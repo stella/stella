@@ -35,7 +35,8 @@ jobs:
           bun-version-file: "package.json"
 
       - name: Install dependencies
-        run: bun ci --ignore-scripts
+        timeout-minutes: 5
+        run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
 

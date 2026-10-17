@@ -40,6 +40,10 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 32845
+      },
+      {
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 33274
       }
     ],
     "anthropic/extended": [
@@ -82,6 +86,10 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 33336
+      },
+      {
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 33765
       }
     ],
     "bedrock/default": [
@@ -124,6 +132,10 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 33078
+      },
+      {
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 33523
       }
     ],
     "bedrock/extended": [
@@ -166,6 +178,10 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 33567
+      },
+      {
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 34012
       }
     ],
     "google/default": [
@@ -204,6 +220,10 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 32188
+      },
+      {
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 32639
       }
     ],
     "google/extended": [
@@ -238,6 +258,10 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 32666
+      },
+      {
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 33117
       }
     ],
     "mistral/default": [
@@ -280,6 +304,10 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 34330
+      },
+      {
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 34800
       }
     ],
     "mistral/extended": [
@@ -322,6 +350,10 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 34857
+      },
+      {
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 35327
       }
     ],
     "openai/default": [
@@ -364,6 +396,10 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 33933
+      },
+      {
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 34387
       }
     ],
     "openai/extended": [
@@ -406,6 +442,10 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 34449
+      },
+      {
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 34903
       }
     ],
     "openrouter-anthropic/default": [
@@ -444,6 +484,10 @@
       {
         "reason": "Connector input tools and feature admission share the stable prefix",
         "tokens": 34298
+      },
+      {
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 34632
       }
     ],
     "openrouter-anthropic/extended": [
@@ -482,6 +526,10 @@
       {
         "reason": "Connector input tools and feature admission share the stable prefix",
         "tokens": 34797
+      },
+      {
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 35145
       }
     ],
     "openrouter/default": [
@@ -520,6 +568,10 @@
       {
         "reason": "Connector input tools and feature admission share the stable prefix",
         "tokens": 34298
+      },
+      {
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 34632
       }
     ],
     "openrouter/extended": [
@@ -558,6 +610,10 @@
       {
         "reason": "Connector input tools and feature admission share the stable prefix",
         "tokens": 34797
+      },
+      {
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 35145
       }
     ]
   },

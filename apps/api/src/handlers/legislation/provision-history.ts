@@ -3,6 +3,7 @@ import type { SQL } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
+import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
 import { mapWithConcurrency } from "@stll/concurrency";
 
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
@@ -61,6 +62,8 @@ type ProvisionHistoryOptions = {
   anchor: string;
   query: ProvisionHistoryQuery;
   legislationDb: LegislationReadDb;
+  /** The surface this read answers for; its country list decides publication. */
+  surface: PublicCountrySurface;
 };
 
 type VersionCursor = {
@@ -119,6 +122,7 @@ export const readProvisionHistoryHandler = async ({
   anchor,
   query,
   legislationDb,
+  surface,
 }: ProvisionHistoryOptions) => {
   const limit = normalizeTenantPageLimit(
     query.limit ?? LIMITS.legislationProvisionHistoryPageSizeDefault,
@@ -134,13 +138,13 @@ export const readProvisionHistoryHandler = async ({
   }
 
   const versions = await legislationDb(async (tx) => {
-    const work = await selectWorkKey(tx, documentId);
+    const work = await selectWorkKey(tx, documentId, surface);
 
     if (work === null) {
       return null;
     }
 
-    const conditions: SQL[] = workKeyConditions(work);
+    const conditions: SQL[] = workKeyConditions(work, surface);
 
     if (cursor !== null) {
       conditions.push(
@@ -176,6 +180,7 @@ export const readProvisionHistoryHandler = async ({
     operation: async (version) =>
       extractProvisionText(
         await readVersionBlocks({
+          surface,
           row: version,
           legislationDb,
           step: HISTORY_READ_STEP,

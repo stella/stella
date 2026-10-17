@@ -65,6 +65,9 @@
     "runSelectedRows": "Vykdyti {count, plural, one {# pasirinktai eilutei} few {# pasirinktoms eilutėms} many {# pasirinktos eilutės} other {# pasirinktų eilučių}}",
     "selectedRun": "Vykdyti DI stulpelius {count, plural, one {# eilutei} few {# eilutėms} many {# eilutės} other {# eilučių}}"
   },
+  "aiDisclosure": {
+    "caseLaw": "DI parengtas teismų sprendimų santraukas, pastabas ir analizes generuoja stella; teismai jų nėra patvirtinę ir jos neatspindi pačių teismų argumentacijos. Tai pagalbinės priemonės teisės specialistams, o oficialiu ir lemiamu šaltiniu išlieka sprendimo tekstas."
+  },
   "appearance": {
     "calendar": "Kalendorius",
     "calendarGregorian": "Grigaliaus",
@@ -173,6 +176,7 @@
       "heldDescription": "Šių ištraukų <strong>reikšmė iš tiesų neaiški</strong>: turinys yra preliminarus arba nepatvirtintas, o ne vien parašytas ranka. Jos nevertinamos, kol tikrintojas jų nepatvirtina, nepataiso arba neįveda iš naujo. Įskaitomas šaltinis niekada nesiunčiamas peržiūrėti vien dėl jo laikmenos.",
       "heldForReview": "Sulaikyta peržiūrai",
       "holdOutOfScoring": "Neįtraukti į vertinimą",
+      "inScoring": "Įtraukta į vertinimą",
       "includeInScoring": "Įtraukti į vertinimą",
       "interpretationNote": "Aiškinimo pastaba",
       "interpretationNotePlaceholder": "Jei šio įrodymo reikšmė yra ginčijama, aprašykite, kaip. Jei ne, palikite lauką tuščią.",
@@ -528,6 +532,70 @@
     },
     "hourlyRateMustBeNonNegative": "Valandinis įkainis negali būti neigiamas",
     "hours": "Valandos",
+    "invoiceComposer": {
+      "addSellerProfile": "Pridėkite pardavėjo profilį atsiskaitymo nustatymuose",
+      "billedHours": "Apmokamos valandos",
+      "buyer": "Klientas (pirkėjas)",
+      "continueToDetails": "Tęsti į duomenis",
+      "continueToIssue": "Tęsti į išrašymą",
+      "datesAndPayment": "Datos ir mokėjimas",
+      "days": "{days, plural, one {# diena} few {# dienos} many {# dienos} other {# dienų}}",
+      "draftSavedTitle": "Sąskaitos juodraštis išsaugotas",
+      "dueIn": "Mokėjimo terminas",
+      "dueOn": "apmokėti iki {date}",
+      "flatFee": "Šiai bylai taikomas fiksuotas honoraras: sąskaitoje nurodomi sutarti {amount}, o žemiau nurodytas laikas juo padengtas.",
+      "flatFeeLine": "Sutartas fiksuotas honoraras",
+      "include": "Įtraukti į šią sąskaitą",
+      "issueFailed": "Juodraštis išsaugotas, bet sąskaitos išrašyti nepavyko.",
+      "issueInvoice": "Išrašyti sąskaitą",
+      "issuedTitle": "Sąskaita {number} išrašyta",
+      "lines": "Sąskaitos eilutės",
+      "loggedHours": "užregistruota {hours} val.",
+      "noCharge": "Be mokesčio",
+      "noClient": "Ši byla neturi kliento, todėl sąskaita dar neturi pirkėjo.",
+      "noExpenses": "Šioje byloje nėra patvirtintų ir neapmokestintų išlaidų.",
+      "noTime": "Šioje byloje nėra patvirtinto ir neapmokestinto laiko.",
+      "noVat": "Be PVM",
+      "nothingToBill": "Kol kas nėra už ką išrašyti sąskaitos. Patvirtinkite šios bylos laiko įrašus ar išlaidas, kad galėtumėte už juos išrašyti sąskaitą.",
+      "openInvoice": "Atidaryti sąskaitą",
+      "otherCurrency": "{count, plural, one {# eilutė užregistruota} few {# eilutės užregistruotos} many {# eilutės užregistruota} other {# eilučių užregistruota}} kita valiuta nei {currency} ir lieka atskirai sąskaitai.",
+      "outsideScope": "Nepatenka į PVM taikymo sritį, 0 %",
+      "rate": "Įkainis",
+      "readyDescription": "Išrašant sąskaitai suteikiamas kitas jūsų numerių serijos numeris ir ji užrakinama. Juodraštį galima toliau redaguoti.",
+      "readyTitle": "Paruošta išrašyti",
+      "reverseCharge": "Atvirkštinis apmokestinimas, 0 %",
+      "saveDraft": "Išsaugoti kaip juodraštį",
+      "seller": "Pardavėjas",
+      "sources": {
+        "client": "Perkelta iš bylos kliento",
+        "clientTerm": "Kliento mokėjimo terminas",
+        "defaultSeller": "Jūsų numatytasis pardavėjo profilis",
+        "defaultTerm": "Įprastas mokėjimo terminas",
+        "lastWorkDay": "Paskutinė įtraukto darbo diena"
+      },
+      "steps": {
+        "issue": "Peržiūra ir išrašymas",
+        "items": "Laikas ir išlaidos"
+      },
+      "tax": "Mokestis ir valiuta",
+      "taxableSupplyDate": "Paslaugų suteikimo data",
+      "timeEntries": "Laiko įrašai",
+      "timeSummary": "{count, plural, one {# įrašas} few {# įrašai} many {# įrašo} other {# įrašų}} · {hours} val.",
+      "title": "Nauja sąskaita",
+      "totalsSummary": "Be PVM {net} · PVM {vat} · Iš viso {total}",
+      "vat": "PVM režimas",
+      "vatRate": "PVM {rate} %",
+      "vatReasons": {
+        "clientCountryUnconfirmed": "Kliento šalies patvirtinti nepavyko: PVM mokėtojo kodas ir adresas nurodo skirtingas šalis, todėl taikomas standartinis tarifas",
+        "clientVatIdInvalid": "Kliento PVM mokėtojo kodas neatitinka jo šalies formato, todėl taikomas standartinis tarifas",
+        "domesticRate": "Jūsų didžiausias paslaugų suteikimo dieną galiojantis PVM tarifas",
+        "noSellerProfile": "Nėra pardavėjo profilio, todėl PVM netaikomas, kol jo nenustatysite sąskaitoje",
+        "noVatRate": "Atsiskaitymo nustatymuose nenustatytas joks PVM tarifas",
+        "outsideScope": "Kliento PVM kodas įregistruotas ne ES, todėl paslaugų teikimo vieta yra užsienyje",
+        "reverseCharge": "Kliento PVM mokėtojo kodas įregistruotas kitoje šalyje",
+        "sellerNotVatPayer": "Pardavėjas nėra PVM mokėtojas"
+      }
+    },
     "invoiceNarrative": "Sąskaitos aprašas",
     "invoiceNarrativePlaceholder": "Klientui skirtas aprašymas (neprivaloma)",
     "invoices": {
@@ -670,7 +738,10 @@
       "registrationId": "Registracijos numeris",
       "setDefault": "Nustatyti kaip numatytąjį",
       "title": "Pardavėjo profiliai",
-      "vatId": "PVM mokėtojo kodas"
+      "vatId": "PVM mokėtojo kodas",
+      "vatPayer": "PVM mokėtojas",
+      "vatPayerHelp": "Šio pardavėjo sąskaitose taikomas PVM. Išjunkite registruotam asmeniui, kuris turi PVM mokėtojo kodą, bet nėra PVM mokėtojas.",
+      "vatPayerRequiresVatId": "Įveskite PVM mokėtojo kodą, kad galėtumėte išrašyti sąskaitas kaip PVM mokėtojas."
     },
     "settingsTitle": "Atsiskaitymas",
     "split": {
@@ -748,6 +819,7 @@
         "answerIncomplete": "{source, select, organization {Jūsų organizacijos {provider} raktas grąžino neišsamų atsakymą.} other {DI modelis grąžino neišsamų atsakymą.}}",
         "providerRefused": "{source, select, organization {{provider} atmetė užklausą, pateiktą su jūsų organizacijos raktu. Patikrinkite raktą, jo kvotą ir atsiskaitymą organizacijos nustatymuose.} other {DI teikėjas atmetė užklausą.}}",
         "providerUnavailable": "{source, select, organization {{provider} šiuo metu nepasiekiamas su jūsų organizacijos raktu.} other {DI teikėjas šiuo metu nepasiekiamas.}}",
+        "retryAfter": "Bandyti dar kartą galėsite po {time}.",
         "timedOut": "{source, select, organization {{provider} neatsakė laiku naudojant jūsų organizacijos raktą.} other {DI modelis neatsakė laiku.}}",
         "unavailable": "Šiam sprendimui DI analizė neprieinama."
       },
@@ -1044,6 +1116,13 @@
       "provisionMentions": "{count, number}×",
       "provisionMentionsLabel": "{count, plural, one {# paminėjimas} few {# paminėjimai} many {# paminėjimo} other {# paminėjimų}}",
       "provisionsCited": "Cituojamos nuostatos",
+      "provisionsFailed": "Citatų apdorojimas nepavyko",
+      "provisionsNoneFound": "Cituojamų nuostatų nerasta",
+      "provisionsProcessing": "Citatos apdorojamos",
+      "provisionsUnavailable": "Citatos neprieinamos",
+      "provisionsUnplaceable": "Citatų negalima susieti su sprendimo tekstu",
+      "provisionsUnsupported": "Šio sprendimo citatų apdorojimas nepalaikomas",
+      "provisionsWithheld": "Citatos neatskleidžiamos",
       "sourceFields": {
         "decisionCategory": "Sprendimo kategorija",
         "publishedOnWeb": "Paskelbta internete"
@@ -1136,6 +1215,11 @@
       "requesting": "Ruošiami pakeitimai…",
       "stale": "Šis atsakymas pasikeitė. Pasirinkite tekstą iš naujo.",
       "submit": "Prašyti pakeitimo"
+    },
+    "answerQuote": {
+      "showInDecision": "Rodyti sprendime",
+      "verified": "Patikrinta citata",
+      "verifiedHint": "Pažodžiui: {source}"
     },
     "applyMode": {
       "description": "Word įrašo, kas atliko kiekvieną pakeitimą. Įsiminsime jūsų pasirinkimą.",
@@ -1305,6 +1389,7 @@
       "overflow": "+{count, number}",
       "unnamed": "{count, plural, one {ir dar #} few {ir dar #} many {ir dar #} other {ir dar #}}"
     },
+    "historyTrimmed": "Ankstesnių žinučių nepavyko apibendrinti, todėl šiame atsakyme atsižvelgta tik į naujausią pokalbio dalį.",
     "improvePrompt": "Patobulinti užklausą",
     "improvePromptDraftChanged": "Juodraštis pasikeitė, todėl patobulinimas nebuvo pritaikytas.",
     "improvePromptPlainTextOnly": "Užklausą galima tobulinti tik kaip paprastą tekstą.",
@@ -1336,6 +1421,7 @@
       "loadError": "Nepavyko įkelti elementų"
     },
     "messageTimestampToday": "Šiandien, {time}",
+    "messageUnavailable": "Šio pranešimo negalima parodyti.",
     "mockModel": {
       "description": "Iš anksto paruošti vietinio imituojamo modelio atsakymai",
       "label": "Imituojamas DI"
@@ -1384,6 +1470,12 @@
       "title": "Įklijuotas tekstas"
     },
     "placeholder": "Čia įveskite klausimą, / įgūdžiams, @ kontekstui pridėti",
+    "processSummary": {
+      "analyses": "{count, plural, one {# analizė} few {# analizės} many {# analizės} other {# analizių}}",
+      "changesSaved": "{count, plural, one {# išsaugotas pakeitimas} few {# išsaugoti pakeitimai} many {# išsaugoto pakeitimo} other {# išsaugotų pakeitimų}}",
+      "documentEdits": "{count, plural, one {# dokumento pakeitimas} few {# dokumento pakeitimai} many {# dokumento pakeitimo} other {# dokumento pakeitimų}}",
+      "sourcesChecked": "{count, plural, one {# patikrintas šaltinis} few {# patikrinti šaltiniai} many {# patikrinto šaltinio} other {# patikrintų šaltinių}}"
+    },
     "promptImprovementStrategies": {
       "decompose": {
         "description": "Sudėtingą darbą suskaido į nuoseklias smulkesnes užduotis.",
@@ -1495,12 +1587,25 @@
       "rejected": "Atmesta"
     },
     "tabToAsk": "→, kad paklaustumėte: „{prompt}“",
+    "tableChart": {
+      "bar": "Stulpelinė",
+      "kind": "Diagramos tipas",
+      "line": "Linijinė",
+      "loading": "Parenkama diagrama…",
+      "pie": "Skritulinė",
+      "scatter": "Taškinė",
+      "showChart": "Rodyti kaip diagramą",
+      "summary": "Rodomų reikšmių skaičius: {n, number}.",
+      "unavailable": "Nepavyko parinkti diagramos. Rodoma lentelė.",
+      "values": "{label}: {value, number}"
+    },
     "thinking": "Dirbama su kontekstu",
     "threadFiles": {
       "title": "Šio pokalbio failai"
     },
     "tool": {
       "add_comment": "Pridedamas komentaras",
+      "add_matter_member": "Pridėti bylos narį",
       "apply-active-docx-edits": "Ruošiami dokumento pakeitimai",
       "ares_lookup_company": "Ieškoma įmonės duomenų",
       "ares_search_companies": "Ieškoma įmonių duomenų",
@@ -1558,7 +1663,6 @@
       "list_stories": "Išvardijamos dokumento dalys",
       "list_templates": "Šablonų sąrašas",
       "load-skill": "Skaitomos gairės",
-      "manage_organization": "Tvarkyti organizaciją",
       "read-contact": "Skaitomas kontaktas",
       "read-content-across-matters": "Skaitomas turinys keliose bylose",
       "read-skill-resource": "Skaitomos gairės",
@@ -1568,6 +1672,7 @@
       "read_section": "Skaitomas skyrius",
       "read_story": "Skaitoma dokumento dalis",
       "remember": "Įsimenama",
+      "remove_matter_member": "Pašalinti bylos narį",
       "reply_comment": "Atsakoma į komentarą",
       "request_secret": "Prašoma privačių prisijungimo duomenų",
       "resolve_comment": "Išsprendžiamas komentaras",
@@ -1601,6 +1706,7 @@
       "suggest_template_fields": "Siūlomi šablono laukai",
       "unknown": "Naudojamas įrankis",
       "update-entity-fields": "Atnaujinami metaduomenys",
+      "update_organization_settings": "Atnaujinti komandos nustatymus",
       "update_reader_annotation": "Redaguoti paryškinimą ar komentarą",
       "use-browser": "Jūsų naršyklės naudojimas",
       "use_connector_secret": "Naudojami jungties prisijungimo duomenys",
@@ -1616,6 +1722,7 @@
       "interrupted": "Nutraukta nebaigus",
       "output": "Išvestis",
       "sourceCode": "Pirminis kodas",
+      "statusWaiting": "Laukiama",
       "toggleDetails": "Perjungti detales",
       "unrestoredFields": "Anonimizuotu režimu nepavyko tikromis reikšmėmis užpildyti {count, plural, one {# lauko} few {# laukų} many {# lauko} other {# laukų}}. Patikrinkite: {fields}"
     },
@@ -1641,7 +1748,8 @@
       "toggleLabel": "Paieška internete",
       "toggleOff": "Išjungti paiešką internete",
       "toggleOn": "Įjungti paiešką internete"
-    }
+    },
+    "workedFor": "Darbo trukmė: {duration}"
   },
   "clauses": {
     "addVariant": "Pridėti variantą",
@@ -2522,11 +2630,14 @@
     "actionFailed": "Veiksmas nepavyko",
     "api": {
       "badRequest": "Užklausos nepavyko užbaigti.",
+      "caseLawCountryUnavailable": "Šios šalies teismų praktika nepasiekiama. Pasirinkite kitą šalį.",
+      "caseLawSearchUnavailable": "Šios šalies teismų praktikos paieška nepasiekiama. Jos viešus teismų sprendimus vis tiek galite skaityti.",
       "conflict": "Užklausa nesuderinama su dabartine būsena.",
       "forbidden": "Neturite teisės atlikti šio veiksmo.",
+      "legislationCountryUnavailable": "Šios šalies teisės aktai nepasiekiami. Pasirinkite kitą šalį.",
+      "legislationSearchUnavailable": "Šios šalies teisės aktų paieška nepasiekiama. Jos viešus teisės aktus vis tiek galite skaityti.",
       "notFound": "Nepavyko rasti prašomo objekto.",
       "payloadTooLarge": "Užklausa per didelė.",
-      "publicCountryUnavailable": "Šios šalies teisės aktai ir teismų praktika nepasiekiami. Pasirinkite kitą šalį.",
       "rateLimited": "Per daug užklausų. Bandykite dar kartą vėliau.",
       "server": "Kažkas nepavyko. Bandykite dar kartą.",
       "serviceUnavailable": "Paslauga laikinai nepasiekiama. Bandykite dar kartą.",
@@ -2569,6 +2680,10 @@
       "providerRateLimited": "Pasiektas teikėjo užklausų limitas. Netrukus bandykite dar kartą.",
       "thirdPartyBoundaryRefusal": "Užklausa bandė naudoti turinį už leidžiamo darbo srities konteksto ribų.",
       "usageLimitExceeded": "Pasiektas naudojimo limitas.",
+      "validationInvalid": "Lauke yra reikšmė, kurios negalima išsaugoti.",
+      "validationRequired": "Privalomas laukas tuščias.",
+      "validationTooLong": "Per ilga: naudokite ne daugiau kaip {limit, number} simbolių.",
+      "validationTooShort": "Per trumpa: naudokite ne mažiau kaip {limit, number} simbolių.",
       "verificationActiveLimitReached": "Jūsų organizacija pasiekė vienu metu vykdomų patikrų limitą. Palaukite, kol viena patikra bus baigta, ir bandykite dar kartą.",
       "verificationDailyLimitReached": "Jūsų organizacija pasiekė dienos patikrų limitą. Bandykite dar kartą po vidurnakčio (Europe/Prague).",
       "versionConflict": "Kažkas kitas tai pakeitė, kol redagavote. Įkelkite iš naujo, kad gautumėte dabartinę versiją."
@@ -4530,6 +4645,25 @@
     "tokenHelp": "Kaip gauti žetoną",
     "viewOnGithub": "Peržiūrėti GitHub platformoje"
   },
+  "readerAnswers": {
+    "budgetError": "Atsakymams skirtas biudžetas išnaudotas.",
+    "citation": "¶{paragraph}",
+    "expand": "Išskleisti atsakymą",
+    "explain": "Paaiškinti",
+    "externalCitation": "{decision} · ¶{paragraph}",
+    "followUp": "Užduoti papildomą klausimą",
+    "invalidCitations": "{count, plural, one {Nepavyko patikrinti # nuorodos.} few {Nepavyko patikrinti # nuorodų.} many {Nepavyko patikrinti # nuorodos.} other {Nepavyko patikrinti # nuorodų.}}",
+    "loading": "Generuojamas atsakymas…",
+    "minimise": "Suskleisti atsakymą",
+    "modelError": "Modelis negalėjo užbaigti šio atsakymo.",
+    "networkError": "Ryšys nutrūko. Bandykite dar kartą.",
+    "regenerate": "Generuoti atsakymą iš naujo",
+    "selectionError": "Pasirinkite tekstą vienoje pastraipoje (iki 2000 ženklų).",
+    "send": "Siųsti papildomą klausimą",
+    "share": "Bendrinti su komanda",
+    "timeoutError": "Baigėsi atsakymui skirtas laikas. Bandykite dar kartą.",
+    "title": "Atsakymas apie pasirinktą tekstą"
+  },
   "routeError": {
     "backToMatters": "Grįžti į bylas",
     "copyReference": "Kopijuoti klaidos nuorodą",
@@ -4656,9 +4790,19 @@
       "deleteAccountWarningExplanation": "Atsiųsime patvirtinimo kodą į jūsų el. pašto adresą, kad patvirtintume šią užklausą. Užbaigta darbo sričių istorija liks priskirta jūsų ištrintai paskyrai.",
       "desktop": "Darbalaukis",
       "desktopAppDescription": "Vėl raskite viską, ką nukopijavote, ir atidarykite „stella“ dokumentus jau naudojamose kompiuterio programose.",
+      "desktopCardApproveDetail": "Patvirtinkite, kad šis kompiuteris būtų susietas su <bdi>{identity}</bdi> serveryje {host}.",
+      "desktopCardApproveTitle": "stella desktop prašo prisijungti",
+      "desktopCardConnectedDetail": "Susieta su <bdi>{identity}</bdi> serveryje {host} · versija {version}",
+      "desktopCardConnectedDetailNoVersion": "Susieta su <bdi>{identity}</bdi> serveryje {host}",
+      "desktopCardConnectedTitle": "stella desktop susieta",
+      "desktopCardMissingDetail": "Įdiekite ją arba prijunkite, jei ji jau įdiegta šiame kompiuteryje.",
+      "desktopCardMissingTitle": "stella desktop dar nesusieta",
+      "desktopCardOutdatedDetail": "Versija {version} susieta su <bdi>{identity}</bdi>. Įdiekite naujausią versiją, kad dokumentai ir veikla toliau veiktų.",
+      "desktopCardOutdatedTitle": "stella desktop reikia atnaujinti",
       "desktopClipboardDescription": "Atidarykite, ieškokite, tvarkykite ir pakartotinai naudokite tekstą, nukopijuotą iš bet kurios programos.",
       "desktopClipboardTitle": "Ieškoma iškarpinės istorija",
       "desktopConnectFailed": "Nepavyko prijungti „stella desktop“.",
+      "desktopConnectInstalled": "Jau įdiegta, prijungti",
       "desktopConnectedAs": "Prisijungta kaip <bdi>{email}</bdi>",
       "desktopDescription": "Iškarpinės istorija ir dokumentų įrankiai jūsų kompiuteryje",
       "desktopDocumentsDescription": "Atidarykite „stella“ failus kompiuterio programose; pakeitimai grįš į tinkamą bylą.",

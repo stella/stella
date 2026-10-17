@@ -91,12 +91,6 @@ export const UPLOAD_DOCUMENT_VERSION_OUTPUT_SCHEMA = v.strictObject({
   }),
 });
 
-const uploadDocumentVersionCapabilityOutputSchema = v.strictObject({
-  finalizedResult:
-    UPLOAD_DOCUMENT_VERSION_OUTPUT_SCHEMA.entries.finalizedResult,
-  meta: v.optional(v.strictObject({ requestId: v.string() })),
-});
-
 export type UploadDocumentVersionInput = v.InferOutput<
   typeof UPLOAD_DOCUMENT_VERSION_INPUT_SCHEMA
 >;
@@ -395,7 +389,7 @@ export const uploadRemoteDocumentVersion = async ({
     return finalized.result;
   }
   const parsedFinalized = v.safeParse(
-    uploadDocumentVersionCapabilityOutputSchema,
+    UPLOAD_DOCUMENT_VERSION_OUTPUT_SCHEMA,
     finalized.payload,
   );
   if (!parsedFinalized.success) {

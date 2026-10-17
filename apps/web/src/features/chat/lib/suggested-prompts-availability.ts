@@ -78,11 +78,13 @@ export const resolveSuggestedPromptsTurnOwner = ({
     return "composer";
   }
   const owners = new Set(
-    lastMessage.parts.flatMap((part) =>
-      part.type === "tool-call" && ASK_USER_STATE_OWNS_TURN[part.state]
-        ? (USER_INPUT_TURN_OWNERS[part.name] ?? [])
-        : [],
-    ),
+    lastMessage.parts.flatMap((part) => {
+      if (part.type !== "tool-call" || !ASK_USER_STATE_OWNS_TURN[part.state]) {
+        return [];
+      }
+      const owner = USER_INPUT_TURN_OWNERS[part.name];
+      return owner === undefined ? [] : [owner];
+    }),
   );
   // A private input card outranks a connector card, which outranks a question.
   if (owners.has("secret")) {

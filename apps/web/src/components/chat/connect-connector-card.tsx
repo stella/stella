@@ -91,9 +91,10 @@ const useConnectorSummary = (
     iconUrl: connector?.iconUrl ?? null,
     // Only an OAuth sign-in requests scopes; none are shown when unknown.
     requestedScopes:
-      connector?.authType === "oauth2"
-        ? (connector.oauthRequestedScopes ?? [])
-        : [],
+      connector?.authType !== "oauth2" ||
+      connector.oauthRequestedScopes === null
+        ? []
+        : connector.oauthRequestedScopes,
   };
 };
 
@@ -395,7 +396,7 @@ export const ConnectConnectorCard = ({
             className="text-muted-foreground"
             iconUrl={connector.iconUrl}
             size={16}
-            slug={connectorSlug}
+            {...(connectorSlug === undefined ? {} : { slug: connectorSlug })}
           />
         )}
         {t("chat.connectConnector.title")}

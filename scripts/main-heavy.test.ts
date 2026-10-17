@@ -379,7 +379,8 @@ test("heavy test shards execute full scope while ordinary runs retain affected s
             ...Bun.env,
             EVENT_NAME: event,
             HEAVY_ONLY: String(heavyOnly),
-            BASE_REF: "main",
+            COMPARISON_BASE: "0123abc",
+            TEST_SCOPE: "--filter=...[0123abc...HEAD]",
             GITHUB_OUTPUT: output,
             GITHUB_ENV: environment,
           },
@@ -393,10 +394,46 @@ test("heavy test shards execute full scope while ordinary runs retain affected s
         expect(
           readFileSync(environment, "utf-8"),
           `${event}/${String(heavyOnly)}`,
-        ).toBe(full ? "" : "TURBO_SCM_BASE=origin/main\n");
+        ).toBe(full ? "" : "TURBO_SCM_BASE=0123abc\n");
       } finally {
         rmSync(fixture, { recursive: true, force: true });
       }
+    }
+  }
+});
+
+test("ordinary test shards run the full tree without the planner's base or scope", () => {
+  const affected = ciWorkflow.jobs["ci-tests"]?.steps?.find(
+    ({ name }) => name === "Compute affected flag",
+  );
+  const script = v.parse(v.string(), affected?.run);
+  for (const [comparisonBase, testScope] of [
+    ["", "--filter=...[0123abc...HEAD]"],
+    ["0123abc", ""],
+  ]) {
+    const fixture = mkdtempSync(path.join(tmpdir(), "missing-test-scope-"));
+    try {
+      const output = path.join(fixture, "output");
+      const environment = path.join(fixture, "environment");
+      writeFileSync(output, "");
+      writeFileSync(environment, "");
+      const result = Bun.spawnSync(["bash", "-euc", script], {
+        cwd: fixture,
+        env: {
+          ...Bun.env,
+          EVENT_NAME: "pull_request",
+          HEAVY_ONLY: "false",
+          COMPARISON_BASE: comparisonBase,
+          TEST_SCOPE: testScope,
+          GITHUB_OUTPUT: output,
+          GITHUB_ENV: environment,
+        },
+      });
+      expect(result.exitCode).toBe(0);
+      expect(readFileSync(output, "utf-8")).toBe("flag=\n");
+      expect(readFileSync(environment, "utf-8")).toBe("");
+    } finally {
+      rmSync(fixture, { recursive: true, force: true });
     }
   }
 });
@@ -510,7 +547,18 @@ test("only the final job can publish the main/heavy status", () => {
   const jobsWithStatusPermission = Object.entries(mainWorkflow.jobs)
     .filter(([, job]) => job.permissions?.["statuses"] === "write")
     .map(([name]) => name);
-  expect(jobsWithStatusPermission).toEqual(["status"]);
+  // The suites call only grants a ceiling: ci.yml declares the scope for the
+  // merge-queue yield, which runs on pull_request events and never here.
+  expect(jobsWithStatusPermission).toEqual(["suites", "status"]);
+  const ciStatusWriters = Object.values(ciWorkflow.jobs)
+    .flatMap((job) => job.steps ?? [])
+    .filter((step) => /commitstatus|\/statuses\b/iu.test(JSON.stringify(step)));
+  expect(ciStatusWriters.map(({ name }) => name)).toEqual([
+    "Yield to the merge queue",
+  ]);
+  expect(String(ciStatusWriters[0]?.["if"])).toContain(
+    "github.event_name == 'pull_request'",
+  );
   expect(mainWorkflow.jobs.status.permissions).toEqual({
     contents: "read",
     actions: "read",

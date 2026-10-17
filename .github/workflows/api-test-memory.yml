@@ -23,9 +23,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
+        shard: [1, 2, 3]
     env:
-      API_TEST_SHARD: ${{ matrix.shard }}/4
+      API_TEST_SHARD: ${{ matrix.shard }}/3
       API_TEST_LANES: "1"
     steps:
       - name: Checkout
@@ -41,6 +41,7 @@ jobs:
           bun-version-file: package.json
 
       - name: Install dependencies
+        timeout-minutes: 5
         env:
           NPM_TOKEN: ""
         run: bash scripts/retry.sh bun ci --ignore-scripts
@@ -98,6 +99,7 @@ jobs:
           bun-version-file: package.json
 
       - name: Install dependencies
+        timeout-minutes: 5
         env:
           NPM_TOKEN: ""
         run: bash scripts/retry.sh bun ci --ignore-scripts

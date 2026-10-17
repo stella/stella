@@ -292,6 +292,47 @@ const git = (args: string[]) => {
   }
   return result.stdout.toString().trim();
 };
+const trackedFiles = new Set(
+  git(["ls-files", "-z"]).split("\0").filter(Boolean),
+);
+
+const normalizeGuardPathLines = (run: string, tracked: ReadonlySet<string>) =>
+  run.replace(
+    /^([ \t]*git diff --exit-code --)[ \t]*\\\n((?:[^\n]*\\\n)*[^\n]*)/gmu,
+    (command, prefix: string, argumentsBlock: string) => {
+      const lines = argumentsBlock.split("\n");
+      const kept = lines.filter((line) => {
+        const argument = line.trim().replace(/ ?\\$/u, "");
+        const match =
+          /^(?:"([^"$\x60]+)"|'([^']+)'|([^\s"'$\x60;&|<>\\()]+))$/u.exec(
+            argument,
+          );
+        const path = match?.at(1) ?? match?.at(2) ?? match?.at(3);
+        // Commands and nonliteral shell expressions must survive comparison.
+        if (path === undefined) {
+          return true;
+        }
+        if (tracked.has(path)) {
+          return true;
+        }
+        const glob = new Bun.Glob(path);
+        for (const file of tracked) {
+          if (file.startsWith(`${path}/`) || glob.match(file)) {
+            return true;
+          }
+        }
+        return false;
+      });
+      if (kept.length === lines.length) {
+        return command;
+      }
+      if (kept.length === 0) {
+        // An empty explicit path list must not match an unscoped diff guard.
+        return `${prefix} \\\n`;
+      }
+      return `${prefix} \\\n${kept.map((line) => line.replace(/[ \t]*\\$/u, "")).join(" \\\n")}`;
+    },
+  );
 const mergeBase = git(["merge-base", "origin/main", "HEAD"]);
 const baseCancellationSource = new Bun.Transpiler({
   loader: "ts",
@@ -458,8 +499,9 @@ const setupSteps = (steps: readonly Step[]) =>
     .map(withoutContinuation)
     .map(withoutStepId)
     .map(withoutActionRef);
-// Shared runners need ephemeral cache ports. Preserve every other baseline input.
-const withIsolatedCachePort = (step: Step): Step => {
+// Task receipts share the GitHub cache server with Turbo; the versioned
+// namespace separates their format and relative paths make receipts portable.
+const withTaskResultCacheSetup = (step: Step): Step => {
   if (usesOf(step) !== "rharkor/caching-for-turbo@<pinned>") {
     return step;
   }
@@ -467,7 +509,16 @@ const withIsolatedCachePort = (step: Step): Step => {
     v.looseObject({ with: v.optional(v.record(v.string(), v.unknown())) }),
     step,
   ).with;
-  return { ...step, with: { ...inputs, "server-port": "0" } };
+  return {
+    ...step,
+    with: {
+      ...inputs,
+      "server-port": "0",
+      provider: "github",
+      "cache-prefix": "task-results-v1_",
+      "use-relative-cache-path": "true",
+    },
+  };
 };
 const ownedInstallFlags = '["--frozen-lockfile","--ignore-scripts"]';
 const scopedInstallActions = new Set([
@@ -621,6 +672,18 @@ const withoutTestTimeout = (step: Step): Step => {
   };
 };
 
+// A step deadline bounds a hung command; the step still fails when it fires,
+// so it changes no coverage. With continue-on-error a fired deadline would
+// pass silently, so those steps keep the timeout in the comparison.
+const withoutStepTimeout = (step: Step): Step => {
+  if (step["continue-on-error"] !== undefined) {
+    return step;
+  }
+  const original = { ...step };
+  delete original["timeout-minutes"];
+  return original;
+};
+
 const LOCAL_CHECK_BASE_REF = `\${{ format('origin/{0}', github.base_ref || 'main') }}`;
 const LOCAL_BASE_REF = `\${{ github.base_ref || 'main' }}`;
 const CLI_CONTRACT_COMMAND = "bun scripts/check-cli-contract-changeset.ts";
@@ -667,7 +730,13 @@ const ownedSteps = (steps: readonly Step[]) =>
     .map(withoutContinuation)
     .map(withoutPreparedGeneration)
     .map(withoutTestTimeout)
+    .map(withoutStepTimeout)
     .map(withoutStepId)
+    .map((step) =>
+      typeof step["run"] === "string"
+        ? { ...step, run: normalizeGuardPathLines(step["run"], trackedFiles) }
+        : step,
+    )
     .map((step) => {
       const { background, ...check } = step;
       if (background !== true) {
@@ -694,13 +763,23 @@ type ScopeOptions = {
 const expectScope = ({ current, base }: ScopeOptions) => {
   const { if: condition, ...scope } = current;
   const { if: originalCondition, ...originalScope } = base;
+  // ci-plan produces the generated sources. A merge base that still ran the
+  // producer as a job of its own names it beside the plan in `needs`.
+  if (
+    isDeepStrictEqual(originalScope["needs"], [
+      "ci-plan",
+      "ci-generated-sources",
+    ])
+  ) {
+    originalScope["needs"] = "ci-plan";
+  }
   const originalEnvironment =
     originalScope["env"] === undefined
       ? undefined
       : v.parse(v.record(v.string(), v.unknown()), originalScope["env"]);
   const hydrationDependency =
     originalScope["needs"] === "ci-plan" &&
-    isDeepStrictEqual(scope["needs"], ["ci-plan", "ci-generated-sources"]) &&
+    scope["needs"] === "ci-plan" &&
     !Object.hasOwn(
       originalEnvironment ?? {},
       "CI_GENERATED_SOURCES_MANIFEST",
@@ -712,11 +791,14 @@ const expectScope = ({ current, base }: ScopeOptions) => {
   const migrated = { ...scope };
   // Normalize only an added handoff. A baseline that owns it must retain it.
   if (hydrationDependency) {
-    migrated["needs"] = "ci-plan";
+    const { CI_GENERATED_SOURCES_MANIFEST: _added, ...environment } = v.parse(
+      v.record(v.string(), v.unknown()),
+      scope["env"],
+    );
     if (originalEnvironment === undefined) {
       delete migrated["env"];
     } else {
-      migrated["env"] = originalEnvironment;
+      migrated["env"] = environment;
     }
   }
   expect(migrated).toEqual(originalScope);
@@ -967,6 +1049,28 @@ test("parallel CI checks preserve every merge-base check exactly once", () => {
   });
 });
 
+test("task result cache checks belong exactly once to the rest leg", () => {
+  const checks = partitions.flatMap(({ steps }, index) =>
+    ownedSteps(steps)
+      .filter(
+        ({ run }) =>
+          typeof run === "string" &&
+          run.includes("scripts/task-result-cache.test.ts"),
+      )
+      .map((step) => ({ leg: partitionIds.at(index), step })),
+  );
+  expect(checks).toEqual([
+    {
+      leg: "ci-checks-rest",
+      step: {
+        name: "Task result cache contract",
+        if: PACKAGE_SCOPE,
+        run: "bun test scripts/task-result-cache.test.ts",
+      },
+    },
+  ]);
+});
+
 test("each CI check leg preserves merge-base setup, supply-chain protection and scope", () => {
   const result = v.parse(
     v.looseObject({
@@ -1002,7 +1106,7 @@ test("each CI check leg preserves merge-base setup, supply-chain protection and 
     } = base;
     const { steps, "timeout-minutes": timeout, ...scope } = partition;
     const originalSetup = setupSteps(originalSteps)
-      .map(withIsolatedCachePort)
+      .map(withTaskResultCacheSetup)
       .map((step) => withInstallCache(step, base))
       .map((step) => {
         if (
@@ -1108,7 +1212,6 @@ test("CI check scope permits only the heavy-only wrapper around the unchanged co
   expectScope({
     current: {
       ...wrapped,
-      needs: ["ci-plan", "ci-generated-sources"],
       env: {
         CI_GENERATED_SOURCES_MANIFEST: `\${{ github.workspace }}/.cache/ci-generated-sources/manifest.json`,
       },
@@ -1134,7 +1237,7 @@ test("CI check scope permits only the heavy-only wrapper around the unchanged co
     { ...wrapped, needs: [] },
     { ...wrapped, needs: ["ci-generated-sources"] },
     { ...wrapped, needs: ["ci-plan", "unrelated"] },
-    { ...wrapped, needs: ["ci-plan", "ci-generated-sources", "unrelated"] },
+    { ...wrapped, needs: ["ci-plan", "ci-generated-sources"] },
     { ...wrapped, permissions: { contents: "write" } },
     { ...wrapped, "runs-on": "self-hosted" },
     { ...wrapped, "continue-on-error": true },
@@ -1185,7 +1288,7 @@ test("package scope narrows check legs while retaining baseline trust and comple
         : scope;
     const base = {
       if: wrap(trust),
-      needs: ["ci-plan", "ci-generated-sources"],
+      needs: "ci-plan",
     };
     const narrowed = { ...base, if: wrap(`${trust} && ${PACKAGE_SCOPE}`) };
     expectScope({ base, current: narrowed });
@@ -1258,7 +1361,6 @@ test("CI check scope migrates only the complete producer handoff and preserves a
     };
     const handoff = {
       ...base,
-      needs: ["ci-plan", "ci-generated-sources"],
       env: {
         ...environment,
         CI_GENERATED_SOURCES_MANIFEST: `\${{ github.workspace }}/.cache/ci-generated-sources/manifest.json`,
@@ -1274,10 +1376,9 @@ test("CI check scope migrates only the complete producer handoff and preserves a
       base: handoff,
     });
     const incomplete = [
-      { ...handoff, env: environment },
-      { ...handoff, needs: "ci-plan" },
+      { ...handoff, needs: ["ci-plan", "unrelated"] },
       { ...handoff, needs: ["ci-generated-sources", "ci-plan"] },
-      { ...handoff, needs: ["ci-plan", "ci-generated-sources", "unrelated"] },
+      { ...handoff, needs: ["ci-plan", "ci-generated-sources"] },
       {
         ...handoff,
         env: { ...handoff.env, CI_GENERATED_SOURCES_MANIFEST: "different" },
@@ -1300,7 +1401,7 @@ test("producer scope regression rejects a mutation that normalizes an already-ow
   expect(mutant).not.toBe(source);
   const handoff = {
     if: "needs.ci-plan.outputs.trusted == 'true'",
-    needs: ["ci-plan", "ci-generated-sources"],
+    needs: "ci-plan",
     env: {
       CI_GENERATED_SOURCES_MANIFEST: `\${{ github.workspace }}/.cache/ci-generated-sources/manifest.json`,
     },
@@ -1336,6 +1437,96 @@ test("CI check scope preserves whitespace inside quoted condition values", () =>
       base,
     }),
   ).toThrow("Expected:");
+});
+
+test("CI coverage ignores untracked guard paths on either side of the comparison", () => {
+  expect(trackedFiles.has(workflowPath)).toBe(true);
+  for (const path of [
+    "untracked-base-output.json",
+    "untracked-head-output.json",
+  ]) {
+    expect(trackedFiles.has(path)).toBe(false);
+  }
+  expectCoverage({
+    base: [
+      {
+        name: "Generated output check",
+        run: [
+          "git diff --exit-code -- \\",
+          "  untracked-base-output.json \\",
+          `  ${workflowPath}`,
+        ].join("\n"),
+      },
+    ],
+    current: [
+      {
+        name: "Generated output check",
+        run: [
+          "git diff --exit-code -- \\",
+          `  ${workflowPath} \\`,
+          "  untracked-head-output.json",
+        ].join("\n"),
+      },
+    ],
+    removed: [],
+  });
+});
+
+test("CI coverage rejects removal of a tracked guard path", () => {
+  const path = "scripts/generated-files.ts";
+  expect(trackedFiles.has(workflowPath)).toBe(true);
+  expect(trackedFiles.has(path)).toBe(true);
+  expect(() =>
+    expectCoverage({
+      base: [
+        {
+          name: "Generated output check",
+          run: [
+            "git diff --exit-code -- \\",
+            `  ${workflowPath} \\`,
+            `  ${path}`,
+          ].join("\n"),
+        },
+      ],
+      current: [
+        {
+          name: "Generated output check",
+          run: ["git diff --exit-code -- \\", `  ${workflowPath}`].join("\n"),
+        },
+      ],
+      removed: [],
+    }),
+  ).toThrow("toEqual");
+});
+
+test("guard normalization preserves directories, glob coverage and nonliteral commands", () => {
+  const tracked = new Set(["generated/kept.json"]);
+  const guarded = [
+    "git diff --exit-code -- \\",
+    "  generated \\",
+    '  "generated/*.json" \\',
+    "  untracked-output.json",
+  ].join("\n");
+  expect(normalizeGuardPathLines(guarded, tracked)).toBe(
+    [
+      "git diff --exit-code -- \\",
+      "  generated \\",
+      '  "generated/*.json"',
+    ].join("\n"),
+  );
+  expect(
+    normalizeGuardPathLines(
+      ["git diff --exit-code -- \\", "  untracked-output.json"].join("\n"),
+      tracked,
+    ),
+  ).not.toBe("git diff --exit-code --");
+  const commands = [
+    "echo untracked-output.json",
+    "git diff --exit-code -- \\",
+    '  "$GENERATED_OUTPUT"',
+    "echo done",
+  ].join("\n");
+  expect(normalizeGuardPathLines(commands, tracked)).toBe(commands);
 });
 
 test("CI coverage rejects a dropped check and accepts only an explicitly listed removal", () => {
@@ -2417,7 +2608,7 @@ test("head cancellation normalization is valid as the next base and rejects chan
 test("already hydrated merge-base jobs retain their generated manifest environment", () => {
   const base = {
     if: "scope",
-    needs: ["ci-plan", "ci-generated-sources"],
+    needs: "ci-plan",
     env: {
       CI_GENERATED_SOURCES_MANIFEST: `\${{ github.workspace }}/.cache/ci-generated-sources/manifest.json`,
     },
@@ -2425,4 +2616,24 @@ test("already hydrated merge-base jobs retain their generated manifest environme
   expectScope({ current: base, base });
   const { env: _env, ...missing } = base;
   expect(() => expectScope({ current: missing, base })).toThrow("toEqual");
+});
+
+test("a merge base with a separate producer job maps to the plan that now produces", () => {
+  const current = {
+    if: "scope",
+    needs: "ci-plan",
+    env: {
+      CI_GENERATED_SOURCES_MANIFEST: `\${{ github.workspace }}/.cache/ci-generated-sources/manifest.json`,
+    },
+  };
+  const base = { ...current, needs: ["ci-plan", "ci-generated-sources"] };
+  expectScope({ current, base });
+  const { env: _env, ...missing } = current;
+  for (const changed of [
+    missing,
+    { ...current, needs: ["ci-plan", "unrelated"] },
+    { ...current, needs: ["ci-plan", "ci-generated-sources"] },
+  ]) {
+    expect(() => expectScope({ current: changed, base })).toThrow("toEqual");
+  }
 });

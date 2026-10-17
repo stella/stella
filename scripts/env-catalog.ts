@@ -327,6 +327,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Maximum queued and running document verifications per organization (1–100; default 2).",
   LIST_VERIFICATION_DAILY_STARTS_MAX:
     "Maximum document verification starts per organization per Europe/Prague day (1–1000; default 20).",
+  CASE_LAW_DERIVED_AI:
+    'Model calls for case-law derived layers: "on" generates a missing decision analysis when a reader opens it and refreshes its significance from the citation graph; "off" (the default) serves stored analyses only, so local, seeded and CI stacks never reach a model by serving a decision.',
   CASE_LAW_EU_COMPLETION_ENABLED:
     "Enable bounded EU case-law completion. Defaults to false.",
   CASE_LAW_EU_COMPLETION_KILL_SWITCH:
@@ -745,6 +747,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   BETTER_AUTH_SECRET: ENV_CREDENTIAL_KIND.credential,
   BETTER_AUTH_URL: ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_DATABASE_POOL_MAX: ENV_CREDENTIAL_KIND.notCredential,
+  CASE_LAW_DERIVED_AI: ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_REPLAY_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_REPLAY_KILL_SWITCH: ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_REPLAY_DISABLED_SOURCES: ENV_CREDENTIAL_KIND.notCredential,
@@ -1284,6 +1287,7 @@ export const MANUAL_SCHEMA_KEYS = new Set([
   "STELLA_DESKTOP_TELEMETRY_LOCAL_DEBUG",
   "STELLA_DESKTOP_VIEW_PORT",
   "STELLA_ENABLE_DEBUG_CLIPBOARD_PERSISTENCE",
+  "STELLA_GENERATED_STORE",
   "STELLA_OPEN_CLIPBOARD_ON_LAUNCH",
   "STELLA_PGLITE_SNAPSHOT_CACHE_DIR",
   "STELLA_SEED_EMAIL_WORKSPACE_ID",
@@ -1461,6 +1465,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "APP_VERSION",
   "AWS_ENDPOINT_URL_BEDROCK_RUNTIME",
   "BASE_REF",
+  "COMPARISON_BASE",
   "BASE_SHA",
   "CANARY_PORT",
   "CANARY_PROBE_TOKEN",
@@ -1492,6 +1497,10 @@ export const TOOLING_ENV_KEYS = new Set([
   "E2E_WEB_URL",
   "EVENT_NAME",
   "EXPECTED_COMMIT",
+  // Flake trial ownership and isolated subprocess fixture handoffs.
+  "FLAKE_CHILD_RECORD",
+  "FLAKE_GATE_FIXTURE_PRELOADED",
+  "FLAKE_GATE_TRIAL",
   "GH_READ_TOKEN",
   "HEAD_SHA",
   // Scheduled journey checks: endpoint overrides and bounded request/retry timing.
@@ -1570,6 +1579,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "REHEARSAL_DECISIONS",
   "REHEARSAL_MIGRATE_BUDGET_SECONDS",
   "REHEARSAL_PRODUCTION_READY_URL",
+  "REHEARSAL_WRITER_GAP_BUDGET_SECONDS",
   // Trusted release-proof controls passed between workflow steps.
   "PROOF_MAIN_BASE",
   "RELEASE_PR_HEAD",

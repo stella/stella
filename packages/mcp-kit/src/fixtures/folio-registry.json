@@ -1,19 +1,24 @@
 {
   "source": {
     "repository": "stella/folio",
-    "commit": "daa059e8da69fb227e66b294b105558ea3291635",
+    "commit": "cd3e64e180cd7625099524ac367edc3596bf7fbc",
     "paths": [
       "packages/cli/src/registry.ts",
       "packages/cli/src/mcp.ts",
       "packages/cli/src/mcp.test.ts",
       "packages/cli/src/mcp-kit"
-    ]
+    ],
+    "capture": "CLI toKitTool metadata and mcp-kit discovery/invocation output; invocation handlers echo the tool name and normalized arguments.",
+    "dependencies": {
+      "@stll/folio-agents": "0.16.1",
+      "@stll/folio-core": "0.60.0"
+    }
   },
   "tools": [
     {
       "name": "read_document",
       "summary": "Read blocks as `[id] text` lines (a table row as `| [id] cell | [id] cell |`), with the fileVersion writes need. When `nextCursor` is set, pass it as `cursor` for the next page.",
-      "guide": "Read the full document body as a list of blocks (paragraphs, headings, list items). Call this first, or whenever you need fresh block ids after a mutation — block ids from a stale read may no longer resolve. A block shows its number or bullet (`2.1.`, `a)`, `•`) as `displayLabel`, a numbered heading included; a heading also has `headingLevel` and a numbered block `listLevel`. Each block includes a `blockTextHash`; echo it as `precondition.blockTextHash` on a suggest_changes / add_comment operation to guard against the block changing before that call runs.",
+      "guide": "Read the full document body as a list of blocks (paragraphs, headings, list items). Call this first, or whenever you need fresh block ids after a mutation — block ids from a stale read may no longer resolve. A block shows its number or bullet (`2.1.`, `a)`, `•`) as `displayLabel`, a numbered heading included; a heading also has `headingLevel`. Paragraph blocks include `statedNumbering`; diagnostic blocks omit paragraph numbering fields. `listReference` is present when numbering resolves to an instance. Each block includes a `blockTextHash`; echo it as `precondition.blockTextHash` on a suggest_changes / add_comment operation to guard against the block changing before that call runs.",
       "access": "read",
       "destructive": false,
       "inputSchema": {
@@ -40,7 +45,7 @@
           },
           "formatting": {
             "type": "boolean",
-            "description": "Return each block's fields (kind, displayLabel, headingLevel, listLevel, blockTextHash, blockIdSource, tableCell) instead of `[id] text` lines."
+            "description": "Return each block's fields (kind, displayLabel, headingLevel, paragraph statedNumbering and listReference when applicable, blockTextHash, blockIdSource, tableCell) instead of `[id] text` lines. Diagnostic blocks omit paragraph numbering fields."
           }
         },
         "required": ["path"],
@@ -70,7 +75,7 @@
           },
           "formatting": {
             "type": "boolean",
-            "description": "Return each block's fields (kind, displayLabel, headingLevel, listLevel, blockTextHash, blockIdSource, tableCell) instead of `[id] text` lines."
+            "description": "Return each block's fields (kind, displayLabel, headingLevel, paragraph statedNumbering and listReference when applicable, blockTextHash, blockIdSource, tableCell) instead of `[id] text` lines. Diagnostic blocks omit paragraph numbering fields."
           }
         },
         "required": ["path"],
@@ -154,7 +159,7 @@
     {
       "name": "read_section",
       "summary": "Read one section by its outline handle.",
-      "guide": "Read one logical heading section using a handle from get_document_outline. Content is block-bounded and paginated with an afterBlockId cursor, avoiding a full-document read. Blocks have the same fields as read_document's, `displayLabel`, `headingLevel` and `listLevel` included. Each block includes a `blockTextHash`; echo it as `precondition.blockTextHash` on a suggest_changes / add_comment operation.",
+      "guide": "Read one logical heading section using a handle from get_document_outline. Content is block-bounded and paginated with an afterBlockId cursor, avoiding a full-document read. Blocks have the same fields as read_document's, including `displayLabel`, `headingLevel`, and paragraph numbering fields on paragraph blocks. Diagnostic blocks omit paragraph numbering fields. Each block includes a `blockTextHash`; echo it as `precondition.blockTextHash` on a suggest_changes / add_comment operation.",
       "access": "read",
       "destructive": false,
       "domain": "read",
@@ -705,7 +710,7 @@
     {
       "name": "suggest_changes",
       "summary": "Apply edits as tracked changes in one batch that lands whole or not at all; returns the new fileVersion. Operations: replaceAll {find, replace, matchCase?, wholeWord?} (every match); replaceInBlock {blockId, find, replace}; replaceRange {range, replace}; replaceBlock {blockId, text}; insertAfterBlock / insertBeforeBlock {blockId, text}; deleteBlock {blockId}; addComment {comment, quote or blockId}; commentOnRange {range, comment}. Others: describe_capability.",
-      "guide": "Supported operations: replaceInBlock (replace an exact text match inside one block (`find` -> `replace`)); replaceRange (replace the text covered by a `range` copied from find_text); commentOnRange (attach a comment to a `range` copied from find_text); formatRange (toggle bold, italic, or underline on a `range` copied from find_text); insertAfterBlock (insert a new paragraph after a block, with optional direct alignment and spacing); insertBeforeBlock (insert a new paragraph before a block, with optional direct alignment and spacing); replaceBlock (replace one block's entire text); deleteBlock (delete one block); splitBlock (break one block in two at `offset`, moving a paragraph mark and no words); mergeBlockWithNext (join one block with the block after it in the same container); setBlockParagraphProperties (change one block's paragraph properties (list level, paragraph style, direct alignment or spacing) without touching its words); insertTable (insert a whole table of `rows` next to the anchor block); deleteTable (delete the whole table the anchor block sits in); insertTableRow (insert a table row next to the row containing a cell block); deleteTableRow (delete the table row containing a cell block); insertTableColumn (insert a table column next to the column containing a cell block); deleteTableColumn (delete the table column containing a cell block); mergeTableCells (merge table cells from a cell block to `endBlockId`, or `rowCount` rows downward); splitTableCell (split a previously merged table cell).\nStructural edits: set `pageBreakBefore: true` on an insert to start it on a new page; set `styleId` on an insert or replaceBlock to apply a paragraph style such as a clause heading. Inserts also accept direct `alignment` and `spacing`, with null restoring style inheritance. Never emit directive markers or markdown syntax as paragraph text.\nLimits: at most 50 operations per call (batch larger edits across calls); each text field at most 100,000 characters.\nSet `severity` and `area` on operations when the edit is part of a structured review.\nFields by operation type:\nreplaceAll: id, find, replace, matchCase, wholeWord, severity, area\naddComment: id, comment, blockId, quote, severity, area\nreplaceInBlock: id, blockId, severity, area, precondition, find, replace, comment\nreplaceRange: id, range, severity, area, precondition, replace, comment\ncommentOnRange: id, range, severity, area, precondition, comment\nformatRange: id, range, severity, area, precondition, formatting\ninsertAfterBlock: id, blockId, severity, area, precondition, text, inheritFormatting, alignment, spacing, indentation, lineBreakMode, formattingScope, listLevel, numbering, moveId, pageBreakBefore, hardPageBreak, styleId, outlineLevel, comment\ninsertBeforeBlock: id, blockId, severity, area, precondition, text, inheritFormatting, alignment, spacing, indentation, lineBreakMode, formattingScope, listLevel, numbering, moveId, pageBreakBefore, hardPageBreak, styleId, outlineLevel, comment\nreplaceBlock: id, blockId, severity, area, precondition, text, preserveFormatting, styleId, comment\ndeleteBlock: id, blockId, severity, area, precondition, moveId, comment\nsplitBlock: id, blockId, severity, area, precondition, offset, separator, firstParagraphProperties, secondParagraphProperties\nmergeBlockWithNext: id, blockId, severity, area, precondition, separator, mergedParagraphProperties\nsetBlockParagraphProperties: id, blockId, severity, area, precondition, properties\ninsertTable: id, blockId, severity, area, precondition, position, rows\ndeleteTable: id, blockId, severity, area, precondition\ninsertTableRow: id, blockId, severity, area, precondition, position, cellTexts\ndeleteTableRow: id, blockId, severity, area, precondition\ninsertTableColumn: id, blockId, severity, area, precondition, position, cellTexts\ndeleteTableColumn: id, blockId, severity, area, precondition\nmergeTableCells: id, blockId, severity, area, precondition, endBlockId, rowCount\nsplitTableCell: id, blockId, severity, area, precondition",
+      "guide": "Supported operations: replaceInBlock (replace an exact text match inside one block (`find` -> `replace`)); replaceRange (replace the text covered by a `range` copied from find_text); commentOnRange (attach a comment to a `range` copied from find_text); formatRange (toggle bold, italic, or underline on a `range` copied from find_text); insertAfterBlock (insert a new paragraph after a block, with optional direct alignment and spacing); insertBeforeBlock (insert a new paragraph before a block, with optional direct alignment and spacing); replaceBlock (replace one block's entire text); deleteBlock (delete one block); splitBlock (break one block in two at `offset`, moving a paragraph mark and no words); mergeBlockWithNext (join one block with the block after it in the same container); setBlockParagraphProperties (change one block's paragraph properties (list level, paragraph style, direct alignment or spacing) without touching its words); insertTable (insert a whole table of `rows` next to the anchor block); deleteTable (delete the whole table the anchor block sits in); insertTableRow (insert a table row next to the row containing a cell block); deleteTableRow (delete the table row containing a cell block); insertTableColumn (insert a table column next to the column containing a cell block); deleteTableColumn (delete the table column containing a cell block); mergeTableCells (merge table cells from a cell block to `endBlockId`, or `rowCount` rows downward); splitTableCell (split a previously merged table cell).\nStructural edits: set `pageBreakBefore: true` on an insert to start it on a new page; set `styleId` on an insert or replaceBlock to apply a paragraph style such as a clause heading. Inserts also accept direct `alignment` and `spacing`, with null restoring style inheritance. Never emit directive markers or markdown syntax as paragraph text.\nLimits: at most 50 operations per call (batch larger edits across calls); each text field at most 100,000 characters.\nSet `severity` and `area` on operations when the edit is part of a structured review.\nFields by operation type:\nreplaceAll: id, find, replace, matchCase, wholeWord, severity, area\naddComment: id, comment, blockId, quote, severity, area\nreplaceInBlock: id, blockId, severity, area, precondition, find, replace, comment\nreplaceRange: id, range, severity, area, precondition, replace, comment\ncommentOnRange: id, range, severity, area, precondition, comment\nformatRange: id, range, severity, area, precondition, formatting\ninsertAfterBlock: id, blockId, severity, area, precondition, text, inheritFormatting, alignment, spacing, indentation, lineBreakMode, formattingScope, numbering, moveId, pageBreakBefore, hardPageBreak, styleId, outlineLevel, comment\ninsertBeforeBlock: id, blockId, severity, area, precondition, text, inheritFormatting, alignment, spacing, indentation, lineBreakMode, formattingScope, numbering, moveId, pageBreakBefore, hardPageBreak, styleId, outlineLevel, comment\nreplaceBlock: id, blockId, severity, area, precondition, text, preserveFormatting, styleId, comment\ndeleteBlock: id, blockId, severity, area, precondition, moveId, comment\nsplitBlock: id, blockId, severity, area, precondition, offset, separator, firstParagraphProperties, secondParagraphProperties\nmergeBlockWithNext: id, blockId, severity, area, precondition, separator, mergedParagraphProperties\nsetBlockParagraphProperties: id, blockId, severity, area, precondition, properties\ninsertTable: id, blockId, severity, area, precondition, position, rows\ndeleteTable: id, blockId, severity, area, precondition\ninsertTableRow: id, blockId, severity, area, precondition, position, cellTexts\ndeleteTableRow: id, blockId, severity, area, precondition\ninsertTableColumn: id, blockId, severity, area, precondition, position, cellTexts\ndeleteTableColumn: id, blockId, severity, area, precondition\nmergeTableCells: id, blockId, severity, area, precondition, endBlockId, rowCount\nsplitTableCell: id, blockId, severity, area, precondition",
       "brief": "Fields (* required):\nreplaceAll {find*, replace*, matchCase, wholeWord}: every match in the body and tables; run formatting is kept\nreplaceInBlock {blockId*, find*, replace*}: find must occur once in the block\nreplaceRange {range*, replace*}: range from find_text\nreplaceBlock {blockId*, text*, preserveFormatting}\ninsertAfterBlock | insertBeforeBlock {blockId*, text*, styleId}\ndeleteBlock {blockId*}\naddComment {comment*, blockId | quote}: a quote alone anchors to the one block containing it\ncommentOnRange {range*, comment*}\nformatRange {range*, formatting* {bold, italic, underline}}\nEdits take an optional comment. mode \"direct\" edits without tracking. Split, merge and table operations: detail \"full\".",
       "access": "write",
       "destructive": true,
@@ -1052,30 +1057,72 @@
                     {
                       "type": "object",
                       "properties": {
-                        "numId": {
-                          "type": "integer",
-                          "minimum": 1,
-                          "maximum": 9007199254740991
-                        },
-                        "level": {
-                          "type": "integer",
-                          "minimum": 0,
-                          "maximum": 9007199254740991
+                        "kind": {
+                          "type": "string",
+                          "enum": ["none"]
                         }
                       },
-                      "required": ["numId", "level"],
+                      "required": ["kind"],
                       "additionalProperties": false
                     },
                     {
                       "type": "object",
                       "properties": {
-                        "start": {
-                          "type": "string",
-                          "enum": ["new"]
-                        },
                         "kind": {
                           "type": "string",
-                          "enum": ["numbered", "bullet"]
+                          "enum": ["inherit"]
+                        }
+                      },
+                      "required": ["kind"],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": ["levelOnly"]
+                        },
+                        "ilvl": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 8
+                        }
+                      },
+                      "required": ["kind", "ilvl"],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": ["reference"]
+                        },
+                        "numId": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 9007199254740991
+                        },
+                        "ilvl": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 8
+                        }
+                      },
+                      "required": ["kind", "numId"],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": ["newList"]
+                        },
+                        "format": {
+                          "type": "string",
+                          "enum": ["bullet", "numbered"]
                         },
                         "level": {
                           "type": "integer",
@@ -1083,14 +1130,11 @@
                           "maximum": 8
                         }
                       },
-                      "required": ["start", "kind"],
+                      "required": ["kind", "format"],
                       "additionalProperties": false
-                    },
-                    {
-                      "type": "null"
                     }
                   ],
-                  "description": "An existing numbering instance and level (`numId` from a prior read; it must name an instance the document defines, one a list block read from it carries, or the operation skips with `missingNumbering`); or `{ start: \"new\", kind: \"numbered\" | \"bullet\", level? }` to start a new list, numbered from the first item, with every paragraph this operation numbers in it (separate operations start separate lists; works in a document with no lists); null removes paragraph numbering."
+                  "description": "A paragraph numbering request: `none` cancels numbering, `inherit` removes the direct numbering reference, `levelOnly` sets only `w:ilvl`, `reference` selects a defined numbering instance with an optional level override, and `newList` starts a list with the requested format."
                 },
                 "hardPageBreak": {
                   "type": "object",
@@ -1197,48 +1241,77 @@
                       ],
                       "description": "Direct outline level (`w:outlineLvl`): a heading level from 0 (top) to 8, or body text. null removes it and lets the paragraph style decide."
                     },
-                    "listLevel": {
-                      "oneOf": [
-                        {
-                          "type": "integer",
-                          "minimum": 0,
-                          "maximum": 9007199254740991
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ],
-                      "description": "`w:numPr/w:ilvl`, zero-based; a number retains the paragraph or anchor's numbering instance (`numId`), while null removes paragraph numbering unless a concrete numbering instance is supplied, in which case it omits the direct level."
-                    },
                     "numbering": {
                       "oneOf": [
                         {
                           "type": "object",
                           "properties": {
-                            "numId": {
-                              "type": "integer",
-                              "minimum": 1,
-                              "maximum": 9007199254740991
-                            },
-                            "level": {
-                              "type": "integer",
-                              "minimum": 0,
-                              "maximum": 9007199254740991
+                            "kind": {
+                              "type": "string",
+                              "enum": ["none"]
                             }
                           },
-                          "required": ["numId", "level"],
+                          "required": ["kind"],
                           "additionalProperties": false
                         },
                         {
                           "type": "object",
                           "properties": {
-                            "start": {
-                              "type": "string",
-                              "enum": ["new"]
-                            },
                             "kind": {
                               "type": "string",
-                              "enum": ["numbered", "bullet"]
+                              "enum": ["inherit"]
+                            }
+                          },
+                          "required": ["kind"],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "enum": ["levelOnly"]
+                            },
+                            "ilvl": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 8
+                            }
+                          },
+                          "required": ["kind", "ilvl"],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "enum": ["reference"]
+                            },
+                            "numId": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 9007199254740991
+                            },
+                            "ilvl": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 8
+                            }
+                          },
+                          "required": ["kind", "numId"],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "enum": ["newList"]
+                            },
+                            "format": {
+                              "type": "string",
+                              "enum": ["bullet", "numbered"]
                             },
                             "level": {
                               "type": "integer",
@@ -1246,14 +1319,11 @@
                               "maximum": 8
                             }
                           },
-                          "required": ["start", "kind"],
+                          "required": ["kind", "format"],
                           "additionalProperties": false
-                        },
-                        {
-                          "type": "null"
                         }
                       ],
-                      "description": "An existing numbering instance and level (`numId` from a prior read; it must name an instance the document defines, one a list block read from it carries, or the operation skips with `missingNumbering`); or `{ start: \"new\", kind: \"numbered\" | \"bullet\", level? }` to start a new list, numbered from the first item, with every paragraph this operation numbers in it (separate operations start separate lists; works in a document with no lists); null removes paragraph numbering."
+                      "description": "A paragraph numbering request: `none` cancels numbering, `inherit` removes the direct numbering reference, `levelOnly` sets only `w:ilvl`, `reference` selects a defined numbering instance with an optional level override, and `newList` starts a list with the requested format."
                     },
                     "indentation": {
                       "oneOf": [
@@ -1413,48 +1483,77 @@
                       ],
                       "description": "Direct outline level (`w:outlineLvl`): a heading level from 0 (top) to 8, or body text. null removes it and lets the paragraph style decide."
                     },
-                    "listLevel": {
-                      "oneOf": [
-                        {
-                          "type": "integer",
-                          "minimum": 0,
-                          "maximum": 9007199254740991
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ],
-                      "description": "`w:numPr/w:ilvl`, zero-based; a number retains the paragraph or anchor's numbering instance (`numId`), while null removes paragraph numbering unless a concrete numbering instance is supplied, in which case it omits the direct level."
-                    },
                     "numbering": {
                       "oneOf": [
                         {
                           "type": "object",
                           "properties": {
-                            "numId": {
-                              "type": "integer",
-                              "minimum": 1,
-                              "maximum": 9007199254740991
-                            },
-                            "level": {
-                              "type": "integer",
-                              "minimum": 0,
-                              "maximum": 9007199254740991
+                            "kind": {
+                              "type": "string",
+                              "enum": ["none"]
                             }
                           },
-                          "required": ["numId", "level"],
+                          "required": ["kind"],
                           "additionalProperties": false
                         },
                         {
                           "type": "object",
                           "properties": {
-                            "start": {
-                              "type": "string",
-                              "enum": ["new"]
-                            },
                             "kind": {
                               "type": "string",
-                              "enum": ["numbered", "bullet"]
+                              "enum": ["inherit"]
+                            }
+                          },
+                          "required": ["kind"],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "enum": ["levelOnly"]
+                            },
+                            "ilvl": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 8
+                            }
+                          },
+                          "required": ["kind", "ilvl"],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "enum": ["reference"]
+                            },
+                            "numId": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 9007199254740991
+                            },
+                            "ilvl": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 8
+                            }
+                          },
+                          "required": ["kind", "numId"],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "enum": ["newList"]
+                            },
+                            "format": {
+                              "type": "string",
+                              "enum": ["bullet", "numbered"]
                             },
                             "level": {
                               "type": "integer",
@@ -1462,14 +1561,11 @@
                               "maximum": 8
                             }
                           },
-                          "required": ["start", "kind"],
+                          "required": ["kind", "format"],
                           "additionalProperties": false
-                        },
-                        {
-                          "type": "null"
                         }
                       ],
-                      "description": "An existing numbering instance and level (`numId` from a prior read; it must name an instance the document defines, one a list block read from it carries, or the operation skips with `missingNumbering`); or `{ start: \"new\", kind: \"numbered\" | \"bullet\", level? }` to start a new list, numbered from the first item, with every paragraph this operation numbers in it (separate operations start separate lists; works in a document with no lists); null removes paragraph numbering."
+                      "description": "A paragraph numbering request: `none` cancels numbering, `inherit` removes the direct numbering reference, `levelOnly` sets only `w:ilvl`, `reference` selects a defined numbering instance with an optional level override, and `newList` starts a list with the requested format."
                     },
                     "indentation": {
                       "oneOf": [
@@ -1629,48 +1725,77 @@
                       ],
                       "description": "Direct outline level (`w:outlineLvl`): a heading level from 0 (top) to 8, or body text. null removes it and lets the paragraph style decide."
                     },
-                    "listLevel": {
-                      "oneOf": [
-                        {
-                          "type": "integer",
-                          "minimum": 0,
-                          "maximum": 9007199254740991
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ],
-                      "description": "`w:numPr/w:ilvl`, zero-based; a number retains the paragraph or anchor's numbering instance (`numId`), while null removes paragraph numbering unless a concrete numbering instance is supplied, in which case it omits the direct level."
-                    },
                     "numbering": {
                       "oneOf": [
                         {
                           "type": "object",
                           "properties": {
-                            "numId": {
-                              "type": "integer",
-                              "minimum": 1,
-                              "maximum": 9007199254740991
-                            },
-                            "level": {
-                              "type": "integer",
-                              "minimum": 0,
-                              "maximum": 9007199254740991
+                            "kind": {
+                              "type": "string",
+                              "enum": ["none"]
                             }
                           },
-                          "required": ["numId", "level"],
+                          "required": ["kind"],
                           "additionalProperties": false
                         },
                         {
                           "type": "object",
                           "properties": {
-                            "start": {
-                              "type": "string",
-                              "enum": ["new"]
-                            },
                             "kind": {
                               "type": "string",
-                              "enum": ["numbered", "bullet"]
+                              "enum": ["inherit"]
+                            }
+                          },
+                          "required": ["kind"],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "enum": ["levelOnly"]
+                            },
+                            "ilvl": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 8
+                            }
+                          },
+                          "required": ["kind", "ilvl"],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "enum": ["reference"]
+                            },
+                            "numId": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 9007199254740991
+                            },
+                            "ilvl": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 8
+                            }
+                          },
+                          "required": ["kind", "numId"],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "enum": ["newList"]
+                            },
+                            "format": {
+                              "type": "string",
+                              "enum": ["bullet", "numbered"]
                             },
                             "level": {
                               "type": "integer",
@@ -1678,14 +1803,11 @@
                               "maximum": 8
                             }
                           },
-                          "required": ["start", "kind"],
+                          "required": ["kind", "format"],
                           "additionalProperties": false
-                        },
-                        {
-                          "type": "null"
                         }
                       ],
-                      "description": "An existing numbering instance and level (`numId` from a prior read; it must name an instance the document defines, one a list block read from it carries, or the operation skips with `missingNumbering`); or `{ start: \"new\", kind: \"numbered\" | \"bullet\", level? }` to start a new list, numbered from the first item, with every paragraph this operation numbers in it (separate operations start separate lists; works in a document with no lists); null removes paragraph numbering."
+                      "description": "A paragraph numbering request: `none` cancels numbering, `inherit` removes the direct numbering reference, `levelOnly` sets only `w:ilvl`, `reference` selects a defined numbering instance with an optional level override, and `newList` starts a list with the requested format."
                     },
                     "indentation": {
                       "oneOf": [
@@ -1845,48 +1967,77 @@
                       ],
                       "description": "Direct outline level (`w:outlineLvl`): a heading level from 0 (top) to 8, or body text. null removes it and lets the paragraph style decide."
                     },
-                    "listLevel": {
-                      "oneOf": [
-                        {
-                          "type": "integer",
-                          "minimum": 0,
-                          "maximum": 9007199254740991
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ],
-                      "description": "`w:numPr/w:ilvl`, zero-based; a number retains the paragraph or anchor's numbering instance (`numId`), while null removes paragraph numbering unless a concrete numbering instance is supplied, in which case it omits the direct level."
-                    },
                     "numbering": {
                       "oneOf": [
                         {
                           "type": "object",
                           "properties": {
-                            "numId": {
-                              "type": "integer",
-                              "minimum": 1,
-                              "maximum": 9007199254740991
-                            },
-                            "level": {
-                              "type": "integer",
-                              "minimum": 0,
-                              "maximum": 9007199254740991
+                            "kind": {
+                              "type": "string",
+                              "enum": ["none"]
                             }
                           },
-                          "required": ["numId", "level"],
+                          "required": ["kind"],
                           "additionalProperties": false
                         },
                         {
                           "type": "object",
                           "properties": {
-                            "start": {
-                              "type": "string",
-                              "enum": ["new"]
-                            },
                             "kind": {
                               "type": "string",
-                              "enum": ["numbered", "bullet"]
+                              "enum": ["inherit"]
+                            }
+                          },
+                          "required": ["kind"],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "enum": ["levelOnly"]
+                            },
+                            "ilvl": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 8
+                            }
+                          },
+                          "required": ["kind", "ilvl"],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "enum": ["reference"]
+                            },
+                            "numId": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 9007199254740991
+                            },
+                            "ilvl": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 8
+                            }
+                          },
+                          "required": ["kind", "numId"],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "enum": ["newList"]
+                            },
+                            "format": {
+                              "type": "string",
+                              "enum": ["bullet", "numbered"]
                             },
                             "level": {
                               "type": "integer",
@@ -1894,14 +2045,11 @@
                               "maximum": 8
                             }
                           },
-                          "required": ["start", "kind"],
+                          "required": ["kind", "format"],
                           "additionalProperties": false
-                        },
-                        {
-                          "type": "null"
                         }
                       ],
-                      "description": "An existing numbering instance and level (`numId` from a prior read; it must name an instance the document defines, one a list block read from it carries, or the operation skips with `missingNumbering`); or `{ start: \"new\", kind: \"numbered\" | \"bullet\", level? }` to start a new list, numbered from the first item, with every paragraph this operation numbers in it (separate operations start separate lists; works in a document with no lists); null removes paragraph numbering."
+                      "description": "A paragraph numbering request: `none` cancels numbering, `inherit` removes the direct numbering reference, `levelOnly` sets only `w:ilvl`, `reference` selects a defined numbering instance with an optional level override, and `newList` starts a list with the requested format."
                     },
                     "indentation": {
                       "oneOf": [
@@ -2010,19 +2158,6 @@
                   },
                   "minProperties": 1,
                   "additionalProperties": false
-                },
-                "listLevel": {
-                  "oneOf": [
-                    {
-                      "type": "integer",
-                      "minimum": 0,
-                      "maximum": 9007199254740991
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ],
-                  "description": "`w:numPr/w:ilvl`, zero-based; a number retains the paragraph or anchor's numbering instance (`numId`), while null removes paragraph numbering unless a concrete numbering instance is supplied, in which case it omits the direct level."
                 },
                 "offset": {
                   "type": "integer",
@@ -2356,17 +2491,6 @@
                 "mergedParagraphProperties": {
                   "$ref": "#/$defs/properties"
                 },
-                "listLevel": {
-                  "oneOf": [
-                    {
-                      "type": "integer",
-                      "minimum": 0
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                },
                 "offset": {
                   "type": "integer",
                   "minimum": 0
@@ -2435,17 +2559,6 @@
               "outlineLevel": {
                 "$ref": "#/$defs/outlineLevel"
               },
-              "listLevel": {
-                "oneOf": [
-                  {
-                    "type": "integer",
-                    "minimum": 0
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
-              },
               "numbering": {
                 "$ref": "#/$defs/numbering"
               },
@@ -2488,23 +2601,46 @@
               {
                 "type": "object",
                 "properties": {
-                  "numId": {
-                    "type": "integer",
-                    "minimum": 1
-                  },
-                  "level": {
-                    "type": "integer",
-                    "minimum": 0
+                  "kind": {
+                    "type": "string",
+                    "enum": ["none"]
                   }
                 },
-                "required": ["numId", "level"],
+                "required": ["kind"],
                 "additionalProperties": false
               },
               {
-                "$ref": "#/$defs/numbering2"
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": ["inherit"]
+                  }
+                },
+                "required": ["kind"],
+                "additionalProperties": false
               },
               {
-                "type": "null"
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": ["levelOnly"]
+                  },
+                  "ilvl": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 8
+                  }
+                },
+                "required": ["kind", "ilvl"],
+                "additionalProperties": false
+              },
+              {
+                "$ref": "#/$defs/numbering3"
+              },
+              {
+                "$ref": "#/$defs/numbering2"
               }
             ]
           },
@@ -2616,13 +2752,13 @@
           "numbering2": {
             "type": "object",
             "properties": {
-              "start": {
-                "type": "string",
-                "enum": ["new"]
-              },
               "kind": {
                 "type": "string",
-                "enum": ["numbered", "bullet"]
+                "enum": ["newList"]
+              },
+              "format": {
+                "type": "string",
+                "enum": ["bullet", "numbered"]
               },
               "level": {
                 "type": "integer",
@@ -2630,7 +2766,27 @@
                 "maximum": 8
               }
             },
-            "required": ["start", "kind"],
+            "required": ["kind", "format"],
+            "additionalProperties": false
+          },
+          "numbering3": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["reference"]
+              },
+              "numId": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "ilvl": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 8
+              }
+            },
+            "required": ["kind", "numId"],
             "additionalProperties": false
           }
         }
@@ -3280,7 +3436,7 @@
         "capability": "read_document",
         "detail": "full"
       },
-      "result": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"id\\\":\\\"read_document\\\",\\\"description\\\":\\\"Read blocks as `[id] text` lines (a table row as `| [id] cell | [id] cell |`), with the fileVersion writes need. When `nextCursor` is set, pass it as `cursor` for the next page.\\\\nRead the full document body as a list of blocks (paragraphs, headings, list items). Call this first, or whenever you need fresh block ids after a mutation — block ids from a stale read may no longer resolve. A block shows its number or bullet (`2.1.`, `a)`, `•`) as `displayLabel`, a numbered heading included; a heading also has `headingLevel` and a numbered block `listLevel`. Each block includes a `blockTextHash`; echo it as `precondition.blockTextHash` on a suggest_changes / add_comment operation to guard against the block changing before that call runs.\\\",\\\"access\\\":\\\"read\\\",\\\"destructive\\\":false,\\\"inputSchema\\\":{\\\"type\\\":\\\"object\\\",\\\"properties\\\":{\\\"path\\\":{\\\"type\\\":\\\"string\\\",\\\"description\\\":\\\"The .docx file, absolute or relative to the first allowed root.\\\"},\\\"fileVersion\\\":{\\\"type\\\":\\\"string\\\",\\\"pattern\\\":\\\"^[0-9a-f]{64}$\\\",\\\"description\\\":\\\"When given, refuse unless the file still has this fileVersion.\\\"},\\\"maxBlocks\\\":{\\\"type\\\":\\\"integer\\\",\\\"minimum\\\":1,\\\"maximum\\\":1000,\\\"description\\\":\\\"Blocks per page. The response carries `nextCursor` when more remain.\\\"},\\\"cursor\\\":{\\\"type\\\":\\\"string\\\",\\\"description\\\":\\\"`nextCursor` from the previous page. A cursor is bound to the fileVersion it was issued for.\\\"},\\\"formatting\\\":{\\\"type\\\":\\\"boolean\\\",\\\"description\\\":\\\"Return each block's fields (kind, displayLabel, headingLevel, listLevel, blockTextHash, blockIdSource, tableCell) instead of `[id] text` lines.\\\"}},\\\"required\\\":[\\\"path\\\"],\\\"additionalProperties\\\":false}}\"}],\"isError\":false}"
+      "result": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"id\\\":\\\"read_document\\\",\\\"description\\\":\\\"Read blocks as `[id] text` lines (a table row as `| [id] cell | [id] cell |`), with the fileVersion writes need. When `nextCursor` is set, pass it as `cursor` for the next page.\\\\nRead the full document body as a list of blocks (paragraphs, headings, list items). Call this first, or whenever you need fresh block ids after a mutation — block ids from a stale read may no longer resolve. A block shows its number or bullet (`2.1.`, `a)`, `•`) as `displayLabel`, a numbered heading included; a heading also has `headingLevel`. Paragraph blocks include `statedNumbering`; diagnostic blocks omit paragraph numbering fields. `listReference` is present when numbering resolves to an instance. Each block includes a `blockTextHash`; echo it as `precondition.blockTextHash` on a suggest_changes / add_comment operation to guard against the block changing before that call runs.\\\",\\\"access\\\":\\\"read\\\",\\\"destructive\\\":false,\\\"inputSchema\\\":{\\\"type\\\":\\\"object\\\",\\\"properties\\\":{\\\"path\\\":{\\\"type\\\":\\\"string\\\",\\\"description\\\":\\\"The .docx file, absolute or relative to the first allowed root.\\\"},\\\"fileVersion\\\":{\\\"type\\\":\\\"string\\\",\\\"pattern\\\":\\\"^[0-9a-f]{64}$\\\",\\\"description\\\":\\\"When given, refuse unless the file still has this fileVersion.\\\"},\\\"maxBlocks\\\":{\\\"type\\\":\\\"integer\\\",\\\"minimum\\\":1,\\\"maximum\\\":1000,\\\"description\\\":\\\"Blocks per page. The response carries `nextCursor` when more remain.\\\"},\\\"cursor\\\":{\\\"type\\\":\\\"string\\\",\\\"description\\\":\\\"`nextCursor` from the previous page. A cursor is bound to the fileVersion it was issued for.\\\"},\\\"formatting\\\":{\\\"type\\\":\\\"boolean\\\",\\\"description\\\":\\\"Return each block's fields (kind, displayLabel, headingLevel, paragraph statedNumbering and listReference when applicable, blockTextHash, blockIdSource, tableCell) instead of `[id] text` lines. Diagnostic blocks omit paragraph numbering fields.\\\"}},\\\"required\\\":[\\\"path\\\"],\\\"additionalProperties\\\":false}}\"}],\"isError\":false}"
     },
     {
       "name": "describe_capability",
@@ -3310,7 +3466,7 @@
         "capability": "read_section",
         "detail": "full"
       },
-      "result": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"id\\\":\\\"read_section\\\",\\\"description\\\":\\\"Read one section by its outline handle.\\\\nRead one logical heading section using a handle from get_document_outline. Content is block-bounded and paginated with an afterBlockId cursor, avoiding a full-document read. Blocks have the same fields as read_document's, `displayLabel`, `headingLevel` and `listLevel` included. Each block includes a `blockTextHash`; echo it as `precondition.blockTextHash` on a suggest_changes / add_comment operation.\\\",\\\"access\\\":\\\"read\\\",\\\"destructive\\\":false,\\\"inputSchema\\\":{\\\"type\\\":\\\"object\\\",\\\"properties\\\":{\\\"path\\\":{\\\"type\\\":\\\"string\\\",\\\"description\\\":\\\"The .docx file, absolute or relative to the first allowed root.\\\"},\\\"fileVersion\\\":{\\\"type\\\":\\\"string\\\",\\\"pattern\\\":\\\"^[0-9a-f]{64}$\\\",\\\"description\\\":\\\"When given, refuse unless the file still has this fileVersion.\\\"},\\\"handle\\\":{\\\"type\\\":\\\"object\\\",\\\"properties\\\":{\\\"type\\\":{\\\"type\\\":\\\"string\\\",\\\"enum\\\":[\\\"headingSection\\\"]},\\\"story\\\":{\\\"type\\\":\\\"string\\\",\\\"enum\\\":[\\\"main\\\"]},\\\"headingBlockId\\\":{\\\"type\\\":\\\"string\\\"},\\\"headingTextHash\\\":{\\\"type\\\":\\\"string\\\"},\\\"headingLevel\\\":{\\\"type\\\":\\\"integer\\\",\\\"minimum\\\":1,\\\"maximum\\\":9}},\\\"required\\\":[\\\"type\\\",\\\"story\\\",\\\"headingBlockId\\\",\\\"headingTextHash\\\",\\\"headingLevel\\\"],\\\"additionalProperties\\\":false},\\\"maxBlocks\\\":{\\\"type\\\":\\\"integer\\\",\\\"minimum\\\":1,\\\"maximum\\\":200,\\\"description\\\":\\\"Maximum blocks to return. Defaults to 100.\\\"},\\\"afterBlockId\\\":{\\\"type\\\":\\\"string\\\",\\\"description\\\":\\\"Continue after this block id from the preceding read_section response.\\\"}},\\\"required\\\":[\\\"path\\\",\\\"handle\\\"],\\\"additionalProperties\\\":false}}\"}],\"isError\":false}"
+      "result": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"id\\\":\\\"read_section\\\",\\\"description\\\":\\\"Read one section by its outline handle.\\\\nRead one logical heading section using a handle from get_document_outline. Content is block-bounded and paginated with an afterBlockId cursor, avoiding a full-document read. Blocks have the same fields as read_document's, including `displayLabel`, `headingLevel`, and paragraph numbering fields on paragraph blocks. Diagnostic blocks omit paragraph numbering fields. Each block includes a `blockTextHash`; echo it as `precondition.blockTextHash` on a suggest_changes / add_comment operation.\\\",\\\"access\\\":\\\"read\\\",\\\"destructive\\\":false,\\\"inputSchema\\\":{\\\"type\\\":\\\"object\\\",\\\"properties\\\":{\\\"path\\\":{\\\"type\\\":\\\"string\\\",\\\"description\\\":\\\"The .docx file, absolute or relative to the first allowed root.\\\"},\\\"fileVersion\\\":{\\\"type\\\":\\\"string\\\",\\\"pattern\\\":\\\"^[0-9a-f]{64}$\\\",\\\"description\\\":\\\"When given, refuse unless the file still has this fileVersion.\\\"},\\\"handle\\\":{\\\"type\\\":\\\"object\\\",\\\"properties\\\":{\\\"type\\\":{\\\"type\\\":\\\"string\\\",\\\"enum\\\":[\\\"headingSection\\\"]},\\\"story\\\":{\\\"type\\\":\\\"string\\\",\\\"enum\\\":[\\\"main\\\"]},\\\"headingBlockId\\\":{\\\"type\\\":\\\"string\\\"},\\\"headingTextHash\\\":{\\\"type\\\":\\\"string\\\"},\\\"headingLevel\\\":{\\\"type\\\":\\\"integer\\\",\\\"minimum\\\":1,\\\"maximum\\\":9}},\\\"required\\\":[\\\"type\\\",\\\"story\\\",\\\"headingBlockId\\\",\\\"headingTextHash\\\",\\\"headingLevel\\\"],\\\"additionalProperties\\\":false},\\\"maxBlocks\\\":{\\\"type\\\":\\\"integer\\\",\\\"minimum\\\":1,\\\"maximum\\\":200,\\\"description\\\":\\\"Maximum blocks to return. Defaults to 100.\\\"},\\\"afterBlockId\\\":{\\\"type\\\":\\\"string\\\",\\\"description\\\":\\\"Continue after this block id from the preceding read_section response.\\\"}},\\\"required\\\":[\\\"path\\\",\\\"handle\\\"],\\\"additionalProperties\\\":false}}\"}],\"isError\":false}"
     },
     {
       "name": "describe_capability",
@@ -3400,7 +3556,7 @@
         "capability": "suggest_changes",
         "detail": "full"
       },
-      "result": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"id\\\":\\\"suggest_changes\\\",\\\"description\\\":\\\"Apply edits as tracked changes in one batch that lands whole or not at all; returns the new fileVersion. Operations: replaceAll {find, replace, matchCase?, wholeWord?} (every match); replaceInBlock {blockId, find, replace}; replaceRange {range, replace}; replaceBlock {blockId, text}; insertAfterBlock / insertBeforeBlock {blockId, text}; deleteBlock {blockId}; addComment {comment, quote or blockId}; commentOnRange {range, comment}. Others: describe_capability.\\\\nSupported operations: replaceInBlock (replace an exact text match inside one block (`find` -> `replace`)); replaceRange (replace the text covered by a `range` copied from find_text); commentOnRange (attach a comment to a `range` copied from find_text); formatRange (toggle bold, italic, or underline on a `range` copied from find_text); insertAfterBlock (insert a new paragraph after a block, with optional direct alignment and spacing); insertBeforeBlock (insert a new paragraph before a block, with optional direct alignment and spacing); replaceBlock (replace one block's entire text); deleteBlock (delete one block); splitBlock (break one block in two at `offset`, moving a paragraph mark and no words); mergeBlockWithNext (join one block with the block after it in the same container); setBlockParagraphProperties (change one block's paragraph properties (list level, paragraph style, direct alignment or spacing) without touching its words); insertTable (insert a whole table of `rows` next to the anchor block); deleteTable (delete the whole table the anchor block sits in); insertTableRow (insert a table row next to the row containing a cell block); deleteTableRow (delete the table row containing a cell block); insertTableColumn (insert a table column next to the column containing a cell block); deleteTableColumn (delete the table column containing a cell block); mergeTableCells (merge table cells from a cell block to `endBlockId`, or `rowCount` rows downward); splitTableCell (split a previously merged table cell).\\\\nStructural edits: set `pageBreakBefore: true` on an insert to start it on a new page; set `styleId` on an insert or replaceBlock to apply a paragraph style such as a clause heading. Inserts also accept direct `alignment` and `spacing`, with null restoring style inheritance. Never emit directive markers or markdown syntax as paragraph text.\\\\nLimits: at most 50 operations per call (batch larger edits across calls); each text field at most 100,000 characters.\\\\nSet `severity` and `area` on operations when the edit is part of a structured review.\\\\nFields by operation type:\\\\nreplaceAll: id, find, replace, matchCase, wholeWord, severity, area\\\\naddComment: id, comment, blockId, quote, severity, area\\\\nreplaceInBlock: id, blockId, severity, area, precondition, find, replace, comment\\\\nreplaceRange: id, range, severity, area, precondition, replace, comment\\\\ncommentOnRange: id, range, severity, area, precondition, comment\\\\nformatRange: id, range, severity, area, precondition, formatting\\\\ninsertAfterBlock: id, blockId, severity, area, precondition, text, inheritFormatting, alignment, spacing, indentation, lineBreakMode, formattingScope, listLevel, numbering, moveId, pageBreakBefore, hardPageBreak, styleId, outlineLevel, comment\\\\ninsertBeforeBlock: id, blockId, severity, area, precondition, text, inheritFormatting, alignment, spacing, indentation, lineBreakMode, formattingScope, listLevel, numbering, moveId, pageBreakBefore, hardPageBreak, styleId, outlineLevel, comment\\\\nreplaceBlock: id, blockId, severity, area, precondition, text, preserveFormatting, styleId, comment\\\\ndeleteBlock: id, blockId, severity, area, precondition, moveId, comment\\\\nsplitBlock: id, blockId, severity, area, precondition, offset, separator, firstParagraphProperties, secondParagraphProperties\\\\nmergeBlockWithNext: id, blockId, severity, area, precondition, separator, mergedParagraphProperties\\\\nsetBlockParagraphProperties: id, blockId, severity, area, precondition, properties\\\\ninsertTable: id, blockId, severity, area, precondition, position, rows\\\\ndeleteTable: id, blockId, severity, area, precondition\\\\ninsertTableRow: id, blockId, severity, area, precondition, position, cellTexts\\\\ndeleteTableRow: id, blockId, severity, area, precondition\\\\ninsertTableColumn: id, blockId, severity, area, precondition, position, cellTexts\\\\ndeleteTableColumn: id, blockId, severity, area, precondition\\\\nmergeTableCells: id, blockId, severity, area, precondition, endBlockId, rowCount\\\\nsplitTableCell: id, blockId, severity, area, precondition\\\",\\\"access\\\":\\\"write\\\",\\\"destructive\\\":true,\\\"inputSchema\\\":{\\\"type\\\":\\\"object\\\",\\\"properties\\\":{\\\"path\\\":{\\\"type\\\":\\\"string\\\",\\\"description\\\":\\\"The .docx file, absolute or relative to the first allowed root.\\\"},\\\"fileVersion\\\":{\\\"type\\\":\\\"string\\\",\\\"pattern\\\":\\\"^[0-9a-f]{64}$\\\",\\\"description\\\":\\\"The file's fileVersion (SHA-256) from your latest read or write. Required: a change to a file that moved on is refused.\\\"},\\\"destination\\\":{\\\"type\\\":\\\"string\\\",\\\"description\\\":\\\"Write the result to this .docx instead of changing `path` in place. It must not start with a dot or sit inside .folio.\\\"},\\\"overwrite\\\":{\\\"type\\\":\\\"boolean\\\",\\\"description\\\":\\\"Let `destination` replace an existing .docx; needs `expectedDestinationVersion`. The replaced file is backed up.\\\"},\\\"expectedDestinationVersion\\\":{\\\"type\\\":\\\"string\\\",\\\"pattern\\\":\\\"^[0-9a-f]{64}$\\\",\\\"description\\\":\\\"The fileVersion of the existing file `destination` replaces.\\\"},\\\"txId\\\":{\\\"type\\\":\\\"string\\\",\\\"pattern\\\":\\\"^[\\\\\\\\w.-]{1,128}$\\\",\\\"description\\\":\\\"Idempotency key: repeating a committed call returns its original result.\\\"},\\\"allowRepack\\\":{\\\"type\\\":\\\"boolean\\\",\\\"description\\\":\\\"Allow rewriting the whole package when the change cannot be patched in (e.g. paragraphs added or removed).\\\"},\\\"mode\\\":{\\\"type\\\":\\\"string\\\",\\\"enum\\\":[\\\"tracked\\\",\\\"direct\\\"],\\\"description\\\":\\\"tracked (default) records tracked changes; direct edits the text.\\\"},\\\"operations\\\":{\\\"type\\\":\\\"array\\\",\\\"description\\\":\\\"The edits to propose, applied in order. At most 50 per call.\\\",\\\"minItems\\\":1,\\\"maxItems\\\":50,\\\"items\\\":{\\\"type\\\":\\\"object\\\",\\\"properties\\\":{\\\"type\\\":{\\\"type\\\":\\\"string\\\",\\\"enum\\\":[\\\"replaceInBlock\\\",\\\"replaceRange\\\",\\\"commentOnRange\\\",\\\"formatRange\\\",\\\"insertAfterBlock\\\",\\\"insertBeforeBlock\\\",\\\"replaceBlock\\\",\\\"deleteBlock\\\",\\\"splitBlock\\\",\\\"mergeBlockWithNext\\\",\\\"setBlockParagraphProperties\\\",\\\"insertTable\\\",\\\"deleteTable\\\",\\\"insertTableRow\\\",\\\"deleteTableRow\\\",\\\"insertTableColumn\\\",\\\"deleteTableColumn\\\",\\\"mergeTableCells\\\",\\\"splitTableCell\\\",\\\"replaceAll\\\",\\\"addComment\\\"]},\\\"id\\\":{\\\"type\\\":\\\"string\\\"},\\\"blockId\\\":{\\\"type\\\":\\\"string\\\"},\\\"severity\\\":{\\\"type\\\":\\\"string\\\",\\\"enum\\\":[\\\"low\\\",\\\"medium\\\",\\\"high\\\"]},\\\"area\\\":{\\\"type\\\":\\\"string\\\"},\\\"precondition\\\":{\\\"type\\\":\\\"object\\\",\\\"properties\\\":{\\\"blockTextHash\\\":{\\\"type\\\":\\\"string\\\",\\\"pattern\\\":\\\"^h[0-9a-z]+$\\\"}},\\\"required\\\":[\\\"blockTextHash\\\"],\\\"additionalProperties\\\":false},\\\"endBlockId\\\":{\\\"type\\\":\\\"string\\\",\\\"minLength\\\":1},\\\"rowCount\\\":{\\\"type\\\":\\\"integer\\\",\\\"minimum\\\":2},\\\"range\\\":{\\\"type\\\":\\\"object\\\",\\\"properties\\\":{\\\"type\\\":{\\\"type\\\":\\\"string\\\",\\\"enum\\\":[\\\"textRange\\\"]},\\\"story\\\":{\\\"type\\\":\\\"string\\\",\\\"enum\\\":[\\\"main\\\"]},\\\"blockId\\\":{\\\"type\\\":\\\"string\\\",\\\"minLength\\\":1},\\\"startOffset\\\":{\\\"type\\\":\\\"integer\\\",\\\"minimum\\\":0},\\\"endOffset\\\":{\\\"type\\\":\\\"integer\\\",\\\"minimum\\\":1},\\\"selectedTextHash\\\":{\\\"type\\\":\\\"string\\\",\\\"pattern\\\":\\\"^h[0-9a-z]+$\\\"}},\\\"required\\\":[\\\"type\\\",\\\"story\\\",\\\"blockId\\\",\\\"startOffset\\\",\\\"endOffset\\\",\\\"selectedTextHash\\\"],\\\"additionalProperties\\\":false},\\\"find\\\":{\\\"type\\\":\\\"string\\\"},\\\"replace\\\":{\\\"type\\\":\\\"string\\\"},\\\"text\\\":{\\\"type\\\":\\\"string\\\"},\\\"styleId\\\":{\\\"oneOf\\\":[{\\\"type\\\":\\\"string\\\"},{\\\"type\\\":\\\"null\\\"}]},\\\"outlineLevel\\\":{\\\"$ref\\\":\\\"#/$defs/outlineLevel\\\"},\\\"pageBreakBefore\\\":{\\\"type\\\":\\\"boolean\\\"},\\\"inheritFormatting\\\":{\\\"type\\\":\\\"boolean\\\"},\\\"alignment\\\":{\\\"oneOf\\\":[{\\\"type\\\":\\\"string\\\",\\\"enum\\\":[\\\"start\\\",\\\"center\\\",\\\"end\\\",\\\"both\\\",\\\"mediumKashida\\\",\\\"distribute\\\",\\\"numTab\\\",\\\"highKashida\\\",\\\"lowKashida\\\",\\\"thaiDistribute\\\",\\\"left\\\",\\\"right\\\"]},{\\\"type\\\":\\\"null\\\"}]},\\\"spacing\\\":{\\\"$ref\\\":\\\"#/$defs/spacing\\\"},\\\"indentation\\\":{\\\"$ref\\\":\\\"#/$defs/indentation\\\"},\\\"lineBreakMode\\\":{\\\"type\\\":\\\"string\\\",\\\"enum\\\":[\\\"paragraph\\\",\\\"inline\\\"]},\\\"formattingScope\\\":{\\\"type\\\":\\\"string\\\",\\\"enum\\\":[\\\"firstParagraph\\\",\\\"allParagraphs\\\"]},\\\"numbering\\\":{\\\"$ref\\\":\\\"#/$defs/numbering\\\"},\\\"hardPageBreak\\\":{\\\"type\\\":\\\"object\\\",\\\"properties\\\":{\\\"clear\\\":{\\\"type\\\":\\\"string\\\",\\\"enum\\\":[\\\"none\\\",\\\"left\\\",\\\"right\\\",\\\"all\\\"]}},\\\"additionalProperties\\\":false},\\\"preserveFormatting\\\":{\\\"type\\\":\\\"boolean\\\"},\\\"position\\\":{\\\"type\\\":\\\"string\\\",\\\"enum\\\":[\\\"after\\\",\\\"before\\\"]},\\\"rows\\\":{\\\"type\\\":\\\"array\\\",\\\"items\\\":{\\\"type\\\":\\\"array\\\",\\\"items\\\":{\\\"type\\\":\\\"string\\\"}}},\\\"cellTexts\\\":{\\\"type\\\":\\\"array\\\",\\\"maxItems\\\":256,\\\"items\\\":{\\\"type\\\":\\\"string\\\"}},\\\"formatting\\\":{\\\"type\\\":\\\"object\\\",\\\"properties\\\":{\\\"bold\\\":{\\\"type\\\":\\\"boolean\\\"},\\\"italic\\\":{\\\"type\\\":\\\"boolean\\\"},\\\"underline\\\":{\\\"type\\\":\\\"boolean\\\"}},\\\"minProperties\\\":1,\\\"additionalProperties\\\":false},\\\"properties\\\":{\\\"$ref\\\":\\\"#/$defs/properties\\\"},\\\"firstParagraphProperties\\\":{\\\"$ref\\\":\\\"#/$defs/properties\\\"},\\\"secondParagraphProperties\\\":{\\\"$ref\\\":\\\"#/$defs/properties\\\"},\\\"mergedParagraphProperties\\\":{\\\"$ref\\\":\\\"#/$defs/properties\\\"},\\\"listLevel\\\":{\\\"oneOf\\\":[{\\\"type\\\":\\\"integer\\\",\\\"minimum\\\":0},{\\\"type\\\":\\\"null\\\"}]},\\\"offset\\\":{\\\"type\\\":\\\"integer\\\",\\\"minimum\\\":0},\\\"separator\\\":{\\\"type\\\":\\\"string\\\"},\\\"moveId\\\":{\\\"type\\\":\\\"string\\\"},\\\"comment\\\":{\\\"type\\\":\\\"string\\\"},\\\"matchCase\\\":{\\\"type\\\":\\\"boolean\\\"},\\\"wholeWord\\\":{\\\"type\\\":\\\"boolean\\\"}},\\\"oneOf\\\":[{\\\"not\\\":{\\\"required\\\":[\\\"hardPageBreak\\\"]}},{\\\"required\\\":[\\\"hardPageBreak\\\",\\\"text\\\"],\\\"properties\\\":{\\\"type\\\":{\\\"enum\\\":[\\\"insertAfterBlock\\\",\\\"insertBeforeBlock\\\"]},\\\"text\\\":{\\\"enum\\\":[\\\"\\\"]},\\\"pageBreakBefore\\\":{\\\"not\\\":{}},\\\"lineBreakMode\\\":{\\\"not\\\":{}}}}],\\\"required\\\":[\\\"type\\\"],\\\"additionalProperties\\\":false}}},\\\"required\\\":[\\\"path\\\",\\\"fileVersion\\\",\\\"operations\\\"],\\\"additionalProperties\\\":false,\\\"$defs\\\":{\\\"properties\\\":{\\\"type\\\":\\\"object\\\",\\\"properties\\\":{\\\"styleId\\\":{\\\"oneOf\\\":[{\\\"type\\\":\\\"string\\\"},{\\\"type\\\":\\\"null\\\"}]},\\\"outlineLevel\\\":{\\\"$ref\\\":\\\"#/$defs/outlineLevel\\\"},\\\"listLevel\\\":{\\\"oneOf\\\":[{\\\"type\\\":\\\"integer\\\",\\\"minimum\\\":0},{\\\"type\\\":\\\"null\\\"}]},\\\"numbering\\\":{\\\"$ref\\\":\\\"#/$defs/numbering\\\"},\\\"indentation\\\":{\\\"$ref\\\":\\\"#/$defs/indentation\\\"},\\\"alignment\\\":{\\\"oneOf\\\":[{\\\"type\\\":\\\"string\\\",\\\"enum\\\":[\\\"start\\\",\\\"center\\\",\\\"end\\\",\\\"both\\\",\\\"mediumKashida\\\",\\\"distribute\\\",\\\"numTab\\\",\\\"highKashida\\\",\\\"lowKashida\\\",\\\"thaiDistribute\\\",\\\"left\\\",\\\"right\\\"]},{\\\"type\\\":\\\"null\\\"}]},\\\"spacing\\\":{\\\"$ref\\\":\\\"#/$defs/spacing\\\"}},\\\"minProperties\\\":1,\\\"additionalProperties\\\":false},\\\"numbering\\\":{\\\"oneOf\\\":[{\\\"type\\\":\\\"object\\\",\\\"properties\\\":{\\\"numId\\\":{\\\"type\\\":\\\"integer\\\",\\\"minimum\\\":1},\\\"level\\\":{\\\"type\\\":\\\"integer\\\",\\\"minimum\\\":0}},\\\"required\\\":[\\\"numId\\\",\\\"level\\\"],\\\"additionalProperties\\\":false},{\\\"$ref\\\":\\\"#/$defs/numbering2\\\"},{\\\"type\\\":\\\"null\\\"}]},\\\"spacing\\\":{\\\"oneOf\\\":[{\\\"$ref\\\":\\\"#/$defs/spacing2\\\"},{\\\"type\\\":\\\"null\\\"}]},\\\"spacing2\\\":{\\\"type\\\":\\\"object\\\",\\\"properties\\\":{\\\"spaceBefore\\\":{\\\"type\\\":\\\"integer\\\",\\\"minimum\\\":0},\\\"spaceAfter\\\":{\\\"type\\\":\\\"integer\\\",\\\"minimum\\\":0},\\\"lineSpacing\\\":{\\\"type\\\":\\\"integer\\\",\\\"minimum\\\":-9007199254740991},\\\"lineSpacingRule\\\":{\\\"type\\\":\\\"string\\\",\\\"enum\\\":[\\\"auto\\\",\\\"exact\\\",\\\"atLeast\\\"]},\\\"beforeAutospacing\\\":{\\\"type\\\":\\\"boolean\\\"},\\\"afterAutospacing\\\":{\\\"type\\\":\\\"boolean\\\"}},\\\"minProperties\\\":1,\\\"additionalProperties\\\":false},\\\"outlineLevel\\\":{\\\"oneOf\\\":[{\\\"type\\\":\\\"object\\\",\\\"properties\\\":{\\\"kind\\\":{\\\"type\\\":\\\"string\\\",\\\"enum\\\":[\\\"heading\\\"]},\\\"level\\\":{\\\"type\\\":\\\"integer\\\",\\\"minimum\\\":0,\\\"maximum\\\":8}},\\\"required\\\":[\\\"kind\\\",\\\"level\\\"],\\\"additionalProperties\\\":false},{\\\"type\\\":\\\"object\\\",\\\"properties\\\":{\\\"kind\\\":{\\\"type\\\":\\\"string\\\",\\\"enum\\\":[\\\"bodyText\\\"]}},\\\"required\\\":[\\\"kind\\\"],\\\"additionalProperties\\\":false},{\\\"type\\\":\\\"null\\\"}]},\\\"indentation\\\":{\\\"oneOf\\\":[{\\\"$ref\\\":\\\"#/$defs/indentation2\\\"},{\\\"type\\\":\\\"null\\\"}]},\\\"indentation2\\\":{\\\"type\\\":\\\"object\\\",\\\"properties\\\":{\\\"indentLeft\\\":{\\\"type\\\":\\\"integer\\\",\\\"minimum\\\":-9007199254740991},\\\"indentRight\\\":{\\\"type\\\":\\\"integer\\\",\\\"minimum\\\":-9007199254740991},\\\"indentFirstLine\\\":{\\\"type\\\":\\\"integer\\\",\\\"minimum\\\":-9007199254740991},\\\"hangingIndent\\\":{\\\"type\\\":\\\"boolean\\\"}},\\\"minProperties\\\":1,\\\"additionalProperties\\\":false},\\\"numbering2\\\":{\\\"type\\\":\\\"object\\\",\\\"properties\\\":{\\\"start\\\":{\\\"type\\\":\\\"string\\\",\\\"enum\\\":[\\\"new\\\"]},\\\"kind\\\":{\\\"type\\\":\\\"string\\\",\\\"enum\\\":[\\\"numbered\\\",\\\"bullet\\\"]},\\\"level\\\":{\\\"type\\\":\\\"integer\\\",\\\"minimum\\\":0,\\\"maximum\\\":8}},\\\"required\\\":[\\\"start\\\",\\\"kind\\\"],\\\"additionalProperties\\\":false}}}}\"}],\"isError\":false}"
+      "result": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"id\\\":\\\"suggest_changes\\\",\\\"description\\\":\\\"Apply edits as tracked changes in one batch that lands whole or not at all; returns the new fileVersion. Operations: replaceAll {find, replace, matchCase?, wholeWord?} (every match); replaceInBlock {blockId, find, replace}; replaceRange {range, replace}; replaceBlock {blockId, text}; insertAfterBlock / insertBeforeBlock {blockId, text}; deleteBlock {blockId}; addComment {comment, quote or blockId}; commentOnRange {range, comment}. Others: describe_capability.\\\\nSupported operations: replaceInBlock (replace an exact text match inside one block (`find` -> `replace`)); replaceRange (replace the text covered by a `range` copied from find_text); commentOnRange (attach a comment to a `range` copied from find_text); formatRange (toggle bold, italic, or underline on a `range` copied from find_text); insertAfterBlock (insert a new paragraph after a block, with optional direct alignment and spacing); insertBeforeBlock (insert a new paragraph before a block, with optional direct alignment and spacing); replaceBlock (replace one block's entire text); deleteBlock (delete one block); splitBlock (break one block in two at `offset`, moving a paragraph mark and no words); mergeBlockWithNext (join one block with the block after it in the same container); setBlockParagraphProperties (change one block's paragraph properties (list level, paragraph style, direct alignment or spacing) without touching its words); insertTable (insert a whole table of `rows` next to the anchor block); deleteTable (delete the whole table the anchor block sits in); insertTableRow (insert a table row next to the row containing a cell block); deleteTableRow (delete the table row containing a cell block); insertTableColumn (insert a table column next to the column containing a cell block); deleteTableColumn (delete the table column containing a cell block); mergeTableCells (merge table cells from a cell block to `endBlockId`, or `rowCount` rows downward); splitTableCell (split a previously merged table cell).\\\\nStructural edits: set `pageBreakBefore: true` on an insert to start it on a new page; set `styleId` on an insert or replaceBlock to apply a paragraph style such as a clause heading. Inserts also accept direct `alignment` and `spacing`, with null restoring style inheritance. Never emit directive markers or markdown syntax as paragraph text.\\\\nLimits: at most 50 operations per call (batch larger edits across calls); each text field at most 100,000 characters.\\\\nSet `severity` and `area` on operations when the edit is part of a structured review.\\\\nFields by operation type:\\\\nreplaceAll: id, find, replace, matchCase, wholeWord, severity, area\\\\naddComment: id, comment, blockId, quote, severity, area\\\\nreplaceInBlock: id, blockId, severity, area, precondition, find, replace, comment\\\\nreplaceRange: id, range, severity, area, precondition, replace, comment\\\\ncommentOnRange: id, range, severity, area, precondition, comment\\\\nformatRange: id, range, severity, area, precondition, formatting\\\\ninsertAfterBlock: id, blockId, severity, area, precondition, text, inheritFormatting, alignment, spacing, indentation, lineBreakMode, formattingScope, numbering, moveId, pageBreakBefore, hardPageBreak, styleId, outlineLevel, comment\\\\ninsertBeforeBlock: id, blockId, severity, area, precondition, text, inheritFormatting, alignment, spacing, indentation, lineBreakMode, formattingScope, numbering, moveId, pageBreakBefore, hardPageBreak, styleId, outlineLevel, comment\\\\nreplaceBlock: id, blockId, severity, area, precondition, text, preserveFormatting, styleId, comment\\\\ndeleteBlock: id, blockId, severity, area, precondition, moveId, comment\\\\nsplitBlock: id, blockId, severity, area, precondition, offset, separator, firstParagraphProperties, secondParagraphProperties\\\\nmergeBlockWithNext: id, blockId, severity, area, precondition, separator, mergedParagraphProperties\\\\nsetBlockParagraphProperties: id, blockId, severity, area, precondition, properties\\\\ninsertTable: id, blockId, severity, area, precondition, position, rows\\\\ndeleteTable: id, blockId, severity, area, precondition\\\\ninsertTableRow: id, blockId, severity, area, precondition, position, cellTexts\\\\ndeleteTableRow: id, blockId, severity, area, precondition\\\\ninsertTableColumn: id, blockId, severity, area, precondition, position, cellTexts\\\\ndeleteTableColumn: id, blockId, severity, area, precondition\\\\nmergeTableCells: id, blockId, severity, area, precondition, endBlockId, rowCount\\\\nsplitTableCell: id, blockId, severity, area, precondition\\\",\\\"access\\\":\\\"write\\\",\\\"destructive\\\":true,\\\"inputSchema\\\":{\\\"type\\\":\\\"object\\\",\\\"properties\\\":{\\\"path\\\":{\\\"type\\\":\\\"string\\\",\\\"description\\\":\\\"The .docx file, absolute or relative to the first allowed root.\\\"},\\\"fileVersion\\\":{\\\"type\\\":\\\"string\\\",\\\"pattern\\\":\\\"^[0-9a-f]{64}$\\\",\\\"description\\\":\\\"The file's fileVersion (SHA-256) from your latest read or write. Required: a change to a file that moved on is refused.\\\"},\\\"destination\\\":{\\\"type\\\":\\\"string\\\",\\\"description\\\":\\\"Write the result to this .docx instead of changing `path` in place. It must not start with a dot or sit inside .folio.\\\"},\\\"overwrite\\\":{\\\"type\\\":\\\"boolean\\\",\\\"description\\\":\\\"Let `destination` replace an existing .docx; needs `expectedDestinationVersion`. The replaced file is backed up.\\\"},\\\"expectedDestinationVersion\\\":{\\\"type\\\":\\\"string\\\",\\\"pattern\\\":\\\"^[0-9a-f]{64}$\\\",\\\"description\\\":\\\"The fileVersion of the existing file `destination` replaces.\\\"},\\\"txId\\\":{\\\"type\\\":\\\"string\\\",\\\"pattern\\\":\\\"^[\\\\\\\\w.-]{1,128}$\\\",\\\"description\\\":\\\"Idempotency key: repeating a committed call returns its original result.\\\"},\\\"allowRepack\\\":{\\\"type\\\":\\\"boolean\\\",\\\"description\\\":\\\"Allow rewriting the whole package when the change cannot be patched in (e.g. paragraphs added or removed).\\\"},\\\"mode\\\":{\\\"type\\\":\\\"string\\\",\\\"enum\\\":[\\\"tracked\\\",\\\"direct\\\"],\\\"description\\\":\\\"tracked (default) records tracked changes; direct edits the text.\\\"},\\\"operations\\\":{\\\"type\\\":\\\"array\\\",\\\"description\\\":\\\"The edits to propose, applied in order. At most 50 per call.\\\",\\\"minItems\\\":1,\\\"maxItems\\\":50,\\\"items\\\":{\\\"type\\\":\\\"object\\\",\\\"properties\\\":{\\\"type\\\":{\\\"type\\\":\\\"string\\\",\\\"enum\\\":[\\\"replaceInBlock\\\",\\\"replaceRange\\\",\\\"commentOnRange\\\",\\\"formatRange\\\",\\\"insertAfterBlock\\\",\\\"insertBeforeBlock\\\",\\\"replaceBlock\\\",\\\"deleteBlock\\\",\\\"splitBlock\\\",\\\"mergeBlockWithNext\\\",\\\"setBlockParagraphProperties\\\",\\\"insertTable\\\",\\\"deleteTable\\\",\\\"insertTableRow\\\",\\\"deleteTableRow\\\",\\\"insertTableColumn\\\",\\\"deleteTableColumn\\\",\\\"mergeTableCells\\\",\\\"splitTableCell\\\",\\\"replaceAll\\\",\\\"addComment\\\"]},\\\"id\\\":{\\\"type\\\":\\\"string\\\"},\\\"blockId\\\":{\\\"type\\\":\\\"string\\\"},\\\"severity\\\":{\\\"type\\\":\\\"string\\\",\\\"enum\\\":[\\\"low\\\",\\\"medium\\\",\\\"high\\\"]},\\\"area\\\":{\\\"type\\\":\\\"string\\\"},\\\"precondition\\\":{\\\"type\\\":\\\"object\\\",\\\"properties\\\":{\\\"blockTextHash\\\":{\\\"type\\\":\\\"string\\\",\\\"pattern\\\":\\\"^h[0-9a-z]+$\\\"}},\\\"required\\\":[\\\"blockTextHash\\\"],\\\"additionalProperties\\\":false},\\\"endBlockId\\\":{\\\"type\\\":\\\"string\\\",\\\"minLength\\\":1},\\\"rowCount\\\":{\\\"type\\\":\\\"integer\\\",\\\"minimum\\\":2},\\\"range\\\":{\\\"type\\\":\\\"object\\\",\\\"properties\\\":{\\\"type\\\":{\\\"type\\\":\\\"string\\\",\\\"enum\\\":[\\\"textRange\\\"]},\\\"story\\\":{\\\"type\\\":\\\"string\\\",\\\"enum\\\":[\\\"main\\\"]},\\\"blockId\\\":{\\\"type\\\":\\\"string\\\",\\\"minLength\\\":1},\\\"startOffset\\\":{\\\"type\\\":\\\"integer\\\",\\\"minimum\\\":0},\\\"endOffset\\\":{\\\"type\\\":\\\"integer\\\",\\\"minimum\\\":1},\\\"selectedTextHash\\\":{\\\"type\\\":\\\"string\\\",\\\"pattern\\\":\\\"^h[0-9a-z]+$\\\"}},\\\"required\\\":[\\\"type\\\",\\\"story\\\",\\\"blockId\\\",\\\"startOffset\\\",\\\"endOffset\\\",\\\"selectedTextHash\\\"],\\\"additionalProperties\\\":false},\\\"find\\\":{\\\"type\\\":\\\"string\\\"},\\\"replace\\\":{\\\"type\\\":\\\"string\\\"},\\\"text\\\":{\\\"type\\\":\\\"string\\\"},\\\"styleId\\\":{\\\"oneOf\\\":[{\\\"type\\\":\\\"string\\\"},{\\\"type\\\":\\\"null\\\"}]},\\\"outlineLevel\\\":{\\\"$ref\\\":\\\"#/$defs/outlineLevel\\\"},\\\"pageBreakBefore\\\":{\\\"type\\\":\\\"boolean\\\"},\\\"inheritFormatting\\\":{\\\"type\\\":\\\"boolean\\\"},\\\"alignment\\\":{\\\"oneOf\\\":[{\\\"type\\\":\\\"string\\\",\\\"enum\\\":[\\\"start\\\",\\\"center\\\",\\\"end\\\",\\\"both\\\",\\\"mediumKashida\\\",\\\"distribute\\\",\\\"numTab\\\",\\\"highKashida\\\",\\\"lowKashida\\\",\\\"thaiDistribute\\\",\\\"left\\\",\\\"right\\\"]},{\\\"type\\\":\\\"null\\\"}]},\\\"spacing\\\":{\\\"$ref\\\":\\\"#/$defs/spacing\\\"},\\\"indentation\\\":{\\\"$ref\\\":\\\"#/$defs/indentation\\\"},\\\"lineBreakMode\\\":{\\\"type\\\":\\\"string\\\",\\\"enum\\\":[\\\"paragraph\\\",\\\"inline\\\"]},\\\"formattingScope\\\":{\\\"type\\\":\\\"string\\\",\\\"enum\\\":[\\\"firstParagraph\\\",\\\"allParagraphs\\\"]},\\\"numbering\\\":{\\\"$ref\\\":\\\"#/$defs/numbering\\\"},\\\"hardPageBreak\\\":{\\\"type\\\":\\\"object\\\",\\\"properties\\\":{\\\"clear\\\":{\\\"type\\\":\\\"string\\\",\\\"enum\\\":[\\\"none\\\",\\\"left\\\",\\\"right\\\",\\\"all\\\"]}},\\\"additionalProperties\\\":false},\\\"preserveFormatting\\\":{\\\"type\\\":\\\"boolean\\\"},\\\"position\\\":{\\\"type\\\":\\\"string\\\",\\\"enum\\\":[\\\"after\\\",\\\"before\\\"]},\\\"rows\\\":{\\\"type\\\":\\\"array\\\",\\\"items\\\":{\\\"type\\\":\\\"array\\\",\\\"items\\\":{\\\"type\\\":\\\"string\\\"}}},\\\"cellTexts\\\":{\\\"type\\\":\\\"array\\\",\\\"maxItems\\\":256,\\\"items\\\":{\\\"type\\\":\\\"string\\\"}},\\\"formatting\\\":{\\\"type\\\":\\\"object\\\",\\\"properties\\\":{\\\"bold\\\":{\\\"type\\\":\\\"boolean\\\"},\\\"italic\\\":{\\\"type\\\":\\\"boolean\\\"},\\\"underline\\\":{\\\"type\\\":\\\"boolean\\\"}},\\\"minProperties\\\":1,\\\"additionalProperties\\\":false},\\\"properties\\\":{\\\"$ref\\\":\\\"#/$defs/properties\\\"},\\\"firstParagraphProperties\\\":{\\\"$ref\\\":\\\"#/$defs/properties\\\"},\\\"secondParagraphProperties\\\":{\\\"$ref\\\":\\\"#/$defs/properties\\\"},\\\"mergedParagraphProperties\\\":{\\\"$ref\\\":\\\"#/$defs/properties\\\"},\\\"offset\\\":{\\\"type\\\":\\\"integer\\\",\\\"minimum\\\":0},\\\"separator\\\":{\\\"type\\\":\\\"string\\\"},\\\"moveId\\\":{\\\"type\\\":\\\"string\\\"},\\\"comment\\\":{\\\"type\\\":\\\"string\\\"},\\\"matchCase\\\":{\\\"type\\\":\\\"boolean\\\"},\\\"wholeWord\\\":{\\\"type\\\":\\\"boolean\\\"}},\\\"oneOf\\\":[{\\\"not\\\":{\\\"required\\\":[\\\"hardPageBreak\\\"]}},{\\\"required\\\":[\\\"hardPageBreak\\\",\\\"text\\\"],\\\"properties\\\":{\\\"type\\\":{\\\"enum\\\":[\\\"insertAfterBlock\\\",\\\"insertBeforeBlock\\\"]},\\\"text\\\":{\\\"enum\\\":[\\\"\\\"]},\\\"pageBreakBefore\\\":{\\\"not\\\":{}},\\\"lineBreakMode\\\":{\\\"not\\\":{}}}}],\\\"required\\\":[\\\"type\\\"],\\\"additionalProperties\\\":false}}},\\\"required\\\":[\\\"path\\\",\\\"fileVersion\\\",\\\"operations\\\"],\\\"additionalProperties\\\":false,\\\"$defs\\\":{\\\"properties\\\":{\\\"type\\\":\\\"object\\\",\\\"properties\\\":{\\\"styleId\\\":{\\\"oneOf\\\":[{\\\"type\\\":\\\"string\\\"},{\\\"type\\\":\\\"null\\\"}]},\\\"outlineLevel\\\":{\\\"$ref\\\":\\\"#/$defs/outlineLevel\\\"},\\\"numbering\\\":{\\\"$ref\\\":\\\"#/$defs/numbering\\\"},\\\"indentation\\\":{\\\"$ref\\\":\\\"#/$defs/indentation\\\"},\\\"alignment\\\":{\\\"oneOf\\\":[{\\\"type\\\":\\\"string\\\",\\\"enum\\\":[\\\"start\\\",\\\"center\\\",\\\"end\\\",\\\"both\\\",\\\"mediumKashida\\\",\\\"distribute\\\",\\\"numTab\\\",\\\"highKashida\\\",\\\"lowKashida\\\",\\\"thaiDistribute\\\",\\\"left\\\",\\\"right\\\"]},{\\\"type\\\":\\\"null\\\"}]},\\\"spacing\\\":{\\\"$ref\\\":\\\"#/$defs/spacing\\\"}},\\\"minProperties\\\":1,\\\"additionalProperties\\\":false},\\\"numbering\\\":{\\\"oneOf\\\":[{\\\"type\\\":\\\"object\\\",\\\"properties\\\":{\\\"kind\\\":{\\\"type\\\":\\\"string\\\",\\\"enum\\\":[\\\"none\\\"]}},\\\"required\\\":[\\\"kind\\\"],\\\"additionalProperties\\\":false},{\\\"type\\\":\\\"object\\\",\\\"properties\\\":{\\\"kind\\\":{\\\"type\\\":\\\"string\\\",\\\"enum\\\":[\\\"inherit\\\"]}},\\\"required\\\":[\\\"kind\\\"],\\\"additionalProperties\\\":false},{\\\"type\\\":\\\"object\\\",\\\"properties\\\":{\\\"kind\\\":{\\\"type\\\":\\\"string\\\",\\\"enum\\\":[\\\"levelOnly\\\"]},\\\"ilvl\\\":{\\\"type\\\":\\\"integer\\\",\\\"minimum\\\":0,\\\"maximum\\\":8}},\\\"required\\\":[\\\"kind\\\",\\\"ilvl\\\"],\\\"additionalProperties\\\":false},{\\\"$ref\\\":\\\"#/$defs/numbering3\\\"},{\\\"$ref\\\":\\\"#/$defs/numbering2\\\"}]},\\\"spacing\\\":{\\\"oneOf\\\":[{\\\"$ref\\\":\\\"#/$defs/spacing2\\\"},{\\\"type\\\":\\\"null\\\"}]},\\\"spacing2\\\":{\\\"type\\\":\\\"object\\\",\\\"properties\\\":{\\\"spaceBefore\\\":{\\\"type\\\":\\\"integer\\\",\\\"minimum\\\":0},\\\"spaceAfter\\\":{\\\"type\\\":\\\"integer\\\",\\\"minimum\\\":0},\\\"lineSpacing\\\":{\\\"type\\\":\\\"integer\\\",\\\"minimum\\\":-9007199254740991},\\\"lineSpacingRule\\\":{\\\"type\\\":\\\"string\\\",\\\"enum\\\":[\\\"auto\\\",\\\"exact\\\",\\\"atLeast\\\"]},\\\"beforeAutospacing\\\":{\\\"type\\\":\\\"boolean\\\"},\\\"afterAutospacing\\\":{\\\"type\\\":\\\"boolean\\\"}},\\\"minProperties\\\":1,\\\"additionalProperties\\\":false},\\\"outlineLevel\\\":{\\\"oneOf\\\":[{\\\"type\\\":\\\"object\\\",\\\"properties\\\":{\\\"kind\\\":{\\\"type\\\":\\\"string\\\",\\\"enum\\\":[\\\"heading\\\"]},\\\"level\\\":{\\\"type\\\":\\\"integer\\\",\\\"minimum\\\":0,\\\"maximum\\\":8}},\\\"required\\\":[\\\"kind\\\",\\\"level\\\"],\\\"additionalProperties\\\":false},{\\\"type\\\":\\\"object\\\",\\\"properties\\\":{\\\"kind\\\":{\\\"type\\\":\\\"string\\\",\\\"enum\\\":[\\\"bodyText\\\"]}},\\\"required\\\":[\\\"kind\\\"],\\\"additionalProperties\\\":false},{\\\"type\\\":\\\"null\\\"}]},\\\"indentation\\\":{\\\"oneOf\\\":[{\\\"$ref\\\":\\\"#/$defs/indentation2\\\"},{\\\"type\\\":\\\"null\\\"}]},\\\"indentation2\\\":{\\\"type\\\":\\\"object\\\",\\\"properties\\\":{\\\"indentLeft\\\":{\\\"type\\\":\\\"integer\\\",\\\"minimum\\\":-9007199254740991},\\\"indentRight\\\":{\\\"type\\\":\\\"integer\\\",\\\"minimum\\\":-9007199254740991},\\\"indentFirstLine\\\":{\\\"type\\\":\\\"integer\\\",\\\"minimum\\\":-9007199254740991},\\\"hangingIndent\\\":{\\\"type\\\":\\\"boolean\\\"}},\\\"minProperties\\\":1,\\\"additionalProperties\\\":false},\\\"numbering2\\\":{\\\"type\\\":\\\"object\\\",\\\"properties\\\":{\\\"kind\\\":{\\\"type\\\":\\\"string\\\",\\\"enum\\\":[\\\"newList\\\"]},\\\"format\\\":{\\\"type\\\":\\\"string\\\",\\\"enum\\\":[\\\"bullet\\\",\\\"numbered\\\"]},\\\"level\\\":{\\\"type\\\":\\\"integer\\\",\\\"minimum\\\":0,\\\"maximum\\\":8}},\\\"required\\\":[\\\"kind\\\",\\\"format\\\"],\\\"additionalProperties\\\":false},\\\"numbering3\\\":{\\\"type\\\":\\\"object\\\",\\\"properties\\\":{\\\"kind\\\":{\\\"type\\\":\\\"string\\\",\\\"enum\\\":[\\\"reference\\\"]},\\\"numId\\\":{\\\"type\\\":\\\"integer\\\",\\\"minimum\\\":1},\\\"ilvl\\\":{\\\"type\\\":\\\"integer\\\",\\\"minimum\\\":0,\\\"maximum\\\":8}},\\\"required\\\":[\\\"kind\\\",\\\"numId\\\"],\\\"additionalProperties\\\":false}}}}\"}],\"isError\":false}"
     },
     {
       "name": "describe_capability",

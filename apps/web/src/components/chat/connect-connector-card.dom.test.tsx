@@ -7,8 +7,10 @@ import type {
   ConnectConnectorInput,
   ConnectConnectorOutput,
 } from "@stll/api-contract/chat-connector";
+import { toSafeId } from "@stll/api-contract/safe-id";
 
 import messages from "@/i18n/langs/en.json";
+import type { McpConnectorsResponse } from "@/lib/knowledge/queries";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
@@ -20,7 +22,7 @@ const catalog = {
   canManageCustomConnectors: false,
   connectors: [
     {
-      id: "sample-connector-id",
+      id: toSafeId<"mcpConnector">("018f0000-0000-7000-8000-000000000010"),
       slug: connectorSlug,
       organizationId: null,
       displayName: "Sample source",
@@ -40,7 +42,7 @@ const catalog = {
     },
   ],
   nativeTools: [],
-};
+} satisfies McpConnectorsResponse;
 
 const requests: { method: string; url: string }[] = [];
 const originalFetch = globalThis.fetch;

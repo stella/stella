@@ -17,13 +17,14 @@ import { panic, Result } from "better-result";
 import { eq, inArray } from "drizzle-orm";
 
 import type { DecisionTextWithheldReason } from "@stll/api-contract/case-law-text-field";
+import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { findCitationPassage } from "@stll/legal-ast/citation-passage";
 import type { CitationPassageMention } from "@stll/legal-ast/citation-passage";
 import { hasBlockInlines, plainTextOf } from "@stll/legal-ast/document-ast";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
-import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import { publishedCaseLawDecisions, caseLawSources } from "@/api/db/schema";
 import type { DecisionCitationRow } from "@/api/handlers/case-law/decisions/citation-graph";
 import { listDecisionCitationsHandler } from "@/api/handlers/case-law/decisions/citation-graph";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -113,14 +114,17 @@ const readPassageSourcePointers = async (
   }
   const rows = await tx
     .select({
-      id: caseLawDecisions.id,
-      astS3Key: caseLawDecisions.astS3Key,
-      contentHash: caseLawDecisions.contentHash,
+      id: publishedCaseLawDecisions.id,
+      astS3Key: publishedCaseLawDecisions.astS3Key,
+      contentHash: publishedCaseLawDecisions.contentHash,
       descriptor: caseLawSources.descriptor,
     })
-    .from(caseLawDecisions)
-    .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
-    .where(inArray(caseLawDecisions.id, [...ids]));
+    .from(publishedCaseLawDecisions)
+    .innerJoin(
+      caseLawSources,
+      eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
+    )
+    .where(inArray(publishedCaseLawDecisions.id, [...ids]));
   // The same split the decision read makes: redistribution decides whether a
   // citation may be listed at all, derived AI whether its text may travel
   // with it.
@@ -153,12 +157,12 @@ const readDecisionTextColumns = async (
     async (tx) =>
       await tx
         .select({
-          id: caseLawDecisions.id,
-          documentAst: caseLawDecisions.documentAst,
-          sections: caseLawDecisions.sections,
+          id: publishedCaseLawDecisions.id,
+          documentAst: publishedCaseLawDecisions.documentAst,
+          sections: publishedCaseLawDecisions.sections,
         })
-        .from(caseLawDecisions)
-        .where(inArray(caseLawDecisions.id, [...ids])),
+        .from(publishedCaseLawDecisions)
+        .where(inArray(publishedCaseLawDecisions.id, [...ids])),
   );
   return new Map(
     rows.map(({ id, ...columns }) => [String(id), columns] as const),
@@ -330,6 +334,8 @@ export type ReadDecisionCitationsOptions = {
   decisionId: SafeId<"caseLawDecision">;
   direction: CitationReadDirection;
   limit: number;
+  /** The surface the read serves; its country list decides publication. */
+  surface: PublicCountrySurface;
 };
 
 /**
@@ -344,9 +350,11 @@ export const readGatedDecisionCitations = async ({
   decisionId,
   direction,
   limit,
+  surface,
 }: ReadDecisionCitationsOptions): Promise<DecisionCitationsRead | null> => {
   const gated = await withRedistributableSubject(
     caseLawDb,
+    surface,
     { kind: "id", id: decisionId },
     async (subject) => {
       const page = await listDecisionCitationsHandler({
