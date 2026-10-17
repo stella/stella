@@ -3668,7 +3668,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "destructiveHint": "Check counterparty does not change state.",
       "openWorldHint": "Check counterparty can access public or external entities outside the private workspace."
     },
-    "description": "Screen a company or person for due diligence. \`check\` picks the source. A register check returns one outcome: clear, found (adverse records), not-registered (no record; not a clearance), unavailable (no answer: NOT cleared) or not-covered (cannot screen this subject, or needs the tax ID). The sanctions check returns one outcome per list in \`lists\`, with whether it binds the firm: clear or possible-match (resembling entries with score and conflicting fields; each needs human review, none is confirmed), naming the edition screened; or unavailable (stale, not loaded, or the company name unreadable: NOT cleared), whose edition fields name the latest edition on file, not one screened. Top-level status is clear only when every list is. Person matches rest on name and birth date: compare the record first.",
+    "description": "Screen a company or person for due diligence. \`check\` picks the source. A register check returns one outcome: clear, found (adverse records), not-registered (no record; not a clearance), unavailable (no answer: NOT cleared) or not-covered (cannot screen this subject, or needs the tax ID). The sanctions check returns one outcome per list in \`lists\`, with whether it binds the firm: clear; possible-match (resembling entries with score and conflicting fields; each needs human review, none confirmed); incomplete (only a bounded subset screened, nothing matched: NOT cleared); or unavailable (stale, not loaded, or company name unreadable: NOT cleared, edition not screened). Top level is clear only if every list was fully screened clear. Person matches rest on name and birth date: compare the record first.",
     "annotations": {
       "title": "Check counterparty",
       "destructiveHint": false,
@@ -4322,7 +4322,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "destructiveHint": "Save clause can overwrite, delete, cancel, revoke, or otherwise irreversibly change existing state.",
       "openWorldHint": "Save clause is confined to the private workspace or a bounded computation."
     },
-    "description": "Create or update a clause in the organization's clause library. Omit clause_id to create (title and body required); pass clause_id to update. body is an ordered array of paragraphs, each with text and optional style, level, runs, list_kind, list_level, is_directive, directive_kind, and directive_expression. Use balanced {% ... %} tags. Keep num(), ref(), clause() and ai(adapt=true) in the template body. category_id, language, description, usage_notes, and metadata accept null to clear them on update. Set snapshot_version true on an update to also append a version snapshot of the body. Returns the clause id.",
+    "description": "Create or update a library clause. Omit clause_id to create (title and body required); include it to update. body contains ordered paragraphs. Use balanced {% ... %} tags; keep num(), ref(), clause() and ai(adapt=true) in the template body. Clear category_id, language, description, usage_notes or metadata with null. Set snapshot_version true to append a body version on update. Returns the clause id.",
     "annotations": {
       "title": "Save clause",
       "destructiveHint": true,
@@ -4396,9 +4396,29 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
                 "type": "string",
                 "description": "List item kind when the paragraph is a list item"
               },
-              "list_level": {
-                "type": "integer",
-                "description": "0-based list nesting depth for a list item"
+              "numbering": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "levelOnly"
+                    ],
+                    "description": "Set only the paragraph's list nesting depth",
+                    "type": "string"
+                  },
+                  "ilvl": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 8,
+                    "description": "0-based list nesting depth for a list item"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "ilvl"
+                ],
+                "additionalProperties": false,
+                "description": "List nesting depth for the paragraph"
               },
               "is_directive": {
                 "type": "boolean",
@@ -10217,7 +10237,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "destructiveHint": "Check counterparty does not change state.",
       "openWorldHint": "Check counterparty can access public or external entities outside the private workspace."
     },
-    "description": "Screen a company or person for due diligence. \`check\` picks the source. A register check returns one outcome: clear, found (adverse records), not-registered (no record; not a clearance), unavailable (no answer: NOT cleared) or not-covered (cannot screen this subject, or needs the tax ID). The sanctions check returns one outcome per list in \`lists\`, with whether it binds the firm: clear or possible-match (resembling entries with score and conflicting fields; each needs human review, none is confirmed), naming the edition screened; or unavailable (stale, not loaded, or the company name unreadable: NOT cleared), whose edition fields name the latest edition on file, not one screened. Top-level status is clear only when every list is. Person matches rest on name and birth date: compare the record first.",
+    "description": "Screen a company or person for due diligence. \`check\` picks the source. A register check returns one outcome: clear, found (adverse records), not-registered (no record; not a clearance), unavailable (no answer: NOT cleared) or not-covered (cannot screen this subject, or needs the tax ID). The sanctions check returns one outcome per list in \`lists\`, with whether it binds the firm: clear; possible-match (resembling entries with score and conflicting fields; each needs human review, none confirmed); incomplete (only a bounded subset screened, nothing matched: NOT cleared); or unavailable (stale, not loaded, or company name unreadable: NOT cleared, edition not screened). Top level is clear only if every list was fully screened clear. Person matches rest on name and birth date: compare the record first.",
     "annotations": {
       "title": "Check counterparty",
       "destructiveHint": false,
@@ -10871,7 +10891,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "destructiveHint": "Save clause can overwrite, delete, cancel, revoke, or otherwise irreversibly change existing state.",
       "openWorldHint": "Save clause is confined to the private workspace or a bounded computation."
     },
-    "description": "Create or update a clause in the organization's clause library. Omit clause_id to create (title and body required); pass clause_id to update. body is an ordered array of paragraphs, each with text and optional style, level, runs, list_kind, list_level, is_directive, directive_kind, and directive_expression. Use balanced {% ... %} tags. Keep num(), ref(), clause() and ai(adapt=true) in the template body. category_id, language, description, usage_notes, and metadata accept null to clear them on update. Set snapshot_version true on an update to also append a version snapshot of the body. Returns the clause id.",
+    "description": "Create or update a library clause. Omit clause_id to create (title and body required); include it to update. body contains ordered paragraphs. Use balanced {% ... %} tags; keep num(), ref(), clause() and ai(adapt=true) in the template body. Clear category_id, language, description, usage_notes or metadata with null. Set snapshot_version true to append a body version on update. Returns the clause id.",
     "annotations": {
       "title": "Save clause",
       "destructiveHint": true,
@@ -10945,9 +10965,29 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                 "type": "string",
                 "description": "List item kind when the paragraph is a list item"
               },
-              "list_level": {
-                "type": "integer",
-                "description": "0-based list nesting depth for a list item"
+              "numbering": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "levelOnly"
+                    ],
+                    "description": "Set only the paragraph's list nesting depth",
+                    "type": "string"
+                  },
+                  "ilvl": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 8,
+                    "description": "0-based list nesting depth for a list item"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "ilvl"
+                ],
+                "additionalProperties": false,
+                "description": "List nesting depth for the paragraph"
               },
               "is_directive": {
                 "type": "boolean",

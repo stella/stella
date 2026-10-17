@@ -10,6 +10,7 @@ import { member } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   chatMessages,
+  chatRunLogEntries,
   chatRunLogs,
   chatThreadNames,
   chatToolGrants,
@@ -210,7 +211,7 @@ const withRunLogInsert =
 
 const withRunLogUpdate =
   (update: (table: unknown) => unknown) => (table: unknown) =>
-    table === chatRunLogs
+    table === chatRunLogs || table === chatRunLogEntries
       ? { set: () => ({ where: async () => undefined }) }
       : update(table);
 

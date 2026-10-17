@@ -35,7 +35,7 @@ export const marketingConfig = ({ testDir, project }: MarketingConfigOptions) =>
     fullyParallel: false,
     workers: 1,
     retries: 0,
-    // One test walks every capture in both themes (20 shots), each first visit
+    // One test walks every capture in both themes, each first visit
     // paying a cold route compile; a full pass on the CI runner takes ~4 min.
     timeout: 600_000,
     expect: { timeout: 15_000 },

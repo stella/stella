@@ -28,6 +28,7 @@ import type {
   RequestSecretDecision,
   SecretTargetResolution,
 } from "@/components/chat/chat-approval-context";
+import type { ChatTableChartProps } from "@/components/chat/chat-table-chart";
 import type {
   ApprovalToolName,
   AskUserOutput,
@@ -76,8 +77,8 @@ import {
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import type { CreateDocumentDestination } from "@/components/chat/needs-matter-card";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
-import "@/components/chat/create-document-draft-inspector";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
+import "@/components/chat/create-document-draft-inspector";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { entityReferenceHref } from "@/components/references/reference.logic";
 import { mountBrowserExtensionBridge } from "@/features/chat/browser-control/browser-extension-bridge";
@@ -95,6 +96,7 @@ import {
   readChatToolGrantCoverage,
   storeChatToolGrant,
 } from "@/features/chat/chat-tool-grants";
+import { LazyChatTableChart } from "@/features/chat/components/lazy-chat-table-chart";
 import {
   invalidateCreatedDocumentQueries,
   promoteCreateDocumentDraftInspectorTab,
@@ -1554,6 +1556,11 @@ export const useChatSession = ({
   );
   const streamdownComponents = useMemo(
     () => ({
+      table: (props: Omit<ChatTableChartProps, "cacheScope">) =>
+        createElement(LazyChatTableChart, {
+          ...props,
+          cacheScope: [organizationId, userId],
+        }),
       a: (props: ComponentProps<"a">) =>
         createElement(StreamdownMentionLink, {
           ...props,
@@ -1563,7 +1570,7 @@ export const useChatSession = ({
       "stll-anon": (props: ComponentProps<"button"> & { ph?: string }) =>
         createElement(AnonymizedSpan, props),
     }),
-    [workspaceId],
+    [workspaceId, organizationId, userId],
   );
 
   const approvalPendingMessageId = useMemo(
