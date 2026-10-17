@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
+
+import { assertProperty } from "@stll/property-testing";
 
 import {
+  closestNames,
   failure,
   jsonSuccess,
   KIT_INTERNAL_MESSAGE,
@@ -24,6 +28,51 @@ const INTERNAL_RESULT = {
   ],
   isError: true,
 } satisfies ToolCallResult;
+
+const legacyEditDistance = (left: string, right: string): number => {
+  let previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+  for (let row = 1; row <= left.length; row += 1) {
+    const current = [row];
+    for (let column = 1; column <= right.length; column += 1) {
+      const substitution =
+        (previous[column - 1] ?? 0) +
+        (left[row - 1] === right[column - 1] ? 0 : 1);
+      current[column] = Math.min(
+        (previous[column] ?? 0) + 1,
+        (current[column - 1] ?? 0) + 1,
+        substitution,
+      );
+    }
+    previous = current;
+  }
+  return previous[right.length] ?? 0;
+};
+
+const legacyClosestNames = (
+  name: string,
+  known: readonly string[],
+): string[] => {
+  const lowered = name.toLowerCase();
+  return known
+    .map((candidate) => {
+      const lower = candidate.toLowerCase();
+      const contains = lower.includes(lowered) || lowered.includes(lower);
+      return {
+        candidate,
+        distance: contains ? 0 : legacyEditDistance(lowered, lower),
+      };
+    })
+    .filter(
+      ({ distance }) => distance <= Math.max(2, Math.floor(name.length / 3)),
+    )
+    .toSorted(
+      (left, right) =>
+        left.distance - right.distance ||
+        left.candidate.localeCompare(right.candidate),
+    )
+    .slice(0, 3)
+    .map(({ candidate }) => candidate);
+};
 
 describe("tool results preserve JSON data or return a safe error", () => {
   test("preserves primitive and nested JSON values and normalization notes", () => {
@@ -139,5 +188,68 @@ describe("tool results preserve JSON data or return a safe error", () => {
       ],
       isError: true,
     });
+  });
+});
+
+describe("closest tool names", () => {
+  test("matches contained names and returns at most three closest names", () => {
+    expect(closestNames("eta", ["theta", "beta"])).toEqual(["beta", "theta"]);
+    expect(closestNames("cat", ["rat", "mat", "hat", "bat"])).toEqual([
+      "bat",
+      "hat",
+      "mat",
+    ]);
+  });
+
+  test("breaks equal distances lexically and applies the name-length threshold", () => {
+    expect(closestNames("cat", ["hat", "bat"])).toEqual(["bat", "hat"]);
+    expect(closestNames("abcdef", ["abcxef", "abxyef", "abyyzf"])).toEqual([
+      "abcxef",
+      "abxyef",
+    ]);
+  });
+
+  test("returns no suggestions for empty or distant candidate lists", () => {
+    expect(closestNames("missing", [])).toEqual([]);
+    expect(closestNames("cat", ["elephant", "zebra"])).toEqual([]);
+  });
+
+  test("counts astral Unicode characters as one edit in either direction", () => {
+    expect(closestNames("ab", ["a😀😀"])).toEqual(["a😀😀"]);
+    expect(closestNames("a😀😀", ["ab"])).toEqual(["ab"]);
+    expect(closestNames("x", ["😀"])).toEqual(["😀"]);
+  });
+
+  test("retains Czech diacritics and contained inflected names", () => {
+    expect(closestNames("kůň", ["kun", "kům"])).toEqual(["kům", "kun"]);
+    expect(closestNames("Novákem", ["Novák"])).toEqual(["Novák"]);
+  });
+
+  test("ASCII closest-name ranking matches the previous algorithm", () => {
+    const asciiCharacters = [
+      ..."abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+      "-",
+      "_",
+      " ",
+      "\t",
+      "\n",
+      ".",
+    ];
+    const asciiText = fc
+      .array(fc.constantFrom(...asciiCharacters), { maxLength: 12 })
+      .map((characters) => characters.join(""));
+
+    assertProperty(
+      "ASCII closest-name ranking matches the previous algorithm",
+      fc.property(
+        asciiText,
+        fc.array(asciiText, { maxLength: 8 }),
+        (name, known) => {
+          expect(closestNames(name, known)).toEqual(
+            legacyClosestNames(name, known),
+          );
+        },
+      ),
+    );
   });
 });
