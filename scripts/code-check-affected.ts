@@ -889,11 +889,44 @@ const parseAffectedWorkspacePaths = (output: string): string[] => {
 };
 
 const THREE_TASK_MEMORY_BYTES = 12 * 1024 ** 3;
-// Cgroup v2, then v1: a container reports the host's memory but enforces these.
-const CGROUP_MEMORY_LIMITS = [
-  "/sys/fs/cgroup/memory.max",
-  "/sys/fs/cgroup/memory/memory.limit_in_bytes",
-];
+const CGROUP_ROOT = "/sys/fs/cgroup";
+
+/**
+ * Memory-limit files for this process's cgroup and every ancestor, v2 then
+ * v1. A nested cgroup can be limited while the mount root reports `max`.
+ */
+export const cgroupMemoryLimitFiles = (procSelfCgroup: string): string[] => {
+  const files: string[] = [];
+  const ancestry = (cgroupPath: string) => {
+    const parts = cgroupPath.split("/").filter((part) => part !== "");
+    return parts.map(
+      (_, index) => `/${parts.slice(0, parts.length - index).join("/")}`,
+    );
+  };
+  for (const line of procSelfCgroup.split("\n")) {
+    const [, controllers, cgroupPath] = line.split(":");
+    if (controllers === undefined || cgroupPath === undefined) {
+      continue;
+    }
+    if (controllers === "") {
+      files.push(
+        ...ancestry(cgroupPath).map((dir) => `${CGROUP_ROOT}${dir}/memory.max`),
+      );
+    } else if (controllers.split(",").includes("memory")) {
+      files.push(
+        ...ancestry(cgroupPath).map(
+          (dir) => `${CGROUP_ROOT}/memory${dir}/memory.limit_in_bytes`,
+        ),
+      );
+    }
+  }
+  // The mount roots: a namespaced container sees its own cgroup there.
+  files.push(
+    `${CGROUP_ROOT}/memory.max`,
+    `${CGROUP_ROOT}/memory/memory.limit_in_bytes`,
+  );
+  return [...new Set(files)];
+};
 
 /**
  * The memory the checks may use: the machine's, or a lower container limit.
@@ -920,7 +953,9 @@ export const memoryLimitBytes = ({
     return override;
   }
   let limit = total;
-  for (const file of CGROUP_MEMORY_LIMITS) {
+  const selfCgroup =
+    Result.try(() => read("/proc/self/cgroup")).unwrapOr(undefined) ?? "";
+  for (const file of cgroupMemoryLimitFiles(selfCgroup)) {
     const value = Number(
       Result.try(() => read(file))
         .unwrapOr(undefined)

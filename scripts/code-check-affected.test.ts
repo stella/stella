@@ -30,6 +30,7 @@ import {
   LINT_ONLY_CACHE_INPUTS,
   lintAllTrace,
   matchedLintAllInputs,
+  cgroupMemoryLimitFiles,
   memoryLimitBytes,
   separateApiLintFromTypecheck,
   executeCheckCommands,
@@ -1281,6 +1282,30 @@ describe("parallel code-quality legs", () => {
     expect(typecheckAt).toBeGreaterThan(-1);
     expect(lintAt).toBeGreaterThan(typecheckAt);
   }, 30_000);
+
+  test("a nested cgroup limit counts although the mount root reports max", () => {
+    const GiB = 1024 ** 3;
+    const files: Record<string, string> = {
+      "/proc/self/cgroup": "0::/user.slice/ci.scope/job\n",
+      "/sys/fs/cgroup/memory.max": "max\n",
+      "/sys/fs/cgroup/user.slice/memory.max": "max\n",
+      "/sys/fs/cgroup/user.slice/ci.scope/memory.max": `${12 * GiB}\n`,
+      "/sys/fs/cgroup/user.slice/ci.scope/job/memory.max": "max\n",
+    };
+    expect(
+      memoryLimitBytes({
+        total: 64 * GiB,
+        read: (file) => files[file],
+        requested: "",
+      }),
+    ).toBe(12 * GiB);
+    expect(cgroupMemoryLimitFiles("4:cpu,memory:/docker/abc\n")).toEqual([
+      "/sys/fs/cgroup/memory/docker/abc/memory.limit_in_bytes",
+      "/sys/fs/cgroup/memory/docker/memory.limit_in_bytes",
+      "/sys/fs/cgroup/memory.max",
+      "/sys/fs/cgroup/memory/memory.limit_in_bytes",
+    ]);
+  });
 
   test("an explicit memory size replaces detection", () => {
     expect(
