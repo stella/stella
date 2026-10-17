@@ -154,12 +154,13 @@ export const revokeMcpConnectionTokens = async ({
     revoked.push(tokenTypeHint);
   };
 
-  if (connection.refreshTokenEncrypted && connection.refreshTokenIv) {
+  const { refreshTokenEncrypted, refreshTokenIv } = connection;
+  if (refreshTokenEncrypted && refreshTokenIv) {
     await revoke("refresh_token", async () => ({
       token: await dependencies.decryptMcpSecret({
-        ciphertext: connection.refreshTokenEncrypted,
+        ciphertext: refreshTokenEncrypted,
         connectorId: connection.connectorId,
-        iv: connection.refreshTokenIv,
+        iv: refreshTokenIv,
         organizationId,
         purpose: "mcp_refresh_token",
         userId,

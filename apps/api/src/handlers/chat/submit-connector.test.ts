@@ -29,9 +29,25 @@ const input = {
 
 const assistantContent = (
   state: "input-complete" | "complete" = "input-complete",
-  name: string = CONNECT_CONNECTOR_TOOL_NAME,
-) =>
-  toPersistedChatMessageContentV3({
+  name:
+    | typeof CONNECT_CONNECTOR_TOOL_NAME
+    | "ask-user" = CONNECT_CONNECTOR_TOOL_NAME,
+) => {
+  if (name === "ask-user") {
+    return toPersistedChatMessageContentV3({
+      data: [
+        {
+          type: "tool-call",
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
+          id: toolCallId,
+          name,
+          arguments: "{}",
+          state,
+        },
+      ],
+    });
+  }
+  return toPersistedChatMessageContentV3({
     data: [
       {
         type: "tool-call",
@@ -52,6 +68,7 @@ const assistantContent = (
       },
     ],
   });
+};
 
 type Script = {
   thread?: boolean;
