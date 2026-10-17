@@ -19,6 +19,7 @@ import {
   hasUsableOpenAIKey,
 } from "@/components/ai-config-role-models.logic";
 import { CopyActionButton } from "@/components/copy-action-button";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { SettingsPageHeader } from "@/components/settings-page-header";
 import { env } from "@/env";
 import { detached } from "@/lib/detached";
@@ -276,6 +277,9 @@ export const AIConfigForm = ({
             providers={providerValues}
             hasOpenAIKey={hasUsableOpenAIKey(form.providers)}
             roleModels={form.roleModels}
+            defaultModels={form.defaultModels}
+            providerDefaultModels={form.providerDefaultModels}
+            defaultsFeedback={<QueryViewFeedback view={form.defaultsView} />}
             onRoleChange={form.changeRole}
             onRoleReset={form.resetRole}
             decisionState={form.decisionState}

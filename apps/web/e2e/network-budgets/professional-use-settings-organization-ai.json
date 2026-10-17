@@ -1,6 +1,6 @@
 {
   "route": "/admin/ai",
-  "reason": "Load professional-use acceptance before protected route data is requested.",
+  "reason": "Load professional-use acceptance before protected route data is requested; preview the resolved default models for the configured providers.",
   "budget": {
     "depth": 4,
     "requests": [
@@ -20,7 +20,8 @@
       "GET /v1/organization-settings/web-search-config",
       "GET /v1/signals/count",
       "GET /v1/time-timers",
-      "GET /v1/workspaces/navigation"
+      "GET /v1/workspaces/navigation",
+      "POST /v1/organization-settings/ai-config/defaults-preview"
     ],
     "requestCounts": {
       "GET /api/auth/get-session": 1,
@@ -39,7 +40,8 @@
       "GET /v1/signals/count": 1,
       "GET /v1/time-timers": 1,
       "GET /v1/workspaces/navigation": 1,
-      "GET /v1/me/professional-use": 1
+      "GET /v1/me/professional-use": 1,
+      "POST /v1/organization-settings/ai-config/defaults-preview": 1
     },
     "dbQueries": {
       "GET /api/auth/get-session": 4,

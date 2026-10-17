@@ -1241,6 +1241,11 @@
       "stale": "Ta odpowiedź się zmieniła. Zaznacz tekst ponownie.",
       "submit": "Poproś o zmianę"
     },
+    "answerQuote": {
+      "showInDecision": "Pokaż w orzeczeniu",
+      "verified": "Zweryfikowany cytat",
+      "verifiedHint": "Dosłownie w {source}"
+    },
     "applyMode": {
       "description": "Word zapisuje, kto wprowadził każdą zmianę. Zapamiętamy Twój wybór.",
       "direct": "Nie, zastosuj bezpośrednio",
@@ -1479,6 +1484,12 @@
       "title": "Wklejony tekst"
     },
     "placeholder": "Wpisz pytanie tutaj, / dla umiejętności, @ aby dodać kontekst",
+    "processSummary": {
+      "analyses": "{count, plural, one {# analiza} few {# analizy} many {# analiz} other {# analizy}}",
+      "changesSaved": "{count, plural, one {# zapisana zmiana} few {# zapisane zmiany} many {# zapisanych zmian} other {# zapisanej zmiany}}",
+      "documentEdits": "{count, plural, one {# edycja dokumentu} few {# edycje dokumentu} many {# edycji dokumentu} other {# edycji dokumentu}}",
+      "sourcesChecked": "{count, plural, one {# sprawdzone źródło} few {# sprawdzone źródła} many {# sprawdzonych źródeł} other {# sprawdzonego źródła}}"
+    },
     "promptImprovementStrategies": {
       "decompose": {
         "description": "Dzieli złożone zadanie na uporządkowane podzadania.",
@@ -1724,6 +1735,7 @@
       "interrupted": "Przerwano przed ukończeniem",
       "output": "Wynik",
       "sourceCode": "Kod źródłowy",
+      "statusWaiting": "Oczekuje",
       "toggleDetails": "Przełącz szczegóły",
       "unrestoredFields": "W trybie anonimizacji nie udało się wypełnić prawdziwymi wartościami {count, plural, one {# pola} few {# pól} many {# pól} other {# pola}}. Sprawdź: {fields}"
     },

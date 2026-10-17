@@ -93,7 +93,7 @@ export const AppsGroup = ({
           <ListGroupTitle id="connections-apps">
             {t("settings.connections.connectedAppsTitle")}
             {all.length > 0 && (
-              <ListGroupCount>{format.number(visible.length)}</ListGroupCount>
+              <ListGroupCount count={format.number(visible.length)} />
             )}
           </ListGroupTitle>
           <ListGroupDescription>
