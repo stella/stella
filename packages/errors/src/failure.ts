@@ -259,7 +259,7 @@ export const readFailureBrand = (
           read === undefined
             ? value
             : new Proxy(value, {
-                get: (target, key) =>
+                get: (target, key): unknown =>
                   typeof key === "string"
                     ? read(target, key)
                     : Reflect.get(target, key),

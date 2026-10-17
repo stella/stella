@@ -878,7 +878,7 @@ function toSafeStatusResponse(
   return status(statusCode, body);
 }
 
-type SafeHandlerLogContext = {
+export type SafeHandlerLogContext = {
   request: Request;
   route: string;
 };

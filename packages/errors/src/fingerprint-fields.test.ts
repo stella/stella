@@ -39,7 +39,14 @@ describe("fingerprint fields preserve owner provenance", () => {
       "termination.reason": "timeout",
     });
     expect(
-      fieldsOf(new DomainFailure({ ...error, termination: null })),
+      fieldsOf(
+        new DomainFailure({
+          message: error.message,
+          reason: error.reason,
+          stage: error.stage,
+          termination: null,
+        }),
+      ),
     ).toEqual({
       reason: "cancelled",
       stage: "write",

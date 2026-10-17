@@ -82,6 +82,7 @@ const readThread = async (threadId: SafeId<"chatThread">) =>
       promptCachingEnabled: false,
       query: {},
       request: new Request("http://localhost/v1/chat/threads/messages"),
+      route: "/v1/chat/threads/:threadId/messages",
       safeDb,
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userA1 },

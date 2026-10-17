@@ -20,7 +20,9 @@ beforeEach(() => {
   captured.length = 0;
   resetCaptureWindows();
   setAnalyticsForTesting({
-    capture: (event) => captured.push(event),
+    capture: (event) => {
+      captured.push(event);
+    },
     flush: async () => undefined,
     identifyOrganizationGroup: () => undefined,
   });

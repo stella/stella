@@ -109,6 +109,7 @@ describe("updateWorkObligation", () => {
         params: { workspaceId, entityId },
         recordAuditEvent,
         request,
+        route: "/v1/work-obligations/:workspaceId/:entityId",
         safeDb,
         scopedDb,
         session: {
@@ -242,6 +243,7 @@ describe("updateWorkObligation", () => {
         params: { workspaceId, entityId },
         recordAuditEvent,
         request,
+        route: "/v1/work-obligations/:workspaceId/:entityId",
         safeDb,
         scopedDb,
         session: {
@@ -368,6 +370,7 @@ describe("updateWorkObligation", () => {
           params: { workspaceId, entityId },
           recordAuditEvent,
           request,
+          route: "/v1/work-obligations/:workspaceId/:entityId",
           safeDb,
           scopedDb,
           session: {

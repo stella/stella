@@ -31,7 +31,9 @@ const createContext = ({
   session: { activeOrganizationId: organizationId },
   memberRole: sessionMemberRole("owner"),
   query,
-  safeDb: async <T>() => Result.ok(asTestRaw<T>(rows)),
+  safeDb: asTestRaw<Parameters<typeof listFolders.handler>[0]["safeDb"]>(
+    async () => Result.ok(rows),
+  ),
   request: new Request("https://example.test/v1/entities/ws/files"),
   route: "/v1/entities/:workspaceId/files",
 });

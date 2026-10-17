@@ -6,6 +6,7 @@ import {
   ORG_AI_CONFIG_STATUS,
   type OrgAIConfigStatus,
 } from "@/api/lib/ai-config-loader-core";
+import type { SafeHandlerLogContext } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -51,9 +52,7 @@ export type BaseTestHandlerContext = {
   orgAIConfigStatus: OrgAIConfigStatus;
   promptCachingEnabled: boolean;
   managedAIResidency: ManagedAIResidency;
-  request: Request;
-  route: string;
-};
+} & SafeHandlerLogContext;
 
 /**
  * Overrides accepted by {@link createTestHandlerContext}. The base identity
@@ -129,12 +128,12 @@ const createBaseContext = (): Omit<
 // oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- the type parameter IS the API: callers pin the handler's own context type per call
 export const createTestHandlerContext = <TContext = BaseTestHandlerContext>(
   overrides: TestHandlerContextOverrides,
-): TContext => {
+): TContext & SafeHandlerLogContext => {
   const base = createBaseContext();
   const { audit, safeDb, scopedDb, createAuditRecorder, ...fields } = overrides;
   const recordAuditEvent =
     typeof audit === "function" ? audit : unconfiguredAuditRecorder;
-  return asTestRaw<TContext>({
+  return asTestRaw<TContext & SafeHandlerLogContext>({
     ...base,
     ...fields,
     // Only the sentinel is replaced; any supplied double passes through as is.

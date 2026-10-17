@@ -42,7 +42,7 @@ export type NotEdenErrorEnvelope<E> = E extends Error
     ? never
     : E;
 
-export type ErrorCaptureOptions = {
+type ErrorCaptureOptions = {
   scope: ExceptionScope;
   fingerprintKey: ExceptionFingerprintKey;
   context?: ErrorCaptureContext;

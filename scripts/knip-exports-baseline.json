@@ -1,6 +1,6 @@
 {
   "apps/api": {
-    "count": 130,
+    "count": 128,
     "files": {
       "apps/api/scripts/lib/capability-catalog.ts": 7,
       "apps/api/src/handlers/case-law/citation-kind.ts": 2,
@@ -13,13 +13,12 @@
       "apps/api/src/handlers/entities/pdf-signing-redeem-handoff.ts": 1,
       "apps/api/src/handlers/files/routes.ts": 7,
       "apps/api/src/handlers/playbooks/create-shared.ts": 2,
-      "apps/api/src/handlers/playbooks/derive-ask.ts": 1,
       "apps/api/src/handlers/workspaces/read-navigation.ts": 1,
       "apps/api/src/lib/account-deletion-steps.ts": 13,
       "apps/api/src/lib/ai-config.ts": 6,
       "apps/api/src/lib/ai-provider-probe.ts": 2,
       "apps/api/src/lib/auth/feature-access/view-eligibility.ts": 1,
-      "apps/api/src/lib/buffer-intent-reconciliation.ts": 7,
+      "apps/api/src/lib/buffer-intent-reconciliation.ts": 6,
       "apps/api/src/lib/chat/thread-compaction.ts": 1,
       "apps/api/src/lib/document-processing-ocr-result.ts": 1,
       "apps/api/src/lib/document-review/review-extract.ts": 2,
