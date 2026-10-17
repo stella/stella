@@ -4,6 +4,12 @@
   "private": true,
   "license": "Apache-2.0",
   "type": "module",
+  "imports": {
+    "#aho-corasick": {
+      "browser": "@stll/aho-corasick-wasm",
+      "default": "@stll/aho-corasick"
+    }
+  },
   "scripts": {
     "media:sync": "bun ../../scripts/product-media.ts sync",
     "dev": "bun --cwd=../../packages/cli run codegen:runtime && bun run media:sync && bun --bun astro dev",
@@ -24,6 +30,8 @@
     "@astrojs/sitemap": "^3.7.4",
     "@astrojs/starlight": "^0.42.6",
     "@resvg/resvg-js": "^2.6.2",
+    "@stll/aho-corasick": "1.0.4",
+    "@stll/aho-corasick-wasm": "1.0.4",
     "@stll/anonymize-chat": "workspace:*",
     "@stll/anonymize-data": "catalog:",
     "@stll/anonymize-wasm": "catalog:",
@@ -47,9 +55,12 @@
     "@astrojs/check": "^0.9.9",
     "@playwright/test": "^1.63.0",
     "@stll/playwright-tools": "workspace:*",
+    "@stll/property-testing": "workspace:*",
+    "@stll/text-normalize": "workspace:*",
     "@types/react": "catalog:react19",
     "@types/react-dom": "catalog:react19",
-    "bun-types": "catalog:"
+    "bun-types": "catalog:",
+    "fast-check": "catalog:"
   },
   "crawlPosture": "public"
 }
