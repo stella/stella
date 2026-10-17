@@ -931,7 +931,10 @@ test("CI diff path guards stay pinned to manifest outputs", () => {
   // The workflow retains its baseline shell checks. Its registered command
   // validates the complete manifest, including newly declared outputs.
   expect(bundle).not.toContain("git diff --exit-code");
-  expect(bundle).toContain(generator("mcp-app-bundles").check.join(" "));
+  const bundleCheck =
+    generator("mcp-app-bundles").check ??
+    panic("mcp-app-bundles declares its own check command");
+  expect(bundle).toContain(bundleCheck.join(" "));
   const guard = readFileSync(
     new URL("check-mcp-generated-tracking.ts", import.meta.url),
     "utf-8",
