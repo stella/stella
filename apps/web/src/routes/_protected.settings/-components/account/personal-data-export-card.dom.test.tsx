@@ -3,6 +3,7 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 
 import messages from "@/i18n/langs/en.json";
 import type { AccountDataExportStatus } from "@/lib/account/account-data-export-queries";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({
   url: "http://localhost:3000/settings/account/profile",
@@ -66,7 +67,7 @@ afterEach(async () => {
 
 afterAll(async () => {
   globalThis.fetch = originalFetch;
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const renderAccountCard = () => {
