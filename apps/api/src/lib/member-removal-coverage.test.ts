@@ -122,6 +122,7 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "flow_runs.definition_snapshot",
   "folio_collab_room_tokens.permissions",
   "folio_collab_rooms.docx_checkpoint_scan_warnings",
+  "folio_collab_rooms.saved_snapshot_cut",
   "usage_provider_webhook_events.replay_audit",
   "justifications.content",
   "justifications.bounding_boxes",

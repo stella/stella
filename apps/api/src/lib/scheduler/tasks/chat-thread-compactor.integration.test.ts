@@ -103,7 +103,7 @@ const SUMMARY_MARKDOWN = [
 
 const settingsSpy = spyOn(aiConfigLoader, "loadOrgAISettings");
 const budgetSpy = spyOn(compactionBudget, "resolveChatCompactionBudget");
-const modelSpy = spyOn(modelTransport, "generateTanStackTextForRole");
+const modelSpy = spyOn(modelTransport, "generateTanStackTextForTask");
 const logs = installRecordingLogger();
 const seededThreadIds: SafeId<"chatThread">[] = [];
 

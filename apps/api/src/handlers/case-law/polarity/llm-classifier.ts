@@ -49,7 +49,7 @@ export const polarityGeneration = ({
 }) =>
   ({
     dataClass: "public_corpus",
-    role: "fast",
+    task: "classify",
     serviceTier: "flex",
     orgAIConfig: null,
     organizationId: null,
@@ -58,14 +58,14 @@ export const polarityGeneration = ({
     analytics: createTanStackAIAnalyticsCallbacks({
       dataClass: "public_corpus",
       feature: "case-law.polarity",
-      modelRole: "fast",
+      modelTask: "classify",
       modelTier: NO_ORGANIZATION_MODEL_DISPATCH.modelTier,
       properties: { language },
       traceId: Bun.randomUUIDv7(),
     }),
     caching: resolveCaching({
       promptCachingEnabled: true,
-      role: "fast",
+      task: "classify",
       scopeKey: `polarity:${language}`,
     }),
     system: SYSTEM_PROMPT,

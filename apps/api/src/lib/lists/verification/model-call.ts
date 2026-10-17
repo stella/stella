@@ -27,10 +27,10 @@ import type { VerificationBlock } from "@/api/lib/lists/verification/document-te
 import type { ListVerificationRunCapError } from "@/api/lib/lists/verification/run-caps";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { markTanStackCacheBreakpoint } from "@/api/lib/tanstack-ai-caching";
-import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 
-/** The role both passes dispatch on, and the one a run records. */
-export const VERIFICATION_MODEL_ROLE = "pdf" as const;
+/** The task both passes dispatch on, and the one a run records. */
+export const VERIFICATION_MODEL_TASK = "pdf";
 const CALL_TIMEOUT_MS = 120_000;
 
 export class ListVerificationAccessRevokedError extends TaggedError(
@@ -52,7 +52,7 @@ export type VerificationModelDeps = {
   usageMetering: AIUsageMetering;
   abortSignal: AbortSignal;
   /** External model-dispatch boundary; supplied by focused tests. */
-  generateObjectForRole?: typeof generateTanStackObjectForRole | undefined;
+  generateObjectForTask?: typeof generateTanStackObjectForTask | undefined;
 };
 
 const proofMatchesRequest = (
@@ -99,13 +99,13 @@ export const createVerificationCall = <TSchema extends v.GenericSchema>({
 }: VerificationCallArgs<TSchema>): VerificationCall<TSchema> => {
   const caching = resolveCaching({
     promptCachingEnabled: deps.promptCachingEnabled,
-    role: VERIFICATION_MODEL_ROLE,
+    task: VERIFICATION_MODEL_TASK,
     scopeKey: `list-verification:${deps.entityVersionId}`,
   });
   const analytics = createTanStackAIAnalyticsCallbacks({
     dataClass: "customer",
     feature,
-    modelRole: VERIFICATION_MODEL_ROLE,
+    modelTask: VERIFICATION_MODEL_TASK,
     orgAIConfig: deps.orgAIConfig,
     modelTier: deps.admission.modelTier,
     properties: {
@@ -124,7 +124,7 @@ export const createVerificationCall = <TSchema extends v.GenericSchema>({
             { decision: caching },
           ),
         ];
-  const generate = deps.generateObjectForRole ?? generateTanStackObjectForRole;
+  const generate = deps.generateObjectForTask ?? generateTanStackObjectForTask;
 
   return {
     request: (task) => ({
@@ -152,7 +152,7 @@ export const createVerificationCall = <TSchema extends v.GenericSchema>({
       return Result.ok(
         await generate({
           dataClass: "customer",
-          role: VERIFICATION_MODEL_ROLE,
+          task: VERIFICATION_MODEL_TASK,
           orgAIConfig: deps.orgAIConfig,
           managedAIResidency: deps.managedAIResidency,
           organizationId: deps.organizationId,
