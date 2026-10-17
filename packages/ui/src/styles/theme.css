@@ -130,6 +130,14 @@
     0.999,
     1
   );
+  /* UI easing. Surfaces that enter or exit use ease-out: a strong curve that
+     responds at once and settles softly. Movement on screen uses ease-in-out.
+     Overriding Tailwind's own names keeps `ease-out`/`ease-in-out` and every
+     transition without an explicit curve on these values. Never `ease-in` for
+     UI (no-layout-motion-classes rejects it). */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --default-transition-timing-function: var(--ease-out);
   --animate-skeleton: skeleton 2s -1s infinite linear;
   --animate-caret-blink: caret-blink 1.25s ease-out infinite;
   /* One-shot tint pulse for a surface that just became relevant.
@@ -142,6 +150,56 @@
   --animate-loader: loader 1.8s ease-in-out infinite;
   /* A list item settling into place; callers stagger it by index. */
   --animate-rise: rise 240ms ease-out both;
+  /* StatusMark: the running arc turns (paused, never reset, when it stops);
+     under reduced motion a running ring breathes instead. Its state
+     changes are transitions, owned by the component. */
+  --animate-status-spin: status-spin 1100ms linear infinite;
+  --animate-status-breathe: status-breathe 1400ms ease-in-out infinite;
+  /* Text that replaces other text (a changed digit, a new live label)
+     fades in; opacity only, so inline glyphs keep their bidirectional
+     order. */
+  --animate-text-fade: text-fade 200ms ease-out both;
+  /* SwapText: a live label rolls over, the old one lifting out as the new
+     one rises in, softened by a slight blur. */
+  --animate-swap-in: swap-in 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-swap-out: swap-out 200ms ease-in both;
+  @keyframes swap-in {
+    from {
+      filter: blur(2px);
+      opacity: 0;
+      transform: translateY(0.45em);
+    }
+    to {
+      filter: blur(0);
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  @keyframes swap-out {
+    to {
+      filter: blur(2px);
+      opacity: 0;
+      transform: translateY(-0.45em);
+    }
+  }
+  @keyframes status-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  @keyframes status-breathe {
+    50% {
+      opacity: 0.45;
+    }
+  }
+  @keyframes text-fade {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
   @keyframes loader {
     0%,
     100% {
@@ -1165,8 +1223,26 @@
   * {
     @apply border-border outline-ring/50;
   }
+  /* Device safe areas (notch, home indicator, rounded corners), non-zero
+   * because the viewport meta carries `viewport-fit=cover`. The inline pair
+   * follows the writing direction, so `ps-(--safe-area-inline-start)` pads
+   * the notch side in both LTR and RTL. */
+  :root,
+  [dir="ltr"] {
+    --safe-area-top: env(safe-area-inset-top, 0px);
+    --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-area-inline-start: env(safe-area-inset-left, 0px);
+    --safe-area-inline-end: env(safe-area-inset-right, 0px);
+  }
+  [dir="rtl"] {
+    --safe-area-inline-start: env(safe-area-inset-right, 0px);
+    --safe-area-inline-end: env(safe-area-inset-left, 0px);
+  }
   html {
     @apply antialiased;
+    /* Controls draw their own hover, pressed and focus states; the grey
+     * WebKit tap flash on top of them reads as a web page. */
+    -webkit-tap-highlight-color: transparent;
     /* Paint native UI (scrollbars, form controls, spellcheck) in the active
      * palette. Without this the browser renders default scrollbars light even
      * in dark mode, so they read as bright strips against the dark surface. */
@@ -1178,6 +1254,9 @@
   html:has([data-slot="workspace-shell"]) {
     overflow: hidden;
     scrollbar-gutter: auto !important;
+    /* The shell is an app, not a page: no pull-to-refresh or rubber-band
+     * on the document, and no scroll chaining from an inner scroller. */
+    overscroll-behavior: none;
   }
   html.dark {
     color-scheme: dark;

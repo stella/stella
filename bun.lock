@@ -187,6 +187,7 @@
         "@myriaddreamin/typst-ts-web-compiler": "0.7.0",
         "@playwright/test": "^1.63.0",
         "@standard-schema/spec": "^1.1.0",
+        "@stll/playwright-tools": "workspace:*",
         "@stll/property-testing": "workspace:*",
         "@stll/test-kit": "workspace:*",
         "@stll/typescript-config": "workspace:*",
@@ -508,7 +509,6 @@
         "react": "catalog:react19",
         "react-dom": "catalog:react19",
         "streamdown": "^2.7.0",
-        "thinking-orbs": "0.3.2",
         "tw-animate-css": "1.4.0",
         "uqr": "^0.1.3",
         "use-debounce": "^10.1.1",
@@ -583,7 +583,7 @@
     },
     "packages/ai-catalog": {
       "name": "@stll/ai-catalog",
-      "version": "0.7.0",
+      "version": "0.7.1",
       "dependencies": {
         "valibot": "catalog:",
       },
@@ -732,7 +732,7 @@
     },
     "packages/chat": {
       "name": "@stll/chat",
-      "version": "0.1.40",
+      "version": "0.2.0",
       "dependencies": {
         "@ag-ui/core": "1.0.2",
         "@stll/ai-catalog": "workspace:^",
@@ -779,7 +779,7 @@
     },
     "packages/cli": {
       "name": "@stll/cli",
-      "version": "4.2.0",
+      "version": "4.3.0",
       "bin": {
         "stella": "./dist/cli.js",
       },
@@ -897,7 +897,7 @@
     },
     "packages/docx-utils": {
       "name": "@stll/docx-utils",
-      "version": "0.1.5",
+      "version": "0.2.0",
       "dependencies": {
         "better-result": "catalog:",
         "jszip": "catalog:",
@@ -1215,6 +1215,7 @@
         "@stll/text-normalize": "workspace:*",
         "@stll/time": "workspace:*",
         "better-result": "catalog:",
+        "oxfmt": "catalog:",
         "typescript": "catalog:",
       },
       "devDependencies": {
@@ -1385,7 +1386,7 @@
     },
     "packages/ui": {
       "name": "@stll/ui",
-      "version": "0.45.0",
+      "version": "0.46.0",
       "dependencies": {
         "better-result": "catalog:",
         "class-variance-authority": "^0.7.1",
@@ -1464,7 +1465,7 @@
     },
     "packages/workspace-ui": {
       "name": "@stll/workspace-ui",
-      "version": "0.12.1",
+      "version": "0.12.2",
       "dependencies": {
         "@stll/calculations": "workspace:^",
         "@stll/conditions": "workspace:^",
@@ -5811,8 +5812,6 @@
     "thenify": ["thenify@3.3.1", "", { "dependencies": { "any-promise": "^1.0.0" } }, "sha512-RVZSIV5IG10Hk3enotrhvz0T9em6cyHBLkH/YAZuKqd8hRkKhSfCGIcP2KUY0EPxndzANBmNllzWPwak+bheSw=="],
 
     "thenify-all": ["thenify-all@1.6.0", "", { "dependencies": { "thenify": ">= 3.1.0 < 4" } }, "sha512-RNxQH/qI8/t3thXJDwcstUO4zeqo64+Uy/+sNVRBx4Xn2OX+OZ9oP+iJnNFqplFra2ZUVeKCSa2oVWi3T4uVmA=="],
-
-    "thinking-orbs": ["thinking-orbs@0.3.2", "", { "peerDependencies": { "react": ">=18.0.0" } }, "sha512-QZFeBaPEzqhjiZoXy961EvDgaXk2WgXacF3Rbz+Sj5IfzDzBvTC86vdREUHniBffYibJFKSwbfllxLUdI/Xv6g=="],
 
     "throat": ["throat@5.0.0", "", {}, "sha512-fcwX4mndzpLQKBS1DVYhGAcYaYt7vsHNIvQV+WXMvnow5cgjPphq5CaayLaGsjRdSCKZFNGt7/GYAuXaNOiYCA=="],
 
