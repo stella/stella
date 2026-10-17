@@ -228,6 +228,7 @@
     "@oxlint/plugins": "1.87.0",
     "@shadcn/lint": "0.1.0",
     "@silurus/ooxml": "0.88.0",
+    "@stll/aho-corasick": "1.0.4",
     "@stll/anonymize": "3.0.7",
     "@stll/anonymize-data": "0.0.10",
     "@stll/anonymize-wasm": "3.0.7",
