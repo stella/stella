@@ -17,6 +17,7 @@ import {
   useMcpConnectionOAuthRefresh,
 } from "@/components/mcp-reconnect-button";
 import {
+  canMentionMcpConnection,
   matchBrokenMcpConnections,
   mcpReconnectDismissKey,
   type McpReconnectCandidate,
@@ -52,14 +53,6 @@ type NamedConnection = McpReconnectCandidate & {
 
 export const McpReconnectNotice = ({ editor }: { editor: Editor | null }) => {
   const { id: userId, activeOrganizationId } = useAuthenticatedUser();
-  const connectionsQuery = useQuery(
-    mcpConnectionsOptions(activeOrganizationId, userId),
-  );
-  const connectorsQuery = useQuery(mcpConnectorsOptions(activeOrganizationId));
-  const connectionsView = useQueryView(connectionsQuery);
-  const connectorsView = useQueryView(connectorsQuery);
-  useQueryViewError(connectionsView);
-  useQueryViewError(connectorsView);
   const text = useEditorState({
     editor,
     selector: ({ editor: current }) => {
@@ -72,6 +65,21 @@ export const McpReconnectNotice = ({ editor }: { editor: Editor | null }) => {
     },
   });
   const [debouncedText] = useDebounce(text ?? "", COMPOSER_MATCH_DELAY_MS);
+  // Opening a chat costs no integration requests; they load once the
+  // composer holds enough text to name one.
+  const enabled = canMentionMcpConnection(debouncedText);
+  const connectionsQuery = useQuery({
+    ...mcpConnectionsOptions(activeOrganizationId, userId),
+    enabled,
+  });
+  const connectorsQuery = useQuery({
+    ...mcpConnectorsOptions(activeOrganizationId),
+    enabled,
+  });
+  const connectionsView = useQueryView(connectionsQuery);
+  const connectorsView = useQueryView(connectorsQuery);
+  useQueryViewError(connectionsView);
+  useQueryViewError(connectorsView);
   const connectors =
     connectorsView.type === "items" ? connectorsView.items.connectors : [];
   const connectorsBySlug = new Map(

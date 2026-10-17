@@ -16,6 +16,10 @@ const MIN_MATCH_LENGTH = 3;
 
 const fold = (text: string) => stripDiacritics(text).toLowerCase();
 
+/** No connection name can match text shorter than the shortest matchable name. */
+export const canMentionMcpConnection = (text: string) =>
+  Array.from(text.trim()).length >= MIN_MATCH_LENGTH;
+
 const containsWholeName = (text: string, name: string) => {
   if (Array.from(name).length < MIN_MATCH_LENGTH) {
     return false;

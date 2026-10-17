@@ -5,6 +5,7 @@ import { normalizeUnicode } from "@stll/text-normalize";
 import { toSafeId } from "@/lib/safe-id";
 
 import {
+  canMentionMcpConnection,
   matchBrokenMcpConnections,
   mcpReconnectDismissKey,
 } from "./mcp-reconnect.logic";
@@ -155,5 +156,32 @@ describe("dismissal memory for one MCP break", () => {
     ] satisfies McpReconnectCandidate[]) {
       expect(mcpReconnectDismissKey(candidate)).not.toBe(originalKey);
     }
+  });
+});
+
+describe("whether composer text can mention a connection", () => {
+  test("needs as many non-space characters as the shortest matchable name", () => {
+    for (const text of ["", "  ", "ab", " ab ", "č"]) {
+      expect(canMentionMcpConnection(text)).toBe(false);
+    }
+    for (const text of ["abc", " abc ", "Čes"]) {
+      expect(canMentionMcpConnection(text)).toBe(true);
+    }
+  });
+
+  test("text it rejects never matches a connection", () => {
+    const short = {
+      ...connection,
+      displayName: "Ab",
+      slug: "ab",
+    } satisfies McpReconnectCandidate;
+    for (const text of ["ab", " Ab ", "a"]) {
+      expect(canMentionMcpConnection(text)).toBe(false);
+      expect(matchBrokenMcpConnections(text, [short, connection])).toEqual([]);
+    }
+    expect(canMentionMcpConnection("Český rejstřík")).toBe(true);
+    expect(
+      matchBrokenMcpConnections("Český rejstřík", [connection]),
+    ).toHaveLength(1);
   });
 });
