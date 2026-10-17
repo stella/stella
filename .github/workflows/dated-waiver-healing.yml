@@ -19,7 +19,7 @@ jobs:
   heal:
     if: github.repository == 'stella/stella'
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    timeout-minutes: 92
     permissions:
       contents: read
       pull-requests: read

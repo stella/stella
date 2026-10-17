@@ -221,7 +221,9 @@ test("required CI expiry checks cannot be skipped by paths, reuse, or queue dept
   const guardSteps = expiry.steps.filter(({ name }) =>
     name.startsWith("dated-waiver-expiry: "),
   );
-  expect(guardSteps).toHaveLength(2);
+  expect(guardSteps).toHaveLength(3);
+  // Only a pull request or merge group has a change to scope expiry to.
+  const changeScopeStep = "dated-waiver-expiry: List files the change touches";
   for (const event of ["pull_request", "merge_group", "workflow_dispatch"]) {
     const context = {
       values: {
@@ -238,7 +240,9 @@ test("required CI expiry checks cannot be skipped by paths, reuse, or queue dept
     };
     expect(evaluate(expiry.if, context), event).toBe(true);
     for (const step of guardSteps) {
-      expect(evaluate(step.if ?? "true", context), step.name).toBe(true);
+      expect(evaluate(step.if ?? "true", context), step.name).toBe(
+        step.name !== changeScopeStep || event !== "workflow_dispatch",
+      );
     }
     // A heavy-only dispatch adds heavy suites to a tree whose merge group
     // already ran this thin job, so it is the one run that skips it.
