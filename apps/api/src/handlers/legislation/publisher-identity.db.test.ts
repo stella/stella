@@ -122,10 +122,13 @@ const rowsOf = async (sourceId: LegislationDocumentInput["sourceId"]) =>
     .from(legislationDocuments)
     .where(eq(legislationDocuments.sourceId, sourceId));
 
-const rejectionOf = async (write: Promise<unknown>): Promise<unknown> =>
+const rejectionOf = async (write: Promise<unknown>): Promise<Error> =>
   await write.then(
     () => panic("expected the database to reject the write"),
-    (error: unknown) => error,
+    (error: unknown) =>
+      error instanceof Error
+        ? error
+        : panic("expected the write to reject with an Error", error),
   );
 
 const sqlState = async (write: Promise<unknown>) => {
