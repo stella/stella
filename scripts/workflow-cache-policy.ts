@@ -38,6 +38,10 @@ const REVIEWED_LOCAL_ACTIONS: Record<string, string> = {
   // release-desktop restores the same action from the workflow revision
   // because the pinned release checkout replaces the workspace.
   "./.release-tooling/desktop-windows-build": DESKTOP_WINDOWS_BUILD_CACHE_USE,
+  "./.github/actions/setup-e2e-stack":
+    "docker compose services, registry logins, migrations and seeds; no cache",
+  "./.github/actions/setup-playwright":
+    "pinned browser image verification; no cache",
 };
 
 export const MAIN_ONLY_BUN_CACHE_SAVE = `\${{ github.ref == 'refs/heads/main' }}`;

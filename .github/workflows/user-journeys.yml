@@ -1,0 +1,303 @@
+name: User journeys
+
+defaults:
+  run:
+    shell: bash
+
+on:
+  schedule:
+    - cron: "26 * * * *"
+  workflow_run:
+    workflows:
+      - Deploy main to staging
+    branches: [main]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Journey target
+        required: true
+        default: scheduled
+        type: choice
+        options:
+          - staging
+          - scheduled
+
+permissions: {}
+
+concurrency:
+  group: user-journeys
+  cancel-in-progress: false
+
+jobs:
+  staging-commit:
+    name: Resolve the staging commit
+    if: >-
+      (github.event_name == 'workflow_dispatch' && inputs.target == 'staging')
+      || (github.event_name == 'workflow_run'
+      && github.event.workflow_run.conclusion == 'success'
+      && github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/deploy-staging.yml'
+      && github.event.workflow_run.event == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    outputs:
+      commit: ${{ steps.deployed.outputs.commit }}
+    steps:
+      - name: Resolve the deployed commit
+        id: deployed
+        timeout-minutes: 3
+        env:
+          E2E_API_URL: https://api-staging.stll.app
+          E2E_EDGE_HEADER_NAME: x-stella-edge-token
+          E2E_EDGE_HEADER_VALUE: ${{ secrets.STAGING_VIEWER_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          body="$(curl --fail --silent --show-error --max-time 20 --retry 3 --retry-all-errors \
+            --header "${E2E_EDGE_HEADER_NAME}: ${E2E_EDGE_HEADER_VALUE}" "$E2E_API_URL/health")"
+          commit="$(printf '%s' "$body" | jq -r '.commit // empty')"
+          if [[ ! "$commit" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Staging did not report its deployed commit on /health."
+            exit 1
+          fi
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+
+  staging:
+    name: Staging journeys
+    needs: staging-commit
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Checkout the deployed commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.staging-commit.outputs.commit }}
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: package.json
+          no-cache: true
+
+      - name: Install dependencies
+        timeout-minutes: 8
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Login to GitHub Container Registry for browser images
+        timeout-minutes: 2
+        continue-on-error: true
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify image-provided Chromium
+        timeout-minutes: 4
+        uses: ./.github/actions/setup-playwright
+
+      - name: Run staging journeys
+        id: journeys
+        timeout-minutes: 12
+        run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:journeys --project deployed
+        env:
+          E2E_WEB_URL: https://staging.stll.app
+          E2E_API_URL: https://staging.stll.app/api
+          E2E_EDGE_HEADER_NAME: x-stella-edge-token
+          E2E_EDGE_HEADER_VALUE: ${{ secrets.STAGING_VIEWER_ACCESS_TOKEN }}
+          JOURNEY_SIGN_IN: smoke-session
+          JOURNEY_SMOKE_SESSION_URL: https://api-staging.stll.app/smoke/session
+          SMOKE_SESSION_SECRET: ${{ secrets.SMOKE_SESSION_SECRET }}
+
+      - name: Upload Playwright report
+        if: ${{ failure() && steps.journeys.outcome == 'failure' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: user-journeys-staging-report
+          path: apps/web/playwright-report/
+          retention-days: 7
+
+  local-stack:
+    name: Mock-model journeys
+    needs: staging-commit
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    permissions:
+      contents: read
+      packages: read
+    env:
+      CI_IMAGE_MIRROR_ENABLED: ${{ github.token != '' }}
+    steps:
+      - name: Checkout the deployed commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.staging-commit.outputs.commit }}
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: package.json
+          no-cache: true
+
+      - name: Install dependencies
+        timeout-minutes: 8
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Prepare environment
+        run: |
+          cp apps/api/.env.example apps/api/.env
+          cp apps/web/.env.example apps/web/.env
+
+      - name: Build production web
+        run: bun --filter @stll/web build
+
+      - name: Start docker stack and API server
+        timeout-minutes: 10
+        uses: ./.github/actions/setup-e2e-stack
+        with:
+          dockerhub-username: ${{ secrets.DOCKERHUB_USERNAME }}
+          dockerhub-token: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Login to GitHub Container Registry for browser images
+        timeout-minutes: 2
+        continue-on-error: true
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify image-provided Chromium
+        timeout-minutes: 4
+        uses: ./.github/actions/setup-playwright
+
+      - name: Start production web server
+        run: |
+          cd apps/web
+          NODE_ENV=production PORT=3000 nohup bun dist/runtime.js > /tmp/web-user-journeys.log 2>&1 &
+
+      - name: Wait for production web server
+        run: |
+          for _ in {1..60}; do
+            if curl --connect-timeout 2 --max-time 5 -sf http://localhost:3000/health > /dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::Production web never came up"
+          tail -200 /tmp/web-user-journeys.log || true
+          exit 1
+
+      - name: Run mock-model journeys
+        id: journeys
+        timeout-minutes: 12
+        run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:journeys --project local-stack
+        env:
+          E2E_WEB_URL: http://localhost:3000
+          E2E_API_URL: http://localhost:3001
+          JOURNEY_SIGN_IN: seeded
+
+      - name: Upload Playwright report
+        if: ${{ failure() && steps.journeys.outcome == 'failure' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: user-journeys-local-stack-report
+          path: |
+            apps/web/playwright-report/
+            /tmp/api.log
+            /tmp/web-user-journeys.log
+          retention-days: 7
+
+  scheduled:
+    name: Scheduled target journeys
+    if: >-
+      github.event_name == 'schedule'
+      || (github.event_name == 'workflow_dispatch' && inputs.target == 'scheduled')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Resolve the deployed commit
+        id: deployed
+        timeout-minutes: 3
+        env:
+          WEB_URL: ${{ vars.USER_JOURNEYS_WEB_URL }}
+          API_URL: ${{ vars.USER_JOURNEYS_API_URL }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$WEB_URL" || -z "$API_URL" ]]; then
+            echo "::error::Set the USER_JOURNEYS_WEB_URL and USER_JOURNEYS_API_URL repository variables."
+            exit 1
+          fi
+          body="$(curl --fail --silent --show-error --max-time 20 --retry 3 --retry-all-errors "${API_URL%/}/health")"
+          commit="$(printf '%s' "$body" | jq -r '.commit // empty')"
+          if [[ ! "$commit" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::The scheduled target did not report its deployed commit on /health."
+            exit 1
+          fi
+          {
+            echo "commit=$commit"
+            echo "web-url=${WEB_URL%/}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Checkout the deployed commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ steps.deployed.outputs.commit }}
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: package.json
+          no-cache: true
+
+      - name: Install dependencies
+        timeout-minutes: 8
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Login to GitHub Container Registry for browser images
+        timeout-minutes: 2
+        continue-on-error: true
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify image-provided Chromium
+        timeout-minutes: 4
+        uses: ./.github/actions/setup-playwright
+
+      - name: Run scheduled target journeys
+        id: journeys
+        timeout-minutes: 12
+        run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:journeys --project deployed
+        env:
+          E2E_WEB_URL: ${{ steps.deployed.outputs.web-url }}
+          E2E_API_URL: ${{ steps.deployed.outputs.web-url }}/api
+          JOURNEY_SIGN_IN: review-account
+          APP_REVIEW_ACCOUNT_EMAIL: ${{ vars.APP_REVIEW_ACCOUNT_EMAIL }}
+          REVIEW_ACCOUNT_PASSWORD: ${{ secrets.REVIEW_ACCOUNT_PASSWORD }}
+
+      - name: Upload Playwright report
+        if: ${{ failure() && steps.journeys.outcome == 'failure' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: user-journeys-scheduled-report
+          path: apps/web/playwright-report/
+          retention-days: 7

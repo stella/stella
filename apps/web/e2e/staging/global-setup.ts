@@ -3,17 +3,12 @@ import path from "node:path";
 
 import { sleep } from "@stll/concurrency/sleep";
 
+import { fetchSmokeSessionStorageState } from "../helpers/smoke-session";
 import {
   EDGE_HEADERS,
   STAGING_API_URL,
   STAGING_STORAGE_STATE,
 } from "../playwright.staging.config";
-
-type SmokeSession = {
-  cookieName: string;
-  cookieValue: string;
-  expiresAt: string;
-};
 
 const WEB_URL = process.env["E2E_WEB_URL"] ?? "https://staging.stll.app";
 
@@ -240,33 +235,12 @@ const globalSetup = async (): Promise<void> => {
 
   await waitForDeployedRevision();
 
-  const response = await fetch(`${STAGING_API_URL}/smoke/session`, {
-    method: "POST",
-    headers: { "x-smoke-secret": secret, ...EDGE_HEADERS },
-    signal: AbortSignal.timeout(15_000),
+  const storageState = await fetchSmokeSessionStorageState({
+    headers: EDGE_HEADERS,
+    secret,
+    sessionUrl: `${STAGING_API_URL}/smoke/session`,
+    webUrl: WEB_URL,
   });
-  if (!response.ok) {
-    throw new Error(`POST /smoke/session -> ${String(response.status)}`);
-  }
-  const session = (await response.json()) as SmokeSession;
-
-  // Browser sessions are host-only on the web origin. The API hostname stays
-  // public for non-browser clients, but the SPA never sends its cookie there.
-  const storageState = {
-    cookies: [
-      {
-        name: session.cookieName,
-        value: session.cookieValue,
-        domain: new URL(WEB_URL).hostname,
-        path: "/",
-        expires: Math.floor(new Date(session.expiresAt).getTime() / 1000),
-        httpOnly: true,
-        secure: true,
-        sameSite: "Lax" as const,
-      },
-    ],
-    origins: [],
-  };
 
   mkdirSync(path.dirname(STAGING_STORAGE_STATE), { recursive: true });
   writeFileSync(STAGING_STORAGE_STATE, JSON.stringify(storageState, null, 2));

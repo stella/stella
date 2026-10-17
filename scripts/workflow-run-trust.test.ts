@@ -30,6 +30,7 @@ const WORKFLOW_RUN_WORKFLOWS = [
   "publish-npm.yml",
   "release-desktop.yml",
   "scheduled-run-alerts.yml",
+  "user-journeys.yml",
 ] as const;
 
 // A source check holds when the job's condition is false, whatever every
