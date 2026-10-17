@@ -69,8 +69,9 @@ const quasiText = (quasi: unknown): string => {
     : "";
 };
 
-// A template literal's static chunks joined around a placeholder, so a
-// keyword split by an interpolation (`ALTER TABLE ${t}`) still reads whole.
+// A template literal's static chunks joined around each interpolation: its
+// static string value when it has one (`ALTER ${"TABLE"} t`), else a
+// placeholder, so a keyword split by an interpolation still reads whole.
 const literalText = (node: unknown): string | null => {
   if (!isAstNode(node)) {
     return null;
@@ -79,7 +80,16 @@ const literalText = (node: unknown): string | null => {
     return typeof node.value === "string" ? node.value : null;
   }
   if (node.type === "TemplateLiteral" && Array.isArray(node.quasis)) {
-    return node.quasis.map((quasi) => quasiText(quasi)).join(" ? ");
+    const expressions = Array.isArray(node.expressions) ? node.expressions : [];
+    return node.quasis
+      .map((quasi, offset) => {
+        if (offset === 0) {
+          return quasiText(quasi);
+        }
+        const expression: unknown = expressions[offset - 1];
+        return `${staticStringValue(expression) ?? " ? "}${quasiText(quasi)}`;
+      })
+      .join("");
   }
   return null;
 };

@@ -35,9 +35,11 @@ describe(RULE, () => {
         [
           `const a = \`ALTER ${slot("'TABLE'")} public.t VALIDATE CONSTRAINT c\`;`,
           'const b = "DROP /* inline */ INDEX x";',
+          // Only the interpolated keyword makes this one table-locking.
+          `const c = \`ALTER ${slot("'TABLE'")} public.t ADD COLUMN x integer\`;`,
         ].join("\n"),
       ),
-    ).toEqual([1, 2]);
+    ).toEqual([1, 2, 3]);
   });
 
   test("accepts reads, row writes, session settings and prose", async () => {
