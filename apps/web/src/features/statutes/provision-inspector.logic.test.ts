@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
 
+import { assertProperty } from "@stll/property-testing";
 import { stripDiacritics } from "@stll/text-normalize";
 
 import { DECISION_CITATION_PRESENTATION } from "@/components/references/decision-citation-presentation.logic";
@@ -382,4 +384,98 @@ describe("provision question drafts", () => {
     expect(() => clearProvisionQuestionDraft(storage, key)).not.toThrow();
     expect(readProvisionQuestionDraft(storage, key)).toBe("");
   });
+});
+
+describe("citing decision literal filter", () => {
+  test.each([
+    ["Čapkově", ["czech"]],
+    ["capkov", ["czech"]],
+    ["C\u030capkov", ["czech"]],
+    ["[a+b]", ["punctuation"]],
+    ["a.b", []],
+    ["strasse", []],
+    ["filing", []],
+    ["σ", []],
+    ["😀", ["astral"]],
+    // A half-emoji query becomes U+FFFD instead of matching inside the emoji.
+    ["\ud83d", ["unpaired"]],
+    // Distinct lone surrogates normalize to the same replacement character.
+    ["\ud800", ["unpaired"]],
+    ["capek novak", []],
+  ])(
+    "keeps literal substring and existing folding for %s",
+    (query, expected) => {
+      const rows = [
+        { caseNumber: "czech", court: "O Čapkově návrhu", sentenceText: null },
+        { caseNumber: "punctuation", court: "[a+b]", sentenceText: null },
+        { caseNumber: "german", court: "Straße", sentenceText: null },
+        { caseNumber: "ligature", court: "ﬁling", sentenceText: null },
+        { caseNumber: "greek", court: "ΟΣ", sentenceText: null },
+        { caseNumber: "astral", court: "😀", sentenceText: null },
+        { caseNumber: "unpaired", court: "\ud801", sentenceText: null },
+        { caseNumber: "words", court: "Čapek a Novák", sentenceText: null },
+      ];
+      expect(
+        filterCitingDecisions(rows, query).map(({ caseNumber }) => caseNumber),
+      ).toEqual(expected);
+      expect(filterCitingDecisions([], query)).toEqual([]);
+    },
+  );
+});
+
+const searchText = fc.string({
+  unit: fc.constantFrom(
+    "a",
+    "A",
+    "Č",
+    "ě",
+    "ß",
+    "ﬁ",
+    "Σ",
+    "ς",
+    "1",
+    "[",
+    "]",
+    "+",
+    ".",
+    " ",
+    "\n",
+    "\u030c",
+    "😀",
+    "\ud800",
+    "\ud801",
+  ),
+  size: "medium",
+});
+
+test("citing decision engine agrees with scalar substring oracle", () => {
+  assertProperty(
+    "citing decision engine agrees with scalar substring oracle",
+    fc.property(fc.array(searchText), searchText, (texts, query) => {
+      const rows = texts.map((court) => ({
+        caseNumber: "entry",
+        court,
+        sentenceText: null,
+      }));
+      const fold = (value: string) =>
+        stripDiacritics(value.toWellFormed()).toLowerCase();
+      const needle = fold(query.trim());
+      expect(filterCitingDecisions(rows, query)).toEqual(
+        rows.filter(({ court }) => fold(`entry ${court} `).includes(needle)),
+      );
+    }),
+  );
+});
+
+test("matches long literal queries across citing decisions", () => {
+  const query = "Čapkově".repeat(512);
+  const longQueryDecisions = [
+    { caseNumber: "1", court: "Soud", sentenceText: `Návrh ${query} závěr` },
+    { caseNumber: "2", court: "Soud", sentenceText: null },
+  ];
+  expect(
+    filterCitingDecisions(longQueryDecisions, query).map(
+      ({ caseNumber }) => caseNumber,
+    ),
+  ).toEqual(["1"]);
 });
