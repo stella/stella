@@ -271,6 +271,7 @@ export const listStatutesHandler = async (
   legislationDb: LegislationReadDb,
 ) => {
   const countryRead = readPublicLawCountry(query.country, {
+    domain: "legislation",
     admitted: PUBLIC_LEGISLATION_COUNTRIES,
     surface: "search",
   });

@@ -65,6 +65,9 @@
     "runSelectedRows": "Spustit pro {count, plural, one {# vybraný řádek} few {# vybrané řádky} many {# vybraného řádku} other {# vybraných řádků}}",
     "selectedRun": "Spustit AI sloupce pro {count, plural, one {# řádek} few {# řádky} many {# řádku} other {# řádků}}"
   },
+  "aiDisclosure": {
+    "caseLaw": "AI shrnutí, poznámky a analýzy soudních rozhodnutí vytváří stella. Soudy je neschvalují a nejde o vlastní úvahy soudů; slouží jako pomůcka pro právníky a rozhodujícím zdrojem zůstává text rozhodnutí."
+  },
   "appearance": {
     "calendar": "Kalendář",
     "calendarGregorian": "Gregoriánský",
@@ -1213,6 +1216,11 @@
       "stale": "Odpověď se změnila. Vyberte text znovu.",
       "submit": "Požádat o úpravu"
     },
+    "answerQuote": {
+      "showInDecision": "Zobrazit v rozhodnutí",
+      "verified": "Ověřená citace",
+      "verifiedHint": "Doslovně v {source}"
+    },
     "applyMode": {
       "description": "Word ukládá, kdo provedl každou změnu. Vaši volbu si zapamatujeme.",
       "direct": "Ne, použít přímo",
@@ -1451,6 +1459,12 @@
       "title": "Vložený text"
     },
     "placeholder": "Zde napište svůj dotaz, / pro dovednosti, @ pro přidání kontextu",
+    "processSummary": {
+      "analyses": "{count, plural, one {# analýza} few {# analýzy} other {# analýz}}",
+      "changesSaved": "{count, plural, one {# uložená změna} few {# uložené změny} other {# uložených změn}}",
+      "documentEdits": "{count, plural, one {# úprava dokumentu} few {# úpravy dokumentu} other {# úprav dokumentu}}",
+      "sourcesChecked": "{count, plural, one {# prověřený zdroj} few {# prověřené zdroje} other {# prověřených zdrojů}}"
+    },
     "promptImprovementStrategies": {
       "decompose": {
         "description": "Rozdělí složitý úkol na seřazené dílčí kroky.",
@@ -1696,6 +1710,7 @@
       "interrupted": "Přerušeno před dokončením",
       "output": "Výstup",
       "sourceCode": "Zdrojový kód",
+      "statusWaiting": "Čeká",
       "toggleDetails": "Přepnout detaily",
       "unrestoredFields": "{count, plural, one {# pole se nepodařilo} few {# pole se nepodařilo} many {# pole se nepodařilo} other {# polí se nepodařilo}} v anonymizovaném režimu vyplnit skutečnými hodnotami. Zkontrolujte: {fields}"
     },
@@ -1721,7 +1736,8 @@
       "toggleLabel": "Vyhledávání na webu",
       "toggleOff": "Vypnout vyhledávání na webu",
       "toggleOn": "Zapnout vyhledávání na webu"
-    }
+    },
+    "workedFor": "Pracovalo {duration}"
   },
   "clauses": {
     "addVariant": "Přidat variantu",
@@ -2599,11 +2615,14 @@
     "actionFailed": "Akce se nezdařila",
     "api": {
       "badRequest": "Požadavek se nepodařilo dokončit.",
+      "caseLawCountryUnavailable": "Judikatura této země není dostupná. Vyberte jinou zemi.",
+      "caseLawSearchUnavailable": "Vyhledávání judikatury této země není dostupné. Její veřejná rozhodnutí si můžete nadále číst.",
       "conflict": "Požadavek je v konfliktu s aktuálním stavem.",
       "forbidden": "K této akci nemáte oprávnění.",
+      "legislationCountryUnavailable": "Právní předpisy této země nejsou dostupné. Vyberte jinou zemi.",
+      "legislationSearchUnavailable": "Vyhledávání právních předpisů této země není dostupné. Její veřejné právní předpisy si můžete nadále číst.",
       "notFound": "Požadovanou položku se nepodařilo najít.",
       "payloadTooLarge": "Požadavek je příliš velký.",
-      "publicCountryUnavailable": "Právní předpisy a judikatura této země nejsou dostupné. Vyberte jinou zemi.",
       "rateLimited": "Příliš mnoho požadavků. Zkuste to prosím později.",
       "server": "Něco se pokazilo. Zkuste to prosím znovu.",
       "serviceUnavailable": "Služba je dočasně nedostupná. Zkuste to prosím znovu.",

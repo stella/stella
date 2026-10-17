@@ -14,7 +14,7 @@ export default {
     names: [
       "createTanStackTextAdapterFactory",
       "getTanStackTextModelById",
-      "getTanStackTextModelForRole",
+      "getTanStackTextModelForTask",
     ],
     allowed: [
       {

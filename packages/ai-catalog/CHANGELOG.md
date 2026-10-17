@@ -1,5 +1,11 @@
 # @stll/ai-catalog
 
+## 0.7.1
+
+### Patch Changes
+
+- [#5769](https://github.com/stella/stella/pull/5769) [`7d21fdb`](https://github.com/stella/stella/commit/7d21fdb179373956566d4c5f2098a0dfb37af275) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Offer Gemini 4 Argon on the Google and OpenRouter routes.
+
 ## 0.7.0
 
 ### Minor Changes
