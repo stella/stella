@@ -25,6 +25,7 @@ CHANGED_FILES="$(git diff --name-only "$BASE_REF"...HEAD)"
 # The folder name identifies a migration in the deployed ledger. Reject
 # deletion or renaming of a migration already present at the merge base.
 bun scripts/check-migration-order.ts "$BASE_REF"
+bun scripts/check-migration-locks.ts --base "$BASE_REF"
 
 extract_schema_files() {
   local source_file="$1"
