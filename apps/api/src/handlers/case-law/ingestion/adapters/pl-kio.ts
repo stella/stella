@@ -1,7 +1,8 @@
 // parser-output-unchanged: shared warning projection changes error telemetry only; parsed decisions are unchanged.
 import { Result, panic } from "better-result";
-import * as cheerio from "cheerio";
+import type * as cheerio from "cheerio";
 import type { AnyNode } from "domhandler";
+import { Buffer } from "node:buffer";
 
 import {
   DECISION_IDENTIFIER_TYPES,
@@ -114,6 +115,13 @@ import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
 
 import { logDocumentParseFailure } from "./document-parse-failure";
+import {
+  readPlKioHtml,
+  loadPlKioHtml,
+  PlKioHtmlBudgetError,
+  PL_KIO_DOCUMENT_REJECTION,
+  PL_KIO_HTML_BUDGET,
+} from "./pl-kio-response-budget";
 
 // ── Publisher boundary ───────────────────────────────────
 
@@ -330,7 +338,11 @@ const readPlKioListingItem = (
  * without it is an error page or a challenge, never an empty listing.
  */
 export const readPlKioListing = (html: string): PlKioListingPage | null => {
-  const $ = cheerio.load(html);
+  const parsed = readPlKioHtml(html);
+  if (parsed.type !== "accepted") {
+    return null;
+  }
+  const $ = parsed.document;
   const rawCounts = $("#resultCounts").attr("value");
   const counts = rawCounts?.split(",").map((part) => Number(part.trim()));
   if (
@@ -389,7 +401,11 @@ const plKioQuarantineRepairIds = (item: PlKioListingItem): string[] => {
   if (item.html === undefined) {
     return [canonicalId];
   }
-  const $ = cheerio.load(item.html);
+  const parsed = readPlKioHtml(item.html);
+  if (parsed.type !== "accepted") {
+    return [canonicalId];
+  }
+  const $ = parsed.document;
   const legacyId = plKioQuarantineId(
     readPlKioListingItem($(".search-list-item"), legacyQuarantineHtmlText),
   );
@@ -490,7 +506,11 @@ const KIND_HREF = /[?&]Kind=(?<kind>[A-Z]+)/u;
  * "no such page" answer is a full HTML page under a 404, handled before).
  */
 export const readPlKioDetail = (html: string): PlKioDetail | null => {
-  const $ = cheerio.load(html);
+  const parsed = readPlKioHtml(html);
+  if (parsed.type !== "accepted") {
+    return null;
+  }
+  const $ = parsed.document;
   const metrics = $(".details-metrics");
   if (metrics.length === 0) {
     return null;
@@ -643,11 +663,12 @@ const PL_KIO_SOURCE_FIELDS = {
   },
 } as const satisfies Record<PlKioSourceField, SourceFieldDisposition>;
 
-/** The envelope parts, named by the response each holds. */
+/** Response payloads and bounded-read dispositions needed for replay. */
 const RAW_PART = {
   LISTING: "listing",
   DETAIL: "detail",
   DOCUMENT: "document",
+  DOCUMENT_REJECTION: "document-rejection",
 } as const;
 
 const listPlKioSourceFields = (parts: SourceRawParts): readonly string[] => {
@@ -811,8 +832,55 @@ type AssemblePlKioDecisionOptions = {
   item: PlKioListingItem;
   /** The record page verbatim, where one was served. */
   detailHtml: string | undefined;
-  /** The document verbatim, where one was served; empty is no document. */
-  documentHtml: string | undefined;
+  document:
+    | { type: "read"; html: string }
+    | { type: "unavailable" }
+    | { type: typeof PL_KIO_DOCUMENT_REJECTION.OVERSIZED };
+};
+
+type PlKioDocumentReadState = {
+  html: string | undefined;
+  rejection:
+    | (typeof PL_KIO_DOCUMENT_REJECTION)[keyof typeof PL_KIO_DOCUMENT_REJECTION]
+    | undefined;
+  rawParts: SourceRawParts;
+};
+
+const plKioParseError = (error: unknown, state: PlKioDocumentReadState) => {
+  if (error instanceof PlKioHtmlBudgetError) {
+    state.rejection = error.reason;
+  }
+  return errorTag(error);
+};
+
+const plKioDocumentOf = (
+  document: AssemblePlKioDecisionOptions["document"],
+): PlKioDocumentReadState => {
+  switch (document.type) {
+    case "read":
+      return {
+        html: document.html,
+        rejection:
+          Buffer.byteLength(document.html, "utf-8") >
+          PL_KIO_HTML_BUDGET.maxBytes
+            ? PL_KIO_DOCUMENT_REJECTION.OVERSIZED
+            : undefined,
+        rawParts: { [RAW_PART.DOCUMENT]: document.html },
+      };
+    case "unavailable":
+      return { html: undefined, rejection: undefined, rawParts: {} };
+    case PL_KIO_DOCUMENT_REJECTION.OVERSIZED:
+      return {
+        html: undefined,
+        rejection: document.type,
+        rawParts: { [RAW_PART.DOCUMENT_REJECTION]: document.type },
+      };
+    default:
+      document satisfies never;
+      return panic(
+        `Unhandled procurement document read: ${JSON.stringify(document)}`,
+      );
+  }
 };
 
 const fieldOf = (
@@ -899,7 +967,7 @@ const plKioCourtStorage = ({
  */
 export const assemblePlKioDecision = ({
   detailHtml,
-  documentHtml,
+  document: documentRead,
   item,
 }: AssemblePlKioDecisionOptions): PlKioBuildResult => {
   const id = publisherIdOf(item);
@@ -970,10 +1038,13 @@ export const assemblePlKioDecision = ({
   );
 
   const kind = detail?.kind;
+  const documentReadState = plKioDocumentOf(documentRead);
   const content =
-    documentHtml === undefined || documentHtml.trim().length === 0
+    documentReadState.rejection !== undefined ||
+    documentReadState.html === undefined ||
+    documentReadState.html.trim().length === 0
       ? undefined
-      : documentHtml;
+      : documentReadState.html;
   const parsed =
     content === undefined
       ? null
@@ -989,6 +1060,7 @@ export const assemblePlKioDecision = ({
               documentUrl:
                 id === undefined ? undefined : documentUrlOf(id, kind),
               content,
+              loadHtml: loadPlKioHtml,
               keywords: itemsOf(
                 detail,
                 "Zagadnienia merytoryczne w odwołaniu z Indeksu tematycznego",
@@ -997,7 +1069,7 @@ export const assemblePlKioDecision = ({
               documentId: sourceDocumentId,
               sourceSystem: PL_KIO_SOURCE_SYSTEM,
             }),
-          catch: errorTag,
+          catch: (error) => plKioParseError(error, documentReadState),
         });
   if (parsed !== null && Result.isError(parsed)) {
     logDocumentParseFailure({
@@ -1040,9 +1112,7 @@ export const assemblePlKioDecision = ({
   const sourceRaw = encodeSourceRawEnvelope({
     [RAW_PART.LISTING]: JSON.stringify(item),
     ...(detailHtml === undefined ? {} : { [RAW_PART.DETAIL]: detailHtml }),
-    ...(documentHtml === undefined
-      ? {}
-      : { [RAW_PART.DOCUMENT]: documentHtml }),
+    ...documentReadState.rawParts,
   });
 
   const keyed: ProcurementRulingKeyInput = {
@@ -1084,6 +1154,7 @@ export const assemblePlKioDecision = ({
       decisionDate,
       decisionType,
       decisionForm,
+      documentStatus: documentReadState.rejection,
       documentId: id,
       quarantineReason,
       ...(courtTooLong ? { courtAsStated: statedCourt } : {}),
@@ -1132,12 +1203,6 @@ const publisherError = (
   });
 
 type Requested = { status: number; body: string; url: string };
-
-/**
- * The most a single response may hold. The largest document observed is a
- * quarter of a megabyte; anything past this is not a page this adapter reads.
- */
-const MAX_RESPONSE_BYTES = 16 * 1024 * 1024;
 
 type RequestOptions = {
   fetchStage: DocumentFetchStage;
@@ -1190,7 +1255,7 @@ const receive = async ({
   const bytes =
     response.body === null
       ? new Uint8Array()
-      : await readCappedBytes(response.body, MAX_RESPONSE_BYTES);
+      : await readCappedBytes(response.body, PL_KIO_HTML_BUDGET.maxBytes);
   return { status: response.status, bytes, url: target.toString() };
 };
 
@@ -1202,7 +1267,7 @@ const request = async (
     return Result.err(
       publisherError(
         options.cursor,
-        `${options.path} answered more than ${MAX_RESPONSE_BYTES} bytes`,
+        `${options.path} answered more than ${PL_KIO_HTML_BUDGET.maxBytes} bytes`,
         status,
       ),
     );
@@ -1339,7 +1404,7 @@ const fetchPlKioDecision = async ({
       assemblePlKioDecision({
         item,
         detailHtml: undefined,
-        documentHtml: undefined,
+        document: { type: "unavailable" },
       }),
     );
   }
@@ -1359,7 +1424,7 @@ const fetchPlKioDecision = async ({
       assemblePlKioDecision({
         item,
         detailHtml: undefined,
-        documentHtml: undefined,
+        document: { type: "unavailable" },
       }),
     );
   }
@@ -1385,14 +1450,16 @@ const fetchPlKioDecision = async ({
     content.status === 410 ||
     (content.status === 200 && content.bytes === null)
   ) {
-    // A record whose document is gone, or past what this adapter reads, is
-    // still the record: stored with no document, which the pipeline keeps
-    // unpublished and re-asks for.
+    // A missing document remains retryable. A response beyond the parser's
+    // resource budget is retained with an explicit exclusion for reconciliation.
     return Result.ok(
       assemblePlKioDecision({
         item,
         detailHtml: detail.body,
-        documentHtml: undefined,
+        document:
+          content.status === 200
+            ? { type: PL_KIO_DOCUMENT_REJECTION.OVERSIZED }
+            : { type: "unavailable" },
       }),
     );
   }
@@ -1409,7 +1476,7 @@ const fetchPlKioDecision = async ({
     assemblePlKioDecision({
       item,
       detailHtml: detail.body,
-      documentHtml: new TextDecoder().decode(content.bytes),
+      document: { type: "read", html: new TextDecoder().decode(content.bytes) },
     }),
   );
 };
@@ -1428,10 +1495,22 @@ const reparsePlKioStoredRaw = (
   if (read.type === "rejected") {
     return read;
   }
+  const storedDocument = read.parts[RAW_PART.DOCUMENT];
+  let document: AssemblePlKioDecisionOptions["document"];
+  if (storedDocument !== undefined) {
+    document = { type: "read", html: storedDocument };
+  } else if (
+    read.parts[RAW_PART.DOCUMENT_REJECTION] ===
+    PL_KIO_DOCUMENT_REJECTION.OVERSIZED
+  ) {
+    document = { type: PL_KIO_DOCUMENT_REJECTION.OVERSIZED };
+  } else {
+    document = { type: "unavailable" };
+  }
   const built = assemblePlKioDecision({
     item: normalizePlKioListingItem(read.listing),
     detailHtml: read.parts[RAW_PART.DETAIL],
-    documentHtml: read.parts[RAW_PART.DOCUMENT],
+    document,
   });
   return { type: "parsed", result: built.decision };
 };
@@ -1842,6 +1921,15 @@ export const plKioAdapter = defineSourceAdapter({
     ...plKioDaySlices.walk,
     tipWindowDays: PL_KIO_TIP_WINDOW_DAYS,
     heldRequiresDetail: true,
+    heldWithoutDocument: {
+      metadataKey: "documentStatus",
+      reasons: [
+        PL_KIO_DOCUMENT_REJECTION.OVERSIZED,
+        ...Object.values(PL_KIO_DOCUMENT_REJECTION).filter(
+          (reason) => reason !== PL_KIO_DOCUMENT_REJECTION.OVERSIZED,
+        ),
+      ],
+    },
     listSlicePage: listPlKioSlicePage,
     buildDecision: buildPlKioFromPayload,
   },

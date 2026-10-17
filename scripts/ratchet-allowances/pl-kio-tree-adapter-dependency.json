@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "Declare the already-locked parse5-htmlparser2-tree-adapter 7.1.0 used by Cheerio so KIO can wrap the actual DOM allocator instead of counting input with a different parser. No resolved package version changes."
+}

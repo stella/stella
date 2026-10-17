@@ -1,3 +1,4 @@
+// parser-output-unchanged: Optional bounded loading is supplied only by KIO; accepted DOM traversal and legacy plaintext normalization are unchanged.
 // parser-output-unchanged: [pl-sn] PDF text becomes escaped paragraphs, so table-row changes are unreachable; exclusions and direct text reads are equivalent.
 /**
  * Polish Courts (SAOS) parser.
@@ -48,6 +49,7 @@ type ParsePlDecisionInput = {
   sourceUrl: string | undefined;
   documentUrl: string | undefined;
   content: string;
+  loadHtml?: (html: string) => cheerio.CheerioAPI;
   keywords: string[];
   statutes: string[];
   documentId: string;
@@ -498,6 +500,7 @@ const parsePlainText = (state: ParserState, content: string): void => {
 export const parsePlDecisionContent = (
   input: ParsePlDecisionInput,
 ): ParsePlDecisionOutput => {
+  const loadHtml = input.loadHtml ?? cheerio.load;
   const state = createState();
   const title = normalizeDecisionTitle(input.decisionType);
 
@@ -511,29 +514,34 @@ export const parsePlDecisionContent = (
   }
 
   if (hasHtmlTags(input.content)) {
-    const $ = cheerio.load(input.content);
+    const $ = loadHtml(input.content);
     const root = $("body").length > 0 ? $("body") : $.root();
     parseChildren($, state, root);
     validateAndLog(
       { parser: "pl-courts", caseNumber: input.caseNumber },
       input.content,
       state.blocks,
+      { sourceDocument: $ },
     );
   } else {
     const normalizedContent = normalizeLegacyPlainText(
       stripHtml(input.content),
     );
-    parsePlainText(state, normalizedContent);
     const paragraphs = normalizedContent
       .split(/\n{2,}/u)
       .flatMap((paragraph) => {
         const normalized = normalizeWhitespace(paragraph);
         return normalized ? [normalized] : [];
       });
+    const validationHtml = buildValidationHtml(paragraphs);
+    // Check expansion before allocating paragraph ASTs for bounded sources.
+    const sourceDocument = input.loadHtml?.(validationHtml);
+    parsePlainText(state, normalizedContent);
     validateAndLog(
       { parser: "pl-courts", caseNumber: input.caseNumber },
-      buildValidationHtml(paragraphs),
+      validationHtml,
       state.blocks,
+      { sourceDocument },
     );
   }
 

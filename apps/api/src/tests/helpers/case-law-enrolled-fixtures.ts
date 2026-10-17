@@ -1012,7 +1012,7 @@ export const plKioFixture = (): EnrolledAdapterFixture => ({
     const built = assemblePlKioDecision({
       item: { ...PL_KIO_LISTING_ROW },
       detailHtml: PL_KIO_DETAIL_PAGE,
-      documentHtml: PL_KIO_DOCUMENT,
+      document: { type: "read", html: PL_KIO_DOCUMENT },
     });
     return await Promise.resolve(
       built.type === "built"
