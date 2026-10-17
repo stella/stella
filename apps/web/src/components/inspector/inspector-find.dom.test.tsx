@@ -1,9 +1,13 @@
 import type { ComponentProps, ReactNode } from "react";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, expect, test } from "bun:test";
+import { panic } from "better-result";
+import { afterAll, afterEach, expect, mock, test } from "bun:test";
 
+import { sleep } from "@stll/concurrency/sleep";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
+
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 
@@ -32,7 +36,7 @@ Object.defineProperty(globalThis, "Highlight", {
 });
 
 const { useRef } = await import("react");
-const { cleanup, fireEvent, render, waitFor, within } =
+const { act, cleanup, fireEvent, render, waitFor, within } =
   await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
@@ -55,7 +59,7 @@ afterEach(() => {
   highlights.clear();
 });
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const readerText = {
@@ -67,12 +71,15 @@ const readerText = {
 };
 
 type ReaderOptions = {
+  citationQuery?: string;
   content?: ReactNode;
   enabled?: boolean;
   initialQuery?: string;
   name: string;
 };
+const openCitedPassageLabel = "Open cited passage";
 const Reader = ({
+  citationQuery,
   content,
   enabled = true,
   initialQuery,
@@ -90,6 +97,14 @@ const Reader = ({
   return (
     <section aria-label={name} ref={panelRef}>
       <InspectorFindBar find={find} />
+      {citationQuery !== undefined && (
+        <button
+          type="button"
+          onClick={() => find.openFindAtQuery(citationQuery)}
+        >
+          {openCitedPassageLabel}
+        </button>
+      )}
       <div ref={contentRef}>
         {content === undefined ? (
           <>
@@ -296,6 +311,69 @@ test("opening without search terms keeps the bar closed until the reader receive
   await waitFor(() => expect(screen.getByRole("searchbox")).toBeTruthy());
   expect(screen.getByRole("searchbox").getAttribute("value")).toBe("");
   expect(highlights.size).toBe(0);
+});
+
+test("a cited search passage opens a closed find bar with its query and highlights", async () => {
+  const screen = renderReaders([
+    { citationQuery: "odpovědnost", name: "decision" },
+  ]);
+  expect(screen.queryByRole("searchbox")).toBeNull();
+  expect(highlights.size).toBe(0);
+  fireEvent.click(screen.getByRole("button", { name: "Open cited passage" }));
+  await waitFor(() =>
+    expect(highlightText("stella-inspector-find-decision")).toEqual([
+      "Odpovědnosti",
+      "odpovědnosti",
+    ]),
+  );
+  expect(screen.getByRole("searchbox").getAttribute("value")).toBe(
+    "odpovědnost",
+  );
+  expect(screen.getByText(matchCounter(1, 2))).toBeTruthy();
+});
+
+test("reopening the same cited query scrolls back to its first match while Find only focuses the bar", async () => {
+  const scroll = mock(() => {});
+  const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
+  HTMLElement.prototype.scrollIntoView = scroll;
+  try {
+    const screen = renderReaders([
+      { citationQuery: "odpovědnost", name: "decision" },
+    ]);
+    const pane = screen.getByRole("region", { name: "decision" });
+    Object.defineProperty(pane, "offsetParent", { value: document.body });
+    const citation = screen.getByRole("button", { name: "Open cited passage" });
+    fireEvent.click(citation);
+    await waitFor(() =>
+      expect(screen.getByText(matchCounter(1, 2))).toBeTruthy(),
+    );
+    expect(scroll).toHaveBeenCalledTimes(1);
+    const first = activeRange("decision");
+    fireEvent.click(
+      screen.getByRole("button", { name: messages.common.nextMatch }),
+    );
+    expect(screen.getByText(matchCounter(2, 2))).toBeTruthy();
+    fireEvent.click(citation);
+    expect(screen.getByText(matchCounter(1, 2))).toBeTruthy();
+    expect(activeRange("decision")?.startContainer).toBe(first?.startContainer);
+
+    citation.focus();
+    pane.dispatchEvent(new Event("wheel"));
+    scroll.mockClear();
+    fireEvent.keyDown(pane, { key: "f", code: "KeyF", ctrlKey: true });
+    expect(document.activeElement).toBe(screen.getByRole("searchbox"));
+    expect(scroll).not.toHaveBeenCalled();
+    citation.focus();
+    fireEvent.click(citation);
+    expect(scroll).toHaveBeenCalledTimes(1);
+    expect(activeRange("decision")?.startContainer).toBe(first?.startContainer);
+    expect(highlightText("stella-inspector-find-decision")).toEqual([
+      "Odpovědnosti",
+      "odpovědnosti",
+    ]);
+  } finally {
+    HTMLElement.prototype.scrollIntoView = originalScrollIntoView;
+  }
 });
 
 test("Escape inside one pane leaves its neighbor's find bar and highlights intact", async () => {
@@ -512,4 +590,148 @@ test("a hard-wrapped decision finds words inside both drawn paragraphs", async (
     "Krajský",
     "Krajský",
   ]);
+});
+
+/**
+ * Records every move to a match. Happy DOM has no scroller around the
+ * reader, so each one lands in the element's own scrollIntoView.
+ */
+const recordScrolls = () => {
+  const scrolledTo: string[] = [];
+  const own = Object.getOwnPropertyDescriptor(
+    HTMLElement.prototype,
+    "scrollIntoView",
+  );
+  Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+    configurable: true,
+    value(this: HTMLElement) {
+      scrolledTo.push(this.textContent);
+    },
+  });
+  const restore = () => {
+    Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
+    if (own !== undefined) {
+      Object.defineProperty(HTMLElement.prototype, "scrollIntoView", own);
+    }
+  };
+  return { restore, scrolledTo };
+};
+
+test("a query with no matches does not scroll when later text introduces a match", async () => {
+  const { restore, scrolledTo } = recordScrolls();
+  try {
+    const screen = renderReaders([
+      { initialQuery: "pozdější", name: "decision" },
+    ]);
+    await waitFor(() =>
+      expect(screen.getByText(messages.common.noResults)).toBeTruthy(),
+    );
+    expect(highlightText("stella-inspector-find-decision")).toEqual([]);
+    expect(scrolledTo).toEqual([]);
+
+    const text =
+      screen.getByText(readerText.damagesParagraph).parentElement ??
+      panic("The reader did not render its text");
+    const note = text.ownerDocument.createElement("p");
+    note.textContent = "Pozdější znění přidalo shodu.";
+    text.append(note);
+    await act(async () => {
+      await sleep(0);
+    });
+    await waitFor(() =>
+      expect(screen.getByText(matchCounter(1, 1))).toBeTruthy(),
+    );
+    expect(highlightText("stella-inspector-find-decision")).toEqual([
+      "Pozdější",
+    ]);
+    expect(scrolledTo).toEqual([]);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: messages.common.nextMatch }),
+    );
+    await waitFor(() => expect(scrolledTo).toHaveLength(1));
+    expect(scrolledTo.at(0)).toBe(note.textContent);
+  } finally {
+    restore();
+  }
+});
+
+test("Next and Previous take the reader back to a lone match, while repaints leave the view alone", async () => {
+  const { restore, scrolledTo } = recordScrolls();
+  try {
+    const screen = renderReaders([
+      { initialQuery: "samostatný", name: "decision" },
+    ]);
+    await waitFor(() =>
+      expect(screen.getByText(matchCounter(1, 1))).toBeTruthy(),
+    );
+    await waitFor(() => expect(scrolledTo).toHaveLength(1));
+
+    // The text changing under the open bar repaints the marks only.
+    const text =
+      screen.getByText(readerText.damagesParagraph).parentElement ??
+      panic("The reader did not render its text");
+    const note = text.ownerDocument.createElement("p");
+    note.textContent = "Poznámka pod textem.";
+    text.append(note);
+    await act(async () => {
+      await sleep(0);
+    });
+    expect(scrolledTo).toHaveLength(1);
+
+    // The reader has scrolled away; each explicit step returns to the match,
+    // though it stays the first of one.
+    for (const name of [
+      messages.common.nextMatch,
+      messages.common.previousMatch,
+    ]) {
+      const before = scrolledTo.length;
+      fireEvent.click(screen.getByRole("button", { name }));
+      await waitFor(() => expect(scrolledTo).toHaveLength(before + 1));
+      expect(scrolledTo.at(-1)).toBe(readerText.damagesParagraph);
+      expect(screen.getByText(matchCounter(1, 1))).toBeTruthy();
+    }
+  } finally {
+    restore();
+  }
+});
+
+test("removing the active match from the text moves the active mark but not the view", async () => {
+  const { restore, scrolledTo } = recordScrolls();
+  try {
+    const screen = renderReaders([
+      { initialQuery: "odpovědnost", name: "decision" },
+    ]);
+    await waitFor(() =>
+      expect(screen.getByText(matchCounter(1, 2))).toBeTruthy(),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: messages.common.nextMatch }),
+    );
+    await waitFor(() =>
+      expect(screen.getByText(matchCounter(2, 2))).toBeTruthy(),
+    );
+    expect(scrolledTo.at(-1)).toBe(readerText.liabilityParagraph);
+    const scrolls = scrolledTo.length;
+
+    // A toggle in the text takes the paragraph with the active match away;
+    // the remaining match becomes active where it already is on screen.
+    screen.getByText(readerText.liabilityParagraph).remove();
+    await waitFor(() =>
+      expect(screen.getByText(matchCounter(1, 1))).toBeTruthy(),
+    );
+    await act(async () => {
+      await sleep(0);
+    });
+    expect(activeRange("decision")?.toString()).toBe("Odpovědnosti");
+    expect(scrolledTo).toHaveLength(scrolls);
+
+    // Asking for the next match still takes the reader there.
+    fireEvent.click(
+      screen.getByRole("button", { name: messages.common.nextMatch }),
+    );
+    await waitFor(() => expect(scrolledTo).toHaveLength(scrolls + 1));
+  } finally {
+    restore();
+  }
 });

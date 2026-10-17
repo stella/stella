@@ -4,6 +4,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import * as v from "valibot";
 
 import { checkCiEventPolicies, workflowSchema } from "./check-ci-event-policy";
+import { evaluate } from "./github-expression";
 
 const directory = new URL("../.github/workflows/", import.meta.url);
 const workflows = Object.fromEntries(
@@ -21,8 +22,154 @@ const policy = JSON.parse(
   ),
 );
 
+test.each([
+  {
+    baseRef: "refs/heads/selected-base",
+    prBase: "pr-base-sha",
+    expected: "refs/heads/selected-base",
+  },
+  { baseRef: "", prBase: "pr-base-sha", expected: "pr-base-sha" },
+  {
+    baseRef: "refs/tags/replay-base",
+    prBase: "",
+    expected: "refs/tags/replay-base",
+  },
+  { baseRef: "", prBase: "", expected: "origin/main" },
+])(
+  "flake report diff uses the requested base before the caller PR base: %j",
+  ({ baseRef, prBase, expected }) => {
+    const workflow = v.parse(workflowSchema, workflows["flake-gate.yml"]);
+    const step = workflow.jobs["report"]?.steps?.find(
+      ({ run }) => run === "bun scripts/flake-gate.ts",
+    );
+    const value = step?.env?.["BASE_SHA"];
+    if (
+      typeof value !== "string" ||
+      !value.startsWith("${{") ||
+      !value.endsWith("}}")
+    ) {
+      panic("Missing flake report base expression");
+    }
+    expect(
+      evaluate(value.slice(3, -2).trim(), {
+        values: {
+          "inputs.base_ref": baseRef,
+          "github.event.pull_request.base.sha": prBase,
+        },
+      }),
+    ).toBe(expected);
+  },
+);
+
+test("compiler parity and seeded probes require dispatch-only policy in every workflow", () => {
+  for (const command of [
+    "bun run check:typecheck-parity",
+    "bun scripts/typecheck-parity.ts",
+    "bunx --no-install stll-typecheck-parity --project=tsconfig.json",
+    "bash scripts/typecheck-command-probe.sh",
+    "probe=packages/sha256/src/typecheck-command-probe.ts",
+  ]) {
+    const workflow = {
+      on: { workflow_dispatch: {} },
+      jobs: { proof: { steps: [{ run: command }] } },
+    };
+    expect(
+      checkCiEventPolicies({
+        workflows: { "fixture.yml": workflow },
+        policy: { jobs: { "fixture.yml/proof": "main" } },
+      }),
+    ).toContain(
+      "fixture.yml/proof: compiler parity and probes require dispatch-only policy",
+    );
+    expect(
+      checkCiEventPolicies({
+        workflows: {
+          "fixture.yml": {
+            ...workflow,
+            jobs: { proof: { steps: [{ parallel: [{ run: command }] }] } },
+          },
+        },
+        policy: { jobs: { "fixture.yml/proof": "main" } },
+      }),
+    ).toContain(
+      "fixture.yml/proof: compiler parity and probes require dispatch-only policy",
+    );
+    const declared = { jobs: { "fixture.yml/proof": "dispatch-only" } };
+    expect(
+      checkCiEventPolicies({
+        workflows: { "fixture.yml": workflow },
+        policy: declared,
+      }),
+    ).toEqual([]);
+    for (const event of [
+      "schedule",
+      "push",
+      "pull_request",
+      "pull_request_target",
+      "merge_group",
+      "workflow_call",
+      "workflow_run",
+      "repository_dispatch",
+    ]) {
+      expect(
+        checkCiEventPolicies({
+          workflows: {
+            "fixture.yml": { ...workflow, on: { ...workflow.on, [event]: {} } },
+          },
+          policy: declared,
+        }),
+      ).toContain(
+        "fixture.yml/proof: dispatch-only jobs require workflow_dispatch as the only trigger",
+      );
+    }
+  }
+});
+
+test("moving compiler proofs into an automatic workflow fails the real policy census", () => {
+  for (const file of ["ci.yml", "nightly-typecheck.yml"]) {
+    const workflow = v.parse(workflowSchema, structuredClone(workflows[file]));
+    const job = Object.values(workflow.jobs).find(
+      (candidate) => candidate.steps,
+    );
+    if (!job?.steps) {
+      panic("Missing workflow steps fixture");
+    }
+    for (const command of [
+      "bun run check:typecheck-parity",
+      "bash scripts/typecheck-command-probe.sh",
+    ]) {
+      job.steps.push({ run: command });
+      expect(
+        checkCiEventPolicies({
+          workflows: { ...workflows, [file]: workflow },
+          policy,
+        }),
+      ).toContainEqual(
+        expect.stringContaining(
+          "compiler parity and probes require dispatch-only policy",
+        ),
+      );
+      job.steps.pop();
+    }
+  }
+});
+
 test("every real workflow job has an event policy and the fast gate follows it", () => {
   expect(checkCiEventPolicies({ workflows, policy })).toEqual([]);
+});
+
+test("duplicate raw event-policy job keys fail before JSON key collapse", () => {
+  const source =
+    '{"jobs":{"fixture.yml/job":"pr-fast","fixture.yml/job":"main"}}';
+  const parsed: unknown = JSON.parse(source);
+  expect(parsed).toEqual({ jobs: { "fixture.yml/job": "main" } });
+  expect(
+    checkCiEventPolicies({
+      workflows: {},
+      policy: parsed,
+      policySource: source,
+    }),
+  ).toContain("CI event policy has duplicate job key: fixture.yml/job");
 });
 
 test("Postgres-only PR suites cannot lose their disabled-by-default switch", () => {
@@ -326,6 +473,43 @@ test("advisory fix evidence is an explicit label opt-in rather than an automatic
       policy: declared,
     }),
   ).toEqual([]);
+});
+
+test("flake gate label events neither run nor cancel for unrelated labels", () => {
+  const flakeGate = v.parse(
+    workflowSchema,
+    structuredClone(workflows["flake-gate.yml"]),
+  );
+  const report = flakeGate.jobs["report"];
+  if (report === undefined || typeof report.if !== "string") {
+    panic("Missing flake-gate report guard fixture");
+  }
+  const flakePolicy = {
+    jobs: { "flake-gate.yml/report": "pr-opt-in" },
+  };
+  expect(
+    checkCiEventPolicies({
+      workflows: { "flake-gate.yml": flakeGate },
+      policy: flakePolicy,
+    }),
+  ).toEqual([]);
+
+  const original = report.if;
+  for (const condition of [
+    "github.event_name != 'pull_request' || github.event.action != 'labeled' || github.event.label.name == 'flake-gate'",
+    "github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'flake-gate')",
+  ]) {
+    report.if = condition;
+    expect(report.if).not.toBe(original);
+    expect(
+      checkCiEventPolicies({
+        workflows: { "flake-gate.yml": flakeGate },
+        policy: flakePolicy,
+      }),
+    ).toContain(
+      "flake-gate.yml/report: PR report must require flake-gate and ignore unrelated label events",
+    );
+  }
 });
 
 test("the actual reusable CI main group is distinct from its caller and coalesces", () => {

@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { extractCaseLawDecisionIdFromIdRouteParam } from "@stll/api-contract/case-law-decision-route";
+import { CASE_LAW_BROWSER_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 import { propertyConfig } from "@stll/property-testing";
 
 import {
@@ -69,6 +70,27 @@ describe("case decision inspector", () => {
     expect(
       isCaseDecisionViewPayload({ ...reopened.payload, findSessionId: "" }),
     ).toBe(false);
+  });
+
+  test("reopening a passage scrolls again while retaining the same decision chip", () => {
+    const target = {
+      caseNumber: "100 A 1/2026",
+      country: "CZ",
+      court: "Synthetic Court",
+      decisionId: "synthetic-decision",
+      language: null,
+      languageAlternates: null,
+      slug: "synthetic-decision",
+      anchorId: "p-12",
+    };
+    const first = createCaseDecisionViewTab(target);
+    const reopened = createCaseDecisionViewTab(target);
+    expect(reopened.id).toBe(first.id);
+    expect(reopened.payload.anchorId).toBe(first.payload.anchorId);
+    expect(first.payload.findSessionId).toBeDefined();
+    expect(reopened.payload.findSessionId).not.toBe(
+      first.payload.findSessionId,
+    );
   });
 
   test("validates synchronized payloads", () => {
@@ -210,7 +232,7 @@ describe("case decision inspector", () => {
       fc.property(
         fc.record({
           caseNumber: fc.string({ minLength: 1 }),
-          country: fc.constantFrom("CZE", "POL", "SVK", "EU"),
+          country: fc.constantFrom(...CASE_LAW_BROWSER_COUNTRIES),
           court: fc.constantFrom(
             "Nejvyšší soud",
             "Sąd Najwyższy",

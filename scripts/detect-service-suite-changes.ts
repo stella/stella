@@ -148,6 +148,14 @@ const DERIVED_OUTPUT_INPUTS: ReadonlyMap<string, readonly string[]> = new Map(
   ),
 );
 
+const DERIVED_OUTPUT_GLOBS = GENERATORS.filter(
+  ({ outputKind }) => outputKind === "derived",
+).flatMap(({ outputs, inputs }) =>
+  outputs
+    .filter((output) => /[*?[{]/u.test(output))
+    .map((output) => ({ glob: new Bun.Glob(output), inputs })),
+);
+
 const derivedInputFiles = (inputs: readonly string[], root: string) =>
   inputs.flatMap((input) =>
     /[*?[{]/u.test(input)
@@ -170,6 +178,12 @@ const resolveLocalImport = (
     .find((inputs) => inputs !== undefined);
   if (derivedInputs !== undefined) {
     return derivedInputFiles(derivedInputs, root);
+  }
+  const derivedGlob = DERIVED_OUTPUT_GLOBS.find(({ glob }) =>
+    [candidate, `${stem}.ts`].some((entry) => glob.match(entry)),
+  );
+  if (derivedGlob !== undefined) {
+    return derivedInputFiles(derivedGlob.inputs, root);
   }
   const resolved = [
     candidate,
@@ -375,15 +389,6 @@ export const planServiceSuites = (
   const required = (suite: ServiceSuite): boolean => {
     if (files.some((file) => directlyRequired(file, suite))) {
       return true;
-    }
-    if (
-      !files.some(
-        (file) =>
-          file.startsWith(`apps/${SUITES[suite].app}/`) ||
-          file.startsWith("packages/"),
-      )
-    ) {
-      return false;
     }
     let graph = root === repositoryRoot ? defaultGraphs.get(suite) : undefined;
     if (graph === undefined) {

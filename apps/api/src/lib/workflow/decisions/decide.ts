@@ -16,7 +16,7 @@ import { sanitizeForPrompt, untrustedText } from "@/api/lib/prompt-safety";
 import { admittedDispatchSignal } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { splitPropertiesForBudget } from "@/api/lib/structured-output-budget";
 import {
-  generateTanStackObjectForRole,
+  generateTanStackObjectForTask,
   resolveTanStackTextModel,
   structuredOutputWireJsonSchema,
   withGenerationDeadline,
@@ -104,7 +104,7 @@ type DecisionGenerationOptionsFor<TOptions> = TOptions extends unknown
   : never;
 
 export type DecisionGenerationOptions = DecisionGenerationOptionsFor<
-  Parameters<typeof generateTanStackObjectForRole>[0]
+  Parameters<typeof generateTanStackObjectForTask>[0]
 >;
 
 export type DecisionGenerationRequest = {
@@ -411,7 +411,8 @@ const askDecisionModel = async <TQuestions extends SystemOneQuestions>({
 };
 
 const refusalSchema = v.strictObject({ type: v.literal("refusal") });
-const generativeDecisionsSchema = (questions: SystemOneQuestions) => {
+/** Read by the structured-output role contract test. @public */
+export const generativeDecisionsSchema = (questions: SystemOneQuestions) => {
   const entries = Object.entries(questions).map(([id, question]) =>
     v.strictObject({
       id: v.literal(id),
@@ -465,7 +466,7 @@ const generateDecisionChunk = async ({
 }: GenerateDecisionChunkOptions) => {
   const { prompt, messages, evidenceInstruction, ...runtime } = generation;
   const options = { ...runtime, orgAIConfig };
-  return await generateTanStackObjectForRole({
+  return await generateTanStackObjectForTask({
     ...options,
     resolveTextModel: () => model,
     analytics: {

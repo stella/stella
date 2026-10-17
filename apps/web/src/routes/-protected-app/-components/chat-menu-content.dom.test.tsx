@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 GlobalRegistrator.register();
 
 const { act, cleanup, fireEvent, render, waitFor } =
@@ -18,7 +20,7 @@ afterEach(() => {
 });
 
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 for (const { locale, label, direction } of [

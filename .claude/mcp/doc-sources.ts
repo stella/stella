@@ -274,7 +274,7 @@ export const DOC_SOURCES = {
     url: "https://wxt.dev/llms.txt",
   },
   Yjs: {
-    dependencies: ["yjs"],
+    dependencies: ["yjs", "y-protocols"],
     url: "https://docs.yjs.dev/llms.txt",
   },
 } as const satisfies Record<string, DocSource>;
@@ -376,7 +376,6 @@ export const DOC_SOURCE_EXCLUSIONS = [
   "ssf",
   "tailwind-merge",
   "tailwindcss",
-  "thinking-orbs",
   "tw-animate-css",
   "typescript",
   "unified",
@@ -387,6 +386,45 @@ export const DOC_SOURCE_EXCLUSIONS = [
 ]
   .map(noLlmsTxt)
   .concat(
+    ...[
+      "prosemirror-commands",
+      "prosemirror-dropcursor",
+      "prosemirror-gapcursor",
+      "prosemirror-history",
+      "prosemirror-inputrules",
+      "prosemirror-keymap",
+      "prosemirror-model",
+      "prosemirror-state",
+      "prosemirror-tables",
+      "prosemirror-transform",
+      "prosemirror-view",
+    ].map(
+      (dependency) =>
+        ({
+          checkedAt: "2026-10-15T00:00:00.000Z",
+          dependency,
+          explanation:
+            "https://prosemirror.net/llms.txt and https://prosemirror.net/docs/llms.txt return 404. Use the official guide and package API reference at https://prosemirror.net/docs/ directly.",
+          expiresAt: "2026-11-14T00:00:00.000Z",
+          reason: "no-llms-txt",
+        }) satisfies NoLlmsTxtExclusion,
+    ),
+    {
+      checkedAt: "2026-10-13T00:00:00.000Z",
+      dependency: "@myriaddreamin/typst-ts-renderer",
+      explanation:
+        "https://myriad-dreamin.github.io/typst.ts/llms.txt and https://typst.app/llms.txt return 404. Use the typst.ts guide at https://myriad-dreamin.github.io/typst.ts/cookery/ and the Typst reference at https://typst.app/docs/ directly.",
+      expiresAt: "2026-11-12T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
+      checkedAt: "2026-10-13T00:00:00.000Z",
+      dependency: "@myriaddreamin/typst-ts-web-compiler",
+      explanation:
+        "https://myriad-dreamin.github.io/typst.ts/llms.txt and https://typst.app/llms.txt return 404. Use the typst.ts guide at https://myriad-dreamin.github.io/typst.ts/cookery/ and the Typst reference at https://typst.app/docs/ directly.",
+      expiresAt: "2026-11-12T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
     {
       checkedAt: "2026-10-11T00:00:00.000Z",
       dependency: "shell-quote",
@@ -492,6 +530,14 @@ export const DOC_SOURCE_EXCLUSIONS = [
       reason: "no-llms-txt",
     },
     {
+      checkedAt: "2026-10-14T04:36:26.734Z",
+      dependency: "linkify-it",
+      explanation:
+        "The canonical raw repository and documentation-site llms.txt endpoints return 404. Use the API reference at https://markdown-it.github.io/linkify-it/ and repository documentation at https://github.com/markdown-it/linkify-it directly.",
+      expiresAt: "2026-11-13T04:36:26.734Z",
+      reason: "no-llms-txt",
+    },
+    {
       checkedAt: "2026-09-27T00:00:00.000Z",
       dependency: "tldts",
       explanation:
@@ -553,6 +599,14 @@ export const DOC_SOURCE_EXCLUSIONS = [
       explanation:
         "https://stylelint.io/llms.txt returns 404. Use https://stylelint.io/user-guide/rules/ and https://stylelint.io/user-guide/configure/ directly for the CSS correctness configuration.",
       expiresAt: "2026-11-07T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
+      checkedAt: "2026-10-13T00:00:00.000Z",
+      dependency: "isbot",
+      explanation:
+        "https://raw.githubusercontent.com/omrilotan/isbot/main/llms.txt returns 404 and https://isbot.js.org/llms.txt returns 404. Use the canonical README at https://github.com/omrilotan/isbot#readme directly.",
+      expiresAt: "2026-11-12T00:00:00.000Z",
       reason: "no-llms-txt",
     },
     {

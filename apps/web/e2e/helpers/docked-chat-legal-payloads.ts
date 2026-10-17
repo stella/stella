@@ -107,6 +107,8 @@ const olderStatute = {
 };
 
 const noProvisions = {
+  capability: { type: "supported" as const, languages: ["cs"] },
+  pendingSince: null,
   status: { type: "current" as const },
   generation: "synthetic-dock",
   publishedProjectionDigest: null,
@@ -119,6 +121,7 @@ const noCitations = {
   nextCursor: null,
   limit: 50,
   items: [],
+  doctrineAvailability: "unavailable" as const,
 };
 const noLeadingCitations = {
   items: [],

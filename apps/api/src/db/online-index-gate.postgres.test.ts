@@ -3,14 +3,12 @@ import type { ReservedSQL } from "bun";
 import { describe, expect, test } from "bun:test";
 
 import { defaultConfig, type Signal } from "@stll/db-load-gate/health";
+import { waitFor } from "@stll/test-kit";
 
 import type { OnlineIndexConfig } from "../env-online-index";
 import { getPgErrorCode, PG_ERROR } from "../lib/pg-error";
 import { isRecord } from "../lib/type-guards";
-import {
-  GATED_TEST_FORCE_CLOSE_TIMEOUT_SECONDS,
-  withGatedTestClients,
-} from "../tests/gated-test-database";
+import { withGatedTestClients } from "../tests/gated-test-database";
 import {
   createOnlineIndexGate,
   type OnlineIndexGateOptions,
@@ -19,7 +17,8 @@ import type {
   OnlineMigrationConnection,
   OnlineMigrationParam,
 } from "./online-migration-connection";
-import { ensureOnlineIndexValid } from "./online-migrations";
+import { ensureOnlineIndexValid, retireOnlineIndex } from "./online-migrations";
+import { terminateReserved } from "./sql-close";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -33,7 +32,7 @@ const connectionAdapter = (
   },
   release: () => connection.release(),
   terminate: async () => {
-    await connection.close({ timeout: 0 });
+    await terminateReserved(connection);
   },
 });
 
@@ -186,7 +185,7 @@ const withFixture = async (work: (fixture: Fixture) => Promise<void>) => {
         blocker.release();
       }
     },
-    { closeTimeout: GATED_TEST_FORCE_CLOSE_TIMEOUT_SECONDS },
+    { closeMode: "force" },
   );
 };
 
@@ -335,7 +334,7 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
           },
         });
       // The cancelled run returns instead of sleeping, so a migrator can
-      // release its schema lane before the retry.
+      // re-read its ledger before the retry.
       expect(await run()).toEqual({
         type: "deferred",
         index: fixture.name,
@@ -410,7 +409,7 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
         ...fixture.gate,
         wait: async () => {
           await waitForPhase(fixture.observer, fixture.pid);
-          await fixture.builder.close({ timeout: 0 });
+          await terminateReserved(fixture.builder);
         },
       });
       const outcome = await Result.tryPromise(
@@ -858,18 +857,15 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
         expect(await indexState(fixture)).toMatchObject({ valid: false });
         child.kill("SIGKILL");
         expect(await child.exited).not.toBe(0);
-        for (let attempt = 0; attempt < 400; attempt++) {
-          const rows = await fixture.observer<
-            { alive: boolean }[]
-          >`SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE pid = ${pid}) AS alive`;
-          if (!rows.at(0)?.alive) {
-            break;
-          }
-          if (attempt === 399) {
-            throw new TypeError("Killed runner backend did not exit");
-          }
-          await Bun.sleep(5);
-        }
+        await waitFor(
+          async () => {
+            const rows = await fixture.observer<
+              { alive: boolean }[]
+            >`SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE pid = ${pid}) AS alive`;
+            return rows.at(0)?.alive === false ? true : undefined;
+          },
+          { description: "the killed runner backend to exit" },
+        );
         expect(await indexState(fixture)).toMatchObject({ valid: false });
         await fixture.blocker`ROLLBACK`;
         await repair(fixture);
@@ -936,6 +932,110 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
         await fixture.blocker`ROLLBACK`;
       }
       await repair(fixture);
+    });
+  });
+
+  test("the phase's lock budget alone cannot retire an index under a writer", async () => {
+    await withFixture(async (fixture) => {
+      await fixture.owner.unsafe(
+        `CREATE INDEX ${fixture.name} ON public.${fixture.table} (id)`,
+      );
+      await blockBuild(fixture);
+      await fixture.connection.execute("SET lock_timeout = '1s'");
+      const bare = await Result.tryPromise({
+        try: async () =>
+          await fixture.connection.execute(
+            `DROP INDEX CONCURRENTLY IF EXISTS public.${fixture.name}`,
+          ),
+        catch: (cause: unknown) => cause,
+      });
+      expect(bare.isErr() && getPgErrorCode(bare.error)).toBe(
+        PG_ERROR.LOCK_NOT_AVAILABLE,
+      );
+    });
+  });
+
+  test("a replaced index under a writer defers, then retires once the writer commits", async () => {
+    await withFixture(async (fixture) => {
+      await fixture.owner.unsafe(
+        `CREATE INDEX ${fixture.name} ON public.${fixture.table} (id)`,
+      );
+      await blockBuild(fixture);
+      // The phase's own budget: the drop the previous test shows failing.
+      await fixture.connection.execute("SET lock_timeout = '1s'");
+      const drops: string[] = [];
+      const connection: OnlineMigrationConnection = {
+        ...fixture.connection,
+        execute: async (statement, parameters) => {
+          if (statement.includes("DROP INDEX")) {
+            drops.push(statement);
+          }
+          await fixture.connection.execute(statement, parameters);
+        },
+      };
+      let clock = fixture.gate.clock();
+      let polls = 0;
+      const retire = async (
+        wait: NonNullable<OnlineIndexGateOptions["wait"]>,
+      ) =>
+        await retireOnlineIndex({
+          connection,
+          index: { name: fixture.name, tableName: fixture.table },
+          reserveObserver: async () => ({
+            ...fixture.observation,
+            release: () => undefined,
+          }),
+          gate: { ...fixture.gate, clock: () => clock, wait },
+        });
+
+      expect(
+        await retire(async () => {
+          for (let attempt = 0; attempt < 400; attempt++) {
+            const rows = await fixture.observer<
+              { waiting: boolean }[]
+            >`SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE pid = ${fixture.pid} AND wait_event_type = 'Lock') AS waiting`;
+            if (rows.at(0)?.waiting) {
+              break;
+            }
+            if (attempt === 399) {
+              throw new TypeError("DROP did not reach the writer lock barrier");
+            }
+            await Bun.sleep(5);
+          }
+          polls++;
+          expect(polls).toBeLessThanOrEqual(2);
+          if (polls === 2) {
+            clock += fixture.gate.config.maxSnapshotWaitMs;
+          }
+        }),
+      ).toEqual({
+        type: "deferred",
+        index: fixture.name,
+        retryAfterMs: fixture.gate.config.retryMs,
+      });
+      expect(
+        fixture.records
+          .map((record) => JSON.stringify(record))
+          .some((record) => record.includes("Snapshot wait watchdog")),
+      ).toBe(true);
+      // Cancelled after PostgreSQL marked it invalid: the leftover the next
+      // run has to find and drop.
+      expect(await indexState(fixture)).toMatchObject({ valid: false });
+      // The gate lifted the budget for the drop and restored it after.
+      const budget = await fixture.builder<
+        { timeout: string }[]
+      >`SELECT current_setting('lock_timeout') AS timeout`;
+      expect(budget.at(0)?.timeout).toBe("1s");
+
+      // Later runs read health at the fixture's own time again.
+      clock = fixture.gate.clock();
+      await fixture.blocker`COMMIT`;
+      expect(await retire(waitForAbort)).toEqual({ type: "complete" });
+      expect(await indexState(fixture)).toBeUndefined();
+      expect(drops).toHaveLength(2);
+
+      expect(await retire(waitForAbort)).toEqual({ type: "complete" });
+      expect(drops).toHaveLength(2);
     });
   });
 
@@ -1036,7 +1136,7 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
         ...fixture.connection,
         terminate: async () => {
           terminated = true;
-          await fixture.builder.close({ timeout: 0 });
+          await terminateReserved(fixture.builder);
         },
       };
       const gate = createOnlineIndexGate({

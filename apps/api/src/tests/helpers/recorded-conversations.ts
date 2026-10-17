@@ -47,6 +47,7 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
+import { stabilizeRecordedConversation } from "../../../scripts/recorded-conversation-stabilization";
 import type { RecordedConversationSuite } from "./recorded-conversation-suites";
 
 // Recorded conversations: for each scenario, the exact requests the web app's
@@ -159,75 +160,6 @@ export const registerRecordedConversationSuite = (
     scenario: string;
     steps: RecordedStep[];
     threadId: string;
-  };
-
-  // --- Stable recordings -----------------------------------------------------
-
-  const UUID_PATTERN =
-    /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/giu;
-  /** The run and message ids the web client mints: `run-<epoch ms>-<random>`,
-   *  `msg-<epoch ms>-<random>`. */
-  const CLIENT_ID_PATTERN = /(run|msg)-\d{13}-[0-9a-z]{6}/gu;
-  const ISO_INSTANT_PATTERN =
-    /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/gu;
-  /** Epoch milliseconds from 2023 to 2033, the stream's `timestamp` values. */
-  const EPOCH_MS_PATTERN = /(?<![\d.])1[7-9]\d{11}(?![\d.])/gu;
-  const RECORDING_EPOCH_MS = Date.UTC(2026, 0, 1);
-  /** Elapsed milliseconds a code-mode run reports, raw or inside an SSE body. */
-  const DURATION_PATTERN = /(\\?"(?:duration|durationMs)\\?":)\d+/gu;
-
-  /** Each distinct match of `pattern`, in order of first appearance, named by
-   *  `name(n, match)`: identity is kept, the generated value is not. */
-  const renameEach = (
-    text: string,
-    pattern: RegExp,
-    name: (index: number, match: string) => string,
-  ): string => {
-    const names = new Map<string, string>();
-    return text.replaceAll(pattern, (match) => {
-      const key = match.toLowerCase();
-      const known = names.get(key);
-      if (known !== undefined) {
-        return known;
-      }
-      const next = name(names.size + 1, match);
-      names.set(key, next);
-      return next;
-    });
-  };
-
-  /**
-   * The recording with every generated value made stable, so a fresh recording
-   * of the same conversation is byte for byte the committed one: each distinct
-   * UUID and client run id becomes a fixed one in order of first appearance
-   * (identity kept), and every instant, ISO or epoch milliseconds, the next of
-   * a fixed series a second apart in order of appearance. Whether two instants
-   * fell in the same millisecond is timing, not behaviour, so instants keep no
-   * identity; the page lists messages oldest first, so theirs stay in order.
-   * Durations are timing too, and become 0.
-   */
-  const stabilize = (recording: RecordedConversation): string => {
-    let instants = 0;
-    const nextInstant = () => {
-      instants += 1;
-      return RECORDING_EPOCH_MS + instants * 1000;
-    };
-    const text = renameEach(
-      renameEach(
-        JSON.stringify(recording, null, 2),
-        UUID_PATTERN,
-        (index) =>
-          `00000000-0000-7000-8000-${index.toString(16).padStart(12, "0")}`,
-      ),
-      CLIENT_ID_PATTERN,
-      (index, match) => `${match.slice(0, 3)}-recorded-${String(index)}`,
-    )
-      .replaceAll(ISO_INSTANT_PATTERN, () =>
-        new Date(nextInstant()).toISOString(),
-      )
-      .replaceAll(EPOCH_MS_PATTERN, () => String(nextInstant()))
-      .replaceAll(DURATION_PATTERN, (_, key: string) => `${key}0`);
-    return `${text}\n`;
   };
 
   // --- Scenarios ---------------------------------------------------------------
@@ -448,11 +380,29 @@ return { id: document.entityId, name: document.name };`;
     };
   };
 
-  /** A tool call that has started streaming in the live view. */
-  const holdsToolCall = (messages: readonly UIMessage[]) =>
-    messages.some(({ parts }) =>
-      parts.some(({ type }) => type === "tool-call"),
-    );
+  /**
+   * The live view holds the tool call as far as the scripted model streams
+   * it before going quiet at `point`: its arguments (`before-tool-end`), or
+   * its arguments and end (`after-tool-end`). Waiting for exactly that last
+   * event, not for the call to start, keeps what the page saw before a stop
+   * or a dropped connection the same on every run.
+   */
+  const holdsToolCallUntil =
+    (point: "after-tool-end" | "before-tool-end") =>
+    (messages: readonly UIMessage[]) =>
+      messages.some(({ parts }) =>
+        parts.some((part) => {
+          if (part.type !== "tool-call") {
+            return false;
+          }
+          if (point === "before-tool-end") {
+            return part.arguments !== "";
+          }
+          return (
+            part.state !== "awaiting-input" && part.state !== "input-streaming"
+          );
+        }),
+      );
 
   /** A model call that goes quiet at `quietAt` while its tool call streams. */
   const quietTurn = (
@@ -692,21 +642,19 @@ return { id: document.entityId, name: document.name };`;
       "connection-drop": async (recorder) => {
         const continued = Promise.withResolvers<undefined>();
         recorder.harness.streamLive(recorder.threadId);
-        recorder.harness.script(
-          recorder.threadId,
-          [
-            {
-              type: "step",
-              text: "Checking the register",
-              toolCalls: [plainCall("call-1")],
-              pause: {
-                at: "before-tool-end",
-                wait: async () => await continued.promise,
-              },
+        recorder.harness.script(recorder.threadId, [
+          {
+            type: "step",
+            text: "Checking the register",
+            toolCalls: [plainCall("call-1")],
+            pause: {
+              at: "before-tool-end",
+              wait: async () => await continued.promise,
             },
-          ],
-          [answers("Checked the register")],
-        );
+          },
+          // Delivery can disconnect while the same producer keeps iterating.
+          answers("Checked the register"),
+        ]);
         const messageId = Bun.randomUUIDv7();
         await step(
           recorder,
@@ -715,9 +663,12 @@ return { id: document.entityId, name: document.name };`;
             await recorder.client.startUserMessage(
               messageId,
               "Check the register",
-              holdsToolCall,
+              holdsToolCallUntil("before-tool-end"),
             ),
           { midStream: true },
+        );
+        expect(recorder.harness.modelOptionsOf(recorder.threadId)).toHaveLength(
+          1,
         );
         await step(recorder, { type: "drop-connection" }, () => {
           recorder.harness.dropConnection(recorder.threadId);
@@ -725,6 +676,13 @@ return { id: document.entityId, name: document.name };`;
           // read-only reconnection catches up to the completed transcript.
           continued.resolve(undefined);
         });
+        await recorder.harness.expectSoundWebClient({
+          client: recorder.client,
+          threadId: recorder.threadId,
+        });
+        expect(recorder.harness.modelOptionsOf(recorder.threadId)).toHaveLength(
+          2,
+        );
       },
     },
   } as const satisfies Record<
@@ -745,7 +703,11 @@ return { id: document.entityId, name: document.name };`;
       recorder,
       { messageId, text, type: "send" },
       async () => {
-        await recorder.client.startUserMessage(messageId, text, holdsToolCall);
+        await recorder.client.startUserMessage(
+          messageId,
+          text,
+          holdsToolCallUntil(quietAt),
+        );
       },
       { midStream: true },
     );
@@ -796,7 +758,7 @@ return { id: document.entityId, name: document.name };`;
     run: (recorder: Recorder) => Promise<void>,
   ) => {
     const { failure, recording } = await recordScenario(scenario, run);
-    const recorded = stabilize(recording);
+    const recorded = stabilizeRecordedConversation(recording);
     const file = path.join(FIXTURE_DIR, `${scenario}${RECORDING_EXTENSION}`);
     // A message the page never posted is a finding, never a recording: writing
     // it would make the committed file expect the page to drop it.

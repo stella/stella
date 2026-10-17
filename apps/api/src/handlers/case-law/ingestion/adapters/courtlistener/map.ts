@@ -99,6 +99,7 @@ export const mapCourtListenerRecord = (
                 case "content-loss":
                 case "markup-residue":
                 case "text-not-conserved":
+                case "unclassified-page-chrome":
                   return [];
                 default:
                   reason satisfies never;
@@ -148,6 +149,7 @@ export const mapCourtListenerRecord = (
         scdbPresent: plan.scdbPresent,
       },
       textSelection: composed.opinions,
+      sourceDefects: composed.sourceDefects,
       diagnostics: plan.diagnostics,
     }),
     fulltext: composed.blocks.map(({ plainText }) => plainText).join("\n\n"),

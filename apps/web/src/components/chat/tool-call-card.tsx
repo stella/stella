@@ -9,10 +9,11 @@ import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronRightIcon, CircleHelpIcon } from "@stll/ui/icons";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
+import { StatusMark } from "@stll/ui/status-mark";
+import type { StatusMarkStatus } from "@stll/ui/status-mark";
 import { cn } from "@stll/ui/utils";
 
-import { ChatActivityOrb } from "@/components/chat/chat-activity-orb";
-import { getChatToolActivityState } from "@/components/chat/chat-activity.logic";
+import { CHAT_PENDING_TEXT_CLASS } from "@/components/chat/chat-pending-text";
 import {
   type ChatToolCallPart,
   getChatToolTitleKey,
@@ -25,11 +26,12 @@ import {
 } from "@/components/chat/tool-call-timing.logic";
 import { UnrestoredFieldsNotice } from "@/components/chat/unrestored-fields-notice";
 import {
+  BUILT_IN_SKILL_ORIGIN,
   parseSkillResourceSource,
   type SkillResourceSource,
 } from "@/components/inspector/inspector-store-types";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
-import { findSkillDisplayName } from "@/components/inspector/skill-display-name.logic";
+import { findInstalledSkillDisplayName } from "@/components/inspector/skill-display-name.logic";
 import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
@@ -339,21 +341,67 @@ const findCatalogEntry = ({
   };
 };
 
-// The skills list is cached per user; without a signed-in user (the dev
-// playground) there is no cache to read.
-const readCachedSkillPages = ({
+// A built-in's title follows the reader's language, so only an installed
+// skill's tab stores one. The chat routes load the skills list, so its title
+// is read from the cache, which is kept per user; without a signed-in user
+// (the dev playground) or the cache, the tab shows the slug.
+const skillResourceTabSource = ({
   organizationId,
   queryClient,
+  source,
   user,
 }: {
   organizationId: string;
   queryClient: QueryClient;
+  source: SkillResourceSource;
   user: AuthenticatedUser | null;
-}) =>
-  user === null
-    ? undefined
-    : queryClient.getQueryData(skillsOptions(organizationId, user.id).queryKey)
-        ?.pages;
+}) => {
+  if (source.origin === BUILT_IN_SKILL_ORIGIN || user === null) {
+    return source;
+  }
+  const skillDisplayName = findInstalledSkillDisplayName({
+    pages: queryClient.getQueryData(
+      skillsOptions(organizationId, user.id).queryKey,
+    )?.pages,
+    skillId: source.skillId,
+  });
+  return skillDisplayName === undefined
+    ? source
+    : { ...source, skillDisplayName };
+};
+
+// The mark a call shows when it is neither running nor failed. Approval and
+// user-input states wait on a person, so they read as pending, never done.
+const TOOL_CALL_SETTLED_STATUS = {
+  "approval-requested": "pending",
+  "approval-responded": "pending",
+  "awaiting-input": "pending",
+  complete: "done",
+  error: "failed",
+  "input-complete": "pending",
+  "input-streaming": "pending",
+} as const satisfies Record<ToolPart["state"], StatusMarkStatus>;
+
+const toolCallStatus = ({
+  hasError,
+  isRunning,
+  state,
+}: {
+  hasError: boolean;
+  isRunning: boolean;
+  state: ToolPart["state"];
+}): StatusMarkStatus => {
+  if (hasError) {
+    return "failed";
+  }
+  return isRunning ? "running" : TOOL_CALL_SETTLED_STATUS[state];
+};
+
+const TOOL_CALL_STATUS_LABEL_KEYS = {
+  done: "common.done",
+  pending: "chat.toolCall.statusWaiting",
+  running: "common.running",
+} as const satisfies Record<Exclude<StatusMarkStatus, "failed">, string>;
 
 /** A follow-up a tool row offers once its call completed, such as opening
  *  what the call saved. */
@@ -421,7 +469,6 @@ export const ToolCallCard = ({
   });
 
   const isLoading = isRunningToolPart(part);
-  const activityState = isLoading ? getChatToolActivityState(name) : null;
   const [timing, setTiming] = useState(() =>
     createToolCallTiming({
       durationMs,
@@ -459,6 +506,13 @@ export const ToolCallCard = ({
   const errorMessage =
     failureLabelKey === undefined ? undefined : t(failureLabelKey);
   const hasError = errorMessage !== undefined;
+  const status = toolCallStatus({
+    hasError,
+    isRunning: isLoading,
+    state: part.state,
+  });
+  const statusLabel =
+    status === "failed" ? errorMessage : t(TOOL_CALL_STATUS_LABEL_KEYS[status]);
   const toolInput = getToolInput(part);
   const codeToolSource = getCodeToolSource(part, name);
   const showCodeToolOutput = isCodeToolName(name) && hasOutput;
@@ -500,21 +554,14 @@ export const ToolCallCard = ({
           )}
           onClick={() => {
             if (skillResourceOutput) {
-              // The chat routes load the skills list, so its title is read
-              // from the cache; without it the tab shows the slug.
-              const skillDisplayName = findSkillDisplayName({
-                pages: readCachedSkillPages({
+              useInspectorTabsStore.getState().openSkillResourceTab({
+                ...skillResourceTabSource({
                   organizationId: activeOrganizationId,
                   queryClient,
+                  source: skillResourceOutput.source,
                   user,
                 }),
                 skillName: skillResourceOutput.skillName,
-                source: skillResourceOutput.source,
-              });
-              useInspectorTabsStore.getState().openSkillResourceTab({
-                ...skillResourceOutput.source,
-                skillName: skillResourceOutput.skillName,
-                ...(skillDisplayName === undefined ? {} : { skillDisplayName }),
                 resourcePath: skillResourceOutput.path,
                 mimeType: skillResourceOutput.mimeType,
                 content: skillResourceOutput.content,
@@ -535,12 +582,11 @@ export const ToolCallCard = ({
           }}
           type="button"
         >
-          {activityState && <ChatActivityOrb state={activityState} />}
+          <StatusMark label={statusLabel} status={status} />
           <span
             className={cn(
               "min-w-0 truncate",
-              isLoading &&
-                "animate-skeleton motion-reduce:text-muted-foreground bg-[linear-gradient(90deg,var(--color-foreground-ghost)_35%,var(--color-muted-foreground)_50%,var(--color-foreground-ghost)_65%)] bg-[length:250%_100%] bg-clip-text text-transparent motion-reduce:animate-none rtl:[animation-name:skeleton-rtl]",
+              isLoading && CHAT_PENDING_TEXT_CLASS,
             )}
           >
             <span>{label}</span>

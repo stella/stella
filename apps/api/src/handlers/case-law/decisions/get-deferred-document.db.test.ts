@@ -136,6 +136,7 @@ const checkDeferredRead = async (
 
     const prepared = await withRedistributableSubject(
       caseLawDb,
+      "pages",
       { kind: "id", id: decisionId },
       async (subject) => await prepareDecisionDocumentRead({ subject }),
     );

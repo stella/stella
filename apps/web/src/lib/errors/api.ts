@@ -1,8 +1,9 @@
-import { isTaggedError, TaggedError } from "better-result";
+import { isTaggedError, panic, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import {
   API_FILE_SECURITY_REJECTED_ERROR_CODE,
+  API_VALIDATION_ERROR_CODE,
   API_VERSION_CONFLICT_ERROR_CODE,
   CLAUSE_DIRECTIVES_INVALID_CODE,
   CLAUSE_VERSION_LIMIT_ERROR_CODE,
@@ -10,7 +11,9 @@ import {
   MEMBER_REMOVAL_BUSY_CODE,
   normalizeApiError,
   parseApiErrorValue,
+  parseApiValidationIssues,
 } from "@stll/api-contract";
+import type { ApiValidationIssue } from "@stll/api-contract";
 import {
   ACTION_ADMISSION_REFUSALS,
   isActionAdmissionCode,
@@ -19,7 +22,12 @@ import { HOSTED_CHECKOUT_REFUSAL_CODE } from "@stll/api-contract/hosted-checkout
 import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-policy";
 import { providerDiagnosticSchema } from "@stll/api-contract/provider-setup";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
-import { PUBLIC_COUNTRY_UNAVAILABLE_CODE } from "@stll/api-contract/public-country-capability";
+import {
+  PUBLIC_COUNTRY_UNAVAILABLE_CODE,
+  publicCountryUnavailableSchema,
+  type PublicCountryUnavailable,
+  type PublicLawDomain,
+} from "@stll/api-contract/public-country-capability";
 import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
 import type { VerificationRunCapCode } from "@stll/api-contract/verification-run-caps";
 import { MATTER_CONTACT_CAPACITY_CODE } from "@stll/api-contract/workspace-contacts";
@@ -103,16 +111,30 @@ export const toAPIError = ({ status, value }: ToAPIErrorProps) => {
     value: parseApiErrorValue(value),
   });
   const { code, details, rawMessage } = normalized;
+  const countryRefusal =
+    code === PUBLIC_COUNTRY_UNAVAILABLE_CODE
+      ? v.safeParse(publicCountryUnavailableSchema, value)
+      : undefined;
   const diagnosticValue = details?.["providerDiagnostic"];
   const diagnostic =
     diagnosticValue === undefined
       ? undefined
       : v.safeParse(providerDiagnosticSchema, diagnosticValue);
-  if (diagnostic !== undefined && !diagnostic.success) {
-    throw new ClientOperationError({
+  let malformedResponse =
+    countryRefusal?.success === false
+      ? {
+          action: "parse-public-country-unavailable",
+          message: "Invalid public country unavailability response",
+        }
+      : null;
+  if (malformedResponse === null && diagnostic?.success === false) {
+    malformedResponse = {
       action: "parse-provider-diagnostic",
       message: "Invalid provider diagnostic response",
-    });
+    };
+  }
+  if (malformedResponse !== null) {
+    throw new ClientOperationError(malformedResponse);
   }
   return new APIError({
     ...(diagnostic?.success ? { providerDiagnostic: diagnostic.output } : {}),
@@ -120,9 +142,31 @@ export const toAPIError = ({ status, value }: ToAPIErrorProps) => {
     ...(details === undefined ? {} : { details }),
     ...(rawMessage === undefined ? {} : { rawMessage }),
     status: normalized.status,
-    message: localizeAPIError({ code, details, status: normalized.status }),
+    message: countryRefusal?.success
+      ? translateError(
+          PUBLIC_COUNTRY_ERROR_KEYS[countryRefusal.output.domain][
+            countryRefusal.output.reason
+          ],
+        )
+      : localizeAPIError({ code, details, status: normalized.status }),
   });
 };
+
+const PUBLIC_COUNTRY_ERROR_KEYS = {
+  caseLaw: {
+    pending_public: "errors.api.caseLawCountryUnavailable",
+    withdrawn: "errors.api.caseLawCountryUnavailable",
+    pages_public: "errors.api.caseLawSearchUnavailable",
+  },
+  legislation: {
+    pending_public: "errors.api.legislationCountryUnavailable",
+    withdrawn: "errors.api.legislationCountryUnavailable",
+    pages_public: "errors.api.legislationSearchUnavailable",
+  },
+} as const satisfies Record<
+  PublicLawDomain,
+  Record<PublicCountryUnavailable["reason"], TranslationKey>
+>;
 
 const RAW_INTERNAL_TOOL_ERROR_CODE = {
   legalSourceStructuralRepairRequired:
@@ -146,7 +190,6 @@ const CODE_ERROR_KEYS = {
     "errors.apiCodes.matterContactCapacityExceeded",
   [CLAUSE_DIRECTIVES_INVALID_CODE]: "errors.apiCodes.clauseDirectivesInvalid",
   [CLAUSE_VERSION_LIMIT_ERROR_CODE]: "clauses.versionLimitReached",
-  [PUBLIC_COUNTRY_UNAVAILABLE_CODE]: "errors.api.publicCountryUnavailable",
   [MEMBER_REMOVAL_BUSY_CODE]: "errors.actionAdmission.concurrencyBusy",
   access_denied: "errors.apiCodes.accessDenied",
   account_deletion_otp_expired: "errors.apiCodes.accountDeletionOtpExpired",
@@ -202,6 +245,48 @@ const isUsageRejectionReason = (
 ): reason is keyof typeof USAGE_REJECTION_REASON_KEYS =>
   Object.hasOwn(USAGE_REJECTION_REASON_KEYS, reason);
 
+/** The message for the first field a rejected request named. */
+const validationIssueMessage = (issue: ApiValidationIssue): string => {
+  const t = getTranslator();
+  switch (issue.constraint) {
+    case "maxLength":
+      return issue.limit === undefined
+        ? t("errors.apiCodes.validationInvalid")
+        : t("errors.apiCodes.validationTooLong", { limit: issue.limit });
+    case "minLength":
+      return issue.limit === undefined
+        ? t("errors.apiCodes.validationInvalid")
+        : t("errors.apiCodes.validationTooShort", { limit: issue.limit });
+    case "required":
+      return t("errors.apiCodes.validationRequired");
+    case "invalid":
+      return t("errors.apiCodes.validationInvalid");
+    default:
+      issue.constraint satisfies never;
+      return panic(
+        `Unhandled validation constraint: ${String(issue.constraint)}`,
+      );
+  }
+};
+
+/**
+ * The message for a rejected request's issue on one body field, or
+ * `undefined` when the error is not a validation answer naming that field.
+ * Forms show it under the matching input instead of only in a toast.
+ */
+export const apiFieldIssueMessage = (
+  error: unknown,
+  field: string,
+): string | undefined => {
+  if (!APIError.is(error) || error.code !== API_VALIDATION_ERROR_CODE) {
+    return undefined;
+  }
+  const issue = parseApiValidationIssues(error.details).find(
+    (candidate) => candidate.field === field,
+  );
+  return issue === undefined ? undefined : validationIssueMessage(issue);
+};
+
 export const isDisplayableAPIError = (error: APIError): boolean =>
   isActionAdmissionCode(error.code) ||
   (typeof error.code === "string" && isKnownErrorCode(error.code)) ||
@@ -251,6 +336,13 @@ const localizeAPIError = ({ code, details, status }: LocalizeAPIErrorInput) => {
   if (isActionAdmissionCode(code)) {
     return translateError(ACTION_ADMISSION_ERROR_KEYS[code]);
   }
+  const issue =
+    code === API_VALIDATION_ERROR_CODE
+      ? parseApiValidationIssues(details).at(0)
+      : undefined;
+  if (issue !== undefined) {
+    return validationIssueMessage(issue);
+  }
   if (code && isKnownErrorCode(code)) {
     return translateError(CODE_ERROR_KEYS[code]);
   }
@@ -265,27 +357,17 @@ const localizeAPIError = ({ code, details, status }: LocalizeAPIErrorInput) => {
 };
 
 /**
- * API refusals of a chat request whose localized message says what the user
- * must change, so the chat shows it instead of the generic send failure.
- */
-const CHAT_REFUSAL_CODES: ReadonlySet<string> = new Set([
-  ENCRYPTED_CONTENT_ERROR_CODE,
-]);
-
-/**
  * The chat refusal an error carries, directly or as a cause: the API error
  * whose (already localized) message the chat should show, or `null`.
+ * HTTP refusals never expose raw diagnostics: `toAPIError` localizes their
+ * status/code before this boundary. Keep all of them through SDK wrappers.
  */
 export const chatRefusal = (error: unknown): APIError | null => {
   const seen = new Set<unknown>();
   let current = error;
   while (current instanceof Error && !seen.has(current)) {
     seen.add(current);
-    if (
-      APIError.is(current) &&
-      current.code !== undefined &&
-      CHAT_REFUSAL_CODES.has(current.code)
-    ) {
+    if (APIError.is(current)) {
       return current;
     }
     current = current.cause;

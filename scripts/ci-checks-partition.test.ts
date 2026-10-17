@@ -11,9 +11,73 @@ import { assertProperty } from "@stll/property-testing";
 
 import { testProcessBudgets } from "../apps/api/scripts/test-process-supervisor";
 import { CANONICAL_CANCEL_STEP } from "./ci-cancellation-contract";
+import { rootCheckGate } from "./ci-root-check-gate";
+import { ROOT_CHECK_INPUTS } from "./ci-root-checks";
+import { STATIC_RECEIPT_STEP_NAMES } from "./ci-static-checks";
+import { withoutStaticReuseCondition } from "./ci-static-checks.test-support";
 import { customLintTestCommand } from "./run-custom-lint-tests";
 import { jobCachePolicy } from "./workflow-cache-policy.ts";
 import { flattenWorkflowSteps, isWorkflowBarrier } from "./workflow-steps";
+
+// Receipt wiring is checked against the real graph in ci-static-checks.test.ts;
+// this census still compares each underlying command and original condition.
+const withoutStaticReceipts = (steps: Record<string, unknown>[]) => {
+  const normalized = steps
+    .filter(
+      (step) =>
+        !STATIC_RECEIPT_STEP_NAMES.some((name) => name === step["name"]),
+    )
+    .map((step) => {
+      const result = { ...withoutStaticReuseCondition(step) };
+      const rawEnv = step["env"];
+      if (
+        typeof rawEnv === "object" &&
+        rawEnv !== null &&
+        !Array.isArray(rawEnv)
+      ) {
+        const env = Object.fromEntries(
+          Object.entries(rawEnv).filter(
+            ([key]) =>
+              ![
+                "CI_CHECK_KIND",
+                "CI_CHECK_INPUTS",
+                "CI_CHECK_CONTEXT",
+              ].includes(key),
+          ),
+        );
+        if (Object.keys(env).length === 0) {
+          delete result["env"];
+        } else {
+          result["env"] = env;
+        }
+      }
+      if (typeof result["if"] === "string") {
+        result["if"] = result["if"].replace(
+          "(steps.standalone_lockfiles.outcome == 'success' || steps.static_receipts.outputs.reuse_standalone_lockfiles == 'true')",
+          "steps.standalone_lockfiles.outcome == 'success'",
+        );
+      }
+      if (
+        typeof result["id"] === "string" &&
+        result["id"].startsWith("static_check_")
+      ) {
+        delete result["id"];
+      }
+      return result;
+    });
+  // Bun must precede the receipt resolver and the install-free shell guards.
+  const localGuard = normalized.findIndex(
+    (step) => step["name"] === "Check local skill overrides",
+  );
+  const setup = normalized.findIndex((step) => step["name"] === "Setup Bun");
+  if (localGuard !== -1 && setup !== -1 && setup < localGuard) {
+    const [bun] = normalized.splice(setup, 1);
+    if (bun) {
+      normalized.splice(localGuard, 0, bun);
+    }
+  }
+  return normalized;
+};
 
 const cancellationJobSchema = (canonical: object) =>
   v.pipe(
@@ -44,7 +108,36 @@ const cancellationJobSchema = (canonical: object) =>
       return { ...job, permissions, steps: job.steps.slice(0, -1) };
     }),
   );
-const headJobSchema = cancellationJobSchema(CANONICAL_CANCEL_STEP);
+const headCancellationSchema = cancellationJobSchema(CANONICAL_CANCEL_STEP);
+const partitionJobSchema = (
+  cancellation: ReturnType<typeof cancellationJobSchema>,
+) =>
+  v.pipe(
+    cancellation,
+    v.transform((job) => {
+      const result = { ...job };
+      result.steps = v.parse(
+        v.array(v.looseObject({ name: v.string() })),
+        withoutStaticReceipts(job.steps),
+      );
+      if (
+        "env" in job &&
+        typeof job["env"] === "object" &&
+        job["env"] !== null
+      ) {
+        result["env"] = Object.fromEntries(
+          Object.entries(job["env"]).filter(
+            ([key]) =>
+              !["CI_CANCELLATION_KIND", "CI_CANCELLATION_CONTEXT"].includes(
+                key,
+              ),
+          ),
+        );
+      }
+      return result;
+    }),
+  );
+const headJobSchema = partitionJobSchema(headCancellationSchema);
 const workflowSchema = v.object({ jobs: v.record(v.string(), v.unknown()) });
 const removalSchema = v.array(
   v.object({ name: v.string(), reason: v.pipe(v.string(), v.minLength(1)) }),
@@ -199,6 +292,47 @@ const git = (args: string[]) => {
   }
   return result.stdout.toString().trim();
 };
+const trackedFiles = new Set(
+  git(["ls-files", "-z"]).split("\0").filter(Boolean),
+);
+
+const normalizeGuardPathLines = (run: string, tracked: ReadonlySet<string>) =>
+  run.replace(
+    /^([ \t]*git diff --exit-code --)[ \t]*\\\n((?:[^\n]*\\\n)*[^\n]*)/gmu,
+    (command, prefix: string, argumentsBlock: string) => {
+      const lines = argumentsBlock.split("\n");
+      const kept = lines.filter((line) => {
+        const argument = line.trim().replace(/ ?\\$/u, "");
+        const match =
+          /^(?:"([^"$\x60]+)"|'([^']+)'|([^\s"'$\x60;&|<>\\()]+))$/u.exec(
+            argument,
+          );
+        const path = match?.at(1) ?? match?.at(2) ?? match?.at(3);
+        // Commands and nonliteral shell expressions must survive comparison.
+        if (path === undefined) {
+          return true;
+        }
+        if (tracked.has(path)) {
+          return true;
+        }
+        const glob = new Bun.Glob(path);
+        for (const file of tracked) {
+          if (file.startsWith(`${path}/`) || glob.match(file)) {
+            return true;
+          }
+        }
+        return false;
+      });
+      if (kept.length === lines.length) {
+        return command;
+      }
+      if (kept.length === 0) {
+        // An empty explicit path list must not match an unscoped diff guard.
+        return `${prefix} \\\n`;
+      }
+      return `${prefix} \\\n${kept.map((line) => line.replace(/[ \t]*\\$/u, "")).join(" \\\n")}`;
+    },
+  );
 const mergeBase = git(["merge-base", "origin/main", "HEAD"]);
 const baseCancellationSource = new Bun.Transpiler({
   loader: "ts",
@@ -211,7 +345,8 @@ const baseCancellation = v.parse(
     `data:text/javascript;base64,${Buffer.from(baseCancellationSource).toString("base64")}`
   ),
 ).CANONICAL_CANCEL_STEP;
-const baseJobSchema = cancellationJobSchema(baseCancellation);
+const baseCancellationSchema = cancellationJobSchema(baseCancellation);
+const baseJobSchema = partitionJobSchema(baseCancellationSchema);
 const parseJobs = (source: string) =>
   v.parse(workflowSchema, Bun.YAML.parse(source)).jobs;
 const jobs = parseJobs(
@@ -364,23 +499,10 @@ const setupSteps = (steps: readonly Step[]) =>
     .map(withoutContinuation)
     .map(withoutStepId)
     .map(withoutActionRef);
-// Shared runners need ephemeral cache ports. Preserve every other baseline input.
-const withIsolatedCachePort = (step: Step): Step => {
+// Task receipts share the GitHub cache server with Turbo; the versioned
+// namespace separates their format and relative paths make receipts portable.
+const withTaskResultCacheSetup = (step: Step): Step => {
   if (usesOf(step) !== "rharkor/caching-for-turbo@<pinned>") {
-    return step;
-  }
-  const inputs = v.parse(
-    v.looseObject({ with: v.optional(v.record(v.string(), v.unknown())) }),
-    step,
-  ).with;
-  return { ...step, with: { ...inputs, "server-port": "0" } };
-};
-// Only ordinary install jobs may migrate to the shared dependency cache owner.
-const withInstallCache = (step: Step, job: Record<string, unknown>): Step => {
-  if (
-    jobCachePolicy({ workflow: baseWorkflow, job }) !== "install-cache" ||
-    usesOf(step) !== "oven-sh/setup-bun@<pinned>"
-  ) {
     return step;
   }
   const inputs = v.parse(
@@ -389,9 +511,104 @@ const withInstallCache = (step: Step, job: Record<string, unknown>): Step => {
   ).with;
   return {
     ...step,
-    uses: "stella/.github/actions/setup-bun-cached@<pinned>",
-    with: { ...inputs, save: `\${{ github.ref == 'refs/heads/main' }}` },
+    with: {
+      ...inputs,
+      "server-port": "0",
+      provider: "github",
+      "cache-prefix": "task-results-v1_",
+      "use-relative-cache-path": "true",
+    },
   };
+};
+const ownedInstallFlags = '["--frozen-lockfile","--ignore-scripts"]';
+const scopedInstallActions = new Set([
+  "./.github/actions/ci-install",
+  "$/.github/actions/ci-install",
+]);
+const derivedInstallTimeout = (job: Record<string, unknown>) => {
+  const runners = Array.isArray(job["runs-on"])
+    ? job["runs-on"].join(" ")
+    : job["runs-on"];
+  if (typeof runners !== "string") {
+    return undefined;
+  }
+  if (/windows/iu.test(runners)) {
+    return 7;
+  }
+  return /ubuntu|macos/iu.test(runners) ? 3 : undefined;
+};
+const hasOwnedInstallTransition = (job: Record<string, unknown>) => {
+  if (jobCachePolicy({ workflow: baseWorkflow, job }) !== "install-cache") {
+    return false;
+  }
+  const inputs =
+    v.parse(
+      v.looseObject({
+        steps: v.optional(
+          v.array(
+            v.looseObject({
+              name: v.string(),
+              uses: v.optional(v.string()),
+              with: v.optional(v.record(v.string(), v.unknown())),
+            }),
+          ),
+        ),
+      }),
+      job,
+    ).steps ?? [];
+  const setup = inputs.find(({ name }) => name === "Setup Bun");
+  const install = inputs.find(({ name }) => name === "Install dependencies");
+  if (
+    setup === undefined ||
+    usesOf(withoutActionRef(setup)) !== "oven-sh/setup-bun@<pinned>" ||
+    install === undefined ||
+    !scopedInstallActions.has(usesOf(install) ?? "")
+  ) {
+    return false;
+  }
+  const setupInputs = setup.with ?? {};
+  const installInputs = install.with ?? {};
+  return (
+    Object.keys(setupInputs).length === 1 &&
+    setupInputs["bun-version-file"] === "package.json" &&
+    Object.keys(installInputs).length === 1 &&
+    installInputs["flags"] === ownedInstallFlags
+  );
+};
+// Normalize only the exact ordinary install-owner transition back to its
+// merge-base setup and install steps. All step metadata remains significant.
+const withInstallCache = (step: Step, job: Record<string, unknown>): Step => {
+  if (!hasOwnedInstallTransition(job)) {
+    return step;
+  }
+  if (
+    step.name === "Setup Bun" &&
+    usesOf(step) === "oven-sh/setup-bun@<pinned>"
+  ) {
+    const inputs = v.parse(
+      v.looseObject({ with: v.optional(v.record(v.string(), v.unknown())) }),
+      step,
+    ).with;
+    return {
+      ...step,
+      uses: "stella/.github/actions/setup-bun-cached@<pinned>",
+      with: { ...inputs, save: `\${{ github.ref == 'refs/heads/main' }}` },
+    };
+  }
+  if (
+    step.name === "Install dependencies" &&
+    scopedInstallActions.has(usesOf(step) ?? "")
+  ) {
+    const original = { ...step };
+    delete original["uses"];
+    delete original["with"];
+    if (original["timeout-minutes"] === derivedInstallTimeout(job)) {
+      delete original["timeout-minutes"];
+    }
+    original["run"] = "bash scripts/retry.sh bun ci --ignore-scripts";
+    return original;
+  }
+  return step;
 };
 const withoutPreparedGeneration = (step: Step): Step => {
   if (
@@ -455,6 +672,18 @@ const withoutTestTimeout = (step: Step): Step => {
   };
 };
 
+// A step deadline bounds a hung command; the step still fails when it fires,
+// so it changes no coverage. With continue-on-error a fired deadline would
+// pass silently, so those steps keep the timeout in the comparison.
+const withoutStepTimeout = (step: Step): Step => {
+  if (step["continue-on-error"] !== undefined) {
+    return step;
+  }
+  const original = { ...step };
+  delete original["timeout-minutes"];
+  return original;
+};
+
 const LOCAL_CHECK_BASE_REF = `\${{ format('origin/{0}', github.base_ref || 'main') }}`;
 const LOCAL_BASE_REF = `\${{ github.base_ref || 'main' }}`;
 const CLI_CONTRACT_COMMAND = "bun scripts/check-cli-contract-changeset.ts";
@@ -493,24 +722,6 @@ const withoutLocalVerification = (step: Step): Step => {
   return original;
 };
 
-// Project topology changes need parity too; the executable selection tests
-// guard this widening while the partition census still checks every other byte.
-const withoutApiProjectParityTrigger = (step: Step): Step => {
-  if (
-    step.name !== "Select typecheck parity coverage" ||
-    typeof step["run"] !== "string"
-  ) {
-    return step;
-  }
-  return {
-    ...step,
-    run: step["run"].replace(
-      ' || git("diff", "--name-only", base, "HEAD", "--", "apps/api/tsconfig*.json", "scripts/typecheck-parity.ts") !== ""',
-      "",
-    ),
-  };
-};
-
 const ownedSteps = (steps: readonly Step[]) =>
   steps
     .filter(({ name }) => !prerequisites.has(name))
@@ -519,8 +730,13 @@ const ownedSteps = (steps: readonly Step[]) =>
     .map(withoutContinuation)
     .map(withoutPreparedGeneration)
     .map(withoutTestTimeout)
-    .map(withoutApiProjectParityTrigger)
+    .map(withoutStepTimeout)
     .map(withoutStepId)
+    .map((step) =>
+      typeof step["run"] === "string"
+        ? { ...step, run: normalizeGuardPathLines(step["run"], trackedFiles) }
+        : step,
+    )
     .map((step) => {
       const { background, ...check } = step;
       if (background !== true) {
@@ -547,13 +763,23 @@ type ScopeOptions = {
 const expectScope = ({ current, base }: ScopeOptions) => {
   const { if: condition, ...scope } = current;
   const { if: originalCondition, ...originalScope } = base;
+  // ci-plan produces the generated sources. A merge base that still ran the
+  // producer as a job of its own names it beside the plan in `needs`.
+  if (
+    isDeepStrictEqual(originalScope["needs"], [
+      "ci-plan",
+      "ci-generated-sources",
+    ])
+  ) {
+    originalScope["needs"] = "ci-plan";
+  }
   const originalEnvironment =
     originalScope["env"] === undefined
       ? undefined
       : v.parse(v.record(v.string(), v.unknown()), originalScope["env"]);
   const hydrationDependency =
     originalScope["needs"] === "ci-plan" &&
-    isDeepStrictEqual(scope["needs"], ["ci-plan", "ci-generated-sources"]) &&
+    scope["needs"] === "ci-plan" &&
     !Object.hasOwn(
       originalEnvironment ?? {},
       "CI_GENERATED_SOURCES_MANIFEST",
@@ -565,11 +791,14 @@ const expectScope = ({ current, base }: ScopeOptions) => {
   const migrated = { ...scope };
   // Normalize only an added handoff. A baseline that owns it must retain it.
   if (hydrationDependency) {
-    migrated["needs"] = "ci-plan";
+    const { CI_GENERATED_SOURCES_MANIFEST: _added, ...environment } = v.parse(
+      v.record(v.string(), v.unknown()),
+      scope["env"],
+    );
     if (originalEnvironment === undefined) {
       delete migrated["env"];
     } else {
-      migrated["env"] = originalEnvironment;
+      migrated["env"] = environment;
     }
   }
   expect(migrated).toEqual(originalScope);
@@ -626,6 +855,31 @@ const expectCoverage = ({ current, base, removed }: CoverageOptions) => {
 // Setup removals are owned by their leg, so repeated names cannot authorize
 // removing another leg's protection implicitly.
 const baselineIds = baseJobs["ci-checks"] ? ["ci-checks"] : partitionIds;
+const normalizeRootSelection = (step: Step, job: string) => {
+  const fields = v.parse(
+    v.looseObject({
+      if: v.optional(v.string()),
+      env: v.optional(v.record(v.string(), v.unknown())),
+    }),
+    step,
+  );
+  const condition = fields.if;
+  const suffix = ` && ${rootCheckGate({ job, name: step.name })}`;
+  const tokens = condition?.replace(/^\$\{\{\s*([\s\S]*?)\s*\}\}$/u, "$1");
+  const normalized = { ...step };
+  if (tokens?.endsWith(suffix)) {
+    const inputs = Object.entries(ROOT_CHECK_INPUTS).find(
+      ([id]) => id === job,
+    )?.[1][step.name];
+    expect(
+      inputs,
+      "root scope must have an explicit declaration",
+    ).toBeDefined();
+    expect(inputs).not.toContain("**");
+    normalized["if"] = `\${{ ${tokens.slice(0, -suffix.length)} }}`;
+  }
+  return normalized;
+};
 const legSteps = (
   legs: readonly v.InferOutput<typeof headJobSchema>[],
   ids: readonly string[],
@@ -635,11 +889,12 @@ const legSteps = (
     if (!id) {
       panic("CI check leg has no identifier");
     }
-    return steps.map((step) =>
-      step.name === "Install Safe Chain"
+    return steps.map((original) => {
+      const step = normalizeRootSelection(original, id);
+      return step.name === "Install Safe Chain"
         ? { ...step, name: `${id}: ${step.name}` }
-        : step,
-    );
+        : step;
+    });
   });
 const actualSteps = legSteps(partitions, partitionIds);
 const lintFixtureCommand = ["bun", ...customLintTestCommand().slice(1)].join(
@@ -654,7 +909,29 @@ const stepFields = (step: Step | undefined) =>
   v.parse(stepFieldsSchema, step ?? {});
 const baseSteps = legSteps(baseline, baselineIds).map((step) => {
   const fields = stepFields(step);
+  if (
+    step.name === "Test oxlint plugins" &&
+    fields.run ===
+      "bun test scripts/oxlint-plugin-test-coverage.test.ts\nbun scripts/run-custom-lint-tests.ts\n"
+  ) {
+    const coverage = stepFields(
+      actualSteps.find(({ name }) => name === "Custom lint rule coverage"),
+    );
+    expect(coverage.run).toBe(
+      "bun test scripts/check-oxlint-rule-coverage.test.ts\nbun scripts/check-oxlint-rule-coverage.ts\n",
+    );
+    expect(coverage.if).toBe(fields.if);
+    return Object.assign(step, {
+      run: "bun test scripts/oxlint-plugin-test-coverage.test.ts\n",
+    });
+  }
   const runnerMigrations = {
+    "Typecheck-cost baseline guard": {
+      before:
+        'bun scripts/typecheck-baseline.ts --self-test\nbun test scripts/typecheck-baseline.test.ts\nbun scripts/typecheck-baseline.ts --check-delta "$RUNNER_TEMP/typecheck-base.json"\n',
+      after:
+        'bun scripts/typecheck-baseline.ts --self-test\nbun test scripts/typecheck-baseline.test.ts scripts/pre-push-policy.test.ts\nbun scripts/typecheck-baseline.ts --check-delta "$RUNNER_TEMP/typecheck-base.json"\n',
+    },
     "Test oxlint plugins": {
       before:
         "bun test scripts/oxlint-plugin-test-coverage.test.ts\nfind ./.oxlint-plugins/__tests__ -maxdepth 1 -name '*.test.ts' -print0 | sort -z | xargs -0 bun test\n",
@@ -742,6 +1019,21 @@ test("CI legs normalize only the complete canonical cancellation tail and its pe
   ).not.toEqual(base);
 });
 
+test("the store cache save supervisor runs exactly once in the rest leg", () => {
+  const command = "bun test scripts/ci-store-save.test.ts";
+  const owners = partitions.flatMap(({ steps }, index) =>
+    steps
+      .filter((step) =>
+        stepFields(step).run?.includes("scripts/ci-store-save.test.ts"),
+      )
+      .map((step) => ({
+        leg: partitionIds.at(index),
+        run: stepFields(step).run,
+      })),
+  );
+  expect(owners).toEqual([{ leg: "ci-checks-rest", run: command }]);
+});
+
 test("parallel CI checks preserve every merge-base check exactly once", () => {
   expect(jobs).not.toHaveProperty("ci-checks");
   expect(new Set(removedChecks.map(({ name }) => name)).size).toBe(
@@ -755,6 +1047,28 @@ test("parallel CI checks preserve every merge-base check exactly once", () => {
     base: baseSteps,
     removed: newRemovals.map(({ name }) => name),
   });
+});
+
+test("task result cache checks belong exactly once to the rest leg", () => {
+  const checks = partitions.flatMap(({ steps }, index) =>
+    ownedSteps(steps)
+      .filter(
+        ({ run }) =>
+          typeof run === "string" &&
+          run.includes("scripts/task-result-cache.test.ts"),
+      )
+      .map((step) => ({ leg: partitionIds.at(index), step })),
+  );
+  expect(checks).toEqual([
+    {
+      leg: "ci-checks-rest",
+      step: {
+        name: "Task result cache contract",
+        if: PACKAGE_SCOPE,
+        run: "bun test scripts/task-result-cache.test.ts",
+      },
+    },
+  ]);
 });
 
 test("each CI check leg preserves merge-base setup, supply-chain protection and scope", () => {
@@ -792,7 +1106,7 @@ test("each CI check leg preserves merge-base setup, supply-chain protection and 
     } = base;
     const { steps, "timeout-minutes": timeout, ...scope } = partition;
     const originalSetup = setupSteps(originalSteps)
-      .map(withIsolatedCachePort)
+      .map(withTaskResultCacheSetup)
       .map((step) => withInstallCache(step, base))
       .map((step) => {
         if (
@@ -817,6 +1131,8 @@ test("each CI check leg preserves merge-base setup, supply-chain protection and 
         reordered.add("Prepare environment");
         reordered.add("Content delivery declarations");
         reordered.add("Test release image CI gate");
+        // Runs in the foreground beside the first background pair.
+        reordered.add("Test oxlint plugins");
       }
       expect(
         steps
@@ -862,16 +1178,21 @@ test("each CI check leg preserves merge-base setup, supply-chain protection and 
         ? Math.max(baselineBudget, 40)
         : baselineBudget;
     expect(timeout).toBe(expectedBudget);
-    expect(setupSteps(steps)).toEqual(originalSetup);
+    expect(
+      setupSteps(steps).map((step) => withInstallCache(step, partition)),
+    ).toEqual(originalSetup);
     const installIndex = steps.findIndex(
       ({ name }) => name === "Install dependencies",
     );
     expect(steps.findIndex(({ name }) => name === "Setup Bun")).toBeLessThan(
       installIndex,
     );
-    expect(steps.at(installIndex)?.["run"]).toBe(
-      "bash scripts/retry.sh bun ci --ignore-scripts",
-    );
+    const installStep = steps.at(installIndex);
+    expect(
+      installStep === undefined
+        ? undefined
+        : withInstallCache(installStep, partition)["run"],
+    ).toBe("bash scripts/retry.sh bun ci --ignore-scripts");
   }
 });
 
@@ -891,7 +1212,6 @@ test("CI check scope permits only the heavy-only wrapper around the unchanged co
   expectScope({
     current: {
       ...wrapped,
-      needs: ["ci-plan", "ci-generated-sources"],
       env: {
         CI_GENERATED_SOURCES_MANIFEST: `\${{ github.workspace }}/.cache/ci-generated-sources/manifest.json`,
       },
@@ -917,7 +1237,7 @@ test("CI check scope permits only the heavy-only wrapper around the unchanged co
     { ...wrapped, needs: [] },
     { ...wrapped, needs: ["ci-generated-sources"] },
     { ...wrapped, needs: ["ci-plan", "unrelated"] },
-    { ...wrapped, needs: ["ci-plan", "ci-generated-sources", "unrelated"] },
+    { ...wrapped, needs: ["ci-plan", "ci-generated-sources"] },
     { ...wrapped, permissions: { contents: "write" } },
     { ...wrapped, "runs-on": "self-hosted" },
     { ...wrapped, "continue-on-error": true },
@@ -968,7 +1288,7 @@ test("package scope narrows check legs while retaining baseline trust and comple
         : scope;
     const base = {
       if: wrap(trust),
-      needs: ["ci-plan", "ci-generated-sources"],
+      needs: "ci-plan",
     };
     const narrowed = { ...base, if: wrap(`${trust} && ${PACKAGE_SCOPE}`) };
     expectScope({ base, current: narrowed });
@@ -1041,7 +1361,6 @@ test("CI check scope migrates only the complete producer handoff and preserves a
     };
     const handoff = {
       ...base,
-      needs: ["ci-plan", "ci-generated-sources"],
       env: {
         ...environment,
         CI_GENERATED_SOURCES_MANIFEST: `\${{ github.workspace }}/.cache/ci-generated-sources/manifest.json`,
@@ -1057,10 +1376,9 @@ test("CI check scope migrates only the complete producer handoff and preserves a
       base: handoff,
     });
     const incomplete = [
-      { ...handoff, env: environment },
-      { ...handoff, needs: "ci-plan" },
+      { ...handoff, needs: ["ci-plan", "unrelated"] },
       { ...handoff, needs: ["ci-generated-sources", "ci-plan"] },
-      { ...handoff, needs: ["ci-plan", "ci-generated-sources", "unrelated"] },
+      { ...handoff, needs: ["ci-plan", "ci-generated-sources"] },
       {
         ...handoff,
         env: { ...handoff.env, CI_GENERATED_SOURCES_MANIFEST: "different" },
@@ -1083,7 +1401,7 @@ test("producer scope regression rejects a mutation that normalizes an already-ow
   expect(mutant).not.toBe(source);
   const handoff = {
     if: "needs.ci-plan.outputs.trusted == 'true'",
-    needs: ["ci-plan", "ci-generated-sources"],
+    needs: "ci-plan",
     env: {
       CI_GENERATED_SOURCES_MANIFEST: `\${{ github.workspace }}/.cache/ci-generated-sources/manifest.json`,
     },
@@ -1119,6 +1437,96 @@ test("CI check scope preserves whitespace inside quoted condition values", () =>
       base,
     }),
   ).toThrow("Expected:");
+});
+
+test("CI coverage ignores untracked guard paths on either side of the comparison", () => {
+  expect(trackedFiles.has(workflowPath)).toBe(true);
+  for (const path of [
+    "untracked-base-output.json",
+    "untracked-head-output.json",
+  ]) {
+    expect(trackedFiles.has(path)).toBe(false);
+  }
+  expectCoverage({
+    base: [
+      {
+        name: "Generated output check",
+        run: [
+          "git diff --exit-code -- \\",
+          "  untracked-base-output.json \\",
+          `  ${workflowPath}`,
+        ].join("\n"),
+      },
+    ],
+    current: [
+      {
+        name: "Generated output check",
+        run: [
+          "git diff --exit-code -- \\",
+          `  ${workflowPath} \\`,
+          "  untracked-head-output.json",
+        ].join("\n"),
+      },
+    ],
+    removed: [],
+  });
+});
+
+test("CI coverage rejects removal of a tracked guard path", () => {
+  const path = "scripts/generated-files.ts";
+  expect(trackedFiles.has(workflowPath)).toBe(true);
+  expect(trackedFiles.has(path)).toBe(true);
+  expect(() =>
+    expectCoverage({
+      base: [
+        {
+          name: "Generated output check",
+          run: [
+            "git diff --exit-code -- \\",
+            `  ${workflowPath} \\`,
+            `  ${path}`,
+          ].join("\n"),
+        },
+      ],
+      current: [
+        {
+          name: "Generated output check",
+          run: ["git diff --exit-code -- \\", `  ${workflowPath}`].join("\n"),
+        },
+      ],
+      removed: [],
+    }),
+  ).toThrow("toEqual");
+});
+
+test("guard normalization preserves directories, glob coverage and nonliteral commands", () => {
+  const tracked = new Set(["generated/kept.json"]);
+  const guarded = [
+    "git diff --exit-code -- \\",
+    "  generated \\",
+    '  "generated/*.json" \\',
+    "  untracked-output.json",
+  ].join("\n");
+  expect(normalizeGuardPathLines(guarded, tracked)).toBe(
+    [
+      "git diff --exit-code -- \\",
+      "  generated \\",
+      '  "generated/*.json"',
+    ].join("\n"),
+  );
+  expect(
+    normalizeGuardPathLines(
+      ["git diff --exit-code -- \\", "  untracked-output.json"].join("\n"),
+      tracked,
+    ),
+  ).not.toBe("git diff --exit-code --");
+  const commands = [
+    "echo untracked-output.json",
+    "git diff --exit-code -- \\",
+    '  "$GENERATED_OUTPUT"',
+    "echo done",
+  ].join("\n");
+  expect(normalizeGuardPathLines(commands, tracked)).toBe(commands);
 });
 
 test("CI coverage rejects a dropped check and accepts only an explicitly listed removal", () => {
@@ -1318,6 +1726,7 @@ test("repository backgrounds are bounded and joined before failure cancellation"
       expect(pending.has(id), id).toBe(false);
       pending.add(id);
       launched++;
+      // Keep at most two background checks running concurrently.
       expect(pending.size).toBeLessThanOrEqual(2);
       expect(step["continue-on-error"]).toBeUndefined();
       continue;
@@ -1341,7 +1750,7 @@ test("repository backgrounds are bounded and joined before failure cancellation"
       expect(pending.size).toBe(0);
     }
   }
-  expect(launched).toBe(6);
+  expect(launched).toBe(7);
   expect(pending.size).toBe(0);
 });
 
@@ -1700,7 +2109,9 @@ const conditionEvaluator = ({
     cancelled: () => cancelled,
     github: { event_name: event },
     steps: outcomes,
-    needs: { "ci-plan": { outputs: scopes } },
+    // This oracle proves continuation under full selection; root selection has
+    // its own package enumeration and workflow gate census.
+    needs: { "ci-plan": { outputs: { ...scopes, root_checks: "" } } },
   });
   return (condition: string) => {
     const expression = condition.startsWith(`\${{`)
@@ -1763,9 +2174,6 @@ const simulateRestLeg = ({ failures, lockfileScope }: SimulateLegOptions) => {
     if (id !== undefined) {
       outcomes[id] = {
         outcome,
-        ...(id === "typecheck_parity_gate"
-          ? { outputs: { required: outcome === "success" ? "true" : "" } }
-          : {}),
       };
     }
     if (outcome === "failure") {
@@ -1774,18 +2182,6 @@ const simulateRestLeg = ({ failures, lockfileScope }: SimulateLegOptions) => {
   }
   return results;
 };
-
-test("a failed parity selection keeps the seeded-error probe while skipping the full comparison", () => {
-  const results = simulateRestLeg({
-    failures: ["Select typecheck parity coverage"],
-    lockfileScope: "false",
-  });
-  expect(results["Select typecheck parity coverage"]).toBe("failure");
-  expect(results["Typecheck parity (all checked projects)"]).toBe("skipped");
-  expect(results["Record typecheck parity report"]).toBe("skipped");
-  expect(results["Upload typecheck parity report"]).toBe("skipped");
-  expect(results["Typecheck command rejects errors"]).toBe("success");
-});
 
 test("an unrelated pre-install failure still runs planned safety, installation and later guards", () => {
   for (const lockfileScope of ["true", "false"] as const) {
@@ -1851,9 +2247,9 @@ test("continued guard conditions preserve every previously runnable plan outcome
           const condition =
             v.parse(v.looseObject({ if: v.optional(v.string()) }), step).if ??
             "";
-          return [
-            ...condition.matchAll(/needs\.ci-plan\.outputs\.([a-z_]+)/gu),
-          ].map((match) => v.parse(v.string(), match.at(1)));
+          return [...condition.matchAll(/needs\.ci-plan\.outputs\.([a-z_]+)/gu)]
+            .map((match) => v.parse(v.string(), match.at(1)))
+            .filter((name) => name !== "root_checks");
         }),
       ),
     ),
@@ -2060,21 +2456,88 @@ test("setup migration preserves runtime inputs and protected install policy", ()
     uses: "oven-sh/setup-bun@<pinned>",
     with: { "bun-version-file": "package.json" },
   };
-  const migrated = withInstallCache(setup, { steps: [setup] });
+  const install = {
+    name: "Install dependencies",
+    uses: "$/.github/actions/ci-install",
+    with: { flags: ownedInstallFlags },
+  };
+  const job = { steps: [setup, install] };
+  const migrated = withInstallCache(setup, job);
   expect(migrated).toEqual({
     ...setup,
     uses: "stella/.github/actions/setup-bun-cached@<pinned>",
     with: { ...setup.with, save: `\${{ github.ref == 'refs/heads/main' }}` },
   });
+  expect(withInstallCache(install, job)).toEqual({
+    name: "Install dependencies",
+    run: "bash scripts/retry.sh bun ci --ignore-scripts",
+  });
+  const guardedInstall = {
+    ...install,
+    id: "install",
+    if: "needs.ci-plan.outputs.package_checks_required == 'true'",
+    env: { NPM_TOKEN: "" },
+  };
+  expect(withInstallCache(guardedInstall, job)).toEqual({
+    name: "Install dependencies",
+    id: "install",
+    if: "needs.ci-plan.outputs.package_checks_required == 'true'",
+    env: { NPM_TOKEN: "" },
+    run: "bash scripts/retry.sh bun ci --ignore-scripts",
+  });
+  const derivedTimeoutJob = { ...job, "runs-on": "ubuntu-latest" };
+  const derivedTimeoutInstall = {
+    ...guardedInstall,
+    "timeout-minutes": 3,
+  };
+  expect(withInstallCache(derivedTimeoutInstall, derivedTimeoutJob)).toEqual({
+    name: "Install dependencies",
+    id: "install",
+    if: "needs.ci-plan.outputs.package_checks_required == 'true'",
+    env: { NPM_TOKEN: "" },
+    run: "bash scripts/retry.sh bun ci --ignore-scripts",
+  });
+  const unapprovedTimeout = { ...derivedTimeoutInstall, "timeout-minutes": 4 };
+  expect(withInstallCache(unapprovedTimeout, derivedTimeoutJob)).toEqual({
+    name: "Install dependencies",
+    id: "install",
+    if: "needs.ci-plan.outputs.package_checks_required == 'true'",
+    env: { NPM_TOKEN: "" },
+    "timeout-minutes": 4,
+    run: "bash scripts/retry.sh bun ci --ignore-scripts",
+  });
+  for (const flags of [
+    '["--ignore-scripts"]',
+    '["--frozen-lockfile","--ignore-scripts","--filter","other"]',
+  ]) {
+    const changedInstall = { ...install, with: { flags } };
+    const changed = { ...job, steps: [setup, changedInstall] };
+    expect(withInstallCache(setup, changed)).toEqual(setup);
+    expect(withInstallCache(changedInstall, changed)).toEqual(changedInstall);
+  }
+  const nonScoped = {
+    ...job,
+    steps: [
+      setup,
+      { name: "Install dependencies", run: "bun ci --ignore-scripts" },
+    ],
+  };
+  expect(withInstallCache(setup, nonScoped)).toEqual(setup);
   const noCache = { ...setup, with: { ...setup.with, "no-cache": true } };
   for (const steps of [
-    [noCache],
-    [{ uses: "./.github/actions/safe-chain" }, setup],
+    [noCache, install],
+    [
+      { name: "Install Safe Chain", uses: "./.github/actions/safe-chain" },
+      setup,
+      install,
+    ],
   ]) {
     expect(withInstallCache(setup, { steps })).toEqual(setup);
   }
   const mutable = { ...setup, uses: "oven-sh/setup-bun@main" };
-  expect(withInstallCache(mutable, { steps: [mutable] })).toEqual(mutable);
+  expect(withInstallCache(mutable, { steps: [mutable, install] })).toEqual(
+    mutable,
+  );
 });
 
 test("documentation policy widens only its package gate and retains successful installation", () => {
@@ -2101,7 +2564,7 @@ test("documentation policy widens only its package gate and retains successful i
 });
 
 const expectCancellationNormalization = (
-  schema: typeof headJobSchema,
+  schema: ReturnType<typeof cancellationJobSchema>,
   candidateJobs: Record<string, unknown>,
 ) => {
   for (const id of partitionIds) {
@@ -2135,17 +2598,17 @@ const expectCancellationNormalization = (
 };
 
 test("baseline cancellation normalization uses its own owner and rejects changed tails", () => {
-  expectCancellationNormalization(baseJobSchema, baseJobs);
+  expectCancellationNormalization(baseCancellationSchema, baseJobs);
 });
 
 test("head cancellation normalization is valid as the next base and rejects changed tails", () => {
-  expectCancellationNormalization(headJobSchema, jobs);
+  expectCancellationNormalization(headCancellationSchema, jobs);
 });
 
 test("already hydrated merge-base jobs retain their generated manifest environment", () => {
   const base = {
     if: "scope",
-    needs: ["ci-plan", "ci-generated-sources"],
+    needs: "ci-plan",
     env: {
       CI_GENERATED_SOURCES_MANIFEST: `\${{ github.workspace }}/.cache/ci-generated-sources/manifest.json`,
     },
@@ -2153,4 +2616,24 @@ test("already hydrated merge-base jobs retain their generated manifest environme
   expectScope({ current: base, base });
   const { env: _env, ...missing } = base;
   expect(() => expectScope({ current: missing, base })).toThrow("toEqual");
+});
+
+test("a merge base with a separate producer job maps to the plan that now produces", () => {
+  const current = {
+    if: "scope",
+    needs: "ci-plan",
+    env: {
+      CI_GENERATED_SOURCES_MANIFEST: `\${{ github.workspace }}/.cache/ci-generated-sources/manifest.json`,
+    },
+  };
+  const base = { ...current, needs: ["ci-plan", "ci-generated-sources"] };
+  expectScope({ current, base });
+  const { env: _env, ...missing } = current;
+  for (const changed of [
+    missing,
+    { ...current, needs: ["ci-plan", "unrelated"] },
+    { ...current, needs: ["ci-plan", "ci-generated-sources"] },
+  ]) {
+    expect(() => expectScope({ current: changed, base })).toThrow("toEqual");
+  }
 });

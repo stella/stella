@@ -124,7 +124,7 @@ const actor = createRootRunActor(
 );
 
 const preparationSpy = spyOn(preparation, "fetchAndPrepareReviewFiles");
-const modelSpy = spyOn(modelTransport, "generateTanStackTextForRole");
+const modelSpy = spyOn(modelTransport, "generateTanStackTextForTask");
 const fetchPreconnect = globalThis.fetch.preconnect;
 const fetchSpy = spyOn(globalThis, "fetch");
 const analytics = installRecordingAnalytics();

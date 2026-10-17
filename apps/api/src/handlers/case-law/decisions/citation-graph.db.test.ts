@@ -4,10 +4,9 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
-import type { DocumentAst } from "@stll/legal-ast/document-ast";
-
 import {
   caseLawCitations,
+  caseLawCitationDoctrineReviews,
   caseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
@@ -20,15 +19,16 @@ import {
   listLeadingCitationsHandler,
   listTopCitingDecisionsHandler,
   summarizeDecisionCitationsHandler,
+  summarizeDecisionDoctrineHandler,
   treatmentOf,
 } from "@/api/handlers/case-law/decisions/citation-graph";
 import type { DecisionCitationRow } from "@/api/handlers/case-law/decisions/citation-graph";
+import { readGatedDecisionCitations } from "@/api/handlers/case-law/decisions/citation-passages";
 import {
-  completeDecisionCitations,
-  prepareDecisionCitations,
-  readGatedDecisionCitations,
-} from "@/api/handlers/case-law/decisions/citation-passages";
-import { POLARITIES, POLARITY } from "@/api/handlers/case-law/polarity/consts";
+  CITATION_REVIEW_ORIGIN,
+  POLARITIES,
+  POLARITY,
+} from "@/api/handlers/case-law/polarity/consts";
 import { citationSummaryResponseSchema } from "@/api/handlers/case-law/public-response-schemas";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -41,16 +41,8 @@ import {
   CITATION_TREATMENTS,
 } from "@/api/lib/case-law/citation-vocabulary";
 import type { CitationDirection } from "@/api/lib/case-law/citation-vocabulary";
-import { metadataWithDecisionAbsorption } from "@/api/lib/case-law/decision-absorption";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
-import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
-import { metadataMarkedListingOnly } from "@/api/lib/legal-search/partial-observation-sql";
-import type { PublicLawReadOptions } from "@/api/lib/public-law-read-db";
-import {
-  CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION,
-  publicLawColumnPairs,
-} from "@/api/lib/public-law-relations";
 import { projectResponseText } from "@/api/lib/search/project-response-text";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import {
@@ -136,38 +128,22 @@ const STORED_POLARITIES = [
 /** Incoming rows per stored polarity: enough to cross one page boundary. */
 const INCOMING_PER_POLARITY = 9;
 
-const grantEvidenceColumns = async () => {
-  const columns = publicLawColumnPairs(
-    CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION,
-  );
-  await db.execute(sql`GRANT SELECT (${sql.join(
-    columns.map(({ column }) => sql.identifier(column)),
-    sql`, `,
-  )})
-    ON TABLE case_law_citations TO stella_public_law_reader`);
-};
-
 beforeAll(
   async () => {
     client = await createTestPglite();
     db = drizzle({ client });
-    await grantEvidenceColumns();
     await grantPgliteDecisionCitationStatsReader(db);
     const readDb = async <T>(
       fn: (tx: CaseLawPublicReadTransaction) => Promise<T>,
-      options?: PublicLawReadOptions,
     ) =>
-      await withPublicLawReaderRole(db, async (tx) => {
-        if (options?.isolation === "repeatable-read") {
-          await tx.execute(
-            sql`SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY`,
-          );
-        }
-        // SAFETY: the role transaction has the same Drizzle read surface as
-        // the public-law handle; writes remain on the owner database above.
-        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- PGlite test transaction stands in for the public read handle
-        return await fn(tx as unknown as CaseLawPublicReadTransaction);
-      });
+      await withPublicLawReaderRole(
+        db,
+        async (tx) =>
+          // SAFETY: the role transaction has the same Drizzle read surface as
+          // the public-law handle; writes remain on the owner database above.
+          // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- PGlite test transaction stands in for the public read handle
+          await fn(tx as unknown as CaseLawPublicReadTransaction),
+      );
     // SAFETY: brand-only wrapper; the reads never inspect the marker.
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the branded handle carries no behaviour
     caseLawDb = readDb as unknown as CaseLawPublicReadDb;
@@ -397,8 +373,12 @@ const withSubject = async <T>(
   id: SafeId<"caseLawDecision">,
   read: (subject: RedistributableDecisionSubject) => Promise<T>,
 ): Promise<T> =>
-  (await withRedistributableSubject(caseLawDb, { kind: "id", id }, read)) ??
-  panic("expected a redistributable subject");
+  (await withRedistributableSubject(
+    caseLawDb,
+    "pages",
+    { kind: "id", id },
+    read,
+  )) ?? panic("expected a redistributable subject");
 
 const readCitationPage = async (
   direction: CitationDirection,
@@ -781,6 +761,7 @@ test("a restricted subject decision cannot be resolved as a subject", async () =
   expect(
     await withRedistributableSubject(
       caseLawDb,
+      "pages",
       {
         kind: "id",
         id: closedRelatedId,
@@ -791,6 +772,7 @@ test("a restricted subject decision cannot be resolved as a subject", async () =
   expect(
     await withRedistributableSubject(
       caseLawDb,
+      "pages",
       {
         kind: "id",
         id: subjectId,
@@ -819,6 +801,7 @@ test("a listing-only related decision is absent from every citation read even wi
   expect(
     await withRedistributableSubject(
       caseLawDb,
+      "pages",
       { kind: "id", id: listingOnlyRelatedId },
       async () => true,
     ),
@@ -1193,10 +1176,30 @@ test("conflicting edge inserts preserve exact projections for both endpoints", a
   await assertRecount();
 });
 
+test("expand release reports doctrine capability unavailable instead of unread", async () => {
+  const page = await readCitationPage("incoming", undefined);
+  if (!("items" in page)) {
+    throw new Error("Expected a citation page");
+  }
+  expect(page.doctrineAvailability).toBe("unavailable");
+  expect(
+    page.items.every(
+      ({ doctrine, evidenceQuote }) =>
+        doctrine === null && evidenceQuote === null,
+    ),
+  ).toBe(true);
+  const summary = await withSubject(
+    subjectId,
+    async (subject) => await summarizeDecisionDoctrineHandler({ subject }),
+  );
+  expect(summary).toEqual({ status: "unavailable" });
+});
+
 test("citation digests omit withheld unresolved references", async () => {
   const digest = await readGatedDecisionCitationDigest({
     caseLawDb,
     decisionId: withheldSubjectId,
+    surface: "search",
   });
   expect(digest?.cites).toMatchObject([
     {
@@ -1214,6 +1217,7 @@ test("citation reads carry withheld text dispositions", async () => {
     decisionId: withheldSubjectId,
     direction: "cites",
     limit: 10,
+    surface: "search",
   });
   expect(read).toMatchObject({
     type: "page",
@@ -1229,664 +1233,73 @@ test("citation reads carry withheld text dispositions", async () => {
   });
 });
 
-test("citation evidence reads the persisted classifier window only after AST eligibility", async () => {
-  const citingId = createSafeId<"caseLawDecision">();
-  const referenceId = createSafeId<"caseLawCitation">();
-  const first = "Synthetic prefix 😀";
-  const excerpt = "Separate opinion rejects the cited reasoning.";
-  const windowStart = first.length + 1;
-  const documentAst = {
-    version: 1,
-    source: {
-      system: "test",
-      documentId: "synthetic-evidence",
-      webUrl: "",
-      printUrl: "",
-    },
-    metadata: {
-      caseNumber: "synthetic-evidence",
-      court: "Synthetic court",
-      ecli: "",
-      decisionDate: "2024-02-01",
-      decisionType: "judgment",
-      keywords: [],
-      statutes: [],
-    },
-    blocks: [
-      {
-        id: "evidence",
-        anchorId: "p1",
-        type: "paragraph",
-        inlines: [{ type: "text", text: excerpt }],
-        plainText: excerpt,
-      },
-    ],
-  } satisfies DocumentAst;
-  await db.insert(caseLawDecisions).values({
-    id: citingId,
-    caseNumber: "synthetic-evidence",
-    documentAst,
-    country: "CZE",
-    court: "Synthetic court",
-    language: "en",
-    sourceId: openSourceId,
-    sections: [
-      { index: 0, type: "header", title: null, text: first },
-      { index: 1, type: "argumentation", title: null, text: excerpt },
-    ],
-  });
-  await db.insert(caseLawCitations).values({
-    id: referenceId,
-    citingDecisionId: citingId,
-    citedDecisionId: subjectId,
-    citationText: "synthetic authority",
-    kind: CITATION_KIND.PRECEDENT,
-    polarity: POLARITY.NEGATIVE,
-    polaritySource: "review",
-    polarityClassifierVersion: "synthetic-v1",
-    polarityEvidenceWindows: [
-      { start: windowStart, end: windowStart + excerpt.length },
-    ],
-    citedPart: "dissent",
-  });
-  const preparedRead = await withRedistributableSubject(
-    caseLawDb,
-    { kind: "id", id: citingId },
-    async (subject) => {
-      const [snapshot] = await subject.tx
-        .select({
-          isolation: sql<string>`current_setting('transaction_isolation')`,
-        })
-        .from(sql`(SELECT 1) AS transaction_snapshot`);
-      return {
-        isolation: snapshot?.isolation,
-        prepared: await prepareDecisionCitations({
-          subject,
-          cursor: undefined,
-          direction: "cites",
-          limit: 10,
-        }),
-      };
-    },
-  );
-  expect(preparedRead?.isolation).toBe("repeatable read");
-  const read = await completeDecisionCitations({
-    caseLawDb,
-    prepared:
-      preparedRead?.prepared ?? panic("Expected prepared citation page"),
-  });
-  expect(read).toMatchObject({
-    type: "page",
-    page: {
-      items: [
-        {
-          id: referenceId,
-          citationText: "synthetic authority",
-          textIncompleteReason: null,
-          citedPart: "dissent",
-          polarityEvidence: {
-            source: "review",
-            ruleId: null,
-            classifierVersion: "synthetic-v1",
-            excerpt,
-          },
-          passage: null,
-        },
-      ],
-    },
-  });
-  const prepared = preparedRead?.prepared;
-  if (prepared?.type !== "page" || prepared.evidence.type !== "ready") {
-    panic("Expected prepared citation page with readable evidence");
-  }
-  const missingEvidencePrepared = {
-    ...prepared,
-    evidence: { type: "ready", rows: [] },
-  } satisfies typeof prepared;
-  expect(
-    await completeDecisionCitations({
-      caseLawDb,
-      prepared: missingEvidencePrepared,
-    }),
-  ).toMatchObject({
-    type: "page",
-    page: {
-      items: [
-        {
-          id: referenceId,
-          citationText: null,
-          textIncompleteReason: null,
-          evidenceIncompleteReason: "missing_evidence",
-          citedPart: null,
-          polarityEvidence: null,
-          passage: null,
-        },
-      ],
-    },
-  });
+test("a reviewed doctrine quote cannot bypass the source text disposition", async () => {
   await db
-    .update(caseLawDecisions)
-    .set({ sourceId: withheldSourceId })
-    .where(eq(caseLawDecisions.id, citingId));
-  const withheld = await readGatedDecisionCitations({
-    caseLawDb,
-    cursor: undefined,
-    decisionId: citingId,
-    direction: "cites",
-    limit: 10,
-  });
-  expect(withheld).toMatchObject({
-    type: "page",
-    page: {
-      items: [
-        {
-          citationText: null,
-          textWithheldReason: "source_licence",
-          polarityEvidence: { source: "review", excerpt: null },
-          citedPart: "dissent",
-        },
-      ],
-    },
-  });
-});
-
-test.each(["text revision", "publication eligibility"] as const)(
-  "a changed %s withholds citation evidence and reports an incomplete reason",
-  async (change) => {
-    const citingId = createSafeId<"caseLawDecision">();
-    const referenceId = createSafeId<"caseLawCitation">();
-    const paragraph = "Synthetic reasoning cites an authority.";
-    const documentAst = {
-      version: 1,
-      source: {
-        system: "test",
-        documentId: "revision",
-        webUrl: "",
-        printUrl: "",
-      },
-      metadata: {
-        caseNumber: "revision",
-        court: "Court",
-        ecli: "",
-        decisionDate: "2024-02-01",
-        decisionType: "judgment",
-        keywords: [],
-        statutes: [],
-      },
-      blocks: [
-        {
-          id: "reasoning",
-          anchorId: "p1",
-          type: "paragraph",
-          inlines: [{ type: "text", text: paragraph }],
-          plainText: paragraph,
-        },
-      ],
-    } satisfies DocumentAst;
-    await db.insert(caseLawDecisions).values({
-      id: citingId,
-      caseNumber: `revision-${change}`,
-      country: "CZE",
-      court: "Court",
-      language: "en",
-      sourceId: openSourceId,
-      contentHash: null,
-      documentAst,
-      sections: [
-        { index: 0, type: "argumentation", title: null, text: paragraph },
-      ],
-    });
-    await db.insert(caseLawCitations).values({
-      id: referenceId,
-      citingDecisionId: citingId,
-      citedDecisionId: subjectId,
-      citationText: "authority",
-      kind: CITATION_KIND.PRECEDENT,
-      polaritySource: "rule",
-      polarityEvidenceWindows: [{ start: 0, end: paragraph.length }],
-    });
-    const prepared = await withRedistributableSubject(
-      caseLawDb,
-      { kind: "id", id: citingId },
-      async (subject) =>
-        await prepareDecisionCitations({
-          subject,
-          cursor: undefined,
-          direction: "cites",
-          limit: 10,
-        }),
-    );
-    if (prepared?.type !== "page") {
-      panic("Expected prepared public citation page");
-    }
-    const changedText = "Updated synthetic reasoning cites an authority.";
-    expect(changedText).not.toBe(paragraph);
-    await db
-      .update(caseLawDecisions)
-      .set(
-        change === "text revision"
-          ? {
-              sections: [
-                {
-                  index: 0,
-                  type: "argumentation",
-                  title: null,
-                  text: changedText,
-                },
-              ],
-            }
-          : { metadata: LISTING_ONLY_METADATA },
-      )
-      .where(eq(caseLawDecisions.id, citingId));
-    const [changed] = await db
-      .select({ contentHash: caseLawDecisions.contentHash })
-      .from(caseLawDecisions)
-      .where(eq(caseLawDecisions.id, citingId));
-    expect(changed?.contentHash).toBeNull();
-    expect(
-      await completeDecisionCitations({ caseLawDb, prepared }),
-    ).toMatchObject({
-      type: "page",
-      page: {
-        items: [
-          {
-            id: referenceId,
-            polarityEvidence: { excerpt: null },
-            passage: null,
-            textIncompleteReason:
-              change === "text revision" ? "text_changed" : "missing_text",
-          },
-        ],
-      },
-    });
-  },
-);
-
-test.each([
-  {
-    change: "unchanged descriptor",
-    updatedDescriptor: null,
-    expected: {
-      citationText: "authority",
-      passage: { text: "Synthetic reasoning cites an authority." },
-      polarityEvidence: { excerpt: "Synthetic reasoning cites an authority." },
-      textWithheldReason: null,
-      textIncompleteReason: null,
-    },
-  },
-  {
-    change: "derived-AI permission revoked",
-    updatedDescriptor: {
-      allowsDerivedAi: false,
-      allowsRedistribution: true,
-      attribution: null,
-      license: "permitted-redistribution",
-    },
-    expected: {
-      citationText: null,
-      passage: null,
-      polarityEvidence: { excerpt: null },
-      textWithheldReason: "source_licence",
-      textIncompleteReason: null,
-    },
-  },
-  {
-    change: "derived-AI permission restored",
-    updatedDescriptor: {
-      allowsDerivedAi: true,
-      allowsRedistribution: true,
-      attribution: null,
-      license: "permitted-redistribution",
-    },
-    expected: {
-      citationText: null,
-      passage: null,
-      polarityEvidence: { excerpt: null },
-      textWithheldReason: null,
-      textIncompleteReason: "text_changed",
-    },
-  },
-  {
-    change: "redistribution permission revoked",
-    updatedDescriptor: {
-      allowsDerivedAi: true,
-      allowsRedistribution: false,
-      attribution: null,
-      license: "restricted",
-    },
-    expected: {
-      citationText: null,
-      passage: null,
-      polarityEvidence: { excerpt: null },
-      textWithheldReason: null,
-      textIncompleteReason: "missing_text",
-    },
-  },
-] as const)(
-  "completion rechecks the source descriptor after preparation: $change",
-  async ({ change, updatedDescriptor, expected }) => {
-    const sourceId = createSafeId<"caseLawSource">();
-    const citingId = createSafeId<"caseLawDecision">();
-    const referenceId = createSafeId<"caseLawCitation">();
-    const paragraph = "Synthetic reasoning cites an authority.";
-    const descriptor = {
-      allowsDerivedAi: change !== "derived-AI permission restored",
-      allowsRedistribution: true,
-      attribution: null,
-      license: "permitted-redistribution",
-    } as const;
-    const documentAst = {
-      version: 1,
-      source: {
-        system: "test",
-        documentId: "descriptor-revision",
-        webUrl: "",
-        printUrl: "",
-      },
-      metadata: {
-        caseNumber: "descriptor-revision",
-        court: "Court",
-        ecli: "",
-        decisionDate: "2024-02-01",
-        decisionType: "judgment",
-        keywords: [],
-        statutes: [],
-      },
-      blocks: [
-        {
-          id: "reasoning",
-          anchorId: "p1",
-          type: "paragraph",
-          inlines: [{ type: "text", text: paragraph }],
-          plainText: paragraph,
-        },
-      ],
-    } satisfies DocumentAst;
-    await db.insert(caseLawSources).values(
-      caseLawSourceRow({
-        adapterKey: `descriptor-${citingId}`,
-        descriptor,
-        id: sourceId,
-        name: `descriptor-${citingId}`,
-      }),
-    );
-    await db.insert(caseLawDecisions).values({
-      id: citingId,
-      caseNumber: `descriptor-${change}-${citingId}`,
-      country: "CZE",
-      court: "Court",
-      language: "en",
-      sourceId,
-      contentHash: null,
-      documentAst,
-      sections: [
-        { index: 0, type: "argumentation", title: null, text: paragraph },
-      ],
-    });
-    await db.insert(caseLawCitations).values({
-      id: referenceId,
-      citingDecisionId: citingId,
-      citedDecisionId: subjectId,
-      citationText: "authority",
-      kind: CITATION_KIND.PRECEDENT,
-      polaritySource: "rule",
-      polarityEvidenceWindows: [{ start: 0, end: paragraph.length }],
-    });
-    const prepared = await withRedistributableSubject(
-      caseLawDb,
-      { kind: "id", id: citingId },
-      async (subject) =>
-        await prepareDecisionCitations({
-          subject,
-          cursor: undefined,
-          direction: "cites",
-          limit: 10,
-        }),
-    );
-    if (prepared?.type !== "page") {
-      panic("Expected prepared public citation page");
-    }
-    if (updatedDescriptor !== null) {
-      await db
-        .update(caseLawSources)
-        .set({ descriptor: updatedDescriptor })
-        .where(eq(caseLawSources.id, sourceId));
-    }
-
-    expect(
-      await completeDecisionCitations({ caseLawDb, prepared }),
-    ).toMatchObject({
-      type: "page",
-      page: { items: [{ id: referenceId, ...expected }] },
-    });
-  },
-);
-
-test("outgoing citations through a retired UUID retain canonical passages and evidence", async () => {
-  const retiredId = createSafeId<"caseLawDecision">();
-  const canonicalId = createSafeId<"caseLawDecision">();
-  const referenceId = createSafeId<"caseLawCitation">();
-  const citationText = "21 Cdo 500/2019";
-  const paragraph = `Canonical reasoning follows ${citationText}.`;
-  const documentAst = {
-    version: 1,
-    source: {
-      system: "test",
-      documentId: "canonical-citing-decision",
-      webUrl: "",
-      printUrl: "",
-    },
-    metadata: {
-      caseNumber: "canonical-citing-decision",
-      court: "Court",
-      ecli: "",
-      decisionDate: "2024-02-01",
-      decisionType: "judgment",
-      keywords: [],
-      statutes: [],
-    },
-    blocks: [
-      {
-        id: "canonical-reasoning",
-        anchorId: "p1",
-        type: "paragraph",
-        inlines: [{ type: "text", text: paragraph }],
-        plainText: paragraph,
-      },
-    ],
-  } satisfies DocumentAst;
-  await db.insert(caseLawDecisions).values([
-    {
-      id: retiredId,
-      caseNumber: "retired-citing-decision",
-      country: "CZE",
-      court: "Court",
-      language: "cs",
-      sourceId: openSourceId,
-    },
-    {
-      id: canonicalId,
-      caseNumber: "canonical-citing-decision",
-      country: "CZE",
-      court: "Court",
-      language: "cs",
-      sourceId: openSourceId,
-      documentAst,
-      sections: [
-        { index: 0, type: "argumentation", title: null, text: paragraph },
-      ],
-    },
-  ]);
-  await db
-    .update(caseLawDecisions)
+    .update(caseLawCitations)
     .set({
-      metadata: metadataWithDecisionAbsorption(
-        metadataMarkedListingOnly(caseLawDecisions.metadata),
-        {
-          decisionId: canonicalId,
-          kind: DECISION_SUPPLEMENT_KIND.REASONS,
-          sourceDocumentId: "retired-reasons",
-        },
-      ),
+      citationKey: "doctrine-licence-fixture",
+      doctrinalTreatment: "limits",
     })
-    .where(eq(caseLawDecisions.id, retiredId));
-  await db.insert(caseLawCitations).values({
-    id: referenceId,
-    citingDecisionId: canonicalId,
-    citedDecisionId: subjectId,
-    citationText,
-    kind: CITATION_KIND.PRECEDENT,
-    polarity: POLARITY.POSITIVE,
-    polaritySource: "review",
-    polarityClassifierVersion: "canonical-v1",
-    polarityEvidenceWindows: [{ start: 0, end: paragraph.length }],
-    citedPart: "majority",
+    .where(eq(caseLawCitations.id, citationId(999)));
+  const reviewId = createSafeId<"caseLawCitationDoctrineReview">();
+  await db.insert(caseLawCitationDoctrineReviews).values({
+    id: reviewId,
+    citingDecisionId: withheldSubjectId,
+    citationKey: "doctrine-licence-fixture",
+    doctrinalTreatment: "limits",
+    evidenceQuote: "The earlier precedent has a narrower scope.",
+    reviewRef: "test:source-text-disposition",
+    origin: CITATION_REVIEW_ORIGIN.HUMAN_REVIEW,
   });
-  expect(retiredId).not.toBe(canonicalId);
-
-  const canonical = await readGatedDecisionCitations({
-    caseLawDb,
-    cursor: undefined,
-    decisionId: canonicalId,
-    direction: "cites",
-    limit: 10,
-  });
-  if (canonical === null) {
-    panic("Expected public canonical citation page");
-  }
-  expect(canonical).toMatchObject({
-    type: "page",
-    page: {
-      items: [
-        {
-          id: referenceId,
-          citationText,
-          passage: { anchorId: "p1", text: paragraph },
-          textWithheldReason: null,
-          textIncompleteReason: null,
-          evidenceIncompleteReason: null,
-          polarityEvidence: { source: "review", excerpt: paragraph },
-        },
-      ],
-    },
-  });
-  // REST prepares inside the public gate and completes after it closes.
-  const prepared = await withRedistributableSubject(
-    caseLawDb,
-    { kind: "id", id: retiredId },
-    async (subject) => {
-      expect(subject.id).toBe(canonicalId);
-      return await prepareDecisionCitations({
-        subject,
-        cursor: undefined,
-        direction: "cites",
-        limit: 10,
-      });
-    },
-  );
-  if (prepared === null) {
-    panic("Expected retired UUID to resolve to the public canonical decision");
-  }
-  expect(await completeDecisionCitations({ caseLawDb, prepared })).toEqual(
-    canonical,
-  );
-  // MCP and chat use this shared gated owner.
-  expect(
-    await readGatedDecisionCitations({
-      caseLawDb,
-      cursor: undefined,
-      decisionId: retiredId,
-      direction: "cites",
-      limit: 10,
-    }),
-  ).toEqual(canonical);
-});
-
-test("missing evidence privileges withhold only the evidence fields", async () => {
-  const citingId = createSafeId<"caseLawDecision">();
-  const referenceId = createSafeId<"caseLawCitation">();
-  const citationText = "21 Cdo 500/2019";
-  const paragraph = `Synthetic reasoning in ${citationText}.`;
-  const documentAst = {
-    version: 1,
-    source: {
-      system: "test",
-      documentId: "synthetic",
-      webUrl: "",
-      printUrl: "",
-    },
-    metadata: {
-      caseNumber: "synthetic",
-      court: "Court",
-      ecli: "",
-      decisionDate: "2024-02-01",
-      decisionType: "judgment",
-      keywords: [],
-      statutes: [],
-    },
-    blocks: [
-      {
-        id: "b1",
-        anchorId: "p1",
-        type: "paragraph",
-        inlines: [{ type: "text", text: paragraph }],
-        plainText: paragraph,
-      },
-    ],
-  } satisfies DocumentAst;
-  await db.insert(caseLawDecisions).values({
-    id: citingId,
-    caseNumber: "synthetic",
-    country: "CZE",
-    court: "Court",
-    language: "en",
-    sourceId: openSourceId,
-    documentAst,
-    sections: [
-      { index: 0, type: "argumentation", title: null, text: paragraph },
-    ],
-  });
-  await db.insert(caseLawCitations).values({
-    id: referenceId,
-    citingDecisionId: citingId,
-    citedDecisionId: subjectId,
-    citationText,
-    kind: CITATION_KIND.PRECEDENT,
-  });
-  const columns = publicLawColumnPairs(
-    CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION,
+  await db.execute(
+    sql`GRANT SELECT (citation_key, doctrinal_treatment) ON case_law_citations TO stella_public_law_reader`,
   );
   await db.execute(
-    sql`REVOKE SELECT (${sql.join(
-      columns.map(({ column }) => sql.identifier(column)),
-      sql`, `,
-    )}) ON TABLE case_law_citations FROM stella_public_law_reader`,
+    sql`GRANT SELECT (citing_decision_id, citation_key, doctrinal_treatment, evidence_quote) ON case_law_citation_doctrine_reviews TO stella_public_law_reader`,
   );
-  try {
-    const read = await readGatedDecisionCitations({
-      caseLawDb,
-      cursor: undefined,
-      decisionId: citingId,
-      direction: "cites",
-      limit: 10,
-    });
-    expect(read).toMatchObject({
-      type: "page",
-      page: {
-        items: [
-          {
-            id: referenceId,
-            citationText,
-            passage: { anchorId: "p1", text: paragraph },
-            textIncompleteReason: null,
-            evidenceIncompleteReason: "missing_privileges",
-            citedPart: null,
-            polarityEvidence: null,
-          },
-        ],
-      },
-    });
-  } finally {
-    await grantEvidenceColumns();
+  const read = await readGatedDecisionCitations({
+    caseLawDb,
+    cursor: undefined,
+    decisionId: withheldSubjectId,
+    direction: "cites",
+    limit: 10,
+    surface: "search",
+  });
+  const summary = await withSubject(
+    withheldSubjectId,
+    async (subject) => await summarizeDecisionDoctrineHandler({ subject }),
+  );
+  await db.execute(
+    sql`REVOKE SELECT (citation_key, doctrinal_treatment) ON case_law_citations FROM stella_public_law_reader`,
+  );
+  await db.execute(
+    sql`REVOKE SELECT (citing_decision_id, citation_key, doctrinal_treatment, evidence_quote) ON case_law_citation_doctrine_reviews FROM stella_public_law_reader`,
+  );
+  await db
+    .delete(caseLawCitationDoctrineReviews)
+    .where(eq(caseLawCitationDoctrineReviews.id, reviewId));
+  await db
+    .update(caseLawCitations)
+    .set({ citationKey: null, doctrinalTreatment: null })
+    .where(eq(caseLawCitations.id, citationId(999)));
+  if (read?.type !== "page") {
+    throw new Error("Expected a citation page");
   }
+  expect(summary).toEqual({
+    status: "available",
+    counts: {
+      incoming: { distinguishes: 0, limits: 0, not_stated: 0, unread: 0 },
+      outgoing: { distinguishes: 0, limits: 1, not_stated: 0, unread: 0 },
+    },
+    capped: { incoming: false, outgoing: false },
+    candidateWindow: CITATION_SUMMARY_SCAN_LIMIT,
+  });
+  expect(read.page.doctrineAvailability).toBe("available");
+  expect(read.page.items.at(0)).toMatchObject({
+    doctrine: "limits",
+    passage: null,
+    citationText: null,
+    textWithheldReason: "source_licence",
+  });
+  expect(read.page.items.at(0)).not.toHaveProperty("evidenceQuote");
 });

@@ -102,6 +102,7 @@ if (!databaseUrl || !enabled) {
 
         const preparedPromise = withRedistributableSubject(
           readDb,
+          "pages",
           { kind: "id", id: citingDecisionId },
           async (subject) => {
             const page = await listDecisionCitationsHandler({

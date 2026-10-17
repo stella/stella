@@ -60,11 +60,43 @@
     "reason": "Renamed to Test migration identity logic after removing the repository merge CLI."
   },
   {
-    "name": "Test merge \u0062ar freshness, arm guard and disarm",
+    "name": "Test merge bar freshness, arm guard and disarm",
     "reason": "Removed with the repository merge CLI; pull requests now enter the merge queue directly."
   },
   {
     "name": "Test merge queue jump-reset recovery",
     "reason": "Removed with the repository merge CLI and its queue-position recovery behavior."
+  },
+  {
+    "name": "MCP App bundle and shared assets guard",
+    "reason": "Replaced by MCP app package bundles and shared assets guard: builds the frontend package, regenerates its API-derived contracts, checks all committed bundle assets, and enforces per-app bundle budgets."
+  },
+  {
+    "name": "Select typecheck parity coverage",
+    "reason": "Compiler parity and seeded compiler probes run only through explicit Manual checks dispatch."
+  },
+  {
+    "name": "Typecheck parity (all checked projects)",
+    "reason": "Compiler parity and seeded compiler probes run only through explicit Manual checks dispatch."
+  },
+  {
+    "name": "Record typecheck parity report",
+    "reason": "Compiler parity and seeded compiler probes run only through explicit Manual checks dispatch."
+  },
+  {
+    "name": "Upload typecheck parity report",
+    "reason": "Compiler parity and seeded compiler probes run only through explicit Manual checks dispatch."
+  },
+  {
+    "name": "Typecheck command rejects errors",
+    "reason": "Compiler parity and seeded compiler probes run only through explicit Manual checks dispatch."
+  },
+  {
+    "name": "Dependabot group guard",
+    "reason": "Reads installed manifests, so it moved to ci-checks-policy after the install as 'Dependabot group guard (installed packages)'."
+  },
+  {
+    "name": "MCP app package bundles and shared assets guard",
+    "reason": "Its outputs are derived before use and no longer committed, so it became 'MCP app derived outputs guard': it builds them, checks the bundle budgets, and fails when an output is missing, empty, or tracked again."
   }
 ]

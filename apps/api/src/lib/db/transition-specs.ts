@@ -1,6 +1,10 @@
+import { DESKTOP_TIME_ENTRY_BATCH_STATUSES } from "@stll/api-contract/desktop-time-entries";
+
 import {
   caseLawDecisionCitationStatsState,
   desktopEditSessions,
+  folioCollabRooms,
+  desktopTimeEntryBatches,
   legalReaderAnswerMessages,
   EU_COMPLETION_STATUSES,
   euCompletionApprovals,
@@ -15,16 +19,17 @@ import {
   FLOW_RUN_TRANSITIONS_V1,
   FLOW_RUN_STEP_TRANSITIONS_V1,
 } from "@/api/lib/db/flow-run-transition-spec";
+import { FOLIO_COLLAB_TRANSITION_IDENTITIES } from "@/api/lib/db/folio-collab-transition-identities";
 import { READER_ANSWER_TRANSITION_IDENTITIES } from "@/api/lib/db/reader-answer-transition-identities";
 import type {
-  STATUS_COLUMNS,
+  WRITABLE_STATUS_COLUMNS,
   StatusTable,
 } from "@/api/lib/db/status-tables.gen";
 import {
   defineFixedLifecycle,
-  defineScopedTransitions,
   defineKeyedTransitions,
   defineLifecycle,
+  defineScopedTransitions,
   defineTransitions,
 } from "@/api/lib/db/transitions";
 import type {
@@ -75,6 +80,17 @@ const UNMANAGED_REASONS = {
     "Timer state and its entry projection are coordinated by the timer transaction owner pending migration.",
 } as const;
 
+export const FOLIO_COLLAB_SEED_TRANSITIONS = defineScopedTransitions({
+  ...FOLIO_COLLAB_TRANSITION_IDENTITIES.FOLIO_COLLAB_SEED_TRANSITIONS,
+  table: folioCollabRooms,
+  edges: {
+    empty: ["empty", "claimed"],
+    claimed: ["empty", "claimed", "seeded"],
+    seeded: ["empty", "seeded"],
+  },
+  initial: ["empty"],
+});
+
 // Refresh atomically publishes a complete recount; later recounts remain exact.
 const DECISION_CITATION_STATS_TRANSITIONS = defineKeyedTransitions({
   table: caseLawDecisionCitationStatsState,
@@ -106,6 +122,15 @@ const PDF_SIGNING_SESSION_TRANSITIONS = defineTransitions(
   { open: ["finalized", "cancelled"], finalized: [], cancelled: [] },
   { terminal: ["finalized", "cancelled"] },
 );
+
+const DESKTOP_TIME_ENTRY_BATCH_RECEIPT_LIFECYCLE = defineScopedTransitions({
+  table: desktopTimeEntryBatches,
+  key: "idempotencyKey",
+  scope: ["organizationId", "userId"],
+  stateColumn: "status",
+  edges: { committed: [], cancelled: [] },
+  initial: DESKTOP_TIME_ENTRY_BATCH_STATUSES,
+});
 
 const WORK_OBLIGATION_TRANSITIONS = defineKeyedTransitions({
   table: workObligations,
@@ -224,7 +249,7 @@ const EU_COMPLETION_APPROVAL_PROOF = defineFixedLifecycle({
 });
 
 type StatusColumns<TTable extends StatusTable> =
-  (typeof STATUS_COLUMNS)[TTable];
+  (typeof WRITABLE_STATUS_COLUMNS)[TTable];
 
 // Each table's decision covers exactly its inventoried lifecycle columns.
 type TransitionDecision<TTable extends StatusTable> =
@@ -287,6 +312,7 @@ export const TRANSITIONS = {
   corpusIndexProjectionStates: { unmanaged: UNMANAGED_REASONS.projection },
   correspondence: { unmanaged: UNMANAGED_REASONS.userWorkflow },
   desktopEditSessions: DESKTOP_EDIT_SESSION_TRANSITIONS,
+  desktopTimeEntryBatches: DESKTOP_TIME_ENTRY_BATCH_RECEIPT_LIFECYCLE,
   documentProcessingRuns: { unmanaged: UNMANAGED_REASONS.workerRun },
   documentReviewFindings: { unmanaged: UNMANAGED_REASONS.userDecision },
   documentReviewRuns: { unmanaged: UNMANAGED_REASONS.workerRun },
@@ -304,7 +330,7 @@ export const TRANSITIONS = {
   fileComparisonUploads: { unmanaged: UNMANAGED_REASONS.fileLifecycle },
   flowRuns: FLOW_RUN_TRANSITIONS_V1,
   flowRunSteps: FLOW_RUN_STEP_TRANSITIONS_V1,
-  folioCollabRooms: { unmanaged: UNMANAGED_REASONS.collaboration },
+  folioCollabRooms: FOLIO_COLLAB_SEED_TRANSITIONS,
   invitation: { unmanaged: UNMANAGED_REASONS.delegatedAuth },
   invoices: { unmanaged: UNMANAGED_REASONS.userWorkflow },
   legalListClaims: { unmanaged: UNMANAGED_REASONS.userWorkflow },

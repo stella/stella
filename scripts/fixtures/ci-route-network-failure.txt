@@ -1,0 +1,35 @@
+2026-10-13T14:14:53.9162647Z @stll/web test:e2e: [network-baseline] Baseline request(s) not observed on /chat (late/conditional, not a failure):
+2026-10-13T14:14:53.9165186Z @stll/web test:e2e:     GET /api/auth/organization/list
+2026-10-13T14:14:53.9165906Z @stll/web test:e2e:     GET /v1/user-files/:id/visual
+2026-10-13T14:14:53.9167401Z @stll/web test:e2e: [network-baseline] Waterfall shallower on /chat: 8 -> 3 (improvement; refresh the baseline to tighten the budget).
+2026-10-13T14:14:53.9169014Z @stll/web test:e2e: [network-baseline] Baseline request(s) not observed on /chat/$threadId (late/conditional, not a failure):
+2026-10-13T14:14:53.9170155Z @stll/web test:e2e:     GET /api/auth/organization/list
+2026-10-13T14:14:53.9170891Z @stll/web test:e2e:     GET /v1/chat/threads/:id/title
+2026-10-13T14:14:53.9171555Z @stll/web test:e2e:     GET /v1/usage/entitlement
+2026-10-13T14:14:53.9172229Z @stll/web test:e2e:     GET /v1/user-files/:id/visual
+2026-10-13T14:14:53.9173495Z @stll/web test:e2e: [network-baseline] Waterfall shallower on /chat/$threadId: 8 -> 3 (improvement; refresh the baseline to tighten the budget).
+2026-10-13T14:14:53.9176544Z @stll/web test:e2e: [network-baseline] Baseline request(s) not observed on /chat/new (late/conditional, not a failure):
+2026-10-13T14:14:53.9177942Z @stll/web test:e2e:     GET /api/auth/organization/list
+2026-10-13T14:14:53.9178780Z @stll/web test:e2e:     GET /v1/organization-settings/deployment-features
+2026-10-13T14:14:53.9179588Z @stll/web test:e2e:     GET /v1/usage/entitlement
+2026-10-13T14:14:53.9180761Z @stll/web test:e2e: [network-baseline] Waterfall shallower on /chat/new: 5 -> 3 (improvement; refresh the baseline to tighten the budget).
+2026-10-13T14:14:54.0050671Z @stll/web test:e2e: ::error file=apps/web/e2e/helpers/network.ts,title=[route-smoke] › e2e/specs/route-smoke.spec.ts:390:5 › authenticated routes render without browser errors 1/1 › network manifest matches the committed baseline,line=1138,col=5::  1) [route-smoke] › e2e/specs/route-smoke.spec.ts:390:5 › authenticated routes render without browser errors 1/1 › network manifest matches the committed baseline %0A    Error: Network baseline check failed:%0A%0A    Request waterfall got deeper on /settings/organization/vat-rates: 4 -> 5%0A      level 1: GET /api/auth/get-session%0A      level 2: GET /v1/me/professional-use%0A      level 3: GET /v1/organization-settings/ai-availability, GET /api/auth/organization/get-active-member-role, GET /v1/notifications%0A      level 4: GET /v1/workspaces/navigation%0A      level 5: GET /v1/vat-rates%0A      Each extra level is one more sequential network round the user waits
+2026-10-13T14:14:54.0068044Z @stll/web test:e2e:   ✘  53 [route-smoke] › e2e/specs/route-smoke.spec.ts:390:5 › authenticated routes render without browser errors 1/1 › network manifest matches the committed baseline (17ms)
+2026-10-13T14:14:54.0070067Z @stll/web test:e2e:   -  54 [route-smoke] › e2e/helpers/public-knowledge-smoke.ts:118:7 › public visitor routes › /knowledge/templates/catalogue
+2026-10-13T14:14:54.0071994Z @stll/web test:e2e:   -  55 [route-smoke] › e2e/helpers/public-knowledge-smoke.ts:118:7 › public visitor routes › /knowledge/templates/catalogue/$packId/$templateId
+2026-10-13T14:14:54.0073777Z @stll/web test:e2e:   -  56 [route-smoke] › e2e/helpers/public-knowledge-smoke.ts:118:7 › public visitor routes › /knowledge/tools/$entry
+2026-10-13T14:14:54.0075419Z @stll/web test:e2e:   -  57 [route-smoke] › e2e/helpers/public-knowledge-smoke.ts:118:7 › public visitor routes › /knowledge/tools/contribute
+2026-10-13T14:14:54.5896900Z @stll/web test:e2e:   1) [route-smoke] › e2e/specs/route-smoke.spec.ts:390:5 › authenticated routes render without browser errors 1/1 › network manifest matches the committed baseline
+2026-10-13T14:14:54.5898060Z @stll/web test:e2e:
+2026-10-13T14:14:54.5898471Z @stll/web test:e2e:     Error: Network baseline check failed:
+2026-10-13T14:14:54.5898843Z @stll/web test:e2e:
+2026-10-13T14:14:54.5899269Z @stll/web test:e2e:     Request waterfall got deeper on /settings/organization/vat-rates: 4 -> 5
+2026-10-13T14:14:54.5899837Z @stll/web test:e2e:       level 1: GET /api/auth/get-session
+2026-10-13T14:14:54.5900258Z @stll/web test:e2e:       level 2: GET /v1/me/professional-use
+2026-10-13T14:14:54.5901040Z @stll/web test:e2e:       level 3: GET /v1/organization-settings/ai-availability, GET /api/auth/organization/get-active-member-role, GET /v1/notifications
+2026-10-13T14:14:54.5901791Z @stll/web test:e2e:       level 4: GET /v1/workspaces/navigation
+2026-10-13T14:14:54.5902191Z @stll/web test:e2e:       level 5: GET /v1/vat-rates
+2026-10-13T14:14:54.5902669Z @stll/web test:e2e:       Each extra level is one more sequential network round the user waits
+2026-10-13T14:14:54.5903309Z @stll/web test:e2e:       through before the page can finish. Usually the fix is to start the
+2026-10-13T14:14:54.5904125Z @stll/web test:e2e:       query in the route loader (ensureRouteQueryData / prefetchRouteQuery in
+2026-10-13T14:14:54.5905135Z @stll/web test:e2e:       apps/web/src/lib/react-query.ts) or lift it so it fires in parallel

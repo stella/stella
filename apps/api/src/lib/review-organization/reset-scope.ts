@@ -62,6 +62,8 @@ export const REVIEW_RESET_KEPT_TABLES = {
   business_registry_credentials:
     "Integration credentials: never touched by the reset.",
   feedback_reports: "Product feedback the operators read.",
+  chat_content_v3_backfill_receipts:
+    "Repair receipts the operators read; identifiers only, never chat content.",
   sanctions_organization_marks:
     "Scheduler-maintained screening state; holds no reviewer content.",
   sanctions_monitoring_backfills:
@@ -110,6 +112,7 @@ export const REVIEW_RESET_CLEARED_TABLES = [
   "correspondence_drop_logs",
   "correspondence_filers",
   "desktop_presence",
+  "desktop_time_entry_batches",
   "document_processing_runs",
   "document_reference_counters",
   "document_review_findings",

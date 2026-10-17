@@ -222,6 +222,23 @@ describe("aggregate mutation route coverage", () => {
     expect(enumerate(sources).at(0)?.declared).toBe(true);
   });
 
+  test("a declaration through a local endpoint factory checks the factory's handler", () => {
+    const sources = fixture('post("/existing", existing.handler)');
+    sources.set(
+      routes,
+      `import existing from "@/api/handlers/example/create"; ${String(sources.get(routes))}`,
+    );
+    const create = (body: string) =>
+      `import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration"; import { createSafeHandler } from "@/api/lib/api-handlers"; import { withAggregateLock } from "@/api/lib/db/aggregate-lock"; export const createEndpoint = (authorize = defaultAuthorize) => createSafeHandler({}, async () => { ${body} }); const existing = createEndpoint(); declareAggregateMutation(existing.handler, {type: "aggregate", aggregates: ["workspace"]}); export default existing;`;
+    sources.set(
+      "apps/api/src/handlers/example/create.ts",
+      create('await withAggregateLock({aggregate: "workspace", id, tx});'),
+    );
+    expect(enumerate(sources).at(0)?.declared).toBe(true);
+    sources.set("apps/api/src/handlers/example/create.ts", create(""));
+    expect(() => enumerate(sources)).toThrow("must await withAggregateLock");
+  });
+
   test("a default export declaration does not classify a different named handler", () => {
     const sources = fixture('post("/named", foo.handler)');
     sources.set(
@@ -582,7 +599,13 @@ describe("aggregate mutation route coverage", () => {
         `import { Result } from "better-result"; import { withAggregateLock, withAggregateTransaction } from "@/api/lib/db/aggregate-lock"; export const renewExample = async ({ db }) => { const outcome = await Result.tryPromise({ try: async () => await withAggregateTransaction(db, async (tx) => { const lock = ${acquisition} }) }); return outcome; };`,
       );
       expect(enumerate(sources).at(0)?.declared).toBe(true);
+      sources.set(
+        service,
+        `import { abortableTx, safeDbFromScoped } from "@/api/db/safe-db"; ${lockImport} export const renewExample = async ({ value }) => { return await abortableTx(safeDbFromScoped(value.scopedDb), async (tx) => { ${acquisition} }); };`,
+      );
+      expect(enumerate(sources).at(0)?.declared).toBe(true);
       for (const detached of [
+        `await value.scopedDb(async (tx) => { ${acquisition} });`,
         `setTimeout(async () => { ${acquisition} }, 0);`,
         `await setTimeout(async () => { ${acquisition} }, 0);`,
         `await runInTransaction(db, async (tx) => { ${acquisition} });`,

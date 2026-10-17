@@ -49,6 +49,8 @@ export const TEXT_CANDIDATE_UNUSABLE = {
   MARKUP_RESIDUE: "markup-residue",
   /** Some source text did not reach the blocks, in order and in full. */
   TEXT_NOT_CONSERVED: "text-not-conserved",
+  /** Candidate page chrome contains text outside the reviewed publisher signatures. */
+  UNCLASSIFIED_PAGE_CHROME: "unclassified-page-chrome",
 } as const;
 
 export type TextCandidateUnusable =

@@ -32,12 +32,14 @@
     "@stll/text-normalize": "workspace:*",
     "@stll/time": "workspace:*",
     "better-result": "catalog:",
+    "oxfmt": "catalog:",
     "typescript": "catalog:"
   },
   "devDependencies": {
     "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "bun-types": "catalog:",
-    "fast-check": "catalog:"
+    "fast-check": "catalog:",
+    "oxc-transform-react": "catalog:"
   }
 }

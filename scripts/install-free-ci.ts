@@ -10,7 +10,7 @@
  *
  * Install detection is exact rather than by step name:
  * - An install is a `bun install` / `bun i` / `bun ci` / `bun add` command
- *   (directly or through `bash scripts/retry.sh`) that is not global. It
+ *   (directly or through `bash <path>/retry.sh`) that is not global. It
  *   covers the commands that run in its directory or below it.
  * - Inside a step, the commands after the install are covered. A later step
  *   is covered when its `if:` implies the install step's `if:`: every
@@ -726,6 +726,15 @@ const changeDirectory = ({ from, to }: ChangeDirectoryOptions): string => {
 
 const TIMEOUT_DURATION = /^(?:\d+(?:\.\d*)?|\.\d+)[smhd]?$/u;
 
+/**
+ * The repository retry helper, wherever the step finds it: `scripts/retry.sh`
+ * from the root, or a copy kept elsewhere such as a release tooling checkout.
+ * It runs the rest of its words as the command, so it is unwrapped like
+ * `timeout`.
+ */
+const isRetryHelper = (word: string | undefined): boolean =>
+  word === "retry.sh" || word?.endsWith("/retry.sh") === true;
+
 /** The program and its arguments, past keywords, assignments and wrappers. */
 export const programWords = (words: readonly string[]): readonly string[] => {
   let rest = words;
@@ -781,7 +790,7 @@ export const programWords = (words: readonly string[]): readonly string[] => {
         return words;
       }
       rest = rest.slice(1); // Duration precedes the wrapped command.
-    } else if (first === "bash" && rest.at(1) === "scripts/retry.sh") {
+    } else if (first === "bash" && isRetryHelper(rest.at(1))) {
       rest = rest.slice(2);
     } else {
       return rest;
@@ -1501,6 +1510,7 @@ type StepDefaults = {
 
 const POSIX_SHELL = /^(?:bash|sh)\b/u;
 const LOCAL_ACTION = "./.github/actions/";
+const SELF_ACTION = "$/.github/actions/";
 const LOCAL_WORKFLOW = "./.github/workflows/";
 
 const readYaml = ({ file, root }: RepoFile): unknown =>
@@ -1720,9 +1730,12 @@ const walkWorkflowStep = ({
     for (const dir of result.installs) {
       stepInstalls.push({ condition, dir });
     }
-  } else if (typeof uses === "string" && uses.startsWith(LOCAL_ACTION)) {
+  } else if (
+    typeof uses === "string" &&
+    (uses.startsWith(LOCAL_ACTION) || uses.startsWith(SELF_ACTION))
+  ) {
     const actionFile = ["action.yml", "action.yaml"]
-      .map((name) => path.posix.join(uses, name))
+      .map((name) => path.posix.join(uses.slice(2), name))
       .find((file) => existsSync(path.join(context.root, file)));
     if (actionFile === undefined) {
       invocations.push({

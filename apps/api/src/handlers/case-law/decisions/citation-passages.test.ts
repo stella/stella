@@ -116,6 +116,65 @@ describe("the excerpt a citation travels with", () => {
     expect(passage?.mention).toBe("latest_of_several");
   });
 
+  test("keeps the review quote verbatim beside the canonical citation excerpt", () => {
+    const evidenceQuote = "The earlier decision concerns different facts.";
+    const classified = "The court cites 21 Cdo 500/2019.";
+    const { passage } = citationTextFields({
+      text: {
+        type: "eligible",
+        ast: astOf([
+          { anchorId: "p1", text: classified },
+          { anchorId: "p2", text: `21 Cdo 500/2019: ${evidenceQuote}` },
+        ]),
+        sections: [
+          { index: 0, text: classified, type: "argumentation", title: null },
+        ],
+      },
+      textWithheldReason: null,
+      citationText: "21 Cdo 500/2019",
+      sectionIndex: 0,
+      evidenceWindows: null,
+      evidenceQuote,
+    });
+    expect(passage).toEqual({
+      anchorId: "p1",
+      text: classified,
+      mention: "classified_section",
+      truncated: false,
+      evidenceQuote,
+      evidenceAnchorId: "p2",
+    });
+  });
+
+  test("anchors a review quote in a paragraph that does not repeat the citation", () => {
+    const evidenceQuote = "That ruling concerned a different contract.";
+    const citing = "The court cites 21 Cdo 500/2019.";
+    const passage = citationPassageIn({
+      ast: astOf([
+        { anchorId: "p1", text: citing },
+        { anchorId: "p2", text: `However, ${evidenceQuote}` },
+      ]),
+      citationText: "21 Cdo 500/2019",
+      sectionText: undefined,
+      evidenceQuote,
+    });
+    expect(passage).toMatchObject({
+      anchorId: "p1",
+      evidenceQuote,
+      evidenceAnchorId: "p2",
+    });
+  });
+
+  test("does not publish a quote absent from the decision text", () => {
+    const passage = citationPassageIn({
+      ast: astOf([{ anchorId: "p1", text: "21 Cdo 500/2019 is cited." }]),
+      citationText: "21 Cdo 500/2019",
+      sectionText: undefined,
+      evidenceQuote: "Different facts.",
+    });
+    expect(passage).not.toHaveProperty("evidenceQuote");
+  });
+
   test("is absent when no paragraph carries the citation", () => {
     expect(
       citationPassageIn({

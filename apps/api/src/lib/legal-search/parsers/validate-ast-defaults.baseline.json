@@ -1,0 +1,491 @@
+{
+  "baselineCommit": "53dbd13e0a",
+  "cases": [
+    {
+      "name": "faithful invented court text",
+      "html": "<p>Alpha bravo charlie</p>",
+      "headings": [],
+      "paragraphs": [
+        {
+          "inlineText": "Alpha bravo charlie",
+          "plainText": "Alpha bravo charlie"
+        }
+      ],
+      "expected": {
+        "ok": true,
+        "issues": [
+          {
+            "code": "NO_HEADINGS",
+            "message": "AST has no heading blocks",
+            "severity": "warning"
+          }
+        ],
+        "stats": {
+          "originalLength": 19,
+          "astLength": 19,
+          "retainedPct": 100,
+          "blockCount": 1,
+          "missingWords": [],
+          "boundaryWhitespaceWords": [],
+          "blockTypeCounts": {
+            "paragraph": 1
+          },
+          "tinyBlocks": 0,
+          "hugeBlocks": 0,
+          "duplicateBlocks": 0,
+          "markupResidue": [],
+          "work": {
+            "textComputations": 1,
+            "textCharacters": 19,
+            "ancestorChecks": 0
+          }
+        }
+      }
+    },
+    {
+      "name": "lost invented court words",
+      "html": "<p>Alpha bravo charlie delta echo foxtrot</p>",
+      "headings": [],
+      "paragraphs": [
+        {
+          "inlineText": "Alpha bravo charlie delta echo foxtrot",
+          "plainText": "Alpha"
+        }
+      ],
+      "expected": {
+        "ok": false,
+        "issues": [
+          {
+            "code": "CONTENT_LOSS",
+            "message": "Only 13.2% of text retained (threshold: 90%)",
+            "severity": "error"
+          },
+          {
+            "code": "NO_HEADINGS",
+            "message": "AST has no heading blocks",
+            "severity": "warning"
+          },
+          {
+            "code": "INLINE_PLAINTEXT_MISMATCH",
+            "message": "Block \"Alpha...\" inline length (38) != plainText length (5)",
+            "severity": "warning"
+          }
+        ],
+        "stats": {
+          "originalLength": 38,
+          "astLength": 5,
+          "retainedPct": 13.2,
+          "blockCount": 1,
+          "missingWords": ["bravo", "charlie", "delta", "echo", "foxtrot"],
+          "boundaryWhitespaceWords": [],
+          "blockTypeCounts": {
+            "paragraph": 1
+          },
+          "tinyBlocks": 0,
+          "hugeBlocks": 0,
+          "duplicateBlocks": 0,
+          "markupResidue": [],
+          "work": {
+            "textComputations": 1,
+            "textCharacters": 38,
+            "ancestorChecks": 0
+          }
+        }
+      }
+    },
+    {
+      "name": "historical backslashed prose diagnostic",
+      "html": "<p>\\a\\ny finding in the record</p>",
+      "headings": [],
+      "paragraphs": [
+        {
+          "inlineText": "\\a\\ny finding in the record",
+          "plainText": "\\a\\ny finding in the record"
+        }
+      ],
+      "expected": {
+        "ok": false,
+        "issues": [
+          {
+            "code": "NO_HEADINGS",
+            "message": "AST has no heading blocks",
+            "severity": "warning"
+          },
+          {
+            "code": "MARKUP_RESIDUE",
+            "message": "1 block(s) carry source markup (RTF control words at invented-paragraph): \\a\\ny finding in the record",
+            "severity": "error"
+          }
+        ],
+        "stats": {
+          "originalLength": 27,
+          "astLength": 27,
+          "retainedPct": 100,
+          "blockCount": 1,
+          "missingWords": [],
+          "boundaryWhitespaceWords": [],
+          "blockTypeCounts": {
+            "paragraph": 1
+          },
+          "tinyBlocks": 0,
+          "hugeBlocks": 0,
+          "duplicateBlocks": 0,
+          "markupResidue": [
+            {
+              "rule": "rtf-control",
+              "reason": "RTF control words",
+              "excerpt": "\\a\\ny finding in the record",
+              "anchorId": "invented-paragraph"
+            }
+          ],
+          "work": {
+            "textComputations": 1,
+            "textCharacters": 27,
+            "ancestorChecks": 0
+          }
+        }
+      }
+    },
+    {
+      "name": "historical named entity omission",
+      "html": "<p>Invented &amp;CounterClockwiseContourIntegral; reference</p>",
+      "headings": [],
+      "paragraphs": [
+        {
+          "inlineText": "Invented &CounterClockwiseContourIntegral; reference",
+          "plainText": "Invented &CounterClockwiseContourIntegral; reference"
+        }
+      ],
+      "expected": {
+        "ok": true,
+        "issues": [
+          {
+            "code": "NO_HEADINGS",
+            "message": "AST has no heading blocks",
+            "severity": "warning"
+          }
+        ],
+        "stats": {
+          "originalLength": 52,
+          "astLength": 52,
+          "retainedPct": 100,
+          "blockCount": 1,
+          "missingWords": [],
+          "boundaryWhitespaceWords": [],
+          "blockTypeCounts": {
+            "paragraph": 1
+          },
+          "tinyBlocks": 0,
+          "hugeBlocks": 0,
+          "duplicateBlocks": 0,
+          "markupResidue": [],
+          "work": {
+            "textComputations": 1,
+            "textCharacters": 52,
+            "ancestorChecks": 0
+          }
+        }
+      }
+    },
+    {
+      "name": "historical hexadecimal entity omission",
+      "html": "<p>Invented &amp;#x40; reference</p>",
+      "headings": [],
+      "paragraphs": [
+        {
+          "inlineText": "Invented &#x40; reference",
+          "plainText": "Invented &#x40; reference"
+        }
+      ],
+      "expected": {
+        "ok": true,
+        "issues": [
+          {
+            "code": "NO_HEADINGS",
+            "message": "AST has no heading blocks",
+            "severity": "warning"
+          }
+        ],
+        "stats": {
+          "originalLength": 25,
+          "astLength": 25,
+          "retainedPct": 100,
+          "blockCount": 1,
+          "missingWords": [],
+          "boundaryWhitespaceWords": [],
+          "blockTypeCounts": {
+            "paragraph": 1
+          },
+          "tinyBlocks": 0,
+          "hugeBlocks": 0,
+          "duplicateBlocks": 0,
+          "markupResidue": [],
+          "work": {
+            "textComputations": 1,
+            "textCharacters": 25,
+            "ancestorChecks": 0
+          }
+        }
+      }
+    },
+    {
+      "name": "historical short named entity diagnostic",
+      "html": "<p>Invented &amp;amp; reference</p>",
+      "headings": [],
+      "paragraphs": [
+        {
+          "inlineText": "Invented &amp; reference",
+          "plainText": "Invented &amp; reference"
+        }
+      ],
+      "expected": {
+        "ok": false,
+        "issues": [
+          {
+            "code": "NO_HEADINGS",
+            "message": "AST has no heading blocks",
+            "severity": "warning"
+          },
+          {
+            "code": "MARKUP_RESIDUE",
+            "message": "1 block(s) carry source markup (undecoded character entities at invented-paragraph): &amp; reference",
+            "severity": "error"
+          }
+        ],
+        "stats": {
+          "originalLength": 24,
+          "astLength": 24,
+          "retainedPct": 100,
+          "blockCount": 1,
+          "missingWords": [],
+          "boundaryWhitespaceWords": [],
+          "blockTypeCounts": {
+            "paragraph": 1
+          },
+          "tinyBlocks": 0,
+          "hugeBlocks": 0,
+          "duplicateBlocks": 0,
+          "markupResidue": [
+            {
+              "rule": "entity",
+              "reason": "undecoded character entities",
+              "excerpt": "&amp; reference",
+              "anchorId": "invented-paragraph"
+            }
+          ],
+          "work": {
+            "textComputations": 1,
+            "textCharacters": 24,
+            "ancestorChecks": 0
+          }
+        }
+      }
+    },
+    {
+      "name": "unknown publisher entity stays literal",
+      "html": "<p>Invented &amp;inventedUnknown; reference</p>",
+      "headings": [],
+      "paragraphs": [
+        {
+          "inlineText": "Invented &inventedUnknown; reference",
+          "plainText": "Invented &inventedUnknown; reference"
+        }
+      ],
+      "expected": {
+        "ok": true,
+        "issues": [
+          {
+            "code": "NO_HEADINGS",
+            "message": "AST has no heading blocks",
+            "severity": "warning"
+          }
+        ],
+        "stats": {
+          "originalLength": 36,
+          "astLength": 36,
+          "retainedPct": 100,
+          "blockCount": 1,
+          "missingWords": [],
+          "boundaryWhitespaceWords": [],
+          "blockTypeCounts": {
+            "paragraph": 1
+          },
+          "tinyBlocks": 0,
+          "hugeBlocks": 0,
+          "duplicateBlocks": 0,
+          "markupResidue": [],
+          "work": {
+            "textComputations": 1,
+            "textCharacters": 36,
+            "ancestorChecks": 0
+          }
+        }
+      }
+    },
+    {
+      "name": "historical letter spacing diagnostics",
+      "html": "<p>I n v e n t e d  j u d g m e n t  a f f i r m e d</p>",
+      "headings": [],
+      "paragraphs": [
+        {
+          "inlineText": "I n v e n t e d  j u d g m e n t  a f f i r m e d",
+          "plainText": "Invented judgment affirmed"
+        }
+      ],
+      "expected": {
+        "ok": false,
+        "issues": [
+          {
+            "code": "CONTENT_LOSS",
+            "message": "Only 55.3% of text retained (threshold: 90%)",
+            "severity": "error"
+          },
+          {
+            "code": "NO_HEADINGS",
+            "message": "AST has no heading blocks",
+            "severity": "warning"
+          },
+          {
+            "code": "INLINE_PLAINTEXT_MISMATCH",
+            "message": "Block \"Invented judgment affirmed...\" inline length (47) != plainText length (26)",
+            "severity": "warning"
+          }
+        ],
+        "stats": {
+          "originalLength": 47,
+          "astLength": 26,
+          "retainedPct": 55.3,
+          "blockCount": 1,
+          "missingWords": [],
+          "boundaryWhitespaceWords": [],
+          "blockTypeCounts": {
+            "paragraph": 1
+          },
+          "tinyBlocks": 0,
+          "hugeBlocks": 0,
+          "duplicateBlocks": 0,
+          "markupResidue": [],
+          "work": {
+            "textComputations": 1,
+            "textCharacters": 47,
+            "ancestorChecks": 0
+          }
+        }
+      }
+    },
+    {
+      "name": "existing textless source shape",
+      "html": "<!DOCTYPE html><html lang=\"cs\"><head><title>39 A 1/2026-35 - text</title></head><body>N/A</body></html>",
+      "headings": [],
+      "paragraphs": [],
+      "expected": {
+        "ok": true,
+        "issues": [
+          {
+            "code": "EMPTY_AST",
+            "message": "AST has no blocks",
+            "severity": "warning"
+          },
+          {
+            "code": "NO_HEADINGS",
+            "message": "AST has no heading blocks",
+            "severity": "warning"
+          }
+        ],
+        "stats": {
+          "originalLength": 0,
+          "astLength": 0,
+          "retainedPct": 100,
+          "blockCount": 0,
+          "missingWords": [],
+          "boundaryWhitespaceWords": [],
+          "blockTypeCounts": {},
+          "tinyBlocks": 0,
+          "hugeBlocks": 0,
+          "duplicateBlocks": 0,
+          "markupResidue": [],
+          "work": {
+            "textComputations": 0,
+            "textCharacters": 0,
+            "ancestorChecks": 0
+          }
+        }
+      }
+    },
+    {
+      "name": "existing marker-only scan shape",
+      "html": "<html><body><div><p><span>[OBR</span><span>Á</span><span>ZEK]</span></p><p><span>[OBRÁZEK]</span></p></div></body></html>",
+      "headings": [],
+      "paragraphs": [],
+      "expected": {
+        "ok": true,
+        "issues": [
+          {
+            "code": "EMPTY_AST",
+            "message": "AST has no blocks",
+            "severity": "warning"
+          },
+          {
+            "code": "NO_HEADINGS",
+            "message": "AST has no heading blocks",
+            "severity": "warning"
+          }
+        ],
+        "stats": {
+          "originalLength": 9,
+          "astLength": 0,
+          "retainedPct": 100,
+          "blockCount": 0,
+          "missingWords": [],
+          "boundaryWhitespaceWords": [],
+          "blockTypeCounts": {},
+          "tinyBlocks": 0,
+          "hugeBlocks": 0,
+          "duplicateBlocks": 0,
+          "markupResidue": [],
+          "work": {
+            "textComputations": 3,
+            "textCharacters": 36,
+            "ancestorChecks": 2
+          }
+        }
+      }
+    },
+    {
+      "name": "existing Czech content-retention shape",
+      "html": "<html><body><p>Soud konstatoval, že žaloba je důvodná a žalobce má nárok na náhradu škody.</p></body></html>",
+      "headings": ["Odůvodnění:"],
+      "paragraphs": [
+        {
+          "inlineText": "Soud konstatoval, že žaloba je důvodná a žalobce má nárok na náhradu škody.",
+          "plainText": "Soud konstatoval, že žaloba je důvodná a žalobce má nárok na náhradu škody."
+        }
+      ],
+      "expected": {
+        "ok": true,
+        "issues": [],
+        "stats": {
+          "originalLength": 75,
+          "astLength": 87,
+          "retainedPct": 116,
+          "blockCount": 2,
+          "missingWords": [],
+          "boundaryWhitespaceWords": [],
+          "blockTypeCounts": {
+            "heading": 1,
+            "paragraph": 1
+          },
+          "tinyBlocks": 0,
+          "hugeBlocks": 0,
+          "duplicateBlocks": 0,
+          "markupResidue": [],
+          "work": {
+            "textComputations": 1,
+            "textCharacters": 75,
+            "ancestorChecks": 0
+          }
+        }
+      }
+    }
+  ]
+}

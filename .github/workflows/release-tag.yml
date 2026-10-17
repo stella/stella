@@ -12,6 +12,10 @@ on:
         description: "Commit SHA (blank selects the newest staging/verified success on main)"
         required: false
         type: string
+      proof_sha:
+        description: "Optional commit carrying tree-identical release evidence"
+        required: false
+        type: string
       waive_dependency_audit:
         description: "Tag despite current high/critical dependency advisories"
         required: false
@@ -25,8 +29,10 @@ on:
 permissions:
   contents: read
   statuses: read
+  checks: read
   actions: read
   issues: read
+  pull-requests: read
 
 concurrency:
   group: release-tag
@@ -48,16 +54,28 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      # Bun runs the release queue history check that decides whether a
+      # merge-group receipt may stand in for the heavy statuses.
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: "package.json"
+
       - name: Select and validate the release commit
         id: candidate
         env:
           GH_TOKEN: ${{ github.token }}
           REQUESTED_SHA: ${{ inputs.sha }}
-        run: bash scripts/prepare-release-tag.sh --repo "$GITHUB_REPOSITORY" --sha "$REQUESTED_SHA" >> "$GITHUB_OUTPUT"
+          PROOF_SHA: ${{ inputs.proof_sha }}
+        run: bash scripts/prepare-release-tag.sh --repo "$GITHUB_REPOSITORY" --sha "$REQUESTED_SHA" --proof-sha "$PROOF_SHA" >> "$GITHUB_OUTPUT"
 
       - name: Preserve the trusted release guard
         run: |
           cp scripts/check-release-main-health.sh "$RUNNER_TEMP/check-release-main-health.sh"
+          cp scripts/verify-release-tree-proof.sh "$RUNNER_TEMP/verify-release-tree-proof.sh"
+          cp scripts/check-release-receipt-coverage.sh "$RUNNER_TEMP/check-release-receipt-coverage.sh"
+          cp scripts/check-release-queue-history.ts "$RUNNER_TEMP/check-release-queue-history.ts"
           cp scripts/gh-retry.sh "$RUNNER_TEMP/gh-retry.sh"
 
       - name: Checkout the verified commit
@@ -65,13 +83,8 @@ jobs:
           RELEASE_SHA: ${{ steps.candidate.outputs.sha }}
         run: git checkout --detach "$RELEASE_SHA"
 
-      - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
-        with:
-          save: ${{ github.ref == 'refs/heads/main' }}
-          bun-version-file: "package.json"
-
       - name: Install dependencies for the release audit
+        timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
@@ -115,10 +128,14 @@ jobs:
           repositories: ${{ github.event.repository.name }}
           permission-contents: write
 
-      # Re-checks staging/verified, main/heavy and main/pr-depth on the exact commit right
-      # before the push, so a status that turned red since selection stops it.
+      # Re-checks staging/verified plus the merge-group receipt with validated
+      # queue history (or main/heavy and main/pr-depth) on the exact commit
+      # right before the push, so evidence that turned red since selection
+      # stops it.
       - name: Push tag
         env:
+          RELEASE_TREE_PROOF_VERIFIER: ${{ runner.temp }}/verify-release-tree-proof.sh
+          PROOF_SHA: ${{ steps.candidate.outputs.proof-sha }}
           RELEASE_HEALTH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.candidate.outputs.tag }}
           RELEASE_SHA: ${{ steps.candidate.outputs.sha }}
@@ -127,7 +144,7 @@ jobs:
           # scripts) run without it available.
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
-          GH_TOKEN="$RELEASE_HEALTH_TOKEN" bash "$RUNNER_TEMP/check-release-main-health.sh" "$GITHUB_REPOSITORY" "$RELEASE_SHA"
+          GH_TOKEN="$RELEASE_HEALTH_TOKEN" bash "$RUNNER_TEMP/check-release-main-health.sh" "$GITHUB_REPOSITORY" "$RELEASE_SHA" "$PROOF_SHA"
           git config user.name "stella-release-deployer[bot]"
           git config user.email "stella-release-deployer[bot]@users.noreply.github.com"
           git tag -a "$TAG" "$RELEASE_SHA" -m "$TAG"
@@ -158,6 +175,7 @@ jobs:
           bun-version-file: "package.json"
 
       - name: Install dependencies
+        timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""

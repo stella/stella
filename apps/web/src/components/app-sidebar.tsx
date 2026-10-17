@@ -1,5 +1,6 @@
 import type * as React from "react";
 import {
+  Fragment,
   lazy,
   Suspense,
   useCallback,
@@ -26,6 +27,7 @@ import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
 
+import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
@@ -44,6 +46,7 @@ import {
 } from "@stll/ui/icons";
 import { InlineRenameInput } from "@stll/ui/inline-rename";
 import { SIDE_RAIL_ICON_BUTTON_SIZE } from "@stll/ui/inspector";
+import { MatterIcon } from "@stll/ui/matter-icon";
 import {
   Menu,
   MenuItem,
@@ -72,7 +75,6 @@ import {
 } from "@/components/drag-and-drop-live-region.logic";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { MatterActivityRow } from "@/components/matter-activity-row";
-import { MatterIcon } from "@/components/matter-icon";
 import {
   Sidebar,
   SidebarContent,
@@ -82,7 +84,6 @@ import {
   SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
-  SidebarMenuAction,
   SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -142,6 +143,7 @@ import { knowledgeSections } from "@/lib/knowledge/navigation";
 import { isPublicKnowledgeEnabled } from "@/lib/knowledge/public-knowledge-launch";
 import { publicToolsBasePath } from "@/lib/knowledge/public-tools-path";
 import { localISODate } from "@/lib/local-iso-date";
+import { useMatterNumberingEnabled } from "@/lib/organization/use-matter-numbering";
 import { usePinnedStore } from "@/lib/pinned-store";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import type { EntityKind } from "@/lib/types";
@@ -684,67 +686,69 @@ export const AppSidebar = (props: AppSidebarProps) => {
               const digit = index + 1;
 
               return (
-                <NavContextMenu config={navTarget.contextMenu} key={item.id}>
-                  <SidebarMenuItem>
-                    {item.kind === "action" ? (
-                      <SidebarMenuButton
-                        onClick={navTarget.action}
-                        tooltip={label}
-                      >
-                        <Icon />
-                        <span>{label}</span>
-                      </SidebarMenuButton>
-                    ) : (
-                      <SidebarMenuButton asChild tooltip={label}>
-                        <Link
-                          activeProps={{ "data-active": true }}
-                          to={item.to}
+                <Fragment key={item.id}>
+                  <NavContextMenu config={navTarget.contextMenu}>
+                    <SidebarMenuItem>
+                      {item.kind === "action" ? (
+                        <SidebarMenuButton
+                          onClick={navTarget.action}
+                          tooltip={label}
                         >
                           <Icon />
                           <span>{label}</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    )}
-                    {(() => {
-                      if (showNavBadges) {
-                        return <NavBadge digit={digit} />;
-                      }
-                      if (item.id === "search") {
-                        return (
-                          <SidebarMenuBadge>
-                            <kbd className="text-muted-foreground text-3xs">
-                              {formatHotkeyForPlatform(
-                                searchHotkey,
-                                hotkeyPlatform,
-                              )}
-                            </kbd>
-                          </SidebarMenuBadge>
-                        );
-                      }
-                      if (item.id === "inbox" && openInboxCount > 0) {
-                        return (
-                          <SidebarMenuBadge>
-                            <span className="text-muted-foreground text-3xs tabular-nums">
-                              {format.number(openInboxCount)}
-                            </span>
-                          </SidebarMenuBadge>
-                        );
-                      }
-                      if (item.id === "matters" && canCreateMatter) {
-                        return (
-                          <SidebarMenuAction
-                            onClick={handleCreateWorkspace}
-                            showOnHover
-                            title={t("common.newMatter")}
+                        </SidebarMenuButton>
+                      ) : (
+                        <SidebarMenuButton asChild tooltip={label}>
+                          <Link
+                            activeProps={{ "data-active": true }}
+                            to={item.to}
                           >
-                            <PlusIcon />
-                          </SidebarMenuAction>
-                        );
-                      }
-                      return null;
-                    })()}
-                  </SidebarMenuItem>
-                </NavContextMenu>
+                            <Icon />
+                            <span>{label}</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      )}
+                      {(() => {
+                        if (showNavBadges) {
+                          return <NavBadge digit={digit} />;
+                        }
+                        if (item.id === "search") {
+                          return (
+                            <SidebarMenuBadge>
+                              <kbd className="text-muted-foreground text-3xs">
+                                {formatHotkeyForPlatform(
+                                  searchHotkey,
+                                  hotkeyPlatform,
+                                )}
+                              </kbd>
+                            </SidebarMenuBadge>
+                          );
+                        }
+                        if (item.id === "inbox" && openInboxCount > 0) {
+                          return (
+                            <SidebarMenuBadge>
+                              <span className="text-muted-foreground text-3xs tabular-nums">
+                                {format.number(openInboxCount)}
+                              </span>
+                            </SidebarMenuBadge>
+                          );
+                        }
+                        return null;
+                      })()}
+                    </SidebarMenuItem>
+                  </NavContextMenu>
+                  {item.id === "matters" && canCreateMatter ? (
+                    <SidebarMenuItem>
+                      <SidebarMenuButton
+                        onClick={handleCreateWorkspace}
+                        tooltip={t("common.newMatter")}
+                      >
+                        <PlusIcon />
+                        <span>{t("common.newMatter")}</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ) : null}
+                </Fragment>
               );
             })}
           </SidebarMenu>
@@ -1114,6 +1118,7 @@ const MatterItem = ({
   // Read pin state directly from the store so the menu label
   // updates immediately after toggling (the prop may be stale
   // while the popover is open).
+  const showMatterNumber = useMatterNumberingEnabled();
   const isPinned = usePinnedStore((s) => s.isPinned(ws.id));
   const pinAttention = usePinnedStore((s) =>
     s.pinAttention.type === "pending" && s.pinAttention.matterId === ws.id
@@ -1347,6 +1352,7 @@ const MatterItem = ({
           />
           <InlineRenameInput
             className="text-sm"
+            maxLength={DEFAULT_VARCHAR_MAX_LENGTH}
             onCommit={() => {
               detached(rename.commit(), "app-sidebar.commit");
             }}
@@ -1429,7 +1435,7 @@ const MatterItem = ({
           tooltip={[
             ws.name,
             ws.client?.displayName ?? t("workspaces.parties.personalLabel"),
-            ws.reference,
+            showMatterNumber ? ws.reference : null,
           ]
             .filter(Boolean)
             .join(" — ")}

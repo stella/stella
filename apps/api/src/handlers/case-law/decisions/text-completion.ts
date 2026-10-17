@@ -6,10 +6,9 @@ import type {
   DecisionTextWithheldReason,
 } from "@stll/api-contract/case-law-text-field";
 
-import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import { publishedCaseLawDecisions, caseLawSources } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
-import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution-sql";
 import { citationTextRevisionFingerprintSql } from "@/api/lib/case-law/text-revision";
 import { decisionTextWithheldReason } from "@/api/lib/legal-search/corpus-source";
@@ -72,20 +71,20 @@ export const decisionTextCompletionOf = ({
     !published || !redistributable ? ("missing_text" as const) : null,
 });
 
+// Publication is enforced by the view; a revoked row is absent at completion.
 export const decisionTextCompletionColumns = {
-  published: sql<boolean>`${publishedCaseLawDecision}`,
+  published: sql<boolean>`true`,
   redistributable: sql<boolean>`${redistributableCaseLawSourceFor(caseLawSources.descriptor)}`,
-  documentUrl: caseLawDecisions.documentUrl,
+  documentUrl: publishedCaseLawDecisions.documentUrl,
   textRevisionFingerprint: citationTextRevisionFingerprintSql({
-    contentHash: caseLawDecisions.contentHash,
-    sections: caseLawDecisions.sections,
+    contentHash: publishedCaseLawDecisions.contentHash,
+    sections: publishedCaseLawDecisions.sections,
   }),
   descriptor: caseLawSources.descriptor,
 };
 
 export const decisionTextCompletionGate = sql`(
-  ${publishedCaseLawDecision}
-  AND ${redistributableCaseLawSourceFor(caseLawSources.descriptor)}
+  ${redistributableCaseLawSourceFor(caseLawSources.descriptor)}
 )`;
 
 export type DecisionTextCompletionSnapshot = ReturnType<
@@ -127,12 +126,15 @@ export const readDecisionTextCompletions = async (
   }
   const rows = await tx
     .select({
-      id: caseLawDecisions.id,
+      id: publishedCaseLawDecisions.id,
       ...decisionTextCompletionColumns,
     })
-    .from(caseLawDecisions)
-    .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
-    .where(inArray(caseLawDecisions.id, [...decisionIds]))
+    .from(publishedCaseLawDecisions)
+    .innerJoin(
+      caseLawSources,
+      eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
+    )
+    .where(inArray(publishedCaseLawDecisions.id, [...decisionIds]))
     .limit(decisionIds.length);
   return new Map(
     rows.map((row) => [String(row.id), decisionTextCompletionOf(row)]),

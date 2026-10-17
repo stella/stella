@@ -1,6 +1,12 @@
 # Pin to digest for supply-chain integrity (oven/bun:1.4.3-slim)
 FROM oven/bun:1.4.3-slim@sha256:14a223fa35747ec728bce300ef85888bc5f7958164d15bbba6a54b22b52a3288 AS base
 WORKDIR /app
+# BEGIN GENERATED INSTALL TOOLING
+COPY packages/scripts/src/child-exit-status.ts packages/scripts/src/child-exit-status.ts
+COPY packages/sha256/src/bun.ts packages/sha256/src/bun.ts
+COPY scripts/ci-install-store.ts scripts/ci-install-store.ts
+COPY scripts/ci-install.ts scripts/ci-install.ts
+# END GENERATED INSTALL TOOLING
 
 FROM base AS install-inputs
 # Preserve Bun's committed root lockfile and full workspace manifest map.
@@ -20,7 +26,7 @@ RUN mkdir -p /json && \
 FROM base AS pruner
 COPY package.json .
 RUN --mount=type=cache,target=/root/.bun/install/cache \
-    bun install -g "turbo@$(bun -p 'require("./package.json").devDependencies.turbo')"
+    bun scripts/ci-install.ts /tmp/pruner-install.log -g "turbo@$(bun -p 'require("./package.json").devDependencies.turbo')"
 COPY . .
 RUN turbo prune @stll/api @stll/collab @stll/legal-atlas-runner --docker
 
@@ -30,7 +36,7 @@ COPY --from=install-inputs /json/ .
 # The cache mount is detached after this layer, so packages must be
 # materialized under /app instead of linked into the global virtual store.
 RUN --mount=type=cache,target=/root/.bun/install/cache \
-    BUN_INSTALL_GLOBAL_STORE=0 bun install --filter @stll/api --filter @stll/collab --filter @stll/legal-atlas-runner --frozen-lockfile --ignore-scripts --network-concurrency=8
+    BUN_INSTALL_GLOBAL_STORE=0 bun scripts/ci-install.ts /tmp/deps-install.log --filter @stll/api --filter @stll/collab --filter @stll/legal-atlas-runner --frozen-lockfile --ignore-scripts --network-concurrency=8
 
 # Copy source code and compile the API to a Bun binary.
 #
@@ -43,7 +49,14 @@ FROM deps AS builder
 ARG TARGETARCH
 ENV NODE_ENV=production
 COPY --from=pruner /app/out/full/ .
+# Generator inputs outside the pruned API workspace graph.
+COPY --from=install-inputs /app/apps/web/src/fonts.css /app/apps/web/src/fonts.css
+COPY --from=install-inputs /app/apps/web/src/i18n/langs/ /app/apps/web/src/i18n/langs/
+COPY --from=install-inputs /app/apps/web/public/fonts/ /app/apps/web/public/fonts/
+COPY --from=install-inputs /app/scripts/generated-artifacts.ts /app/scripts/generated-artifacts.ts
+COPY --from=install-inputs /app/.oxfmtrc.json /app/.oxfmtrc.json
 RUN bun apps/api/scripts/generate-capability-runtime.ts
+RUN bun apps/api/scripts/generate-mcp-app-contracts.ts && bun packages/mcp-apps/scripts/build-mcp-apps.ts
 # Build the server unminified: `bun build --minify` can break Elysia's AOT
 # handler codegen (minified variable renames vs Sucrose). See elysiajs/elysia#1711.
 RUN bun build \

@@ -66,6 +66,7 @@ import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
 } from "@/api/lib/case-law/decision-text";
+import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
 import { citationTextRevisionFingerprintSql } from "@/api/lib/case-law/text-revision";
 import type { CorpusStorageMode } from "@/api/lib/corpus-storage-mode";
 import { executedRows } from "@/api/lib/db/executed-rows";
@@ -1200,6 +1201,9 @@ const storeBackfilledDocumentOwned = async ({
         subject: { family: "case_law", entityId: decision.id },
       });
     }
+    if (applied.length > 0) {
+      await runDecisionWriteExtension(tx, decision.id);
+    }
     return applied.length > 0;
   };
 
@@ -1571,6 +1575,9 @@ const markDocumentUnavailableOwned = async ({
         lock: projectionLock,
         subject: { family: "case_law", entityId: decision.id },
       });
+    }
+    if (updated.length > 0) {
+      await runDecisionWriteExtension(tx, decision.id);
     }
   });
 };

@@ -24,9 +24,11 @@ import {
   ownsCodeCheckPath,
   type CodeCheckLeg,
 } from "../packages/scripts/src/code-quality-partition";
-import { runBudgetedCheck } from "./code-quality-task-budget";
+import { RUST_TEST_DISCOVERY_INPUTS } from "./check-rust-test-determinism";
+import { runBudgetedCheck, TASK_STALL_MS } from "./code-quality-task-budget";
 import configuredBudgets from "./code-quality-task-budgets.json" with { type: "json" };
 import { isChangedLintPath } from "./lint-paths";
+import { matches } from "./oxlint-config-scopes";
 import { measureResultBoundaryDebt } from "./ratchet";
 import {
   isResultConventionExcludedFile,
@@ -80,9 +82,12 @@ export const WORKSPACE_TYPECHECK_CACHE_INPUTS = [
   ...ALL_WORKSPACE_CACHE_INPUTS,
   "$TURBO_ROOT$/package.json",
 ] as const;
-// Every module `oxlint.config.ts` imports is rule configuration: a row edited
-// in the ownership table, a glob in the result-boundary scope, or a file in the
-// design-system backlog changes what every workspace lint reports.
+// Every entry here can change lint output outside its owning workspace: a row
+// edited in the ownership table, a glob in the result-boundary scope, or a file
+// in the design-system backlog changes what multiple workspace lints report.
+// Workspace-local files that the config imports belong to that workspace's
+// `$TURBO_DEFAULT$` inputs instead; merely evaluating the config does not make
+// their contents an input to unrelated lint scopes.
 // scripts/oxlint-config-inputs.test.ts holds this list to the config's imports
 // and to turbo.json.
 export const OXLINT_CONFIGURATION_CACHE_INPUTS = [
@@ -100,14 +105,12 @@ export const OXLINT_CONFIGURATION_CACHE_INPUTS = [
   "$TURBO_ROOT$/scripts/parse-memo.ts",
   "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",
   "$TURBO_ROOT$/scripts/oxlint-rule-ids.ts",
-  "$TURBO_ROOT$/apps/api/src/lib/db/status-tables.gen.ts",
   "$TURBO_ROOT$/apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
   "$TURBO_ROOT$/apps/api/src/lib/db/read-bounded.ts",
   "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
   "$TURBO_ROOT$/scripts/sql-perf-detector.ts",
   "$TURBO_ROOT$/apps/api/src/db/high-volume-tables.ts",
   "$TURBO_ROOT$/apps/api/src/lib/db/public-corpus-audit/**",
-  "$TURBO_ROOT$/apps/api/drizzle/**",
   "$TURBO_ROOT$/apps/api/src/lib/safe-handler-factories.ts",
   "$TURBO_ROOT$/apps/api/src/lib/system-audit/modules.ts",
   "$TURBO_ROOT$/scripts/sql-perf-scope.ts",
@@ -120,12 +123,20 @@ export const OXLINT_CONFIGURATION_CACHE_INPUTS = [
   "$TURBO_ROOT$/scripts/check-test-state-baseline.ts",
   "$TURBO_ROOT$/scripts/baseline-paths.ts",
   "$TURBO_ROOT$/scripts/ledger-membership.ts",
+  "$TURBO_ROOT$/scripts/product-frontend-files.ts",
 ] as const;
 export const LINT_ONLY_CACHE_INPUTS = [
   ...OXLINT_CONFIGURATION_CACHE_INPUTS,
   "$TURBO_ROOT$/tsconfig.tooling.json",
 ] as const;
 export const PLUGIN_FIXTURE_INPUTS = [
+  ...Object.values(RUST_TEST_DISCOVERY_INPUTS).map(
+    (input) => `$TURBO_ROOT$/${input}`,
+  ),
+  "$TURBO_ROOT$/scripts/check-rust-test-determinism.ts",
+  "$TURBO_ROOT$/scripts/rust-test-determinism-scan.ts",
+  "$TURBO_ROOT$/scripts/check-rust-test-determinism.test.ts",
+  "$TURBO_ROOT$/scripts/rust-test-determinism-baseline.json",
   ...DEPENDENCY_CACHE_INPUTS,
   ...SHARED_COMPILER_CACHE_INPUTS,
   ...OXLINT_CONFIGURATION_CACHE_INPUTS,
@@ -135,6 +146,9 @@ export const PLUGIN_FIXTURE_INPUTS = [
   "$TURBO_ROOT$/scripts/oxlint-additional-guards.test.ts",
   "$TURBO_ROOT$/scripts/check-oxlint-fixture-counts.ts",
   "$TURBO_ROOT$/scripts/check-oxlint-fixture-counts.test.ts",
+  // The status-column map the no-direct-status-set fixture is linted against;
+  // it stays a fixture input although it no longer forces lint everywhere.
+  "$TURBO_ROOT$/apps/api/src/lib/db/status-tables.gen.ts",
   "$TURBO_ROOT$/tsconfig.json",
   "$TURBO_ROOT$/tsconfig.oxlint-plugins.json",
 ] as const;
@@ -152,7 +166,6 @@ export const ROOT_SCRIPT_LINT_INPUTS = [
 ] as const;
 const TURBO_CONFIG_PATH = "turbo.json";
 const TURBO_ROOT_INPUT_PREFIX = "$TURBO_ROOT$/";
-const RECURSIVE_GLOB_SUFFIX = "/**";
 
 const ROOT_CHECKS = {
   assets: "assets",
@@ -214,11 +227,23 @@ const matchesTurboInput = (file: string, input: string): boolean => {
     return false;
   }
   const relativeInput = input.slice(TURBO_ROOT_INPUT_PREFIX.length);
-  if (!relativeInput.endsWith(RECURSIVE_GLOB_SUFFIX)) {
-    return file === relativeInput;
-  }
-  const directory = relativeInput.slice(0, -RECURSIVE_GLOB_SUFFIX.length);
-  return file.startsWith(`${directory}/`);
+  return matches(relativeInput, file);
+};
+
+export const matchedLintAllInputs = (
+  changedPaths: readonly string[],
+): string[] =>
+  [...ALL_WORKSPACE_CACHE_INPUTS, ...LINT_ONLY_CACHE_INPUTS].filter((input) =>
+    changedPaths.some((changedPath) => matchesTurboInput(changedPath, input)),
+  );
+
+export const lintAllTrace = (
+  changedPaths: readonly string[],
+): string | null => {
+  const matchedInputs = matchedLintAllInputs(changedPaths);
+  return matchedInputs.length === 0
+    ? null
+    : `code-check: lint all shared inputs: ${matchedInputs.join(", ")}\n`;
 };
 
 const invalidatesAllWorkspaceChecks = (file: string): boolean =>
@@ -357,6 +382,8 @@ type Options = {
   leg?: CodeCheckLeg;
   scope: CheckScope;
   dryRun: boolean;
+  /** Pre-push leaves a change that needs the full check to CI. */
+  skipFullFallback: boolean;
 };
 
 const parseArgs = (args: readonly string[]): Options => {
@@ -364,11 +391,16 @@ const parseArgs = (args: readonly string[]): Options => {
   let base: string | null = null;
   let all = false;
   let dryRun = false;
+  let skipFullFallback = false;
 
   const argv = args.values();
   for (const argument of argv) {
     if (argument === "--dry-run") {
       dryRun = true;
+      continue;
+    }
+    if (argument === "--skip-full-fallback") {
+      skipFullFallback = true;
       continue;
     }
     if (argument === "--all") {
@@ -403,6 +435,7 @@ const parseArgs = (args: readonly string[]): Options => {
       ? { type: "all" }
       : { type: "affected", base: base ?? DEFAULT_BASE },
     dryRun,
+    skipFullFallback,
   };
 };
 
@@ -655,7 +688,7 @@ type ExecuteCheckCommandsOptions = {
   ) => Result<void, CodeCheckError> | Promise<Result<void, CodeCheckError>>;
   write?: (output: string) => void;
   dryRun?: boolean;
-  deadlineMs?: number;
+  budgetDeadlineMs?: number;
   now?: () => number;
 };
 
@@ -667,18 +700,21 @@ export const executeCheckCommands = async ({
   },
   dryRun = false,
   now = Date.now,
-  deadlineMs = now() + CODE_CHECK_EXECUTION_BUDGET_MS,
+  budgetDeadlineMs = now() + CODE_CHECK_EXECUTION_BUDGET_MS,
 }: ExecuteCheckCommandsOptions): Promise<number> => {
   const failures: CodeCheckError[] = [];
+  let warned = false;
   for (const command of commands) {
     if (dryRun) {
       write(`  ${command.join(" ")}\n`);
       continue;
     }
-    const timeoutMs = deadlineMs - now();
-    if (timeoutMs <= 0) {
-      write("code-check: execution deadline exceeded before next command\n");
-      return 1;
+    const timeoutMs = Math.max(0, budgetDeadlineMs - now());
+    if (timeoutMs === 0 && !warned) {
+      warned = true;
+      write(
+        "::warning title=task-budget::code-check execution warning budget exceeded; continuing checks\n",
+      );
     }
     const result = await (runner === undefined
       ? runCheck(command, timeoutMs)
@@ -772,6 +808,7 @@ type DiscoverAffectedWorkspacesOptions = {
   command?: readonly string[];
   cwd?: string;
   timeoutMs?: number;
+  stallMs?: number;
   report?: (diagnostic: string) => void;
 };
 
@@ -780,6 +817,7 @@ export const discoverAffectedWorkspaces = async ({
   command = ["bun", "--bun", "turbo", "ls", "--affected", "--output=json"],
   cwd = REPO_ROOT,
   timeoutMs = planningCommandTimeout(),
+  stallMs = TASK_STALL_MS,
   report = (diagnostic) => {
     process.stdout.write(diagnostic);
   },
@@ -793,6 +831,7 @@ export const discoverAffectedWorkspaces = async ({
     command,
     cwd,
     timeoutMs,
+    stallMs,
     summary: "none",
     env: { TURBO_SCM_BASE: mergeBase, TURBO_SCM_HEAD: "HEAD" },
     writeStdout: (text) => {
@@ -807,13 +846,13 @@ export const discoverAffectedWorkspaces = async ({
   });
   const diagnostic = `code-check: planner ${command.join(" ")} elapsed=${Date.now() - startedAt}ms budget=${timeoutMs}ms exit=${result.exitCode} outcome=${result.outcome}\n`;
   report(diagnostic);
-  if (result.outcome === "deadline") {
+  if (result.outcome === "stalled") {
     report(
-      `${stderr.join("")}code-check: affected planner timed out; using full check scope\n`,
+      `${stderr.join("")}code-check: affected planner stalled; using full check scope\n`,
     );
     return Result.ok({
       type: "fallback",
-      reason: "affected workspace planner timeout",
+      reason: "affected workspace planner stall",
     });
   }
   if (result.exitCode !== 0) {
@@ -850,8 +889,27 @@ const parseAffectedWorkspacePaths = (output: string): string[] => {
 };
 
 const THREE_TASK_MEMORY_BYTES = 12 * 1024 ** 3;
-export const codeCheckConcurrency = (memoryBytes = totalmem()): number =>
-  memoryBytes >= THREE_TASK_MEMORY_BYTES ? 3 : 2;
+/** Memory-based task count; a valid request may only lower it. */
+export const codeCheckConcurrency = (
+  memoryBytes: number,
+  requested?: string,
+): number => {
+  const memoryDefault = memoryBytes >= THREE_TASK_MEMORY_BYTES ? 3 : 2;
+  const override = Number(requested);
+  if (
+    requested !== undefined &&
+    Number.isSafeInteger(override) &&
+    override > 0
+  ) {
+    return Math.min(override, memoryDefault);
+  }
+  return memoryDefault;
+};
+
+// CODE_CHECK_CONCURRENCY lowers the task count on a busy host (pre-push runs
+// one task at a time); child Turbo runs inherit it.
+export const configuredCodeCheckConcurrency = (): number =>
+  codeCheckConcurrency(totalmem(), process.env["CODE_CHECK_CONCURRENCY"]);
 
 const turboCommand = (tasks: readonly string[], scope: TaskScope): string[] => [
   "bun",
@@ -859,7 +917,7 @@ const turboCommand = (tasks: readonly string[], scope: TaskScope): string[] => [
   "turbo",
   "run",
   ...tasks,
-  `--concurrency=${codeCheckConcurrency()}`,
+  `--concurrency=${configuredCodeCheckConcurrency()}`,
   "--summarize",
   "--remote-cache-timeout=20",
   "--log-order=stream",
@@ -1050,7 +1108,7 @@ export const scopedCommands = (
       "turbo",
       "run",
       "typecheck:repo",
-      `--concurrency=${codeCheckConcurrency()}`,
+      `--concurrency=${configuredCodeCheckConcurrency()}`,
       "--summarize",
       "--remote-cache-timeout=20",
       "--log-order=stream",
@@ -1101,6 +1159,7 @@ const presentPaths = (paths: readonly string[]): string[] =>
 
 type ScopeCheck = {
   plan: CheckPlan;
+  changedPaths: string[];
   presentChangedPaths: string[];
   mergeBase: string | null;
 };
@@ -1117,6 +1176,7 @@ const planScope = async (
             files,
             workspacePaths: workspacePaths(),
           }),
+          changedPaths: paths,
           presentChangedPaths: files,
           mergeBase: null,
         };
@@ -1142,6 +1202,7 @@ const planScope = async (
                   affectedWorkspacePaths: discovery.paths,
                   workspacePaths: workspacePaths(),
                 }),
+          changedPaths: changed.value.paths,
           presentChangedPaths,
           mergeBase: changed.value.mergeBase,
         };
@@ -1157,13 +1218,13 @@ const planScope = async (
 type CodeCheckError = CommandFailedError;
 
 const main = async (): Promise<Result<number, CommandFailedError>> => {
-  const deadlineMs = Date.now() + CODE_CHECK_EXECUTION_BUDGET_MS;
+  const budgetDeadlineMs = Date.now() + CODE_CHECK_EXECUTION_BUDGET_MS;
   const options = parseArgs(process.argv.slice(2));
   // Verify the narrow runtime pin before even the Turbo affected/dry-run query:
   // a stale projection must fail before any old-runtime cache can be replayed.
   const toolchain = await runCheck(
     ["bun", "scripts/generate-bun-toolchain.ts"],
-    Math.min(30_000, Math.max(0, deadlineMs - Date.now())),
+    Math.min(30_000, Math.max(0, budgetDeadlineMs - Date.now())),
   );
   if (toolchain.isErr()) {
     return toolchain;
@@ -1172,7 +1233,12 @@ const main = async (): Promise<Result<number, CommandFailedError>> => {
   if (scoped.isErr()) {
     return scoped;
   }
-  const { plan, presentChangedPaths, mergeBase } = scoped.value;
+  const {
+    plan,
+    changedPaths: selectedChangedPaths,
+    presentChangedPaths,
+    mergeBase,
+  } = scoped.value;
   const leg = options.leg;
   const resultBoundaryCommand = planResultBoundaryLint({
     files:
@@ -1186,7 +1252,7 @@ const main = async (): Promise<Result<number, CommandFailedError>> => {
           cwd: REPO_ROOT,
           stdout: "pipe",
           stderr: "pipe",
-          timeout: planningCommandTimeout(deadlineMs - Date.now()),
+          timeout: planningCommandTimeout(budgetDeadlineMs - Date.now()),
           killSignal: "SIGKILL",
         });
       // Only a missing comparison ref means "no base"; any other Git failure
@@ -1225,6 +1291,18 @@ const main = async (): Promise<Result<number, CommandFailedError>> => {
     commands.push(resultBoundaryCommand);
   }
 
+  if (plan.type === "fallback" && options.skipFullFallback) {
+    process.stdout.write(
+      `code-check: skipped; ${plan.changedPath} requires the full repository check, which CI runs\n`,
+    );
+    return Result.ok(
+      await executeCheckCommands({
+        commands,
+        dryRun: options.dryRun,
+        budgetDeadlineMs,
+      }),
+    );
+  }
   if (plan.type === "fallback") {
     process.stdout.write(
       `code-check: full repository (${plan.changedPath} requires fallback)\n`,
@@ -1240,7 +1318,7 @@ const main = async (): Promise<Result<number, CommandFailedError>> => {
       await executeCheckCommands({
         commands,
         dryRun: options.dryRun,
-        deadlineMs,
+        budgetDeadlineMs,
       }),
     );
   }
@@ -1257,6 +1335,12 @@ const main = async (): Promise<Result<number, CommandFailedError>> => {
   process.stdout.write(
     `code-check: lint ${scopeLabel(plan.lint)}; typecheck ${scopeLabel(plan.typecheck)}\n`,
   );
+  if (plan.lint.type === "all") {
+    const trace = lintAllTrace(selectedChangedPaths);
+    if (trace !== null) {
+      process.stdout.write(trace);
+    }
+  }
   commands.push(
     ...scopedCommands(
       plan,
@@ -1267,7 +1351,7 @@ const main = async (): Promise<Result<number, CommandFailedError>> => {
     await executeCheckCommands({
       commands,
       dryRun: options.dryRun,
-      deadlineMs,
+      budgetDeadlineMs,
     }),
   );
 };

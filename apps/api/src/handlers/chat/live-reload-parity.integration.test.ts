@@ -1,4 +1,6 @@
+import { EventType, StreamProcessor } from "@tanstack/ai";
 import type { UIMessage } from "@tanstack/ai-client";
+import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { inArray } from "drizzle-orm";
 import fc from "fast-check";
@@ -13,6 +15,7 @@ import {
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatThreads } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
+import { processChatTurnOwnership } from "@/api/handlers/chat/chat-turn-run";
 import { createForkThread } from "@/api/handlers/chat/fork/create";
 import type { CreateDocumentToolOutput } from "@/api/handlers/chat/tools/create-document-tool";
 import {
@@ -31,6 +34,8 @@ import {
   PLAIN_TOOL_NAME,
 } from "@/api/tests/helpers/chat-approval-harness";
 import type { ChatHarness } from "@/api/tests/helpers/chat-approval-harness";
+import { createChatHarnessProfile } from "@/api/tests/helpers/chat-harness-profile";
+import { readClientStreamChunks } from "@/api/tests/helpers/chat-live-view";
 import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
 import type { OracleViolation } from "@/api/tests/helpers/chat-oracles";
 import type { ScriptedTurn } from "@/api/tests/helpers/chat-round-trip";
@@ -45,6 +50,7 @@ import {
 } from "@/api/tests/security/rls-fixture";
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
+import { withQueryLogger } from "@/api/tests/security/test-utils";
 
 // Whole conversations driven through the production path from both ends: the
 // web app's own chat runtime posts what its live view holds and answers only
@@ -57,28 +63,40 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 // first tab for the same approval.
 
 let testDb: TestDatabase;
+const profile = createChatHarnessProfile(
+  "live-reload-parity.integration.test.ts",
+);
 let ids: TestIds;
 let safeDb: SafeDb;
 let scopedDb: ScopedDb;
 const seededThreadIds: SafeId<"chatThread">[] = [];
 
-beforeAll(async () => {
-  const fixture = await getRlsFixture();
-  testDb = fixture.testDb;
-  ids = fixture.ids;
-  scopedDb = asTestRaw<ScopedDb>(
-    createScopedDb(testDb, [ids.wsA1, ids.wsA2], ids.orgA, ids.userA1),
-  );
-  safeDb = toSafeDbMock(scopedDb);
-});
+beforeAll(
+  async () =>
+    await profile.measure("fixture", async () => {
+      const fixture = await getRlsFixture();
+      testDb = withQueryLogger(fixture.testDb, profile.logger);
+      ids = fixture.ids;
+      scopedDb = asTestRaw<ScopedDb>(
+        createScopedDb(testDb, [ids.wsA1, ids.wsA2], ids.orgA, ids.userA1),
+      );
+      safeDb = toSafeDbMock(scopedDb);
+    }),
+);
 
 afterAll(async () => {
-  if (seededThreadIds.length > 0) {
-    await testDb
-      .delete(chatThreads)
-      .where(inArray(chatThreads.id, seededThreadIds));
+  try {
+    await profile.measure("close", async () => {
+      if (seededThreadIds.length > 0) {
+        await testDb
+          .delete(chatThreads)
+          .where(inArray(chatThreads.id, seededThreadIds));
+      }
+      await releaseRlsFixture();
+    });
+  } finally {
+    profile.report();
   }
-  await releaseRlsFixture();
 });
 
 const newThread = (): SafeId<"chatThread"> => {
@@ -1334,7 +1352,13 @@ const supersedeCommand = fc
   .map(([runs, text]) => new SupersedeCards(runs, text));
 
 const openConversation = async () => {
-  const harness = createApprovalHarness({ ids, safeDb, scopedDb, testDb });
+  const harness = createApprovalHarness({
+    ids,
+    profile,
+    safeDb,
+    scopedDb,
+    testDb,
+  });
   const threadId = newThread();
   let idCount = 0;
   const real: Real = {
@@ -2408,6 +2432,131 @@ describe("a conversation's live view", () => {
     "stops an answer while it streams (%s)",
     async (quietAt) => {
       await stopWhileStreaming(quietAt);
+    },
+    propertyTestTimeout(30_000),
+  );
+
+  test.each([
+    ["after-tool-end", "user-stop"],
+    ["before-tool-end", "user-stop"],
+    ["after-tool-end", "owner-lost"],
+    ["before-tool-end", "owner-lost"],
+  ] as const)(
+    "a second live reader observes a cut turn without a failure (%s, %s)",
+    async (quietAt, reason) => {
+      const conversation = await openConversation();
+      const { real } = conversation;
+      const { harness, threadId } = real;
+      try {
+        harness.streamLive(threadId);
+        harness.script(threadId, [
+          {
+            type: "step",
+            quietUntilAborted: quietAt,
+            text: "Checking the register",
+            textChunks: [
+              "Checking the register",
+              ...Array.from({ length: 27 }, () => " "),
+            ],
+            toolCalls: [
+              {
+                arguments: PLAIN_TOOL_ARGUMENTS,
+                toolCallId: "call-stopped",
+                toolName: PLAIN_TOOL_NAME,
+              },
+            ],
+          },
+        ]);
+        await real.client.startUserMessage(
+          Bun.randomUUIDv7(),
+          "Check the register",
+          (messages) =>
+            messages.some(({ parts }) =>
+              parts.some(
+                (part) =>
+                  part.type === "tool-call" && part.id === "call-stopped",
+              ),
+            ),
+        );
+        const turn =
+          (await testDb.query.chatTurns.findFirst({
+            where: { threadId: { eq: threadId }, status: { eq: "running" } },
+          })) ?? panic("The second reader must join a running turn");
+        const runId = turn.runId ?? panic("The running turn must have a run");
+        const response = await fetch(
+          `http://localhost/v1/chat/threads/${threadId}/turns/${turn.id}/join`,
+          { signal: AbortSignal.timeout(10_000) },
+        );
+        expect(response.headers.get("Content-Type")).toContain(
+          "text/event-stream",
+        );
+        const secondReader = readClientStreamChunks({
+          response,
+          runId,
+          threadId,
+        });
+        if (reason === "user-stop") {
+          await real.client.stop();
+        } else {
+          const run =
+            processChatTurnOwnership.run(
+              turn.executionId ??
+                panic("A running turn must have an execution"),
+            ) ?? panic("The process must own the running turn");
+          expect(await run.relinquish()).toBe("stored");
+        }
+        const chunks = await secondReader;
+        // This reader stays attached when the stopping page disconnects.
+        expect(chunks.some(({ type }) => type === EventType.RUN_STARTED)).toBe(
+          true,
+        );
+        expect(
+          chunks.filter(({ type }) => type === EventType.RUN_ERROR),
+        ).toEqual([]);
+        const processor = new StreamProcessor();
+        for (const chunk of chunks) {
+          processor.processChunk(chunk);
+        }
+        const liveAssistant = processor
+          .getMessages()
+          .findLast(({ role }) => role === "assistant");
+        const reloadedAssistant = (await harness.reloadView(threadId)).findLast(
+          ({ role }) => role === "assistant",
+        );
+        expect(liveAssistant?.metadata?.["turnTiming"]).toMatchObject({
+          status: "finished",
+        });
+        expect(liveAssistant?.metadata?.["turnTiming"]).toEqual(
+          reloadedAssistant?.metadata?.["turnTiming"],
+        );
+        expect(reloadedAssistant?.metadata?.["turnOutcome"]).toEqual({
+          type: reason === "user-stop" ? "cancelled" : "interrupted",
+          reason,
+        });
+        const stoppedAssistant = real.client
+          .messages()
+          .findLast(({ role }) => role === "assistant");
+        expect(stoppedAssistant?.metadata?.["turnOutcome"]).toEqual(
+          reloadedAssistant?.metadata?.["turnOutcome"],
+        );
+        expect(
+          liveAssistant?.parts.filter(({ type }) => type === "text"),
+        ).toEqual(
+          reloadedAssistant?.parts.filter(({ type }) => type === "text"),
+        );
+        expect(liveAssistant?.parts).toContainEqual({
+          type: "text",
+          content: `Checking the register${" ".repeat(27)}`,
+        });
+        expect(liveAssistant?.metadata?.["turnOutcome"]).toEqual(
+          reloadedAssistant?.metadata?.["turnOutcome"],
+        );
+        expect(
+          chunks.filter(({ type }) => type === EventType.RUN_FINISHED),
+        ).toMatchObject([{ runId, threadId, outcome: { type: "cancelled" } }]);
+      } finally {
+        await closeConversation(conversation);
+      }
     },
     propertyTestTimeout(30_000),
   );

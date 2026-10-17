@@ -4,8 +4,8 @@ defaults:
   run:
     shell: bash
 
-# No `paths` filter: each job scopes itself. Dependency updates and ordinary
-# same-repository PRs share the Tauri alignment fixer and existing App push.
+# Each job scopes itself. Dependency updates and ordinary same-repository
+# PRs share the Tauri alignment fixer and existing App push.
 on:
   workflow_dispatch:
     inputs:
@@ -19,6 +19,15 @@ on:
         type: string
   pull_request:
     types: [opened, synchronize, reopened]
+    # Workflow files are never fixed (the App cannot push them); only those a
+    # generator or the Tauri alignment reads stay in scope. A test derives
+    # this list from both.
+    paths:
+      - "**"
+      - "!.github/workflows/**"
+      - ".github/workflows/autofix.yml"
+      - ".github/workflows/ci.yml"
+      - ".github/workflows/release.yml"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number || github.ref) || github.event_name == 'workflow_dispatch' && format('dispatch-pr-{0}-run-{1}', inputs.pr, github.run_id) || format('run-{0}', github.run_id) }}
@@ -92,6 +101,7 @@ jobs:
           submodules: true
 
       - name: Install regeneration dependencies
+        timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
@@ -310,13 +320,24 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
+      # The merge-queue yield reads workflow runs and their jobs.
+      actions: read
+      # The push scope reads earlier autofix results.
+      checks: read
       contents: read
       pull-requests: read
     outputs:
+      deferred: ${{ steps.merge-queue.outputs.result == 'skip' }}
       ready: ${{ steps.planner.outputs.ready }}
       run: ${{ steps.scope.outputs.run }}
       ids: ${{ steps.scope.outputs.ids }}
       allowed: ${{ steps.scope.outputs.allowed }}
+      # A planner without these outputs (an older head) leaves them empty,
+      # which the consumers read as "run".
+      prune: ${{ steps.scope.outputs.prune }}
+      needed: ${{ steps.scope.outputs.needed }}
+      since: ${{ steps.settled.outputs.since }}
+      refix: ${{ steps.scope.outputs.refix }}
     steps:
       - name: Checkout GitHub API tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -325,8 +346,38 @@ jobs:
           ref: ${{ github.workflow_sha }}
           path: .gh-retry
           persist-credentials: false
-          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout: |
+            scripts/gh-retry.sh
+            scripts/merge-queue-waiting.mjs
           sparse-checkout-cone-mode: false
+
+      # Autofix is a convenience; CI's format, lint and drift guards still
+      # enforce. While the merge queue has waiting work, a first attempt
+      # skips the fixer instead of taking a runner; a re-run never skips.
+      - name: Yield to the merge queue
+        id: merge-queue
+        continue-on-error: true
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          CI_YIELD_TO_MERGE_QUEUE: ${{ vars.CI_YIELD_TO_MERGE_QUEUE }}
+        with:
+          retries: 0
+          result-encoding: string
+          script: |
+            const { pathToFileURL } = require("node:url");
+            const { resolve } = require("node:path");
+            const { mergeQueueGate } = await import(pathToFileURL(
+              resolve(".gh-retry/scripts/merge-queue-waiting.mjs")).href);
+            return mergeQueueGate({
+              github,
+              context,
+              enabled: process.env.CI_YIELD_TO_MERGE_QUEUE === "on",
+              attempt: Number(process.env.GITHUB_RUN_ATTEMPT ?? "1"),
+              polls: 0,
+              intervalMs: 0,
+              sleep: async () => {},
+              notice: (message) => core.notice(message),
+            });
 
       - name: Preserve GitHub API tooling across source checkouts
         run: |
@@ -349,6 +400,10 @@ jobs:
         with:
           persist-credentials: false
           ref: ${{ github.event.pull_request.head.sha }}
+          # Recent history without file contents: enough to find the settled
+          # commit and list what changed since.
+          fetch-depth: 21
+          filter: blob:none
           sparse-checkout: |
             /scripts/
             /packages/scripts/src/generated-files.ts
@@ -380,15 +435,41 @@ jobs:
           done
           echo "ready=true" >> "$GITHUB_OUTPUT"
 
+      # A later push starts from the newest commit autofix left settled, so
+      # files unchanged since then are not fixed again; see
+      # scripts/autofix-push-scope.ts. Without one the scope is the whole pull
+      # request.
+      - name: Find settled autofix commit
+        id: settled
+        if: steps.planner.outputs.ready == 'true' && github.event.action == 'synchronize'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if [[ ! -f scripts/autofix-push-scope.ts ]]; then
+            exit 0
+          fi
+          bun --no-install --no-env-file scripts/autofix-push-scope.ts settled "$GH_RETRY_SCRIPT" "$REPOSITORY" > "$RUNNER_TEMP/settled"
+          since=$(sed -n 's/^since=//p' "$RUNNER_TEMP/settled")
+          if [[ -n "$since" ]] && git -c core.quotepath=off diff --name-only --no-renames "$since" HEAD -- > "$RUNNER_TEMP/push-paths"; then
+            echo "::notice::Autofix scope: changes since $since."
+            echo "since=$since" >> "$GITHUB_OUTPUT"
+          fi
+
       # The manifest owns generator inputs and outputs. The files API lists at
       # most 3000 files, so a list that long regenerates rather than guessing.
       - name: Match generator inputs
         id: scope
         if: steps.planner.outputs.ready == 'true'
+        env:
+          SINCE_SHA: ${{ steps.settled.outputs.since }}
         run: |
           set -euo pipefail
           if [[ "$(wc -l < "$RUNNER_TEMP/changed-paths")" -ge 3000 ]]; then
             bun --no-install --no-env-file scripts/autofix-plan.ts plan --all < "$RUNNER_TEMP/changed-paths" >> "$GITHUB_OUTPUT"
+          elif [[ -n "$SINCE_SHA" ]]; then
+            bun --no-install --no-env-file scripts/autofix-plan.ts plan --since "$RUNNER_TEMP/push-paths" < "$RUNNER_TEMP/changed-paths" >> "$GITHUB_OUTPUT"
           else
             bun --no-install --no-env-file scripts/autofix-plan.ts plan < "$RUNNER_TEMP/changed-paths" >> "$GITHUB_OUTPUT"
           fi
@@ -399,6 +480,8 @@ jobs:
     if: >-
       needs.regenerate-scope.result == 'success'
       && needs.regenerate-scope.outputs.ready == 'true'
+      && needs.regenerate-scope.outputs.deferred != 'true'
+      && needs.regenerate-scope.outputs.needed != 'false'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
@@ -414,10 +497,14 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           submodules: true
 
+      # Changed paths bound what autofix may rewrite; the fixers act on the
+      # subset the push changed since the settled commit.
       - name: Record changed paths
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          # A push that changed a fixer input refixes every changed path.
+          SINCE_SHA: ${{ needs.regenerate-scope.outputs.refix != 'true' && needs.regenerate-scope.outputs.since || '' }}
         run: |
           set -euo pipefail
           if [[ "$(git rev-parse HEAD)" != "$HEAD_SHA" ]]; then
@@ -425,6 +512,12 @@ jobs:
             exit 1
           fi
           git diff --name-only -z --diff-filter=ACMR "$BASE_SHA"..."$HEAD_SHA" -- > "$RUNNER_TEMP/autofix-changed-paths"
+          if [[ -n "$SINCE_SHA" ]]; then
+            git diff --name-only -z --no-renames "$SINCE_SHA" "$HEAD_SHA" -- > "$RUNNER_TEMP/autofix-push-paths"
+            comm -z -12 <(sort -z -u "$RUNNER_TEMP/autofix-changed-paths") <(sort -z -u "$RUNNER_TEMP/autofix-push-paths") > "$RUNNER_TEMP/autofix-fix-paths"
+          else
+            cp "$RUNNER_TEMP/autofix-changed-paths" "$RUNNER_TEMP/autofix-fix-paths"
+          fi
           git diff --name-only -z --no-renames --diff-filter=A "$BASE_SHA"..."$HEAD_SHA" -- apps/api/ > "$RUNNER_TEMP/autofix-added-paths"
 
       - name: Setup Bun
@@ -446,7 +539,7 @@ jobs:
             paths=()
             while IFS= read -r -d '' path; do
               paths+=("$path")
-            done < "$RUNNER_TEMP/autofix-changed-paths"
+            done < "$RUNNER_TEMP/autofix-fix-paths"
             required=$(bun --no-install --no-env-file scripts/check-tauri-package-alignment.ts --requires-check "${paths[@]}")
             if [[ "$required" == true ]]; then
               bun --no-install --no-env-file scripts/fix-tauri-package-alignment.ts
@@ -456,6 +549,7 @@ jobs:
           fi
 
       - name: Install dependencies
+        timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           # .npmrc references NPM_TOKEN; pull request installs get none.
@@ -469,6 +563,24 @@ jobs:
             [[ -f "$app/.env" ]] || cp "$app/.env.example" "$app/.env"
           done
 
+      # Generated exports must exist before the compiler can check source fixes.
+      # Regenerate again below because lint may rewrite generator inputs.
+      - name: Prepare selected MCP app exports
+        if: needs.regenerate-scope.outputs.run == 'true'
+        env:
+          STELLA_LOCAL_AUTOFIX: "true"
+          GENERATOR_IDS: ${{ needs.regenerate-scope.outputs.ids }}
+        run: |
+          mcp_ids=""
+          for id in mcp-app-contracts mcp-app-bundles; do
+            if [[ ",$GENERATOR_IDS," == *",$id,"* ]]; then
+              mcp_ids="${mcp_ids:+$mcp_ids,}$id"
+            fi
+          done
+          if [[ -n "$mcp_ids" ]]; then
+            bun scripts/autofix-plan.ts run "$mcp_ids"
+          fi
+
       - name: Fix changed files
         env:
           STELLA_LOCAL_AUTOFIX: "true"
@@ -477,7 +589,7 @@ jobs:
           changed=()
           while IFS= read -r -d '' path; do
             changed+=("$path")
-          done < "$RUNNER_TEMP/autofix-changed-paths"
+          done < "$RUNNER_TEMP/autofix-fix-paths"
           bun scripts/autofix-protected-paths.ts > "$RUNNER_TEMP/autofix-protected-paths"
           protected=()
           while IFS= read -r pattern; do
@@ -541,6 +653,19 @@ jobs:
             bun scripts/autofix-plan.ts run "$GENERATOR_IDS"
           fi
 
+      # Baselines stay protected; the one exception is deleting entries that
+      # no longer match code. The restrict step re-verifies every rewrite
+      # against the head commit before anything is pushed.
+      - name: Prune stale baseline entries
+        if: needs.regenerate-scope.outputs.prune != 'false'
+        env:
+          STELLA_LOCAL_AUTOFIX: "true"
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [[ -f scripts/autofix-baseline-prune.ts ]]; then
+            bun scripts/autofix-baseline-prune.ts prune
+          fi
+
       - name: Restrict autofix changes
         env:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
@@ -563,6 +688,11 @@ jobs:
           fi
 
           # No changed-path or generator grant can authorize decision records.
+          # The only exception is a shrink-only baseline whose rewrite deletes
+          # entries, checked against the head commit by the base revision's
+          # verifier, run from an empty directory without dependencies. That
+          # is a policy guard against mistaken rewrites, not a security
+          # boundary: the pull request's own code already ran in this job.
           bun scripts/autofix-protected-paths.ts > "$RUNNER_TEMP/autofix-protected-paths"
           protected=()
           while IFS= read -r pattern; do
@@ -572,9 +702,27 @@ jobs:
           for pattern in "${protected[@]}"; do
             protected_specs+=(":(glob)$pattern")
           done
-          if ! git diff --quiet "$HEAD_SHA" -- "${protected_specs[@]}" || [[ -n "$(git ls-files --others --exclude-standard -- "${protected_specs[@]}")" ]]; then
+          refuse_protected() {
             echo "::error::Autofix cannot modify baselines, ledgers, waivers, allowances or changesets."
             exit 1
+          }
+          if [[ -n "$(git ls-files --others --exclude-standard -- "${protected_specs[@]}")" ]]; then
+            refuse_protected
+          fi
+          pruned=()
+          while IFS= read -r -d '' path; do
+            pruned+=("$path")
+          done < <(git diff --name-only -z "$HEAD_SHA" -- "${protected_specs[@]}")
+          if (( ${#pruned[@]} > 0 )); then
+            verifier=$(mktemp -d)
+            for source in autofix-baseline-prune.ts baseline-shrink.ts baseline-paths.ts; do
+              git show "$BASE_SHA:scripts/$source" > "$verifier/$source" || refuse_protected
+            done
+            repository=$(pwd)
+            if ! (cd "$verifier" && bun --no-install --no-env-file autofix-baseline-prune.ts \
+              verify --repo "$repository" --ref "$HEAD_SHA" "${pruned[@]}"); then
+              refuse_protected
+            fi
           fi
 
           changed=()
@@ -596,6 +744,9 @@ jobs:
           done
           for path in "${tauri_paths[@]}"; do
             [[ -n "$path" ]] || continue
+            excludes+=(":(exclude,literal)$path")
+          done
+          for path in ${pruned[@]+"${pruned[@]}"}; do
             excludes+=(":(exclude,literal)$path")
           done
 

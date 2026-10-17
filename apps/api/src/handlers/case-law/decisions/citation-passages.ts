@@ -22,14 +22,16 @@ import type {
   DecisionTextWithheldReason,
 } from "@stll/api-contract/case-law-text-field";
 import { CITATION_EVIDENCE_INCOMPLETE_REASON } from "@stll/api-contract/case-law-text-field";
+import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { findCitationPassage } from "@stll/legal-ast/citation-passage";
 import type { CitationPassageMention } from "@stll/legal-ast/citation-passage";
+import { hasBlockInlines, plainTextOf } from "@stll/legal-ast/document-ast";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import {
   caseLawCitations,
-  caseLawDecisions,
+  publishedCaseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
 import type { DecisionCitationRow } from "@/api/handlers/case-law/decisions/citation-graph";
@@ -80,6 +82,8 @@ export type CitationPassage = {
   text: string;
   truncated: boolean;
   mention: CitationPassageMention;
+  evidenceQuote?: string;
+  evidenceAnchorId?: string | null;
 };
 
 export type CitationPolarityEvidence = {
@@ -101,7 +105,10 @@ type CitationEvidenceFields =
       citedPart: null;
     };
 
-export type CitationWithPassage = Omit<DecisionCitationRow, "citationText"> &
+export type CitationWithPassage = Omit<
+  DecisionCitationRow,
+  "citationText" | "evidenceQuote"
+> &
   CitationEvidenceFields & {
     citationText: string | null;
     textIncompleteReason: CitationTextIncompleteReason | null;
@@ -115,6 +122,7 @@ export type CitationWithPassage = Omit<DecisionCitationRow, "citationText"> &
   };
 
 export type DecisionCitationsPage = {
+  doctrineAvailability: "available" | "unavailable";
   items: CitationWithPassage[];
   nextCursor: string | null;
 };
@@ -159,15 +167,21 @@ const readPassageSourcePointers = async (
   }
   const rows = await tx
     .select({
-      id: caseLawDecisions.id,
-      astS3Key: caseLawDecisions.astS3Key,
-      contentHash: caseLawDecisions.contentHash,
+      id: publishedCaseLawDecisions.id,
+      astS3Key: publishedCaseLawDecisions.astS3Key,
+      contentHash: publishedCaseLawDecisions.contentHash,
       ...decisionTextCompletionColumns,
     })
-    .from(caseLawDecisions)
-    .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
+    .from(publishedCaseLawDecisions)
+    .innerJoin(
+      caseLawSources,
+      eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
+    )
     .where(
-      and(inArray(caseLawDecisions.id, [...ids]), decisionTextCompletionGate),
+      and(
+        inArray(publishedCaseLawDecisions.id, [...ids]),
+        decisionTextCompletionGate,
+      ),
     );
   // The same split the decision read makes: redistribution decides whether a
   // citation may be listed at all, derived AI whether its text may travel
@@ -217,20 +231,20 @@ const readDecisionTextColumns = async (
     async (tx) =>
       await tx
         .select({
-          id: caseLawDecisions.id,
-          documentAst: caseLawDecisions.documentAst,
-          contentHash: caseLawDecisions.contentHash,
+          id: publishedCaseLawDecisions.id,
+          documentAst: publishedCaseLawDecisions.documentAst,
+          contentHash: publishedCaseLawDecisions.contentHash,
           ...decisionTextCompletionColumns,
-          sections: caseLawDecisions.sections,
+          sections: publishedCaseLawDecisions.sections,
         })
-        .from(caseLawDecisions)
+        .from(publishedCaseLawDecisions)
         .innerJoin(
           caseLawSources,
-          eq(caseLawSources.id, caseLawDecisions.sourceId),
+          eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
         )
         .where(
           and(
-            inArray(caseLawDecisions.id, [...ids]),
+            inArray(publishedCaseLawDecisions.id, [...ids]),
             decisionTextCompletionGate,
           ),
         ),
@@ -290,6 +304,7 @@ export type CitationPassageOptions = {
   citationText: string;
   /** The section the citation row was extracted from, when the row kept it. */
   sectionText: string | undefined;
+  evidenceQuote?: string | null;
 };
 
 /**
@@ -304,6 +319,7 @@ export const citationPassageIn = ({
   ast,
   citationText,
   sectionText,
+  evidenceQuote,
 }: CitationPassageOptions): CitationPassage | null => {
   const match = findCitationPassage({
     blocks: ast.blocks,
@@ -312,6 +328,27 @@ export const citationPassageIn = ({
   });
   if (match === null) {
     return null;
+  }
+  // The quote anchors to the paragraph that carries it, which need not repeat
+  // the citation: a court often discusses a precedent in the paragraph after
+  // the one naming it. The citing paragraph wins when it carries the quote.
+  const quoteBlocks =
+    evidenceQuote === null || evidenceQuote === undefined
+      ? []
+      : ast.blocks.filter(
+          (block) =>
+            hasBlockInlines(block) &&
+            plainTextOf(block.inlines).includes(evidenceQuote),
+        );
+  const evidenceBlock =
+    quoteBlocks.find((block) => block.id === match.blockId) ??
+    quoteBlocks.at(0);
+  if (
+    evidenceQuote !== null &&
+    evidenceQuote !== undefined &&
+    evidenceBlock === undefined
+  ) {
+    logger.warn("case_law.citation_passage.doctrine_evidence_unavailable", {});
   }
   const excerpt = excerptAround(
     match.text,
@@ -323,6 +360,11 @@ export const citationPassageIn = ({
     text: excerpt.text,
     truncated: excerpt.truncated,
     mention: match.mention,
+    ...(evidenceBlock === undefined ||
+    evidenceQuote === null ||
+    evidenceQuote === undefined
+      ? {}
+      : { evidenceQuote, evidenceAnchorId: evidenceBlock.anchorId }),
   };
 };
 
@@ -589,6 +631,8 @@ export type ReadDecisionCitationsOptions = {
   decisionId: SafeId<"caseLawDecision">;
   direction: CitationReadDirection;
   limit: number;
+  /** The surface the read serves; its country list decides publication. */
+  surface: PublicCountrySurface;
 };
 
 type PrepareDecisionCitationsOptions = {
@@ -719,6 +763,7 @@ export const completeDecisionCitations = async ({
       : [],
   );
   const items = gated.page.items.map((item): CitationWithPassage => {
+    const { evidenceQuote, ...citation } = item;
     const citingId =
       gated.direction === "cites"
         ? String(gated.resolvedDecisionId)
@@ -735,6 +780,10 @@ export const completeDecisionCitations = async ({
       citationText: item.citationText,
       sectionIndex: item.sectionIndex,
       evidenceWindows: evidence?.evidenceWindows ?? null,
+      evidenceQuote:
+        item.doctrine === "distinguishes" || item.doctrine === "limits"
+          ? evidenceQuote
+          : null,
     });
     const evidenceFields: CitationEvidenceFields =
       evidence === null
@@ -757,7 +806,7 @@ export const completeDecisionCitations = async ({
             },
           };
     return {
-      ...item,
+      ...citation,
       ...evidenceFields,
       citationText:
         gated.evidence.type === "ready" && evidence === null
@@ -773,7 +822,11 @@ export const completeDecisionCitations = async ({
   });
 
   return {
-    page: { items, nextCursor: gated.page.nextCursor },
+    page: {
+      items,
+      nextCursor: gated.page.nextCursor,
+      doctrineAvailability: gated.page.doctrineAvailability,
+    },
     type: "page",
   };
 };
@@ -833,9 +886,11 @@ export const readGatedDecisionCitations = async ({
   decisionId,
   direction,
   limit,
+  surface,
 }: ReadDecisionCitationsOptions): Promise<DecisionCitationsRead | null> => {
   const prepared = await withRedistributableSubject(
     caseLawDb,
+    surface,
     { kind: "id", id: decisionId },
     async (subject) =>
       await prepareDecisionCitations({ subject, cursor, direction, limit }),
@@ -855,6 +910,7 @@ type CitationTextFieldsOptions = {
   citationText: string;
   sectionIndex: number | null;
   evidenceWindows: CitationEvidenceWindows | null;
+  evidenceQuote?: string | null;
 };
 
 /** All citation text outputs share one eligibility branch, including the reference itself. */
@@ -864,6 +920,7 @@ export const citationTextFields = ({
   citationText,
   sectionIndex,
   evidenceWindows,
+  evidenceQuote,
 }: CitationTextFieldsOptions) => {
   if (textWithheldReason !== null) {
     return {
@@ -886,6 +943,7 @@ export const citationTextFields = ({
       return {
         citationText,
         passage: citationPassageIn({
+          evidenceQuote,
           ast: text.ast,
           citationText,
           sectionText: sectionTextAt(text.sections, sectionIndex),

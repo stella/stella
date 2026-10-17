@@ -73,10 +73,10 @@ rules.
 `bun run typecheck` uses Bun 1.4.3’s native checker through the workspace
 tasks. Direct project checks use
 `bun check --no-pretty --all --project=<tsconfig path>`; add `--build` for
-solution configs with project references. CI runs `bun run check:typecheck-parity`
-to compare TypeScript and Bun diagnostics on repository code and seeded cases
-when the Bun pin or resolved TypeScript compiler versions change, and nightly or
-on manual dispatch. Every PR retains Bun checks and a seeded-error probe.
+solution configs with project references. Manual checks dispatch offers
+`typecheck-parity` to compare TypeScript and Bun diagnostics on repository code
+and seeded cases, and `typecheck-probe` to verify seeded-error rejection.
+These optional proofs run only on explicit dispatch. Every PR retains Bun checks.
 Editors keep the TypeScript language service because Bun provides no LSP.
 Keep TypeScript and its compatibility alias for compiler-API tools and declaration
 generation.
@@ -95,6 +95,10 @@ There, local formatting and generator runs are optional, except that workflow
 files must be formatted locally. Fork pull requests get no autofix: run
 `bun run autofix` (the same generators, lint fixes and formatting, against the
 canonical repository's main) before pushing.
+
+Network fetches in CI go through `scripts/retry.sh` (`scripts/gh-retry.sh` for
+the GitHub API) or a cache-first action, in a step with its own
+`timeout-minutes`; `scripts/check-ci-network-steps.ts` enforces both.
 
 `bun run verify` runs the local package checks from `ci-checks` in
 `.github/workflows/ci.yml`; use it before pushing code changes instead of

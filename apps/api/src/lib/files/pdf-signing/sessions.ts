@@ -54,6 +54,7 @@ import {
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
+import { memberReachesMatterSql } from "@/api/lib/workspaces/authorized-workspace-ids";
 
 /** The browser hands the deep link straight to the OS; two minutes is the
  *  whole window in which the desktop app has to come up and redeem it. */
@@ -319,15 +320,27 @@ export const redeemPdfSigningHandoff = async (
       return null;
     }
 
+    // The locks come first, so the access rule below reads rows that a
+    // concurrent revocation can no longer change before this commits.
     const access = lockedCreatorAccess(tx, session);
-    const [roles, memberships] = await Promise.all([
-      access.role,
-      access.membership,
-    ]);
+    const [roles] = await Promise.all([access.role, access.membership]);
+    const matters = await tx
+      .select({
+        reachesMatter: memberReachesMatterSql(
+          {
+            organizationId: workspaces.organizationId,
+            userId: session.createdBy,
+          },
+          workspaces.id,
+        ),
+      })
+      .from(workspaces)
+      .where(eq(workspaces.id, session.workspaceId))
+      .limit(1);
     if (
       !canWriteWorkspaceEntities({
         organizationRole: roles.at(0)?.role ?? null,
-        workspaceMemberId: memberships.at(0)?.id ?? null,
+        reachesMatter: matters.at(0)?.reachesMatter ?? false,
       })
     ) {
       return null;
@@ -470,8 +483,14 @@ export const authorizePdfSigningSession = async (
           signingTime: pdfSigningSessions.signingTime,
           stamp: pdfSigningSessions.stamp,
           tokenExpiresAt: pdfSigningSessions.tokenExpiresAt,
+          reachesMatter: memberReachesMatterSql(
+            {
+              organizationId: workspaces.organizationId,
+              userId: pdfSigningSessions.createdBy,
+            },
+            pdfSigningSessions.workspaceId,
+          ),
           workspaceId: pdfSigningSessions.workspaceId,
-          workspaceMemberId: workspaceMembers.id,
         })
         .from(pdfSigningSessions)
         .innerJoin(
@@ -488,13 +507,6 @@ export const authorizePdfSigningSession = async (
         .leftJoin(
           entityVersions,
           eq(entityVersions.id, pdfSigningSessions.finalizedVersionId),
-        )
-        .leftJoin(
-          workspaceMembers,
-          and(
-            eq(workspaceMembers.userId, pdfSigningSessions.createdBy),
-            eq(workspaceMembers.workspaceId, pdfSigningSessions.workspaceId),
-          ),
         )
         .where(eq(pdfSigningSessions.id, sessionId))
         .limit(1),
@@ -533,7 +545,7 @@ export const authorizePdfSigningSession = async (
   if (
     !canWriteWorkspaceEntities({
       organizationRole: session.organizationRole,
-      workspaceMemberId: session.workspaceMemberId,
+      reachesMatter: session.reachesMatter,
     })
   ) {
     return { status: "permission-revoked" };

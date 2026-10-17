@@ -381,7 +381,7 @@
       "version": "0.3.0"
     },
     {
-      "bom-ref": "pkg:cargo/ammonia@4.2.0",
+      "bom-ref": "pkg:cargo/ammonia@4.2.3",
       "evidence": {
         "identity": [
           {
@@ -402,7 +402,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "3f7ed3ac4252be4d3e36fb589ed5659356842587b21a31596a9dc89d3b2f5e2a"
+          "content": "061e83b03c2681c18a6787d956e355c74e0b98ba7ba3d69b0822ade1e6f1d716"
         }
       ],
       "licenses": [
@@ -424,9 +424,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/ammonia@4.2.0",
+      "purl": "pkg:cargo/ammonia@4.2.3",
       "type": "library",
-      "version": "4.2.0"
+      "version": "4.2.3"
     },
     {
       "bom-ref": "pkg:cargo/android_system_properties@0.1.6",
@@ -14182,7 +14182,7 @@
       "version": "0.7.6"
     },
     {
-      "bom-ref": "pkg:cargo/objc2@0.6.4",
+      "bom-ref": "pkg:cargo/objc2@0.6.5",
       "evidence": {
         "identity": [
           {
@@ -14203,7 +14203,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "3a12a8ed07aefc768292f076dc3ac8c48f3781c8f2d5851dd3d98950e8c5a89f"
+          "content": "08849bbd4767dfae9457696856ae1c84fe4e0281bbe4a7abff2d0e06fb7981f8"
         }
       ],
       "licenses": [
@@ -14220,9 +14220,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/objc2@0.6.4",
+      "purl": "pkg:cargo/objc2@0.6.5",
       "type": "library",
-      "version": "0.6.4"
+      "version": "0.6.5"
     },
     {
       "bom-ref": "pkg:cargo/objc2-app-kit@0.3.2",
@@ -18739,7 +18739,7 @@
       "version": "1.1.4"
     },
     {
-      "bom-ref": "pkg:cargo/rustls@0.23.45",
+      "bom-ref": "pkg:cargo/rustls@0.23.46",
       "evidence": {
         "identity": [
           {
@@ -18760,7 +18760,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "0d41d731c7d2f962d1ccc364cec258de3c0e93b38c2fb3ba97ac74513048d634"
+          "content": "48e13bd8c0e9365c43cfa5c9e8f9ad49d3c8444926c9aac819e0e4dc503c8fdf"
         }
       ],
       "licenses": [
@@ -18787,9 +18787,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/rustls@0.23.45",
+      "purl": "pkg:cargo/rustls@0.23.46",
       "type": "library",
-      "version": "0.23.45"
+      "version": "0.23.46"
     },
     {
       "bom-ref": "pkg:cargo/rustls-native-certs@0.8.4",
@@ -22294,7 +22294,7 @@
       "version": "0.12.16"
     },
     {
-      "bom-ref": "pkg:cargo/tauri@2.12.1",
+      "bom-ref": "pkg:cargo/tauri@2.12.2",
       "evidence": {
         "identity": [
           {
@@ -22315,7 +22315,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "ed99ee9694a2deb776d91cae48ac7411ddfc89ecae2f9b5041111d8c88f2ace9"
+          "content": "d061d042ccd2df9c9f1508c1e63d835278c0a4c8801eb41764080e51f2eaaf34"
         }
       ],
       "licenses": [
@@ -22337,9 +22337,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/tauri@2.12.1",
+      "purl": "pkg:cargo/tauri@2.12.2",
       "type": "library",
-      "version": "2.12.1"
+      "version": "2.12.2"
     },
     {
       "bom-ref": "pkg:cargo/tauri-build@2.7.1",
@@ -22918,7 +22918,7 @@
       "version": "2.5.2"
     },
     {
-      "bom-ref": "pkg:cargo/tauri-plugin-updater@2.13.1",
+      "bom-ref": "pkg:cargo/tauri-plugin-updater@2.13.2",
       "evidence": {
         "identity": [
           {
@@ -22939,7 +22939,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "3cb0b2ea3e85ca287990d3859a29cc5cb18024240fd78f62e027fb7963670f18"
+          "content": "8cb463cd1f26c9562a01718fe9adf6927795f764c3576e509f27cf567307ddef"
         }
       ],
       "licenses": [
@@ -22961,9 +22961,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/tauri-plugin-updater@2.13.1",
+      "purl": "pkg:cargo/tauri-plugin-updater@2.13.2",
       "type": "library",
-      "version": "2.13.1"
+      "version": "2.13.2"
     },
     {
       "bom-ref": "pkg:cargo/tauri-runtime@2.12.1",
@@ -23964,7 +23964,7 @@
       "version": "0.1.1"
     },
     {
-      "bom-ref": "pkg:cargo/tokio@1.53.1",
+      "bom-ref": "pkg:cargo/tokio@1.53.2",
       "evidence": {
         "identity": [
           {
@@ -23985,7 +23985,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "202caea871b69668250d242070849eb495be178ed697a3e98aebce5bc81a0bed"
+          "content": "e95f91fcc7a621e8b030f6aa23c71fe9838ae2fb4d8118b75602a328f5144044"
         }
       ],
       "licenses": [
@@ -24002,9 +24002,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/tokio@1.53.1",
+      "purl": "pkg:cargo/tokio@1.53.2",
       "type": "library",
-      "version": "1.53.1"
+      "version": "1.53.2"
     },
     {
       "bom-ref": "pkg:cargo/tokio-macros@2.7.2",
@@ -25725,7 +25725,7 @@
       "version": "1.0.4"
     },
     {
-      "bom-ref": "pkg:cargo/uuid@1.26.1",
+      "bom-ref": "pkg:cargo/uuid@1.28.0",
       "evidence": {
         "identity": [
           {
@@ -25746,7 +25746,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "2ef6dac1e96601b4fb3acccccff2139741fcb757cb9a36089bf5be91cfb285ce"
+          "content": "7cc1186384beb7dd8eedea376413fd654937285ea6c9cfbb928dc3043ea4b606"
         }
       ],
       "licenses": [
@@ -25768,9 +25768,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/uuid@1.26.1",
+      "purl": "pkg:cargo/uuid@1.28.0",
       "type": "library",
-      "version": "1.26.1"
+      "version": "1.28.0"
     },
     {
       "bom-ref": "pkg:cargo/valuable@0.1.1",
@@ -31373,7 +31373,7 @@
       "version": "0.1.7"
     },
     {
-      "bom-ref": "pkg:cargo/zeroize@1.9.0",
+      "bom-ref": "pkg:cargo/zeroize@1.9.1",
       "evidence": {
         "identity": [
           {
@@ -31394,7 +31394,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "e13c156562582aa81c60cb29407084cdb54c4164760106ab78e6c5b0858cf64e"
+          "content": "e13084392c5e4bc371903e2935a5eaeed24905a7511356b883835e18a78f6879"
         }
       ],
       "licenses": [
@@ -31416,9 +31416,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/zeroize@1.9.0",
+      "purl": "pkg:cargo/zeroize@1.9.1",
       "type": "library",
-      "version": "1.9.0"
+      "version": "1.9.1"
     },
     {
       "bom-ref": "pkg:cargo/zerotrie@0.2.4",
@@ -31593,7 +31593,7 @@
       "version": "4.6.1"
     },
     {
-      "bom-ref": "pkg:cargo/zip@8.6.0",
+      "bom-ref": "pkg:cargo/zip@9.0.0",
       "evidence": {
         "identity": [
           {
@@ -31614,7 +31614,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "2d04a6b5381502aa6087c94c669499eb1602eb9c5e8198e534de571f7154809b"
+          "content": "711e8c9646791c49b7eb799a19c4ae70a9b8372ddc6a1fa4778defd1e2aa5d5e"
         }
       ],
       "licenses": [
@@ -31631,9 +31631,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/zip@8.6.0",
+      "purl": "pkg:cargo/zip@9.0.0",
       "type": "library",
-      "version": "8.6.0"
+      "version": "9.0.0"
     },
     {
       "bom-ref": "pkg:cargo/zmij@1.0.23",
@@ -31968,7 +31968,7 @@
         "pkg:cargo/maplit@1.0.2",
         "pkg:cargo/url@2.5.8"
       ],
-      "ref": "pkg:cargo/ammonia@4.2.0"
+      "ref": "pkg:cargo/ammonia@4.2.3"
     },
     {
       "dependsOn": [
@@ -32003,7 +32003,7 @@
         "pkg:cargo/objc2-core-foundation@0.3.2",
         "pkg:cargo/objc2-core-graphics@0.3.2",
         "pkg:cargo/objc2-foundation@0.3.2",
-        "pkg:cargo/objc2@0.6.4",
+        "pkg:cargo/objc2@0.6.5",
         "pkg:cargo/parking_lot@0.12.5",
         "pkg:cargo/percent-encoding@2.3.2",
         "pkg:cargo/windows-sys@0.60.2",
@@ -32153,7 +32153,7 @@
     {
       "dependsOn": [
         "pkg:cargo/aws-lc-sys@0.44.0",
-        "pkg:cargo/zeroize@1.9.0"
+        "pkg:cargo/zeroize@1.9.1"
       ],
       "ref": "pkg:cargo/aws-lc-rs@1.18.0"
     },
@@ -32189,7 +32189,7 @@
         "pkg:cargo/serde_path_to_error@0.1.20",
         "pkg:cargo/serde_urlencoded@0.7.1",
         "pkg:cargo/sync_wrapper@1.0.2",
-        "pkg:cargo/tokio@1.53.1",
+        "pkg:cargo/tokio@1.53.2",
         "pkg:cargo/tower-layer@0.3.3",
         "pkg:cargo/tower-service@0.3.3",
         "pkg:cargo/tower@0.5.3",
@@ -32247,7 +32247,7 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/objc2@0.6.4"
+        "pkg:cargo/objc2@0.6.5"
       ],
       "ref": "pkg:cargo/block2@0.6.2"
     },
@@ -32376,7 +32376,7 @@
     {
       "dependsOn": [
         "pkg:cargo/fnv@1.0.7",
-        "pkg:cargo/uuid@1.26.1",
+        "pkg:cargo/uuid@1.28.0",
         "pkg:cargo/web-time@1.1.0"
       ],
       "ref": "pkg:cargo/cfb@0.14.0"
@@ -32430,7 +32430,7 @@
         "pkg:cargo/objc2-app-kit@0.3.2",
         "pkg:cargo/objc2-foundation@0.3.2",
         "pkg:cargo/objc2-ui-kit@0.3.2",
-        "pkg:cargo/objc2@0.6.4",
+        "pkg:cargo/objc2@0.6.5",
         "pkg:cargo/windows@0.59.0",
         "pkg:cargo/x11rb@0.13.2"
       ],
@@ -32582,7 +32582,7 @@
     {
       "dependsOn": [
         "pkg:cargo/quote@1.0.47",
-        "pkg:cargo/syn@3.0.3"
+        "pkg:cargo/syn@2.0.119"
       ],
       "ref": "pkg:cargo/cssparser-macros@0.7.1"
     },
@@ -32696,7 +32696,7 @@
         "pkg:cargo/bitflags@2.13.1",
         "pkg:cargo/block2@0.6.2",
         "pkg:cargo/libc@0.2.189",
-        "pkg:cargo/objc2@0.6.4"
+        "pkg:cargo/objc2@0.6.5"
       ],
       "ref": "pkg:cargo/dispatch2@0.3.1"
     },
@@ -33184,7 +33184,7 @@
         "pkg:cargo/crossbeam-channel@0.5.16",
         "pkg:cargo/keyboard-types@0.7.0",
         "pkg:cargo/objc2-app-kit@0.3.2",
-        "pkg:cargo/objc2@0.6.4",
+        "pkg:cargo/objc2@0.6.5",
         "pkg:cargo/once_cell@1.21.4",
         "pkg:cargo/serde@1.0.229",
         "pkg:cargo/thiserror@2.0.20",
@@ -33256,7 +33256,7 @@
         "pkg:cargo/indexmap@2.14.0",
         "pkg:cargo/slab@0.4.12",
         "pkg:cargo/tokio-util@0.7.19",
-        "pkg:cargo/tokio@1.53.1",
+        "pkg:cargo/tokio@1.53.2",
         "pkg:cargo/tracing@0.1.44"
       ],
       "ref": "pkg:cargo/h2@0.4.17"
@@ -33357,7 +33357,7 @@
         "pkg:cargo/itoa@1.0.18",
         "pkg:cargo/pin-project-lite@0.2.17",
         "pkg:cargo/smallvec@1.15.2",
-        "pkg:cargo/tokio@1.53.1",
+        "pkg:cargo/tokio@1.53.2",
         "pkg:cargo/want@0.3.1"
       ],
       "ref": "pkg:cargo/hyper@1.11.0"
@@ -33367,9 +33367,9 @@
         "pkg:cargo/http@1.5.0",
         "pkg:cargo/hyper-util@0.1.20",
         "pkg:cargo/hyper@1.11.0",
-        "pkg:cargo/rustls@0.23.45",
+        "pkg:cargo/rustls@0.23.46",
         "pkg:cargo/tokio-rustls@0.26.4",
-        "pkg:cargo/tokio@1.53.1",
+        "pkg:cargo/tokio@1.53.2",
         "pkg:cargo/tower-service@0.3.3"
       ],
       "ref": "pkg:cargo/hyper-rustls@0.27.9"
@@ -33389,7 +33389,7 @@
         "pkg:cargo/pin-project-lite@0.2.17",
         "pkg:cargo/socket2@0.6.5",
         "pkg:cargo/system-configuration@0.7.0",
-        "pkg:cargo/tokio@1.53.1",
+        "pkg:cargo/tokio@1.53.2",
         "pkg:cargo/tower-service@0.3.3",
         "pkg:cargo/tracing@0.1.44",
         "pkg:cargo/windows-registry@0.6.1"
@@ -33777,9 +33777,9 @@
         "pkg:cargo/cc@1.4.2",
         "pkg:cargo/log@0.4.33",
         "pkg:cargo/objc2-foundation@0.3.2",
-        "pkg:cargo/objc2@0.6.4",
+        "pkg:cargo/objc2@0.6.5",
         "pkg:cargo/time@0.3.55",
-        "pkg:cargo/uuid@1.26.1"
+        "pkg:cargo/uuid@1.28.0"
       ],
       "ref": "pkg:cargo/mac-notification-sys@0.6.15"
     },
@@ -33862,7 +33862,7 @@
         "pkg:cargo/objc2-app-kit@0.3.2",
         "pkg:cargo/objc2-core-foundation@0.3.2",
         "pkg:cargo/objc2-foundation@0.3.2",
-        "pkg:cargo/objc2@0.6.4",
+        "pkg:cargo/objc2@0.6.5",
         "pkg:cargo/once_cell@1.21.4",
         "pkg:cargo/png@0.18.1",
         "pkg:cargo/serde@1.0.229",
@@ -34033,7 +34033,7 @@
         "pkg:cargo/objc2-encode@4.1.0",
         "pkg:cargo/objc2-exception-helper@0.1.1"
       ],
-      "ref": "pkg:cargo/objc2@0.6.4"
+      "ref": "pkg:cargo/objc2@0.6.5"
     },
     {
       "dependsOn": [
@@ -34049,7 +34049,7 @@
         "pkg:cargo/objc2-core-video@0.3.2",
         "pkg:cargo/objc2-foundation@0.3.2",
         "pkg:cargo/objc2-quartz-core@0.3.2",
-        "pkg:cargo/objc2@0.6.4"
+        "pkg:cargo/objc2@0.6.5"
       ],
       "ref": "pkg:cargo/objc2-app-kit@0.3.2"
     },
@@ -34057,7 +34057,7 @@
       "dependsOn": [
         "pkg:cargo/bitflags@2.13.1",
         "pkg:cargo/objc2-foundation@0.3.2",
-        "pkg:cargo/objc2@0.6.4"
+        "pkg:cargo/objc2@0.6.5"
       ],
       "ref": "pkg:cargo/objc2-cloud-kit@0.3.2"
     },
@@ -34065,7 +34065,7 @@
       "dependsOn": [
         "pkg:cargo/bitflags@2.13.1",
         "pkg:cargo/objc2-foundation@0.3.2",
-        "pkg:cargo/objc2@0.6.4"
+        "pkg:cargo/objc2@0.6.5"
       ],
       "ref": "pkg:cargo/objc2-core-data@0.3.2"
     },
@@ -34073,7 +34073,7 @@
       "dependsOn": [
         "pkg:cargo/bitflags@2.13.1",
         "pkg:cargo/dispatch2@0.3.1",
-        "pkg:cargo/objc2@0.6.4"
+        "pkg:cargo/objc2@0.6.5"
       ],
       "ref": "pkg:cargo/objc2-core-foundation@0.3.2"
     },
@@ -34083,21 +34083,21 @@
         "pkg:cargo/dispatch2@0.3.1",
         "pkg:cargo/objc2-core-foundation@0.3.2",
         "pkg:cargo/objc2-io-surface@0.3.2",
-        "pkg:cargo/objc2@0.6.4"
+        "pkg:cargo/objc2@0.6.5"
       ],
       "ref": "pkg:cargo/objc2-core-graphics@0.3.2"
     },
     {
       "dependsOn": [
         "pkg:cargo/objc2-foundation@0.3.2",
-        "pkg:cargo/objc2@0.6.4"
+        "pkg:cargo/objc2@0.6.5"
       ],
       "ref": "pkg:cargo/objc2-core-image@0.3.2"
     },
     {
       "dependsOn": [
         "pkg:cargo/objc2-foundation@0.3.2",
-        "pkg:cargo/objc2@0.6.4"
+        "pkg:cargo/objc2@0.6.5"
       ],
       "ref": "pkg:cargo/objc2-core-location@0.3.2"
     },
@@ -34106,7 +34106,7 @@
         "pkg:cargo/bitflags@2.13.1",
         "pkg:cargo/objc2-core-foundation@0.3.2",
         "pkg:cargo/objc2-core-graphics@0.3.2",
-        "pkg:cargo/objc2@0.6.4"
+        "pkg:cargo/objc2@0.6.5"
       ],
       "ref": "pkg:cargo/objc2-core-text@0.3.2"
     },
@@ -34116,7 +34116,7 @@
         "pkg:cargo/objc2-core-foundation@0.3.2",
         "pkg:cargo/objc2-core-graphics@0.3.2",
         "pkg:cargo/objc2-io-surface@0.3.2",
-        "pkg:cargo/objc2@0.6.4"
+        "pkg:cargo/objc2@0.6.5"
       ],
       "ref": "pkg:cargo/objc2-core-video@0.3.2"
     },
@@ -34136,7 +34136,7 @@
         "pkg:cargo/block2@0.6.2",
         "pkg:cargo/libc@0.2.189",
         "pkg:cargo/objc2-core-foundation@0.3.2",
-        "pkg:cargo/objc2@0.6.4"
+        "pkg:cargo/objc2@0.6.5"
       ],
       "ref": "pkg:cargo/objc2-foundation@0.3.2"
     },
@@ -34144,7 +34144,7 @@
       "dependsOn": [
         "pkg:cargo/bitflags@2.13.1",
         "pkg:cargo/objc2-core-foundation@0.3.2",
-        "pkg:cargo/objc2@0.6.4"
+        "pkg:cargo/objc2@0.6.5"
       ],
       "ref": "pkg:cargo/objc2-io-surface@0.3.2"
     },
@@ -34153,7 +34153,7 @@
         "pkg:cargo/bitflags@2.13.1",
         "pkg:cargo/objc2-app-kit@0.3.2",
         "pkg:cargo/objc2-foundation@0.3.2",
-        "pkg:cargo/objc2@0.6.4"
+        "pkg:cargo/objc2@0.6.5"
       ],
       "ref": "pkg:cargo/objc2-osa-kit@0.3.2"
     },
@@ -34162,7 +34162,7 @@
         "pkg:cargo/bitflags@2.13.1",
         "pkg:cargo/objc2-core-foundation@0.3.2",
         "pkg:cargo/objc2-foundation@0.3.2",
-        "pkg:cargo/objc2@0.6.4"
+        "pkg:cargo/objc2@0.6.5"
       ],
       "ref": "pkg:cargo/objc2-quartz-core@0.3.2"
     },
@@ -34170,7 +34170,7 @@
       "dependsOn": [
         "pkg:cargo/bitflags@2.13.1",
         "pkg:cargo/objc2-core-foundation@0.3.2",
-        "pkg:cargo/objc2@0.6.4"
+        "pkg:cargo/objc2@0.6.5"
       ],
       "ref": "pkg:cargo/objc2-security@0.3.2"
     },
@@ -34180,7 +34180,7 @@
         "pkg:cargo/objc2-core-foundation@0.3.2",
         "pkg:cargo/objc2-foundation@0.3.2",
         "pkg:cargo/objc2-security@0.3.2",
-        "pkg:cargo/objc2@0.6.4"
+        "pkg:cargo/objc2@0.6.5"
       ],
       "ref": "pkg:cargo/objc2-service-management@0.3.2"
     },
@@ -34198,14 +34198,14 @@
         "pkg:cargo/objc2-foundation@0.3.2",
         "pkg:cargo/objc2-quartz-core@0.3.2",
         "pkg:cargo/objc2-user-notifications@0.3.2",
-        "pkg:cargo/objc2@0.6.4"
+        "pkg:cargo/objc2@0.6.5"
       ],
       "ref": "pkg:cargo/objc2-ui-kit@0.3.2"
     },
     {
       "dependsOn": [
         "pkg:cargo/objc2-foundation@0.3.2",
-        "pkg:cargo/objc2@0.6.4"
+        "pkg:cargo/objc2@0.6.5"
       ],
       "ref": "pkg:cargo/objc2-user-notifications@0.3.2"
     },
@@ -34216,7 +34216,7 @@
         "pkg:cargo/objc2-app-kit@0.3.2",
         "pkg:cargo/objc2-core-foundation@0.3.2",
         "pkg:cargo/objc2-foundation@0.3.2",
-        "pkg:cargo/objc2@0.6.4"
+        "pkg:cargo/objc2@0.6.5"
       ],
       "ref": "pkg:cargo/objc2-web-kit@0.3.2"
     },
@@ -34269,7 +34269,7 @@
         "pkg:cargo/nix@0.31.3",
         "pkg:cargo/objc2-foundation@0.3.2",
         "pkg:cargo/objc2-ui-kit@0.3.2",
-        "pkg:cargo/objc2@0.6.4",
+        "pkg:cargo/objc2@0.6.5",
         "pkg:cargo/windows-sys@0.61.2"
       ],
       "ref": "pkg:cargo/os_info@3.15.0"
@@ -34285,7 +34285,7 @@
       "dependsOn": [
         "pkg:cargo/objc2-foundation@0.3.2",
         "pkg:cargo/objc2-osa-kit@0.3.2",
-        "pkg:cargo/objc2@0.6.4",
+        "pkg:cargo/objc2@0.6.5",
         "pkg:cargo/serde@1.0.229",
         "pkg:cargo/serde_json@1.0.151",
         "pkg:cargo/thiserror@2.0.20"
@@ -34511,10 +34511,10 @@
         "pkg:cargo/quinn-proto@0.11.16",
         "pkg:cargo/quinn-udp@0.5.15",
         "pkg:cargo/rustc-hash@2.1.3",
-        "pkg:cargo/rustls@0.23.45",
+        "pkg:cargo/rustls@0.23.46",
         "pkg:cargo/socket2@0.6.5",
         "pkg:cargo/thiserror@2.0.20",
-        "pkg:cargo/tokio@1.53.1",
+        "pkg:cargo/tokio@1.53.2",
         "pkg:cargo/tracing@0.1.44",
         "pkg:cargo/web-time@1.1.0"
       ],
@@ -34531,7 +34531,7 @@
         "pkg:cargo/ring@0.17.14",
         "pkg:cargo/rustc-hash@2.1.3",
         "pkg:cargo/rustls-pki-types@1.15.1",
-        "pkg:cargo/rustls@0.23.45",
+        "pkg:cargo/rustls@0.23.46",
         "pkg:cargo/slab@0.4.12",
         "pkg:cargo/thiserror@2.0.20",
         "pkg:cargo/tinyvec@1.12.0",
@@ -34662,13 +34662,14 @@
         "pkg:cargo/quinn@0.11.11",
         "pkg:cargo/rustls-pki-types@1.15.1",
         "pkg:cargo/rustls-platform-verifier@0.7.0",
-        "pkg:cargo/rustls@0.23.45",
+        "pkg:cargo/rustls@0.23.46",
         "pkg:cargo/serde@1.0.229",
         "pkg:cargo/serde_json@1.0.151",
+        "pkg:cargo/serde_urlencoded@0.7.1",
         "pkg:cargo/sync_wrapper@1.0.2",
         "pkg:cargo/tokio-rustls@0.26.4",
         "pkg:cargo/tokio-util@0.7.19",
-        "pkg:cargo/tokio@1.53.1",
+        "pkg:cargo/tokio@1.53.2",
         "pkg:cargo/tower-http@0.6.11",
         "pkg:cargo/tower-service@0.3.3",
         "pkg:cargo/tower@0.5.3",
@@ -34726,9 +34727,9 @@
         "pkg:cargo/rustls-pki-types@1.15.1",
         "pkg:cargo/rustls-webpki@0.103.15",
         "pkg:cargo/subtle@2.6.1",
-        "pkg:cargo/zeroize@1.9.0"
+        "pkg:cargo/zeroize@1.9.1"
       ],
-      "ref": "pkg:cargo/rustls@0.23.45"
+      "ref": "pkg:cargo/rustls@0.23.46"
     },
     {
       "dependsOn": [
@@ -34742,7 +34743,7 @@
     {
       "dependsOn": [
         "pkg:cargo/web-time@1.1.0",
-        "pkg:cargo/zeroize@1.9.0"
+        "pkg:cargo/zeroize@1.9.1"
       ],
       "ref": "pkg:cargo/rustls-pki-types@1.15.1"
     },
@@ -34756,7 +34757,7 @@
         "pkg:cargo/rustls-native-certs@0.8.4",
         "pkg:cargo/rustls-platform-verifier-android@0.1.1",
         "pkg:cargo/rustls-webpki@0.103.15",
-        "pkg:cargo/rustls@0.23.45",
+        "pkg:cargo/rustls@0.23.46",
         "pkg:cargo/security-framework-sys@2.17.0",
         "pkg:cargo/security-framework@3.7.0",
         "pkg:cargo/webpki-root-certs@1.0.9",
@@ -35058,7 +35059,7 @@
       "dependsOn": [
         "pkg:cargo/objc2-foundation@0.3.2",
         "pkg:cargo/objc2-service-management@0.3.2",
-        "pkg:cargo/objc2@0.6.4",
+        "pkg:cargo/objc2@0.6.5",
         "pkg:cargo/thiserror@2.0.20"
       ],
       "ref": "pkg:cargo/smappservice-rs@0.1.3"
@@ -35079,7 +35080,7 @@
         "pkg:cargo/objc2-core-graphics@0.3.2",
         "pkg:cargo/objc2-foundation@0.3.2",
         "pkg:cargo/objc2-quartz-core@0.3.2",
-        "pkg:cargo/objc2@0.6.4",
+        "pkg:cargo/objc2@0.6.5",
         "pkg:cargo/raw-window-handle@0.6.2",
         "pkg:cargo/redox_syscall@0.5.18",
         "pkg:cargo/tracing@0.1.44",
@@ -35116,7 +35117,7 @@
     {
       "dependsOn": [
         "pkg:cargo/aes-gcm@0.11.1",
-        "pkg:cargo/ammonia@4.2.0",
+        "pkg:cargo/ammonia@4.2.3",
         "pkg:cargo/apple-native-keyring-store@1.0.2",
         "pkg:cargo/axum@0.8.9",
         "pkg:cargo/base64@0.23.1",
@@ -35134,7 +35135,7 @@
         "pkg:cargo/objc2-app-kit@0.3.2",
         "pkg:cargo/objc2-core-graphics@0.3.2",
         "pkg:cargo/objc2-foundation@0.3.2",
-        "pkg:cargo/objc2@0.6.4",
+        "pkg:cargo/objc2@0.6.5",
         "pkg:cargo/opener@0.9.0",
         "pkg:cargo/plist@1.10.1",
         "pkg:cargo/reqwest@0.13.5",
@@ -35156,20 +35157,20 @@
         "pkg:cargo/tauri-plugin-opener@2.7.0",
         "pkg:cargo/tauri-plugin-process@2.4.0",
         "pkg:cargo/tauri-plugin-single-instance@2.5.2",
-        "pkg:cargo/tauri-plugin-updater@2.13.1",
-        "pkg:cargo/tauri@2.12.1",
-        "pkg:cargo/tokio@1.53.1",
+        "pkg:cargo/tauri-plugin-updater@2.13.2",
+        "pkg:cargo/tauri@2.12.2",
+        "pkg:cargo/tokio@1.53.2",
         "pkg:cargo/tower@0.5.3",
         "pkg:cargo/tracing-subscriber@0.3.23",
         "pkg:cargo/tracing@0.1.44",
         "pkg:cargo/ts-rs@12.0.1",
-        "pkg:cargo/uuid@1.26.1",
+        "pkg:cargo/uuid@1.28.0",
         "pkg:cargo/windows-icons@0.4.0",
         "pkg:cargo/windows-native-keyring-store@1.1.0",
         "pkg:cargo/winsafe@0.0.29",
         "pkg:cargo/zbus-secret-service-keyring-store@1.0.1",
-        "pkg:cargo/zeroize@1.9.0",
-        "pkg:cargo/zip@8.6.0"
+        "pkg:cargo/zeroize@1.9.1",
+        "pkg:cargo/zip@9.0.0"
       ],
       "ref": "pkg:cargo/stella-desktop@0.0.1"
     },
@@ -35179,8 +35180,8 @@
         "pkg:cargo/objc2-app-kit@0.3.2",
         "pkg:cargo/objc2-foundation@0.3.2",
         "pkg:cargo/objc2-web-kit@0.3.2",
-        "pkg:cargo/objc2@0.6.4",
-        "pkg:cargo/tauri@2.12.1",
+        "pkg:cargo/objc2@0.6.5",
+        "pkg:cargo/tauri@2.12.2",
         "pkg:cargo/windows-sys@0.61.2"
       ],
       "ref": "pkg:cargo/stella-desktop-macos@0.0.1"
@@ -35320,7 +35321,7 @@
         "pkg:cargo/objc2-app-kit@0.3.2",
         "pkg:cargo/objc2-foundation@0.3.2",
         "pkg:cargo/objc2-ui-kit@0.3.2",
-        "pkg:cargo/objc2@0.6.4",
+        "pkg:cargo/objc2@0.6.5",
         "pkg:cargo/parking_lot@0.12.5",
         "pkg:cargo/percent-encoding@2.3.2",
         "pkg:cargo/raw-window-handle@0.6.2",
@@ -35377,7 +35378,7 @@
         "pkg:cargo/objc2-foundation@0.3.2",
         "pkg:cargo/objc2-ui-kit@0.3.2",
         "pkg:cargo/objc2-web-kit@0.3.2",
-        "pkg:cargo/objc2@0.6.4",
+        "pkg:cargo/objc2@0.6.5",
         "pkg:cargo/percent-encoding@2.3.2",
         "pkg:cargo/plist@1.10.1",
         "pkg:cargo/raw-window-handle@0.6.2",
@@ -35393,7 +35394,7 @@
         "pkg:cargo/tauri-runtime@2.12.1",
         "pkg:cargo/tauri-utils@2.10.1",
         "pkg:cargo/thiserror@2.0.20",
-        "pkg:cargo/tokio@1.53.1",
+        "pkg:cargo/tokio@1.53.2",
         "pkg:cargo/tray-icon@0.25.1",
         "pkg:cargo/url@2.5.8",
         "pkg:cargo/webkit2gtk@2.0.2",
@@ -35401,7 +35402,7 @@
         "pkg:cargo/window-vibrancy@0.8.1",
         "pkg:cargo/windows@0.62.2"
       ],
-      "ref": "pkg:cargo/tauri@2.12.1"
+      "ref": "pkg:cargo/tauri@2.12.2"
     },
     {
       "dependsOn": [
@@ -35440,7 +35441,7 @@
         "pkg:cargo/thiserror@2.0.20",
         "pkg:cargo/time@0.3.55",
         "pkg:cargo/url@2.5.8",
-        "pkg:cargo/uuid@1.26.1",
+        "pkg:cargo/uuid@1.28.0",
         "pkg:cargo/walkdir@2.5.0"
       ],
       "ref": "pkg:cargo/tauri-codegen@2.7.1"
@@ -35475,7 +35476,7 @@
         "pkg:cargo/serde@1.0.229",
         "pkg:cargo/serde_json@1.0.151",
         "pkg:cargo/tauri-plugin@2.7.1",
-        "pkg:cargo/tauri@2.12.1",
+        "pkg:cargo/tauri@2.12.2",
         "pkg:cargo/thiserror@2.0.20"
       ],
       "ref": "pkg:cargo/tauri-plugin-autostart@2.7.0"
@@ -35487,7 +35488,7 @@
         "pkg:cargo/serde@1.0.229",
         "pkg:cargo/serde_json@1.0.151",
         "pkg:cargo/tauri-plugin@2.7.1",
-        "pkg:cargo/tauri@2.12.1",
+        "pkg:cargo/tauri@2.12.2",
         "pkg:cargo/thiserror@2.0.20"
       ],
       "ref": "pkg:cargo/tauri-plugin-clipboard-manager@2.4.1"
@@ -35501,7 +35502,7 @@
         "pkg:cargo/serde_json@1.0.151",
         "pkg:cargo/tauri-plugin@2.7.1",
         "pkg:cargo/tauri-utils@2.10.1",
-        "pkg:cargo/tauri@2.12.1",
+        "pkg:cargo/tauri@2.12.2",
         "pkg:cargo/thiserror@2.0.20",
         "pkg:cargo/tracing@0.1.44",
         "pkg:cargo/url@2.5.8",
@@ -35517,7 +35518,7 @@
         "pkg:cargo/serde@1.0.229",
         "pkg:cargo/serde_json@1.0.151",
         "pkg:cargo/tauri-plugin@2.7.1",
-        "pkg:cargo/tauri@2.12.1",
+        "pkg:cargo/tauri@2.12.2",
         "pkg:cargo/thiserror@2.0.20"
       ],
       "ref": "pkg:cargo/tauri-plugin-global-shortcut@2.4.0"
@@ -35531,7 +35532,7 @@
         "pkg:cargo/serde_json@1.0.151",
         "pkg:cargo/serde_repr@0.1.21",
         "pkg:cargo/tauri-plugin@2.7.1",
-        "pkg:cargo/tauri@2.12.1",
+        "pkg:cargo/tauri@2.12.2",
         "pkg:cargo/thiserror@2.0.20",
         "pkg:cargo/time@0.3.55",
         "pkg:cargo/url@2.5.8"
@@ -35549,7 +35550,7 @@
         "pkg:cargo/serde@1.0.229",
         "pkg:cargo/serde_json@1.0.151",
         "pkg:cargo/tauri-plugin@2.7.1",
-        "pkg:cargo/tauri@2.12.1",
+        "pkg:cargo/tauri@2.12.2",
         "pkg:cargo/thiserror@2.0.20",
         "pkg:cargo/url@2.5.8",
         "pkg:cargo/windows@0.62.2",
@@ -35560,7 +35561,7 @@
     {
       "dependsOn": [
         "pkg:cargo/tauri-plugin@2.7.1",
-        "pkg:cargo/tauri@2.12.1"
+        "pkg:cargo/tauri@2.12.2"
       ],
       "ref": "pkg:cargo/tauri-plugin-process@2.4.0"
     },
@@ -35569,9 +35570,9 @@
         "pkg:cargo/serde@1.0.229",
         "pkg:cargo/serde_json@1.0.151",
         "pkg:cargo/tauri-plugin-deep-link@2.6.1",
-        "pkg:cargo/tauri@2.12.1",
+        "pkg:cargo/tauri@2.12.2",
         "pkg:cargo/thiserror@2.0.20",
-        "pkg:cargo/tokio@1.53.1",
+        "pkg:cargo/tokio@1.53.2",
         "pkg:cargo/tracing@0.1.44",
         "pkg:cargo/windows-sys@0.61.2",
         "pkg:cargo/zbus@5.18.0"
@@ -35586,27 +35587,28 @@
         "pkg:cargo/futures-util@0.3.34",
         "pkg:cargo/http@1.5.0",
         "pkg:cargo/infer@0.22.0",
+        "pkg:cargo/libc@0.2.189",
         "pkg:cargo/log@0.4.33",
         "pkg:cargo/minisign-verify@0.2.5",
         "pkg:cargo/osakit@0.3.1",
         "pkg:cargo/percent-encoding@2.3.2",
         "pkg:cargo/reqwest@0.13.5",
-        "pkg:cargo/rustls@0.23.45",
+        "pkg:cargo/rustls@0.23.46",
         "pkg:cargo/semver@1.0.28",
         "pkg:cargo/serde@1.0.229",
         "pkg:cargo/serde_json@1.0.151",
         "pkg:cargo/tar@0.4.46",
         "pkg:cargo/tauri-plugin@2.7.1",
-        "pkg:cargo/tauri@2.12.1",
+        "pkg:cargo/tauri@2.12.2",
         "pkg:cargo/tempfile@3.27.0",
         "pkg:cargo/thiserror@2.0.20",
         "pkg:cargo/time@0.3.55",
-        "pkg:cargo/tokio@1.53.1",
+        "pkg:cargo/tokio@1.53.2",
         "pkg:cargo/url@2.5.8",
         "pkg:cargo/windows-sys@0.61.2",
         "pkg:cargo/zip@4.6.1"
       ],
-      "ref": "pkg:cargo/tauri-plugin-updater@2.13.1"
+      "ref": "pkg:cargo/tauri-plugin-updater@2.13.2"
     },
     {
       "dependsOn": [
@@ -35617,7 +35619,7 @@
         "pkg:cargo/jni@0.21.1",
         "pkg:cargo/objc2-ui-kit@0.3.2",
         "pkg:cargo/objc2-web-kit@0.3.2",
-        "pkg:cargo/objc2@0.6.4",
+        "pkg:cargo/objc2@0.6.5",
         "pkg:cargo/raw-window-handle@0.6.2",
         "pkg:cargo/serde@1.0.229",
         "pkg:cargo/serde_json@1.0.151",
@@ -35637,7 +35639,7 @@
         "pkg:cargo/jni@0.21.1",
         "pkg:cargo/log@0.4.33",
         "pkg:cargo/objc2-app-kit@0.3.2",
-        "pkg:cargo/objc2@0.6.4",
+        "pkg:cargo/objc2@0.6.5",
         "pkg:cargo/once_cell@1.21.4",
         "pkg:cargo/percent-encoding@2.3.2",
         "pkg:cargo/raw-window-handle@0.6.2",
@@ -35683,7 +35685,7 @@
         "pkg:cargo/toml@1.1.4+spec-1.1.0",
         "pkg:cargo/url@2.5.8",
         "pkg:cargo/urlpattern@0.6.0",
-        "pkg:cargo/uuid@1.26.1",
+        "pkg:cargo/uuid@1.28.0",
         "pkg:cargo/walkdir@2.5.0"
       ],
       "ref": "pkg:cargo/tauri-utils@2.10.1"
@@ -35814,7 +35816,7 @@
         "pkg:cargo/tokio-macros@2.7.2",
         "pkg:cargo/windows-sys@0.61.2"
       ],
-      "ref": "pkg:cargo/tokio@1.53.1"
+      "ref": "pkg:cargo/tokio@1.53.2"
     },
     {
       "dependsOn": [
@@ -35826,8 +35828,8 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/rustls@0.23.45",
-        "pkg:cargo/tokio@1.53.1"
+        "pkg:cargo/rustls@0.23.46",
+        "pkg:cargo/tokio@1.53.2"
       ],
       "ref": "pkg:cargo/tokio-rustls@0.26.4"
     },
@@ -35838,7 +35840,7 @@
         "pkg:cargo/futures-sink@0.3.34",
         "pkg:cargo/libc@0.2.189",
         "pkg:cargo/pin-project-lite@0.2.17",
-        "pkg:cargo/tokio@1.53.1"
+        "pkg:cargo/tokio@1.53.2"
       ],
       "ref": "pkg:cargo/tokio-util@0.7.19"
     },
@@ -35885,7 +35887,7 @@
         "pkg:cargo/futures-util@0.3.34",
         "pkg:cargo/pin-project-lite@0.2.17",
         "pkg:cargo/sync_wrapper@1.0.2",
-        "pkg:cargo/tokio@1.53.1",
+        "pkg:cargo/tokio@1.53.2",
         "pkg:cargo/tower-layer@0.3.3",
         "pkg:cargo/tower-service@0.3.3",
         "pkg:cargo/tracing@0.1.44"
@@ -35972,7 +35974,7 @@
         "pkg:cargo/objc2-core-foundation@0.3.2",
         "pkg:cargo/objc2-core-graphics@0.3.2",
         "pkg:cargo/objc2-foundation@0.3.2",
-        "pkg:cargo/objc2@0.6.4",
+        "pkg:cargo/objc2@0.6.5",
         "pkg:cargo/once_cell@1.21.4",
         "pkg:cargo/png@0.18.1",
         "pkg:cargo/serde@1.0.229",
@@ -36088,7 +36090,7 @@
         "pkg:cargo/serde_core@1.0.229",
         "pkg:cargo/wasm-bindgen@0.2.127"
       ],
-      "ref": "pkg:cargo/uuid@1.26.1"
+      "ref": "pkg:cargo/uuid@1.28.0"
     },
     {
       "dependsOn": [],
@@ -36364,7 +36366,7 @@
         "pkg:cargo/objc2-core-foundation@0.3.2",
         "pkg:cargo/objc2-foundation@0.3.2",
         "pkg:cargo/objc2-quartz-core@0.3.2",
-        "pkg:cargo/objc2@0.6.4",
+        "pkg:cargo/objc2@0.6.5",
         "pkg:cargo/raw-window-handle@0.6.2",
         "pkg:cargo/windows-sys@0.61.2",
         "pkg:cargo/windows-version@0.1.7"
@@ -36439,7 +36441,7 @@
         "pkg:cargo/keyring-core@1.0.0",
         "pkg:cargo/regex@1.13.1",
         "pkg:cargo/windows-sys@0.61.2",
-        "pkg:cargo/zeroize@1.9.0"
+        "pkg:cargo/zeroize@1.9.1"
       ],
       "ref": "pkg:cargo/windows-native-keyring-store@1.1.0"
     },
@@ -36602,7 +36604,7 @@
         "pkg:cargo/objc2-foundation@0.3.2",
         "pkg:cargo/objc2-ui-kit@0.3.2",
         "pkg:cargo/objc2-web-kit@0.3.2",
-        "pkg:cargo/objc2@0.6.4",
+        "pkg:cargo/objc2@0.6.5",
         "pkg:cargo/once_cell@1.21.4",
         "pkg:cargo/percent-encoding@2.3.2",
         "pkg:cargo/raw-window-handle@0.6.2",
@@ -36699,7 +36701,7 @@
         "pkg:cargo/serde_repr@0.1.21",
         "pkg:cargo/tracing@0.1.44",
         "pkg:cargo/uds_windows@1.2.1",
-        "pkg:cargo/uuid@1.26.1",
+        "pkg:cargo/uuid@1.28.0",
         "pkg:cargo/windows-sys@0.61.2",
         "pkg:cargo/winnow@1.0.4",
         "pkg:cargo/zbus_macros@5.18.0",
@@ -36767,7 +36769,7 @@
     },
     {
       "dependsOn": [],
-      "ref": "pkg:cargo/zeroize@1.9.0"
+      "ref": "pkg:cargo/zeroize@1.9.1"
     },
     {
       "dependsOn": [
@@ -36800,7 +36802,7 @@
         "pkg:cargo/memchr@2.8.3",
         "pkg:cargo/typed-path@0.12.3"
       ],
-      "ref": "pkg:cargo/zip@8.6.0"
+      "ref": "pkg:cargo/zip@9.0.0"
     },
     {
       "dependsOn": [],

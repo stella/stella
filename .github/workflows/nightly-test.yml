@@ -47,6 +47,7 @@ jobs:
           bun-version-file: "package.json"
 
       - name: Install dependencies
+        timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
@@ -81,18 +82,19 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install Playwright Chromium
-        if: steps.e2e-stack.outputs.status == 'ready'
+        timeout-minutes: 4
+        if: steps.e2e-stack.outcome == 'success'
         uses: ./.github/actions/setup-playwright
 
       - name: Start production web server
-        if: steps.e2e-stack.outputs.status == 'ready'
+        if: steps.e2e-stack.outcome == 'success'
         run: |
           cd apps/web
           NODE_ENV=production PORT=3000 nohup bun dist/runtime.js > /tmp/web-workspace-replay.log 2>&1 &
           echo $! > /tmp/web-workspace-replay.pid
 
       - name: Wait for production web server
-        if: steps.e2e-stack.outputs.status == 'ready'
+        if: steps.e2e-stack.outcome == 'success'
         run: |
           for i in {1..60}; do
             if curl --connect-timeout 2 --max-time 5 -sf http://localhost:3000/health > /dev/null 2>&1; then
@@ -106,14 +108,15 @@ jobs:
           exit 1
 
       - name: Explore workspace interactions
-        if: steps.e2e-stack.outputs.status == 'ready'
+        timeout-minutes: 15
+        if: steps.e2e-stack.outcome == 'success'
         env:
           E2E_SOAK_SEED: ${{ github.run_id }}
           E2E_SOAK_STEPS: "200"
         run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:soak
 
       - name: Add replay instructions
-        if: failure() && steps.e2e-stack.outputs.status == 'ready'
+        if: failure() && steps.e2e-stack.outcome != 'skipped'
         run: |
           {
             echo "## Workspace replay failure"
@@ -124,7 +127,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload replay diagnostics
-        if: failure() && steps.e2e-stack.outputs.status == 'ready'
+        if: failure() && steps.e2e-stack.outcome != 'skipped'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: nightly-workspace-replay-${{ github.run_id }}
@@ -133,7 +136,7 @@ jobs:
           retention-days: 14
 
       - name: Upload server logs
-        if: failure() && steps.e2e-stack.outputs.status == 'ready'
+        if: failure() && steps.e2e-stack.outcome != 'skipped'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: nightly-workspace-replay-server-logs-${{ github.run_id }}
@@ -215,6 +218,7 @@ jobs:
           bun-version-file: "package.json"
 
       - name: Install dependencies
+        timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           # .npmrc references NPM_TOKEN, but this workflow can be manually
@@ -271,6 +275,7 @@ jobs:
           bun-version-file: "package.json"
 
       - name: Install dependencies
+        timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
@@ -381,6 +386,7 @@ jobs:
           bun-version-file: "package.json"
 
       - name: Install dependencies
+        timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
@@ -442,6 +448,7 @@ jobs:
           bun-version-file: "package.json"
 
       - name: Install dependencies
+        timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
@@ -476,6 +483,7 @@ jobs:
           bun-version-file: "package.json"
 
       - name: Install dependencies
+        timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
@@ -548,6 +556,7 @@ jobs:
           save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install candidate dependencies
+        timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
@@ -561,6 +570,7 @@ jobs:
         run: bun test scripts/migration-catalog.test.ts scripts/rehearse-exact-base-upgrade.test.ts
 
       - name: Rehearse exact-base migration upgrade
+        timeout-minutes: 12
         id: rehearsal
         env:
           BASE_SHA: ${{ steps.base.outputs.sha }}

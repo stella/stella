@@ -133,6 +133,8 @@ const plan = {
   ),
   desktop_browser_required: "true",
   ci_browser_scope_required: "true",
+  // Scopes the quick-check parts select by inside their shared job.
+  docs_checks_required: "true",
   legal_atlas_image_inputs_required: "true",
   legal_atlas_api_source_required: "true",
   agent_sandbox_docker_required: "true",
@@ -202,6 +204,10 @@ const context = ({
     CI_POSTGRES_PR_SELECTION: "",
   },
   inputs: { heavy_only: false, pr_depth_only: false },
+  steps: {
+    "completed-depth": { outputs: { normal_completion: "required" } },
+    "pilot-queue-plan": { outputs: { queue_jobs: "[]" } },
+  },
   needs: Object.fromEntries(
     needs.map((job) => {
       const outputs: Record<string, string> =
@@ -280,6 +286,32 @@ test("computed browser planning retains trust and suite scopes across queue dept
           }
         }
       }
+    }
+  }
+});
+
+test("fast merge-group browser admission follows the planned jobs until normal completion", () => {
+  for (const normalCompletion of ["required", "complete"]) {
+    for (const queuedBrowser of [false, true]) {
+      const value = context({
+        event: { event: "merge_group", message: "ordinary" },
+        variable: "thin",
+        queueDepth: "thin",
+      });
+      const planner = value.needs["ci-plan"];
+      if (!planner) {
+        panic("Missing browser planner context");
+      }
+      planner.outputs["suite_depth"] = "fast";
+      value.steps["completed-depth"].outputs.normal_completion =
+        normalCompletion;
+      value.steps["pilot-queue-plan"].outputs.queue_jobs = JSON.stringify(
+        queuedBrowser ? ["ci-browser"] : [],
+      );
+      expect(
+        selected(ci.jobs["ci-browser"]?.if, value),
+        JSON.stringify({ normalCompletion, queuedBrowser }),
+      ).toBe(queuedBrowser && normalCompletion !== "complete");
     }
   }
 });
@@ -693,7 +725,12 @@ const mainSelection = ({ workflow, event, variable }: MainSelectionOptions) => {
   }
   const dependentContext = {
     ...value,
-    needs: { validate: { result: validationResult, outputs: { run: "true" } } },
+    needs: {
+      validate: {
+        result: validationResult,
+        outputs: { run: "true", proof: "" },
+      },
+    },
   };
   const suites =
     mainTriggered(event.event) &&
@@ -810,25 +847,56 @@ test("unset and full preserve historical predicates except declared PR, Postgres
   const baseline = original("ci.yml");
   const baselineMain = original("main-heavy.yml");
   expect(Object.keys(main.jobs)).toEqual(Object.keys(baselineMain.jobs));
+  // Retired jobs: ci-plan now produces the generated sources itself.
+  const retiredJobs = new Set([
+    "merge-group-fail-fast",
+    "ci-generated-sources",
+  ]);
   const collapsedJobs = new Map([
     ["code-quality-web", "code-quality-web-rest"],
     ["code-quality-rest", "code-quality-web-rest"],
     ["typecheck-baseline", "ci-checks-generated"],
     ["desktop-clippy", "desktop-rust-tests"],
   ]);
+  // Jobs that became one part of a shared job: the part's step condition,
+  // under the shared job's condition, keeps the historical predicate.
+  const foldedParts = new Map([
+    ["parser-version-guard", "ci-quick-checks"],
+    ["ci-checks-docs", "ci-quick-checks"],
+    ["dated-waiver-expiry", "ci-quick-checks"],
+  ]);
+  const partSelected = (job: string, value: ReturnType<typeof context>) => {
+    const host = foldedParts.get(job);
+    if (host === undefined) {
+      return selected(ci.jobs[collapsedJobs.get(job) ?? job]?.if, value);
+    }
+    const parts = (ci.jobs[host]?.steps ?? []).filter(({ name }) =>
+      name?.startsWith(`${job}: `),
+    );
+    expect(parts.length, job).toBeGreaterThan(0);
+    const installed = {
+      ...value,
+      steps: { ...value.steps, install: { outcome: "success" } },
+    };
+    return (
+      selected(ci.jobs[host]?.if, installed) &&
+      parts.every((part) => selected(part.if, installed))
+    );
+  };
   expect(Object.keys(ci.jobs).toSorted()).toEqual(
     [
       ...new Set([
         ...Object.keys(baseline.jobs).filter(
-          (id) => id !== "merge-group-fail-fast" && !collapsedJobs.has(id),
+          (id) =>
+            !retiredJobs.has(id) &&
+            !collapsedJobs.has(id) &&
+            !foldedParts.has(id),
         ),
         "api-test-durations",
         "postgres-service-suites",
         "marketing-screenshots-cancel",
-        "ci-generated-sources",
-        "ci-checks-docs",
+        "ci-quick-checks",
         "code-quality-web-rest",
-        "dated-waiver-expiry",
         "desktop-rust-tests",
         "desktop-rust-lint",
         "query-perf",
@@ -851,7 +919,7 @@ test("unset and full preserve historical predicates except declared PR, Postgres
     )) {
       const value = context({ event, variable, queueDepth: "full", proveFix });
       for (const [job, body] of Object.entries(baseline.jobs)) {
-        if (job === "merge-group-fail-fast") {
+        if (retiredJobs.has(job)) {
           continue;
         }
         let expected = selected(body.if, value);
@@ -867,13 +935,13 @@ test("unset and full preserve historical predicates except declared PR, Postgres
           expected = expectedRouteSelection(value);
         } else if (event.event === "pull_request") {
           expected = expectedPrSelection({
-            job: collapsedJobs.get(job) ?? job,
+            job: collapsedJobs.get(job) ?? foldedParts.get(job) ?? job,
             baseline: expected,
             value,
           });
         }
         expect(
-          selected(ci.jobs[collapsedJobs.get(job) ?? job]?.if, value),
+          partSelected(job, value),
           `${event.event}/${event.message}/${variable}/${proveFix}/${job}`,
         ).toBe(expected);
       }
@@ -980,12 +1048,15 @@ type EvaluateOptions = {
   job?: string;
   result?: string;
   script?: string;
+  /** Release typechecks are planned only when VERSION changes. */
+  releaseTypecheck?: boolean;
 };
 const evaluate = ({
   queueDepth,
   job,
   result,
   script = outcome.run,
+  releaseTypecheck = job === "release-typecheck",
 }: EvaluateOptions) => {
   const dependencies = Object.fromEntries(
     needs.map((name) => {
@@ -1033,7 +1104,7 @@ const evaluate = ({
         ...plan,
         queue_depth: queueDepth,
         heavy_web_build_required: "false",
-        release_typecheck_required: "false",
+        release_typecheck_required: releaseTypecheck ? "true" : "false",
       }),
       NEEDS: JSON.stringify(dependencies),
     },
@@ -1057,6 +1128,20 @@ test("both queue depths require every planned admitted check to succeed", () => 
         ).toBe(1);
       }
     }
+  }
+}, 30_000);
+
+test("an unplanned release typecheck may be skipped at either queue depth", () => {
+  for (const queueDepth of ["thin", "full"]) {
+    expect(
+      evaluate({
+        queueDepth,
+        job: "release-typecheck",
+        result: "skipped",
+        releaseTypecheck: false,
+      }),
+      queueDepth,
+    ).toBe(0);
   }
 }, 30_000);
 
@@ -1239,6 +1324,28 @@ test("main release and scheduled runs execute the planned version compiler in ei
   }
 }, 30_000);
 
+test("a release merge group compiles the next version before it lands, at either queue depth", () => {
+  expect(admitted).toContain("release-typecheck");
+  for (const queueDepth of ["thin", "full"]) {
+    for (const required of ["true", "false"]) {
+      const value = context({
+        event: { event: "merge_group", message: "chore: release v1.2.3" },
+        variable: queueDepth,
+        queueDepth,
+      });
+      const planner = value.needs["ci-plan"];
+      if (!planner) {
+        panic("Missing ci-plan context");
+      }
+      planner.outputs["release_typecheck_required"] = required;
+      expect(
+        selected(ci.jobs["release-typecheck"]?.if, value),
+        `${queueDepth}/${required}`,
+      ).toBe(required === "true");
+    }
+  }
+});
+
 test("queue admission covers every gated job except documented event and producer exceptions", () => {
   const exceptions = new Set(Object.keys(MERGE_GROUP_EXCEPTIONS));
   expect([...admitted].toSorted()).toEqual(
@@ -1247,7 +1354,11 @@ test("queue admission covers every gated job except documented event and produce
 });
 
 test("docs checks certify scoped merge groups at both queue depths", () => {
-  expect(admitted).toContain("ci-checks-docs");
+  expect(admitted).toContain("ci-quick-checks");
+  const docs = (ci.jobs["ci-quick-checks"]?.steps ?? []).filter(({ name }) =>
+    name?.startsWith("ci-checks-docs: "),
+  );
+  expect(docs).toHaveLength(1);
   for (const queueDepth of ["thin", "full"]) {
     for (const required of ["true", "false"]) {
       const value = context({
@@ -1260,9 +1371,14 @@ test("docs checks certify scoped merge groups at both queue depths", () => {
         panic("Missing ci-plan context");
       }
       planner.outputs["docs_checks_required"] = required;
-      expect(selected(ci.jobs["ci-checks-docs"]?.if, value)).toBe(
-        required === "true",
-      );
+      const installed = {
+        ...value,
+        steps: { ...value.steps, install: { outcome: "success" } },
+      };
+      expect(selected(ci.jobs["ci-quick-checks"]?.if, installed)).toBe(true);
+      for (const part of docs) {
+        expect(selected(part.if, installed)).toBe(required === "true");
+      }
     }
   }
 });

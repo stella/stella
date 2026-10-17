@@ -47,6 +47,7 @@
     "dated-waiver-healing.yml/heal": "main",
     "release-pr.yml/gate": "main",
     "release-pr.yml/version": "main",
+    "release-proof.yml/dispatch": "pr-fast",
     "main-heavy.yml/validate": "main",
     "main-heavy.yml/suites": "main",
     "main-heavy.yml/status": "main",
@@ -106,6 +107,9 @@
     "railway-template-source.yml/drift": "main",
     "disarm-auto-merge.yml/disarm": "pr-fast",
     "bot-refresh-auto-merge.yml/arm": "pr-fast",
+    "autofix-generated-conflicts.yml/dispatch": "main",
+    "generated-conflicts-resolve.yml/resolve": "main",
+    "generated-conflicts-publish.yml/publish": "main",
     "desktop-release-canary.yml/check-latest": "main",
     "journey-canary.yml/journeys": "main",
     "provenance-nightly.yml/provenance-update": "main",
@@ -115,10 +119,7 @@
     "cleanup-queued-pr-runs.yml/cleanup": "main",
     "safe-chain-cache.yml/warm": "main",
     "ci.yml/ci-plan": "pr-fast",
-    "ci.yml/ci-generated-sources": "pr-fast",
     "ci.yml/docker-checks": "queue",
-    "ci.yml/parser-version-guard": "pr-fast",
-    "ci.yml/ci-checks-docs": "pr-fast",
     "ci.yml/ci-checks-generated": "pr-fast",
     "ci.yml/ci-checks-policy": "pr-fast",
     "ci.yml/ci-checks-rest": "pr-fast",
@@ -151,11 +152,13 @@
     "ci.yml/scan-engine-wasm-drift": "pr-fast",
     "ci.yml/desktop-rust-lint": "pr-fast",
     "ci.yml/dependency-malware": "pr-fast",
-    "ci.yml/dated-waiver-expiry": "pr-fast",
+    "ci.yml/ci-quick-checks": "pr-fast",
     "ci.yml/ci-result": "pr-fast",
+    "flake-gate.yml/report": "pr-opt-in",
     "security-txt-guard.yml/check": "pr-fast",
     "dependency-audit.yml/audit": "pr-fast",
     "dependency-audit.yml/remediate": "main",
+    "dependency-audit.yml/cargo-advisories": "main",
     "scorecard.yml/scorecard": "main",
     "codeql.yml/scope": "release-pr",
     "ci.yml/code-quality-web-rest": "pr-fast",
@@ -164,14 +167,14 @@
     "main-pr-depth.yml/status": "main",
     "ci.yml/query-perf": "pr-fast",
     "query-perf.yml/query-perf": "pr-fast",
-    "manual-checks.yml/check": "main",
-    "bundle-size-nightly.yml/report": "main"
+    "manual-checks.yml/check": "dispatch-only",
+    "bundle-size-nightly.yml/report": "main",
+    "manual-checks.yml/install-cache-windows": "main",
+    "manual-checks.yml/install-cache-linux": "main",
+    "type-cost-measurement.yml/prepare": "main",
+    "type-cost-measurement.yml/measure": "main"
   },
   "pushMain": {
-    "audit-image.yml": {
-      "role": "analysis",
-      "cancelInProgress": true
-    },
     "typecheck-base.yml": {
       "role": "analysis",
       "cancelInProgress": false
@@ -189,6 +192,10 @@
       "cancelInProgress": true
     },
     "publish-npm.yml": {
+      "role": "publish",
+      "cancelInProgress": false
+    },
+    "autofix-generated-conflicts.yml": {
       "role": "publish",
       "cancelInProgress": false
     },

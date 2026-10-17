@@ -21,10 +21,13 @@ import {
   dockerInstructions,
   dockerPruneScopes,
   inDockerContext,
+  installToolingCopies,
   sourceClosureProblems,
+  updateInstallToolingCopies,
   type SourceTree,
 } from "./docker-source-closure";
 import { GENERATORS } from "./generated-files";
+import { lexShell, parseBunFlags, programWords } from "./install-free-ci";
 
 const root = mkdtempSync(path.join(tmpdir(), "docker-source-fixtures-"));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
@@ -37,6 +40,127 @@ const tree = (files: readonly string[]): SourceTree =>
   new Map(files.map((file) => [`/app/${file}`, file]));
 
 describe("Docker source closure", () => {
+  test("API install tooling COPY lines match the complete runtime import closure", () => {
+    updateInstallToolingCopies(path.resolve(import.meta.dir, ".."), false);
+  });
+
+  test("install tooling copies derive transitive imports and reject omitted modules", () => {
+    const entry = put(
+      "install-tooling/entry.ts",
+      'import { value } from "./store"; import type { Options } from "./types"; console.log(value);',
+    );
+    const store = put(
+      "install-tooling/store.ts",
+      'export { value } from "./hash";',
+    );
+    const hash = put(
+      "install-tooling/hash.ts",
+      'import "node:crypto"; export const value = "ready";',
+    );
+    const files = tree([entry, store, hash]);
+    const copies = installToolingCopies({
+      root,
+      files,
+      entry: `/app/${entry}`,
+    });
+    expect(copies.split("\n")).toEqual(
+      [entry, hash, store].map((file) => `COPY ${file} ${file}`),
+    );
+    const context = new Map([...files].map(([, file]) => [`/${file}`, file]));
+    const source = `FROM oven/bun AS base\nWORKDIR /app\n${copies}\nRUN bun ${entry}\n`;
+    expect(checkDockerSource(root, source, context, new Map())).toEqual([]);
+    expect(
+      checkDockerSource(
+        root,
+        source.replace(`COPY ${hash} ${hash}\n`, ""),
+        context,
+        new Map(),
+      ),
+    ).toEqual([`${store} imports ./hash, unavailable in Docker stage`]);
+    expect(() =>
+      installToolingCopies({
+        root,
+        files: tree([entry, store]),
+        entry: `/app/${entry}`,
+      }),
+    ).toThrow("imports ./hash, unavailable in Docker stage");
+  });
+
+  test("preinstall copy generation refuses imports that need an install or runtime discovery", () => {
+    for (const [file, source, error] of [
+      [
+        "install-tooling/external.ts",
+        'import "valibot";',
+        "requires a relative import or builtin",
+      ],
+      [
+        "install-tooling/dynamic.ts",
+        'const target = "./x.ts";\nimport(target);',
+        "nonliteral runtime import",
+      ],
+    ] as const) {
+      const entry = put(file, source);
+      expect(() =>
+        installToolingCopies({
+          root,
+          files: tree([entry]),
+          entry: `/app/${entry}`,
+        }),
+      ).toThrow(error);
+    }
+  });
+  test("every API image install uses the bounded installer owner", () => {
+    const source = readFileSync(
+      new URL("../apps/api/Dockerfile", import.meta.url),
+      "utf-8",
+    );
+    const unboundedInstalls = (dockerfile: string) =>
+      dockerInstructions(dockerfile).flatMap((instruction) => {
+        if (!instruction.startsWith("RUN ")) {
+          return [];
+        }
+        const command = instruction.replace(/^RUN\s+(?:--mount=\S+\s+)*/u, "");
+        return lexShell(command).flatMap((event) => {
+          if (event.type !== "command") {
+            return [];
+          }
+          const words = programWords(event.words);
+          if (path.posix.basename(words.at(0) ?? "") !== "bun") {
+            return [];
+          }
+          const flags = parseBunFlags({
+            args: words.slice(1),
+            context: { root, checkouts: [], expanding: new Set() },
+            cwd: ".",
+            stdin: event.stdin?.body,
+          });
+          if (flags.type === "classified") {
+            return flags.classification.type === "unclassified"
+              ? [command]
+              : [];
+          }
+          return ["install", "i", "ci", "add"].includes(
+            flags.positional.at(0) ?? "",
+          )
+            ? [command]
+            : [];
+        });
+      });
+    expect(source).toContain(
+      "bun scripts/ci-install.ts /tmp/deps-install.log --filter @stll/api",
+    );
+    expect(unboundedInstalls(source)).toEqual([]);
+    for (const command of [
+      "bun install",
+      "BUN_INSTALL_GLOBAL_STORE=0 bun i",
+      "env bun ci",
+      "bun add -g turbo",
+      "bun --filter @stll/api install",
+      "/usr/bin/bun --cwd /app ci",
+    ]) {
+      expect(unboundedInstalls(`${source}\nRUN ${command}`)).toEqual([command]);
+    }
+  });
   test("checks the sandbox install and cache commands without hiding source runners", () => {
     const source = readFileSync(
       new URL(
@@ -666,6 +790,96 @@ describe("Docker source closure", () => {
     }
   });
 
+  test("cached generators require their declared inputs and expand output globs", () => {
+    for (const includeInput of [true, false]) {
+      const fixtureRoot = mkdtempSync(path.join(root, "cached-generator-"));
+      const files = {
+        "scripts/prepare-mcp-apps.ts": "export {};",
+        "apps/api/package.json": JSON.stringify({
+          name: "@stll/api",
+          scripts: {
+            "generate:mcp-app-contracts":
+              "bun scripts/generate-mcp-app-contracts.ts",
+          },
+        }),
+        "apps/api/scripts/generate-mcp-app-contracts.ts": "export {};",
+        "packages/mcp-apps/package.json": JSON.stringify({
+          name: "@stll/mcp-apps",
+          scripts: { build: "bun ../../scripts/prepare-mcp-apps.ts" },
+        }),
+        "packages/mcp-apps/scripts/build-mcp-apps.ts": "export {};",
+        "apps/web/src/fonts.css": "body {}",
+        "entry.ts":
+          'import "./packages/mcp-apps/src/example/generated/app.html.txt";',
+      };
+      for (const [file, source] of Object.entries(files)) {
+        mkdirSync(path.dirname(path.join(fixtureRoot, file)), {
+          recursive: true,
+        });
+        writeFileSync(path.join(fixtureRoot, file), source);
+      }
+      const generator = GENERATORS.find(({ id }) => id === "mcp-app-bundles");
+      if (generator === undefined) {
+        panic("Missing MCP app generator");
+      }
+      for (const pattern of GENERATORS.filter(
+        ({ id }) => id === "mcp-app-contracts" || id === generator.id,
+      ).flatMap(({ outputs }) => outputs)) {
+        const file = pattern.replace("*", "example");
+        mkdirSync(path.dirname(path.join(fixtureRoot, file)), {
+          recursive: true,
+        });
+        writeFileSync(path.join(fixtureRoot, file), "{}");
+      }
+      const context: SourceTree = new Map(
+        Object.keys(files).map((file) => [`/${file}`, file]),
+      );
+      const source = [
+        "FROM bun AS builder",
+        "WORKDIR /app",
+        ...Object.keys(files)
+          .filter((file) => includeInput || file !== "apps/web/src/fonts.css")
+          .map((file) => `COPY ${file} ${file}`),
+        "RUN bun scripts/prepare-mcp-apps.ts",
+        "RUN bun entry.ts",
+      ].join("\n");
+      const problems = checkDockerSource(
+        fixtureRoot,
+        source,
+        context,
+        new Map(),
+      );
+      if (includeInput) {
+        expect(problems).toEqual([]);
+      } else {
+        expect(problems.join("\n")).toContain(
+          "Generator input is unavailable: mcp-app-bundles//apps/web/src/fonts.css",
+        );
+      }
+    }
+  });
+
+  test("the API image generates MCP bundles in production", () => {
+    const source = readFileSync(
+      new URL("../apps/api/Dockerfile", import.meta.url),
+      "utf-8",
+    );
+    const instructions = dockerInstructions(source);
+    const builder = instructions.slice(
+      instructions.indexOf("FROM deps AS builder"),
+    );
+    const generation = builder.findIndex((line) =>
+      line.includes("bun packages/mcp-apps/scripts/build-mcp-apps.ts"),
+    );
+    expect(generation).toBeGreaterThan(0);
+    expect(builder.slice(0, generation)).toContain("ENV NODE_ENV=production");
+    expect(builder.slice(0, generation + 1).join("\n")).not.toMatch(
+      /NODE_ENV=development|STELLA_LOCAL_DEV=1/u,
+    );
+    expect(builder.join("\n")).not.toContain("/app/apps/web/ /app/apps/web/");
+    expect(builder.join("\n")).not.toContain("/app/scripts/ /app/scripts/");
+  });
+
   test.each([
     {
       kind: "direct",
@@ -1252,12 +1466,16 @@ describe("Docker source closure", () => {
     put(
       helper,
       actual.replace(
-        '"./generated-files"',
+        '"./generated-file-inventory"',
         '"../../../scripts/generated-files"',
       ),
     );
     put("scripts/generated-files.ts", "export const CI_GENERATED_FILES = [];");
-    const available = tree([helper]);
+    const identity = put(
+      "packages/scripts/src/generated-input-identity.ts",
+      "export const generatedInputGit = () => ''; export const generatedInputTreeHash = () => '';",
+    );
+    const available = tree([helper, identity]);
     expect(sourceClosureProblems(root, available, [`/app/${helper}`])).toEqual([
       `${helper} imports ../../../scripts/generated-files, unavailable in Docker stage`,
     ]);

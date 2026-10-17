@@ -12,6 +12,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import JSZip from "jszip";
 
+import { writeZipEntry } from "@stll/docx-utils";
 import { propertyConfig } from "@stll/property-testing";
 
 import { tokenize } from "./diff-paragraphs";
@@ -110,7 +111,7 @@ const buildDocxBuffer = async (bodyXml: string): Promise<Buffer> => {
     `<w:body>${bodyXml}</w:body></w:document>`;
 
   const zip = new JSZip();
-  zip.file("word/document.xml", documentXml);
+  writeZipEntry(zip, "word/document.xml", documentXml);
   const buf = await zip.generateAsync({ type: "nodebuffer" });
   return Buffer.from(buf);
 };

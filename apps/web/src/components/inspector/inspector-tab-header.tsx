@@ -6,11 +6,11 @@ import { UserText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ArrowLeftIcon, XIcon } from "@stll/ui/icons";
+import { MatterIcon } from "@stll/ui/matter-icon";
 import { cn } from "@stll/ui/utils";
 
 import { InlineEdit } from "@/components/inline-edit";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
-import { MatterIcon } from "@/components/matter-icon";
 
 /**
  * Shared header strip used at the top of every inspector tab —
@@ -46,6 +46,8 @@ type RenameState = {
    * required press/click trigger semantics.
    */
   action?: ReactNode;
+  /** Longest name the rename accepts. */
+  maxLength?: number | undefined;
 };
 
 type InspectorTabHeaderProps = {
@@ -115,6 +117,7 @@ export const InspectorTabHeader = ({
           <InlineEdit
             className="text-xs font-medium"
             action={rename.action}
+            maxLength={rename.maxLength}
             onCancel={rename.onCancel}
             onChange={rename.onChange}
             onCommit={rename.onCommit}

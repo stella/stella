@@ -5,6 +5,7 @@ import {
   type DecisionParagraphRange,
   decisionParagraphFragment,
 } from "@stll/api-contract/decision-paragraph-range";
+import { DECISION_READER_RESOURCE_URI } from "@stll/mcp-apps/resource-uri";
 
 import type { readDecisionReaderSource } from "@/api/handlers/case-law/decisions/reader";
 import type { readProvisionPreviewHandler } from "@/api/handlers/legislation/provision-preview";
@@ -14,7 +15,6 @@ import {
   brandPersistedLegislationDocumentId,
 } from "@/api/lib/safe-id-boundaries";
 
-import { DECISION_READER_RESOURCE_URI } from "./apps/resource-uri";
 import type { McpRequestContext } from "./context";
 import {
   blocksDecisionOutput,
@@ -184,6 +184,7 @@ const openTool: TypedMcpToolHandler<
     decisionId: brandPersistedCaseLawDecisionId(parsed.output.decision_id),
     phase: "blocks",
     audience: "model",
+    surface: "search",
   });
   if (Result.isError(read)) {
     return internalFailureResult(read.error);
@@ -258,6 +259,7 @@ const blocksTool: TypedMcpToolHandler<
     phase,
     ...(referenceCursor === undefined ? {} : { referenceCursor }),
     audience: "app",
+    surface: "search",
   });
   if (Result.isError(read)) {
     return internalFailureResult(read.error);
@@ -305,6 +307,7 @@ const blocksTool: TypedMcpToolHandler<
       blockFragments: page.blockFragments,
       citationAnchors: page.citationAnchors,
       provisionAnchors: page.provisionAnchors,
+      provisionStatus: page.provisionStatus,
       nextCursor: page.nextCursor,
       limit: READER_PAGE_MAX_CHARS,
     },

@@ -638,8 +638,8 @@
       "behaviour": "A message sent while cards wait resets the client's interrupt state first, so the send is posted.",
       "status": "active",
       "file": "../web/src/features/chat/chat-runtime.ts",
-      "search": "    supersedePendingInterrupts();\n    const stream = client.sendMessage(message, options?.body);",
-      "replace": "    const stream = client.sendMessage(message, options?.body);",
+      "search": "    supersedePendingInterrupts();\n",
+      "replace": "",
       "scenario": {
         "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
         "test": "lets a new message replace an approval that still waits"
@@ -1000,7 +1000,8 @@
       "id": "reader-decodes-v2-envelope",
       "fix": "saved-state",
       "behaviour": "The reader keeps decoding the v2 content envelope that releases before canonical tool calls stored, instead of reading it as v3.",
-      "status": "active",
+      "status": "retired",
+      "reason": "The v3 content backfill upgrades every stored v2 envelope before runtime readers start, and the reader now rejects any version but 3, so no v2 decode path is left to mutate.",
       "file": "src/handlers/chat/chat-message-parts.ts",
       "search": "  if (content.version === 3) {\n    normalized = normalizePersistedV3ChatMessageContent(content);",
       "replace": "  if (content.version >= 2) {\n    normalized = normalizePersistedV3ChatMessageContent(content);",

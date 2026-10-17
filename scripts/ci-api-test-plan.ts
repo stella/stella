@@ -10,9 +10,11 @@ import {
 } from "./api-test-impact";
 import {
   API_TEST_SHARD_IDS,
+  FULL_TEST_JOB_SHARDS,
   fullTestPlan,
   isApiTestShardId,
 } from "./api-test-shard-plan";
+import { selectedTestJobs } from "./ci-affected-selection";
 
 const ImpactSchema = v.strictObject({
   mode: v.picklist(["all", "selected", "none"]),
@@ -55,24 +57,27 @@ export const parseApiTestImpact = (output: string): ApiTestImpact => {
   }
 };
 
+type TestJobShard = (typeof FULL_TEST_JOB_SHARDS)[number];
 type CiApiTestPlanOptions = {
   event: string;
   scopeUnknown: boolean;
-  apiInScope: boolean;
+  testJobs: readonly TestJobShard[];
   select: () => ApiTestImpact;
 };
 export const planCiApiTests = ({
   event,
   scopeUnknown,
-  apiInScope,
+  testJobs,
   select,
 }: CiApiTestPlanOptions) => {
   let impact = allApiTests();
-  if (event === "pull_request" && !scopeUnknown) {
+  if ((event === "pull_request" || event === "merge_group") && !scopeUnknown) {
     try {
-      impact = apiInScope
-        ? parseApiTestImpact(JSON.stringify(select()))
-        : { mode: "none", files: [], shards: 0 };
+      if (!testJobs.some(isApiTestShardId)) {
+        impact = { mode: "none", files: [], shards: 0 };
+      } else if (event === "pull_request") {
+        impact = parseApiTestImpact(JSON.stringify(select()));
+      }
     } catch {
       impact = allApiTests();
     }
@@ -83,45 +88,20 @@ export const planCiApiTests = ({
     impact,
     matrix: {
       shard: fullPlan.matrix.shard.filter(
-        (shard) => !isApiTestShardId(shard) || enabledApiShards.has(shard),
+        (shard) =>
+          (scopeUnknown ||
+            !["pull_request", "merge_group"].includes(event) ||
+            testJobs.includes(shard)) &&
+          (!isApiTestShardId(shard) || enabledApiShards.has(shard)),
       ),
     },
   };
 };
 
-const apiInTestScope = (base: string) => {
-  const scope = Bun.spawnSync(
-    ["bun", "scripts/test-scope.ts", "--base", base],
-    { stdout: "pipe", stderr: "pipe" },
-  );
-  if (scope.exitCode !== 0) {
-    panic("Cannot compute test scope");
-  }
-  const plan = Bun.spawnSync(
-    [
-      "bun",
-      "run",
-      "test",
-      "--",
-      "--dry=json",
-      ...scope.stdout.toString().trim().split(/\s+/u),
-    ],
-    { stdout: "pipe", stderr: "pipe" },
-  );
-  if (plan.exitCode !== 0) {
-    panic("Cannot compute Turbo test plan");
-  }
-  const json: unknown = JSON.parse(plan.stdout.toString());
-  const parsed = v.parse(
-    v.object({ tasks: v.array(v.object({ taskId: v.string() })) }),
-    json,
-  );
-  return parsed.tasks.some(({ taskId }) => taskId === "@stll/api#test");
-};
-
 if (import.meta.main) {
   const root = path.resolve(import.meta.dir, "..");
   let plan;
+  let testScope = "";
   try {
     const event = process.env["EVENT_NAME"] ?? "";
     const scopeUnknown = process.env["API_SCOPE_UNKNOWN"] === "true";
@@ -134,14 +114,45 @@ if (import.meta.main) {
     )
       .split("\0")
       .filter(Boolean);
-    const apiInScope =
-      event === "pull_request" && !scopeUnknown
-        ? apiInTestScope(`origin/${process.env["BASE_REF"] ?? "main"}`)
-        : true;
+    let testJobs = FULL_TEST_JOB_SHARDS;
+    if (!scopeUnknown && ["pull_request", "merge_group"].includes(event)) {
+      const comparisonBase =
+        process.env["COMPARISON_BASE"] ?? panic("Missing COMPARISON_BASE");
+      const scopeResult = Bun.spawnSync(
+        ["bun", "scripts/test-scope.ts", "--base", comparisonBase],
+        { cwd: root, stderr: "pipe", stdout: "pipe" },
+      );
+      if (scopeResult.exitCode !== 0) {
+        panic(`Test scope failed: ${scopeResult.stderr.toString()}`);
+      }
+      testScope = scopeResult.stdout.toString().trim();
+      const scopeArgs = testScope.split(/\s+/u).filter(Boolean);
+      const dryRun = Bun.spawnSync(
+        [
+          "bun",
+          "run",
+          "test",
+          "--",
+          "--concurrency=2",
+          ...scopeArgs,
+          "--dry=json",
+        ],
+        { cwd: root, stderr: "pipe", stdout: "pipe" },
+      );
+      if (dryRun.exitCode !== 0) {
+        panic(`Test plan failed: ${dryRun.stderr.toString()}`);
+      }
+      const output = dryRun.stdout.toString();
+      const jsonStart = output.indexOf("{");
+      if (jsonStart === -1) {
+        panic("Test plan did not contain JSON");
+      }
+      testJobs = selectedTestJobs(output.slice(jsonStart), root);
+    }
     plan = planCiApiTests({
       event,
       scopeUnknown,
-      apiInScope,
+      testJobs,
       select: () => selectApiTestImpact({ changed, root }),
     });
   } catch (error) {
@@ -149,12 +160,12 @@ if (import.meta.main) {
     plan = planCiApiTests({
       event: "fallback",
       scopeUnknown: true,
-      apiInScope: true,
+      testJobs: FULL_TEST_JOB_SHARDS,
       select: allApiTests,
     });
   }
   appendFileSync(
     process.env["GITHUB_OUTPUT"] ?? panic("Missing GITHUB_OUTPUT"),
-    `ci_tests_matrix=${JSON.stringify(plan.matrix)}\napi_test_shards=${plan.impact.shards}\napi_test_files<<API_TEST_FILES_END\n${plan.impact.files.join("\n")}\nAPI_TEST_FILES_END\n`,
+    `ci_tests_matrix=${JSON.stringify(plan.matrix)}\napi_test_shards=${plan.impact.shards}\ntest_scope=${testScope}\napi_test_files<<API_TEST_FILES_END\n${plan.impact.files.join("\n")}\nAPI_TEST_FILES_END\n`,
   );
 }

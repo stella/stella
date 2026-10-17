@@ -46,7 +46,12 @@ export const EXPENSE_CATEGORIES = [
 
 export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number];
 
-export const TIME_ENTRY_SOURCES = ["manual", "timer", "suggested"] as const;
+export const TIME_ENTRY_SOURCES = [
+  "manual",
+  "timer",
+  "suggested",
+  "activity",
+] as const;
 
 export type TimeEntrySource = (typeof TIME_ENTRY_SOURCES)[number];
 
@@ -54,6 +59,7 @@ export const TIME_ENTRY_SOURCE = {
   MANUAL: "manual",
   TIMER: "timer",
   SUGGESTED: "suggested",
+  ACTIVITY: "activity",
 } as const satisfies Record<string, TimeEntrySource>;
 
 type MissingTimeEntrySource = Exclude<
@@ -139,3 +145,9 @@ type MissingInvoiceLineSource = Exclude<
 >;
 
 true satisfies MissingInvoiceLineSource extends never ? true : never;
+
+/** Payment terms the invoice composer offers as one-click choices. */
+export const INVOICE_DUE_DAY_PRESETS = [7, 14, 30] as const;
+
+/** Payment term used when neither the client nor the caller sets one. */
+export const DEFAULT_INVOICE_DUE_DAYS = 14;

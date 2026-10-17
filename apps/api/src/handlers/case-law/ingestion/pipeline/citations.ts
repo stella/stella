@@ -18,7 +18,10 @@ import type { DecisionReference } from "@/api/handlers/case-law/citations/decisi
 import type { extractCitations } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { classifyCitedPart } from "@/api/handlers/case-law/polarity/cited-part";
 import { POLARITY_CLASSIFIER_VERSION } from "@/api/handlers/case-law/polarity/consts";
-import { applyCitationReviews } from "@/api/handlers/case-law/polarity/reviews";
+import {
+  applyCitationReviews,
+  applyDoctrineReviews,
+} from "@/api/handlers/case-law/polarity/reviews";
 import {
   ACTIVE_RULE_SOURCES,
   loadRules,
@@ -312,6 +315,7 @@ export const citationContent = (row: {
   sectionIndex?: number | null | undefined;
   polarity?: string | null | undefined;
   polarityRuleId?: string | null | undefined;
+  doctrinalTreatment?: string | null | undefined;
   polaritySource?: string | null | undefined;
   polarityClassifierVersion?: string | null | undefined;
   polarityEvidenceWindows?: unknown;
@@ -331,6 +335,7 @@ export const citationContent = (row: {
     persistedColumnNumber(caseLawCitations.sectionIndex, row.sectionIndex),
     row.polarity ?? null,
     row.polarityRuleId ?? null,
+    row.doctrinalTreatment ?? null,
     row.polaritySource ?? null,
     row.polarityClassifierVersion ?? null,
     JSON.stringify(
@@ -409,6 +414,7 @@ export const writeDecisionCitations = async (
                section_index,
                polarity,
                polarity_rule_id::text AS polarity_rule_id,
+               doctrinal_treatment,
                polarity_source, polarity_classifier_version,
                polarity_evidence_windows,
                polarity_confidence, cited_part
@@ -438,6 +444,7 @@ export const writeDecisionCitations = async (
         ),
         polarity: textOrNull(row["polarity"]),
         polarityRuleId: textOrNull(row["polarity_rule_id"]),
+        doctrinalTreatment: textOrNull(row["doctrinal_treatment"]),
         polaritySource: textOrNull(row["polarity_source"]),
         polarityClassifierVersion: textOrNull(
           row["polarity_classifier_version"],
@@ -463,7 +470,10 @@ export const writeDecisionCitations = async (
 
   const incoming: CitationRow[] = [];
   let kept = 0;
-  for (const row of await applyCitationReviews(tx, rows)) {
+  for (const row of await applyDoctrineReviews(
+    tx,
+    await applyCitationReviews(tx, rows),
+  )) {
     const matches = unmatched.get(citationContent(row));
     if (matches !== undefined && matches.length > 0) {
       matches.pop();

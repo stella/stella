@@ -5,6 +5,7 @@ import fc from "fast-check";
 import JSZip from "jszip";
 
 import { compareCodeUnit } from "@stll/collation";
+import { writeZipEntry } from "@stll/docx-utils";
 import { assertProperty } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { filtersFromFieldConfig } from "@stll/template-conditions";
@@ -89,8 +90,9 @@ const P = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
 
 const makeDocx = async (documentXml: string): Promise<ScannedFile> => {
   const zip = new JSZip();
-  zip.file("word/document.xml", documentXml);
-  zip.file(
+  writeZipEntry(zip, "word/document.xml", documentXml);
+  writeZipEntry(
+    zip,
     "[Content_Types].xml",
     [
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
@@ -1425,7 +1427,7 @@ describe("clause and template directive parity", () => {
         text: "{{ loop.index }}: {{ term.value }}",
         runs: [{ text: "{{ loop.index }}: {{ term.value }}", italic: true }],
         listKind: "ordered",
-        listLevel: 1,
+        numbering: { kind: "levelOnly", ilvl: 1 },
       },
       clauseDirective("{% endfor %}"),
       clauseDirective("{% endif %}"),
@@ -3257,7 +3259,8 @@ describe("template fields are required where they render", () => {
   test("header markers are required where the header renders them", async () => {
     const fillWithHeader = async (header: string, values: TemplateData) => {
       const zip = await JSZip.loadAsync((await makeDocx(WRAP(branch))).bytes);
-      zip.file(
+      writeZipEntry(
+        zip,
         "word/header1.xml",
         `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">${header}</w:hdr>`,
       );
