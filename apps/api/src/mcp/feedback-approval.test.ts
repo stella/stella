@@ -93,6 +93,19 @@ describe("feedback approval", () => {
     ).toBe("expired");
   });
 
+  test("refuses alternate numeric spellings even with a valid approval signature", () => {
+    const [prefix, expiresAt, mac] = approval.split(".");
+    for (const token of [`${expiresAt}e0`, `+${expiresAt}`, ` ${expiresAt}`]) {
+      expect(
+        checkFeedbackApproval({
+          ...subject,
+          approval: `${prefix}.${token}.${mac}`,
+          now: NOW,
+        }),
+      ).toBe("invalid");
+    }
+  });
+
   test("rejects a forged expiry and malformed tokens", () => {
     const mac = approval.slice(approval.lastIndexOf(".") + 1);
     const extended = `fb1.${String(NOW + 10 * FEEDBACK_APPROVAL_TTL_MS)}.${mac}`;
