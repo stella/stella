@@ -1123,8 +1123,8 @@ export const generatorsForFiles = (files: readonly string[]) => {
     }
   }
   // A derived output is never committed, so a clean checkout lacks it: every
-  // derived generator a selected one reads from (through `after` or an output
-  // feeding its inputs) must run first, and so must its own prerequisites.
+  // derived generator a selected one declares in `after` must run first, and
+  // so must its own derived prerequisites.
   const pending = [...selected];
   while (pending.length > 0) {
     const id = pending.pop();
@@ -1142,16 +1142,16 @@ export const generatorsForFiles = (files: readonly string[]) => {
   return GENERATORS.filter((generator) => selected.has(generator.id));
 };
 
-/** Derived generators whose outputs `generator` needs present to run. */
+/**
+ * Derived generators whose outputs `generator` needs present to run: the
+ * derived ones it declares in `after`. (Input globs are too broad to infer
+ * this from; a generator that reads a derived output declares it.)
+ */
 export const derivedPrerequisites = (generator: Generator) =>
   GENERATORS.filter(
     (upstream) =>
-      upstream.id !== generator.id &&
       upstream.outputKind === "derived" &&
-      (generator.after.includes(upstream.id) ||
-        upstream.outputs.some((output) =>
-          generator.inputs.some((input) => outputFeedsInput(output, input)),
-        )),
+      generator.after.includes(upstream.id),
   );
 
 export const allowedOutputs = (generators: readonly Generator[]) => [
@@ -1172,10 +1172,8 @@ export const orderGenerators = (
   );
   const ordered: Generator[] = [];
   while (pending.size > 0) {
-    const next = [...pending.values()].find(
-      (generator) =>
-        generator.after.every((id) => !pending.has(id)) &&
-        derivedPrerequisites(generator).every(({ id }) => !pending.has(id)),
+    const next = [...pending.values()].find((generator) =>
+      generator.after.every((id) => !pending.has(id)),
     );
     if (!next) {
       console.error("Generated-file dependency cycle");
