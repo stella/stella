@@ -1,0 +1,45 @@
+import { containsSearchMatchKey } from "@stll/text-normalize/search-match-key";
+
+type MatterSearchItem = { id: string; name: string };
+
+type FilterMatterPickerItemsOptions<TItem extends MatterSearchItem> = {
+  getClientLabel: (item: TItem) => string;
+  items: readonly TItem[];
+  query: string;
+  selectedId?: string | null | undefined;
+};
+
+export const filterMatterPickerItems = <TItem extends MatterSearchItem>({
+  getClientLabel,
+  items,
+  query,
+  selectedId,
+}: FilterMatterPickerItemsOptions<TItem>): readonly TItem[] => {
+  const normalizedQuery = query.trim().toLowerCase();
+  const matches =
+    normalizedQuery.length === 0
+      ? items
+      : items.filter(
+          (item) =>
+            containsSearchMatchKey(item.name.toLowerCase(), normalizedQuery) ||
+            containsSearchMatchKey(
+              getClientLabel(item).toLowerCase(),
+              normalizedQuery,
+            ),
+        );
+
+  if (
+    normalizedQuery.length > 0 ||
+    selectedId === null ||
+    selectedId === undefined
+  ) {
+    return matches;
+  }
+
+  const selected = matches.find((item) => item.id === selectedId);
+  if (selected === undefined) {
+    return matches;
+  }
+
+  return [selected, ...matches.filter((item) => item.id !== selectedId)];
+};
