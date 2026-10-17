@@ -115,19 +115,19 @@ const useTemplateActions = (organizationId: string) => {
       submit.run({
         operation: "template-upload",
         body: { file, name },
-        send: (body) => api.templates.put(body),
+        send: async (body) => api.templates.put(body),
       }),
     createBlank: async (name: string) =>
       submit.run({
         operation: "template-blank",
         body: { name },
-        send: (body) => api.templates.blank.put(body),
+        send: async (body) => api.templates.blank.put(body),
       }),
     createFromStyleSet: async (name: string, styleSetId: string) =>
       submit.run({
         operation: "template-style-set",
         body: { name, styleSetId: toSafeId<"styleSet">(styleSetId) },
-        send: (body) => api.templates["style-set"].put(body),
+        send: async (body) => api.templates["style-set"].put(body),
       }),
     update: async (templateId: string, patch: TemplatePatch) =>
       api.templates({ templateId }).post(patch),
@@ -139,7 +139,8 @@ const useTemplateActions = (organizationId: string) => {
       submit.run({
         operation: `template-install:${packId}`,
         body: { templateSlugs: [templateSlug] },
-        send: (body) => api["template-packs"]({ packId }).install.post(body),
+        send: async (body) =>
+          api["template-packs"]({ packId }).install.post(body),
       }),
     /**
      * The audited presigned URL of the template's source DOCX, read from its

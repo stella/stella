@@ -439,7 +439,7 @@ const StyleSetFormDialog = ({
           name: normalizedName,
           styleSource: file,
         },
-        send: (body) => api["style-sets"].put(body),
+        send: async (body) => api["style-sets"].put(body),
       });
     }
     setSaving(false);

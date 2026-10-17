@@ -162,7 +162,7 @@ const ImportSkillDialogBody = ({
     mutationFn: async (source: SkillDiscovery) => {
       const response = await submit.run({
         operation: "skill-import-urls",
-        send: (body) => api.skills["import-urls"].post(body),
+        send: async (body) => api.skills["import-urls"].post(body),
         body: {
           items: source.skills
             .filter((skill) => selected.has(skill.sourceUrl))

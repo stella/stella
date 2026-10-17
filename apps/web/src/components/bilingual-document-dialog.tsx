@@ -78,19 +78,19 @@ export const BilingualDocumentDialog = ({
 
   const createMutation = useMutation({
     mutationFn: async () => {
+      const client = api.entities({
+        workspaceId: toSafeId<"workspace">(workspaceId),
+      }).bilingual;
       const response = await submit.run({
         operation: `bilingual-create:${workspaceId}`,
-        send: (body) =>
-          api
-            .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-            .bilingual.post(body),
+        send: async (body) => client.post(body),
         body: {
           entityId: toSafeId<"entity">(entityId),
           fieldId: toSafeId<"field">(fieldId),
           sourceLang,
           targetLang,
           borders: "none",
-        },
+        } satisfies Parameters<typeof client.post>[0],
       });
       return unwrapEden(response);
     },

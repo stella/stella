@@ -109,12 +109,13 @@ export const createDocxSuggestionsRequest = async ({
           },
         ],
   );
-  if (body.length === 0) {
+  const first = body.at(0);
+  if (first === undefined) {
     return Result.ok(null);
   }
 
   // Suggestion refs already identify this immutable batch intent across retries.
-  const intent = createSubmitIntent(() => body[0].ref);
+  const intent = createSubmitIntent(() => first.ref);
   const request = intent.request();
   const result = await Result.tryPromise({
     try: async () => {

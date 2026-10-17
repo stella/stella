@@ -86,8 +86,8 @@ const receiptFixture = ({ openClient }: Fixture) => {
     otherOrganizationId,
     userId,
   );
-  const claim = (body: unknown = ORIGINAL_BODY, now?: Date) =>
-    claimRequestReceipt({
+  const claim = async (body: unknown = ORIGINAL_BODY, now?: Date) =>
+    await claimRequestReceipt({
       scopedDb,
       organizationId,
       userId,
@@ -96,11 +96,11 @@ const receiptFixture = ({ openClient }: Fixture) => {
       fingerprint: fingerprint(body),
       ...(now === undefined ? {} : { now }),
     });
-  const submit = <T>(
+  const submit = async <T>(
     run: (scopedDb: ScopedDb) => Promise<T>,
     { status = 201, now }: SubmitOptions = {},
   ) =>
-    runWithRequestReceipt({
+    await runWithRequestReceipt({
       scopedDb,
       organizationId,
       userId,
@@ -223,8 +223,11 @@ describe.skipIf(!enabled)("request receipt state machine (postgres)", () => {
           return Result.ok({ id: `resource-${creates}` });
         },
       );
-      const invoke = (key: string | null, body: unknown = ORIGINAL_BODY) =>
-        endpoint.handler(
+      const invoke = async (
+        key: string | null,
+        body: unknown = ORIGINAL_BODY,
+      ) =>
+        await endpoint.handler(
           createTestHandlerContext<Parameters<typeof endpoint.handler>[0]>({
             audit: NO_AUDIT,
             scopedDb,
@@ -344,6 +347,9 @@ describe.skipIf(!enabled)("request receipt state machine (postgres)", () => {
         ),
       ).toEqual([]);
       const created = await invoke();
+      if (!("id" in created)) {
+        panic("A successful retry must return its created contact");
+      }
       expect(
         await scopedDb(
           async (tx) => await tx.select({ id: contacts.id }).from(contacts),

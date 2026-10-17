@@ -3,7 +3,10 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
+import { sourceFileIndex } from "@stll/scripts/src/source-file-index";
+
 import {
+  createReplayExceptions,
   liveCreateRoutes,
   serverCreateRoutes,
   mountedServerCreateRoutes,
@@ -23,6 +26,18 @@ const walk = (node: ts.Node, visit: (node: ts.Node) => void) => {
   visit(node);
   ts.forEachChild(node, (child) => walk(child, visit));
 };
+// Parsed nodes have parents up to the SourceFile; its typed parent is not
+// optional even though it is absent at runtime.
+const ancestorsOf = (node: ts.Node) => {
+  const ancestors = [node];
+  let ancestor = node;
+  while (!ts.isSourceFile(ancestor)) {
+    ancestor = ancestor.parent;
+    ancestors.push(ancestor);
+  }
+  return ancestors;
+};
+
 type ClientEnvironment = {
   declarations: Map<string, ts.Expression>;
   roots: ReadonlyMap<string, readonly string[]>;
@@ -190,7 +205,7 @@ const createMutationViolations = ({
       return;
     }
     let scope: ts.Node = node;
-    while (scope.parent && !ts.isBlock(scope) && !ts.isSourceFile(scope)) {
+    while (!ts.isBlock(scope) && !ts.isSourceFile(scope)) {
       scope = scope.parent;
     }
     let declarations = scopedDeclarations.get(scope);
@@ -202,13 +217,11 @@ const createMutationViolations = ({
   });
   const declarationsAt = (node: ts.Node) => {
     const scopes: Map<string, ts.Expression>[] = [];
-    let ancestor: ts.Node | undefined = node;
-    while (ancestor) {
+    for (const ancestor of ancestorsOf(node)) {
       const declarations = scopedDeclarations.get(ancestor);
       if (declarations) {
         scopes.push(declarations);
       }
-      ancestor = ancestor.parent;
     }
     const declarations = new Map<string, ts.Expression>();
     for (const scope of scopes.toReversed()) {
@@ -358,8 +371,7 @@ const createMutationViolations = ({
       return false;
     }
     const name = node.expression.expression.text;
-    let ancestor: ts.Node | undefined = node;
-    while (ancestor) {
+    for (const ancestor of ancestorsOf(node)) {
       const receiver = scopedDeclarations.get(ancestor)?.get(name);
       if (receiver) {
         return (
@@ -394,7 +406,6 @@ const createMutationViolations = ({
           }
         }
       }
-      ancestor = ancestor.parent;
     }
     return false;
   };
@@ -435,8 +446,7 @@ const createMutationViolations = ({
     name: string,
   ): boolean => requestType(parameterBindingType(parameter, name));
   const requestIdentifier = (name: string, node: ts.Node): boolean => {
-    let ancestor: ts.Node | undefined = node;
-    while (ancestor) {
+    for (const ancestor of ancestorsOf(node)) {
       const initializer = scopedDeclarations.get(ancestor)?.get(name);
       if (initializer) {
         if (
@@ -482,7 +492,6 @@ const createMutationViolations = ({
           );
         }
       }
-      ancestor = ancestor.parent;
     }
     return false;
   };
@@ -544,12 +553,10 @@ const createMutationViolations = ({
     ) {
       return;
     }
-    let ancestor: ts.Node | undefined = node.parent;
-    while (ancestor) {
+    for (const ancestor of ancestorsOf(node.parent)) {
       if (ts.isTypeNode(ancestor)) {
         return;
       }
-      ancestor = ancestor.parent;
     }
     const route = clientPath({
       node: node.expression,
@@ -586,18 +593,19 @@ const createMutationViolations = ({
 };
 
 test("every web call to a registered JSON create route carries submit-intent headers", () => {
-  const creates = liveCreateRoutes();
-  expect(creates.size).toBeGreaterThan(75);
+  const { all, replay: creates, excluded } = liveCreateRoutes();
+  expect(all.size).toBeGreaterThan(75);
+  expect(creates.size + excluded.size).toBe(all.size);
+  expect([...creates].filter((route) => excluded.has(route))).toEqual([]);
   const violations: string[] = [];
   const roots = clientRoots();
   let createCalls = 0;
-  for (const file of new Bun.Glob("**/*.{ts,tsx}").scanSync({
-    cwd: sourceRoot,
-  })) {
+  for (const { relativePath: file, sourceText: text } of sourceFileIndex(
+    sourceRoot,
+  )) {
     if (/\.(?:test|type-test)\./u.test(file)) {
       continue;
     }
-    const text = readFileSync(path.join(sourceRoot, file), "utf-8");
     if (!/\.(?:put|post)\b/u.test(text)) {
       continue;
     }
@@ -607,6 +615,21 @@ test("every web call to a registered JSON create route carries submit-intent hea
   }
   expect(createCalls).toBeGreaterThan(50);
   expect(violations).toEqual([]);
+});
+
+test("create census derives lifecycle exceptions from the server declaration and rejects a missing inventory", () => {
+  const source = parse({
+    file: "server-census.ts",
+    text: 'const IDEMPOTENCY_EXCEPTIONS = { "src/handlers/upload/create.ts": "Owns durable uploads" } as const satisfies Record<string, string>;',
+  });
+  expect([...createReplayExceptions(source)]).toEqual([
+    "src/handlers/upload/create.ts",
+  ]);
+  expect(() =>
+    createReplayExceptions(
+      parse({ file: "server-census.ts", text: "export {};" }),
+    ),
+  ).toThrow("Server create replay exception inventory is missing");
 });
 
 test("create census resolves nested groups and separate route prefixes", () => {

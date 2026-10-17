@@ -206,7 +206,7 @@ const LoadedStyleSetEditor = ({
           name: normalizedName,
           settings,
         },
-        send: (body) => api["style-sets"].editor.put(body),
+        send: async (body) => api["style-sets"].editor.put(body),
       });
       await finishSave(response.error);
       return;

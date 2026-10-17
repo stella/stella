@@ -595,7 +595,7 @@ export const useTemplateStudioSlashMenu = ({
     const response = await idempotentSubmit.run({
       operation: `templates.${templateId}.clauses.create`,
       body: { clauseId: toSafeId<"clause">(clauseId), slotName },
-      send: (body) =>
+      send: async (body) =>
         api
           .templates({ templateId: toSafeId<"template">(templateId) })
           .clauses.put(body),

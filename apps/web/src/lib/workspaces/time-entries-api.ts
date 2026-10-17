@@ -175,7 +175,7 @@ export const sendTimeEntryMutation = async ({
     case "create":
       await requestTimeEntries({
         body: mutation.body,
-        headers,
+        ...(headers === undefined ? {} : { headers }),
         method: "PUT",
         parse: parseTimeEntryIdResponse,
         path: "/",
@@ -185,7 +185,7 @@ export const sendTimeEntryMutation = async ({
     case "update":
       await requestTimeEntries({
         body: mutation.body,
-        headers,
+        ...(headers === undefined ? {} : { headers }),
         method: "PATCH",
         parse: parseTimeEntryIdResponse,
         path: "/",
@@ -195,7 +195,7 @@ export const sendTimeEntryMutation = async ({
     case "delete":
       await requestTimeEntries({
         body: mutation.body,
-        headers,
+        ...(headers === undefined ? {} : { headers }),
         method: "DELETE",
         parse: parseTimeEntryDeleteResponse,
         path: "/",
@@ -205,7 +205,7 @@ export const sendTimeEntryMutation = async ({
     case "batch_update":
       await requestTimeEntries({
         body: mutation.body,
-        headers,
+        ...(headers === undefined ? {} : { headers }),
         method: "POST",
         parse: parseTimeEntryUpdatedResponse,
         path: "/batch",
@@ -215,7 +215,7 @@ export const sendTimeEntryMutation = async ({
     case "batch_delete":
       await requestTimeEntries({
         body: mutation.body,
-        headers,
+        ...(headers === undefined ? {} : { headers }),
         method: "DELETE",
         parse: parseTimeEntryUpdatedResponse,
         path: "/batch",
@@ -225,7 +225,7 @@ export const sendTimeEntryMutation = async ({
     case "split":
       await requestTimeEntries({
         body: mutation.body,
-        headers,
+        ...(headers === undefined ? {} : { headers }),
         method: "POST",
         parse: parseTimeEntrySplitResponse,
         path: "/split",
@@ -235,7 +235,7 @@ export const sendTimeEntryMutation = async ({
     case "suggestion_decision":
       await requestTimeEntries({
         body: mutation.body,
-        headers,
+        ...(headers === undefined ? {} : { headers }),
         method: "POST",
         parse: parseTimeEntrySuggestionDecision,
         path: "/suggestions/decisions",

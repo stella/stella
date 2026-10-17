@@ -1,7 +1,8 @@
 import { panic } from "better-result";
-import { readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
+
+import { sourceFileIndex } from "@stll/scripts/src/source-file-index";
 
 const apiRoot = path.resolve(import.meta.dirname, "../../../api/src");
 
@@ -87,8 +88,8 @@ const serverReceiver = ({ file, text }: SourceOptions) => {
     if (declaration) {
       return prefix(declaration, depth + 1);
     }
-    let parent: ts.Node | undefined = node.parent;
-    while (parent) {
+    let parent = node.parent;
+    while (!ts.isSourceFile(parent)) {
       if (
         ts.isArrowFunction(parent) &&
         parent.parameters.some(
@@ -261,51 +262,120 @@ export const mountedServerCreateRoutes = (
   return creates;
 };
 
-export const liveCreateRoutes = () => {
-  const capabilityModules = new Set<string>();
-  for (const file of new Bun.Glob(
-    "mcp/generated/capability-dispatch/*.create.ts",
-  ).scanSync({ cwd: apiRoot })) {
-    walk(
-      parse({ file, text: readFileSync(path.join(apiRoot, file), "utf-8") }),
-      (node) => {
-        if (
-          !ts.isCallExpression(node) ||
-          node.expression.kind !== ts.SyntaxKind.ImportKeyword
-        ) {
-          return;
-        }
-        const module = node.arguments.at(0);
-        if (module && ts.isStringLiteral(module)) {
-          capabilityModules.add(module.text);
-        }
-      },
-    );
-  }
-  const isCreate = ({ file, module }: ModuleOptions) => {
-    const target = module.startsWith("@/api/")
-      ? path.join(apiRoot, module.slice("@/api/".length))
-      : path.resolve(path.dirname(file), module);
+// The server census owns the reasoned exception inventory. Read its declaration
+// rather than duplicating that lifecycle policy in a client-side allowlist.
+export const createReplayExceptions = (source: ts.SourceFile) => {
+  let exceptions: Set<string> | undefined;
+  walk(source, (node) => {
     if (
-      !target.startsWith(apiRoot) ||
-      (!target.endsWith("/create") && !capabilityModules.has(module))
+      !ts.isVariableDeclaration(node) ||
+      !ts.isIdentifier(node.name) ||
+      node.name.text !== "IDEMPOTENCY_EXCEPTIONS" ||
+      !node.initializer
+    ) {
+      return;
+    }
+    let value = node.initializer;
+    while (ts.isSatisfiesExpression(value) || ts.isAsExpression(value)) {
+      value = value.expression;
+    }
+    if (!ts.isObjectLiteralExpression(value)) {
+      panic("Server create replay exceptions must be an object declaration");
+    }
+    exceptions = new Set(
+      value.properties.map((entry) => {
+        if (
+          !ts.isPropertyAssignment(entry) ||
+          !ts.isStringLiteral(entry.name)
+        ) {
+          panic(
+            "Server create replay exceptions must use literal handler paths",
+          );
+        }
+        return entry.name.text;
+      }),
+    );
+  });
+  return (
+    exceptions ?? panic("Server create replay exception inventory is missing")
+  );
+};
+
+export const liveCreateRoutes = () => {
+  const index = sourceFileIndex(apiRoot);
+  const census = index.find(
+    ({ relativePath }) =>
+      relativePath === "handlers/idempotency-census.test.ts",
+  );
+  if (!census) {
+    panic("Server create replay census is missing");
+  }
+  const exceptions = createReplayExceptions(census.sourceFile(false));
+  const capabilityModules = new Set<string>();
+  for (const entry of index) {
+    if (
+      !/^mcp\/generated\/capability-dispatch\/.*\.create\.ts$/u.test(
+        entry.relativePath,
+      )
+    ) {
+      continue;
+    }
+    walk(entry.sourceFile(false), (node) => {
+      if (
+        !ts.isCallExpression(node) ||
+        node.expression.kind !== ts.SyntaxKind.ImportKeyword
+      ) {
+        return;
+      }
+      const module = node.arguments.at(0);
+      if (module && ts.isStringLiteral(module)) {
+        capabilityModules.add(module.text);
+      }
+    });
+  }
+  const entries = new Map(index.map((entry) => [entry.filePath, entry]));
+  const dispositions = new Map<string, "replay" | "excluded">();
+  const isCreate = ({ file, module }: ModuleOptions) => {
+    const target = resolveModule({ file, module });
+    if (
+      !target.startsWith(`${apiRoot}${path.sep}`) ||
+      (!target.endsWith("/create.ts") && !capabilityModules.has(module))
     ) {
       return false;
     }
-    // Non-JSON/credential/public-auth exceptions are owned by the server census.
-    return /idempotency:\s*\{\s*type:\s*"replay"/u.test(
-      readFileSync(`${target}.ts`, "utf-8"),
-    );
-  };
-  const sources = new Map<string, string>();
-  for (const file of new Bun.Glob("handlers/**/*.ts").scanSync({
-    cwd: apiRoot,
-  })) {
-    if (/\.(?:test|type-test)\./u.test(file)) {
-      continue;
+    const entry = entries.get(target);
+    if (!entry) {
+      panic(`Cannot read create handler ${target}`);
     }
-    const absolute = path.join(apiRoot, file);
-    sources.set(absolute, readFileSync(absolute, "utf-8"));
-  }
-  return mountedServerCreateRoutes(sources, isCreate);
+    const replay = /idempotency:\s*\{\s*type:\s*"replay"/u.test(
+      entry.sourceText,
+    );
+    const excluded = exceptions.has(`src/${entry.relativePath}`);
+    if (replay === excluded) {
+      panic(
+        `${target}: declare replay or exactly one server-owned lifecycle exception`,
+      );
+    }
+    dispositions.set(target, replay ? "replay" : "excluded");
+    return true;
+  };
+  const sources = new Map(
+    index
+      .filter(
+        ({ relativePath }) =>
+          relativePath.startsWith("handlers/") &&
+          !/\.(?:test|type-test)\./u.test(relativePath),
+      )
+      .map(({ filePath, sourceText }) => [filePath, sourceText]),
+  );
+  const all = mountedServerCreateRoutes(sources, isCreate);
+  const replay = mountedServerCreateRoutes(
+    sources,
+    (options) => dispositions.get(resolveModule(options)) === "replay",
+  );
+  const excluded = mountedServerCreateRoutes(
+    sources,
+    (options) => dispositions.get(resolveModule(options)) === "excluded",
+  );
+  return { all, replay, excluded };
 };

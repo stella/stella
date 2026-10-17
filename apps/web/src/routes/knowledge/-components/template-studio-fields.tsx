@@ -1603,7 +1603,7 @@ const SaveRecipeDialog = ({
     const response = await idempotentSubmit.run({
       operation: "template-recipes.create",
       body: { name: trimmed, definition },
-      send: (body, request) => api["template-recipes"].put(body, request),
+      send: async (body, request) => api["template-recipes"].put(body, request),
     });
     setSaving(false);
     if (response.error) {

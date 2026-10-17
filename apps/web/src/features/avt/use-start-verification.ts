@@ -58,7 +58,7 @@ export const useStartVerification = ({
     const sent = await Result.tryPromise(async () => {
       const { data, error } = await submit.run({
         operation: `verification-create:${workspaceId}`,
-        send: (body) =>
+        send: async (body) =>
           api
             .lists({ workspaceId: toSafeId<"workspace">(workspaceId) })
             .verifications.post(body),

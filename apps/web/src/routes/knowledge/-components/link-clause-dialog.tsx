@@ -266,7 +266,7 @@ export const LinkClauseDialog = ({
     const response = await idempotentSubmit.run({
       operation: `templates.${templateId}.clauses.create`,
       body,
-      send: (payload) =>
+      send: async (payload) =>
         api
           .templates({ templateId: toSafeId<"template">(templateId) })
           .clauses.put(payload),

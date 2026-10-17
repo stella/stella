@@ -45,10 +45,10 @@ export const useIdempotentMutation = <
     ...(onMutate === undefined
       ? {}
       : {
-          onMutate: (
+          onMutate: async (
             submission: MutationSubmission<TVariables, TData>,
             context: Parameters<typeof onMutate>[1],
-          ) => onMutate(submission[IDEMPOTENT_SUBMISSION], context),
+          ) => await onMutate(submission[IDEMPOTENT_SUBMISSION], context),
         }),
     onSuccess: (data, submission, result, context) =>
       onSuccess?.(data, submission[IDEMPOTENT_SUBMISSION], result, context),

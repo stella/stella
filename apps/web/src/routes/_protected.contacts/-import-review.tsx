@@ -374,7 +374,7 @@ export const useImportReview = ({
       const request = await resolveContactImportRequest({ payload, scope });
       const response = await submit.run({
         operation: "contact-import",
-        send: (body) => api.contacts.import.put(body),
+        send: async (body) => api.contacts.import.put(body),
         body: {
           importRequestId: request.id,
           ...payload,

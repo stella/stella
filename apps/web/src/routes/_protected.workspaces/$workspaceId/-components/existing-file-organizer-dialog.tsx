@@ -1574,7 +1574,6 @@ const ensureFolders = async ({
 
       const parentSafeId =
         currentParentId === null ? null : toSafeId<"entity">(currentParentId);
-      // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- each folder is created under the id the previous iteration returned
       const response = await submit.run({
         operation: `organizer-folder:${workspaceId}:${pathKey}`,
         body: { kind: "folder", name: segment, parentId: parentSafeId },
