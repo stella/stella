@@ -1,3 +1,5 @@
+import { AhoCorasick } from "#aho-corasick";
+
 /**
  * The words a query marks, and how a mark looks.
  *
@@ -82,7 +84,10 @@ export const queryHighlightTokens = (
     return [];
   }
   const tokens: string[] = [];
-  for (const word of query.replace(NON_WORD_RUN, " ").split(" ")) {
+  for (const word of query
+    .toWellFormed()
+    .replace(NON_WORD_RUN, " ")
+    .split(" ")) {
     const token = word.toLowerCase();
     if (token.length < MIN_HIGHLIGHT_TOKEN_LENGTH || tokens.includes(token)) {
       continue;
@@ -92,34 +97,67 @@ export const queryHighlightTokens = (
   return tokens;
 };
 
+type QueryPrefixScan = {
+  source: string;
+  text: string;
+  starts: ReadonlySet<number>;
+};
+
+type WordPrefixMatcher = (text: string, index: number) => number | null;
+
+// Rows for the current query share the automaton, while each reader owns its scan.
+let compiledQueryPrefix: { key: string; matcher: AhoCorasick } | undefined;
+
 /**
- * Where a token matches, as an index into the lowercased text: at the start of
- * a word only, and running to the end of that word.
- *
- * The word-start rule is what keeps a three-letter token from lighting up the
- * middle of unrelated words, and letting the match run to the end of the word
- * is what makes it useful in an inflected language: "odpovědnost" marks
- * "odpovědnosti" whole, rather than marking a fragment and leaving a stray
- * ending behind. Prefix, not substring.
+ * Owns a snapshot of the query tokens so caller mutations cannot alter a
+ * compiled matcher. Build once per query; the bound matcher scans each piece
+ * once while its caller walks UTF-16 positions.
  */
-export const wordPrefixMatchEnd = (
-  lowered: string,
-  index: number,
+export const createWordPrefixMatcher = (
   tokens: readonly string[],
-): number | null => {
-  if (endsWithWordCharacter(lowered, index)) {
-    return null;
+): WordPrefixMatcher => {
+  const patterns = [
+    ...new Set(
+      tokens
+        .map((token) => token.toWellFormed())
+        .filter((token) => token.length > 0),
+    ),
+  ];
+  if (patterns.length === 0) {
+    return () => null;
   }
-  const matched = tokens.some((token) => lowered.startsWith(token, index));
-  if (!matched) {
-    return null;
+  const key = JSON.stringify(patterns);
+  if (compiledQueryPrefix?.key !== key) {
+    compiledQueryPrefix = { key, matcher: new AhoCorasick(patterns) };
   }
-  let end = index;
-  for (;;) {
-    const codePoint = wordCodePointAt(lowered, end);
-    if (codePoint === null) {
-      return end;
+  const matcher = compiledQueryPrefix.matcher;
+  let scan: QueryPrefixScan | undefined;
+
+  return (lowered, index) => {
+    if (scan?.source !== lowered) {
+      const normalized = lowered.toWellFormed();
+      scan = {
+        source: lowered,
+        text: normalized,
+        starts: new Set(
+          matcher.findOverlappingIter(normalized).map(({ start }) => start),
+        ),
+      };
     }
-    end += codePointWidth(codePoint);
-  }
+    if (endsWithWordCharacter(scan.text, index)) {
+      return null;
+    }
+    if (!scan.starts.has(Math.max(0, Math.trunc(index)))) {
+      return null;
+    }
+    // Prefix matches extend through inflections, stopping at the word end.
+    let end = index;
+    for (;;) {
+      const codePoint = wordCodePointAt(scan.text, end);
+      if (codePoint === null) {
+        return end;
+      }
+      end += codePointWidth(codePoint);
+    }
+  };
 };

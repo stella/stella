@@ -5,7 +5,7 @@ import {
   stripDiacritics,
 } from "@stll/text-normalize";
 
-import { queryHighlightTokens, wordPrefixMatchEnd } from "./query-marks";
+import { createWordPrefixMatcher, queryHighlightTokens } from "./query-marks";
 
 export type SearchPiece = {
   id: string;
@@ -198,6 +198,7 @@ export const buildSearchResults = ({
     return { matchCount: 0, rangesByPieceId: {} };
   }
 
+  const matchPrefix = createWordPrefixMatcher(tokens);
   const rangesByPieceId: Record<string, ReaderSearchMatchRange[]> = {};
   let matchCount = 0;
 
@@ -206,7 +207,7 @@ export const buildSearchResults = ({
 
     let index = 0;
     while (index < normalizedPiece.text.length) {
-      const end = wordPrefixMatchEnd(normalizedPiece.text, index, tokens);
+      const end = matchPrefix(normalizedPiece.text, index);
       if (end === null || end === index) {
         index += 1;
         continue;

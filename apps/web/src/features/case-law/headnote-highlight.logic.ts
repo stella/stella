@@ -17,7 +17,7 @@
  * read it from `@stll/decision-reader/query-marks`.
  */
 
-import { wordPrefixMatchEnd } from "@stll/decision-reader/query-marks";
+import { createWordPrefixMatcher } from "@stll/decision-reader/query-marks";
 
 /**
  * A run of the original text, and whether the query asked for it. `start` is
@@ -55,11 +55,12 @@ export const highlightSegments = (
   if (lowered.length !== text.length) {
     return [{ start: 0, text, match: false }];
   }
+  const matchPrefix = createWordPrefixMatcher(tokens);
   const segments: HighlightSegment[] = [];
   let plainFrom = 0;
   let index = 0;
   while (index < text.length) {
-    const end = wordPrefixMatchEnd(lowered, index, tokens);
+    const end = matchPrefix(lowered, index);
     if (end === null || end === index) {
       index += 1;
       continue;
