@@ -23,6 +23,7 @@ type AgentSkillResponseRow = Pick<
   | "sourceUrl"
   | "contentHash"
   | "enabled"
+  | "invocation"
   | "body"
   | "command"
   | "createdAt"
@@ -50,6 +51,7 @@ export const toAgentSkillResponse = (
   sourceUrl: skill.sourceUrl,
   contentHash: skill.contentHash,
   enabled: skill.enabled,
+  invocation: skill.invocation,
   body: skill.body,
   command: skill.command,
   createdAt: skill.createdAt,

@@ -239,6 +239,11 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     files: ["lib/knowledge/queries/catalogue.ts"],
     keys: () => [catalogueOptions(ORG, USER).queryKey],
   },
+  "chat/link-icons/get.ts": {
+    kind: "not-per-user",
+    reason:
+      "Public site icons are shared by hostname; the caller is used only for miss admission.",
+  },
   "chat/get-suggested-prompts.ts": { kind: "owned-id", reason: OWNED_THREAD },
   "chat/get-thread-recap.ts": { kind: "owned-id", reason: OWNED_THREAD },
   "chat/get-thread-title.ts": { kind: "owned-id", reason: OWNED_THREAD },

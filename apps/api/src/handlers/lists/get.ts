@@ -38,6 +38,7 @@ const readListById = createSafeHandler(
     const result = yield* Result.await(
       safeDb(async (tx) => {
         const list = await tx.query.legalLists.findFirst({
+          columns: { sampleCase: false },
           where: {
             id: { eq: params.listId },
             workspaceId: { eq: workspaceId },

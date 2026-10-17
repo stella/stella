@@ -7,6 +7,7 @@ import type {
 import type { PermissionInput } from "@stll/permissions";
 
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ChatTurnStatus } from "@/api/lib/chat/turn-status";
 
 export {
   CHAT_TURN_FAILURE_CODES,
@@ -21,17 +22,6 @@ export type {
 export const CHAT_TURN_PERMISSIONS = {
   chat: ["create"],
 } satisfies PermissionInput;
-
-export const CHAT_TURN_STATUSES = [
-  "accepted",
-  "running",
-  "awaiting-user",
-  "completed",
-  "failed",
-  "cancelled",
-  "interrupted",
-] as const;
-export type ChatTurnStatus = (typeof CHAT_TURN_STATUSES)[number];
 
 /** The statuses of a turn not yet settled; a thread holds at most one. */
 export const ACTIVE_CHAT_TURN_STATUSES = [

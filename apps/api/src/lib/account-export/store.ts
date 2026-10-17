@@ -19,7 +19,7 @@ import {
 } from "@/api/lib/db/aggregate-lock";
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transition } from "@/api/lib/db/transitions";
-import type { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   createCursorPage,
   decodePaginationCursor,
@@ -27,8 +27,6 @@ import {
   isUuidPaginationCursorPart,
   type Page,
 } from "@/api/lib/pagination";
-import { admitAccountExportRequest } from "@/api/lib/rate-limit/account-action-budget";
-import type { RateLimitContext } from "@/api/lib/rate-limit/contracts";
 
 export type AccountExportRow = typeof accountExports.$inferSelect;
 export type AccountExportDb = Pick<typeof rootDb, "transaction">;
@@ -178,23 +176,13 @@ const expireReadyAccountExport = async (
 
 type RequestAccountExportOptions = {
   db?: AccountExportDb;
-  rateLimitContext?: Pick<RateLimitContext, "increment" | "complete">;
 };
 export const requestAccountExport = async (
   userId: SafeId<"user">,
-  { db, rateLimitContext }: RequestAccountExportOptions = {},
+  { db }: RequestAccountExportOptions = {},
 ): Promise<Result<AccountExportRow, HandlerError>> => {
-  const admitted = await admitAccountExportRequest({
-    userId,
-    max: ACCOUNT_EXPORT_LIMITS.requestsPerWindow,
-    durationMs: ACCOUNT_EXPORT_LIMITS.requestWindowMs,
-    ...(rateLimitContext === undefined ? {} : { context: rateLimitContext }),
-  });
-  if (Result.isError(admitted)) {
-    return admitted;
-  }
   const database = await resolveDatabase(db);
-  const row = await withAggregateTransaction(database, async (tx) => {
+  return await withAggregateTransaction(database, async (tx) => {
     await lockActiveAccountRow(tx, userId);
     await scopeAccount(tx, userId);
     const existing = await tx
@@ -208,17 +196,55 @@ export const requestAccountExport = async (
       )
       .limit(1);
     const activeId = existing.at(0)?.id;
-    if (activeId !== undefined) {
-      // Expiration participates in the same lock and transaction as creation.
-      const active =
-        (await lockAccountExport(tx, { id: activeId, userId })) ??
-        panic("Active account export left under the account lock");
-      if (active.row.status !== "ready" || !active.readyElapsed) {
-        return active.row;
+    const active =
+      activeId === undefined
+        ? undefined
+        : ((await lockAccountExport(tx, { id: activeId, userId })) ??
+          panic("Active account export left under the account lock"));
+    if (active !== undefined) {
+      switch (active.row.status) {
+        case "requested":
+        case "processing":
+          return Result.ok(active.row);
+        case "ready":
+          if (!active.readyElapsed) {
+            return Result.ok(active.row);
+          }
+          break;
+        case "failed":
+        case "expired":
+          break;
+        default:
+          active.row.status satisfies never;
+          panic("Unknown account export status");
       }
-      if (!(await expireReadyAccountExport(tx, active.row))) {
-        panic("Locked account export changed under its lock");
-      }
+    }
+    // The account lock serializes this indexed, bounded budget check with
+    // insertion. Returning an active export never consumes a request slot.
+    const recent = await tx
+      .select({ id: accountExports.id })
+      .from(accountExports)
+      .where(
+        and(
+          eq(accountExports.userId, userId),
+          sql`${accountExports.createdAt} > CURRENT_TIMESTAMP - (${ACCOUNT_EXPORT_LIMITS.requestWindowMs} * INTERVAL '1 millisecond')`,
+        ),
+      )
+      .limit(ACCOUNT_EXPORT_LIMITS.requestsPerWindow);
+    if (recent.length >= ACCOUNT_EXPORT_LIMITS.requestsPerWindow) {
+      return Result.err(
+        new HandlerError({
+          status: 429,
+          code: "account_export_request_limited",
+          message: "Try again later.",
+        }),
+      );
+    }
+    if (
+      active?.row.status === "ready" &&
+      !(await expireReadyAccountExport(tx, active.row))
+    ) {
+      panic("Locked account export changed under its lock");
     }
     const rows = await tx
       .insert(accountExports)
@@ -232,9 +258,8 @@ export const requestAccountExport = async (
       type: "account.data_export.requested",
       resourceId: created.id,
     });
-    return created;
+    return Result.ok(created);
   });
-  return Result.ok(row);
 };
 
 type ReadScopedAccountExportOptions = {
