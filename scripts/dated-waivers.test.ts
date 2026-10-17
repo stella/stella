@@ -6,18 +6,25 @@ import path from "node:path";
 
 import { assertProperty } from "@stll/property-testing";
 
-import { waiverKey } from "./dated-waiver-fix-task";
+import { baseWaiverReferences } from "./dated-waiver-inventory";
+import { trackedPolicyFiles } from "./dated-waiver-tracked-files";
 import {
   collectWaivers,
   DAY_MS,
+  DocumentationExclusionParseError,
   DOC_SOURCE_FILE,
   dueWaivers,
   expiredWaiverAnnotations,
   expiredWaiverFailures,
   expiryInstant,
+  exceptionInventory as inventoryJson,
+  loadWaivers,
+  readDocumentationExclusions,
+  withinHours,
   readTestQuarantines,
   RECHECK_INSTRUCTIONS,
   uncoveredExpirySources,
+  waiverKey,
 } from "./dated-waivers";
 
 const doc = {
@@ -114,63 +121,29 @@ test("complete owner UTC day and exact five-day grace boundary are preserved", (
   expect(dueWaivers(entries, new Date(boundary))).toEqual(entries);
   expect(dueWaivers(entries, new Date(boundary - 1))).toEqual([]);
 });
-test("an elapsed waiver annotates the change instead of failing it", () => {
+test("elapsed entries fail globally and warn only unrelated changes", () => {
   const entries = inventory();
-  const exclusionLine = entries.find(
-    ({ kind }) => kind === "release-age-exclusion",
-  )?.line;
-  expect(exclusionLine).toBeNumber();
-  expect(
-    expiredWaiverAnnotations(entries, new Date("2026-10-02T01:02:02.999Z")),
-  ).toEqual([]);
-  const annotations = expiredWaiverAnnotations(
-    entries,
-    new Date("2026-10-02T01:02:03.000Z"),
-  );
-  expect(annotations).toHaveLength(1);
-  expect(annotations[0]).toStartWith(
-    `::warning file=bunfig.toml,line=${String(exclusionLine)}::`,
-  );
-  expect(annotations[0]).toContain(
-    "new-package (release-age-exclusion) expired at 2026-10-02T01:02:03.000Z",
-  );
-  expect(
-    expiredWaiverAnnotations(entries, new Date("2026-10-07T00:00:00.000Z")),
-  ).toHaveLength(
-    entries.filter(({ kind }) => kind === "release-age-exclusion").length,
-  );
-  expect(
-    expiredWaiverFailures(entries, new Date("2026-10-02T01:02:03.000Z")),
-  ).toEqual([]);
-});
-test("an elapsed test quarantine and other elapsed waivers still fail the check", () => {
-  const quarantine = readTestQuarantines({
-    "packages/example/src/a.test.ts":
-      'import { test } from "bun:test";\n// test-quarantine-expires: 2026-10-05T00:00:00.000Z\ntest.skip("a case", () => {});',
-  });
-  const entries = [...inventory(), ...quarantine];
-  expect(
-    expiredWaiverFailures(entries, new Date("2026-10-04T23:59:59.999Z")).some(
-      (failure) => failure.endsWith("dated waiver expired: a case"),
-    ),
-  ).toBe(false);
-  const failures = expiredWaiverFailures(
-    entries,
-    new Date("2026-10-05T00:00:00.000Z"),
-  );
-  expect(failures).toContain(
-    "packages/example/src/a.test.ts:3 dated waiver expired: a case",
-  );
-  const allElapsed = expiredWaiverFailures(
-    entries,
-    new Date("2026-10-07T00:00:00.000Z"),
-  );
-  expect(allElapsed).toHaveLength(
-    entries.filter(({ kind }) => kind !== "release-age-exclusion").length,
-  );
-  expect(allElapsed.some((failure) => failure.includes("new-package"))).toBe(
-    false,
-  );
+  const now = new Date("2026-10-07T00:00:00.000Z");
+  expect(expiredWaiverFailures(entries, now)).toHaveLength(entries.length);
+  expect(expiredWaiverAnnotations(entries, now)).toEqual([]);
+  for (const entry of entries) {
+    const unrelated = {
+      scope: { type: "changes" as const, changedFiles: new Set(["README.md"]) },
+    };
+    expect(expiredWaiverFailures([entry], now, unrelated)).toEqual([]);
+    const warnings = expiredWaiverAnnotations([entry], now, unrelated);
+    expect(warnings).toHaveLength(1);
+    expect(warnings.at(0)).toContain(entry.id);
+    expect(warnings.at(0)).toContain(RECHECK_INSTRUCTIONS[entry.kind]);
+    const owner = {
+      scope: {
+        type: "changes" as const,
+        changedFiles: new Set([entry.source]),
+      },
+    };
+    expect(expiredWaiverFailures([entry], now, owner)).toHaveLength(1);
+    expect(expiredWaiverAnnotations([entry], now, owner)).toEqual([]);
+  }
 });
 test("impossible dates, missing anchors and new expiry-bearing owners fail closed", () => {
   for (const value of ["2026-02-30", "2026-02-30T00:00:00.000Z", "tomorrow"]) {
@@ -213,6 +186,108 @@ test("documentation inventory derives from injected typed owners including none"
     expect(entries.map(({ id }) => id).toSorted()).toEqual(
       docs.map(({ dependency }) => dependency).toSorted(),
     );
+  }
+});
+test("documentation inventory preserves the deadline from each supplied tree reader", () => {
+  const documentationSource = (expiresAt: string) =>
+    `
+const NO_LLMS_TXT_EXPLANATION = "https://example.com/llms.txt returns 404";
+const NO_LLMS_TXT_CHECKED_AT = "2026-09-01T00:00:00.000Z";
+const NO_LLMS_TXT_EXPIRES_AT = __EXPIRES_AT__;
+const noLlmsTxt = (dependency: string) => ({
+  checkedAt: NO_LLMS_TXT_CHECKED_AT,
+  dependency,
+  explanation: NO_LLMS_TXT_EXPLANATION,
+  expiresAt: NO_LLMS_TXT_EXPIRES_AT,
+  reason: "no-llms-txt",
+});
+export const DOC_SOURCE_EXCLUSIONS = ["doc-package"].map(noLlmsTxt);
+`.replace("__EXPIRES_AT__", () => JSON.stringify(expiresAt));
+  const inventoryFrom = (expiresAt: string) =>
+    loadWaivers([DOC_SOURCE_FILE], (file) => {
+      if (file === DOC_SOURCE_FILE) {
+        return documentationSource(expiresAt);
+      }
+      if (file === "scripts/dependency-audit-baseline.json") {
+        return '{"accepted":[]}';
+      }
+      if (file === "scripts/suppression-waivers.json") {
+        return '{"waivers":[]}';
+      }
+      return "";
+    });
+
+  const baseDeadline = "2026-10-01T00:00:00.000Z";
+  const headDeadline = "2026-11-01T00:00:00.000Z";
+  expect(inventoryFrom(baseDeadline).at(0)?.expiresAt).toBe(baseDeadline);
+  expect(inventoryFrom(headDeadline).at(0)?.expiresAt).toBe(headDeadline);
+});
+test("documentation registry resolves local const array aliases through static wrappers", () => {
+  const entries = readDocumentationExclusions(`
+const NO_LLMS_TXT_EXPLANATION = "https://example.com/llms.txt returns 404";
+const NO_LLMS_TXT_CHECKED_AT = "2026-09-01T00:00:00.000Z";
+const NO_LLMS_TXT_EXPIRES_AT = "2026-10-01T00:00:00.000Z";
+const exclusions = (["doc-package"] as const) satisfies readonly string[];
+export const DOC_SOURCE_EXCLUSIONS = exclusions;
+`);
+
+  expect(entries).toEqual([
+    {
+      ...doc,
+      checkedAt: "2026-09-01T00:00:00.000Z",
+      expiresAt: "2026-10-01T00:00:00.000Z",
+    },
+  ]);
+});
+test("documentation registry aliases ignore same-name constants in nested scopes", () => {
+  const entries = readDocumentationExclusions(`
+const NO_LLMS_TXT_EXPLANATION = "https://example.com/llms.txt returns 404";
+const NO_LLMS_TXT_CHECKED_AT = "2026-09-01T00:00:00.000Z";
+const NO_LLMS_TXT_EXPIRES_AT = "2026-10-01T00:00:00.000Z";
+const exclusions = ["doc-package"];
+function helper() {
+  const exclusions = [];
+  return exclusions;
+}
+export const DOC_SOURCE_EXCLUSIONS = exclusions;
+`);
+
+  expect(entries).toEqual([
+    {
+      ...doc,
+      checkedAt: "2026-09-01T00:00:00.000Z",
+      expiresAt: "2026-10-01T00:00:00.000Z",
+    },
+  ]);
+});
+test("documentation registry aliases reject duplicate module declarations", () => {
+  const source = `
+const exclusions = ["doc-package"];
+const exclusions = [];
+export const DOC_SOURCE_EXCLUSIONS = exclusions;
+`;
+
+  expect(() => readDocumentationExclusions(source)).toThrow(
+    DocumentationExclusionParseError,
+  );
+});
+test("documentation registry accepts its direct static array shorthand", () => {
+  const source = `
+const NO_LLMS_TXT_EXPLANATION = "https://example.com/llms.txt returns 404";
+const NO_LLMS_TXT_CHECKED_AT = "2026-09-06T00:00:00.000Z";
+const NO_LLMS_TXT_EXPIRES_AT = "2026-10-06T00:00:00.000Z";
+export const DOC_SOURCE_EXCLUSIONS = ["doc-package"].map(noLlmsTxt);
+`;
+
+  expect(readDocumentationExclusions(source)).toEqual([doc]);
+});
+test("documentation registry rejects dynamic and imported spread expressions", () => {
+  for (const registry of ["makeExclusions()", "[...importedExclusions]"]) {
+    expect(() =>
+      readDocumentationExclusions(
+        `export const DOC_SOURCE_EXCLUSIONS = ${registry};`,
+      ),
+    ).toThrow(DocumentationExclusionParseError);
   }
 });
 test("adjacent literal skipped tests declare twenty samples and lapse at expiry", () => {
@@ -373,6 +448,16 @@ test("check consumes validated tracked files without spawning under the offline 
     });
     expect(git.exitCode).toBe(0);
     writeFileSync(trackedFiles, git.stdout);
+    writeFileSync(
+      `${trackedFiles}.context.json`,
+      JSON.stringify({
+        scope: { type: "all" },
+        baseBunfigs: {},
+        basePackageManifests: {},
+        baseProposals: {},
+        baseEntries: null,
+      }),
+    );
 
     const checked = Bun.spawnSync(
       [
@@ -431,3 +516,103 @@ test("tracked-files input rejects absolute and parent paths", () => {
     rmSync(directory, { force: true, recursive: true });
   }
 });
+
+test("radar JSON preserves owner identity, exact expiry and unknown removal state", () => {
+  const entries = inventory();
+  const before = inventoryJson(entries, new Date("2026-10-02T01:02:02.999Z"));
+  expect(before.schemaVersion).toBe(1);
+  expect(before.entries.at(0)).toMatchObject({
+    kind: "release-age-exclusion",
+    file: "bunfig.toml",
+    entry: "new-package",
+    owner: "bunfig.toml",
+    expiryInstant: "2026-10-02T01:02:03.000Z",
+    canRemoveYet: false,
+    removal: "at-expiry",
+  });
+  expect(
+    inventoryJson(entries, new Date("2026-10-02T01:02:03.000Z")).entries.at(0)
+      ?.canRemoveYet,
+  ).toBe(true);
+  for (const entry of before.entries.filter(
+    ({ kind }) => kind !== "release-age-exclusion",
+  )) {
+    expect(entry.canRemoveYet).toBeNull();
+    expect(entry.removal).toBe("requires-probe");
+  }
+  expect(
+    before.entries.find(({ kind }) => kind === "dependency-audit")
+      ?.expiryInstant,
+  ).toBe("2026-10-04T00:00:00.000Z");
+});
+
+test("radar selects exactly the inclusive hour horizon", () => {
+  expect(withinHours("72h")).toBe(72);
+  for (const invalid of ["72", "-1h", "3d", "1.5h"]) {
+    expect(() => withinHours(invalid)).toThrow("--within requires");
+  }
+  for (const entry of inventory()) {
+    const at = Date.parse(expiryInstant(entry.expiresAt));
+    expect(
+      dueWaivers(
+        [entry],
+        new Date(at - 72 * 3_600_000),
+        withinHours("72h") / 24,
+      ),
+    ).toEqual([entry]);
+    expect(dueWaivers([entry], new Date(at - 72 * 3_600_000 - 1), 3)).toEqual(
+      [],
+    );
+  }
+});
+
+test("inventory rejects duplicate package exclusions regardless of deadline and retains cross-file owners", () => {
+  const first = sources["bunfig.toml"];
+  const twin = first.replace(
+    "\n]\n",
+    '\n "new-package", # quarantine-expires: 2026-10-03T01:02:03.000Z\n]\n',
+  );
+  const options = {
+    read: (file: string) => (file.endsWith("bunfig.toml") ? twin : read(file)),
+    docs: [],
+    audit: [],
+    bunfigs: ["bunfig.toml", ".claude/mcp/bunfig.toml"],
+    releaseAgeSources: {},
+  };
+  expect(() => collectWaivers(options)).toThrow(
+    "Duplicate dated waiver identity",
+  );
+  const entries = collectWaivers({
+    ...options,
+    read: (file) => (file.endsWith("bunfig.toml") ? first : read(file)),
+  }).filter(({ kind }) => kind === "release-age-exclusion");
+  expect(entries.map(({ source }) => source).toSorted()).toEqual([
+    ".claude/mcp/bunfig.toml",
+    "bunfig.toml",
+  ]);
+});
+
+test("the base inventory read from git equals the inventory of the same tree", () => {
+  const root = path.resolve(import.meta.dir, "..");
+  const git = (...args: string[]) => {
+    const result = Bun.spawnSync(["git", ...args], { cwd: root });
+    expect(result.exitCode).toBe(0);
+    return result.stdout.toString();
+  };
+  // Committed state only: the working tree may carry local edits.
+  if (git("status", "--porcelain", "--untracked-files=no").trim() !== "") {
+    return;
+  }
+  const head = git("rev-parse", "HEAD").trim();
+  const files = git("ls-tree", "-r", "--name-only", "-z", head)
+    .split("\0")
+    .filter(Boolean);
+  const references = baseWaiverReferences(head, files);
+  expect(references.length).toBeGreaterThan(0);
+  expect(references).toEqual(
+    loadWaivers(trackedPolicyFiles()).map(
+      ({ kind, source, id, expiresAt }) => ({ kind, source, id, expiresAt }),
+    ),
+  );
+  // Both inventories read the whole repository.
+}, 60_000);

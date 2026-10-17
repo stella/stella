@@ -4,6 +4,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import ts from "typescript";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import {
   removeWaiver,
   runWaiverProbe,
@@ -13,6 +15,8 @@ import {
   PROBE_TIMEOUT_MS,
 } from "./dated-waiver-probes";
 import {
+  collectWaivers,
+  exceptionInventory,
   readTestQuarantines,
   ZERO_AGE_OVERRIDE,
   type DatedWaiver,
@@ -40,6 +44,85 @@ const waiver = (
 });
 const reader = (sources: Readonly<Record<string, string>>) => (file: string) =>
   sources[file] ?? "";
+
+test("every inventory suppression probe distinguishes passing and failing removal fixtures", () => {
+  const root = path.resolve(import.meta.dir, "..");
+  const directory = mkdtempSync(
+    path.join(root, "apps/api/src/lib/search/dated-waiver-probe-"),
+  );
+  const source = "scripts/suppression-waivers.json";
+  const rule = "require-search-scope/require-search-scope";
+  const fixtures = [
+    { name: "first", id: "SW-0001" },
+    { name: "second", id: "SW-0002" },
+  ].map(({ name, id }) => ({
+    id,
+    kind: "temporary",
+    rule,
+    file: repoRelativePath(root, path.join(directory, `${name}.ts`)),
+    symbol: "example",
+    count: 1,
+    reason: "Fixture search scope invariant",
+    evidence: "scripts/dated-waiver-probes.test.ts",
+    expires: "2026-10-05",
+  }));
+  const ledger = JSON.stringify({ waivers: fixtures });
+  const entries = collectWaivers({
+    read: reader({ [source]: ledger }),
+    docs: [],
+    audit: [],
+    bunfigs: [],
+    releaseAgeSources: {},
+  });
+  const inventory = exceptionInventory(entries, new Date("2026-10-01"));
+  expect(inventory.entries.map(({ entry }) => entry).toSorted()).toEqual(
+    fixtures.map(({ id }) => id).toSorted(),
+  );
+  try {
+    for (const entry of entries) {
+      const declared = inventory.entries.find(
+        ({ entry: id }) => id === entry.id,
+      );
+      expect(declared).toBeDefined();
+      if (!declared) {
+        throw new TypeError("Inventory probe missing");
+      }
+      const fixture = fixtures.find(({ id }) => id === entry.id);
+      if (!fixture) {
+        throw new TypeError("Suppression fixture missing");
+      }
+      for (const passes of [true, false]) {
+        const before = `import { sql } from "drizzle-orm";\n// oxlint-disable-next-line ${rule} -- fixture invariant\nexport const example = sql\`SELECT * FROM ${passes ? "entities" : "search_documents"}\`;\n`;
+        const changes = removeWaiver(
+          entry,
+          reader({ [source]: ledger, [fixture.file]: before }),
+        );
+        const changed = changes.find(
+          ({ source: changedSource }) => changedSource === fixture.file,
+        );
+        expect(changed).toBeDefined();
+        if (!changed) {
+          throw new TypeError("Suppression removal missing");
+        }
+        expect(changed.after).not.toContain("oxlint-disable");
+        writeFileSync(path.join(root, fixture.file), changed.after);
+        const result = Bun.spawnSync([...declared.probe.command], {
+          cwd: root,
+          timeout: 30_000,
+        });
+        const output = result.stdout.toString() + result.stderr.toString();
+        expect(result.exitCode === 0, output).toBe(passes);
+        if (!passes) {
+          expect(output).toContain(
+            "Raw read from private search projection `search_documents`",
+          );
+        }
+      }
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+}, 120_000);
 
 test("green needs every stress sample and one red remains red without early exit", async () => {
   for (const attempts of [3, 20]) {

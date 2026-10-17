@@ -15,7 +15,6 @@ import {
   EXPIRY_ALERT_LABEL,
   probeSourceFingerprint,
   RESOLUTION_POLICY,
-  waiverKey,
 } from "./dated-waiver-fix-task";
 import type { FixEvidence } from "./dated-waiver-fix-task";
 import {
@@ -53,6 +52,7 @@ import {
   dueWaivers,
   RECHECK_INSTRUCTIONS,
   type DatedWaiver,
+  waiverKey,
 } from "./dated-waivers";
 
 const entry = {
@@ -605,9 +605,8 @@ test("red replay refreshes exactly one private task, reopens it, and alerts once
   await sink.alertExpiry(next);
   expect(fake.writes).toHaveLength(writes);
   expect(fake.tasks.at(0)?.labels).toContainEqual({ name: EXPIRY_ALERT_LABEL });
-  expect(waiverKey({ ...entry, expiresAt: "2026-12-01" })).toBe(
-    waiverKey(entry),
-  );
+  const renewed = { ...entry, expiresAt: "2026-12-01" };
+  expect(waiverKey(renewed)).toBe(waiverKey(entry));
 });
 
 test("closed task at T-1 never emits the expiry signal", async () => {

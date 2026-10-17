@@ -7,13 +7,9 @@
  *    `# quarantine-expires: <timestamp>` must be removed once Bun's release-age
  *    gate can take over again.
  *
- * An expiry is a wall-clock instant, so failing at that instant turns every
- * open branch red at once for a change nobody made. Removal is automatic
- * instead: `quarantine-prune.yml` runs `--prune` hourly and opens the PR that
- * deletes the entry. An expired entry is therefore only a warning while that
- * PR waits to be merged, and fails once it has been ignored past the window.
- * It has to fail eventually: a stale exclude is not inert, because the next
- * version of that package published would skip the quarantine unnoticed.
+ * Wall-clock expiry blocks changes to the owning installation files. Other
+ * changes receive a warning; main and scheduled checks remain blocking.
+ * Structural policy errors always block every check.
  *
  * The 5-day quarantine is a supply-chain control for third-party code. First-
  * party packages publish continuously, so they are excluded by name. The
@@ -27,16 +23,28 @@
  * Bun matches these entries EXACTLY. A `@stll/*` glob is accepted and silently
  * ignored, which is why this cannot be solved by pattern and needs a guard.
  *
- * Run: `bun scripts/check-stll-quarantine-excludes.ts`
+ * Run: `bun scripts/check-stll-quarantine-excludes-cli.ts`
  */
 
-import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-const REPO_ROOT = path.resolve(import.meta.dir, "..");
-const LOCKFILE = "bun.lock";
-const BUNFIG = "bunfig.toml";
-const SCRIPT_PATH = "scripts/check-stll-quarantine-excludes.ts";
+import { expiryBlocksFiles, type ExpiryCheckScope } from "./expiry-check-scope";
+
+/** The guard, inventory, and prune share the complete tracked bunfig scan. */
+export const quarantineBunfigFiles = (
+  trackedFiles: readonly string[],
+): string[] =>
+  trackedFiles.filter(
+    (file) =>
+      path.posix.basename(file) === "bunfig.toml" &&
+      !file.split("/").includes("node_modules"),
+  );
+
+export const REPO_ROOT = path.resolve(import.meta.dir, "..");
+export const LOCKFILE = "bun.lock";
+export const BUNFIG = "bunfig.toml";
+// The command line that owns --prune; the diagnostic names it.
+export const SCRIPT_PATH = "scripts/check-stll-quarantine-excludes-cli.ts";
 const EXPIRY_MARKER = "quarantine-expires:";
 const EXCLUDED_SINCE_MARKER = "quarantine-excluded-since:";
 export const RELEASE_AGE_EXCEPTION_SOURCES = ["docker-compose.yml"] as const;
@@ -204,12 +212,18 @@ const exactUtcTimestampError = ({
 
 const readExcludeAnnotationErrors = (bunfig: string, now: Date): string[] => {
   const lines = readExcludeBlock(bunfig).split("\n");
-  const declaredNames = new Set(
-    lines.flatMap((line) => {
-      const name = excludeDeclaration(line);
-      return name === undefined ? [] : [name];
-    }),
-  );
+  const declaredNames = new Set<string>();
+  const duplicateNames = new Set<string>();
+  for (const line of lines) {
+    const name = excludeDeclaration(line);
+    if (name === undefined) {
+      continue;
+    }
+    if (declaredNames.has(name)) {
+      duplicateNames.add(name);
+    }
+    declaredNames.add(name);
+  }
   const unrecognizedEntries = [...readExcludes(bunfig)].filter(
     (name) => !declaredNames.has(name),
   );
@@ -221,6 +235,10 @@ const readExcludeAnnotationErrors = (bunfig: string, now: Date): string[] => {
         ];
 
   errors.push(
+    ...[...duplicateNames].map(
+      (name) =>
+        `${BUNFIG} minimumReleaseAgeExcludes repeats package "${name}"; keep one annotated entry per package`,
+    ),
     ...lines.flatMap((line) => {
       const name = excludeDeclaration(line);
       if (name === undefined) {
@@ -234,6 +252,12 @@ const readExcludeAnnotationErrors = (bunfig: string, now: Date): string[] => {
           ];
         }
         return [];
+      }
+
+      if (name.includes("*")) {
+        return [
+          `${BUNFIG} quarantine exclude "${name}" must name an exact package; Bun does not expand globs`,
+        ];
       }
 
       if (!line.includes(EXCLUDED_SINCE_MARKER)) {
@@ -301,22 +325,6 @@ export const readReleaseAgeExceptions = (
     }
   }
   return { entries, errors };
-};
-
-const readReleaseAgeExceptionErrors = (
-  sources: Readonly<Record<string, string>>,
-  now: Date,
-): string[] => {
-  const parsed = readReleaseAgeExceptions(sources);
-  return [
-    ...parsed.errors,
-    ...parsed.entries
-      .filter((entry) => Date.parse(entry.expiresAt) <= now.getTime())
-      .map(
-        (entry) =>
-          `${entry.source}:${entry.line} release-age quarantine exception expired at ${entry.expiresAt}`,
-      ),
-  ];
 };
 
 export type TemporaryExclude = {
@@ -420,8 +428,73 @@ const readRegistryStllPackages = (lockfile: string): Set<string> =>
     }),
   );
 
+export const quarantineOwningFiles = ({
+  bunfigFile,
+  packageName,
+  packageManifests = {},
+  basePackageManifests = {},
+}: {
+  bunfigFile: string;
+  packageName: string;
+  packageManifests?: Readonly<Record<string, string>> | undefined;
+  basePackageManifests?: Readonly<Record<string, string>> | undefined;
+}): string[] => {
+  const dir = path.posix.dirname(bunfigFile);
+  const manifests = [
+    ...Object.entries(packageManifests),
+    ...Object.entries(basePackageManifests),
+  ].flatMap(([file, text]) => {
+    if (dir !== "." && !file.startsWith(`${dir}/`)) {
+      return [];
+    }
+    const manifest: unknown = JSON.parse(text);
+    if (typeof manifest !== "object" || manifest === null) {
+      return [];
+    }
+    for (const field of [
+      "dependencies",
+      "devDependencies",
+      "optionalDependencies",
+      "peerDependencies",
+      "overrides",
+      "resolutions",
+      "catalog",
+    ]) {
+      if (!(field in manifest)) {
+        continue;
+      }
+      const pins: unknown = Reflect.get(manifest, field);
+      if (typeof pins === "object" && pins !== null && packageName in pins) {
+        return [file];
+      }
+    }
+    if ("catalogs" in manifest) {
+      const catalogs = manifest.catalogs;
+      if (typeof catalogs === "object" && catalogs !== null) {
+        for (const catalog of Object.keys(catalogs)) {
+          const pins: unknown = Reflect.get(catalogs, catalog);
+          if (
+            typeof pins === "object" &&
+            pins !== null &&
+            packageName in pins
+          ) {
+            return [file];
+          }
+        }
+      }
+    }
+    return [];
+  });
+  return [
+    bunfigFile,
+    dir === "." ? LOCKFILE : `${dir}/${LOCKFILE}`,
+    ...new Set(manifests),
+  ];
+};
+
 export type QuarantineExcludeCheckResult = {
   errors: string[];
+  warnings: string[];
   excludeCount: number;
   firstPartyCount: number;
   activeTemporaryCount: number;
@@ -432,9 +505,19 @@ export const checkQuarantineExcludes = ({
   lockfile,
   now = new Date(),
   releaseAgeExceptionSources = {},
+  scope = { type: "all" },
+  bunfigFile = BUNFIG,
+  owningFiles = [bunfigFile, LOCKFILE],
+  packageManifests = {},
+  basePackageManifests = {},
 }: {
   bunfig: string;
   lockfile: string;
+  scope?: ExpiryCheckScope;
+  bunfigFile?: string;
+  owningFiles?: readonly string[];
+  packageManifests?: Readonly<Record<string, string>> | undefined;
+  basePackageManifests?: Readonly<Record<string, string>> | undefined;
   now?: Date;
   releaseAgeExceptionSources?: Readonly<Record<string, string>>;
 }): QuarantineExcludeCheckResult => {
@@ -444,11 +527,29 @@ export const checkQuarantineExcludes = ({
     .filter((name) => !excludes.has(name))
     .toSorted();
   const temporary = readTemporaryExcludes(bunfig);
+  const warnings: string[] = [];
+  const releaseAgeExceptions = readReleaseAgeExceptions(
+    releaseAgeExceptionSources,
+  );
   const errors = [
     ...temporary.errors,
     ...readExcludeAnnotationErrors(bunfig, now),
-    ...readReleaseAgeExceptionErrors(releaseAgeExceptionSources, now),
+    ...releaseAgeExceptions.errors,
   ];
+
+  for (const entry of releaseAgeExceptions.entries) {
+    if (Date.parse(entry.expiresAt) > now.getTime()) {
+      continue;
+    }
+    const message = `${entry.source}:${entry.line} release-age quarantine exception expired at ${entry.expiresAt}`;
+    if (expiryBlocksFiles(scope, [entry.source])) {
+      errors.push(message);
+    } else {
+      warnings.push(
+        `${message}. Remove the exception or provide an owner-approved extension.`,
+      );
+    }
+  }
 
   if (missing.length > 0) {
     errors.push(
@@ -468,8 +569,19 @@ export const checkQuarantineExcludes = ({
     const expiresAtMs = Date.parse(expiresAt);
 
     if (nowMs >= expiresAtMs) {
-      errors.push(
-        `${BUNFIG} temporary quarantine exclude "${name}" expired at ${expiresAt} ` +
+      const messages = expiryBlocksFiles(scope, [
+        ...owningFiles,
+        ...quarantineOwningFiles({
+          bunfigFile,
+          packageName: name,
+          packageManifests,
+          basePackageManifests,
+        }),
+      ])
+        ? errors
+        : warnings;
+      messages.push(
+        `${bunfigFile} temporary quarantine exclude "${name}" expired at ${expiresAt} ` +
           `and is still here. Remove it (\`bun ${SCRIPT_PATH} --prune\`): the ` +
           `release-age gate admits the package on its own now, and leaving the ` +
           `entry lets the next version of it publish straight past the quarantine.`,
@@ -482,6 +594,7 @@ export const checkQuarantineExcludes = ({
     errors,
     excludeCount: excludes.size,
     firstPartyCount: firstPartyPackages.size,
+    warnings,
   };
 };
 
@@ -540,52 +653,16 @@ export const pruneExpiredExcludes = ({
   };
 };
 
-const prune = () => {
-  const bunfigPath = path.join(REPO_ROOT, BUNFIG);
-  const { bunfig, pruned } = pruneExpiredExcludes({
-    bunfig: readFileSync(bunfigPath, "utf-8"),
-  });
-
-  if (pruned.length === 0) {
-    console.log(`${BUNFIG}: no expired quarantine excludes to remove.`);
-    return;
-  }
-
-  writeFileSync(bunfigPath, bunfig);
-  console.log(
-    `${BUNFIG}: removed ${pruned.length} expired quarantine exclude(s): ${pruned.join(", ")}.`,
+export const pruneQuarantineBunfigs = ({
+  bunfigs,
+  now = new Date(),
+}: {
+  bunfigs: Readonly<Record<string, string>>;
+  now?: Date;
+}): Record<string, PruneResult> =>
+  Object.fromEntries(
+    Object.entries(bunfigs).map(([file, bunfig]) => [
+      file,
+      pruneExpiredExcludes({ bunfig, now }),
+    ]),
   );
-};
-
-const main = () => {
-  if (process.argv.includes("--prune")) {
-    prune();
-    return;
-  }
-
-  const result = checkQuarantineExcludes({
-    bunfig: readFileSync(path.join(REPO_ROOT, BUNFIG), "utf-8"),
-    lockfile: readFileSync(path.join(REPO_ROOT, LOCKFILE), "utf-8"),
-    releaseAgeExceptionSources: Object.fromEntries(
-      RELEASE_AGE_EXCEPTION_SOURCES.map((source) => [
-        source,
-        readFileSync(path.join(REPO_ROOT, source), "utf-8"),
-      ]),
-    ),
-  });
-
-  if (result.errors.length > 0) {
-    console.error(result.errors.join("\n\n"));
-    process.exit(1);
-  }
-
-  console.log(
-    `${BUNFIG}: ${result.excludeCount} quarantine excludes cover all ` +
-      `${result.firstPartyCount} registry-backed first-party packages; ` +
-      `${result.activeTemporaryCount} temporary exclude(s) remain active.`,
-  );
-};
-
-if (import.meta.main) {
-  main();
-}

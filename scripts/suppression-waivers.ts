@@ -21,11 +21,11 @@
 // document.
 //
 // Modes:
-//   bun scripts/suppression-waivers.ts            report the ledger vs the tree
-//   bun scripts/suppression-waivers.ts --check    CI gate (exit 1 on drift)
-//   bun scripts/suppression-waivers.ts --seed     draft entries for undeclared
+//   bun scripts/suppression-waivers-cli.ts            report the ledger vs the tree
+//   bun scripts/suppression-waivers-cli.ts --check    CI gate (exit 1 on drift)
+//   bun scripts/suppression-waivers-cli.ts --seed     draft entries for undeclared
 //                                                 directives, for hand review
-//   bun scripts/suppression-waivers.ts --self-test prove the guard still fires
+//   bun scripts/suppression-waivers-cli.ts --self-test prove the guard still fires
 //
 // CI-only wiring lives in .github/workflows/ci.yml and scripts/verify.sh
 // alongside the ratchet guard.
@@ -37,6 +37,11 @@ import path from "node:path";
 import { compareCodeUnit } from "@stll/collation";
 import { isPathStrictlyInside } from "@stll/portable-path";
 
+import {
+  expiryBlocksFiles,
+  expiryWarning,
+  type ExpiryCheckScope,
+} from "./expiry-check-scope";
 import {
   collectLintDirectives,
   directiveReason,
@@ -51,7 +56,7 @@ const SCRIPTS_DIR = import.meta.dir;
 const REPO_ROOT = path.resolve(SCRIPTS_DIR, "..");
 const LEDGER_PATH = path.resolve(SCRIPTS_DIR, "suppression-waivers.json");
 const LEDGER_REL = "scripts/suppression-waivers.json";
-const SEED_HINT = "bun scripts/suppression-waivers.ts --seed";
+const SEED_HINT = "bun scripts/suppression-waivers-cli.ts --seed";
 
 // --- Ledger shape -----------------------------------------------------------
 
@@ -262,6 +267,8 @@ type InspectionInput = {
   readonly evidenceExists: (file: string) => boolean;
   readonly evidenceContains: (file: string, symbol: string) => boolean;
   readonly today: string;
+  readonly expiryScope?: ExpiryCheckScope | undefined;
+  readonly onExpiryWarning?: ((message: string) => void) | undefined;
 };
 
 /** `path/to/file.ts#symbol` split into its two halves. */
@@ -320,12 +327,17 @@ const inspectEvidence = (
   return undefined;
 };
 
-const inspectShape = (
-  waivers: readonly Waiver[],
-  evidenceExists: (file: string) => boolean,
-  evidenceContains: (file: string, symbol: string) => boolean,
-  today: string,
-): string[] => {
+type InspectShapeInput = Omit<InspectionInput, "ledger" | "observation"> & {
+  waivers: readonly Waiver[];
+};
+const inspectShape = ({
+  waivers,
+  evidenceExists,
+  evidenceContains,
+  today,
+  expiryScope = { type: "all" },
+  onExpiryWarning = (message) => console.warn(expiryWarning(message)),
+}: InspectShapeInput): string[] => {
   const errors: string[] = [];
   const ids = new Set<string>();
   const keys = new Set<string>();
@@ -358,9 +370,12 @@ const inspectShape = (
       errors.push(evidenceProblem);
     }
     if (waiver.kind === "temporary" && waiver.expires < today) {
-      errors.push(
-        `${waiver.id}: temporary waiver expired on ${waiver.expires}; remove the suppression or re-justify it with a new date`,
-      );
+      const message = `${waiver.id}: temporary waiver expired on ${waiver.expires}; remove the suppression or re-justify it with a new date`;
+      if (expiryBlocksFiles(expiryScope, [LEDGER_REL, waiver.file])) {
+        errors.push(message);
+      } else {
+        onExpiryWarning(message);
+      }
     }
   }
 
@@ -373,13 +388,17 @@ export const inspectLedger = ({
   evidenceExists,
   evidenceContains,
   today,
+  expiryScope,
+  onExpiryWarning,
 }: InspectionInput): readonly string[] => {
-  const errors = inspectShape(
-    ledger.waivers,
+  const errors = inspectShape({
+    waivers: ledger.waivers,
     evidenceExists,
     evidenceContains,
     today,
-  );
+    expiryScope,
+    onExpiryWarning,
+  });
 
   for (const file of observation.bare) {
     errors.push(
@@ -431,9 +450,9 @@ export const inspectLedger = ({
 
 const today = (): string => new Date().toISOString().slice(0, 10);
 
-const readLedger = (): Ledger => {
+const readLedger = (ledgerPath = LEDGER_PATH): Ledger => {
   const parsed = Result.try((): unknown =>
-    JSON.parse(readFileSync(LEDGER_PATH, "utf-8")),
+    JSON.parse(readFileSync(ledgerPath, "utf-8")),
   );
   if (Result.isError(parsed)) {
     panic(`${LEDGER_REL} is not valid JSON`);
@@ -450,8 +469,11 @@ const observeRepo = (root: string): Observation =>
     readFileSync(path.join(root, file), "utf-8"),
   );
 
-const runCheck = (): number => {
-  const ledger = readLedger();
+export const runCheck = (
+  expiryScope: ExpiryCheckScope,
+  ledgerPath = LEDGER_PATH,
+): number => {
+  const ledger = readLedger(ledgerPath);
   const errors = inspectLedger({
     ledger,
     observation: observeRepo(REPO_ROOT),
@@ -459,6 +481,7 @@ const runCheck = (): number => {
     evidenceContains: (file, symbol) =>
       readFileSync(path.join(REPO_ROOT, file), "utf-8").includes(symbol),
     today: today(),
+    expiryScope,
   });
 
   if (errors.length === 0) {
@@ -480,7 +503,7 @@ const runCheck = (): number => {
   return 1;
 };
 
-const runReport = (): number => {
+export const runReport = (): number => {
   const { observed, bare } = observeRepo(REPO_ROOT);
   console.log(`security-tier suppressions in the tree (${observed.length}):\n`);
   for (const entry of observed) {
@@ -496,7 +519,7 @@ const runReport = (): number => {
 // directive's own `-- reason` trailer across. Evidence defaults to the file's
 // adjacent test when one exists and to the anchoring symbol otherwise; both
 // are starting points a reviewer is expected to replace with the real locator.
-const runSeed = (): number => {
+export const runSeed = (): number => {
   const ledger = readLedger();
   const { observed } = observeRepo(REPO_ROOT);
   const declared = new Set(ledger.waivers.map(identityKey));
@@ -699,7 +722,7 @@ const NAMESPACE_FIXTURE_LINES = [
 ];
 const NAMESPACE_FIXTURE = `${NAMESPACE_FIXTURE_LINES.join("\n")}\n`;
 
-const runSelfTest = (): number => {
+export const runSelfTest = (): number => {
   const failures: string[] = [];
 
   const expectClean = (name: string, errors: readonly string[]): void => {
@@ -956,21 +979,9 @@ const runSelfTest = (): number => {
   return 0;
 };
 
-// --- Entry ------------------------------------------------------------------
-
-const main = (): number => {
-  if (process.argv.includes("--self-test")) {
-    return runSelfTest();
-  }
-  if (process.argv.includes("--seed")) {
-    return runSeed();
-  }
-  if (process.argv.includes("--check")) {
-    return runCheck();
-  }
-  return runReport();
-};
-
 if (import.meta.main) {
-  process.exit(main());
+  console.error(
+    "suppression-waivers.ts is an import-only module; run scripts/suppression-waivers-cli.ts instead.",
+  );
+  process.exit(1);
 }

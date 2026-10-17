@@ -926,6 +926,18 @@ const baseSteps = legSteps(baseline, baselineIds).map((step) => {
     });
   }
   const runnerMigrations = {
+    "Quarantine-exclude guards": {
+      before:
+        "bun test scripts/check-stll-quarantine-excludes.test.ts\nbun scripts/check-stll-quarantine-excludes.ts\n",
+      after:
+        "bun test scripts/check-stll-quarantine-excludes.test.ts\nbun scripts/check-stll-quarantine-excludes-cli.ts\n",
+    },
+    "Suppression waiver ledger": {
+      before:
+        "bun scripts/suppression-waivers.ts --self-test\nbun scripts/suppression-waivers.ts --check\n",
+      after:
+        'bun scripts/suppression-waivers-cli.ts --self-test\nbun scripts/expiry-check-scope-git.ts > "$RUNNER_TEMP/suppression-waiver-scope.json"\nbun --preload ./scripts/offline-network-preload.ts scripts/suppression-waivers-offline.ts --check --scope "$RUNNER_TEMP/suppression-waiver-scope.json"\n',
+    },
     "Typecheck-cost baseline guard": {
       before:
         'bun scripts/typecheck-baseline.ts --self-test\nbun test scripts/typecheck-baseline.test.ts\nbun scripts/typecheck-baseline.ts --check-delta "$RUNNER_TEMP/typecheck-base.json"\n',
