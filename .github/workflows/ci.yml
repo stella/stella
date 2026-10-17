@@ -3595,7 +3595,8 @@ jobs:
         # drift. Draft entries: `bun scripts/suppression-waivers-cli.ts --seed`.
         run: |
           bun scripts/suppression-waivers-cli.ts --self-test
-          bun scripts/suppression-waivers-cli.ts --check
+          bun scripts/expiry-check-scope-git.ts > "$RUNNER_TEMP/suppression-waiver-scope.json"
+          bun --preload ./scripts/offline-network-preload.ts scripts/suppression-waivers-offline.ts --check --scope "$RUNNER_TEMP/suppression-waiver-scope.json"
 
       - name: Crawl posture guard
         env:

@@ -64,10 +64,6 @@
     "reason": "Existing repository check reads committed files or local build products; retained unchanged by the CI partition contract."
   },
   {
-    "command": "[\"bun\",\"scripts/suppression-waivers-cli.ts\",\"--check\"]",
-    "reason": "Existing repository check reads committed files or local build products; retained unchanged by the CI partition contract."
-  },
-  {
     "command": "[\"bun\",\"scripts/crawl-posture.ts\",\"--check\"]",
     "reason": "Existing repository check reads committed files or local build products; retained unchanged by the CI partition contract."
   },

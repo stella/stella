@@ -59,24 +59,38 @@ test("new check invocations cannot bypass the offline preload in nested shell or
   expect(offlineCheckViolations(protectedChecks, [])).toEqual([]);
 });
 
-test("every suppression check exception rejects an invalid ledger through its declared CLI", () => {
+test("every declared suppression check rejects an invalid ledger offline", () => {
   const directory = mkdtempSync(path.join(tmpdir(), "suppression-probe-"));
   const ledger = path.join(directory, "invalid.json");
+  const scope = path.join(directory, "scope.json");
   writeFileSync(ledger, '{"waivers": "not-an-array"}\n');
+  writeFileSync(scope, '{"type":"all"}\n');
   try {
-    const commands = exceptions()
-      .map(({ command }) => command)
-      .filter((command) => command.includes("suppression-waivers"));
+    const commands = enumerateOfflineChecks(
+      Bun.YAML.parse(
+        readFileSync(path.join(root, ".github/workflows/ci.yml"), "utf-8"),
+      ),
+    ).filter(({ command }) => command.includes("suppression-waivers"));
     expect(commands.length).toBeGreaterThan(0);
-    for (const serialized of commands) {
+    for (const { command: serialized, protected: offline } of commands) {
+      expect(offline, serialized).toBe(true);
       const command: unknown = JSON.parse(serialized);
       expect(Array.isArray(command)).toBe(true);
       if (!Array.isArray(command)) {
         panic("Suppression probe command is not an argument array");
       }
-      const result = Bun.spawnSync([...command, "--ledger", ledger], {
-        cwd: root,
-      });
+      const result = Bun.spawnSync(
+        [
+          ...command.map((word) =>
+            word === "$RUNNER_TEMP/suppression-waiver-scope.json"
+              ? scope
+              : word,
+          ),
+          "--ledger",
+          ledger,
+        ],
+        { cwd: root },
+      );
       expect(result.exitCode, serialized).not.toBe(0);
       expect(result.stderr.toString(), serialized).toContain(
         'must be an object with a "waivers" array',
