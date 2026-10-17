@@ -234,6 +234,7 @@ describe("handleMcpHttpRequest", () => {
   });
 
   test("a real MCP transport request emits exactly one phase record", async () => {
+    const toolProjectionDelayMs = 100;
     const lines: string[] = [];
     setMetricLineSinkForTesting((line) => {
       lines.push(line);
@@ -249,6 +250,10 @@ describe("handleMcpHttpRequest", () => {
     resolveMcpSessionContextMock.mockResolvedValue({
       organizationId: "org_1",
       userId: "user_1",
+    });
+    listMcpToolsMock.mockImplementation(async () => {
+      await Bun.sleep(toolProjectionDelayMs);
+      return [];
     });
 
     const response = await handleMcpHttpRequest(
@@ -276,7 +281,42 @@ describe("handleMcpHttpRequest", () => {
       record.dispatch,
     ].reduce((total, duration) => total + duration, 0);
     expect(record.auth).toBeGreaterThan(0);
+    expect(record.tool_projection).toBeGreaterThanOrEqual(
+      toolProjectionDelayMs,
+    );
+    expect(record.tool_projection).toBeGreaterThan(0);
+    expect(record.server_build).toBeLessThan(record.tool_projection);
     expect(phaseTotal).toBeLessThanOrEqual(record.total);
+  });
+
+  test("modern method metrics preserve the parsed method when a method header is present", async () => {
+    authenticateMcpRequestMock.mockResolvedValue(
+      Result.ok({
+        organizationId: "org_1",
+        scopes: ["stella:read"],
+        userId: "user_1",
+      }),
+    );
+    resolveMcpSessionContextMock.mockResolvedValue({
+      organizationId: "org_1",
+      userId: "user_1",
+    });
+
+    const lines: string[] = [];
+    setMetricLineSinkForTesting((line) => {
+      lines.push(line);
+    });
+
+    const response = await handleMcpHttpRequest(
+      createModernMcpRequest({ id: 1, method: "tools/list" }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(
+      lines
+        .map((line) => JSON.parse(line))
+        .find((record) => record.event === "mcp.request.phases"),
+    ).toMatchObject({ method: "tools/list", path: "modern" });
   });
 
   test("method metrics do not clone or reparse a large request body", async () => {

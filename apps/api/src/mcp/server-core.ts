@@ -1025,7 +1025,8 @@ export const createMcpHttpRequestHandler = ({
       },
     );
 
-    server.setRequestHandler("tools/list", async () => {
+    server.setRequestHandler("tools/list", async (listRequest) => {
+      setMcpMetricParsedMethod(listRequest.method);
       const tools = await measureMcpPhase(
         "tool_projection",
         async () => await listMcpTools(context, mode, session.scopes),
@@ -1084,8 +1085,9 @@ export const createMcpHttpRequestHandler = ({
 
     server.setRequestHandler(
       "tools/call",
-      async (toolRequest, requestContext) =>
-        await observeMcpToolCall({
+      async (toolRequest, requestContext) => {
+        setMcpMetricParsedMethod(toolRequest.method);
+        return await observeMcpToolCall({
           context,
           mode,
           toolName: toolRequest.params.name,
@@ -1100,7 +1102,8 @@ export const createMcpHttpRequestHandler = ({
               }),
               mode,
             ),
-        }),
+        });
+      },
     );
 
     addMcpPhaseDuration(
