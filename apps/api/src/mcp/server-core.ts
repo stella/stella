@@ -95,7 +95,7 @@ import {
   addMcpPhaseDuration,
   measureMcpPhase,
   observeMcpRequest,
-  setMcpMetricMethodFromRequest,
+  setMcpMetricParsedMethod,
   setMcpMetricProtocolPath,
   setMcpMetricRegisteredToolName,
 } from "@/api/mcp/request-metrics";
@@ -1194,6 +1194,9 @@ export const createMcpHttpRequestHandler = ({
     const observeHandshake: NonNullable<typeof transport.onmessage> = (
       message,
     ) => {
+      if ("method" in message) {
+        setMcpMetricParsedMethod(message.method);
+      }
       if (!isInitializeRequest(message)) {
         return;
       }
@@ -1478,7 +1481,6 @@ export const createMcpHttpRequestHandler = ({
             return await completeResponse(payloadTooLargeResponse(), session);
           }
           const request = withTransportAcceptHeader(frame.request);
-          await setMcpMetricMethodFromRequest(request);
 
           const authInfo = {
             clientId: session.userId,
@@ -1513,10 +1515,7 @@ export const createMcpHttpRequestHandler = ({
               : await completeResponse(retryableServerErrorResponse(), session);
           }
 
-          return await measureMcpPhase(
-            "serialize",
-            async () => await completeResponse(response, session),
-          );
+          return await completeResponse(response, session);
         } catch (error) {
           if (error instanceof McpOrganizationAccessError) {
             return accessDeniedResponse({

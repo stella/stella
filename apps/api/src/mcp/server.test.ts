@@ -235,14 +235,17 @@ describe("handleMcpHttpRequest", () => {
 
   test("a real MCP transport request emits exactly one phase record", async () => {
     const lines: string[] = [];
-    setMetricLineSinkForTesting((line) => lines.push(line));
-    authenticateMcpRequestMock.mockResolvedValue(
-      Result.ok({
+    setMetricLineSinkForTesting((line) => {
+      lines.push(line);
+    });
+    authenticateMcpRequestMock.mockImplementation(async () => {
+      await Bun.sleep(5);
+      return Result.ok({
         organizationId: "org_1",
         scopes: ["stella:read"],
         userId: "user_1",
-      }),
-    );
+      });
+    });
     resolveMcpSessionContextMock.mockResolvedValue({
       organizationId: "org_1",
       userId: "user_1",
@@ -257,12 +260,51 @@ describe("handleMcpHttpRequest", () => {
       .map((line) => JSON.parse(line))
       .filter((record) => record.event === "mcp.request.phases");
     expect(records).toHaveLength(1);
-    expect(records.at(0)).toMatchObject({
+    const record = records.at(0);
+    expect(record).toMatchObject({
       event: "mcp.request.phases",
       method: "tools/list",
       mode: "default",
+      overlap: false,
       path: "modern",
     });
+    const phaseTotal = [
+      record.auth,
+      record.context,
+      record.server_build,
+      record.tool_projection,
+      record.dispatch,
+    ].reduce((total, duration) => total + duration, 0);
+    expect(record.auth).toBeGreaterThan(0);
+    expect(phaseTotal).toBeLessThanOrEqual(record.total);
+  });
+
+  test("method metrics do not clone or reparse a large request body", async () => {
+    authenticateMcpRequestMock.mockResolvedValue(
+      Result.ok({
+        organizationId: "org_1",
+        scopes: ["stella:read"],
+        userId: "user_1",
+      }),
+    );
+    resolveMcpSessionContextMock.mockResolvedValue({
+      organizationId: "org_1",
+      userId: "user_1",
+    });
+    const request = createModernMcpRequest({
+      id: 1,
+      method: "tools/list",
+      params: { padding: "x".repeat(100_000) },
+    });
+    const clone = mock(() => {
+      throw new Error("request body was cloned");
+    });
+    Object.defineProperty(request, "clone", { value: clone });
+
+    const response = await handleMcpHttpRequest(request);
+
+    expect(response.status).toBe(200);
+    expect(clone).not.toHaveBeenCalled();
   });
 
   test("native admission refusals keep their code and capture only infrastructure failure", async () => {

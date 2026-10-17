@@ -4,7 +4,6 @@ import * as v from "valibot";
 
 import { AI_PROVIDERS } from "@stll/ai-catalog";
 import { compareCodeUnit } from "@stll/collation";
-import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { CHAT_TURN_FAILURE_CODES } from "@/api/handlers/chat/chat-turn-state";
 import type { ChatTurnOutcome } from "@/api/handlers/chat/types";
@@ -38,6 +37,7 @@ test("MCP phase records are integral, non-overlapping, and bounded", () => {
   const record = buildMcpRequestMetricRecord({
     method: normalizeMcpMetricMethod(freeText),
     mode: "default",
+    overlap: false,
     path: "modern",
     phases: {
       auth: 1.9,
@@ -45,7 +45,6 @@ test("MCP phase records are integral, non-overlapping, and bounded", () => {
       server_build: 3.9,
       tool_projection: 4.9,
       dispatch: 5.9,
-      serialize: 6.9,
     },
     queryCount: 7,
     totalMs: 30.1,
@@ -54,6 +53,7 @@ test("MCP phase records are integral, non-overlapping, and bounded", () => {
     event: "mcp.request.phases",
     method: "unknown",
     mode: "default",
+    overlap: false,
     path: "modern",
     queryCount: 7,
     auth: 1,
@@ -61,7 +61,6 @@ test("MCP phase records are integral, non-overlapping, and bounded", () => {
     server_build: 3,
     tool_projection: 4,
     dispatch: 5,
-    serialize: 6,
     total: 31,
   });
   const phaseTotal =
@@ -69,8 +68,7 @@ test("MCP phase records are integral, non-overlapping, and bounded", () => {
     record.context +
     record.server_build +
     record.tool_projection +
-    record.dispatch +
-    record.serialize;
+    record.dispatch;
   expect(phaseTotal).toBeLessThanOrEqual(record.total);
   expect(JSON.stringify(record)).not.toContain(freeText);
   expect(normalizeMcpMetricMethod("tools/call")).toBe("tools/call");
@@ -85,20 +83,27 @@ test("MCP phase records are integral, non-overlapping, and bounded", () => {
   ).toBe("list_matters");
 });
 
-test("MCP phases reject overlap so nested timing cannot double count", async () => {
-  const run = observeMcpRequest({
+test("MCP phase overlap never changes the result and is flagged", async () => {
+  const lines: string[] = [];
+  setMetricLineSinkForTesting((line) => {
+    lines.push(line);
+  });
+  const result = await observeMcpRequest({
     method: "tools/list",
     mode: "default",
     run: async () =>
       await measureMcpPhase(
         "auth",
-        async () => await measureMcpPhase("context", async () => undefined),
+        async () => await measureMcpPhase("context", async () => "served"),
       ),
   });
-  expect(await rejectionOf(run)).toHaveProperty(
-    "message",
-    expect.stringContaining("MCP metric phases overlap"),
-  );
+  expect(result).toBe("served");
+  expect(JSON.parse(lines.at(0) ?? "{}")).toMatchObject({
+    event: "mcp.request.phases",
+    overlap: true,
+    context: 0,
+  });
+  resetMetricLineSinkForTesting();
 });
 
 test("reasoning replay drops emit only bounded provider and reason dimensions", () => {

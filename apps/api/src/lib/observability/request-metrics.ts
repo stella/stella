@@ -37,15 +37,11 @@ const FAILURE_METRIC_NAME = "RequestTransientFailures";
 type McpRequestMetricInput = {
   method: string;
   mode: string;
+  overlap: boolean;
   path: string;
   toolName?: string;
   phases: Record<
-    | "auth"
-    | "context"
-    | "server_build"
-    | "tool_projection"
-    | "dispatch"
-    | "serialize",
+    "auth" | "context" | "server_build" | "tool_projection" | "dispatch",
     number
   >;
   queryCount: number;
@@ -64,7 +60,6 @@ export const buildMcpRequestMetricRecord = ({
   server_build: Math.floor(phases.server_build),
   tool_projection: Math.floor(phases.tool_projection),
   dispatch: Math.floor(phases.dispatch),
-  serialize: Math.floor(phases.serialize),
   total: Math.ceil(totalMs),
 });
 

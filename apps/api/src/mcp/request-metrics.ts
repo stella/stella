@@ -1,4 +1,3 @@
-import { panic } from "better-result";
 import { AsyncLocalStorage } from "node:async_hooks";
 
 import { currentQueryCount } from "@/api/lib/db-query-counter";
@@ -23,8 +22,7 @@ export type McpMetricPhase =
   | "context"
   | "server_build"
   | "tool_projection"
-  | "dispatch"
-  | "serialize";
+  | "dispatch";
 
 const isMcpMetricMethod = (value: string): value is McpMetricMethod =>
   MCP_METHODS.some((method) => method === value);
@@ -51,6 +49,7 @@ type McpRequestMetricState = {
   toolName?: string;
   phases: Record<McpMetricPhase, number>;
   activePhase: McpMetricPhase | undefined;
+  overlap: boolean;
 };
 
 const phaseStore = new AsyncLocalStorage<McpRequestMetricState>();
@@ -61,7 +60,6 @@ const emptyPhases = (): Record<McpMetricPhase, number> => ({
   server_build: 0,
   tool_projection: 0,
   dispatch: 0,
-  serialize: 0,
 });
 
 export const measureMcpPhase = async <T>(
@@ -73,7 +71,10 @@ export const measureMcpPhase = async <T>(
     return await run();
   }
   if (state.activePhase !== undefined) {
-    panic(`MCP metric phases overlap: ${state.activePhase} and ${phase}`);
+    // Telemetry must not change request behavior. Keep the outer measurement,
+    // flag the record, and run nested work without charging it twice.
+    state.overlap = true;
+    return await run();
   }
   state.activePhase = phase;
   const startedAt = performance.now();
@@ -102,25 +103,12 @@ export const setMcpMetricProtocolPath = (path: "legacy" | "modern"): void => {
   }
 };
 
-export const setMcpMetricMethodFromRequest = async (
-  request: Request,
-): Promise<void> => {
+export const setMcpMetricParsedMethod = (method: string): void => {
   const state = phaseStore.getStore();
-  if (state === undefined || state.method !== "unknown") {
+  if (state?.method !== "unknown") {
     return;
   }
-  try {
-    const body: unknown = await request.clone().json();
-    if (typeof body !== "object" || body === null || !("method" in body)) {
-      return;
-    }
-    const method = body.method;
-    state.method = normalizeMcpMetricMethod(
-      typeof method === "string" ? method : null,
-    );
-  } catch {
-    // The transport owns malformed-body errors; metrics retain "unknown".
-  }
+  state.method = normalizeMcpMetricMethod(method);
 };
 
 /** Records only a name already resolved through the registered tool catalog. */
@@ -148,6 +136,7 @@ export const observeMcpRequest = async <T>({
     path: "unknown",
     phases: emptyPhases(),
     activePhase: undefined,
+    overlap: false,
   };
   return await phaseStore.run(state, async () => {
     try {
@@ -157,6 +146,7 @@ export const observeMcpRequest = async <T>({
         method: state.method,
         mode: state.mode,
         path: state.path,
+        overlap: state.overlap,
         ...(state.toolName === undefined ? {} : { toolName: state.toolName }),
         phases: state.phases,
         queryCount: Math.max(
