@@ -1220,6 +1220,11 @@
       "stale": "تغيّرت هذه الإجابة. حدد النص مرة أخرى.",
       "submit": "طلب تعديل"
     },
+    "answerQuote": {
+      "showInDecision": "عرض في القرار",
+      "verified": "اقتباس موثَّق",
+      "verifiedHint": "حرفيًا في {source}"
+    },
     "applyMode": {
       "description": "يُخزّن Word مَن أجرى كل تغيير. وسنتذكّر اختيارك.",
       "direct": "لا، طبّق مباشرةً",
@@ -1458,6 +1463,12 @@
       "title": "نص ملصق"
     },
     "placeholder": "اكتب سؤالك هنا، / للمهارات، @ لإضافة سياق",
+    "processSummary": {
+      "analyses": "{count, plural, zero {# تحليلات} one {تحليل واحد} two {تحليلان} few {# تحليلات} many {# تحليلًا} other {# تحليل}}",
+      "changesSaved": "{count, plural, zero {# تغييرات محفوظة} one {تغيير واحد محفوظ} two {تغييران محفوظان} few {# تغييرات محفوظة} many {# تغييرًا محفوظًا} other {# تغيير محفوظ}}",
+      "documentEdits": "{count, plural, zero {# تعديلات على المستند} one {تعديل واحد على المستند} two {تعديلان على المستند} few {# تعديلات على المستند} many {# تعديلًا على المستند} other {# تعديل على المستند}}",
+      "sourcesChecked": "{count, plural, zero {# مصادر تمت مراجعتها} one {مصدر واحد تمت مراجعته} two {مصدران تمت مراجعتهما} few {# مصادر تمت مراجعتها} many {# مصدرًا تمت مراجعته} other {# مصدر تمت مراجعته}}"
+    },
     "promptImprovementStrategies": {
       "decompose": {
         "description": "يحوّل العمل المعقد إلى مهام فرعية مرتبة.",
@@ -1703,6 +1714,7 @@
       "interrupted": "توقّف قبل الاكتمال",
       "output": "المخرجات",
       "sourceCode": "الشيفرة المصدرية",
+      "statusWaiting": "في الانتظار",
       "toggleDetails": "إظهار/إخفاء التفاصيل",
       "unrestoredFields": "تعذّر ملء {count, plural, zero {# حقل} one {حقل واحد} two {حقلين} few {# حقول} many {# حقلًا} other {# حقل}} بالقيم الحقيقية في وضع إخفاء الهوية. راجِع: {fields}"
     },

@@ -1220,6 +1220,11 @@
       "stale": "Diese Antwort wurde geändert. Wählen Sie den Text erneut aus.",
       "submit": "Änderung anfordern"
     },
+    "answerQuote": {
+      "showInDecision": "In der Entscheidung zeigen",
+      "verified": "Verifiziertes Zitat",
+      "verifiedHint": "Wörtlich in {source}"
+    },
     "applyMode": {
       "description": "Word speichert, wer welche Änderung vorgenommen hat. Wir merken uns Ihre Auswahl.",
       "direct": "Nein, direkt anwenden",
@@ -1458,6 +1463,12 @@
       "title": "Eingefügter Text"
     },
     "placeholder": "Geben Sie hier Ihre Frage ein, / für Skills, @ für Kontext",
+    "processSummary": {
+      "analyses": "{count, plural, one {# Analyse} other {# Analysen}}",
+      "changesSaved": "{count, plural, one {# Änderung gespeichert} other {# Änderungen gespeichert}}",
+      "documentEdits": "{count, plural, one {# Dokumentänderung} other {# Dokumentänderungen}}",
+      "sourcesChecked": "{count, plural, one {# Quelle geprüft} other {# Quellen geprüft}}"
+    },
     "promptImprovementStrategies": {
       "decompose": {
         "description": "Teilt komplexe Aufgaben in geordnete Teilaufgaben auf.",
@@ -1703,6 +1714,7 @@
       "interrupted": "Vor Abschluss unterbrochen",
       "output": "Ausgabe",
       "sourceCode": "Quellcode",
+      "statusWaiting": "Wartet",
       "toggleDetails": "Details ein-/ausblenden",
       "unrestoredFields": "{count, plural, one {# Feld konnte} other {# Felder konnten}} im anonymisierten Modus nicht mit echten Werten gefüllt werden. Bitte prüfen: {fields}"
     },
