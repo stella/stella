@@ -257,8 +257,22 @@ describe("required dependency review workflow boundary", () => {
     expect(checkout.if).toBe(reviewCondition);
     expect(review.if).toBe(reviewCondition);
     expect(checkout.with?.["persist-credentials"]).toBe(false);
+    // A merge group reviews against the target branch, resolved through the
+    // API in this job: no checked-out code runs next to the PR token.
+    const resolver = job.steps.find((step) => step.id === "target-base");
+    if (!resolver) {
+      throw new TypeError("Missing comparison base resolver");
+    }
+    expect(resolver.uses?.startsWith("actions/github-script@")).toBe(true);
+    expect(resolver.if).toBe(
+      `github.event_name == 'merge_group' && (${reviewCondition})`,
+    );
+    expect(String(resolver.with?.["script"])).toContain(
+      "compareCommitsWithBasehead",
+    );
+    expect(String(resolver.with?.["script"])).toContain("core.setFailed");
     expect(review.with?.["base-ref"]).toBe(
-      `\${{ github.event.merge_group.base_sha || '' }}`,
+      `\${{ github.event_name == 'merge_group' && steps.target-base.outputs.base_sha || '' }}`,
     );
     expect(review.with?.["head-ref"]).toBe(
       `\${{ github.event.merge_group.head_sha || '' }}`,
