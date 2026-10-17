@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { expect, test } from "bun:test";
 
 import {
+  holdSharedRunUntilPendingForTest,
   lintSingleRule,
   lintsAlone,
   runSingleRule,
@@ -97,6 +98,7 @@ test("concurrent cases of one configuration share a run and keep their own lines
   // exactly the ones recorded while it awaits.
   const code = "no-raw-sha256(no-raw-sha256)";
   const before = sharedRuns.filter((run) => run.code === code).length;
+  holdSharedRunUntilPendingForTest(code, 3);
   const hash = 'new Bun.CryptoHasher("sha256");';
   const results = await Promise.all(
     [
@@ -109,4 +111,22 @@ test("concurrent cases of one configuration share a run and keep their own lines
   expect(sharedRuns.filter((run) => run.code === code).slice(before)).toEqual([
     { code, cases: 3 },
   ]);
+});
+
+test("concurrent cases keep their own lines across any run grouping", async () => {
+  const code = "no-raw-browser-storage(no-raw-browser-storage)";
+  const before = sharedRuns.filter((run) => run.code === code).length;
+  const storage = "localStorage.getItem('key');";
+  const results = await Promise.all(
+    [
+      'const clean = "storage";',
+      [storage, "const other = 1;", storage].join("\n"),
+      ["const first = 1;", storage].join("\n"),
+    ].map(
+      async (source) => await lintSingleRule("no-raw-browser-storage", source),
+    ),
+  );
+  expect(results).toEqual([[], [1, 3], [2]]);
+  const runs = sharedRuns.filter((run) => run.code === code).slice(before);
+  expect(runs.reduce((cases, run) => cases + run.cases, 0)).toBe(3);
 });
