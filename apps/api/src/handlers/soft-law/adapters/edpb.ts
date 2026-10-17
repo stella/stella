@@ -52,7 +52,7 @@ const SOURCE_KINDS = [
 type KindDisposition =
   | { type: "included"; kind: SoftLawMetadata["kind"] }
   | { type: "excluded"; reason: string };
-export const EDPB_KIND_DISPOSITIONS = {
+const EDPB_KIND_DISPOSITIONS = {
   Guideline: { type: "included", kind: "guideline" },
   Recommendation: { type: "included", kind: "recommendation" },
   Statement: { type: "included", kind: "statement" },
@@ -245,12 +245,12 @@ const readEdpbFiles = ($: CheerioAPI, url: string) =>
         continue;
       }
       const revision =
-        label.match(/\bv(?:ersion)?\s*(\d+(?:\.\d+)*)\b/iu)?.at(1) ?? "";
+        /\bv(?:ersion)?\s*(\d+(?:\.\d+)*)\b/iu.exec(label)?.at(1) ?? "";
       const assets = [
         {
           href: mainHref,
           language:
-            mainHref.match(/_([a-z]{2})(?:_\d+)?\.pdf(?:\?|$)/u)?.at(1) ?? "",
+            /_([a-z]{2})(?:_\d+)?\.pdf(?:\?|$)/u.exec(mainHref)?.at(1) ?? "",
         },
       ];
       file.find("option[data-url][lang]").each((__, option) => {
@@ -399,7 +399,7 @@ export const parseEdpbDocument = ({
         evidence: { url, quote: version, locator: ".document-full__version" },
       };
     }
-    const reference = title.match(/\b\d{1,3}\/\d{4}\b/u)?.at(0) ?? "";
+    const reference = /\b\d{1,3}\/\d{4}\b/u.exec(title)?.at(0) ?? "";
     const sourceDates = {
       ...(issued ? { documentDate: issued } : {}),
       ...(start ? { consultationStart: start } : {}),
@@ -589,8 +589,8 @@ export const edpbAdapter = {
     userAgent: "Stella/1.0 (+https://github.com/stella/stella)",
     window: { type: "any_time" },
   },
-  discover: ({ cursor, fetch: read }) =>
-    Result.gen(async function* () {
+  discover: async ({ cursor, fetch: read }) =>
+    await Result.gen(async function* () {
       const { index, page, item } = yield* readCursor(cursor);
       const path = INDEXES.at(index);
       if (!path) {
@@ -707,7 +707,8 @@ export const edpbAdapter = {
       ...extraction,
     });
   },
-  getTotalCount: async () => ({ type: "no-count-endpoint" }),
+  getTotalCount: async () =>
+    await Promise.resolve({ type: "no-count-endpoint" as const }),
   sliceWalk: {
     type: "unsupported",
     reason:
@@ -717,7 +718,7 @@ export const edpbAdapter = {
     status: "declared",
     fields: SOURCE_FIELD_DISPOSITIONS,
     listSourceFields: (parts) => {
-      const $ = load(parts.detail ?? "");
+      const $ = load(parts["detail"] ?? "");
       return SOURCE_FIELDS.filter(
         (field) => $(FIELD_SELECTORS[field]).length > 0,
       );

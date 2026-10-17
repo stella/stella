@@ -5,6 +5,7 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { softLawSources } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import { SoftLawIngestionError } from "@/api/lib/legal-search/soft-law-types";
+import { recordSystemAudit } from "@/api/lib/system-audit/record";
 
 import { EU_SOFT_LAW_SOURCES } from "./adapters/registry";
 import { runSoftLawIngestion } from "./ingestion";
@@ -22,18 +23,25 @@ export const syncEuSoftLaw = async ({
   signal,
 }: SyncSoftLawOptions) => {
   const { adapter, descriptor } = EU_SOFT_LAW_SOURCES[authority];
+  const auditSubject = createSafeId<"systemScriptRun">();
   const registration = await Result.tryPromise(
     async () =>
       await scopedDb(async (tx) => {
-        // audit: skip - idempotent registration of an ingestion-only global source
-        await tx
+        const inserted = await tx
           .insert(softLawSources)
           .values({
             id: createSafeId<"softLawSource">(),
             adapterKey: adapter.key,
             descriptor,
           })
-          .onConflictDoNothing({ target: softLawSources.adapterKey });
+          .onConflictDoNothing({ target: softLawSources.adapterKey })
+          .returning({ id: softLawSources.id });
+        if (inserted.length > 0) {
+          await recordSystemAudit(tx, "system:eu-soft-law-ingestion", {
+            subject: auditSubject,
+            counts: { sourcesRegistered: inserted.length },
+          });
+        }
         const row =
           (
             await tx

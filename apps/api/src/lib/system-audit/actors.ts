@@ -88,6 +88,7 @@ export const SYSTEM_RUN_ACTOR_COUNTS = {
     "reviewRequired",
     "failed",
   ],
+  "system:eu-soft-law-ingestion": ["sourcesRegistered"],
   "system:corpus-generation-operator": ["registered", "promoted", "demoted"],
 } as const satisfies Record<`system:${string}`, readonly string[]>;
 
