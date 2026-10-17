@@ -27,6 +27,7 @@ import type {
   OnlineMigrationParam,
 } from "@/api/db/online-migration-connection";
 import type { Transaction } from "@/api/db/root";
+import type { pendingScoutEmissions } from "@/api/db/schema";
 import {
   entities,
   entityVersions,
@@ -54,6 +55,7 @@ export const AGGREGATE_LOCKS = {
   schedulerClaim: { rank: 20, kind: "row" },
   definitionCap: { rank: 30, kind: "advisory" },
   definition: { rank: 40, kind: "row" },
+  uploadReceipt: { rank: 50, kind: "row" },
   scoutCensus: { rank: 60, kind: "row" },
   desktopMembership: { rank: 70, kind: "row" },
   desktopCredential: { rank: 80, kind: "row" },
@@ -119,6 +121,7 @@ export const AGGREGATE_CHAINS = {
     "schedulerClaim",
     "definitionCap",
     "definition",
+    "uploadReceipt",
   ],
   flowEffect: [
     "orgFeatureAdmission",
@@ -225,11 +228,23 @@ type AggregateIdentities = {
     id: SafeId<"flowDefinition">;
     organizationId: SafeId<"organization">;
   };
-  scoutCensus: {
-    type: "run";
-    id: SafeId<"scoutRun">;
+  uploadReceipt: {
+    definitionId: SafeId<"flowDefinition">;
+    entityId: SafeId<"entity">;
     organizationId: SafeId<"organization">;
   };
+  scoutCensus:
+    | {
+        type: "run";
+        id: SafeId<"scoutRun">;
+        organizationId: SafeId<"organization">;
+      }
+    | (Pick<
+        typeof pendingScoutEmissions.$inferSelect,
+        "organizationId" | "sourceKind" | "sourceId"
+      > & {
+        type: "receipt";
+      });
   workspace: {
     id: SafeId<"workspace">;
     organizationId: SafeId<"organization">;
@@ -763,6 +778,30 @@ const memberCleanupRowResource = (
       return panic("Unknown member cleanup resource");
   }
 };
+const scoutCensusRowResource = (
+  id: AggregateIdentities["scoutCensus"],
+): RowResource => {
+  switch (id.type) {
+    case "receipt":
+      return {
+        table: "pending_scout_emissions",
+        columns: ["organization_id", "source_kind", "source_id"],
+        values: [id.organizationId, id.sourceKind, id.sourceId],
+        scopeColumns: [],
+        scopeValues: [],
+      };
+    case "run":
+      return byIdWithin(
+        "scout_runs",
+        id.id,
+        "organization_id",
+        id.organizationId,
+      );
+    default:
+      id satisfies never;
+      return panic("Unknown scout census resource");
+  }
+};
 const rowResource = (options: RowIdentityOptions): RowResource => {
   switch (options.aggregate) {
     case "organization":
@@ -885,12 +924,15 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
         options.id.workspaceId,
       );
     case "scoutCensus":
-      return byIdWithin(
-        "scout_runs",
-        options.id.id,
-        "organization_id",
-        options.id.organizationId,
-      );
+      return scoutCensusRowResource(options.id);
+    case "uploadReceipt":
+      return {
+        table: "flow_upload_trigger_intents",
+        columns: ["definition_id", "entity_id"],
+        values: [options.id.definitionId, options.id.entityId],
+        scopeColumns: ["organization_id"],
+        scopeValues: [options.id.organizationId],
+      };
     case "chatThread":
       return {
         table: "chat_threads",
@@ -2149,6 +2191,108 @@ export const withDecisionCitationStatsLocks = async ({
       ORDER BY key
     ) anchors
   `);
+};
+
+const scopeSourceRow = v.object({
+  organizationId: v.pipe(v.string(), v.transform(brandPersistedOrganizationId)),
+  workspaceId: v.nullable(
+    v.pipe(v.string(), v.transform(brandPersistedWorkspaceId)),
+  ),
+  id: v.string(),
+});
+
+type OrgScopeSourceOptions = {
+  tx: Pick<Transaction, "select" | "execute">;
+  source: { table: PgTable; organizationId: SQL; workspaceId: SQL; rowId: SQL };
+  where: SQL;
+};
+
+class AggregateScopeSourceBusy extends TaggedError("AggregateScopeSourceBusy")<{
+  message: string;
+  cause: unknown;
+}> {}
+
+const abortScopeSourceFailure = (error: unknown): never => {
+  if (getPgErrorCode(error) === PG_ERROR.LOCK_NOT_AVAILABLE) {
+    return abortTransaction(
+      new AggregateScopeSourceBusy({
+        message: "Scope source is in use",
+        cause: error,
+      }),
+    );
+  }
+  return abortTransaction(error);
+};
+
+/** Pin ownership without adding a blocking upgrade to the caller's resource chain. */
+export const lockOrgScopeSource = async ({
+  tx,
+  source,
+  where,
+}: OrgScopeSourceOptions) => {
+  const tableName = getTableName(source.table);
+  const sourceMode =
+    tableName === "workspaces" ? sql`KEY SHARE` : sql`NO KEY UPDATE`;
+  const result = await Result.tryPromise(async () => {
+    const rawRow = executedRows(
+      await tx.execute(sql`SELECT ${source.organizationId} AS "organizationId",
+        ${source.workspaceId} AS "workspaceId", ${source.rowId} AS id
+      FROM ${source.table} WHERE ${where} LIMIT 1
+      FOR ${sourceMode} OF ${sql.identifier(tableName)} NOWAIT`),
+    ).at(0);
+    if (rawRow === undefined) {
+      return undefined;
+    }
+    const row = v.parse(scopeSourceRow, rawRow);
+    if (row.workspaceId !== null) {
+      const matter = (
+        await tx
+          .select({ organizationId: workspaces.organizationId })
+          .from(workspaces)
+          .where(eq(workspaces.id, row.workspaceId))
+          .for("key share", { noWait: true })
+          .limit(1)
+      ).at(0);
+      if (matter?.organizationId !== row.organizationId) {
+        return panic("Scope source and matter organization must agree");
+      }
+    }
+    return row;
+  });
+  if (Result.isError(result)) {
+    return abortScopeSourceFailure(result.error);
+  }
+  return result.value;
+};
+
+/**
+ * Pin the ownership of several matters in one id-ordered statement, so a
+ * bounded page proves its organization without a lock round trip per matter.
+ */
+export const lockOrgScopeMatters = async ({
+  tx,
+  workspaceIds,
+}: {
+  tx: Pick<Transaction, "select">;
+  workspaceIds: readonly SafeId<"workspace">[];
+}) => {
+  const result = await Result.tryPromise(
+    async () =>
+      await tx
+        .select({
+          id: workspaces.id,
+          organizationId: workspaces.organizationId,
+        })
+        .from(workspaces)
+        .where(inArray(workspaces.id, [...workspaceIds]))
+        .orderBy(workspaces.id)
+        .limit(workspaceIds.length)
+        .for("key share", { noWait: true }),
+  );
+  if (Result.isError(result)) {
+    return abortScopeSourceFailure(result.error);
+  }
+  return result.value;
 };
 
 type MemberAccessRowLockOptions = {

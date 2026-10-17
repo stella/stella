@@ -22,8 +22,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { readReaderAnswerDecision } from "@/api/lib/case-law/reader-answer-corpus";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { readBounded } from "@/api/lib/db/read-bounded";
+import { READER_ANSWER_MESSAGE_TRANSITIONS } from "@/api/lib/db/reader-answer-transitions";
 import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
-import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transitionScopedCount } from "@/api/lib/db/transitions";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type {
@@ -361,7 +361,7 @@ export const prepareReaderAnswer = async (
     if (streaming !== undefined) {
       await transitionScopedCount({
         tx,
-        spec: TRANSITIONS.legalReaderAnswerMessages,
+        spec: READER_ANSWER_MESSAGE_TRANSITIONS,
         where:
           and(
             eq(legalReaderAnswerMessages.answerId, answerId),

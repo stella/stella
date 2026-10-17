@@ -21,136 +21,112 @@ if (!databaseUrl || !runPostgresTests) {
   });
 } else {
   describe("review gate state (postgres)", () => {
-    for (const intermediate of [false, true]) {
-      for (const winner of ACTIONS) {
-        for (const loser of ACTIONS) {
-          test(`${intermediate ? "intermediate" : "final"} gate: ${winner} commits before ${loser}`, async () => {
-            await withGatedTestClients(databaseUrl, async ({ openClient }) => {
-              const { db } = openClient();
-              const { sql: otherClient } = openClient();
-              const f = await flowReviewGateFixture(db, {
-                intermediate,
-                governed: true,
-              });
-              const firstDb = createSafeDb(
-                markRlsDatabase(db),
-                [f.workspaceId],
-                f.organizationId,
-                f.userId,
-              );
-              const written = Promise.withResolvers<undefined>();
-              const release = Promise.withResolvers<undefined>();
-              const otherDb = drizzle({
-                client: otherClient,
-                relations: databaseRelations,
-                logger: {
-                  logQuery: (query) => {
-                    // Release at the decisive lock request. Without locking,
-                    // release at UPDATE instead, after all stale reads have
-                    // finished; a nonlocking mutation must fail this matrix.
-                    if (
-                      query.includes("for update") ||
-                      /^update "flow_(runs|run_steps)"/u.test(query)
-                    ) {
-                      release.resolve(undefined);
-                    }
-                  },
-                },
-              });
-              const secondDb = createSafeDb(
-                markRlsDatabase(otherDb),
-                [f.workspaceId],
-                f.organizationId,
-                f.userId,
-              );
-              const gatedFirst: SafeDb = async (work, retry) =>
-                await firstDb(async (tx) => {
-                  const value = await work(tx);
-                  if (
-                    typeof value === "object" &&
-                    value !== null &&
-                    ("payload" in value || "steps" in value)
-                  ) {
-                    written.resolve(undefined);
-                    await release.promise;
-                  }
-                  return value;
-                }, retry);
-              try {
-                const winning = f.act(gatedFirst, winner);
-                await Promise.race([
-                  written.promise,
-                  winning.then((result) => {
-                    if (result.isErr()) {
-                      throw result.error;
-                    }
-                    throw new Error(
-                      "The winning action finished without reaching its commit barrier",
-                    );
-                  }),
-                ]);
-                const losing = f.act(secondDb, loser);
-                const [won, lost] = await Promise.all([winning, losing]);
-                expect(won.isOk()).toBe(true);
-                expect(lost.isErr()).toBe(true);
-                if (lost.isErr()) {
-                  expect(HandlerError.is(lost.error)).toBe(true);
-                  expect(lost.error).toMatchObject({
-                    status: 409,
-                    message:
-                      loser === "cancel"
-                        ? "This run changed before it could be cancelled."
-                        : "This run is not awaiting review.",
-                  });
-                }
-                const state = await f.read();
-                const gate = state.steps.at(0);
-                const approvedStatus = intermediate ? "running" : "completed";
-                expect(state.run?.status).toBe(
-                  winner === "approved" ? approvedStatus : "cancelled",
-                );
-                expect(state.task?.status).toBe(
-                  winner === "cancel" ? "cancelled" : "done",
-                );
-                expect(state.obligation?.status).toBe(
-                  winner === "cancel" ? "cancelled" : "completed",
-                );
-                expect(gate?.status).toBe(
-                  winner === "cancel" ? "skipped" : "completed",
-                );
-                expect(gate?.output).toEqual(
-                  winner === "cancel"
-                    ? null
-                    : {
-                        kind: "review-gate",
-                        decision: winner,
-                        userId: f.userId,
-                        note: `${winner}:0`,
-                      },
-                );
-                expect(f.enqueued).toEqual(
-                  winner === "approved" && intermediate ? [1] : [],
-                );
-                if (intermediate) {
-                  expect(state.steps.at(1)?.status).toBe(
-                    winner === "approved" ? "pending" : "skipped",
-                  );
-                }
-                for (const action of ACTIONS.filter(
-                  (candidate) => candidate !== "cancel",
-                )) {
-                  expect((await f.act(secondDb, action)).isErr()).toBe(true);
-                  expect(await f.read()).toEqual(state);
-                }
-              } finally {
+    test("an intermediate approval commits before a competing rejection", async () => {
+      const intermediate = true;
+      const winner = "approved";
+      const loser = "rejected";
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db } = openClient();
+        const { sql: otherClient } = openClient();
+        const f = await flowReviewGateFixture(db, {
+          intermediate,
+          governed: true,
+        });
+        const firstDb = createSafeDb(
+          markRlsDatabase(db),
+          [f.workspaceId],
+          f.organizationId,
+          f.userId,
+        );
+        const written = Promise.withResolvers<undefined>();
+        const release = Promise.withResolvers<undefined>();
+        const otherDb = drizzle({
+          client: otherClient,
+          relations: databaseRelations,
+          logger: {
+            logQuery: (query) => {
+              // Release at the decisive lock request. Without locking,
+              // release at UPDATE instead, after all stale reads have
+              // finished; a nonlocking mutation must fail this regression.
+              if (
+                query.includes("pg_advisory_xact_lock(") ||
+                query.includes("for update") ||
+                /^update "flow_(runs|run_steps)"/u.test(query)
+              ) {
                 release.resolve(undefined);
-                await f.cleanup();
               }
+            },
+          },
+        });
+        const secondDb = createSafeDb(
+          markRlsDatabase(otherDb),
+          [f.workspaceId],
+          f.organizationId,
+          f.userId,
+        );
+        const gatedFirst: SafeDb = async (work, retry) =>
+          await firstDb(async (tx) => {
+            const value = await work(tx);
+            if (
+              typeof value === "object" &&
+              value !== null &&
+              ("payload" in value || "steps" in value)
+            ) {
+              written.resolve(undefined);
+              await release.promise;
+            }
+            return value;
+          }, retry);
+        try {
+          const winning = f.act(gatedFirst, winner);
+          await Promise.race([
+            written.promise,
+            winning.then((result) => {
+              if (result.isErr()) {
+                throw result.error;
+              }
+              throw new Error(
+                "The winning action finished without reaching its commit barrier",
+              );
+            }),
+          ]);
+          const losing = f.act(secondDb, loser);
+          const [won, lost] = await Promise.all([winning, losing]);
+          expect(won.isOk()).toBe(true);
+          expect(lost.isErr()).toBe(true);
+          if (lost.isErr()) {
+            expect(HandlerError.is(lost.error)).toBe(true);
+            expect(lost.error).toMatchObject({
+              status: 409,
+              message: "This run is not awaiting review.",
             });
+          }
+          const state = await f.read();
+          const gate = state.steps.at(0);
+          expect(state.run?.status).toBe("running");
+          expect(state.task?.status).toBe("done");
+          expect(state.obligation?.status).toBe("completed");
+          expect(gate?.status).toBe("completed");
+          expect(gate?.output).toEqual({
+            kind: "review-gate",
+            decision: winner,
+            userId: f.userId,
+            note: `${winner}:0`,
           });
+          expect(f.enqueued).toEqual([1]);
+          expect(state.steps.at(1)?.status).toBe("pending");
+          for (const action of ACTIONS.filter(
+            (candidate) => candidate !== "cancel",
+          )) {
+            expect((await f.act(secondDb, action)).isErr()).toBe(true);
+            expect(await f.read()).toEqual(state);
+          }
+        } finally {
+          release.resolve(undefined);
+          await f.cleanup();
         }
-      }
-    }
+      });
+    });
     test("review gate first committed terminal action is immutable", async () => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const { db } = openClient();

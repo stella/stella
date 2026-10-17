@@ -524,6 +524,339 @@ type DispatchBoundary = NonNullable<
   NonNullable<FeatureRegistry[string]["ownership"]>["dispatchModules"]
 >[number];
 
+type OperationalBoundary = Extract<DispatchBoundary, { type: "operational" }>;
+
+const voidReturnType = (type: ts.TypeNode | undefined) =>
+  type?.kind === ts.SyntaxKind.VoidKeyword ||
+  (type !== undefined &&
+    ts.isTypeReferenceNode(type) &&
+    ts.isIdentifier(type.typeName) &&
+    type.typeName.text === "Promise" &&
+    type.typeArguments?.length === 1 &&
+    type.typeArguments.at(0)?.kind === ts.SyntaxKind.VoidKeyword);
+
+const voidFunction = (
+  node: ts.FunctionDeclaration | ts.ArrowFunction | ts.FunctionExpression,
+) => {
+  if (
+    !voidReturnType(node.type) ||
+    node.body === undefined ||
+    !ts.isBlock(node.body)
+  ) {
+    return false;
+  }
+  let valid = true;
+  const visit = (child: ts.Node) => {
+    // Callback results stay local; only the exported function's return can escape.
+    if (ts.isFunctionLike(child)) {
+      return;
+    }
+    if (ts.isReturnStatement(child) && child.expression !== undefined) {
+      valid = false;
+    }
+    ts.forEachChild(child, visit);
+  };
+  visit(node.body);
+  return valid;
+};
+
+const exportedVoidFunction = (ast: ts.SourceFile, name: string) => {
+  for (const statement of ast.statements) {
+    if (!declaresSymbol(statement, name)) {
+      continue;
+    }
+    if (ts.isFunctionDeclaration(statement)) {
+      return voidFunction(statement);
+    }
+    if (!ts.isVariableStatement(statement)) {
+      return false;
+    }
+    const declaration = statement.declarationList.declarations.find(
+      (item) => ts.isIdentifier(item.name) && item.name.text === name,
+    );
+    const value =
+      declaration?.initializer === undefined
+        ? undefined
+        : unwrapExpression(declaration.initializer);
+    return (
+      value !== undefined &&
+      (ts.isArrowFunction(value) || ts.isFunctionExpression(value)) &&
+      voidFunction(value)
+    );
+  }
+  return false;
+};
+
+type TableOwnership = readonly {
+  matcher: RegExp;
+  owners: ReadonlyMap<string, Requirement>;
+}[];
+
+type OperationalValidationOptions = {
+  boundary: OperationalBoundary;
+  graph: DeclarationSourceGraph;
+  registry: FeatureRegistry;
+  tables: TableOwnership;
+};
+
+const operationalOwners = (
+  boundary: OperationalBoundary,
+  graph: DeclarationSourceGraph,
+) => {
+  if (
+    boundary.reason.trim().length === 0 ||
+    boundary.effects.length === 0 ||
+    new Set(boundary.effects).size !== boundary.effects.length ||
+    boundary.owners.length !== boundary.effects.length
+  ) {
+    return undefined;
+  }
+  const owners = new Map<string, Set<string>>();
+  for (const effect of boundary.effects) {
+    const matching = boundary.owners.filter((owner) => owner.effect === effect);
+    const owner = matching.at(0);
+    if (
+      matching.length !== 1 ||
+      owner === undefined ||
+      owner.exports.length === 0 ||
+      new Set(owner.exports).size !== owner.exports.length ||
+      owner.module === boundary.module
+    ) {
+      return undefined;
+    }
+    const ast = graph.sourceFile(owner.module);
+    if (
+      ast === undefined ||
+      !owner.exports.every((name) => exportedVoidFunction(ast, name))
+    ) {
+      return undefined;
+    }
+    const exports = owners.get(owner.module) ?? new Set<string>();
+    for (const name of owner.exports) {
+      exports.add(name);
+    }
+    owners.set(owner.module, exports);
+  }
+  return owners;
+};
+
+const validOperationalExport = (statement: ts.Statement) => {
+  if (!exported(statement)) {
+    return true;
+  }
+  if (ts.isClassDeclaration(statement)) {
+    return false;
+  }
+  if (ts.isFunctionDeclaration(statement)) {
+    return voidFunction(statement);
+  }
+  if (!ts.isVariableStatement(statement)) {
+    return true;
+  }
+  return statement.declarationList.declarations.every((declaration) => {
+    if (declaration.initializer === undefined) {
+      return false;
+    }
+    const value = unwrapExpression(declaration.initializer);
+    if (ts.isArrowFunction(value) || ts.isFunctionExpression(value)) {
+      return voidFunction(value);
+    }
+    return (
+      ts.isStringLiteralLike(value) ||
+      ts.isNumericLiteral(value) ||
+      value.kind === ts.SyntaxKind.TrueKeyword ||
+      value.kind === ts.SyntaxKind.FalseKeyword
+    );
+  });
+};
+
+const operationalFeatureReachability = ({
+  graph,
+  registry,
+  tables,
+}: Omit<OperationalValidationOptions, "boundary">) => {
+  const aggregateTables = aggregateTableNames(
+    graph.sourceFile(AGGREGATE_LOCK_MODULE),
+  );
+  const visited = new Set<string>();
+  // A wrapper cannot conceal feature reads behind an ordinary-looking import.
+  const reachesFeature = (file: string): boolean => {
+    if (visited.has(file)) {
+      return false;
+    }
+    visited.add(file);
+    if (moduleRequirements(registry, file).size !== 0) {
+      return true;
+    }
+    const source = graph.sourceFile(file);
+    if (
+      source === undefined ||
+      collectModuleUses(source, registry, tables, aggregateTables).length !== 0
+    ) {
+      return true;
+    }
+    const dependencies = graph.dependencies(source);
+    return (
+      dependencies.missing.length !== 0 ||
+      dependencies.targets.some(reachesFeature)
+    );
+  };
+  return reachesFeature;
+};
+
+type OperationalImportOptions = {
+  ast: ts.SourceFile;
+  statement: ts.Statement;
+  graph: DeclarationSourceGraph;
+  owners: ReadonlyMap<string, ReadonlySet<string>>;
+  usedOwners: Set<string>;
+  reachesFeature: (file: string) => boolean;
+};
+
+const validOperationalImport = ({
+  ast,
+  statement,
+  graph,
+  owners,
+  usedOwners,
+  reachesFeature,
+}: OperationalImportOptions) => {
+  if (!runtimeImport(statement) && !runtimeExport(statement)) {
+    return true;
+  }
+  const target = graph.resolve(ast.fileName, statement.moduleSpecifier.text);
+  if (target === undefined) {
+    return !localSourceImport(statement.moduleSpecifier.text);
+  }
+  const ownerExports = owners.get(target);
+  if (ownerExports === undefined) {
+    const modules =
+      ts.isImportDeclaration(statement) &&
+      statement.importClause !== undefined &&
+      statement.importClause.name === undefined &&
+      statement.importClause.namedBindings !== undefined &&
+      ts.isNamedImports(statement.importClause.namedBindings)
+        ? statement.importClause.namedBindings.elements
+            .filter((binding) => !binding.isTypeOnly)
+            .flatMap((binding) =>
+              graph.symbolModules(
+                target,
+                binding.propertyName?.text ?? binding.name.text,
+              ),
+            )
+        : [target];
+    return !modules.some(reachesFeature);
+  }
+  if (
+    !ts.isImportDeclaration(statement) ||
+    statement.importClause?.name !== undefined ||
+    statement.importClause?.namedBindings === undefined ||
+    !ts.isNamedImports(statement.importClause.namedBindings)
+  ) {
+    return false;
+  }
+  return statement.importClause.namedBindings.elements.every((binding) => {
+    if (binding.isTypeOnly) {
+      return true;
+    }
+    const name = binding.propertyName?.text ?? binding.name.text;
+    const references = runtimeReferences(ast, binding.name.text);
+    if (
+      !ownerExports.has(name) ||
+      references.length === 0 ||
+      !references.every(
+        (reference) =>
+          ts.isCallExpression(reference.parent) &&
+          reference.parent.expression === reference,
+      )
+    ) {
+      return false;
+    }
+    usedOwners.add(`${target}#${name}`);
+    return true;
+  });
+};
+
+type OperationalDynamicImportOptions = Pick<
+  OperationalImportOptions,
+  "ast" | "graph" | "owners" | "reachesFeature"
+>;
+const validOperationalDynamicImports = ({
+  ast,
+  graph,
+  owners,
+  reachesFeature,
+}: OperationalDynamicImportOptions) => {
+  let valid = true;
+  const visit = (node: ts.Node) => {
+    if (
+      ts.isCallExpression(node) &&
+      node.expression.kind === ts.SyntaxKind.ImportKeyword
+    ) {
+      const specifier = node.arguments.at(0);
+      if (specifier === undefined || !ts.isStringLiteral(specifier)) {
+        valid = false;
+      } else {
+        const target = graph.resolve(ast.fileName, specifier.text);
+        if (
+          target !== undefined &&
+          (owners.has(target) || reachesFeature(target))
+        ) {
+          valid = false;
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(ast);
+  return valid;
+};
+
+const isValidOperationalBoundary = ({
+  boundary,
+  graph,
+  registry,
+  tables,
+}: OperationalValidationOptions) => {
+  const aggregateTables = aggregateTableNames(
+    graph.sourceFile(AGGREGATE_LOCK_MODULE),
+  );
+  const owners = operationalOwners(boundary, graph);
+  const ast = graph.sourceFile(boundary.module);
+  if (
+    owners === undefined ||
+    ast === undefined ||
+    collectModuleUses(ast, registry, tables, aggregateTables).length !== 0
+  ) {
+    return false;
+  }
+  const reachesFeature = operationalFeatureReachability({
+    graph,
+    registry,
+    tables,
+  });
+  const usedOwners = new Set<string>();
+  const validStatements = ast.statements.every(
+    (statement) =>
+      validOperationalExport(statement) &&
+      validOperationalImport({
+        ast,
+        statement,
+        graph,
+        owners,
+        usedOwners,
+        reachesFeature,
+      }),
+  );
+  return (
+    validStatements &&
+    validOperationalDynamicImports({ ast, graph, owners, reachesFeature }) &&
+    [...owners].every(([module, exports]) =>
+      [...exports].every((name) => usedOwners.has(`${module}#${name}`)),
+    )
+  );
+};
+
 const isValidDispatchBoundary = (
   ast: ts.SourceFile,
   boundary: DispatchBoundary,
@@ -582,12 +915,72 @@ const isValidDispatchBoundary = (
       visit(ast);
       return valid;
     }
+    case "operational":
+      return false; // Operational boundaries need the completed ownership graph.
     default: {
       boundary satisfies never;
       return panic("Unknown dispatch ownership boundary");
     }
   }
 };
+type CollectTableOwnershipOptions = {
+  featureId: string;
+  ownership: NonNullable<FeatureRegistry[string]["ownership"]>;
+  graph: DeclarationSourceGraph;
+  violations: FeatureAccessDeclarationViolation[];
+  tableOwners: Map<string, Map<string, Requirement>>;
+};
+
+const collectTableOwnership = ({
+  featureId,
+  ownership,
+  graph,
+  violations,
+  tableOwners,
+}: CollectTableOwnershipOptions) => {
+  for (const file of [
+    ...ownership.tableSchemaFiles,
+    ...Object.keys(ownership.conditionalTableSchemas ?? {}),
+  ]) {
+    const ast = graph.sourceFile(file);
+    if (ast === undefined) {
+      continue;
+    }
+    const selectedSymbols = ownership.conditionalTableSchemas?.[file];
+    const selectedAst =
+      selectedSymbols === undefined
+        ? ast
+        : ts.factory.updateSourceFile(
+            ast,
+            ast.statements.filter((statement) =>
+              selectedSymbols.some((symbol) =>
+                declaresSymbol(statement, symbol),
+              ),
+            ),
+          );
+    for (const symbol of selectedSymbols ?? []) {
+      if (
+        !ast.statements.some((statement) => declaresSymbol(statement, symbol))
+      ) {
+        violations.push({
+          file,
+          message: `feature ${featureId} owns a missing table symbol ${symbol}`,
+        });
+      }
+    }
+    for (const name of exportedTableNames(selectedAst)) {
+      const owners = tableOwners.get(name) ?? new Map<string, Requirement>();
+      owners.set(
+        featureId,
+        ownership.conditionalTableSchemas?.[file] !== undefined
+          ? "conditional"
+          : "required",
+      );
+      tableOwners.set(name, owners);
+    }
+  }
+};
+
 const validateOwnership = (
   registry: FeatureRegistry,
   graph: DeclarationSourceGraph,
@@ -595,6 +988,8 @@ const validateOwnership = (
   const violations: FeatureAccessDeclarationViolation[] = [];
   const tableOwners = new Map<string, Map<string, Requirement>>();
   const dispatchModules = new Set<string>();
+  const operational: { featureId: string; boundary: OperationalBoundary }[] =
+    [];
   for (const [featureId, { ownership }] of Object.entries(registry)) {
     // A desktop feature is gated by the client from its served decision, so
     // it may own no API source at all.
@@ -647,47 +1042,13 @@ const validateOwnership = (
         });
       }
     }
-    for (const file of [
-      ...ownership.tableSchemaFiles,
-      ...Object.keys(ownership.conditionalTableSchemas ?? {}),
-    ]) {
-      const ast = graph.sourceFile(file);
-      if (ast === undefined) {
-        continue;
-      }
-      const selectedSymbols = ownership.conditionalTableSchemas?.[file];
-      const selectedAst =
-        selectedSymbols === undefined
-          ? ast
-          : ts.factory.updateSourceFile(
-              ast,
-              ast.statements.filter((statement) =>
-                selectedSymbols.some((symbol) =>
-                  declaresSymbol(statement, symbol),
-                ),
-              ),
-            );
-      for (const symbol of selectedSymbols ?? []) {
-        if (
-          !ast.statements.some((statement) => declaresSymbol(statement, symbol))
-        ) {
-          violations.push({
-            file,
-            message: `feature ${featureId} owns a missing table symbol ${symbol}`,
-          });
-        }
-      }
-      for (const name of exportedTableNames(selectedAst)) {
-        const owners = tableOwners.get(name) ?? new Map<string, Requirement>();
-        owners.set(
-          featureId,
-          ownership.conditionalTableSchemas?.[file] !== undefined
-            ? "conditional"
-            : "required",
-        );
-        tableOwners.set(name, owners);
-      }
-    }
+    collectTableOwnership({
+      featureId,
+      ownership,
+      graph,
+      violations,
+      tableOwners,
+    });
     for (const boundary of ownership.dispatchModules ?? []) {
       const ast = graph.sourceFile(boundary.module);
       if (ast === undefined) {
@@ -695,6 +1056,10 @@ const validateOwnership = (
           file: boundary.module,
           message: `feature ${featureId} owns a missing dispatch module`,
         });
+        continue;
+      }
+      if (boundary.type === "operational") {
+        operational.push({ featureId, boundary });
         continue;
       }
       if (!isValidDispatchBoundary(ast, boundary)) {
@@ -714,6 +1079,16 @@ const validateOwnership = (
     ),
     owners,
   }));
+  for (const { featureId, boundary } of operational) {
+    if (!isValidOperationalBoundary({ boundary, graph, registry, tables })) {
+      violations.push({
+        file: boundary.module,
+        message: `feature ${featureId} has an invalid operational dispatch boundary`,
+      });
+      continue;
+    }
+    dispatchModules.add(boundary.module);
+  }
   return { violations, tables, dispatchModules };
 };
 const parseDeclaration = (
@@ -785,16 +1160,479 @@ type ModuleUse = readonly [featureId: string, type: Requirement];
  * and owned table names. Pure per module, so one validation run computes
  * each module once instead of once per endpoint that reaches it.
  */
+// The generated capability map stores feature identities, not SQL table names.
+const isCapabilityFeatureBindingMetadata = (
+  node: ts.StringLiteralLike,
+  registry: FeatureRegistry,
+) => {
+  const binding = node.parent;
+  if (
+    !ts.isArrayLiteralExpression(binding) ||
+    binding.elements.length !== 2 ||
+    !binding.elements.includes(node)
+  ) {
+    return false;
+  }
+  const featureId = binding.elements.at(1);
+  if (
+    featureId === undefined ||
+    !ts.isStringLiteralLike(featureId) ||
+    !Object.hasOwn(registry, featureId.text)
+  ) {
+    return false;
+  }
+  const entries = binding.parent;
+  if (!ts.isArrayLiteralExpression(entries)) {
+    return false;
+  }
+  const map = entries.parent;
+  if (
+    !ts.isNewExpression(map) ||
+    !ts.isIdentifier(map.expression) ||
+    map.expression.text !== "Map" ||
+    map.arguments?.at(0) !== entries
+  ) {
+    return false;
+  }
+  const declaration = map.parent;
+  return (
+    ts.isVariableDeclaration(declaration) &&
+    ts.isIdentifier(declaration.name) &&
+    declaration.name.text === "CAPABILITY_FEATURE_BINDINGS" &&
+    declaration.initializer === map
+  );
+};
+
+const canonicalFeatureRegistryEntries = (ast: ts.SourceFile) => {
+  if (ast.fileName !== "apps/api/src/lib/feature-access/registry.ts") {
+    return undefined;
+  }
+  for (const statement of ast.statements) {
+    if (!ts.isVariableStatement(statement) || !exported(statement)) {
+      continue;
+    }
+    for (const declaration of statement.declarationList.declarations) {
+      if (
+        !ts.isVariableDeclaration(declaration) ||
+        !ts.isIdentifier(declaration.name) ||
+        declaration.name.text !== "FEATURE_REGISTRY" ||
+        declaration.initializer === undefined
+      ) {
+        continue;
+      }
+      const initializer = unwrapExpression(declaration.initializer);
+      if (
+        !ts.isCallExpression(initializer) ||
+        !ts.isIdentifier(initializer.expression) ||
+        initializer.expression.text !== "defineFeatureRegistry"
+      ) {
+        continue;
+      }
+      const entries = initializer.arguments.at(0);
+      if (entries !== undefined && ts.isObjectLiteralExpression(entries)) {
+        return entries;
+      }
+    }
+  }
+  return undefined;
+};
+
+const isFeatureRegistryIdMetadata = (
+  node: ts.StringLiteralLike,
+  registry: FeatureRegistry,
+) => {
+  const declaration = node.parent;
+  if (
+    ts.isPropertyAssignment(declaration) &&
+    declaration.name === node &&
+    Object.hasOwn(registry, node.text) &&
+    canonicalFeatureRegistryEntries(node.getSourceFile())?.properties.includes(
+      declaration,
+    )
+  ) {
+    return true;
+  }
+  if (
+    !ts.isVariableDeclaration(declaration) ||
+    declaration.initializer !== node ||
+    !ts.isIdentifier(declaration.name) ||
+    !Object.hasOwn(registry, node.text)
+  ) {
+    return false;
+  }
+  const declarationList = declaration.parent;
+  if (
+    !ts.isVariableDeclarationList(declarationList) ||
+    declarationList.getFirstToken()?.kind !== ts.SyntaxKind.ConstKeyword ||
+    !ts.isVariableStatement(declarationList.parent) ||
+    !ts.isSourceFile(declarationList.parent.parent)
+  ) {
+    return false;
+  }
+
+  const featureIdName = declaration.name.text;
+  return (
+    canonicalFeatureRegistryEntries(node.getSourceFile())?.properties.some(
+      (property) =>
+        ts.isPropertyAssignment(property) &&
+        ts.isComputedPropertyName(property.name) &&
+        ts.isIdentifier(property.name.expression) &&
+        property.name.expression.text === featureIdName,
+    ) ?? false
+  );
+};
+
+const isFeatureOwnershipDataMetadata = (node: ts.StringLiteralLike) => {
+  let child: ts.Node = node;
+  let parent = child.parent;
+  while (!ts.isSourceFile(parent)) {
+    const currentChild = child;
+    if (
+      ts.isPropertyAssignment(parent) &&
+      (parent.name === child || parent.initializer === child)
+    ) {
+      if (
+        ts.isIdentifier(parent.name) &&
+        parent.name.text === "ownership" &&
+        parent.initializer === child &&
+        ts.isObjectLiteralExpression(child)
+      ) {
+        const entry = parent.parent;
+        if (!ts.isObjectLiteralExpression(entry)) {
+          return false;
+        }
+        const registryEntry = entry.parent;
+        return (
+          ts.isPropertyAssignment(registryEntry) &&
+          registryEntry.initializer === entry &&
+          (canonicalFeatureRegistryEntries(
+            node.getSourceFile(),
+          )?.properties.includes(registryEntry) ??
+            false)
+        );
+      }
+      child = parent;
+      parent = parent.parent;
+      continue;
+    }
+    if (
+      ts.isObjectLiteralExpression(parent) &&
+      parent.properties.some((property) => property === currentChild)
+    ) {
+      child = parent;
+      parent = parent.parent;
+      continue;
+    }
+    if (
+      ts.isArrayLiteralExpression(parent) &&
+      parent.elements.some((element) => element === currentChild)
+    ) {
+      child = parent;
+      parent = parent.parent;
+      continue;
+    }
+    if (
+      ts.isComputedPropertyName(parent) &&
+      parent.expression === child &&
+      ts.isStringLiteralLike(child)
+    ) {
+      child = parent;
+      parent = parent.parent;
+      continue;
+    }
+    return false;
+  }
+  return false;
+};
+
+const isFeatureIdentityMetadata = (
+  node: ts.StringLiteralLike,
+  registry: FeatureRegistry,
+): boolean => {
+  if (
+    isCapabilityFeatureBindingMetadata(node, registry) ||
+    isFeatureRegistryIdMetadata(node, registry) ||
+    isFeatureOwnershipDataMetadata(node)
+  ) {
+    return true;
+  }
+  if (!Object.hasOwn(registry, node.text)) {
+    return false;
+  }
+  const parent = node.parent;
+  return (
+    ts.isPropertyAssignment(parent) &&
+    (ts.isIdentifier(parent.name) || ts.isStringLiteral(parent.name)) &&
+    parent.name.text === "featureId" &&
+    parent.initializer === node
+  );
+};
+
+const AGGREGATE_LOCK_MODULE = "apps/api/src/lib/db/aggregate-lock.ts";
+
+// The generic lock engine selects a table only when a caller selects an aggregate.
+// Derive that selection from its authoritative switch rather than hand-listing tables.
+type AggregateTableSelections = {
+  namesByAggregate: ReadonlyMap<string, ReadonlySet<string>>;
+  tableNodes: ReadonlySet<ts.StringLiteralLike>;
+};
+const aggregateTableNames = (ast: ts.SourceFile | undefined) => {
+  const namesByAggregate = new Map<string, Set<string>>();
+  const tableNodes = new Set<ts.StringLiteralLike>();
+  if (ast === undefined) {
+    return { namesByAggregate, tableNodes } satisfies AggregateTableSelections;
+  }
+  type LocalHelperBody =
+    | { status: "missing" }
+    | { status: "shadowed" }
+    | { status: "callable"; body: ts.Node };
+  const declarationBody = (
+    statement: ts.Statement,
+    name: string,
+  ): LocalHelperBody => {
+    if (ts.isFunctionDeclaration(statement) && statement.name?.text === name) {
+      return statement.body === undefined
+        ? { status: "shadowed" }
+        : { status: "callable", body: statement.body };
+    }
+    if (!ts.isVariableStatement(statement)) {
+      return { status: "missing" };
+    }
+    const declaration = statement.declarationList.declarations.find(
+      (item) => ts.isIdentifier(item.name) && item.name.text === name,
+    );
+    if (declaration === undefined) {
+      return { status: "missing" };
+    }
+    if (declaration.initializer === undefined) {
+      return { status: "shadowed" };
+    }
+    const initializer = unwrapExpression(declaration.initializer);
+    return ts.isArrowFunction(initializer) ||
+      ts.isFunctionExpression(initializer)
+      ? { status: "callable", body: initializer.body }
+      : { status: "shadowed" };
+  };
+  const scopeStatements = (scope: ts.Node) => {
+    if (ts.isBlock(scope) || ts.isSourceFile(scope)) {
+      return scope.statements;
+    }
+    if (ts.isCaseBlock(scope)) {
+      return scope.clauses.flatMap((clause) => clause.statements);
+    }
+    return undefined;
+  };
+  const helperBody = (call: ts.CallExpression, name: string) => {
+    let scope: ts.Node = call.parent;
+    while (true) {
+      if (
+        ts.isFunctionLike(scope) &&
+        scope.parameters.some(
+          (parameter) =>
+            ts.isIdentifier(parameter.name) && parameter.name.text === name,
+        )
+      ) {
+        return undefined;
+      }
+      const statements = scopeStatements(scope);
+      if (statements !== undefined) {
+        for (const statement of statements) {
+          const declaration = declarationBody(statement, name);
+          switch (declaration.status) {
+            case "missing":
+              break;
+            case "shadowed":
+              return undefined;
+            case "callable":
+              return declaration.body;
+            default:
+              declaration satisfies never;
+              return panic("Unknown local helper resolution");
+          }
+        }
+      }
+      if (ts.isSourceFile(scope)) {
+        return undefined;
+      }
+      scope = scope.parent;
+    }
+  };
+  const tableParameterIndexes = (body: ts.Node) => {
+    const helper = body.parent;
+    if (!ts.isFunctionLike(helper)) {
+      return [];
+    }
+    const tableNames = new Set<string>();
+    const visit = (node: ts.Node) => {
+      if (ts.isFunctionLike(node) && node !== helper) {
+        return;
+      }
+      if (
+        ts.isShorthandPropertyAssignment(node) &&
+        node.name.text === "table"
+      ) {
+        tableNames.add("table");
+      }
+      if (
+        ts.isPropertyAssignment(node) &&
+        ts.isIdentifier(node.name) &&
+        node.name.text === "table" &&
+        ts.isIdentifier(node.initializer)
+      ) {
+        tableNames.add(node.initializer.text);
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(body);
+    return helper.parameters.flatMap((parameter, index) =>
+      ts.isIdentifier(parameter.name) && tableNames.has(parameter.name.text)
+        ? [index]
+        : [],
+    );
+  };
+  const collectTables = (
+    root: ts.Node,
+    names: Set<string>,
+    selectedNodes: Set<ts.StringLiteralLike>,
+  ) => {
+    const visitedHelpers = new Set<ts.Node>();
+    const visit = (node: ts.Node, rootNode: boolean) => {
+      if (!rootNode && ts.isFunctionLike(node)) {
+        return;
+      }
+      if (
+        ts.isPropertyAssignment(node) &&
+        ts.isIdentifier(node.name) &&
+        node.name.text === "table" &&
+        ts.isStringLiteral(node.initializer)
+      ) {
+        names.add(node.initializer.text);
+        selectedNodes.add(node.initializer);
+      }
+      if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
+        const body = helperBody(node, node.expression.text);
+        if (body !== undefined) {
+          // A helper that builds the row from a `table` parameter selects
+          // the literal its caller passes in that position.
+          for (const index of tableParameterIndexes(body)) {
+            const argument = node.arguments.at(index);
+            if (argument !== undefined && ts.isStringLiteral(argument)) {
+              names.add(argument.text);
+              selectedNodes.add(argument);
+            }
+          }
+        }
+        if (body !== undefined && !visitedHelpers.has(body)) {
+          visitedHelpers.add(body);
+          visit(body, true);
+        }
+      }
+      ts.forEachChild(node, (child) => visit(child, false));
+    };
+    visit(root, true);
+  };
+  const visit = (node: ts.Node) => {
+    if (
+      ts.isCaseClause(node) &&
+      ts.isStringLiteral(node.expression) &&
+      ts.isSwitchStatement(node.parent.parent) &&
+      ts.isPropertyAccessExpression(node.parent.parent.expression) &&
+      node.parent.parent.expression.name.text === "aggregate"
+    ) {
+      const tables = new Set<string>();
+      const selectedNodes = new Set<ts.StringLiteralLike>();
+      for (const statement of node.statements) {
+        collectTables(statement, tables, selectedNodes);
+      }
+      if (tables.size > 0) {
+        namesByAggregate.set(node.expression.text, tables);
+        for (const tableNode of selectedNodes) {
+          tableNodes.add(tableNode);
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(ast);
+  return { namesByAggregate, tableNodes } satisfies AggregateTableSelections;
+};
+
+const isAggregateTableSelection = (
+  node: ts.StringLiteralLike,
+  aggregateTables: AggregateTableSelections,
+) => aggregateTables.tableNodes.has(node);
+
+type AggregateSelectorUsesOptions = {
+  node: ts.Node;
+  tables: TableOwnership;
+  aggregateTables: AggregateTableSelections;
+};
+const aggregateSelectorUses = ({
+  node,
+  tables,
+  aggregateTables,
+}: AggregateSelectorUsesOptions): ModuleUse[] => {
+  if (
+    !ts.isPropertyAssignment(node) ||
+    !ts.isIdentifier(node.name) ||
+    node.name.text !== "aggregate" ||
+    !ts.isStringLiteral(node.initializer)
+  ) {
+    return [];
+  }
+  const uses: ModuleUse[] = [];
+  for (const name of aggregateTables.namesByAggregate.get(
+    node.initializer.text,
+  ) ?? []) {
+    for (const { matcher, owners } of tables) {
+      if (matcher.test(name)) {
+        uses.push(...owners);
+      }
+    }
+  }
+  return uses;
+};
+
 const collectModuleUses = (
   ast: ts.SourceFile,
   registry: FeatureRegistry,
-  tables: ReturnType<typeof validateOwnership>["tables"],
+  tables: TableOwnership,
+  aggregateTables: AggregateTableSelections,
 ): ModuleUse[] => {
   const uses: ModuleUse[] = [];
   const visit = (node: ts.Node) => {
+    if (ts.isTypeNode(node)) {
+      return;
+    }
+    // Module addresses are inspected by the dependency graph, never as SQL table names.
+    if (ts.isStringLiteralLike(node)) {
+      const parent = node.parent;
+      if (
+        isFeatureIdentityMetadata(node, registry) ||
+        isAggregateTableSelection(node, aggregateTables)
+      ) {
+        return;
+      }
+
+      if (
+        (ts.isImportDeclaration(parent) || ts.isExportDeclaration(parent)) &&
+        parent.moduleSpecifier === node
+      ) {
+        return;
+      }
+      if (
+        ts.isCallExpression(parent) &&
+        parent.expression.kind === ts.SyntaxKind.ImportKeyword &&
+        parent.arguments.at(0) === node
+      ) {
+        return;
+      }
+    }
+
     if (dispatchRegistry(node)) {
       return;
     }
+    uses.push(...aggregateSelectorUses({ node, tables, aggregateTables }));
     if (
       (ts.isPropertyAccessExpression(node) ||
         (ts.isElementAccessExpression(node) &&
@@ -847,7 +1685,11 @@ type ModuleFacts = {
 const moduleFacts = (
   registry: FeatureRegistry,
   tables: ReturnType<typeof validateOwnership>["tables"],
+  graph: DeclarationSourceGraph,
 ): ModuleFacts => {
+  const aggregateTables = aggregateTableNames(
+    graph.sourceFile(AGGREGATE_LOCK_MODULE),
+  );
   const boundaries = new Map<string, ReadonlyMap<string, Requirement>>();
   const uses = new Map<string, readonly ModuleUse[]>();
   return {
@@ -865,7 +1707,12 @@ const moduleFacts = (
       if (cached !== undefined) {
         return cached;
       }
-      const moduleUses = collectModuleUses(ast, registry, tables);
+      const moduleUses = collectModuleUses(
+        ast,
+        registry,
+        tables,
+        aggregateTables,
+      );
       uses.set(module, moduleUses);
       return moduleUses;
     },
@@ -1124,7 +1971,7 @@ export const validateFeatureAccessDeclarations = ({
   }
   const ownership = validateOwnership(registry, graph);
   const violations = ownership.violations;
-  const modules = moduleFacts(registry, ownership.tables);
+  const modules = moduleFacts(registry, ownership.tables, graph);
   for (const endpoint of [
     ...endpoints,
     ...tasks.values(),

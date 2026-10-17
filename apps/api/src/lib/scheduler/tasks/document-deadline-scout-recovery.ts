@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 
-import { recoverDocumentDeadlineScoutDispatches } from "@/api/lib/document-processing-queue";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
+import { recoverDocumentDeadlineScoutDispatches } from "@/api/lib/scouts/document-deadline-recovery";
 
 export const RECOVER_DOCUMENT_DEADLINE_SCOUTS_TASK =
   "documentProcessing.recoverDeadlineScouts" as const;

@@ -3,32 +3,26 @@ import { DESKTOP_TIME_ENTRY_BATCH_STATUSES } from "@stll/api-contract/desktop-ti
 import {
   caseLawDecisionCitationStatsState,
   desktopEditSessions,
-  folioCollabRooms,
   desktopTimeEntryBatches,
-  legalReaderAnswerMessages,
-  EU_COMPLETION_STATUSES,
-  euCompletionApprovals,
-  euCompletionControls,
-  euCompletionReceipts,
-  pdfSigningSessions,
   workObligations,
-  sanctionsEditionFanouts,
-  sanctionsMonitoringBackfills,
 } from "@/api/db/schema";
 import {
-  FLOW_RUN_TRANSITIONS_V1,
+  EU_COMPLETION_APPROVAL_PROOF,
+  EU_COMPLETION_CONTROL_LIFECYCLE,
+  EU_COMPLETION_RECEIPT_LIFECYCLE,
+} from "@/api/lib/case-law/eu-completion-transitions";
+import {
+  FLOW_RUN_SCOPED_TRANSITIONS,
   FLOW_RUN_STEP_TRANSITIONS_V1,
 } from "@/api/lib/db/flow-run-transition-spec";
-import { FOLIO_COLLAB_TRANSITION_IDENTITIES } from "@/api/lib/db/folio-collab-transition-identities";
-import { READER_ANSWER_TRANSITION_IDENTITIES } from "@/api/lib/db/reader-answer-transition-identities";
+import { FOLIO_COLLAB_SEED_TRANSITIONS } from "@/api/lib/db/folio-collab-transitions";
+import { READER_ANSWER_MESSAGE_TRANSITIONS } from "@/api/lib/db/reader-answer-transitions";
 import type {
   WRITABLE_STATUS_COLUMNS,
   StatusTable,
 } from "@/api/lib/db/status-tables.gen";
 import {
-  defineFixedLifecycle,
   defineKeyedTransitions,
-  defineLifecycle,
   defineScopedTransitions,
   defineTransitions,
 } from "@/api/lib/db/transitions";
@@ -38,13 +32,18 @@ import type {
   LifecycleSpec,
   TransitionSpec,
 } from "@/api/lib/db/transitions";
+import { PDF_SIGNING_SESSION_TRANSITIONS } from "@/api/lib/files/pdf-signing/transition-spec";
+import { UPLOAD_TRIGGER_TRANSITIONS } from "@/api/lib/flows/upload-trigger-transitions";
 import {
   CONTACT_MONITORING_TRANSITIONS,
   FIRM_MONITORING_TRANSITIONS,
   MATCH_MEMBERSHIP_TRANSITIONS,
   MATCH_REVIEW_TRANSITIONS,
   SCREENING_COVERAGE_TRANSITIONS,
+  SANCTIONS_EDITION_FANOUT_TRANSITIONS,
+  SANCTIONS_MONITORING_BACKFILL_TRANSITIONS,
 } from "@/api/lib/lists/sanctions/monitoring-transition-specs";
+import { SCOUT_EMISSION_TRANSITIONS } from "@/api/lib/signals/scout-emission-transitions";
 
 // Each table chooses an ownership category explicitly; new status tables must
 // choose a category or declare a managed spec before the total map compiles.
@@ -80,30 +79,12 @@ const UNMANAGED_REASONS = {
     "Timer state and its entry projection are coordinated by the timer transaction owner pending migration.",
 } as const;
 
-export const FOLIO_COLLAB_SEED_TRANSITIONS = defineScopedTransitions({
-  ...FOLIO_COLLAB_TRANSITION_IDENTITIES.FOLIO_COLLAB_SEED_TRANSITIONS,
-  table: folioCollabRooms,
-  edges: {
-    empty: ["empty", "claimed"],
-    claimed: ["empty", "claimed", "seeded"],
-    seeded: ["empty", "seeded"],
-  },
-  initial: ["empty"],
-});
-
 // Refresh atomically publishes a complete recount; later recounts remain exact.
 const DECISION_CITATION_STATS_TRANSITIONS = defineKeyedTransitions({
   table: caseLawDecisionCitationStatsState,
   key: "decisionId",
   edges: { pending: ["exact"], exact: [] },
   options: { terminal: ["exact"] },
-});
-
-const READER_ANSWER_MESSAGE_TRANSITIONS = defineScopedTransitions({
-  ...READER_ANSWER_TRANSITION_IDENTITIES.READER_ANSWER_MESSAGE_TRANSITIONS,
-  table: legalReaderAnswerMessages,
-  edges: { streaming: ["complete", "failed"], complete: [], failed: [] },
-  initial: ["streaming", "complete"],
 });
 
 const DESKTOP_EDIT_SESSION_TRANSITIONS = defineTransitions(
@@ -115,12 +96,6 @@ const DESKTOP_EDIT_SESSION_TRANSITIONS = defineTransitions(
     expired: [],
   },
   { terminal: ["finalized", "cancelled", "expired"] },
-);
-
-const PDF_SIGNING_SESSION_TRANSITIONS = defineTransitions(
-  pdfSigningSessions,
-  { open: ["finalized", "cancelled"], finalized: [], cancelled: [] },
-  { terminal: ["finalized", "cancelled"] },
 );
 
 const DESKTOP_TIME_ENTRY_BATCH_RECEIPT_LIFECYCLE = defineScopedTransitions({
@@ -159,93 +134,6 @@ const WORK_OBLIGATION_TRANSITIONS = defineKeyedTransitions({
   },
   // Closed obligations can reopen according to their current ownership state.
   options: { terminal: [] },
-});
-
-export const SANCTIONS_EDITION_FANOUT_TRANSITIONS = defineLifecycle({
-  table: sanctionsEditionFanouts,
-  key: "sourceId",
-  graphs: {
-    status: {
-      edges: { pending: ["complete"], complete: ["pending"] },
-      terminal: [],
-    },
-    freshnessStatus: {
-      edges: {
-        unknown: ["fresh", "unavailable"],
-        fresh: ["unavailable"],
-        unavailable: ["fresh"],
-      },
-      terminal: [],
-    },
-  },
-});
-
-export const SANCTIONS_MONITORING_BACKFILL_TRANSITIONS = defineKeyedTransitions(
-  {
-    table: sanctionsMonitoringBackfills,
-    key: "sourceId",
-    scope: ["organizationId"],
-    edges: { pending: ["complete"], complete: ["pending"] },
-    options: { terminal: [], fence: "generation" },
-  },
-);
-// Active receipts settle to any outcome; dry-run settles only fetched work.
-// Failed and mirror-repair receipts are readmitted; the rest are final.
-const EU_COMPLETION_SETTLEMENTS = EU_COMPLETION_STATUSES.filter(
-  (status): status is Exclude<typeof status, "dry-run"> => status !== "dry-run",
-);
-const EU_COMPLETION_RECEIPT_LIFECYCLE = defineLifecycle({
-  table: euCompletionReceipts,
-  key: "id",
-  graphs: {
-    status: {
-      edges: {
-        pending: EU_COMPLETION_SETTLEMENTS,
-        fetched: EU_COMPLETION_STATUSES,
-        "failed-backoff": EU_COMPLETION_SETTLEMENTS,
-        "publisher-refused": EU_COMPLETION_SETTLEMENTS,
-        "superseded-by-crawl": EU_COMPLETION_SETTLEMENTS,
-        failed: ["pending", "fetched", "withdrawn"],
-        "review-required": ["pending", "fetched"],
-        applied: [],
-        unchanged: [],
-        "dry-run": [],
-        "too-large": [],
-        "publisher-gone": [],
-        withdrawn: [],
-      },
-      terminal: [
-        "applied",
-        "unchanged",
-        "dry-run",
-        "too-large",
-        "publisher-gone",
-        "withdrawn",
-      ],
-    },
-    // The attempt lease is taken and released around every publisher read.
-    attemptState: {
-      edges: {
-        idle: ["picked-up", "repair"],
-        "picked-up": ["idle", "repair"],
-        repair: ["idle", "picked-up"],
-      },
-      terminal: [],
-    },
-  },
-});
-
-const EU_COMPLETION_CONTROL_LIFECYCLE = defineLifecycle({
-  table: euCompletionControls,
-  key: "key",
-  graphs: { state: { edges: { off: ["on"], on: ["off"] }, terminal: [] } },
-});
-
-// The approval copies its dry-run receipt's outcome as foreign-key proof.
-const EU_COMPLETION_APPROVAL_PROOF = defineFixedLifecycle({
-  table: euCompletionApprovals,
-  column: "proofStatus",
-  value: "dry-run",
 });
 
 type StatusColumns<TTable extends StatusTable> =
@@ -328,8 +216,11 @@ export const TRANSITIONS = {
   expenses: { unmanaged: UNMANAGED_REASONS.userWorkflow },
   extractionRuns: { unmanaged: UNMANAGED_REASONS.workerRun },
   fileComparisonUploads: { unmanaged: UNMANAGED_REASONS.fileLifecycle },
-  flowRuns: FLOW_RUN_TRANSITIONS_V1,
+  flowRuns: {
+    scoped: FLOW_RUN_SCOPED_TRANSITIONS,
+  },
   flowRunSteps: FLOW_RUN_STEP_TRANSITIONS_V1,
+  flowUploadTriggerIntents: UPLOAD_TRIGGER_TRANSITIONS,
   folioCollabRooms: FOLIO_COLLAB_SEED_TRANSITIONS,
   invitation: { unmanaged: UNMANAGED_REASONS.delegatedAuth },
   invoices: { unmanaged: UNMANAGED_REASONS.userWorkflow },
@@ -354,6 +245,7 @@ export const TRANSITIONS = {
   organizationFileObjects: { unmanaged: UNMANAGED_REASONS.fileLifecycle },
   organizationSettings: FIRM_MONITORING_TRANSITIONS,
   pdfSigningSessions: PDF_SIGNING_SESSION_TRANSITIONS,
+  pendingScoutEmissions: SCOUT_EMISSION_TRANSITIONS,
   pendingUploads: { unmanaged: UNMANAGED_REASONS.fileLifecycle },
   playbookDefinitions: { unmanaged: UNMANAGED_REASONS.userDecision },
   properties: { unmanaged: UNMANAGED_REASONS.userWorkflow },

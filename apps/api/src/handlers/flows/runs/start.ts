@@ -26,6 +26,7 @@ import { getTanStackTextModelInfoForRole } from "@/api/lib/tanstack-ai-models";
 import { readManagedModelTier } from "@/api/lib/usage/organization-access-state";
 
 const config = {
+  featureAccess: { featureId: "flows", type: "required" },
   contract: "patch",
   description:
     "Start a manual flow run in a matter using a flow definition and optional input documents. Returns the run ID and initial status.",

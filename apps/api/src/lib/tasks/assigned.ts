@@ -7,6 +7,7 @@ import { TASK_CLOSED_STATUSES } from "@stll/api-contract/entity-options";
 import { entities, taskAssignees } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { entityQueryScopeCondition } from "@/api/lib/entities/query-scope";
+import { flowReviewTaskVisibilityCondition } from "@/api/lib/flows/visibility";
 
 /** Whose tasks a list returns: the caller's own assignments, or every task. */
 export const TASK_ASSIGNEE_FILTER = {
@@ -65,6 +66,7 @@ export const dueAssignedTaskCondition = ({
   asOf,
 }: DueAssignedTaskConditionOptions): SQL =>
   and(
+    flowReviewTaskVisibilityCondition({ organizationId, userId }),
     entityQueryScopeCondition(
       { type: "organization", organizationId },
       entities.workspaceId,

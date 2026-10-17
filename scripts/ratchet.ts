@@ -65,6 +65,8 @@ import {
   countRootConnectionImports,
   countRootConnectionShapes,
   countRootConnectionTypeImports,
+  findUnscopedOrgWrites,
+  orgScopeTableExportNames,
 } from "./root-connection-shapes";
 import { schemaIntrospectionPaths } from "./schema-introspection";
 import {
@@ -1117,6 +1119,21 @@ const OWNER_HANDLE_ALLOWLIST_REMEDY =
 const ROOT_CONNECTION_DOOR_FILES: ReadonlySet<string> = new Set(
   ROOT_CONNECTION_DOORS.flatMap((door) => door.owner),
 );
+
+const ORG_SCOPE_REGISTRY_FILE = "apps/api/src/db/org-scope-registry.ts";
+const orgWriteBudgetPath = (file: string): string =>
+  file === "apps/api/src/lib/member-assignment-offboarding.ts" ||
+  file === "apps/api/src/lib/member-assignment-offboarding-owner.ts"
+    ? "apps/api/src/lib/member-offboarding/member-assignment-offboarding-owner.ts"
+    : file;
+const isOrgWriteOwner = (file: string): boolean =>
+  ROOT_CONNECTION_DOOR_FILES.has(file) ||
+  /^apps\/api\/src\/lib\/(?:flows|signals|scouts|feature-access|member-offboarding|scheduler\/tasks)\//u.test(
+    file,
+  ) ||
+  /^apps\/api\/src\/lib\/(?:auth|document-deadline-scout-worker|member-assignment-offboarding(?:-owner|-census)?)\.ts$/u.test(
+    file,
+  );
 
 // `audit: skip` directives: occurrences in comments only, found as the
 // occurrences that stripping comments removes.
@@ -3246,6 +3263,45 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
       countRootConnectionShapes(content, file)) satisfies FileCounter,
     perFile: true,
     allowlist: OWNER_HANDLE_ALLOWLIST_REMEDY,
+  },
+  {
+    scope: "repo",
+    id: "unscoped-org-owner-writes",
+    description:
+      "ORG table writes in owner modules outside the withOrgScope callback transaction; each file/table/operation/normalized-statement identity is independently shrink-only",
+    perFile: true,
+    growth: "shrink-only",
+    count: (context) => {
+      const ownerFiles = scanRepoFiles(context, API_OWNER_HANDLE_GLOBS).filter(
+        isOrgWriteOwner,
+      );
+      if (ownerFiles.length === 0) {
+        return { count: 0, files: {} };
+      }
+      // New classifications apply identically to main and the current tree.
+      // Reading the classification from the base would make its first metric
+      // appear to have no existing writers.
+      const orgTables = new Set(
+        orgScopeTableExportNames(
+          readFileSync(path.join(REPO_ROOT, ORG_SCOPE_REGISTRY_FILE), "utf-8"),
+          ORG_SCOPE_REGISTRY_FILE,
+        ),
+      );
+      const counts = new Map<string, number>();
+      let count = 0;
+      for (const file of ownerFiles) {
+        for (const hit of findUnscopedOrgWrites({
+          content: readSource(context, file),
+          file,
+          orgTables,
+        })) {
+          const key = `${orgWriteBudgetPath(file)}#${hit.table}#${hit.operation}#${hit.fingerprint}`;
+          counts.set(key, (counts.get(key) ?? 0) + 1);
+          count += 1;
+        }
+      }
+      return { count, files: Object.fromEntries(counts) };
+    },
   },
   {
     scope: "file",

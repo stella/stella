@@ -1,14 +1,53 @@
-import { and, eq, gte, sql } from "drizzle-orm";
+import { panic, Result } from "better-result";
+import { deepEquals } from "bun";
+import { and, eq, getColumns, gte, sql } from "drizzle-orm";
 
-import { Temporal } from "@stll/time";
+import { DAY_IN_MS, Temporal } from "@stll/time";
 
-import type { rootDb } from "@/api/db/root";
-import { flowRuns, flowRunSteps } from "@/api/db/schema";
+import {
+  assertCallerOrg,
+  combineOrgScopes,
+  proveOrgScope,
+  withOrgScope,
+} from "@/api/db/org-scope";
+import type { rootDb, Transaction } from "@/api/db/root";
+import {
+  flowDefinitions,
+  flowRuns,
+  flowRunSteps,
+  flowUploadTriggerIntents,
+  schedulerJobs,
+  workspaces,
+} from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import { withAutomatedFlowRunCapLock } from "@/api/lib/db/aggregate-lock";
-import { isAutomatedRunCapReached } from "@/api/lib/flows/flow-trigger-logic";
+import {
+  withAggregateTransaction,
+  withAggregateRowQuery,
+  withAggregateLock,
+} from "@/api/lib/db/aggregate-lock";
+import { mutateRecoveryClaim } from "@/api/lib/db/recovery-bookkeeping/claims";
+import { transitionRecoveryGrantState } from "@/api/lib/db/recovery-bookkeeping/grant-state";
+import {
+  timestampCasToken,
+  timestampMatchesCasToken,
+} from "@/api/lib/db/timestamp-cas";
+import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
+import { isBackgroundFeatureEnabled } from "@/api/lib/feature-access/background";
+import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
+import {
+  fileUploadTriggerMatches,
+  isAutomatedRunCapReached,
+} from "@/api/lib/flows/flow-trigger-logic";
+import type {
+  FlowTrigger,
+  FlowTriggerSource,
+  FlowUploadTriggerSkipReason,
+} from "@/api/lib/flows/flow-types";
+import { buildFlowRunRows } from "@/api/lib/flows/start-flow-run";
 import type { FlowRunRows } from "@/api/lib/flows/start-flow-run";
+import { UPLOAD_TRIGGER_TRANSITIONS } from "@/api/lib/flows/upload-trigger-transitions";
 import { snapshotOperationInput } from "@/api/lib/proofs/checked-transaction";
+import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
 
 /**
  * Atomic daily spend rail for automated (schedule / file-upload) flow runs,
@@ -28,6 +67,28 @@ import { snapshotOperationInput } from "@/api/lib/proofs/checked-transaction";
  * `workspace_id` still comes from a server-validated trigger source.
  */
 
+const replayIdentityFor = (triggerSource: FlowTriggerSource) => {
+  switch (triggerSource.type) {
+    case "file-upload":
+      return and(
+        sql`${flowRuns.triggerSource}->>'type' = 'file-upload'`,
+        sql`${flowRuns.triggerSource}->>'entityId' = ${triggerSource.entityId}`,
+      );
+    case "schedule":
+      return triggerSource.dueSlot === undefined
+        ? undefined
+        : and(
+            sql`${flowRuns.triggerSource}->>'type' = 'schedule'`,
+            sql`${flowRuns.triggerSource}->>'dueSlot' = ${triggerSource.dueSlot}`,
+          );
+    case "manual":
+      return undefined;
+    default:
+      triggerSource satisfies never;
+      return panic("Unknown flow trigger source");
+  }
+};
+
 const startOfUtcDay = (now: Date): Date =>
   new Date(
     Temporal.Instant.fromEpochMilliseconds(now.getTime())
@@ -36,11 +97,23 @@ const startOfUtcDay = (now: Date): Date =>
   );
 
 export type InsertAutomatedFlowRunWithinCapInput = {
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
   definitionId: SafeId<"flowDefinition">;
   /** Pre-built run + step rows (see `buildFlowRunRows`). */
   rows: FlowRunRows;
+  expectedScheduleTrigger?:
+    | Extract<FlowTrigger, { type: "schedule" }>
+    | undefined;
   now?: Date;
   reservePeriod?: () => Promise<void>;
+  uploadTriggerClaimToken?: TimestampCasToken | undefined;
+  schedulerClaim?:
+    | {
+        jobId: string;
+        lockedBy: string;
+      }
+    | undefined;
   database: Pick<typeof rootDb, "transaction">;
 };
 
@@ -51,42 +124,454 @@ export type InsertAutomatedFlowRunWithinCapInput = {
  * the rows with, so `started` need not echo it back.
  */
 export type InsertAutomatedFlowRunWithinCapResult =
+  | { outcome: "stale" }
+  | { outcome: "paused" }
   | { outcome: "started" }
+  | { outcome: "already-started" }
+  | { outcome: "source-removed" }
+  | { outcome: "skipped"; reason: FlowUploadTriggerSkipReason }
   | { outcome: "capped"; dailyRunCount: number };
+
+type RevalidateUploadIntentOptions = {
+  tx: Transaction;
+  definitionId: SafeId<"flowDefinition">;
+  definition: typeof flowDefinitions.$inferSelect | undefined;
+  entityId: SafeId<"entity">;
+  rows: FlowRunRows;
+};
+
+type RevalidatedUploadIntent =
+  | { type: "current"; rows: FlowRunRows }
+  | { type: "source-removed" }
+  | { type: "skipped"; reason: FlowUploadTriggerSkipReason };
+
+/** The caller holds the definition row until either the skip or run commits. */
+const revalidateUploadIntent = async ({
+  tx,
+  definitionId,
+  definition,
+  entityId,
+  rows,
+}: RevalidateUploadIntentOptions): Promise<RevalidatedUploadIntent> => {
+  if (definition === undefined) {
+    return { type: "source-removed" };
+  }
+  const receipt = (
+    await tx
+      .select({
+        ...getColumns(flowUploadTriggerIntents),
+        retryAtToken: timestampCasToken(flowUploadTriggerIntents.retryAt),
+      })
+      .from(flowUploadTriggerIntents)
+      .where(
+        and(
+          eq(flowUploadTriggerIntents.definitionId, definitionId),
+          eq(flowUploadTriggerIntents.entityId, entityId),
+          eq(
+            flowUploadTriggerIntents.organizationId,
+            definition.organizationId,
+          ),
+          eq(flowUploadTriggerIntents.workspaceId, rows.run.workspaceId),
+        ),
+      )
+      .limit(1)
+  ).at(0);
+  if (receipt === undefined) {
+    return { type: "source-removed" };
+  }
+  if (receipt.status === "skipped") {
+    return {
+      type: "skipped",
+      reason:
+        receipt.skipReason ?? panic("Skipped upload receipt requires a reason"),
+    };
+  }
+  const reason = (() => {
+    if (definition.createdByUserId === null) {
+      return "actor_missing" as const;
+    }
+    if (!definition.enabled) {
+      return "definition_disabled" as const;
+    }
+    if (
+      definition.trigger.type !== "file-upload" ||
+      !fileUploadTriggerMatches({
+        trigger: definition.trigger,
+        workspaceId: receipt.workspaceId,
+        extension: receipt.fileExtension,
+      })
+    ) {
+      return "trigger_no_longer_matches" as const;
+    }
+    return undefined;
+  })();
+  if (reason !== undefined) {
+    await transitionRecoveryGrantState({
+      type: "upload",
+      tx,
+      table: flowUploadTriggerIntents,
+      spec: UPLOAD_TRIGGER_TRANSITIONS,
+      where: sql`${and(eq(flowUploadTriggerIntents.organizationId, definition.organizationId), eq(flowUploadTriggerIntents.workspaceId, rows.run.workspaceId), eq(flowUploadTriggerIntents.definitionId, definitionId), eq(flowUploadTriggerIntents.entityId, entityId), eq(flowUploadTriggerIntents.status, "pending"), timestampMatchesCasToken(flowUploadTriggerIntents.retryAt, receipt.retryAtToken))}`,
+      options: {
+        from: ["pending"],
+        to: "skipped",
+        set: { skipReason: reason },
+      },
+      log: { event: "flow.upload_trigger_skipped", reason },
+    });
+    return { type: "skipped", reason };
+  }
+  return {
+    type: "current",
+    rows: buildFlowRunRows({
+      runId: rows.run.id,
+      workspaceId: rows.run.workspaceId,
+      definitionId,
+      definition: { name: definition.name, steps: definition.steps },
+      triggerSource: rows.run.triggerSource,
+      inputEntityIds: rows.run.inputEntityIds,
+    }),
+  };
+};
+
+type DeferCappedUploadIntentOptions = {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+  workspaceId: SafeId<"workspace">;
+  definitionId: SafeId<"flowDefinition">;
+  entityId: SafeId<"entity">;
+  claimToken: TimestampCasToken;
+  now: Date;
+};
+
+const deferCappedUploadIntent = async ({
+  tx,
+  organizationId,
+  workspaceId,
+  definitionId,
+  entityId,
+  claimToken,
+  now,
+}: DeferCappedUploadIntentOptions): Promise<void> => {
+  await mutateRecoveryClaim({
+    type: "upload-defer",
+    tx,
+    table: flowUploadTriggerIntents,
+    retryAt: new Date(startOfUtcDay(now).getTime() + DAY_IN_MS),
+    where: sql`${and(
+      eq(flowUploadTriggerIntents.organizationId, organizationId),
+      eq(flowUploadTriggerIntents.workspaceId, workspaceId),
+      eq(flowUploadTriggerIntents.definitionId, definitionId),
+      eq(flowUploadTriggerIntents.entityId, entityId),
+      eq(flowUploadTriggerIntents.status, "pending"),
+      timestampMatchesCasToken(flowUploadTriggerIntents.retryAt, claimToken),
+    )}`,
+  });
+};
+
+type LockUploadRunClaimOptions = Pick<
+  InsertAutomatedFlowRunWithinCapInput,
+  "definitionId" | "organizationId" | "rows" | "uploadTriggerClaimToken"
+> & { tx: Transaction };
+
+const lockUploadRunClaim = async ({
+  tx,
+  definitionId,
+  organizationId,
+  rows,
+  uploadTriggerClaimToken,
+}: LockUploadRunClaimOptions): Promise<boolean> => {
+  if (rows.run.triggerSource.type === "file-upload") {
+    if (uploadTriggerClaimToken === undefined) {
+      return false;
+    }
+    const owned = await withAggregateRowQuery({
+      aggregate: "uploadReceipt",
+      id: {
+        definitionId,
+        organizationId,
+        entityId: brandPersistedEntityId(rows.run.triggerSource.entityId),
+      },
+      tx,
+      mode: "update",
+      where:
+        and(
+          eq(flowUploadTriggerIntents.workspaceId, rows.run.workspaceId),
+          eq(flowUploadTriggerIntents.status, "pending"),
+          timestampMatchesCasToken(
+            flowUploadTriggerIntents.retryAt,
+            uploadTriggerClaimToken,
+          ),
+        ) ?? panic("Upload receipt ownership predicate is required"),
+      select: (queryTx) =>
+        queryTx
+          .select({
+            definitionId: flowUploadTriggerIntents.definitionId,
+            organizationId: flowUploadTriggerIntents.organizationId,
+            entityId: flowUploadTriggerIntents.entityId,
+          })
+          .from(flowUploadTriggerIntents)
+          .limit(1),
+    });
+    if (owned.rows.length === 0) {
+      return false;
+    }
+  }
+  return true;
+};
+
+type LockSchedulerRunClaimOptions = {
+  tx: Transaction;
+  schedulerClaim: InsertAutomatedFlowRunWithinCapInput["schedulerClaim"];
+};
+const lockSchedulerRunClaim = async ({
+  tx,
+  schedulerClaim,
+}: LockSchedulerRunClaimOptions): Promise<boolean> => {
+  if (schedulerClaim !== undefined) {
+    const owned = await withAggregateRowQuery({
+      aggregate: "schedulerClaim",
+      id: { id: schedulerClaim.jobId },
+      tx,
+      mode: "update",
+      where: eq(schedulerJobs.lockedBy, schedulerClaim.lockedBy),
+      select: (queryTx) =>
+        queryTx.select({ id: schedulerJobs.id }).from(schedulerJobs).limit(1),
+    });
+    if (owned.rows.length === 0) {
+      return false;
+    }
+  }
+  return true;
+};
+
+type HasAutomatedRunReplayOptions = Pick<
+  InsertAutomatedFlowRunWithinCapInput,
+  "definitionId" | "rows"
+> & { tx: Transaction };
+const hasAutomatedRunReplay = async ({
+  tx,
+  definitionId,
+  rows,
+}: HasAutomatedRunReplayOptions): Promise<boolean> => {
+  const replayIdentity = replayIdentityFor(rows.run.triggerSource);
+  if (replayIdentity !== undefined) {
+    const existing = await tx
+      .select({ id: flowRuns.id })
+      .from(flowRuns)
+      .where(
+        and(
+          eq(flowRuns.definitionId, definitionId),
+          eq(flowRuns.workspaceId, rows.run.workspaceId),
+          replayIdentity,
+        ),
+      )
+      .limit(1);
+    if (existing.length !== 0) {
+      return true;
+    }
+  }
+  return false;
+};
 
 export const insertAutomatedFlowRunWithinCap = async (
   input: InsertAutomatedFlowRunWithinCapInput,
 ): Promise<InsertAutomatedFlowRunWithinCapResult> => {
   const {
+    organizationId,
+    userId,
     definitionId,
     rows,
+    expectedScheduleTrigger,
+    uploadTriggerClaimToken,
+    schedulerClaim,
     now = new Date(),
     reservePeriod,
     database,
   } = snapshotOperationInput(input);
-  const cutoff = startOfUtcDay(now);
-  return await withAutomatedFlowRunCapLock(
-    { definitionId, database },
-    async (tx) => {
-      const dailyRunCount = await tx.$count(
-        flowRuns,
-        and(
-          eq(flowRuns.definitionId, definitionId),
-          // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- cutoff read from the caller's clock, never round-tripped through the database
-          gte(flowRuns.createdAt, cutoff),
-          sql`${flowRuns.triggerSource}->>'type' in ('schedule', 'file-upload')`,
-        ),
-      );
-      if (isAutomatedRunCapReached(dailyRunCount)) {
-        return { outcome: "capped", dailyRunCount };
-      }
+  return await withAggregateTransaction(database, async (tx) => {
+    // Admission precedes resource locks; the existing cap -> definition order stays intact.
+    await lockFeatureRecoveryAdmission({
+      tx,
+      organizationId,
+      featureId: "flows",
+    });
+    if (
+      !(await isBackgroundFeatureEnabled({
+        tx,
+        organizationId,
+        userId,
+        featureId: "flows",
+      }))
+    ) {
+      return { outcome: "paused" };
+    }
+    if (!(await lockSchedulerRunClaim({ tx, schedulerClaim }))) {
+      return { outcome: "stale" };
+    }
+    // Serialize concurrent automated starts for this definition. The xact lock
+    // releases on commit/rollback, after the prior holder's run row is visible,
+    // so the count below can never miss a committed sibling.
+    await withAggregateLock({
+      aggregate: "definitionCap",
+      id: { definitionId },
+      tx,
+    });
 
-      await tx.insert(flowRuns).values(rows.run);
-      await tx.insert(flowRunSteps).values(rows.steps);
-      // A refusal rolls the inserted run back. A later commit failure may rarely
-      // over-count the operational throttle; reservations are never refunded.
-      await reservePeriod?.();
-      return { outcome: "started" };
-    },
-  );
+    // Keep the cap's advisory lock before the definition lock already
+    // required by run insertion. NO KEY UPDATE also permits receipt FK checks.
+    let currentDefinition: typeof flowDefinitions.$inferSelect | undefined;
+    if (
+      rows.run.triggerSource.type === "file-upload" ||
+      rows.run.triggerSource.type === "schedule"
+    ) {
+      const definition = await withAggregateRowQuery({
+        aggregate: "definition",
+        id: { id: definitionId, organizationId },
+        tx,
+        mode: "no key update",
+        select: (queryTx) => queryTx.select().from(flowDefinitions).limit(1),
+      });
+      currentDefinition = definition.rows.at(0);
+    }
+
+    const definitionScope = await proveOrgScope(tx, {
+      table: "flowDefinitions",
+      where: eq(flowDefinitions.id, definitionId),
+    });
+    if (
+      Result.isError(definitionScope) ||
+      Result.isError(assertCallerOrg(definitionScope.value, organizationId))
+    ) {
+      return { outcome: "stale" };
+    }
+    const matterScope = await proveOrgScope(tx, {
+      table: "workspaces",
+      where: eq(workspaces.id, rows.run.workspaceId),
+    });
+    if (Result.isError(matterScope)) {
+      return { outcome: "stale" };
+    }
+    const scope = combineOrgScopes(definitionScope.value, matterScope.value);
+    if (Result.isError(scope)) {
+      return { outcome: "stale" };
+    }
+
+    if (
+      !(await lockUploadRunClaim({
+        tx,
+        definitionId,
+        organizationId,
+        rows,
+        uploadTriggerClaimToken,
+      }))
+    ) {
+      return { outcome: "stale" };
+    }
+
+    // Recovery may replay after the run committed but before its receipt settled.
+    // The same definition lock makes this decision atomic with every insertion.
+    if (await hasAutomatedRunReplay({ tx, definitionId, rows })) {
+      return { outcome: "already-started" };
+    }
+
+    let currentRows = rows;
+    if (rows.run.triggerSource.type === "schedule") {
+      if (
+        !currentDefinition?.enabled ||
+        currentDefinition.trigger.type !== "schedule" ||
+        currentDefinition.trigger.workspaceId !== rows.run.workspaceId ||
+        expectedScheduleTrigger === undefined ||
+        !deepEquals(currentDefinition.trigger, expectedScheduleTrigger)
+      ) {
+        return { outcome: "stale" };
+      }
+      currentRows = buildFlowRunRows({
+        runId: rows.run.id,
+        workspaceId: rows.run.workspaceId,
+        definitionId,
+        definition: currentDefinition,
+        triggerSource: rows.run.triggerSource,
+        inputEntityIds: rows.run.inputEntityIds,
+      });
+    }
+    if (rows.run.triggerSource.type === "file-upload") {
+      const entityId = brandPersistedEntityId(rows.run.triggerSource.entityId);
+      const validation = await withOrgScope({
+        tx,
+        scope: scope.value,
+        actor: { type: "system" },
+        fn: async (scopedTx) =>
+          await revalidateUploadIntent({
+            tx: scopedTx,
+            definitionId,
+            definition: currentDefinition,
+            entityId,
+            rows,
+          }),
+      });
+      switch (validation.type) {
+        case "source-removed":
+          return { outcome: "source-removed" };
+        case "skipped":
+          return { outcome: "skipped", reason: validation.reason };
+        case "current":
+          currentRows = validation.rows;
+          break;
+        default:
+          validation satisfies never;
+          return panic("Unknown upload intent validation");
+      }
+    }
+
+    const dailyRunCount = await tx.$count(
+      flowRuns,
+      and(
+        eq(flowRuns.definitionId, definitionId),
+        // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- cutoff read from the caller's clock, never round-tripped through the database
+        gte(flowRuns.createdAt, startOfUtcDay(now)),
+        sql`${flowRuns.triggerSource}->>'type' in ('schedule', 'file-upload')`,
+      ),
+    );
+    if (isAutomatedRunCapReached(dailyRunCount)) {
+      if (
+        rows.run.triggerSource.type === "file-upload" &&
+        uploadTriggerClaimToken !== undefined
+      ) {
+        const entityId = brandPersistedEntityId(
+          rows.run.triggerSource.entityId,
+        );
+        await withOrgScope({
+          tx,
+          scope: scope.value,
+          actor: { type: "system" },
+          fn: async (scopedTx) =>
+            await deferCappedUploadIntent({
+              tx: scopedTx,
+              organizationId,
+              workspaceId: rows.run.workspaceId,
+              definitionId,
+              entityId,
+              claimToken: uploadTriggerClaimToken,
+              now,
+            }),
+        });
+      }
+      return { outcome: "capped", dailyRunCount };
+    }
+
+    await withOrgScope({
+      tx,
+      scope: scope.value,
+      actor: { type: "system" },
+      fn: async (scopedTx) => {
+        await scopedTx.insert(flowRuns).values(currentRows.run);
+        await scopedTx.insert(flowRunSteps).values(currentRows.steps);
+      },
+    });
+    // A refusal rolls the inserted run back. A later commit failure may rarely
+    // over-count the operational throttle; reservations are never refunded.
+    await reservePeriod?.();
+    return { outcome: "started" };
+  });
 };

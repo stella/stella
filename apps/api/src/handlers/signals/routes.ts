@@ -9,8 +9,15 @@ import listSignals from "@/api/handlers/signals/list";
 import createRequest from "@/api/handlers/signals/requests/create";
 import snoozeSignal from "@/api/handlers/signals/snoozes/create";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
+import { featureAccessGate } from "@/api/lib/auth/feature-access/route";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 
 export const signalsRoute = new Elysia({ prefix: "/signals" })
+  .use(
+    deploymentFeatureGate(() => isDeploymentFeatureEnabled("FEATURE_SIGNALS")),
+  )
+  .use(featureAccessGate("signals"))
   .use(authMacro)
   .use(permissionMacro)
   .guard({ validateAuth: true })

@@ -100,7 +100,7 @@ import { LIMITS } from "@/api/lib/limits";
 import {
   clearMemberAssignments,
   tryLockAccountMemberCleanup,
-} from "@/api/lib/member-assignment-offboarding";
+} from "@/api/lib/member-offboarding/member-assignment-offboarding";
 import { pendingUploadS3KeysForDeletion } from "@/api/lib/pending-upload-keys";
 import {
   brandPersistedOrganizationId,

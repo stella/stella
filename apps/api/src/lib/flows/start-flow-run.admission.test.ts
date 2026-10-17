@@ -1,5 +1,7 @@
-import { Result } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { panic, Result } from "better-result";
+import { beforeEach, describe, expect, test } from "bun:test";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { flowDefinitions } from "@/api/db/schema";
@@ -9,18 +11,96 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { startAutomatedFlowRun } from "@/api/lib/flows/start-automated-flow-run";
 import { startFlowRun } from "@/api/lib/flows/start-flow-run";
 import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
+import { aggregateExecutionRows } from "@/api/tests/fixtures/aggregate-lock-order";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { PLAIN_MEMBER_FACTS } from "@/api/tests/helpers/member-authorization";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const organizationId = mintAuthProviderId<"organization">();
 const userId = mintAuthProviderId<"user">();
 const workspaceId = createSafeId<"workspace">();
 const definitionId = createSafeId<"flowDefinition">();
+const executeManualFixtureQuery = async (query: SQL) => {
+  const text = new PgDialect().sqlToQuery(query).sql;
+  if (text.includes('AS "organizationId"')) {
+    const isDefinition = text.includes('"flow_definitions"');
+    return [
+      {
+        organizationId,
+        workspaceId: isDefinition ? null : workspaceId,
+        id: isDefinition ? definitionId : workspaceId,
+      },
+    ];
+  }
+  return aggregateExecutionRows(query);
+};
+
+const manualFixtureRows = (projection: Record<string, unknown>) => {
+  if ("role" in projection) {
+    return [
+      {
+        role: "stella",
+        organizationId,
+        userId,
+        workspaceIds: workspaceId,
+        workspaceAccessMode: "explicit",
+        featureIds: '["flows"]',
+      },
+    ];
+  }
+  if ("email" in projection) {
+    return [
+      {
+        email: "flow@example.test",
+        emailVerified: true,
+        enrolledFeatureIds: ["flows"],
+      },
+    ];
+  }
+  if ("organizationId" in projection && !("featureId" in projection)) {
+    return [{ organizationId }];
+  }
+  return [{ featureId: "flows", organizationId, userId }];
+};
+
+const selectManualFixtureRows = (projection: Record<string, unknown>) => {
+  const rows = Promise.resolve(manualFixtureRows(projection));
+  // Resolving the existing promise preserves its query methods at every chain link.
+  const resolveRows = Promise.resolve.bind(Promise, rows);
+  const query = Object.assign(rows, {
+    innerJoin: resolveRows,
+    where: resolveRows,
+    for: resolveRows,
+    limit: resolveRows,
+  });
+  return { from: async () => query };
+};
+
+// Savepoints share rows and counters, but each transaction level needs its own
+// identity so aggregate lock histories follow PostgreSQL savepoint lifetimes.
+const withSavepoints = <T extends object>(tx: T) => {
+  const fake: T & {
+    transaction: <R>(run: (savepoint: T) => Promise<R>) => Promise<R>;
+  } = {
+    ...tx,
+    transaction: async <R>(run: (savepoint: T) => Promise<R>) =>
+      await run(withSavepoints(tx)),
+  };
+  return fake;
+};
+
 const definition = {
   id: definitionId,
   name: "Review document",
   enabled: true,
+  trigger: {
+    type: "schedule" as const,
+    workspaceId,
+    schedule: { frequency: "daily" as const, hourUtc: 23 },
+  },
   createdByUserId: userId,
   steps: [
     {
@@ -31,20 +111,24 @@ const definition = {
   ],
 } satisfies Pick<
   typeof flowDefinitions.$inferSelect,
-  "id" | "name" | "enabled" | "createdByUserId" | "steps"
+  "id" | "name" | "enabled" | "createdByUserId" | "steps" | "trigger"
 >;
 
 const withAdmission = async (run: () => Promise<void>) => {
   const previous = env.FEATURE_ACTION_ADMISSION;
-  env.FEATURE_ACTION_ADMISSION = true;
+  testState.setConfig("FEATURE_ACTION_ADMISSION", true);
   try {
     await run();
   } finally {
-    env.FEATURE_ACTION_ADMISSION = previous;
+    testState.setConfig("FEATURE_ACTION_ADMISSION", previous);
   }
 };
 
 describe("flow kickoff acceptance", () => {
+  beforeEach(() => {
+    testState.setConfig("FEATURE_FLOWS", true);
+  });
+
   test("pending automated admission retains its definition and execution input", async () => {
     const entered = Promise.withResolvers<undefined>();
     const proceed = Promise.withResolvers<undefined>();
@@ -62,11 +146,13 @@ describe("flow kickoff acceptance", () => {
         workspaceId,
         createdByUserId: userId,
         triggerSource: { type: "schedule" },
+        expectedScheduleTrigger: definition.trigger,
         inputEntityIds,
         logContext: {},
       },
       {
         findDefinition: async () => loadedDefinition,
+        featureEnabled: async () => true,
         resolveAuthorization: async () => {
           entered.resolve(undefined);
           await proceed.promise;
@@ -87,7 +173,12 @@ describe("flow kickoff acceptance", () => {
           await run(new AbortController().signal, async () => undefined),
       },
     );
-    await entered.promise;
+    await Promise.race([
+      entered.promise,
+      result.then(() =>
+        panic("Flow start missed its pending admission barrier"),
+      ),
+    ]);
     inputEntityIds.push(createSafeId<"entity">());
     loadedDefinition.steps.push({
       kind: "review-gate",
@@ -108,20 +199,31 @@ describe("flow kickoff acceptance", () => {
       ...definition,
       steps: definition.steps.map((step) => ({ ...step })),
     };
+    const persistedDefinition = structuredClone(loadedDefinition);
+    let definitionReads = 0;
     const written: unknown[] = [];
     const safeDb = safeDbFromScoped(
       async (run) =>
         await run(
-          asTestRaw({
-            query: {
-              flowDefinitions: { findFirst: async () => loadedDefinition },
-            },
-            insert: () => ({
-              values: async (rows: unknown) => {
-                written.push(rows);
+          asTestRaw(
+            withSavepoints({
+              execute: executeManualFixtureQuery,
+              select: selectManualFixtureRows,
+              query: {
+                flowDefinitions: {
+                  findFirst: async () =>
+                    definitionReads++ === 0
+                      ? loadedDefinition
+                      : persistedDefinition,
+                },
               },
+              insert: () => ({
+                values: async (rows: unknown) => {
+                  written.push(rows);
+                },
+              }),
             }),
-          }),
+          ),
         ),
     );
     const originalInput = createSafeId<"entity">();
@@ -152,7 +254,12 @@ describe("flow kickoff acceptance", () => {
       enqueueStep: async () => await Promise.resolve(),
     } satisfies Parameters<typeof startFlowRun>[0];
     const result = startFlowRun(options);
-    await entered.promise;
+    await Promise.race([
+      entered.promise,
+      result.then(() =>
+        panic("Flow start missed its pending admission barrier"),
+      ),
+    ]);
     inputEntityIds.push(createSafeId<"entity">());
     loadedDefinition.steps.push({
       kind: "review-gate",
@@ -177,14 +284,18 @@ describe("flow kickoff acceptance", () => {
       const queuedRunIds: string[] = [];
       const safeDb = safeDbFromScoped(async (run) => {
         const result = await run(
-          asTestRaw({
-            query: { flowDefinitions: { findFirst: async () => definition } },
-            insert: () => ({
-              values: async () => {
-                insertedRows += 1;
-              },
+          asTestRaw(
+            withSavepoints({
+              execute: executeManualFixtureQuery,
+              select: selectManualFixtureRows,
+              query: { flowDefinitions: { findFirst: async () => definition } },
+              insert: () => ({
+                values: async () => {
+                  insertedRows += 1;
+                },
+              }),
             }),
-          }),
+          ),
         );
         if (insertedRows > 0) {
           lease.abort(
@@ -242,16 +353,18 @@ describe("flow kickoff acceptance", () => {
         const safeDb = safeDbFromScoped(
           async (run) =>
             await run(
-              asTestRaw({
-                query: {
-                  flowDefinitions: { findFirst: async () => definition },
-                },
-                insert: () => ({
-                  values: async () => {
-                    inserted = true;
+              asTestRaw(
+                withSavepoints({
+                  query: {
+                    flowDefinitions: { findFirst: async () => definition },
                   },
+                  insert: () => ({
+                    values: async () => {
+                      inserted = true;
+                    },
+                  }),
                 }),
-              }),
+              ),
             ),
         );
         const result = await startFlowRun({
@@ -294,14 +407,18 @@ describe("flow kickoff acceptance", () => {
       const safeDb = safeDbFromScoped(
         async (run) =>
           await run(
-            asTestRaw({
-              query: { flowDefinitions: { findFirst: async () => definition } },
-              insert: () => ({
-                values: async () => {
-                  inserted = true;
+            asTestRaw(
+              withSavepoints({
+                query: {
+                  flowDefinitions: { findFirst: async () => definition },
                 },
+                insert: () => ({
+                  values: async () => {
+                    inserted = true;
+                  },
+                }),
               }),
-            }),
+            ),
           ),
       );
       const result = await startFlowRun({
@@ -355,11 +472,13 @@ describe("flow kickoff acceptance", () => {
             definitionId,
             createdByUserId: userId,
             triggerSource: { type: "schedule" },
+            expectedScheduleTrigger: definition.trigger,
             inputEntityIds: [],
             logContext: {},
           },
           {
             findDefinition: async () => definition,
+            featureEnabled: async () => true,
             resolveAuthorization: async () => ({
               memberId: "member",
               email: "member@example.test",

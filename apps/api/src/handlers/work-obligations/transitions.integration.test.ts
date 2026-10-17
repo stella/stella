@@ -6,9 +6,11 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
+import { user } from "@/api/db/auth-schema";
 import {
+  featureEnrolments,
   entities,
   flowRuns,
   flowRunSteps,
@@ -111,6 +113,18 @@ const AI_STEP: FlowStep = {
  * needs no worker.
  */
 const seedFlowReviewWork = async () => {
+  await testDb
+    .update(user)
+    .set({ emailVerified: true })
+    .where(eq(user.id, ids.userA1));
+  await testDb
+    .insert(featureEnrolments)
+    .values({
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+      featureId: "flows",
+    })
+    .onConflictDoNothing();
   const entityId = createSafeId<"entity">();
   const runId = createSafeId<"flowRun">();
   taskIds.push(entityId);

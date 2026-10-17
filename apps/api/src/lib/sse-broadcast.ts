@@ -9,6 +9,7 @@ import {
   type OrganizationRealtimeEvent,
   type UserRealtimeEvent,
   type WorkspaceRealtimeEvent,
+  type BuiltRealtimeEvent,
 } from "@stll/api-contract";
 
 import type { SafeId } from "@/api/lib/branded-types";
@@ -261,13 +262,13 @@ export const createSseBroadcastPublisher = ({
     },
     publishWorkspaceEvent: async (
       workspaceId: SafeId<"workspace">,
-      event: WorkspaceRealtimeEvent,
+      event: BuiltRealtimeEvent,
       options: PublishOptions = {},
     ): Promise<void> => {
       await publishRedisPayload({
         scope: "workspace",
         id: workspaceId,
-        event,
+        event: event.toJSON(),
         originInstanceId: options.originInstanceId,
         deliveredInline: options.deliveredInline,
       });

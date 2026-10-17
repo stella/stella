@@ -94,6 +94,7 @@ import {
   visibleEntityFieldIds,
 } from "@/lib/workspaces/queries/entities";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
+import { useTransferEligibility } from "@/lib/workspaces/queries/transfer-eligibility";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
 import { mergeLayout } from "@/lib/workspaces/view-layout";
 import { AddEntityMenu } from "@/routes/_protected.workspaces/$workspaceId/-components/add-entity-menu";
@@ -707,9 +708,24 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
 
   const [isRootDropTarget, setIsRootDropTarget] = useState(false);
   const [isDragActive, setIsDragActive] = useState(false);
+  const [draggedEntityIds, setDraggedEntityIds] = useState<string[]>([]);
+  const dragTransferAvailable = useTransferEligibility({
+    workspaceId,
+    entityIds: draggedEntityIds,
+    enabled: draggedEntityIds.length > 0,
+  });
+  const canTransferDraggedEntities = useLatestCallback(
+    (entityIds: string[]) =>
+      dragTransferAvailable &&
+      entityIds.length > 0 &&
+      entityIds.every((entityId) => draggedEntityIds.includes(entityId)),
+  );
   const rootBarRef = useRef<HTMLDivElement>(null);
   const rootFolderAnnouncementName = t("workspaces.copyToMatter.rootFolder");
   const handleMoveEntitiesToRoot = useLatestCallback((entityIds: string[]) => {
+    if (!canTransferDraggedEntities(entityIds)) {
+      return;
+    }
     for (const entityId of entityIds) {
       moveEntity.mutate(
         { workspaceId, entityId, parentId: null },
@@ -729,6 +745,13 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
     monitorForElements({
       canMonitor: ({ source }) => source.data["type"] === ENTITY_DRAG_TYPE,
       onDragStart: ({ source }) => {
+        const entityIds = getDragEntityIds(source.data);
+        if (entityIds === null) {
+          setDraggedEntityIds([]);
+          setIsDragActive(false);
+          return;
+        }
+        setDraggedEntityIds(entityIds);
         const entities = source.data["entities"];
         const parentId = source.data["parentId"];
         const hasNested = isDragEntityList(entities)
@@ -738,7 +761,10 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
           setIsDragActive(true);
         }
       },
-      onDrop: () => setIsDragActive(false),
+      onDrop: () => {
+        setIsDragActive(false);
+        setDraggedEntityIds([]);
+      },
     }),
   );
 
@@ -756,7 +782,14 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
     }
     return dropTargetForElements({
       element: el,
-      canDrop: ({ source }) => source.data["type"] === ENTITY_DRAG_TYPE,
+      canDrop: ({ source }) => {
+        const entityIds = getDragEntityIds(source.data);
+        return (
+          source.data["type"] === ENTITY_DRAG_TYPE &&
+          entityIds !== null &&
+          canTransferDraggedEntities(entityIds)
+        );
+      },
       getData: () =>
         withDropAnnouncementData(
           {},
@@ -773,7 +806,11 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
         handleMoveEntitiesToRoot(entityIds);
       },
     });
-  }, [handleMoveEntitiesToRoot, rootFolderAnnouncementName]);
+  }, [
+    handleMoveEntitiesToRoot,
+    rootFolderAnnouncementName,
+    canTransferDraggedEntities,
+  ]);
 
   if (data.length === 0) {
     return (
@@ -962,6 +999,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
                   }}
                 >
                   <FilesystemRow
+                    canTransferEntities={canTransferDraggedEntities}
                     ancestorIds={row.ancestorIds}
                     currentFolderId={currentFolderId}
                     depth={row.depth}
@@ -1194,6 +1232,7 @@ const ColumnHeaderCell = ({
 };
 
 type FilesystemRowProps = {
+  canTransferEntities: (entityIds: string[]) => boolean;
   node: TableTreeNode;
   depth: number | undefined;
   workspaceId: string;
@@ -1226,6 +1265,7 @@ type FilesystemRowProps = {
 };
 
 export const FilesystemRow = ({
+  canTransferEntities,
   node,
   depth = 0,
   workspaceId,
@@ -1388,6 +1428,9 @@ export const FilesystemRow = ({
     onToggleFolder(node.entityId);
   });
   const moveEntitiesToFolder = useLatestCallback((entityIds: string[]) => {
+    if (!canTransferEntities(entityIds)) {
+      return;
+    }
     for (const entityId of entityIds) {
       if (isAncestor(entityId)) {
         continue;
@@ -1501,7 +1544,10 @@ export const FilesystemRow = ({
                 }
 
                 const entityId = getDragEntityId(source.data);
+                const entityIds = getDragEntityIds(source.data);
                 return (
+                  entityIds !== null &&
+                  canTransferEntities(entityIds) &&
                   entityId !== null &&
                   entityId !== node.entityId &&
                   !isAncestor(entityId)
@@ -1556,6 +1602,7 @@ export const FilesystemRow = ({
     getCurrentSelectedIds,
     getCurrentAncestorIds,
     moveEntitiesToFolder,
+    canTransferEntities,
     t,
   ]);
 

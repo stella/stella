@@ -39,7 +39,7 @@ import {
   settleObjectCleanupIntentsAfterWriterInTransaction,
 } from "@/api/lib/buffer-intent-reconciliation";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
-import { FOLIO_COLLAB_SEED_TRANSITIONS } from "@/api/lib/db/transition-specs";
+import { FOLIO_COLLAB_SEED_TRANSITIONS } from "@/api/lib/db/folio-collab-transitions";
 import { transitionScopedCount } from "@/api/lib/db/transitions";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session-predicates";

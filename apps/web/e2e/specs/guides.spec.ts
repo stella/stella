@@ -5,7 +5,7 @@ import { sleep } from "@stll/concurrency/sleep";
 
 import { getStorageKey } from "../../src/consts";
 import { GUIDE_ANCHORS } from "../../src/features/guides/guide-anchors";
-import { apiGet } from "../helpers/api";
+import { apiGet, apiPut } from "../helpers/api";
 import { expect, test } from "../helpers/test";
 import {
   type TestWorkspace,
@@ -24,22 +24,19 @@ const GUIDE_NAVIGATION_TIMEOUT_MS = 45_000;
 test.describe.configure({ timeout: GUIDE_TEST_TIMEOUT_MS });
 
 const enableGuidesTestFeatures = async (page: Page) => {
+  await apiPut(
+    page.request,
+    "/organization-settings/feature-enrolments/flows",
+    {},
+  );
   await page.addInitScript(
-    ({ devStorageKey, i18nStorageKey }) => {
-      localStorage.setItem(
-        devStorageKey,
-        JSON.stringify({
-          state: { workflowsPreview: true },
-          version: 0,
-        }),
-      );
+    ({ i18nStorageKey }) => {
       localStorage.setItem(
         i18nStorageKey,
         JSON.stringify({ state: { lang: "en" }, version: 0 }),
       );
     },
     {
-      devStorageKey: getStorageKey("dev"),
       i18nStorageKey: getStorageKey("i18n"),
     },
   );

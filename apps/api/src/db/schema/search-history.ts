@@ -1,3 +1,5 @@
+import { systemScopePolicies } from "@/api/db/system-scope-policies";
+
 import {
   bytea,
   organization,
@@ -48,6 +50,7 @@ export const searchHistoryEntries = p.pgTable(
     useCount: p.integer("use_count").notNull().default(1),
   },
   (table) => [
+    ...systemScopePolicies(table),
     p
       .uniqueIndex("search_history_entries_owner_lookup_idx")
       .on(table.organizationId, table.userId, table.kind, table.lookupKey),
@@ -106,6 +109,7 @@ export const searchHistoryOwners = p.pgTable(
     tombstoneCutoffAt: timestamptz("tombstone_cutoff_at"),
   },
   (table) => [
+    ...systemScopePolicies(table),
     p.primaryKey({ columns: [table.organizationId, table.userId] }),
     ...userOrganizationPolicies(),
     p.pgPolicy("search_history_owners_owner", {
@@ -133,6 +137,7 @@ export const searchHistoryTombstones = p.pgTable(
     deletedAt: timestamptz("deleted_at").notNull(),
   },
   (table) => [
+    ...systemScopePolicies(table),
     p.primaryKey({
       name: "search_history_tombstones_pk",
       columns: [

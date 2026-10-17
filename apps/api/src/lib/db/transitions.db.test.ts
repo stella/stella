@@ -13,7 +13,7 @@ import {
   createBackgroundAuditRecorder,
 } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
-import { TRANSITIONS } from "@/api/lib/db/transition-specs";
+import { FLOW_RUN_TRANSITIONS_V1 } from "@/api/lib/db/flow-run-transition-spec";
 import {
   defineKeyedTransitions,
   transition,
@@ -95,7 +95,7 @@ test("a successful transition commits one system audit; a stale transition recor
       const transactional = withBunRows(tx);
       return await transition({
         tx: transactional,
-        spec: TRANSITIONS.flowRuns,
+        spec: FLOW_RUN_TRANSITIONS_V1,
         id: runId,
         options: { from: ["pending"], to: "running" },
         recordTransitionAuditEvent: async (auditTx, row) => {
@@ -133,7 +133,7 @@ test("a real audit insert failure rolls back the already applied transition", as
       const transactional = withBunRows(tx);
       return await transition({
         tx: transactional,
-        spec: TRANSITIONS.flowRuns,
+        spec: FLOW_RUN_TRANSITIONS_V1,
         id: runId,
         options: { from: ["pending"], to: "running" },
         recordTransitionAuditEvent: async (auditTx, row) => {
@@ -164,7 +164,7 @@ test("a batch records exactly its successful rows in one audit call", async () =
     const transactional = withBunRows(tx);
     return await transitionBatch({
       tx: transactional,
-      spec: TRANSITIONS.flowRuns,
+      spec: FLOW_RUN_TRANSITIONS_V1,
       ids: [runId, missingId],
       options: {
         from: ["pending"],
@@ -210,7 +210,7 @@ test("an audit failure rolls back every row in a batch", async () => {
       const transactional = withBunRows(tx);
       await transitionBatch({
         tx: transactional,
-        spec: TRANSITIONS.flowRuns,
+        spec: FLOW_RUN_TRANSITIONS_V1,
         ids: [runId, secondId],
         options: { from: ["pending"], to: "cancelled" },
         recordTransitionAuditEvent: async (auditTx, rows) => {

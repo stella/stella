@@ -4,62 +4,77 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## signals · `signals` · signals.ts:113
+## signals · `signals` · signals.ts:115
 
 Org-scoped inbox signal.
 
 ```text
-signals.id                  pUuid               pk,not null       signals.ts:116
-signals.organization_id     safeOrganizationId  fk,not null       signals.ts:117
-signals.workspace_id        safeWorkspaceId     fk,null           signals.ts:120
-signals.kind                text                not null          signals.ts:124
-signals.origin              text                not null          signals.ts:125
-signals.scout_key           text                not null          signals.ts:126
-signals.severity            text                not null          signals.ts:127
-signals.confidence          real                null              signals.ts:129  0..1, model origin only.
-signals.title               varchar             not null          signals.ts:130
-signals.summary             text                not null          signals.ts:131
-signals.subject             jsonb               not null          signals.ts:132
-signals.evidence            jsonb               not null          signals.ts:133
-signals.suggestions         jsonb               not null          signals.ts:134
-signals.dedupe_key          text                not null          signals.ts:135
-signals.status              text                default,not null  signals.ts:136
-signals.snoozed_until       timestamptz         null              signals.ts:137
-signals.assignee_user_id    text                fk,null           signals.ts:138
-signals.created_by_user_id  text                fk,null           signals.ts:141
-signals.dismiss_reason      text                null              signals.ts:144
-signals.accepted_result     jsonb               null              signals.ts:145
-signals.resolved_at         timestamptz         null              signals.ts:146
-signals.created_at          timestamptz         default,not null  signals.ts:147
-signals.updated_at          timestamptz         default,not null  signals.ts:148
+signals.id                  pUuid               pk,not null       signals.ts:118
+signals.organization_id     safeOrganizationId  fk,not null       signals.ts:119
+signals.workspace_id        safeWorkspaceId     fk,null           signals.ts:122
+signals.kind                text                not null          signals.ts:126
+signals.origin              text                not null          signals.ts:127
+signals.scout_key           text                not null          signals.ts:128
+signals.severity            text                not null          signals.ts:129
+signals.confidence          real                null              signals.ts:131  0..1, model origin only.
+signals.title               varchar             not null          signals.ts:132
+signals.summary             text                not null          signals.ts:133
+signals.subject             jsonb               not null          signals.ts:134
+signals.evidence            jsonb               not null          signals.ts:135
+signals.suggestions         jsonb               not null          signals.ts:136
+signals.dedupe_key          text                not null          signals.ts:137
+signals.status              text                default,not null  signals.ts:138
+signals.snoozed_until       timestamptz         null              signals.ts:139
+signals.assignee_user_id    text                fk,null           signals.ts:140
+signals.created_by_user_id  text                fk,null           signals.ts:143
+signals.dismiss_reason      text                null              signals.ts:146
+signals.accepted_result     jsonb               null              signals.ts:147
+signals.resolved_at         timestamptz         null              signals.ts:148
+signals.created_at          timestamptz         default,not null  signals.ts:149
+signals.updated_at          timestamptz         default,not null  signals.ts:150
 ```
 
-## signal_events · `signalEvents` · signals.ts:227 · rls
+## signal_events · `signalEvents` · signals.ts:230 · rls
 
 Append-only lifecycle audit for a signal.
 
 ```text
-signal_events.id               pUuid               pk,not null       signals.ts:230
-signal_events.organization_id  safeOrganizationId  not null          signals.ts:231
-signal_events.signal_id        safeUuid            not null          signals.ts:232
-signal_events.type             text                not null          signals.ts:233
-signal_events.actor_user_id    text                fk,null           signals.ts:234
-signal_events.payload          jsonb               null              signals.ts:237
-signal_events.created_at       timestamptz         default,not null  signals.ts:238
+signal_events.id               pUuid               pk,not null       signals.ts:233
+signal_events.organization_id  safeOrganizationId  not null          signals.ts:234
+signal_events.signal_id        safeUuid            not null          signals.ts:235
+signal_events.type             text                not null          signals.ts:236
+signal_events.actor_user_id    text                fk,null           signals.ts:237
+signal_events.payload          jsonb               null              signals.ts:240
+signal_events.created_at       timestamptz         default,not null  signals.ts:241
 ```
 
-## scout_runs · `scoutRuns` · signals.ts:298 · rls
+## scout_runs · `scoutRuns` · signals.ts:307 · rls
 
 Census of scout executions: proves a scout ran and how many signals it emitted vs. deduplicated, so "no signals" is distinguishable from "never ran".
 
 ```text
-scout_runs.id               pUuid               pk,not null       signals.ts:301
-scout_runs.organization_id  safeOrganizationId  fk,not null       signals.ts:302
-scout_runs.scout_key        text                not null          signals.ts:305
-scout_runs.status           text                not null          signals.ts:306
-scout_runs.emitted_count    integer             default,not null  signals.ts:307
-scout_runs.inserted_count   integer             default,not null  signals.ts:308
-scout_runs.error            text                null              signals.ts:309
-scout_runs.started_at       timestamptz         default,not null  signals.ts:310
-scout_runs.finished_at      timestamptz         null              signals.ts:311
+scout_runs.id               pUuid               pk,not null       signals.ts:310
+scout_runs.organization_id  safeOrganizationId  fk,not null       signals.ts:311
+scout_runs.scout_key        text                not null          signals.ts:314
+scout_runs.status           text                not null          signals.ts:315
+scout_runs.emitted_count    integer             default,not null  signals.ts:316
+scout_runs.inserted_count   integer             default,not null  signals.ts:317
+scout_runs.error            text                null              signals.ts:318
+scout_runs.started_at       timestamptz         default,not null  signals.ts:319
+scout_runs.finished_at      timestamptz         null              signals.ts:320
+```
+
+## pending_scout_emissions · `pendingScoutEmissions` · signals.ts:346 · rls
+
+A source commits its deferred emission before its own terminal transition.
+
+```text
+pending_scout_emissions.organization_id  safeOrganizationId  fk,not null       signals.ts:349
+pending_scout_emissions.workspace_id     safeWorkspaceId     not null          signals.ts:352
+pending_scout_emissions.source_kind      text                not null          signals.ts:353
+pending_scout_emissions.source_id        uuid                not null          signals.ts:356
+pending_scout_emissions.status           text                default,not null  signals.ts:357
+pending_scout_emissions.next_attempt_at  timestamptz         default,not null  signals.ts:361
+pending_scout_emissions.last_error       varchar             null              signals.ts:362
+pending_scout_emissions.created_at       timestamptz         default,not null  signals.ts:363
 ```

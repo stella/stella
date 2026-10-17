@@ -52,6 +52,11 @@ const ENTITY_FEATURE_GATE_MIGRATION =
 // Fingerprinting the complete statement makes comments, quoting tricks, and
 // dynamically assembled commands unable to bypass migration safety checks.
 const APPROVED_PROCEDURAL_STATEMENTS = new Set([
+  // Declares and verifies the system role posture; changes no data or budgets.
+  "20261013190100_org_scoped_system_work/migration.sql:cf1a6e436f77c9af756cc6bf2114787f14680e6badf8b42bba963c6b1fe82e82",
+  // Applies scoped policies to the finite table inventory under the declared
+  // 1s lock and 10s statement budgets; identifiers use format %I.
+  "20261013190100_org_scoped_system_work/migration.sql:09fdfdd0384e97d3a8ad5c8aca751605c62e652ba9b2d149a1b80461a1826c29",
   // Renames legacy resource paths in stable order with collision checks and
   // transaction-local snapshots. Static writes retain the 1s lock and 30s
   // statement budgets; a timeout rolls back the entire cutover.
@@ -161,6 +166,10 @@ const APPROVED_PROCEDURAL_STATEMENTS = new Set([
   // Adds the cleanup-status CHECK only when absent. The body is static DDL;
   // the conditional makes a partially applied migration retryable.
   "20260830150000_workspace_reference_cleanup_indexes/migration.sql:157817473ab2cf147be3836c532ca148079553e488ae4df0bdb9ae19ecaa32e2",
+  // Static missing-only checks make committed DDL replayable; neither body
+  // changes the concurrent-index protocol or executes dynamic SQL.
+  "20261010005400_upload_trigger_settlements/migration.sql:c6e71fa842501914e50112ab870cfd166f46a20a4cda0b6dc06a98dc287c8d65",
+  "20261010005500_feature_recovery_grant_waits/migration.sql:164a5f477c32d9f62e6ad5e7dabb6b4aa96e17d9f0da867908d2b110c377cae9",
   // Add each supplements foreign key and CHECK only when absent. The bodies
   // are static DDL; the conditional makes a re-applied migration a no-op.
   "20260924100000_case_law_decision_supplements/migration.sql:784ee86bc5f375503326b7b432485d292dc5bafbe6d5c1ea1b63f7a55b81ba61",
@@ -2057,11 +2066,19 @@ const isReplaySafeBeforeSplit = (
   const dropped = droppedObjects(earlier);
   const alter = ALTER_TABLE.exec(statement)?.groups;
   if (alter !== undefined) {
-    const table = canonicalRelation(alter["table"] ?? "");
+    const tableCapture = alter["table"];
+    if (tableCapture === undefined) {
+      panic("ALTER TABLE match has no table capture");
+    }
+    const table = canonicalRelation(tableCapture);
     // Every action has to survive on its own: one guarded clause says nothing
     // about the unguarded one beside it.
     return splitTableActions(alter["actions"] ?? "").every((action) => {
       if (REPLAY_SAFE_TABLE_ACTIONS.some((pattern) => pattern.test(action))) {
+        // Actions execute in order within the same atomic ALTER statement.
+        dropped.push(
+          ...droppedObjects([`ALTER TABLE ${tableCapture} ${action}`]),
+        );
         return true;
       }
       const name = ADD_CONSTRAINT_ACTION.exec(action)?.groups?.["name"];
@@ -2182,6 +2199,26 @@ describe("split-transaction migrations", () => {
         false,
       ],
       [`ALTER TABLE "t" ADD CONSTRAINT "k" CHECK (true) NOT VALID`, [], false],
+      [
+        `ALTER TABLE "t" DROP CONSTRAINT IF EXISTS "k", ADD CONSTRAINT "k" CHECK (true) NOT VALID`,
+        [],
+        true,
+      ],
+      [
+        `ALTER TABLE "t" DROP CONSTRAINT IF EXISTS "other", ADD CONSTRAINT "k" CHECK (true) NOT VALID`,
+        [],
+        false,
+      ],
+      [
+        `ALTER TABLE "t" ADD CONSTRAINT "k" CHECK (true) NOT VALID, DROP CONSTRAINT IF EXISTS "k"`,
+        [],
+        false,
+      ],
+      [
+        `ALTER TABLE "t" DROP CONSTRAINT "k", ADD CONSTRAINT "k" CHECK (true) NOT VALID`,
+        [],
+        false,
+      ],
       [
         `ALTER TABLE "t" ADD CONSTRAINT "k" CHECK (true) NOT VALID`,
         [`ALTER TABLE "t" DROP CONSTRAINT IF EXISTS "k"`],

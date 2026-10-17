@@ -4,7 +4,10 @@ import type { Job } from "bullmq";
 import { sleep } from "bun";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
-import { RESOURCE_TYPE } from "@stll/api-contract";
+import {
+  workflowExtractionPreviewRealtimeEvent,
+  RESOURCE_TYPE,
+} from "@stll/api-contract";
 import { drainFanOut } from "@stll/concurrency";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { Temporal } from "@stll/time";
@@ -127,7 +130,6 @@ import type { PartialAnswerUpdate } from "@/api/lib/workflow/streaming-answer";
 import { prepareBatch } from "@/api/lib/workflow/utils";
 import { computeVerdictBatch } from "@/api/lib/workflow/verdict-engine";
 
-const EXTRACTION_PREVIEW_EVENT_TYPE = "workflow-extraction-preview";
 const EXTRACTION_PREVIEW_THROTTLE_MS = 500;
 
 type ExtractionPreviewPayload = {
@@ -1581,10 +1583,7 @@ const createBatchPreviewPublisher = ({
   const lastSentAt = new Map<SafeId<"property">, number>();
 
   const broadcastPreview = (payload: ExtractionPreviewPayload) => {
-    broadcast(workspaceId, {
-      type: EXTRACTION_PREVIEW_EVENT_TYPE,
-      data: payload,
-    });
+    broadcast(workspaceId, workflowExtractionPreviewRealtimeEvent(payload));
   };
 
   const publish = (update: PartialAnswerUpdate): void => {

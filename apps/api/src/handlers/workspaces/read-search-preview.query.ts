@@ -8,6 +8,7 @@ import {
   openAgendaTask,
 } from "@/api/handlers/workspaces/agenda-conditions";
 import type { SafeId } from "@/api/lib/branded-types";
+import { flowReviewTaskVisibilityCondition } from "@/api/lib/flows/visibility";
 import { LIMITS } from "@/api/lib/limits";
 import type {
   UnbackedProjectionKeys,
@@ -92,6 +93,8 @@ true satisfies MissingPreviewColumn extends never ? true : never;
 true satisfies UnexpectedPreviewColumn extends never ? true : never;
 
 type ReadSearchPreviewOptions = {
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
   scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
 };
@@ -99,6 +102,8 @@ type ReadSearchPreviewOptions = {
 export const readSearchPreviewHandler = async ({
   scopedDb,
   workspaceId,
+  organizationId,
+  userId,
 }: ReadSearchPreviewOptions) =>
   await scopedDb(async (tx) => {
     const [upcomingAgenda, updatedDocuments, legacyDocuments] =
@@ -110,6 +115,7 @@ export const readSearchPreviewHandler = async ({
             and(
               eq(entities.workspaceId, workspaceId),
               openAgendaTask(entities),
+              flowReviewTaskVisibilityCondition({ organizationId, userId }),
               isNotNull(entities.dueDate),
               dueFromToday(entities),
             ),

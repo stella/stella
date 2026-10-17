@@ -7,8 +7,10 @@ import {
 } from "@stll/api-contract";
 
 import { flowRuns } from "@/api/db/schema";
-import { FLOW_TRANSITION_SPECS_V1 } from "@/api/lib/db/flow-run-transition-spec";
-import { TRANSITIONS } from "@/api/lib/db/transition-specs";
+import {
+  FLOW_TRANSITION_SPECS_V1,
+  FLOW_RUN_TRANSITIONS_V1,
+} from "@/api/lib/db/flow-run-transition-spec";
 import {
   transitionDomainSql,
   transitionTriggerSql,
@@ -86,10 +88,10 @@ test("the transition generator discovers a restamped migration without source ed
 });
 
 test("canonical terminal flow states have no escape even when both generators agree", () => {
-  expect(TRANSITIONS.flowRuns.terminal).toEqual(FLOW_RUN_TERMINAL_STATUSES);
+  expect(FLOW_RUN_TRANSITIONS_V1.terminal).toEqual(FLOW_RUN_TERMINAL_STATUSES);
   for (const from of FLOW_RUN_TERMINAL_STATUSES) {
     for (const to of FLOW_RUN_STATUSES) {
-      expect(permitsTransition(TRANSITIONS.flowRuns, from, to)).toBe(
+      expect(permitsTransition(FLOW_RUN_TRANSITIONS_V1, from, to)).toBe(
         from === to,
       );
     }

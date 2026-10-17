@@ -51,6 +51,7 @@ import {
 } from "@/api/mcp/auth";
 import {
   accessibleFeatureCapabilityIds,
+  conditionalCapabilityInputs,
   invokedCapabilityConsumesServices,
   featureOmittedCapabilityIds,
 } from "@/api/mcp/capability-tools";
@@ -75,7 +76,10 @@ import {
   McpGatewayLoadError,
   McpOrganizationAccessError,
 } from "@/api/mcp/errors";
-import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
+import {
+  isMcpDescriptorFeatureAdmitted,
+  isMcpDescriptorFeatureEnabled,
+} from "@/api/mcp/feature-access";
 import type { McpFeatureAccessContext } from "@/api/mcp/feature-access";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/gateway/list-tools";
 import {
@@ -279,7 +283,7 @@ export const mcpOmittedToolNamesByReason = ({
   const scope: string[] = [];
   for (const definition of listStaticMcpToolDefinitions(mode)) {
     if (
-      !isMcpDescriptorFeatureEnabled({
+      !isMcpDescriptorFeatureAdmitted({
         context,
         kind: "tools",
         id: definition.name,
@@ -1013,6 +1017,7 @@ export const createMcpHttpRequestHandler = ({
         _meta: {
           featureAccess: {
             capabilities: await accessibleFeatureCapabilityIds(context),
+            conditionalInputs: await conditionalCapabilityInputs(context),
             tools: tools
               .filter((tool) => typeof tool._meta?.["featureId"] === "string")
               .map(({ name }) => name),

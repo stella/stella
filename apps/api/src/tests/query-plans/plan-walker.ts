@@ -391,17 +391,20 @@ export const heapFetchRiskViolations = (
 export const withoutAuthorizationSubplans = (scan: ScanOccurrence): string => {
   let filter = scan.filter ?? "";
   for (const subplan of scan.subplans) {
+    if (subplan.name === null) {
+      continue;
+    }
+    const escapedName = subplan.name.replaceAll(/[.*+?^${}()|[\]\\]/gu, "\\$&");
     if (
-      subplan.name !== null &&
-      subplan.relations.includes("aw") &&
+      subplan.relations.some((relation) => /^aw(?:_\d+)?$/u.test(relation)) &&
       subplan.relations.includes("workspace_members") &&
-      subplan.relations.includes("workspaces")
+      subplan.relations.includes("workspaces") &&
+      new RegExp(`\\bhashed\\s+${escapedName}(?!\\d)`, "u").test(filter)
     ) {
-      const escapedName = subplan.name.replaceAll(
-        /[.*+?^${}()|[\]\\]/gu,
-        "\\$&",
+      filter = filter.replaceAll(
+        new RegExp(`\\bhashed\\s+${escapedName}(?!\\d)`, "gu"),
+        "",
       );
-      filter = filter.replaceAll(new RegExp(`${escapedName}(?!\\d)`, "gu"), "");
     }
   }
   return filter;

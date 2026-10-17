@@ -1,5 +1,7 @@
 import { sql } from "drizzle-orm";
 
+import { systemScopePolicies } from "@/api/db/system-scope-policies";
+
 import { MCP_CONNECTION_STATUSES, MCP_CONNECTOR_AUTH_TYPES } from "./chat";
 import type {
   McpConnectionStatus,
@@ -252,6 +254,7 @@ export const mcpUserConnections = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    ...systemScopePolicies(table),
     p
       .uniqueIndex("mcp_user_connections_org_connector_user_uidx")
       .on(table.organizationId, table.connectorId, table.userId),
@@ -301,6 +304,7 @@ export const mcpOAuthState = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    ...systemScopePolicies(table),
     p.index("mcp_oauth_state_created_idx").on(table.createdAt),
     p
       .index("mcp_oauth_state_org_user_idx")

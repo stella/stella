@@ -1,5 +1,7 @@
 import { panic, Result } from "better-result";
 import { getColumns } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 import { member, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -7,8 +9,10 @@ import type { SafeDb, SafeDbRetryConfig, ScopedDb } from "@/api/db/safe-db";
 import {
   entities,
   entityVersions,
-  fields,
   featureEnrolments,
+  fields,
+  flowRunSteps,
+  type workspaces,
 } from "@/api/db/schema";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -25,7 +29,12 @@ export const toSafeDbMock =
   };
 
 type FeatureAccessMockOptions = {
-  identity: Pick<typeof user.$inferSelect, "email" | "emailVerified"> | null;
+  /** With `userId`, only that member's enrolments join the identity row. */
+  identity:
+    | (Pick<typeof user.$inferSelect, "email" | "emailVerified"> & {
+        userId?: string;
+      })
+    | null;
   enrolments?: Pick<
     typeof featureEnrolments.$inferSelect,
     "featureId" | "organizationId" | "userId"
@@ -33,8 +42,17 @@ type FeatureAccessMockOptions = {
 };
 
 type ScopedDbMockOptions = {
+  entityTransferEligibility?: {
+    entityId: typeof entities.$inferSelect.id;
+    eligible: boolean;
+  }[];
   siblingRows?: { name: string; parentId: string | null }[];
   featureAccess?: FeatureAccessMockOptions;
+  flowTaskGates?: {
+    runId: typeof flowRunSteps.$inferSelect.runId;
+    status: typeof flowRunSteps.$inferSelect.status;
+    organizationId: typeof workspaces.$inferSelect.organizationId;
+  }[];
   visibleResources?: {
     entity?: readonly string[];
     entityVersion?: readonly string[];
@@ -50,7 +68,7 @@ export const createSelectQueryMock = <TRow>(rows: TRow[]) => {
   const limit = (count: number) => {
     const selected = rows.slice(rowOffset, rowOffset + count);
     return Object.assign(Promise.resolve(selected), {
-      for: async () => await Promise.resolve(selected),
+      for: () => selected,
     });
   };
   const offset = (count: number) => {
@@ -62,7 +80,7 @@ export const createSelectQueryMock = <TRow>(rows: TRow[]) => {
     Object.assign(Promise.resolve(rows), {
       limit,
       offset,
-      for: async () => await Promise.resolve(rows),
+      for: () => rows,
       orderBy: () => ({ limit, offset }),
     });
   return {
@@ -74,12 +92,30 @@ export const createSelectQueryMock = <TRow>(rows: TRow[]) => {
   };
 };
 
+// Every aggregate advisory statement (exclusive, shared, try, or the
+// key-only alias lookup) selects the physical key pair it resolves.
+const isAdvisoryLockStatement = (statement: string) =>
+  statement.includes(" AS key1, ") && statement.includes(" AS key2");
+
 const fixtureSelect =
   (tx: unknown, options?: ScopedDbMockOptions) => (selection: unknown) => {
     const columns =
       typeof selection === "object" && selection !== null
         ? Object.values(selection)
         : [];
+    // Linked ownership is an explicit fixture boundary; ordinary resource
+    // selects must never accidentally stand in for persisted flow pointers.
+    if (columns.includes(flowRunSteps.runId)) {
+      const query = createSelectQueryMock(options?.flowTaskGates ?? []);
+      return {
+        from: (table: unknown) => {
+          if (table !== flowRunSteps) {
+            return panic("Flow ownership fixture must read flow run steps");
+          }
+          return query.from();
+        },
+      };
+    }
     // Feature admission is infrastructure shared by every handler fixture.
     // Use schema columns, so a resource select with similar keys still delegates.
     if (
@@ -113,10 +149,15 @@ const fixtureSelect =
           ? []
           : [
               {
-                ...identity,
-                enrolledFeatureIds: enrolments.map(
-                  ({ featureId }) => featureId,
-                ),
+                email: identity.email,
+                emailVerified: identity.emailVerified,
+                enrolledFeatureIds: enrolments
+                  .filter(
+                    (enrolment) =>
+                      identity.userId === undefined ||
+                      enrolment.userId === identity.userId,
+                  )
+                  .map(({ featureId }) => featureId),
               },
             ],
       );
@@ -184,17 +225,54 @@ export const createScopedDbMock = (
   options?: ScopedDbMockOptions,
 ) => {
   let callCount = 0;
+  const transferEligibility = options?.entityTransferEligibility;
 
   const scopedDb: ScopedDb = async <T>(
     callback: (transaction: Transaction) => Promise<T>,
   ) => {
     callCount += 1;
     // Tests provide only the transaction members touched by the handler.
+    const advisoryKeys = new Map<string, number>();
+    const advisoryExecute = (query: SQL) => {
+      const rendered = new PgDialect().sqlToQuery(query);
+      if (!isAdvisoryLockStatement(rendered.sql)) {
+        return [];
+      }
+      const identity = JSON.stringify(rendered.params);
+      const key = advisoryKeys.get(identity) ?? advisoryKeys.size + 1;
+      advisoryKeys.set(identity, key);
+      return [{ key1: 1, key2: key, acquired: true }];
+    };
     const transaction = {
-      execute: async () => {
-        await Promise.resolve();
-      },
+      execute: advisoryExecute,
       ...(typeof tx === "object" && tx !== null ? tx : {}),
+      ...(transferEligibility === undefined
+        ? {}
+        : {
+            execute: (query: SQL) => {
+              const rendered = new PgDialect().sqlToQuery(query);
+              if (rendered.sql.includes('root_id AS "entityId"')) {
+                return Promise.resolve(
+                  transferEligibility.filter((row) =>
+                    rendered.params.includes(row.entityId),
+                  ),
+                );
+              }
+              if (isAdvisoryLockStatement(rendered.sql)) {
+                return Promise.resolve(advisoryExecute(query));
+              }
+              if (
+                typeof tx !== "object" ||
+                tx === null ||
+                !("execute" in tx) ||
+                typeof tx.execute !== "function"
+              ) {
+                return panic("Missing fixture execute");
+              }
+              const result: unknown = Reflect.apply(tx.execute, tx, [query]);
+              return result;
+            },
+          }),
       select: fixtureSelect(tx, options),
     };
     return await callback(asTestRaw<Transaction>(transaction));

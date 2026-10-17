@@ -5,7 +5,11 @@ import { SCOUT_KEY } from "@stll/api-contract/signals";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import type { Transaction } from "@/api/db/root";
-import { SCOUT_RUN_STATUS, scoutRuns } from "@/api/db/schema";
+import {
+  featureEnrolments,
+  SCOUT_RUN_STATUS,
+  scoutRuns,
+} from "@/api/db/schema";
 import type { RlsDatabase } from "@/api/db/scoped";
 import { ModelRunError } from "@/api/lib/errors/provider-call-error";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
@@ -23,11 +27,24 @@ const SENTINEL = "SENTINEL_SCOUT_OBSERVATION_TEXT";
 let testDb: TestDatabase;
 let ids: TestIds;
 const startedAt = new Date();
+let ownsGrant = false;
 
 beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
   ids = fixture.ids;
+  ownsGrant =
+    (
+      await testDb
+        .insert(featureEnrolments)
+        .values({
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+          featureId: "signals",
+        })
+        .onConflictDoNothing()
+        .returning({ userId: featureEnrolments.userId })
+    ).length !== 0;
 });
 
 afterAll(async () => {
@@ -41,6 +58,17 @@ afterAll(async () => {
           gte(scoutRuns.startedAt, startedAt),
         ),
       );
+    if (ownsGrant) {
+      await testDb
+        .delete(featureEnrolments)
+        .where(
+          and(
+            eq(featureEnrolments.organizationId, ids.orgA),
+            eq(featureEnrolments.userId, ids.userA1),
+            eq(featureEnrolments.featureId, "signals"),
+          ),
+        );
+    }
   } finally {
     await releaseRlsFixture();
   }
@@ -75,6 +103,7 @@ const recordFailure = async (thrown: unknown) => {
     runScout({
       db,
       organizationId: ids.orgA,
+      userId: ids.userA1,
       scoutKey: SCOUT_KEY.MANUAL_REQUEST,
       observe: async () => {
         throw thrown;

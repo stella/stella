@@ -7,7 +7,7 @@ import { RESOURCE_TYPE } from "@stll/api-contract";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
-import { transactionAbortError } from "@/api/db/safe-db";
+import { abortTransaction, transactionAbortError } from "@/api/db/safe-db";
 import { entities, workspaces } from "@/api/db/schema";
 import {
   collectFileCopySources,
@@ -26,7 +26,7 @@ import {
   validateMoveSourceReadLimits,
 } from "@/api/handlers/entities/copy-utils";
 import { entityRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -47,16 +47,29 @@ import {
   type FieldFileRef,
 } from "@/api/lib/files/field-file-refs";
 import { deleteS3Objects } from "@/api/lib/files/utils";
+import {
+  admitEntityTransferAccess,
+  admitFlowReviewTaskDeletion,
+  FLOW_TASK_FEATURE_ACCESS,
+} from "@/api/lib/flows/review-gate-task";
+import { flowRelatedTaskVisibilityConditions } from "@/api/lib/flows/visibility";
 import { LIMITS } from "@/api/lib/limits";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { DOCUMENT_TYPE_CLASSIFIER_ROLE } from "@/api/lib/properties/create-schema";
 import { broadcastWorkspaceResourceSetUpdated } from "@/api/lib/resource-realtime";
-import { syncWorkspaceSearchActivity } from "@/api/lib/search/index-global";
 import {
   requestNativeExtractionRuns,
   SEARCH_INDEX_OWNER,
 } from "@/api/lib/search/process-extraction";
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
+import { syncWorkspaceSearchActivity } from "@/api/lib/search/workspace-search-activity";
+
+const searchRepairFailure = failureSink({
+  event: "entities.copy_search_repair_failed",
+  expected: [],
+});
 
 const copyToWorkspaceBodySchema = t.Object({
   entityId: tSafeId("entity"),
@@ -124,6 +137,8 @@ type ReadSourceEntityOptions = {
   sourceWorkspaceId: SafeId<"workspace">;
   sourceEntityId: SafeId<"entity">;
   transfer: EntityTransfer;
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
 };
 
 const readSourceEntity = async ({
@@ -131,10 +146,13 @@ const readSourceEntity = async ({
   sourceWorkspaceId,
   sourceEntityId,
   transfer,
+  organizationId,
+  userId,
 }: ReadSourceEntityOptions): Promise<EntitySnapshot | undefined> => {
   const where = {
     id: { eq: sourceEntityId },
     workspaceId: { eq: sourceWorkspaceId },
+    RAW: flowRelatedTaskVisibilityConditions({ organizationId, userId }).entity,
   } as const;
 
   if (transfer.type === "move") {
@@ -157,14 +175,21 @@ type ReadWorkspaceEntitiesOptions = {
   tx: Transaction;
   sourceWorkspaceId: SafeId<"workspace">;
   transfer: EntityTransfer;
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
 };
 
 const readWorkspaceEntities = async ({
   tx,
   sourceWorkspaceId,
   transfer,
+  organizationId,
+  userId,
 }: ReadWorkspaceEntitiesOptions): Promise<EntitySnapshot[]> => {
-  const where = { workspaceId: { eq: sourceWorkspaceId } } as const;
+  const where = {
+    workspaceId: { eq: sourceWorkspaceId },
+    RAW: flowRelatedTaskVisibilityConditions({ organizationId, userId }).entity,
+  } as const;
 
   if (transfer.type === "move") {
     return await tx.query.entities.findMany({
@@ -373,17 +398,30 @@ const copyToWorkspaceHandler = async function* ({
   ) satisfies EntityTransfer;
 
   // Fetch source entity
-  const source = yield* Result.await(
-    safeDb(
-      async (tx) =>
+  const sourceRead = yield* Result.await(
+    safeDb(async (tx) => {
+      const admission = await admitEntityTransferAccess(tx, {
+        workspaceId: sourceWorkspaceId,
+        entityId: sourceEntityId,
+        userId,
+        access: "write",
+      });
+      if (admission.isErr()) {
+        return admission;
+      }
+      return Result.ok(
         await readSourceEntity({
           tx,
           sourceWorkspaceId,
           sourceEntityId,
           transfer,
+          organizationId,
+          userId,
         }),
-    ),
+      );
+    }),
   );
+  const source = yield* sourceRead;
 
   if (!source) {
     return Result.err(
@@ -403,12 +441,29 @@ const copyToWorkspaceHandler = async function* ({
   // Get subtree for folders
   let sourceEntities: EntitySnapshot[] = [source];
   if (source.kind === "folder") {
-    const workspaceEntities = yield* Result.await(
-      safeDb(
-        async (tx) =>
-          await readWorkspaceEntities({ tx, sourceWorkspaceId, transfer }),
-      ),
+    const workspaceRead = yield* Result.await(
+      safeDb(async (tx) => {
+        const admission = await admitEntityTransferAccess(tx, {
+          workspaceId: sourceWorkspaceId,
+          entityId: sourceEntityId,
+          userId,
+          access: "write",
+        });
+        if (admission.isErr()) {
+          return admission;
+        }
+        return Result.ok(
+          await readWorkspaceEntities({
+            tx,
+            sourceWorkspaceId,
+            transfer,
+            organizationId,
+            userId,
+          }),
+        );
+      }),
     );
+    const workspaceEntities = yield* workspaceRead;
 
     const subtree = getFolderSubtree(workspaceEntities, sourceEntityId);
     if (!subtree) {
@@ -554,6 +609,15 @@ const copyToWorkspaceHandler = async function* ({
   // to ensure atomicity — either both succeed or neither does.
   const sourceEntityIds = sourceEntities.map((e) => e.id);
   const txResultResult = await safeDb(async (tx) => {
+    const admission = await admitEntityTransferAccess(tx, {
+      workspaceId: sourceWorkspaceId,
+      entityId: sourceEntityId,
+      userId,
+      access: deleteSource ? "remove" : "write",
+    });
+    if (admission.isErr()) {
+      return Result.err(admission.error);
+    }
     const copyResult = await copyEntities({
       organizationId,
       tx,
@@ -580,6 +644,14 @@ const copyToWorkspaceHandler = async function* ({
 
     // For move operations, delete source entities in the same transaction.
     if (deleteSource) {
+      const deletionAdmission = await admitFlowReviewTaskDeletion(tx, {
+        workspaceId: sourceWorkspaceId,
+        taskEntityIds: sourceEntityIds,
+        userId,
+      });
+      if (deletionAdmission.isErr()) {
+        abortTransaction(deletionAdmission.error);
+      }
       // The whole moved subtree goes in one statement. Ordering the deletes
       // bought nothing: `entities.parent_id` is ON DELETE SET NULL, so no
       // child is ever left referencing a removed parent, and every child is
@@ -674,13 +746,45 @@ const copyToWorkspaceHandler = async function* ({
   }
 
   // Sync search indexes
-  dependencies
-    .syncWorkspaceSearchActivity(targetWorkspaceId)
-    .catch(captureError);
+  detached(
+    Result.tryPromise(
+      async () =>
+        await safeDb(
+          async (tx) =>
+            await dependencies.syncWorkspaceSearchActivity(
+              targetWorkspaceId,
+              tx,
+            ),
+        ),
+    ).then((searchAttempt) => {
+      const result = searchAttempt.andThen((value) => value);
+      if (result.isErr()) {
+        observeFailure(result.error, { sink: searchRepairFailure });
+      }
+      return result;
+    }),
+    "entities-copy.target-search-repair",
+  );
   if (deleteSource) {
-    dependencies
-      .syncWorkspaceSearchActivity(sourceWorkspaceId)
-      .catch(captureError);
+    detached(
+      Result.tryPromise(
+        async () =>
+          await safeDb(
+            async (tx) =>
+              await dependencies.syncWorkspaceSearchActivity(
+                sourceWorkspaceId,
+                tx,
+              ),
+          ),
+      ).then((searchAttempt) => {
+        const result = searchAttempt.andThen((value) => value);
+        if (result.isErr()) {
+          observeFailure(result.error, { sink: searchRepairFailure });
+        }
+        return result;
+      }),
+      "entities-copy.source-search-repair",
+    );
   }
 
   // The source workspace event is emitted by the route macro. This explicit
@@ -711,6 +815,7 @@ const config = {
     "read-only entities are refused.",
   permissions: { entity: ["create", "delete"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  featureAccess: FLOW_TASK_FEATURE_ACCESS,
   realtime: entityRealtimeUpdates,
   mcp: {
     type: "capability",

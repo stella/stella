@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/signals/reset-cleanup-owner.ts",
+  "delta": 3,
+  "reason": "Bounded keyset pages discover cleanup sources in identity order. Signal events prove their parent before their exact event source; every deletion uses the row-proven scope. Serial scope lending restores transaction role settings before the next source, and each committed table count is audited after its pages."
+}

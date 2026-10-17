@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 
+import { flowOwnedEntityVisibilitySql } from "@/api/lib/flows/visibility";
 import { searchDocumentsAccessSql } from "@/api/lib/search/contact-workspace-access-sql";
 import { decodeCursor } from "@/api/lib/search/cursor";
 import { TS_HEADLINE_CONFIG } from "@/api/lib/search/highlight";
@@ -20,7 +21,13 @@ const currentVersionProjectionFilter = sql`
 export const buildDocumentSearchQueries = (query: SearchQuery) => {
   assertAuthorizedSearchScope(query);
 
-  const { organizationId, limit } = query;
+  const { organizationId, userId, limit } = query;
+  const flowVisibility = flowOwnedEntityVisibilitySql({
+    organizationId,
+    userId,
+    entityId: sql`sd.entity_id`,
+    workspaceId: sql`sd.workspace_id`,
+  });
 
   const orgFilter = sql`sd.organization_id = ${organizationId}`;
   const selectedWorkspaceIds =
@@ -81,6 +88,7 @@ export const buildDocumentSearchQueries = (query: SearchQuery) => {
       ${kindFilter}
       ${cursorFilter}
       ${currentVersionProjectionFilter}
+      AND ${flowVisibility}
       AND sd.tsv @@ ${tsQuery}
     ORDER BY score DESC, sd.entity_id DESC
     LIMIT ${limit + 1}
@@ -95,6 +103,7 @@ export const buildDocumentSearchQueries = (query: SearchQuery) => {
       ${workspaceSelectionFilter}
       ${kindFilter}
       ${currentVersionProjectionFilter}
+      AND ${flowVisibility}
       AND sd.tsv @@ ${tsQuery}
   `;
 
@@ -109,6 +118,7 @@ export const buildDocumentSearchQueries = (query: SearchQuery) => {
     WHERE ${orgFilter}
       ${workspaceSelectionFilter}
       ${currentVersionProjectionFilter}
+      AND ${flowVisibility}
       AND sd.tsv @@ ${tsQuery}
     GROUP BY sd.kind
     ORDER BY count DESC
@@ -127,6 +137,7 @@ export const buildDocumentSearchQueries = (query: SearchQuery) => {
       ${workspaceAccessFilter}
       ${kindFilter}
       ${currentVersionProjectionFilter}
+      AND ${flowVisibility}
       AND sd.tsv @@ ${tsQuery}
     GROUP BY sd.workspace_id, w.name
     ORDER BY count DESC
@@ -140,7 +151,13 @@ const CONTENT_HEADLINE_CONFIG =
   'FragmentDelimiter=" ... ", StartSel="", StopSel=""';
 
 export const buildContentSearchQueries = (query: ContentSearchQuery) => {
-  const { organizationId, workspaceId, limit } = query;
+  const { organizationId, userId, workspaceId, limit } = query;
+  const flowVisibility = flowOwnedEntityVisibilitySql({
+    organizationId,
+    userId,
+    entityId: sql`sd.entity_id`,
+    workspaceId: sql`sd.workspace_id`,
+  });
   const tsQuery = buildSearchTsQuery(query.query);
   const singleWorkspaceFilter = searchDocumentsAccessSql({
     accessibleWorkspaceIds: [workspaceId],
@@ -166,6 +183,7 @@ export const buildContentSearchQueries = (query: ContentSearchQuery) => {
       WHERE sd.organization_id = ${organizationId}
         ${singleWorkspaceFilter}
         ${currentVersionProjectionFilter}
+      AND ${flowVisibility}
         AND sd.tsv @@ ${tsQuery}
       ORDER BY score DESC, sd.entity_id DESC
       LIMIT ${limit}
@@ -178,6 +196,7 @@ export const buildContentSearchQueries = (query: ContentSearchQuery) => {
       WHERE sd.organization_id = ${organizationId}
         ${singleWorkspaceFilter}
         ${currentVersionProjectionFilter}
+      AND ${flowVisibility}
         AND sd.tsv @@ ${tsQuery}
     `,
   };

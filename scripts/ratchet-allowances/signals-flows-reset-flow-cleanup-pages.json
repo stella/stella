@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/flows/reset-cleanup-owner.ts",
+  "delta": 2,
+  "reason": "Bounded keyset pages discover definitions in identity order; each exact source proof precedes its scoped deletion. Serial scope lending restores transaction role settings before the next source, and the committed deletion count is audited after all pages."
+}

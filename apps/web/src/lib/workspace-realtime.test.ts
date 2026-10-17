@@ -30,10 +30,11 @@ describe("workspace realtime policy", () => {
       type: REALTIME_EVENT_TYPE.RESOURCE_UPDATED,
       resource: { type: RESOURCE_TYPE.ENTITY, id: "entity-1" },
     });
-    const deleted = parseEvent({
-      type: REALTIME_EVENT_TYPE.RESOURCE_DELETED,
-      resource: { type: RESOURCE_TYPE.ENTITY, id: "entity-1" },
-    });
+    const deleted = parseEvent(
+      JSON.parse(
+        '{"type":"resource.deleted","resource":{"type":"entity","id":"entity-1"},"deletionOwnership":"ordinary"}',
+      ),
+    );
 
     expect(updated).not.toBeNull();
     expect(deleted).not.toBeNull();
@@ -105,10 +106,11 @@ describe("workspace realtime policy", () => {
       type: REALTIME_EVENT_TYPE.RESOURCE_UPDATED,
       resource: { type: RESOURCE_TYPE.FIELD, id: "field-1" },
     });
-    const deleted = parseEvent({
-      type: REALTIME_EVENT_TYPE.RESOURCE_DELETED,
-      resource: { type: RESOURCE_TYPE.FIELD, id: "field-1" },
-    });
+    const deleted = parseEvent(
+      JSON.parse(
+        '{"type":"resource.deleted","resource":{"type":"field","id":"field-1"},"deletionOwnership":"ordinary"}',
+      ),
+    );
 
     expect(updated).not.toBeNull();
     expect(deleted).not.toBeNull();
@@ -337,10 +339,9 @@ describe("matter refresh after a reconnect", () => {
           type: REALTIME_EVENT_TYPE.RESOURCE_UPDATED,
           resource: { type: resourceType, id: "resource-1" },
         },
-        {
-          type: REALTIME_EVENT_TYPE.RESOURCE_DELETED,
-          resource: { type: resourceType, id: "resource-1" },
-        },
+        JSON.parse(
+          `{"type":"resource.deleted","resource":{"type":"${resourceType}","id":"resource-1"},"deletionOwnership":"ordinary"}`,
+        ),
       ],
     );
     for (const missed of missedEvents) {

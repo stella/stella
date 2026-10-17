@@ -12,7 +12,17 @@ export default {
     names: ["desktopPresence"],
     allowed: [
       {
-        path: "apps/api/src/lib/member-assignment-offboarding.ts",
+        path: "apps/api/src/db/org-scope-registry.ts",
+        reason:
+          "Static row ownership and key metadata only; no data queries or mutations.",
+      },
+      {
+        path: "apps/api/src/lib/member-offboarding/member-assignment-offboarding-census.ts",
+        reason:
+          "Static column metadata used only by the cleanup coverage test; no presence or assignment query.",
+      },
+      {
+        path: "apps/api/src/lib/member-offboarding/member-assignment-offboarding-owner.ts",
         reason: "Clears observations during organization membership removal.",
       },
     ],

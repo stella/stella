@@ -1,5 +1,5 @@
 import { panic, Result, TaggedError } from "better-result";
-import { and, asc, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 
 import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
 import {
@@ -8,14 +8,13 @@ import {
   SUGGESTION_KIND,
 } from "@stll/api-contract/signals";
 
-import { member as organizationMembers } from "@/api/db/auth-schema";
+import { proveOrgScope, withOrgScope } from "@/api/db/org-scope";
 import type { rootDb, Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   documentProcessingRuns,
   entities,
   extractedContent,
-  workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
 import type { RlsDatabase } from "@/api/db/scoped";
@@ -25,10 +24,30 @@ import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { decryptContent } from "@/api/lib/content-encryption";
+import {
+  withAggregateLock,
+  withAggregateRowQuery,
+  withAggregateTransaction,
+} from "@/api/lib/db/aggregate-lock";
+import { mutateRecoveryClaim } from "@/api/lib/db/recovery-bookkeeping/claims";
+import { timestampMatchesCasToken } from "@/api/lib/db/timestamp-cas";
+import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import {
+  findSignalsBackgroundActor,
+  backgroundFeatureActorExists,
+  isBackgroundFeatureEnabled,
+} from "@/api/lib/feature-access/background";
+import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
+import { logger } from "@/api/lib/observability/logger";
 import type { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
 import { createModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
 import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
-import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
+import {
+  DEADLINE_DISPATCH_RECOVERY,
+  pauseDocumentDeadlineScoutAfterGrantLoss,
+} from "@/api/lib/scouts/document-deadline-recovery";
+import type { DeadlineScoutClaimSettlement } from "@/api/lib/scouts/document-deadline-recovery";
 import { deadlineScoutDue } from "@/api/lib/scouts/document-deadline-skip";
 import {
   capText,
@@ -52,20 +71,21 @@ const DEADLINE_GENERATION_TIMEOUT_MS = 60_000;
 // A 2,000-token allowance truncated valid extractions before JSON could close.
 const DEADLINE_MAX_OUTPUT_TOKENS = 8192;
 const DEADLINE_SCOUT_ERROR_CODE = {
-  NO_ACTOR: "no_actor",
+  FEATURE_NOT_GRANTED: "feature_not_granted",
   OBSERVATION_FAILED: "observation_failed",
   SOURCE_SUPERSEDED: "source_superseded",
+  STALE_CLAIM: "stale_claim",
 } as const;
 
 class DocumentDeadlineScoutError extends TaggedError(
   "DocumentDeadlineScoutError",
 )<{
-  code: string;
+  code: (typeof DEADLINE_SCOUT_ERROR_CODE)[keyof typeof DEADLINE_SCOUT_ERROR_CODE];
   message: string;
   cause: unknown;
 }> {}
 
-type DeadlineScoutDb = Pick<typeof rootDb, "select" | "update">;
+type DeadlineScoutDb = Pick<typeof rootDb, "select" | "update" | "transaction">;
 
 export type RunDocumentDeadlineScoutArgs = {
   db: DeadlineScoutDb;
@@ -76,77 +96,45 @@ export type RunDocumentDeadlineScoutArgs = {
   admit?: typeof withActionAdmission;
 };
 
-type ClaimedRun = typeof documentProcessingRuns.$inferSelect;
+type ClaimedRun = typeof documentProcessingRuns.$inferSelect & {
+  deadlineScoutClaimedAt: Date;
+  deadlineScoutClaimedAtToken: TimestampCasToken;
+};
 
 const claimRun = async (
-  db: DeadlineScoutDb,
+  db: Transaction,
   sourceRunId: SafeId<"documentProcessingRun">,
 ): Promise<ClaimedRun | null> => {
   const now = new Date();
-  const claimed = await db
-    .update(documentProcessingRuns)
-    .set({
-      deadlineScoutAttemptCount: sql`${documentProcessingRuns.deadlineScoutAttemptCount} + 1`,
-      deadlineScoutClaimedAt: now,
-      deadlineScoutErrorCode: null,
-      deadlineScoutSkippedUntil: null,
-      deadlineScoutStatus: "running",
-      updatedAt: now,
-    })
-    .where(
-      and(
-        eq(documentProcessingRuns.id, sourceRunId),
-        eq(documentProcessingRuns.status, "succeeded"),
-        eq(documentProcessingRuns.deadlineScoutStatus, "pending"),
-        deadlineScoutDue(now),
-      ),
-    )
-    .returning();
-  return claimed.at(0) ?? null;
-};
-
-const resolveActorUserId = async (
-  db: DeadlineScoutDb,
-  run: ClaimedRun,
-): Promise<SafeId<"user"> | null> => {
-  const candidates = await db
-    .select({ userId: workspaceMembers.userId })
-    .from(workspaceMembers)
-    .innerJoin(
-      organizationMembers,
-      and(
-        eq(organizationMembers.organizationId, run.organizationId),
-        eq(organizationMembers.userId, workspaceMembers.userId),
-      ),
-    )
-    .innerJoin(
-      workspaces,
-      and(
-        eq(workspaces.id, workspaceMembers.workspaceId),
-        eq(workspaces.organizationId, run.organizationId),
-      ),
-    )
-    .innerJoin(
-      entities,
-      and(
-        eq(entities.id, run.entityId),
-        eq(entities.workspaceId, workspaces.id),
-      ),
-    )
-    .where(eq(workspaceMembers.workspaceId, run.workspaceId))
-    .orderBy(
-      sql`CASE
-        WHEN ${workspaceMembers.userId} = ${run.requestedBy} THEN 0
-        WHEN ${workspaceMembers.userId} = ${entities.createdBy} THEN 1
-        WHEN ${workspaceMembers.userId} = ${workspaces.leadUserId} THEN 2
-        ELSE 3
-      END`,
-      asc(workspaceMembers.createdAt),
-      asc(workspaceMembers.id),
-    )
-    .limit(1);
-  const actor = candidates.at(0);
-  return actor ? brandPersistedUserId(actor.userId) : null;
+  const claimed = await mutateRecoveryClaim({
+    type: "deadline-claim",
+    tx: db,
+    spec: DEADLINE_DISPATCH_RECOVERY,
+    sourceRunId,
+    table: documentProcessingRuns,
+    now,
+    where: sql`${and(
+      eq(documentProcessingRuns.id, sourceRunId),
+      eq(documentProcessingRuns.status, "succeeded"),
+      eq(documentProcessingRuns.deadlineScoutStatus, "pending"),
+      deadlineScoutDue(now),
+    )}`,
+  });
+  if (claimed.status === "stale_claim") {
+    return null;
+  }
+  const { run } = claimed;
+  if (
+    run.deadlineScoutClaimedAt === null ||
+    run.deadlineScoutClaimedAtToken === null
+  ) {
+    return panic("Claimed deadline scout has no claim token");
+  }
+  return {
+    ...run,
+    deadlineScoutClaimedAt: run.deadlineScoutClaimedAt,
+    deadlineScoutClaimedAtToken: run.deadlineScoutClaimedAtToken,
+  };
 };
 
 type ExtractDeadlinesOptions = {
@@ -160,7 +148,7 @@ type ExtractDeadlinesOptions = {
   run: ClaimedRun;
   scopedDb: ScopedDb;
   userId: SafeId<"user">;
-  onRefused: (admission: DeadlineScanAdmission) => void;
+  onRefused: (admission: DeadlineScoutAdmission) => void;
   admit: typeof withActionAdmission | undefined;
 };
 
@@ -185,6 +173,30 @@ const extractDeadlines = async ({
     userId,
     organizationStateDb: scopedDb,
     actionKind: "documents.scan-deadlines",
+    beforeReserve: async (reservePeriod) => {
+      await scopedDb(async (tx) => {
+        const decision = await validateDocumentDeadlineScoutClaim({
+          tx,
+          run,
+          actorUserId: userId,
+        });
+        if (decision !== "current") {
+          const code = (
+            {
+              "not-granted": DEADLINE_SCOUT_ERROR_CODE.FEATURE_NOT_GRANTED,
+              stale_claim: DEADLINE_SCOUT_ERROR_CODE.STALE_CLAIM,
+              superseded: DEADLINE_SCOUT_ERROR_CODE.SOURCE_SUPERSEDED,
+            } as const
+          )[decision];
+          throw new DocumentDeadlineScoutError({
+            code,
+            message: "Deadline observation is no longer admitted",
+            cause: null,
+          });
+        }
+        await reservePeriod();
+      });
+    },
     ...(admit === undefined ? {} : { admit }),
   })(
     async ({ admission }) =>
@@ -212,7 +224,25 @@ const extractDeadlines = async ({
   );
   if (Result.isError(admitted)) {
     const { error } = admitted;
-    onRefused(deadlineScanAdmission(error));
+    const refusal = DocumentDeadlineScoutError.is(error) ? error.code : null;
+    switch (refusal) {
+      case DEADLINE_SCOUT_ERROR_CODE.FEATURE_NOT_GRANTED:
+        onRefused({ type: "feature_not_granted" });
+        break;
+      case DEADLINE_SCOUT_ERROR_CODE.STALE_CLAIM:
+        onRefused({ type: "stale_claim" });
+        break;
+      case DEADLINE_SCOUT_ERROR_CODE.SOURCE_SUPERSEDED:
+        onRefused({ type: "source_superseded" });
+        break;
+      case DEADLINE_SCOUT_ERROR_CODE.OBSERVATION_FAILED:
+      case null:
+        onRefused(deadlineScanAdmission(error));
+        break;
+      default:
+        refusal satisfies never;
+        panic("Unknown deadline observation refusal");
+    }
     // An observation reports its failure by rejecting, as the model call
     // itself does; a refused scan is such a failure.
     throw error;
@@ -293,40 +323,105 @@ const settledColumns = (settlement: DeadlineScanSettlement) => {
         errorCode: settlement.errorCode,
         skippedUntil: null,
         status: settlement.status,
-      };
+      } as const;
     default:
       settlement satisfies never;
       return panic("Unhandled deadline scan settlement");
   }
 };
 
-const settleRun = async ({
+export const settleDocumentDeadlineScoutClaim = async ({
   db,
   run,
   settlement,
 }: {
-  db: Pick<DeadlineScoutDb, "update">;
-  run: Pick<ClaimedRun, "id">;
+  db: Pick<DeadlineScoutDb, "select" | "transaction"> | Transaction;
+  run: Pick<ClaimedRun, "id" | "deadlineScoutClaimedAtToken">;
   settlement: DeadlineScanSettlement;
-}): Promise<void> => {
+}): Promise<DeadlineScoutClaimSettlement> => {
   const { attemptRefund, errorCode, skippedUntil, status } =
     settledColumns(settlement);
-  await db
-    .update(documentProcessingRuns)
-    .set({
-      deadlineScoutAttemptCount: sql`GREATEST(${documentProcessingRuns.deadlineScoutAttemptCount} - ${attemptRefund}, 0)`,
-      deadlineScoutClaimedAt: null,
-      deadlineScoutErrorCode: errorCode,
-      deadlineScoutSkippedUntil: skippedUntil,
-      deadlineScoutStatus: status,
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
+  const settle = async (
+    tx: Transaction,
+    organizationId?: SafeId<"organization">,
+  ) => {
+    const proof = await proveOrgScope(tx, {
+      table: "documentProcessingRuns",
+      where: sql`${and(
         eq(documentProcessingRuns.id, run.id),
+        organizationId === undefined
+          ? undefined
+          : eq(documentProcessingRuns.organizationId, organizationId),
         eq(documentProcessingRuns.deadlineScoutStatus, "running"),
-      ),
-    );
+        timestampMatchesCasToken(
+          documentProcessingRuns.deadlineScoutClaimedAt,
+          run.deadlineScoutClaimedAtToken,
+        ),
+      )}`,
+    });
+    const scope = proof.unwrapOr(null);
+    if (scope === null) {
+      return 0;
+    }
+    return await withOrgScope({
+      tx,
+      scope,
+      actor: { type: "system" },
+      fn: async (scopedTx) =>
+        await mutateRecoveryClaim({
+          type: "deadline-settlement",
+          tx: scopedTx,
+          spec: DEADLINE_DISPATCH_RECOVERY,
+          table: documentProcessingRuns,
+          now: new Date(),
+          status,
+          errorCode,
+          skippedUntil,
+          attemptRefund,
+          where: sql`${and(
+            eq(documentProcessingRuns.id, run.id),
+            eq(documentProcessingRuns.organizationId, scope.organizationId),
+            eq(documentProcessingRuns.deadlineScoutStatus, "running"),
+            timestampMatchesCasToken(
+              documentProcessingRuns.deadlineScoutClaimedAt,
+              run.deadlineScoutClaimedAtToken,
+            ),
+          )}`,
+        }),
+    });
+  };
+  if ("rollback" in db) {
+    const settled = await settle(db);
+    return { status: settled === 0 ? "stale_claim" : "settled" };
+  }
+  const source = (
+    await db
+      .select({ organizationId: documentProcessingRuns.organizationId })
+      .from(documentProcessingRuns)
+      .where(
+        sql`${and(
+          eq(documentProcessingRuns.id, run.id),
+          eq(documentProcessingRuns.deadlineScoutStatus, "running"),
+          timestampMatchesCasToken(
+            documentProcessingRuns.deadlineScoutClaimedAt,
+            run.deadlineScoutClaimedAtToken,
+          ),
+        )}`,
+      )
+      .limit(1)
+  ).at(0);
+  if (source === undefined) {
+    return { status: "stale_claim" };
+  }
+  const settled = await withAggregateTransaction(db, async (tx) => {
+    await lockFeatureRecoveryAdmission({
+      tx,
+      organizationId: source.organizationId,
+      featureId: "signals",
+    });
+    return await settle(tx, source.organizationId);
+  });
+  return { status: settled === 0 ? "stale_claim" : "settled" };
 };
 
 type RejectDeadlineObservationOptions = {
@@ -339,8 +434,8 @@ const rejectDeadlineObservation = async ({
   db,
   run,
   error,
-}: RejectDeadlineObservationOptions): Promise<never> => {
-  await settleRun({
+}: RejectDeadlineObservationOptions): Promise<void> => {
+  const settled = await settleDocumentDeadlineScoutClaim({
     db,
     run,
     settlement: {
@@ -348,6 +443,9 @@ const rejectDeadlineObservation = async ({
       status: deadlineScoutFailureStatus(run.deadlineScoutAttemptCount, error),
     },
   });
+  if (settled.status === "stale_claim") {
+    return;
+  }
   throw new DocumentDeadlineScoutError({
     code: DEADLINE_SCOUT_ERROR_CODE.OBSERVATION_FAILED,
     message: "Document deadline observation failed",
@@ -356,26 +454,223 @@ const rejectDeadlineObservation = async ({
 };
 
 type SkipDeadlineScanOptions = {
-  db: Pick<DeadlineScoutDb, "update">;
+  db: DeadlineScoutDb;
   runId: ClaimedRun["id"];
-  skippedUntil: Date;
-};
+  claimedAtToken: TimestampCasToken;
+} & (
+  | { reason: "period_exhausted"; skippedUntil: Date }
+  | { reason: "feature_not_granted" }
+);
 
-/** Settle a running scan that an exhausted action period refused. */
+/** A refused claim returns its attempt; only period exhaustion delays its retry. */
 export const skipDeadlineScan = async ({
   db,
   runId,
-  skippedUntil,
-}: SkipDeadlineScanOptions): Promise<void> => {
-  await settleRun({
+  claimedAtToken,
+  ...refusal
+}: SkipDeadlineScanOptions): Promise<DeadlineScoutClaimSettlement> => {
+  if (refusal.reason === "feature_not_granted") {
+    return await pauseDocumentDeadlineScoutAfterGrantLoss({
+      database: db,
+      sourceRunId: runId,
+      from: "running",
+      claimedAtToken,
+    });
+  }
+  const settlement = {
+    status: "skipped",
+    skippedUntil: refusal.skippedUntil,
+  } as const;
+  return await settleDocumentDeadlineScoutClaim({
     db,
-    run: { id: runId },
-    settlement: { status: "skipped", skippedUntil },
+    run: { id: runId, deadlineScoutClaimedAtToken: claimedAtToken },
+    settlement,
   });
 };
 
+const admittedDeadlineScoutActor = async ({
+  db,
+  sourceRunId,
+}: RunDocumentDeadlineScoutArgs) => {
+  if (!isDeploymentFeatureEnabled("FEATURE_SIGNALS")) {
+    logger.info("scout.document_deadlines.skipped", {
+      sourceRunId,
+      reason: "deployment_disabled",
+    });
+    return null;
+  }
+  const sourceRun = (
+    await db
+      .select()
+      .from(documentProcessingRuns)
+      .where(eq(documentProcessingRuns.id, sourceRunId))
+      .limit(1)
+  ).at(0);
+  if (!sourceRun) {
+    return null;
+  }
+  const actorUserId = await findSignalsBackgroundActor({
+    tx: db,
+    organizationId: sourceRun.organizationId,
+    workspaceId: sourceRun.workspaceId,
+  });
+  if (!actorUserId) {
+    await pauseDocumentDeadlineScoutAfterGrantLoss({
+      database: db,
+      sourceRunId,
+      from: "pending",
+    });
+    logger.info("scout.document_deadlines.skipped", {
+      sourceRunId,
+      reason: "no_granted_member",
+    });
+    return null;
+  }
+  return actorUserId;
+};
+
+type ValidateDeadlineSourceOptions = {
+  tx: Transaction;
+  run: ClaimedRun;
+  actorUserId: SafeId<"user">;
+};
+
+export const validateDocumentDeadlineScoutClaim = async ({
+  tx,
+  run,
+  actorUserId,
+}: ValidateDeadlineSourceOptions) => {
+  await lockFeatureRecoveryAdmission({
+    tx,
+    organizationId: run.organizationId,
+    featureId: "signals",
+  });
+  if (
+    !(await isBackgroundFeatureEnabled({
+      tx,
+      organizationId: run.organizationId,
+      userId: actorUserId,
+      featureId: "signals",
+    }))
+  ) {
+    return "not-granted" as const;
+  }
+  const actorMatter = await tx
+    .select({ id: workspaces.id })
+    .from(workspaces)
+    .where(
+      and(
+        eq(workspaces.id, run.workspaceId),
+        eq(workspaces.organizationId, run.organizationId),
+        backgroundFeatureActorExists({
+          organizationId: run.organizationId,
+          workspaceId: run.workspaceId,
+          userId: actorUserId,
+          featureId: "signals",
+        }),
+      ),
+    )
+    .limit(1);
+  if (actorMatter.length === 0) {
+    return "not-granted" as const;
+  }
+  await withAggregateLock({
+    aggregate: "entity",
+    id: { id: run.entityId, workspaceId: run.workspaceId },
+    tx,
+    mode: "update",
+  });
+  const proof = await proveOrgScope(tx, {
+    table: "documentProcessingRuns",
+    where: sql`${and(
+      eq(documentProcessingRuns.id, run.id),
+      eq(documentProcessingRuns.workspaceId, run.workspaceId),
+      eq(documentProcessingRuns.organizationId, run.organizationId),
+      eq(documentProcessingRuns.deadlineScoutStatus, "running"),
+      timestampMatchesCasToken(
+        documentProcessingRuns.deadlineScoutClaimedAt,
+        run.deadlineScoutClaimedAtToken,
+      ),
+    )}`,
+  });
+  if (proof.isErr()) {
+    return "stale_claim" as const;
+  }
+  const claimed = await withAggregateRowQuery({
+    aggregate: "processingClaim",
+    id: { id: run.id, workspaceId: run.workspaceId },
+    tx,
+    mode: "update",
+    select: (queryTx) =>
+      queryTx
+        .select({
+          id: documentProcessingRuns.id,
+          workspaceId: documentProcessingRuns.workspaceId,
+        })
+        .from(documentProcessingRuns),
+    where:
+      and(
+        eq(documentProcessingRuns.deadlineScoutStatus, "running"),
+        timestampMatchesCasToken(
+          documentProcessingRuns.deadlineScoutClaimedAt,
+          run.deadlineScoutClaimedAtToken,
+        ),
+      ) ?? panic("Missing deadline scout claim predicates"),
+  });
+  if (claimed.rows.length === 0) {
+    return "stale_claim" as const;
+  }
+  const current = await tx
+    .select({ entityId: extractedContent.entityId })
+    .from(extractedContent)
+    .innerJoin(
+      entities,
+      and(
+        eq(entities.id, extractedContent.entityId),
+        eq(entities.workspaceId, extractedContent.workspaceId),
+      ),
+    )
+    .innerJoin(
+      workspaces,
+      and(
+        eq(workspaces.id, extractedContent.workspaceId),
+        eq(workspaces.organizationId, extractedContent.organizationId),
+      ),
+    )
+    .where(currentSourceWhere(run))
+    .limit(1);
+  return current.length === 1 ? ("current" as const) : ("superseded" as const);
+};
+
+type PauseDeadlineScoutOptions = {
+  db: DeadlineScoutDb;
+  run: ClaimedRun;
+};
+
+const pauseDeadlineScout = async ({
+  db,
+  run,
+}: PauseDeadlineScoutOptions): Promise<void> => {
+  await skipDeadlineScan({
+    db,
+    runId: run.id,
+    claimedAtToken: run.deadlineScoutClaimedAtToken,
+    reason: "feature_not_granted",
+  });
+  logger.info("scout.document_deadlines.skipped", {
+    sourceRunId: run.id,
+    reason: "actor_not_granted",
+  });
+};
+
+type DeadlineScoutAdmission =
+  | DeadlineScanAdmission
+  | { type: "stale_claim" }
+  | { type: "feature_not_granted" }
+  | { type: "source_superseded" };
+
 type SettleFailedObservationOptions = RejectDeadlineObservationOptions & {
-  admission: DeadlineScanAdmission;
+  admission: DeadlineScoutAdmission;
 };
 
 const settleFailedObservation = async ({
@@ -385,15 +680,34 @@ const settleFailedObservation = async ({
   error,
 }: SettleFailedObservationOptions): Promise<void> => {
   switch (admission.type) {
+    case "source_superseded":
+      await settleDocumentDeadlineScoutClaim({
+        db,
+        run,
+        settlement: {
+          status: "cancelled",
+          errorCode: DEADLINE_SCOUT_ERROR_CODE.SOURCE_SUPERSEDED,
+        },
+      });
+      return;
+    case "stale_claim":
+      return;
+    case "feature_not_granted":
+      await pauseDeadlineScout({ db, run });
+      return;
     case "period_exhausted":
       await skipDeadlineScan({
         db,
         runId: run.id,
+        claimedAtToken: run.deadlineScoutClaimedAtToken,
+        reason: "period_exhausted",
         skippedUntil: admission.skippedUntil,
       });
       return;
-    case "admitted":
-      return await rejectDeadlineObservation({ db, run, error });
+    case "admitted": {
+      await rejectDeadlineObservation({ db, run, error });
+      return;
+    }
     default:
       admission satisfies never;
       return panic("Unhandled deadline scan admission");
@@ -404,27 +718,131 @@ const settleFailedObservation = async ({
  * Read one immutable processing result and surface explicit dated obligations.
  * PostgreSQL owns claiming and retry state; a BullMQ job is only a wake-up.
  */
+const settleAcceptedDeadlineObservation = async ({
+  tx,
+  run,
+  scan,
+  observationAccepted,
+  featureEnabled,
+}: {
+  tx: Transaction;
+  run: ClaimedRun;
+  scan: { admission: DeadlineScoutAdmission };
+  observationAccepted: boolean;
+  featureEnabled: boolean;
+}): Promise<boolean> => {
+  if (scan.admission.type !== "admitted" || !featureEnabled) {
+    return false;
+  }
+  const settled = await settleDocumentDeadlineScoutClaim({
+    db: tx,
+    run,
+    settlement: observationAccepted
+      ? { errorCode: null, status: "succeeded" }
+      : {
+          errorCode: DEADLINE_SCOUT_ERROR_CODE.SOURCE_SUPERSEDED,
+          status: "cancelled",
+        },
+  });
+  if (settled.status === "stale_claim") {
+    panic("Deadline claim changed under its emission lock");
+  }
+  return true;
+};
+
+const claimAdmittedDeadlineSource = async ({
+  db,
+  sourceRunId,
+  actorUserId,
+}: RunDocumentDeadlineScoutArgs & {
+  actorUserId: SafeId<"user">;
+}): Promise<ClaimedRun | null> =>
+  await withAggregateTransaction(db, async (tx) => {
+    const source = (
+      await tx
+        .select({
+          organizationId: documentProcessingRuns.organizationId,
+          workspaceId: documentProcessingRuns.workspaceId,
+        })
+        .from(documentProcessingRuns)
+        .where(eq(documentProcessingRuns.id, sourceRunId))
+        .limit(1)
+    ).at(0);
+    if (!source) {
+      return null;
+    }
+    await lockFeatureRecoveryAdmission({
+      tx,
+      organizationId: source.organizationId,
+      featureId: "signals",
+    });
+    if (
+      !(await isBackgroundFeatureEnabled({
+        tx,
+        organizationId: source.organizationId,
+        userId: actorUserId,
+        featureId: "signals",
+      }))
+    ) {
+      return null;
+    }
+    const accessible = await tx
+      .select({ id: workspaces.id })
+      .from(workspaces)
+      .where(
+        and(
+          eq(workspaces.id, source.workspaceId),
+          backgroundFeatureActorExists({
+            organizationId: source.organizationId,
+            workspaceId: source.workspaceId,
+            userId: actorUserId,
+            featureId: "signals",
+          }),
+        ),
+      )
+      .limit(1);
+    if (accessible.length === 0) {
+      return null;
+    }
+    const proof = await proveOrgScope(tx, {
+      table: "documentProcessingRuns",
+      where: sql`${and(
+        eq(documentProcessingRuns.id, sourceRunId),
+        eq(documentProcessingRuns.organizationId, source.organizationId),
+        eq(documentProcessingRuns.workspaceId, source.workspaceId),
+        eq(documentProcessingRuns.status, "succeeded"),
+        eq(documentProcessingRuns.deadlineScoutStatus, "pending"),
+        deadlineScoutDue(new Date()),
+      )}`,
+    });
+    const scope = proof.unwrapOr(null);
+    if (scope === null) {
+      return null;
+    }
+    return await withOrgScope({
+      tx,
+      scope,
+      actor: { type: "system" },
+      fn: async (scopedTx) => await claimRun(scopedTx, sourceRunId),
+    });
+  });
+
 export const runDocumentDeadlineScout = async ({
   db,
   sourceRunId,
   database,
   admit,
 }: RunDocumentDeadlineScoutArgs): Promise<void> => {
-  const run = await claimRun(db, sourceRunId);
-  if (!run) {
+  const actorUserId = await admittedDeadlineScoutActor({ db, sourceRunId });
+  if (!actorUserId) {
     return;
   }
-
-  const actorUserId = await resolveActorUserId(db, run);
-  if (!actorUserId) {
-    await settleRun({
-      db,
-      run,
-      settlement: {
-        errorCode: DEADLINE_SCOUT_ERROR_CODE.NO_ACTOR,
-        status: "failed",
-      },
-    });
+  const run = await claimAdmittedDeadlineSource({
+    db,
+    sourceRunId,
+    actorUserId,
+  });
+  if (!run) {
     return;
   }
 
@@ -436,11 +854,12 @@ export const runDocumentDeadlineScout = async ({
   const scopedDb = createRootScopedDb(member, database);
   const safeDb = createRootSafeDb(member, database);
 
-  const scan: { admission: DeadlineScanAdmission } = {
+  const scan: { admission: DeadlineScoutAdmission } = {
     admission: { type: "admitted" },
   };
   // The config is read before the scout run opens: an organization barred
   // from the instance provider without a key of its own cannot observe.
+  const sourceSettlement = { settled: false };
   const observed = Result.flatten(
     await Result.tryPromise(async () => {
       const orgAIConfigResult = await loadOrgAISettings(db, {
@@ -455,6 +874,7 @@ export const runDocumentDeadlineScout = async ({
         await runScout({
           db: scopedDb,
           organizationId: run.organizationId,
+          userId: actorUserId,
           scoutKey: SCOUT_KEY.DOCUMENT_DEADLINES,
           observe: async () => {
             const source = await loadCurrentSource(db, run);
@@ -558,29 +978,26 @@ export const runDocumentDeadlineScout = async ({
             });
           },
           validate: async (tx) => {
-            const current = await tx
-              .select({ entityId: extractedContent.entityId })
-              .from(extractedContent)
-              .innerJoin(
-                entities,
-                and(
-                  eq(entities.id, extractedContent.entityId),
-                  eq(entities.workspaceId, extractedContent.workspaceId),
-                ),
-              )
-              .innerJoin(
-                workspaces,
-                and(
-                  eq(workspaces.id, extractedContent.workspaceId),
-                  eq(
-                    workspaces.organizationId,
-                    extractedContent.organizationId,
-                  ),
-                ),
-              )
-              .where(currentSourceWhere(run))
-              .limit(1);
-            return current.length === 1;
+            const decision = await validateDocumentDeadlineScoutClaim({
+              tx,
+              run,
+              actorUserId,
+            });
+            if (decision === "not-granted") {
+              scan.admission = { type: "feature_not_granted" };
+            }
+            if (decision === "stale_claim") {
+              scan.admission = { type: "stale_claim" };
+            }
+            return decision === "current";
+          },
+          settle: async (tx, admission) => {
+            sourceSettlement.settled = await settleAcceptedDeadlineObservation({
+              tx,
+              run,
+              scan,
+              ...admission,
+            });
           },
         }),
       );
@@ -597,14 +1014,20 @@ export const runDocumentDeadlineScout = async ({
     return;
   }
 
-  await settleRun({
-    db,
-    run,
-    settlement: observed.value.observationAccepted
-      ? { errorCode: null, status: "succeeded" }
-      : {
-          errorCode: DEADLINE_SCOUT_ERROR_CODE.SOURCE_SUPERSEDED,
-          status: "cancelled",
-        },
-  });
+  if (
+    sourceSettlement.settled ||
+    observed.value.outcome === "stale" ||
+    scan.admission.type === "stale_claim"
+  ) {
+    return;
+  }
+  if (
+    observed.value.outcome === "paused" ||
+    scan.admission.type === "feature_not_granted"
+  ) {
+    await pauseDeadlineScout({ db, run });
+    return;
+  }
+
+  // Accepted observations settled in the signal transaction.
 };

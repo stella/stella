@@ -404,6 +404,62 @@ test("directive placement leaves ledger write counts identical", async () => {
   }
 });
 
+describe("recovery bookkeeping audit ownership", () => {
+  const declaration =
+    "declare const tx: { update: (table: unknown) => void };\ndeclare const rows: unknown;\n";
+  const directive =
+    "// audit: skip - derived recovery state has an audited source";
+  const ownerSource = `${declaration}export const write = () => {\n${directive}\ntx.update(rows);\n};`;
+  const options = (sourcePath: string) => ({
+    sourcePath,
+    ruleOptionsForRoot: (root: string) => ({ root }),
+  });
+
+  test("one class owner directive covers its closed writes", async () => {
+    expect(
+      await lintSingleRule(
+        RULE,
+        ownerSource,
+        options("apps/api/src/lib/db/recovery-bookkeeping/claims.ts"),
+      ),
+    ).toEqual([]);
+  });
+
+  test("a class owner cannot add a second directive", async () => {
+    expect(
+      await lintSingleRule(
+        RULE,
+        ownerSource.replace(directive, () => `${directive}\n${directive}`),
+        options("apps/api/src/lib/db/recovery-bookkeeping/claims.ts"),
+      ),
+    ).toEqual([1]);
+  });
+
+  test.each([
+    "@/api/lib/db/recovery-bookkeeping/claims",
+    "./db/recovery-bookkeeping/claims",
+  ])(
+    "a consumer of %s cannot annotate its own bookkeeping writes",
+    async (specifier) => {
+      const consumerSource = `import { mutateRecoveryClaim } from "${specifier}";\n${ownerSource}`;
+      expect(
+        await lintSingleRule(RULE, consumerSource, options(SOURCE_PATH)),
+      ).toEqual([1]);
+      expect(
+        await lintSingleRule(
+          RULE,
+          consumerSource.replace(directive, ""),
+          options(SOURCE_PATH),
+        ),
+      ).toEqual([6]);
+      const delegated = `import { mutateRecoveryClaim } from "${specifier}";\ndeclare const operation: Parameters<typeof mutateRecoveryClaim>[0];\nexport const save = () => mutateRecoveryClaim(operation);`;
+      expect(
+        await lintSingleRule(RULE, delegated, options(SOURCE_PATH)),
+      ).toEqual([]);
+    },
+  );
+});
+
 test("the recorder owns audit insertion while other writes still require an event", async () => {
   const accountInsert =
     "export const record = (tx) => tx.insert(accountAuditLogs);";
@@ -429,4 +485,48 @@ test("the recorder owns audit insertion while other writes still require an even
       },
     ),
   ).toEqual([1]);
+});
+
+describe("organization owner callback audit scope", () => {
+  const owner = (importPath: string, consumption: string, audit: string) => `
+import { withOrgScope as lend } from "${importPath}";
+declare const tx: any;
+declare const rows: any;
+export const change = async (recordAuditEvent: any) => {
+  ${consumption === "return" ? audit : ""}
+  ${consumption} lend({ tx, scope: {}, actor: {}, fn: async (scopedTx) => {
+    await scopedTx.update(rows);
+  }});
+  ${consumption === "return" ? "" : audit}
+};`;
+  test.each(["await", "return"])(
+    "%s canonical owner callback retains its enclosing audit",
+    async (consumption) => {
+      expect(
+        await lintSingleRule(
+          RULE,
+          owner(
+            "@/api/db/org-scope",
+            consumption,
+            "await recordAuditEvent(tx, {});",
+          ),
+          { sourcePath: SOURCE_PATH },
+        ),
+      ).toEqual([]);
+    },
+  );
+  test.each([
+    ["@/api/db/org-scope", "await", ""],
+    ["@/api/db/org-scope", "void", "await recordAuditEvent(tx, {});"],
+    ["./other-owner", "await", "await recordAuditEvent(tx, {});"],
+  ])(
+    "%s %s retains the mutation diagnostic without an awaited canonical audit scope",
+    async (importPath, consumption, audit) => {
+      expect(
+        await lintSingleRule(RULE, owner(importPath, consumption, audit), {
+          sourcePath: SOURCE_PATH,
+        }),
+      ).toEqual([8]);
+    },
+  );
 });

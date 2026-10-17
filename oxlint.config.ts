@@ -1447,6 +1447,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-contract-domains.ts",
     ...SHADCN_LINT_JS_PLUGINS,
     stellaLowercasePluginSpecifier,
+    "./.oxlint-plugins/no-forged-realtime-event.ts",
     "./.oxlint-plugins/no-raw-cache-control.ts",
     "./.oxlint-plugins/confine-sql-close.ts",
     "./.oxlint-plugins/raw-hash-from-source-fingerprint.ts",
@@ -4639,6 +4640,11 @@ const config = defineConfig({
           {
             allowedFiles: [
               {
+                file: "apps/api/src/db/org-scope-registry.ts",
+                reason:
+                  "Static account table classification metadata; the registry executes no data queries.",
+              },
+              {
                 file: "apps/api/src/lib/db/operator-activity/read.ts",
                 reason:
                   "deployment-credential authorized aggregate counts, bounded by time windows and statement timeout, with transactional access auditing",
@@ -5088,6 +5094,10 @@ const config = defineConfig({
       rules: {
         "no-unanchored-footnotes/no-unanchored-footnotes": "error",
       },
+    },
+    {
+      files: ["**/*.{ts,tsx}"],
+      rules: { "no-forged-realtime-event/no-forged-realtime-event": "error" },
     },
     {
       files: [

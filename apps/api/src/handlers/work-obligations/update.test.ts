@@ -22,6 +22,10 @@ import updateWorkObligation from "./update";
 
 type UpdateContext = Parameters<typeof updateWorkObligation.handler>[0];
 
+// Handler feature admission reads the caller identity; these tasks are
+// not flow-linked, so no enrolment is needed.
+const CALLER_IDENTITY = { email: "member@example.test", emailVerified: true };
+
 describe("updateWorkObligation", () => {
   test("locks the delegated owner's membership before the obligation", async () => {
     const workspaceId = toSafeId<"workspace">(
@@ -85,7 +89,10 @@ describe("updateWorkObligation", () => {
           },
         }),
       },
-      { visibleResources: { entity: [entityId] } },
+      {
+        visibleResources: { entity: [entityId] },
+        featureAccess: { identity: CALLER_IDENTITY },
+      },
     );
     const request = new Request("https://api.example.test/work-obligations");
     const recordAuditEvent = createAuditRecorder({
@@ -218,7 +225,10 @@ describe("updateWorkObligation", () => {
           },
         }),
       },
-      { visibleResources: { entity: [entityId] } },
+      {
+        visibleResources: { entity: [entityId] },
+        featureAccess: { identity: CALLER_IDENTITY },
+      },
     );
     const request = new Request("https://api.example.test/work-obligations");
     const recordAuditEvent = createAuditRecorder({
@@ -344,7 +354,10 @@ describe("updateWorkObligation", () => {
           }),
           insert: () => ({ values: async () => undefined }),
         },
-        { visibleResources: { entity: [entityId] } },
+        {
+          visibleResources: { entity: [entityId] },
+          featureAccess: { identity: CALLER_IDENTITY },
+        },
       );
       const request = new Request("https://api.example.test/work-obligations");
       const recordAuditEvent = createAuditRecorder({

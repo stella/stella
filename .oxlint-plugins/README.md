@@ -52,6 +52,8 @@ runtime validation, or integration tests.
 
 ### Security, identity, files, and external boundaries
 
+- [`no-forged-realtime-event`](./no-forged-realtime-event.ts) (`no-forged-realtime-event`): confines event and deletion brand literals/casts to their canonical owners and resource deletion object construction to contract builders; follows stable local aliases and named deletion constants, including test files.
+
 - [`require-write-contract`](./require-write-contract.ts) (`require-write-contract`): requires safe handler configs to declare a literal patch or replace contract and rejects Replace-prefixed descriptions declared patch; resolves owner factory imports, their registered config argument shape, local config bindings and ordered spreads. Canonical factory owners may forward typed parameters; concrete leaf configs remain checked.
 
 - [`require-caller-feature-access`](./require-caller-feature-access.ts) (`require-caller-feature-access`): requires routes importing caller-gated features to admit their loaders through the feature-access owner before feature reads, and rejects browser feature flags and preview state.

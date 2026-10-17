@@ -111,7 +111,7 @@ export type SearchAISummaryParams = {
 // Query keys are reconstructed field-by-field (never spread) so extra
 // properties on a caller-supplied params object cannot leak into the cache
 // identity and trigger spurious refetches.
-const searchKeys = {
+export const searchKeys = {
   all: ["search"] as const,
   owner: (params: SearchOwner) =>
     [

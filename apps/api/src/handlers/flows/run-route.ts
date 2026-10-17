@@ -6,11 +6,16 @@ import listFlowRuns from "@/api/handlers/flows/runs/list";
 import reviewFlowRun from "@/api/handlers/flows/runs/review";
 import startFlowRun from "@/api/handlers/flows/runs/start";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
+import { featureAccessGate } from "@/api/lib/auth/feature-access/route";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 
 /** Workspace-scoped flow run lifecycle (start / list / detail / review / cancel). */
 export const flowRunsRoute = new Elysia({
   prefix: "/workspaces/:workspaceId/flows/runs",
 })
+  .use(deploymentFeatureGate(() => isDeploymentFeatureEnabled("FEATURE_FLOWS")))
+  .use(featureAccessGate("flows"))
   .use(workspaceAccessMacro)
   .use(permissionMacro)
   .guard({ validateWorkspaceAccess: true })

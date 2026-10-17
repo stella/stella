@@ -1,7 +1,11 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import {
+  resourceRef,
+  RESOURCE_TYPE,
+  RESOURCE_DELETION_OWNERSHIP,
+} from "@stll/api-contract";
 
 import { workspaceViews } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
@@ -132,10 +136,10 @@ const deleteView = createSafeHandler(
       }),
     );
 
-    broadcastWorkspaceResourceDeleted(
-      workspaceId,
-      resourceRef({ type: RESOURCE_TYPE.WORKSPACE_VIEW, id: viewId }),
-    );
+    broadcastWorkspaceResourceDeleted(workspaceId, {
+      resource: resourceRef({ type: RESOURCE_TYPE.WORKSPACE_VIEW, id: viewId }),
+      deletionOwnership: RESOURCE_DELETION_OWNERSHIP.ORDINARY,
+    });
 
     return Result.ok({});
   },

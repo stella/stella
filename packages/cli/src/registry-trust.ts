@@ -146,6 +146,16 @@ const featureAccessSnapshotSchema = v.object({
     v.array(v.pipe(v.string(), v.regex(MCP_TOOL_NAME_PATTERN))),
     v.maxLength(MAX_TOOLS),
   ),
+  conditionalInputs: v.exactOptional(
+    v.record(
+      v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
+      v.strictObject({
+        body: v.exactOptional(v.record(v.string(), v.unknown())),
+        params: v.exactOptional(v.record(v.string(), v.unknown())),
+        query: v.exactOptional(v.record(v.string(), v.unknown())),
+      }),
+    ),
+  ),
 });
 
 const extractFeatureAccess = (parsed: unknown) => {
@@ -508,6 +518,22 @@ export const validateFetchedToolsList = (rawBody: string): TrustResult => {
   );
   if (!featureAccess.success) {
     return { ok: false, violation: "feature access snapshot is invalid" };
+  }
+  for (const [id, schemas] of Object.entries(
+    featureAccess.output.conditionalInputs ?? {},
+  )) {
+    for (const schema of Object.values(schemas)) {
+      if (Buffer.byteLength(JSON.stringify(schema)) > MAX_TOOL_SCHEMA_BYTES) {
+        return {
+          ok: false,
+          violation: `capability ${id} input schema is too large`,
+        };
+      }
+      const violation = walkSchema(schema, 1);
+      if (violation !== undefined) {
+        return { ok: false, violation: `capability ${id}: ${violation}` };
+      }
+    }
   }
   return {
     ok: true,

@@ -133,37 +133,49 @@ describe("removeWorkspaceMember", () => {
     const deletedWorkspaceMemberId = toSafeId<"workspaceMember">("wm_lead");
     const updates: { table: string; value: unknown }[] = [];
     const insertedAuditLogs: unknown[] = [];
+    const selectedTables: unknown[] = [];
     const deletedWorkspaceMembers: unknown[] = [];
 
     const { safeDb, scopedDb } = createScopedDbMock({
       $count: async () => 0,
       select: () => ({
-        from: (table: unknown) => ({
-          innerJoin: () => ({
-            ...createSelectQueryMock([]).from(),
+        from: (table: unknown) => {
+          selectedTables.push(table);
+          return {
             innerJoin: () => ({
-              where: () => ({ as: () => ({}) }),
+              ...createSelectQueryMock([]).from(),
+              innerJoin: () => ({
+                where: () => ({ as: () => ({}) }),
+              }),
             }),
-          }),
-          where: () => ({
-            orderBy: async () => await createSelectQueryMock([]).from().where(),
-            limit: () => ({
-              for: async () => [],
+            where: () => ({
+              orderBy: () => createSelectQueryMock([]).from().where().orderBy(),
+              limit: createSelectQueryMock(
+                table === workspaces
+                  ? [
+                      {
+                        organizationId: toSafeId<"organization">("org_test123"),
+                      },
+                    ]
+                  : [],
+              )
+                .from()
+                .where().limit,
+              for: async () => {
+                if (table === workspaces) {
+                  return [{ leadUserId: "user_lead" }];
+                }
+                if (table === workspaceMembers) {
+                  return [
+                    { id: "wm_lead", userId: "user_lead" },
+                    { id: "wm_other", userId: "user_other" },
+                  ];
+                }
+                return [];
+              },
             }),
-            for: async () => {
-              if (table === workspaces) {
-                return [{ leadUserId: "user_lead" }];
-              }
-              if (table === workspaceMembers) {
-                return [
-                  { id: "wm_lead", userId: "user_lead" },
-                  { id: "wm_other", userId: "user_other" },
-                ];
-              }
-              return [];
-            },
-          }),
-        }),
+          };
+        },
       }),
       delete: (table: unknown) => ({
         where: () => ({
@@ -203,16 +215,10 @@ describe("removeWorkspaceMember", () => {
 
     expect(result).toEqual({ id: deletedWorkspaceMemberId });
     expect(deletedWorkspaceMembers).toEqual([workspaceMembers]);
-    // Signing transitions require a held session; this fixture has none.
+    // Discovery returns no qualifying takeover, handoff or signing row.
+    expect(selectedTables).toContain(desktopEditSessions);
+    expect(selectedTables).toContain(desktopEditHandoffs);
     expect(updates).toEqual([
-      {
-        table: getTableName(desktopEditSessions),
-        value: { takeoverRequestedBy: null, takeoverRequestedAt: null },
-      },
-      {
-        table: getTableName(desktopEditHandoffs),
-        value: { expiresAt: expect.any(Date), updatedAt: expect.any(Date) },
-      },
       {
         table: getTableName(correspondence),
         value: { assigneeId: null, updatedAt: expect.any(Date) },

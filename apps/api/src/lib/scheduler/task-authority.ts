@@ -57,6 +57,14 @@ const platform = (module: string, reason: string) =>
   }) as const satisfies SchedulerTaskAuthorityEntry;
 
 export const SCHEDULER_TASK_AUTHORITY = {
+  "flows.recoverUploadTriggers": platform(
+    "upload-flow-trigger-recovery.ts",
+    "Replays committed upload receipts after live author admission.",
+  ),
+  "signals.recoverScoutEmission": platform(
+    "scout-emission-recovery.ts",
+    "Replays deferred scout sources only for live enrolled recipients.",
+  ),
   "actions.sweepCosts": platform(
     "action-cost-retention.ts",
     "Retention sweep of usage records past their window.",

@@ -5,6 +5,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import {
   WORK_OBLIGATION_SOURCE,
   entities,
+  featureEnrolments,
   flowRuns,
   flowRunSteps,
   workspaces,
@@ -71,6 +72,7 @@ export const flowReviewGateFixture = async (
       id: userId,
       name: "Reviewer",
       email: `${userId}@example.test`,
+      emailVerified: true,
     });
     await db.insert(member).values({
       id: mintAuthProviderIdValue(),
@@ -78,6 +80,11 @@ export const flowReviewGateFixture = async (
       userId,
       role: "owner",
       createdAt: new Date(),
+    });
+    await db.insert(featureEnrolments).values({
+      organizationId,
+      userId,
+      featureId: "flows",
     });
     await db.insert(workspaces).values({
       id: workspaceId,

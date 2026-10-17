@@ -4,7 +4,10 @@
  * reach a document through one gate rather than two that can drift.
  */
 
+import { sql } from "drizzle-orm";
+
 import type { SafeId } from "@/api/lib/branded-types";
+import { flowOwnedEntityVisibilitySql } from "@/api/lib/flows/visibility";
 import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
 import { includes } from "@/api/lib/type-guards";
 import type { McpRequestContext } from "@/api/mcp/context";
@@ -61,6 +64,13 @@ export const resolveEntityWorkspace = async ({
       where: {
         id: { eq: entityId },
         workspaceId: { in: context.accessibleWorkspaceIds },
+        RAW: ({ id, workspaceId }) =>
+          flowOwnedEntityVisibilitySql({
+            organizationId: context.organizationId,
+            userId: context.userId,
+            entityId: sql`${id}`,
+            workspaceId: sql`${workspaceId}`,
+          }),
       },
       columns: { workspaceId: true, kind: true, name: true },
     }),

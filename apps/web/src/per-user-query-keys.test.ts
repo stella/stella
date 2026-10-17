@@ -2,6 +2,7 @@ import { QueryClient, skipToken, type QueryKey } from "@tanstack/react-query";
 import { describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
+import ts from "typescript";
 
 import { repoRelativePath } from "@stll/portable-path";
 
@@ -52,6 +53,7 @@ import {
 import { myTimeEntriesInfiniteOptions } from "@/lib/workspaces/queries/my-time-entries";
 import { reportExportsKeys } from "@/lib/workspaces/queries/report-exports";
 import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
+import { transferEligibilityOptions } from "@/lib/workspaces/queries/transfer-eligibility";
 import { viewTemplateKeys } from "@/lib/workspaces/queries/view-templates";
 import { workspaceMemberPreviewsOptions } from "@/lib/workspaces/queries/workspace-member-previews";
 import { featureEnrolmentsOptions } from "@/queries/feature-enrolments";
@@ -76,6 +78,8 @@ const WEB_SOURCE = import.meta.dirname;
 const API_SOURCE = nodePath.join(WEB_SOURCE, "../../api/src");
 const API_HANDLERS = nodePath.join(API_SOURCE, "handlers");
 const TEST_FILE_PATTERN = /\.(?:test|spec)\.tsx?$/u;
+// Widened once so flag arithmetic compares numbers, not enum members.
+const CONST_DECLARATION_FLAG: number = ts.NodeFlags.Const;
 
 const ORG = "org-probe";
 const USER = "user-probe";
@@ -96,9 +100,9 @@ type PerUserRead =
   | { kind: "owned-id"; reason: string }
   // The session or role itself; the cache is dropped when it changes.
   | { kind: "session"; reason: string }
-  // Rows shared by every member, with the caller's own marked (an open edit
-  // session, say). Kept under the shared key; the whole cache is dropped when
-  // the signed-in user changes.
+  // Shared row identities with caller-specific markers or eligibility. Kept
+  // under the shared key; the whole cache is dropped when the signed-in user
+  // changes.
   | { kind: "caller-marker"; reason: string }
   // Not called by the web today.
   | { kind: "no-web-caller"; calls: string[] }
@@ -114,9 +118,81 @@ const DOWNLOAD = "a file download, not cached";
 const OAUTH_REDIRECT = "an OAuth redirect, not cached";
 const OWN_EDIT_SESSION = "marks the caller's own open edit session";
 const KEY_TYPE_HAS_USER = "the key argument's type requires userId";
+const FEATURE_VISIBILITY =
+  "Shared identities have caller-specific feature visibility; session-cache-guard and feature-enrolment reconciliation clear these projections.";
 
 // Keyed by handler path under apps/api/src/handlers.
 const PER_USER_READS: Record<string, PerUserRead> = {
+  "entities/transfer-eligibility/get.ts": {
+    kind: "keyed",
+    calls: ['api.entities()["transfer-eligibility"].post'],
+    files: ["lib/workspaces/queries/transfer-eligibility.ts"],
+    keys: () => [
+      transferEligibilityOptions({
+        workspaceId: WORKSPACE,
+        userId: USER,
+        organizationId: ORG,
+        entityIds: ["folder-a"],
+      }).queryKey,
+    ],
+  },
+  "work-obligations/transition.ts": {
+    kind: "not-per-user",
+    reason: WRITE,
+  },
+  "workspaces/read-overview-activity-actors.ts": {
+    kind: "caller-marker",
+    reason: FEATURE_VISIBILITY,
+  },
+  "workspaces/search-preview/get.ts": {
+    kind: "caller-marker",
+    reason: FEATURE_VISIBILITY,
+  },
+  "workspaces/read-search-preview.query.ts": {
+    kind: "caller-marker",
+    reason: FEATURE_VISIBILITY,
+  },
+  "workspaces/read-overview-activity.query.ts": {
+    kind: "caller-marker",
+    reason: FEATURE_VISIBILITY,
+  },
+  "tasks/calendar/list.ts": {
+    kind: "caller-marker",
+    reason: FEATURE_VISIBILITY,
+  },
+  "entities/versions/list.ts": {
+    kind: "caller-marker",
+    reason: FEATURE_VISIBILITY,
+  },
+  "entities/versions/get.ts": {
+    kind: "caller-marker",
+    reason: FEATURE_VISIBILITY,
+  },
+  "entities/versions/diff.ts": {
+    kind: "caller-marker",
+    reason: FEATURE_VISIBILITY,
+  },
+  "entities/summaries/list.ts": {
+    kind: "caller-marker",
+    reason: FEATURE_VISIBILITY,
+  },
+  "entities/summaries/count.ts": {
+    kind: "caller-marker",
+    reason: FEATURE_VISIBILITY,
+  },
+  "entities/read-property-facets.ts": {
+    kind: "caller-marker",
+    reason: FEATURE_VISIBILITY,
+  },
+  "entities/read-group-counts.ts": {
+    kind: "caller-marker",
+    reason: FEATURE_VISIBILITY,
+  },
+  "entities/read-field-file.ts": {
+    kind: "caller-marker",
+    reason: FEATURE_VISIBILITY,
+  },
+  "entities/get.ts": { kind: "caller-marker", reason: FEATURE_VISIBILITY },
   "search-history/list.ts": {
     kind: "keyed",
     calls: ['api["search-history"].get'],
@@ -343,6 +419,16 @@ const PER_USER_READS: Record<string, PerUserRead> = {
   "entities/window/list.ts": {
     kind: "caller-marker",
     reason: OWN_EDIT_SESSION,
+  },
+  "tasks/get.ts": {
+    kind: "caller-marker",
+    reason:
+      "Shared task identities carry caller-specific review visibility; session-cache-guard clears them on member changes.",
+  },
+  "tasks/entity-links/list.ts": {
+    kind: "caller-marker",
+    reason:
+      "Shared task links carry caller-specific review visibility; session-cache-guard clears them on member changes.",
   },
   "entity-views/list.ts": {
     kind: "keyed",
@@ -673,7 +759,7 @@ const PER_USER_READS: Record<string, PerUserRead> = {
       }).queryKey,
     ],
   },
-  "workspaces/list.ts": { kind: "not-per-user", reason: JOINS_NAMES },
+  "workspaces/list.ts": { kind: "caller-marker", reason: FEATURE_VISIBILITY },
   "workspaces/read-active.ts": {
     kind: "no-web-caller",
     calls: ["api.workspaces.active.get"],
@@ -706,8 +792,8 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     ],
   },
   "workspaces/read-overview-activity-actors.query.ts": {
-    kind: "not-per-user",
-    reason: JOINS_NAMES,
+    kind: "caller-marker",
+    reason: FEATURE_VISIBILITY,
   },
 };
 
@@ -841,6 +927,172 @@ const closingParen = (source: string, open: number) => {
   return -1;
 };
 
+const readScanBindingNames = (name: ts.BindingName): ts.Identifier[] => {
+  if (ts.isIdentifier(name)) {
+    return [name];
+  }
+  return name.elements.flatMap((element) =>
+    ts.isOmittedExpression(element) ? [] : readScanBindingNames(element.name),
+  );
+};
+
+const readScanScope = (node: ts.Node): boolean =>
+  ts.isSourceFile(node) ||
+  ts.isBlock(node) ||
+  ts.isFunctionLike(node) ||
+  ts.isCatchClause(node) ||
+  ts.isForStatement(node) ||
+  ts.isForOfStatement(node) ||
+  ts.isForInStatement(node) ||
+  ts.isCaseBlock(node);
+
+const readScanDeclarations = (ast: ts.SourceFile) => {
+  const declarations = new Map<ts.Node, Map<string, ts.Identifier>>();
+  const add = (
+    name: ts.Identifier,
+    parent: ts.Node,
+    functionScoped = false,
+  ) => {
+    const scope = ts.findAncestor(parent, (node) =>
+      functionScoped
+        ? ts.isSourceFile(node) || ts.isFunctionLike(node)
+        : readScanScope(node),
+    );
+    if (scope === undefined) {
+      return;
+    }
+    const bindings =
+      declarations.get(scope) ?? new Map<string, ts.Identifier>();
+    bindings.set(name.text, name);
+    declarations.set(scope, bindings);
+  };
+  const visit = (node: ts.Node): void => {
+    if (ts.isVariableDeclaration(node) || ts.isParameter(node)) {
+      const variableList = node.parent;
+      const functionScoped =
+        ts.isVariableDeclarationList(variableList) &&
+        variableList.flags % (ts.NodeFlags.BlockScoped + 1) === 0;
+      for (const name of readScanBindingNames(node.name)) {
+        add(name, node.parent, functionScoped);
+      }
+    } else if (
+      (ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node)) &&
+      node.name !== undefined
+    ) {
+      add(node.name, node.parent);
+    } else if (ts.isFunctionExpression(node) && node.name !== undefined) {
+      add(node.name, node);
+    } else if (ts.isImportDeclaration(node)) {
+      const clause = node.importClause;
+      if (clause?.name !== undefined) {
+        add(clause.name, node.parent);
+      }
+      const bindings = clause?.namedBindings;
+      if (bindings !== undefined && ts.isNamespaceImport(bindings)) {
+        add(bindings.name, node.parent);
+      }
+      if (bindings !== undefined && ts.isNamedImports(bindings)) {
+        for (const binding of bindings.elements) {
+          add(binding.name, node.parent);
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(ast);
+  return declarations;
+};
+
+const staticReadScanChain = (
+  node: ts.Expression,
+  roots: readonly string[],
+): string | undefined => {
+  if (
+    ts.isParenthesizedExpression(node) ||
+    ts.isAsExpression(node) ||
+    ts.isSatisfiesExpression(node) ||
+    ts.isNonNullExpression(node)
+  ) {
+    return staticReadScanChain(node.expression, roots);
+  }
+  if (ts.isIdentifier(node)) {
+    return roots.includes(node.text) ? node.text : undefined;
+  }
+  if (ts.isPropertyAccessExpression(node)) {
+    const chain = staticReadScanChain(node.expression, roots);
+    return chain === undefined ? undefined : `${chain}.${node.name.text}`;
+  }
+  if (
+    ts.isElementAccessExpression(node) &&
+    ts.isStringLiteralLike(node.argumentExpression)
+  ) {
+    const chain = staticReadScanChain(node.expression, roots);
+    return chain === undefined
+      ? undefined
+      : `${chain}["${node.argumentExpression.text}"]`;
+  }
+  if (ts.isCallExpression(node)) {
+    const chain = staticReadScanChain(node.expression, roots);
+    return chain === undefined ? undefined : `${chain}()`;
+  }
+  return undefined;
+};
+
+// A method getter becomes read evidence only when its immutable lexical binding
+// is called. Parameters and inner declarations retain their own identity.
+const calledReadScanAliases = (
+  source: string,
+  roots: readonly string[],
+): string[] => {
+  if (
+    !/\bconst\s/u.test(source) ||
+    !roots.some((root) => source.includes(root))
+  ) {
+    return [];
+  }
+  const text = source.trimStart().startsWith("{")
+    ? `const readScanObject = (${source});`
+    : source;
+  const ast = ts.createSourceFile(
+    "read-scan.tsx",
+    text,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+  const declarations = readScanDeclarations(ast);
+  const chains: string[] = [];
+  const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
+      const callee = node.expression;
+      let binding: ts.Identifier | undefined;
+      ts.findAncestor(callee.parent, (scope) => {
+        binding = declarations.get(scope)?.get(callee.text);
+        return binding !== undefined;
+      });
+      const declaration = binding?.parent;
+      if (
+        declaration !== undefined &&
+        ts.isVariableDeclaration(declaration) &&
+        declaration.initializer !== undefined &&
+        ts.isVariableDeclarationList(declaration.parent) &&
+        declaration.parent.flags % (ts.NodeFlags.BlockScoped + 1) ===
+          CONST_DECLARATION_FLAG &&
+        (ts.isPropertyAccessExpression(declaration.initializer) ||
+          ts.isElementAccessExpression(declaration.initializer))
+      ) {
+        const chain = staticReadScanChain(declaration.initializer, roots);
+        if (chain !== undefined) {
+          chains.push(`${chain}()`);
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(ast);
+  return chains;
+};
+
 /**
  * Member chains starting at one of `roots`, with call arguments dropped:
  * `api.workspaces({ workspaceId }).activity.get({ … })` reads
@@ -886,6 +1138,7 @@ const callChains = (source: string, roots: readonly string[]) => {
     }
     chains.push(chain);
   }
+  chains.push(...calledReadScanAliases(source, roots));
   return chains;
 };
 
@@ -1255,6 +1508,59 @@ test("organization settings skip authenticated reads until an organization is se
 });
 
 describe("the per-user read scan", () => {
+  test("recognizes an immutable endpoint method only when its binding is called", () => {
+    const source = `
+const request = api.entities(matter)["transfer-eligibility"].post;
+const load = async () => await request(body, options);
+`;
+    expect(callChains(source, ["api"])).toContain(
+      'api.entities()["transfer-eligibility"].post()',
+    );
+  });
+
+  test.each([
+    'const request = api.entities(matter)["transfer-eligibility"].post;',
+    'let request = api.entities(matter)["transfer-eligibility"].post; request(body);',
+    'const request = api.entities(matter)["transfer-eligibility"].post; const load = (request) => request(body);',
+    'const request = api.entities(matter)["transfer-eligibility"].post; const load = ({ request }) => request(body);',
+    'const request = api.entities(matter)["transfer-eligibility"].post; { const request = unrelated; request(body); }',
+    'const request = api.entities(matter)["transfer-eligibility"].post; const load = () => { var request = unrelated; request(body); };',
+    'const request = api.entities(matter)["transfer-eligibility"].post; try {} catch (request) { request(body); }',
+    'const request = api.entities(matter)["transfer-eligibility"].post; for (const request of requests) request(body);',
+  ])(
+    "an uncalled or separate endpoint binding supplies no called chain: %s",
+    (source) => {
+      expect(callChains(source, ["api"])).not.toContain(
+        'api.entities()["transfer-eligibility"].post()',
+      );
+    },
+  );
+
+  test("query snippets require caller keys when they call an immutable endpoint method", () => {
+    const source = `
+export const eligibilityOptions = (organizationId: string) => queryOptions({
+  queryKey: ["eligibility", organizationId],
+  queryFn: async () => {
+    const request = api.entities(matter)["transfer-eligibility"].post;
+    return await request(body, options);
+  },
+});
+`;
+    const calls = ['api.entities()["transfer-eligibility"].post'];
+    expect(unkeyedQueries(source, calls)).toEqual([
+      '["eligibility", organizationId]',
+    ]);
+    expect(
+      unkeyedQueries(
+        source.replace(
+          '"eligibility", organizationId',
+          '"eligibility", organizationId, userId',
+        ),
+        calls,
+      ),
+    ).toEqual([]);
+  });
+
   test("sees the caller however a handler refers to it", () => {
     for (const reference of [
       "eq(timeEntries.userId, currentUser.id)",
