@@ -167,7 +167,7 @@ describe("typed decision fallback ownership", () => {
   test.each([
     `async function consume() {
       const decision = await decide({});
-      if (decision.state === "undecided") return generateTanStackObjectForRole({});
+      if (decision.state === "undecided") return generateTanStackObjectForTask({});
     }`,
     `async function consume() {
       const decision = await decide({});
@@ -175,7 +175,7 @@ describe("typed decision fallback ownership", () => {
       return generateFieldObject({});
     }`,
     `import { decide as ask } from "@/api/lib/workflow/decisions/decide";
-    import { generateTanStackObjectForRole as write } from "@/api/lib/tanstack-ai-generate";
+    import { generateTanStackObjectForTask as write } from "@/api/lib/tanstack-ai-generate";
     async function privateTier() { return write({}); }
     async function consume() {
       const decision = await ask({});
@@ -208,7 +208,7 @@ describe("typed decision fallback ownership", () => {
           if (decision.state === "undecided") return { state: "failed", reason: decision.reason };
           return decision.answer;
         }
-        async function writeText() { return generateTanStackObjectForRole({}); }`,
+        async function writeText() { return generateTanStackObjectForTask({}); }`,
       ),
     ).toEqual([]);
   });

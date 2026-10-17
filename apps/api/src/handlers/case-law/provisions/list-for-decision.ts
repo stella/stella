@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
@@ -11,7 +11,7 @@ import { PROVISION_LINK_STATUS_TYPES } from "@stll/api-contract/provision-link-s
 import type { ProvisionLinkStatus } from "@stll/api-contract/provision-link-status";
 
 import {
-  caseLawDecisions,
+  publishedCaseLawDecisions,
   caseLawProvisionCitations,
   caseLawProvisionExtractions,
   caseLawProvisionExtractionRevisions,
@@ -231,11 +231,11 @@ const readLegacyProvisionPage = async ({
   }
   const [decisionMetadata] = await tx
     .select({
-      country: caseLawDecisions.country,
-      language: caseLawDecisions.language,
+      country: publishedCaseLawDecisions.country,
+      language: publishedCaseLawDecisions.language,
     })
-    .from(caseLawDecisions)
-    .where(eq(caseLawDecisions.id, decisionId));
+    .from(publishedCaseLawDecisions)
+    .where(eq(publishedCaseLawDecisions.id, decisionId));
   if (decisionMetadata === undefined) {
     panic("Authorized decision disappeared");
   }
@@ -243,13 +243,12 @@ const readLegacyProvisionPage = async ({
     .select(LEGACY_CITATION_FIELDS)
     .from(caseLawProvisionCitations)
     .innerJoin(
-      caseLawDecisions,
-      eq(caseLawDecisions.id, caseLawProvisionCitations.decisionId),
+      publishedCaseLawDecisions,
+      eq(publishedCaseLawDecisions.id, caseLawProvisionCitations.decisionId),
     )
     .where(
       and(
         eq(caseLawProvisionCitations.decisionId, decisionId),
-        isNull(caseLawDecisions.redactedAt),
         cursor === null
           ? undefined
           : sql`(${caseLawProvisionCitations.spanStart}, ${caseLawProvisionCitations.anchor}) > (${cursor.spanStart}::integer, ${cursor.anchor}::text)`,
@@ -297,7 +296,7 @@ export const listDecisionProvisionsHandler = async ({
     return await readLegacyProvisionPage({ subject, cursor, limit });
   }
 
-  const decision = caseLawDecisions;
+  const decision = publishedCaseLawDecisions;
   const extraction = caseLawProvisionExtractions;
   const revisions = caseLawProvisionExtractionRevisions;
   const registry = caseLawProvisionExtractionRevisionsRegistry;
@@ -336,8 +335,6 @@ export const listDecisionProvisionsHandler = async ({
   }));
   const pageConditions = [
     eq(caseLawProvisionCitations.decisionId, decisionId),
-    // A redacted decision's old citation excerpts must not escape its tombstone.
-    isNull(decision.redactedAt),
     ...(cursor === null
       ? []
       : [

@@ -9,14 +9,12 @@ import { stellaToast } from "@stll/ui/toast";
 import { AIConfigProvidersEditor } from "@/components/ai-config-providers-editor";
 import type { ProviderRowStatus } from "@/components/ai-config-providers-editor";
 import {
-  createDefaultRoleModels,
   getProviderValues,
   PROVIDER_LABELS,
 } from "@/components/ai-config-role-models.logic";
 import type {
   ProviderCredentialDraft,
   ProviderPreview,
-  RoleModelSelections,
 } from "@/components/ai-config-role-models.logic";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
@@ -29,7 +27,6 @@ import {
 type AIStepProps = {
   providers: ProviderCredentialDraft[];
   onProvidersChange: (providers: ProviderCredentialDraft[]) => void;
-  onRoleModelsChange: (roleModels: RoleModelSelections) => void;
   onPreviewChange?: (preview: readonly ProviderPreview[]) => void;
   onNext: () => void;
   onSkip: () => void;
@@ -61,7 +58,6 @@ const INITIAL_ROW_STATES: RowStateMap = {
 export const AIStep = ({
   providers,
   onProvidersChange,
-  onRoleModelsChange,
   onPreviewChange,
   onNext,
   onSkip,
@@ -183,7 +179,6 @@ export const AIStep = ({
 
   const updateProviders = (next: ProviderCredentialDraft[]) => {
     onProvidersChange(next);
-    onRoleModelsChange(createDefaultRoleModels(getProviderValues(next)));
     // Drop validation entries for providers no longer in the draft list.
     const stillPresent = new Set(getProviderValues(next));
     const current = rowStatesRef.current;

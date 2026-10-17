@@ -40,7 +40,7 @@ import {
 import { fetchAndPrepareReviewFiles } from "@/api/lib/document-review/prepare-review-files";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cloneOperationInput } from "@/api/lib/proofs/checked-transaction";
-import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
+import { requireTanStackAIAvailableForTask } from "@/api/lib/tanstack-ai-models";
 
 const TIMEOUT_MS = 60_000;
 
@@ -270,16 +270,16 @@ export const createReviewParties = ({
       return Result.ok(notDetectedAnswer(entityVersionId));
     }
 
-    yield* requireTanStackAIAvailableForRole({
+    yield* requireTanStackAIAvailableForTask({
       dataClass: "customer",
       configStatus: orgAIConfigStatus,
       orgConfig: orgAIConfig,
-      role: "pdf",
+      task: "pdf",
     });
 
     const authorization = yield* Result.await(
       authorizeHandlerUsage({
-        metering: { actionType: "chat", modelRole: "pdf" },
+        metering: { actionType: "chat", modelTask: "pdf" },
         organizationId,
         orgAIConfig,
         workspaceId,

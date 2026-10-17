@@ -8,7 +8,7 @@ import {
 } from "@stll/api-contract/case-law-launch-readiness";
 
 import {
-  caseLawDecisions,
+  publishedCaseLawDecisions,
   caseLawProvisionCitations,
   caseLawStatuteCitationCounts,
   caseLawStatuteCitationCountState,
@@ -18,7 +18,6 @@ import {
   STATUTE_CITATION_TARGET_TYPE,
 } from "@/api/db/schema";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
-import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import {
   readPublicLawCountry,
@@ -78,20 +77,25 @@ export const readStatuteCitationCountsHandler = async (
         })
         .from(caseLawProvisionCitations)
         .innerJoin(
-          caseLawDecisions,
-          eq(caseLawDecisions.id, caseLawProvisionCitations.decisionId),
+          publishedCaseLawDecisions,
+          eq(
+            publishedCaseLawDecisions.id,
+            caseLawProvisionCitations.decisionId,
+          ),
         )
         .innerJoin(
           caseLawSources,
-          eq(caseLawSources.id, caseLawDecisions.sourceId),
+          eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
         )
         .where(
           and(
             eq(caseLawProvisionCitations.jurisdiction, jurisdiction),
             eq(caseLawProvisionCitations.workEli, query.eli),
-            inArray(caseLawDecisions.country, PUBLIC_CASE_LAW_COUNTRIES),
+            inArray(
+              publishedCaseLawDecisions.country,
+              PUBLIC_CASE_LAW_COUNTRIES,
+            ),
             redistributableCaseLawSource,
-            publishedCaseLawDecision,
           ),
         )
         .groupBy(caseLawProvisionCitations.anchor)

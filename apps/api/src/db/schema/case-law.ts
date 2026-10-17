@@ -68,7 +68,10 @@ import {
   decisionCourtIdByCountrySql,
 } from "@/api/lib/case-law/decision-court-id-sql";
 import { DOCTRINAL_TREATMENTS } from "@/api/lib/case-law/doctrine";
-import { publishedUnredactedCaseLawDecisionFor } from "@/api/lib/case-law/published-decisions-sql";
+import {
+  publishedCaseLawDecisionFor,
+  unredactedCaseLawDecisionFor,
+} from "@/api/lib/case-law/published-decisions-sql";
 import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution-sql";
 import type {
   CaseLawResearchAnswerRun,
@@ -744,7 +747,7 @@ export const caseLawDecisions = p.pgTable(
       CASE_LAW_DECISION_COURT_ID_CONSTRAINT,
       decisionCourtIdByCountrySql(t.country, t.courtId),
     ),
-    // The byte budget `case_law_decisions_search_candidate_idx` needs its
+    // The byte budget `case_law_decisions_search_candidate_published_idx` needs its
     // variable-width columns to stay inside; `varchar(n)` bounds characters,
     // and a B-tree tuple is bounded in bytes.
     p.check(
@@ -818,8 +821,9 @@ export const caseLawDecisions = p.pgTable(
     // country's rows. Same expression, direction and tiebreaker, led by
     // country alone.
     p
-      .index("case_law_decisions_country_date_idx")
-      .on(t.country, sql`coalesce(${t.decisionDate}, '-infinity'::date)`, t.id),
+      .index("case_law_decisions_country_date_published_idx")
+      .on(t.country, sql`coalesce(${t.decisionDate}, '-infinity'::date)`, t.id)
+      .where(publishedCaseLawDecisionFor(t)),
     p
       .index("case_law_decisions_source_generation_cursor_idx")
       .on(t.sourceId, t.createdAt, t.id),
@@ -852,29 +856,28 @@ export const caseLawDecisions = p.pgTable(
     // fetches every row in it to evaluate the publication gate, which reads
     // `metadata`: a week of one busy source is over a hundred thousand rows
     // and as many random reads. Partial on the gate, as
-    // `case_law_decisions_search_candidate_idx` is, the count needs no heap.
+    // `case_law_decisions_search_candidate_published_idx` is, the count needs no heap.
     // The cursor index stays: ingestion walks listing-only rows too.
     p
-      .index("case_law_decisions_source_arrivals_idx")
+      .index("case_law_decisions_source_arrivals_published_idx")
       .on(t.sourceId, t.createdAt)
-      .where(storedObservationHasDetail(t.metadata)),
-    // Exact coverage bounds per source: two endpoint probes, independent of
-    // the display-sized year facet.
+      .where(publishedCaseLawDecisionFor(t)),
+    // Exact coverage bounds per source use two endpoint probes.
     p
       .index("case_law_decisions_source_decision_date_coverage_idx")
       .on(t.sourceId, t.decisionDate, t.id)
-      .where(publishedUnredactedCaseLawDecisionFor(t)),
+      .where(publishedCaseLawDecisionFor(t)),
     // The sitemap shard refresh: the public countries' published decisions,
     // counted per month and bucket with their newest `updated_at`.
     // Partial on the publication gate so the gate costs nothing per row, and
     // carrying the source (for the redistribution join), `updated_at` and `id`
     // (for the bucket) so the count is read off the index rather than the
     // heap. Trailing keys rather than INCLUDE for the reason given at
-    // `case_law_decisions_citation_candidate_idx`.
+    // `case_law_decisions_citation_candidate_published_idx`.
     p
-      .index("case_law_decisions_sitemap_shard_idx")
+      .index("case_law_decisions_sitemap_shard_published_idx")
       .on(t.country, t.decisionDate, t.sourceId, t.updatedAt, t.id)
-      .where(storedObservationHasDetail(t.metadata)),
+      .where(publishedCaseLawDecisionFor(t)),
     p
       .index("case_law_decisions_updated_id_idx")
       .on(t.updatedAt.desc(), t.id.desc()),
@@ -921,14 +924,19 @@ export const caseLawDecisions = p.pgTable(
     // the Drizzle version in use cannot express INCLUDE; the two are the same
     // index-only scan here, since nothing ever ranges on `id` in this order.
     //
-    // This replaces the plain `(citation_key) WHERE citation_key IS NOT NULL`
-    // index it is a strict prefix of. Keeping both would have cost a few
-    // hundred megabytes of cache on the same instance that has to hold this
-    // one, to serve queries this index already answers.
+    // The resolver reads candidate holders before its caller applies a
+    // publication gate, so keep the existing all-row lookup. The public
+    // identity read has a separate publication-partial index below.
     p
       .index("case_law_decisions_citation_candidate_idx")
       .on(t.citationKey, t.country, t.decisionDate, t.id)
       .where(isNotNull(t.citationKey)),
+    p
+      .index("case_law_decisions_citation_candidate_published_idx")
+      .on(t.citationKey, t.country, t.decisionDate, t.id)
+      .where(
+        sql`${isNotNull(t.citationKey)} AND ${publishedCaseLawDecisionFor(t)}`,
+      ),
     // The search's candidate read, answered entirely from the index. A page of
     // ten is blended from a few hundred candidates the engine proposed, and
     // each one was a random fetch into a heap far too large to cache: the ids
@@ -939,19 +947,19 @@ export const caseLawDecisions = p.pgTable(
     // as a trailing key: the filters it may add (`country` always, the rest
     // when the reader narrows) and the five columns the blend reads. Trailing
     // keys rather than an INCLUDE payload for the same reason as
-    // `case_law_decisions_citation_candidate_idx`.
+    // `case_law_decisions_citation_candidate_published_idx`.
     //
     // Partial on the publication gate because that gate reads `metadata`, a
     // JSONB blob no index can carry: as a predicate it costs nothing per row
     // and drops the listing-only rows the read discards anyway. The predicate
-    // is built from `storedObservationHasDetail`, the same function the reads
+    // is built from `publishedCaseLawDecisionFor`, the same function the reads
     // apply, so the two texts cannot drift apart and leave the index unusable.
     //
     // The three variable-width columns it carries are bounded by
     // `case_law_decisions_search_candidate_row_bound` below, so no row can
     // build a tuple this index cannot hold.
     p
-      .index("case_law_decisions_search_candidate_idx")
+      .index("case_law_decisions_search_candidate_published_idx")
       .on(
         t.id,
         t.country,
@@ -963,7 +971,7 @@ export const caseLawDecisions = p.pgTable(
         t.citationAuthority,
         t.languageGroupKey,
       )
-      .where(storedObservationHasDetail(t.metadata)),
+      .where(publishedCaseLawDecisionFor(t)),
     // Deferred-document queue, priority tier: decisions a reader asked
     // for, oldest request first. Partial on the pending predicate, so
     // the index stays proportional to the queue, not to the corpus.
@@ -1012,12 +1020,35 @@ export const caseLawDecisions = p.pgTable(
     // every such citation.
     p.check("decisions_citation_key_non_empty", sql`${t.citationKey} <> ''`),
     ...globalCaseLawPolicies(),
+    // Expand phase: the reader policies stay while older readers query this
+    // table. The contract step in `lib/db/pending-contract-migrations`
+    // removes them together with the reader grants.
     ...publicCaseLawReaderPolicies(),
     ...caseLawAnalysisWriterPolicies(),
     ...caseLawAnalysisReaderDecisionPolicies(),
     ...corpusSampleReaderDecisionPolicies(),
   ],
 );
+
+/** Published decisions, with columns and types derived from the base table. */
+export const publishedCaseLawDecisions = p
+  .pgView("case_law_published_decisions")
+  .as((qb) =>
+    qb
+      .select()
+      .from(caseLawDecisions)
+      .where(publishedCaseLawDecisionFor(caseLawDecisions)),
+  );
+
+/** Unredacted decisions for the public subject's narrowly scoped locator. */
+export const unredactedCaseLawDecisions = p
+  .pgView("case_law_unredacted_decisions")
+  .as((qb) =>
+    qb
+      .select()
+      .from(caseLawDecisions)
+      .where(unredactedCaseLawDecisionFor(caseLawDecisions)),
+  );
 
 /** Searchable identifiers stated by a decision's publisher. */
 export const caseLawDecisionIdentifiers = p.pgTable(
