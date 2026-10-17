@@ -401,11 +401,10 @@ describe("network baseline workflows", () => {
       // Every event that compares also loads the published budget; an event
       // filter here would compare against the frozen committed JSON instead.
       expect(job.steps[prepare]?.if ?? "", name).not.toContain("event_name");
+      // The planner's comparison base: the PR base, or the target branch for
+      // a merge group, so a group compares every entry it merges.
       expect(job.steps[prepare]?.with?.["base-sha"]).toContain(
-        "github.event.pull_request.base.sha",
-      );
-      expect(job.steps[prepare]?.with?.["base-sha"]).toContain(
-        "github.event.merge_group.base_sha",
+        "needs.ci-plan.outputs.target_base_sha",
       );
       const checkout = job.steps.find((step) =>
         step.uses?.startsWith("actions/checkout@"),
