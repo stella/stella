@@ -71,10 +71,12 @@ const entryKey = <
   scope: TScope,
 ): string => (typeof entry.key === "string" ? entry.key : entry.key(scope));
 
-const removeInvalid = (area: StorageArea, key: string) =>
-  requireBrowserStorage(area).andThen((storage) =>
-    Result.try(() => storage.removeItem(key)),
-  );
+/** Best-effort cleanup after a read already fell back to the default. */
+const removeInvalid = (area: StorageArea, key: string): void => {
+  requireBrowserStorage(area)
+    .andThen((storage) => Result.try(() => storage.removeItem(key)))
+    .unwrapOr(undefined);
+};
 
 export const isRestoredStateSafeMode = (): boolean => {
   if (typeof window === "undefined") {

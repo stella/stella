@@ -37,7 +37,7 @@ const inspectorPaneWidthEntry = definePersistedState({
 const paneWidthPersistence = {
   read: () => readPersistedState(inspectorPaneWidthEntry, {}),
   write: (width: number) => {
-    writePersistedState(inspectorPaneWidthEntry, {}, width);
+    writePersistedState(inspectorPaneWidthEntry, {}, width).unwrapOr(undefined);
   },
 };
 

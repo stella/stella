@@ -116,7 +116,11 @@ const writePersistedMinimized = (
   scope: InspectorBroadcastScope,
   minimized: boolean,
 ): void => {
-  writePersistedState(inspectorMinimizedEntry, scope, minimized);
+  // Best effort like every layout preference: blocked storage keeps the
+  // in-memory state and the next start opens at the default.
+  writePersistedState(inspectorMinimizedEntry, scope, minimized).unwrapOr(
+    undefined,
+  );
 };
 
 // Restored tabs mount the docked viewer at load. If a restore keeps the page
@@ -148,10 +152,14 @@ const writeRestorePending = (
   pending: boolean,
 ): void => {
   if (pending) {
-    writePersistedState(inspectorRestorePendingEntry, scope, pageLoadId);
+    writePersistedState(
+      inspectorRestorePendingEntry,
+      scope,
+      pageLoadId,
+    ).unwrapOr(undefined);
     return;
   }
-  removePersistedState(inspectorRestorePendingEntry, scope);
+  removePersistedState(inspectorRestorePendingEntry, scope).unwrapOr(undefined);
 };
 
 // Viewers the restore mounted that have not loaded their document yet. The
