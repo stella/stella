@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import * as v from "valibot";
 
 import {
@@ -5,7 +6,6 @@ import {
   recentEntrySchema,
 } from "@/lib/law-search-history/law-search-history.schema";
 import type { LawRecentEntry } from "@/lib/law-search-history/law-search-history.schema";
-import { readStoredJson } from "@/lib/stored-json";
 
 const EMPTY: readonly LawRecentEntry[] = [];
 
@@ -13,12 +13,16 @@ const EMPTY: readonly LawRecentEntry[] = [];
 export const readLawRecent = (
   raw: string | null,
 ): readonly LawRecentEntry[] => {
-  const rows = readStoredJson(raw, v.array(v.unknown()));
-  if (rows === null) {
+  const decoded = Result.try((): unknown => JSON.parse(raw ?? "null"));
+  if (Result.isError(decoded)) {
+    return EMPTY;
+  }
+  const parsed = v.safeParse(v.array(v.unknown()), decoded.value);
+  if (!parsed.success) {
     return EMPTY;
   }
   const entries: LawRecentEntry[] = [];
-  for (const row of rows) {
+  for (const row of parsed.output) {
     const recent = v.safeParse(recentEntrySchema, row);
     if (recent.success) {
       entries.push(recent.output);

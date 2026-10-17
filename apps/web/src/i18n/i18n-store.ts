@@ -1,6 +1,8 @@
 import { createFormatter, createTranslator } from "use-intl/core";
+import * as v from "valibot";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import type { StorageValue } from "zustand/middleware";
 
 import folioEn from "@stll/folio-react/messages/en";
 import type { FolioLocale } from "@stll/folio-react/messages/locales";
@@ -14,6 +16,11 @@ import { getTranslator, setTranslator } from "@/i18n/translator";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import {
+  definePersistedState,
+  keepInAnyScope,
+} from "@/lib/persisted-state/registry";
+import { registryZustandStorage } from "@/lib/persisted-state/zustand-storage";
 import { isPublicSsrPath } from "@/lib/public-ssr-paths";
 
 // UI presentation order for language pickers. The membership is enforced
@@ -414,6 +421,17 @@ const recomputeFormatterForState = (state: State): void => {
   );
 };
 
+const i18nStateEntry = definePersistedState({
+  key: getStorageKey("i18n"),
+  area: "local",
+  version: 1,
+  schema: v.custom<StorageValue<State & Actions> | null>(() => true),
+  maxBytes: 16_384,
+  defaultValue: () => null,
+  scopeCheck: keepInAnyScope,
+  restoredUi: false,
+});
+
 export const useI18nStore = create<State & Actions>()(
   persist(
     (set, get) => ({
@@ -528,6 +546,7 @@ export const useI18nStore = create<State & Actions>()(
     }),
     {
       name: getStorageKey("i18n"),
+      storage: registryZustandStorage(i18nStateEntry, {}),
       version: 0,
       partialize: (state) => ({
         lang: state.lang,

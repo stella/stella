@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
@@ -17,7 +18,6 @@ import { api } from "@/lib/api";
 import { sessionOptions } from "@/lib/auth-queries";
 import { unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { readStoredJson } from "@/lib/stored-json";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 // Progress is the source of truth in the DB: it rides the `["session"]` query
@@ -40,10 +40,15 @@ type StoredGuideProgress = Partial<Record<GuideTourId, GuideTourStatus>>;
 export const parseGuideProgress = (
   raw: string | null | undefined,
 ): StoredGuideProgress => {
-  const blob = readStoredJson(raw ?? null, storedBlobSchema);
-  if (!blob) {
+  const decoded = Result.try((): unknown => JSON.parse(raw ?? "null"));
+  if (Result.isError(decoded)) {
     return {};
   }
+  const parsed = v.safeParse(storedBlobSchema, decoded.value);
+  if (!parsed.success) {
+    return {};
+  }
+  const blob = parsed.output;
   const progress: StoredGuideProgress = {};
   for (const [tourId, status] of Object.entries(blob)) {
     const parsedStatus = v.safeParse(guideTourStatusSchema, status);

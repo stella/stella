@@ -7,23 +7,19 @@ import type {
 import { panic } from "better-result";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { PersistStorage } from "zustand/middleware";
 import { immer } from "zustand/middleware/immer";
 
 import type {
   TableFindSelection,
   TableFindState,
 } from "@/components/workspaces/table/table-find.logic";
-import { browserStateStorage } from "@/lib/account/browser-storage";
-import {
-  followStorageOwner,
-  userScopedStateStorage,
-} from "@/lib/account/user-scoped-storage";
+import { followStorageOwner } from "@/lib/account/user-scoped-storage";
+import { registryZustandStorage } from "@/lib/persisted-state/zustand-storage";
 import type { WorkspaceEntity } from "@/lib/types";
 import { viewsQueryWorkspaceId } from "@/lib/workspaces/queries/views.logic";
 import {
   pruneMatterViews,
-  readPersistedTableState,
+  tableStateEntry,
   TABLE_STORE_VERSION,
 } from "@/lib/workspaces/table-store.logic";
 import type {
@@ -69,16 +65,7 @@ const selectedEntitiesEqual = (
   });
 };
 
-const scopedTableStorage = userScopedStateStorage(browserStateStorage("local"));
-const validatingStorage: PersistStorage<PersistedTableState> = {
-  getItem: (name) => readPersistedTableState(scopedTableStorage.getItem(name)),
-  setItem: (name, value) => {
-    scopedTableStorage.setItem(name, JSON.stringify(value));
-  },
-  removeItem: (name) => {
-    scopedTableStorage.removeItem(name);
-  },
-};
+const validatingStorage = registryZustandStorage(tableStateEntry, {}, true);
 
 type TableViewRecords = PersistedTableState & {
   rowSelection: TableViewRecord<RowSelectionState>;

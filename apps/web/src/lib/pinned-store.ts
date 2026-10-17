@@ -1,38 +1,41 @@
 import * as v from "valibot";
 import { create } from "zustand";
 
-import { browserStateStorage } from "@/lib/account/browser-storage";
 import {
   onStorageOwnerChange,
   userStorageKey,
 } from "@/lib/account/user-scoped-storage";
-import { readStoredJson, writeStoredJson } from "@/lib/stored-json";
+import {
+  definePersistedState,
+  keepInAnyScope,
+  readPersistedState,
+  writePersistedState,
+} from "@/lib/persisted-state/registry";
 
 const PINNED_LS_PREFIX = "sidebar_pinned";
 
 const PinnedIdsSchema = v.array(v.string());
 
+const pinnedStateEntry = definePersistedState({
+  key: () => userStorageKey(PINNED_LS_PREFIX),
+  area: "local",
+  version: 1,
+  schema: PinnedIdsSchema,
+  maxBytes: 65_536,
+  defaultValue: () => [],
+  scopeCheck: keepInAnyScope,
+  restoredUi: false,
+});
+
 type PinAttention =
   | { type: "idle"; sequence: number }
   | { type: "pending"; matterId: string; sequence: number };
 
-const readFromStorage = (): string[] => {
-  const stored = readStoredJson(
-    browserStateStorage("local").getItem(userStorageKey(PINNED_LS_PREFIX)),
-    PinnedIdsSchema,
-  );
-  if (stored === null) {
-    return [];
-  }
-  return stored;
-};
+const readFromStorage = (): string[] =>
+  readPersistedState(pinnedStateEntry, {});
 
 const writeToStorage = (ids: readonly string[]) => {
-  writeStoredJson(
-    browserStateStorage("local"),
-    userStorageKey(PINNED_LS_PREFIX),
-    ids,
-  );
+  writePersistedState(pinnedStateEntry, {}, [...ids]);
 };
 
 type PinnedStore = {

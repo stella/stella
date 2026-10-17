@@ -13,10 +13,7 @@ import {
   selectAvailableWorkspaceView,
   selectAvailableWorkspaceViews,
 } from "@/lib/workspaces/queries/views.logic";
-import {
-  readPersistedTableState,
-  TABLE_STORE_VERSION,
-} from "@/lib/workspaces/table-store.logic";
+import { TABLE_STORE_VERSION } from "@/lib/workspaces/table-store.logic";
 
 const V1_PAYLOAD = {
   state: {
@@ -25,33 +22,6 @@ const V1_PAYLOAD = {
   },
   version: TABLE_STORE_VERSION,
 };
-
-describe("the persisted table state's read boundary", () => {
-  test("reads a current payload back as written", () => {
-    expect(readPersistedTableState(JSON.stringify(V1_PAYLOAD))).toEqual(
-      V1_PAYLOAD,
-    );
-  });
-
-  test("reads a missing key, broken JSON, a wrong shape and an old version as absent", () => {
-    const v0 = {
-      state: {
-        columnSizing: { __map: [["view-1", { col_a: 200 }]] },
-        contentMode: { "view-1": "tight" },
-      },
-      version: 0,
-    };
-    expect(readPersistedTableState(null)).toBeNull();
-    expect(readPersistedTableState("{truncated")).toBeNull();
-    expect(readPersistedTableState("{}")).toBeNull();
-    expect(readPersistedTableState(JSON.stringify(v0))).toBeNull();
-    expect(
-      readPersistedTableState(
-        JSON.stringify({ ...V1_PAYLOAD, version: TABLE_STORE_VERSION + 1 }),
-      ),
-    ).toBeNull();
-  });
-});
 
 // The store's `persist` middleware writes on every change, so it needs a
 // Storage before the module is evaluated.
@@ -77,6 +47,12 @@ Object.defineProperty(globalThis, "localStorage", {
   configurable: true,
   writable: true,
 });
+if (typeof window !== "undefined") {
+  Object.defineProperty(window, "localStorage", {
+    value: fakeLocalStorage,
+    configurable: true,
+  });
+}
 
 const {
   EMPTY_TABLE_VIEW_RECORDS,
@@ -95,7 +71,7 @@ test("the persisted key is written at the current version", () => {
   useTableStore.getState().setColumnSizing(v1, { col_a: 120 });
 
   expect(
-    readPersistedTableState(stored.get(userStorageKey("stella:table")) ?? null),
+    JSON.parse(stored.get(userStorageKey("stella:table")) ?? "null").value,
   ).toEqual({
     state: {
       columnSizing: { "ws-1": { v1: { col_a: 120 } } },
@@ -440,7 +416,7 @@ test("table settings follow accounts without overwriting their saved state", () 
     kind: "user",
     userId: "user-b",
   });
-  const accountB = JSON.stringify(V1_PAYLOAD);
+  const accountB = JSON.stringify({ version: 1, value: V1_PAYLOAD });
   stored.set(accountBKey, accountB);
   queryClient.setQueryData(["session"], { user: { id: "user-b" } });
   expect(useTableStore.getState().columnSizing).toEqual(

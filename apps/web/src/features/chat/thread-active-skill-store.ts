@@ -1,5 +1,7 @@
+import * as v from "valibot";
 import { create } from "zustand";
-import { createJSONStorage, persist } from "zustand/middleware";
+import { persist } from "zustand/middleware";
+import type { StorageValue } from "zustand/middleware";
 
 import type { BuiltInSkillId } from "@stll/skills";
 
@@ -7,13 +9,17 @@ import {
   isActiveSkillContext,
   type ActiveSkillChatContext,
 } from "@/components/inspector/inspector-active-skill";
-import { browserStateStorage } from "@/lib/account/browser-storage";
 import {
   followStorageOwner,
-  userScopedStateStorage,
+  userStorageKey,
 } from "@/lib/account/user-scoped-storage";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { getChatThreadKey } from "@/lib/chat-thread-ref";
+import {
+  definePersistedState,
+  keepInAnyScope,
+} from "@/lib/persisted-state/registry";
+import { registryZustandStorage } from "@/lib/persisted-state/zustand-storage";
 
 /** The built-in skill that interviews a user and saves a playbook. */
 export const PLAYBOOK_BUILDER_SKILL_NAME =
@@ -64,6 +70,17 @@ const readPersistedState = (
   return { skills: retainNewest(valid) };
 };
 
+const persistedStateEntry = definePersistedState({
+  key: () => userStorageKey("stella.chat.threadActiveSkill"),
+  area: "local",
+  version: 1,
+  schema: v.custom<StorageValue<ThreadActiveSkillStore> | null>(() => true),
+  maxBytes: 131_072,
+  defaultValue: () => null,
+  scopeCheck: keepInAnyScope,
+  restoredUi: false,
+});
+
 export const useThreadActiveSkillStore = create<ThreadActiveSkillStore>()(
   persist(
     (set) => ({
@@ -80,9 +97,7 @@ export const useThreadActiveSkillStore = create<ThreadActiveSkillStore>()(
     }),
     {
       name: "stella.chat.threadActiveSkill",
-      storage: createJSONStorage(() =>
-        userScopedStateStorage(browserStateStorage("local")),
-      ),
+      storage: registryZustandStorage(persistedStateEntry, {}, true),
       partialize: ({ skills }) => ({ skills }),
       version: 1,
       merge: (persisted, current) => ({

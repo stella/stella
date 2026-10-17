@@ -33,12 +33,14 @@ test("server history stays visible while a local import recovers", async () => {
     kind: "user",
     userId: MEMBER_SESSION.user.id,
   });
-  const local = JSON.stringify([
-    { query: "Local query", at: "2026-01-01T12:00:00Z" },
-  ]);
-  const legacy = JSON.stringify([
-    { query: "Earlier query", at: "2026-01-01T12:00:00Z" },
-  ]);
+  const local = JSON.stringify({
+    version: 1,
+    value: [{ query: "Local query", at: "2026-01-01T12:00:00Z" }],
+  });
+  const legacy = JSON.stringify({
+    version: 1,
+    value: [{ query: "Earlier query", at: "2026-01-01T12:00:00Z" }],
+  });
   storage.setItem(scopedKey, local);
   storage.setItem(LAW_HISTORY_STORAGE_KEY, legacy);
   const recovery = Promise.withResolvers<undefined>();
@@ -168,7 +170,10 @@ test("leaving the page during a local import does not report its cancellation", 
   });
   storage.setItem(
     scopedKey,
-    JSON.stringify([{ query: "Local query", at: "2026-01-01T12:00:00Z" }]),
+    JSON.stringify({
+      version: 1,
+      value: [{ query: "Local query", at: "2026-01-01T12:00:00Z" }],
+    }),
   );
   let clockRequested = false;
   const writes: string[] = [];

@@ -35,6 +35,9 @@ let ownerListeners: readonly (() => void)[] = [];
 // state is not written over the new owner's entry.
 let writesSuspended = false;
 
+/** Whether an owner transition is resetting stores before rehydration. */
+export const areUserStorageWritesSuspended = (): boolean => writesSuspended;
+
 /** Whose entries the browser holds now; a visitor until a session is read. */
 export const storageOwner = (): StorageOwner => currentOwner;
 

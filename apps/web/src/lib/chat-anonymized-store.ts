@@ -1,7 +1,9 @@
 import { useCallback } from "react";
 
+import * as v from "valibot";
 import { create } from "zustand";
-import { createJSONStorage, persist } from "zustand/middleware";
+import { persist } from "zustand/middleware";
+import type { StorageValue } from "zustand/middleware";
 
 import {
   CHAT_SEND_MODE,
@@ -10,13 +12,17 @@ import {
 } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 
-import { browserStateStorage } from "@/lib/account/browser-storage";
 import {
   followStorageOwner,
-  userScopedStateStorage,
+  userStorageKey,
 } from "@/lib/account/user-scoped-storage";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { getChatThreadKey } from "@/lib/chat-thread-ref";
+import {
+  definePersistedState,
+  keepInAnyScope,
+} from "@/lib/persisted-state/registry";
+import { registryZustandStorage } from "@/lib/persisted-state/zustand-storage";
 
 const DEFAULT_SEND_MODE = CHAT_SEND_MODE.rawOverride;
 const MAX_PERSISTED_NON_PROTECTIVE_THREAD_MODES = 100;
@@ -127,6 +133,17 @@ const retainThreadSendModes = ({
   ]);
 };
 
+const persistedStateEntry = definePersistedState({
+  key: () => userStorageKey("stella.chat.anonymized"),
+  area: "local",
+  version: 1,
+  schema: v.custom<StorageValue<ChatAnonymizedStore> | null>(() => true),
+  maxBytes: 262_144,
+  defaultValue: () => null,
+  scopeCheck: keepInAnyScope,
+  restoredUi: false,
+});
+
 export const useChatAnonymizedStore = create<ChatAnonymizedStore>()(
   persist(
     (set) => ({
@@ -155,9 +172,7 @@ export const useChatAnonymizedStore = create<ChatAnonymizedStore>()(
     }),
     {
       name: "stella.chat.anonymized",
-      storage: createJSONStorage(() =>
-        userScopedStateStorage(browserStateStorage("local")),
-      ),
+      storage: registryZustandStorage(persistedStateEntry, {}, true),
       partialize: ({ defaultSendMode, sendModes }) => ({
         defaultSendMode,
         sendModes,

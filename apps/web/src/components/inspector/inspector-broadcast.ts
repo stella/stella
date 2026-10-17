@@ -517,17 +517,17 @@ const isInspectorBroadcastMessage = (
   if (type !== "inspector-tabs:sync") {
     return false;
   }
-  const tabs = value.tabs;
+  const tabs = value["tabs"];
   return (
     isOptionalString(value["recipientId"]) &&
     typeof value["updatedAt"] === "number" &&
     Array.isArray(tabs) &&
     tabs.every(isInspectorTab) &&
-    (value.groups === undefined ||
-      (Array.isArray(value.groups) &&
-        value.groups.every(isInspectorTabGroup))) &&
-    (value.groupAssignments === undefined ||
-      isGroupAssignments(value.groupAssignments))
+    (value["groups"] === undefined ||
+      (Array.isArray(value["groups"]) &&
+        value["groups"].every(isInspectorTabGroup))) &&
+    (value["groupAssignments"] === undefined ||
+      isGroupAssignments(value["groupAssignments"]))
   );
 };
 

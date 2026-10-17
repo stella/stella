@@ -7,6 +7,7 @@
 import type { RefObject } from "react";
 
 import { useTranslations } from "use-intl";
+import * as v from "valibot";
 
 import { usePublicLawFind } from "@/components/public-law-table/use-public-law-find";
 import type { PublicLawFind } from "@/components/public-law-table/use-public-law-find";
@@ -19,20 +20,35 @@ import {
   DEFAULT_STATUTE_TABLE_LAYOUT,
   STATUTE_COLUMN_IDS,
   STATUTE_COLUMN_LABEL_KEYS,
-  statuteTableLayouts,
-  StoredStatuteLayoutSchema,
 } from "@/features/statutes/statute-columns.logic";
 import type { StatuteTableLayout } from "@/features/statutes/statute-columns.logic";
 import {
   isFindableStatuteColumn,
   statuteFindRowText,
 } from "@/features/statutes/statute-find.logic";
-import { readStoredJson } from "@/lib/stored-json";
+import {
+  definePersistedState,
+  keepInAnyScope,
+  readPersistedState,
+  writePersistedState,
+} from "@/lib/persisted-state/registry";
+
+const layoutEntry = definePersistedState({
+  key: "statute_table_layout",
+  area: "local",
+  version: 1,
+  schema: v.custom<Record<string, StatuteTableLayout>>(() => true),
+  maxBytes: 131_072,
+  defaultValue: () => ({}),
+  scopeCheck: keepInAnyScope,
+  restoredUi: true,
+});
 
 const STATUTE_LAYOUT_STORE: PublicLawTableLayoutStore<StatuteTableLayout> = {
-  storageKey: "statute_table_layout",
-  read: (raw) =>
-    statuteTableLayouts(readStoredJson(raw, StoredStatuteLayoutSchema) ?? {}),
+  read: () => readPersistedState(layoutEntry, {}),
+  write: (layouts) => {
+    writePersistedState(layoutEntry, {}, layouts);
+  },
   defaultLayout: DEFAULT_STATUTE_TABLE_LAYOUT,
 };
 

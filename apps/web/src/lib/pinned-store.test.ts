@@ -100,14 +100,16 @@ describe("account-owned pins", () => {
     const unsubscribe = installUserScopedStorage(queryClient, areas);
     queryClient.setQueryData(["session"], { user: { id: "user-a" } });
     usePinnedStore.getState().togglePin("matter-a");
-    expect(stored.get(userStorageKey("sidebar_pinned"))).toBe('["matter-a"]');
+    expect(stored.get(userStorageKey("sidebar_pinned"))).toBe(
+      JSON.stringify({ version: 1, value: ["matter-a"] }),
+    );
     releaseUserStorage(areas());
     expect(usePinnedStore.getState().pinnedOrder).toEqual([]);
     expect(usePinnedStore.getState().pinnedIds.has("matter-a")).toBe(false);
     expect(usePinnedStore.getState().pinAttention.type).toBe("idle");
     stored.set(
       userStorageKey("sidebar_pinned", { kind: "user", userId: "user-b" }),
-      '["matter-b"]',
+      JSON.stringify({ version: 1, value: ["matter-b"] }),
     );
     queryClient.setQueryData(["session"], { user: { id: "user-b" } });
     expect(usePinnedStore.getState().pinnedOrder).toEqual(["matter-b"]);
@@ -124,7 +126,10 @@ describe("account-owned pins", () => {
         kind: "user",
         userId: "user-a",
       });
-      stored.set(accountKey, '["matter-a"]');
+      stored.set(
+        accountKey,
+        JSON.stringify({ version: 1, value: ["matter-a"] }),
+      );
       queryClient.setQueryData(["session"], { user: { id: "user-a" } });
       expect(usePinnedStore.getState().pinnedOrder).toEqual(["matter-a"]);
       releaseUserStorage(areas());

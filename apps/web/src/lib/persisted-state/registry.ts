@@ -5,7 +5,8 @@ import { requireBrowserStorage } from "@/lib/account/browser-storage";
 import type { StorageArea } from "@/lib/account/storage-families";
 import { readStoredJson, serializeStoredJson } from "@/lib/stored-json";
 
-type PersistedStateScope = {
+type PersistedStateScope = object;
+type DefaultPersistedStateScope = {
   organizationId?: string | undefined;
   workspaceId?: string | undefined;
 };
@@ -14,7 +15,7 @@ type PersistedStateKey<TScope extends PersistedStateScope> =
   | string
   | ((scope: TScope) => string);
 
-type PersistedStateEntry<
+export type PersistedStateEntry<
   TSchema extends v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
   TScope extends PersistedStateScope,
 > = {
@@ -58,7 +59,7 @@ const envelopeSchema = <
 
 export const definePersistedState = <
   TSchema extends v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
-  TScope extends PersistedStateScope = PersistedStateScope,
+  TScope extends PersistedStateScope = DefaultPersistedStateScope,
 >(
   entry: PersistedStateEntry<TSchema, TScope>,
 ) => entry;

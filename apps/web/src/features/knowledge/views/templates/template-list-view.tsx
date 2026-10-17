@@ -2,6 +2,7 @@ import type { DragEvent, ReactElement, ReactNode } from "react";
 import { useState } from "react";
 
 import { useTranslations } from "use-intl";
+import * as v from "valibot";
 
 import { compareByLocale } from "@stll/collation";
 import { Button } from "@stll/ui/button";
@@ -23,9 +24,14 @@ import type {
 } from "@/features/knowledge/views/templates/templates-seam";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useI18nStore } from "@/i18n/i18n-store";
-import { deviceStorage } from "@/lib/account/browser-storage";
 import { optionalArray } from "@/lib/arrays";
 import { TOOLBAR_ROW_MIN_HEIGHT } from "@/lib/consts";
+import {
+  definePersistedState,
+  keepInAnyScope,
+  readPersistedState,
+  writePersistedState,
+} from "@/lib/persisted-state/registry";
 
 /** The per-row context a route needs to render one row of the list. */
 type TemplateRowContext = {
@@ -61,16 +67,23 @@ type TemplateListViewProps = {
 // carries its own MIME type, not files) — should light up the list.
 const isFileDrag = (e: DragEvent) => e.dataTransfer.types.includes("Files");
 
-const DENSITY_STORAGE_KEY = "stella.templates.density";
+const templateDensityEntry = definePersistedState({
+  key: "stella.templates.density",
+  area: "local",
+  version: 1,
+  schema: v.picklist(["compact", "comfortable"]),
+  maxBytes: 256,
+  defaultValue: (): TemplateDensity => "compact",
+  scopeCheck: keepInAnyScope,
+  restoredUi: true,
+});
 
 /** Persisted list density; defaults to compact for fast scanning. */
 const readTemplateDensity = (): TemplateDensity =>
-  deviceStorage("local").getItem(DENSITY_STORAGE_KEY) === "comfortable"
-    ? "comfortable"
-    : "compact";
+  readPersistedState(templateDensityEntry, {});
 
 const writeTemplateDensity = (density: TemplateDensity): void => {
-  deviceStorage("local").setItem(DENSITY_STORAGE_KEY, density);
+  writePersistedState(templateDensityEntry, {}, density);
 };
 
 const TemplateListView = ({

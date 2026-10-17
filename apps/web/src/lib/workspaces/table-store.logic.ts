@@ -1,8 +1,11 @@
 import type { ColumnSizingState } from "@tanstack/react-table";
 import * as v from "valibot";
-import type { StorageValue } from "zustand/middleware";
 
-import { readStoredJson } from "@/lib/stored-json";
+import { userStorageKey } from "@/lib/account/user-scoped-storage";
+import {
+  definePersistedState,
+  keepInAnyScope,
+} from "@/lib/persisted-state/registry";
 
 export const TABLE_STORE_VERSION = 1;
 
@@ -56,7 +59,7 @@ const viewRecord = <
   value: TSchema,
 ) => v.record(v.string(), v.record(v.string(), value));
 
-const StorageSchema = v.strictObject({
+export const tableStorageSchema = v.strictObject({
   state: v.strictObject({
     columnSizing: viewRecord(v.record(v.string(), v.number())),
     contentMode: viewRecord(v.picklist(TABLE_CONTENT_MODES)),
@@ -64,8 +67,13 @@ const StorageSchema = v.strictObject({
   version: v.literal(TABLE_STORE_VERSION),
 });
 
-/** Anything but a well-formed current-version payload reads as `null`. */
-export const readPersistedTableState = (
-  raw: string | null,
-): StorageValue<PersistedTableState> | null =>
-  readStoredJson(raw, StorageSchema);
+export const tableStateEntry = definePersistedState({
+  key: () => userStorageKey("stella:table"),
+  area: "local",
+  version: 1,
+  schema: v.nullable(tableStorageSchema),
+  maxBytes: 524_288,
+  defaultValue: () => null,
+  scopeCheck: keepInAnyScope,
+  restoredUi: true,
+});

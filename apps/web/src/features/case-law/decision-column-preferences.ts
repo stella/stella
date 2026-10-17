@@ -1,17 +1,32 @@
+import * as v from "valibot";
+
 import { usePublicLawTableLayout } from "@/components/public-law-table/use-public-law-table-layout";
 import type { PublicLawTableLayoutStore } from "@/components/public-law-table/use-public-law-table-layout";
-import {
-  DEFAULT_DECISION_TABLE_LAYOUT,
-  decisionTableLayouts,
-  StoredDecisionLayoutSchema,
-} from "@/features/case-law/decision-column-preferences.logic";
+import { DEFAULT_DECISION_TABLE_LAYOUT } from "@/features/case-law/decision-column-preferences.logic";
 import type { DecisionTableLayout } from "@/features/case-law/decision-column-preferences.logic";
-import { readStoredJson } from "@/lib/stored-json";
+import {
+  definePersistedState,
+  keepInAnyScope,
+  readPersistedState,
+  writePersistedState,
+} from "@/lib/persisted-state/registry";
+
+const layoutEntry = definePersistedState({
+  key: "case_law_hidden_columns",
+  area: "local",
+  version: 1,
+  schema: v.custom<Record<string, DecisionTableLayout>>(() => true),
+  maxBytes: 131_072,
+  defaultValue: () => ({}),
+  scopeCheck: keepInAnyScope,
+  restoredUi: true,
+});
 
 const DECISION_LAYOUT_STORE: PublicLawTableLayoutStore<DecisionTableLayout> = {
-  storageKey: "case_law_hidden_columns",
-  read: (raw) =>
-    decisionTableLayouts(readStoredJson(raw, StoredDecisionLayoutSchema) ?? {}),
+  read: () => readPersistedState(layoutEntry, {}),
+  write: (layouts) => {
+    writePersistedState(layoutEntry, {}, layouts);
+  },
   defaultLayout: DEFAULT_DECISION_TABLE_LAYOUT,
 };
 

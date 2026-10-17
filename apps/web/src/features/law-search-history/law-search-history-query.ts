@@ -16,7 +16,6 @@ import type { SearchHistoryTitleParts } from "@stll/api-contract/search-history-
 import { Temporal } from "@stll/time";
 
 import { useLatestCallback } from "@/hooks/use-latest-callback";
-import { browserStateStorage } from "@/lib/account/browser-storage";
 import { userStorageKey } from "@/lib/account/user-scoped-storage";
 import { api } from "@/lib/api";
 import { fetchSession } from "@/lib/auth-queries";
@@ -28,9 +27,14 @@ import { migrateLocalLawHistory } from "@/lib/law-search-history/law-search-hist
 import {
   LAW_HISTORY_DISPLAY_LIMIT,
   LAW_HISTORY_STORAGE_KEY,
-  readLawRecent,
   type LawRecentFilter,
 } from "@/lib/law-search-history/law-search-history.logic";
+import {
+  lawHistoryMigrationStorage,
+  readLocalLawHistory,
+  removeLocalLawHistory,
+  writeLocalLawHistory,
+} from "@/lib/persisted-state/law-history-storage";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 type HistoryInput = Parameters<(typeof api)["search-history"]["post"]>[0];
@@ -99,13 +103,12 @@ const importLocalLawHistory = async ({
   signal,
   isCurrentScope,
 }: ImportLocalLawHistoryOptions) => {
-  const storage = browserStateStorage("local");
   const scopedKey = userStorageKey(LAW_HISTORY_STORAGE_KEY, {
     kind: "user",
     userId: scope.userId,
   });
   await migrateLocalLawHistory({
-    storage,
+    storage: lawHistoryMigrationStorage,
     userKey: scopedKey,
     canRemove: () => !signal.aborted && isCurrentScope(),
     importEntries: async (entries) => {
@@ -193,14 +196,13 @@ const coordinateHistoryWrite = async ({
   queryClient,
   onError,
 }: CoordinateHistoryWriteOptions) => {
-  const storage = browserStateStorage("local");
   const snapshots = [
     userStorageKey(LAW_HISTORY_STORAGE_KEY, {
       kind: "user",
       userId: write.scope.userId,
     }),
     LAW_HISTORY_STORAGE_KEY,
-  ].map((key) => ({ key, entries: readLawRecent(storage.getItem(key)) }));
+  ].map((key) => ({ key, entries: readLocalLawHistory(key) }));
   const localIdentity = (
     entry: (typeof snapshots)[number]["entries"][number],
   ) =>
@@ -239,7 +241,7 @@ const coordinateHistoryWrite = async ({
   await sendHistoryWrite(write);
   // A rejected server write must leave the local batch available for import retry.
   for (const { key } of snapshots) {
-    const current = readLawRecent(storage.getItem(key));
+    const current = readLocalLawHistory(key);
     const remaining = current.filter(
       (entry) => !capturedMatches.has(localIdentity(entry)),
     );
@@ -247,13 +249,13 @@ const coordinateHistoryWrite = async ({
       continue;
     }
     if (remaining.length === 0) {
-      storage.removeItem(key);
+      removeLocalLawHistory(key);
     } else {
-      storage.setItem(key, JSON.stringify(remaining));
+      writeLocalLawHistory(key, remaining);
     }
   }
   // Retain failed imports with unrelated local entries so their retry remains available.
-  if (snapshots.every(({ key }) => storage.getItem(key) === null)) {
+  if (snapshots.every(({ key }) => readLocalLawHistory(key).length === 0)) {
     queryClient.setQueryData(importKey, null);
   }
 };

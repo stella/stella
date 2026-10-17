@@ -1,4 +1,3 @@
-import { Result } from "better-result";
 import * as v from "valibot";
 
 import { isSafeIdValue } from "@stll/api-contract";
@@ -9,13 +8,16 @@ import type { DocumentIdentity } from "@stll/ui/document-identity-badge.logic";
 import { COURT_TIER_WEIGHT } from "@stll/ui/document-identity-badge.logic";
 
 import { getStorageKey } from "@/consts";
-import { browserStateStorage } from "@/lib/account/browser-storage";
 import {
   isCurrentStorageOwner,
   userStorageKey,
 } from "@/lib/account/user-scoped-storage";
 import type { StorageOwner } from "@/lib/account/user-scoped-storage";
-import { readStoredJson, writeStoredJson } from "@/lib/stored-json";
+import {
+  definePersistedState,
+  readPersistedState,
+  writePersistedState,
+} from "@/lib/persisted-state/registry";
 
 const RECENT_SEARCHES_KEY = getStorageKey("search-recent-searches");
 const MAX_RECENT_SEARCHES = 6;
@@ -37,11 +39,6 @@ export type RecentFileWithIdentity = StoredRecentFile & {
 };
 
 type RecentFileInput = Omit<RecentFileWithIdentity, "openedAt">;
-
-const getStorage = (): Storage | null => browserStateStorage("local");
-
-const scopedKey = (key: string, scope: SearchRecentsScope): string =>
-  userStorageKey(`${key}:${scope.organizationId}:`, scope.owner);
 
 export const isSearchRecentsScopeCurrent = (
   scope: SearchRecentsScope,
@@ -109,56 +106,55 @@ const isRecentFile = (value: unknown): value is RecentFileWithIdentity =>
   typeof value["openedAt"] === "string" &&
   (value["updatedAt"] === undefined || typeof value["updatedAt"] === "string");
 
-// Top-level shape only: each item is validated individually below via
-// `isItem`, so one malformed entry drops just that entry rather than the
-// whole list.
+// Top-level shape only: each item is validated individually below.
 const JsonArraySchema = v.array(v.unknown());
+
+const recentListEntry = definePersistedState({
+  key: ({ key, organizationId, owner }: SearchRecentsScope & { key: string }) =>
+    userStorageKey(`${key}:${organizationId}:`, owner),
+  area: "local",
+  version: 1,
+  schema: JsonArraySchema,
+  maxBytes: 262_144,
+  defaultValue: () => [],
+  scopeCheck: (value, scope) =>
+    isSearchRecentsScopeCurrent(scope)
+      ? { keep: true, value }
+      : { keep: false },
+  restoredUi: false,
+});
 
 const readList = <T>(
   key: string,
   isItem: (value: unknown) => value is T,
-  storage: Storage | null = getStorage(),
-): T[] => {
-  if (!storage) {
-    return [];
-  }
-
-  const raw = Result.try(() => storage.getItem(key)).unwrapOr(null);
-  const parsed = readStoredJson(raw, JsonArraySchema);
-  return parsed ? parsed.filter(isItem) : [];
-};
+  scope: SearchRecentsScope,
+): T[] => readPersistedState(recentListEntry, { ...scope, key }).filter(isItem);
 
 const writeList = (
   key: string,
   items: readonly unknown[],
-  storage: Storage | null = getStorage(),
+  scope: SearchRecentsScope,
 ): void => {
-  if (!storage) {
-    return;
-  }
-
-  writeStoredJson(storage, key, items);
+  writePersistedState(recentListEntry, { ...scope, key }, [...items]);
 };
 
 export const readRecentSearches = (
   scope: SearchRecentsScope,
-  storage: Storage | null = getStorage(),
 ): RecentSearch[] =>
   isSearchRecentsScopeCurrent(scope)
-    ? readList(scopedKey(RECENT_SEARCHES_KEY, scope), isRecentSearch, storage)
+    ? readList(RECENT_SEARCHES_KEY, isRecentSearch, scope)
     : [];
 
 export const recordRecentSearch = (
   query: string,
   scope: SearchRecentsScope,
-  storage: Storage | null = getStorage(),
 ): RecentSearch[] => {
   if (!isSearchRecentsScopeCurrent(scope)) {
     return [];
   }
   const trimmed = query.trim();
   if (!trimmed) {
-    return readRecentSearches(scope, storage);
+    return readRecentSearches(scope);
   }
 
   const next = [
@@ -168,31 +164,23 @@ export const recordRecentSearch = (
         fractionalSecondDigits: 3,
       }),
     },
-    ...readRecentSearches(scope, storage).filter(
-      (item) => item.query !== trimmed,
-    ),
+    ...readRecentSearches(scope).filter((item) => item.query !== trimmed),
   ].slice(0, MAX_RECENT_SEARCHES);
 
-  writeList(scopedKey(RECENT_SEARCHES_KEY, scope), next, storage);
+  writeList(RECENT_SEARCHES_KEY, next, scope);
   return next;
 };
 
 export const readRecentFiles = (
   scope: SearchRecentsScope,
-  storage: Storage | null = getStorage(),
 ): RecentFileWithIdentity[] =>
   isSearchRecentsScopeCurrent(scope)
-    ? readList(
-        scopedKey(RECENT_FILES_STORAGE_KEY, scope),
-        isRecentFile,
-        storage,
-      )
+    ? readList(RECENT_FILES_STORAGE_KEY, isRecentFile, scope)
     : [];
 
 export const recordRecentFile = (
   file: RecentFileInput,
   scope: SearchRecentsScope,
-  storage: Storage | null = getStorage(),
 ): RecentFileWithIdentity[] => {
   if (!isSearchRecentsScopeCurrent(scope)) {
     return [];
@@ -203,7 +191,7 @@ export const recordRecentFile = (
     !isSafeIdValue(file.workspaceId) ||
     !title
   ) {
-    return readRecentFiles(scope, storage);
+    return readRecentFiles(scope);
   }
 
   const next = [
@@ -212,11 +200,9 @@ export const recordRecentFile = (
       title,
       openedAt: Temporal.Now.instant().toString({ fractionalSecondDigits: 3 }),
     },
-    ...readRecentFiles(scope, storage).filter(
-      (item) => item.entityId !== file.entityId,
-    ),
+    ...readRecentFiles(scope).filter((item) => item.entityId !== file.entityId),
   ].slice(0, MAX_RECENT_FILES);
 
-  writeList(scopedKey(RECENT_FILES_STORAGE_KEY, scope), next, storage);
+  writeList(RECENT_FILES_STORAGE_KEY, next, scope);
   return next;
 };

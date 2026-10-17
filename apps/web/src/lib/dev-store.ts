@@ -1,8 +1,14 @@
+import * as v from "valibot";
 import { create } from "zustand";
-import { createJSONStorage, persist } from "zustand/middleware";
+import { persist } from "zustand/middleware";
+import type { StorageValue } from "zustand/middleware";
 
 import { getStorageKey } from "@/consts";
-import { deviceStorage } from "@/lib/account/browser-storage";
+import {
+  definePersistedState,
+  keepInAnyScope,
+} from "@/lib/persisted-state/registry";
+import { registryZustandStorage } from "@/lib/persisted-state/zustand-storage";
 
 type State = {
   tanstackDevtools: boolean;
@@ -21,6 +27,17 @@ type Actions = {
   setInboxPreview: (value: boolean) => void;
   setSimulateSlowLoad: (value: boolean) => void;
 };
+
+const devStateEntry = definePersistedState({
+  key: getStorageKey("dev"),
+  area: "local",
+  version: 1,
+  schema: v.custom<StorageValue<State & Actions> | null>(() => true),
+  maxBytes: 16_384,
+  defaultValue: () => null,
+  scopeCheck: keepInAnyScope,
+  restoredUi: false,
+});
 
 export const useDevStore = create<State & Actions>()(
   persist(
@@ -52,7 +69,7 @@ export const useDevStore = create<State & Actions>()(
       },
     }),
     {
-      storage: createJSONStorage(() => deviceStorage("local")),
+      storage: registryZustandStorage(devStateEntry, {}),
       name: getStorageKey("dev"),
     },
   ),
