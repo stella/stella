@@ -309,7 +309,7 @@ const selectorCase = (
       : {};
   return {
     flags: ["-e"],
-    script: `${detectors === DETECTORS.inProcess ? SERVED_BUN_SHIM : ""}changed_files=("$@"); e2e_core_required=$(bash scripts/detect-e2e-changes.sh core "$@")
+    script: `${detectors === DETECTORS.inProcess ? SERVED_BUN_SHIM : ""}changed_files=("$@"); scope_files=("$@"); e2e_core_required=$(bash scripts/detect-e2e-changes.sh core "$@")
 desktop_rust_checks_required=$(bash scripts/detect-tauri-rust-changes.sh "$@")
 e2e_landing_required="$E2E_LANDING_REQUIRED"
 package_checks_required=true
@@ -2860,7 +2860,7 @@ const packageChecksPlan = (files: readonly string[]) => {
       "-e",
       "-c",
       `${PACKAGE_CHECKS_BUN_SHIM}
-changed_files=("$@"); desktop_rust_checks_required=false
+changed_files=("$@"); scope_files=("$@"); desktop_rust_checks_required=false
 ${packageScope}
 printf "%s\\n" "$package_checks_required"`,
       "ci-plan-test",
@@ -5190,7 +5190,7 @@ test("the production service-scope capture rejects crashed or malformed detector
           "bash",
           "-eu",
           "-c",
-          `changed_files=(docs/guide.md)\n${capture}\nprintf 'SCOPES=%s %s %s %s\\n' "$postgres_suites_required" "$corpus_suites_required" "$valkey_suites_required" "$collaboration_suite_required"`,
+          `changed_files=(docs/guide.md)\nscope_files=(docs/guide.md)\n${capture}\nprintf 'SCOPES=%s %s %s %s\\n' "$postgres_suites_required" "$corpus_suites_required" "$valkey_suites_required" "$collaboration_suite_required"`,
         ],
         {
           env: {
