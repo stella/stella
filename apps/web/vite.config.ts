@@ -614,6 +614,7 @@ export default defineConfig(({ mode, command }) => {
         "@tiptap/extension-italic",
         "@tiptap/extension-list",
         "diff",
+        "pele/lazy",
         "y-prosemirror",
         "yjs",
       ],

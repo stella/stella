@@ -546,6 +546,7 @@
         "mdast-util-gfm": "3.1.0",
         "micromark-extension-gfm": "3.0.0",
         "pdfjs-dist": "^6.4.299",
+        "pele": "^1.3.0",
         "posthog-js": "^1.438.2",
         "prism-react-renderer": "^2.4.1",
         "prosemirror-commands": "catalog:",
@@ -5373,6 +5374,8 @@
     "pdfjs-dist": ["pdfjs-dist@6.4.299", "", { "optionalDependencies": { "@napi-rs/canvas": "^1.0.10" } }, "sha512-AVl138zALtfaAPvADulE0PZThbYzCBS79nL4pOSL/6Sm/4AH5A21BD9VHt97OlCuzJuCpmeZtAtkinisF4Vb1g=="],
 
     "peberminta": ["peberminta@0.9.0", "", {}, "sha512-XIxfHpEuSJbITd1H3EeQwpcZbTLHc+VVr8ANI9t5sit565tsI4/xK3KWTUFE2e6QiangUkh3B0jihzmGnNrRsQ=="],
+
+    "pele": ["pele@1.3.0", "", {}, "sha512-Jz3SW2OYo4yLkrrNuQwfg93el1SEGsFVTd7c/XVvZEry6UfR8ncvxoZqAefEpXOFpJRwhmXwWq17aGHg8W0vuA=="],
 
     "perfect-debounce": ["perfect-debounce@2.1.0", "", {}, "sha512-LjgdTytVFXeUgtHZr9WYViYSM/g8MkcTPYDlPa3cDqMirHjKiSZPYd6DoL7pK8AJQr+uWkQvCjHNdiMqsrJs+g=="],
 
