@@ -65,6 +65,9 @@
     "runSelectedRows": "Palaist {count, plural, zero {# atlasītai rindai} one {# atlasītai rindai} other {# atlasītām rindām}}",
     "selectedRun": "Palaist AI kolonnas {count, plural, zero {# rindai} one {# rindai} other {# rindām}}"
   },
+  "aiDisclosure": {
+    "caseLaw": "AI veidotos tiesu nolēmumu kopsavilkumus, piezīmes un analīzes ģenerē stella; tiesas tos nav apstiprinājušas, un tie neatspoguļo pašu tiesu argumentāciju. Tie ir palīglīdzekļi juridiskās jomas speciālistiem, un noteicošais avots joprojām ir nolēmuma teksts."
+  },
   "appearance": {
     "calendar": "Kalendārs",
     "calendarGregorian": "Gregora",

@@ -65,6 +65,9 @@
     "runSelectedRows": "Executar para {count, plural, one {# linha selecionada} other {# linhas selecionadas}}",
     "selectedRun": "Executar colunas de IA para {count, plural, one {# linha} other {# linhas}}"
   },
+  "aiDisclosure": {
+    "caseLaw": "Os resumos, notas e análises de decisões judiciais feitos por IA são gerados pelo stella, não são endossados pelos tribunais e não representam a fundamentação dos próprios tribunais; são ferramentas de apoio para profissionais do direito, e o texto da decisão continua sendo a fonte oficial."
+  },
   "appearance": {
     "calendar": "Calendário",
     "calendarGregorian": "Gregoriano",
