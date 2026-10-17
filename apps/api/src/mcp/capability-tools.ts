@@ -81,6 +81,7 @@ import {
   declaresInternalField,
   INTERNAL_FIELD_NAME,
   PUBLIC_FIELD_NAME,
+  withPublicFieldNames,
 } from "@/api/mcp/public-field-names";
 import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
@@ -1159,7 +1160,7 @@ const describeCapabilityHandler: McpToolHandler<
   );
   const schema = advertisedSchemas(endpoint.config);
   const requirement = endpoint.config.featureAccess;
-  const inputSchema =
+  const callerSchema =
     requirement?.type === "conditional" &&
     !isMcpDescriptorFeatureEnabled({
       context,
@@ -1169,6 +1170,13 @@ const describeCapabilityHandler: McpToolHandler<
     })
       ? requirement.projectInputSchema(schema)
       : schema;
+  // The executors read `matterId` and refuse the internal spelling, so the
+  // description names the field the same way the catalog does.
+  const inputSchema = {
+    body: withPublicFieldNames(callerSchema.body),
+    params: withPublicFieldNames(callerSchema.params),
+    query: withPublicFieldNames(callerSchema.query),
+  };
 
   return structuredEgressPlan({
     payload: projectionPayload(DESCRIBE_CAPABILITY_OUTPUT_SCHEMA, {
