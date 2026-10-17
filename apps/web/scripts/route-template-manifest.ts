@@ -1,6 +1,6 @@
 import type { GeneratorPlugin } from "@tanstack/router-generator";
 import { panic, Result } from "better-result";
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 export const routeTemplateManifest = (tree: string): string => {
@@ -33,7 +33,11 @@ export const refreshRouteTemplateManifest = (
     readFileSync(destination, "utf-8"),
   ).unwrapOr(null);
   if (manifest !== previous) {
-    writeFileSync(destination, manifest);
+    // Watchers and concurrent generator runs read this file; a rename within
+    // the directory replaces it in one step, so no reader sees a partial one.
+    const staging = `${destination}.${process.pid}.tmp`;
+    writeFileSync(staging, manifest);
+    renameSync(staging, destination);
   }
 };
 

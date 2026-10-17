@@ -98,6 +98,71 @@ const setup = ({
   attach();
   return { detector, hangs, frames, attach, markerKey };
 };
+
+const setupRetirementScenario = (clock: { value: number }) => {
+  const intervalDescriptor = Object.getOwnPropertyDescriptor(
+    window,
+    "setInterval",
+  );
+  const timeoutDescriptor = Object.getOwnPropertyDescriptor(
+    window,
+    "setTimeout",
+  );
+  const idleDescriptor = Object.getOwnPropertyDescriptor(
+    window,
+    "requestIdleCallback",
+  );
+  let onHeartbeat: (() => void) | undefined;
+  let onRetirement: (() => void) | undefined;
+  let retirementDelay: number | undefined;
+  Object.defineProperty(window, "setInterval", {
+    configurable: true,
+    value: (task: () => void) => {
+      onHeartbeat = task;
+      return 1;
+    },
+  });
+  Object.defineProperty(window, "setTimeout", {
+    configurable: true,
+    value: (task: () => void, delay: number) => {
+      onRetirement = task;
+      retirementDelay = delay;
+      return 2;
+    },
+  });
+  Object.defineProperty(window, "requestIdleCallback", {
+    configurable: true,
+    value: (task: () => void) => {
+      task();
+      return 3;
+    },
+  });
+  const current = setup({ now: () => clock.value });
+  current.detector.routeReady("/chat/$threadId");
+  return {
+    ...current,
+    retirementDelay: () => retirementDelay,
+    heartbeat: () => {
+      onHeartbeat?.();
+    },
+    retire: () => {
+      onRetirement?.();
+    },
+    restore: () => {
+      if (intervalDescriptor) {
+        Object.defineProperty(window, "setInterval", intervalDescriptor);
+      }
+      if (timeoutDescriptor) {
+        Object.defineProperty(window, "setTimeout", timeoutDescriptor);
+      }
+      if (idleDescriptor) {
+        Object.defineProperty(window, "requestIdleCallback", idleDescriptor);
+      } else {
+        Reflect.deleteProperty(window, "requestIdleCallback");
+      }
+    },
+  };
+};
 test("a stale boot reports once and resets layout before restoration, with a visible recovery toast", async () => {
   seed("boot");
   const { detector, hangs, attach } = setup();
@@ -288,6 +353,68 @@ test("a successful safe boot clears its marker before monitoring the healthy ses
     } else {
       Reflect.deleteProperty(window, "requestIdleCallback");
     }
+  }
+});
+test("a healthy replacement retires an abandoned recent boot before it becomes stale", () => {
+  const clock = { value: 100 };
+  seed("boot", { started: 1, heartbeat: 90 });
+  const replacement = setupRetirementScenario(clock);
+  try {
+    expect(replacement.detector.safeMode).toBe(false);
+    expect(replacement.retirementDelay()).toBe(2 * HANG_HEARTBEAT_MS);
+    clock.value += 2 * HANG_HEARTBEAT_MS;
+    replacement.retire();
+    expect(local.getItem(key)).toBeNull();
+
+    clock.value = HANG_STALE_MS + 101;
+    replacement.heartbeat();
+    const next = setup({ now: () => clock.value });
+    expect(next.detector.safeMode).toBe(false);
+    expect(next.hangs).toEqual([]);
+  } finally {
+    replacement.restore();
+  }
+});
+test("a healthy replacement keeps a visible boot whose heartbeat advances", () => {
+  const clock = { value: 100 };
+  seed("boot", { started: 1, heartbeat: 90 });
+  const replacement = setupRetirementScenario(clock);
+  try {
+    const neighbour = local.getItem(key);
+    if (neighbour === null) {
+      throw new DOMException("Boot marker required");
+    }
+    local.setItem(key, neighbour.replace('"heartbeat":90', '"heartbeat":200'));
+    clock.value += 2 * HANG_HEARTBEAT_MS;
+    replacement.retire();
+    expect(local.getItem(key)).toContain('"heartbeat":200');
+  } finally {
+    replacement.restore();
+  }
+});
+test("a healthy replacement leaves hidden boot markers alone", () => {
+  const clock = { value: 100 };
+  seed("boot", { started: 1, heartbeat: 90, visible: false });
+  const replacement = setupRetirementScenario(clock);
+  try {
+    clock.value += 2 * HANG_HEARTBEAT_MS;
+    replacement.retire();
+    expect(local.getItem(key)).not.toBeNull();
+  } finally {
+    replacement.restore();
+  }
+});
+test("a disposed replacement does not retire abandoned boot markers", () => {
+  const clock = { value: 100 };
+  seed("boot", { started: 1, heartbeat: 90 });
+  const replacement = setupRetirementScenario(clock);
+  try {
+    replacement.detector.dispose();
+    clock.value += 2 * HANG_HEARTBEAT_MS;
+    replacement.retire();
+    expect(local.getItem(key)).not.toBeNull();
+  } finally {
+    replacement.restore();
   }
 });
 test("heartbeats run every three seconds only while visible and refresh on visibility changes", () => {

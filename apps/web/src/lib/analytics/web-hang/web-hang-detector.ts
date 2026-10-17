@@ -168,12 +168,21 @@ export const createWebHangDetector = ({
   // sessionStorage is copied by duplicate/opener tabs: identity belongs to
   // this document, so another document can never erase its evidence.
   const key = `${HANG_MARKER_PREFIX}${createEphemeralId()}`;
+  const started = now();
+  const bootCandidates: BootCandidate[] = [];
   let previous: { key: string; marker: Marker } | undefined;
   for (const { key: candidate, marker: stored } of readHangMarkers(local)) {
     if (
+      stored?.phase === "boot" &&
+      stored.visible &&
+      stored.started < started
+    ) {
+      bootCandidates.push({ key: candidate, heartbeat: stored.heartbeat });
+    }
+    if (
       !stored ||
       !stored.visible ||
-      now() - stored.heartbeat <= HANG_STALE_MS
+      started - stored.heartbeat <= HANG_STALE_MS
     ) {
       continue;
     }
@@ -186,8 +195,8 @@ export const createWebHangDetector = ({
   const restoredState = persistedUiStateFingerprint(local);
   let marker: Marker = {
     routeTemplate: resolveWebRouteTemplate(browser.location.pathname),
-    started: now(),
-    heartbeat: now(),
+    started,
+    heartbeat: started,
     phase: "boot",
     build,
     restoredState,
@@ -208,6 +217,7 @@ export const createWebHangDetector = ({
   let notified = false;
   let analytics: HangAnalytics | undefined;
   let idlePending = false;
+  let retirementTimer: ReturnType<typeof browser.setTimeout> | undefined;
   const persist = () => {
     if (!storageReady || stopped) {
       return;
@@ -242,6 +252,9 @@ export const createWebHangDetector = ({
   const uninstall = () => {
     if (timer !== undefined) {
       browser.clearInterval(timer);
+    }
+    if (retirementTimer !== undefined) {
+      browser.clearTimeout(retirementTimer);
     }
     observer?.disconnect();
     browser.document.removeEventListener("visibilitychange", onVisibility);
@@ -312,6 +325,24 @@ export const createWebHangDetector = ({
         } else {
           persist();
         }
+        const retireBootCandidates = () => {
+          if (stopped) {
+            return;
+          }
+          retireAbandonedBootCandidates({
+            storage: local,
+            candidates: bootCandidates,
+            started: marker.started,
+          });
+        };
+        const retirementDelay = Math.max(
+          0,
+          started + 2 * HANG_HEARTBEAT_MS - now(),
+        );
+        retirementTimer = browser.setTimeout(
+          retireBootCandidates,
+          retirementDelay,
+        );
       };
       if (typeof browser.requestIdleCallback === "function") {
         browser.requestIdleCallback(interactive);
@@ -333,6 +364,34 @@ export const createWebHangDetector = ({
       uninstall();
     },
   };
+};
+
+type BootCandidate = { key: string; heartbeat: number };
+type RetireBootCandidatesOptions = {
+  storage: Storage | null;
+  candidates: BootCandidate[];
+  started: number;
+};
+
+const retireAbandonedBootCandidates = ({
+  storage,
+  candidates,
+  started,
+}: RetireBootCandidatesOptions) => {
+  const records = new Map(
+    readHangMarkers(storage).map((record) => [record.key, record.marker]),
+  );
+  for (const candidate of candidates) {
+    const current = records.get(candidate.key);
+    if (
+      current?.phase === "boot" &&
+      current.visible &&
+      current.started < started &&
+      current.heartbeat === candidate.heartbeat
+    ) {
+      Result.try(() => storage?.removeItem(candidate.key)).unwrapOr(undefined);
+    }
+  }
 };
 
 let detector: ReturnType<typeof createWebHangDetector> | undefined;

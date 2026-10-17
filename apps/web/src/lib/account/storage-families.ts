@@ -217,6 +217,7 @@ export const USER_STORAGE_FAMILIES: readonly UserStorageFamily[] = [
   {
     area: "session",
     prefix: "stella:inspector-restore-pending:v1:",
+    restoration: "layout",
     owner: "scoped",
     retention: "cleared",
   },
