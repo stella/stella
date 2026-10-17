@@ -9,7 +9,7 @@ import {
 test("concurrent captures retain additive scopes without leaking between executions", async () => {
   const scope = { type: "handler", handlerId: "shared.reportFailure" } as const;
   const results = await Promise.all(
-    ["first", "second"].map((jobId) =>
+    ["first", "second"].map(async (jobId) =>
       withExceptionScope({ type: "job", jobId, task: "repair" }, async () => {
         await Promise.resolve();
         return await withExceptionScope(scope, async () => {

@@ -582,10 +582,10 @@ test("safe handlers group plain errors by declared route across source-line move
   const safeDb: SafeDb = async <T>() =>
     Result.err<T, SafeDbError>(new DatabaseError({ message: "unused" }));
   const app = new Elysia()
-    .get("/first/:entityId", ({ request, route }) =>
+    .get("/first/:entityId", async ({ request, route }) =>
       first.handler({ ...createContext(first, safeDb), request, route }),
     )
-    .get("/second/:entityId", ({ request, route }) =>
+    .get("/second/:entityId", async ({ request, route }) =>
       second.handler({ ...createContext(second, safeDb), request, route }),
     );
   try {
@@ -654,10 +654,10 @@ test("safe handlers preserve request scope through shared helpers and detached r
   const safeDb: SafeDb = async <T>() =>
     Result.err<T, SafeDbError>(new DatabaseError({ message: "unused" }));
   const app = new Elysia()
-    .get("/first/:id", ({ request, route }) =>
+    .get("/first/:id", async ({ request, route }) =>
       endpoint.handler({ ...createContext(endpoint, safeDb), request, route }),
     )
-    .get("/second/:id", ({ request, route }) =>
+    .get("/second/:id", async ({ request, route }) =>
       endpoint.handler({ ...createContext(endpoint, safeDb), request, route }),
     );
   try {
