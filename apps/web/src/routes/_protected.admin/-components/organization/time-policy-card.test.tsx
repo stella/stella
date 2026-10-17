@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { panic } from "better-result";
-import { beforeAll, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { IntlProvider } from "use-intl";
 
 import { parseTimeZoneId } from "@stll/time";
@@ -12,11 +12,11 @@ import en from "@/i18n/langs/en.json";
 import { AuthenticatedUserProvider } from "@/lib/authenticated-user-context";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 
+import { createWebTestEnvironment } from "../../../../../tests/environment.test-fixtures";
 import type { TimePolicySettings } from "./time-policy.logic";
 
-beforeAll(() => {
-  process.env["VITE_API_URL"] ??= "https://api.example.test";
-});
+const testEnvironment = createWebTestEnvironment({ file: import.meta.path });
+testEnvironment.setEnvIfAbsent("VITE_API_URL", "https://api.example.test");
 
 const USER = {
   activeOrganizationId: "org-1",
