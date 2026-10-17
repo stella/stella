@@ -338,6 +338,90 @@ export const isAllowedBYOKModelForRole = ({
   );
 };
 
+type ModelSelectionAvailabilityOptions = {
+  dataClass: AIDataClass;
+  provider: AIProvider;
+  modelId: string;
+  orgAIConfig: OrgAIConfig | null | undefined;
+  role: ModelRole;
+};
+
+export const isModelSelectionAvailableForRole = ({
+  dataClass,
+  provider,
+  modelId,
+  orgAIConfig,
+  role,
+}: ModelSelectionAvailabilityOptions): boolean => {
+  if (!isAllowedBYOKModelForRole({ provider, modelId, role })) {
+    return false;
+  }
+  if (orgAIConfig) {
+    return orgAIConfig.providers.some(
+      (providerConfig) => providerConfig.provider === provider,
+    );
+  }
+  return (
+    hasConfiguredTanStackInstanceProvider() &&
+    (isMockTextAdapterActive() ||
+      isManagedProviderAvailable(provider, dataClass)) &&
+    getActiveProvider() === provider
+  );
+};
+
+type StructuredOutputFallbackModelOptions = {
+  failedModelId: string;
+  orgAIConfig: OrgAIConfig | null | undefined;
+  role: ModelRole;
+  modelTier: ManagedModelTier;
+} & AIRequestPolicy;
+
+/** Select once in catalog order; dispatch still proves admission and policy. */
+export const getStructuredOutputFallbackModelId = ({
+  failedModelId,
+  orgAIConfig,
+  role,
+  modelTier,
+  dataClass,
+}: StructuredOutputFallbackModelOptions): string | null => {
+  // Managed fast-tier resolution pins every selection to the fast primary.
+  if (!orgAIConfig && modelTier === MANAGED_MODEL_TIER.fast) {
+    return null;
+  }
+  for (const provider of TANSTACK_AI_PROVIDERS) {
+    for (const modelId of BYOK_MODEL_OPTIONS[provider]) {
+      if (
+        modelId === failedModelId ||
+        !isModelSelectionAvailableForRole({
+          dataClass,
+          provider,
+          modelId,
+          orgAIConfig,
+          role,
+        })
+      ) {
+        continue;
+      }
+      if (!orgAIConfig) {
+        if (
+          !isManagedProviderAvailable(provider, dataClass) ||
+          getModelRate(modelId) === undefined
+        ) {
+          continue;
+        }
+        if (
+          provider === "openrouter" &&
+          Result.isError(assertManagedOpenRouterModel(modelId))
+        ) {
+          continue;
+        }
+      }
+      return `${provider}::${modelId}`;
+    }
+  }
+  return null;
+};
+
 type ModelOverride = {
   modelId: string;
   provider?: AIProvider | undefined;
