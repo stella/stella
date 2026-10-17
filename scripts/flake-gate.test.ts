@@ -586,6 +586,40 @@ test("five shuffled iterations name the failing iteration", async () => {
   expect(reportExitCode(report, true)).toBe(1);
 });
 
+test("the real runner detects order dependence and rejects zero-test success", async () => {
+  await withFixture(async (root) => {
+    // The dependent test passes only after every preparer, so most shuffled
+    // orders fail it.
+    write(
+      root,
+      "fixture.test.ts",
+      `import {expect,test} from "bun:test";
+let prepared = 0;
+test("prepare a", () => { prepared += 1; });
+test("prepare b", () => { prepared += 1; });
+test("prepare c", () => { prepared += 1; });
+test("requires preparation", () => { expect(prepared).toBe(3); });
+`,
+    );
+    const report = await executeGate({
+      targets: [targetFor(root)],
+      skipped: [],
+    });
+    const result = report.results.at(0);
+    expect(result?.runs).toBe(REPEATS);
+    expect(result?.failures).toBeGreaterThan(0);
+    expect(reportExitCode(report, true)).toBe(1);
+    write(root, "empty.test.ts", "export {};\n");
+    expect(
+      await runOnce({
+        target: targetFor(root, "empty.test.ts"),
+        seed: 1,
+        timeoutMs: 10_000,
+      }),
+    ).toMatchObject({ type: "executed", passed: false });
+  });
+}, 30_000);
+
 test("the pinned Bun accepts native rerun and shuffle flags", async () => {
   await withFixture(async (root) => {
     write(
