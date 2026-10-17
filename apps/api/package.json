@@ -153,6 +153,7 @@
     "@stll/permissions": "workspace:*",
     "@stll/portable-path": "workspace:*",
     "@stll/redis-config": "workspace:*",
+    "@stll/regex-set": "catalog:",
     "@stll/runtime-mode": "workspace:*",
     "@stll/sanctions": "workspace:*",
     "@stll/scripts": "workspace:*",

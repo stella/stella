@@ -236,6 +236,7 @@
     "@stll/folio-core": "0.58.5",
     "@stll/folio-react": "0.26.0",
     "@stll/fuzzy-search": "1.1.5",
+    "@stll/regex-set": "1.0.5",
     "@t3-oss/env-core": "0.13.11",
     "@tailwindcss/postcss": "4.3.3",
     "@tailwindcss/vite": "4.3.3",
