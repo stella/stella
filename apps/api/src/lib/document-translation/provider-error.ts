@@ -30,6 +30,7 @@ export const documentTranslationProviderErrorCode = (
       return "provider_unavailable";
     case "output_incomplete":
     case "output_invalid":
+    case "output_moderated":
     case "empty_completion":
     case "loop_detected":
     case "model_unavailable":

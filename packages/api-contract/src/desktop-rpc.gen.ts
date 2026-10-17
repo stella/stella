@@ -16,7 +16,7 @@ export type DesktopAccountCredential = { key: string, expiresAt: string, };
 
 export type DesktopAccountIdentity = { userId: string, organizationId: string, };
 
-export type DesktopAccountSnapshot = { "status": "disconnected" } | { "status": "reconnectRequired" } | { "status": "expired" } | { "status": "connected", account: LinkedAccountSnapshot, identity: DesktopAccountIdentity, expiresAt: string, };
+export type DesktopAccountSnapshot = { "status": "disconnected", server: string, } | { "status": "reconnectRequired", server: string, } | { "status": "expired", server: string, } | { "status": "connected", account: LinkedAccountSnapshot, identity: DesktopAccountIdentity, expiresAt: string, server: string, };
 
 export type DesktopEditFileType = "docx" | "xlsx" | "pptx";
 

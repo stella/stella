@@ -1,11 +1,13 @@
 import { expect, test } from "@playwright/test";
-import type { APIRequestContext, Locator, Page } from "@playwright/test";
+import type { APIRequestContext, Page } from "@playwright/test";
+import * as v from "valibot";
 
 import { isPublicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 import {
   PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD,
   PROFESSIONAL_USE_STATEMENT_VERSION,
 } from "@stll/api-contract/professional-use";
+import marketingCaseLaw from "@stll/playwright-tools/marketing-case-law.json" with { type: "json" };
 
 import { setFixedBrowserTime } from "../helpers/clock";
 import {
@@ -14,6 +16,8 @@ import {
   MARKETING_AGENT_THREAD_TITLE,
   settleMarketingAgentThread,
 } from "./agent-thread";
+import { CAPTURE_DPR } from "./captures";
+import { getMarketingDecisionPaths } from "./case-law-reader";
 import {
   assertNoActiveEditBadge,
   releaseSupplierAgreementEditLock,
@@ -27,6 +31,15 @@ const EXPORT_REVIEW_WORKSPACE_ID = "bb8641dc-0667-574c-8e30-152a1fd4b3f5";
 // the anonymization capture.
 const ANONYMIZED_EXTRACT_ENTITY_ID = "c3dc74a6-7855-5157-84db-ddf14f886df4";
 const ANONYMIZED_EXTRACT_FIELD_ID = "e98a6746-dae9-5509-888b-d58bfbca9a33";
+// seedId("ws-due-diligence") and seedId("invoice-2") from db:seed-dev:
+// INV-2025-0003, a sent invoice whose billed time entries the invoicing
+// capture lists.
+const DUE_DILIGENCE_WORKSPACE_ID = "fb2ce658-f761-5fdd-84c9-109a15003f49";
+const SENT_INVOICE_ID = "e55ceae6-b520-565d-8cb9-96f96d928994";
+const SENT_INVOICE_NUMBER = "INV-2025-0003";
+// The seeded time entries span fixed dates (Dec 2024 - Feb 2025); naming the
+// day in the URL keeps the timesheet off the wall-clock "today".
+const TIME_TRACKING_DATE = "2024-12-13";
 // The org that owns every seeded marketing workspace (AKVIZICE/EXPORT_REVIEW/
 // Meridian). Fixed id from seed-utils' DEFAULT_ORG_ID ("Harbrook & Partners",
 // apps/api/scripts/seed-test-user.ts), seeded by
@@ -34,37 +47,14 @@ const ANONYMIZED_EXTRACT_FIELD_ID = "e98a6746-dae9-5509-888b-d58bfbca9a33";
 // starts with no active organization, so we set it server-side (below) instead
 // of driving the org-picker UI, which the workspace routes below depend on.
 const MARKETING_ORGANIZATION_ID = "test-org-stella-dev";
-// The seeded reader story on the CZE decision (apps/api/scripts/
-// seed-case-law-reader-story.ts, `CASE_LAW_READER_STORY`): the test user's
-// highlights and comments on it, and its chat already holding a cited answer.
-// The thread is found by this title; keep it in sync with `threadTitle`
-// there. Filming another decision is a change to that constant plus a
-// capture's `decisionText`.
-const READER_STORY_THREAD_TITLE =
-  "Director's guarantee under § 159(3): when it arises";
-// Words from the seeded answer, proving it rendered rather than the empty
-// chat's prompt cards.
-const READER_STORY_ANSWER_TEXT = /No demand is needed/u;
-// Where the framed paragraph lands below the reader's top edge: room for its
-// section heading, and for the comment cards beside it to fit the clip.
-const READER_SCROLL_OFFSET_PX = 48;
-// The most air left above the block the frame opens on; less when the gap to
-// the block above is smaller, so that block stays wholly out of view.
-const READER_TOP_INSET_PX = 12;
-// How many blocks, from the target's own upward, the frame may open on.
-const READER_FRAME_CANDIDATES = 12;
-// Duplicated from apps/web/src/components/inspector/inspector-storage-keys.ts,
-// for the same reason as the theme key below.
-const INSPECTOR_STATE_STORAGE_PREFIX = "stella:inspector-state:v1:";
-const INSPECTOR_MINIMIZED_STORAGE_PREFIX = "stella:inspector-minimized:v1:";
 // Duplicated from apps/web/src/consts.ts, exactly as
 // apps/web/public/prepaint-init.js duplicates it: the e2e project has no
 // `@/` path alias. Writing any other key silently leaves the app on its
 // system colour-scheme preference.
 const THEME_STORAGE_KEY = "stella-ui-theme";
 const INSPECTOR_STORAGE_PREFIXES = [
-  INSPECTOR_MINIMIZED_STORAGE_PREFIX,
-  INSPECTOR_STATE_STORAGE_PREFIX,
+  "stella:inspector-minimized:v1:",
+  "stella:inspector-state:v1:",
 ] as const;
 const requestedCapture = process.env["MARKETING_CAPTURE"];
 const MARKETING_URLS = {
@@ -77,11 +67,6 @@ const MARKETING_URLS = {
 // cover on a CI runner. Mirrors the same allowance in e2e/specs/route-smoke.
 const COLD_COMPILE_TIMEOUT = 60_000;
 
-type CaptureClip = { x: number; y: number; width: number; height: number };
-// What a capture without its own clip records: the app's main column, right
-// of the sidebar.
-const DEFAULT_CLIP: CaptureClip = { x: 255, y: 0, width: 1137, height: 710 };
-
 // The document inspector renders `${versionLabel} · ${formatRelativeTime(...)}`
 // against the current version's timestamp, so the caption changes with wall
 // clock time and drifts every baseline it appears in. Captures carrying a
@@ -90,6 +75,10 @@ const DEFAULT_CLIP: CaptureClip = { x: 255, y: 0, width: 1137, height: 710 };
 // `formatRelativeTime`'s minute bucket (one minute to one hour), far from
 // either boundary, and reads as a natural "just edited" label.
 const VERSION_CAPTION_OFFSET_MS = 5 * 60_000;
+
+// The product-shot frame for captures without their own clip: the app's main
+// column, below the sidebar.
+const DEFAULT_CLIP = { x: 255, y: 0, width: 1137, height: 710 } as const;
 
 const captures = [
   {
@@ -104,37 +93,17 @@ const captures = [
     prepare: "open-table",
     readyText: "Export Review - Project Atlas Data Room",
   },
-  // Three different national decisions (CZE, POL, SVK), each rendering with
-  // the structured reader (structure/AI margin populated) so the chapter can
-  // cross-fade between jurisdictions. Keep in sync with
-  // HomeProductStory.astro's data chapter. Only a publicly admitted country
-  // is filmed (see the capture loop); a `readerStory` capture also shows the
-  // seeded highlights, comments and cited chat answer.
-  {
-    name: "story-public-data-1",
-    prepare: "open-decision",
-    country: "CZE",
-    decisionText: "27 Cdo 59/2022",
-    readerStory: true,
-    readyText: "Case Law",
-    clip: { x: 0, y: 0, width: 1440, height: 760 },
-  },
-  {
-    name: "story-public-data-2",
-    prepare: "open-decision",
-    country: "POL",
-    decisionText: "IV C 1273/16",
-    readyText: "Case Law",
-    clip: { x: 0, y: 0, width: 1440, height: 760 },
-  },
-  {
-    name: "story-public-data-3",
-    prepare: "open-decision",
-    country: "SVK",
-    decisionText: "25Cbr/166/2024",
-    readyText: "Case Law",
-    clip: { x: 0, y: 0, width: 1440, height: 760 },
-  },
+  ...marketingCaseLaw.map(
+    (scenario, index) =>
+      ({
+        name: `story-public-data-${String(index + 1)}`,
+        prepare: "open-decision",
+        country: scenario.country,
+        decisionText: scenario.caseNumber,
+        readyText: "Case Law",
+        clip: { x: 0, y: 0, width: 1440, height: 760 },
+      }) as const,
+  ),
   {
     name: "editor",
     path: SUPPLIER_AGREEMENT_EDITOR_PATH,
@@ -159,14 +128,6 @@ const captures = [
     // the shot never ships mid-render.
     readyText: MARKETING_AGENT_FIRST_QUESTION,
   },
-  {
-    name: "public-data",
-    prepare: "open-decision",
-    country: "CZE",
-    decisionText: "27 Cdo 59/2022",
-    readerStory: true,
-    readyText: "Case Law",
-  },
   { name: "templates", path: "/knowledge/templates", readyText: "Templates" },
   {
     name: "anonymization",
@@ -181,7 +142,48 @@ const captures = [
       entityId: ANONYMIZED_EXTRACT_ENTITY_ID,
     },
   },
+  {
+    // Contacts are listed by display name, so the first seeded organisation
+    // heads the list on every run.
+    name: "contacts",
+    path: "/contacts",
+    readyText: "Bratislava Legal Group, s.r.o.",
+  },
+  {
+    name: "time-tracking",
+    path: `/time?date=${TIME_TRACKING_DATE}`,
+    prepare: "await-time-entries",
+    readyText: "Timesheets",
+  },
+  {
+    name: "invoicing",
+    path: `/workspaces/${DUE_DILIGENCE_WORKSPACE_ID}/invoices/${SENT_INVOICE_ID}`,
+    prepare: "await-invoice-entries",
+    readyText: SENT_INVOICE_NUMBER,
+  },
+  {
+    // The Export Review table with its export menu open.
+    name: "import-export",
+    path: `/workspaces/${EXPORT_REVIEW_WORKSPACE_ID}/`,
+    prepare: "open-table-export",
+    readyText: "Export Review - Project Atlas Data Room",
+  },
+  {
+    // The Czech results listing without a query: every seeded CZE decision,
+    // in the listing's own order. A keyword query depends on what the
+    // best-effort seed search index matched and returned no rows in CI.
+    name: "case-law-search",
+    path: "/law/cases?country=cze",
+    prepare: "await-search-results",
+    country: "CZE",
+    readyText: "Case Law",
+    clip: { x: 0, y: 0, width: 1440, height: 760 },
+  },
 ] as const;
+
+// Stills share the recordings' device pixel ratio, so the PNGs are twice the
+// CSS clip size and stay sharp on retina screens. Clips stay in CSS pixels.
+test.use({ deviceScaleFactor: CAPTURE_DPR });
 
 test("capture landing product screenshots", async ({
   context,
@@ -221,6 +223,11 @@ test("capture landing product screenshots", async ({
       ? await resolveAgentThreadPath(page.request)
       : undefined;
 
+  const decisionPaths =
+    !requestedCapture || requestedCapture.startsWith("story-public-data-")
+      ? await resolveDecisionPaths(page.request)
+      : new Map<string, string>();
+
   // Whether the shared page still carries a pinned clock from a previous
   // capture; see the anchor block in the capture loop.
   let clockPinned = false;
@@ -242,19 +249,19 @@ test("capture landing product screenshots", async ({
       if (requestedCapture && capture.name !== requestedCapture) {
         continue;
       }
-      if ("country" in capture && !isPublicCaseLawCountry(capture.country)) {
-        continue;
+      if ("country" in capture) {
+        expect(
+          isPublicCaseLawCountry(capture.country),
+          `${capture.name}: the filmed jurisdiction is publicly supported`,
+        ).toBe(true);
       }
-      // A decision capture scopes the search to its country so only a
-      // matching decision is deterministically on screen.
-      const searchedPath =
+      const decisionPath =
         "decisionText" in capture
-          ? `/law/cases?country=${capture.country.toLowerCase()}&q=${encodeURIComponent(
-              capture.decisionText,
-            )}`
+          ? decisionPaths.get(capture.decisionText)
           : undefined;
       const declaredPath = "path" in capture ? capture.path : agentThreadPath;
-      const capturePath = searchedPath ?? declaredPath;
+      const capturePath =
+        "decisionText" in capture ? decisionPath : declaredPath;
       if (!capturePath) {
         throw new Error(`${capture.name}: no path resolved for this capture`);
       }
@@ -262,7 +269,7 @@ test("capture landing product screenshots", async ({
       // Anchor the inspector's relative timestamp before navigating, so the
       // caption paints with the pinned clock on its first render. Captures
       // without an anchor run on real time; the clock is only restored when a
-      // previous capture actually pinned it, so the eight captures that never
+      // previous capture actually pinned it, so the captures that never
       // show a timestamp keep an untouched Date/timer implementation.
       if ("versionAnchor" in capture) {
         const versionCreatedAt = await resolveCurrentVersionCreatedAt(
@@ -278,7 +285,13 @@ test("capture landing product screenshots", async ({
         await page.clock.setSystemTime(Date.now());
         clockPinned = false;
       }
-      await page.goto(capturePath, { waitUntil: "domcontentloaded" });
+      // The navigation policy reads `waitUntil` as a literal, so the two
+      // lifecycles are separate calls.
+      if ("decisionText" in capture) {
+        await page.goto(capturePath, { waitUntil: "commit" });
+      } else {
+        await page.goto(capturePath, { waitUntil: "domcontentloaded" });
+      }
       await expect(page).not.toHaveURL(/\/sign-in(?:\/|\?|$)/u);
       // Each capture is the first visit to its route, so its chunk compiles on
       // demand here too; the config's 15s expect timeout is not enough for that
@@ -292,37 +305,8 @@ test("capture landing product screenshots", async ({
         });
       }
       if ("prepare" in capture && capture.prepare === "open-decision") {
-        // Film a specific national decision deterministically, rather than
-        // whatever happens to be newest in the seeded corpus.
-        const decisionLink = page
-          .locator('main a[href*="/cases/"]')
-          .filter({ hasText: capture.decisionText });
-        await expect(decisionLink).toBeVisible({
-          timeout: COLD_COMPILE_TIMEOUT,
-        });
-        // A plain click on a results row opens that decision in the inspector
-        // beside the results; this capture wants the full reader page, which
-        // is what the row's own href names. Take the href rather than a
-        // rebuilt path, so the shot follows the product's link even if the
-        // decision route's shape changes.
-        const decisionPath = await decisionLink.getAttribute("href");
-        if (decisionPath === null) {
-          throw new Error(
-            `${capture.name}: the "${capture.decisionText}" result row has no href to the decision`,
-          );
-        }
-        // The reader carries its own inspector, which must start from the same
-        // clean state as every other capture rather than inheriting whatever
-        // the results page persisted.
-        await clearPersistedInspectorState(page);
-        // The reader opens the decision's conversation itself, found on the
-        // server by the decision it is about; its id is what the pane must
-        // show.
-        const readerStoryThreadId =
-          "readerStory" in capture
-            ? await findReaderStoryThreadId(page, capture.decisionText)
-            : undefined;
-        await page.goto(decisionPath, { waitUntil: "commit" });
+        // Open the reader directly from its seeded conversation metadata.
+        // Search-page SSR is independent of the completed reader state.
         await expect(page).toHaveURL(/\/law\/[a-z-]+\/cases\//u);
         // The case detail is its own code-split chunk, so this is the first
         // load of another route: same cold-compile allowance as the
@@ -350,96 +334,124 @@ test("capture landing product screenshots", async ({
         await inspectorDock
           .getByRole("button", { exact: true, name: "Show pane" })
           .click();
-        // Scope readiness to the visible inspector: other route shells may
-        // remain mounted and must not satisfy the capture gate.
+        const scenario = marketingCaseLaw.find(
+          (item) => item.caseNumber === capture.decisionText,
+        );
+        if (scenario === undefined) {
+          throw new Error(`${capture.name}: no rich reader scenario`);
+        }
         const inspectorChat = page.locator(
           '[data-slot="inspector-chat-panel"]:visible',
         );
         await expect(inspectorChat).toHaveCount(1, {
           timeout: COLD_COMPILE_TIMEOUT,
         });
-        if (readerStoryThreadId !== undefined) {
-          // Name the failure precisely: a fresh thread here means the saved
-          // tab was never restored, not that the answer is slow to render.
-          await expect(
-            inspectorChat,
-            `The decision's chat pane should show the seeded thread ${readerStoryThreadId}, found on the server by its decision, not a newly minted one`,
-          ).toHaveAttribute("data-chat-thread-id", readerStoryThreadId);
-          // The restored thread's cited answer, down to a citation chip, so
-          // the shot never lands on the empty chat or a loading transcript.
-          await expect(
-            inspectorChat.getByText(READER_STORY_ANSWER_TEXT).first(),
-          ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT });
-          await expect(
-            inspectorChat.locator("[data-decision-citation]").first(),
-          ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT });
-        } else {
-          // The empty chat loads its saved-skill prompts independently of the
-          // decision and analysis queries and paints the logo first; this
-          // component only exists once at least one prompt card rendered.
-          await expect(
-            inspectorChat.locator('[data-slot="prompt-suggestions"]'),
-          ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT });
-        }
-        // The decision opens on its headnote, with the body and its margin
-        // further down. Scroll the reader's own scroller to the reader's first
-        // mark (or, without one, the first AI note) so the shot shows the
-        // body beside its margin rather than headnote text.
-        const readerMark = page
-          .locator('[data-slot="reader-document-column"] [data-annotation-id]')
-          .first();
-        await scrollReaderTo(
-          "readerStory" in capture
-            ? readerMark
-            : page.locator(AI_MARGIN_NOTE_SELECTOR).first(),
-        );
-        // Keep the breadcrumb in frame: only the nested reader scrolls. Done
-        // before anything is measured against the clip, which is a region of
-        // the page as it is shot.
-        await page.evaluate(() => window.scrollTo({ left: 0, top: 0 }));
-        const captureClip = "clip" in capture ? capture.clip : DEFAULT_CLIP;
-        // Notes are placed beside their passages once the reader measured
-        // them, so this also waits out that layout.
-        await expectSomeWithinClip(
-          page,
-          AI_MARGIN_NOTE_SELECTOR,
-          captureClip,
-          "an AI margin note",
-        );
-        // Where a block or a stacked note meets the frame's edges depends on
-        // the fonts the runner renders with, so the frame is chosen from
-        // the measured layout, then every promise is checked again.
-        await frameReader({
-          clip: captureClip,
-          target:
-            "readerStory" in capture
-              ? readerMark
-              : page.locator(AI_MARGIN_NOTE_SELECTOR).first(),
-          needsComment: "readerStory" in capture,
+        const messages = inspectorChat.locator("[data-chat-message-id]");
+        await expect(messages).toHaveCount(4, {
+          timeout: COLD_COMPILE_TIMEOUT,
         });
-        await expectCleanTopEdge(page);
-        // Whole notes, inside the shot's own clip: a card cut at the frame's
-        // edge reads as a glitch.
-        await expectSomeWithinClip(
-          page,
-          AI_MARGIN_NOTE_SELECTOR,
-          captureClip,
-          "an AI margin note",
-        );
-        if ("readerStory" in capture) {
-          await expectWithinClip(
-            readerMark,
-            captureClip,
-            "The first mark in the text",
-          );
-          await expectSomeWithinClip(
-            page,
-            '[data-margin-note="comment"] > *',
-            captureClip,
-            "a comment card",
-          );
+        for (const [index, text] of [
+          scenario.question,
+          scenario.answer,
+          scenario.followUp,
+          scenario.followUpAnswer,
+        ].entries()) {
+          await expect(messages.nth(index)).toContainText(text);
         }
-        await expectNoMarginNoteCut(page, captureClip);
+        await expect(
+          inspectorChat.locator('[data-slot="prompt-suggestions"]'),
+        ).toHaveCount(0);
+        const citations = inspectorChat.locator("[data-decision-citation]");
+        await expect(citations).toHaveCount(2);
+        // Compact inline cards show the court's short form; the full case
+        // number is their accessible name.
+        await expect(citations.first()).toHaveAttribute(
+          "aria-label",
+          expect.stringContaining(scenario.caseNumber),
+        );
+        await inspectorChat
+          .locator('[data-slot="scroll-area-viewport"]')
+          .evaluate((element) => {
+            element.scrollTop = 0;
+          });
+
+        // Align the earlier marked paragraph with the reader's top, rather
+        // than centering it against the taller browser viewport.
+        const clip = "clip" in capture ? capture.clip : DEFAULT_CLIP;
+        const readerAnchors = page.locator(
+          `article [data-anchor="${scenario.highlightAnchor}"], article [data-anchor="${scenario.underlineAnchor}"]`,
+        );
+        await expect(readerAnchors).toHaveCount(2);
+        await readerAnchors.evaluateAll((elements, clipTop) => {
+          const first = elements.at(0);
+          const scroller = first?.closest(".reader-scroll");
+          if (scroller === undefined || scroller === null) {
+            throw new Error("The case-law reader has no scroll container");
+          }
+          const anchorTop = Math.min(
+            ...elements.map((element) => element.getBoundingClientRect().top),
+          );
+          const frameTop = Math.max(
+            clipTop,
+            scroller.getBoundingClientRect().top,
+          );
+          scroller.scrollTop += anchorTop - frameTop - 16;
+        }, clip.y);
+        await page.evaluate(() => window.scrollTo({ left: 0, top: 0 }));
+        const requiredElements = [
+          page.locator("aside").getByText(scenario.aiNote, { exact: true }),
+          page.locator("aside").getByText(scenario.comment, { exact: true }),
+        ];
+        for (const [anchor, variant, paragraphNumber] of [
+          [
+            scenario.highlightAnchor,
+            "text-foreground",
+            scenario.highlightNumber,
+          ],
+          [scenario.underlineAnchor, "underline", scenario.underlineNumber],
+        ] as const) {
+          requiredElements.push(
+            page
+              .locator(
+                `article [data-anchor="${anchor}"] mark[data-annotation-id].${variant}:not(.decoration-dotted)`,
+              )
+              .first(),
+          );
+          // A published paragraph number stays visible independently of
+          // how long the paragraph below it is.
+          const number = page.locator(
+            `article [data-anchor="${anchor}"] > span.reader-chrome.absolute`,
+          );
+          await expect(number).toHaveCount(1);
+          await expect(number).toHaveText(String(paragraphNumber));
+          requiredElements.push(number);
+        }
+        requiredElements.push(
+          ...(await messages.all()),
+          ...(await citations.all()),
+        );
+        for (const element of requiredElements) {
+          await expect(element).toBeVisible();
+          await expect(element).toBeInViewport({ ratio: 1 });
+          await expect
+            .poll(
+              async () => {
+                const box = await element.boundingBox();
+                return (
+                  box !== null &&
+                  box.x >= clip.x &&
+                  box.y >= clip.y &&
+                  box.x + box.width <= clip.x + clip.width &&
+                  box.y + box.height <= clip.y + clip.height
+                );
+              },
+              {
+                message: `${capture.name}: required reader content fits the screenshot clip`,
+              },
+            )
+            .toBe(true);
+        }
+        await expectNoMarginNoteCut(page, clip.y);
       }
       if ("prepare" in capture && capture.prepare === "open-files") {
         await page.getByRole("tab", { name: "Files" }).click();
@@ -459,6 +471,36 @@ test("capture landing product screenshots", async ({
       if ("prepare" in capture && capture.prepare === "open-table") {
         await page.getByRole("tab", { name: "Table" }).click();
         await expect(page.getByRole("grid")).toBeVisible();
+      }
+      if ("prepare" in capture && capture.prepare === "await-time-entries") {
+        // The total row renders only once the day's entries have loaded.
+        await expect(
+          page.getByText("Total", { exact: true }).first(),
+        ).toBeVisible();
+      }
+      if ("prepare" in capture && capture.prepare === "await-invoice-entries") {
+        await expect(page.getByText("Linked time entries")).toBeVisible();
+        await expect(page.locator("table tbody tr").first()).toBeVisible();
+      }
+      if ("prepare" in capture && capture.prepare === "open-table-export") {
+        await page.getByRole("tab", { name: "Table" }).click();
+        await expect(page.getByRole("grid")).toBeVisible();
+        await page
+          .getByRole("button", { exact: true, name: "Export table" })
+          .first()
+          .click();
+        await expect(
+          page.getByRole("menuitem", { name: "Export XLSX" }),
+        ).toBeVisible();
+      }
+      if ("prepare" in capture && capture.prepare === "await-search-results") {
+        // Several result rows, not just the first, so the shot shows a list
+        // rather than a single hit.
+        await expect(
+          page.locator('main a[href*="/cases/"]').nth(1),
+        ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT });
+        await page.waitForLoadState("networkidle");
+        await expect(page.locator("#route-error-title")).toHaveCount(0);
       }
       if ("prepare" in capture && capture.prepare === "open-agent-thread") {
         // Waits for every answer, citation chip, the generated view's guest
@@ -502,7 +544,7 @@ test("capture landing product screenshots", async ({
           // a macOS-to-Linux font gap. Dispatch that workflow on the branch
           // when the UI change is intended.
           maxDiffPixelRatio: 0.005,
-          scale: "css",
+          scale: "device",
         });
       // `?editing=true` opened an edit session, i.e. a lease-backed lock on the
       // Supplier Agreement. A full navigation never unmounts the editor, so
@@ -530,263 +572,10 @@ const clearPersistedInspectorState = async (page: Page) => {
   }, INSPECTOR_STORAGE_PREFIXES);
 };
 
-// The AI's notes: a section card or a further note under it. The kind marker
-// wraps each note with `display: contents`, so the note's own box is its
-// child.
-const AI_MARGIN_NOTE_SELECTOR =
-  '[data-margin-note="card"] > *, [data-margin-note="annotation"] > *';
-
-// Waits until at least one element matching `selector` lies wholly inside
-// the recorded clip.
-const expectSomeWithinClip = async (
-  page: Page,
-  selector: string,
-  clip: CaptureClip,
-  label: string,
-) => {
-  await expect
-    .poll(
-      async () =>
-        await page.evaluate(
-          ({ band, query }) =>
-            [...document.querySelectorAll(query)].some((element) => {
-              const box = element.getBoundingClientRect();
-              return (
-                box.height > 0 &&
-                box.top >= band.y &&
-                box.left >= band.x &&
-                box.bottom <= band.y + band.height &&
-                box.right <= band.x + band.width
-              );
-            }),
-          { band: clip, query: selector },
-        ),
-      {
-        message: `Expected ${label} wholly inside the ${String(clip.width)}x${String(clip.height)} capture clip`,
-      },
-    )
-    .toBe(true);
-};
-
-// Waits until the element's whole box lies inside the recorded clip, so a
-// note half past the frame's edge fails here, naming itself, rather than
-// shipping in the shot.
-const expectWithinClip = async (
-  target: Locator,
-  clip: CaptureClip,
-  label: string,
-) => {
-  await expect
-    .poll(
-      async () => {
-        const box = await target.boundingBox();
-        return (
-          box !== null &&
-          box.y >= clip.y &&
-          box.x >= clip.x &&
-          box.y + box.height <= clip.y + clip.height &&
-          box.x + box.width <= clip.x + clip.width
-        );
-      },
-      {
-        message: `${label} must lie wholly inside the ${String(clip.width)}x${String(clip.height)} capture clip`,
-      },
-    )
-    .toBe(true);
-};
-
-// Chooses the reader's frame in one step, from measured positions. Every
-// candidate opens on the start of a block at or above the target's block,
-// with the block above it wholly out of view; the gap between two blocks is
-// only a few pixels, so the frame's top edge sits inside that gap rather
-// than at a fixed offset (a fixed offset larger than the gap would cut the
-// block above, and lowering that one would cut the next). The first
-// candidate that also holds an AI note clear of the margin's sticky header,
-// the target, a whole comment card when the shot has one, and no note
-// half hidden under that header wins; the scroller moves once, by that
-// candidate's offset. A note running off the bottom edge is fine: it reads
-// as the page continuing.
-// Notes are laid out against the scrolling content, so shifting a measured
-// box by the offset is where it lands. Throws, naming each candidate's
-// failure, when none fits.
-const frameReader = async ({
-  clip,
-  target,
-  needsComment,
-}: {
-  clip: CaptureClip;
-  target: Locator;
-  needsComment: boolean;
-}) => {
-  await expect(target).toBeAttached({ timeout: COLD_COMPILE_TIMEOUT });
-  await target.evaluate(
-    (targetElement, { bandBottom, commentRequired, maxInset, candidates }) => {
-      const column = document.querySelector(
-        '[data-slot="reader-document-column"]',
-      );
-      const scroller = column?.closest(".reader-scroll");
-      if (!column || !(scroller instanceof HTMLElement)) {
-        throw new Error("The reader's scroller is missing");
-      }
-      const frame = scroller.getBoundingClientRect();
-      const top = frame.top;
-      const bottom = Math.min(frame.bottom, bandBottom);
-      // Outermost blocks only: a table cell carries its own anchor inside
-      // its table's.
-      const blocks = [...column.querySelectorAll<HTMLElement>("[data-anchor]")]
-        .filter(
-          (block) => block.parentElement?.closest("[data-anchor]") === null,
-        )
-        .map((block) => block.getBoundingClientRect())
-        .filter((box) => box.height > 0);
-      const notes = [
-        ...document.querySelectorAll<HTMLElement>("[data-margin-note] > *"),
-      ].map((note) => ({
-        box: note.getBoundingClientRect(),
-        kind: note.parentElement?.dataset["marginNote"] ?? "",
-      }));
-      // The margin's current-section header sticks to the top of the
-      // scroller; a note under it reads as cut.
-      const aside = column.parentElement?.querySelector("aside");
-      // The header's own box has no height (it sits out of the flow), so
-      // what it covers is the bottom of everything drawn inside it.
-      const stuckBottoms = aside
-        ? [...aside.querySelectorAll<HTMLElement>("*")]
-            .filter(
-              (element) =>
-                getComputedStyle(element).position === "sticky" &&
-                element.getBoundingClientRect().top <= top + 1,
-            )
-            .map((element) =>
-              Math.max(
-                element.getBoundingClientRect().bottom,
-                ...[...element.querySelectorAll("*")].map(
-                  (child) => child.getBoundingClientRect().bottom,
-                ),
-              ),
-            )
-        : [];
-      const notesTop = Math.max(top, ...stuckBottoms);
-      const targetBox = targetElement.getBoundingClientRect();
-      const targetBlock = blocks.findLastIndex(
-        (box) => box.top <= targetBox.top + 1,
-      );
-      if (targetBlock < 1) {
-        throw new Error("The target has no block above it to frame from");
-      }
-      const within = (box: DOMRect, delta: number, upper: number) =>
-        box.top - delta >= upper && box.bottom - delta <= bottom;
-      const crosses = (box: DOMRect, delta: number, edge: number) =>
-        box.top - delta < edge && box.bottom - delta > edge;
-      const failures: string[] = [];
-      for (
-        let index = targetBlock;
-        index > Math.max(0, targetBlock - candidates);
-        index -= 1
-      ) {
-        const block = blocks[index];
-        const above = blocks[index - 1];
-        if (!block || !above) {
-          continue;
-        }
-        const gap = block.top - above.bottom;
-        const inset = Math.max(0, Math.min(maxInset, gap - 1));
-        const delta = block.top - (top + inset);
-        const problems = [
-          blocks.some((box) => crosses(box, delta, top))
-            ? "a block crosses the top edge"
-            : null,
-          within(targetBox, delta, top) ? null : "the target is out of view",
-          notes.some(
-            ({ box, kind }) =>
-              kind !== "comment" &&
-              kind !== "composer" &&
-              within(box, delta, notesTop),
-          )
-            ? null
-            : "no AI note clear of the header",
-          !commentRequired ||
-          notes.some(
-            ({ box, kind }) =>
-              kind === "comment" && within(box, delta, notesTop),
-          )
-            ? null
-            : "no whole comment card",
-          notes.some(({ box }) => crosses(box, delta, notesTop))
-            ? "a note is cut by the header"
-            : null,
-        ].filter((problem) => problem !== null);
-        if (problems.length === 0) {
-          scroller.scrollTop += delta;
-          return;
-        }
-        failures.push(`block ${String(index)}: ${problems.join(", ")}`);
-      }
-      // The measured layout at the current scroll, rounded, so one log read
-      // shows why no candidate fit and where the gaps are.
-      const span = (box: DOMRect) =>
-        `${String(Math.round(box.top))}-${String(Math.round(box.bottom))}`;
-      const first = Math.max(0, targetBlock - candidates);
-      const layout = [
-        `frame ${String(Math.round(top))}-${String(Math.round(bottom))}`,
-        `header to ${String(Math.round(notesTop))}`,
-        `target ${span(targetBox)}`,
-        `blocks ${blocks
-          .slice(first, targetBlock + candidates)
-          .map((box, offset) => `${String(first + offset)}:${span(box)}`)
-          .join(" ")}`,
-        `notes ${notes
-          .map(({ box, kind }) => `${kind}:${span(box)}`)
-          .join(" ")}`,
-      ].join("; ");
-      throw new Error(
-        `No frame fits the reader shot: ${failures.join("; ")}. Layout: ${layout}`,
-      );
-    },
-    {
-      bandBottom: clip.y + clip.height,
-      commentRequired: needsComment,
-      maxInset: READER_TOP_INSET_PX,
-      candidates: READER_FRAME_CANDIDATES,
-    },
-  );
-};
-
-// No text block straddles the reader's top edge: the first one in view
-// starts at or below it.
-const expectCleanTopEdge = async (page: Page) => {
-  await expect
-    .poll(
-      async () =>
-        await page.evaluate(() => {
-          const scroller = document
-            .querySelector('[data-slot="reader-document-column"]')
-            ?.closest(".reader-scroll");
-          if (!(scroller instanceof HTMLElement)) {
-            return "the reader's scroller is missing";
-          }
-          const top = scroller.getBoundingClientRect().top;
-          const cut = [
-            ...document.querySelectorAll<HTMLElement>(
-              '[data-slot="reader-document-column"] [data-anchor]',
-            ),
-          ].find((block) => {
-            const box = block.getBoundingClientRect();
-            return box.top < top && box.bottom > top;
-          });
-          return cut === undefined
-            ? null
-            : `block ${cut.dataset["anchor"] ?? "?"} starts above the reader's top edge`;
-        }),
-      { message: "The reader's frame must open on the start of a block" },
-    )
-    .toBeNull();
-};
-
 // No margin note is half hidden at the top of the margin, under the sticky
 // section header or the frame's top edge. One running off the bottom edge
 // is fine: it reads as the page continuing.
-const expectNoMarginNoteCut = async (page: Page, clip: CaptureClip) => {
+const expectNoMarginNoteCut = async (page: Page, clipTop: number) => {
   await expect
     .poll(
       async () =>
@@ -835,97 +624,13 @@ const expectNoMarginNoteCut = async (page: Page, clip: CaptureClip) => {
             }
             return cut;
           },
-          { top: clip.y },
+          { top: clipTop },
         ),
       {
         message: "No margin note may be half hidden at the top of the margin",
       },
     )
     .toEqual([]);
-};
-
-// Scrolls the reader's own scroller, never the page, so the target's passage
-// sits a fixed distance below the reader's top edge: one deterministic
-// position rather than wherever `scrollIntoView` settles. A mark is inline,
-// so the passage framed is the text block it sits in.
-const scrollReaderTo = async (target: Locator) => {
-  await expect(target).toBeAttached({ timeout: COLD_COMPILE_TIMEOUT });
-  await target.evaluate((element, offset) => {
-    const scroller = element.closest(".reader-scroll");
-    if (!(scroller instanceof HTMLElement)) {
-      throw new Error("The scroll target is outside the reader's scroller");
-    }
-    const framed = element.closest("[data-anchor]") ?? element;
-    scroller.scrollTop +=
-      framed.getBoundingClientRect().top -
-      scroller.getBoundingClientRect().top -
-      offset;
-  }, READER_SCROLL_OFFSET_PX);
-};
-
-// The seeded conversation about the filmed decision, as the chat history
-// lists it. The reader finds the same thread on its own (by the decision it
-// is about); the capture only needs its id to check the pane shows it.
-const findReaderStoryThreadId = async (page: Page, caseNumber: string) => {
-  const apiBaseURL = process.env["E2E_API_URL"] ?? "http://localhost:3001";
-  const threadsResponse = await page.request.get(
-    `${apiBaseURL}/v1/chat/threads?limit=50&search=${encodeURIComponent(
-      READER_STORY_THREAD_TITLE,
-    )}`,
-  );
-  expect(threadsResponse.ok(), await threadsResponse.text()).toBe(true);
-  const thread = getReaderStoryThread(await threadsResponse.json(), caseNumber);
-  if (thread === undefined) {
-    throw new Error(
-      `Could not find the seeded "${READER_STORY_THREAD_TITLE}" thread on ` +
-        `${caseNumber}; run the dev seed (seed-case-law-reader-story.ts)`,
-    );
-  }
-  return thread.threadId;
-};
-
-// The global thread with the story's title whose decision badge names the
-// filmed decision; the badge also carries the id the chat tab binds to.
-const getReaderStoryThread = (
-  payload: unknown,
-  caseNumber: string,
-): { threadId: string; decisionId: string } | undefined => {
-  if (
-    typeof payload !== "object" ||
-    payload === null ||
-    !("global" in payload) ||
-    !isUnknownArray(payload.global)
-  ) {
-    return undefined;
-  }
-  for (const thread of payload.global) {
-    if (
-      typeof thread !== "object" ||
-      thread === null ||
-      !("id" in thread) ||
-      typeof thread.id !== "string" ||
-      !("title" in thread) ||
-      thread.title !== READER_STORY_THREAD_TITLE ||
-      !("decision" in thread) ||
-      typeof thread.decision !== "object" ||
-      thread.decision === null ||
-      !("badge" in thread.decision) ||
-      typeof thread.decision.badge !== "object" ||
-      thread.decision.badge === null
-    ) {
-      continue;
-    }
-    const { badge } = thread.decision;
-    if (
-      "id" in badge &&
-      typeof badge.id === "string" &&
-      "caseNumber" in badge &&
-      badge.caseNumber === caseNumber
-    ) {
-      return { threadId: thread.id, decisionId: badge.id };
-    }
-  }
-  return undefined;
 };
 
 // Resolves the seeded agent thread's route by title via the chat threads
@@ -944,6 +649,42 @@ const resolveAgentThreadPath = async (request: APIRequestContext) => {
     );
   }
   return `/chat/workspaces/${EXPORT_REVIEW_WORKSPACE_ID}/${threadId}`;
+};
+
+const DECISION_THREAD_PAGE_LIMIT = 100;
+const threadPageSchema = v.object({
+  global: v.array(v.unknown()),
+  nextCursor: v.nullable(v.string()),
+});
+
+// The threads endpoint lists newest first, so the seeded readers can sit
+// beyond the first page on a busy dev account: follow its cursor to the end.
+const resolveDecisionPaths = async (request: APIRequestContext) => {
+  const global: unknown[] = [];
+  let cursor: string | null = null;
+  for (let page = 0; page < DECISION_THREAD_PAGE_LIMIT; page++) {
+    const query: string =
+      cursor === null
+        ? "limit=50"
+        : `limit=50&cursor=${encodeURIComponent(cursor)}`;
+    const response = await request.get(
+      `${MARKETING_URLS.apiUrl}/v1/chat/threads?${query}`,
+    );
+    expect(response.ok(), await response.text()).toBe(true);
+    const payload: unknown = await response.json();
+    const parsed = v.safeParse(threadPageSchema, payload);
+    if (!parsed.success) {
+      throw new Error("Chat thread list response is malformed");
+    }
+    global.push(...parsed.output.global);
+    if (parsed.output.nextCursor === null) {
+      return getMarketingDecisionPaths({ global });
+    }
+    cursor = parsed.output.nextCursor;
+  }
+  throw new Error(
+    `Chat thread list exceeded ${String(DECISION_THREAD_PAGE_LIMIT)} pages`,
+  );
 };
 
 // Reads the timestamp the inspector's version caption formats, from the same

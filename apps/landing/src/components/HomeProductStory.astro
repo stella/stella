@@ -69,30 +69,26 @@ const chapters = [
   },
 ] as const satisfies readonly StoryChapter[];
 
-// Data chapter: cycles through three different national decisions (CZE,
-// POL, SVK), each captured with the structured reader (structure/AI margin
-// populated) — see apps/web/e2e/marketing/product-screenshots.spec.ts,
-// "story-public-data-1/2/3". Keep in sync with that spec's decisionText
-// values. The first (CZE) shot, a Supreme Court judgment on a director's guarantee,
-// is the reader at its richest: AI margin notes,
-// the reader's own highlights and comments, and the decision's chat with an
-// answer citing its paragraphs (seed-case-law-reader-story.ts). The spec only
-// films publicly admitted countries, so the POL and SVK shots are refreshed
-// once those countries are admitted.
+// Data chapter: cycles through three Czech decisions with cited chat,
+// AI notes and reader marks. The shared scenario fixture drives
+// apps/web/e2e/marketing/product-screenshots.spec.ts.
 const storyShots = [
   {
     darkSrc: "/media/products/story-public-data-1-dark.png",
     lightSrc: "/media/products/story-public-data-1.png",
+    altKey: "story.dataMainAlt",
   },
   {
     darkSrc: "/media/products/story-public-data-2-dark.png",
     lightSrc: "/media/products/story-public-data-2.png",
+    altKey: "story.dataConstitutionalAlt",
   },
   {
     darkSrc: "/media/products/story-public-data-3-dark.png",
     lightSrc: "/media/products/story-public-data-3.png",
+    altKey: "story.dataSupremeAlt",
   },
-] as const;
+] as const satisfies readonly { darkSrc: string; lightSrc: string; altKey: TranslationKey }[];
 
 // Each shot holds at full opacity for ~3.6s and cross-fades over ~0.8s, for
 // a ~13.2s total loop. The keyframes (below, in .story-shot-layer) are
@@ -234,18 +230,17 @@ const proofItems = [
                           <span class="mac-traffic-glyph">+</span>
                         </span>
                       </div>
-                      <div class="mac-titlebar-label">stella · Case Law</div>
+                      <div class="mac-titlebar-label">stella · {t("story.dataEyebrow")}</div>
                     </div>
                     <div class="story-shot-body">
                       {
                         storyShots.map((shot, shotIndex) => (
                           <div
-                            aria-hidden={shotIndex === 0 ? undefined : "true"}
                             class="story-shot-layer"
                             style={`animation-duration: ${STORY_SHOT_TOTAL_SECONDS}s; animation-delay: ${(shotIndex - storyShots.length) * STORY_SHOT_SEGMENT_SECONDS}s`}
                           >
                             <ThemeImage
-                              alt={shotIndex === 0 ? t("story.dataMainAlt") : ""}
+                              alt={t(shot.altKey)}
                               class="h-full w-full object-cover object-top"
                               darkSrc={shot.darkSrc}
                               decoding="async"

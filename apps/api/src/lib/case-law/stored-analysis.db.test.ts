@@ -15,7 +15,7 @@ import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import type { SafeId } from "@/api/lib/branded-types";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 
-import { analysisSentinel, claimableAnalysisRow } from "./stored-analysis";
+import { analysisSentinel, claimableAnalysisRowFor } from "./stored-analysis";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -82,7 +82,9 @@ if (!databaseUrl || !runPostgresTests) {
       const updated = await db
         .update(caseLawDecisions)
         .set({ analysis: analysisSentinel(CURRENT, NOW) })
-        .where(claimableAnalysisRow({ decisionId, observed }))
+        .where(
+          claimableAnalysisRowFor(caseLawDecisions, { decisionId, observed }),
+        )
         .returning({ id: caseLawDecisions.id });
       return updated.length === 1;
     };

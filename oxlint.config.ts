@@ -8,6 +8,7 @@ import {
 } from "@stll/oxlint-config";
 
 import concurrencyExceptions from "./.oxlint-plugins/no-hand-rolled-concurrency-exceptions.json" with { type: "json" };
+import { PUBLIC_LAW_MIXED_MODULES } from "./.oxlint-plugins/public-law-decision-surface-modules.ts";
 import auditMutationLedger from "./.oxlint-plugins/require-audit-on-mutation-ledger.json" with { type: "json" };
 import { factoriesWhere } from "./apps/api/src/lib/safe-handler-factories.ts";
 import { SYSTEM_AUDIT_MODULES } from "./apps/api/src/lib/system-audit/modules.ts";
@@ -203,6 +204,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-swallowed-item-error.fixture.test.ts", [
     "no-swallowed-item-error/no-test-swallowed-error",
   ]),
+  fixtureRuleOverride("no-test-support-import.fixture.ts", [
+    "no-test-support-import/no-test-support-import",
+  ]),
   fixtureRuleOverride("no-failure-as-empty.fixture.ts", [
     "no-failure-as-empty/no-failure-as-empty",
   ]),
@@ -381,6 +385,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-raw-file-input.fixture.tsx", [
     "no-raw-file-input/no-raw-file-input",
+  ]),
+  fixtureRuleOverride("no-ad-hoc-chat-link.fixture.tsx", [
+    "no-ad-hoc-chat-link/no-ad-hoc-chat-link",
   ]),
   fixtureRuleOverride("no-font-utility-in-reader.fixture.tsx", [
     "no-font-utility-in-reader/no-font-utility-in-reader",
@@ -1482,6 +1489,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-direct-matter-glyph.ts",
     "./.oxlint-plugins/no-direct-entity-glyph.ts",
     "./.oxlint-plugins/no-direct-lucide-import.ts",
+    "./.oxlint-plugins/no-test-support-import.ts",
     "./.oxlint-plugins/no-legal-cliche-glyph.ts",
     "./.oxlint-plugins/no-custom-account-modal.ts",
     "./.oxlint-plugins/no-raw-file-input.ts",
@@ -1630,6 +1638,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-disabled-tooltip-trigger.ts",
     "./.oxlint-plugins/no-dialog-trigger-menu-item.ts",
     "./.oxlint-plugins/no-decorated-search-input.ts",
+    "./.oxlint-plugins/no-ad-hoc-chat-link.ts",
     "./.oxlint-plugins/no-font-utility-in-reader.ts",
     "./.oxlint-plugins/dialog-footer-owns-actions.ts",
     "./.oxlint-plugins/field-parts-inside-field.ts",
@@ -1732,6 +1741,19 @@ const config = defineConfig({
         "gdp-ts/no-type-assertion": "error",
         "gdp-ts/no-any": "error",
       },
+    },
+    {
+      files: ["apps/api/src/**/*.{ts,tsx}"],
+      excludeFiles: [
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "**/*.type-test.ts",
+        "**/*.spec.ts",
+        "**/__fixtures__/**",
+        "**/__tests__/**",
+        "apps/api/src/tests/**",
+      ],
+      rules: { "no-test-support-import/no-test-support-import": "error" },
     },
     {
       files: ["apps/api/src/lib/proofs/checked-transaction.ts"],
@@ -2280,6 +2302,7 @@ const config = defineConfig({
       // code on structured logging. The type rules still apply to both.
       files: [
         "apps/api/src/tests/load/**/*.ts",
+        "apps/api/src/tests/exact-mirror-guard.ts",
         "apps/api/src/scripts/**/*.ts",
       ],
       rules: { "no-console": "off" },
@@ -2343,10 +2366,29 @@ const config = defineConfig({
         "no-layout-motion-classes/no-layout-motion-classes": [
           "error",
           {
-            // Surfaces that change their own box. Each exemption names the
-            // exact existing utility, so another layout transition in the same
-            // file still fails.
+            // Surfaces that change their own box, and motion that is not
+            // interface feedback. Each exemption names the exact existing
+            // utility, so another layout transition or long duration in the
+            // same file still fails.
             allowedFiles: [
+              {
+                path: "apps/web/src/components/globe.tsx",
+                reason:
+                  "Decorative globe canvas fades in once after it draws; nothing waits on it.",
+                utilities: ["duration-700"],
+              },
+              {
+                path: "apps/web/src/routes/knowledge/-components/template-studio-selection-gesture.tsx",
+                reason:
+                  "Teaching animation: a one-shot cross-fade from the template to its filled result, slow enough to follow.",
+                utilities: ["duration-500"],
+              },
+              {
+                path: "apps/web/src/routes/onboarding/-components/sidebar-preview.tsx",
+                reason:
+                  "Onboarding preview: a status dot pulses slowly to show a connection in progress.",
+                utilities: ["duration-500"],
+              },
               {
                 path: "apps/web/src/routes/_protected.workspaces/-components/alphabet-index.tsx",
                 reason:
@@ -2412,7 +2454,19 @@ const config = defineConfig({
         "apps/landing/src/**/*.{ts,tsx}",
       ],
       rules: {
-        "no-layout-motion-classes/no-layout-motion-classes": "error",
+        "no-layout-motion-classes/no-layout-motion-classes": [
+          "error",
+          {
+            allowedFiles: [
+              {
+                path: "apps/landing/src/components/react/ProductShowcase.tsx",
+                reason:
+                  "Marketing motion: showcase tiles settle in as the carousel scrolls; nothing waits on it.",
+                utilities: ["duration-[500ms]"],
+              },
+            ],
+          },
+        ],
       },
     },
     {
@@ -3167,6 +3221,27 @@ const config = defineConfig({
       ],
       rules: {
         "no-ad-hoc-text-mark/no-ad-hoc-text-mark": "off",
+      },
+    },
+    {
+      files: [
+        "apps/web/src/components/chat/**/*.tsx",
+        "apps/web/src/components/ai-elements/message-response.tsx",
+        "apps/web/src/features/chat/components/proxy-chat-link.tsx",
+        "apps/web/src/components/legal-reader/*chat*.tsx",
+        "apps/web/src/components/ai-suggestions/file-chat-overlay*.tsx",
+        "apps/web/src/components/ai-suggestions/file-viewer-with-ai*.tsx",
+        "packages/chat/src/**/*.tsx",
+        ".oxlint-plugins/__fixtures__/no-ad-hoc-chat-link.fixture.tsx",
+      ],
+      excludeFiles: [
+        "**/*.test.tsx",
+        // These are settings/navigation chrome, outside message content.
+        "apps/web/src/components/chat/chat-model-options-menu.tsx",
+        "apps/web/src/components/chat/chat-matter-picker.tsx",
+      ],
+      rules: {
+        "no-ad-hoc-chat-link/no-ad-hoc-chat-link": "error",
       },
     },
     {
@@ -5441,16 +5516,19 @@ const config = defineConfig({
       excludeFiles: [
         "apps/api/src/**/*.test.{ts,tsx}",
         "apps/api/src/tests/**",
-        "apps/api/src/handlers/case-law/matter-links/list.ts",
-        "apps/api/src/handlers/case-law/research/answers-run.ts",
-        "apps/api/src/handlers/case-law/research/columns-suggest-prompt.ts",
-        "apps/api/src/handlers/chat/chat-prompt.ts",
-        "apps/api/src/lib/case-law/research-answer-runner.ts",
-        "apps/api/src/lib/legal-search/corpus-tombstones.ts",
-        "apps/api/src/mcp/stella-tools.ts",
+        ...PUBLIC_LAW_MIXED_MODULES,
       ],
       rules: {
         "public-case-law-db-boundary/public-case-law-db-boundary": "error",
+      },
+    },
+    {
+      files: [...PUBLIC_LAW_MIXED_MODULES],
+      rules: {
+        "public-case-law-db-boundary/public-case-law-db-boundary": [
+          "error",
+          { scope: "decision-surface" },
+        ],
       },
     },
     {

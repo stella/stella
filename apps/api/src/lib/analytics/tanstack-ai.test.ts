@@ -726,11 +726,49 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       event: SERVER_ANALYTICS_EVENTS.aiGenerationFailed,
       properties: {
         failure_reason: "provider",
+        failure_kind: "unknown",
         feature: "chat.stream",
         model: "gpt-5.4-mini",
         provider: "openai",
       },
     });
+    // No status was carried, so none is invented.
+    expect(failedEvent?.properties).not.toHaveProperty("provider_status");
+  });
+
+  test("names a provider refusal by kind and status, not by its message", async () => {
+    const { createTanStackAIAnalyticsCallbacks } =
+      await loadTanStackAIAnalytics();
+    const events: Parameters<ServerAnalytics["capture"]>[0][] = [];
+    const callbacks = createTanStackAIAnalyticsCallbacks({
+      modelTier: MANAGED_MODEL_TIER.standard,
+      dataClass: "public_corpus",
+      analytics: {
+        capture: (event) => {
+          events.push(event);
+        },
+        flush: async () => undefined,
+        identifyOrganizationGroup: () => undefined,
+      },
+      feature: "case-law.analysis",
+      orgAIConfig: createOpenAIOrgAIConfig(),
+      traceId: "trace_refused",
+    });
+    const SENTINEL = "SENTINEL_PROVIDER_TEXT";
+    const error = new Error("stream failed", {
+      cause: { statusCode: 401, message: `${SENTINEL} key rejected` },
+    });
+
+    callbacks.captureError(error);
+
+    const failedEvent = events.find(
+      (event) => event.event === SERVER_ANALYTICS_EVENTS.aiGenerationFailed,
+    );
+    expect(failedEvent?.properties).toMatchObject({
+      failure_kind: "provider_credentials_rejected",
+      provider_status: "401",
+    });
+    expect(JSON.stringify(events)).not.toContain(SENTINEL);
   });
 
   test("keeps model metadata lookup best-effort", async () => {

@@ -41,7 +41,7 @@ export const OnboardingLayout = ({
       {/* Left: form. overflow-y-auto so tall steps (AI provider/model
           picker, invite form) stay scrollable on short viewports
           instead of clipping the footer controls. */}
-      <div className="flex w-full flex-col overflow-y-auto px-6 pt-[8vh] pb-10 md:w-1/2 md:px-12 md:pt-[10vh] lg:px-20">
+      <div className="flex w-full flex-col overflow-y-auto px-6 pt-[8svh] pb-10 md:w-1/2 md:px-12 md:pt-[10svh] lg:px-20">
         <div
           className="relative mx-auto flex min-h-0 w-full flex-1 flex-col"
           style={{ maxWidth: contentMaxWidth }}
@@ -73,7 +73,7 @@ export const OnboardingLayout = ({
       {/* Right: preview — matches left column's vertical padding so the
           floating Theme/Language buttons (top-4) and the back arrow
           have breathing room above the card. */}
-      <div className="bg-muted relative hidden items-center justify-center overflow-hidden px-6 pt-[10vh] pb-10 md:flex md:w-1/2">
+      <div className="bg-muted relative hidden items-center justify-center overflow-hidden px-6 pt-[10svh] pb-10 md:flex md:w-1/2">
         {/* The landing hero SVGs are the source of truth for these rays;
             onboarding only lowers their opacity. */}
         <div

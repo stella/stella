@@ -141,6 +141,13 @@ const ENTITY_PRIORITY_SQL_VALUES = ENTITY_PRIORITIES.map((priority) =>
   sql.raw(`'${priority}'`),
 );
 
+export type LegalListSampleCase = {
+  documentEntityId: SafeId<"entity">;
+  fileFieldId: SafeId<"field">;
+  /** The sample facts; the receipt is stale once any is no longer an item. */
+  factEntityIds: SafeId<"entity">[];
+};
+
 export const legalLists = p.pgTable(
   "legal_lists",
   {
@@ -150,6 +157,8 @@ export const legalLists = p.pgTable(
       .references(() => workspaces.id, { onDelete: "cascade" }),
     name: p.varchar({ length: 256 }).notNull(),
     description: p.text(),
+    /** Receipt of the atomically loaded AVT sample; independent of its name. */
+    sampleCase: jsonb("sample_case").$type<LegalListSampleCase>(),
     status: p
       .text("status", { enum: LEGAL_LIST_STATUSES })
       .notNull()
@@ -162,6 +171,10 @@ export const legalLists = p.pgTable(
   },
   (table) => [
     p.unique("legal_lists_id_ws_unq").on(table.id, table.workspaceId),
+    p
+      .uniqueIndex("legal_lists_sample_workspace_uidx")
+      .on(table.workspaceId)
+      .where(sql`${table.sampleCase} IS NOT NULL`),
     p.check(
       "legal_lists_status_check",
       sql`${table.status} in (${sql.join(LEGAL_LIST_STATUS_SQL_VALUES, sql`, `)})`,

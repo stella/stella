@@ -81,6 +81,34 @@ fn public_methods(source: &str) -> BTreeSet<String> {
 }
 
 #[test]
+fn tray_icon_updates_always_restore_template_tinting() {
+  let source = include_str!("../src/tray.rs");
+  let (before, helper_and_after) = source
+    .split_once("fn set_tray_icon(")
+    .expect("tray icon updates must have one template-preserving helper");
+  let (helper, after) = helper_and_after
+    .split_once("\n}")
+    .expect("the tray icon helper must have a body");
+  let compact = |source: &str| {
+    source
+      .chars()
+      .filter(|c| !c.is_whitespace())
+      .collect::<String>()
+  };
+  for outside in [before, after] {
+    assert!(
+      !compact(outside).contains(".set_icon("),
+      "tray icon updates must go through set_tray_icon"
+    );
+  }
+  assert!(
+    compact(helper)
+      .contains("tray.set_icon(Some(icon))?;tray.set_icon_as_template(true)"),
+    "setting the tray icon must immediately restore template tinting"
+  );
+}
+
+#[test]
 fn every_pinned_native_tray_method_is_confined_to_its_owner() {
   // Cargo has fetched the dependency sources before compiling this test.
   let root = tauri_source();

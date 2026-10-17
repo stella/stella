@@ -71,16 +71,6 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   // on the credential path, are covered by
   // `tests/security/machine-api-keys.test.ts`.
   "api-keys": WAIVER_REASON.isolatedOutsideRlsHarness,
-  // Desktop registry search authenticates with a purpose-bound API key
-  // rather than the session the matrix harness drives, so no matrix case can
-  // reach it. The key's server-written metadata pins the organization and
-  // membership is re-resolved on every request
-  // (`handlers/desktop-registry/auth.test.ts`); its one tenant-scoped read,
-  // saved lookup formats, runs on the membership-scoped RLS database covered
-  // by `tests/security/template-lookup-formats-rls.integration.test.ts`; and
-  // revocation cannot cross organizations
-  // (`lib/business-registries/desktop/revocation.db.test.ts`).
-  "desktop-registry": WAIVER_REASON.isolatedOutsideRlsHarness,
   "ai-autocomplete": WAIVER_REASON.preExistingGap,
   "ai-config": WAIVER_REASON.preExistingGap,
   "audit-logs": WAIVER_REASON.preExistingGap,
@@ -171,24 +161,7 @@ type DatedWaiver = {
  * until then names the dedicated tests that cover the domain; the guard checks
  * those tests exist and fails once the date has passed.
  */
-const DATED_CROSS_TENANT_WAIVERS: Record<string, DatedWaiver> = {
-  // Purpose-bound desktop credentials, not the session used by the matrix,
-  // bind the caller's organization. No request field selects another tenant.
-  "desktop-feature-access": {
-    reason: WAIVER_REASON.isolatedOutsideRlsHarness,
-    expiresOn: "2026-10-17",
-    substituteTests: [
-      {
-        file: "handlers/desktop-feature-access/routes.test.ts",
-        titles: [
-          "feature access requires the desktop account credential",
-          "a member grant does not cross the desktop account organization",
-        ],
-      },
-      { file: "handlers/desktop-registry/auth.test.ts", titles: [] },
-    ],
-  },
-};
+const DATED_CROSS_TENANT_WAIVERS: Record<string, DatedWaiver> = {};
 
 const waivedDomains = [
   ...Object.keys(CROSS_TENANT_WAIVERS),
@@ -206,11 +179,15 @@ const apiSrcDir = path.resolve(import.meta.dir, "../..");
 const PER_HANDLER_WAIVERS: Record<string, Record<string, WaiverReason>> = {
   "desktop-time-entries": {},
   chat: {
+    // Authenticated public-host icon bytes contain no tenant-owned records.
+    "link-icons/get": WAIVER_REASON.noTenantReadSurface,
     // The model catalog for the caller's own organization: no record id in,
     // nothing another tenant owns out.
     "get-model-options": WAIVER_REASON.noTenantReadSurface,
     // Rewrites the prompt text in the request body; reads no stored record.
     "improve-prompt": WAIVER_REASON.noTenantReadSurface,
+    // Plans a chart from the table in the request body; reads no stored record.
+    "table-chart": WAIVER_REASON.noTenantReadSurface,
   },
 };
 

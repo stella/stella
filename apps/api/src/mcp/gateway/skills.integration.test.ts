@@ -134,7 +134,7 @@ describe("MCP skill tools against the database", () => {
     const listing = createRecordingContext(ids.userA1);
     const tools = await loadVisibleSkillTools({
       context: listing.context,
-      mode: "default",
+      mode: "advanced",
     });
     expect(tools.map((tool) => tool.exposedName)).toContain(
       namespaceSkillToolName(calledSlug),
@@ -145,7 +145,7 @@ describe("MCP skill tools against the database", () => {
     const dispatched = await dispatchGatewayToolCall({
       args: {},
       context: calling.context,
-      mode: "default",
+      mode: "advanced",
       toolName: namespaceSkillToolName(calledSlug),
     });
     expect(dispatched?.type).toBe("internal");
@@ -170,7 +170,12 @@ describe("MCP skill tools against the database", () => {
     const { context } = createRecordingContext(ids.userA1);
     const toolName = namespaceSkillToolName(slug);
 
-    const skillRead = await handleMcpToolCall({ args: {}, context, toolName });
+    const skillRead = await handleMcpToolCall({
+      args: {},
+      context,
+      toolName,
+      mode: "advanced",
+    });
     expect(skillRead.isError).toBeUndefined();
     expect(skillRead.structuredContent).toMatchObject({
       type: "skill",
@@ -181,6 +186,7 @@ describe("MCP skill tools against the database", () => {
     });
 
     const resourceRead = await handleMcpToolCall({
+      mode: "advanced",
       args: { resource: "references/checklist.md" },
       context,
       toolName,
@@ -195,6 +201,7 @@ describe("MCP skill tools against the database", () => {
     });
 
     const missingRead = await handleMcpToolCall({
+      mode: "advanced",
       args: { resource: "references/absent.md" },
       context,
       toolName,
@@ -216,8 +223,9 @@ describe("MCP skill tools against the database", () => {
     const { context } = createRecordingContext(ids.userA1);
     const toolName = namespaceSkillToolName(slug);
 
-    await handleMcpToolCall({ args: {}, context, toolName });
+    await handleMcpToolCall({ args: {}, context, toolName, mode: "advanced" });
     await handleMcpToolCall({
+      mode: "advanced",
       args: { resource: "references/absent.md" },
       context,
       toolName,
@@ -293,7 +301,7 @@ describe("MCP skill tools against the database", () => {
     const { context } = createRecordingContext(ids.userA1);
     const resolved = await resolveSkillTool({
       context,
-      mode: "default",
+      mode: "advanced",
       toolName: namespaceSkillToolName(slug),
     });
     if (resolved?.source !== "installed" || resolved.id !== privateSkillId) {
@@ -349,26 +357,33 @@ describe("MCP skill tools against the database", () => {
 
     const tools = await loadVisibleSkillTools({
       context,
-      mode: "default",
+      mode: "advanced",
       scopes: ["stella:skills"],
     });
     expect(tools.map((tool) => tool.exposedName)).not.toContain(name);
 
     const prompts = await listSkillPrompts({
       context,
-      mode: "default",
+      mode: "advanced",
       scopes: ["stella:skills"],
     });
     expect(prompts.map((prompt) => prompt.name)).toContain(name);
     expect(
-      await listSkillPrompts({ context, mode: "default", scopes: [] }),
+      await listSkillPrompts({ context, mode: "advanced", scopes: [] }),
+    ).toEqual([]);
+    expect(
+      await listSkillPrompts({
+        context,
+        mode: "default",
+        scopes: ["stella:skills"],
+      }),
     ).toEqual([]);
 
     const prompt = (
       await getSkillPrompt({
         args: { request: "Check the lease." },
         context,
-        mode: "default",
+        mode: "advanced",
         name,
       })
     ).unwrap();
@@ -388,7 +403,7 @@ describe("MCP skill tools against the database", () => {
     const called = await dispatchGatewayToolCall({
       args: {},
       context,
-      mode: "default",
+      mode: "advanced",
       toolName: name,
     });
     expect(called).toMatchObject({
@@ -451,7 +466,7 @@ describe("MCP skill tools against the database", () => {
             ...recording.context,
             grantedScopes: ["stella:skills"],
           }),
-          mode: "default",
+          mode: "advanced",
           name: namespaceSkillToolName(slug),
         })
       ).unwrap();
@@ -491,7 +506,7 @@ describe("MCP skill tools against the database", () => {
         ...context,
         grantedScopes: ["stella:skills"],
       }),
-      mode: "default",
+      mode: "advanced",
       name: "skill__does_not_exist",
     });
     expect(Result.isError(result)).toBe(true);

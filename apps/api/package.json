@@ -8,7 +8,7 @@
     "#text-shaper.wasm": "@stll/folio-core/text-shaping/wasm"
   },
   "scripts": {
-    "build": "bun run generate:capability-runtime && bun run generate:mcp-app-contracts && bun --cwd=../../packages/mcp-apps run build && bun run build:visual-sandbox",
+    "build": "bun run generate:capability-runtime && bun run build:visual-sandbox",
     "build:visual-sandbox": "bun scripts/build-visual-sandbox.ts",
     "gen:chat-saved-state": "bun scripts/gen-chat-saved-state.ts",
     "gen:chat-transcripts": "bun scripts/gen-chat-transcripts.ts",
@@ -50,6 +50,7 @@
     "eval:reader-explain": "bun evals/reader-explain-local.ts",
     "eval:agent-orientation": "bun --cwd=../../packages/cli run codegen:runtime && bun run generate:capability-runtime && NODE_ENV=development STELLA_LOCAL_DEV=1 bun --env-file=.env evals/agent-orientation.ts",
     "db:migrate": "bun run src/db/migrate.ts",
+    "db:backfill-chat-content-v3": "bun run --env-file=.env src/scripts/backfill-chat-content-v3.ts",
     "db:audit-better-auth": "bun run --env-file=.env src/scripts/better-auth-migration-audit.ts",
     "db:derive-better-auth-microsoft-identities": "bun run --env-file=.env src/scripts/better-auth-microsoft-identity-map.ts",
     "db:backfill-better-auth-17": "bun run --env-file=.env src/scripts/better-auth-17-backfill.ts",
@@ -73,7 +74,8 @@
     "corpus:generation": "bun run --env-file=.env src/scripts/corpus-generation.ts",
     "document-processing-worker": "bun src/scripts/document-processing-worker.ts",
     "dev:errors": "tail -F .dev-logs/errors.jsonl",
-    "generate:capability-runtime": "bun scripts/generate-capability-runtime.ts",
+    "generate:capability-runtime": "bun scripts/generate-capability-runtime.ts && bun ../../scripts/prepare-mcp-apps.ts",
+    "generate:case-law-decision-view-grants": "bun scripts/generate-case-law-decision-view-grants.ts",
     "generate:mcp-app-contracts": "bun scripts/generate-mcp-app-contracts.ts",
     "generate:typecheck-declarations": "bun ../../packages/scripts/src/api-typecheck-declarations.ts tsconfig.declarations.json",
     "typecheck:src": "bun ../../packages/scripts/src/api-typecheck-config.ts tsconfig.src.json && bun check --no-pretty --all --project=tsconfig.src.json",
@@ -224,7 +226,9 @@
     "@myriaddreamin/typst-ts-web-compiler": "0.7.0",
     "@playwright/test": "^1.63.0",
     "@standard-schema/spec": "^1.1.0",
+    "@stll/playwright-tools": "workspace:*",
     "@stll/property-testing": "workspace:*",
+    "@stll/test-kit": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "@types/d3-scale": "catalog:",
     "ajv": "catalog:",
@@ -247,7 +251,7 @@
       "gate": "STELLA_RUN_POSTGRES_TESTS",
       "gateValue": "true",
       "runner": "scripts/run-postgres-tests.ts",
-      "testFileGlob": "{src,scripts}/**/*.test.{ts,tsx}"
+      "testFileGlob": "{src,evals,scripts}/**/*.test.{ts,tsx}"
     },
     "test:valkey": {
       "gate": "STELLA_RUN_VALKEY_TESTS",

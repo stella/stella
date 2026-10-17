@@ -18,7 +18,7 @@ import { panic, Result } from "better-result";
  * Usage:
  *   bun apps/api/scripts/seed-case-law.ts
  */
-import { and, eq, getColumns, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { readdir } from "node:fs/promises";
 import path from "node:path";
 import * as v from "valibot";
@@ -34,7 +34,6 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
 import type { CaseLawWriteHandles } from "@/api/lib/case-law/maintenance-lane";
 import { canonicalDecisionDate } from "@/api/lib/dates";
-import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { readGzipJson } from "@/api/lib/gzip-json";
 import { indexDecision } from "@/api/lib/legal-search/case-law-search-index";
 import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-source";
@@ -49,7 +48,7 @@ import { seedId } from "./seed-utils";
 
 const FIXTURES_DIR = path.join(import.meta.dir, "__fixtures__", "case-law");
 
-const sourceIdFor = (adapterKey: string) =>
+export const sourceIdFor = (adapterKey: string) =>
   seedId(`case-law-source-${adapterKey}`);
 const decisionIdFor = (
   adapterKey: string,
@@ -220,107 +219,11 @@ export const fixtureDecisionRow = ({
   sourceHash: d.source_hash,
 });
 
-/** A recorded decision, named by the key the seed stores it under. */
-export type FixtureDecisionKey = {
-  adapterKey: string;
-  caseNumber: string;
-  language: string;
-};
-
-type SeedFixturesOptions = {
-  /**
-   * Decisions whose stored row is brought back to its fixture on every run.
-   * The seed otherwise keeps a row a database already holds, so a fixture
-   * edit (a new analysis, a re-recorded AST) would never reach a database
-   * seeded before it, and whatever is built on that decision would be built
-   * on its old text.
-   */
-  refresh?: readonly FixtureDecisionKey[] | undefined;
-};
-
-type RefreshFixtureDecisionOptions = FixtureDecisionRowOptions & {
-  /** The stored row's id, which need not be the fixture's seed id. */
-  decisionId: SafeId<"caseLawDecision">;
-};
-
-/**
- * Brings a stored decision back to its fixture: the row keeps the id it
- * already had and every column the fixture records is written in place, only
- * when one of them differs. The row is never deleted, so what hangs off the
- * decision (matter links, citations, search documents) keeps its association.
- */
-export const refreshFixtureDecision = async (
-  db: Pick<CaseLawWriteHandles["rootDb"], "transaction">,
-  { decisionId, ...row }: RefreshFixtureDecisionOptions,
-) => {
-  const fixtureRow = { ...fixtureDecisionRow(row), id: decisionId };
-  // Spelled out so the lifecycle-write lint can see that no state column is
-  // among them; `satisfies` makes a column the fixture row gains a type error
-  // here until it is listed.
-  const set = {
-    sourceId: fixtureRow.sourceId,
-    caseNumber: fixtureRow.caseNumber,
-    slug: fixtureRow.slug,
-    ecli: fixtureRow.ecli,
-    court: fixtureRow.court,
-    country: fixtureRow.country,
-    language: fixtureRow.language,
-    languageGroupKey: fixtureRow.languageGroupKey,
-    decisionDate: fixtureRow.decisionDate,
-    decisionType: fixtureRow.decisionType,
-    fulltext: fixtureRow.fulltext,
-    sections: fixtureRow.sections,
-    documentAst: fixtureRow.documentAst,
-    analysis: fixtureRow.analysis,
-    parserVersion: fixtureRow.parserVersion,
-    sourceRaw: fixtureRow.sourceRaw,
-    sourceRawS3Key: fixtureRow.sourceRawS3Key,
-    sourceRawContentType: fixtureRow.sourceRawContentType,
-    sourceUrl: fixtureRow.sourceUrl,
-    documentUrl: fixtureRow.documentUrl,
-    metadata: fixtureRow.metadata,
-    sourceHash: fixtureRow.sourceHash,
-  } satisfies Omit<typeof fixtureRow, "id">;
-  // Derived from the update projection, so a column the fixture row gains
-  // takes part in the unchanged check without a second list to keep.
-  const changed = Object.entries(getColumns(caseLawDecisions))
-    .filter(([key]) => key in set)
-    .map(
-      ([, column]) =>
-        sql`${column} IS DISTINCT FROM excluded.${sql.identifier(column.name)}`,
-    );
-  await withAggregateTransaction(db, async (tx) => {
-    await tx
-      .insert(caseLawDecisions)
-      .values(fixtureRow)
-      .onConflictDoUpdate({
-        target: caseLawDecisions.id,
-        set,
-        setWhere: sql.join(changed, sql` OR `),
-      });
-  });
-};
-
-const isRefreshed = (
-  refresh: readonly FixtureDecisionKey[],
-  adapterKey: string,
-  decision: FixtureDecision,
-) =>
-  refresh.some(
-    (key) =>
-      key.adapterKey === adapterKey &&
-      key.caseNumber === decision.case_number &&
-      key.language === decision.language,
-  );
-
 // Index + slug writes target the global `case_law_*` tables, which only
 // the `stella_ingestion` role may write under RLS. The decision rows below
 // go in via the lane's `rootDb` (table owner), but `indexDecision` and the
 // slug backfill run their writes through its ingestion-scoped handle.
-const seedFixtures = async (
-  { rootDb, ingestionDb }: CaseLawWriteHandles,
-  { refresh = [] }: SeedFixturesOptions,
-) => {
+const seedFixtures = async ({ rootDb, ingestionDb }: CaseLawWriteHandles) => {
   await ensureSearchPreviewConfig(rootDb);
 
   const fixtures = [
@@ -405,17 +308,6 @@ const seedFixtures = async (
         );
       }
 
-      // A row this database already held keeps its old columns unless the
-      // caller asked for this decision to match its fixture again.
-      if (result.length === 0 && isRefreshed(refresh, adapterKey, d)) {
-        await refreshFixtureDecision(rootDb, {
-          adapterKey,
-          decision: d,
-          decisionId,
-          sourceId,
-        });
-      }
-
       // Search-index projection is non-essential for the public read path
       // (decisions are read from `case_law_decisions`, not the search table).
       // A failure here (e.g. local schema drift in `case_law_search_documents`)
@@ -465,14 +357,14 @@ const seedFixtures = async (
   console.log("Done. Case law data seeded successfully.");
 };
 
-export async function seedCaseLaw(options: SeedFixturesOptions = {}) {
+export async function seedCaseLaw() {
   requireLocalDevOpen("Seeding");
 
   // The dev seed route runs this inside the API process, so the lane is
   // released here rather than left to the process exit.
   const lane = await enterCaseLawMaintenanceLane();
   try {
-    await seedFixtures(lane, options);
+    await seedFixtures(lane);
   } finally {
     await lane.release();
   }
