@@ -180,6 +180,7 @@ export const organizationSettingsRoute = new Elysia({
   .post("/ai-config/defaults-preview", previewAIConfigDefaults.handler, {
     body: previewAIConfigDefaults.config.body,
     permissions: previewAIConfigDefaults.config.permissions,
+    accountAccess: previewAIConfigDefaults.config.accountAccess,
   })
   .get("/ai-config", readAIConfig.handler, {
     permissions: readAIConfig.config.permissions,
