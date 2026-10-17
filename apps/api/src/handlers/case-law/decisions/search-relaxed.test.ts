@@ -2,8 +2,8 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { SEARCH_PAGE_END } from "@stll/api-contract/search";
-import { rejectionOf } from "@stll/property-testing/rejection";
 
+import { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
 import type { RankedHit } from "@/api/lib/legal-search/rerank";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -96,7 +96,7 @@ test.each(["complete", "truncated", "missing"] as const)(
       { ...hit("four", 1), snippet: fourSnippet },
     ];
     const queries: string[] = [];
-    const coverageById = await readTermCoverage({
+    const coverage = await readTermCoverage({
       ids: candidates.map(({ id }) => id),
       queries: [...MEMBERSHIP.keys()],
       observer: "unobserved",
@@ -120,6 +120,7 @@ test.each(["complete", "truncated", "missing"] as const)(
         });
       },
     });
+    const coverageById = coverage.unwrap();
     expect(queries).toHaveLength(4);
     expect([...coverageById]).toEqual([
       ["two", 2],
@@ -151,16 +152,17 @@ test.each([
 ])(
   "incomplete engine membership cannot silently supply coverage: %j",
   async (term_coverage) => {
-    const failure = await rejectionOf(
-      readTermCoverage({
-        ids: ["a"],
-        queries: ["term"],
-        observer: "unobserved",
-        indexId: "fixture-index",
-        aggregate: async () => Result.ok({ term_coverage }),
-      }),
-    );
-    expect(failure).toMatchObject({
+    const result = await readTermCoverage({
+      ids: ["a"],
+      queries: ["term"],
+      observer: "unobserved",
+      indexId: "fixture-index",
+      aggregate: async () => Result.ok({ term_coverage }),
+    });
+    if (Result.isOk(result)) {
+      return expect.unreachable("Incomplete coverage must fail");
+    }
+    expect(result.error).toMatchObject({
       message: "Search term coverage is incomplete",
     });
   },
@@ -170,4 +172,63 @@ test("a candidate without measured coverage is an invariant failure", () => {
   expect(() =>
     rankByTermCoverage({ ranked: [hit("a", 1)], coverageById: new Map() }),
   ).toThrow("Missing candidate term coverage");
+});
+
+test("an unavailable coverage read returns its tagged failure", async () => {
+  const cause = new CorpusIndexError({
+    message: "Coverage provider unavailable",
+  });
+  const result = await readTermCoverage({
+    ids: ["a"],
+    queries: ["term"],
+    observer: "unobserved",
+    indexId: "fixture-index",
+    aggregate: async () => Result.err(cause),
+  });
+  if (Result.isOk(result)) {
+    return expect.unreachable("Unavailable coverage must fail");
+  }
+  expect(result.error).toMatchObject({
+    _tag: "HandlerError",
+    status: 503,
+    message: "Search term coverage is temporarily unavailable",
+    cause,
+  });
+});
+
+test.each([
+  { buckets: [{ key: "outside-candidates", doc_count: 1 }] },
+  {
+    buckets: [
+      { key: "a", doc_count: 1 },
+      { key: "a", doc_count: 1 },
+    ],
+  },
+  { buckets: [{ key: "a", doc_count: 0 }] },
+  { buckets: [{ key: "a", doc_count: 1.5 }] },
+  { buckets: [{ key: 1, doc_count: 1 }] },
+  { buckets: [null] },
+])("invalid membership returns a tagged failure: %j", async ({ buckets }) => {
+  const result = await readTermCoverage({
+    ids: ["a"],
+    queries: ["term"],
+    observer: "unobserved",
+    indexId: "fixture-index",
+    aggregate: async () =>
+      Result.ok({
+        term_coverage: {
+          buckets,
+          sum_other_doc_count: 0,
+          doc_count_error_upper_bound: 0,
+        },
+      }),
+  });
+  if (Result.isOk(result)) {
+    return expect.unreachable("Invalid coverage must fail");
+  }
+  expect(result.error).toMatchObject({
+    _tag: "HandlerError",
+    status: 502,
+    message: "Search term coverage is invalid",
+  });
 });

@@ -279,7 +279,9 @@ import type {
 } from "@/api/lib/legal-search/rerank";
 import { searchIndexUnavailableResponse } from "@/api/lib/legal-search/search-index-unavailable";
 import { LIMITS } from "@/api/lib/limits";
+import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   decodePaginationCursor,
   encodePaginationCursor,
@@ -897,6 +899,152 @@ export const readCaseLawSearchFacet = definePublicLawSharedQuery(
   ): Promise<RawRows> => await tx.execute(plan.facets[facet]),
 );
 
+type PresentPostgresSearchPageOptions = {
+  body: PostgresSearchBody;
+  caseLawDb: CaseLawPublicReadDb;
+  courtWeights: CourtWeightMap;
+  isFirstPage: boolean;
+  sort: SearchSort;
+  relaxed: boolean;
+  hasMore: boolean;
+  resultRows: RawRows;
+  alternatesByGroupKey: Awaited<
+    ReturnType<typeof readPublicDecisionLanguageAlternatesByGroup>
+  >;
+  countResultRaw: RawRows;
+  courtResultRaw: RawRows;
+  yearResultRaw: RawRows;
+  decisionTypeResultRaw: RawRows;
+  sourceResultRaw: RawRows;
+  languageResultRaw: RawRows;
+};
+
+const presentPostgresSearchPage = async ({
+  body,
+  caseLawDb,
+  courtWeights,
+  isFirstPage,
+  sort,
+  relaxed,
+  hasMore,
+  resultRows,
+  alternatesByGroupKey,
+  countResultRaw,
+  courtResultRaw,
+  yearResultRaw,
+  decisionTypeResultRaw,
+  sourceResultRaw,
+  languageResultRaw,
+}: PresentPostgresSearchPageOptions) => {
+  const countResult = arrayOrEmpty(countResultRaw);
+
+  const lastRaw = resultRows.at(-1);
+  const nextCursor =
+    !relaxed && hasMore && lastRaw
+      ? encodeDecisionSearchCursor({
+          id: String(lastRaw["decision_id"]),
+          sort,
+          sortKey: Number(lastRaw["sort_key"]),
+        })
+      : null;
+
+  const hits = resultRows.map((row) => {
+    const languageGroupKey = toNullableString(row["language_group_key"]);
+    const headline = toNullableString(row["headline"]);
+    const presentation = courtPresentation(courtWeights, {
+      country: String(row["country"]),
+      court: String(row["court"]),
+      courtId: toNullableString(row["court_id"]),
+      ecli: toNullableString(row["ecli"]),
+    });
+
+    const caseNumberType = primaryReferenceTypeFromStored(
+      row["case_number_type"],
+    );
+    return {
+      decisionId: String(row["decision_id"]),
+      caseNumber: String(row["case_number"]),
+      caseNumberType,
+      slug: toNullableString(row["slug"]),
+      ecli: toNullableString(row["ecli"]),
+      identifiers: decisionIdentifierProjection(row["identifiers"], {
+        caseNumber: String(row["case_number"]),
+        caseNumberType,
+        ecli: toNullableString(row["ecli"]),
+      }),
+      court: String(row["court"]),
+      courtAbbreviation: presentation.courtAbbreviation,
+      courtTier: presentation.courtTier,
+      country: String(row["country"]),
+      language: String(row["language"]),
+      languageAlternates: alternatesByGroupKey.alternatesFor(languageGroupKey),
+      decisionDate: toNullableString(row["decision_date"]),
+      decisionType: toNullableString(row["decision_type"]),
+      sourceUrl: toNullableString(row["source_url"]),
+      textWithheldReason: decisionTextWithheldReason({
+        allowsDerivedAi: readSearchSourceAiPermission(row["allows_derived_ai"]),
+      }),
+      keywords: readDecisionKeywords(row["keywords"]),
+      headnote: readDecisionHeadnote({
+        headnote: row["headnote"],
+        keywords: row["keywords"],
+        maxChars: decisionHeadnoteMaxChars(body.headnotePresentation),
+      }),
+      headline: headline ? escapeAndHighlight(headline) : null,
+      // Postgres FTS scores whole decisions, so there is no passage to anchor
+      // the hit to. Kept on both paths so the response shape does not depend
+      // on which provider served it.
+      anchorId: null,
+      citationCount: Number(row["citation_count"]) || 0,
+      citationAuthority: Number(row["citation_authority"]) || 0,
+      // Whole-decision scoring has no passages to count, so the breadth
+      // signal is the one match the decision itself is.
+      matchingPassages: 1,
+      match: relaxed ? ("some_terms" as const) : ("all_terms" as const),
+      createdAt:
+        row["created_at"] instanceof Date
+          ? row["created_at"].toISOString()
+          : String(row["created_at"]),
+    };
+  });
+
+  const total = isFirstPage
+    ? countedSearchTotal(
+        SEARCH_TOTAL_TYPE.EXACT,
+        Number(countResult.at(0)?.["total"]) || 0,
+      )
+    : SEARCH_TOTAL_NOT_COUNTED;
+
+  const sourceBuckets = cappedSourceFacetBuckets(facetBuckets(sourceResultRaw));
+  const facets: DecisionSearchFacets | null = !isFirstPage
+    ? null
+    : {
+        courtYear: null,
+        court: groupCourtsByTier({
+          buckets: facetBuckets(courtResultRaw),
+          country: body.country,
+          courtWeights,
+          perTierLimit: LIMITS.caseLawFacetLimit,
+        }),
+        // Already newest-first from the statement; the year is the key it
+        // grouped and ordered by.
+        year: facetBuckets(yearResultRaw),
+        decisionType: decisionTypeKindBuckets(
+          facetBuckets(decisionTypeResultRaw),
+        ),
+        source: labelSourceBuckets(
+          sourceBuckets,
+          await readCaseLawSourceNames(
+            caseLawDb,
+            sourceBuckets.map((bucket) => bucket.value),
+          ),
+        ),
+        language: facetBuckets(languageResultRaw),
+      };
+
+  return { hits, facets, total, nextCursor };
+};
+
 export const searchPostgresDecisions = async (
   body: PostgresSearchBody,
   caseLawDb: CaseLawPublicReadDb,
@@ -1023,8 +1171,6 @@ export const searchPostgresDecisions = async (
         ),
       )
     : strictHitsResult;
-  const countResult = arrayOrEmpty(countResultRaw);
-
   const hasMore = hitsResult.length > limit;
   const resultRows = hasMore ? hitsResult.slice(0, limit) : hitsResult;
   const languageGroupKeys = [
@@ -1040,109 +1186,23 @@ export const searchPostgresDecisions = async (
       languageGroupKeys,
     });
 
-  const lastRaw = resultRows.at(-1);
-  const nextCursor =
-    !relaxed && hasMore && lastRaw
-      ? encodeDecisionSearchCursor({
-          id: String(lastRaw["decision_id"]),
-          sort,
-          sortKey: Number(lastRaw["sort_key"]),
-        })
-      : null;
-
-  const hits = resultRows.map((row) => {
-    const languageGroupKey = toNullableString(row["language_group_key"]);
-    const headline = toNullableString(row["headline"]);
-    const presentation = courtPresentation(courtWeights, {
-      country: String(row["country"]),
-      court: String(row["court"]),
-      courtId: toNullableString(row["court_id"]),
-      ecli: toNullableString(row["ecli"]),
-    });
-
-    const caseNumberType = primaryReferenceTypeFromStored(
-      row["case_number_type"],
-    );
-    return {
-      decisionId: String(row["decision_id"]),
-      caseNumber: String(row["case_number"]),
-      caseNumberType,
-      slug: toNullableString(row["slug"]),
-      ecli: toNullableString(row["ecli"]),
-      identifiers: decisionIdentifierProjection(row["identifiers"], {
-        caseNumber: String(row["case_number"]),
-        caseNumberType,
-        ecli: toNullableString(row["ecli"]),
-      }),
-      court: String(row["court"]),
-      courtAbbreviation: presentation.courtAbbreviation,
-      courtTier: presentation.courtTier,
-      country: String(row["country"]),
-      language: String(row["language"]),
-      languageAlternates: alternatesByGroupKey.alternatesFor(languageGroupKey),
-      decisionDate: toNullableString(row["decision_date"]),
-      decisionType: toNullableString(row["decision_type"]),
-      sourceUrl: toNullableString(row["source_url"]),
-      textWithheldReason: decisionTextWithheldReason({
-        allowsDerivedAi: readSearchSourceAiPermission(row["allows_derived_ai"]),
-      }),
-      keywords: readDecisionKeywords(row["keywords"]),
-      headnote: readDecisionHeadnote({
-        headnote: row["headnote"],
-        keywords: row["keywords"],
-        maxChars: decisionHeadnoteMaxChars(body.headnotePresentation),
-      }),
-      headline: headline ? escapeAndHighlight(headline) : null,
-      // Postgres FTS scores whole decisions, so there is no passage to anchor
-      // the hit to. Kept on both paths so the response shape does not depend
-      // on which provider served it.
-      anchorId: null,
-      citationCount: Number(row["citation_count"]) || 0,
-      citationAuthority: Number(row["citation_authority"]) || 0,
-      // Whole-decision scoring has no passages to count, so the breadth
-      // signal is the one match the decision itself is.
-      matchingPassages: 1,
-      match: relaxed ? ("some_terms" as const) : ("all_terms" as const),
-      createdAt:
-        row["created_at"] instanceof Date
-          ? row["created_at"].toISOString()
-          : String(row["created_at"]),
-    };
+  const { hits, facets, total, nextCursor } = await presentPostgresSearchPage({
+    body,
+    caseLawDb,
+    courtWeights,
+    isFirstPage,
+    sort,
+    relaxed,
+    hasMore,
+    resultRows,
+    alternatesByGroupKey,
+    countResultRaw,
+    courtResultRaw,
+    yearResultRaw,
+    decisionTypeResultRaw,
+    sourceResultRaw,
+    languageResultRaw,
   });
-
-  const total = isFirstPage
-    ? countedSearchTotal(
-        SEARCH_TOTAL_TYPE.EXACT,
-        Number(countResult.at(0)?.["total"]) || 0,
-      )
-    : SEARCH_TOTAL_NOT_COUNTED;
-
-  const sourceBuckets = cappedSourceFacetBuckets(facetBuckets(sourceResultRaw));
-  const facets: DecisionSearchFacets | null = !isFirstPage
-    ? null
-    : {
-        courtYear: null,
-        court: groupCourtsByTier({
-          buckets: facetBuckets(courtResultRaw),
-          country: body.country,
-          courtWeights,
-          perTierLimit: LIMITS.caseLawFacetLimit,
-        }),
-        // Already newest-first from the statement; the year is the key it
-        // grouped and ordered by.
-        year: facetBuckets(yearResultRaw),
-        decisionType: decisionTypeKindBuckets(
-          facetBuckets(decisionTypeResultRaw),
-        ),
-        source: labelSourceBuckets(
-          sourceBuckets,
-          await readCaseLawSourceNames(
-            caseLawDb,
-            sourceBuckets.map((bucket) => bucket.value),
-          ),
-        ),
-        language: facetBuckets(languageResultRaw),
-      };
 
   const answer = searchAnswer({
     body,
@@ -2455,6 +2515,18 @@ export const countDroppedIdentityCandidates = ({
   return inWindow(candidateCount) - inWindow(rehydratedCandidateCount);
 };
 
+const decodeCaseLawCorpusCursor = (
+  cursor: string,
+): CorpusSearchCursor | null => {
+  const parsed = decodeCorpusSearchCursor(cursor);
+  return parsed !== null && isUuid(parsed.id) ? parsed : null;
+};
+
+const TERM_COVERAGE_FAILURE_SINK = failureSink({
+  event: "case_law.search_term_coverage.failed",
+  expected: [],
+});
+
 export const searchCorpusIndexDecisions = async ({
   body,
   caseLawDb,
@@ -2480,8 +2552,8 @@ export const searchCorpusIndexDecisions = async ({
   const { isFirstPage, offset } = decisionPagePlacement(body);
   let parsedCursor: CorpusSearchCursor | null = null;
   if (body.cursor) {
-    parsedCursor = decodeCorpusSearchCursor(body.cursor);
-    if (!parsedCursor || !isUuid(parsedCursor.id)) {
+    parsedCursor = decodeCaseLawCorpusCursor(body.cursor);
+    if (parsedCursor === null) {
       return status(400, { message: "Invalid cursor" });
     }
   }
@@ -2944,7 +3016,7 @@ export const searchCorpusIndexDecisions = async ({
       match: "any",
     });
     if (relaxedQuery.resolved.type === "empty") {
-      return { hits: [], scan: emptyCorpusIndexScan() };
+      return Result.ok({ hits: [], scan: emptyCorpusIndexScan() });
     }
     const needed = limit - page.hits.length;
     const relaxedPage = await readTextPage(
@@ -2986,6 +3058,9 @@ export const searchCorpusIndexDecisions = async ({
       ids: candidates.map(({ id }) => id),
       queries: queries.map((query) => `(${query}) AND (${candidateQuery})`),
     });
+    if (Result.isError(coverageById)) {
+      return Result.err(coverageById.error);
+    }
     const coverageScan = {
       ...emptyCorpusIndexScan(),
       rounds: candidates.length === 0 ? 0 : queries.length,
@@ -2993,7 +3068,7 @@ export const searchCorpusIndexDecisions = async ({
     };
     const ranked = rankByTermCoverage({
       ranked: relaxedPage.pageRanked,
-      coverageById,
+      coverageById: coverageById.value,
     }).slice(0, needed);
     const relaxedById = await readPageRows(ranked);
     const relaxedAlternates = await readPublicDecisionLanguageAlternatesByGroup(
@@ -3019,10 +3094,10 @@ export const searchCorpusIndexDecisions = async ({
     });
     // The relaxed scan is reported with the strict one, so a topped-up
     // request's rounds and index time count both reads.
-    return {
+    return Result.ok({
       hits: relaxedHitsPage.hits,
       scan: sumCorpusIndexScans(relaxedPage.scan, coverageScan),
-    };
+    });
   };
   const relaxed = shouldRelaxCaseLawSearch({
     body,
@@ -3035,8 +3110,12 @@ export const searchCorpusIndexDecisions = async ({
     strictEnd: searchPageEnd(searchPage),
   })
     ? await readRelaxedHits()
-    : { hits: [], scan: emptyCorpusIndexScan() };
-  const relaxedHits = relaxed.hits;
+    : Result.ok({ hits: [], scan: emptyCorpusIndexScan() });
+  if (Result.isError(relaxed)) {
+    observeFailure(relaxed.error, { sink: TERM_COVERAGE_FAILURE_SINK });
+    return status(relaxed.error.status, { message: relaxed.error.message });
+  }
+  const relaxedHits = relaxed.value.hits;
   const servedIds = new Set(page.hits.map((hit) => String(hit.decisionId)));
   const dispositions = hitDispositions.snapshot();
   reportCaseLawIncompleteAnswer({
@@ -3068,7 +3147,7 @@ export const searchCorpusIndexDecisions = async ({
   });
   const hits = [...page.hits, ...relaxedHits];
   // An unrelaxed request adds the empty scan, which changes nothing.
-  report(hits.length, sumCorpusIndexScans(scan, relaxed.scan));
+  report(hits.length, sumCorpusIndexScans(scan, relaxed.value.scan));
   if (interpretation.droppedFunctionWords.length > 0) {
     reportCaseLawFunctionWordsExcluded({
       country: body.country,

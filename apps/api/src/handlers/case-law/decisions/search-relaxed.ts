@@ -104,13 +104,15 @@ export const readTermCoverage = async ({
   indexId,
   queries,
   ids,
-}: ReadTermCoverageOptions): Promise<ReadonlyMap<string, number>> => {
+}: ReadTermCoverageOptions): Promise<
+  Result<ReadonlyMap<string, number>, HandlerError<502 | 503>>
+> => {
   if (ids.length === 0) {
-    return new Map();
+    return Result.ok(new Map());
   }
   const coverage = new Map(ids.map((id) => [id, 0]));
   const candidates = `document_id: IN [${ids.map(quoteCorpusValue).join(" ")}]`;
-  await mapWithConcurrency({
+  const results = await mapWithConcurrency({
     items: queries,
     limit: TERM_COVERAGE_CONCURRENCY,
     operation: async (query) => {
@@ -131,11 +133,13 @@ export const readTermCoverage = async ({
         },
       });
       if (Result.isError(answer)) {
-        throw new HandlerError({
-          status: 503,
-          message: "Search term coverage is temporarily unavailable",
-          cause: answer.error,
-        });
+        return Result.err(
+          new HandlerError({
+            status: 503,
+            message: "Search term coverage is temporarily unavailable",
+            cause: answer.error,
+          }),
+        );
       }
       const buckets = answer.value["term_coverage"];
       if (
@@ -144,13 +148,15 @@ export const readTermCoverage = async ({
         buckets["sum_other_doc_count"] !== 0 ||
         buckets["doc_count_error_upper_bound"] !== 0
       ) {
-        throw new HandlerError({
-          status: 502,
-          message: "Search term coverage is incomplete",
-          cause: new CorpusIndexError({
-            message: "Expected exact candidate term buckets",
+        return Result.err(
+          new HandlerError({
+            status: 502,
+            message: "Search term coverage is incomplete",
+            cause: new CorpusIndexError({
+              message: "Expected exact candidate term buckets",
+            }),
           }),
-        });
+        );
       }
       const seen = new Set<string>();
       for (const bucket of buckets["buckets"]) {
@@ -162,13 +168,15 @@ export const readTermCoverage = async ({
           !Number.isSafeInteger(bucket["doc_count"]) ||
           Number(bucket["doc_count"]) <= 0
         ) {
-          throw new HandlerError({
-            status: 502,
-            message: "Search term coverage is invalid",
-            cause: new CorpusIndexError({
-              message: "Unexpected candidate term bucket",
+          return Result.err(
+            new HandlerError({
+              status: 502,
+              message: "Search term coverage is invalid",
+              cause: new CorpusIndexError({
+                message: "Unexpected candidate term bucket",
+              }),
             }),
-          });
+          );
         }
         const id = bucket["key"];
         seen.add(id);
@@ -177,9 +185,15 @@ export const readTermCoverage = async ({
           (coverage.get(id) ?? panic("Missing candidate coverage")) + 1,
         );
       }
+      return Result.ok(undefined);
     },
   });
-  return coverage;
+  for (const result of results) {
+    if (Result.isError(result)) {
+      return Result.err(result.error);
+    }
+  }
+  return Result.ok(coverage);
 };
 
 type RankByTermCoverageOptions = {
