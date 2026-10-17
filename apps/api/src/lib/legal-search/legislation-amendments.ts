@@ -263,8 +263,7 @@ export const readLegislationAmendments = async (
   const after = cursor === null ? null : decodePaginationCursor(cursor);
   if (
     cursor !== null &&
-    (after === null ||
-      after.length !== 2 ||
+    (after?.length !== 2 ||
       typeof after.at(0) !== "string" ||
       typeof after.at(1) !== "string")
   ) {

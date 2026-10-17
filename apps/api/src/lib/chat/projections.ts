@@ -1770,13 +1770,20 @@ const STATUTE_AMENDMENT_PAGE_PROJECTION = v.nullable(
     ),
     observedAt: v.string(),
     coverage: v.variant("type", [
-      v.strictObject({ type: v.literal("complete") }),
-      v.strictObject({
-        type: v.literal("partial"),
-        unlocatedRelations: v.number(),
-        reason: v.string(),
-      }),
-      v.strictObject({ type: v.literal("not-stated"), reason: v.string() }),
+      projectionBranch(v.strictObject({ type: v.literal("complete") })),
+      projectionBranch(
+        v.strictObject({
+          type: v.literal("partial"),
+          unlocatedRelations: v.number(),
+          reason: v.string(),
+        }),
+      ),
+      projectionBranch(
+        v.strictObject({
+          type: v.literal("not-stated"),
+          reason: v.string(),
+        }),
+      ),
     ]),
     truncated: v.boolean(),
   }),

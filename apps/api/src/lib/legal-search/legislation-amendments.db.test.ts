@@ -82,7 +82,7 @@ beforeEach(async () => {
   });
 });
 afterAll(async () => {
-  await client?.close();
+  await client.close();
 });
 
 describe("publisher amendment snapshots", () => {
