@@ -94,10 +94,12 @@ const quoted = (identifier: string) => `"${identifier.replaceAll('"', '""')}"`;
 const declaredTables = (): Map<string, string[]> => {
   const tables = new Map<string, string[]>();
   const declare = (tableName: string, ...texts: (string | undefined)[]) => {
-    tables.set(tableName, [
-      ...(tables.get(tableName) ?? []),
-      ...texts.filter((text) => text !== undefined),
-    ]);
+    const declared = texts.filter((text) => text !== undefined);
+    const known = tables.get(tableName);
+    tables.set(
+      tableName,
+      known === undefined ? declared : [...known, ...declared],
+    );
   };
   for (const index of ONLINE_MIGRATION_INDEXES) {
     declare(index.tableName, index.definitionBody, index.createSql);

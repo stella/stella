@@ -86,8 +86,8 @@ export const createIndexConcurrently = ({
     );
   }
   // The gate watches the declared table, so the build must be on it.
-  const [, builtName, builtTable] = createSqlTarget.exec(createSql) ?? [];
-  if (builtName !== name || builtTable !== tableName) {
+  const built = createSqlTarget.exec(createSql);
+  if (built?.[1] !== name || built[2] !== tableName) {
     panic(
       `Online index ${name}: its create SQL must build it concurrently on public.${tableName}`,
     );
@@ -167,7 +167,7 @@ export type GatedTableSession = {
 };
 
 /** Where gated work runs, and what the gate reports a deferral as. */
-export type GatedTableTarget = {
+type GatedTableTarget = {
   tableName: string;
   /** The index or constraint a deferral names. */
   name: string;

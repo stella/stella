@@ -39,6 +39,8 @@ const OWNER = "apps/api/src/db/online-ddl";
 const DATABASE_MODULES = "apps/api/src/db/";
 const SCHEMA_PHASE = "apps/api/src/db/migration-runner";
 const DECLARED_BUILD = "createSql";
+const FIXTURE = ".oxlint-plugins/__fixtures__/confine-online-ddl.fixture.ts";
+const PLANTED_MODULE = "apps/api/src/db/planted-repair.ts";
 const GATE_OPENERS = new Set([
   "createOnlineIndexGate",
   "createUngatedTableGateForTests",
@@ -153,7 +155,9 @@ export default eslintCompatPlugin({
         };
         return {
           before() {
-            const filename = repoRelativeFilename(context);
+            const linted = repoRelativeFilename(context);
+            // The regression fixture is linted as the database module it plants.
+            const filename = linted === FIXTURE ? PLANTED_MODULE : linted;
             if (
               isTestFile(filename) ||
               filename.includes("/__fixtures__/") ||

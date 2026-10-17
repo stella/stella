@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 
 import { lintSingleRule } from "./lint-single-rule.ts";
 
@@ -116,5 +117,13 @@ describe(RULE, () => {
         "apps/api/src/lib/scheduler/tasks/example.ts",
       ),
     ).toEqual([]);
+  });
+
+  test("the planted fixture reports each suppressed case and nothing else", async () => {
+    const source = readFileSync(
+      new URL("../__fixtures__/confine-online-ddl.fixture.ts", import.meta.url),
+      "utf-8",
+    ).replaceAll(/^\/\/ oxlint-disable-next-line .*\n/gmu, "");
+    expect(await lint(source)).toHaveLength(3);
   });
 });

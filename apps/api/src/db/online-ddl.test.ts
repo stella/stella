@@ -64,7 +64,8 @@ describe("online lock-taking statements", () => {
     // @ts-expect-error A LockTakingStatement is not SQL text for a raw session.
     await connection.execute(statement);
     // At run time the object reaches the driver as no SQL text at all.
-    expect(statements).toEqual([statement]);
+    const reached: unknown[] = statements;
+    expect(reached).toEqual([statement]);
   });
 
   test("each builder names its table and renders one statement", async () => {
