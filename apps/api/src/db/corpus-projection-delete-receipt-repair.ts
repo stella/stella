@@ -32,8 +32,11 @@ import { defaultConfig, type Verdict } from "@stll/db-load-gate/health";
 import { isRecord } from "../lib/type-guards";
 import { createBackfillRuntime } from "./backfill-runtime";
 import { readConstraintCompletion } from "./online-constraint-completion";
+import { validateOnlineConstraints } from "./online-ddl";
+import type { OnlineConstraintValidation, OnlineTableGate } from "./online-ddl";
 import type {
   OnlineMigrationConnection,
+  OnlineMigrationOutcome,
   OnlineRepair,
 } from "./online-migration-connection";
 
@@ -50,13 +53,6 @@ const CONSTRAINT_NAME = "corpus_index_projection_intents_delete_receipt_paired";
 const BATCH = 1000;
 const BATCH_LOCK_TIMEOUT = "30s";
 const BATCH_STATEMENT_TIMEOUT = "1min";
-/**
- * VALIDATE takes SHARE UPDATE EXCLUSIVE, which queues behind an autovacuum of
- * the table until that vacuum notices the waiter and yields. Longer than the
- * online phase's default, which is sized for index builds; the phase restores
- * its own setting afterwards.
- */
-const VALIDATE_LOCK_TIMEOUT = "1min";
 
 /** Primary-key floor: every UUID sorts after it, so the walk starts here. */
 const ID_FLOOR = "00000000-0000-0000-0000-000000000000";
@@ -150,16 +146,24 @@ const repairFrom = async (
   }
 };
 
+export const CORPUS_PROJECTION_DELETE_RECEIPT_CONSTRAINTS = [
+  { tableName: TABLE_NAME, constraintName: CONSTRAINT_NAME },
+] as const satisfies readonly OnlineConstraintValidation[];
+
+/**
+ * VALIDATE takes SHARE UPDATE EXCLUSIVE, which queues behind an autovacuum of
+ * the table until that vacuum notices the waiter and yields; the gate watches
+ * that wait and defers the phase rather than failing it.
+ */
 const validateConstraint = async (
   connection: OnlineMigrationConnection,
-): Promise<void> => {
-  await connection.execute(`SET lock_timeout = '${VALIDATE_LOCK_TIMEOUT}'`);
-  // A no-op on an already validated constraint, which is what makes the
-  // repair a fixed point.
-  await connection.execute(
-    `ALTER TABLE public."${TABLE_NAME}" VALIDATE CONSTRAINT "${CONSTRAINT_NAME}"`,
-  );
-};
+  tables: OnlineTableGate,
+): Promise<OnlineMigrationOutcome> =>
+  await validateOnlineConstraints({
+    connection,
+    tables,
+    constraints: CORPUS_PROJECTION_DELETE_RECEIPT_CONSTRAINTS,
+  });
 
 type RepairRuntimeOptions = {
   readVerdict?: () => Promise<Verdict>;
@@ -180,20 +184,19 @@ export const createCorpusProjectionDeleteReceiptRepair = (
       backfillName: REPAIR_NAME,
       tableName: TABLE_NAME,
     }),
-  repair: async (connection) => {
+  repair: async (connection, tables) => {
     // Empty fresh databases have no heavy data work and no metric source yet.
     if (
       (await connection.query(`SELECT 1 FROM public."${TABLE_NAME}" LIMIT 1`))
         .length === 0
     ) {
-      await validateConstraint(connection);
-      return;
+      return await validateConstraint(connection, tables);
     }
     const pass = await repairFrom(connection, options);
     if (pass.isErr()) {
       throw pass.error;
     }
-    await validateConstraint(connection);
+    return await validateConstraint(connection, tables);
   },
 });
 
