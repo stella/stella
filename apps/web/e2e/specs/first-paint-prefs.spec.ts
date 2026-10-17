@@ -160,10 +160,13 @@ test("profile language and collapsed sidebar render in the first HTML response",
           .at(0),
       );
       expect(firstPaintWidth).toBe(serverWidth);
-      const hydratedWidth = await page
-        .locator('[data-slot="sidebar-gap"]')
-        .evaluate((element) => element.getBoundingClientRect().width);
-      expect(hydratedWidth).toBe(serverWidth);
+      await expect
+        .poll(async () =>
+          page
+            .locator('[data-slot="sidebar-gap"]')
+            .evaluate((element) => element.getBoundingClientRect().width),
+        )
+        .toBe(serverWidth);
 
       await page.goto("/settings/account/profile", {
         waitUntil: "domcontentloaded",
@@ -250,7 +253,10 @@ for (const { language, sundayBasedWeekStart } of [
         .getByRole("button", { name: ar.common.filters, exact: true })
         .click();
       await page
-        .getByRole("button", { name: ar.search.dateFrom, exact: true })
+        .getByRole("button", {
+          name: `${ar.search.dateFrom} ${ar.common.selectDate}`,
+          exact: true,
+        })
         .click();
       const calendar = page.locator('[data-slot="date-picker-popup"]');
       await expect(calendar).toBeVisible();

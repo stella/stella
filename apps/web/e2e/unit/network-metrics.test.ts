@@ -1071,6 +1071,7 @@ describe("diffNetworkBaseline", () => {
     expect(observed.responseBodyReadFailures).toEqual({
       "GET /v1/contacts": [
         {
+          reason: "unavailable",
           status: 200,
           errorName: "Error",
           message: `${reason}: <response URL>`,
@@ -1090,6 +1091,69 @@ describe("diffNetworkBaseline", () => {
     expect(problems.at(0)).not.toContain("api.example.test");
     expect(problems.at(0)).not.toContain("private");
   });
+
+  test.each([
+    { status: 200, failure: null, navigated: true, missing: false },
+    { status: 204, failure: null, navigated: true, missing: false },
+    { status: 500, failure: null, navigated: true, missing: true },
+    {
+      status: 200,
+      failure: { errorText: "aborted" },
+      navigated: true,
+      missing: true,
+    },
+    { status: 200, failure: null, navigated: false, missing: true },
+  ])(
+    "only successful bodies explicitly discarded on navigation are excluded: %j",
+    async ({ status, failure, navigated, missing }) => {
+      const record: NetworkCapture["requests"][number] = {
+        method: "GET",
+        pathname: "/v1/contacts",
+        dbQueries: 2,
+        dbQueryHeaderMissing: false,
+        responseBytes: null,
+        responseBodyReadFailure: null,
+      };
+      await readResponseBytes(
+        {
+          status: () => status,
+          fromServiceWorker: () => false,
+          headers: () => ({ "content-encoding": "gzip" }),
+          request: () => ({
+            failure: () => failure,
+            sizes: async () => ({
+              requestBodySize: 0,
+              requestHeadersSize: 0,
+              responseBodySize: 0,
+              responseHeadersSize: 0,
+            }),
+          }),
+          body: async () => {
+            throw new Error(
+              navigated
+                ? "Response body is not available for a response that was navigated away from. Read response.body() before triggering any navigation."
+                : "Protocol error (Network.getResponseBody): No data found for resource with given identifier",
+            );
+          },
+        },
+        record,
+      );
+      expect(record.responseBodyReadFailure?.reason).toBe(
+        missing ? "unavailable" : "navigation-discarded",
+      );
+      const observed = summarizeCapture({ requests: [record], intervals: [] });
+      expect(observed.requests).toEqual(["GET /v1/contacts"]);
+      expect(observed.dbQueries).toEqual({ "GET /v1/contacts": 2 });
+      expect(observed.responseSizes).toEqual({});
+      expect(observed.missingResponseSizeCounts).toEqual(
+        missing ? { "GET /v1/contacts": 1 } : {},
+      );
+      expect(
+        diffNetworkBaseline(sizeBaseline, new Map([["/contacts", observed]]))
+          .problems,
+      ).toHaveLength(missing ? 1 : 0);
+    },
+  );
 
   test("a request without a measured size is not a missing response-size count", () => {
     // Mirrors "a request without a response is not a missing db-query count":

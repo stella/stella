@@ -48,6 +48,7 @@ const WRITE_HINT =
 // --- collector -------------------------------------------------------------
 
 type ResponseBodyReadFailure = {
+  reason: "navigation-discarded" | "unavailable";
   status: number;
   errorName: string;
   message: string;
@@ -256,8 +257,20 @@ export const readResponseBytes = async (
     }
     const message =
       error instanceof Error ? error.message : "Non-Error body-read rejection";
+    const status = response.status();
     record.responseBodyReadFailure = {
-      status: response.status(),
+      // Playwright explicitly identifies bodies the browser discarded on
+      // navigation. A successful response lost this way is not size evidence.
+      reason:
+        status >= 200 &&
+        status < 300 &&
+        request.failure() === null &&
+        message.includes(
+          "Response body is not available for a response that was navigated away from.",
+        )
+          ? "navigation-discarded"
+          : "unavailable",
+      status,
       errorName: error instanceof Error ? error.name : "UnknownError",
       // Driver errors may include request URLs; redact them before reporting.
       message: message.replace(/https?:\/\/[^\s)]+/gu, "<response URL>"),
@@ -588,8 +601,10 @@ export const summarizeCapture = (
       (responseBodyReadFailures[key] ??= []).push(
         request.responseBodyReadFailure,
       );
-      missingResponseSizeCounts[key] =
-        (missingResponseSizeCounts[key] ?? 0) + 1;
+      if (request.responseBodyReadFailure.reason === "unavailable") {
+        missingResponseSizeCounts[key] =
+          (missingResponseSizeCounts[key] ?? 0) + 1;
+      }
     }
     if (
       request.responseBytes !== null &&

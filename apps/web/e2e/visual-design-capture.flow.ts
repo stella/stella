@@ -216,7 +216,7 @@ const captureVisualDesign = async ({
   // replacing either sandbox document or resetting its selected court.
   const initialSrc = await outer.getAttribute("src");
   await page
-    .locator('[data-slot="sidebar-footer"] [data-slot="menu-trigger"]')
+    .locator('[data-slot="sidebar-footer"] button[aria-haspopup="menu"]')
     .last()
     .click();
   await page.getByRole("menuitem", { name: /appearance|vzhled/iu }).hover();
@@ -231,7 +231,7 @@ const captureVisualDesign = async ({
   await snap("visual-design-dark-desktop", { waitFor: selector });
 
   await page
-    .locator('[data-slot="sidebar-footer"] [data-slot="menu-trigger"]')
+    .locator('[data-slot="sidebar-footer"] button[aria-haspopup="menu"]')
     .last()
     .click();
   await page.getByRole("menuitem", { name: /appearance|vzhled/iu }).hover();
