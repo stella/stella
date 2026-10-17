@@ -96,6 +96,7 @@ import { chatThreadOptions } from "@/features/chat/queries";
 import {
   claimQueuedChatSend,
   hasQueuedChatSend,
+  queueChatSend,
   subscribeQueuedChatSend,
 } from "@/features/chat/queued-chat-sends";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
@@ -136,6 +137,15 @@ const chatTabThreadRef = (tab: ChatTab): ChatThreadRef =>
         threadId: tab.id,
         workspaceId: tab.workspaceId,
       };
+
+/** What one prompt submission did. */
+const PROMPT_SUBMIT_OUTCOME = {
+  SENT: "sent",
+  UNAVAILABLE: "unavailable",
+  FAILED: "failed",
+} as const;
+type PromptSubmitOutcome =
+  (typeof PROMPT_SUBMIT_OUTCOME)[keyof typeof PROMPT_SUBMIT_OUTCOME];
 
 export const ChatTabPanel = ({
   tab,
@@ -304,10 +314,10 @@ export const ChatTabPanel = ({
     }: {
       prompt: string;
       files: ChatDraftAttachment[];
-    }) => {
+    }): Promise<PromptSubmitOutcome> => {
       try {
         if (!(await ensureAIAvailable())) {
-          return;
+          return PROMPT_SUBMIT_OUTCOME.UNAVAILABLE;
         }
 
         // PromptBar emits the raw editor HTML; the backend parses
@@ -315,8 +325,10 @@ export const ChatTabPanel = ({
         await sendMessage(
           await buildChatRequestMessage({ files, html: prompt }),
         );
+        return PROMPT_SUBMIT_OUTCOME.SENT;
       } catch (submitError) {
         capturePromptSubmitError(submitError);
+        return PROMPT_SUBMIT_OUTCOME.FAILED;
       }
     },
   );
@@ -496,8 +508,17 @@ export const ChatTabPanel = ({
         return;
       }
       const queuedHtml = claimQueuedChatSend(threadRef);
-      if (queuedHtml !== null) {
-        await handlePromptSubmit({ prompt: queuedHtml, files: [] });
+      if (queuedHtml === null) {
+        return;
+      }
+      const outcome = await handlePromptSubmit({
+        prompt: queuedHtml,
+        files: [],
+      });
+      // A question that was not sent goes back to the queue, so the next
+      // attempt sends it instead of losing it.
+      if (outcome !== PROMPT_SUBMIT_OUTCOME.SENT) {
+        queueChatSend(threadRef, queuedHtml);
       }
     } finally {
       queuedSendInFlight.current = false;
