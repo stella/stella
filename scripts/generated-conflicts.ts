@@ -828,6 +828,7 @@ type VerifiedResolutionBytesOptions = {
   baseline: string;
   collected: string;
   file: ManifestFile;
+  conflicted: ReadonlySet<string>;
 };
 
 const verifiedResolutionBytes = ({
@@ -835,6 +836,7 @@ const verifiedResolutionBytes = ({
   baseline,
   collected,
   file,
+  conflicted,
 }: VerifiedResolutionBytesOptions) => {
   const source = path.join(collected, "files", file.path);
   const stat = lstatSync(source);
@@ -863,8 +865,9 @@ const verifiedResolutionBytes = ({
         ),
     });
   } else if (
+    conflicted.has(file.path) &&
     conflictReason({ path: file.path, kind: "both-modified" }, GENERATORS) !==
-    null
+      null
   ) {
     const expected = git(gitDir, ["show", `${baseline}:${file.path}`]).stdout;
     if (file.mode !== "100644" || bytes.toString() !== expected) {
@@ -917,7 +920,8 @@ export const apply = ({
     treeModes(gitDir, headTree),
     treeModes(gitDir, planned.baseline),
   ];
-  const uncovered = new Set(planned.conflicts.map(({ path: file }) => file));
+  const conflicted = new Set(planned.conflicts.map(({ path: file }) => file));
+  const uncovered = new Set(conflicted);
   const seen = new Set<string>();
   for (const file of parsed.files) {
     if (seen.has(file.path)) {
@@ -938,10 +942,12 @@ export const apply = ({
       `The collected resolution omits conflicted paths: ${[...uncovered].join(", ")}`,
     );
   }
-  const tree = editTree(gitDir, planned.baseline, (index) => {
+  const baseline = planned.baseline;
+  const tree = editTree(gitDir, baseline, (index) => {
     for (const file of parsed.files) {
       if (file.deleted) {
         if (
+          conflicted.has(file.path) &&
           conflictReason(
             { path: file.path, kind: "both-modified" },
             GENERATORS,
@@ -949,16 +955,18 @@ export const apply = ({
         ) {
           fail(`${file.path}: cannot delete a format or lockfile resolution`);
         }
-        git(gitDir, ["update-index", "--force-remove", "--", file.path], {
+        git(gitDir, ["update-index", "-z", "--index-info"], {
           index,
+          input: Buffer.from(`0 ${"0".repeat(40)}\t${file.path}\0`),
         });
         continue;
       }
       const bytes = verifiedResolutionBytes({
         gitDir,
-        baseline: planned.baseline,
+        baseline,
         collected,
         file,
+        conflicted,
       });
       const sha = git(
         gitDir,

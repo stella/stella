@@ -110,9 +110,9 @@ test("every committed generator has an explicit autofix purity decision", () => 
   const committed = GENERATORS.filter(
     ({ outputKind }) => outputKind === "committed",
   );
-  expect(committed.map(({ id }) => id).toSorted()).toEqual(
-    [...Object.keys(PURE_AUTOFIX), ...Object.keys(EXCLUDED_AUTOFIX)].toSorted(),
-  );
+  expect(
+    Object.keys({ ...PURE_AUTOFIX, ...EXCLUDED_AUTOFIX }).toSorted(),
+  ).toEqual(committed.map(({ id }) => id).toSorted());
   for (const id of Object.keys(EXCLUDED_AUTOFIX)) {
     expect(generator(id).autofix, id).toBe(false);
   }

@@ -59,7 +59,7 @@ describe("conservative format and lockfile proofs", () => {
       ["const x = `line\n  value`;", "const x = `line\n    value`;"],
       ["/* line\n  value */", "/* line\n    value */"],
       ["const x = <p>\n  value</p>;", "const x = <p>\n    value</p>;"],
-    ]) {
+    ] as const) {
       expect(indentationOnly({ before, after })).toBe(false);
     }
   });
@@ -366,13 +366,17 @@ describe("resolution across runs", () => {
     return { origin, head, main };
   };
 
+  type ResolveOptions = {
+    origin: string;
+    head: string;
+    main: string;
+    regenerate?: (repo: string) => void;
+  };
+
   /** The untrusted resolve run, with a stand-in generator. */
-  const resolve = (
-    origin: string,
-    head: string,
-    main: string,
-    regenerated = "type Messages = { a: string; b: string; c: string };\n",
-  ) => {
+  const resolve = ({ origin, head, main, regenerate }: ResolveOptions) => {
+    const regenerated =
+      "type Messages = { a: string; b: string; c: string };\n";
     const repo = path.join(root, "resolve");
     git(root, "clone", "-q", origin, repo);
     git(repo, "checkout", "-q", "--detach", head);
@@ -393,6 +397,7 @@ describe("resolution across runs", () => {
     expect(parsed.eligible).toBe(true);
     git(repo, "read-tree", "-m", "-u", "HEAD", parsed.baseline);
     write(repo, MESSAGES, regenerated);
+    regenerate?.(repo);
     const out = path.join(root, "resolution");
     const collected = cli(
       repo,
@@ -527,7 +532,7 @@ describe("resolution across runs", () => {
       mainEdits: (repo) =>
         write(repo, source, "const x = {\n  value: 2,\n};\n"),
     });
-    const { out } = resolve(origin, head, main);
+    const { out } = resolve({ origin, head, main });
     expect(readFileSync(path.join(out, "files", source), "utf-8")).toContain(
       "value: 2",
     );
@@ -538,6 +543,62 @@ describe("resolution across runs", () => {
       "format-only resolution changed source logic",
     );
   });
+
+  test.each(["rewrite", "delete"] as const)(
+    "allowed non-conflicted generator outputs can %s during resolution",
+    (operation) => {
+      const compose = "docker-compose.selfhost.yml";
+      const docs = "docs/self-hosting.md";
+      const before =
+        "Hand-written introduction\n<!-- BEGIN GENERATED SELF-HOST CONTRACT -->\nold contract\n<!-- END GENERATED SELF-HOST CONTRACT -->\n";
+      const after = before.replace("old contract", "merged contract");
+      expect(after).not.toBe(before);
+      const { origin, head, main } = fixture({
+        baseEdits: (repo) => {
+          write(repo, compose, "services: {}\n");
+          write(repo, docs, before);
+        },
+        branchEdits: (repo) =>
+          write(repo, compose, "services: { branch: {} }\n"),
+        mainEdits: (repo) => write(repo, compose, "services: { main: {} }\n"),
+      });
+      const { out } = resolve({
+        origin,
+        head,
+        main,
+        regenerate: (repo) => {
+          if (operation === "delete") {
+            rmSync(path.join(repo, docs));
+            return;
+          }
+          write(repo, docs, after);
+        },
+      });
+      const planned = JSON.parse(
+        readFileSync(path.join(root, "plan.json"), "utf-8"),
+      );
+      expect(planned.conflicts).toEqual(
+        [MESSAGES, compose]
+          .toSorted()
+          .map((file) => ({ path: file, kind: "both-modified" })),
+      );
+      expect(planned.allowed).toContain(docs);
+      const published = publish(origin, head, out);
+      expect(published.exitCode, published.stderr).toBe(0);
+      const manifest = JSON.parse(
+        readFileSync(path.join(out, "manifest.json"), "utf-8"),
+      );
+      if (operation === "delete") {
+        expect(git(published.bare, "ls-tree", manifest.tree, "--", docs)).toBe(
+          "",
+        );
+        return;
+      }
+      expect(git(published.bare, "show", `${manifest.tree}:${docs}`)).toBe(
+        after.trim(),
+      );
+    },
+  );
 
   test("source logic conflicts remain ineligible", () => {
     const source = "apps/api/logic.ts";
@@ -585,7 +646,7 @@ describe("resolution across runs", () => {
           lock({ common: ["common@1.0.0"], b: ["b@1.0.0"] }),
         ),
     });
-    const { out } = resolve(origin, head, main);
+    const { out } = resolve({ origin, head, main });
     const merged = JSON.parse(
       readFileSync(path.join(out, "files", "bun.lock"), "utf-8"),
     );
@@ -611,7 +672,7 @@ describe("resolution across runs", () => {
 
   test("the trusted run rebuilds exactly the collected tree", () => {
     const { origin, head, main } = fixture();
-    const { out, regenerated } = resolve(origin, head, main);
+    const { out, regenerated } = resolve({ origin, head, main });
     const published = publish(origin, head, out);
     expect(published.exitCode, published.stderr).toBe(0);
     const commit = JSON.parse(
@@ -669,7 +730,7 @@ describe("resolution across runs", () => {
       main,
     ]);
     expect(merged.exitCode, merged.stderr).toBe(0);
-    const { out } = resolve(origin, head, main);
+    const { out } = resolve({ origin, head, main });
     const plan = JSON.parse(
       readFileSync(path.join(root, "plan.json"), "utf-8"),
     );
@@ -685,7 +746,7 @@ describe("resolution across runs", () => {
         symlinkSync(tmpdir(), path.join(repo, "docs/module-ownership"));
       },
     });
-    const { out } = resolve(origin, head, main);
+    const { out } = resolve({ origin, head, main });
     // The output glob docs/module-ownership/*.md is an owning generator's.
     write(path.join(out, "files"), "docs/module-ownership/x.md", "owned\n");
     editManifest(out, (manifest) => {
@@ -704,7 +765,7 @@ describe("resolution across runs", () => {
 
   test("tampered or foreign data never reaches a request", () => {
     const { origin, head, main } = fixture();
-    const { out, regenerated } = resolve(origin, head, main);
+    const { out, regenerated } = resolve({ origin, head, main });
 
     writeFileSync(path.join(out, "files", MESSAGES), "tampered\n");
     const tampered = publish(origin, head, out);
@@ -741,7 +802,7 @@ describe("resolution across runs", () => {
 
   test("a deletion of a file nobody conflicted on is refused", () => {
     const { origin, head, main } = fixture();
-    const { out } = resolve(origin, head, main);
+    const { out } = resolve({ origin, head, main });
     for (const target of [
       // An ordinary file the merge resolved cleanly.
       NOTES,
@@ -765,7 +826,7 @@ describe("resolution across runs", () => {
 
   test("a branch that moved between the jobs gets no merge from the old resolution", () => {
     const { origin, head, main } = fixture();
-    const { out } = resolve(origin, head, main);
+    const { out } = resolve({ origin, head, main });
     git(origin, "switch", "-q", "feature");
     write(origin, "apps/api/later.txt", "pushed after the resolve run\n");
     git(origin, "add", "-A");
@@ -781,7 +842,7 @@ describe("resolution across runs", () => {
 
   test("main that moved between the jobs still merges the commit that was resolved", () => {
     const { origin, head, main } = fixture();
-    const { out } = resolve(origin, head, main);
+    const { out } = resolve({ origin, head, main });
     write(origin, "apps/api/later.txt", "landed after the resolve run\n");
     git(origin, "add", "-A");
     git(origin, "commit", "-qm", "later");
