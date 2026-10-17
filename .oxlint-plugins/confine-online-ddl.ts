@@ -54,12 +54,12 @@ const LOCK_TAKING_SQL = [
   /\bcreate\s+(?:unique\s+)?index\b/iu,
   /\bdrop\s+index\b/iu,
   /\bREINDEX\b/u,
-  /\breindex\s+(?:\(\s*\w+[^)]*\)\s+)?(?:index|table|schema|database|system)\b/iu,
+  /\breindex\s+(?:\([^)]*\)\s*)?(?:index|table|schema|database|system)\b/iu,
   /\balter\s+(?:table|index)\b/iu,
   /\block\s+table\b/iu,
   /\bvalidate\s+constraint\b/iu,
   /^\s*(?:ANALYZE|VACUUM|CLUSTER)\b/u,
-  /^\s*(?:analyze|vacuum|cluster)(?:\s+verbose)?\s*(?:$|;|public\.|"|[a-z_][a-z0-9_]*\s*(?:$|;|\())/iu,
+  /^\s*(?:analyze|vacuum|cluster)(?: verbose)?(?:$|;| (?:public\.|"|[a-z_]\w*(?:$|;|\()))/iu,
 ];
 
 const SQL_COMMENT = /--[^\n]*|\/\*[\S\s]*?\*\//gu;
