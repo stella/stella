@@ -1431,32 +1431,37 @@ const generatorEntries = (
   const inventory: SourceTree = new Map(
     [...context].map(([file, origin]) => [`/app${file}`, origin]),
   );
-  const words = [...generator.write];
-  let cwd = "/app";
-  const directory = words.find((word) => word.startsWith("--cwd="));
-  if (directory !== undefined) {
-    cwd = absolute(cwd, directory.slice("--cwd=".length));
-    words.splice(words.indexOf(directory), 1);
-    if (!inventory.has(`${cwd}/package.json`)) {
+  return [
+    generator.write,
+    ...(generator.prepare === undefined ? [] : [generator.prepare]),
+  ].flatMap((command) => {
+    const words = [...command];
+    let cwd = "/app";
+    const directory = words.find((word) => word.startsWith("--cwd="));
+    if (directory !== undefined) {
+      cwd = absolute(cwd, directory.slice("--cwd=".length));
+      words.splice(words.indexOf(directory), 1);
+      if (!inventory.has(`${cwd}/package.json`)) {
+        return [];
+      }
+    }
+    const filter = words.indexOf("--filter");
+    if (
+      filter !== -1 &&
+      ![...inventory].some(
+        ([file, origin]) =>
+          file.endsWith("/package.json") &&
+          JSON.parse(text(root, origin)).name === words.at(filter + 1),
+      )
+    ) {
       return [];
     }
-  }
-  const filter = words.indexOf("--filter");
-  if (
-    filter !== -1 &&
-    ![...inventory].some(
-      ([file, origin]) =>
-        file.endsWith("/package.json") &&
-        JSON.parse(text(root, origin)).name === words.at(filter + 1),
-    )
-  ) {
-    return [];
-  }
-  return walkCommand(
-    { root, tree: inventory, active: new Set() },
-    words.join(" "),
-    cwd,
-  );
+    return walkCommand(
+      { root, tree: inventory, active: new Set() },
+      words.join(" "),
+      cwd,
+    );
+  });
 };
 
 type CopyInstructionOptions = {
@@ -1699,6 +1704,8 @@ export const checkDockerSource = (
   ).map((generator) => ({
     generator,
     entries: generatorEntries(root, context, generator),
+    inputGlobs: generator.inputs.map((input) => new Bun.Glob(input)),
+    outputGlobs: generator.outputs.map((output) => new Bun.Glob(output)),
   }));
   const stages = new Map<string, Stage>();
   let stage: Stage = createStage();
@@ -1824,7 +1831,12 @@ export const checkDockerSource = (
             // A Docker RUN can create declared sources after validating its own
             // source closure. Only hydrated outputs of that exact producer enter
             // the stage; later imports still resolve against this inventory.
-            for (const { generator, entries: producerEntries } of producers) {
+            for (const {
+              generator,
+              entries: producerEntries,
+              inputGlobs,
+              outputGlobs,
+            } of producers) {
               if (
                 production !== "guaranteed" ||
                 entry.mode !== "run" ||
@@ -1837,14 +1849,39 @@ export const checkDockerSource = (
               ) {
                 continue;
               }
-              for (const output of generator.outputs) {
-                if (!existsSync(path.join(root, output))) {
+              const missingInputs = [...context].filter(([file]) => {
+                const relative = file.replace(/^\//u, "");
+                return (
+                  generator.prepare !== undefined &&
+                  inputGlobs.some((input) => input.match(relative)) &&
+                  !outputGlobs.some((output) => output.match(relative)) &&
+                  !runStage.files.has(absolute("/app", relative))
+                );
+              });
+              if (missingInputs.length > 0) {
+                problems.push(
+                  ...missingInputs.map(
+                    ([file]) =>
+                      `Generator input is unavailable: ${generator.id}/${file}`,
+                  ),
+                );
+                continue;
+              }
+              for (const pattern of generator.outputs) {
+                const outputs = [
+                  ...new Bun.Glob(pattern).scanSync({
+                    cwd: root,
+                    onlyFiles: true,
+                  }),
+                ];
+                if (outputs.length === 0) {
                   problems.push(
-                    `Generated output is unavailable: ${generator.id}/${output}`,
+                    `Generated output is unavailable: ${generator.id}/${pattern}`,
                   );
-                  continue;
                 }
-                runStage.files.set(absolute("/app", output), output);
+                for (const output of outputs) {
+                  runStage.files.set(absolute("/app", output), output);
+                }
               }
               runStage.seen.clear();
               delete runStage.checker;

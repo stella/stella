@@ -9,8 +9,13 @@ import { PROVISION_STATE_BACKFILL_STEPS } from "@/api/lib/case-law/provision-sta
 import { readOnlineIndexConfig } from "../env-online-index";
 import { BackfillHeldError } from "./backfill-runtime";
 import { createDecisionDateCeilingRepair } from "./decision-date-ceiling-repair";
+import type { MigrationTimingRecord } from "./migration-timing";
 import { createOnlineIndexHold } from "./online-index-gate";
 import type { OnlineIndexGateOptions } from "./online-index-gate";
+import type {
+  OnlineRepair,
+  OnlineRepairCompletion,
+} from "./online-migration-connection";
 import {
   assertOnlineMigrationsApplied,
   ONLINE_MIGRATION_INDEX_CUTOVERS,
@@ -62,6 +67,7 @@ const runOnlineMigrations = async (
 ) =>
   await runOnlineMigrationsWithGate(pool, {
     indexGate: healthyIndexGate,
+    timing: { clock: () => 0, emit: () => undefined },
     ...options,
     reserveObserver: async () => ({
       execute: async () => undefined,
@@ -115,9 +121,9 @@ const CLEANUP_STALL_CONSTRAINTS = [
 
 describe("online migrations", () => {
   /**
-   * The online phase runs inside the migrator's exclusive corpus schema lane,
-   * so a walk or a full-table scan there pauses every corpus writer for its
-   * whole length. The provision state backfill is a scheduler job instead.
+   * The online phase runs inside the release's migrate run, so a walk or a
+   * full-table scan there holds the release for its whole length. The
+   * provision state backfill is a scheduler job instead.
    */
   test("keeps the provision state backfill out of the online phase", () => {
     const repairNames = new Set(
@@ -214,6 +220,86 @@ describe("online migrations", () => {
     expect(harness.released()).toBe(true);
   });
 
+  test("every online step reports its duration, in the order the phase runs them", async () => {
+    const harness = createHarness();
+    const records: MigrationTimingRecord[] = [];
+    let now = 0;
+
+    await runOnlineMigrations(harness.pool, {
+      timing: {
+        clock: () => (now += 5),
+        emit: (record) => {
+          records.push(record);
+        },
+      },
+    });
+
+    const steps = records.flatMap((record) =>
+      record.event === "migrate.online_step_duration" ? [record] : [],
+    );
+    expect(steps).toHaveLength(records.length);
+    const named = (kind: string) =>
+      steps.filter((step) => step.kind === kind).map(({ name }) => name);
+    expect(named("index")).toEqual(
+      ONLINE_MIGRATION_INDEXES.map(({ name }) => name),
+    );
+    expect(named("cutover")).toEqual(
+      ONLINE_MIGRATION_INDEX_CUTOVERS.map(({ final }) => final.name),
+    );
+    expect(named("replacement_drop").length).toBeGreaterThan(0);
+    // Indexes, then cutovers, then the replaced indexes they retire.
+    expect(steps.map(({ kind }) => kind)).toEqual(
+      [...steps.map(({ kind }) => kind)].toSorted(
+        (left, right) =>
+          ["index", "cutover", "replacement_drop", "repair"].indexOf(left) -
+          ["index", "cutover", "replacement_drop", "repair"].indexOf(right),
+      ),
+    );
+    for (const step of steps) {
+      expect(step.durationMs, step.name).toBe(5);
+      expect(step.outcome, step.name).toBe("complete");
+    }
+  });
+
+  test("a deferred index is the last step reported, as deferred", async () => {
+    const harness = createHarness({
+      indexStates: { [REPORT_EXPORT_INDEX]: [undefined, undefined] },
+    });
+    const records: MigrationTimingRecord[] = [];
+
+    const outcome = await runOnlineMigrations(harness.pool, {
+      indexGate: {
+        ...healthyIndexGate,
+        ebs: {
+          type: "reader",
+          read: async () => ({
+            indicator: "ebs_balance",
+            kind: "unknown",
+            value: null,
+            threshold: 70,
+            observedAt: null,
+            reason: "Injected unavailable metric",
+          }),
+        },
+      },
+      timing: {
+        clock: () => 0,
+        emit: (record) => {
+          records.push(record);
+        },
+      },
+    });
+
+    expect(outcome.type).toBe("deferred");
+    expect(records.at(-1)).toEqual({
+      event: "migrate.online_step_duration",
+      kind: "index",
+      name: REPORT_EXPORT_INDEX,
+      durationMs: 0,
+      outcome: "deferred",
+    });
+  });
+
   test("creates a missing index online and verifies completion", async () => {
     const harness = createHarness({
       missingIndexes: [REPORT_EXPORT_INDEX],
@@ -228,8 +314,7 @@ describe("online migrations", () => {
   });
 
   /**
-   * The migrator runs this phase holding the exclusive corpus schema lane, so
-   * a gate that sleeps until health returns pauses every corpus writer for
+   * A gate that sleeps until health returns would hold the migrate run for
    * that long. A held build ends the phase instead, and nothing after it runs:
    * later steps may depend on the index it would have built.
    */
@@ -908,6 +993,45 @@ describe("online migrations", () => {
       ),
     ).toBe(-1);
     expect(harness.released()).toBe(true);
+  });
+
+  test("a repair its completion check rejects is reported as failed, never as pending", async () => {
+    const harness = createHarness();
+    const records: MigrationTimingRecord[] = [];
+    const completions: OnlineRepairCompletion[] = [
+      { type: "incomplete", reason: "not started" },
+      { type: "incomplete", reason: "rows left behind" },
+    ];
+    const repair = {
+      name: "probe-repair",
+      readCompletion: async () =>
+        completions.shift() ?? {
+          type: "incomplete",
+          reason: "unexpected read",
+        },
+      repair: async () => undefined,
+    } satisfies OnlineRepair;
+
+    const failure = await rejectionOf(
+      runOnlineMigrations(harness.pool, {
+        repairs: [repair],
+        timing: {
+          clock: () => 0,
+          emit: (record) => {
+            records.push(record);
+          },
+        },
+      }),
+    );
+
+    expect(String(failure)).toContain("probe-repair");
+    expect(records.at(-1)).toEqual({
+      event: "migrate.online_step_duration",
+      kind: "repair",
+      name: "probe-repair",
+      durationMs: 0,
+      outcome: "failed",
+    });
   });
 
   test("a migrate-phase batch statement timeout stays pending and deployment proceeds", async () => {

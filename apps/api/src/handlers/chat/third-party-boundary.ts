@@ -13,8 +13,8 @@ import {
   CHAT_MAX_FILE_BYTES,
   TEXT_PLAIN_MIME_TYPE,
 } from "@/api/handlers/chat/attachment-validation";
+import type { chatMessageFromPersisted } from "@/api/handlers/chat/chat-message-parts";
 import {
-  chatMessageFromPersisted,
   createChatAttachmentPart,
   getChatAttachmentFilename,
   getChatAttachmentMimeType,
@@ -95,22 +95,9 @@ export type ChatThirdPartyBoundary =
 export const storedRestorationsOf = (
   messages: readonly Parameters<typeof chatMessageFromPersisted>[0][],
 ): ChatAnonRestoration[] =>
-  messages.flatMap((message) => {
-    const { content } = message;
-    switch (content.version) {
-      case 1:
-        // Legacy rows keep their restorations as a data part.
-        return arrayOrEmpty(
-          chatMessageFromPersisted(message).metadata?.anonRestorations?.pairs,
-        );
-      case 2:
-      case 3:
-        return arrayOrEmpty(content.metadata?.anonRestorations?.pairs);
-      default:
-        content satisfies never;
-        return panic(`Unhandled content version: ${String(content)}`);
-    }
-  });
+  messages.flatMap(({ content }) =>
+    arrayOrEmpty(content.metadata?.anonRestorations?.pairs),
+  );
 
 /**
  * The placeholder maps a boundary starts from: every placeholder the history

@@ -335,6 +335,39 @@ docker compose --env-file deploy/selfhost/.env \
   bun /app/apps/api/src/db/migrate.js
 ```
 
+Before this chat content upgrade, stop and drain all API instances running the
+old release, including any workers that write chat history. Run the migration
+with the new release image, and restart the API only after migration succeeds.
+The database rejects legacy chat content writes as soon as this migration starts.
+
+Chat content upgrades run automatically through the migration entrypoint. The
+version 3 repair converts stored version 1 and 2 messages and revision snapshots
+in adaptive keyset batches of 1 to 50 rows, with durable progress. Every processed row
+has an owner-only receipt in `chat_content_v3_backfill_receipts`: source, row and
+message identifiers, prior version, outcome, fixed reason, and timestamp. Receipts
+contain no message content and retain repair history after message deletion; an
+organization foreign key removes its receipts when the organization is deleted. If a
+parent message is deleted during a batch, its row receives a `deleted-concurrently`
+outcome with the fixed reason `parent-deleted`; message and revision repair both
+continue without referencing a deleted parent through a foreign key. Existing
+converted receipts retain their original conversion provenance. A row holding a
+number beyond double precision is never rewritten with a rounded value: it fails
+with the reason `lossy-json-number`.
+
+From a source checkout, preview the repair without writes:
+
+```bash
+bun --filter @stll/api db:backfill-chat-content-v3 --dry-run
+```
+
+The preview reports counts by stored version. The migration must finish the
+repair and verify that no legacy content remains before the upgrade proceeds;
+unfinished or failed rows block deployment. After an interruption, rerun the
+migration command above (or `bun --filter @stll/api db:migrate` from source).
+If a receipt records a failed row, repair its stored data, then run
+`bun --filter @stll/api db:backfill-chat-content-v3 --apply --retry-failed` and rerun
+the migration command. Successful rows are not converted again.
+
 After migrations, run the usage policy seed explicitly inside the API image with `STELLA_USAGE_POLICY_SEEDS` set to the deployment's JSON configuration; it never runs on API startup.
 
 <!-- usage-policy-seed-command -->

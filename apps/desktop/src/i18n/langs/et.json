@@ -33,7 +33,8 @@
     "sessionMovedToAnotherDevice": "Teisaldatud teise seadmesse",
     "sessionNeedsAttention": "Vajab tähelepanu",
     "sessionOpeningInOffice": "Avamine Office'is",
-    "sessionSavingDraft": "Mustandi salvestamine"
+    "sessionSavingDraft": "Mustandi salvestamine",
+    "reconnectAccount": "Ühenda stella webiga uuesti…"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName} — Muudatused jäävad kohalikuks ja proovitakse automaatselt uuesti",
@@ -209,7 +210,13 @@
     "startOnLoginDescription": "Käivita stella desktop automaatselt sisselogimisel.",
     "stellaDesktop": "stella desktop",
     "support": "Tugi",
-    "title": "Seaded"
+    "title": "Seaded",
+    "serverLabel": "Server",
+    "connectToHost": "Ühenda: {host}",
+    "connectToHostDescription": "Avab brauseris {host}, kus saate selle arvuti kinnitada.",
+    "reconnectNeeded": "Vaja uuesti ühendada",
+    "reconnect": "Ühenda uuesti",
+    "reconnectHostDescription": "Ühendus serveriga {host} tuleb uuendada. Kinnitage see arvuti brauseris uuesti."
   },
   "clipboard": {
     "registryUnavailable": "Teie tegevusjurisdiktsioonide jaoks pole registreid lubatud.",

@@ -143,7 +143,9 @@ const TOOL_COVERAGE = {
   list_invoices: RUN,
   get_usage: RUN,
   list_audit_log: RUN,
-  manage_organization: RUN,
+  add_matter_member: RUN,
+  remove_matter_member: RUN,
+  update_organization_settings: RUN,
   prepare_feedback: RUN,
   submit_feedback: excluded("delivers the report to an external tracker"),
   list_capabilities: RUN,
@@ -167,6 +169,7 @@ type RunToolName = {
 /** Ids earlier calls created, read by later ones. */
 type Seeded = {
   userId: SafeId<"user">;
+  additionalMemberUserId: SafeId<"user">;
   matterId?: string;
   contactId?: string;
   taskId?: string;
@@ -319,9 +322,23 @@ const STEPS: readonly Step[] = [
     args: () => ({ jurisdictions: [{ country_code: "CZ", is_primary: true }] }),
   },
   {
-    tool: "manage_organization",
+    tool: "add_matter_member",
+    args: (s) => ({
+      matter_id: required(s.matterId, "matter"),
+      user_id: s.additionalMemberUserId,
+    }),
+  },
+  {
+    tool: "remove_matter_member",
+    args: (s) => ({
+      matter_id: required(s.matterId, "matter"),
+      user_id: s.additionalMemberUserId,
+      confirm: true,
+    }),
+  },
+  {
+    tool: "update_organization_settings",
     args: () => ({
-      action: "update_org_settings",
       ai_instructions: "Use concise language.",
       time_narrative_required: false,
     }),
@@ -474,7 +491,20 @@ describe("every MCP tool's real output passes its output contract", () => {
 
   test("a seeded organization drives each runnable tool", async () => {
     const caller = await createOrganization();
-    const seeded: Seeded = { userId: caller.userId };
+    const additionalMemberUserId = mintAuthProviderId<"user">();
+    await testDb.insert(user).values({
+      id: additionalMemberUserId,
+      name: "Member",
+      email: `${additionalMemberUserId}@example.test`,
+    });
+    await testDb.insert(member).values({
+      id: mintAuthProviderIdValue(),
+      organizationId: caller.organizationId,
+      userId: additionalMemberUserId,
+      role: "member",
+      createdAt: new Date(),
+    });
+    const seeded: Seeded = { userId: caller.userId, additionalMemberUserId };
     for (const step of STEPS) {
       const result = await handleMcpToolCall({
         mode: "advanced",

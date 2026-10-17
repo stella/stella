@@ -1,10 +1,17 @@
 import type { TSchema } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
 import Elysia, { status, t } from "elysia";
 import fc from "fast-check";
 
+import {
+  PUBLIC_COUNTRIES,
+  PUBLIC_COUNTRY_CAPABILITIES,
+  PUBLIC_LAW_DOMAINS,
+  publicCountryUnavailableIn,
+  publicCountryUnavailableSchema,
+} from "@stll/api-contract/public-country-capability";
 import { assertProperty } from "@stll/property-testing";
 
 import {
@@ -37,6 +44,7 @@ const unboundedError = (value: string) => ({
   code: value,
   hint: value,
   contactUrl: value,
+  domain: value,
   retryable: true,
   country: value,
   status: value,
@@ -57,26 +65,58 @@ const unboundedError = (value: string) => ({
 test("public error projection bounds serialized Unicode and issue collections", () => {
   assertProperty(
     "public error projection bounds serialized Unicode and issue collections",
-    fc.property(text, (value) => {
-      const input = unboundedError(value);
-      expect(Buffer.byteLength(input.message)).toBeGreaterThan(
-        PUBLIC_ERROR_TEXT_BYTES.message,
-      );
-      const projected = projectPublicErrorBody(input);
-      expect(Value.Check(safePublicHandlerErrorResponseSchema, projected)).toBe(
-        true,
-      );
-      expect(Buffer.byteLength(JSON.stringify(projected))).toBeLessThanOrEqual(
-        PUBLIC_ERROR_RESPONSE_MAX_BYTES,
-      );
-      expect(projected.versions?.length).toBe(
-        PUBLIC_ERROR_TEXT_BYTES.versionCount,
-      );
-      expect(projected.issues?.length).toBe(PUBLIC_ERROR_TEXT_BYTES.issueCount);
-      expect(projected).not.toHaveProperty("claim_token");
-      expect(projected).not.toHaveProperty("arbitrary");
-    }),
+    fc.property(
+      text,
+      fc.constantFrom(...PUBLIC_LAW_DOMAINS),
+      (value, domain) => {
+        const input = unboundedError(value);
+        expect(Buffer.byteLength(input.message)).toBeGreaterThan(
+          PUBLIC_ERROR_TEXT_BYTES.message,
+        );
+        expect(projectPublicErrorBody(input)).not.toHaveProperty("domain");
+        const projected = projectPublicErrorBody({ ...input, domain });
+        expect(projected.domain).toBe(domain);
+        expect(
+          Value.Check(safePublicHandlerErrorResponseSchema, projected),
+        ).toBe(true);
+        expect(
+          Buffer.byteLength(JSON.stringify(projected)),
+        ).toBeLessThanOrEqual(PUBLIC_ERROR_RESPONSE_MAX_BYTES);
+        expect(projected.versions?.length).toBe(
+          PUBLIC_ERROR_TEXT_BYTES.versionCount,
+        );
+        expect(projected.issues?.length).toBe(
+          PUBLIC_ERROR_TEXT_BYTES.issueCount,
+        );
+        expect(projected).not.toHaveProperty("claim_token");
+        expect(projected).not.toHaveProperty("arbitrary");
+      },
+    ),
   );
+});
+
+test("canonical country refusals are fixed points of public error projection", () => {
+  for (const country of PUBLIC_COUNTRIES) {
+    for (const reason of publicCountryUnavailableSchema.entries.reason
+      .options) {
+      for (const domain of PUBLIC_LAW_DOMAINS) {
+        const refusal = publicCountryUnavailableIn({
+          capabilities: {
+            ...PUBLIC_COUNTRY_CAPABILITIES,
+            [country]: { caseLaw: reason, legislation: reason },
+          },
+          domain,
+          input: country,
+          surface: "search",
+        });
+        expect(refusal).not.toBeNull();
+        if (refusal === null) {
+          panic("Expected a refusal for a closed public-law domain");
+        }
+        expect(projectPublicErrorBody(refusal)).toEqual(refusal);
+      }
+    }
+  }
 });
 
 const publicConfig = {
@@ -99,6 +139,7 @@ test("bounded public handlers bound both returned status errors and resolved han
         status(503, {
           ...unboundedError(failureText),
           country: "SVK",
+          domain: "caseLaw",
           status: "unavailable",
           reason: "pending_public",
         }),
@@ -164,9 +205,12 @@ test("bounded public handlers bound both returned status errors and resolved han
     if (path === "/returned") {
       expect(body).toMatchObject({
         country: "SVK",
+        domain: "caseLaw",
         status: "unavailable",
         reason: "pending_public",
       });
+    } else {
+      expect(body).not.toHaveProperty("domain");
     }
   }
   const legacyResponse = await app.handle(

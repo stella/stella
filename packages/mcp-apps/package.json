@@ -19,13 +19,14 @@
   },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",
-    "test": "bun test",
+    "test": "bun ../../scripts/prepare-mcp-apps.ts && bun test",
     "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts' --include='*.test.tsx')",
-    "typecheck": "bun check --no-pretty --all --project=tsconfig.json && bun check --no-pretty --all --project=src/shared/generated/tsconfig.json",
+    "typecheck": "bun ../../scripts/prepare-mcp-apps.ts && bun check --no-pretty --all --project=tsconfig.json && bun check --no-pretty --all --project=src/shared/generated/tsconfig.json",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/mcp-apps",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/mcp-apps",
     "format": "bun ../../scripts/run-oxfmt.ts .",
-    "build": "bun scripts/build-mcp-apps.ts"
+    "prepack": "bun run build",
+    "build": "bun ../../scripts/prepare-mcp-apps.ts"
   },
   "dependencies": {
     "@base-ui/react": "catalog:",
