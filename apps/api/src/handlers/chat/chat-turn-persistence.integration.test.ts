@@ -1,6 +1,6 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 
 import {
   ACTION_ADMISSION_CODES,
@@ -12,8 +12,8 @@ import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import {
+  toPersistedChatMessageContentV3,
   getAwaitingUserInteractions,
-  toChatMessageContent,
   toPersistableChatMessage,
 } from "@/api/handlers/chat/chat-message-parts";
 import {
@@ -28,11 +28,16 @@ import {
   createChatTurnAcceptance,
   insertChatTurnAcceptanceOnTx,
   renewChatTurnExecutionLease,
+  readChatTurnTiming,
   settleChatTurnOnTx,
+  stopChatTurnOnTx,
   withClaimedChatTurnExecution,
 } from "@/api/handlers/chat/chat-turn-persistence";
 import type { ChatTurnExecutionClaim } from "@/api/handlers/chat/chat-turn-persistence";
-import { clientMessageFromPageRow } from "@/api/handlers/chat/message-page";
+import {
+  clientMessageFromPageRow,
+  loadChatMessagePage,
+} from "@/api/handlers/chat/message-page";
 import type { ChatPart, ChatTurnOutcome } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -99,7 +104,7 @@ const unwrap = <T>(result: Result<T, unknown>): T => {
   return result.value;
 };
 
-const awaitingAskUserContent = toChatMessageContent({
+const awaitingAskUserContent = {
   data: [
     {
       arguments:
@@ -120,24 +125,23 @@ const awaitingAskUserContent = toChatMessageContent({
       metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
     },
   ] satisfies ChatPart[],
-  version: 2,
-});
+};
 
-const awaitingApprovalAndAskUserContent = toChatMessageContent({
+const awaitingApprovalAndAskUserContent = {
   data: [
     {
       approval: { id: "approval-1", needsApproval: true },
       arguments: '{"query":"Draft"}',
       id: "approval-1",
       input: { query: "Draft" },
+      metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
       name: "mcp__test__write",
       state: "approval-requested",
       type: "tool-call",
     },
     ...awaitingAskUserContent.data,
   ] satisfies ChatPart[],
-  version: 2,
-});
+};
 
 const seedAwaitingTurn = async () => {
   const { assistantMessageId, threadId, userMessageId } = await seedThread();
@@ -152,10 +156,9 @@ const seedAwaitingTurn = async () => {
     await safeDb(async (tx) => {
       await tx.insert(chatMessages).values([
         {
-          content: {
-            data: [{ text: "Draft a response", type: "text" }],
-            version: 1,
-          },
+          content: toPersistedChatMessageContentV3({
+            data: [{ content: "Draft a response", type: "text" }],
+          }),
           id: userMessageId,
           role: "user",
           threadId,
@@ -163,7 +166,7 @@ const seedAwaitingTurn = async () => {
           workspaceId: ids.wsA1,
         },
         {
-          content: awaitingAskUserContent,
+          content: toPersistedChatMessageContentV3(awaitingAskUserContent),
           id: assistantMessageId,
           role: "assistant",
           threadId,
@@ -227,10 +230,9 @@ describe("durable chat turn persistence", () => {
       unwrap(
         await fixtureSafeDb(async (tx) => {
           await tx.insert(chatMessages).values({
-            content: {
-              data: [{ text: "Draft a response", type: "text" }],
-              version: 1,
-            },
+            content: toPersistedChatMessageContentV3({
+              data: [{ content: "Draft a response", type: "text" }],
+            }),
             id: userMessageId,
             role: "user",
             threadId,
@@ -275,10 +277,9 @@ describe("durable chat turn persistence", () => {
       unwrap(
         await fixtureSafeDb(async (tx) => {
           await tx.insert(chatMessages).values({
-            content: toChatMessageContent({
+            content: toPersistedChatMessageContentV3({
               data: [],
               metadata: { turnOutcome: outcome },
-              version: 2,
             }),
             id: assistantMessageId,
             role: "assistant",
@@ -559,10 +560,9 @@ describe("durable chat turn persistence", () => {
     unwrap(
       await safeDb(async (tx) => {
         await tx.insert(chatMessages).values({
-          content: {
-            data: [{ text: "Draft an NDA", type: "text" }],
-            version: 1,
-          },
+          content: toPersistedChatMessageContentV3({
+            data: [{ content: "Draft an NDA", type: "text" }],
+          }),
           id: userMessageId,
           role: "user",
           threadId,
@@ -647,10 +647,9 @@ describe("durable chat turn persistence", () => {
     unwrap(
       await safeDb(async (tx) => {
         await tx.insert(chatMessages).values({
-          content: {
-            data: [{ text: "Draft an NDA", type: "text" }],
-            version: 1,
-          },
+          content: toPersistedChatMessageContentV3({
+            data: [{ content: "Draft an NDA", type: "text" }],
+          }),
           id: userMessageId,
           role: "user",
           threadId,
@@ -742,10 +741,9 @@ describe("durable chat turn persistence", () => {
     unwrap(
       await safeDb(async (tx) => {
         await tx.insert(chatMessages).values({
-          content: {
-            data: [{ text: "Draft an NDA", type: "text" }],
-            version: 1,
-          },
+          content: toPersistedChatMessageContentV3({
+            data: [{ content: "Draft an NDA", type: "text" }],
+          }),
           id: userMessageId,
           role: "user",
           threadId,
@@ -780,7 +778,9 @@ describe("durable chat turn persistence", () => {
     const settled = unwrap(
       await safeDb(async (tx) => {
         await tx.insert(chatMessages).values({
-          content: { data: [{ text: "NDA", type: "text" }], version: 1 },
+          content: toPersistedChatMessageContentV3({
+            data: [{ content: "NDA", type: "text" }],
+          }),
           id: assistantMessageId,
           role: "assistant",
           threadId,
@@ -879,7 +879,9 @@ describe("durable chat turn persistence", () => {
   test("adopts a persisted pre-migration user message into the durable lifecycle", async () => {
     const { threadId, userMessageId } = await seedThread();
     await testDb.insert(chatMessages).values({
-      content: { data: [{ text: "Draft an NDA", type: "text" }], version: 1 },
+      content: toPersistedChatMessageContentV3({
+        data: [{ content: "Draft an NDA", type: "text" }],
+      }),
       id: userMessageId,
       role: "user",
       threadId,
@@ -923,10 +925,9 @@ describe("durable chat turn persistence", () => {
     unwrap(
       await safeDb(async (tx) => {
         await tx.insert(chatMessages).values({
-          content: {
-            data: [{ text: "Draft a power of attorney", type: "text" }],
-            version: 1,
-          },
+          content: toPersistedChatMessageContentV3({
+            data: [{ content: "Draft a power of attorney", type: "text" }],
+          }),
           id: userMessageId,
           role: "user",
           threadId,
@@ -959,7 +960,7 @@ describe("durable chat turn persistence", () => {
     unwrap(
       await safeDb(async (tx) => {
         await tx.insert(chatMessages).values({
-          content: awaitingAskUserContent,
+          content: toPersistedChatMessageContentV3(awaitingAskUserContent),
           id: assistantMessageId,
           role: "assistant",
           threadId,
@@ -1018,10 +1019,9 @@ describe("durable chat turn persistence", () => {
       await safeDb(async (tx) => {
         await tx.insert(chatMessages).values([
           {
-            content: {
-              data: [{ text: "Draft a response", type: "text" }],
-              version: 1,
-            },
+            content: toPersistedChatMessageContentV3({
+              data: [{ content: "Draft a response", type: "text" }],
+            }),
             id: userMessageId,
             role: "user",
             threadId,
@@ -1029,10 +1029,9 @@ describe("durable chat turn persistence", () => {
             workspaceId: ids.wsA1,
           },
           {
-            content: {
-              data: [{ text: "Which court?", type: "text" }],
-              version: 1,
-            },
+            content: toPersistedChatMessageContentV3({
+              data: [{ content: "Which court?", type: "text" }],
+            }),
             id: assistantMessageId,
             role: "assistant",
             threadId,
@@ -1119,12 +1118,13 @@ describe("durable chat turn persistence", () => {
       userMessageId,
       workspaceId: ids.wsA1,
     });
-    const pendingApprovals = toChatMessageContent({
+    const pendingApprovals = toPersistedChatMessageContentV3({
       data: [
         {
           arguments: '{"name":"First","source":"@title First"}',
           id: "approval-first",
           input: { name: "First", source: "@title First" },
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
           name: "create-document",
           state: "approval-requested",
           type: "tool-call",
@@ -1133,6 +1133,7 @@ describe("durable chat turn persistence", () => {
           arguments: '{"name":"Second","source":"@title Second"}',
           id: "approval-second",
           input: { name: "Second", source: "@title Second" },
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
           name: "create-document",
           state: "approval-requested",
           type: "tool-call",
@@ -1150,22 +1151,21 @@ describe("durable chat turn persistence", () => {
               },
             ],
           },
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
           name: "ask-user",
           state: "input-complete",
           type: "tool-call",
         },
       ] satisfies ChatPart[],
-      version: 2,
     });
 
     unwrap(
       await safeDb(async (tx) => {
         await tx.insert(chatMessages).values([
           {
-            content: {
-              data: [{ text: "Create both documents", type: "text" }],
-              version: 1,
-            },
+            content: toPersistedChatMessageContentV3({
+              data: [{ content: "Create both documents", type: "text" }],
+            }),
             id: userMessageId,
             role: "user",
             threadId,
@@ -1247,10 +1247,9 @@ describe("durable chat turn persistence", () => {
     unwrap(
       await safeDb(async (tx) => {
         await tx.insert(chatMessages).values({
-          content: {
-            data: [{ text: "First request", type: "text" }],
-            version: 1,
-          },
+          content: toPersistedChatMessageContentV3({
+            data: [{ content: "First request", type: "text" }],
+          }),
           id: userMessageId,
           role: "user",
           threadId,
@@ -1284,10 +1283,9 @@ describe("durable chat turn persistence", () => {
         const reserved = await canAcceptChatTurnOnTx({ threadId, tx });
         if (reserved) {
           await tx.insert(chatMessages).values({
-            content: {
-              data: [{ text: "Competing request", type: "text" }],
-              version: 1,
-            },
+            content: toPersistedChatMessageContentV3({
+              data: [{ content: "Competing request", type: "text" }],
+            }),
             id: candidateId,
             role: "user",
             threadId,
@@ -1319,10 +1317,9 @@ describe("durable chat turn persistence", () => {
     unwrap(
       await safeDb(async (tx) => {
         await tx.insert(chatMessages).values({
-          content: {
-            data: [{ text: "First request", type: "text" }],
-            version: 1,
-          },
+          content: toPersistedChatMessageContentV3({
+            data: [{ content: "First request", type: "text" }],
+          }),
           id: userMessageId,
           role: "user",
           threadId,
@@ -1356,6 +1353,8 @@ describe("durable chat turn persistence", () => {
     await testDb
       .update(chatTurns)
       .set({
+        activeDurationMs: 2000,
+        activeStartedAt: new Date(expiredAt.getTime() - 1000),
         createdAt: new Date(expiredAt.getTime() - 1000),
         leaseExpiresAt: expiredAt,
       })
@@ -1372,10 +1371,9 @@ describe("durable chat turn persistence", () => {
     unwrap(
       await safeDb(async (tx) => {
         await tx.insert(chatMessages).values({
-          content: {
-            data: [{ text: "Replacement request", type: "text" }],
-            version: 1,
-          },
+          content: toPersistedChatMessageContentV3({
+            data: [{ content: "Replacement request", type: "text" }],
+          }),
           id: replacementMessageId,
           role: "user",
           threadId,
@@ -1391,6 +1389,8 @@ describe("durable chat turn persistence", () => {
     const turns = await testDb.query.chatTurns.findMany({
       where: { threadId: { eq: threadId } },
       columns: {
+        activeDurationMs: true,
+        activeStartedAt: true,
         executionId: true,
         id: true,
         interruptionReason: true,
@@ -1402,6 +1402,8 @@ describe("durable chat turn persistence", () => {
     expect(turns).toEqual(
       expect.arrayContaining([
         {
+          activeDurationMs: null,
+          activeStartedAt: null,
           executionId: null,
           id: acceptance.id,
           interruptionReason: "owner-lost",
@@ -1410,6 +1412,8 @@ describe("durable chat turn persistence", () => {
           status: "interrupted",
         },
         {
+          activeDurationMs: 0,
+          activeStartedAt: expect.any(Date),
           executionId: null,
           id: replacement.id,
           interruptionReason: null,
@@ -1452,10 +1456,9 @@ describe("durable chat turn persistence", () => {
           return false;
         }
         await tx.insert(chatMessages).values({
-          content: {
-            data: [{ text: "A competing request", type: "text" }],
-            version: 1,
-          },
+          content: toPersistedChatMessageContentV3({
+            data: [{ content: "A competing request", type: "text" }],
+          }),
           id: replacementMessageId,
           role: "user",
           threadId,
@@ -1490,7 +1493,11 @@ describe("durable chat turn persistence", () => {
       await seedAwaitingTurn();
     await testDb
       .update(chatMessages)
-      .set({ content: awaitingApprovalAndAskUserContent })
+      .set({
+        content: toPersistedChatMessageContentV3(
+          awaitingApprovalAndAskUserContent,
+        ),
+      })
       .where(eq(chatMessages.id, assistantMessageId));
     const replacementMessageId = toSafeId<"chatMessage">(Bun.randomUUIDv7());
     const replacement = createChatTurnAcceptance({
@@ -1504,10 +1511,9 @@ describe("durable chat turn persistence", () => {
     unwrap(
       await safeDb(async (tx) => {
         await tx.insert(chatMessages).values({
-          content: {
-            data: [{ text: "A newer request", type: "text" }],
-            version: 1,
-          },
+          content: toPersistedChatMessageContentV3({
+            data: [{ content: "A newer request", type: "text" }],
+          }),
           id: replacementMessageId,
           role: "user",
           threadId,
@@ -1601,10 +1607,9 @@ describe("durable chat turn persistence", () => {
     unwrap(
       await safeDb(async (tx) => {
         await tx.insert(chatMessages).values({
-          content: {
-            data: [{ text: "Draft a response", type: "text" }],
-            version: 1,
-          },
+          content: toPersistedChatMessageContentV3({
+            data: [{ content: "Draft a response", type: "text" }],
+          }),
           id: userMessageId,
           role: "user",
           threadId,
@@ -1636,7 +1641,7 @@ describe("durable chat turn persistence", () => {
     unwrap(
       await safeDb(async (tx) => {
         await tx.insert(chatMessages).values({
-          content: awaitingAskUserContent,
+          content: toPersistedChatMessageContentV3(awaitingAskUserContent),
           id: assistantMessageId,
           role: "assistant",
           threadId,
@@ -1673,10 +1678,9 @@ describe("durable chat turn persistence", () => {
           await tx
             .update(chatMessages)
             .set({
-              content: {
-                data: [{ text: "Winner response", type: "text" }],
-                version: 1,
-              },
+              content: toPersistedChatMessageContentV3({
+                data: [{ content: "Winner response", type: "text" }],
+              }),
             })
             .where(inArray(chatMessages.id, [assistantMessageId]));
         },
@@ -1694,10 +1698,9 @@ describe("durable chat turn persistence", () => {
           await tx
             .update(chatMessages)
             .set({
-              content: {
-                data: [{ text: "Duplicate response", type: "text" }],
-                version: 1,
-              },
+              content: toPersistedChatMessageContentV3({
+                data: [{ content: "Duplicate response", type: "text" }],
+              }),
             })
             .where(inArray(chatMessages.id, [assistantMessageId]));
         },
@@ -1710,10 +1713,11 @@ describe("durable chat turn persistence", () => {
       where: { id: { eq: assistantMessageId } },
       columns: { content: true },
     });
-    expect(message?.content).toEqual({
-      data: [{ text: "Winner response", type: "text" }],
-      version: 1,
-    });
+    expect(message?.content).toEqual(
+      toPersistedChatMessageContentV3({
+        data: [{ content: "Winner response", type: "text" }],
+      }),
+    );
   });
 
   test("renews a claimed execution by the run's heartbeat lease", async () => {
@@ -1728,10 +1732,9 @@ describe("durable chat turn persistence", () => {
     unwrap(
       await safeDb(async (tx) => {
         await tx.insert(chatMessages).values({
-          content: {
-            data: [{ text: "Draft an NDA", type: "text" }],
-            version: 1,
-          },
+          content: toPersistedChatMessageContentV3({
+            data: [{ content: "Draft an NDA", type: "text" }],
+          }),
           id: userMessageId,
           role: "user",
           threadId,
@@ -1793,10 +1796,9 @@ describe("durable chat turn persistence", () => {
     unwrap(
       await safeDb(async (tx) => {
         await tx.insert(chatMessages).values({
-          content: {
-            data: [{ text: "Draft an NDA", type: "text" }],
-            version: 1,
-          },
+          content: toPersistedChatMessageContentV3({
+            data: [{ content: "Draft an NDA", type: "text" }],
+          }),
           id: userMessageId,
           role: "user",
           threadId,
@@ -1832,10 +1834,9 @@ describe("durable chat turn persistence", () => {
     unwrap(
       await safeDb(async (tx) => {
         await tx.insert(chatMessages).values({
-          content: toChatMessageContent({
+          content: toPersistedChatMessageContentV3({
             data: [],
             metadata: { turnOutcome: { error: "unknown", type: "failed" } },
-            version: 2,
           }),
           id: failedAssistantMessageId,
           role: "assistant",
@@ -1895,10 +1896,9 @@ describe("durable chat turn persistence", () => {
     unwrap(
       await safeDb(async (tx) => {
         await tx.insert(chatMessages).values({
-          content: {
-            data: [{ text: "Draft an NDA", type: "text" }],
-            version: 1,
-          },
+          content: toPersistedChatMessageContentV3({
+            data: [{ content: "Draft an NDA", type: "text" }],
+          }),
           id: userMessageId,
           role: "user",
           threadId,
@@ -1950,12 +1950,11 @@ describe("durable chat turn persistence", () => {
       unwrap(
         await safeDb(async (tx) => {
           await tx.insert(chatMessages).values({
-            content: toChatMessageContent({
+            content: toPersistedChatMessageContentV3({
               data: [],
               metadata: {
                 turnOutcome: { error: "unknown", type: "failed" },
               },
-              version: 2,
             }),
             id: failedAssistantMessageId,
             role: "assistant",
@@ -2035,10 +2034,9 @@ describe("settling a continuation reports a stored message that breaks the rules
       await safeDb(async (tx) => {
         await tx.insert(chatMessages).values([
           {
-            content: {
-              data: [{ text: "Delete the NDA", type: "text" }],
-              version: 1,
-            },
+            content: toPersistedChatMessageContentV3({
+              data: [{ content: "Delete the NDA", type: "text" }],
+            }),
             id: userMessageId,
             role: "user",
             threadId,
@@ -2046,7 +2044,7 @@ describe("settling a continuation reports a stored message that breaks the rules
             workspaceId: ids.wsA1,
           },
           {
-            content: toChatMessageContent({ data: continued, version: 2 }),
+            content: toPersistedChatMessageContentV3({ data: continued }),
             id: assistantMessageId,
             role: "assistant",
             threadId,
@@ -2137,4 +2135,361 @@ describe("settling a continuation reports a stored message that breaks the rules
       expect(await settleContinuation({ continued, run })).toEqual(reports);
     },
   );
+});
+
+describe("durable active turn timing", () => {
+  const resume = async (
+    fixture: Awaited<ReturnType<typeof seedAwaitingTurn>>,
+  ) => {
+    const execution = unwrap(
+      await claimChatTurnForExecution({
+        acceptedTurnId: null,
+        continuationInteraction: { toolCallId: "ask-1", type: "ask-user" },
+        incomingMessageId: fixture.assistantMessageId,
+        incomingMessageRole: "assistant",
+        organizationId: ids.orgA,
+        safeDb,
+        threadId: fixture.threadId,
+        userId: ids.userA1,
+        workspaceId: ids.wsA1,
+      }),
+    );
+    if (execution === null) {
+      throw new Error("Expected a timing continuation claim");
+    }
+    return execution;
+  };
+
+  test("a timing observation uses the statement clock within a transaction", async () => {
+    const fixture = await seedAwaitingTurn();
+    await resume(fixture);
+    unwrap(
+      await safeDb(async (tx) => {
+        await tx
+          .update(chatTurns)
+          .set({
+            activeDurationMs: 2000,
+            activeStartedAt: sql`statement_timestamp()`,
+          })
+          .where(eq(chatTurns.id, fixture.acceptance.id));
+        const page = unwrap(
+          await loadChatMessagePage({
+            threadId: fixture.threadId,
+            userId: ids.userA1,
+            tx,
+          }),
+        );
+        const timing = page.messages.find(
+          ({ id }) => id === fixture.assistantMessageId,
+        )?.metadata?.turnTiming;
+        expect(timing).toMatchObject({ status: "running", durationMs: 2000 });
+        if (timing?.status !== "running") {
+          panic("Expected running timing after the transaction clock");
+        }
+        expect(timing.elapsedMs).toBeGreaterThanOrEqual(0);
+        expect(Number.isSafeInteger(timing.elapsedMs)).toBe(true);
+        expect(Date.parse(timing.observedAt)).toBeGreaterThanOrEqual(
+          Date.parse(timing.startedAt),
+        );
+      }),
+    );
+  });
+
+  test("continuations accumulate active spans and exclude the user pause", async () => {
+    const fixture = await seedAwaitingTurn();
+    await testDb
+      .update(chatTurns)
+      .set({ activeDurationMs: 2000 })
+      .where(eq(chatTurns.id, fixture.acceptance.id));
+    const execution = await resume(fixture);
+    const running = await testDb.query.chatTurns.findFirst({
+      where: { id: { eq: fixture.acceptance.id } },
+    });
+    expect(running?.activeDurationMs).toBe(2000);
+    expect(running?.activeStartedAt).toBeInstanceOf(Date);
+    expect(running?.timingMessageId).toBe(fixture.assistantMessageId);
+    if (
+      running?.activeStartedAt === null ||
+      running?.activeStartedAt === undefined
+    ) {
+      panic("Expected an active timing anchor");
+    }
+    const liveTiming = unwrap(await readChatTurnTiming({ execution, safeDb }));
+    expect(liveTiming).toEqual({
+      status: "running",
+      durationMs: 2000,
+      startedAt: running.activeStartedAt.toISOString(),
+      observedAt: expect.any(String),
+      elapsedMs: expect.any(Number),
+    });
+    if (liveTiming?.status !== "running") {
+      panic("Expected running turn timing");
+    }
+    expect(liveTiming.elapsedMs).toBeGreaterThanOrEqual(0);
+    expect(Number.isSafeInteger(liveTiming.elapsedMs)).toBe(true);
+    expect(Date.parse(liveTiming.observedAt)).toBeGreaterThanOrEqual(
+      Date.parse(liveTiming.startedAt),
+    );
+    unwrap(
+      await safeDb(async (tx) => {
+        await tx
+          .update(chatTurns)
+          .set({ activeStartedAt: sql`now() - interval '3 seconds'` })
+          .where(eq(chatTurns.id, fixture.acceptance.id));
+        expect(
+          await settleChatTurnOnTx({
+            assistantMessageId: fixture.assistantMessageId,
+            execution,
+            outcome: { type: "completed" },
+            tx,
+          }),
+        ).toBe("settled");
+        // Replaying a settlement is a fixed point, including its duration.
+        expect(
+          await settleChatTurnOnTx({
+            assistantMessageId: fixture.assistantMessageId,
+            execution,
+            outcome: { type: "completed" },
+            tx,
+          }),
+        ).toBe("not-owned");
+      }),
+    );
+    const settled = await testDb.query.chatTurns.findFirst({
+      where: { id: { eq: fixture.acceptance.id } },
+    });
+    expect(settled?.activeDurationMs).toBe(5000);
+    expect(settled?.activeStartedAt).toBeNull();
+    expect(unwrap(await readChatTurnTiming({ execution, safeDb }))).toEqual({
+      durationMs: 5000,
+      status: "finished",
+    });
+  });
+
+  test("all terminal outcomes close their active span and retain message timing ownership", async () => {
+    const outcomes = [
+      { type: "completed" },
+      { error: "unknown", type: "failed" },
+      { reason: "user-stop", type: "cancelled" },
+      { reason: "owner-lost", type: "interrupted" },
+    ] as const satisfies readonly ChatTurnOutcome[];
+    for (const outcome of outcomes) {
+      const fixture = await seedAwaitingTurn();
+      const execution = await resume(fixture);
+      unwrap(
+        await safeDb(async (tx) => {
+          await tx
+            .update(chatTurns)
+            .set({
+              activeDurationMs: 0,
+              activeStartedAt: sql`now() - interval '4 seconds'`,
+            })
+            .where(eq(chatTurns.id, fixture.acceptance.id));
+          expect(
+            await settleChatTurnOnTx({
+              assistantMessageId: fixture.assistantMessageId,
+              execution,
+              outcome,
+              tx,
+            }),
+          ).toBe("settled");
+        }),
+      );
+      const settled = await testDb.query.chatTurns.findFirst({
+        where: { id: { eq: fixture.acceptance.id } },
+      });
+      expect(settled?.timingMessageId).toBe(fixture.assistantMessageId);
+      expect(settled?.activeStartedAt).toBeNull();
+      expect(unwrap(await readChatTurnTiming({ execution, safeDb }))).toEqual({
+        durationMs: 4000,
+        status: "finished",
+      });
+    }
+  });
+
+  test("streaming and reload aggregate every turn producing the same message", async () => {
+    const fixture = await seedAwaitingTurn();
+    await testDb
+      .update(chatTurns)
+      .set({ activeDurationMs: 7000 })
+      .where(eq(chatTurns.id, fixture.acceptance.id));
+    const earlierTurnId = toSafeId<"chatTurn">(Bun.randomUUIDv7());
+    await testDb.insert(chatTurns).values({
+      id: earlierTurnId,
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+      workspaceId: ids.wsA1,
+      userMessageId: fixture.userMessageId,
+      assistantMessageId: fixture.assistantMessageId,
+      timingMessageId: fixture.assistantMessageId,
+      threadId: fixture.threadId,
+      status: "completed",
+      settledAt: sql`now()`,
+      activeDurationMs: 4000,
+    });
+    const execution = await resume(fixture);
+    await testDb
+      .update(chatTurns)
+      .set({ activeStartedAt: sql`now() - interval '1 second'` })
+      .where(eq(chatTurns.id, fixture.acceptance.id));
+    const live = unwrap(await readChatTurnTiming({ execution, safeDb }));
+    expect(live).toMatchObject({ durationMs: 11_000, status: "running" });
+    if (live?.status !== "running") {
+      panic("Expected running turn timing");
+    }
+    expect(live.elapsedMs).toBeGreaterThanOrEqual(1000);
+    const page = unwrap(
+      await loadChatMessagePage({
+        threadId: fixture.threadId,
+        userId: ids.userA1,
+        safeDb,
+      }),
+    );
+    const reloaded = page.messages.find(
+      (message) => message.id === fixture.assistantMessageId,
+    )?.metadata?.turnTiming;
+    expect(reloaded).toMatchObject({
+      durationMs: live.durationMs,
+      startedAt: live.startedAt,
+      status: "running",
+    });
+    if (reloaded?.status !== "running") {
+      panic("Expected reloaded running turn timing");
+    }
+    expect(reloaded.elapsedMs).toBeGreaterThanOrEqual(live.elapsedMs);
+    expect(Date.parse(reloaded.observedAt)).toBeGreaterThanOrEqual(
+      Date.parse(live.observedAt),
+    );
+    unwrap(
+      await safeDb(async (tx) => {
+        await tx
+          .update(chatTurns)
+          .set({ activeStartedAt: sql`now()` })
+          .where(eq(chatTurns.id, fixture.acceptance.id));
+        expect(
+          await settleChatTurnOnTx({
+            assistantMessageId: fixture.assistantMessageId,
+            execution,
+            outcome: { type: "completed" },
+            tx,
+          }),
+        ).toBe("settled");
+      }),
+    );
+    expect(unwrap(await readChatTurnTiming({ execution, safeDb }))).toEqual({
+      status: "finished",
+      durationMs: 11_000,
+    });
+    const settledPage = unwrap(
+      await loadChatMessagePage({
+        threadId: fixture.threadId,
+        userId: ids.userA1,
+        safeDb,
+      }),
+    );
+    expect(
+      settledPage.messages.find(
+        (message) => message.id === fixture.assistantMessageId,
+      )?.metadata?.turnTiming,
+    ).toEqual({ status: "finished", durationMs: 11_000 });
+    await testDb
+      .update(chatTurns)
+      .set({ activeDurationMs: null })
+      .where(eq(chatTurns.id, earlierTurnId));
+    expect(unwrap(await readChatTurnTiming({ execution, safeDb }))).toBeNull();
+    const unknownPage = unwrap(
+      await loadChatMessagePage({
+        threadId: fixture.threadId,
+        userId: ids.userA1,
+        safeDb,
+      }),
+    );
+    expect(
+      unknownPage.messages.find(
+        (message) => message.id === fixture.assistantMessageId,
+      )?.metadata?.turnTiming,
+    ).toBeUndefined();
+  });
+
+  test("stopping while awaiting the user preserves the closed active duration", async () => {
+    const fixture = await seedAwaitingTurn();
+    await testDb
+      .update(chatTurns)
+      .set({ activeDurationMs: 5000 })
+      .where(eq(chatTurns.id, fixture.acceptance.id));
+    unwrap(
+      await safeDb(async (tx) => {
+        expect(
+          await stopChatTurnOnTx({
+            threadId: fixture.threadId,
+            turnId: fixture.acceptance.id,
+            tx,
+          }),
+        ).toMatchObject({ type: "settled" });
+      }),
+    );
+    const page = unwrap(
+      await loadChatMessagePage({
+        threadId: fixture.threadId,
+        userId: ids.userA1,
+        safeDb,
+      }),
+    );
+    expect(
+      page.messages.find((message) => message.id === fixture.assistantMessageId)
+        ?.metadata?.turnTiming,
+    ).toEqual({ status: "finished", durationMs: 5000 });
+    const stopped = await testDb.query.chatTurns.findFirst({
+      where: { id: { eq: fixture.acceptance.id } },
+    });
+    expect(stopped?.activeStartedAt).toBeNull();
+  });
+
+  test("unknown history and reversed clocks never invent a duration", async () => {
+    for (const timing of [
+      { activeDurationMs: null, activeStartedAt: null },
+      {
+        activeDurationMs: 2000,
+        activeStartedAt: sql`now() + interval '1 second'`,
+      },
+    ]) {
+      const fixture = await seedAwaitingTurn();
+      if (timing.activeDurationMs === null) {
+        await testDb
+          .update(chatTurns)
+          .set(timing)
+          .where(eq(chatTurns.id, fixture.acceptance.id));
+      }
+      const execution = await resume(fixture);
+      if (timing.activeDurationMs === null) {
+        expect(
+          unwrap(await readChatTurnTiming({ execution, safeDb })),
+        ).toBeNull();
+      }
+      unwrap(
+        await safeDb(async (tx) => {
+          await tx
+            .update(chatTurns)
+            .set(timing)
+            .where(eq(chatTurns.id, fixture.acceptance.id));
+          expect(
+            await settleChatTurnOnTx({
+              assistantMessageId: fixture.assistantMessageId,
+              execution,
+              outcome: { type: "completed" },
+              tx,
+            }),
+          ).toBe("settled");
+        }),
+      );
+      const settled = await testDb.query.chatTurns.findFirst({
+        where: { id: { eq: fixture.acceptance.id } },
+      });
+      expect(settled?.activeDurationMs).toBeNull();
+      expect(settled?.activeStartedAt).toBeNull();
+      expect(
+        unwrap(await readChatTurnTiming({ execution, safeDb })),
+      ).toBeNull();
+    }
+  });
 });

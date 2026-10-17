@@ -34,6 +34,7 @@ import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { BoundedMap } from "@/lib/bounded-set";
+import { toAPIError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { inputTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
 import { reusableConditions } from "@/routes/knowledge/-components/template-studio-condition-source";
@@ -72,7 +73,7 @@ export const TemplateStudioSelectionGesture = ({
   const [preview, setPreview] = useState<GestureInsertKind | null>(null);
   return (
     <div
-      className="bg-popover text-popover-foreground absolute z-50 flex max-h-[min(26rem,80vh)] max-w-[min(92vw,30rem,100%)] flex-col overflow-y-auto rounded-lg border p-1 shadow-lg/5 transition-opacity duration-100 starting:opacity-0"
+      className="bg-popover text-popover-foreground absolute z-50 flex max-h-[min(26rem,80dvh)] max-w-[min(92vw,30rem,100%)] flex-col overflow-y-auto rounded-lg border p-1 shadow-lg/5 transition-opacity duration-100 starting:opacity-0"
       role="group"
       style={{
         left: gesture.left,
@@ -402,7 +403,7 @@ export const useTemplateStudioSelectionGesture = ({
       return;
     }
     if (error) {
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(toAPIError(error));
       setEnrichment({ status: "idle" });
       return;
     }

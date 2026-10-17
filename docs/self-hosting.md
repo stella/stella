@@ -335,6 +335,39 @@ docker compose --env-file deploy/selfhost/.env \
   bun /app/apps/api/src/db/migrate.js
 ```
 
+Before this chat content upgrade, stop and drain all API instances running the
+old release, including any workers that write chat history. Run the migration
+with the new release image, and restart the API only after migration succeeds.
+The database rejects legacy chat content writes as soon as this migration starts.
+
+Chat content upgrades run automatically through the migration entrypoint. The
+version 3 repair converts stored version 1 and 2 messages and revision snapshots
+in adaptive keyset batches of 1 to 50 rows, with durable progress. Every processed row
+has an owner-only receipt in `chat_content_v3_backfill_receipts`: source, row and
+message identifiers, prior version, outcome, fixed reason, and timestamp. Receipts
+contain no message content and retain repair history after message deletion; an
+organization foreign key removes its receipts when the organization is deleted. If a
+parent message is deleted during a batch, its row receives a `deleted-concurrently`
+outcome with the fixed reason `parent-deleted`; message and revision repair both
+continue without referencing a deleted parent through a foreign key. Existing
+converted receipts retain their original conversion provenance. A row holding a
+number beyond double precision is never rewritten with a rounded value: it fails
+with the reason `lossy-json-number`.
+
+From a source checkout, preview the repair without writes:
+
+```bash
+bun --filter @stll/api db:backfill-chat-content-v3 --dry-run
+```
+
+The preview reports counts by stored version. The migration must finish the
+repair and verify that no legacy content remains before the upgrade proceeds;
+unfinished or failed rows block deployment. After an interruption, rerun the
+migration command above (or `bun --filter @stll/api db:migrate` from source).
+If a receipt records a failed row, repair its stored data, then run
+`bun --filter @stll/api db:backfill-chat-content-v3 --apply --retry-failed` and rerun
+the migration command. Successful rows are not converted again.
+
 After migrations, run the usage policy seed explicitly inside the API image with `STELLA_USAGE_POLICY_SEEDS` set to the deployment's JSON configuration; it never runs on API startup.
 
 <!-- usage-policy-seed-command -->
@@ -430,6 +463,39 @@ Compose uses `/ready` for the API. The worker healthcheck runs only while the
 worker process is alive and also requires API readiness. Queue latency and
 worker error logs remain the authoritative signals that work is draining; the
 healthcheck does not claim to execute a synthetic document job.
+
+## OAuth refusal counts
+
+The API emits one `auth.request_refused` event per refused auth request.
+For `/oauth2/token` refresh and authorization-code grants, `oauth.refusal_reason`
+records the provider decision, alongside `oauth.client_id`, `oauth.grant_type`,
+`http.status_code` and the ambient `request.id` when present.
+`oauth.grant_family` is SHA-256 of
+`stella:oauth:grant-family:v1:` followed by the stored authorization-code
+identifier (also carried into each rotated refresh row). It correlates a
+family across rotations without exposing credentials or database identifiers.
+It is `"none"` when the refresh row or its authorization-code identifier is absent.
+An unavailable public client id is also recorded as `"none"`.
+
+`unknown_token` includes refresh rows deleted by consent revocation or member
+removal; those actions have separate audit records. `code_invalid` combines
+absent, expired and already consumed codes because atomic consumption returns
+the same result for each. No tombstones or additional retention are introduced.
+`revoked` applies only when a revoked refresh row remains available, and
+`rotated_outside_replay` applies to a rotated row past its replay interval.
+`rotation_replay_mismatch` records a rotated row whose replay response cannot
+be returned inside that interval. `oauth.refusal_unclassified = true` identifies
+a refusal requiring a provider-mapping review.
+
+For CloudWatch Logs Insights, select the API log group and desired time range,
+then count refusals by day, reason and public client id (no additional metrics):
+
+```text
+filter message = "auth.request_refused" and `auth.path` = "/oauth2/token"
+| filter ispresent(`oauth.refusal_reason`)
+| stats count(*) as refusals by bin(1d), `oauth.refusal_reason`, `oauth.client_id`
+| sort refusals desc
+```
 
 ## Requirements
 

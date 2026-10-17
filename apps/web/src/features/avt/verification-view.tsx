@@ -229,10 +229,7 @@ export const VerificationView = ({
 
   // One claim mark, wherever the pane draws it: over the reader's text, or
   // on its own in a passage.
-  const renderClaim = (
-    claim: VerificationClaim,
-    children: React.ReactNode,
-  ): React.ReactElement => {
+  const renderClaim = (claim: VerificationClaim, children: React.ReactNode) => {
     const { dim, highlight } = spanPresentation({
       filterActive: filter !== "all",
       matches: matches(claim, filter),

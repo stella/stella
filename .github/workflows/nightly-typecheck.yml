@@ -4,10 +4,9 @@ defaults:
   run:
     shell: bash
 
+# Optional proofs run on demand only: pull requests, pushes and the merge queue
+# run the correctness gates in ci.yml.
 on:
-  schedule:
-    # 03:17 UTC daily (off-minute to avoid :00 stampede)
-    - cron: "17 3 * * *"
   workflow_dispatch:
     inputs:
       fresh-web:
@@ -38,7 +37,8 @@ jobs:
           bun-version-file: "package.json"
 
       - name: Install dependencies
-        run: bun ci --ignore-scripts
+        timeout-minutes: 5
+        run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           # .npmrc references NPM_TOKEN, but installs must not expose
           # the real npm token to dependency lifecycle scripts.
@@ -74,7 +74,8 @@ jobs:
           bun-version-file: "package.json"
 
       - name: Install dependencies
-        run: bun ci --ignore-scripts
+        timeout-minutes: 5
+        run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
 
@@ -90,7 +91,7 @@ jobs:
         run: bun scripts/typecheck-baseline.ts --check
 
   fresh-web-sources:
-    if: ${{ github.event_name == 'schedule' || inputs.fresh-web }}
+    if: ${{ inputs.fresh-web }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -106,6 +107,7 @@ jobs:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: package.json
       - name: Prove fresh web consumers and generator guards
+        timeout-minutes: 40
         run: bash scripts/check-fresh-web-sources.sh
         env:
           NPM_TOKEN: ""

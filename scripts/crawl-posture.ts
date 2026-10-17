@@ -648,7 +648,8 @@ const checkMixed = (appDir: string, app: string): Violation[] => {
             .replaceAll(".", "/")
             .replaceAll("_", "")
             .replace(/\/(?:index|route)$/u, "")}`;
-          return routePath === route;
+          // An index route names its full path with a trailing slash.
+          return routePath === route.replace(/(.)\/$/u, "$1");
         })
         .map((file) =>
           stripSourceComments(
@@ -854,7 +855,7 @@ const MIXED_LIB_VALID = libFixture([
   "  // commented-out example: Allow: /admin$",
   "  const allowed = createPublicCrawlRules();",
   '  const url = "https://example.com/sitemap.xml"; const deny = "Disallow: /";',
-  '  const lines = ["User-agent: *", "Allow: /law/", "Allow: /law$", "Allow: /sitemap.xml$", deny, ...allowed];',
+  '  const lines = ["User-agent: *", "Allow: /law$", "Allow: /sitemap.xml$", deny, ...allowed];',
   "  return { lines, url };",
   "};",
 ]);
@@ -883,12 +884,18 @@ const MIXED_LIB_CONSTANT_UNUSED = libFixture([
 ]);
 
 // Fixtures derive route files from the production policy.
+/** The route file a full path lives in; an index route's path ends in `/`. */
+const fixtureRouteFile = (route: string): string =>
+  route.endsWith("/")
+    ? `${route.slice(1)}index.tsx`
+    : `${route.slice(1).replaceAll(".", "[.]")}.tsx`;
+
 const layoutValidMixed = (root: string, app: string): void => {
   writeFixtureFile(root, path.join(app, "package.json"), pkg("mixed"));
   writeFixtureFile(root, path.join(app, MIXED_ROBOTS_ROUTE), ROUTE_STUB);
   writeFixtureFile(root, path.join(app, MIXED_SITEMAP_ROUTE), ROUTE_STUB);
   for (const { route, format } of PUBLIC_CRAWL_ROUTES) {
-    const filename = `${route.slice(1).replaceAll(".", "[.]")}.tsx`;
+    const filename = fixtureRouteFile(route);
     writeFixtureFile(
       root,
       path.join(app, MIXED_ROUTES_DIR, filename),
@@ -1265,7 +1272,12 @@ const runSelfTest = (): number => {
     "mixed prefix without a route",
     reportForSingleApp((root, app) => {
       layoutValidMixed(root, app);
+      // The whole /law prefix: a nested route (law/cases) would still resolve it.
       rmSync(path.join(root, app, MIXED_ROUTES_DIR, "law.tsx"));
+      rmSync(path.join(root, app, MIXED_ROUTES_DIR, "law"), {
+        recursive: true,
+        force: true,
+      });
     }),
     "mixed-prefix-no-route",
   );
@@ -1278,7 +1290,7 @@ const runSelfTest = (): number => {
       `mixed HTML route without public head: ${route}`,
       reportForSingleApp((root, app) => {
         layoutValidMixed(root, app);
-        const filename = `${route.slice(1).replaceAll(".", "[.]")}.tsx`;
+        const filename = fixtureRouteFile(route);
         writeFixtureFile(
           root,
           path.join(app, MIXED_ROUTES_DIR, filename),

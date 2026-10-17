@@ -7,6 +7,7 @@ import {
   REALTIME_EVENT_TYPE,
   RESOURCE_TYPE,
 } from "@stll/api-contract";
+import { writeZipEntry } from "@stll/docx-utils";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
 
 import type { Transaction } from "@/api/db/root";
@@ -70,7 +71,8 @@ const stampedDocxBytes = async (): Promise<Uint8Array> => {
   const relNs =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
   const zip = new JSZip();
-  zip.file(
+  writeZipEntry(
+    zip,
     "[Content_Types].xml",
     [
       '<?xml version="1.0" encoding="UTF-8"?>',
@@ -80,7 +82,8 @@ const stampedDocxBytes = async (): Promise<Uint8Array> => {
       "</Types>",
     ].join("\n"),
   );
-  zip.file(
+  writeZipEntry(
+    zip,
     "word/document.xml",
     [
       '<?xml version="1.0" encoding="UTF-8"?>',

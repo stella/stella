@@ -900,6 +900,13 @@ describe("handleMcpHttpRequest", () => {
         "resolve_case_law_decision",
         "resolve_law_citation",
       ]);
+      expect(
+        listed.tools.find(({ name }) => name === "read_case_law_citations")
+          ?._meta?.["ui"],
+      ).toMatchObject({
+        resourceUri: "ui://stella/citation-graph",
+        visibility: ["model", "app"],
+      });
       expect(authenticateMcpRequestMock).toHaveBeenCalledWith("token", {
         mode: "law",
       });
@@ -1580,6 +1587,33 @@ describe("handleMcpHttpRequest", () => {
     expect(parsed?.error.code).toBe("unknown_tool");
     expect(parsed?.error.hint).not.toContain("list_matters");
     expect(body.result.isError).toBe(true);
+  });
+
+  test("translates an unavailable prompt into an invalid-params protocol error", async () => {
+    authenticateMcpRequestMock.mockResolvedValue(
+      Result.ok({
+        organizationId: "org_1",
+        scopes: ["stella:read"],
+        userId: "user_1",
+      }),
+    );
+    resolveMcpSessionContextMock.mockResolvedValue({ grantedScopes: [] });
+
+    const response = await handleMcpHttpRequest(
+      createMcpRequest({
+        id: 1,
+        jsonrpc: "2.0",
+        method: "prompts/get",
+        params: { name: "skill__unavailable" },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await readTestJson<McpJsonRpcError>(response)).toMatchObject({
+      error: { code: -32_602, message: "Unknown prompt: skill__unavailable" },
+      id: 1,
+      jsonrpc: "2.0",
+    });
   });
 
   test("lists static resources for the request mode", async () => {

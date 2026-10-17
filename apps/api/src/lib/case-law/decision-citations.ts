@@ -1,16 +1,15 @@
-import { and, asc, eq, gt, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { status } from "elysia";
 
 import {
   caseLawCitations,
-  caseLawDecisions,
+  publishedCaseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { readPublicDecisionLanguageAlternatesInTx } from "@/api/lib/case-law/language-alternates";
-import { publishedCaseLawDecisionFor } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution";
 import { buildCaseLawDecisionAppUrl } from "@/api/lib/legal-search/public-law-app-urls";
 import { LIMITS } from "@/api/lib/limits";
@@ -23,9 +22,15 @@ import {
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedCaseLawCitationId } from "@/api/lib/safe-id-boundaries";
 
-const citedDecision = alias(caseLawDecisions, "cited_case_law_decision");
+const citedDecision = alias(
+  publishedCaseLawDecisions,
+  "cited_case_law_decision",
+);
 const citedSource = alias(caseLawSources, "cited_case_law_source");
-const citingDecision = alias(caseLawDecisions, "citing_case_law_decision");
+const citingDecision = alias(
+  publishedCaseLawDecisions,
+  "citing_case_law_decision",
+);
 const citingSource = alias(caseLawSources, "citing_case_law_source");
 
 const decodeCitationCursor = (
@@ -48,6 +53,8 @@ type CitationPageOptions = {
   tx: CaseLawPublicReadTransaction;
   cursor: string | undefined;
   decisionId: SafeId<"caseLawDecision">;
+  /** The subject's own country list; the far end answers to the same list. */
+  countries: readonly string[];
 };
 
 type ScannedCitation<T> = {
@@ -85,6 +92,7 @@ const readOutgoingDecisionCitationRows = async ({
   tx,
   cursor,
   decisionId,
+  countries,
 }: CitationPageOptions) => {
   const cursorId = decodeCitationCursor(cursor);
   if (cursorId === null) {
@@ -131,7 +139,7 @@ const readOutgoingDecisionCitationRows = async ({
         OR (
           ${citedSource.id} IS NOT NULL
           AND ${redistributableCaseLawSourceFor(citedSource.descriptor)}
-          AND ${publishedCaseLawDecisionFor(citedDecision.metadata)}
+          AND ${inArray(citedDecision.country, [...countries])}
         )
       )`,
     })
@@ -193,6 +201,7 @@ export const listIncomingDecisionCitations = async ({
   tx,
   cursor,
   decisionId,
+  countries,
 }: CitationPageOptions) => {
   const cursorId = decodeCitationCursor(cursor);
   if (cursorId === null) {
@@ -228,7 +237,7 @@ export const listIncomingDecisionCitations = async ({
       visible: sql<boolean>`(
         ${citingSource.id} IS NOT NULL
         AND ${redistributableCaseLawSourceFor(citingSource.descriptor)}
-        AND ${publishedCaseLawDecisionFor(citingDecision.metadata)}
+        AND ${inArray(citingDecision.country, [...countries])}
       )`,
     })
     .from(candidates)

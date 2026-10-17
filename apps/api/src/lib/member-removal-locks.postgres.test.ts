@@ -560,6 +560,12 @@ describeLocks("matter creation against organization removal (postgres)", () => {
                 async (fn) =>
                   await creationDb.transaction(async (tx) => {
                     creationPid.resolve(await backendPid(tx));
+                    // A request transaction carries its organization and
+                    // member; matter creation in the database reads them.
+                    await tx.execute(
+                      sql`SELECT set_config('app.organization_id', ${data.organizationId}, true),
+                        set_config('app.user_id', ${data.ownerId}, true)`,
+                    );
                     const value = await fn(asTestRaw<Transaction>(tx));
                     if (hold) {
                       await releaseCreation.promise;

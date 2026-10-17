@@ -12,7 +12,6 @@ import type { SafeDb } from "@/api/db/safe-db";
 import {
   desktopEditSessions,
   folioCollabRooms,
-  workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
@@ -37,6 +36,7 @@ import {
   recordFolioCollabContribution,
 } from "@/api/lib/folio-collab-rooms";
 import { isMemberRole } from "@/api/lib/member-roles";
+import { memberReachesMatterSql } from "@/api/lib/workspaces/authorized-workspace-ids";
 
 const joinFolioCollabRoomBodySchema = t.Object({
   entityId: tSafeId("entity"),
@@ -51,6 +51,7 @@ type JoinFolioCollabRoomResponse = {
   generation: number;
   roomId: SafeId<"folioCollabRoom">;
   roomName: string;
+  snapshotRecovery: "none" | "unsaved-changes-discarded";
   seedDownloadUrl: string;
   shouldSeed: boolean;
   token: string;
@@ -80,8 +81,10 @@ const canStillEditWorkspace = async ({
   const memberships = await tx
     .select({
       organizationRole: member.role,
-      workspaceClientId: workspaces.clientId,
-      workspaceMemberId: workspaceMembers.id,
+      reachesMatter: memberReachesMatterSql(
+        { organizationId, userId },
+        workspaceId,
+      ),
       workspaceStatus: workspaces.status,
     })
     .from(member)
@@ -90,13 +93,6 @@ const canStillEditWorkspace = async ({
       and(
         eq(workspaces.id, workspaceId),
         eq(workspaces.organizationId, organizationId),
-      ),
-    )
-    .leftJoin(
-      workspaceMembers,
-      and(
-        eq(workspaceMembers.userId, member.userId),
-        eq(workspaceMembers.workspaceId, workspaceId),
       ),
     )
     .where(
@@ -115,8 +111,7 @@ const canStillEditWorkspace = async ({
 
   const canUseWorkspace = canUseFolioCollabWorkspace({
     organizationRole: membership.organizationRole,
-    workspaceClientId: membership.workspaceClientId,
-    workspaceMemberId: membership.workspaceMemberId,
+    reachesMatter: membership.reachesMatter,
   });
   return (
     canUseWorkspace &&
@@ -177,6 +172,24 @@ export const decideFolioCollabSeedClaim = ({
   }
   return "claimable";
 };
+
+/**
+ * Whether the joining client seeds a room whose previous collaboration state
+ * was discarded: either recovery reset a refused snapshot, or the room still
+ * holds a snapshot it can no longer use.
+ */
+export const decideFolioCollabSnapshotRecovery = ({
+  shouldSeed,
+  snapshotRecovered,
+  yjsSnapshotRevision,
+}: {
+  shouldSeed: boolean;
+  snapshotRecovered: boolean;
+  yjsSnapshotRevision: number;
+}): JoinFolioCollabRoomResponse["snapshotRecovery"] =>
+  shouldSeed && (snapshotRecovered || yjsSnapshotRevision > 0)
+    ? "unsaved-changes-discarded"
+    : "none";
 
 const claimFolioCollabRoomSeed = async ({
   expectedGeneration,
@@ -287,6 +300,8 @@ const joinFolioCollabRoomHandler = async function* ({
           id: folioCollabRooms.id,
           seedClaimedAt: folioCollabRooms.seedClaimedAt,
           seedState: folioCollabRooms.seedState,
+          snapshotRecoveredAt: folioCollabRooms.snapshotRecoveredAt,
+          yjsSnapshotRevision: folioCollabRooms.yjsSnapshotRevision,
         })
         .from(folioCollabRooms)
         .where(
@@ -337,6 +352,8 @@ const joinFolioCollabRoomHandler = async function* ({
             id: folioCollabRooms.id,
             seedClaimedAt: folioCollabRooms.seedClaimedAt,
             seedState: folioCollabRooms.seedState,
+            snapshotRecoveredAt: folioCollabRooms.snapshotRecoveredAt,
+            yjsSnapshotRevision: folioCollabRooms.yjsSnapshotRevision,
           });
 
         await recordAuditEvent(tx, {
@@ -463,6 +480,8 @@ const joinFolioCollabRoomHandler = async function* ({
         shouldSeed,
         token,
         tokenExpiresAt,
+        snapshotRecovered: room.snapshotRecoveredAt !== null,
+        yjsSnapshotRevision: room.yjsSnapshotRevision,
       } as const;
     }),
   );
@@ -488,6 +507,7 @@ const joinFolioCollabRoomHandler = async function* ({
     generation: joined.generation,
     roomId: joined.roomId,
     roomName: toFolioCollabRoomName(joined.roomId),
+    snapshotRecovery: decideFolioCollabSnapshotRecovery(joined),
     seedDownloadUrl,
     shouldSeed: joined.shouldSeed,
     token: joined.token,

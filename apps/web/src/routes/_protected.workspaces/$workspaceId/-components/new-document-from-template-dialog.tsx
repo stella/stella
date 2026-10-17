@@ -80,7 +80,7 @@ const NewDocumentFromTemplateDialogBody = ({
             : t("templates.pickTemplate")}
         </DialogDescription>
       </DialogHeader>
-      <DialogPanel className="flex max-h-[70vh] min-h-48 flex-col overflow-hidden p-0">
+      <DialogPanel className="flex max-h-[70dvh] min-h-48 flex-col overflow-hidden p-0">
         {picked === null ? (
           <TemplatePickList onPick={setPicked} />
         ) : (
