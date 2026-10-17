@@ -28,6 +28,14 @@ type DdlFormDefinition = {
 // Strongest relation lock per form, including indexes and referenced tables.
 // NO EXISTING RELATION means catalog/object locks, not absence of all locks.
 export const DDL_FORMS = {
+  // CASCADE can remove columns on unknown dependent tables, regardless of the
+  // dropped object's own locks. Match before every object-specific DROP form.
+  // PG18 dependency tracking: https://www.postgresql.org/docs/18/ddl-depend.html
+  "drop-cascade": {
+    scope: "statement",
+    lockMode: "ACCESS EXCLUSIVE",
+    pattern: /^DROP\b.*\bCASCADE$/u,
+  },
   // PG18 §13.3.1: https://www.postgresql.org/docs/18/explicit-locking.html#LOCKING-TABLES
   "create-index-concurrently": {
     scope: "statement",

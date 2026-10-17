@@ -49,6 +49,132 @@ describe("migration lock census", () => {
     ).toContain("Unknown DDL form: CREATE MATERIALIZED VIEW");
   });
 
+  test.each([
+    {
+      setup:
+        "CREATE TYPE probe_type AS ENUM ('active'); CREATE TABLE probe(value probe_type);",
+      drop: "DROP TYPE probe_type CASCADE;",
+    },
+    {
+      setup:
+        "CREATE FUNCTION probe_default() RETURNS int LANGUAGE sql AS 'SELECT 1'; CREATE TABLE probe(value int DEFAULT probe_default());",
+      drop: "DROP FUNCTION probe_default() CASCADE;",
+    },
+  ])(
+    "cascading drops require a reason for unknown dependent tables: $drop",
+    ({ setup, drop }) => {
+      const sources = source(`${setup}\n${drop}`);
+      const baseline = migrationLockPairs(
+        source(`${setup}\n${drop.replace(" CASCADE", "")}`),
+      );
+      expect(censusSql(setup).errors).toEqual([]);
+      expect(
+        checkMigrationLocks({ sources, baseline }).errors.join("\n"),
+      ).toContain("ACCESS EXCLUSIVE drop-cascade needs");
+      expect(
+        checkMigrationLocks({
+          sources,
+          baseline: [],
+          allowances: [
+            {
+              migration: "20990101000000_example",
+              form: "drop-cascade",
+              reason: "Dependent columns are retired after the contract step",
+            },
+          ],
+        }).errors,
+      ).toEqual([]);
+      expect(
+        checkMigrationLocks({
+          sources: source(
+            `${setup}\n-- stella-migration-safety: reviewed drop-object - Dependent columns are retired after the contract step\n${drop}`,
+          ),
+          baseline: [],
+        }).errors,
+      ).toEqual([]);
+    },
+  );
+
+  test("every cascading DROP kind takes precedence over object-only classifications", () => {
+    for (const target of [
+      "TYPE probe",
+      "DOMAIN probe",
+      "FUNCTION probe()",
+      "SCHEMA probe",
+      "EXTENSION probe",
+      "SEQUENCE probe",
+      "VIEW probe",
+      "MATERIALIZED VIEW probe",
+      "TABLE probe",
+      "INDEX probe",
+      "TRIGGER probe ON target",
+      "POLICY probe ON target",
+      "PROCEDURE probe()",
+      "AGGREGATE probe(int)",
+      "FOREIGN TABLE probe",
+      "SERVER probe",
+      "COLLATION probe",
+      "TEXT SEARCH CONFIGURATION probe",
+    ]) {
+      const sql = `DROP ${target} /* dependent objects */ CASCADE;`;
+      expect(censusSql(sql)).toEqual({
+        forms: [
+          { form: "drop-cascade", lockMode: "ACCESS EXCLUSIVE", line: 1 },
+        ],
+        errors: [],
+      });
+      expect(
+        checkMigrationLocks({ sources: source(sql), baseline: [] }).errors,
+      ).toEqual([
+        expect.stringContaining("ACCESS EXCLUSIVE drop-cascade needs"),
+      ]);
+      expect(
+        checkMigrationLocks({
+          sources: source(sql),
+          baseline: [],
+          allowances: [
+            {
+              migration: "20990101000000_example",
+              form: "drop-cascade",
+              reason: "Dependent objects are retired after the contract step",
+            },
+          ],
+        }).errors,
+      ).toEqual([]);
+    }
+  });
+
+  test("executable cascading drops retain their dependency lock classification", () => {
+    for (const sql of [
+      "DO $$ BEGIN DROP TYPE probe CASCADE; END $$;",
+      "DO $$ BEGIN EXECUTE 'DROP TYPE probe CASCADE'; END $$;",
+    ]) {
+      expect(censusSql(sql).errors).toEqual([]);
+      expect(
+        censusSql(sql).forms.map(({ form, lockMode }) => ({ form, lockMode })),
+      ).toEqual([{ form: "drop-cascade", lockMode: "ACCESS EXCLUSIVE" }]);
+    }
+  });
+
+  test("plain type drops retain their catalog-only classification", () => {
+    for (const sql of [
+      "DROP TYPE probe;",
+      "DROP TYPE probe RESTRICT;",
+      'DROP TYPE "CASCADE";',
+      "DROP TYPE probe; -- CASCADE",
+    ]) {
+      expect(censusSql(sql)).toEqual({
+        forms: [
+          { form: "drop-type", lockMode: "NO EXISTING RELATION", line: 1 },
+        ],
+        errors: [],
+      });
+      expect(
+        checkMigrationLocks({ sources: source(sql), baseline: [] }).errors,
+      ).toEqual([]);
+    }
+  });
+
   test("new strong locks require a reason and cannot consume another folder's baseline", () => {
     const sql = "ALTER TABLE probe ADD COLUMN title text;";
     const baseline = migrationLockPairs(source(sql));
