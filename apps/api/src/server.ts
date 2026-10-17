@@ -134,6 +134,7 @@ import { workspacesRoute } from "@/api/handlers/workspaces/routes";
 import { detached } from "@/api/lib/analytics/capture";
 import { getAuth, realtimeAuthorizers } from "@/api/lib/auth";
 import { createAuthResponseCookiesPlugin } from "@/api/lib/auth/auth-response-cookies";
+import { applyDiscoveryMetadataCachePolicy } from "@/api/lib/auth/discovery-metadata-cache";
 import {
   isAllowedBrowserOrigin,
   shouldRejectBrowserMutation,
@@ -150,7 +151,6 @@ import { assertConfiguredBetterAuthOAuthPolicy } from "@/api/lib/db/assert-bette
 import { assertMigrationsApplied } from "@/api/lib/db/assert-migrations-applied";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
-import { applyDiscoveryMetadataCachePolicy } from "@/api/lib/discovery-metadata-cache";
 import { httpError } from "@/api/lib/errors/http-error";
 import { errorTag } from "@/api/lib/errors/utils";
 import {

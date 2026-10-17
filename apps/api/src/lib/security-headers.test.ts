@@ -11,7 +11,7 @@ import { createAuthResponseCookiesPlugin } from "@/api/lib/auth/auth-response-co
 import {
   applyDiscoveryMetadataCachePolicy,
   DISCOVERY_METADATA_PATHS,
-} from "@/api/lib/discovery-metadata-cache";
+} from "@/api/lib/auth/discovery-metadata-cache";
 import {
   applyResponseCachePolicy,
   finalizeResponseCachePolicy,
