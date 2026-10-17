@@ -87,7 +87,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/slice-listing";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decisionAbsorptionSql } from "@/api/lib/case-law/decision-absorption";
-import { rowHoldsDocument } from "@/api/lib/case-law/stored-payload";
+import { rowHoldsDocumentFor } from "@/api/lib/case-law/stored-payload";
 import {
   errorFingerprint,
   errorSystemFields,
@@ -621,7 +621,7 @@ const selectHeldDocumentIds = async (
         sourceDocumentId: caseLawDecisions.sourceDocumentId,
         hasDetail:
           detail === undefined ? sql<boolean>`true` : sql<boolean>`${detail}`,
-        hasStoredDocument: rowHoldsDocument,
+        hasStoredDocument: rowHoldsDocumentFor(caseLawDecisions),
         hasStoredDetail: sql<boolean>`${storedObservationHasDetail(caseLawDecisions.metadata)}`,
         // Taken out of the corpus by absorption or by a takedown: either
         // way settled, and nothing a listing walk could place again.

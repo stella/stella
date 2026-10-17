@@ -2976,7 +2976,7 @@ describe("OpenAI-compatible MCP tools", () => {
         status: "unavailable",
         domain: expectedDomain,
         country: "SVK",
-        reason: "pending_public",
+        reason: "pages_public",
       });
       expect(result.content).toContainEqual({
         type: "text",

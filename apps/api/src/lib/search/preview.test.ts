@@ -231,7 +231,7 @@ describe("search preview authorization scope", () => {
     const compiled = compilePreview("case-law");
     expect(compiled.sql).toContain("FROM case_law_search_documents clsd");
     expect(compiled.sql).toContain(
-      "JOIN case_law_decisions d ON d.id = clsd.decision_id",
+      "JOIN case_law_published_decisions d ON d.id = clsd.decision_id",
     );
     expect(compiled.sql).toContain(
       "JOIN case_law_sources\n    ON case_law_sources.id = d.source_id",

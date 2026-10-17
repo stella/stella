@@ -1398,6 +1398,13 @@ export const markdownReaders = (root = ROOT): readonly MarkdownReader[] => {
   return readers;
 };
 
+export const hasDeclaredMarkdownReader = (file: string, root = ROOT) =>
+  markdownReaders(root).some(
+    (reader) =>
+      !reader.file.startsWith(".github/workflows/ci.yml:ci-checks-policy:") &&
+      reader.inputs.some((input) => matches(file, input)),
+  );
+
 export const markdownChecks = ({
   changed,
   root = ROOT,

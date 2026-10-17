@@ -1,13 +1,18 @@
 import { panic } from "better-result";
-import { and, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { type Static, t } from "elysia";
 
 import { SECTION_UNITS } from "@stll/legal-atlas/provision-citation-profile";
 
-import { caseLawProvisionCitations } from "@/api/db/schema";
+import {
+  caseLawProvisionCitations,
+  publishedCaseLawDecisions,
+  caseLawSources,
+} from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
+import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { LIMITS } from "@/api/lib/limits";
 
 /**
@@ -121,12 +126,23 @@ export const readCaseLawProvisionScope = async (
   }: ProvisionScopeOptions & { idSetMax?: number },
 ): Promise<CaseLawProvisionScope> => {
   const link = caseLawProvisionCitations;
-  const conditions = and(...provisionLinkConditions(scope));
+  const conditions = and(
+    redistributableCaseLawSource,
+    ...provisionLinkConditions(scope),
+  );
   // Grouped rather than DISTINCT: the public read transaction exposes only
   // `select`, and a decision citing the provision at several levels is one.
   const rows = await tx
     .select({ decisionId: link.decisionId })
     .from(link)
+    .innerJoin(
+      publishedCaseLawDecisions,
+      eq(publishedCaseLawDecisions.id, link.decisionId),
+    )
+    .innerJoin(
+      caseLawSources,
+      eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
+    )
     .where(conditions)
     .groupBy(link.decisionId)
     .limit(idSetMax + 1);
@@ -141,6 +157,14 @@ export const readCaseLawProvisionScope = async (
       citingDecisions: sql<number>`count(DISTINCT ${link.decisionId})::int`,
     })
     .from(link)
+    .innerJoin(
+      publishedCaseLawDecisions,
+      eq(publishedCaseLawDecisions.id, link.decisionId),
+    )
+    .innerJoin(
+      caseLawSources,
+      eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
+    )
     .where(conditions);
   return {
     type: "broad",

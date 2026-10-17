@@ -11,13 +11,14 @@ const PLUGIN_DIRECTORY = ".oxlint-plugins";
 const FIXTURE_DIRECTORY = path.join(PLUGIN_DIRECTORY, "__fixtures__");
 const CONFIG_PATH = "oxlint.config.ts";
 const README_PATH = path.join(PLUGIN_DIRECTORY, "README.md");
-const NON_PLUGIN_MODULES = new Set([
+export const NON_PLUGIN_MODULES: ReadonlySet<string> = new Set([
   "aggregate-lock-sites.ts",
   "budget-ledger.ts",
   "database-access.ts",
   "icon-ownership.ts",
   "module-id.ts",
   "physical-properties.ts",
+  "public-law-decision-surface-modules.ts",
   "restricted-import.ts",
   "utils.ts",
 ]);
