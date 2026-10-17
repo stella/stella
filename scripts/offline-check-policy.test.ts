@@ -198,6 +198,217 @@ test("the check preload denies every fetch invocation", () => {
   );
 });
 
+test("the offline baseline reader uses the merge base and preserves absent files", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "offline-git-baseline-"));
+  const git = (args: string[]) => {
+    const result = Bun.spawnSync(["git", ...args], { cwd: directory });
+    expect(result.exitCode).toBe(0);
+    return result.stdout.toString().trim();
+  };
+  try {
+    git(["init", "--initial-branch=main"]);
+    writeFileSync(path.join(directory, "baseline.txt"), "original\n");
+    mkdirSync(path.join(directory, "data"));
+    writeFileSync(
+      path.join(directory, "data/font.ttf"),
+      new Uint8Array([0, 255, 10, 128, 13, 2]),
+    );
+    writeFileSync(
+      path.join(directory, "data/config.json"),
+      '{"original":true}',
+    );
+    const patchFile = "patches/@tanstack%2Fai@0.65.1.patch";
+    mkdirSync(path.join(directory, "patches"));
+    writeFileSync(path.join(directory, patchFile), "patch baseline\n");
+    const routeFile =
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/client.ts";
+    mkdirSync(path.dirname(path.join(directory, routeFile)), {
+      recursive: true,
+    });
+    writeFileSync(path.join(directory, routeFile), "route baseline\n");
+    git(["add", "."]);
+    git([
+      "-c",
+      "user.name=Baseline Test",
+      "-c",
+      "user.email=baseline@example.invalid",
+      "commit",
+      "--no-gpg-sign",
+      "-m",
+      "baseline",
+    ]);
+    const base = git(["rev-parse", "HEAD"]);
+    const batchTrace = path.join(directory, "batch-trace.json");
+    const binary = runPreloaded(
+      `import { createGitBaselineReader } from './scripts/offline-git-read.ts';
+       process.env['GIT_TRACE2_EVENT'] = ${JSON.stringify(batchTrace)};
+       const read = createGitBaselineReader(${JSON.stringify({ root: directory, base })});
+       console.log(JSON.stringify({ blob: read.blobId('data/font.ttf'), sibling: read.blobId('data/config.json') }));`,
+      "--check",
+    );
+    expect(binary.exitCode).toBe(0);
+    expect(JSON.parse(binary.stdout.toString())).toEqual({
+      blob: git(["rev-parse", `${base}:data/font.ttf`]),
+      sibling: git(["rev-parse", `${base}:data/config.json`]),
+    });
+    expect(readFileSync(batchTrace, "utf-8")).not.toContain('"cat-file"');
+    expect(readFileSync(batchTrace, "utf-8")).not.toContain('"show"');
+    writeFileSync(path.join(directory, "baseline.txt"), "changed\n");
+    writeFileSync(
+      path.join(directory, "data/font.ttf"),
+      new Uint8Array([0, 255, 10, 128, 13, 3]),
+    );
+    writeFileSync(path.join(directory, "introduced.txt"), "new\n");
+    git(["add", "."]);
+    git([
+      "-c",
+      "user.name=Baseline Test",
+      "-c",
+      "user.email=baseline@example.invalid",
+      "commit",
+      "--no-gpg-sign",
+      "-m",
+      "head",
+    ]);
+    const headObjects = runPreloaded(
+      `import { readGitWorkingTreeBlobIds } from './scripts/offline-git-read.ts';
+       const objects = readGitWorkingTreeBlobIds(${JSON.stringify(directory)});
+       console.log(JSON.stringify({ changed: objects.get('data/font.ttf'), absent: objects.get('data/missing.ttf') ?? null }));`,
+      "--check",
+    );
+    expect(headObjects.exitCode).toBe(0);
+    expect(JSON.parse(headObjects.stdout.toString())).toEqual({
+      changed: git(["rev-parse", "HEAD:data/font.ttf"]),
+      absent: null,
+    });
+    expect(JSON.parse(headObjects.stdout.toString()).changed).not.toBe(
+      JSON.parse(binary.stdout.toString()).blob,
+    );
+    const read = (file: string, ref = base) =>
+      runPreloaded(
+        `import { createGitBaselineReader } from './scripts/offline-git-read.ts';
+       console.log(JSON.stringify({ baseline: createGitBaselineReader(${JSON.stringify({ root: directory, base: ref })})(${JSON.stringify(file)}) }));`,
+        "--check",
+      );
+    const existing = read("baseline.txt");
+    expect(existing.exitCode).toBe(0);
+    expect(JSON.parse(existing.stdout.toString())).toEqual({
+      baseline: "original\n",
+    });
+    const patch = read(patchFile);
+    expect(patch.exitCode).toBe(0);
+    expect(JSON.parse(patch.stdout.toString())).toEqual({
+      baseline: "patch baseline\n",
+    });
+    const route = read(routeFile);
+    expect(route.exitCode).toBe(0);
+    expect(JSON.parse(route.stdout.toString())).toEqual({
+      baseline: "route baseline\n",
+    });
+    const absent = read("introduced.txt");
+    expect(absent.exitCode).toBe(0);
+    expect(JSON.parse(absent.stdout.toString())).toEqual({});
+    const blob = git(["rev-parse", `${base}:baseline.txt`]);
+    rmSync(
+      path.join(directory, ".git/objects", blob.slice(0, 2), blob.slice(2)),
+    );
+    git(["config", "remote.origin.url", "offlineprobe::baseline"]);
+    git(["config", "remote.origin.promisor", "true"]);
+    git(["config", "remote.origin.partialclonefilter", "blob:none"]);
+    git(["config", "extensions.partialClone", "origin"]);
+    const trace = path.join(directory, "git-trace.json");
+    const missing = runPreloaded(
+      `import { createGitBaselineReader } from './scripts/offline-git-read.ts';
+       process.env['GIT_TRACE2_EVENT'] = ${JSON.stringify(trace)};
+       createGitBaselineReader(${JSON.stringify({ root: directory, base })})("baseline.txt");`,
+      "--check",
+    );
+    expect(missing.exitCode).not.toBe(0);
+    expect(missing.stderr.toString()).toContain(
+      "ExternalContractBaselineUnavailable",
+    );
+    expect(missing.stderr.toString()).toContain(
+      "Baseline blob must be present locally",
+    );
+    expect(readFileSync(trace, "utf-8")).not.toContain('"child_start"');
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("offline Git reads reject unsupported operations", () => {
+  const result = runPreloaded(
+    `import { readOfflineGit } from './scripts/offline-git-read.ts';
+     readOfflineGit(${JSON.stringify({ root, operation: { type: "status" } })});`,
+    "--check",
+  );
+  expect(result.exitCode).not.toBe(0);
+  expect(result.stderr.toString()).toContain(
+    "Unsupported offline Git operation",
+  );
+});
+
+test.each([
+  {
+    name: "merge-base rejects an option-like revision",
+    operation: { type: "merge-base", ref: "--help" },
+    error: "ref",
+  },
+  {
+    name: "ls-tree rejects an option-like revision",
+    operation: { type: "ls-tree", commit: "--help", file: "baseline.txt" },
+    error: "commit",
+  },
+  {
+    name: "show rejects an option-like path",
+    operation: { type: "show", commit: "0".repeat(40), file: "--help" },
+    error: "path",
+  },
+])("$name", ({ operation, error }) => {
+  const result = runPreloaded(
+    `import { readOfflineGit } from './scripts/offline-git-read.ts';
+     readOfflineGit(${JSON.stringify({ root, operation })});`,
+    "--check",
+  );
+  expect(result.exitCode).not.toBe(0);
+  expect(result.stderr.toString()).toContain(`Invalid offline Git ${error}`);
+});
+
+test("the Git owner classification cannot permit child processes in another module", () => {
+  const directory = mkdtempSync(
+    path.join(root, ".offline-git-classification-"),
+  );
+  try {
+    const entry = path.join(directory, "check.ts");
+    writeFileSync(
+      entry,
+      `import ${JSON.stringify(path.join(root, "scripts/offline-git-read.ts"))}; import './planted';`,
+    );
+    writeFileSync(
+      path.join(directory, "planted.ts"),
+      "import { spawnSync } from 'node:child_process';",
+    );
+    const violations = offlineImportGraphViolations({
+      entries: [entry],
+      repositoryRoot: root,
+      allowances: parseOfflineImportAllowances(
+        JSON.parse(
+          readFileSync(
+            path.join(root, "scripts/offline-check-import-allowlist.json"),
+            "utf-8",
+          ),
+        ),
+      ).filter(({ file }) => file === "scripts/offline-git-read.ts"),
+    });
+    expect(violations).toHaveLength(1);
+    expect(violations.at(0)?.message).toContain(
+      "planted.ts: node:child_process is forbidden",
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test.each([
   [
     "node:https.get",

@@ -1,0 +1,22 @@
+{
+  "fixtureSet": "apps/api/src/lib/s3-presign.test.ts",
+  "provenance": {
+    "type": "authored",
+    "kind": "synthetic-from-spec"
+  },
+  "characterisedAt": {
+    "apps/api/package.json#dependencies.@aws-sdk/client-s3": "^3.1147.0",
+    "apps/api/package.json#dependencies.@aws-sdk/client-sts": "^3.1147.0",
+    "apps/api/package.json#dependencies.@aws-sdk/s3-request-presigner": "^3.1147.0",
+    "scripts/ci-service-images.json#rustfs": "docker.io/rustfs/rustfs:1.0.1@sha256:1803faef57627e2d9c2e7d89d655d712ddded5389040054987163043fecb6a3c",
+    "bun.lock#@aws-sdk/client-s3": "@aws-sdk/client-s3@3.1147.0",
+    "bun.lock#@aws-sdk/client-sts": "@aws-sdk/client-sts@3.1147.0",
+    "bun.lock#@aws-sdk/s3-request-presigner": "@aws-sdk/s3-request-presigner@3.1147.0"
+  },
+  "coveredOwners": ["apps/api/src/lib/s3-presign.ts", "apps/api/src/lib/s3.ts"],
+  "coveredSdks": [
+    "@aws-sdk/client-s3",
+    "@aws-sdk/client-sts",
+    "@aws-sdk/s3-request-presigner"
+  ]
+}

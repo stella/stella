@@ -9,6 +9,7 @@ import {
   ZERO_AGE_OVERRIDE,
   type DatedWaiver,
 } from "./dated-waivers";
+import { readExternalContractPinAllowances } from "./external-contract-pin-allowances";
 import {
   collectLintDirectives,
   resolveDirectiveAnchors,
@@ -185,6 +186,15 @@ export const removeWaiver = (
   const before = read(entry.source);
   let after: string;
   switch (entry.kind) {
+    case "external-contract-pin": {
+      const allowances = readExternalContractPinAllowances(before);
+      const allowance = allowances.find(({ id }) => id === entry.id);
+      if (!allowance || allowance.expiresAt !== entry.expiresAt) {
+        panic(`External contract pin allowance anchor missing: ${entry.id}`);
+      }
+      after = `${JSON.stringify({ allowances: allowances.filter(({ id }) => id !== entry.id) }, null, 2)}\n`;
+      break;
+    }
     case "no-llms-txt":
       after = removeDocumentation(before, entry);
       break;

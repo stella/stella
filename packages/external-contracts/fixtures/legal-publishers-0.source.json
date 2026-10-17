@@ -1,0 +1,12 @@
+{
+  "fixtureSet": "apps/api/src/handlers/case-law/ingestion/adapters/__fixtures__",
+  "provenance": {
+    "type": "sidecars",
+    "format": "fixture-provenance"
+  },
+  "characterisedAt": {},
+  "coveredOwners": [
+    "apps/api/src/handlers/case-law/ingestion/adapters/retry.ts"
+  ],
+  "coveredSdks": []
+}

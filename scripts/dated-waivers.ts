@@ -18,6 +18,11 @@ import {
   RELEASE_AGE_EXCEPTION_SOURCES,
 } from "./check-stll-quarantine-excludes";
 import type { AcceptanceTerms } from "./dependency-audit-acceptance";
+import {
+  EXTERNAL_CONTRACT_PIN_ALLOWANCES_PATH,
+  readExternalContractPinAllowances,
+  type ExternalContractPinAllowance,
+} from "./external-contract-pin-allowances";
 import { parseLedger } from "./suppression-waivers";
 
 export const DAY_MS = 86_400_000;
@@ -38,6 +43,8 @@ export const ZERO_AGE_OVERRIDE =
 export const DOC_SOURCE_FILE = ".claude/mcp/doc-sources.ts";
 
 export const RECHECK_INSTRUCTIONS = {
+  "external-contract-pin":
+    "Replay the offline SDK contract fixtures and remove the pin allowance.",
   "no-llms-txt": "Check canonical llms.txt and register an available source.",
   "release-age-exclusion":
     "Verify the pinned release passes the normal release-age gate, then remove the temporary exclusion.",
@@ -90,6 +97,7 @@ type CollectWaiversOptions = {
   bunfigs: readonly string[];
   releaseAgeSources: Readonly<Record<string, string>>;
   quarantineSources?: Readonly<Record<string, string>>;
+  externalContractPinAllowances?: readonly ExternalContractPinAllowance[];
 };
 
 export const collectWaivers = ({
@@ -99,6 +107,7 @@ export const collectWaivers = ({
   bunfigs,
   releaseAgeSources,
   quarantineSources = {},
+  externalContractPinAllowances = [],
 }: CollectWaiversOptions): DatedWaiver[] => {
   const entries: DatedWaiver[] = docs.map((entry) => ({
     source: DOC_SOURCE_FILE,
@@ -216,6 +225,23 @@ export const collectWaivers = ({
     });
   }
   entries.push(...readTestQuarantines(quarantineSources));
+  for (const allowance of externalContractPinAllowances) {
+    entries.push({
+      source: EXTERNAL_CONTRACT_PIN_ALLOWANCES_PATH,
+      line: sourceLine(
+        read(EXTERNAL_CONTRACT_PIN_ALLOWANCES_PATH),
+        allowance.id,
+      ),
+      id: allowance.id,
+      kind: "external-contract-pin",
+      checkedAt: allowance.checkedAt,
+      expiresAt: allowance.expiresAt,
+      probe: {
+        command: ["bun", "scripts/check-external-contracts.ts", "--check"],
+        attempts: 1,
+      },
+    });
+  }
   const identities = new Set<string>();
   for (const entry of entries) {
     expiryInstant(entry.expiresAt);
@@ -465,6 +491,7 @@ export const loadWaivers = (tracked: readonly string[]): DatedWaiver[] => {
       "scripts/suppression-waivers.ts",
       "scripts/suppression-waivers.json",
       "scripts/dependency-audit-baseline.json",
+      EXTERNAL_CONTRACT_PIN_ALLOWANCES_PATH,
       ...RELEASE_AGE_EXCEPTION_SOURCES,
       ...files,
     ]),
@@ -495,6 +522,9 @@ export const loadWaivers = (tracked: readonly string[]): DatedWaiver[] => {
       : [];
   return collectWaivers({
     read,
+    externalContractPinAllowances: readExternalContractPinAllowances(
+      read(EXTERNAL_CONTRACT_PIN_ALLOWANCES_PATH),
+    ),
     docs: DOC_SOURCE_EXCLUSIONS,
     audit,
     bunfigs: files,

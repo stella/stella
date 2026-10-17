@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 2,
+  "reason": "The new external-contracts package declares the existing catalog entries better-result for invariant failures and bun-types for its offline Bun test environment. No resolved dependency versions change."
+}

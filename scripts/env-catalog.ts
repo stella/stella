@@ -1501,6 +1501,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "FLAKE_CHILD_RECORD",
   "FLAKE_GATE_FIXTURE_PRELOADED",
   "FLAKE_GATE_TRIAL",
+  // Offline Git regression fixtures trace child processes to prove no fetch ran.
+  "GIT_TRACE2_EVENT",
   "GH_READ_TOKEN",
   "HEAD_SHA",
   // Scheduled journey checks: endpoint overrides and bounded request/retry timing.
