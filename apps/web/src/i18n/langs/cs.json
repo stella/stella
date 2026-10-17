@@ -65,6 +65,9 @@
     "runSelectedRows": "Spustit pro {count, plural, one {# vybraný řádek} few {# vybrané řádky} many {# vybraného řádku} other {# vybraných řádků}}",
     "selectedRun": "Spustit AI sloupce pro {count, plural, one {# řádek} few {# řádky} many {# řádku} other {# řádků}}"
   },
+  "aiDisclosure": {
+    "caseLaw": "AI shrnutí, poznámky a analýzy soudních rozhodnutí vytváří stella. Soudy je neschvalují a nejde o vlastní úvahy soudů; slouží jako pomůcka pro právníky a rozhodujícím zdrojem zůstává text rozhodnutí."
+  },
   "appearance": {
     "calendar": "Kalendář",
     "calendarGregorian": "Gregoriánský",

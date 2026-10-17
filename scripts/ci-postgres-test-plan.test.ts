@@ -106,7 +106,7 @@ const allRuleCases = {
   npm: ".npmrc",
   turbo: "turbo.json",
   patches: "patches/example.patch",
-  github: ".github/actions/test/action.yml",
+  github: ".github/workflows/ci.yml",
   migrations: "apps/api/drizzle/next/migration.sql",
   database: "apps/api/src/db/schema/table.ts",
   runner: "apps/api/scripts/run-tests.ts",
@@ -135,6 +135,41 @@ test("every API all-suite rule widens Postgres selection", async () => {
         }),
         name,
       ).toEqual({ mode: "all" });
+    }
+  });
+});
+
+test("Postgres selection shares the narrowed GitHub reader boundary", async () => {
+  await withRepository(async (root, write) => {
+    write("apps/api/src/feature/db.test.ts", gateSource(""));
+    for (const file of [
+      ".github/workflows/ci.yml",
+      ".github/actions/ci-install/action.yml",
+    ]) {
+      expect(
+        await planPostgresTests({
+          event: "pull_request",
+          scopeUnknown: false,
+          changed: [file],
+          root,
+        }),
+        file,
+      ).toEqual({ mode: "all" });
+    }
+    for (const file of [
+      ".github/workflows/pr-lint.yml",
+      ".github/ci-event-policy.json",
+      ".github/ci-checks/ci-checks-policy.yml",
+    ]) {
+      expect(
+        await planPostgresTests({
+          event: "pull_request",
+          scopeUnknown: false,
+          changed: [file],
+          root,
+        }),
+        file,
+      ).toEqual({ mode: "none" });
     }
   });
 });

@@ -65,6 +65,9 @@
     "runSelectedRows": "Uruchom dla {count, plural, one {# wybranego wiersza} few {# wybranych wierszy} many {# wybranych wierszy} other {# wybranego wiersza}}",
     "selectedRun": "Uruchom kolumny AI dla {count, plural, one {# wiersza} few {# wierszy} many {# wierszy} other {# wiersza}}"
   },
+  "aiDisclosure": {
+    "caseLaw": "Podsumowania, notatki i analizy orzeczeń sądowych przygotowane przez AI generuje stella; nie są one zatwierdzone przez sądy i nie odzwierciedlają własnego rozumowania sądów. Stanowią pomoc dla prawników, a rozstrzygającym źródłem pozostaje tekst orzeczenia."
+  },
   "appearance": {
     "calendar": "Kalendarz",
     "calendarGregorian": "Gregoriański",
