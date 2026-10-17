@@ -66,6 +66,7 @@ import {
   FOLIO_COLLAB_SNAPSHOT_MAX_BYTES,
   FOLIO_COLLAB_TOKEN_TTL_MS,
 } from "@/api/lib/folio-collab-room-contract";
+import { retireFolioCollabSnapshot } from "@/api/lib/folio-collab-snapshot-retirement";
 import { isMemberRole } from "@/api/lib/member-roles";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import {
@@ -680,17 +681,16 @@ const recoverRefusedFolioSnapshot = async ({
           seedClaimedBy: null,
           seededAt: null,
           sourceVersionId: snapshotPointer.baseVersionId,
-          yjsSnapshotFileId: createSafeId<"userFile">(),
-          yjsSnapshotSizeBytes: null,
           docxCheckpointFileId: createSafeId<"userFile">(),
           docxCheckpointSha256Hex: null,
           docxCheckpointSnapshotSha256Hex: null,
           docxCheckpointSizeBytes: null,
           docxCheckpointScanWarnings: null,
           docxCheckpointUpdatedAt: null,
-          savedSnapshotCut: null,
-          snapshotRecoveredAt:
-            decideFolioSnapshotRecoveryState({
+          ...retireFolioCollabSnapshot({
+            snapshotFileId: createSafeId<"userFile">(),
+            now: new Date(),
+            state: decideFolioSnapshotRecoveryState({
               snapshotSha256Hex,
               savedSnapshotCut: snapshotPointer.savedSnapshotCut,
               savedVersionId: snapshotPointer.baseVersionId,
@@ -702,11 +702,8 @@ const recoverRefusedFolioSnapshot = async ({
                 snapshotPointer.baseVersionId
                   ? "initial-seed"
                   : "publication",
-            }) === "unsaved"
-              ? new Date()
-              : null,
-          yjsSnapshotRevision: 0,
-          yjsSnapshotUpdatedAt: null,
+            }),
+          }),
         },
       },
       recordTransitionAuditEvent: async (auditTx) => {

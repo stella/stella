@@ -44,6 +44,7 @@ import {
   issueFolioCollabToken,
   recordFolioCollabContribution,
 } from "@/api/lib/folio-collab-rooms";
+import { retireFolioCollabSnapshot } from "@/api/lib/folio-collab-snapshot-retirement";
 import { isMemberRole } from "@/api/lib/member-roles";
 import { memberReachesMatterSql } from "@/api/lib/workspaces/authorized-workspace-ids";
 
@@ -133,7 +134,6 @@ type ClaimRoomSeedOptions = {
   expectedSeedState: "claimed" | "empty";
   now: Date;
   roomId: SafeId<"folioCollabRoom">;
-  snapshotRecoveredAt: Date | null;
   tx: Transaction;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace">;
@@ -206,7 +206,6 @@ const claimFolioCollabRoomSeed = async ({
   expectedSeedState,
   now,
   roomId,
-  snapshotRecoveredAt,
   tx,
   userId,
   workspaceId,
@@ -219,13 +218,12 @@ const claimFolioCollabRoomSeed = async ({
       seedClaimedAt: now,
       seedClaimedBy: userId,
       seedState: "claimed",
-      yjsSnapshotFileId: createSafeId<"userFile">(),
-      savedSnapshotCut: null,
-      snapshotRecoveredAt,
-      yjsSnapshotRevision: 0,
+      ...retireFolioCollabSnapshot({
+        snapshotFileId: createSafeId<"userFile">(),
+        state: "pending-seed",
+        now,
+      }),
       seededAt: null,
-      yjsSnapshotSizeBytes: null,
-      yjsSnapshotUpdatedAt: null,
     })
     .where(
       folioCollabSeedClaimPredicate({
@@ -235,7 +233,11 @@ const claimFolioCollabRoomSeed = async ({
         workspaceId,
       }),
     )
-    .returning({ generation: folioCollabRooms.generation });
+    .returning({
+      generation: folioCollabRooms.generation,
+      snapshotRecoveredAt: folioCollabRooms.snapshotRecoveredAt,
+      yjsSnapshotRevision: folioCollabRooms.yjsSnapshotRevision,
+    });
 
   return claimed.at(0) ?? null;
 };
@@ -315,9 +317,6 @@ const joinFolioCollabRoomHandler = async function* ({
           id: folioCollabRooms.id,
           seedClaimedAt: folioCollabRooms.seedClaimedAt,
           seedState: folioCollabRooms.seedState,
-          savedSnapshotCut: folioCollabRooms.savedSnapshotCut,
-          snapshotRecoveredAt: folioCollabRooms.snapshotRecoveredAt,
-          yjsSnapshotRevision: folioCollabRooms.yjsSnapshotRevision,
           yjsSnapshotFileId: folioCollabRooms.yjsSnapshotFileId,
           yjsSnapshotUpdatedAt: folioCollabRooms.yjsSnapshotUpdatedAt,
         })
@@ -370,9 +369,6 @@ const joinFolioCollabRoomHandler = async function* ({
             id: folioCollabRooms.id,
             seedClaimedAt: folioCollabRooms.seedClaimedAt,
             seedState: folioCollabRooms.seedState,
-            savedSnapshotCut: folioCollabRooms.savedSnapshotCut,
-            snapshotRecoveredAt: folioCollabRooms.snapshotRecoveredAt,
-            yjsSnapshotRevision: folioCollabRooms.yjsSnapshotRevision,
             yjsSnapshotFileId: folioCollabRooms.yjsSnapshotFileId,
             yjsSnapshotUpdatedAt: folioCollabRooms.yjsSnapshotUpdatedAt,
           });
@@ -443,25 +439,11 @@ const joinFolioCollabRoomHandler = async function* ({
           } as const;
         }
 
-        snapshotRecovery = decideFolioCollabSnapshotRecovery({
-          shouldSeed: true,
-          snapshotRecovered: room.snapshotRecoveredAt !== null,
-          // Only a receipt bound to the saved version proves a claimed seed is pristine.
-          yjsSnapshotRevision:
-            room.seedState === "claimed" &&
-            room.savedSnapshotCut?.versionId === room.baseVersionId
-              ? 0
-              : room.yjsSnapshotRevision,
-        });
         const claim = await claimFolioCollabRoomSeed({
           expectedGeneration: room.generation,
           expectedSeedState: room.seedState,
           now,
           roomId: room.id,
-          snapshotRecoveredAt:
-            snapshotRecovery === "unsaved-changes-discarded"
-              ? (room.snapshotRecoveredAt ?? now)
-              : null,
           tx,
           userId,
           workspaceId,
@@ -496,6 +478,11 @@ const joinFolioCollabRoomHandler = async function* ({
 
         generation = claim.generation;
         shouldSeed = true;
+        snapshotRecovery = decideFolioCollabSnapshotRecovery({
+          shouldSeed,
+          snapshotRecovered: claim.snapshotRecoveredAt !== null,
+          yjsSnapshotRevision: claim.yjsSnapshotRevision,
+        });
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.UPDATE,
           resourceType: AUDIT_RESOURCE_TYPE.FOLIO_COLLAB_ROOM,

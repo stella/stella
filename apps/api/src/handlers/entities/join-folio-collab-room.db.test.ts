@@ -29,6 +29,7 @@ import {
   folioCollabRooms,
   folioCollabPublications,
   folioCollabRoomTokens,
+  workspaceMembers,
 } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
 import { resetFolioCollabUserState } from "@/api/lib/account-deletion-steps";
@@ -1188,6 +1189,119 @@ test("issued collaboration tokens store the legacy createHash digest", async () 
     .from(folioCollabRoomTokens)
     .where(eq(folioCollabRoomTokens.roomId, roomId));
   expect(stored).toEqual([{ tokenHash: legacyHex(token) }]);
+});
+
+test("deleting a claimant before seed acknowledgement warns the next member about discarded edits", async () => {
+  const roomId = await insertRoom({
+    generation: 4,
+    seedState: "claimed",
+    seedClaimedAt: new Date(),
+    seedClaimedBy: ids.userA1,
+  });
+  const scopedDb = asTestRaw<
+    Parameters<typeof loadFolioCollabSnapshot>[0]["scopedDb"]
+  >(
+    async <T>(run: (tx: TestDatabaseTransaction) => Promise<T>) =>
+      await scopedQuery([ids.wsA1], ids.orgA, run, ids.userA1),
+  );
+  const fake = startFakeS3();
+  const membershipId = createSafeId<"workspaceMember">();
+  let retiredKey: string | undefined;
+  try {
+    await testDb.insert(workspaceMembers).values({
+      id: membershipId,
+      userId: ids.userA2,
+      workspaceId: ids.wsA1,
+    });
+    const stored = await storeFolioCollabSnapshot({
+      authority: { type: "collab-service" },
+      expectedGeneration: 4,
+      expectedSnapshotRevision: 0,
+      snapshotBytes: deployedSnapshot("dirty"),
+      value: {
+        canEdit: true,
+        entityId: ids.entityA1,
+        fileName: "contract.docx",
+        generation: 4,
+        organizationId: ids.orgA,
+        propertyId: ids.filePropertyA1,
+        roomId,
+        scopedDb,
+        tokenExpiresAt: new Date(Date.now() + 60_000),
+        tokenId: createSafeId<"folioCollabRoomToken">(),
+        userId: ids.userA1,
+        userName: "Editor",
+        workspaceId: ids.wsA1,
+      },
+    });
+    expect(stored.unwrap()).toMatchObject({
+      status: "stored",
+      snapshotRevision: 1,
+    });
+    const [pending] = await testDb
+      .select()
+      .from(folioCollabRooms)
+      .where(eq(folioCollabRooms.id, roomId));
+    if (!pending) {
+      throw new TypeError("Pending seed fixture room is missing");
+    }
+    expect(pending).toMatchObject({
+      seedState: "claimed",
+      savedSnapshotCut: null,
+      seededAt: null,
+      yjsSnapshotRevision: 1,
+    });
+    retiredKey = createFileKey({
+      fileId: pending.yjsSnapshotFileId,
+      mimeType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+    });
+    await testDb.transaction(
+      async (tx) =>
+        await resetFolioCollabUserState(
+          asTestRaw<Parameters<typeof resetFolioCollabUserState>[0]>(tx),
+          ids.userA1,
+        ),
+    );
+    const nextMemberDb = asTestRaw<
+      Parameters<typeof loadFolioCollabSnapshot>[0]["scopedDb"]
+    >(
+      async <T>(run: (tx: TestDatabaseTransaction) => Promise<T>) =>
+        await scopedQuery([ids.wsA1], ids.orgA, run, ids.userA2),
+    );
+    const noAudit = async () => undefined;
+    const joined = await joinFolioCollabRoom.handler(
+      asTestRaw<Parameters<typeof joinFolioCollabRoom.handler>[0]>({
+        body: { entityId: ids.entityA1, propertyId: ids.filePropertyA1 },
+        safeDb: safeDbFromScoped(nextMemberDb),
+        session: { activeOrganizationId: ids.orgA },
+        user: { id: ids.userA2, email: "member@example.test" },
+        workspaceId: ids.wsA1,
+        memberRole: sessionMemberRole("member"),
+        request: new Request("https://example.test/join"),
+        route: "/v1/workspaces/:workspaceId/entities/join-folio-collab-room",
+        recordAuditEvent: noAudit,
+        createAuditRecorder: () => noAudit,
+      }),
+    );
+    expect(joined).toMatchObject({
+      roomId,
+      generation: 6,
+      shouldSeed: true,
+      snapshotRecovery: "unsaved-changes-discarded",
+    });
+  } finally {
+    fake.stop();
+    await testDb
+      .delete(workspaceMembers)
+      .where(eq(workspaceMembers.id, membershipId));
+    if (retiredKey !== undefined) {
+      await testDb
+        .delete(bufferObjectCleanupIntents)
+        .where(eq(bufferObjectCleanupIntents.objectKey, retiredKey));
+    }
+  }
 });
 
 test("deleting a pending seed claimant retires its stored snapshot under the room tenant", async () => {

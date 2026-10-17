@@ -111,6 +111,7 @@ import {
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey, createUserFileKey } from "@/api/lib/files/utils";
 import { FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE } from "@/api/lib/folio-collab-mime";
+import { retireFolioCollabSnapshot } from "@/api/lib/folio-collab-snapshot-retirement";
 import { LIMITS } from "@/api/lib/limits";
 import {
   clearMemberAssignments,
@@ -889,17 +890,17 @@ export const resetFolioCollabUserState = async (
                 seedClaimedBy: null,
                 seedState: "empty",
                 seededAt: null,
-                savedSnapshotCut: null,
-                yjsSnapshotRevision: 0,
-                yjsSnapshotFileId: sqlCaseFragment({
-                  branches: claimBatch.map(
-                    ({ id }) =>
-                      sql`WHEN ${eq(folioCollabRooms.id, id)} THEN ${createSafeId<"userFile">()}::uuid`,
-                  ),
-                  fallback: sql`${folioCollabRooms.yjsSnapshotFileId}`,
+                ...retireFolioCollabSnapshot({
+                  state: "pending-seed",
+                  now: new Date(),
+                  snapshotFileId: sqlCaseFragment({
+                    branches: claimBatch.map(
+                      ({ id }) =>
+                        sql`WHEN ${eq(folioCollabRooms.id, id)} THEN ${createSafeId<"userFile">()}::uuid`,
+                    ),
+                    fallback: sql`${folioCollabRooms.yjsSnapshotFileId}`,
+                  }),
                 }),
-                yjsSnapshotSizeBytes: null,
-                yjsSnapshotUpdatedAt: null,
               })
               .where(
                 and(
