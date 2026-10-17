@@ -749,6 +749,7 @@ exit 0
             "autofix-local.sh",
             "prepare-typecheck-base.sh",
             "gh-retry.sh",
+            "retry.sh",
           ]) {
             copyFileSync(
               path.join(root, "scripts", file),
@@ -787,6 +788,9 @@ exit 0
           });
           for (const file of [
             "scripts/autofix-plan.ts",
+            "scripts/autofix-push-scope.ts",
+            "scripts/autofix-baseline-prune.ts",
+            "scripts/baseline-shrink.ts",
             "scripts/autofix-protected-paths.ts",
             "scripts/baseline-paths.ts",
             "scripts/generated-files.ts",

@@ -19,6 +19,7 @@ import {
   legislationFacetRefreshes,
   legislationSources,
 } from "@/api/db/schema";
+import { createStatuteCitationCountRepair } from "@/api/handlers/case-law/provisions/citation-count-repair";
 import {
   readStatuteByEliHandler,
   resolveStatuteWorkVersion,
@@ -77,7 +78,7 @@ let historyDb: LegislationReadDb;
 let historyClient: Awaited<ReturnType<typeof createTestPglite>> | undefined;
 let ownerDb: LegislationReadDb;
 
-const unpublishedStatutes = ["SVK", "POL", "DEU"].map((country) => ({
+const unpublishedStatutes = ["POL", "DEU"].map((country) => ({
   country,
   id: createSafeId<"legislationDocument">(),
   eli: `${country}/2020/123`,
@@ -452,6 +453,13 @@ beforeAll(
         versionValidTo: null,
       }),
     ]);
+
+    const repairCitationCounts = createStatuteCitationCountRepair(db);
+    let repair = await repairCitationCounts();
+    if (repair.status === "advanced") {
+      repair = await repairCitationCounts();
+    }
+    expect(repair).toEqual({ status: "ready", decisions: 0 });
 
     ownerDb = async (read) =>
       await db.transaction(
@@ -1774,11 +1782,11 @@ describe("batched point-in-time statute resolve", () => {
       null,
     ]);
     expect(items.at(3)).toMatchObject({
-      unresolvedReason: "pending_public",
+      unresolvedReason: "pages_public",
       availability: {
         status: "unavailable",
         country: "SVK",
-        reason: "pending_public",
+        reason: "pages_public",
       },
     });
   });
@@ -2163,7 +2171,10 @@ describe("statute country publication", () => {
   test.each(unpublishedStatutes)(
     "$country cannot be enumerated or reached through a document or work identifier",
     async ({ id, country, eli }) => {
-      const unavailable = publicCountryUnavailable(country, "search");
+      const unavailable = publicCountryUnavailable(country, {
+        domain: "legislation",
+        surface: "search",
+      });
       const listed = await listStatutesHandler({ country }, legislationDb);
       if (unavailable === null) {
         const page = expectPage(listed);

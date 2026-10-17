@@ -137,7 +137,7 @@ describe("pageTotals", () => {
   test("counts a repeated endpoint every time it is called", () => {
     expect(
       pageTotals({
-        intervals: [],
+        depthChain: [],
         requests: [request(3, 1000), request(3, 1000), request(null, null)],
       }),
     ).toEqual({ apiRequests: 3, dbQueries: 6, responseBytes: 2000 });
