@@ -2616,10 +2616,12 @@
     "api": {
       "badRequest": "Pieprasījumu neizdevās pabeigt.",
       "caseLawCountryUnavailable": "Šīs valsts judikatūra nav pieejama. Izvēlieties citu valsti.",
+      "caseLawIdentityOnly": "Šajā valstī ir pieejama tikai precīza nolēmumu meklēšana un lasīšana.",
       "caseLawSearchUnavailable": "Šīs valsts judikatūras meklēšana nav pieejama. Tās publiskos tiesu nolēmumus joprojām varat lasīt.",
       "conflict": "Pieprasījums konfliktē ar pašreizējo stāvokli.",
       "forbidden": "Jums nav atļaujas veikt šo darbību.",
       "legislationCountryUnavailable": "Šīs valsts tiesību akti nav pieejami. Izvēlieties citu valsti.",
+      "legislationIdentityOnly": "Šajā valstī ir pieejama tikai precīza tiesību aktu meklēšana un lasīšana.",
       "legislationSearchUnavailable": "Šīs valsts tiesību aktu meklēšana nav pieejama. Tās publiskos tiesību aktus joprojām varat lasīt.",
       "notFound": "Pieprasīto vienumu neizdevās atrast.",
       "payloadTooLarge": "Pieprasījums ir pārāk liels.",

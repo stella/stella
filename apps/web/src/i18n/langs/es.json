@@ -2616,10 +2616,12 @@
     "api": {
       "badRequest": "No se pudo completar la solicitud.",
       "caseLawCountryUnavailable": "La jurisprudencia de este país no está disponible. Elige otro país.",
+      "caseLawIdentityOnly": "Para este país solo están disponibles la búsqueda exacta y la lectura de resoluciones.",
       "caseLawSearchUnavailable": "La búsqueda de jurisprudencia de este país no está disponible. Puedes seguir consultando sus resoluciones públicas.",
       "conflict": "La solicitud entra en conflicto con el estado actual.",
       "forbidden": "No tienes permiso para hacer esto.",
       "legislationCountryUnavailable": "La legislación de este país no está disponible. Elige otro país.",
+      "legislationIdentityOnly": "Para este país solo están disponibles la búsqueda exacta y la lectura de legislación.",
       "legislationSearchUnavailable": "La búsqueda de legislación de este país no está disponible. Puedes seguir consultando su legislación pública.",
       "notFound": "No pudimos encontrar lo solicitado.",
       "payloadTooLarge": "La solicitud es demasiado grande.",

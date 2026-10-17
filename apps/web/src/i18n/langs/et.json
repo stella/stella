@@ -2616,10 +2616,12 @@
     "api": {
       "badRequest": "Päringut ei saanud lõpule viia.",
       "caseLawCountryUnavailable": "Selle riigi kohtupraktika ei ole saadaval. Valige teine riik.",
+      "caseLawIdentityOnly": "Selle riigi puhul saab kohtulahendeid ainult täpse tunnuse alusel otsida ja lugeda.",
       "caseLawSearchUnavailable": "Selle riigi kohtupraktika otsing ei ole saadaval. Selle avalikke kohtulahendeid saate endiselt lugeda.",
       "conflict": "Päring on praeguse olekuga vastuolus.",
       "forbidden": "Teil pole selleks toiminguks õigust.",
       "legislationCountryUnavailable": "Selle riigi õigusaktid ei ole saadaval. Valige teine riik.",
+      "legislationIdentityOnly": "Selle riigi puhul saab õigusakte ainult täpse tunnuse alusel otsida ja lugeda.",
       "legislationSearchUnavailable": "Selle riigi õigusaktide otsing ei ole saadaval. Selle avalikke õigusakte saate endiselt lugeda.",
       "notFound": "Soovitud üksust ei leitud.",
       "payloadTooLarge": "Päring on liiga suur.",

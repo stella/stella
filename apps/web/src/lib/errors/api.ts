@@ -154,11 +154,13 @@ export const toAPIError = ({ status, value }: ToAPIErrorProps) => {
 
 const PUBLIC_COUNTRY_ERROR_KEYS = {
   caseLaw: {
+    identity_public: "errors.api.caseLawIdentityOnly",
     pending_public: "errors.api.caseLawCountryUnavailable",
     withdrawn: "errors.api.caseLawCountryUnavailable",
     pages_public: "errors.api.caseLawSearchUnavailable",
   },
   legislation: {
+    identity_public: "errors.api.legislationIdentityOnly",
     pending_public: "errors.api.legislationCountryUnavailable",
     withdrawn: "errors.api.legislationCountryUnavailable",
     pages_public: "errors.api.legislationSearchUnavailable",

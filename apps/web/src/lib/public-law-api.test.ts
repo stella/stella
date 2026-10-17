@@ -113,6 +113,8 @@ describe("isSearchUnavailableError", () => {
       other: "legislation",
       unavailable:
         "Case law for this country is not available. Choose another country.",
+      identity:
+        "Only exact decision lookup and reading are available for this country.",
       search:
         "Case-law search is not available for this country. You can still read its public decisions.",
     },
@@ -121,12 +123,14 @@ describe("isSearchUnavailableError", () => {
       other: "caseLaw",
       unavailable:
         "Legislation for this country is not available. Choose another country.",
+      identity:
+        "Only exact legislation lookup and reading are available for this country.",
       search:
         "Legislation search is not available for this country. You can still read its public legislation.",
     },
   ] as const)(
     "$domain refusal preserves the other admitted domain",
-    ({ domain, other, unavailable, search }) => {
+    ({ domain, identity, other, unavailable, search }) => {
       for (const reason of publicCountryUnavailableSchema.entries.reason
         .options) {
         const capabilities = {
@@ -157,6 +161,10 @@ describe("isSearchUnavailableError", () => {
           throw new TypeError("Expected APIError");
         }
         expect(error.details).toMatchObject({ domain, reason, country: "EU" });
+        if (reason === "identity_public") {
+          expect(error.message).toBe(identity);
+          continue;
+        }
         expect(error.message).toBe(
           reason === "pages_public" ? search : unavailable,
         );

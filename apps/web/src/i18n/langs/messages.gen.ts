@@ -2619,10 +2619,12 @@ type Messages = {
     "api": {
       "badRequest": "The request could not be completed.";
       "caseLawCountryUnavailable": "Case law for this country is not available. Choose another country.";
+      "caseLawIdentityOnly": "Only exact decision lookup and reading are available for this country.";
       "caseLawSearchUnavailable": "Case-law search is not available for this country. You can still read its public decisions.";
       "conflict": "The request conflicts with the current state.";
       "forbidden": "You do not have permission to do this.";
       "legislationCountryUnavailable": "Legislation for this country is not available. Choose another country.";
+      "legislationIdentityOnly": "Only exact legislation lookup and reading are available for this country.";
       "legislationSearchUnavailable": "Legislation search is not available for this country. You can still read its public legislation.";
       "notFound": "We could not find what you requested.";
       "payloadTooLarge": "The request is too large.";

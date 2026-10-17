@@ -2616,10 +2616,12 @@
     "api": {
       "badRequest": "Užklausos nepavyko užbaigti.",
       "caseLawCountryUnavailable": "Šios šalies teismų praktika nepasiekiama. Pasirinkite kitą šalį.",
+      "caseLawIdentityOnly": "Šioje šalyje galima tik tiksli sprendimų paieška ir jų skaitymas.",
       "caseLawSearchUnavailable": "Šios šalies teismų praktikos paieška nepasiekiama. Jos viešus teismų sprendimus vis tiek galite skaityti.",
       "conflict": "Užklausa nesuderinama su dabartine būsena.",
       "forbidden": "Neturite teisės atlikti šio veiksmo.",
       "legislationCountryUnavailable": "Šios šalies teisės aktai nepasiekiami. Pasirinkite kitą šalį.",
+      "legislationIdentityOnly": "Šioje šalyje galima tik tiksli teisės aktų paieška ir jų skaitymas.",
       "legislationSearchUnavailable": "Šios šalies teisės aktų paieška nepasiekiama. Jos viešus teisės aktus vis tiek galite skaityti.",
       "notFound": "Nepavyko rasti prašomo objekto.",
       "payloadTooLarge": "Užklausa per didelė.",

@@ -2616,10 +2616,12 @@
     "api": {
       "badRequest": "A kérést nem sikerült teljesíteni.",
       "caseLawCountryUnavailable": "Az ország ítélkezési gyakorlata nem érhető el. Válasszon másik országot.",
+      "caseLawIdentityOnly": "Ebben az országban csak a határozatok pontos keresése és olvasása érhető el.",
       "caseLawSearchUnavailable": "Az ország ítélkezési gyakorlatában nem lehet keresni. Nyilvános határozatait továbbra is olvashatja.",
       "conflict": "A kérés ütközik a jelenlegi állapottal.",
       "forbidden": "Nincs jogosultsága ehhez a művelethez.",
       "legislationCountryUnavailable": "Az ország jogszabályai nem érhetők el. Válasszon másik országot.",
+      "legislationIdentityOnly": "Ebben az országban csak a jogszabályok pontos keresése és olvasása érhető el.",
       "legislationSearchUnavailable": "Az ország jogszabályaiban nem lehet keresni. Nyilvános jogszabályait továbbra is olvashatja.",
       "notFound": "A kért elem nem található.",
       "payloadTooLarge": "A kérés túl nagy.",

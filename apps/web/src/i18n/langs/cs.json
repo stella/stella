@@ -2616,10 +2616,12 @@
     "api": {
       "badRequest": "Požadavek se nepodařilo dokončit.",
       "caseLawCountryUnavailable": "Judikatura této země není dostupná. Vyberte jinou zemi.",
+      "caseLawIdentityOnly": "Pro tuto zemi je dostupné pouze přesné vyhledání a čtení rozhodnutí.",
       "caseLawSearchUnavailable": "Vyhledávání judikatury této země není dostupné. Její veřejná rozhodnutí si můžete nadále číst.",
       "conflict": "Požadavek je v konfliktu s aktuálním stavem.",
       "forbidden": "K této akci nemáte oprávnění.",
       "legislationCountryUnavailable": "Právní předpisy této země nejsou dostupné. Vyberte jinou zemi.",
+      "legislationIdentityOnly": "Pro tuto zemi je dostupné pouze přesné vyhledání a čtení právních předpisů.",
       "legislationSearchUnavailable": "Vyhledávání právních předpisů této země není dostupné. Její veřejné právní předpisy si můžete nadále číst.",
       "notFound": "Požadovanou položku se nepodařilo najít.",
       "payloadTooLarge": "Požadavek je příliš velký.",

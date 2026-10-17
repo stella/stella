@@ -2616,10 +2616,12 @@
     "api": {
       "badRequest": "Die Anfrage konnte nicht abgeschlossen werden.",
       "caseLawCountryUnavailable": "Die Rechtsprechung dieses Landes ist nicht verfügbar. Wählen Sie ein anderes Land.",
+      "caseLawIdentityOnly": "Für dieses Land sind nur die genaue Suche und das Lesen von Entscheidungen verfügbar.",
       "caseLawSearchUnavailable": "Die Suche in der Rechtsprechung dieses Landes ist nicht verfügbar. Die öffentlichen Entscheidungen können Sie weiterhin lesen.",
       "conflict": "Die Anfrage steht im Konflikt mit dem aktuellen Zustand.",
       "forbidden": "Sie haben keine Berechtigung für diese Aktion.",
       "legislationCountryUnavailable": "Die Rechtsvorschriften dieses Landes sind nicht verfügbar. Wählen Sie ein anderes Land.",
+      "legislationIdentityOnly": "Für dieses Land sind nur die genaue Suche und das Lesen von Rechtsvorschriften verfügbar.",
       "legislationSearchUnavailable": "Die Suche in den Rechtsvorschriften dieses Landes ist nicht verfügbar. Die öffentlichen Rechtsvorschriften können Sie weiterhin lesen.",
       "notFound": "Das Angeforderte konnte nicht gefunden werden.",
       "payloadTooLarge": "Die Anfrage ist zu groß.",
