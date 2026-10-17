@@ -118,7 +118,9 @@ const storedInput = (seed: IngestionResult, raw: string) => ({
 const persistedOutput = (adapter: string, raw: RawIngestionResult) => {
   const schema = metadataUrlSchemaForAdapter(adapter);
   const result = sanitizeResult(
-    toPlainTextIngestionResult(raw, schema).unwrap(),
+    toPlainTextIngestionResult(raw, schema).unwrap(
+      "A recorded fixture is a valid ingestion result",
+    ),
     schema,
   );
   const sections =
@@ -131,7 +133,7 @@ const persistedOutput = (adapter: string, raw: RawIngestionResult) => {
       ? result.documentAst
       : undefined,
     citationScopes: result.citationScopes,
-  }).unwrap();
+  }).unwrap("Citation extraction over recorded fixture text succeeds");
   const grammar =
     Object.values(PROVISION_CITATION_GRAMMARS).find(
       ({ jurisdiction }) => jurisdiction === result.country,
@@ -548,7 +550,9 @@ const collectAmericanDocuments = async ({
     add({
       adapter: "us-courtlistener",
       fixture: `courtlistener-clusters-2026-06-30.ndjson.gz[${index}]`,
-      decision: mapCourtListenerRecord(record).unwrap(),
+      decision: mapCourtListenerRecord(record).unwrap(
+        "A recorded CourtListener cluster maps to a decision",
+      ),
     });
   }
   const courtListenerFixtures = path.join(
