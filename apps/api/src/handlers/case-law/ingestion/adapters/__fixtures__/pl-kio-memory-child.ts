@@ -5,6 +5,7 @@ import { decodeSourceRawEnvelope } from "@/api/handlers/case-law/ingestion/adapt
 import { assemblePlKioDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-kio";
 import {
   PL_KIO_HTML_BUDGET,
+  PL_KIO_RESPONSE_BYTE_CAP,
   readPlKioHtml,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-kio-response-budget";
 
@@ -72,21 +73,25 @@ const documentHtmlOf = (kind: string) => {
 };
 const documentHtml = documentHtmlOf(workload);
 const documentBytes = Buffer.byteLength(documentHtml);
-const budget = readPlKioHtml(documentHtml).type;
+const budget = readPlKioHtml(documentHtml, {
+  maxBytes: PL_KIO_RESPONSE_BYTE_CAP.document,
+}).type;
 // Each span allocates an element, an attribute and a text node; parse5 also
 // creates document/html/head/body nodes for this fragment.
 const boundaryRepeats = Math.floor(
   (PL_KIO_HTML_BUDGET.maxDomAllocations - 4) / 3,
 );
 const markupBoundaryHtml = '<span a="x">text</span>'.repeat(boundaryRepeats);
-const boundaryBudget = readPlKioHtml(markupBoundaryHtml).type;
-const overflowBudget = readPlKioHtml(
-  `${markupBoundaryHtml}<span>x</span>`,
-).type;
+const boundaryBudget = readPlKioHtml(markupBoundaryHtml, {
+  maxBytes: PL_KIO_RESPONSE_BYTE_CAP.document,
+}).type;
+const overflowBudget = readPlKioHtml(`${markupBoundaryHtml}<span>x</span>`, {
+  maxBytes: PL_KIO_RESPONSE_BYTE_CAP.document,
+}).type;
 const markupTokens = countMarkupTokens(documentHtml);
 if (
   (workload === "accepted" && documentBytes !== targetBytes) ||
-  targetBytes > PL_KIO_HTML_BUDGET.maxBytes ||
+  targetBytes > PL_KIO_RESPONSE_BYTE_CAP.document ||
   (workload === "accepted" && budget !== "accepted") ||
   boundaryBudget !== "accepted" ||
   overflowBudget !== "markup-budget-exceeded"

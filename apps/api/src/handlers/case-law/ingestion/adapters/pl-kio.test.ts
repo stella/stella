@@ -40,6 +40,7 @@ import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 import {
   PL_KIO_DOCUMENT_REJECTION,
   PL_KIO_HTML_BUDGET,
+  PL_KIO_RESPONSE_BYTE_CAP,
 } from "./pl-kio-response-budget";
 
 const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);
@@ -663,7 +664,7 @@ type Seen = { url: string; body: string };
 
 type StubOverrides = {
   detailStatus?: number;
-  detailBytes?: number;
+  detailHtml?: string;
   contentStatus?: number;
   contentHtml?: string;
   /** Serves a document body of this many bytes instead of the fixture. */
@@ -704,8 +705,8 @@ const stubPublisher = async (
       return html(pages[form.get("Pg") ?? ""] ?? pages["2"] ?? "");
     }
     if (url.includes("/Home/Details/")) {
-      if (overrides.detailBytes !== undefined) {
-        return html("x".repeat(overrides.detailBytes));
+      if (overrides.detailHtml !== undefined) {
+        return html(overrides.detailHtml);
       }
       return overrides.detailStatus === undefined
         ? html(detail)
@@ -864,11 +865,12 @@ describe("walking a month", () => {
     ).toBe(true);
   });
 
-  test("a converted document at the byte budget retains its text and raw HTML", async () => {
+  test("a converted document above 2 MiB retains its text on fetch and replay", async () => {
     const content = await gzFixtureText("pl-kio-content-30308.html.gz");
-    const documentHtml = `<!--${"x".repeat(PL_KIO_HTML_BUDGET.maxBytes - new TextEncoder().encode(content).byteLength - 7)}-->${content}`;
+    const documentBytes = 2 * 1024 * 1024 + 1;
+    const documentHtml = `<!--${"x".repeat(documentBytes - new TextEncoder().encode(content).byteLength - 7)}-->${content}`;
     expect(new TextEncoder().encode(documentHtml).byteLength).toBe(
-      PL_KIO_HTML_BUDGET.maxBytes,
+      documentBytes,
     );
     await stubPublisher({
       contentHtml: documentHtml,
@@ -888,25 +890,47 @@ describe("walking a month", () => {
     expect(
       Object.values(decodeSourceRawEnvelope(decision?.sourceRaw ?? "") ?? {}),
     ).toContain(documentHtml);
+    const replay = await plKioAdapter.reparseStoredRaw?.({
+      raw: new TextEncoder().encode(decision?.sourceRaw ?? ""),
+      contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+      sourceDocumentId: "30308",
+      caseNumber: decision?.caseNumber ?? "KIO 2845/25",
+      language: "pl",
+      court: decision?.court ?? "Krajowa Izba Odwoławcza",
+      ecli: null,
+      decisionDate: decision?.decisionDate ?? null,
+      decisionType: decision?.decisionType ?? null,
+      sourceUrl: decision?.sourceUrl ?? null,
+      documentUrl: decision?.documentUrl ?? null,
+      metadata: decision?.metadata ?? {},
+    });
+    expect(replay?.type).toBe("parsed");
+    if (replay?.type === "parsed") {
+      expect(replay.result.fulltext).toContain("KIO");
+    }
   });
 
-  test("a detail record obeys the HTML byte budget", async () => {
+  test("listing and detail responses above 2 MiB retain the record", async () => {
+    const detail = await fixtureText("pl-kio-detail-30308.html");
+    const padding = `<!--${"x".repeat(2 * 1024 * 1024)}-->`;
     await stubPublisher({
-      detailBytes: PL_KIO_HTML_BUDGET.maxBytes + 1,
+      detailHtml: `${padding}${detail}`,
       monthPages: {
-        "1": listingPage(1, [listingRow("30308", "KIO 2845/25", "01-09-2025")]),
+        "1": `${padding}${listingPage(1, [listingRow("30308", "KIO 2845/25", "01-09-2025")])}`,
       },
     });
     const page = await plKioAdapter.fetchPage("2025-09:0+0", {});
-    expect(Result.isError(page)).toBe(true);
-    if (Result.isError(page)) {
-      expect(page.error.message).toContain("answered more than 2097152 bytes");
+    expect(Result.isOk(page)).toBe(true);
+    if (Result.isOk(page)) {
+      expect(page.value.decisions.at(0)?.metadata["presiding"]).toBe(
+        "Ewa Sikorska",
+      );
     }
   });
 
   test("a document past the byte budget keeps a typed oversized record", async () => {
     await stubPublisher({
-      contentBytes: 32 * 1024 * 1024,
+      contentBytes: PL_KIO_RESPONSE_BYTE_CAP.document + 1,
       monthPages: {
         "1": listingPage(1, [listingRow("30308", "KIO 2845/25", "01-09-2025")]),
       },

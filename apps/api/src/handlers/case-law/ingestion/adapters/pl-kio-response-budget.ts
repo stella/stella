@@ -7,12 +7,19 @@ import { adapter } from "parse5-htmlparser2-tree-adapter";
 import { hasPlKioAttributeBudget } from "./pl-kio-attribute-budget";
 
 export const PL_KIO_HTML_BUDGET = {
-  maxBytes: 2 * 1024 * 1024,
   maxDomAllocations: 20_000,
   maxAttributesPerTag: 512,
   maxAttributesTotal: 20_000,
   maxScanStepsPerCharacter: 8,
 } as const;
+
+export const PL_KIO_RESPONSE_BYTE_CAP = {
+  listing: 16 * 1024 * 1024,
+  detail: 16 * 1024 * 1024,
+  document: 32 * 1024 * 1024,
+} as const;
+
+export type PlKioResponseKind = keyof typeof PL_KIO_RESPONSE_BYTE_CAP;
 
 export const PL_KIO_DOCUMENT_REJECTION = {
   OVERSIZED: "oversized",
@@ -25,9 +32,14 @@ export class PlKioHtmlBudgetError extends TaggedError("PlKioHtmlBudgetError")<{
 }> {}
 
 /** Bound allocations in the same parse5 tree builder that Cheerio consumes. */
-export const loadPlKioHtml = (html: string) => {
+type LoadPlKioHtmlOptions = { maxBytes: number };
+
+export const loadPlKioHtml = (
+  html: string,
+  { maxBytes }: LoadPlKioHtmlOptions,
+) => {
   let rejection: PlKioHtmlBudgetError["reason"] | undefined;
-  if (Buffer.byteLength(html, "utf-8") > PL_KIO_HTML_BUDGET.maxBytes) {
+  if (Buffer.byteLength(html, "utf-8") > maxBytes) {
     rejection = PL_KIO_DOCUMENT_REJECTION.OVERSIZED;
   } else if (!hasPlKioAttributeBudget(html, PL_KIO_HTML_BUDGET)) {
     rejection = PL_KIO_DOCUMENT_REJECTION.MARKUP_BUDGET_EXCEEDED;
@@ -108,8 +120,8 @@ export const loadPlKioHtml = (html: string) => {
   });
 };
 
-export const readPlKioHtml = (html: string) => {
-  const result = loadPlKioHtml(html);
+export const readPlKioHtml = (html: string, options: LoadPlKioHtmlOptions) => {
+  const result = loadPlKioHtml(html, options);
   if (Result.isError(result)) {
     return { type: result.error.reason };
   }

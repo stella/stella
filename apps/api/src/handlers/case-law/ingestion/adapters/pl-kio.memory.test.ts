@@ -3,7 +3,10 @@ import { expect, test } from "bun:test";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { PL_KIO_HTML_BUDGET } from "@/api/handlers/case-law/ingestion/adapters/pl-kio-response-budget";
+import {
+  PL_KIO_HTML_BUDGET,
+  PL_KIO_RESPONSE_BYTE_CAP,
+} from "@/api/handlers/case-law/ingestion/adapters/pl-kio-response-budget";
 
 const API_ROOT = path.resolve(import.meta.dir, "../../../../..");
 const MEMORY_CHILD = fileURLToPath(
@@ -12,7 +15,11 @@ const MEMORY_CHILD = fileURLToPath(
 const MEMORY_BUDGET_BYTES = 1024 * 1024 * 1024;
 const MEMORY_WORKLOAD_TIMEOUT_MS = 180_000;
 const ATTRIBUTE_FLOOD_DEADLINE_MS = 10_000;
-const RESPONSE_SIZES = [256 * 1024, 1024 * 1024, PL_KIO_HTML_BUDGET.maxBytes];
+const RESPONSE_SIZES = [
+  256 * 1024,
+  1024 * 1024,
+  PL_KIO_RESPONSE_BYTE_CAP.document,
+];
 
 const runMemoryChild = async (targetBytes: number, workload = "accepted") => {
   const child = Bun.spawn(
@@ -106,7 +113,7 @@ test(
       expect(receipt.budgetType).toBe("accepted");
       expect(receipt.boundaryBudgetType).toBe("accepted");
       expect(receipt.overflowBudgetType).toBe("markup-budget-exceeded");
-      if (targetBytes === PL_KIO_HTML_BUDGET.maxBytes) {
+      if (targetBytes === PL_KIO_RESPONSE_BYTE_CAP.document) {
         expect(receipt.markupTokens).toBeGreaterThanOrEqual(
           PL_KIO_HTML_BUDGET.maxDomAllocations * 0.9,
         );
@@ -133,7 +140,9 @@ test.each(["svg", "attributes", "plaintext"])(
   "rejected %s expansion stays within memory headroom through production assembly",
   async (workload) => {
     const { receipt, peakBytes } = await runMemoryChild(256 * 1024, workload);
-    expect(receipt.documentBytes).toBeLessThan(PL_KIO_HTML_BUDGET.maxBytes);
+    expect(receipt.documentBytes).toBeLessThan(
+      PL_KIO_RESPONSE_BYTE_CAP.document,
+    );
     expect(receipt.budgetType).toBe("markup-budget-exceeded");
     expect(receipt.fulltextChars).toBe(0);
     expect(receipt.astBlocks).toBe(0);

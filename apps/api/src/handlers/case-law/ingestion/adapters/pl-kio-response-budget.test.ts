@@ -12,10 +12,14 @@ import {
   PL_KIO_HTML_BUDGET,
 } from "./pl-kio-response-budget";
 
+const TEST_BYTE_CAP = 2 * 1024 * 1024;
+const readTestHtml = (html: string) =>
+  readPlKioHtml(html, { maxBytes: TEST_BYTE_CAP });
+
 test("the HTML byte budget counts UTF-8 bytes rather than characters", () => {
-  const atBudget = "ą".repeat(PL_KIO_HTML_BUDGET.maxBytes / 2);
-  expect(readPlKioHtml(atBudget).type).toBe("accepted");
-  expect(readPlKioHtml(`${atBudget}ą`)).toEqual({
+  const atBudget = "ą".repeat(TEST_BYTE_CAP / 2);
+  expect(readTestHtml(atBudget).type).toBe("accepted");
+  expect(readTestHtml(`${atBudget}ą`)).toEqual({
     type: PL_KIO_DOCUMENT_REJECTION.OVERSIZED,
   });
 });
@@ -25,9 +29,9 @@ test.each(["<b></b>", '<div a="b"></div>'])(
   (markup) => {
     const input = markup.repeat(PL_KIO_HTML_BUDGET.maxDomAllocations + 1);
     expect(new TextEncoder().encode(input).byteLength).toBeLessThan(
-      PL_KIO_HTML_BUDGET.maxBytes,
+      TEST_BYTE_CAP,
     );
-    expect(readPlKioHtml(input)).toEqual({
+    expect(readTestHtml(input)).toEqual({
       type: PL_KIO_DOCUMENT_REJECTION.MARKUP_BUDGET_EXCEEDED,
     });
   },
@@ -51,10 +55,10 @@ test.each([
     ).join(separator);
     const input = `${prefix}${attributes}${suffix}`;
     expect(new TextEncoder().encode(input).byteLength).toBeLessThan(
-      PL_KIO_HTML_BUDGET.maxBytes,
+      TEST_BYTE_CAP,
     );
     expect(input.split("<").length - 1).toBeLessThan(5);
-    expect(readPlKioHtml(input)).toEqual({
+    expect(readTestHtml(input)).toEqual({
       type: PL_KIO_DOCUMENT_REJECTION.MARKUP_BUDGET_EXCEEDED,
     });
   },
@@ -81,7 +85,7 @@ test.each([
     ).join(" ");
     const html = `${prefix}${names}>`;
     expect(hasPlKioAttributeBudget(html, PL_KIO_HTML_BUDGET)).toBe(false);
-    expect(readPlKioHtml(html).type).toBe(
+    expect(readTestHtml(html).type).toBe(
       PL_KIO_DOCUMENT_REJECTION.MARKUP_BUDGET_EXCEEDED,
     );
   },
@@ -90,7 +94,7 @@ test.each([
 test("overlapping tag candidates exhaust linear work before parsing", () => {
   const html = `<div a="${"<p ".repeat(20_000)}">`;
   expect(hasPlKioAttributeBudget(html, PL_KIO_HTML_BUDGET)).toBe(false);
-  expect(readPlKioHtml(html).type).toBe(
+  expect(readTestHtml(html).type).toBe(
     PL_KIO_DOCUMENT_REJECTION.MARKUP_BUDGET_EXCEEDED,
   );
 });

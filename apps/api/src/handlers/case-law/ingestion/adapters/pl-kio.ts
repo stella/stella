@@ -120,7 +120,8 @@ import {
   loadPlKioHtml,
   PlKioHtmlBudgetError,
   PL_KIO_DOCUMENT_REJECTION,
-  PL_KIO_HTML_BUDGET,
+  PL_KIO_RESPONSE_BYTE_CAP,
+  type PlKioResponseKind,
 } from "./pl-kio-response-budget";
 
 // ── Publisher boundary ───────────────────────────────────
@@ -338,7 +339,9 @@ const readPlKioListingItem = (
  * without it is an error page or a challenge, never an empty listing.
  */
 export const readPlKioListing = (html: string): PlKioListingPage | null => {
-  const parsed = readPlKioHtml(html);
+  const parsed = readPlKioHtml(html, {
+    maxBytes: PL_KIO_RESPONSE_BYTE_CAP.listing,
+  });
   if (parsed.type !== "accepted") {
     return null;
   }
@@ -401,7 +404,9 @@ const plKioQuarantineRepairIds = (item: PlKioListingItem): string[] => {
   if (item.html === undefined) {
     return [canonicalId];
   }
-  const parsed = readPlKioHtml(item.html);
+  const parsed = readPlKioHtml(item.html, {
+    maxBytes: PL_KIO_RESPONSE_BYTE_CAP.listing,
+  });
   if (parsed.type !== "accepted") {
     return [canonicalId];
   }
@@ -506,7 +511,9 @@ const KIND_HREF = /[?&]Kind=(?<kind>[A-Z]+)/u;
  * "no such page" answer is a full HTML page under a 404, handled before).
  */
 export const readPlKioDetail = (html: string): PlKioDetail | null => {
-  const parsed = readPlKioHtml(html);
+  const parsed = readPlKioHtml(html, {
+    maxBytes: PL_KIO_RESPONSE_BYTE_CAP.detail,
+  });
   if (parsed.type !== "accepted") {
     return null;
   }
@@ -854,7 +861,9 @@ const plKioParseError = (error: unknown, state: PlKioDocumentReadState) => {
 };
 
 const loadPlKioHtmlForParser = (html: string) => {
-  const loaded = loadPlKioHtml(html);
+  const loaded = loadPlKioHtml(html, {
+    maxBytes: PL_KIO_RESPONSE_BYTE_CAP.document,
+  });
   if (Result.isError(loaded)) {
     // oxlint-disable-next-line result-boundary/no-throw-outside-boundary -- the shared parser's callback contract returns a CheerioAPI; the enclosing Result.try in assemblePlKioDecision records the rejection via plKioParseError
     throw loaded.error;
@@ -871,7 +880,7 @@ const plKioDocumentOf = (
         html: document.html,
         rejection:
           Buffer.byteLength(document.html, "utf-8") >
-          PL_KIO_HTML_BUDGET.maxBytes
+          PL_KIO_RESPONSE_BYTE_CAP.document
             ? PL_KIO_DOCUMENT_REJECTION.OVERSIZED
             : undefined,
         rawParts: { [RAW_PART.DOCUMENT]: document.html },
@@ -1218,6 +1227,7 @@ type RequestOptions = {
   cursor: string;
   form?: URLSearchParams | undefined;
   path: string;
+  responseKind: PlKioResponseKind;
   signal?: AbortSignal | undefined;
   timeoutMs: number;
 };
@@ -1230,6 +1240,7 @@ const receive = async ({
   fetchStage,
   form,
   path,
+  responseKind,
   signal,
   timeoutMs,
 }: RequestOptions): Promise<Received> => {
@@ -1264,7 +1275,10 @@ const receive = async ({
   const bytes =
     response.body === null
       ? new Uint8Array()
-      : await readCappedBytes(response.body, PL_KIO_HTML_BUDGET.maxBytes);
+      : await readCappedBytes(
+          response.body,
+          PL_KIO_RESPONSE_BYTE_CAP[responseKind],
+        );
   return { status: response.status, bytes, url: target.toString() };
 };
 
@@ -1276,7 +1290,7 @@ const request = async (
     return Result.err(
       publisherError(
         options.cursor,
-        `${options.path} answered more than ${PL_KIO_HTML_BUDGET.maxBytes} bytes`,
+        `${options.path} answered more than ${PL_KIO_RESPONSE_BYTE_CAP[options.responseKind]} bytes`,
         status,
       ),
     );
@@ -1335,6 +1349,7 @@ const listPage = async ({
     fetchStage: "listing",
     form,
     path: LISTING_PATH,
+    responseKind: "listing",
     signal,
     timeoutMs: ADAPTER_TIMEOUT.LIST,
   });
@@ -1421,6 +1436,7 @@ const fetchPlKioDecision = async ({
     cursor,
     fetchStage: "document",
     path: `/Home/Details/${id}`,
+    responseKind: "detail",
     signal,
     timeoutMs: ADAPTER_TIMEOUT.REQUEST,
   });
@@ -1451,6 +1467,7 @@ const fetchPlKioDecision = async ({
     cursor,
     fetchStage: "document",
     path: documentPathOf(id, record.kind),
+    responseKind: "document",
     signal,
     timeoutMs: ADAPTER_TIMEOUT.PAGE,
   });
