@@ -39,6 +39,7 @@ import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
 import { useLocale } from "@/i18n/formatting-context";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
 import { isCatalogueEntryAvailableDuringOnboarding } from "@/routes/onboarding/-components/onboarding-catalogue-setup.logic";
+import { filterOnboardingCatalogueEntries } from "@/routes/onboarding/-components/steps/catalogue-search.logic";
 
 const toRowDisplay = (entry: LoadedCatalogueEntry): CatalogueRowDisplay => ({
   slug: entry.slug,
@@ -148,39 +149,18 @@ export const CatalogueStep = ({
       !recommendedSet.has(entry.slug) && !pinnedSlugSet.has(entry.slug),
   );
 
-  const matchesSearch = (entry: LoadedCatalogueEntry) => {
-    const normalised = query.trim().toLowerCase();
-    // Jurisdiction filter: pass if no filter active, or entry has
-    // any matching jurisdiction, or entry is universal (no
-    // jurisdictions). Universal entries surface in any filter scope.
-    if (jurisdictionFilter.size > 0 && entry.jurisdictions.length > 0) {
-      const hasMatch = entry.jurisdictions.some((code) =>
-        jurisdictionFilter.has(code),
-      );
-      if (!hasMatch) {
-        return false;
-      }
-    }
-    if (normalised === "") {
-      return true;
-    }
-    return (
-      entry.displayName.toLowerCase().includes(normalised) ||
-      localizedName(entry).toLowerCase().includes(normalised) ||
-      entry.description.toLowerCase().includes(normalised) ||
-      entry.tags.some((tag) => tag.toLowerCase().includes(normalised))
-    );
-  };
-
   // Single flat list of all non-pinned entries that pass the search +
   // jurisdiction filters. Recommended entries are no longer in a
   // separate section — they're just regular entries in this list, and
   // "Vybrat vše doporučené" bulk-adds the ones in `recommendedSet`.
-  const filteredEntries = [...recommendedEntries, ...otherEntries]
-    .filter(matchesSearch)
-    .toSorted((left, right) =>
-      compareLocalizedName(localizedName(left), localizedName(right)),
-    );
+  const filteredEntries = filterOnboardingCatalogueEntries({
+    compareName: compareLocalizedName,
+    jurisdictionFilter,
+    localizedName,
+    otherEntries,
+    query,
+    recommendedEntries,
+  });
 
   const allJurisdictionCodes = (() => {
     const set = new Set<string>();
