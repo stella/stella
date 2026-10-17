@@ -39,8 +39,8 @@ test("overlapping theme and sidebar saves from two tabs both survive reload", as
     withLock,
     openChannel: hub.open,
   });
-  const stopFirst = first.subscribe(() => undefined);
-  const stopSecond = second.subscribe(() => undefined);
+  const stopFirst = first.subscribeToPeers();
+  const stopSecond = second.subscribeToPeers();
   try {
     const themeSave = first.update({ theme: "dark" });
     await started.promise;

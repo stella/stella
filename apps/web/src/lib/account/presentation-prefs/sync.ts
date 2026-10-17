@@ -44,6 +44,7 @@ export const createPresentationPrefsSync = ({
   const pending: { patch: Partial<PresentationPrefs> }[] = [];
   const listeners = new Set<() => void>();
   let channel: PrefsChannel | undefined;
+  let peerSubscribers = 0;
 
   const refresh = () => {
     // A peer's committed snapshot must not erase this tab's pending edits.
@@ -73,7 +74,7 @@ export const createPresentationPrefsSync = ({
     return channel;
   };
   const disconnectIfUnused = () => {
-    if (listeners.size > 0 || channel === undefined) {
+    if (peerSubscribers > 0 || channel === undefined) {
       return;
     }
     channel.removeEventListener("message", onMessage);
@@ -85,9 +86,15 @@ export const createPresentationPrefsSync = ({
     getSnapshot: () => snapshot,
     subscribe: (listener: () => void) => {
       listeners.add(listener);
-      connect();
       return () => {
         listeners.delete(listener);
+      };
+    },
+    subscribeToPeers: () => {
+      peerSubscribers += 1;
+      connect();
+      return () => {
+        peerSubscribers -= 1;
         disconnectIfUnused();
       };
     },

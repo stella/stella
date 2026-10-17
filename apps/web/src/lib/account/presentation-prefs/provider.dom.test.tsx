@@ -12,7 +12,10 @@ import {
 } from "./sync.test-fixtures";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
-const { act, cleanup, fireEvent, render } =
+const { Suspense, use } = await import("react");
+const { renderToString } = await import("react-dom/server");
+const { hydrateRoot } = await import("react-dom/client");
+const { act, cleanup, fireEvent, render, within } =
   await import("@testing-library/react");
 const { PresentationPrefsProvider, usePresentationPrefs } =
   await import("./provider");
@@ -103,5 +106,77 @@ test("mounted tabs receive saved themes and sidebar changes even after a local t
       .getAttribute("aria-pressed"),
   ).toBe("true");
   view.unmount();
+  expect(hub.connected()).toBe(0);
+});
+
+test("a deserialized store and peer updates preserve a boundary still hydrating", async () => {
+  const hub = createPrefsBroadcastHub();
+  const initialPrefs = { ...defaultPresentationPrefs, theme: "light" as const };
+  const options = {
+    initialPrefs: { ...initialPrefs },
+    write: async (patch: Partial<PresentationPrefs>) =>
+      await Promise.resolve({ ...initialPrefs, ...patch }),
+    openChannel: hub.open,
+  };
+  const sync = createPresentationPrefsSync(options);
+  const peer = createPresentationPrefsSync(options);
+  const gate = Promise.withResolvers<undefined>();
+  const Reader = ({
+    hydrationGate,
+  }: {
+    hydrationGate?: Promise<undefined>;
+  }) => {
+    if (hydrationGate !== undefined) {
+      use(hydrationGate);
+    }
+    return <Controls tab="reader" />;
+  };
+  const tree = (hydrationGate?: Promise<undefined>) => (
+    <PresentationPrefsProvider initialPrefs={initialPrefs} sync={sync}>
+      <Suspense fallback={null}>
+        <Reader hydrationGate={hydrationGate} />
+      </Suspense>
+    </PresentationPrefsProvider>
+  );
+  const container = document.createElement("div");
+  // safe-html: React serializes the local Reader fixture, without external HTML.
+  container.innerHTML = renderToString(tree());
+  document.body.append(container);
+  expect(hub.connected()).toBe(0);
+  const serverButton = within(container).getByRole("button", {
+    name: "reader dark",
+  });
+  serverButton.focus();
+  const errors: unknown[] = [];
+  const root = await act(async () =>
+    hydrateRoot(container, tree(gate.promise), {
+      onRecoverableError: (error) => {
+        errors.push(error);
+      },
+    }),
+  );
+  try {
+    await act(async () => {
+      await peer.update({ theme: "dark" });
+    });
+    expect(serverButton.isConnected).toBe(true);
+    expect(document.activeElement === serverButton).toBe(true);
+    await act(async () => {
+      gate.resolve(undefined);
+      await gate.promise;
+    });
+    expect(errors).toEqual([]);
+    expect(within(container).getByLabelText("reader theme").textContent).toBe(
+      "dark",
+    );
+    expect(
+      within(container).getByRole("button", { name: "reader dark" }) ===
+        serverButton,
+    ).toBe(true);
+  } finally {
+    gate.resolve(undefined);
+    await act(async () => root.unmount());
+    container.remove();
+  }
   expect(hub.connected()).toBe(0);
 });

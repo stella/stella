@@ -3,6 +3,7 @@ import type { PropsWithChildren, RefObject } from "react";
 
 import { Result } from "better-result";
 
+import { useMountEffect } from "@/hooks/use-effect";
 import { getTranslator } from "@/i18n/translator";
 import { defaultPresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
 import type { PresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
@@ -21,7 +22,7 @@ const createBrowserSync = (initialPrefs: PresentationPrefs) =>
     initialPrefs,
     write: async (patch) => await writePresentationPrefs({ data: patch }),
     withLock: async (write) => {
-      if (navigator.locks !== undefined) {
+      if ("locks" in navigator) {
         await navigator.locks.request(PRESENTATION_PREFS_LOCK, write);
         return;
       }
@@ -77,7 +78,11 @@ export const persistPresentationPrefs = (
 };
 
 const PresentationPrefsContext = createContext({
-  prefs: defaultPresentationPrefs,
+  initialPrefs: defaultPresentationPrefs,
+  sync: {
+    getSnapshot: () => defaultPresentationPrefs,
+    subscribe: (_listener: () => void) => (): void => undefined,
+  },
   readerScrollContainers: new Set<RefObject<HTMLElement | null>>(),
   setPrefs: (_patch: Partial<PresentationPrefs>): void => undefined,
 });
@@ -103,11 +108,7 @@ export const PresentationPrefsProvider = ({
           })
         : getBrowserSync(initialPrefs)),
   );
-  const prefs = useSyncExternalStore(
-    sync.subscribe,
-    sync.getSnapshot,
-    () => initialPrefs,
-  );
+  useMountEffect(() => sync.subscribeToPeers());
   const [readerScrollContainers] = useState(
     () => new Set<RefObject<HTMLElement | null>>(),
   );
@@ -115,11 +116,23 @@ export const PresentationPrefsProvider = ({
     savePrefs(sync, patch);
   return (
     <PresentationPrefsContext
-      value={{ prefs, setPrefs, readerScrollContainers }}
+      value={{ initialPrefs, sync, setPrefs, readerScrollContainers }}
     >
       {children}
     </PresentationPrefsContext>
   );
 };
 
-export const usePresentationPrefs = () => use(PresentationPrefsContext);
+export const usePresentationPrefs = () => {
+  const { initialPrefs, sync, setPrefs, readerScrollContainers } = use(
+    PresentationPrefsContext,
+  );
+  // Each Suspense boundary hydrates the document snapshot independently;
+  // a peer update must not change another boundary's first client render.
+  const prefs = useSyncExternalStore(
+    sync.subscribe,
+    sync.getSnapshot,
+    () => initialPrefs,
+  );
+  return { prefs, setPrefs, readerScrollContainers };
+};

@@ -249,6 +249,12 @@ for (const { language, sundayBasedWeekStart } of [
       expect(html).toMatch(
         /<html(?=[^>]*\blang="ar")(?=[^>]*\bdir="rtl")[^>]*>/u,
       );
+      // SSR controls are visible while their route chunks are still loading.
+      // Router matches commit after asynchronous hydration.
+      await page.waitForFunction(() => {
+        const router = window.__TSR_ROUTER__;
+        return router !== undefined && router.state.matches.length > 0;
+      });
       // Opening the filters and calendar requires hydrated event handlers.
       const filters = page.getByRole("button", {
         name: ar.common.filters,
@@ -311,7 +317,10 @@ test("overlapping preference changes survive reload and update another mounted t
     await route.continue();
   });
   try {
-    await Promise.all([page.goto("/chat"), peer.goto("/chat")]);
+    await Promise.all([
+      page.goto("/chat", { waitUntil: "domcontentloaded" }),
+      peer.goto("/chat", { waitUntil: "domcontentloaded" }),
+    ]);
     await page
       .locator('[data-slot="sidebar-footer"] button[aria-haspopup="menu"]')
       .last()
@@ -338,7 +347,7 @@ test("overlapping preference changes survive reload and update another mounted t
     // Both tabs stay mounted while their queued writes settle.
     await expect(peer.locator("html")).toHaveClass(/dark/u);
     for (const tab of [page, peer]) {
-      await tab.reload();
+      await tab.reload({ waitUntil: "domcontentloaded" });
       await expect(tab.locator("html")).toHaveClass(/dark/u);
       await expect(tab.locator('[data-slot="sidebar"]')).toHaveAttribute(
         "data-state",

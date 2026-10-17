@@ -14,7 +14,7 @@ export const createTestPresentationPrefsSync = (
     write: async (patch) => {
       onSave(patch);
       saved = { ...saved, ...patch };
-      return saved;
+      return await Promise.resolve(saved);
     },
   });
 };

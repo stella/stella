@@ -1119,7 +1119,9 @@ describe("public law sitemap", () => {
     expect(timeZoneSource).toContain('globalThis.addEventListener("focus"');
     expect(timeZoneSource).toContain('globalThis.removeEventListener("focus"');
 
-    const providerSource = await readSource("apps/web/src/app-providers.tsx");
+    const appSource = await readSource("apps/web/src/app-providers.tsx");
+    expect(appSource).toContain("<I18nProvider>");
+    const providerSource = await readSource("apps/web/src/i18n/provider.tsx");
     expect(providerSource).toContain(
       "useHydrationSafeTimeZone(synchronizeFormatterTimeZone)",
     );
