@@ -1,3 +1,5 @@
+import { useMemo } from "react";
+
 import { useQuery } from "@tanstack/react-query";
 
 import {
@@ -98,19 +100,41 @@ export const useFileTabEntity = ({
         isEmailViewerActive: queryInput.isEmailViewerActive,
       }),
   });
-  return {
-    ...getFileTabEntityState({
-      entityData: query.data,
-      entityQueryError: query.isError,
-      needsPropertyResolution: queryInput.needsPropertyResolution,
-      tab,
+  const entityState = useMemo(
+    () =>
+      getFileTabEntityState({
+        entityData: query.data,
+        entityQueryError: query.isError,
+        needsPropertyResolution: queryInput.needsPropertyResolution,
+        tab,
+      }),
+    [query.data, query.isError, queryInput.needsPropertyResolution, tab],
+  );
+  const downloadRenditions = useMemo(
+    () =>
+      getEntityFileDownloadRenditions({
+        entityData: query.data,
+        fieldId: tab.id,
+      }),
+    [query.data, tab.id],
+  );
+  const queryState = useMemo(
+    () => ({
+      data: query.data,
+      isError: query.isError,
+      refetch: query.refetch,
     }),
-    downloadRenditions: getEntityFileDownloadRenditions({
-      entityData: query.data,
-      fieldId: tab.id,
+    [query.data, query.isError, query.refetch],
+  );
+
+  return useMemo(
+    () => ({
+      ...entityState,
+      downloadRenditions,
+      query: queryState,
     }),
-    query,
-  };
+    [downloadRenditions, entityState, queryState],
+  );
 };
 
 export type FileTabEntity = ReturnType<typeof useFileTabEntity>;

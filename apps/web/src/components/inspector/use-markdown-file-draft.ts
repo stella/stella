@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
@@ -124,6 +124,7 @@ export const useMarkdownFileDraft = ({
       });
     },
   });
+  const { isPending: isSaving, mutate: saveDraft } = saveMutation;
 
   const syncInput = {
     fieldId: tab.id,
@@ -147,15 +148,15 @@ export const useMarkdownFileDraft = ({
     }
   }
 
-  const discard = () => {
-    if (saveMutation.isPending) {
+  const discard = useCallback(() => {
+    if (isSaving) {
       return;
     }
     editorRef.current?.resetMarkdown(text);
     setDraft(text);
-  };
-  const save = () => {
-    if (saveMutation.isPending) {
+  }, [isSaving, text]);
+  const save = useCallback(() => {
+    if (isSaving) {
       return;
     }
     const currentTab = useInspectorTabsStore
@@ -169,7 +170,7 @@ export const useMarkdownFileDraft = ({
     if (currentTab?.type !== "pdf") {
       panic("Markdown publication requires a mounted file tab");
     }
-    saveMutation.mutate({
+    saveDraft({
       entityId: tab.entityId,
       fieldId: tab.id,
       fileName: currentTab.fileName,
@@ -180,18 +181,29 @@ export const useMarkdownFileDraft = ({
       text: editorRef.current?.captureForSave() ?? draft,
       workspaceId: tab.workspaceId,
     });
-  };
+  }, [draft, filePropertyId, isSaving, saveDraft, tab]);
+  const textQueryState = useMemo(
+    () => ({
+      error: textQuery.error,
+      isPending: textQuery.isPending,
+      refetch: textQuery.refetch,
+    }),
+    [textQuery.error, textQuery.isPending, textQuery.refetch],
+  );
 
-  return {
-    discard,
-    editorRef,
-    isDirty,
-    isSaving: saveMutation.isPending,
-    save,
-    setDraft,
-    text,
-    textQuery,
-  };
+  return useMemo(
+    () => ({
+      discard,
+      editorRef,
+      isDirty,
+      isSaving,
+      save,
+      setDraft,
+      text,
+      textQuery: textQueryState,
+    }),
+    [discard, isDirty, isSaving, save, text, textQueryState],
+  );
 };
 
 export type MarkdownFileDraft = ReturnType<typeof useMarkdownFileDraft>;

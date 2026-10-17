@@ -156,7 +156,9 @@ afterAll(async () => {
 
 test("native DOCX keeps the host registry and editor inside the render budget", async () => {
   const mounted = renderFileTab(docxTab);
-  await waitFor(() => expect(mounted.getByTestId("docx-engine")).toBeTruthy());
+  const engine = await waitFor(() => mounted.getByTestId("docx-engine"));
+  expect(engine.isConnected).toBeTrue();
+  expect(docxEngineRenderCount).toBe(1);
 
   const registryAfterMount = useDocxEditorHostStore.getState().registry;
   const claim = Object.values(registryAfterMount).at(0)?.lastClaim;
@@ -185,7 +187,9 @@ test("native DOCX keeps the host registry and editor inside the render budget", 
 
 test("PDF keeps the host registry and PDF engine inside the render budget", async () => {
   const mounted = renderFileTab(pdfTab);
-  await waitFor(() => expect(pdfEngineRenderCount).toBeGreaterThan(0));
+  const engine = await waitFor(() => mounted.getByTestId("pdf-engine"));
+  expect(engine.isConnected).toBeTrue();
+  expect(pdfEngineRenderCount).toBe(1);
 
   const registryAfterMount = useDocxEditorHostStore.getState().registry;
   const rendersAfterMount = pdfEngineRenderCount;
