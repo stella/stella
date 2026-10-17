@@ -41,6 +41,7 @@
     "mcp:surface-baseline": "NODE_ENV=development STELLA_LOCAL_DEV=1 bun --env-file=.env.example scripts/mcp-surface-baseline.ts",
     "mcp:surface-token-calibration": "NODE_ENV=development STELLA_LOCAL_DEV=1 bun --env-file=.env.example scripts/mcp-surface-token-calibration.ts",
     "bench:chat-read-surface": "NODE_ENV=development STELLA_LOCAL_DEV=1 bun scripts/benchmark-chat-read-surface.ts",
+    "bench:mcp-call": "bun --preload ./src/tests/setup-env.ts scripts/benchmark-mcp-call.ts",
     "eval:create-document": "NODE_ENV=development STELLA_LOCAL_DEV=1 bun --env-file=.env evals/create-document-drafting.ts",
     "eval:suggest-changes": "NODE_ENV=development STELLA_LOCAL_DEV=1 bun --env-file=.env evals/suggest-changes-precision.ts",
     "eval:template-fill": "NODE_ENV=development STELLA_LOCAL_DEV=1 bun --env-file=.env evals/template-fill.ts",

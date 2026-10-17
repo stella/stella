@@ -24,6 +24,7 @@ import { auditLogsRoute } from "@/api/handlers/audit-logs/routes";
 import {
   authCapabilitiesRoute,
   authMetadataRoute,
+  handleAuthMetadataPreflightRequest,
 } from "@/api/handlers/auth/routes";
 import { authUiRoute } from "@/api/handlers/auth/ui-routes";
 import { bilingualTranslationsRoute } from "@/api/handlers/bilingual-translations/routes";
@@ -412,11 +413,13 @@ const api = new Elysia()
     }
 
     // Ahead of the CORS layer below, which otherwise answers every preflight
-    // with the API-wide method list and leaves the MCP route's own preflight
-    // unreachable.
-    const mcpPreflightResponse = handleMcpPreflightRequest(request, set);
-    if (mcpPreflightResponse) {
-      return mcpPreflightResponse;
+    // with the API-wide method list and trusted origins only, leaving the MCP
+    // and discovery routes' own preflights unreachable.
+    const publicPreflightResponse =
+      handleMcpPreflightRequest(request, set) ??
+      handleAuthMetadataPreflightRequest(request, set);
+    if (publicPreflightResponse) {
+      return publicPreflightResponse;
     }
 
     return (

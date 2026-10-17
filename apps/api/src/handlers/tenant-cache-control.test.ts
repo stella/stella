@@ -11,15 +11,18 @@ import {
 import api from "@/api/server";
 
 // TTL changes and new shared-cache routes require an explicit review decision.
+const DISCOVERY_CACHE_HEADER =
+  "public, max-age=300, stale-while-revalidate=3600";
 const PUBLIC_CACHE_HEADERS = {
-  "GET /.well-known/oauth-authorization-server": "public, max-age=300",
-  "GET /.well-known/oauth-authorization-server/api/auth": "public, max-age=300",
-  "GET /.well-known/openid-configuration": "public, max-age=300",
-  "GET /.well-known/oauth-protected-resource": "public, max-age=300",
+  "GET /.well-known/oauth-authorization-server": DISCOVERY_CACHE_HEADER,
+  "GET /.well-known/oauth-authorization-server/api/auth":
+    DISCOVERY_CACHE_HEADER,
+  "GET /.well-known/openid-configuration": DISCOVERY_CACHE_HEADER,
+  "GET /.well-known/oauth-protected-resource": DISCOVERY_CACHE_HEADER,
   ...Object.fromEntries(
     MCP_MODES.map((mode) => [
       `GET ${MCP_RESOURCE_MODE_CONFIG[mode].discoveryPath}`,
-      "public, max-age=300",
+      DISCOVERY_CACHE_HEADER,
     ]),
   ),
   "GET /auth.md": "public, max-age=300",
@@ -93,6 +96,60 @@ describe("composed API cache policy", () => {
     }
 
     expect(observedPublicHeaders).toEqual(PUBLIC_CACHE_HEADERS);
+  });
+
+  test("OAuth discovery is shareable across origins on the actual API", async () => {
+    const origin = "https://client.example.test";
+    for (const path of [
+      "/.well-known/oauth-authorization-server",
+      "/.well-known/openid-configuration",
+      "/.well-known/oauth-protected-resource/mcp",
+    ]) {
+      // A third-party client's preflight is answered for any origin, admits
+      // the protocol header MCP clients send, and may be reused.
+      const preflight = await api.handle(
+        new Request(`http://localhost${path}`, {
+          method: "OPTIONS",
+          headers: {
+            origin,
+            "access-control-request-method": "GET",
+            "access-control-request-headers": "mcp-protocol-version",
+          },
+        }),
+      );
+      expect(preflight.status, path).toBe(204);
+      expect(preflight.headers.get("Access-Control-Allow-Origin"), path).toBe(
+        "*",
+      );
+      expect(
+        preflight.headers
+          .get("Access-Control-Allow-Headers")
+          ?.toLowerCase()
+          .split(", "),
+        path,
+      ).toContain("mcp-protocol-version");
+      expect(preflight.headers.get("Access-Control-Max-Age"), path).not.toBe(
+        null,
+      );
+
+      // One representation for every origin: no `Vary: Origin` to split a
+      // shared cache, and no credential flag beside the wildcard origin.
+      const document = await api.handle(
+        new Request(`http://localhost${path}`, { headers: { origin } }),
+      );
+      expect(document.status, path).toBe(200);
+      expect(document.headers.get("Cache-Control"), path).toBe(
+        DISCOVERY_CACHE_HEADER,
+      );
+      expect(document.headers.get("Access-Control-Allow-Origin"), path).toBe(
+        "*",
+      );
+      expect(document.headers.get("Vary"), path).toBeNull();
+      expect(
+        document.headers.get("Access-Control-Allow-Credentials"),
+        path,
+      ).toBeNull();
+    }
   });
 
   test("authentication failures stay private on the actual API", async () => {

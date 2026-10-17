@@ -85,6 +85,7 @@ import { functionWordsWarning } from "@/api/lib/case-law/search-warnings";
 import { SEARCH_CASE_LAW_PROJECTION } from "@/api/lib/chat/case-law-result-projections";
 import { encryptContent } from "@/api/lib/content-encryption";
 import type { EncryptedContent } from "@/api/lib/content-encryption";
+import { readPresent } from "@/api/lib/errors/read-outcome";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey } from "@/api/lib/file-key";
 import { corpusIndexReadTarget } from "@/api/lib/legal-search/corpus-index-group-contract";
@@ -1732,7 +1733,8 @@ describe("OpenAI-compatible MCP tools", () => {
     test("narrows the registry enum to the org's enabled registries", async () => {
       const tool = await registryTool({
         ...createContext(),
-        enabledRegistrySlugs: ["orsr", "vies"],
+        resolveEnabledRegistrySlugs: async () =>
+          await Promise.resolve(readPresent(["orsr", "vies"])),
       });
 
       expect(tool?.inputSchema.properties?.["registry"]).toEqual({
@@ -1745,7 +1747,8 @@ describe("OpenAI-compatible MCP tools", () => {
     test("drops the tool when the org can reach no registry", async () => {
       const tool = await registryTool({
         ...createContext(),
-        enabledRegistrySlugs: [],
+        resolveEnabledRegistrySlugs: async () =>
+          await Promise.resolve(readPresent([])),
       });
 
       expect(tool).toBeUndefined();
@@ -1755,8 +1758,13 @@ describe("OpenAI-compatible MCP tools", () => {
       const tool = await registryTool(createContext());
 
       // A context that never resolved its reachable registries (test/synthetic
-      // or a bootstrap read fault) keeps the full advertisement.
-      expect(tool?.inputSchema.properties?.["registry"]).toMatchObject({
+      // or a bootstrap read fault) keeps the full advertisement. The served
+      // schema is shared with later sessions, and Bun's `toMatchObject` swaps
+      // a matched property for its asymmetric matcher (frozen or not), so the
+      // assertion reads a copy.
+      expect(
+        structuredClone(tool?.inputSchema.properties?.["registry"]),
+      ).toMatchObject({
         enum: expect.arrayContaining(["ares", "vies"]),
       });
     });
@@ -1774,7 +1782,8 @@ describe("OpenAI-compatible MCP tools", () => {
         args: { registry: "krs", query: "0000123456" },
         context: {
           ...baseContext,
-          enabledRegistrySlugs: ["ares"],
+          resolveEnabledRegistrySlugs: async () =>
+            await Promise.resolve(readPresent(["ares"])),
           testDependencies: {
             ...baseContext.testDependencies,
             executeRegistryLookup: executeRegistryLookupMock,

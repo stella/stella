@@ -10,6 +10,7 @@ import {
 import {
   authCapabilitiesRoute,
   authMetadataRoute,
+  handleAuthMetadataPreflightRequest,
 } from "@/api/handlers/auth/routes";
 import {
   getAuthEndpointUrl,
@@ -18,6 +19,7 @@ import {
   OPENID_CONFIGURATION_DISCOVERY_PATH,
   ROOT_OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH,
 } from "@/api/lib/auth/auth-paths";
+import { PUBLIC_CORS_PREFLIGHT_MAX_AGE_SECONDS } from "@/api/lib/public-cors";
 
 describe("OAuth authorization server metadata", () => {
   const assertMetadataResponse = async (path: string) => {
@@ -26,7 +28,9 @@ describe("OAuth authorization server metadata", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(response.headers.get("Cache-Control")).toBe("public, max-age=300");
+    expect(response.headers.get("Cache-Control")).toBe(
+      "public, max-age=300, stale-while-revalidate=3600",
+    );
     expect(response.headers.get("Access-Control-Allow-Origin")).toBe("*");
     expect(response.headers.get("Access-Control-Allow-Methods")).toBe(
       "GET, OPTIONS",
@@ -128,6 +132,51 @@ describe("OAuth authorization server metadata", () => {
     expect(response.headers.get("Access-Control-Allow-Methods")).toBe(
       "GET, OPTIONS",
     );
+    expect(response.headers.get("Access-Control-Allow-Headers")).toBe(
+      "MCP-Protocol-Version",
+    );
+    expect(response.headers.get("Access-Control-Max-Age")).toBe(
+      String(PUBLIC_CORS_PREFLIGHT_MAX_AGE_SECONDS),
+    );
+  });
+
+  test("owns the discovery preflight ahead of the credentialed CORS layer", () => {
+    for (const path of [
+      ROOT_OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH,
+      OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH,
+      OPENID_CONFIGURATION_DISCOVERY_PATH,
+    ]) {
+      const set: { headers: Record<string, string> } = {
+        headers: { "access-control-allow-credentials": "true" },
+      };
+      const response = handleAuthMetadataPreflightRequest(
+        new Request(`http://localhost${path}`, {
+          method: "OPTIONS",
+          headers: { origin: "https://client.example.test" },
+        }),
+        set,
+      );
+
+      expect(response?.status).toBe(204);
+      expect(response?.headers.get("Access-Control-Allow-Origin")).toBe("*");
+      expect(set.headers).toEqual({});
+    }
+    expect(
+      handleAuthMetadataPreflightRequest(
+        new Request(
+          `http://localhost${ROOT_OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH}`,
+        ),
+        { headers: {} },
+      ),
+    ).toBeUndefined();
+    expect(
+      handleAuthMetadataPreflightRequest(
+        new Request("http://localhost/auth/capabilities", {
+          method: "OPTIONS",
+        }),
+        { headers: {} },
+      ),
+    ).toBeUndefined();
   });
 });
 
