@@ -1,10 +1,13 @@
 import {
+  CompleteMultipartUploadCommand,
   CopyObjectCommand,
+  CreateMultipartUploadCommand,
   DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
   ListObjectsV2Command,
   PutObjectCommand,
+  UploadPartCommand,
   S3Client as AwsS3Client,
 } from "@aws-sdk/client-s3";
 import { panic, Result, TaggedError } from "better-result";
@@ -32,6 +35,7 @@ import {
   isUsableStaticCredential,
   type OptionalS3Credentials,
 } from "@/api/lib/s3/credentials";
+import { createMultipartSink } from "@/api/lib/s3/multipart-sink";
 import { isRecord } from "@/api/lib/type-guards";
 import { withTimeout } from "@/api/lib/with-timeout";
 
@@ -1170,6 +1174,194 @@ export const putTemporaryS3ObjectWithSignal = async (
         { abortSignal: signal },
       ),
   );
+};
+
+export type S3ObjectStream = {
+  sizeBytes: number;
+  chunks: AsyncIterable<Uint8Array>;
+};
+
+const readableChunks = async function* (
+  stream: ReadableStream<unknown>,
+): AsyncGenerator<Uint8Array> {
+  const reader = stream.getReader();
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) {
+        return;
+      }
+      if (!(value instanceof Uint8Array)) {
+        throw new S3ObjectReadError({
+          message: "S3 returned an invalid response chunk",
+        });
+      }
+      yield value;
+    }
+  } finally {
+    // A consumer that stops early (abort, error) must not leave the
+    // response body flowing; after EOF the cancel is a no-op.
+    try {
+      await reader.cancel();
+    } finally {
+      reader.releaseLock();
+    }
+  }
+};
+
+/**
+ * Open one object as a stream of chunks, or `null` when the store confirms
+ * it holds no such key. Memory holds one network chunk at a time, so a
+ * caller can pass files of any size through; `signal` cancels the body.
+ */
+export const openS3ObjectStream = async ({
+  key,
+  signal,
+}: {
+  key: string;
+  signal: AbortSignal;
+}): Promise<S3ObjectStream | null> =>
+  await presentOrNull(
+    async () =>
+      await documentsCredentials.run(async () => {
+        const response = await getAbortableS3().send(
+          new GetObjectCommand({ Bucket: envBase.S3_BUCKET, Key: key }),
+          { abortSignal: signal },
+        );
+        if (response.ContentLength === undefined || !response.Body) {
+          throw new S3ObjectReadError({
+            message: `Object read for ${key} returned no body or length`,
+          });
+        }
+        return {
+          sizeBytes: response.ContentLength,
+          chunks: readableChunks(response.Body.transformToWebStream()),
+        };
+      }),
+  );
+
+/** S3 multipart limits: at most 10,000 parts of 5 MiB to 5 GiB each. */
+const MULTIPART_MAX_PARTS = 10_000;
+const MULTIPART_MAX_PART_BYTES = 5 * 1024 ** 3;
+/** Smallest part used: large enough to keep request counts low. */
+const STREAMING_UPLOAD_MIN_PART_BYTES = 16 * 1024 * 1024;
+/** An object's real size may exceed its estimate; parts leave room for it. */
+const STREAMING_UPLOAD_SIZE_HEADROOM = 2;
+
+/**
+ * The part size that fits an object of about `expectedBytes` (with
+ * headroom) into the multipart part limit, or `null` when no part size can.
+ */
+export const multipartPartBytes = (expectedBytes: number): number | null => {
+  const needed = Math.ceil(
+    (expectedBytes * STREAMING_UPLOAD_SIZE_HEADROOM) / MULTIPART_MAX_PARTS,
+  );
+  if (needed > MULTIPART_MAX_PART_BYTES) {
+    return null;
+  }
+  return Math.max(needed, STREAMING_UPLOAD_MIN_PART_BYTES);
+};
+
+class S3MultipartResponseError extends TaggedError("S3MultipartResponseError")<{
+  message: string;
+}> {}
+
+export type S3StreamingUpload = {
+  /** Resolves once the chunk is accepted; waits while a part is in flight. */
+  write: (chunk: Uint8Array) => Promise<void>;
+  /** Completes the multipart upload; the object exists only after this. */
+  end: () => Promise<void>;
+};
+
+type OpenS3StreamingUploadOptions = {
+  key: string;
+  contentType: string;
+  /** From `multipartPartBytes`. */
+  partBytes: number;
+  /** The key must live under a prefix whose owner deletes it. */
+  ownership: { type: "lifecycle-prefix"; prefix: string };
+};
+
+/**
+ * Upload one part at a time with bounded buffering. Every SDK request reads
+ * the current client through the credential guard, including completion after
+ * a long upload. Incomplete uploads belong to the bucket lifecycle.
+ */
+export const openS3StreamingUpload = ({
+  key,
+  contentType,
+  partBytes,
+  ownership,
+}: OpenS3StreamingUploadOptions): S3StreamingUpload => {
+  if (!key.startsWith(ownership.prefix)) {
+    return panic("Object key is outside its cleanup lifecycle prefix");
+  }
+  return createMultipartSink({
+    partBytes,
+    start: async () =>
+      await documentsCredentials.run(async () => {
+        const response = await getAbortableS3().send(
+          new CreateMultipartUploadCommand({
+            Bucket: envBase.S3_BUCKET,
+            Key: key,
+            ContentType: contentType,
+          }),
+        );
+        if (!response.UploadId) {
+          throw new S3MultipartResponseError({
+            message: "S3 returned no multipart upload ID",
+          });
+        }
+        return response.UploadId;
+      }),
+    sendPart: async ({ uploadId, partNumber, data }) =>
+      await documentsCredentials.run(async () => {
+        if (partNumber > MULTIPART_MAX_PARTS) {
+          throw new S3MultipartResponseError({
+            message: "Object exceeds the multipart part limit",
+          });
+        }
+        const response = await getAbortableS3().send(
+          new UploadPartCommand({
+            Bucket: envBase.S3_BUCKET,
+            Key: key,
+            UploadId: uploadId,
+            PartNumber: partNumber,
+            Body: data,
+          }),
+        );
+        if (!response.ETag) {
+          throw new S3MultipartResponseError({
+            message: "S3 returned no multipart part ETag",
+          });
+        }
+        return response.ETag;
+      }),
+    complete: async ({ uploadId, parts }) => {
+      await documentsCredentials.run(async () => {
+        await getAbortableS3().send(
+          new CompleteMultipartUploadCommand({
+            Bucket: envBase.S3_BUCKET,
+            Key: key,
+            UploadId: uploadId,
+            MultipartUpload: { Parts: parts },
+          }),
+        );
+      });
+    },
+    putEmpty: async () => {
+      await documentsCredentials.run(async () => {
+        await getAbortableS3().send(
+          new PutObjectCommand({
+            Bucket: envBase.S3_BUCKET,
+            Key: key,
+            ContentType: contentType,
+            Body: new Uint8Array(),
+          }),
+        );
+      });
+    },
+  });
 };
 
 type ListS3ObjectKeysOptions = {

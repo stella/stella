@@ -203,6 +203,22 @@ describe("role grant boundaries", () => {
     }
   });
 
+  test("only owner and admin can start or read organisation data exports", () => {
+    for (const role of ["owner", "admin"] as const) {
+      expect(
+        roles[role].authorize({ dataExport: ["create", "read"] }).success,
+      ).toBe(true);
+    }
+    for (const role of ["member", "intern", "external"] as const) {
+      expect(roles[role].authorize({ dataExport: ["create"] }).success).toBe(
+        false,
+      );
+      expect(roles[role].authorize({ dataExport: ["read"] }).success).toBe(
+        false,
+      );
+    }
+  });
+
   test("every role can read its workspace", () => {
     for (const role of ROLE_NAMES) {
       expect(roles[role].authorize({ workspace: ["read"] }).success).toBe(true);

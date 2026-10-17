@@ -28,6 +28,7 @@ export const AUDIT_RESOURCE_TYPE = {
   CHAT_FILE: "chat_file",
   CHAT_MESSAGE: "chat_message",
   CHAT_THREAD: "chat_thread",
+  DATA_EXPORT: "data_export",
   CLAUSE: "clause",
   CLAUSE_CATEGORY: "clause_category",
   CLAUSE_TEMPLATE_LINK: "clause_template_link",

@@ -1,0 +1,5 @@
+{
+  "metric": "api-lib-top-level-entries",
+  "delta": 1,
+  "reason": "data-export-queue.ts holds the data export queue identity and object layout apart from the worker, so the request handler and the scheduler can enqueue without importing the archive builder, mirroring report-export-enqueue.ts."
+}

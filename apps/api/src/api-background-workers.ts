@@ -1,4 +1,5 @@
 import { rootDb } from "@/api/db/root";
+import { initDataExportWorker } from "@/api/handlers/data-exports/data-export-worker";
 import { initReportExportWorker } from "@/api/handlers/reports/report-export-queue";
 import { initAccountDeletionCleanupWorker } from "@/api/lib/account-deletion-cleanup-queue";
 import { initBilingualRunWorker } from "@/api/lib/bilingual/run-queue";
@@ -28,6 +29,7 @@ export const initApiBackgroundWorkers = async (mode: BullMqWorkerHostMode) => {
   return createBullMqWorkerHost("api", { db: rootDb }, mode, [
     initAccountDeletionCleanupWorker,
     initBilingualRunWorker,
+    initDataExportWorker,
     initDocumentDeadlineScoutWorker,
     initDocumentReviewRunWorker,
     initDocumentTranslationRunWorker,
