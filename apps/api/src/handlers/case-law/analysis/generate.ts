@@ -52,7 +52,7 @@ import {
 import type { AnalysisInput } from "@/api/lib/case-law/analysis-prompt";
 import {
   analysisStore,
-  storesAnalyses,
+  writesDerivedAnalyses,
   type AnalysisStore,
 } from "@/api/lib/case-law/analysis-store";
 import { reportCaseLawIncompleteAnswer } from "@/api/lib/case-law/incomplete-answer-telemetry";
@@ -518,6 +518,12 @@ type GenerateAnalysisOptions = {
   retry: boolean;
   /** Where the analysis lives; the application's store unless a test says. */
   store?: AnalysisStore | undefined;
+  /**
+   * Whether a model may be asked for this decision's derived layers;
+   * `CASE_LAW_DERIVED_AI` unless a test says. Off, a stored analysis is
+   * served as it is and a missing one is reported unavailable.
+   */
+  derivedAi?: boolean | undefined;
   /** External model-resolution boundary; supplied by focused tests only. */
   resolveTextModel?: AnalysisModelResolver | undefined;
   /** The run's deadline; `ANALYSIS_GENERATION_DEADLINE_MS` unless a test says. */
@@ -540,6 +546,7 @@ export const generateAnalysis = async ({
   promptCachingEnabled,
   retry,
   store = analysisStore(),
+  derivedAi = writesDerivedAnalyses(),
   resolveTextModel,
   deadlineMs = ANALYSIS_GENERATION_DEADLINE_MS,
   beforeClaim,
@@ -584,12 +591,13 @@ export const generateAnalysis = async ({
       // on the citation graph and written in the background, so a reader
       // never waits for it and a decision whose neighbourhood has not
       // moved costs one indexed query.
-      if (storesAnalyses()) {
+      if (derivedAi) {
         detached(
           refreshSignificance({
             admitModelAction,
             analysis: stored.analysis,
             contentHash: decision.contentHash,
+            derivedAi,
             decisionId,
             orgAIConfig,
             orgAIConfigStatus,
@@ -612,6 +620,19 @@ export const generateAnalysis = async ({
       stored satisfies never;
       return panic(`Unhandled stored: ${String(stored)}`);
     }
+  }
+
+  // A deployment that may not ask a model for derived layers serves what is
+  // stored and generates nothing: a seeded or local stack never reaches a
+  // model by opening a decision. Decided before any recorded failure, so a
+  // reader is never offered a retry that this deployment cannot run.
+  if (!derivedAi) {
+    return Result.ok(
+      unavailable(
+        "analysis_unavailable",
+        "Analysis is unavailable for this decision",
+      ),
+    );
   }
 
   // Before a run starts: when the run this reader's key made last failed,
@@ -643,15 +664,6 @@ export const generateAnalysis = async ({
   const heldFailure = await answerFailure();
   if (heldFailure !== null) {
     return Result.ok(heldFailure);
-  }
-
-  if (!storesAnalyses()) {
-    return Result.ok(
-      unavailable(
-        "analysis_unavailable",
-        "Analysis is unavailable for this decision",
-      ),
-    );
   }
 
   // Sources carry different reuse terms. One whose terms withhold derived AI
