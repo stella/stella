@@ -1,3 +1,4 @@
+// parser-output-unchanged: total failure grading changes observation policy without changing parsed records.
 // Failure vocabulary and classification, shared by every runtime that throws
 // or observes a failure.
 

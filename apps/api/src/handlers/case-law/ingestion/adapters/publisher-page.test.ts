@@ -33,7 +33,7 @@ describe("publisher response failure grading inputs", () => {
   } as const;
 
   test("covers every publisher response rejection", () => {
-    expect([...reasons].toSorted()).toEqual(Object.keys(expected).toSorted());
+    expect(Object.keys(expected).toSorted()).toEqual([...reasons].toSorted());
   });
 
   for (const reason of reasons) {

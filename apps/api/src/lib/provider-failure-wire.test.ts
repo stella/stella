@@ -202,6 +202,29 @@ test("provider message recovery accepts only complete known envelopes", () => {
 });
 
 describe("wrapped provider message evidence", () => {
+  test("classifies and preserves structured status ahead of conflicting message bodies", () => {
+    for (const message of [
+      '{"error":{"code":401}}',
+      '{"error":{"type":"authentication_error"}}',
+      'got status: 401. {"error":{"code":401}}',
+    ]) {
+      const evidence = Object.assign(new Error(message), {
+        status: 429,
+        isRetryable: true,
+      });
+      expect(classifyAIError(evidence)).toBe("quota_exhausted");
+      expect(providerStatusCode(evidence)).toBe(429);
+      const error = createProviderCallError({
+        model: { provider: "google", keySource: "byok" },
+        evidence,
+        status: 502,
+      });
+      expect(error.kind).toBe("quota_exhausted");
+      expect(error.providerStatus).toBe(429);
+      expect(error.cause).toMatchObject({ status: 429, isRetryable: true });
+      expect(gradeFailure(readEvidence(error), sink).grade).toBe("transient");
+    }
+  });
   for (const depth of [1, 2]) {
     test(`preserves status through ${depth} wrappers and a cause cycle`, () => {
       const inner = Object.assign(

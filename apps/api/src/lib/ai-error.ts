@@ -146,9 +146,7 @@ export const providerFailureFacts = (error: unknown) => {
   let current = error;
   while (isNonNullObject(current) && !seen.has(current)) {
     seen.add(current);
-    const status =
-      readProviderStatus(current) ??
-      readProviderStatus(providerMessageBody(current));
+    const { status } = providerResponseEvidence(current);
     if (status !== undefined) {
       const isRetryable = current["isRetryable"];
       return {
@@ -221,10 +219,6 @@ const awsExceptionKind = (error: unknown): AIErrorKind | null => {
   return isAwsExceptionName(name) ? AWS_EXCEPTION_KINDS[name] : null;
 };
 
-const isProviderError = (error: unknown): boolean =>
-  isNonNullObject(error) &&
-  (providerStatusCode(error) !== null || isProviderCredentialRejection(error));
-
 /**
  * The provider's structured error body, recovered from a stream error message.
  *
@@ -266,6 +260,22 @@ export const providerErrorBody = (
 const providerMessageBody = (error: unknown) =>
   error instanceof Error ? providerErrorBody(error.message) : undefined;
 
+// Structured status owns the response. Only recover message evidence when it
+// is absent, so classification and preserved facts cannot disagree.
+const providerResponseEvidence = (error: unknown) => {
+  const structuredStatus = readProviderStatus(error);
+  if (structuredStatus !== undefined) {
+    return { status: structuredStatus, credentialsRejected: false };
+  }
+  const body = providerMessageBody(error);
+  return {
+    status: readProviderStatus(body),
+    credentialsRejected:
+      isProviderCredentialRejection(error) ||
+      isProviderCredentialRejection(body),
+  };
+};
+
 const errorCause = (error: unknown): unknown => {
   if (!isNonNullObject(error)) {
     return undefined;
@@ -274,8 +284,9 @@ const errorCause = (error: unknown): unknown => {
 };
 
 const providerResponseKind = (error: unknown): AIErrorKind => {
-  if (isProviderError(error)) {
-    const statusCode = providerStatusCode(error);
+  const statusCode = providerStatusCode(error);
+  const { credentialsRejected } = providerResponseEvidence(error);
+  if (statusCode !== null || credentialsRejected) {
     if (statusCode === 429) {
       return "quota_exhausted";
     }
@@ -296,10 +307,7 @@ const providerResponseKind = (error: unknown): AIErrorKind => {
     // here: its curated copy would otherwise be replaced by the provider's.
     // A provider 403 stays unmapped because it is ambiguous (permission,
     // region, or account state) where a 401 is not.
-    if (
-      statusCode === 401 ||
-      (statusCode === null && isProviderCredentialRejection(error))
-    ) {
+    if (statusCode === 401 || (statusCode === null && credentialsRejected)) {
       return "provider_credentials_rejected";
     }
     // A 404 on a generate/stream call means the provider no longer
@@ -368,13 +376,6 @@ const classifyAIErrorInternal = (
     const causeKind = classifyAIErrorInternal(error.cause, seen);
     if (causeKind !== "unknown") {
       return causeKind;
-    }
-  }
-  const body = providerMessageBody(error);
-  if (body !== undefined) {
-    const bodyKind = classifyAIErrorInternal(body, seen);
-    if (bodyKind !== "unknown") {
-      return bodyKind;
     }
   }
   const awsKind = awsExceptionKind(error);
