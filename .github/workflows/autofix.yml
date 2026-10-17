@@ -548,6 +548,14 @@ jobs:
             echo "::notice::Alignment fixer sources changed; CI enforces alignment without automatic edits."
           fi
 
+      # Reconcile merged manifest metadata without moving existing package
+      # pins. The helper restores bun.lock and fails on any resolution change.
+      - name: Refresh merged lockfile
+        env:
+          STELLA_LOCAL_AUTOFIX: "true"
+          NPM_TOKEN: ""
+        run: bun --no-install --no-env-file scripts/generated-conflicts.ts refresh-lock --repo .
+
       - name: Install dependencies
         timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
@@ -605,6 +613,8 @@ jobs:
             fi
             protected_path=false
             for pattern in "${protected[@]}"; do
+              # This exact README is generated documentation, never a release entry.
+              [[ "$path" == .changeset/README.md ]] && continue
               # Protected entries are glob patterns, so expansion must stay unquoted.
               # shellcheck disable=SC2254
               case "$path" in
@@ -629,9 +639,15 @@ jobs:
             # aborts on preparation or compiler errors before any fixer runs.
             bun scripts/ci-generated-sources.ts prepare
             bun scripts/typecheck-coverage.ts --autofix "${lint_paths[@]}"
-            # --fix applies safe fixes only. CI's lint job reports anything left.
+            # Restrict even safe fixes to the reviewed rule list. Never enable
+            # suggestions or dangerous fixes; CI reports all remaining rules.
+            bun scripts/autofix-safe-rules.ts > "$RUNNER_TEMP/autofix-safe-rule-args"
+            safe_rule_args=()
+            while IFS= read -r arg; do
+              safe_rule_args+=("$arg")
+            done < "$RUNNER_TEMP/autofix-safe-rule-args"
             lint_status=0
-            bun --bun oxlint -c oxlint.config.ts --no-error-on-unmatched-pattern --type-aware --fix "${lint_paths[@]}" || lint_status=$?
+            bun --bun oxlint -c oxlint.config.ts --no-error-on-unmatched-pattern --type-aware --fix "${safe_rule_args[@]}" "${lint_paths[@]}" || lint_status=$?
             if (( lint_status > 1 )); then
               exit "$lint_status"
             fi
@@ -698,7 +714,8 @@ jobs:
           while IFS= read -r pattern; do
             protected+=("$pattern")
           done < "$RUNNER_TEMP/autofix-protected-paths"
-          protected_specs=()
+          # The exact README is generated documentation, never a release entry.
+          protected_specs=(':(exclude,literal).changeset/README.md')
           for pattern in "${protected[@]}"; do
             protected_specs+=(":(glob)$pattern")
           done
@@ -750,6 +767,8 @@ jobs:
             excludes+=(":(exclude,literal)$path")
           done
 
+          # The refresh helper independently rejects changes to resolved pins.
+          excludes+=(":(exclude,literal)bun.lock")
           unexpected_tracked="$(git diff --name-only -- . "${excludes[@]}")"
           unexpected_untracked="$(git ls-files --others --exclude-standard -- . "${excludes[@]}")"
           if [[ -n "${unexpected_tracked}${unexpected_untracked}" ]]; then

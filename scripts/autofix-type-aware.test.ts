@@ -42,7 +42,7 @@ test.each(cases)(
     const root = mkdtempSync(path.join(tmpdir(), "autofix-type-aware-"));
     const repo = path.resolve(import.meta.dirname, "..");
     const source =
-      'export const value = { name: "fixture" };\nexport const name = value["name"];\n';
+      'export const value = { name: "fixture" };\nexport const name = value["name"];\nexport const truth = value.name ? true : false;\nexport const reversed = 1 === value.name.length;\ndebugger;\n';
     try {
       symlinkSync(
         path.join(repo, "node_modules"),
@@ -51,6 +51,7 @@ test.each(cases)(
       mkdirSync(path.join(root, "bin"));
       mkdirSync(path.join(root, "scripts"));
       for (const file of [
+        "autofix-safe-rules.ts",
         "autofix-protected-paths.ts",
         "baseline-paths.ts",
         "typecheck-coverage.ts",
@@ -94,16 +95,25 @@ test.each(cases)(
       }
       writeFileSync(
         path.join(root, "oxlint.config.ts"),
-        'export default { plugins: ["typescript"], categories: { correctness: "off" }, rules: { "typescript/dot-notation": "error" } };\n',
+        'export default { plugins: ["typescript"], categories: { correctness: "off" }, rules: { "typescript/dot-notation": "error", "no-debugger": "error", "no-unneeded-ternary": "error", "yoda": "error" } };\n',
       );
-      writeFileSync(path.join(root, ".oxfmtrc.json"), "{}");
+      writeFileSync(
+        path.join(root, ".oxfmtrc.json"),
+        readFileSync(path.join(repo, ".oxfmtrc.json")),
+      );
+      mkdirSync(path.join(root, "apps/landing"), { recursive: true });
+      const imports =
+        'import {z} from "z-package";import {a} from "a-package";export const names=[z,a]';
+      writeFileSync(path.join(root, "apps/landing/changed.js"), imports);
+      writeFileSync(path.join(root, "unchanged.js"), imports);
+      writeFileSync(path.join(root, "changed.json"), '{"x":1,"y":[2,3]}');
       writeFileSync(path.join(root, "generated.html.txt"), "fixture");
       // The fixer steps read the push scope; a run without a settled
       // commit scopes every changed path.
       for (const name of ["autofix-changed-paths", "autofix-fix-paths"]) {
         writeFileSync(
           path.join(root, name),
-          "changed.ts\0generated.html.txt\0",
+          "changed.ts\0generated.html.txt\0apps/landing/changed.js\0changed.json\0",
         );
       }
       const finding = Bun.spawnSync(
@@ -218,6 +228,22 @@ exec '${process.execPath}' "$@"
         expect(generated).toBe(rewritten);
       } else {
         expect(generated).toBe("fixture");
+      }
+      expect(readFileSync(path.join(root, "unchanged.js"), "utf-8")).toBe(
+        imports,
+      );
+      if (failure === "none") {
+        // Real oxfmt proves both changed-file formatting and configured sorting.
+        expect(readFileSync(path.join(root, "changed.json"), "utf-8")).toBe(
+          '{ "x": 1, "y": [2, 3] }\n',
+        );
+        const sorted = readFileSync(
+          path.join(root, "apps/landing/changed.js"),
+          "utf-8",
+        );
+        expect(sorted).toBe(
+          'import { a } from "a-package";\nimport { z } from "z-package";\nexport const names = [z, a];\n',
+        );
       }
       expect(readFileSync(path.join(root, "unchanged.ts"), "utf-8")).toBe(
         source,
