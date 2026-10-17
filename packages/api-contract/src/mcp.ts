@@ -10,7 +10,25 @@ export const ACCOUNT_EXPORT_SCOPES = {
   write: "stella:account_export_write",
 } as const;
 
+// Browser-safe literal; registry.test.ts compares both directions against
+// every scope required by the tools served on /mcp.
 export const MCP_DEFAULT_RESOURCE_SCOPES = [
+  "stella:search",
+  "stella:read",
+  "stella:law_read",
+  "stella:templates",
+  "stella:documents_write",
+  "stella:matters_write",
+  "stella:contacts_write",
+  "stella:knowledge_write",
+  "stella:billing_write",
+  "stella:admin_read",
+  "stella:admin_write",
+  "stella:onboarding",
+  "stella:feedback",
+] as const;
+
+export const MCP_ADVANCED_RESOURCE_SCOPES = [
   "stella:search",
   "stella:read",
   "stella:law_read",
@@ -28,10 +46,6 @@ export const MCP_DEFAULT_RESOURCE_SCOPES = [
   "stella:onboarding",
   "stella:skills",
   "stella:feedback",
-] as const;
-
-export const MCP_ADVANCED_RESOURCE_SCOPES = [
-  ...MCP_DEFAULT_RESOURCE_SCOPES,
   "stella:external_mcps",
 ] as const;
 
@@ -117,7 +131,7 @@ const isMcpWriteOnlyResourceScope = (
   MCP_RESOURCE_SCOPE_ACCESS[scope] === "write-only";
 
 export const MCP_WRITE_ONLY_RESOURCE_SCOPES =
-  MCP_DEFAULT_RESOURCE_SCOPES.filter(isMcpWriteOnlyResourceScope);
+  MCP_ADVANCED_RESOURCE_SCOPES.filter(isMcpWriteOnlyResourceScope);
 
 export const MCP_OAUTH_PROTOCOL_SCOPES = [
   "openid",

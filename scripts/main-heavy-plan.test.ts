@@ -576,7 +576,7 @@ test("completed-depth reuse skips every nonstructural main heavy job", () => {
       if (
         job === "ci-plan" ||
         job === "ci-result" ||
-        job === "dated-waiver-expiry"
+        job === "ci-quick-checks"
       ) {
         continue;
       }

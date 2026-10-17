@@ -16,6 +16,11 @@ export default {
     specifiers: ["@/api/lib/redis-client"],
     allowed: [
       {
+        path: "apps/api/src/handlers/chat/link-icons/cache.ts",
+        reason:
+          "Bounded favicon cache and miss admission; outages return no icon without an origin lease.",
+      },
+      {
         path: "apps/api/src/lib/admission-redis.ts",
         reason:
           "Admission clients check and periodically refresh the non-eviction policy before issuing coordination commands.",

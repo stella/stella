@@ -7,6 +7,7 @@ import { assertProperty } from "@stll/property-testing";
 import { createCorpusHitDispositionCounter } from "@/api/lib/legal-search/corpus-hit-telemetry";
 import {
   partitionCorpusRehydration,
+  partitionReturnedCorpusRecords,
   recordCorpusRehydrationDispositions,
 } from "@/api/lib/legal-search/corpus-rehydration-disposition";
 import {
@@ -43,6 +44,19 @@ test("canonical rehydration separates eligible content from id-only dispositions
   recordCorpusRehydrationDispositions(partition.dispositions, counter);
   expect(counter.snapshot()).toEqual({ malformed: 0, excluded: 1, drift: 1 });
   expect(logs.records).toEqual([]);
+});
+
+test("explicit returned records separate content from exclusions", () => {
+  const row = { id: "eligible", text: "displayable content" };
+  expect(
+    partitionReturnedCorpusRecords([
+      { id: "eligible", row },
+      { id: "absent-from-published-view", row: null },
+    ]),
+  ).toEqual({
+    rows: [row],
+    dispositions: [{ id: "absent-from-published-view", type: "excluded" }],
+  });
 });
 
 const REHYDRATION_STATES = ["eligible", "excluded", "drift"] as const;

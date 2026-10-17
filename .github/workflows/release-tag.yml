@@ -29,6 +29,7 @@ on:
 permissions:
   contents: read
   statuses: read
+  checks: read
   actions: read
   issues: read
   pull-requests: read
@@ -53,6 +54,14 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      # Bun runs the release queue history check that decides whether a
+      # merge-group receipt may stand in for the heavy statuses.
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: "package.json"
+
       - name: Select and validate the release commit
         id: candidate
         env:
@@ -65,6 +74,8 @@ jobs:
         run: |
           cp scripts/check-release-main-health.sh "$RUNNER_TEMP/check-release-main-health.sh"
           cp scripts/verify-release-tree-proof.sh "$RUNNER_TEMP/verify-release-tree-proof.sh"
+          cp scripts/check-release-receipt-coverage.sh "$RUNNER_TEMP/check-release-receipt-coverage.sh"
+          cp scripts/check-release-queue-history.ts "$RUNNER_TEMP/check-release-queue-history.ts"
           cp scripts/gh-retry.sh "$RUNNER_TEMP/gh-retry.sh"
 
       - name: Checkout the verified commit
@@ -72,13 +83,8 @@ jobs:
           RELEASE_SHA: ${{ steps.candidate.outputs.sha }}
         run: git checkout --detach "$RELEASE_SHA"
 
-      - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
-        with:
-          save: ${{ github.ref == 'refs/heads/main' }}
-          bun-version-file: "package.json"
-
       - name: Install dependencies for the release audit
+        timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
@@ -122,8 +128,10 @@ jobs:
           repositories: ${{ github.event.repository.name }}
           permission-contents: write
 
-      # Re-checks staging/verified, main/heavy and main/pr-depth on the exact commit right
-      # before the push, so a status that turned red since selection stops it.
+      # Re-checks staging/verified plus the merge-group receipt with validated
+      # queue history (or main/heavy and main/pr-depth) on the exact commit
+      # right before the push, so evidence that turned red since selection
+      # stops it.
       - name: Push tag
         env:
           RELEASE_TREE_PROOF_VERIFIER: ${{ runner.temp }}/verify-release-tree-proof.sh
@@ -167,6 +175,7 @@ jobs:
           bun-version-file: "package.json"
 
       - name: Install dependencies
+        timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""

@@ -29,10 +29,7 @@ const LIMIT_ARG = "limit";
  * `--confirm` flag: the reserved `--yes` flow owns the confirmation, and the
  * executor injects `confirm: true` after the human confirms. It is dropped from
  * the generated per-tool flags of EVERY leaf of any tool that declares it
- * (including non-destructive sibling subcommands of a discriminated tool such
- * as `manage_organization`, where only `remove-member` is destructive but all
- * three subcommands share the one schema). It stays reachable through `--input`
- * for scripts that want it.
+ * and stays reachable through `--input` for scripts that want it.
  */
 const CONFIRM_ARG = "confirm";
 

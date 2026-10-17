@@ -1,5 +1,4 @@
 import { panic, Result } from "better-result";
-import { eq } from "drizzle-orm";
 
 import type { getLawTextBlock, searchConsolidatedLegislation } from "@stll/boe";
 import type { runEntityCheck } from "@stll/business-registries/entity-checks";
@@ -7,7 +6,6 @@ import type { PermissionInput } from "@stll/permissions";
 
 import { rlsDb } from "@/api/db/root";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import { workspaces } from "@/api/db/schema";
 import {
   createMembershipSafeDb,
   createMembershipScopedDb,
@@ -22,7 +20,10 @@ import type {
   readsSharedPublicLawCorpus,
 } from "@/api/handlers/case-law/decisions/get-deferred-document";
 import type { readDecisionReaderSource } from "@/api/handlers/case-law/decisions/reader";
-import type { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
+import type {
+  listCaseLawProvisionDecisions,
+  searchDecisionsHandler,
+} from "@/api/handlers/case-law/decisions/search";
 import type { resolveAnnotationTarget } from "@/api/handlers/legal-reader/annotations/document-blocks";
 import type { admitLawRead } from "@/api/handlers/legal-resolve/admission";
 import type { resolveDecision } from "@/api/handlers/legal-resolve/decision";
@@ -72,6 +73,7 @@ import type {
   executeRegistryLookup,
 } from "@/api/lib/business-registries/dispatch";
 import type { runSanctionsCheck } from "@/api/lib/business-registries/sanctions-check";
+import type { readCaseLawProvisionScope } from "@/api/lib/case-law/provision-filter";
 import type { CaseLawSearchGuidanceMode } from "@/api/lib/case-law/search-guidance-mode";
 import type { loadLatestApprovedVersion } from "@/api/lib/document-review/approved-playbook-versions";
 import type { createPlaybookTableRuns } from "@/api/lib/document-review/table-run-create";
@@ -109,6 +111,7 @@ import type { writeStoredTemplate } from "@/api/lib/templates/write-template";
 import type { withTimeout } from "@/api/lib/with-timeout";
 import type { startWorkflow } from "@/api/lib/workflow-queue";
 import type { materializePlaybookRun } from "@/api/lib/workflow/materialize-playbook-run";
+import { readAuthorizedWorkspaces } from "@/api/lib/workspaces/authorized-workspace-ids";
 import type { anonymizeTextFields } from "@/api/mcp/anonymization";
 import type { McpSession } from "@/api/mcp/auth";
 import type { consumeInvokeCapabilityRateLimit } from "@/api/mcp/capability-rate-limit";
@@ -165,6 +168,11 @@ export type McpRequestContext = {
     createTimeEntryHandler?: typeof createTimeEntryHandler;
     readCaseLawCoverageHandler?: typeof readCaseLawCoverageHandler;
     searchDecisionsHandler?: typeof searchDecisionsHandler;
+    listCaseLawProvisionDecisions?: typeof listCaseLawProvisionDecisions;
+    /** Reads a provision's citing set once per agent search. */
+    readCaseLawProvisionScope?: (
+      scope: Omit<Parameters<typeof readCaseLawProvisionScope>[1], "idSetMax">,
+    ) => ReturnType<typeof readCaseLawProvisionScope>;
     corpusIndexQueryVariant?: CorpusIndexQueryVariant;
     caseLawSearchGuidance?: CaseLawSearchGuidanceMode;
     /** Every court spelling one corpus country holds, for reading a court filter. */
@@ -360,21 +368,22 @@ type LoadAccessibleMcpWorkspacesOptions = {
 };
 
 /**
- * Enumerate the workspace metadata MCP's current access maps require. Keep the
- * organization predicate explicit even though RLS independently enforces it,
- * so the tenant index bounds the query before policy evaluation.
+ * Enumerate the workspace metadata MCP's current access maps require, from
+ * the authorized-workspace owner in the credential's scoped transaction.
  */
 export const loadAccessibleMcpWorkspaces = async ({
   organizationId,
   scopedDb,
-}: LoadAccessibleMcpWorkspacesOptions): Promise<AccessibleWorkspace[]> =>
-  await scopedDb(
-    async (tx) =>
-      await tx
-        .select({ id: workspaces.id, status: workspaces.status })
-        .from(workspaces)
-        .where(eq(workspaces.organizationId, organizationId)),
+}: LoadAccessibleMcpWorkspacesOptions): Promise<AccessibleWorkspace[]> => {
+  const outcome = await scopedDb(
+    async (tx) => await readAuthorizedWorkspaces(tx, { organizationId }),
   );
+  if (outcome.isErr()) {
+    const { error } = outcome;
+    throw error;
+  }
+  return outcome.value.workspaces;
+};
 
 export const resolveMcpSessionContext = async (
   session: McpSession,

@@ -511,8 +511,7 @@ test.each(["true", "false"])(
     try {
       const step = readVerifyWorkflow({ root, mode: "verify" }).find(
         ({ job, name }) =>
-          job === "ci-generated-sources" &&
-          name === "Produce generated sources",
+          job === "ci-plan" && name === "Produce generated sources",
       );
       if (step === undefined) {
         throw new TypeError("Marked generated preparation is missing");
@@ -744,6 +743,7 @@ exit 0
             "autofix-local.sh",
             "prepare-typecheck-base.sh",
             "gh-retry.sh",
+            "retry.sh",
           ]) {
             copyFileSync(
               path.join(root, "scripts", file),
@@ -772,6 +772,9 @@ exit 0
           });
           for (const file of [
             "scripts/autofix-plan.ts",
+            "scripts/autofix-push-scope.ts",
+            "scripts/autofix-baseline-prune.ts",
+            "scripts/baseline-shrink.ts",
             "scripts/autofix-protected-paths.ts",
             "scripts/baseline-paths.ts",
             "scripts/generated-files.ts",

@@ -2,7 +2,7 @@ import { and, eq, isNull } from "drizzle-orm";
 
 import { member, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
-import { workspaces, workspaceMembers } from "@/api/db/schema";
+import { workspaces } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { resolveFeatureAccess } from "@/api/lib/auth/feature-access/context";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -11,23 +11,21 @@ import { canWriteWorkspaceEntities } from "@/api/lib/entities/workspace-entity-w
 import type { FeatureAccessGrants } from "@/api/lib/feature-access/grants-schema";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import type { ListVerificationAccessResult } from "@/api/lib/lists/verification/access";
+import { memberReachesMatterSql } from "@/api/lib/workspaces/authorized-workspace-ids";
 
 type VerificationWorkspaceAccessOptions = {
   organizationRole: string | null;
-  workspaceMemberId: string | null;
+  reachesMatter: boolean;
   workspaceStatus: string | null;
-  clientId: string | null;
 };
 
 const canExecuteListVerificationInWorkspace = ({
   organizationRole,
-  workspaceMemberId,
+  reachesMatter,
   workspaceStatus,
-  clientId,
 }: VerificationWorkspaceAccessOptions): boolean =>
   workspaceStatus === "active" &&
-  (workspaceMemberId !== null || clientId !== null) &&
-  canWriteWorkspaceEntities({ organizationRole, workspaceMemberId });
+  canWriteWorkspaceEntities({ organizationRole, reachesMatter });
 
 type ResolveListVerificationAccessArgs = {
   tx: Pick<Transaction, "select">;
@@ -69,8 +67,10 @@ export const resolveListVerificationAccess = async ({
         role: member.role,
         workspaceId: workspaces.id,
         workspaceStatus: workspaces.status,
-        clientId: workspaces.clientId,
-        workspaceMemberId: workspaceMembers.id,
+        reachesMatter: memberReachesMatterSql(
+          { organizationId: member.organizationId, userId: member.userId },
+          workspaceId,
+        ),
       })
       .from(member)
       .innerJoin(user, eq(user.id, member.userId))
@@ -79,13 +79,6 @@ export const resolveListVerificationAccess = async ({
         and(
           eq(workspaces.id, workspaceId),
           eq(workspaces.organizationId, member.organizationId),
-        ),
-      )
-      .leftJoin(
-        workspaceMembers,
-        and(
-          eq(workspaceMembers.workspaceId, workspaces.id),
-          eq(workspaceMembers.userId, member.userId),
         ),
       )
       .where(
@@ -101,9 +94,8 @@ export const resolveListVerificationAccess = async ({
     identity?.workspaceId === workspaceId &&
     canExecuteListVerificationInWorkspace({
       organizationRole: identity.role,
-      workspaceMemberId: identity.workspaceMemberId,
+      reachesMatter: identity.reachesMatter,
       workspaceStatus: identity.workspaceStatus,
-      clientId: identity.clientId,
     });
   if (identity === undefined || !workspaceAllowed) {
     return { status: "unavailable" };

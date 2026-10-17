@@ -34,7 +34,7 @@ export const DocumentIdentityBadge = ({
 
 type DocumentIdentityBadgeProps = {
   identity: DocumentIdentity;
-  /** Decision chips can fit an inline metadata row. */
+  /** Court chip size; statute labels follow their container width. */
   size?: CourtBadgeSize | undefined;
   /** Omit when the enclosing tab already supplies the full-title tooltip. */
   title?: string | undefined;

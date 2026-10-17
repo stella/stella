@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import { writeZipEntry } from "@stll/docx-utils";
 import { OFFICE_ARCHIVE_FORMATS } from "@stll/docx-utils/office-formats";
 
 import { attachedTemplateScanner } from "./attached-template";
@@ -12,7 +13,8 @@ test.each(wordFormats)(
   "inspects template relationships in the canonical Word format %s",
   async (extension, format) => {
     const zip = new JSZip();
-    zip.file(
+    writeZipEntry(
+      zip,
       "word/_rels/document.xml.rels",
       '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/attachedTemplate" Target="https://templates.example.test/template.dotx" TargetMode="External"/></Relationships>',
     );

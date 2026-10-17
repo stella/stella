@@ -22,9 +22,9 @@ import type {
 import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import {
-  publishedCaseLawDecision,
+  publishedCaseLawDecisionFor,
   publishedCaseLawDecisionSqlFor,
-} from "@/api/lib/case-law/published-decisions";
+} from "@/api/lib/case-law/published-decisions-sql";
 import {
   markListingOnly,
   partialObservationFromMetadata,
@@ -58,6 +58,7 @@ const DB_TEST_TIMEOUT_MS = 120_000;
 
 const sourceId = createSafeId<"caseLawSource">();
 const publishedId = createSafeId<"caseLawDecision">();
+const redactedId = createSafeId<"caseLawDecision">();
 const pendingId = createSafeId<"caseLawDecision">();
 const groupPendingId = createSafeId<"caseLawDecision">();
 const groupPublishedId = createSafeId<"caseLawDecision">();
@@ -172,6 +173,15 @@ beforeAll(async () => {
       createdAt: new Date(2026, 2, 4, 9),
       metadata: {},
     }),
+    {
+      ...seedDecision({
+        id: redactedId,
+        caseNumber: "redacted",
+        createdAt: new Date(2026, 2, 4, 9, 30),
+        metadata: {},
+      }),
+      redactedAt: new Date("2026-03-05T00:00:00Z"),
+    },
     seedDecision({
       id: pendingId,
       caseNumber: "2 Cdo 2/2026",
@@ -251,7 +261,7 @@ test(
       .where(
         and(
           eq(caseLawDecisions.country, SHAPE_COUNTRY),
-          publishedCaseLawDecision,
+          publishedCaseLawDecisionFor(caseLawDecisions),
         ),
       );
     expect(columnForm.map((row) => row.id).toSorted()).toEqual(expected);
@@ -295,7 +305,7 @@ test(
 );
 
 test(
-  "no public surface shows a listing-only row",
+  "public reads use the publication filter",
   async () => {
     expect((await listedIds()).toSorted()).toEqual(
       [publishedId, groupPublishedId].toSorted(),
@@ -387,6 +397,7 @@ test(
     expect(
       await withRedistributableSubject(
         caseLawDb,
+        "pages",
         { kind: "id", id: pendingId },
         async (subject) => subject.id,
       ),
@@ -394,6 +405,7 @@ test(
     expect(
       await withRedistributableSubject(
         caseLawDb,
+        "pages",
         { kind: "id", id: publishedId },
         async (subject) => subject.id,
       ),
@@ -425,6 +437,7 @@ test(
     expect(
       await withRedistributableSubject(
         caseLawDb,
+        "pages",
         { kind: "id", id: groupPendingId },
         async (subject) => subject.id,
       ),
@@ -454,7 +467,7 @@ test(
       });
     });
     expect(plan.join("\n")).toMatch(
-      /Index Only Scan using case_law_decisions_search_candidate_idx on case_law_decisions/u,
+      /Index Only Scan using case_law_decisions_search_candidate_published_idx on case_law_decisions/u,
     );
 
     await db

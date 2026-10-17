@@ -44,7 +44,6 @@ describe("extractMcpSession", () => {
           verifications += 1;
           expect(options?.verifyOptions?.audience).toEqual([
             getMcpResourceUrl("advanced"),
-            getMcpResourceUrl("default"),
           ]);
           expect(options?.verifyOptions?.issuer).toBe(getAuthIssuerUrl());
           return {

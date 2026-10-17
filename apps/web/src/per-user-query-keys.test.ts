@@ -9,6 +9,7 @@ import { savedTimeNarrativesKeys } from "@/components/billing/saved-time-narrati
 import { companyFormatKeys } from "@/components/company-format-library";
 import { readerAnnotationKeys } from "@/components/legal-reader/annotations/reader-annotations-query";
 import { savedSearchKeys } from "@/components/saved-searches.logic";
+import { readerAnswersOptions } from "@/features/case-law/components/case-viewer/reader-answers-query";
 import { chatKeys } from "@/features/chat/chat-query-contract";
 import { desktopPresenceOptions } from "@/features/desktop/desktop-presence";
 import { lawHistoryKeys } from "@/features/law-search-history/law-search-history-query";
@@ -245,6 +246,11 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     files: ["lib/knowledge/queries/catalogue.ts"],
     keys: () => [catalogueOptions(ORG, USER).queryKey],
   },
+  "chat/link-icons/get.ts": {
+    kind: "not-per-user",
+    reason:
+      "Public site icons are shared by hostname; the caller is used only for miss admission.",
+  },
   "chat/get-suggested-prompts.ts": { kind: "owned-id", reason: OWNED_THREAD },
   "chat/get-thread-recap.ts": { kind: "owned-id", reason: OWNED_THREAD },
   "chat/get-thread-title.ts": { kind: "owned-id", reason: OWNED_THREAD },
@@ -376,8 +382,16 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     opaqueKeys: { "readerAnnotationKeys.forTarget(key)": KEY_TYPE_HAS_USER },
   },
   "legal-reader/answers/list.ts": {
-    kind: "no-web-caller",
+    kind: "keyed",
     calls: ["api.reader.answers.get"],
+    files: ["features/case-law/components/case-viewer/reader-answers-query.ts"],
+    keys: () => [
+      readerAnswersOptions({
+        organizationId: ORG,
+        userId: USER,
+        decisionId: "decision",
+      }).queryKey,
+    ],
   },
   "lists/items/list.ts": {
     kind: "keyed",

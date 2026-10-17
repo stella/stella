@@ -390,6 +390,10 @@ describe("list verification access grants across MCP tools", () => {
         status: "verified",
       },
     },
+    "lists.sample-case.create": {
+      params,
+      body: { filePropertyName: "Documents" },
+    },
   } as const;
 
   let previousGrants = env.API_FEATURE_ACCESS_GRANTS;
@@ -519,6 +523,11 @@ describe("list verification access grants across MCP tools", () => {
           limit: () => query,
         });
       },
+      // Row locks (the sample loader's matter lock) read no rows here.
+      execute: async () => {
+        resourceLookups += 1;
+        return [];
+      },
       insert: () => ({ values: async () => [] }),
       update: () => {
         mutations += 1;
@@ -538,6 +547,14 @@ describe("list verification access grants across MCP tools", () => {
       scopedDb: database.scopedDb,
       safeDb: database.safeDb,
       workspaceIds: [matterId],
+      // The sample loader stores a document, so it needs the documents scope.
+      grantedScopes: [
+        "stella:read",
+        "stella:billing_write",
+        "stella:knowledge_write",
+        "stella:matters_write",
+        "stella:documents_write",
+      ],
     });
     context.organizationId = toSafeId<"organization">(organizationId);
     context.userId = toSafeId<"user">(userId);
@@ -572,6 +589,40 @@ describe("list verification access grants across MCP tools", () => {
       .filter(requiresVerificationGrant)
       .map(({ id }) => id);
     expect(Object.keys(inputs).toSorted()).toEqual(declared.toSorted());
+  });
+
+  test("every list mutation retains matter consent alongside other write consents", () => {
+    const mutations = capabilityCatalog.filter(
+      ({ id, access }) => id.startsWith("lists.") && access === "write",
+    );
+    expect(mutations.length).toBeGreaterThan(0);
+    for (const entry of mutations) {
+      expect(
+        [entry.scope, ...(entry.additionalScopes ?? [])],
+        entry.id,
+      ).toContain("stella:matters_write");
+    }
+  });
+
+  test("document consent alone refuses sample loading before mutation", async () => {
+    grantCurrentMember();
+    const fixture = verificationContext();
+    fixture.context.grantedScopes = ["stella:documents_write"];
+    const result = await handleMcpToolCall({
+      mode: "advanced",
+      toolName: "write_capability",
+      context: fixture.context,
+      args: {
+        capability: "lists.sample-case.create",
+        input: inputs["lists.sample-case.create"],
+      },
+    });
+    expect(errorEnvelope(result)).toMatchObject({
+      code: "missing_scope",
+      message: expect.stringContaining("stella:matters_write"),
+    });
+    expect(fixture.mutations()).toBe(0);
+    expect(fixture.resourceLookups()).toBe(0);
   });
 
   test("empty grants omit dedicated verification capabilities from discovery", async () => {
@@ -1156,7 +1207,6 @@ describe("capability handler refusal metadata", () => {
           mappedError(
             mapHandlerResult({
               id: "properties.update",
-              access: "write",
               result: new ElysiaCustomStatusResponse(status, {
                 code: "handler_specific_code",
                 message: "A corrective action is required",
@@ -1196,7 +1246,6 @@ describe("capability handler refusal metadata", () => {
     const error = mappedError(
       mapHandlerResult({
         id: "properties.update",
-        access: "write",
         result: new ElysiaCustomStatusResponse(422, {
           message: "Invalid input",
           hint: { raw: "private details" },
@@ -2746,7 +2795,6 @@ describe("capability executor file-response gate (fix-6)", () => {
     const mapped = mapHandlerResult({
       id: "x.y",
       result: new Response("file bytes"),
-      access: "read",
     });
     expect(mappedError(mapped).code).toBe("feature_disabled");
   });
@@ -2763,7 +2811,6 @@ describe("capability executor file-response gate (fix-6)", () => {
       const mapped = mapHandlerResult({
         id: "x.y",
         result: value,
-        access: "read",
       });
       expect(mappedError(mapped).code, label).toBe("feature_disabled");
     }
@@ -2773,7 +2820,6 @@ describe("capability executor file-response gate (fix-6)", () => {
     const mapped = mapHandlerResult({
       id: "x.y",
       result: { ok: true },
-      access: "read",
     });
     expect(mapped).toEqual({
       egress: "structured",
@@ -2782,26 +2828,25 @@ describe("capability executor file-response gate (fix-6)", () => {
     });
   });
 
-  test("(layer b) a WRITE success payload carries the request receipt under meta", () => {
-    const mapped = runWithRequestId("req_invoke", () =>
-      mapHandlerResult({ id: "x.y", result: { ok: true }, access: "write" }),
-    );
-    expect(mapped).toEqual({
-      egress: "structured",
-      payload: { ok: true, meta: { requestId: "req_invoke" } },
-      textFields: [],
-    });
-  });
-
-  test("(layer b) a READ success payload carries NO receipt (deterministic for caching)", () => {
-    const mapped = runWithRequestId("req_invoke", () =>
-      mapHandlerResult({ id: "x.y", result: { ok: true }, access: "read" }),
-    );
-    expect(mapped).toEqual({
-      egress: "structured",
-      payload: { ok: true },
-      textFields: [],
-    });
+  test("successful capability projections exclude request receipts", () => {
+    for (const payload of [
+      { ok: true },
+      { items: [{ id: "entity_1" }], nextCursor: "next_page" },
+      { meta: { revision: 3 }, value: "rendered text" },
+      ["one", "two"],
+      "rendered text",
+      null,
+    ]) {
+      const mapped = runWithRequestId("req_invoke", () =>
+        mapHandlerResult({ id: "x.y", result: payload }),
+      );
+      expect(mapped).toEqual({
+        egress: "structured",
+        payload,
+        textFields: [],
+      });
+      expect(JSON.stringify(mapped)).not.toContain('"requestId"');
+    }
   });
 
   test("verification limit refusals preserve codes, recovery metadata and receipts", () => {
@@ -2816,7 +2861,6 @@ describe("capability executor file-response gate (fix-6)", () => {
         const result = runWithRequestId("req_refusal", () =>
           mapHandlerResult({
             id: "documents.verifications.start",
-            access: "write",
             result: new ElysiaCustomStatusResponse(429, refusal),
           }),
         );
@@ -2834,7 +2878,6 @@ describe("capability executor file-response gate (fix-6)", () => {
       const result = runWithRequestId("req_refusal", () =>
         mapHandlerResult({
           id: "x.y",
-          access: "write",
           result: new ElysiaCustomStatusResponse(refusal.status, {
             code,
             message: refusal.message,
@@ -2858,7 +2901,6 @@ describe("capability executor file-response gate (fix-6)", () => {
     const mapped = mapHandlerResult({
       id: "x.y",
       result: new ElysiaCustomStatusResponse(404, { message: "Gone" }),
-      access: "read",
     });
     expect(mappedError(mapped).code).toBe("not_found");
   });
@@ -3466,7 +3508,6 @@ describe("status-to-envelope mapping", () => {
       result: new ElysiaCustomStatusResponse(409, {
         message: "Decision already linked to this matter",
       }),
-      access: "write",
     });
     const error = mappedError(mapped);
     expect(error.code).toBe("conflict");
@@ -3479,7 +3520,6 @@ describe("status-to-envelope mapping", () => {
       result: new ElysiaCustomStatusResponse(422, {
         message: "dateFrom must precede dateTo",
       }),
-      access: "read",
     });
     const error = mappedError(mapped);
     expect(error.code).toBe("validation_error");
@@ -3490,7 +3530,6 @@ describe("status-to-envelope mapping", () => {
     const mapped = mapHandlerResult({
       id: "x.y",
       result: new ElysiaCustomStatusResponse(401, { message: "Unauthorized" }),
-      access: "read",
     });
     expect(mappedError(mapped).code).toBe("permission_denied");
   });
@@ -3501,7 +3540,6 @@ describe("status-to-envelope mapping", () => {
       result: new ElysiaCustomStatusResponse(502, {
         message: "upstream gotenberg at 10.0.3.7 refused",
       }),
-      access: "read",
     });
     const error = mappedError(mapped);
     expect(error.code).toBe("internal_error");

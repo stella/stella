@@ -12,6 +12,7 @@ import { sleep } from "@stll/concurrency/sleep";
 import { getModelOptionsForRole } from "@/components/ai-config-role-models.logic";
 import messages from "@/i18n/langs/en.json";
 import type { OrganizationAIConfig } from "@/lib/organization/ai-config-queries";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({
   url: "http://localhost:3000/settings/organization",
@@ -20,6 +21,9 @@ const originalFetch = globalThis.fetch;
 const requests: { method: string; url: string; body: string }[] = [];
 let settingsFailure: { code: string; message: string } | undefined;
 let reflectProviderOrder = false;
+let previewBarrier: Promise<void> | undefined;
+let previewDefaults: OrganizationAIConfig["defaultModels"] | undefined;
+const previewRequests: { providers: unknown }[] = [];
 const ORGANIZATION = "byok-navigation-fixture";
 let sessionOrganization = ORGANIZATION;
 let auxiliaryFailure: { path: string; message: string } | undefined;
@@ -29,13 +33,66 @@ let organizationSettings = {
   memoryExtractionEnabled: false,
 };
 const GOOGLE_KEY = `AIza${"a".repeat(31)}1234`;
+const GOOGLE_DEFAULTS = {
+  chat: { provider: "google", modelId: "gemini-3.8-flash" },
+  fast: { provider: "google", modelId: "gemini-3.8-flash" },
+  reasoning: { provider: "google", modelId: "gemini-3.8-flash" },
+  pdf: { provider: "google", modelId: "gemini-3.8-flash" },
+} satisfies OrganizationAIConfig["defaultModels"];
+const ANTHROPIC_DEFAULTS = {
+  chat: { provider: "anthropic", modelId: "claude-opus-5-5" },
+  fast: { provider: "anthropic", modelId: "claude-haiku-5-5" },
+  reasoning: { provider: "anthropic", modelId: "claude-opus-5-5" },
+  pdf: { provider: "anthropic", modelId: "claude-opus-5-5" },
+} satisfies OrganizationAIConfig["defaultModels"];
+const OPENROUTER_DEFAULTS = {
+  chat: { provider: "openrouter", modelId: "openai/gpt-6-sol" },
+  fast: { provider: "openrouter", modelId: "anthropic/claude-haiku-5.5" },
+  reasoning: { provider: "openrouter", modelId: "openai/gpt-6-sol" },
+  pdf: { provider: "openrouter", modelId: "google/gemini-3.8-flash" },
+} satisfies OrganizationAIConfig["defaultModels"];
+const EMPTY_DEFAULTS = {
+  chat: null,
+  fast: null,
+  reasoning: null,
+  pdf: null,
+} satisfies OrganizationAIConfig["defaultModels"];
+const previewDefaultsFixture = (fixtureKey: string) => {
+  switch (fixtureKey) {
+    case '["anthropic"]':
+      return ANTHROPIC_DEFAULTS;
+    case '["google"]':
+    case '["google","anthropic"]':
+      return GOOGLE_DEFAULTS;
+    case "[]":
+      return EMPTY_DEFAULTS;
+    default:
+      return panic(`Missing defaults preview fixture: ${fixtureKey}`);
+  }
+};
+const providerDefaultsFixture = (provider: unknown) => {
+  switch (provider) {
+    case "google":
+      return GOOGLE_DEFAULTS;
+    case "anthropic":
+      return ANTHROPIC_DEFAULTS;
+    default:
+      return panic("Missing provider defaults fixture");
+  }
+};
 const config = {
   configured: false,
+  defaultModels: EMPTY_DEFAULTS,
+  providerDefaultModels: [],
   instanceProvisioned: false,
   decisionInstanceProvisioned: false,
 } satisfies OrganizationAIConfig;
 const savedConfig = {
   configured: true,
+  defaultModels: GOOGLE_DEFAULTS,
+  providerDefaultModels: [
+    { provider: "google", defaultModels: GOOGLE_DEFAULTS },
+  ],
   instanceProvisioned: false,
   decisionInstanceProvisioned: false,
   providers: [
@@ -73,8 +130,30 @@ globalThis.fetch = Object.assign(
     } else if (input instanceof Request) {
       body = await input.clone().text();
     }
-    requests.push({ method, url, body });
     const pathname = new URL(url, "http://localhost:3000").pathname;
+    if (pathname.endsWith("/ai-config/defaults-preview")) {
+      const previewRequest: unknown = JSON.parse(body);
+      if (
+        typeof previewRequest !== "object" ||
+        previewRequest === null ||
+        !("providers" in previewRequest) ||
+        !Array.isArray(previewRequest.providers)
+      ) {
+        return panic("Expected defaults preview provider list");
+      }
+      previewRequests.push({ providers: previewRequest.providers });
+      await previewBarrier;
+      const fixtureKey = JSON.stringify(previewRequest.providers);
+      const defaultModels = previewDefaultsFixture(fixtureKey);
+      return Response.json({
+        defaultModels: previewDefaults ?? defaultModels,
+        providerDefaultModels: previewRequest.providers.map((provider) => ({
+          provider,
+          defaultModels: providerDefaultsFixture(provider),
+        })),
+      });
+    }
+    requests.push({ method, url, body });
     if (pathname.endsWith("/auth/get-session")) {
       return Response.json({
         session: { userId: "user", activeOrganizationId: sessionOrganization },
@@ -189,13 +268,16 @@ afterEach(() => {
     memoryExtractionEnabled: false,
   };
   reflectProviderOrder = false;
+  previewBarrier = undefined;
+  previewDefaults = undefined;
+  previewRequests.length = 0;
   responseConfig = savedConfig;
 });
 afterAll(async () => {
   globalThis.fetch = originalFetch;
   cleanup();
   await act(async () => await sleep(50));
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 type AIConfigReadState = Parameters<typeof AIConfigForm>[0]["readState"];
@@ -555,6 +637,139 @@ test("provider title and trailing add action share the section header", async ()
   ).toBe(title.parentElement);
 });
 
+test("Advanced displays defaults returned by the server even when catalog recommendations differ", async () => {
+  const modelId = getModelOptionsForRole({
+    provider: "google",
+    role: "chat",
+  }).find((candidate) => candidate !== GOOGLE_DEFAULTS.chat.modelId);
+  if (modelId === undefined) {
+    panic("Google chat must offer an alternate model");
+  }
+  await mount({
+    ...savedConfig,
+    overrideModels: null,
+    defaultModels: {
+      ...GOOGLE_DEFAULTS,
+      chat: { provider: "google", modelId },
+    },
+    providerDefaultModels: [
+      {
+        provider: "google",
+        defaultModels: {
+          ...GOOGLE_DEFAULTS,
+          chat: { provider: "google", modelId },
+        },
+      },
+    ],
+  });
+  fireEvent.click(
+    screen.getByRole("button", { name: messages.common.advanced }),
+  );
+  const modelLabel = messages.organization.aiConfig.modelForRole.replace(
+    "{role}",
+    () => messages.organization.aiConfig.roles.chat,
+  );
+  expect(await screen.findByLabelText(modelLabel)).toHaveProperty(
+    "value",
+    modelId,
+  );
+  expect(previewRequests).toEqual([]);
+  expect(hasUnsavedWork()).toBe(false);
+});
+
+test("draft defaults load from the server without replacing explicit overrides or collapsing Advanced", async () => {
+  const { promise, resolve } = Promise.withResolvers<undefined>();
+  await mount(savedConfig);
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: new RegExp(messages.common.advanced, "u"),
+    }),
+  );
+  previewBarrier = promise;
+  previewDefaults = ANTHROPIC_DEFAULTS;
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: messages.organization.aiConfig.addProvider,
+    }),
+  );
+  await waitFor(() =>
+    expect(previewRequests).toEqual([{ providers: ["google", "anthropic"] }]),
+  );
+  expect(await screen.findByRole("status")).toBeDefined();
+  const advanced = screen.getByRole("button", {
+    name: new RegExp(messages.common.advanced, "u"),
+  });
+  expect(advanced.getAttribute("aria-expanded")).toBe("true");
+  await act(async () => resolve(undefined));
+  const modelLabel = messages.organization.aiConfig.modelForRole.replace(
+    "{role}",
+    () => messages.organization.aiConfig.roles.chat,
+  );
+  expect(await screen.findByLabelText(modelLabel)).toHaveProperty(
+    "value",
+    savedConfig.overrideModels.chat.modelId,
+  );
+  expect(advanced.getAttribute("aria-expanded")).toBe("true");
+  expect(hasUnsavedWork()).toBe(false);
+});
+
+test("switching providers uses the server's per-provider default model", async () => {
+  const modelId = ANTHROPIC_DEFAULTS.chat.modelId;
+  expect(modelId).not.toBe(ANTHROPIC_DEFAULTS.fast.modelId);
+  await mount({
+    ...savedConfig,
+    overrideModels: null,
+    providers: [
+      ...savedConfig.providers,
+      {
+        provider: "anthropic",
+        apiKeyMasked: "sk-ant****5678",
+        region: "global",
+      },
+    ],
+    providerDefaultModels: [
+      ...savedConfig.providerDefaultModels,
+      {
+        provider: "anthropic",
+        defaultModels: {
+          ...ANTHROPIC_DEFAULTS,
+          fast: { provider: "anthropic", modelId },
+        },
+      },
+    ],
+  });
+  fireEvent.click(
+    screen.getByRole("button", { name: messages.common.advanced }),
+  );
+  const row = screen.getByRole("group", {
+    name: messages.organization.aiConfig.roles.fast,
+  });
+  fireEvent.click(
+    within(row).getByLabelText(
+      messages.organization.aiConfig.providerForRole.replace(
+        "{role}",
+        () => messages.organization.aiConfig.roles.fast,
+      ),
+    ),
+  );
+  const provider = await screen.findByRole("option", { name: "Anthropic" });
+  act(() => {
+    fireEvent.pointerDown(provider, { pointerType: "mouse", button: 0 });
+    fireEvent.click(provider);
+  });
+  await waitFor(() =>
+    expect(
+      within(row).getByLabelText(
+        messages.organization.aiConfig.modelForRole.replace(
+          "{role}",
+          () => messages.organization.aiConfig.roles.fast,
+        ),
+      ),
+    ).toHaveProperty("value", modelId),
+  );
+  expect(previewRequests).toEqual([]);
+});
+
 test("stored overrides keep Advanced collapsed and mark Custom even when equal to defaults", async () => {
   await mount(savedConfig);
   const advanced = screen.getByRole("button", {
@@ -583,6 +798,42 @@ test.each([false, true])(
     await mount({
       ...savedConfig,
       providers: withFallback ? [mistral, openai] : [mistral],
+      defaultModels: {
+        chat: { provider: "mistral", modelId: "mistral-medium-latest" },
+        fast: { provider: "mistral", modelId: "mistral-small-latest" },
+        reasoning: { provider: "mistral", modelId: "mistral-medium-latest" },
+        pdf: withFallback ? { provider: "openai", modelId: "gpt-6-sol" } : null,
+      },
+      providerDefaultModels: [
+        {
+          provider: "mistral",
+          defaultModels: {
+            chat: { provider: "mistral", modelId: "mistral-medium-latest" },
+            fast: { provider: "mistral", modelId: "mistral-small-latest" },
+            reasoning: {
+              provider: "mistral",
+              modelId: "mistral-medium-latest",
+            },
+            pdf: null,
+          },
+        },
+        ...(withFallback
+          ? [
+              {
+                provider: openai.provider,
+                defaultModels: {
+                  chat: { provider: openai.provider, modelId: "gpt-6-sol" },
+                  fast: { provider: openai.provider, modelId: "gpt-6-luna" },
+                  reasoning: {
+                    provider: openai.provider,
+                    modelId: "gpt-6-sol",
+                  },
+                  pdf: { provider: openai.provider, modelId: "gpt-6-sol" },
+                },
+              },
+            ]
+          : []),
+      ],
       overrideModels: null,
     });
     fireEvent.click(
@@ -622,6 +873,10 @@ test.each([false, true])(
 test("replacing the first saved key preserves provider order and every default role provider", async () => {
   const twoProviders = {
     ...savedConfig,
+    providerDefaultModels: [
+      ...savedConfig.providerDefaultModels,
+      { provider: "anthropic", defaultModels: ANTHROPIC_DEFAULTS },
+    ],
     providers: [
       ...savedConfig.providers,
       {
@@ -1046,6 +1301,10 @@ test("page header save reveals Anthropic workspace recovery and preserves the co
   responseConfig = {
     ...savedConfig,
     overrideModels: null,
+    providerDefaultModels: [
+      ...savedConfig.providerDefaultModels,
+      { provider: "anthropic", defaultModels: ANTHROPIC_DEFAULTS },
+    ],
     providers: [
       ...savedConfig.providers,
       {
@@ -1337,6 +1596,10 @@ test("provider removal is staged until Save and preserves remaining credentials"
   await mount({
     ...savedConfig,
     overrideModels: null,
+    providerDefaultModels: [
+      ...savedConfig.providerDefaultModels,
+      { provider: "openrouter", defaultModels: OPENROUTER_DEFAULTS },
+    ],
     providers: [
       ...savedConfig.providers,
       {

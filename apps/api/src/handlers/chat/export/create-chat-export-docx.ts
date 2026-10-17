@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import JSZip from "jszip";
 
 import type { Footnote, ParagraphContent } from "@stll/docx-core/model";
+import { writeZipEntry } from "@stll/docx-utils";
 import type { Document } from "@stll/folio-core";
 
 import { documentToDocx } from "@/api/lib/docx-authoring/document";
@@ -120,7 +121,8 @@ export const createChatExportDocx = async (
   const relationships = await requiredZipText(zip, DOCUMENT_RELATIONSHIPS_PATH);
   const relationshipId = nextRelationshipId(relationships);
 
-  zip.file(
+  writeZipEntry(
+    zip,
     CONTENT_TYPES_PATH,
     appendBeforeClosingTag(
       contentTypes,
@@ -128,7 +130,8 @@ export const createChatExportDocx = async (
       `<Override PartName="/${FOOTNOTES_PATH}" ContentType="${FOOTNOTES_CONTENT_TYPE}"/>`,
     ),
   );
-  zip.file(
+  writeZipEntry(
+    zip,
     DOCUMENT_RELATIONSHIPS_PATH,
     appendBeforeClosingTag(
       relationships,
@@ -136,7 +139,7 @@ export const createChatExportDocx = async (
       `<Relationship Id="${relationshipId}" Type="${FOOTNOTES_RELATIONSHIP_TYPE}" Target="footnotes.xml"/>`,
     ),
   );
-  zip.file(FOOTNOTES_PATH, serializeFootnotes(footnotes));
+  writeZipEntry(zip, FOOTNOTES_PATH, serializeFootnotes(footnotes));
 
   return await zip.generateAsync({
     type: "arraybuffer",

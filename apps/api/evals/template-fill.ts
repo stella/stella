@@ -42,6 +42,7 @@ import JSZip from "jszip";
 import { writeFile } from "node:fs/promises";
 import * as v from "valibot";
 
+import { writeZipEntry } from "@stll/docx-utils";
 import { filtersFromFieldConfig, formatDate } from "@stll/template-conditions";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -118,8 +119,9 @@ const P = (text: string): string =>
 // types, package relationship).
 const makeDocx = async (documentXml: string): Promise<Buffer> => {
   const zip = new JSZip();
-  zip.file("word/document.xml", documentXml);
-  zip.file(
+  writeZipEntry(zip, "word/document.xml", documentXml);
+  writeZipEntry(
+    zip,
     "[Content_Types].xml",
     [
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
@@ -129,7 +131,8 @@ const makeDocx = async (documentXml: string): Promise<Buffer> => {
       "</Types>",
     ].join(""),
   );
-  zip.file(
+  writeZipEntry(
+    zip,
     "_rels/.rels",
     [
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
@@ -831,7 +834,7 @@ const runModelTurn = async ({
 }): Promise<{ turn: ModelTurn; trace: ToolTrace[]; fillCalls: FillCall[] }> => {
   const caching = resolveCaching({
     promptCachingEnabled: false,
-    role: "fast",
+    task: "short-text",
     scopeKey: null,
   });
   const organizationId = mintAuthProviderId<"organization">();
@@ -1117,7 +1120,7 @@ const resolveModels = async (
         orgAIConfig: null,
         dataClass: "customer",
         managedAIResidency: "eu",
-        role: "fast",
+        task: "short-text",
         organizationId: null,
         admission: NO_ORGANIZATION_MODEL_DISPATCH,
       }),
