@@ -97,7 +97,7 @@ const installRequestCaptureTransport = () => {
         ? new Request(input, init)
         : new Request(input.toString(), init);
     requests.push({
-      body: await request.clone().json(),
+      body: await request.json(),
       pathname: new URL(request.url).pathname,
     });
     return new Response(

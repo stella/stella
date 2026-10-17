@@ -1,4 +1,7 @@
 import { envApiServerSchema } from "../env-schema";
+import { installHandlerMcpResponseConformance } from "./helpers/install-handler-mcp-response-conformance";
+import { installHttpResponseConformance } from "./helpers/install-http-response-conformance";
+import { initializeResponseConformanceExecutionCollection } from "./helpers/response-conformance-execution-collector";
 import { configureTestDatabaseEnvironment } from "./test-database-environment";
 
 // Preserve configured providers while preventing inherited credentials from
@@ -102,3 +105,7 @@ process.env["CORPUS_INDEX_Q09_SEARCH_ENDPOINT"] ??= "http://localhost:7291";
 process.env["GOTENBERG_URL"] ??= "http://localhost:3002";
 process.env["GOTENBERG_USERNAME"] ??= "test";
 process.env["GOTENBERG_PASSWORD"] ??= "test";
+
+initializeResponseConformanceExecutionCollection();
+installHandlerMcpResponseConformance();
+installHttpResponseConformance();

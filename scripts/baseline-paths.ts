@@ -59,6 +59,8 @@ export const BASELINE_PATHS = {
   sqlPerf: ".oxlint-plugins/sql-perf-baseline.json",
   /** apps/api/src/tests/query-perf/query-perf.test.ts */
   queryPerf: "apps/api/src/tests/query-perf/baseline.json",
+  /** apps/api/scripts/response-conformance-guard.ts */
+  responseConformance: "apps/api/response-conformance-baseline.json",
   /** apps/api/scripts/mcp-coverage-guard.ts */
   mcpCoverage: "apps/api/mcp-coverage-baseline.json",
   /** apps/api/scripts/mcp-surface-baseline.ts */

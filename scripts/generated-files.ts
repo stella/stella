@@ -186,6 +186,31 @@ const GENERATOR_DECLARATIONS = [
     after: ["status-tables"],
   },
   {
+    id: "response-conformance-census",
+    outputKind: "committed",
+    outputs: ["apps/api/response-conformance-census.json"],
+    inputs: [
+      "apps/api/src/**",
+      "apps/api/scripts/**",
+      "apps/api/response-conformance-baseline.json",
+      "packages/**",
+      "scripts/baseline-paths.ts",
+      "scripts/baseline-shrink.ts",
+    ],
+    write: [
+      "bun",
+      "apps/api/scripts/response-conformance-census.ts",
+      "--write",
+    ],
+    check: [
+      "bun",
+      "apps/api/scripts/response-conformance-census.ts",
+      "--check",
+    ],
+    autofix: false,
+    after: ["capability-runtime"],
+  },
+  {
     id: "capability-catalog",
     outputKind: "committed",
     outputs: ["packages/cli/capabilities/**", "docs/capability-coverage.md"],

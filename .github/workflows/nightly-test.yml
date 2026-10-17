@@ -232,6 +232,7 @@ jobs:
       - name: Full test suite
         env:
           API_TEST_SHARD_COUNT: ${{ needs.full-test-plan.outputs.api-shards }}
+          API_TEST_ARTIFACT_DIR: ${{ runner.temp }}/api-test-${{ matrix.shard }}
           SHARD: ${{ matrix.shard == 'rest-web' && 'rest' || matrix.shard }}
           TURBO_FORCE: "true"
         run: |
@@ -247,6 +248,15 @@ jobs:
         run: |
           read -r -a shard_args <<<"$(bun scripts/test-shards.ts --filters "$SHARD")"
           bun run test -- --concurrency=2 "${shard_args[@]}"
+
+      - name: Upload response conformance report
+        if: always() && startsWith(matrix.shard, 'api-')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: response-conformance-${{ matrix.shard }}
+          path: ${{ runner.temp }}/api-test-${{ matrix.shard }}/response-conformance-execution.json
+          if-no-files-found: warn
+          retention-days: 14
 
   # The production client build is the remaining browser-CI setup hotspot.
   # Profile it nightly rather than taxing every PR; retain TanStack Start's
