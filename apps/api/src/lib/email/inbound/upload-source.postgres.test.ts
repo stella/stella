@@ -602,7 +602,7 @@ if (!databaseUrl || !runPostgresTests) {
         scopedDbForSource,
       });
       expect(initial.isOk() && initial.value.status).toBe("filed");
-      const records = () =>
+      const records = async () =>
         fixtureScopedDb(
           async (tx) =>
             await tx
