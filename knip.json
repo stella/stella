@@ -300,5 +300,12 @@
   },
   "exclude": ["exports", "types"],
   "ignoreBinaries": ["docker", "oxfmt", "tsc", "bun", "tail"],
-  "ignoreDependencies": ["@stll/typescript-config"]
+  "ignoreDependencies": [
+    "@stll/typescript-config",
+    // Declared ahead of the call-site migrations that import them; remove each
+    // entry once every workspace declaring that engine imports it.
+    "@stll/aho-corasick",
+    "@stll/aho-corasick-wasm",
+    "@stll/regex-set"
+  ]
 }

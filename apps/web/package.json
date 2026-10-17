@@ -48,6 +48,8 @@
     "@neftaly/editcontext-polyfill": "^0.1.1",
     "@silurus/ooxml": "catalog:",
     "@standard-schema/spec": "^1.1.0",
+    "@stll/aho-corasick": "catalog:",
+    "@stll/aho-corasick-wasm": "catalog:",
     "@stll/ai-catalog": "workspace:*",
     "@stll/analytics-config": "workspace:*",
     "@stll/anonymize-chat": "workspace:*",

@@ -29,7 +29,14 @@ minimumReleaseAgeExcludes = [
   # quarantined optional bindings otherwise leave the executable unavailable.
   "@stll/oxlint-config", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
   "@stll/typescript-config", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
+  "@stll/aho-corasick", # quarantine-excluded-since: 2026-10-17T17:53:00.000Z
+  "@stll/aho-corasick-darwin-arm64", # quarantine-excluded-since: 2026-10-17T17:53:00.000Z
+  "@stll/aho-corasick-darwin-x64", # quarantine-excluded-since: 2026-10-17T17:53:00.000Z
+  "@stll/aho-corasick-linux-arm64-gnu", # quarantine-excluded-since: 2026-10-17T17:53:00.000Z
+  "@stll/aho-corasick-linux-x64-gnu", # quarantine-excluded-since: 2026-10-17T17:53:00.000Z
   "@stll/aho-corasick-wasm", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
+  "@stll/aho-corasick-wasm32-wasi", # quarantine-excluded-since: 2026-10-17T17:53:00.000Z
+  "@stll/aho-corasick-win32-x64-msvc", # quarantine-excluded-since: 2026-10-17T17:53:00.000Z
   "@stll/anonymize", # quarantine-excluded-since: 2026-08-21T20:57:15.731Z
   "@stll/anonymize-darwin-arm64", # quarantine-excluded-since: 2026-08-21T20:53:13.734Z
   "@stll/anonymize-darwin-x64", # quarantine-excluded-since: 2026-08-21T20:53:18.289Z
@@ -52,7 +59,14 @@ minimumReleaseAgeExcludes = [
   "@stll/fuzzy-search-wasm", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
   "@stll/fuzzy-search-wasm32-wasi", # quarantine-excluded-since: 2026-09-27T00:00:00.000Z
   "@stll/fuzzy-search-win32-x64-msvc", # quarantine-excluded-since: 2026-09-27T00:00:00.000Z
+  "@stll/regex-set", # quarantine-excluded-since: 2026-10-17T17:53:00.000Z
+  "@stll/regex-set-darwin-arm64", # quarantine-excluded-since: 2026-10-17T17:53:00.000Z
+  "@stll/regex-set-darwin-x64", # quarantine-excluded-since: 2026-10-17T17:53:00.000Z
+  "@stll/regex-set-linux-arm64-gnu", # quarantine-excluded-since: 2026-10-17T17:53:00.000Z
+  "@stll/regex-set-linux-x64-gnu", # quarantine-excluded-since: 2026-10-17T17:53:00.000Z
   "@stll/regex-set-wasm", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
+  "@stll/regex-set-wasm32-wasi", # quarantine-excluded-since: 2026-10-17T17:53:00.000Z
+  "@stll/regex-set-win32-x64-msvc", # quarantine-excluded-since: 2026-10-17T17:53:00.000Z
   "@stll/template-conditions", # quarantine-excluded-since: 2026-08-11T09:34:37.000Z
   # A napi package must be listed WITH its platform subpackages. They publish
   # in the same minute, but they are optionalDependencies: quarantine one and

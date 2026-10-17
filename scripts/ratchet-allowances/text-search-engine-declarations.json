@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 13,
+  "reason": "Literal and multi-pattern string scanning moves onto the first-party @stll/aho-corasick and @stll/regex-set engines (browser bundles use @stll/aho-corasick-wasm). Each consuming manifest declares the engine it imports through the catalog: aho-corasick in the root scripts, apps/api, apps/landing, apps/legal-atlas-runner, apps/web, packages/api-contract, packages/decision-reader, packages/infosoud and packages/legal-ast; aho-corasick-wasm in apps/landing, apps/web and packages/decision-reader; regex-set in apps/api. Declaring them once lets the migrations share one dependency set instead of each funding its own increase."
+}
