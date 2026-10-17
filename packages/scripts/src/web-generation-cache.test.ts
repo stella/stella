@@ -97,7 +97,9 @@ test("web sources generate once across compiler tasks and restore until source i
     expect(task["dependsOn"]).toContain("generate:api-types");
     expect(task["dependsOn"]).toContain("generate:route-tree");
     consumerTasks[`@stll/web#${consumer}`] = {
-      dependsOn: task["dependsOn"],
+      dependsOn: task["dependsOn"].filter(
+        (dependency) => dependency !== "generate:messages",
+      ),
     };
   }
   const directory = mkdtempSync(

@@ -21,7 +21,7 @@ import {
 } from "./generated-conflicts";
 import { GENERATORS } from "./generated-files";
 
-const MESSAGES = "apps/web/src/i18n/langs/messages.gen.ts";
+const MESSAGES = "apps/landing/src/i18n/messages/messages.gen.ts";
 
 // Every file this test reads is a temporary fixture or request, never
 // Markdown in the repository.
@@ -48,10 +48,10 @@ describe("classification", () => {
     if (!result.eligible) {
       return;
     }
-    expect(result.ids).toContain("i18n-messages-web");
+    expect(result.ids).toContain("i18n-messages-landing");
     expect(isAllowedResolution(MESSAGES, result)).toBe(true);
     for (const refused of [
-      "apps/web/src/i18n/langs/cs.json",
+      "apps/landing/src/i18n/messages/cs.json",
       ".github/workflows/ci.yml",
       "apps/web/../../etc/passwd",
       "/etc/passwd",
@@ -469,7 +469,7 @@ describe("resolution across runs", () => {
       // An ordinary file the merge resolved cleanly.
       NOTES,
       // Another generator's output: only owners of a conflict may write.
-      "apps/landing/src/i18n/messages/messages.gen.ts",
+      "packages/transactional/i18n/langs/messages.gen.ts",
     ]) {
       editManifest(out, (manifest) => {
         manifest.files.push({ path: target, deleted: true, mode: "100644" });

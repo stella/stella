@@ -584,24 +584,18 @@ const GENERATOR_DECLARATIONS = [
   },
   {
     id: "i18n-messages-web",
-    outputKind: "committed",
+    outputKind: "derived",
     outputs: CI_GENERATED_OUTPUTS.webMessages,
     inputs: [
       "apps/web/src/i18n/langs/*.json",
       "packages/scripts/src/i18n-typegen.ts",
+      "apps/web/package.json",
     ],
-    write: [
-      "bun",
-      "packages/scripts/src/i18n-typegen.ts",
-      "apps/web/src/i18n/langs",
-    ],
-    check: [
-      "bun",
-      "packages/scripts/src/i18n-typegen.ts",
-      "apps/web/src/i18n/langs",
-      "--check",
-    ],
-    autofix: true,
+    write: ["bun", "--filter", "@stll/web", "generate:messages"],
+    check: null,
+    unchecked:
+      "derived on demand; the web i18n check validates the source catalogs",
+    autofix: false,
     after: [],
   },
   {
