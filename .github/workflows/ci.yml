@@ -1355,6 +1355,7 @@ jobs:
             bun scripts/query-perf-scope.ts >> "$GITHUB_OUTPUT"
 
       - name: Install API test planner dependencies
+        timeout-minutes: 3
         id: api-test-deps
         # Both planners retain full coverage when installation is unavailable.
         continue-on-error: true
@@ -2167,6 +2168,7 @@ jobs:
         run: bun scripts/check-published-exports.ts packages/mcp-kit
 
       - name: Load merge base measurement
+        timeout-minutes: 6
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bash scripts/prepare-typecheck-base.sh
         env:
@@ -2492,6 +2494,17 @@ jobs:
         run: |
           bun test scripts/check-gh-retry.test.ts scripts/gh-retry.test.ts scripts/promote-dispatch.test.ts
           bun scripts/check-gh-retry.ts
+
+      # Network fetches retry through scripts/retry.sh and carry a step
+      # timeout; the allowlist may only shrink against the measured base.
+      - name: CI network step retries and timeouts
+        env:
+          CI_CHECK_KIND: CONTEXTUAL
+          CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: |
+          bun test scripts/check-ci-network-steps.test.ts
+          bun scripts/check-ci-network-steps.ts --base "$RATCHET_BASE_REF"
 
       - name: Sparse checkout script dependencies
         env:
@@ -3501,6 +3514,7 @@ jobs:
         run: bun test scripts/ci-store-save.test.ts
 
       - name: Workflow lint
+        timeout-minutes: 2
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         env:
           CI_CHECK_KIND: CONTEXTUAL
@@ -4970,6 +4984,7 @@ jobs:
           echo "required=false" >> "$GITHUB_OUTPUT"
 
       - name: Setup Bun
+        timeout-minutes: 2
         if: steps.desktop-browser-tests.outputs.required == 'true' || steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
         env:
           NPM_TOKEN: ""
@@ -4979,7 +4994,7 @@ jobs:
           version=$(node -p 'require("./package.json").packageManager.split("@")[1]')
           bootstrap="$RUNNER_TEMP/bun-bootstrap"
           bin="$HOME/.bun/bin"
-          npm install --prefix "$bootstrap" --ignore-scripts --no-audit --no-fund --no-save "@oven/bun-linux-x64@$version"
+          bash scripts/retry.sh npm install --prefix "$bootstrap" --ignore-scripts --no-audit --no-fund --no-save "@oven/bun-linux-x64@$version"
           mkdir -p "$bin"
           ln -s "$bootstrap/node_modules/@oven/bun-linux-x64/bin/bun" "$bin/bun"
           ln -s "$bin/bun" "$bin/bunx"
@@ -5023,6 +5038,7 @@ jobs:
           cp .env.example .env
 
       - name: Install UI browser test runtime
+        timeout-minutes: 2
         if: steps.desktop-browser-tests.outputs.required == 'true' || steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
         uses: ./.github/actions/setup-playwright
         with:
@@ -5820,6 +5836,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Pull the promoted release's API image
+        timeout-minutes: 3
         env:
           BASE_IMAGE: ghcr.io/${{ github.repository_owner }}/stella-api:${{ steps.base.outputs.ref }}
         run: |
@@ -5831,6 +5848,7 @@ jobs:
         run: docker logout ghcr.io
 
       - name: Rehearse the upgrade from the promoted release at scale
+        timeout-minutes: 9
         env:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
           REHEARSAL_BASE_IMAGE_REPOSITORY: ghcr.io/${{ github.repository_owner }}/stella-api
@@ -6407,6 +6425,7 @@ jobs:
 
       # The recorder uses this exact setup, build artifact, seed and browser.
       - name: Setup production browser stack
+        timeout-minutes: 8
         id: e2e-stack
         uses: ./.github/actions/setup-production-e2e
         with:
@@ -6431,6 +6450,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Check route network baseline
+        timeout-minutes: 6
         id: network-baseline
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/check-route-network-baseline.json
@@ -6783,11 +6803,13 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Verify Firefox and WebKit in the pinned image
+        timeout-minutes: 4
         uses: ./.github/actions/setup-playwright
         with:
           browsers: firefox webkit
 
       - name: Test browser stack redaction
+        timeout-minutes: 2
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/test-browser-stack-redaction.json
         run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:stack-redaction
@@ -6920,10 +6942,12 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install Playwright browsers
+        timeout-minutes: 3
         if: steps.e2e-stack.outcome == 'success'
         uses: ./.github/actions/setup-playwright
 
       - name: Run Vite dependency canary
+        timeout-minutes: 3
         if: steps.e2e-stack.outcome == 'success'
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/run-vite-dependency-canary.json
@@ -6935,6 +6959,7 @@ jobs:
           --project chromium
 
       - name: Test anonymized PDF export
+        timeout-minutes: 2
         if: steps.e2e-stack.outcome == 'success'
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/test-anonymized-pdf-export.json
@@ -6945,6 +6970,7 @@ jobs:
       # blob (testDir e2e/collab) breaks the merged specs report. Its failures
       # are uploaded separately with their traces and videos.
       - name: Run lockless collaboration browser suite
+        timeout-minutes: 3
         if: steps.e2e-stack.outcome == 'success'
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/run-lockless-collaboration-browser-suite.json
@@ -7095,11 +7121,13 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install Playwright browsers
+        timeout-minutes: 4
         uses: ./.github/actions/setup-playwright
         with:
           package-directory: apps/landing
 
       - name: Check landing islands
+        timeout-minutes: 2
         env:
           PLAYWRIGHT_PACKAGE_DIR: apps/landing
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/check-landing-islands.json
@@ -7397,6 +7425,7 @@ jobs:
             --tag stella-api-release:ci . 2>&1 | tee "$RUNNER_TEMP/api-image-build.log"
 
       - name: Pull API smoke service images
+        timeout-minutes: 2
         env:
           POSTGRES_IMAGE: ${{ needs.ci-plan.outputs.postgres }}
           REDIS_IMAGE: ${{ needs.ci-plan.outputs.redis }}
@@ -7409,6 +7438,7 @@ jobs:
         run: docker logout ghcr.io
 
       - name: Rehearse migrations and boot packaged entrypoints
+        timeout-minutes: 2
         env:
           POSTGRES_IMAGE: ${{ needs.ci-plan.outputs.postgres }}
           REDIS_IMAGE: ${{ needs.ci-plan.outputs.redis }}
@@ -8013,6 +8043,7 @@ jobs:
           wait "$server_pid"
 
       - name: Install cargo-deny
+        timeout-minutes: 10
         if: matrix.os == 'macos'
         uses: ./.github/actions/cargo-deny
 
@@ -8023,6 +8054,7 @@ jobs:
       # schedule instead.
       - name: Fetch license audit inputs
         if: matrix.os == 'macos'
+        timeout-minutes: 10
         env:
           CARGO_NET_RETRY: "5"
         run: bash .github/actions/cargo-deny/fetch.sh apps/desktop/src-tauri/Cargo.toml
@@ -8099,15 +8131,19 @@ jobs:
         with:
           bun-version-file: "package.json"
       - name: Install Safe Chain
+        timeout-minutes: 2
         uses: ./.github/actions/safe-chain
       - name: Install OSV-Scanner
+        timeout-minutes: 2
         if: ${{ !cancelled() }}
         uses: ./.github/actions/osv-scanner
       - name: Verify malware scanner fixtures
+        timeout-minutes: 2
         if: ${{ !cancelled() }}
         run: bash scripts/test-malware-scanners.sh
 
       - name: Scan dependency malware
+        timeout-minutes: 13
         if: ${{ !cancelled() }}
         run: bash scripts/scan-dependency-malware.sh
         env:
