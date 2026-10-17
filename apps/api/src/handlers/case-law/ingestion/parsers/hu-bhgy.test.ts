@@ -504,6 +504,44 @@ describe("Hungarian closing date shapes", () => {
       ]).decisionDate,
     ).toBeUndefined();
   });
+
+  test.each(["bíró", "előadó bíró", "tanácselnök", "a tanács elnöke"])(
+    "a bare date before a signature bearing the %s role dates both paragraph layouts",
+    (role) => {
+      const signature = `Dr. Példa Anna s.k. ${role}`;
+      const paragraph = parse([
+        { text: "Indokolás" },
+        { text: "[1] A bíróság döntése." },
+        { text: "2024. június 13-án" },
+        { text: signature },
+      ]);
+      const softBreak = parseDocument(
+        bodyOf([
+          paragraphOf({ text: "Indokolás" }),
+          softBrokenParagraph([
+            "[1] A bíróság döntése.",
+            "2024. június 13-án",
+            signature,
+          ]),
+        ]),
+      );
+
+      expect(paragraph.decisionDate).toBe("2024-06-13");
+      expect(softBreak.decisionDate).toBe("2024-06-13");
+    },
+  );
+
+  test("a soft-broken paragraph can open with a bare decision date", () => {
+    const parsed = parseDocument(
+      bodyOf([
+        paragraphOf({ text: "Indokolás" }),
+        softBrokenParagraph(["2024. június 13-án", "Dr. Példa Anna s.k. bíró"]),
+      ]),
+    );
+
+    expect(parsed.decisionDate).toBe("2024-06-13");
+    expect(parsed.documentAst.metadata.decisionDate).toBe("2024-06-13");
+  });
 });
 
 const isGregorianDay = ({ year, month, day }: HungarianDateParts) => {

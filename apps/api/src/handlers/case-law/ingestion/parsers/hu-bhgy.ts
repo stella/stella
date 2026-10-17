@@ -598,11 +598,16 @@ const BENCH_ROLES = [
   { suffix: "bíró", role: DECISION_JUDGE_ROLE.PANEL_MEMBER },
 ] as const;
 
+const SIGNATURE_ROLE_SUFFIXES = BENCH_ROLES.map(({ suffix }) => suffix);
+
+/** `s.k.`, optionally followed by one of the publisher's bench roles. */
+const SIGNED_IN_ORIGINAL = new RegExp(
+  String.raw`\bs\.\s?k\.(?:\s+(?:${SIGNATURE_ROLE_SUFFIXES.join("|")}))?\s*$`,
+  "iu",
+);
+
 /** Members of one panel line, as the court separates them. */
 const PANEL_MEMBER_SEPARATOR = /[/,;]/u;
-
-/** `s.k.`, the signed-in-the-original mark, which is not part of a name. */
-const SIGNED_IN_ORIGINAL = /\bs\.\s?k\.\s*$/iu;
 
 type BenchRoleMatch = {
   readonly role: DecisionJudgeInput["role"];
@@ -776,7 +781,6 @@ const closingDateAfterSoftBreak = (text: string): string | undefined => {
     }
     const nextLine = lines.at(index + 1)?.trim();
     if (
-      index > 0 &&
       DATE_ONLY.test(trimmed) &&
       nextLine !== undefined &&
       SIGNED_IN_ORIGINAL.test(nextLine)
