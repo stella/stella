@@ -5,12 +5,12 @@ import type { ComponentProps } from "react";
 
 import { cjk } from "@streamdown/cjk";
 import { math } from "@streamdown/math";
-import { mermaid } from "@streamdown/mermaid";
 import { defaultRehypePlugins, Streamdown } from "streamdown";
 
 import { rehypeChatLinks } from "@stll/chat/link-markdown";
 import { cn } from "@stll/ui/utils";
 
+import { mermaidDiagram } from "@/components/ai-elements/mermaid-diagram";
 import { messageComponents } from "@/components/ai-elements/message-response-components";
 import { rehypeMarkdownSourceOffsets } from "@/components/chat/rehype-markdown-source-offsets";
 
@@ -18,7 +18,7 @@ export type MessageResponseProps = ComponentProps<typeof Streamdown> & {
   sourceOffsets?: boolean;
 };
 
-const streamdownPlugins = { cjk, math, mermaid };
+const streamdownPlugins = { cjk, math, mermaid: mermaidDiagram };
 
 // `<stll-anon>` is injected into the parsed HAST by the
 // `rehype-anon-spans` plugin after markdown parsing. Streamdown's
