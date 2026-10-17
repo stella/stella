@@ -16,7 +16,6 @@ import * as v from "valibot";
 import {
   createPrivateTaskSink,
   probeSourceFingerprint,
-  waiverKey,
   type FixEvidence,
   type RemovalAssessment,
 } from "./dated-waiver-fix-task";
@@ -43,6 +42,7 @@ import {
   expiryInstant,
   loadWaivers,
   type DatedWaiver,
+  waiverKey,
 } from "./dated-waivers";
 
 const OUTPUT_LIMIT = 24_000;
@@ -492,7 +492,7 @@ type ProbeEntryOptions = {
   sha: string;
   budget: ReturnType<typeof createProbeBudget>;
 };
-const probeEntry = async ({
+export const probeEntry = async ({
   entry,
   sha,
   budget,

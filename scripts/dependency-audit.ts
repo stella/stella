@@ -41,6 +41,8 @@ import {
   type LapsedAcceptance,
 } from "./dependency-audit-acceptance";
 import { auditablePackages, dependencyChanges } from "./dependency-audit-scope";
+import type { ExpiryCheckScope } from "./expiry-check-scope";
+import { readExpiryCheckScope } from "./expiry-check-scope-git";
 
 const SCRIPTS_DIR = import.meta.dir;
 const REPO_ROOT = path.resolve(SCRIPTS_DIR, "..");
@@ -342,14 +344,20 @@ const fetchLatestVersion = async (pkg: string): Promise<string | undefined> => {
   return version === "" ? undefined : version;
 };
 
-const checkLapsedAcceptances = async (
-  advisories: Advisory[],
-  baseline: Baseline,
-  today: string,
-  latestVersion: (
-    pkg: string,
-  ) => Promise<string | undefined> = fetchLatestVersion,
-): Promise<LapsedAcceptance[]> => {
+type CheckLapsedAcceptancesOptions = {
+  advisories: Advisory[];
+  baseline: Baseline;
+  today: string;
+  latestVersion?: ((pkg: string) => Promise<string | undefined>) | undefined;
+  expiryScope?: ExpiryCheckScope | undefined;
+};
+const checkLapsedAcceptances = async ({
+  advisories,
+  baseline,
+  today,
+  latestVersion = fetchLatestVersion,
+  expiryScope,
+}: CheckLapsedAcceptancesOptions): Promise<LapsedAcceptance[]> => {
   const packages = new Set(
     baseline.accepted
       .filter(({ untilPatched }) => untilPatched === true)
@@ -367,6 +375,7 @@ const checkLapsedAcceptances = async (
     current: advisories,
     today,
     latestVersion: (pkg) => latest.get(pkg),
+    expiryScope,
   });
   if (lapsed.length === 0) {
     return [];
@@ -422,11 +431,12 @@ const warnBeforeExpiry = ({
 
 type CheckOptions = {
   baseline?: Baseline;
-  latestVersion?: (pkg: string) => Promise<string | undefined>;
+  latestVersion?: ((pkg: string) => Promise<string | undefined>) | undefined;
   now?: () => Date;
   packages?: ReadonlySet<string>;
   /** Defaults to GitHub annotations inside GitHub Actions. */
   warningFormat?: WarningFormat;
+  expiryScope?: ExpiryCheckScope | undefined;
 };
 
 export const check = async (
@@ -458,12 +468,13 @@ export const check = async (
       options.warningFormat ??
       (process.env["GITHUB_ACTIONS"] === "true" ? "github" : "plain"),
   });
-  const lapsed = await checkLapsedAcceptances(
+  const lapsed = await checkLapsedAcceptances({
     advisories,
     baseline,
     today,
-    options.latestVersion,
-  );
+    latestVersion: options.latestVersion,
+    expiryScope: options.expiryScope,
+  });
   const lapsedIds = new Set(lapsed.map(({ id }) => id));
 
   for (const advisory of advisories) {
@@ -592,7 +603,7 @@ const checkDiff = async (baseRevision: string): Promise<number> => {
   const advisories = (await collectGatedAdvisories()).filter(
     ({ package: pkg }) => packages.has(pkg),
   );
-  return check(advisories, { packages });
+  return check(advisories, { packages, expiryScope: readExpiryCheckScope() });
 };
 
 const checkRelease = async (): Promise<number> => {
@@ -637,7 +648,9 @@ const main = async (): Promise<void> => {
   const advisories = await collectGatedAdvisories();
 
   if (arg === "--check") {
-    process.exit(await check(advisories));
+    process.exit(
+      await check(advisories, { expiryScope: readExpiryCheckScope() }),
+    );
   }
 
   report(advisories);

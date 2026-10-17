@@ -595,6 +595,7 @@ test("the lockfile release-age guard follows every tracked lockfile", () => {
     "scripts/check-lockfile-release-ages.ts",
     "scripts/check-lockfile-release-ages.test.ts",
     "scripts/check-stll-quarantine-excludes.ts",
+    "scripts/check-stll-quarantine-excludes-cli.ts",
   ]) {
     expect(runSelector([file], ["lockfile_ages_required"]), file).toEqual([
       "true",

@@ -3,13 +3,13 @@ import path from "node:path";
 import ts from "typescript";
 import * as v from "valibot";
 
-import { waiverKey } from "./dated-waiver-fix-task";
-import type { DatedWaiver } from "./dated-waivers";
+import { type DatedWaiver, waiverKey } from "./dated-waivers";
 
 export const REMOVAL_TITLE = "chore: remove verified dated waiver";
 type RemovalPr = { number: number; body: string; title: string };
 type ReconcileRemovalOptions = {
   body: string;
+  title?: string;
   github: {
     list: () => Promise<RemovalPr[]>;
     create: (body: string) => Promise<number>;
@@ -18,6 +18,7 @@ type ReconcileRemovalOptions = {
 };
 export const reconcileRemovalPr = async ({
   body,
+  title = REMOVAL_TITLE,
   github,
 }: ReconcileRemovalOptions): Promise<number> => {
   const open = await github.list();
@@ -28,7 +29,7 @@ export const reconcileRemovalPr = async ({
   if (!existing) {
     return github.create(body);
   }
-  if (existing.body !== body || existing.title !== REMOVAL_TITLE) {
+  if (existing.body !== body || existing.title !== title) {
     await github.update(existing.number, body);
   }
   return existing.number;
@@ -311,6 +312,7 @@ export type PublishedRemoval = {
 };
 
 type PublishRemovalOptions = {
+  title?: string;
   branch: string;
   baseSha: string;
   baseFiles: Readonly<Record<string, string>>;
@@ -323,6 +325,7 @@ type PublishRemovalOptions = {
 // The two branch refs are reserved for this workflow. Build a proposal before
 // swapping the PR head; moving an open PR straight to main would close it.
 export const publishRemoval = async ({
+  title = REMOVAL_TITLE,
   branch,
   baseSha,
   baseFiles,
@@ -359,7 +362,7 @@ export const publishRemoval = async ({
         await request([`${api}/pulls`, "--method", "POST", "--input", "-"], {
           head: branch,
           base: "main",
-          title: REMOVAL_TITLE,
+          title,
           body: prBody,
           draft: false,
         }),
@@ -367,7 +370,7 @@ export const publishRemoval = async ({
     update: async (number: number, prBody: string): Promise<void> => {
       await request(
         [`${api}/pulls/${number}`, "--method", "PATCH", "--input", "-"],
-        { title: REMOVAL_TITLE, body: prBody },
+        { title, body: prBody },
       );
     },
   };
@@ -423,7 +426,7 @@ export const publishRemoval = async ({
         input: {
           branch: { repositoryNameWithOwner: repo, branchName: buildBranch },
           expectedHeadOid: base,
-          message: { headline: REMOVAL_TITLE },
+          message: { headline: title },
           fileChanges: {
             additions: Object.entries(files).map(([file, contents]) => ({
               path: file,
@@ -459,7 +462,7 @@ export const publishRemoval = async ({
   }
   await request([`${api}/git/refs/heads/${buildBranch}`, "--method", "DELETE"]);
   return {
-    number: await reconcileRemovalPr({ body, github }),
+    number: await reconcileRemovalPr({ body, title, github }),
     headSha: pushed,
   };
 };
