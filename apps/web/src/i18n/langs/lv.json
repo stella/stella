@@ -1233,6 +1233,11 @@
       "unorderedList": "Aizzīmju saraksts",
       "wholeBlockRequired": "Lai mainītu stilu, atlasiet visu rindkopu vai sarakstu."
     },
+    "answerQuote": {
+      "showInDecision": "Rādīt nolēmumā",
+      "verified": "Pārbaudīts citāts",
+      "verifiedHint": "Vārds vārdā: {source}"
+    },
     "applyMode": {
       "description": "Word saglabā, kurš veica katru izmaiņu. Mēs atcerēsimies jūsu izvēli.",
       "direct": "Nē, lietot tieši",
@@ -1471,6 +1476,12 @@
       "title": "Ielīmētais teksts"
     },
     "placeholder": "Ierakstiet jautājumu šeit, / prasmēm, @ konteksta pievienošanai",
+    "processSummary": {
+      "analyses": "{count, plural, zero {# analīžu} one {# analīze} other {# analīzes}}",
+      "changesSaved": "{count, plural, zero {# saglabātu izmaiņu} one {# saglabāta izmaiņa} other {# saglabātas izmaiņas}}",
+      "documentEdits": "{count, plural, zero {# dokumenta labojumu} one {# dokumenta labojums} other {# dokumenta labojumi}}",
+      "sourcesChecked": "{count, plural, zero {# pārbaudītu avotu} one {# pārbaudīts avots} other {# pārbaudīti avoti}}"
+    },
     "promptImprovementStrategies": {
       "decompose": {
         "description": "Sadala sarežģītu darbu secīgos apakšuzdevumos.",
@@ -1716,6 +1727,7 @@
       "interrupted": "Pārtraukts pirms pabeigšanas",
       "output": "Izvade",
       "sourceCode": "Pirmkods",
+      "statusWaiting": "Gaida",
       "toggleDetails": "Pārslēgt detaļas",
       "unrestoredFields": "Anonimizētajā režīmā ar īstajām vērtībām neizdevās aizpildīt {count, plural, zero {# laukus} one {# lauku} other {# laukus}}. Pārbaudiet: {fields}"
     },

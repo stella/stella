@@ -1236,6 +1236,11 @@ type Messages = {
       "unorderedList": "Bulleted list";
       "wholeBlockRequired": "Select a whole paragraph or list to change its style.";
     };
+    "answerQuote": {
+      "showInDecision": "Show in decision";
+      "verified": "Verified citation";
+      "verifiedHint": "Word for word in {source}";
+    };
     "applyMode": {
       "description": "Word stores who made each change. We'll remember your choice.";
       "direct": "No, apply directly";
@@ -1474,6 +1479,12 @@ type Messages = {
       "title": "Pasted text";
     };
     "placeholder": "Type your question here, / for skills, @ to add context";
+    "processSummary": {
+      "analyses": "{count, plural, one {# analysis} other {# analyses}}";
+      "changesSaved": "{count, plural, one {# change saved} other {# changes saved}}";
+      "documentEdits": "{count, plural, one {# document edit} other {# document edits}}";
+      "sourcesChecked": "{count, plural, one {# source checked} other {# sources checked}}";
+    };
     "promptImprovementStrategies": {
       "decompose": {
         "description": "Turn complex work into ordered sub-tasks.";
@@ -1719,6 +1730,7 @@ type Messages = {
       "interrupted": "Interrupted before finishing";
       "output": "Output";
       "sourceCode": "Source code";
+      "statusWaiting": "Waiting";
       "toggleDetails": "Toggle details";
       "unrestoredFields": "{count, plural, one {# field} other {# fields}} could not be filled with real values in anonymized mode. Review: {fields}";
     };
