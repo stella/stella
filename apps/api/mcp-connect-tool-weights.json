@@ -456,10 +456,10 @@
     {
       "name": "save_clause",
       "nameChars": 11,
-      "descriptionChars": 441,
-      "inputSchemaChars": 2963,
-      "totalChars": 3415,
-      "estimatedTokens": 1386
+      "descriptionChars": 402,
+      "inputSchemaChars": 3241,
+      "totalChars": 3654,
+      "estimatedTokens": 1489
     },
     {
       "name": "save_contact",
@@ -615,7 +615,7 @@
     }
   ],
   "totals": {
-    "characters": 125952,
-    "estimatedTokens": 49904
+    "characters": 126191,
+    "estimatedTokens": 50007
   }
 }
