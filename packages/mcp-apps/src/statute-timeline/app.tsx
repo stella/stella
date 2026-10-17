@@ -177,7 +177,7 @@ const Timeline = ({
                           bridge.openLink(selectedUrl.href, (message) =>
                             setRead({ status: "error", message }),
                           ),
-                          "open provision version",
+                          "statuteTimeline.openProvisionVersion",
                         )
                       }
                     >
@@ -199,7 +199,9 @@ const Timeline = ({
           className="h-auto max-w-full whitespace-normal"
           variant="outline"
           disabled={!bridge.supportsTools() || read.status === "loading"}
-          onClick={() => bridge.detached(loadMore(), "page provision history")}
+          onClick={() =>
+            bridge.detached(loadMore(), "statuteTimeline.loadMore")
+          }
         >
           {t("timelineLoadMore")}
         </Button>
@@ -275,7 +277,7 @@ const App = () => {
                 <p>{result.message ?? locale.messages.error}</p>
                 <Button
                   onClick={() =>
-                    bridge.detached(bridge.retry(), "retry provision history")
+                    bridge.detached(bridge.retry(), "statuteTimeline.retry")
                   }
                 >
                   {locale.messages.retry}
@@ -293,4 +295,4 @@ const App = () => {
 const root =
   document.querySelector("#app") ?? panic("Statute timeline mount is missing");
 createRoot(root).render(<App />);
-bridge.detached(bridge.connect(), "connect statute timeline");
+bridge.detached(bridge.connect(), "statuteTimeline.connect");

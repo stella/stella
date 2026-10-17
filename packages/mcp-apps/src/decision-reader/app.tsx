@@ -14,5 +14,5 @@ if (root === null) {
 createRoot(root).render(<ReaderView host={controller} />);
 controller.bridge.detached(
   controller.bridge.connect(),
-  "connect decision reader",
+  "decisionReader.connect",
 );
