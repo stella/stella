@@ -78,7 +78,7 @@ let historyDb: LegislationReadDb;
 let historyClient: Awaited<ReturnType<typeof createTestPglite>> | undefined;
 let ownerDb: LegislationReadDb;
 
-const unpublishedStatutes = ["SVK", "POL", "DEU"].map((country) => ({
+const unpublishedStatutes = ["POL", "DEU"].map((country) => ({
   country,
   id: createSafeId<"legislationDocument">(),
   eli: `${country}/2020/123`,
@@ -1782,11 +1782,11 @@ describe("batched point-in-time statute resolve", () => {
       null,
     ]);
     expect(items.at(3)).toMatchObject({
-      unresolvedReason: "pending_public",
+      unresolvedReason: "pages_public",
       availability: {
         status: "unavailable",
         country: "SVK",
-        reason: "pending_public",
+        reason: "pages_public",
       },
     });
   });

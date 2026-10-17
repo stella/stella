@@ -571,6 +571,9 @@ const concurrencyValueFor = async (
       new Script(expression).runInNewContext({
         github,
         inputs: { base_ref: github.inputs?.base_ref ?? "" },
+        contains: (members: readonly string[], candidate: string) =>
+          members.includes(candidate),
+        fromJSON: (serialized: string) => JSON.parse(serialized),
         format: (template: string, ...values: (string | number)[]) =>
           template.replace(/\{(\d+)\}/gu, (_placeholder, index: string) =>
             String(values.at(Number(index)) ?? ""),
@@ -707,4 +710,51 @@ test("manual CI replaces the same branch while PRs and merge groups stay isolate
   expect(await groupFor(file, { ...merge, run_id: 2 })).not.toBe(
     await groupFor(file, merge),
   );
+});
+
+test("CI metadata events cannot cancel the code run for the same head", async () => {
+  const file = "ci.yml";
+  const codeRun = {
+    ...recording,
+    workflow: "CI Checks",
+    event: { ...recording.event, action: "synchronize" },
+  };
+  const metadataRun = {
+    ...codeRun,
+    event: { ...codeRun.event, action: "labeled" },
+  };
+
+  expect(await groupFor(file, codeRun)).toBe("CI Checks-pr-12");
+  expect(await groupFor(file, metadataRun)).toBe(
+    "CI Checks-pr-12-head-one-meta",
+  );
+  expect(await concurrencyValueFor(file, "cancel-in-progress", codeRun)).toBe(
+    "true",
+  );
+  expect(
+    await concurrencyValueFor(file, "cancel-in-progress", metadataRun),
+  ).toBe("false");
+  expect(
+    await groupFor(file, {
+      ...metadataRun,
+      event: {
+        ...metadataRun.event,
+        pull_request: { number: 12, head: { sha: "head-two" } },
+      },
+    }),
+  ).not.toBe(await groupFor(file, metadataRun));
+  // A draft runs no CI, so ready_for_review is the first code run, and a
+  // prove-fix label changes the suites: both stay in the code-run group.
+  for (const event of [
+    { ...codeRun.event, action: "ready_for_review" },
+    { ...codeRun.event, action: "labeled", label: { name: "prove-fix" } },
+  ]) {
+    expect(await groupFor(file, { ...codeRun, event })).toBe("CI Checks-pr-12");
+    expect(
+      await concurrencyValueFor(file, "cancel-in-progress", {
+        ...codeRun,
+        event,
+      }),
+    ).toBe("true");
+  }
 });
