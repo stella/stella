@@ -717,7 +717,7 @@ export const edpbAdapter = {
     status: "declared",
     fields: SOURCE_FIELD_DISPOSITIONS,
     listSourceFields: (parts) => {
-      const $ = load(parts.detail ?? "");
+      const $ = load(parts["detail"] ?? "");
       return SOURCE_FIELDS.filter(
         (field) => $(FIELD_SELECTORS[field]).length > 0,
       );
