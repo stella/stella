@@ -76,6 +76,9 @@ const runOnlineMigrations = async (
         if (query.includes("pg_backend_pid() AS pid")) {
           return [{ pid: 2, database: "test" }];
         }
+        if (query.includes('"stateAgeMs"')) {
+          return [];
+        }
         if (query.includes("ageMs")) {
           return [
             { ageMs: 0, observedAt: new Date(testClock()).toISOString() },

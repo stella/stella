@@ -337,6 +337,8 @@ const gateConfig = (maxSnapshotWaitMs: number): OnlineIndexConfig => ({
   retryMs: RETRY_MS,
   maxSnapshotWaitMs,
   clientConnectionCheckMs: 10,
+  idleHolderMs: 3_600_000,
+  longHolderMs: 3_600_000,
   parallelWorkers: 1,
   maintenanceWorkMemMb: 16,
 });

@@ -13,8 +13,10 @@ import { readOnlineIndexConfig } from "../env-online-index";
 import {
   createOnlineIndexGate,
   createOnlineIndexHold,
+  tableLockBlockers,
   type OnlineIndexEbsSource,
   type OnlineIndexHoldRef,
+  type TableLockHolder,
 } from "./online-index-gate";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
 
@@ -63,6 +65,7 @@ type HarnessOptions = {
   onCancel?: () => void;
   hold?: OnlineIndexHoldRef;
   ebsSource?: OnlineIndexEbsSource;
+  tableLockHolders?: readonly TableLockHolder[];
 };
 
 const makeHarness = ({
@@ -81,6 +84,7 @@ const makeHarness = ({
   onCancel,
   hold = createOnlineIndexHold(),
   ebsSource,
+  tableLockHolders = [],
 }: HarnessOptions) => {
   let now = Date.parse("2026-10-02T12:00:00.000Z");
   let readingOffset = 0;
@@ -170,6 +174,10 @@ const makeHarness = ({
           },
         ];
       }
+      // Before the pid branch: the holder census excludes both sessions by pid.
+      if (statement.includes('"stateAgeMs"')) {
+        return [...tableLockHolders];
+      }
       if (statement.includes("pg_backend_pid")) {
         return [{ pid: 202, database: observerDatabase }];
       }
@@ -256,6 +264,132 @@ const loggedRecords = (records: readonly unknown[]) =>
     }
     return record.record;
   });
+
+const holder = (overrides: Partial<TableLockHolder> = {}): TableLockHolder => ({
+  pid: 303,
+  state: "active",
+  xactAgeMs: 0,
+  stateAgeMs: 0,
+  waiting: false,
+  ...overrides,
+});
+
+describe("online index table lock blockers", () => {
+  const thresholds = { idleHolderMs: 10_000, longHolderMs: 60_000 };
+
+  test("names a queued session, a long idle holder and an old transaction", () => {
+    expect(
+      tableLockBlockers(
+        [
+          holder({ pid: 1, waiting: true }),
+          holder({ pid: 2, state: "idle in transaction", stateAgeMs: 10_000 }),
+          holder({
+            pid: 3,
+            state: "idle in transaction (aborted)",
+            stateAgeMs: 12_000,
+          }),
+          holder({ pid: 4, xactAgeMs: 60_000 }),
+        ],
+        thresholds,
+      ).map(({ pid, kind }) => [pid, kind]),
+    ).toEqual([
+      [1, "queued"],
+      [2, "idle_in_transaction"],
+      [3, "idle_in_transaction"],
+      [4, "long_transaction"],
+    ]);
+  });
+
+  test("leaves short holders to the lock wait", () => {
+    expect(
+      tableLockBlockers(
+        [
+          holder({ state: "idle in transaction", stateAgeMs: 9999 }),
+          holder({ state: "active", xactAgeMs: 59_999, stateAgeMs: 59_999 }),
+          holder({ state: "idle", stateAgeMs: 3_600_000 }),
+        ],
+        thresholds,
+      ),
+    ).toEqual([]);
+  });
+
+  test("a holder is a blocker exactly when one threshold is reached", () => {
+    fc.assert(
+      fc.property(
+        fc.record({
+          pid: fc.integer({ min: 1, max: 100_000 }),
+          state: fc.constantFrom(
+            null,
+            "active",
+            "idle",
+            "idle in transaction",
+            "idle in transaction (aborted)",
+          ),
+          xactAgeMs: fc.integer({ min: 0, max: 120_000 }),
+          stateAgeMs: fc.integer({ min: 0, max: 120_000 }),
+          waiting: fc.boolean(),
+        }),
+        (candidate) => {
+          const idle =
+            candidate.state?.startsWith("idle in transaction") === true &&
+            candidate.stateAgeMs >= thresholds.idleHolderMs;
+          const expected =
+            candidate.waiting ||
+            idle ||
+            candidate.xactAgeMs >= thresholds.longHolderMs;
+          expect(tableLockBlockers([candidate], thresholds).length).toBe(
+            expected ? 1 : 0,
+          );
+        },
+      ),
+      propertyConfig(),
+    );
+  });
+
+  test("the gate waits without starting the work when the table has a blocker", async () => {
+    const harness = makeHarness({
+      readings: [ebs(90)],
+      tableLockHolders: [
+        holder({ pid: 404, state: "idle in transaction", stateAgeMs: 30_000 }),
+      ],
+    });
+
+    expect(
+      await harness.gate.attempt(
+        "CREATE INDEX CONCURRENTLY test_idx ON public.test_table (id)",
+      ),
+    ).toBe("wait");
+    expect(harness.statements).not.toContain(
+      "CREATE INDEX CONCURRENTLY test_idx ON public.test_table (id)",
+    );
+    expect(harness.statements).not.toContain("SET lock_timeout = '0'");
+    expect(
+      harness.observerQueries.filter((query) => query.includes('"stateAgeMs"')),
+    ).toHaveLength(1);
+    expect(loggedRecords(harness.records)).toContainEqual(
+      expect.objectContaining({
+        decision: "wait",
+        reason: "Table lock holders",
+        blockers: [
+          expect.objectContaining({ pid: 404, kind: "idle_in_transaction" }),
+        ],
+      }),
+    );
+  });
+
+  test("the gate starts the work when every holder is short", async () => {
+    const harness = makeHarness({
+      readings: [ebs(90), ebs(90)],
+      tableLockHolders: [holder({ state: "active", xactAgeMs: 500 })],
+    });
+
+    expect(
+      await harness.gate.attempt(
+        "CREATE INDEX CONCURRENTLY test_idx ON public.test_table (id)",
+      ),
+    ).toBe("done");
+  });
+});
 
 describe("online index gate", () => {
   test("rejects an observer connected to a different database before building", async () => {

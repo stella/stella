@@ -124,6 +124,8 @@ const withFixture = async (work: (fixture: Fixture) => Promise<void>) => {
         retryMs: 2,
         maxSnapshotWaitMs: 600_000,
         clientConnectionCheckMs: 10,
+        idleHolderMs: 3_600_000,
+        longHolderMs: 3_600_000,
         parallelWorkers: 1,
         maintenanceWorkMemMb: 16,
       } satisfies OnlineIndexConfig;
@@ -933,6 +935,100 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
         await gate.close();
         await fixture.blocker`ROLLBACK`;
       }
+      await repair(fixture);
+    });
+  });
+
+  test("an idle writer on the table holds the work before it joins the lock queue", async () => {
+    await withFixture(async (fixture) => {
+      await blockBuild(fixture);
+      const blockerPid = (
+        await fixture.blocker<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`
+      ).at(0)?.pid;
+      for (let attempt = 0; attempt < 400; attempt++) {
+        const rows = await fixture.observer<
+          { idle: boolean }[]
+        >`SELECT state = 'idle in transaction' AS idle FROM pg_stat_activity WHERE pid = ${blockerPid ?? 0}`;
+        if (rows.at(0)?.idle) {
+          break;
+        }
+        await Bun.sleep(5);
+      }
+      const gate = createOnlineIndexGate({
+        connection: fixture.connection,
+        observer: fixture.observation,
+        tableName: fixture.table,
+        name: fixture.name,
+        kind: "index_build",
+        ...fixture.gate,
+        config: { ...fixture.gate.config, idleHolderMs: 0 },
+      });
+      try {
+        expect(await gate.attempt(fixture.index.createSql)).toBe("wait");
+      } finally {
+        await gate.close();
+      }
+      // Never started: no index, and no lock request left behind the writer.
+      expect(await indexState(fixture)).toBeUndefined();
+      expect(
+        fixture.records
+          .map((record) => JSON.stringify(record))
+          .some(
+            (record) =>
+              record.includes("Table lock holders") &&
+              record.includes(`"pid":${String(blockerPid)}`) &&
+              record.includes('"kind":"idle_in_transaction"'),
+          ),
+      ).toBe(true);
+      await fixture.blocker`COMMIT`;
+      await repair(fixture);
+    });
+  });
+
+  test("a lock request already queued on the table holds the work", async () => {
+    await withFixture(async (fixture) => {
+      await blockBuild(fixture);
+      await fixture.owner`BEGIN`;
+      const queued = fixture.owner.unsafe(
+        `LOCK TABLE public.${fixture.table} IN ACCESS EXCLUSIVE MODE`,
+      );
+      const queuedRequests = async () =>
+        await fixture.observer<
+          { pid: number }[]
+        >`SELECT pid FROM pg_locks WHERE locktype = 'relation' AND relation = ${`public.${fixture.table}`}::regclass AND NOT granted`;
+      for (let attempt = 0; attempt < 400; attempt++) {
+        if ((await queuedRequests()).length > 0) {
+          break;
+        }
+        await Bun.sleep(5);
+      }
+      expect(await queuedRequests()).toHaveLength(1);
+      const gate = createOnlineIndexGate({
+        connection: fixture.connection,
+        observer: fixture.observation,
+        tableName: fixture.table,
+        name: fixture.name,
+        kind: "index_build",
+        ...fixture.gate,
+      });
+      try {
+        expect(await gate.attempt(fixture.index.createSql)).toBe("wait");
+      } finally {
+        await gate.close();
+      }
+      expect(await indexState(fixture)).toBeUndefined();
+      expect(
+        fixture.records
+          .map((record) => JSON.stringify(record))
+          .some(
+            (record) =>
+              record.includes("Table lock holders") &&
+              record.includes('"kind":"queued"'),
+          ),
+      ).toBe(true);
+      await fixture.blocker`ROLLBACK`;
+      await queued;
+      await fixture.owner`ROLLBACK`;
       await repair(fixture);
     });
   });
