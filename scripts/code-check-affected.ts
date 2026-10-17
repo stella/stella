@@ -146,6 +146,9 @@ export const PLUGIN_FIXTURE_INPUTS = [
   "$TURBO_ROOT$/scripts/oxlint-additional-guards.test.ts",
   "$TURBO_ROOT$/scripts/check-oxlint-fixture-counts.ts",
   "$TURBO_ROOT$/scripts/check-oxlint-fixture-counts.test.ts",
+  // The status-column map the no-direct-status-set fixture is linted against;
+  // it stays a fixture input although it no longer forces lint everywhere.
+  "$TURBO_ROOT$/apps/api/src/lib/db/status-tables.gen.ts",
   "$TURBO_ROOT$/tsconfig.json",
   "$TURBO_ROOT$/tsconfig.oxlint-plugins.json",
 ] as const;

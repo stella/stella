@@ -448,6 +448,18 @@ describe("affected code-check planning", () => {
     });
   });
 
+  test("a status-table change relints the plugin fixtures that read it", () => {
+    const planned = plan(
+      ["apps/api/src/lib/db/status-tables.gen.ts"],
+      ["apps/api"],
+    );
+    expect(planned.type).toBe("scoped");
+    if (planned.type !== "scoped") {
+      throw new Error("Expected a scoped code-check plan");
+    }
+    expect(planned.rootChecks).toContain("plugin-fixtures");
+  });
+
   test.each([
     "scripts/design-lint-baseline.json",
     "scripts/ownership/status-transition.ts",
