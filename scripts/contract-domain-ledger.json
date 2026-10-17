@@ -996,10 +996,6 @@
     "reason": "Existing inputSchema UI validation or presentation bound; contract migration pending."
   },
   {
-    "id": "apps/web/src/components/legal-reader/annotations/guest-annotation-store.logic.ts::legacyGuestAnnotationStoreSchema::minLength:1::1",
-    "reason": "Existing legacyGuestAnnotationStoreSchema UI validation or presentation bound; contract migration pending."
-  },
-  {
     "id": "apps/web/src/components/legal-reader/annotations/guest-annotation-store.logic.ts::spanSchema::maxLength:64::1",
     "reason": "Existing spanSchema UI validation or presentation bound; contract migration pending."
   },
