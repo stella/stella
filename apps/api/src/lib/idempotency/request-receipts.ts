@@ -33,9 +33,9 @@ import {
   withSkipLockedBatch,
 } from "@/api/lib/db/aggregate-lock";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
-import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transitionScopedCount } from "@/api/lib/db/transitions";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { REQUEST_IDEMPOTENCY_RECEIPT_TRANSITIONS } from "@/api/lib/idempotency/request-receipt-transition-spec";
 import { toJsonValue } from "@/api/lib/json-value";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import type { SchedulerDb } from "@/api/lib/scheduler/types";
@@ -218,7 +218,7 @@ export const completeRequestReceipt = async ({
   await scopedDb(async (tx) => {
     const completed = await transitionScopedCount({
       tx,
-      spec: TRANSITIONS.requestIdempotencyReceipts,
+      spec: REQUEST_IDEMPOTENCY_RECEIPT_TRANSITIONS,
       where: eq(receipts.id, id),
       options: {
         from: ["pending"],
@@ -451,8 +451,9 @@ export const sweepExpiredRequestReceipts = async ({
   // and rolls back its resource writes before the pending row can be removed.
   // The owner-only lock policy grants UPDATE visibility, not write permission.
   // Discovery also skips live owners, so a full batch of active
-  // requests cannot starve abandoned rows behind it. Deletion locks again
-  // under each row's tenant scope and rechecks eligibility.
+  // requests cannot starve abandoned rows behind it. Each sweep handles one
+  // principal's bounded set in one scoped delete; the scheduler bounds and
+  // continues these rounds. Deletion locks again and rechecks eligibility.
   const candidates = await withSkipLockedBatch({
     database: db,
     limit: REQUEST_RECEIPT_RETENTION_BATCH_SIZE,
@@ -467,85 +468,75 @@ export const sweepExpiredRequestReceipts = async ({
         .where(expired),
     run: (_tx, rows) => rows,
   });
-  const groups = new Map<string, typeof candidates>();
-  for (const row of candidates) {
-    const key = `${row.organizationId}:${row.userId}`;
-    const group = groups.get(key);
-    if (group) {
-      group.push(row);
-    } else {
-      groups.set(key, [row]);
-    }
+  const first = candidates.at(0);
+  if (first === undefined) {
+    return { deleted: 0, hasMore: false };
   }
-  let deleted = 0;
-  let groupsProcessed = 0;
-  const database = markRlsDatabase(db);
-  for (const group of groups.values()) {
-    if (shouldStop()) {
-      break;
-    }
-    const first =
-      group.at(0) ?? panic("Receipt retention group must have a row");
-    const scopedDb = createScopedDb(
-      database,
-      [],
-      first.organizationId,
-      brandPersistedUserId(first.userId),
-    );
-    const rows = await withSkipLockedBatch({
-      database: { transaction: scopedDb },
-      limit: REQUEST_RECEIPT_RETENTION_BATCH_SIZE,
-      select: (tx) =>
-        tx
-          .select({ id: receipts.id })
-          .from(receipts)
-          .where(
-            and(
-              eq(receipts.organizationId, first.organizationId),
-              eq(receipts.userId, first.userId),
-              inArray(
-                receipts.id,
-                group.map(({ id }) => id),
-              ),
-              expired,
-            ),
-          ),
-      run: async (tx, unlocked) => {
-        if (unlocked.length === 0) {
-          return [];
-        }
-        await setSharedStatementTimeout(
-          tx,
-          Math.max(
-            1,
-            Math.min(RETENTION_STATEMENT_BUDGET_MS, deadline - elapsedMs()),
-          ),
-        );
-        await setSharedLockTimeout(tx, RETENTION_LOCK_BUDGET_MS);
-        // audit: skip - Retention removes expired technical receipts under their tenant scope.
-        return await tx
-          .delete(receipts)
-          .where(
-            and(
-              eq(receipts.organizationId, first.organizationId),
-              eq(receipts.userId, first.userId),
-              inArray(
-                receipts.id,
-                unlocked.map(({ id }) => id),
-              ),
-              expired,
-            ),
-          )
-          .returning({ id: receipts.id });
-      },
-    });
-    deleted += rows.length;
-    groupsProcessed += 1;
+  if (shouldStop()) {
+    return { deleted: 0, hasMore: true };
   }
+  const group = candidates.filter(
+    (row) =>
+      row.organizationId === first.organizationId &&
+      row.userId === first.userId,
+  );
+  const scopedDb = createScopedDb(
+    markRlsDatabase(db),
+    [],
+    first.organizationId,
+    brandPersistedUserId(first.userId),
+  );
+  const rows = await withSkipLockedBatch({
+    database: { transaction: scopedDb },
+    limit: REQUEST_RECEIPT_RETENTION_BATCH_SIZE,
+    select: (tx) =>
+      tx
+        .select({ id: receipts.id })
+        .from(receipts)
+        .where(
+          and(
+            eq(receipts.organizationId, first.organizationId),
+            eq(receipts.userId, first.userId),
+            inArray(
+              receipts.id,
+              group.map(({ id }) => id),
+            ),
+            expired,
+          ),
+        ),
+    run: async (tx, unlocked) => {
+      if (unlocked.length === 0) {
+        return [];
+      }
+      await setSharedStatementTimeout(
+        tx,
+        Math.max(
+          1,
+          Math.min(RETENTION_STATEMENT_BUDGET_MS, deadline - elapsedMs()),
+        ),
+      );
+      await setSharedLockTimeout(tx, RETENTION_LOCK_BUDGET_MS);
+      // audit: skip - Retention removes expired technical receipts under their tenant scope.
+      return await tx
+        .delete(receipts)
+        .where(
+          and(
+            eq(receipts.organizationId, first.organizationId),
+            eq(receipts.userId, first.userId),
+            inArray(
+              receipts.id,
+              unlocked.map(({ id }) => id),
+            ),
+            expired,
+          ),
+        )
+        .returning({ id: receipts.id });
+    },
+  });
   return {
-    deleted,
+    deleted: rows.length,
     hasMore:
       candidates.length === REQUEST_RECEIPT_RETENTION_BATCH_SIZE ||
-      groupsProcessed < groups.size,
+      group.length < candidates.length,
   };
 };

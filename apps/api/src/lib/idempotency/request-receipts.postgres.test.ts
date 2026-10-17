@@ -642,13 +642,14 @@ describe.skipIf(!enabled)("request receipt state machine (postgres)", () => {
     });
   });
 
-  test("retention resumes partially swept organization groups after the deadline", async () => {
+  test("retention deletes a whole principal batch and resumes other organizations", async () => {
     await withFixture(
       async ({
         db,
         claim,
         scopedDb,
         otherScopedDb,
+        organizationId,
         otherOrganizationId,
         userId,
       }) => {
@@ -660,6 +661,24 @@ describe.skipIf(!enabled)("request receipt state machine (postgres)", () => {
         await completeRequestReceipt({
           scopedDb,
           id: first.id,
+          status: 201,
+          body: {},
+        });
+        const samePrincipal = await claimRequestReceipt({
+          scopedDb,
+          organizationId,
+          userId,
+          key: "same-principal-intent",
+          route: "/test/create",
+          fingerprint: fingerprint(ORIGINAL_BODY),
+          now: old,
+        });
+        if (samePrincipal.type !== "claimed") {
+          panic("Second receipt must be claimed");
+        }
+        await completeRequestReceipt({
+          scopedDb,
+          id: samePrincipal.id,
           status: 201,
           body: {},
         });
@@ -681,27 +700,74 @@ describe.skipIf(!enabled)("request receipt state machine (postgres)", () => {
           status: 201,
           body: {},
         });
-        let clockReads = 0;
-        const interrupted = await sweepExpiredRequestReceipts({
+        const firstBatch = await sweepExpiredRequestReceipts({
           db,
           now: new Date("2026-10-15T10:00:00Z"),
           signal: new AbortController().signal,
           deadline: 100,
-          elapsedMs: () => {
-            clockReads += 1;
-            return clockReads >= 4 ? 100 : 0;
-          },
+          elapsedMs: () => 0,
         });
-        expect(interrupted).toEqual({ deleted: 1, hasMore: true });
+        expect(firstBatch.hasMore).toBe(true);
+        expect([1, 2]).toContain(firstBatch.deleted);
+        const remaining = await Promise.all([
+          scopedDb(
+            async (tx) =>
+              await tx.execute(
+                sql`SELECT id FROM request_idempotency_receipts`,
+              ),
+          ),
+          otherScopedDb(
+            async (tx) =>
+              await tx.execute(
+                sql`SELECT id FROM request_idempotency_receipts`,
+              ),
+          ),
+        ]);
+        expect(remaining.map((rows) => rows.length)).toEqual(
+          firstBatch.deleted === 2 ? [0, 1] : [2, 0],
+        );
         const resumed = await sweepExpiredRequestReceipts({
           db,
           now: new Date("2026-10-15T10:00:00Z"),
           signal: new AbortController().signal,
           deadline: performance.now() + 30_000,
         });
-        expect(resumed).toEqual({ deleted: 1, hasMore: false });
+        expect(resumed).toEqual({
+          deleted: 3 - firstBatch.deleted,
+          hasMore: false,
+        });
       },
     );
+  });
+
+  test("retention leaves discovered receipts for continuation when its budget expires", async () => {
+    await withFixture(async ({ db, claim }) => {
+      expect(
+        (await claim(undefined, new Date("2026-10-15T09:57:59Z"))).type,
+      ).toBe("claimed");
+      let clockReads = 0;
+      expect(
+        await sweepExpiredRequestReceipts({
+          db,
+          now: new Date("2026-10-15T10:00:00Z"),
+          signal: new AbortController().signal,
+          deadline: 100,
+          elapsedMs: () => {
+            clockReads += 1;
+            return clockReads >= 2 ? 100 : 0;
+          },
+        }),
+      ).toEqual({ deleted: 0, hasMore: true });
+      expect(await claim()).toEqual({ type: "in_progress" });
+      expect(
+        await sweepExpiredRequestReceipts({
+          db,
+          now: new Date("2026-10-15T10:00:00Z"),
+          signal: new AbortController().signal,
+          deadline: performance.now() + 30_000,
+        }),
+      ).toEqual({ deleted: 1, hasMore: false });
+    });
   });
 
   test("RLS prevents another organization reading or deleting the receipt", async () => {

@@ -61,3 +61,14 @@ CREATE POLICY "retention_owner_select" ON "request_idempotency_receipts" FOR SEL
 CREATE POLICY "retention_owner_lock" ON "request_idempotency_receipts" FOR UPDATE TO PUBLIC USING (
   current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.request_idempotency_receipts'::regclass)
 ) WITH CHECK (false);--> statement-breakpoint
+
+-- Review reset clears request results for every former organization member.
+-- Only the table owner with the explicit reset organization can use this path.
+CREATE POLICY "review_reset_owner_select" ON "request_idempotency_receipts" FOR SELECT TO PUBLIC USING (
+  current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.request_idempotency_receipts'::regclass)
+  AND organization_id = nullif(current_setting('app.correspondence_review_reset_organization_id', true), '')
+);--> statement-breakpoint
+CREATE POLICY "review_reset_owner_delete" ON "request_idempotency_receipts" FOR DELETE TO PUBLIC USING (
+  current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.request_idempotency_receipts'::regclass)
+  AND organization_id = nullif(current_setting('app.correspondence_review_reset_organization_id', true), '')
+);--> statement-breakpoint

@@ -7,6 +7,8 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 
 import type { Transaction } from "@/api/db/root";
 import { createSafeId } from "@/api/lib/branded-types";
+import { DatabaseError } from "@/api/lib/errors/tagged-errors";
+import { PG_ERROR } from "@/api/lib/pg-error";
 import {
   aggregateExecutionRows,
   aggregateFences as fences,
@@ -17,6 +19,7 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   AGGREGATE_CHAINS,
   AGGREGATE_LOCKS,
+  lockRequestReceiptPrincipalRows,
   withAggregateLock,
   withAutomatedFlowRunCapLock,
   withSkipLockedBatch,
@@ -203,6 +206,81 @@ test("the advisory namespace census rejects a duplicate", () => {
 });
 
 describe("aggregate acquisition ordering", () => {
+  test.each(["ready", "busy"] as const)(
+    "receipt principal cleanup owns the NOWAIT set and savepoint history: %s",
+    async (availability) => {
+      const fixture = fences();
+      const { organizationId, userId } = fixture.requestReceipt.id;
+      const rows = [
+        { id: fixture.requestReceipt.id.id },
+        { id: createSafeId<"requestIdempotencyReceipt">() },
+      ];
+      const selectedPredicates: ReturnType<PgDialect["sqlToQuery"]>[] = [];
+      const execute = async (statement: SQL) =>
+        await Promise.resolve(aggregateExecutionRows(statement));
+      const select = () => ({
+        from: () => ({
+          where: (predicate: SQL) => {
+            selectedPredicates.push(new PgDialect().sqlToQuery(predicate));
+            return {
+              for: async (mode: string, config?: { noWait?: boolean }) => {
+                expect(mode).toBe("update");
+                expect(config).toEqual({ noWait: true });
+                if (availability === "busy") {
+                  return await Promise.reject(
+                    new DatabaseError({
+                      message: "The receipt row is locked",
+                      code: PG_ERROR.LOCK_NOT_AVAILABLE,
+                    }),
+                  );
+                }
+                return await Promise.resolve(rows);
+              },
+            };
+          },
+        }),
+      });
+      const tx = asTestRaw<Transaction>({
+        execute,
+        select,
+        transaction: async (run: (child: Transaction) => Promise<unknown>) =>
+          await run(asTestRaw<Transaction>({ execute, select })),
+      });
+      await withAggregateLock({ ...fixture.workspace, tx });
+      const result = await lockRequestReceiptPrincipalRows({
+        tx,
+        organizationId,
+        userId,
+      });
+      expect(selectedPredicates).toHaveLength(1);
+      expect(selectedPredicates.at(0)?.params).toEqual([
+        organizationId,
+        userId,
+      ]);
+      if (availability === "busy") {
+        expect(result.status).toBe("busy");
+        expect(
+          await rejectionOf(
+            withAggregateLock({ ...fixture.requestReceipt, tx }),
+          ),
+        ).toMatchObject({ message: "Aggregate lock rank inversion" });
+        return;
+      }
+      expect(result).toEqual({ status: "locked", rows });
+      for (const { id } of rows) {
+        // Only retained coverage permits this earlier-ranked blocking request
+        // after the workspace fence; a lost savepoint history would reject it.
+        expect(
+          await withAggregateLock({
+            ...fixture.requestReceipt,
+            id: { id, organizationId, userId },
+            tx,
+          }),
+        ).toEqual({ status: "locked" });
+      }
+    },
+  );
+
   test("a principal-scoped NOWAIT request receipt permits later handler aggregate locks", async () => {
     const fixture = fences();
     const statements: ReturnType<PgDialect["sqlToQuery"]>[] = [];

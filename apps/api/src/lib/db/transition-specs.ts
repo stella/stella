@@ -14,7 +14,6 @@ import {
   workObligations,
   sanctionsEditionFanouts,
   sanctionsMonitoringBackfills,
-  requestIdempotencyReceipts,
 } from "@/api/db/schema";
 import {
   FLOW_RUN_TRANSITIONS_V1,
@@ -39,6 +38,7 @@ import type {
   LifecycleSpec,
   TransitionSpec,
 } from "@/api/lib/db/transitions";
+import { REQUEST_IDEMPOTENCY_RECEIPT_TRANSITIONS } from "@/api/lib/idempotency/request-receipt-transition-spec";
 import {
   CONTACT_MONITORING_TRANSITIONS,
   FIRM_MONITORING_TRANSITIONS,
@@ -131,15 +131,6 @@ const DESKTOP_TIME_ENTRY_BATCH_RECEIPT_LIFECYCLE = defineScopedTransitions({
   stateColumn: "status",
   edges: { committed: [], cancelled: [] },
   initial: DESKTOP_TIME_ENTRY_BATCH_STATUSES,
-});
-
-const REQUEST_IDEMPOTENCY_RECEIPT_TRANSITIONS = defineScopedTransitions({
-  table: requestIdempotencyReceipts,
-  key: "id",
-  scope: [],
-  stateColumn: "state",
-  edges: { pending: ["completed"], completed: [] },
-  initial: ["pending"],
 });
 
 const WORK_OBLIGATION_TRANSITIONS = defineKeyedTransitions({
