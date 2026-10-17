@@ -5,7 +5,7 @@ import {
   READER_TEXT_SCALES,
   READER_TEXT_SCALE_DEFAULT,
 } from "@stll/decision-reader/reader-text-scale.logic";
-import { resolveAcceptLanguage, UI_LOCALES } from "@stll/locales";
+import { negotiateAcceptLanguage, UI_LOCALES } from "@stll/locales";
 import {
   INSPECTOR_PANE_DEFAULT_WIDTH,
   INSPECTOR_PANE_MAX_WIDTH,
@@ -50,7 +50,10 @@ export const corePresentationPrefsSchema = v.strictObject({
     ),
     INSPECTOR_PANE_DEFAULT_WIDTH,
   ),
-  region: v.fallback(v.pipe(v.string(), v.regex(/^(?:[A-Z]{2})?$/u)), ""),
+  region: v.fallback(
+    v.pipe(v.string(), v.regex(/^(?:[A-Z]{2}|[0-9]{3})?$/u)),
+    "",
+  ),
   regionalFormat: v.fallback(v.picklist(["auto", "en-IN"]), "auto"),
   calendar: v.fallback(
     v.picklist(["auto", "gregory", "islamic-umalqura"]),
@@ -121,9 +124,11 @@ export const parseVisitorPresentationPrefs = (
   acceptLanguage: string | undefined,
 ): PresentationPrefs => {
   const prefs = parsePresentationPrefs(raw);
-  return raw === undefined
-    ? { ...prefs, visitorLocale: resolveAcceptLanguage(acceptLanguage) }
-    : prefs;
+  if (raw !== undefined) {
+    return prefs;
+  }
+  const { locale, region } = negotiateAcceptLanguage(acceptLanguage);
+  return { ...prefs, visitorLocale: locale, region };
 };
 
 export const serializePresentationPrefs = ({

@@ -21,5 +21,6 @@ export {
   isUiLocale,
   resolveUiLocale,
   resolveAcceptLanguage,
+  negotiateAcceptLanguage,
   toLanguageCode,
 } from "./helpers.js";

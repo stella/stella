@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test";
 
+import ar from "../../src/i18n/langs/ar.json" with { type: "json" };
 import {
   parsePresentationPrefs,
   defaultPresentationPrefs,
@@ -219,3 +220,50 @@ test("a fresh visitor renders the preferred browser catalogue and explicit prefe
     await context.close();
   }
 });
+
+for (const { language, sundayBasedWeekStart } of [
+  { language: "ar-SA", sundayBasedWeekStart: 0 },
+  { language: "ar-AE", sundayBasedWeekStart: 1 },
+]) {
+  test(`fresh ${language} visitors retain regional formatting through hydration`, async ({
+    browser,
+    baseURL,
+  }) => {
+    const context = await browser.newContext({
+      baseURL: baseURL ?? "http://localhost:3000",
+      locale: language,
+      storageState: { cookies: [], origins: [] },
+      extraHTTPHeaders: { "Accept-Language": `en;q=0.2,${language};q=0.9` },
+    });
+    try {
+      const page = await context.newPage();
+      const response = await page.goto("/law/cases?country=cze", {
+        waitUntil: "domcontentloaded",
+      });
+      expect(response?.ok()).toBe(true);
+      const html = await response?.text();
+      expect(html).toMatch(
+        /<html(?=[^>]*\blang="ar")(?=[^>]*\bdir="rtl")[^>]*>/u,
+      );
+      // Opening the filters and calendar requires hydrated event handlers.
+      await page
+        .getByRole("button", { name: ar.common.filters, exact: true })
+        .click();
+      await page
+        .getByRole("button", { name: ar.search.dateFrom, exact: true })
+        .click();
+      const calendar = page.locator('[data-slot="date-picker-popup"]');
+      await expect(calendar).toBeVisible();
+      const formattingLocale = `${language}-u-ca-gregory-nu-arab`;
+      const expectedWeekday = new Intl.DateTimeFormat(formattingLocale, {
+        weekday: "short",
+        timeZone: "UTC",
+      }).format(new Date(Date.UTC(2026, 0, 4 + sundayBasedWeekStart)));
+      await expect(
+        calendar.locator('[role="row"][aria-hidden="true"] > span').first(),
+      ).toHaveText(expectedWeekday);
+    } finally {
+      await context.close();
+    }
+  });
+}

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 
-import { resolveAcceptLanguage } from "./helpers";
+import { negotiateAcceptLanguage, resolveAcceptLanguage } from "./helpers";
 import { UI_LOCALES } from "./languages";
 
 test("every supported locale is selectable with browser quality weights", () => {
@@ -35,5 +35,26 @@ test("unsupported, excluded and malformed ranges cannot select a catalogue", () 
     "cs;q=1.001",
   ]) {
     expect(resolveAcceptLanguage(header)).toBe("en");
+  }
+});
+
+test("catalogue and region come from the same winning browser language", () => {
+  for (const [header, locale, region] of [
+    ["ar-SA", "ar", "SA"],
+    ["ar-AE", "ar", "AE"],
+    ["ar-Arab-AE", "ar", "AE"],
+    ["AR-ae", "ar", "AE"],
+    ["ar-SA;q=0.2,ar-AE;q=0.9", "ar", "AE"],
+    ["ar-SA;q=0,ar-AE", "ar", "AE"],
+    ["ar-SA;q=0.9,ar-AE;q=0.9", "ar", "SA"],
+    ["ar-SA;q=0.2,ar;q=0.9", "ar", ""],
+    ["zz-SA,cs-CZ;q=0.5", "cs", "CZ"],
+    ["ar-u,cs-CZ;q=0.5", "cs", "CZ"],
+    ["es-419", "es", "419"],
+    ["pt-PT", "pt-BR", "PT"],
+    [undefined, "en", ""],
+  ] as const) {
+    expect(negotiateAcceptLanguage(header)).toEqual({ locale, region });
+    expect(resolveAcceptLanguage(header)).toBe(locale);
   }
 });

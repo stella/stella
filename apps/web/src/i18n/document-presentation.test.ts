@@ -5,14 +5,17 @@ import { QueryClient } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, test } from "bun:test";
 
 import type { UiLocale } from "@stll/locales";
+import { getFirstWeekday } from "@stll/ui/week";
 
 import {
   initializeRenderedLocale,
+  getFormattingLocale,
   loadLocaleMessages,
   useI18nStore,
 } from "@/i18n/i18n-store";
 import {
   parseVisitorPresentationPrefs,
+  parsePresentationPrefs,
   defaultPresentationPrefs,
   serializePresentationPrefs,
 } from "@/lib/account/presentation-prefs/preferences";
@@ -158,3 +161,35 @@ test("server presentation uses the profile locale without adding identity to the
     globalThis.fetch = originalFetch;
   }
 });
+
+test.each([
+  { language: "ar-SA", region: "SA", weekStart: 0 },
+  { language: "ar-AE", region: "AE", weekStart: 1 },
+])(
+  "fresh $language server renders preserve formatting and week start",
+  async ({ language, region, weekStart }) => {
+    await withRequestI18n(async () => {
+      const prefs = parseVisitorPresentationPrefs(
+        undefined,
+        `en;q=0.2,${language};q=0.9`,
+      );
+      const locale = prefs.visitorLocale;
+      initializeRenderedLocale({
+        locale,
+        prefs,
+        messages: await loadLocaleMessages(locale),
+      });
+      const formattingLocale = getFormattingLocale();
+      expect(useI18nStore.getState().region).toBe(region);
+      expect(formattingLocale).toBe(`${language}-u-ca-gregory-nu-arab`);
+      expect(getFirstWeekday(formattingLocale)).toBe(weekStart);
+      expect(renderToStaticMarkup(createElement(DocumentSnapshot))).toContain(
+        'lang="ar"',
+      );
+      // The router serializes the same prefs alongside the selected catalogue.
+      expect(parsePresentationPrefs(serializePresentationPrefs(prefs))).toEqual(
+        prefs,
+      );
+    });
+  },
+);

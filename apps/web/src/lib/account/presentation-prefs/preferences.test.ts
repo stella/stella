@@ -127,3 +127,29 @@ test("cookie-free visitors negotiate language and explicit preferences win over 
     "en",
   );
 });
+
+test.each([
+  { language: "ar-SA", region: "SA" },
+  { language: "ar-AE", region: "AE" },
+])(
+  "fresh $language visitors retain their negotiated region",
+  ({ language, region }) => {
+    const prefs = parseVisitorPresentationPrefs(
+      undefined,
+      `en;q=0.2,${language};q=0.9`,
+    );
+    expect(prefs.visitorLocale).toBe("ar");
+    expect(prefs.region).toBe(region);
+    const explicit = {
+      ...defaultPresentationPrefs,
+      visitorLocale: "ar",
+      region: "EG",
+    } as const;
+    expect(
+      parseVisitorPresentationPrefs(
+        serializePresentationPrefs(explicit),
+        language,
+      ),
+    ).toEqual(explicit);
+  },
+);

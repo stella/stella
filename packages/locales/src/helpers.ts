@@ -47,9 +47,13 @@ export const resolveUiLocale = (value: string): UiLocale | null => {
   return null;
 };
 
-/** Selects a shipped catalogue using browser quality weights; exclusions never win. */
-export const resolveAcceptLanguage = (header: string | undefined): UiLocale => {
-  let selected: UiLocale = "en";
+type NegotiatedLocale = { locale: UiLocale; region: string };
+
+/** Selects a catalogue and its browser region together using quality weights. */
+export const negotiateAcceptLanguage = (
+  header: string | undefined,
+): NegotiatedLocale => {
+  let selected: NegotiatedLocale = { locale: "en", region: "" };
   let highestQuality = 0;
   for (const part of (header ?? "").split(",")) {
     const [range, ...parameters] = part.trim().split(";");
@@ -67,12 +71,23 @@ export const resolveAcceptLanguage = (header: string | undefined): UiLocale => {
     const quality = weight === undefined ? 1 : Number(weight.slice(2));
     const locale = resolveUiLocale(range.toLowerCase());
     if (locale !== null && quality > highestQuality) {
-      selected = locale;
-      highestQuality = quality;
+      // This header is untrusted; a supported prefix alone does not make a
+      // complete BCP-47 tag valid (for example, a dangling Unicode extension).
+      try {
+        const { region } = new Intl.Locale(range);
+        selected = { locale, region: region ?? "" };
+        highestQuality = quality;
+      } catch {
+        continue;
+      }
     }
   }
   return selected;
 };
+
+/** Selects a shipped catalogue using browser quality weights; exclusions never win. */
+export const resolveAcceptLanguage = (header: string | undefined): UiLocale =>
+  negotiateAcceptLanguage(header).locale;
 
 /**
  * Canonicalizes a (possibly regional) language tag to its ISO 639-1 base
