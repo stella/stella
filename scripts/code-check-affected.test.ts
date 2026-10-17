@@ -30,6 +30,8 @@ import {
   LINT_ONLY_CACHE_INPUTS,
   lintAllTrace,
   matchedLintAllInputs,
+  memoryLimitBytes,
+  separateApiLintFromTypecheck,
   executeCheckCommands,
   planCheck,
   planningCommandTimeout,
@@ -1194,6 +1196,95 @@ describe("parallel code-quality legs", () => {
     }
     expect(codeCheckConcurrency(8 * 1024 ** 3)).toBe(2);
     expect(codeCheckConcurrency(12 * 1024 ** 3)).toBe(3);
+  });
+
+  test("a container memory limit below the machine's is the limit the checks get", () => {
+    const GiB = 1024 ** 3;
+    const reads = (files: Record<string, string>) => (file: string) =>
+      files[file];
+    // A cloud sandbox: 64 GiB host, 16 GiB cgroup v2 limit.
+    expect(
+      memoryLimitBytes({
+        total: 64 * GiB,
+        read: reads({ "/sys/fs/cgroup/memory.max": `${16 * GiB}\n` }),
+      }),
+    ).toBe(16 * GiB);
+    // cgroup v1 with no effective limit reports a huge number.
+    expect(
+      memoryLimitBytes({
+        total: 32 * GiB,
+        read: reads({
+          "/sys/fs/cgroup/memory.max": "max\n",
+          "/sys/fs/cgroup/memory/memory.limit_in_bytes": "9223372036854771712",
+        }),
+      }),
+    ).toBe(32 * GiB);
+    // No cgroup files (macOS) or an unreadable file keep the machine's.
+    expect(memoryLimitBytes({ total: 48 * GiB, read: () => undefined })).toBe(
+      48 * GiB,
+    );
+    expect(
+      memoryLimitBytes({
+        total: 48 * GiB,
+        read: () => {
+          throw new Error("EACCES");
+        },
+      }),
+    ).toBe(48 * GiB);
+  });
+
+  test("below 24 GiB the API typecheck and type-aware API lint never run together", () => {
+    const GiB = 1024 ** 3;
+    const turbo = (...rest: string[]) => [
+      "bun",
+      "--bun",
+      "turbo",
+      "run",
+      "lint",
+      "typecheck",
+      "--concurrency=3",
+      ...rest,
+    ];
+    const typecheckOnly = (...rest: string[]) => [
+      "bun",
+      "--bun",
+      "turbo",
+      "run",
+      "typecheck",
+      "--concurrency=3",
+      ...rest,
+    ];
+    const lintOnly = (...rest: string[]) => [
+      "bun",
+      "--bun",
+      "turbo",
+      "run",
+      "lint",
+      "--concurrency=3",
+      ...rest,
+    ];
+    const css = ["bun", "run", "lint:css"];
+    for (const scope of [
+      [],
+      ["--filter=./apps/api", "--filter=./packages/time"],
+    ]) {
+      expect(
+        separateApiLintFromTypecheck([css, turbo(...scope)], 16 * GiB),
+      ).toEqual([css, typecheckOnly(...scope), lintOnly(...scope)]);
+    }
+    // Enough memory, or no API in the command: lint and typecheck overlap.
+    expect(separateApiLintFromTypecheck([turbo()], 24 * GiB)).toEqual([
+      turbo(),
+    ]);
+    for (const scope of [["--filter=./apps/web"], ["--filter=!./apps/api"]]) {
+      expect(separateApiLintFromTypecheck([turbo(...scope)], 16 * GiB)).toEqual(
+        [turbo(...scope)],
+      );
+    }
+    // A command with only one of the two is already separate.
+    expect(separateApiLintFromTypecheck([lintOnly()], 16 * GiB)).toEqual([
+      lintOnly(),
+    ]);
   });
 
   test("a requested concurrency lowers the task count; invalid requests keep the memory default", () => {

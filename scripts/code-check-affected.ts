@@ -13,7 +13,7 @@
 // fails safe to the full check.
 
 import { panic, Result, TaggedError } from "better-result";
-import { appendFileSync, existsSync, readdirSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync, readdirSync } from "node:fs";
 import { totalmem } from "node:os";
 import path from "node:path";
 import { stripVTControlCharacters } from "node:util";
@@ -889,6 +889,81 @@ const parseAffectedWorkspacePaths = (output: string): string[] => {
 };
 
 const THREE_TASK_MEMORY_BYTES = 12 * 1024 ** 3;
+// Cgroup v2, then v1: a container reports the host's memory but enforces these.
+const CGROUP_MEMORY_LIMITS = [
+  "/sys/fs/cgroup/memory.max",
+  "/sys/fs/cgroup/memory/memory.limit_in_bytes",
+];
+
+/**
+ * The memory the checks may use: the machine's, or a lower container limit.
+ * A cloud sandbox reports its host's memory through `totalmem()` while its
+ * cgroup enforces far less.
+ */
+export const memoryLimitBytes = ({
+  total = totalmem(),
+  read = (file: string) =>
+    existsSync(file) ? readFileSync(file, "utf-8") : undefined,
+}: {
+  total?: number;
+  read?: (file: string) => string | undefined;
+} = {}): number => {
+  let limit = total;
+  for (const file of CGROUP_MEMORY_LIMITS) {
+    const value = Number(
+      Result.try(() => read(file))
+        .unwrapOr(undefined)
+        ?.trim() ?? Number.NaN,
+    );
+    if (Number.isSafeInteger(value) && value > 0) {
+      limit = Math.min(limit, value);
+    }
+  }
+  return limit;
+};
+
+// Type-aware API lint (about 14 GiB resident on a cold run) and the API
+// typecheck each need most of a small machine; together they push a 16 GiB
+// sandbox into its memory limit and stall for many minutes.
+const SEPARATE_API_CHECKS_BELOW_BYTES = 24 * 1024 ** 3;
+const API_FILTER = "--filter=./apps/api";
+
+/**
+ * Below 24 GiB, a Turbo command that runs both lint and typecheck over the
+ * API runs typecheck and then lint, so the two API programs never share the
+ * memory. Other commands, and larger machines, keep lint and typecheck
+ * overlapped.
+ */
+export const separateApiLintFromTypecheck = (
+  commands: readonly string[][],
+  memoryBytes: number,
+): string[][] =>
+  commands.flatMap((command) => {
+    if (
+      memoryBytes >= SEPARATE_API_CHECKS_BELOW_BYTES ||
+      command[2] !== "turbo"
+    ) {
+      return [command];
+    }
+    const lintAt = command.indexOf("lint");
+    const typecheckAt = command.indexOf("typecheck");
+    if (lintAt === -1 || typecheckAt === -1) {
+      return [command];
+    }
+    const targets = command.filter((argument) =>
+      argument.startsWith("--filter=./"),
+    );
+    const coversApi =
+      !command.includes("--filter=!./apps/api") &&
+      (targets.length === 0 || targets.includes(API_FILTER));
+    if (!coversApi) {
+      return [command];
+    }
+    return [
+      command.filter((_, index) => index !== lintAt),
+      command.filter((_, index) => index !== typecheckAt),
+    ];
+  });
 /** Memory-based task count; a valid request may only lower it. */
 export const codeCheckConcurrency = (
   memoryBytes: number,
@@ -909,7 +984,10 @@ export const codeCheckConcurrency = (
 // CODE_CHECK_CONCURRENCY lowers the task count on a busy host (pre-push runs
 // one task at a time); child Turbo runs inherit it.
 export const configuredCodeCheckConcurrency = (): number =>
-  codeCheckConcurrency(totalmem(), process.env["CODE_CHECK_CONCURRENCY"]);
+  codeCheckConcurrency(
+    memoryLimitBytes(),
+    process.env["CODE_CHECK_CONCURRENCY"],
+  );
 
 const turboCommand = (tasks: readonly string[], scope: TaskScope): string[] => [
   "bun",
@@ -1349,7 +1427,7 @@ const main = async (): Promise<Result<number, CommandFailedError>> => {
   );
   return Result.ok(
     await executeCheckCommands({
-      commands,
+      commands: separateApiLintFromTypecheck(commands, memoryLimitBytes()),
       dryRun: options.dryRun,
       budgetDeadlineMs,
     }),
