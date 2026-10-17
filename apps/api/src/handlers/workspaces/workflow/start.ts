@@ -8,7 +8,7 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { requestExtractionRunStore } from "@/api/lib/extraction-runs/request-run-store";
 import { LIMITS } from "@/api/lib/limits";
-import { isDeferredServiceTierAvailableForRole } from "@/api/lib/tanstack-ai-models";
+import { isDeferredServiceTierAvailableForTask } from "@/api/lib/tanstack-ai-models";
 import { startWorkflow } from "@/api/lib/workflow-queue";
 import { isReportedWorkflowStartStatus } from "@/api/lib/workflow/workflow-start-disposition";
 
@@ -75,7 +75,7 @@ export const createWorkflowStart = (
       }
       if (
         body.serviceTier === "flex" &&
-        !isDeferredServiceTierAvailableForRole("pdf", orgAIConfig)
+        !isDeferredServiceTierAvailableForTask("pdf", orgAIConfig)
       ) {
         return Result.err(
           new HandlerError({

@@ -694,6 +694,18 @@ const withoutDelegatedGeneratorChecks = (step: Step): Step => {
     : { ...original, env: environment };
 };
 
+// A step deadline bounds a hung command; the step still fails when it fires,
+// so it changes no coverage. With continue-on-error a fired deadline would
+// pass silently, so those steps keep the timeout in the comparison.
+const withoutStepTimeout = (step: Step): Step => {
+  if (step["continue-on-error"] !== undefined) {
+    return step;
+  }
+  const original = { ...step };
+  delete original["timeout-minutes"];
+  return original;
+};
+
 const LOCAL_CHECK_BASE_REF = `\${{ format('origin/{0}', github.base_ref || 'main') }}`;
 const LOCAL_BASE_REF = `\${{ github.base_ref || 'main' }}`;
 const CLI_CONTRACT_COMMAND = "bun scripts/check-cli-contract-changeset.ts";
@@ -741,6 +753,7 @@ const ownedSteps = (steps: readonly Step[]) =>
     .map(withoutPreparedGeneration)
     .map(withoutTestTimeout)
     .map(withoutDelegatedGeneratorChecks)
+    .map(withoutStepTimeout)
     .map(withoutStepId)
     .map((step) =>
       typeof step["run"] === "string"

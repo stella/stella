@@ -244,7 +244,7 @@ test("suggested prompts usage refusal calls no model and persists nothing", asyn
   });
   const generator = spyOn(
     textGeneration,
-    "generateTanStackTextForRole",
+    "generateTanStackTextForTask",
   ).mockResolvedValue("Draft a response.");
   testState.setConfig("USAGE_ENFORCEMENT_ENABLED", true);
   testState.setConfig("AI_PROVIDER", "openrouter");
