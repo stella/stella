@@ -231,6 +231,9 @@ const installFixtureSchema = async (main: SQL, owner: ReservedSQL) => {
   for (const [, functionName] of texts.matchAll(
     /\b([a-z_][a-z0-9_]*)\s*\(/gu,
   )) {
+    if (functionName === undefined) {
+      continue;
+    }
     for (const row of rowsOf(
       await main.unsafe(
         `SELECT pg_get_functiondef(p.oid) AS definition
@@ -250,7 +253,7 @@ const installFixtureSchema = async (main: SQL, owner: ReservedSQL) => {
 
 const withScratch = async (work: (scratch: Scratch) => Promise<void>) => {
   if (databaseUrl === undefined) {
-    return panic("DATABASE_URL is required");
+    panic("DATABASE_URL is required");
   }
   await withGatedTestClients(databaseUrl, async ({ openClient }) => {
     const main = openClient().sql;
@@ -281,7 +284,7 @@ const withScratch = async (work: (scratch: Scratch) => Promise<void>) => {
               >`SELECT extract(epoch FROM clock_timestamp())::double precision * 1000 AS now`
             ).at(0)?.now;
             if (pid === undefined || now === undefined) {
-              return panic("Missing scratch session state");
+              panic("Missing scratch session state");
             }
             // Ahead of the database clock, so no catalog reading is in the
             // future; advancing, so a held wait has a duration.
