@@ -4,6 +4,7 @@ import { normalizeCountry } from "@stll/agent-input";
 import type { LegalResolveResponse } from "@stll/api-contract/legal-resolve";
 import {
   isPublicCountry,
+  PUBLIC_COUNTRY_CAPABILITIES,
   type PublicCountry,
 } from "@stll/api-contract/public-country-capability";
 import {
@@ -109,12 +110,13 @@ export const resolveCzechLaw = async (
   const expression = await resolveExpression(
     { eli, ...(input.asOf === undefined ? {} : { asOf: input.asOf }) },
     legislationPublicReadDb,
+    "search",
   );
   if (expression.type !== "expression") {
     return { status: "not_found", reason: "unknown_document" };
   }
   const [document, preview] = await Promise.all([
-    readDocument(expression.id, legislationPublicReadDb),
+    readDocument(expression.id, legislationPublicReadDb, "search"),
     readPreview({
       documentId: expression.id,
       anchor: section.anchor,
@@ -179,6 +181,12 @@ export const resolveLawCitation = async ({
 }: ResolveLawCitationOptions): Promise<LegalResolveResponse> => {
   const normalized = normalizeCountry(countryInput);
   if (!normalized.ok || !isPublicCountry(normalized.value.alpha3)) {
+    return { status: "country_unavailable" };
+  }
+  if (
+    PUBLIC_COUNTRY_CAPABILITIES[normalized.value.alpha3].legislation !==
+    "admitted"
+  ) {
     return { status: "country_unavailable" };
   }
   return await LAW_RESOLVERS[normalized.value.alpha3](input);

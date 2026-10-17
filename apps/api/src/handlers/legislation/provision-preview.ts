@@ -19,7 +19,7 @@ import {
   buildProvisionPreview,
   previewVersionColumns,
 } from "@/api/lib/legal-search/legislation-provision-preview";
-import { publishedLegislationDocument } from "@/api/lib/legal-search/legislation-redistribution";
+import { publishedLegislationDocumentFor } from "@/api/lib/legal-search/legislation-redistribution";
 import {
   readVersionBlocks,
   versionAstColumns,
@@ -88,7 +88,7 @@ export const readProvisionPreviewHandler = async ({
         .where(
           and(
             eq(legislationDocuments.id, documentId),
-            publishedLegislationDocument,
+            publishedLegislationDocumentFor("pages"),
           ),
         )
         .limit(1),
@@ -100,6 +100,7 @@ export const readProvisionPreviewHandler = async ({
 
   // Outside the transaction above: the AST lives in object storage.
   const blocks = await readVersionBlocks({
+    surface: "pages",
     row: version,
     legislationDb,
     step: PREVIEW_READ_STEP,

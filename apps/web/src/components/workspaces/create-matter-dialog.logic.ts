@@ -1,5 +1,3 @@
-import { compareByLocale } from "@stll/collation";
-
 type ExistingWorkspace = {
   client?: { id: string } | null;
   members: {
@@ -9,18 +7,6 @@ type ExistingWorkspace = {
   id: string;
   name: string;
   reference?: string | null;
-};
-
-type OrganizationMember = {
-  user: { name: string };
-  userId: string;
-};
-
-type CollaboratorStats = {
-  activityCount: number;
-  lastActivityMs: number;
-  sharedCount: number;
-  sharedLastActivityMs: number;
 };
 
 const MIN_DUPLICATE_TOKEN_LENGTH = 3;
@@ -34,13 +20,6 @@ const tokenizeMatterName = (value: string) =>
   normalizeMatterName(value)
     .split(/[^\p{L}\p{N}]+/u)
     .filter((token) => token.length >= MIN_DUPLICATE_TOKEN_LENGTH);
-
-const createEmptyCollaboratorStats = (): CollaboratorStats => ({
-  activityCount: 0,
-  lastActivityMs: 0,
-  sharedCount: 0,
-  sharedLastActivityMs: 0,
-});
 
 export const isPossibleDuplicateMatter = ({
   clientId,
@@ -132,94 +111,4 @@ export const getPossibleDuplicateMatters = ({
   }
 
   return result;
-};
-
-export const buildCollaboratorStats = ({
-  currentUserId,
-  workspaces,
-}: {
-  currentUserId: string;
-  workspaces: ExistingWorkspace[];
-}) => {
-  const collaboratorStats = new Map<string, CollaboratorStats>();
-
-  for (const workspace of workspaces) {
-    const contributorIds = new Set<string>();
-
-    for (const contributor of workspace.members) {
-      if (contributor.userId) {
-        contributorIds.add(contributor.userId);
-      }
-    }
-
-    const currentUserContributed = contributorIds.has(currentUserId);
-
-    for (const contributor of workspace.members) {
-      if (!contributor.userId || contributor.userId === currentUserId) {
-        continue;
-      }
-
-      const contributorLastActivityMs =
-        contributor.lastActivity !== null &&
-        contributor.lastActivity !== undefined
-          ? new Date(contributor.lastActivity).getTime()
-          : 0;
-      const existing =
-        collaboratorStats.get(contributor.userId) ??
-        createEmptyCollaboratorStats();
-
-      existing.activityCount += 1;
-      existing.lastActivityMs = Math.max(
-        existing.lastActivityMs,
-        contributorLastActivityMs,
-      );
-
-      if (currentUserContributed) {
-        existing.sharedCount += 1;
-        existing.sharedLastActivityMs = Math.max(
-          existing.sharedLastActivityMs,
-          contributorLastActivityMs,
-        );
-      }
-
-      collaboratorStats.set(contributor.userId, existing);
-    }
-  }
-
-  return collaboratorStats;
-};
-
-export const compareMembersByCollaboratorStats = ({
-  a,
-  b,
-  collaboratorStats,
-  locale,
-}: {
-  a: OrganizationMember;
-  b: OrganizationMember;
-  collaboratorStats: Map<string, CollaboratorStats>;
-  locale: string;
-}) => {
-  const aStats =
-    collaboratorStats.get(a.userId) ?? createEmptyCollaboratorStats();
-  const bStats =
-    collaboratorStats.get(b.userId) ?? createEmptyCollaboratorStats();
-
-  if (aStats.sharedCount !== bStats.sharedCount) {
-    return bStats.sharedCount - aStats.sharedCount;
-  }
-
-  if (aStats.sharedLastActivityMs !== bStats.sharedLastActivityMs) {
-    return bStats.sharedLastActivityMs - aStats.sharedLastActivityMs;
-  }
-
-  if (aStats.activityCount !== bStats.activityCount) {
-    return bStats.activityCount - aStats.activityCount;
-  }
-
-  if (aStats.lastActivityMs !== bStats.lastActivityMs) {
-    return bStats.lastActivityMs - aStats.lastActivityMs;
-  }
-
-  return compareByLocale(locale)(a.user.name, b.user.name);
 };

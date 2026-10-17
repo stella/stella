@@ -131,6 +131,7 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "legal_list_generation_candidate_sources.locator",
   "legal_list_item_sources.locator",
   "legal_list_verification_runs.evidence",
+  "legal_lists.sample_case",
   "legal_reader_answer_messages.citations",
   "legal_reader_answer_messages.usage",
   "legislation_documents.sections",
@@ -659,6 +660,27 @@ const census = {
 };
 
 describe("member removal schema coverage", () => {
+  test("chat repair receipts retain only organization-owned metadata on member removal", () => {
+    // Repair history belongs to the organization, contains no member data,
+    // and is erased by its organization FK rather than member offboarding.
+    const receipt = schemaCensus().find(
+      (table) => table.name === "chat_content_v3_backfill_receipts",
+    );
+    expect(receipt).toBeDefined();
+    expect(receipt?.memberForeignKeyColumns).toEqual([]);
+    expect(receipt?.columns.map((column) => column.name).toSorted()).toEqual([
+      "from_version",
+      "message_id",
+      "organization_id",
+      "outcome",
+      "reason",
+      "recorded_at",
+      "row_id",
+      "source",
+    ]);
+    expect(receipt?.columns.some((column) => column.json)).toBe(false);
+  });
+
   test("every column naming a member has a disposition on both removal paths", () => {
     expect(memberReferenceGaps({ ...census, tables: schemaCensus() })).toEqual(
       [],

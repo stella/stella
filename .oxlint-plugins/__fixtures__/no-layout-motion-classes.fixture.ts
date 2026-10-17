@@ -13,20 +13,36 @@ const viewportTemplate = `flex min-h-screen`;
 // oxlint-disable-next-line no-layout-motion-classes/no-layout-motion-classes -- x2: fixture proves class-composer arguments receive the same guard
 const composed = cn("transition-all", "min-h-screen");
 
+// oxlint-disable-next-line no-layout-motion-classes/no-layout-motion-classes -- fixture proves a vh length in an arbitrary value is rejected
+const largeViewportLength = "max-h-[calc(100vh-3rem)]";
+// oxlint-disable-next-line no-layout-motion-classes/no-layout-motion-classes -- fixture proves ease-in is rejected
+const easeIn = "transition-opacity ease-in";
+// oxlint-disable-next-line no-layout-motion-classes/no-layout-motion-classes -- fixture proves an entry from scale-0 is rejected
+const scaleFromZero = "data-starting-style:scale-0";
+// oxlint-disable-next-line no-layout-motion-classes/no-layout-motion-classes -- fixture proves a UI duration above 300ms is rejected
+const longDuration = "transition-opacity duration-500";
+
 const namedTransitions =
   // expect-clean: no-layout-motion-classes/no-layout-motion-classes
   "transition-opacity transition-transform transition-none";
 const dynamicViewport = "min-h-dvh h-dvh max-h-dvh w-dvw";
 const compositableAnimation = "animate-[pulse_700ms_ease-in-out_3]";
 const animationNamedAfterProperty = "animate-[height_200ms_ease-out]";
+const shortMotion =
+  "ease-out ease-in-out duration-300 data-starting-style:scale-95 max-h-[70dvh]";
 
 export {
   animationNamedAfterProperty,
   composed,
   compositableAnimation,
   dynamicViewport,
+  easeIn,
+  largeViewportLength,
+  longDuration,
   layoutTransition,
   namedTransitions,
+  scaleFromZero,
+  shortMotion,
   transitionAll,
   viewportTemplate,
   viewportUnits,

@@ -286,8 +286,7 @@ const validRow = (overrides: Row = {}): Row => ({
   userId: "user_1",
   userName: "Authorized user",
   workspaceId,
-  workspaceClientId: "client_1",
-  workspaceMemberId: null,
+  reachesMatter: true,
   workspaceStatus: "active",
   ...overrides,
 });
@@ -317,25 +316,9 @@ describe("authorizeFolioCollabRoom", () => {
     expect(await authorize(validRow({ organizationRole: null }))).toEqual({
       status: "workspace-access-revoked",
     });
-    expect(
-      await authorize(
-        validRow({ organizationRole: "member", workspaceMemberId: null }),
-      ),
-    ).toEqual({ status: "workspace-access-revoked" });
-  });
-
-  test("requires personal-matter membership even for organization admins", async () => {
-    expect(
-      await authorize(
-        validRow({ workspaceClientId: null, workspaceMemberId: null }),
-      ),
-    ).toEqual({ status: "workspace-access-revoked" });
-
-    expect(
-      await authorize(
-        validRow({ workspaceClientId: null, workspaceMemberId: "wm_1" }),
-      ),
-    ).toMatchObject({ status: "authorized" });
+    expect(await authorize(validRow({ reachesMatter: false }))).toEqual({
+      status: "workspace-access-revoked",
+    });
   });
 
   test("rejects credentials minted for an abandoned seed generation", async () => {
@@ -345,9 +328,7 @@ describe("authorizeFolioCollabRoom", () => {
   });
 
   test("downgrades edit permission on the next authorization", async () => {
-    const result = await authorize(
-      validRow({ organizationRole: "intern", workspaceMemberId: "wm_1" }),
-    );
+    const result = await authorize(validRow({ organizationRole: "intern" }));
 
     expect(result.status).toBe("authorized");
     if (result.status === "authorized") {
@@ -365,8 +346,7 @@ describe("authorizeFolioCollabRoom", () => {
         organizationRole: "owner",
         tokenCanEdit: false,
         tokenGeneration: 3,
-        workspaceClientId: "client_1",
-        workspaceMemberId: null,
+        reachesMatter: true,
         workspaceStatus: "active",
       }),
     ).toEqual({ status: "authorized", canEdit: false });

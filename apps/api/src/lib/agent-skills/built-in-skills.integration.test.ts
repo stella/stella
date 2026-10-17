@@ -7,6 +7,7 @@ import { listSkillMetadata, loadSkill } from "@stll/skills";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { agentSkills } from "@/api/db/schema";
+import { offerSkillsToModel } from "@/api/lib/agent-skills/invocation";
 import { resolveRequestedSkills } from "@/api/lib/agent-skills/requested-skills";
 import {
   listAvailableChatSkillMetadata,
@@ -102,7 +103,10 @@ describe("shipped built-in skills in chat", () => {
       const requested = unwrap(
         await resolveRequestedSkills({
           ...context,
-          catalog: unwrap(await listAvailableChatSkillMetadata(context)),
+          catalog: offerSkillsToModel({
+            invokedSkillNames: new Set([name]),
+            skills: unwrap(await listAvailableChatSkillMetadata(context)),
+          }),
           messageText: `Use [${name}](#stella-skill-ref=${name}).`,
           recordAuditEvent,
         }),

@@ -72,3 +72,34 @@ export const openOnlineIndexObserver = async (
     lockTimeoutMs: config.health.readTimeoutMs,
   });
 };
+
+/**
+ * One dedicated session for an operator-run online repair, outside the
+ * migrator. It carries no session budgets: each repair batch installs its own
+ * LOCAL budgets, and the online-migration lock must wait for a deploy's repair
+ * rather than time out.
+ */
+export const openOnlineRepairConnection = async (
+  url: string,
+): Promise<OnlineMigrationConnection> => {
+  const client = new SQL({ url, max: 1 });
+  const reservation = await Result.tryPromise(
+    async () => await client.reserve(),
+  );
+  if (reservation.isErr()) {
+    await client.close();
+    throw reservation.error;
+  }
+  const reserved = reservation.value;
+  return {
+    execute: async (query, params = []) => {
+      await reserved.unsafe(query, [...params]);
+    },
+    query: async (query, params = []) =>
+      await reserved.unsafe<unknown[]>(query, [...params]),
+    release: async () => {
+      reserved.release();
+      await client.close();
+    },
+  };
+};
