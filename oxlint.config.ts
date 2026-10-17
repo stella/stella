@@ -8,6 +8,7 @@ import {
 } from "@stll/oxlint-config";
 
 import concurrencyExceptions from "./.oxlint-plugins/no-hand-rolled-concurrency-exceptions.json" with { type: "json" };
+import { PUBLIC_LAW_MIXED_MODULES } from "./.oxlint-plugins/public-law-decision-surface-modules.ts";
 import auditMutationLedger from "./.oxlint-plugins/require-audit-on-mutation-ledger.json" with { type: "json" };
 import { factoriesWhere } from "./apps/api/src/lib/safe-handler-factories.ts";
 import { SYSTEM_AUDIT_MODULES } from "./apps/api/src/lib/system-audit/modules.ts";
@@ -5520,16 +5521,19 @@ const config = defineConfig({
       excludeFiles: [
         "apps/api/src/**/*.test.{ts,tsx}",
         "apps/api/src/tests/**",
-        "apps/api/src/handlers/case-law/matter-links/list.ts",
-        "apps/api/src/handlers/case-law/research/answers-run.ts",
-        "apps/api/src/handlers/case-law/research/columns-suggest-prompt.ts",
-        "apps/api/src/handlers/chat/chat-prompt.ts",
-        "apps/api/src/lib/case-law/research-answer-runner.ts",
-        "apps/api/src/lib/legal-search/corpus-tombstones.ts",
-        "apps/api/src/mcp/stella-tools.ts",
+        ...PUBLIC_LAW_MIXED_MODULES,
       ],
       rules: {
         "public-case-law-db-boundary/public-case-law-db-boundary": "error",
+      },
+    },
+    {
+      files: [...PUBLIC_LAW_MIXED_MODULES],
+      rules: {
+        "public-case-law-db-boundary/public-case-law-db-boundary": [
+          "error",
+          { scope: "decision-surface" },
+        ],
       },
     },
     {

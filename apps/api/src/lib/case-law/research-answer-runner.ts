@@ -11,9 +11,10 @@ import { Temporal } from "@stll/time";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import {
-  caseLawDecisions,
+  publishedCaseLawDecisions,
   caseLawResearchAnswers,
   caseLawResearchColumns,
+  caseLawSources,
 } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { resolveCaching } from "@/api/lib/ai-config";
@@ -623,24 +624,28 @@ const readResearchDecision = async (
   tx: CaseLawPublicReadTransaction,
   decisionId: SafeId<"caseLawDecision">,
 ): Promise<ResearchDecisionRow | null> => {
-  const row = await tx.query.caseLawDecisions.findFirst({
-    where: { id: { eq: decisionId } },
-    columns: {
-      id: true,
-      caseNumber: true,
-      court: true,
-      country: true,
-      language: true,
-      decisionType: true,
-      documentAst: true,
-      astS3Key: true,
-      textS3Key: true,
-      contentHash: true,
-      fulltext: true,
-    },
-    // `descriptor` decides redistribution and derived-AI use; never returned.
-    with: { source: { columns: { descriptor: true } } },
-  });
+  const [row] = await tx
+    .select({
+      id: publishedCaseLawDecisions.id,
+      caseNumber: publishedCaseLawDecisions.caseNumber,
+      court: publishedCaseLawDecisions.court,
+      country: publishedCaseLawDecisions.country,
+      language: publishedCaseLawDecisions.language,
+      decisionType: publishedCaseLawDecisions.decisionType,
+      documentAst: publishedCaseLawDecisions.documentAst,
+      astS3Key: publishedCaseLawDecisions.astS3Key,
+      textS3Key: publishedCaseLawDecisions.textS3Key,
+      contentHash: publishedCaseLawDecisions.contentHash,
+      fulltext: publishedCaseLawDecisions.fulltext,
+      source: { descriptor: caseLawSources.descriptor },
+    })
+    .from(publishedCaseLawDecisions)
+    .leftJoin(
+      caseLawSources,
+      eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
+    )
+    .where(eq(publishedCaseLawDecisions.id, decisionId))
+    .limit(1);
   return row ?? null;
 };
 
@@ -782,10 +787,10 @@ const readCurrentResearchRevisionTx = async (
     .select({
       appliedRevision: caseLawCorpusAppliedRevision(generation),
     })
-    .from(caseLawDecisions)
+    .from(publishedCaseLawDecisions)
     .where(
       and(
-        eq(caseLawDecisions.id, decisionId),
+        eq(publishedCaseLawDecisions.id, decisionId),
         currentCaseLawCorpusProjection(generation),
       ),
     )
