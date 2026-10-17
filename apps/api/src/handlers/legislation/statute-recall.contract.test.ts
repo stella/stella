@@ -7,7 +7,7 @@ import Elysia from "elysia";
 import * as v from "valibot";
 
 import { normalizeEli } from "@stll/agent-input";
-import { readStatuteQueryReferences } from "@stll/api-contract/statute-query-intent";
+import { readStatuteQueryReferences } from "@stll/api-contract/statute-query-references";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
 import { normalizeUnicode } from "@stll/text-normalize";
 

@@ -118,6 +118,7 @@
     "./statute-aliases": "./src/statute-aliases.ts",
     "./statute-query-capability": "./src/statute-query-capability.ts",
     "./statute-query-intent": "./src/statute-query-intent.ts",
+    "./statute-query-references": "./src/statute-query-references.ts",
     "./desktop-presence": "./src/desktop-presence.ts",
     "./mcp-app-messages": "./src/mcp-app-messages.json",
     "./mcp-app.fixtures": "./src/mcp-app.fixtures.ts",
@@ -134,6 +135,7 @@
     "format": "bun ../../scripts/run-oxfmt.ts ."
   },
   "dependencies": {
+    "@stll/aho-corasick": "catalog:",
     "@stll/anonymize-chat": "workspace:*",
     "@stll/legal-ast": "workspace:*",
     "@stll/template-conditions": "workspace:*",

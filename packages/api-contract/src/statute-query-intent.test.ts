@@ -6,11 +6,8 @@ import { normalizeUnicode } from "@stll/text-normalize";
 
 import { STATUTE_ALIASES } from "./statute-aliases";
 import type { StatuteQueryCountry } from "./statute-query-capability";
-import {
-  foldStatuteQuery,
-  parseStatuteQuery,
-  readStatuteQueryReferences,
-} from "./statute-query-intent";
+import { foldStatuteQuery, parseStatuteQuery } from "./statute-query-intent";
+import { readStatuteQueryReferences } from "./statute-query-references";
 
 const countries = Object.keys(STATUTE_ALIASES).filter(
   (country): country is StatuteQueryCountry =>
@@ -335,6 +332,25 @@ describe("reading act references inside a full-text query", () => {
     expect(readStatuteQueryReferences("svk", "výklad ZOK ve sporu")).toEqual(
       [],
     );
+  });
+
+  test("embedded aliases keep ASCII case and Unicode word boundaries", () => {
+    expect(readStatuteQueryReferences("cze", "text (OZ), then _ZP_")).toEqual([
+      { country: "cze", ...STATUTE_ALIASES.cze.oz },
+      { country: "cze", ...STATUTE_ALIASES.cze.zp },
+    ]);
+    expect(readStatuteQueryReferences("cze", "text oz in prose")).toEqual([]);
+    expect(readStatuteQueryReferences("cze", "éOZé in prose")).toEqual([]);
+  });
+
+  test("combined accented aliases preserve mention order around punctuation", () => {
+    expect(
+      readStatuteQueryReferences("cze", "výklad OSŘ; potom SŘS a OZ"),
+    ).toEqual([
+      { country: "cze", ...STATUTE_ALIASES.cze.osr },
+      { country: "cze", ...STATUTE_ALIASES.cze.srs },
+      { country: "cze", ...STATUTE_ALIASES.cze.oz },
+    ]);
   });
 
   test("embedded numeric references need an act marker and exclude dockets", () => {
