@@ -18,9 +18,8 @@ const [mode, resultPath] = process.argv.slice(2);
 if (mode === "prompts") {
   const tool = createShowVisualTools({
     origin: createVisualResourceOrigin(),
-    store: async () => panic("The selection harness does not publish views"),
-    preview: async () =>
-      panic("The selection harness does not request previews"),
+    store: () => panic("The selection harness does not publish views"),
+    preview: () => panic("The selection harness does not request previews"),
   })[VISUAL_PREVIEW_TOOL_NAME];
   for (const scenario of generatedViewsCases) {
     console.log(
