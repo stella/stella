@@ -120,6 +120,33 @@ describe("desktop account request proofs", () => {
     );
   });
 
+  test("rejects non-canonical base64url", async () => {
+    const { sign, verify } = await fixture();
+    const compact = await sign(claims());
+    const alphabet =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    const segments = compact.split(".");
+    // A segment whose length is not a multiple of four ends in a character
+    // with unused low bits; flipping one keeps the decoded bytes identical.
+    const variants = segments.flatMap((segment, index) => {
+      if (segment.length % 4 === 0) {
+        return [];
+      }
+      const last = alphabet.indexOf(segment.at(-1) ?? panic("Empty segment"));
+      const flipped = last % 2 === 0 ? last + 1 : last - 1;
+      const sibling = `${segment.slice(0, -1)}${alphabet[flipped]}`;
+      expect(Buffer.from(sibling, "base64url")).toEqual(
+        Buffer.from(segment, "base64url"),
+      );
+      return [segments.with(index, sibling).join(".")];
+    });
+    expect(variants.length).toBeGreaterThan(0);
+    for (const variant of [...variants, `${compact}AAA`]) {
+      expectRefusal(await verify(variant));
+    }
+    expect((await verify(compact)).isOk()).toBe(true);
+  });
+
   test("a missing request proof is refused", async () => {
     const { thumbprint } = await fixture();
     expectRefusal(
