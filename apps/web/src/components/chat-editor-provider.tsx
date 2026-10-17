@@ -252,7 +252,8 @@ export type ChatEditorController = {
   /**
    * Read-only TipTap handle. TipTap nulls `commandManager` on destroy, so
    * any `editor.commands.*` access after teardown throws. Always narrow
-   * with `editor.isDestroyed`, or prefer the controller's mutation
+   * with `getLiveEditor(editor)` at the point of use, or prefer the
+   * controller's mutation
    * helpers (`blur`, `setEditable`, `setContent`, ...) which already
    * guard against the destroyed state.
    */
