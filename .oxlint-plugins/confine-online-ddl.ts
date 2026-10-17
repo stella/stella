@@ -59,7 +59,7 @@ const LOCK_TAKING_SQL = [
   /\block\s+table\b/iu,
   /\bvalidate\s+constraint\b/iu,
   /^\s*(?:ANALYZE|VACUUM|CLUSTER)\b/u,
-  /^\s*(?:analyze|vacuum|cluster)(?: verbose)?(?:$|;| (?:public\.|"|[a-z_]\w*(?:$|;|\()))/iu,
+  /^\s*(?:analyze|vacuum|cluster)(?: +verbose)?(?:$|;| +(?:public\.|"|\?|[a-z_]\w*(?:$|;|\()))/iu,
 ];
 
 const SQL_COMMENT = /--[^\n]*|\/\*[\S\s]*?\*\//gu;
@@ -195,11 +195,16 @@ export default eslintCompatPlugin({
             }
           },
           Property(node) {
-            if (
-              node.parent.type === "ObjectPattern" &&
-              propertyKeyName(node) === DECLARED_BUILD
-            ) {
+            if (node.parent.type !== "ObjectPattern") {
+              return;
+            }
+            const key = propertyKeyName(node);
+            if (key === DECLARED_BUILD) {
               context.report({ node, messageId: "declaredBuildRead" });
+            }
+            // `const { createOnlineIndexGate } = gate` or `= await import(...)`.
+            if (key !== null && GATE_OPENERS.has(key)) {
+              context.report({ node, messageId: "gateOpener" });
             }
           },
           ImportSpecifier(node) {

@@ -84,11 +84,17 @@ const run = async (): Promise<void> => {
             reserveObserver: async () => await openOnlineIndexObserver(url),
           }),
         );
-        process.stdout.write(
-          outcome.type === "complete"
-            ? "Chat content v3 backfill complete\n"
-            : `Chat content v3 backfill deferred at ${outcome.step}; rerun after ${String(outcome.retryAfterMs)} ms\n`,
-        );
+        if (outcome.type === "complete") {
+          process.stdout.write("Chat content v3 backfill complete\n");
+        } else {
+          // The constraints stay NOT VALID until a rerun completes, so an
+          // operator job must not read the deferral as success. 75 is the
+          // conventional "temporary failure, retry later" exit code.
+          process.stderr.write(
+            `Chat content v3 backfill deferred at ${outcome.step}; rerun after ${String(outcome.retryAfterMs)} ms\n`,
+          );
+          process.exitCode = 75;
+        }
       } finally {
         if (sessionIsActive()) {
           await releaseOnlineMigrationLock(connection);

@@ -66,11 +66,12 @@ describe(RULE, () => {
           'await connection.execute("analyze public.t");',
           'await connection.execute("vacuum verbose \\"t\\"");',
           "await connection.execute(`DROP\\nINDEX CONCURRENTLY public.x`);",
+          `await connection.execute(\`analyze ${slot("table")}\`);`,
           'const reason = "reindex artifacts are dropped first";',
           'const reason2 = "analyze the table before the cutover";',
         ].join("\n"),
       ),
-    ).toEqual([1, 2, 3, 4]);
+    ).toEqual([1, 2, 3, 4, 5]);
   });
 
   test("an index declaration's createSql is exempt, and reading it is the violation", async () => {
@@ -112,9 +113,11 @@ describe(RULE, () => {
           'import * as gate from "./online-index-gate";',
           "const runtime = gate.createOnlineIndexGate(options);",
           'const ungated = gate["createUngatedTableGateForTests"];',
+          "const { createOnlineIndexGate: open } = gate;",
+          'const { createUngatedTableGateForTests } = await import("./online-ddl");',
         ].join("\n"),
       ),
-    ).toEqual([2, 3]);
+    ).toEqual([2, 3, 4, 5]);
   });
 
   test("the owner, tests, fixtures and the schema phase are out of scope", async () => {
