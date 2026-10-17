@@ -29,7 +29,11 @@
   "type": "module",
   "sideEffects": false,
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./country": "./src/country.ts",
+    "./date-value": "./src/date-value.ts",
+    "./locale": "./src/locale.ts",
+    "./string-list": "./src/string-list.ts"
   },
   "publishConfig": {
     "access": "public"
@@ -48,6 +52,7 @@
   },
   "dependencies": {
     "@stll/country-codes": "workspace:^",
+    "@stll/fuzzy-search": "catalog:",
     "@stll/template-conditions": "workspace:^",
     "@stll/text-normalize": "workspace:^",
     "@stll/time": "workspace:^",
