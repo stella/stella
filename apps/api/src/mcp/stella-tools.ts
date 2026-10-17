@@ -37,7 +37,10 @@ import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import { provisionCitationProfileFor } from "@stll/legal-atlas/provision-citation-profiles";
 import { resolveProvisionCitation } from "@stll/legal-atlas/provision-citation-resolve";
-import { CASE_LAW_RESULTS_RESOURCE_URI } from "@stll/mcp-apps/resource-uri";
+import {
+  CASE_LAW_RESULTS_RESOURCE_URI,
+  CITATION_GRAPH_RESOURCE_URI,
+} from "@stll/mcp-apps/resource-uri";
 import { Temporal } from "@stll/time";
 
 import { workspaces } from "@/api/db/schema";
@@ -230,6 +233,7 @@ import {
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 import { boundCaseLawSearchHeadnotes } from "./case-law-search-headnotes";
+import { searchNotesForCall } from "./search-notes";
 
 const defaultReadWorkspaceHandler: typeof readWorkspaceHandler = async (
   input,
@@ -1224,6 +1228,12 @@ export const STELLA_TOOL_DEFINITIONS = [
     // Backed by the public case-law corpus (caseLawPublicReadDb), the same
     // surface the public routes gate behind the same feature flag.
     feature: "FEATURE_PUBLIC_LAW",
+    _meta: {
+      ui: {
+        resourceUri: CITATION_GRAPH_RESOURCE_URI,
+        visibility: ["model", "app"],
+      },
+    },
     name: "read_case_law_citations",
     scope: "stella:read",
   }),
@@ -2568,14 +2578,17 @@ const listSearchCaseLawProvision = async ({
   const payload = boundCaseLawSearchHeadnotes({
     headnotes: "included",
     facets: page.facets,
-    searches: [
-      {
-        query: provisionText,
-        queryUsed: page.queryUsed,
-        paginationOutcome: page.paginationOutcome,
-        warnings: [...filterWarnings, ...page.warnings],
-      },
-    ],
+    searches: searchNotesForCall(
+      [
+        {
+          query: provisionText,
+          queryUsed: page.queryUsed,
+          paginationOutcome: page.paginationOutcome,
+          warnings: [...filterWarnings, ...page.warnings],
+        },
+      ],
+      [],
+    ),
     nextCursor: page.nextCursor,
     paginationOutcome: page.paginationOutcome,
     results: merged.map(caseLawSearchResult),
@@ -2584,6 +2597,8 @@ const listSearchCaseLawProvision = async ({
   });
   return toolDataResult(projectionPayload(SEARCH_CASE_LAW_PROJECTION, payload));
 };
+
+const SEARCH_ADMISSION = { domain: "caseLaw", surface: "search" } as const;
 
 const handleSearchCaseLawTool: TypedMcpToolHandler<
   v.InferInput<typeof SEARCH_CASE_LAW_PROJECTION>
@@ -2606,7 +2621,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
     queries,
   } = parsed.output;
   const limit = normalizePage(parsed.output.limit ?? DEFAULT_SEARCH_LIMIT);
-  const unavailable = publicCountryUnavailable(country, "search");
+  const unavailable = publicCountryUnavailable(country, SEARCH_ADMISSION);
   if (unavailable !== null) {
     return toolDataResult(unavailable);
   }
@@ -2750,12 +2765,11 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
   const single =
     queries.length === 1 && !first.exhausted ? first.page : undefined;
   const mergedCursor = mergedCaseLawSearchCursor(pages);
-
   // One entry per query, in input order. Required words and warnings belong
   // to each phrasing independently of the first phrasing's facets.
-  const guidance = mcpCaseLawSearchGuidance(context);
   const searches = requests.map(
     ({ interpretation, query, subCursor }, index) => {
+      const warnings = index === 0 ? filterWarnings : [];
       const outcome = pages.at(index);
       if (outcome === undefined || outcome.exhausted) {
         // Exhausted phrasings echo the prior interpretation without new warnings.
@@ -2763,7 +2777,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
           query,
           queryUsed: interpretation.queryUsed,
           paginationOutcome: SEARCH_PAGINATION_COMPLETE,
-          warnings: [...filterWarnings, ...provisionRead.warnings],
+          warnings: warnings.concat(provisionRead.warnings),
         };
       }
       const values = facetValuesForFilters({
@@ -2781,13 +2795,13 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
         queryUsed: outcome.page.queryUsed,
         paginationOutcome: outcome.page.paginationOutcome,
         warnings: [
-          ...filterWarnings,
+          ...warnings,
           ...provisionRead.warnings,
           ...outcome.page.warnings.map((warning) =>
             withFacetValues(warning, values),
           ),
           ...manyRequiredTermsWarnings({
-            guidance,
+            guidance: mcpCaseLawSearchGuidance(context),
             subCursor,
             page: outcome.page,
             slots: perQueryLimit,
@@ -2800,7 +2814,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
   const payload = boundCaseLawSearchHeadnotes({
     headnotes: "included",
     facets: first.exhausted ? null : first.page.facets,
-    searches,
+    searches: searchNotesForCall(searches, requests),
     nextCursor: single === undefined ? mergedCursor : single.nextCursor,
     paginationOutcome: pages.some(
       (outcome) =>

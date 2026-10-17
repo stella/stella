@@ -48,7 +48,6 @@ const cleanupSignalTable = async ({
   let cursor: string | undefined;
   let count = 0;
   for (;;) {
-    // db-await-in-loop: discover bounded pages after serial row-scoped deletions.
     const page = await readCursorPage(
       tx
         .select({
@@ -76,11 +75,11 @@ const cleanupSignalTable = async ({
         row.signalId === null
           ? undefined
           : eq(signalEvents.signalId, row.signalId);
-      // db-await-in-loop: signal events pin their parent before the event source.
       const parentProof =
         row.signalId === null
           ? undefined
-          : await proveOrgScope(tx, {
+          : // db-await-in-loop: signal events pin their parent before the event source.
+            await proveOrgScope(tx, {
               table: "signals",
               where: sql`${and(
                 eq(signals.id, row.signalId),

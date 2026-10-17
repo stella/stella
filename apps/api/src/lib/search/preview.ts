@@ -437,7 +437,7 @@ export const buildSearchPreviewQuery = ({
           useUnaccent: sql`coalesce(clfc.use_unaccent, true)`,
         })}
         FROM case_law_search_documents clsd
-        JOIN case_law_decisions d ON d.id = clsd.decision_id
+        JOIN case_law_published_decisions d ON d.id = clsd.decision_id
         LEFT JOIN case_law_fts_configs clfc ON clfc.language = clsd.language
         ${publicCaseLawDecisionJoin}
         ${previewPassageJoin({

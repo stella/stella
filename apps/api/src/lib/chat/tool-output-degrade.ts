@@ -4,6 +4,7 @@ import * as v from "valibot";
 import { declareFailureClass } from "@stll/errors";
 
 import { captureError } from "@/api/lib/analytics/capture";
+import { maskUuids } from "@/api/lib/chat/uuid-mask";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -247,7 +248,8 @@ export const parseStrippingUndeclaredKeys = <TSchema extends v.GenericSchema>(
 
 /**
  * A tool result reached its caller degraded: undeclared fields were stripped,
- * or (chat) a leaf carrying an unmappable internal id was dropped. The call
+ * or (chat) an unmappable internal id was masked in a data string or its
+ * ref leaf dropped. The call
  * succeeded, so nothing else would surface the handler/contract drift; it is
  * a defect and reported at error level.
  */
@@ -287,7 +289,9 @@ export const reportToolOutputDegrade = ({
   source: ToolOutputDegradeSource;
   toolName: string;
 }): void => {
-  const joinedPaths = paths.join(", ");
+  // Paths can carry dynamic keys (undeclared fields, JSON object keys);
+  // telemetry never receives a raw id.
+  const joinedPaths = maskUuids(paths.join(", "));
   logger.error(TOOL_OUTPUT_CONTRACT_DEGRADED_EVENT, {
     defect,
     paths: joinedPaths,

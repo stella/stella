@@ -26,9 +26,9 @@ import { oauthConsent } from "@/api/db/auth-schema";
 import { bytea } from "@/api/db/columns";
 import { matterInboundAddresses, searchHistoryEntries } from "@/api/db/schema";
 import { ACCOUNT_DELETION_MANUAL_TABLES } from "@/api/lib/account-deletion-steps";
-import { aggregateExecutionRows } from "@/api/lib/db/aggregate-lock-order.fixture";
 import { removeOrganizationMemberInTransaction } from "@/api/lib/member-offboarding/member-assignment-offboarding";
 import { ORGANIZATION_MEMBER_CLEANUP_COLUMNS } from "@/api/lib/member-offboarding/member-assignment-offboarding-census";
+import { aggregateExecutionRows } from "@/api/tests/fixtures/aggregate-lock-order";
 import {
   mintAuthProviderId,
   mintAuthProviderIdValue,

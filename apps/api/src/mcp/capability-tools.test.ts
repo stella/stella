@@ -392,6 +392,10 @@ describe("list verification access grants across MCP tools", () => {
         status: "verified",
       },
     },
+    "lists.sample-case.create": {
+      params,
+      body: { filePropertyName: "Documents" },
+    },
   } as const;
 
   let previousGrants = env.API_FEATURE_ACCESS_GRANTS;
@@ -524,6 +528,11 @@ describe("list verification access grants across MCP tools", () => {
           limit: () => query,
         });
       },
+      // Row locks (the sample loader's matter lock) read no rows here.
+      execute: async () => {
+        resourceLookups += 1;
+        return [];
+      },
       insert: () => ({ values: async () => [] }),
       update: () => {
         mutations += 1;
@@ -543,6 +552,14 @@ describe("list verification access grants across MCP tools", () => {
       scopedDb: database.scopedDb,
       safeDb: database.safeDb,
       workspaceIds: [matterId],
+      // The sample loader stores a document, so it needs the documents scope.
+      grantedScopes: [
+        "stella:read",
+        "stella:billing_write",
+        "stella:knowledge_write",
+        "stella:matters_write",
+        "stella:documents_write",
+      ],
     });
     context.organizationId = toSafeId<"organization">(organizationId);
     context.userId = toSafeId<"user">(userId);
@@ -577,6 +594,40 @@ describe("list verification access grants across MCP tools", () => {
       .filter(requiresVerificationGrant)
       .map(({ id }) => id);
     expect(Object.keys(inputs).toSorted()).toEqual(declared.toSorted());
+  });
+
+  test("every list mutation retains matter consent alongside other write consents", () => {
+    const mutations = capabilityCatalog.filter(
+      ({ id, access }) => id.startsWith("lists.") && access === "write",
+    );
+    expect(mutations.length).toBeGreaterThan(0);
+    for (const entry of mutations) {
+      expect(
+        [entry.scope, ...(entry.additionalScopes ?? [])],
+        entry.id,
+      ).toContain("stella:matters_write");
+    }
+  });
+
+  test("document consent alone refuses sample loading before mutation", async () => {
+    grantCurrentMember();
+    const fixture = verificationContext();
+    fixture.context.grantedScopes = ["stella:documents_write"];
+    const result = await handleMcpToolCall({
+      mode: "advanced",
+      toolName: "write_capability",
+      context: fixture.context,
+      args: {
+        capability: "lists.sample-case.create",
+        input: inputs["lists.sample-case.create"],
+      },
+    });
+    expect(errorEnvelope(result)).toMatchObject({
+      code: "missing_scope",
+      message: expect.stringContaining("stella:matters_write"),
+    });
+    expect(fixture.mutations()).toBe(0);
+    expect(fixture.resourceLookups()).toBe(0);
   });
 
   test("empty grants omit dedicated verification capabilities from discovery", async () => {

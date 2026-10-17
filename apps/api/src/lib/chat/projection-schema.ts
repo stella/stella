@@ -12,6 +12,7 @@ import {
   parseStrippingUndeclaredKeys,
   reportToolOutputDegrade,
 } from "@/api/lib/chat/tool-output-degrade";
+import { containsUuid, maskUuids } from "@/api/lib/chat/uuid-mask";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import {
   brandPersistedContactId,
@@ -29,6 +30,7 @@ import {
 import type { ChatProjectionSchema } from "./projection-fields";
 
 export {
+  contentText,
   passthroughId,
   publicUrl,
   projectionBranch,
@@ -164,6 +166,7 @@ const annotationSchema = v.variant("role", [
   }),
   v.strictObject({ role: v.literal("passthroughId") }),
   v.strictObject({ role: v.literal("publicUrl") }),
+  v.strictObject({ role: v.literal("contentText") }),
   v.strictObject({ role: v.literal("strip") }),
   v.strictObject({ role: v.literal("json") }),
 ]);
@@ -468,7 +471,8 @@ const buildMediationLists = (
         stripPaths.add(path);
         return;
       }
-      case "json": {
+      case "json":
+      case "contentText": {
         return;
       }
       default: {
@@ -533,7 +537,8 @@ const issueRefPath = (issue: v.BaseIssue<unknown>): string => {
     }
     segments.push(String(item.key));
   }
-  return segments.length > 0 ? segments.join(".") : "(root)";
+  // A dynamic key can be an id; failure telemetry carries the path masked.
+  return segments.length > 0 ? maskUuids(segments.join(".")) : "(root)";
 };
 
 /**
@@ -594,21 +599,8 @@ const strictParseProjection = ({
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
-const UUID_ANYWHERE_REGEX =
-  /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/iu;
-
 const isUuidString = (value: unknown): value is string =>
   typeof value === "string" && UUID_REGEX.test(value);
-
-/**
- * A verbatim-UUID guard for the "no tenant UUID reaches the model" invariant.
- * A projected payload must serialize without any raw UUID: every tenant id is
- * a ref and every `passthroughId` handle is documented as either
- * non-UUID-formatted (opaque cursors) or an out-of-band handle. Tests assert
- * this holds.
- */
-export const containsRawUuid = (value: unknown): boolean =>
-  UUID_ANYWHERE_REGEX.test(JSON.stringify(value));
 
 /**
  * What input dehydration resolved, carried into the output walk so entity
@@ -633,27 +625,10 @@ export type DehydratedInput = {
 };
 
 /**
- * Surfaced to the model when a projected payload still carries a raw uuid at
- * a position the schema does not license and the offending leaf cannot be
- * dropped (only the root itself; any nested leaf is dropped and reported
- * instead, so the model sees less but never the raw id). Deliberately does not say
- * "anonymization": the anonymization feature (the anonymized MCP surface) is
- * a different mechanism and is not involved — chat egress runs in default
- * mode. This is the chat ref projection's own fail-closed invariant, it fires
- * regardless of any anonymization setting, and the model can do nothing about
- * it, so the message says both.
- */
-const REF_PROJECTION_FAILURE_MESSAGE =
-  "The tool result contained an internal identifier the chat projection " +
-  "could not map to a reference. This is a server-side defect, not a " +
-  "problem with your input; do not retry this call.";
-
-/**
  * Surfaced to the model when a converted tool's payload fails its projection
  * schema's strict parse: a declared field is missing or changed shape. (A
- * field nobody classified alone is stripped and reported, not refused.) Same
- * fail-closed semantics as `REF_PROJECTION_FAILURE_MESSAGE`; the parse fires
- * before any field can be forwarded.
+ * field nobody classified alone is stripped and reported, not refused.) The
+ * parse fires before any field can be forwarded.
  */
 export const PROJECTION_SCHEMA_FAILURE_MESSAGE =
   "The tool result did not match the shape the chat projection declares " +
@@ -679,25 +654,26 @@ type ProjectWalkContext = {
   /**
    * Offending paths of the terminal UUID invariant, recorded during the walk:
    * a UUID-bearing string at any position not licensed by a `passthroughId`
-   * annotation (an ordinary declared field, an unenumerated subtree, a ref
-   * leaf hydration could not rewrite). Each offending leaf is dropped from
-   * the projection (`OMITTED`). Paths only, never values.
+   * or `contentText` annotation. A data string (an ordinary declared field,
+   * an unenumerated subtree) is masked in place; a ref leaf hydration could
+   * not rewrite is dropped (`OMITTED`), because masking a handle would
+   * fabricate one. Paths only, never values.
    */
   uuidViolations: string[];
 };
 
 /**
  * Record a violation if a string leaf carries a UUID anywhere in it, and say
- * whether it did so the caller drops the leaf. A substring match (not just a
- * bare-UUID exact match) so a UUID embedded inside a longer string (a url,
- * free text) is still caught.
+ * whether it did so the caller drops the handle leaf. A substring match (not
+ * just a bare-UUID exact match) so a UUID embedded inside a longer string (a
+ * url, free text) is still caught.
  */
 const recordUuidLeaf = (
   ctx: ProjectWalkContext,
   value: unknown,
   segments: readonly string[],
 ): boolean => {
-  if (typeof value === "string" && UUID_ANYWHERE_REGEX.test(value)) {
+  if (typeof value === "string" && containsUuid(value)) {
     ctx.uuidViolations.push(segments.join("."));
     return true;
   }
@@ -705,11 +681,49 @@ const recordUuidLeaf = (
 };
 
 /**
- * Forward an `unenumeratedJson` subtree: every string inside stays subject to
- * the UUID invariant, unlicensed, and an offending string is dropped (its key
- * from an object, the item from an array). Paths use the same `a.b` / `a[].b`
- * grammar as the rest of the walk (arrays collapsed to a `[]` suffix on their
- * key).
+ * Forward a data string leaf: each UUID inside it is masked and the rest of
+ * the text kept, so an unclassified id costs the model the id, never the
+ * surrounding data. The path is still reported: an id in an unannotated
+ * field is a projection defect (it should be a ref or `contentText`).
+ */
+const maskUuidLeaf = (
+  ctx: ProjectWalkContext,
+  value: unknown,
+  segments: readonly string[],
+): unknown =>
+  recordUuidLeaf(ctx, value, segments) && typeof value === "string"
+    ? maskUuids(value)
+    : value;
+
+/**
+ * Mask the UUIDs in an object's keys. Id-free keys are reserved first, so a
+ * masked key that would collide with any other key gets a numbered variant
+ * (`[id]`, `[id] (2)`) and no entry overwrites another.
+ */
+const maskUuidKeys = (keys: readonly string[]): Map<string, string> => {
+  const taken = new Set(keys.filter((key) => !containsUuid(key)));
+  const projected = new Map<string, string>();
+  for (const key of keys) {
+    if (!containsUuid(key)) {
+      projected.set(key, key);
+      continue;
+    }
+    const masked = maskUuids(key);
+    let candidate = masked;
+    for (let suffix = 2; taken.has(candidate); suffix += 1) {
+      candidate = `${masked} (${suffix})`;
+    }
+    taken.add(candidate);
+    projected.set(key, candidate);
+  }
+  return projected;
+};
+
+/**
+ * Forward an `unenumeratedJson` subtree: every string inside, keys included,
+ * stays subject to the UUID invariant, unlicensed, and each id is masked in
+ * place. Paths use the masked keys and the same `a.b` / `a[].b` grammar as
+ * the rest of the walk (arrays collapsed to a `[]` suffix on their key).
  */
 const scrubUnenumerated = (
   ctx: ProjectWalkContext,
@@ -717,25 +731,31 @@ const scrubUnenumerated = (
   segments: readonly string[],
 ): unknown => {
   if (typeof node === "string") {
-    return recordUuidLeaf(ctx, node, segments) ? OMITTED : node;
+    return maskUuidLeaf(ctx, node, segments);
   }
   if (Array.isArray(node)) {
-    return node
-      .map((item: unknown) => scrubUnenumerated(ctx, item, segments))
-      .filter((item) => item !== OMITTED);
+    return node.map((item: unknown) => scrubUnenumerated(ctx, item, segments));
   }
   if (!isRecord(node)) {
     return node;
   }
-  const kept: [string, unknown][] = [];
-  for (const [key, value] of Object.entries(node)) {
-    const segment = Array.isArray(value) ? `${key}[]` : key;
-    const scrubbed = scrubUnenumerated(ctx, value, [...segments, segment]);
-    if (scrubbed !== OMITTED) {
-      kept.push([key, scrubbed]);
-    }
-  }
-  return Object.fromEntries(kept);
+  const entries = Object.entries(node);
+  const keys = maskUuidKeys(entries.map(([key]) => key));
+  return Object.fromEntries(
+    entries.map(([key, value]) => {
+      const projectedKey = keys.get(key) ?? panic("key mask skipped a key");
+      if (projectedKey !== key) {
+        ctx.uuidViolations.push([...segments, projectedKey].join("."));
+      }
+      return [
+        projectedKey,
+        scrubUnenumerated(ctx, value, [
+          ...segments,
+          Array.isArray(value) ? `${projectedKey}[]` : projectedKey,
+        ]),
+      ];
+    }),
+  );
 };
 
 /** Read the first scalar a (non-array) dotted path resolves to in `raw`. */
@@ -951,6 +971,11 @@ const projectField = ({
         // never a Stella tenant id.
         return value;
       }
+      case "contentText": {
+        // Document or record text: a UUID inside it is content, not a handle,
+        // so it is masked in place and the rest of the text is kept.
+        return typeof value === "string" ? maskUuids(value) : value;
+      }
       case "json": {
         const segment = Array.isArray(value) ? `${key}[]` : key;
         return scrubUnenumerated(ctx, value, [...segments, segment]);
@@ -1004,11 +1029,9 @@ const projectField = ({
       );
     }
     const itemSegments = [...segments, `${key}[]`];
-    // A dropped item (a bare string carrying an unlicensed UUID) leaves the
-    // array; the model sees fewer items, never the raw id.
-    return value
-      .map((entry) => projectValue(ctx, item, entry, itemSegments))
-      .filter((entry) => entry !== OMITTED);
+    // Items are never dropped: a data string is masked in place and a
+    // dropped handle leaves only its own key inside an object item.
+    return value.map((entry) => projectValue(ctx, item, entry, itemSegments));
   }
   if (nodeType === "unknown") {
     return panic(
@@ -1083,8 +1106,8 @@ const projectValue = (
     );
   }
   // A scalar leaf (string/number/boolean/literal/picklist/null): ordinary
-  // data. A UUID-bearing string here is undeclared and dropped.
-  return recordUuidLeaf(ctx, value, segments) ? OMITTED : value;
+  // data. A UUID inside a string here is undeclared: masked and reported.
+  return maskUuidLeaf(ctx, value, segments);
 };
 
 /** Where a projection ran, for the defect telemetry context. */
@@ -1112,15 +1135,16 @@ export type ProjectForChatOptions<TPayload> = {
  *    `strippedField` leaves are omitted, `chatRef`/`chatEntityRef` leaves are
  *    hydrated into chat refs (entity workspaces resolved per their declared
  *    `EntityWorkspaceSource`, always against the raw parsed snapshot),
- *    `passthroughId` leaves and `unenumeratedJson` subtrees pass through.
+ *    `passthroughId` leaves pass through, and ids inside `contentText`
+ *    leaves and `unenumeratedJson` strings are masked.
  * 3. The terminal invariant, enforced in the same walk: no UUID survives at
  *    any position a `passthroughId` annotation does not license. The schema
  *    annotations are documentation the type system cannot fully enforce (a
  *    wrong workspace source silently skips hydration), so every forwarded
- *    string is checked rather than trusting the static mapping alone; a
- *    survivor's leaf is dropped from the result and reported as a defect,
- *    its path (never its value) to telemetry. Only a root that cannot be
- *    dropped fails closed as a `server-defect`.
+ *    string is checked rather than trusting the static mapping alone. A
+ *    surviving UUID is masked inside a data string and drops a ref leaf;
+ *    either is reported as a defect, its path (never its value) to
+ *    telemetry.
  */
 export const projectForChat = <TPayload>({
   schema,
@@ -1161,19 +1185,6 @@ export const projectForChat = <TPayload>({
     uuidViolations: [],
   };
   const projected = projectValue(ctx, schema, output, []);
-
-  if (projected === OMITTED) {
-    const error = new ChatToolError({
-      kind: "server-defect",
-      message: REF_PROJECTION_FAILURE_MESSAGE,
-    });
-    captureError(error, {
-      path: ctx.uuidViolations.at(0) ?? "(root)",
-      source,
-      toolName,
-    });
-    return Result.err(error);
-  }
   if (ctx.uuidViolations.length > 0) {
     reportToolOutputDegrade({
       defect: "unmapped_id",

@@ -339,7 +339,6 @@ const clearMemberObligationOwners = async ({
         }
       }
       if (owned.length > 0) {
-        // db-await-in-loop: transition this held ownership page before consuming the next counted batch.
         const changedCounts = await mapWithConcurrency({
           items: owned,
           limit: 1,
@@ -1891,6 +1890,7 @@ const cancelMemberFlowRuns = async ({
           return { run, scope: proof.value };
         },
       });
+      // db-await-in-loop: finish scoped transitions and audits for the locked bounded page before selecting the next page.
       await cancelScopedMemberFlowRunBatch({ tx, actorUserId, scopedRuns });
     }
   }
@@ -2005,7 +2005,6 @@ const cancelMemberDesktopSessions = async ({
     if (sessions.length === 0) {
       break;
     }
-    // db-await-in-loop: transition and audit the held desktop page before consuming the next counted batch.
     const changedCounts = await mapWithConcurrency({
       items: sessions,
       limit: 1,

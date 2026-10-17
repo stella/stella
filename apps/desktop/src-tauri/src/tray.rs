@@ -106,6 +106,21 @@ fn recording_icon(recording: bool) -> image::ImageResult<tauri::image::Image<'st
     height,
   ))
 }
+
+#[allow(
+  clippy::disallowed_methods,
+  clippy::disallowed_types,
+  reason = "the tray owner updates native handles only from its main-thread refresh"
+)]
+fn set_tray_icon(
+  tray: &tauri::tray::TrayIcon,
+  icon: tauri::image::Image<'_>,
+) -> tauri::Result<()> {
+  // Replacing the image clears macOS template tinting.
+  tray.set_icon(Some(icon))?;
+  tray.set_icon_as_template(true)
+}
+
 const OPEN_ABOUT_ACTION: &str = "open-about";
 const CHECK_FOR_UPDATES_ACTION: &str = "check-for-updates";
 const OPEN_EDIT_ROOT_ACTION: &str = "open-edit-root";
@@ -241,7 +256,7 @@ fn refresh_on_main_thread(
       .as_ref()
       .is_some_and(|activity| activity.status == ActivityRecordingStatus::Recording);
   if let Ok(icon) = recording_icon(recording) {
-    let _ = tray.set_icon(Some(icon));
+    let _ = set_tray_icon(&tray, icon);
   }
 }
 
@@ -563,6 +578,22 @@ mod tests {
     );
     assert_ne!(recording.rgba(), base.rgba());
     assert_eq!(recording_icon(false).unwrap().rgba(), base.rgba());
+  }
+
+  #[test]
+  fn recording_icons_are_monochrome_with_alpha() {
+    for recording in [false, true] {
+      let icon = recording_icon(recording).unwrap();
+      let (pixels, _) = icon.rgba().as_chunks::<4>();
+      assert!(pixels.iter().any(|pixel| pixel[3] == 0));
+      assert!(pixels.iter().any(|pixel| pixel[3] == 255));
+      assert!(
+        pixels
+          .iter()
+          .all(|pixel| pixel[3] == 0 || pixel[..3] == [0, 0, 0]),
+        "visible template pixels must be monochrome black"
+      );
+    }
   }
 
   #[test]

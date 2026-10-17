@@ -18,7 +18,7 @@ import {
 import { FOLIO_COLLAB_SEED_TRANSITIONS } from "@/api/lib/db/folio-collab-transitions";
 import { READER_ANSWER_MESSAGE_TRANSITIONS } from "@/api/lib/db/reader-answer-transitions";
 import type {
-  STATUS_COLUMNS,
+  WRITABLE_STATUS_COLUMNS,
   StatusTable,
 } from "@/api/lib/db/status-tables.gen";
 import {
@@ -137,7 +137,7 @@ const WORK_OBLIGATION_TRANSITIONS = defineKeyedTransitions({
 });
 
 type StatusColumns<TTable extends StatusTable> =
-  (typeof STATUS_COLUMNS)[TTable];
+  (typeof WRITABLE_STATUS_COLUMNS)[TTable];
 
 // Each table's decision covers exactly its inventoried lifecycle columns.
 type TransitionDecision<TTable extends StatusTable> =

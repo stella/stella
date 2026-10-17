@@ -31,7 +31,6 @@ export const cleanupFlowDefinitions = async ({
   let cursor: SafeId<"flowDefinition"> | undefined;
   let count = 0;
   for (;;) {
-    // db-await-in-loop: discover each bounded page after the preceding scoped deletions.
     const page = await readCursorPage(
       tx
         .select({ id: flowDefinitions.id })
