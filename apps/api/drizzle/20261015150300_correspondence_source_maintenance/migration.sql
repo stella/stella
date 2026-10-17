@@ -28,7 +28,9 @@ $role$;--> statement-breakpoint
 -- stella-migration-safety: reviewed grant-privileges - Temporary role administration installs private lifecycle routines; inheritance remains disabled and SET is revoked before commit.
 GRANT stella_correspondence_source TO CURRENT_USER WITH INHERIT FALSE, SET TRUE;--> statement-breakpoint
 GRANT USAGE, CREATE ON SCHEMA public TO stella_correspondence_source;--> statement-breakpoint
--- Custom scope settings are user-settable; they need no parameter ACL grant.
+-- Custom placeholders require parameter ACLs in function-level SET clauses, even
+-- though set_config can change them at runtime without those ACLs.
+GRANT SET ON PARAMETER "app.correspondence_source_organization_id", "app.correspondence_source_workspace_id", "app.correspondence_source_record_id" TO stella_correspondence_source;--> statement-breakpoint
 GRANT SELECT (organization_id, workspace_id, correspondence_id, entity_id) ON public.correspondence_sources TO stella_correspondence_source;--> statement-breakpoint
 GRANT SELECT (organization_id, workspace_id, id, source_entity_id), UPDATE (source_entity_id, updated_at), DELETE ON public.correspondence TO stella_correspondence_source;--> statement-breakpoint
 

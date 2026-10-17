@@ -265,6 +265,11 @@ describe("data-box correspondence reads", () => {
           params: { correspondenceId },
         }),
       );
+      if ("code" in preview) {
+        throw new Error(
+          `Expected correspondence detail, received ${preview.code}`,
+        );
+      }
       expect(preview.dataBoxContacts?.sender.matches).toHaveLength(5);
       expect(preview.dataBoxContacts?.sender.hasMore).toBe(true);
       expect(preview.dataBoxContacts?.recipient).toEqual({

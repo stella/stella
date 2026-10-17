@@ -15,7 +15,7 @@ import {
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { createAuditRecorder } from "@/api/lib/audit-log";
-import { createSafeId, toSafeId, type SafeId } from "@/api/lib/branded-types";
+import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { parseDataBoxMessage } from "@/api/lib/data-box/zfo";
 import { zfoFile } from "@/api/lib/data-box/zfo.test-fixture";
 import {
@@ -820,8 +820,8 @@ type RetireSourceFixtureOptions = {
 const retireSourceFixture = async ({
   entityId,
   expectedSourceVersionId,
-}: RetireSourceFixtureOptions) =>
-  await retireCorrespondenceSource({
+}: RetireSourceFixtureOptions) => {
+  const result = await retireCorrespondenceSource({
     safeDb: asTestRaw<SafeDb>(
       createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
     ),
@@ -837,6 +837,11 @@ const retireSourceFixture = async ({
       server: null,
     }),
   });
+  if (result.type === "error") {
+    throw result.error;
+  }
+  return { type: result.type, id: null };
+};
 
 type SetSourceVersionOptions = {
   entityId: SafeId<"entity">;
@@ -922,9 +927,11 @@ test.each(sourceTransitions)(
             attachmentId,
           });
     expect(initial.type).toBe("ok");
-    const oldId =
-      "id" in initial ? toSafeId<"correspondence">(initial.id) : null;
+    const oldId = initial.id;
     if (oldCopies === "retained" && initialParsed !== null) {
+      if (oldId === null) {
+        throw new Error("A retained copy requires initial correspondence");
+      }
       expect(
         (
           await fileCopy({
@@ -980,8 +987,7 @@ test.each(sourceTransitions)(
           });
     const replacement = await applyReplacement();
     expect(replacement.type).toBe("ok");
-    const replacementId =
-      "id" in replacement ? toSafeId<"correspondence">(replacement.id) : null;
+    const replacementId = replacement.id;
     const association = () =>
       testDb
         .select({ correspondenceId: correspondenceSources.correspondenceId })
@@ -1087,8 +1093,7 @@ test.each(sourceTransitions)(
             attachmentId,
           });
     expect(roundtrip.type).toBe("ok");
-    const roundtripId =
-      "id" in roundtrip ? toSafeId<"correspondence">(roundtrip.id) : null;
+    const roundtripId = roundtrip.id;
     expect(await association()).toEqual(
       roundtripId === null ? [] : [{ correspondenceId: roundtripId }],
     );
@@ -1102,6 +1107,9 @@ test.each(sourceTransitions)(
     }
     if (roundtripId !== null) {
       if (oldCopies === "retained") {
+        if (oldId === null) {
+          throw new Error("A retained copy requires initial correspondence");
+        }
         expect(roundtripId).toBe(oldId);
         expect(
           await testDb
@@ -1366,7 +1374,7 @@ test.each(["replace", "retire"] as const)(
         .from(correspondenceSources)
         .where(eq(correspondenceSources.entityId, entityId)),
     ).toEqual(
-      "id" in replacement ? [{ correspondenceId: replacement.id }] : [],
+      replacement.id === null ? [] : [{ correspondenceId: replacement.id }],
     );
   },
 );
