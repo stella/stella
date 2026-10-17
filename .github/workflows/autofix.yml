@@ -487,7 +487,6 @@ jobs:
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       RUSTUP_TOOLCHAIN: 1.99.0
-      OXLINT_TAILWINDCSS_CACHE_DIR: ${{ runner.temp }}/oxlint-tailwindcss
 
     steps:
       - name: Checkout pull request head
@@ -591,6 +590,8 @@ jobs:
       - name: Fix changed files
         env:
           STELLA_LOCAL_AUTOFIX: "true"
+          # The design systems restored above; the warm-up and oxlint share it.
+          OXLINT_TAILWINDCSS_CACHE_DIR: ${{ runner.temp }}/oxlint-tailwindcss
         run: |
           set -euo pipefail
           changed=()

@@ -5280,7 +5280,6 @@ jobs:
       actions: write
     env:
       CI_GENERATED_SOURCES_MANIFEST: ${{ github.workspace }}/.cache/ci-generated-sources/manifest.json
-      OXLINT_TAILWINDCSS_CACHE_DIR: ${{ runner.temp }}/oxlint-tailwindcss
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -5336,8 +5335,11 @@ jobs:
           path: ${{ runner.temp }}/oxlint-tailwindcss
           key: tailwind-design-systems-${{ runner.os }}-${{ hashFiles('apps/**/*.css', 'packages/**/*.css', 'bun.lock') }}
 
+      # The cache directory restored above; every later lint step reads it.
       - name: Warm Tailwind design systems
-        run: bun run lint:tailwind:warm
+        run: |
+          echo "OXLINT_TAILWINDCSS_CACHE_DIR=$RUNNER_TEMP/oxlint-tailwindcss" >> "$GITHUB_ENV"
+          OXLINT_TAILWINDCSS_CACHE_DIR="$RUNNER_TEMP/oxlint-tailwindcss" bun run lint:tailwind:warm
 
       - name: Code quality (web)
         env:
