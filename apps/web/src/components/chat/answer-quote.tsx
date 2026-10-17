@@ -12,7 +12,7 @@ import {
   BookTextIcon,
   ChevronDownIcon,
   CircleCheckIcon,
-  CopyIcon,
+  CopyFromMenuIcon,
 } from "@stll/ui/icons";
 import { Popover, PopoverPanel, PopoverTrigger } from "@stll/ui/popover";
 
@@ -134,7 +134,7 @@ const QuoteAttribution = ({
         <PopoverTrigger
           render={<Button className="-my-1" size="xs" variant="ghost" />}
         >
-          <CopyIcon aria-hidden="true" className="size-3.5" />
+          <CopyFromMenuIcon aria-hidden="true" className="size-3.5" />
           {t("common.copy")}
           <ChevronDownIcon aria-hidden="true" className="size-3" />
         </PopoverTrigger>
