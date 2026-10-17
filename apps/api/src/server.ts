@@ -134,6 +134,7 @@ import { workspacesRoute } from "@/api/handlers/workspaces/routes";
 import { detached } from "@/api/lib/analytics/capture";
 import { getAuth, realtimeAuthorizers } from "@/api/lib/auth";
 import { createAuthResponseCookiesPlugin } from "@/api/lib/auth/auth-response-cookies";
+import { applyDiscoveryMetadataCachePolicy } from "@/api/lib/auth/discovery-metadata-cache";
 import {
   isAllowedBrowserOrigin,
   shouldRejectBrowserMutation,
@@ -358,6 +359,9 @@ const api = new Elysia()
   .use(multipartFormParser)
   .onRequest(({ set }) => {
     setSecurityHeaders(set);
+  })
+  .onRequest(({ request, set }) => {
+    applyDiscoveryMetadataCachePolicy({ request, set });
   })
   .onRequest(async (context) => {
     const { request, set } = context;
