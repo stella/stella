@@ -948,6 +948,45 @@ test.each(Object.values(RECONCILIATION_ITEM_STATUS))(
   },
 );
 
+test("a completed walk drops every withdrawn parked row past one prune batch", async () => {
+  // Pruning deletes in bounded batches. One batch more than the bound proves
+  // the walk keeps pruning instead of leaving the remainder due for a retry.
+  const sourceId = await seedSource();
+  await seedFreshTip(sourceId);
+  await seedSlice({
+    sourceId,
+    slice: OWED_SLICE,
+    reported: 3,
+    collected: 0,
+    checkedAt: addUtcDays(NOW, -2),
+  });
+  const dueAt = addUtcDays(NOW, 1);
+  const withdrawnCount = 1001;
+  await db.insert(caseLawReconciliationItems).values(
+    Array.from({ length: withdrawnCount }, (_, index) => ({
+      id: createSafeId<"caseLawReconciliationItem">(),
+      sourceId,
+      slice: OWED_SLICE,
+      identityKey: `document:withdrawn-${index}`,
+      status: RECONCILIATION_ITEM_STATUS.PARKED,
+      attempts: 2,
+      nextAttemptAt: dueAt,
+      payload: { withdrawn: index },
+    })),
+  );
+
+  expect(await runUnit(sourceId)).toMatchObject({
+    type: "worked",
+    summary: { slice: OWED_SLICE, pruned: withdrawnCount },
+  });
+  builds.length = 0;
+  expect(await runUnitWith({ sourceId, now: () => dueAt })).toMatchObject({
+    type: "worked",
+    summary: { unit: "parked-retries" },
+  });
+  expect(builds).toEqual(LISTING_ITEMS);
+});
+
 test.each(Object.values(RECONCILIATION_ITEM_STATUS))(
   "a failed partial listing preserves tracked %s rows",
   async (status) => {

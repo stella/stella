@@ -1587,19 +1587,30 @@ const walkSlice = async ({
   // Only a completed listing is authoritative about withdrawals. Remove
   // unlisted parked rows before they can retry a withdrawn payload, and
   // unlisted terminal rows before they can vouch for this slice's shortfall.
-  // A partial or failed listing never reaches this boundary.
-  await lease.beforeDatabaseMark();
-  const prune = await pruneUnlistedReconciliationItems(scopedDb, {
-    sourceId,
-    leaseToken: lease.leaseToken,
-    slice,
-    listedIdentityKeys: items.map(({ identityKey }) => identityKey),
-    limit: PRUNE_ROW_LIMIT,
-  });
-  if (prune.outcome === "superseded") {
-    return summary;
+  // A partial or failed listing never reaches this boundary. Each prune is a
+  // bounded batch; keep pruning until a batch comes back short, so no
+  // withdrawn row survives to a later retry and coverage is recorded only
+  // once the slice holds no unlisted row.
+  const listedIdentityKeys = items.map(({ identityKey }) => identityKey);
+  let pruned = 0;
+  let batchRemoved = PRUNE_ROW_LIMIT;
+  while (batchRemoved === PRUNE_ROW_LIMIT) {
+    await lease.beforeDatabaseMark();
+    // db-await-in-loop: bounded delete batches under the lease, until the slice holds no unlisted row
+    const prune = await pruneUnlistedReconciliationItems(scopedDb, {
+      sourceId,
+      leaseToken: lease.leaseToken,
+      slice,
+      listedIdentityKeys,
+      limit: PRUNE_ROW_LIMIT,
+    });
+    if (prune.outcome === "superseded") {
+      return summary;
+    }
+    batchRemoved = prune.removed;
+    pruned += batchRemoved;
   }
-  summary.pruned = prune.removed;
+  summary.pruned = pruned;
 
   await recordSliceCoverage(scopedDb, {
     sourceId,
