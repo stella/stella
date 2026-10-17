@@ -2,6 +2,7 @@ import Elysia from "elysia";
 
 import updateFactDetails from "@/api/handlers/lists/items/fact-details/update";
 import verifyItemSource from "@/api/handlers/lists/items/sources/verification/update";
+import createSampleCase from "@/api/handlers/lists/sample-case/create";
 import createClaimComment from "@/api/handlers/lists/verifications/claim-comments/create";
 import deleteClaimComment from "@/api/handlers/lists/verifications/claim-comments/delete";
 import listClaimComments from "@/api/handlers/lists/verifications/claim-comments/list";
@@ -57,6 +58,10 @@ export const createListVerificationRoutes = (
     .delete("/claim-comments/:annotationId", deleteClaimComment.handler, {
       params: deleteClaimComment.config.params,
       permissions: deleteClaimComment.config.permissions,
+    })
+    .post("/sample-case", createSampleCase.handler, {
+      body: createSampleCase.config.body,
+      permissions: createSampleCase.config.permissions,
     })
     .post("/verifications", createVerification.handler, {
       body: createVerification.config.body,

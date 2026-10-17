@@ -48,7 +48,7 @@ const tableOwnerCheck = sql.raw(
 
 /**
  * A claim's comment exists for the caller only while the claim does. The
- * database function (migration `20261012120100`) is SECURITY INVOKER, so the
+ * database function (migration `20261016100500`) is SECURITY INVOKER, so the
  * claim's own policies (matter access, the verification's feature fence)
  * decide whether it finds the claim. The check lives in the database rather
  * than in this module: the public-law reader routes reach this table but

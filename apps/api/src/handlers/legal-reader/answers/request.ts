@@ -9,7 +9,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import type { AnnotationAuthorScope } from "@/api/lib/legal-search/reader-annotations/target";
 import { createModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
-import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
+import { requireTanStackAIAvailableForTask } from "@/api/lib/tanstack-ai-models";
 import type { UsageLaneDecision } from "@/api/lib/usage/lane-routing";
 
 type ReaderAnswerRequestOptions = Pick<
@@ -39,8 +39,8 @@ export const readerAnswerRequest = ({
   request,
   usageLane,
 }: ReaderAnswerRequestOptions) => {
-  const available = requireTanStackAIAvailableForRole({
-    role: "chat",
+  const available = requireTanStackAIAvailableForTask({
+    task: "chat",
     orgConfig: orgAIConfig,
     configStatus: orgAIConfigStatus,
     dataClass: "customer",

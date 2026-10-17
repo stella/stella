@@ -13,9 +13,10 @@ import {
   API_TEST_DURATIONS_FILE_ENV,
   loadTestDurationWeights,
 } from "../apps/api/scripts/test-timings";
+import { API_TEST_SHARD_IDS } from "./api-test-shard-plan";
 
 const REPOSITORY_ROOT = path.resolve(import.meta.dir, "..");
-const MAX_SHARDS = 4;
+const MAX_SHARDS = API_TEST_SHARD_IDS.length;
 export const API_SHARD_SECONDS = 600;
 const MODULE_PATTERN = /\.(?:[cm]?[jt]s|[jt]sx)$/u;
 
@@ -28,7 +29,9 @@ export const API_ALL_RULES = {
   npm: /(?:^|\/)\.npmrc$/u,
   turbo: /(?:^|\/)turbo\.json$/u,
   patches: /^patches\//u,
-  github: /^\.github\//u,
+  // Keep this list aligned with the local actions used by the API-running jobs
+  // in ci.yml. api-test-impact.test.ts fails when a new action is wired there.
+  github: /^\.github\/(?:workflows\/ci\.yml|actions\/ci-install(?:\/.*)?)$/u,
   migrations: /^apps\/api\/drizzle\//u,
   database: /^apps\/api\/src\/db\//u,
   runner: /^apps\/api\/scripts\//u,

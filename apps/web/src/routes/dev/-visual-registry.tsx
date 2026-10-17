@@ -12,6 +12,20 @@ type VisualLoader = {
 };
 
 const visualLoaders = {
+  "hungarian-decision": {
+    load: async () => {
+      const { HungarianDecisionPlayground } =
+        await import("./-components/hungarian-decision-playground");
+      return { default: HungarianDecisionPlayground };
+    },
+  },
+  "table-chart": {
+    load: async () => {
+      const { TableChartPlayground } =
+        await import("./-components/table-chart-playground");
+      return { default: TableChartPlayground };
+    },
+  },
   "oauth-consent": {
     load: async () => {
       const { OAuthConsentPlayground } =
@@ -31,6 +45,34 @@ const visualLoaders = {
       const { ChatLongPastePlayground } =
         await import("./-components/chat-long-paste-playground");
       return { default: ChatLongPastePlayground };
+    },
+  },
+  "chat-status": {
+    load: async () => {
+      const { ChatStatusPlayground } =
+        await import("./-components/chat-status-playground");
+      return { default: ChatStatusPlayground };
+    },
+  },
+  "chat-citations": {
+    load: async () => {
+      const { ChatCitationsPlayground } =
+        await import("./-components/chat-citations-playground");
+      return { default: ChatCitationsPlayground };
+    },
+  },
+  "chat-link-icons": {
+    load: async () => {
+      const { ChatLinkIconsPlayground } =
+        await import("./-components/chat-link-icons-playground");
+      return { default: ChatLinkIconsPlayground };
+    },
+  },
+  "reader-answers": {
+    load: async () => {
+      const { ReaderAnswersPlayground } =
+        await import("./-components/reader-answers-playground");
+      return { default: ReaderAnswersPlayground };
     },
   },
   "chat-history-decision": {
@@ -88,11 +130,25 @@ const visualLoaders = {
       return { default: ProtectedPendingSkeleton };
     },
   },
+  "provision-header": {
+    load: async () => {
+      const { ProvisionHeaderPlayground } =
+        await import("./-components/provision-header-playground");
+      return { default: ProvisionHeaderPlayground };
+    },
+  },
   "workspace-table": {
     load: async () => {
       const { WorkspaceTablePlayground } =
         await import("./-components/workspace-table-playground");
       return { default: WorkspaceTablePlayground };
+    },
+  },
+  "public-law-toolbar": {
+    load: async () => {
+      const { PublicLawToolbarPlayground } =
+        await import("./-components/public-law-toolbar-playground");
+      return { default: PublicLawToolbarPlayground };
     },
   },
 } as const satisfies Record<VisualName, VisualLoader>;

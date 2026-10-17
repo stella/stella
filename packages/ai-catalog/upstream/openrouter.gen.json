@@ -409,6 +409,12 @@
       }
     },
     {
+      "id": "meta/muse-spark-open",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
       "id": "meta/muse-wonder",
       "reasoning": {
         "default_effort": "medium"
@@ -537,7 +543,7 @@
     {
       "id": "openai/gpt-5.1",
       "reasoning": {
-        "default_effort": "none"
+        "default_effort": "medium"
       }
     },
     {
@@ -561,7 +567,7 @@
     {
       "id": "openai/gpt-5.1:batch",
       "reasoning": {
-        "default_effort": "none"
+        "default_effort": "medium"
       }
     },
     {
@@ -922,6 +928,12 @@
       "id": "qwen/qwen3.8-max-prime",
       "reasoning": {
         "default_effort": "xhigh"
+      }
+    },
+    {
+      "id": "reflection/beam-1.0-501b-a23b",
+      "reasoning": {
+        "default_effort": "max"
       }
     },
     {

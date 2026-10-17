@@ -249,6 +249,7 @@ const readStatute = createSafeBoundedPublicHandler(
           await readPublicLegislationHandler(
             documentId,
             legislationPublicReadDb,
+            "pages",
           ),
       ),
     );
@@ -277,6 +278,7 @@ const listStatuteVersions = createSafeBoundedPublicHandler(
             documentId,
             query,
             legislationDb: legislationPublicReadDb,
+            surface: "pages",
           }),
       ),
     );
@@ -306,6 +308,7 @@ const readProvisionHistory = createSafeBoundedPublicHandler(
             anchor,
             query,
             legislationDb: legislationPublicReadDb,
+            surface: "pages",
           }),
       ),
     );

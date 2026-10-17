@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 
 import { env } from "@/api/env";
+import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -77,10 +78,9 @@ const runDeniedTitle = async ({
               id: "message_title",
               role: "user",
               createdAt: new Date("2026-09-01T00:00:00Z"),
-              content: {
-                version: 2,
+              content: toPersistedChatMessageContentV3({
                 data: [{ type: "text", content: "Draft a document" }],
-              },
+              }),
             },
           ];
         },
@@ -123,7 +123,7 @@ const runDeniedTitle = async ({
     });
   const endpoint = createSuggestThreadTitle({
     admit,
-    generateTextForRole: async () => {
+    generateTextForTask: async () => {
       modelCalls += 1;
       throw new HandlerError({
         status: 500,

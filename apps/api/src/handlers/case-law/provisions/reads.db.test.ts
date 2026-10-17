@@ -18,6 +18,7 @@ import {
   caseLawSources,
   STATUTE_CITATION_TARGET_TYPE,
 } from "@/api/db/schema";
+import { createStatuteCitationCountRepair } from "@/api/handlers/case-law/provisions/citation-count-repair";
 import { readStatuteCitationCountsHandler } from "@/api/handlers/case-law/provisions/citation-counts";
 import { listCitingDecisionsHandler } from "@/api/handlers/case-law/provisions/citing-decisions";
 import { listDecisionProvisionsHandler } from "@/api/handlers/case-law/provisions/list-for-decision";
@@ -239,6 +240,13 @@ beforeAll(
         workIdentifier: UNHELD_WORK,
       }),
     ]);
+
+    const repairCitationCounts = createStatuteCitationCountRepair(db);
+    let repair = await repairCitationCounts();
+    if (repair.status === "advanced") {
+      repair = await repairCitationCounts();
+    }
+    expect(repair).toEqual({ status: "ready", decisions: 0 });
   },
   { timeout: 120_000 },
 );
@@ -251,8 +259,12 @@ const withSubject = async <T>(
   id: SafeId<"caseLawDecision">,
   read: (subject: RedistributableDecisionSubject) => Promise<T>,
 ): Promise<T> =>
-  (await withRedistributableSubject(caseLawDb, { kind: "id", id }, read)) ??
-  panic("expected a redistributable subject");
+  (await withRedistributableSubject(
+    caseLawDb,
+    "pages",
+    { kind: "id", id },
+    read,
+  )) ?? panic("expected a redistributable subject");
 
 const decisionProvisions = async (cursor?: string) => {
   const page = await withSubject(
@@ -389,15 +401,14 @@ test("an unavailable court registry preserves citing decisions without court bad
   }
 });
 
-test("a tombstoned decision keeps its citation edge without its excerpt", async () => {
+test("public reads use the publication filter for tombstoned citing decisions", async () => {
   const page = await citingDecisions({ limit: 10, work: REDACTED_WORK });
 
-  expect(page.items).toHaveLength(2);
-  expect(page.items.at(0)).toMatchObject({
-    caseNumber: "redacted",
-    decisionId: redactedDecisionId,
-    sentenceText: null,
-  });
+  expect(page.items).toHaveLength(1);
+  expect(page.items.at(0)?.decisionId).toBe(lowAuthorityId);
+  expect(page.items.map(({ decisionId }) => decisionId)).not.toContain(
+    redactedDecisionId,
+  );
 });
 
 test("excerpt-required authority reads fill their budget before limiting", async () => {

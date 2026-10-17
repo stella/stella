@@ -21,12 +21,15 @@ import {
   WORKSPACE_TYPECHECK_CACHE_INPUTS,
   CommandFailedError,
   codeCheckConcurrency,
+  configuredCodeCheckConcurrency,
   discoverAffectedWorkspaces,
   prioritizeWebLint,
   DEPENDENCY_CACHE_INPUTS,
   failureExitCode,
   formatCheckFailure,
   LINT_ONLY_CACHE_INPUTS,
+  lintAllTrace,
+  matchedLintAllInputs,
   executeCheckCommands,
   planCheck,
   planningCommandTimeout,
@@ -87,6 +90,12 @@ describe("changed-file result boundary lint", () => {
         },
       }),
     ).toBeNull();
+  });
+
+  test("names the matched shared input in the lint-all trace", () => {
+    expect(lintAllTrace(["scripts/design-lint-baseline.json"])).toBe(
+      "code-check: lint all shared inputs: $TURBO_ROOT$/scripts/design-lint-baseline.json\n",
+    );
   });
 
   test("reuses the affected scope's merge base when measuring candidate debt", () => {
@@ -176,14 +185,13 @@ describe("changed-file result boundary lint", () => {
     ]);
   });
 
-  test("skips measured debt, boundaries, generated output, tests, and unrelated source", () => {
+  test("skips measured debt, boundaries, tests, and unrelated source", () => {
     expect(
       resultBoundaryLintCommand(
         [
           "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts",
           "apps/api/src/lib/document-processing-queue.ts",
           "apps/api/src/lib/document-processing-queue.test.ts",
-          "apps/api/src/mcp/generated/capability-dispatch/matters.list.ts",
           "packages/start-runtime/src/runtime.ts",
           "packages/ssr-testkit/src/assert-document.ts",
           "apps/web/src/server.ts",
@@ -281,7 +289,7 @@ describe("affected code-check planning", () => {
       "run",
       "lint",
       "typecheck",
-      `--concurrency=${codeCheckConcurrency()}`,
+      `--concurrency=${configuredCodeCheckConcurrency()}`,
       "--summarize",
       "--remote-cache-timeout=20",
       "--log-order=stream",
@@ -295,7 +303,7 @@ describe("affected code-check planning", () => {
       "turbo",
       "run",
       "typecheck:repo",
-      `--concurrency=${codeCheckConcurrency()}`,
+      `--concurrency=${configuredCodeCheckConcurrency()}`,
       "--summarize",
       "--remote-cache-timeout=20",
       "--log-order=stream",
@@ -425,6 +433,51 @@ describe("affected code-check planning", () => {
   });
 
   test.each([
+    "apps/api/drizzle/20261016000000_example/migration.sql",
+    "apps/api/drizzle/20261016000000_example/cutover.sql",
+    "apps/api/src/lib/db/status-tables.gen.ts",
+  ])("keeps workspace-local lint input %s scoped to the API", (changedPath) => {
+    const planned = plan([changedPath], ["apps/api"]);
+    expect(planned.type).toBe("scoped");
+    if (planned.type !== "scoped") {
+      throw new Error("Expected a scoped code-check plan");
+    }
+    expect(planned.lint).toEqual({
+      type: "targets",
+      targets: ["apps/api"],
+    });
+  });
+
+  test("a status-table change relints the plugin fixtures that read it", () => {
+    const planned = plan(
+      ["apps/api/src/lib/db/status-tables.gen.ts"],
+      ["apps/api"],
+    );
+    expect(planned.type).toBe("scoped");
+    if (planned.type !== "scoped") {
+      throw new Error("Expected a scoped code-check plan");
+    }
+    expect(planned.rootChecks).toContain("plugin-fixtures");
+  });
+
+  test.each([
+    "scripts/design-lint-baseline.json",
+    "scripts/ownership/status-transition.ts",
+  ])("retains cross-workspace lint input %s", (changedPath) => {
+    const planned = plan([changedPath], []);
+    expect(planned.type).toBe("scoped");
+    if (planned.type !== "scoped") {
+      throw new Error("Expected a scoped code-check plan");
+    }
+    expect(planned.lint).toEqual({ type: "all" });
+    expect(matchedLintAllInputs([changedPath])).toContain(
+      changedPath === "scripts/design-lint-baseline.json"
+        ? "$TURBO_ROOT$/scripts/design-lint-baseline.json"
+        : "$TURBO_ROOT$/scripts/ownership/*.ts",
+    );
+  });
+
+  test.each([
     ["scripts/check-oxlint-plugin-registry.ts", "plugin-registry"],
     ["scripts/lint-oxlint-fixtures.sh", "plugin-fixtures"],
     ["scripts/oxlint-safe-fixers.test.ts", "plugin-fixtures"],
@@ -480,7 +533,7 @@ describe("affected code-check planning", () => {
       "turbo",
       "run",
       "lint",
-      `--concurrency=${codeCheckConcurrency()}`,
+      `--concurrency=${configuredCodeCheckConcurrency()}`,
       "--summarize",
       "--remote-cache-timeout=20",
       "--log-order=stream",
@@ -492,7 +545,7 @@ describe("affected code-check planning", () => {
       "turbo",
       "run",
       "typecheck",
-      `--concurrency=${codeCheckConcurrency()}`,
+      `--concurrency=${configuredCodeCheckConcurrency()}`,
       "--summarize",
       "--remote-cache-timeout=20",
       "--log-order=stream",
@@ -532,7 +585,7 @@ describe("affected code-check planning", () => {
       "run",
       "lint",
       "typecheck",
-      `--concurrency=${codeCheckConcurrency()}`,
+      `--concurrency=${configuredCodeCheckConcurrency()}`,
       "--summarize",
       "--remote-cache-timeout=20",
       "--log-order=stream",
@@ -868,7 +921,7 @@ process.exit(childExitStatus(result));
       "run",
       "lint",
       "typecheck",
-      `--concurrency=${codeCheckConcurrency()}`,
+      `--concurrency=${configuredCodeCheckConcurrency()}`,
       "--summarize",
       "--remote-cache-timeout=20",
       "--log-order=stream",
@@ -1141,6 +1194,31 @@ describe("parallel code-quality legs", () => {
     }
     expect(codeCheckConcurrency(8 * 1024 ** 3)).toBe(2);
     expect(codeCheckConcurrency(12 * 1024 ** 3)).toBe(3);
+  });
+
+  test("a requested concurrency lowers the task count; invalid requests keep the memory default", () => {
+    expect(codeCheckConcurrency(12 * 1024 ** 3, "1")).toBe(1);
+    expect(codeCheckConcurrency(8 * 1024 ** 3, "100")).toBe(2);
+    for (const requested of ["0", "-1", "1.5", "many", ""]) {
+      expect(codeCheckConcurrency(12 * 1024 ** 3, requested)).toBe(3);
+    }
+  });
+
+  test("only the configured concurrency reads CODE_CHECK_CONCURRENCY", () => {
+    const probe = Bun.spawnSync(
+      [
+        "bun",
+        "-e",
+        `const m = await import(${JSON.stringify(path.join(import.meta.dirname, "code-check-affected.ts"))});
+console.log(m.configuredCodeCheckConcurrency(), m.codeCheckConcurrency(12 * 1024 ** 3));`,
+      ],
+      {
+        stdout: "pipe",
+        stderr: "pipe",
+        env: { ...process.env, CODE_CHECK_CONCURRENCY: "1" },
+      },
+    );
+    expect(probe.stdout.toString().trim()).toBe("1 3");
   });
 
   test("runs result consumption with the same plan scope and owner in every leg", () => {
@@ -1615,7 +1693,7 @@ const TURBO_LINT_TYPECHECK = [
   "run",
   "lint",
   "typecheck",
-  `--concurrency=${codeCheckConcurrency()}`,
+  `--concurrency=${configuredCodeCheckConcurrency()}`,
 ];
 
 const failure = (command: readonly string[], lines: readonly string[]) =>

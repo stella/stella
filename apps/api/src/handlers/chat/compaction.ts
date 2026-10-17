@@ -1,7 +1,7 @@
 import type { ModelMessage } from "@tanstack/ai";
 import { Result } from "better-result";
 
-import type { ModelRole, ReasoningEffort } from "@stll/ai-catalog";
+import type { ModelTask } from "@stll/ai-catalog";
 
 import {
   getChatAttachmentFilename,
@@ -23,7 +23,7 @@ import {
 import {
   DEFAULT_PRESERVE_TOKENS,
   DEFAULT_TRIGGER_TOKENS,
-  COMPACTION_GENERATION_POLICY,
+  compactionGenerationRequest,
   estimateTextTokens,
   FILE_PART_ESTIMATED_TOKENS,
   MAX_STRUCTURED_PART_CHARS,
@@ -33,10 +33,12 @@ import {
   safeStringify,
   truncateForCompaction,
 } from "@/api/lib/chat/compaction-tokens";
+import { HISTORY_TRIMMED_NOTICE } from "@/api/lib/chat/context-notice";
+import type { ChatContextNotice } from "@/api/lib/chat/context-notice";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
-import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
+import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
 
 export const COMPACTION_SUMMARY_MESSAGE_ID = "stella-chat-compaction-summary";
 
@@ -322,6 +324,57 @@ export const planModelCompaction = ({
   };
 };
 
+/**
+ * What compaction hands the request: the history to send, and the notice the
+ * answer carries when that history left earlier messages out. A summary that
+ * cannot be made never drops history silently: the request keeps the newest
+ * messages that fit, and the answer says that earlier ones were left out.
+ */
+export type CompactedHistory<TMessage> = {
+  messages: TMessage[];
+  notice: ChatContextNotice | null;
+};
+
+const compacted = <TMessage>(
+  messages: TMessage[],
+): CompactedHistory<TMessage> => ({ messages, notice: null });
+
+/**
+ * The newest history that fits `budgetTokens`, from a user turn boundary:
+ * what a request still carries when its earlier history could not be
+ * summarized. The trigger is the most history a request carries without
+ * compaction, so it is the budget a failed compaction keeps.
+ */
+const trimmedChatHistory = (
+  messages: ChatMessage[],
+  budgetTokens: number,
+): CompactedHistory<ChatMessage> => {
+  const plan = planChatCompaction({
+    messages,
+    preserveTokens: budgetTokens,
+    triggerTokens: 0,
+  });
+  return {
+    messages: plan.type === "none" ? messages : plan.recentMessages,
+    notice: HISTORY_TRIMMED_NOTICE,
+  };
+};
+
+const trimmedModelHistory = (
+  messages: ModelMessage[],
+  budgetTokens: number,
+): CompactedHistory<ModelMessage> => {
+  const plan = planModelCompaction({
+    messages,
+    preserveTokens: budgetTokens,
+    triggerTokens: 0,
+  });
+  return {
+    messages: plan.type === "none" ? messages : plan.recentMessages,
+    notice: HISTORY_TRIMMED_NOTICE,
+  };
+};
+
 type CompactChatMessagesOptions = PlanChatCompactionOptions & {
   onSummaryError?: ((error: HandlerError<500>) => void) | undefined;
   prepareTranscript?:
@@ -343,13 +396,13 @@ export const compactChatMessages = async ({
   prepareTranscript,
   preserveTokens,
   summarizeTranscript,
-  triggerTokens,
+  triggerTokens = DEFAULT_TRIGGER_TOKENS,
 }: CompactChatMessagesOptions): Promise<
-  Result<ChatMessage[], HandlerError<422 | 500>>
+  Result<CompactedHistory<ChatMessage>, HandlerError<422 | 500>>
 > => {
   const plan = planChatCompaction({ messages, preserveTokens, triggerTokens });
   if (plan.type === "none") {
-    return Result.ok(messages);
+    return Result.ok(compacted(messages));
   }
 
   const transcript = renderChatMessagesForCompaction(plan.messagesToSummarize);
@@ -371,21 +424,23 @@ export const compactChatMessages = async ({
   });
   if (Result.isError(summaryResult)) {
     onSummaryError?.(summaryResult.error);
-    return Result.ok(plan.recentMessages);
+    return Result.ok(trimmedChatHistory(messages, triggerTokens));
   }
 
   const summaryMarkdown = summaryResult.value.trim();
   if (summaryMarkdown.length === 0) {
-    return Result.ok(plan.recentMessages);
+    return Result.ok(trimmedChatHistory(messages, triggerTokens));
   }
 
-  return Result.ok([
-    createCompactionSummaryMessage({
-      summarizedMessageCount: plan.messagesToSummarize.length,
-      summary: summaryMarkdown,
-    }),
-    ...plan.recentMessages,
-  ]);
+  return Result.ok(
+    compacted([
+      createCompactionSummaryMessage({
+        summarizedMessageCount: plan.messagesToSummarize.length,
+        summary: summaryMarkdown,
+      }),
+      ...plan.recentMessages,
+    ]),
+  );
 };
 
 export const compactModelMessages = async ({
@@ -393,13 +448,13 @@ export const compactModelMessages = async ({
   onSummaryError,
   preserveTokens,
   summarizeTranscript,
-  triggerTokens,
+  triggerTokens = DEFAULT_TRIGGER_TOKENS,
 }: CompactModelMessagesOptions): Promise<
-  Result<ModelMessage[], HandlerError<500>>
+  Result<CompactedHistory<ModelMessage>, HandlerError<500>>
 > => {
   const plan = planModelCompaction({ messages, preserveTokens, triggerTokens });
   if (plan.type === "none") {
-    return Result.ok(messages);
+    return Result.ok(compacted(messages));
   }
 
   const transcript = renderModelMessagesForCompaction(plan.messagesToSummarize);
@@ -414,21 +469,23 @@ export const compactModelMessages = async ({
   });
   if (Result.isError(summaryResult)) {
     onSummaryError?.(summaryResult.error);
-    return Result.ok(plan.recentMessages);
+    return Result.ok(trimmedModelHistory(messages, triggerTokens));
   }
 
   const summary = summaryResult.value.trim();
   if (summary.length === 0) {
-    return Result.ok(plan.recentMessages);
+    return Result.ok(trimmedModelHistory(messages, triggerTokens));
   }
 
-  return Result.ok([
-    createModelCompactionSummaryMessage({
-      summarizedMessageCount: plan.messagesToSummarize.length,
-      summary,
-    }),
-    ...plan.recentMessages,
-  ]);
+  return Result.ok(
+    compacted([
+      createModelCompactionSummaryMessage({
+        summarizedMessageCount: plan.messagesToSummarize.length,
+        summary,
+      }),
+      ...plan.recentMessages,
+    ]),
+  );
 };
 
 type CompactChatMessagesForModelOptions = PlanChatCompactionOptions & {
@@ -441,7 +498,6 @@ type CompactChatMessagesForModelOptions = PlanChatCompactionOptions & {
   admission: ModelDispatchAdmission;
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
-  reasoningEffort?: ReasoningEffort | undefined;
   /** Tenant set for the model-ingress guard on the summarizer request. */
   tenantWorkspaceIds: readonly SafeId<"workspace">[];
 };
@@ -457,7 +513,7 @@ type CompactModelMessagesForModelOptions = {
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
   preserveTokens?: number | undefined;
-  role: ModelRole;
+  task: ModelTask;
   summarizeWithModel?: ((transcript: string) => Promise<string>) | undefined;
   /** Tenant set for the model-ingress guard on the summarizer request. */
   tenantWorkspaceIds: readonly SafeId<"workspace">[];
@@ -475,12 +531,11 @@ export const compactChatMessagesForModel = async ({
   admission,
   orgAIConfig,
   managedAIResidency,
-  reasoningEffort,
   preserveTokens,
   tenantWorkspaceIds,
   triggerTokens,
 }: CompactChatMessagesForModelOptions): Promise<
-  Result<ChatMessage[], HandlerError<422 | 500>>
+  Result<CompactedHistory<ChatMessage>, HandlerError<422 | 500>>
 > =>
   await compactChatMessages({
     messages,
@@ -492,29 +547,29 @@ export const compactChatMessagesForModel = async ({
     summarizeTranscript: async (transcript) => {
       const result = await Result.tryPromise({
         try: async () =>
-          await generateTanStackTextForRole({
+          await generateTanStackTextForTask({
             dataClass: "customer",
             abortSignal,
             analytics: aiAnalytics,
             caching: resolveCaching({
               promptCachingEnabled: false,
-              role: "chat",
+              task: "chat",
               scopeKey: null,
             }),
-            ...COMPACTION_GENERATION_POLICY,
+            ...compactionGenerationRequest(
+              [
+                "Compact the earlier conversation transcript below.",
+                "Return only the checkpoint summary.",
+                "",
+                transcript,
+              ].join("\n"),
+            ),
             modelId,
             organizationId,
             admission,
             orgAIConfig,
             managedAIResidency,
-            reasoningEffort,
-            prompt: [
-              "Compact the earlier conversation transcript below.",
-              "Return only the checkpoint summary.",
-              "",
-              transcript,
-            ].join("\n"),
-            role: "chat",
+            task: "chat",
             serviceTier: "standard",
             system: CHAT_COMPACTION_SYSTEM_PROMPT,
             systemPromptOrigin: "server-built",
@@ -545,12 +600,12 @@ export const compactModelMessagesForModel = async ({
   orgAIConfig,
   managedAIResidency,
   preserveTokens,
-  role,
+  task,
   summarizeWithModel,
   tenantWorkspaceIds,
   triggerTokens,
 }: CompactModelMessagesForModelOptions): Promise<
-  Result<ModelMessage[], HandlerError<500>>
+  Result<CompactedHistory<ModelMessage>, HandlerError<500>>
 > =>
   await compactModelMessages({
     messages,
@@ -563,30 +618,31 @@ export const compactModelMessagesForModel = async ({
 
       const result = await Result.tryPromise({
         try: async () =>
-          await generateTanStackTextForRole({
+          await generateTanStackTextForTask({
             dataClass: "customer",
             abortSignal,
             analytics: aiAnalytics,
             caching: resolveCaching({
               promptCachingEnabled: false,
-              role,
+              task,
               scopeKey: null,
             }),
-            ...COMPACTION_GENERATION_POLICY,
+            ...compactionGenerationRequest(
+              [
+                "Compact the earlier model-step transcript below.",
+                "Return only the checkpoint summary.",
+                "",
+                transcript,
+              ].join("\n"),
+            ),
             modelId,
             organizationId,
             admission,
             orgAIConfig,
             managedAIResidency,
-            prompt: [
-              "Compact the earlier model-step transcript below.",
-              "Return only the checkpoint summary.",
-              "",
-              transcript,
-            ].join("\n"),
             system: COMPACTION_SYSTEM_PROMPT,
             systemPromptOrigin: "server-built",
-            role,
+            task,
             serviceTier: "standard",
             temperature: 0,
             tenantWorkspaceIds,

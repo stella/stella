@@ -347,7 +347,6 @@ test.each(["active", "daily"] as const)(
         const mapped = mapHandlerResult({
           id: "lists.verifications.create",
           result,
-          access: "write",
         });
         expect(mapped).toMatchObject({
           status: "error",

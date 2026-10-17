@@ -65,6 +65,9 @@
     "runSelectedRows": "Exécuter pour {count, plural, one {# ligne sélectionnée} other {# lignes sélectionnées}}",
     "selectedRun": "Exécuter les colonnes IA pour {count, plural, one {# ligne} other {# lignes}}"
   },
+  "aiDisclosure": {
+    "caseLaw": "Les résumés, notes et analyses de décisions de justice produits par l’IA sont générés par stella ; ils ne sont pas approuvés par les juridictions et ne reflètent pas leur propre raisonnement. Ce sont des outils d’aide destinés aux professionnels du droit ; seul le texte de la décision fait foi."
+  },
   "appearance": {
     "calendar": "Calendrier",
     "calendarGregorian": "Grégorien",
@@ -173,6 +176,7 @@
       "heldDescription": "Le sens de ces extractions est <strong>réellement incertain</strong> — leur contenu est provisoire ou non confirmé, et pas simplement manuscrit. Elles sont exclues du scoring jusqu’à ce qu’un relecteur les confirme, les modifie ou les requalifie. Une source lisible n’est jamais mise en attente pour son seul support.",
       "heldForReview": "En attente de relecture",
       "holdOutOfScoring": "Exclure de la notation",
+      "inScoring": "Pris en compte",
       "includeInScoring": "Inclure dans la notation",
       "interpretationNote": "Note d’interprétation",
       "interpretationNotePlaceholder": "Si le sens de cette preuve est contesté, précisez comment. Laissez vide sinon.",
@@ -363,6 +367,8 @@
       "chooseList": "Choisir une liste",
       "createList": "Créer une liste",
       "evidenceList": "Faits de",
+      "loadSample": "Charger un dossier d’exemple",
+      "loadSampleFailed": "Impossible de charger le dossier d’exemple",
       "noLists": "Ce dossier n’a aucune liste.",
       "pickList": "Choisissez la liste dont les faits servent à vérifier les documents de ce dossier."
     }
@@ -526,6 +532,70 @@
     },
     "hourlyRateMustBeNonNegative": "Le taux horaire ne peut pas être négatif",
     "hours": "Heures",
+    "invoiceComposer": {
+      "addSellerProfile": "Ajoutez un profil vendeur dans les paramètres de facturation",
+      "billedHours": "Heures facturées",
+      "buyer": "Client (acheteur)",
+      "continueToDetails": "Continuer vers les informations",
+      "continueToIssue": "Continuer vers l’émission",
+      "datesAndPayment": "Dates et paiement",
+      "days": "{days, plural, one {# jour} other {# jours}}",
+      "draftSavedTitle": "Brouillon de facture enregistré",
+      "dueIn": "Échéance",
+      "dueOn": "échéance le {date}",
+      "flatFee": "Ce dossier est au forfait : la facture porte sur les {amount} convenus et le temps ci-dessous est couvert par le forfait.",
+      "flatFeeLine": "Forfait convenu",
+      "include": "Inclure dans cette facture",
+      "issueFailed": "Le brouillon a été enregistré, mais la facture n’a pas pu être émise.",
+      "issueInvoice": "Émettre la facture",
+      "issuedTitle": "Facture {number} émise",
+      "lines": "Lignes de facture",
+      "loggedHours": "{hours} h saisies",
+      "noCharge": "Non facturé",
+      "noClient": "Ce dossier n’a pas de client, la facture n’a donc pas encore d’acheteur.",
+      "noExpenses": "Aucun débours approuvé et non facturé dans ce dossier.",
+      "noTime": "Aucun temps approuvé et non facturé dans ce dossier.",
+      "noVat": "Sans TVA",
+      "nothingToBill": "Rien à facturer pour l’instant. Approuvez des saisies de temps ou des débours de ce dossier pour les facturer.",
+      "openInvoice": "Ouvrir la facture",
+      "otherCurrency": "{count, plural, one {# élément est saisi} other {# éléments sont saisis}} dans une autre devise que {currency} et restent à facturer séparément.",
+      "outsideScope": "Hors du champ d'application de la TVA, 0 %",
+      "rate": "Taux",
+      "readyDescription": "L’émission attribue le numéro suivant de votre série et verrouille la facture. Un brouillon reste modifiable.",
+      "readyTitle": "Prête à émettre",
+      "reverseCharge": "Autoliquidation, 0 %",
+      "saveDraft": "Enregistrer en brouillon",
+      "seller": "Vendeur",
+      "sources": {
+        "client": "Repris du client du dossier",
+        "clientTerm": "Délai de paiement du client",
+        "defaultSeller": "Votre profil vendeur par défaut",
+        "defaultTerm": "Délai de paiement habituel",
+        "lastWorkDay": "Dernier jour du travail inclus"
+      },
+      "steps": {
+        "issue": "Vérifier et émettre",
+        "items": "Temps et débours"
+      },
+      "tax": "Taxe et devise",
+      "taxableSupplyDate": "Date de la prestation",
+      "timeEntries": "Saisies de temps",
+      "timeSummary": "{count, plural, one {# saisie} other {# saisies}} · {hours} h",
+      "title": "Nouvelle facture",
+      "totalsSummary": "HT {net} · TVA {vat} · Total {total}",
+      "vat": "Régime de TVA",
+      "vatRate": "TVA {rate} %",
+      "vatReasons": {
+        "clientCountryUnconfirmed": "Impossible de confirmer le pays du client : son numéro de TVA et son adresse n’indiquent pas le même pays, le taux normal s’applique donc",
+        "clientVatIdInvalid": "Le numéro de TVA du client n'a pas le format de son pays, le taux normal s'applique donc",
+        "domesticRate": "Votre taux de TVA le plus élevé en vigueur à la date de la prestation",
+        "noSellerProfile": "Aucun profil vendeur : pas de TVA tant que vous ne la fixez pas sur la facture",
+        "noVatRate": "Aucun taux de TVA n’est configuré dans la facturation",
+        "outsideScope": "Le numéro de TVA du client est enregistré hors de l'UE, le lieu de prestation est donc à l'étranger",
+        "reverseCharge": "Le numéro de TVA du client est enregistré dans un autre pays",
+        "sellerNotVatPayer": "Le vendeur n’est pas assujetti à la TVA"
+      }
+    },
     "invoiceNarrative": "Description de la facture",
     "invoiceNarrativePlaceholder": "Description destinée au client (facultatif)",
     "invoices": {
@@ -668,7 +738,10 @@
       "registrationId": "Numéro d’immatriculation",
       "setDefault": "Définir par défaut",
       "title": "Profils de vendeur",
-      "vatId": "Numéro de TVA"
+      "vatId": "Numéro de TVA",
+      "vatPayer": "Assujetti à la TVA",
+      "vatPayerHelp": "Les factures de ce vendeur facturent la TVA. Désactivez pour une personne identifiée qui a un numéro de TVA sans être assujettie.",
+      "vatPayerRequiresVatId": "Saisissez le numéro de TVA pour facturer en tant qu’assujetti à la TVA."
     },
     "settingsTitle": "Facturation",
     "split": {
@@ -746,6 +819,7 @@
         "answerIncomplete": "{source, select, organization {La clé {provider} de votre organisation a renvoyé une réponse incomplète.} other {Le modèle d’IA a renvoyé une réponse incomplète.}}",
         "providerRefused": "{source, select, organization {{provider} a refusé la requête faite avec la clé de votre organisation. Vérifiez la clé, son quota et la facturation dans les paramètres de l’organisation.} other {Le fournisseur d’IA a refusé la requête.}}",
         "providerUnavailable": "{source, select, organization {{provider} est indisponible pour la clé de votre organisation pour le moment.} other {Le fournisseur d’IA est indisponible pour le moment.}}",
+        "retryAfter": "Vous pourrez réessayer à partir du {time}.",
         "timedOut": "{source, select, organization {{provider} n’a pas répondu à temps avec la clé de votre organisation.} other {Le modèle d’IA n’a pas répondu à temps.}}",
         "unavailable": "L’analyse par IA n’est pas disponible pour cette décision."
       },
@@ -1042,6 +1116,13 @@
       "provisionMentions": "{count, number}×",
       "provisionMentionsLabel": "{count, plural, one {# occurrence} other {# occurrences}}",
       "provisionsCited": "Dispositions citées",
+      "provisionsFailed": "Le traitement des citations a échoué",
+      "provisionsNoneFound": "Aucune disposition citée trouvée",
+      "provisionsProcessing": "Les citations sont en cours de traitement",
+      "provisionsUnavailable": "Les citations ne sont pas disponibles",
+      "provisionsUnplaceable": "Les citations ne peuvent pas être situées dans le texte de la décision",
+      "provisionsUnsupported": "Le traitement des citations n’est pas pris en charge pour cette décision",
+      "provisionsWithheld": "Les citations ne sont pas communiquées",
       "sourceFields": {
         "decisionCategory": "Catégorie de décision",
         "publishedOnWeb": "Publié sur le web"
@@ -1134,6 +1215,11 @@
       "requesting": "Préparation des modifications…",
       "stale": "Cette réponse a été modifiée. Sélectionnez à nouveau le texte.",
       "submit": "Demander une modification"
+    },
+    "answerQuote": {
+      "showInDecision": "Afficher dans la décision",
+      "verified": "Citation vérifiée",
+      "verifiedHint": "Mot pour mot dans {source}"
     },
     "applyMode": {
       "description": "Word enregistre l’auteur de chaque modification. Nous mémoriserons votre choix.",
@@ -1292,6 +1378,7 @@
       "overflow": "+{count, number}",
       "unnamed": "{count, plural, one {et # autre} many {et # autres} other {et # autres}}"
     },
+    "historyTrimmed": "Les messages précédents n'ont pas pu être résumés : cette réponse ne tient compte que de la partie la plus récente de la conversation.",
     "improvePrompt": "Améliorer le prompt",
     "improvePromptDraftChanged": "Le brouillon a changé, l'amélioration n'a donc pas été appliquée.",
     "improvePromptPlainTextOnly": "L'amélioration du prompt est disponible uniquement pour le texte brut.",
@@ -1323,6 +1410,7 @@
       "loadError": "Échec du chargement des éléments"
     },
     "messageTimestampToday": "Aujourd’hui, {time}",
+    "messageUnavailable": "Ce message ne peut pas être affiché.",
     "mockModel": {
       "description": "Réponses prédéfinies du modèle simulé local",
       "label": "IA simulée"
@@ -1371,6 +1459,12 @@
       "title": "Texte collé"
     },
     "placeholder": "Saisissez votre question ici, / pour les compétences, @ pour ajouter du contexte",
+    "processSummary": {
+      "analyses": "{count, plural, one {# analyse} other {# analyses}}",
+      "changesSaved": "{count, plural, one {# modification enregistrée} other {# modifications enregistrées}}",
+      "documentEdits": "{count, plural, one {# modification du document} other {# modifications du document}}",
+      "sourcesChecked": "{count, plural, one {# source vérifiée} other {# sources vérifiées}}"
+    },
     "promptImprovementStrategies": {
       "decompose": {
         "description": "Transforme un travail complexe en sous-tâches ordonnées.",
@@ -1482,12 +1576,25 @@
       "rejected": "Rejeté"
     },
     "tabToAsk": "→ pour demander : « {prompt} »",
+    "tableChart": {
+      "bar": "Barres",
+      "kind": "Type de graphique",
+      "line": "Courbes",
+      "loading": "Sélection du graphique…",
+      "pie": "Secteurs",
+      "scatter": "Nuage de points",
+      "showChart": "Afficher sous forme de graphique",
+      "summary": "Valeurs affichées : {n, number}.",
+      "unavailable": "Impossible de sélectionner un graphique. Le tableau est affiché.",
+      "values": "{label} : {value, number}"
+    },
     "thinking": "Traitement du contexte",
     "threadFiles": {
       "title": "Fichiers de cette conversation"
     },
     "tool": {
       "add_comment": "Ajout d’un commentaire",
+      "add_matter_member": "Ajouter un membre au dossier",
       "apply-active-docx-edits": "Préparation des modifications",
       "ares_lookup_company": "Recherche des données d’entreprise",
       "ares_search_companies": "Recherche des données d’entreprise",
@@ -1544,7 +1651,6 @@
       "list_stories": "Liste des parties du document",
       "list_templates": "Liste des modèles",
       "load-skill": "Lecture des consignes",
-      "manage_organization": "Gérer l’organisation",
       "read-contact": "Lecture du contact",
       "read-content-across-matters": "Lecture du contenu dans tous les dossiers",
       "read-skill-resource": "Lecture des consignes",
@@ -1554,6 +1660,7 @@
       "read_section": "Lecture d'une section",
       "read_story": "Lecture d'une partie du document",
       "remember": "Mémorisation",
+      "remove_matter_member": "Retirer un membre du dossier",
       "reply_comment": "Réponse au commentaire",
       "request_secret": "Demande d’identifiant privé",
       "resolve_comment": "Résolution du commentaire",
@@ -1587,6 +1694,7 @@
       "suggest_template_fields": "Suggestion des champs du modèle",
       "unknown": "Utilisation d’un outil",
       "update-entity-fields": "Mise à jour des métadonnées",
+      "update_organization_settings": "Modifier les paramètres de l’équipe",
       "update_reader_annotation": "Modifier le surlignage ou le commentaire",
       "use-browser": "Utilisation de votre navigateur",
       "use_connector_secret": "Utilisation de l’identifiant du connecteur",
@@ -1602,6 +1710,7 @@
       "interrupted": "Interrompu avant la fin",
       "output": "Résultat",
       "sourceCode": "Code source",
+      "statusWaiting": "En attente",
       "toggleDetails": "Afficher les détails",
       "unrestoredFields": "En mode anonymisé, {count, plural, one {# champ n’a pas pu être rempli} other {# champs n’ont pas pu être remplis}} avec des valeurs réelles. À vérifier : {fields}"
     },
@@ -1627,7 +1736,8 @@
       "toggleLabel": "Recherche web",
       "toggleOff": "Désactiver la recherche web",
       "toggleOn": "Activer la recherche web"
-    }
+    },
+    "workedFor": "Temps de travail : {duration}"
   },
   "clauses": {
     "addVariant": "Ajouter une variante",
@@ -2072,6 +2182,7 @@
     "versionLabel": "Version {version}",
     "viewSource": "Voir la source",
     "website": "Site web",
+    "whenToUse": "Quand utiliser",
     "workflow": "Flux de travail",
     "workflows": "Flux de travail",
     "zoomIn": "Zoom avant",
@@ -2504,11 +2615,14 @@
     "actionFailed": "Action échouée",
     "api": {
       "badRequest": "La requête n’a pas pu être terminée.",
+      "caseLawCountryUnavailable": "La jurisprudence de ce pays n’est pas disponible. Choisissez un autre pays.",
+      "caseLawSearchUnavailable": "La recherche dans la jurisprudence de ce pays n’est pas disponible. Vous pouvez toujours consulter ses décisions publiques.",
       "conflict": "La requête est en conflit avec l’état actuel.",
       "forbidden": "Vous n’avez pas l’autorisation d’effectuer cette action.",
+      "legislationCountryUnavailable": "Les textes législatifs de ce pays ne sont pas disponibles. Choisissez un autre pays.",
+      "legislationSearchUnavailable": "La recherche dans les textes législatifs de ce pays n’est pas disponible. Vous pouvez toujours consulter ses textes législatifs publics.",
       "notFound": "Nous n’avons pas trouvé l’élément demandé.",
       "payloadTooLarge": "La requête est trop volumineuse.",
-      "publicCountryUnavailable": "Les textes législatifs et la jurisprudence de ce pays ne sont pas disponibles. Choisissez un autre pays.",
       "rateLimited": "Trop de requêtes. Veuillez réessayer plus tard.",
       "server": "Une erreur s’est produite. Veuillez réessayer.",
       "serviceUnavailable": "Le service est temporairement indisponible. Veuillez réessayer.",
@@ -2551,6 +2665,10 @@
       "providerRateLimited": "La limite de requêtes du fournisseur a été atteinte. Réessayez dans quelques instants.",
       "thirdPartyBoundaryRefusal": "La requête a tenté d’utiliser du contenu hors du contexte d’espace de travail autorisé.",
       "usageLimitExceeded": "Limite d’utilisation atteinte.",
+      "validationInvalid": "Un champ contient une valeur qui ne peut pas être enregistrée.",
+      "validationRequired": "Un champ obligatoire est vide.",
+      "validationTooLong": "Trop long : {limit, number} caractères au maximum.",
+      "validationTooShort": "Trop court : {limit, number} caractères au minimum.",
       "verificationActiveLimitReached": "Votre organisation a atteint la limite de vérifications simultanées. Attendez la fin d’une vérification, puis réessayez.",
       "verificationDailyLimitReached": "Votre organisation a atteint la limite quotidienne de vérifications. Réessayez après minuit (Europe/Prague).",
       "versionConflict": "Quelqu’un d’autre l’a modifié pendant votre édition. Rechargez pour obtenir la version actuelle."
@@ -2921,6 +3039,7 @@
     "checkingDocxEditDescription": "stella vérifie encore si ce DOCX peut être modifié en toute sécurité. Réessayez une fois le document chargé.",
     "checkingDocxEditTitle": "Vérification du document",
     "chooseEvidence": "Choisissez un fichier pour insérer une référence numérotée à un élément de preuve.",
+    "collaborationSnapshotRecovered": "La copie collaborative enregistrée n’a pas pu être rouverte. La salle a été restaurée à partir du dernier document enregistré ; les modifications non enregistrées ont peut-être été perdues.",
     "comment": "Commenter",
     "comments": {
       "addPlaceholder": "Ajouter un commentaire...",
@@ -3645,6 +3764,10 @@
       "importTitle": "Importer une compétence",
       "importedSkills": "{count, plural, one {# compétence importée} other {# compétences importées}}",
       "invalidPath": "Le chemin ne doit contenir que des lettres minuscules, des chiffres, des points, des traits d'union ou des tirets bas",
+      "invocationAuto": "Automatiquement",
+      "invocationAutoHelp": "L’IA peut utiliser cette compétence d’elle-même lorsqu’elle correspond à la demande.",
+      "invocationManual": "Uniquement sur demande",
+      "invocationManualHelp": "Utilisée uniquement lorsque vous l’appelez avec / ou l’ajoutez à votre message.",
       "license": "Licence : {license}",
       "newFile": "Nouveau fichier",
       "newFileFilenamePlaceholder": "notes.md",
@@ -4335,6 +4458,8 @@
         "yearMonthSequential": "Année-Mois / Séquentiel (2026-02/001)",
         "yearSequential": "Année / Séquentiel (2026/001)"
       },
+      "showInTitle": "Afficher le numéro à côté du nom du dossier",
+      "showInTitleDescription": "Lorsque cette option est désactivée, le titre est exactement le nom saisi.",
       "title": "Numérotation des dossiers",
       "tokenHelp": "Jetons disponibles : '{'SEQ'}' (séquence), '{'YYYY'}' (année), '{'YY'}' (année à 2 chiffres), '{'MM'}' (mois)"
     },
@@ -4505,6 +4630,25 @@
     "tokenHelp": "Comment obtenir un jeton",
     "viewOnGithub": "Voir sur GitHub"
   },
+  "readerAnswers": {
+    "budgetError": "Le budget consacré aux réponses est épuisé.",
+    "citation": "¶{paragraph}",
+    "expand": "Développer la réponse",
+    "explain": "Expliquer",
+    "externalCitation": "{decision} · ¶{paragraph}",
+    "followUp": "Poser une question complémentaire",
+    "invalidCitations": "{count, plural, one {# référence n’a pas pu être vérifiée.} many {# références n’ont pas pu être vérifiées.} other {# références n’ont pas pu être vérifiées.}}",
+    "loading": "Génération de la réponse…",
+    "minimise": "Réduire la réponse",
+    "modelError": "Le modèle n’a pas pu terminer cette réponse.",
+    "networkError": "La connexion a été interrompue. Réessayez.",
+    "regenerate": "Régénérer la réponse",
+    "selectionError": "Sélectionnez du texte dans un seul paragraphe (2 000 caractères maximum).",
+    "send": "Envoyer la question complémentaire",
+    "share": "Partager avec l’équipe",
+    "timeoutError": "Le délai de génération de la réponse a expiré. Réessayez.",
+    "title": "Réponse sur le texte sélectionné"
+  },
   "routeError": {
     "backToMatters": "Retourner aux dossiers",
     "copyReference": "Copier la référence de l’erreur",
@@ -4517,6 +4661,8 @@
   },
   "search": {
     "aiRefine": "Améliorer la requête avec l’IA",
+    "caseLawMatchingDecisions": "{count, plural, one {# décision correspondante} other {# décisions correspondantes}}",
+    "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ décision correspondante} other {#+ décisions correspondantes}}",
     "continueInChat": "Continuer dans une conversation",
     "dateFrom": "Du",
     "dateTo": "Au",
@@ -4629,9 +4775,19 @@
       "deleteAccountWarningExplanation": "Nous enverrons un code de vérification à votre adresse e-mail pour confirmer cette demande. L'historique terminé de l'espace de travail restera attribué à votre compte supprimé.",
       "desktop": "Bureau",
       "desktopAppDescription": "Retrouvez tout ce que vous copiez et ouvrez les documents stella dans les applications que vous utilisez déjà.",
+      "desktopCardApproveDetail": "Approuvez pour lier cet ordinateur à <bdi>{identity}</bdi> sur {host}.",
+      "desktopCardApproveTitle": "stella desktop demande à se connecter",
+      "desktopCardConnectedDetail": "Lié à <bdi>{identity}</bdi> sur {host} · version {version}",
+      "desktopCardConnectedDetailNoVersion": "Lié à <bdi>{identity}</bdi> sur {host}",
+      "desktopCardConnectedTitle": "stella desktop est associé",
+      "desktopCardMissingDetail": "Installez-le, ou connectez-le s'il est déjà installé sur cet ordinateur.",
+      "desktopCardMissingTitle": "stella desktop n'est pas encore associé",
+      "desktopCardOutdatedDetail": "La version {version} est liée à <bdi>{identity}</bdi>. Installez la dernière version pour que les documents et l'activité continuent de fonctionner.",
+      "desktopCardOutdatedTitle": "stella desktop doit être mis à jour",
       "desktopClipboardDescription": "Ouvrez, recherchez, organisez et réutilisez le texte copié depuis n’importe quelle application.",
       "desktopClipboardTitle": "Historique du presse-papiers consultable",
       "desktopConnectFailed": "Impossible de connecter stella desktop.",
+      "desktopConnectInstalled": "Déjà installé, connecter",
       "desktopConnectedAs": "Connecté en tant que <bdi>{email}</bdi>",
       "desktopDescription": "Historique du presse-papiers et outils documentaires sur votre ordinateur",
       "desktopDocumentsDescription": "Ouvrez les fichiers stella dans vos applications ; les révisions reviennent dans le bon dossier.",
@@ -4966,17 +5122,22 @@
     "provisionAskSummarize": "Résumer l’application de cette disposition par les juridictions",
     "provisionAskSummarizePrompt": "Résume la façon dont les juridictions appliquent {subject}, en citant les décisions retenues.",
     "provisionDetailsFor": "Détails de {provision}",
+    "provisionEffectiveFrom": "en vigueur depuis le {date}",
     "provisionHistoryEarliest": "Version la plus ancienne disponible.",
     "provisionHistoryEmpty": "Aucune version de cette disposition n'est disponible.",
     "provisionHistoryLoadOlder": "Charger des versions antérieures pour les comparer.",
     "provisionHistoryUnavailable": "Impossible de charger l'historique de cette disposition.",
+    "provisionPartTextUnavailable": "Le texte de {provisionLabel} n’est pas disponible",
     "provisionPromptSubject": "{provision} de {statute} ({eli}), dans sa rédaction en vigueur depuis le {date}",
     "provisionPromptSubjectUndated": "{provision} de {statute} ({eli})",
+    "provisionTextUnavailable": "Texte indisponible pour cette version",
     "publisherWindowInconsistent": "Aucune version en vigueur ne peut être établie à cette date : les données de l'éditeur sont incohérentes.",
     "resolvedAlias": "Reconnu comme {label}",
     "searchAskPrompt": "{query} (législation : {country})",
     "searchLabel": "Rechercher dans la législation",
     "searchPlaceholder": "Numéro, nom ou intitulé, p. ex. 89/2012 Sb.",
+    "showCitedPartOnly": "Afficher seulement la partie citée",
+    "showFullProvision": "Afficher toute la disposition",
     "showInText": "Afficher dans le texte",
     "statedWindow": "Dates indiquées par l'éditeur : {range}",
     "status": {
@@ -4992,7 +5153,6 @@
     "title": "Législation",
     "validity": "En vigueur du {from} au {to}",
     "versionAppliedInDecision": "Version appliquée dans la décision <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
-    "wordingValidFrom": "Rédaction en vigueur depuis le {date}",
     "wordingVersionUnknown": "Date de la version de la rédaction indisponible"
   },
   "styleSets": {
@@ -5545,7 +5705,6 @@
     "viewVersion": "Voir",
     "whenNotToUse": "Quand ne pas utiliser",
     "whenNotToUsePlaceholder": "Quand faut-il éviter ce modèle ?",
-    "whenToUse": "Quand utiliser",
     "whenToUsePlaceholder": "Quand ce modèle doit-il être utilisé ? (guide la sélection de modèles par l'IA)"
   },
   "timesheets": {
@@ -5666,7 +5825,7 @@
       "title": "Copier vers un dossier"
     },
     "create": {
-      "ownerTypeToggle": "Type de dossier",
+      "matterName": "Nom du dossier",
       "personalDescription": "Les dossiers personnels sont privés et ne nécessitent pas de client. Vous pourrez les promouvoir plus tard pour les partager avec l'équipe."
     },
     "createNewWorkspace": "Créer un nouveau dossier",
@@ -6118,15 +6277,12 @@
       "upcomingTasks": "Agenda à venir",
       "uploaded": "a importé"
     },
-    "ownerType": {
-      "client": "Client",
-      "personal": "Personnel"
-    },
     "parties": {
       "addParty": "Ajouter une partie",
       "changeClient": "Changer de client",
       "client": "Client",
       "noClient": "Aucun client attribué",
+      "noClientOptional": "Sans client (facultatif)",
       "noParties": "Aucune partie ajoutée à ce dossier.",
       "partyRoles": {
         "co_counsel": "Co-conseil",

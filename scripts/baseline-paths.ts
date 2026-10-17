@@ -21,6 +21,8 @@ export const BASELINE_PATHS = {
   actionlint: ".github/actionlint-baseline.json",
   /** scripts/check-test-state-baseline.ts */
   testState: "scripts/test-state-baseline.json",
+  /** scripts/check-rust-test-determinism.ts */
+  rustTestDeterminism: "scripts/rust-test-determinism-baseline.json",
   /** scripts/check-aggregate-locks.ts */
   aggregateLocks: "scripts/aggregate-lock-baseline.json",
   /** scripts/check-write-contracts.ts */
@@ -37,6 +39,8 @@ export const BASELINE_PATHS = {
   knipExports: "scripts/knip-exports-baseline.json",
   /** scripts/offline-check-policy.ts */
   offlineCheckImports: "scripts/offline-check-import-allowlist.json",
+  /** scripts/check-ci-network-steps.ts */
+  ciNetworkSteps: "scripts/ci-network-steps-allowlist.json",
   /** scripts/rc-bailouts.ts */
   reactCompilerBailouts: "scripts/react-compiler-bailouts.json",
   /** scripts/design-lint-baseline.ts */

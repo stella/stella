@@ -43,7 +43,7 @@ import {
 } from "@/api/lib/lists/verification/run-queue";
 import { createRootRunActor } from "@/api/lib/root-scoped-db";
 import { brandPersistedListVerificationRunId } from "@/api/lib/safe-id-boundaries";
-import type { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import type { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
@@ -405,7 +405,7 @@ test.each(["matter", "grant", "deployment", "active"] as const)(
           documentReads.push(file.fileId);
           return { type: "no-text" } as const;
         },
-        generateObjectForRole: asTestRaw<typeof generateTanStackObjectForRole>(
+        generateObjectForTask: asTestRaw<typeof generateTanStackObjectForTask>(
           async (request: unknown) => {
             modelDispatches.push(request);
             return {};
@@ -751,8 +751,8 @@ test.each([
                 serviceTier: "standard",
               },
               abortSignal: AbortSignal.timeout(5000),
-              generateObjectForRole: asTestRaw<
-                typeof generateTanStackObjectForRole
+              generateObjectForTask: asTestRaw<
+                typeof generateTanStackObjectForTask
               >(async () => {
                 calls += 1;
                 return { value: "fixture" };
@@ -922,8 +922,8 @@ test("worker budget refusal stops model dispatch and releases its active slot", 
               },
             ],
           }),
-          generateObjectForRole: asTestRaw<
-            typeof generateTanStackObjectForRole
+          generateObjectForTask: asTestRaw<
+            typeof generateTanStackObjectForTask
           >(async (request: unknown) => {
             modelDispatches.push(request);
             return { claims: [] };
