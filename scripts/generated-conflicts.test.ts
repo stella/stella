@@ -64,6 +64,17 @@ describe("conservative format and lockfile proofs", () => {
     }
   });
 
+  test.each(["\u2028", "\u2029"])(
+    "literal Unicode separator %j does not hide changes to JSON string values",
+    (separator) => {
+      const before = `{"value":"first${separator}  second"}`;
+      const after = `{"value":"first${separator}    second"}`;
+      expect(before).toContain(separator);
+      expect(JSON.parse(before).value).not.toBe(JSON.parse(after).value);
+      expect(indentationOnly({ before, after })).toBe(false);
+    },
+  );
+
   test("independent lock additions retain every parent pin", () => {
     const base = {
       packages: { common: ["common@1.0.0", "", {}, "integrity"] },
@@ -822,6 +833,46 @@ describe("resolution across runs", () => {
       });
     }
     expect(publish(origin, head, out).exitCode).toBe(0);
+  });
+
+  test("a collected artifact cannot delete a non-conflicted bun.lock", () => {
+    const { origin, head, main } = fixture({
+      baseEdits: (repo) =>
+        write(
+          repo,
+          "bun.lock",
+          JSON.stringify({
+            lockfileVersion: 3,
+            workspaces: { "": { name: "fixture" } },
+            packages: { common: ["common@1.0.0"] },
+          }),
+        ),
+    });
+    const { out } = resolve({
+      origin,
+      head,
+      main,
+      regenerate: (repo) => rmSync(path.join(repo, "bun.lock")),
+    });
+    const planned = JSON.parse(
+      readFileSync(path.join(root, "plan.json"), "utf-8"),
+    );
+    expect(planned.conflicts).toEqual([
+      { path: MESSAGES, kind: "both-modified" },
+    ]);
+    const manifest = JSON.parse(
+      readFileSync(path.join(out, "manifest.json"), "utf-8"),
+    );
+    expect(manifest.files).toContainEqual({
+      path: "bun.lock",
+      deleted: true,
+      mode: "100644",
+    });
+    const published = publish(origin, head, out);
+    expect(published.exitCode).not.toBe(0);
+    expect(published.stderr).toContain(
+      "bun.lock: cannot delete a format or lockfile resolution",
+    );
   });
 
   test("a branch that moved between the jobs gets no merge from the old resolution", () => {

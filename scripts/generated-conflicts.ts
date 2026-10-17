@@ -77,9 +77,11 @@ export const indentationOnly = ({
   before,
   after,
 }: IndentationOnlyOptions): boolean => {
-  // Templates, JSX, continued strings and block comments can contain meaningful
-  // indentation. Refuse the whole file rather than guess its lexical context.
-  if ([before, after].some((text) => /[`\\]|\/\*|[<>]/u.test(text))) {
+  // These constructs can contain meaningful whitespace. Unicode separators
+  // also match multiline anchors inside literals, so refuse them conservatively.
+  if (
+    [before, after].some((text) => /[`\\\u2028\u2029]|\/\*|[<>]/u.test(text))
+  ) {
     return false;
   }
   return before.replace(/^[ \t]+/gmu, "") === after.replace(/^[ \t]+/gmu, "");
@@ -947,11 +949,12 @@ export const apply = ({
     for (const file of parsed.files) {
       if (file.deleted) {
         if (
-          conflicted.has(file.path) &&
-          conflictReason(
-            { path: file.path, kind: "both-modified" },
-            GENERATORS,
-          ) !== null
+          file.path === "bun.lock" ||
+          (conflicted.has(file.path) &&
+            conflictReason(
+              { path: file.path, kind: "both-modified" },
+              GENERATORS,
+            ) !== null)
         ) {
           fail(`${file.path}: cannot delete a format or lockfile resolution`);
         }
