@@ -317,10 +317,13 @@ test("cache invalidation failures preserve every registered mutation's committed
     try {
       expect(await write({ workspaceId: WORKSPACE_ID })).toBe(committed);
       expect(invalidate).toHaveBeenCalled();
-      expect(capture).toHaveBeenCalledWith(failure, {
-        type: "detached",
-        operation: "resource-query.invalidate",
-      });
+      expect(capture).toHaveBeenCalledWith(
+        expect.objectContaining({ cause: failure }),
+        {
+          type: "detached",
+          operation: "resource-query.invalidate",
+        },
+      );
     } finally {
       invalidate.mockRestore();
       capture.mockRestore();

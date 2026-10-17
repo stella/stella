@@ -45,6 +45,9 @@ const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
 const { entitiesKeys } =
   await import("@/lib/workspaces/queries/entities.logic");
+const { myWorkKeys } = await import("@/lib/workspaces/queries/my-work");
+const { tasksQueryRoot } = await import("@/lib/resource-query-roots.logic");
+const { workspacesKeys } = await import("@/lib/workspaces/queries.logic");
 const { downloadTabFile } = await import("./file-download-service");
 const { toSafeId } = await import("@/lib/safe-id");
 const { readStoredJson } = await import("@/lib/stored-json");
@@ -295,6 +298,7 @@ describe("confirmed file rename state", () => {
       refetchCount += 1;
       return await refresh.promise;
     });
+    const invalidate = spyOn(client, "invalidateQueries");
     const completed: string[] = [];
     try {
       act(() =>
@@ -315,6 +319,20 @@ describe("confirmed file rename state", () => {
       expect(
         client.getQueryState(entitiesKeys.all("matter"))?.fetchStatus,
       ).toBe("fetching");
+      expect(
+        new Set(
+          invalidate.mock.calls.map(([filters]) =>
+            JSON.stringify(filters?.queryKey),
+          ),
+        ),
+      ).toEqual(
+        new Set([
+          JSON.stringify(entitiesKeys.all("matter")),
+          JSON.stringify(myWorkKeys.all),
+          JSON.stringify(tasksQueryRoot("matter")),
+          JSON.stringify(workspacesKeys.overview("matter")),
+        ]),
+      );
       act(() =>
         result.current.first.mutate({
           workspaceId: "matter",
@@ -328,6 +346,7 @@ describe("confirmed file rename state", () => {
       expect(tab("A")?.label).toBe("second.md");
     } finally {
       await act(async () => refresh.resolve([]));
+      invalidate.mockRestore();
     }
   });
 
