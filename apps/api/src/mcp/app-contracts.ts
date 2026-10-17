@@ -4,6 +4,7 @@ import { legalResolveResponseSchema } from "@stll/api-contract/legal-resolve";
 import { MCP_APPS } from "@stll/mcp-apps/manifest";
 import type { PresentationApp } from "@stll/mcp-apps/manifest";
 
+import { READ_CASE_LAW_CITATIONS_PROJECTION } from "../lib/chat/case-law-citation-projection";
 import { SEARCH_CASE_LAW_PROJECTION } from "../lib/chat/case-law-result-projections";
 import {
   openDecisionOutput,
@@ -38,6 +39,7 @@ export const MCP_APP_OUTPUT_SCHEMAS = {
   preview_cited_provision: provisionPreviewOutput,
   search_case_law: SEARCH_CASE_LAW_PROJECTION,
   resolve_case_law_decision: legalResolveResponseSchema,
+  read_case_law_citations: READ_CASE_LAW_CITATIONS_PROJECTION,
 } as const satisfies Record<
   PresentationApp["callableTools"][number],
   v.GenericSchema

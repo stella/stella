@@ -1,18 +1,16 @@
 import { and, asc, eq, inArray, lte, sql } from "drizzle-orm";
 
-import { PUBLIC_CASE_LAW_PAGE_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
-import { IDENTITY_PUBLIC_COUNTRIES } from "@stll/api-contract/public-country-capability";
+import { publicCountriesFor } from "@stll/api-contract/public-country-capability";
 
-import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import { publishedCaseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
 import { normalizePublicDecisionLanguage } from "@/api/lib/case-law/decision-language";
-import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
-import { publicRowHoldsDocument } from "@/api/lib/case-law/stored-payload";
+import { publicRowHoldsDocumentFor } from "@/api/lib/case-law/stored-payload";
 import { LIMITS } from "@/api/lib/limits";
 import {
   definePublicLawSharedQuery,
@@ -52,7 +50,7 @@ export type PublicDecisionLanguageAlternatesByGroup = {
 const NO_ALTERNATES: readonly PublicDecisionLanguageAlternate[] = [];
 
 /** The same lower-case, hyphenated form the public routes use for a language. */
-const normalizedLanguageSql = sql<string>`replace(lower(${caseLawDecisions.language}), '_', '-')`;
+const normalizedLanguageSql = sql<string>`replace(lower(${publishedCaseLawDecisions.language}), '_', '-')`;
 const ROUTE_LANGUAGE_PATTERN = "^[a-z]{2,3}(-[a-z0-9]{2,8})*$";
 
 /**
@@ -71,30 +69,34 @@ export const readPublicDecisionLanguageAlternatesQuery =
     ): Promise<PublicDecisionLanguageAlternateRow[]> => {
       const versions = tx
         .select({
-          id: caseLawDecisions.id,
-          caseNumber: caseLawDecisions.caseNumber,
-          slug: caseLawDecisions.slug,
-          country: caseLawDecisions.country,
-          court: caseLawDecisions.court,
-          decisionDate: caseLawDecisions.decisionDate,
-          language: caseLawDecisions.language,
-          languageGroupKey: caseLawDecisions.languageGroupKey,
+          id: publishedCaseLawDecisions.id,
+          caseNumber: publishedCaseLawDecisions.caseNumber,
+          slug: publishedCaseLawDecisions.slug,
+          country: publishedCaseLawDecisions.country,
+          court: publishedCaseLawDecisions.court,
+          decisionDate: publishedCaseLawDecisions.decisionDate,
+          language: publishedCaseLawDecisions.language,
+          languageGroupKey: publishedCaseLawDecisions.languageGroupKey,
           languageRank: sql<number>`row_number() over (
-            partition by ${caseLawDecisions.languageGroupKey}, ${normalizedLanguageSql}
-            order by ${caseLawDecisions.id}
+            partition by ${publishedCaseLawDecisions.languageGroupKey}, ${normalizedLanguageSql}
+            order by ${publishedCaseLawDecisions.id}
           )`.as("language_rank"),
         })
-        .from(caseLawDecisions)
+        .from(publishedCaseLawDecisions)
         .innerJoin(
           caseLawSources,
-          eq(caseLawSources.id, caseLawDecisions.sourceId),
+          eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
         )
         .where(
           and(
-            inArray(caseLawDecisions.languageGroupKey, [...languageGroupKeys]),
-            inArray(caseLawDecisions.country, [...IDENTITY_PUBLIC_COUNTRIES]),
+            inArray(publishedCaseLawDecisions.languageGroupKey, [
+              ...languageGroupKeys,
+            ]),
+            inArray(
+              publishedCaseLawDecisions.country,
+              publicCountriesFor("caseLaw", "identity"),
+            ),
             redistributableCaseLawSource,
-            publishedCaseLawDecision,
             sql`${normalizedLanguageSql} ~ ${ROUTE_LANGUAGE_PATTERN}`,
           ),
         )
@@ -249,27 +251,34 @@ export const listPublicDecisionLanguageAlternates = async ({
   // before language deduplication so a textless duplicate cannot hide text.
   const versions = tx
     .select({
-      id: caseLawDecisions.id,
-      caseNumber: caseLawDecisions.caseNumber,
-      slug: caseLawDecisions.slug,
-      country: caseLawDecisions.country,
-      court: caseLawDecisions.court,
-      decisionDate: caseLawDecisions.decisionDate,
-      language: caseLawDecisions.language,
-      hasDocument: publicRowHoldsDocument.as("has_document"),
+      id: publishedCaseLawDecisions.id,
+      caseNumber: publishedCaseLawDecisions.caseNumber,
+      slug: publishedCaseLawDecisions.slug,
+      country: publishedCaseLawDecisions.country,
+      court: publishedCaseLawDecisions.court,
+      decisionDate: publishedCaseLawDecisions.decisionDate,
+      language: publishedCaseLawDecisions.language,
+      hasDocument: publicRowHoldsDocumentFor(publishedCaseLawDecisions).as(
+        "has_document",
+      ),
       languageRank: sql<number>`row_number() over (
         partition by ${normalizedLanguageSql}
-        order by ${publicRowHoldsDocument} desc, ${caseLawDecisions.id}
+        order by ${publicRowHoldsDocumentFor(publishedCaseLawDecisions)} desc, ${publishedCaseLawDecisions.id}
       )`.as("language_rank"),
     })
-    .from(caseLawDecisions)
-    .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
+    .from(publishedCaseLawDecisions)
+    .innerJoin(
+      caseLawSources,
+      eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
+    )
     .where(
       and(
-        eq(caseLawDecisions.languageGroupKey, languageGroupKey),
-        inArray(caseLawDecisions.country, [...PUBLIC_CASE_LAW_PAGE_COUNTRIES]),
+        eq(publishedCaseLawDecisions.languageGroupKey, languageGroupKey),
+        inArray(
+          publishedCaseLawDecisions.country,
+          publicCountriesFor("caseLaw", "identity"),
+        ),
         redistributableCaseLawSource,
-        publishedCaseLawDecision,
         sql`${normalizedLanguageSql} ~ ${ROUTE_LANGUAGE_PATTERN}`,
       ),
     )

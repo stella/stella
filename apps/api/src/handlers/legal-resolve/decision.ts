@@ -209,7 +209,9 @@ export const resolveDecision = async ({
     return { status: "country_unavailable" };
   }
   if (
-    !PUBLIC_COUNTRY_SURFACE_OPEN.identity[PUBLIC_COUNTRY_CAPABILITIES[country]]
+    !PUBLIC_COUNTRY_SURFACE_OPEN.identity[
+      PUBLIC_COUNTRY_CAPABILITIES[country].caseLaw
+    ]
   ) {
     return { status: "country_unavailable" };
   }

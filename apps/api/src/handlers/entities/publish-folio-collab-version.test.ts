@@ -98,7 +98,10 @@ describe("folio collaboration publication cut", () => {
     );
 
     expect(lockStart).toBeGreaterThan(-1);
-    expect(source.slice(lockStart, lockEnd)).toContain('.for("update")');
+    const acquisition = source.slice(lockStart, lockEnd);
+    expect(acquisition).toContain("await withAggregateRowQuery({");
+    expect(acquisition).toContain('aggregate: "folioCollabRoom"');
+    expect(acquisition).toContain('mode: "update"');
     expect(transactionStart).toBeGreaterThan(-1);
     expect(roomLock).toBeGreaterThan(transactionStart);
     expect(canonicalWrite).toBeGreaterThan(roomLock);
