@@ -27,6 +27,38 @@ export type PublicLawTableLayout = {
   contentMode: TableContentMode;
 };
 
+/** Replay a table action against its latest stored arrangement. */
+export type PublicLawTableLayoutUpdate<TLayout extends PublicLawTableLayout> = (
+  latest: TLayout,
+) => TLayout;
+
+type ApplyPublicLawSizingChangeOptions = {
+  previous: PublicLawTableLayout["sizing"];
+  next: PublicLawTableLayout["sizing"];
+  latest: PublicLawTableLayout["sizing"];
+};
+
+/** A controlled table publishes the full sizing map; retain only its edit. */
+export const applyPublicLawSizingChange = ({
+  previous,
+  next,
+  latest,
+}: ApplyPublicLawSizingChangeOptions) => {
+  const removed = new Set(
+    Object.keys(previous).filter((column) => !(column in next)),
+  );
+  return {
+    ...Object.fromEntries(
+      Object.entries(latest).filter(([column]) => !removed.has(column)),
+    ),
+    ...Object.fromEntries(
+      Object.entries(next).filter(
+        ([column, width]) => previous[column] !== width,
+      ),
+    ),
+  };
+};
+
 /** One empty sizing map, so an untouched layout keeps one identity. */
 export const NO_COLUMN_SIZING: Readonly<Record<string, number>> = {};
 

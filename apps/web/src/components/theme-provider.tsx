@@ -84,11 +84,11 @@ export const ThemeProvider = ({ children }: PropsWithChildren) => {
   const resolvedTheme = theme === "system" ? systemTheme : theme;
 
   const setTheme = (next: Theme) => {
-    setPrefs({ theme: next });
+    setPrefs(() => ({ theme: next }));
   };
 
   const setPalette = (next: Palette) => {
-    setPrefs({ palette: next });
+    setPrefs(() => ({ palette: next }));
   };
 
   useLayoutEffect(() => {

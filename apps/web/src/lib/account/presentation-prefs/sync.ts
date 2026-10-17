@@ -25,8 +25,19 @@ type PrefsChannel = {
   ) => void;
 };
 
+/** Evaluated optimistically, then again against the stored prefs under the write lock. */
+export type PresentationPrefsUpdate = (
+  latest: PresentationPrefs,
+) => Partial<PresentationPrefs>;
+
+const applyUpdate = (
+  prefs: PresentationPrefs,
+  update: PresentationPrefsUpdate,
+): PresentationPrefs => ({ ...prefs, ...update(prefs) });
+
 type PresentationPrefsSyncOptions = {
   initialPrefs: PresentationPrefs;
+  read: () => Promise<PresentationPrefs>;
   write: (patch: Partial<PresentationPrefs>) => Promise<PresentationPrefs>;
   withLock?: (write: () => Promise<void>) => Promise<void>;
   openChannel?: () => PrefsChannel | undefined;
@@ -34,6 +45,7 @@ type PresentationPrefsSyncOptions = {
 
 export const createPresentationPrefsSync = ({
   initialPrefs,
+  read,
   write,
   withLock = async (operation) => await operation(),
   openChannel,
@@ -41,19 +53,17 @@ export const createPresentationPrefsSync = ({
   let applied = initialPrefs;
   let snapshot = initialPrefs;
   let queued: Promise<unknown> = Promise.resolve();
-  const pending: { patch: Partial<PresentationPrefs> }[] = [];
+  const pending: { patch: PresentationPrefsUpdate }[] = [];
   const listeners = new Set<() => void>();
   let channel: PrefsChannel | undefined;
   let peerSubscribers = 0;
 
   const refresh = () => {
     // A peer's committed snapshot must not erase this tab's pending edits.
-    snapshot = {
-      ...applied,
-      ...Object.fromEntries(
-        pending.flatMap(({ patch }) => Object.entries(patch)),
-      ),
-    };
+    snapshot = applied;
+    for (const { patch } of pending) {
+      snapshot = applyUpdate(snapshot, patch);
+    }
     for (const listener of listeners) {
       listener();
     }
@@ -98,7 +108,7 @@ export const createPresentationPrefsSync = ({
         disconnectIfUnused();
       };
     },
-    update: async (patch: Partial<PresentationPrefs>) => {
+    update: async (patch: PresentationPrefsUpdate) => {
       const update = { patch };
       pending.push(update);
       refresh();
@@ -108,7 +118,8 @@ export const createPresentationPrefsSync = ({
             await withLock(async () => {
               // Start the request under the origin-wide lock: its Cookie header
               // must include the preceding response's Set-Cookie changes.
-              applied = await write(patch);
+              const latest = await read();
+              applied = await write(patch(latest));
               pending.splice(pending.indexOf(update), 1);
               refresh();
               const activeChannel = connect();

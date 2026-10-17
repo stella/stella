@@ -39,7 +39,7 @@ const Controls = ({ tab }: { tab: string }) => {
       <button
         type="button"
         aria-label={`${tab} dark`}
-        onClick={() => setPrefs({ theme: "dark" })}
+        onClick={() => setPrefs(() => ({ theme: "dark" }))}
       >
         {tab}
       </button>
@@ -69,6 +69,7 @@ test("mounted tabs receive saved themes and sidebar changes even after a local t
   const createTab = () =>
     createPresentationPrefsSync({
       initialPrefs: cookie,
+      read: async () => await Promise.resolve(cookie),
       write,
       withLock,
       openChannel: hub.open,
@@ -114,6 +115,7 @@ test("a deserialized store and peer updates preserve a boundary still hydrating"
   const initialPrefs = { ...defaultPresentationPrefs, theme: "light" as const };
   const options = {
     initialPrefs: { ...initialPrefs },
+    read: async () => await Promise.resolve(initialPrefs),
     write: async (patch: Partial<PresentationPrefs>) =>
       await Promise.resolve({ ...initialPrefs, ...patch }),
     openChannel: hub.open,
@@ -161,7 +163,7 @@ test("a deserialized store and peer updates preserve a boundary still hydrating"
   );
   try {
     await act(async () => {
-      await peer.update({ theme: "dark" });
+      await peer.update(() => ({ theme: "dark" }));
     });
     expect(serverButton.isConnected).toBe(true);
     expect(document.activeElement === serverButton).toBe(true);

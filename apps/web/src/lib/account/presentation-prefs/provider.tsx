@@ -7,19 +7,26 @@ import { useMountEffect } from "@/hooks/use-effect";
 import { getTranslator } from "@/i18n/translator";
 import { defaultPresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
 import type { PresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
-import { writePresentationPrefs } from "@/lib/account/presentation-prefs/server";
+import {
+  readPresentationPrefs,
+  writePresentationPrefs,
+} from "@/lib/account/presentation-prefs/server";
 import {
   createPresentationPrefsSync,
   PRESENTATION_PREFS_CHANNEL,
   PRESENTATION_PREFS_LOCK,
 } from "@/lib/account/presentation-prefs/sync";
-import type { PresentationPrefsSync } from "@/lib/account/presentation-prefs/sync";
+import type {
+  PresentationPrefsSync,
+  PresentationPrefsUpdate,
+} from "@/lib/account/presentation-prefs/sync";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detachedUserAction } from "@/lib/errors/user-toast";
 
 const createBrowserSync = (initialPrefs: PresentationPrefs) =>
   createPresentationPrefsSync({
     initialPrefs,
+    read: async () => await readPresentationPrefs(),
     write: async (patch) => await writePresentationPrefs({ data: patch }),
     withLock: async (write) => {
       if ("locks" in navigator) {
@@ -61,7 +68,7 @@ export const getBrowserPresentationPrefs = (): PresentationPrefs =>
 
 const savePrefs = (
   sync: PresentationPrefsSync,
-  patch: Partial<PresentationPrefs>,
+  patch: PresentationPrefsUpdate,
 ) => {
   detachedUserAction(sync.update(patch), {
     context: "presentation-prefs.save",
@@ -70,7 +77,7 @@ const savePrefs = (
 };
 
 export const persistPresentationPrefs = (
-  patch: Partial<PresentationPrefs>,
+  patch: PresentationPrefsUpdate,
 ): void => {
   if (typeof window !== "undefined") {
     savePrefs(getBrowserSync(), patch);
@@ -84,7 +91,7 @@ const PresentationPrefsContext = createContext({
     subscribe: (_listener: () => void) => (): void => undefined,
   },
   readerScrollContainers: new Set<RefObject<HTMLElement | null>>(),
-  setPrefs: (_patch: Partial<PresentationPrefs>): void => undefined,
+  setPrefs: (_patch: PresentationPrefsUpdate): void => undefined,
 });
 
 type PresentationPrefsProviderProps = PropsWithChildren<{
@@ -103,6 +110,7 @@ export const PresentationPrefsProvider = ({
       (typeof window === "undefined"
         ? createPresentationPrefsSync({
             initialPrefs,
+            read: async () => await readPresentationPrefs(),
             write: async (patch) =>
               await writePresentationPrefs({ data: patch }),
           })
@@ -112,8 +120,7 @@ export const PresentationPrefsProvider = ({
   const [readerScrollContainers] = useState(
     () => new Set<RefObject<HTMLElement | null>>(),
   );
-  const setPrefs = (patch: Partial<PresentationPrefs>) =>
-    savePrefs(sync, patch);
+  const setPrefs = (patch: PresentationPrefsUpdate) => savePrefs(sync, patch);
   return (
     <PresentationPrefsContext
       value={{ initialPrefs, sync, setPrefs, readerScrollContainers }}

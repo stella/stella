@@ -1,5 +1,8 @@
 import { layoutForSurface } from "@/components/public-law-table/public-law-table-layout.logic";
-import type { PublicLawTableLayout } from "@/components/public-law-table/public-law-table-layout.logic";
+import type {
+  PublicLawTableLayout,
+  PublicLawTableLayoutUpdate,
+} from "@/components/public-law-table/public-law-table-layout.logic";
 import type { PresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
 import { usePresentationPrefs } from "@/lib/account/presentation-prefs/provider";
 
@@ -47,7 +50,15 @@ export const usePublicLawTableLayout = <TLayout extends PublicLawTableLayout>(
   });
   return {
     layout,
-    setLayout: (next: TLayout) =>
-      setPrefs(store.patch({ ...layouts, [surface]: next })),
+    setLayout: (update: PublicLawTableLayoutUpdate<TLayout>) =>
+      setPrefs((latest) => {
+        const latestLayouts = store.layouts(latest);
+        const current = layoutForSurface({
+          defaults: store.defaultLayout,
+          layouts: latestLayouts,
+          surface,
+        });
+        return store.patch({ ...latestLayouts, [surface]: update(current) });
+      }),
   };
 };

@@ -22,6 +22,6 @@ export const setLang = async (lang: SupportedLanguage): Promise<void> => {
   }
   await useI18nStore.getState().loadMessages(lang);
   if (!session.data && useI18nStore.getState().loadedLang === lang) {
-    persistPresentationPrefs({ visitorLocale: lang });
+    persistPresentationPrefs(() => ({ visitorLocale: lang }));
   }
 };

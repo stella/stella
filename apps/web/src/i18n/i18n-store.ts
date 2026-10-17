@@ -477,25 +477,25 @@ const browserI18nStore = create<I18nState>()((set, get) => ({
 
   setCalendar: (calendar) => {
     set({ calendar });
-    persistPresentationPrefs({ calendar });
+    persistPresentationPrefs(() => ({ calendar }));
     recomputeFormatterForState(get());
   },
 
   setNumberingSystem: (numberingSystem) => {
     set({ numberingSystem });
-    persistPresentationPrefs({ numberingSystem });
+    persistPresentationPrefs(() => ({ numberingSystem }));
     recomputeFormatterForState(get());
   },
 
   setRegionalFormat: (regionalFormat) => {
     set({ regionalFormat });
-    persistPresentationPrefs({ regionalFormat });
+    persistPresentationPrefs(() => ({ regionalFormat }));
     recomputeFormatterForState(get());
   },
 
   setWeekStart: (weekStart) => {
     set({ weekStart });
-    persistPresentationPrefs({ weekStart });
+    persistPresentationPrefs(() => ({ weekStart }));
     recomputeFormatterForState(get());
   },
 }));

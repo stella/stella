@@ -15,7 +15,7 @@ export const useSharedInspectorPaneWidth = ({
   const { prefs, setPrefs } = usePresentationPrefs();
   return useInspectorPaneWidth({
     initialWidth: prefs.inspectorWidth,
-    onWidthChange: (inspectorWidth) => setPrefs({ inspectorWidth }),
+    onWidthChange: (inspectorWidth) => setPrefs(() => ({ inspectorWidth })),
     sidebarWidth,
     viewportWidth,
   });

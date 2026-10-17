@@ -22,10 +22,10 @@ export const useReaderProvisionMode = (
       for (const scroller of readerScrollContainers) {
         keepReadingPosition({ scroller: scroller.current }, () => undefined);
       }
-      setPrefs({
+      setPrefs((latest) => ({
         readerProvisionMode:
-          prefs.readerProvisionMode === "expanded" ? "collapsed" : "expanded",
-      });
+          latest.readerProvisionMode === "expanded" ? "collapsed" : "expanded",
+      }));
     },
   };
 };

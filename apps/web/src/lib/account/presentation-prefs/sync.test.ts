@@ -29,12 +29,14 @@ test("overlapping theme and sidebar saves from two tabs both survive reload", as
   };
   const first = createPresentationPrefsSync({
     initialPrefs: cookie,
+    read: async () => await Promise.resolve(cookie),
     write,
     withLock,
     openChannel: hub.open,
   });
   const second = createPresentationPrefsSync({
     initialPrefs: cookie,
+    read: async () => await Promise.resolve(cookie),
     write,
     withLock,
     openChannel: hub.open,
@@ -42,9 +44,9 @@ test("overlapping theme and sidebar saves from two tabs both survive reload", as
   const stopFirst = first.subscribeToPeers();
   const stopSecond = second.subscribeToPeers();
   try {
-    const themeSave = first.update({ theme: "dark" });
+    const themeSave = first.update(() => ({ theme: "dark" }));
     await started.promise;
-    const sidebarSave = second.update({ sidebarOpen: false });
+    const sidebarSave = second.update(() => ({ sidebarOpen: false }));
     await Promise.resolve();
     await Promise.resolve();
     expect(requests).toEqual([{ theme: "dark" }]);
@@ -67,6 +69,7 @@ test("overlapping theme and sidebar saves from two tabs both survive reload", as
     });
     const reloaded = createPresentationPrefsSync({
       initialPrefs: cookie,
+      read: async () => await Promise.resolve(cookie),
       write,
     });
     expect(reloaded.getSnapshot()).toMatchObject({
@@ -85,6 +88,7 @@ test("without browser coordination APIs one tab still serializes writes and broa
   let cookie = defaultPresentationPrefs;
   const sync = createPresentationPrefsSync({
     initialPrefs: cookie,
+    read: async () => await Promise.resolve(cookie),
     write: async (patch) => {
       const incomingCookie = cookie;
       await Promise.resolve();
@@ -93,8 +97,8 @@ test("without browser coordination APIs one tab still serializes writes and broa
     },
   });
   const saves = [
-    sync.update({ theme: "dark" }),
-    sync.update({ sidebarOpen: false }),
+    sync.update(() => ({ theme: "dark" })),
+    sync.update(() => ({ sidebarOpen: false })),
   ];
   expect(sync.getSnapshot()).toMatchObject({
     theme: "dark",
@@ -109,6 +113,7 @@ test("a failed save rejects its caller and later changes still persist", async (
   let cookie = defaultPresentationPrefs;
   const sync = createPresentationPrefsSync({
     initialPrefs: cookie,
+    read: async () => await Promise.resolve(cookie),
     write: async (patch) => {
       if (patch.theme !== undefined) {
         throw new Error("Preference save failed");
@@ -117,8 +122,8 @@ test("a failed save rejects its caller and later changes still persist", async (
       return cookie;
     },
   });
-  const failed = sync.update({ theme: "dark" });
-  const saved = sync.update({ sidebarOpen: false });
+  const failed = sync.update(() => ({ theme: "dark" }));
+  const saved = sync.update(() => ({ sidebarOpen: false }));
   expect(await rejectionOf(failed)).toMatchObject({
     message: "Preference save failed",
   });

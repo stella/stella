@@ -83,7 +83,7 @@ export const resolveKeyboardWidth = ({
 type UseInspectorPaneWidthOptions = {
   /** Inline size the sidebar takes out of the same layout row. */
   sidebarWidth: number;
-  /** Initial desired width supplied by the host, including its server snapshot. */
+  /** Desired width supplied by the host; updates apply between pointer drags. */
   initialWidth?: number;
   /** Persist the desired width on completed user resizes. */
   onWidthChange?: (width: number) => void;
@@ -137,13 +137,23 @@ export const useInspectorPaneWidth = ({
   const [desiredWidth, setDesiredWidth] = useState(
     initialWidth ?? INSPECTOR_PANE_DEFAULT_WIDTH,
   );
+  const [hostWidth, setHostWidth] = useState(initialWidth);
+  const [dragStatus, setDragStatus] = useState<"idle" | "dragging">("idle");
+  // Pointer move and release can share a React batch; retain the latest width
+  // synchronously while state makes the drag status available during render.
   const drag = useRef<
     { status: "idle" } | { status: "dragging"; width: number }
   >({ status: "idle" });
 
+  if (hostWidth !== initialWidth && dragStatus === "idle") {
+    setHostWidth(initialWidth);
+    setDesiredWidth(initialWidth ?? INSPECTOR_PANE_DEFAULT_WIDTH);
+  }
+
   const handlePointerDown = (event: ReactPointerEvent<HTMLElement>) => {
     event.preventDefault();
     drag.current = { status: "dragging", width: desiredWidth };
+    setDragStatus("dragging");
     event.currentTarget.setPointerCapture(event.pointerId);
   };
 
@@ -171,6 +181,7 @@ export const useInspectorPaneWidth = ({
       onWidthChange?.(drag.current.width);
     }
     drag.current = { status: "idle" };
+    setDragStatus("idle");
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }

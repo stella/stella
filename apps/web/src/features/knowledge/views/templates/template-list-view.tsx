@@ -86,7 +86,7 @@ const TemplateListView = ({
   const { dropFile } = actions;
 
   const changeDensity = (next: TemplateDensity) => {
-    setPrefs({ templateDensity: next });
+    setPrefs(() => ({ templateDensity: next }));
   };
 
   const handleDragOver = (e: DragEvent) => {

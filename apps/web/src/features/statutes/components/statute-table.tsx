@@ -36,6 +36,7 @@ import { cn } from "@stll/ui/utils";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { PublicLawRow } from "@/components/public-law-table/public-law-row";
 import { PublicLawTable } from "@/components/public-law-table/public-law-table";
+import type { PublicLawTableLayoutUpdate } from "@/components/public-law-table/public-law-table-layout.logic";
 import type { ColumnToggleGroup } from "@/components/workspaces/table/column-toggle";
 import { HighlightedText } from "@/components/workspaces/table/find-highlight";
 import type { TableFindHighlight } from "@/components/workspaces/table/find-highlight";
@@ -92,7 +93,9 @@ type StatuteTableProps = {
   /** See `PublicLawTable`. */
   isRefreshing?: boolean | undefined;
   layout: StatuteTableLayout;
-  onLayoutChange: (layout: StatuteTableLayout) => void;
+  onLayoutChange: (
+    update: PublicLawTableLayoutUpdate<StatuteTableLayout>,
+  ) => void;
   statutes: readonly StatuteListItem[];
 };
 

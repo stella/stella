@@ -6,6 +6,6 @@ export const useWebReaderTextScale = () => {
   const { prefs, setPrefs } = usePresentationPrefs();
   return useReaderTextScale({
     initialScale: prefs.readerTextScale,
-    onScaleChange: (readerTextScale) => setPrefs({ readerTextScale }),
+    onScaleChange: (readerTextScale) => setPrefs(() => ({ readerTextScale })),
   });
 };

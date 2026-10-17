@@ -17,6 +17,6 @@ export const usePersistedSidebarOpen = ({
     ? prefs.sidebarOpen
     : (openOverride ?? defaultOpen);
   const persistOpen = (nextOpen: boolean) =>
-    setPrefs({ sidebarOpen: nextOpen });
+    setPrefs(() => ({ sidebarOpen: nextOpen }));
   return { open, persistOpen, setOpen: setOpenOverride };
 };
