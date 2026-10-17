@@ -47,7 +47,5 @@ export const checkMcpGeneratedOutputs = async (root: string) => {
 if (import.meta.main) {
   const root = new URL("..", import.meta.url).pathname;
   checkMcpGeneratedTracking(root);
-  if (process.argv.includes("--check-outputs")) {
-    await checkMcpGeneratedOutputs(root);
-  }
+  await checkMcpGeneratedOutputs(root);
 }

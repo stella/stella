@@ -928,14 +928,16 @@ test("CI diff path guards stay pinned to manifest outputs", () => {
     ]);
   }
   const bundle = ciGeneratedStepRun("MCP app derived outputs guard");
-  // Derived outputs are untracked, so a diff would pass on anything: the
-  // guard instead requires every declared output to exist after the build
-  // and runs the tracking check.
-  expect(bundle).not.toContain("outputs=(");
+  // The workflow retains its baseline shell checks. Its registered command
+  // validates the complete manifest, including newly declared outputs.
   expect(bundle).not.toContain("git diff --exit-code");
-  expect(bundle).toContain(
-    "bun scripts/check-mcp-generated-tracking.ts --check-outputs",
+  expect(bundle).toContain(generator("mcp-app-bundles").check.join(" "));
+  const guard = readFileSync(
+    new URL("check-mcp-generated-tracking.ts", import.meta.url),
+    "utf-8",
   );
+  expect(guard).toContain("await checkMcpGeneratedOutputs(root);");
+  expect(guard).not.toContain("process.argv");
   const preparation = readFileSync(
     new URL("ci-generated-sources.ts", import.meta.url),
     "utf-8",
