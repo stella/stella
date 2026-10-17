@@ -11,7 +11,13 @@ import {
   verifyPublicMetadata,
 } from "./public-metadata";
 import type { PublicMetadata, MetadataReader } from "./public-metadata";
-import { GIT_ORIGIN, metadataReferenceIdentity } from "./references";
+import {
+  GIT_ORIGIN,
+  metadataReferenceIdentity,
+  sameMetadataOrigin,
+  resolveLocalMetadataPath,
+} from "./references";
+import type { MetadataOrigin } from "./references";
 import { AdmissionError, parseDocument } from "./yaml";
 
 const DECISIONS = v.record(
@@ -66,10 +72,14 @@ export const readClassificationInputs = (root: string) => {
     decisions: v.parse(DECISIONS, read("ci-job-classification-decisions.json")),
     snapshots,
     reader,
-    localActionPath: (directory: string) => {
+    localActionPath: ({ repository, directory }: LocalActionPathOptions) => {
       const file = ["action.yml", "action.yaml"]
         .map((name) => `${directory}/${name}`)
-        .find((candidatePath) => existsSync(path.resolve(root, candidatePath)));
+        .find((candidatePath) =>
+          repository === "candidate"
+            ? existsSync(path.resolve(root, candidatePath))
+            : snapshots[repository]?.documents[candidatePath] !== undefined,
+        );
       if (!file) {
         throw new AdmissionError({
           message: `Local action metadata missing: ${directory}`,
@@ -80,11 +90,13 @@ export const readClassificationInputs = (root: string) => {
   };
 };
 
+type LocalActionPathOptions = { repository: string; directory: string };
+
 type GenerateOptions = {
   manifest: PublicMetadata;
   decisions: v.InferOutput<typeof DECISIONS>;
   reader: MetadataReader;
-  localActionPath: (directory: string) => string;
+  localActionPath: (options: LocalActionPathOptions) => string;
 };
 // Every emitted field except kind/qualifier is derived from the reachable tree.
 export const generateClassification = ({
@@ -97,11 +109,17 @@ export const generateClassification = ({
     try: () => {
       const nodes = new Map<string, PublicMetadata["nodes"][number]>();
       const missing: string[] = [];
-      const source = (repository: string, file: string) =>
+      type SourceOptions = {
+        repository: string;
+        file: string;
+        origin: MetadataOrigin;
+      };
+      const source = ({ repository, file, origin }: SourceOptions) =>
         manifest.nodes.find(
           (node) =>
             node.type === "metadata" &&
             node.repository === repository &&
+            sameMetadataOrigin({ caller: origin, target: node.origin }) &&
             node.path === file,
         );
       const visit = (original: PublicMetadata["nodes"][number]): string => {
@@ -143,25 +161,38 @@ export const generateClassification = ({
             reference,
             node.repository,
           );
-          let target = manifest.nodes.find((entry) => {
-            if (entry.type === "supplier") {
-              return entry.reference === identity;
-            }
-            return entry.references.some(
-              (declared) =>
-                metadataReferenceIdentity(declared, entry.repository) ===
-                identity,
-            );
-          });
-          if (
-            reference.startsWith("$/") ||
-            (reference.startsWith("./") && !target)
-          ) {
-            const relative = reference.slice(2);
-            const file = /\.ya?ml$/u.test(relative)
-              ? relative
-              : localActionPath(relative);
-            target = source(node.repository, file) ?? {
+          const local =
+            reference.startsWith("$/") || reference.startsWith("./");
+          let target = local
+            ? undefined
+            : manifest.nodes.find((entry) => {
+                if (entry.type === "supplier") {
+                  return entry.reference === identity;
+                }
+                return entry.references.some(
+                  (declared) =>
+                    metadataReferenceIdentity(declared, entry.repository) ===
+                    identity,
+                );
+              });
+          if (local) {
+            const relative = resolveLocalMetadataPath({
+              reference,
+              kind,
+              relocatedActions: parsed.value.relocatedActions,
+            });
+            const file =
+              kind === "reusable-workflow"
+                ? relative
+                : localActionPath({
+                    repository: node.repository,
+                    directory: relative,
+                  });
+            target = source({
+              repository: node.repository,
+              origin: node.origin,
+              file,
+            }) ?? {
               type: "metadata",
               id: `source-${sha256(`${node.repository}:${file}`)}`,
               repository: node.repository,
@@ -202,7 +233,11 @@ export const generateClassification = ({
         .toSorted()
         .map((file) => {
           const original =
-            source(manifest.repository, file) ??
+            source({
+              repository: manifest.repository,
+              origin: { type: "checkout" },
+              file,
+            }) ??
             ({
               type: "metadata",
               id: `source-${sha256(`${manifest.repository}:${file}`)}`,

@@ -13,9 +13,14 @@ import {
   metadataReferenceIdentity,
   parseRemoteReference,
   sameMetadataOrigin,
+  resolveLocalMetadataPath,
   verifyRemoteReference,
 } from "./references";
-import type { MetadataOrigin, MetadataReferenceKind } from "./references";
+import type {
+  LocalMetadataPathOptions,
+  MetadataOrigin,
+  MetadataReferenceKind,
+} from "./references";
 import { AdmissionError, parseDocument } from "./yaml";
 
 export const REFRESH_COMMAND =
@@ -80,17 +85,13 @@ const safePath = (path: string) => {
     reject("unsafe metadata path");
   }
 };
-const githubExpression = (value: string) => `\${{ ${value} }}`;
 type ReferenceOptions = {
   callerRepository: string;
   callerOrigin: MetadataOrigin;
   target: PublicMetadata["nodes"][number];
   reference: string;
   kind: MetadataReferenceKind;
-  relocatedActions: Record<
-    string,
-    { repository: string | null; ref: string | null; path: string }[]
-  >;
+  relocatedActions: LocalMetadataPathOptions["relocatedActions"];
 };
 const verifyReference = ({
   callerRepository,
@@ -116,29 +117,20 @@ const verifyReference = ({
         kind,
       });
     } else {
-      const localPath = reference.slice(2);
-      const relocations = relocatedActions[reference] ?? [];
+      const localPath = resolveLocalMetadataPath({
+        reference,
+        kind,
+        relocatedActions,
+      });
       const exactPath =
         kind === "reusable-workflow"
           ? target.path === localPath
           : target.path === `${localPath}/action.yml` ||
             target.path === `${localPath}/action.yaml`;
-      const relocatedPath = relocations.some(
-        (relocation) =>
-          (relocation.repository === null ||
-            relocation.repository === githubExpression("github.repository") ||
-            relocation.repository ===
-              githubExpression("job.workflow_repository")) &&
-          (relocation.ref === null ||
-            relocation.ref === githubExpression("github.workflow_sha") ||
-            relocation.ref === githubExpression("job.workflow_sha")) &&
-          (target.path === `${relocation.path}/action.yml` ||
-            target.path === `${relocation.path}/action.yaml`),
-      );
       if (
         target.repository !== callerRepository ||
         !sameMetadataOrigin({ caller: callerOrigin, target: target.origin }) ||
-        (!exactPath && !relocatedPath)
+        !exactPath
       ) {
         reject("local metadata path, repository or origin mismatch");
       }

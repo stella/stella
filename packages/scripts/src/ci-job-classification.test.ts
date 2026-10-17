@@ -720,6 +720,29 @@ const relocatedActionFixture = ({
 test("checkout-relative action aliases bind to their source repository and path", () => {
   const valid = relocatedActionFixture({});
   expect(verifyPublicMetadata(valid).isOk()).toBe(true);
+  const generated = generateClassification({
+    ...valid,
+    manifest: {
+      ...valid.manifest,
+      nodes: valid.manifest.nodes.map((node) =>
+        node.type === "metadata" && node.id === "action"
+          ? { ...node, references: [] }
+          : node,
+      ),
+    },
+    decisions: fixtureDecisions(valid.manifest),
+    localActionPath: ({ repository, directory }) => {
+      expect(repository).toBe("candidate");
+      expect(directory).toBe(".github/actions/local");
+      return `${directory}/action.yml`;
+    },
+  });
+  if (generated.isErr()) {
+    throw generated.error;
+  }
+  expect(generated.value.nodes.find((node) => node.id === "action")).toEqual(
+    valid.manifest.nodes.find((node) => node.id === "action"),
+  );
 
   failure(
     verifyPublicMetadata(
@@ -921,7 +944,7 @@ test("new jobs remain unclassified even when refreshing generated metadata", () 
   const result = generateClassification({
     ...f,
     decisions: fixtureDecisions(f.manifest),
-    localActionPath: (directory) => `${directory}/action.yml`,
+    localActionPath: ({ directory }) => `${directory}/action.yml`,
   });
   expect(result.isErr()).toBe(true);
   if (result.isErr()) {
@@ -940,7 +963,8 @@ test("classification generation reaches a fixed point and preserves human decisi
   const options = {
     ...f,
     decisions,
-    localActionPath: (directory: string) => `${directory}/action.yml`,
+    localActionPath: ({ directory }: { directory: string }) =>
+      `${directory}/action.yml`,
   };
   const first = generateClassification(options);
   if (first.isErr()) {
@@ -989,7 +1013,7 @@ test("classification generation scopes relative action identity to the caller re
     manifest,
     decisions: fixtureDecisions(manifest),
     reader: f.reader,
-    localActionPath: (directory) => `${directory}/action.yml`,
+    localActionPath: ({ directory }) => `${directory}/action.yml`,
   });
   if (generated.isErr()) {
     throw generated.error;
@@ -1005,6 +1029,172 @@ test("classification generation scopes relative action identity to the caller re
     false,
   );
 });
+
+for (const extension of ["yml", "yaml"]) {
+  test(`relative actions resolve independently in candidate and supplier checkouts: ${extension}`, () => {
+    const f = fixture();
+    const relative = "./.github/actions/local";
+    const supplier = "public-supplier@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const remote = `vendor/shared/composite@${"a".repeat(40)}`;
+    const compositePath = "composite/action.yml";
+    const localPath = `.github/actions/local/action.${extension}`;
+    const supplierAction =
+      "runs: {using: composite, steps: [{run: 'echo supplier'}]}";
+    const composite = `runs: {using: composite, steps: [{uses: '${relative}'}]}`;
+    const callee = f.manifest.nodes.find((node) => node.id === "callee");
+    if (callee?.type !== "metadata") {
+      throw new AdmissionError({ message: "supplier fixture missing" });
+    }
+    const manifest = {
+      ...f.manifest,
+      nodes: [
+        {
+          ...callee,
+          id: "composite",
+          path: compositePath,
+          references: [remote],
+        },
+        // Exercise stale aliases as well as source-specific action extensions.
+        ...f.manifest.nodes.map((node) =>
+          node.type === "metadata" && node.id === "action"
+            ? {
+                ...node,
+                path:
+                  extension === "yml"
+                    ? ".github/actions/alias/action.yml"
+                    : node.path,
+                references: [relative],
+              }
+            : node,
+        ),
+      ],
+    } satisfies PublicMetadata;
+    const directory = mkdtempSync(path.join(tmpdir(), "ci-relative-sources-"));
+    try {
+      mkdirSync(path.join(directory, ".github/workflows"), { recursive: true });
+      mkdirSync(path.join(directory, ".github/actions/local"), {
+        recursive: true,
+      });
+      writeFileSync(
+        path.join(directory, ".github/workflows/ci.yml"),
+        `jobs: {caller: {steps: [{uses: '${relative}'}, {uses: '${remote}'}]}}`,
+      );
+      writeFileSync(
+        path.join(directory, ".github/actions/local/action.yml"),
+        "runs: {using: composite, steps: [{run: 'echo candidate'}]}",
+      );
+      const files = {
+        "ci-job-classification.json": manifest,
+        "ci-job-classification-decisions.json": fixtureDecisions(f.manifest),
+        "ci-job-classification-sources.json": {
+          [supplier]: {
+            origin: callee.origin,
+            documents: {
+              [compositePath]: composite,
+              [localPath]: supplierAction,
+            },
+          },
+        },
+      };
+      for (const [file, value] of Object.entries(files)) {
+        writeFileSync(
+          path.join(directory, ".github", file),
+          JSON.stringify(value),
+        );
+      }
+      const inputs = readClassificationInputs(directory);
+      const reads = new Set<string>();
+      const reader: MetadataReader = {
+        workflows: inputs.reader.workflows,
+        read: (repository, file) => {
+          reads.add(`${repository}:${file}`);
+          return inputs.reader.read(repository, file);
+        },
+      };
+      const generated = generateClassification({ ...inputs, reader });
+      if (generated.isErr()) {
+        throw generated.error;
+      }
+      expect(reads).toContain("candidate:.github/actions/local/action.yml");
+      expect(reads).toContain(`${supplier}:${localPath}`);
+      const sources = generated.value.nodes.filter(
+        (node) => node.type === "metadata",
+      );
+      expect(sources).toHaveLength(4);
+      const candidateAction = sources.find(
+        (node) =>
+          node.repository === "candidate" &&
+          node.path === ".github/actions/local/action.yml",
+      );
+      const supplierLocalAction = sources.find(
+        (node) => node.repository === supplier && node.path === localPath,
+      );
+      if (!candidateAction || !supplierLocalAction) {
+        throw new AdmissionError({
+          message: "resolved action fixture missing",
+        });
+      }
+      expect(candidateAction.id).not.toBe(supplierLocalAction.id);
+      expect(
+        sources.find((node) => node.path === compositePath)?.edges[relative],
+      ).toBe(supplierLocalAction.id);
+      const again = generateClassification({
+        ...inputs,
+        reader,
+        manifest: generated.value,
+      });
+      if (again.isErr()) {
+        throw again.error;
+      }
+      expect(again.value).toEqual(generated.value);
+      const swapped = {
+        ...generated.value,
+        nodes: generated.value.nodes.map((node) =>
+          node.type === "metadata" && node.path === compositePath
+            ? { ...node, edges: { [relative]: candidateAction.id } }
+            : node,
+        ),
+      };
+      failure(
+        verifyPublicMetadata({ manifest: swapped, reader }),
+        "local metadata path, repository or origin mismatch",
+      );
+      const changed = supplierAction.replace("echo supplier", "npm publish");
+      expect(changed).not.toBe(supplierAction);
+      const changedReader: MetadataReader = {
+        workflows: reader.workflows,
+        read: (repository, file) =>
+          repository === supplier && file === localPath
+            ? changed
+            : reader.read(repository, file),
+      };
+      failure(
+        verifyPublicMetadata({
+          manifest: generated.value,
+          reader: changedReader,
+        }),
+        "Classification-relevant metadata changed",
+      );
+      const refreshed = generateClassification({
+        ...inputs,
+        manifest: generated.value,
+        reader: changedReader,
+      });
+      if (refreshed.isErr()) {
+        throw refreshed.error;
+      }
+      expect(refreshed.value).not.toEqual(generated.value);
+      expect(
+        verifyPublicMetadata({
+          manifest: refreshed.value,
+          reader: changedReader,
+        }).isOk(),
+      ).toBe(true);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  }, 60_000);
+}
 
 test("real ci.yml classification is stable across comments, timeouts and step names", () => {
   const original = readFileSync(
@@ -1097,7 +1287,8 @@ for (const [before, after] of [
     const options = {
       ...f,
       decisions: fixtureDecisions(f.manifest),
-      localActionPath: (directory: string) => `${directory}/action.yml`,
+      localActionPath: ({ directory }: { directory: string }) =>
+        `${directory}/action.yml`,
     };
     const baseline = generateClassification(options);
     if (baseline.isErr()) {
@@ -1170,7 +1361,8 @@ test("reusable workflow caller inputs require review until metadata is refreshed
   const options = {
     ...f,
     decisions: fixtureDecisions(f.manifest),
-    localActionPath: (directory: string) => `${directory}/action.yml`,
+    localActionPath: ({ directory }: { directory: string }) =>
+      `${directory}/action.yml`,
   };
   const baseline = generateClassification(options);
   if (baseline.isErr()) {
@@ -1378,7 +1570,8 @@ for (const [before, after] of [
     const options = {
       ...f,
       decisions: fixtureDecisions(f.manifest),
-      localActionPath: (directory: string) => `${directory}/action.yml`,
+      localActionPath: ({ directory }: { directory: string }) =>
+        `${directory}/action.yml`,
     };
     const baseline = generateClassification(options);
     if (baseline.isErr()) {

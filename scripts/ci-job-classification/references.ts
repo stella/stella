@@ -130,3 +130,48 @@ export const verifyRemoteReference = ({
     throw new AdmissionError({ message: "remote metadata path mismatch" });
   }
 };
+
+const githubExpression = (value: string) => `\${{ ${value} }}`;
+export type LocalMetadataPathOptions = {
+  reference: string;
+  kind: MetadataReferenceKind;
+  relocatedActions: Record<
+    string,
+    { repository: string | null; ref: string | null; path: string }[]
+  >;
+};
+// Relocations describe a checkout of the calling document's own source.
+export const resolveLocalMetadataPath = ({
+  reference,
+  kind,
+  relocatedActions,
+}: LocalMetadataPathOptions) => {
+  const relocations =
+    kind === "action" ? (relocatedActions[reference] ?? []) : [];
+  if (relocations.length === 0) {
+    return reference.slice(2);
+  }
+  const paths = new Set<string>();
+  for (const relocation of relocations) {
+    if (
+      (relocation.repository !== null &&
+        relocation.repository !== githubExpression("github.repository") &&
+        relocation.repository !==
+          githubExpression("job.workflow_repository")) ||
+      (relocation.ref !== null &&
+        relocation.ref !== githubExpression("github.workflow_sha") &&
+        relocation.ref !== githubExpression("job.workflow_sha"))
+    ) {
+      throw new AdmissionError({
+        message: "local metadata path, repository or origin mismatch",
+      });
+    }
+    paths.add(relocation.path);
+  }
+  if (paths.size !== 1) {
+    throw new AdmissionError({
+      message: "ambiguous local metadata checkout path",
+    });
+  }
+  return relocations[0].path;
+};
