@@ -212,10 +212,11 @@ or change deployed feature flags.
    is unhealthy, inconclusive, or still inside its window without a
    verdict. After investigating, re-dispatch `release.yml` for the new tag
    with `acknowledge_unhealthy_release` set to that previous release.
+
 10. After a stable release succeeds, `publish-npm.yml` checks out the same
-   release commit, packs the CLI, installs that exact tarball under plain Node,
-   and runs its unauthenticated compatibility canary against production. Only
-   then can the hardened npm publishing job publish `@stll/cli`.
+    release commit, packs the CLI, installs that exact tarball under plain Node,
+    and runs its unauthenticated compatibility canary against production. Only
+    then can the hardened npm publishing job publish `@stll/cli`.
 
 Changing `packages/cli/package.json` on `main` does not publish the CLI by
 itself. This ordering is deliberate: the API must advertise support for the
