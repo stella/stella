@@ -1219,18 +1219,9 @@ test("deleting a claimant before seed acknowledgement warns the next member abou
       expectedSnapshotRevision: 0,
       snapshotBytes: deployedSnapshot("dirty"),
       value: {
-        canEdit: true,
-        entityId: ids.entityA1,
-        fileName: "contract.docx",
-        generation: 4,
         organizationId: ids.orgA,
-        propertyId: ids.filePropertyA1,
         roomId,
         scopedDb,
-        tokenExpiresAt: new Date(Date.now() + 60_000),
-        tokenId: createSafeId<"folioCollabRoomToken">(),
-        userId: ids.userA1,
-        userName: "Editor",
         workspaceId: ids.wsA1,
       },
     });
