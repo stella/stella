@@ -1,4 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
+
+import { assertProperty } from "@stll/property-testing";
+import { stripUnicodeMarks } from "@stll/text-normalize";
 
 import {
   canApproveIntegrationAuthorization,
@@ -6,6 +10,38 @@ import {
   matchesConnectionQuery,
   type IntegrationAuthorizationStatus,
 } from "./connections.logic";
+
+const PROPERTY_MAX_TEXT_PARTS = 20;
+const PROPERTY_MAX_FIELDS = 6;
+const searchTextArbitrary = fc
+  .array(
+    fc.constantFrom(
+      "a",
+      "C",
+      "é",
+      "e\u0301",
+      "Č",
+      "c\u030C",
+      "ß",
+      "ς",
+      "😀",
+      "\ud800",
+      "\udc00",
+      "\ufffd",
+      "+",
+      "[",
+      " ",
+      "\t",
+    ),
+    { maxLength: PROPERTY_MAX_TEXT_PARTS },
+  )
+  .map((parts) => parts.join(""));
+
+const oldFold = (value: string): string =>
+  stripUnicodeMarks(value, {
+    form: "NFD",
+    markClass: "combining",
+  }).toLocaleLowerCase();
 
 describe("integration approval", () => {
   test("approval requires permission and a pending review", () => {
@@ -51,6 +87,47 @@ describe("connection search", () => {
     expect(
       matchesConnectionQuery("harbrook", [null, undefined, "Harbrook"]),
     ).toBe(true);
+  });
+
+  test("matches punctuation literally and retains its existing NFD fold", () => {
+    expect(matchesConnectionQuery("+", ["Drive + files"])).toBe(true);
+    expect(matchesConnectionQuery("drive +", ["Drive files"])).toBe(false);
+    expect(matchesConnectionQuery("strasse", ["Straße"])).toBe(false);
+  });
+
+  test("matches malformed surrogates as replacement characters and rejects half-astral queries", () => {
+    expect(matchesConnectionQuery("\ufffd", ["broken\ud800text"])).toBe(true);
+    expect(matchesConnectionQuery("\ud83d", ["😀"])).toBe(false);
+    expect(matchesConnectionQuery("\ude00", ["😀"])).toBe(false);
+  });
+
+  test("connection search matches the previous NFD word predicate for generated Unicode inputs", () => {
+    assertProperty(
+      "connection search matches the previous NFD word predicate for generated Unicode inputs",
+      fc.property(
+        searchTextArbitrary,
+        fc.array(
+          fc.oneof(
+            searchTextArbitrary,
+            fc.constant(null),
+            fc.constant(undefined),
+          ),
+          { maxLength: PROPERTY_MAX_FIELDS },
+        ),
+        (query, fields) => {
+          const words = oldFold(query)
+            .split(/\s+/u)
+            .filter(Boolean)
+            .map((word) => word.toWellFormed());
+          const expected = words.every((word) =>
+            oldFold(fields.filter(Boolean).join(" "))
+              .toWellFormed()
+              .includes(word),
+          );
+          expect(matchesConnectionQuery(query, fields)).toBe(expected);
+        },
+      ),
+    );
   });
 });
 

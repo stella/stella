@@ -1,4 +1,5 @@
 import { stripUnicodeMarks } from "@stll/text-normalize";
+import { containsSearchMatchKey } from "@stll/text-normalize/search-match-key";
 import type { StatusTone } from "@stll/ui/list";
 
 import type { TranslationKey } from "@/i18n/types";
@@ -27,7 +28,7 @@ export const matchesConnectionQuery = (
     return true;
   }
   const haystack = fold(fields.filter(Boolean).join(" "));
-  return words.every((word) => haystack.includes(word));
+  return words.every((word) => containsSearchMatchKey(haystack, word));
 };
 
 export type IntegrationConnection = Pick<
