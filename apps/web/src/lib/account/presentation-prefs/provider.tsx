@@ -21,7 +21,7 @@ const createBrowserSync = (initialPrefs: PresentationPrefs) =>
     initialPrefs,
     write: async (patch) => await writePresentationPrefs({ data: patch }),
     withLock: async (write) => {
-      if (typeof navigator !== "undefined" && navigator.locks !== undefined) {
+      if (navigator.locks !== undefined) {
         await navigator.locks.request(PRESENTATION_PREFS_LOCK, write);
         return;
       }

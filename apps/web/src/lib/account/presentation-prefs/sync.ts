@@ -91,7 +91,7 @@ export const createPresentationPrefsSync = ({
         disconnectIfUnused();
       };
     },
-    update: (patch: Partial<PresentationPrefs>) => {
+    update: async (patch: Partial<PresentationPrefs>) => {
       const update = { patch };
       pending.push(update);
       refresh();
