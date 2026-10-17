@@ -284,17 +284,27 @@ export const selectChecks = ({
   return { affected, selected };
 };
 
-export const selectedTestJobs = (
-  changed: readonly string[],
-  repository = root,
-) => {
+export const selectedTestJobs = (turboPlan: string, repository = root) => {
   const graph = readSelectionGraph(repository);
-  const { selected } = selectChecks({
-    changed,
-    graph,
-    checks: readCheckInputs(graph, repository),
-  });
+  const parsed = v.parse(
+    v.object({
+      tasks: v.array(v.object({ package: v.string(), task: v.string() })),
+    }),
+    JSON.parse(turboPlan),
+  );
+  const selectedPackages = new Set(
+    parsed.tasks
+      .filter(({ task }) => task === "test")
+      .map(({ package: packageName }) => packageName),
+  );
+  const packageNames = [...graph.packages]
+    .filter(([, value]) => value.tests)
+    .map(([name]) => name);
   return FULL_TEST_JOB_SHARDS.filter((shard) =>
-    selected.has(`ci-tests (${shard})`),
+    TEST_JOB_SHARDS[shard].some((testShard) =>
+      shardPackages({ packageNames, shard: testShard }).some((packageName) =>
+        selectedPackages.has(packageName),
+      ),
+    ),
   );
 };
