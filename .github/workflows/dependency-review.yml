@@ -156,13 +156,18 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Resolve comparison base
+        if: steps.changes.outputs.required == 'true' || steps.actions.outputs.required == 'true'
+        id: target-base
+        uses: ./.github/actions/merge-target-base
+
       - name: Dependency Review
         if: steps.changes.outputs.required == 'true' || steps.actions.outputs.required == 'true'
         uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
           # The action derives both refs from a pull_request payload on its own;
           # a merge group carries them under its own event key.
-          base-ref: ${{ github.event.merge_group.base_sha || '' }}
+          base-ref: ${{ github.event_name == 'merge_group' && steps.target-base.outputs.base_sha || '' }}
           head-ref: ${{ github.event.merge_group.head_sha || '' }}
           fail-on-severity: high
           allow-licenses: >-

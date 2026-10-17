@@ -7152,3 +7152,175 @@ test("Postgres PR required checks follow trust, run eligibility and the general 
     }
   }
 });
+
+const TARGET_BASE_ACTION = ".github/actions/merge-target-base/action.yml";
+
+/** Runs the comparison-base resolver's script in `cwd` and returns its output. */
+const resolveTargetBase = (cwd: string, env: Record<string, string>) => {
+  const action = v.parse(
+    v.object({
+      runs: v.object({ steps: v.array(v.object({ run: v.string() })) }),
+    }),
+    Bun.YAML.parse(
+      readFileSync(
+        nodePath.join(import.meta.dir, "..", TARGET_BASE_ACTION),
+        "utf-8",
+      ),
+    ),
+  );
+  const script =
+    action.runs.steps.at(0)?.run ?? panic("resolver has no script");
+  const output = nodePath.join(cwd, ".resolver-output");
+  writeFileSync(output, "");
+  const result = Bun.spawnSync(["bash", "-e", "-c", script], {
+    cwd,
+    env: { PATH: Bun.env["PATH"] ?? "", GITHUB_OUTPUT: output, ...env },
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  expect(result.exitCode, result.stderr.toString()).toBe(0);
+  return readFileSync(output, "utf-8")
+    .trim()
+    .replace(/^base_sha=/u, "");
+};
+
+test("a merge group certifies every queue entry it merges against the target branch", () => {
+  const root = realpathSync(
+    mkdtempSync(nodePath.join(tmpdir(), "merge-target-base-")),
+  );
+  const git = (cwd: string, ...args: string[]) => {
+    const result = Bun.spawnSync(["git", "-C", cwd, ...args], {
+      env: {
+        PATH: Bun.env["PATH"] ?? "",
+        GIT_AUTHOR_NAME: "Fixture",
+        GIT_AUTHOR_EMAIL: "fixture@localhost",
+        GIT_COMMITTER_NAME: "Fixture",
+        GIT_COMMITTER_EMAIL: "fixture@localhost",
+      },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
+    return result.stdout.toString().trim();
+  };
+  const commit = (cwd: string, file: string, message: string) => {
+    mkdirSync(nodePath.dirname(nodePath.join(cwd, file)), { recursive: true });
+    writeFileSync(nodePath.join(cwd, file), `${message}\n`);
+    git(cwd, "add", file);
+    git(cwd, "-c", "commit.gpgsign=false", "commit", "--quiet", "-m", message);
+    return git(cwd, "rev-parse", "HEAD");
+  };
+  try {
+    const origin = nodePath.join(root, "origin");
+    mkdirSync(origin);
+    git(origin, "init", "--quiet", "--initial-branch=main");
+    const main = commit(origin, "README.md", "main");
+    // Queue entry 1 changes a production web spec; entry 2 only docs. The
+    // group for entry 2 is built on entry 1's commit.
+    git(origin, "checkout", "--quiet", "-b", "queue");
+    const entry1 = commit(
+      origin,
+      "apps/web/e2e/specs/queued.spec.ts",
+      "entry 1",
+    );
+    const entry2 = commit(origin, "docs/queued.md", "entry 2");
+    const group = nodePath.join(root, "group");
+    git(root, "clone", "--quiet", "--no-checkout", origin, "group");
+    git(group, "checkout", "--quiet", "--detach", entry2);
+
+    const base = resolveTargetBase(group, {
+      EVENT_NAME: "merge_group",
+      TARGET_REF: "refs/heads/main",
+    });
+    expect(base).toBe(main);
+    const changed = (from: string) =>
+      git(group, "diff", "--name-only", `${from}...${entry2}`).split("\n");
+    expect(changed(base).toSorted()).toEqual([
+      "apps/web/e2e/specs/queued.spec.ts",
+      "docs/queued.md",
+    ]);
+    expect(
+      runSelector(
+        changed(base),
+        ["e2e_production_required"],
+        "full",
+        "false",
+        "merge_group",
+      ),
+    ).toEqual(["true"]);
+    // The previous entry's commit (merge_group.base_sha) sees only entry 2,
+    // which is why the group must not plan against it.
+    expect(changed(entry1)).toEqual(["docs/queued.md"]);
+    expect(
+      runSelector(
+        changed(entry1),
+        ["e2e_production_required"],
+        "full",
+        "false",
+        "merge_group",
+      ),
+    ).toEqual(["false"]);
+
+    // An unresolvable target branch leaves the base empty: consumers widen.
+    expect(
+      resolveTargetBase(group, {
+        EVENT_NAME: "merge_group",
+        TARGET_REF: "refs/heads/missing",
+      }),
+    ).toBe("");
+    // A pull request keeps its own base.
+    expect(
+      resolveTargetBase(group, {
+        EVENT_NAME: "pull_request",
+        PR_BASE_SHA: main,
+      }),
+    ).toBe(main);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("only the resolver chooses a merge group's comparison base", () => {
+  const offenders: string[] = [];
+  for (const pattern of [
+    ".github/workflows/*.yml",
+    ".github/actions/*/action.yml",
+  ]) {
+    for (const file of new Bun.Glob(pattern).scanSync({
+      cwd: nodePath.join(import.meta.dir, ".."),
+    })) {
+      const source = readFileSync(
+        nodePath.join(import.meta.dir, "..", file),
+        "utf-8",
+      );
+      for (const [index, line] of source.split("\n").entries()) {
+        if (!line.includes("github.event.merge_group.base_sha")) {
+          continue;
+        }
+        // The patch id names an entry's own change, so it alone diffs
+        // against the previous queue entry.
+        if (
+          file === ".github/workflows/ci.yml" &&
+          line.trim().startsWith("GROUP_BASE_SHA:")
+        ) {
+          continue;
+        }
+        offenders.push(`${file}:${String(index + 1)}`);
+      }
+    }
+  }
+  expect(offenders).toEqual([]);
+  const patchId = jobSteps(ciJobs["ci-plan"]).find(
+    ({ name }) => name === "Compute stable patch id",
+  );
+  expect(JSON.stringify(patchId)).toContain(
+    "github.event.merge_group.base_sha",
+  );
+  const certified = jobSteps(ciJobs["ci-result"]).find(
+    ({ name }) => name === "Record the certified comparison base",
+  );
+  expect(JSON.stringify(certified)).toContain(
+    "needs.ci-plan.outputs.target_base_sha",
+  );
+  expect(certified?.run).toContain("GITHUB_STEP_SUMMARY");
+});

@@ -1,0 +1,41 @@
+name: Resolve the comparison base
+description: >
+  The commit a run compares its changes against. A pull request compares
+  against its base. A merge group compares against the target branch, not
+  against the previous queue entry (`merge_group.base_sha`): the queue merges
+  every earlier entry together with this one, so the group must certify all of
+  their changes. Empty when there is no base (push, schedule) or it cannot be
+  resolved; every consumer treats empty as unknown and widens.
+outputs:
+  base_sha:
+    description: Comparison base commit, or empty.
+    value: ${{ steps.resolve.outputs.base_sha }}
+runs:
+  using: composite
+  steps:
+    - id: resolve
+      shell: bash
+      env:
+        EVENT_NAME: ${{ github.event_name }}
+        PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        TARGET_REF: ${{ github.event.merge_group.base_ref }}
+      run: |
+        base=""
+        if [[ "$EVENT_NAME" == pull_request ]]; then
+          base="$PR_BASE_SHA"
+        elif [[ "$EVENT_NAME" == merge_group ]]; then
+          ref="${TARGET_REF#refs/heads/}"
+          fetch=(git fetch --quiet --no-tags --filter=blob:none)
+          if [[ "$(git rev-parse --is-shallow-repository)" == true ]]; then
+            fetch+=(--unshallow)
+          fi
+          if [[ -n "$ref" ]] && "${fetch[@]}" origin "$ref" &&
+            target="$(git rev-parse FETCH_HEAD)" &&
+            merge_base="$(git merge-base "$target" HEAD)"; then
+            base="$merge_base"
+            echo "Merge group compares against $ref at merge base $base."
+          else
+            echo "::warning::Merge group target base unresolved; consumers widen to full scope."
+          fi
+        fi
+        echo "base_sha=$base" >> "$GITHUB_OUTPUT"
