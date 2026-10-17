@@ -2609,6 +2609,7 @@
       "admissionUnavailable": "Diese Aktion ist vorübergehend pausiert. Bitte versuchen Sie es in Kürze erneut.",
       "concurrencyBusy": "Andere Vorgänge laufen noch. Bitte versuchen Sie es in Kürze erneut.",
       "contact": "Kontaktieren Sie uns",
+      "featureDisabled": "Diese Funktion ist vorübergehend deaktiviert.",
       "notEnabled": "Diese Aktion ist für Ihre Organisation nicht aktiviert.",
       "periodExhausted": "Diese Aktion ist für Ihre Organisation pausiert."
     },

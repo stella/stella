@@ -1,7 +1,8 @@
-import { panic, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import type { SafeId } from "@/api/lib/branded-types";
+import { admitSwitchedAction } from "@/api/lib/kill-switches/admission";
 import type { ActionKind } from "@/api/lib/rate-limit/action-kinds";
 import {
   MANAGED_MODEL_TIER,
@@ -70,7 +71,8 @@ type AdmitModelDispatchOptions<T> = {
  * The proof lives exactly as long as `run`: when `run` settles, its signal
  * aborts and any later dispatch on it panics, so work that outlives its
  * admission (a detached generation, a proof returned out of the admitted
- * callback) cannot reach a model.
+ * callback) cannot reach a model. A proof is never minted for an action whose
+ * kill switch is off; the refusal rejects as the wrapper's admission refusal.
  */
 export const admitModelDispatch = async <T>({
   organizationId,
@@ -79,6 +81,10 @@ export const admitModelDispatch = async <T>({
   signal,
   run,
 }: AdmitModelDispatchOptions<T>): Promise<T> => {
+  const switched = admitSwitchedAction(actionKind);
+  if (Result.isError(switched)) {
+    throw switched.error;
+  }
   const modelTier = await readManagedModelTier(
     organizationStateDb,
     organizationId,

@@ -1,0 +1,5 @@
+{
+  "metric": "throw-outside-boundary",
+  "delta": 1,
+  "reason": "admitModelDispatch in apps/api/src/lib/rate-limit/model-dispatch-admission.ts reports failure by rejecting, as its managed-tier read already does; every admission wrapper converts the rejection at its Result boundary. Refusing a switched-off action there holds the kill switch for every model dispatch by construction."
+}

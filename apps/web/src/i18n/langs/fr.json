@@ -2609,6 +2609,7 @@
       "admissionUnavailable": "Cette action est temporairement suspendue. Veuillez réessayer dans un instant.",
       "concurrencyBusy": "D’autres opérations sont en cours. Veuillez réessayer dans un instant.",
       "contact": "Contactez-nous",
+      "featureDisabled": "Cette fonctionnalité est temporairement désactivée.",
       "notEnabled": "Cette action n’est pas activée pour votre organisation.",
       "periodExhausted": "Cette action est suspendue pour votre organisation."
     },

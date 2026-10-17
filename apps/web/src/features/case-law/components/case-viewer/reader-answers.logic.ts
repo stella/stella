@@ -269,6 +269,7 @@ const READER_ANSWER_ERROR_KINDS = {
   [ACTION_ADMISSION_CODES.concurrencyBusy]: "network",
   [ACTION_ADMISSION_CODES.notEnabled]: "network",
   [ACTION_ADMISSION_CODES.admissionUnavailable]: "network",
+  [ACTION_ADMISSION_CODES.featureDisabled]: "network",
 } as const satisfies Record<ReaderAnswerErrorCode, string>;
 
 export type ReaderAnswerFailureKind =

@@ -2609,6 +2609,7 @@
       "admissionUnavailable": "Šis veiksmas laikinai pristabdytas. Netrukus bandykite dar kartą.",
       "concurrencyBusy": "Vyksta kiti darbai. Netrukus bandykite dar kartą.",
       "contact": "Susisiekite su mumis",
+      "featureDisabled": "Ši funkcija laikinai išjungta.",
       "notEnabled": "Šis veiksmas jūsų organizacijai neįjungtas.",
       "periodExhausted": "Šis veiksmas jūsų organizacijai pristabdytas."
     },
