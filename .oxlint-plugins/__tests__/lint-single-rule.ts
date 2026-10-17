@@ -184,9 +184,18 @@ export const sharedLines = (
   );
 };
 
-/** Every batch claimed for a configuration, so tests can prove case coverage. */
+/** Every accepted shared run in this process, so tests can prove sharing. */
 export const sharedRuns: { readonly code: string; readonly cases: number }[] =
   [];
+
+/**
+ * Every batch claimed for a configuration, accepted or not, so tests can prove
+ * that each case was linted exactly once whatever the grouping.
+ */
+export const claimedBatches: {
+  readonly code: string;
+  readonly cases: number;
+}[] = [];
 
 type PendingGate = {
   readonly cases: number;
@@ -213,7 +222,7 @@ const lintTogether = async (
   if (first === undefined) {
     return [];
   }
-  sharedRuns.push({ code, cases: requests.length });
+  claimedBatches.push({ code, cases: requests.length });
   if (requests.length > 1) {
     const sourceFiles = requests.map(({ lintCase }) => lintCase.sourceFile);
     const lines = sharedLines(
@@ -225,6 +234,7 @@ const lintTogether = async (
       code,
     );
     if (lines !== null) {
+      sharedRuns.push({ code, cases: requests.length });
       return requests.map(({ lintCase }, index) => ({
         shared: {
           lines: lines[index] ?? [],

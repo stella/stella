@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { expect, test } from "bun:test";
 
 import {
+  claimedBatches,
   holdSharedRunUntilPendingForTest,
   lintSingleRule,
   lintsAlone,
@@ -127,6 +128,40 @@ test("concurrent cases keep their own lines across any run grouping", async () =
     ),
   );
   expect(results).toEqual([[], [1, 3], [2]]);
-  const runs = sharedRuns.filter((run) => run.code === code).slice(before);
-  expect(runs.reduce((cases, run) => cases + run.cases, 0)).toBe(3);
+  const batches = claimedBatches
+    .filter((batch) => batch.code === code)
+    .slice(before);
+  expect(batches.reduce((cases, batch) => cases + batch.cases, 0)).toBe(3);
+});
+
+test("a rejected shared run falls back to lone runs and is not counted as shared", async () => {
+  const code = "no-raw-date-parsing(no-raw-date-parsing)";
+  const sharedBefore = sharedRuns.filter((run) => run.code === code).length;
+  const claimedBefore = claimedBatches.filter(
+    (batch) => batch.code === code,
+  ).length;
+  holdSharedRunUntilPendingForTest(code, 3);
+  const dateOnly = 'const parsed = new Date("2024-01-01");';
+  // The unparsable case adds a diagnostic that is not this rule's, so the
+  // shared report is rejected and every case reruns alone.
+  const results = await Promise.all(
+    [
+      dateOnly,
+      "const broken = ;",
+      ["const first = 1;", dateOnly].join("\n"),
+    ].map(
+      async (source) =>
+        await Result.tryPromise(async () =>
+          lintSingleRule("no-raw-date-parsing", source),
+        ),
+    ),
+  );
+  expect(results[0]?.isOk() && results[0].value).toEqual([1]);
+  expect(results[2]?.isOk() && results[2].value).toEqual([2]);
+  expect(
+    claimedBatches.filter((batch) => batch.code === code).slice(claimedBefore),
+  ).toEqual([{ code, cases: 3 }]);
+  expect(
+    sharedRuns.filter((run) => run.code === code).slice(sharedBefore),
+  ).toEqual([]);
 });
