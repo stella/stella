@@ -3,7 +3,7 @@ import type { SQL, SQLWrapper } from "drizzle-orm";
 
 import { caseLawDecisions } from "@/api/db/schema";
 import { citationTextRevisionFingerprintSql } from "@/api/lib/case-law/citation-text-revision";
-import { publishedCaseLawDecisionSqlFor } from "@/api/lib/case-law/published-decisions";
+import { publishedCaseLawDecisionSqlFor } from "@/api/lib/case-law/published-decisions-sql";
 
 export type CitationTextRevision = {
   contentHash: string | null;

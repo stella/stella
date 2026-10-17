@@ -98,7 +98,7 @@ const artifacts = await formattedArtifactsLikeRepository([
   },
   {
     path: path.join(outputRoot, "contracts.d.ts"),
-    contents: `${header}import type * as v from "valibot";\nimport type { Block } from "@stll/legal-ast/document-ast";\n\n${declarations.join("\n\n")}\n`,
+    contents: `${header}import type * as v from "valibot";\nimport type { Block } from "@stll/legal-ast/document-ast";\n\n${declarations.join("\n\n")}\n\nexport declare const APP_CITATION_TREATMENTS: readonly CitationPage["citations"][number]["polarity"][];\n`,
   },
 ]);
 await Promise.all(

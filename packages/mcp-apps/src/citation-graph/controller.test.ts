@@ -35,6 +35,10 @@ const citation = (citationId: string, decisionId = "synthetic-target") =>
     citationId,
     citationText: `Synthetic citation ${citationId}`,
     textWithheldReason: null,
+    textIncompleteReason: null,
+    evidenceIncompleteReason: null,
+    polarityEvidence: null,
+    citedPart: null,
     polarity: "unclassified",
     doctrine: null,
     decision: {

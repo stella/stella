@@ -46,6 +46,10 @@ const citation = (
     citationId: `fixture-citation-${index}`,
     citationText: `Fixture reference ${index + 1}`,
     textWithheldReason: null,
+    textIncompleteReason: null,
+    evidenceIncompleteReason: null,
+    polarityEvidence: null,
+    citedPart: null,
     polarity,
     doctrine: null,
     decision:
