@@ -1287,7 +1287,7 @@ test("a push that only merges the base reuses the previous head's green run", as
     parents: [{ sha: previous }, { sha: baseCommit }],
   };
   const onBase = { status: "ahead", merge_base_commit: { sha: baseCommit } };
-  const reuse = (options: LookupOptions = {}) =>
+  const reuse = async (options: LookupOptions = {}) =>
     decide({
       action: "synchronize",
       before: previous,
