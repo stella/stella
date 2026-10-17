@@ -512,7 +512,7 @@ describe("pending style set package cleanup reconciliation", () => {
   });
 
   test.each(["defect", "transient"] as const)(
-    "the real runner records one %s exception and a failed cleanup tick",
+    "the real runner records a %s failure and a failed cleanup tick",
     async (grade) => {
       const cause =
         grade === "defect"
@@ -539,11 +539,21 @@ describe("pending style set package cleanup reconciliation", () => {
       });
 
       expect(status).toBe("failed");
-      expect(analytics.exceptions()).toHaveLength(1);
-      expect(analytics.exceptions().at(0)?.properties).toMatchObject({
-        "error.class": "StyleSetPackageCleanupRequeueError",
-        "failure.grade": grade,
-        "failure.reason": grade === "defect" ? "unclassified" : "network_reset",
+      expect(analytics.exceptions()).toHaveLength(grade === "defect" ? 1 : 0);
+      if (grade === "defect") {
+        expect(analytics.exceptions().at(0)?.properties).toMatchObject({
+          "error.class": "StyleSetPackageCleanupRequeueError",
+          "failure.grade": grade,
+          "failure.reason": "tagged_failure",
+        });
+      }
+      expect(
+        logs.records.find(({ message }) => message === "scheduler.job_failed")
+          ?.attributes,
+      ).toMatchObject({
+        "failure.shadow_grade": grade,
+        "failure.shadow_reason":
+          grade === "defect" ? "tagged_failure" : "network_reset",
       });
       expect(
         logs.records.filter(

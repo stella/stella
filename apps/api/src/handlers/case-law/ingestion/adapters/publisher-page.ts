@@ -6,6 +6,11 @@ import { isTag } from "domhandler";
 import { parseXmlDocument } from "slimdom";
 
 import {
+  INGESTION_STOP_KIND,
+  type IngestionStopKind,
+} from "@stll/legal-atlas/ingestion-cycle";
+
+import {
   isExcludedHtmlTag,
   visibleHtmlText,
 } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
@@ -17,6 +22,14 @@ type PublisherPageReason =
   | "interstitial"
   | "invalid-syntax"
   | "invalid-shape";
+
+const PUBLISHER_PAGE_STOP_KIND = {
+  "too-small": INGESTION_STOP_KIND.SOURCE_UNREACHABLE,
+  "content-type": INGESTION_STOP_KIND.SOURCE_UNREACHABLE,
+  interstitial: INGESTION_STOP_KIND.PUBLISHER_REFUSAL,
+  "invalid-syntax": INGESTION_STOP_KIND.ADAPTER_ERROR,
+  "invalid-shape": INGESTION_STOP_KIND.ADAPTER_ERROR,
+} as const satisfies Record<PublisherPageReason, IngestionStopKind>;
 
 export class PublisherPageError extends AdapterFetchError {
   override readonly name = "PublisherPageError";
@@ -30,7 +43,11 @@ export class PublisherPageError extends AdapterFetchError {
     adapterKey: string;
     cursor: string | null;
   }) {
-    super({ ...context, message: `Publisher page rejected: ${reason}` });
+    super({
+      ...context,
+      message: `Publisher page rejected: ${reason}`,
+      stopKind: PUBLISHER_PAGE_STOP_KIND[reason],
+    });
     this.reason = reason;
   }
 }

@@ -1,14 +1,22 @@
 import { EventType } from "@tanstack/ai";
 import type { AnyTextAdapter, StreamChunk } from "@tanstack/ai";
 import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
 
 import { env } from "@/api/env";
+import {
+  classifyAIError,
+  providerErrorBody,
+  providerStatusCode,
+} from "@/api/lib/ai-error";
 import { withProviderStreamContract } from "@/api/lib/chat/provider-stream-contract";
+import { createProviderCallError } from "@/api/lib/errors/provider-call-failure";
+import { failureSink, gradeFailure } from "@/api/lib/observability/failure";
+import { readEvidence } from "@/api/lib/observability/failure-evidence";
 import { createTanStackTextAdapterFactory } from "@/api/lib/tanstack-ai-models";
 import { CHAT_ORACLE } from "@/api/tests/helpers/chat-oracles";
 import type { OracleViolation } from "@/api/tests/helpers/chat-oracles";
@@ -167,6 +175,41 @@ const checkCassette = async (cassette: ProviderWireCassette) => {
     findWireContractViolations({ cassette, replay: findings, run }),
   );
   expectSettledTranscripts({ requests, transcripts });
+  if (
+    cassette.scenario === "rate-limit" ||
+    cassette.scenario === "server-error"
+  ) {
+    const failed = run.chunks.findLast(
+      (chunk) => chunk.type === EventType.RUN_ERROR,
+    );
+    if (failed?.type !== EventType.RUN_ERROR) {
+      panic("An HTTP failure cassette produced no RUN_ERROR");
+    }
+    const evidence =
+      failed.rawEvent ??
+      providerErrorBody(failed.message) ??
+      Object.assign(new Error(failed.message), { code: failed.code });
+    const error = createProviderCallError({
+      model: { provider: cassette.provider, keySource: "byok" },
+      evidence,
+      status: 502,
+    });
+    if (cassette.expect.outcome !== "error") {
+      panic("An HTTP failure cassette needs an error expectation");
+    }
+    expect(classifyAIError(error)).toBe(cassette.expect.errorKind);
+    expect(
+      gradeFailure(
+        readEvidence(error),
+        failureSink({ event: "chat.stream_failed", expected: [] }),
+      ).grade,
+    ).toBe("transient");
+    // In-band failures answer HTTP 200 but retain their actual upstream code.
+    const responseStatus = cassette.exchanges.at(-1)?.response.status;
+    expect(error.providerStatus).toBe(
+      responseStatus === 200 ? 502 : responseStatus,
+    );
+  }
   // The rules first: a request a provider would refuse names the rule it
   // breaks before it shows as a changed shape.
   expectProviderRules(sent);
@@ -575,4 +618,68 @@ test("a cancelled structured Bedrock request never reaches the provider", async 
     );
   expect(outcome).toBe("rejected");
   expect(replay.takeFindings().unexpected).toEqual([]);
+});
+
+// Replay the existing quota response through Gemini's non-streaming SDK path:
+// rebuilding its ApiError from the message discards the status at this boundary.
+test("Gemini structured output preserves its provider HTTP status", async () => {
+  const cassette = cassetteFor(cassettes, "google", "rate-limit");
+  replay.serve({
+    ...cassette,
+    exchanges: cassette.exchanges.map((exchange) => ({
+      ...exchange,
+      request: {
+        ...exchange.request,
+        path: exchange.request.path.replace(
+          ":streamGenerateContent?alt=sse",
+          ":generateContent",
+        ),
+      },
+    })),
+  });
+  const model = wireChatModel("google");
+  const adapter = createTanStackTextAdapterFactory({
+    dataClass: "public_corpus",
+    apiKey: "cassette-replay-no-credentials",
+    provider: "google",
+  })(model);
+  const result = await Result.tryPromise(async () =>
+    adapter.structuredOutput({
+      chatOptions: {
+        logger: resolveDebugOption(false),
+        messages: [{ content: "Reply with OK.", role: "user" }],
+        model,
+      },
+      outputSchema: {
+        properties: { answer: { type: "string" } },
+        required: ["answer"],
+        type: "object",
+      },
+    }),
+  );
+  expect(Result.isError(result)).toBe(true);
+  if (Result.isOk(result)) {
+    panic("The quota cassette unexpectedly returned structured output");
+  }
+  // Inspect the actual SDK exception, before our message-body recovery can
+  // compensate for an upstream rethrow that lost the field.
+  expect(result.error.cause).toMatchObject({ status: 429 });
+  expect(providerStatusCode(result.error.cause)).toBe(429);
+  expect(classifyAIError(result.error.cause)).toBe("quota_exhausted");
+  const error = createProviderCallError({
+    model: { provider: "google", keySource: "byok" },
+    evidence: result.error.cause,
+    status: 502,
+  });
+  expect(
+    gradeFailure(
+      readEvidence(error),
+      failureSink({ event: "chat.stream_failed", expected: [] }),
+    ),
+  ).toMatchObject({
+    grade: "transient",
+    reason: "quota_exhausted",
+  });
+  expect(replay.takeFindings()).toEqual({ unexpected: [], unconsumed: [] });
+  replay.takeRequests();
 });

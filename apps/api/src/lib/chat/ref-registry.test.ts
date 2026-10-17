@@ -303,3 +303,12 @@ describe("chat refs across the requests of a thread", () => {
     expect(durable.split(CHAT_UNAVAILABLE_REF_TEXT)).toHaveLength(3);
   });
 });
+
+test("handled model-authored refs become inert text without an exception", () => {
+  const registry = createChatRefRegistry();
+  const result = registry.resolveAssistantTextRefs(
+    "[unknown](#stella-entity-ref=ent_999)",
+  );
+  expect(result).toBe("[unknown](#stella-unresolved-ref)");
+  expect(analytics.exceptions()).toEqual([]);
+});

@@ -50,6 +50,23 @@ const MODEL_CATALOG_INPUTS = [
 
 const GENERATOR_DECLARATIONS = [
   {
+    id: "failure-tags",
+    outputKind: "committed",
+    outputs: ["apps/api/src/lib/observability/failure-tags.gen.ts"],
+    inputs: [
+      "apps/api/src/**/*.ts",
+      "apps/api/src/**/*.tsx",
+      "packages/*/src/**/*.ts",
+      "packages/*/src/**/*.tsx",
+      "scripts/failure-tags.ts",
+      "scripts/generate-failure-tags.ts",
+    ],
+    write: ["bun", "scripts/generate-failure-tags.ts", "--write"],
+    check: ["bun", "scripts/generate-failure-tags.ts"],
+    autofix: false,
+    after: [],
+  },
+  {
     id: "cloud-setup",
     outputKind: "committed",
     outputs: [".agents/cloud-setup.sh"],

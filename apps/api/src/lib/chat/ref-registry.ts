@@ -12,6 +12,7 @@ import {
   toChatSourceCitationHref,
   toChatResourceHref,
 } from "@stll/api-contract";
+import { classifyFailure } from "@stll/errors";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { captureError } from "@/api/lib/analytics/capture";
@@ -111,12 +112,18 @@ const reportRefTelemetry = ({
   kind,
   message,
   ref,
+  origin,
 }: {
   kind: string;
   message: string;
   ref: string;
+  origin: "model" | "stored";
 }) => {
-  captureError(new TelemetryError({ message }), {
+  const error = new TelemetryError({ message });
+  if (origin === "model") {
+    classifyFailure(error, "model_output_invalid");
+  }
+  captureError(error, {
     source: "chat-ref-registry",
     kind,
     ...describeUnresolvedRef(ref),
@@ -597,6 +604,7 @@ export const createChatRefRegistry = (
     reportRefTelemetry({
       kind,
       message: "Assistant text cited a chat ref this turn never minted",
+      origin: "model",
       ref,
     });
   };
@@ -886,6 +894,7 @@ export const createChatRefRegistry = (
   ) => {
     reportRefTelemetry({
       kind: binding.kind,
+      origin: "stored",
       message:
         outcome === "conflict"
           ? "Stored chat history bound one ref to two targets"

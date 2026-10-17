@@ -1,6 +1,13 @@
 import { beforeEach, describe, expect, setSystemTime, test } from "bun:test";
 
 import {
+  classifyFailure,
+  FAILURE_REASON_GRADE,
+  isFailureReason,
+} from "@stll/errors";
+
+import {
+  captureObservedError,
   captureError,
   captureRequestError,
   resetCaptureWindows,
@@ -12,6 +19,8 @@ import {
   type ExtractionWorkerTermination,
   SUBPROCESS_TERMINATION_REASON,
 } from "@/api/lib/errors/tagged-errors";
+import { failureSink, gradeFailure } from "@/api/lib/observability/failure";
+import { readEvidence } from "@/api/lib/observability/failure-evidence";
 import {
   enrichRequestContext,
   getRequestFailure,
@@ -334,9 +343,34 @@ describe("captureError owned fields", () => {
       reason: "network_reset",
       sink: "exception.captured",
     });
-    expect(captured.at(0)?.properties).toMatchObject({
-      "failure.grade": "transient",
-      "failure.reason": "network_reset",
-    });
+    expect(captured).toEqual([]);
   });
+});
+
+describe("exception capture follows the declared grade", () => {
+  const sink = failureSink({ event: "capture.contract", expected: [] });
+  for (const [reason, grade] of Object.entries(FAILURE_REASON_GRADE)) {
+    test(`${reason} uses the same capture policy in shadow and observed paths`, () => {
+      if (!isFailureReason(reason)) {
+        throw new TypeError("Failure policy key must be a declared reason");
+      }
+      const error = classifyFailure(new Error("bounded outcome"), reason);
+      const grading = gradeFailure(readEvidence(error), sink);
+      expect(grading.grade).toBe(grade);
+      const capturePaths = [
+        () => captureError(error),
+        () =>
+          captureRequestError(error, {
+            request: new Request("http://localhost/"),
+          }),
+        () => captureObservedError(error, { observation: grading }),
+      ];
+      for (const capture of capturePaths) {
+        captured.length = 0;
+        resetCaptureWindows();
+        capture();
+        expect(captured).toHaveLength(grade === "defect" ? 1 : 0);
+      }
+    });
+  }
 });
