@@ -182,7 +182,7 @@ test("uses authoritative decision timestamps for filter-only case law", async ()
   expect(caseLawQueries).toHaveLength(2);
   for (const query of caseLawQueries) {
     expect(query).toContain(
-      "JOIN case_law_decisions d ON d.id = clsd.decision_id",
+      "JOIN case_law_published_decisions d ON d.id = clsd.decision_id",
     );
     expect(query).toContain("d.updated_at >=");
     expect(query).not.toContain("clsd.updated_at >=");

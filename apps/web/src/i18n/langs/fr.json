@@ -1058,7 +1058,6 @@
       }
     },
     "sameCaseNumber": "{count, plural, one {# décision porte} other {# décisions portent}} ce numéro d'affaire. Choisissez la juridiction.",
-    "searchAskPrompt": "{query} (jurisprudence, {country})",
     "searchLabel": "Rechercher dans la jurisprudence",
     "searchPlaceholder": "Numéro d'affaire, ECLI ou mots-clés, p. ex. 22 Cdo 2653/2012",
     "searchUnavailable": {
@@ -1215,6 +1214,11 @@
       "requesting": "Préparation des modifications…",
       "stale": "Cette réponse a été modifiée. Sélectionnez à nouveau le texte.",
       "submit": "Demander une modification"
+    },
+    "answerQuote": {
+      "showInDecision": "Afficher dans la décision",
+      "verified": "Citation vérifiée",
+      "verifiedHint": "Mot pour mot dans {source}"
     },
     "applyMode": {
       "description": "Word enregistre l’auteur de chaque modification. Nous mémoriserons votre choix.",
@@ -1400,7 +1404,12 @@
     "maxAttachmentsReached": "Maximum {count} fichiers par message",
     "mention": {
       "category": {
-        "entities": "Dans ce dossier"
+        "entities": "Dans ce dossier",
+        "sources": "Sources"
+      },
+      "corpus": {
+        "caseLaw": "Jurisprudence · {country}",
+        "legislation": "Législation · {country}"
       },
       "loadError": "Échec du chargement des éléments"
     },
@@ -1454,6 +1463,12 @@
       "title": "Texte collé"
     },
     "placeholder": "Saisissez votre question ici, / pour les compétences, @ pour ajouter du contexte",
+    "processSummary": {
+      "analyses": "{count, plural, one {# analyse} other {# analyses}}",
+      "changesSaved": "{count, plural, one {# modification enregistrée} other {# modifications enregistrées}}",
+      "documentEdits": "{count, plural, one {# modification du document} other {# modifications du document}}",
+      "sourcesChecked": "{count, plural, one {# source vérifiée} other {# sources vérifiées}}"
+    },
     "promptImprovementStrategies": {
       "decompose": {
         "description": "Transforme un travail complexe en sous-tâches ordonnées.",
@@ -1699,6 +1714,7 @@
       "interrupted": "Interrompu avant la fin",
       "output": "Résultat",
       "sourceCode": "Code source",
+      "statusWaiting": "En attente",
       "toggleDetails": "Afficher les détails",
       "unrestoredFields": "En mode anonymisé, {count, plural, one {# champ n’a pas pu être rempli} other {# champs n’ont pas pu être remplis}} avec des valeurs réelles. À vérifier : {fields}"
     },
@@ -5121,7 +5137,6 @@
     "provisionTextUnavailable": "Texte indisponible pour cette version",
     "publisherWindowInconsistent": "Aucune version en vigueur ne peut être établie à cette date : les données de l'éditeur sont incohérentes.",
     "resolvedAlias": "Reconnu comme {label}",
-    "searchAskPrompt": "{query} (législation : {country})",
     "searchLabel": "Rechercher dans la législation",
     "searchPlaceholder": "Numéro, nom ou intitulé, p. ex. 89/2012 Sb.",
     "showCitedPartOnly": "Afficher seulement la partie citée",

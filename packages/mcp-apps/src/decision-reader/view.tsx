@@ -60,7 +60,7 @@ const anchorsFor = (document: ReaderPager, host: ReaderController) => {
       start: anchor.start,
       end: anchor.end,
       render: (children: ReactNode): ReactNode =>
-        !host.bridge.supportsTools() && anchor.appUrl === null ? (
+        !host.bridge.supportsTools() && anchor.url === null ? (
           children
         ) : (
           <button
@@ -84,7 +84,7 @@ const anchorsFor = (document: ReaderPager, host: ReaderController) => {
       start: anchor.start,
       end: anchor.end,
       render: (children: ReactNode): ReactNode =>
-        !host.bridge.supportsTools() && anchor.appUrl === null ? (
+        !host.bridge.supportsTools() && anchor.url === null ? (
           children
         ) : (
           <button
@@ -116,7 +116,7 @@ const McpDecisionMetadata = ({
   formattingLocale: ReturnType<typeof appLocale>["formattingLocale"];
   openInStella: string;
 }) => {
-  const webUrl = metadata?.appUrl;
+  const webUrl = metadata?.url;
   const format = createFormatter({ locale: formattingLocale });
   return (
     <>
@@ -172,7 +172,7 @@ const McpProvisionPreview = ({
   host: ReaderController;
   openInStella: string;
 }) => {
-  const previewUrl = preview.appUrl;
+  const previewUrl = preview.url;
   return (
     <aside className="mt-4 space-y-2" lang={preview.language} dir="ltr">
       {previewUrl !== null && (

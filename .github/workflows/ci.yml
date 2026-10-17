@@ -61,12 +61,14 @@ on:
         options: [fast, full]
         default: fast
 
-# PR runs supersede their predecessors. Manual runs supersede only older
-# manual runs on the same branch; merge-group runs remain isolated. Main calls
-# coalesce under a child group distinct from the caller's group.
+# Code-changing PR runs supersede their predecessors. Metadata events use the
+# immutable head SHA so they cannot cancel the code run they are inspecting.
+# Manual runs supersede only older manual runs on the same branch; merge-group
+# runs remain isolated. Main calls coalesce under a child group distinct from
+# the caller's group.
 concurrency:
-  group: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && github.workflow || inputs.heavy_only == true && format('main-heavy-suites-{0}', inputs.sha) || github.workflow }}-${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'ci-' || '' }}${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && github.ref || github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number || github.ref) || github.event_name == 'workflow_dispatch' && format('ci-dispatch-{0}', github.ref) || format('run-{0}', github.run_id) }}
-  cancel-in-progress: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || (inputs.heavy_only != true && (github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch')) }}
+  group: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && github.workflow || inputs.heavy_only == true && format('main-heavy-suites-{0}', inputs.sha) || github.workflow }}-${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'ci-' || '' }}${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && github.ref || github.event_name == 'pull_request' && (contains(fromJSON('["labeled","unlabeled","auto_merge_enabled"]'), github.event.action) && github.event.label.name != 'prove-fix') && format('pr-{0}-{1}-meta', github.event.pull_request.number, github.event.pull_request.head.sha) || github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number || github.ref) || github.event_name == 'workflow_dispatch' && format('ci-dispatch-{0}', github.ref) || format('run-{0}', github.run_id) }}
+  cancel-in-progress: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || (inputs.heavy_only != true && ((github.event_name == 'pull_request' && (contains(fromJSON('["opened","synchronize","reopened","ready_for_review"]'), github.event.action) || github.event.label.name == 'prove-fix')) || github.event_name == 'workflow_dispatch')) }}
 
 permissions: {}
 
@@ -109,6 +111,8 @@ jobs:
       generated_sources_input_hash: ${{ steps.generate.outputs.input_hash }}
       ci_tests_matrix: ${{ steps.api-tests.outputs.ci_tests_matrix }}
       api_test_files: ${{ steps.api-tests.outputs.api_test_files }}
+      test_scope: ${{ steps.api-tests.outputs.test_scope }}
+      comparison_base: ${{ steps.changed-files.outputs.comparison_base }}
       root_checks: ${{ steps.root-checks.outputs.root_checks }}
       api_test_shards: ${{ steps.api-tests.outputs.api_test_shards }}
       api_test_durations_key: ${{ steps.api-test-durations.outputs.key }}
@@ -131,6 +135,7 @@ jobs:
       completion_marker: ${{ steps.completed-depth.outputs.marker }}
       completed_run_id: ${{ steps.completed-depth.outputs.completed_run_id }}
       queue_validation: ${{ steps.completed-depth.outputs.queue_validation }}
+      metadata_only: ${{ steps.completed-depth.outputs.metadata_only }}
       coverage_profile: ${{ steps.pilot.outputs.coverage_profile }}
       pilot_fast_jobs: ${{ steps.pilot-plan.outputs.fast_jobs }}
       queue_required_jobs: ${{ steps.heavy-plan.outputs.queue_jobs || '[]' }}
@@ -473,6 +478,13 @@ jobs:
               return;
             }
             const mergeGroup = context.eventName === "merge_group";
+            const metadataAction = context.eventName === "pull_request"
+              // enqueued keeps its queue-validation path and its ci-result.
+              && ["labeled", "unlabeled", "auto_merge_enabled"].includes(context.payload.action)
+              // A draft runs no CI, so ready_for_review starts the first code
+              // run, and prove-fix changes suite scope: both own ci-result.
+              && context.payload.label?.name !== "prove-fix";
+            if (metadataAction) core.setOutput("metadata_only", "true");
             const queue = mergeGroup && process.env.QUEUE_DEPTH === "thin";
             if (queue) core.setOutput("normal_completion", "required");
             let pr = context.payload.pull_request;
@@ -502,6 +514,14 @@ jobs:
                 || !/^[a-f0-9]{40}$/.test(pr.base?.sha || "")) return;
             const proof = Array.isArray(pr.labels)
               && pr.labels.some((label) => label.name === "prove-fix");
+            const proofScopeChanged = ["labeled", "unlabeled"].includes(context.payload.action)
+              && context.payload.label?.name === "prove-fix";
+            // Metadata that cannot change suite scope consumes completed
+            // evidence when available, but never starts a duplicate suite.
+            // Ready events and prove-fix transitions still need their suites.
+            if (metadataAction && !proofScopeChanged) {
+              core.setOutput("run_required", "false");
+            }
             const scope = require("node:crypto").createHash("sha256")
               .update(JSON.stringify([pr.title, pr.body || "", proof])).digest("hex");
             const profile = mergeGroup ? "normal-v1" : process.env.COVERAGE_PROFILE || "normal-v1";
@@ -821,10 +841,12 @@ jobs:
         run: |
           changed_files=()
           scope_unknown=false
+          comparison_base=""
           if [[ "$EVENT_NAME" != "workflow_dispatch" && "${HEAVY_ONLY:-false}" != true ]]; then
             base_ref="${BASE_SHA:-origin/$BASE_REF}"
             changed_paths=$(mktemp)
-            if git diff --name-only -z --no-renames "$base_ref"...HEAD > "$changed_paths"; then
+            if comparison_base=$(git merge-base "$base_ref" HEAD) &&
+              git diff --name-only -z --no-renames "$comparison_base" HEAD > "$changed_paths"; then
               while IFS= read -r -d '' file; do
                 changed_files+=("$file")
               done < "$changed_paths"
@@ -839,6 +861,22 @@ jobs:
             printf '%s\0' "${changed_files[@]}" > "$RUNNER_TEMP/api-test-changed-paths"
           fi
           echo "api_scope_unknown=$scope_unknown" >> "$GITHUB_OUTPUT"
+          echo "comparison_base=$comparison_base" >> "$GITHUB_OUTPUT"
+
+          # Graph-based scope tools read scope_files; explicit per-path selectors
+          # (dependency malware, lockfile ages, image and manifest inputs) keep
+          # reading the raw changed_files.
+          scope_files=("${changed_files[@]}")
+          # Resolve dependency metadata into the workspace source paths whose
+          # resolved closures changed. Unknown and shared-toolchain changes
+          # retain their original paths and therefore keep the full plan.
+          if (( ${#changed_files[@]} > 0 )); then
+            dependency_scope=$(bun scripts/ci-dependency-scope.ts "$base_ref" HEAD "${changed_files[@]}") || dependency_scope='{"type":"unknown","files":[]}'
+            dependency_class=$(jq -er '.type | select(. == "none" or . == "dev-tooling" or . == "runtime" or . == "shared-base" or . == "unknown")' <<< "$dependency_scope") || dependency_class=unknown
+            if [[ "$dependency_class" == dev-tooling || "$dependency_class" == runtime ]]; then
+              mapfile -t scope_files < <(jq -r '.files[]' <<< "$dependency_scope") || scope_unknown=true
+            fi
+          fi
 
           # An unreadable diff must widen every scope rather than skip checks.
           if [[ "$EVENT_NAME" == "workflow_dispatch" || "$scope_unknown" == "true" || "${HEAVY_ONLY:-false}" == true ]]; then
@@ -964,8 +1002,8 @@ jobs:
           # scope did not change is skipped entirely instead of scheduling a
           # runner just to decide it has nothing to do.
           package_checks_required=true
-          if [[ "$EVENT_NAME" == pull_request || "$EVENT_NAME" == merge_group ]]; then
-            package_scope=$(bun scripts/ci-package-scope.ts --package-checks "${changed_files[@]}") || package_scope=true
+          if [[ "$dependency_class" != dev-tooling && ("$EVENT_NAME" == pull_request || "$EVENT_NAME" == merge_group) ]]; then
+            package_scope=$(bun scripts/ci-package-scope.ts --package-checks "${scope_files[@]}") || package_scope=true
             if [[ "$package_scope" == false ]]; then
               package_checks_required=false
             fi
@@ -982,7 +1020,7 @@ jobs:
 
           # A crashed detector cannot certify a plan. Reject its exit status
           # or malformed output before any empty scope can skip a suite.
-          if ! service_suite_scopes=$(bun scripts/detect-service-suite-changes.ts --scopes "${changed_files[@]}"); then
+          if ! service_suite_scopes=$(bun scripts/detect-service-suite-changes.ts --scopes "${scope_files[@]}"); then
             echo "::error::Service-suite scope detector failed."
             exit 1
           fi
@@ -996,14 +1034,14 @@ jobs:
           if [[ "$postgres_suites_required" == true || "$corpus_suites_required" == true || "$valkey_suites_required" == true || "$collaboration_suite_required" == true ]]; then
             service_suites_pr_required=true
           fi
-          desktop_browser_required=$(bun scripts/ci-package-scope.ts --desktop-browser "${changed_files[@]}") || desktop_browser_required=true
+          desktop_browser_required=$(bun scripts/ci-package-scope.ts --desktop-browser "${scope_files[@]}") || desktop_browser_required=true
           if [[ "$desktop_browser_required" != false ]]; then
             desktop_browser_required=true
           fi
           if [[ "$package_checks_required" == false ]]; then
             desktop_browser_required=false
           fi
-          ci_browser_scope_required=$(bun scripts/ci-browser-scope.ts "${changed_files[@]}") || ci_browser_scope_required=true
+          ci_browser_scope_required=$(bun scripts/ci-browser-scope.ts "${scope_files[@]}") || ci_browser_scope_required=true
           if [[ "$ci_browser_scope_required" != false ]]; then
             ci_browser_scope_required=true
           fi
@@ -1014,7 +1052,7 @@ jobs:
           collab_redis_required=false
           landing_build_required=false
           if [[ "$EVENT_NAME" == pull_request ]]; then
-            landing_build_required=$(bun scripts/ci-package-scope.ts --landing-build "${changed_files[@]}") || landing_build_required=true
+            landing_build_required=$(bun scripts/ci-package-scope.ts --landing-build "${scope_files[@]}") || landing_build_required=true
             if [[ "$landing_build_required" != false ]]; then
               landing_build_required=true
             fi
@@ -1029,7 +1067,7 @@ jobs:
           release_typecheck_required=false
           route_smoke_required=false
           if [[ "$EVENT_NAME" == "pull_request" || "$EVENT_NAME" == "merge_group" ]]; then
-            route_smoke_required=$(bun scripts/detect-route-smoke-changes.ts "${changed_files[@]}")
+            route_smoke_required=$(bun scripts/detect-route-smoke-changes.ts "${scope_files[@]}")
           fi
           route_tree_required=false
           scan_engine_wasm_required=false
@@ -1322,6 +1360,7 @@ jobs:
             bun scripts/query-perf-scope.ts >> "$GITHUB_OUTPUT"
 
       - name: Install API test planner dependencies
+        timeout-minutes: 3
         id: api-test-deps
         # Both planners retain full coverage when installation is unavailable.
         continue-on-error: true
@@ -1374,13 +1413,14 @@ jobs:
         if: steps.completed-depth.outputs.run_required != 'false' && (github.event_name == 'pull_request' || github.event_name == 'merge_group') && steps.api-test-deps.outcome == 'success'
         env:
           EVENT_NAME: ${{ github.event_name }}
-          BASE_REF: ${{ github.base_ref || 'main' }}
+          COMPARISON_BASE: ${{ steps.changed-files.outputs.comparison_base }}
           API_SCOPE_UNKNOWN: ${{ steps.changed-files.outputs.api_scope_unknown }}
         run: |
           if ! timeout --kill-after=10s 120s bun scripts/ci-api-test-plan.ts; then
             {
               echo 'ci_tests_matrix={"shard":["api-1","api-2","api-3","rest-web"]}'
               echo 'api_test_shards=3'
+              echo 'test_scope='
               echo 'api_test_files='
             } >> "$GITHUB_OUTPUT"
           fi
@@ -1572,11 +1612,13 @@ jobs:
           SELECTED_MATRIX: ${{ steps.api-test-selection.outputs.ci_tests_matrix }}
           SELECTED_FILES: ${{ steps.api-test-selection.outputs.api_test_files }}
           SELECTED_SHARDS: ${{ steps.api-test-selection.outputs.api_test_shards }}
+          SELECTED_SCOPE: ${{ steps.api-test-selection.outputs.test_scope }}
         run: |
           if [[ -n "$SELECTED_MATRIX" && -n "$SELECTED_SHARDS" ]]; then
             {
               echo "ci_tests_matrix=$SELECTED_MATRIX"
               echo "api_test_shards=$SELECTED_SHARDS"
+              echo "test_scope=$SELECTED_SCOPE"
             } >> "$GITHUB_OUTPUT"
             {
               echo 'api_test_files<<API_TEST_FILES_END'
@@ -1587,11 +1629,15 @@ jobs:
             {
               echo 'ci_tests_matrix={"shard":["rest-web"]}'
               echo 'api_test_shards=0'
+              echo 'test_scope='
               echo 'api_test_files='
             } >> "$GITHUB_OUTPUT"
           else
-            bun scripts/api-test-shard-plan.ts >> "$GITHUB_OUTPUT"
-            echo 'api_test_files=' >> "$GITHUB_OUTPUT"
+            {
+              bun scripts/api-test-shard-plan.ts
+              echo 'test_scope='
+              echo 'api_test_files='
+            } >> "$GITHUB_OUTPUT"
           fi
 
       # Package checks restore generated sources produced here, after the
@@ -2134,6 +2180,7 @@ jobs:
         run: bun scripts/check-published-exports.ts packages/mcp-kit
 
       - name: Load merge base measurement
+        timeout-minutes: 6
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bash scripts/prepare-typecheck-base.sh
         env:
@@ -2459,6 +2506,17 @@ jobs:
         run: |
           bun test scripts/check-gh-retry.test.ts scripts/gh-retry.test.ts scripts/promote-dispatch.test.ts
           bun scripts/check-gh-retry.ts
+
+      # Network fetches retry through scripts/retry.sh and carry a step
+      # timeout; the allowlist may only shrink against the measured base.
+      - name: CI network step retries and timeouts
+        env:
+          CI_CHECK_KIND: CONTEXTUAL
+          CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: |
+          bun test scripts/check-ci-network-steps.test.ts
+          bun scripts/check-ci-network-steps.ts --base "$RATCHET_BASE_REF"
 
       - name: Sparse checkout script dependencies
         env:
@@ -3468,6 +3526,7 @@ jobs:
         run: bun test scripts/ci-store-save.test.ts
 
       - name: Workflow lint
+        timeout-minutes: 2
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         env:
           CI_CHECK_KIND: CONTEXTUAL
@@ -3704,6 +3763,15 @@ jobs:
         run: |
           bun --filter @stll/ai-catalog check:generations --self-test --check
           bun --filter @stll/ai-catalog check:generations --check
+
+      - name: Model task default evidence guard
+        env:
+          CI_CHECK_KIND: CONTEXTUAL
+          CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: |
+          bun --filter @stll/ai-catalog check:defaults --self-test
+          bun --filter @stll/ai-catalog check:defaults --base origin/main
 
       - name: Model catalog snapshot drift check
         env:
@@ -4599,15 +4667,18 @@ jobs:
         # Heavy runs and manual dispatches test the full source tree; other
         # runs widen affected packages through scripts/test-scope.ts.
         env:
-          BASE_REF: ${{ github.base_ref || 'main' }}
+          COMPARISON_BASE: ${{ needs.ci-plan.outputs.comparison_base }}
+          TEST_SCOPE: ${{ needs.ci-plan.outputs.test_scope }}
           EVENT_NAME: ${{ github.event_name }}
           HEAVY_ONLY: ${{ inputs.heavy_only }}
         run: |
-          if [[ "$HEAVY_ONLY" == true || "$EVENT_NAME" == "workflow_dispatch" ]]; then
+          # Without the planner's comparison base or test scope (a planner
+          # fallback), test the full tree rather than let Turbo guess.
+          if [[ "$HEAVY_ONLY" == true || "$EVENT_NAME" == "workflow_dispatch" || -z "$COMPARISON_BASE" || -z "$TEST_SCOPE" ]]; then
             echo "flag=" >> "$GITHUB_OUTPUT"
           else
             echo "flag=--affected" >> "$GITHUB_OUTPUT"
-            echo "TURBO_SCM_BASE=origin/$BASE_REF" >> "$GITHUB_ENV"
+            echo "TURBO_SCM_BASE=$COMPARISON_BASE" >> "$GITHUB_ENV"
           fi
 
       - name: Test .claude/mcp
@@ -4631,7 +4702,7 @@ jobs:
           && needs.ci-plan.outputs.package_checks_required == 'true'
         env:
           AFFECTED_FLAG: ${{ steps.affected.outputs.flag }}
-          BASE_REF: ${{ github.base_ref || 'main' }}
+          TEST_SCOPE: ${{ needs.ci-plan.outputs.test_scope }}
           SHARD: ${{ matrix.shard == 'rest-web' && 'rest' || matrix.shard }}
           API_TEST_TIMINGS_DIR: ${{ runner.temp }}/api-test-timings-${{ matrix.shard }}
           API_TEST_ARTIFACT_DIR: ${{ runner.temp }}/api-test-${{ matrix.shard }}
@@ -4651,8 +4722,7 @@ jobs:
         run: |
           args=()
           if [[ -n "$AFFECTED_FLAG" ]]; then
-            scope=$(bun scripts/test-scope.ts --base "origin/$BASE_REF")
-            read -r -a args <<<"$scope"
+            read -r -a args <<<"$TEST_SCOPE"
           fi
           read -r -a shard_args <<<"$(bun scripts/test-shards.ts --filters "$SHARD")"
           API_TEST_SHARD=$(bun scripts/test-shards.ts --api-shard "$SHARD")
@@ -4685,13 +4755,12 @@ jobs:
           && matrix.shard == 'rest-web'
         env:
           AFFECTED_FLAG: ${{ steps.affected.outputs.flag }}
-          BASE_REF: ${{ github.base_ref || 'main' }}
+          TEST_SCOPE: ${{ needs.ci-plan.outputs.test_scope }}
           SHARD: web
         run: |
           args=()
           if [[ -n "$AFFECTED_FLAG" ]]; then
-            scope=$(bun scripts/test-scope.ts --base "origin/$BASE_REF")
-            read -r -a args <<<"$scope"
+            read -r -a args <<<"$TEST_SCOPE"
           fi
           read -r -a shard_args <<<"$(bun scripts/test-shards.ts --filters "$SHARD")"
           API_TEST_SHARD=$(bun scripts/test-shards.ts --api-shard "$SHARD")
@@ -4938,6 +5007,7 @@ jobs:
           echo "required=false" >> "$GITHUB_OUTPUT"
 
       - name: Setup Bun
+        timeout-minutes: 2
         if: steps.desktop-browser-tests.outputs.required == 'true' || steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
         env:
           NPM_TOKEN: ""
@@ -4947,7 +5017,7 @@ jobs:
           version=$(node -p 'require("./package.json").packageManager.split("@")[1]')
           bootstrap="$RUNNER_TEMP/bun-bootstrap"
           bin="$HOME/.bun/bin"
-          npm install --prefix "$bootstrap" --ignore-scripts --no-audit --no-fund --no-save "@oven/bun-linux-x64@$version"
+          bash scripts/retry.sh npm install --prefix "$bootstrap" --ignore-scripts --no-audit --no-fund --no-save "@oven/bun-linux-x64@$version"
           mkdir -p "$bin"
           ln -s "$bootstrap/node_modules/@oven/bun-linux-x64/bin/bun" "$bin/bun"
           ln -s "$bin/bun" "$bin/bunx"
@@ -4991,6 +5061,7 @@ jobs:
           cp .env.example .env
 
       - name: Install UI browser test runtime
+        timeout-minutes: 2
         if: steps.desktop-browser-tests.outputs.required == 'true' || steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
         uses: ./.github/actions/setup-playwright
         with:
@@ -5788,6 +5859,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Pull the promoted release's API image
+        timeout-minutes: 3
         env:
           BASE_IMAGE: ghcr.io/${{ github.repository_owner }}/stella-api:${{ steps.base.outputs.ref }}
         run: |
@@ -5799,6 +5871,7 @@ jobs:
         run: docker logout ghcr.io
 
       - name: Rehearse the upgrade from the promoted release at scale
+        timeout-minutes: 9
         env:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
           REHEARSAL_BASE_IMAGE_REPOSITORY: ghcr.io/${{ github.repository_owner }}/stella-api
@@ -6375,6 +6448,7 @@ jobs:
 
       # The recorder uses this exact setup, build artifact, seed and browser.
       - name: Setup production browser stack
+        timeout-minutes: 8
         id: e2e-stack
         uses: ./.github/actions/setup-production-e2e
         with:
@@ -6399,6 +6473,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Check route network baseline
+        timeout-minutes: 6
         id: network-baseline
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/check-route-network-baseline.json
@@ -6751,11 +6826,13 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Verify Firefox and WebKit in the pinned image
+        timeout-minutes: 4
         uses: ./.github/actions/setup-playwright
         with:
           browsers: firefox webkit
 
       - name: Test browser stack redaction
+        timeout-minutes: 2
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/test-browser-stack-redaction.json
         run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:stack-redaction
@@ -6888,10 +6965,12 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install Playwright browsers
+        timeout-minutes: 3
         if: steps.e2e-stack.outcome == 'success'
         uses: ./.github/actions/setup-playwright
 
       - name: Run Vite dependency canary
+        timeout-minutes: 3
         if: steps.e2e-stack.outcome == 'success'
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/run-vite-dependency-canary.json
@@ -6903,6 +6982,7 @@ jobs:
           --project chromium
 
       - name: Test anonymized PDF export
+        timeout-minutes: 2
         if: steps.e2e-stack.outcome == 'success'
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/test-anonymized-pdf-export.json
@@ -6913,6 +6993,7 @@ jobs:
       # blob (testDir e2e/collab) breaks the merged specs report. Its failures
       # are uploaded separately with their traces and videos.
       - name: Run lockless collaboration browser suite
+        timeout-minutes: 3
         if: steps.e2e-stack.outcome == 'success'
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/run-lockless-collaboration-browser-suite.json
@@ -7063,11 +7144,13 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install Playwright browsers
+        timeout-minutes: 4
         uses: ./.github/actions/setup-playwright
         with:
           package-directory: apps/landing
 
       - name: Check landing islands
+        timeout-minutes: 2
         env:
           PLAYWRIGHT_PACKAGE_DIR: apps/landing
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/check-landing-islands.json
@@ -7365,6 +7448,7 @@ jobs:
             --tag stella-api-release:ci . 2>&1 | tee "$RUNNER_TEMP/api-image-build.log"
 
       - name: Pull API smoke service images
+        timeout-minutes: 2
         env:
           POSTGRES_IMAGE: ${{ needs.ci-plan.outputs.postgres }}
           REDIS_IMAGE: ${{ needs.ci-plan.outputs.redis }}
@@ -7377,6 +7461,7 @@ jobs:
         run: docker logout ghcr.io
 
       - name: Rehearse migrations and boot packaged entrypoints
+        timeout-minutes: 2
         env:
           POSTGRES_IMAGE: ${{ needs.ci-plan.outputs.postgres }}
           REDIS_IMAGE: ${{ needs.ci-plan.outputs.redis }}
@@ -7981,6 +8066,7 @@ jobs:
           wait "$server_pid"
 
       - name: Install cargo-deny
+        timeout-minutes: 10
         if: matrix.os == 'macos'
         uses: ./.github/actions/cargo-deny
 
@@ -7991,6 +8077,7 @@ jobs:
       # schedule instead.
       - name: Fetch license audit inputs
         if: matrix.os == 'macos'
+        timeout-minutes: 10
         env:
           CARGO_NET_RETRY: "5"
         run: bash .github/actions/cargo-deny/fetch.sh apps/desktop/src-tauri/Cargo.toml
@@ -8067,15 +8154,19 @@ jobs:
         with:
           bun-version-file: "package.json"
       - name: Install Safe Chain
+        timeout-minutes: 2
         uses: ./.github/actions/safe-chain
       - name: Install OSV-Scanner
+        timeout-minutes: 2
         if: ${{ !cancelled() }}
         uses: ./.github/actions/osv-scanner
       - name: Verify malware scanner fixtures
+        timeout-minutes: 2
         if: ${{ !cancelled() }}
         run: bash scripts/test-malware-scanners.sh
 
       - name: Scan dependency malware
+        timeout-minutes: 13
         if: ${{ !cancelled() }}
         run: bash scripts/scan-dependency-malware.sh
         env:
@@ -8185,7 +8276,10 @@ jobs:
   # this check to pass, which ensures untrusted PRs cannot be
   # merged without CI and trusted PRs must pass all checks.
   ci-result:
-    name: ci-result
+    # A metadata run has a distinct check name. It can reuse a completed code
+    # run or exercise a changed scope, but can never overwrite the required
+    # ci-result while that code run is pending or failed.
+    name: ${{ github.event_name == 'pull_request' && (contains(fromJSON('["labeled","unlabeled","auto_merge_enabled"]'), github.event.action) && github.event.label.name != 'prove-fix') && 'ci-metadata-result' || 'ci-result' }}
     if: always()
     needs:
       [
@@ -8278,6 +8372,7 @@ jobs:
           PR_DEPTH_ONLY: ${{ inputs.pr_depth_only }}
           PR_DEPTH_SOURCE_RUN_ID: ${{ needs.ci-plan.outputs.pr_depth_source_run_id }}
           QUEUE_VALIDATION: ${{ needs.ci-plan.outputs.queue_validation }}
+          METADATA_ONLY: ${{ needs.ci-plan.outputs.metadata_only }}
           PR_ACTION: ${{ github.event.action }}
           PLAN_RESULT: ${{ needs.ci-plan.result }}
           SUITE_DEPTH: ${{ needs.ci-plan.outputs.suite_depth }}
@@ -8492,6 +8587,10 @@ jobs:
             exit 1
           fi
           if [[ "${RUN_REQUIRED:-true}" == false ]]; then
+            if [[ "$METADATA_ONLY" == true && -z "$COMPLETED_RUN_ID" ]]; then
+              echo "No completed evidence exists for this metadata event; the code run owns ci-result."
+              exit 0
+            fi
             if [[ "$EVENT" != pull_request || ! "$COMPLETED_RUN_ID" =~ ^[1-9][0-9]*$ ]] || ! jq -e 'all(.[]; .result == "success" or .result == "skipped")' <<< "$NEEDS" > /dev/null; then
               echo "::error::Invalid completed-depth reuse or unexpected dependency outcome."
               exit 1

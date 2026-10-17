@@ -1,12 +1,19 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  countProcessWork,
   getChatToolActivityCategory,
-  getChatToolActivityState,
   getLatestCompletedResearchPartIndex,
   resolveChatActivityIndicatorState,
 } from "@/components/chat/chat-activity.logic";
+import { projectCanonicalChatUIMessages } from "@/components/chat/chat-ui-tools";
 import type { ChatMessage } from "@/components/chat/chat-ui-tools";
+
+// Fixtures cross the same projection boundary the thread renders through.
+const projectParts = (parts: ChatMessage["parts"]) =>
+  projectCanonicalChatUIMessages([
+    { id: "message", parts, role: "assistant" },
+  ]).flatMap((message) => message.parts);
 
 describe("chat tool activity", () => {
   test("classifies evidence gathering as research", () => {
@@ -25,22 +32,19 @@ describe("chat tool activity", () => {
       "mcp__salvia__get_decision",
     ]) {
       expect(getChatToolActivityCategory(toolName)).toBe("research");
-      expect(getChatToolActivityState(toolName)).toBe("searching");
     }
   });
 
-  test("uses shaping only for artifact work", () => {
+  test("classifies artifact work apart from mutations", () => {
     for (const toolName of [
       "suggest_changes",
       "fill_template",
       "mcp__documents__draft_agreement",
     ]) {
       expect(getChatToolActivityCategory(toolName)).toBe("artifact");
-      expect(getChatToolActivityState(toolName)).toBe("shaping");
     }
 
     expect(getChatToolActivityCategory("save_matter")).toBe("mutation");
-    expect(getChatToolActivityState("save_matter")).toBe("working");
   });
 
   test("keeps a retired tool's category instead of the unknown fallback", () => {
@@ -51,10 +55,68 @@ describe("chat tool activity", () => {
     expect(getChatToolActivityCategory("compare_versions")).toBe("research");
   });
 
-  test("does not animate tools awaiting user input", () => {
+  test("classifies tools awaiting a person as user input", () => {
     expect(getChatToolActivityCategory("ask-user")).toBe("user-input");
-    expect(getChatToolActivityState("ask-user")).toBeNull();
-    expect(getChatToolActivityState("create-document")).toBeNull();
+    expect(getChatToolActivityCategory("create-document")).toBe("user-input");
+  });
+});
+
+describe("process summary", () => {
+  test("counts landed work by kind and leaves out failures, waits and reasoning", () => {
+    const parts = [
+      { type: "thinking" as const, content: "Check clause 11." },
+      {
+        type: "tool-call" as const,
+        id: "read",
+        name: "read_document" as const,
+        arguments: "{}",
+        input: {},
+        state: "complete" as const,
+        output: { text: "11.3 Aggregate liability" },
+      },
+      {
+        type: "tool-call" as const,
+        id: "read-failed",
+        name: "read_section" as const,
+        arguments: "{}",
+        input: {},
+        state: "complete" as const,
+        output: { error: "Renumbered" },
+      },
+      {
+        type: "tool-call" as const,
+        id: "still-running",
+        name: "web_search" as const,
+        arguments: "{}",
+        input: {},
+        state: "input-complete" as const,
+      },
+      {
+        type: "tool-call" as const,
+        id: "edit",
+        name: "suggest_changes" as const,
+        arguments: "{}",
+        input: {},
+        state: "complete" as const,
+        output: { success: true },
+      },
+      {
+        type: "tool-call" as const,
+        id: "ask",
+        name: "ask-user" as const,
+        arguments: "{}",
+        input: {},
+        state: "complete" as const,
+        output: { answers: [] },
+      },
+    ] satisfies ChatMessage["parts"];
+
+    expect(countProcessWork(projectParts(parts))).toEqual(
+      new Map([
+        ["research", 1],
+        ["artifact", 1],
+      ]),
+    );
   });
 });
 
@@ -70,6 +132,7 @@ describe("thread activity", () => {
           id: "failed-search",
           name: "mcp__registry__lookup_company" as const,
           arguments: "{}",
+          input: {},
           state: "complete" as const,
           output: { error: "Unavailable" },
         },
@@ -78,6 +141,7 @@ describe("thread activity", () => {
           id: "successful-search",
           name: "web_search" as const,
           arguments: "{}",
+          input: {},
           state: "complete" as const,
           output: {
             jurisdiction: "global" as const,
@@ -107,6 +171,7 @@ describe("thread activity", () => {
               id: "failed-mcp-search",
               name: "mcp__registry__lookup_company" as const,
               arguments: "{}",
+              input: {},
               state: "complete" as const,
               output: { content: [], isError: true },
             },

@@ -1,9 +1,5 @@
-import {
-  GENERATORS,
-  allowedOutputs,
-  generatorsForFiles,
-  orderGenerators,
-} from "./generated-files";
+import { planAutofix } from "./autofix-push-scope";
+import { GENERATORS, allowedOutputs, orderGenerators } from "./generated-files";
 
 // The explicit type lets calls narrow the values they reject.
 const fail: (message: string) => never = (message) => {
@@ -35,14 +31,26 @@ switch (mode) {
   case "plan": {
     const input = await Bun.stdin.text();
     const files = input.split("\n").filter(Boolean);
-    const selected = orderGenerators(
-      args.includes("--all")
-        ? GENERATORS.filter((generator) => generator.autofix)
-        : generatorsForFiles(files),
-    );
+    // --since names a file listing paths changed since the settled commit.
+    const sinceAt = args.indexOf("--since");
+    const sincePath = sinceAt === -1 ? undefined : args[sinceAt + 1];
+    if (sinceAt !== -1 && !sincePath) {
+      fail("--since needs a file of changed paths");
+    }
+    const plan = planAutofix({
+      pullRequestFiles: files,
+      pushFiles: sincePath
+        ? (await Bun.file(sincePath).text()).split("\n").filter(Boolean)
+        : null,
+      all: args.includes("--all"),
+    });
+    const selected = plan.generators;
     console.log(`run=${selected.length > 0}`);
     console.log(`ids=${selected.map((generator) => generator.id).join(",")}`);
     console.log(`allowed=${allowedOutputs(selected).join("|")}`);
+    console.log(`refix=${plan.refix}`);
+    console.log(`prune=${plan.prune}`);
+    console.log(`needed=${plan.needed}`);
     break;
   }
   case "run": {
