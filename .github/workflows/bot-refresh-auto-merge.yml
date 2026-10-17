@@ -133,8 +133,9 @@ jobs:
           no-cache: true
 
       - name: Install trusted verifier dependencies
+        timeout-minutes: 20
         if: steps.refresh.outputs.dated == 'true'
-        run: bun ci --ignore-scripts
+        run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
 

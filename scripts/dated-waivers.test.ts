@@ -281,8 +281,29 @@ export const DOC_SOURCE_EXCLUSIONS = ["doc-package"].map(noLlmsTxt);
 
   expect(readDocumentationExclusions(source)).toEqual([doc]);
 });
+test("documentation registry reads literal object maps spread into concat without executing source", () => {
+  for (const field of ["dependency", "dependency: dependency"]) {
+    const source = `
+export const DOC_SOURCE_EXCLUSIONS = [].concat(...(["doc-package"] as const).map(
+  (dependency) => ({
+    ${field},
+    checkedAt: "${doc.checkedAt}",
+    expiresAt: "${doc.expiresAt}",
+    explanation: "${doc.explanation}",
+    reason: "no-llms-txt",
+  }) satisfies NoLlmsTxtExclusion,
+));`;
+    expect(readDocumentationExclusions(source)).toEqual([doc]);
+  }
+});
 test("documentation registry rejects dynamic and imported spread expressions", () => {
-  for (const registry of ["makeExclusions()", "[...importedExclusions]"]) {
+  for (const registry of [
+    "makeExclusions()",
+    "[...importedExclusions]",
+    "[].concat(...importedExclusions)",
+    '[].concat(...["doc-package"].map((dependency) => makeExclusion(dependency)))',
+    '[].concat(...["doc-package"].map((dependency) => ({ ...importedExclusion, dependency })))',
+  ]) {
     expect(() =>
       readDocumentationExclusions(
         `export const DOC_SOURCE_EXCLUSIONS = ${registry};`,

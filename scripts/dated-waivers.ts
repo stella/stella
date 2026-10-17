@@ -51,6 +51,80 @@ export class DocumentationExclusionParseError extends TaggedError(
   "DocumentationExclusionParseError",
 )<{ message: string }> {}
 
+const invalidRegistry = (expression: ts.Expression): never => {
+  throw new DocumentationExclusionParseError({
+    message: `Documentation waiver registry must be a static array literal: ${expression.getText()}`,
+  });
+};
+const unwrap = (expression: ts.Expression): ts.Expression => {
+  if (
+    ts.isAsExpression(expression) ||
+    ts.isSatisfiesExpression(expression) ||
+    ts.isParenthesizedExpression(expression)
+  ) {
+    return unwrap(expression.expression);
+  }
+  return expression;
+};
+
+const staticObjectMap = (
+  expression: ts.CallExpression,
+  elements: readonly ts.Expression[],
+): readonly ts.Expression[] => {
+  const callback = expression.arguments[0];
+  if (
+    !callback ||
+    !ts.isArrowFunction(callback) ||
+    callback.modifiers?.length ||
+    callback.parameters.length !== 1
+  ) {
+    return invalidRegistry(expression);
+  }
+  const parameter = callback.parameters[0];
+  if (
+    !parameter ||
+    !ts.isIdentifier(parameter.name) ||
+    parameter.initializer ||
+    parameter.dotDotDotToken ||
+    ts.isBlock(callback.body)
+  ) {
+    return invalidRegistry(expression);
+  }
+  const parameterName = parameter.name.text;
+  const body = unwrap(callback.body);
+  if (!ts.isObjectLiteralExpression(body)) {
+    return invalidRegistry(body);
+  }
+  return elements.map((element) => {
+    if (!ts.isStringLiteral(unwrap(element))) {
+      return invalidRegistry(element);
+    }
+    return ts.factory.updateObjectLiteralExpression(
+      body,
+      body.properties.map((property) => {
+        if (
+          ts.isShorthandPropertyAssignment(property) &&
+          property.name.text === parameterName &&
+          !property.objectAssignmentInitializer
+        ) {
+          return ts.factory.createPropertyAssignment(property.name, element);
+        }
+        if (!ts.isPropertyAssignment(property)) {
+          return invalidRegistry(body);
+        }
+        const initializer = unwrap(property.initializer);
+        return ts.factory.updatePropertyAssignment(
+          property,
+          property.name,
+          ts.isIdentifier(initializer) && initializer.text === parameterName
+            ? element
+            : property.initializer,
+        );
+      }),
+    );
+  });
+};
+
 /** Reads the documentation waiver registry without executing its source file. */
 export const readDocumentationExclusions = (
   source: string,
@@ -82,21 +156,6 @@ export const readDocumentationExclusions = (
   if (!owner?.initializer) {
     return panic("Documentation waiver owner missing");
   }
-  const invalidRegistry = (expression: ts.Expression): never => {
-    throw new DocumentationExclusionParseError({
-      message: `Documentation waiver registry must be a static array literal: ${expression.getText(ast)}`,
-    });
-  };
-  const unwrap = (expression: ts.Expression): ts.Expression => {
-    if (
-      ts.isAsExpression(expression) ||
-      ts.isSatisfiesExpression(expression) ||
-      ts.isParenthesizedExpression(expression)
-    ) {
-      return unwrap(expression.expression);
-    }
-    return expression;
-  };
   const moduleConstInitializer = (name: string): ts.Expression | undefined => {
     const declarations = moduleDeclarations.get(name);
     if (
@@ -158,13 +217,24 @@ export const readDocumentationExclusions = (
     ) {
       return [
         ...registryElements(unwrapped.expression.expression, resolving),
-        ...unwrapped.arguments.map((argument) => {
+        ...unwrapped.arguments.flatMap((argument) => {
           if (ts.isSpreadElement(argument)) {
-            return invalidRegistry(argument);
+            return registryElements(argument.expression, resolving);
           }
-          return argument;
+          return [argument];
         }),
       ];
+    }
+    if (
+      ts.isCallExpression(unwrapped) &&
+      ts.isPropertyAccessExpression(unwrapped.expression) &&
+      unwrapped.expression.name.text === "map" &&
+      unwrapped.arguments.length === 1
+    ) {
+      return staticObjectMap(
+        unwrapped,
+        registryElements(unwrapped.expression.expression, resolving),
+      );
     }
     return invalidRegistry(unwrapped);
   };
