@@ -35,6 +35,7 @@ import type {
   OnlineRepair,
   OnlineRepairCompletion,
 } from "./online-migration-connection";
+import { ORGANIZATION_AI_INSTRUCTIONS_CONSTRAINT_VALIDATION } from "./organization-ai-instructions-constraint-validation";
 import { SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS } from "./sanctions-monitoring-constraint-validation";
 
 // Fast DDL retains a short lock budget; guarded concurrent index work lifts it
@@ -611,6 +612,7 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
   CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR,
   ...SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS,
   LIST_VERIFICATION_CONSTRAINT_VALIDATION,
+  ORGANIZATION_AI_INSTRUCTIONS_CONSTRAINT_VALIDATION,
   ENTITY_FEATURE_GATE_REPAIR,
   CORPUS_PROJECTION_CLEANUP_STALL_REPAIR,
   // Not behind one migration: the OAuth resource set is derived from the MCP

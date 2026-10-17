@@ -4426,6 +4426,12 @@
       "title": "KI-Konfiguration",
       "usingDefaults": "Standardeinstellungen aktiv"
     },
+    "aiInstructions": {
+      "characterCount": "{count}/{maxLength} Zeichen",
+      "description": "Diese Anweisungen gelten für alle KI-Unterhaltungen in Ihrer Organisation und haben Vorrang vor persönlichen Präferenzen. Änderungen gelten ab der nächsten Nachricht. Nutzen Sie sie für Compliance-Regeln, Datenverarbeitung und Formatierungsstandards.",
+      "title": "Organisationsanweisungen",
+      "tooLong": "Die Anweisungen dürfen höchstens {maxLength} Zeichen enthalten."
+    },
     "invitations": {
       "cancelInvitation": "Einladung stornieren",
       "emailAddressLabel": "E-Mail-Adresse",

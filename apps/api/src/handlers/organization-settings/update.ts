@@ -12,6 +12,7 @@ import {
 } from "@stll/time";
 import type { TimeZoneId } from "@stll/time";
 
+import { ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH } from "@/api/db/organization-settings-constants";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   DOCUMENT_PROCESSING_MODE,
@@ -31,6 +32,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DEFAULT_MANAGED_AI_RESIDENCY } from "@/api/lib/chat/ai-data-policy";
 import type { MANAGED_AI_RESIDENCIES } from "@/api/lib/chat/ai-data-policy";
+import { withAggregateRowQuery } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { validatePattern } from "@/api/lib/matter-reference";
@@ -85,6 +87,13 @@ const updateOrganizationSettingsBodySchema = t.Object({
   ),
   matterNumberingEnabled: t.Optional(t.Boolean()),
   promptCachingEnabled: t.Optional(t.Boolean()),
+  aiInstructions: t.Optional(
+    t.String({
+      maxLength: ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH,
+      description:
+        "Instructions for every organization chat, taking priority over personal preferences. Send an empty string to clear them.",
+    }),
+  ),
   managedAIResidency: t.Optional(managedAIResidencySchema),
   memoryExtractionEnabled: t.Optional(t.Boolean()),
   timeMinimumUnitMinutes: t.Optional(
@@ -116,7 +125,7 @@ const config = {
   contract: "patch",
   description:
     "Change the organization's general settings: document processing mode, " +
-    "matter-number pattern, padding, whether titles show that number, prompt caching, memory " +
+    "matter-number pattern, padding, whether titles show that number, prompt caching, organization AI instructions, memory " +
     "extraction, time policy, and time zone. Only the fields you pass are written and the matter-number " +
     "pattern is validated against its padding first. Turning document " +
     "processing off is refused while an automatic run is still going. " +
@@ -217,6 +226,7 @@ type ExistingGeneralSettings = ExistingTimePolicy &
     InferSelectModel<typeof organizationSettings>,
     | "managedAIResidency"
     | "promptCachingEnabled"
+    | "aiInstructions"
     | "documentProcessingMode"
     | "memoryExtractionEnabled"
     | "timeZone"
@@ -231,6 +241,24 @@ const timeZoneAuditChanges = (
   body.timeZone !== undefined && body.timeZone !== (existing?.timeZone ?? null)
     ? { timeZone: { old: existing?.timeZone ?? null, new: body.timeZone } }
     : {};
+
+const organizationAIInstructionsAuditChanges = (
+  body: NormalizedUpdateBody,
+  existing: ExistingGeneralSettings | undefined,
+) => ({
+  ...(body.aiInstructions !== undefined &&
+  body.aiInstructions !== (existing?.aiInstructions ?? "")
+    ? {
+        // Audit the change without copying potentially sensitive prompt content.
+        aiInstructions: {
+          old: {
+            characterCount: Array.from(existing?.aiInstructions ?? "").length,
+          },
+          new: { characterCount: Array.from(body.aiInstructions).length },
+        },
+      }
+    : {}),
+});
 
 /** `{ old, new }` when the request sets a value that differs from the stored one. */
 const settingChange = <V>(requested: V | undefined, current: V) =>
@@ -290,6 +318,7 @@ const organizationSettingsAuditChanges = (
       }
     : {}),
   ...generalSettingAuditChanges(body, existing),
+  ...organizationAIInstructionsAuditChanges(body, existing),
   ...timePolicyAuditChanges(body, existing),
   ...timeZoneAuditChanges(body, existing),
 });
@@ -439,19 +468,22 @@ export const updateOrganizationSettingsHandler = async function* ({
       const wantsManagedAIResidencyUpdate =
         body.managedAIResidency !== undefined;
       const wantsPromptCachingUpdate = body.promptCachingEnabled !== undefined;
+      const wantsAIInstructionsUpdate = body.aiInstructions !== undefined;
       const wantsDocumentProcessingUpdate =
         body.documentProcessingMode !== undefined;
       const wantsMemoryExtractionUpdate =
         body.memoryExtractionEnabled !== undefined;
       const wantsTimeZoneUpdate = body.timeZone !== undefined;
-      const needsSerializedSettingsRead =
-        wantsManagedAIResidencyUpdate ||
-        wantsPromptCachingUpdate ||
-        wantsDocumentProcessingUpdate ||
-        wantsMemoryExtractionUpdate ||
-        wantsTimeZoneUpdate ||
+      const needsSerializedSettingsRead = [
+        wantsManagedAIResidencyUpdate,
+        wantsPromptCachingUpdate,
+        wantsAIInstructionsUpdate,
+        wantsDocumentProcessingUpdate,
+        wantsMemoryExtractionUpdate,
         Object.keys({ ...timePolicyUpdate, ...matterNumberingUpdate }).length >
-          0;
+          0,
+        wantsTimeZoneUpdate,
+      ].some(Boolean);
 
       // Coordinate extraction consent changes with the background worker's
       // persistence transaction as well as concurrent settings requests.
@@ -477,28 +509,38 @@ export const updateOrganizationSettingsHandler = async function* ({
           });
       }
       const existingRows = needsSerializedSettingsRead
-        ? await tx
-            .select({
-              documentProcessingMode:
-                organizationSettings.documentProcessingMode,
-              memoryExtractionEnabled:
-                organizationSettings.memoryExtractionEnabled,
-              promptCachingEnabled: organizationSettings.promptCachingEnabled,
-              managedAIResidency: organizationSettings.managedAIResidency,
-              timeMinimumUnitMinutes:
-                organizationSettings.timeMinimumUnitMinutes,
-              timeEditWindowDays: organizationSettings.timeEditWindowDays,
-              timeLockedThroughMonth:
-                organizationSettings.timeLockedThroughMonth,
-              timeNarrativeRequired: organizationSettings.timeNarrativeRequired,
-              matterNumberingEnabled:
-                organizationSettings.matterNumberingEnabled,
-              ...organizationTimeZoneColumns,
+        ? (
+            await withAggregateRowQuery({
+              tx,
+              aggregate: "organizationSettings",
+              id: organizationId,
+              mode: "update",
+              select: (queryTx) =>
+                queryTx
+                  .select({
+                    organizationId: organizationSettings.organizationId,
+                    documentProcessingMode:
+                      organizationSettings.documentProcessingMode,
+                    memoryExtractionEnabled:
+                      organizationSettings.memoryExtractionEnabled,
+                    matterNumberingEnabled:
+                      organizationSettings.matterNumberingEnabled,
+                    promptCachingEnabled:
+                      organizationSettings.promptCachingEnabled,
+                    aiInstructions: organizationSettings.aiInstructions,
+                    managedAIResidency: organizationSettings.managedAIResidency,
+                    timeMinimumUnitMinutes:
+                      organizationSettings.timeMinimumUnitMinutes,
+                    timeEditWindowDays: organizationSettings.timeEditWindowDays,
+                    timeLockedThroughMonth:
+                      organizationSettings.timeLockedThroughMonth,
+                    timeNarrativeRequired:
+                      organizationSettings.timeNarrativeRequired,
+                    ...organizationTimeZoneColumns,
+                  })
+                  .from(organizationSettings),
             })
-            .from(organizationSettings)
-            .where(eq(organizationSettings.organizationId, organizationId))
-            .limit(1)
-            .for("update")
+          ).rows
         : [];
       const existing = existingRows.at(0);
       if (
@@ -558,6 +600,9 @@ export const updateOrganizationSettingsHandler = async function* ({
           ...(wantsManagedAIResidencyUpdate
             ? { managedAIResidency: body.managedAIResidency }
             : {}),
+          ...(wantsAIInstructionsUpdate
+            ? { aiInstructions: body.aiInstructions }
+            : {}),
           ...(wantsPromptCachingUpdate
             ? { promptCachingEnabled: body.promptCachingEnabled }
             : {}),
@@ -587,6 +632,9 @@ export const updateOrganizationSettingsHandler = async function* ({
               : {}),
             ...(wantsManagedAIResidencyUpdate
               ? { managedAIResidency: body.managedAIResidency }
+              : {}),
+            ...(wantsAIInstructionsUpdate
+              ? { aiInstructions: body.aiInstructions }
               : {}),
             ...(wantsPromptCachingUpdate
               ? { promptCachingEnabled: body.promptCachingEnabled }
@@ -649,6 +697,9 @@ export const updateOrganizationSettingsHandler = async function* ({
       : {}),
     ...(body.managedAIResidency !== undefined
       ? { managedAIResidency: body.managedAIResidency }
+      : {}),
+    ...(body.aiInstructions !== undefined
+      ? { aiInstructions: body.aiInstructions }
       : {}),
     ...(body.promptCachingEnabled !== undefined
       ? { promptCachingEnabled: body.promptCachingEnabled }

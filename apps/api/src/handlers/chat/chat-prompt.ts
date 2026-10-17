@@ -122,6 +122,7 @@ import type {
   ChatSafePromptLayers,
 } from "@/api/lib/chat/chat-prompt-layers";
 import { estimateTextTokens } from "@/api/lib/chat/compaction-tokens";
+import { buildOrganizationAIInstructionsPrompt } from "@/api/lib/chat/organization-ai-instructions";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { formatDateInTimeZone } from "@/api/lib/date-format";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
@@ -699,6 +700,7 @@ type BuildChatSystemPromptProps = {
    * it cannot finish.
    */
   offeredToolNamesForSkills: () => ReadonlySet<string>;
+  organizationAIInstructions?: string | undefined;
   practiceJurisdictions: readonly PracticeJurisdiction[];
   refRegistry: ChatRefRegistry;
   safeDb: SafeDb;
@@ -908,6 +910,7 @@ export const buildChatSystemPromptParts = async ({
   hasReachableMatter,
   offeredToolNamesForSkills,
   organizationId,
+  organizationAIInstructions,
   practiceJurisdictions,
   refRegistry,
   safeDb,
@@ -954,6 +957,7 @@ export const buildChatSystemPromptParts = async ({
         ? buildGlobalPromptParts({
             featureAccessContext,
             documentedChatReads,
+            organizationAIInstructions,
             practiceJurisdictions,
             skillMetadata: promptSkillMetadata,
             toolAvailability,
@@ -963,6 +967,7 @@ export const buildChatSystemPromptParts = async ({
             buildWorkspacePromptPartsFromDb({
               featureAccessContext,
               documentedChatReads,
+              organizationAIInstructions,
               practiceJurisdictions,
               refRegistry,
               safeDb,
@@ -1216,6 +1221,7 @@ type BuildGlobalPromptProps = {
   featureAccessContext?: McpFeatureAccessContext | undefined;
   /** The active skill's documented reads; none without a skill. */
   documentedChatReads?: readonly RegistryReadToolName[] | undefined;
+  organizationAIInstructions?: string | undefined;
   practiceJurisdictions?: readonly PracticeJurisdiction[];
   skillMetadata?: readonly PromptSkillMetadata[] | undefined;
   toolAvailability?: ChatToolAvailability | undefined;
@@ -1225,6 +1231,7 @@ type BuildGlobalPromptProps = {
 export const buildGlobalPrompt = ({
   featureAccessContext,
   documentedChatReads = [],
+  organizationAIInstructions = "",
   practiceJurisdictions = [],
   skillMetadata = [],
   toolAvailability = DEFAULT_CHAT_TOOL_AVAILABILITY,
@@ -1233,6 +1240,7 @@ export const buildGlobalPrompt = ({
   buildGlobalPromptParts({
     featureAccessContext,
     documentedChatReads,
+    organizationAIInstructions,
     practiceJurisdictions,
     skillMetadata,
     toolAvailability,
@@ -1242,6 +1250,7 @@ export const buildGlobalPrompt = ({
 export const buildGlobalPromptParts = ({
   featureAccessContext,
   documentedChatReads = [],
+  organizationAIInstructions = "",
   practiceJurisdictions = [],
   skillMetadata = [],
   toolAvailability = DEFAULT_CHAT_TOOL_AVAILABILITY,
@@ -1250,6 +1259,7 @@ export const buildGlobalPromptParts = ({
   buildPromptParts({
     featureAccessContext,
     documentedChatReads,
+    organizationAIInstructions,
     practiceJurisdictions,
     requestContextSections: [],
     skillMetadata,
@@ -1303,6 +1313,7 @@ export const estimateChatContextPromptTokens = ({
 type BuildWorkspacePromptProps = {
   featureAccessContext?: McpFeatureAccessContext | undefined;
   documentedChatReads: readonly RegistryReadToolName[];
+  organizationAIInstructions?: string | undefined;
   practiceJurisdictions?: readonly PracticeJurisdiction[];
   refRegistry: ChatRefRegistry;
   safeDb: SafeDb;
@@ -1315,6 +1326,7 @@ type BuildWorkspacePromptProps = {
 const buildWorkspacePromptPartsFromDb = async ({
   featureAccessContext,
   documentedChatReads,
+  organizationAIInstructions = "",
   practiceJurisdictions = [],
   refRegistry,
   safeDb,
@@ -1337,6 +1349,7 @@ const buildWorkspacePromptPartsFromDb = async ({
         documentedChatReads,
         entityCount: workspacePromptData.entityCount,
         extractedProperties: workspacePromptData.extractedProperties,
+        organizationAIInstructions,
         practiceJurisdictions,
         refRegistry,
         skillMetadata,
@@ -1474,6 +1487,7 @@ type BuildWorkspacePromptTextProps = {
   documentedChatReads?: readonly RegistryReadToolName[] | undefined;
   entityCount: number;
   extractedProperties?: readonly ExtractedPropertySummary[] | undefined;
+  organizationAIInstructions?: string | undefined;
   practiceJurisdictions?: readonly PracticeJurisdiction[];
   refRegistry: ChatRefRegistry;
   skillMetadata?: readonly PromptSkillMetadata[] | undefined;
@@ -1488,6 +1502,7 @@ export const buildWorkspacePromptText = ({
   documentedChatReads = [],
   entityCount,
   extractedProperties = [],
+  organizationAIInstructions = "",
   practiceJurisdictions = [],
   refRegistry,
   skillMetadata = [],
@@ -1501,6 +1516,7 @@ export const buildWorkspacePromptText = ({
     documentedChatReads,
     entityCount,
     extractedProperties,
+    organizationAIInstructions,
     practiceJurisdictions,
     refRegistry,
     skillMetadata,
@@ -1515,6 +1531,7 @@ export const buildWorkspacePromptParts = ({
   documentedChatReads = [],
   entityCount,
   extractedProperties = [],
+  organizationAIInstructions = "",
   practiceJurisdictions = [],
   refRegistry,
   skillMetadata = [],
@@ -1526,6 +1543,7 @@ export const buildWorkspacePromptParts = ({
   buildPromptParts({
     featureAccessContext,
     documentedChatReads,
+    organizationAIInstructions,
     practiceJurisdictions,
     requestContextSections: buildWorkspaceContextSections({
       entityCount,
@@ -3100,6 +3118,7 @@ export const buildActiveFileSection = ({
 type BuildPromptProps = {
   featureAccessContext?: McpFeatureAccessContext | undefined;
   documentedChatReads: readonly RegistryReadToolName[];
+  organizationAIInstructions?: string | undefined;
   practiceJurisdictions: readonly PracticeJurisdiction[];
   requestContextSections: string[];
   skillMetadata: readonly PromptSkillMetadata[];
@@ -3110,6 +3129,7 @@ type BuildPromptProps = {
 const buildPromptParts = ({
   featureAccessContext,
   documentedChatReads,
+  organizationAIInstructions,
   practiceJurisdictions,
   requestContextSections,
   skillMetadata,
@@ -3151,8 +3171,8 @@ const buildPromptParts = ({
   const safePrompt = chatSafePromptText(safeLayers);
 
   // Untrusted half: anything that interpolates user-controlled
-  // text into the prompt. Installed skill names/descriptions are
-  // user-configured text; `requestContextSections` includes the
+  // text into the prompt. Administrator instructions and installed skill
+  // names/descriptions are user-configured text; `requestContextSections` includes the
   // `Connected to matter "..."` line (matter names commonly carry
   // client / opposing-party names); `userContextBlock` echoes the
   // user's own profile (name, email). All must cross the
@@ -3162,6 +3182,11 @@ const buildPromptParts = ({
     | ChatUserPromptSection
     | ChatVolatilePromptSection
   )[] = [
+    // Administrator-authored text can contain client names, so it crosses
+    // the anonymizer and leaves the provider's cacheable blocks untouched.
+    chatVolatilePromptSection(
+      buildOrganizationAIInstructionsPrompt(organizationAIInstructions ?? ""),
+    ),
     // Team skills and the user's own (`listAvailableChatSkillMetadata`).
     chatUserPromptSection(buildSkillCatalogSection(installedSkillMetadata)),
     ...requestContextSections.map(chatVolatilePromptSection),

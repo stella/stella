@@ -4426,6 +4426,12 @@
       "title": "AI konfigurācija",
       "usingDefaults": "Tiek izmantoti noklusējuma iestatījumi"
     },
+    "aiInstructions": {
+      "characterCount": "{count}/{maxLength} rakstzīmes",
+      "description": "Šie norādījumi attiecas uz visām sarunām ar AI jūsu organizācijā un ir prioritāri pār personīgajām preferencēm. Izmaiņas stājas spēkā no nākamā ziņojuma. Izmantojiet tos atbilstības prasībām, datu apstrādei un formatēšanas standartiem.",
+      "title": "Organizācijas norādījumi",
+      "tooLong": "Norādījumos drīkst būt ne vairāk kā {maxLength} rakstzīmes."
+    },
     "invitations": {
       "cancelInvitation": "Atcelt uzaicinājumu",
       "emailAddressLabel": "E-pasta adrese",

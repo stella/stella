@@ -1627,12 +1627,6 @@
   },
   {
     "file": "apps/api/src/handlers/organization-settings/update.ts",
-    "fingerprint": "4d2058b9fb2319e60f536fc5503c12fa6839589dfb61971a049376d97c39328b",
-    "count": 1,
-    "reason": "The same serialized settings read, now also selecting matterNumberingEnabled for its audit entry."
-  },
-  {
-    "file": "apps/api/src/handlers/organization-settings/update.ts",
     "fingerprint": "939a41ef5abaae42b9dc4e8a11e2cf17d26a02422209beced1d98261b2dbb789",
     "count": 1,
     "reason": "pg_advisory_xact_lock( in apps/api/src/handlers/organization-settings/update.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."

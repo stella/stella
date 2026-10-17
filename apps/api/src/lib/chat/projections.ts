@@ -2577,6 +2577,7 @@ export const REMOVE_MATTER_MEMBER_PROJECTION = v.strictObject({
 });
 
 export const UPDATE_ORGANIZATION_SETTINGS_PROJECTION = v.strictObject({
+  aiInstructions: v.optional(v.string()),
   managedAIResidency: v.optional(v.picklist(MANAGED_AI_RESIDENCIES)),
   matterNumberPattern: v.optional(v.string()),
   matterNumberPadding: v.optional(v.number()),

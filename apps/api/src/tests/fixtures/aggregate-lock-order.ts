@@ -34,6 +34,11 @@ export const aggregateFences = () => {
       id: organizationId,
       mode: "update",
     },
+    organizationSettings: {
+      aggregate: "organizationSettings",
+      id: organizationId,
+      mode: "update",
+    },
     professionalUseAcceptance: {
       aggregate: "professionalUseAcceptance",
       id: { userId: mintAuthProviderId<"user">() },

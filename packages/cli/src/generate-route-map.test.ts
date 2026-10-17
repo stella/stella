@@ -226,6 +226,7 @@ describe("generateRouteMap: discriminator split (S2)", () => {
     ]);
     expect(add?.flags.every((f) => f.required)).toBe(true);
     expect(settings?.flags.map((f) => f.flag).toSorted()).toEqual([
+      "--ai-instructions",
       "--document-processing-mode",
       "--matter-number-padding",
       "--matter-number-pattern",

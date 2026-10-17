@@ -4426,6 +4426,12 @@
       "title": "Konfiguracja AI",
       "usingDefaults": "Używane są ustawienia domyślne"
     },
+    "aiInstructions": {
+      "characterCount": "{count}/{maxLength} znaków",
+      "description": "Te instrukcje obowiązują we wszystkich rozmowach z AI w Twojej organizacji i mają pierwszeństwo przed osobistymi preferencjami. Zmiany obowiązują od następnej wiadomości. Używaj ich do określania zasad zgodności z przepisami, przetwarzania danych i formatowania.",
+      "title": "Instrukcje organizacji",
+      "tooLong": "Instrukcje mogą zawierać maksymalnie {maxLength} znaków."
+    },
     "invitations": {
       "cancelInvitation": "Anuluj zaproszenie",
       "emailAddressLabel": "Adres e-mail",

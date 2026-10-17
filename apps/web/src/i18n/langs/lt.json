@@ -4426,6 +4426,12 @@
       "title": "DI konfigūracija",
       "usingDefaults": "Naudojami numatytieji nustatymai"
     },
+    "aiInstructions": {
+      "characterCount": "{count}/{maxLength} simbolių",
+      "description": "Šie nurodymai taikomi visiems jūsų organizacijos pokalbiams su DI ir turi pirmenybę prieš asmenines nuostatas. Pakeitimai įsigalioja nuo kitos žinutės. Naudokite juos atitikties taisyklėms, duomenų tvarkymui ir formatavimo standartams nustatyti.",
+      "title": "Organizacijos nurodymai",
+      "tooLong": "Nurodymuose gali būti ne daugiau kaip {maxLength} simbolių."
+    },
     "invitations": {
       "cancelInvitation": "Atšaukti kvietimą",
       "emailAddressLabel": "El. pašto adresas",

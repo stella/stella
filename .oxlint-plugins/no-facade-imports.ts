@@ -29,6 +29,7 @@ const ALLOWED_LEAF_IMPORTS = new Set([
   "@/api/db/entity-feature-policies",
   "@/api/db/json-utils",
   "@/api/db/long-running-connection",
+  "@/api/db/organization-settings-constants",
   "@/api/db/online-migration-connection",
   "@/api/db/rls",
   "@/api/db/root",

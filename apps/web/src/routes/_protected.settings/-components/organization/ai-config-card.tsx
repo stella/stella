@@ -3,15 +3,6 @@ import { useRouteContext } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
-import {
-  AlertDialog,
-  AlertDialogPopup,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogClose,
-} from "@stll/ui/alert-dialog";
 import { Button } from "@stll/ui/button";
 
 import {
@@ -26,6 +17,7 @@ import { providerSetupGuidance } from "@/lib/errors/provider-setup-guidance";
 import { aiConfigOptions } from "@/lib/organization/ai-config-queries";
 import { AIProviderRows } from "@/routes/_protected.settings/-components/organization/ai-provider-rows";
 
+import { SettingsLeaveGuard } from "../settings-leave-guard";
 import { SettingsPageHeader } from "../settings-page-header";
 import { AIConfigAdvanced } from "./ai-config-advanced";
 import { hasCustomAIModels } from "./ai-config-form.logic";
@@ -34,6 +26,7 @@ import { AISettingsSectionFeedback } from "./ai-settings-section";
 import { DeepLKeyCard } from "./deepl-key-card";
 import { DocumentProcessingCard } from "./document-processing-card";
 import { MemoryExtractionCard } from "./memory-extraction-card";
+import { OrganizationInstructionsCard } from "./organization-instructions-card";
 import { PromptCachingCard } from "./prompt-caching-card";
 import { useAIConfigForm } from "./use-ai-config-form";
 import type { AIConfigReadState } from "./use-ai-config-form";
@@ -160,47 +153,6 @@ const SettingsError = ({ error }: SettingsErrorProps) => {
   );
 };
 
-type LeaveGuardProps = {
-  blocker: AIConfigFormState["blocker"];
-};
-
-const LeaveGuard = ({ blocker }: LeaveGuardProps) => {
-  const common = useTranslations("common");
-  return (
-    <AlertDialog
-      open={blocker.status === "blocked"}
-      onOpenChange={(open) => {
-        if (!open && blocker.status === "blocked") {
-          blocker.reset();
-        }
-      }}
-    >
-      <AlertDialogPopup>
-        <AlertDialogHeader>
-          <AlertDialogTitle>{common("confirmAction")}</AlertDialogTitle>
-          <AlertDialogDescription>
-            {common("unsavedLeaveConfirm")}
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogClose render={<Button variant="ghost" />}>
-            {common("goBackToEditing")}
-          </AlertDialogClose>
-          <Button
-            onClick={() => {
-              if (blocker.status === "blocked") {
-                blocker.proceed();
-              }
-            }}
-          >
-            {common("confirm")}
-          </Button>
-        </AlertDialogFooter>
-      </AlertDialogPopup>
-    </AlertDialog>
-  );
-};
-
 type AuxiliaryCardsProps = {
   form: AIConfigFormState;
 };
@@ -295,8 +247,9 @@ export const AIConfigForm = ({
       {form.feedback.status !== "error" && (
         <AISettingsSectionFeedback feedback={form.feedback} />
       )}
+      <OrganizationInstructionsCard key={organizationId} />
       <AuxiliaryCards form={form} />
-      <LeaveGuard blocker={form.blocker} />
+      <SettingsLeaveGuard blocker={form.blocker} />
     </div>
   );
 };

@@ -25,6 +25,7 @@ import {
   runOnlineMigrations as runOnlineMigrationsWithGate,
   type OnlineRepairOptions,
 } from "./online-migrations";
+import { ORGANIZATION_AI_INSTRUCTIONS_CONSTRAINT_VALIDATION } from "./organization-ai-instructions-constraint-validation";
 import { SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS } from "./sanctions-monitoring-constraint-validation";
 
 const testClock = () => Date.parse("2026-10-01T12:00:00.000Z");
@@ -140,8 +141,11 @@ describe("online migrations", () => {
     ).toEqual([]);
   });
 
-  test.each(SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS)(
-    "validates monitoring constraint $name once and rejects incomplete startup",
+  test.each([
+    ...SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS,
+    ORGANIZATION_AI_INSTRUCTIONS_CONSTRAINT_VALIDATION,
+  ])(
+    "validates deferred constraint $name once and rejects incomplete startup",
     async ({ name }) => {
       const harness = createHarness({ unvalidatedConstraints: [name] });
       const rejection = await assertOnlineMigrationsApplied(harness.pool).then(
@@ -164,6 +168,46 @@ describe("online migrations", () => {
       expect(harness.released()).toBe(true);
     },
   );
+
+  test("rolls back interrupted organization instructions validation and retries to completion", async () => {
+    const { name } = ORGANIZATION_AI_INSTRUCTIONS_CONSTRAINT_VALIDATION;
+    const harness = createHarness({ unvalidatedConstraints: [name] });
+    let validationStatus: "interrupt" | "resume" = "interrupt";
+    const pool = {
+      reserve: async () => {
+        const connection = await harness.pool.reserve();
+        return {
+          ...connection,
+          execute: async (query: string) => {
+            if (
+              validationStatus === "interrupt" &&
+              query.includes(`VALIDATE CONSTRAINT "${name}"`)
+            ) {
+              validationStatus = "resume";
+              throw new TypeError(
+                "Injected constraint validation interruption",
+              );
+            }
+            await connection.execute(query);
+          },
+        };
+      },
+    };
+    expect(await rejectionOf(runOnlineMigrations(pool))).toMatchObject({
+      message: "Injected constraint validation interruption",
+    });
+    expect(harness.statements).toContain("ROLLBACK");
+    expect(
+      await rejectionOf(assertOnlineMigrationsApplied(harness.pool)),
+    ).toMatchObject({
+      message: `Online repair ${name} is not complete: constraint ${name} is not validated`,
+    });
+    await runOnlineMigrations(pool);
+    await assertOnlineMigrationsApplied(pool);
+    expect(harness.statements).toContain(
+      "SELECT set_config('statement_timeout', $1, true), set_config('lock_timeout', $2, true)\n-- params [\"10000ms\",\"1000ms\"]",
+    );
+  });
 
   test("accepts an already valid index without rebuilding it", async () => {
     const harness = createHarness();
