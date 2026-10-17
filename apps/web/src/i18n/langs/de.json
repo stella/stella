@@ -65,6 +65,9 @@
     "runSelectedRows": "Ausführen für {count, plural, one {# ausgewählte Zeile} other {# ausgewählte Zeilen}}",
     "selectedRun": "KI-Spalten ausführen für {count, plural, one {# Zeile} other {# Zeilen}}"
   },
+  "aiDisclosure": {
+    "caseLaw": "KI-Zusammenfassungen, -Notizen und -Analysen von Gerichtsentscheidungen erstellt stella; sie sind von den Gerichten nicht gebilligt und geben nicht deren eigene Erwägungen wieder. Sie dienen juristischen Fachleuten als Hilfsmittel; maßgeblich bleibt der Text der Entscheidung."
+  },
   "appearance": {
     "calendar": "Kalender",
     "calendarGregorian": "Gregorianisch",
@@ -1213,6 +1216,11 @@
       "stale": "Diese Antwort wurde geändert. Wählen Sie den Text erneut aus.",
       "submit": "Änderung anfordern"
     },
+    "answerQuote": {
+      "showInDecision": "In der Entscheidung zeigen",
+      "verified": "Verifiziertes Zitat",
+      "verifiedHint": "Wörtlich in {source}"
+    },
     "applyMode": {
       "description": "Word speichert, wer welche Änderung vorgenommen hat. Wir merken uns Ihre Auswahl.",
       "direct": "Nein, direkt anwenden",
@@ -1451,6 +1459,12 @@
       "title": "Eingefügter Text"
     },
     "placeholder": "Geben Sie hier Ihre Frage ein, / für Skills, @ für Kontext",
+    "processSummary": {
+      "analyses": "{count, plural, one {# Analyse} other {# Analysen}}",
+      "changesSaved": "{count, plural, one {# Änderung gespeichert} other {# Änderungen gespeichert}}",
+      "documentEdits": "{count, plural, one {# Dokumentänderung} other {# Dokumentänderungen}}",
+      "sourcesChecked": "{count, plural, one {# Quelle geprüft} other {# Quellen geprüft}}"
+    },
     "promptImprovementStrategies": {
       "decompose": {
         "description": "Teilt komplexe Aufgaben in geordnete Teilaufgaben auf.",
@@ -1696,6 +1710,7 @@
       "interrupted": "Vor Abschluss unterbrochen",
       "output": "Ausgabe",
       "sourceCode": "Quellcode",
+      "statusWaiting": "Wartet",
       "toggleDetails": "Details ein-/ausblenden",
       "unrestoredFields": "{count, plural, one {# Feld konnte} other {# Felder konnten}} im anonymisierten Modus nicht mit echten Werten gefüllt werden. Bitte prüfen: {fields}"
     },
@@ -1721,7 +1736,8 @@
       "toggleLabel": "Websuche",
       "toggleOff": "Websuche ausschalten",
       "toggleOn": "Websuche einschalten"
-    }
+    },
+    "workedFor": "Bearbeitungszeit: {duration}"
   },
   "clauses": {
     "addVariant": "Variante hinzufügen",
@@ -2599,11 +2615,14 @@
     "actionFailed": "Aktion fehlgeschlagen",
     "api": {
       "badRequest": "Die Anfrage konnte nicht abgeschlossen werden.",
+      "caseLawCountryUnavailable": "Die Rechtsprechung dieses Landes ist nicht verfügbar. Wählen Sie ein anderes Land.",
+      "caseLawSearchUnavailable": "Die Suche in der Rechtsprechung dieses Landes ist nicht verfügbar. Die öffentlichen Entscheidungen können Sie weiterhin lesen.",
       "conflict": "Die Anfrage steht im Konflikt mit dem aktuellen Zustand.",
       "forbidden": "Sie haben keine Berechtigung für diese Aktion.",
+      "legislationCountryUnavailable": "Die Rechtsvorschriften dieses Landes sind nicht verfügbar. Wählen Sie ein anderes Land.",
+      "legislationSearchUnavailable": "Die Suche in den Rechtsvorschriften dieses Landes ist nicht verfügbar. Die öffentlichen Rechtsvorschriften können Sie weiterhin lesen.",
       "notFound": "Das Angeforderte konnte nicht gefunden werden.",
       "payloadTooLarge": "Die Anfrage ist zu groß.",
-      "publicCountryUnavailable": "Rechtsvorschriften und Rechtsprechung für dieses Land sind nicht verfügbar. Wählen Sie ein anderes Land.",
       "rateLimited": "Zu viele Anfragen. Bitte versuchen Sie es später erneut.",
       "server": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
       "serviceUnavailable": "Der Dienst ist vorübergehend nicht verfügbar. Bitte versuchen Sie es erneut.",

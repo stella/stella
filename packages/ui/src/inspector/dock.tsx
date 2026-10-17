@@ -109,7 +109,9 @@ export const InspectorDock = ({
       />
       <div
         className={cn(
-          "fixed inset-y-0 end-0 hidden h-svh md:flex",
+          // Fixed to the viewport, so it clears the notch and the home
+          // indicator itself; its width includes that padding.
+          "fixed inset-y-0 end-0 hidden h-svh pe-(--safe-area-inline-end) pt-(--safe-area-top) pb-(--safe-area-bottom) md:flex",
           PANE_LAYER_CLASS_NAME[mount],
         )}
         data-slot="inspector-dock-pane"

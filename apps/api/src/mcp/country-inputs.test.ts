@@ -224,6 +224,10 @@ describe("a country input reads the spellings a model writes", () => {
     ["Czech Republic", "CZE"],
     ["Slovensko", "SVK"],
     ["Polska", "POL"],
+    ["HU", "HUN"],
+    ["HUN", "HUN"],
+    ["Magyarország", "HUN"],
+    ["Hungary", "HUN"],
     ["European Union", "EU"],
   ])("search_case_law reads %j as %s", (spelling, canonical) => {
     expect(

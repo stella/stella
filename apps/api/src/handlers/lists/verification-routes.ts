@@ -2,6 +2,7 @@ import Elysia from "elysia";
 
 import updateFactDetails from "@/api/handlers/lists/items/fact-details/update";
 import verifyItemSource from "@/api/handlers/lists/items/sources/verification/update";
+import createSampleCase from "@/api/handlers/lists/sample-case/create";
 import createBulkClaimReviews from "@/api/handlers/lists/verifications/claim-reviews/bulk/create";
 import createClaimReview from "@/api/handlers/lists/verifications/claim-reviews/create";
 import createVerification from "@/api/handlers/lists/verifications/create";
@@ -34,6 +35,10 @@ export const createListVerificationRoutes = (
     .post("/claim-reviews/bulk", createBulkClaimReviews.handler, {
       body: createBulkClaimReviews.config.body,
       permissions: createBulkClaimReviews.config.permissions,
+    })
+    .post("/sample-case", createSampleCase.handler, {
+      body: createSampleCase.config.body,
+      permissions: createSampleCase.config.permissions,
     })
     .post("/verifications", createVerification.handler, {
       body: createVerification.config.body,

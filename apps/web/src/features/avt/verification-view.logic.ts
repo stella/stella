@@ -1,5 +1,7 @@
 import { panic } from "better-result";
 
+import type { ParagraphBlock } from "@stll/legal-ast/document-ast";
+
 import type {
   ClaimAnchor,
   VerificationClaim,
@@ -92,14 +94,27 @@ export const passageReadingOrder = (
 
 type VerificationBlock = VerificationRun["blocks"][number];
 
-export type ProseSegment =
-  | { type: "plain"; text: string }
-  | { type: "claim"; text: string; claim: VerificationClaim };
+/**
+ * Where one claim is marked in its block's text. Offsets index the stored
+ * text (UTF-16), which is also the reader paragraph's plain text, so they
+ * are the reader's anchor offsets unchanged.
+ */
+export type ClaimSpan = {
+  claim: VerificationClaim;
+  start: number;
+  end: number;
+};
 
+/**
+ * A stored block as the document pane shows it: the shared reader's
+ * paragraph for its text, and the claims marked in it.
+ */
 export type ProseBlock = {
   ordinal: number;
   pageNumber: number | null;
-  segments: ProseSegment[];
+  /** Piece and anchor id are the AVT block id. */
+  paragraph: ParagraphBlock;
+  claimSpans: ClaimSpan[];
 };
 
 const claimBelongsToBlock = (
@@ -126,12 +141,17 @@ const claimBelongsToBlock = (
   }
 };
 
-/** Partition stored text without changing its UTF-16 offsets or repeating overlap. */
-export const segmentProseBlock = (
+/**
+ * The claims of one block as ordered, non-overlapping spans of its text: the
+ * earliest claim wins, then the longest; a later claim keeps only what an
+ * earlier one left, and one left with nothing is not marked. The reader
+ * requires the anchors of one piece not to overlap.
+ */
+export const claimSpansForBlock = (
   block: VerificationBlock,
   claims: readonly VerificationClaim[],
-): ProseSegment[] => {
-  const segments: ProseSegment[] = [];
+): ClaimSpan[] => {
+  const spans: ClaimSpan[] = [];
   const anchored = claims
     .filter((claim) => claimBelongsToBlock(claim, block))
     .toSorted(
@@ -147,17 +167,27 @@ export const segmentProseBlock = (
     if (start >= end) {
       continue;
     }
-    if (start > cursor) {
-      segments.push({ type: "plain", text: block.text.slice(cursor, start) });
-    }
-    segments.push({ type: "claim", text: block.text.slice(start, end), claim });
+    spans.push({ claim, start, end });
     cursor = end;
   }
-  if (cursor < block.text.length) {
-    segments.push({ type: "plain", text: block.text.slice(cursor) });
-  }
-  return segments;
+  return spans;
 };
+
+/**
+ * The block's text as a reader paragraph, the shape the reader's own
+ * full-text fallback builds. The text stays one run, line breaks included
+ * (the pane preserves them with `white-space`): the reader draws an anchor
+ * once per text run, so a claim that crosses a line stays one mark, and the
+ * paragraph's plain text is the stored text, so claim offsets need no
+ * translation.
+ */
+export const readerParagraph = (block: VerificationBlock): ParagraphBlock => ({
+  id: block.blockId,
+  anchorId: block.blockId,
+  type: "paragraph",
+  plainText: block.text,
+  inlines: [{ type: "text", text: block.text }],
+});
 
 export const segmentProse = (
   blocks: readonly VerificationBlock[],
@@ -168,17 +198,14 @@ export const segmentProse = (
     .map((block) => ({
       ordinal: block.ordinal,
       pageNumber: block.kind === "pdf-page" ? block.pageNumber : null,
-      segments: segmentProseBlock(block, claims),
+      paragraph: readerParagraph(block),
+      claimSpans: claimSpansForBlock(block, claims),
     }));
 
 export const proseReadingOrder = (
   blocks: readonly ProseBlock[],
 ): VerificationClaim["id"][] =>
-  blocks.flatMap((block) =>
-    block.segments.flatMap((segment) =>
-      segment.type === "claim" ? [segment.claim.id] : [],
-    ),
-  );
+  blocks.flatMap((block) => block.claimSpans.map((span) => span.claim.id));
 
 export type ClaimPresentation =
   | {

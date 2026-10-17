@@ -86,6 +86,9 @@ test("a transient fetch failure is retried until the download succeeds", () => {
   expect(result.calls).toEqual(
     Array.from({ length: 3 }, () => [CRATES, ADVISORIES]).flat(),
   );
+  // The shared retry helper owns the attempt budget and its reporting.
+  expect(result.output).toContain("retry.sh: attempt 1/3 failed");
+  expect(result.output).toContain("succeeded on attempt 3/3");
 });
 
 test("a crate download that keeps failing stops after the bounded attempts", () => {
