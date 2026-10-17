@@ -32,7 +32,10 @@ import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import { provisionCitationProfileFor } from "@stll/legal-atlas/provision-citation-profiles";
 import { resolveProvisionCitation } from "@stll/legal-atlas/provision-citation-resolve";
-import { CASE_LAW_RESULTS_RESOURCE_URI } from "@stll/mcp-apps/resource-uri";
+import {
+  CASE_LAW_RESULTS_RESOURCE_URI,
+  CITATION_GRAPH_RESOURCE_URI,
+} from "@stll/mcp-apps/resource-uri";
 import { Temporal } from "@stll/time";
 
 import { workspaces } from "@/api/db/schema";
@@ -1058,6 +1061,12 @@ export const STELLA_TOOL_DEFINITIONS = [
     // Backed by the public case-law corpus (caseLawPublicReadDb), the same
     // surface the public routes gate behind the same feature flag.
     feature: "FEATURE_PUBLIC_LAW",
+    _meta: {
+      ui: {
+        resourceUri: CITATION_GRAPH_RESOURCE_URI,
+        visibility: ["model", "app"],
+      },
+    },
     name: "read_case_law_citations",
     scope: "stella:read",
   }),

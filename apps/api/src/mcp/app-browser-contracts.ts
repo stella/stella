@@ -79,3 +79,5 @@ export {
 } from "../lib/chat/decision-reader-projections";
 
 export { READ_PROVISION_HISTORY_PROJECTION as APP_PROVISION_HISTORY_SCHEMA } from "../lib/chat/legislation-result-projections";
+
+export { READ_CASE_LAW_CITATIONS_PROJECTION as APP_CITATION_PAGE_SCHEMA } from "../lib/chat/case-law-citation-projection";
