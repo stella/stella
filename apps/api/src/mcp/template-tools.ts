@@ -1358,7 +1358,7 @@ const assertTemplateFillUsage = async ({
     return null;
   }
   const authorization = await authorizeHandlerUsage({
-    metering: { actionType: "chat", modelRole: "fast" },
+    metering: { actionType: "chat", modelTask: "short-text" },
     organizationId: context.organizationId,
     orgAIConfig,
     workspaceId,
@@ -1466,7 +1466,7 @@ const handleFillTemplateTool: McpToolHandler<
           workspaceId: null,
         },
         feature: "templates.fill",
-        modelRole: "fast",
+        modelTask: "short-text",
         orgAIConfig,
         modelTier: admission.modelTier,
         properties: { organization_id: context.organizationId },
@@ -1940,7 +1940,7 @@ const handleSaveFilledTemplateTool: McpToolHandler<
           workspaceId,
         },
         feature: "templates.fill",
-        modelRole: "fast",
+        modelTask: "short-text",
         orgAIConfig,
         modelTier: admission.modelTier,
         properties: { organization_id: context.organizationId },
@@ -3126,18 +3126,18 @@ const handlePreviewTemplateConditionsTool: TypedMcpToolHandler<
             organizationId: context.organizationId,
             admission,
             tenantWorkspaceIds: [],
-            role: "fast",
+            task: "classify",
             serviceTier: "standard",
             caching: resolveCaching({
               promptCachingEnabled: false,
-              role: "fast",
+              task: "classify",
               scopeKey: parsed.output.template_id,
             }),
             prompt: "Decide the template conditions from the supplied values.",
             analytics: createTanStackAIAnalyticsCallbacks({
               dataClass: "customer",
               feature: "templates.preview-conditions",
-              modelRole: "fast",
+              modelTask: "classify",
               orgAIConfig,
               modelTier: admission.modelTier,
               organizationId: context.organizationId,

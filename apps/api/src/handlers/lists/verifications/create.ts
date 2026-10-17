@@ -27,11 +27,11 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { encryptedContentError } from "@/api/lib/files/detect-file-encryption";
 import { readVerificationEvidence } from "@/api/lib/lists/verification/evidence";
-import { VERIFICATION_MODEL_ROLE } from "@/api/lib/lists/verification/model-call";
+import { VERIFICATION_MODEL_TASK } from "@/api/lib/lists/verification/model-call";
 import { ListVerificationRunCapError } from "@/api/lib/lists/verification/run-caps";
 import { enqueueListVerificationRun } from "@/api/lib/lists/verification/run-queue";
 import { startVerificationRun } from "@/api/lib/lists/verification/start-run";
-import { getTanStackTextModelInfoForRole } from "@/api/lib/tanstack-ai-models";
+import { getTanStackTextModelInfoForTask } from "@/api/lib/tanstack-ai-models";
 import { estimateDocumentRunUnits } from "@/api/lib/usage/run-estimate";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
@@ -200,8 +200,8 @@ const createVerification = createSafeHandler(
         }),
       );
     }
-    const model = getTanStackTextModelInfoForRole(
-      VERIFICATION_MODEL_ROLE,
+    const model = getTanStackTextModelInfoForTask(
+      VERIFICATION_MODEL_TASK,
       orgAIConfig,
       {
         dataClass: "customer",
@@ -213,7 +213,7 @@ const createVerification = createSafeHandler(
       authorizeHandlerRunSize({
         metering: {
           actionType: "doc_review",
-          modelRole: VERIFICATION_MODEL_ROLE,
+          modelTask: VERIFICATION_MODEL_TASK,
         },
         estimatedUnits: estimateDocumentRunUnits({
           modelId: model.modelId,
