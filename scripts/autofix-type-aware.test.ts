@@ -98,10 +98,14 @@ test.each(cases)(
       );
       writeFileSync(path.join(root, ".oxfmtrc.json"), "{}");
       writeFileSync(path.join(root, "generated.html.txt"), "fixture");
-      writeFileSync(
-        path.join(root, "autofix-changed-paths"),
-        "changed.ts\0generated.html.txt\0",
-      );
+      // The fixer steps read the push scope; a run without a settled
+      // commit scopes every changed path.
+      for (const name of ["autofix-changed-paths", "autofix-fix-paths"]) {
+        writeFileSync(
+          path.join(root, name),
+          "changed.ts\0generated.html.txt\0",
+        );
+      }
       const finding = Bun.spawnSync(
         [
           process.execPath,
