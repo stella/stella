@@ -24,7 +24,7 @@
  */
 import { panic } from "better-result";
 import type { SQL } from "drizzle-orm";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import {
   DECISION_READ_RESOLUTION,
@@ -36,7 +36,7 @@ import {
 } from "@stll/api-contract/case-law-launch-readiness";
 import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
 
-import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import { unredactedCaseLawDecisions, caseLawSources } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
   CaseLawPublicReadDb,
@@ -48,8 +48,10 @@ import {
   supplementAnchorPrefix,
 } from "@/api/lib/case-law/decision-absorption";
 import { normalizePublicDecisionLanguage } from "@/api/lib/case-law/decision-language";
-import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
+import { publishedCaseLawDecisionFor } from "@/api/lib/case-law/published-decisions-sql";
+import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { isRedistributable } from "@/api/lib/legal-search/corpus-source";
+import { storedObservationIsListingOnly } from "@/api/lib/legal-search/partial-observation-sql";
 
 /** Module-private, so the subject type is constructible only below. */
 const REDISTRIBUTABLE: unique symbol = Symbol("redistributableDecisionSubject");
@@ -153,7 +155,7 @@ const locatorCondition = (
 ) => {
   switch (locator.kind) {
     case "id":
-      return eq(caseLawDecisions.id, locator.id);
+      return eq(unredactedCaseLawDecisions.id, locator.id);
     case "slug": {
       const country = locator.country.toUpperCase();
       const language = normalizePublicDecisionLanguage(locator.language);
@@ -165,13 +167,13 @@ const locatorCondition = (
       }
       return language === null
         ? and(
-            eq(caseLawDecisions.country, country),
-            eq(caseLawDecisions.slug, locator.slug),
+            eq(unredactedCaseLawDecisions.country, country),
+            eq(unredactedCaseLawDecisions.slug, locator.slug),
           )
         : and(
-            eq(caseLawDecisions.country, country),
-            eq(caseLawDecisions.slug, locator.slug),
-            sql`replace(lower(${caseLawDecisions.language}), '_', '-') = ${language}`,
+            eq(unredactedCaseLawDecisions.country, country),
+            eq(unredactedCaseLawDecisions.slug, locator.slug),
+            sql`replace(lower(${unredactedCaseLawDecisions.language}), '_', '-') = ${language}`,
           );
     }
     default: {
@@ -188,14 +190,17 @@ const selectLocatedRows = (
 ) =>
   tx
     .select({
-      id: caseLawDecisions.id,
-      country: caseLawDecisions.country,
+      id: unredactedCaseLawDecisions.id,
+      country: unredactedCaseLawDecisions.country,
       descriptor: caseLawSources.descriptor,
-      published: sql<boolean>`${publishedCaseLawDecision}`,
-      absorption: decisionAbsorptionSql(caseLawDecisions.metadata),
+      published: sql<boolean>`${publishedCaseLawDecisionFor(unredactedCaseLawDecisions)}`,
+      absorption: decisionAbsorptionSql(unredactedCaseLawDecisions.metadata),
     })
-    .from(caseLawDecisions)
-    .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
+    .from(unredactedCaseLawDecisions)
+    .innerJoin(
+      caseLawSources,
+      eq(caseLawSources.id, unredactedCaseLawDecisions.sourceId),
+    )
     .where(condition);
 
 /** The row a condition names, whether or not it is published. */
@@ -254,7 +259,7 @@ const resolveSubjectIn = async (
   }
   const target = await selectLocatedRow(
     tx,
-    eq(caseLawDecisions.id, absorption.decisionId),
+    eq(unredactedCaseLawDecisions.id, absorption.decisionId),
   );
   if (target === undefined || !isPublic(target, countries)) {
     return null;
@@ -292,7 +297,10 @@ export const withRedistributableDecisions = async <T>(
       const rows =
         ids.length === 0
           ? []
-          : await selectLocatedRows(tx, inArray(caseLawDecisions.id, [...ids]));
+          : await selectLocatedRows(
+              tx,
+              inArray(unredactedCaseLawDecisions.id, [...ids]),
+            );
       return await read(
         rows
           .filter((row) => row.published && isPublic(row, countries))
@@ -339,3 +347,31 @@ export const withRedistributableSubject = async <T>(
     },
     { isolation: "repeatable-read" },
   );
+
+/** Pending-text aggregates expose counts without publishing listing-only rows. */
+export const readPendingTextCountsBySource = async (
+  tx: CaseLawPublicReadTransaction,
+  sourceIds: readonly SafeId<"caseLawSource">[],
+) => {
+  if (sourceIds.length === 0) {
+    return [];
+  }
+  return await tx
+    .select({
+      sourceId: caseLawSources.id,
+      pendingTextCount: sql<number>`count(${unredactedCaseLawDecisions.id})::integer`,
+    })
+    .from(caseLawSources)
+    .leftJoin(
+      unredactedCaseLawDecisions,
+      and(
+        eq(unredactedCaseLawDecisions.sourceId, caseLawSources.id),
+        isNull(unredactedCaseLawDecisions.fulltext),
+        storedObservationIsListingOnly(unredactedCaseLawDecisions.metadata),
+      ),
+    )
+    .where(
+      and(inArray(caseLawSources.id, sourceIds), redistributableCaseLawSource),
+    )
+    .groupBy(caseLawSources.id);
+};

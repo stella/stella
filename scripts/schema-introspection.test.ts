@@ -298,6 +298,37 @@ describe("schema-only dependency validation", () => {
   });
 });
 
+test("treats schema-owned Drizzle view callbacks as declarations, not runtime reads", () => {
+  const schemaFile = "apps/api/src/db/schema/case-law.ts";
+  const source = [
+    FULL_IMPORT,
+    'export const view = pg.pgView("published").with({ securityBarrier: true }).as((qb) => qb.select().from(schema.caseLawDecisions));',
+  ].join("\n");
+  const { root, dispose } = fixture({ [schemaFile]: source });
+  try {
+    expect(
+      validateSchemaIntrospection({
+        entries: [{ path: schemaFile, reason: "Declares a schema view." }],
+        repoRoot: root,
+      }),
+    ).toEqual([]);
+
+    const ordinaryQuery = source.replace(
+      ".as((qb) => qb.select().from(schema.caseLawDecisions))",
+      ".as(() => db.select())",
+    );
+    writeFileSync(path.join(root, schemaFile), ordinaryQuery);
+    expect(
+      validateSchemaIntrospection({
+        entries: [{ path: schemaFile, reason: "Declares a schema view." }],
+        repoRoot: root,
+      }),
+    ).toContain(`${schemaFile}: database operation in ${schemaFile}: select`);
+  } finally {
+    dispose();
+  }
+});
+
 test("every schema owner inherits exactly the shared set once", () => {
   const declared = SCHEMA_INTROSPECTION.map(({ path: file }) => file);
   for (const entry of OWNERSHIP) {

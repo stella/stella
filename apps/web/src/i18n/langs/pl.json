@@ -65,6 +65,9 @@
     "runSelectedRows": "Uruchom dla {count, plural, one {# wybranego wiersza} few {# wybranych wierszy} many {# wybranych wierszy} other {# wybranego wiersza}}",
     "selectedRun": "Uruchom kolumny AI dla {count, plural, one {# wiersza} few {# wierszy} many {# wierszy} other {# wiersza}}"
   },
+  "aiDisclosure": {
+    "caseLaw": "Podsumowania, notatki i analizy orzeczeń sądowych przygotowane przez AI generuje stella; nie są one zatwierdzone przez sądy i nie odzwierciedlają własnego rozumowania sądów. Stanowią pomoc dla prawników, a rozstrzygającym źródłem pozostaje tekst orzeczenia."
+  },
   "appearance": {
     "calendar": "Kalendarz",
     "calendarGregorian": "Gregoriański",
@@ -1213,6 +1216,11 @@
       "stale": "Ta odpowiedź się zmieniła. Zaznacz tekst ponownie.",
       "submit": "Poproś o zmianę"
     },
+    "answerQuote": {
+      "showInDecision": "Pokaż w orzeczeniu",
+      "verified": "Zweryfikowany cytat",
+      "verifiedHint": "Dosłownie w {source}"
+    },
     "applyMode": {
       "description": "Word zapisuje, kto wprowadził każdą zmianę. Zapamiętamy Twój wybór.",
       "direct": "Nie, zastosuj bezpośrednio",
@@ -1451,6 +1459,12 @@
       "title": "Wklejony tekst"
     },
     "placeholder": "Wpisz pytanie tutaj, / dla umiejętności, @ aby dodać kontekst",
+    "processSummary": {
+      "analyses": "{count, plural, one {# analiza} few {# analizy} many {# analiz} other {# analizy}}",
+      "changesSaved": "{count, plural, one {# zapisana zmiana} few {# zapisane zmiany} many {# zapisanych zmian} other {# zapisanej zmiany}}",
+      "documentEdits": "{count, plural, one {# edycja dokumentu} few {# edycje dokumentu} many {# edycji dokumentu} other {# edycji dokumentu}}",
+      "sourcesChecked": "{count, plural, one {# sprawdzone źródło} few {# sprawdzone źródła} many {# sprawdzonych źródeł} other {# sprawdzonego źródła}}"
+    },
     "promptImprovementStrategies": {
       "decompose": {
         "description": "Dzieli złożone zadanie na uporządkowane podzadania.",
@@ -1696,6 +1710,7 @@
       "interrupted": "Przerwano przed ukończeniem",
       "output": "Wynik",
       "sourceCode": "Kod źródłowy",
+      "statusWaiting": "Oczekuje",
       "toggleDetails": "Przełącz szczegóły",
       "unrestoredFields": "W trybie anonimizacji nie udało się wypełnić prawdziwymi wartościami {count, plural, one {# pola} few {# pól} many {# pól} other {# pola}}. Sprawdź: {fields}"
     },
@@ -2600,11 +2615,14 @@
     "actionFailed": "Akcja nie powiodła się",
     "api": {
       "badRequest": "Nie udało się wykonać żądania.",
+      "caseLawCountryUnavailable": "Orzecznictwo tego kraju nie jest dostępne. Wybierz inny kraj.",
+      "caseLawSearchUnavailable": "Wyszukiwanie orzecznictwa tego kraju nie jest dostępne. Nadal możesz czytać jego publiczne orzeczenia.",
       "conflict": "Żądanie jest sprzeczne z bieżącym stanem.",
       "forbidden": "Nie masz uprawnień do wykonania tej czynności.",
+      "legislationCountryUnavailable": "Przepisy tego kraju nie są dostępne. Wybierz inny kraj.",
+      "legislationSearchUnavailable": "Wyszukiwanie przepisów tego kraju nie jest dostępne. Nadal możesz czytać jego publiczne przepisy.",
       "notFound": "Nie udało się znaleźć żądanego elementu.",
       "payloadTooLarge": "Żądanie jest zbyt duże.",
-      "publicCountryUnavailable": "Przepisy i orzecznictwo tego kraju nie są dostępne. Wybierz inny kraj.",
       "rateLimited": "Zbyt wiele żądań. Spróbuj ponownie później.",
       "server": "Coś poszło nie tak. Spróbuj ponownie.",
       "serviceUnavailable": "Usługa jest tymczasowo niedostępna. Spróbuj ponownie.",

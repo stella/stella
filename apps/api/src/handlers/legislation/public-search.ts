@@ -43,6 +43,7 @@ export const createPublicStatuteSearch = (search = searchLegislationHandler) =>
     },
     async function* ({ query: { country, ...query } }) {
       const countryRead = readPublicLawCountry(country, {
+        domain: "legislation",
         admitted: PUBLIC_LEGISLATION_COUNTRIES,
         surface: "search",
       });
