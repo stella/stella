@@ -112,9 +112,9 @@ export const createProfileTestSession = async ({
     );
     expect(importedSession.ok(), await importedSession.text()).toBe(true);
     const imported = objectValue(await importedSession.json());
-    expect(stringField(objectValue(imported.user), "email")).toBe(email);
+    expect(stringField(objectValue(imported["user"]), "email")).toBe(email);
     expect(
-      stringField(objectValue(imported.session), "activeOrganizationId"),
+      stringField(objectValue(imported["session"]), "activeOrganizationId"),
     ).toBe(organizationId);
 
     return {

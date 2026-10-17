@@ -60,14 +60,22 @@ test("publication year reaches the public statute list request", async () => {
   );
   const queryClient = new QueryClient();
   try {
-    await queryClient.infiniteQuery(
-      statutesInfiniteOptions(
-        createStatuteListFilters(
-          "svk",
-          v.parse(statutesIndexSearchSchema, { year: 1964 }),
+    // Server-side API reads forward the incoming request's cookies, so the
+    // read runs inside a request as it does during SSR.
+    const { requestHandler } = await import("@tanstack/react-start/server");
+    const handle = requestHandler(async () => {
+      await queryClient.infiniteQuery(
+        statutesInfiniteOptions(
+          createStatuteListFilters(
+            "svk",
+            v.parse(statutesIndexSearchSchema, { year: 1964 }),
+          ),
         ),
-      ),
-    );
+      );
+      return new Response(null);
+    });
+    const response = await handle(new Request("http://localhost:3000/law"), {});
+    expect(response.status).toBe(200);
     expect(requests).toHaveLength(1);
     expect(requests.at(0)?.pathname).toBe("/v1/law/statutes");
     expect(requests.at(0)?.searchParams.get("country")).toBe("SVK");
