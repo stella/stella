@@ -10,8 +10,10 @@ import {
 import { createAuthResponseCookiesPlugin } from "@/api/lib/auth/auth-response-cookies";
 import {
   applyDiscoveryMetadataCachePolicy,
-  applyResponseCachePolicy,
   DISCOVERY_METADATA_PATHS,
+} from "@/api/lib/discovery-metadata-cache";
+import {
+  applyResponseCachePolicy,
   finalizeResponseCachePolicy,
   PRIVATE_CACHE_CONTROL,
   RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS,

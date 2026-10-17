@@ -150,6 +150,7 @@ import { assertConfiguredBetterAuthOAuthPolicy } from "@/api/lib/db/assert-bette
 import { assertMigrationsApplied } from "@/api/lib/db/assert-migrations-applied";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
+import { applyDiscoveryMetadataCachePolicy } from "@/api/lib/discovery-metadata-cache";
 import { httpError } from "@/api/lib/errors/http-error";
 import { errorTag } from "@/api/lib/errors/utils";
 import {
@@ -202,7 +203,6 @@ import { startSchedulerLoop } from "@/api/lib/scheduler/runner";
 import { createReapOwnerlessChatTurnsTask } from "@/api/lib/scheduler/tasks/chat-turn-reaper";
 import { securityCanaryInterceptor } from "@/api/lib/security-canary";
 import {
-  applyDiscoveryMetadataCachePolicy,
   finalizeResponseCachePolicy,
   API_SECURITY_HEADERS,
   setSecurityHeaders,
@@ -357,8 +357,10 @@ const api = new Elysia()
   // Body parsing is decided before any route runs, so the multipart parser has
   // to sit ahead of every route registration.
   .use(multipartFormParser)
-  .onRequest(({ request, set }) => {
+  .onRequest(({ set }) => {
     setSecurityHeaders(set);
+  })
+  .onRequest(({ request, set }) => {
     applyDiscoveryMetadataCachePolicy({ request, set });
   })
   .onRequest(async (context) => {
