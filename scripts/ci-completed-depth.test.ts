@@ -171,8 +171,8 @@ type LookupOptions = {
   evidence?: unknown;
   archive?: Buffer;
   downloadFailure?: boolean;
-  /** The pushed-over head of a synchronize event. */
-  before?: string;
+  /** The pushed-over head of a synchronize event; undefined when it has none. */
+  before?: string | undefined;
   /** git.getCommit for the new head. */
   commit?: unknown;
   /** The patch-id step's clean_base_merge output. */
