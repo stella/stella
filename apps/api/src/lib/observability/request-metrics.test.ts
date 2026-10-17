@@ -26,7 +26,6 @@ import {
 } from "@/api/lib/observability/request-metrics";
 import type { RequestClass } from "@/api/lib/observability/request-metrics";
 import {
-  allowlistedMcpMetricToolName,
   measureMcpPhase,
   normalizeMcpMetricMethod,
   observeMcpRequest,
@@ -72,15 +71,6 @@ test("MCP phase records are integral, non-overlapping, and bounded", () => {
   expect(phaseTotal).toBeLessThanOrEqual(record.total);
   expect(JSON.stringify(record)).not.toContain(freeText);
   expect(normalizeMcpMetricMethod("tools/call")).toBe("tools/call");
-  expect(
-    allowlistedMcpMetricToolName(freeText, ["list_matters", "get_matter"]),
-  ).toBeUndefined();
-  expect(
-    allowlistedMcpMetricToolName("list_matters", [
-      "list_matters",
-      "get_matter",
-    ]),
-  ).toBe("list_matters");
 });
 
 test("MCP phase overlap never changes the result and is flagged", async () => {

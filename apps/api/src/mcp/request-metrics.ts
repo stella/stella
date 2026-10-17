@@ -3,6 +3,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { currentQueryCount } from "@/api/lib/db-query-counter";
 import { emitMcpRequestMetric } from "@/api/lib/observability/request-metrics";
 import type { McpMode } from "@/api/mcp/constants";
+import { classifyMcpMetricToolName } from "@/api/mcp/observe-tool-call";
 
 const MCP_METHODS = [
   "initialize",
@@ -31,14 +32,6 @@ export const normalizeMcpMetricMethod = (
   value: string | null,
 ): McpMetricMethod =>
   value !== null && isMcpMetricMethod(value) ? value : "unknown";
-
-export const allowlistedMcpMetricToolName = (
-  candidate: string,
-  registeredNames: readonly string[],
-): string | undefined =>
-  registeredNames.some((registered) => registered === candidate)
-    ? candidate
-    : undefined;
 
 type McpRequestMetricState = {
   startedAt: number;
@@ -111,11 +104,10 @@ export const setMcpMetricParsedMethod = (method: string): void => {
   state.method = normalizeMcpMetricMethod(method);
 };
 
-/** Records only a name already resolved through the registered tool catalog. */
-export const setMcpMetricRegisteredToolName = (toolName: string): void => {
+export const setMcpMetricToolName = (toolName: string, mode: McpMode): void => {
   const state = phaseStore.getStore();
   if (state !== undefined) {
-    state.toolName = toolName;
+    state.toolName = classifyMcpMetricToolName(toolName, mode);
   }
 };
 

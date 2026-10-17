@@ -319,6 +319,61 @@ describe("handleMcpHttpRequest", () => {
     ).toMatchObject({ method: "tools/list", path: "modern" });
   });
 
+  test.each([
+    ["list_matters", "list_matters"],
+    ["mcp__tenant_connector__lookup", "external_mcp"],
+    ["skill__tenant_research", "skill"],
+  ])(
+    "phase metrics classify the resolved %s tool as %s",
+    async (toolName, metricToolName) => {
+      const staticDefinition = listStaticMcpToolDefinitions("default").find(
+        ({ name }) => name === "list_matters",
+      );
+      if (staticDefinition === undefined) {
+        panic("Canonical list_matters tool definition is missing");
+      }
+      authenticateMcpRequestMock.mockResolvedValue(
+        Result.ok({
+          organizationId: "org_1",
+          scopes: ["stella:read", "stella:skills"],
+          userId: "user_1",
+        }),
+      );
+      resolveMcpSessionContextMock.mockResolvedValue({ type: "mcp-context" });
+      getMcpToolDefinitionMock.mockResolvedValue({
+        ...staticDefinition,
+        name: toolName,
+      });
+      handleMcpToolCallMock.mockResolvedValue({
+        content: [{ type: "text", text: "ok" }],
+      });
+      const lines: string[] = [];
+      setMetricLineSinkForTesting((line) => {
+        lines.push(line);
+      });
+
+      const response = await handleMcpHttpRequest(
+        createModernMcpRequest({
+          id: 1,
+          method: "tools/call",
+          params: { arguments: {}, name: toolName },
+        }),
+      );
+
+      expect(response.status).toBe(200);
+      const phaseRecord = lines
+        .map((line) => JSON.parse(line))
+        .find((record) => record.event === "mcp.request.phases");
+      expect(phaseRecord).toMatchObject({
+        method: "tools/call",
+        toolName: metricToolName,
+      });
+      if (toolName !== metricToolName) {
+        expect(JSON.stringify(phaseRecord)).not.toContain(toolName);
+      }
+    },
+  );
+
   test("method metrics do not clone or reparse a large request body", async () => {
     authenticateMcpRequestMock.mockResolvedValue(
       Result.ok({

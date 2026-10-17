@@ -97,7 +97,7 @@ import {
   observeMcpRequest,
   setMcpMetricParsedMethod,
   setMcpMetricProtocolPath,
-  setMcpMetricRegisteredToolName,
+  setMcpMetricToolName,
 } from "@/api/mcp/request-metrics";
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
 import { scopeHintToSurface } from "@/api/mcp/surface-tool-mentions";
@@ -884,7 +884,7 @@ export const createMcpHttpRequestHandler = ({
       });
     }
 
-    setMcpMetricRegisteredToolName(definition.name);
+    setMcpMetricToolName(definition.name, mode);
 
     const requiredScopes = requiredScopesForTool(definition);
     const missingScope = requiredScopes.find(
