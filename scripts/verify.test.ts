@@ -511,7 +511,7 @@ test.each(["true", "false"])(
     try {
       const step = readVerifyWorkflow({ root, mode: "verify" }).find(
         ({ job, name }) =>
-          job === "ci-plan" && name === "Produce generated sources",
+          job === "generated-sources" && name === "Produce generated sources",
       );
       if (step === undefined) {
         throw new TypeError("Marked generated preparation is missing");

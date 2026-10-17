@@ -847,7 +847,7 @@ test("unset and full preserve historical predicates except declared PR, Postgres
   const baseline = original("ci.yml");
   const baselineMain = original("main-heavy.yml");
   expect(Object.keys(main.jobs)).toEqual(Object.keys(baselineMain.jobs));
-  // Retired jobs: ci-plan now produces the generated sources itself.
+  // Retired jobs: generated sources now come from the generated-sources job.
   const retiredJobs = new Set([
     "merge-group-fail-fast",
     "ci-generated-sources",
@@ -893,6 +893,7 @@ test("unset and full preserve historical predicates except declared PR, Postgres
             !foldedParts.has(id),
         ),
         "api-test-durations",
+        "generated-sources",
         "postgres-service-suites",
         "marketing-screenshots-cancel",
         "ci-quick-checks",
@@ -1273,6 +1274,8 @@ test("the planner emits the canonical thin set only when derived planning is sel
             steps: {
               depth: { outputs: { queue_depth: queueDepth } },
               "completed-depth": { outputs: { run_required: "true" } },
+              // The derivation also waits for the planner install.
+              "planner-deps": { outcome: "success" },
             },
           }),
         ).toBe(heavyOnly || (event === "merge_group" && queueDepth === "thin"));

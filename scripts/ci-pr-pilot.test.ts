@@ -272,6 +272,7 @@ test("off and unset preserve today's job plan across every event and depth", asy
           (job) => FOLDED_PARTS.get(job) ?? job,
         ),
         "postgres-service-suites",
+        "generated-sources",
       ]),
     ].toSorted(),
   ).toEqual(

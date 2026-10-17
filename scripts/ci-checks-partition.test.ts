@@ -763,13 +763,18 @@ type ScopeOptions = {
 const expectScope = ({ current, base }: ScopeOptions) => {
   const { if: condition, ...scope } = current;
   const { if: originalCondition, ...originalScope } = base;
-  // ci-plan produces the generated sources. A merge base that still ran the
-  // producer as a job of its own names it beside the plan in `needs`.
+  // The generated-source producer is a job of its own, so its consumers
+  // name both. A merge base may name the plan alone, the current producer, or
+  // the retired producer that ran after the plan.
+  if (isDeepStrictEqual(scope["needs"], ["ci-plan", "generated-sources"])) {
+    scope["needs"] = "ci-plan";
+  }
   if (
     isDeepStrictEqual(originalScope["needs"], [
       "ci-plan",
       "ci-generated-sources",
-    ])
+    ]) ||
+    isDeepStrictEqual(originalScope["needs"], ["ci-plan", "generated-sources"])
   ) {
     originalScope["needs"] = "ci-plan";
   }
