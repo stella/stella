@@ -2,11 +2,13 @@ import { Result } from "better-result";
 import { and, eq, isNull } from "drizzle-orm";
 
 import { notifications } from "@/api/db/schema";
+import {
+  notificationParamsSchema,
+  readUnreadCount,
+} from "@/api/handlers/notifications/read-model";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-
-import { notificationParamsSchema, readUnreadCount } from "./read-model";
 
 const config = {
   contract: "patch",
@@ -18,7 +20,11 @@ const config = {
   // rows (user-scoped RLS); workspace:read is the access floor.
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
-  mcp: { type: "internal", reason: "native_tool_ui" },
+  mcp: {
+    type: "capability",
+    reason: "notification_inbox",
+    consumesServices: false,
+  },
   access: "write",
   params: notificationParamsSchema,
 } satisfies HandlerConfig;

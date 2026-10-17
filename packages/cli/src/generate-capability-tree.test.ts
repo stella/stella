@@ -654,6 +654,62 @@ describe("insertCapabilities: against the real curated tree + catalog", () => {
     expect(stats.generated).toBe(catalog.length - suppressed);
   });
 
+  test("agent workflow capabilities generate their commands and flags", async () => {
+    const catalog = parseCapabilityCatalog(readCapabilityCatalog());
+    if (catalog === null) {
+      throw new TypeError("Invalid capability catalog");
+    }
+    const listings = await Bun.file(
+      new URL("generated/registry-snapshot.json", import.meta.url),
+    ).json();
+    const { tree } = insertCapabilities({
+      tree: generateRouteMap(listings, TOOL_ANNOTATIONS),
+      entries: catalog,
+    });
+    // A discriminated-union body has no flag projection, so it travels in
+    // `--input`; every other property is a flag.
+    const expected = {
+      "docx-suggestions.list": {
+        flags: ["--entity-id", "--matter-id", "--status"],
+        inputOnly: [],
+      },
+      "docx-suggestions.resolve": {
+        flags: ["--entity-id", "--matter-id", "--suggestion-id"],
+        inputOnly: ["body"],
+      },
+      "docx-suggestions.revert": {
+        flags: ["--entity-id", "--matter-id", "--suggestion-id"],
+        inputOnly: [],
+      },
+      "memories.create": { flags: [], inputOnly: ["body"] },
+      "memories.list": {
+        flags: ["--matter-id", "--scope", "--status"],
+        inputOnly: [],
+      },
+      "memories.update": {
+        flags: ["--memory-id", "--content", "--pinned", "--status"],
+        inputOnly: [],
+      },
+      "notifications.list": { flags: [], inputOnly: [] },
+      "notifications.read-state.update": {
+        flags: ["--notification-id"],
+        inputOnly: [],
+      },
+    } as const;
+    for (const [id, { flags, inputOnly }] of Object.entries(expected)) {
+      const catalogEntry = catalog.find((candidate) => candidate.id === id);
+      const leaf = leafAt(tree, capabilityCommandPath(id));
+      expect(catalogEntry).toBeDefined();
+      expect(leaf).toMatchObject({
+        capabilityId: id,
+        access: catalogEntry?.access,
+        destructive: catalogEntry?.destructive,
+      });
+      expect(leaf?.flags.map((flag) => flag.flag)).toEqual([...flags]);
+      expect(leaf?.inputOnly).toEqual([...inputOnly]);
+    }
+  });
+
   test("no committed input schema carries a transport coercion union", async () => {
     // Elysia compiles `t.Integer` and friends to a string|scalar union with
     // the bounds hoisted above it. The catalog embeds the advertised

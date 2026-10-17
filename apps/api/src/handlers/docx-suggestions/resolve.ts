@@ -24,9 +24,20 @@ import { tResolveDocxSuggestionBody } from "./schemas";
 const resolveDocxSuggestion = createSafeHandler(
   {
     contract: "patch",
+    description:
+      "Record a decision on one pending redline suggestion: accepted (with " +
+      "the mode the change was applied in) or rejected. This records the " +
+      "decision only and does not edit the document file, so accept a " +
+      "suggestion only once its change is in the document. A suggestion that " +
+      "is no longer pending answers { updated: false } and is left as it is; " +
+      "a linked document-review finding takes the same decision.",
     permissions: { entity: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
-    mcp: { type: "internal", reason: "document_processing" },
+    mcp: {
+      type: "capability",
+      reason: "document_processing",
+      consumesServices: false,
+    },
     params: workspaceParams({
       entityId: tSafeId("entity"),
       suggestionId: tSafeId("docxSuggestion"),

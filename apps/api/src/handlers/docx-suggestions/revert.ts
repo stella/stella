@@ -36,9 +36,19 @@ const REVERT_OUTCOME = {
 const revertDocxSuggestion = createSafeHandler(
   {
     contract: "patch",
+    description:
+      "Return an accepted or rejected redline suggestion to pending, clearing " +
+      "who resolved it and when. This does not undo a change already applied " +
+      "to the document file. A suggestion that is already pending answers " +
+      "{ updated: false }; a document at its pending-suggestion limit refuses " +
+      "the revert. A linked document-review finding is reopened with it.",
     permissions: { entity: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
-    mcp: { type: "internal", reason: "document_processing" },
+    mcp: {
+      type: "capability",
+      reason: "document_processing",
+      consumesServices: false,
+    },
     params: workspaceParams({
       entityId: tSafeId("entity"),
       suggestionId: tSafeId("docxSuggestion"),

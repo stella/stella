@@ -184,6 +184,7 @@ export const DOMAIN_ACTION_VERBS = [
   "restore",
   "resume",
   "retry",
+  "revert",
   "review",
   "rewrite",
   "run",

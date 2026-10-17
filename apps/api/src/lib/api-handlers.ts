@@ -189,6 +189,11 @@ export type McpToolName = (typeof MCP_STATIC_TOOL_NAMES)[number];
  * - `personal_history`: the caller's own search history (list, delete one,
  *   clear). Recording a use and the one-time browser import stay `internal`
  *   under `search_ui`.
+ * - `assistant_memory`: the assistant memory the caller may read and write
+ *   (list, create, update). Firm-wide memory writes stay `internal` under
+ *   `assistant_chat`.
+ * - `notification_inbox`: the caller's own notifications (list, mark one
+ *   read). Mark-all and announcements stay `internal` under `native_tool_ui`.
  */
 type McpCapabilityReason =
   | "template_authoring_ui"
@@ -207,7 +212,9 @@ type McpCapabilityReason =
   | "file_transport"
   | "contact_extraction_ui"
   | "correspondence"
-  | "personal_history";
+  | "personal_history"
+  | "assistant_memory"
+  | "notification_inbox";
 
 /**
  * Approved, permanent reasons an endpoint is intentionally never reachable from

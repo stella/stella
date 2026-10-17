@@ -16,9 +16,20 @@ import { PG_ERROR } from "@/api/lib/pg-error";
 
 const config = {
   contract: "patch",
+  description:
+    "Change one assistant memory: accept a suggested memory (status " +
+    "active), retire it (status archived), pin or unpin it, or edit its " +
+    "content. Archiving is how a memory is removed; an archived memory must " +
+    "be set active again before its content can change. Firm-wide memory " +
+    "needs firm-memory permission, matter memory needs permission to update " +
+    "that active matter.",
   permissions: { chat: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
-  mcp: { type: "internal", reason: "assistant_chat" },
+  mcp: {
+    type: "capability",
+    reason: "assistant_memory",
+    consumesServices: false,
+  },
   params: t.Object({ memoryId: tSafeId("aiMemory") }),
   body: t.Object({
     // Accept a suggestion (-> active) or dismiss/retire it (-> archived).

@@ -36,7 +36,7 @@ import type { TestIds } from "@/api/tests/security/rls-helpers";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
-import listDocxSuggestions from "./read";
+import listDocxSuggestions from "./list";
 
 const PAGE_LIMIT = 4;
 /**

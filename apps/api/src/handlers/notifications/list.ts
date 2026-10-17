@@ -27,7 +27,12 @@ const config = {
     "no work state; they are read or unread and nothing else.",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
-  mcp: { type: "internal", reason: "native_tool_ui" },
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "notification_inbox",
+    consumesServices: false,
+  },
   access: "read",
   query: t.Object({
     limit: t.Optional(tPaginationLimit(LIMITS.notificationsPageSizeMax)),

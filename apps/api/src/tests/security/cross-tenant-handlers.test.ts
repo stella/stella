@@ -116,7 +116,9 @@ import { createDesktopMattersEndpoint } from "@/api/handlers/desktop-time-entrie
 import listDocumentReviewSources from "@/api/handlers/document-reviews/list-sources";
 import readDocumentTranslationRun from "@/api/handlers/document-translations/runs/get";
 import { createDocumentCompareHandler } from "@/api/handlers/documents/compare";
-import listDocxSuggestions from "@/api/handlers/docx-suggestions/read";
+import listDocxSuggestions from "@/api/handlers/docx-suggestions/list";
+import resolveDocxSuggestion from "@/api/handlers/docx-suggestions/resolve";
+import revertDocxSuggestion from "@/api/handlers/docx-suggestions/revert";
 import readEntityById from "@/api/handlers/entities/get";
 import readVersionById from "@/api/handlers/entities/versions/get";
 import readVersions from "@/api/handlers/entities/versions/list";
@@ -132,7 +134,9 @@ import listReaderAnswers from "@/api/handlers/legal-reader/answers/list";
 import updateReaderAnswer from "@/api/handlers/legal-reader/answers/update";
 import listLegalLists from "@/api/handlers/lists/list";
 import listMemories from "@/api/handlers/memories/list";
+import updateMemory from "@/api/handlers/memories/update";
 import listNotifications from "@/api/handlers/notifications/list";
+import markNotificationRead from "@/api/handlers/notifications/read-state/update";
 import getNumberSeries from "@/api/handlers/number-series/get";
 import listNumberSeries from "@/api/handlers/number-series/list";
 import getBillingArrangement from "@/api/handlers/rates/arrangement/get";
@@ -1022,6 +1026,52 @@ const isolationCases: IsolationCase[] = [
       expectPageContainsId(result, testIds.docxSuggestionB1),
   },
   {
+    // The positive run rejects B's suggestion; the revert case below returns
+    // it to pending, so the fixture leaves the matrix as it entered.
+    name: "docx suggestion resolve",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(resolveDocxSuggestion, workspaceA, {
+        params: {
+          workspaceId: testIds.wsA1,
+          entityId: testIds.entityB1,
+          suggestionId: testIds.docxSuggestionB1,
+        },
+        body: { status: "rejected" },
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(resolveDocxSuggestion, workspaceB, {
+        params: {
+          workspaceId: testIds.wsB1,
+          entityId: testIds.entityB1,
+          suggestionId: testIds.docxSuggestionB1,
+        },
+        body: { status: "rejected" },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) => expect(result).toEqual({ updated: true }),
+  },
+  {
+    name: "docx suggestion revert",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(revertDocxSuggestion, workspaceA, {
+        params: {
+          workspaceId: testIds.wsA1,
+          entityId: testIds.entityB1,
+          suggestionId: testIds.docxSuggestionB1,
+        },
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(revertDocxSuggestion, workspaceB, {
+        params: {
+          workspaceId: testIds.wsB1,
+          entityId: testIds.entityB1,
+          suggestionId: testIds.docxSuggestionB1,
+        },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) => expect(result).toEqual({ updated: true }),
+  },
+  {
     name: "document review source list",
     runAAgainstB: async ({ workspaceA }) =>
       await runHandler(listDocumentReviewSources, workspaceA, {
@@ -1535,6 +1585,24 @@ const isolationCases: IsolationCase[] = [
       expectPageContainsId(result, testIds.aiMemoryFirmB),
   },
   {
+    // `pinned: false` matches the fixture, so the positive run reaches the
+    // locked row without writing.
+    name: "memory update",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(updateMemory, workspaceA, {
+        params: { memoryId: testIds.aiMemoryFirmB },
+        body: { pinned: false },
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(updateMemory, workspaceB, {
+        params: { memoryId: testIds.aiMemoryFirmB },
+        body: { pinned: false },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result, { ids: testIds }) =>
+      expectRecordFieldEquals(result, "id", testIds.aiMemoryFirmB),
+  },
+  {
     name: "organization contact read by id",
     runAAgainstB: async ({ ids: testIds, workspaceA }) =>
       await runHandler(readContactById, workspaceA, {
@@ -1637,6 +1705,21 @@ const isolationCases: IsolationCase[] = [
       expectPageExcludesField(result, "id", notificationB),
     expectPositive: (result) =>
       expectPageContainsField(result, "id", notificationB),
+  },
+  {
+    // Same organization, other recipient: only the recipient predicate stands
+    // between user A1 and user B1's notification.
+    name: "notification mark read",
+    runAAgainstB: async ({ sameUserWorkspaceB }) =>
+      await runHandler(markNotificationRead, sameUserWorkspaceB, {
+        params: { notificationId: notificationB },
+      }),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(markNotificationRead, workspaceB, {
+        params: { notificationId: notificationB },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) => expect(result).toEqual({ unreadCount: 0 }),
   },
   {
     name: "chat thread list",

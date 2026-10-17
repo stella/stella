@@ -164,6 +164,9 @@ const DOMAIN_SCOPE: Record<string, string> = {
   // they require their own consent instead of borrowing a workspace write.
   contacts: "stella:contacts_write",
   "document-types": "stella:matters_write",
+  // Redline suggestions queued on a document: deciding or reopening one is a
+  // document review act, so it takes the document write consent.
+  "docx-suggestions": "stella:documents_write",
   // A translation run reads a matter document and writes the translated one
   // back as a new document, so it takes the workspace write bucket.
   "document-translations": "stella:matters_write",
@@ -184,7 +187,14 @@ const DOMAIN_SCOPE: Record<string, string> = {
   "legal-reader": "stella:knowledge_write",
   legislation: "stella:read",
   lists: "stella:matters_write",
+  // Assistant memory is replayed into future chat prompts, so it shares the
+  // assistant's own consent rather than a workspace write.
+  memories: "stella:chat",
   "number-series": "stella:billing_write",
+  // The caller's own inbox. Marking one read is per-user bookkeeping, but it
+  // is still a write, so it takes the workspace write bucket while listing
+  // reads under stella:read.
+  notifications: "stella:matters_write",
   "vat-rates": "stella:billing_write",
   "organization-settings": "stella:admin_write",
   playbooks: "stella:knowledge_write",
@@ -468,6 +478,7 @@ const DOMAIN_FEATURE: Record<string, string> = {
   invoices: "FEATURE_TIME_BILLING",
   legislation: "FEATURE_PUBLIC_LAW",
   lists: "FEATURE_LEGAL_LISTS",
+  memories: "FEATURE_AI_MEMORY",
   "number-series": "FEATURE_TIME_BILLING",
   rates: "FEATURE_TIME_BILLING",
   "saved-time-narratives": "FEATURE_TIME_BILLING",

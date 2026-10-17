@@ -13,11 +13,23 @@ import {
 
 const config = {
   contract: "patch",
+  description:
+    "Save an assistant memory that future chats will read. scope user is " +
+    "private to you and takes kind preference or instruction; scope " +
+    "workspace belongs to one active matter (matterId) and also takes fact, " +
+    "decision or relationship, and needs permission to update that matter. " +
+    "Content identical to an existing memory returns that memory's id with " +
+    "type existing, or reactivated when it was archived, instead of a " +
+    "duplicate. Firm-wide memory cannot be created here.",
   // Memory is part of the AI assistant; gate on the chat capability.
   // Firm-scoped writes go through the separate, permission-gated route.
   permissions: { chat: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
-  mcp: { type: "internal", reason: "assistant_chat" },
+  mcp: {
+    type: "capability",
+    reason: "assistant_memory",
+    consumesServices: false,
+  },
   body: createMemoryBodySchema,
 } satisfies HandlerConfig;
 

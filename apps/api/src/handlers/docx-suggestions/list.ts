@@ -56,9 +56,20 @@ const suggestionOrigin = (
 const listDocxSuggestions = createSafeHandler(
   {
     contract: "patch",
+    description:
+      "List the redline suggestions queued on one document, oldest first: " +
+      "each suggestion's id, its document operation, comment, severity, " +
+      "area, status (pending, accepted, rejected) and origin (chat or " +
+      "review). Filter by status to find what still awaits a decision; pass " +
+      "a suggestion id to docx-suggestions.resolve or docx-suggestions.revert.",
     permissions: { workspace: ["read"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
-    mcp: { type: "internal", reason: "document_processing" },
+    mcp: {
+      type: "capability",
+      readClass: "tenant",
+      reason: "document_processing",
+      consumesServices: false,
+    },
     access: "read",
     params: workspaceParams({ entityId: tSafeId("entity") }),
     query: t.Object({

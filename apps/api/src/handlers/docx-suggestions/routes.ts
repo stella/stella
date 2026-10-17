@@ -1,7 +1,7 @@
 import Elysia from "elysia";
 
 import createDocxSuggestions from "@/api/handlers/docx-suggestions/create";
-import listDocxSuggestions from "@/api/handlers/docx-suggestions/read";
+import listDocxSuggestions from "@/api/handlers/docx-suggestions/list";
 import rejectPendingDocxSuggestions from "@/api/handlers/docx-suggestions/reject-pending";
 import resolveDocxSuggestion from "@/api/handlers/docx-suggestions/resolve";
 import revertDocxSuggestion from "@/api/handlers/docx-suggestions/revert";
