@@ -346,3 +346,73 @@ describe("the source hash fingerprints every stored part", () => {
     expect(replayed.result.rawHash).toBe(decision.rawHash);
   });
 });
+
+describe("detail fulltext body markers", () => {
+  afterEach(() => mock.restore());
+
+  const tail =
+    " JUDr. Kateřina Nováková rozhodla o návrhu pana Nováka. ".repeat(3);
+  for (const { name, body, expected } of [
+    {
+      name: "listed priority before earliest position",
+      body: "metadata Nejvyšší soud projednal earlier Nejvyšší soud rozhodl",
+      expected: "Nejvyšší soud rozhodl",
+    },
+    {
+      name: "zero-position first marker permits the next marker",
+      body: "Nejvyšší soud rozhodl then Nejvyšší soud České republiky",
+      expected: "Nejvyšší soud České republiky",
+    },
+    {
+      name: "zero-position occurrence hides later repeats",
+      body: "Nejvyšší soud rozhodl then Nejvyšší soud rozhodl",
+      expected: "Nejvyšší soud rozhodl then Nejvyšší soud rozhodl",
+    },
+    {
+      name: "case is exact",
+      body: "metadata NEJVYŠŠÍ SOUD ROZHODL",
+      expected: "metadata NEJVYŠŠÍ SOUD ROZHODL",
+    },
+    {
+      name: "diacritics are exact",
+      body: "metadata Nejvyssi soud rozhodl",
+      expected: "metadata Nejvyssi soud rozhodl",
+    },
+    {
+      name: "astral prefix keeps the body start",
+      body: "👩‍⚖️ metadata Nejvyšší soud projednal",
+      expected: "Nejvyšší soud projednal",
+    },
+    {
+      name: "isolated surrogate prefix keeps UTF-16 offsets",
+      body: "\ud800 metadata Nejvyšší soud projednal",
+      expected: "Nejvyšší soud projednal",
+    },
+    {
+      name: "no marker retains the prefix",
+      body: "metadata and decision",
+      expected: "metadata and decision",
+    },
+  ]) {
+    test(name, async () => {
+      spyOn(globalThis, "fetch").mockImplementation(
+        asFetchMock(async (input: string | URL | Request) => {
+          const url = input instanceof Request ? input.url : input.toString();
+          return url.includes("/WebPrint/")
+            ? new Response("", { status: 404 })
+            : new Response(
+                `<html><font face="Times New Roman">${body}${tail}Citace rozhodnutí footer</font></html>`,
+              );
+        }),
+      );
+      const result = await buildCzNsDecision({
+        unid: "0123456789abcdef0123456789abcdef",
+        caseNumber: "1 Cdo 1/2026",
+      });
+      expect(result.type).toBe("built");
+      if (result.type === "built") {
+        expect(result.decision.fulltext).toBe(`${expected}${tail}`.trim());
+      }
+    });
+  }
+});
