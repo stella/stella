@@ -24,7 +24,7 @@ const git = (args: string[]) =>
 const gitText = (args: string[]) => {
   const result = git(args);
   if (result.status !== 0) {
-    panic(`git ${args.at(0)} failed: ${result.stderr}`);
+    panic(`git ${String(args.at(0))} failed: ${result.stderr}`);
   }
   return result.stdout;
 };
@@ -120,7 +120,7 @@ const main = () => {
     ...censusOnlineDdlSource(readFileSync(ownerPath, "utf-8")),
   );
   for (const mode of [...result.counts.keys()].toSorted()) {
-    console.log(`${mode}: ${result.counts.get(mode)}`);
+    console.log(`${mode}: ${String(result.counts.get(mode))}`);
   }
   console.log(
     `Baseline: ${MIGRATION_LOCK_BASELINE.entries.length} migration/form pairs`,

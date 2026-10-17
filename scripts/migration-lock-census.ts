@@ -1,10 +1,12 @@
 import { panic } from "better-result";
 
 import {
+  matchingMigrationGuardedRules,
+  type MigrationGuardedRuleId,
   migrationStatementTokens,
   parseMigrationStatements,
   readMigrationRelation,
-  reviewedMigrationLines,
+  reviewedMigrationStatements,
   splitMigrationAlterActions,
 } from "./check-migration-safety";
 
@@ -224,6 +226,12 @@ export const DDL_FORMS = {
     pattern:
       /^ALTER (?:COLUMN )?(?:"ID"|[A-Z_][A-Z0-9_$]*) (?:SET (?:DEFAULT|NOT NULL|DATA TYPE)|DROP (?:DEFAULT|NOT NULL)|TYPE)\b/u,
   },
+  // PG18 ALTER TABLE: OWNER uses the default ACCESS EXCLUSIVE lock.
+  "change-owner": {
+    scope: "alter-table",
+    lockMode: "ACCESS EXCLUSIVE",
+    pattern: /^OWNER TO\b/u,
+  },
   // PG18 ALTER TABLE, RENAME.
   "rename-table-or-column": {
     scope: "alter-table",
@@ -306,7 +314,50 @@ export const DDL_FORMS = {
 } as const satisfies Record<string, DdlFormDefinition>;
 
 export type DdlForm = keyof typeof DDL_FORMS;
-type CensusForm = { form: DdlForm; lockMode: LockMode; line: number };
+type CensusForm = {
+  form: DdlForm;
+  lockMode: LockMode;
+  line: number;
+  statementIndex: number;
+  sql: string;
+};
+
+// Every guarded rule explicitly decides which classified operations it reviews.
+const REVIEWED_FORMS = {
+  "drop-object": [
+    "drop-cascade",
+    "drop-index",
+    "drop-index-concurrently",
+    "drop-trigger",
+    "drop-table",
+    "drop-policy",
+    "drop-function",
+    "drop-type",
+  ],
+  "drop-column": ["drop-column"],
+  "drop-column-identity": [],
+  "drop-constraint": ["drop-constraint"],
+  "rename-table-or-column": ["rename-table-or-column"],
+  "rename-enum-value": [],
+  "alter-column-type": ["alter-column"],
+  "truncate-table": ["truncate"],
+  "delete-data": [],
+  "set-unlogged": [],
+  "disable-trigger": ["toggle-trigger"],
+  "unbounded-update": [],
+  "insert-select": [],
+  merge: [],
+  "create-table-as": [],
+  "materialized-view-populate": [],
+  "recursive-cte": [],
+  "disable-row-level-security": ["row-level-security"],
+  "grant-privileges": [],
+  "alter-policy": ["alter-policy"],
+  "permissive-policy": ["create-policy"],
+  "security-definer": ["create-function", "alter-function"],
+  "change-owner": ["change-owner"],
+  "set-schema": [],
+} as const satisfies Record<MigrationGuardedRuleId, readonly DdlForm[]>;
 const isDdlForm = (value: string): value is DdlForm =>
   Object.hasOwn(DDL_FORMS, value);
 const FORM_ENTRIES = Object.entries(DDL_FORMS).flatMap(([form, definition]) =>
@@ -320,7 +371,13 @@ const DDL_VERB =
 export const censusSql = (source: string) => {
   const forms: CensusForm[] = [];
   const errors: string[] = [];
-  const classify = (sql: string, line: number, alter: boolean) => {
+  type ClassifyOptions = {
+    sql: string;
+    line: number;
+    alter: boolean;
+    statementIndex: number;
+  };
+  const classify = ({ sql, line, alter, statementIndex }: ClassifyOptions) => {
     const normalized = sql.replace(/\s+/gu, " ").trim().replace(/;$/u, "");
     const match = FORM_ENTRIES.find(
       ([, { pattern, scope }]) =>
@@ -333,9 +390,17 @@ export const censusSql = (source: string) => {
       return;
     }
     const [form, { lockMode }] = match;
-    forms.push({ form, lockMode, line });
+    forms.push({
+      form,
+      lockMode,
+      line,
+      statementIndex,
+      sql: alter ? `ALTER TABLE census_target ${normalized}` : normalized,
+    });
   };
-  for (const statement of parseMigrationStatements(source)) {
+  for (const [statementIndex, statement] of parseMigrationStatements(
+    source,
+  ).entries()) {
     const tokens = migrationStatementTokens(statement);
     // A privilege name is not a statement, nor is ALTER in an ALTER FUNCTION option.
     if (
@@ -378,11 +443,21 @@ export const censusSql = (source: string) => {
           for (const action of splitMigrationAlterActions(
             sqlTokens.slice(relation.next),
           )) {
-            classify(render(action), statement.line, true);
+            classify({
+              sql: render(action),
+              line: statement.line,
+              alter: true,
+              statementIndex,
+            });
           }
         }
       } else {
-        classify(render(sqlTokens), statement.line, false);
+        classify({
+          sql: render(sqlTokens),
+          line: statement.line,
+          alter: false,
+          statementIndex,
+        });
       }
     }
     // SQL passed to EXECUTE/format is executable, unlike ordinary string data.
@@ -399,7 +474,11 @@ export const censusSql = (source: string) => {
           literal.value.replace(/%(?:\d+\$)?[ILs]/gu, '"dynamic_identifier"'),
         );
         forms.push(
-          ...nested.forms.map((form) => ({ ...form, line: statement.line })),
+          ...nested.forms.map((form) => ({
+            ...form,
+            line: statement.line,
+            statementIndex,
+          })),
         );
         errors.push(
           ...nested.errors.map(
@@ -472,8 +551,8 @@ export const checkMigrationLocks = ({
     const migration = migrationFolder(file);
     const census = censusSql(source);
     errors.push(...census.errors.map((error) => `${file}: ${error}`));
-    const reviewed = reviewedMigrationLines(source);
-    for (const { form, lockMode, line } of census.forms) {
+    const reviewed = reviewedMigrationStatements(source);
+    for (const { form, lockMode, line, statementIndex, sql } of census.forms) {
       counts.set(lockMode, (counts.get(lockMode) ?? 0) + 1);
       const key = `${migration}/${form}`;
       const historical = remaining.get(key) ?? 0;
@@ -481,7 +560,16 @@ export const checkMigrationLocks = ({
         remaining.set(key, historical - 1);
         continue;
       }
-      if (lockMode !== "ACCESS EXCLUSIVE" || reviewed.has(line)) {
+      if (lockMode !== "ACCESS EXCLUSIVE") {
+        continue;
+      }
+      if (
+        matchingMigrationGuardedRules(sql).some(
+          (rule) =>
+            reviewed.get(statementIndex)?.has(rule) &&
+            REVIEWED_FORMS[rule].some((covered) => covered === form),
+        )
+      ) {
         continue;
       }
       if (

@@ -117,7 +117,14 @@ describe("migration lock census", () => {
       "TEXT SEARCH CONFIGURATION probe",
     ]) {
       const sql = `DROP ${target} /* dependent objects */ CASCADE;`;
-      expect(censusSql(sql)).toEqual({
+      expect({
+        ...censusSql(sql),
+        forms: censusSql(sql).forms.map(({ form, lockMode, line }) => ({
+          form,
+          lockMode,
+          line,
+        })),
+      }).toEqual({
         forms: [
           { form: "drop-cascade", lockMode: "ACCESS EXCLUSIVE", line: 1 },
         ],
@@ -163,7 +170,14 @@ describe("migration lock census", () => {
       'DROP TYPE "CASCADE";',
       "DROP TYPE probe; -- CASCADE",
     ]) {
-      expect(censusSql(sql)).toEqual({
+      expect({
+        ...censusSql(sql),
+        forms: censusSql(sql).forms.map(({ form, lockMode, line }) => ({
+          form,
+          lockMode,
+          line,
+        })),
+      }).toEqual({
         forms: [
           { form: "drop-type", lockMode: "NO EXISTING RELATION", line: 1 },
         ],
@@ -243,6 +257,54 @@ describe("migration lock census", () => {
         baseline: [],
       }).errors.join("\n"),
     ).toContain("ACCESS EXCLUSIVE add-column needs");
+  });
+
+  test.each([" ", "\n"])(
+    "reviews do not cross statement boundaries (%j)",
+    (separator) => {
+      const sql = `-- stella-migration-safety: reviewed drop-object - Remove retired objects after the contract step
+DROP TABLE a;${separator}ALTER TABLE b ADD COLUMN c int;`;
+      expect(
+        checkMigrationLocks({ sources: source(sql), baseline: [] }).errors,
+      ).toEqual([expect.stringContaining("ACCESS EXCLUSIVE add-column needs")]);
+    },
+  );
+
+  test.each([
+    ["change-owner", "OWNER TO r"],
+    ["drop-column", "DROP COLUMN retired"],
+    ["alter-column-type", "ALTER COLUMN existing TYPE bigint"],
+    ["disable-row-level-security", "DISABLE ROW LEVEL SECURITY"],
+  ])("a %s review covers only its ALTER action", (rule, action) => {
+    const prefix = `-- stella-migration-safety: reviewed ${rule} - Reviewed after the application contract step\n`;
+    expect(
+      checkMigrationLocks({
+        sources: source(`${prefix}ALTER TABLE t ${action}, ADD COLUMN c int;`),
+        baseline: [],
+      }).errors,
+    ).toEqual([expect.stringContaining("ACCESS EXCLUSIVE add-column needs")]);
+    expect(
+      checkMigrationLocks({
+        sources: source(`${prefix}ALTER TABLE t ${action};`),
+        baseline: [],
+      }).errors,
+    ).toEqual([]);
+  });
+
+  test("a type-change review does not cover another alter-column action", () => {
+    const sql = `-- stella-migration-safety: reviewed alter-column-type - Reviewed after the application contract step
+ALTER TABLE t ALTER COLUMN a TYPE bigint, ALTER COLUMN b SET NOT NULL;`;
+    expect(
+      checkMigrationLocks({ sources: source(sql), baseline: [] }).errors,
+    ).toEqual([expect.stringContaining("ACCESS EXCLUSIVE alter-column needs")]);
+  });
+
+  test("one review does not acknowledge two same-rule statements on one line", () => {
+    const sql = `-- stella-migration-safety: reviewed drop-object - Remove retired objects after the contract step
+DROP TABLE a; DROP TABLE b;`;
+    expect(
+      checkMigrationLocks({ sources: source(sql), baseline: [] }).errors,
+    ).toEqual([expect.stringContaining("ACCESS EXCLUSIVE drop-table needs")]);
   });
 
   test("mixed ALTER TABLE actions retain their individual lock classifications", () => {
