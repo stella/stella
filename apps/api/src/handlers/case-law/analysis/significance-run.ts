@@ -27,10 +27,10 @@ import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { analysisStore } from "@/api/lib/case-law/analysis-store";
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import type { ModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
-import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 import {
-  getTanStackTextModelInfoForRole,
-  requireTanStackAIAvailableForRole,
+  getTanStackTextModelInfoForTask,
+  requireTanStackAIAvailableForTask,
 } from "@/api/lib/tanstack-ai-models";
 
 import {
@@ -98,11 +98,11 @@ export const refreshSignificance = async ({
   // must not pay for the query either.
   if (
     Result.isError(
-      requireTanStackAIAvailableForRole({
+      requireTanStackAIAvailableForTask({
         dataClass: "public_corpus",
         configStatus: orgAIConfigStatus,
         orgConfig: orgAIConfig,
-        role: "fast",
+        task: "classify",
       }),
     )
   ) {
@@ -133,7 +133,6 @@ export const refreshSignificance = async ({
   inFlight.add(key);
 
   const language = current.holding.language;
-
   // Built once admission states the tier; absent when admission refused.
   let aiAnalytics:
     | ReturnType<typeof createTanStackAIAnalyticsCallbacks>
@@ -142,7 +141,7 @@ export const refreshSignificance = async ({
     aiAnalytics = createTanStackAIAnalyticsCallbacks({
       dataClass: "public_corpus",
       feature: "case-law.analysis.significance",
-      modelRole: "fast",
+      modelTask: "classify",
       organizationId,
       orgAIConfig,
       modelTier: admission.modelTier,
@@ -155,15 +154,18 @@ export const refreshSignificance = async ({
       sessionId: decisionId,
       traceId: Bun.randomUUIDv7(),
     });
-
-    const { modelId } = getTanStackTextModelInfoForRole("fast", orgAIConfig, {
+    const { modelId } = getTanStackTextModelInfoForTask(
+      "classify",
+      orgAIConfig,
+      {
+        dataClass: "public_corpus",
+        organizationId,
+        modelTier: admission.modelTier,
+      },
+    );
+    const result = await generateTanStackObjectForTask({
       dataClass: "public_corpus",
-      organizationId,
-      modelTier: admission.modelTier,
-    });
-    const result = await generateTanStackObjectForRole({
-      dataClass: "public_corpus",
-      role: "fast",
+      task: "classify",
       serviceTier: "standard",
       orgAIConfig,
       organizationId,
@@ -173,7 +175,7 @@ export const refreshSignificance = async ({
       analytics: aiAnalytics,
       caching: resolveCaching({
         promptCachingEnabled,
-        role: "fast",
+        task: "classify",
         scopeKey: decisionId,
       }),
       system: significanceSystemPrompt(language),

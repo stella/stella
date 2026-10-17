@@ -161,15 +161,15 @@ export const AI_ERROR_KIND_SHAPES = {
   provider_stream_incomplete: ["early-eof", "unusable-stop"],
   output_incomplete: {
     notAShape:
-      "A structured answer cut off or unparseable (`generateTanStackObjectForRole`); a chat turn keeps a `length` answer.",
+      "A structured answer cut off or unparseable (`generateTanStackObjectForTask`); a chat turn keeps a `length` answer.",
   },
   output_invalid: {
     notAShape:
-      "A structured answer its schema rejects (`generateTanStackObjectForRole`); a chat turn carries no schema.",
+      "A structured answer its schema rejects (`generateTanStackObjectForTask`); a chat turn carries no schema.",
   },
   output_moderated: {
     notAShape:
-      "A text generation the provider filtered (`generateTanStackTextForRole`); a chat turn keeps a `content_filter` answer.",
+      "A text generation the provider filtered (`generateTanStackTextForTask`); a chat turn keeps a `content_filter` answer.",
   },
   deadline_exceeded: {
     notAShape:
