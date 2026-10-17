@@ -58,6 +58,8 @@ testState.setConfig("USE_MOCK_AI", false);
 const {
   clearByokAdapterCache,
   getTanStackTextModelInfoById,
+  getStructuredOutputFallbackModelId,
+  isModelSelectionAvailableForRole,
   getTanStackTextModelInfoForRole,
   getTanStackTextModelById,
   getTanStackTextModelForRole,
@@ -1687,5 +1689,174 @@ describe("managed model tier", () => {
         ),
       );
     });
+  });
+});
+
+describe("approved structured-output fallback selection", () => {
+  test("structured fallback stays within configured role models", () => {
+    assertProperty(
+      "structured fallback stays within configured role models",
+      fc.property(
+        fc.subarray([...TANSTACK_AI_PROVIDERS]),
+        fc.constantFrom(...MODEL_ROLES),
+        fc.constantFrom(...Object.values(BYOK_MODEL_OPTIONS).flat()),
+        (providers, role, failedModelId) => {
+          const orgAIConfig = {
+            providers: providers.map((provider) => ({
+              provider,
+              apiKey: "test-org-provider-key",
+            })),
+            overrideModels: null,
+            decision: null,
+          } satisfies OrgAIConfig;
+          const options = {
+            failedModelId,
+            orgAIConfig,
+            role,
+            modelTier: MANAGED_MODEL_TIER.standard,
+            dataClass: "customer",
+            managedAIResidency: "eu",
+          } as const;
+          const fallback = getStructuredOutputFallbackModelId(options);
+          const availableModels = providers.flatMap((provider) =>
+            BYOK_MODEL_OPTIONS[provider].filter(
+              (modelId) =>
+                modelId !== failedModelId &&
+                isAllowedBYOKModelForRole({ provider, modelId, role }),
+            ),
+          );
+          if (fallback === null) {
+            expect(availableModels).toHaveLength(0);
+            return;
+          }
+          const [provider, ...modelParts] = fallback.split("::");
+          const modelId = modelParts.join("::");
+          expect(providers.some((configured) => configured === provider)).toBe(
+            true,
+          );
+          expect(availableModels).toContain(modelId);
+          expect(modelId).not.toBe(failedModelId);
+          expect(getStructuredOutputFallbackModelId(options)).toBe(fallback);
+        },
+      ),
+    );
+  });
+
+  test("an organization without an approved provider skips fallback", () => {
+    expect(
+      getStructuredOutputFallbackModelId({
+        failedModelId: DEFAULT_MODELS.openai.chat,
+        orgAIConfig: { providers: [], overrideModels: null, decision: null },
+        role: "chat",
+        modelTier: MANAGED_MODEL_TIER.standard,
+        dataClass: "customer",
+        managedAIResidency: "eu",
+      }),
+    ).toBeNull();
+  });
+
+  test("a configured provider without approved models for the role skips fallback", () => {
+    const orgAIConfig = orgConfigForProvider("mistral");
+    expect(
+      BYOK_MODEL_OPTIONS.mistral.every(
+        (modelId) =>
+          !isAllowedBYOKModelForRole({
+            provider: "mistral",
+            modelId,
+            role: "pdf",
+          }),
+      ),
+    ).toBe(true);
+    expect(
+      getStructuredOutputFallbackModelId({
+        failedModelId: DEFAULT_MODELS.mistral.chat,
+        orgAIConfig,
+        role: "pdf",
+        modelTier: MANAGED_MODEL_TIER.standard,
+        dataClass: "customer",
+        managedAIResidency: "eu",
+      }),
+    ).toBeNull();
+  });
+
+  test("managed fallback distinguishes public corpus from customer data", () => {
+    testState.setConfig("AI_PROVIDER", "openai");
+    testState.setConfig("OPENAI_API_KEY", "test-openai-instance-key");
+    testState.setConfig("REQUIRE_PERSONAL_AI_KEY", false);
+    testState.setConfig("USE_MOCK_AI", false);
+    expect(
+      isModelSelectionAvailableForRole({
+        dataClass: "public_corpus",
+        provider: "openai",
+        modelId: DEFAULT_MODELS.openai.chat,
+        orgAIConfig: null,
+        role: "chat",
+      }),
+    ).toBe(true);
+    const publicFallback = getStructuredOutputFallbackModelId({
+      failedModelId: DEFAULT_MODELS.openai.chat,
+      orgAIConfig: null,
+      role: "chat",
+      modelTier: MANAGED_MODEL_TIER.standard,
+      dataClass: "public_corpus",
+    });
+    expect(publicFallback).toStartWith("openai::");
+    expect(publicFallback).not.toBe(`openai::${DEFAULT_MODELS.openai.chat}`);
+    expect(
+      isModelSelectionAvailableForRole({
+        dataClass: "customer",
+        provider: "openai",
+        modelId: DEFAULT_MODELS.openai.chat,
+        orgAIConfig: null,
+        role: "chat",
+      }),
+    ).toBe(false);
+    for (const managedAIResidency of ["eu", "us"] as const) {
+      expect(
+        getStructuredOutputFallbackModelId({
+          failedModelId: DEFAULT_MODELS.openai.chat,
+          orgAIConfig: null,
+          role: "chat",
+          modelTier: MANAGED_MODEL_TIER.standard,
+          dataClass: "customer",
+          managedAIResidency,
+        }),
+      ).toBeNull();
+    }
+  });
+
+  test("managed fallback uses the active provider's regional policy", () => {
+    testState.setConfig("AI_PROVIDER", "openrouter");
+    testState.setConfig("OPENROUTER_API_KEY", "test-openrouter-instance-key");
+    testState.setConfig("REQUIRE_PERSONAL_AI_KEY", false);
+    testState.setConfig("USE_MOCK_AI", false);
+    for (const managedAIResidency of ["eu", "us"] as const) {
+      const fallback = getStructuredOutputFallbackModelId({
+        failedModelId: DEFAULT_MODELS.openrouter.chat,
+        orgAIConfig: null,
+        role: "chat",
+        modelTier: MANAGED_MODEL_TIER.standard,
+        dataClass: "customer",
+        managedAIResidency,
+      });
+      expect(fallback).toStartWith("openrouter::");
+      expect(fallback).not.toBe(
+        `openrouter::${DEFAULT_MODELS.openrouter.chat}`,
+      );
+    }
+  });
+
+  test("managed fast tier skips because model resolution pins its primary", () => {
+    testState.setConfig("AI_PROVIDER", "openrouter");
+    expect(
+      getStructuredOutputFallbackModelId({
+        failedModelId: DEFAULT_MODELS.openrouter.fast,
+        orgAIConfig: null,
+        role: "chat",
+        modelTier: MANAGED_MODEL_TIER.fast,
+        dataClass: "customer",
+        managedAIResidency: "eu",
+      }),
+    ).toBeNull();
   });
 });

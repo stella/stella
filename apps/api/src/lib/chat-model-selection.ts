@@ -50,6 +50,7 @@ import {
   getTanStackTextModelInfoForRole,
   hasTanStackInstanceProvider,
   isAllowedBYOKModelForRole,
+  isModelSelectionAvailableForRole,
 } from "@/api/lib/tanstack-ai-models";
 import type { ManagedModelTier } from "@/api/lib/usage/managed-model-tier";
 
@@ -110,19 +111,14 @@ export const isChatModelSelectionAvailable = ({
   provider,
   modelId,
   orgAIConfig,
-}: BYOKChatModelSelection & { orgAIConfig: OrgAIConfig | null }): boolean => {
-  if (
-    !isAllowedBYOKModelForRole({ provider, modelId, role: CHAT_MODEL_ROLE })
-  ) {
-    return false;
-  }
-  if (orgAIConfig) {
-    return orgAIConfig.providers.some(
-      (providerConfig) => providerConfig.provider === provider,
-    );
-  }
-  return hasTanStackInstanceProvider() && getActiveProvider() === provider;
-};
+}: BYOKChatModelSelection & { orgAIConfig: OrgAIConfig | null }): boolean =>
+  isModelSelectionAvailableForRole({
+    dataClass: "customer",
+    provider,
+    modelId,
+    orgAIConfig,
+    role: CHAT_MODEL_ROLE,
+  });
 
 const chatModelOption = (
   provider: BYOKProvider,

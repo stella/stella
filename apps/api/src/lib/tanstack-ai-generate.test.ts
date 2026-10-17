@@ -15,7 +15,7 @@ import {
 import { assertProperty } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
-import type { CachingDecision } from "@/api/lib/ai-config";
+import type { OrgAIConfig, CachingDecision } from "@/api/lib/ai-config";
 import { classifyAIError, isAnticipatedAIFailure } from "@/api/lib/ai-error";
 import type { AIErrorKind } from "@/api/lib/ai-error";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -2567,7 +2567,7 @@ describe("a structured answer its schema rejects gets one repair turn", () => {
     expect(classifyAIError(caught)).toBe("output_invalid");
     expect(providerRequests).toHaveLength(2);
     expect(outcomeLogs()).toEqual([
-      { result: "failed", rung: "output_invalid", issueTypes: "number" },
+      { result: "failed", rung: "fallback_skipped", issueTypes: "number" },
     ]);
     // The outcome line carries paths and types, never the model's values.
     expect(JSON.stringify(logs.records)).not.toContain("three");
@@ -2668,6 +2668,245 @@ describe("a chat run a caller consumes itself", () => {
       asTestRaw<Error | undefined>(caught)?.name,
     );
     expect(JSON.stringify({ chunks, caught })).not.toContain(SENTINEL);
+  });
+});
+
+describe("an unrepaired structured answer falls back once within the approved set", () => {
+  const primaryModelId = BYOK_MODEL_OPTIONS.openai[0];
+  const orgAIConfig = {
+    providers: [{ provider: "openai", apiKey: "fixture-key" }],
+    overrideModels: null,
+    decision: null,
+  } satisfies OrgAIConfig;
+  const options = {
+    admission: NO_ORGANIZATION_MODEL_DISPATCH,
+    organizationId: null,
+    orgAIConfig,
+    caching: noCaching,
+    dataClass: "customer",
+    managedAIResidency: "us",
+    outputSchema: v.strictObject({ answer: v.string(), page: v.number() }),
+    prompt: "Extract the answer.",
+    role: "chat",
+    serviceTier: "standard",
+    tenantWorkspaceIds: [],
+  } as const;
+
+  type ResolveOptions = Parameters<
+    NonNullable<
+      Parameters<typeof generateTanStackObjectForRole>[0]["resolveTextModel"]
+    >
+  >[0];
+  const resolver = (request: ResolveOptions) => ({
+    ...testModel,
+    modelId: request.modelId?.split("::").slice(1).join("::") ?? primaryModelId,
+  });
+  const fallbackOutcome = () =>
+    logs.records.findLast(
+      ({ message }) => message === "ai.structured_output.outcome",
+    )?.attributes;
+
+  test("a second approved model gets only the original request and must match the full schema", async () => {
+    queueRun(objectRun({ answer: "SENTINEL_PRIMARY", page: "three" }));
+    queueRun(objectRun({ answer: "SENTINEL_REPAIR", page: "3" }));
+    queueRun(objectRun({ answer: "ok", page: 3 }));
+    const resolutions: ResolveOptions[] = [];
+    const result = await generateTanStackObjectForRole({
+      ...options,
+      resolveTextModel: (request) => {
+        resolutions.push(request);
+        return resolver(request);
+      },
+    });
+    expect(result).toEqual({ answer: "ok", page: 3 });
+    expect(resolutions).toHaveLength(2);
+    const fallback = resolutions[1];
+    expect(fallback?.modelId).toStartWith("openai::");
+    expect(fallback?.modelId).not.toBe(`openai::${primaryModelId}`);
+    expect(fallback?.admission).toBe(options.admission);
+    expect(fallback).toMatchObject({
+      dataClass: "customer",
+      managedAIResidency: "us",
+    });
+    expect(providerRequests).toHaveLength(3);
+    expect(providerRequests[2]?.messages).toEqual(
+      providerRequests[0]?.messages,
+    );
+    expect(JSON.stringify(providerRequests[2])).not.toContain("SENTINEL_");
+    expect(fallbackOutcome()).toMatchObject({
+      "ai.structured_output.rung": "fallback_model",
+      "ai.structured_output.result": "ok",
+      "ai.structured_output.fallback_model_id": fallback?.modelId,
+    });
+    expect(JSON.stringify(logs.records)).not.toContain("SENTINEL_");
+  });
+
+  test("a fallback on another provider reuses the live organization admission", async () => {
+    queueRun(objectRun({ answer: "SENTINEL_PRIMARY", page: "three" }));
+    queueRun(objectRun({ answer: "SENTINEL_REPAIR", page: "3" }));
+    queueRun(objectRun({ answer: "ok", page: 3 }));
+    const organizationId = toSafeId<"organization">("org_structured_fallback");
+    const resolutions: ResolveOptions[] = [];
+    const result = await admitModelDispatch({
+      organizationId,
+      actionKind: "templates.fill",
+      organizationStateDb: testOrganizationStateDb,
+      signal: new AbortController().signal,
+      run: async (admission) =>
+        await generateTanStackObjectForRole({
+          ...options,
+          organizationId,
+          admission,
+          orgAIConfig: {
+            ...orgAIConfig,
+            providers: [
+              ...orgAIConfig.providers,
+              { provider: "google", apiKey: "fixture-google-key" },
+            ],
+          },
+          resolveTextModel: (request) => {
+            resolutions.push(request);
+            expect(request.admission).toBe(admission);
+            expect(admission.signal.aborted).toBe(false);
+            return request.modelId === undefined
+              ? resolver(request)
+              : {
+                  adapter: providerAdapter,
+                  keySource: "byok",
+                  modelId: request.modelId.split("::").slice(1).join("::"),
+                  modelOptions: {},
+                  provider: "google",
+                };
+          },
+        }),
+    });
+    expect(result).toEqual({ answer: "ok", page: 3 });
+    expect(resolutions).toHaveLength(2);
+    expect(resolutions[1]?.modelId).toStartWith("google::");
+    expect(providerRequests[2]?.messages).toEqual(
+      providerRequests[0]?.messages,
+    );
+    expect(JSON.stringify(providerRequests[2])).not.toContain("SENTINEL_");
+  });
+
+  test("a throttled fallback retries its own request without restarting the ladder", async () => {
+    queueRun(objectRun({ answer: "ok", page: "three" }));
+    queueRun(objectRun({ answer: "ok", page: "3" }));
+    queueRun({
+      type: "throw",
+      error: Object.assign(
+        new Error("Rate limit exceeded. Please retry in 1ms."),
+        {
+          status: 429,
+          headers: new Headers({ "retry-after-ms": "1" }),
+        },
+      ),
+    });
+    queueRun(objectRun({ answer: "ok", page: 3 }));
+    const resolutions: ResolveOptions[] = [];
+    expect(
+      await generateTanStackObjectForRole({
+        ...options,
+        resolveTextModel: (request) => {
+          resolutions.push(request);
+          return resolver(request);
+        },
+      }),
+    ).toEqual({ answer: "ok", page: 3 });
+    expect(resolutions).toHaveLength(2);
+    expect(providerRequests).toHaveLength(4);
+    expect(providerRequests[3]?.messages).toEqual(
+      providerRequests[2]?.messages,
+    );
+    expect(providerRequests[3]?.messages).toEqual(
+      providerRequests[0]?.messages,
+    );
+  });
+
+  test("a repair rejected as invalid structured output still reaches the approved fallback", async () => {
+    queueRun(objectRun({ answer: "ok", page: "three" }));
+    queueRun(
+      throwingRun(
+        Object.assign(new Error("SENTINEL_INVALID_REPAIR"), {
+          code: "structured-output-validation-failed",
+        }),
+      ),
+    );
+    queueRun(objectRun({ answer: "ok", page: 3 }));
+    expect(
+      await generateTanStackObjectForRole({
+        ...options,
+        resolveTextModel: resolver,
+      }),
+    ).toEqual({ answer: "ok", page: 3 });
+    expect(providerRequests).toHaveLength(3);
+    expect(providerRequests[2]?.messages).toEqual(
+      providerRequests[0]?.messages,
+    );
+    expect(JSON.stringify(providerRequests[2])).not.toContain("SENTINEL_");
+    expect(fallbackOutcome()).toMatchObject({
+      "ai.structured_output.rung": "fallback_model",
+    });
+  });
+
+  test("the fallback is never repaired or coerced", async () => {
+    for (const page of ["three", "3", "4"]) {
+      queueRun(objectRun({ answer: "ok", page }));
+    }
+    const caught = await rejectionOf(
+      generateTanStackObjectForRole({
+        ...options,
+        resolveTextModel: resolver,
+      }),
+    );
+    expect(caught).toBeInstanceOf(ModelOutputInvalidError);
+    expect(providerRequests).toHaveLength(3);
+    expect(fallbackOutcome()).toMatchObject({
+      "ai.structured_output.rung": "fallback_model",
+      "ai.structured_output.result": "failed",
+    });
+  });
+
+  test("an organization with no other role model records a skipped fallback", async () => {
+    queueRun(objectRun({ answer: "ok", page: "three" }));
+    queueRun(objectRun({ answer: "ok", page: "3" }));
+    const caught = await rejectionOf(
+      generateTanStackObjectForRole({
+        ...options,
+        orgAIConfig: { providers: [], overrideModels: null, decision: null },
+        resolveTextModel: () => resolver(options),
+      }),
+    );
+    expect(caught).toBeInstanceOf(ModelOutputInvalidError);
+    expect(providerRequests).toHaveLength(2);
+    expect(fallbackOutcome()).toMatchObject({
+      "ai.structured_output.rung": "fallback_skipped",
+      "ai.structured_output.result": "failed",
+    });
+  });
+
+  test("fallback resolution shares the original deadline and abort signal", async () => {
+    queueRun(objectRun({ answer: "ok", page: "three" }));
+    queueRun(objectRun({ answer: "ok", page: "3" }));
+    const pending = Promise.withResolvers<ResolvedTanStackTextModel>();
+    const signals: (AbortSignal | undefined)[] = [];
+    const caught = await rejectionOf(
+      generateTanStackObjectForRole({
+        ...options,
+        deadlineMs: 40,
+        resolveTextModel: async (request) => {
+          signals.push(request.abortSignal);
+          return request.modelId === undefined
+            ? resolver(options)
+            : await pending.promise;
+        },
+      }),
+    );
+    expect(caught).toBeInstanceOf(ModelDeadlineExceededError);
+    expect(signals).toHaveLength(2);
+    expect(signals[1]).toBe(signals[0]);
+    expect(signals[1]?.aborted).toBe(true);
+    expect(providerRequests).toHaveLength(2);
   });
 });
 
