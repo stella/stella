@@ -3611,3 +3611,37 @@ describe("identifier keys by jurisdiction", () => {
     );
   });
 });
+
+describe("European Commission competition case numbers", () => {
+  test.each([
+    ["Case AT.99991", "AT.99991"],
+    ["Sache COMP/99.991", "COMP/99.991"],
+    ["věc M.99991", "M.99991"],
+    ["affaire SA.99991", "SA.99991"],
+    ["asunto C 99/2099", "C 99/2099"],
+    ["caso N 991/2099", "N 991/2099"],
+    ["zaak NN 99/2099", "NN 99/2099"],
+  ])("reads %s as a Commission identifier", (text, value) => {
+    expect(extractCitations([{ index: 0, text }])).toEqual([
+      expect.objectContaining({
+        citationText: value,
+        identifierType: DECISION_IDENTIFIER_TYPES.COMMISSION_CASE_NUMBER,
+        identifierValue: value,
+      }),
+    ]);
+  });
+
+  test.each([
+    "AT.99991",
+    "COMP/99.991",
+    "M.99991",
+    "SA.99991",
+    "C 99/2099",
+    "N 991/2099",
+    "NN 99/2099",
+    "The initials M. 99991 appeared in the heading",
+    "Case law was discussed before unrelated text padding M.99991",
+  ])("does not read an uncued or remote number: %s", (text) => {
+    expect(extractCitations([{ index: 0, text }])).toEqual([]);
+  });
+});

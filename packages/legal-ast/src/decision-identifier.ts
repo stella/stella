@@ -9,6 +9,7 @@ import { stripDangerousChars } from "./text-sanitize.js";
 
 export const DECISION_IDENTIFIER_TYPES = {
   CASE_NUMBER: "case-number",
+  COMMISSION_CASE_NUMBER: "commission-case-number",
   ECLI: "ecli",
   NEUTRAL_CITATION: "neutral-citation",
   REPORTER_CITATION: "reporter-citation",
@@ -40,6 +41,11 @@ export type EcliIdentifier = {
   value: string;
 };
 
+export type CommissionCaseNumberIdentifier = {
+  type: typeof DECISION_IDENTIFIER_TYPES.COMMISSION_CASE_NUMBER;
+  value: string;
+};
+
 export type NeutralCitationIdentifier = {
   type: typeof DECISION_IDENTIFIER_TYPES.NEUTRAL_CITATION;
   value: string;
@@ -52,6 +58,7 @@ export type ReporterCitationIdentifier = {
 
 export type DecisionIdentifier =
   | CaseNumberIdentifier
+  | CommissionCaseNumberIdentifier
   | EcliIdentifier
   | NeutralCitationIdentifier
   | ReporterCitationIdentifier;
@@ -114,6 +121,10 @@ export const decisionIdentifierSchema: v.GenericSchema<DecisionIdentifier> =
       value: identifierValueSchema,
     }),
     v.strictObject({
+      type: v.literal(DECISION_IDENTIFIER_TYPES.COMMISSION_CASE_NUMBER),
+      value: structuredIdentifierValueSchema,
+    }),
+    v.strictObject({
       type: v.literal(DECISION_IDENTIFIER_TYPES.ECLI),
       value: structuredIdentifierValueSchema,
     }),
@@ -146,6 +157,7 @@ export const normalizeStructuredDecisionIdentifier = (
         "",
       );
     case DECISION_IDENTIFIER_TYPES.NEUTRAL_CITATION:
+    case DECISION_IDENTIFIER_TYPES.COMMISSION_CASE_NUMBER:
     case DECISION_IDENTIFIER_TYPES.REPORTER_CITATION:
       return normalizeStructuredCitation(identifier.value);
     default: {
