@@ -64,7 +64,7 @@ import {
 } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
 // parser-output-unchanged: imports the document AST from its package owner
-import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import type { DecisionDocumentAst } from "@stll/legal-ast/document-ast";
 import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
 import { sha256Hex as hashContent, createSha256 } from "@stll/sha256/bun";
@@ -1491,7 +1491,7 @@ export const assemblePlUokikDecision = async ({
     keywords: practices,
   });
   const document = read.type === "read" ? read.output : null;
-  const documentAst: DocumentAst | EmptyAst =
+  const documentAst: DecisionDocumentAst | EmptyAst =
     document?.documentAst ?? EMPTY_AST;
 
   const sourceRaw = encodeSourceRawEnvelope(rawParts);

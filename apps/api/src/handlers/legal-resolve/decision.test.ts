@@ -66,6 +66,7 @@ const decisionAst = (texts = ["Text"]) =>
       printUrl: "",
     },
     metadata: {
+      family: "decision",
       caseNumber: "3 Afs 41/2008 - 98",
       ecli: "ECLI:CZ:NSS:2008:3.AFS.41.2008.98",
       court: "Nejvyšší správní soud",

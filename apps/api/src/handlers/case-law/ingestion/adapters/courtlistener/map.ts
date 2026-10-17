@@ -33,7 +33,7 @@ import {
 import { hasVisibleText } from "./snapshot-columns";
 
 export const COURTLISTENER_IMPORT_KEY = IMPORT_SOURCE_KEYS.COURTLISTENER;
-export const COURTLISTENER_PARSER_VERSION = 16;
+export const COURTLISTENER_PARSER_VERSION = 17;
 
 const textField = (value: string) =>
   hasVisibleText(value)
@@ -162,6 +162,7 @@ export const mapCourtListenerRecord = (
         printUrl: plan.sourceUrl,
       },
       metadata: {
+        family: "decision",
         caseNumber: plan.caseNumber,
         ecli: null,
         court: plan.court,

@@ -8,7 +8,7 @@ import { classifyFailure } from "@stll/errors";
 import { DECISION_IDENTIFIER_MAX_COUNT } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
 // parser-output-unchanged: imports the document AST from its package owner
-import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import type { DecisionDocumentAst } from "@stll/legal-ast/document-ast";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
 import { sha256Hex as hashContent } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
@@ -1066,7 +1066,7 @@ const parseDecisionPage = ({
     sourceDocumentId,
   });
 
-  let documentAst: DocumentAst | EmptyAst = EMPTY_AST;
+  let documentAst: DecisionDocumentAst | EmptyAst = EMPTY_AST;
   let sections: ReturnType<typeof parseUsDecisionHtml>["sections"] | undefined;
   let resolvedFulltext = fulltext;
 

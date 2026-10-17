@@ -34,6 +34,7 @@ const documentAst = {
     printUrl: "https://example.test/print",
   },
   metadata: {
+    family: "decision",
     caseNumber: "28 Cdo 5171/2008",
     court: "Nejvyšší soud",
     ecli: "ECLI:CZ:NS:2009:28.CDO.5171.2008.1",

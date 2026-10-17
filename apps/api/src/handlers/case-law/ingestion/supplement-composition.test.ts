@@ -252,6 +252,7 @@ const astOf = (blocks: DocumentAst["blocks"]): DocumentAst => ({
     printUrl: "",
   },
   metadata: {
+    family: "decision",
     caseNumber: "IV Ka 95/18",
     ecli: null,
     court: "Sąd Okręgowy we Wrocławiu",

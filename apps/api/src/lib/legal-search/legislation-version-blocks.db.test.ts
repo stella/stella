@@ -50,6 +50,7 @@ const DOCUMENT_AST = {
   version: 1,
   source: { system: "test", documentId: "test", webUrl: "", printUrl: "" },
   metadata: {
+    family: "decision",
     caseNumber: null,
     ecli: null,
     court: null,

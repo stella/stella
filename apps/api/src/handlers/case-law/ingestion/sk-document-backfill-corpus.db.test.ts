@@ -74,6 +74,7 @@ const parsedAst: DocumentAst = {
     printUrl: "",
   },
   metadata: {
+    family: "decision",
     caseNumber: "1T/9/2026",
     ecli: null,
     court: "Okresný súd",

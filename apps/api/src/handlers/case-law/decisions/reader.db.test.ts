@@ -97,6 +97,7 @@ const documentAst = ({ blockCount, citationCount }: ReaderAstOptions) =>
       printUrl: "",
     },
     metadata: {
+      family: "decision",
       caseNumber: "Reader fixture",
       ecli: null,
       court: "Court",

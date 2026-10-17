@@ -118,6 +118,7 @@ const decoratedAst = (): DocumentAst => ({
     printUrl: "https://example.test/d1.pdf",
   },
   metadata: {
+    family: "decision",
     caseNumber: "1 Az 1/2020",
     ecli: null,
     court: "Test court",

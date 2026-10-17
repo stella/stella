@@ -455,6 +455,7 @@ describe("additional stated boundaries", () => {
       version: 1,
       source: { system: "fixture", documentId: "id", webUrl: "", printUrl: "" },
       metadata: {
+        family: "decision",
         caseNumber: "C-1/24",
         ecli: null,
         court: null,

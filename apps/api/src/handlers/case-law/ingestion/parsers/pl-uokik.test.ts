@@ -11,7 +11,6 @@ import { describe, expect, test } from "bun:test";
 
 import type { Block, Inline } from "@stll/legal-ast/document-ast";
 
-import type { PlSnLine } from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
 import {
   parsePlUokikDocument,
   PL_UOKIK_RULING_UNREAD,
@@ -19,6 +18,7 @@ import {
   readPlUokikRulingHeader,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-uokik";
 import type { ParsePlUokikDocumentInput } from "@/api/handlers/case-law/ingestion/parsers/pl-uokik";
+import type { PdfParagraphLine } from "@/api/lib/legal-search/parsers/pdf-paragraphs";
 import {
   buildValidationHtml,
   validateAst,
@@ -199,7 +199,7 @@ const headerOf = async (fixture: URL) =>
   readPlUokikRulingHeader(await plUokikDocumentLines([await bytesOf(fixture)]));
 
 /** Lines as a text layer states them, for headers no capture holds. */
-const typeset = (lines: readonly string[]): PlSnLine[] =>
+const typeset = (lines: readonly string[]): PdfParagraphLine[] =>
   lines.map((text) => ({
     type: "text",
     runs: [{ text, bold: false }],

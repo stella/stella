@@ -1,7 +1,7 @@
 /**
  * Slovak Courts PDF parser.
  *
- * Extracts structured DocumentAst from court decision PDFs
+ * Extracts structured DecisionDocumentAst from court decision PDFs
  * using libpdf/core's text extraction with line/font info.
  *
  * libpdf/core provides:
@@ -38,7 +38,11 @@
 
 import { PDF, SecurityError } from "@libpdf/core";
 
-import type { Block, DocumentAst, Inline } from "@stll/legal-ast/document-ast";
+import type {
+  Block,
+  DecisionDocumentAst,
+  Inline,
+} from "@stll/legal-ast/document-ast";
 import {
   isSkDecisionTitle,
   isSkHoldingMarker,
@@ -81,7 +85,7 @@ type ParseSkDecisionInput = {
 };
 
 type ParseSkDecisionOutput = {
-  documentAst: DocumentAst;
+  documentAst: DecisionDocumentAst;
   fulltext: string;
 };
 
@@ -155,7 +159,7 @@ export const parseSkDecisionPdf = async (
     .flatMap((b) => (b.plainText ? [b.plainText] : []))
     .join("\n\n");
 
-  const ast: DocumentAst = {
+  const ast: DecisionDocumentAst = {
     version: 1,
     source: {
       system: input.sourceSystem ?? "obcan.justice.sk",
@@ -164,6 +168,7 @@ export const parseSkDecisionPdf = async (
       printUrl: "",
     },
     metadata: {
+      family: "decision",
       caseNumber: input.caseNumber,
       ecli: input.ecli ?? null,
       court: input.court,

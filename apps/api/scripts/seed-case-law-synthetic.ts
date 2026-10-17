@@ -360,6 +360,7 @@ const syntheticDocumentAst = ({
     printUrl: "",
   },
   metadata: {
+    family: "decision",
     caseNumber,
     ecli: null,
     court,

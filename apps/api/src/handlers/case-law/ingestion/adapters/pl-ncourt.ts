@@ -57,7 +57,7 @@ import {
   type DecisionDocumentRole,
 } from "@stll/api-contract/decision-document-role";
 // parser-output-unchanged: imports the document AST from its package owner
-import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import type { DecisionDocumentAst } from "@stll/legal-ast/document-ast";
 import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
 import { sha256Hex as hashContent } from "@stll/sha256/bun";
@@ -1099,7 +1099,7 @@ export const assemblePlNcourtDecision = ({
     keywords: listOf(detail, "themePhrases"),
     statutes: listOf(detail, "legalBases"),
   });
-  const documentAst: DocumentAst | EmptyAst =
+  const documentAst: DecisionDocumentAst | EmptyAst =
     document?.documentAst ?? EMPTY_AST;
   if (content !== null && document !== null) {
     validatePlNcourtDocument(

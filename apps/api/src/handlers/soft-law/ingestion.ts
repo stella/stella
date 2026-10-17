@@ -10,6 +10,7 @@ import {
 import type { WriteRawSourcePayload } from "@/api/lib/legal-search/raw-source-storage";
 import type { SoftLawFetch } from "@/api/lib/legal-search/soft-law-access-types";
 import { SoftLawBlockedError } from "@/api/lib/legal-search/soft-law-access-types";
+import { buildSoftLawAst } from "@/api/lib/legal-search/soft-law-ast";
 import { SOFT_LAW_AUTHORITY_POLICIES } from "@/api/lib/legal-search/soft-law-authority-policy";
 import {
   softLawIdentityKey,
@@ -25,6 +26,8 @@ import {
   SoftLawItemError,
   SoftLawListingIncompleteError,
   SOFT_LAW_BATCH_LIMIT,
+  SOFT_LAW_RAW_BYTE_LIMIT,
+  SOFT_LAW_RAW_PART_LIMIT,
 } from "@/api/lib/legal-search/soft-law-types";
 import type {
   SoftLawSourceAdapter,
@@ -35,8 +38,6 @@ import type {
 import { createSoftLawFetch } from "./publisher-access";
 
 const PAGE_BUDGET = 20;
-const PAGE_RAW_BYTE_LIMIT = 64 * 1024 * 1024;
-const DOCUMENT_RAW_PART_LIMIT = 20;
 const ITEM_ATTEMPT_LIMIT = 3;
 
 type RunSoftLawIngestionOptions = {
@@ -129,7 +130,7 @@ const fetchSoftLawItem = async ({
   const identityKey = identity.value;
   if (
     !input.raw.length ||
-    input.raw.length > DOCUMENT_RAW_PART_LIMIT ||
+    input.raw.length > SOFT_LAW_RAW_PART_LIMIT ||
     new Set(input.raw.map((part) => part.role)).size !== input.raw.length ||
     (SOFT_LAW_AUTHORITY_POLICIES[adapter.authority].expression === "required" &&
       (!input.raw.some((part) => part.purpose === "document") ||
@@ -146,7 +147,7 @@ const fetchSoftLawItem = async ({
     (total, part) => total + part.bytes.byteLength,
     0,
   );
-  if (rawByteLength > PAGE_RAW_BYTE_LIMIT) {
+  if (rawByteLength > SOFT_LAW_RAW_BYTE_LIMIT) {
     return Result.err(
       new SoftLawItemError({
         message: "Document exceeds the page raw byte limit",
@@ -228,7 +229,10 @@ const fetchSoftLawPage = async ({
     if (previous && previous.status !== "retryable") {
       continue;
     }
-    if (capacity === "exhausted" || retainedRawBytes === PAGE_RAW_BYTE_LIMIT) {
+    if (
+      capacity === "exhausted" ||
+      retainedRawBytes === SOFT_LAW_RAW_BYTE_LIMIT
+    ) {
       attempts.push({
         entry,
         status: "retryable",
@@ -244,7 +248,7 @@ const fetchSoftLawPage = async ({
     if (renewed.status === "error") {
       return renewed;
     }
-    const maxRawBytes = PAGE_RAW_BYTE_LIMIT - retainedRawBytes;
+    const maxRawBytes = SOFT_LAW_RAW_BYTE_LIMIT - retainedRawBytes;
     const attempted = await Result.tryPromise(
       async () =>
         await fetchSoftLawItem({
@@ -286,7 +290,7 @@ const fetchSoftLawPage = async ({
   return Result.ok({ attempts, fetched });
 };
 const prepareSoftLawPage = async (options: PrepareSoftLawPageOptions) => {
-  const { store, sourceId, writeRaw, runId } = options;
+  const { store, sourceId, writeRaw, runId, adapter } = options;
   const page = await fetchSoftLawPage(options);
   if (page.status === "error") {
     return page;
@@ -378,7 +382,21 @@ const prepareSoftLawPage = async (options: PrepareSoftLawPageOptions) => {
           ...(part.purpose ? { purpose: part.purpose } : {}),
         });
       }
-      return { entry, input, documentId, identityKey, contentHash, rawObjects };
+      const ast = await buildSoftLawAst({
+        authority: adapter.authority,
+        documentId,
+        sourceUrl: entry.url,
+        input,
+      });
+      return {
+        entry,
+        input,
+        documentId,
+        identityKey,
+        contentHash,
+        rawObjects,
+        ast,
+      };
     });
     if (written.status === "error") {
       attempts.push(rejectedAttempt(entry, written.error.cause, count));

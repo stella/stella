@@ -12,6 +12,7 @@ const astFor = (storedKey: string): DocumentAst => ({
   version: 1,
   source: { system: "test", documentId: storedKey, webUrl: "", printUrl: "" },
   metadata: {
+    family: "decision",
     caseNumber: null,
     ecli: null,
     court: null,

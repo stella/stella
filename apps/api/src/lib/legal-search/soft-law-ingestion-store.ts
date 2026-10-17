@@ -31,6 +31,8 @@ import type {
 } from "@/api/lib/legal-search/soft-law-types";
 import { commitReplaySafeIngestionBatch } from "@/api/lib/replay-safe-ingestion";
 
+import type { SoftLawAstReaderState } from "./soft-law-ast";
+
 const LEASE_SECONDS = 300;
 const MINIMUM_LISTING_FRACTION = 0.8;
 export type SoftLawObservation = {
@@ -40,6 +42,7 @@ export type SoftLawObservation = {
   identityKey: string;
   contentHash: string;
   rawObjects: SoftLawRawObject[];
+  ast: SoftLawAstReaderState;
 };
 type SoftLawIngestionStoreOptions = {
   sourceId: SafeId<"softLawSource">;
@@ -433,6 +436,9 @@ const persistSoftLawVersions = async (
           metadata: item.input.metadata,
           rawObjects: item.rawObjects,
           extractedText: item.input.text,
+          documentAst:
+            item.ast.type === "readable" ? item.ast.documentAst : null,
+          astBuilderVersion: item.ast.astBuilderVersion,
           extractionFailure: item.input.extractionFailure ?? null,
           extractionQuality: item.input.extractionQuality,
           sourceDates: item.input.sourceDates,
@@ -452,6 +458,8 @@ const persistSoftLawVersions = async (
           extractedText: sql`excluded.extracted_text`,
           extractionQuality: sql`excluded.extraction_quality`,
           extractionFailure: sql`excluded.extraction_failure`,
+          documentAst: sql`excluded.document_ast`,
+          astBuilderVersion: sql`excluded.ast_builder_version`,
         },
       });
   }

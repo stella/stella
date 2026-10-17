@@ -98,6 +98,7 @@ const ast = {
     paragraph("versions", VERSIONS_PARAGRAPH),
   ],
   metadata: {
+    family: "decision",
     caseNumber: "1 As 1/2026",
     court: "Test court",
     decisionDate: null,

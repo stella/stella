@@ -4,91 +4,93 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## soft_law_sources · `softLawSources` · soft-law.ts:31 · rls
+## soft_law_sources · `softLawSources` · soft-law.ts:33 · rls
 
 Global ingestion state; ordinary application roles have no access.
 
 ```text
-soft_law_sources.id                      pUuid        pk,not null       soft-law.ts:34
-soft_law_sources.adapter_key             text         unique,not null   soft-law.ts:35
-soft_law_sources.descriptor              jsonb        not null          soft-law.ts:36
-soft_law_sources.sync_cursor             text         null              soft-law.ts:37
-soft_law_sources.listing_baseline        integer      default,not null  soft-law.ts:38
-soft_law_sources.listing_seen            integer      null              soft-law.ts:39
-soft_law_sources.listing_expected_total  integer      null              soft-law.ts:40
-soft_law_sources.last_sync_at            timestamptz  null              soft-law.ts:41
-soft_law_sources.run_state               text         default,not null  soft-law.ts:42
-soft_law_sources.run_id                  uuid         null              soft-law.ts:46
-soft_law_sources.run_started_at          timestamptz  null              soft-law.ts:47
-soft_law_sources.lease_token             safeUuid     null              soft-law.ts:48
-soft_law_sources.lease_expires_at        timestamptz  null              soft-law.ts:49
-soft_law_sources.failure_tag             text         null              soft-law.ts:50
+soft_law_sources.id                      pUuid        pk,not null       soft-law.ts:36
+soft_law_sources.adapter_key             text         unique,not null   soft-law.ts:37
+soft_law_sources.descriptor              jsonb        not null          soft-law.ts:38
+soft_law_sources.sync_cursor             text         null              soft-law.ts:39
+soft_law_sources.listing_baseline        integer      default,not null  soft-law.ts:40
+soft_law_sources.listing_seen            integer      null              soft-law.ts:41
+soft_law_sources.listing_expected_total  integer      null              soft-law.ts:42
+soft_law_sources.last_sync_at            timestamptz  null              soft-law.ts:43
+soft_law_sources.run_state               text         default,not null  soft-law.ts:44
+soft_law_sources.run_id                  uuid         null              soft-law.ts:48
+soft_law_sources.run_started_at          timestamptz  null              soft-law.ts:49
+soft_law_sources.lease_token             safeUuid     null              soft-law.ts:50
+soft_law_sources.lease_expires_at        timestamptz  null              soft-law.ts:51
+soft_law_sources.failure_tag             text         null              soft-law.ts:52
 ```
 
-## soft_law_documents · `softLawDocuments` · soft-law.ts:77 · rls
+## soft_law_documents · `softLawDocuments` · soft-law.ts:79 · rls
 
 ```text
-soft_law_documents.id                      pUuid        pk,not null  soft-law.ts:80
-soft_law_documents.source_id               safeUuid     not null     soft-law.ts:81
-soft_law_documents.identity_key            text         not null     soft-law.ts:82
-soft_law_documents.jurisdiction            text         not null     soft-law.ts:83
-soft_law_documents.authority               text         not null     soft-law.ts:84
-soft_law_documents.kind                    text         not null     soft-law.ts:85
-soft_law_documents.title                   text         not null     soft-law.ts:86
-soft_law_documents.stated_reference        text         null         soft-law.ts:87
-soft_law_documents.stated_reference_state  text         not null     soft-law.ts:88
-soft_law_documents.issued_on               date         null         soft-law.ts:91
-soft_law_documents.issued_on_state         text         not null     soft-law.ts:92
-soft_law_documents.listing_state           text         not null     soft-law.ts:95
-soft_law_documents.validity_state          text         not null     soft-law.ts:98
-soft_law_documents.validity_basis          text         not null     soft-law.ts:101
-soft_law_documents.first_seen_at           timestamptz  not null     soft-law.ts:104
-soft_law_documents.last_seen_at            timestamptz  not null     soft-law.ts:105
-soft_law_documents.last_seen_run           uuid         not null     soft-law.ts:106
+soft_law_documents.id                      pUuid        pk,not null  soft-law.ts:82
+soft_law_documents.source_id               safeUuid     not null     soft-law.ts:83
+soft_law_documents.identity_key            text         not null     soft-law.ts:84
+soft_law_documents.jurisdiction            text         not null     soft-law.ts:85
+soft_law_documents.authority               text         not null     soft-law.ts:86
+soft_law_documents.kind                    text         not null     soft-law.ts:87
+soft_law_documents.title                   text         not null     soft-law.ts:88
+soft_law_documents.stated_reference        text         null         soft-law.ts:89
+soft_law_documents.stated_reference_state  text         not null     soft-law.ts:90
+soft_law_documents.issued_on               date         null         soft-law.ts:93
+soft_law_documents.issued_on_state         text         not null     soft-law.ts:94
+soft_law_documents.listing_state           text         not null     soft-law.ts:97
+soft_law_documents.validity_state          text         not null     soft-law.ts:100
+soft_law_documents.validity_basis          text         not null     soft-law.ts:103
+soft_law_documents.first_seen_at           timestamptz  not null     soft-law.ts:106
+soft_law_documents.last_seen_at            timestamptz  not null     soft-law.ts:107
+soft_law_documents.last_seen_run           uuid         not null     soft-law.ts:108
 ```
 
-## soft_law_document_versions · `softLawDocumentVersions` · soft-law.ts:142 · rls
+## soft_law_document_versions · `softLawDocumentVersions` · soft-law.ts:144 · rls
 
 ```text
-soft_law_document_versions.id                  pUuid        pk,not null  soft-law.ts:145
-soft_law_document_versions.document_id         safeUuid     not null     soft-law.ts:146
-soft_law_document_versions.sequence            integer      not null     soft-law.ts:147
-soft_law_document_versions.content_hash        text         not null     soft-law.ts:148
-soft_law_document_versions.raw_objects         jsonb        not null     soft-law.ts:149
-soft_law_document_versions.metadata            jsonb        not null     soft-law.ts:152
-soft_law_document_versions.extracted_text      text         null         soft-law.ts:153
-soft_law_document_versions.extraction_failure  text         null         soft-law.ts:155  Sanitized local extraction failure; publisher bytes remain available for repair.
-soft_law_document_versions.extraction_quality  text         not null     soft-law.ts:156
-soft_law_document_versions.source_dates        jsonb        not null     soft-law.ts:159
-soft_law_document_versions.observed_from       timestamptz  not null     soft-law.ts:162
-soft_law_document_versions.observed_to         timestamptz  null         soft-law.ts:163
+soft_law_document_versions.id                   pUuid        pk,not null  soft-law.ts:147
+soft_law_document_versions.document_id          safeUuid     not null     soft-law.ts:148
+soft_law_document_versions.sequence             integer      not null     soft-law.ts:149
+soft_law_document_versions.content_hash         text         not null     soft-law.ts:150
+soft_law_document_versions.raw_objects          jsonb        not null     soft-law.ts:151
+soft_law_document_versions.metadata             jsonb        not null     soft-law.ts:154
+soft_law_document_versions.extracted_text       text         null         soft-law.ts:155
+soft_law_document_versions.document_ast         jsonb        null         soft-law.ts:157  Structured guidance text built from this version's retained originals.
+soft_law_document_versions.ast_builder_version  integer      null         soft-law.ts:159  Builder revision attempted, including original-only outcomes; null means not built yet.
+soft_law_document_versions.extraction_failure   text         null         soft-law.ts:161  Sanitized local extraction failure; publisher bytes remain available for repair.
+soft_law_document_versions.extraction_quality   text         not null     soft-law.ts:162
+soft_law_document_versions.source_dates         jsonb        not null     soft-law.ts:165
+soft_law_document_versions.observed_from        timestamptz  not null     soft-law.ts:168
+soft_law_document_versions.observed_to          timestamptz  null         soft-law.ts:169
 ```
 
-## soft_law_document_locators · `softLawDocumentLocators` · soft-law.ts:193 · rls
+## soft_law_document_locators · `softLawDocumentLocators` · soft-law.ts:203 · rls
 
 ```text
-soft_law_document_locators.id             pUuid        pk,not null  soft-law.ts:196
-soft_law_document_locators.source_id      safeUuid     not null     soft-law.ts:197
-soft_law_document_locators.document_id    safeUuid     not null     soft-law.ts:198
-soft_law_document_locators.url            text         not null     soft-law.ts:199
-soft_law_document_locators.first_seen_at  timestamptz  not null     soft-law.ts:200
-soft_law_document_locators.last_seen_at   timestamptz  not null     soft-law.ts:201
-soft_law_document_locators.last_seen_run  uuid         not null     soft-law.ts:202
-soft_law_document_locators.state          text         not null     soft-law.ts:203
+soft_law_document_locators.id             pUuid        pk,not null  soft-law.ts:206
+soft_law_document_locators.source_id      safeUuid     not null     soft-law.ts:207
+soft_law_document_locators.document_id    safeUuid     not null     soft-law.ts:208
+soft_law_document_locators.url            text         not null     soft-law.ts:209
+soft_law_document_locators.first_seen_at  timestamptz  not null     soft-law.ts:210
+soft_law_document_locators.last_seen_at   timestamptz  not null     soft-law.ts:211
+soft_law_document_locators.last_seen_run  uuid         not null     soft-law.ts:212
+soft_law_document_locators.state          text         not null     soft-law.ts:213
 ```
 
-## soft_law_ingestion_attempts · `softLawIngestionAttempts` · soft-law.ts:230 · rls
+## soft_law_ingestion_attempts · `softLawIngestionAttempts` · soft-law.ts:240 · rls
 
 ```text
-soft_law_ingestion_attempts.id            pUuid        pk,not null       soft-law.ts:233
-soft_law_ingestion_attempts.source_id     safeUuid     not null          soft-law.ts:234
-soft_law_ingestion_attempts.run_id        uuid         not null          soft-law.ts:235
-soft_law_ingestion_attempts.url           text         not null          soft-law.ts:236
-soft_law_ingestion_attempts.entry         jsonb        not null          soft-law.ts:237
-soft_law_ingestion_attempts.raw_objects   jsonb        default,not null  soft-law.ts:239  Per-run source snapshots, including unchanged-document discovery evidence.
-soft_law_ingestion_attempts.status        text         not null          soft-law.ts:243
-soft_law_ingestion_attempts.tag           text         null              soft-law.ts:244
-soft_law_ingestion_attempts.identity_key  text         null              soft-law.ts:245
-soft_law_ingestion_attempts.count         integer      not null          soft-law.ts:246
-soft_law_ingestion_attempts.observed_at   timestamptz  not null          soft-law.ts:247
+soft_law_ingestion_attempts.id            pUuid        pk,not null       soft-law.ts:243
+soft_law_ingestion_attempts.source_id     safeUuid     not null          soft-law.ts:244
+soft_law_ingestion_attempts.run_id        uuid         not null          soft-law.ts:245
+soft_law_ingestion_attempts.url           text         not null          soft-law.ts:246
+soft_law_ingestion_attempts.entry         jsonb        not null          soft-law.ts:247
+soft_law_ingestion_attempts.raw_objects   jsonb        default,not null  soft-law.ts:249  Per-run source snapshots, including unchanged-document discovery evidence.
+soft_law_ingestion_attempts.status        text         not null          soft-law.ts:253
+soft_law_ingestion_attempts.tag           text         null              soft-law.ts:254
+soft_law_ingestion_attempts.identity_key  text         null              soft-law.ts:255
+soft_law_ingestion_attempts.count         integer      not null          soft-law.ts:256
+soft_law_ingestion_attempts.observed_at   timestamptz  not null          soft-law.ts:257
 ```

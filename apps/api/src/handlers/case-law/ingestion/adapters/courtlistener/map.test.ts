@@ -359,6 +359,9 @@ test("CourtListener source types and text never infer a decision type", () => {
         expect(sanitized.metadata["decisionType"]).toEqual(
           result.metadata["decisionType"],
         );
+        if (result.documentAst.metadata.family !== "decision") {
+          throw new Error("CourtListener must produce a decision AST");
+        }
         expect(result.documentAst.metadata.decisionType).toBeNull();
         expect(result.metadata["decisionType"]).toEqual(
           toPlainTextMetadata({

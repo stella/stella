@@ -593,7 +593,7 @@ describe("parseNssDecisionHtml", () => {
   });
 
   describe("metadata", () => {
-    test("populates DocumentAst metadata correctly", () => {
+    test("populates DecisionDocumentAst metadata correctly", () => {
       const input = baseInput(nssUnitDecisionHtml);
       const { documentAst } = parseNssDecisionHtml(input);
 

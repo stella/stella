@@ -10,7 +10,7 @@ import type {
  * Czech Constitutional Court (Ustavni soud) HTML parser.
  *
  * Converts HTML from nalus.usoud.cz/Search/GetText.aspx
- * into a canonical DocumentAst.
+ * into a canonical DecisionDocumentAst.
  *
  * Primary source: the `docContentHidden` hidden field contains
  * RTF-encoded text with proper paragraph structure (`\par`
@@ -57,8 +57,11 @@ import {
   CZ_JUDGE_NAME_RE as JUDGE_NAME_RE,
   CZ_JUDGE_TITLE_RE as SIGNATURE_RE,
 } from "@stll/legal-ast/czech-document-roles";
-// parser-output-unchanged: imports the document AST from its package owner
-import type { Block, DocumentAst, Inline } from "@stll/legal-ast/document-ast";
+import type {
+  Block,
+  DecisionDocumentAst,
+  Inline,
+} from "@stll/legal-ast/document-ast";
 import {
   normalizeInlineLine,
   stripInlineLinePrefix,
@@ -100,7 +103,7 @@ type CrossReference = {
 };
 
 type ParseUsDecisionOutput = {
-  documentAst: DocumentAst;
+  documentAst: DecisionDocumentAst;
   fulltext: string;
   sections: DecisionSection[];
   /** Cross-references to other decisions found in the HTML. */
@@ -162,7 +165,7 @@ export const parseUsDecisionHtml = (
     .flatMap((b) => (b.plainText ? [b.plainText] : []))
     .join("\n\n");
 
-  const ast: DocumentAst = {
+  const ast: DecisionDocumentAst = {
     version: 1,
     source: {
       system: "nalus.usoud.cz",
@@ -171,6 +174,7 @@ export const parseUsDecisionHtml = (
       printUrl: "",
     },
     metadata: {
+      family: "decision",
       caseNumber: input.caseNumber,
       ecli: input.ecli ?? null,
       court: input.court,

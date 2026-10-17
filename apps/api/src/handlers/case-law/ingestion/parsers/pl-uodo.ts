@@ -17,10 +17,9 @@ import { Result } from "better-result";
 import * as cheerio from "cheerio";
 import { type AnyNode, type Element, isCDATA, isTag, isText } from "domhandler";
 
-// parser-output-unchanged: imports the document AST from its package owner
 import type {
   Block,
-  DocumentAst,
+  DecisionDocumentAst,
   HeadingLevel,
   Inline,
   ParagraphBlock,
@@ -50,7 +49,7 @@ export type ParsePlUodoDecisionInput = {
 };
 
 export type ParsePlUodoDecisionOutput = {
-  documentAst: DocumentAst;
+  documentAst: DecisionDocumentAst;
   fulltext: string;
   validationIssues: string[];
   /** Unexpected element names, or #text/#cdata for stray text nodes. */
@@ -626,6 +625,7 @@ export const parsePlUodoDecisionXml = (
         printUrl: "",
       },
       metadata: {
+        family: "decision",
         caseNumber: input.caseNumber,
         ecli: null,
         court: input.court,

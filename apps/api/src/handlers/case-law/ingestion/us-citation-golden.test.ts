@@ -185,6 +185,7 @@ const readCapturedDocument = (html: string): CapturedDocument => {
         printUrl: "",
       },
       metadata: {
+        family: "decision",
         caseNumber: null,
         ecli: null,
         court: null,

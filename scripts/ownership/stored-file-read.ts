@@ -101,6 +101,11 @@ export default {
         reason: "Loads persisted legal source bytes for processing.",
       },
       {
+        path: "apps/api/src/lib/legal-search/soft-law-ast-replay.ts",
+        reason:
+          "Rebuilds guidance ASTs from source-scoped, digest-verified originals under a shared byte cap and cancellation signal.",
+      },
+      {
         path: "apps/api/src/lib/legal-search/case-law-raw-layout.ts",
         reason: "Loads source layout bytes for case-law processing.",
       },

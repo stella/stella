@@ -1,9 +1,8 @@
-// parser-output-unchanged: Unicode owner migration retains native normalization forms, mark classes and operation order; no folding is added.
 /**
  * Czech Supreme Administrative Court (NSS) HTML parser.
  *
  * Converts Aspose.Words HTML from vyhledavac.nssoud.cz
- * /DokumentOriginal/Html/{id} into a canonical DocumentAst.
+ * /DokumentOriginal/Html/{id} into a canonical DecisionDocumentAst.
  *
  * The HTML uses <p> elements with inline styles for alignment
  * and <span> elements with font-weight/font-style for emphasis.
@@ -33,8 +32,11 @@ import {
   CZ_CLOSING_RE as CLOSING_RE,
   CZ_JUDGE_TITLE_RE as SIGNATURE_RE,
 } from "@stll/legal-ast/czech-document-roles";
-// parser-output-unchanged: imports the document AST from its package owner
-import type { Block, DocumentAst, Inline } from "@stll/legal-ast/document-ast";
+import type {
+  Block,
+  DecisionDocumentAst,
+  Inline,
+} from "@stll/legal-ast/document-ast";
 import { normalizeInlineLine } from "@stll/legal-ast/inline-line";
 import { normalizeUnicode, collapseSpacedLetters } from "@stll/text-normalize";
 
@@ -66,7 +68,7 @@ export type ParseNssDecisionInput = {
 };
 
 type ParseNssDecisionOutput = {
-  documentAst: DocumentAst;
+  documentAst: DecisionDocumentAst;
   fulltext: string;
 };
 
@@ -91,7 +93,7 @@ export const parseNssDecisionHtml = (
     .flatMap((b) => (b.plainText ? [b.plainText] : []))
     .join("\n\n");
 
-  const ast: DocumentAst = {
+  const ast: DecisionDocumentAst = {
     version: 1,
     source: {
       system: "nssoud.cz",
@@ -100,6 +102,7 @@ export const parseNssDecisionHtml = (
       printUrl: "",
     },
     metadata: {
+      family: "decision",
       caseNumber: input.caseNumber,
       ecli: input.ecli ?? null,
       court: input.court,

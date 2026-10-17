@@ -2,7 +2,7 @@
  * Czech Regional Courts parser.
  *
  * Converts the structured JSON from rozhodnuti.justice.cz
- * /api/finaldoc/{uuid} into a canonical DocumentAst.
+ * /api/finaldoc/{uuid} into a canonical DecisionDocumentAst.
  *
  * The API provides pre-segmented sections:
  *   header[]        — intro paragraphs (court, parties)
@@ -22,8 +22,11 @@ import {
   CZ_CLOSING_RE as CLOSING_RE,
   CZ_JUDGE_TITLE_RE as SIGNATURE_RE,
 } from "@stll/legal-ast/czech-document-roles";
-// parser-output-unchanged: imports the document AST from its package owner
-import type { Block, DocumentAst, Inline } from "@stll/legal-ast/document-ast";
+import type {
+  Block,
+  DecisionDocumentAst,
+  Inline,
+} from "@stll/legal-ast/document-ast";
 
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 import {
@@ -74,7 +77,7 @@ export type ParseRegionalInput = {
 };
 
 type ParseRegionalOutput = {
-  documentAst: DocumentAst;
+  documentAst: DecisionDocumentAst;
   fulltext: string;
 };
 
@@ -254,7 +257,7 @@ export const parseRegionalDecision = (
     numbered,
   );
 
-  const ast: DocumentAst = {
+  const ast: DecisionDocumentAst = {
     version: 1,
     source: {
       system: "justice.cz",
@@ -263,6 +266,7 @@ export const parseRegionalDecision = (
       printUrl: "",
     },
     metadata: {
+      family: "decision",
       caseNumber: input.caseNumber,
       ecli: input.ecli ?? null,
       court: input.court,

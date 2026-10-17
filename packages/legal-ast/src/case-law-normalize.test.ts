@@ -15,6 +15,7 @@ const documentWith = (blocks: Block[]): DocumentAst => ({
   version: 1,
   source: { system: "test", documentId: "decision", webUrl: "", printUrl: "" },
   metadata: {
+    family: "decision",
     caseNumber: null,
     ecli: null,
     court: null,

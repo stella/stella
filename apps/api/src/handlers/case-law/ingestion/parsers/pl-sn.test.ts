@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  assemblePlSnParagraphs,
-  plSnParagraphsToHtml,
-} from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
-import type { PlSnLine } from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
+  assemblePdfParagraphs,
+  pdfParagraphsToHtml,
+} from "@/api/lib/legal-search/parsers/pdf-paragraphs";
+import type { PdfParagraphLine } from "@/api/lib/legal-search/parsers/pdf-paragraphs";
 
-type PlSnTextLine = Extract<PlSnLine, { type: "text" }>;
+type PlSnTextLine = Extract<PdfParagraphLine, { type: "text" }>;
 
 const body = (text: string, bold = false): PlSnTextLine => ({
   type: "text",
@@ -19,14 +19,16 @@ const opens = (text: string, bold = false): PlSnTextLine => ({
   indented: true,
 });
 
-const BLANK: PlSnLine = { type: "blank" };
+const BLANK: PdfParagraphLine = { type: "blank" };
 
-const plainText = (paragraphs: readonly { text: string }[][]): string[] =>
-  paragraphs.map((runs) => runs.map(({ text }) => text).join(""));
+const plainText = (
+  paragraphs: readonly { runs: readonly { text: string }[] }[],
+): string[] =>
+  paragraphs.map(({ runs }) => runs.map(({ text }) => text).join(""));
 
 describe("assembling sn.pl's typeset lines into paragraphs", () => {
   test("an indented line opens a paragraph and unindented lines continue it", () => {
-    const paragraphs = assemblePlSnParagraphs([
+    const paragraphs = assemblePdfParagraphs([
       opens("Sąd Najwyższy rozpoznał sprawę"),
       body("ze skargi kasacyjnej powoda."),
       opens("Skarga podlega oddaleniu."),
@@ -39,7 +41,7 @@ describe("assembling sn.pl's typeset lines into paragraphs", () => {
   });
 
   test("a blank line ends a paragraph without opening one", () => {
-    const paragraphs = assemblePlSnParagraphs([
+    const paragraphs = assemblePdfParagraphs([
       body("Wyrok z dnia 23 czerwca 1994 r."),
       BLANK,
       BLANK,
@@ -55,7 +57,7 @@ describe("assembling sn.pl's typeset lines into paragraphs", () => {
   test("a paragraph runs on across a page break it is not indented after", () => {
     // Pages are concatenated in reading order, so the only signal that the
     // text continues is the absence of an indent on the first line overleaf.
-    const paragraphs = assemblePlSnParagraphs([
+    const paragraphs = assemblePdfParagraphs([
       opens("Izba Skarbowa podzieliła stanowisko"),
       body("Urzędu Skarbowego w całości."),
     ]);
@@ -64,7 +66,7 @@ describe("assembling sn.pl's typeset lines into paragraphs", () => {
   });
 
   test("a word broken across lines is rejoined without its hyphen", () => {
-    const paragraphs = assemblePlSnParagraphs([
+    const paragraphs = assemblePdfParagraphs([
       body("po rozpo-"),
       body("znaniu sprawy"),
     ]);
@@ -73,7 +75,7 @@ describe("assembling sn.pl's typeset lines into paragraphs", () => {
   });
 
   test("a compound broken at its own hyphen keeps it, and gains no space", () => {
-    const paragraphs = assemblePlSnParagraphs([
+    const paragraphs = assemblePdfParagraphs([
       body("Sądowi Administracyjnego-"),
       body("Ośrodkowi Zamiejscowemu"),
     ]);
@@ -84,11 +86,11 @@ describe("assembling sn.pl's typeset lines into paragraphs", () => {
   });
 
   test("a paragraph of nothing but spaces is dropped", () => {
-    expect(assemblePlSnParagraphs([body("   "), BLANK])).toEqual([]);
+    expect(assemblePdfParagraphs([body("   "), BLANK])).toEqual([]);
   });
 
   test("runs of the same weight merge across a line join, others do not", () => {
-    const paragraphs = assemblePlSnParagraphs([
+    const paragraphs = assemblePdfParagraphs([
       { type: "text", indented: true, runs: [{ text: "Sąd", bold: true }] },
       {
         type: "text",
@@ -102,7 +104,7 @@ describe("assembling sn.pl's typeset lines into paragraphs", () => {
       },
     ]);
 
-    expect(paragraphs).toEqual([
+    expect(paragraphs.map(({ runs }) => runs)).toEqual([
       [
         { text: "Sąd Najwyższy", bold: true },
         { text: " orzekł", bold: false },
@@ -113,11 +115,13 @@ describe("assembling sn.pl's typeset lines into paragraphs", () => {
 
 describe("emitting the paragraphs as markup the Polish parser reads", () => {
   test("bold survives as <b> and markup characters are escaped", () => {
-    const html = plSnParagraphsToHtml([
-      [
-        { text: "UZASADNIENIE", bold: true },
-        { text: ' w sprawie "A & B" <spółka>', bold: false },
-      ],
+    const html = pdfParagraphsToHtml([
+      {
+        runs: [
+          { text: "UZASADNIENIE", bold: true },
+          { text: ' w sprawie "A & B" <spółka>', bold: false },
+        ],
+      },
     ]);
 
     expect(html).toBe(
@@ -126,9 +130,9 @@ describe("emitting the paragraphs as markup the Polish parser reads", () => {
   });
 
   test("each paragraph is its own element", () => {
-    const html = plSnParagraphsToHtml([
-      [{ text: "Pierwszy", bold: false }],
-      [{ text: "Drugi", bold: false }],
+    const html = pdfParagraphsToHtml([
+      { runs: [{ text: "Pierwszy", bold: false }] },
+      { runs: [{ text: "Drugi", bold: false }] },
     ]);
 
     expect(html).toBe("<p>Pierwszy</p><p>Drugi</p>");

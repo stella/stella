@@ -34,6 +34,7 @@ const ast = (paragraphText = text): DocumentAst => ({
     printUrl: "",
   },
   metadata: {
+    family: "decision",
     caseNumber: null,
     ecli: null,
     court: null,

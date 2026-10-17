@@ -57,6 +57,7 @@ const decisionWithText = (text: string) => {
         printUrl: "",
       },
       metadata: {
+        family: "decision",
         caseNumber: null,
         ecli: null,
         court: null,

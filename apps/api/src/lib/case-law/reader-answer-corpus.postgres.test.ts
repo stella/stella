@@ -45,6 +45,7 @@ const decisionAst = ({
       printUrl: "",
     },
     metadata: {
+      family: "decision",
       caseNumber: `Fixture ${decisionId}`,
       ecli: null,
       court,

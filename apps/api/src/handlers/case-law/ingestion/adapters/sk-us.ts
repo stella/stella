@@ -45,7 +45,7 @@ import { backoffDelay } from "@stll/concurrency/backoff-delay";
  */
 import { classifyFailure } from "@stll/errors";
 // parser-output-unchanged: imports the document AST from its package owner
-import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import type { DecisionDocumentAst } from "@stll/legal-ast/document-ast";
 import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 import { decodeDeclared } from "@stll/mojibake/declared-charset";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
@@ -1618,7 +1618,7 @@ const assembleSkUsDecision = ({
   const rapporteurs = skUsRapporteurs(doc);
   const dissenters = facetValues(facetsJson, "mkDifferentViewJudges");
 
-  let documentAst: DocumentAst | EmptyAst = EMPTY_AST;
+  let documentAst: DecisionDocumentAst | EmptyAst = EMPTY_AST;
   let fulltext: string | undefined;
 
   if (documentXhtml !== undefined) {

@@ -1,4 +1,3 @@
-// parser-output-unchanged: Parser-local type exports removed; parsing and document output are unchanged.
 /**
  * Polish Constitutional Tribunal (ipo.trybunal.gov.pl) page reader.
  *
@@ -17,10 +16,9 @@
 import * as cheerio from "cheerio";
 import { type AnyNode, isTag, isText } from "domhandler";
 
-// parser-output-unchanged: imports the document AST from its package owner
 import type {
   Block,
-  DocumentAst,
+  DecisionDocumentAst,
   HeadingBlock,
   Inline,
   ParagraphBlock,
@@ -990,7 +988,7 @@ export const validatePlTkBlocks = (
 
 export const parsePlTkText = (
   input: ParsePlTkTextInput,
-): { documentAst: DocumentAst; fulltext: string } => {
+): { documentAst: DecisionDocumentAst; fulltext: string } => {
   const blocks = buildBlocks(input.textHtml);
   validatePlTkBlocks(input.caseNumber, input.textHtml, blocks);
   return {
@@ -1003,6 +1001,7 @@ export const parsePlTkText = (
         printUrl: input.documentUrl ?? "",
       },
       metadata: {
+        family: "decision",
         caseNumber: input.caseNumber,
         // Poland issues no ECLI.
         ecli: null,

@@ -616,6 +616,7 @@ const createReadDecisionResult = () => ({
       },
     ],
     metadata: {
+      family: "decision",
       caseNumber: "29 Cdo 123/2024",
       court: "Nejvyšší soud",
       decisionDate: "2024-02-01",
@@ -679,6 +680,7 @@ const createStatuteBlocks = () => [
 const createStatuteAst = () => ({
   blocks: createStatuteBlocks(),
   metadata: {
+    family: "decision",
     caseNumber: null,
     court: null,
     decisionDate: null,

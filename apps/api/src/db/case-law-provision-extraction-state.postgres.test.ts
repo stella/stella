@@ -250,6 +250,7 @@ if (!databaseUrl || !runPostgresTests) {
               printUrl: "https://example.test/print",
             },
             metadata: {
+              family: "decision",
               caseNumber: null,
               ecli: null,
               court: null,

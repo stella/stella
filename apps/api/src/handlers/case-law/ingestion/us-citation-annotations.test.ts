@@ -35,6 +35,7 @@ const documentOf = (blocks: Block[]): DocumentAst => ({
   version: 1,
   source: { system: "test", documentId: "d", webUrl: "", printUrl: "" },
   metadata: {
+    family: "decision",
     caseNumber: null,
     ecli: null,
     court: null,

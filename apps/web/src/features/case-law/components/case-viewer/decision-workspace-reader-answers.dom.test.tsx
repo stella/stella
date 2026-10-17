@@ -174,6 +174,7 @@ const ast = {
   version: 1,
   source: { documentId: "1", printUrl: "", system: "test", webUrl: "" },
   metadata: {
+    family: "decision",
     caseNumber: "1 As 1/2026",
     court: "Test court",
     decisionDate: null,

@@ -270,6 +270,7 @@ test("reader response serialization preserves the complete official AST and text
       printUrl: "https://example.test/act/1/print",
     },
     metadata: {
+      family: "decision",
       caseNumber: null,
       ecli: null,
       court: null,

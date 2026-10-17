@@ -42,6 +42,7 @@ const ast = {
     },
   ],
   metadata: {
+    family: "decision",
     caseNumber: "1 As 1/2026",
     court: "Test court",
     decisionDate: null,
@@ -342,6 +343,7 @@ const landingAst = {
     },
   ],
   metadata: {
+    family: "decision",
     caseNumber: "1 As 1/2026",
     court: "Test court",
     decisionDate: null,

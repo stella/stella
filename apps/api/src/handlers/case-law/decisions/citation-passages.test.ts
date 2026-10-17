@@ -11,6 +11,7 @@ const astOf = (
   version: 1,
   source: { system: "test", documentId: "d1", webUrl: "", printUrl: "" },
   metadata: {
+    family: "decision",
     caseNumber: "29 Cdo 123/2024",
     court: "Nejvyšší soud",
     ecli: "ECLI:CZ:NS:2024:29.CDO.123.2024.1",

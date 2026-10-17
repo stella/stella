@@ -49,7 +49,7 @@ import { Result, panic } from "better-result";
 
 // parser-output-unchanged: error output projection only; parsed decision fields are unchanged.
 // parser-output-unchanged: imports the document AST from its package owner
-import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import type { DecisionDocumentAst } from "@stll/legal-ast/document-ast";
 import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
 import { sha256Hex as hashContent } from "@stll/sha256/bun";
@@ -801,7 +801,7 @@ export const assemblePlSnDecision = async ({
     });
   }
   const document = parsed !== null && Result.isOk(parsed) ? parsed.value : null;
-  const documentAst: DocumentAst | EmptyAst =
+  const documentAst: DecisionDocumentAst | EmptyAst =
     document?.documentAst ?? EMPTY_AST;
   const fulltext = document?.fulltext;
 

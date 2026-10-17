@@ -79,6 +79,7 @@ const documentAst = {
   version: 1,
   source: { system: "test", documentId: "test", webUrl: "", printUrl: "" },
   metadata: {
+    family: "decision",
     caseNumber: "21 Cdo 1/2026",
     ecli: null,
     court: "Nejvyšší soud",

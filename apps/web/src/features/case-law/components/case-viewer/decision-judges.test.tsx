@@ -63,6 +63,7 @@ const ast = {
     },
   ],
   metadata: {
+    family: "decision",
     caseNumber: "Pl. ÚS 1/2026",
     court: "Ústavní soud",
     decisionDate: null,

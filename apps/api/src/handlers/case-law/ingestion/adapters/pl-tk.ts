@@ -47,7 +47,7 @@ import type { AnyNode } from "domhandler";
 import { isPolishConstitutionalDocket } from "@stll/api-contract/decision-docket-grammar";
 // parser-output-unchanged: error output projection only; parsed decision fields are unchanged.
 // parser-output-unchanged: imports the document AST from its package owner
-import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import type { DecisionDocumentAst } from "@stll/legal-ast/document-ast";
 import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
@@ -1090,7 +1090,7 @@ export const assemblePlTkDecision = ({
     });
   }
   const document = parsed !== null && Result.isOk(parsed) ? parsed.value : null;
-  const documentAst: DocumentAst | EmptyAst =
+  const documentAst: DecisionDocumentAst | EmptyAst =
     document?.documentAst ?? EMPTY_AST;
   const sourceRaw = encodeSourceRawEnvelope(rawParts);
   const hasText = document !== null && deciding.type === "stated";

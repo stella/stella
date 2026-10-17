@@ -10,7 +10,7 @@ import {
 } from "@stll/api-contract/case-law-text-field";
 import { classifyFailure } from "@stll/errors";
 // parser-output-unchanged: imports the document AST from its package owner
-import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import type { DecisionDocumentAst } from "@stll/legal-ast/document-ast";
 import { Temporal } from "@stll/time";
 
 import { splitCaseReference } from "@/api/handlers/case-law/case-number";
@@ -629,7 +629,7 @@ export const parseResultRows = (html: string): ParsedRow[] => {
 
 type DecisionContent = {
   fulltext: string | undefined;
-  documentAst: DocumentAst | EmptyAst | undefined;
+  documentAst: DecisionDocumentAst | EmptyAst | undefined;
   /** The rich HTML document, which is what the parser reads. */
   sourceRaw: string | undefined;
   /**
@@ -814,7 +814,7 @@ const fetchRichDocument = async (
 
 /**
  * Fetch rich HTML from /DokumentOriginal/Html/{id} and parse it into a
- * DocumentAst. Falls back to /Text/{id} for plain fulltext where the portal
+ * DecisionDocumentAst. Falls back to /Text/{id} for plain fulltext where the portal
  * holds no rich original or the parser cannot read what it served. A failed
  * read of either endpoint is reported unavailable, never replaced by the
  * other representation.
@@ -1743,7 +1743,7 @@ type RebuildStoredDocumentOptions = {
 
 type RebuiltDocument = {
   fulltext: string | undefined;
-  documentAst: DocumentAst | EmptyAst;
+  documentAst: DecisionDocumentAst | EmptyAst;
 };
 
 /**

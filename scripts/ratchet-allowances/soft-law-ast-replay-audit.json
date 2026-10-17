@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 1,
+  "reason": "The bounded guidance AST replay updates derived public-corpus text in the existing maintenance lane. Its source version and builder revision identify the rebuild; it has no tenant-owned mutation or user actor to audit."
+}

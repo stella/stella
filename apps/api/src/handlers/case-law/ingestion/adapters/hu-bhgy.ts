@@ -56,7 +56,7 @@ import type { Document as FolioDocument } from "@stll/docx-core/model";
  */
 import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
 // parser-output-unchanged: imports the document AST from its package owner
-import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import type { DecisionDocumentAst } from "@stll/legal-ast/document-ast";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
 import { sha256Hex as hashContent } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
@@ -899,7 +899,8 @@ export const assembleHuBhgyDecision = async ({
       blockCount: read.documentAst.blocks.length,
     });
   }
-  const documentAst: DocumentAst | EmptyAst = read?.documentAst ?? EMPTY_AST;
+  const documentAst: DecisionDocumentAst | EmptyAst =
+    read?.documentAst ?? EMPTY_AST;
 
   const related = arrayOrEmpty(row.KapcsolodoHatarozatok).flatMap(
     ({ KapcsolodoBirosag, KapcsolodoUgyszam }) =>

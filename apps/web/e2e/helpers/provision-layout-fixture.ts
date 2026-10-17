@@ -19,6 +19,7 @@ const makeAst = (documentId: string, text: string, statute: boolean) =>
     version: 1,
     source: { system: "synthetic", documentId, webUrl: "", printUrl: "" },
     metadata: {
+      family: "decision",
       caseNumber: null,
       ecli: null,
       court: null,

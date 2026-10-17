@@ -39,6 +39,7 @@ const ast = (decisionId: SafeId<"caseLawDecision">) =>
       printUrl: "",
     },
     metadata: {
+      family: "decision",
       caseNumber: "Fixture",
       ecli: null,
       court: "Court",

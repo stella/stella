@@ -524,7 +524,7 @@ describe("parseRegionalDecision", () => {
   // ── Metadata ──────────────────────────────────────────────
 
   describe("metadata", () => {
-    test("populates DocumentAst metadata", () => {
+    test("populates DecisionDocumentAst metadata", () => {
       const input = baseInput();
 
       const { documentAst } = parseRegionalDecision(input);

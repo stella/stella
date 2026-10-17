@@ -3,10 +3,9 @@ import { Result } from "better-result";
 import * as cheerio from "cheerio";
 import { type AnyNode, type Element, isTag, isText } from "domhandler";
 
-// parser-output-unchanged: imports the document AST from its package owner
 import type {
   Block,
-  DocumentAst,
+  DecisionDocumentAst,
   ParagraphRole,
 } from "@stll/legal-ast/document-ast";
 
@@ -38,7 +37,7 @@ export type ParseRisDecisionInput = {
 export type RisDocumentSections = Readonly<Record<string, string>>;
 
 export type ParseRisDecisionOutput = {
-  documentAst: DocumentAst;
+  documentAst: DecisionDocumentAst;
   fulltext: string;
   sections: RisDocumentSections;
   validationIssues: string[];
@@ -275,6 +274,7 @@ export const parseRisDecisionXml = (
         printUrl: "",
       },
       metadata: {
+        family: "decision",
         caseNumber: input.caseNumber,
         ecli: input.ecli ?? null,
         court: input.court,

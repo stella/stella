@@ -37,10 +37,9 @@ import {
   DECISION_IDENTIFIER_TYPES,
   isDecisionIdentifier,
 } from "@stll/legal-ast/decision-identifier";
-// parser-output-unchanged: imports the document AST from its package owner
 import type {
   Block,
-  DocumentAst,
+  DecisionDocumentAst,
   HeadingBlock,
   Inline,
   ParagraphBlock,
@@ -48,7 +47,6 @@ import type {
   TableBlock,
   TableCell,
 } from "@stll/legal-ast/document-ast";
-// parser-output-unchanged: the inline-line helpers moved unchanged to their package owner.
 import {
   normalizeInlineLine,
   stripInlineLinePrefix,
@@ -1007,7 +1005,7 @@ export type ParseHuBhgyInput = {
 };
 
 export type ParseHuBhgyOutput = {
-  documentAst: DocumentAst;
+  documentAst: DecisionDocumentAst;
   fulltext: string;
   sections: DecisionSection[];
   /** Read off the document; the listing states only the year. */
@@ -1344,7 +1342,7 @@ export const parseHuBhgyDecision = (
 
   decisionDate ??= softBreakDate;
   const documentDocket = huDocketFrom(lineTexts);
-  const ast: DocumentAst = {
+  const ast: DecisionDocumentAst = {
     version: 1,
     source: {
       system: HU_BHGY_SOURCE_SYSTEM,
@@ -1353,6 +1351,7 @@ export const parseHuBhgyDecision = (
       printUrl: input.documentUrl,
     },
     metadata: {
+      family: "decision",
       caseNumber: input.listedCaseNumber,
       // Hungary issues no ECLI.
       ecli: null,

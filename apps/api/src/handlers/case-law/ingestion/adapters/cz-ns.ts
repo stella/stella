@@ -5,7 +5,7 @@ import { Result, panic } from "better-result";
 import { classifyFailure } from "@stll/errors";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 // parser-output-unchanged: imports the document AST from its package owner
-import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import type { DecisionDocumentAst } from "@stll/legal-ast/document-ast";
 import { Temporal } from "@stll/time";
 
 import {
@@ -673,7 +673,7 @@ const buildCzNsDecisionFromPages = ({
     [CZ_NS_RAW_PART.LISTING]: storedListingRow(row),
   });
 
-  let documentAst: DocumentAst | EmptyAst = EMPTY_AST;
+  let documentAst: DecisionDocumentAst | EmptyAst = EMPTY_AST;
   let fulltext = meta["fulltext"];
   let sourceMetadata: Record<string, unknown> = {};
 

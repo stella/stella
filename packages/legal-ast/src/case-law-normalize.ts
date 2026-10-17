@@ -1,7 +1,11 @@
 import { collapseSpacedLetters } from "@stll/text-normalize";
 
 import { caseLawSectionHeading } from "./case-law-heading.js";
-import type { Block, DocumentAst } from "./document-ast.js";
+import type {
+  Block,
+  DocumentAst,
+  DocumentAstMetadata,
+} from "./document-ast.js";
 
 const REASONING_HEADING = /^Odůvodnění\s*:?$/iu;
 
@@ -9,7 +13,11 @@ const REASONING_HEADING = /^Odůvodnění\s*:?$/iu;
  * Repair structure shared by every case-law consumer, including decisions
  * stored before parsers learned to preserve same-line Roman section titles.
  */
-export const normalizeCaseLawDecisionAst = (ast: DocumentAst): DocumentAst => {
+export const normalizeCaseLawDecisionAst = <
+  TMetadata extends DocumentAstMetadata,
+>(
+  ast: DocumentAst<TMetadata>,
+): DocumentAst<TMetadata> => {
   const blocks: Block[] = [];
   let changed = false;
   let inReasoning = false;

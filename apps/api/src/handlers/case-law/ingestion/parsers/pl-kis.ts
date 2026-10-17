@@ -7,15 +7,14 @@
  * there is one Polish parser and this is not a second one.
  */
 
-// parser-output-unchanged: imports the document AST from its package owner
-import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import type { DecisionDocumentAst } from "@stll/legal-ast/document-ast";
 
 import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 import {
-  assemblePlSnParagraphs,
-  extractPlSnLines,
-  plSnParagraphsToHtml,
-} from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
+  assemblePdfParagraphs,
+  extractPdfParagraphLines,
+  pdfParagraphsToHtml,
+} from "@/api/lib/legal-search/parsers/pdf-paragraphs";
 
 /** Publisher recorded on the AST, so a stored document names where it came from. */
 const PL_KIS_SOURCE_SYSTEM = "eureka.mf.gov.pl";
@@ -33,7 +32,7 @@ export type ParsePlKisDocumentInput = {
 };
 
 export type ParsePlKisDocumentOutput = {
-  documentAst: DocumentAst;
+  documentAst: DecisionDocumentAst;
   fulltext: string;
 };
 
@@ -68,7 +67,7 @@ export const parsePlKisDocumentPdf = async (
 ): Promise<ParsePlKisDocumentOutput> =>
   parseContent(
     input,
-    plSnParagraphsToHtml(
-      assemblePlSnParagraphs(await extractPlSnLines(input.pdfBytes)),
+    pdfParagraphsToHtml(
+      assemblePdfParagraphs(await extractPdfParagraphLines(input.pdfBytes)),
     ),
   );

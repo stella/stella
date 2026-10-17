@@ -116,6 +116,7 @@ const baseResult = (
   });
 
 const astMetadata = {
+  family: "decision" as const,
   caseNumber: "X/1/2026",
   court: "Test Court",
   ecli: "ECLI:SK:TEST:2026:1.1",

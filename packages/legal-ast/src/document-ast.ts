@@ -1,4 +1,3 @@
-// parser-output-unchanged: Validation actions are named for schema publication; accepted AST values are identical.
 import { panic } from "better-result";
 /**
  * Canonical legal-document AST shared by legal corpus readers and parsers.
@@ -24,6 +23,18 @@ import {
   rawInlineTypes,
 } from "./inline.js";
 import type { Inline } from "./inline.js";
+import {
+  SOFT_LAW_AUTHORITIES,
+  SOFT_LAW_KINDS,
+  SOFT_LAW_VALIDITY_STATES,
+} from "./soft-law.js";
+import type {
+  SoftLawAuthority,
+  SoftLawKind,
+  SoftLawStated,
+  SoftLawExpression,
+  SoftLawValidityState,
+} from "./soft-law.js";
 
 export type {
   Inline,
@@ -339,7 +350,8 @@ export type DocumentAstSource = {
   printUrl: string;
 };
 
-export type DocumentAstMetadata = {
+export type DecisionDocumentAstMetadata = {
+  family: "decision";
   caseNumber: string | null;
   ecli: string | null;
   court: string | null;
@@ -349,10 +361,29 @@ export type DocumentAstMetadata = {
   statutes: string[];
 };
 
-export type DocumentAst = {
+export type GuidanceDocumentAstMetadata = {
+  family: "guidance";
+  authority: SoftLawAuthority;
+  kind: SoftLawKind;
+  statedReference: SoftLawStated<string>;
+  issuedOn: SoftLawStated<string>;
+  language: SoftLawStated<string>;
+  expression: SoftLawExpression;
+  validityState: SoftLawValidityState;
+};
+
+export type DocumentAstMetadata =
+  | DecisionDocumentAstMetadata
+  | GuidanceDocumentAstMetadata;
+export type DecisionDocumentAst = DocumentAst<DecisionDocumentAstMetadata>;
+export type GuidanceDocumentAst = DocumentAst<GuidanceDocumentAstMetadata>;
+
+export type DocumentAst<
+  TMetadata extends DocumentAstMetadata = DocumentAstMetadata,
+> = {
   version: 1;
   source: DocumentAstSource;
-  metadata: DocumentAstMetadata;
+  metadata: TMetadata;
   blocks: Block[];
 };
 
@@ -437,7 +468,9 @@ export type WireBlock =
   | (Omit<ImageBlock, "plainText"> & { plainText?: string | undefined })
   | (Omit<TableBlock, "rows"> & { rows: WireTableCell[][] });
 
-export type WireDocumentAst = Omit<DocumentAst, "blocks"> & {
+export type WireDocumentAst<
+  TMetadata extends DocumentAstMetadata = DocumentAstMetadata,
+> = Omit<DocumentAst<TMetadata>, "blocks"> & {
   blocks: WireBlock[];
 };
 
@@ -511,7 +544,9 @@ const TABLE_ROW_SEPARATOR = "\n";
  * reprojected, so a parser-built join would describe the text they used
  * to hold.
  */
-export const withProjectedPlainText = (ast: DocumentAst): DocumentAst => ({
+export const withProjectedPlainText = <TMetadata extends DocumentAstMetadata>(
+  ast: DocumentAst<TMetadata>,
+): DocumentAst<TMetadata> => ({
   ...ast,
   blocks: ast.blocks.map((block): Block => {
     switch (block.type) {
@@ -556,7 +591,9 @@ export const withProjectedPlainText = (ast: DocumentAst): DocumentAst => ({
  * parsed `DocumentAst` keeps `plainText` required and no consumer of a
  * parsed AST sees the omission.
  */
-export const omitDerivablePlainText = (ast: DocumentAst): WireDocumentAst => ({
+export const omitDerivablePlainText = <TMetadata extends DocumentAstMetadata>(
+  ast: DocumentAst<TMetadata>,
+): WireDocumentAst<TMetadata> => ({
   ...ast,
   blocks: ast.blocks.map((block): WireBlock => {
     // Every branch drops `plainText` and keeps the rest of the block by
@@ -899,16 +936,60 @@ const documentAstSourceSchema: v.GenericSchema<DocumentAstSource> = v.object({
   printUrl: v.string(),
 });
 
-const documentAstMetadataSchema: v.GenericSchema<DocumentAstMetadata> =
-  v.object({
-    caseNumber: v.nullable(v.string()),
-    ecli: v.nullable(v.string()),
-    court: v.nullable(v.string()),
-    decisionDate: v.nullable(v.string()),
-    decisionType: v.nullable(v.string()),
-    keywords: v.array(v.string()),
-    statutes: v.array(v.string()),
-  });
+const decisionMetadataEntries = {
+  caseNumber: v.nullable(v.string()),
+  ecli: v.nullable(v.string()),
+  court: v.nullable(v.string()),
+  decisionDate: v.nullable(v.string()),
+  decisionType: v.nullable(v.string()),
+  keywords: v.array(v.string()),
+  statutes: v.array(v.string()),
+};
+const decisionDocumentAstMetadataSchema = v.object({
+  family: v.literal("decision"),
+  ...decisionMetadataEntries,
+});
+const statedStringSchema = v.variant("state", [
+  v.object({ state: v.literal("stated"), value: v.string() }),
+  v.object({ state: v.literal("not_stated") }),
+]);
+const guidanceDocumentAstMetadataSchema = v.strictObject({
+  family: v.literal("guidance"),
+  authority: v.custom<SoftLawAuthority>(
+    (value) =>
+      typeof value === "string" && Object.hasOwn(SOFT_LAW_AUTHORITIES, value),
+  ),
+  kind: v.picklist(SOFT_LAW_KINDS),
+  statedReference: statedStringSchema,
+  issuedOn: statedStringSchema,
+  language: statedStringSchema,
+  expression: v.variant("type", [
+    v.object({ type: v.literal("unspecified") }),
+    v.object({
+      type: v.literal("identified"),
+      language: v.string(),
+      revision: statedStringSchema,
+    }),
+  ]),
+  validityState: v.picklist(SOFT_LAW_VALIDITY_STATES),
+});
+const documentAstMetadataSchema = v.variant("family", [
+  decisionDocumentAstMetadataSchema,
+  guidanceDocumentAstMetadataSchema,
+]);
+
+// Remove this branch after bounded reparse/backfill confirms every persisted
+// decision AST has family. Parsing avoids rewriting the full historical corpus.
+const persistedDocumentAstMetadataSchema = v.union([
+  documentAstMetadataSchema,
+  v.pipe(
+    v.object({ family: v.optional(v.never()), ...decisionMetadataEntries }),
+    v.transform((metadata): DecisionDocumentAstMetadata => ({
+      ...metadata,
+      family: "decision",
+    })),
+  ),
+]);
 
 const footnoteOf = (block: Block): ParagraphNote | null =>
   (block.type === "paragraph" || block.type === "table") &&
@@ -966,6 +1047,7 @@ const emptyDocumentAstSource = () =>
 
 const emptyDocumentAstMetadata = () =>
   ({
+    family: "decision",
     caseNumber: null,
     ecli: null,
     court: null,
@@ -978,7 +1060,7 @@ const emptyDocumentAstMetadata = () =>
 const persistedDocumentAstWireSchema = v.object({
   version: v.literal(1),
   source: v.optional(documentAstSourceSchema),
-  metadata: v.optional(documentAstMetadataSchema),
+  metadata: v.optional(persistedDocumentAstMetadataSchema),
   blocks: v.array(persistedBlockSchema),
 });
 
@@ -1047,3 +1129,14 @@ export const parseUsableDocumentAst = (raw: unknown): DocumentAst | null => {
 
 export const hasUsableAst = (val: unknown): val is DocumentAst =>
   isDocumentAst(val) && val.blocks.length > 0;
+
+/** Decision storage boundary: guidance is a different family, never a decision. */
+export const parseDecisionDocumentAst = (
+  raw: unknown,
+): DecisionDocumentAst | null => {
+  const ast = parseDocumentAst(raw);
+  if (ast === null || ast.metadata.family !== "decision") {
+    return null;
+  }
+  return { ...ast, metadata: ast.metadata };
+};

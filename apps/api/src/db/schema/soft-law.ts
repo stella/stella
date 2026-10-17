@@ -1,3 +1,5 @@
+import type { GuidanceDocumentAst } from "@stll/legal-ast/document-ast";
+
 import { caseLawIngestionOnlyPolicies } from "@/api/db/rls";
 import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-source";
 import type {
@@ -151,6 +153,10 @@ export const softLawDocumentVersions = p.pgTable.withRLS(
       .notNull(),
     metadata: jsonb().$type<SoftLawMetadata>().notNull(),
     extractedText: p.text("extracted_text"),
+    /** Structured guidance text built from this version's retained originals. */
+    documentAst: jsonb("document_ast").$type<GuidanceDocumentAst>(),
+    /** Builder revision attempted, including original-only outcomes; null means not built yet. */
+    astBuilderVersion: p.integer("ast_builder_version"),
     /** Sanitized local extraction failure; publisher bytes remain available for repair. */
     extractionFailure: p.text("extraction_failure"),
     extractionQuality: p
@@ -177,6 +183,10 @@ export const softLawDocumentVersions = p.pgTable.withRLS(
     p.check(
       "soft_law_versions_quality_check",
       sql`${t.extractionQuality} IN (${values(SOFT_LAW_EXTRACTION_QUALITIES)})`,
+    ),
+    p.check(
+      "soft_law_versions_ast_check",
+      sql`(${t.astBuilderVersion} IS NULL OR ${t.astBuilderVersion} > 0) AND (${t.documentAst} IS NULL OR ${t.astBuilderVersion} IS NOT NULL)`,
     ),
     p.check(
       "soft_law_versions_extraction_failure_check",

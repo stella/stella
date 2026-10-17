@@ -11,19 +11,18 @@
  */
 
 import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
-// parser-output-unchanged: imports the document AST from its package owner
-import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import type { DecisionDocumentAst } from "@stll/legal-ast/document-ast";
 import { parsePlainDate } from "@stll/time";
 
 import { PL_NCOURT_COURT_NAMES } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt-courts";
 import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 import {
-  assemblePlSnParagraphs,
-  extractPlSnLines,
-  PL_PDF_PARAGRAPH_START,
-  plSnParagraphsToHtml,
-} from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
-import type { PlSnLine } from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
+  assemblePdfParagraphs,
+  extractPdfParagraphLines,
+  PDF_PARAGRAPH_START,
+  pdfParagraphsToHtml,
+} from "@/api/lib/legal-search/parsers/pdf-paragraphs";
+import type { PdfParagraphLine } from "@/api/lib/legal-search/parsers/pdf-paragraphs";
 
 /** Publisher recorded on the AST, so a stored document names where it came from. */
 const PL_UOKIK_SOURCE_SYSTEM = "decyzje.uokik.gov.pl";
@@ -42,7 +41,7 @@ export type ParsePlUokikDocumentInput = {
 };
 
 export type ParsePlUokikDocumentOutput = {
-  documentAst: DocumentAst;
+  documentAst: DecisionDocumentAst;
   fulltext: string;
 };
 
@@ -52,18 +51,17 @@ export type ParsePlUokikDocumentOutput = {
  */
 export const plUokikDocumentLines = async (
   pdfs: readonly Uint8Array[],
-): Promise<PlSnLine[]> => {
-  const lines: PlSnLine[] = [];
+): Promise<PdfParagraphLine[]> => {
+  const lines: PdfParagraphLine[] = [];
   for (const pdf of pdfs) {
     if (lines.length > 0) {
       lines.push({ type: "blank" });
     }
     // The office numbers its paragraphs with a hanging indent.
     lines.push(
-      ...(await extractPlSnLines(
-        pdf,
-        PL_PDF_PARAGRAPH_START.INDENT_OR_OUTDENT,
-      )),
+      ...(await extractPdfParagraphLines(pdf, {
+        paragraphStart: PDF_PARAGRAPH_START.INDENT_OR_OUTDENT,
+      })),
     );
   }
   return lines;
@@ -76,7 +74,7 @@ export const plUokikDocumentLines = async (
 export const parsePlUokikDocument = async (
   input: ParsePlUokikDocumentInput,
 ): Promise<ParsePlUokikDocumentOutput | null> => {
-  const paragraphs = assemblePlSnParagraphs(
+  const paragraphs = assemblePdfParagraphs(
     await plUokikDocumentLines(input.pdfs),
   );
   if (paragraphs.length === 0) {
@@ -91,7 +89,7 @@ export const parsePlUokikDocument = async (
     decisionType: input.decisionType,
     sourceUrl: input.sourceUrl,
     documentUrl: input.documentUrl ?? "",
-    content: plSnParagraphsToHtml(paragraphs),
+    content: pdfParagraphsToHtml(paragraphs),
     keywords: input.keywords,
     statutes: [],
     documentId: input.documentId,
@@ -260,7 +258,7 @@ const courtOf = (text: string): CourtRead | undefined => {
   };
 };
 
-const lineTexts = (lines: readonly PlSnLine[]): string[] =>
+const lineTexts = (lines: readonly PdfParagraphLine[]): string[] =>
   lines
     .flatMap((line) =>
       line.type === "text"
@@ -277,7 +275,7 @@ const lineTexts = (lines: readonly PlSnLine[]): string[] =>
  * is never taken for its own.
  */
 export const readPlUokikRulingHeader = (
-  lines: readonly PlSnLine[],
+  lines: readonly PdfParagraphLine[],
 ): PlUokikRulingHeaderRead => {
   const text = lineTexts(lines).slice(0, HEADER_LINES);
   if (text.length === 0) {

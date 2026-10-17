@@ -2,14 +2,14 @@ import { describe, expect, test } from "bun:test";
 
 import { sha256Hex } from "@stll/sha256/node";
 
-import type { Block, DocumentAst } from "./document-ast.js";
+import type { Block, DecisionDocumentAst } from "./document-ast.js";
 import {
   PROVISION_SPAN_PROJECTION_REVISION,
   projectionDigest,
   projectionPieces,
 } from "./projection-digest.js";
 
-const blankAst = (blocks: Block[]): DocumentAst => ({
+const blankAst = (blocks: Block[]): DecisionDocumentAst => ({
   version: 1,
   source: {
     system: "test",
@@ -18,6 +18,7 @@ const blankAst = (blocks: Block[]): DocumentAst => ({
     printUrl: "https://court.test/d/print",
   },
   metadata: {
+    family: "decision",
     caseNumber: null,
     ecli: null,
     court: null,
@@ -101,7 +102,7 @@ const DECISION = blankAst([
   },
 ]);
 
-const FIXTURE_CORPUS: DocumentAst[] = [DECISION, blankAst([])];
+const FIXTURE_CORPUS: DecisionDocumentAst[] = [DECISION, blankAst([])];
 
 /**
  * The digest of the fixture corpus at each projection revision. A change
@@ -136,7 +137,7 @@ describe("projectionDigest", () => {
   });
 
   test("ignores what the projection does not read", async () => {
-    const relabelled: DocumentAst = {
+    const relabelled: DecisionDocumentAst = {
       ...DECISION,
       metadata: { ...DECISION.metadata, caseNumber: "other" },
       blocks: DECISION.blocks.map((block) => ({

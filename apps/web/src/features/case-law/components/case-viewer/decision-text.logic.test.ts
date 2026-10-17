@@ -102,6 +102,7 @@ const astOf = (blocks: Block[]): DocumentAst => ({
   version: 1,
   source: { system: "test", documentId: "1", webUrl: "", printUrl: "" },
   metadata: {
+    family: "decision",
     caseNumber: "347 U.S. 483",
     ecli: null,
     court: "Supreme Court",
@@ -295,6 +296,7 @@ const ast = {
   version: 1,
   source: { system: "test", documentId: "1", webUrl: "", printUrl: "" },
   metadata: {
+    family: "decision",
     caseNumber: "1 As 1/2026",
     ecli: null,
     court: "Nejvyšší správní soud",

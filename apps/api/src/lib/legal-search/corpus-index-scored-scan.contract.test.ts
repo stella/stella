@@ -130,6 +130,7 @@ const decisionAst = (templates: readonly number[]): DocumentAst => ({
     printUrl: "https://example.test/contract.pdf",
   },
   metadata: {
+    family: "decision",
     caseNumber: null,
     ecli: null,
     court: null,

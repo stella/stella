@@ -16,7 +16,10 @@ import type {
   SourceRawObjectRef,
   SourceRawObjects,
 } from "@/api/lib/legal-search/ingestion-types";
-import { RAW_SOURCE_FAMILY } from "@/api/lib/legal-search/raw-source-family";
+import {
+  RAW_SOURCE_FAMILY,
+  rawSourcePrefix,
+} from "@/api/lib/legal-search/raw-source-family";
 import {
   createS3ObjectIfAbsent,
   copyReplayS3Object,
@@ -103,7 +106,7 @@ export const rawSourcePayloadKey = ({
       return rawDocumentPayloadKey(owner, hashSha256Hex(data));
     case RAW_SOURCE_FAMILY.LEGISLATION:
     case RAW_SOURCE_FAMILY.SOFT_LAW:
-      return `${owner.family}/raw/${owner.sourceId}/${hashSha256Hex(data)}`;
+      return `${rawSourcePrefix(owner)}${hashSha256Hex(data)}`;
     default:
       owner satisfies never;
       return panic(`Unhandled raw source owner ${String(owner)}`);

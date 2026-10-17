@@ -25,6 +25,7 @@ const documentAst = (blocks: Block[]): DocumentAst => ({
     printUrl: "https://example.test/1.pdf",
   },
   metadata: {
+    family: "decision",
     caseNumber: null,
     ecli: null,
     court: null,

@@ -12,10 +12,9 @@
  * matched to find a boundary (rule 9).
  */
 
-// parser-output-unchanged: imports the document AST from its package owner
 import type {
   Block,
-  DocumentAst,
+  DecisionDocumentAst,
   ParagraphRole,
 } from "@stll/legal-ast/document-ast";
 
@@ -99,7 +98,7 @@ type PlNsaTextSource = "sections" | "full-text" | "none";
 
 type ParsePlNsaDecisionOutput = {
   /** `null` when the row carries no text anywhere. */
-  documentAst: DocumentAst | null;
+  documentAst: DecisionDocumentAst | null;
   fulltext: string | undefined;
   sections: DecisionSection[];
   /** The completeness check of the document as returned; it always runs. */
@@ -259,6 +258,7 @@ export const parsePlNsaDecision = (
         printUrl: "",
       },
       metadata: {
+        family: "decision",
         caseNumber: input.caseNumber,
         ecli: null,
         court: input.court,

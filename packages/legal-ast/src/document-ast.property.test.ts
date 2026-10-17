@@ -331,6 +331,7 @@ const documentAst: fc.Arbitrary<DocumentAst> = fc
         printUrl: "https://court.test/d/print",
       },
       metadata: {
+        family: "decision",
         caseNumber: null,
         ecli: null,
         court: null,

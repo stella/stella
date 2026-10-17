@@ -44,6 +44,7 @@ const astOf = (blocks: Block[]): DocumentAst => ({
   version: 1,
   source: { system: "test", documentId: "d", webUrl: "", printUrl: "" },
   metadata: {
+    family: "decision",
     caseNumber: null,
     ecli: null,
     court: null,
@@ -406,6 +407,7 @@ describe("chunkDocument never emits a body-less passage", () => {
         version: 1,
         source: { system: "t", documentId: "d", webUrl: "", printUrl: "" },
         metadata: {
+          family: "decision",
           caseNumber: null,
           ecli: null,
           court: null,
@@ -618,6 +620,7 @@ describe("structural budget", () => {
         version: 1,
         source: { system: "t", documentId: "d", webUrl: "", printUrl: "" },
         metadata: {
+          family: "decision",
           caseNumber: null,
           ecli: null,
           court: null,

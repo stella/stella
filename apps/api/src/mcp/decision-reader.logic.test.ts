@@ -20,6 +20,7 @@ const astOf = (blocks: ParagraphBlock[]) =>
     version: 1,
     source: { system: "", documentId: "", webUrl: "", printUrl: "" },
     metadata: {
+      family: "decision",
       caseNumber: null,
       ecli: null,
       court: null,

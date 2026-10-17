@@ -11,6 +11,7 @@ const documentAst = {
     printUrl: "",
   },
   metadata: {
+    family: "decision",
     caseNumber: null,
     ecli: null,
     court: null,

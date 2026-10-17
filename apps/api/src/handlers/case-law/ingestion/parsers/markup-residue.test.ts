@@ -10,15 +10,15 @@ import { parseRegionalDecision } from "@/api/handlers/case-law/ingestion/parsers
 import { parseUsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-us";
 import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 import {
-  assemblePlSnParagraphs,
-  plSnParagraphsToHtml,
-} from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
-import type { PlSnLine } from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
-import {
   markupResidueIn,
   markupResidueSweepRules,
 } from "@/api/lib/legal-search/parsers/markup-residue";
 import type { MarkupResidueRuleId } from "@/api/lib/legal-search/parsers/markup-residue";
+import {
+  assemblePdfParagraphs,
+  pdfParagraphsToHtml,
+} from "@/api/lib/legal-search/parsers/pdf-paragraphs";
+import type { PdfParagraphLine } from "@/api/lib/legal-search/parsers/pdf-paragraphs";
 
 // ── What the rules report ───────────────────────────────────
 
@@ -215,7 +215,7 @@ const regionalFulltext = (): string => {
 };
 
 const plSnFulltext = (): string => {
-  const line = (text: string, indented: boolean): PlSnLine => ({
+  const line = (text: string, indented: boolean): PdfParagraphLine => ({
     type: "text",
     runs: [{ text, bold: false }],
     indented,
@@ -228,8 +228,8 @@ const plSnFulltext = (): string => {
     decisionType: "wyrok",
     sourceUrl: "https://www.sn.pl/orzeczenia/1",
     documentUrl: "https://www.sn.pl/orzeczenia/1.pdf",
-    content: plSnParagraphsToHtml(
-      assemblePlSnParagraphs([
+    content: pdfParagraphsToHtml(
+      assemblePdfParagraphs([
         line("Sąd Najwyższy rozpoznał sprawę ze skargi kasacyjnej", true),
         line("powoda i skargę oddalił.", false),
         { type: "blank" },

@@ -134,6 +134,10 @@
     "./text-spans": {
       "types": "./src/text-spans.ts",
       "import": "./src/text-spans.ts"
+    },
+    "./soft-law": {
+      "types": "./src/soft-law.ts",
+      "import": "./src/soft-law.ts"
     }
   },
   "scripts": {

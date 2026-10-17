@@ -33,6 +33,7 @@ const citations = (text: ReturnType<typeof compose>) => {
         printUrl: "",
       },
       metadata: {
+        family: "decision",
         caseNumber: null,
         ecli: null,
         court: null,

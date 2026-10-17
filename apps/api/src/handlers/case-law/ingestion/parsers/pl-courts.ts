@@ -1,4 +1,3 @@
-// parser-output-unchanged: [pl-sn] PDF text becomes escaped paragraphs, so table-row changes are unreachable; exclusions and direct text reads are equivalent.
 /**
  * Polish Courts (SAOS) parser.
  *
@@ -14,10 +13,9 @@
 import * as cheerio from "cheerio";
 import { type AnyNode, isTag, isText } from "domhandler";
 
-// parser-output-unchanged: imports the document AST from its package owner
 import type {
   Block,
-  DocumentAst,
+  DecisionDocumentAst,
   Inline,
   ParagraphRole,
   TableCell,
@@ -52,7 +50,7 @@ type ParsePlDecisionInput = {
   statutes: string[];
   documentId: string;
   /**
-   * Publisher the document came from, for `DocumentAst.source.system`.
+   * Publisher the document came from, for `DecisionDocumentAst.source.system`.
    *
    * Polish decisions reach this parser from more than one publisher, and the
    * AST records which one a stored document was read from. Defaults to SAOS,
@@ -62,7 +60,7 @@ type ParsePlDecisionInput = {
 };
 
 type ParsePlDecisionOutput = {
-  documentAst: DocumentAst;
+  documentAst: DecisionDocumentAst;
   fulltext: string;
 };
 
@@ -541,7 +539,7 @@ export const parsePlDecisionContent = (
     .flatMap((block) => (block.plainText ? [block.plainText] : []))
     .join("\n\n");
 
-  const documentAst: DocumentAst = {
+  const documentAst: DecisionDocumentAst = {
     version: 1,
     source: {
       system: input.sourceSystem ?? "saos.org.pl",
@@ -550,6 +548,7 @@ export const parsePlDecisionContent = (
       printUrl: input.documentUrl ?? "",
     },
     metadata: {
+      family: "decision",
       caseNumber: input.caseNumber,
       ecli: input.ecli ?? null,
       court: input.court,

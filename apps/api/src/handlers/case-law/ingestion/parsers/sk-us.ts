@@ -1,4 +1,3 @@
-// parser-output-unchanged: the script/style check now calls the shared exclusion helper, which excludes the same two tags.
 /**
  * Slovak Constitutional Court document parser (the markup rendering).
  *
@@ -28,10 +27,9 @@ import * as cheerio from "cheerio";
 import { type AnyNode, isTag, isText } from "domhandler";
 
 import { COURT_PARAGRAPH_NUMBERING_LIMITS } from "@stll/legal-ast/court-paragraph-numbers";
-// parser-output-unchanged: imports the document AST from its package owner
 import type {
   Block,
-  DocumentAst,
+  DecisionDocumentAst,
   HeadingBlock,
   Inline,
 } from "@stll/legal-ast/document-ast";
@@ -521,7 +519,7 @@ export type ParseSkUsDocumentOptions = {
 };
 
 export type ParseSkUsDocumentResult = {
-  documentAst: DocumentAst;
+  documentAst: DecisionDocumentAst;
   fulltext: string;
 };
 
@@ -570,6 +568,7 @@ export const parseSkUsDocumentXhtml = ({
         printUrl: "",
       },
       metadata: {
+        family: "decision",
         caseNumber,
         ecli: ecli ?? null,
         court,

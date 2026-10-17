@@ -382,6 +382,7 @@ if (!databaseUrl || !enabled) {
             printUrl: "",
           },
           metadata: {
+            family: "decision",
             caseNumber: "1/2026",
             ecli: null,
             court: "Court",
@@ -473,6 +474,7 @@ if (!databaseUrl || !enabled) {
               printUrl: "",
             },
             metadata: {
+              family: "decision",
               caseNumber: "1/2026",
               ecli: null,
               court: "Court",
@@ -583,6 +585,7 @@ if (!databaseUrl || !enabled) {
               printUrl: "",
             },
             metadata: {
+              family: "decision",
               caseNumber: "1/2026",
               ecli: null,
               court: "Court",

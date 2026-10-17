@@ -51,6 +51,23 @@ if (isStatuteAst(ast)) {
 - Persisted shapes are versioned. New formats should add versions, not mutate old
   data in place.
 
+## Document families
+
+`DocumentAstMetadata.family` distinguishes `decision` from `guidance`. Guidance
+metadata contains authority, kind, publisher-stated references and dates,
+language, expression/revision, and validity; it never carries case fields.
+
+The canonical soft-law document vocabulary is `src/soft-law.ts`. The API ingestion
+owner (`apps/api/src/lib/legal-search/soft-law-types.ts`) imports and reexports
+these values and types, so the AST and ingestion share one definition without
+making this package depend on an application.
+
+Writers must provide `family`. The persisted schema reads historical metadata
+without it as `decision` once at the storage boundary. This avoids rewriting the
+historical corpus merely to add a discriminator. Remove that normalization after
+a bounded reparse/backfill confirms every persisted decision AST has `family`.
+Guidance without `family` is rejected, as are guidance metadata with case fields.
+
 ## License
 
 Apache-2.0

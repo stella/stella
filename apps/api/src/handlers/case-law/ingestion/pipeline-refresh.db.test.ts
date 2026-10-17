@@ -55,6 +55,7 @@ const storedAst: DocumentAst = {
     printUrl: "",
   },
   metadata: {
+    family: "decision",
     caseNumber: "1T/7/2026",
     ecli: null,
     court: "Okresný súd",

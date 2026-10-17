@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   type Block,
-  type DocumentAst,
+  type DecisionDocumentAst,
   isDocumentAst,
 } from "@stll/legal-ast/document-ast";
 
@@ -59,7 +59,7 @@ const parsed = (outcome: CourtListenerTextOutcome) => {
   return outcome;
 };
 
-const asDocument = (blocks: readonly Block[]): DocumentAst => ({
+const asDocument = (blocks: readonly Block[]): DecisionDocumentAst => ({
   version: 1,
   source: {
     system: "courtlistener",
@@ -68,6 +68,7 @@ const asDocument = (blocks: readonly Block[]): DocumentAst => ({
     printUrl: "",
   },
   metadata: {
+    family: "decision",
     caseNumber: null,
     ecli: null,
     court: null,

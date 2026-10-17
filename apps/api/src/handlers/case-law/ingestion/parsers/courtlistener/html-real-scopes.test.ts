@@ -105,6 +105,7 @@ const extract = (text: Composed) => {
         printUrl: "",
       },
       metadata: {
+        family: "decision",
         caseNumber: null,
         ecli: null,
         court: null,

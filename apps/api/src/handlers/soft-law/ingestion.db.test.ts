@@ -26,6 +26,8 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { rawSourcePayloadKey } from "@/api/lib/legal-search/raw-source-storage";
 import type { WriteRawSourcePayload } from "@/api/lib/legal-search/raw-source-storage";
 import { SoftLawAccessError } from "@/api/lib/legal-search/soft-law-access-types";
+import { SOFT_LAW_AST_BUILDER_VERSION } from "@/api/lib/legal-search/soft-law-ast";
+import { replaySoftLawAstBatch } from "@/api/lib/legal-search/soft-law-ast-replay";
 import { createSoftLawIngestionStore } from "@/api/lib/legal-search/soft-law-ingestion-store";
 import type {
   SoftLawSourceAdapter,
@@ -183,6 +185,151 @@ if (!databaseUrl || !enabled) {
   });
 } else {
   describe("guidance ingestion on real Postgres", () => {
+    test("OCR and failed extraction persist an attempted builder without an empty AST", async () => {
+      for (const extractionQuality of [
+        "needs_ocr",
+        "scanned_ocr",
+        "extraction_failed",
+      ] as const) {
+        await withSource(databaseUrl, async ({ db, sourceId, run }) => {
+          const sourceAdapter = adapter([entry()]);
+          expect(
+            await run({
+              ...sourceAdapter,
+              fetchDocument: async (item) => {
+                const input = document(item);
+                return Result.ok(
+                  extractionQuality === "extraction_failed"
+                    ? {
+                        ...input,
+                        extractionQuality,
+                        text: null,
+                        extractionFailure: "Synthetic extraction failure",
+                      }
+                    : { ...input, extractionQuality, text: null },
+                );
+              },
+            }),
+          ).toEqual({ status: "complete" });
+          const stored = (
+            await db
+              .select({
+                ast: softLawDocumentVersions.documentAst,
+                builder: softLawDocumentVersions.astBuilderVersion,
+              })
+              .from(softLawDocumentVersions)
+              .innerJoin(
+                softLawDocuments,
+                eq(softLawDocuments.id, softLawDocumentVersions.documentId),
+              )
+              .where(eq(softLawDocuments.sourceId, sourceId))
+          ).at(0);
+          expect(stored).toEqual({
+            ast: null,
+            builder: SOFT_LAW_AST_BUILDER_VERSION,
+          });
+        });
+      }
+    });
+
+    test("guidance AST ingestion and retained-original replay reach the same fixed point", async () =>
+      await withSource(databaseUrl, async ({ db, sourceId, run }) => {
+        const html =
+          "<main><h1>Pokyny</h1><p>1. Syntetické doporučení.</p></main>";
+        const originals = new Map<string, Uint8Array>();
+        const sourceAdapter = adapter([entry()], html);
+        const writeRaw: WriteRawSourcePayload = async (options) => {
+          const key = rawSourcePayloadKey(options);
+          originals.set(
+            key,
+            typeof options.data === "string"
+              ? new TextEncoder().encode(options.data)
+              : options.data,
+          );
+          return key;
+        };
+        expect(await run(sourceAdapter, { writeRaw })).toEqual({
+          status: "complete",
+        });
+        const versions = () =>
+          db
+            .select()
+            .from(softLawDocumentVersions)
+            .innerJoin(
+              softLawDocuments,
+              eq(softLawDocuments.id, softLawDocumentVersions.documentId),
+            )
+            .where(eq(softLawDocuments.sourceId, sourceId));
+        const first = (await versions()).at(0)?.soft_law_document_versions;
+        if (!first) {
+          return panic("Missing guidance version");
+        }
+        expect(first.documentAst?.metadata.family).toBe("guidance");
+        expect(first.astBuilderVersion).toBe(SOFT_LAW_AST_BUILDER_VERSION);
+        expect(await run(sourceAdapter, { writeRaw })).toEqual({
+          status: "complete",
+        });
+        expect(
+          (await versions()).map(
+            ({ soft_law_document_versions: version }) => version.documentAst,
+          ),
+        ).toEqual([first.documentAst]);
+
+        await db
+          .update(softLawDocumentVersions)
+          .set({ documentAst: null, astBuilderVersion: null })
+          .where(eq(softLawDocumentVersions.id, first.id));
+        const replayOptions = {
+          scopedDb: async (work) => await db.transaction(work),
+          sourceId,
+          after: null,
+          signal: new AbortController().signal,
+          readRaw: async ({ key }) => originals.get(key) ?? null,
+        } satisfies Parameters<typeof replaySoftLawAstBatch>[0];
+        const unavailable = await replaySoftLawAstBatch({
+          ...replayOptions,
+          readRaw: async () => null,
+        });
+        expect(unavailable.status).toBe("error");
+        expect(
+          (await versions()).at(0)?.soft_law_document_versions
+            .astBuilderVersion,
+        ).toBeNull();
+        const rebuilt = await replaySoftLawAstBatch(replayOptions);
+        expect(rebuilt.status === "ok" && rebuilt.value).toEqual({
+          rebuilt: 1,
+          nextCursor: null,
+        });
+        expect(
+          (await versions()).at(0)?.soft_law_document_versions.documentAst,
+        ).toEqual(first.documentAst);
+        const unchanged = await replaySoftLawAstBatch(replayOptions);
+        expect(unchanged.status === "ok" && unchanged.value).toEqual({
+          rebuilt: 0,
+          nextCursor: null,
+        });
+
+        await db
+          .update(softLawDocumentVersions)
+          .set({ documentAst: null, astBuilderVersion: null })
+          .where(eq(softLawDocumentVersions.id, first.id));
+        const stale = await replaySoftLawAstBatch({
+          ...replayOptions,
+          readRaw: async ({ key }) => {
+            await db
+              .update(softLawDocumentVersions)
+              .set({ astBuilderVersion: SOFT_LAW_AST_BUILDER_VERSION + 1 })
+              .where(eq(softLawDocumentVersions.id, first.id));
+            return originals.get(key) ?? null;
+          },
+        });
+        expect(stale.status === "ok" && stale.value.rebuilt).toBe(0);
+        expect(
+          (await versions()).at(0)?.soft_law_document_versions
+            .astBuilderVersion,
+        ).toBe(SOFT_LAW_AST_BUILDER_VERSION + 1);
+      }));
+
     test("a URL move preserves identity and raw versions; a changed hash creates history", async () =>
       await withSource(databaseUrl, async ({ db, sourceId, run }) => {
         const item = entry();

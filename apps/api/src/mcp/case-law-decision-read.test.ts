@@ -202,6 +202,7 @@ describe("compact metadata", () => {
     expect(
       compactDecisionMetadata({
         metadata: {
+          family: "decision",
           caseNumber: "21 Cdo 1484/2004",
           court: "Nejvyšší soud",
           decisionDate: "2004-06-30",

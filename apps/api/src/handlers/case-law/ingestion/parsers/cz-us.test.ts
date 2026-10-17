@@ -801,7 +801,7 @@ describe("parseUsDecisionHtml", () => {
   });
 
   describe("metadata", () => {
-    test("populates DocumentAst metadata", () => {
+    test("populates DecisionDocumentAst metadata", () => {
       const input = baseInput(rtfDecisionHtml);
       const { documentAst } = parseUsDecisionHtml(input);
 

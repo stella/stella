@@ -38,6 +38,7 @@ const astOf = (count = 8): DocumentAst => ({
     printUrl: "",
   },
   metadata: {
+    family: "decision",
     caseNumber: "1 Test 2026",
     ecli: null,
     court: "Test court",

@@ -42,6 +42,14 @@ export const brandPersistedLegalReaderAnswerId = (
   id: string,
 ): SafeId<"legalReaderAnswer"> => toSafeId<"legalReaderAnswer">(id);
 
+export const brandPersistedSoftLawSourceId = (
+  id: string,
+): SafeId<"softLawSource"> => toSafeId<"softLawSource">(id);
+
+export const brandPersistedSoftLawDocumentVersionId = (
+  id: string,
+): SafeId<"softLawDocumentVersion"> => toSafeId<"softLawDocumentVersion">(id);
+
 export const brandPersistedTemplateId = (
   templateId: string,
 ): SafeId<"template"> => toSafeId<"template">(templateId);

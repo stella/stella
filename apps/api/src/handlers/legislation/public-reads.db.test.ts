@@ -226,6 +226,7 @@ const statuteAst = (deliveryText: string | null): DocumentAst => {
     version: 1,
     source: { system: "test", documentId: "", webUrl: "", printUrl: "" },
     metadata: {
+      family: "decision",
       caseNumber: null,
       ecli: null,
       court: null,

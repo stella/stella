@@ -27,6 +27,7 @@ const documentAst = (blocks: DocumentAst["blocks"]): DocumentAst => ({
     printUrl: "",
   },
   metadata: {
+    family: "decision",
     caseNumber: "1T/3/2026",
     ecli: null,
     court: "Okresný súd",

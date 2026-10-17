@@ -54,6 +54,7 @@ const astWith = (text: string) =>
     version: 1,
     source: { system: "test", documentId: "test", webUrl: "", printUrl: "" },
     metadata: {
+      family: "decision",
       caseNumber: null,
       ecli: null,
       court: null,

@@ -1,9 +1,8 @@
-// parser-output-unchanged: EcjDocumentBoundary is now private; parsing and document output are unchanged.
 /**
  * Court of Justice of the European Union (CJEU) XHTML parser.
  *
  * Converts the Cellar XHTML manifestation of a judgment, order or
- * Advocate General opinion into a canonical DocumentAst.
+ * Advocate General opinion into a canonical DecisionDocumentAst.
  *
  * The Cellar XHTML is produced by the Publications Office's
  * `fmx2xhtml` converter and is annotated with a stable `coj-*` class
@@ -44,10 +43,9 @@
 import * as cheerio from "cheerio";
 import { type AnyNode, type Element, isTag, isText } from "domhandler";
 
-// parser-output-unchanged: imports the document AST from its package owner
 import type {
   Block,
-  DocumentAst,
+  DecisionDocumentAst,
   HeadingBlock,
   Inline,
   ParagraphBlock,
@@ -90,7 +88,7 @@ export type ParseEcjDecisionInput = {
 };
 
 export type ParseEcjDecisionOutput = {
-  documentAst: DocumentAst;
+  documentAst: DecisionDocumentAst;
   fulltext: string;
   /** Keyword chain from the `coj-index` line, one entry per segment. */
   keywords: string[];
@@ -138,6 +136,7 @@ export const parseEcjDecisionHtml = (
         printUrl: "",
       },
       metadata: {
+        family: "decision",
         caseNumber: input.caseNumber,
         ecli: input.ecli ?? null,
         court: input.court,

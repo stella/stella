@@ -10,6 +10,7 @@ import {
   omitDerivablePlainText,
   PARAGRAPH_ROLES,
   parseDocumentAst,
+  parseDecisionDocumentAst,
   parseUsableDocumentAst,
   persistedAstDegradations,
   resolveDocumentAnchor,
@@ -36,6 +37,7 @@ const documentAst = {
     printUrl: "https://example.test/decision/print",
   },
   metadata: {
+    family: "decision",
     caseNumber: "30 Cdo 161/2024",
     ecli: "ECLI:CZ:NS:2024:30.CDO.161.2024.1",
     court: "Nejvyšší soud",
@@ -249,6 +251,7 @@ describe("parseDocumentAst", () => {
       version: 1,
       source: { system: "", documentId: "", webUrl: "", printUrl: "" },
       metadata: {
+        family: "decision",
         caseNumber: null,
         ecli: null,
         court: null,
@@ -881,5 +884,61 @@ describe("persisted kinds outside the declared sets", () => {
       { kind: "inline-type", blockId: "p1", type: "ornament" },
       { kind: "inline-type", blockId: "t1", type: "ruby" },
     ]);
+  });
+});
+
+describe("document families", () => {
+  const guidance = {
+    ...documentAst,
+    metadata: {
+      family: "guidance",
+      authority: "eu-edpb",
+      kind: "guideline",
+      statedReference: { state: "stated", value: "01/2026" },
+      issuedOn: { state: "not_stated" },
+      language: { state: "stated", value: "en" },
+      expression: {
+        type: "identified",
+        language: "en",
+        revision: { state: "not_stated" },
+      },
+      validityState: "not_stated",
+    },
+  } satisfies DocumentAst;
+
+  test("guidance retains its own metadata and cannot enter a decision read", () => {
+    expect(isDocumentAst(guidance)).toBe(true);
+    expect(parseDocumentAst(guidance)).toEqual(guidance);
+    expect(parseDecisionDocumentAst(guidance)).toBeNull();
+    for (const field of Object.keys(documentAst.metadata)) {
+      if (field === "family") {
+        continue;
+      }
+      const withCaseField = {
+        ...guidance,
+        metadata: { ...guidance.metadata, [field]: null },
+      };
+      expect(isDocumentAst(withCaseField)).toBe(false);
+      expect(parseDocumentAst(withCaseField)).toBeNull();
+    }
+  });
+
+  test("historical decision metadata gains family only at the persisted boundary", () => {
+    const { family: _family, ...metadata } = documentAst.metadata;
+    const historical = { ...documentAst, metadata };
+    expect(isDocumentAst(historical)).toBe(false);
+    expect(parseDocumentAst(historical)).toEqual(documentAst);
+    expect(parseDocumentAst(parseDocumentAst(historical))).toEqual(documentAst);
+    expect(parseDecisionDocumentAst(historical)).toEqual(documentAst);
+    expect(
+      parseDocumentAst({
+        ...historical,
+        metadata: { ...metadata, family: "unknown" },
+      }),
+    ).toBeNull();
+    const { family: _guidanceFamily, ...untypedGuidance } = guidance.metadata;
+    const guidanceWithoutFamily = { ...guidance, metadata: untypedGuidance };
+    expect(isDocumentAst(guidanceWithoutFamily)).toBe(false);
+    expect(parseDocumentAst(guidanceWithoutFamily)).toBeNull();
   });
 });

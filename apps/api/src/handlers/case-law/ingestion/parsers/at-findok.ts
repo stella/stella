@@ -3,8 +3,7 @@ import { Result } from "better-result";
 import * as cheerio from "cheerio";
 import { type AnyNode, type Element, isTag, isText } from "domhandler";
 
-// parser-output-unchanged: imports the document AST from its package owner
-import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
+import type { Block, DecisionDocumentAst } from "@stll/legal-ast/document-ast";
 
 import { ParseXmlError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -25,7 +24,7 @@ export type ParseFindokDecisionInput = {
 };
 
 export type ParseFindokDecisionOutput = {
-  documentAst: DocumentAst;
+  documentAst: DecisionDocumentAst;
   /** The one-line subject the ministry prints over the decision. */
   betreff: string | undefined;
   ecli: string | undefined;
@@ -298,6 +297,7 @@ export const parseFindokDecisionXml = (
         printUrl: input.sourceUrl,
       },
       metadata: {
+        family: "decision",
         caseNumber: input.caseNumber,
         ecli: ecli ?? null,
         court: input.court,

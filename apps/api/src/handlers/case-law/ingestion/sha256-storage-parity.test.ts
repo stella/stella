@@ -82,6 +82,7 @@ for (const text of texts) {
         },
       ],
       metadata: {
+        family: "decision",
         caseNumber: null,
         ecli: null,
         court: null,

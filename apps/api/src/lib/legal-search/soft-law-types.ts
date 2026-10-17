@@ -1,6 +1,17 @@
 import { TaggedError } from "better-result";
 import type { Result } from "better-result";
 
+// Pure document vocabulary lives in legal-ast so packages never depend on the API.
+// This module remains the ingestion contract owner and reexports that vocabulary.
+import type {
+  SOFT_LAW_KINDS,
+  SOFT_LAW_VALIDITY_STATES,
+  SoftLawAuthority,
+  SoftLawStated,
+  SoftLawEvidence,
+  SoftLawExpression,
+} from "@stll/legal-ast/soft-law";
+
 import type {
   SourceFieldInventory,
   SourceSurfaceCensus,
@@ -15,27 +26,24 @@ import {
   type SoftLawFetch,
 } from "./soft-law-access-types";
 
-export const SOFT_LAW_KINDS = [
-  "methodology",
-  "recommendation",
-  "opinion",
-  "faq",
-  "guideline",
-  "position",
-  "statement",
-  "inspection_report",
-  "annual_report",
-  "other",
-] as const;
+export {
+  SOFT_LAW_KINDS,
+  SOFT_LAW_VALIDITY_STATES,
+  SOFT_LAW_STATED_STATES,
+  SOFT_LAW_AUTHORITIES,
+  type SoftLawAuthority,
+  type SoftLawKind,
+  type SoftLawValidityState,
+  type SoftLawStated,
+  type SoftLawEvidence,
+  type SoftLawExpression,
+} from "@stll/legal-ast/soft-law";
+
 export const SOFT_LAW_LISTING_STATES = ["listed", "no_longer_listed"] as const;
 export const SOFT_LAW_LOCATOR_STATES = ["current", "historical"] as const;
 export const SOFT_LAW_BATCH_LIMIT = 100;
-export const SOFT_LAW_VALIDITY_STATES = [
-  "not_stated",
-  "withdrawn",
-  "superseded",
-  "historical_repealed_basis",
-] as const;
+export const SOFT_LAW_RAW_BYTE_LIMIT = 64 * 1024 * 1024;
+export const SOFT_LAW_RAW_PART_LIMIT = 20;
 export const SOFT_LAW_VALIDITY_BASES = [
   "source_stated",
   "archived_source_stated",
@@ -47,7 +55,6 @@ export const SOFT_LAW_EXTRACTION_QUALITIES = [
   "scanned_ocr",
   "extraction_failed",
 ] as const;
-export const SOFT_LAW_STATED_STATES = ["stated", "not_stated"] as const;
 export const SOFT_LAW_RUN_STATES = [
   "idle",
   "running",
@@ -73,27 +80,6 @@ export const SOFT_LAW_ATTEMPT_STATES = [
   "rejected",
   "retryable",
 ] as const;
-export const SOFT_LAW_AUTHORITIES = {
-  "cz-uoou": { jurisdiction: "CZE", name: "Úřad pro ochranu osobních údajů" },
-  "eu-edpb": { jurisdiction: "EU", name: "European Data Protection Board" },
-  "eu-wp29": { jurisdiction: "EU", name: "Article 29 Working Party" },
-} as const;
-export type SoftLawAuthority = keyof typeof SOFT_LAW_AUTHORITIES;
-export type SoftLawStated<T> =
-  | { state: "stated"; value: T }
-  | { state: "not_stated" };
-export type SoftLawEvidence = {
-  url: string;
-  quote: string;
-  locator: string;
-};
-export type SoftLawExpression =
-  | { type: "unspecified" }
-  | {
-      type: "identified";
-      language: string;
-      revision: SoftLawStated<string>;
-    };
 export type SoftLawStage =
   | { state: "not_stated" }
   | { state: "consultation" | "adopted"; evidence: SoftLawEvidence };
