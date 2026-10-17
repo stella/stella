@@ -31,6 +31,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
+import { AhoCorasick } from "@stll/aho-corasick";
 import { compareCodeUnit } from "@stll/collation";
 
 import { readCapabilityCatalog } from "../../../packages/cli/src/capability-catalog-data";
@@ -313,6 +314,8 @@ const SELF_TEST_UNDECLARED = "FEATURE_SELF_TEST_UNDECLARED";
 const SELF_TEST_DEAD = "FEATURE_SELF_TEST_DEAD";
 const GATED_ROUTE_FILE = "apps/api/src/handlers/lists/routes.ts";
 const GATED_ROUTE_FLAG = "FEATURE_LEGAL_LISTS";
+const GATED_ROUTE_SOURCE = `  .use(\n    deploymentFeatureGate(() =>\n      isDeploymentFeatureEnabled("${GATED_ROUTE_FLAG}"),\n    ),\n  )\n`;
+const GATED_ROUTE_MATCHER = new AhoCorasick([GATED_ROUTE_SOURCE]);
 const SELF_TEST_ROUTE_FILE = "apps/api/src/handlers/self-test/routes.ts";
 
 const hasKey = (result: ScanResult, key: string): boolean =>
@@ -414,15 +417,14 @@ export const SELF_TEST_CASES: readonly SelfTestCase[] = [
     name: "a gate added after the routes does not cover them",
     mutate: (input) =>
       replaceRouteSource(input, GATED_ROUTE_FILE, (source) => {
-        const gate = `  .use(\n    deploymentFeatureGate(() =>\n      isDeploymentFeatureEnabled("${GATED_ROUTE_FLAG}"),\n    ),\n  )\n`;
-        if (!source.includes(gate)) {
+        if (!GATED_ROUTE_MATCHER.isMatch(source)) {
           return panic(
             "self-test: the lists route gate moved; update the case",
           );
         }
         return source
-          .replace(gate, () => "")
-          .replace(/;\s*$/u, () => `\n${gate};\n`);
+          .replace(GATED_ROUTE_SOURCE, () => "")
+          .replace(/;\s*$/u, () => `\n${GATED_ROUTE_SOURCE};\n`);
       }),
     expect: (result) =>
       result.findings.some(

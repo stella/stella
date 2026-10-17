@@ -455,6 +455,32 @@ describe("real tree", () => {
   const cache = createParseCache();
   const scanned = scanDeploymentFeatures(real, cache);
 
+  test("route relocation requires the exact gate snippet", () => {
+    const relocation = SELF_TEST_CASES.find(
+      ({ name }) =>
+        name === "a gate added after the routes does not cover them",
+    );
+    expect(relocation).toBeDefined();
+    for (const replace of [
+      (source: string) =>
+        source.replaceAll("FEATURE_LEGAL_LISTS", "feature_legal_lists"),
+      (source: string) => source.replaceAll("\n", " "),
+    ]) {
+      const changed = {
+        ...real,
+        routeFiles: real.routeFiles.map((record) =>
+          record.file === "apps/api/src/handlers/lists/routes.ts"
+            ? { file: record.file, source: replace(record.source) }
+            : record,
+        ),
+      };
+      expect(changed.routeFiles).not.toEqual(real.routeFiles);
+      expect(() => relocation?.mutate(changed)).toThrow(
+        "self-test: the lists route gate moved; update the case",
+      );
+    }
+  });
+
   test("every self-test detector fires", () => {
     expect(SELF_TEST_CASES.length).toBeGreaterThan(0);
     expect(runSelfTest(real, cache)).toEqual([]);
