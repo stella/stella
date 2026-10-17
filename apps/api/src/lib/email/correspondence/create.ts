@@ -58,6 +58,34 @@ export const retireCorrespondenceSource = async ({
   recordAuditEvent,
 }: RetireCorrespondenceSourceOptions) => {
   const transaction = await abortableTx(safeDb, async (tx) => {
+    const [linked] = await tx
+      .select({ id: correspondenceSources.correspondenceId })
+      .from(correspondenceSources)
+      .where(
+        and(
+          eq(correspondenceSources.organizationId, organizationId),
+          eq(correspondenceSources.workspaceId, workspaceId),
+          eq(correspondenceSources.entityId, sourceEntityId),
+        ),
+      )
+      .unionAll(
+        tx
+          .select({ id: correspondence.id })
+          .from(correspondence)
+          .where(
+            and(
+              eq(correspondence.organizationId, organizationId),
+              eq(correspondence.workspaceId, workspaceId),
+              eq(correspondence.sourceEntityId, sourceEntityId),
+            ),
+          ),
+      )
+      .limit(1);
+    // Filing an older generation is fenced by the immutable source version;
+    // ordinary files without a correspondence link need no aggregate locks.
+    if (linked === undefined) {
+      return Result.ok({ type: "ok" as const });
+    }
     const matter = await withAggregateLock({
       tx,
       aggregate: "workspace",

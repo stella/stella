@@ -15,7 +15,7 @@ import {
   SEAL_SIGNED_AT,
   sealContent,
   zfoFile,
-} from "@/api/lib/data-box/zfo.test-fixture";
+} from "@/api/tests/fixtures/zfo";
 
 const encode = (text: string) => new TextEncoder().encode(text);
 
@@ -28,6 +28,17 @@ const failureReason = (
 };
 
 describe("parseDataBoxMessage", () => {
+  test.each(["0", "00", "11", "99", "-1", "1.5"])(
+    "leaves unknown status codes unset: %s",
+    async (messageStatus) => {
+      const parsed = parseDataBoxMessage(await zfoFile({ messageStatus }));
+      if (parsed.isErr()) {
+        throw parsed.error;
+      }
+      expect(parsed.value.envelope.status).toBeNull();
+    },
+  );
+
   test("reads the envelope, files and seal of a sealed message", async () => {
     const parsed = parseDataBoxMessage(await zfoFile());
     if (parsed.isErr()) {
@@ -239,8 +250,8 @@ describe("parseDataBoxMessage refusals", () => {
     expect(failureReason(await sealContent(encode(xml)))).toBe("invalid_file");
   });
 
-  test("data-box message parse refuses arbitrary bytes", async () => {
-    await assertProperty(
+  test("data-box message parse refuses arbitrary bytes", () => {
+    assertProperty(
       "data-box message parse refuses arbitrary bytes",
       fc.property(fc.uint8Array({ maxLength: 2048 }), (bytes) => {
         expect(parseDataBoxMessage(bytes).isErr()).toBe(true);
@@ -250,7 +261,7 @@ describe("parseDataBoxMessage refusals", () => {
 
   test("data-box message parse survives a corrupted byte", async () => {
     const valid = await zfoFile();
-    await assertProperty(
+    assertProperty(
       "data-box message parse survives a corrupted byte",
       fc.property(
         fc.nat({ max: valid.length - 1 }),

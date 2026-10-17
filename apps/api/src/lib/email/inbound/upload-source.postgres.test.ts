@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { beforeAll, describe, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import { DATA_BOX_MESSAGE_MIME_TYPE } from "@stll/api-contract/data-box";
 import {
@@ -22,7 +22,6 @@ import {
 } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
-import { FIXTURE_MESSAGE, zfoFile } from "@/api/lib/data-box/zfo.test-fixture";
 import {
   emlFile,
   GOLDEN_MESSAGE,
@@ -34,6 +33,7 @@ import {
 } from "@/api/lib/email/inbound/upload";
 import { fileSecurityRejection } from "@/api/lib/file-scan/rejection";
 import { FileScanRejectedError } from "@/api/lib/file-scan/scan-upload";
+import { FIXTURE_MESSAGE, zfoFile } from "@/api/tests/fixtures/zfo";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 import {
   mintAuthProviderId,
@@ -461,6 +461,41 @@ if (!databaseUrl || !runPostgresTests) {
         }
       },
     );
+
+    test("unrelated files retire without locking the matter or source entity", async () => {
+      const entityId = createSafeId<"entity">();
+      await testDb.insert(entities).values({
+        id: entityId,
+        workspaceId: ids.wsA1,
+        name: "Unrelated document",
+        createdBy: ids.userA1,
+      });
+      const outcome = await retireUploadedMailSource({
+        database: testDb,
+        scope: { organizationId: ids.orgA, workspaceId: ids.wsA1, entityId },
+        scopedDbForSource: () => async (run) =>
+          await createScopedDb(
+            testDb,
+            [ids.wsA1],
+            ids.orgA,
+            null,
+          )(async (tx) => {
+            const result = await run(tx);
+            const locks = await tx.execute(sql`
+                SELECT 1 FROM pg_catalog.pg_locks
+                WHERE pid = pg_backend_pid()
+                  AND relation IN ('public.workspaces'::regclass, 'public.entities'::regclass)
+                  AND mode IN ('RowShareLock', 'RowExclusiveLock')
+              `);
+            expect(locks).toHaveLength(0);
+            return result;
+          }),
+      });
+      expect(outcome.isOk() && outcome.value).toEqual({
+        status: "skipped",
+        reason: "not_email",
+      });
+    });
 
     test("only the current immutable file generation may file or retire uploaded correspondence", async () => {
       const entityId = createSafeId<"entity">();

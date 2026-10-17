@@ -22,11 +22,10 @@ import {
   entityFeaturePolicyStatements,
 } from "@/api/db/entity-feature-policies";
 import * as schema from "@/api/db/schema";
-
 import {
   latestEntityFeaturePolicies,
   readEntityFeatureMigrations,
-} from "./entity-feature-migrations.fixture";
+} from "@/api/tests/fixtures/entity-feature-migrations";
 
 const scopePolicies = (tableName: string) => {
   const workspaceScope = sql`CASE WHEN workspace_id = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting('app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[])) THEN true ELSE workspace_id IN (SELECT aw.authorized_workspace_id FROM public.stella_authorized_workspaces aw) END`;
@@ -446,8 +445,8 @@ test("a classified reference without a foreign key does not prove parent existen
   ]);
 });
 
-test("the migration trigger graph exactly matches the schema-derived census", async () => {
-  const migration = await readEntityFeatureMigrations();
+test("the migration trigger graph exactly matches the schema-derived census", () => {
+  const migration = readEntityFeatureMigrations();
   const graphText = [...migration.matchAll(/\$metadata\$(.+)\$metadata\$/gu)]
     .at(-1)
     ?.at(1);
@@ -465,8 +464,8 @@ test("the migration trigger graph exactly matches the schema-derived census", as
   );
 });
 
-test("migration propagation plans are derived from the complete gate census", async () => {
-  const migration = await readEntityFeatureMigrations();
+test("migration propagation plans are derived from the complete gate census", () => {
+  const migration = readEntityFeatureMigrations();
   const tables = Object.values(schema).filter((table) => is(table, PgTable));
   const expected = entityFeatureGatePropagationSql(
     entityFeatureGateMetadata(tables),
@@ -481,8 +480,8 @@ test("migration propagation plans are derived from the complete gate census", as
   expect(actual).toBe(expected);
 });
 
-test("the migration grants maintenance policies only to the dedicated gate role", async () => {
-  const migration = await readEntityFeatureMigrations();
+test("the migration grants maintenance policies only to the dedicated gate role", () => {
+  const migration = readEntityFeatureMigrations();
   const tables = Object.values(schema).filter((table) => is(table, PgTable));
   const descriptors = entityFeatureGateMetadata(tables);
   const expected = entityFeaturePolicyStatements(
@@ -546,8 +545,8 @@ test("the migration grants maintenance policies only to the dedicated gate role"
   }
 });
 
-test("migration maintenance grants match each descriptor's read and write columns", async () => {
-  const migration = await readEntityFeatureMigrations();
+test("migration maintenance grants match each descriptor's read and write columns", () => {
+  const migration = readEntityFeatureMigrations();
   const tables = Object.values(schema).filter((table) => is(table, PgTable));
   const descriptors = entityFeatureGateMetadata(tables);
   const grants = [

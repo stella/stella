@@ -3,6 +3,7 @@ import { beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { asc, eq } from "drizzle-orm";
 
 import { DATA_BOX_MESSAGE_MIME_TYPE } from "@stll/api-contract/data-box";
+import { compareCodeUnit } from "@stll/collation";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
@@ -16,12 +17,12 @@ import {
 } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
-import { FIXTURE_MESSAGE, zfoFile } from "@/api/lib/data-box/zfo.test-fixture";
 import { fileUploadedMail } from "@/api/lib/email/inbound/upload";
 import type { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { fileSecurityRejection } from "@/api/lib/file-scan/rejection";
 import { FileScanRejectedError } from "@/api/lib/file-scan/scan-upload";
 import type { scanUpload } from "@/api/lib/file-scan/scan-upload";
+import { FIXTURE_MESSAGE, zfoFile } from "@/api/tests/fixtures/zfo";
 import {
   openGatedTestDatabase,
   type GatedTestDb,
@@ -428,13 +429,17 @@ if (!databaseUrl || !runPostgresTests) {
       expect(
         filed
           .map((record) => [record.workspaceId, record.messageId])
-          .toSorted(),
+          .toSorted((left, right) =>
+            compareCodeUnit(left.join(":"), right.join(":")),
+          ),
       ).toEqual(
         [
           [workspaceId, "1234567890"],
           [workspaceId, "1234567891"],
           [otherWorkspaceId, "1234567890"],
-        ].toSorted(),
+        ].toSorted((left, right) =>
+          compareCodeUnit(left.join(":"), right.join(":")),
+        ),
       );
       const original = filed.find(
         (record) =>

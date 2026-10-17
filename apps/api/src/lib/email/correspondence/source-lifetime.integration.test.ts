@@ -17,11 +17,11 @@ import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { parseDataBoxMessage } from "@/api/lib/data-box/zfo";
-import { zfoFile } from "@/api/lib/data-box/zfo.test-fixture";
 import {
   createCorrespondence,
   retireCorrespondenceSource,
 } from "@/api/lib/email/correspondence/create";
+import { zfoFile } from "@/api/tests/fixtures/zfo";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -219,7 +219,25 @@ test("data-box correspondence lives until its last matter source is deleted", as
     "DatabaseRlsError",
   );
 
-  await testDb.delete(entities).where(eq(entities.id, firstSource));
+  const deleteSource = async (sourceId: SafeId<"entity">) => {
+    await testDb.transaction(async (tx) => {
+      await tx.execute(sql`SELECT
+        set_config('app.correspondence_source_organization_id', ${ids.orgB}, true),
+        set_config('app.correspondence_source_workspace_id', ${ids.wsB1}, true),
+        set_config('app.correspondence_source_record_id', ${other.id}, true)
+      `);
+      const scope = sql`SELECT
+        current_setting('app.correspondence_source_organization_id', true) AS organization_id,
+        current_setting('app.correspondence_source_workspace_id', true) AS workspace_id,
+        current_setting('app.correspondence_source_record_id', true) AS record_id
+      `;
+      const before = await tx.execute(scope);
+      await tx.delete(entities).where(eq(entities.id, sourceId));
+      const after = await tx.execute(scope);
+      expect(after.rows).toEqual(before.rows);
+    });
+  };
+  await deleteSource(firstSource);
   expect(await sources()).toEqual([{ entityId: secondSource }]);
   expect(
     await testDb
@@ -230,7 +248,7 @@ test("data-box correspondence lives until its last matter source is deleted", as
   expect(await filers()).toEqual(initialFilers);
   expect(await attachments()).toEqual(initialAttachments);
 
-  await testDb.delete(entities).where(eq(entities.id, secondSource));
+  await deleteSource(secondSource);
   expect(await sources()).toEqual([]);
   expect(
     await testDb

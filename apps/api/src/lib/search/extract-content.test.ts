@@ -3,12 +3,12 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { DATA_BOX_MESSAGE_MIME_TYPE } from "@stll/api-contract/data-box";
 import { OFFICE_ARCHIVE_FORMATS } from "@stll/docx-utils/office-formats";
 
-import { FIXTURE_MESSAGE, zfoFile } from "@/api/lib/data-box/zfo.test-fixture";
 import {
   PPTX_MIME_TYPE,
   XLSX_MIME_TYPE,
   OCTET_STREAM_MIME_TYPE,
 } from "@/api/mime-types";
+import { FIXTURE_MESSAGE, zfoFile } from "@/api/tests/fixtures/zfo";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";

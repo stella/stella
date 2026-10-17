@@ -250,7 +250,11 @@ const fieldStatus = (element: Element) => {
   if (text === null || !/^\d{1,2}$/u.test(text)) {
     return null;
   }
-  return DATA_BOX_MESSAGE_STATUSES.at(Number(text) - 1) ?? null;
+  const code = Number(text);
+  if (code < 1 || code > DATA_BOX_MESSAGE_STATUSES.length) {
+    return null;
+  }
+  return DATA_BOX_MESSAGE_STATUSES.at(code - 1) ?? null;
 };
 
 const boxId = (element: Element, localName: string) => {

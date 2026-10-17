@@ -28,9 +28,6 @@ $role$;--> statement-breakpoint
 -- stella-migration-safety: reviewed grant-privileges - Temporary role administration installs private lifecycle routines; inheritance remains disabled and SET is revoked before commit.
 GRANT stella_correspondence_source TO CURRENT_USER WITH INHERIT FALSE, SET TRUE;--> statement-breakpoint
 GRANT USAGE, CREATE ON SCHEMA public TO stella_correspondence_source;--> statement-breakpoint
--- Custom placeholders require parameter ACLs in function-level SET clauses, even
--- though set_config can change them at runtime without those ACLs.
-GRANT SET ON PARAMETER "app.correspondence_source_organization_id", "app.correspondence_source_workspace_id", "app.correspondence_source_record_id" TO stella_correspondence_source;--> statement-breakpoint
 GRANT SELECT (organization_id, workspace_id, correspondence_id, entity_id) ON public.correspondence_sources TO stella_correspondence_source;--> statement-breakpoint
 GRANT SELECT (organization_id, workspace_id, id, source_entity_id), UPDATE (source_entity_id, updated_at), DELETE ON public.correspondence TO stella_correspondence_source;--> statement-breakpoint
 
@@ -61,14 +58,15 @@ RETURNS uuid LANGUAGE sql SET search_path = pg_catalog SET row_security = on AS 
 $$;--> statement-breakpoint
 REVOKE ALL ON FUNCTION public.next_correspondence_source(public.correspondence_sources) FROM PUBLIC;--> statement-breakpoint
 
--- stella-migration-safety: reviewed security-definer - Private non-bypass role, fixed search path and forced row security; scope comes only from the deleted source row and is restored at function exit.
+-- stella-migration-safety: reviewed security-definer - Private non-bypass role, fixed search path and forced row security; scope comes only from the deleted source row and is restored before returning.
 CREATE OR REPLACE FUNCTION public.remove_correspondence_source() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER
-SET search_path = pg_catalog SET row_security = on
-SET app.correspondence_source_organization_id = ''
-SET app.correspondence_source_workspace_id = ''
-SET app.correspondence_source_record_id = '' AS $$
-DECLARE next_source uuid;
+SET search_path = pg_catalog SET row_security = on AS $$
+DECLARE
+  next_source uuid;
+  previous_organization_id text := current_setting('app.correspondence_source_organization_id', true);
+  previous_workspace_id text := current_setting('app.correspondence_source_workspace_id', true);
+  previous_record_id text := current_setting('app.correspondence_source_record_id', true);
 BEGIN
   PERFORM set_config('app.correspondence_source_organization_id', OLD.organization_id, true),
     set_config('app.correspondence_source_workspace_id', OLD.workspace_id::text, true),
@@ -77,21 +75,25 @@ BEGIN
   WHERE organization_id = OLD.organization_id
     AND workspace_id = OLD.workspace_id AND id = OLD.correspondence_id
   FOR UPDATE;
-  IF NOT FOUND THEN
-    RETURN OLD;
+  IF FOUND THEN
+    next_source := public.next_correspondence_source(OLD);
+    IF next_source IS NULL THEN
+      DELETE FROM public.correspondence
+      WHERE organization_id = OLD.organization_id
+        AND workspace_id = OLD.workspace_id AND id = OLD.correspondence_id;
+    ELSE
+      UPDATE public.correspondence
+      SET source_entity_id = next_source, updated_at = now()
+      WHERE organization_id = OLD.organization_id
+        AND workspace_id = OLD.workspace_id AND id = OLD.correspondence_id
+        AND source_entity_id = OLD.entity_id;
+    END IF;
   END IF;
-  next_source := public.next_correspondence_source(OLD);
-  IF next_source IS NULL THEN
-    DELETE FROM public.correspondence
-    WHERE organization_id = OLD.organization_id
-      AND workspace_id = OLD.workspace_id AND id = OLD.correspondence_id;
-  ELSE
-    UPDATE public.correspondence
-    SET source_entity_id = next_source, updated_at = now()
-    WHERE organization_id = OLD.organization_id
-      AND workspace_id = OLD.workspace_id AND id = OLD.correspondence_id
-      AND source_entity_id = OLD.entity_id;
-  END IF;
+  -- Custom GUCs cannot appear in this owner's function SET clauses. Restore
+  -- successful calls explicitly; a failed statement rolls back its local GUCs.
+  PERFORM set_config('app.correspondence_source_organization_id', coalesce(previous_organization_id, ''), true),
+    set_config('app.correspondence_source_workspace_id', coalesce(previous_workspace_id, ''), true),
+    set_config('app.correspondence_source_record_id', coalesce(previous_record_id, ''), true);
   RETURN OLD;
 END;
 $$;--> statement-breakpoint
