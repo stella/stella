@@ -229,7 +229,7 @@ describe("required dependency review workflow boundary", () => {
     expect(workflow.on["pull_request"]).toBeDefined();
     expect(workflow.on["merge_group"]).toEqual({ types: ["checks_requested"] });
     expect(job.if).toBe(
-      "(github.event_name == 'pull_request' || github.event_name == 'merge_group') && needs.ci-plan.outputs.dependency_changes_required == 'true'",
+      "inputs.heavy_only != true && (github.event_name == 'pull_request' || github.event_name == 'merge_group') && needs.ci-plan.outputs.dependency_changes_required == 'true'",
     );
     expect(job.needs).toBe("ci-plan");
     expect(job["name"] ?? "dependency-review").toBe("dependency-review");
