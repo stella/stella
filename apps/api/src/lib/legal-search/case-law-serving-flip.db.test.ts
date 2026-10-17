@@ -690,7 +690,7 @@ test("global browse counts stay unchanged after a jurisdiction flips and before 
     ) => {
       requests += 1;
       const url = new URL(input instanceof Request ? input.url : input);
-      const body: unknown = JSON.parse(String(init?.body));
+      const body: unknown = JSON.parse(v.parse(v.string(), init?.body));
       const elastic = url.pathname.includes("/_elastic/");
       const indexIds = url.pathname.split("/").at(-2)?.split(",") ?? [];
       let selected = documents.filter(({ index }) => indexIds.includes(index));
