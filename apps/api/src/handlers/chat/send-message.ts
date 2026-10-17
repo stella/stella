@@ -3027,7 +3027,7 @@ export const createSendMessage = (
         const promptSources = await loadTurnPromptSources({
           requestedSkills: {
             type: "required",
-            load: () =>
+            load: async () =>
               loadRequestedSkillsPrompt({
                 activeSkillContext: chatContext.activeSkillContext,
                 catalog: chatContext.skillMetadata,
@@ -3040,7 +3040,7 @@ export const createSendMessage = (
           },
           connectorCatalog: {
             type: "optional",
-            load: () =>
+            load: async () =>
               streamingTools[CONNECT_CONNECTOR_TOOL_NAME] === undefined
                 ? Promise.resolve(Result.ok(undefined))
                 : loadConnectableMcpConnectorsForUser({

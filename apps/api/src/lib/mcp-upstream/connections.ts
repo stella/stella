@@ -439,7 +439,7 @@ export const loadConnectableMcpConnectorsForUser = async ({
   safeDb: SafeDb;
   userId: SafeId<"user">;
 }): Promise<Result<ConnectableMcpConnectorCatalog, SafeDbError>> => {
-  const result = await safeDb((tx) =>
+  const result = await safeDb(async (tx) =>
     readCursorPage(
       tx
         .selectDistinctOn([mcpConnectors.slug], {

@@ -54,7 +54,7 @@ export const createConnectorTools = (context: ConnectorToolsContext) => ({
       ]),
     ),
   }).server(async ({ afterSlug }) => {
-    const read = await Result.tryPromise(() =>
+    const read = await Result.tryPromise(async () =>
       loadConnectableMcpConnectorsForUser({ ...context, afterSlug }),
     );
     const catalog = read.andThen((value) => value);
