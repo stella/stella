@@ -590,8 +590,6 @@ jobs:
       - name: Fix changed files
         env:
           STELLA_LOCAL_AUTOFIX: "true"
-          # The design systems restored above; the warm-up and oxlint share it.
-          OXLINT_TAILWINDCSS_CACHE_DIR: ${{ runner.temp }}/oxlint-tailwindcss
         run: |
           set -euo pipefail
           changed=()
@@ -637,7 +635,9 @@ jobs:
             # aborts on preparation or compiler errors before any fixer runs.
             bun scripts/ci-generated-sources.ts prepare
             # Only the lint fixer reads the design systems; formatting-only
-            # changes skip the warm-up.
+            # changes skip the warm-up. The warm-up and oxlint share the
+            # directory restored above.
+            export OXLINT_TAILWINDCSS_CACHE_DIR="$RUNNER_TEMP/oxlint-tailwindcss"
             bun run lint:tailwind:warm
             bun scripts/typecheck-coverage.ts --autofix "${lint_paths[@]}"
             # --fix applies safe fixes only. CI's lint job reports anything left.
