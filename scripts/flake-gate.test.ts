@@ -569,6 +569,27 @@ test("reports preserve reduced coverage and failures and only blocking mode fail
   ).toBe(1);
 });
 
+test("repeat runs never overlap across files", async () => {
+  let active = 0;
+  let peak = 0;
+  const report = await executeGate({
+    targets: [
+      targetFor("/fixture", "a.test.ts"),
+      targetFor("/fixture", "b.test.ts"),
+    ],
+    skipped: [],
+    run: async () => {
+      active += 1;
+      peak = Math.max(peak, active);
+      await Bun.sleep(1);
+      active -= 1;
+      return { type: "executed", passed: true, status: 0, ranTests: true };
+    },
+  });
+  expect(report.results.map(({ runs }) => runs)).toEqual([REPEATS, REPEATS]);
+  expect(peak).toBe(1);
+});
+
 test("five shuffled iterations name the failing iteration", async () => {
   const report = await executeGate({
     targets: [targetFor("/fixture")],

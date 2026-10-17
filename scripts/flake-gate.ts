@@ -488,37 +488,37 @@ export const executeGate = async ({
     });
   }
   const plan = planRepeats(measured, remaining());
-  // Files repeat concurrently on the existing shard runner; iterations for one
-  // file remain serial so state cannot leak between overlapping invocations.
-  await Promise.all(
-    report.results.map(async (result) => {
-      const target = targets.find(({ file }) => file === result.file);
-      if (!target) {
-        return panic(`Missing target: ${result.file}`);
+  // The plan spends the remaining budget as one serial pool, and one test
+  // process may already run several lanes, so files repeat one at a time:
+  // overlapping runs would contend for the shard runner and could push a
+  // stable test past its deadline.
+  for (const result of report.results) {
+    const target = targets.find(({ file }) => file === result.file);
+    if (!target) {
+      return panic(`Missing target: ${result.file}`);
+    }
+    const planned = plan.get(result.file);
+    if (planned === undefined) {
+      return panic(`Missing repeat plan: ${result.file}`);
+    }
+    result.planned = planned;
+    for (
+      let index = 1;
+      index < result.planned && remaining() >= result.durationMs;
+      index += 1
+    ) {
+      const outcome = await attempt({
+        target,
+        seed: index + 1,
+        timeoutMs: remaining(),
+      });
+      result.runs += 1;
+      if (outcome.type === "no-tests" || !outcome.passed) {
+        result.failures += 1;
+        result.failedIterations.push(index + 1);
       }
-      const planned = plan.get(result.file);
-      if (planned === undefined) {
-        return panic(`Missing repeat plan: ${result.file}`);
-      }
-      result.planned = planned;
-      for (
-        let index = 1;
-        index < result.planned && remaining() >= result.durationMs;
-        index += 1
-      ) {
-        const outcome = await attempt({
-          target,
-          seed: index + 1,
-          timeoutMs: remaining(),
-        });
-        result.runs += 1;
-        if (outcome.type === "no-tests" || !outcome.passed) {
-          result.failures += 1;
-          result.failedIterations.push(index + 1);
-        }
-      }
-    }),
-  );
+    }
+  }
   report.elapsedMs = now() - start;
   return report;
 };
