@@ -7,7 +7,7 @@ import { readStatuteQueryScope } from "@stll/api-contract/statute-query-capabili
 import {
   readStatuteQueryReferences,
   type StatuteQueryReference,
-} from "@stll/api-contract/statute-query-intent";
+} from "@stll/api-contract/statute-query-references";
 import {
   splitStatuteTitleCitation,
   statuteTitleCitationMentionRegex,
