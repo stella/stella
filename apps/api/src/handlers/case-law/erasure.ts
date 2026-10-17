@@ -6,12 +6,14 @@ import { Temporal } from "@stll/time";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
+  caseLawCitationDoctrineReviews,
   caseLawDecisionSupplements,
   caseLawDecisions,
   caseLawIndexJobs,
 } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import {
   cancelCaseLawCorpusUploadIntents,
@@ -380,6 +382,13 @@ export const redactCaseLawDecision = async ({
         ),
       )
       .returning({ key: caseLawDecisionSupplements.sourceRawS3Key });
+    // A doctrine review quotes the citing decision's own text as evidence,
+    // so it goes with that text. Re-reviewing a redacted decision has no
+    // text to quote from, so nothing re-creates it. Covered by this fence's
+    // redaction exemption above, recorded in case_law_index_jobs below.
+    await tx
+      .delete(caseLawCitationDoctrineReviews)
+      .where(eq(caseLawCitationDoctrineReviews.citingDecisionId, decisionId));
     const supplementRawKeys = erasedSupplements.flatMap(({ key }) =>
       key !== null &&
       classifyCaseLawRawKey(key, {
@@ -410,6 +419,7 @@ export const redactCaseLawDecision = async ({
         subject: { family: "case_law", entityId: decisionId },
       });
     }
+    await runDecisionWriteExtension(tx, decisionId);
     return { type: "fenced", cancelledIntents, decision, supplementRawKeys };
   });
 
@@ -562,9 +572,9 @@ export const redactCaseLawDecision = async ({
   // erasure retains exact retry targets while the row tombstone already
   // blocks every reader.
   if (corpusErasure.type !== "incomplete" && rawErasure.type !== "incomplete") {
-    await scopedDb((tx) =>
+    await scopedDb(async (tx) => {
       // audit: skip — GDPR redaction; recorded in case_law_index_jobs below
-      tx
+      await tx
         .update(caseLawDecisions)
         .set({
           textS3Key: null,
@@ -573,8 +583,9 @@ export const redactCaseLawDecision = async ({
           sourceRawS3Key: null,
           sourceRawContentType: null,
         })
-        .where(eq(caseLawDecisions.id, decisionId)),
-    );
+        .where(eq(caseLawDecisions.id, decisionId));
+      await runDecisionWriteExtension(tx, decisionId);
+    });
   }
 
   if (corpusErasure.type === "incomplete") {

@@ -20,6 +20,7 @@ import updateSkillResource from "@/api/handlers/skills/resources/update";
 import uploadSkillResource from "@/api/handlers/skills/resources/upload";
 import updateSkill from "@/api/handlers/skills/update";
 import { seedDefaultSkills } from "@/api/lib/agent-skills/default-skills";
+import { noModelOfferedSkills } from "@/api/lib/agent-skills/invocation";
 import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -172,7 +173,7 @@ const skillEditTools = (skillId: SafeId<"agentSkill">) =>
     organizationId: ids.orgA,
     recordAuditEvent: async () => undefined,
     safeDb: asTestRaw<SafeDb>(createSafeDb(testDb, [], ids.orgA, ids.userA1)),
-    skills: [],
+    skills: noModelOfferedSkills(),
     userId: ids.userA1,
   });
 

@@ -178,6 +178,57 @@ test("a newly added transitive import is picked up without editing the detector"
   }
 });
 
+test("a concrete path selected by a derived output glob follows generator inputs", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "service-suite-derived-glob-"));
+  const generator = GENERATORS.find(({ id }) => id === "capability-runtime");
+  if (generator === undefined) {
+    throw new TypeError("Missing capability runtime generator");
+  }
+  const sources = {
+    ...Object.fromEntries(
+      generator.inputs
+        .filter((input) => !/[*?[{]/u.test(input))
+        .map((input) => [input, ""]),
+    ),
+    ...DETECTOR_SOURCES,
+    "packages/cli/capabilities/lists.verifications.get.json": "{}",
+    "apps/api/package.json": readFileSync(
+      new URL("../apps/api/package.json", import.meta.url),
+      "utf-8",
+    ),
+    "apps/api/src/tests/setup-env.ts": "",
+    "apps/api/scripts/run-postgres-tests.ts": "",
+    "apps/api/scripts/run-valkey-tests.ts": "",
+    "apps/api/src/db/migrate.ts": "",
+    "apps/collab/src/server.test.ts": "",
+    "apps/api/src/gated.test.ts": [
+      'const gate = "STELLA_RUN_POSTGRES_TESTS";',
+      'import "@/api/mcp/generated/capability-dispatch/lists.verifications.get";',
+    ].join(" "),
+  };
+  try {
+    for (const [file, source] of Object.entries(sources)) {
+      mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+      writeFileSync(path.join(root, file), source);
+    }
+    const graph = serviceSuiteDependencies(root, "postgres");
+    expect(graph.status).toBe("complete");
+    if (graph.status !== "complete") {
+      return;
+    }
+    expect(graph.dependencies).toContain(
+      "apps/api/scripts/generate-capability-runtime.ts",
+    );
+    expect(
+      [...graph.dependencies].some((file) =>
+        file.startsWith("packages/cli/capabilities/"),
+      ),
+    ).toBe(true);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("each suite follows its own import closure without planning unrelated siblings", () => {
   const root = mkdtempSync(path.join(tmpdir(), "service-suite-scopes-"));
   const sources = {

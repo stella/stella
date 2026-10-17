@@ -99,6 +99,7 @@ jobs:
           save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install dependencies
+        timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           # .npmrc references NPM_TOKEN; the build installs nothing private.
@@ -212,6 +213,7 @@ jobs:
           echo "Landing deployment dispatched; the private workflow reports its result." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Ping IndexNow with sitemap URLs
+        timeout-minutes: 4
         # The key file is hosted at apps/landing/public/<key>.txt so
         # search engines can verify ownership. The key is intentionally
         # public (it's served at https://stll.app/<key>.txt), so the

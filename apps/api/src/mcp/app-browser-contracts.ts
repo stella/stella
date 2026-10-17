@@ -22,7 +22,7 @@ const identityFields = [
 export const APP_SEARCH_SCHEMA = v.union([
   unavailable,
   v.object({
-    ...v.pick(search, ["nextCursor", "nextStep", "headnotes"]).entries,
+    ...v.pick(search, ["nextCursor", "headnotes"]).entries,
     results: v.array(
       v.union([
         v.object(
@@ -68,8 +68,8 @@ export const APP_SEARCH_SCHEMA = v.union([
         warnings: v.array(
           v.object(
             v.pick(search.entries.searches.item.entries.warnings.item, [
+              "audience",
               "message",
-              "hint",
             ]).entries,
           ),
         ),
@@ -86,3 +86,5 @@ export {
 } from "../lib/chat/decision-reader-projections";
 
 export { READ_PROVISION_HISTORY_PROJECTION as APP_PROVISION_HISTORY_SCHEMA } from "../lib/chat/legislation-result-projections";
+
+export { READ_CASE_LAW_CITATIONS_PROJECTION as APP_CITATION_PAGE_SCHEMA } from "../lib/chat/case-law-citation-projection";

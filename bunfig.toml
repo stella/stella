@@ -15,7 +15,6 @@ publicHoistPattern = ["*"]
 # scripts/check-standalone-lockfiles.ts enforces.
 minimumReleaseAge = 432_000
 minimumReleaseAgeExcludes = [
-  "bun-types", # quarantine-expires: 2026-10-15T05:25:00.000Z
   # quarantine exception granted 2026-10-07: @gdp-ts/core can be installed now
   # Temporary third-party exceptions must carry the exact instant at which
   # the normal five-day quarantine admits the currently pinned release.
@@ -84,3 +83,9 @@ minimumReleaseAgeExcludes = [
   "@stll/regex-set-win32-x64-msvc", # quarantine-excluded-since: 2026-10-14T16:29:50.763Z
   "@stll/text-search-wasm", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
 ]
+
+[test]
+# Custom lint rule tests spend their time awaiting oxlint. Running each file's
+# tests concurrently lets .oxlint-plugins/__tests__/lint-single-rule.ts lint
+# every waiting case of one rule configuration in a single oxlint run.
+concurrentTestGlob = "**/.oxlint-plugins/__tests__/*.test.ts"

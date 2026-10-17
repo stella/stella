@@ -40,7 +40,6 @@
     "Test remaining repository scripts": ["**"],
     "Test release image CI gate": ["**"],
     "Workspace hygiene": ["**"],
-    "Dependabot group guard": ["**"],
     "Lockfile workspace-version guard": ["**"],
     "Resolution range guard": ["**"],
     "Quarantine-exclude guards": ["**"],
@@ -148,6 +147,7 @@
     "Validate CI service image mirror inventory": ["**"],
     "Test CI service image workflow contracts": ["**"],
     "Test CI workflow invariants": ["**"],
+    "Test reusable workflow permission contracts": ["**"],
     "Test main network recording selection": ["**"],
     "Test API duration workflow": ["**"],
     "Test autofix protected paths": ["**"],
@@ -155,6 +155,7 @@
     "Test local workflow verification": ["**"],
     "Typecheck cache contract": ["**"],
     "Test CI check partition": ["**"],
+    "Task result cache contract": ["**"],
     "Test install-free CI commands": ["**"],
     "Test pre-push secret scan ranges": ["**"],
     "Test merge-base network comparison": ["**"],
@@ -195,6 +196,7 @@
     "Deployment feature guard": ["**"],
     "Processed-field backlog guard": ["@stll/api"],
     "GitHub API command ownership": ["**"],
+    "CI network step retries and timeouts": ["**"],
     "Sparse checkout script dependencies": ["**"],
     "SHA-256 migration ledger": ["**"],
     "Custom lint rule coverage": ["**"],
@@ -205,6 +207,7 @@
     "Knip production dependency checks": ["**"],
     "Knip workspace dependency checks": ["**"],
     "Knip dead-export check (packages/cli)": ["**"],
-    "Knip dead-export budget (all workspaces)": ["**"]
+    "Knip dead-export budget (all workspaces)": ["**"],
+    "Dependabot group guard (installed packages)": ["**"]
   }
 }

@@ -140,6 +140,31 @@ pub fn web_origin_for_trusted_api(api_base_url: &str) -> Option<String> {
   Some(format!("http://{}:{web_port}", parsed.host()?))
 }
 
+/// The server a fresh "Connect to stella web" links to: the API and web
+/// origin this build was made for, or production when the build names none.
+pub fn default_connect_target() -> (String, String) {
+  let api = parse_origins(BUILD_TIME_DEFAULT_API_BASE_URLS.map(str::to_string))
+    .into_iter()
+    .next();
+  let web = parse_origins(BUILD_TIME_DEFAULT_ORIGINS.map(str::to_string))
+    .into_iter()
+    .next();
+  default_connect_target_from(api, web)
+}
+
+fn default_connect_target_from(
+  api: Option<String>,
+  web: Option<String>,
+) -> (String, String) {
+  match (api, web) {
+    (Some(api), Some(web)) => (normalize_api_base_url(&api), web),
+    _ => (
+      PRODUCTION_API_BASE_URL.to_string(),
+      PRODUCTION_WEB_ORIGIN.to_string(),
+    ),
+  }
+}
+
 pub fn resolve_bridge_port() -> u16 {
   parse_port(
     std::env::var("STELLA_DESKTOP_BRIDGE_PORT").ok(),
@@ -190,6 +215,33 @@ pub fn resolve_trusted_api_base_urls() -> HashSet<String> {
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn connect_goes_to_the_server_the_build_names() {
+    assert_eq!(
+      default_connect_target_from(
+        Some("http://localhost:3333".into()),
+        Some("http://localhost:3332".into()),
+      ),
+      (
+        "http://localhost:3333".to_string(),
+        "http://localhost:3332".to_string()
+      )
+    );
+    for (api, web) in [
+      (None, None),
+      (Some("http://localhost:3333".to_string()), None),
+      (None, Some("http://localhost:3332".to_string())),
+    ] {
+      assert_eq!(
+        default_connect_target_from(api, web),
+        (
+          PRODUCTION_API_BASE_URL.to_string(),
+          PRODUCTION_WEB_ORIGIN.to_string()
+        )
+      );
+    }
+  }
 
   #[test]
   fn a_handoff_api_maps_to_the_web_origin_that_links_its_account() {

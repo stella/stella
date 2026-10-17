@@ -1,15 +1,17 @@
 import { panic } from "better-result";
-import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 import * as v from "valibot";
 
+import { provisionLinkCapability } from "@stll/api-contract/provision-link-capability";
+import type { ProvisionLinkCapability } from "@stll/api-contract/provision-link-capability";
 import { PROVISION_LINK_STATUS_TYPES } from "@stll/api-contract/provision-link-status";
 import type { ProvisionLinkStatus } from "@stll/api-contract/provision-link-status";
 
 import {
-  caseLawDecisions,
+  publishedCaseLawDecisions,
   caseLawProvisionCitations,
   caseLawProvisionExtractions,
   caseLawProvisionExtractionRevisions,
@@ -32,6 +34,7 @@ import {
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
+import { provisionStatusForCapability } from "./status-for-capability";
 import {
   PROVISION_VERSION_COLUMNS,
   projectProvisionVersion,
@@ -154,6 +157,8 @@ type ProvisionPageOptions = {
   generation: string;
   status: ProvisionLinkStatus;
   publishedProjectionDigest: string | null;
+  capability: ProvisionLinkCapability;
+  pendingSince: string | null;
 };
 
 const provisionPage = ({
@@ -162,6 +167,8 @@ const provisionPage = ({
   generation,
   status: linkStatus,
   publishedProjectionDigest,
+  capability,
+  pendingSince,
 }: ProvisionPageOptions) => ({
   ...createCursorPage({
     rows: rows.map(projectProvisionVersion),
@@ -169,9 +176,11 @@ const provisionPage = ({
     cursorForItem: (item) =>
       encodePaginationCursor([generation, item.spanStart, item.anchor]),
   }),
-  status: linkStatus,
+  status: provisionStatusForCapability(capability, linkStatus),
   generation,
   publishedProjectionDigest,
+  capability,
+  pendingSince: capability.type === "notSupportedYet" ? null : pendingSince,
 });
 
 /** Check on this transaction, so a grant rollout takes effect without a restart. */
@@ -214,17 +223,26 @@ const readLegacyProvisionPage = async ({
   if (cursor !== null && cursor.generation !== "0") {
     return paginationConflict();
   }
+  const [decisionMetadata] = await tx
+    .select({
+      country: publishedCaseLawDecisions.country,
+      language: publishedCaseLawDecisions.language,
+    })
+    .from(publishedCaseLawDecisions)
+    .where(eq(publishedCaseLawDecisions.id, decisionId));
+  if (decisionMetadata === undefined) {
+    panic("Authorized decision disappeared");
+  }
   const rows = await tx
     .select(LEGACY_CITATION_FIELDS)
     .from(caseLawProvisionCitations)
     .innerJoin(
-      caseLawDecisions,
-      eq(caseLawDecisions.id, caseLawProvisionCitations.decisionId),
+      publishedCaseLawDecisions,
+      eq(publishedCaseLawDecisions.id, caseLawProvisionCitations.decisionId),
     )
     .where(
       and(
         eq(caseLawProvisionCitations.decisionId, decisionId),
-        isNull(caseLawDecisions.redactedAt),
         cursor === null
           ? undefined
           : sql`(${caseLawProvisionCitations.spanStart}, ${caseLawProvisionCitations.anchor}) > (${cursor.spanStart}::integer, ${cursor.anchor}::text)`,
@@ -241,6 +259,11 @@ const readLegacyProvisionPage = async ({
     generation: "0",
     status: { type: "pending" },
     publishedProjectionDigest: null,
+    capability: provisionLinkCapability(
+      decisionMetadata.country,
+      decisionMetadata.language,
+    ),
+    pendingSince: null,
   });
 };
 
@@ -267,7 +290,7 @@ export const listDecisionProvisionsHandler = async ({
     return await readLegacyProvisionPage({ subject, cursor, limit });
   }
 
-  const decision = caseLawDecisions;
+  const decision = publishedCaseLawDecisions;
   const extraction = caseLawProvisionExtractions;
   const revisions = caseLawProvisionExtractionRevisions;
   const registry = caseLawProvisionExtractionRevisionsRegistry;
@@ -306,8 +329,6 @@ export const listDecisionProvisionsHandler = async ({
   }));
   const pageConditions = [
     eq(caseLawProvisionCitations.decisionId, decisionId),
-    // A redacted decision's old citation excerpts must not escape its tombstone.
-    isNull(decision.redactedAt),
     ...(cursor === null
       ? []
       : [
@@ -318,6 +339,9 @@ export const listDecisionProvisionsHandler = async ({
   const rows = await tx
     .select({
       status: statusCase,
+      country: decision.country,
+      language: decision.language,
+      pendingSince: extraction.pendingSince,
       generation: sql<string>`coalesce(${extraction.generation}, 0)::text`,
       publishedProjectionDigest: sql<
         string | null
@@ -357,5 +381,7 @@ export const listDecisionProvisionsHandler = async ({
     status: metadata.status,
     generation: metadata.generation,
     publishedProjectionDigest: metadata.publishedProjectionDigest,
+    capability: provisionLinkCapability(metadata.country, metadata.language),
+    pendingSince: metadata.pendingSince?.toISOString() ?? null,
   });
 };
