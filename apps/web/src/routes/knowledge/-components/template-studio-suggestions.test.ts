@@ -1,7 +1,13 @@
+import type { Node as PMNode } from "@tiptap/pm/model";
 import { Schema } from "@tiptap/pm/model";
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
 
-import { resolveSuggestionAnchor } from "@stll/folio-react";
+import {
+  buildPositionalText,
+  resolveSuggestionAnchor,
+} from "@stll/folio-react";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   buildOperationSpecs,
@@ -23,6 +29,46 @@ const schema = new Schema({
     text: {},
   },
 });
+
+const PROPERTY_MAX_PARAGRAPHS = 4;
+const PROPERTY_MAX_SPECS = 6;
+const PROPERTY_MAX_OCCUPIED_RANGES = 5;
+const PROPERTY_MAX_RANGE_LENGTH = 32;
+const PROPERTY_MAX_TEXT_PARTS = 18;
+const PROPERTY_MAX_SEARCH_TOKENS = 4;
+const PROPERTY_MIN_PARAGRAPHS = 1;
+const PROPERTY_CONTEXT_CHARS = 24;
+const SEARCH_TEXT_ATOMS = Object.freeze([
+  "a",
+  "Acme",
+  "café",
+  "Čapkovým",
+  "e\u0301",
+  "😀",
+  " ",
+  "+",
+  "[",
+  "\ud800",
+  "\udc00",
+  "\ufffd",
+]);
+const searchTextArbitrary = fc
+  .array(fc.constantFrom(...SEARCH_TEXT_ATOMS), {
+    maxLength: PROPERTY_MAX_TEXT_PARTS,
+  })
+  .map((parts) => parts.join(""));
+const searchLiteralArbitrary = fc.constantFrom(
+  "a",
+  "Acme",
+  "café",
+  "Čapkov",
+  "fé",
+  "e\u0301",
+  "😀",
+  "+",
+  "[",
+  "",
+);
 
 const makeDoc = (paragraphs: string[]) =>
   schema.node(
@@ -46,7 +92,199 @@ const spec = (partial: Partial<ReplacementSpec>): ReplacementSpec => ({
     : { registerMeta: partial.registerMeta }),
 });
 
+type PreviousSuggestionProjectionOptions = {
+  doc: PMNode;
+  occupiedRanges: readonly { from: number; to: number }[];
+  specs: readonly ReplacementSpec[];
+};
+
+const previousSuggestionProjection = ({
+  doc,
+  occupiedRanges,
+  specs,
+}: PreviousSuggestionProjectionOptions) => {
+  const positional = buildPositionalText(doc);
+  const haystack = positional.text;
+  const searchHaystack = haystack.toWellFormed();
+  const suggestions: {
+    contextAfter: string;
+    contextBefore: string;
+    originalText: string;
+    range: { from: number; to: number };
+    rationale: string;
+    severity: "substantive";
+    status: "pending";
+    suggestedText: string;
+    topic: string;
+  }[] = [];
+  const placedSpecIds = new Set<string>();
+  const occupied = [...occupiedRanges];
+
+  for (const candidateSpec of specs) {
+    if (candidateSpec.literalText.length === 0) {
+      continue;
+    }
+
+    let regionStart = 0;
+    let regionEnd = haystack.length;
+    if (
+      candidateSpec.scopeText !== undefined &&
+      candidateSpec.scopeText.length > 0
+    ) {
+      const normalizedScopeText = candidateSpec.scopeText.toWellFormed();
+      const scopeIndex = searchHaystack.indexOf(normalizedScopeText);
+      if (scopeIndex !== -1) {
+        regionStart = scopeIndex;
+        regionEnd = scopeIndex + normalizedScopeText.length;
+      }
+    }
+
+    const normalizedLiteralText = candidateSpec.literalText.toWellFormed();
+    let matchIndex = searchHaystack.indexOf(normalizedLiteralText, regionStart);
+    while (
+      matchIndex !== -1 &&
+      matchIndex + normalizedLiteralText.length <= regionEnd
+    ) {
+      const from = positional.pmPositionAt(matchIndex);
+      const to =
+        positional.pmPositionAt(matchIndex + normalizedLiteralText.length - 1) +
+        1;
+      const overlaps = occupied.some(
+        (range) => from < range.to && to > range.from,
+      );
+      if (!overlaps) {
+        occupied.push({ from, to });
+        placedSpecIds.add(candidateSpec.id);
+        suggestions.push({
+          contextBefore: haystack.slice(
+            Math.max(0, matchIndex - PROPERTY_CONTEXT_CHARS),
+            matchIndex,
+          ),
+          contextAfter: haystack.slice(
+            matchIndex + normalizedLiteralText.length,
+            matchIndex + normalizedLiteralText.length + PROPERTY_CONTEXT_CHARS,
+          ),
+          originalText: haystack.slice(
+            matchIndex,
+            matchIndex + normalizedLiteralText.length,
+          ),
+          range: { from, to },
+          rationale: candidateSpec.rationale,
+          severity: "substantive",
+          status: "pending",
+          suggestedText: candidateSpec.suggestedText,
+          topic: candidateSpec.topic,
+        });
+      }
+      matchIndex = searchHaystack.indexOf(
+        normalizedLiteralText,
+        matchIndex + normalizedLiteralText.length,
+      );
+    }
+  }
+
+  return {
+    placedSpecIds: [...placedSpecIds],
+    suggestions: suggestions.toSorted(
+      (left, right) => left.range.from - right.range.from,
+    ),
+  };
+};
+
 describe("buildReplacementSuggestions", () => {
+  test("matches the previous scoped, ordered literal-scan outputs for generated inputs", () => {
+    const generatedParagraphs = fc
+      .array(
+        fc.array(fc.constantFrom(...SEARCH_TEXT_ATOMS), {
+          maxLength: PROPERTY_MAX_SEARCH_TOKENS,
+        }),
+        {
+          minLength: PROPERTY_MIN_PARAGRAPHS,
+          maxLength: PROPERTY_MAX_PARAGRAPHS,
+        },
+      )
+      .map((paragraphs) => paragraphs.map((parts) => parts.join(" ")));
+    const generatedSpecs = fc.array(
+      fc.record({
+        id: searchTextArbitrary,
+        literalText: searchLiteralArbitrary,
+        rationale: searchTextArbitrary,
+        scopeText: fc.option(searchTextArbitrary, { nil: undefined }),
+        suggestedText: searchTextArbitrary,
+        topic: searchTextArbitrary,
+      }),
+      { maxLength: PROPERTY_MAX_SPECS },
+    );
+    const generatedOccupiedRanges = fc.array(
+      fc.tuple(
+        fc.nat({ max: PROPERTY_MAX_RANGE_LENGTH }),
+        fc.nat({ max: PROPERTY_MAX_RANGE_LENGTH }),
+      ),
+      { maxLength: PROPERTY_MAX_OCCUPIED_RANGES },
+    );
+
+    assertProperty(
+      "matches the previous scoped, ordered literal-scan outputs for generated inputs",
+      fc.property(
+        generatedParagraphs,
+        generatedSpecs,
+        generatedOccupiedRanges,
+        (paragraphs, rawSpecs, rawOccupiedRanges) => {
+          const doc = makeDoc(paragraphs);
+          const oracleSpecs = rawSpecs.map((candidate) => {
+            const { scopeText, ...candidateFields } = candidate;
+            return {
+              ...candidateFields,
+              literalText: candidate.literalText,
+              ...(scopeText === undefined ? {} : { scopeText }),
+            };
+          });
+          const maxPosition = doc.content.size;
+          const occupiedRanges = rawOccupiedRanges.map(([start, length]) => {
+            const from = start % (maxPosition + 1);
+            const to = Math.min(maxPosition, from + length);
+            return { from, to };
+          });
+          const expected = previousSuggestionProjection({
+            doc,
+            occupiedRanges,
+            specs: oracleSpecs,
+          });
+          const actual = buildReplacementSuggestions(doc, oracleSpecs, {
+            occupiedRanges,
+          });
+
+          expect(actual.placedSpecIds).toEqual(new Set(expected.placedSpecIds));
+          expect(
+            actual.suggestions.map(
+              ({
+                contextAfter,
+                contextBefore,
+                originalText,
+                range,
+                rationale,
+                severity,
+                status,
+                suggestedText,
+                topic,
+              }) => ({
+                contextAfter,
+                contextBefore,
+                originalText,
+                range,
+                rationale,
+                severity,
+                status,
+                suggestedText,
+                topic,
+              }),
+            ),
+          ).toEqual(expected.suggestions);
+        },
+      ),
+    );
+  });
+
   test("contexts come from positional text so anchors re-resolve", () => {
     const doc = makeDoc(["Seller: Acme Inc.", "Buyer: Beta s.r.o."]);
     const { suggestions } = buildReplacementSuggestions(doc, [
@@ -94,6 +332,33 @@ describe("buildReplacementSuggestions", () => {
     ).toBe("Acme Inc.");
     // Anchored in the second paragraph, not the first occurrence.
     expect(suggestions[0]?.contextBefore ?? "").toContain("goods.");
+  });
+
+  test("well-forms malformed text for matching and never matches half an astral character", () => {
+    for (const malformedText of ["left\ud800right", "left\udc00right"]) {
+      const malformedDocument = makeDoc([malformedText]);
+      const replacementSuggestions = buildReplacementSuggestions(
+        malformedDocument,
+        [spec({ literalText: "\ufffd", suggestedText: "replacement" })],
+      );
+      expect(replacementSuggestions.suggestions).toHaveLength(1);
+      const suggestion = replacementSuggestions.suggestions[0];
+      if (!suggestion) {
+        throw new Error("expected a malformed-text suggestion");
+      }
+      expect(suggestion.originalText).toBe(malformedText.slice(4, 5));
+      expect(resolveSuggestionAnchor(malformedDocument, suggestion)).toEqual(
+        suggestion.range,
+      );
+    }
+
+    const astralDocument = makeDoc(["😀"]);
+    expect(
+      buildReplacementSuggestions(astralDocument, [
+        spec({ literalText: "\ud83d", suggestedText: "high half" }),
+        spec({ id: "low", literalText: "\ude00", suggestedText: "low half" }),
+      ]).suggestions,
+    ).toEqual([]);
   });
 
   test("unmatched literals report as not placed; matched specs map every occurrence without overlap", () => {
