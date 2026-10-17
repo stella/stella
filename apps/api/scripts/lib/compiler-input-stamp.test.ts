@@ -308,3 +308,9 @@ test("a portable stamp rejects a dependency in an unrecorded ancestor of a symli
     rmSync(linkRoot, { recursive: true, force: true });
   }
 });
+
+test("a portable stamp for an unreadable checkout is not reused", () => {
+  expect(
+    localizeStamp(recordProgram(), path.join(directory, "missing-checkout")),
+  ).toBeUndefined();
+});

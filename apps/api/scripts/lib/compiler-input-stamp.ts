@@ -216,7 +216,7 @@ const toPortableStamp = (stamp: CompilerInputStamp, root: string) => {
  * Absolute paths remain untouched, so a machine-specific path outside the
  * repository never matches another checkout.
  */
-export const localizeStamp = (stamp: CompilerInputStamp, root: string) => {
+const localizeStampOrThrow = (stamp: CompilerInputStamp, root: string) => {
   const realRoot = realpathSync(root);
   const tokens = JSON.stringify(stamp).match(ROOT_TOKEN_PATTERN) ?? [];
   if (
@@ -283,6 +283,15 @@ export const localizeStamp = (stamp: CompilerInputStamp, root: string) => {
     }
   }
   return localized;
+};
+
+/**
+ * {@link localizeStampOrThrow}, treating an unreadable checkout or ancestor as
+ * a stamp that cannot be reused, so the caller generates instead of failing.
+ */
+export const localizeStamp = (stamp: CompilerInputStamp, root: string) => {
+  const localized = Result.try(() => localizeStampOrThrow(stamp, root));
+  return localized.isOk() ? localized.value : undefined;
 };
 
 // Paths and keys, not text: a stable code-unit order on every machine.
