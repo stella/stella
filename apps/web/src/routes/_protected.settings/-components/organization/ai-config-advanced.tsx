@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import { useTranslations } from "use-intl";
 
 import {
@@ -14,6 +16,8 @@ import {
 } from "@/components/ai-config-role-models.logic";
 import type {
   RoleModelOverrides,
+  RoleModelSelections,
+  ProviderDefaultRoleModels,
   ProviderValue,
   RoleValue,
   ModelSelection,
@@ -28,6 +32,9 @@ type AIConfigAdvancedProps = {
   hasOpenAIKey: boolean;
   providers: readonly ProviderValue[];
   roleModels: RoleModelOverrides;
+  defaultModels: RoleModelSelections | null;
+  providerDefaultModels: ProviderDefaultRoleModels;
+  defaultsFeedback: ReactNode;
   onRoleChange: (role: RoleValue, selection: ModelSelection | null) => void;
   onRoleReset: (role: RoleValue) => void;
   decisionState: DecisionModelState;
@@ -42,6 +49,9 @@ export const AIConfigAdvanced = ({
   hasOpenAIKey,
   providers,
   roleModels,
+  defaultModels,
+  providerDefaultModels,
+  defaultsFeedback,
   onRoleChange,
   onRoleReset,
   decisionState,
@@ -66,13 +76,20 @@ export const AIConfigAdvanced = ({
         </AccordionTrigger>
         <AccordionPanel>
           <div className="flex flex-col gap-4">
+            {defaultsFeedback}
             <AIConfigRoleModelPicker
               disabled={disabled}
               providers={providerValues}
-              roleModels={roleModelsFromOverrideModels({
-                overrideModels: roleModels,
-                providers: providerValues,
-              })}
+              providerDefaultModels={providerDefaultModels}
+              roleModels={
+                defaultModels === null
+                  ? null
+                  : roleModelsFromOverrideModels({
+                      overrideModels: roleModels,
+                      defaultModels,
+                      providers: providerValues,
+                    })
+              }
               customization={{ overrides: roleModels, onReset: onRoleReset }}
               onModelChange={onRoleChange}
             >
@@ -85,6 +102,7 @@ export const AIConfigAdvanced = ({
                 stored={storedDecision}
               />
             </AIConfigRoleModelPicker>
+
             {!hasUsableDecisionModel({
               state: decisionState,
               stored: storedDecision,
