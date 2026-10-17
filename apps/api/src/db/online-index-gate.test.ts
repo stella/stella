@@ -8,6 +8,7 @@ import {
   LONG_TRANSACTION_SQL,
 } from "@stll/db-load-gate/indicators";
 import { propertyConfig } from "@stll/property-testing";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { readOnlineIndexConfig } from "../env-online-index";
 import {
@@ -500,6 +501,27 @@ describe("online index gate", () => {
     ).toBe("retry");
     expect(harness.pollCount()).toBe(4);
     expect(JSON.stringify(harness.records)).toContain('"value":20');
+    await harness.gate.close();
+  });
+
+  test("work that runs out of its own lock budget retries; other failures still throw", async () => {
+    const harness = makeHarness({ readings: [ebs(90)] });
+    expect(
+      await harness.gate.attempt(async () => {
+        throw Object.assign(new Error("lock timeout"), { code: "55P03" });
+      }),
+    ).toBe("retry");
+    expect(JSON.stringify(harness.records)).toContain(
+      "Statement lock budget exhausted",
+    );
+    const failure = Object.assign(new Error("syntax"), { code: "42601" });
+    expect(
+      await rejectionOf(
+        harness.gate.attempt(async () => {
+          throw failure;
+        }),
+      ),
+    ).toBe(failure);
     await harness.gate.close();
   });
 

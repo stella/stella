@@ -1469,7 +1469,7 @@ const createHarness = ({
           }
           if (
             query.trim() ===
-            "SELECT to_regprocedure('public.entity_feature_gate_finish()') IS NOT NULL AS installed"
+            "SELECT to_regproc('public.entity_feature_gate_finish') IS NOT NULL AS installed"
           ) {
             return [{ installed: false }];
           }
