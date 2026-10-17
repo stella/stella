@@ -4,6 +4,7 @@ import type { SQL } from "drizzle-orm";
 
 import { isEntityKind, resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 import { courtAbbreviation } from "@stll/api-contract/case-law-court-abbreviations";
+import { GLOBAL_SEARCH_RESULT_LIMIT } from "@stll/api-contract/search";
 import { compareCodeUnit } from "@stll/collation";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { Temporal } from "@stll/time";
@@ -47,7 +48,6 @@ import {
 } from "@/api/lib/search/highlight";
 import {
   compareScoredSearchHits,
-  GLOBAL_SEARCH_RESULT_LIMIT,
   globalSearchCursorSql,
   paginateScoredSearchHits,
   parseGlobalSearchCursor,
@@ -929,7 +929,7 @@ const readGlobalSearch = async (
         ${searchScore({ tsv: sql`clsd.tsv`, updatedAt: sql`d.updated_at` })},
         d.updated_at
       FROM case_law_search_documents clsd
-      JOIN case_law_decisions d ON d.id = clsd.decision_id
+      JOIN case_law_published_decisions d ON d.id = clsd.decision_id
       ${publicCaseLawDecisionJoin}
       ${caseLawBodyPreviewJoin}
       WHERE TRUE
@@ -996,7 +996,7 @@ const readGlobalSearch = async (
     FROM (
       SELECT 1
       FROM case_law_search_documents clsd
-      JOIN case_law_decisions d ON d.id = clsd.decision_id
+      JOIN case_law_published_decisions d ON d.id = clsd.decision_id
       ${publicCaseLawDecisionJoin}
       WHERE TRUE
         ${caseLawTextSearchFilter}

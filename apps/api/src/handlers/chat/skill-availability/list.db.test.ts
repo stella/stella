@@ -380,8 +380,9 @@ describe("built-in skills are decided beside installed ones", () => {
   // on them is visible; their names stay the shipped ones.
   const listUnmetBuiltIns = createListUnavailableChatSkills({
     listBuiltInSkills: () =>
-      listSkillMetadata().map(({ description, name, version }) => ({
+      listSkillMetadata().map(({ description, invocation, name, version }) => ({
         description,
+        invocation,
         metadata: { [SKILL_REQUIRED_TOOLS_METADATA_KEY]: SKILL.nowhere.tools },
         name,
         version,

@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { eq, sql } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
@@ -19,17 +20,13 @@ const ZERO_UUID = "00000000-0000-0000-0000-000000000000";
 type SearchablePersistedChatMessageContent = {
   data: unknown[];
   metadata?: unknown;
-  version: 1 | 2 | 3;
+  version: 3;
 };
 
 const isPersistedChatMessageContent = (
   value: unknown,
 ): value is SearchablePersistedChatMessageContent =>
-  isRecord(value) &&
-  (value["version"] === 1 ||
-    value["version"] === 2 ||
-    value["version"] === 3) &&
-  Array.isArray(value["data"]);
+  isRecord(value) && value["version"] === 3 && Array.isArray(value["data"]);
 
 type SearchableChatTextPart = {
   content: string;
@@ -72,9 +69,6 @@ const toSearchableTextPart = (part: unknown): SearchableChatTextPart | null => {
   }
   if (typeof part["content"] === "string") {
     return { type: "text", content: stripMarkdownLinkTargets(part["content"]) };
-  }
-  if (typeof part["text"] === "string") {
-    return { type: "text", content: stripMarkdownLinkTargets(part["text"]) };
   }
   return null;
 };
@@ -126,6 +120,9 @@ const toSearchableChatSourceDocument = (
 };
 
 export const normalizeSearchableChatMessageContent = (content: unknown) => {
+  if (isRecord(content) && content["version"] !== 3) {
+    panic("Stored chat content requires the v3 data backfill");
+  }
   if (!isPersistedChatMessageContent(content)) {
     return null;
   }
@@ -134,23 +131,8 @@ export const normalizeSearchableChatMessageContent = (content: unknown) => {
     const searchable = toSearchableTextPart(part);
     return searchable ? [searchable] : [];
   });
-  const rawMetadata =
-    content.version !== 1 && isRecord(content.metadata) ? content.metadata : {};
-  const version2SourceDocuments = rawMetadata["sourceDocuments"];
-  const legacySourceDocuments =
-    content.version === 1
-      ? content.data.flatMap((part) =>
-          isRecord(part) &&
-          part["type"] === "data-stella-source-document" &&
-          isRecord(part["data"])
-            ? [part["data"]]
-            : [],
-        )
-      : [];
-  let rawSourceDocuments = version2SourceDocuments;
-  if (rawSourceDocuments === undefined && legacySourceDocuments.length > 0) {
-    rawSourceDocuments = legacySourceDocuments;
-  }
+  const rawMetadata = isRecord(content.metadata) ? content.metadata : {};
+  const rawSourceDocuments = rawMetadata["sourceDocuments"];
   const metadata: SearchableChatMessageMetadata = {
     ...rawMetadata,
     ...(rawSourceDocuments === undefined

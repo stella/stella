@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { asc, eq, sql } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
+
+import { deferred, settledWithin } from "@stll/test-kit";
+import { dbClock } from "@stll/test-kit/db";
 
 import { schedulerJobRuns, schedulerJobs } from "@/api/db/schema";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
@@ -12,30 +15,9 @@ const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
 const LEASE_MS = 3 * 60_000;
 const HEARTBEAT_INTERVAL_MS = 100;
-// Far beyond the abort deadline below, so only the heartbeat can stop the task.
+// Far beyond any wait below, so only the heartbeat can stop the task.
 const MAX_RUNTIME_MS = 60_000;
-const ABORT_DEADLINE_MS = 2000;
 const TASK = "test.lease-handoff";
-
-type Deferred = { promise: Promise<unknown>; resolve: () => void };
-
-const deferred = (): Deferred => {
-  const { promise, resolve } = Promise.withResolvers();
-  return { promise, resolve: () => resolve(undefined) };
-};
-
-const within = async (
-  promise: Promise<unknown>,
-  ms: number,
-): Promise<boolean> => {
-  const { promise: timedOut, resolve } = Promise.withResolvers<boolean>();
-  const timer = setTimeout(() => resolve(false), ms);
-  try {
-    return await Promise.race([promise.then(() => true), timedOut]);
-  } finally {
-    clearTimeout(timer);
-  }
-};
 
 if (!databaseUrl || !runPostgresTests) {
   describe.skip("scheduler lease handoff (postgres)", () => {
@@ -73,6 +55,10 @@ if (!databaseUrl || !runPostgresTests) {
           committedBy.push("runner-2");
         };
 
+        // Settled in `finally` too, so a failed wait never deletes rows or
+        // closes clients under a runner that is still writing.
+        let firstRunner: ReturnType<typeof runSchedulerOnce> | undefined;
+
         try {
           await firstDb.insert(schedulerJobs).values({
             description: "lease handoff",
@@ -82,7 +68,7 @@ if (!databaseUrl || !runPostgresTests) {
             task: TASK,
           });
 
-          const firstRunner = runSchedulerOnce({
+          firstRunner = runSchedulerOnce({
             db: firstDb,
             heartbeatIntervalMs: HEARTBEAT_INTERVAL_MS,
             leaseMs: LEASE_MS,
@@ -99,7 +85,7 @@ if (!databaseUrl || !runPostgresTests) {
             .update(schedulerJobs)
             .set({
               lockedBy: "evicted",
-              lockedUntil: sql`now() - interval '1 second'`,
+              lockedUntil: dbClock.ago(1000),
             })
             .where(eq(schedulerJobs.id, jobId));
 
@@ -112,14 +98,15 @@ if (!databaseUrl || !runPostgresTests) {
           });
           expect(secondResult.succeeded).toBe(1);
 
-          const sawAbort = await within(
-            firstTaskAborted.promise,
-            ABORT_DEADLINE_MS,
-          );
+          // Wait for the event, not for a time: the heartbeat's next renewal
+          // finds the lease gone and aborts the task. The hang guard only names
+          // the wait if that never happens; it does not bound runner speed.
+          await settledWithin(firstTaskAborted.promise, {
+            description: "runner 1 to stop its task after losing the lease",
+          });
           releaseFirstTask.resolve();
           const firstResult = await firstRunner;
 
-          expect(sawAbort).toBe(true);
           expect(firstResult).toMatchObject({ acquired: 1, skipped: 1 });
           expect(committedBy).toEqual(["runner-2"]);
 
@@ -149,6 +136,7 @@ if (!databaseUrl || !runPostgresTests) {
           expect(job?.lastSuccessAt).toBeInstanceOf(Date);
         } finally {
           releaseFirstTask.resolve();
+          await Promise.allSettled([firstRunner]);
           await secondDb
             .delete(schedulerJobRuns)
             .where(eq(schedulerJobRuns.jobId, jobId));

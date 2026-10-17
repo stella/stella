@@ -30,6 +30,7 @@ jobs:
     permissions:
       contents: read
       statuses: read
+      checks: read
       pull-requests: read
       issues: read
       actions: read
@@ -47,6 +48,14 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
           sparse-checkout: scripts
+
+      # Bun runs the release queue history check the health gate needs before
+      # a merge-group receipt may stand in for the heavy statuses.
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .release-proof/package.json
+          no-cache: true
 
       - name: Reuse completed release proof
         id: reuse
@@ -142,6 +151,9 @@ jobs:
       checks: read
       pull-requests: read
       packages: read
+      # Declared by ci-plan's merge-queue yield, which runs only on
+      # pull_request events and never here.
+      statuses: write
     with:
       depth: fast
       pr_depth_only: true

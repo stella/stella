@@ -7,6 +7,7 @@ import { plugin } from "bun";
 import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 
 import type { FolioScrollEventDetail } from "@/lib/folio-scroll-event";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type { OriginalDocxHostProps } from "./original-docx-host";
 import type { ClaimState, VerificationRun } from "./types";
@@ -175,7 +176,7 @@ afterEach(() => {
 });
 afterAll(async () => {
   fetchBoundary.mockRestore();
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const claimFixtures = {

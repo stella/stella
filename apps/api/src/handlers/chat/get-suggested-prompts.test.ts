@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { describe, expect, mock, spyOn, test } from "bun:test";
 
 import { env } from "@/api/env";
+import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -221,10 +222,9 @@ test("suggested prompts usage refusal calls no model and persists nothing", asyn
               id: "message_prompts_refused",
               role: "user",
               createdAt: new Date("2026-09-01T00:00:00Z"),
-              content: {
-                version: 2,
+              content: toPersistedChatMessageContentV3({
                 data: [{ type: "text", content: "Draft a document" }],
-              },
+              }),
             },
           ];
         },
@@ -244,7 +244,7 @@ test("suggested prompts usage refusal calls no model and persists nothing", asyn
   });
   const generator = spyOn(
     textGeneration,
-    "generateTanStackTextForRole",
+    "generateTanStackTextForTask",
   ).mockResolvedValue("Draft a response.");
   testState.setConfig("USAGE_ENFORCEMENT_ENABLED", true);
   testState.setConfig("AI_PROVIDER", "openrouter");

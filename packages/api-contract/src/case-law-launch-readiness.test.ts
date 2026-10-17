@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  CASE_LAW_BROWSER_COUNTRIES,
+  CASE_LAW_REGION_BY_COUNTRY,
   parseCaseLawLaunchReadiness,
   publicCaseLawCountry,
 } from "./case-law-launch-readiness";
@@ -13,6 +15,16 @@ const readyRow = {
 } as const;
 
 describe("case-law launch readiness", () => {
+  test.each(CASE_LAW_BROWSER_COUNTRIES)(
+    "%s has a region and can carry complete readiness evidence",
+    (country) => {
+      expect(CASE_LAW_REGION_BY_COUNTRY[country]).toMatch(/^[A-Z]{2}$/u);
+      const parsed = parseCaseLawLaunchReadiness([{ ...readyRow, country }]);
+      expect(parsed).toHaveLength(1);
+      expect(parsed.at(0) === country).toBe(true);
+    },
+  );
+
   test("requires complete readiness evidence", () => {
     expect(() =>
       parseCaseLawLaunchReadiness([{ ...readyRow, evalSetExists: false }]),

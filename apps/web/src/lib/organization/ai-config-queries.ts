@@ -1,6 +1,8 @@
 import { queryOptions } from "@tanstack/react-query";
 import type { InferDataFromTag } from "@tanstack/react-query";
 
+import type { TanStackAIProvider } from "@stll/ai-catalog";
+
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
@@ -12,6 +14,11 @@ type OrganizationAIConfigKey = {
 
 export const aiConfigKeys = {
   all: ["organization-ai-config"] as const,
+  defaultsPreview: ({
+    organizationId,
+    providers,
+  }: OrganizationAIConfigKey & { providers: readonly TanStackAIProvider[] }) =>
+    ["organization-ai-defaults-preview", organizationId, providers] as const,
   availabilityRoot: ["organization-ai-availability"] as const,
   byOrganization: ({ organizationId }: OrganizationAIConfigKey) => [
     ...aiConfigKeys.all,
@@ -41,6 +48,27 @@ export const aiConfigOptions = ({ organizationId }: AIConfigOptionsInput) =>
 
       return unwrapEden(response);
     },
+    staleTime: ROUTE_QUERY_STALE_TIME_MS,
+  });
+
+type AIDefaultsPreviewOptionsInput = QueryOptionsInput<
+  OrganizationAIConfigKey & {
+    providers: readonly TanStackAIProvider[];
+  }
+>;
+
+export const aiDefaultsPreviewOptions = ({
+  organizationId,
+  providers,
+}: AIDefaultsPreviewOptionsInput) =>
+  queryOptions({
+    queryKey: aiConfigKeys.defaultsPreview({ organizationId, providers }),
+    queryFn: async ({ signal }) =>
+      unwrapEden(
+        await api["organization-settings"]["ai-config"][
+          "defaults-preview"
+        ].post({ providers: [...providers] }, { fetch: { signal } }),
+      ),
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
 
