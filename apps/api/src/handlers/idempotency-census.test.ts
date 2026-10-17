@@ -59,6 +59,8 @@ const IDEMPOTENCY_EXCEPTIONS = {
     "The response is a realtime stream, not a JSON document.",
   "src/handlers/uploads/create.ts":
     "Creates expiring entity-create or entity-version upload intents; signed URLs expire and abort removes the intent, while resource identity is established by finalization.",
+  "src/handlers/workspaces/correspondence/address/create.ts":
+    "Rotates an inbound address containing a generated credential that must not be retained in replay receipts.",
 } as const satisfies Record<string, string>;
 
 const parse = (source: string) =>
@@ -235,9 +237,22 @@ const hasReplayConfig = (source: string) => {
     const idempotency = config ? property(config, "idempotency") : undefined;
     const replay = idempotency ? resolve(idempotency) : undefined;
     const type = replay ? property(replay, "type") : undefined;
-    eligible.push(
-      type !== undefined && ts.isStringLiteral(type) && type.text === "replay",
-    );
+    const declaresReplay =
+      type !== undefined && ts.isStringLiteral(type) && type.text === "replay";
+    const mcpExpression = config ? property(config, "mcp") : undefined;
+    const mcp = mcpExpression ? resolve(mcpExpression) : undefined;
+    const reason = mcp ? property(mcp, "reason") : undefined;
+    if (
+      declaresReplay &&
+      reason !== undefined &&
+      ts.isStringLiteral(reason) &&
+      reason.text === "provider_secret"
+    ) {
+      throw new TypeError(
+        "Credential-bearing handlers cannot retain replay receipts",
+      );
+    }
+    eligible.push(declaresReplay);
   });
   return (
     nonJsonConstructs.length === 0 &&
@@ -332,6 +347,21 @@ test("the create census rejects direct response and stream replay", () => {
       createSafeRootHandler({ idempotency: { type: "replay" } }, () => ${result});
     `),
     ).toBe(false);
+  }
+});
+
+test("the create census rejects replay of generated credentials", () => {
+  for (const handler of ["createSafeHandler", "createSafeRootHandler"]) {
+    expect(() =>
+      hasReplayConfig(`
+      const access = { type: "internal", reason: "provider_secret" };
+      const config = {
+        idempotency: { type: "replay" },
+        mcp: access,
+      } satisfies HandlerConfig;
+      ${handler}(config, () => Result.ok({ credential: "generated" }));
+    `),
+    ).toThrow("Credential-bearing handlers cannot retain replay receipts");
   }
 });
 

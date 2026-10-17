@@ -8,7 +8,6 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { correspondenceApi } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { toSafeId } from "@/lib/safe-id";
 import { correspondenceKeys } from "@/lib/workspaces/queries/correspondence";
 
@@ -73,18 +72,15 @@ export const useRotateCorrespondenceAddress = () => {
   const queryClient = useQueryClient();
   const t = useTranslations();
 
-  return useIdempotentMutation({
-    mutationFn: async (
-      {
-        workspaceId,
-      }: {
-        workspaceId: string;
-      },
-      request,
-    ): Promise<void> => {
+  return useMutation({
+    mutationFn: async ({
+      workspaceId,
+    }: {
+      workspaceId: string;
+    }): Promise<void> => {
       const response = await correspondenceApi
         .workspaces({ workspaceId })
-        .correspondence.address.post(undefined, request);
+        .correspondence.address.post();
       unwrapEden(response);
     },
     onSuccess: async (_result, { workspaceId }) => {
