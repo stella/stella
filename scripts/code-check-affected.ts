@@ -904,10 +904,21 @@ export const memoryLimitBytes = ({
   total = totalmem(),
   read = (file: string) =>
     existsSync(file) ? readFileSync(file, "utf-8") : undefined,
+  requested = process.env["CODE_CHECK_MEMORY_BYTES"],
 }: {
   total?: number;
   read?: (file: string) => string | undefined;
+  requested?: string | undefined;
 } = {}): number => {
+  // An explicit byte count replaces detection (tests pin the plan with it).
+  const override = Number(requested);
+  if (
+    requested !== undefined &&
+    Number.isSafeInteger(override) &&
+    override > 0
+  ) {
+    return override;
+  }
   let limit = total;
   for (const file of CGROUP_MEMORY_LIMITS) {
     const value = Number(

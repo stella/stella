@@ -48,6 +48,10 @@ import {
 import configuredBudgets from "./code-quality-task-budgets.json" with { type: "json" };
 import { isChangedLintPath } from "./lint-paths";
 
+// Subprocess runs that assert on the plan pin a large machine; the plan
+// otherwise depends on the host's memory.
+const LARGE_MACHINE = { CODE_CHECK_MEMORY_BYTES: String(64 * 1024 ** 3) };
+
 const WORKSPACES = new Set([
   "apps/api",
   "apps/landing",
@@ -770,6 +774,7 @@ exec "$CHECK_REAL_BUN" "$@"
         {
           env: {
             ...process.env,
+            ...LARGE_MACHINE,
             PATH: `${directory}:${process.env["PATH"] ?? ""}`,
             CHECK_REAL_BUN: process.execPath,
           },
@@ -814,7 +819,13 @@ process.exit(childExitStatus(result));
       }
       const result = Bun.spawnSync(
         ["bun", "scripts/code-check-affected.ts", "--all", "--dry-run"],
-        { env: { ...process.env, PATH: `${directory}:${environmentPath}` } },
+        {
+          env: {
+            ...process.env,
+            ...LARGE_MACHINE,
+            PATH: `${directory}:${environmentPath}`,
+          },
+        },
       );
       expect(result.exitCode).not.toBe(0);
       expect(result.stderr.toString()).toContain(
@@ -846,13 +857,25 @@ process.exit(childExitStatus(result));
       }
       const reference = Bun.spawnSync(
         ["git", "rev-parse", "--verify", "--quiet", "origin/main^{commit}"],
-        { env: { ...process.env, PATH: `${directory}:${environmentPath}` } },
+        {
+          env: {
+            ...process.env,
+            ...LARGE_MACHINE,
+            PATH: `${directory}:${environmentPath}`,
+          },
+        },
       );
       expect(reference.exitCode).toBe(1);
       expect(Boolean(reference.signalCode)).toBe(false);
       const result = Bun.spawnSync(
         ["bun", "scripts/code-check-affected.ts", "--all", "--dry-run"],
-        { env: { ...process.env, PATH: `${directory}:${environmentPath}` } },
+        {
+          env: {
+            ...process.env,
+            ...LARGE_MACHINE,
+            PATH: `${directory}:${environmentPath}`,
+          },
+        },
       );
       expect(result.exitCode, result.stderr.toString()).toBe(0);
       expect(result.stderr.toString()).not.toContain("Panic");
@@ -1207,12 +1230,14 @@ describe("parallel code-quality legs", () => {
       memoryLimitBytes({
         total: 64 * GiB,
         read: reads({ "/sys/fs/cgroup/memory.max": `${16 * GiB}\n` }),
+        requested: "",
       }),
     ).toBe(16 * GiB);
     // cgroup v1 with no effective limit reports a huge number.
     expect(
       memoryLimitBytes({
         total: 32 * GiB,
+        requested: "",
         read: reads({
           "/sys/fs/cgroup/memory.max": "max\n",
           "/sys/fs/cgroup/memory/memory.limit_in_bytes": "9223372036854771712",
@@ -1220,17 +1245,52 @@ describe("parallel code-quality legs", () => {
       }),
     ).toBe(32 * GiB);
     // No cgroup files (macOS) or an unreadable file keep the machine's.
-    expect(memoryLimitBytes({ total: 48 * GiB, read: () => undefined })).toBe(
-      48 * GiB,
-    );
     expect(
       memoryLimitBytes({
         total: 48 * GiB,
+        read: () => undefined,
+        requested: "",
+      }),
+    ).toBe(48 * GiB);
+    expect(
+      memoryLimitBytes({
+        total: 48 * GiB,
+        requested: "",
         read: () => {
           throw new Error("EACCES");
         },
       }),
     ).toBe(48 * GiB);
+  });
+
+  test("a 16 GiB machine plans the full check with typecheck before lint", () => {
+    const result = Bun.spawnSync(
+      ["bun", "scripts/code-check-affected.ts", "--all", "--dry-run"],
+      {
+        env: {
+          ...process.env,
+          CODE_CHECK_MEMORY_BYTES: String(16 * 1024 ** 3),
+        },
+      },
+    );
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
+    const output = result.stdout.toString();
+    expect(output).not.toContain("turbo run lint typecheck");
+    const typecheckAt = output.indexOf("turbo run typecheck --concurrency");
+    const lintAt = output.indexOf("turbo run lint --concurrency");
+    expect(typecheckAt).toBeGreaterThan(-1);
+    expect(lintAt).toBeGreaterThan(typecheckAt);
+  }, 30_000);
+
+  test("an explicit memory size replaces detection", () => {
+    expect(
+      memoryLimitBytes({ total: 8, read: () => "4", requested: "64" }),
+    ).toBe(64);
+    for (const requested of ["0", "-1", "lots", ""]) {
+      expect(memoryLimitBytes({ total: 8, read: () => "4", requested })).toBe(
+        4,
+      );
+    }
   });
 
   test("below 24 GiB the API typecheck and type-aware API lint never run together", () => {
@@ -1739,6 +1799,7 @@ esac
           cwd: path.resolve(import.meta.dir, ".."),
           env: {
             ...process.env,
+            ...LARGE_MACHINE,
             PATH: `${directory}:${process.env["PATH"] ?? ""}`,
             CHECK_COMMAND_LOG: log,
             CHECK_REAL_GIT: realGit,
