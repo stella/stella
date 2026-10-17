@@ -376,3 +376,21 @@ test("Czech and Slovak article words place the complete printed reference", () =
     ).toEqual([printed]);
   }
 });
+
+test("article words do not match related adjectives", () => {
+  const sentence = "Použije se článkový 6 přehled.";
+  expect(
+    locateProvisionAnchors({
+      blocks: [paragraph("text", sentence)],
+      provisions: [
+        {
+          id: "article",
+          reference: { ...reference(6), unit: "article" },
+          sentenceText: sentence,
+          spanStart: sentence.indexOf("článkový 6"),
+          target: "eu-act",
+        },
+      ],
+    }).failures,
+  ).toEqual([{ id: "article", reason: "reference-unlocatable" }]);
+});
