@@ -43,6 +43,30 @@ describe("local generated-view selection scoring", () => {
     ).toBe(true);
   });
 
+  test("rejects HTML in an unlabelled fence but accepts a fenced non-HTML snippet", () => {
+    const [unlabelled, plainFence] = scoreGeneratedViews(
+      selections().map((result, index) => ({
+        ...result,
+        answer:
+          index === 0
+            ? "```\n<!doctype html><div>Analysis</div>\n```"
+            : "```\nPenalty 400000 > cap 120000\n```",
+      })),
+    );
+    expect(unlabelled?.presentationPass).toBe(false);
+    expect(plainFence?.presentationPass).toBe(true);
+  });
+
+  test("every case supplies the material its prompt refers to", () => {
+    expect(
+      generatedViewsCases.every(({ context }) => context.trim().length > 40),
+    ).toBe(true);
+    const treemap = generatedViewsCases.find(
+      ({ id }) => id === "court-year-treemap",
+    );
+    expect(treemap?.context).toContain('"courtYear"');
+  });
+
   test("requires exactly one result for every fixture", () => {
     const results = selections();
     expect(() => scoreGeneratedViews(results.slice(1))).toThrow(

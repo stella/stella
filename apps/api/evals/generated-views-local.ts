@@ -26,6 +26,7 @@ if (mode === "prompts") {
       JSON.stringify({
         caseId: scenario.id,
         prompt: scenario.prompt,
+        context: scenario.context,
         tools: [
           {
             name: tool.name,
@@ -34,7 +35,7 @@ if (mode === "prompts") {
           },
         ],
         instruction:
-          "Choose tools for this request. The supplied analysis or data is available in the conversation. Record your choice as JSON with caseId, harness (your local run label), answer, and toolCalls: [{name}]. Do not call any model provider API.",
+          "Choose tools for this request. The supplied analysis or data is the context field. Record your choice as JSON with caseId, harness (your local run label), answer, and toolCalls: [{name}]. Do not call any model provider API.",
       }),
     );
   }
