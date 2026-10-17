@@ -608,6 +608,19 @@ export const generateAnalysis = async ({
     }
   }
 
+  // A deployment that may not ask a model for derived layers serves what is
+  // stored and generates nothing: a seeded or local stack never reaches a
+  // model by opening a decision. Decided before any recorded failure, so a
+  // reader is never offered a retry that this deployment cannot run.
+  if (!derivedAi) {
+    return Result.ok(
+      unavailable(
+        "analysis_unavailable",
+        "Analysis is unavailable for this decision",
+      ),
+    );
+  }
+
   // Before a run starts: when the run this reader's key made last failed,
   // say so until the reader asks again, and even then until the provider's
   // retry time when it named one. The record is filed under this reader's
@@ -637,18 +650,6 @@ export const generateAnalysis = async ({
   const heldFailure = await answerFailure();
   if (heldFailure !== null) {
     return Result.ok(heldFailure);
-  }
-
-  // A deployment that may not ask a model for derived layers serves what is
-  // stored and generates nothing: a seeded or local stack never reaches a
-  // model by opening a decision.
-  if (!derivedAi) {
-    return Result.ok(
-      unavailable(
-        "analysis_unavailable",
-        "Analysis is unavailable for this decision",
-      ),
-    );
   }
 
   // Sources carry different reuse terms. One whose terms withhold derived AI

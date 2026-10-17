@@ -455,6 +455,32 @@ describe("a failed analysis run", () => {
     expect(await failureRows(decisionId)).toEqual([]);
   });
 
+  // A failure filed while derived AI was on must not offer a retry once the
+  // deployment turns it off: off mode is the terminal answer, poll or retry.
+  test("with derived AI off, a still-held failure answers unavailable, not retryable", async () => {
+    const decisionId = await insertDecision();
+    await read({ decisionId, model: fakeGoogle(["refused"]).model });
+    const held = await read({ decisionId, model: fakeGoogle([]).model });
+    expect(held.response).toMatchObject({ status: "error", code: "failed" });
+
+    const google = fakeGoogle(["valid"]);
+    for (const retry of [false, true]) {
+      const { response, starts } = await read({
+        decisionId,
+        model: google.model,
+        retry,
+        derivedAi: false,
+      });
+      expect(response).toMatchObject({
+        status: "error",
+        code: "analysis_unavailable",
+      });
+      expect(starts).toBe(0);
+    }
+    expect(google.requests).toEqual([]);
+    expect(await storedValue(decisionId)).toBeNull();
+  });
+
   test("a provider refusal persists its redacted diagnostic until retry or a provider change", async () => {
     const decisionId = await insertDecision();
     const google = fakeGoogle(["refused", "valid"]);
