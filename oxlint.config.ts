@@ -285,6 +285,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-inline-style-colors.fixture.tsx", [
     "no-inline-style-colors/no-inline-style-colors",
   ]),
+  fixtureRuleOverride("no-inline-heavy-host-props.fixture.tsx", [
+    "no-inline-heavy-host-props/no-inline-heavy-host-props",
+  ]),
   fixtureRuleOverride("no-ad-hoc-find-shortcut.fixture.ts", [
     "no-ad-hoc-find-shortcut/no-ad-hoc-find-shortcut",
   ]),
@@ -1472,6 +1475,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-ad-hoc-inline-rename.ts",
     "./.oxlint-plugins/no-first-observer-entry.ts",
     "./.oxlint-plugins/no-inline-style-colors.ts",
+    "./.oxlint-plugins/no-inline-heavy-host-props.ts",
     "./.oxlint-plugins/no-ad-hoc-find-shortcut.ts",
     "./.oxlint-plugins/no-hand-rolled-typed-character.ts",
     "./.oxlint-plugins/no-ambient-hotkey-format.ts",
@@ -2365,6 +2369,7 @@ const config = defineConfig({
         "no-raw-foreground-opacity/no-raw-foreground-opacity": "error",
         "no-ad-hoc-inline-rename/no-ad-hoc-inline-rename": "error",
         "no-inline-style-colors/no-inline-style-colors": "error",
+        "no-inline-heavy-host-props/no-inline-heavy-host-props": "error",
         "no-physical-properties/no-physical-properties": "error",
         "no-layout-motion-classes/no-layout-motion-classes": [
           "error",

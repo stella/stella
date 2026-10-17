@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type {
   Dispatch,
   MouseEvent,
@@ -250,12 +250,10 @@ export const FileTabPanel = ({
   const t = useTranslations();
   const [pdfColorMode, setPDFColorMode] = useState<PDFColorMode>("system");
   const setFileFacet = useInspectorTabsStore((s) => s.setFileFacet);
-  const display = getFileTabDisplayState({
-    activeId,
-    minimized,
-    scaleOffsets,
-    tab,
-  });
+  const display = useMemo(
+    () => getFileTabDisplayState({ activeId, minimized, scaleOffsets, tab }),
+    [activeId, minimized, scaleOffsets, tab],
+  );
   const {
     desktopEditFileType,
     isActive,
@@ -313,9 +311,12 @@ export const FileTabPanel = ({
     tab,
   });
 
-  const handleViewerError = (error: unknown) => {
-    notifyUserError(error, t("errors.actionFailed"));
-  };
+  const handleViewerError = useCallback(
+    (error: unknown) => {
+      notifyUserError(error, t("errors.actionFailed"));
+    },
+    [t],
+  );
 
   const docxEditor = useDocxEditorBindings({
     docxActionsRef,

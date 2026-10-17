@@ -138,25 +138,7 @@ const changedClaim = (
 };
 
 describe("hosted DOCX editor: claiming", () => {
-  test("re-claiming an equal claim returns the same registry, even from new objects", () => {
-    for (const slot of [DOCX_EDITOR_SLOT.main, DOCX_EDITOR_SLOT.inspector]) {
-      const registry = claimDocxEditorSlot(EMPTY_DOCX_EDITOR_REGISTRY, {
-        claim: claimFor(slot, 1),
-        hostKey,
-      });
-      let current = registry;
-      // A panel that rebuilds its document object on every render.
-      for (let render = 0; render < 50; render += 1) {
-        current = claimDocxEditorSlot(current, {
-          claim: { ...claimFor(slot, 1), document: { ...document } },
-          hostKey,
-        });
-      }
-      expect(current).toBe(registry);
-    }
-  });
-
-  test("any change to what a claim asks for yields a new registry", () => {
+  test("equal claims preserve the registry while changed claims replace it", () => {
     fc.assert(
       fc.property(
         fc.constantFrom(DOCX_EDITOR_SLOT.main, DOCX_EDITOR_SLOT.inspector),
@@ -174,8 +156,13 @@ describe("hosted DOCX editor: claiming", () => {
             claim: base,
             hostKey,
           });
+          const equal = claimDocxEditorSlot(registry, {
+            claim: { ...claimFor(slot, 1), document: { ...document } },
+            hostKey,
+          });
+          expect(equal).toBe(registry);
           const changed = changedClaim(base, change);
-          const next = claimDocxEditorSlot(registry, {
+          const next = claimDocxEditorSlot(equal, {
             claim: changed,
             hostKey,
           });
