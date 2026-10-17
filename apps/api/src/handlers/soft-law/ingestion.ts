@@ -1,4 +1,4 @@
-import { panic, Result } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -10,6 +10,7 @@ import {
 import type { WriteRawSourcePayload } from "@/api/lib/legal-search/raw-source-storage";
 import type { SoftLawFetch } from "@/api/lib/legal-search/soft-law-access-types";
 import { SoftLawBlockedError } from "@/api/lib/legal-search/soft-law-access-types";
+import { SOFT_LAW_AUTHORITY_POLICIES } from "@/api/lib/legal-search/soft-law-authority-policy";
 import {
   softLawIdentityKey,
   softLawContentHash,
@@ -93,6 +94,9 @@ type PrepareSoftLawPageOptions = {
   fetch: SoftLawFetch;
   writeRaw: WriteRawSourcePayload;
 };
+class SoftLawPageCapacityError extends TaggedError("SoftLawPageCapacityError")<{
+  message: string;
+}> {}
 type FetchedSoftLawItem = {
   entry: SoftLawEntry;
   input: SoftLawDocumentInput;
@@ -126,7 +130,10 @@ const fetchSoftLawItem = async ({
   if (
     !input.raw.length ||
     input.raw.length > DOCUMENT_RAW_PART_LIMIT ||
-    new Set(input.raw.map((part) => part.role)).size !== input.raw.length
+    new Set(input.raw.map((part) => part.role)).size !== input.raw.length ||
+    (SOFT_LAW_AUTHORITY_POLICIES[adapter.authority].expression === "required" &&
+      (!input.raw.some((part) => part.purpose === "document") ||
+        input.raw.some((part) => part.purpose === undefined)))
   ) {
     return Result.err(
       new SoftLawItemError({
@@ -139,11 +146,18 @@ const fetchSoftLawItem = async ({
     (total, part) => total + part.bytes.byteLength,
     0,
   );
-  if (rawByteLength > maxRawBytes) {
+  if (rawByteLength > PAGE_RAW_BYTE_LIMIT) {
     return Result.err(
       new SoftLawItemError({
-        message: "Page raw byte limit exceeded",
+        message: "Document exceeds the page raw byte limit",
         tag: "invalid_document",
+      }),
+    );
+  }
+  if (rawByteLength > maxRawBytes) {
+    return Result.err(
+      new SoftLawPageCapacityError({
+        message: "Page raw byte capacity exhausted",
       }),
     );
   }
@@ -162,14 +176,26 @@ const rejectedAttempt = (
   count: number,
 ): SoftLawAttempt => {
   if (SoftLawItemError.is(error)) {
-    return { entry, status: "rejected", tag: error.tag, count };
+    return { entry, status: "rejected", tag: error.tag, count, rawObjects: [] };
   }
   if (SoftLawIngestionError.is(error)) {
-    return { entry, status: "rejected", tag: "invalid_document", count };
+    return {
+      entry,
+      status: "rejected",
+      tag: "invalid_document",
+      count,
+      rawObjects: [],
+    };
   }
   return count >= ITEM_ATTEMPT_LIMIT
-    ? { entry, status: "rejected", tag: "retry_exhausted", count }
-    : { entry, status: "retryable", tag: null, count };
+    ? {
+        entry,
+        status: "rejected",
+        tag: "retry_exhausted",
+        count,
+        rawObjects: [],
+      }
+    : { entry, status: "retryable", tag: null, count, rawObjects: [] };
 };
 const fetchSoftLawPage = async ({
   entries,
@@ -195,10 +221,21 @@ const fetchSoftLawPage = async ({
     )
     .map((attempt) => attempt.entry);
   let retainedRawBytes = 0;
+  let capacity: "available" | "exhausted" = "available";
   for (const entry of [...entries, ...pendingEntries]) {
     signal.throwIfAborted();
     const previous = prior.get(entry.url);
     if (previous && previous.status !== "retryable") {
+      continue;
+    }
+    if (capacity === "exhausted" || retainedRawBytes === PAGE_RAW_BYTE_LIMIT) {
+      attempts.push({
+        entry,
+        status: "retryable",
+        tag: null,
+        count: previous?.count ?? 0,
+        rawObjects: [],
+      });
       continue;
     }
     const count = (previous?.count ?? 0) + 1;
@@ -229,6 +266,17 @@ const fetchSoftLawPage = async ({
     }
     signal.throwIfAborted();
     if (result.status === "error") {
+      if (SoftLawPageCapacityError.is(result.error)) {
+        capacity = "exhausted";
+        attempts.push({
+          entry,
+          status: "retryable",
+          tag: null,
+          count: previous?.count ?? 0,
+          rawObjects: [],
+        });
+        continue;
+      }
       attempts.push(rejectedAttempt(entry, result.error, count));
       continue;
     }
@@ -272,6 +320,7 @@ const prepareSoftLawPage = async (options: PrepareSoftLawPageOptions) => {
         count,
         status: "rejected",
         tag: "ambiguous_locator",
+        rawObjects: [],
       });
       continue;
     }
@@ -303,6 +352,7 @@ const prepareSoftLawPage = async (options: PrepareSoftLawPageOptions) => {
         status: "rejected",
         tag: "identity_collision",
         identityKey,
+        rawObjects: [],
       });
       continue;
     }
@@ -325,6 +375,7 @@ const prepareSoftLawPage = async (options: PrepareSoftLawPageOptions) => {
           role: part.role,
           key,
           contentType: part.contentType,
+          ...(part.purpose ? { purpose: part.purpose } : {}),
         });
       }
       return { entry, input, documentId, identityKey, contentHash, rawObjects };
@@ -338,6 +389,7 @@ const prepareSoftLawPage = async (options: PrepareSoftLawPageOptions) => {
     attempts.push({
       entry,
       count,
+      rawObjects: written.value.rawObjects,
       status:
         existing?.version?.contentHash === contentHash
           ? "unchanged"
@@ -414,7 +466,11 @@ export const runSoftLawIngestion = async ({
         if (renewed.status === "error") {
           return renewed;
         }
-        const page = await adapter.discover({ cursor, signal, fetch });
+        const discovered = await adapter.discover({ cursor, signal, fetch });
+        if (discovered.status === "error") {
+          return discovered;
+        }
+        const page = discovered.value;
         const pageAvailable = assertPublisherAvailable(fetch);
         if (pageAvailable.status === "error") {
           return pageAvailable;
