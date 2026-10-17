@@ -40,6 +40,14 @@ export const linkIconOptions = (hostname: string) => {
             message: "Link icon unavailable",
             cause: Result.isError(result) ? result.error : result.value.error,
           }),
+          {
+            fingerprintKey: "linkIconOptions:request",
+            scope: {
+              type: "request",
+              method: "GET",
+              routeTemplate: "/v1/chat/link-icons/:hostname",
+            },
+          },
         );
         return temporary;
       }
@@ -64,6 +72,14 @@ export const linkIconOptions = (hostname: string) => {
             action: "readLinkIcon",
             message: "Unexpected link icon response",
           }),
+          {
+            fingerprintKey: "linkIconOptions:response",
+            scope: {
+              type: "request",
+              method: "GET",
+              routeTemplate: "/v1/chat/link-icons/:hostname",
+            },
+          },
         );
         return temporary;
       }

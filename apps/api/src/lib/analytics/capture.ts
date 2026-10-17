@@ -25,7 +25,7 @@ import {
   exceptionFingerprint,
   type StableExceptionKey,
 } from "@/api/lib/observability/exception-fingerprint";
-import { getExceptionScopes } from "@/api/lib/observability/exception-scope";
+import { getRequestExceptionScopes } from "@/api/lib/observability/exception-scope";
 import type { FailureGrading } from "@/api/lib/observability/failure";
 import { identityFields } from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
@@ -187,7 +187,7 @@ const captureErrorWithOptions = (
   const stableFingerprint = exceptionFingerprint(evidence, {
     fingerprintKey: options.fingerprintKey,
     scope: options.scope,
-    inheritedScopes: getExceptionScopes(),
+    inheritedScopes: getRequestExceptionScopes(),
   });
   const grading =
     options.observed === undefined

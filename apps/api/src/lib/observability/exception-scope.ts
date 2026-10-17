@@ -6,7 +6,7 @@ import { getMountedRequestRoute } from "@/api/lib/observability/request-context"
 
 export { withExceptionScope } from "@stll/errors/exception-scope-context";
 
-export const getExceptionScopes = (): readonly ExceptionScope[] => {
+export const getRequestExceptionScopes = (): readonly ExceptionScope[] => {
   const mountedRoute = getMountedRequestRoute();
   return getInheritedExceptionScopes().map((scope) => {
     if (scope.type !== "request" || mountedRoute === undefined) {
@@ -24,4 +24,4 @@ export const getExceptionScopes = (): readonly ExceptionScope[] => {
 };
 
 export const getExceptionScope = (): ExceptionScope | undefined =>
-  getExceptionScopes().at(-1);
+  getRequestExceptionScopes().at(-1);

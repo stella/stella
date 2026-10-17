@@ -1,5 +1,4 @@
-import { panic } from "better-result";
-
+import { panic } from "@stll/errors";
 import type { RequestExceptionScope } from "@stll/errors";
 
 export type ScopedResponseObserver = (context: {

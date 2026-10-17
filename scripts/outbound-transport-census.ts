@@ -41,6 +41,13 @@ export const LINK_ICON_TRANSPORT_OWNERS = [
 
 export const OUTBOUND_TRANSPORT_CENSUS = [
   {
+    path: "packages/api-client/src/index.ts",
+    class: "package-owned-client",
+    reason:
+      "Typed first-party API client resolves the runtime fetch transport for scoped response observation.",
+    transports: ["global:fetch"],
+  },
+  {
     path: "packages/start-runtime/src/local-module-loader.ts",
     class: "package-owned-client",
     reason:

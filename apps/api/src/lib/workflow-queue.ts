@@ -488,6 +488,43 @@ type PlanAndEnqueueWorkflowOptions = Omit<
   releaseClaimAndFail: (cause: unknown) => Promise<StartWorkflowResult>;
 };
 
+type RequestedWorkflowPlanOptions = {
+  entityIds: StartWorkflowArgs["entityIds"];
+  propertyIds: StartWorkflowArgs["propertyIds"];
+  executionPlanData: Awaited<ReturnType<typeof getExecutionPlanData>>;
+};
+
+const requestedWorkflowPlan = ({
+  entityIds,
+  propertyIds,
+  executionPlanData,
+}: RequestedWorkflowPlanOptions) => {
+  // Property-status freshness is an optimization for full-workspace
+  // runs ("nothing changed, skip"). It must be bypassed when the
+  // caller is asking for an explicit re-run: entity backfills
+  // ("backfill these new rows") and column reruns ("re-extract this
+  // column") both need the property in the plan even if it is
+  // marked fresh. The per-entity / per-property targeting below
+  // still scopes the actual computation correctly.
+  const planInput =
+    (entityIds && entityIds.length > 0) ||
+    (propertyIds && propertyIds.length > 0)
+      ? {
+          ...executionPlanData,
+          properties: executionPlanData.properties.map((p) => ({
+            ...p,
+            status: "stale" as const,
+          })),
+        }
+      : executionPlanData;
+
+  const fullExecutionPlan = getPropertyExecutionPlan(planInput);
+
+  return propertyIds && propertyIds.length > 0
+    ? filterPlanByPropertyIds(fullExecutionPlan, propertyIds)
+    : fullExecutionPlan;
+};
+
 const planAndEnqueueWorkflow = async (
   {
     workspaceId,
@@ -543,31 +580,11 @@ const planAndEnqueueWorkflow = async (
     const executionPlanData = await getExecutionPlanData(workspaceId, scopedDb);
     signal?.throwIfAborted();
 
-    // Property-status freshness is an optimization for full-workspace
-    // runs ("nothing changed, skip"). It must be bypassed when the
-    // caller is asking for an explicit re-run: entity backfills
-    // ("backfill these new rows") and column reruns ("re-extract this
-    // column") both need the property in the plan even if it is
-    // marked fresh. The per-entity / per-property targeting below
-    // still scopes the actual computation correctly.
-    const planInput =
-      (inputEntityIds && inputEntityIds.length > 0) ||
-      (inputPropertyIds && inputPropertyIds.length > 0)
-        ? {
-            ...executionPlanData,
-            properties: executionPlanData.properties.map((p) => ({
-              ...p,
-              status: "stale" as const,
-            })),
-          }
-        : executionPlanData;
-
-    const fullExecutionPlan = getPropertyExecutionPlan(planInput);
-
-    const executionPlan =
-      inputPropertyIds && inputPropertyIds.length > 0
-        ? filterPlanByPropertyIds(fullExecutionPlan, inputPropertyIds)
-        : fullExecutionPlan;
+    const executionPlan = requestedWorkflowPlan({
+      entityIds: inputEntityIds,
+      propertyIds: inputPropertyIds,
+      executionPlanData,
+    });
 
     const hasWork = executionPlan.some((level) =>
       level.some((batch) => batch.properties.length > 0),

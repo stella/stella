@@ -18,8 +18,7 @@
   },
   "dependencies": {
     "@elysia/eden": "^1.4.10",
-    "@stll/errors": "workspace:*",
-    "better-result": "catalog:"
+    "@stll/errors": "workspace:*"
   },
   "devDependencies": {
     "@stll/typescript-config": "workspace:*",

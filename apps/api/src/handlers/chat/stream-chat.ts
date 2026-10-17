@@ -3065,6 +3065,38 @@ const createClientAssistantOwner = (responseMessageId: string) => {
   };
 };
 
+const finalizeCompletedSource = (
+  processor: ChatStreamProcessor,
+  finishedChunks: readonly PublicStreamChunk[],
+): void => {
+  for (const chunk of finishedChunks) {
+    processor.processChunk(chunk);
+  }
+  // The source is drained, so the turn is over. A finish that reports
+  // `tool_calls` leaves the processor waiting for the next iteration of the
+  // agent loop, and an iteration that never comes would leave the assistant
+  // message unfinalized and `onStreamEnd` unfired: the turn a client tool or
+  // an approval is waiting on would read as an empty completion. Finalizing
+  // is what ends the message; it is the same call the SDK makes when it
+  // drives the stream itself, and repeating it later is a no-op.
+  processor.finalizeStream();
+};
+
+const reportCancelledStreamFailure = (
+  error: unknown,
+  kind: AIErrorKind,
+): void => {
+  // Run control cancellation is expected; retain other upstream failures
+  // that arrive during cancellation.
+  if (AIGenerationCancelledError.is(error)) {
+    return;
+  }
+  captureError(
+    error,
+    handlerErrorContext(`chat.processServerChatStream.${kind}`, { kind }),
+  );
+};
+
 export const processServerChatStream = async function* ({
   abortSignal,
   runSignal = abortSignal,
@@ -3214,17 +3246,7 @@ export const processServerChatStream = async function* ({
       return;
     }
     const finalRunFinishedChunks = deferredRunFinishedChunks.splice(0);
-    for (const chunk of finalRunFinishedChunks) {
-      processor.processChunk(chunk);
-    }
-    // The source is drained, so the turn is over. A finish that reports
-    // `tool_calls` leaves the processor waiting for the next iteration of the
-    // agent loop, and an iteration that never comes would leave the assistant
-    // message unfinalized and `onStreamEnd` unfired: the turn a client tool or
-    // an approval is waiting on would read as an empty completion. Finalizing
-    // is what ends the message; it is the same call the SDK makes when it
-    // drives the stream itself, and repeating it later is a no-op.
-    processor.finalizeStream();
+    finalizeCompletedSource(processor, finalRunFinishedChunks);
     const outcome = drainedRunOutcome({
       abortSignal: streamControlSignal(abortSignal, runSignal),
       deadlineSignal,
@@ -3250,14 +3272,7 @@ export const processServerChatStream = async function* ({
     }
     const kind = classifyAIError(error);
     if (abortSignal.aborted) {
-      // Run control cancellation is an expected exit. Keep telemetry for
-      // other upstream failures that arrive during cancellation.
-      if (!AIGenerationCancelledError.is(error)) {
-        captureError(
-          error,
-          handlerErrorContext(`chat.processServerChatStream.${kind}`, { kind }),
-        );
-      }
+      reportCancelledStreamFailure(error, kind);
       await terminalize({
         flushProcessor: true,
         outcome: cutShortOutcome(),
