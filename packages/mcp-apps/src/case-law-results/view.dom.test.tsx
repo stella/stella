@@ -64,13 +64,46 @@ test("invalid agent filter input displays a translated hint", () => {
         facets: null,
         nextCursor: null,
         searches: [],
-        nextStep: undefined,
       },
     },
   });
   const ui = render(<CaseLawApp bridge={host.bridge} />);
   expect(ui.getByRole("alert").textContent).toBe("Vyberte platný stát.");
 });
+
+test.each(["cs-CZ", "en", "ar"])(
+  "agent-directed court and grammar notes never render in the %s app",
+  (locale) => {
+    const messages = [
+      'Read court "NS" as "Nejvyšší soud". Pass court "Nejvyšší soud" to search the same way without this note.',
+      "The search did not require these words, which are grammar rather than subject matter: za, vůči. Pass strict: true to require every word, or quote a phrase...",
+    ];
+    const host = fakeBridge({
+      ...baseSnapshot,
+      context: { locale },
+      input: { country: "CZE", queries: ["náhrada škody"] },
+      result: {
+        status: "ready",
+        view: {
+          type: "search",
+          results: [],
+          facets: null,
+          nextCursor: null,
+          searches: messages.map((message) => ({
+            warnings: [{ audience: "agent", message }],
+          })),
+        },
+      },
+    });
+    const ui = render(<CaseLawApp bridge={host.bridge} />);
+    expect(ui.getByRole("main")).toBeDefined();
+    for (const message of messages) {
+      expect(ui.container.textContent).not.toContain(message);
+    }
+    expect(ui.container.textContent).not.toContain("Pass strict: true");
+    expect(ui.container.textContent).not.toContain('Read court "NS"');
+  },
+);
 
 test("resolved decisions preserve citations and open the external link", () => {
   const host = fakeBridge({
@@ -114,7 +147,6 @@ test("search dates expose localized labels and calendar controls", async () => {
         facets: null,
         nextCursor: null,
         searches: [],
-        nextStep: undefined,
       },
     },
   });

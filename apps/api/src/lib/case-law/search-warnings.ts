@@ -44,7 +44,7 @@ type CaseLawSearchWarningsOptions = {
   emptyResultSet: boolean;
 };
 
-const functionWordsWarning = (
+export const functionWordsWarning = (
   dropped: readonly string[],
 ): CaseLawSearchWarning => ({
   code: "function_words_optional",

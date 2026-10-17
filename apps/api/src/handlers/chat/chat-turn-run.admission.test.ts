@@ -31,7 +31,11 @@ import {
   chatMessageContentFromMessage,
   toPersistableChatMessage,
 } from "./chat-message-parts";
-import { ChatTurnOwnership, ChatTurnRun } from "./chat-turn-run";
+import {
+  CHAT_TURN_OWNER_LOST_REASON,
+  ChatTurnOwnership,
+  ChatTurnRun,
+} from "./chat-turn-run";
 import { processServerChatStream, toChatMessage } from "./stream-chat";
 import { createChatMessageIdMapper } from "./stream-message-identity";
 
@@ -94,6 +98,220 @@ test("durable SSE delivers a tool start while its provider is waiting", async ()
 });
 
 describe("chat run admission follows owned settlement", () => {
+  test("does not pull a source after run ownership was already lost", async () => {
+    const control = new AbortController();
+    control.abort(CHAT_TURN_OWNER_LOST_REASON);
+    let sourcePulls = 0;
+    let persisted = 0;
+    const { processor, message } = createStreamMessageCapture({
+      initialMessages: [],
+      capture: toChatMessage,
+    });
+    const source = (async function* (): AsyncIterable<StreamChunk> {
+      sourcePulls += 1;
+      yield {
+        type: EventType.TEXT_MESSAGE_START,
+        messageId: "unused-assistant",
+        role: "assistant",
+      };
+    })();
+    const chunks: StreamChunk[] = [];
+    for await (const chunk of processServerChatStream({
+      abortSignal: control.signal,
+      runSignal: control.signal,
+      deadlineSignal: new AbortController().signal,
+      getResponseMessage: message,
+      initialMessages: [],
+      mapMessageId: createChatMessageIdMapper(() =>
+        toSafeId<"chatMessage">("11111111-1111-4111-8111-111111111111"),
+      ),
+      processor,
+      source,
+      onFinish: async ({ outcome }) => {
+        persisted += 1;
+        expect(outcome).toEqual({ type: "interrupted", reason: "owner-lost" });
+      },
+    })) {
+      chunks.push(chunk);
+    }
+    expect(sourcePulls).toBe(0);
+    expect(persisted).toBe(1);
+    expect(
+      chunks.filter((chunk) => chunk.type === EventType.RUN_ERROR),
+    ).toEqual([]);
+  });
+
+  for (const cut of [
+    "deadline",
+    "ownership-loss",
+    "admission-then-deadline",
+  ] as const) {
+    test(`ends at ${cut} while its source ignores abort and remains blocked`, async () => {
+      const sourceBlocked = Promise.withResolvers<undefined>();
+      const sourceMayFinish = Promise.withResolvers<undefined>();
+      const sourceClosed = Promise.withResolvers<undefined>();
+      let sourceFinished = false;
+      let persisted = 0;
+      const admission = new AbortController();
+      const admissionLoss = new ActionAdmissionError({
+        reason: "unavailable",
+        message: "Admission lost before the stalled provider deadline",
+      });
+      const ownership = new ChatTurnOwnership();
+      const run = new ChatTurnRun({
+        ...(cut === "admission-then-deadline"
+          ? {
+              admission: {
+                signal: admission.signal,
+                modelAdmission: testModelAdmission(
+                  toSafeId<"organization">("org_blocked_source"),
+                ),
+                reservePeriod: async () => Result.ok(undefined),
+                release: async () => {},
+              },
+            }
+          : {}),
+        connectors: undefined,
+        deadlineMs: cut === "ownership-loss" ? 60_000 : 100,
+        mode: "raw",
+        heartbeat: { intervalMs: 60_000, renewEvery: 1000 },
+        ownership,
+        owner: {
+          indexThread: async () => {},
+          execution: {
+            id: toSafeId<"chatTurn">("turn_blocked_source"),
+            executionId: "execution_blocked_source",
+          },
+          owningAssistantMessage: undefined,
+          recordAuditEvent: async () => {},
+          safeDb: createScopedDbMock({}).safeDb,
+          threadId: toSafeId<"chatThread">("thread_blocked_source"),
+          userId: toSafeId<"user">("user_blocked_source"),
+          workspaceId: null,
+        },
+      });
+      const { processor, message } = createStreamMessageCapture({
+        initialMessages: [],
+        capture: toChatMessage,
+      });
+      const source = (async function* (): AsyncIterable<StreamChunk> {
+        yield {
+          type: EventType.TEXT_MESSAGE_START,
+          messageId: "blocked-assistant",
+          role: "assistant",
+        };
+        yield {
+          type: EventType.TEXT_MESSAGE_CONTENT,
+          messageId: "blocked-assistant",
+          delta: "Partial answer",
+        };
+        if (cut === "admission-then-deadline") {
+          admission.abort(admissionLoss);
+        }
+        sourceBlocked.resolve(undefined);
+        // Deliberately ignore run.control's signal, like a stalled adapter.
+        try {
+          await sourceMayFinish.promise;
+          sourceFinished = true;
+          yield {
+            type: EventType.TEXT_MESSAGE_CONTENT,
+            messageId: "blocked-assistant",
+            delta: "Late answer after settlement",
+          };
+        } finally {
+          sourceClosed.resolve(undefined);
+        }
+      })();
+      const output = processServerChatStream({
+        abortSignal: run.control.providerAbortController.signal,
+        runSignal: run.control.abortController.signal,
+        deadlineSignal: run.control.deadlineSignal,
+        getResponseMessage: message,
+        initialMessages: [],
+        mapMessageId: createChatMessageIdMapper(() =>
+          toSafeId<"chatMessage">("11111111-1111-4111-8111-111111111111"),
+        ),
+        processor,
+        source,
+        onFinish: async ({ outcome, responseMessage }) => {
+          expect(outcome).toEqual(
+            cut === "admission-then-deadline"
+              ? {
+                  type: "failed",
+                  error: "provider_unavailable",
+                  refusal: actionAdmissionRefusal(admissionLoss),
+                }
+              : {
+                  type: "interrupted",
+                  reason: cut === "ownership-loss" ? "owner-lost" : "timeout",
+                },
+          );
+          expect(responseMessage.parts).toContainEqual({
+            type: "text",
+            content: "Partial answer",
+          });
+          await run.settle(async () => {
+            persisted += 1;
+            return { type: "stored", outcome };
+          });
+        },
+      });
+      const delivered = run
+        .produce(output, memoryStream({ runId: Bun.randomUUIDv7() }))
+        .text();
+      try {
+        await sourceBlocked.promise;
+        expect(sourceFinished).toBe(false);
+        if (cut === "admission-then-deadline") {
+          expect(run.control.providerAbortController.signal.aborted).toBe(true);
+          expect(run.control.abortController.signal.aborted).toBe(false);
+        }
+        if (cut === "ownership-loss") {
+          void run.relinquish();
+        }
+        const [end, body] = await withTimeout(
+          async () => await Promise.all([run.settled, delivered]),
+          { label: "blocked source run settlement", timeoutMs: 1000 },
+        );
+        expect(end).toBe("stored");
+        if (cut === "admission-then-deadline") {
+          expect(body).toContain('"type":"RUN_ERROR"');
+        } else {
+          expect(body).not.toContain('"type":"RUN_ERROR"');
+        }
+        expect(body).toContain("Partial answer");
+        expect(body).not.toContain("Late answer after settlement");
+        expect(persisted).toBe(1);
+        expect(sourceFinished).toBe(false);
+        expect(ownership.run(run.execution.executionId)).toBeUndefined();
+        if (cut === "ownership-loss") {
+          expect(run.control.abortController.signal.reason).toBe(
+            CHAT_TURN_OWNER_LOST_REASON,
+          );
+        } else {
+          expect(run.control.deadlineSignal.aborted).toBe(true);
+        }
+      } finally {
+        sourceMayFinish.resolve(undefined);
+        await delivered;
+      }
+      await withTimeout(async () => await sourceClosed.promise, {
+        label: "blocked source cleanup",
+        timeoutMs: 1000,
+      });
+      expect(sourceFinished).toBe(true);
+      expect(persisted).toBe(1);
+      expect(message()?.parts).toContainEqual({
+        type: "text",
+        content: "Partial answer",
+      });
+      expect(message()?.parts).not.toContainEqual({
+        type: "text",
+        content: "Partial answerLate answer after settlement",
+      });
+    });
+  }
+
   test("an initial durability write failure releases admission and unused connectors without pulling the provider", async () => {
     const admission = new AbortController();
     let releases = 0;

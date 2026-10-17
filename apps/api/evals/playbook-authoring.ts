@@ -39,7 +39,7 @@ import type { AnyServerTool, ModelMessage, TokenUsage } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import { writeFile } from "node:fs/promises";
 
-import { DEFAULT_MODELS } from "@stll/ai-catalog";
+import { MODEL_DEFAULTS_LEDGER } from "@stll/ai-catalog/model-defaults-ledger";
 
 import { resolveActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
 import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
@@ -144,7 +144,7 @@ const DEFAULT_EVAL_MODELS = [
   "anthropic::claude-haiku-4-5-20251001",
   "gpt-5.4-mini",
   "gpt-5.6-luna",
-  DEFAULT_MODELS.openai.chat,
+  MODEL_DEFAULTS_LEDGER.chat.openai.candidate.modelId,
 ];
 const DEFAULT_RUNS = 1;
 // Every run is a paid request; keep a typo from turning into a bill.
@@ -659,7 +659,7 @@ const runModelTurn = async ({
 }: ModelTurnOptions): Promise<ModelTurn> => {
   const caching = resolveCaching({
     promptCachingEnabled: false,
-    role: "fast",
+    task: "short-text",
     scopeKey: null,
   });
   const rawCalls: ToolTrace[] = [];
@@ -1604,7 +1604,7 @@ const resolveModels = async (modelIds: readonly string[]) => {
         orgAIConfig: null,
         dataClass: "customer",
         managedAIResidency: "eu",
-        role: "fast",
+        task: "short-text",
         organizationId: null,
         admission: NO_ORGANIZATION_MODEL_DISPATCH,
       }),

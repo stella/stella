@@ -1427,7 +1427,7 @@ describe("clause and template directive parity", () => {
         text: "{{ loop.index }}: {{ term.value }}",
         runs: [{ text: "{{ loop.index }}: {{ term.value }}", italic: true }],
         listKind: "ordered",
-        listLevel: 1,
+        numbering: { kind: "levelOnly", ilvl: 1 },
       },
       clauseDirective("{% endfor %}"),
       clauseDirective("{% endif %}"),

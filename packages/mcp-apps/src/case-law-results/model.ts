@@ -118,9 +118,11 @@ export const searchView = (data: SearchResults) => {
           },
     nextCursor: data.nextCursor,
     searches: data.searches.map(({ warnings }) => ({
-      warnings: warnings.map(({ message, hint }) => ({ message, hint })),
+      warnings: warnings.map(({ audience, message }) => ({
+        audience,
+        message,
+      })),
     })),
-    nextStep: data.nextStep,
   } as const;
 };
 

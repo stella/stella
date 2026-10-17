@@ -79,6 +79,7 @@ import { createEmbeddedReaderBridge } from "../decision-reader/embedded-bridge";
 import { ReaderView } from "../decision-reader/view";
 import type { createPresentationBridge } from "../shared/bridge";
 import { appLocale } from "../shared/locale";
+import { ToolNotes } from "../shared/tool-notes";
 import { filterDefaults, searchFilterInput, sortResultRows } from "./model";
 import type {
   CaseLawView,
@@ -663,26 +664,7 @@ const SearchResults = ({
           defaults={defaults}
         />
       )}
-      {[
-        ...new Map(
-          page.searches
-            .flatMap(({ warnings }) => warnings)
-            .map((warning) => [`${warning.message}-${warning.hint}`, warning]),
-        ).values(),
-      ].map((warning) => (
-        <p
-          role="status"
-          className="bg-muted/60 text-muted-foreground rounded-lg p-3 text-xs"
-          key={`${warning.message}-${warning.hint}`}
-        >
-          {warning.message} {warning.hint}
-        </p>
-      ))}
-      {page.nextStep !== undefined && (
-        <p role="status" className="text-muted-foreground text-xs">
-          {page.nextStep}
-        </p>
-      )}
+      <ToolNotes notes={page.searches.flatMap(({ warnings }) => warnings)} />
       <div className="bg-background overflow-hidden rounded-xl border shadow-xs">
         <div className="flex items-center justify-between gap-3 px-4 py-3">
           <p className="text-muted-foreground shrink-0 text-xs font-medium whitespace-nowrap">
