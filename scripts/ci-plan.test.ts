@@ -32,6 +32,7 @@ import timeoutAnnotations from "./__fixtures__/ci-cancellation/timeout.json" wit
 import { selectApiTestImpact } from "./api-test-impact";
 import { FULL_TEST_JOB_SHARDS } from "./api-test-shard-plan";
 import { requiresMalwareScan } from "./check-standalone-lockfiles";
+import { readSelectionGraph } from "./ci-affected-selection";
 import { planCiApiTests } from "./ci-api-test-plan";
 import { ciBrowserScopePredicate } from "./ci-browser-scope";
 import {
@@ -46,6 +47,7 @@ import {
   requiresPackageChecks,
 } from "./ci-package-scope";
 import { extractPlanSelector } from "./ci-plan-selector";
+import { selectRootChecks } from "./ci-root-checks";
 import { withoutStaticReuseCondition } from "./ci-static-checks.test-support";
 import { routeSmokeAffected } from "./detect-route-smoke-changes";
 import { serviceSuiteCliOutput } from "./detect-service-suite-changes";
@@ -5714,6 +5716,13 @@ test("workflow and planner changes run every planner test as a merge-group gate"
     expect(plan, item.files.join(",")).toEqual(["true"]);
   }
   const admitted = queueAdmittedJobs({ jobs: ciJobs });
+  const rootChecks = JSON.stringify(
+    selectRootChecks({
+      changed: changes,
+      graph: readSelectionGraph(root),
+      pathChange: "content",
+    }),
+  );
   const gated = new Set<string>();
   for (const file of plannerTests) {
     const selected = owners.get(file) ?? [];
@@ -5741,6 +5750,7 @@ test("workflow and planner changes run every planner test as a merge-group gate"
               "github.event_name": EVENT.mergeGroup,
               "needs.ci-plan.outputs.package_checks_required": "true",
               "needs.ci-plan.outputs.queue_depth": queueDepth,
+              "needs.ci-plan.outputs.root_checks": rootChecks,
               "needs.ci-plan.outputs.suite_depth": SUITE_DEPTH.full,
             },
             status: {

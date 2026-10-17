@@ -12,7 +12,6 @@ import { assertProperty } from "@stll/property-testing";
 import { testProcessBudgets } from "../apps/api/scripts/test-process-supervisor";
 import { CANONICAL_CANCEL_STEP } from "./ci-cancellation-contract";
 import { rootCheckGate } from "./ci-root-check-gate";
-import { ROOT_CHECK_INPUTS } from "./ci-root-checks";
 import { STATIC_RECEIPT_STEP_NAMES } from "./ci-static-checks";
 import { withoutStaticReuseCondition } from "./ci-static-checks.test-support";
 import { customLintTestCommand } from "./run-custom-lint-tests";
@@ -867,15 +866,9 @@ const normalizeRootSelection = (step: Step, job: string) => {
   const suffix = ` && ${rootCheckGate({ job, name: step.name })}`;
   const tokens = condition?.replace(/^\$\{\{\s*([\s\S]*?)\s*\}\}$/u, "$1");
   const normalized = { ...step };
+  // Base and head both normalize here; validateRootCheckCensus owns the
+  // head's gate-to-declaration agreement, and a base gate may be removed.
   if (tokens?.endsWith(suffix)) {
-    const inputs = Object.entries(ROOT_CHECK_INPUTS).find(
-      ([id]) => id === job,
-    )?.[1][step.name];
-    expect(
-      inputs,
-      "root scope must have an explicit declaration",
-    ).toBeDefined();
-    expect(inputs).not.toContain("**");
     normalized["if"] = `\${{ ${tokens.slice(0, -suffix.length)} }}`;
   }
   return normalized;
@@ -1051,7 +1044,11 @@ test("parallel CI checks preserve every merge-base check exactly once", () => {
 
 test("task result cache checks belong exactly once to the rest leg", () => {
   const checks = partitions.flatMap(({ steps }, index) =>
-    ownedSteps(steps)
+    ownedSteps(
+      steps.map((step) =>
+        normalizeRootSelection(step, partitionIds.at(index) ?? ""),
+      ),
+    )
       .filter(
         ({ run }) =>
           typeof run === "string" &&
