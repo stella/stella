@@ -48,17 +48,46 @@ jobs:
     timeout-minutes: 5
 
     steps:
-      # Keep the required check present even for drafts and source-only changes.
-      # No checkout or PR code executes while deciding whether review is needed.
-      - name: Derive dependency changes
-        id: changes
+      # A merge group reviews everything it merges: compare against the target
+      # branch, not the previous queue entry. Resolved through the API so no
+      # checked-out code runs in this job, which holds a pull-request token;
+      # an unresolved base fails the review instead of narrowing it.
+      - name: Resolve comparison base
+        if: github.event_name == 'merge_group'
+        id: target-base
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
             const { owner, repo } = context.repo;
+            const group = context.payload.merge_group;
+            const target = String(group.base_ref).replace(/^refs\/heads\//u, "");
+            const { data } = await github.rest.repos.compareCommitsWithBasehead({
+              owner,
+              repo,
+              basehead: `${target}...${group.head_sha}`,
+              per_page: 1,
+            });
+            const base = data.merge_base_commit?.sha ?? "";
+            if (!/^[0-9a-f]{40}$/u.test(base)) {
+              core.setFailed(`Cannot resolve the merge base of ${target} and the merge group head.`);
+              return;
+            }
+            core.setOutput("base_sha", base);
+
+      # Keep the required check present even for drafts and source-only changes.
+      # No checkout or PR code executes while deciding whether review is needed.
+      - name: Derive dependency changes
+        id: changes
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          TARGET_BASE_SHA: ${{ steps.target-base.outputs.base_sha }}
+        with:
+          retries: 0
+          script: |
+            const { owner, repo } = context.repo;
             const event = context.payload;
-            const base = event.pull_request?.base.sha || event.merge_group?.base_sha;
+            const base = event.pull_request?.base.sha || process.env.TARGET_BASE_SHA;
             const head = event.pull_request?.head.sha || event.merge_group?.head_sha;
             if (!base || !head) throw new Error("Missing dependency comparison refs");
             const { data } = await github.rest.repos.compareCommitsWithBasehead({
@@ -162,7 +191,7 @@ jobs:
         with:
           # The action derives both refs from a pull_request payload on its own;
           # a merge group carries them under its own event key.
-          base-ref: ${{ github.event.merge_group.base_sha || '' }}
+          base-ref: ${{ github.event_name == 'merge_group' && steps.target-base.outputs.base_sha || '' }}
           head-ref: ${{ github.event.merge_group.head_sha || '' }}
           fail-on-severity: high
           allow-licenses: >-
