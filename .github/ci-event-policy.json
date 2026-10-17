@@ -94,6 +94,7 @@
     "ai-provider-canary.yml/provider-canary": "main",
     "ai-provider-canary.yml/require-provider-coverage": "main",
     "cancel-stale-merge-groups.yml/cancel": "main",
+    "requeue-cancelled-merge-groups.yml/requeue": "main",
     "release-tag.yml/tag": "main",
     "release-tag.yml/marketing-freshness": "main",
     "catalogue-upstream.yml/catalogue-upstream": "main",

@@ -29,6 +29,7 @@ const WORKFLOW_RUN_WORKFLOWS = [
   "marketing-screenshots-publish.yml",
   "publish-npm.yml",
   "release-desktop.yml",
+  "requeue-cancelled-merge-groups.yml",
   "scheduled-run-alerts.yml",
 ] as const;
 
@@ -297,6 +298,10 @@ describe("workflow_run trust", () => {
     };
     expect(trigger("scheduled-run-alerts.yml")).toMatchObject({
       branches: ["main"],
+      types: ["completed"],
+    });
+    expect(trigger("requeue-cancelled-merge-groups.yml")).toMatchObject({
+      branches: ["gh-readonly-queue/main/**"],
       types: ["completed"],
     });
     expect(trigger("bot-refresh-auto-merge.yml")).toMatchObject({
