@@ -8,6 +8,7 @@ import type { OnlineIndexConfig } from "../env-online-index";
 import { getPgErrorCode, PG_ERROR } from "../lib/pg-error";
 import { isRecord } from "../lib/type-guards";
 import { withGatedTestClients } from "../tests/gated-test-database";
+import { runGatedTableWork, setRowLevelSecurity } from "./online-ddl";
 import {
   createOnlineIndexGate,
   type OnlineIndexGateOptions,
@@ -222,6 +223,111 @@ const repair = async (fixture: Fixture, connection = fixture.connection) => {
 };
 
 describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
+  test("writer-blocking requests and readers stay bounded, defer, and complete after the writer commits", async () => {
+    await withFixture(async (fixture) => {
+      await blockBuild(fixture);
+      const lockRetry = {
+        config: {
+          lockTimeoutsMs: [100, 250, 500],
+          pauseBaseMs: 20,
+          pauseCapMs: 40,
+          budgetMs: 2000,
+        },
+        runtime: {
+          now: Date.now,
+          sleep: async (ms: number) => {
+            await Bun.sleep(ms);
+          },
+          random: () => 0.5,
+        },
+      };
+      const run = async () =>
+        await runGatedTableWork({
+          connection: fixture.connection,
+          gate: fixture.gate,
+          reserveObserver: async () => ({
+            ...fixture.observation,
+            release: () => undefined,
+          }),
+          target: { tableName: fixture.table, name: "enable_rls" },
+          kind: "index_repair",
+          lockRetry,
+          work: async (session) => {
+            await session.run(setRowLevelSecurity(fixture.table, "enable"));
+          },
+        });
+      let done = false;
+      const work = Result.tryPromise({
+        try: run,
+        catch: (cause: unknown) => cause,
+      }).finally(() => {
+        done = true;
+      });
+      let reader: Promise<number> | undefined;
+      let samples = 0;
+      try {
+        const isDone = () => done;
+        while (!isDone()) {
+          const waits = await fixture.observer<
+            { waitMs: number; active: boolean }[]
+          >`SELECT extract(epoch FROM clock_timestamp() - l.waitstart)::double precision * 1000 AS "waitMs",
+              a.wait_event_type = 'Lock' AS active
+            FROM pg_locks l JOIN pg_stat_activity a ON a.pid = l.pid
+            WHERE l.pid = ${fixture.pid} AND l.locktype = 'relation'
+              AND l.relation = ${`public.${fixture.table}`}::regclass
+              AND l.mode = 'AccessExclusiveLock' AND NOT l.granted
+              AND l.waitstart IS NOT NULL`;
+          for (const wait of waits) {
+            samples++;
+            expect(wait.active).toBe(true);
+            expect(wait.waitMs).toBeLessThanOrEqual(500);
+            if (reader === undefined) {
+              const started = Date.now();
+              reader = fixture.owner
+                .unsafe(`SELECT * FROM public.${fixture.table}`)
+                .then(() => Date.now() - started);
+            }
+          }
+          await Bun.sleep(5);
+        }
+      } finally {
+        if (!done) {
+          await fixture.blocker`ROLLBACK`;
+        }
+        await work;
+        if (reader !== undefined) {
+          await reader;
+        }
+      }
+      const result = await work;
+      if (result.isErr()) {
+        throw result.error;
+      }
+      expect(result.value).toEqual({
+        type: "deferred",
+        step: "enable_rls",
+        retryAfterMs: fixture.gate.config.retryMs,
+      });
+      expect(samples).toBeGreaterThan(0);
+      expect(reader).toBeDefined();
+      if (reader !== undefined) {
+        expect(await reader).toBeLessThanOrEqual(500);
+      }
+      const deferredState = await fixture.observer<
+        { enabled: boolean; waiting: boolean }[]
+      >`SELECT c.relrowsecurity AS enabled,
+          EXISTS (SELECT 1 FROM pg_locks l WHERE l.pid = ${fixture.pid} AND NOT l.granted) AS waiting
+        FROM pg_class c WHERE c.oid = ${`public.${fixture.table}`}::regclass`;
+      expect(deferredState.at(0)).toEqual({ enabled: false, waiting: false });
+      await fixture.blocker`COMMIT`;
+      expect(await run()).toEqual({ type: "complete" });
+      const completed = await fixture.observer<
+        { enabled: boolean }[]
+      >`SELECT relrowsecurity AS enabled FROM pg_class WHERE oid = ${`public.${fixture.table}`}::regclass`;
+      expect(completed.at(0)?.enabled).toBe(true);
+    });
+  }, 20_000);
+
   test("two hard-floor readings cancel CIC, leave INVALID, and a healthy run repairs to VALID", async () => {
     await withFixture(async (fixture) => {
       await blockBuild(fixture);

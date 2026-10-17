@@ -26,14 +26,17 @@ export const lockTakingSqlOf = async (
       await session.run(statement);
     },
   });
-  return statements.at(0) ?? "";
+  return (
+    statements.find((text) => !text.startsWith("SET lock_timeout")) ??
+    panic("Gated statement emitted no SQL")
+  );
 };
 
 const BLOCK = /^DO \$online_ddl\$ BEGIN (.*) END \$online_ddl\$$/u;
 
 /**
- * The statements an ACCESS EXCLUSIVE block runs, without the lock budget it
- * sets first. The owner refuses `;` inside a statement, so it splits exactly.
+ * The statements an ACCESS EXCLUSIVE block runs. The owner refuses `;`
+ * inside a statement, so it splits exactly.
  */
 export const blockStatementsOf = async (
   statement: LockTakingStatement,
@@ -42,14 +45,10 @@ export const blockStatementsOf = async (
   if (body === undefined) {
     return panic("Not an online DDL block");
   }
-  const [budget, ...statements] = body
+  return body
     .split(";")
     .map((part) => part.trim())
     .filter((part) => part !== "");
-  if (budget !== "SET LOCAL lock_timeout = '1s'") {
-    return panic(`Unexpected online DDL block budget: ${budget}`);
-  }
-  return statements;
 };
 
 /** Each policy's CREATE POLICY statement, as a migration spells it. */

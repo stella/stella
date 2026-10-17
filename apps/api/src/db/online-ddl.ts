@@ -6,23 +6,26 @@
  * a table (each `CONCURRENTLY` form), can wait longer than that on a busy
  * table, and failing it fails the migrate run. Every such statement is built
  * here as an opaque `LockTakingStatement`, which no raw `execute` accepts, and
- * runs only inside `runGatedTableWork`: under the index gate, with the short
- * lock timeout lifted and the wait watched, so a busy table defers the phase
- * instead of failing it. The `confine-online-ddl` lint rule keeps the SQL text
- * of these statements out of every other database module. A database function
+ * runs only inside `runGatedTableWork`: under the index gate, with watched
+ * waits beside writers or bounded lock requests for writer-blocking work.
+ * A busy table defers the phase instead of failing it. The `confine-online-ddl`
+ * lint rule keeps the SQL text of these statements out of every other database module. A database function
  * whose body runs such DDL is declared in `online-ddl-functions.ts` and called
  * only through `callDeclaredFunction`.
  */
 
-import { panic } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 
 import type { RequiredMigrationIndex } from "../lib/db/migration-history";
+import {
+  DEFAULT_LOCK_RETRY_CONFIG,
+  DEFAULT_LOCK_RETRY_RUNTIME,
+  runLockRetryLadder,
+} from "./lock-retry-ladder";
+import type { LockRetryConfig, LockRetryRuntime } from "./lock-retry-ladder";
 import { readConstraintValidated } from "./online-constraint-completion";
-import { DDL_FUNCTIONS } from "./online-ddl-functions";
-import type {
-  DdlFunctionDeclaration,
-  OnlineDdlFunctionName,
-} from "./online-ddl-functions";
+import { readDdlFunctionDeclaration } from "./online-ddl-functions";
+import type { OnlineDdlFunctionName } from "./online-ddl-functions";
 import { createOnlineIndexGate } from "./online-index-gate";
 import type { OnlineIndexGateOptions } from "./online-index-gate";
 import type {
@@ -41,6 +44,13 @@ const LOCK_TAKING: unique symbol = Symbol("stella.lockTakingStatement");
 export type LockTakingStatement = {
   readonly [LOCK_TAKING]: string;
   readonly tableName: string;
+  /**
+   * `beside_writers` takes SHARE UPDATE EXCLUSIVE or weaker and uses the
+   * gate's watched wait. `blocks_writers` takes SHARE, SHARE ROW EXCLUSIVE,
+   * EXCLUSIVE or ACCESS EXCLUSIVE and uses bounded lock requests with retries.
+   * Keep this discriminator stable: execution budgets depend on this class.
+   */
+  readonly lockQueue: "beside_writers" | "blocks_writers";
 };
 
 const POSTGRES_IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/u;
@@ -52,9 +62,19 @@ const quoteIdentifier = (identifier: string): string => {
   return `"${identifier}"`;
 };
 
-const lockTaking = (tableName: string, text: string): LockTakingStatement => ({
+type LockTakingOptions = {
+  tableName: string;
+  text: string;
+  lockQueue: LockTakingStatement["lockQueue"];
+};
+const lockTaking = ({
+  tableName,
+  text,
+  lockQueue,
+}: LockTakingOptions): LockTakingStatement => ({
   [LOCK_TAKING]: text,
   tableName,
+  lockQueue,
 });
 
 /** An index declared for the online phase, with its own build statement. */
@@ -87,10 +107,11 @@ export const createIndexConcurrently = ({
   tableName,
 }: OnlineIndexDeclaration): LockTakingStatement => {
   if (createSql === undefined) {
-    return lockTaking(
+    return lockTaking({
       tableName,
-      `CREATE ${isUnique ? "UNIQUE " : ""}INDEX CONCURRENTLY ${quoteIdentifier(name)} ${definitionBody}`,
-    );
+      text: `CREATE ${isUnique ? "UNIQUE " : ""}INDEX CONCURRENTLY ${quoteIdentifier(name)} ${definitionBody}`,
+      lockQueue: "beside_writers",
+    });
   }
   // The gate watches the declared table, so the build must be on it.
   const [, builtName, builtTable] = createSqlTarget.exec(createSql) ?? [];
@@ -99,26 +120,32 @@ export const createIndexConcurrently = ({
       `Online index ${name}: its create SQL must build it concurrently on public.${tableName}`,
     );
   }
-  return lockTaking(tableName, createSql);
+  return lockTaking({
+    tableName,
+    text: createSql,
+    lockQueue: "beside_writers",
+  });
 };
 
 export const dropIndexConcurrently = (
   { name, tableName }: IndexTarget,
   { ifExists }: { ifExists: boolean },
 ): LockTakingStatement =>
-  lockTaking(
+  lockTaking({
     tableName,
-    `DROP INDEX CONCURRENTLY ${ifExists ? "IF EXISTS " : ""}public.${quoteIdentifier(name)}`,
-  );
+    text: `DROP INDEX CONCURRENTLY ${ifExists ? "IF EXISTS " : ""}public.${quoteIdentifier(name)}`,
+    lockQueue: "beside_writers",
+  });
 
 export const reindexIndexConcurrently = ({
   name,
   tableName,
 }: IndexTarget): LockTakingStatement =>
-  lockTaking(
+  lockTaking({
     tableName,
-    `REINDEX INDEX CONCURRENTLY public.${quoteIdentifier(name)}`,
-  );
+    text: `REINDEX INDEX CONCURRENTLY public.${quoteIdentifier(name)}`,
+    lockQueue: "beside_writers",
+  });
 
 /**
  * Takes SHARE UPDATE EXCLUSIVE on the index: no writer waits on it, but
@@ -134,10 +161,11 @@ export const renameIndex = ({
   if (from.tableName !== to.tableName) {
     panic(`Index ${from.name} cannot be renamed onto another table`);
   }
-  return lockTaking(
-    from.tableName,
-    `ALTER INDEX public.${quoteIdentifier(from.name)} RENAME TO ${quoteIdentifier(to.name)}`,
-  );
+  return lockTaking({
+    tableName: from.tableName,
+    text: `ALTER INDEX public.${quoteIdentifier(from.name)} RENAME TO ${quoteIdentifier(to.name)}`,
+    lockQueue: "beside_writers",
+  });
 };
 
 /** A NOT VALID CHECK or foreign key the online phase validates. */
@@ -155,25 +183,20 @@ export const validateConstraint = ({
   tableName,
   constraintName,
 }: OnlineConstraintValidation): LockTakingStatement =>
-  lockTaking(
+  lockTaking({
     tableName,
-    `ALTER TABLE public.${quoteIdentifier(tableName)} VALIDATE CONSTRAINT ${quoteIdentifier(constraintName)}`,
-  );
+    text: `ALTER TABLE public.${quoteIdentifier(tableName)} VALIDATE CONSTRAINT ${quoteIdentifier(constraintName)}`,
+    lockQueue: "beside_writers",
+  });
 
 /** Takes SHARE UPDATE EXCLUSIVE, the same lock as a validation. */
 export const analyzeTable = (tableName: string): LockTakingStatement =>
-  lockTaking(tableName, `ANALYZE public.${quoteIdentifier(tableName)}`);
+  lockTaking({
+    tableName,
+    text: `ANALYZE public.${quoteIdentifier(tableName)}`,
+    lockQueue: "beside_writers",
+  });
 
-/**
- * The lock budget of every ACCESS EXCLUSIVE statement below. A statement
- * waiting for ACCESS EXCLUSIVE queues every later reader of its table behind
- * it, so the gate's watched wait (lock budget lifted, cancelled only by its
- * watchdog) would stall the table's reads for as long as the wait lasts.
- * These statements instead keep a short budget LOCAL to their own
- * transaction, and the gate defers the phase when it runs out, as it does on
- * a cancellation.
- */
-const ACCESS_EXCLUSIVE_LOCK_BUDGET = "1s";
 const BLOCK_TAG = "$online_ddl$";
 
 /** SQL text spliced into a block: one expression or statement, nothing more. */
@@ -185,19 +208,20 @@ const spliced = (text: string): string => {
 };
 
 /**
- * One transaction under the short budget, so a statement list is atomic: a
- * cancelled or timed-out block leaves the table as it was.
+ * One transaction per attempt, so a statement list is atomic: a cancelled
+ * or timed-out block leaves the table as it was.
  */
 const accessExclusive = (
   tableName: string,
   statements: readonly string[],
 ): LockTakingStatement =>
-  lockTaking(
+  lockTaking({
     tableName,
-    `DO ${BLOCK_TAG} BEGIN SET LOCAL lock_timeout = '${ACCESS_EXCLUSIVE_LOCK_BUDGET}'; ${statements
+    text: `DO ${BLOCK_TAG} BEGIN ${statements
       .map((statement) => `${spliced(statement)};`)
       .join(" ")} END ${BLOCK_TAG}`,
-  );
+    lockQueue: "blocks_writers",
+  });
 
 /** A row-level security policy, with its expressions as rendered SQL. */
 export type PolicyDefinition = {
@@ -273,7 +297,7 @@ const quoteLiteral = (value: string): string =>
 
 /**
  * A call to a function declared `online` in `DDL_FUNCTIONS`, gated on the
- * table it locks, under the same short budget as the policy statements: its
+ * table it locks, under the same retry ladder as the policy statements: its
  * body's DDL is ACCESS EXCLUSIVE work the type cannot see.
  */
 export const callDeclaredFunction = ({
@@ -283,7 +307,7 @@ export const callDeclaredFunction = ({
   name: OnlineDdlFunctionName;
   tableName: string;
 }): LockTakingStatement => {
-  const declaration: DdlFunctionDeclaration = DDL_FUNCTIONS[name];
+  const declaration = readDdlFunctionDeclaration(name);
   if (!declaration.online) {
     return panic(`Function ${name} is not callable from the online phase`);
   }
@@ -335,11 +359,21 @@ type GatedTableWorkOptions = GatedTableWorkRequest & {
   connection: OnlineMigrationConnection;
   gate: OnlineIndexGateOptions;
   reserveObserver: () => Promise<OnlineMigrationConnection>;
+  lockRetry?: { config: LockRetryConfig; runtime: LockRetryRuntime };
 };
+
+class OnlineLockRetryDeferred extends TaggedError("OnlineLockRetryDeferred")<{
+  message: string;
+  reason: "exhausted" | "budget_spent";
+  attempts: number;
+  lockTimeoutMs: number;
+  cause: unknown;
+}> {}
 
 const sessionOn = (
   connection: Pick<OnlineMigrationConnection, "execute" | "query">,
   { tableName }: GatedTableTarget,
+  lockRetry: GatedTableWorkOptions["lockRetry"],
 ): GatedTableSession => ({
   query: async (query, params) => await connection.query(query, params),
   run: async (statement) => {
@@ -349,7 +383,41 @@ const sessionOn = (
         `Gated work on ${tableName} cannot lock ${statement.tableName}; gate each table on its own`,
       );
     }
-    await connection.execute(statement[LOCK_TAKING]);
+    switch (statement.lockQueue) {
+      case "beside_writers":
+        await connection.execute(statement[LOCK_TAKING]);
+        return;
+      case "blocks_writers": {
+        const outcome = await runLockRetryLadder({
+          config: lockRetry?.config ?? DEFAULT_LOCK_RETRY_CONFIG,
+          now: lockRetry?.runtime.now ?? DEFAULT_LOCK_RETRY_RUNTIME.now,
+          sleep: lockRetry?.runtime.sleep ?? DEFAULT_LOCK_RETRY_RUNTIME.sleep,
+          random:
+            lockRetry?.runtime.random ?? DEFAULT_LOCK_RETRY_RUNTIME.random,
+          attempt: async (lockTimeoutMs) => {
+            await connection.execute(`SET lock_timeout = '${lockTimeoutMs}ms'`);
+            try {
+              await connection.execute(statement[LOCK_TAKING]);
+            } finally {
+              await connection.execute("SET lock_timeout = '0'");
+            }
+          },
+        });
+        if (outcome.type === "stop") {
+          throw new OnlineLockRetryDeferred({
+            message: "Online statement lock retry budget exhausted",
+            reason: outcome.reason,
+            attempts: outcome.attempts,
+            lockTimeoutMs: outcome.lockTimeoutMs,
+            cause: outcome.cause,
+          });
+        }
+        return;
+      }
+      default:
+        statement.lockQueue satisfies never;
+        return panic("Unexpected online DDL lock queue class");
+    }
   },
 });
 
@@ -366,6 +434,7 @@ export const runGatedTableWork = async ({
   target,
   kind,
   work,
+  lockRetry,
 }: GatedTableWorkOptions): Promise<OnlineMigrationOutcome> => {
   const observer = await reserveObserver();
   try {
@@ -378,10 +447,25 @@ export const runGatedTableWork = async ({
       kind,
     });
     try {
-      const outcome = await runtime.attempt(
-        async (guardedConnection) =>
-          await work(sessionOn(guardedConnection, target)),
-      );
+      const attempt = await Result.tryPromise({
+        try: async () =>
+          await runtime.attempt(
+            async (guardedConnection) =>
+              await work(sessionOn(guardedConnection, target, lockRetry)),
+          ),
+        catch: (cause) => cause,
+      });
+      if (attempt.isErr()) {
+        if (!(attempt.error instanceof OnlineLockRetryDeferred)) {
+          throw attempt.error;
+        }
+        return {
+          type: "deferred",
+          step: target.name,
+          retryAfterMs: runtime.retryAfterMs,
+        };
+      }
+      const outcome = attempt.value;
       switch (outcome) {
         case "done":
           return { type: "complete" };
@@ -430,9 +514,10 @@ export const createOnlineTableGate = ({
  */
 export const createUngatedTableGateForTests = (
   connection: Pick<OnlineMigrationConnection, "execute" | "query">,
+  lockRetry?: GatedTableWorkOptions["lockRetry"],
 ): OnlineTableGate => ({
   run: async ({ target, work }) => {
-    await work(sessionOn(connection, target));
+    await work(sessionOn(connection, target, lockRetry));
     return { type: "complete" };
   },
 });

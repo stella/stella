@@ -678,7 +678,7 @@ describe.skipIf(!enabled)("online lock-taking steps under contention", () => {
         `DROP POLICY workspace_entity_feature ON public.${ENTITY_TABLE}`,
       );
       await scratch.owner.unsafe(legacyPolicy);
-      // Unwatched, the replacement's own one-second budget runs out behind
+      // Unwatched, the replacement's bounded retry ladder runs out behind
       // the writer, so it defers with the legacy policy still in place.
       await contend(scratch, ENTITY_TABLE, "writer");
       try {

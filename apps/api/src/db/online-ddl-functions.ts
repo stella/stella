@@ -47,3 +47,8 @@ export type OnlineDdlFunctionName = {
 }[DdlFunctionName];
 
 export const DDL_FUNCTION_NAMES: readonly string[] = Object.keys(DDL_FUNCTIONS);
+
+/** Keep the declaration union at the lookup boundary, even with no online entries. */
+export const readDdlFunctionDeclaration = (
+  name: DdlFunctionName,
+): DdlFunctionDeclaration => DDL_FUNCTIONS[name];

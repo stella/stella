@@ -64,7 +64,7 @@ const sqlOf = async (statement: LockTakingStatement): Promise<string> => {
       await session.run(statement);
     },
   });
-  return statements.at(0) ?? "";
+  return statements.find((text) => !text.startsWith("SET lock_timeout")) ?? "";
 };
 
 describe("online lock-taking statements", () => {
@@ -119,6 +119,7 @@ describe("online lock-taking statements", () => {
     ];
     for (const [statement, sql] of cases) {
       expect(statement.tableName).toBe("probe");
+      expect(statement.lockQueue).toBe("beside_writers");
       expect(await sqlOf(statement)).toBe(sql);
     }
   });
@@ -243,7 +244,7 @@ const POLICY: PolicyDefinition = {
 };
 
 describe("online ACCESS EXCLUSIVE statements", () => {
-  test("each runs as one block under its own short lock budget", async () => {
+  test("each runs atomically and declares its writer-blocking lock class", async () => {
     const created =
       'CREATE POLICY "probe_policy" ON "public"."probe" AS RESTRICTIVE FOR ALL TO "stella" USING (probe.gate = \'open\') WITH CHECK (probe.gate = \'open\')';
     const cases: [LockTakingStatement, string[]][] = [
@@ -284,8 +285,110 @@ describe("online ACCESS EXCLUSIVE statements", () => {
     ];
     for (const [statement, statements] of cases) {
       expect(statement.tableName).toBe("probe");
+      expect(statement.lockQueue).toBe("blocks_writers");
       expect(await blockStatementsOf(statement)).toEqual(statements);
     }
+  });
+
+  test("writer-blocking work retries bounded requests and restores the watched timeout", async () => {
+    const statements: string[] = [];
+    let failures = 2;
+    let now = 0;
+    const lockFailure = { code: "55P03", message: "lock unavailable" };
+    const connection = {
+      execute: async (text: string) => {
+        statements.push(text);
+        if (text.startsWith("DO ") && failures-- > 0) {
+          throw lockFailure;
+        }
+      },
+      query: async () => [],
+    };
+    const gate = createUngatedTableGateForTests(connection, {
+      config: {
+        lockTimeoutsMs: [100, 250, 500],
+        pauseBaseMs: 10,
+        pauseCapMs: 20,
+        budgetMs: 2000,
+      },
+      runtime: {
+        now: () => now,
+        sleep: async (ms) => {
+          now += ms;
+        },
+        random: () => 0.5,
+      },
+    });
+    expect(
+      await gate.run({
+        target: { tableName: "probe", name: "policy" },
+        kind: "index_repair",
+        work: async (session) => {
+          await session.run(createPolicy(POLICY));
+          await session.run(analyzeTable("probe"));
+        },
+      }),
+    ).toEqual({ type: "complete" });
+    expect(
+      statements.filter((text) => text.startsWith("SET lock_timeout")),
+    ).toEqual([
+      "SET lock_timeout = '100ms'",
+      "SET lock_timeout = '0'",
+      "SET lock_timeout = '250ms'",
+      "SET lock_timeout = '0'",
+      "SET lock_timeout = '500ms'",
+      "SET lock_timeout = '0'",
+    ]);
+    expect(statements.filter((text) => text.startsWith("DO "))).toHaveLength(3);
+    expect(statements.at(-1)).toBe('ANALYZE public."probe"');
+  });
+
+  test("exhausted writer-blocking work leaves subsequent statements for a later run", async () => {
+    const lockFailure = { code: "55P03", message: "lock unavailable" };
+    const statements: string[] = [];
+    const gate = createUngatedTableGateForTests(
+      {
+        execute: async (text) => {
+          statements.push(text);
+          if (text.startsWith("DO ")) {
+            throw lockFailure;
+          }
+        },
+        query: async () => [],
+      },
+      {
+        config: {
+          lockTimeoutsMs: [100, 250],
+          pauseBaseMs: 10,
+          pauseCapMs: 20,
+          budgetMs: 2000,
+        },
+        runtime: {
+          now: () => 0,
+          sleep: async () => undefined,
+          random: () => 0,
+        },
+      },
+    );
+    const rejection = await rejectionOf(
+      gate.run({
+        target: { tableName: "probe", name: "policy" },
+        kind: "index_repair",
+        work: async (session) => {
+          await session.run(createPolicy(POLICY));
+          await session.run(analyzeTable("probe"));
+        },
+      }),
+    );
+    expect(rejection).toMatchObject({
+      reason: "exhausted",
+      attempts: 2,
+      lockTimeoutMs: 250,
+      cause: lockFailure,
+    });
+    expect(statements.filter((text) => text.startsWith("DO "))).toHaveLength(2);
+    expect(statements.at(-1)).toBe("SET lock_timeout = '0'");
+    expect(statements.some((text) => text.startsWith("ANALYZE"))).toBe(false);
   });
 
   test("spliced text is one expression: a second statement never reaches SQL", () => {
