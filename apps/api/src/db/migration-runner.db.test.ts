@@ -35,10 +35,8 @@ import type {
   MigrationTiming,
   MigrationTimingRecord,
 } from "./migration-timing";
-import {
-  ONLINE_MIGRATION_INDEXES,
-  type OnlineMigrationOutcome,
-} from "./online-migrations";
+import type { OnlineMigrationOutcome } from "./online-migration-connection";
+import { ONLINE_MIGRATION_INDEXES } from "./online-migrations";
 
 const databaseUrl = process.env["DATABASE_URL"];
 // Scratch databases are not RDS; the migrator requires an explicit choice.
@@ -675,6 +673,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
                 event: "migrate.phase_duration",
                 phase: "schema",
                 durationMs: 20,
+                retriesSpent: 0,
                 outcome: "applied",
                 laneWaitMs: 10,
                 appliedCount: 1,
@@ -683,6 +682,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
                 event: "migrate.phase_duration",
                 phase: "online",
                 durationMs: 10,
+                retriesSpent: 0,
                 outcome: "complete",
               },
             ]);
@@ -730,24 +730,41 @@ if (!runPostgresTests || databaseUrl === undefined) {
             );
           const deferred = {
             type: "deferred",
-            index: "probe_idx",
+            step: "probe_idx",
             retryAfterMs: 7,
           } as const satisfies OnlineMigrationOutcome;
           const connection = await openClient().reserve();
+          const timings: MigrationTimingRecord[] = [];
           try {
             const single = await runMigrations({
               connection,
               migrationsFolder: folder,
               ebs: DISABLED_EBS,
               databaseUrl: scratchUrl,
+              timing: {
+                clock: () => performance.now(),
+                emit: (record) => {
+                  timings.push(record);
+                },
+              },
               runOnline: async () => {
                 expect(await laneOpenToWriters()).toBe(true);
                 return deferred;
               },
             });
+            const onlineTerminals = timings.filter(
+              (record) =>
+                record.event === "migrate.phase_duration" &&
+                record.phase === "online",
+            );
+            expect(onlineTerminals).toHaveLength(1);
+            expect(onlineTerminals.at(0)).toMatchObject({
+              outcome: "deferred",
+              retriesSpent: 0,
+            });
             expect(single).toMatchObject({
               status: "online_deferred",
-              index: deferred.index,
+              step: deferred.step,
               insertedNames: [A],
             });
             expect(await laneOpenToWriters()).toBe(true);
@@ -906,7 +923,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
             stderr: "pipe",
           });
           let output = "";
-          const decisions: { index: string; retryAfterMs: number }[] = [];
+          const decisions: { step: string; retryAfterMs: number }[] = [];
           const deadline = setTimeout(() => child.kill(), 30_000);
           try {
             const readOutput = async () => {
@@ -926,15 +943,15 @@ if (!runPostgresTests || databaseUrl === undefined) {
                   if (
                     typeof record !== "object" ||
                     record === null ||
-                    !("index" in record) ||
-                    typeof record.index !== "string" ||
+                    !("step" in record) ||
+                    typeof record.step !== "string" ||
                     !("retryAfterMs" in record) ||
                     typeof record.retryAfterMs !== "number"
                   ) {
                     throw new TypeError("Invalid migrate deferral event");
                   }
                   decisions.push({
-                    index: record.index,
+                    step: record.step,
                     retryAfterMs: record.retryAfterMs,
                   });
                   if (decisions.length === 2) {
@@ -954,7 +971,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
             ).toBeGreaterThanOrEqual(2);
             const first = decisions.at(0);
             expect(first).toMatchObject({
-              index: firstIndex.name,
+              step: firstIndex.name,
               retryAfterMs: 13,
             });
             expect(decisions.at(1)).toEqual(first);
@@ -1011,16 +1028,22 @@ if (!runPostgresTests || databaseUrl === undefined) {
                         mismatchedNames: [A],
                       });
                       // The no-op event, then the schema phase's duration.
-                      expect(stdout.mock.calls).toHaveLength(2);
+                      const phaseCalls = stdout.mock.calls.filter(
+                        (call) =>
+                          !String(call.at(0)).includes(
+                            '"event":"migrate.lock_attempt"',
+                          ),
+                      );
+                      expect(phaseCalls).toHaveLength(2);
                       expect(
-                        JSON.parse(String(stdout.mock.calls.at(1)?.at(0))),
+                        JSON.parse(String(phaseCalls.at(1)?.at(0))),
                       ).toMatchObject({
                         event: "migrate.phase_duration",
                         phase: "schema",
                         outcome: "stale_bundle_noop",
                         appliedCount: 0,
                       });
-                      const noopLine = String(stdout.mock.calls.at(0)?.at(0));
+                      const noopLine = String(phaseCalls.at(0)?.at(0));
                       expect(noopLine.endsWith("\n")).toBe(true);
                       expect(JSON.parse(noopLine)).toEqual({
                         event: "migrate.stale_bundle_noop",
@@ -1182,6 +1205,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
               const holder = holdLockProbe(openClient());
               const connection = await openClient().reserve();
               const sleeps: number[] = [];
+              const timings: MigrationTimingRecord[] = [];
               const stdout = spyOn(process.stdout, "write").mockImplementation(
                 () => true,
               );
@@ -1195,6 +1219,12 @@ if (!runPostgresTests || databaseUrl === undefined) {
                       ebs: DISABLED_EBS,
                       migrationsFolder: folder,
                       runOnline: async () => ONLINE_COMPLETE,
+                      timing: {
+                        clock: () => performance.now(),
+                        emit: (record) => {
+                          timings.push(record);
+                        },
+                      },
                       lockWaitRetry: {
                         delaysMs: [10, 10],
                         budgetMs: MIGRATION_LOCK_WAIT_RETRY_BUDGET_MS,
@@ -1215,6 +1245,13 @@ if (!runPostgresTests || databaseUrl === undefined) {
                   true,
                 );
                 expect(sleeps).toEqual([10, 10]);
+                expect(timings).toHaveLength(1);
+                expect(timings.at(0)).toMatchObject({
+                  event: "migrate.phase_duration",
+                  phase: "schema",
+                  outcome: "failed",
+                  retriesSpent: 2,
+                });
                 expect(await ledgerRows(observer)).toEqual([]);
                 const [probe] = await observer.unsafe<{ exists: boolean }[]>(
                   "SELECT to_regclass('migration_probe') IS NOT NULL AS exists",

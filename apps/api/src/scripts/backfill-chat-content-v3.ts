@@ -6,11 +6,20 @@ import {
   countChatContentVersions,
   resetChatContentV3Checkpoints,
 } from "../db/chat-content-v3-backfill";
-import { openOnlineRepairConnection } from "../db/online-index-observer";
+import { createOnlineTableGate } from "../db/online-ddl";
+import {
+  openOnlineIndexObserver,
+  openOnlineRepairConnection,
+} from "../db/online-index-observer";
 import {
   acquireOnlineMigrationLock,
   releaseOnlineMigrationLock,
 } from "../db/online-migrations";
+import { envDbLoadGate } from "../env-db-load-gate";
+import {
+  requireEbsConfiguration,
+  resolveEbsConfiguration,
+} from "../lib/db/ebs-signal-reader";
 
 const run = async (): Promise<void> => {
   const args = process.argv.slice(2);
@@ -48,8 +57,27 @@ const run = async (): Promise<void> => {
         if (args.includes("--retry-failed")) {
           await resetChatContentV3Checkpoints(connection);
         }
-        await CHAT_CONTENT_V3_REPAIR.repair(connection);
-        process.stdout.write("Chat content v3 backfill complete\n");
+        // The constraint validations wait for table locks, so they run
+        // through the same gate as the deploy's online phase.
+        const ebs = requireEbsConfiguration(
+          resolveEbsConfiguration(envDbLoadGate),
+        );
+        if (ebs.isErr()) {
+          throw ebs.error;
+        }
+        const outcome = await CHAT_CONTENT_V3_REPAIR.repair(
+          connection,
+          createOnlineTableGate({
+            connection,
+            gate: { ebs: ebs.value },
+            reserveObserver: async () => await openOnlineIndexObserver(url),
+          }),
+        );
+        process.stdout.write(
+          outcome.type === "complete"
+            ? "Chat content v3 backfill complete\n"
+            : `Chat content v3 backfill deferred at ${outcome.step}; rerun after ${String(outcome.retryAfterMs)} ms\n`,
+        );
       } finally {
         await releaseOnlineMigrationLock(connection);
       }

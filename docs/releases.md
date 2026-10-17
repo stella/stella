@@ -48,6 +48,28 @@ Schema changes should follow an expand/contract sequence:
 Application rollback must not require database rollback. Destructive migrations
 should lag the release that stopped using the old data.
 
+### Migration completion and deployment failure
+
+Run the release's migration entrypoint to completion before replacing serving
+application instances. A migration error exits nonzero and stops promotion;
+the existing application version keeps serving. Deferred online work keeps
+migration running: it logs `migrate.online_deferred`, waits, and retries until
+settled. A deferral does not authorize an application rollout.
+
+Schema lock contention gets bounded retries. Exhausted attempts, a spent retry
+budget, or changed migration receipts stop migration with an error. Earlier
+committed steps may remain applied; a rerun reads the migration ledger again.
+Inspect migration task logs and the failed promotion workflow before rerunning.
+The deployment result retains the migration exit status and task diagnostics.
+
+`migrate.lock_attempt` records each attempt's outcome and observed lock waits,
+including requested mode, table, wait duration, and blocker activity with query
+fingerprints. Fingerprints strip literals and quoted identifiers before
+truncation. Existing `migrate.phase_duration` and
+`migrate.online_step_duration` records include `retriesSpent`; these fields use
+the existing log pipeline and require no additional metrics. Lock inspection is
+sampled, so waits shorter than the inspection interval may not be observed.
+
 ## Staging Verification
 
 `deploy-staging.yml` runs on `main` only. Its optional `sha` input pins the
