@@ -1,7 +1,9 @@
 import { PGlite } from "@electric-sql/pglite";
 import { pg_trgm } from "@electric-sql/pglite/contrib/pg_trgm";
+import { panic } from "better-result";
 import { getTableName, sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
+import { getViewConfig, isPgView, PgDialect } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
 
 import * as agentAuthSchema from "@/api/db/agent-auth-schema";
@@ -10,6 +12,7 @@ import * as rlsExports from "@/api/db/rls";
 import * as schema from "@/api/db/schema";
 import type { AnyDrizzle } from "@/api/db/scoped";
 import {
+  caseLawDecisionViewGrantStatement,
   CENSUS_COLUMN_GRANTS_BY_RELATION,
   DOCTRINE_COLUMN_GRANTS_BY_RELATION,
   PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
@@ -73,6 +76,19 @@ const allSchema = {
   ...agentAuthSchema,
   ...rlsExports,
 };
+
+const publicLawRelations = new Set(
+  Object.keys(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION),
+);
+const publicLawViews = Object.values(allSchema).flatMap((entity) => {
+  if (!isPgView(entity)) {
+    return [];
+  }
+  const config = getViewConfig(entity);
+  return !config.isExisting && publicLawRelations.has(config.name)
+    ? [entity]
+    : [];
+});
 
 const quoteSqlIdentifier = (identifier: string) =>
   `"${identifier.replaceAll('"', '""')}"`;
@@ -321,6 +337,7 @@ export const ROLE_GRANT_STATEMENTS = [
   `GRANT INSERT, UPDATE ON TABLE "soft_law_documents", "soft_law_document_versions", "soft_law_document_locators", "soft_law_ingestion_attempts" TO stella_ingestion`,
   `GRANT UPDATE (listing_baseline, listing_seen, listing_expected_total, sync_cursor, last_sync_at, run_state, run_id, run_started_at, lease_token, lease_expires_at, failure_tag) ON TABLE "soft_law_sources" TO stella_ingestion`,
   `GRANT SELECT, INSERT, UPDATE ON TABLE "case_law_decision_aliases" TO stella_ingestion`,
+  caseLawDecisionViewGrantStatement("stella_ingestion"),
   `
     GRANT SELECT (${AUTH_USER_STELLA_SELECT_COLUMNS_SQL})
       ON TABLE "user" TO stella
@@ -656,6 +673,56 @@ const applyStellaTablePrivileges = async (client: PGlite): Promise<void> => {
     ),
   );
   await client.exec(statements.join(";\n"));
+};
+
+const installTestPublicLawViews = async (
+  db: Pick<ReturnType<typeof drizzle>, "execute">,
+): Promise<void> => {
+  const dialect = new PgDialect();
+  for (const view of publicLawViews) {
+    const config = getViewConfig(view);
+    const query = config.query;
+    if (query === undefined) {
+      panic(`Public-law view ${config.name} has no query`);
+    }
+    if (config.with !== undefined) {
+      panic(
+        `Public-law fixture view ${config.name} must use plain view semantics`,
+      );
+    }
+    const rendered = dialect.sqlToQuery(query);
+    if (rendered.params.length > 0) {
+      panic(`Public-law view ${config.name} query has bound parameters`);
+    }
+    await db.execute(sql`
+      CREATE VIEW ${sql.identifier(config.schema ?? "public")}.${sql.identifier(
+        config.name,
+      )}
+      AS (${sql.raw(rendered.sql)})
+    `);
+  }
+};
+
+/** Rebuild schema-derived views and their grants after a fixture column change. */
+export const rebuildTestPublicLawViews = async (
+  client: PGlite,
+  change: () => Promise<void>,
+): Promise<void> => {
+  const db = drizzle({ client });
+  for (const view of publicLawViews) {
+    const config = getViewConfig(view);
+    await db.execute(sql`
+      DROP VIEW ${sql.identifier(config.schema ?? "public")}.${sql.identifier(
+        config.name,
+      )}
+    `);
+  }
+  await change();
+  await installTestPublicLawViews(db);
+  await applyStellaTablePrivileges(client);
+  for (const statement of ROLE_GRANT_STATEMENTS) {
+    await db.execute(sql.raw(statement));
+  }
 };
 
 /**

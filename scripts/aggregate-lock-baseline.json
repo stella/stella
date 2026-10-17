@@ -961,9 +961,9 @@
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row-update.ts",
-    "fingerprint": "c053c6081dba8dc6c9eb93df702a4f7c0c2c889102c377969f8f397dd7e11070",
+    "fingerprint": "60da0167e1e8232dbf418d1f799ee1496e32daf142bcd7c577eb70d889b160ae",
     "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/pipeline/decision-row-update.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "Pass the relation explicitly to the stored-payload owner in the existing ingestion row lock query; acquisition mode, target and count are unchanged."
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/source-totals.ts",
@@ -3019,15 +3019,15 @@
   },
   {
     "file": "apps/api/src/lib/legal-search/case-law-search-index.ts",
-    "fingerprint": "bfa8cd41da649399ea0a3cddf9920b10b0ca8c6443b5725f7b140b8c2fe074ef",
+    "fingerprint": "106aff206b13512ed7c0ece6e1a13fad32c4aef3e80a2e64179b24639147d456",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/case-law-search-index.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "Pass the relation explicitly to the publication owner in the existing projection write lock query; acquisition mode, target and count are unchanged."
   },
   {
     "file": "apps/api/src/lib/legal-search/case-law-search-index.ts",
-    "fingerprint": "da59847a805cb4732021f29074eb99924a9badb3111e781bf386e2723130b33a",
+    "fingerprint": "1216b0764623f970d8df9576ba0eb2695f2b571851d9aa52bc7f115e9f817f2b",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/case-law-search-index.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "Pass the relation explicitly to the publication owner in the existing projection retry lock query; acquisition mode, target and count are unchanged."
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-generation-store.ts",
@@ -4402,12 +4402,6 @@
     "fingerprint": "c706ad660961a651e2f40e1137a837c23a32cb36deed5d2c9707a09e97b032ad",
     "count": 1,
     "reason": "transaction-boundary in apps/api/src/scripts/normalize-review-passage-references.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/src/scripts/polarity-system-one-compare.ts",
-    "fingerprint": "725302c2a3fb1edb66ad8c7a13ca1bc4cbf3dac50329ebac080b58e4c1729347",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/scripts/polarity-system-one-compare.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
   },
   {
     "file": "apps/api/src/scripts/readjudicate-ambiguous-citations.ts",
