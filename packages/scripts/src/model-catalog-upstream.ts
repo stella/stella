@@ -45,13 +45,13 @@ import {
   BYOK_DOCUMENT_INPUT_MODEL_OPTIONS,
   BYOK_MODEL_OPTIONS,
   CAPABILITY_OVERRIDES,
-  DEFAULT_MODELS,
   DOCUMENT_INPUT_OVERRIDES,
   FIRST_PARTY_MODEL_PROVIDERS,
   MODEL_REASONING_EFFORTS,
   MODEL_TEMPERATURE_POLICIES,
 } from "@stll/ai-catalog";
 import type { FirstPartyModelProvider } from "@stll/ai-catalog";
+import { MODEL_DEFAULTS_LEDGER } from "@stll/ai-catalog/model-defaults-ledger";
 
 import {
   parseUpstreamCapabilities,
@@ -195,11 +195,10 @@ const collectCatalogEntries = (): CatalogEntry[] => {
       add(provider, modelId);
     }
   }
-  for (const [provider, roles] of Object.entries(DEFAULT_MODELS)) {
-    for (const modelId of Object.values(roles)) {
-      // A role the provider has no default model for prices nothing.
-      if (modelId !== null) {
-        add(provider, modelId);
+  for (const defaults of Object.values(MODEL_DEFAULTS_LEDGER)) {
+    for (const [provider, entry] of Object.entries(defaults)) {
+      if (entry.kind === "candidate") {
+        add(provider, entry.candidate.modelId);
       }
     }
   }

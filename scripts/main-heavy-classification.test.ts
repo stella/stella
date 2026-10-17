@@ -41,7 +41,7 @@ test("identical queue job and step names cannot prove full and affected test sel
   );
   const testStep = steps.find(({ name }) => name === "Test API or rest");
   const stepName = v.parse(v.string(), testStep?.name);
-  expect(testStep?.run).toContain("bun scripts/test-scope.ts --base");
+  expect(testStep?.run).toContain('read -r -a args <<<"$TEST_SCOPE"');
   expect(testStep?.run).toContain(
     'bun scripts/test-shards.ts --filters "$SHARD"',
   );
@@ -140,7 +140,8 @@ test("identical queue job and step names cannot prove full and affected test sel
           ...process.env,
           HEAVY_ONLY: String(heavyOnly),
           EVENT_NAME: heavyOnly ? "push" : "merge_group",
-          BASE_REF: "main",
+          COMPARISON_BASE: "origin/main",
+          TEST_SCOPE: "--filter=...[origin/main...HEAD]",
           GITHUB_OUTPUT: output,
           GITHUB_ENV: environment,
         },

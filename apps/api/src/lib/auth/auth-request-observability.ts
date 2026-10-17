@@ -2,6 +2,7 @@ import type { BetterAuthPlugin, HookEndpointContext } from "better-auth";
 import type { createAuthMiddleware } from "better-auth/api";
 
 import { describeAuthRefusal } from "@/api/lib/auth/auth-refusal-log";
+import { OAUTH_TOKEN_OBSERVATION } from "@/api/lib/auth/oauth-token-refusal";
 import { logger } from "@/api/lib/observability/logger";
 import {
   getCurrentRequestId,
@@ -33,16 +34,19 @@ export const createAuthRefusalLogPlugin = (
         {
           matcher: () => true,
           handler: middleware(async (ctx) => {
+            const requestId = getCurrentRequestId();
             const refusal = describeAuthRefusal({
               path: ctx.path,
               returned: ctx.context.returned,
               body: ctx.body,
+              oauthObservation: Reflect.get(
+                ctx.context,
+                OAUTH_TOKEN_OBSERVATION,
+              ),
+              ...(requestId === undefined ? {} : { requestId }),
             });
             if (refusal.type === "refused") {
-              logger.warn("auth.request_refused", {
-                ...refusal.attributes,
-                "request.id": getCurrentRequestId(),
-              });
+              logger.warn("auth.request_refused", refusal.attributes);
             }
             await Promise.resolve();
           }),
