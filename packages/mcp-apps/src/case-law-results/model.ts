@@ -108,8 +108,12 @@ const warningView = (
         code: warning.code,
         filters: warning.filters.map((filter) => filter),
       } as const;
-    case "no_hits":
     case "provision_cited_widely":
+      return {
+        code: warning.code,
+        citingDecisions: warning.citingDecisions,
+      } as const;
+    case "no_hits":
     case "many_required_terms":
       return { code: warning.code } as const;
     default:

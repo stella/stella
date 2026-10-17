@@ -24,6 +24,7 @@ export const MCP_APP_CONSUMED_FIELDS = {
     "facets.court[].courts[].value",
     "nextCursor",
     "searches[].warnings[].code",
+    "searches[].warnings[].citingDecisions",
     "searches[].warnings[].droppedFunctionWords[]",
     "searches[].warnings[].filter",
     "searches[].warnings[].courtAliases[].input",

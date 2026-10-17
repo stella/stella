@@ -50,6 +50,37 @@ const warnings = [
 const t = createTranslator({ locale: "cs", messages: MCP_APP_MESSAGES.cs });
 
 describe("compact search notices", () => {
+  test("a lone widely cited provision shows the partial-results fact in every locale", () => {
+    const partial = [
+      {
+        code: "provision_cited_widely",
+        citingDecisions: 4037,
+        message: "MODEL ONLY",
+        hint: "Run more searches",
+      },
+    ] as const satisfies readonly ToolWarning[];
+    for (const [locale, messages] of Object.entries(MCP_APP_MESSAGES)) {
+      const translate = createTranslator({ locale, messages });
+      const details = searchNoticeDetails(partial, translate);
+      const partialNotice = translate("noticePartialCiting", { count: 4037 });
+      expect(details).toEqual([partialNotice]);
+      expect(
+        searchNoticeDetails([...warnings, ...partial], translate).at(0),
+      ).toBe(partialNotice);
+      const markup = renderToStaticMarkup(
+        <IntlProvider locale={locale} messages={messages}>
+          <SearchNotice warnings={partial} />
+        </IntlProvider>,
+      );
+      expect(markup).toContain("<summary");
+      expect(markup).toContain(partialNotice);
+      expect(markup).not.toContain("MODEL ONLY");
+      expect(markup).not.toContain("Run more searches");
+      expect(searchNoticeDetails([...partial, ...partial], translate)).toEqual(
+        details,
+      );
+    }
+  });
   test("merges alias notes before deduplicated query words in one closed disclosure", () => {
     const details = searchNoticeDetails(warnings, t);
     expect(details).toEqual([

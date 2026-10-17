@@ -11,6 +11,8 @@
 /* Bundles embed this stylesheet; scanning them feeds escaped selectors back in. */
 @source not "../*/generated";
 @source "../../../ui/src";
+@source not "../../../{ui,decision-reader,mcp-apps}/src/**/*.{test,spec,story,stories,fixture}.{ts,tsx}";
+@source not "../../../{ui,decision-reader,mcp-apps}/src/**/fixtures";
 
 :root {
   font-family: var(--font-sans);

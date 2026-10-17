@@ -32,6 +32,7 @@ export const searchNoticeDetails = (
   const words = new Map<string, string>();
   const filters = new Set<CaseLawSearchFilter>();
   const dropped = new Set<string>();
+  const citingSelections = new Set<number>();
   let noHits = false;
   for (const warning of warnings) {
     switch (warning.code) {
@@ -67,6 +68,8 @@ export const searchNoticeDetails = (
         noHits = true;
         break;
       case "provision_cited_widely":
+        citingSelections.add(warning.citingDecisions);
+        break;
       case "many_required_terms":
         break;
       default:
@@ -74,6 +77,9 @@ export const searchNoticeDetails = (
     }
   }
   const details: string[] = [];
+  for (const count of citingSelections) {
+    details.push(t("noticePartialCiting", { count }));
+  }
   if (aliases.size > 0) {
     details.push(
       t("noticeAliases", {

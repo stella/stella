@@ -147,6 +147,7 @@ const agentWarningSchemas = [
   }),
   v.strictObject({
     code: v.literal("provision_cited_widely"),
+    citingDecisions: v.pipe(v.number(), v.integer(), v.minValue(1)),
     ...agentWarningText,
   }),
 ] as const;
@@ -249,6 +250,7 @@ export const provisionCitedWidelyWarning = ({
   citingDecisions: number;
 }): AgentCaseLawSearchWarning => ({
   code: "provision_cited_widely",
+  citingDecisions,
   message: `${provision} is cited by ${String(citingDecisions)} decisions, more than one search can filter by: these results are the topic's best matches that cite it, not all of them.`,
   hint: "Add a subsection or letter to the provision, or more topic words, to narrow; or omit queries to list every decision citing it, with an exact total.",
 });
