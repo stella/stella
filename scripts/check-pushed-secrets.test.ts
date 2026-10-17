@@ -439,6 +439,40 @@ describe("a merge resolution", () => {
 });
 
 describe("merge replay fallback", () => {
+  test("merging main into an already pushed branch does not rescan main", () => {
+    const dir = initRepo("fallback-pushed-branch");
+    commitFile(dir, { file: "shared.txt", text: "base\n" });
+    run(dir, ["git", "switch", "-q", "-c", "feature"]);
+    const branchTip = commitFile(dir, {
+      file: "feature.txt",
+      text: `${BRANCH_BEFORE_MERGE}\n`,
+    });
+    // The branch was pushed before main moved on.
+    publish(dir, { ref: "feature", oid: branchTip });
+    run(dir, ["git", "switch", "-q", "main"]);
+    // Main moved on by more than the branch did, as it usually has.
+    commitFile(dir, { file: "main-notes.txt", text: "one\ntwo\nthree\n" });
+    const mainTip = commitFile(dir, {
+      file: "main.txt",
+      text: `api_key = "sk_test_FAKE7d2c9a4e1b8f6a0c3e5d9b2f"\n`, // gitleaks:allow
+    });
+    publish(dir, { ref: "main", oid: mainTip });
+    run(dir, ["git", "switch", "-q", "feature"]);
+    run(dir, ["git", "merge", "-q", "--no-commit", "--no-ff", "main"]);
+    const tip = commitFile(dir, {
+      file: "resolution.txt",
+      text: `${CLEAN_MERGE_ADDITION}\n`,
+    });
+    const result = scan(
+      `refs/heads/feature ${tip} refs/heads/feature ${branchTip}\n`,
+      { cwd: dir, pathPrefix: replayErrorGitBin },
+    );
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr).toContain("cannot replay merge");
+    expect(result.patch).not.toContain("main.txt");
+    expect(result.patch).toContain("resolution.txt");
+  });
+
   for (const resolution of ["clean", "secret"] as const) {
     test(`published main with a ${resolution} merge resolution scans only unpublished additions`, () => {
       const dir = initRepo(`fallback-${resolution}`);
