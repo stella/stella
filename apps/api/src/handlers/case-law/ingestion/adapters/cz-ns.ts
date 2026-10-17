@@ -1,7 +1,9 @@
+// parser-output-unchanged: body markers retain listed priority and exact first-occurrence offsets through the shared matcher.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { Result, panic } from "better-result";
 
+import { AhoCorasick } from "@stll/aho-corasick";
 import { classifyFailure } from "@stll/errors";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 // parser-output-unchanged: imports the document AST from its package owner
@@ -463,6 +465,7 @@ const BODY_START_MARKERS = [
   "Nejvyšší soud České republiky",
   "Nejvyšší soud projednal",
 ];
+const BODY_START_MATCHER = new AhoCorasick(BODY_START_MARKERS);
 const BODY_END_MARKER = "Citace rozhodnutí";
 
 /** Extract decision fulltext from the detail page body. */
@@ -478,12 +481,21 @@ const extractFulltext = (html: string): string | undefined => {
   let text = stripHtml(parts.join(" ")).trim();
 
   // Trim metadata prefix — body starts at the decision header
-  for (const marker of BODY_START_MARKERS) {
-    const pos = text.indexOf(marker);
-    if (pos > 0) {
-      text = text.slice(pos);
-      break;
+  const firstStarts = new Map<number, number>();
+  for (const match of BODY_START_MATCHER.findOverlappingIter(
+    text.toWellFormed(),
+  )) {
+    if (!firstStarts.has(match.pattern)) {
+      firstStarts.set(match.pattern, match.start);
     }
+  }
+  // Priority belongs to the listed marker, including when its first match
+  // at zero prevents a later occurrence of that marker from trimming text.
+  const start = BODY_START_MARKERS.map((_, index) =>
+    firstStarts.get(index),
+  ).find((offset) => offset !== undefined && offset > 0);
+  if (start !== undefined) {
+    text = text.slice(start);
   }
 
   // Trim footer
