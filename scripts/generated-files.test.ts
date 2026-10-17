@@ -23,7 +23,7 @@ import {
   generatorsForFiles,
   matchesGeneratedGlob,
   orderGenerators,
-  upToDateCheck,
+  runGenerators,
 } from "./generated-files";
 import {
   checkRouteGeneratorVersion,
@@ -1190,20 +1190,30 @@ test("every plan builds the derived outputs its generators read before running t
 
 // Building a prerequisite first is useless if the run then skips it: a derived
 // generator's check guards tracking, so it passes on a clean checkout that
-// lacks the outputs.
-test("a planned derived generator always writes its outputs", () => {
-  for (const owner of GENERATORS) {
-    expect({ id: owner.id, check: upToDateCheck(owner) }).toEqual({
-      id: owner.id,
-      check: owner.outputKind === "derived" ? null : owner.check,
-    });
-  }
-  const runner = readFileSync(
-    new URL("autofix-plan.ts", import.meta.url),
-    "utf-8",
+// lacks the outputs. Every check here passes; only committed outputs may skip.
+test("a run writes every derived generator even when its check passes", () => {
+  const spawned: string[] = [];
+  const failed = runGenerators(
+    orderGenerators(GENERATORS.filter(({ autofix }) => autofix)),
+    (command) => {
+      spawned.push(command.join(" "));
+      return 0;
+    },
+    () => undefined,
   );
-  expect(runner).toContain("upToDateCheck(generator)");
-  expect(runner).not.toContain("generator.check");
+  expect(failed).toBeNull();
+  for (const owner of GENERATORS.filter(({ autofix }) => autofix)) {
+    expect(spawned.includes(owner.write.join(" ")), owner.id).toBe(
+      owner.outputKind === "derived" || owner.check === null,
+    );
+  }
+  expect(
+    runGenerators(
+      [generator("mcp-app-bundles")],
+      () => 1,
+      () => undefined,
+    )?.id,
+  ).toBe("mcp-app-bundles");
 });
 
 test("a CLI registry change plans the MCP app bundles it reads", () => {

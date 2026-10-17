@@ -1160,8 +1160,30 @@ export const derivedPrerequisites = (generator: Generator) =>
  * tracking, not presence) says nothing about whether a clean checkout has it:
  * derived generators always write.
  */
-export const upToDateCheck = (generator: Generator) =>
+const upToDateCheck = (generator: Generator) =>
   generator.outputKind === "committed" ? generator.check : null;
+
+/**
+ * Run `write` for every generator whose outputs are not proven current, in
+ * the given order. Returns the first generator that failed, or null.
+ */
+export const runGenerators = (
+  generators: readonly Generator[],
+  spawn: (command: readonly string[]) => number,
+  log: (line: string) => void = console.log,
+): Generator | null => {
+  for (const generator of generators) {
+    const check = upToDateCheck(generator);
+    if (check && spawn(check) === 0) {
+      continue;
+    }
+    log(`Regenerating ${generator.id}`);
+    if (spawn(generator.write) !== 0) {
+      return generator;
+    }
+  }
+  return null;
+};
 
 export const allowedOutputs = (generators: readonly Generator[]) => [
   // A planner cannot authorize recreating the retired ratchet budget.

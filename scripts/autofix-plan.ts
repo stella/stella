@@ -3,7 +3,7 @@ import {
   GENERATORS,
   allowedOutputs,
   orderGenerators,
-  upToDateCheck,
+  runGenerators,
 } from "./generated-files";
 
 // The explicit type lets calls narrow the values they reject.
@@ -60,25 +60,14 @@ switch (mode) {
   }
   case "run": {
     const selected = selectedFromIds(args.at(0) ?? "");
-    for (const generator of selected) {
-      const check = upToDateCheck(generator);
-      if (check) {
-        const checked = Bun.spawnSync([...check], {
-          stdout: "inherit",
-          stderr: "inherit",
-        });
-        if (checked.exitCode === 0) {
-          continue;
-        }
-      }
-      console.log(`Regenerating ${generator.id}`);
-      const result = Bun.spawnSync([...generator.write], {
-        stdout: "inherit",
-        stderr: "inherit",
-      });
-      if (result.exitCode !== 0) {
-        fail(`Generator ${generator.id} failed`);
-      }
+    const failed = runGenerators(
+      selected,
+      (command) =>
+        Bun.spawnSync([...command], { stdout: "inherit", stderr: "inherit" })
+          .exitCode,
+    );
+    if (failed !== null) {
+      fail(`Generator ${failed.id} failed`);
     }
     break;
   }
