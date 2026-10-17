@@ -1,33 +1,14 @@
 import { cn } from "@stll/ui/utils";
 
+import type {
+  ClauseListKind,
+  ClauseParagraph,
+} from "@/components/templates/clause-editor-types";
 import { CONDITIONAL_KINDS } from "@/features/knowledge/views/templates/directive-kinds";
-import type { BlockDirectiveKind } from "@/features/knowledge/views/templates/directive-kinds";
 import {
   DirectiveLabel,
   HighlightedText,
 } from "@/features/knowledge/views/templates/paragraph-rendering";
-
-// ── Types ────────────────────────────────────────────
-
-type ClauseRun = {
-  text: string;
-  bold?: boolean;
-  italic?: boolean;
-};
-
-type ClauseListKind = "bullet" | "ordered";
-
-type ClauseParagraph = {
-  text: string;
-  style?: string;
-  level?: number;
-  runs?: ClauseRun[];
-  isDirective?: boolean;
-  directiveKind?: BlockDirectiveKind;
-  directiveExpression?: string;
-  listKind?: ClauseListKind;
-  listLevel?: number;
-};
 
 // ── Component ────────────────────────────────────────
 
@@ -48,7 +29,7 @@ export const ClauseBody = ({
 /**
  * Walk the flat paragraph array, rendering each run of consecutive list
  * paragraphs (`listKind` set) as a real nested `<ul>`/`<ol>` and every other
- * paragraph as a row. List nesting is reconstructed from `listLevel`.
+ * paragraph as a row. List nesting is reconstructed from `numbering.ilvl`.
  */
 const renderRows = (paragraphs: ClauseParagraph[]): React.ReactNode[] => {
   const rows: React.ReactNode[] = [];
@@ -61,7 +42,12 @@ const renderRows = (paragraphs: ClauseParagraph[]): React.ReactNode[] => {
       continue;
     }
     if (p.listKind && !p.isDirective) {
-      const built = buildListTree(paragraphs, i, p.listLevel ?? 0, p.listKind);
+      const built = buildListTree(
+        paragraphs,
+        i,
+        p.numbering?.ilvl ?? 0,
+        p.listKind,
+      );
 
       rows.push(<ClauseList key={i} node={built.node} />);
       i += built.consumed;
@@ -100,7 +86,7 @@ const buildListTree = (
     if (!p || p.isDirective || !p.listKind) {
       break;
     }
-    const pLevel = Math.max(0, p.listLevel ?? 0);
+    const pLevel = Math.max(0, p.numbering?.ilvl ?? 0);
     if (pLevel < level || (pLevel === level && p.listKind !== kind)) {
       break;
     }
@@ -119,11 +105,15 @@ const buildListTree = (
     const item: ListTreeItem = { paragraph: p, children: null };
     i += 1;
     const next = paragraphs[i];
-    if (next?.listKind && !next.isDirective && (next.listLevel ?? 0) > level) {
+    if (
+      next?.listKind &&
+      !next.isDirective &&
+      (next.numbering?.ilvl ?? 0) > level
+    ) {
       const child = buildListTree(
         paragraphs,
         i,
-        next.listLevel ?? 0,
+        next.numbering?.ilvl ?? 0,
         next.listKind,
       );
       item.children = child.node;

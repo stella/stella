@@ -108,10 +108,14 @@ test.each(cases)(
       writeFileSync(path.join(root, "unchanged.js"), imports);
       writeFileSync(path.join(root, "changed.json"), '{"x":1,"y":[2,3]}');
       writeFileSync(path.join(root, "generated.html.txt"), "fixture");
-      writeFileSync(
-        path.join(root, "autofix-changed-paths"),
-        "changed.ts\0generated.html.txt\0apps/landing/changed.js\0changed.json\0",
-      );
+      // The fixer steps read the push scope; a run without a settled
+      // commit scopes every changed path.
+      for (const name of ["autofix-changed-paths", "autofix-fix-paths"]) {
+        writeFileSync(
+          path.join(root, name),
+          "changed.ts\0generated.html.txt\0apps/landing/changed.js\0changed.json\0",
+        );
+      }
       const finding = Bun.spawnSync(
         [
           process.execPath,

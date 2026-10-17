@@ -834,7 +834,7 @@ const runModelTurn = async ({
 }): Promise<{ turn: ModelTurn; trace: ToolTrace[]; fillCalls: FillCall[] }> => {
   const caching = resolveCaching({
     promptCachingEnabled: false,
-    role: "fast",
+    task: "short-text",
     scopeKey: null,
   });
   const organizationId = mintAuthProviderId<"organization">();
@@ -1120,7 +1120,7 @@ const resolveModels = async (
         orgAIConfig: null,
         dataClass: "customer",
         managedAIResidency: "eu",
-        role: "fast",
+        task: "short-text",
         organizationId: null,
         admission: NO_ORGANIZATION_MODEL_DISPATCH,
       }),

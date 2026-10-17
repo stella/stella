@@ -26,12 +26,14 @@ import type { ChatUIMessage } from "@/components/chat/chat-ui-tools";
 import { useExternalSourceStore } from "@/components/chat/external-source-store";
 import { collectSourceChipEntries } from "@/components/chat/source-chips.logic";
 import { DecisionCitationChip } from "@/components/references/decision-citation-chip";
+import { citationTextNamesCase } from "@/components/references/decision-citation-chip.logic";
 import { decisionCitationPresentationsById } from "@/components/references/decision-citation-presentation.logic";
 import type { DecisionCitationPresentation } from "@/components/references/decision-citation-presentation.logic";
 import type { CitedDecisionParagraph } from "@/components/references/reference.logic";
 import { env } from "@/env";
 import { publicCaseLawPageCountryFromParam } from "@/features/case-law/case-law-jurisdiction";
 import { useOpenDecisionTab } from "@/features/case-law/open-decision-tab";
+import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import {
   decisionBySlugOptions,
   decisionOptions,
@@ -83,6 +85,19 @@ const withAnchor = (href: string, anchorId: string | undefined): string => {
   return `${base}#${encodeURIComponent(anchorId)}`;
 };
 
+// The text of a link's children when they are plain text, as Markdown link
+// text usually is; null for anything richer, which keeps its badge.
+const plainText = (node: ReactNode): string | null => {
+  if (typeof node === "string" || typeof node === "number") {
+    return String(node);
+  }
+  if (Array.isArray(node)) {
+    const parts = node.map((child: ReactNode) => plainText(child));
+    return parts.every((part) => part !== null) ? parts.join("") : null;
+  }
+  return null;
+};
+
 const CitationView = ({
   read,
   passage,
@@ -111,6 +126,26 @@ const CitationView = ({
     readerUrl: withAnchor(readerUrl ?? metadata.readerUrl, paragraph?.anchorId),
     originalUrl: originalUrl === undefined ? metadata.originalUrl : originalUrl,
   };
+  // Prose that names the case ("v nálezu III. ÚS 2429/24") is the citation:
+  // it opens the card itself, and no badge repeats the court beside it.
+  const passageText = plainText(passage);
+  if (
+    renderPassage &&
+    passageText !== null &&
+    citationTextNamesCase(passageText, metadata.caseNumber)
+  ) {
+    return (
+      <>
+        <DecisionCitationChip
+          decision={decision}
+          label={passage}
+          onOpen={onOpen}
+          paragraphNumber={paragraph?.courtParagraphNumber ?? null}
+        />
+        <CitationReadFeedback read={read} />
+      </>
+    );
+  }
   return (
     <>
       {renderPassage && passage}
@@ -340,6 +375,29 @@ export const ChatAnswerDecisionProvider = ({
       {children}
     </AnswerDecisionContext>
   );
+};
+
+/**
+ * The decisions this answer cites by id, as their readers load them (full
+ * text and blocks), for checking its quotations against. The same cache
+ * entries the citation chips read, so a quotation adds no request of its own;
+ * outside an answer there are none.
+ */
+export const useAnswerCitedDecisions = (): PublicCaseLawDecision[] => {
+  const answer = useContext(AnswerDecisionContext);
+  if (answer === null) {
+    return [];
+  }
+  // Decisions cited by id or by route, as the answer already read them. A
+  // decision still loading, or failed, leaves its quotations unverified
+  // rather than wrong; its citation chip already reports a failed read.
+  const decisions = new Map<string, PublicCaseLawDecision>();
+  for (const read of [...answer.reads.values(), ...answer.routes.values()]) {
+    if (read.type === "query" && read.view.type === "items") {
+      decisions.set(read.view.items.id, read.view.items);
+    }
+  }
+  return [...decisions.values()];
 };
 
 /** A quotation remains prose; its decision annotation owns metadata and actions. */

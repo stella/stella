@@ -53,6 +53,7 @@ export const listDecisionFacetsHandler = async ({
   country,
 }: ListDecisionFacetsQuery) => {
   const countryRead = readPublicLawCountry(country, {
+    domain: "caseLaw",
     admitted: PUBLIC_CASE_LAW_COUNTRIES,
     surface: "search",
   });
