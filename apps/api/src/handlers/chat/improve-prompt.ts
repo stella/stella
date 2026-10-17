@@ -15,7 +15,7 @@ import {
 } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
+import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
 
 const config = {
   contract: "patch",
@@ -31,7 +31,7 @@ const config = {
       t.Literal(CHAT_SEND_MODE.rawOverride),
     ]),
   }),
-  requiresUsage: { actionType: "chat", modelRole: "fast" },
+  requiresUsage: { actionType: "chat", modelTask: "short-text" },
 } satisfies HandlerConfig;
 
 const IMPROVE_PROMPT_TIMEOUT_MS = 20_000;
@@ -81,7 +81,7 @@ const improvePrompt = createSafeRootHandler(
         workspaceId: null,
       },
       feature: "chat.improve_prompt",
-      modelRole: "fast",
+      modelTask: "short-text",
       orgAIConfig,
       modelTier: configuredModelAdmission({ modelAdmission }).modelTier,
       properties: { organization_id: session.activeOrganizationId },
@@ -95,7 +95,7 @@ const improvePrompt = createSafeRootHandler(
             prompt,
             body.strategy,
           );
-          return await generateTanStackTextForRole({
+          return await generateTanStackTextForTask({
             dataClass: "customer",
             abortSignal: AbortSignal.any([
               actionSignal ?? request.signal,
@@ -104,7 +104,7 @@ const improvePrompt = createSafeRootHandler(
             analytics: aiAnalytics,
             caching: resolveCaching({
               promptCachingEnabled,
-              role: "fast",
+              task: "short-text",
               scopeKey: null,
             }),
             finishPolicy: "require-complete",
@@ -114,7 +114,7 @@ const improvePrompt = createSafeRootHandler(
             admission: configuredModelAdmission({ modelAdmission }),
             orgAIConfig,
             managedAIResidency,
-            role: "fast",
+            task: "short-text",
             serviceTier: "standard",
             system: modelInput.system,
             systemPromptOrigin: "server-built",

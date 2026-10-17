@@ -22,7 +22,7 @@ import {
   startFlowRun,
 } from "@/api/lib/flows/start-flow-run";
 import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
-import { getTanStackTextModelInfoForRole } from "@/api/lib/tanstack-ai-models";
+import { getTanStackTextModelInfoForTask } from "@/api/lib/tanstack-ai-models";
 import { readManagedModelTier } from "@/api/lib/usage/organization-access-state";
 
 const config = {
@@ -96,7 +96,7 @@ const startFlowRunHandler = createSafeHandler(
         // prompt is bounded by the executor's caps, so the estimate is an
         // upper bound. Large runs need the client to restate it.
         admit: async ({ steps }) => {
-          const stepModel = getTanStackTextModelInfoForRole(
+          const stepModel = getTanStackTextModelInfoForTask(
             "chat",
             orgAIConfig,
             {
@@ -106,7 +106,7 @@ const startFlowRunHandler = createSafeHandler(
             },
           );
           return await authorizeHandlerRunSize({
-            metering: { actionType: "background", modelRole: "chat" },
+            metering: { actionType: "background", modelTask: "chat" },
             estimatedUnits: estimateFlowRunUnits({
               modelId: stepModel.modelId,
               steps,

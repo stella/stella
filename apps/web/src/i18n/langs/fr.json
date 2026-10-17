@@ -65,6 +65,9 @@
     "runSelectedRows": "Exécuter pour {count, plural, one {# ligne sélectionnée} other {# lignes sélectionnées}}",
     "selectedRun": "Exécuter les colonnes IA pour {count, plural, one {# ligne} other {# lignes}}"
   },
+  "aiDisclosure": {
+    "caseLaw": "Les résumés, notes et analyses de décisions de justice produits par l’IA sont générés par stella ; ils ne sont pas approuvés par les juridictions et ne reflètent pas leur propre raisonnement. Ce sont des outils d’aide destinés aux professionnels du droit ; seul le texte de la décision fait foi."
+  },
   "appearance": {
     "calendar": "Calendrier",
     "calendarGregorian": "Grégorien",
@@ -1213,6 +1216,11 @@
       "stale": "Cette réponse a été modifiée. Sélectionnez à nouveau le texte.",
       "submit": "Demander une modification"
     },
+    "answerQuote": {
+      "showInDecision": "Afficher dans la décision",
+      "verified": "Citation vérifiée",
+      "verifiedHint": "Mot pour mot dans {source}"
+    },
     "applyMode": {
       "description": "Word enregistre l’auteur de chaque modification. Nous mémoriserons votre choix.",
       "direct": "Non, appliquer directement",
@@ -1451,6 +1459,12 @@
       "title": "Texte collé"
     },
     "placeholder": "Saisissez votre question ici, / pour les compétences, @ pour ajouter du contexte",
+    "processSummary": {
+      "analyses": "{count, plural, one {# analyse} other {# analyses}}",
+      "changesSaved": "{count, plural, one {# modification enregistrée} other {# modifications enregistrées}}",
+      "documentEdits": "{count, plural, one {# modification du document} other {# modifications du document}}",
+      "sourcesChecked": "{count, plural, one {# source vérifiée} other {# sources vérifiées}}"
+    },
     "promptImprovementStrategies": {
       "decompose": {
         "description": "Transforme un travail complexe en sous-tâches ordonnées.",
@@ -1696,6 +1710,7 @@
       "interrupted": "Interrompu avant la fin",
       "output": "Résultat",
       "sourceCode": "Code source",
+      "statusWaiting": "En attente",
       "toggleDetails": "Afficher les détails",
       "unrestoredFields": "En mode anonymisé, {count, plural, one {# champ n’a pas pu être rempli} other {# champs n’ont pas pu être remplis}} avec des valeurs réelles. À vérifier : {fields}"
     },
@@ -1721,7 +1736,8 @@
       "toggleLabel": "Recherche web",
       "toggleOff": "Désactiver la recherche web",
       "toggleOn": "Activer la recherche web"
-    }
+    },
+    "workedFor": "Temps de travail : {duration}"
   },
   "clauses": {
     "addVariant": "Ajouter une variante",
@@ -2599,11 +2615,14 @@
     "actionFailed": "Action échouée",
     "api": {
       "badRequest": "La requête n’a pas pu être terminée.",
+      "caseLawCountryUnavailable": "La jurisprudence de ce pays n’est pas disponible. Choisissez un autre pays.",
+      "caseLawSearchUnavailable": "La recherche dans la jurisprudence de ce pays n’est pas disponible. Vous pouvez toujours consulter ses décisions publiques.",
       "conflict": "La requête est en conflit avec l’état actuel.",
       "forbidden": "Vous n’avez pas l’autorisation d’effectuer cette action.",
+      "legislationCountryUnavailable": "Les textes législatifs de ce pays ne sont pas disponibles. Choisissez un autre pays.",
+      "legislationSearchUnavailable": "La recherche dans les textes législatifs de ce pays n’est pas disponible. Vous pouvez toujours consulter ses textes législatifs publics.",
       "notFound": "Nous n’avons pas trouvé l’élément demandé.",
       "payloadTooLarge": "La requête est trop volumineuse.",
-      "publicCountryUnavailable": "Les textes législatifs et la jurisprudence de ce pays ne sont pas disponibles. Choisissez un autre pays.",
       "rateLimited": "Trop de requêtes. Veuillez réessayer plus tard.",
       "server": "Une erreur s’est produite. Veuillez réessayer.",
       "serviceUnavailable": "Le service est temporairement indisponible. Veuillez réessayer.",

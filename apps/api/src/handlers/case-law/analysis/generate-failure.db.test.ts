@@ -20,6 +20,7 @@ import {
   getOutputTokenLimit,
   TANSTACK_AI_PROVIDERS,
 } from "@stll/ai-catalog";
+import { AI_DISCLOSURES } from "@stll/api-contract/ai-disclosure";
 import { PROVIDER_SETUP_ERROR_CODE } from "@stll/api-contract/provider-setup";
 import type { AnalysisGenerating } from "@stll/legal-ast/analysis";
 import type { DocumentAst, ParagraphBlock } from "@stll/legal-ast/document-ast";
@@ -367,6 +368,7 @@ describe("a failed analysis run", () => {
     retry = false,
     deadlineMs,
     beforeClaim,
+    derivedAi = true,
   }: {
     decisionId: SafeId<"caseLawDecision">;
     model: ResolvedTanStackTextModel | Promise<ResolvedTanStackTextModel>;
@@ -375,6 +377,7 @@ describe("a failed analysis run", () => {
     retry?: boolean;
     deadlineMs?: number;
     beforeClaim?: () => Promise<void>;
+    derivedAi?: boolean;
   }) => {
     const starts = { count: 0 };
     const response = await generateAnalysis({
@@ -391,6 +394,7 @@ describe("a failed analysis run", () => {
       promptCachingEnabled: false,
       retry,
       store: createDbAnalysisStore(db),
+      derivedAi,
       resolveTextModel: async () => await model,
       ...(deadlineMs === undefined ? {} : { deadlineMs }),
       ...(beforeClaim === undefined ? {} : { beforeClaim }),
@@ -424,6 +428,59 @@ describe("a failed analysis run", () => {
       expect(poll.starts).toBe(0);
     });
   }
+
+  // A local, seeded or CI stack serves stored analyses and asks no model:
+  // with derived AI off, opening a decision without one claims nothing,
+  // starts nothing and files nothing, retry or not.
+  test("with derived AI off, a decision without an analysis starts no run", async () => {
+    const decisionId = await insertDecision();
+    const google = fakeGoogle(["valid"]);
+
+    for (const retry of [false, true]) {
+      const { response, starts } = await read({
+        decisionId,
+        model: google.model,
+        retry,
+        derivedAi: false,
+      });
+      expect(response).toMatchObject({
+        status: "error",
+        code: "analysis_unavailable",
+      });
+      expect(starts).toBe(0);
+    }
+    // The provider was never asked: its one answer is still queued.
+    expect(google.requests).toEqual([]);
+    expect(google.remaining()).toBe(1);
+    expect(await storedValue(decisionId)).toBeNull();
+    expect(await failureRows(decisionId)).toEqual([]);
+  });
+
+  // A failure filed while derived AI was on must not offer a retry once the
+  // deployment turns it off: off mode is the terminal answer, poll or retry.
+  test("with derived AI off, a still-held failure answers unavailable, not retryable", async () => {
+    const decisionId = await insertDecision();
+    await read({ decisionId, model: fakeGoogle(["refused"]).model });
+    const held = await read({ decisionId, model: fakeGoogle([]).model });
+    expect(held.response).toMatchObject({ status: "error", code: "failed" });
+
+    const google = fakeGoogle(["valid"]);
+    for (const retry of [false, true]) {
+      const { response, starts } = await read({
+        decisionId,
+        model: google.model,
+        retry,
+        derivedAi: false,
+      });
+      expect(response).toMatchObject({
+        status: "error",
+        code: "analysis_unavailable",
+      });
+      expect(starts).toBe(0);
+    }
+    expect(google.requests).toEqual([]);
+    expect(await storedValue(decisionId)).toBeNull();
+  });
 
   test("a provider refusal persists its redacted diagnostic until retry or a provider change", async () => {
     const decisionId = await insertDecision();
@@ -979,6 +1036,8 @@ describe("a failed analysis run", () => {
     expect(done.response).toMatchObject({
       status: "done",
       analysis: { version: 3, holding: { text: "Dovolání se zamítá." } },
+      // The finished analysis reaches the agent with what to tell the reader.
+      aiDisclosure: { context: "caseLaw", text: AI_DISCLOSURES.caseLaw.text },
     });
   });
 

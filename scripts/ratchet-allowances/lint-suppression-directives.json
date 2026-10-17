@@ -1,5 +1,5 @@
 {
   "metric": "lint-suppression-directives",
-  "delta": 2,
-  "reason": "The parse5 tree-adapter callback cannot return a Result, so it throws the tagged allocation-budget error to abort synchronous parsing; the shared parser callback also must return a CheerioAPI, so it rethrows that tagged error for the enclosing Result.try to record through plKioParseError."
+  "delta": 3,
+  "reason": "The citations cassette replays one recorded answer verbatim; its three resource links are the model output the citation renderer is developed against, so they stay raw in the fixture."
 }

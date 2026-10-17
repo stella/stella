@@ -43,7 +43,7 @@ export const ChatImageAttachment = ({
           <DialogPanel className="flex justify-center p-2">
             <img
               alt={alt}
-              className="max-h-[min(70vh,48rem)] w-full object-contain"
+              className="max-h-[min(70dvh,48rem)] w-full object-contain"
               src={fullSrc}
             />
           </DialogPanel>
