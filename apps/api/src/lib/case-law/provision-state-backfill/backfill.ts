@@ -9,6 +9,7 @@ import { Temporal } from "@stll/time";
 import { isRecord } from "@/api/lib/type-guards";
 
 import { PROVISION_CITATION_CHECK_STEP } from "./citation-checks";
+import { PROVISION_PENDING_CLOCK_STEP } from "./pending-clock";
 import { inBackfillTransaction, PROVISION_BACKFILL_BUDGET } from "./step";
 import type {
   ProvisionBackfillCompletion,
@@ -425,6 +426,7 @@ const backfillSteps = (
   scopeSeedStep(admission),
   scopeTransitionsStep,
   cursorStep("state-seed"),
+  PROVISION_PENDING_CLOCK_STEP,
   PROVISION_CITATION_CHECK_STEP,
 ];
 

@@ -33,7 +33,8 @@
     "sessionMovedToAnotherDevice": "انتقل إلى جهاز آخر",
     "sessionNeedsAttention": "يتطلب انتباهك",
     "sessionOpeningInOffice": "جارٍ الفتح في Office",
-    "sessionSavingDraft": "حفظ المسودة"
+    "sessionSavingDraft": "حفظ المسودة",
+    "reconnectAccount": "إعادة الاتصال بـ stella web…"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName} — تبقى التغييرات محلية وستُعاد المحاولة تلقائياً",
@@ -209,7 +210,13 @@
     "startOnLoginDescription": "تشغيل stella desktop تلقائياً عند تسجيل دخولك.",
     "stellaDesktop": "stella desktop",
     "support": "الدعم",
-    "title": "الإعدادات"
+    "title": "الإعدادات",
+    "serverLabel": "الخادم",
+    "connectToHost": "الاتصال بـ {host}",
+    "connectToHostDescription": "يفتح {host} في المتصفح لتوافق على هذا الكمبيوتر.",
+    "reconnectNeeded": "يلزم إعادة الاتصال",
+    "reconnect": "إعادة الاتصال",
+    "reconnectHostDescription": "يجب تجديد الاتصال بـ {host}. وافق على هذا الكمبيوتر مرة أخرى في المتصفح."
   },
   "clipboard": {
     "registryUnavailable": "لا توجد سجلات مفعّلة لجهات اختصاص ممارستك.",

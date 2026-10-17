@@ -65,6 +65,9 @@
     "runSelectedRows": "Käivita {count, plural, one {# valitud real} other {# valitud real}}",
     "selectedRun": "Käivita tehisintellekti veerud {count, plural, one {# real} other {# real}}"
   },
+  "aiDisclosure": {
+    "caseLaw": "Kohtulahendite AI-kokkuvõtted, -märkmed ja -analüüsid koostab stella; kohtud ei ole neid heaks kiitnud ja need ei kajasta kohtute endi arutluskäiku. Need on abivahendid õigusala spetsialistidele ning määravaks allikaks jääb lahendi tekst."
+  },
   "appearance": {
     "calendar": "Kalender",
     "calendarGregorian": "Gregoriuse",
@@ -529,6 +532,70 @@
     },
     "hourlyRateMustBeNonNegative": "Tunnitasu ei tohi olla negatiivne",
     "hours": "Tunnid",
+    "invoiceComposer": {
+      "addSellerProfile": "Lisage müüja profiil arvelduse seadetes",
+      "billedHours": "Arveldatavad tunnid",
+      "buyer": "Klient (ostja)",
+      "continueToDetails": "Jätka andmetega",
+      "continueToIssue": "Jätka väljastamisega",
+      "datesAndPayment": "Kuupäevad ja makse",
+      "days": "{days, plural, one {# päev} other {# päeva}}",
+      "draftSavedTitle": "Arve mustand salvestatud",
+      "dueIn": "Tähtaeg",
+      "dueOn": "tähtaeg {date}",
+      "flatFee": "Selles toimikus kehtib kindeltasu: arve sisaldab kokkulepitud {amount} ja allolev aeg on sellega kaetud.",
+      "flatFeeLine": "Kokkulepitud kindeltasu",
+      "include": "Lisa sellele arvele",
+      "issueFailed": "Mustand salvestati, kuid arvet ei õnnestunud väljastada.",
+      "issueInvoice": "Väljasta arve",
+      "issuedTitle": "Arve {number} väljastatud",
+      "lines": "Arve read",
+      "loggedHours": "{hours} h kirjendatud",
+      "noCharge": "Tasuta",
+      "noClient": "Sellel toimikul pole klienti, seega pole arvel veel ostjat.",
+      "noExpenses": "Selles toimikus pole kinnitatud ja arveldamata kulusid.",
+      "noTime": "Selles toimikus pole kinnitatud ja arveldamata aega.",
+      "noVat": "Käibemaksuta",
+      "nothingToBill": "Veel pole midagi arveldada. Kinnitage selle toimiku ajakanded või kulud, et neid arveldada.",
+      "openInvoice": "Ava arve",
+      "otherCurrency": "{count, plural, one {# rida on} other {# rida on}} kirjendatud muus valuutas kui {currency} ja jääb eraldi arve jaoks.",
+      "outsideScope": "Ei kuulu käibemaksu kohaldamisalasse, 0 %",
+      "rate": "Tunnihind",
+      "readyDescription": "Väljastamisel saab arve teie numbriseeria järgmise numbri ja lukustatakse. Mustandit saab edasi muuta.",
+      "readyTitle": "Valmis väljastamiseks",
+      "reverseCharge": "Pöördmaksustamine, 0 %",
+      "saveDraft": "Salvesta mustandina",
+      "seller": "Müüja",
+      "sources": {
+        "client": "Võetud toimiku kliendilt",
+        "clientTerm": "Kliendi maksetähtaeg",
+        "defaultSeller": "Teie vaikimisi müüja profiil",
+        "defaultTerm": "Tavaline maksetähtaeg",
+        "lastWorkDay": "Arvele lisatud töö viimane päev"
+      },
+      "steps": {
+        "issue": "Ülevaatus ja väljastamine",
+        "items": "Aeg ja kulud"
+      },
+      "tax": "Maks ja valuuta",
+      "taxableSupplyDate": "Teenuse osutamise kuupäev",
+      "timeEntries": "Ajakanded",
+      "timeSummary": "{count, plural, one {# kanne} other {# kannet}} · {hours} h",
+      "title": "Uus arve",
+      "totalsSummary": "Käibemaksuta {net} · Käibemaks {vat} · Kokku {total}",
+      "vat": "Käibemaksu käsitlus",
+      "vatRate": "Käibemaks {rate} %",
+      "vatReasons": {
+        "clientCountryUnconfirmed": "Kliendi riiki ei õnnestunud kinnitada: käibemaksukohustuslase number ja aadress ei viita samale riigile, seega kehtib tavamäär",
+        "clientVatIdInvalid": "Kliendi KMKR number ei vasta tema riigi vormingule, seega kehtib tavamäär",
+        "domesticRate": "Teie kõrgeim teenuse osutamise päeval kehtiv käibemaksumäär",
+        "noSellerProfile": "Müüja profiil puudub, seega käibemaksu ei arvestata enne, kui selle arvele määrate",
+        "noVatRate": "Arvelduse seadetes pole käibemaksumäära seadistatud",
+        "outsideScope": "Kliendi KMKR number on registreeritud väljaspool ELi, seega on teenuse osutamise koht välismaal",
+        "reverseCharge": "Kliendi käibemaksukohustuslase number on registreeritud teises riigis",
+        "sellerNotVatPayer": "Müüja ei ole käibemaksukohustuslane"
+      }
+    },
     "invoiceNarrative": "Arve selgitus",
     "invoiceNarrativePlaceholder": "Kliendile nähtav kirjeldus (vabatahtlik)",
     "invoices": {
@@ -671,7 +738,10 @@
       "registrationId": "Registrikood",
       "setDefault": "Määra vaikimisi",
       "title": "Müüja profiilid",
-      "vatId": "Käibemaksukohustuslase number"
+      "vatId": "Käibemaksukohustuslase number",
+      "vatPayer": "Käibemaksukohustuslane",
+      "vatPayerHelp": "Selle müüja arved sisaldavad käibemaksu. Lülitage välja registreeritud isiku puhul, kellel on käibemaksukohustuslase number, kuid kes ei ole maksukohustuslane.",
+      "vatPayerRequiresVatId": "Sisestage käibemaksukohustuslase number, et väljastada arveid käibemaksukohustuslasena."
     },
     "settingsTitle": "Arveldus",
     "split": {
@@ -1046,6 +1116,13 @@
       "provisionMentions": "{count, number}×",
       "provisionMentionsLabel": "{count, plural, one {# mainimine} other {# mainimist}}",
       "provisionsCited": "Viidatud sätted",
+      "provisionsFailed": "Viidete töötlemine ebaõnnestus",
+      "provisionsNoneFound": "Viidatud sätteid ei leitud",
+      "provisionsProcessing": "Viiteid töödeldakse",
+      "provisionsUnavailable": "Viited pole saadaval",
+      "provisionsUnplaceable": "Viiteid ei saa lahendi tekstis paigutada",
+      "provisionsUnsupported": "Selle lahendi viidete töötlemist ei toetata",
+      "provisionsWithheld": "Viiteid ei avaldata",
       "sourceFields": {
         "decisionCategory": "Lahendi kategooria",
         "publishedOnWeb": "Veebis avaldatud"
@@ -1488,6 +1565,18 @@
       "rejected": "Tagasi lükatud"
     },
     "tabToAsk": "→ küsimiseks: \"{prompt}\"",
+    "tableChart": {
+      "bar": "Tulpdiagramm",
+      "kind": "Diagrammi tüüp",
+      "line": "Joondiagramm",
+      "loading": "Diagrammi valimine…",
+      "pie": "Sektordiagramm",
+      "scatter": "Hajuvusdiagramm",
+      "showChart": "Kuva diagrammina",
+      "summary": "Kuvatud väärtuste arv: {n, number}.",
+      "unavailable": "Diagrammi ei õnnestunud valida. Kuvatakse tabel.",
+      "values": "{label}: {value, number}"
+    },
     "thinking": "Töötan kontekstiga",
     "threadFiles": {
       "title": "Selle vestluse failid"
@@ -1635,7 +1724,8 @@
       "toggleLabel": "Veebiotsing",
       "toggleOff": "Lülita veebiotsing välja",
       "toggleOn": "Lülita veebiotsing sisse"
-    }
+    },
+    "workedFor": "Tööaeg: {duration}"
   },
   "clauses": {
     "addVariant": "Lisa variant",
@@ -2513,11 +2603,14 @@
     "actionFailed": "Toiming ebaõnnestus",
     "api": {
       "badRequest": "Päringut ei saanud lõpule viia.",
+      "caseLawCountryUnavailable": "Selle riigi kohtupraktika ei ole saadaval. Valige teine riik.",
+      "caseLawSearchUnavailable": "Selle riigi kohtupraktika otsing ei ole saadaval. Selle avalikke kohtulahendeid saate endiselt lugeda.",
       "conflict": "Päring on praeguse olekuga vastuolus.",
       "forbidden": "Teil pole selleks toiminguks õigust.",
+      "legislationCountryUnavailable": "Selle riigi õigusaktid ei ole saadaval. Valige teine riik.",
+      "legislationSearchUnavailable": "Selle riigi õigusaktide otsing ei ole saadaval. Selle avalikke õigusakte saate endiselt lugeda.",
       "notFound": "Soovitud üksust ei leitud.",
       "payloadTooLarge": "Päring on liiga suur.",
-      "publicCountryUnavailable": "Selle riigi õigusaktid ja kohtupraktika ei ole saadaval. Valige teine riik.",
       "rateLimited": "Liiga palju päringuid. Proovige hiljem uuesti.",
       "server": "Midagi läks valesti. Proovige uuesti.",
       "serviceUnavailable": "Teenus pole ajutiselt saadaval. Proovige uuesti.",
@@ -4670,9 +4763,19 @@
       "deleteAccountWarningExplanation": "Saadame teie e-posti aadressile kinnituskoodi selle taotluse kinnitamiseks. Lõpetatud tööruumi ajalugu jääb seotuks teie kustutatud kontoga.",
       "desktop": "Töölaud",
       "desktopAppDescription": "Leidke kõik kopeeritu uuesti üles ja avage stella dokumendid juba kasutatavates töölauarakendustes.",
+      "desktopCardApproveDetail": "Kinnitage, et siduda see arvuti kontoga <bdi>{identity}</bdi> serveris {host}.",
+      "desktopCardApproveTitle": "stella desktop soovib ühenduda",
+      "desktopCardConnectedDetail": "Seotud kontoga <bdi>{identity}</bdi> serveris {host} · versioon {version}",
+      "desktopCardConnectedDetailNoVersion": "Seotud kontoga <bdi>{identity}</bdi> serveris {host}",
+      "desktopCardConnectedTitle": "stella desktop on seotud",
+      "desktopCardMissingDetail": "Paigaldage see või ühendage, kui see on selles arvutis juba paigaldatud.",
+      "desktopCardMissingTitle": "stella desktop pole veel ühendatud",
+      "desktopCardOutdatedDetail": "Versioon {version} on seotud kontoga <bdi>{identity}</bdi>. Paigaldage uusim versioon, et dokumendid ja tegevus töötaksid edasi.",
+      "desktopCardOutdatedTitle": "stella desktop vajab uuendust",
       "desktopClipboardDescription": "Avage, otsige, korraldage ja kasutage uuesti mis tahes rakendusest kopeeritud teksti.",
       "desktopClipboardTitle": "Otsitav lõikelaua ajalugu",
       "desktopConnectFailed": "Rakenduse stella desktop ühendamine ebaõnnestus.",
+      "desktopConnectInstalled": "On paigaldatud, ühenda",
       "desktopConnectedAs": "Ühendatud kasutajana <bdi>{email}</bdi>",
       "desktopDescription": "Lõikelaua ajalugu ja dokumenditööriistad teie arvutis",
       "desktopDocumentsDescription": "Avage stella failid töölauarakendustes; parandused jõuavad tagasi õigesse toimikusse.",
