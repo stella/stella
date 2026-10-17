@@ -2383,6 +2383,40 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun scripts/ci-generated-sources.ts restore "$RUNNER_TEMP/generated-sources"
 
+      - name: Checkout workflow classification tooling
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        env:
+          CI_CHECK_KIND: CONTEXTUAL
+          CI_CHECK_CONTEXT: "Reads classification tooling at the workflow revision."
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .workflow-tooling
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            .github/workflows
+            .github/actions
+            .github/ci-job-classification.json
+            .github/ci-job-classification-decisions.json
+            .github/ci-job-classification-sources.json
+            scripts/check-ci-job-classification.ts
+            scripts/ci-job-classification
+            packages/collation/src/collation.ts
+            packages/sha256/src/node.ts
+            packages/sha256/src/types.ts
+
+      - name: Check workflow job classifications
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        env:
+          CI_CHECK_KIND: CONTEXTUAL
+          CI_CHECK_CONTEXT: "Checks workflow-owned declarations and metadata at the workflow revision."
+        # Remove the tooling checkout so later source checks see only the
+        # candidate tree.
+        run: |
+          trap 'rm -rf .workflow-tooling' EXIT
+          bun .workflow-tooling/scripts/check-ci-job-classification.ts .workflow-tooling
+
       - name: Compute affected flag
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         id: affected
