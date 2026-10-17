@@ -7156,7 +7156,11 @@ test("Postgres PR required checks follow trust, run eligibility and the general 
 const TARGET_BASE_ACTION = ".github/actions/merge-target-base/action.yml";
 
 /** Runs the comparison-base resolver's script in `cwd` and returns its output. */
-const resolveTargetBase = (cwd: string, env: Record<string, string>) => {
+const resolveTargetBase = (
+  cwd: string,
+  env: Record<string, string>,
+  expectedExit = 0,
+) => {
   const action = v.parse(
     v.object({
       runs: v.object({ steps: v.array(v.object({ run: v.string() })) }),
@@ -7178,7 +7182,7 @@ const resolveTargetBase = (cwd: string, env: Record<string, string>) => {
     stdout: "pipe",
     stderr: "pipe",
   });
-  expect(result.exitCode, result.stderr.toString()).toBe(0);
+  expect(result.exitCode, result.stderr.toString()).toBe(expectedExit);
   return readFileSync(output, "utf-8")
     .trim()
     .replace(/^base_sha=/u, "");
@@ -7261,12 +7265,14 @@ test("a merge group certifies every queue entry it merges against the target bra
       ),
     ).toEqual(["false"]);
 
-    // An unresolvable target branch leaves the base empty: consumers widen.
+    // An unresolvable target branch fails the plan rather than handing an
+    // empty base to a consumer that would compare HEAD with itself.
     expect(
-      resolveTargetBase(group, {
-        EVENT_NAME: "merge_group",
-        TARGET_REF: "refs/heads/missing",
-      }),
+      resolveTargetBase(
+        group,
+        { EVENT_NAME: "merge_group", TARGET_REF: "refs/heads/missing" },
+        1,
+      ),
     ).toBe("");
     // A pull request keeps its own base.
     expect(
