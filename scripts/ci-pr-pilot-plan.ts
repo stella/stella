@@ -10,6 +10,9 @@ export const PILOT_FAST_ROOTS = [
   "code-quality-api",
   "code-quality-web-rest",
   "query-perf",
+  // Dependency checks gate on dependency changes; PRs run them.
+  "dependency-audit",
+  "dependency-review",
 ] as const;
 /** Jobs every profile runs: wall-clock checks no plan scope can skip. */
 export const PILOT_ALWAYS = ["ci-quick-checks"] as const;

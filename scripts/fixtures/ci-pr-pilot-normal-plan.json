@@ -116,6 +116,12 @@
     },
     "desktop-rust-lint": {
       "if": "inputs.pr_depth_only != true && inputs.heavy_only != true && (github.event_name == 'merge_group' || needs.ci-plan.outputs.run_required != 'false') && (needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch') && needs.ci-plan.outputs.desktop_rust_checks_required == 'true'"
+    },
+    "dependency-audit": {
+      "if": "inputs.heavy_only != true && (github.event_name == 'pull_request' || github.event_name == 'merge_group') && needs.ci-plan.outputs.dependency_changes_required == 'true'"
+    },
+    "dependency-review": {
+      "if": "inputs.heavy_only != true && (github.event_name == 'pull_request' || github.event_name == 'merge_group') && needs.ci-plan.outputs.dependency_changes_required == 'true'"
     }
   }
 }

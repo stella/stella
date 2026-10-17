@@ -587,6 +587,43 @@ test("route tree freshness follows route inputs and full-depth runs", () => {
   ).toEqual(["true"]);
 });
 
+test("dependency jobs follow dependency inputs and skip unrelated changes", () => {
+  const dependencyInputs = [
+    "bun.lock",
+    "package.json",
+    "apps/web/package.json",
+    "bunfig.toml",
+    "patches/example.patch",
+    "Cargo.lock",
+    "apps/desktop/Cargo.toml",
+    "pyproject.toml",
+    "uv.lock",
+    "requirements.txt",
+    ".github/workflows/ci.yml",
+    ".github/actions/example/action.yml",
+    "action.yml",
+    "action.yaml",
+  ];
+  const cases = [
+    ...dependencyInputs.map((file) => ({ files: [file], expected: "true" })),
+    { files: ["apps/web/src/example.ts"], expected: "false" },
+  ];
+  for (const { item, plan } of planSelector(
+    cases.map(({ files }) => ({
+      files,
+      outputs: ["dependency_changes_required"],
+    })),
+  )) {
+    const expected = cases.find(({ files }) => files[0] === item.files[0]);
+    if (!expected) {
+      throw new TypeError(
+        `Missing dependency selector case: ${String(item.files[0])}`,
+      );
+    }
+    expect(plan, item.files[0]).toEqual([expected.expected]);
+  }
+});
+
 test("the lockfile release-age guard follows every tracked lockfile", () => {
   for (const file of [
     "bun.lock",
@@ -747,6 +784,10 @@ const resultJob = v.parse(
 const CANCEL_REUSABLE_JOB = "marketing-screenshots-cancel";
 const MAIN_ONLY_JOBS = new Set(["api-test-durations"]);
 const CANCELLATION_EXCEPTIONS = new Set([
+  // These moved jobs retain the exact least-privilege grants from their
+  // standalone workflows, so neither can cancel a merge-group run.
+  "dependency-audit",
+  "dependency-review",
   "query-perf",
   "fix-tests-on-base",
   "heavy-web-build",
@@ -4158,6 +4199,7 @@ type RunChangedFilesOptions = {
   baseRef?: string;
   changedPath?: "bun.lock" | "package.json" | "e2e-spec" | "documentation";
   gitShim?: string;
+  eventName?: "pull_request" | "merge_group" | "workflow_dispatch";
 };
 
 const runChangedFilesStep = ({
@@ -4165,6 +4207,7 @@ const runChangedFilesStep = ({
   baseRef = "main",
   changedPath,
   gitShim,
+  eventName = "pull_request",
 }: RunChangedFilesOptions) => {
   const step = jobSteps(ciJobs["ci-plan"]).find(
     ({ name }) => name === "Check changed file scope",
@@ -4237,7 +4280,7 @@ const runChangedFilesStep = ({
 
     const env = {
       BASE_REF: baseRef,
-      EVENT_NAME: "pull_request",
+      EVENT_NAME: eventName,
       GITHUB_OUTPUT: output,
       RUNNER_TEMP: directory,
       PATH: gitShim
@@ -4297,6 +4340,22 @@ test("an unknown diff base plans malware and e2e scans", () => {
   expect(outputs.get("dependency_malware_required")).toBe("true");
   expect(outputs.get("e2e_core_required")).toBe("true");
   expect(outputs.get("service_suites_pr_required")).toBe("true");
+});
+
+test("wide scopes plan dependency checks only for events that run them", () => {
+  expect(
+    runChangedFilesStep({ eventName: "workflow_dispatch" }).get(
+      "dependency_changes_required",
+    ),
+  ).toBe("false");
+  for (const eventName of ["pull_request", "merge_group"] as const) {
+    expect(
+      runChangedFilesStep({ eventName, baseRef: "missing-base" }).get(
+        "dependency_changes_required",
+      ),
+      eventName,
+    ).toBe("true");
+  }
 });
 
 test("a changed-file diff failure plans malware and e2e scans", () => {
