@@ -840,7 +840,9 @@ test("callers may tighten but cannot raise the screening work bound", () => {
       {
         cutoff: DEFAULT_CUTOFF,
         ...(maxWork === undefined ? {} : { maxWork }),
-        onWork: ({ limit }) => reportedLimits.push(limit),
+        onWork: ({ limit }) => {
+          reportedLimits.push(limit);
+        },
       },
     ).unwrap();
   }
