@@ -227,6 +227,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
     reason:
       "Reads a thread owner's compacted chat and stores memory suggestions attributed to that owner, as that owner's run actor.",
   },
+  "observability.checkDataInvariants": platform(
+    "data-invariants.ts",
+    "Reads tenant-spanning aggregate counts to judge pipeline output.",
+  ),
   "organizations.recordMissingAccessStates": platform(
     "organization-access-state-reconcile.ts",
     "Records organization access state.",
