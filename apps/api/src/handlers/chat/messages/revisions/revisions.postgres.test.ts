@@ -845,11 +845,7 @@ if (!databaseUrl || !runPostgres) {
               },
             ]),
           );
-          const messages = historyAfter.value.map(({ id, role, content }) => ({
-            id,
-            role,
-            parts: content.data,
-          }));
+          const messages = historyAfter.value.map(chatMessageFromPersisted);
           const prompt = (
             await buildChatSystemPromptParts({
               activeDecision: undefined,
@@ -864,6 +860,7 @@ if (!databaseUrl || !runPostgres) {
               refRegistry: createChatRefRegistry(),
               safeDb: toSafeDbMock(fixture.scoped(db)),
               messages,
+              requestedSkillNames: new Set(),
               threadId: fixture.threadId,
               toolAvailability: {
                 docxEditMode: null,
