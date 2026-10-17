@@ -882,7 +882,22 @@ test("CI determinism selectors cover the cached generators' input contracts", ()
     ["generate:route-tree", "# The route-tree generator"],
   ] as const) {
     const selectors = casePatternsAfter(marker);
-    for (const glob of generationInputs(name)) {
+    // Turbo accepts brace sets; each alternative must be covered on its own.
+    const expandBraces = (glob: string): string[] => {
+      const match = /\{([^{}]+)\}/u.exec(glob);
+      if (match === null) {
+        return [glob];
+      }
+      const [set, alternatives = ""] = match;
+      return alternatives
+        .split(",")
+        .flatMap((alternative) =>
+          expandBraces(
+            `${glob.slice(0, match.index)}${alternative}${glob.slice(match.index + set.length)}`,
+          ),
+        );
+    };
+    for (const glob of generationInputs(name).flatMap(expandBraces)) {
       const rooted = glob.startsWith("$TURBO_ROOT$/")
         ? glob.replace("$TURBO_ROOT$/", "")
         : `apps/web/${glob}`;

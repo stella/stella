@@ -73,6 +73,11 @@ import {
   type AliasGraphEdge,
   nameAliases,
 } from "./lib/web-api-alias-names";
+import {
+  uncoveredCompilerInputs,
+  webApiDependencyOutputs,
+  webApiTurboInputs,
+} from "./lib/web-api-turbo-inputs";
 import { orderUnionMembers } from "./lib/web-api-union-order";
 
 const API_DIR = path.resolve(import.meta.dir, "..");
@@ -1489,6 +1494,18 @@ const main = async () => {
     validation: check ? "identity" : "print",
     recorder,
   });
+  const stamp = recorder.stamp(context);
+  const uncovered = uncoveredCompilerInputs(
+    stamp,
+    REPO_ROOT,
+    webApiTurboInputs(REPO_ROOT),
+    webApiDependencyOutputs(REPO_ROOT),
+  );
+  if (uncovered.length > 0) {
+    panic(
+      `generate-web-api-types: compiler inputs are missing from the Turbo task:\n${uncovered.join("\n")}`,
+    );
+  }
   // The determinism run starts after the identity check's program is
   // collected, so it too runs alone.
   if (check) {
@@ -1506,7 +1523,7 @@ const main = async () => {
     STAMP_PATH,
     JSON.stringify({
       outputHash: sha256Hex(output),
-      inputs: recorder.stamp(context),
+      inputs: stamp,
     }),
   );
   // A store failure costs only a later rebuild elsewhere, never this run.
