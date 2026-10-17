@@ -79,6 +79,7 @@ jobs:
           bun-version-file: "package.json"
 
       - name: Install dependencies
+        timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
@@ -113,6 +114,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install Playwright Chromium
+        timeout-minutes: 4
         if: steps.e2e-stack.outcome == 'success'
         uses: ./.github/actions/setup-playwright
 
@@ -138,6 +140,7 @@ jobs:
           exit 1
 
       - name: Explore workspace interactions
+        timeout-minutes: 15
         if: steps.e2e-stack.outcome == 'success'
         env:
           E2E_SOAK_SEED: ${{ github.run_id }}
@@ -247,6 +250,7 @@ jobs:
           bun-version-file: "package.json"
 
       - name: Install dependencies
+        timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           # .npmrc references NPM_TOKEN, but this workflow can be manually
@@ -303,6 +307,7 @@ jobs:
           bun-version-file: "package.json"
 
       - name: Install dependencies
+        timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
@@ -413,6 +418,7 @@ jobs:
           bun-version-file: "package.json"
 
       - name: Install dependencies
+        timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
@@ -474,6 +480,7 @@ jobs:
           bun-version-file: "package.json"
 
       - name: Install dependencies
+        timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
@@ -508,6 +515,7 @@ jobs:
           bun-version-file: "package.json"
 
       - name: Install dependencies
+        timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
@@ -580,6 +588,7 @@ jobs:
           save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install candidate dependencies
+        timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
@@ -593,6 +602,7 @@ jobs:
         run: bun test scripts/migration-catalog.test.ts scripts/rehearse-exact-base-upgrade.test.ts
 
       - name: Rehearse exact-base migration upgrade
+        timeout-minutes: 12
         id: rehearsal
         env:
           BASE_SHA: ${{ steps.base.outputs.sha }}

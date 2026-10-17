@@ -9,7 +9,8 @@ import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
-import { BYOK_DEFAULT_MODELS, BYOK_MODEL_OPTIONS } from "@stll/ai-catalog";
+import { BYOK_MODEL_OPTIONS } from "@stll/ai-catalog";
+import { MODEL_DEFAULTS_LEDGER } from "@stll/ai-catalog/model-defaults-ledger";
 import { sleep } from "@stll/concurrency/sleep";
 
 import { classifyRunErrorChunk } from "@/api/handlers/chat/stream-chat";
@@ -22,7 +23,7 @@ import { ToolCallIdLedger } from "@/api/lib/chat/unique-tool-call-ids";
 import {
   clearByokAdapterCache,
   createTanStackTextAdapterFactory,
-  getTanStackTextModelForRole,
+  getTanStackTextModelForTask,
 } from "@/api/lib/tanstack-ai-models";
 import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
@@ -115,7 +116,7 @@ export const UNKNOWN_MODEL_ID = "stella-cassette-no-such-model";
 
 /** The chat model a provider's corpus is recorded with by default. */
 export const wireChatModel = (provider: ProviderWireProvider): string =>
-  BYOK_DEFAULT_MODELS[provider].chat.modelId;
+  MODEL_DEFAULTS_LEDGER.chat[provider].candidate.modelId;
 
 /** A model of the provider's other than `chat`, for side calls such as
  *  thread titles. */
@@ -176,7 +177,7 @@ const prepareWireRequest = ({
   clearByokAdapterCache();
   // The rejected request names a model no provider serves, so its options
   // come from the provider's chat default.
-  const resolved = getTanStackTextModelForRole(
+  const resolved = getTanStackTextModelForTask(
     "chat",
     wireOrgAIConfig({
       apiKey,
@@ -209,7 +210,7 @@ const prepareWireRequest = ({
             })(model),
           },
     modelTools: chatToolMapToArray({ [WIRE_TOOL_NAME]: wireTool() }),
-    role: "chat",
+    task: "chat",
     system: undefined,
     toolCallIds: new ToolCallIdLedger([]),
   });

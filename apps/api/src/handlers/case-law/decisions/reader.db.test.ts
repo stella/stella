@@ -449,21 +449,16 @@ describe("public decision reader database boundary", () => {
     }
   });
 
-  test("redacted decisions retain metadata but expose no AST or anchors", async () => {
+  test("public reads use the publication filter", async () => {
     for (const phase of ["blocks", "citations", "provisions"] as const) {
       const result = await read(redactedId, phase);
-      expect(result?.status).toBe("read");
-      if (result?.status !== "read") {
-        throw new Error("Expected redacted decision metadata");
-      }
-      expect(result.decision.id).toBe(redactedId);
-      expect(result.ast).toBeNull();
-      expect(result.citationAnchors).toEqual([]);
-      expect(result.provisionAnchors).toEqual([]);
+      expect(result).toBeNull();
     }
   });
 
   test("text kept from AI skips citation reads for the model while the app reader locates real anchors", async () => {
+    // Compare the reader work after the shared lazy court registry is warm.
+    await read(withheldId, "citations");
     const metadataOnly = await measuredRead(withheldId, "citations");
     const visible = await runWithQueryCounter(async (counter) => {
       const result = await readDecisionReaderSource({

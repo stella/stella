@@ -48,7 +48,7 @@ import { planReviewRun } from "@/api/lib/document-review/run-plan";
 import { enqueueDocumentReviewRun } from "@/api/lib/document-review/run-queue";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
-import { getTanStackTextModelInfoForRole } from "@/api/lib/tanstack-ai-models";
+import { getTanStackTextModelInfoForTask } from "@/api/lib/tanstack-ai-models";
 import { estimateDocumentRunUnits } from "@/api/lib/usage/run-estimate";
 import type { Position } from "@/api/lib/workflow/playbook-positions";
 import { findDuplicatePositionSourceId } from "@/api/lib/workflow/playbook-positions-validation";
@@ -300,7 +300,7 @@ const createDocumentReviewRun = createSafeHandler(
     // Size the whole run before pinning it: every reviewed file's bytes
     // through the review model's rate, one output budget per planned
     // finding. Large runs need the client to restate the estimate.
-    const reviewModel = getTanStackTextModelInfoForRole("pdf", orgAIConfig, {
+    const reviewModel = getTanStackTextModelInfoForTask("pdf", orgAIConfig, {
       dataClass: "customer",
       organizationId,
       modelTier: configuredModelAdmission({ modelAdmission }).modelTier,
@@ -312,7 +312,7 @@ const createDocumentReviewRun = createSafeHandler(
         0,
       );
     const authorization = await authorizeHandlerRunSize({
-      metering: { actionType: "doc_review", modelRole: "pdf" },
+      metering: { actionType: "doc_review", modelTask: "pdf" },
       estimatedUnits: estimateDocumentRunUnits({
         modelId: reviewModel.modelId,
         actionType: "doc_review",

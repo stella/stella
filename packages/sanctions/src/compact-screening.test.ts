@@ -269,31 +269,42 @@ test("repeated absent spellings replay fresh results across the work-budget boun
   expect(complete).toEqual(
     legacyScreen(legacy, query, { cutoff: 0.65 }).unwrap(),
   );
-  // Work accounting belongs to the entity index; compare repeated and fresh
-  // lookups at the same budget rather than the historical scan cost.
-  let failures = 0;
-  let successes = 0;
-  for (const maxWork of [
+  // Work accounting belongs to the entity index: the complete lookup reports
+  // its own spend, so budgets spread around it place the boundary without a
+  // search. Repeated and fresh lookups must agree at every budget, and the
+  // outcome must switch from failure to success exactly once.
+  const budgets = [
     1,
-    Math.floor(completeWork / 2),
+    Math.floor(completeWork / 3),
+    Math.floor((completeWork * 2) / 3),
     completeWork - 1,
     completeWork,
     completeWork + 1,
-  ]) {
+    completeWork * 2,
+    completeWork * 4,
+  ]
+    .filter((maxWork) => maxWork >= 1)
+    .filter((maxWork, index, values) => values.indexOf(maxWork) === index)
+    .toSorted((left, right) => left - right);
+  const outcomes: ("failure" | "success")[] = [];
+  for (const maxWork of budgets) {
     const options = { cutoff: 0.65, maxWork };
     const expected = screen(buildScreeningIndex(lists), query, options);
     const actual = screen(compact, query, options);
     expect(legacyScreenOutcome(actual)).toEqual(legacyScreenOutcome(expected));
     if (expected.isErr()) {
       expect(expected.error.code).toBe("work-limit");
-      failures += 1;
+      outcomes.push("failure");
     } else {
       expect(expected.value).toEqual(complete);
-      successes += 1;
+      outcomes.push("success");
     }
   }
-  expect(failures).toBeGreaterThan(0);
-  expect(successes).toBeGreaterThan(0);
+  expect(outcomes.at(0)).toBe("failure");
+  expect(outcomes.at(-1)).toBe("success");
+  expect(
+    outcomes.filter((outcome, index) => outcome !== outcomes.at(index - 1)),
+  ).toEqual(["failure", "success"]);
 });
 
 test("identifier-only screening preserves shared postings and legacy work limits", () => {
