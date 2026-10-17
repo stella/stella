@@ -65,6 +65,9 @@
     "runSelectedRows": "Executar para {count, plural, one {# linha selecionada} other {# linhas selecionadas}}",
     "selectedRun": "Executar colunas de IA para {count, plural, one {# linha} other {# linhas}}"
   },
+  "aiDisclosure": {
+    "caseLaw": "Os resumos, notas e análises de decisões judiciais feitos por IA são gerados pelo stella, não são endossados pelos tribunais e não representam a fundamentação dos próprios tribunais; são ferramentas de apoio para profissionais do direito, e o texto da decisão continua sendo a fonte oficial."
+  },
   "appearance": {
     "calendar": "Calendário",
     "calendarGregorian": "Gregoriano",
@@ -2600,11 +2603,14 @@
     "actionFailed": "Falha na ação",
     "api": {
       "badRequest": "Não foi possível concluir a solicitação.",
+      "caseLawCountryUnavailable": "A jurisprudência deste país não está disponível. Escolha outro país.",
+      "caseLawSearchUnavailable": "A pesquisa de jurisprudência deste país não está disponível. Você ainda pode consultar suas decisões públicas.",
       "conflict": "A solicitação entra em conflito com o estado atual.",
       "forbidden": "Você não tem permissão para fazer isso.",
+      "legislationCountryUnavailable": "A legislação deste país não está disponível. Escolha outro país.",
+      "legislationSearchUnavailable": "A pesquisa de legislação deste país não está disponível. Você ainda pode consultar sua legislação pública.",
       "notFound": "Não encontramos o que você solicitou.",
       "payloadTooLarge": "A solicitação é grande demais.",
-      "publicCountryUnavailable": "A legislação e a jurisprudência deste país não estão disponíveis. Escolha outro país.",
       "rateLimited": "Muitas solicitações. Tente novamente mais tarde.",
       "server": "Algo deu errado. Tente novamente.",
       "serviceUnavailable": "O serviço está temporariamente indisponível. Tente novamente.",

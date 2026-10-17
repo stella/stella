@@ -254,6 +254,7 @@ export const listDecisionsHandler = async (
   readCourtWeights: () => Promise<CourtWeightMap> = loadPublicCourtWeights,
 ) => {
   const countryRead = readPublicLawCountry(query.country, {
+    domain: "caseLaw",
     admitted: PUBLIC_CASE_LAW_COUNTRIES,
     surface: "search",
   });

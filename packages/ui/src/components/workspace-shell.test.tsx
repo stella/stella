@@ -34,6 +34,7 @@ describe("WorkspaceShell", () => {
     );
     expect(SHELL_CHROME_LAYER_CLASS_NAME).toBe("z-30");
     expect(markup).toContain('data-slot="workspace-shell-content"');
+    expect(markup).not.toContain(" md:pe-(--safe-area-inline-end)");
   });
 
   test("leaves the chrome divider to the top bar, not the page under it", () => {
@@ -130,6 +131,7 @@ describe("WorkspaceShell", () => {
       /<article data-test="content">Content<\/article><\/div><\/main><\/div>$/su,
     );
     expect(markup).not.toContain('data-slot="inspector-rail"');
+    expect(markup).toContain(" md:pe-(--safe-area-inline-end)");
   });
 });
 
@@ -151,6 +153,7 @@ describe("WorkspaceEndRail", () => {
     );
 
     expect(markup).toContain('aria-label="Workspace inspector"');
+    expect(markup).toContain("h-full");
     expect(markup).toMatch(
       /data-slot="inspector-rail-cell"[^>]*>.*Toggle pane.*data-slot="inspector-rail-content"[^>]*>.*Document tab.*data-slot="inspector-rail-footer"[^>]*>.*aria-label="New chat"/su,
     );

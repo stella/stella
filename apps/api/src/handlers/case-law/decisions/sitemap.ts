@@ -247,7 +247,10 @@ export const listSitemapShardDecisionsHandler = async (
   query: SitemapShardDecisionsQuery,
   caseLawDb: CaseLawPublicReadDb,
 ) => {
-  const unavailable = publicLawCountryUnavailable(query.country, "pages");
+  const unavailable = publicLawCountryUnavailable(query.country, {
+    domain: "caseLaw",
+    surface: "pages",
+  });
   if (unavailable !== null) {
     return unavailable;
   }
