@@ -4,6 +4,7 @@ import {
   beforeEach,
   describe,
   expect,
+  setSystemTime,
   test,
 } from "bun:test";
 import { eq, getTableName, sql, TransactionRollbackError } from "drizzle-orm";
@@ -151,6 +152,9 @@ describe("publisher amendment snapshots", () => {
       }),
     });
 
+    // Pending changes are those effective after the legal day; pin the day
+    // before the fixture's 2027-01-01 effective date.
+    setSystemTime(new Date("2026-10-18T10:00:00.000Z"));
     await setAmendmentGrants("REVOKE");
     try {
       const beforeGrant = await readBoth();
@@ -171,7 +175,14 @@ describe("publisher amendment snapshots", () => {
           { amendedBy: { items: [{ publisherId: relation.publisherId }] } },
         ],
       });
+
+      // On its effective day the amendment is in force, no longer pending.
+      setSystemTime(new Date("2027-01-01T10:00:00.000Z"));
+      expect(
+        await readPublicLegislationHandler(documentId, legislationDb, "pages"),
+      ).toMatchObject({ pendingChanges: { items: [] } });
     } finally {
+      setSystemTime();
       await setAmendmentGrants("GRANT");
     }
   });
