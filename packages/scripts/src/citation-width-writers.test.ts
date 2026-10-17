@@ -360,7 +360,7 @@ const boundedPayloadProblems = (members: readonly Writer[]): string[] =>
       expected =
         /WITH v\(id, key\) AS \(VALUES \$\{values\}\)[\s\S]*SET citation_key = v\.key/u;
     } else if (writer.id.includes(":upsertReviewsStatement:")) {
-      expected = /FROM \$\{labelValues\(labels\)\}/u;
+      expected = /FROM \$\{labelValues\(labels,\s*domain\)\}/u;
     } else {
       expected =
         /WITH projected\(id, type, normalized_value\) AS \(VALUES \$\{projected\}\)[\s\S]*normalized_identifier_value = projected\.normalized_value/u;

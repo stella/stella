@@ -31,12 +31,11 @@ import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import {
   caseLawCitations,
-  caseLawDecisions,
+  publishedCaseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
 import type { DecisionCitationRow } from "@/api/handlers/case-law/decisions/citation-graph";
 import { listDecisionCitationsHandler } from "@/api/handlers/case-law/decisions/citation-graph";
-import { citationTextRevisionFingerprintSql } from "@/api/handlers/case-law/polarity/text-revision";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
@@ -44,6 +43,7 @@ import type {
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
 import type { CitationEvidenceWindows } from "@/api/lib/case-law/citation-evidence";
+import { citationTextRevisionFingerprintSql } from "@/api/lib/case-law/citation-text-revision";
 import type {
   CitationReadDirection,
   CitationPolaritySource,
@@ -53,7 +53,6 @@ import { GRAPH_DIRECTION } from "@/api/lib/case-law/citation-vocabulary";
 import { readDecisionAnalysisAst } from "@/api/lib/case-law/decision-analysis";
 import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
-import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution-sql";
 import { readCorpusTombstones } from "@/api/lib/legal-search/corpus-reads";
 import { decisionTextWithheldReason } from "@/api/lib/legal-search/corpus-source";
@@ -177,19 +176,18 @@ export const passageTextEligibility = ({
 });
 
 const passageTextEligibilityColumns = {
-  country: caseLawDecisions.country,
-  published: sql<boolean>`${publishedCaseLawDecision}`,
+  country: publishedCaseLawDecisions.country,
+  published: sql<boolean>`true`,
   redistributable: sql<boolean>`${redistributableCaseLawSourceFor(caseLawSources.descriptor)}`,
   textRevisionFingerprint: citationTextRevisionFingerprintSql({
-    contentHash: caseLawDecisions.contentHash,
-    sections: caseLawDecisions.sections,
+    contentHash: publishedCaseLawDecisions.contentHash,
+    sections: publishedCaseLawDecisions.sections,
   }),
   descriptor: caseLawSources.descriptor,
 };
 
-const passageTextEligibilityGate = and(
-  publishedCaseLawDecision,
-  redistributableCaseLawSourceFor(caseLawSources.descriptor),
+const passageTextEligibilityGate = redistributableCaseLawSourceFor(
+  caseLawSources.descriptor,
 );
 
 type ReadPassageSourcePointersOptions = {
@@ -208,17 +206,20 @@ const readPassageSourcePointers = async ({
   }
   const rows = await tx
     .select({
-      id: caseLawDecisions.id,
-      astS3Key: caseLawDecisions.astS3Key,
-      contentHash: caseLawDecisions.contentHash,
+      id: publishedCaseLawDecisions.id,
+      astS3Key: publishedCaseLawDecisions.astS3Key,
+      contentHash: publishedCaseLawDecisions.contentHash,
       ...passageTextEligibilityColumns,
     })
-    .from(caseLawDecisions)
-    .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
+    .from(publishedCaseLawDecisions)
+    .innerJoin(
+      caseLawSources,
+      eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
+    )
     .where(
       and(
-        inArray(caseLawDecisions.id, [...ids]),
-        inArray(caseLawDecisions.country, [...countries]),
+        inArray(publishedCaseLawDecisions.id, [...ids]),
+        inArray(publishedCaseLawDecisions.country, [...countries]),
         passageTextEligibilityGate,
       ),
     );
@@ -281,21 +282,21 @@ const readDecisionTextColumns = async ({
     async (tx) =>
       await tx
         .select({
-          id: caseLawDecisions.id,
-          documentAst: caseLawDecisions.documentAst,
-          contentHash: caseLawDecisions.contentHash,
+          id: publishedCaseLawDecisions.id,
+          documentAst: publishedCaseLawDecisions.documentAst,
+          contentHash: publishedCaseLawDecisions.contentHash,
           ...passageTextEligibilityColumns,
-          sections: caseLawDecisions.sections,
+          sections: publishedCaseLawDecisions.sections,
         })
-        .from(caseLawDecisions)
+        .from(publishedCaseLawDecisions)
         .innerJoin(
           caseLawSources,
-          eq(caseLawSources.id, caseLawDecisions.sourceId),
+          eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
         )
         .where(
           and(
-            inArray(caseLawDecisions.id, [...ids]),
-            inArray(caseLawDecisions.country, [...countries]),
+            inArray(publishedCaseLawDecisions.id, [...ids]),
+            inArray(publishedCaseLawDecisions.country, [...countries]),
             passageTextEligibilityGate,
           ),
         ),
@@ -870,7 +871,7 @@ export const citationTextFields = ({
   citationText,
   sectionIndex,
   evidenceWindows,
-  evidenceQuote,
+  evidenceQuote = null,
 }: CitationTextFieldsOptions) => {
   if (textWithheldReason !== null) {
     return {

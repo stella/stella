@@ -161,14 +161,14 @@ describe("court filters read a court as every spelling the corpus stores it unde
     );
   });
 
-  test("NS reads as both stored spellings of the Slovak Supreme Court", () => {
+  test("a documented abbreviation reads every stored spelling without a warning", () => {
     const identities = storedCourtIdentities("SVK", STORED_SPELLINGS.SVK);
     const reading = readCourtFilter({ court: "NS", identities });
 
     expect(reading).toMatchObject({
       type: "court",
       courts: ["Najvyšší súd", "Najvyšší súd Slovenskej republiky"],
-      warning: { code: "filter_read" },
+      warning: null,
     });
   });
 

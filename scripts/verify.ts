@@ -225,10 +225,10 @@ const localChecks = (options: VerifyOptions, config: HostConfig): number => {
             ...untracked,
           ]),
         ];
-        writeFileSync(
-          path.join(temporary, "autofix-changed-paths"),
-          `${changed.join("\0")}\0`,
-        );
+        // A local run has no settled commit: the fixers see the whole branch.
+        for (const name of ["autofix-changed-paths", "autofix-fix-paths"]) {
+          writeFileSync(path.join(temporary, name), `${changed.join("\0")}\0`);
+        }
         writeFileSync(
           path.join(temporary, "autofix-added-paths"),
           `${added.join("\0")}\0`,

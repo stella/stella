@@ -9,7 +9,7 @@ import {
 } from "@/api/db/schema";
 import type { caseLawCitations } from "@/api/db/schema";
 import { CITATION_REVIEW_ORIGIN } from "@/api/handlers/case-law/polarity/consts";
-import { citationTextRevisionFingerprintSql } from "@/api/handlers/case-law/polarity/text-revision";
+import { citationTextRevisionFingerprintSql } from "@/api/lib/case-law/citation-text-revision";
 
 type ReviewTextEligibility = {
   origin: SQLWrapper;

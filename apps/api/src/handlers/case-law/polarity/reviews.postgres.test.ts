@@ -16,6 +16,7 @@ import {
   caseLawDecisions,
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
+import { citationTextRevisionFingerprintSql } from "@/api/lib/case-law/citation-text-revision";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { DOCTRINE_LABEL_DOMAIN } from "@/api/scripts/apply-reviewed-citation-labels-doctrine";
 import {
@@ -26,7 +27,6 @@ import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
 import { CITATION_REVIEW_ORIGIN } from "./consts";
 import { applyCitationReviews, applyDoctrineReviews } from "./reviews";
-import { citationTextRevisionFingerprintSql } from "./text-revision";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";

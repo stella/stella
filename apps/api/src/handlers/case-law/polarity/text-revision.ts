@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
 
 import { caseLawDecisions } from "@/api/db/schema";
+import { citationTextRevisionFingerprintSql } from "@/api/lib/case-law/citation-text-revision";
 import { publishedCaseLawDecisionSqlFor } from "@/api/lib/case-law/published-decisions";
 
 export type CitationTextRevision = {
@@ -38,18 +39,6 @@ export const citationTextRevisionFence = ({
     predicate: sql`citation_text_revision.content_hash IS NOT DISTINCT FROM ${expectedContentHash}
     AND citation_text_revision.sections IS NOT DISTINCT FROM ${expectedSections}`,
   });
-
-type CitationTextRevisionFingerprintArgs = {
-  contentHash: SQLWrapper;
-  sections: SQLWrapper;
-};
-
-/** PostgreSQL JSONB canonicalization binds the digest to both stored text and its corpus revision. */
-export const citationTextRevisionFingerprintSql = ({
-  contentHash,
-  sections,
-}: CitationTextRevisionFingerprintArgs) =>
-  sql<string>`encode(sha256(convert_to(jsonb_build_array(${contentHash}, ${sections})::text, 'UTF8')), 'hex')`;
 
 type CitationTextRevisionFingerprintFenceArgs = {
   citingDecisionId: SQLWrapper;

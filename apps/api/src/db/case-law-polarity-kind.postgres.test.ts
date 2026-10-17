@@ -11,7 +11,7 @@ import { renderSeedRuleKindBackfill } from "../../scripts/generate-polarity-kind
 
 const migration = readFileSync(
   new URL(
-    "../../drizzle/20261016100100_case_law_polarity_kind_evidence/migration.sql",
+    "../../drizzle/20261016100500_case_law_polarity_kind_evidence/migration.sql",
     import.meta.url,
   ),
   "utf-8",
@@ -19,7 +19,7 @@ const migration = readFileSync(
 const databaseUrl = process.env["DATABASE_URL"];
 const validationMigration = readFileSync(
   new URL(
-    "../../drizzle/20261016100200_case_law_citation_polarity_evidence_validate/migration.sql",
+    "../../drizzle/20261016100600_case_law_citation_polarity_evidence_validate/migration.sql",
     import.meta.url,
   ),
   "utf-8",

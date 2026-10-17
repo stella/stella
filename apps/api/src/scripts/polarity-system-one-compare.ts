@@ -5,7 +5,7 @@ import { mkdir } from "node:fs/promises";
 import { mapWithConcurrency } from "@stll/concurrency";
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
-import { caseLawCitations, caseLawDecisions } from "@/api/db/schema";
+import { caseLawCitations, publishedCaseLawDecisions } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
 import { CITATION_KIND } from "@/api/handlers/case-law/citation-kind";
@@ -18,6 +18,7 @@ import {
 } from "@/api/handlers/case-law/polarity/system-one-classifier";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { openCaseLawReadOnlySession } from "@/api/lib/case-law/maintenance-lane";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { readCorpusText } from "@/api/lib/legal-search/corpus-reads";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
@@ -205,11 +206,14 @@ const languagePredicate = (tx: CaseLawPublicReadTransaction) =>
     : exists(
         tx
           .select({ one: sql`1` })
-          .from(caseLawDecisions)
+          .from(publishedCaseLawDecisions)
           .where(
             and(
-              eq(caseLawDecisions.id, caseLawCitations.citingDecisionId),
-              eq(caseLawDecisions.language, options.language),
+              eq(
+                publishedCaseLawDecisions.id,
+                caseLawCitations.citingDecisionId,
+              ),
+              eq(publishedCaseLawDecisions.language, options.language),
             ),
           ),
       );
@@ -332,7 +336,7 @@ await runScriptWithErrorOutput(async () => {
   const { rootDb } = await openCaseLawReadOnlySession();
 
   const readSample = async () =>
-    await rootDb.transaction(async (tx) => {
+    await withAggregateTransaction(rootDb, async (tx) => {
       const citations = await tx.execute<SampledCitation>(
         sql.join(
           planSampleBuckets(options).map((bucket) => bucketQuery(tx, bucket)),
@@ -348,16 +352,16 @@ await runScriptWithErrorOutput(async () => {
       }
       const rows = await tx
         .select({
-          id: caseLawDecisions.id,
-          language: caseLawDecisions.language,
-          court: caseLawDecisions.court,
-          caseNumber: caseLawDecisions.caseNumber,
-          sections: caseLawDecisions.sections,
-          fulltext: caseLawDecisions.fulltext,
-          textS3Key: caseLawDecisions.textS3Key,
+          id: publishedCaseLawDecisions.id,
+          language: publishedCaseLawDecisions.language,
+          court: publishedCaseLawDecisions.court,
+          caseNumber: publishedCaseLawDecisions.caseNumber,
+          sections: publishedCaseLawDecisions.sections,
+          fulltext: publishedCaseLawDecisions.fulltext,
+          textS3Key: publishedCaseLawDecisions.textS3Key,
         })
-        .from(caseLawDecisions)
-        .where(inArray(caseLawDecisions.id, citingIds));
+        .from(publishedCaseLawDecisions)
+        .where(inArray(publishedCaseLawDecisions.id, citingIds));
       for (const { id, ...decision } of rows) {
         decisions.set(id, decision);
       }

@@ -307,6 +307,7 @@ const blocksTool: TypedMcpToolHandler<
       blockFragments: page.blockFragments,
       citationAnchors: page.citationAnchors,
       provisionAnchors: page.provisionAnchors,
+      provisionStatus: page.provisionStatus,
       nextCursor: page.nextCursor,
       limit: READER_PAGE_MAX_CHARS,
     },

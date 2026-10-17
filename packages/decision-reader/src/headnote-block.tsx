@@ -4,10 +4,10 @@ import type { ReactNode } from "react";
 import { panic } from "better-result";
 
 import type { CourtTierLabel as CourtTier } from "@stll/api-contract/case-law-court-tiers";
-import { SparklesIcon } from "@stll/ui/icons";
 
 import { CourtTierBadge } from "./court-tier-badge";
 import { useReaderMessages } from "./reader-adapters";
+import { ReaderAiLabel } from "./reader-ai-label";
 
 /** The court's own chip, where the registry abbreviates it. */
 type CourtChip = { abbreviation: string; tier: CourtTier };
@@ -29,7 +29,8 @@ export type HeadnoteOrigin =
  * The mark itself. The court's chip stands beside the court's name, which the
  * reference line above the top matter already prints; where nothing
  * abbreviates the court, the mark says "court" in words rather than inventing
- * a chip for it.
+ * a chip for it. The model's mark is the shared AI label, which opens what
+ * the reader should know about text the court did not write.
  */
 const OriginMark = ({ origin }: { origin: HeadnoteOrigin }) => {
   const messages = useReaderMessages();
@@ -37,10 +38,10 @@ const OriginMark = ({ origin }: { origin: HeadnoteOrigin }) => {
   switch (origin.type) {
     case "ai":
       return (
-        <span className="inline-flex items-center gap-1 align-middle">
-          <SparklesIcon aria-hidden className="size-3" />
-          {messages["caseLaw.notesFilter.ai"]}
-        </span>
+        <ReaderAiLabel
+          context="caseLaw"
+          label={messages["caseLaw.notesFilter.ai"]}
+        />
       );
     case "court":
       return origin.chip === null ? (
@@ -91,29 +92,40 @@ export const HeadnoteBlock = ({
   const [openedByReader, setOpenedByReader] = useState(defaultOpen);
 
   return (
-    <details
-      className="mt-4 first:mt-0"
-      data-reader-chrome={origin.type === "court" ? undefined : ""}
-      onToggle={(event) => {
-        // Held open by a find match, not by the reader: recording it as their
-        // choice would leave the section open once the match moves on.
-        if (forceOpen) {
-          return;
-        }
-        setOpenedByReader(event.currentTarget.open);
-      }}
-      open={openedByReader || forceOpen}
-    >
-      <summary
-        className="reader-chrome text-muted-foreground cursor-pointer text-[calc(0.75rem*var(--reader-text-scale))] font-semibold tracking-wide uppercase select-none marker:text-current"
+    // The mark shares the summary's row without being inside it: the
+    // `<summary>` is itself the section's toggle, and a control nested in it
+    // would be interactive content inside interactive content.
+    // It comes first in the DOM so assistive technology announces the origin
+    // before the headnote it describes, not after the whole section.
+    <div className="relative mt-4 first:mt-0" data-slot="headnote-block">
+      {/* Same type as the summary, so both sit on one line at every size. */}
+      <span
+        className="reader-chrome text-foreground-disabled absolute end-0 top-0 text-[calc(0.75rem*var(--reader-text-scale))] font-semibold tracking-wide uppercase"
         data-reader-chrome=""
+        data-slot="headnote-origin"
       >
-        {label}
-        <span className="text-foreground-disabled ms-2">
-          <OriginMark origin={origin} />
-        </span>
-      </summary>
-      <div className="mt-2">{children}</div>
-    </details>
+        <OriginMark origin={origin} />
+      </span>
+      <details
+        data-reader-chrome={origin.type === "court" ? undefined : ""}
+        onToggle={(event) => {
+          // Held open by a find match, not by the reader: recording it as
+          // their choice would leave the section open once the match moves on.
+          if (forceOpen) {
+            return;
+          }
+          setOpenedByReader(event.currentTarget.open);
+        }}
+        open={openedByReader || forceOpen}
+      >
+        <summary
+          className="reader-chrome text-muted-foreground cursor-pointer pe-20 text-[calc(0.75rem*var(--reader-text-scale))] font-semibold tracking-wide uppercase select-none marker:text-current"
+          data-reader-chrome=""
+        >
+          {label}
+        </summary>
+        <div className="mt-2">{children}</div>
+      </details>
+    </div>
   );
 };

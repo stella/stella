@@ -488,7 +488,7 @@ for (const phase of ["dated", "undated"] as const) {
       const plan = await pagePlan(phase);
 
       expect(plan).toMatch(
-        /Index Only Scan using case_law_decisions_sitemap_shard_idx on case_law_decisions/u,
+        /Index Only Scan using case_law_decisions_sitemap_shard_published_idx on case_law_decisions/u,
       );
       // The resume point and the country are where the index read starts,
       // not a filter over everything before it, and the limit stops it: the

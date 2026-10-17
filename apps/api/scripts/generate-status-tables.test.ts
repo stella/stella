@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
-import { pgTable, text, integer } from "drizzle-orm/pg-core";
+import { integer, pgTable, pgView, text } from "drizzle-orm/pg-core";
 
-import { statusColumns } from "./generate-status-tables";
+import { statusColumnMaps } from "./generate-status-tables";
 
 test("a new lifecycle column enters the inventory without a hand-maintained table list", () => {
   const table = pgTable("inventory_fixture", {
@@ -12,7 +12,17 @@ test("a new lifecycle column enters the inventory without a hand-maintained tabl
     phase: integer(),
     name: text(),
   });
-  expect(statusColumns({ constant: "unused", newTable: table })).toEqual({
+  const view = pgView("inventory_view").as((qb) => qb.select().from(table));
+  const maps = statusColumnMaps({
+    constant: "unused",
+    newTable: table,
+    inventoryView: view,
+  });
+  expect(maps.statusColumns).toEqual({
+    newTable: ["phase", "seedState", "status", "workStatus"],
+    inventoryView: ["phase", "seedState", "status", "workStatus"],
+  });
+  expect(maps.writableStatusColumns).toEqual({
     newTable: ["phase", "seedState", "status", "workStatus"],
   });
 });

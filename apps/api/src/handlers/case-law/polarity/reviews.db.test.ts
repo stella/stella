@@ -56,10 +56,10 @@ import {
 import { loadRules } from "@/api/handlers/case-law/polarity/rule-engine";
 import { resetRetiredRuleVerdicts } from "@/api/handlers/case-law/polarity/rule-retirement";
 import { SEED_RULES } from "@/api/handlers/case-law/polarity/seed-rules";
-import { citationTextRevisionFingerprintSql } from "@/api/handlers/case-law/polarity/text-revision";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { CITATION_STORAGE_WIDTHS } from "@/api/lib/case-law/citation-storage-bounds";
+import { citationTextRevisionFingerprintSql } from "@/api/lib/case-law/citation-text-revision";
 import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
