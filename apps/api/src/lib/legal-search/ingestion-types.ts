@@ -21,6 +21,7 @@ import {
   TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
 import type { DecisionDocumentRole } from "@stll/api-contract/decision-document-role";
+import { withExceptionScope } from "@stll/errors/exception-scope-context";
 import type {
   DecisionIdentifiers,
   DecisionPrimaryReferenceType,
@@ -58,7 +59,6 @@ import {
 } from "@/api/lib/legal-search/ingestion-constants";
 import type { ObservationDetail } from "@/api/lib/legal-search/partial-observation-sql";
 import type { SkCollectionConnector } from "@/api/lib/legal-search/sk-collection-enrichment";
-import { withExceptionScope } from "@/api/lib/observability/exception-scope";
 import { isRecord } from "@/api/lib/type-guards";
 
 export { EMPTY_AST };

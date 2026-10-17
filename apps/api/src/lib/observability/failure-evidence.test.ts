@@ -461,7 +461,7 @@ describe("failure evidence snapshots typed fingerprint dimensions", () => {
 test("failure evidence shares discriminator reads with class brands and accessors", () => {
   class ReasonFailureError extends Error {
     override readonly name = "ReasonFailureError";
-    readonly reason = "runtime" as const;
+    readonly reason: "runtime" | "timeout" = "runtime";
     static {
       declareFailureClass(this, ({ reason }) =>
         reason === "runtime" ? "unclassified" : "invalid_declaration",
