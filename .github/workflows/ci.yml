@@ -61,12 +61,14 @@ on:
         options: [fast, full]
         default: fast
 
-# PR runs supersede their predecessors. Manual runs supersede only older
-# manual runs on the same branch; merge-group runs remain isolated. Main calls
-# coalesce under a child group distinct from the caller's group.
+# Code-changing PR runs supersede their predecessors. Metadata events use the
+# immutable head SHA so they cannot cancel the code run they are inspecting.
+# Manual runs supersede only older manual runs on the same branch; merge-group
+# runs remain isolated. Main calls coalesce under a child group distinct from
+# the caller's group.
 concurrency:
-  group: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && github.workflow || inputs.heavy_only == true && format('main-heavy-suites-{0}', inputs.sha) || github.workflow }}-${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'ci-' || '' }}${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && github.ref || github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number || github.ref) || github.event_name == 'workflow_dispatch' && format('ci-dispatch-{0}', github.ref) || format('run-{0}', github.run_id) }}
-  cancel-in-progress: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || (inputs.heavy_only != true && (github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch')) }}
+  group: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && github.workflow || inputs.heavy_only == true && format('main-heavy-suites-{0}', inputs.sha) || github.workflow }}-${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'ci-' || '' }}${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && github.ref || github.event_name == 'pull_request' && (contains(fromJSON('["labeled","unlabeled","auto_merge_enabled"]'), github.event.action) && github.event.label.name != 'prove-fix') && format('pr-{0}-{1}-meta', github.event.pull_request.number, github.event.pull_request.head.sha) || github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number || github.ref) || github.event_name == 'workflow_dispatch' && format('ci-dispatch-{0}', github.ref) || format('run-{0}', github.run_id) }}
+  cancel-in-progress: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || (inputs.heavy_only != true && ((github.event_name == 'pull_request' && (contains(fromJSON('["opened","synchronize","reopened","ready_for_review"]'), github.event.action) || github.event.label.name == 'prove-fix')) || github.event_name == 'workflow_dispatch')) }}
 
 permissions: {}
 
@@ -131,6 +133,7 @@ jobs:
       completion_marker: ${{ steps.completed-depth.outputs.marker }}
       completed_run_id: ${{ steps.completed-depth.outputs.completed_run_id }}
       queue_validation: ${{ steps.completed-depth.outputs.queue_validation }}
+      metadata_only: ${{ steps.completed-depth.outputs.metadata_only }}
       coverage_profile: ${{ steps.pilot.outputs.coverage_profile }}
       pilot_fast_jobs: ${{ steps.pilot-plan.outputs.fast_jobs }}
       queue_required_jobs: ${{ steps.heavy-plan.outputs.queue_jobs || '[]' }}
@@ -473,6 +476,13 @@ jobs:
               return;
             }
             const mergeGroup = context.eventName === "merge_group";
+            const metadataAction = context.eventName === "pull_request"
+              // enqueued keeps its queue-validation path and its ci-result.
+              && ["labeled", "unlabeled", "auto_merge_enabled"].includes(context.payload.action)
+              // A draft runs no CI, so ready_for_review starts the first code
+              // run, and prove-fix changes suite scope: both own ci-result.
+              && context.payload.label?.name !== "prove-fix";
+            if (metadataAction) core.setOutput("metadata_only", "true");
             const queue = mergeGroup && process.env.QUEUE_DEPTH === "thin";
             if (queue) core.setOutput("normal_completion", "required");
             let pr = context.payload.pull_request;
@@ -502,6 +512,14 @@ jobs:
                 || !/^[a-f0-9]{40}$/.test(pr.base?.sha || "")) return;
             const proof = Array.isArray(pr.labels)
               && pr.labels.some((label) => label.name === "prove-fix");
+            const proofScopeChanged = ["labeled", "unlabeled"].includes(context.payload.action)
+              && context.payload.label?.name === "prove-fix";
+            // Metadata that cannot change suite scope consumes completed
+            // evidence when available, but never starts a duplicate suite.
+            // Ready events and prove-fix transitions still need their suites.
+            if (metadataAction && !proofScopeChanged) {
+              core.setOutput("run_required", "false");
+            }
             const scope = require("node:crypto").createHash("sha256")
               .update(JSON.stringify([pr.title, pr.body || "", proof])).digest("hex");
             const profile = mergeGroup ? "normal-v1" : process.env.COVERAGE_PROFILE || "normal-v1";
@@ -8184,7 +8202,10 @@ jobs:
   # this check to pass, which ensures untrusted PRs cannot be
   # merged without CI and trusted PRs must pass all checks.
   ci-result:
-    name: ci-result
+    # A metadata run has a distinct check name. It can reuse a completed code
+    # run or exercise a changed scope, but can never overwrite the required
+    # ci-result while that code run is pending or failed.
+    name: ${{ github.event_name == 'pull_request' && (contains(fromJSON('["labeled","unlabeled","auto_merge_enabled"]'), github.event.action) && github.event.label.name != 'prove-fix') && 'ci-metadata-result' || 'ci-result' }}
     if: always()
     needs:
       [
@@ -8277,6 +8298,7 @@ jobs:
           PR_DEPTH_ONLY: ${{ inputs.pr_depth_only }}
           PR_DEPTH_SOURCE_RUN_ID: ${{ needs.ci-plan.outputs.pr_depth_source_run_id }}
           QUEUE_VALIDATION: ${{ needs.ci-plan.outputs.queue_validation }}
+          METADATA_ONLY: ${{ needs.ci-plan.outputs.metadata_only }}
           PR_ACTION: ${{ github.event.action }}
           PLAN_RESULT: ${{ needs.ci-plan.result }}
           SUITE_DEPTH: ${{ needs.ci-plan.outputs.suite_depth }}
@@ -8491,6 +8513,10 @@ jobs:
             exit 1
           fi
           if [[ "${RUN_REQUIRED:-true}" == false ]]; then
+            if [[ "$METADATA_ONLY" == true && -z "$COMPLETED_RUN_ID" ]]; then
+              echo "No completed evidence exists for this metadata event; the code run owns ci-result."
+              exit 0
+            fi
             if [[ "$EVENT" != pull_request || ! "$COMPLETED_RUN_ID" =~ ^[1-9][0-9]*$ ]] || ! jq -e 'all(.[]; .result == "success" or .result == "skipped")' <<< "$NEEDS" > /dev/null; then
               echo "::error::Invalid completed-depth reuse or unexpected dependency outcome."
               exit 1
