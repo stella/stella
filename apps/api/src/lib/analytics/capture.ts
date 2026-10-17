@@ -72,7 +72,7 @@ type CaptureErrorOptions = {
 };
 
 type CaptureRequestErrorOptions = {
-  scope: RequestExceptionScope;
+  scope: RequestExceptionScope | HandlerExceptionScope;
   fingerprintKey: StableExceptionKey;
   context?: ErrorTelemetryContext | undefined;
   request: Request;
@@ -286,7 +286,7 @@ const captureErrorWithOptions = (
 
 export const captureError = (
   error: unknown,
-  { fingerprintKey, context, scope }: CaptureErrorInput,
+  { fingerprintKey, context, scope }: CaptureErrorInput & { request?: never },
 ) => {
   captureErrorWithOptions(error, { fingerprintKey, context, scope });
 };

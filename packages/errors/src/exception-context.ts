@@ -15,8 +15,9 @@ export type CaptureErrorInput = {
 export const handlerErrorContext = (
   fingerprintKey: StableExceptionKey,
   context?: ErrorTelemetryContext,
-): CaptureErrorInput => ({
-  fingerprintKey,
-  scope: { type: "handler", handlerId: fingerprintKey },
-  ...(context === undefined ? {} : { context }),
-});
+) =>
+  ({
+    fingerprintKey,
+    scope: { type: "handler", handlerId: fingerprintKey },
+    ...(context === undefined ? {} : { context }),
+  }) satisfies CaptureErrorInput;

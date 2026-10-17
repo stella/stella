@@ -43,7 +43,8 @@ test("distinct frameless paths retain distinct identities", () => {
     fc.property(fc.uuid(), fc.uuid(), (left, right) => {
       fc.pre(left !== right);
       const error = new Error("failure");
-      error.stack = undefined;
+      delete error.stack;
+      expect(error.stack).toBeUndefined();
       const evidence = readEvidence(error);
       expect(
         exceptionFingerprint(evidence, {

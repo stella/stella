@@ -1,3 +1,5 @@
+import { handlerErrorContext } from "@stll/errors/exception-context";
+
 import {
   captureError,
   captureObservedError,
@@ -21,9 +23,9 @@ export const framelessCaptureRequiresKey = (
   captureError(error, { fingerprintKey: "worker.processJob" });
   // @ts-expect-error Request captures require method and declared route scope.
   captureRequestError(error, { request, fingerprintKey: "request.handle" });
-  // @ts-expect-error A string key is not a typed execution scope.
   captureObservedError(error, {
     observation: undefined,
+    // @ts-expect-error A string key is not a typed execution scope.
     scope: "request.handle",
     fingerprintKey: "request.handle",
   });
@@ -41,4 +43,16 @@ export const framelessCaptureRequiresKey = (
     fingerprintKey: "worker.observeJob",
     scope: { type: "job", jobId: "nightly", task: "repair" },
   });
+};
+
+export const requestAttributionRequiresRequestCapture = (
+  error: unknown,
+  request: Request,
+) => {
+  const options = { request, ...handlerErrorContext("request.handle") };
+  // @ts-expect-error Request-bearing variables must use the request-aware capture.
+  captureError(error, options);
+  // @ts-expect-error A spread cannot discard request attribution through frameless capture.
+  captureError(error, { ...handlerErrorContext("request.handle"), request });
+  captureRequestError(error, options);
 };

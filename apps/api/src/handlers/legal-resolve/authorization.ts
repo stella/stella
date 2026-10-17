@@ -3,7 +3,7 @@ import { decodeJwt } from "jose";
 
 import { admitLawRead } from "@/api/handlers/legal-resolve/admission";
 import { hasLawReadScope } from "@/api/handlers/legal-resolve/scope";
-import { captureError as captureAuthorizationError } from "@/api/lib/analytics/capture";
+import { captureRequestError as captureAuthorizationError } from "@/api/lib/analytics/capture";
 import { isServiceResolveSession } from "@/api/lib/db/service-client-contract";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
