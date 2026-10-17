@@ -12,6 +12,7 @@ import {
   isRestoredStateSafeMode,
   keepInAnyScope,
   readPersistedState,
+  removePersistedState,
   writePersistedState,
 } from "./registry";
 
@@ -97,6 +98,13 @@ describe("persisted state registry", () => {
     });
   });
 
+  test("removing a stored value succeeds and the next read is the default", () => {
+    expect(writePersistedState(entry, {}, { width: 640 }).isOk()).toBe(true);
+    expect(removePersistedState(entry, {}).isOk()).toBe(true);
+    expect(storage.getItem(key)).toBeNull();
+    expect(readPersistedState(entry, {})).toEqual({ width: 512 });
+  });
+
   test("removes an oversized value", () => {
     storage.setItem(
       key,
@@ -122,6 +130,7 @@ describe("persisted state registry", () => {
     });
     expect(readPersistedState(entry, {})).toEqual({ width: 512 });
     expect(writePersistedState(entry, {}, { width: 640 }).isErr()).toBe(true);
+    expect(removePersistedState(entry, {}).isErr()).toBe(true);
     if (descriptor !== undefined) {
       Object.defineProperty(globalThis, "window", descriptor);
     }

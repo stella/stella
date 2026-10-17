@@ -71,11 +71,14 @@ const entryKey = <
   scope: TScope,
 ): string => (typeof entry.key === "string" ? entry.key : entry.key(scope));
 
+const removeStored = (area: StorageArea, key: string) =>
+  requireBrowserStorage(area).andThen((storage) =>
+    Result.try(() => storage.removeItem(key)),
+  );
+
 /** Best-effort cleanup after a read already fell back to the default. */
 const removeInvalid = (area: StorageArea, key: string): void => {
-  requireBrowserStorage(area)
-    .andThen((storage) => Result.try(() => storage.removeItem(key)))
-    .unwrapOr(undefined);
+  removeStored(area, key).unwrapOr(undefined);
 };
 
 export const isRestoredStateSafeMode = (): boolean => {
@@ -178,4 +181,5 @@ export const removePersistedState = <
 >(
   entry: PersistedStateEntry<TSchema, TScope>,
   scope: TScope,
-) => removeInvalid(entry.area, entryKey(entry, scope));
+): ReturnType<typeof removeStored> =>
+  removeStored(entry.area, entryKey(entry, scope));
