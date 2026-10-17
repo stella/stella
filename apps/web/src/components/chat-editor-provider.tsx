@@ -94,7 +94,9 @@ import {
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { getChatThreadKey } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
+import { useRequiredRouteProvider } from "@/lib/route-provider-scope";
 import { createUuid } from "@/lib/uuid";
+import { PROVIDER_SCOPE } from "@/routes/-app-frame-scope";
 
 const CHAT_FILES_PER_MESSAGE = 5;
 const CHAT_MAX_FILE_BYTES = CHAT_CONTEXT_FILE_MAX_BYTES;
@@ -535,26 +537,17 @@ const UnsentChatDraftGuard = () => {
 };
 
 export const useChatEditorExtensions = () => {
-  const context = use(ChatEditorManagerContext);
-
-  if (context === null) {
-    panic("useChatEditorExtensions must be used within ChatEditorProvider");
-  }
-
-  return {
-    registerExtension: context.registerExtension,
-  };
+  const context = useChatEditorManager();
+  return { registerExtension: context.registerExtension };
 };
 
-export const useChatEditorManager = () => {
-  const context = use(ChatEditorManagerContext);
-
-  if (context === null) {
-    panic("useChatEditorManager must be used within ChatEditorProvider");
-  }
-
-  return context;
-};
+export const useChatEditorManager = () =>
+  useRequiredRouteProvider({
+    context: ChatEditorManagerContext,
+    scope: PROVIDER_SCOPE.composer,
+    missingMessage:
+      "useChatEditorManager must be used within ChatEditorProvider",
+  });
 
 // Subscribes only to the registration version, so the editor's plugin-sync
 // effect re-runs when extensions change without dragging the whole manager API

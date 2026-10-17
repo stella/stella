@@ -46,9 +46,11 @@ import { hasOrganizationManagementAccess } from "@/lib/organization/role-assignm
 import { optionalOrganizationSettingsOptions } from "@/lib/organization/settings-queries";
 import { pageTitle } from "@/lib/page-title";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { APP_FRAME_SCOPE } from "@/routes/-app-frame-scope";
 import { loadAuthContext } from "@/routes/-auth-context";
 
 export const Route = createFileRoute("/consent")({
+  staticData: { appFrame: APP_FRAME_SCOPE.none },
   beforeLoad: async ({ context, location }) => {
     const authContext = await loadAuthContext(context.queryClient);
     const bridgedQuery = getSignedOauthQueryFromHash(location.hash);

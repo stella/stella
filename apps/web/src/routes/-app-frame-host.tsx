@@ -11,6 +11,7 @@ import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { isPublicKnowledgeEnabled } from "@/lib/knowledge/public-knowledge-launch";
 import { resetAuthTransition } from "@/lib/session-cache-guard";
+import { matchedAppFrameScope } from "@/routes/-app-frame-scope";
 import {
   frameVisitor,
   selectAppFrame,
@@ -86,6 +87,9 @@ export const AppFrameHost = ({ children, frames }: AppFrameHostProps) => {
     select: (state) =>
       state.matches.map((match) => match.routeId).join(ROUTE_ID_SEPARATOR),
   });
+  const scope = useRouterState({
+    select: (state) => matchedAppFrameScope(state.matches),
+  });
   const routeUser = useRouterState({
     select: (state) => routeUserOf(state.matches),
   });
@@ -93,6 +97,7 @@ export const AppFrameHost = ({ children, frames }: AppFrameHostProps) => {
   const publicKnowledge = isPublicKnowledgeEnabled();
   const needsAudience =
     selectAppFrame({
+      scope,
       routeIds,
       hasRouteUser: routeUser !== undefined,
       publicKnowledge,
@@ -102,6 +107,7 @@ export const AppFrameHost = ({ children, frames }: AppFrameHostProps) => {
   const authStatus = useClientAuthStatus({ enabled: needsAudience });
   const audience = needsAudience ? audienceOf(authStatus) : undefined;
   const frame = selectAppFrame({
+    scope,
     routeIds,
     hasRouteUser: routeUser !== undefined,
     publicKnowledge,

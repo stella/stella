@@ -7,6 +7,8 @@ import {
 } from "@/routes/-app-frame.logic";
 import type { AppFrameAudience } from "@/routes/-app-frame.logic";
 
+import { APP_FRAME_SCOPE } from "./-app-frame-scope";
+
 const PROTECTED = ["__root__", "/_protected", "/_protected/chat/"];
 const KNOWLEDGE = ["__root__", "/knowledge", "/knowledge/templates"];
 const PUBLIC_LAW = ["__root__", "/law", "/law/"];
@@ -15,6 +17,7 @@ describe("selectAppFrame", () => {
   test("signed-in routes get the member frame once their guard has a user", () => {
     expect(
       selectAppFrame({
+        scope: APP_FRAME_SCOPE.member,
         routeIds: PROTECTED,
         hasRouteUser: true,
         publicKnowledge: true,
@@ -23,6 +26,7 @@ describe("selectAppFrame", () => {
     // Still loading: the root owns the first shell while the guard resolves.
     expect(
       selectAppFrame({
+        scope: APP_FRAME_SCOPE.member,
         routeIds: PROTECTED,
         hasRouteUser: false,
         publicKnowledge: true,
@@ -39,6 +43,7 @@ describe("selectAppFrame", () => {
     ] as const) {
       expect(
         selectAppFrame({
+          scope: APP_FRAME_SCOPE.member,
           routeIds: PROTECTED,
           hasRouteUser: true,
           publicKnowledge: true,
@@ -51,6 +56,7 @@ describe("selectAppFrame", () => {
   test("with Knowledge behind sign-in it behaves like any signed-in route", () => {
     expect(
       selectAppFrame({
+        scope: APP_FRAME_SCOPE.knowledge,
         routeIds: KNOWLEDGE,
         hasRouteUser: true,
         publicKnowledge: false,
@@ -58,6 +64,7 @@ describe("selectAppFrame", () => {
     ).toBe("member");
     expect(
       selectAppFrame({
+        scope: APP_FRAME_SCOPE.knowledge,
         routeIds: KNOWLEDGE,
         hasRouteUser: false,
         publicKnowledge: false,
@@ -69,6 +76,7 @@ describe("selectAppFrame", () => {
   test("Knowledge for everyone asks for the session first", () => {
     expect(
       selectAppFrame({
+        scope: APP_FRAME_SCOPE.knowledge,
         routeIds: KNOWLEDGE,
         hasRouteUser: false,
         publicKnowledge: true,
@@ -79,6 +87,7 @@ describe("selectAppFrame", () => {
   test("Knowledge for everyone fails closed until the visitor is known", () => {
     const frame = (audience: AppFrameAudience) =>
       selectAppFrame({
+        scope: APP_FRAME_SCOPE.knowledge,
         routeIds: KNOWLEDGE,
         hasRouteUser: false,
         publicKnowledge: true,
@@ -95,6 +104,7 @@ describe("selectAppFrame", () => {
     for (const publicKnowledge of [true, false]) {
       expect(
         selectAppFrame({
+          scope: APP_FRAME_SCOPE.none,
           routeIds: PUBLIC_LAW,
           hasRouteUser: false,
           publicKnowledge,
@@ -191,6 +201,7 @@ describe("pages that show the same to every visitor", () => {
     for (const routeIds of CATALOGUE_ENTRIES) {
       expect(
         selectAppFrame({
+          scope: APP_FRAME_SCOPE.knowledge,
           routeIds,
           hasRouteUser: false,
           publicKnowledge: true,
@@ -199,6 +210,7 @@ describe("pages that show the same to every visitor", () => {
       ).toBe("neutral");
       expect(
         selectAppFrame({
+          scope: APP_FRAME_SCOPE.knowledge,
           routeIds,
           hasRouteUser: false,
           publicKnowledge: true,
@@ -211,6 +223,7 @@ describe("pages that show the same to every visitor", () => {
   test("a section page still shows only the skeleton", () => {
     expect(
       selectAppFrame({
+        scope: APP_FRAME_SCOPE.knowledge,
         routeIds: KNOWLEDGE,
         hasRouteUser: false,
         publicKnowledge: true,

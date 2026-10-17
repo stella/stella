@@ -1,6 +1,46 @@
 import { expect, test } from "bun:test";
+import ts from "typescript";
 
-import { readDockedChatHosts } from "../helpers/docked-chat-hosts";
+import {
+  declaredAppFrameScope,
+  readDockedChatHosts,
+} from "../helpers/docked-chat-hosts";
+
+test.each(["member", "knowledge", "none"])(
+  "reads declared %s scope independently of route names",
+  (scope) => {
+    const source = ts.createSourceFile(
+      "renamed-route.tsx",
+      `import { APP_FRAME_SCOPE as scope } from "@/routes/-app-frame-scope";
+export const Route = createFileRoute("/unrelated-name")({ staticData: { appFrame: scope.${scope} } });`,
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TSX,
+    );
+    expect(declaredAppFrameScope(source)).toBe(scope);
+  },
+);
+
+test("absent metadata inherits while unsupported metadata fails", () => {
+  const parse = (source: string) =>
+    ts.createSourceFile(
+      "route.tsx",
+      source,
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TSX,
+    );
+  expect(
+    declaredAppFrameScope(
+      parse('export const Route = createFileRoute("/_protected")({});'),
+    ),
+  ).toBeUndefined();
+  expect(() =>
+    declaredAppFrameScope(
+      parse("const value = { staticData: { appFrame: arbitrary } };"),
+    ),
+  ).toThrow("Unsupported appFrame metadata");
+});
 
 test("docked chat census includes reader and inspector hosts but excludes non-page endpoints", () => {
   const { hosts, providerSources } = readDockedChatHosts();
