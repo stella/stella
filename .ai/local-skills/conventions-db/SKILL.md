@@ -45,6 +45,17 @@ transactions, or tenant-scoped persistence.
 - Migrations run before new API tasks finish rolling out. Old tasks must remain
   compatible with the migrated schema, and a failed rollout must have a safe
   forward-fix path.
+- A rollback runs the previous release on the migrated schema, so contract
+  operations (drop or rename a table, column, type value or routine; change a
+  column type; tighten NOT NULL, a default, a constraint or a unique index)
+  wait for a release after the one that stopped using the old shape. To remove
+  a table or column, the expand release stops declaring it in schema.ts and
+  marks it `COMMENT ON ... IS 'stella:retired'`; a later release drops it.
+  `scripts/check-migration-safety.ts` flags contract statements as
+  `rollback-contract` (acknowledge only when no supported release can observe
+  the change), and the upgrade rehearsal runs
+  `scripts/migration-rollback-compatibility.ts` against the promoted release's
+  schema.
 - Keep irreversible schema operations out of the same release as risky
   application changes. Destructive, bulk-backfill, and access-control SQL
   requires a statement-scoped acknowledgement enforced by
@@ -63,9 +74,10 @@ transactions, or tenant-scoped persistence.
   timestamp prefix does not need to sort after the base branch, but never
   rename or delete a merged migration; add a new one instead.
 - Validate migration history two ways: apply every committed migration to a
-  fresh database, then confirm
-  `bun --filter @stll/api db:push -- --explain` reports no schema drift. Do not
-  repair drift by resetting a shared database.
+  fresh database, then confirm `bun scripts/check-migrated-schema-parity.ts`
+  reports no schema drift (it runs `drizzle-kit push --explain` and accepts
+  only the drops of `stella:retired` objects). Do not repair drift by
+  resetting a shared database.
 
 ## Tenant Scope and Queries
 
@@ -105,7 +117,7 @@ transactions, or tenant-scoped persistence.
 - Keep transactions short; perform S3, network, conversion, and other external
   I/O outside them.
 - Close every read-decide-write race. Lock the decisive row with `SELECT ...
-FOR UPDATE`, or encode the expected state/version in the mutation `WHERE`
+  FOR UPDATE`, or encode the expected state/version in the mutation `WHERE`
   clause and check the affected-row count.
 - Make retries converge. Stable identities, unique constraints, conditional
   transitions, and idempotency keys are stronger than read-before-insert

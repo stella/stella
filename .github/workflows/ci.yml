@@ -1111,9 +1111,9 @@ jobs:
             # release PR always rehearses; so does anything that changes what
             # the migrate entrypoint applies (the migration files, the db and
             # lib/db modules, and the script modules the online repairs
-            # reuse) or how the rehearsal seeds and measures.
+            # reuse) or how the rehearsal seeds, measures and judges a rollback.
             case "$file" in
-              VERSION|apps/api/drizzle/*|apps/api/src/db/*|apps/api/src/lib/db/*|apps/api/src/lib/decision-date-bounds-sql.ts|apps/api/src/handlers/case-law/citation-resolution.ts|apps/api/src/scripts/*|scripts/rehearse-migration-upgrade.sh|scripts/resolve-promoted-release.ts|scripts/migration-rehearsal-db.ts|.github/workflows/ci.yml)
+              VERSION|apps/api/drizzle/*|apps/api/src/db/*|apps/api/src/lib/db/*|apps/api/src/lib/decision-date-bounds-sql.ts|apps/api/src/handlers/case-law/citation-resolution.ts|apps/api/src/scripts/*|scripts/rehearse-migration-upgrade.sh|scripts/resolve-promoted-release.ts|scripts/migration-rehearsal-db.ts|scripts/migration-catalog.ts|scripts/migration-rollback-compatibility.ts|scripts/migration-rollback-baseline.json|scripts/migration-retired-schema.ts|scripts/check-migration-safety.ts|scripts/check-migrated-schema-parity.ts|.github/workflows/ci.yml)
                 migration_rehearsal_required=true
                 ;;
             esac
@@ -5768,8 +5768,9 @@ jobs:
     # Promotes this change's migrate entrypoint the way production would:
     # the promoted release's schema (from its published image), the
     # registered high-volume tables at scale, then this checkout's schema
-    # migrations and online phase under a budget, a rerun, and schema
-    # parity. See scripts/rehearse-migration-upgrade.sh.
+    # migrations and online phase under a budget, a rerun, schema parity, and
+    # whether the promoted release still runs on the result (a rollback).
+    # See scripts/rehearse-migration-upgrade.sh.
     needs: ci-plan
     if: >-
       inputs.pr_depth_only != true

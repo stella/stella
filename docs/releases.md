@@ -48,6 +48,27 @@ Schema changes should follow an expand/contract sequence:
 Application rollback must not require database rollback. Destructive migrations
 should lag the release that stopped using the old data.
 
+A rollback runs the previous release against the migrated database, so a
+release's migrations must not contract anything that release still uses:
+dropping or renaming a table, column, enum value or routine, changing a column
+type, or tightening NOT NULL, a default, a constraint or a unique index. Split
+such a change:
+
+1. Expand in release N. Add the new shape. To remove a table or column, stop
+   declaring it in `schema.ts`, make it nullable or defaulted if release N no
+   longer writes it, and mark it in the migration:
+   `COMMENT ON COLUMN "table"."column" IS 'stella:retired';`. Schema parity
+   (`scripts/check-migrated-schema-parity.ts`) accepts exactly the drops such a
+   marker explains.
+2. Contract in a release after N is promoted: drop the retired object.
+
+`scripts/check-migration-safety.ts` reports contract statements as
+`rollback-contract`. A drop of an object an earlier migration retired is not
+reported. When no supported release can observe a change (it never read the
+column, or a check only widens the accepted values), acknowledge it on the
+statement with the reason:
+`-- stella-migration-safety: reviewed rollback-contract - <why>`.
+
 ## Staging Verification
 
 `deploy-staging.yml` runs on `main` only. Its optional `sha` input pins the
@@ -114,7 +135,13 @@ or change deployed feature flags.
    production currently serves from that release's published image, fills the
    registered high-volume tables with scale-shaped rows, then runs this
    commit's migrate entrypoint under a budget, reruns it, and checks schema
-   parity. Its summary reports the base release and the timings.
+   parity. It then checks that the promoted release still runs on the upgraded
+   schema (`scripts/migration-rollback-compatibility.ts`): every change that
+   release cannot tolerate fails the job by name unless a migration in the
+   upgrade acknowledges `rollback-contract` on the statement that makes it
+   (`scripts/migration-rollback-baseline.json` stands in for migrations merged
+   before the check existed, until a promoted release includes them). Its
+   summary reports the base release and the timings.
    `scripts/rehearse-migration-upgrade.sh` runs the same rehearsal locally
    against an empty database.
 

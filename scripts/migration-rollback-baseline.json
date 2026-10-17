@@ -1,0 +1,85 @@
+{
+  "_note": "Rollback incompatibilities with the promoted release in migrations merged before scripts/migration-rollback-compatibility.ts existed. A merged migration is immutable, so it cannot gain a rollback-contract acknowledgement; each entry stands in for one until its migration ships in a promoted release, after which the check fails until the entry is removed. Migrations after the cutoff in that script cannot be listed. Delete this file and its loader once it is empty.",
+  "entries": [
+    {
+      "migration": "20261008090000_chat_secrets",
+      "target": {
+        "type": "constraint",
+        "schema": "public",
+        "table": "mcp_user_connections",
+        "name": "mcp_user_connections_response_target_check"
+      }
+    },
+    {
+      "migration": "20261010005100_standard_skill_resource_folders",
+      "target": {
+        "type": "column",
+        "schema": "public",
+        "table": "agent_skill_resources",
+        "column": "kind"
+      }
+    },
+    {
+      "migration": "20261010212100_case_law_publication_filter",
+      "target": {
+        "type": "routine",
+        "schema": "public",
+        "name": "case_law_statute_citation_is_published"
+      }
+    },
+    {
+      "migration": "20261010234000_chat_content_v3_backfill_receipts",
+      "target": {
+        "type": "constraint",
+        "schema": "public",
+        "table": "chat_messages",
+        "name": "chat_messages_content_v3_check"
+      }
+    },
+    {
+      "migration": "20261012230000_seller_profile_vat_payer",
+      "target": {
+        "type": "constraint",
+        "schema": "public",
+        "table": "seller_profiles",
+        "name": "seller_profiles_vat_payer_check"
+      }
+    },
+    {
+      "migration": "20261014180800_avt_sample_case",
+      "target": {
+        "type": "constraint",
+        "schema": "public",
+        "table": "legal_lists",
+        "name": "legal_lists_sample_workspace_uidx"
+      }
+    },
+    {
+      "migration": "20261015060000_folio_collab_saved_snapshot_cut",
+      "target": {
+        "type": "constraint",
+        "schema": "public",
+        "table": "folio_collab_rooms",
+        "name": "folio_collab_rooms_seed_fields_check"
+      }
+    },
+    {
+      "migration": "20261015060000_folio_collab_saved_snapshot_cut",
+      "target": {
+        "type": "constraint",
+        "schema": "public",
+        "table": "folio_collab_rooms",
+        "name": "folio_collab_rooms_snapshot_revision_seed_check"
+      }
+    },
+    {
+      "migration": "20261015202900_sanctions_screening_incomplete_status",
+      "target": {
+        "type": "constraint",
+        "schema": "public",
+        "table": "sanctions_contact_screenings",
+        "name": "sanctions_contact_screenings_incomplete_edition_check"
+      }
+    }
+  ]
+}

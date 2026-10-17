@@ -181,8 +181,31 @@ const snapshotData = async (
   return data;
 };
 
-/** Catalog only non-system objects. Database-local names are stable across both paths. */
-export const snapshotCatalog = async (client: SQL): Promise<Catalog> => {
+const snapshotIndexes = async (client: SQL): Promise<Row[]> =>
+  await queryRows(
+    client,
+    `
+    SELECT n.nspname AS schema, t.relname AS "table", i.relname AS name,
+           pg_get_indexdef(i.oid) AS definition, x.indisvalid AS valid,
+           x.indisready AS ready, x.indisunique AS "unique",
+           EXISTS (SELECT 1 FROM pg_constraint con
+                   WHERE con.conindid = i.oid AND con.conrelid = t.oid
+                     AND con.contype IN ('p', 'u', 'x')) AS constraint_backed,
+           ARRAY(SELECT DISTINCT a.attname::text FROM pg_depend d
+                 JOIN pg_attribute a ON a.attrelid = d.refobjid AND a.attnum = d.refobjsubid
+                 WHERE d.classid = 'pg_class'::regclass AND d.objid = i.oid
+                   AND d.refobjid = t.oid AND d.refobjsubid > 0
+                 ORDER BY a.attname::text) AS columns
+    FROM pg_index x JOIN pg_class i ON i.oid = x.indexrelid
+    JOIN pg_class t ON t.oid = x.indrelid JOIN pg_namespace n ON n.oid = t.relnamespace
+    WHERE ${USER_SCHEMA} ORDER BY n.nspname, t.relname, i.relname`,
+  );
+
+/**
+ * Catalog only non-system objects, without row digests. Database-local names
+ * are stable across both paths.
+ */
+export const snapshotSchema = async (client: SQL) => {
   const schemas = await queryRows(
     client,
     `
@@ -203,7 +226,8 @@ export const snapshotCatalog = async (client: SQL): Promise<Catalog> => {
     SELECT n.nspname AS schema, c.relname AS name, c.relkind AS kind,
            c.relrowsecurity AS rls, c.relforcerowsecurity AS force_rls,
            pg_get_userbyid(c.relowner) AS owner,
-           coalesce(c.relacl::text[], '{}'::text[]) AS acl
+           coalesce(c.relacl::text[], '{}'::text[]) AS acl,
+           obj_description(c.oid, 'pg_class') AS comment
     FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
     WHERE ${USER_SCHEMA} AND c.relkind IN ('r', 'p', 'f')
     ORDER BY n.nspname, c.relname`,
@@ -215,7 +239,8 @@ export const snapshotCatalog = async (client: SQL): Promise<Catalog> => {
            format_type(a.atttypid, a.atttypmod) AS type, a.attnotnull AS not_null,
            pg_get_expr(d.adbin, d.adrelid) AS "default", a.attidentity AS identity,
            a.attgenerated AS generated,
-           coalesce(a.attacl::text[], '{}'::text[]) AS acl
+           coalesce(a.attacl::text[], '{}'::text[]) AS acl,
+           col_description(c.oid, a.attnum) AS comment
     FROM pg_attribute a JOIN pg_class c ON c.oid = a.attrelid
     JOIN pg_namespace n ON n.oid = c.relnamespace
     LEFT JOIN pg_attrdef d ON d.adrelid = a.attrelid AND d.adnum = a.attnum
@@ -228,21 +253,15 @@ export const snapshotCatalog = async (client: SQL): Promise<Catalog> => {
     `
     SELECT n.nspname AS schema, c.relname AS "table", con.conname AS name,
            pg_get_constraintdef(con.oid, true) AS definition,
-           con.convalidated AS valid
+           con.convalidated AS valid, con.contype AS type,
+           ARRAY(SELECT a.attname::text FROM pg_attribute a
+                 WHERE a.attrelid = con.conrelid AND a.attnum = ANY (con.conkey)
+                 ORDER BY a.attname) AS columns
     FROM pg_constraint con JOIN pg_namespace n ON n.oid = con.connamespace
     LEFT JOIN pg_class c ON c.oid = con.conrelid
     WHERE ${USER_SCHEMA} ORDER BY n.nspname, c.relname, con.conname`,
   );
-  const indexes = await queryRows(
-    client,
-    `
-    SELECT n.nspname AS schema, t.relname AS "table", i.relname AS name,
-           pg_get_indexdef(i.oid) AS definition, x.indisvalid AS valid,
-           x.indisready AS ready
-    FROM pg_index x JOIN pg_class i ON i.oid = x.indexrelid
-    JOIN pg_class t ON t.oid = x.indrelid JOIN pg_namespace n ON n.oid = t.relnamespace
-    WHERE ${USER_SCHEMA} ORDER BY n.nspname, t.relname, i.relname`,
-  );
+  const indexes = await snapshotIndexes(client);
   const policies = await queryRows(
     client,
     `
@@ -279,7 +298,8 @@ export const snapshotCatalog = async (client: SQL): Promise<Catalog> => {
     SELECT n.nspname AS schema, c.relname AS name, c.relkind AS kind,
            pg_get_viewdef(c.oid, true) AS definition,
            pg_get_userbyid(c.relowner) AS owner,
-           coalesce(c.relacl::text[], '{}'::text[]) AS acl
+           coalesce(c.relacl::text[], '{}'::text[]) AS acl,
+           obj_description(c.oid, 'pg_class') AS comment
     FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
     WHERE ${USER_SCHEMA} AND c.relkind IN ('v', 'm')
     ORDER BY n.nspname, c.relname`,
@@ -340,8 +360,6 @@ export const snapshotCatalog = async (client: SQL): Promise<Catalog> => {
     SELECT name, hash FROM drizzle.__drizzle_migrations ORDER BY name, hash`,
   );
 
-  const data = await snapshotData(client, tables, columns);
-
   const enums: Record<string, string[]> = {};
   for (const row of enumRows) {
     const key = `${String(row["schema"])}.${String(row["name"])}`;
@@ -369,7 +387,18 @@ export const snapshotCatalog = async (client: SQL): Promise<Catalog> => {
         hash: String(row["hash"]),
       })),
     ),
-    data,
+  };
+};
+
+export const snapshotCatalog = async (client: SQL): Promise<Catalog> => {
+  const schema = await snapshotSchema(client);
+  return {
+    ...schema,
+    data: await snapshotData(
+      client,
+      Object.values(schema.tables),
+      Object.values(schema.columns),
+    ),
   };
 };
 

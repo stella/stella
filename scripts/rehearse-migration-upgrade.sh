@@ -8,8 +8,11 @@
 # image applies it), fills the registered high-volume tables with
 # scale-shaped rows, then runs this checkout's migrate entrypoint, schema
 # migrations and online phase alike, under a wall-clock budget. It runs the
-# entrypoint a second time to prove the upgrade is a fixed point, and checks
-# that the migrated schema matches schema.ts.
+# entrypoint a second time to prove the upgrade is a fixed point, checks that
+# the migrated schema matches schema.ts, and checks that the promoted release
+# can still run on it, which is what a rollback after this upgrade does
+# (scripts/migration-rollback-compatibility.ts against the catalog the base
+# schema left).
 #
 # Inputs (environment):
 #   DATABASE_URL                       an EMPTY database (refused otherwise);
@@ -41,7 +44,8 @@
 # the database is not empty, the base schema cannot be applied, the seed
 # fails, the upgrade fails or outruns its budget, corpus writers were kept
 # out for longer than the writer gap budget, the rerun changes the applied migrations, a CHECK constraint's validity, or the
-# rows an online repair rewrites, or the schema drifts from schema.ts.
+# rows an online repair rewrites, the schema drifts from schema.ts, or the
+# promoted release cannot run on the upgraded schema.
 #
 # The base image is pulled only when it is not already present, so a caller
 # that pulled it with credentials this script never sees (CI does, before it
@@ -103,6 +107,11 @@ docker run --rm --network host \
   "$base_image" \
   bun /app/apps/api/src/db/migrate.js
 
+# The promoted release's schema.ts matched this catalog in its own CI, so it
+# is the contract the rollback check holds the upgraded schema to.
+base_catalog="$(mktemp)"
+bun "$repo_root/scripts/migration-catalog.ts" snapshot >"$base_catalog"
+
 seed_args=()
 if [[ -n "$decisions" ]]; then
   seed_args+=(--decisions "$decisions")
@@ -125,7 +134,7 @@ stop_contender() {
     wait "$contender_pid" 2>/dev/null || true
   fi
 }
-trap 'stop_contender; rm -f "$contender_log"' EXIT
+trap 'stop_contender; rm -f "$contender_log" "$base_catalog"' EXIT
 assert_contender_alive() {
   if ! kill -0 "$contender_pid" 2>/dev/null; then
     cat "$contender_log"
@@ -175,10 +184,17 @@ writer_gap="$(bun "$repo_root/scripts/migration-rehearsal-writer-gap.ts" \
   || fail "Corpus writers were kept out for longer than ${writer_gap_budget}s during the upgrade (see the error above)."
 
 log "Checking the migrated schema against schema.ts"
-parity_output="$(cd "$repo_root/apps/api" && bun --bun drizzle-kit push --explain 2>&1)" || true
-if ! grep -q "No changes detected" <<<"$parity_output"; then
-  printf '%s\n' "$parity_output"
-  fail "The upgraded schema does not match schema.ts."
+bun "$repo_root/scripts/check-migrated-schema-parity.ts" \
+  || fail "The upgraded schema does not match schema.ts."
+
+log "Checking that ${base_ref} still runs on the upgraded schema"
+rollback_status=0
+bun "$repo_root/scripts/migration-rollback-compatibility.ts" "$base_catalog" \
+  --base-release "$base_ref" || rollback_status=$?
+if (( rollback_status == 2 )); then
+  fail "Rolling back to ${base_ref} after this upgrade would break it (see the changes listed above)."
+elif (( rollback_status != 0 )); then
+  fail "The rollback compatibility check failed (see the error above)."
 fi
 
 {
@@ -191,5 +207,6 @@ fi
   echo "| Upgrade | ${upgrade_seconds}s of ${budget}s, against a contending writer |"
   echo "| Rerun | ${rerun_seconds}s, state unchanged |"
   echo "| Writer max gap | ${writer_gap} |"
-  echo "| Schema parity | no changes detected |"
+  echo "| Schema parity | matches schema.ts |"
+  echo "| Rollback to \`${base_ref}\` | compatible |"
 } | tee -a "$summary"

@@ -27,6 +27,7 @@ export const MIGRATION_SAFETY_RULE_IDS = [
   "security-definer",
   "change-owner",
   "set-schema",
+  "rollback-contract",
   "high-volume-index-build",
   "on-conflict-column-target",
   "code-owned-table-write",

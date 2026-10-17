@@ -149,7 +149,7 @@ jobs:
           NPM_TOKEN: ""
 
       - name: Test migration safety rules and historical findings
-        run: bun test scripts/check-migration-safety.test.ts scripts/check-migration-index-builds.test.ts apps/api/scripts/migration-roles.test.ts
+        run: bun test scripts/check-migration-safety.test.ts scripts/check-migration-index-builds.test.ts scripts/migration-rollback-compatibility.test.ts scripts/check-migrated-schema-parity.test.ts apps/api/scripts/migration-roles.test.ts
 
       - name: Check migration coverage
         env:
@@ -230,18 +230,11 @@ jobs:
         run: bun run src/db/migrate.ts
 
       - name: Verify schema parity with schema.ts
-        working-directory: apps/api
         env:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
-        # `push --explain` exits with "[i] No changes detected" when the
-        # migrated schema already matches schema.ts. Any pending diff fails CI.
-        run: |
-          OUT=$(bun --bun drizzle-kit push --explain 2>&1)
-          echo "$OUT"
-          echo "$OUT" | grep -q "No changes detected" || {
-            echo "::error::Migrated schema does not match schema.ts. Either commit a generated migration that closes the gap, or fix the migration files."
-            exit 1
-          }
+        # Any pending `push --explain` diff fails, except the drops of tables
+        # and columns a stella:retired comment keeps for the previous release.
+        run: bun scripts/check-migrated-schema-parity.ts
 
       - name: Verify __drizzle_migrations recorded all migrations
         env:

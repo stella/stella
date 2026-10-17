@@ -24,6 +24,7 @@ import {
 } from "node:fs";
 import path from "node:path";
 
+import { compareCodeUnit } from "@stll/collation";
 import { repoRelativePath } from "@stll/portable-path";
 import { createSha256 } from "@stll/sha256/node";
 
@@ -32,6 +33,10 @@ import { HIGH_VOLUME_TABLES } from "../apps/api/src/db/high-volume-tables";
 // Statement hashes pin historical index work without exempting a whole file.
 // The corpus test requires exact findings and forbids additions to this snapshot.
 import indexFindingsSnapshot from "./migration-index-findings.json" with { type: "json" };
+import {
+  isRetiredSchemaComment,
+  RETIRED_SCHEMA_COMMENT,
+} from "./migration-retired-schema";
 import type { MigrationSafetyRuleId } from "./migration-safety-rule-ids";
 
 type Statement = {
@@ -116,6 +121,7 @@ const GUARDED_CATEGORIES = [
   "destructive-change",
   "bulk-backfill",
   "access-control",
+  "rollback-compatibility",
 ] as const;
 
 const GUARDED_CATEGORY_GUIDANCE = {
@@ -125,6 +131,7 @@ const GUARDED_CATEGORY_GUIDANCE = {
     "Migrations should be fast, additive DDL. Move bulk or idempotent backfills to an out-of-band batched script (see the pattern in apps/api/src/scripts/backfill-case-law-slugs.ts), or add a bounded WHERE clause.",
   "access-control":
     "Privilege, ownership, and policy changes widen or shift data access. Confirm least privilege and workspace isolation are preserved.",
+  "rollback-compatibility": `A rollback runs the previous release against this schema. Split the change: expand in one release (add the new shape; to remove a table or column, stop declaring it in schema.ts and mark it with COMMENT ON ... IS '${RETIRED_SCHEMA_COMMENT}'), contract in a later release once that one is promoted. Acknowledge only when no supported release can observe the change, and say why.`,
 } as const satisfies Record<GuardedCategory, string>;
 
 const ACKNOWLEDGEMENT_MARKER_PATTERN =
@@ -583,6 +590,8 @@ const GUARDED_RULES = [
 const HIGH_VOLUME_TABLE_NAMES = new Set<string>(HIGH_VOLUME_TABLES);
 const HIGH_VOLUME_INDEX_BUILD_RULE_ID =
   "high-volume-index-build" satisfies MigrationSafetyRuleId;
+const ROLLBACK_CONTRACT_RULE_ID =
+  "rollback-contract" satisfies MigrationSafetyRuleId;
 
 const DML_VERBS = ["INSERT", "UPDATE", "DELETE", "MERGE"] as const;
 type DmlVerb = (typeof DML_VERBS)[number];
@@ -772,12 +781,16 @@ type DefinedRuleId =
   | (typeof GUARDED_RULES)[number]["id"]
   | (typeof STATEMENT_INVARIANT_RULES)[number]["id"]
   | (typeof FILE_INVARIANT_RULES)[number]["id"]
-  | typeof HIGH_VOLUME_INDEX_BUILD_RULE_ID;
+  | typeof HIGH_VOLUME_INDEX_BUILD_RULE_ID
+  | typeof ROLLBACK_CONTRACT_RULE_ID;
 true satisfies [Exclude<MigrationSafetyRuleId, DefinedRuleId>] extends [never]
   ? true
   : never;
 
-const KNOWN_RULE_IDS = new Set<string>(GUARDED_RULES.map((rule) => rule.id));
+const KNOWN_RULE_IDS = new Set<string>([
+  ...GUARDED_RULES.map((rule) => rule.id),
+  ROLLBACK_CONTRACT_RULE_ID,
+]);
 
 const usage = () => {
   console.error(
@@ -1921,6 +1934,778 @@ const isIndexRebuiltLater = (
   });
 };
 
+// Rollback compatibility (expand/contract). Rolling a deploy back runs the
+// previous release against the database this migration already changed, so a
+// statement that removes or narrows what an existing table, column, type or
+// routine accepts can break that release. Each such statement names the object
+// it contracts; scripts/migration-rollback-compatibility.ts honours an
+// acknowledgement of this rule only for the objects its statement names.
+
+export type RollbackTarget =
+  | { type: "relation"; schema: string; name: string }
+  | { type: "column"; schema: string; table: string; column: string }
+  | { type: "type"; schema: string; name: string }
+  | { type: "routine"; schema: string; name: string }
+  // A constraint or unique index by name; null for an unnamed one, which
+  // stands for every constraint and unique index of the table.
+  | { type: "constraint"; schema: string; table: string; name: string | null };
+
+const ROLLBACK_CONTRACT_DESCRIPTIONS = {
+  "drop-relation": "drops table or view",
+  "rename-relation": "renames table or view",
+  "drop-column": "drops column",
+  "rename-column": "renames column",
+  "alter-column-type": "changes the type of column",
+  "set-not-null": "makes NOT NULL column",
+  "drop-default": "drops the default of column",
+  "add-required-column": "adds a NOT NULL column without a default:",
+  "add-constraint": "adds constraint",
+  "create-unique-index": "adds unique index",
+  "drop-type": "drops type",
+  "rename-type": "renames type",
+  "rename-enum-value": "renames a value of enum",
+  "drop-routine": "drops routine",
+  "rename-routine": "renames routine",
+} as const satisfies Record<string, string>;
+
+type RollbackContractKind = keyof typeof ROLLBACK_CONTRACT_DESCRIPTIONS;
+
+type ReadingContractKind = "add-constraint" | "create-unique-index";
+
+type ConstraintTarget = Extract<RollbackTarget, { type: "constraint" }>;
+
+// A constraint or unique index restricts only the columns it reads; null when
+// they cannot be read from the statement, which counts as the whole table.
+type RollbackContract =
+  | {
+      kind: Exclude<RollbackContractKind, ReadingContractKind>;
+      target: Exclude<RollbackTarget, ConstraintTarget>;
+    }
+  | {
+      kind: ReadingContractKind;
+      target: ConstraintTarget;
+      references: readonly string[] | null;
+    };
+
+// Only removing what a marker retired is the planned contract step; renaming
+// or narrowing a retired object is still a contract.
+const RETIRED_DROP_KINDS = new Set<RollbackContractKind>([
+  "drop-relation",
+  "drop-column",
+]);
+
+export const rollbackTargetKey = (target: RollbackTarget): string => {
+  switch (target.type) {
+    case "relation":
+    case "type":
+    case "routine": {
+      return JSON.stringify([target.type, target.schema, target.name]);
+    }
+    case "column": {
+      return JSON.stringify([
+        target.type,
+        target.schema,
+        target.table,
+        target.column,
+      ]);
+    }
+    case "constraint": {
+      return JSON.stringify([
+        target.type,
+        target.schema,
+        target.table,
+        target.name,
+      ]);
+    }
+    default: {
+      target satisfies never;
+      return panic(`unhandled rollback target: ${JSON.stringify(target)}`);
+    }
+  }
+};
+
+export const formatRollbackTarget = (target: RollbackTarget): string => {
+  switch (target.type) {
+    case "relation":
+    case "type":
+    case "routine": {
+      return `${target.schema}.${target.name}`;
+    }
+    case "column": {
+      return `${target.schema}.${target.table}.${target.column}`;
+    }
+    case "constraint": {
+      return target.name === null
+        ? `${target.schema}.${target.table}`
+        : `${target.name} on ${target.schema}.${target.table}`;
+    }
+    default: {
+      target satisfies never;
+      return panic(`unhandled rollback target: ${JSON.stringify(target)}`);
+    }
+  }
+};
+
+const relationTarget = ({
+  schema,
+  name,
+}: IndexRelation): Extract<RollbackTarget, { type: "relation" }> => ({
+  type: "relation",
+  schema,
+  name,
+});
+
+const constraintTarget = (
+  { schema, name: table }: IndexRelation,
+  name: IndexToken | undefined,
+): ConstraintTarget => ({
+  type: "constraint",
+  schema,
+  table,
+  name: name === undefined || name.kind === "punctuation" ? null : name.value,
+});
+
+const columnTarget = (
+  table: IndexRelation,
+  column: IndexToken | undefined,
+): Extract<RollbackTarget, { type: "column" }>[] =>
+  column === undefined || column.kind === "punctuation"
+    ? []
+    : [
+        {
+          type: "column",
+          schema: table.schema,
+          table: table.name,
+          column: column.value,
+        },
+      ];
+
+// Position after an optional `IF EXISTS` / `IF NOT EXISTS`.
+const skipExistenceClause = (
+  tokens: IndexToken[],
+  position: number,
+): number => {
+  if (!isIndexKeyword(tokens[position], "if")) {
+    return position;
+  }
+  return isIndexKeyword(tokens[position + 1], "not")
+    ? position + 3
+    : position + 2;
+};
+
+// Comma-separated object names, each optionally followed by an argument list.
+const readNameList = (tokens: IndexToken[], start: number): IndexRelation[] => {
+  const names: IndexRelation[] = [];
+  let position = start;
+  for (;;) {
+    const read = readIndexRelation(tokens, position);
+    if (!read) {
+      return names;
+    }
+    names.push(read.relation);
+    position = read.next;
+    if (tokens[position]?.value === "(") {
+      position += (firstGroup(tokens.slice(position))?.length ?? 0) + 2;
+    }
+    if (tokens[position]?.value !== ",") {
+      return names;
+    }
+    position++;
+  }
+};
+
+const ADD_CONSTRAINT_STARTS = new Set([
+  "constraint",
+  "check",
+  "unique",
+  "primary",
+  "foreign",
+  "exclude",
+]);
+const SERIAL_TYPES = new Set([
+  "smallserial",
+  "serial",
+  "bigserial",
+  "serial2",
+  "serial4",
+  "serial8",
+]);
+
+// An added column an older release's INSERT can omit: nullable, defaulted, or
+// filled by the database.
+const isRequiredColumnDefinition = (definition: IndexToken[]): boolean => {
+  const words = topLevelAlterTokens(definition).map(({ value }) => value);
+  const notNull = words.some(
+    (word, index) =>
+      (word === "not" && words[index + 1] === "null") ||
+      (word === "primary" && words[index + 1] === "key"),
+  );
+  return (
+    notNull &&
+    !words.some(
+      (word) =>
+        word === "default" || word === "generated" || SERIAL_TYPES.has(word),
+    )
+  );
+};
+
+// Words an expression uses that never name a column.
+const EXPRESSION_WORDS = new Set([
+  "all",
+  "and",
+  "any",
+  "array",
+  "array_length",
+  "asc",
+  "between",
+  "bigint",
+  "boolean",
+  "btree",
+  "btrim",
+  "cardinality",
+  "case",
+  "char_length",
+  "check",
+  "coalesce",
+  "collate",
+  "date",
+  "deferrable",
+  "deferred",
+  "desc",
+  "distinct",
+  "else",
+  "end",
+  "exclude",
+  "false",
+  "first",
+  "from",
+  "gin",
+  "gist",
+  "greatest",
+  "hash",
+  "ilike",
+  "immediate",
+  "in",
+  "include",
+  "initially",
+  "int",
+  "integer",
+  "interval",
+  "is",
+  "jsonb",
+  "jsonb_array_length",
+  "jsonb_typeof",
+  "last",
+  "least",
+  "length",
+  "like",
+  "lower",
+  "no",
+  "not",
+  "nullif",
+  "null",
+  "nulls",
+  "numeric",
+  "octet_length",
+  "or",
+  "similar",
+  "some",
+  "text",
+  "then",
+  "timestamptz",
+  "to",
+  "true",
+  "trim",
+  "upper",
+  "using",
+  "uuid",
+  "valid",
+  "varchar",
+  "when",
+  "where",
+  "with",
+]);
+
+const expressionReferences = (tokens: IndexToken[]): string[] =>
+  tokens
+    .filter(
+      (token) =>
+        token.kind === "identifier" ||
+        (token.kind === "word" && !EXPRESSION_WORDS.has(token.value)),
+    )
+    .map(({ value }) => value);
+
+// The tokens of the first parenthesised group, without the parentheses.
+const firstGroup = (tokens: IndexToken[]): IndexToken[] | null => {
+  const open = tokens.findIndex((token) => token.value === "(");
+  if (open === -1) {
+    return null;
+  }
+  let depth = 0;
+  for (let position = open; position < tokens.length; position++) {
+    const value = tokens[position]?.value;
+    if (value === "(") {
+      depth++;
+    } else if (value === ")") {
+      depth--;
+    }
+    if (depth === 0) {
+      return tokens.slice(open + 1, position);
+    }
+  }
+  return null;
+};
+
+// Columns a table constraint body reads. A key constraint reads its column
+// list (a foreign key's referenced columns belong to another table); a check
+// or exclusion reads every name in its expression.
+const constraintReferences = (body: IndexToken[]): string[] | null => {
+  const [kind, next] = body;
+  if (isIndexKeyword(kind, "not") && isIndexKeyword(next, "null")) {
+    return expressionReferences(body.slice(2));
+  }
+  if (isIndexKeyword(kind, "check") || isIndexKeyword(kind, "exclude")) {
+    return expressionReferences(body);
+  }
+  const group = firstGroup(body);
+  return group === null ? null : expressionReferences(group);
+};
+
+const alterActionContracts = (
+  action: IndexToken[],
+  table: IndexRelation,
+): RollbackContract[] => {
+  const [verb, second] = action;
+  const columnAt = second?.value === "column" ? 2 : 1;
+  const contracts = (
+    kind: Exclude<RollbackContractKind, ReadingContractKind>,
+    targets: Exclude<RollbackTarget, ConstraintTarget>[],
+  ): RollbackContract[] => targets.map((target) => ({ kind, target }));
+
+  if (isIndexKeyword(verb, "drop")) {
+    if (isIndexKeyword(second, "constraint")) {
+      return [];
+    }
+    return contracts(
+      "drop-column",
+      columnTarget(table, action[skipExistenceClause(action, columnAt)]),
+    );
+  }
+  if (isIndexKeyword(verb, "rename")) {
+    if (isIndexKeyword(second, "to")) {
+      return contracts("rename-relation", [relationTarget(table)]);
+    }
+    if (isIndexKeyword(second, "constraint")) {
+      return [];
+    }
+    return contracts("rename-column", columnTarget(table, action[columnAt]));
+  }
+  if (isIndexKeyword(verb, "alter")) {
+    if (isIndexKeyword(second, "constraint")) {
+      return [];
+    }
+    const column = columnTarget(table, action[columnAt]);
+    const [first, next, third] = action
+      .slice(columnAt + 1)
+      .map(({ value }) => value);
+    if (
+      first === "type" ||
+      (first === "set" && next === "data" && third === "type")
+    ) {
+      return contracts("alter-column-type", column);
+    }
+    if (first === "set" && next === "not" && third === "null") {
+      return contracts("set-not-null", column);
+    }
+    if (first === "drop" && (next === "default" || next === "identity")) {
+      return contracts("drop-default", column);
+    }
+    return [];
+  }
+  if (isIndexKeyword(verb, "add")) {
+    if (second?.kind === "word" && ADD_CONSTRAINT_STARTS.has(second.value)) {
+      return [
+        {
+          kind: "add-constraint",
+          target: constraintTarget(
+            table,
+            isIndexKeyword(second, "constraint") ? action[2] : undefined,
+          ),
+          references: constraintReferences(
+            action.slice(isIndexKeyword(second, "constraint") ? 3 : 1),
+          ),
+        },
+      ];
+    }
+    const namePosition = skipExistenceClause(action, columnAt);
+    return isRequiredColumnDefinition(action.slice(namePosition + 1))
+      ? contracts(
+          "add-required-column",
+          columnTarget(table, action[namePosition]),
+        )
+      : [];
+  }
+  return [];
+};
+
+const DROP_KINDS = {
+  table: "drop-relation",
+  view: "drop-relation",
+  type: "drop-type",
+  function: "drop-routine",
+  procedure: "drop-routine",
+  routine: "drop-routine",
+} as const satisfies Record<string, RollbackContractKind>;
+
+const isDropKeyword = (value: string): value is keyof typeof DROP_KINDS =>
+  Object.hasOwn(DROP_KINDS, value);
+
+const ROUTINE_KEYWORDS = new Set(["function", "procedure", "routine"]);
+
+const targetFor = (
+  kind: RollbackContractKind,
+  relation: IndexRelation,
+): Exclude<RollbackTarget, ConstraintTarget> => {
+  switch (kind) {
+    case "drop-type":
+    case "rename-type":
+    case "rename-enum-value": {
+      return { type: "type", schema: relation.schema, name: relation.name };
+    }
+    case "drop-routine":
+    case "rename-routine": {
+      return { type: "routine", schema: relation.schema, name: relation.name };
+    }
+    default: {
+      return relationTarget(relation);
+    }
+  }
+};
+
+// What a statement contracts, before the file and retirement context decide
+// whether it is a finding.
+const statementRollbackContracts = (
+  statement: Statement,
+): RollbackContract[] => {
+  if (statement.deferred) {
+    return [];
+  }
+  const tokens = indexTokens(statement);
+  const [first, second, third] = tokens.map(({ value }) => value);
+  const materialized = second === "materialized" ? 1 : 0;
+
+  if (first === "drop") {
+    const keyword = tokens[1 + materialized]?.value ?? "";
+    if (!isDropKeyword(keyword)) {
+      return [];
+    }
+    const kind = DROP_KINDS[keyword];
+    return readNameList(
+      tokens,
+      skipExistenceClause(tokens, 2 + materialized),
+    ).map((relation) => ({ kind, target: targetFor(kind, relation) }));
+  }
+
+  if (first === "alter" && second === "type") {
+    const read = readIndexRelation(tokens, 2);
+    const action = tokens.slice(read?.next ?? 0).map(({ value }) => value);
+    if (!read || action[0] !== "rename") {
+      return [];
+    }
+    const kind = action[1] === "value" ? "rename-enum-value" : "rename-type";
+    return action[1] === "value" || action[1] === "to"
+      ? [{ kind, target: targetFor(kind, read.relation) }]
+      : [];
+  }
+
+  if (
+    first === "alter" &&
+    second !== undefined &&
+    ROUTINE_KEYWORDS.has(second)
+  ) {
+    const [relation] = readNameList(tokens, 2);
+    const renamed = tokens.some(
+      (token, index) =>
+        isIndexKeyword(token, "rename") &&
+        isIndexKeyword(tokens[index + 1], "to"),
+    );
+    return relation && renamed
+      ? [
+          {
+            kind: "rename-routine",
+            target: targetFor("rename-routine", relation),
+          },
+        ]
+      : [];
+  }
+
+  const viewKeyword = tokens[1 + materialized]?.value;
+  if (first === "alter" && (second === "table" || viewKeyword === "view")) {
+    let cursor = skipExistenceClause(tokens, 2 + materialized);
+    if (isIndexKeyword(tokens[cursor], "only")) {
+      cursor++;
+    }
+    const table = readIndexRelation(tokens, cursor);
+    return table
+      ? splitAlterActions(tokens.slice(table.next)).flatMap((action) =>
+          alterActionContracts(action, table.relation),
+        )
+      : [];
+  }
+
+  if (first === "create" && second === "unique" && third === "index") {
+    let on = tokens.findIndex((token) => isIndexKeyword(token, "on"));
+    if (on === -1) {
+      return [];
+    }
+    let named = 3;
+    if (isIndexKeyword(tokens[named], "concurrently")) {
+      named++;
+    }
+    named = skipExistenceClause(tokens, named);
+    const index =
+      named < on ? readIndexRelation(tokens, named)?.relation : undefined;
+    on += isIndexKeyword(tokens[on + 1], "only") ? 2 : 1;
+    const table = readIndexRelation(tokens, on);
+    return table
+      ? [
+          {
+            kind: "create-unique-index",
+            target: {
+              ...constraintTarget(table.relation, undefined),
+              name: index?.name ?? null,
+            },
+            references: expressionReferences(tokens.slice(table.next)),
+          },
+        ]
+      : [];
+  }
+
+  return [];
+};
+
+// Tables, views, types and columns a statement creates: contracting them later
+// in the same file changes nothing an older release could have used.
+const createdTargets = (statement: Statement): RollbackTarget[] => {
+  if (statement.deferred) {
+    return [];
+  }
+  const tokens = indexTokens(statement);
+  if (
+    isIndexKeyword(tokens[0], "alter") &&
+    isIndexKeyword(tokens[1], "table")
+  ) {
+    let cursor = skipExistenceClause(tokens, 2);
+    if (isIndexKeyword(tokens[cursor], "only")) {
+      cursor++;
+    }
+    const table = readIndexRelation(tokens, cursor);
+    if (!table) {
+      return [];
+    }
+    return splitAlterActions(tokens.slice(table.next)).flatMap((action) => {
+      const [verb, second] = action;
+      if (
+        !isIndexKeyword(verb, "add") ||
+        (second?.kind === "word" && ADD_CONSTRAINT_STARTS.has(second.value))
+      ) {
+        return [];
+      }
+      return columnTarget(
+        table.relation,
+        action[
+          skipExistenceClause(action, isIndexKeyword(second, "column") ? 2 : 1)
+        ],
+      );
+    });
+  }
+  if (!isIndexKeyword(tokens[0], "create")) {
+    return [];
+  }
+  let cursor = 1;
+  if (isIndexKeyword(tokens[cursor], "or")) {
+    cursor += 2;
+  }
+  if (isIndexKeyword(tokens[cursor], "materialized")) {
+    cursor++;
+  }
+  const keyword = tokens[cursor]?.value;
+  if (keyword !== "table" && keyword !== "view" && keyword !== "type") {
+    return [];
+  }
+  const read = readIndexRelation(
+    tokens,
+    skipExistenceClause(tokens, cursor + 1),
+  );
+  if (!read) {
+    return [];
+  }
+  return [
+    keyword === "type"
+      ? targetFor("drop-type", read.relation)
+      : relationTarget(read.relation),
+  ];
+};
+
+const isCreatedTarget = (
+  contract: RollbackContract,
+  created: ReadonlySet<string>,
+): boolean => {
+  const isCreated = (target: RollbackTarget) =>
+    created.has(rollbackTargetKey(target));
+  const { target } = contract;
+  switch (target.type) {
+    case "relation":
+    case "type": {
+      return isCreated(target);
+    }
+    case "column": {
+      return (
+        isCreated(target) ||
+        isCreated({
+          type: "relation",
+          schema: target.schema,
+          name: target.table,
+        })
+      );
+    }
+    case "constraint": {
+      if (
+        isCreated({
+          type: "relation",
+          schema: target.schema,
+          name: target.table,
+        })
+      ) {
+        return true;
+      }
+      const references =
+        contract.kind === "add-constraint" ||
+        contract.kind === "create-unique-index"
+          ? contract.references
+          : null;
+      return (
+        references !== null &&
+        references.length > 0 &&
+        references.every((column) =>
+          isCreated({
+            type: "column",
+            schema: target.schema,
+            table: target.table,
+            column,
+          }),
+        )
+      );
+    }
+    case "routine": {
+      return false;
+    }
+    default: {
+      target satisfies never;
+      return panic(`unhandled rollback target: ${JSON.stringify(target)}`);
+    }
+  }
+};
+
+// The tables and columns a `COMMENT ON ... IS 'stella:retired'` statement marks.
+const retiredTargetsIn = (statement: Statement): RollbackTarget[] => {
+  if (statement.deferred) {
+    return [];
+  }
+  const tokens = indexTokens(statement);
+  const [first, second, kind] = tokens.map(({ value }) => value);
+  if (
+    first !== "comment" ||
+    second !== "on" ||
+    !isRetiredSchemaComment(statement.literals.at(0)?.value ?? null)
+  ) {
+    return [];
+  }
+  const parts: string[] = [];
+  for (let position = 3; position < tokens.length; position += 2) {
+    const token = tokens[position];
+    if (!token || token.kind === "punctuation") {
+      break;
+    }
+    parts.push(token.value);
+    if (tokens[position + 1]?.value !== ".") {
+      break;
+    }
+  }
+  if (kind === "table" && (parts.length === 1 || parts.length === 2)) {
+    const [name, schema = "public"] = parts.toReversed();
+    return name === undefined ? [] : [{ type: "relation", schema, name }];
+  }
+  if (kind === "column" && (parts.length === 2 || parts.length === 3)) {
+    const [column, table, schema = "public"] = parts.toReversed();
+    return column === undefined || table === undefined
+      ? []
+      : [{ type: "column", schema, table, column }];
+  }
+  return [];
+};
+
+// A raw keyword check may over-select comments or literals, but never skips a
+// drop the retirement corpus could exempt.
+const DROP_KEYWORD_PATTERN = /\bDROP\b/iu;
+
+// The migration that first marks each retired object, keyed by target.
+type RetiredTargets = ReadonlyMap<string, string>;
+
+const collectRetiredTargets = (
+  sources: readonly MigrationIndexSource[],
+): RetiredTargets => {
+  const retired = new Map<string, string>();
+  for (const { file, source } of sources.toSorted((left, right) =>
+    compareCodeUnit(toRepoPath(left.file), toRepoPath(right.file)),
+  )) {
+    if (!source.includes(RETIRED_SCHEMA_COMMENT)) {
+      continue;
+    }
+    for (const statement of parseStatements(source)) {
+      for (const target of retiredTargetsIn(statement)) {
+        const key = rollbackTargetKey(target);
+        if (!retired.has(key)) {
+          retired.set(key, toRepoPath(file));
+        }
+      }
+    }
+  }
+  return retired;
+};
+
+// Dropping an object a strictly earlier migration retired is the contract step
+// of a split change; the runtime check proves that migration shipped in a
+// promoted release.
+const isRetiredEarlier = ({
+  contract: { kind, target },
+  file,
+  retired,
+}: {
+  contract: RollbackContract;
+  file: string;
+  retired: RetiredTargets;
+}): boolean => {
+  if (!RETIRED_DROP_KINDS.has(kind)) {
+    return false;
+  }
+  const keys = [rollbackTargetKey(target)];
+  if (target.type === "column") {
+    keys.push(
+      rollbackTargetKey({
+        type: "relation",
+        schema: target.schema,
+        name: target.table,
+      }),
+    );
+  }
+  const current = toRepoPath(file);
+  return keys.some((key) => {
+    const marking = retired.get(key);
+    return marking !== undefined && compareCodeUnit(marking, current) < 0;
+  });
+};
+
 const guardedRuleMatches = (rule: GuardedRule, statement: string): boolean =>
   rule.matches
     ? rule.matches(statement)
@@ -2109,12 +2894,21 @@ type FileCheckResult = {
   invariantFindings: Finding[];
   guardedFindings: (Finding & { category: GuardedCategory })[];
   acknowledgementErrors: Finding[];
+  /** Objects whose rollback contract this file acknowledges. */
+  acknowledgedRollbackTargets: RollbackTarget[];
 };
 
-const checkSource = (
-  { file, source }: MigrationIndexSource,
-  indexFindings: Finding[],
-): FileCheckResult => {
+type CheckSourceOptions = {
+  migration: MigrationIndexSource;
+  indexFindings: Finding[];
+  retired: RetiredTargets;
+};
+
+const checkSource = ({
+  migration: { file, source },
+  indexFindings,
+  retired,
+}: CheckSourceOptions): FileCheckResult => {
   const lines = source.split("\n");
   const statements = parseStatements(source);
 
@@ -2155,8 +2949,53 @@ const checkSource = (
     acknowledgements,
   );
   const guardedFindings: FileCheckResult["guardedFindings"] = [];
+  const acknowledgedRollbackTargets: RollbackTarget[] = [];
+  const created = new Set<string>();
 
   for (const [position, statement] of statements.entries()) {
+    // A column added by this statement is new to every older release, but
+    // adding it NOT NULL is the contract itself.
+    const createdHere = createdTargets(statement).map(rollbackTargetKey);
+    const createdWithHere = new Set([...created, ...createdHere]);
+    const reported = new Set<string>();
+    for (const contract of statementRollbackContracts(statement)) {
+      if (
+        isCreatedTarget(
+          contract,
+          contract.kind === "add-required-column" ? created : createdWithHere,
+        )
+      ) {
+        continue;
+      }
+      const acknowledgement = findAcknowledgement(
+        statement,
+        ROLLBACK_CONTRACT_RULE_ID,
+      );
+      if (acknowledgement) {
+        acknowledgement.usedRuleIds.add(ROLLBACK_CONTRACT_RULE_ID);
+        acknowledgedRollbackTargets.push(contract.target);
+        continue;
+      }
+      const findingKey = `${contract.kind}:${rollbackTargetKey(contract.target)}`;
+      if (
+        isRetiredEarlier({ contract, file, retired }) ||
+        reported.has(findingKey)
+      ) {
+        continue;
+      }
+      reported.add(findingKey);
+      guardedFindings.push({
+        file,
+        line: statement.line,
+        ruleId: ROLLBACK_CONTRACT_RULE_ID,
+        description: `${ROLLBACK_CONTRACT_DESCRIPTIONS[contract.kind]} ${formatRollbackTarget(contract.target)}, which an older release may still use`,
+        category: "rollback-compatibility",
+      });
+    }
+    for (const key of createdHere) {
+      created.add(key);
+    }
+
     // A deferred (stored-routine) statement executes nothing at migration
     // time, so no guarded rule applies to it.
     if (statement.deferred) {
@@ -2207,7 +3046,12 @@ const checkSource = (
     });
   }
 
-  return { invariantFindings, guardedFindings, acknowledgementErrors };
+  return {
+    invariantFindings,
+    guardedFindings,
+    acknowledgementErrors,
+    acknowledgedRollbackTargets,
+  };
 };
 
 const reportFindings = (findings: Finding[]) => {
@@ -2330,9 +3174,19 @@ export const checkMigrationSources = (
           entry.statementHash === finding.statementHash,
       ),
   );
+  const retired = collectRetiredTargets(
+    selectedSources.some(({ source }) => DROP_KEYWORD_PATTERN.test(source))
+      ? [
+          ...collectMigrationFiles(DEFAULT_MIGRATIONS_DIR)
+            .filter((file) => !selected.has(file))
+            .map((file) => ({ file, source: readFileSync(file, "utf-8") })),
+          ...selectedSources,
+        ]
+      : [],
+  );
   return selectedSources.map((migration) => ({
     file: migration.file,
-    ...checkSource(migration, indexFindings),
+    ...checkSource({ migration, indexFindings, retired }),
   }));
 };
 

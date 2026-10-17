@@ -416,7 +416,7 @@ describe("check-migration-safety", () => {
       );
       expectClean(
         runChecker(`
-          -- stella-migration-safety: reviewed drop-object - every caller was replaced above
+          -- stella-migration-safety: reviewed drop-object, rollback-contract - every caller was replaced above
           DROP FUNCTION "documents_is_live"(jsonb);
         `),
       );
@@ -531,7 +531,7 @@ describe("check-migration-safety", () => {
     it("clears several rules on one statement", () => {
       expectClean(
         runChecker(`
-          -- stella-migration-safety: reviewed drop-column, disable-trigger - column unused
+          -- stella-migration-safety: reviewed drop-column, disable-trigger, rollback-contract - column unused
           -- since v0.7; trigger re-enabled in the next statement after the rewrite
           ALTER TABLE "documents" DROP COLUMN "legacy_status", DISABLE TRIGGER ALL;
           ALTER TABLE "documents" ENABLE TRIGGER ALL;
@@ -579,7 +579,7 @@ describe("check-migration-safety", () => {
     it("counts a multi-line reason", () => {
       expectClean(
         runChecker(`
-          -- stella-migration-safety: reviewed drop-object - see
+          -- stella-migration-safety: reviewed drop-object, rollback-contract - see
           -- the replacement table created in the previous migration
           DROP TABLE "documents_old";
         `),
@@ -1011,6 +1011,245 @@ describe("check-migration-safety", () => {
           $$ LANGUAGE plpgsql;
         `),
       );
+    });
+  });
+
+  describe("rollback-contract", () => {
+    const rollbackFindings = (sql: string) =>
+      findingsIn(sql).filter(({ ruleId }) => ruleId === "rollback-contract");
+
+    it.each([
+      [`DROP TABLE "documents";`, "drops table or view public.documents"],
+      [
+        `DROP MATERIALIZED VIEW IF EXISTS "document_stats";`,
+        "public.document_stats",
+      ],
+      [
+        `ALTER TABLE "documents" DROP COLUMN "legacy";`,
+        "drops column public.documents.legacy",
+      ],
+      [
+        `ALTER TABLE "documents" RENAME COLUMN "title" TO "name";`,
+        "renames column public.documents.title",
+      ],
+      [
+        `ALTER TABLE "documents" RENAME TO "files";`,
+        "renames table or view public.documents",
+      ],
+      [
+        `ALTER TABLE "documents" ALTER COLUMN "size" TYPE bigint;`,
+        "changes the type of column public.documents.size",
+      ],
+      [
+        `ALTER TABLE "documents" ALTER COLUMN "title" SET NOT NULL;`,
+        "makes NOT NULL column public.documents.title",
+      ],
+      [
+        `ALTER TABLE "documents" ALTER COLUMN "status" DROP DEFAULT;`,
+        "drops the default of column public.documents.status",
+      ],
+      [
+        `ALTER TABLE "documents" ADD COLUMN "owner_id" text NOT NULL;`,
+        "adds a NOT NULL column without a default: public.documents.owner_id",
+      ],
+      [
+        `ALTER TABLE "documents" ADD CONSTRAINT "documents_status_check" CHECK ("status" IN ('draft')) NOT VALID;`,
+        "adds constraint documents_status_check on public.documents",
+      ],
+      [
+        `CREATE UNIQUE INDEX CONCURRENTLY "documents_title_key" ON "documents" ("title");`,
+        "adds unique index documents_title_key on public.documents",
+      ],
+      [`DROP TYPE "document_status";`, "drops type public.document_status"],
+      [
+        `ALTER TYPE "document_status" RENAME VALUE 'draft' TO 'pending';`,
+        "renames a value of enum public.document_status",
+      ],
+      [
+        `DROP FUNCTION "documents_is_live"(jsonb);`,
+        "drops routine public.documents_is_live",
+      ],
+      [
+        `ALTER FUNCTION "documents_is_live"(jsonb) RENAME TO "documents_live";`,
+        "renames routine public.documents_is_live",
+      ],
+    ])("flags %s", (sql, description) => {
+      expect(
+        rollbackFindings(sql).map((finding) => finding.description),
+      ).toEqual([expect.stringContaining(description)]);
+    });
+
+    it("leaves expand-only statements alone", () => {
+      expect(
+        rollbackFindings(`
+          ALTER TABLE "documents" ADD COLUMN "note" text;
+          ALTER TABLE "documents" ADD COLUMN "rank" integer DEFAULT 0 NOT NULL;
+          ALTER TABLE "documents" ADD COLUMN "seq" bigint GENERATED ALWAYS AS IDENTITY;
+          ALTER TABLE "documents" ADD COLUMN "legacy_id" bigserial NOT NULL;
+          ALTER TABLE "documents" ALTER COLUMN "title" DROP NOT NULL;
+          ALTER TABLE "documents" ALTER COLUMN "status" SET DEFAULT 'draft';
+          ALTER TABLE "documents" DROP CONSTRAINT "documents_status_check";
+          ALTER TABLE "documents" RENAME CONSTRAINT "a" TO "b";
+          ALTER TYPE "document_status" ADD VALUE 'archived';
+          DROP INDEX CONCURRENTLY "documents_title_idx";
+          CREATE INDEX CONCURRENTLY "documents_note_idx" ON "documents" ("note");
+          -- DROP TABLE "documents";
+          SELECT 'DROP TABLE documents';
+        `),
+      ).toEqual([]);
+    });
+
+    it("ignores contracts on objects this migration creates", () => {
+      expect(
+        rollbackFindings(`
+          CREATE TABLE "drafts" ("id" text PRIMARY KEY, "title" text);
+          ALTER TABLE "drafts" ALTER COLUMN "title" SET NOT NULL;
+          ALTER TABLE "drafts" ADD CONSTRAINT "drafts_title_check" CHECK ("title" <> '');
+          CREATE UNIQUE INDEX "drafts_title_key" ON "drafts" ("title");
+          ALTER TABLE "documents"
+            ADD COLUMN "draft_id" text,
+            ADD CONSTRAINT "documents_draft_fk" FOREIGN KEY ("draft_id") REFERENCES "drafts"("id") NOT VALID;
+          ALTER TABLE "documents" ADD CONSTRAINT "documents_draft_check" CHECK ("draft_id" IS NULL OR length("draft_id") > 0);
+          CREATE UNIQUE INDEX "documents_draft_key" ON "documents" USING btree ("draft_id") WHERE "draft_id" IS NOT NULL;
+          CREATE TYPE "draft_status" AS ENUM ('open');
+          ALTER TYPE "draft_status" RENAME VALUE 'open' TO 'pending';
+        `),
+      ).toEqual([]);
+    });
+
+    it("still flags a constraint that also reads an existing column", () => {
+      expect(
+        rollbackFindings(`
+          ALTER TABLE "documents" ADD COLUMN "archived_at" timestamptz;
+          ALTER TABLE "documents" ADD CONSTRAINT "documents_archive_check"
+            CHECK ("archived_at" IS NULL OR "status" = 'archived') NOT VALID;
+        `).map((finding) => finding.line),
+      ).toEqual([6]);
+    });
+
+    it("still flags adding a column NOT NULL without a default", () => {
+      expect(
+        rollbackFindings(
+          `ALTER TABLE "documents" ADD COLUMN "owner_id" text NOT NULL, ADD CONSTRAINT "documents_owner_check" CHECK ("owner_id" <> '');`,
+        ).map((finding) => finding.description),
+      ).toEqual([expect.stringContaining("public.documents.owner_id")]);
+    });
+
+    it("reports the objects an acknowledgement covers", () => {
+      const [result] = checkMigrationSources([
+        {
+          file: PROPERTY_MIGRATION,
+          source: `${TIMEOUTS}
+            -- stella-migration-safety: reviewed drop-column, rollback-contract - no release since v0.9.0 declares either column
+            ALTER TABLE "public"."documents" DROP COLUMN "legacy", DROP COLUMN IF EXISTS "legacy_note";
+          `,
+        },
+      ]);
+
+      expect(result?.guardedFindings).toEqual([]);
+      expect(result?.acknowledgementErrors).toEqual([]);
+      expect(result?.acknowledgedRollbackTargets).toEqual([
+        {
+          type: "column",
+          schema: "public",
+          table: "documents",
+          column: "legacy",
+        },
+        {
+          type: "column",
+          schema: "public",
+          table: "documents",
+          column: "legacy_note",
+        },
+      ]);
+    });
+
+    it("rejects an acknowledgement on a statement that contracts nothing", () => {
+      expectFinding(
+        runChecker(`
+          -- stella-migration-safety: reviewed rollback-contract - adds a nullable column only
+          ALTER TABLE "documents" ADD COLUMN "note" text;
+        `),
+        "unused-acknowledgement",
+      );
+    });
+
+    describe("retired objects", () => {
+      const retire = `${TIMEOUTS}
+        COMMENT ON COLUMN "documents"."legacy" IS 'stella:retired';
+        COMMENT ON TABLE "public"."drafts" IS 'stella:retired - replaced by documents';
+      `;
+      const contract = `${TIMEOUTS}
+        -- stella-migration-safety: reviewed drop-column - retired by the previous release
+        ALTER TABLE "documents" DROP COLUMN "legacy";
+        -- stella-migration-safety: reviewed drop-object - retired by the previous release
+        DROP TABLE "drafts";
+      `;
+      const findingsFor = (sources: { file: string; source: string }[]) =>
+        checkMigrationSources(sources).flatMap(({ file, guardedFindings }) =>
+          guardedFindings.map(
+            ({ ruleId, line }) => `${file}:${line} ${ruleId}`,
+          ),
+        );
+
+      it("accepts dropping what an earlier migration retired", () => {
+        expect(
+          findingsFor([
+            {
+              file: "apps/api/drizzle/29990101000000_retire/migration.sql",
+              source: retire,
+            },
+            {
+              file: "apps/api/drizzle/29990102000000_contract/migration.sql",
+              source: contract,
+            },
+          ]),
+        ).toEqual([]);
+      });
+
+      it("flags dropping what the same or a later migration retires", () => {
+        expect(
+          findingsFor([
+            {
+              file: "apps/api/drizzle/29990102000000_retire/migration.sql",
+              source: retire,
+            },
+            {
+              file: "apps/api/drizzle/29990101000000_contract/migration.sql",
+              source: contract,
+            },
+          ]),
+        ).toEqual([
+          "apps/api/drizzle/29990101000000_contract/migration.sql:6 rollback-contract",
+          "apps/api/drizzle/29990101000000_contract/migration.sql:8 rollback-contract",
+        ]);
+        expect(
+          findingsFor([
+            {
+              file: "apps/api/drizzle/29990101000000_both/migration.sql",
+              source: `${retire}${contract.replace(TIMEOUTS, "")}`,
+            },
+          ]),
+        ).toHaveLength(2);
+      });
+
+      it("still requires renaming a retired column to be reviewed", () => {
+        expect(
+          findingsFor([
+            {
+              file: "apps/api/drizzle/29990101000000_retire/migration.sql",
+              source: retire,
+            },
+            {
+              file: "apps/api/drizzle/29990102000000_rename/migration.sql",
+              source: `${TIMEOUTS}ALTER TABLE "documents" RENAME COLUMN "legacy" TO "old";`,
+            },
+          ]),
+        ).toEqual([
+          "apps/api/drizzle/29990102000000_rename/migration.sql:4 rollback-contract",
+          "apps/api/drizzle/29990102000000_rename/migration.sql:4 rename-table-or-column",
+        ]);
+      });
     });
   });
 });
