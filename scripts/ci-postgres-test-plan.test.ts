@@ -10,7 +10,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import packageJson from "../apps/api/package.json" with { type: "json" };
-import { listApiTestPaths } from "../apps/api/scripts/api-test-plan";
+import {
+  listApiTestPaths,
+  TEST_ROOTS,
+} from "../apps/api/scripts/api-test-plan";
 import { parseGatedTestSelection } from "../apps/api/scripts/gated-test-selection";
 import { discoverGatedTestFiles } from "../apps/api/scripts/run-gated-tests";
 import { API_ALL_RULES } from "./api-test-impact";
@@ -20,6 +23,7 @@ import {
 } from "./ci-postgres-test-plan";
 
 const POSTGRES_GATE = "STELLA_RUN_POSTGRES_TESTS";
+const API_TEST_FILE_GLOB = `{${TEST_ROOTS.join(",")}}/**/*.test.{ts,tsx}`;
 const apiRoot = path.resolve(import.meta.dir, "../apps/api");
 
 const withRepository = async (
@@ -52,7 +56,7 @@ const withRepository = async (
         ciGateTestRunners: {
           "test:postgres": {
             gate: POSTGRES_GATE,
-            testFileGlob: "src/**/*.test.ts",
+            testFileGlob: API_TEST_FILE_GLOB,
           },
         },
       }),
@@ -309,7 +313,7 @@ test("Postgres discovery rejects missing and stale entries with named diagnostic
   );
 });
 
-test("a new gated test outside the runner glob cannot turn into none affected", async () => {
+test("API eval Postgres suites stay discoverable and mismatches widen", async () => {
   await withRepository(async (root, write) => {
     write("apps/api/src/feature/db.test.ts", gateSource('import "./entry";'));
     write("apps/api/src/feature/entry.ts", "export const value = true;");
@@ -330,9 +334,25 @@ test("a new gated test outside the runner glob cannot turn into none affected", 
     const discovered = await discoverGatedTestFiles({
       apiRoot: path.join(root, "apps/api"),
       gate: POSTGRES_GATE,
-      testFileGlob: "src/**/*.test.ts",
+      testFileGlob: API_TEST_FILE_GLOB,
     });
-    expect(discovered).not.toContain("evals/new.db.test.ts");
+    expect(discovered).toContain("evals/new.db.test.ts");
+    expect(await planPostgresTests(input)).toEqual({
+      mode: "selected",
+      files: ["src/feature/db.test.ts"],
+    });
+
+    write(
+      "apps/api/package.json",
+      JSON.stringify({
+        ciGateTestRunners: {
+          "test:postgres": {
+            gate: POSTGRES_GATE,
+            testFileGlob: "src/**/*.test.ts",
+          },
+        },
+      }),
+    );
     expect(await planPostgresTests(input)).toEqual({ mode: "all" });
   });
 });

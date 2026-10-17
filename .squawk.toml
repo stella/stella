@@ -18,6 +18,7 @@ excluded_rules = [
   "ban-drop-column",
   "ban-drop-table",
   "ban-drop-database",
+  "ban-drop-function",
   "renaming-column",
   "renaming-table",
   "ban-truncate-cascade",
