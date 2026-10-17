@@ -125,7 +125,7 @@ export const compactMessagesForContext = async ({
       workspaceId,
     },
     feature: "chat.context_compaction",
-    modelRole: "chat",
+    modelTask: "chat",
     orgAIConfig,
     modelTier: admission.modelTier,
     properties: {

@@ -290,7 +290,7 @@ import { brandPersistedChatMessageId } from "@/api/lib/safe-id-boundaries";
 import { extractFileTextResult } from "@/api/lib/search/extract-content";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 import {
-  requireTanStackAIAvailableForRole,
+  requireTanStackAIAvailableForTask,
   validateTanStackDevModelOverride,
 } from "@/api/lib/tanstack-ai-models";
 import type { UsageLaneDecision } from "@/api/lib/usage/lane-routing";
@@ -2236,11 +2236,11 @@ export const createSendMessage = (
         );
       }
 
-      yield* requireTanStackAIAvailableForRole({
+      yield* requireTanStackAIAvailableForTask({
         dataClass: "customer",
         configStatus: orgAIConfigStatus,
         orgConfig: orgAIConfig,
-        role: "chat",
+        task: "chat",
       });
 
       const hasEnvelopeCorrelationMismatch = (): boolean =>

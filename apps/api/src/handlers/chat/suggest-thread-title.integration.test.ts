@@ -10,7 +10,7 @@ import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
-import type { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
+import type { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -23,10 +23,10 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 const generateTextMock = mock(async () => '"Title: Drafting an NDA"');
 // SAFETY: The test fake ignores request details and returns a fixture title.
 const generateTextForTest =
-  generateTextMock as typeof generateTanStackTextForRole;
+  generateTextMock as typeof generateTanStackTextForTask;
 const { createSuggestThreadTitle } = await import("./suggest-thread-title");
 const suggestThreadTitle = createSuggestThreadTitle({
-  generateTextForRole: generateTextForTest,
+  generateTextForTask: generateTextForTest,
 });
 type SuggestCtx = Parameters<typeof suggestThreadTitle.handler>[0];
 

@@ -6,6 +6,8 @@ import { useTranslations } from "use-intl";
 
 import {
   getProviderValues,
+  projectDefaultRoleModels,
+  projectProviderDefaultRoleModels,
   providerDraftsFromStoredProviders,
   roleOverridesFromStoredModels,
   serializeDecisionModel,
@@ -24,6 +26,7 @@ import { invalidateAIConfigurationCaches } from "@/lib/organization/ai-config-ca
 import {
   aiAvailabilityOptions,
   aiConfigKeys,
+  aiDefaultsPreviewOptions,
   updateCachedAIAvailability,
 } from "@/lib/organization/ai-config-queries";
 import type { OrganizationAIConfig } from "@/lib/organization/ai-config-queries";
@@ -32,6 +35,7 @@ import { useAISettingsKeys } from "../../-hooks/use-ai-settings-keys";
 import { useAISettingsToggles } from "../../-hooks/use-ai-settings-toggles";
 import { useSettingsMutation } from "../../-hooks/use-settings-mutation";
 import { canSaveAIConfig, hasAIConfigEdits } from "./ai-config-form.logic";
+import { useAIConfigDefaults } from "./use-ai-config-defaults";
 import { useAIConfigDrafts } from "./use-ai-config-drafts";
 
 export type AIConfigReadState =
@@ -47,6 +51,14 @@ type PersistAIConfigOptions = {
   nextProviders: ProviderCredentialDraft[];
   nextRoles: RoleModelOverrides;
 };
+
+const AI_CONFIG_MUTATION_OPTIONS = {
+  exceptionScope: {
+    type: "handler",
+    handlerId: "useAIConfigForm.aiMutation.useSettingsMutation",
+  },
+  invalidate: aiConfigKeys.all,
+} as const;
 
 /**
  * Sole owner of the AI settings page's edit, dirty and save model: the
@@ -83,6 +95,13 @@ export const useAIConfigForm = ({
     setFeedback,
     ...handlers
   } = useAIConfigDrafts({ config, isReady: readState.status === "ready" });
+
+  const { defaultModels, providerDefaultModels, defaultsView } =
+    useAIConfigDefaults({
+      config,
+      organizationId,
+      providers: getProviderValues(providers),
+    });
 
   const hasAIEdits = hasAIConfigEdits({
     providers,
@@ -152,6 +171,18 @@ export const useAIConfigForm = ({
       ...(decision === undefined ? {} : { decision }),
     });
     const data = unwrapEden(response);
+    queryClient.setQueryData(
+      aiDefaultsPreviewOptions({
+        organizationId,
+        providers: getProviderValues(nextProviders),
+      }).queryKey,
+      {
+        defaultModels: projectDefaultRoleModels(data.defaultModels),
+        providerDefaultModels: projectProviderDefaultRoleModels(
+          data.providerDefaultModels,
+        ),
+      },
+    );
     const saved = providerDraftsFromStoredProviders(data.providers);
     setStoredProviders(saved);
     const savedOverrides = roleOverridesFromStoredModels({
@@ -167,11 +198,7 @@ export const useAIConfigForm = ({
   };
 
   const aiMutation = useSettingsMutation({
-    exceptionScope: {
-      type: "handler",
-      handlerId: "useAIConfigForm.aiMutation.useSettingsMutation",
-    },
-    invalidate: aiConfigKeys.all,
+    ...AI_CONFIG_MUTATION_OPTIONS,
     mutationFn: async () => {
       if (providers.length === 0 || recoveryAction === "remove") {
         unwrapEden(await api["organization-settings"]["ai-config"].delete({}));
@@ -236,6 +263,9 @@ export const useAIConfigForm = ({
     providers,
     storedProviders,
     roleModels,
+    defaultModels,
+    providerDefaultModels,
+    defaultsView,
     decisionState,
     storedDecision,
     recoveryAction,

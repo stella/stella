@@ -15,6 +15,8 @@ import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
 import { hasInstanceDecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 
+import { resolveAIConfigDefaults } from "./ai-config-defaults";
+
 type AIConfigResult = {
   /**
    * Whether the backend has any platform-provisioned AI keys
@@ -29,22 +31,23 @@ type AIConfigResult = {
    * caller takes its generative or rule-based path.
    */
   decisionInstanceProvisioned: boolean;
-} & (
-  | { configured: false }
-  | {
-      configured: true;
-      providers: {
-        provider: OrgAIConfig["providers"][number]["provider"];
-        apiKeyMasked: string;
-        anthropicWorkspaceId?: string | undefined;
-        endpoint?: string | undefined;
-        apiVersion?: string | undefined;
-        region: DataRegion;
-      }[];
-      overrideModels: OrgAIConfig["overrideModels"];
-      decision: ReturnType<typeof decisionModelResponse>;
-    }
-);
+} & ReturnType<typeof resolveAIConfigDefaults> &
+  (
+    | { configured: false }
+    | {
+        configured: true;
+        providers: {
+          provider: OrgAIConfig["providers"][number]["provider"];
+          apiKeyMasked: string;
+          anthropicWorkspaceId?: string | undefined;
+          endpoint?: string | undefined;
+          apiVersion?: string | undefined;
+          region: DataRegion;
+        }[];
+        overrideModels: OrgAIConfig["overrideModels"];
+        decision: ReturnType<typeof decisionModelResponse>;
+      }
+  );
 
 const config = {
   contract: "patch",
@@ -82,6 +85,7 @@ const readAIConfig = createSafeRootHandler(
     const decisionInstanceProvisioned = hasInstanceDecisionModel("customer");
 
     let result: AIConfigResult = {
+      ...resolveAIConfigDefaults([]),
       configured: false,
       instanceProvisioned,
       decisionInstanceProvisioned,
@@ -108,6 +112,9 @@ const readAIConfig = createSafeRootHandler(
 
       const aiConfig = decryptResult.value;
       result = {
+        ...resolveAIConfigDefaults(
+          aiConfig.providers.map(({ provider }) => provider),
+        ),
         configured: true,
         providers: aiConfig.providers.map((providerConfig) => ({
           provider: providerConfig.provider,

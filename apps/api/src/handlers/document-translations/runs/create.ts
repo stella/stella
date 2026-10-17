@@ -204,7 +204,7 @@ export const createDocumentTranslationRunHandler = ({
       const authorization = await authorizeUsage({
         metering:
           body.engine === DOCUMENT_TRANSLATION_ENGINE.AI
-            ? { actionType: "doc_review", modelRole: "chat" }
+            ? { actionType: "doc_review", modelTask: "chat" }
             : null,
         organizationId,
         orgAIConfig,

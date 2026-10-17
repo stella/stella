@@ -47,7 +47,7 @@ const config = {
   mcp: { type: "internal", reason: "document_processing" },
   params: workspaceParams({}),
   body: createBilingualRunBodySchema,
-  requiresUsage: { actionType: "doc_review", modelRole: "chat" },
+  requiresUsage: { actionType: "doc_review", modelTask: "chat" },
 } satisfies WorkspaceHandlerConfig;
 
 const createBilingualRun = createSafeHandler(

@@ -42,7 +42,7 @@ export type CaseLawResearchColumnContent = AiExtractablePropertyContent;
 
 export const defaultResearchColumnTool = (): CaseLawResearchColumnTool => ({
   version: 1,
-  role: "fast",
+  task: "short-text",
 });
 
 export type ResearchQuestion = {

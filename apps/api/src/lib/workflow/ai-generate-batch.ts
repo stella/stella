@@ -20,7 +20,7 @@ import { splitPropertiesForBudget } from "@/api/lib/structured-output-budget";
 import { markTanStackCacheBreakpoint } from "@/api/lib/tanstack-ai-caching";
 import {
   resolveTanStackTextModel,
-  streamTanStackObjectForRole,
+  streamTanStackObjectForTask,
   structuredOutputWireJsonSchema,
 } from "@/api/lib/tanstack-ai-generate";
 import { isMockTextAdapter } from "@/api/lib/tanstack-ai-models";
@@ -155,7 +155,7 @@ export const buildWorkflowAIAnalyticsProps = ({
 }: BuildWorkflowAIAnalyticsPropsInput): WorkflowAIAnalyticsProps => ({
   dataClass: "customer" as const,
   feature: "workflow.generate-batch",
-  modelRole: "pdf",
+  modelTask: "pdf",
   orgAIConfig,
   properties: {
     entity_version_id: entityVersionId,
@@ -325,7 +325,7 @@ export const generateWorkflowData = async ({
 > => {
   const cachingDecision = resolveCaching({
     promptCachingEnabled,
-    role: "pdf",
+    task: "pdf",
     scopeKey: entityVersionId,
   });
 
@@ -402,7 +402,7 @@ export const generateWorkflowData = async ({
   const typedPhase = await askSystemOne({
     generation: (plannedProperties) => ({
       dataClass: "customer",
-      role: "pdf",
+      task: "pdf",
       resolveTextModel,
       orgAIConfig,
       managedAIResidency,
@@ -463,7 +463,7 @@ export const generateWorkflowData = async ({
       await (resolveTextModel ?? resolveTanStackTextModel)({
         dataClass: "customer",
         managedAIResidency,
-        role: "pdf",
+        task: "pdf",
         orgAIConfig,
         organizationId,
         admission,
@@ -536,9 +536,9 @@ export const generateWorkflowData = async ({
 
     return await Result.tryPromise({
       try: async () => {
-        const stream = streamTanStackObjectForRole({
+        const stream = streamTanStackObjectForTask({
           dataClass: "customer",
-          role: "pdf",
+          task: "pdf",
           resolveTextModel,
           orgAIConfig,
           managedAIResidency,

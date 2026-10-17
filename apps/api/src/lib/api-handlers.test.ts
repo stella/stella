@@ -41,7 +41,7 @@ import {
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
-import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
+import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
 import {
   instanceWireErrorModel,
   providerCallErrorCassettes,
@@ -205,7 +205,7 @@ describe("createSafeRootHandler usage preflight", () => {
       const context = resolveMeteringContext({
         metering: {
           actionType: "chat",
-          modelRole: "fast",
+          modelTask: "short-text",
           serviceTier: "flex",
         },
         organizationId: toSafeId<"organization">(
@@ -317,7 +317,7 @@ describe("createSafeRootHandler usage preflight", () => {
           permissions: { workspace: ["read"] },
           accountAccess: ACCOUNT_ACCESS.sandbox,
           mcp: { type: "internal", reason: "health_infra" },
-          requiresUsage: { actionType: "chat", modelRole: "fast" },
+          requiresUsage: { actionType: "chat", modelTask: "short-text" },
         },
         async function* () {
           meteredHandlerCalled = true;
@@ -1041,7 +1041,7 @@ describe("authorizeHandlerRunSize", () => {
   const userId = toSafeId<"user">("019e7000-0000-7000-8000-000000000001");
 
   const baseInput = {
-    metering: { actionType: "doc_review", modelRole: "pdf" },
+    metering: { actionType: "doc_review", modelTask: "pdf" },
     organizationId,
     orgAIConfig: null,
     workspaceId: null,
@@ -1215,13 +1215,13 @@ describe("provider failure HTTP response", () => {
           },
           async function* () {
             const generated = await Result.tryPromise(async () =>
-              generateTanStackTextForRole({
+              generateTanStackTextForTask({
                 tenantWorkspaceIds: [],
                 caching: { enabled: false, reason: "org-disabled" },
                 serviceTier: "standard",
                 orgAIConfig: null,
                 dataClass: "public_corpus",
-                role: "chat",
+                task: "chat",
                 organizationId: null,
                 admission: NO_ORGANIZATION_MODEL_DISPATCH,
                 prompt: "Draft a memo",

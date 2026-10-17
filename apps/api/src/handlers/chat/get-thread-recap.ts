@@ -28,7 +28,7 @@ import { THREAD_STORED_CONTENT_SEND_MODE } from "@/api/lib/chat/thread-stored-co
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
-import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
+import { requireTanStackAIAvailableForTask } from "@/api/lib/tanstack-ai-models";
 
 type CacheThreadRecapOptions = {
   tx: Transaction;
@@ -95,11 +95,11 @@ const getThreadRecap = createSafeRootHandler(config, async function* (ctx) {
   // return no recap rather than blocking the thread view.
   if (
     Result.isError(
-      requireTanStackAIAvailableForRole({
+      requireTanStackAIAvailableForTask({
         dataClass: "customer",
         configStatus: orgAIConfigStatus,
         orgConfig: orgAIConfig,
-        role: "fast",
+        task: "short-text",
       }),
     )
   ) {

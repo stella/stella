@@ -12,17 +12,13 @@ import {
 import { stellaToast } from "@stll/ui/toast";
 
 import {
-  createDefaultRoleModels,
   createProviderCredentialDraft,
-  getProviderValues,
   hasUsableProviderDrafts,
-  serializeOverrideModels,
   serializeProviderDrafts,
 } from "@/components/ai-config-role-models.logic";
 import type {
   ProviderCredentialDraft,
   ProviderPreview,
-  RoleModelSelections,
 } from "@/components/ai-config-role-models.logic";
 import { LanguagePicker } from "@/components/language-picker";
 import { ThemePicker } from "@/components/theme-picker";
@@ -89,7 +85,6 @@ type WizardData = {
   catalogueSlugs: string[];
   emails: string[];
   aiProviders: ProviderCredentialDraft[];
-  aiRoleModels: RoleModelSelections;
 };
 
 const TOTAL_STEPS = 6;
@@ -142,7 +137,6 @@ export const OnboardingWizard = () => {
     catalogueSlugs: [],
     emails: [],
     aiProviders: [createProviderCredentialDraft()],
-    aiRoleModels: createDefaultRoleModels(),
   }));
   const suggestedCountryCodes = getSuggestedCountryCodes({
     email: userEmail,
@@ -403,21 +397,12 @@ export const OnboardingWizard = () => {
         }
 
         // Phase 2: Save AI config (BYOK) if user provided one
-        const aiProviderValues = getProviderValues(finalData.aiProviders);
-        const aiOverrideModels = serializeOverrideModels({
-          providers: aiProviderValues,
-          roleModels: finalData.aiRoleModels,
-        });
-
-        if (
-          hasUsableProviderDrafts(finalData.aiProviders) &&
-          aiOverrideModels !== null
-        ) {
+        if (hasUsableProviderDrafts(finalData.aiProviders)) {
           const { error: aiConfigError } = await api["organization-settings"][
             "ai-config"
           ].post({
             providers: serializeProviderDrafts(finalData.aiProviders),
-            overrideModels: aiOverrideModels,
+            overrideModels: null,
           });
 
           if (aiConfigError) {
@@ -697,14 +682,10 @@ export const OnboardingWizard = () => {
             onProvidersChange={(aiProviders) => {
               setData((d) => ({ ...d, aiProviders }));
             }}
-            onRoleModelsChange={(aiRoleModels) => {
-              setData((d) => ({ ...d, aiRoleModels }));
-            }}
             onSkip={() => {
               setData((d) => ({
                 ...d,
                 aiProviders: [createProviderCredentialDraft()],
-                aiRoleModels: createDefaultRoleModels(),
               }));
               setPreviewAiProviders([]);
               setStep("invite");

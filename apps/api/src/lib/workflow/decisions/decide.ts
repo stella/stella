@@ -17,7 +17,7 @@ import { sanitizeForPrompt, untrustedText } from "@/api/lib/prompt-safety";
 import { admittedDispatchSignal } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { splitPropertiesForBudget } from "@/api/lib/structured-output-budget";
 import {
-  generateTanStackObjectForRole,
+  generateTanStackObjectForTask,
   resolveTanStackTextModel,
   structuredOutputWireJsonSchema,
   withGenerationDeadline,
@@ -105,7 +105,7 @@ type DecisionGenerationOptionsFor<TOptions> = TOptions extends unknown
   : never;
 
 export type DecisionGenerationOptions = DecisionGenerationOptionsFor<
-  Parameters<typeof generateTanStackObjectForRole>[0]
+  Parameters<typeof generateTanStackObjectForTask>[0]
 >;
 
 export type DecisionGenerationRequest = {
@@ -467,7 +467,7 @@ const generateDecisionChunk = async ({
 }: GenerateDecisionChunkOptions) => {
   const { prompt, messages, evidenceInstruction, ...runtime } = generation;
   const options = { ...runtime, orgAIConfig };
-  return await generateTanStackObjectForRole({
+  return await generateTanStackObjectForTask({
     ...options,
     resolveTextModel: () => model,
     analytics: {

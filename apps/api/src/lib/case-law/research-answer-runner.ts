@@ -85,8 +85,8 @@ import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
-import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
-import { getTanStackTextModelInfoForRole } from "@/api/lib/tanstack-ai-models";
+import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
+import { getTanStackTextModelInfoForTask } from "@/api/lib/tanstack-ai-models";
 import {
   decodeSystemOneAnswers,
   planSystemOneAnswers,
@@ -393,7 +393,7 @@ const answerDecision = async (
   const analyticsOptions = {
     dataClass: "customer",
     feature: "case-law.research-answers",
-    modelRole: "fast",
+    modelTask: "short-text",
     organizationId: input.organizationId,
     orgAIConfig: input.orgAIConfig,
     modelTier: input.admission.modelTier,
@@ -418,7 +418,7 @@ const answerDecision = async (
   const tier = await answerWithSystemOne({
     generation: (prompt, questionCount) => ({
       dataClass: "customer",
-      role: "fast",
+      task: "short-text",
       serviceTier: "standard",
       orgAIConfig: input.orgAIConfig,
       managedAIResidency: input.managedAIResidency,
@@ -434,7 +434,7 @@ const answerDecision = async (
       }),
       caching: resolveCaching({
         promptCachingEnabled: input.promptCachingEnabled,
-        role: "fast",
+        task: "short-text",
         scopeKey: decisionId,
       }),
       system: RESEARCH_SYSTEM_PROMPT,
@@ -473,8 +473,8 @@ const answerDecision = async (
 
   const generated = await Result.tryPromise({
     try: async () => {
-      const { modelId } = getTanStackTextModelInfoForRole(
-        "fast",
+      const { modelId } = getTanStackTextModelInfoForTask(
+        "short-text",
         input.orgAIConfig,
         {
           dataClass: "customer",
@@ -482,9 +482,9 @@ const answerDecision = async (
           modelTier: input.admission.modelTier,
         },
       );
-      const output = await generateTanStackObjectForRole({
+      const output = await generateTanStackObjectForTask({
         dataClass: "customer",
-        role: "fast",
+        task: "short-text",
         serviceTier: "standard",
         orgAIConfig: input.orgAIConfig,
         managedAIResidency: input.managedAIResidency,
@@ -495,7 +495,7 @@ const answerDecision = async (
         analytics: aiAnalytics,
         caching: resolveCaching({
           promptCachingEnabled: input.promptCachingEnabled,
-          role: "fast",
+          task: "short-text",
           scopeKey: decisionId,
         }),
         system: RESEARCH_SYSTEM_PROMPT,
