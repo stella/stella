@@ -172,6 +172,7 @@ export const SEARCH_CASE_LAW_PROJECTION = v.union([
                 ...CASE_LAW_SEARCH_WARNING_CODES,
                 ...AGENT_CASE_LAW_SEARCH_WARNING_CODES,
               ]),
+              audience: v.picklist(["agent", "user"]),
               message: v.string(),
               hint: v.string(),
             }),
