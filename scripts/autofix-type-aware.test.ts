@@ -129,6 +129,7 @@ test.each(cases)(
         `#!/bin/bash
 if [[ "$1" == scripts/ci-generated-sources.ts && "$2" == prepare ]]; then touch prepared; exit "$PREPARE_EXIT"; fi
 if [[ "$1" == run && "$2" == format:guard ]]; then exit 0; fi
+if [[ "$1" == run && "$2" == lint:tailwind:warm ]]; then touch tailwind_warmed; exit 0; fi
 if [[ "$1" == scripts/autofix-plan.ts && "$2" == run ]]; then cp changed.ts generated.html.txt; exit 0; fi
 if [[ "$2" == oxlint && ! -f prepared ]]; then exit 2; fi
 if [[ "$1" == scripts/typecheck-coverage.ts && "$2" == --autofix ]]; then touch compiler_checked; printf '%s\\n' "$@" > compiler_args; fi
@@ -201,6 +202,10 @@ exec '${process.execPath}' "$@"
         }
       }
       expect(existsSync(path.join(root, "compiler_checked"))).toBe(
+        failure !== "prepare",
+      );
+      // The lint fixer reads the design systems the warm-up caches.
+      expect(existsSync(path.join(root, "tailwind_warmed"))).toBe(
         failure !== "prepare",
       );
       if (failure !== "prepare") {
