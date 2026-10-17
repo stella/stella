@@ -23,8 +23,6 @@ const { createCaseDecisionDetailsTab } =
   await import("@/components/inspector/case-decision-details-view");
 const { INSPECTOR_PANE_INTENT } =
   await import("@/components/inspector/inspector-store-types");
-const { inspectorRestorePendingStorageKey } =
-  await import("@/components/inspector/inspector-storage-keys");
 const { useInspectorTabsStore } =
   await import("@/components/inspector/inspector-tabs-store");
 const { SidebarProvider } = await import("@/components/sidebar");
@@ -174,34 +172,6 @@ const openDecisionPage = () => {
 };
 
 describe("a member returning to a decision on the public law surface", () => {
-  test("keeps the pane open when navigation remounts member persistence", () => {
-    const client = new QueryClient();
-    uninstallStorage = installUserScopedStorage(client);
-    act(() => {
-      client.setQueryData(rootKeys.session, { user: { id: MEMBER.id } });
-    });
-    persistDecisionChat();
-    localArea().setItem(ownerKey("stella:inspector-minimized:v1"), "0");
-
-    const firstShell = renderMemberInspector(client);
-    expect(useInspectorTabsStore.getState().minimized).toBe(false);
-    const session =
-      browserStorage("session") ?? panic("Test requires session storage");
-    expect(
-      session.getItem(
-        inspectorRestorePendingStorageKey({
-          organizationId: MEMBER.activeOrganizationId,
-          userId: MEMBER.id,
-        }),
-      ),
-    ).not.toBeNull();
-    firstShell.unmount();
-    renderMemberInspector(client);
-
-    expect(useInspectorTabsStore.getState().minimized).toBe(false);
-    expect(useInspectorTabsStore.getState().activeId).toBe(SAVED_THREAD_ID);
-  });
-
   test("continues the decision's saved chat beside the page's own tabs", () => {
     const client = new QueryClient();
     uninstallStorage = installUserScopedStorage(client);

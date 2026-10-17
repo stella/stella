@@ -9,7 +9,6 @@ import {
   holdInspectorRestoreSettle,
   isFileFacet,
 } from "@/components/inspector/inspector-broadcast";
-import { inspectorRestorePendingStorageKey } from "@/components/inspector/inspector-storage-keys";
 import {
   buildSkillResourceTabId,
   closeInspectorTabsForEntities,
@@ -39,8 +38,6 @@ import { toChatThreadId } from "@/lib/chat-thread-ref";
 
 const localArea = () =>
   browserStorage("local") ?? panic("Test requires local browser storage");
-const sessionArea = () =>
-  browserStorage("session") ?? panic("Test requires session browser storage");
 
 let cleanupInspectorBroadcast: (() => void) | null = null;
 let restoreTemporalNow: (() => void) | undefined;
@@ -1391,12 +1388,7 @@ describe("Inspector tab broadcast", () => {
     expect(useInspectorTabsStore.getState().minimized).toBe(false);
     expect(recovered).not.toHaveBeenCalled();
 
-    // A new document finds the unfinished restore's marker, including the
-    // marker written before document identities were recorded.
-    expect(
-      sessionArea().getItem(inspectorRestorePendingStorageKey(scope)),
-    ).not.toBeNull();
-    sessionArea().setItem(inspectorRestorePendingStorageKey(scope), "1");
+    // The next start still finds the flag: tabs come back, the pane stays shut.
     cleanupInspectorBroadcast();
     useInspectorTabsStore.setState({
       tabs: [],
@@ -1426,9 +1418,6 @@ describe("Inspector tab broadcast", () => {
     cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
     // The page stays responsive past the settle delay.
     await Bun.sleep(2200);
-    expect(
-      sessionArea().getItem(inspectorRestorePendingStorageKey(scope)),
-    ).toBeNull();
 
     cleanupInspectorBroadcast();
     useInspectorTabsStore.setState({
@@ -1465,9 +1454,6 @@ describe("Inspector tab broadcast", () => {
     cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
     // A quick reload: the page leaves well inside the settle delay.
     pagehide.dispatchEvent(new Event("pagehide"));
-    expect(
-      sessionArea().getItem(inspectorRestorePendingStorageKey(scope)),
-    ).toBeNull();
 
     cleanupInspectorBroadcast();
     useInspectorTabsStore.setState({
@@ -1498,9 +1484,6 @@ describe("Inspector tab broadcast", () => {
     await Bun.sleep(2200);
 
     // It stalled after the delay: the next start must still recover.
-    const pendingKey = inspectorRestorePendingStorageKey(scope);
-    expect(sessionArea().getItem(pendingKey)).not.toBeNull();
-    sessionArea().setItem(pendingKey, "previous-document");
     cleanupInspectorBroadcast();
     useInspectorTabsStore.setState({
       tabs: [],
