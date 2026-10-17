@@ -171,6 +171,12 @@ type LookupOptions = {
   evidence?: unknown;
   archive?: Buffer;
   downloadFailure?: boolean;
+  /** The pushed-over head of a synchronize event. */
+  before?: string;
+  /** git.getCommit for the new head. */
+  commit?: unknown;
+  /** The patch-id step's clean_base_merge output. */
+  cleanBaseMerge?: string;
 };
 const decide = async ({
   depth = "full",
@@ -195,6 +201,9 @@ const decide = async ({
   archive = zipEvidence(JSON.stringify(evidence)),
   downloadFailure = false,
   currentPatchId = patchId,
+  before,
+  commit,
+  cleanBaseMerge = "",
 }: LookupOptions = {}) => {
   const outputs = new Map<string, string>();
   const requests: unknown[] = [];
@@ -223,12 +232,14 @@ const decide = async ({
         PATCH_ID: currentPatchId,
         WORKFLOW_VERSION: pr.head.sha,
         PR_DEPTH_JOBS: JSON.stringify(prDepth),
+        CLEAN_BASE_MERGE: cleanBaseMerge,
       },
     },
     context: {
       eventName: event,
       payload: {
         action,
+        before,
         pull_request: pull,
         merge_group: { head_ref: groupRef, head_sha: "c".repeat(40) },
       },
@@ -248,6 +259,15 @@ const decide = async ({
               throw new Error("Queued PR unavailable");
             }
             return { data: pull };
+          },
+        },
+        git: {
+          getCommit: async (request: unknown) => {
+            requests.push(request);
+            if (commit === undefined) {
+              throw new Error("Commit unavailable");
+            }
+            return { data: commit };
           },
         },
         repos: {
@@ -1249,4 +1269,80 @@ test("a metadata event without completed evidence starts no suites", async () =>
     expect(outputs.get("run_required"), action).toBe("false");
     expect(outputs.get("metadata_only"), action).toBe("true");
   }
+});
+
+test("a push that only merges the base reuses the previous head's green run", async () => {
+  // The previous head's run produced the evidence; the new head merges the
+  // base branch into it and keeps the same patch id.
+  const previous = pr.head.sha;
+  const mergeHead = "e".repeat(40);
+  const baseCommit = "f".repeat(40);
+  const pushed = {
+    ...pr,
+    head: { ...pr.head, sha: mergeHead },
+    base: { sha: "9".repeat(40) },
+  };
+  const merge = {
+    sha: mergeHead,
+    parents: [{ sha: previous }, { sha: baseCommit }],
+  };
+  const onBase = { status: "ahead", merge_base_commit: { sha: baseCommit } };
+  const reuse = (options: LookupOptions = {}) =>
+    decide({
+      action: "synchronize",
+      before: previous,
+      pull: pushed,
+      commit: merge,
+      comparison: onBase,
+      cleanBaseMerge: "true",
+      ...options,
+    });
+  const { outputs } = await reuse();
+  expect(outputs.get("run_required")).toBe("false");
+  expect(outputs.get("completed_run_id")).toBe("99");
+  expect(outputs.get("base_merge_reused")).toBe("true");
+  // The new head still records its own marker for its own completion.
+  expect(outputs.get("marker")).toContain(mergeHead);
+
+  for (const [label, options] of [
+    ["a changed patch id", { currentPatchId: "c".repeat(40) }],
+    [
+      "a non-merge commit",
+      { commit: { sha: mergeHead, parents: [{ sha: previous }] } },
+    ],
+    [
+      "a merge onto another first parent",
+      {
+        commit: {
+          ...merge,
+          parents: [{ sha: "1".repeat(40) }, { sha: baseCommit }],
+        },
+      },
+    ],
+    [
+      "a second parent off the base branch",
+      {
+        comparison: {
+          status: "diverged",
+          merge_base_commit: { sha: "2".repeat(40) },
+        },
+      },
+    ],
+    ["unavailable commit evidence", { commit: undefined }],
+    ["a push without a previous head", { before: undefined }],
+    [
+      "a head that is not the untouched automatic merge",
+      { cleanBaseMerge: "false" },
+    ],
+  ] as const) {
+    expect((await reuse(options)).outputs.get("run_required"), label).toBe(
+      "true",
+    );
+  }
+  // Failed or partial previous runs never carry over.
+  expect(
+    (
+      await reuse({ sourceRun: { ...successfulRun, conclusion: "failure" } })
+    ).outputs.get("run_required"),
+  ).toBe("true");
 });
