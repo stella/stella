@@ -144,6 +144,9 @@ const writePersistedMinimized = (
 // tells the next start to restore minimized instead.
 const RESTORE_SETTLE_DELAY_MS = 2000;
 
+let restoreDocumentId: string | undefined;
+const getRestoreDocumentId = () => (restoreDocumentId ??= createUuid());
+
 const restorePendingKey = (scope: InspectorBroadcastScope) =>
   inspectorRestorePendingStorageKey(scope);
 
@@ -155,7 +158,7 @@ const readRestorePending = (scope: InspectorBroadcastScope): boolean => {
     .andThen((storage) =>
       Result.try(() => storage.getItem(restorePendingKey(scope))),
     )
-    .map((value) => value !== null)
+    .map((value) => value !== null && value !== getRestoreDocumentId())
     .unwrapOr(false);
 };
 
@@ -170,7 +173,9 @@ const writeRestorePending = (
     .andThen((storage) =>
       Result.try(() => {
         if (pending) {
-          storage.setItem(restorePendingKey(scope), "1");
+          // Shell navigation can remount persistence before this document's
+          // restore settles; only a marker from another document is recovery.
+          storage.setItem(restorePendingKey(scope), getRestoreDocumentId());
         } else {
           storage.removeItem(restorePendingKey(scope));
         }
