@@ -292,6 +292,7 @@ test("a pending public jurisdiction reports unavailability before reading its st
     code: PUBLIC_COUNTRY_UNAVAILABLE_STATUS,
     response: {
       code: "public_country_unavailable",
+      domain: "legislation",
       status: "unavailable",
       country: "SVK",
       reason: "pending_public",

@@ -61,6 +61,7 @@ export const planPostgresTests = async ({
     changed.some(
       (file) =>
         !Object.values(API_ALL_RULES).some((rule) => rule.test(file)) &&
+        !file.startsWith(".github/") &&
         !/^(?:apps|packages)\/[^/]+\/.+\.(?:[cm]?[jt]s|[jt]sx)$/u.test(file),
     )
   ) {
