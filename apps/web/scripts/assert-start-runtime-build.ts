@@ -81,6 +81,11 @@ const RUNTIME_ASSET_CONTRACTS = [
   },
   {
     expectedCount: 1,
+    label: "Aho-Corasick search WASM",
+    pattern: "dist/client/assets/aho-corasick.wasm32-wasi-????????.wasm",
+  },
+  {
+    expectedCount: 1,
     // @vscode/diff (the markdown editor's baseline diff) loads its binary via
     // `new URL(..., import.meta.url)`, so Vite emits it as a hashed asset.
     label: "markdown editor diff WASM",
