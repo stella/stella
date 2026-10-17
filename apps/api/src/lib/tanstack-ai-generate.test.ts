@@ -2506,7 +2506,7 @@ describe("a structured answer its schema rejects gets one repair turn", () => {
     orgAIConfig: null,
     outputSchema: v.strictObject({ answer: v.string(), page: v.number() }),
     prompt: "Extract the answer.",
-    role: "chat" as const,
+    task: "chat" as const,
     serviceTier: "standard" as const,
     tenantWorkspaceIds: [],
   };
