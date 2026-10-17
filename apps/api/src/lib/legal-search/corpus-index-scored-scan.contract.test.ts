@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import { Buffer } from "node:buffer";
 
+import { getCollator } from "@stll/collation";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
 
@@ -757,10 +758,19 @@ describe.skipIf(!runEngineTests)(
           if (result.isErr()) {
             throw result.error;
           }
-          return result.value;
+          // Equal-count buckets have no tie order in the engine contract.
+          // Compare every facet's complete bucket contents across the flip.
+          return Object.fromEntries(
+            Object.entries(result.value).map(([name, buckets]) => [
+              name,
+              buckets.toSorted((left, right) =>
+                getCollator("en").compare(left.value, right.value),
+              ),
+            ]),
+          );
         };
         const before = await readFacets(false);
-        expect(before.country).toEqual([
+        expect(before["country"]).toEqual([
           { value: "CZE", count: 1 },
           { value: "SVK", count: 1 },
         ]);
