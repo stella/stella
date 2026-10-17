@@ -709,6 +709,15 @@ jobs:
           )
         run: bun scripts/check-tracked-symlinks.ts
 
+      - name: Check tracked cloud task reports
+        if: >-
+          steps.completed-depth.outputs.run_required != 'false'
+          && (
+          steps.check.outputs.trusted == 'true'
+          || github.event_name == 'workflow_dispatch'
+          )
+        run: bun scripts/check-tracked-cloud-reports.ts
+
       - name: Login to GitHub Container Registry for image resolution
         id: registry
         if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch') && github.event.pull_request.head.repo.fork != true && github.token != ''

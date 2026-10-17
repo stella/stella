@@ -34,6 +34,9 @@ pre-commit:
     tracked-symlinks:
       # Match the archive's staged tree, never ignored or unstaged targets.
       run: bun scripts/check-tracked-symlinks.ts
+    tracked-cloud-reports:
+      # Match the archive's staged tree, including files staged in this commit.
+      run: bun scripts/check-tracked-cloud-reports.ts
     lockfiles:
       # Reads the index, so a lockfile staged in this commit is checked too.
       run: bun run check:standalone-lockfiles
