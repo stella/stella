@@ -1152,7 +1152,7 @@ test.each([true, false])(
           await tx.execute(sql`EXPLAIN (COSTS OFF) ${query.getSQL()}`),
         );
         expect(plan).toMatch(
-          /(?:Index(?: Only)? Scan using|Bitmap Index Scan on) case_law_decisions_(?:pkey|search_candidate_idx)/u,
+          /(?:Index(?: Only)? Scan using|Bitmap Index Scan on) case_law_decisions_(?:pkey|search_candidate(?:_published)?_idx)/u,
         );
         expect(plan).toContain("Index Cond:");
         expect(plan).toContain("id = ANY");
@@ -1197,7 +1197,7 @@ test("corpus hydration and page reads apply the same case-insensitive type filte
   }
 });
 
-test("rehydration accounts for exclusions and absent canonical rows in one read", async () => {
+test("rehydration counts ids absent from the published surface as exclusions in one read", async () => {
   const hitDispositions = createCorpusHitDispositionCounter();
   const missingId = createSafeId<"caseLawDecision">();
   const hydrated: HydratedRows = new Map();
@@ -1214,14 +1214,14 @@ test("rehydration accounts for exclusions and absent canonical rows in one read"
   expect(result.ranked.map((hit) => hit.id)).toEqual([czechId]);
   expect(hitDispositions.snapshot()).toEqual({
     malformed: 0,
-    excluded: 3,
-    drift: 1,
+    excluded: 4,
+    drift: 0,
   });
   await rehydrateCaseLawCandidates(options);
   expect(hitDispositions.snapshot()).toEqual({
     malformed: 0,
-    excluded: 3,
-    drift: 1,
+    excluded: 4,
+    drift: 0,
   });
   expect(reads).toBe(1);
 });
@@ -1240,8 +1240,8 @@ test("the shared provider accounts for canonical eligibility with its existing b
   expect([...result.context.displayById.keys()]).toEqual([czechId]);
   expect(hitDispositions.snapshot()).toEqual({
     malformed: 0,
-    excluded: 2,
-    drift: 1,
+    excluded: 3,
+    drift: 0,
   });
   expect(reads).toBe(1);
 });
@@ -1259,8 +1259,8 @@ test("the final page read accounts for canonical exclusions before presentation"
   expect([...rows.keys()]).toEqual([czechId]);
   expect(hitDispositions.snapshot()).toEqual({
     malformed: 0,
-    excluded: 2,
-    drift: 1,
+    excluded: 3,
+    drift: 0,
   });
   expect(reads).toBe(1);
 });
@@ -1275,13 +1275,15 @@ test("canonical reads return content only for eligible rows and separate id-only
       await pageDecisionRowsQuery(tx, options),
       await rehydrateCorpusIndexProviderCandidatesQuery(tx, options),
     ];
+    // The published view exposes neither hidden nor absent decisions.
+    // Both produce explicit null rows and an id-only exclusion.
     for (const read of partitions) {
       expect(read.rows.map((row) => row.id)).toEqual([czechId]);
       expect(read.dispositions).toEqual(
         expect.arrayContaining([
           { id: closedId, type: "excluded" },
           { id: queuedId, type: "excluded" },
-          { id: missingId, type: "drift" },
+          { id: missingId, type: "excluded" },
         ]),
       );
       expect(read.dispositions).toHaveLength(3);
@@ -1386,8 +1388,8 @@ test("provider scan counts retained omissions once as eligible candidates grow",
     expect(eligibleCounts).toEqual([0, 1, 2]);
     expect(hitDispositions.snapshot()).toEqual({
       malformed: 0,
-      excluded: 1,
-      drift: 1,
+      excluded: 2,
+      drift: 0,
     });
     expect(reads).toBe(3);
   } finally {

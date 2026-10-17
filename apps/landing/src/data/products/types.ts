@@ -33,7 +33,7 @@ export type ProductMedia =
       type: "image";
       src: string;
       darkSrc: string;
-      alt: string;
+      altKey: TranslationKey;
       aspect?: string;
     }
   | {

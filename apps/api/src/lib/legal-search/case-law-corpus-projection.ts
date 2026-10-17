@@ -1,7 +1,7 @@
 import { type SQL, type SQLWrapper, sql } from "drizzle-orm";
 
 import {
-  caseLawDecisions,
+  publishedCaseLawDecisions,
   corpusIndexJurisdictionServing,
   corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
@@ -28,7 +28,7 @@ export const caseLawCorpusServingGeneration = (generation: string) =>
     SELECT pointer.${sql.identifier(corpusIndexJurisdictionServing.generation.name)}
     FROM ${corpusIndexJurisdictionServing} pointer
     WHERE pointer.${sql.identifier(corpusIndexJurisdictionServing.family.name)} = ${CASE_LAW_FAMILY}
-      AND pointer.${sql.identifier(corpusIndexJurisdictionServing.jurisdiction.name)} = ${caseLawDecisions.country}
+      AND pointer.${sql.identifier(corpusIndexJurisdictionServing.jurisdiction.name)} = ${publishedCaseLawDecisions.country}
   ), ${generation})`;
 
 /** Only an applied revision with exactly one physical passage proves a singleton. */
@@ -41,7 +41,7 @@ export const caseLawCorpusDocumentCanRecur = (generation: string) =>
       FROM ${corpusIndexProjectionStates} projection_state
       WHERE projection_state.family = ${CASE_LAW_FAMILY}
         AND projection_state.generation = ${caseLawCorpusServingGeneration(generation)}
-        AND projection_state.entity_id = ${caseLawDecisions}.${sql.identifier(caseLawDecisions.id.name)}
+        AND projection_state.entity_id = ${publishedCaseLawDecisions}.${sql.identifier(publishedCaseLawDecisions.id.name)}
     )
   ), 0) <> 1`;
 
@@ -56,7 +56,7 @@ export const caseLawCorpusAppliedRevision = (generation: string) =>
     FROM ${corpusIndexProjectionStates} projection_state
     WHERE projection_state.family = ${CASE_LAW_FAMILY}
       AND projection_state.generation = ${caseLawCorpusServingGeneration(generation)}
-      AND projection_state.entity_id = ${caseLawDecisions}.${sql.identifier(caseLawDecisions.id.name)}
+      AND projection_state.entity_id = ${publishedCaseLawDecisions}.${sql.identifier(publishedCaseLawDecisions.id.name)}
   )`;
 
 /**
@@ -71,18 +71,18 @@ const acceptedCaseLawProjectionStateAt = (
 ): SQL => sql`
         ${corpusIndexProjectionStates.family} = ${CASE_LAW_FAMILY}
         AND ${corpusIndexProjectionStates.generation} = ${resolvedGeneration}
-        AND ${corpusIndexProjectionStates.entityId} = ${caseLawDecisions.id}
+        AND ${corpusIndexProjectionStates.entityId} = ${publishedCaseLawDecisions.id}
         AND ${corpusIndexProjectionStates.desiredAction} = 'upsert'
         AND ${corpusIndexProjectionStates.appliedAction} = 'upsert'
         AND ${corpusIndexProjectionStates.appliedEpoch} = ${corpusIndexProjectionStates.desiredEpoch}
         AND ${corpusIndexProjectionStates.appliedFingerprint} = ${corpusIndexProjectionStates.desiredFingerprint}
         AND ${corpusIndexProjectionStates.appliedIndexId} = ${corpusIndexProjectionStates.desiredIndexId}
-        AND ${corpusIndexProjectionStates.appliedIndexId} = (${caseLawIndexIdSql(resolvedGeneration, caseLawDecisions.country)})`;
+        AND ${corpusIndexProjectionStates.appliedIndexId} = (${caseLawIndexIdSql(resolvedGeneration, publishedCaseLawDecisions.country)})`;
 
 /** The jurisdiction-serving pointer row of the decision's country. */
 const caseLawDecisionPointer = sql`
         pointer.${sql.identifier(corpusIndexJurisdictionServing.family.name)} = ${CASE_LAW_FAMILY}
-        AND pointer.${sql.identifier(corpusIndexJurisdictionServing.jurisdiction.name)} = ${caseLawDecisions.country}`;
+        AND pointer.${sql.identifier(corpusIndexJurisdictionServing.jurisdiction.name)} = ${publishedCaseLawDecisions.country}`;
 
 /**
  * Accept a physical hit only when the generation that serves the decision's

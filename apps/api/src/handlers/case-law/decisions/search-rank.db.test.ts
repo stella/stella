@@ -5,6 +5,7 @@ import { drizzle } from "drizzle-orm/pglite";
 
 import {
   caseLawDecisions,
+  publishedCaseLawDecisions,
   caseLawSources,
   corpusIndexGenerations,
   corpusIndexProjectionIntents,
@@ -241,8 +242,8 @@ test("a missing applied passage count cannot prove a singleton", async () => {
         .select({
           canRecur: caseLawCorpusDocumentCanRecur("missing-generation"),
         })
-        .from(caseLawDecisions)
-        .where(eq(caseLawDecisions.id, singletonId)),
+        .from(publishedCaseLawDecisions)
+        .where(eq(publishedCaseLawDecisions.id, singletonId)),
   );
   expect(rows).toEqual([{ canRecur: true }]);
 });
