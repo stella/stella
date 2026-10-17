@@ -3,14 +3,22 @@ import { panic } from "better-result";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { parseArgs } from "node:util";
 import { gzipSync } from "node:zlib";
 
 import { DIAGRAM_FIXTURES } from "../src/components/ai-elements/mermaid-diagram.fixtures";
 
 const WEB_ROOT = fileURLToPath(new URL("../", import.meta.url));
 const OUT_DIR = path.join(WEB_ROOT, ".cache/diagram-render-bench");
-const WARM_RUNS = Number(process.env["WARM_RUNS"] ?? "10");
-const CHROMIUM_EXECUTABLE_PATH = process.env["CHROMIUM_EXECUTABLE_PATH"];
+const {
+  values: { "executable-path": executablePath, "warm-runs": warmRuns },
+} = parseArgs({
+  options: {
+    "executable-path": { type: "string" },
+    "warm-runs": { type: "string", default: "10" },
+  },
+});
+const WARM_RUNS = Number(warmRuns);
 
 const RENDERER_NAMES = ["mermaid", "pele"] as const;
 
@@ -95,9 +103,7 @@ const server = Bun.serve({
 });
 
 const browser = await chromium.launch(
-  CHROMIUM_EXECUTABLE_PATH === undefined
-    ? {}
-    : { executablePath: CHROMIUM_EXECUTABLE_PATH },
+  executablePath === undefined ? {} : { executablePath },
 );
 
 const measure = async (renderer: RendererName): Promise<RendererReport> => {
