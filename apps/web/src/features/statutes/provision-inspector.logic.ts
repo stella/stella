@@ -7,6 +7,8 @@ import { decisionCitationPresentationsById } from "@/components/references/decis
 import type { DecisionCitationPresentation } from "@/components/references/decision-citation-presentation.logic";
 import type { ProvisionViewPayload } from "@/features/statutes/provision-inspector-contract";
 
+import { AhoCorasick } from "#aho-corasick";
+
 export {
   createProvisionViewTab,
   isProvisionViewPayload,
@@ -36,7 +38,16 @@ type CitingDecisionRow = {
 };
 
 const foldForFilter = (value: string): string =>
-  stripDiacritics(value).toLowerCase();
+  stripDiacritics(value.toWellFormed()).toLowerCase();
+
+let cachedMatcher: { needle: string; matcher: AhoCorasick } | undefined;
+
+const citingDecisionMatcher = (needle: string): AhoCorasick => {
+  if (cachedMatcher?.needle !== needle) {
+    cachedMatcher = { needle, matcher: new AhoCorasick([needle]) };
+  }
+  return cachedMatcher.matcher;
+};
 
 /**
  * Narrows the loaded pages to the rows whose case number, court, or cited
@@ -52,10 +63,13 @@ export const filterCitingDecisions = <T extends CitingDecisionRow>(
     return [...decisions];
   }
 
+  const matcher = citingDecisionMatcher(needle);
   return decisions.filter((decision) =>
-    foldForFilter(
-      `${decision.caseNumber} ${decision.court} ${decision.sentenceText ?? ""}`,
-    ).includes(needle),
+    matcher.isMatch(
+      foldForFilter(
+        `${decision.caseNumber} ${decision.court} ${decision.sentenceText ?? ""}`,
+      ),
+    ),
   );
 };
 
