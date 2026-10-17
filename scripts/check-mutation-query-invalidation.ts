@@ -6,13 +6,14 @@ import * as v from "valibot";
 
 import { compareCodeUnit } from "@stll/collation";
 
+import { BASELINE_PATHS } from "./baseline-paths";
 import {
   generateMutationQueryCensus,
   type MutationQueryCensus,
 } from "./mutation-query-census.ts";
 
 const ROOT = path.resolve(import.meta.dir, "..");
-const BASELINE = "scripts/mutation-query-invalidation-baseline.json";
+const BASELINE = BASELINE_PATHS.mutationQueryInvalidation;
 const REALTIME_MODULE = "apps/web/src/lib/workspace-realtime.ts";
 const CONTRACT_MODULE = REALTIME_MODULE;
 const API_CONTRACT_MODULE = "packages/api-contract/src/resource-ref.ts";

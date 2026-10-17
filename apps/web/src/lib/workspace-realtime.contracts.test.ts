@@ -35,6 +35,16 @@ import {
   entityViewKeys,
   entityViewRowsOptions,
 } from "@/lib/workspaces/queries/entity-views";
+import {
+  invoicesKeys,
+  invoiceByIdOptions,
+  invoicePrefillOptions,
+  invoicesInfiniteOptions,
+} from "@/lib/workspaces/queries/invoices";
+import {
+  timeEntriesKeys,
+  timeEntriesOptions,
+} from "@/lib/workspaces/queries/time-entries";
 
 const WORKSPACE_ID = "workspace-rename";
 const OTHER_WORKSPACE_ID = "workspace-other";
@@ -75,6 +85,26 @@ type PreviousInvalidation = {
 // Historical factory names are resolved with current production keys and reader metadata.
 const previousInvalidationFor = (factory: string): PreviousInvalidation => {
   switch (factory) {
+    case "invoicesKeys.all": {
+      const target = invoicesKeys.all(WORKSPACE_ID);
+      const readers = [
+        invoiceByIdOptions(WORKSPACE_ID, "invoice-coverage"),
+        invoicePrefillOptions(WORKSPACE_ID),
+        invoicesInfiniteOptions(WORKSPACE_ID, 20),
+      ];
+      return {
+        target,
+        readers: readers.map((reader) => ({
+          queryKey: reader.queryKey,
+          meta: reader.meta,
+        })),
+      };
+    }
+    case "timeEntriesKeys.all": {
+      const target = timeEntriesKeys.all(WORKSPACE_ID);
+      const { queryKey, meta } = timeEntriesOptions(WORKSPACE_ID, USER_ID);
+      return { target, readers: [{ queryKey, meta }] };
+    }
     case "entitiesKeys.all": {
       const target = entitiesKeys.all(WORKSPACE_ID);
       return { target, readers: [{ queryKey: target }] };

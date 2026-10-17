@@ -92,11 +92,7 @@ export const RESOURCE_MUTATION_CONTRACTS = {
         route: "/invoices/:workspaceId/:invoiceId/transition",
       },
     ],
-    resources: [
-      RESOURCE_TYPE.INVOICE,
-      RESOURCE_TYPE.TIME_ENTRY,
-      RESOURCE_TYPE.EXPENSE,
-    ],
+    resources: [RESOURCE_TYPE.INVOICE],
   },
   transitionInvoice: {
     writes: [
