@@ -18,6 +18,7 @@ import { CORPUS_BM25_RATIO_POWER } from "@/api/lib/legal-search/corpus-ranking-p
 import { RELEVANCE_ORDER } from "@/api/lib/legal-search/corpus-search-order";
 import { LIMITS } from "@/api/lib/limits";
 import {
+  testAppliedProjectionsFor,
   testRevisionOf,
   testRevisionsFor,
 } from "@/api/tests/helpers/corpus-projection-revisions";
@@ -106,7 +107,7 @@ const readDispositionPage = async (
     scanTransport: mode === "native" ? { type: "native" } : { type: "scored" },
     rankingMode: mode === "bm25" ? "bm25-ratio" : "off",
     snippetFields: ["text"],
-    revisionRetrieval: { type: "stored", field: "projection_revision" },
+    projectionRevisionField: "projection_revision",
     extractId: (hit: CorpusIndexHit) =>
       typeof hit["document_id"] === "string" ? hit["document_id"] : null,
     extractSnippet: (snippet) => {
@@ -116,7 +117,9 @@ const readDispositionPage = async (
     },
     unseenScoreUpperBound: () => 0,
     rankCandidates: async (probes, { selectAppliedCandidates }) => {
-      const candidates = selectAppliedCandidates(testRevisionsFor(probes));
+      const candidates = selectAppliedCandidates(
+        testAppliedProjectionsFor(probes),
+      );
       return {
         context: null,
         groups: [],

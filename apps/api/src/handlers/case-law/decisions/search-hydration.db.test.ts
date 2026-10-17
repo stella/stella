@@ -468,6 +468,7 @@ test("the blend read carries what ranking and the fold need, and nothing a card 
   );
   for (const row of hydrated.values()) {
     expect(Object.keys(row ?? {}).toSorted()).toEqual([
+      "appliedGeneration",
       "appliedRevision",
       "canRecur",
       "citationAuthority",
@@ -1361,7 +1362,7 @@ test("provider scan counts retained omissions once as eligible candidates grow",
       hitDispositions,
       rankingMode: "off",
       snippetFields: ["text"],
-      revisionRetrieval: { type: "stored", field: "projection_revision" },
+      projectionRevisionField: "projection_revision",
       extractId: (hit) =>
         typeof hit["document_id"] === "string" ? hit["document_id"] : null,
       extractSnippet: () => null,
@@ -1504,7 +1505,7 @@ test.each(["off", "bm25-ratio"] as const)(
               ? { type: "scored" }
               : { type: "native" },
           snippetFields: ["text"],
-          revisionRetrieval: { type: "stored", field: "projection_revision" },
+          projectionRevisionField: "projection_revision",
           extractId: (hit) =>
             typeof hit["document_id"] === "string" ? hit["document_id"] : null,
           extractSnippet: () => null,

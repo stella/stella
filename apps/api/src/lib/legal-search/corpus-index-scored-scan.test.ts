@@ -24,6 +24,7 @@ import {
 } from "@/api/lib/legal-search/rerank";
 import { LIMITS } from "@/api/lib/limits";
 import {
+  testAppliedProjectionsFor,
   testRevisionOf,
   testRevisionsFor,
 } from "@/api/tests/helpers/corpus-projection-revisions";
@@ -331,7 +332,7 @@ const readFixturePage = async (
     parsedCursor,
     scanTransport,
     snippetFields: ["text"],
-    revisionRetrieval: { type: "stored", field: "projection_revision" },
+    projectionRevisionField: "projection_revision",
     extractId: (hit: CorpusIndexHit) =>
       typeof hit["document_id"] === "string" ? hit["document_id"] : null,
     extractSnippet: (snippet) => {
@@ -341,7 +342,9 @@ const readFixturePage = async (
     unseenScoreUpperBound: (next) => stableBlendUpperBound(next, BLEND_WEIGHT),
     rankCandidates: async (probes, { selectAppliedCandidates }) => {
       const revisionById = testRevisionsFor(probes);
-      const candidates = selectAppliedCandidates(revisionById);
+      const candidates = selectAppliedCandidates(
+        testAppliedProjectionsFor(probes),
+      );
       return {
         context: null,
         groups: candidates.map((candidate) =>

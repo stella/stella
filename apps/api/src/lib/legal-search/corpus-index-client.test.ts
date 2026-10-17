@@ -42,6 +42,7 @@ import {
   type ActionCostObservation,
 } from "@/api/lib/usage/action-costs/context";
 import {
+  testAppliedProjectionsFor,
   testRevisionOf,
   testRevisionsFor,
 } from "@/api/tests/helpers/corpus-projection-revisions";
@@ -607,14 +608,16 @@ const readSortedPage = async (order: CorpusSearchOrder) => {
     order,
     parsedCursor: null,
     snippetFields: ["text"],
-    revisionRetrieval: { type: "stored", field: "projection_revision" },
+    projectionRevisionField: "projection_revision",
     extractId: (hit) =>
       typeof hit["document_id"] === "string" ? hit["document_id"] : null,
     extractSnippet: () => null,
     unseenScoreUpperBound: () => 0,
     rankCandidates: async (probes, { selectAppliedCandidates }) => {
       const revisionById = testRevisionsFor(probes);
-      const candidates = selectAppliedCandidates(revisionById);
+      const candidates = selectAppliedCandidates(
+        testAppliedProjectionsFor(probes),
+      );
       return {
         context: null,
         groups: candidates.map((candidate) =>

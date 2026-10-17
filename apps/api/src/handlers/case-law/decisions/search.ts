@@ -167,7 +167,9 @@ import { errorTag } from "@/api/lib/errors/utils";
 import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import { blendedRankSql } from "@/api/lib/legal-search/authority-sql";
 import {
+  caseLawAppliedProjections,
   caseLawCorpusAppliedRevision,
+  caseLawCorpusServingGeneration,
   caseLawCorpusDocumentCanRecur,
   currentCaseLawCorpusProjection,
 } from "@/api/lib/legal-search/case-law-corpus-projection";
@@ -191,10 +193,7 @@ import {
   readServingCorpusIndexTargetTx,
   type ServingCorpusIndexTargetError,
 } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
-import {
-  corpusIndexRevisionRetrieval,
-  requireCorpusIndexManifest,
-} from "@/api/lib/legal-search/corpus-index-manifest";
+import { requireCorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
 import type {
   CorpusIndexScanReport,
   CorpusIndexScanTransport,
@@ -1443,6 +1442,8 @@ export const candidateDecisionRowsStatement = (
       // The copy a page's snippet and anchor are read from.
       appliedRevision:
         caseLawCorpusAppliedRevision(generation).as("applied_revision"),
+      appliedGeneration:
+        caseLawCorpusServingGeneration(generation).as("applied_generation"),
       canRecur:
         sql<boolean>`CASE WHEN ${caseLawCorpusDocumentCanRecur(generation)}
         THEN true ELSE EXISTS (
@@ -1753,17 +1754,19 @@ export const rehydrateCaseLawCandidates = async ({
   }
 
   const byId = new Map<string, CandidateDecisionRow>();
-  const revisionById = new Map<string, CorpusProjectionRevision>();
   for (const [id, row] of hydrated) {
     if (row !== null && row.appliedRevision !== null) {
       byId.set(id, row);
-      revisionById.set(id, row.appliedRevision);
     }
   }
+  const appliedById = caseLawAppliedProjections(byId.values());
+  const revisionById = new Map(
+    [...appliedById].map(([id, { revision }]) => [id, revision]),
+  );
   const appliedCandidates =
     selectAppliedCandidates === undefined
       ? candidates
-      : selectAppliedCandidates(revisionById);
+      : selectAppliedCandidates(appliedById);
   const authorityById = new Map<string, number>();
   // The court a decision comes from is known the day it is published, which
   // is what citation authority cannot say about a judgment nothing cites yet.
@@ -2706,9 +2709,8 @@ export const searchCorpusIndexDecisions = async ({
     scanTransport: caseLawScanTransport(sort),
     rankingMode,
     snippetFields: ["text"],
-    revisionRetrieval: corpusIndexRevisionRetrieval(
-      requireCorpusIndexManifest("case_law", generation),
-    ),
+    projectionRevisionField: requireCorpusIndexManifest("case_law", generation)
+      .projection.projectionRevisionField,
     extractId: (hit) => {
       const id = hit["document_id"];
       return typeof id === "string" && isUuid(id) ? id : null;

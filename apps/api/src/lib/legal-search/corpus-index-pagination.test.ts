@@ -40,6 +40,7 @@ import {
 } from "@/api/lib/legal-search/rerank";
 import { LIMITS } from "@/api/lib/limits";
 import {
+  testAppliedProjectionsFor,
   testRevisionOf,
   testRevisionsFor,
 } from "@/api/tests/helpers/corpus-projection-revisions";
@@ -225,7 +226,7 @@ const readPage = async (
     order,
     parsedCursor,
     snippetFields: ["text"],
-    revisionRetrieval: { type: "stored", field: "projection_revision" },
+    projectionRevisionField: "projection_revision",
     extractId: (hit: CorpusIndexHit) =>
       typeof hit["document_id"] === "string" ? hit["document_id"] : null,
     extractSnippet: (snippet) => {
@@ -234,7 +235,9 @@ const readPage = async (
     },
     unseenScoreUpperBound: () => 0,
     rankCandidates: async (probes, { selectAppliedCandidates }) => {
-      const candidates = selectAppliedCandidates(testRevisionsFor(probes));
+      const candidates = selectAppliedCandidates(
+        testAppliedProjectionsFor(probes),
+      );
       return {
         context: null,
         revisionById: testRevisionsFor(candidates),
@@ -407,13 +410,15 @@ describe("a page settles within one scan round", () => {
       order: RELEVANCE_ORDER,
       parsedCursor,
       snippetFields: ["text"],
-      revisionRetrieval: { type: "stored", field: "projection_revision" },
+      projectionRevisionField: "projection_revision",
       extractId: (hit: CorpusIndexHit) =>
         typeof hit["document_id"] === "string" ? hit["document_id"] : null,
       extractSnippet: () => null,
       unseenScoreUpperBound: (score) => stableBlendUpperBound(score, weight),
       rankCandidates: async (probes, { selectAppliedCandidates }) => {
-        const candidates = selectAppliedCandidates(testRevisionsFor(probes));
+        const candidates = selectAppliedCandidates(
+          testAppliedProjectionsFor(probes),
+        );
         return {
           context: null,
           revisionById: testRevisionsFor(candidates),
@@ -539,13 +544,15 @@ describe("the scan is bounded by engine round trips", () => {
       order: RELEVANCE_ORDER,
       parsedCursor,
       snippetFields: ["text"],
-      revisionRetrieval: { type: "stored", field: "projection_revision" },
+      projectionRevisionField: "projection_revision",
       extractId: (hit: CorpusIndexHit) =>
         typeof hit["document_id"] === "string" ? hit["document_id"] : null,
       extractSnippet: () => null,
       unseenScoreUpperBound: (score) => score + 1,
       rankCandidates: async (probes, { selectAppliedCandidates }) => {
-        const candidates = selectAppliedCandidates(testRevisionsFor(probes));
+        const candidates = selectAppliedCandidates(
+          testAppliedProjectionsFor(probes),
+        );
         return {
           context: null,
           revisionById: testRevisionsFor(candidates),
@@ -707,14 +714,16 @@ describe("a passage flood does not strand the reader", () => {
       order: RELEVANCE_ORDER,
       parsedCursor,
       snippetFields: ["text"],
-      revisionRetrieval: { type: "stored", field: "projection_revision" },
+      projectionRevisionField: "projection_revision",
       extractId: (hit: CorpusIndexHit) =>
         typeof hit["document_id"] === "string" ? hit["document_id"] : null,
       extractSnippet: () => null,
       unseenScoreUpperBound: (score) =>
         stableBlendUpperBound(score, DEFAULT_AUTHORITY_WEIGHT),
       rankCandidates: async (probes, { selectAppliedCandidates }) => {
-        const candidates = selectAppliedCandidates(testRevisionsFor(probes));
+        const candidates = selectAppliedCandidates(
+          testAppliedProjectionsFor(probes),
+        );
         return {
           context: null,
           revisionById: testRevisionsFor(candidates),
@@ -814,13 +823,15 @@ describe("residual filters preserve progress past empty scan windows", () => {
       order,
       parsedCursor,
       snippetFields: [],
-      revisionRetrieval: { type: "stored", field: "projection_revision" },
+      projectionRevisionField: "projection_revision",
       extractId: (hit) =>
         typeof hit["document_id"] === "string" ? hit["document_id"] : null,
       extractSnippet: () => null,
       unseenScoreUpperBound: (score) => score,
       rankCandidates: async (probes, { selectAppliedCandidates }) => {
-        const candidates = selectAppliedCandidates(testRevisionsFor(probes));
+        const candidates = selectAppliedCandidates(
+          testAppliedProjectionsFor(probes),
+        );
         return {
           context: null,
           revisionById: testRevisionsFor(candidates),
@@ -949,13 +960,15 @@ describe("split legislation stays one hit across cursor pages", () => {
         order: RELEVANCE_ORDER,
         parsedCursor,
         snippetFields: [],
-        revisionRetrieval: { type: "stored", field: "projection_revision" },
+        projectionRevisionField: "projection_revision",
         extractId: (hit: CorpusIndexHit) =>
           typeof hit["document_id"] === "string" ? hit["document_id"] : null,
         extractSnippet: () => null,
         unseenScoreUpperBound: () => 0,
         rankCandidates: async (probes, { selectAppliedCandidates }) => {
-          const candidates = selectAppliedCandidates(testRevisionsFor(probes));
+          const candidates = selectAppliedCandidates(
+            testAppliedProjectionsFor(probes),
+          );
           return {
             context: null,
             revisionById: testRevisionsFor(candidates),
@@ -1017,13 +1030,15 @@ describe("ranker-folded candidates stay folded across pages", () => {
       order: RELEVANCE_ORDER,
       parsedCursor,
       snippetFields: ["text"],
-      revisionRetrieval: { type: "stored", field: "projection_revision" },
+      projectionRevisionField: "projection_revision",
       extractId: (hit: CorpusIndexHit) =>
         typeof hit["document_id"] === "string" ? hit["document_id"] : null,
       extractSnippet: () => null,
       unseenScoreUpperBound: (score) => score,
       rankCandidates: async (probes, { selectAppliedCandidates }) => {
-        const candidates = selectAppliedCandidates(testRevisionsFor(probes));
+        const candidates = selectAppliedCandidates(
+          testAppliedProjectionsFor(probes),
+        );
 
         const { representatives, groupTokenById } = collapseByLanguageGroup(
           candidates.map((candidate) => ({
@@ -1808,14 +1823,16 @@ describe("folded acts stay folded across capped windows", () => {
       order: RELEVANCE_ORDER,
       parsedCursor,
       snippetFields: ["text"],
-      revisionRetrieval: { type: "stored", field: "projection_revision" },
+      projectionRevisionField: "projection_revision",
       extractId: (hit: CorpusIndexHit) =>
         typeof hit["document_id"] === "string" ? hit["document_id"] : null,
       extractSnippet: () => null,
       // No bound ever proves the page: only the round cap ends a scan.
       unseenScoreUpperBound: (score) => score + 1,
       rankCandidates: async (probes, { selectAppliedCandidates }) => {
-        const candidates = selectAppliedCandidates(testRevisionsFor(probes));
+        const candidates = selectAppliedCandidates(
+          testAppliedProjectionsFor(probes),
+        );
 
         const collapsed = collapseLegislationHitsByWork({
           ranked: candidates
@@ -2018,7 +2035,7 @@ describe("a page addressed by offset", () => {
       parsedCursor,
       skip,
       snippetFields: ["text"],
-      revisionRetrieval: { type: "stored", field: "projection_revision" },
+      projectionRevisionField: "projection_revision",
       extractId: (hit: CorpusIndexHit) =>
         typeof hit["document_id"] === "string" ? hit["document_id"] : null,
       extractSnippet: () => null,
@@ -2029,7 +2046,9 @@ describe("a page addressed by offset", () => {
         probes,
         { excludedGroups, selectAppliedCandidates },
       ) => {
-        const candidates = selectAppliedCandidates(testRevisionsFor(probes));
+        const candidates = selectAppliedCandidates(
+          testAppliedProjectionsFor(probes),
+        );
 
         const shown = candidates.filter(
           ({ id }) => !excludedGroups.has(corpusSearchGroupToken(id)),

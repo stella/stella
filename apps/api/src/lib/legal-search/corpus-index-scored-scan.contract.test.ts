@@ -19,7 +19,6 @@ import {
 import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexConfigFromManifest,
-  corpusIndexRevisionRetrieval,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   type CorpusIndexScanTransport,
@@ -30,6 +29,7 @@ import {
 import { buildCaseLawProjectionDocuments } from "@/api/lib/legal-search/corpus-index-projection-builder";
 import type { CaseLawProjectionInput } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import { caseLawCorpusQueryFields } from "@/api/lib/legal-search/corpus-index-read-contract";
+import { corpusAppliedProjection } from "@/api/lib/legal-search/corpus-index-revision-clause";
 import { caseLawCorpusQuery } from "@/api/lib/legal-search/corpus-query";
 import type { CorpusIndexQueryVariant } from "@/api/lib/legal-search/corpus-query-variant-policy";
 import {
@@ -457,7 +457,7 @@ const readScanPage = async ({
     scanTransport,
     rankingMode,
     snippetFields: ["text"],
-    revisionRetrieval: corpusIndexRevisionRetrieval(MANIFEST),
+    projectionRevisionField: "projection_revision",
     extractId: (hit) =>
       typeof hit["document_id"] === "string" ? hit["document_id"] : null,
     extractSnippet: (snippet) => {
@@ -468,7 +468,14 @@ const readScanPage = async ({
       stableBlendUpperBound(next, DEFAULT_AUTHORITY_WEIGHT),
     rankCandidates: async (probes, { selectAppliedCandidates }) => {
       const revisionById = new Map(probes.map(({ id }) => [id, REVISION]));
-      const candidates = selectAppliedCandidates(revisionById);
+      const candidates = selectAppliedCandidates(
+        new Map(
+          [...revisionById].map(([id, revision]) => [
+            id,
+            corpusAppliedProjection(MANIFEST, revision),
+          ]),
+        ),
+      );
       return {
         context: null,
         // Every fixture document was ingested under this one revision.

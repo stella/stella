@@ -9,7 +9,6 @@ import { Result } from "better-result";
 import { afterEach, beforeAll, beforeEach, expect, test } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
-import * as v from "valibot";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
@@ -24,7 +23,9 @@ import {
 } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
+  caseLawAppliedProjections,
   caseLawCorpusAppliedRevision,
+  caseLawCorpusServingGeneration,
   currentCaseLawCorpusProjection,
 } from "@/api/lib/legal-search/case-law-corpus-projection";
 import {
@@ -33,6 +34,7 @@ import {
   type CaseLawServingFlipContext,
   type CaseLawServingFlipOptions,
 } from "@/api/lib/legal-search/case-law-serving-flip";
+import { createCorpusHitDispositionCounter } from "@/api/lib/legal-search/corpus-hit-telemetry";
 import { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
 import { resolveCorpusIndexGroupContract } from "@/api/lib/legal-search/corpus-index-group-contract";
 import {
@@ -44,11 +46,15 @@ import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
-import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
+import {
+  corpusIndexLexicalScore,
+  readCorpusIndexSearchPage,
+} from "@/api/lib/legal-search/corpus-index-pagination";
 import {
   advanceCorpusProjectionDesiredStateTx,
   ensureCorpusProjectionDesiredStateTx,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
+import { CORPUS_BM25_RATIO_POWER } from "@/api/lib/legal-search/corpus-ranking-policy";
 import { RELEVANCE_ORDER } from "@/api/lib/legal-search/corpus-search-order";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
@@ -649,146 +655,198 @@ test("the flip moves Czech readers and the acceptance to v9, and only the flip d
   );
 });
 
-test("global counts equal a single copy after the flip and before purge", async () => {
-  const engine = await buildV9();
-  const oldRevision = toSafeId<"corpusIndexProjectionIntent">(
-    "0198e331-e578-7000-8000-000000000508",
-  );
-  const slovakRevision = toSafeId<"corpusIndexProjectionIntent">(
-    "0198e331-e578-7000-8000-00000000050a",
-  );
-  await applyDesired("case_law_v8", CZE_DECISION_ID, oldRevision);
-  await applyDesired("case_law_v8", SVK_DECISION_ID, slovakRevision);
-  const flipped = await flip(engine);
-  expect(flipped.isOk() ? flipped.value.type : flipped.error._tag).toBe(
-    "flipped",
-  );
-  const global = await read(undefined);
-  const current = [
-    {
-      document_id: CZE_DECISION_ID,
-      projection_revision: V9_REVISION,
-      text: "Czech one",
-    },
-    {
-      document_id: CZE_DECISION_ID,
-      projection_revision: V9_REVISION,
-      text: "Czech two",
-    },
-    {
-      document_id: SVK_DECISION_ID,
-      projection_revision: slovakRevision,
-      text: "Slovak one",
-    },
-  ];
-  let hits = current;
-  globalThis.fetch = Object.assign(
-    async (
-      _input: Parameters<typeof fetch>[0],
-      init?: Parameters<typeof fetch>[1],
-    ) => {
-      const body = v.parse(
-        v.object({
-          start_offset: v.optional(v.number(), 0),
-          max_hits: v.optional(v.number(), 100),
-          snippet_fields: v.optional(v.string()),
-        }),
-        JSON.parse(v.parse(v.string(), init?.body)),
-      );
-      return Response.json({
-        num_hits: hits.length,
-        hits: hits.slice(body.start_offset, body.start_offset + body.max_hits),
-        ...(body.snippet_fields === undefined
-          ? {}
-          : { snippets: hits.map((hit) => ({ text: [hit.text] })) }),
-      });
-    },
-    { preconnect: originalFetch.preconnect },
-  );
-  const search = async () =>
-    await readCorpusIndexSearchPage({
-      observer: "unobserved",
-      cluster: "q09",
-      indexId: global.route.indexId,
-      query: "text:fixture",
-      limit: 40,
-      order: RELEVANCE_ORDER,
-      parsedCursor: null,
-      scanTransport: { type: "native" },
-      rankingMode: "off",
-      snippetFields: ["text"],
-      revisionRetrieval: { type: "stored", field: "projection_revision" },
-      extractId: (hit) =>
-        typeof hit["document_id"] === "string" ? hit["document_id"] : null,
-      extractSnippet: () => null,
-      unseenScoreUpperBound: () => 0,
-      rankCandidates: async (candidates, { selectAppliedCandidates }) => {
-        const rows = await db
-          .select({
-            id: caseLawDecisions.id,
-            revision: caseLawCorpusAppliedRevision("case_law_v8"),
-          })
-          .from(caseLawDecisions)
-          .where(
-            and(
-              inArray(
-                caseLawDecisions.id,
-                candidates.map(({ id }) => toSafeId<"caseLawDecision">(id)),
-              ),
-              currentCaseLawCorpusProjection("case_law_v8"),
-            ),
-          );
-        const revisionById = new Map(
-          rows.flatMap(({ id, revision }) =>
-            revision === null ? [] : [[id, revision]],
-          ),
-        );
-        return {
-          context: { decisionCount: rows.length },
-          groups: [],
-          ranked: selectAppliedCandidates(revisionById)
-            .filter(({ id }) =>
-              revisionById.has(toSafeId<"caseLawDecision">(id)),
-            )
-            .map((candidate) => ({
-              ...candidate,
-              lexicalScore: candidate.score,
-              citationAuthority: 0,
-            })),
-          revisionById,
-        };
+test.each([
+  ["native", "off"],
+  ["scored", "off"],
+  ["scored", "bm25-ratio"],
+] as const)(
+  "global mixed-generation search selects each jurisdiction's applied passages through %s with %s ranking",
+  async (transport, rankingMode) => {
+    const scanTransport = { type: transport };
+    const engine = await buildV9();
+    const oldRevision = toSafeId<"corpusIndexProjectionIntent">(
+      "0198e331-e578-7000-8000-000000000508",
+    );
+    const slovakRevision = toSafeId<"corpusIndexProjectionIntent">(
+      "0198e331-e578-7000-8000-00000000050a",
+    );
+    await applyDesired("case_law_v8", CZE_DECISION_ID, oldRevision);
+    await applyDesired("case_law_v8", SVK_DECISION_ID, slovakRevision);
+    const flipped = await flip(engine);
+    expect(flipped.isOk() ? flipped.value.type : flipped.error._tag).toBe(
+      "flipped",
+    );
+    const global = await read(undefined);
+    expect(global.serving.generation).toBe("case_law_v8");
+    const current = [
+      {
+        document_id: CZE_DECISION_ID,
+        chunk_id: "cze-current-1",
+        projection_revision: V9_REVISION,
       },
-    });
-  const singleCopy = await search();
-  hits = [
-    ...current
-      .filter((hit) => hit.document_id === CZE_DECISION_ID)
-      .map((hit) => ({ ...hit, projection_revision: oldRevision })),
-    ...current,
-  ];
-  const beforePurge = await search();
-  expect(beforePurge.passageCountById).toEqual(singleCopy.passageCountById);
-  expect(beforePurge.passageCountById).toEqual(
-    new Map([
-      [CZE_DECISION_ID, 2],
-      [SVK_DECISION_ID, 1],
-    ]),
-  );
-  expect(beforePurge.pageRanked.map(({ id }) => id).toSorted()).toEqual(
-    singleCopy.pageRanked.map(({ id }) => id).toSorted(),
-  );
-  expect(beforePurge.pageRanked).toHaveLength(2);
-  expect(beforePurge.context.decisionCount).toBe(
-    singleCopy.context.decisionCount,
-  );
-  expect(beforePurge.context.decisionCount).toBe(2);
-  expect(
-    [...beforePurge.passageCountById.values()].reduce(
-      (sum, count) => sum + count,
-      0,
-    ),
-  ).toBe(3);
-});
+      {
+        document_id: CZE_DECISION_ID,
+        chunk_id: "cze-current-2",
+        projection_revision: V9_REVISION,
+      },
+      // v8's mapping does not store the revision even though SQL records one.
+      { document_id: SVK_DECISION_ID, chunk_id: "svk-current" },
+    ];
+    const stale = [
+      { document_id: CZE_DECISION_ID, chunk_id: "cze-v8-old" },
+      {
+        document_id: CZE_DECISION_ID,
+        chunk_id: "cze-v9-old",
+        projection_revision: oldRevision,
+      },
+    ];
+    let hits = current;
+    let requests = 0;
+    globalThis.fetch = Object.assign(
+      async (
+        input: Parameters<typeof fetch>[0],
+        init?: Parameters<typeof fetch>[1],
+      ) => {
+        requests += 1;
+        const body: Record<string, unknown> =
+          typeof init?.body === "string" ? JSON.parse(init.body) : {};
+        const url = new URL(input instanceof Request ? input.url : input);
+        if (url.pathname.includes("/_elastic/")) {
+          const offset = Number(body["from"] ?? 0);
+          const window = hits.slice(offset, offset + Number(body["size"]));
+          return Response.json({
+            hits: {
+              total: { value: hits.length, relation: "eq" },
+              hits: window.map((hit, index) => ({
+                _source: hit,
+                sort: [10 - offset - index],
+              })),
+            },
+          });
+        }
+        const offset = Number(body["start_offset"] ?? 0);
+        return Response.json({
+          num_hits: hits.length,
+          hits: hits.slice(offset, offset + Number(body["max_hits"])),
+          snippets: [],
+        });
+      },
+      { preconnect: originalFetch.preconnect },
+    );
+    const search = async () => {
+      const hitDispositions = createCorpusHitDispositionCounter();
+      const page = await readCorpusIndexSearchPage({
+        hitDispositions,
+        observer: "unobserved",
+        cluster: "q09",
+        indexId: global.route.indexId,
+        query: "text:fixture",
+        limit: 40,
+        order: RELEVANCE_ORDER,
+        parsedCursor: null,
+        scanTransport,
+        rankingMode,
+        snippetFields: [],
+        projectionRevisionField: "projection_revision",
+        extractId: (hit) =>
+          typeof hit["document_id"] === "string" ? hit["document_id"] : null,
+        extractSnippet: () => null,
+        unseenScoreUpperBound: () => 0,
+        rankCandidates: async (candidates, { selectAppliedCandidates }) => {
+          const rows = await db
+            .select({
+              id: caseLawDecisions.id,
+              appliedRevision: caseLawCorpusAppliedRevision(
+                global.serving.generation,
+              ),
+              appliedGeneration: caseLawCorpusServingGeneration(
+                global.serving.generation,
+              ),
+            })
+            .from(caseLawDecisions)
+            .where(
+              and(
+                inArray(
+                  caseLawDecisions.id,
+                  candidates.map(({ id }) => toSafeId<"caseLawDecision">(id)),
+                ),
+                currentCaseLawCorpusProjection(global.serving.generation),
+              ),
+            );
+          const appliedById = caseLawAppliedProjections(rows);
+          const revisionById = new Map(
+            [...appliedById].map(([id, projection]) => [
+              id,
+              projection.revision,
+            ]),
+          );
+          return {
+            context: {
+              generations: new Map(
+                rows.map(({ id, appliedGeneration }) => [
+                  id,
+                  appliedGeneration,
+                ]),
+              ),
+            },
+            groups: [],
+            ranked: selectAppliedCandidates(appliedById)
+              .filter(({ id }) =>
+                revisionById.has(toSafeId<"caseLawDecision">(id)),
+              )
+              .map((candidate) => ({
+                ...candidate,
+                lexicalScore: candidate.score,
+                citationAuthority: 0,
+              })),
+            revisionById,
+          };
+        },
+      });
+      expect(hitDispositions.snapshot().malformed).toBe(0);
+      return page;
+    };
+    const singleCopy = await search();
+    hits = [...stale, ...current];
+    const beforePurge = await search();
+    expect(beforePurge.passageCountById).toEqual(singleCopy.passageCountById);
+    expect(beforePurge.passageCountById).toEqual(
+      new Map([
+        [CZE_DECISION_ID, 2],
+        [SVK_DECISION_ID, 1],
+      ]),
+    );
+    expect(beforePurge.context.generations).toEqual(
+      new Map([
+        [CZE_DECISION_ID, V9.generation],
+        [SVK_DECISION_ID, V8.generation],
+      ]),
+    );
+    expect(beforePurge.pageRanked.map(({ id }) => id).toSorted()).toEqual(
+      [CZE_DECISION_ID, SVK_DECISION_ID].toSorted(),
+    );
+    expect(
+      beforePurge.pageRanked.find(({ id }) => id === CZE_DECISION_ID)?.score,
+    ).toBe(
+      rankingMode === "bm25-ratio"
+        ? (8 / 10) ** CORPUS_BM25_RATIO_POWER
+        : corpusIndexLexicalScore(2),
+    );
+    expect(beforePurge.passageClauseById.get(CZE_DECISION_ID)).toBe(
+      'chunk_id:"cze-current-1"',
+    );
+    // Only stale Czech matches remain; its applied row alone cannot validate them.
+    hits = [
+      ...stale,
+      ...current.filter(({ document_id }) => document_id === SVK_DECISION_ID),
+    ];
+    const staleOnly = await search();
+    expect(staleOnly.pageRanked.map(({ id }) => id)).toEqual([SVK_DECISION_ID]);
+    expect(staleOnly.passageCountById.has(CZE_DECISION_ID)).toBe(false);
+    expect(staleOnly.passageCountById.get(SVK_DECISION_ID)).toBe(1);
+    expect(requests).toBe(3);
+  },
+);
 
 test("after the flip the old copies are scheduled for erasure and the new ones are untouched", async () => {
   const engine = await buildV9();

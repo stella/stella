@@ -23,6 +23,7 @@ import {
   stableBlendUpperBound,
 } from "@/api/lib/legal-search/rerank";
 import {
+  testAppliedProjectionsFor,
   testRevisionOf,
   testRevisionsFor,
 } from "@/api/tests/helpers/corpus-projection-revisions";
@@ -42,14 +43,16 @@ const rankingTestOptions = {
   limit: 40,
   parsedCursor: null,
   snippetFields: [],
-  revisionRetrieval: { type: "stored", field: "projection_revision" },
+  projectionRevisionField: "projection_revision",
   extractId: (hit) =>
     typeof hit["document_id"] === "string" ? hit["document_id"] : null,
   extractSnippet: () => null,
   unseenScoreUpperBound: stableBlendUpperBound,
   rankCandidates: async (probes, { selectAppliedCandidates }) => {
     const revisionById = testRevisionsFor(probes);
-    const candidates = selectAppliedCandidates(revisionById);
+    const candidates = selectAppliedCandidates(
+      testAppliedProjectionsFor(probes),
+    );
     return {
       context: null,
       groups: [],
@@ -330,7 +333,7 @@ test("BM25 ranking replays a bounded deduplicated universe with scale-invariant 
       limit: 10,
       parsedCursor,
       snippetFields: [],
-      revisionRetrieval: { type: "stored", field: "projection_revision" },
+      projectionRevisionField: "projection_revision",
       extractId: (hit) =>
         typeof hit["document_id"] === "string" ? hit["document_id"] : null,
       extractSnippet: () => null,
@@ -339,7 +342,9 @@ test("BM25 ranking replays a bounded deduplicated universe with scale-invariant 
       unseenScoreUpperBound: () => 0,
       rankCandidates: async (probes, { selectAppliedCandidates }) => {
         const revisionById = testRevisionsFor(probes);
-        const candidates = selectAppliedCandidates(revisionById);
+        const candidates = selectAppliedCandidates(
+          testAppliedProjectionsFor(probes),
+        );
         hydrationRounds += 1;
         hydratedIds = candidates.map(({ id }) => id);
         const ranked = blendStableCitationAuthority({
@@ -417,7 +422,9 @@ test("BM25 pages honor and carry the groups their cursor excludes", async () => 
       parsedCursor,
       rankCandidates: async (probes, { selectAppliedCandidates }) => {
         const revisionById = testRevisionsFor(probes);
-        const candidates = selectAppliedCandidates(revisionById);
+        const candidates = selectAppliedCandidates(
+          testAppliedProjectionsFor(probes),
+        );
         const { representatives, groupTokenById } = collapseByLanguageGroup(
           blendStableCitationAuthority({
             candidates,

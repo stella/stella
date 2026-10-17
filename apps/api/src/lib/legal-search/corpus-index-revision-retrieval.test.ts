@@ -3,7 +3,6 @@ import { afterEach, expect, test } from "bun:test";
 import { createCorpusHitDispositionCounter } from "@/api/lib/legal-search/corpus-hit-telemetry";
 import {
   CORPUS_INDEX_MANIFESTS,
-  corpusIndexRevisionRetrieval,
   type CorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
@@ -11,6 +10,7 @@ import {
   type CorpusIndexScanTransport,
   readCorpusIndexSearchPage,
 } from "@/api/lib/legal-search/corpus-index-pagination";
+import { corpusAppliedProjection } from "@/api/lib/legal-search/corpus-index-revision-clause";
 import {
   CORPUS_BM25_RATIO_POWER,
   type CorpusIndexRankingMode,
@@ -37,7 +37,8 @@ const readRevisionFixture = async ({
   scanTransport,
   rankingMode,
 }: ReadRevisionFixtureOptions) => {
-  const retrieval = corpusIndexRevisionRetrieval(manifest);
+  const appliedProjection = corpusAppliedProjection(manifest, APPLIED_REVISION);
+  const retrieval = appliedProjection.retrieval;
   const stored = retrieval.type === "stored";
   const passages = [
     {
@@ -66,6 +67,12 @@ const readRevisionFixture = async ({
       ? passage
       : { document_id: passage.document_id, chunk_id: passage.chunk_id },
   );
+  if (stored) {
+    returnedHits.push({
+      document_id: "missing-revision",
+      chunk_id: "missing-revision-1",
+    });
+  }
   const requests: Record<string, unknown>[] = [];
   const highlightQueries: string[] = [];
   const stub = async (
@@ -131,7 +138,7 @@ const readRevisionFixture = async ({
     rankingMode,
     order: RELEVANCE_ORDER,
     snippetFields: ["text"],
-    revisionRetrieval: retrieval,
+    projectionRevisionField: "projection_revision",
     extractId: (hit) =>
       typeof hit["document_id"] === "string" ? hit["document_id"] : null,
     extractSnippet: (snippet) => {
@@ -149,7 +156,9 @@ const readRevisionFixture = async ({
         context: null,
         groups: [],
         revisionById,
-        ranked: selectAppliedCandidates(revisionById).map(({ id, score }) => ({
+        ranked: selectAppliedCandidates(
+          new Map(probes.map(({ id }) => [id, appliedProjection])),
+        ).map(({ id, score }) => ({
           id,
           score,
           lexicalScore: score,

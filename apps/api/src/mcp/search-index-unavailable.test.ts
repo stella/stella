@@ -92,7 +92,7 @@ const scanUnreachableIndex = async (): Promise<never> => {
     order: RELEVANCE_ORDER,
     parsedCursor: null,
     snippetFields: ["text"],
-    revisionRetrieval: { type: "stored", field: "projection_revision" },
+    projectionRevisionField: "projection_revision",
     extractId: (hit) =>
       typeof hit["document_id"] === "string" ? hit["document_id"] : null,
     extractSnippet: () => null,

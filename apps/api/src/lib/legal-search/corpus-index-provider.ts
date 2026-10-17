@@ -22,7 +22,9 @@ import { decisionIdentifierProjection } from "@/api/lib/case-law/decision-identi
 import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import {
+  caseLawAppliedProjections,
   caseLawCorpusAppliedRevision,
+  caseLawCorpusServingGeneration,
   caseLawCorpusDocumentCanRecur,
   currentCaseLawCorpusProjection,
 } from "@/api/lib/legal-search/case-law-corpus-projection";
@@ -34,16 +36,12 @@ import {
 import { corpusIndexBrowseFacets } from "@/api/lib/legal-search/corpus-index-facets";
 import { courtPartitionsForCourtFilter } from "@/api/lib/legal-search/corpus-index-group-contract";
 import { readServingCorpusIndexTargetTx } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
-import {
-  corpusIndexRevisionRetrieval,
-  requireCorpusIndexManifest,
-} from "@/api/lib/legal-search/corpus-index-manifest";
+import { requireCorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   readCorpusIndexSearchPage,
   type CorpusCandidateRankingInput,
 } from "@/api/lib/legal-search/corpus-index-pagination";
 import { caseLawCorpusQueryFields } from "@/api/lib/legal-search/corpus-index-read-contract";
-import type { CorpusProjectionRevision } from "@/api/lib/legal-search/corpus-index-revision-clause";
 import { markCorpusFragment } from "@/api/lib/legal-search/corpus-passage-highlight";
 import {
   caseLawCorpusQuery,
@@ -188,6 +186,8 @@ export const rehydrateCorpusIndexProviderCandidatesStatement = (
       canRecur: caseLawCorpusDocumentCanRecur(generation).as("can_recur"),
       appliedRevision:
         caseLawCorpusAppliedRevision(generation).as("applied_revision"),
+      appliedGeneration:
+        caseLawCorpusServingGeneration(generation).as("applied_generation"),
     })
     .from(caseLawDecisions)
     .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
@@ -266,12 +266,10 @@ export const rankCorpusIndexProviderCandidates = async ({
   const authorityById = new Map(
     rows.map((row) => [String(row.id), row.citationAuthority]),
   );
-  const revisionById = new Map<string, CorpusProjectionRevision>();
-  for (const { id, appliedRevision } of rows) {
-    if (appliedRevision !== null) {
-      revisionById.set(String(id), appliedRevision);
-    }
-  }
+  const appliedById = caseLawAppliedProjections(rows);
+  const revisionById = new Map(
+    [...appliedById].map(([id, { revision }]) => [id, revision]),
+  );
 
   // Drop candidates missing from Postgres (index/DB drift) so we never
   // surface a hit we cannot render. Only documents with later physical
@@ -280,7 +278,7 @@ export const rankCorpusIndexProviderCandidates = async ({
   const rendered = (
     selectAppliedCandidates === undefined
       ? candidates
-      : selectAppliedCandidates(revisionById)
+      : selectAppliedCandidates(appliedById)
   ).filter(
     (candidate) =>
       displayById.has(candidate.id) && revisionById.has(candidate.id),
@@ -454,9 +452,8 @@ const searchResult = async (
     scanTransport:
       rankingMode === "bm25-ratio" ? { type: "scored" } : { type: "native" },
     snippetFields: ["text"],
-    revisionRetrieval: corpusIndexRevisionRetrieval(
-      requireCorpusIndexManifest(family, generation),
-    ),
+    projectionRevisionField: requireCorpusIndexManifest(family, generation)
+      .projection.projectionRevisionField,
     extractId: (hit) => {
       const id = hit["document_id"];
       return typeof id === "string" && isUuid(id) ? id : null;

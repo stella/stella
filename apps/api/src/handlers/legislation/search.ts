@@ -48,16 +48,16 @@ import type {
   CorpusServingGenerationAbsentError,
   ServingCorpusIndexGeneration,
 } from "@/api/lib/legal-search/corpus-index-generation-store";
-import {
-  corpusIndexRevisionRetrieval,
-  requireCorpusIndexManifest,
-} from "@/api/lib/legal-search/corpus-index-manifest";
+import { requireCorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   type SearchCursor,
   readCorpusIndexSearchPage,
   type CorpusCandidateRankingInput,
 } from "@/api/lib/legal-search/corpus-index-pagination";
-import type { CorpusProjectionRevision } from "@/api/lib/legal-search/corpus-index-revision-clause";
+import {
+  corpusAppliedProjection,
+  type CorpusAppliedProjection,
+} from "@/api/lib/legal-search/corpus-index-revision-clause";
 import {
   corpusFreeTextClause,
   quoteCorpusValue,
@@ -576,16 +576,23 @@ export const rehydrateLegislationCandidates = async ({
   const authorityById = new Map(
     read.rows.map((row) => [String(row.id), row.citationAuthority]),
   );
-  const revisionById = new Map<string, CorpusProjectionRevision>();
+  const appliedById = new Map<string, CorpusAppliedProjection>();
+  const manifest = requireCorpusIndexManifest("legislation", generation);
   for (const { id, appliedRevision } of read.rows) {
     if (appliedRevision !== null) {
-      revisionById.set(String(id), appliedRevision);
+      appliedById.set(
+        String(id),
+        corpusAppliedProjection(manifest, appliedRevision),
+      );
     }
   }
+  const revisionById = new Map(
+    [...appliedById].map(([id, { revision }]) => [id, revision]),
+  );
   const appliedCandidates =
     selectAppliedCandidates === undefined
       ? candidates
-      : selectAppliedCandidates(revisionById);
+      : selectAppliedCandidates(appliedById);
   const rankedCandidates =
     ranking === "authority"
       ? blendStableCitationAuthority({
@@ -1111,9 +1118,10 @@ const corpusIndexSearch = async ({
           }
         : {}),
       snippetFields: ["text"],
-      revisionRetrieval: corpusIndexRevisionRetrieval(
-        requireCorpusIndexManifest("legislation", generation),
-      ),
+      projectionRevisionField: requireCorpusIndexManifest(
+        "legislation",
+        generation,
+      ).projection.projectionRevisionField,
       extractId: (hit) => {
         const id = hit["document_id"];
         return typeof id === "string" && isUuid(id) ? id : null;

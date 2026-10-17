@@ -8,7 +8,12 @@ import {
 } from "@/api/db/schema";
 import { caseLawIndexIdSql } from "@/api/lib/legal-search/case-law-index-groups";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
-import type { CorpusProjectionRevision } from "@/api/lib/legal-search/corpus-index-revision-clause";
+import { requireCorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
+import {
+  corpusAppliedProjection,
+  type CorpusAppliedProjection,
+  type CorpusProjectionRevision,
+} from "@/api/lib/legal-search/corpus-index-revision-clause";
 
 const CASE_LAW_FAMILY = "case_law" satisfies CorpusFamily;
 
@@ -18,8 +23,8 @@ const CASE_LAW_FAMILY = "case_law" satisfies CorpusFamily;
  * the caller passes. The acceptance of an indexed hit follows the pointer and
  * nothing else, so it can never disagree with where the read went.
  */
-const servingGenerationOfDecision = (generation: string) =>
-  sql`COALESCE((
+export const caseLawCorpusServingGeneration = (generation: string) =>
+  sql<string>`COALESCE((
     SELECT pointer.${sql.identifier(corpusIndexJurisdictionServing.generation.name)}
     FROM ${corpusIndexJurisdictionServing} pointer
     WHERE pointer.${sql.identifier(corpusIndexJurisdictionServing.family.name)} = ${CASE_LAW_FAMILY}
@@ -35,7 +40,7 @@ export const caseLawCorpusDocumentCanRecur = (generation: string) =>
       SELECT projection_state.applied_revision
       FROM ${corpusIndexProjectionStates} projection_state
       WHERE projection_state.family = ${CASE_LAW_FAMILY}
-        AND projection_state.generation = ${servingGenerationOfDecision(generation)}
+        AND projection_state.generation = ${caseLawCorpusServingGeneration(generation)}
         AND projection_state.entity_id = ${caseLawDecisions}.${sql.identifier(caseLawDecisions.id.name)}
     )
   ), 0) <> 1`;
@@ -50,7 +55,7 @@ export const caseLawCorpusAppliedRevision = (generation: string) =>
     SELECT projection_state.applied_revision
     FROM ${corpusIndexProjectionStates} projection_state
     WHERE projection_state.family = ${CASE_LAW_FAMILY}
-      AND projection_state.generation = ${servingGenerationOfDecision(generation)}
+      AND projection_state.generation = ${caseLawCorpusServingGeneration(generation)}
       AND projection_state.entity_id = ${caseLawDecisions}.${sql.identifier(caseLawDecisions.id.name)}
   )`;
 
@@ -102,3 +107,27 @@ export const currentCaseLawCorpusProjection = (generation: string): SQL =>
       JOIN ${corpusIndexProjectionStates}
         ON ${acceptedCaseLawProjectionStateAt(sql`COALESCE(pointer.${sql.identifier(corpusIndexJurisdictionServing.generation.name)}, ${generation})`)}
     )`;
+
+/** Derive each accepted decision's retrieval contract from SQL's effective generation. */
+export const caseLawAppliedProjections = (
+  rows: Iterable<{
+    id: string;
+    appliedRevision: CorpusProjectionRevision | null;
+    appliedGeneration: string;
+  }>,
+): ReadonlyMap<string, CorpusAppliedProjection> => {
+  const applied = new Map<string, CorpusAppliedProjection>();
+  for (const { id, appliedRevision, appliedGeneration } of rows) {
+    if (appliedRevision === null) {
+      continue;
+    }
+    applied.set(
+      id,
+      corpusAppliedProjection(
+        requireCorpusIndexManifest(CASE_LAW_FAMILY, appliedGeneration),
+        appliedRevision,
+      ),
+    );
+  }
+  return applied;
+};

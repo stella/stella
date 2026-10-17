@@ -28,8 +28,8 @@ import {
   getCorpusIndexClient,
   isCorpusIndexUnavailable,
 } from "@/api/lib/legal-search/corpus-index-client";
-import type { CorpusRevisionRetrieval } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
+  type CorpusAppliedProjection,
   type CorpusProjectionRevision,
   type CorpusProjectionRevisionField,
   corpusRevisionClause,
@@ -133,7 +133,7 @@ type CorpusIndexRanking<TContext> = {
 };
 
 type SelectAppliedCorpusCandidates = (
-  revisionById: ReadonlyMap<string, CorpusProjectionRevision>,
+  appliedById: ReadonlyMap<string, CorpusAppliedProjection>,
 ) => readonly ScoredCandidate[];
 
 /** Scan identities require a revision selector; already-scored callers do not. */
@@ -228,8 +228,8 @@ type CorpusIndexSearchPageInput<TContext> = {
    * a couple of hundred passages to answer with ten.
    */
   snippetFields: string[];
-  /** Whether the manifest returns revision identity with each physical hit. */
-  revisionRetrieval: CorpusRevisionRetrieval;
+  /** The manifest's indexed revision field, including on legacy mappings. */
+  projectionRevisionField: CorpusProjectionRevisionField;
   extractId: (hit: CorpusIndexHit) => string | null;
   /**
    * The excerpt one hit shows. Handed the hit beside its snippet because the
@@ -936,12 +936,18 @@ type ScannedPassage = {
   clause: string | null;
 };
 
+type SelectedPassages = {
+  id: string;
+  best: ScannedPassage;
+  count: number;
+};
+
 /**
- * Stored revisions stay separate until SQL binds the applied copy. Legacy
- * mappings expose no revision in hits; they retain document-level ranking and
- * constrain hydration to the applied revision through `pageRevisionClauses`.
+ * A global read can span mappings with different revision storage. SQL binds
+ * each decision to its effective generation; missing physical revisions are
+ * accepted only while that decision still uses a legacy mapping.
  */
-const appliedPassages = (retrieval: CorpusRevisionRetrieval) => {
+const appliedPassages = () => {
   const passages = new Map<
     string,
     Map<string | null, { best: ScannedPassage; count: number }>
@@ -949,60 +955,67 @@ const appliedPassages = (retrieval: CorpusRevisionRetrieval) => {
   const candidates: { id: string }[] = [];
   const passageClauseById = new Map<string, string>();
   const bestScoreById = new Map<string, number>();
-  const applied = (
-    revisionById: ReadonlyMap<string, CorpusProjectionRevision>,
-  ) =>
+  let selected: SelectedPassages[] | undefined;
+  const applied = (appliedById: ReadonlyMap<string, CorpusAppliedProjection>) =>
     [...passages]
-      .flatMap(([id, revisions]) =>
-        [...revisions].flatMap(([revision, passage]) =>
-          retrieval.type === "query_only" || revision === revisionById.get(id)
-            ? [{ id, ...passage }]
-            : [],
-        ),
-      )
+      .flatMap(([id, revisions]) => {
+        const projection = appliedById.get(id);
+        if (projection === undefined) {
+          return [];
+        }
+        let best: ScannedPassage | undefined;
+        let count = 0;
+        for (const [revision, passage] of revisions) {
+          const matches =
+            revision === null
+              ? projection.retrieval.type === "query_only"
+              : revision === projection.revision;
+          if (!matches) {
+            continue;
+          }
+          count += passage.count;
+          if (best === undefined || passage.best.position < best.position) {
+            best = passage.best;
+          }
+        }
+        return best === undefined ? [] : [{ id, best, count }];
+      })
       .toSorted((a, b) => a.best.position - b.best.position);
   return {
     candidates,
     passageClauseById,
     bestScoreById,
     record: (passage: ScannedPassage): boolean => {
-      const { id } = passage;
-      let revision: string | null;
-      switch (retrieval.type) {
-        case "stored":
-          if (typeof passage.revision !== "string") {
-            return false;
-          }
-          revision = passage.revision;
-          break;
-        case "query_only":
-          revision = null;
-          break;
-        default:
-          retrieval satisfies never;
-          return panic("Unhandled revision retrieval capability");
+      const { id, revision } = passage;
+      if (
+        revision !== undefined &&
+        revision !== null &&
+        typeof revision !== "string"
+      ) {
+        return false;
       }
+      const key = revision ?? null;
       let revisions = passages.get(id);
       if (revisions === undefined) {
         revisions = new Map();
         passages.set(id, revisions);
-        // Identity probes for the SQL read; scores resolve only after that read.
         candidates.push({ id });
       }
-      const existing = revisions.get(revision);
+      const existing = revisions.get(key);
       if (existing === undefined) {
-        revisions.set(revision, { best: passage, count: 1 });
+        revisions.set(key, { best: passage, count: 1 });
       } else {
         existing.count += 1;
       }
       return true;
     },
     selectCandidates: (
-      revisionById: ReadonlyMap<string, CorpusProjectionRevision>,
+      appliedById: ReadonlyMap<string, CorpusAppliedProjection>,
     ) => {
+      selected = applied(appliedById);
       passageClauseById.clear();
       bestScoreById.clear();
-      return applied(revisionById).map(({ id, best }) => {
+      return selected.map(({ id, best }) => {
         if (best.clause !== null) {
           passageClauseById.set(id, best.clause);
         }
@@ -1012,8 +1025,16 @@ const appliedPassages = (retrieval: CorpusRevisionRetrieval) => {
         return { id, score: best.score };
       });
     },
-    counts: (revisionById: ReadonlyMap<string, CorpusProjectionRevision>) =>
-      new Map(applied(revisionById).map(({ id, count }) => [id, count])),
+    counts: (revisionById: ReadonlyMap<string, CorpusProjectionRevision>) => {
+      if (selected === undefined) {
+        return panic("Corpus ranker did not select applied candidates");
+      }
+      return new Map(
+        selected
+          .filter(({ id }) => revisionById.has(id))
+          .map(({ id, count }) => [id, count]),
+      );
+    },
   };
 };
 
@@ -1033,7 +1054,7 @@ const readWindowPage = async <TContext>({
   scanTransport = NATIVE_SCAN_TRANSPORT,
   maxRounds = LIMITS.corpusIndexSearchMaxRounds,
   snippetFields,
-  revisionRetrieval,
+  projectionRevisionField,
   extractId,
   extractSnippet,
   rankCandidates,
@@ -1041,7 +1062,7 @@ const readWindowPage = async <TContext>({
 }: ObservedCorpusIndexSearchPageInput<TContext>): Promise<
   ScanPage<TContext>
 > => {
-  const passages = appliedPassages(revisionRetrieval);
+  const passages = appliedPassages();
   const { candidates, passageClauseById, bestScoreById } = passages;
   const rankingScope = rankingScopeOf(parsedCursor, passages.selectCandidates);
   const scores = scanScoreRecorder(bestScoreById);
@@ -1136,7 +1157,7 @@ const readWindowPage = async <TContext>({
           if (
             !passages.record({
               id,
-              revision: hit[revisionRetrieval.field],
+              revision: hit[projectionRevisionField],
               score: corpusIndexLexicalScore(startOffset + index),
               position: startOffset + index,
               bm25: round.scores?.[index],
@@ -1202,7 +1223,7 @@ const readWindowPage = async <TContext>({
     clauses: pageRevisionClauses({
       pageRanked,
       revisionById: ranking.revisionById,
-      field: revisionRetrieval.field,
+      field: projectionRevisionField,
       passageClauseById,
     }),
     cluster,
@@ -1336,7 +1357,7 @@ const readOffsetChainPage = async <TContext>(
     clauses: pageRevisionClauses({
       pageRanked,
       revisionById,
-      field: options.revisionRetrieval.field,
+      field: options.projectionRevisionField,
       passageClauseById,
     }),
     cluster: options.cluster,
@@ -1435,7 +1456,7 @@ const readBm25SearchPage = async <TContext>(
     skip = 0,
     scanTransport,
     snippetFields,
-    revisionRetrieval,
+    projectionRevisionField,
     extractId,
     extractSnippet,
     rankCandidates,
@@ -1483,7 +1504,7 @@ const readBm25SearchPage = async <TContext>(
   const hits = round.hits
     .slice(0, CORPUS_BM25_PASSAGE_LIMIT)
     .toSorted(compareBm25Passages);
-  const passages = appliedPassages(revisionRetrieval);
+  const passages = appliedPassages();
   const { candidates, bestScoreById, passageClauseById } = passages;
   let malformed = 0;
   for (const [position, { fields: hit, score }] of hits.entries()) {
@@ -1500,7 +1521,7 @@ const readBm25SearchPage = async <TContext>(
         if (
           !passages.record({
             id,
-            revision: hit[revisionRetrieval.field],
+            revision: hit[projectionRevisionField],
             score:
               topScore === 0
                 ? 0
@@ -1556,7 +1577,7 @@ const readBm25SearchPage = async <TContext>(
     clauses: pageRevisionClauses({
       pageRanked,
       revisionById: ranking.revisionById,
-      field: revisionRetrieval.field,
+      field: projectionRevisionField,
       passageClauseById,
     }),
     cluster,
