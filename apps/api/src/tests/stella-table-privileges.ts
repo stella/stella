@@ -191,7 +191,7 @@ const tablePrivileges = (privilegeList: string): TablePrivilege[] => {
   return privileges;
 };
 
-const stripComments = (sqlText: string): string =>
+export const migrationSqlWithoutLineComments = (sqlText: string): string =>
   sqlText.replaceAll(/--[^\n]*/gu, "");
 
 export type MigrationSource = { name: string; sql: string };
@@ -249,7 +249,9 @@ export const deriveStellaTablePrivileges = (
 
   for (const migration of migrations) {
     let dynamicApplied = false;
-    for (const match of stripComments(migration.sql).matchAll(EVENT)) {
+    for (const match of migrationSqlWithoutLineComments(migration.sql).matchAll(
+      EVENT,
+    )) {
       const groups = match.groups ?? {};
       if (groups["create"] !== undefined) {
         const name = relationName(groups["createName"] ?? "");
