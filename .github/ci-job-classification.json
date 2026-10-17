@@ -769,7 +769,7 @@
         "type": "checkout"
       },
       "path": ".github/workflows/autofix.yml",
-      "digest": "b2741b2a83cdd427e5d4f956dcf2cdb1f3478ab96d7bf006988888e935e7363c",
+      "digest": "5ee3f043265b85e8f98f77d177c71479519d906149f444a211d580dc001a0fe9",
       "references": [],
       "jobs": [
         {
@@ -787,14 +787,14 @@
         {
           "id": "regenerate-scope",
           "kind": "ordinary",
-          "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "89c57e898b0752087a2089251a9b19ee35d7110e4a1008d1254330c8afa0789a"
+          "qualifier": "Plans pull-request autofix scope using settled-run evidence; no release publication, tag creation, or deployment.",
+          "digest": "07c526eea1c675633304d7b2fdeede7a32baac72c6e37ca8470eb9d86513d824"
         },
         {
           "id": "regenerate-derived-files",
           "kind": "ordinary",
-          "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "66e2925fd16f6f91a4400e785dbeef5e1f00185b4484acd1161f4fe0f24c941d"
+          "qualifier": "Regenerates and pushes scoped pull-request autofix commits; no release publication, tag creation, or deployment.",
+          "digest": "e746a3ddf1eee8dd3732b65722164fdee0b9297945066c014c4bf3a4514a7a5c"
         }
       ],
       "edges": {
@@ -940,242 +940,242 @@
         "type": "checkout"
       },
       "path": ".github/workflows/ci.yml",
-      "digest": "9bccdfb219e9af3f58d3fb02509aa27567f912fba7e26878860c62fbc9555105",
+      "digest": "9caeac976c4b57396149632b963f7ed57914fcf5f80fdc5f1fd937d551cff2ec",
       "references": ["./.github/workflows/ci.yml"],
       "jobs": [
         {
           "id": "ci-plan",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "a59e6d80905b2bc0d551d922abf59c9bf161462c4d721d58bb805abbae0cc14d"
+          "digest": "73ccc280acd003d9113c2f1ed6bac8c677576cdaec1588ec1789979a53268c51"
         },
         {
           "id": "docker-checks",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "820e656b7468cbf578b3237808a3066e61c2397d7ae537f9f8ae959586bcd9ef"
+          "digest": "75082fecd6ffcee45bf4b375b5221c851fd27572fc96f21e4731089809dd3e76"
         },
         {
           "id": "ci-checks-generated",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "e992c953699b6ac347b2cdbeebc55a5e622181bcfd8be65d555d1bd62a1248b4"
+          "digest": "8f83718e10733e295d439c0ef157048eb8458f47332bda318cbe6b24e7a4ec4b"
         },
         {
           "id": "ci-checks-policy",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "fc5d20f3c628be2ecc0a909b9ee811b31d95bbc5a5b47b5cbc7de5d9005b143c"
+          "digest": "4b62a55a12ba33eb45797e0ac36a484e218325d7804b0065561cc7baa441d2fc"
         },
         {
           "id": "ci-checks-rest",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "f7cc1c30e881e8c8301ffcc785a297f6ba4e51a547b2743a48c54039f11d1ca1"
+          "digest": "f437f2c0fcfdd54c9b601cdd6e03de91c66256d17c06683b1971460679fdfd5e"
         },
         {
           "id": "ci-tests",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "b41fda0cd0b7c7ac8f6d549f75a7c2609c1e1dd655bf1a5f863bdb9557b9a254"
+          "digest": "7d2aa19485887699b50074983670032025d34fb32170feafe78c78fe8960d901"
         },
         {
           "id": "api-test-durations",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "912bc8069ec36885a97d3ed48fbfdb484035b22e7b5916d65caaaa1df18928fd"
+          "digest": "b5baf043bfb14ac655773b9d859f23c8ac0594f36648ce7bc6a4d1cd079d0be7"
         },
         {
           "id": "ci-browser",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "eab828981425e259e50312e574000afce2c537568590acc173be91b1b73eaa56"
+          "digest": "97d12da0e210320b34b83b42ef8ac9cfbb4e5e889df4cbbd842b7597e29616cf"
         },
         {
           "id": "code-quality-api",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "54fd0f890692ff37b03659d35d3e19d86b91d9232bc75fae3037612f899abd21"
+          "digest": "943f6604cd8d4c1392b0264ed3046b3f09e79c199836c87797313cf8972aa24a"
         },
         {
           "id": "code-quality-web-rest",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "155774d0777382885bf7b5c5a5c87548b85f68f416b9c1cd932ee2c1fe09c44b"
+          "digest": "f5fd42570b193f8ee824c3456f3530e037d32112d3b0efc703191f3991aa6d6a"
         },
         {
           "id": "query-perf",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "94bd40de0d0dc2f55ecf7111f3dfc5aa350dc2b9206ae4883118b8467b357e44"
+          "digest": "90e16fe2bd4a0608885f42fcbe703414b292b4e2ac889de7bb664bcaf4f1c41a"
         },
         {
           "id": "postgres-service-suites",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "c1edef8161475394611790019563276d0bf073f4809c96f11d5709a0351200cd"
+          "digest": "52a49df01c96c0d4808c14e4bb23d3b518f7dbe3f0b9eb9980de0e6eea891bb8"
         },
         {
           "id": "service-suites",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "8030fd771193b65c4c63429a31ef84ee1d59b4aa1de06683974b548e4783ba0f"
+          "digest": "aaa6e65c4c808b034ed86f60f2ebe9f18c864f4c89529654dcc15324e62c5dfd"
         },
         {
           "id": "migration-upgrade-rehearsal",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "08b9ce78d01c821974256aa908b33b8bdf8bc4702ea2b46ff209000cc94a55c2"
+          "digest": "72a4598d10cf8e36cf70ca660e0fb3449eb35bef7d09ad31f78cf1457af50ea8"
         },
         {
           "id": "release-typecheck",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "58db7a1a0efaee9f5dcfe902c6b4d561fa1a9a5de1dc46c2a9f4a4b2fd84d393"
+          "digest": "de9787ba58ff966e589f32c8b4abf99c11fa63fb4e32c051e055960a304a0e80"
         },
         {
           "id": "fix-tests-on-base",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "094a78209d33c2a0e9590413bc7555e258076d34c58565b6d3abf59317591053"
+          "digest": "e90760a3e09fcef4f03091f8052e9998a7d5ef40c6622392f32513f5720315cd"
         },
         {
           "id": "web-build",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "5f7abc68e3cd0e4afd91dd1888b44eeeed2b410d4ede25cc3c8c99b37a4135e9"
+          "digest": "7421c8293eb87b9e8a7d91dd8415699f6bb5015c76ace28e4eb378febaa2e5fd"
         },
         {
           "id": "web-image-smoke",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "8bc417b577297f923c2f981d91a0e38c06d7dccbb0dd5644e1ac56bf1eb76d2b"
+          "digest": "f0e5524d69a6d466d5f6ba7fddbc252933ee4fd2594ee1ff6698e6026b810bc5"
         },
         {
           "id": "mobile-build",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "5ea5236503d594ff8312b53e3984d3289bf2bd4c966b4eb9082079ef6e29cbe2"
+          "digest": "b40711893e30d2a38204b86375d2b60412d071f44e255ec25bc5314fd92ed2ba"
         },
         {
           "id": "landing-build",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "66e4de2b5ce619138d1359fddb3358c35f93e90c53a536a0c4aab385f62169a0"
+          "digest": "52f07274f00f816d2c795f5b06e8f8bf5f2b7587a50c76a22f1a8c70cc905a2c"
         },
         {
           "id": "heavy-web-build",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "cacff02da03f52fe6bc844fd02aeed88264af06fd581aab6829872d1ddbbac01"
+          "digest": "d926694bc801d8e52270fce41648e884c48cb5f4efa3db5410a17d61da94ea28"
         },
         {
           "id": "route-smoke",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "63b63ed884249f387f7649e3db42f377d28cc088e89d6ed0e3f8172750c5c4b9"
+          "digest": "dce82d6dcfb71bed625d5f1f41607853f9c147beea6305f6f354f40a9649f1b6"
         },
         {
           "id": "e2e-production-shard",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "9328d702f8beb454614912efd3d02feb3c45900706eaa298f7d86f700a766f0b"
+          "digest": "dcb52a8bea977a7d437fc85131f8cca36028441d34c117f6e5ac19b63b653e9d"
         },
         {
           "id": "stack-redaction-browsers",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "0379c15969f3bbbb71f2c20b4ad9f61984766555e523b3243b498d28c0a27132"
+          "digest": "4616e8796d7bdeb7d1a262a1b253653c294cf6ed0b225efd945d32942cff8f93"
         },
         {
           "id": "e2e-vite-canary",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "fc3774d949fc793835f2efd49da8b2c249501ef346ecd4b8d361d0b4044d405b"
+          "digest": "ba3fa413a3e26dc1cbde19344e50a299be3fb1a0e59ca50004f82517fd3153a9"
         },
         {
           "id": "e2e-landing",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "d6a2a20c80fef1de7f5d41bf03ec7b920afc6f71b6b626fbc17296d649dc77dc"
+          "digest": "6ec9433489f28f18da56e6ab58605244cf062f602ff019ee9bfdf269441f33ef"
         },
         {
           "id": "marketing-screenshots",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "c1245dd90e2e10a6ab17d298c4f9f441d050859690f082d05e85697c55bdbddb"
+          "digest": "d57ce2c6190b0bf96e471d0b0ff9ed151b3177e3525896e51c3ee5d0269db2ca"
         },
         {
           "id": "marketing-screenshots-cancel",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "d96d7c811ee1829ed5bef363c532649538a97e20831fe95df7a9f5f2abbffeab"
+          "digest": "7552841c10dfe576ee095fdcfce982ebcaa52b211d485c2bf671f3bae8b34bdd"
         },
         {
           "id": "e2e-report",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "d375003f3c5c83fb2342b2970f1b6a2626d303ba8f6bd352e97ff6e34cc3ece5"
+          "digest": "c80cdfb0cd00512306b98dfd29774525446f1a8cf63a4f26a0668174df5822c1"
         },
         {
           "id": "api-image-smoke",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "cdd2c6b9f9f816354082e07176db02974b7385da2f5b709a3f2b18cdf5b046da"
+          "digest": "44e0d691465293d63eca7943c44a2eb0a94cb889465134db0c9d77971a9d4f45"
         },
         {
           "id": "legal-atlas-image",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "466a0223cc61f2a3894172ea51305def20afd142272c259ba90024d2bcde6633"
+          "digest": "472aed78733e552f987f69957952dcb9410a56040b8d42cdc6c217b8973eef8e"
         },
         {
           "id": "desktop-windows-dry-run",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "b409f894c5e74bde8432372c3bcdd22c4b9fd8a2cd1d187ab89df28a05847931"
+          "digest": "d0fceac48a8746d34b23f6ba2170d442949bda40b9cf10a2af1e9ba2ab8d37a4"
         },
         {
           "id": "windows-scripts",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "c8d78b900b31c9c066a5c190ccd58a8170de2f9a8dc674a20f6c22ab3efb5ff9"
+          "digest": "5910ab7cc2e7ef6091babbe788ff1a8bdd8235cbda1dbfd7d8cb64121f5589b3"
         },
         {
           "id": "scan-engine-wasm-drift",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "17edb6d2815afd841fdd0ba05e122f550dd11349b52cf2c372203aaa03f3e1c2"
+          "digest": "05052cbc780f0e706b1a7bf10cdf0dba7e04f280401ccc8ed5fad4719fa6d44f"
         },
         {
           "id": "desktop-rust-tests",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "d29855fec83e5fe93a4d3d74a65a939f8634bd970ba9e457753e672b67377e6c"
+          "digest": "3d0c9c6afee7ff284e20ddae76599ea5aba220cf731dbf3408fd8dfdba203cc0"
         },
         {
           "id": "desktop-rust-lint",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "12d0ca43f82de454de27639e7ab704bcc3f74d86eb0f09e6da50027b6190a62d"
+          "digest": "6179c2894c45f0b3fb6fef42875462d43ae3bee66efd6f5c434d6a1a34d905b8"
         },
         {
           "id": "dependency-malware",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "a2047e352d331064aebf20f68359bab5d46e3313e83722e57c84094634d86cf9"
+          "digest": "9e1ff242302f42a1636fcd7ece71a4880eb9d83abf4b19e866c27039f4be578a"
         },
         {
           "id": "ci-quick-checks",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "3ffc3bc717d9e110bad7aef89b4e676ba9317b1e2d5b5c0946841900039755e9"
+          "digest": "8aa5e1c18d10c5f43a7d719e64659700bdb376509ea41fcdc69f4684741c3604"
         },
         {
           "id": "ci-result",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "7ce4c1d6d39d1139b0930751545cc822484c9cb4b4f254b3f57bcf806030bd29"
+          "digest": "28d5960481e89069bb3d7152123d87a3b17be8bac2f745e7a376c863680c60b7"
         }
       ],
       "edges": {
@@ -2490,7 +2490,7 @@
         "type": "checkout"
       },
       "path": ".github/workflows/release-desktop.yml",
-      "digest": "29d41928475230770aee06bacbae06d1dfd1b6967675af7a1710c46b42c018cc",
+      "digest": "4877df79d379c1e84a2784af1501ca55b0262c5e2e766c0c256743288c439819",
       "references": [],
       "jobs": [
         {
@@ -2503,7 +2503,7 @@
           "id": "build",
           "kind": "priority",
           "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-          "digest": "03b9bb8c0e87cca2733f09600c0d201cb365ff4a81664946795106578bd49e83"
+          "digest": "ab829786abc6860bbe808fca12afa7541b34f05f8901be8263c5ebc6f7224822"
         },
         {
           "id": "verify-production",

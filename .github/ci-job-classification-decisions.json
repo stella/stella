@@ -61,11 +61,11 @@
   },
   "candidate:.github/workflows/autofix.yml/regenerate-scope": {
     "kind": "ordinary",
-    "qualifier": "Checks; no publication, tag creation, or deployment."
+    "qualifier": "Plans pull-request autofix scope using settled-run evidence; no release publication, tag creation, or deployment."
   },
   "candidate:.github/workflows/autofix.yml/regenerate-derived-files": {
     "kind": "ordinary",
-    "qualifier": "Checks; no publication, tag creation, or deployment."
+    "qualifier": "Regenerates and pushes scoped pull-request autofix commits; no release publication, tag creation, or deployment."
   },
   "candidate:.github/workflows/bot-refresh-auto-merge.yml/arm": {
     "kind": "ordinary",
