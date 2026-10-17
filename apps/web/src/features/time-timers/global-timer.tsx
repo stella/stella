@@ -1,4 +1,5 @@
 import { lazy, Suspense } from "react";
+import type { ComponentType } from "react";
 
 import { useInfiniteQuery } from "@tanstack/react-query";
 
@@ -13,7 +14,14 @@ const TimerContent = lazy(async () => {
   return { default: GlobalTimerContent };
 });
 
-export const GlobalTimer = ({ workspaceId }: { workspaceId?: string }) => {
+export const GlobalTimer = ({
+  workspaceId,
+  Content = TimerContent,
+}: {
+  workspaceId?: string;
+  /** The timer surface; tests pass a fake to observe the wrapper alone. */
+  Content?: ComponentType<{ workspaceId?: string }>;
+}) => {
   const enabled = useTimeBillingPreviewEnabled();
   const canRead = usePermissions({ timeEntry: ["read"] });
   const user = useAuthenticatedUser();
@@ -28,7 +36,7 @@ export const GlobalTimer = ({ workspaceId }: { workspaceId?: string }) => {
   }
   return (
     <Suspense fallback={null}>
-      <TimerContent
+      <Content
         key={`${user.activeOrganizationId}:${user.id}`}
         {...(workspaceId === undefined ? {} : { workspaceId })}
       />
