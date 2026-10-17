@@ -7153,30 +7153,20 @@ test("Postgres PR required checks follow trust, run eligibility and the general 
   }
 });
 
-const TARGET_BASE_ACTION = ".github/actions/merge-target-base/action.yml";
+const TARGET_BASE_SCRIPT = nodePath.join(
+  import.meta.dir,
+  "merge-target-base.sh",
+);
 
-/** Runs the comparison-base resolver's script in `cwd` and returns its output. */
+/** Runs the comparison-base resolver in `cwd` and returns its output. */
 const resolveTargetBase = (
   cwd: string,
   env: Record<string, string>,
   expectedExit = 0,
 ) => {
-  const action = v.parse(
-    v.object({
-      runs: v.object({ steps: v.array(v.object({ run: v.string() })) }),
-    }),
-    Bun.YAML.parse(
-      readFileSync(
-        nodePath.join(import.meta.dir, "..", TARGET_BASE_ACTION),
-        "utf-8",
-      ),
-    ),
-  );
-  const script =
-    action.runs.steps.at(0)?.run ?? panic("resolver has no script");
   const output = nodePath.join(cwd, ".resolver-output");
   writeFileSync(output, "");
-  const result = Bun.spawnSync(["bash", "-e", "-c", script], {
+  const result = Bun.spawnSync(["bash", TARGET_BASE_SCRIPT], {
     cwd,
     env: { PATH: Bun.env["PATH"] ?? "", GITHUB_OUTPUT: output, ...env },
     stdout: "pipe",
@@ -7329,4 +7319,13 @@ test("only the resolver chooses a merge group's comparison base", () => {
     "needs.ci-plan.outputs.target_base_sha",
   );
   expect(certified?.run).toContain("GITHUB_STEP_SUMMARY");
+  // ci-plan runs the workflow revision's own resolver, never the copy in the
+  // tree it certifies.
+  const resolver = jobSteps(ciJobs["ci-plan"]).find(
+    ({ name }) => name === "Resolve comparison base",
+  );
+  expect(resolver?.run).toBe('bash "$RUNNER_TEMP/merge-target-base.sh"');
+  expect(JSON.stringify(jobSteps(ciJobs["ci-plan"]))).toContain(
+    "scripts/merge-target-base.sh",
+  );
 });

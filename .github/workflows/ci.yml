@@ -320,12 +320,14 @@ jobs:
           sparse-checkout: |
             .github/workflows/ci.yml
             scripts/gh-retry.sh
+            scripts/merge-target-base.sh
             scripts/retry.sh
           sparse-checkout-cone-mode: false
 
       - name: Preserve GitHub API tooling across source checkouts
         run: |
           cp "$GITHUB_WORKSPACE/.workflow-tooling/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          cp "$GITHUB_WORKSPACE/.workflow-tooling/scripts/merge-target-base.sh" "$RUNNER_TEMP/merge-target-base.sh"
           echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
 
       - name: Preserve this run's CI workflow for planning
@@ -403,12 +405,17 @@ jobs:
           filter: blob:none
           persist-credentials: false
 
-      # Only pull requests and merge groups have a base; both run the checkout
-      # above, which puts the local action in the workspace.
+      # Only pull requests and merge groups have a base, and both fetched their
+      # history above. The resolver is this workflow revision's own copy, so
+      # the tree being certified cannot change how its base is chosen.
       - name: Resolve comparison base
         if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
         id: target-base
-        uses: ./.github/actions/merge-target-base
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          TARGET_REF: ${{ github.event.merge_group.base_ref }}
+        run: bash "$RUNNER_TEMP/merge-target-base.sh"
 
       - name: Compute stable patch id
         id: patch-id
