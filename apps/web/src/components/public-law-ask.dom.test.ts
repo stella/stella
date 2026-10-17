@@ -11,8 +11,12 @@ const { useInspectorTabsStore } =
   await import("@/components/inspector/inspector-tabs-store");
 const { mentionTagAttrs, referenceFromMentionAttrs } =
   await import("@/components/references/reference.logic");
-const { claimQueuedChatSend, hasQueuedChatSend, subscribeQueuedChatSend } =
-  await import("@/features/chat/queued-chat-sends");
+const {
+  claimQueuedChatSend,
+  hasQueuedChatSend,
+  settleQueuedChatSend,
+  subscribeQueuedChatSend,
+} = await import("@/features/chat/queued-chat-sends");
 
 afterAll(async () => {
   await unregisterDomEnvironment();
@@ -30,8 +34,15 @@ const openedThreadIds = () =>
     .getState()
     .tabs.flatMap((tab) => (tab.type === "chat" ? [tab.id] : []));
 
-const claim = (threadId: ChatThreadId) =>
-  claimQueuedChatSend({ scope: "global", threadId });
+// The tab takes the question and sends it: claim, then report it sent.
+const claim = (threadId: ChatThreadId) => {
+  const threadRef = { scope: "global", threadId } as const;
+  const html = claimQueuedChatSend(threadRef);
+  if (html !== null) {
+    settleQueuedChatSend(threadRef, "sent");
+  }
+  return html;
+};
 
 beforeEach(() => {
   useInspectorTabsStore.setState({ tabs: [] });

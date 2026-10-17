@@ -96,7 +96,7 @@ import { chatThreadOptions } from "@/features/chat/queries";
 import {
   claimQueuedChatSend,
   hasQueuedChatSend,
-  queueChatSend,
+  settleQueuedChatSend,
   subscribeQueuedChatSend,
 } from "@/features/chat/queued-chat-sends";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
@@ -515,11 +515,12 @@ export const ChatTabPanel = ({
         prompt: queuedHtml,
         files: [],
       });
-      // A question that was not sent goes back to the queue, so the next
-      // attempt sends it instead of losing it.
-      if (outcome !== PROMPT_SUBMIT_OUTCOME.SENT) {
-        queueChatSend(threadRef, queuedHtml);
-      }
+      // A question that was not sent waits again, so the next attempt sends
+      // it instead of losing it.
+      settleQueuedChatSend(
+        threadRef,
+        outcome === PROMPT_SUBMIT_OUTCOME.SENT ? "sent" : "not-sent",
+      );
     } finally {
       queuedSendInFlight.current = false;
     }
