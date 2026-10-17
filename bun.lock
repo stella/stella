@@ -21,6 +21,7 @@
         "@typescript/native": "npm:typescript@7.0.2",
         "better-result": "catalog:",
         "bun-types": "catalog:",
+        "cheerio": "^1.2.0",
         "drizzle-orm": "catalog:",
         "eslint": "catalog:",
         "fast-check": "catalog:",
@@ -167,6 +168,17 @@
         "pkijs": "3.4.1",
         "postal-mime": "4.0.4",
         "posthog-node": "^5.55.0",
+        "prosemirror-commands": "catalog:",
+        "prosemirror-dropcursor": "catalog:",
+        "prosemirror-gapcursor": "catalog:",
+        "prosemirror-history": "catalog:",
+        "prosemirror-inputrules": "catalog:",
+        "prosemirror-keymap": "catalog:",
+        "prosemirror-model": "catalog:",
+        "prosemirror-state": "catalog:",
+        "prosemirror-tables": "catalog:",
+        "prosemirror-transform": "catalog:",
+        "prosemirror-view": "catalog:",
         "quickjs-emscripten-core": "^0.32.0",
         "react": "catalog:react19",
         "react-dom": "catalog:react19",
@@ -175,18 +187,21 @@
         "tldts": "7.4.18",
         "uqr": "^0.1.3",
         "valibot": "catalog:",
+        "y-prosemirror": "catalog:",
+        "y-protocols": "catalog:",
+        "yjs": "catalog:",
       },
       "devDependencies": {
         "@anthropic-ai/sdk": "0.97.1",
         "@aws-sdk/client-bedrock-runtime": "^3.1147.0",
         "@electric-sql/pglite": "^0.5.8",
-        "@mistralai/mistralai": "2.7.0",
         "@modelcontextprotocol/client": "2.3.1",
         "@modelcontextprotocol/ext-apps": "^2.0.3",
         "@myriaddreamin/typst-ts-renderer": "0.7.0",
         "@myriaddreamin/typst-ts-web-compiler": "0.7.0",
         "@playwright/test": "^1.63.0",
         "@standard-schema/spec": "^1.1.0",
+        "@stll/playwright-tools": "workspace:*",
         "@stll/property-testing": "workspace:*",
         "@stll/test-kit": "workspace:*",
         "@stll/typescript-config": "workspace:*",
@@ -198,7 +213,6 @@
         "fast-check": "catalog:",
         "openai": "6.49.0",
         "pdfjs-dist": "^6.4.299",
-        "yjs": "^13.6.33",
       },
     },
     "apps/collab": {
@@ -297,11 +311,25 @@
         "@tailwindcss/vite": "catalog:",
         "astro": "^7.3.8",
         "better-result": "catalog:",
+        "prosemirror-commands": "catalog:",
+        "prosemirror-dropcursor": "catalog:",
+        "prosemirror-gapcursor": "catalog:",
+        "prosemirror-history": "catalog:",
+        "prosemirror-inputrules": "catalog:",
+        "prosemirror-keymap": "catalog:",
+        "prosemirror-model": "catalog:",
+        "prosemirror-state": "catalog:",
+        "prosemirror-tables": "catalog:",
+        "prosemirror-transform": "catalog:",
+        "prosemirror-view": "catalog:",
         "react": "catalog:react19",
         "react-dom": "catalog:react19",
         "tailwindcss": "catalog:",
         "use-debounce": "^10.1.1",
         "use-intl": "catalog:",
+        "y-prosemirror": "catalog:",
+        "y-protocols": "catalog:",
+        "yjs": "catalog:",
       },
       "devDependencies": {
         "@astrojs/check": "^0.9.9",
@@ -365,9 +393,23 @@
       "dependencies": {
         "@stll/folio-react": "catalog:",
         "@stll/ui": "workspace:*",
+        "prosemirror-commands": "catalog:",
+        "prosemirror-dropcursor": "catalog:",
+        "prosemirror-gapcursor": "catalog:",
+        "prosemirror-history": "catalog:",
+        "prosemirror-inputrules": "catalog:",
+        "prosemirror-keymap": "catalog:",
+        "prosemirror-model": "catalog:",
+        "prosemirror-state": "catalog:",
+        "prosemirror-tables": "catalog:",
+        "prosemirror-transform": "catalog:",
+        "prosemirror-view": "catalog:",
         "react": "catalog:react19",
         "react-dom": "catalog:react19",
         "use-intl": "catalog:",
+        "y-prosemirror": "catalog:",
+        "y-protocols": "catalog:",
+        "yjs": "catalog:",
       },
       "devDependencies": {
         "@tailwindcss/vite": "catalog:",
@@ -505,18 +547,29 @@
         "pdfjs-dist": "^6.4.299",
         "posthog-js": "^1.438.2",
         "prism-react-renderer": "^2.4.1",
+        "prosemirror-commands": "catalog:",
+        "prosemirror-dropcursor": "catalog:",
+        "prosemirror-gapcursor": "catalog:",
+        "prosemirror-history": "catalog:",
+        "prosemirror-inputrules": "catalog:",
+        "prosemirror-keymap": "catalog:",
+        "prosemirror-model": "catalog:",
+        "prosemirror-state": "catalog:",
+        "prosemirror-tables": "catalog:",
+        "prosemirror-transform": "catalog:",
+        "prosemirror-view": "catalog:",
         "react": "catalog:react19",
         "react-dom": "catalog:react19",
         "streamdown": "^2.7.0",
-        "thinking-orbs": "0.3.2",
         "tw-animate-css": "1.4.0",
         "uqr": "^0.1.3",
         "use-debounce": "^10.1.1",
         "use-intl": "catalog:",
         "uuid": "^14.0.3",
         "valibot": "catalog:",
-        "y-prosemirror": "^1.3.7",
-        "yjs": "^13.6.33",
+        "y-prosemirror": "catalog:",
+        "y-protocols": "catalog:",
+        "yjs": "catalog:",
         "zustand": "^5.0.15",
       },
       "devDependencies": {
@@ -583,7 +636,7 @@
     },
     "packages/ai-catalog": {
       "name": "@stll/ai-catalog",
-      "version": "0.7.0",
+      "version": "0.8.0",
       "dependencies": {
         "valibot": "catalog:",
       },
@@ -732,7 +785,7 @@
     },
     "packages/chat": {
       "name": "@stll/chat",
-      "version": "0.1.40",
+      "version": "0.2.1",
       "dependencies": {
         "@ag-ui/core": "1.0.2",
         "@stll/ai-catalog": "workspace:^",
@@ -779,7 +832,7 @@
     },
     "packages/cli": {
       "name": "@stll/cli",
-      "version": "4.2.0",
+      "version": "4.3.0",
       "bin": {
         "stella": "./dist/cli.js",
       },
@@ -824,6 +877,7 @@
       },
       "devDependencies": {
         "@stll/property-testing": "workspace:*",
+        "@stll/test-kit": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
         "fast-check": "catalog:",
@@ -897,7 +951,7 @@
     },
     "packages/docx-utils": {
       "name": "@stll/docx-utils",
-      "version": "0.1.5",
+      "version": "0.2.0",
       "dependencies": {
         "better-result": "catalog:",
         "jszip": "catalog:",
@@ -1386,7 +1440,7 @@
     },
     "packages/ui": {
       "name": "@stll/ui",
-      "version": "0.45.0",
+      "version": "0.47.0",
       "dependencies": {
         "better-result": "catalog:",
         "class-variance-authority": "^0.7.1",
@@ -1465,7 +1519,7 @@
     },
     "packages/workspace-ui": {
       "name": "@stll/workspace-ui",
-      "version": "0.12.1",
+      "version": "0.12.3",
       "dependencies": {
         "@stll/calculations": "workspace:^",
         "@stll/conditions": "workspace:^",
@@ -1539,7 +1593,7 @@
     "@expo/router-server": "57.0.12",
     "@expo/ui": "57.0.22",
     "@modelcontextprotocol/sdk": "1.31.0",
-    "@stll/folio-core": "0.58.5",
+    "@stll/folio-core": "0.60.0",
     "adm-zip": "0.6.1",
     "brace-expansion": "5.0.11",
     "expo-constants": "57.0.21",
@@ -1580,10 +1634,10 @@
     "@stll/anonymize": "3.0.7",
     "@stll/anonymize-data": "0.0.10",
     "@stll/anonymize-wasm": "3.0.7",
-    "@stll/docx-core": "0.36.2",
-    "@stll/folio-agents": "0.15.5",
-    "@stll/folio-core": "0.58.5",
-    "@stll/folio-react": "0.26.0",
+    "@stll/docx-core": "0.37.0",
+    "@stll/folio-agents": "0.16.1",
+    "@stll/folio-core": "0.60.0",
+    "@stll/folio-react": "0.28.0",
     "@stll/fuzzy-search": "1.1.5",
     "@t3-oss/env-core": "0.13.11",
     "@tailwindcss/postcss": "4.3.3",
@@ -1628,6 +1682,17 @@
     "oxc-transform-react": "0.152.0",
     "oxfmt": "0.72.0",
     "oxlint": "1.87.0",
+    "prosemirror-commands": "1.7.2",
+    "prosemirror-dropcursor": "1.8.3",
+    "prosemirror-gapcursor": "1.4.1",
+    "prosemirror-history": "1.5.0",
+    "prosemirror-inputrules": "1.5.1",
+    "prosemirror-keymap": "1.2.3",
+    "prosemirror-model": "1.25.12",
+    "prosemirror-state": "1.4.4",
+    "prosemirror-tables": "1.8.5",
+    "prosemirror-transform": "1.12.0",
+    "prosemirror-view": "1.42.6",
     "saxes": "6.0.0",
     "sherif": "1.13.0",
     "ssf": "0.11.2",
@@ -1639,6 +1704,9 @@
     "use-intl": "4.14.9",
     "valibot": "1.5.0",
     "vite": "8.3.4",
+    "y-prosemirror": "1.3.7",
+    "y-protocols": "1.0.7",
+    "yjs": "13.6.33",
   },
   "catalogs": {
     "react19": {
@@ -2423,7 +2491,7 @@
 
     "@mermaid-js/parser": ["@mermaid-js/parser@1.2.1", "", { "dependencies": { "@chevrotain/types": "~11.1.2" } }, "sha512-n12NohV3mrUyUL2o93IgG/ifeW9FTyeJn3zDxkhwa8MJ9Fxg3HQMlA3RiGmD/3UnJvheztkjjQAjA2T4LmUcpw=="],
 
-    "@mistralai/mistralai": ["@mistralai/mistralai@2.7.0", "", { "dependencies": { "@opentelemetry/semantic-conventions": "^1.40.0", "ws": "^8.18.0", "zod": "^3.25.0 || ^4.0.0", "zod-to-json-schema": "^3.25.0" }, "peerDependencies": { "@opentelemetry/api": "^1.9.0", "@opentelemetry/exporter-trace-otlp-http": "^0.220.0", "@opentelemetry/resources": "^2.9.0", "@opentelemetry/sdk-trace-base": "^2.9.0" }, "optionalPeers": ["@opentelemetry/api", "@opentelemetry/exporter-trace-otlp-http", "@opentelemetry/resources", "@opentelemetry/sdk-trace-base"] }, "sha512-zCrx6MtNpcz+EL/Nqvg55QubSgmfwJfBmd3d3wSYfJGfnvlNnWcJYlxEW5xQpS3KR6A5qK9KUyRBwMDIWnyVGA=="],
+    "@mistralai/mistralai": ["@mistralai/mistralai@2.2.0", "", { "dependencies": { "ws": "^8.18.0", "zod": "^3.25.0 || ^4.0.0", "zod-to-json-schema": "^3.25.0" } }, "sha512-JQUGIXjFWnw/J9LpTSf/ZXwVW3Sh8FBAcfTo5QvAHqkl4CfSiIwnjRJhMoAFcP6ncCe84YPU1ncDGX+p3OXnfg=="],
 
     "@modelcontextprotocol/client": ["@modelcontextprotocol/client@2.3.1", "", { "dependencies": { "@modelcontextprotocol/core": "2.3.1", "cross-spawn": "^7.0.5", "eventsource": "^3.0.2", "eventsource-parser": "^3.0.8", "jose": "^6.1.3", "pkce-challenge": "^5.0.0", "zod": "^4.2.0" } }, "sha512-mIGZXpHsjnZ6lD+gD/WCMpR5k8yVQQ8nNFH1N0Srf7AvnwTUMYD6pvTY8ng2+He5FfV7YMZLmrjL7cLa/cc3dQ=="],
 
@@ -3131,7 +3199,7 @@
 
     "@stll/desktop": ["@stll/desktop@workspace:apps/desktop"],
 
-    "@stll/docx-core": ["@stll/docx-core@0.36.2", "", { "dependencies": { "@nodable/entities": "^3.0.0", "@stll/docx-utils": "^0.1.0", "better-result": "3.0.1", "fast-xml-parser": "^5.10.1", "jszip": "3.10.2", "marked": "^18.0.5" } }, "sha512-vrVYIMn8h3YQglQlv0NkJib9uhhqpWWgqkxA6SnE+aX+Zwa8Axb4+6vxO/r57pf+ZzPo5lLccaW5LpOfCJ5mVg=="],
+    "@stll/docx-core": ["@stll/docx-core@0.37.0", "", { "dependencies": { "@nodable/entities": "^3.0.0", "@stll/docx-utils": "^0.1.0", "better-result": "3.0.1", "fast-xml-parser": "^5.10.1", "jszip": "3.10.2", "marked": "^18.0.5" } }, "sha512-st2/7QHqWUCdTzgLfRsmZoV13BqsEwNKd4kW+ul8ATCD91LoVltfA/M7OIc82oA/eazn3S25cgz3BCW+VFpNSQ=="],
 
     "@stll/docx-utils": ["@stll/docx-utils@workspace:packages/docx-utils"],
 
@@ -3141,11 +3209,11 @@
 
     "@stll/fetch": ["@stll/fetch@workspace:packages/fetch"],
 
-    "@stll/folio-agents": ["@stll/folio-agents@0.15.5", "", { "dependencies": { "@stll/folio-core": "^0.58.0", "better-result": "3.0.1" } }, "sha512-QDfan4Ft9DMOmKwa0dQ42WYnVasAgYK5tbHD/tnY51EML5gWVMpSSac5djLSq/3IJe84f8qI3Kl7RrfNrf/NGQ=="],
+    "@stll/folio-agents": ["@stll/folio-agents@0.16.1", "", { "dependencies": { "@stll/folio-core": "^0.60.0", "better-result": "3.0.1" } }, "sha512-rl6kH8eZXrE7T94XpTP2MvuK1WHFFcr1IJYFxYt6UOv6yQwmAxh5dLadeTyKHysH/9F6SB3RpqefI1DoDnf8cA=="],
 
-    "@stll/folio-core": ["@stll/folio-core@0.58.5", "", { "dependencies": { "@stll/docx-core": "^0.36.2", "@stll/docx-utils": "^0.1.0", "@stll/template-conditions": "^0.6.2", "better-result": "3.0.1", "csstype": "^3.1.3", "dompurify": "^3.4.16", "fast-xml-parser": "^5.10.1", "hyphen": "1.14.1", "jszip": "3.10.2", "prosemirror-commands": "^1.7.1", "prosemirror-dropcursor": "^1.8.2", "prosemirror-gapcursor": "^1.4.1", "prosemirror-history": "^1.5.0", "prosemirror-inputrules": "^1.5.0", "prosemirror-keymap": "^1.2.3", "prosemirror-model": "^1.25.9", "prosemirror-state": "^1.4.4", "prosemirror-tables": "^1.8.5", "prosemirror-transform": "^1.12.0", "prosemirror-view": "^1.42.6", "utif2": "^4.1.0", "valibot": "1.5.0", "y-prosemirror": "^1.3.7", "yjs": "^13.6.31" } }, "sha512-1VaSCCuVHyMAqqSCi4Bc2U+brE7B27Wo1CX9vscTjLt0EAtXQdLeIa8He3F08rdk/OMgcLD2j3HMkdrQRMOZ+w=="],
+    "@stll/folio-core": ["@stll/folio-core@0.60.0", "", { "dependencies": { "@stll/docx-core": "^0.37.0", "@stll/docx-utils": "^0.1.0", "@stll/template-conditions": "^0.6.2", "better-result": "3.0.1", "csstype": "^3.1.3", "dompurify": "^3.4.16", "fast-xml-parser": "^5.10.1", "hyphen": "1.14.1", "jszip": "3.10.2", "utif2": "^4.1.0", "valibot": "1.5.0" }, "peerDependencies": { "prosemirror-commands": "^1.7.1", "prosemirror-dropcursor": "^1.8.2", "prosemirror-gapcursor": "^1.4.1", "prosemirror-history": "^1.5.0", "prosemirror-inputrules": "^1.5.0", "prosemirror-keymap": "^1.2.3", "prosemirror-model": "^1.25.9", "prosemirror-state": "^1.4.4", "prosemirror-tables": "^1.8.5", "prosemirror-transform": "^1.12.0", "prosemirror-view": "^1.42.6", "y-prosemirror": "^1.3.7", "y-protocols": "^1.0.6", "yjs": "^13.6.31" } }, "sha512-/A1VSwzDKlzbkWzXCWiZyBlR+AREID92qBcKIQSufgBPeAjw2Lryf8lnf62oJABwRKNJYY4xuthdAQAVKBdmrg=="],
 
-    "@stll/folio-react": ["@stll/folio-react@0.26.0", "", { "dependencies": { "@base-ui/react": "1.8.0", "@fontsource/arimo": "^5.2.8", "@fontsource/caladea": "^5.2.8", "@fontsource/carlito": "^5.2.8", "@fontsource/cousine": "^5.2.7", "@fontsource/lato": "^5.2.7", "@fontsource/noto-sans-arabic": "^5.2.7", "@fontsource/source-sans-3": "^5.2.9", "@fontsource/tinos": "^5.2.7", "@stll/folio-core": "^0.58.5", "better-result": "3.0.1", "lucide-react": "1.24.0", "prosemirror-history": "^1.5.0", "prosemirror-model": "^1.25.9", "prosemirror-state": "^1.4.4", "prosemirror-tables": "^1.8.5", "prosemirror-view": "^1.42.6", "react-compiler-runtime": "^1.0.0", "yjs": "^13.6.31" }, "peerDependencies": { "react": "^19.2.0", "react-dom": "^19.2.0", "use-intl": ">=4.0.0" } }, "sha512-4xuX76+e7do6iRWK10Xy5Ngpcwkz7W03KXBRd3kwMFwZqqz0Ujgp6JibA0T2Svw7yJHdi1imbGzIN+bmlhHnGw=="],
+    "@stll/folio-react": ["@stll/folio-react@0.28.0", "", { "dependencies": { "@base-ui/react": "1.8.0", "@fontsource/arimo": "^5.2.8", "@fontsource/caladea": "^5.2.8", "@fontsource/carlito": "^5.2.8", "@fontsource/cousine": "^5.2.7", "@fontsource/lato": "^5.2.7", "@fontsource/noto-sans-arabic": "^5.2.7", "@fontsource/source-sans-3": "^5.2.9", "@fontsource/tinos": "^5.2.7", "@stll/folio-core": "^0.60.0", "better-result": "3.0.1", "lucide-react": "1.24.0", "react-compiler-runtime": "^1.0.0" }, "peerDependencies": { "prosemirror-history": "^1.5.0", "prosemirror-model": "^1.25.9", "prosemirror-state": "^1.4.4", "prosemirror-tables": "^1.8.5", "prosemirror-view": "^1.42.6", "react": "^19.2.0", "react-dom": "^19.2.0", "use-intl": ">=4.0.0", "yjs": "^13.6.31" } }, "sha512-W/PYtC3I0ULqv5pQ2V9RZIgSv33H3vQ2hri6o4jKfEIHhNieSECC2u+0QYizvDLTWSnpqlSz6Flul+d1JEkUHQ=="],
 
     "@stll/fuzzy-search": ["@stll/fuzzy-search@1.1.5", "", { "optionalDependencies": { "@stll/fuzzy-search-darwin-arm64": "1.1.5", "@stll/fuzzy-search-darwin-x64": "1.1.5", "@stll/fuzzy-search-linux-arm64-gnu": "1.1.5", "@stll/fuzzy-search-linux-x64-gnu": "1.1.5", "@stll/fuzzy-search-wasm32-wasi": "1.1.5", "@stll/fuzzy-search-win32-x64-msvc": "1.1.5" } }, "sha512-dEssLzCS+2JtK+oXV59//3S7dX7ncZhergDknmVh18r1ftKTFsvOd9rCaTqiKewAPfR/QZ8nRT6KXx1KezV4Dg=="],
 
@@ -5813,8 +5881,6 @@
 
     "thenify-all": ["thenify-all@1.6.0", "", { "dependencies": { "thenify": ">= 3.1.0 < 4" } }, "sha512-RNxQH/qI8/t3thXJDwcstUO4zeqo64+Uy/+sNVRBx4Xn2OX+OZ9oP+iJnNFqplFra2ZUVeKCSa2oVWi3T4uVmA=="],
 
-    "thinking-orbs": ["thinking-orbs@0.3.2", "", { "peerDependencies": { "react": ">=18.0.0" } }, "sha512-QZFeBaPEzqhjiZoXy961EvDgaXk2WgXacF3Rbz+Sj5IfzDzBvTC86vdREUHniBffYibJFKSwbfllxLUdI/Xv6g=="],
-
     "throat": ["throat@5.0.0", "", {}, "sha512-fcwX4mndzpLQKBS1DVYhGAcYaYt7vsHNIvQV+WXMvnow5cgjPphq5CaayLaGsjRdSCKZFNGt7/GYAuXaNOiYCA=="],
 
     "tiny-inflate": ["tiny-inflate@1.0.3", "", {}, "sha512-pkY1fj1cKHb2seWDy0B16HeWyczlJA9/WW3u3c4z/NiWDsO3DOU5D7nhTLE9CF0yXv/QZFY7sEJmj24dK+Rrqw=="],
@@ -6222,8 +6288,6 @@
     "@tailwindcss/oxide-wasm32-wasi/tslib": ["tslib@2.8.1", "", { "bundled": true }, "sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w=="],
 
     "@tanstack/ai/@ag-ui/core": ["@ag-ui/core@1.0.0", "", { "peerDependencies": { "zod": "^3.25.18 || ^4.0.0" }, "optionalPeers": ["zod"] }, "sha512-yCRhsQvb4+lmGMrDsi4TOJxqKpm/kb3H64wwL+Z90jNVrkhy17RErfzsNgybfbjNKLM0nenEDYDVJsZHJJSigQ=="],
-
-    "@tanstack/ai-mistral/@mistralai/mistralai": ["@mistralai/mistralai@2.2.0", "", { "dependencies": { "ws": "^8.18.0", "zod": "^3.25.0 || ^4.0.0", "zod-to-json-schema": "^3.25.0" } }, "sha512-JQUGIXjFWnw/J9LpTSf/ZXwVW3Sh8FBAcfTo5QvAHqkl4CfSiIwnjRJhMoAFcP6ncCe84YPU1ncDGX+p3OXnfg=="],
 
     "@tanstack/ai-openrouter/@openrouter/sdk": ["@openrouter/sdk@0.13.20", "", { "dependencies": { "zod": "^3.25.0 || ^4.0.0" } }, "sha512-fx4o19FHgadEldfrSOgSbXAi32hCE3O708q1nxcoxYrW6fP6/WggX3o5PmnlnObzmxrqLMkZpqg188K+Twguhg=="],
 

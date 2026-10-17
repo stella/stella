@@ -10,11 +10,15 @@ import {
   resolveModuleFile,
 } from "@/api/tests/module-mock-factories";
 
+import {
+  isCaseLawPublicReadModule,
+  isSchemaModule,
+} from "../../../../../.oxlint-plugins/public-case-law-db-boundary.ts";
+
+const REPOSITORY_ROOT = path.join(import.meta.dir, "../../../../..");
+
 const readRootFixture = (relativePath: string) =>
-  readFileSync(
-    path.join(import.meta.dir, "../../../../..", relativePath),
-    "utf-8",
-  );
+  readFileSync(path.join(REPOSITORY_ROOT, relativePath), "utf-8");
 
 describe("custom oxlint guardrails", () => {
   test("process.env rule treats only static computed keys as known names", () => {
@@ -104,6 +108,30 @@ describe("custom oxlint guardrails", () => {
     );
   });
 
+  test("public case-law boundary recognizes schema modules by repo-relative id", () => {
+    const schemaFile = path.join(
+      REPOSITORY_ROOT,
+      "apps/api/src/db/schema/case-law",
+    );
+
+    expect(isSchemaModule("apps/api/src/db/schema")).toBe(true);
+    expect(isSchemaModule("apps/api/src/db/schema/case-law")).toBe(true);
+    expect(
+      isSchemaModule(path.join(REPOSITORY_ROOT, "apps/api/src/db/schema")),
+    ).toBe(true);
+    expect(isSchemaModule(schemaFile)).toBe(true);
+    expect(isSchemaModule("apps/api/src/db/schema-helpers")).toBe(false);
+    expect(
+      isSchemaModule(path.join(REPOSITORY_ROOT, "apps/api/src/db/root")),
+    ).toBe(false);
+    expect(
+      isSchemaModule(
+        path.join(path.dirname(REPOSITORY_ROOT), "apps/api/src/db/schema"),
+      ),
+    ).toBe(false);
+    expect(isSchemaModule(null)).toBe(false);
+  });
+
   test("public case-law data files cannot query private tables", () => {
     const configSource = readRootFixture("oxlint.config.ts");
     const pluginSource = readRootFixture(
@@ -118,7 +146,18 @@ describe("custom oxlint guardrails", () => {
     );
     // The rule scopes itself to importers of the public read connection.
     expect(pluginSource).toContain("apps/api/src/lib/case-law-public-read-db");
-    expect(pluginSource).toContain("importsPublicReadDb");
+    expect(
+      isCaseLawPublicReadModule(
+        "apps/api/src/handlers/case-law/decisions/read.ts",
+        new Set(["apps/api/src/lib/case-law-public-read-db"]),
+      ),
+    ).toBe(true);
+    expect(
+      isCaseLawPublicReadModule(
+        "apps/api/src/handlers/case-law/decisions/read.ts",
+        new Set(),
+      ),
+    ).toBe(false);
     expect(pluginSource).toContain("privateCaseLawImport");
     expect(pluginSource).toContain("privateTxQuery");
     expect(pluginSource).toContain("privateSqlText");

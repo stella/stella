@@ -40,9 +40,9 @@ describe("legal citations prefer a served corpus record", () => {
     ["decision", decision],
   ] as const) {
     test(`${path} keeps its internal primary, locator and publisher secondary`, () => {
-      for (const appUrl of [path, new URL(path, APP_ORIGIN).href]) {
+      for (const url of [path, new URL(path, APP_ORIGIN).href]) {
         const result = resolveLegalCitationLinks({
-          appUrl,
+          url,
           sourceUrl,
           appOrigins,
         });
@@ -53,7 +53,7 @@ describe("legal citations prefer a served corpus record", () => {
         );
         expect(
           resolveLegalCitationLinks({
-            appUrl: result.url,
+            url: result.url,
             sourceUrl,
             appOrigins,
           }),
@@ -62,20 +62,20 @@ describe("legal citations prefer a served corpus record", () => {
     });
   }
   test("unheld or unavailable items have only the publisher primary", () => {
-    for (const appUrl of [
+    for (const url of [
       null,
       `https://another-app.example.test${statute}`,
       "https://app.example.test/law/cze/statutes",
       unsafeScriptUrl,
     ]) {
-      expect(
-        resolveLegalCitationLinks({ appUrl, sourceUrl, appOrigins }),
-      ).toEqual({ type: "external", url: sourceUrl });
+      expect(resolveLegalCitationLinks({ url, sourceUrl, appOrigins })).toEqual(
+        { type: "external", url: sourceUrl },
+      );
     }
   });
   test("an absent publisher never hides a held record or fabricates a source", () => {
     const held = resolveLegalCitationLinks({
-      appUrl: statute,
+      url: statute,
       sourceUrl: null,
       appOrigins,
     });
@@ -83,7 +83,7 @@ describe("legal citations prefer a served corpus record", () => {
     expect(held.url).toBe(new URL(statute, APP_ORIGIN).href);
     expect(held).not.toHaveProperty("source_url");
     expect(
-      resolveLegalCitationLinks({ appUrl: null, sourceUrl: null, appOrigins }),
+      resolveLegalCitationLinks({ url: null, sourceUrl: null, appOrigins }),
     ).toEqual({ type: "external", url: null });
   });
   test("unsafe publisher protocols never become a primary or secondary href", () => {
@@ -95,14 +95,14 @@ describe("legal citations prefer a served corpus record", () => {
     ]) {
       expect(
         resolveLegalCitationLinks({
-          appUrl: null,
+          url: null,
           sourceUrl: unsafeSourceUrl,
           appOrigins,
         }),
       ).toEqual({ type: "external", url: null });
       expect(
         resolveLegalCitationLinks({
-          appUrl: statute,
+          url: statute,
           sourceUrl: unsafeSourceUrl,
           appOrigins,
         }),

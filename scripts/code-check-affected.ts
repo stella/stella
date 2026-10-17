@@ -82,9 +82,12 @@ export const WORKSPACE_TYPECHECK_CACHE_INPUTS = [
   ...ALL_WORKSPACE_CACHE_INPUTS,
   "$TURBO_ROOT$/package.json",
 ] as const;
-// Every module `oxlint.config.ts` imports is rule configuration: a row edited
-// in the ownership table, a glob in the result-boundary scope, or a file in the
-// design-system backlog changes what every workspace lint reports.
+// Every entry here can change lint output outside its owning workspace: a row
+// edited in the ownership table, a glob in the result-boundary scope, or a file
+// in the design-system backlog changes what multiple workspace lints report.
+// Workspace-local files that the config imports belong to that workspace's
+// `$TURBO_DEFAULT$` inputs instead; merely evaluating the config does not make
+// their contents an input to unrelated lint scopes.
 // scripts/oxlint-config-inputs.test.ts holds this list to the config's imports
 // and to turbo.json.
 export const OXLINT_CONFIGURATION_CACHE_INPUTS = [
@@ -102,14 +105,12 @@ export const OXLINT_CONFIGURATION_CACHE_INPUTS = [
   "$TURBO_ROOT$/scripts/parse-memo.ts",
   "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",
   "$TURBO_ROOT$/scripts/oxlint-rule-ids.ts",
-  "$TURBO_ROOT$/apps/api/src/lib/db/status-tables.gen.ts",
   "$TURBO_ROOT$/apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
   "$TURBO_ROOT$/apps/api/src/lib/db/read-bounded.ts",
   "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
   "$TURBO_ROOT$/scripts/sql-perf-detector.ts",
   "$TURBO_ROOT$/apps/api/src/db/high-volume-tables.ts",
   "$TURBO_ROOT$/apps/api/src/lib/db/public-corpus-audit/**",
-  "$TURBO_ROOT$/apps/api/drizzle/**",
   "$TURBO_ROOT$/apps/api/src/lib/safe-handler-factories.ts",
   "$TURBO_ROOT$/apps/api/src/lib/system-audit/modules.ts",
   "$TURBO_ROOT$/scripts/sql-perf-scope.ts",
@@ -148,6 +149,9 @@ export const PLUGIN_FIXTURE_INPUTS = [
   "$TURBO_ROOT$/scripts/oxlint-additional-guards.test.ts",
   "$TURBO_ROOT$/scripts/check-oxlint-fixture-counts.ts",
   "$TURBO_ROOT$/scripts/check-oxlint-fixture-counts.test.ts",
+  // The status-column map the no-direct-status-set fixture is linted against;
+  // it stays a fixture input although it no longer forces lint everywhere.
+  "$TURBO_ROOT$/apps/api/src/lib/db/status-tables.gen.ts",
   "$TURBO_ROOT$/tsconfig.json",
   "$TURBO_ROOT$/tsconfig.oxlint-plugins.json",
 ] as const;
@@ -227,6 +231,22 @@ const matchesTurboInput = (file: string, input: string): boolean => {
   }
   const relativeInput = input.slice(TURBO_ROOT_INPUT_PREFIX.length);
   return matches(relativeInput, file);
+};
+
+export const matchedLintAllInputs = (
+  changedPaths: readonly string[],
+): string[] =>
+  [...ALL_WORKSPACE_CACHE_INPUTS, ...LINT_ONLY_CACHE_INPUTS].filter((input) =>
+    changedPaths.some((changedPath) => matchesTurboInput(changedPath, input)),
+  );
+
+export const lintAllTrace = (
+  changedPaths: readonly string[],
+): string | null => {
+  const matchedInputs = matchedLintAllInputs(changedPaths);
+  return matchedInputs.length === 0
+    ? null
+    : `code-check: lint all shared inputs: ${matchedInputs.join(", ")}\n`;
 };
 
 const invalidatesAllWorkspaceChecks = (file: string): boolean =>
@@ -1142,6 +1162,7 @@ const presentPaths = (paths: readonly string[]): string[] =>
 
 type ScopeCheck = {
   plan: CheckPlan;
+  changedPaths: string[];
   presentChangedPaths: string[];
   mergeBase: string | null;
 };
@@ -1158,6 +1179,7 @@ const planScope = async (
             files,
             workspacePaths: workspacePaths(),
           }),
+          changedPaths: paths,
           presentChangedPaths: files,
           mergeBase: null,
         };
@@ -1183,6 +1205,7 @@ const planScope = async (
                   affectedWorkspacePaths: discovery.paths,
                   workspacePaths: workspacePaths(),
                 }),
+          changedPaths: changed.value.paths,
           presentChangedPaths,
           mergeBase: changed.value.mergeBase,
         };
@@ -1213,7 +1236,12 @@ const main = async (): Promise<Result<number, CommandFailedError>> => {
   if (scoped.isErr()) {
     return scoped;
   }
-  const { plan, presentChangedPaths, mergeBase } = scoped.value;
+  const {
+    plan,
+    changedPaths: selectedChangedPaths,
+    presentChangedPaths,
+    mergeBase,
+  } = scoped.value;
   const leg = options.leg;
   const resultBoundaryCommand = planResultBoundaryLint({
     files:
@@ -1310,6 +1338,12 @@ const main = async (): Promise<Result<number, CommandFailedError>> => {
   process.stdout.write(
     `code-check: lint ${scopeLabel(plan.lint)}; typecheck ${scopeLabel(plan.typecheck)}\n`,
   );
+  if (plan.lint.type === "all") {
+    const trace = lintAllTrace(selectedChangedPaths);
+    if (trace !== null) {
+      process.stdout.write(trace);
+    }
+  }
   commands.push(
     ...scopedCommands(
       plan,

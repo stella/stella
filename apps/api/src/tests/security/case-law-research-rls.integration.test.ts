@@ -39,7 +39,7 @@ beforeAll(
           ],
           fallback: null,
         },
-        tool: { version: 1, role: "fast" },
+        tool: { version: 1, task: "short-text" },
       },
       {
         id: orgBColumnId,
@@ -47,7 +47,7 @@ beforeAll(
         position: 1,
         question: "Outcome?",
         content: { version: 1, type: "text" },
-        tool: { version: 1, role: "fast" },
+        tool: { version: 1, task: "short-text" },
       },
     ]);
     await testDb.insert(caseLawResearchAnswers).values([

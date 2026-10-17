@@ -11,6 +11,7 @@ import { DEFAULT_SEARCH_SORT } from "@/api/lib/legal-search/corpus-search-order"
 import { LIMITS } from "@/api/lib/limits";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
+import { caseLawPublishedDecisionsFixtureSql } from "@/api/tests/helpers/case-law-publication-view-fixture";
 import { explainRoot } from "@/api/tests/query-plans/plan-walker";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -108,6 +109,7 @@ describe.skipIf(!enabled)("bounded source facet plan (postgres)", () => {
             (LIKE public.${sql.identifier(table)} INCLUDING ALL)`);
         }
         await db.execute(sql`SET search_path TO ${schema}, public`);
+        await db.execute(caseLawPublishedDecisionsFixtureSql);
         const indexes = await db.execute(sql`SELECT indexname FROM pg_indexes
           WHERE schemaname = ${schemaName} AND tablename = 'case_law_decisions'
             AND indexdef LIKE '%(language_group_key)%'`);

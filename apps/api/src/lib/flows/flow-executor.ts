@@ -89,7 +89,7 @@ import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch
 import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { brandPersistedFlowRunId } from "@/api/lib/safe-id-boundaries";
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
-import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
+import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
 import { createTaskEntityHandler } from "@/api/lib/tasks/create-task-entity";
 import { deployedTaskFeatures } from "@/api/lib/tasks/deployment-features";
 import type { TaskDeploymentFeatures } from "@/api/lib/tasks/deployment-features";
@@ -157,7 +157,7 @@ export const executeFlowStep = async (
   {
     admission,
     database,
-    generateTextForRole = generateTanStackTextForRole,
+    generateTextForTask = generateTanStackTextForTask,
     makeScopedDb = createRootScopedDb,
     makeSafeDb = createRootSafeDb,
     enqueueStep = enqueueFlowStep,
@@ -175,7 +175,7 @@ export const executeFlowStep = async (
     /** The worker's connection, for the run, step and scope reads. */
     database: Pick<typeof rootDb, "query">;
     /** External model-dispatch boundary; supplied by focused integration tests. */
-    generateTextForRole?: typeof generateTanStackTextForRole | undefined;
+    generateTextForTask?: typeof generateTanStackTextForTask | undefined;
     makeScopedDb?: typeof createRootScopedDb | undefined;
     makeSafeDb?: typeof createRootSafeDb | undefined;
     enqueueStep?: typeof enqueueFlowStep | undefined;
@@ -309,7 +309,7 @@ export const executeFlowStep = async (
           workspaceIds: [run.workspaceId],
         }),
         signal,
-        generateTextForRole,
+        generateTextForTask,
         loadAIConfig,
       });
       await completeStepAndAdvance({
@@ -426,7 +426,7 @@ type RunAiStepArgs = {
   scopedDb: ReturnType<typeof createRootScopedDb>;
   safeDb: SafeDb;
   signal: AbortSignal;
-  generateTextForRole: typeof generateTanStackTextForRole;
+  generateTextForTask: typeof generateTanStackTextForTask;
   loadAIConfig: typeof loadOrgAIConfig;
 };
 
@@ -443,7 +443,7 @@ const runAiStep = async ({
   scopedDb,
   safeDb,
   signal,
-  generateTextForRole,
+  generateTextForTask,
   loadAIConfig,
 }: RunAiStepArgs): Promise<FlowStepOutput> => {
   const priorOutputs = await scopedDb(
@@ -475,7 +475,7 @@ const runAiStep = async ({
   const analytics = createTanStackAIAnalyticsCallbacks({
     dataClass: "customer",
     feature: "flows.ai-step",
-    modelRole: "chat",
+    modelTask: "chat",
     orgAIConfig,
     modelTier: admission.modelTier,
     properties: {
@@ -494,13 +494,13 @@ const runAiStep = async ({
     },
   });
 
-  // `generateTanStackTextForRole` throws on provider/config failure; that is
+  // `generateTanStackTextForTask` throws on provider/config failure; that is
   // exactly the retry signal the worker wants, so we let it propagate. Works
   // unchanged under `USE_MOCK_AI` (model resolution short-circuits to the mock
   // adapter). No tools are ever passed.
-  const markdown = await generateTextForRole({
+  const markdown = await generateTextForTask({
     dataClass: "customer",
-    role: "chat",
+    task: "chat",
     organizationId,
     admission,
     tenantWorkspaceIds: [run.workspaceId],
@@ -515,7 +515,7 @@ const runAiStep = async ({
     maxOutputTokens: FLOW_AI_STEP_MAX_OUTPUT_TOKENS,
     caching: resolveCaching({
       promptCachingEnabled: false,
-      role: "chat",
+      task: "chat",
       scopeKey: organizationId,
     }),
     serviceTier: "standard",

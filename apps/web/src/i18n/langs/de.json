@@ -65,6 +65,9 @@
     "runSelectedRows": "Ausführen für {count, plural, one {# ausgewählte Zeile} other {# ausgewählte Zeilen}}",
     "selectedRun": "KI-Spalten ausführen für {count, plural, one {# Zeile} other {# Zeilen}}"
   },
+  "aiDisclosure": {
+    "caseLaw": "KI-Zusammenfassungen, -Notizen und -Analysen von Gerichtsentscheidungen erstellt stella; sie sind von den Gerichten nicht gebilligt und geben nicht deren eigene Erwägungen wieder. Sie dienen juristischen Fachleuten als Hilfsmittel; maßgeblich bleibt der Text der Entscheidung."
+  },
   "appearance": {
     "calendar": "Kalender",
     "calendarGregorian": "Gregorianisch",
@@ -1055,7 +1058,6 @@
       }
     },
     "sameCaseNumber": "{count, plural, one {# Entscheidung trägt} other {# Entscheidungen tragen}} dieses Aktenzeichen. Wählen Sie das Gericht.",
-    "searchAskPrompt": "{query} (Rechtsprechung, {country})",
     "searchLabel": "Rechtsprechung durchsuchen",
     "searchPlaceholder": "Aktenzeichen, ECLI oder Stichwörter, z. B. 22 Cdo 2653/2012",
     "searchUnavailable": {
@@ -1212,6 +1214,11 @@
       "requesting": "Änderungen werden vorbereitet…",
       "stale": "Diese Antwort wurde geändert. Wählen Sie den Text erneut aus.",
       "submit": "Änderung anfordern"
+    },
+    "answerQuote": {
+      "showInDecision": "In der Entscheidung zeigen",
+      "verified": "Verifiziertes Zitat",
+      "verifiedHint": "Wörtlich in {source}"
     },
     "applyMode": {
       "description": "Word speichert, wer welche Änderung vorgenommen hat. Wir merken uns Ihre Auswahl.",
@@ -1397,7 +1404,12 @@
     "maxAttachmentsReached": "Maximal {count} Dateien pro Nachricht",
     "mention": {
       "category": {
-        "entities": "In dieser Akte"
+        "entities": "In dieser Akte",
+        "sources": "Quellen"
+      },
+      "corpus": {
+        "caseLaw": "Rechtsprechung · {country}",
+        "legislation": "Rechtsvorschriften · {country}"
       },
       "loadError": "Einträge konnten nicht geladen werden"
     },
@@ -1451,6 +1463,12 @@
       "title": "Eingefügter Text"
     },
     "placeholder": "Geben Sie hier Ihre Frage ein, / für Skills, @ für Kontext",
+    "processSummary": {
+      "analyses": "{count, plural, one {# Analyse} other {# Analysen}}",
+      "changesSaved": "{count, plural, one {# Änderung gespeichert} other {# Änderungen gespeichert}}",
+      "documentEdits": "{count, plural, one {# Dokumentänderung} other {# Dokumentänderungen}}",
+      "sourcesChecked": "{count, plural, one {# Quelle geprüft} other {# Quellen geprüft}}"
+    },
     "promptImprovementStrategies": {
       "decompose": {
         "description": "Teilt komplexe Aufgaben in geordnete Teilaufgaben auf.",
@@ -1696,6 +1714,7 @@
       "interrupted": "Vor Abschluss unterbrochen",
       "output": "Ausgabe",
       "sourceCode": "Quellcode",
+      "statusWaiting": "Wartet",
       "toggleDetails": "Details ein-/ausblenden",
       "unrestoredFields": "{count, plural, one {# Feld konnte} other {# Felder konnten}} im anonymisierten Modus nicht mit echten Werten gefüllt werden. Bitte prüfen: {fields}"
     },
@@ -5118,7 +5137,6 @@
     "provisionTextUnavailable": "Für diese Fassung ist kein Text verfügbar",
     "publisherWindowInconsistent": "Für dieses Datum lässt sich keine geltende Fassung bestimmen: Die Angaben des Herausgebers sind widersprüchlich.",
     "resolvedAlias": "Erkannt als {label}",
-    "searchAskPrompt": "{query} (Rechtsvorschriften: {country})",
     "searchLabel": "Rechtsvorschriften durchsuchen",
     "searchPlaceholder": "Nummer, Kurzname oder Titel, z. B. 89/2012 Sb.",
     "showCitedPartOnly": "Nur zitierten Teil anzeigen",
