@@ -233,6 +233,7 @@ type WorkflowJob = {
     run?: string;
     env?: Record<string, string>;
     with?: Record<string, unknown>;
+    "continue-on-error"?: boolean | string;
   }[];
 };
 
@@ -423,6 +424,28 @@ describe("network baseline workflows", () => {
     expect(publication).toBeGreaterThan(validation);
     expect(source).not.toContain("signed-commit");
     expect(source).not.toContain("secrets.");
+  });
+
+  test("the baseline reports in the merge queue and blocks elsewhere", () => {
+    const jobs = readWorkflowJobs("ci.yml");
+    const comparison = (name: string) =>
+      (jobs[name] ?? expect.unreachable(name)).steps.find(
+        (step) => step.name === "Check route network baseline",
+      ) ?? expect.unreachable(`${name} comparison`);
+    expect(comparison("route-smoke")["continue-on-error"]).toBeUndefined();
+    const queued = comparison("e2e-production-shard");
+    expect(queued["continue-on-error"]).toBe(
+      githubExpression("github.event_name == 'merge_group'"),
+    );
+    const report = jobs["e2e-production-shard"]?.steps.find(
+      (step) =>
+        step.name === "Report network baseline difference in the merge queue",
+    );
+    expect(queued.id).toBe("network-baseline-comparison");
+    expect(report?.if).toContain(
+      "steps.network-baseline-comparison.outcome == 'failure'",
+    );
+    expect(report?.if).toContain("github.event_name == 'merge_group'");
   });
 
   test("both comparison jobs load the merge-base budget before measuring", () => {

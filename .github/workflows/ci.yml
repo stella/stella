@@ -6618,17 +6618,28 @@ jobs:
 
       # Route count times per-route render time on a loaded runner: the slowest
       # passing runs take about 3 minutes and a slow runner about 4.5.
+      # A budget check: it blocks the pull request that changes a route's
+      # requests, reports in the merge queue and fails on main.
       - name: Check route network baseline
         timeout-minutes: 8
+        id: network-baseline-comparison
         if: >-
           steps.e2e-stack.outcome == 'success'
           && matrix.shard == 'network-baseline'
+        continue-on-error: ${{ github.event_name == 'merge_group' }}
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/check-route-network-baseline.json
           E2E_EXECUTION_PROFILE: network-baseline
           E2E_EXPECT_DEV_ROUTES: "false"
           PLAYWRIGHT_BLOB_OUTPUT_NAME: report-network-baseline.zip
         run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e -- route-smoke.spec.ts
+
+      - name: Report network baseline difference in the merge queue
+        timeout-minutes: 1
+        if: >-
+          github.event_name == 'merge_group'
+          && steps.network-baseline-comparison.outcome == 'failure'
+        run: echo "::warning::Route network baseline differs from the recorded budget. The merge continues; main reports the difference."
 
       # Playwright clears its report directory at the next invocation.
       - name: Upload network baseline blob report
