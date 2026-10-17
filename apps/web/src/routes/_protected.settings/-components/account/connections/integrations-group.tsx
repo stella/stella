@@ -163,7 +163,7 @@ export const IntegrationsGroup = ({
           <ListGroupTitle id="connections-integrations">
             {t("settings.connections.integrationsTitle")}
             {installed.length > 0 && (
-              <ListGroupCount>{format.number(visible.length)}</ListGroupCount>
+              <ListGroupCount count={format.number(visible.length)} />
             )}
           </ListGroupTitle>
           <ListGroupDescription>

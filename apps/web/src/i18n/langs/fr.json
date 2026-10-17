@@ -1216,6 +1216,11 @@
       "stale": "Cette réponse a été modifiée. Sélectionnez à nouveau le texte.",
       "submit": "Demander une modification"
     },
+    "answerQuote": {
+      "showInDecision": "Afficher dans la décision",
+      "verified": "Citation vérifiée",
+      "verifiedHint": "Mot pour mot dans {source}"
+    },
     "applyMode": {
       "description": "Word enregistre l’auteur de chaque modification. Nous mémoriserons votre choix.",
       "direct": "Non, appliquer directement",
@@ -1460,6 +1465,12 @@
       "title": "Texte collé"
     },
     "placeholder": "Saisissez votre question ici, / pour les compétences, @ pour ajouter du contexte",
+    "processSummary": {
+      "analyses": "{count, plural, one {# analyse} other {# analyses}}",
+      "changesSaved": "{count, plural, one {# modification enregistrée} other {# modifications enregistrées}}",
+      "documentEdits": "{count, plural, one {# modification du document} other {# modifications du document}}",
+      "sourcesChecked": "{count, plural, one {# source vérifiée} other {# sources vérifiées}}"
+    },
     "promptImprovementStrategies": {
       "decompose": {
         "description": "Transforme un travail complexe en sous-tâches ordonnées.",
@@ -1705,6 +1716,7 @@
       "interrupted": "Interrompu avant la fin",
       "output": "Résultat",
       "sourceCode": "Code source",
+      "statusWaiting": "En attente",
       "toggleDetails": "Afficher les détails",
       "unrestoredFields": "En mode anonymisé, {count, plural, one {# champ n’a pas pu être rempli} other {# champs n’ont pas pu être remplis}} avec des valeurs réelles. À vérifier : {fields}"
     },

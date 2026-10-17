@@ -4,7 +4,12 @@ import { and, eq } from "drizzle-orm";
 import type { ReaderAnnotationTargetType } from "@stll/api-contract/legal-reader-annotations";
 import type { Block } from "@stll/legal-ast/document-ast";
 
-import { legislationDocuments, legislationSources } from "@/api/db/schema";
+import {
+  caseLawSources,
+  legislationDocuments,
+  legislationSources,
+  publishedCaseLawDecisions,
+} from "@/api/db/schema";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { readDecisionAnalysisAst } from "@/api/lib/case-law/decision-analysis";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
@@ -38,13 +43,6 @@ type AnnotationTargetAccess =
   | { status: "withheld" }
   | { status: "available"; readBlocks: () => Promise<readonly Block[]> };
 
-const DECISION_AST_COLUMNS = {
-  astS3Key: true,
-  contentHash: true,
-  documentAst: true,
-  id: true,
-} as const;
-
 const resolveDecision = async (
   decisionId: string,
 ): Promise<AnnotationTargetAccess> => {
@@ -52,12 +50,27 @@ const resolveDecision = async (
     caseLawPublicReadDb,
     "search",
     { kind: "id", id: brandPersistedCaseLawDecisionId(decisionId) },
-    async ({ id, tx }) =>
-      await tx.query.caseLawDecisions.findFirst({
-        where: { id: { eq: id } },
-        columns: DECISION_AST_COLUMNS,
-        with: { source: { columns: { descriptor: true } } },
-      }),
+    async ({ id, tx }) => {
+      const [decisionRow] = await tx
+        .select({
+          astS3Key: publishedCaseLawDecisions.astS3Key,
+          contentHash: publishedCaseLawDecisions.contentHash,
+          documentAst: publishedCaseLawDecisions.documentAst,
+          id: publishedCaseLawDecisions.id,
+          source: {
+            id: caseLawSources.id,
+            descriptor: caseLawSources.descriptor,
+          },
+        })
+        .from(publishedCaseLawDecisions)
+        .leftJoin(
+          caseLawSources,
+          eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
+        )
+        .where(eq(publishedCaseLawDecisions.id, id))
+        .limit(1);
+      return decisionRow;
+    },
   );
   if (row === null || row === undefined) {
     return { status: "not_found" };

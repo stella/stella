@@ -376,7 +376,6 @@ export const DOC_SOURCE_EXCLUSIONS = [
   "ssf",
   "tailwind-merge",
   "tailwindcss",
-  "thinking-orbs",
   "tw-animate-css",
   "typescript",
   "unified",
