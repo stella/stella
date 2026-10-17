@@ -215,12 +215,15 @@ const captureVisualDesign = async ({
   // Change the preference in place: the existing chart must repaint without
   // replacing either sandbox document or resetting its selected court.
   const initialSrc = await outer.getAttribute("src");
-  await page
+  const accountMenu = page
     .locator('[data-slot="sidebar-footer"] button[aria-haspopup="menu"]')
-    .last()
-    .click();
+    .last();
+  await accountMenu.click();
   await page.getByRole("menuitem", { name: /appearance|vzhled/iu }).hover();
   await page.getByRole("menuitemradio", { name: /dark|tmavý/iu }).click();
+  // Theme radio choices keep the menu open so further preferences can change.
+  await accountMenu.click();
+  await expect(accountMenu).toHaveAttribute("aria-expanded", "false");
   await expect(guest.locator("html")).toHaveCSS("color-scheme", "dark");
   await expect(outer).toHaveAttribute("src", initialSrc ?? "");
   await prepareCapture();
@@ -230,12 +233,11 @@ const captureVisualDesign = async ({
     .toBeGreaterThanOrEqual(0.25);
   await snap("visual-design-dark-desktop", { waitFor: selector });
 
-  await page
-    .locator('[data-slot="sidebar-footer"] button[aria-haspopup="menu"]')
-    .last()
-    .click();
+  await accountMenu.click();
   await page.getByRole("menuitem", { name: /appearance|vzhled/iu }).hover();
   await page.getByRole("menuitemradio", { name: /light|světlý/iu }).click();
+  await accountMenu.click();
+  await expect(accountMenu).toHaveAttribute("aria-expanded", "false");
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(guest.locator("html")).toHaveCSS("color-scheme", "light");
   await expect(

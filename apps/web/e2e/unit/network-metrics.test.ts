@@ -1092,6 +1092,58 @@ describe("diffNetworkBaseline", () => {
     expect(problems.at(0)).not.toContain("private");
   });
 
+  test("a successful auth response discarded by navigation is not a missing size even when the request is aborted", async () => {
+    const record: NetworkCapture["requests"][number] = {
+      method: "GET",
+      pathname: "/api/auth/organization/get-active-member-role",
+      dbQueries: 1,
+      dbQueryHeaderMissing: false,
+      responseBytes: null,
+      responseBodyReadFailure: null,
+    };
+    await readResponseBytes(
+      {
+        status: () => 200,
+        fromServiceWorker: () => false,
+        headers: () => ({}),
+        request: () => ({
+          failure: () => ({ errorText: "net::ERR_ABORTED" }),
+          sizes: async () => ({
+            requestBodySize: 0,
+            requestHeadersSize: 0,
+            responseBodySize: 0,
+            responseHeadersSize: 0,
+          }),
+        }),
+        body: async () => {
+          throw new Error(
+            "response.body: Protocol error (Network.getResponseBody): No data found for resource with given identifier\nResponse body is not available for a response that was navigated away from. Read response.body() before triggering any navigation.",
+          );
+        },
+      },
+      record,
+    );
+    expect(record.responseBodyReadFailure?.reason).toBe("navigation-discarded");
+    const observed = summarizeCapture({ requests: [record], intervals: [] });
+    expect(observed.missingResponseSizeCounts).toEqual({});
+    expect(observed.requestCounts).toEqual({
+      "GET /api/auth/organization/get-active-member-role": 1,
+    });
+    const authResponseBaseline = {
+      "/chat": {
+        depth: 0,
+        requests: ["GET /api/auth/organization/get-active-member-role"],
+        responseSizes: {
+          "GET /api/auth/organization/get-active-member-role": 1024,
+        },
+      },
+    } satisfies NetworkBaseline;
+    expect(
+      diffNetworkBaseline(authResponseBaseline, new Map([["/chat", observed]]))
+        .problems,
+    ).toEqual([]);
+  });
+
   test.each([
     { status: 200, failure: null, navigated: true, missing: false },
     { status: 204, failure: null, navigated: true, missing: false },
@@ -1100,7 +1152,7 @@ describe("diffNetworkBaseline", () => {
       status: 200,
       failure: { errorText: "aborted" },
       navigated: true,
-      missing: true,
+      missing: false,
     },
     { status: 200, failure: null, navigated: false, missing: true },
   ])(

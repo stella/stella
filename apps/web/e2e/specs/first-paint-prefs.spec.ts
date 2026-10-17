@@ -249,9 +249,12 @@ for (const { language, sundayBasedWeekStart } of [
         /<html(?=[^>]*\blang="ar")(?=[^>]*\bdir="rtl")[^>]*>/u,
       );
       // Opening the filters and calendar requires hydrated event handlers.
-      await page
-        .getByRole("button", { name: ar.common.filters, exact: true })
-        .click();
+      const filters = page.getByRole("button", {
+        name: ar.common.filters,
+        exact: true,
+      });
+      await filters.click();
+      await expect(filters).toHaveAttribute("aria-expanded", "true");
       await page
         .getByRole("button", {
           name: `${ar.search.dateFrom} ${ar.common.selectDate}`,

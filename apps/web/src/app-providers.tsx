@@ -6,9 +6,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 import { useRouter, useRouterState } from "@tanstack/react-router";
 import { panic } from "better-result";
-import { IntlProvider, useTranslations } from "use-intl";
 
-import { DialogProvider } from "@stll/ui/dialog";
 import { ToastProvider } from "@stll/ui/toast";
 import { TooltipProvider } from "@stll/ui/tooltip";
 
@@ -16,45 +14,16 @@ import { WebReaderPresentationProvider } from "@/components/legal-reader/web-rea
 import { ThemeProvider } from "@/components/theme-provider";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useHydrated } from "@/hooks/use-hydrated";
-import { FormattingProvider } from "@/i18n/formatting-context";
-import {
-  buildFormattingLocale,
-  synchronizeFormatterTimeZone,
-  useI18nStore,
-} from "@/i18n/i18n-store";
-import { useHydrationSafeTimeZone } from "@/i18n/time-zone";
+import { useI18nStore } from "@/i18n/i18n-store";
+import { I18nProvider } from "@/i18n/provider";
 import { AnalyticsProvider } from "@/lib/analytics/analytics-provider";
 import { useAnalytics } from "@/lib/analytics/provider";
 import type { AnalyticsValue } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { isPublicSsrPath } from "@/lib/public-ssr-paths";
 
-const DialogTranslations = ({ children }: PropsWithChildren) => {
-  const t = useTranslations();
-  return (
-    <DialogProvider
-      labels={{
-        close: t("common.close"),
-        unsavedChanges: t("common.unsavedChangesEscape"),
-      }}
-    >
-      {children}
-    </DialogProvider>
-  );
-};
-
-const I18nProvider = ({ children }: PropsWithChildren) => {
-  const locale = useI18nStore((s) => s.loadedLang);
-  const messages = useI18nStore((s) => s.messages);
-  const region = useI18nStore((s) => s.region);
-  const regionalFormat = useI18nStore((s) => s.regionalFormat);
-  const calendar = useI18nStore((s) => s.calendar);
-  const numberingSystem = useI18nStore((s) => s.numberingSystem);
-  const weekStart = useI18nStore((s) => s.weekStart);
-  const hydrated = useHydrated();
-  const timeZone = useHydrationSafeTimeZone(synchronizeFormatterTimeZone);
-
+const LocaleHeadSync = () => {
+  const locale = useI18nStore((state) => state.loadedLang);
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
@@ -75,31 +44,7 @@ const I18nProvider = ({ children }: PropsWithChildren) => {
     detached(router.invalidate(), "app-providers.locale-change");
   }, [router, locale, onPublicSsrPath]);
 
-  const formattingLocale = buildFormattingLocale({
-    lang: locale,
-    region,
-    regionalFormat,
-    calendar,
-    numberingSystem,
-    weekStart,
-  });
-
-  // The provider can commit while nested Suspense boundaries still hold server
-  // markup. Preserve the public-page remount when browser formatting activates.
-  const hydrationPhase = onPublicSsrPath && !hydrated ? "server" : "browser";
-
-  return (
-    <IntlProvider
-      key={hydrationPhase}
-      locale={locale}
-      messages={messages}
-      timeZone={timeZone}
-    >
-      <FormattingProvider locale={formattingLocale} timeZone={timeZone}>
-        <DialogTranslations>{children}</DialogTranslations>
-      </FormattingProvider>
-    </IntlProvider>
-  );
+  return null;
 };
 
 const AnalyticsAuthIdentity = () => {
@@ -142,6 +87,7 @@ export const AppProviders = ({
     <AnalyticsProvider value={analyticsValue}>
       <AnalyticsAuthIdentity />
       <I18nProvider>
+        <LocaleHeadSync />
         <HotkeysProvider
           defaultOptions={{
             hotkey: { conflictBehavior: "allow" },

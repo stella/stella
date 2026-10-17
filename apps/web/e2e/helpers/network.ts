@@ -261,10 +261,10 @@ export const readResponseBytes = async (
     record.responseBodyReadFailure = {
       // Playwright explicitly identifies bodies the browser discarded on
       // navigation. A successful response lost this way is not size evidence.
+      // Navigation may also mark the request aborted after its 200 response.
       reason:
         status >= 200 &&
         status < 300 &&
-        request.failure() === null &&
         message.includes(
           "Response body is not available for a response that was navigated away from.",
         )
