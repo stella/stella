@@ -2,6 +2,8 @@ import type { MCPToolSource } from "@tanstack/ai";
 import { panic } from "better-result";
 import * as v from "valibot";
 
+import { AhoCorasick } from "@stll/aho-corasick";
+
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { TelemetryError } from "@/api/lib/errors/tagged-errors";
@@ -31,10 +33,28 @@ import { logger } from "@/api/lib/observability/logger";
 
 export const TENANT_ID_REDACTION_PLACEHOLDER = "[internal-id-removed]";
 
-const findTenantId = (
-  text: string,
-  workspaceIds: readonly string[],
-): string | undefined => workspaceIds.find((id) => text.includes(id));
+const tenantIdMatchers = new WeakMap<
+  readonly string[],
+  { ids: string[]; matcher: AhoCorasick }
+>();
+
+const tenantIdMatcher = (workspaceIds: readonly string[]) => {
+  const cached = tenantIdMatchers.get(workspaceIds);
+  if (
+    cached !== undefined &&
+    cached.ids.length === workspaceIds.length &&
+    workspaceIds.every((id, index) => id === cached.ids.at(index))
+  ) {
+    return cached.matcher;
+  }
+  const matcher = new AhoCorasick(workspaceIds.map((id) => id.toWellFormed()));
+  tenantIdMatchers.set(workspaceIds, { ids: [...workspaceIds], matcher });
+  return matcher;
+};
+
+const hasTenantId = (text: string, workspaceIds: readonly string[]): boolean =>
+  workspaceIds.length > 0 &&
+  tenantIdMatcher(workspaceIds).isMatch(text.toWellFormed());
 
 export type ModelIngressSurface = "system-prompt" | "tool-schemas";
 
@@ -51,7 +71,7 @@ export const assertModelSurfaceFreeOfTenantIds = ({
   surface: ModelIngressSurface;
   workspaceIds: readonly SafeId<"workspace">[];
 }): void => {
-  if (findTenantId(serialized, workspaceIds) === undefined) {
+  if (!hasTenantId(serialized, workspaceIds)) {
     return;
   }
   const error = new TelemetryError({
