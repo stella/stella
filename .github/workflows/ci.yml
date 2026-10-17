@@ -1334,7 +1334,6 @@ jobs:
       # coverage when it is unavailable; heavy and thin-queue job derivation
       # cannot, so the step after it fails the plan instead.
       - name: Install planner dependencies
-        timeout-minutes: 3
         id: planner-deps
         if: >-
           steps.completed-depth.outputs.run_required != 'false'
