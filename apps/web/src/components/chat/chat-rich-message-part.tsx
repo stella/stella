@@ -1,12 +1,4 @@
-import {
-  Component,
-  createElement,
-  lazy,
-  Suspense,
-  useMemo,
-  useRef,
-} from "react";
-import type { ErrorInfo, ReactElement } from "react";
+import { createElement, lazy, Suspense, useMemo, useRef } from "react";
 
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
@@ -18,13 +10,12 @@ import {
   MCP_APP_RESOURCE_MIME_TYPE,
 } from "@stll/api-contract";
 
+import { ChatRenderErrorBoundary } from "@/components/chat/chat-render-error-boundary";
 import type { ChatPart } from "@/components/chat/chat-ui-tools";
 import { uiResourceRenderer } from "@/components/chat/ui-resource-renderer";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { getAnalytics } from "@/lib/analytics/provider";
 import { mcpAppSandboxUrl } from "@/lib/api-url";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
-import { ClientTelemetryError } from "@/lib/errors/telemetry";
 import { getUserFileContentUrl } from "@/lib/user-files";
 
 export type RichChatPart = Extract<
@@ -44,45 +35,6 @@ const LazyGeneratedVisual = lazy(async () => {
     await import("@/components/chat/generated-visual");
   return { default: GeneratedVisual };
 });
-
-const CHAT_RICH_CONTENT_AREA = "chat-rich-content";
-
-type RichContentErrorBoundaryProps = {
-  children: ReactElement;
-  fallback: ReactElement;
-};
-
-type RichContentErrorBoundaryState = {
-  hasError: boolean;
-};
-
-export class RichContentErrorBoundary extends Component<
-  RichContentErrorBoundaryProps,
-  RichContentErrorBoundaryState
-> {
-  constructor(props: RichContentErrorBoundaryProps) {
-    super(props);
-    this.state = { hasError: false };
-  }
-
-  static getDerivedStateFromError(): RichContentErrorBoundaryState {
-    return { hasError: true };
-  }
-
-  override componentDidCatch(error: Error, _info: ErrorInfo) {
-    getAnalytics().captureError(
-      new ClientTelemetryError({
-        area: CHAT_RICH_CONTENT_AREA,
-        message: "[Chat rich content] MCP App resource failed to render",
-        cause: error,
-      }),
-    );
-  }
-
-  override render() {
-    return this.state.hasError ? this.props.fallback : this.props.children;
-  }
-}
 
 export const isRichChatPart = (part: ChatPart): part is RichChatPart =>
   part.type === "audio" || part.type === "video" || part.type === "ui-resource";
@@ -269,14 +221,15 @@ const McpAppFrame = ({
       className="min-h-32 w-full overflow-hidden rounded-md border"
       ref={containerRef}
     >
-      <RichContentErrorBoundary
+      <ChatRenderErrorBoundary
+        surface="chat-rich-content"
         fallback={<RichContentStatus />}
         key={`${normalized.toolCallId}:${normalized.resource.uri}`}
       >
         <Suspense fallback={<RichContentStatus loading />}>
           <LazyMcpAppResource part={normalized} sandbox={{ url: sandboxUrl }} />
         </Suspense>
-      </RichContentErrorBoundary>
+      </ChatRenderErrorBoundary>
     </div>
   );
 };
@@ -370,7 +323,10 @@ export const ChatRichMessagePart = ({
             return <RichContentStatus />;
           }
           return (
-            <RichContentErrorBoundary fallback={<RichContentStatus />}>
+            <ChatRenderErrorBoundary
+              surface="chat-rich-content"
+              fallback={<RichContentStatus />}
+            >
               <Suspense fallback={<RichContentStatus loading />}>
                 <LazyGeneratedVisual
                   part={part}
@@ -378,7 +334,7 @@ export const ChatRichMessagePart = ({
                   threadRef={threadRef}
                 />
               </Suspense>
-            </RichContentErrorBoundary>
+            </ChatRenderErrorBoundary>
           );
         case null:
           return <RichContentStatus />;

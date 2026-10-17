@@ -301,7 +301,9 @@ export const listCitingDecisionsHandler = async (
   { caseLawDb, courtRegistry }: CitingDecisionsReadOptions,
 ) => {
   const countryRead = readPublicLawCountry(query.jurisdiction, {
+    domain: "caseLaw",
     admitted: PUBLIC_CASE_LAW_COUNTRIES,
+    surface: "search",
     parameter: "jurisdiction",
   });
   if (countryRead.kind === "unavailable") {

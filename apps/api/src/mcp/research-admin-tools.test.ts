@@ -83,12 +83,6 @@ const errorMessage = (result: McpToolResponse): string => {
   return raw;
 };
 
-const runManageOrg = async (args: Record<string, unknown>) =>
-  await RESEARCH_ADMIN_TOOL_HANDLERS.manage_organization({
-    args,
-    context: createContext("owner"),
-  });
-
 describe("list_audit_log", () => {
   test("fails closed on the anonymized surface", () => {
     const def = DEFAULT_MCP_TOOL_DEFINITIONS.find(
@@ -250,136 +244,142 @@ describe("search_boe_legislation feature gating", () => {
   });
 });
 
-describe("manage_organization per-action validation", () => {
-  test("requires user_id for a member action", async () => {
-    expect(
-      errorMessage(
-        await runManageOrg({ action: "add_member", matter_id: WORKSPACE_ID }),
-      ),
-    ).toBe("user_id is required for add_member and remove_member");
-  });
-
-  test("rejects org-settings fields on a member action", async () => {
-    const message = errorMessage(
-      await runManageOrg({
-        action: "remove_member",
-        matter_id: WORKSPACE_ID,
-        user_id: "user_2",
-        prompt_caching_enabled: false,
-        document_processing_mode: "searchable-text",
-      }),
+describe("matter membership and organization settings", () => {
+  test("each operation exposes only its own inputs and accurate annotations", () => {
+    const expected = {
+      add_matter_member: {
+        title: "Add matter member",
+        destructiveHint: false,
+        idempotentHint: false,
+      },
+      remove_matter_member: {
+        title: "Remove matter member",
+        destructiveHint: true,
+        idempotentHint: false,
+      },
+      update_organization_settings: {
+        title: "Update organization settings",
+        destructiveHint: false,
+        idempotentHint: true,
+      },
+    } as const;
+    for (const [name, annotations] of Object.entries(expected)) {
+      const definition = DEFAULT_MCP_TOOL_DEFINITIONS.find(
+        (tool) => tool.name === name,
+      );
+      expect(definition?.annotations).toEqual({
+        ...annotations,
+        readOnlyHint: false,
+        openWorldHint: false,
+      });
+      expect(definition?.inputSchema.properties).not.toHaveProperty("action");
+      expect(definition?.inputSchema["required"] ?? []).toEqual(
+        name === "update_organization_settings" ? [] : ["matter_id", "user_id"],
+      );
+    }
+    expect(DEFAULT_MCP_TOOL_DEFINITIONS.map((tool) => tool.name)).not.toContain(
+      "manage_organization",
     );
-    expect(message).toBe("Settings fields apply only to update_org_settings");
+    expect(DEFAULT_MCP_CLI_ANNOTATIONS.remove_matter_member.command).toEqual([
+      "matter",
+      "remove-member",
+    ]);
   });
 
-  test("rejects an empty update_org_settings action", async () => {
+  test("member operations require a user and reject settings and discriminator inputs", async () => {
+    for (const name of ["add_matter_member", "remove_matter_member"] as const) {
+      const handler = RESEARCH_ADMIN_TOOL_HANDLERS[name];
+      expect(
+        errorText(
+          await handler({
+            args: { matter_id: WORKSPACE_ID },
+            context: createContext(),
+          }),
+        ),
+      ).toContain("user_id");
+      for (const extra of [
+        { prompt_caching_enabled: true },
+        { action: "add_member" },
+      ]) {
+        expect(
+          errorText(
+            await handler({
+              args: { matter_id: WORKSPACE_ID, user_id: "user_2", ...extra },
+              context: createContext(),
+            }),
+          ),
+        ).toContain("validation_error");
+      }
+    }
+  });
+
+  test("only member removal accepts a replacement and confirmation", async () => {
+    const args = {
+      matter_id: WORKSPACE_ID,
+      user_id: "user_2",
+      reassign_to: "user_3",
+      confirm: true,
+    };
     expect(
-      errorMessage(await runManageOrg({ action: "update_org_settings" })),
-    ).toBe("Provide at least one setting to change for update_org_settings");
+      errorText(
+        await RESEARCH_ADMIN_TOOL_HANDLERS.add_matter_member({
+          args,
+          context: createContext(),
+        }),
+      ),
+    ).toContain("validation_error");
+    expect(
+      errorText(
+        await RESEARCH_ADMIN_TOOL_HANDLERS.remove_matter_member({
+          args,
+          context: createContext(),
+        }),
+      ),
+    ).toContain("Matter not found or not accessible");
+    const definitions: readonly McpToolDefinition[] =
+      DEFAULT_MCP_TOOL_DEFINITIONS;
+    expect(
+      definitions.find((tool) => tool.name === "remove_matter_member")
+        ?.destructiveBehavior,
+    ).toEqual({ type: "always" });
   });
 
-  test("requires the matter pattern and padding to be sent together", async () => {
+  test("settings reject empty updates, unpaired numbering, and member fields", async () => {
+    const handler = RESEARCH_ADMIN_TOOL_HANDLERS.update_organization_settings;
+    expect(
+      errorMessage(await handler({ args: {}, context: createContext() })),
+    ).toBe("Provide at least one setting to change");
     expect(
       errorMessage(
-        await runManageOrg({
-          action: "update_org_settings",
-          matter_number_pattern: "{YYYY}-{SEQ}",
+        await handler({
+          args: { matter_number_pattern: "{YYYY}-{SEQ}" },
+          context: createContext(),
         }),
       ),
     ).toBe(
       "matter_number_pattern and matter_number_padding must be sent together",
     );
-  });
-
-  test("rejects an unknown action shape", async () => {
-    expect(
-      errorText(await runManageOrg({ action: "promote_admin" })),
-    ).toContain("action");
-  });
-
-  test("exposes the searchable-text processing modes", () => {
-    const definition = DEFAULT_MCP_TOOL_DEFINITIONS.find(
-      (tool) => tool.name === "manage_organization",
-    );
-    const property =
-      definition?.inputSchema.properties?.["document_processing_mode"];
-
-    expect(property).toMatchObject({
-      type: "string",
-      enum: ["off", "searchable-text"],
-    });
-  });
-
-  test("rejects an unknown document processing mode", async () => {
     expect(
       errorText(
-        await runManageOrg({
-          action: "update_org_settings",
-          document_processing_mode: "structured-document",
+        await handler({
+          args: { prompt_caching_enabled: true, matter_id: WORKSPACE_ID },
+          context: createContext(),
+        }),
+      ),
+    ).toContain("matter_id");
+    const definition = DEFAULT_MCP_TOOL_DEFINITIONS.find(
+      (tool) => tool.name === "update_organization_settings",
+    );
+    expect(
+      definition?.inputSchema.properties?.["document_processing_mode"],
+    ).toMatchObject({ type: "string", enum: ["off", "searchable-text"] });
+    expect(
+      errorText(
+        await handler({
+          args: { document_processing_mode: "structured-document" },
+          context: createContext(),
         }),
       ),
     ).toContain("document_processing_mode");
   });
-});
-
-describe("manage_organization destructive behavior", () => {
-  test("binds remove_member confirmation to the action discriminator", () => {
-    const definitions: readonly McpToolDefinition[] =
-      DEFAULT_MCP_TOOL_DEFINITIONS;
-    const def = definitions.find((tool) => tool.name === "manage_organization");
-    expect(def).toBeDefined();
-    expect(def?.annotations.destructiveHint).toBe(true);
-    expect(def?.destructiveBehavior).toEqual({
-      type: "input-discriminator",
-      property: "action",
-      destructiveValues: ["remove_member"],
-    });
-  });
-
-  test("remove_member handler proceeds to normal resolution", async () => {
-    const text = errorText(
-      await runManageOrg({
-        action: "remove_member",
-        matter_id: WORKSPACE_ID,
-        user_id: "user_2",
-      }),
-    );
-    expect(text).not.toContain("confirmation_required");
-    expect(text).toContain("Matter not found or not accessible");
-  });
-
-  test("update_org_settings is unaffected by the confirm gate", async () => {
-    // A non-remove action needs no confirm; its own validation fires first.
-    expect(
-      errorMessage(await runManageOrg({ action: "update_org_settings" })),
-    ).toBe("Provide at least one setting to change for update_org_settings");
-  });
-});
-
-test("replacement is accepted only by the member removal action", async () => {
-  const wrongAction = await runManageOrg({
-    action: "add_member",
-    matter_id: WORKSPACE_ID,
-    user_id: "user_2",
-    reassign_to: "user_3",
-  });
-  expect(errorMessage(wrongAction)).toContain(
-    "reassign_to is only supported for remove_member",
-  );
-  const removal = await runManageOrg({
-    action: "remove_member",
-    matter_id: WORKSPACE_ID,
-    user_id: "user_2",
-    reassign_to: "user_3",
-    confirm: true,
-  });
-  expect(errorMessage(removal)).not.toContain("reassign_to");
-});
-
-test("the member removal CLI exposes optional replacement", () => {
-  expect(
-    DEFAULT_MCP_CLI_ANNOTATIONS.manage_organization.discriminator?.subcommands[
-      "remove_member"
-    ]?.include,
-  ).toContain("reassign_to");
 });

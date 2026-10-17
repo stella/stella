@@ -1,6 +1,6 @@
 {
   "cloud": {
-    "install": "bun install --frozen-lockfile",
+    "install": "bun install --frozen-lockfile --ignore-scripts",
     "services": ["postgres", "valkey"],
     "envFile": "apps/api/.env.test"
   }

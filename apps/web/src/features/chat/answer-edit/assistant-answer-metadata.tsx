@@ -5,14 +5,12 @@ import { AnswerRevisionHistory } from "./answer-revision-history";
 
 export const AssistantAnswerMetadata = ({
   message,
-  activeOrganizationId,
   workspaceId,
   threadId,
   disabled,
   onAnswerEdited,
 }: {
   message: ChatUIMessage;
-  activeOrganizationId: string;
   workspaceId?: string | undefined;
   threadId?: string | undefined;
   disabled: boolean;
@@ -31,7 +29,6 @@ export const AssistantAnswerMetadata = ({
         />
       )}
     <SourceChips
-      activeOrganizationId={activeOrganizationId}
       messageId={message.id}
       parts={message.parts}
       sourceDocuments={message.metadata?.sourceDocuments}
