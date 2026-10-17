@@ -26,6 +26,7 @@ export const APP_SEARCH_FIXTURE = {
       warnings: [
         {
           code: "function_words_optional" as const,
+          audience: "agent" as const,
           message: "Search notice",
           hint: "Try another query.",
         },

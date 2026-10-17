@@ -221,7 +221,7 @@ export const requestAccountExport = async (
     }
     // The account lock serializes this indexed, bounded budget check with
     // insertion. Returning an active export never consumes a request slot.
-    const recent = await tx
+    const budgetExhausted = await tx
       .select({ id: accountExports.id })
       .from(accountExports)
       .where(
@@ -230,8 +230,9 @@ export const requestAccountExport = async (
           sql`${accountExports.createdAt} > CURRENT_TIMESTAMP - (${ACCOUNT_EXPORT_LIMITS.requestWindowMs} * INTERVAL '1 millisecond')`,
         ),
       )
-      .limit(ACCOUNT_EXPORT_LIMITS.requestsPerWindow);
-    if (recent.length >= ACCOUNT_EXPORT_LIMITS.requestsPerWindow) {
+      .offset(ACCOUNT_EXPORT_LIMITS.requestsPerWindow - 1)
+      .limit(1);
+    if (budgetExhausted.at(0) !== undefined) {
       return Result.err(
         new HandlerError({
           status: 429,

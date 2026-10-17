@@ -56,7 +56,7 @@ describe.skipIf(!enabled)("account export lifecycle", () => {
         await client`INSERT INTO "user" (id) VALUES (${recoveryUserId}), (${userId})`;
         for (const migration of [
           "20261010005100_account_audit_scope",
-          "20261010212100_account_exports",
+          "20261016100500_account_exports",
         ]) {
           const source = await Bun.file(
             new URL(

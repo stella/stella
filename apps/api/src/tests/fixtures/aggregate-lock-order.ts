@@ -26,6 +26,11 @@ export const aggregateFences = () => {
       id: { id: Bun.randomUUIDv7(), userId },
       mode: "share",
     },
+    folioCollabRoom: {
+      aggregate: "folioCollabRoom",
+      id: { id: createSafeId<"folioCollabRoom">(), workspaceId },
+      mode: "update",
+    },
     signingSession: {
       aggregate: "signingSession",
       id: {
