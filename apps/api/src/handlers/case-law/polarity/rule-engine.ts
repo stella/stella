@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * Regex-based polarity classification engine.
  *
@@ -9,7 +10,6 @@
  * for batch scripts; the API server should omit it to stay
  * stateless (rules reload from DB on every call).
  */
-
 import { and, eq, inArray, lte, sql } from "drizzle-orm";
 import { QueryBuilder } from "drizzle-orm/pg-core";
 
@@ -19,33 +19,60 @@ import { aggregateMentionPolarities } from "@/api/handlers/case-law/polarity/agg
 import {
   CLASSIFIABLE_POLARITIES,
   isClassifiablePolarity,
+  POLARITY,
   POLARITY_PRECEDENCE,
+  POLARITY_RULE_KIND,
   RULE_SOURCE,
   REPORTED_PARTY_SUBMISSION_GROUP,
 } from "@/api/handlers/case-law/polarity/consts";
 import type {
   ClassifiablePolarity,
   Polarity,
+  PolarityRuleKind,
 } from "@/api/handlers/case-law/polarity/consts";
-import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { TelemetryError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 
-export type CompiledRule = {
+const invalidPolarityRule = failureSink({
+  event: "case_law.polarity.invalid_rule",
+  expected: [],
+});
+
+type CompiledRuleBase = {
   id: SafeId<"caseLawPolarityRule">;
   regex: RegExp;
-  /**
-   * Narrower than the column, which the CHECK constraint still lets carry any
-   * `Polarity`. A rule reads one mention, so it can neither assert that
-   * classification did not happen (`unknown`) nor that two mentions disagreed
-   * (`mixed`); both are the pipeline's own words about a citation.
-   */
-  polarity: ClassifiablePolarity;
   /** Kept for the specificity tiebreak; the compiled regex hides its length. */
   pattern: string;
   confidence: number;
 };
+
+type RuleKindPolarity = {
+  kind: PolarityRuleKind;
+  polarity: Polarity;
+};
+
+export type ValidRuleKindPolarity =
+  | {
+      kind: typeof POLARITY_RULE_KIND.FORM;
+      polarity: typeof POLARITY.NEUTRAL;
+    }
+  | {
+      kind: typeof POLARITY_RULE_KIND.STANCE;
+      polarity: ClassifiablePolarity;
+    };
+
+export type CompiledRule = CompiledRuleBase & ValidRuleKindPolarity;
+
+/** Form describes how a citation is printed; it cannot express treatment. */
+export const isValidRuleKindPolarity = (
+  rule: RuleKindPolarity,
+): rule is ValidRuleKindPolarity =>
+  isClassifiablePolarity(rule.polarity) &&
+  (rule.kind === POLARITY_RULE_KIND.STANCE ||
+    rule.polarity === POLARITY.NEUTRAL);
 
 /** The rule tier's label for one citation, over all of its mentions. */
 export type CitationPolarityVerdict = {
@@ -148,8 +175,10 @@ export const rankPolarityRulesByTier = (language: string) =>
     .select({
       id: caseLawPolarityRules.id,
       pattern: caseLawPolarityRules.pattern,
+      kind: caseLawPolarityRules.kind,
       polarity: caseLawPolarityRules.polarity,
       confidence: caseLawPolarityRules.confidence,
+      source: caseLawPolarityRules.source,
       tierRank: sql<number>`row_number() over (
         partition by ${caseLawPolarityRules.polarity}
         order by length(${caseLawPolarityRules.pattern}) desc, ${caseLawPolarityRules.id}
@@ -168,7 +197,7 @@ export const rankPolarityRulesByTier = (language: string) =>
 /** The columns `compileRules` reads; the DB read that produces them is the caller's. */
 type PolarityRuleRow = Pick<
   typeof caseLawPolarityRules.$inferSelect,
-  "id" | "pattern" | "polarity" | "confidence"
+  "id" | "pattern" | "polarity" | "confidence" | "kind"
 >;
 
 /**
@@ -194,32 +223,62 @@ export const compileRules = (
   for (const row of rows) {
     const regex = compilePattern(row.pattern);
     if (!regex) {
-      captureError(
+      observeFailure(
         new TelemetryError({
           message: "Polarity rule pattern does not compile",
         }),
-        { pattern: row.pattern, ruleId: row.id },
+        { sink: invalidPolarityRule, ctx: { entityId: row.id } },
       );
       continue;
     }
 
     if (!isClassifiablePolarity(row.polarity)) {
-      captureError(
+      observeFailure(
         new TelemetryError({
           message: "Polarity rule carries a polarity no match may assign",
         }),
-        { polarity: row.polarity, ruleId: row.id },
+        { sink: invalidPolarityRule, ctx: { entityId: row.id } },
       );
       continue;
     }
 
-    compiled.push({
+    if (!isValidRuleKindPolarity(row)) {
+      observeFailure(
+        new TelemetryError({
+          message: "Citation-form rule carries a stance polarity",
+        }),
+        { sink: invalidPolarityRule, ctx: { entityId: row.id } },
+      );
+      continue;
+    }
+
+    const base = {
       id: row.id,
       regex,
-      polarity: row.polarity,
       pattern: row.pattern,
       confidence: row.confidence,
-    });
+    };
+    const kind = row.kind;
+    switch (kind) {
+      case POLARITY_RULE_KIND.FORM:
+        compiled.push({
+          ...base,
+          kind: POLARITY_RULE_KIND.FORM,
+          polarity: POLARITY.NEUTRAL,
+        });
+        break;
+      case POLARITY_RULE_KIND.STANCE:
+        compiled.push({
+          ...base,
+          kind: POLARITY_RULE_KIND.STANCE,
+          polarity: row.polarity,
+        });
+        break;
+      default: {
+        kind satisfies never;
+        panic("Unhandled polarity rule kind");
+      }
+    }
   }
 
   return compiled.toSorted(compareRulePrecedence);
@@ -367,6 +426,7 @@ export const loadRules = async (
         pattern: ranked.pattern,
         polarity: ranked.polarity,
         confidence: ranked.confidence,
+        kind: ranked.kind,
       })
       .from(ranked)
       .where(lte(ranked.tierRank, RULES_PER_POLARITY)),

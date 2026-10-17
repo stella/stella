@@ -98,6 +98,16 @@ export const DOCTRINE_COLUMN_GRANTS_BY_RELATION = {
   },
 } as const satisfies PublicLawColumnGrantsByRelation;
 
+export const CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION = {
+  case_law_citations: {
+    polarity_rule_id: "permitted",
+    polarity_source: "permitted",
+    polarity_classifier_version: "permitted",
+    polarity_evidence_windows: "permitted",
+    cited_part: "permitted",
+  },
+} as const satisfies PublicLawColumnGrantsByRelation;
+
 const PROVISION_LINK_STATUS_GRANT = "permitted";
 
 /** Columns the provision link status capability requires after its grants land. */
@@ -266,6 +276,7 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     DOCTRINE_COLUMN_GRANTS_BY_RELATION.case_law_citation_doctrine_reviews,
   case_law_citations: {
     ...DOCTRINE_COLUMN_GRANTS_BY_RELATION.case_law_citations,
+    ...CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION.case_law_citations,
     id: "required",
     citing_decision_id: "required",
     cited_decision_id: "required",

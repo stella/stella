@@ -51,6 +51,9 @@ import {
   CITATION_REVIEW_ORIGIN,
   CITATION_REVIEW_ORIGINS,
   POLARITIES,
+  POLARITY,
+  POLARITY_RULE_KIND,
+  POLARITY_RULE_KINDS,
   REVIEWABLE_POLARITIES,
   RULE_SOURCE,
   RULE_SOURCES,
@@ -60,7 +63,14 @@ import type {
   ReviewablePolarity,
   RuleSource,
 } from "@/api/handlers/case-law/polarity/consts";
-import { CITATION_DIRECTIONS } from "@/api/lib/case-law/citation-vocabulary";
+import { citationEvidenceWindowsValidSql } from "@/api/lib/case-law/citation-evidence";
+import type { CitationEvidenceWindows } from "@/api/lib/case-law/citation-evidence";
+import {
+  CITATION_DIRECTIONS,
+  CITATION_POLARITY_SOURCES,
+  CITED_PARTS,
+  CITED_PART,
+} from "@/api/lib/case-law/citation-vocabulary";
 import {
   CASE_LAW_DECISION_COURT_ID_CONSTRAINT,
   DECISION_COURT_ID_MAX_LENGTH,
@@ -1788,6 +1798,20 @@ export const caseLawReconciliationItems = p.pgTable(
   ],
 );
 
+// The writer fence reads this actual column group, including its physical names.
+const citationTextEvidenceColumns = {
+  /** Exact original-coordinate windows used to classify the citation. */
+  polarityEvidenceWindows: jsonb(
+    "polarity_evidence_windows",
+  ).$type<CitationEvidenceWindows>(),
+  polarityConfidence: p.doublePrecision("polarity_confidence"),
+  /** Explicit opinion part referred to by the citation. */
+  citedPart: p
+    .text("cited_part", { enum: CITED_PARTS })
+    .notNull()
+    .default(CITED_PART.NOT_STATED),
+};
+
 export const caseLawCitations = p.pgTable(
   "case_law_citations",
   {
@@ -1888,6 +1912,13 @@ export const caseLawCitations = p.pgTable(
       length: 16,
       enum: DOCTRINAL_TREATMENTS,
     }),
+    /** Classifier tier or review that produced the persisted label. */
+    polaritySource: p.text("polarity_source", {
+      enum: CITATION_POLARITY_SOURCES,
+    }),
+    /** Version of the classifier that produced the evidence. */
+    polarityClassifierVersion: p.text("polarity_classifier_version"),
+    ...citationTextEvidenceColumns,
     polarityRuleId: safeUuid<"caseLawPolarityRule">(
       "polarity_rule_id",
     ).references(() => caseLawPolarityRules.id, {
@@ -1896,6 +1927,28 @@ export const caseLawCitations = p.pgTable(
     createdAt: timestamptz("created_at").defaultNow().notNull(),
   },
   (t) => [
+    p.check(
+      "citations_polarity_source_values",
+      sql`${t.polaritySource} IN (${sql.join(
+        CITATION_POLARITY_SOURCES.map((source) => sql`${source}`),
+        sql.raw(","),
+      )})`,
+    ),
+    p.check(
+      "citations_cited_part_values",
+      sql`${t.citedPart} IN (${sql.join(
+        CITED_PARTS.map((part) => sql`${part}`),
+        sql.raw(","),
+      )})`,
+    ),
+    p.check(
+      "citations_polarity_window_bounds",
+      citationEvidenceWindowsValidSql(t.polarityEvidenceWindows),
+    ),
+    p.check(
+      "citations_polarity_confidence_bounds",
+      sql`${t.polarityConfidence} >= 0 AND ${t.polarityConfidence} <= 1`,
+    ),
     p.index("case_law_citations_citing_page_idx").on(t.citingDecisionId, t.id),
     p
       .index("case_law_citations_cited_page_idx")
@@ -2701,6 +2754,10 @@ export const caseLawPolarityRules = p.pgTable(
   {
     id: pUuid<"caseLawPolarityRule">().primaryKey(),
     pattern: p.varchar("pattern", { length: 512 }).notNull(),
+    kind: p
+      .text("kind", { enum: POLARITY_RULE_KINDS })
+      .default(POLARITY_RULE_KIND.STANCE)
+      .notNull(),
     polarity: p.varchar("polarity", { length: 16 }).$type<Polarity>().notNull(),
     language: p.varchar("language", { length: 8 }).notNull(),
     source: p
@@ -2722,6 +2779,17 @@ export const caseLawPolarityRules = p.pgTable(
     p
       .uniqueIndex("case_law_polarity_rules_pattern_lang_idx")
       .on(t.pattern, t.language),
+    p.check(
+      "polarity_rules_kind_values",
+      sql`${t.kind} IN (${sql.join(
+        POLARITY_RULE_KINDS.map((kind) => sql`${kind}`),
+        sql.raw(","),
+      )})`,
+    ),
+    p.check(
+      "polarity_rules_form_neutral",
+      sql`${t.kind} <> ${POLARITY_RULE_KIND.FORM} OR ${t.polarity} = ${POLARITY.NEUTRAL}`,
+    ),
     p.check(
       "polarity_rules_polarity_values",
       sql`${t.polarity} IN (${sql.join(POLARITY_SQL_VALUES, sql.raw(","))})`,
@@ -2750,6 +2818,8 @@ const citationReviewProvenanceColumns = () => ({
   promptSha256: p.varchar("prompt_sha256", { length: 64 }),
   /** Digest of the passage the label was read from. */
   evidenceSha256: p.varchar("evidence_sha256", { length: 64 }),
+  /** Digest of the decision content hash and sections the model read. */
+  textRevisionSha256: p.varchar("text_revision_sha256", { length: 64 }),
   runId: p.text("run_id"),
   producedAt: timestamptz("produced_at"),
   /** When the current review was made; a changed review moves it. */
@@ -2758,6 +2828,7 @@ const citationReviewProvenanceColumns = () => ({
 });
 
 type CitationReviewProvenanceTable = Record<
+  | "textRevisionSha256"
   | "reviewRef"
   | "origin"
   | "model"
@@ -2774,6 +2845,10 @@ const citationReviewProvenanceChecks = (
   prefix: string,
   t: CitationReviewProvenanceTable,
 ) => [
+  p.check(
+    `${prefix}_text_revision_sha256`,
+    sql`${t.textRevisionSha256} IS NULL OR ${t.textRevisionSha256} ~ '^[0-9a-f]{64}$'`,
+  ),
   p.check(`${prefix}_review_ref_non_empty`, sql`${t.reviewRef} <> ''`),
   p.check(
     `${prefix}_origin_values`,

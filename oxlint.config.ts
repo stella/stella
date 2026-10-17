@@ -1538,6 +1538,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-query-limit.ts",
     "./.oxlint-plugins/require-search-scope.ts",
     "./.oxlint-plugins/no-direct-ingestion-checkpoint-write.ts",
+    "./.oxlint-plugins/citation-evidence-text-fence.ts",
     "./.oxlint-plugins/no-literal-decision-court.ts",
     "./.oxlint-plugins/no-literal-derived-attribute.ts",
     "./.oxlint-plugins/no-parser-validator-calls.ts",
@@ -1699,6 +1700,15 @@ const config = defineConfig({
       ],
       rules: {
         "confine-sql-close/confine-sql-close": "error",
+      },
+    },
+    {
+      files: [
+        "apps/api/**/*.ts",
+        ".oxlint-plugins/__fixtures__/citation-evidence-text-fence.fixture.ts",
+      ],
+      rules: {
+        "citation-evidence-text-fence/citation-evidence-text-fence": "error",
       },
     },
     {

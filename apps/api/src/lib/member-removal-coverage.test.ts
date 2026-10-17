@@ -52,6 +52,8 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "bilingual_translation_rows.warnings",
   "bilingual_translation_runs.glossary",
   "case_law_analysis_failures.provider_diagnostic",
+  // Citation evidence stores source-text offsets, not member identities.
+  "case_law_citations.polarity_evidence_windows",
   "case_law_decision_supplements.document_ast",
   "case_law_decision_supplements.metadata",
   "case_law_decisions.sections",

@@ -11,6 +11,7 @@ import { envBase } from "@/api/env-base";
 import { CITATION_KIND } from "@/api/handlers/case-law/citation-kind";
 import { excerptOf } from "@/api/handlers/case-law/polarity/classifier";
 import { extractContexts } from "@/api/handlers/case-law/polarity/context";
+import { POLARITY_READINGS } from "@/api/handlers/case-law/polarity/model-readings";
 import {
   classifyWithSystemOne,
   POLARITY_QUESTION,
@@ -33,6 +34,7 @@ import {
   DISAGREEMENT_EXAMPLES,
   parseCompareArgs,
   planSampleBuckets,
+  polarityProbabilitiesOf,
   renderComparisonReport,
   renderPairedComparisonReport,
   summarisePairedComparison,
@@ -297,8 +299,8 @@ const readWithDecisionModel = async (
   }
   return {
     status: "read",
-    polarity: answers.polarity.choice,
-    probabilities: answers.polarity.probabilities,
+    polarity: POLARITY_READINGS[answers.polarity.choice].polarity,
+    probabilities: polarityProbabilitiesOf(answers.polarity.probabilities),
     confidence: answers.polarity.confidence,
     latencyMs,
     inputTokens: usage.inputTokens,
@@ -323,7 +325,7 @@ const readWithLlm = async (item: ComparisonItem): Promise<LlmOutcome> => {
   }
   return {
     status: "read",
-    polarity: classified.answer.choice,
+    polarity: POLARITY_READINGS[classified.answer.choice].polarity,
     confidence: classified.confidence,
     keyPhrase: classified.evidence ?? "",
     latencyMs,

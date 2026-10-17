@@ -22,6 +22,31 @@ export const DECISION_TEXT_WITHHELD_REASON = {
 export type DecisionTextWithheldReason =
   (typeof DECISION_TEXT_WITHHELD_REASON)[keyof typeof DECISION_TEXT_WITHHELD_REASON];
 
+// parser-output-unchanged: Citation text eligibility reasons describe read-time failures; parsers do not emit them.
+export const CITATION_TEXT_INCOMPLETE_REASONS = [
+  "absent_ast",
+  "gate_failed",
+  "text_changed",
+  "missing_text",
+] as const;
+export type CitationTextIncompleteReason =
+  (typeof CITATION_TEXT_INCOMPLETE_REASONS)[number];
+
+// parser-output-unchanged: citation evidence availability is read-time metadata.
+export const CITATION_EVIDENCE_INCOMPLETE_REASONS = [
+  "missing_privileges",
+  "missing_evidence",
+] as const;
+export type CitationEvidenceIncompleteReason =
+  (typeof CITATION_EVIDENCE_INCOMPLETE_REASONS)[number];
+export const CITATION_EVIDENCE_INCOMPLETE_REASON = {
+  MISSING_PRIVILEGES: "missing_privileges",
+  MISSING_EVIDENCE: "missing_evidence",
+} as const satisfies Record<
+  Uppercase<CitationEvidenceIncompleteReason>,
+  CitationEvidenceIncompleteReason
+>;
+
 export const TEXT_ABSENCE_REASONS = [
   "not_published",
   "parse_failed",

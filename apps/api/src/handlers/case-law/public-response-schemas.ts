@@ -4,6 +4,11 @@ import { t } from "elysia";
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { DOCTRINAL_TREATMENTS } from "@stll/api-contract/case-law-doctrine";
 import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
+import {
+  CITATION_EVIDENCE_INCOMPLETE_REASONS,
+  CITATION_TEXT_INCOMPLETE_REASONS,
+  DECISION_TEXT_WITHHELD_REASON,
+} from "@stll/api-contract/case-law-text-field";
 import { DECISION_PRIMARY_REFERENCE_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import type {
@@ -16,6 +21,7 @@ import {
   CITATION_TIMELINE_MAX_YEARS,
   LEADING_CITATIONS_PER_TREATMENT,
 } from "@/api/handlers/case-law/decisions/citation-graph";
+import type { CitationWithPassage } from "@/api/handlers/case-law/decisions/citation-passages";
 import type { readCaseLawCoverageHandler } from "@/api/handlers/case-law/decisions/coverage";
 import {
   CASE_LAW_COVERAGE_HEALTH,
@@ -35,7 +41,11 @@ import type {
   listSitemapShardsHandler,
 } from "@/api/handlers/case-law/decisions/sitemap";
 import type { readCaseLawCorpusStatusHandler } from "@/api/handlers/case-law/decisions/status";
-import { CITATION_TREATMENTS } from "@/api/lib/case-law/citation-vocabulary";
+import {
+  CITATION_TREATMENTS,
+  CITATION_POLARITY_SOURCES,
+  CITED_PARTS,
+} from "@/api/lib/case-law/citation-vocabulary";
 import { decisionHeadnotePreviewSchema } from "@/api/lib/case-law/decision-headnote-schema";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { CASE_LAW_SOURCE_ROWS_BOUND } from "@/api/lib/legal-search/ingestion-constants";
@@ -222,20 +232,63 @@ const relatedDecision = t.Object(
   >,
   { additionalProperties: false },
 );
-const citation = t.Object(
+const polarityEvidence = t.Object(
   {
-    id: tSafeId("caseLawCitation"),
-    citationText: boundedString(16_384),
-    sectionIndex: numberOrNull,
-    treatment: t.UnionEnum(CITATION_TREATMENTS),
-    doctrine: t.Union([
-      t.UnionEnum([...DOCTRINAL_TREATMENTS, "unread"]),
-      t.Null(),
-    ]),
-    decision: t.Union([relatedDecision, t.Null()]),
-  } satisfies Record<keyof Omit<DecisionCitationRow, "evidenceQuote">, TSchema>,
+    source: t.Union([t.UnionEnum(CITATION_POLARITY_SOURCES), t.Null()]),
+    ruleId: t.Union([tSafeId("caseLawPolarityRule"), t.Null()]),
+    classifierVersion: nullableBoundedString(256),
+    excerpt: nullableBoundedString(LIMITS.caseLawCitationPassageChars),
+  },
   { additionalProperties: false },
 );
+
+const citationFields = {
+  id: tSafeId("caseLawCitation"),
+  citationText: nullableBoundedString(16_384),
+  textWithheldReason: t.Union([
+    t.Literal(DECISION_TEXT_WITHHELD_REASON.SOURCE_LICENCE),
+    t.Null(),
+  ]),
+  textIncompleteReason: t.Union([
+    t.UnionEnum(CITATION_TEXT_INCOMPLETE_REASONS),
+    t.Null(),
+  ]),
+  sectionIndex: numberOrNull,
+  treatment: t.UnionEnum(CITATION_TREATMENTS),
+  doctrine: t.Union([
+    t.UnionEnum([...DOCTRINAL_TREATMENTS, "unread"]),
+    t.Null(),
+  ]),
+  decision: t.Union([relatedDecision, t.Null()]),
+} satisfies Record<
+  keyof Omit<
+    CitationWithPassage,
+    "passage" | "evidenceIncompleteReason" | "polarityEvidence" | "citedPart"
+  >,
+  TSchema
+>;
+const citation = t.Union([
+  t.Object(
+    {
+      ...citationFields,
+      evidenceIncompleteReason: t.Null(),
+      polarityEvidence,
+      citedPart: t.UnionEnum(CITED_PARTS),
+    },
+    { additionalProperties: false },
+  ),
+  t.Object(
+    {
+      ...citationFields,
+      evidenceIncompleteReason: t.UnionEnum(
+        CITATION_EVIDENCE_INCOMPLETE_REASONS,
+      ),
+      polarityEvidence: t.Null(),
+      citedPart: t.Null(),
+    },
+    { additionalProperties: false },
+  ),
+]);
 // A leading citation always names a held decision; only the general list
 // carries unresolved rows.
 const leadingCitation = t.Object(

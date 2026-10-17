@@ -1,11 +1,17 @@
 import * as v from "valibot";
 
 import { DOCTRINAL_TREATMENTS } from "@stll/api-contract/case-law-doctrine";
-import { DECISION_TEXT_WITHHELD_REASON } from "@stll/api-contract/case-law-text-field";
+import {
+  CITATION_EVIDENCE_INCOMPLETE_REASONS,
+  CITATION_TEXT_INCOMPLETE_REASONS,
+  DECISION_TEXT_WITHHELD_REASON,
+} from "@stll/api-contract/case-law-text-field";
 import { CITATION_PASSAGE_MENTIONS } from "@stll/legal-ast/citation-passage";
 
 import {
   CITATION_READ_DIRECTIONS,
+  CITATION_POLARITY_SOURCES,
+  CITED_PARTS,
   CITATION_TREATMENTS,
 } from "../case-law/citation-vocabulary";
 import { caseNumberTypeProjection } from "./case-law-result-projections";
@@ -29,6 +35,12 @@ export const READ_CASE_LAW_CITATIONS_PROJECTION = v.strictObject({
     v.strictObject({
       citationId: passthroughId(),
       citationText: v.nullable(v.string()),
+      textIncompleteReason: v.nullable(
+        v.picklist(CITATION_TEXT_INCOMPLETE_REASONS),
+      ),
+      evidenceIncompleteReason: v.nullable(
+        v.picklist(CITATION_EVIDENCE_INCOMPLETE_REASONS),
+      ),
       textWithheldReason: v.nullable(
         v.literal(DECISION_TEXT_WITHHELD_REASON.SOURCE_LICENCE),
       ),
@@ -37,6 +49,15 @@ export const READ_CASE_LAW_CITATIONS_PROJECTION = v.strictObject({
       // the absence of a reading, never a neutral one.
       polarity: v.picklist(CITATION_TREATMENTS),
       doctrine: v.nullable(v.picklist([...DOCTRINAL_TREATMENTS, "unread"])),
+      polarityEvidence: v.nullable(
+        v.strictObject({
+          source: v.nullable(v.picklist(CITATION_POLARITY_SOURCES)),
+          ruleId: v.nullable(passthroughId()),
+          classifierVersion: v.nullable(v.string()),
+          excerpt: v.nullable(contentText()),
+        }),
+      ),
+      citedPart: v.nullable(v.picklist(CITED_PARTS)),
       // Null for a citation the corpus holds no decision for.
       decision: v.nullable(
         v.strictObject({
