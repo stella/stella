@@ -140,23 +140,31 @@ const PROVIDER_CREDENTIAL_REJECTION_MARKERS = new Set([
 const hasProviderCredentialRejectionMarker = (value: unknown): boolean =>
   typeof value === "string" && PROVIDER_CREDENTIAL_REJECTION_MARKERS.has(value);
 
-/** Provider-owned facts and message envelopes share one cycle-safe cause walk. */
-export const providerFailureFacts = (error: unknown) => {
+/** Select one authoritative response for both classification and preserved facts. */
+const selectProviderResponse = (error: unknown) => {
   const seen = new Set<object>();
   let current = error;
   while (isNonNullObject(current) && !seen.has(current)) {
     seen.add(current);
     const { status } = providerResponseEvidence(current);
     if (status !== undefined) {
-      const isRetryable = current["isRetryable"];
-      return {
-        status: status.status,
-        ...(typeof isRetryable === "boolean" ? { isRetryable } : {}),
-      };
+      return { status: status.status, source: current };
     }
     current = errorCause(current);
   }
   return undefined;
+};
+
+export const providerFailureFacts = (error: unknown) => {
+  const response = selectProviderResponse(error);
+  if (response === undefined) {
+    return undefined;
+  }
+  const isRetryable = response.source["isRetryable"];
+  return {
+    status: response.status,
+    ...(typeof isRetryable === "boolean" ? { isRetryable } : {}),
+  };
 };
 
 /** Read the upstream status through wrappers without using HandlerError's own status. */
@@ -283,9 +291,19 @@ const errorCause = (error: unknown): unknown => {
   return error["cause"];
 };
 
-const providerResponseKind = (error: unknown): AIErrorKind => {
-  const statusCode = providerStatusCode(error);
+const providerResponseKind = (error: unknown): AIErrorKind | null => {
+  const response = selectProviderResponse(error);
+  const statusCode = response?.status ?? null;
   const { credentialsRejected } = providerResponseEvidence(error);
+  if (response === undefined && !credentialsRejected) {
+    return null;
+  }
+  if (response !== undefined) {
+    const awsKind = awsExceptionKind(response.source);
+    if (awsKind !== null) {
+      return awsKind;
+    }
+  }
   if (statusCode !== null || credentialsRejected) {
     if (statusCode === 429) {
       return "quota_exhausted";
@@ -369,6 +387,12 @@ const classifyAIErrorInternal = (
   ) {
     return "provider_stream_incomplete";
   }
+  // Finding a response is terminal even when its status has no mapped kind.
+  // Otherwise a later cause can disagree with the status retained above.
+  const providerKind = providerResponseKind(error);
+  if (providerKind !== null) {
+    return providerKind;
+  }
   // TanStack wraps provider RUN_ERROR events in a 502 HandlerError. Preserve a
   // recognised provider cause so a permanent provider response does not look
   // like a transient transport outage.
@@ -381,10 +405,6 @@ const classifyAIErrorInternal = (
   const awsKind = awsExceptionKind(error);
   if (awsKind !== null) {
     return awsKind;
-  }
-  const providerKind = providerResponseKind(error);
-  if (providerKind !== "unknown") {
-    return providerKind;
   }
   if (
     isNonNullObject(error) &&

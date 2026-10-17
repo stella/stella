@@ -202,6 +202,25 @@ test("provider message recovery accepts only complete known envelopes", () => {
 });
 
 describe("wrapped provider message evidence", () => {
+  test("keeps an unmapped selected status authoritative over a mapped cause", () => {
+    const quota = Object.assign(new Error("quota"), { status: 429 });
+    for (const evidence of [
+      new Error('{"error":{"code":403}}', { cause: quota }),
+      Object.assign(new Error("forbidden", { cause: quota }), { status: 403 }),
+    ]) {
+      expect(providerStatusCode(evidence)).toBe(403);
+      expect(classifyAIError(evidence)).toBe("unknown");
+      const error = createProviderCallError({
+        model: { provider: "google", keySource: "byok" },
+        evidence,
+        status: 502,
+      });
+      expect(error.kind).toBe("unknown");
+      expect(error.providerStatus).toBe(403);
+      expect(error.cause).toMatchObject({ status: 403 });
+      expect(gradeFailure(readEvidence(error), sink).grade).toBe("defect");
+    }
+  });
   test("classifies and preserves structured status ahead of conflicting message bodies", () => {
     for (const message of [
       '{"error":{"code":401}}',
