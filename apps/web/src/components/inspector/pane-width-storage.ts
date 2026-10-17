@@ -9,6 +9,7 @@ import {
 
 import {
   definePersistedState,
+  keepInAnyScope,
   readPersistedState,
   writePersistedState,
 } from "@/lib/persisted-state/registry";
@@ -29,6 +30,7 @@ const inspectorPaneWidthEntry = definePersistedState({
   ),
   maxBytes: 128,
   defaultValue: () => 512,
+  scopeCheck: keepInAnyScope,
   restoredUi: true,
 });
 

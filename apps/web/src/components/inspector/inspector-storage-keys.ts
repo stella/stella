@@ -1,7 +1,10 @@
 import * as v from "valibot";
 
 import { userStorageKey } from "@/lib/account/user-scoped-storage";
-import { definePersistedState } from "@/lib/persisted-state/registry";
+import {
+  definePersistedState,
+  keepInAnyScope,
+} from "@/lib/persisted-state/registry";
 
 /** Whose inspector this is: one user inside one organization. */
 export type InspectorStorageScope = {
@@ -35,8 +38,8 @@ export const inspectorStateEntry = definePersistedState({
   defaultValue: () => null,
   scopeCheck: (value, scope) =>
     value === null
-      ? null
-      : {
+      ? keepInAnyScope(value)
+      : keepInAnyScope({
           ...value,
           tabs: value.tabs.filter((tab) => {
             if (
@@ -53,7 +56,7 @@ export const inspectorStateEntry = definePersistedState({
               workspaceId === scope.workspaceId
             );
           }),
-        },
+        }),
   restoredUi: true,
 });
 
@@ -65,6 +68,7 @@ export const inspectorMinimizedEntry = definePersistedState({
   schema: v.boolean(),
   maxBytes: 128,
   defaultValue: () => false,
+  scopeCheck: keepInAnyScope,
   restoredUi: true,
 });
 
@@ -76,5 +80,6 @@ export const inspectorRestorePendingEntry = definePersistedState({
   schema: v.string(),
   maxBytes: 256,
   defaultValue: () => "",
+  scopeCheck: keepInAnyScope,
   restoredUi: true,
 });

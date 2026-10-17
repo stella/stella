@@ -10,6 +10,7 @@ import { unregisterDomEnvironment } from "@/test-dom-environment";
 import {
   definePersistedState,
   isRestoredStateSafeMode,
+  keepInAnyScope,
   readPersistedState,
   writePersistedState,
 } from "./registry";
@@ -25,11 +26,28 @@ const entry = definePersistedState({
   schema: v.object({ width: v.number() }),
   maxBytes: 128,
   defaultValue: () => ({ width: 512 }),
+  scopeCheck: keepInAnyScope,
   restoredUi: true,
+});
+
+const ownedKey = "stella:inspector-pane-width:registry-test-owned";
+const ownedEntry = definePersistedState({
+  key: ownedKey,
+  area: "local",
+  version: 1,
+  schema: v.nullable(v.object({ ownerId: v.string() })),
+  maxBytes: 128,
+  defaultValue: () => null,
+  scopeCheck: (value, scope: { ownerId: string }) =>
+    value === null || value.ownerId === scope.ownerId
+      ? keepInAnyScope(value)
+      : { keep: false },
+  restoredUi: false,
 });
 
 beforeEach(() => {
   storage.removeItem(key);
+  storage.removeItem(ownedKey);
   globalThis.history.replaceState(null, "", "/workspaces");
 });
 
@@ -54,6 +72,29 @@ describe("persisted state registry", () => {
     storage.setItem(key, raw);
     expect(readPersistedState(entry, {})).toEqual({ width: 512 });
     expect(storage.getItem(key)).toBeNull();
+  });
+
+  test("a scope check rejects a valid non-null value from another scope", () => {
+    storage.setItem(
+      ownedKey,
+      JSON.stringify({ version: 1, value: { ownerId: "other" } }),
+    );
+    expect(readPersistedState(ownedEntry, { ownerId: "me" })).toBeNull();
+    expect(storage.getItem(ownedKey)).toBeNull();
+  });
+
+  test("a scope check keeps a stored null and the reader's own value", () => {
+    storage.setItem(ownedKey, JSON.stringify({ version: 1, value: null }));
+    expect(readPersistedState(ownedEntry, { ownerId: "me" })).toBeNull();
+    expect(storage.getItem(ownedKey)).not.toBeNull();
+
+    storage.setItem(
+      ownedKey,
+      JSON.stringify({ version: 1, value: { ownerId: "me" } }),
+    );
+    expect(readPersistedState(ownedEntry, { ownerId: "me" })).toEqual({
+      ownerId: "me",
+    });
   });
 
   test("removes an oversized value", () => {

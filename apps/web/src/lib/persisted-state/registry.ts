@@ -24,14 +24,25 @@ type PersistedStateEntry<
   schema: TSchema;
   maxBytes: number;
   defaultValue: () => v.InferOutput<TSchema>;
-  scopeCheck?:
-    | ((
-        value: v.InferOutput<TSchema>,
-        scope: TScope,
-      ) => v.InferOutput<TSchema> | null)
-    | undefined;
+  /** Every entry decides whether a stored value belongs to the reading scope. */
+  scopeCheck: (
+    value: v.InferOutput<TSchema>,
+    scope: TScope,
+  ) => ScopeDecision<v.InferOutput<TSchema>>;
   restoredUi: boolean;
 };
+
+/**
+ * Whether a stored value is kept for the reading scope. A separate `keep` flag
+ * (not a null sentinel) because null is a valid value of nullable entries.
+ */
+export type ScopeDecision<T> = { keep: true; value: T } | { keep: false };
+
+/** For entries whose key already pins the scope, or that have none. */
+export const keepInAnyScope = <T>(value: T): ScopeDecision<T> => ({
+  keep: true,
+  value,
+});
 
 type PersistedEnvelope<T> = { version: number; value: T };
 
@@ -102,12 +113,12 @@ export const readPersistedState = <
     removeInvalid(entry.area, key);
     return fallback;
   }
-  const scoped = entry.scopeCheck?.(parsed.value, scope) ?? parsed.value;
-  if (scoped === null) {
+  const decision = entry.scopeCheck(parsed.value, scope);
+  if (!decision.keep) {
     removeInvalid(entry.area, key);
     return fallback;
   }
-  return scoped;
+  return decision.value;
 };
 
 class PersistedStateWriteError extends TaggedError("PersistedStateWriteError")<{
