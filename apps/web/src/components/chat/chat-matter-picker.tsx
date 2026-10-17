@@ -22,6 +22,7 @@ import { contentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
 
 import { COMPOSER_LIST_VIEWPORT_CLASS_NAME } from "@/components/chat/composer-submenu-search";
+import { filterMatterPickerItems } from "@/components/matter-picker-search.logic";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -257,17 +258,11 @@ export const ChatMatterPicker = ({
     .map((id) => matterById.get(id))
     .filter((m): m is Matter => m !== undefined);
 
-  const filtered = (() => {
-    const q = deferredSearch.trim().toLowerCase();
-    if (q.length === 0) {
-      return matters;
-    }
-    return matters.filter(
-      (m) =>
-        m.name.toLowerCase().includes(q) ||
-        m.clientLabel.toLowerCase().includes(q),
-    );
-  })();
+  const filtered = filterMatterPickerItems({
+    getClientLabel: (matter) => matter.clientLabel,
+    items: matters,
+    query: deferredSearch,
+  });
 
   const mattersByClient = (() => {
     const map = new Map<string, Matter[]>();
