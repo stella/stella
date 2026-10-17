@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import nodePath from "node:path";
 
+import { CASE_LAW_BROWSER_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 import {
   PUBLIC_ROBOTS_ALLOWED_SEARCH_USER_AGENTS,
   PUBLIC_ROBOTS_DENIED_USER_AGENTS,
@@ -147,6 +148,34 @@ const requestUrlForTest = (input: Request | URL | string): string => {
 };
 
 describe("public law sitemap", () => {
+  test.each(CASE_LAW_BROWSER_COUNTRIES)(
+    "%s shard publication follows the public page countries",
+    async (country) => {
+      const segment = country.toLowerCase();
+      const shard = {
+        bucket: "all",
+        country: segment,
+        lastmod: "2026-01-01",
+        month: "03",
+        year: "2019",
+      };
+      const published = PUBLIC_CASE_LAW_PAGE_COUNTRIES.some(
+        (candidate) => candidate === country,
+      );
+      const shards = await fetchPublicSitemapShards({
+        fetchImpl: async () =>
+          Response.json({ items: [shard], limit: 50_000, nextCursor: null }),
+      });
+      expect(shards).toEqual(published ? [shard] : []);
+      const xml = createPublicLawSitemapIndexXml([shard], {
+        publicLawIndexingEnabled: true,
+      });
+      expect(xml.includes(`/sitemaps/law-cases/${segment}/2019/03.xml`)).toBe(
+        published,
+      );
+    },
+  );
+
   test("app robots response blocks bulk and AI crawlers while retaining the deployment crawl policy", async () => {
     expect(robotsRoute.options.server?.handlers).toBe(robotsHandlers);
     const response = robotsHandlers.GET();

@@ -3,6 +3,12 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 import { filenameForContext, jsxName } from "./utils.ts";
 
 const OWNER_PATH = "/packages/chat/src/link.tsx";
+// In-app legal navigation keeps its own label: each entry is the one file and
+// the one href expression that opens the legal reader in place.
+const LEGAL_NAVIGATION = [
+  { file: "/legal-citation-link.tsx", href: "{sanitizeHref(citation.url)}" },
+  { file: "/answer-quote.tsx", href: "{sanitizeHref(readerHref)}" },
+] as const;
 const isFaviconUrl = (text: string) => {
   const normalized = text.toLowerCase();
   return (
@@ -68,8 +74,10 @@ export default eslintCompatPlugin({
             // Legal navigation may use the specialized label. External citation
             // and source branches must delegate to ChatLink instead.
             if (
-              filename.endsWith("/legal-citation-link.tsx") &&
-              source === "{sanitizeHref(citation.url)}" &&
+              LEGAL_NAVIGATION.some(
+                (entry) =>
+                  filename.endsWith(entry.file) && source === entry.href,
+              ) &&
               !node.attributes.some(
                 (attribute) =>
                   attribute.type === "JSXSpreadAttribute" ||

@@ -116,6 +116,27 @@ const GENERATOR_DECLARATIONS = [
     after: [],
   },
   {
+    id: "case-law-publication-migration",
+    outputKind: "committed",
+    outputs: [
+      "apps/api/drizzle/20261010212100_case_law_publication_filter/migration.sql",
+    ],
+    inputs: [
+      "scripts/generate-case-law-publication-migration.ts",
+      "apps/api/src/lib/case-law/published-decisions-sql.ts",
+      "apps/api/src/lib/legal-search/partial-observation-sql.ts",
+      "apps/api/drizzle/20260916110000_published_statute_citation_counts/migration.sql",
+    ],
+    write: ["bun", "scripts/generate-case-law-publication-migration.ts"],
+    check: [
+      "bun",
+      "scripts/generate-case-law-publication-migration.ts",
+      "--check",
+    ],
+    autofix: false,
+    after: [],
+  },
+  {
     id: "status-tables",
     outputKind: "committed",
     outputs: ["apps/api/src/lib/db/status-tables.gen.ts"],
@@ -219,10 +240,14 @@ const GENERATOR_DECLARATIONS = [
       "apps/api/scripts/export-mcp-tool-registry.ts",
       "apps/api/src/lib/chat/projections.ts",
       "apps/api/src/lib/chat/case-law-result-projections.ts",
+      "apps/api/src/lib/chat/case-law-citation-projection.ts",
       "apps/api/src/lib/chat/case-law-court-projection.ts",
       "apps/api/src/lib/chat/legislation-result-projections.ts",
       "apps/api/src/lib/chat/projection-fields.ts",
       "apps/api/src/lib/legal-search/legislation-provision-vocabulary.ts",
+      "apps/api/src/lib/case-law/citation-vocabulary.ts",
+      "apps/api/src/lib/case-law/search-warnings.ts",
+      "apps/api/src/lib/search/pagination-outcome-projection.ts",
       "packages/api-contract/src/case-law-court-year.ts",
       "packages/api-contract/src/statute-version.ts",
       "packages/api-contract/src/mcp-tool-name.ts",
@@ -282,6 +307,7 @@ const GENERATOR_DECLARATIONS = [
       "apps/api/src/mcp/valibot-tool-definition.ts",
       "apps/api/src/lib/chat/*projection*.ts",
       "apps/api/src/lib/legal-search/legislation-provision-vocabulary.ts",
+      "apps/api/src/lib/case-law/citation-vocabulary.ts",
       "apps/api/src/lib/case-law/search-warnings.ts",
       "apps/api/src/lib/search/pagination-outcome-projection.ts",
       "apps/api/src/lib/json-schema/**",
@@ -1097,8 +1123,37 @@ export const generatorsForFiles = (files: readonly string[]) => {
       }
     }
   }
+  // A derived output is never committed, so a clean checkout lacks it: every
+  // derived generator a selected one declares in `after` must run first, and
+  // so must its own derived prerequisites.
+  const pending = [...selected];
+  while (pending.length > 0) {
+    const id = pending.pop();
+    const generator = GENERATORS.find((candidate) => candidate.id === id);
+    if (generator === undefined) {
+      continue;
+    }
+    for (const upstream of derivedPrerequisites(generator)) {
+      if (!selected.has(upstream.id)) {
+        selected.add(upstream.id);
+        pending.push(upstream.id);
+      }
+    }
+  }
   return GENERATORS.filter((generator) => selected.has(generator.id));
 };
+
+/**
+ * Derived generators whose outputs `generator` needs present to run: the
+ * derived ones it declares in `after`. (Input globs are too broad to infer
+ * this from; a generator that reads a derived output declares it.)
+ */
+export const derivedPrerequisites = (generator: Generator) =>
+  GENERATORS.filter(
+    (upstream) =>
+      upstream.outputKind === "derived" &&
+      generator.after.includes(upstream.id),
+  );
 
 export const allowedOutputs = (generators: readonly Generator[]) => [
   // A planner cannot authorize recreating the retired ratchet budget.

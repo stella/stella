@@ -447,8 +447,9 @@ test("the desktop browser scope passes through the plan's emitted value", () => 
   expect(plan("apps/desktop/src/mainview/browser-scope-probe.ts")).toBe("true");
   expect(plan("docs/unrelated-probe.md")).toBe("false");
   // The plan fails open when the selector cannot decide.
-  const changedFiles = ["$", "{changed_files[@]}"].join("");
+  // Graph scope tools read the dependency-classified list.
+  const scopeFiles = ["$", "{scope_files[@]}"].join("");
   expect(source).toContain(
-    `--desktop-browser "${changedFiles}") || desktop_browser_required=true`,
+    `--desktop-browser "${scopeFiles}") || desktop_browser_required=true`,
   );
 }, 60_000);

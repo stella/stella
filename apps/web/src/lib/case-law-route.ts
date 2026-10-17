@@ -20,7 +20,7 @@ const DEFAULT_COUNTRY_BY_LOCALE = {
   es: null,
   et: null,
   fr: null,
-  hu: null,
+  hu: "HUN",
   lt: null,
   lv: null,
   pl: "POL",

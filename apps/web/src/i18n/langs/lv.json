@@ -65,6 +65,9 @@
     "runSelectedRows": "Palaist {count, plural, zero {# atlasītai rindai} one {# atlasītai rindai} other {# atlasītām rindām}}",
     "selectedRun": "Palaist AI kolonnas {count, plural, zero {# rindai} one {# rindai} other {# rindām}}"
   },
+  "aiDisclosure": {
+    "caseLaw": "AI veidotos tiesu nolēmumu kopsavilkumus, piezīmes un analīzes ģenerē stella; tiesas tos nav apstiprinājušas, un tie neatspoguļo pašu tiesu argumentāciju. Tie ir palīglīdzekļi juridiskās jomas speciālistiem, un noteicošais avots joprojām ir nolēmuma teksts."
+  },
   "appearance": {
     "calendar": "Kalendārs",
     "calendarGregorian": "Gregora",
@@ -1213,6 +1216,11 @@
       "stale": "Šī atbilde ir mainījusies. Atlasiet tekstu vēlreiz.",
       "submit": "Pieprasīt izmaiņu"
     },
+    "answerQuote": {
+      "showInDecision": "Rādīt nolēmumā",
+      "verified": "Pārbaudīts citāts",
+      "verifiedHint": "Vārds vārdā: {source}"
+    },
     "applyMode": {
       "description": "Word saglabā, kurš veica katru izmaiņu. Mēs atcerēsimies jūsu izvēli.",
       "direct": "Nē, lietot tieši",
@@ -1451,6 +1459,12 @@
       "title": "Ielīmētais teksts"
     },
     "placeholder": "Ierakstiet jautājumu šeit, / prasmēm, @ konteksta pievienošanai",
+    "processSummary": {
+      "analyses": "{count, plural, zero {# analīžu} one {# analīze} other {# analīzes}}",
+      "changesSaved": "{count, plural, zero {# saglabātu izmaiņu} one {# saglabāta izmaiņa} other {# saglabātas izmaiņas}}",
+      "documentEdits": "{count, plural, zero {# dokumenta labojumu} one {# dokumenta labojums} other {# dokumenta labojumi}}",
+      "sourcesChecked": "{count, plural, zero {# pārbaudītu avotu} one {# pārbaudīts avots} other {# pārbaudīti avoti}}"
+    },
     "promptImprovementStrategies": {
       "decompose": {
         "description": "Sadala sarežģītu darbu secīgos apakšuzdevumos.",
@@ -1696,6 +1710,7 @@
       "interrupted": "Pārtraukts pirms pabeigšanas",
       "output": "Izvade",
       "sourceCode": "Pirmkods",
+      "statusWaiting": "Gaida",
       "toggleDetails": "Pārslēgt detaļas",
       "unrestoredFields": "Anonimizētajā režīmā ar īstajām vērtībām neizdevās aizpildīt {count, plural, zero {# laukus} one {# lauku} other {# laukus}}. Pārbaudiet: {fields}"
     },
@@ -1721,7 +1736,8 @@
       "toggleLabel": "Meklēšana tīmeklī",
       "toggleOff": "Izslēgt meklēšanu tīmeklī",
       "toggleOn": "Ieslēgt meklēšanu tīmeklī"
-    }
+    },
+    "workedFor": "Darba ilgums: {duration}"
   },
   "clauses": {
     "addVariant": "Pievienot variantu",
@@ -2600,11 +2616,14 @@
     "actionFailed": "Darbība neizdevās",
     "api": {
       "badRequest": "Pieprasījumu neizdevās pabeigt.",
+      "caseLawCountryUnavailable": "Šīs valsts judikatūra nav pieejama. Izvēlieties citu valsti.",
+      "caseLawSearchUnavailable": "Šīs valsts judikatūras meklēšana nav pieejama. Tās publiskos tiesu nolēmumus joprojām varat lasīt.",
       "conflict": "Pieprasījums konfliktē ar pašreizējo stāvokli.",
       "forbidden": "Jums nav atļaujas veikt šo darbību.",
+      "legislationCountryUnavailable": "Šīs valsts tiesību akti nav pieejami. Izvēlieties citu valsti.",
+      "legislationSearchUnavailable": "Šīs valsts tiesību aktu meklēšana nav pieejama. Tās publiskos tiesību aktus joprojām varat lasīt.",
       "notFound": "Pieprasīto vienumu neizdevās atrast.",
       "payloadTooLarge": "Pieprasījums ir pārāk liels.",
-      "publicCountryUnavailable": "Šīs valsts tiesību akti un judikatūra nav pieejami. Izvēlieties citu valsti.",
       "rateLimited": "Pārāk daudz pieprasījumu. Lūdzu, mēģiniet vēlāk.",
       "server": "Radās kļūda. Lūdzu, mēģiniet vēlreiz.",
       "serviceUnavailable": "Pakalpojums īslaicīgi nav pieejams. Lūdzu, mēģiniet vēlreiz.",
