@@ -136,8 +136,7 @@
   {
     "id": "apps/api/src/lib/account-deletion-steps.ts::resetFolioCollabUserState",
     "writes": {
-      "delete:folioCollabRoomTokens": 1,
-      "update:folioCollabRooms": 1
+      "delete:folioCollabRoomTokens": 1
     },
     "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
   },

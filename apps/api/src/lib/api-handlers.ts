@@ -4,7 +4,7 @@ import { panic, Result, UnhandledException } from "better-result";
 import type { AnySchema, Context, InputSchema, UnwrapRoute } from "elysia";
 import { ElysiaCustomStatusResponse, status, t } from "elysia";
 
-import type { ModelRole } from "@stll/ai-catalog";
+import type { ModelTask } from "@stll/ai-catalog";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import type { PermissionInput } from "@stll/permissions";
 
@@ -117,7 +117,7 @@ import {
   type CachePolicy,
 } from "@/api/lib/security-headers";
 import {
-  getTanStackTextModelInfoForRole,
+  getTanStackTextModelInfoForTask,
   resolveEffectiveServiceTierForProvider,
   resolveFallbackChatSelection,
 } from "@/api/lib/tanstack-ai-models";
@@ -338,12 +338,12 @@ export type UsageMeteringConfig = {
    */
   laneRouting?: true;
   /**
-   * Logical model role recorded on the consumption ledger row.
-   * Defaults to `"chat"`. Set to the role the handler will pass
+   * Logical model task recorded on the consumption ledger row.
+   * Defaults to `"chat"`. Set to the task the handler will pass
    * to the model resolver so cross-cutting analytics match
    * the actual model.
    */
-  modelRole?: ModelRole;
+  modelTask?: ModelTask;
 };
 
 /**
@@ -594,7 +594,7 @@ type BaseHandlerContext<TConfig extends HandlerConfig = HandlerConfig> =
      * Whether `orgAIConfig` reflects the org's stored configuration.
      * `unreadable` means a stored row failed to decrypt, so the null
      * config above must not be read as "this org has none": pass this
-     * to `requireTanStackAIAvailableForRole` before any model call.
+     * to `requireTanStackAIAvailableForTask` before any model call.
      */
     orgAIConfigStatus: OrgAIConfigStatus;
     /**
@@ -1598,8 +1598,8 @@ export const resolveMeteringContext = ({
   workspaceId: SafeId<"workspace"> | null;
   userId: SafeId<"user">;
 }): ResolvedMeteringContext => {
-  const modelRole = metering.modelRole ?? "chat";
-  const modelInfo = getTanStackTextModelInfoForRole(modelRole, orgAIConfig, {
+  const modelTask = metering.modelTask ?? "chat";
+  const modelInfo = getTanStackTextModelInfoForTask(modelTask, orgAIConfig, {
     dataClass: "customer",
     organizationId,
     // Unit metering and the free tier never run together

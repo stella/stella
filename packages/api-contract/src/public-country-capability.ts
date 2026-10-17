@@ -42,7 +42,7 @@ export const PUBLIC_COUNTRY_SURFACE_OPEN = {
   Record<PublicCountryCapability, boolean>
 >;
 
-// parser-output-unchanged: per-domain publication capabilities only gate public reads; ingestion identities and parsed document output remain unchanged.
+// parser-output-unchanged: scripts/parser-output-diff.ts reports every case-law adapter identical over its recorded fixtures with Slovak pages published; the change gates public reads only.
 export const PUBLIC_LAW_DOMAIN = {
   caseLaw: "caseLaw",
   legislation: "legislation",
@@ -58,7 +58,7 @@ export const PUBLIC_COUNTRY_CAPABILITIES = {
   EU: { caseLaw: "pending_public", legislation: "pending_public" },
   HUN: { caseLaw: "pending_public", legislation: "pending_public" },
   POL: { caseLaw: "pending_public", legislation: "pending_public" },
-  SVK: { caseLaw: "pending_public", legislation: "pending_public" },
+  SVK: { caseLaw: "pages_public", legislation: "pages_public" },
   USA: { caseLaw: "pending_public", legislation: "pending_public" },
 } as const satisfies Record<
   string,

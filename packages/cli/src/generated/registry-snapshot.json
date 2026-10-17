@@ -3903,7 +3903,7 @@
       "scope": "knowledge_write"
     },
     "name": "save_clause",
-    "description": "Create or update a clause in the organization's clause library. Omit clause_id to create (title and body required); pass clause_id to update. body is an ordered array of paragraphs, each with text and optional style, level, runs, list_kind, list_level, is_directive, directive_kind, and directive_expression. Use balanced {% ... %} tags. Keep num(), ref(), clause() and ai(adapt=true) in the template body. category_id, language, description, usage_notes, and metadata accept null to clear them on update. Set snapshot_version true on an update to also append a version snapshot of the body. Returns the clause id.",
+    "description": "Create or update a library clause. Omit clause_id to create (title and body required); include it to update. body contains ordered paragraphs. Use balanced {% ... %} tags; keep num(), ref(), clause() and ai(adapt=true) in the template body. Clear category_id, language, description, usage_notes or metadata with null. Set snapshot_version true to append a body version on update. Returns the clause id.",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -3965,9 +3965,24 @@
                 "type": "string",
                 "description": "List item kind when the paragraph is a list item"
               },
-              "list_level": {
-                "type": "integer",
-                "description": "0-based list nesting depth for a list item"
+              "numbering": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "enum": ["levelOnly"],
+                    "description": "Set only the paragraph's list nesting depth",
+                    "type": "string"
+                  },
+                  "ilvl": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 8,
+                    "description": "0-based list nesting depth for a list item"
+                  }
+                },
+                "required": ["kind", "ilvl"],
+                "additionalProperties": false,
+                "description": "List nesting depth for the paragraph"
               },
               "is_directive": {
                 "type": "boolean",
