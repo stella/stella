@@ -448,8 +448,14 @@ describe("pglite stella table privileges mirror the committed migrations", () =>
       .filter((pair) => pair.startsWith(`${role}:`))
       .toSorted();
     const expectedTables = new Set<string>();
-    for (const [, body = "", rawRole = ""] of migration.matchAll(
-      GRANT_STATEMENT,
+    for (const [
+      ,
+      verb = "",
+      body = "",
+      ,
+      rawRole = "",
+    ] of migrationSqlWithoutLineComments(migration).matchAll(
+      GRANT_OR_REVOKE_STATEMENT,
     )) {
       if (unquote(rawRole) !== role || NOT_A_TABLE_GRANT.test(body)) {
         continue;
@@ -471,7 +477,11 @@ describe("pglite stella table privileges mirror the committed migrations", () =>
           throw new TypeError("Source maintenance grant has no table");
         }
         for (const privilege of privileges) {
-          expectedTables.add(`${table}:${privilege}`);
+          if (verb.toUpperCase() === "GRANT") {
+            expectedTables.add(`${table}:${privilege}`);
+          } else {
+            expectedTables.delete(`${table}:${privilege}`);
+          }
         }
       }
     }
