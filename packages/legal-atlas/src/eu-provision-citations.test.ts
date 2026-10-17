@@ -220,6 +220,7 @@ describe("EU act numbering with a citing date", () => {
         [44, 2001, "32001R0044"],
         [1, 2003, "32003R0001"],
         [2201, 2003, "32003R2201"],
+        [1408, 1971, "31971R1408"],
       ] as const) {
         const printed = spelling
           .replace("{number}", () => String(number))
@@ -237,7 +238,7 @@ describe("EU act numbering with a citing date", () => {
     assertProperty(
       "eu-secondary-law-year-never-follows-citing-date",
       fc.property(
-        fc.integer({ min: 1, max: 999 }),
+        fc.integer({ min: 1, max: 9999 }),
         fc.integer({ min: 1950, max: 2020 }),
         fc.integer({ min: 1950, max: 2020 }),
         (number, year, citingYear) => {
@@ -302,6 +303,19 @@ describe("EU act numbering with a citing date", () => {
           ?.act.celex,
       ).toBe(celex);
     }
+  });
+
+  test("an unmarked four-digit regulation number keeps an unambiguous legacy year", () => {
+    expect(
+      locateEuProvisionCitations("Article 6 of Regulation (EEC) 1408/71", {
+        citedOn: "2020-01-01",
+      }).map(({ act }) => act.celex),
+    ).toEqual(["31971R1408"]);
+    expect(
+      locateEuProvisionCitations("Article 6 of Regulation (EEC) 2001/01", {
+        citedOn: "2020-01-01",
+      }),
+    ).toEqual([]);
   });
 });
 

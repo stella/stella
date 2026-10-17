@@ -58,6 +58,8 @@ const sentencePattern = (sentenceText: string): RegExp | null => {
   return new RegExp(source, "u");
 };
 
+const REFERENCE_PATTERN_FLAGS = "giu";
+
 /**
  * The reference as the decision prints it: the sign or the article word, the
  * number with its inserted-provision letter, then each named
@@ -79,7 +81,7 @@ const referencePattern = ({
   const number = `${String(section)}${sectionSuffix === null ? "" : escapeRegExp(sectionSuffix)}`;
   const head =
     unit === "article"
-      ? String.raw`(?:(?:čl\.|člán(?:ek|ok|ku|kem|kom|ky|ků|kov|kům|cích|koch)|art\.|Art\.?|Article|Artikel)\s*${number}(?![\p{N}\p{L}])|${number}\.\s*cikk)`
+      ? String.raw`(?:(?<!\p{L})(?:čl\.|člán(?:ek|ok|ku|kem|kom|ky|ků|kov|kům|cích|koch)|art\.|Art\.?|Article|Artikel)\s*${number}(?![\p{N}\p{L}])|${number}\.\s*cikk)`
       : String.raw`§\s*${number}(?![\p{N}\p{L}])`;
   const parts = [head];
   if (subsection !== null) {
@@ -94,7 +96,7 @@ const referencePattern = ({
       String.raw`(?:\s*(?:(?:písm\.|písmeno|lit\.|Buchst\.|lettre)\s*${point}\)?|\(${point}\)|${point}\)\s*pont))`,
     );
   }
-  return new RegExp(parts.join(""), "u");
+  return new RegExp(parts.join(""), REFERENCE_PATTERN_FLAGS);
 };
 
 type OccurrenceSource = Pick<
@@ -213,12 +215,18 @@ export const locateProvisionAnchors = <T>({
         (competingPattern) =>
           competingPattern === reference.source
             ? []
-            : [...sentence[0].matchAll(new RegExp(competingPattern, "gu"))],
+            : [
+                ...sentence[0].matchAll(
+                  new RegExp(competingPattern, REFERENCE_PATTERN_FLAGS),
+                ),
+              ],
       );
       // A subsection or letter stored in the same sentence owns its longer
       // span; a section-only pattern must not count that span a second time.
       const occurrences = [
-        ...sentence[0].matchAll(new RegExp(reference.source, "gu")),
+        ...sentence[0].matchAll(
+          new RegExp(reference.source, REFERENCE_PATTERN_FLAGS),
+        ),
       ].filter(
         (match) =>
           !competingMatches.some(

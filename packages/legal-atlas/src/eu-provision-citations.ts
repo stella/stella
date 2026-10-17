@@ -266,12 +266,19 @@ const numberedActIdentity = ({
   for (const order of ["year-number", "number-year"] as const) {
     const rawYear = order === "year-number" ? first : second;
     const rawNumber = order === "year-number" ? second : first;
+    const isUnambiguousLegacyNumberYear =
+      order === "number-year" &&
+      rawNumber.length === 4 &&
+      rawYear.length === 2 &&
+      normalizeYear(rawYear) < 1999;
     // Without an explicit number marker, a sole four-digit component is the year.
+    // Legacy regulations also used NNNN/YY before 1999, which is unambiguous.
     // Do not rescue a future year by treating it as an older act's number.
     if (
       !explicitlyNumberFirst &&
       (first.length === 4) !== (second.length === 4) &&
-      rawYear.length !== 4
+      rawYear.length !== 4 &&
+      !isUnambiguousLegacyNumberYear
     ) {
       continue;
     }

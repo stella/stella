@@ -377,6 +377,33 @@ test("Czech and Slovak article words place the complete printed reference", () =
   }
 });
 
+test("extracted article capitalization variants retain their placements", () => {
+  for (const printed of ["article 6 GDPR", "artikel 6 GDPR", "Článek 6 GDPR"]) {
+    const extracted =
+      /(?<word>article|artikel|článek)\s+(?<section>\d+)/iu.exec(printed);
+    expect(extracted).not.toBeNull();
+    const section = Number(extracted?.groups?.["section"]);
+    const result = locateProvisionAnchors({
+      blocks: [paragraph("text", printed)],
+      provisions: [
+        {
+          id: "article",
+          reference: { ...reference(section), unit: "article" },
+          sentenceText: printed,
+          spanStart: extracted?.index ?? 0,
+          target: "gdpr",
+        },
+      ],
+    });
+    expect(result.failures).toEqual([]);
+    expect(
+      result.anchorsByPieceId["text"]?.map(({ start, end }) =>
+        printed.slice(start, end),
+      ),
+    ).toEqual([printed.slice(0, printed.indexOf(" GDPR"))]);
+  }
+});
+
 test("article words do not match related adjectives", () => {
   const sentence = "Použije se článkový 6 přehled.";
   expect(
@@ -388,6 +415,24 @@ test("article words do not match related adjectives", () => {
           reference: { ...reference(6), unit: "article" },
           sentenceText: sentence,
           spanStart: sentence.indexOf("článkový 6"),
+          target: "eu-act",
+        },
+      ],
+    }).failures,
+  ).toEqual([{ id: "article", reason: "reference-unlocatable" }]);
+});
+
+test("article words do not match inside longer words", () => {
+  const sentence = "See Part 6 of the annex.";
+  expect(
+    locateProvisionAnchors({
+      blocks: [paragraph("text", sentence)],
+      provisions: [
+        {
+          id: "article",
+          reference: { ...reference(6), unit: "article" },
+          sentenceText: sentence,
+          spanStart: sentence.indexOf("Part 6"),
           target: "eu-act",
         },
       ],
