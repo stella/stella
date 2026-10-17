@@ -4715,6 +4715,7 @@ jobs:
           !cancelled()
           && github.event_name == 'pull_request'
           && matrix.shard == 'rest-web'
+          && needs.ci-plan.outputs.package_checks_required == 'true'
         env:
           CHANGED_FILES_JSON: ${{ needs.ci-plan.outputs.changed_files }}
         run: bun scripts/flake-gate.ts --blocking

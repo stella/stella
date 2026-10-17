@@ -739,6 +739,9 @@ test("pending", async () => await new Promise(() => {}));
 });
 
 test("the CLI emits a JSON error report and report/blocking exit codes on an unreadable diff", async () => {
+  // The CI step that repeats this file supplies its own changed-file list,
+  // which the CLI prefers over the diff; drop it so the diff is read.
+  const { CHANGED_FILES_JSON: _suppliedChanged, ...inherited } = process.env;
   await withFixture(async (root) => {
     for (const blocking of [false, true]) {
       const child = Bun.spawn(
@@ -750,7 +753,7 @@ test("the CLI emits a JSON error report and report/blocking exit codes on an unr
         {
           cwd: root,
           env: {
-            ...process.env,
+            ...inherited,
             BASE_SHA: "refs/heads/missing-flake-gate-fixture-base",
             GITHUB_STEP_SUMMARY: path.join(root, "summary.md"),
           },
