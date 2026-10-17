@@ -4,7 +4,10 @@ import { eq } from "drizzle-orm";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { softLawSources } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
-import { SoftLawIngestionError } from "@/api/lib/legal-search/soft-law-types";
+import {
+  SoftLawIngestionError,
+  type SoftLawSourceAdapter,
+} from "@/api/lib/legal-search/soft-law-types";
 import { recordSystemAudit } from "@/api/lib/system-audit/record";
 
 import {
@@ -14,18 +17,18 @@ import {
 import { runSoftLawIngestion } from "./ingestion";
 
 type SyncSoftLawOptions = {
-  authority: RegisteredSoftLawAuthority;
+  adapter: SoftLawSourceAdapter & { authority: RegisteredSoftLawAuthority };
   scopedDb: ScopedDb;
   signal: AbortSignal;
 };
 
 /** Registration and retries share the existing source identity and ingestion lease. */
-export const syncEuSoftLaw = async ({
-  authority,
+export const syncSoftLaw = async ({
+  adapter,
   scopedDb,
   signal,
 }: SyncSoftLawOptions) => {
-  const { adapter, descriptor } = SOFT_LAW_ADMISSIONS[authority];
+  const { descriptor } = SOFT_LAW_ADMISSIONS[adapter.authority];
   const auditSubject = createSafeId<"systemScriptRun">();
   const registration = await Result.tryPromise(
     async () =>
@@ -76,7 +79,7 @@ export const syncEuSoftLaw = async ({
       status: "failed" as const,
       error: new SoftLawIngestionError({
         message:
-          "EU soft-law acquisition requires an ingestion-only source descriptor",
+          "Soft-law acquisition requires an ingestion-only source descriptor",
       }),
     };
   }

@@ -1,15 +1,27 @@
+import { Result } from "better-result";
+
 import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-source";
+import { SoftLawIngestionError } from "@/api/lib/legal-search/soft-law-types";
 import type {
   SoftLawAuthority,
   SoftLawSourceAdapter,
+  SoftLawAdapterConfiguration,
 } from "@/api/lib/legal-search/soft-law-types";
 
+import { loadBfdiAdapter } from "./bfdi";
 import { edpbAdapter } from "./edpb";
 import { wp29Adapter } from "./wp29";
 
 type SourceRegistration<Authority extends SoftLawAuthority> = {
   state: "registered";
-  adapter: SoftLawSourceAdapter & { authority: Authority };
+  loadAdapter: (
+    configuration: SoftLawAdapterConfiguration,
+  ) => Promise<
+    Result<
+      SoftLawSourceAdapter & { authority: Authority },
+      SoftLawIngestionError
+    >
+  >;
   descriptor: CorpusSourceDescriptor & {
     allowsRedistribution: false;
     allowsDerivedAi: false;
@@ -19,13 +31,13 @@ type SourceRegistration<Authority extends SoftLawAuthority> = {
 
 type AdmissionDisposition<Authority extends SoftLawAuthority> =
   | SourceRegistration<Authority>
-  | { state: "held"; reason: string; adapter?: never }
-  | { state: "unverified"; reason: string; adapter?: never }
+  | { state: "held"; reason: string; loadAdapter?: never }
+  | { state: "unverified"; reason: string; loadAdapter?: never }
   | {
       state: "none-found";
       checkedAt: string;
       evidence: readonly [string, ...string[]];
-      adapter?: never;
+      loadAdapter?: never;
     };
 
 const unverified = {
@@ -41,7 +53,14 @@ const held = {
 export const SOFT_LAW_ADMISSIONS = {
   "eu-edpb": {
     state: "registered",
-    adapter: edpbAdapter,
+    loadAdapter: async (configuration) =>
+      configuration.type === "default"
+        ? Result.ok(edpbAdapter)
+        : Result.err(
+            new SoftLawIngestionError({
+              message: "EDPB does not accept an admission file",
+            }),
+          ),
     descriptor: {
       license: "permitted-redistribution",
       attribution:
@@ -53,7 +72,14 @@ export const SOFT_LAW_ADMISSIONS = {
   },
   "eu-wp29": {
     state: "registered",
-    adapter: wp29Adapter,
+    loadAdapter: async (configuration) =>
+      configuration.type === "default"
+        ? Result.ok(wp29Adapter)
+        : Result.err(
+            new SoftLawIngestionError({
+              message: "WP29 does not accept an admission file",
+            }),
+          ),
     descriptor: {
       license: "restricted",
       attribution: "Article 29 Working Party; European Commission archive",
@@ -72,7 +98,17 @@ export const SOFT_LAW_ADMISSIONS = {
   "ee-aki": unverified,
   "fi-ombudsman": unverified,
   "fr-cnil": held,
-  "de-bfdi": held,
+  "de-bfdi": {
+    state: "registered",
+    loadAdapter: loadBfdiAdapter,
+    descriptor: {
+      license: "restricted",
+      attribution: "BfDI; https://www.bfdi.bund.de",
+      allowsRedistribution: false,
+      allowsDerivedAi: false,
+    },
+    reuseNotice: "https://www.bfdi.bund.de",
+  },
   "el-hdpa": unverified,
   "hu-naih": unverified,
   "is-personuvernd": unverified,
@@ -132,3 +168,11 @@ export type RegisteredSoftLawAuthority = {
     ? Authority
     : never;
 }[SoftLawAuthority];
+
+export const isRegisteredSoftLawAuthority = (
+  value: string,
+): value is RegisteredSoftLawAuthority =>
+  Object.entries(SOFT_LAW_ADMISSIONS).some(
+    ([authority, disposition]) =>
+      authority === value && disposition.state === "registered",
+  );

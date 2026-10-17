@@ -2,7 +2,10 @@ import { parseArgs } from "node:util";
 
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
-import { SOFT_LAW_ADMISSIONS } from "@/api/handlers/soft-law/adapters/registry";
+import {
+  SOFT_LAW_ADMISSIONS,
+  isRegisteredSoftLawAuthority,
+} from "@/api/handlers/soft-law/adapters/registry";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
 import { SoftLawIngestionError } from "@/api/lib/legal-search/soft-law-types";
 
@@ -14,46 +17,50 @@ if (import.meta.main) {
       options: {
         source: { type: "string" },
         apply: { type: "boolean", default: false },
+        "admission-file": { type: "string" },
       },
       strict: true,
       allowPositionals: false,
     });
-    const source = Object.values(SOFT_LAW_ADMISSIONS).find(
-      (entry) =>
-        entry.state === "registered" && entry.adapter.key === values.source,
-    );
-    if (!source || source.state !== "registered") {
+    if (!values.source || !isRegisteredSoftLawAuthority(values.source)) {
       throw new SoftLawIngestionError({
-        message: `Use --source ${Object.values(SOFT_LAW_ADMISSIONS)
-          .filter((entry) => entry.state === "registered")
-          .map((entry) => entry.adapter.key)
-          .join(" | ")}; --apply starts one bounded ingestion run`,
+        message:
+          "Use --source with a registered soft-law authority; --apply starts one bounded ingestion run",
       });
     }
-    const authority = source.adapter.authority;
+    const authority = values.source;
+    const source = SOFT_LAW_ADMISSIONS[authority];
+    const loaded = await source.loadAdapter(
+      values["admission-file"] === undefined
+        ? { type: "default" }
+        : { type: "admission-file", path: values["admission-file"] },
+    );
+    if (loaded.status === "error") {
+      throw loaded.error;
+    }
     if (!values.apply) {
       console.log(
         JSON.stringify({
           mode: "dry-run",
           source: authority,
-          access: source.adapter.access,
+          access: loaded.value.access,
           descriptor: source.descriptor,
           reuseNotice: source.reuseNotice,
         }),
       );
       return;
     }
-    const { syncEuSoftLaw } = await import("@/api/handlers/soft-law/sync");
+    const { syncSoftLaw } = await import("@/api/handlers/soft-law/sync");
     const session = await enterCaseLawMaintenanceLane();
     try {
-      const result = await syncEuSoftLaw({
-        authority,
+      const result = await syncSoftLaw({
+        adapter: loaded.value,
         scopedDb: session.ingestionDb,
         signal: AbortSignal.timeout(15 * 60 * 1000),
       });
       if (result.status === "failed") {
         throw new SoftLawIngestionError({
-          message: "EU soft-law ingestion failed",
+          message: "Soft-law ingestion failed",
           cause: result.error,
         });
       }
