@@ -75,7 +75,9 @@ const refineCaseLawSearch = createSafeRootHandler(
     user,
   }): SafeHandlerGenerator<{ query: string } | PublicCountryUnavailableAnswer> {
     const countryRead = readPublicLawCountry(body.country, {
+      domain: "caseLaw",
       admitted: PUBLIC_CASE_LAW_COUNTRIES,
+      surface: "search",
     });
     if (countryRead.kind === "unavailable") {
       return Result.ok(countryRead.answer);

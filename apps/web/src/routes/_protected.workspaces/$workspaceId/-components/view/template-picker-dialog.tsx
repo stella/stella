@@ -42,6 +42,7 @@ import { cn } from "@stll/ui/utils";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useStartWorkflow } from "@/components/workspaces/hooks/use-start-workflow";
 import { usePermissions } from "@/hooks/use-permissions";
+import { useSingleFlight } from "@/hooks/use-single-flight";
 import type { ViewLayoutType } from "@/lib/api-contract";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
@@ -126,7 +127,12 @@ export const TemplatePickerDialog = ({
   const deleteTemplate = useDeleteViewTemplate();
   const startWorkflow = useStartWorkflow(workspaceId);
 
-  const handleUse = (template: WorkspaceViewTemplate) => {
+  // One view per click: both create paths share the in-flight guard.
+  const createOnce = useSingleFlight();
+  const createFromTemplate = (
+    template: WorkspaceViewTemplate,
+    settled: () => void,
+  ) => {
     const hasAITemplateProperty = template.templateProperties.some(
       (p) => p.createIfMissing && p.tool.type === "ai-model",
     );
@@ -137,6 +143,7 @@ export const TemplatePickerDialog = ({
         templateProperties: template.templateProperties,
       },
       {
+        onSettled: settled,
         onSuccess: (view) => {
           onCreated(view.id);
           onOpenChange(false);
@@ -151,13 +158,14 @@ export const TemplatePickerDialog = ({
     );
   };
 
-  const handleCreateAvt = () => {
+  const createAvt = (settled: () => void) => {
     createView.mutate(
       {
         name: t("workspaces.views.layouts.avt"),
         layout: EMPTY_AVT_LAYOUT,
       },
       {
+        onSettled: settled,
         onSuccess: (view) => {
           onCreated(view.id);
           onOpenChange(false);
@@ -167,6 +175,16 @@ export const TemplatePickerDialog = ({
         },
       },
     );
+  };
+
+  const handleUse = (template: WorkspaceViewTemplate) => {
+    detached(
+      createOnce.runSettled((settled) => createFromTemplate(template, settled)),
+      "template-picker-dialog.use",
+    );
+  };
+  const handleCreateAvt = () => {
+    detached(createOnce.runSettled(createAvt), "template-picker-dialog.avt");
   };
 
   const handleDelete = (templateId: string) => {

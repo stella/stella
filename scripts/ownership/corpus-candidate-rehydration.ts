@@ -28,11 +28,6 @@ export default {
     ],
     allowed: [
       {
-        path: "apps/api/src/mcp/generated/capability-dispatch/legislation.search.ts",
-        reason:
-          "Lazy-loads the handler endpoint; does not invoke its canonical-read statement exports.",
-      },
-      {
         path: "apps/api/src/tests/query-plans/registry.ts",
         reason:
           "Measures production canonical-read statements under the public reader role.",

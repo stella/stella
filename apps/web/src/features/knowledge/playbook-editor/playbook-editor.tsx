@@ -12,6 +12,7 @@ import {
   normalizeApiError,
 } from "@stll/api-contract";
 import type { ApiErrorInput } from "@stll/api-contract";
+import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -1601,6 +1602,7 @@ const PlaybookEditorForm = ({
               <Input
                 aria-invalid={attemptedSave && name.trim() === ""}
                 id={nameId}
+                maxLength={DEFAULT_VARCHAR_MAX_LENGTH}
                 onChange={(e) => {
                   setName(e.target.value);
                   scheduleAutosaveFromEdit();

@@ -9,6 +9,7 @@ import {
   agentSkills,
 } from "@/api/db/schema";
 import { skillRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { tSkillInvocation } from "@/api/handlers/skills/skill-invocation-schema";
 import { hashSkillContent } from "@/api/lib/agent-skills/content-hash";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -30,6 +31,7 @@ const createSkillBodySchema = t.Object({
   }),
   body: t.String({ minLength: 1, maxLength: LIMITS.agentSkillBodyMaxChars }),
   command: t.Optional(t.String({ minLength: 1, maxLength: 50 })),
+  invocation: t.Optional(tSkillInvocation()),
 });
 
 const config = {
@@ -37,7 +39,9 @@ const config = {
   idempotency: { type: "replay" },
   description:
     "Author an agent skill from text: name, description, instruction body, " +
-    "and an optional slash command. Team scope requires admin or owner, " +
+    "an optional slash command, and an optional invocation (`auto`, the " +
+    "default: the assistant may use it on its own; `manual`: only when the " +
+    "user invokes it). Team scope requires admin or owner, " +
     "private scope is your own. A command must be lowercase letters, digits, " +
     "hyphens, or underscores, must not be one of the reserved commands, and " +
     "must be free in the organization, as must the skill name. Refused once " +
@@ -166,6 +170,7 @@ const createSkill = createSafeRootHandler(
           contentHash,
           body: body.body,
           enabled: true,
+          invocation: body.invocation ?? "auto",
           command: body.command ?? null,
         })
         .returning({ id: agentSkills.id });
@@ -184,6 +189,9 @@ const createSkill = createSafeRootHandler(
                 slug,
                 origin: "authored",
                 ...(body.command !== undefined && { command: body.command }),
+                ...(body.invocation !== undefined && {
+                  invocation: body.invocation,
+                }),
               },
             },
           },

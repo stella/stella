@@ -7,16 +7,9 @@ import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
 
 import type { ContactType } from "@stll/api-contract";
+import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import {
-  Combobox,
-  ComboboxEmpty,
-  ComboboxInput,
-  ComboboxItem,
-  ComboboxList,
-  ComboboxPopup,
-} from "@stll/ui/combobox";
 import {
   Dialog,
   DialogFormState,
@@ -28,42 +21,36 @@ import {
   DialogTitle,
 } from "@stll/ui/dialog";
 import { Field, FieldLabel } from "@stll/ui/field";
-import {
-  BuildingIcon,
-  PlusIcon,
-  SearchIcon,
-  UserIcon,
-  XIcon,
-} from "@stll/ui/icons";
+import { BuildingIcon, UserIcon, XIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
-import { ScrollArea } from "@stll/ui/scroll-area";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { ContactPicker } from "@/components/contact-picker";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
-import { UserIdentity } from "@/components/user-avatar";
-import {
-  buildCollaboratorStats,
-  compareMembersByCollaboratorStats,
-  getPossibleDuplicateMatters,
-} from "@/components/workspaces/create-matter-dialog.logic";
+import { getPossibleDuplicateMatters } from "@/components/workspaces/create-matter-dialog.logic";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
-import { useLocale } from "@/i18n/formatting-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { useCreateContact } from "@/lib/contacts/mutations";
 import { contactsKeys } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { organizationOptions } from "@/lib/organization/queries";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import type { MatterDraftClient } from "@/lib/workspaces/create-matter-store";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { useCreateWorkspace } from "@/lib/workspaces/mutations";
 import { workspacesOptions } from "@/lib/workspaces/queries";
 
-const SelectedClient = ({ client }: { client: MatterDraftClient }) => (
+const SelectedClient = ({
+  client,
+  onClear,
+  clearLabel,
+}: {
+  client: MatterDraftClient;
+  onClear: () => void;
+  clearLabel: string;
+}) => (
   <div className="bg-muted/40 flex items-center gap-2 rounded-lg border px-3 py-2">
     {client.type === "person" ? (
       <UserIcon className="text-muted-foreground size-4" />
@@ -73,81 +60,15 @@ const SelectedClient = ({ client }: { client: MatterDraftClient }) => (
     <BidiText as="span" className="truncate text-sm font-medium">
       {client.displayName}
     </BidiText>
-  </div>
-);
-
-type OwnerType = "client" | "personal";
-
-const OwnerTypeToggle = ({
-  value,
-  onChange,
-}: {
-  value: OwnerType;
-  onChange: (value: OwnerType) => void;
-}) => {
-  const t = useTranslations();
-  return (
-    <div
-      aria-label={t("workspaces.create.ownerTypeToggle")}
-      className="bg-muted/40 inline-flex w-fit gap-1 rounded-lg border p-0.5"
-      role="radiogroup"
+    <Button
+      aria-label={clearLabel}
+      className="ms-auto"
+      onClick={onClear}
+      size="icon-xs"
+      variant="ghost"
     >
-      <Button
-        aria-checked={value === "client"}
-        onClick={() => onChange("client")}
-        role="radio"
-        size="sm"
-        tabIndex={value === "client" ? 0 : -1}
-        variant={value === "client" ? "default" : "ghost"}
-      >
-        {t("workspaces.ownerType.client")}
-      </Button>
-      <Button
-        aria-checked={value === "personal"}
-        onClick={() => onChange("personal")}
-        role="radio"
-        size="sm"
-        tabIndex={value === "personal" ? 0 : -1}
-        variant={value === "personal" ? "default" : "ghost"}
-      >
-        {t("workspaces.ownerType.personal")}
-      </Button>
-    </div>
-  );
-};
-
-const TeamMemberRow = ({
-  email,
-  image,
-  name,
-  onRemove,
-  removeLabel,
-}: {
-  email: string;
-  image?: string | null | undefined;
-  name: string;
-  onRemove?: () => void;
-  removeLabel?: string;
-}) => (
-  <div className="bg-background flex items-center gap-2 rounded-md border px-3 py-2">
-    <UserIdentity
-      avatarClassName="size-8 shrink-0 text-3xs"
-      className="min-w-0 flex-1"
-      image={image}
-      name={name}
-      secondaryText={email}
-    />
-    {onRemove && (
-      <Button
-        aria-label={removeLabel}
-        className="ms-auto"
-        onClick={onRemove}
-        size="icon-xs"
-        variant="ghost"
-      >
-        <XIcon className="size-3.5" />
-      </Button>
-    )}
+      <XIcon className="size-3.5" />
+    </Button>
   </div>
 );
 
@@ -203,30 +124,16 @@ const CreateMatterDialogBody = ({
   onCreated,
 }: CreateMatterDialogBodyProps) => {
   const t = useTranslations();
-  const locale = useLocale();
   const navigate = useNavigate();
   const currentUser = useAuthenticatedUser();
   const queryClient = useQueryClient();
   const createWorkspace = useCreateWorkspace();
   const createContact = useCreateContact();
   const [name, setName] = useState("");
-  const [ownerType, setOwnerType] = useState<"client" | "personal">("client");
   const [selectedClient, setSelectedClient] =
     useState<MatterDraftClient | null>(draftClient);
-  const [memberQuery, setMemberQuery] = useState("");
-  const [selectedMemberUserIds, setSelectedMemberUserIds] = useState<string[]>(
-    [],
-  );
   const [submitAttempted, setSubmitAttempted] = useState(false);
-  const clientInputRef = useRef<HTMLInputElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
-  const organizationQuery = useChromeQuery({
-    ...organizationOptions(currentUser.activeOrganizationId),
-  });
-  const organizationView = useQueryView(organizationQuery);
-  useQueryViewError(organizationView);
-  const organization =
-    organizationView.type === "items" ? organizationView.items : undefined;
   const workspacesDataQuery = useChromeQuery({
     ...workspacesOptions(currentUser.activeOrganizationId),
   });
@@ -277,43 +184,18 @@ const CreateMatterDialogBody = ({
 
   const handleSubmit = async () => {
     const trimmedName = name.trim();
-    const missingClient = ownerType === "client" && selectedClient === null;
-    const missingName = trimmedName.length === 0;
-
-    if (missingClient || missingName) {
+    if (trimmedName.length === 0) {
       setSubmitAttempted(true);
-
-      if (missingClient) {
-        clientInputRef.current?.focus();
-        return;
-      }
-
       nameInputRef.current?.focus();
       return;
     }
 
-    const payload = (() => {
-      if (ownerType === "personal") {
-        return {
-          name: trimmedName,
-        };
-      }
-      if (selectedClient) {
-        return {
-          clientId: selectedClient.id,
-          memberUserIds: selectedMemberUserIds,
-          name: trimmedName,
-        };
-      }
-      return null;
-    })();
-
-    if (!payload) {
-      return;
-    }
-
     const result = await Result.tryPromise(
-      async () => await createWorkspace.mutateAsync(payload),
+      async () =>
+        await createWorkspace.mutateAsync({
+          name: trimmedName,
+          ...(selectedClient ? { clientId: selectedClient.id } : {}),
+        }),
     );
 
     if (Result.isError(result)) {
@@ -358,164 +240,93 @@ const CreateMatterDialogBody = ({
   };
 
   const canSubmit = !createWorkspace.isPending && !createContact.isPending;
-  const creatorName = currentUser.name ?? currentUser.email;
-  const clientInvalid =
-    submitAttempted && ownerType === "client" && selectedClient === null;
   const nameInvalid = submitAttempted && name.trim().length === 0;
-  const organizationMembers = organization ? organization.members : [];
-  const selectedMemberUserIdSet = new Set(selectedMemberUserIds);
-  const collaboratorStats = buildCollaboratorStats({
-    currentUserId: currentUser.id,
-    workspaces: workspacesData ? workspacesData.workspaces : [],
-  });
-  const availableMembers = organizationMembers
-    .filter(
-      (member) =>
-        member.userId !== currentUser.id &&
-        !selectedMemberUserIdSet.has(member.userId),
-    )
-    .toSorted((a, b) =>
-      compareMembersByCollaboratorStats({
-        a,
-        b,
-        collaboratorStats,
-        locale,
-      }),
-    );
-  const filteredMembers = (() => {
-    const trimmedQuery = memberQuery.trim().toLowerCase();
-
-    if (!trimmedQuery) {
-      return availableMembers;
-    }
-
-    return availableMembers.filter(
-      (member) =>
-        member.user.name.toLowerCase().includes(trimmedQuery) ||
-        member.user.email.toLowerCase().includes(trimmedQuery),
-    );
-  })();
-  const selectedMembers = organizationMembers.filter((member) =>
-    selectedMemberUserIdSet.has(member.userId),
-  );
-  const shouldCollapseSelectedMembers = selectedMembers.length > 3;
-  const hasAdditionalOrganizationMembers = organizationMembers.length > 1;
-  const possibleDuplicates = (() => {
-    if (ownerType === "personal" || selectedClient === null) {
-      return [];
-    }
-
-    return getPossibleDuplicateMatters({
-      clientId: selectedClient.id,
-      limit: 3,
-      name,
-      workspaces: workspacesData ? workspacesData.workspaces : [],
-    });
-  })();
+  const possibleDuplicates =
+    selectedClient === null
+      ? []
+      : getPossibleDuplicateMatters({
+          clientId: selectedClient.id,
+          limit: 3,
+          name,
+          workspaces: workspacesData ? workspacesData.workspaces : [],
+        });
 
   return (
     <DialogPopup className="max-w-md">
       <DialogFormState
-        dirty={
-          name !== "" ||
-          ownerType !== "client" ||
-          selectedClient?.id !== draftClient?.id ||
-          selectedMemberUserIds.length > 0
-        }
+        dirty={name !== "" || selectedClient?.id !== draftClient?.id}
         onDiscard={() => {
           setName("");
-          setOwnerType("client");
           setSelectedClient(draftClient);
-          setSelectedMemberUserIds([]);
         }}
       />
       <DialogHeader>
         <DialogTitle>{t("common.newMatter")}</DialogTitle>
       </DialogHeader>
       <DialogPanel className="flex flex-col gap-5">
-        <QueryViewFeedback view={organizationView} />
         <QueryViewFeedback view={workspacesDataView} />
-        <OwnerTypeToggle onChange={setOwnerType} value={ownerType} />
+        <Field invalid={nameInvalid}>
+          <FieldLabel
+            className={cn(nameInvalid && "text-destructive-foreground")}
+          >
+            {t("workspaces.create.matterName")}
+          </FieldLabel>
+          <Input
+            aria-invalid={nameInvalid}
+            autoFocus
+            maxLength={DEFAULT_VARCHAR_MAX_LENGTH}
+            ref={nameInputRef}
+            onChange={(e) => setName(e.currentTarget.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                detached(handleSubmit(), "create-matter-dialog.submit");
+              }
+            }}
+            value={name}
+          />
+          {nameInvalid ? (
+            <p className="text-destructive-foreground text-xs">
+              {t("common.required")}
+            </p>
+          ) : null}
+        </Field>
 
-        {(() => {
-          if (ownerType === "client") {
-            return (
-              <section className="space-y-3">
-                <Field className="gap-3" invalid={clientInvalid}>
-                  <FieldLabel
-                    className={cn(
-                      clientInvalid && "text-destructive-foreground",
-                    )}
-                  >
-                    {t("workspaces.parties.client")}
-                  </FieldLabel>
-                  {selectedClient && <SelectedClient client={selectedClient} />}
-                  <ContactPicker
-                    autoFocus={!selectedClient}
-                    inputRef={clientInputRef}
-                    invalid={clientInvalid}
-                    onCreate={(...args) => {
-                      detached(
-                        handleCreateClient(...args),
-                        "create-matter-dialog.create-client",
-                      );
-                    }}
-                    onSelect={(contact) => {
-                      setSelectedClient({
-                        id: contact.id,
-                        displayName: contact.displayName,
-                        type: contact.type,
-                      });
-                    }}
-                    placeholder={
-                      selectedClient
-                        ? t("workspaces.parties.changeClient")
-                        : t("workspaces.parties.searchContacts")
-                    }
-                  />
-                  {clientInvalid ? (
-                    <p className="text-destructive-foreground text-xs">
-                      {t("common.required")}
-                    </p>
-                  ) : null}
-                </Field>
-              </section>
-            );
-          }
-          return (
+        <Field className="gap-3">
+          <FieldLabel>{t("workspaces.parties.client")}</FieldLabel>
+          {selectedClient ? (
+            <SelectedClient
+              clearLabel={t("workspaces.parties.removeClient")}
+              client={selectedClient}
+              onClear={() => setSelectedClient(null)}
+            />
+          ) : null}
+          <ContactPicker
+            onCreate={(...args) => {
+              detached(
+                handleCreateClient(...args),
+                "create-matter-dialog.create-client",
+              );
+            }}
+            onSelect={(contact) => {
+              setSelectedClient({
+                id: contact.id,
+                displayName: contact.displayName,
+                type: contact.type,
+              });
+            }}
+            placeholder={
+              selectedClient
+                ? t("workspaces.parties.changeClient")
+                : t("workspaces.parties.noClientOptional")
+            }
+          />
+          {selectedClient === null ? (
             <p className="text-muted-foreground text-xs">
               {t("workspaces.create.personalDescription")}
             </p>
-          );
-        })()}
-
-        <section>
-          <Field invalid={nameInvalid}>
-            <FieldLabel
-              className={cn(nameInvalid && "text-destructive-foreground")}
-            >
-              {t("common.name")}
-            </FieldLabel>
-            <Input
-              aria-invalid={nameInvalid}
-              autoFocus={!!selectedClient}
-              ref={nameInputRef}
-              onChange={(e) => setName(e.currentTarget.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  detached(handleSubmit(), "create-matter-dialog.submit");
-                }
-              }}
-              value={name}
-            />
-            {nameInvalid ? (
-              <p className="text-destructive-foreground text-xs">
-                {t("common.required")}
-              </p>
-            ) : null}
-          </Field>
-        </section>
+          ) : null}
+        </Field>
 
         {possibleDuplicates.length > 0 && (
           <section className="bg-muted/30 space-y-2 rounded-lg border px-3 py-3">
@@ -535,133 +346,6 @@ const CreateMatterDialogBody = ({
                 </li>
               ))}
             </ul>
-          </section>
-        )}
-
-        {ownerType === "client" && (
-          <section className="space-y-3">
-            <h3 className="text-sm font-medium">{t("common.members")}</h3>
-
-            {(() => {
-              if (hasAdditionalOrganizationMembers) {
-                return (
-                  <div className="space-y-2">
-                    <Combobox<(typeof filteredMembers)[number]>
-                      itemToStringLabel={(member) =>
-                        `${member.user.name} ${member.user.email}`
-                      }
-                      onInputValueChange={(inputValue) => {
-                        setMemberQuery(inputValue);
-                      }}
-                      onValueChange={(member) => {
-                        if (!member) {
-                          return;
-                        }
-
-                        setSelectedMemberUserIds((current) => [
-                          ...current,
-                          member.userId,
-                        ]);
-                        setMemberQuery("");
-                      }}
-                      value={null}
-                    >
-                      <ComboboxInput
-                        placeholder={t("common.search")}
-                        showTrigger={false}
-                        startAddon={<SearchIcon />}
-                        value={memberQuery}
-                      />
-                      <ComboboxPopup>
-                        <ComboboxList>
-                          {filteredMembers.map((member) => (
-                            <ComboboxItem key={member.userId} value={member}>
-                              <div className="flex items-center gap-2">
-                                <UserIdentity
-                                  avatarClassName="size-8 shrink-0 text-3xs"
-                                  className="min-w-0 flex-1"
-                                  image={member.user.image}
-                                  name={member.user.name}
-                                  secondaryText={member.user.email}
-                                />
-                                <PlusIcon className="text-muted-foreground size-4" />
-                              </div>
-                            </ComboboxItem>
-                          ))}
-                        </ComboboxList>
-                        {filteredMembers.length === 0 ? (
-                          <ComboboxEmpty>
-                            {memberQuery.length > 0
-                              ? t("workspaces.members.noMembersFound")
-                              : t("common.search")}
-                          </ComboboxEmpty>
-                        ) : null}
-                      </ComboboxPopup>
-                    </Combobox>
-                  </div>
-                );
-              }
-
-              return (
-                <div className="bg-muted/20 space-y-3 rounded-lg border border-dashed p-3">
-                  <p className="text-muted-foreground text-sm">
-                    {t("workspaces.members.noMembersFound")}
-                  </p>
-                </div>
-              );
-            })()}
-
-            <div className="bg-muted/20 rounded-lg border p-3">
-              {shouldCollapseSelectedMembers ? (
-                <ScrollArea className="h-64 w-full" scrollbarGutter>
-                  <div className="space-y-2">
-                    <TeamMemberRow
-                      email={currentUser.email}
-                      image={currentUser.image}
-                      name={creatorName}
-                    />
-                    {selectedMembers.map((member) => (
-                      <TeamMemberRow
-                        email={member.user.email}
-                        image={member.user.image}
-                        key={member.userId}
-                        name={member.user.name}
-                        onRemove={() => {
-                          setSelectedMemberUserIds((current) =>
-                            current.filter(
-                              (userId) => userId !== member.userId,
-                            ),
-                          );
-                        }}
-                        removeLabel={t("common.removeMember")}
-                      />
-                    ))}
-                  </div>
-                </ScrollArea>
-              ) : (
-                <div className="space-y-2">
-                  <TeamMemberRow
-                    email={currentUser.email}
-                    image={currentUser.image}
-                    name={creatorName}
-                  />
-                  {selectedMembers.map((member) => (
-                    <TeamMemberRow
-                      email={member.user.email}
-                      image={member.user.image}
-                      key={member.userId}
-                      name={member.user.name}
-                      onRemove={() => {
-                        setSelectedMemberUserIds((current) =>
-                          current.filter((userId) => userId !== member.userId),
-                        );
-                      }}
-                      removeLabel={t("common.removeMember")}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
           </section>
         )}
       </DialogPanel>

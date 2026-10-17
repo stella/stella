@@ -2,6 +2,8 @@ import { CASE_LAW_REGION_BY_JURISDICTION } from "@stll/api-contract/case-law-jur
 import {
   CASE_LAW_REGION_BY_COUNTRY,
   isPublicCaseLawCountry as isSharedPublicCaseLawCountry,
+  isPublicCaseLawPageCountry as isSharedPublicCaseLawPageCountry,
+  PUBLIC_CASE_LAW_PAGE_COUNTRIES as SHARED_PUBLIC_CASE_LAW_PAGE_COUNTRIES,
   PUBLIC_CASE_LAW_COUNTRIES as SHARED_PUBLIC_CASE_LAW_COUNTRIES,
 } from "@stll/api-contract/case-law-launch-readiness";
 import type {
@@ -25,12 +27,12 @@ export const caseLawCountryRegion = (country: string): string | null =>
   REGIONS[country.toUpperCase()] ?? null;
 
 /** Expects the corpus form (`CZE`), which `fromCaseLawCountryParam` produces. */
-const isCaseLawBrowserCountry = (
+export const isCaseLawBrowserCountry = (
   country: string,
 ): country is CaseLawBrowserCountry =>
   Object.hasOwn(REGION_BY_COUNTRY, country);
 
-/** The only case-law countries public search may enumerate or query. */
+/** The case-law countries public search may enumerate or query (search-admitted). */
 export const PUBLIC_CASE_LAW_COUNTRIES = SHARED_PUBLIC_CASE_LAW_COUNTRIES;
 
 export const isPublicCaseLawCountry = (
@@ -47,6 +49,26 @@ export const publicCaseLawCountryFromParam = (
   }
   const country = fromCaseLawCountryParam(param);
   return isPublicCaseLawCountry(country) ? country : null;
+};
+
+/** The case-law countries whose decision pages are served, listed and crawlable. */
+export const PUBLIC_CASE_LAW_PAGE_COUNTRIES =
+  SHARED_PUBLIC_CASE_LAW_PAGE_COUNTRIES;
+
+export const isPublicCaseLawPageCountry = (
+  country: string,
+): country is PublicCaseLawCountry =>
+  isCaseLawBrowserCountry(country) && isSharedPublicCaseLawPageCountry(country);
+
+/** Resolve the route form to a country whose decision pages are public. */
+export const publicCaseLawPageCountryFromParam = (
+  param: string | undefined,
+): PublicCaseLawCountry | null => {
+  if (param === undefined) {
+    return null;
+  }
+  const country = fromCaseLawCountryParam(param);
+  return isPublicCaseLawPageCountry(country) ? country : null;
 };
 
 /** The URL form of a corpus country code, and back. */

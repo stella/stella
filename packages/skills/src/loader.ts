@@ -2,7 +2,7 @@ import { panic, Result } from "better-result";
 
 import { isSkillResourceFolder, SKILL_RESOURCE_EXTENSIONS } from "./format";
 import { parseSkillFile } from "./frontmatter";
-import type { ParsedSkillFile, SkillMetadata } from "./frontmatter";
+import type { ParsedSkillFile, ParsedSkillMetadata } from "./frontmatter";
 import { GENERATED_SKILLS } from "./skills.gen";
 
 export type { BuiltInSkillId } from "./skills.gen";
@@ -12,7 +12,7 @@ export type SkillResource = {
 };
 
 /** A skill shipped with stella: every organization has it, with no row. */
-export type StellaSkill = SkillMetadata & {
+export type StellaSkill = ParsedSkillMetadata & {
   body: string;
   resources: SkillResource[];
 };
@@ -24,7 +24,7 @@ const skillsById: ReadonlyMap<string, GeneratedSkill> = new Map(
 );
 
 /** The shipped skills' metadata, sorted by name. */
-export const listSkillMetadata = (): SkillMetadata[] =>
+export const listSkillMetadata = (): ParsedSkillMetadata[] =>
   GENERATED_SKILLS.map((skill) => parseShippedSkill(skill).metadata).toSorted(
     (a, b) => a.name.localeCompare(b.name),
   );

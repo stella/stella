@@ -184,11 +184,12 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       const entityId = taskData?.entityId;
       if (taskError || !entityId) {
         analytics.captureError(
-          taskError ??
-            new ClientOperationError({
-              action: "create-task",
-              message: "Task creation returned no entity ID",
-            }),
+          taskError
+            ? toAPIError(taskError)
+            : new ClientOperationError({
+                action: "create-task",
+                message: "Task creation returned no entity ID",
+              }),
         );
         inspector.closeTab(pendingTaskId);
         notifyUserError(

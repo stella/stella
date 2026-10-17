@@ -7,6 +7,8 @@ import {
   TIME_ENTRY_ACTIVITY_GROUPS,
 } from "@stll/api-contract";
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
+import type { DoctrineTreatment } from "@stll/api-contract/case-law-doctrine";
+import { DOCTRINAL_TREATMENTS } from "@stll/api-contract/case-law-doctrine";
 import {
   DECISION_TEXT_FIELD,
   DECISION_TEXT_WITHHELD_REASON,
@@ -75,6 +77,7 @@ import { statuteExpressionLabel } from "./legislation-result-projections";
 import {
   chatEntityRef,
   chatRef,
+  contentText,
   passthroughId,
   projectionBranch,
   publicUrl,
@@ -289,7 +292,7 @@ export const SEARCH_ACROSS_MATTERS_PROJECTION = v.strictObject({
       workspaceName: v.string(),
       name: v.string(),
       kind: v.picklist(ENTITY_KINDS),
-      headline: v.nullable(v.string()),
+      headline: v.nullable(contentText()),
     }),
   ),
 });
@@ -307,7 +310,7 @@ export const READ_CONTENT_ACROSS_MATTERS_PROJECTION = v.strictObject({
   entityId: chatEntityRef({ from: "sibling", key: "workspaceId" }),
   kind: v.picklist(ENTITY_KINDS),
   name: v.string(),
-  text: v.string(),
+  text: contentText(),
   truncated: v.boolean(),
   nextCursor: v.nullable(v.string()),
   workspaceId: chatRef("matter"),
@@ -648,7 +651,7 @@ export const READ_DOCUMENT_DIFF_PROJECTION = v.strictObject({
         projectionBranch(
           v.strictObject({
             kind: v.picklist(["added", "removed", "unchanged", "gap"]),
-            text: v.string(),
+            text: contentText(),
           }),
         ),
         projectionBranch(
@@ -657,7 +660,7 @@ export const READ_DOCUMENT_DIFF_PROJECTION = v.strictObject({
             runs: v.array(
               v.strictObject({
                 kind: v.picklist(["same", "del", "ins"]),
-                text: v.string(),
+                text: contentText(),
               }),
             ),
           }),
@@ -781,13 +784,13 @@ export const LIST_TASKS_PROJECTION = v.union([
  * ids.
  */
 const clauseParagraphProjection = v.strictObject({
-  text: v.string(),
+  text: contentText(),
   style: v.optional(v.string()),
   level: v.optional(v.number()),
   runs: v.optional(
     v.array(
       v.strictObject({
-        text: v.string(),
+        text: contentText(),
         bold: v.optional(v.boolean()),
         italic: v.optional(v.boolean()),
       }),
@@ -910,7 +913,7 @@ const playbookIdealLanguageProjection = v.variant("source", [
     }),
   ),
   projectionBranch(
-    v.strictObject({ source: v.literal("inline"), text: v.string() }),
+    v.strictObject({ source: v.literal("inline"), text: contentText() }),
   ),
 ]);
 
@@ -922,20 +925,24 @@ const playbookIdealLanguageProjection = v.variant("source", [
  */
 const playbookTiersProjection = v.strictObject({
   acceptable: v.strictObject({
-    rules: v.array(v.strictObject({ id: strippedField(), text: v.string() })),
+    rules: v.array(
+      v.strictObject({ id: strippedField(), text: contentText() }),
+    ),
     ideal: v.optional(playbookIdealLanguageProjection),
   }),
   fallback: v.strictObject({
     entries: v.array(
       v.strictObject({
         id: strippedField(),
-        text: v.string(),
+        text: contentText(),
         label: v.optional(v.string()),
       }),
     ),
   }),
   notAcceptable: v.strictObject({
-    rules: v.array(v.strictObject({ id: strippedField(), text: v.string() })),
+    rules: v.array(
+      v.strictObject({ id: strippedField(), text: contentText() }),
+    ),
   }),
 });
 
@@ -1266,7 +1273,7 @@ export const LIST_INVOICES_DETAIL_PROJECTION = v.strictObject({
     dueDate: v.nullable(v.string()),
     currency: v.string(),
     totalAmount: v.number(),
-    notes: v.nullable(v.string()),
+    notes: v.nullable(contentText()),
     sellerProfileId: v.nullable(passthroughId()),
     buyerName: v.nullable(v.string()),
     buyerRegistrationId: v.nullable(v.string()),
@@ -1522,8 +1529,27 @@ const topCitingItemsProjection = v.array(
 
 // A citing or cited decision as the summary names it: no row ids, and an id
 // only where another tool can act on it.
+const doctrineCountsProjection = v.strictObject({
+  distinguishes: v.number(),
+  limits: v.number(),
+  not_stated: v.number(),
+  unread: v.number(),
+} satisfies Record<DoctrineTreatment | "unread", v.GenericSchema>);
+const doctrineSummaryProjection = v.variant("status", [
+  projectionBranch(v.strictObject({ status: v.literal("unavailable") })),
+  projectionBranch(
+    v.strictObject({
+      status: v.literal("available"),
+      counts: doctrineCountsProjection,
+      capped: v.boolean(),
+      candidateWindow: v.literal(CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT),
+    }),
+  ),
+]);
+
 const caseLawCitationSummaryProjection = v.strictObject({
   citedBy: v.strictObject({
+    doctrineCounts: doctrineSummaryProjection,
     // Citing references: a decision citing this one twice counts twice.
     count: v.number(),
     // A lower-bound count. Ranking precision is carried independently by top.
@@ -1546,6 +1572,7 @@ const caseLawCitationSummaryProjection = v.strictObject({
     ]),
   }),
   cites: v.strictObject({
+    doctrineCounts: doctrineSummaryProjection,
     count: v.number(),
     capped: v.optional(v.literal(true)),
     decisions: v.optional(
@@ -1670,7 +1697,7 @@ const caseLawDecisionProjection = v.strictObject({
               "Verbatim enclosing AST heading titles, outermost first; empty when none. No inferred speaker or role.",
             ),
           ),
-          text: v.string(),
+          text: contentText(),
           hit: v.optional(v.literal(true)),
           url: v.optional(v.string()),
         }),
@@ -1730,6 +1757,7 @@ export const READ_CASE_LAW_DECISION_PROJECTION = v.strictObject({
  * text, withheld where the source bars derived AI use.
  */
 export const READ_CASE_LAW_CITATIONS_PROJECTION = v.strictObject({
+  doctrineAvailability: v.picklist(["available", "unavailable"]),
   // The decision the citations were read from, echoed so a paged reply still
   // says what it is about.
   decisionId: passthroughId(),
@@ -1747,6 +1775,7 @@ export const READ_CASE_LAW_CITATIONS_PROJECTION = v.strictObject({
       // the classifier never reached and one it could not answer for are both
       // the absence of a reading, never a neutral one.
       polarity: v.picklist(CITATION_TREATMENTS),
+      doctrine: v.nullable(v.picklist([...DOCTRINAL_TREATMENTS, "unread"])),
       // Null for a citation the corpus holds no decision for.
       decision: v.nullable(
         v.strictObject({
@@ -1771,9 +1800,11 @@ export const READ_CASE_LAW_CITATIONS_PROJECTION = v.strictObject({
       passage: v.nullable(
         v.strictObject({
           anchorId: passthroughId(),
-          text: v.string(),
+          text: contentText(),
           truncated: v.boolean(),
           mention: v.picklist(CITATION_PASSAGE_MENTIONS),
+          evidenceQuote: v.optional(v.string()),
+          evidenceAnchorId: v.optional(v.nullable(passthroughId())),
         }),
       ),
     }),
@@ -1823,7 +1854,7 @@ export const SEARCH_LEGISLATION_PROJECTION = v.union([
           }),
           resourceName: passthroughId(),
           score: v.number(),
-          snippet: v.nullable(v.string()),
+          snippet: v.nullable(contentText()),
           // The publisher's own document URL, which may embed the publisher's
           // own UUID — never a Stella tenant id, so it is forwarded unchanged.
           sourceUrl: v.nullable(publicUrl()),
@@ -1866,7 +1897,7 @@ export const READ_STATUTE_PROJECTION = v.strictObject({
       v.strictObject({
         anchorId: passthroughId(),
         level: v.number(),
-        text: v.string(),
+        text: contentText(),
       }),
     ),
     outlineTruncated: v.boolean(),
@@ -1875,7 +1906,7 @@ export const READ_STATUTE_PROJECTION = v.strictObject({
     // UUID — never a Stella tenant id, so it is forwarded unchanged.
     sourceUrl: v.nullable(publicUrl()),
     status: v.string(),
-    text: v.nullable(v.string()),
+    text: v.nullable(contentText()),
     // Present only where the source permits displaying wording but bars
     // derived AI use; the metadata, outline and versions still answer.
     textWithheldReason: v.optional(v.string()),
@@ -2188,12 +2219,10 @@ const sanctionsListOutcomeProjection = v.strictObject({
   classification: v.picklist(SANCTIONS_CLASSIFICATIONS),
   status: v.picklist(SANCTIONS_SCREENING_STATUSES),
   reason: v.nullable(v.picklist(SANCTIONS_UNAVAILABLE_REASONS)),
-  // The one note the budget keeps: which edition these fields name depends
-  // on the list's status (the screened one when it answered).
-  editionId: v.pipe(
-    v.nullable(passthroughId()),
-    v.description("If unavailable: latest on file, NOT screened"),
-  ),
+  // Which edition these fields name depends on the list's status: the
+  // screened one when it answered, the latest on file (not screened) when
+  // unavailable. The tool description says so; the output schema has no room.
+  editionId: v.nullable(passthroughId()),
   publishedAt: v.nullable(v.string()),
   verifiedAt: v.nullable(v.string()),
   // A newer edition held back for review; the list still screens the
@@ -2468,7 +2497,7 @@ export const LIST_READER_ANNOTATIONS_PROJECTION = v.strictObject({
       kind: v.picklist(READER_ANNOTATION_KINDS),
       color: v.nullable(v.picklist(READER_ANNOTATION_COLORS)),
       style: v.nullable(v.picklist(READER_ANNOTATION_STYLES)),
-      body: v.nullable(v.string()),
+      body: v.nullable(contentText()),
       visibility: v.picklist(READER_ANNOTATION_VISIBILITIES),
       mine: v.boolean(),
       authorName: v.string(),
@@ -2598,23 +2627,24 @@ export const RUN_PLAYBOOK_PROJECTION = v.strictObject({
 });
 
 /**
- * manage_organization: add_member returns `{ memberId }`, remove_member
+ * add_matter_member returns `{ memberId }`, remove_matter_member
  * `{ removed: true, id }` (both membership-row handles, not tenant refs);
- * update_org_settings echoes only the scalar settings it changed.
+ * update_organization_settings echoes only the scalar settings it changed.
  */
-export const MANAGE_ORGANIZATION_ADD_MEMBER_PROJECTION = v.strictObject({
+export const ADD_MATTER_MEMBER_PROJECTION = v.strictObject({
   memberId: passthroughId(),
 });
 
-export const MANAGE_ORGANIZATION_REMOVE_MEMBER_PROJECTION = v.strictObject({
+export const REMOVE_MATTER_MEMBER_PROJECTION = v.strictObject({
   removed: v.literal(true),
   id: passthroughId(),
 });
 
-export const MANAGE_ORGANIZATION_SETTINGS_PROJECTION = v.strictObject({
+export const UPDATE_ORGANIZATION_SETTINGS_PROJECTION = v.strictObject({
   managedAIResidency: v.optional(v.picklist(MANAGED_AI_RESIDENCIES)),
   matterNumberPattern: v.optional(v.string()),
   matterNumberPadding: v.optional(v.number()),
+  matterNumberingEnabled: v.optional(v.boolean()),
   promptCachingEnabled: v.optional(v.boolean()),
   documentProcessingMode: v.optional(v.string()),
   memoryExtractionEnabled: v.optional(v.boolean()),
@@ -2624,12 +2654,6 @@ export const MANAGE_ORGANIZATION_SETTINGS_PROJECTION = v.strictObject({
   timeNarrativeRequired: v.optional(v.boolean()),
   timeZone: v.optional(v.nullable(v.string())),
 });
-
-export const MANAGE_ORGANIZATION_PROJECTION = v.union([
-  projectionBranch(MANAGE_ORGANIZATION_ADD_MEMBER_PROJECTION),
-  projectionBranch(MANAGE_ORGANIZATION_REMOVE_MEMBER_PROJECTION),
-  projectionBranch(MANAGE_ORGANIZATION_SETTINGS_PROJECTION),
-]);
 
 /**
  * set_practice_jurisdictions returns `{ practiceJurisdictions }`: country

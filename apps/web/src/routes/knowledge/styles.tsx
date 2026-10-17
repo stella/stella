@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useFormatter, useTranslations } from "use-intl";
 
+import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
 import { Button } from "@stll/ui/button";
 import { DestructiveConfirmDialog } from "@stll/ui/destructive-confirm-dialog";
 import {
@@ -490,6 +491,7 @@ const StyleSetFormDialog = ({
             <span className="text-sm font-medium">{t("common.name")}</span>
             <Input
               autoFocus
+              maxLength={DEFAULT_VARCHAR_MAX_LENGTH}
               onChange={(event) => setName(event.target.value)}
               value={name}
             />

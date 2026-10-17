@@ -4,6 +4,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
+import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
 import type { DirectiveRange } from "@stll/folio-react";
 import { isClauseSlotName } from "@stll/template-conditions";
 import { Button } from "@stll/ui/button";
@@ -1655,6 +1656,7 @@ const SaveRecipeDialog = ({
             <Input
               autoFocus
               id="recipe-name"
+              maxLength={DEFAULT_VARCHAR_MAX_LENGTH}
               onChange={(e) => setName(e.currentTarget.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {

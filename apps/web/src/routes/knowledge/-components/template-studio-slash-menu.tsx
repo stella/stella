@@ -123,7 +123,7 @@ export const TemplateStudioSlashMenu = ({
           </PreviewPane>
         }
       >
-        <div className="max-h-[min(18rem,60vh)] min-h-0 w-56 overflow-y-auto p-1">
+        <div className="max-h-[min(18rem,60dvh)] min-h-0 w-56 overflow-y-auto p-1">
           {rows.items.length === 0 && (
             <p className="text-muted-foreground px-2 py-1.5 text-xs">{empty}</p>
           )}
