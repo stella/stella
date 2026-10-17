@@ -354,11 +354,7 @@ export const delegatedGeneratorIds = (value: string | undefined) => {
   }
   for (const id of parsed.value) {
     const generator = GENERATORS.find((candidate) => candidate.id === id);
-    if (
-      generator === undefined ||
-      generator.check === null ||
-      generator.checkedBy === undefined
-    ) {
+    if (generator?.checkedBy === undefined || generator.check === null) {
       panic(`Generator ${id} has no check delegated to another CI step`);
     }
   }
@@ -372,7 +368,7 @@ const guardB = async () => {
       return checkGenerator(generator);
     }
     console.log(
-      `Skipping ${generator.id}: checked in this run by "${generator.checkedBy}"`,
+      `Skipping ${generator.id}: checked in this run by "${String(generator.checkedBy)}"`,
     );
     return 0;
   });

@@ -261,7 +261,7 @@ test("Guard B delegates the WebAssembly check exactly in runs whose drift job bu
   const env = step?.["env"];
   const delegation = isRecord(env) ? env[DELEGATED_CHECKS_ENV] : undefined;
   if (typeof delegation !== "string") {
-    return panic(`Guard B step has no ${DELEGATED_CHECKS_ENV}`);
+    panic(`Guard B step has no ${DELEGATED_CHECKS_ENV}`);
   }
   const ownerOf = (id: string) => {
     const { checkedBy } = generator(id);
@@ -296,7 +296,7 @@ test("Guard B delegates the WebAssembly check exactly in runs whose drift job bu
     }
     const value = evaluate(delegation, context);
     if (typeof value !== "string") {
-      return panic(`${DELEGATED_CHECKS_ENV} is not a string`);
+      panic(`${DELEGATED_CHECKS_ENV} is not a string`);
     }
     const delegated = delegatedGeneratorIds(value);
     for (const id of delegated) {
