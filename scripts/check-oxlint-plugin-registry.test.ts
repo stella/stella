@@ -12,11 +12,76 @@ import {
   NON_PLUGIN_MODULES,
   redeclaredSharedHelpers,
   ruleNamesFromSource,
+  newGuardRolloutErrors,
 } from "./check-oxlint-plugin-registry.ts";
+import { GUARD_ROLLOUTS } from "./guard-rollout-policy.ts";
 
 const temporaryDirectories: string[] = [];
 const TYPEBOX_UNSAFE_RULE_ID =
   "no-unreviewed-typebox-unsafe/no-unreviewed-typebox-unsafe";
+
+test("a new rule must ship a registered repair or dated changed-lines scope", () => {
+  const rule = "no-raw-path-relative/no-raw-path-relative";
+  const options = { rules: [rule], now: new Date("2026-10-13T00:00:00.000Z") };
+  expect(newGuardRolloutErrors({ ...options, rollouts: [] })).toHaveLength(1);
+  expect(
+    newGuardRolloutErrors({ ...options, rollouts: GUARD_ROLLOUTS }),
+  ).toEqual([]);
+  expect(
+    newGuardRolloutErrors({
+      ...options,
+      rollouts: [{ id: "path", rules: [rule], type: "full", check: [] }],
+    }),
+  ).toHaveLength(1);
+  expect(
+    newGuardRolloutErrors({
+      ...options,
+      rollouts: [
+        {
+          id: "path",
+          rules: [rule],
+          type: "autofix",
+          generator: "unknown",
+          check: [],
+        },
+      ],
+    }),
+  ).toHaveLength(1);
+  expect(
+    newGuardRolloutErrors({
+      ...options,
+      rollouts: [
+        {
+          id: "path",
+          rules: [rule],
+          type: "autofix",
+          generator: "cloud-setup",
+          check: [],
+        },
+      ],
+    }),
+  ).toEqual([]);
+  for (const expiresAt of [
+    "invalid",
+    "2026-10-13T00:00:00.000Z",
+    "2026-10-20T00:00:00.001Z",
+  ]) {
+    expect(
+      newGuardRolloutErrors({
+        ...options,
+        rollouts: [
+          {
+            id: "path",
+            rules: [rule],
+            type: "changed-lines",
+            expiresAt,
+            check: [],
+          },
+        ],
+      }),
+    ).toHaveLength(1);
+  }
+});
 
 describe("plugin rule census", () => {
   test("keeps shared rule data modules out of the plugin census", () => {

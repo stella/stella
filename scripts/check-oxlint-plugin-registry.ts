@@ -1,8 +1,12 @@
+import { panic } from "better-result";
+import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
 import oxlintConfig from "../oxlint.config.ts";
+import { GENERATORS } from "./generated-files";
+import { GUARD_ROLLOUTS, type GuardRollout } from "./guard-rollout-policy.ts";
 import { readScopes } from "./oxlint-config-scopes.ts";
 import { severityOf } from "./oxlint-effective-config.ts";
 import { parseSource } from "./parse-memo.ts";
@@ -233,6 +237,72 @@ const helperNames = sharedHelperNames(
   readFileSync(path.join(PLUGIN_DIRECTORY, "utils.ts"), "utf-8"),
 );
 
+type NewGuardRolloutOptions = {
+  rules: readonly string[];
+  rollouts: readonly GuardRollout[];
+  now?: Date;
+};
+
+export const newGuardRolloutErrors = ({
+  rules,
+  rollouts,
+  now = new Date(),
+}: NewGuardRolloutOptions): string[] =>
+  rules.flatMap((rule) => {
+    const rollout = rollouts.find((entry) => entry.rules?.includes(rule));
+    if (
+      rollout?.type === "changed-lines" &&
+      Date.parse(rollout.expiresAt) > now.getTime() &&
+      Date.parse(rollout.expiresAt) <= now.getTime() + 7 * 86_400_000
+    ) {
+      return [];
+    }
+    if (
+      rollout?.type === "autofix" &&
+      GENERATORS.some(({ id, autofix }) => id === rollout.generator && autofix)
+    ) {
+      return [];
+    }
+    return [
+      `${rule}: new guards require a registered PR Autofix generator or a dated changed-lines rollout`,
+    ];
+  });
+
+const checkNewGuardRollouts = (): string[] => {
+  const base = execFileSync("git", ["merge-base", "origin/main", "HEAD"], {
+    encoding: "utf-8",
+  }).trim();
+  const changed = new Set(
+    execFileSync("git", ["diff", "--name-only", base, "--", PLUGIN_DIRECTORY], {
+      encoding: "utf-8",
+    })
+      .trim()
+      .split("\n"),
+  );
+  const addedRules: string[] = [];
+  for (const file of pluginFiles) {
+    const filename = `${PLUGIN_DIRECTORY}/${file}`;
+    if (!changed.has(filename)) {
+      continue;
+    }
+    const previous = spawnSync("git", ["show", `${base}:${filename}`], {
+      encoding: "utf-8",
+    });
+    if (previous.status !== 0 && previous.status !== 128) {
+      panic(`Cannot read guard baseline: ${filename}`);
+    }
+    const oldRules = new Set(
+      ruleNamesFromSource(previous.status === 0 ? previous.stdout : ""),
+    );
+    for (const rule of ruleNamesFromSource(readFileSync(filename, "utf-8"))) {
+      if (!oldRules.has(rule)) {
+        addedRules.push(`${path.basename(file, ".ts")}/${rule}`);
+      }
+    }
+  }
+  return newGuardRolloutErrors({ rules: addedRules, rollouts: GUARD_ROLLOUTS });
+};
+
 // A case the rule must accept, checked line by line by
 // scripts/check-oxlint-fixture-counts.ts.
 export const fixtureHasCleanCase = (source: string, ruleId: string): boolean =>
@@ -335,6 +405,7 @@ for (const match of readme.matchAll(/\]\(\.\/(?<file>[a-z0-9-]+\.ts)\)/gu)) {
 }
 
 if (import.meta.main) {
+  errors.push(...checkNewGuardRollouts());
   if (errors.length > 0) {
     console.error("Oxlint plugin registry check failed:");
     for (const error of errors) {

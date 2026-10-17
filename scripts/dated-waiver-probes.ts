@@ -178,6 +178,62 @@ const removeReleaseAgeException = (
   return lines.join("\n");
 };
 
+const removeGuardRollout = (source: string, entry: DatedWaiver): string => {
+  const ast = parseOwner(source, entry.source);
+  const matches: ts.ObjectLiteralExpression[] = [];
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isObjectLiteralExpression(node) &&
+      node.properties.some(
+        (property) =>
+          ts.isPropertyAssignment(property) &&
+          property.name.getText(ast) === "id" &&
+          ts.isStringLiteral(property.initializer) &&
+          property.initializer.text === entry.id,
+      )
+    ) {
+      matches.push(node);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(ast);
+  const target = matches.at(0);
+  if (matches.length !== 1 || !target) {
+    panic(`Guard rollout anchor is not unique: ${entry.id}`);
+  }
+  const properties = target.properties.filter(ts.isPropertyAssignment);
+  const scope = properties.find(
+    (property) => property.name.getText(ast) === "type",
+  );
+  const expiry = properties.find(
+    (property) => property.name.getText(ast) === "expiresAt",
+  );
+  if (
+    !scope ||
+    !ts.isStringLiteral(scope.initializer) ||
+    scope.initializer.text !== "changed-lines" ||
+    !expiry ||
+    !ts.isStringLiteral(expiry.initializer) ||
+    expiry.initializer.text !== entry.expiresAt
+  ) {
+    panic(`Guard rollout scope or expiry changed: ${entry.id}`);
+  }
+  // Apply rightmost edits first so each offset still refers to the owner AST.
+  let updated = source;
+  for (const node of [scope.initializer, expiry].toSorted(
+    (a, b) => b.pos - a.pos,
+  )) {
+    updated =
+      node === expiry
+        ? removeNode(updated, ast, node)
+        : `${updated.slice(0, node.getStart(ast))}"full"${updated.slice(
+            node.end,
+          )}`;
+  }
+  parseOwner(updated, entry.source);
+  return updated;
+};
+
 export const removeWaiver = (
   entry: DatedWaiver,
   read: (file: string) => string,
@@ -185,6 +241,9 @@ export const removeWaiver = (
   const before = read(entry.source);
   let after: string;
   switch (entry.kind) {
+    case "guard-rollout":
+      after = removeGuardRollout(before, entry);
+      break;
     case "no-llms-txt":
       after = removeDocumentation(before, entry);
       break;
