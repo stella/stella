@@ -29,6 +29,34 @@ describe(RULE, () => {
     ).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
   });
 
+  test("rejects policy and row-level security DDL, and calls to declared DDL functions", async () => {
+    expect(
+      await lint(
+        [
+          'await connection.execute(`DROP POLICY IF EXISTS "p" ON public."t"`);',
+          `await connection.execute(\`CREATE POLICY p ON ${slot("table")} USING (true)\`);`,
+          "await connection.execute('alter policy p on t using (false)');",
+          'await connection.execute(`ALTER TABLE "t" ENABLE ROW LEVEL SECURITY`);',
+          `const force = \`${slot("prefix")} FORCE ROW LEVEL SECURITY\`;`,
+          'await connection.execute("SELECT public.entity_feature_gate_finish()");',
+          "const call = `SELECT entity_feature_gate_finish ()`;",
+        ].join("\n"),
+      ),
+    ).toEqual([1, 2, 3, 4, 5, 6, 7]);
+  });
+
+  test("names a declared DDL function without calling it, and policy prose, freely", async () => {
+    expect(
+      await lint(
+        [
+          "await connection.query(\"SELECT to_regproc('public.entity_feature_gate_finish') IS NOT NULL\");",
+          'const reason = "the policy replacement waits for its table";',
+          "await connection.query(\"SELECT qual FROM pg_policies WHERE policyname = 'p'\");",
+        ].join("\n"),
+      ),
+    ).toEqual([]);
+  });
+
   test("a keyword split by an interpolation or a comment still reads whole", async () => {
     expect(
       await lint(

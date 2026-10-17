@@ -2,9 +2,11 @@
 //
 // The online migration phase runs on a session with a one-second
 // `lock_timeout`. A statement that waits for a table lock (an index build,
-// drop or reindex, ALTER TABLE or ALTER INDEX, VALIDATE CONSTRAINT, LOCK
-// TABLE, ANALYZE) can wait longer than that on a busy table, and run there
-// directly it fails the migrate run. `apps/api/src/db/online-ddl.ts` builds
+// drop or reindex, ALTER TABLE or ALTER INDEX, row-level security and policy
+// DDL, VALIDATE CONSTRAINT, LOCK TABLE, ANALYZE, or a call to a database
+// function declared in `apps/api/src/db/online-ddl-functions.ts` as running
+// such DDL in its body) can wait longer than that on a busy table, and run
+// there directly it fails the migrate run. `apps/api/src/db/online-ddl.ts` builds
 // each such statement as an opaque value that only its gate runs, deferring
 // the phase instead. This rule keeps the SQL text out of every other module,
 // so the type is the only way to write one:
@@ -26,6 +28,7 @@
 
 import { eslintCompatPlugin, type Node } from "@oxlint/plugins";
 
+import { DDL_FUNCTION_NAMES } from "../apps/api/src/db/online-ddl-functions.ts";
 import { canonicalModuleId } from "./module-id.ts";
 import {
   getPropertyName,
@@ -53,8 +56,14 @@ const LOCK_TAKING_SQL = [
   /\bREINDEX\b/u,
   /\balter\s+(?:table|index)\b/iu,
   /\block\s+table\b/iu,
+  /\b(?:create|alter|drop)\s+policy\b/iu,
+  /\b(?:enable|force)\s+row\s+level\s+security\b/iu,
   /\bvalidate\s+constraint\b/iu,
   /^\s*(?:ANALYZE|VACUUM|CLUSTER)\b/u,
+  // A call to a function whose body runs table-locking DDL the type cannot see.
+  ...(DDL_FUNCTION_NAMES.length === 0
+    ? []
+    : [new RegExp(`\\b(?:${DDL_FUNCTION_NAMES.join("|")})\\s*\\(`, "u")]),
 ];
 
 const SQL_COMMENT = /--[^\n]*|\/\*[\S\s]*?\*\//gu;
@@ -132,7 +141,7 @@ export default eslintCompatPlugin({
         type: "problem",
         messages: {
           lockTakingSql:
-            "Build table-locking SQL (index builds and drops, ALTER TABLE/INDEX, VALIDATE CONSTRAINT, explicit table locks, ANALYZE) with the builders in apps/api/src/db/online-ddl.ts and run it through its gate: the online phase's session has a one-second lock budget, and only the gate defers a busy table instead of failing the migrate run.",
+            "Build table-locking SQL (index builds and drops, ALTER TABLE/INDEX, policy and row-level security DDL, VALIDATE CONSTRAINT, explicit table locks, ANALYZE, calls to the functions declared in online-ddl-functions.ts) with the builders in apps/api/src/db/online-ddl.ts and run it through its gate: the online phase's session has a one-second lock budget, and only the gate defers a busy table instead of failing the migrate run.",
           declaredBuildRead:
             "Only apps/api/src/db/online-ddl.ts reads an index declaration's createSql; pass the declaration to createIndexConcurrently.",
           gateOpener:
