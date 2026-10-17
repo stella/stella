@@ -741,7 +741,13 @@ const processOnlineMigrations = async (
       return cutovers;
     }
     if (mode.operation === "repair") {
-      await retireReplacedIndexAt(connection, mode.timing);
+      const retirements = await retireReplacedIndexAt({
+        connection,
+        repair: mode,
+      });
+      if (retirements.type === "deferred") {
+        return retirements;
+      }
     }
     await processOnlineRepairAt({
       connection,
@@ -945,14 +951,20 @@ const assertRepairDeployable = (
   }
 };
 
-const retireReplacedIndexAt = async (
-  connection: OnlineMigrationConnection,
-  timing: MigrationTiming,
+type RetireReplacedIndexOptions = {
+  connection: OnlineMigrationConnection;
+  repair: Extract<OnlineMigrationMode, { operation: "repair" }>;
+  offset?: number;
+};
+
+const retireReplacedIndexAt = async ({
+  connection,
+  repair,
   offset = 0,
-): Promise<void> => {
+}: RetireReplacedIndexOptions): Promise<OnlineMigrationOutcome> => {
   const replacement = ONLINE_INDEX_REPLACEMENTS.at(offset);
   if (!replacement) {
-    return;
+    return COMPLETE;
   }
 
   const step = {
@@ -960,18 +972,98 @@ const retireReplacedIndexAt = async (
     kind: "replacement_drop",
     name: replacement.legacyName,
   } as const;
-  await timed({
-    timing,
+  const outcome = await timed({
+    timing: repair.timing,
     work: async () => {
       await assertReplacementIndexAt(connection, replacement);
-      await connection.execute(
-        `DROP INDEX CONCURRENTLY IF EXISTS public.${quoteIdentifier(replacement.legacyName)}`,
-      );
+      return await dropReplacedIndex({ connection, replacement, repair });
     },
-    describe: () => ({ ...step, outcome: "complete" }),
+    describe: ({ type }) => ({ ...step, outcome: type }),
     failure: { ...step, outcome: "failed" },
   });
-  await retireReplacedIndexAt(connection, timing, offset + 1);
+  if (outcome.type === "deferred") {
+    return outcome;
+  }
+  return await retireReplacedIndexAt({
+    connection,
+    repair,
+    offset: offset + 1,
+  });
+};
+
+const LEGACY_INDEX_PRESENT_SQL = `
+  SELECT 1
+  FROM pg_catalog.pg_class index_relation
+  JOIN pg_catalog.pg_namespace index_namespace
+    ON index_namespace.oid = index_relation.relnamespace
+  WHERE index_namespace.nspname = 'public'
+    AND index_relation.relname = $1
+    AND index_relation.relkind = 'i'
+`;
+
+type DropReplacedIndexOptions = {
+  connection: OnlineMigrationConnection;
+  replacement: OnlineIndexReplacement;
+  repair: Extract<OnlineMigrationMode, { operation: "repair" }>;
+};
+
+/**
+ * A concurrent drop waits for every transaction open on the table, which a
+ * steady stream of writers never lets the short session lock budget win. It
+ * runs under the index gate like a concurrent build: the budget lifted, the
+ * wait watched, and the phase deferred when the database is not healthy.
+ */
+const dropReplacedIndex = async ({
+  connection,
+  replacement: { legacyName, replacementNames },
+  repair: { indexGate, reserveObserver },
+}: DropReplacedIndexOptions): Promise<OnlineMigrationOutcome> => {
+  const present = await connection.query(LEGACY_INDEX_PRESENT_SQL, [
+    legacyName,
+  ]);
+  if (present.length === 0) {
+    return COMPLETE;
+  }
+  const tableName = ONLINE_MIGRATION_INDEXES.find(
+    ({ name }) => name === replacementNames.at(0),
+  )?.tableName;
+  if (!tableName) {
+    return panic(`Legacy index ${legacyName} has no registered replacement`);
+  }
+  const observer = await reserveObserver();
+  try {
+    const runtime = createOnlineIndexGate({
+      ...indexGate,
+      connection,
+      observer,
+      tableName,
+      name: legacyName,
+      kind: "index_repair",
+    });
+    try {
+      const outcome = await runtime.attempt(
+        `DROP INDEX CONCURRENTLY IF EXISTS public.${quoteIdentifier(legacyName)}`,
+      );
+      switch (outcome) {
+        case "done":
+          return COMPLETE;
+        case "retry":
+        case "wait":
+          return {
+            type: "deferred",
+            index: legacyName,
+            retryAfterMs: runtime.retryAfterMs,
+          };
+        default:
+          outcome satisfies never;
+          return panic(`Online index ${legacyName}: unexpected gate outcome`);
+      }
+    } finally {
+      await runtime.close();
+    }
+  } finally {
+    await observer.release();
+  }
 };
 
 const assertReplacementIndexAt = async (

@@ -1390,6 +1390,10 @@ const createHarness = ({
             );
           }
 
+          // Every legacy index a replacement retires is still present.
+          if (query.includes("relkind = 'i'")) {
+            return [{ present: 1 }];
+          }
           const indexName = params.at(1);
           if (typeof indexName !== "string") {
             throw new TypeError("Expected index name query parameter");
