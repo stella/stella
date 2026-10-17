@@ -7,7 +7,9 @@ type ReadBaseLedgerOptions = {
   ledgerRel: string;
   repoRoot: string;
   parseLedger: (text: string, label: string) => string[];
-  normalizeBaseEntries?: (entries: string[], baseCommit: string) => string[];
+  normalizeBaseEntries?:
+    | ((entries: string[], baseCommit: string) => string[])
+    | undefined;
 };
 
 type CompareLedgerMembershipOptions = ReadBaseLedgerOptions & {
