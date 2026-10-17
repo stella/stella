@@ -112,7 +112,11 @@ import type {
   NewDocumentVersionOperation,
 } from "@/api/lib/entities/authorize-document-write";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
-import { CHAT_ONLY_FEATURE_TOOL_DEFINITIONS } from "@/api/lib/feature-access/registry";
+import {
+  CHAT_ONLY_FEATURE_TOOL_DEFINITIONS,
+  FEATURE_REGISTRY,
+  type FeatureRegistry,
+} from "@/api/lib/feature-access/registry";
 import { FIELD_VALUE_WRITE_PERMISSIONS } from "@/api/lib/fields/write-field";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
@@ -1301,6 +1305,11 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     },
   });
   const projected = props.projectToolSet?.(registered) ?? registered;
+  const featureRegistry: FeatureRegistry = FEATURE_REGISTRY;
+  const toolFeatureId = (name: string) =>
+    CHAT_ONLY_FEATURE_TOOL_DEFINITIONS.find(
+      (definition) => definition.name === name,
+    )?.featureId ?? getStaticMcpToolDefinition(name)?.featureId;
   const tools = Object.fromEntries(
     Object.entries(projected).filter(([name]) =>
       isMcpDescriptorFeatureEnabled({
@@ -1312,10 +1321,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
         },
         kind: "tools",
         id: name,
-        featureId:
-          CHAT_ONLY_FEATURE_TOOL_DEFINITIONS.find(
-            (definition) => definition.name === name,
-          )?.featureId ?? getStaticMcpToolDefinition(name)?.featureId,
+        featureId: toolFeatureId(name),
       }),
     ),
   );
@@ -1332,8 +1338,18 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
         : [WEB_SEARCH_TOOL_NAME, FETCH_URL_TOOL_NAME].map(
             (name) => [name, "web research is off for this chat"] as const,
           )),
+      // Only a generally available feature may be named when withheld;
+      // invitation and self-serve tools stay invisible to unenrolled callers.
       ...Object.keys(projected)
-        .filter((name) => !(name in tools))
+        .filter((name) => {
+          const featureId = toolFeatureId(name);
+          return (
+            !(name in tools) &&
+            featureId !== undefined &&
+            Object.hasOwn(featureRegistry, featureId) &&
+            featureRegistry[featureId]?.enrolment === "general-availability"
+          );
+        })
         .map(
           (name) =>
             [name, "unavailable for this caller or deployment"] as const,

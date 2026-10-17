@@ -7,7 +7,7 @@ import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
 import { defineFeatureRegistry } from "@/api/lib/feature-access/prerequisites";
 
 type FeatureDefinition = {
-  // parser-output-unchanged: [us-courtlistener] enrolment kinds gate access only, never parsed decision output
+  // parser-output-unchanged: enrolment kinds gate access only, never parsed decision output
   enrolment: "invitation" | "self-serve" | "general-availability";
   deploymentFeature?: DeploymentFeatureFlag;
   prerequisites?: readonly string[];
