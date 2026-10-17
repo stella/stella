@@ -37,7 +37,10 @@ afterEach(() => {
 });
 afterAll(unregisterDomEnvironment);
 const key = `${HANG_MARKER_PREFIX}test-tab`;
-const seed = (phase: "boot" | "session", overrides = {}) => {
+const seed = (
+  phase: "boot" | "session",
+  overrides: Record<string, unknown> = {},
+) => {
   session.setItem("stella:web-hang-tab", "test-tab");
   local.setItem("stella:inspector-state", "privileged document content");
   local.setItem(
@@ -50,6 +53,7 @@ const seed = (phase: "boot" | "session", overrides = {}) => {
       build: "1.2.3",
       visible: true,
       recovery: false,
+      bootSuspectedAt: phase === "boot" ? 2 : undefined,
       restoredState: [{ key: "stella:inspector-state", bytes: 27 }],
       ...overrides,
     }),
@@ -193,6 +197,32 @@ test("a stale boot reports once and resets layout before restoration, with a vis
     await view.findByText(messages.common.layoutResetAfterProblem),
   ).toBeTruthy();
   expect(JSON.stringify(hangs)).not.toContain("privileged");
+});
+test("a stale boot seen immediately after suspension does not reset layouts", () => {
+  seed("boot", { bootSuspectedAt: undefined });
+  const { detector, hangs, markerKey } = setup();
+  expect(detector.safeMode).toBe(false);
+  expect(local.getItem("stella:inspector-state")).toBe(
+    "privileged document content",
+  );
+  expect(hangs).toHaveLength(1);
+  expect(markerKey).toBeDefined();
+  expect(local.getItem(markerKey ?? "")).toContain(
+    `"bootSuspectedAt":${HANG_STALE_MS + 10}`,
+  );
+});
+test("a boot that remains stuck across the corroborating reload enters safe mode", () => {
+  seed("boot", { bootSuspectedAt: undefined });
+  const firstReload = setup({ now: () => HANG_STALE_MS + 10 });
+  expect(firstReload.detector.safeMode).toBe(false);
+  expect(firstReload.hangs).toHaveLength(1);
+
+  const secondStart = 2 * HANG_STALE_MS + 20;
+  const secondReload = setup({ now: () => secondStart });
+  expect(secondReload.detector.safeMode).toBe(true);
+  expect(secondReload.hangs).toHaveLength(1);
+  expect(secondReload.hangs.at(0)?.phase).toBe("boot");
+  expect(local.getItem("stella:inspector-state")).toBeNull();
 });
 test("a stale session reports without resetting layout", () => {
   seed("session");

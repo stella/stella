@@ -38,6 +38,7 @@ const markerSchema = v.strictObject({
   ),
   visible: v.boolean(),
   recovery: v.boolean(),
+  bootSuspectedAt: v.optional(v.number()),
 });
 type Marker = v.InferOutput<typeof markerSchema>;
 const readHangMarkers = (storage: Storage | null) =>
@@ -227,7 +228,11 @@ export const createWebHangDetector = ({
   const started = now();
   const { bootCandidates, previous } = scanEarlierDocuments(local, started);
   const prior = previous?.marker ?? null;
-  const recovery = prior?.phase === "boot" && !prior.recovery;
+  const staleBoot = prior?.phase === "boot" && !prior.recovery;
+  const recovery =
+    staleBoot &&
+    prior.bootSuspectedAt !== undefined &&
+    started > prior.bootSuspectedAt;
   const restoredState = persistedUiStateFingerprint(local);
   let marker: Marker = {
     routeTemplate: resolveWebRouteTemplate(browser.location.pathname),
@@ -238,6 +243,7 @@ export const createWebHangDetector = ({
     restoredState,
     visible: browser.document.visibilityState === "visible",
     recovery,
+    bootSuspectedAt: staleBoot ? (prior.bootSuspectedAt ?? started) : undefined,
   };
   const storageReady = writeHangMarker({ storage: local, key, marker });
   const suspected = storageReady && prior !== null;
