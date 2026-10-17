@@ -45,9 +45,8 @@
     "apps/api": {
       "entry": [
         "src/server.ts!",
-        // Ignored runtime aggregates import every committed capability shard.
-        "src/mcp/generated/capability-dispatch.ts!",
-        "src/mcp/generated/capability-catalog.ts!",
+        // Generated entrypoints and shards remain visible after hydration.
+        "src/mcp/generated/**/*.ts!",
         // Read by scripts/generate-web-api-types.ts through the compiler.
         "src/eden-contract.ts",
         // Callable receiver boundary for authenticated mail transport hosts.
@@ -70,8 +69,9 @@
         "src/lib/__fixtures__/*.ts",
         "src/handlers/case-law/seed-court-weights.ts",
         "src/handlers/case-law/ingestion/adapters/health-check.ts",
-        "src/handlers/case-law/ingestion/adapters/update-fixtures.ts",
+        "src/tests/case-law/update-adapter-fixtures.ts",
         "src/tests/load/*.ts",
+        "src/tests/exact-mirror-guard.ts",
         // Passed to Bun by the API test command builder.
         "src/tests/publisher-gate-preload.ts",
         "drizzle.config.ts",
@@ -210,8 +210,13 @@
       "entry": [
         "src/i18n-check.ts",
         "src/i18n-typegen.ts",
-        "src/dev-postgres.ts"
-      ]
+        "src/dev-postgres.ts",
+        // Test fixture processes are spawned by path from the tests.
+        "src/test-fixtures/*.ts"
+      ],
+      // generated-artifact-format.ts runs the oxfmt binary as a process, which
+      // knip cannot see; filtered installs need it declared here.
+      "ignoreDependencies": ["oxfmt"]
     },
     // The three `exports` entry points are derived from package.json, so
     // listing them here only earns a redundancy hint. These are the entries
@@ -225,6 +230,14 @@
     },
     "packages/template-conditions": {
       "entry": ["src/index.ts", "src/**/*.test.ts"]
+    },
+    "packages/test-kit": {
+      "entry": [
+        "src/index.ts",
+        "src/db-clock.ts",
+        "src/forbid-network.ts",
+        "src/**/*.test.ts"
+      ]
     },
     "packages/typescript-config": {
       "entry": ["*.json", "**/*.test.ts"]

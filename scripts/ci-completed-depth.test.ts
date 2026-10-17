@@ -175,7 +175,9 @@ type LookupOptions = {
 const decide = async ({
   depth = "full",
   profile = "normal-v1",
-  action = "labeled",
+  // A code-run event that may reuse evidence; metadata events never start
+  // suites (see the metadata test below).
+  action = "reopened",
   event = "pull_request",
   artifacts = [artifact(depth, profile)],
   failure = false,
@@ -316,11 +318,15 @@ test("unchanged-head events reuse only the exact completed depth", async () => {
       expect(outputs.get("completed_run_id")).toBe("99");
       expect(requests).toHaveLength(3);
       const opposite = depth === "fast" ? "full" : "fast";
+      // A metadata event never starts suites; the code run owns them.
+      const metadata = ["labeled", "unlabeled", "auto_merge_enabled"].includes(
+        action,
+      );
       expect(
         (
           await decide({ action, depth, artifacts: [artifact(opposite)] })
         ).outputs.get("run_required"),
-      ).toBe("true");
+      ).toBe(metadata ? "false" : "true");
     }
   }
 });
@@ -1236,3 +1242,11 @@ test("thin groups require queued code checks regardless of normal PR completion"
     }
   }
 }, 35_000);
+
+test("a metadata event without completed evidence starts no suites", async () => {
+  for (const action of ["labeled", "unlabeled", "auto_merge_enabled"]) {
+    const { outputs } = await decide({ action, artifacts: [] });
+    expect(outputs.get("run_required"), action).toBe("false");
+    expect(outputs.get("metadata_only"), action).toBe("true");
+  }
+});

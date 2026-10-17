@@ -11,9 +11,10 @@ import {
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { segmentDecision } from "@/api/handlers/case-law/ingestion/segmenter";
 import type { SafeId } from "@/api/lib/branded-types";
+import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
 import {
-  pgPayloadCarriesDocument,
-  rowHoldsDocument,
+  pgPayloadCarriesDocumentFor,
+  rowHoldsDocumentFor,
 } from "@/api/lib/case-law/stored-payload";
 import type { CorpusStorageMode } from "@/api/lib/corpus-storage-mode";
 import {
@@ -102,10 +103,13 @@ export const settleCaseLawCorpusMirrorTx = async ({
         isNull(caseLawDecisions.redactedAt),
         mirrorCarriesDocument
           ? undefined
-          : sql`NOT ${pgPayloadCarriesDocument}`,
+          : sql`NOT ${pgPayloadCarriesDocumentFor(caseLawDecisions)}`,
       ),
     )
     .returning({ id: caseLawDecisions.id });
+  if (settled.length > 0) {
+    await runDecisionWriteExtension(tx, decisionId);
+  }
   return settled.length > 0;
 };
 
@@ -217,7 +221,7 @@ export const hasStoredDocument = async (
 ): Promise<boolean> => {
   const [row] = await scopedDb((tx) =>
     tx
-      .select({ holdsDocument: rowHoldsDocument })
+      .select({ holdsDocument: rowHoldsDocumentFor(caseLawDecisions) })
       .from(caseLawDecisions)
       .where(eq(caseLawDecisions.id, decisionId))
       .limit(1),

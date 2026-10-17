@@ -542,29 +542,38 @@ type ConcurrencyContext = {
   event_name: string;
   ref: string;
   run_id: number;
+  inputs?: { base_ref?: string };
   event: {
+    action?: string;
     pull_request?: { number: number; head: { sha: string } };
     label?: { name: string };
   };
 };
-const groupFor = async (file: string, github: ConcurrencyContext) => {
+const concurrencyValueFor = async (
+  file: string,
+  key: "group" | "cancel-in-progress",
+  github: ConcurrencyContext,
+) => {
   const workflow: unknown = Bun.YAML.parse(
     await Bun.file(new URL(file, WORKFLOWS_URL)).text(),
   );
   if (!isRecord(workflow) || !isRecord(workflow["concurrency"])) {
     throw new Error("Missing concurrency");
   }
-  const group = workflow["concurrency"]["group"];
-  if (typeof group !== "string") {
-    throw new TypeError("Missing group");
+  const value = workflow["concurrency"][key];
+  if (typeof value !== "string") {
+    return value;
   }
   // These group expressions use the same short-circuit/string operations
   // as JavaScript. Execute the actual file, rather than a copied key.
-  return group.replace(/\$\{\{(.*?)\}\}/gu, (_match, expression: string) =>
+  return value.replace(/\$\{\{(.*?)\}\}/gu, (_match, expression: string) =>
     String(
       new Script(expression).runInNewContext({
         github,
-        inputs: {},
+        inputs: { base_ref: github.inputs?.base_ref ?? "" },
+        contains: (members: readonly string[], candidate: string) =>
+          members.includes(candidate),
+        fromJSON: (serialized: string) => JSON.parse(serialized),
         format: (template: string, ...values: (string | number)[]) =>
           template.replace(/\{(\d+)\}/gu, (_placeholder, index: string) =>
             String(values.at(Number(index)) ?? ""),
@@ -573,6 +582,8 @@ const groupFor = async (file: string, github: ConcurrencyContext) => {
     ),
   );
 };
+const groupFor = async (file: string, github: ConcurrencyContext) =>
+  concurrencyValueFor(file, "group", github);
 const recording = {
   workflow: "Record network baseline",
   event_name: "pull_request",
@@ -623,6 +634,57 @@ test("unrelated labels cannot supersede baseline recording requests", async () =
   );
 });
 
+test("unrelated flake-gate labels use an isolated non-cancelling group", async () => {
+  const file = "flake-gate.yml";
+  const requested = {
+    ...recording,
+    workflow: "Changed-test flake report",
+    inputs: { base_ref: "" },
+    event: {
+      ...recording.event,
+      action: "labeled",
+      label: { name: "flake-gate" },
+    },
+  };
+  const reportGroup = await groupFor(file, requested);
+  expect(
+    await groupFor(file, {
+      ...requested,
+      event: { ...requested.event, action: "synchronize" },
+    }),
+  ).toBe(reportGroup);
+
+  const unrelated = {
+    ...requested,
+    event: { ...requested.event, label: { name: "documentation" } },
+  };
+  expect(await groupFor(file, unrelated)).not.toBe(reportGroup);
+  expect(await concurrencyValueFor(file, "cancel-in-progress", unrelated)).toBe(
+    "false",
+  );
+  expect(await concurrencyValueFor(file, "cancel-in-progress", requested)).toBe(
+    "true",
+  );
+
+  const reusableCall = {
+    ...requested,
+    run_id: 44,
+    event: {
+      pull_request: requested.event.pull_request,
+      action: "opened",
+    },
+    inputs: { base_ref: "origin/main" },
+  };
+  const reusableGroup = await groupFor(file, reusableCall);
+  expect(reusableGroup).not.toBe(reportGroup);
+  expect(
+    await groupFor(file, { ...reusableCall, run_id: reusableCall.run_id + 1 }),
+  ).not.toBe(reusableGroup);
+  expect(
+    await concurrencyValueFor(file, "cancel-in-progress", reusableCall),
+  ).toBe("false");
+});
+
 test("manual CI replaces the same branch while PRs and merge groups stay isolated", async () => {
   const file = "ci.yml";
   const dispatch = {
@@ -648,4 +710,51 @@ test("manual CI replaces the same branch while PRs and merge groups stay isolate
   expect(await groupFor(file, { ...merge, run_id: 2 })).not.toBe(
     await groupFor(file, merge),
   );
+});
+
+test("CI metadata events cannot cancel the code run for the same head", async () => {
+  const file = "ci.yml";
+  const codeRun = {
+    ...recording,
+    workflow: "CI Checks",
+    event: { ...recording.event, action: "synchronize" },
+  };
+  const metadataRun = {
+    ...codeRun,
+    event: { ...codeRun.event, action: "labeled" },
+  };
+
+  expect(await groupFor(file, codeRun)).toBe("CI Checks-pr-12");
+  expect(await groupFor(file, metadataRun)).toBe(
+    "CI Checks-pr-12-head-one-meta",
+  );
+  expect(await concurrencyValueFor(file, "cancel-in-progress", codeRun)).toBe(
+    "true",
+  );
+  expect(
+    await concurrencyValueFor(file, "cancel-in-progress", metadataRun),
+  ).toBe("false");
+  expect(
+    await groupFor(file, {
+      ...metadataRun,
+      event: {
+        ...metadataRun.event,
+        pull_request: { number: 12, head: { sha: "head-two" } },
+      },
+    }),
+  ).not.toBe(await groupFor(file, metadataRun));
+  // A draft runs no CI, so ready_for_review is the first code run, and a
+  // prove-fix label changes the suites: both stay in the code-run group.
+  for (const event of [
+    { ...codeRun.event, action: "ready_for_review" },
+    { ...codeRun.event, action: "labeled", label: { name: "prove-fix" } },
+  ]) {
+    expect(await groupFor(file, { ...codeRun, event })).toBe("CI Checks-pr-12");
+    expect(
+      await concurrencyValueFor(file, "cancel-in-progress", {
+        ...codeRun,
+        event,
+      }),
+    ).toBe("true");
+  }
 });

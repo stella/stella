@@ -12,9 +12,11 @@ import { generateCapabilityRuntime } from "../apps/api/scripts/generate-capabili
 import { pinnedParserInputs } from "../packages/catalogue/scripts/pinned-content-facts";
 import { repoRelativePath } from "../packages/portable-path/src/index";
 import { API_TYPECHECK_REGENERATION_COMMANDS } from "../packages/scripts/src/api-typecheck-regenerate";
+import { ciGeneratedFiles } from "../packages/scripts/src/generated-file-inventory";
 import {
   GENERATORS,
   CI_GENERATED_FILES,
+  CI_GENERATED_OUTPUTS,
   allowedOutputs,
   GUARD_A_EXCLUSIONS,
   generatorsForFiles,
@@ -342,7 +344,12 @@ test("capability shard additions are registered and feed CLI generation", () => 
 });
 
 test("derived runtime outputs have one owner and stay ignored when regenerated", () => {
-  for (const id of ["capability-runtime", "cli-runtime"] as const) {
+  for (const id of [
+    "capability-runtime",
+    "cli-runtime",
+    "mcp-app-contracts",
+    "mcp-app-bundles",
+  ] as const) {
     const outputs = generator(id).outputs;
     for (const output of outputs) {
       expect(
@@ -382,18 +389,27 @@ test("capability runtime cache manifests cover every file the producer writes", 
       nodePath.join(catalog, "matters.list.json"),
       JSON.stringify({ id: "matters.list", featureId: "matters" }),
     );
+    await mkdir(nodePath.join(fixture, "apps/api/src/handlers/workspaces"), {
+      recursive: true,
+    });
     await writeFile(
-      nodePath.join(generated, "capability-dispatch/matters.list.ts"),
-      "export const CAPABILITY_DISPATCH = {};\n",
+      nodePath.join(fixture, "apps/api/src/handlers/workspaces/list.ts"),
+      "export default {};\n",
     );
     await generateCapabilityRuntime(pathToFileURL(`${fixture}/`));
+    expect(ciGeneratedFiles(fixture)).toContain(
+      "apps/api/src/mcp/generated/capability-dispatch/matters.list.ts",
+    );
+    expect(
+      await readdir(nodePath.join(generated, "capability-dispatch")),
+    ).toEqual(["matters.list.ts"]);
     const outputs = (await readdir(generated))
       .filter((file) => file.endsWith(".ts"))
       .map((file) => `src/mcp/generated/${file}`)
       .toSorted();
     expect(outputs.length).toBeGreaterThan(0);
     expect(outputs.map((file) => `apps/api/${file}`)).toEqual(
-      generator("capability-runtime").outputs.toSorted(),
+      [...CI_GENERATED_OUTPUTS.capabilityRuntime].toSorted(),
     );
     const config = v.parse(
       v.object({
@@ -411,11 +427,16 @@ test("capability runtime cache manifests cover every file the producer writes", 
       ),
     );
     const assertOutputs = (tasks: typeof config.tasks) => {
+      expect(tasks["@stll/api#generate:capability-runtime"]?.outputs).toContain(
+        "src/mcp/generated/capability-dispatch/**",
+      );
       expect(tasks["@stll/api#typecheck"]?.dependsOn).toContain(
         "typecheck:src",
       );
       expect(
-        tasks["@stll/api#generate:capability-runtime"]?.outputs?.toSorted(),
+        tasks["@stll/api#generate:capability-runtime"]?.outputs
+          ?.filter((output) => !output.includes("*"))
+          .toSorted(),
       ).toEqual(outputs);
       for (const output of outputs) {
         expect(tasks["@stll/api#typecheck:src"]?.dependsOn).toContain(
@@ -899,13 +920,37 @@ test("CI diff path guards stay pinned to manifest outputs", () => {
       .outputs.map((glob) => glob.replace(/\/\*\*$/u, ""))
       .toSorted(),
   );
-  const bundle = ciGeneratedStepRun(
-    "MCP app package bundles and shared assets guard",
+  for (const id of ["mcp-app-contracts", "mcp-app-bundles"] as const) {
+    expect(generator(id).outputKind).toBe("derived");
+    expect(generator(id).check).toEqual([
+      "bun",
+      "scripts/check-mcp-generated-tracking.ts",
+    ]);
+  }
+  const bundle = ciGeneratedStepRun("MCP app derived outputs guard");
+  // Derived outputs are untracked, so a diff would pass on anything: the
+  // guard instead requires every declared output to exist after the build
+  // and runs the tracking check.
+  const declared = (bundle.split("outputs=(\n")[1] ?? "")
+    .split("\n)")[0]
+    ?.split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  expect(declared?.toSorted()).toEqual(
+    [
+      ...generator("mcp-app-contracts").outputs,
+      ...generator("mcp-app-bundles").outputs,
+    ].toSorted(),
   );
-  const bundleOutputs = generator("mcp-app-bundles")
-    .outputs.map((glob) => `"${glob}"`)
-    .join(" ");
-  expect(bundle).toContain(`git diff --exit-code -- ${bundleOutputs}`);
+  expect(bundle).not.toContain("git diff --exit-code");
+  expect(bundle).toContain('test -s "$output"');
+  expect(bundle).toContain("bun scripts/check-mcp-generated-tracking.ts");
+  const preparation = readFileSync(
+    new URL("ci-generated-sources.ts", import.meta.url),
+    "utf-8",
+  );
+  expect(preparation).toContain('from "./check-mcp-generated-tracking"');
+  expect(preparation).toContain("checkMcpGeneratedTracking(");
 });
 
 test("route tree has one derived owner and a cache producer for every consumer", () => {
@@ -959,7 +1004,26 @@ test("route tree has one derived owner and a cache producer for every consumer",
   }
 });
 
-test("the fresh-export proof runs nightly and alone on dispatch", () => {
+test("long optional runs accept dispatch only", () => {
+  for (const file of [
+    "bundle-size-nightly.yml",
+    "nightly-property-test.yml",
+    "nightly-typecheck.yml",
+  ]) {
+    const workflow = v.parse(
+      v.looseObject({ on: v.record(v.string(), v.unknown()) }),
+      Bun.YAML.parse(
+        readFileSync(
+          new URL(`../.github/workflows/${file}`, import.meta.url),
+          "utf-8",
+        ),
+      ),
+    );
+    expect(Object.keys(workflow.on), file).toEqual(["workflow_dispatch"]);
+  }
+});
+
+test("the fresh-export proof runs alone on dispatch", () => {
   const workflow = v.parse(
     v.object({ jobs: v.record(v.string(), v.looseObject({ if: v.string() })) }),
     Bun.YAML.parse(
@@ -970,7 +1034,7 @@ test("the fresh-export proof runs nightly and alone on dispatch", () => {
     ),
   );
   expect(workflow.jobs["fresh-web-sources"]?.if).toBe(
-    `\${{ github.event_name == 'schedule' || inputs.fresh-web }}`,
+    `\${{ inputs.fresh-web }}`,
   );
   for (const [name, job] of Object.entries(workflow.jobs)) {
     if (name === "fresh-web-sources") {

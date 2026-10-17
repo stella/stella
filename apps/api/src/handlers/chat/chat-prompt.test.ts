@@ -12,6 +12,10 @@ import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-pub
 import { sha256Hex as legacyHex } from "@stll/sha256/node";
 
 import type { SafeDb } from "@/api/db/safe-db";
+import type {
+  publishedCaseLawDecisions,
+  caseLawSources,
+} from "@/api/db/schema";
 import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
 import { selectStatuteProvisions } from "@/api/handlers/chat/active-statute-selection.logic";
 import { createChatAttachmentPart } from "@/api/handlers/chat/chat-message-parts";
@@ -24,6 +28,7 @@ import type {
 } from "@/api/lib/case-law-public-read-db";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { DOCX_REVIEW_MARKUP_EXAMPLES } from "@/api/lib/docx-review-markup";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import {
   appendAnonymizedModeHintToChatSafePrompt,
@@ -408,7 +413,20 @@ describe("active decision section", () => {
     fulltext: "Dovolání se zamítá.",
     textS3Key: null,
     source: { descriptor: null },
-  };
+  } satisfies Pick<
+    typeof publishedCaseLawDecisions.$inferSelect,
+    | "id"
+    | "astS3Key"
+    | "caseNumber"
+    | "contentHash"
+    | "country"
+    | "court"
+    | "decisionDate"
+    | "decisionType"
+    | "documentAst"
+    | "fulltext"
+    | "textS3Key"
+  > & { source: Pick<typeof caseLawSources.$inferSelect, "descriptor"> };
 
   /**
    * The public-law corpus reader, which is where a split deployment keeps the
@@ -422,8 +440,7 @@ describe("active decision section", () => {
       fn: (tx: CaseLawPublicReadTransaction) => Promise<T>,
     ): Promise<T> =>
       await fn(
-        // SAFETY: the section runs one relational read off this handle.
-        {
+        asTestRaw<CaseLawPublicReadTransaction>({
           select: () => ({
             from: () => ({
               innerJoin: () => ({
@@ -439,19 +456,14 @@ describe("active decision section", () => {
                   ],
                 }),
               }),
+              leftJoin: () => ({
+                where: () => ({ limit: async () => [row] }),
+              }),
             }),
           }),
-          query: {
-            caseLawDecisions: {
-              findFirst: async () => await Promise.resolve(row),
-            },
-          },
-          // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test handle stands in for a transaction
-        } as unknown as CaseLawPublicReadTransaction,
+        }),
       );
-    // SAFETY: brand-only wrapper; the read never inspects the marker.
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the branded handle carries no behaviour
-    return readDb as unknown as CaseLawPublicReadDb;
+    return asTestRaw<CaseLawPublicReadDb>(readDb);
   };
 
   /** The tenant database holds no corpus row, and must not be asked for one. */

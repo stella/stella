@@ -220,137 +220,138 @@ folio_collab_rooms.seed_state                       text             default,not
 folio_collab_rooms.seed_claimed_by                  text             fk,null           entities.ts:805
 folio_collab_rooms.seed_claimed_at                  timestamptz      null              entities.ts:808
 folio_collab_rooms.seeded_at                        timestamptz      null              entities.ts:809
-folio_collab_rooms.last_activity_at                 timestamptz      null              entities.ts:810
-folio_collab_rooms.created_at                       timestamptz      default,not null  entities.ts:811
-folio_collab_rooms.updated_at                       timestamptz      default,not null  entities.ts:812
+folio_collab_rooms.snapshot_recovered_at            timestamptz      null              entities.ts:812  Set when a refused snapshot was discarded; cleared once the room is seeded again, so the seeding client can tell the user.
+folio_collab_rooms.last_activity_at                 timestamptz      null              entities.ts:813
+folio_collab_rooms.created_at                       timestamptz      default,not null  entities.ts:814
+folio_collab_rooms.updated_at                       timestamptz      default,not null  entities.ts:815
 ```
 
-## folio_collab_room_tokens · `folioCollabRoomTokens` · entities.ts:924
+## folio_collab_room_tokens · `folioCollabRoomTokens` · entities.ts:927
 
 ```text
-folio_collab_room_tokens.{...entityFeatureGateColumns()}  spread                             entities.ts:927
-folio_collab_room_tokens.id                               pUuid            pk,not null       entities.ts:928
-folio_collab_room_tokens.room_id                          safeUuid         not null          entities.ts:929
-folio_collab_room_tokens.workspace_id                     safeWorkspaceId  fk,not null       entities.ts:930
-folio_collab_room_tokens.user_id                          text             fk,not null       entities.ts:933
-folio_collab_room_tokens.token_hash                       varchar          not null          entities.ts:937
-folio_collab_room_tokens.generation                       bigint           not null          entities.ts:938
-folio_collab_room_tokens.permissions                      jsonb            not null          entities.ts:939
-folio_collab_room_tokens.expires_at                       timestamptz      not null          entities.ts:942
-folio_collab_room_tokens.created_at                       timestamptz      default,not null  entities.ts:943
+folio_collab_room_tokens.{...entityFeatureGateColumns()}  spread                             entities.ts:930
+folio_collab_room_tokens.id                               pUuid            pk,not null       entities.ts:931
+folio_collab_room_tokens.room_id                          safeUuid         not null          entities.ts:932
+folio_collab_room_tokens.workspace_id                     safeWorkspaceId  fk,not null       entities.ts:933
+folio_collab_room_tokens.user_id                          text             fk,not null       entities.ts:936
+folio_collab_room_tokens.token_hash                       varchar          not null          entities.ts:940
+folio_collab_room_tokens.generation                       bigint           not null          entities.ts:941
+folio_collab_room_tokens.permissions                      jsonb            not null          entities.ts:942
+folio_collab_room_tokens.expires_at                       timestamptz      not null          entities.ts:945
+folio_collab_room_tokens.created_at                       timestamptz      default,not null  entities.ts:946
 ```
 
-## folio_collab_contributions · `folioCollabContributions` · entities.ts:977
+## folio_collab_contributions · `folioCollabContributions` · entities.ts:980
 
 Contribution rows are capped per room and reset after every publication; deleting the durable room cascades any unpublished remainder.
 
 ```text
-folio_collab_contributions.{...entityFeatureGateColumns()}  spread                             entities.ts:980
-folio_collab_contributions.id                               pUuid            pk,not null       entities.ts:981
-folio_collab_contributions.room_id                          safeUuid         not null          entities.ts:982
-folio_collab_contributions.workspace_id                     safeWorkspaceId  not null          entities.ts:983
-folio_collab_contributions.entity_id                        safeUuid         not null          entities.ts:984
-folio_collab_contributions.user_id                          text             fk,not null       entities.ts:985
-folio_collab_contributions.since_version_id                 safeUuid         not null          entities.ts:989
-folio_collab_contributions.created_at                       timestamptz      default,not null  entities.ts:990
-folio_collab_contributions.updated_at                       timestamptz      default,not null  entities.ts:991
+folio_collab_contributions.{...entityFeatureGateColumns()}  spread                             entities.ts:983
+folio_collab_contributions.id                               pUuid            pk,not null       entities.ts:984
+folio_collab_contributions.room_id                          safeUuid         not null          entities.ts:985
+folio_collab_contributions.workspace_id                     safeWorkspaceId  not null          entities.ts:986
+folio_collab_contributions.entity_id                        safeUuid         not null          entities.ts:987
+folio_collab_contributions.user_id                          text             fk,not null       entities.ts:988
+folio_collab_contributions.since_version_id                 safeUuid         not null          entities.ts:992
+folio_collab_contributions.created_at                       timestamptz      default,not null  entities.ts:993
+folio_collab_contributions.updated_at                       timestamptz      default,not null  entities.ts:994
 ```
 
-## folio_collab_publications · `folioCollabPublications` · entities.ts:1044
+## folio_collab_publications · `folioCollabPublications` · entities.ts:1047
 
 Publications are the durable idempotency ledger for immutable versions.
 
 ```text
-folio_collab_publications.{...entityFeatureGateColumns()}  spread                             entities.ts:1047
-folio_collab_publications.id                               pUuid            pk,not null       entities.ts:1048
-folio_collab_publications.room_id                          safeUuid         not null          entities.ts:1049
-folio_collab_publications.workspace_id                     safeWorkspaceId  not null          entities.ts:1050
-folio_collab_publications.entity_id                        safeUuid         not null          entities.ts:1051
-folio_collab_publications.entity_version_id                safeUuid         not null          entities.ts:1052
-folio_collab_publications.idempotency_key                  varchar          not null          entities.ts:1053
-folio_collab_publications.generation                       bigint           not null          entities.ts:1054
-folio_collab_publications.checkpoint_sha256_hex            varchar          not null          entities.ts:1055
-folio_collab_publications.created_at                       timestamptz      default,not null  entities.ts:1058
+folio_collab_publications.{...entityFeatureGateColumns()}  spread                             entities.ts:1050
+folio_collab_publications.id                               pUuid            pk,not null       entities.ts:1051
+folio_collab_publications.room_id                          safeUuid         not null          entities.ts:1052
+folio_collab_publications.workspace_id                     safeWorkspaceId  not null          entities.ts:1053
+folio_collab_publications.entity_id                        safeUuid         not null          entities.ts:1054
+folio_collab_publications.entity_version_id                safeUuid         not null          entities.ts:1055
+folio_collab_publications.idempotency_key                  varchar          not null          entities.ts:1056
+folio_collab_publications.generation                       bigint           not null          entities.ts:1057
+folio_collab_publications.checkpoint_sha256_hex            varchar          not null          entities.ts:1058
+folio_collab_publications.created_at                       timestamptz      default,not null  entities.ts:1061
 ```
 
-## pending_uploads · `pendingUploads` · entities.ts:1226
+## pending_uploads · `pendingUploads` · entities.ts:1229
 
 ```text
-pending_uploads.id                     pUuid               pk,not null       entities.ts:1229
-pending_uploads.organization_id        safeOrganizationId  not null          entities.ts:1230
-pending_uploads.workspace_id           safeWorkspaceId     fk,not null       entities.ts:1231
-pending_uploads.user_id                text                fk,not null       entities.ts:1234
-pending_uploads.purpose                text                not null          entities.ts:1238
-pending_uploads.purpose_data           jsonb               not null          entities.ts:1239
-pending_uploads.declared_name          varchar             not null          entities.ts:1242
-pending_uploads.declared_mime          varchar             not null          entities.ts:1243
-pending_uploads.declared_size          bigint              not null          entities.ts:1244
-pending_uploads.declared_sha256        varchar             not null          entities.ts:1246  hex; matches `fields.content.sha256Hex` storage shape
-pending_uploads.status                 text                default,not null  entities.ts:1247
-pending_uploads.finalized_result       jsonb               null              entities.ts:1252  Populated on success so retries return the same response shape.
-pending_uploads.reject_reason          text                null              entities.ts:1255
-pending_uploads.rejection_details      jsonb               null              entities.ts:1256
-pending_uploads.claimed_at             timestamptz         null              entities.ts:1260  Set inside the claim transaction.
-pending_uploads.claimed_by_request_id  varchar             null              entities.ts:1261
-pending_uploads.expires_at             timestamptz         not null          entities.ts:1263  `createdAt + 5min`.
-pending_uploads.created_at             timestamptz         default,not null  entities.ts:1264
-pending_uploads.finalized_at           timestamptz         null              entities.ts:1265
+pending_uploads.id                     pUuid               pk,not null       entities.ts:1232
+pending_uploads.organization_id        safeOrganizationId  not null          entities.ts:1233
+pending_uploads.workspace_id           safeWorkspaceId     fk,not null       entities.ts:1234
+pending_uploads.user_id                text                fk,not null       entities.ts:1237
+pending_uploads.purpose                text                not null          entities.ts:1241
+pending_uploads.purpose_data           jsonb               not null          entities.ts:1242
+pending_uploads.declared_name          varchar             not null          entities.ts:1245
+pending_uploads.declared_mime          varchar             not null          entities.ts:1246
+pending_uploads.declared_size          bigint              not null          entities.ts:1247
+pending_uploads.declared_sha256        varchar             not null          entities.ts:1249  hex; matches `fields.content.sha256Hex` storage shape
+pending_uploads.status                 text                default,not null  entities.ts:1250
+pending_uploads.finalized_result       jsonb               null              entities.ts:1255  Populated on success so retries return the same response shape.
+pending_uploads.reject_reason          text                null              entities.ts:1258
+pending_uploads.rejection_details      jsonb               null              entities.ts:1259
+pending_uploads.claimed_at             timestamptz         null              entities.ts:1263  Set inside the claim transaction.
+pending_uploads.claimed_by_request_id  varchar             null              entities.ts:1264
+pending_uploads.expires_at             timestamptz         not null          entities.ts:1266  `createdAt + 5min`.
+pending_uploads.created_at             timestamptz         default,not null  entities.ts:1267
+pending_uploads.finalized_at           timestamptz         null              entities.ts:1268
 ```
 
-## buffer_object_cleanup_intents · `bufferObjectCleanupIntents` · entities.ts:1324 · rls
+## buffer_object_cleanup_intents · `bufferObjectCleanupIntents` · entities.ts:1327 · rls
 
 Durable tombstones for server-generated object writes interrupted by a workspace, organization, or account deletion.
 
 ```text
-buffer_object_cleanup_intents.id               pUuid               pk,not null       entities.ts:1327
-buffer_object_cleanup_intents.organization_id  safeOrganizationId  not null          entities.ts:1328
-buffer_object_cleanup_intents.workspace_id     safeWorkspaceId     null              entities.ts:1329
-buffer_object_cleanup_intents.chat_thread_id   safeUuid            null              entities.ts:1331  Deliberately not a foreign key: the cleanup proof must outlive its chat.
-buffer_object_cleanup_intents.writer_user_id   text                default,null      entities.ts:1334  No FK: a writer must retain settlement authority after its owning workspace, thread, or organization has been removed.
-buffer_object_cleanup_intents.object_key       text                not null          entities.ts:1341
-buffer_object_cleanup_intents.status           text                default,not null  entities.ts:1342
-buffer_object_cleanup_intents.attempt_count    integer             default,not null  entities.ts:1352
-buffer_object_cleanup_intents.next_attempt_at  timestamptz         default,not null  entities.ts:1353
-buffer_object_cleanup_intents.created_at       timestamptz         default,not null  entities.ts:1354
+buffer_object_cleanup_intents.id               pUuid               pk,not null       entities.ts:1330
+buffer_object_cleanup_intents.organization_id  safeOrganizationId  not null          entities.ts:1331
+buffer_object_cleanup_intents.workspace_id     safeWorkspaceId     null              entities.ts:1332
+buffer_object_cleanup_intents.chat_thread_id   safeUuid            null              entities.ts:1334  Deliberately not a foreign key: the cleanup proof must outlive its chat.
+buffer_object_cleanup_intents.writer_user_id   text                default,null      entities.ts:1337  No FK: a writer must retain settlement authority after its owning workspace, thread, or organization has been removed.
+buffer_object_cleanup_intents.object_key       text                not null          entities.ts:1344
+buffer_object_cleanup_intents.status           text                default,not null  entities.ts:1345
+buffer_object_cleanup_intents.attempt_count    integer             default,not null  entities.ts:1355
+buffer_object_cleanup_intents.next_attempt_at  timestamptz         default,not null  entities.ts:1356
+buffer_object_cleanup_intents.created_at       timestamptz         default,not null  entities.ts:1357
 ```
 
-## fields · `fields` · entities.ts:1457
+## fields · `fields` · entities.ts:1460
 
 ```text
-fields.{...entityFeatureGateColumns()}           spread                        entities.ts:1460
-fields.{...entityFeatureWorkspaceGateColumns()}  spread                        entities.ts:1461
-fields.id                                        pUuid            pk,not null  entities.ts:1462
-fields.workspace_id                              safeWorkspaceId  not null     entities.ts:1463
-fields.property_id                               safeUuid         not null     entities.ts:1464
-fields.entity_version_id                         safeUuid         fk,not null  entities.ts:1465
-fields.file_id                                   safeUuid         null         entities.ts:1468
-fields.content                                   jsonb            not null     entities.ts:1469
+fields.{...entityFeatureGateColumns()}           spread                        entities.ts:1463
+fields.{...entityFeatureWorkspaceGateColumns()}  spread                        entities.ts:1464
+fields.id                                        pUuid            pk,not null  entities.ts:1465
+fields.workspace_id                              safeWorkspaceId  not null     entities.ts:1466
+fields.property_id                               safeUuid         not null     entities.ts:1467
+fields.entity_version_id                         safeUuid         fk,not null  entities.ts:1468
+fields.file_id                                   safeUuid         null         entities.ts:1471
+fields.content                                   jsonb            not null     entities.ts:1472
 ```
 
-## cell_metadata · `cellMetadata` · entities.ts:1548
+## cell_metadata · `cellMetadata` · entities.ts:1551
 
 ```text
-cell_metadata.{...entityFeatureGateColumns()}           spread                             entities.ts:1551
-cell_metadata.{...entityFeatureWorkspaceGateColumns()}  spread                             entities.ts:1552
-cell_metadata.workspace_id                              safeWorkspaceId  not null          entities.ts:1553
-cell_metadata.entity_version_id                         safeUuid         fk,not null       entities.ts:1554
-cell_metadata.property_id                               safeUuid         not null          entities.ts:1557
-cell_metadata.metadata                                  jsonb            not null          entities.ts:1558
-cell_metadata.created_by                                text             fk,null           entities.ts:1559
-cell_metadata.updated_by                                text             fk,null           entities.ts:1562
-cell_metadata.created_at                                timestamptz      default,not null  entities.ts:1565
-cell_metadata.updated_at                                timestamptz      default,not null  entities.ts:1566
+cell_metadata.{...entityFeatureGateColumns()}           spread                             entities.ts:1554
+cell_metadata.{...entityFeatureWorkspaceGateColumns()}  spread                             entities.ts:1555
+cell_metadata.workspace_id                              safeWorkspaceId  not null          entities.ts:1556
+cell_metadata.entity_version_id                         safeUuid         fk,not null       entities.ts:1557
+cell_metadata.property_id                               safeUuid         not null          entities.ts:1560
+cell_metadata.metadata                                  jsonb            not null          entities.ts:1561
+cell_metadata.created_by                                text             fk,null           entities.ts:1562
+cell_metadata.updated_by                                text             fk,null           entities.ts:1565
+cell_metadata.created_at                                timestamptz      default,not null  entities.ts:1568
+cell_metadata.updated_at                                timestamptz      default,not null  entities.ts:1569
 ```
 
-## justifications · `justifications` · entities.ts:1595
+## justifications · `justifications` · entities.ts:1598
 
 ```text
-justifications.{...entityFeatureGateColumns()}           spread                                   entities.ts:1598
-justifications.{...entityFeatureWorkspaceGateColumns()}  spread                                   entities.ts:1599
-justifications.id                                        pUuid            pk,not null             entities.ts:1600
-justifications.workspace_id                              safeWorkspaceId  not null                entities.ts:1601
-justifications.field_id                                  safeUuid         not null                entities.ts:1602
-justifications.content                                   jsonb            not null                entities.ts:1603
-justifications.bounding_boxes                            jsonb            null                    entities.ts:1604
-justifications.file_field_ids                            safeUuid         array,default,not null  entities.ts:1605
+justifications.{...entityFeatureGateColumns()}           spread                                   entities.ts:1601
+justifications.{...entityFeatureWorkspaceGateColumns()}  spread                                   entities.ts:1602
+justifications.id                                        pUuid            pk,not null             entities.ts:1603
+justifications.workspace_id                              safeWorkspaceId  not null                entities.ts:1604
+justifications.field_id                                  safeUuid         not null                entities.ts:1605
+justifications.content                                   jsonb            not null                entities.ts:1606
+justifications.bounding_boxes                            jsonb            null                    entities.ts:1607
+justifications.file_field_ids                            safeUuid         array,default,not null  entities.ts:1608
 ```

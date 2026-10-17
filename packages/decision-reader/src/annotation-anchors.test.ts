@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { READER_ANNOTATION_QUOTE_MAX_LENGTH } from "@stll/api-contract/legal-reader-annotations";
+import { assertProperty, propertyConfig } from "@stll/property-testing";
 
 import {
   annotationSegments,
@@ -20,10 +21,13 @@ import type { AnnotationAnchorSource } from "./annotation-anchors";
 const annotationArbitrary = fc.record({
   blockAnchorId: fc.constantFrom("p-1", "p-2", "p-3", "cl_7", "priloha-1"),
   color: fc.constantFrom("yellow", "red", null),
-  endOffset: fc.integer({ min: 1, max: 40 }),
+  endOffset: fc.integer({ min: 1, max: READER_ANNOTATION_QUOTE_MAX_LENGTH }),
   id: fc.uuid(),
   kind: fc.constantFrom("highlight" as const, "comment" as const),
-  startOffset: fc.integer({ min: 0, max: 39 }),
+  startOffset: fc.integer({
+    min: 0,
+    max: READER_ANNOTATION_QUOTE_MAX_LENGTH - 1,
+  }),
   style: fc.constantFrom(
     "highlight" as const,
     "underline" as const,
@@ -34,11 +38,70 @@ const annotationArbitrary = fc.record({
 });
 
 const marksArbitrary = fc.uniqueArray(annotationArbitrary, {
-  maxLength: 8,
   selector: (annotation) => annotation.id,
 });
 
+const answerMarksArbitrary = marksArbitrary.chain((annotations) =>
+  fc
+    .array(fc.boolean(), {
+      minLength: annotations.length,
+      maxLength: annotations.length,
+    })
+    .map((answers) =>
+      annotations.map((annotation, index) => ({
+        ...annotation,
+        activationLabel: answers.at(index)
+          ? `Open answer ${annotation.id}`
+          : undefined,
+      })),
+    ),
+);
+
 describe("annotation anchors", () => {
+  test("overlapping answers retain every activation and the original annotation winner without repeating text", () => {
+    assertProperty(
+      "overlapping answers retain every activation and the original annotation winner without repeating text",
+      fc.property(answerMarksArbitrary, (annotations) => {
+        const segments = annotationSegments(annotations);
+        const normalSegments = annotationSegments(
+          annotations.filter(
+            (annotation) => annotation.activationLabel === undefined,
+          ),
+        );
+        for (let offset = 0; offset < 40; offset += 1) {
+          const covering = annotations.filter(
+            (annotation) =>
+              annotation.startOffset <= offset && annotation.endOffset > offset,
+          );
+          const runs = segments.filter(
+            (segment) => segment.start <= offset && segment.end > offset,
+          );
+          expect(runs.length).toBe(covering.length === 0 ? 0 : 1);
+          const run = runs.at(0);
+          if (run === undefined) {
+            continue;
+          }
+          const expectedNormal = normalSegments.find(
+            (segment) => segment.start <= offset && segment.end > offset,
+          );
+          if (expectedNormal !== undefined) {
+            expect(run.annotation).toBe(expectedNormal.annotation);
+          }
+          const activations = [run.annotation, ...run.overlays]
+            .filter((annotation) => annotation.activationLabel !== undefined)
+            .map((annotation) => annotation.id)
+            .toSorted();
+          expect(activations).toEqual(
+            covering
+              .filter((annotation) => annotation.activationLabel !== undefined)
+              .map((annotation) => annotation.id)
+              .toSorted(),
+          );
+        }
+      }),
+    );
+  });
+
   test("files every anchor under the piece its own mark names", () => {
     fc.assert(
       fc.property(marksArbitrary, (annotations: AnnotationAnchorSource[]) => {
@@ -164,7 +227,7 @@ describe("annotation anchors", () => {
     } as const satisfies AnnotationAnchorSource;
 
     expect(annotationSegments([alone])).toEqual([
-      { annotation: alone, end: 9, start: 0 },
+      { annotation: alone, overlays: [], end: 9, start: 0 },
     ]);
   });
 

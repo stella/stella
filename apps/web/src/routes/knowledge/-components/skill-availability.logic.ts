@@ -1,5 +1,7 @@
 import { panic } from "better-result";
 
+import { toSafeId, type SafeId } from "@/lib/safe-id";
+
 export type SkillScope = "team" | "private";
 
 /**
@@ -52,8 +54,8 @@ export const coerceSkillAvailability = ({
 
 export type SkillBindingBody =
   | Record<string, never>
-  | { boundWorkspaceId: string }
-  | { boundClientId: string };
+  | { boundWorkspaceId: SafeId<"workspace"> }
+  | { boundClientId: SafeId<"contact"> };
 
 /**
  * The binding fields a create request carries, or `null` while the chosen
@@ -72,9 +74,13 @@ export const skillBindingBody = ({
     case "everywhere":
       return {};
     case "matter":
-      return matterId === null ? null : { boundWorkspaceId: matterId };
+      return matterId === null
+        ? null
+        : { boundWorkspaceId: toSafeId<"workspace">(matterId) };
     case "client":
-      return clientId === null ? null : { boundClientId: clientId };
+      return clientId === null
+        ? null
+        : { boundClientId: toSafeId<"contact">(clientId) };
     default:
       availability satisfies never;
       return panic(`Unhandled skill availability: ${String(availability)}`);

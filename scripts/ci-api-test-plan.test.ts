@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 
 import { allApiTests } from "./api-test-impact";
 import { FULL_TEST_JOB_SHARDS } from "./api-test-shard-plan";
+import { selectedTestJobs } from "./ci-affected-selection";
 import { parseApiTestImpact, planCiApiTests } from "./ci-api-test-plan";
 
 const selected = () => ({
@@ -39,7 +40,7 @@ test("pull requests omit idle API runners and keep the shared rest/web runner", 
   ).toEqual({ shard: ["api-1", "api-2", "rest-web"] });
 });
 
-test("dispatches and unreadable scopes retain four shards without invoking the selector", () => {
+test("dispatches and unreadable scopes retain every API shard without invoking the selector", () => {
   for (const [event, scopeUnknown] of [
     ["workflow_dispatch", false],
     ["pull_request", true],
@@ -53,13 +54,7 @@ test("dispatches and unreadable scopes retain four shards without invoking the s
       },
     });
     expect(plan.impact).toEqual(allApiTests());
-    expect(plan.matrix.shard).toEqual([
-      "api-1",
-      "api-2",
-      "api-3",
-      "api-4",
-      "rest-web",
-    ]);
+    expect(plan.matrix.shard).toEqual(["api-1", "api-2", "api-3", "rest-web"]);
   }
 });
 
@@ -112,5 +107,22 @@ test("merge groups select the batch union without narrowing API test files", () 
   ).toEqual(allApiTests());
   expect(
     planCiApiTests({ ...options, scopeUnknown: true }).matrix.shard,
-  ).toHaveLength(5);
+  ).toHaveLength(FULL_TEST_JOB_SHARDS.length);
+});
+
+test("matrix admission follows the executable Turbo test plan", () => {
+  const turboPlan = (packages: readonly string[]) =>
+    JSON.stringify({
+      tasks: packages.map((packageName) => ({
+        package: packageName,
+        task: "test",
+      })),
+    });
+  expect(selectedTestJobs(turboPlan(["@stll/web"]))).toEqual(["rest-web"]);
+  expect(selectedTestJobs(turboPlan(["@stll/api"]))).toEqual([
+    "api-1",
+    "api-2",
+    "api-3",
+  ]);
+  expect(selectedTestJobs(turboPlan([]))).toEqual([]);
 });

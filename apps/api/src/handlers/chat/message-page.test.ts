@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { toChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
+import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import {
   clientMessageFromPageRow,
   decodeMessagePageCursor,
@@ -53,8 +53,7 @@ describe("clientMessageFromPageRow", () => {
         id: MESSAGE_ID,
         role: "assistant",
         revision: 0,
-        content: toChatMessageContent({
-          version: 2,
+        content: toPersistedChatMessageContentV3({
           data: [{ type: "text", content: "Done" }],
           metadata: {
             anonRestorations: {
@@ -113,8 +112,7 @@ describe("clientMessageFromPageRow", () => {
           id: MESSAGE_ID,
           role: "assistant",
           revision,
-          content: toChatMessageContent({
-            version: 2,
+          content: toPersistedChatMessageContentV3({
             data: [{ type: "text", content: "Current answer" }],
           }),
         },

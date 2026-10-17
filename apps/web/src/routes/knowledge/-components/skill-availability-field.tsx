@@ -30,7 +30,7 @@ type SkillAvailabilityFieldProps = {
   client: MatterDraftClient | null;
   matter: MatterOption | null;
   onAvailabilityChange: (next: SkillAvailability) => void;
-  onClientChange: (next: MatterDraftClient) => void;
+  onClientChange: (next: MatterDraftClient | null) => void;
   onMatterChange: (next: MatterOption | null) => void;
   scope: SkillScope;
 };
@@ -126,7 +126,13 @@ export const SkillAvailabilityField = ({
       )}
       {availability === "client" && (
         <div className="flex flex-col gap-2">
-          {client && <SelectedClient client={client} />}
+          {client && (
+            <SelectedClient
+              clearLabel={t("workspaces.parties.removeClient")}
+              client={client}
+              onClear={() => onClientChange(null)}
+            />
+          )}
           <ContactPicker
             onSelect={(contact) =>
               onClientChange({

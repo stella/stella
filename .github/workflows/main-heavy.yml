@@ -44,11 +44,13 @@ jobs:
     permissions:
       contents: read
       statuses: read
+      checks: read
       actions: write
       pull-requests: read
       issues: read
     outputs:
       sha: ${{ steps.ancestor.outputs.sha }}
+      task_cache_producer: ${{ steps.ancestor.outputs.task_cache_producer }}
       proof: ${{ steps.reuse.outputs.proof }}
       main-base: ${{ steps.ancestor.outputs.main-base }}
       run: ${{ steps.reuse.outputs.run || steps.selection.outputs.run }}
@@ -99,6 +101,14 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
           sparse-checkout: scripts
+
+      # Bun runs the release queue history check the health gate needs before
+      # a merge-group receipt may stand in for the heavy statuses.
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .release-proof/package.json
+          no-cache: true
 
       - name: Reuse completed release proof
         id: reuse
@@ -202,8 +212,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_RETRY_SCRIPT: ${{ runner.temp }}/gh-retry.sh
         run: |
-          bash "$RUNNER_TEMP/verify-release-tree-proof.sh" --allow-pr-head "$GITHUB_REPOSITORY" "$SHA" "$SHA" >> "$GITHUB_OUTPUT"
-          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          {
+            bash "$RUNNER_TEMP/verify-release-tree-proof.sh" --allow-pr-head "$GITHUB_REPOSITORY" "$SHA" "$SHA"
+            echo "sha=$SHA"
+            echo "task_cache_producer=validated-main"
+          } >> "$GITHUB_OUTPUT"
 
   suites:
     if: needs.validate.result == 'success' && needs.validate.outputs.run == 'true'
@@ -218,10 +231,14 @@ jobs:
       checks: read
       pull-requests: read
       packages: read
+      # Declared by ci-plan's merge-queue yield, which runs only on
+      # pull_request events and never here.
+      statuses: write
     with:
       depth: full
       heavy_only: true
       sha: ${{ needs.validate.outputs.sha }}
+      task_cache_producer: ${{ needs.validate.outputs.task_cache_producer }}
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}

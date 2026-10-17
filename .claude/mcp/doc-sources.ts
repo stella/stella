@@ -376,7 +376,6 @@ export const DOC_SOURCE_EXCLUSIONS = [
   "ssf",
   "tailwind-merge",
   "tailwindcss",
-  "thinking-orbs",
   "tw-animate-css",
   "typescript",
   "unified",
@@ -505,6 +504,14 @@ export const DOC_SOURCE_EXCLUSIONS = [
       explanation:
         "The canonical repository has no llms.txt (raw endpoint returns 404). Use the authentication API documentation at https://github.com/postalsys/mailauth directly.",
       expiresAt: "2026-10-27T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
+      checkedAt: "2026-10-14T04:36:26.734Z",
+      dependency: "linkify-it",
+      explanation:
+        "The canonical raw repository and documentation-site llms.txt endpoints return 404. Use the API reference at https://markdown-it.github.io/linkify-it/ and repository documentation at https://github.com/markdown-it/linkify-it directly.",
+      expiresAt: "2026-11-13T04:36:26.734Z",
       reason: "no-llms-txt",
     },
     {

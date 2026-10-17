@@ -48,6 +48,8 @@ import type { SkillMetadata } from "@stll/skills/frontmatter";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
   legalReaderAnnotations,
+  caseLawSources,
+  publishedCaseLawDecisions,
   entities,
   entityVersions,
   fields,
@@ -145,8 +147,8 @@ import { allowsDerivedAi } from "@/api/lib/legal-search/corpus-source";
 import { readCorpusPayloadOrFallback } from "@/api/lib/legal-search/corpus-storage";
 import { canonicalLegislationTextSource } from "@/api/lib/legal-search/legislation-canonical-source";
 import {
-  publishedLegislationDocument,
-  redistributableLegislationVersion,
+  publishedLegislationDocumentFor,
+  redistributableLegislationVersionFor,
 } from "@/api/lib/legal-search/legislation-redistribution";
 import {
   readVersionBlocks,
@@ -2146,20 +2148,6 @@ const ACTIVE_DECISION_TEXT_READ_STEP = "chatPrompt.activeDecisionText";
  * document itself is resolved through. A canonical row's payload columns are
  * trimmed and the corpus objects are the document.
  */
-const ACTIVE_DECISION_COLUMNS = {
-  id: true,
-  astS3Key: true,
-  caseNumber: true,
-  contentHash: true,
-  country: true,
-  court: true,
-  decisionDate: true,
-  decisionType: true,
-  documentAst: true,
-  fulltext: true,
-  textS3Key: true,
-} as const;
-
 type ActiveDecisionAstPointers = {
   astS3Key: string | null;
   contentHash: string | null;
@@ -2296,13 +2284,36 @@ export const buildActiveDecisionSection = async ({
         try: async () => {
           const row = await withRedistributableSubject(
             caseLawDb,
+            "search",
             { kind: "id", id: activeDecision.decisionId },
-            async ({ id, tx }) =>
-              await tx.query.caseLawDecisions.findFirst({
-                where: { id: { eq: id } },
-                columns: ACTIVE_DECISION_COLUMNS,
-                with: { source: { columns: { descriptor: true } } },
-              }),
+            async ({ id, tx }) => {
+              const [decisionRow] = await tx
+                .select({
+                  id: publishedCaseLawDecisions.id,
+                  astS3Key: publishedCaseLawDecisions.astS3Key,
+                  caseNumber: publishedCaseLawDecisions.caseNumber,
+                  contentHash: publishedCaseLawDecisions.contentHash,
+                  country: publishedCaseLawDecisions.country,
+                  court: publishedCaseLawDecisions.court,
+                  decisionDate: publishedCaseLawDecisions.decisionDate,
+                  decisionType: publishedCaseLawDecisions.decisionType,
+                  documentAst: publishedCaseLawDecisions.documentAst,
+                  fulltext: publishedCaseLawDecisions.fulltext,
+                  textS3Key: publishedCaseLawDecisions.textS3Key,
+                  source: {
+                    id: caseLawSources.id,
+                    descriptor: caseLawSources.descriptor,
+                  },
+                })
+                .from(publishedCaseLawDecisions)
+                .leftJoin(
+                  caseLawSources,
+                  eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
+                )
+                .where(eq(publishedCaseLawDecisions.id, id))
+                .limit(1);
+              return decisionRow;
+            },
           );
           if (row === null || row === undefined) {
             return null;
@@ -2601,7 +2612,7 @@ const readActiveStatuteFulltext = async (
         .where(
           and(
             eq(legislationDocuments.id, documentId),
-            redistributableLegislationVersion,
+            redistributableLegislationVersionFor("search"),
           ),
         )
         .limit(1),
@@ -2685,7 +2696,7 @@ export const buildActiveStatuteSection = async ({
                 .where(
                   and(
                     eq(legislationDocuments.id, activeStatute.documentId),
-                    publishedLegislationDocument,
+                    publishedLegislationDocumentFor("search"),
                   ),
                 )
                 .limit(1),
@@ -2700,6 +2711,7 @@ export const buildActiveStatuteSection = async ({
 
           // Outside the transaction above: the AST lives in object storage.
           const blocks = await readVersionBlocks({
+            surface: "search",
             row: version,
             legislationDb,
             step: ACTIVE_STATUTE_READ_STEP,

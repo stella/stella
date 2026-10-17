@@ -67,13 +67,13 @@ for (const importedName of ["authorizeHandlerUsage", "checkUsage"]) {
         : `authorizeHandlerUsage as ${importedName}`;
     const text = `import { ${declaration} } from "@/api/lib/api-handlers";
 const createHandler = ({ authorizeUsage = ${importedName} } = {}) =>
-  authorizeUsage({ metering: { actionType: "doc_review", modelRole: "chat" } });`;
+  authorizeUsage({ metering: { actionType: "doc_review", modelTask: "chat" } });`;
     expect(enumerateConditionalOperations({ file, text })).toEqual([
       {
         file,
         line: 3,
         checker: "authorizeHandlerUsage",
-        metering: { actionType: "doc_review", modelRole: "chat" },
+        metering: { actionType: "doc_review", modelTask: "chat" },
       },
     ]);
   });

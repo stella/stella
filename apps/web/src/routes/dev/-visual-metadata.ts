@@ -4,6 +4,7 @@ export type VisualLayout =
   | "plain"
   | "control-sizes"
   | "inspector-pane"
+  | "provision-header"
   | "workspace-table";
 
 type VisualEntry = {
@@ -23,17 +24,25 @@ export const playbookEditorStates = Object.keys(playbookEditorFixtures);
 
 // Browser tests share the fixture census without importing the app graph.
 export const visualRegistry = {
+  "table-chart": { label: "Chat table chart", layout: "plain" },
   "oauth-consent": { label: "OAuth consent", layout: "plain" },
   "page-crop": { label: "PDF page crop", layout: "plain" },
   "chat-long-paste": { label: "Chat long paste", layout: "plain" },
+  "chat-status": { label: "Chat status motion", layout: "plain" },
+  "chat-citations": { label: "Chat case-law citations", layout: "plain" },
+  "chat-link-icons": { label: "Chat link icons", layout: "plain" },
+  "hungarian-decision": { label: "Hungarian decision", layout: "plain" },
+  "reader-answers": { label: "Reader anchored answers", layout: "plain" },
   "answer-edit": { label: "Chat answer edits", layout: "plain" },
   autocomplete: { label: "Autocomplete", layout: "plain" },
   ui: { label: "UI components", layout: "plain" },
   "control-sizes": { label: "Control sizes", layout: "control-sizes" },
   "inspector-pane": { label: "Inspector pane", layout: "inspector-pane" },
   "playbook-editor": { label: "Playbook editor lifecycle", layout: "plain" },
+  "provision-header": { label: "Provision header", layout: "provision-header" },
   "shell-pending": { label: "Shell pending", layout: "plain" },
   "workspace-table": { label: "Workspace table", layout: "workspace-table" },
+  "public-law-toolbar": { label: "Public law toolbar", layout: "plain" },
   "chat-history-decision": { label: "Chat history decision", layout: "plain" },
 } as const satisfies Record<string, VisualEntry>;
 
