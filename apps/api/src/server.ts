@@ -173,7 +173,10 @@ import {
   completeRequest,
   withFinalResponseCompletion,
 } from "@/api/lib/observability/request-lifecycle";
-import { emitEventLoopDelayMetric } from "@/api/lib/observability/request-metrics";
+import {
+  emitEventLoopDelayMetric,
+  emitProcessMemoryLog,
+} from "@/api/lib/observability/request-metrics";
 import { runWithRequestScope } from "@/api/lib/observability/request-scope";
 import {
   closeActionAdmissionRedis,
@@ -276,6 +279,7 @@ const readProcessMemoryReport = () => {
 const startEventLoopDelayReporting = () => {
   let reporting: Promise<void> | undefined;
   startEventLoopDelayMonitor({
+    onReportInterval: () => emitProcessMemoryLog(readProcessMemoryReport()),
     onReport: (delay) => {
       if (reporting !== undefined) {
         return;
@@ -285,7 +289,6 @@ const startEventLoopDelayReporting = () => {
           emitEventLoopDelayMetric({
             ...delay,
             rootPool,
-            memory: readProcessMemoryReport(),
           }),
         )
         .finally(() => {
