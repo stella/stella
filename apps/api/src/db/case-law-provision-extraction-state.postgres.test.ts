@@ -152,11 +152,13 @@ if (!databaseUrl || !runPostgresTests) {
              2016, 'EUR-Lex', 'http://data.europa.eu/eli/reg/2016/679/oj',
              'article', 6, 'article-6', 'Article 6 GDPR', 30, 44, 1)`;
         expect(
-          await observer`
+          Array.from(
+            await observer`
           SELECT jurisdiction, work_identifier, work_number, work_year,
             eu_work_number, eu_work_year FROM case_law_provision_citations
           WHERE decision_id = ${decisionId}::uuid ORDER BY work_identifier
         `,
+          ),
         ).toEqual([
           {
             jurisdiction: "EU",
@@ -184,12 +186,14 @@ if (!databaseUrl || !runPostgresTests) {
           },
         ]);
         expect(
-          await observer`
+          Array.from(
+            await observer`
           SELECT attname, attnotnull FROM pg_attribute
           WHERE attrelid = 'case_law_provision_citations'::regclass
             AND attname IN ('work_number', 'work_year', 'eu_work_number', 'eu_work_year')
           ORDER BY attname
         `,
+          ),
         ).toEqual([
           { attname: "eu_work_number", attnotnull: false },
           { attname: "eu_work_year", attnotnull: false },
