@@ -119,6 +119,9 @@ const collectKio = async ({
       readPlKioListing(await text({ dir: adapterDir, name })) ??
       panic(`Invalid listing ${name}`);
     for (const [index, item] of listed.rows.entries()) {
+      if (typeof item.id !== "string") {
+        panic(`Invalid listing item ${name}:${index}`);
+      }
       const detailName = `pl-kio-detail-${item.id}.html`;
       const contentName = `pl-kio-content-${item.id}.html.gz`;
       kio(
@@ -487,6 +490,9 @@ const collectUokik = async ({
       if (built.type === "unkeyable") {
         panic(`${name}:${index}: unkeyable`);
       }
+      const sourceDocumentId =
+        built.decision.sourceDocumentId ??
+        panic(`${name}:${index}: missing source document ID`);
       uokik(`${name}:${index}`, built.decision);
       if (
         page !== undefined &&
@@ -519,7 +525,7 @@ const collectUokik = async ({
                 bytes: await bytes({ dir: parserDir, name: fixtureName }),
               },
               decision: {
-                sourceDocumentId: built.decision.sourceDocumentId,
+                sourceDocumentId,
                 caseNumber: built.decision.caseNumber,
                 decisionDate: built.decision.decisionDate,
               },

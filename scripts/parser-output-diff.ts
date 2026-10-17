@@ -1,12 +1,34 @@
 #!/usr/bin/env bun
 import { panic } from "better-result";
 import { cp, mkdir, mkdtemp, readdir, rm, symlink } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { availableParallelism, tmpdir } from "node:os";
 import path from "node:path";
 import { deserialize } from "node:v8";
 
 export type ParserOutputs = Record<string, Record<string, unknown>>;
 export type OutputDifference = { field: string; base: unknown; head: unknown };
+
+export const runWithConcurrency = async <Result>(
+  tasks: readonly (() => Promise<Result>)[],
+  limit = availableParallelism(),
+): Promise<Result[]> => {
+  const results: Result[] = [];
+  let nextTask = 0;
+  const runNext = async () => {
+    while (nextTask < tasks.length) {
+      const index = nextTask;
+      nextTask += 1;
+      const task = tasks[index];
+      if (task === undefined) {
+        panic(`Missing task at index ${index}`);
+      }
+      results[index] = await task();
+    }
+  };
+  const workerCount = Math.min(Math.max(1, limit), tasks.length);
+  await Promise.all(Array.from({ length: workerCount }, runNext));
+  return results;
+};
 
 export const formatParserOutputReport = (report: unknown) =>
   JSON.stringify(report, (_key, value: unknown) => {
@@ -156,7 +178,8 @@ const command = async (cwd: string, args: string[]) => {
     child.exited,
   ]);
   if (status !== 0) {
-    return panic(`${args[0]} failed (${status}): ${stderr}`);
+    const executable = args.at(0) ?? panic("Cannot run an empty command");
+    return panic(`${executable} failed (${status}): ${stderr}`);
   }
   return stdout;
 };
@@ -233,6 +256,27 @@ type CompareCheckoutsOptions = {
   head?: string;
   /** A fixture harness, shared byte-for-byte by both runtimes. */
   runner?: string;
+};
+
+type MatchingLockfilesOptions = { reference: string; candidates: string[] };
+const assertMatchingLockfiles = async ({
+  reference,
+  candidates,
+}: MatchingLockfilesOptions) => {
+  const lockfile = "bun.lock";
+  const referenceLock = Bun.file(path.join(reference, lockfile));
+  for (const candidate of candidates) {
+    const candidateLock = Bun.file(path.join(candidate, lockfile));
+    if (
+      (await candidateLock.exists()) !== (await referenceLock.exists()) ||
+      ((await candidateLock.exists()) &&
+        (await candidateLock.text()) !== (await referenceLock.text()))
+    ) {
+      panic(
+        "Dependency lockfiles differ; cannot prove output parity with shared installed dependencies",
+      );
+    }
+  }
 };
 
 export const compareCheckouts = async ({
@@ -391,22 +435,11 @@ await Bun.write(process.argv[3], serialize(result));
         await rm(directory, { recursive: true, force: true });
       }
     };
-    const headOutput = await evaluate({ tree: after, name: "head" });
     const before = await checkout({ ref: base, name: "base" });
-    const lockfile = "bun.lock";
-    const headLock = Bun.file(path.join(after, lockfile));
-    for (const tree of [before, root]) {
-      const installedLock = Bun.file(path.join(tree, lockfile));
-      if (
-        (await installedLock.exists()) !== (await headLock.exists()) ||
-        ((await installedLock.exists()) &&
-          (await installedLock.text()) !== (await headLock.text()))
-      ) {
-        return panic(
-          "Dependency lockfiles differ; cannot prove output parity with shared installed dependencies",
-        );
-      }
-    }
+    await assertMatchingLockfiles({
+      reference: after,
+      candidates: [before, root],
+    });
     const oldInputs = (await command(before, ["git", "ls-files", "-z"]))
       .split("\0")
       .filter(isFixtureInput);
@@ -419,7 +452,12 @@ await Bun.write(process.argv[3], serialize(result));
       await mkdir(path.dirname(path.join(before, file)), { recursive: true });
       await cp(path.join(after, file), path.join(before, file));
     }
-    const baseOutput = await evaluate({ tree: before, name: "base" });
+    const outputs = await runWithConcurrency([
+      async () => evaluate({ tree: after, name: "head" }),
+      async () => evaluate({ tree: before, name: "base" }),
+    ]);
+    const headOutput = outputs.at(0) ?? panic("Head parser worker did not run");
+    const baseOutput = outputs.at(1) ?? panic("Base parser worker did not run");
     if (
       Object.keys(baseOutput).length === 0 ||
       Object.keys(headOutput).length === 0
@@ -458,11 +496,14 @@ if (import.meta.main) {
         args[index * 2 + 1],
       ]),
     );
-    const results = await compareCheckouts({
+    const comparison = {
       root: process.cwd(),
       base: options.get("--base") ?? "origin/main",
-      head: options.get("--head"),
-    });
+    };
+    const head = options.get("--head");
+    const results = await compareCheckouts(
+      head === undefined ? comparison : { ...comparison, head },
+    );
     const rows = results.map(formatParserOutputReport);
     const output = options.get("--output");
     if (output !== undefined) {

@@ -132,7 +132,10 @@ const persistedOutput = (adapter: string, raw: RawIngestionResult) => {
       : undefined,
     citationScopes: result.citationScopes,
   }).unwrap();
-  const grammar = PROVISION_CITATION_GRAMMARS[result.country];
+  const grammar =
+    Object.values(PROVISION_CITATION_GRAMMARS).find(
+      ({ jurisdiction }) => jurisdiction === result.country,
+    ) ?? panic(`No provision citation grammar for ${result.country}`);
   const provisionMentions =
     grammar.status === "supported"
       ? sections.flatMap(({ index, text: body }) =>
@@ -319,7 +322,11 @@ const collectCzechDocuments = async ({
       storedInput(usSeed, raw),
     );
     if (replayed?.type !== "parsed") {
-      panic(`${filename} returned ${replayed?.type}`);
+      panic(
+        replayed === undefined
+          ? `${filename} returned no result`
+          : `${filename} returned ${replayed.type}`,
+      );
     }
     add({
       adapter: "cz-us",
@@ -334,6 +341,10 @@ const collectCzechDocuments = async ({
     ].toSorted()) {
       const input = {
         ...seed,
+        ecli: seed.ecli,
+        decisionDate: seed.decisionDate,
+        decisionType: seed.decisionType,
+        sourceUrl: seed.sourceUrl,
         html: await text(path.join(parserFixtures, filename)),
         detailMetadata: {},
       };
@@ -392,7 +403,11 @@ const collectSlovakDocuments = async ({
     caseNumber: skRow["mkRSAPNumberOfFile"],
   });
   if (skReplayed?.type !== "parsed") {
-    panic(`SK US captured envelope returned ${skReplayed?.type}`);
+    panic(
+      skReplayed === undefined
+        ? "SK US captured envelope returned no result"
+        : `SK US captured envelope returned ${skReplayed.type}`,
+    );
   }
   add({
     adapter: "sk-us",
@@ -412,6 +427,9 @@ const collectSlovakDocuments = async ({
     }
     const parsed = parseSkUsDocumentXhtml({
       ...skSeed,
+      ecli: skSeed.ecli,
+      decisionDate: skSeed.decisionDate,
+      decisionType: skSeed.decisionType,
       documentUrl: skSeed.documentUrl ?? panic("sk-us has no document URL"),
       xhtml: Buffer.from(payload["content"], "base64").toString("utf-8"),
     });
@@ -453,6 +471,10 @@ const collectEuropeanDocuments = async ({
     }
     const parsed = parseEcjDecisionHtml({
       ...ecjSeed,
+      ecli: ecjSeed.ecli,
+      decisionDate: ecjSeed.decisionDate,
+      decisionType: ecjSeed.decisionType,
+      sourceUrl: ecjSeed.sourceUrl,
       celex,
       language,
       html: await text(path.join(parserFixtures, "eu-ecj", filename)),
@@ -476,6 +498,10 @@ const collectEuropeanDocuments = async ({
     }
     const parsed = parseEcjDecisionHtml({
       ...ecjSeed,
+      ecli: ecjSeed.ecli,
+      decisionDate: ecjSeed.decisionDate,
+      decisionType: ecjSeed.decisionType,
+      sourceUrl: ecjSeed.sourceUrl,
       celex,
       language,
       html: await text(path.join(adapterFixtures, filename)),
@@ -650,6 +676,10 @@ const collectRegionalDocuments = async ({
         .parsed ?? panic(`${filename} is not finaldoc`);
     const parsed = parseRegionalDecision({
       ...regionalSeed,
+      ecli: regionalSeed.ecli,
+      decisionDate: regionalSeed.decisionDate,
+      decisionType: regionalSeed.decisionType,
+      sourceUrl: regionalSeed.sourceUrl,
       header: document.header ?? [],
       verdict: document.verdict ?? [],
       justification: document.justification ?? [],

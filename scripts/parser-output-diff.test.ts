@@ -10,6 +10,7 @@ import {
   compareParserOutputs,
   firstDifference,
   formatParserOutputReport,
+  runWithConcurrency,
 } from "./parser-output-diff";
 
 const git = async (cwd: string, args: string[]) => {
@@ -21,6 +22,39 @@ const git = async (cwd: string, args: string[]) => {
   const stderr = await new Response(child.stderr).text();
   expect(await child.exited, stderr).toBe(0);
 };
+
+test("parser workers respect their concurrency bound and preserve result order", async () => {
+  let active = 0;
+  let peak = 0;
+  const releases: (() => void)[] = [];
+  const tasks = [0, 1, 2, 3].map((value) => async () => {
+    active += 1;
+    peak = Math.max(peak, active);
+    await new Promise<void>((resolve) => {
+      releases.push(resolve);
+    });
+    active -= 1;
+    return value;
+  });
+  const results = runWithConcurrency(tasks, 2);
+  while (releases.length < 2) {
+    await Bun.sleep(1);
+  }
+  expect(active).toBe(2);
+  releases.shift()?.();
+  while (releases.length < 2) {
+    await Bun.sleep(1);
+  }
+  releases.shift()?.();
+  while (releases.length < 2) {
+    await Bun.sleep(1);
+  }
+  for (const release of releases.splice(0)) {
+    release();
+  }
+  expect(await results).toEqual([0, 1, 2, 3]);
+  expect(peak).toBe(2);
+});
 
 test("isolated base and working tree parse the same fixture bytes and report the exact changed field", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "parser-diff-test-"));
