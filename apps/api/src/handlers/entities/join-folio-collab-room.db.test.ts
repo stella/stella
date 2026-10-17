@@ -1007,7 +1007,7 @@ test("publishing a checkpoint retains its snapshot cut when later edits already 
 
 describe("stale pending seed recovery notices", () => {
   test.each(["version-bound", "missing", "stale-version"] as const)(
-    "reclaims a stored seed with a %s saved cut",
+    "preserves the discard notice across successive stale reclaims with a %s saved cut",
     async (cutState) => {
       const staleAt = new Date(
         Date.now() - FOLIO_COLLAB_SEED_CLAIM_STALE_MS - 1,
@@ -1044,21 +1044,23 @@ describe("stale pending seed recovery notices", () => {
       const fake = startFakeS3();
       try {
         const noAudit = async () => undefined;
-        const joined = await joinFolioCollabRoom.handler(
-          asTestRaw<Parameters<typeof joinFolioCollabRoom.handler>[0]>({
-            body: { entityId: ids.entityA1, propertyId: ids.filePropertyA1 },
-            safeDb: safeDbFromScoped(scopedDb),
-            session: { activeOrganizationId: ids.orgA },
-            user: { id: ids.userA1, email: "editor@example.test" },
-            workspaceId: ids.wsA1,
-            memberRole: sessionMemberRole("owner"),
-            request: new Request("https://example.test/join"),
-            route:
-              "/v1/workspaces/:workspaceId/entities/join-folio-collab-room",
-            recordAuditEvent: noAudit,
-            createAuditRecorder: () => noAudit,
-          }),
-        );
+        const join = async () =>
+          await joinFolioCollabRoom.handler(
+            asTestRaw<Parameters<typeof joinFolioCollabRoom.handler>[0]>({
+              body: { entityId: ids.entityA1, propertyId: ids.filePropertyA1 },
+              safeDb: safeDbFromScoped(scopedDb),
+              session: { activeOrganizationId: ids.orgA },
+              user: { id: ids.userA1, email: "editor@example.test" },
+              workspaceId: ids.wsA1,
+              memberRole: sessionMemberRole("owner"),
+              request: new Request("https://example.test/join"),
+              route:
+                "/v1/workspaces/:workspaceId/entities/join-folio-collab-room",
+              recordAuditEvent: noAudit,
+              createAuditRecorder: () => noAudit,
+            }),
+          );
+        const joined = await join();
         expect(joined).toMatchObject({
           roomId,
           generation: 5,
@@ -1070,13 +1072,39 @@ describe("stale pending seed recovery notices", () => {
           .select({
             snapshotRevision: folioCollabRooms.yjsSnapshotRevision,
             savedSnapshotCut: folioCollabRooms.savedSnapshotCut,
+            snapshotRecoveredAt: folioCollabRooms.snapshotRecoveredAt,
           })
           .from(folioCollabRooms)
           .where(eq(folioCollabRooms.id, roomId));
         expect(rooms.at(0)).toEqual({
           snapshotRevision: 0,
           savedSnapshotCut: null,
+          snapshotRecoveredAt:
+            cutState === "version-bound" ? null : expect.any(Date),
         });
+
+        // The claimant closes before reseeding; a second stale join must retain the loss notice.
+        await testDb
+          .update(folioCollabRooms)
+          .set({ seedClaimedAt: staleAt })
+          .where(eq(folioCollabRooms.id, roomId));
+        const reclaimed = await join();
+        expect(reclaimed).toMatchObject({
+          roomId,
+          generation: 6,
+          shouldSeed: true,
+          snapshotRecovery:
+            cutState === "version-bound" ? "none" : "unsaved-changes-discarded",
+        });
+        const reclaimedRooms = await testDb
+          .select({
+            snapshotRevision: folioCollabRooms.yjsSnapshotRevision,
+            savedSnapshotCut: folioCollabRooms.savedSnapshotCut,
+            snapshotRecoveredAt: folioCollabRooms.snapshotRecoveredAt,
+          })
+          .from(folioCollabRooms)
+          .where(eq(folioCollabRooms.id, roomId));
+        expect(reclaimedRooms).toEqual(rooms);
       } finally {
         fake.stop();
       }

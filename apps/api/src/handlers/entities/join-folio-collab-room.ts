@@ -133,6 +133,7 @@ type ClaimRoomSeedOptions = {
   expectedSeedState: "claimed" | "empty";
   now: Date;
   roomId: SafeId<"folioCollabRoom">;
+  snapshotRecoveredAt: Date | null;
   tx: Transaction;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace">;
@@ -205,6 +206,7 @@ const claimFolioCollabRoomSeed = async ({
   expectedSeedState,
   now,
   roomId,
+  snapshotRecoveredAt,
   tx,
   userId,
   workspaceId,
@@ -219,6 +221,7 @@ const claimFolioCollabRoomSeed = async ({
       seedState: "claimed",
       yjsSnapshotFileId: createSafeId<"userFile">(),
       savedSnapshotCut: null,
+      snapshotRecoveredAt,
       yjsSnapshotRevision: 0,
       seededAt: null,
       yjsSnapshotSizeBytes: null,
@@ -405,6 +408,8 @@ const joinFolioCollabRoomHandler = async function* ({
       }
 
       let shouldSeed = false;
+      let snapshotRecovery: JoinFolioCollabRoomResponse["snapshotRecovery"] =
+        "none";
       let generation = room.generation;
       // Yjs paragraph tokens stay bound to the original DOCX across publications.
       const seedFileContent = await readVersionDocxTarget({
@@ -438,11 +443,25 @@ const joinFolioCollabRoomHandler = async function* ({
           } as const;
         }
 
+        snapshotRecovery = decideFolioCollabSnapshotRecovery({
+          shouldSeed: true,
+          snapshotRecovered: room.snapshotRecoveredAt !== null,
+          // Only a receipt bound to the saved version proves a claimed seed is pristine.
+          yjsSnapshotRevision:
+            room.seedState === "claimed" &&
+            room.savedSnapshotCut?.versionId === room.baseVersionId
+              ? 0
+              : room.yjsSnapshotRevision,
+        });
         const claim = await claimFolioCollabRoomSeed({
           expectedGeneration: room.generation,
           expectedSeedState: room.seedState,
           now,
           roomId: room.id,
+          snapshotRecoveredAt:
+            snapshotRecovery === "unsaved-changes-discarded"
+              ? (room.snapshotRecoveredAt ?? now)
+              : null,
           tx,
           userId,
           workspaceId,
@@ -518,13 +537,7 @@ const joinFolioCollabRoomHandler = async function* ({
         shouldSeed,
         token,
         tokenExpiresAt,
-        snapshotRecovered: room.snapshotRecoveredAt !== null,
-        // Only a receipt bound to the saved version proves a claimed seed is pristine.
-        yjsSnapshotRevision:
-          room.seedState === "claimed" &&
-          room.savedSnapshotCut?.versionId === room.baseVersionId
-            ? 0
-            : room.yjsSnapshotRevision,
+        snapshotRecovery,
       } as const;
     }),
   );
@@ -551,7 +564,7 @@ const joinFolioCollabRoomHandler = async function* ({
     generation: joined.generation,
     roomId: joined.roomId,
     roomName: toFolioCollabRoomName(joined.roomId),
-    snapshotRecovery: decideFolioCollabSnapshotRecovery(joined),
+    snapshotRecovery: joined.snapshotRecovery,
     seedDownloadUrl,
     shouldSeed: joined.shouldSeed,
     token: joined.token,
