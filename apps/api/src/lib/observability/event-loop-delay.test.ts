@@ -116,7 +116,9 @@ describe("event-loop delay monitoring", () => {
     const originalSetInterval = globalThis.setInterval;
     let reportTick: (() => void) | undefined;
     const interval = spyOn(globalThis, "setInterval").mockImplementation(
-      (handler, delay, ...args) => {
+      (
+        ...[handler, delay, ...args]: Parameters<typeof globalThis.setInterval>
+      ) => {
         if (delay === 200 && typeof handler === "function") {
           reportTick = () => handler(...args);
         }
