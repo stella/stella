@@ -28,6 +28,41 @@ const DEPENDENCY_FIELDS = [
   "peerDependencies",
   "optionalDependencies",
 ] as const;
+const DENIED_NPM_DEPENDENCIES = new Set([
+  "fuse.js",
+  "flexsearch",
+  "minisearch",
+  "lunr",
+  "fast-levenshtein",
+  "fastest-levenshtein",
+  "leven",
+  "js-levenshtein",
+  "string-similarity",
+  "ahocorasick",
+  "natural",
+  "match-sorter",
+  "cmdk",
+  "fuzzysort",
+  "@leeoniya/ufuzzy",
+  "fuzzball",
+  "rapidfuzz",
+  "fuzzywuzzy",
+]);
+const DENIED_CARGO_DEPENDENCIES = new Set([
+  "strsim",
+  "levenshtein",
+  "edit-distance",
+  "fuzzy-matcher",
+  "triple_accel",
+  "rapidfuzz",
+]);
+const CARGO_DEPENDENCY_FIELDS = [
+  "dependencies",
+  "dev-dependencies",
+  "build-dependencies",
+] as const;
+// The docs MCP is installed independently outside the apps/packages workspaces.
+const STANDALONE_NPM_PACKAGE_JSON_PATHS = [".claude/mcp/package.json"] as const;
 const SKIPPED_SCAN_DIRS = new Set([
   ".cache",
   ".turbo",
@@ -145,6 +180,92 @@ const readDependencyNames = (packageJson: Record<string, unknown>) => {
 
   return dependencyNames;
 };
+
+const validateDeniedNpmDependencies = (
+  packageJsonPath: string,
+  packageJson: Record<string, unknown> | null,
+): WorkspaceIssue[] => {
+  const issues: WorkspaceIssue[] = [];
+  for (const field of DEPENDENCY_FIELDS) {
+    const dependencies = packageJson?.[field];
+    if (!isRecord(dependencies)) {
+      continue;
+    }
+    for (const [name, specifier] of Object.entries(dependencies)) {
+      const npmAlias =
+        typeof specifier === "string"
+          ? /^npm:(?<name>@[^/]+\/[^@]+|[^@/]+)(?:@|$)/u.exec(specifier)
+              ?.groups?.["name"]
+          : undefined;
+      const actualName = npmAlias ?? name;
+      const deniedName = DENIED_NPM_DEPENDENCIES.has(actualName)
+        ? actualName
+        : undefined;
+      if (deniedName === undefined) {
+        continue;
+      }
+      issues.push({
+        message: `${deniedName} is blocked; use @stll/text-search for search functionality`,
+        path: packageJsonPath,
+      });
+    }
+  }
+  return issues;
+};
+
+const cargoDependencyEntries = (
+  manifest: Record<string, unknown>,
+): readonly (readonly [string, unknown])[] => {
+  const tables = [
+    manifest,
+    isRecord(manifest["workspace"]) ? manifest["workspace"] : {},
+    ...(isRecord(manifest["target"])
+      ? Object.values(manifest["target"]).filter(isRecord)
+      : []),
+  ];
+  return tables.flatMap((table) =>
+    CARGO_DEPENDENCY_FIELDS.flatMap((field) => {
+      const dependencies = table[field];
+      return isRecord(dependencies) ? Object.entries(dependencies) : [];
+    }),
+  );
+};
+
+const validateDeniedCargoDependencies = (rootDir: string): WorkspaceIssue[] =>
+  findFiles(
+    rootDir,
+    (filePath) => path.basename(filePath) === "Cargo.toml",
+  ).flatMap((manifestPath) => {
+    let manifest: unknown;
+    try {
+      manifest = Bun.TOML.parse(readFileSync(manifestPath, "utf-8"));
+    } catch {
+      return [
+        {
+          message: "Cargo.toml must contain valid TOML for dependency policy",
+          path: repoRelativePath(rootDir, manifestPath),
+        },
+      ];
+    }
+    if (!isRecord(manifest)) {
+      return [];
+    }
+    return cargoDependencyEntries(manifest).flatMap(([name, specifier]) => {
+      const packageName = isRecord(specifier)
+        ? specifier["package"]
+        : undefined;
+      const actualName = typeof packageName === "string" ? packageName : name;
+      if (!DENIED_CARGO_DEPENDENCIES.has(actualName)) {
+        return [];
+      }
+      return [
+        {
+          message: `${actualName} is blocked; use @stll/text-search for search functionality`,
+          path: repoRelativePath(rootDir, manifestPath),
+        },
+      ];
+    });
+  });
 
 const readDependencySpecifier = (
   packageJsonPath: string,
@@ -757,6 +878,17 @@ export const validateWorkspaceRoot = (
     ...validateBunCwdRunForm(rootDir),
     ...validateBabelToolchains(rootDir),
     ...validateTypeScriptToolchain(rootDir),
+    ...validateDeniedNpmDependencies(
+      "package.json",
+      readPackageJson(path.resolve(rootDir, "package.json")),
+    ),
+    ...STANDALONE_NPM_PACKAGE_JSON_PATHS.flatMap((relativePath) =>
+      validateDeniedNpmDependencies(
+        relativePath,
+        readPackageJson(path.resolve(rootDir, relativePath)),
+      ),
+    ),
+    ...validateDeniedCargoDependencies(rootDir),
   ];
 
   for (const parentDir of WORKSPACE_PARENT_DIRS) {
@@ -812,6 +944,10 @@ export const validateWorkspaceRoot = (
       }
 
       issues.push(
+        ...validateDeniedNpmDependencies(
+          `${relativePath}/package.json`,
+          readPackageJson(packageJsonPath),
+        ),
         ...validateBunTypeOwnership(
           path.resolve(parentPath, entry.name),
           relativePath,
