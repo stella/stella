@@ -1,6 +1,7 @@
 import { useTranslations } from "use-intl";
 
-import { LandmarkIcon } from "@stll/ui/icons";
+import { CHAT_REFERENCE_CATEGORIES } from "@stll/api-contract";
+import { LandmarkIcon, LibraryIcon } from "@stll/ui/icons";
 import { MatterIcon } from "@stll/ui/matter-icon";
 
 import type {
@@ -14,14 +15,15 @@ const CATEGORY_LABEL_KEYS = {
   entity: "chat.mention.category.entities",
   workspace: "common.matters",
   decision: "common.caseLaw",
+  corpus: "chat.mention.category.sources",
 } as const satisfies Record<ChatReferenceCategory, TranslationKey>;
 
-/** The order mention results group in, wherever a picker lists them. */
-export const MENTION_CATEGORY_ORDER = [
-  "entity",
-  "workspace",
-  "decision",
-] as const satisfies readonly ChatReferenceCategory[];
+/**
+ * The order mention results group in, wherever a picker lists them: the
+ * contract's own order, so a new category cannot miss a picker group.
+ */
+export const MENTION_CATEGORY_ORDER =
+  CHAT_REFERENCE_CATEGORIES satisfies readonly ChatReferenceCategory[];
 
 type MissingCategory = Exclude<
   ChatReferenceCategory,
@@ -50,6 +52,14 @@ export const MentionIcon = ({ mention }: { mention: ChatMentionOption }) => {
 
   if (mention.category === "decision") {
     return <LandmarkIcon className="text-muted-foreground size-3.5 shrink-0" />;
+  }
+
+  if (mention.category === "corpus") {
+    return mention.scope.corpus === "case_law" ? (
+      <LandmarkIcon className="text-muted-foreground size-3.5 shrink-0" />
+    ) : (
+      <LibraryIcon className="text-muted-foreground size-3.5 shrink-0" />
+    );
   }
 
   return (
