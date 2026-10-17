@@ -364,6 +364,85 @@ test("the patch-id step leaves reuse off for an empty net change", () => {
   }
 });
 
+test("only an untouched automatic merge of the base counts as a clean base merge", () => {
+  const script = v.parse(v.string(), planStep("Compute stable patch id").run);
+  const directory = mkdtempSync(path.join(tmpdir(), "pr-depth-base-merge-"));
+  try {
+    const git = (...args: string[]) => command(directory, "git", ...args);
+    git("init", "-q", "--initial-branch", "main");
+    git("config", "commit.gpgsign", "false");
+    git("config", "user.name", "test");
+    git("config", "user.email", "test@example.com");
+    mkdirSync(path.join(directory, ".github/workflows"), { recursive: true });
+    writeFileSync(
+      path.join(directory, ".github/workflows/ci.yml"),
+      "name: CI\n",
+    );
+    writeFileSync(path.join(directory, "shared"), "one\ntwo\n");
+    git("add", ".");
+    git("commit", "-qm", "base");
+    git("checkout", "-qb", "feature");
+    writeFileSync(
+      path.join(directory, "feature.ts"),
+      'export const label = "a b";\n',
+    );
+    git("add", "feature.ts");
+    git("commit", "-qm", "feature");
+    const before = git("rev-parse", "HEAD");
+    git("checkout", "-q", "main");
+    writeFileSync(path.join(directory, "shared"), "one\ntwo\nthree\n");
+    git("commit", "-qam", "main moves");
+    const mainTip = git("rev-parse", "HEAD");
+    const run = (head: string, action = "synchronize") => {
+      const output = path.join(directory, "output");
+      writeFileSync(output, "");
+      const result = Bun.spawnSync(["bash", "-e", "-c", script], {
+        cwd: directory,
+        env: {
+          ...process.env,
+          EVENT_NAME: "pull_request",
+          EVENT_ACTION: action,
+          BEFORE_SHA: before,
+          PR_BASE_SHA: mainTip,
+          PR_HEAD_SHA: head,
+          WORKFLOW_SHA: head,
+          GITHUB_OUTPUT: output,
+        },
+      });
+      expect(result.exitCode, result.stderr.toString()).toBe(0);
+      return /^clean_base_merge=(.*)$/mu.exec(
+        readFileSync(output, "utf-8"),
+      )?.[1];
+    };
+    git("checkout", "-q", "feature");
+    git("merge", "-q", "--no-edit", "main");
+    const clean = git("rev-parse", "HEAD");
+    expect(run(clean)).toBe("true");
+    expect(run(clean, "opened")).toBe("false");
+    // The same merge with a whitespace edit inside a string literal keeps the
+    // stable patch id but is not the automatic merge.
+    git("reset", "-q", "--hard", before);
+    git("merge", "-q", "--no-commit", "main");
+    writeFileSync(
+      path.join(directory, "feature.ts"),
+      'export const label = "ab";\n',
+    );
+    git("add", "feature.ts");
+    git("commit", "-q", "--no-edit");
+    expect(run(git("rev-parse", "HEAD"))).toBe("false");
+    // A plain commit on top of the previous head is not a base merge.
+    git("reset", "-q", "--hard", before);
+    writeFileSync(
+      path.join(directory, "feature.ts"),
+      'export const label = "a  b";\n',
+    );
+    git("commit", "-qam", "edit");
+    expect(run(git("rev-parse", "HEAD"))).toBe("false");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("the hourly workflow never cancels a running check", () => {
   const concurrency = v.parse(
     v.object({ group: v.string(), "cancel-in-progress": v.literal(false) }),

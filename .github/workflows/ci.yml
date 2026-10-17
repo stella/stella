@@ -415,6 +415,8 @@ jobs:
           GROUP_BASE_SHA: ${{ github.event.merge_group.base_sha }}
           GROUP_HEAD_SHA: ${{ github.event.merge_group.head_sha }}
           WORKFLOW_SHA: ${{ github.workflow_sha }}
+          EVENT_ACTION: ${{ github.event.action }}
+          BEFORE_SHA: ${{ github.event.before }}
         run: |
           if [[ "$EVENT_NAME" == merge_group ]]; then
             base="$GROUP_BASE_SHA"
@@ -432,9 +434,24 @@ jobs:
           fi
           workflow_version=$(git show "$WORKFLOW_SHA:.github/workflows/ci.yml" | git hash-object --stdin)
           [[ "$workflow_version" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::Unable to identify CI workflow version."; exit 1; }
+          # A push that merged the base branch without any edit of its own:
+          # the head is exactly the conflict-free automatic merge of the
+          # pushed-over head and its second parent. A whitespace-only or any
+          # other hand edit makes the trees differ.
+          clean_base_merge=false
+          if [[ "$EVENT_NAME" == pull_request && "$EVENT_ACTION" == synchronize && "$BEFORE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            parents=$(git rev-list --parents -n 1 "$PR_HEAD_SHA" | cut -d ' ' -f 2-)
+            read -r first second extra <<< "$parents"
+            if [[ "$first" == "$BEFORE_SHA" && -n "${second:-}" && -z "${extra:-}" ]] \
+              && merged=$(git merge-tree --write-tree --no-messages "$first" "$second" 2> /dev/null) \
+              && [[ "$merged" == "$(git rev-parse "$PR_HEAD_SHA^{tree}")" ]]; then
+              clean_base_merge=true
+            fi
+          fi
           {
             echo "patch_id=$patch_id"
             echo "workflow_version=$workflow_version"
+            echo "clean_base_merge=$clean_base_merge"
           } >> "$GITHUB_OUTPUT"
 
       - name: Derive PR-depth jobs
@@ -467,6 +484,7 @@ jobs:
           QUEUE_DEPTH: ${{ steps.depth.outputs.queue_depth }}
           PATCH_ID: ${{ steps.patch-id.outputs.patch_id }}
           WORKFLOW_VERSION: ${{ steps.patch-id.outputs.workflow_version }}
+          CLEAN_BASE_MERGE: ${{ steps.patch-id.outputs.clean_base_merge }}
           PR_DEPTH_JOBS: ${{ steps.pr-depth-plan.outputs.pr_depth_jobs }}
         with:
           retries: 0
@@ -528,14 +546,17 @@ jobs:
             const marker = `ci-completed-v6-${profile}-${pr.number}-${pr.head.repo.id}-${pr.head.sha}-${depth}-${scope}`;
             if (!mergeGroup) core.setOutput("marker", marker);
             // A push that only merges the base branch into a head whose run
-            // passed keeps the pull request's own change (same stable patch
-            // id, checked below): that head's evidence still holds, and the
+            // passed keeps the pull request's own change (an untouched
+            // automatic merge, and the same stable patch id checked below):
+            // that head's evidence still holds, and the
             // merge group certifies the combined tree before it reaches main.
             let evidenceHead = pr.head.sha;
             let baseMergeOnly = false;
             if (!mergeGroup && context.payload.action === "synchronize") {
               const before = context.payload.before;
               if (!/^[a-f0-9]{40}$/.test(before || "")) return;
+              // The patch-id step proved the head is the untouched automatic merge.
+              if (process.env.CLEAN_BASE_MERGE !== "true") return;
               try {
                 const { data: commit } = await github.rest.git.getCommit({
                   ...context.repo, commit_sha: pr.head.sha, request: { timeout: 10000 },

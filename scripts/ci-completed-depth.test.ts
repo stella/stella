@@ -175,6 +175,8 @@ type LookupOptions = {
   before?: string;
   /** git.getCommit for the new head. */
   commit?: unknown;
+  /** The patch-id step's clean_base_merge output. */
+  cleanBaseMerge?: string;
 };
 const decide = async ({
   depth = "full",
@@ -201,6 +203,7 @@ const decide = async ({
   currentPatchId = patchId,
   before,
   commit,
+  cleanBaseMerge = "",
 }: LookupOptions = {}) => {
   const outputs = new Map<string, string>();
   const requests: unknown[] = [];
@@ -229,6 +232,7 @@ const decide = async ({
         PATCH_ID: currentPatchId,
         WORKFLOW_VERSION: pr.head.sha,
         PR_DEPTH_JOBS: JSON.stringify(prDepth),
+        CLEAN_BASE_MERGE: cleanBaseMerge,
       },
     },
     context: {
@@ -1290,6 +1294,7 @@ test("a push that only merges the base reuses the previous head's green run", as
       pull: pushed,
       commit: merge,
       comparison: onBase,
+      cleanBaseMerge: "true",
       ...options,
     });
   const { outputs } = await reuse();
@@ -1325,6 +1330,10 @@ test("a push that only merges the base reuses the previous head's green run", as
     ],
     ["unavailable commit evidence", { commit: undefined }],
     ["a push without a previous head", { before: undefined }],
+    [
+      "a head that is not the untouched automatic merge",
+      { cleanBaseMerge: "false" },
+    ],
   ] as const) {
     expect((await reuse(options)).outputs.get("run_required"), label).toBe(
       "true",
