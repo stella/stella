@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
+import type { SelectResultFields } from "drizzle-orm/query-builders/select.types";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 import * as v from "valibot";
@@ -152,9 +153,8 @@ const UNAVAILABLE_SPAN_FIELDS = {
   targetStatus: null,
 } satisfies Record<keyof typeof SPAN_CITATION_FIELDS, null>;
 
-type ProvisionRow = Pick<
-  typeof caseLawProvisionCitations.$inferSelect,
-  keyof typeof LEGACY_CITATION_FIELDS | keyof typeof SPAN_CITATION_FIELDS
+type ProvisionRow = SelectResultFields<
+  typeof LEGACY_CITATION_FIELDS & typeof SPAN_CITATION_FIELDS
 >;
 
 type ProvisionPageOptions = {
