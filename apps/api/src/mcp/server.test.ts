@@ -900,6 +900,13 @@ describe("handleMcpHttpRequest", () => {
         "resolve_case_law_decision",
         "resolve_law_citation",
       ]);
+      expect(
+        listed.tools.find(({ name }) => name === "read_case_law_citations")
+          ?._meta?.["ui"],
+      ).toMatchObject({
+        resourceUri: "ui://stella/citation-graph",
+        visibility: ["model", "app"],
+      });
       expect(authenticateMcpRequestMock).toHaveBeenCalledWith("token", {
         mode: "law",
       });
