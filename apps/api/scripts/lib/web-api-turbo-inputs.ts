@@ -25,12 +25,9 @@ const expandBraces = (pattern: string): string[] => {
     );
 };
 
-const matches = (file: string, pattern: string) => {
-  if (pattern.endsWith("/**")) {
-    return file.startsWith(pattern.slice(0, -2));
-  }
-  return file === pattern;
-};
+// Turbo inputs are globs; wildcards anywhere in a pattern must match.
+const matches = (file: string, pattern: string) =>
+  new Bun.Glob(pattern).match(file);
 
 /**
  * Repository files the compiler read that Turbo would not rehash. A file is

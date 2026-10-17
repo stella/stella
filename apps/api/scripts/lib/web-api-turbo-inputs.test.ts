@@ -77,3 +77,19 @@ test("the API types task's dependency outputs resolve to repository paths", () =
   expect(outputs).toContain("apps/api/src/mcp/generated/capability-catalog.ts");
   expect(outputs).toContain("apps/web/src/routeTree.gen.ts");
 });
+
+test("an exclusion with a wildcard inside the pattern makes its files uncovered", () => {
+  const root = "/repo";
+  const recorded = stamp([
+    `${root}/packages/money/src/money.ts`,
+    `${root}/packages/money/dist/index.d.ts`,
+  ]);
+  expect(
+    uncoveredCompilerInputs(
+      recorded,
+      root,
+      ["$TURBO_ROOT$/packages/money/**", "!$TURBO_ROOT$/packages/**/dist/**"],
+      [],
+    ),
+  ).toEqual(["packages/money/dist/index.d.ts"]);
+});
