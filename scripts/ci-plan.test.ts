@@ -5126,7 +5126,7 @@ test("the production service-scope capture rejects crashed or malformed detector
           "bash",
           "-eu",
           "-c",
-          `changed_files=(docs/guide.md)\n${capture}\nprintf 'SCOPES=%s %s %s %s\\n' "$postgres_suites_required" "$corpus_suites_required" "$valkey_suites_required" "$collaboration_suite_required"`,
+          `changed_files=(docs/guide.md)\nscope_files=(docs/guide.md)\n${capture}\nprintf 'SCOPES=%s %s %s %s\\n' "$postgres_suites_required" "$corpus_suites_required" "$valkey_suites_required" "$collaboration_suite_required"`,
         ],
         {
           env: {
