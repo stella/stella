@@ -216,8 +216,8 @@ test("prepaint-init.js survives malformed or unavailable storage", async () => {
 test("prepaint-init.js preserves valid theme and palette preferences", async () => {
   const result = await runPrepaint({
     storage: {
-      "stella-ui-palette": "nord",
-      "stella-ui-theme": "dark",
+      "stella-ui-palette": JSON.stringify({ version: 1, value: "nord" }),
+      "stella-ui-theme": JSON.stringify({ version: 1, value: "dark" }),
     },
   });
 

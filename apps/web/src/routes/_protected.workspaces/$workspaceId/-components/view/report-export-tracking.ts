@@ -1,15 +1,20 @@
+import * as v from "valibot";
 import { create } from "zustand";
-import { createJSONStorage, persist } from "zustand/middleware";
+import { persist } from "zustand/middleware";
 
 import { Temporal } from "@stll/time";
 import { stellaToast } from "@stll/ui/toast";
 
-import { browserStateStorage } from "@/lib/account/browser-storage";
 import {
   followStorageOwner,
   storageOwner,
-  userScopedStateStorage,
+  userStorageKey,
 } from "@/lib/account/user-scoped-storage";
+import {
+  definePersistedState,
+  keepInAnyScope,
+} from "@/lib/persisted-state/registry";
+import { registryZustandStorage } from "@/lib/persisted-state/zustand-storage";
 
 import {
   evictedTrackedExportIds,
@@ -35,6 +40,22 @@ type ReportExportTrackingStore = {
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const MAX_USER_ID_LENGTH = 128;
+
+const reportExportTrackingEntry = definePersistedState({
+  key: () => userStorageKey("stella.report-exports.active"),
+  area: "local",
+  version: 1,
+  schema: v.nullable(
+    v.object({
+      state: v.object({ exports: v.record(v.string(), v.unknown()) }),
+      version: v.number(),
+    }),
+  ),
+  maxBytes: 256_000,
+  defaultValue: () => null,
+  scopeCheck: keepInAnyScope,
+  restoredUi: false,
+});
 
 export const useReportExportTrackingStore = create<ReportExportTrackingStore>()(
   persist(
@@ -86,9 +107,7 @@ export const useReportExportTrackingStore = create<ReportExportTrackingStore>()(
     }),
     {
       name: "stella.report-exports.active",
-      storage: createJSONStorage(() =>
-        userScopedStateStorage(browserStateStorage("local")),
-      ),
+      storage: registryZustandStorage(reportExportTrackingEntry, {}, true),
       partialize: ({ exports }) => ({ exports }),
       version: 2,
       merge: (persisted, current) => ({

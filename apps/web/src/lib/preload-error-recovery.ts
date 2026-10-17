@@ -1,8 +1,13 @@
-import { Result } from "better-result";
+import * as v from "valibot";
 
 import { Temporal } from "@stll/time";
 
-import { requireBrowserStorage } from "@/lib/account/browser-storage";
+import {
+  definePersistedState,
+  keepInAnyScope,
+  readPersistedState,
+  writePersistedState,
+} from "@/lib/persisted-state/registry";
 // Recover from code that a deploy removed. Vite dispatches
 // `vite:preloadError` on the window when a lazily imported module fails to
 // load — typically a stale chunk after a deploy, or a dev HMR / dep-reoptimize
@@ -17,6 +22,16 @@ import { requireBrowserStorage } from "@/lib/account/browser-storage";
 
 const RELOAD_COOLDOWN_MS = 10_000;
 const STORAGE_KEY = "stella:preload-reload-at";
+const preloadReloadEntry = definePersistedState({
+  key: STORAGE_KEY,
+  area: "session",
+  version: 1,
+  schema: v.nullable(v.number()),
+  maxBytes: 128,
+  defaultValue: () => null,
+  scopeCheck: keepInAnyScope,
+  restoredUi: false,
+});
 
 // Keep this aligned with TanStack Router's cross-browser dynamic-import
 // classifier. A rejected lazy import is cached inside lazyRouteComponent, so
@@ -54,21 +69,10 @@ export const isStaleDeploymentLoadError = (error: unknown): boolean => {
 // the timestamp we skip the reload entirely and fall through to the error
 // boundary, rather than risk a reload loop with no working guard.
 const readReloadAt = (): number | null =>
-  requireBrowserStorage("session")
-    .andThen((storage) =>
-      Result.try(() => Number(storage.getItem(STORAGE_KEY) ?? "0")),
-    )
-    .unwrapOr(null);
+  readPersistedState(preloadReloadEntry, {});
 
 const recordReloadAt = (timestamp: number): boolean =>
-  requireBrowserStorage("session")
-    .andThen((storage) =>
-      Result.try(() => {
-        storage.setItem(STORAGE_KEY, String(timestamp));
-        return true;
-      }),
-    )
-    .unwrapOr(false);
+  writePersistedState(preloadReloadEntry, {}, timestamp).isOk();
 
 /**
  * Reload the page for a fresh build unless one was attempted within the

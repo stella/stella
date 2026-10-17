@@ -19,13 +19,18 @@ import {
   DESKTOP_HANDOFF_POLL_INTERVAL_MS,
   watchDesktopEditHandoff,
 } from "@/features/desktop/desktop-edit-handoff";
-import { browserStateStorage } from "@/lib/account/browser-storage";
 import { api } from "@/lib/api";
 import { getFreshLinkedAccount } from "@/lib/auth-session";
 import { unwrapEden } from "@/lib/errors/api";
 import { readQueryResult } from "@/lib/errors/query-result";
+import {
+  definePersistedState,
+  keepInAnyScope,
+  readPersistedState,
+  removePersistedState,
+  writePersistedState,
+} from "@/lib/persisted-state/registry";
 import { toSafeId } from "@/lib/safe-id";
-import { readStoredJson, serializeStoredJson } from "@/lib/stored-json";
 
 const DESKTOP_BRIDGE_PORT = env.VITE_DESKTOP_BRIDGE_PORT;
 const DESKTOP_BRIDGE_URL = `http://127.0.0.1:${String(DESKTOP_BRIDGE_PORT)}`;
@@ -127,6 +132,17 @@ const storedDesktopAccountLinkSchema = v.object({
   savedAt: v.number(),
 });
 
+const desktopAccountLinkEntry = definePersistedState({
+  key: DESKTOP_ACCOUNT_LINK_STORAGE_KEY,
+  area: "session",
+  version: 1,
+  schema: v.nullable(storedDesktopAccountLinkSchema),
+  maxBytes: 4096,
+  defaultValue: () => null,
+  scopeCheck: keepInAnyScope,
+  restoredUi: false,
+});
+
 const removeDesktopAccountLinkHash = () => {
   window.history.replaceState(
     null,
@@ -148,23 +164,20 @@ export const stashDesktopAccountLink = () => {
   if (!hash.startsWith(`${DESKTOP_ACCOUNT_LINK_HASH}?`)) {
     return;
   }
-  browserStateStorage("session").setItem(
-    DESKTOP_ACCOUNT_LINK_STORAGE_KEY,
-    serializeStoredJson({
+  writePersistedState(
+    desktopAccountLinkEntry,
+    {},
+    {
       hash,
       savedAt: Temporal.Now.instant().epochMilliseconds,
-    }),
+    },
   );
   removeDesktopAccountLinkHash();
 };
 
 const takeStashedDesktopAccountLink = () => {
-  const storage = browserStateStorage("session");
-  const stored = readStoredJson(
-    storage.getItem(DESKTOP_ACCOUNT_LINK_STORAGE_KEY),
-    storedDesktopAccountLinkSchema,
-  );
-  storage.removeItem(DESKTOP_ACCOUNT_LINK_STORAGE_KEY);
+  const stored = readPersistedState(desktopAccountLinkEntry, {});
+  removePersistedState(desktopAccountLinkEntry, {});
   if (
     !stored ||
     Temporal.Now.instant().epochMilliseconds - stored.savedAt >=

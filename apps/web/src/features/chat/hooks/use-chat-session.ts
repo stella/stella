@@ -129,7 +129,6 @@ import { getChatTurnPhase } from "@/features/chat/turn-notifications.logic";
 import { useChatTurnNotifications } from "@/features/chat/use-chat-turn-notifications";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
-import { browserStateStorage } from "@/lib/account/browser-storage";
 import { useOwnerScopedState } from "@/lib/account/use-owner-scoped-state";
 import {
   isCurrentStorageOwner,
@@ -165,8 +164,13 @@ import {
   mcpConnectorsOptions,
   playbookDetailOptions,
 } from "@/lib/knowledge/queries";
+import {
+  definePersistedState,
+  keepInAnyScope,
+  readPersistedState,
+  writePersistedState,
+} from "@/lib/persisted-state/registry";
 import { toSafeId } from "@/lib/safe-id";
-import { readStoredJson, writeStoredJson } from "@/lib/stored-json";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { downloadFile } from "@/lib/utils";
 import { createUuid } from "@/lib/uuid";
@@ -1893,67 +1897,50 @@ const readAlwaysApprovedTools = ({
   return new Set(approvedTools);
 };
 
-const getStorage = (scope: "local" | "session") => {
-  if (typeof window === "undefined") {
-    return null;
-  }
+const JsonArraySchema = v.array(v.unknown());
 
-  return scope === "local"
-    ? browserStateStorage("local")
-    : browserStateStorage("session");
-};
+const localApprovedToolsEntry = definePersistedState({
+  key: ({ key }: { key: string }) => key,
+  area: "local",
+  version: 1,
+  schema: JsonArraySchema,
+  maxBytes: 64_000,
+  defaultValue: () => [],
+  scopeCheck: keepInAnyScope,
+  restoredUi: false,
+});
+
+const sessionApprovedToolsEntry = definePersistedState({
+  ...localApprovedToolsEntry,
+  area: "session",
+});
+
+const approvedToolsEntry = (scope: "local" | "session") =>
+  scope === "local" ? localApprovedToolsEntry : sessionApprovedToolsEntry;
 
 const readStoredApprovedTools = (
   key: string,
   scope: "local" | "session" = "session",
-) => {
-  const stored = readStoredStrings(key, scope);
-  return new Set(stored.filter(isToolApprovalGrant));
-};
+) => new Set(readStoredStrings(key, scope).filter(isToolApprovalGrant));
 
-// Top-level shape only: elements are filtered to strings below, so one
-// non-string entry drops just that entry rather than the whole list.
-const JsonArraySchema = v.array(v.unknown());
-
-const readStoredStrings = (
-  key: string,
-  scope: "local" | "session" = "local",
-) => {
-  const storage = getStorage(scope);
-  if (!storage) {
-    return [];
-  }
-
-  const raw = storage.getItem(key);
-  const parsed = readStoredJson(raw, JsonArraySchema);
-  return parsed
-    ? parsed.filter((value): value is string => typeof value === "string")
-    : [];
-};
+const readStoredStrings = (key: string, scope: "local" | "session" = "local") =>
+  readPersistedState(approvedToolsEntry(scope), { key }).filter(
+    (value): value is string => typeof value === "string",
+  );
 
 const writeStoredApprovedTools = (
   key: string,
   tools: ReadonlySet<ToolApprovalGrant>,
   scope: "local" | "session",
 ) => {
-  const storage = getStorage(scope);
-  if (!storage) {
-    return;
-  }
-
-  writeStoredJson(storage, key, [...tools]);
+  writePersistedState(approvedToolsEntry(scope), { key }, [...tools]);
 };
 
 const writeStoredApprovedStrings = (
   key: string,
   values: ReadonlySet<string>,
 ) => {
-  const storage = getStorage("local");
-  if (!storage) {
-    return;
-  }
-
-  writeStoredJson(storage, key, [...values]);
+  writePersistedState(localApprovedToolsEntry, { key }, [...values]);
 };
 
 const getAlwaysApprovalKey = ({

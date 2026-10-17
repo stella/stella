@@ -8,12 +8,16 @@ import {
   isReadOnlyBrowserCommand,
 } from "@stll/api-contract/browser-control";
 
-import { browserStateStorage } from "@/lib/account/browser-storage";
 import {
   onStorageOwnerChange,
   userStorageKey,
 } from "@/lib/account/user-scoped-storage";
-import { readStoredJson, writeStoredJson } from "@/lib/stored-json";
+import {
+  definePersistedState,
+  keepInAnyScope,
+  readPersistedState,
+  writePersistedState,
+} from "@/lib/persisted-state/registry";
 
 /**
  * Whether page reads run without a click. Scoped to the web tab session: one
@@ -33,6 +37,16 @@ const STORAGE_KEY = "stella.chat.browserApprovalMode";
 // An unknown stored value (a mode an older build offered) parses to null and
 // falls back to asking.
 const modeSchema = v.picklist(Object.values(BROWSER_APPROVAL_MODE));
+const browserApprovalModeEntry = definePersistedState({
+  key: ({ key }: { key: string }) => key,
+  area: "session",
+  version: 1,
+  schema: modeSchema,
+  maxBytes: 128,
+  defaultValue: () => BROWSER_APPROVAL_MODE.askEveryTime,
+  scopeCheck: keepInAnyScope,
+  restoredUi: false,
+});
 
 /**
  * The only path by which a `use-browser` call runs without a click, and so
@@ -55,16 +69,21 @@ export const isBrowserCommandAutoApproved = ({
   lastCommandSucceeded &&
   isReadOnlyBrowserCommand(command);
 
-export const createBrowserApprovalStore = (getStorage: () => Storage) => {
+export const createBrowserApprovalStore = (getStorage?: () => Storage) => {
   const listeners = new Set<() => void>();
   // A throwing storage (blocked site data, sandboxed frame) reads as unset.
-  const readMode = (): BrowserApprovalMode =>
-    readStoredJson(
-      Result.try(() =>
-        getStorage().getItem(userStorageKey(STORAGE_KEY)),
-      ).unwrapOr(null),
-      modeSchema,
-    ) ?? BROWSER_APPROVAL_MODE.askEveryTime;
+  const readMode = (): BrowserApprovalMode => {
+    const storage = getStorage ? Result.try(getStorage) : null;
+    if (storage !== null && Result.isError(storage)) {
+      return BROWSER_APPROVAL_MODE.askEveryTime;
+    }
+    const key = userStorageKey(STORAGE_KEY);
+    return readPersistedState(
+      browserApprovalModeEntry,
+      { key },
+      storage?.value,
+    );
+  };
   let mode = readMode();
   let commandsInFlight = 0;
   let ownerEpoch = 0;
@@ -84,9 +103,15 @@ export const createBrowserApprovalStore = (getStorage: () => Storage) => {
     mode = next;
     // Blocked site data or a sandboxed frame throws on access; the mode
     // then lasts until reload.
-    const storage = Result.try(() => getStorage()).unwrapOr(null);
-    if (storage !== null) {
-      writeStoredJson(storage, userStorageKey(STORAGE_KEY), next);
+    const storage = getStorage ? Result.try(getStorage) : null;
+    if (storage === null || Result.isOk(storage)) {
+      const key = userStorageKey(STORAGE_KEY);
+      writePersistedState(
+        browserApprovalModeEntry,
+        { key },
+        next,
+        storage?.value,
+      );
     }
     notify();
   };
@@ -155,7 +180,7 @@ type BrowserApprovalStore = ReturnType<typeof createBrowserApprovalStore>;
 let store: BrowserApprovalStore | null = null;
 
 const getStore = (): BrowserApprovalStore => {
-  store ??= createBrowserApprovalStore(() => browserStateStorage("session"));
+  store ??= createBrowserApprovalStore();
   return store;
 };
 

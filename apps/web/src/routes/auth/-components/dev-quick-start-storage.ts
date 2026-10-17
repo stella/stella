@@ -1,7 +1,12 @@
+import { Result } from "better-result";
 import * as v from "valibot";
 
-import { deviceStorage } from "@/lib/account/browser-storage";
-import { readStoredJson, writeStoredJson } from "@/lib/stored-json";
+import {
+  definePersistedState,
+  keepInAnyScope,
+  readPersistedState,
+  writePersistedState,
+} from "@/lib/persisted-state/registry";
 
 import {
   DEV_QUICK_START_PHASE,
@@ -24,22 +29,33 @@ const devQuickStartAttemptSchema = v.strictObject({
   ),
 });
 
+const devQuickStartEntry = definePersistedState({
+  key: DEV_QUICK_START_STORAGE_KEY,
+  area: "session",
+  version: 1,
+  schema: v.nullable(devQuickStartAttemptSchema),
+  maxBytes: 4096,
+  defaultValue: () => null,
+  scopeCheck: keepInAnyScope,
+  restoredUi: false,
+});
+
 export const parseDevQuickStartAttempt = (
   raw: string | null,
-): DevQuickStartAttempt | null =>
-  readStoredJson(raw, devQuickStartAttemptSchema);
+): DevQuickStartAttempt | null => {
+  if (raw === null) {
+    return null;
+  }
+  const value = Result.try(() => JSON.parse(raw) as unknown).unwrapOr(null);
+  const parsed = v.safeParse(devQuickStartAttemptSchema, value);
+  return parsed.success ? parsed.output : null;
+};
 
 export const readDevQuickStartAttempt = (): DevQuickStartAttempt | null =>
-  parseDevQuickStartAttempt(
-    deviceStorage("session").getItem(DEV_QUICK_START_STORAGE_KEY),
-  );
+  readPersistedState(devQuickStartEntry, {});
 
 export const writeDevQuickStartAttempt = (
   attempt: DevQuickStartAttempt,
 ): void => {
-  writeStoredJson(
-    deviceStorage("session"),
-    DEV_QUICK_START_STORAGE_KEY,
-    attempt,
-  );
+  writePersistedState(devQuickStartEntry, {}, attempt);
 };

@@ -121,44 +121,20 @@ describe("guest annotation store", () => {
     );
   });
 
-  test("reads the marks a tab was holding before statutes could be marked", () => {
+  test("does not import the retired one-off key", () => {
     const storage = memoryStorage();
     storage.setItem(
       "case-law-guest-annotations:v1",
       JSON.stringify({
-        items: [
-          {
-            createdAt: "2026-09-09T12:00:00.000Z",
-            decisionId: decision.targetId,
-            input,
-            requestId: ids[0],
-            rowIds: ids,
-          },
-        ],
+        items: [],
         version: 1,
       }),
     );
 
-    const migrated = readGuestAnnotationStore(storage);
-    expect(migrated.version).toBe(2);
-    expect(migrated.items.at(0)).toMatchObject({
-      targetId: decision.targetId,
-      targetType: "decision",
-    });
-    expect(
-      guestAnnotationRows({
-        authorName: "You",
-        store: migrated,
-        target: decision,
-      }),
-    ).toHaveLength(ids.length);
-
-    // The migrated copy is the only one: a later write leaves nothing behind
-    // that a cleared store could resurrect.
-    expect(Result.isOk(writeGuestAnnotationStore(storage, migrated))).toBe(
-      true,
+    expect(readGuestAnnotationStore(storage)).toEqual(
+      EMPTY_GUEST_ANNOTATION_STORE,
     );
-    expect(storage.entries.has("case-law-guest-annotations:v1")).toBe(false);
+    expect(storage.entries.has("case-law-guest-annotations:v1")).toBe(true);
   });
 
   test("a mark is only ever read back on the document it was left on", () => {

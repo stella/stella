@@ -1,12 +1,18 @@
 import { useRef } from "react";
 import type { RefObject } from "react";
 
+import * as v from "valibot";
+
 import type { DocxEditorRef } from "@stll/folio-react";
 
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
-import { deviceStorage } from "@/lib/account/browser-storage";
 import { FOLIO_SCROLL_EVENT } from "@/lib/folio-scroll-event";
+import {
+  definePersistedState,
+  keepInAnyScope,
+  readPersistedState,
+} from "@/lib/persisted-state/registry";
 
 // A block that is not on screen yet is retried quickly while the editor
 // settles, then slowly for as long as a large document takes to load, since
@@ -18,6 +24,16 @@ const BLOCK_SCROLL_RETRY_LIMIT = 60;
 const BLOCK_SCROLL_SETTLE_DELAY_MS = 180;
 const BLOCK_SCROLL_SETTLE_ATTEMPTS = 2;
 const FOLIO_SCROLL_DEBUG_KEY = "folio:debug-scroll";
+const folioScrollDebugEntry = definePersistedState({
+  key: FOLIO_SCROLL_DEBUG_KEY,
+  area: "local",
+  version: 1,
+  schema: v.boolean(),
+  maxBytes: 64,
+  defaultValue: () => false,
+  scopeCheck: keepInAnyScope,
+  restoredUi: false,
+});
 
 type UseDocxBlockScrollProps = {
   editorRef: RefObject<DocxEditorRef | null>;
@@ -60,7 +76,7 @@ const debugDocxBlockScroll = (
   event: string,
   details: Record<string, unknown>,
 ) => {
-  if (deviceStorage("local").getItem(FOLIO_SCROLL_DEBUG_KEY) !== "1") {
+  if (!readPersistedState(folioScrollDebugEntry, {})) {
     return;
   }
 

@@ -1,4 +1,4 @@
-import { panic, Result } from "better-result";
+import { panic } from "better-result";
 import * as v from "valibot";
 
 import {
@@ -17,20 +17,16 @@ import type {
 } from "@/components/legal-reader/annotations/annotation-types";
 import type { ReaderAnnotation } from "@/components/legal-reader/annotations/reader-annotations-query";
 import { ClientOperationError } from "@/lib/errors/client";
+import {
+  definePersistedState,
+  keepInAnyScope,
+  readPersistedState,
+  removePersistedState,
+  writePersistedState,
+} from "@/lib/persisted-state/registry";
 import { toSafeId } from "@/lib/safe-id";
-import { readStoredJson } from "@/lib/stored-json";
 
 const GUEST_ANNOTATIONS_STORAGE_KEY = "legal-reader-guest-annotations:v2";
-/**
- * Where a tab that was reading a decision when this shipped still holds its
- * marks. Session storage, so the window is one open tab wide, but the marks
- * are the reader's own words and are not worth dropping.
- */
-const LEGACY_GUEST_ANNOTATIONS_STORAGE_KEY = "case-law-guest-annotations:v1";
-/**
- * v1 held decision notes under `decisionId`, before statutes could be marked.
- * v2 names the document the way the reader and the API now do.
- */
 const GUEST_ANNOTATIONS_VERSION = 2;
 export const GUEST_ANNOTATIONS_MAX_ITEMS = 100;
 
@@ -93,27 +89,6 @@ const guestAnnotationStoreSchema = v.object({
   version: v.literal(GUEST_ANNOTATIONS_VERSION),
 });
 
-/** The v1 payload, read once so a tab's existing marks survive the rename. */
-const legacyGuestAnnotationStoreSchema = v.object({
-  items: v.pipe(
-    v.array(
-      v.object({
-        createdAt: v.pipe(v.string(), v.isoTimestamp()),
-        decisionId: uuidSchema,
-        input: inputSchema,
-        requestId: uuidSchema,
-        rowIds: v.pipe(
-          v.array(uuidSchema),
-          v.minLength(1),
-          v.maxLength(READER_ANNOTATION_MAX_SPANS),
-        ),
-      }),
-    ),
-    v.maxLength(GUEST_ANNOTATIONS_MAX_ITEMS),
-  ),
-  version: v.literal(1),
-});
-
 export type GuestAnnotation = v.InferOutput<typeof guestAnnotationSchema>;
 export type GuestAnnotationStore = v.InferOutput<
   typeof guestAnnotationStoreSchema
@@ -142,71 +117,35 @@ const isCoherent = (store: GuestAnnotationStore): boolean =>
       item.input.spans.every((span) => span.endOffset > span.startOffset),
   );
 
-/**
- * What this tab holds, as the current payload. A payload from before statutes
- * could be marked is read as decision notes rather than discarded: the marks
- * are the reader's own words and nothing about them changed.
- */
+const guestAnnotationsEntry = definePersistedState({
+  key: GUEST_ANNOTATIONS_STORAGE_KEY,
+  area: "session",
+  version: 1,
+  schema: guestAnnotationStoreSchema,
+  maxBytes: 512_000,
+  defaultValue: () => EMPTY_GUEST_ANNOTATION_STORE,
+  scopeCheck: (value) =>
+    isCoherent(value) ? keepInAnyScope(value) : { keep: false },
+  restoredUi: false,
+});
+/** What this tab holds as a validated current payload. */
 export const readGuestAnnotationStore = (
   storage: GuestAnnotationStorage,
-): GuestAnnotationStore => {
-  const raw = Result.try(() => storage.getItem(GUEST_ANNOTATIONS_STORAGE_KEY));
-  if (Result.isError(raw)) {
-    return EMPTY_GUEST_ANNOTATION_STORE;
-  }
-  const parsed = readStoredJson(raw.value, guestAnnotationStoreSchema);
-  if (parsed !== null) {
-    return isCoherent(parsed) ? parsed : EMPTY_GUEST_ANNOTATION_STORE;
-  }
-  if (raw.value !== null) {
-    return EMPTY_GUEST_ANNOTATION_STORE;
-  }
-
-  const legacyRaw = Result.try(() =>
-    storage.getItem(LEGACY_GUEST_ANNOTATIONS_STORAGE_KEY),
-  );
-  if (Result.isError(legacyRaw)) {
-    return EMPTY_GUEST_ANNOTATION_STORE;
-  }
-  const legacy = readStoredJson(
-    legacyRaw.value,
-    legacyGuestAnnotationStoreSchema,
-  );
-  if (legacy === null) {
-    return EMPTY_GUEST_ANNOTATION_STORE;
-  }
-  const migrated: GuestAnnotationStore = {
-    items: legacy.items.map((item) => ({
-      createdAt: item.createdAt,
-      input: item.input,
-      requestId: item.requestId,
-      rowIds: item.rowIds,
-      targetId: item.decisionId,
-      targetType: "decision",
-    })),
-    version: GUEST_ANNOTATIONS_VERSION,
-  };
-  return isCoherent(migrated) ? migrated : EMPTY_GUEST_ANNOTATION_STORE;
-};
+): GuestAnnotationStore =>
+  readPersistedState(guestAnnotationsEntry, {}, storage);
 
 export const writeGuestAnnotationStore = (
   storage: GuestAnnotationStorage,
   store: GuestAnnotationStore,
 ) =>
-  Result.try({
-    try: () => {
-      storage.setItem(GUEST_ANNOTATIONS_STORAGE_KEY, JSON.stringify(store));
-      // The migrated payload is now the only copy; leaving the old key would
-      // let it come back the next time this one is cleared.
-      storage.removeItem(LEGACY_GUEST_ANNOTATIONS_STORAGE_KEY);
-    },
-    catch: (cause) =>
+  writePersistedState(guestAnnotationsEntry, {}, store, storage).mapError(
+    (cause) =>
       new ClientOperationError({
         action: "store-guest-reader-annotation",
         cause,
         message: "Guest annotation storage is unavailable",
       }),
-  });
+  );
 
 export const removeGuestAnnotation = (
   storage: GuestAnnotationStorage,
@@ -218,21 +157,20 @@ export const removeGuestAnnotation = (
     version: GUEST_ANNOTATIONS_VERSION,
   } as const satisfies GuestAnnotationStore;
 
+  const mapError = (cause: unknown) =>
+    new ClientOperationError({
+      action: "remove-guest-reader-annotation",
+      cause,
+      message: "Guest annotation storage could not be cleared",
+    });
   if (next.items.length === 0) {
-    return Result.try({
-      try: () => {
-        storage.removeItem(GUEST_ANNOTATIONS_STORAGE_KEY);
-        storage.removeItem(LEGACY_GUEST_ANNOTATIONS_STORAGE_KEY);
-      },
-      catch: (cause) =>
-        new ClientOperationError({
-          action: "remove-guest-reader-annotation",
-          cause,
-          message: "Guest annotation storage could not be cleared",
-        }),
-    }).map(() => next);
+    return removePersistedState(guestAnnotationsEntry, {}, storage)
+      .mapError(mapError)
+      .map(() => next);
   }
-  return writeGuestAnnotationStore(storage, next).map(() => next);
+  return writePersistedState(guestAnnotationsEntry, {}, next, storage)
+    .mapError(mapError)
+    .map(() => next);
 };
 
 export const createGuestAnnotation = ({

@@ -14,6 +14,11 @@ type PersistedStateKey<TScope extends object> =
   | string
   | ((scope: TScope) => string);
 
+export type PersistedStateStorage = Pick<
+  Storage,
+  "getItem" | "removeItem" | "setItem"
+>;
+
 export type PersistedStateEntry<
   TSchema extends v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
   TScope extends object,
@@ -71,9 +76,16 @@ const entryKey = <
   scope: TScope,
 ): string => (typeof entry.key === "string" ? entry.key : entry.key(scope));
 
-const removeInvalid = (area: StorageArea, key: string) =>
-  requireBrowserStorage(area).andThen((storage) =>
-    Result.try(() => storage.removeItem(key)),
+const resolveStorage = (area: StorageArea, storage?: PersistedStateStorage) =>
+  storage ? Result.ok(storage) : requireBrowserStorage(area);
+
+const removeInvalid = (
+  area: StorageArea,
+  key: string,
+  storage?: PersistedStateStorage,
+) =>
+  resolveStorage(area, storage).andThen((resolvedStorage) =>
+    Result.try(() => resolvedStorage.removeItem(key)),
   );
 
 export const isRestoredStateSafeMode = (): boolean => {
@@ -91,31 +103,32 @@ export const readPersistedState = <
 >(
   entry: PersistedStateEntry<TSchema, TScope>,
   scope: TScope,
+  storage?: PersistedStateStorage,
 ): v.InferOutput<TSchema> => {
   const fallback = entry.defaultValue();
   if (entry.restoredUi && isRestoredStateSafeMode()) {
     return fallback;
   }
   const key = entryKey(entry, scope);
-  const rawResult = requireBrowserStorage(entry.area).andThen((storage) =>
-    Result.try(() => storage.getItem(key)),
+  const rawResult = resolveStorage(entry.area, storage).andThen(
+    (resolvedStorage) => Result.try(() => resolvedStorage.getItem(key)),
   );
   if (Result.isError(rawResult) || rawResult.value === null) {
     return fallback;
   }
   const raw = rawResult.value;
   if (new TextEncoder().encode(raw).byteLength > entry.maxBytes) {
-    removeInvalid(entry.area, key);
+    removeInvalid(entry.area, key, storage);
     return fallback;
   }
   const parsed = readStoredJson(raw, envelopeSchema(entry.schema));
   if (parsed === null || parsed.version !== entry.version) {
-    removeInvalid(entry.area, key);
+    removeInvalid(entry.area, key, storage);
     return fallback;
   }
   const decision = entry.scopeCheck(parsed.value, scope);
   if (!decision.keep) {
-    removeInvalid(entry.area, key);
+    removeInvalid(entry.area, key, storage);
     return fallback;
   }
   return decision.value;
@@ -134,6 +147,7 @@ export const writePersistedState = <
   entry: PersistedStateEntry<TSchema, TScope>,
   scope: TScope,
   value: v.InferOutput<TSchema>,
+  storage?: PersistedStateStorage,
 ) => {
   const serialized = serializeStoredJson({
     version: entry.version,
@@ -149,7 +163,7 @@ export const writePersistedState = <
     );
   }
   const key = entryKey(entry, scope);
-  const storageResult = requireBrowserStorage(entry.area);
+  const storageResult = resolveStorage(entry.area, storage);
   if (Result.isError(storageResult)) {
     return Result.err(
       new PersistedStateWriteError({
@@ -176,4 +190,5 @@ export const removePersistedState = <
 >(
   entry: PersistedStateEntry<TSchema, TScope>,
   scope: TScope,
-) => removeInvalid(entry.area, entryKey(entry, scope));
+  storage?: PersistedStateStorage,
+) => removeInvalid(entry.area, entryKey(entry, scope), storage);

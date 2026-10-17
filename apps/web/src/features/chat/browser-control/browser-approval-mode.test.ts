@@ -83,7 +83,10 @@ describe("browser approval mode", () => {
           kind: "user",
           userId: "account-b",
         }),
-        JSON.stringify(BROWSER_APPROVAL_MODE.autoApproveReads),
+        JSON.stringify({
+          version: 1,
+          value: BROWSER_APPROVAL_MODE.autoApproveReads,
+        }),
       );
       queryClient.setQueryData(["session"], { user: { id: "account-b" } });
       expect(snapshots).toEqual([

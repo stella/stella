@@ -30,7 +30,16 @@
     }
   };
 
-  const storedTheme = getStorageValue(THEME_STORAGE_KEY);
+  const getRegistryValue = (key) => {
+    try {
+      const raw = getStorageValue(key);
+      return raw ? JSON.parse(raw)?.value : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const storedTheme = getRegistryValue(THEME_STORAGE_KEY);
   const d =
     storedTheme === "dark" ||
     (storedTheme !== "light" &&
@@ -40,7 +49,7 @@
     el.style.colorScheme = "dark";
     el.style.backgroundColor = "#0c0c0d";
   }
-  const palette = getStorageValue(PALETTE_STORAGE_KEY);
+  const palette = getRegistryValue(PALETTE_STORAGE_KEY);
   if (palette && PALETTES.includes(palette)) {
     el.classList.add(`palette-${palette}`);
   }

@@ -6,10 +6,17 @@ import {
 } from "react";
 import type { PropsWithChildren } from "react";
 
+import * as v from "valibot";
+
 import { PALETTE_STORAGE_KEY, THEME_STORAGE_KEY } from "@/consts";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useHydrated } from "@/hooks/use-hydrated";
-import { deviceStorage } from "@/lib/account/browser-storage";
+import {
+  definePersistedState,
+  keepInAnyScope,
+  readPersistedState,
+  writePersistedState,
+} from "@/lib/persisted-state/registry";
 import { forceReflow } from "@/lib/utils";
 
 import { syncThemeColorMeta } from "./theme-color";
@@ -40,22 +47,30 @@ const ThemeProviderContext = createContext(initialState);
 
 const PALETTE_PREFIX = "palette-";
 const PREFERENCE_CHANGE_EVENT = "stella-theme-preference-change";
+const themeEntry = definePersistedState({
+  key: THEME_STORAGE_KEY,
+  area: "local",
+  version: 1,
+  schema: v.picklist(THEMES),
+  maxBytes: 64,
+  defaultValue: () => "system" as const,
+  scopeCheck: keepInAnyScope,
+  restoredUi: true,
+});
+const paletteEntry = definePersistedState({
+  key: PALETTE_STORAGE_KEY,
+  area: "local",
+  version: 1,
+  schema: v.picklist(PALETTES),
+  maxBytes: 64,
+  defaultValue: () => "neutral" as const,
+  scopeCheck: keepInAnyScope,
+  restoredUi: true,
+});
 
-const getStoredTheme = (): Theme => {
-  const stored = deviceStorage("local").getItem(THEME_STORAGE_KEY);
-  if (stored === "light" || stored === "dark") {
-    return stored;
-  }
-  return "system";
-};
+const getStoredTheme = (): Theme => readPersistedState(themeEntry, {});
 
-const getStoredPalette = (): Palette => {
-  const stored = deviceStorage("local").getItem(PALETTE_STORAGE_KEY);
-  if (stored === "nord" || stored === "flexoki") {
-    return stored;
-  }
-  return "neutral";
-};
+const getStoredPalette = (): Palette => readPersistedState(paletteEntry, {});
 
 const getSystemTheme = (): "light" | "dark" => {
   if (typeof matchMedia === "undefined") {
@@ -129,12 +144,12 @@ export const ThemeProvider = ({ children }: PropsWithChildren) => {
   const resolvedTheme = theme === "system" ? systemTheme : theme;
 
   const setTheme = (next: Theme) => {
-    deviceStorage("local").setItem(THEME_STORAGE_KEY, next);
+    writePersistedState(themeEntry, {}, next);
     window.dispatchEvent(new Event(PREFERENCE_CHANGE_EVENT));
   };
 
   const setPalette = (next: Palette) => {
-    deviceStorage("local").setItem(PALETTE_STORAGE_KEY, next);
+    writePersistedState(paletteEntry, {}, next);
     window.dispatchEvent(new Event(PREFERENCE_CHANGE_EVENT));
   };
 

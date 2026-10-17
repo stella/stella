@@ -1,13 +1,20 @@
 import { Result, TaggedError } from "better-result";
+import * as v from "valibot";
 
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/browser";
 
-import { requireBrowserStorage } from "@/lib/account/browser-storage";
 import {
   isCurrentStorageOwner,
   storageOwner,
   userStorageKey,
 } from "@/lib/account/user-scoped-storage";
+import {
+  definePersistedState,
+  keepInAnyScope,
+  readPersistedState,
+  removePersistedState,
+  writePersistedState,
+} from "@/lib/persisted-state/registry";
 import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
 import { createUuid } from "@/lib/uuid";
@@ -39,8 +46,16 @@ class ContactImportRequestPersistenceError extends TaggedError(
   cause?: unknown;
 }> {}
 
-const sessionStorageOrUndefined = (): ContactImportRequestStorage | undefined =>
-  requireBrowserStorage("session").unwrapOr(undefined);
+const contactImportRequestEntry = definePersistedState({
+  key: ({ storageKey }: { storageKey: string }) => storageKey,
+  area: "session",
+  version: 1,
+  schema: v.nullable(v.pipe(v.string(), v.regex(UUID_PATTERN))),
+  maxBytes: 256,
+  defaultValue: () => null,
+  scopeCheck: keepInAnyScope,
+  restoredUi: false,
+});
 
 const operationStorageKey = async (
   payload: ImportCommitPayload,
@@ -64,7 +79,7 @@ const operationStorageKey = async (
 export const resolveContactImportRequest = async ({
   payload,
   scope,
-  storage = sessionStorageOrUndefined(),
+  storage,
 }: {
   payload: ImportCommitPayload;
   scope: ContactImportRequestScope;
@@ -76,26 +91,26 @@ export const resolveContactImportRequest = async ({
     owner.kind === "user" &&
     owner.userId === scope.userId &&
     isCurrentStorageOwner(owner);
-  if (!scopeIsCurrent || !storage) {
+  if (!scopeIsCurrent) {
     throw new ContactImportRequestPersistenceError({
-      message: !scopeIsCurrent
-        ? "Contact import retry identity account changed"
-        : "Contact import retry identity storage is unavailable",
+      message: "Contact import retry identity account changed",
     });
   }
 
-  const stored = Result.try(() => storage.getItem(storageKey));
-  if (Result.isError(stored)) {
-    throw new ContactImportRequestPersistenceError({
-      message: "Contact import retry identity could not be read",
-      cause: stored.error,
-    });
-  }
-  const storedId = stored.value;
-  const id = storedId && UUID_PATTERN.test(storedId) ? storedId : createUuid();
+  const storedId = readPersistedState(
+    contactImportRequestEntry,
+    { storageKey },
+    storage,
+  );
+  const id = storedId ?? createUuid();
 
   if (id !== storedId) {
-    const persisted = Result.try(() => storage.setItem(storageKey, id));
+    const persisted = writePersistedState(
+      contactImportRequestEntry,
+      { storageKey },
+      id,
+      storage,
+    );
     if (Result.isError(persisted)) {
       throw new ContactImportRequestPersistenceError({
         message: "Contact import retry identity could not be stored",
@@ -109,12 +124,10 @@ export const resolveContactImportRequest = async ({
 
 export const clearContactImportRequest = ({
   storageKey,
-  storage = sessionStorageOrUndefined(),
+  storage,
 }: {
   storageKey: string;
   storage?: ContactImportRequestStorage | undefined;
 }): void => {
-  if (storage) {
-    Result.try(() => storage.removeItem(storageKey)).unwrapOr(undefined);
-  }
+  removePersistedState(contactImportRequestEntry, { storageKey }, storage);
 };
