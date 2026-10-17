@@ -1429,6 +1429,31 @@ describe("list_capabilities", () => {
     expect(result.isError).toBe(true);
   });
 
+  test("a cursor resumes only the query that issued it", async () => {
+    const first: { items: { id: string }[]; nextCursor: string | null } =
+      parseToolPayload(
+        await call("list_capabilities", { query: "time entries", limit: 1 }),
+      );
+    const issued = first.nextCursor ?? expect.unreachable("Need a second page");
+    const sameId = first.items[0]?.id ?? expect.unreachable("Need an item");
+
+    // Reusing it under another query, or without one, is refused even though
+    // its id also appears in those listings.
+    for (const args of [
+      { query: "time", cursor: issued },
+      { cursor: issued },
+      { query: "time entries", cursor: encodePaginationCursor([sameId]) },
+    ]) {
+      const result = await call("list_capabilities", args);
+      expect(result.isError).toBe(true);
+    }
+    const resumed = await call("list_capabilities", {
+      query: "time entries",
+      cursor: issued,
+    });
+    expect(resumed.isError).not.toBe(true);
+  });
+
   test("without a query a cursor for a hidden entry resumes after its id", async () => {
     const first = parseToolPayload<{ items: { id: string }[] }>(
       await call("list_capabilities", { domain: "time-entries", limit: 50 }),

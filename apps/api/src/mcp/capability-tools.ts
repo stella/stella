@@ -951,14 +951,17 @@ const listCapabilitiesHandler: McpToolHandler<
   }
   const { domain, query, access, cursor, limit } = parsed.output;
 
-  const afterId =
+  const decodedCursor =
     cursor === undefined ? undefined : decodeCapabilityCursor(cursor);
-  if (afterId === null) {
+  // A cursor resumes only the listing that issued it: an id-order cursor
+  // carries no query, a relevance cursor carries its query.
+  if (decodedCursor === null || decodedCursor?.query !== query) {
     return invalidCursorResult({
       cursor: cursor ?? "",
       tool: "list_capabilities",
     });
   }
+  const afterId = decodedCursor?.afterId;
 
   // Feature-gated entries whose flag is off are not advertised, matching how
   // the static tools/list hides gated-off tools (describe/invoke also refuse
@@ -1011,7 +1014,9 @@ const listCapabilitiesHandler: McpToolHandler<
   const last = page.at(-1);
   const nextCursor =
     last !== undefined && filtered.length > page.length
-      ? encodePaginationCursor([last.id])
+      ? encodePaginationCursor(
+          query === undefined ? [last.id] : [last.id, query],
+        )
       : null;
 
   return structuredEgressPlan({
@@ -1096,12 +1101,22 @@ const byCapabilityId = (left: CatalogEntry, right: CatalogEntry): number => {
   return left.id < right.id ? -1 : 1;
 };
 
-const decodeCapabilityCursor = (cursor: string): string | undefined | null => {
-  const decoded = decodePaginationCursor(cursor)?.at(0);
-  if (decoded === undefined) {
+const decodeCapabilityCursor = (
+  cursor: string,
+): { afterId: string; query: string | undefined } | null => {
+  const decoded = decodePaginationCursor(cursor);
+  if (decoded === null) {
     return null;
   }
-  return typeof decoded === "string" ? decoded : null;
+  const [afterId, query, ...rest] = decoded;
+  if (
+    typeof afterId !== "string" ||
+    (query !== undefined && typeof query !== "string") ||
+    rest.length > 0
+  ) {
+    return null;
+  }
+  return { afterId, query };
 };
 
 // --- describe_capability -----------------------------------------------------
