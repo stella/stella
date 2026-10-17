@@ -538,7 +538,7 @@ type OnlineIndexReplacement = {
   replacementNames: readonly string[];
 };
 
-const ONLINE_INDEX_REPLACEMENTS: readonly OnlineIndexReplacement[] = [
+export const ONLINE_INDEX_REPLACEMENTS: readonly OnlineIndexReplacement[] = [
   {
     legacyName: "case_law_decisions_country_date_idx",
     replacementNames: ["case_law_decisions_country_date_published_idx"],
@@ -741,7 +741,10 @@ const processOnlineMigrations = async (
       return cutovers;
     }
     if (mode.operation === "repair") {
-      await retireReplacedIndexAt(connection, mode.timing);
+      const retirements = await retireReplacedIndexAt(connection, mode);
+      if (retirements.type === "deferred") {
+        return retirements;
+      }
     }
     await processOnlineRepairAt({
       connection,
@@ -947,12 +950,12 @@ const assertRepairDeployable = (
 
 const retireReplacedIndexAt = async (
   connection: OnlineMigrationConnection,
-  timing: MigrationTiming,
+  repair: Extract<OnlineMigrationMode, { operation: "repair" }>,
   offset = 0,
-): Promise<void> => {
+): Promise<OnlineMigrationOutcome> => {
   const replacement = ONLINE_INDEX_REPLACEMENTS.at(offset);
   if (!replacement) {
-    return;
+    return COMPLETE;
   }
 
   const step = {
@@ -960,18 +963,90 @@ const retireReplacedIndexAt = async (
     kind: "replacement_drop",
     name: replacement.legacyName,
   } as const;
-  await timed({
-    timing,
+  const outcome = await timed({
+    timing: repair.timing,
     work: async () => {
       await assertReplacementIndexAt(connection, replacement);
-      await connection.execute(
-        `DROP INDEX CONCURRENTLY IF EXISTS public.${quoteIdentifier(replacement.legacyName)}`,
-      );
+      return await retireOnlineIndex({
+        connection,
+        index: {
+          name: replacement.legacyName,
+          tableName: replacementTableName(replacement),
+        },
+        gate: repair.indexGate,
+        reserveObserver: repair.reserveObserver,
+      });
     },
-    describe: () => ({ ...step, outcome: "complete" }),
+    describe: ({ type }) => ({ ...step, outcome: type }),
     failure: { ...step, outcome: "failed" },
   });
-  await retireReplacedIndexAt(connection, timing, offset + 1);
+  if (outcome.type === "deferred") {
+    return outcome;
+  }
+  return await retireReplacedIndexAt(connection, repair, offset + 1);
+};
+
+/** A replaced index lives on the table its replacements cover. */
+const replacementTableName = ({
+  legacyName,
+  replacementNames,
+}: OnlineIndexReplacement): string => {
+  const tableNames = new Set(
+    replacementNames.map(
+      (replacementName) =>
+        ONLINE_MIGRATION_INDEXES.find(({ name }) => name === replacementName)
+          ?.tableName ??
+        panic(
+          `Replacement index ${replacementName} is not registered for online validation`,
+        ),
+    ),
+  );
+  const [tableName, ...others] = tableNames;
+  if (tableName === undefined || others.length > 0) {
+    return panic(
+      `Replaced index ${legacyName} needs replacements on exactly one table`,
+    );
+  }
+  return tableName;
+};
+
+type RetireOnlineIndexOptions = {
+  connection: OnlineMigrationConnection;
+  index: Pick<RequiredMigrationIndex, "name" | "tableName">;
+  gate: OnlineIndexGateOptions;
+  reserveObserver: () => Promise<OnlineMigrationConnection>;
+};
+
+/**
+ * Drops a replaced index. The drop waits for every transaction on the table,
+ * so it runs through the index gate like a build: a drop the gate holds or
+ * cancels defers the phase, and keeping the index meanwhile only costs
+ * writes. A drop cancelled after PostgreSQL marked the index invalid leaves
+ * it `INVALID`; the next run finds it present and drops it the same way.
+ */
+export const retireOnlineIndex = async ({
+  connection,
+  index,
+  gate,
+  reserveObserver,
+}: RetireOnlineIndexOptions): Promise<OnlineMigrationOutcome> => {
+  // Once retired, the step reads the catalog and nothing else, so a held gate
+  // never defers a phase over an index that is already gone.
+  if ((await readIndexState(connection, index)).type === "missing") {
+    return COMPLETE;
+  }
+  return await runGatedIndexWork({
+    connection,
+    gate,
+    reserveObserver,
+    index,
+    kind: "index_repair",
+    work: async (guardedConnection) => {
+      await guardedConnection.execute(
+        `DROP INDEX CONCURRENTLY IF EXISTS public.${quoteIdentifier(index.name)}`,
+      );
+    },
+  });
 };
 
 const assertReplacementIndexAt = async (
@@ -1026,7 +1101,7 @@ const parsePresentIndexState = (row: unknown): PresentIndexState => {
 
 const readIndexState = async (
   connection: OnlineMigrationConnection,
-  { name, tableName }: RequiredMigrationIndex,
+  { name, tableName }: Pick<RequiredMigrationIndex, "name" | "tableName">,
 ): Promise<OnlineIndexState> => {
   const row = (
     await connection.query(READ_INDEX_STATE_SQL, ["public", name, tableName])
@@ -1088,16 +1163,17 @@ const assertNoReindexArtifacts = async (
   }
 };
 
+/** Runs only inside gated index work: each artifact drop waits for the table. */
 const cleanupFailedReindexArtifacts = async (
-  connection: OnlineMigrationConnection,
+  guardedConnection: OnlineMigrationConnection,
   index: RequiredMigrationIndex,
 ): Promise<void> => {
-  const artifacts = await readReindexArtifacts(connection, index);
-  await cleanupReindexArtifactAt(connection, index, artifacts);
+  const artifacts = await readReindexArtifacts(guardedConnection, index);
+  await cleanupReindexArtifactAt(guardedConnection, index, artifacts);
 };
 
 const cleanupReindexArtifactAt = async (
-  connection: OnlineMigrationConnection,
+  guardedConnection: OnlineMigrationConnection,
   index: RequiredMigrationIndex,
   artifacts: readonly PresentIndexState[],
   offset = 0,
@@ -1113,10 +1189,15 @@ const cleanupReindexArtifactAt = async (
       `Required migration index ${index.name} has a valid reindex artifact`,
     );
   }
-  await connection.execute(
+  await guardedConnection.execute(
     `DROP INDEX CONCURRENTLY public.${quoteIdentifier(artifact.name)}`,
   );
-  await cleanupReindexArtifactAt(connection, index, artifacts, offset + 1);
+  await cleanupReindexArtifactAt(
+    guardedConnection,
+    index,
+    artifacts,
+    offset + 1,
+  );
 };
 
 const assertIndexReady = async (
@@ -1160,6 +1241,65 @@ export const ensureOnlineIndexValid = async ({
   } else if (!index.createSql) {
     panic(`Required migration index ${index.name} is missing`);
   }
+  const outcome = await runGatedIndexWork({
+    connection,
+    gate,
+    reserveObserver,
+    index,
+    kind: initialState.type === "present" ? "index_repair" : "index_build",
+    work: async (guardedConnection) => {
+      await cleanupFailedReindexArtifacts(guardedConnection, index);
+      const state = await readIndexState(guardedConnection, index);
+      if (state.type === "present") {
+        assertIndexDefinition(index, state);
+        if (state.isValid && state.isReady) {
+          return;
+        }
+        // An interrupted concurrent build can leave the index ready but
+        // invalid: PostgreSQL still maintains it, and a unique one still
+        // rejects duplicates. REINDEX builds the copy beside it and swaps
+        // only once the copy is valid, so enforcement never lapses; a
+        // DROP before CREATE would let a duplicate commit in between.
+        await guardedConnection.execute(
+          `REINDEX INDEX CONCURRENTLY public.${quoteIdentifier(index.name)}`,
+        );
+        return;
+      }
+      await guardedConnection.execute(
+        index.createSql ??
+          `CREATE ${index.isUnique ? "UNIQUE " : ""}INDEX CONCURRENTLY ${quoteIdentifier(index.name)} ${index.definitionBody}`,
+      );
+    },
+  });
+  if (outcome.type === "complete") {
+    await assertIndexReady(connection, index);
+  }
+  return outcome;
+};
+
+type GatedIndexWorkOptions = {
+  connection: OnlineMigrationConnection;
+  gate: OnlineIndexGateOptions;
+  reserveObserver: () => Promise<OnlineMigrationConnection>;
+  index: Pick<RequiredMigrationIndex, "name" | "tableName">;
+  kind: "index_build" | "index_repair";
+  work: (guardedConnection: OnlineMigrationConnection) => Promise<void>;
+};
+
+/**
+ * The one way this phase runs a statement that waits for every transaction
+ * on a table (each `CONCURRENTLY` form): under the index gate, with the
+ * phase's short lock timeout lifted and the wait watched, so a busy table
+ * defers the phase instead of failing it.
+ */
+const runGatedIndexWork = async ({
+  connection,
+  gate,
+  reserveObserver,
+  index,
+  kind,
+  work,
+}: GatedIndexWorkOptions): Promise<OnlineMigrationOutcome> => {
   const observer = await reserveObserver();
   try {
     const runtime = createOnlineIndexGate({
@@ -1168,39 +1308,17 @@ export const ensureOnlineIndexValid = async ({
       observer,
       tableName: index.tableName,
       name: index.name,
-      kind: initialState.type === "present" ? "index_repair" : "index_build",
+      kind,
     });
     try {
-      const outcome = await runtime.attempt(async (guardedConnection) => {
-        await cleanupFailedReindexArtifacts(guardedConnection, index);
-        const state = await readIndexState(guardedConnection, index);
-        if (state.type === "present") {
-          assertIndexDefinition(index, state);
-          if (state.isValid && state.isReady) {
-            return;
-          }
-          // An interrupted concurrent build can leave the index ready but
-          // invalid: PostgreSQL still maintains it, and a unique one still
-          // rejects duplicates. REINDEX builds the copy beside it and swaps
-          // only once the copy is valid, so enforcement never lapses; a
-          // DROP before CREATE would let a duplicate commit in between.
-          await guardedConnection.execute(
-            `REINDEX INDEX CONCURRENTLY public.${quoteIdentifier(index.name)}`,
-          );
-          return;
-        }
-        await guardedConnection.execute(
-          index.createSql ??
-            `CREATE ${index.isUnique ? "UNIQUE " : ""}INDEX CONCURRENTLY ${quoteIdentifier(index.name)} ${index.definitionBody}`,
-        );
-      });
+      const outcome = await runtime.attempt(work);
       switch (outcome) {
         case "done":
-          await assertIndexReady(connection, index);
           return COMPLETE;
         // Waiting here would hold the migrate run for as long as the database
-        // stays unhealthy; the next run re-reads the ledger first. A build cancelled into INVALID is
-        // repaired, with repair priority, by the next run.
+        // stays unhealthy; the next run re-reads the ledger first. Work
+        // cancelled into an INVALID index is repaired, with repair priority,
+        // by the next run.
         case "retry":
         case "wait":
           return {
@@ -1240,15 +1358,32 @@ const completeIndexCutover = async ({
       finalState.isReady;
 
     if (finalIsReady) {
-      await cleanupFailedReindexArtifacts(connection, final);
-      await assertIndexReady(connection, final);
       const stagedState = await readIndexState(connection, staged);
       if (stagedState.type === "present") {
         assertIndexDefinition(staged, stagedState);
-        await connection.execute(
-          `DROP INDEX CONCURRENTLY public.${quoteIdentifier(staged.name)}`,
-        );
       }
+      const artifacts = await readReindexArtifacts(connection, final);
+      if (stagedState.type === "present" || artifacts.length > 0) {
+        const cleanup = await runGatedIndexWork({
+          connection,
+          gate: indexGate,
+          reserveObserver,
+          index: final,
+          kind: "index_repair",
+          work: async (guardedConnection) => {
+            await cleanupFailedReindexArtifacts(guardedConnection, final);
+            if (stagedState.type === "present") {
+              await guardedConnection.execute(
+                `DROP INDEX CONCURRENTLY public.${quoteIdentifier(staged.name)}`,
+              );
+            }
+          },
+        });
+        if (cleanup.type === "deferred") {
+          return cleanup;
+        }
+      }
+      await assertIndexReady(connection, final);
       return COMPLETE;
     }
   }
@@ -1264,9 +1399,23 @@ const completeIndexCutover = async ({
   }
 
   if (finalState.type === "present") {
-    await connection.execute(
-      `DROP INDEX CONCURRENTLY public.${quoteIdentifier(final.name)}`,
-    );
+    // A drop cancelled into INVALID leaves the final index present and not
+    // ready, so the next run takes this path again.
+    const dropped = await runGatedIndexWork({
+      connection,
+      gate: indexGate,
+      reserveObserver,
+      index: final,
+      kind: "index_repair",
+      work: async (guardedConnection) => {
+        await guardedConnection.execute(
+          `DROP INDEX CONCURRENTLY public.${quoteIdentifier(final.name)}`,
+        );
+      },
+    });
+    if (dropped.type === "deferred") {
+      return dropped;
+    }
   }
   await connection.execute(
     `ALTER INDEX public.${quoteIdentifier(staged.name)} RENAME TO ${quoteIdentifier(final.name)}`,
