@@ -2,6 +2,8 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import type { DocxBrowserEditorActions } from "@/components/docx/use-docx-browser-editor-actions";
+import { toChatThreadId } from "@/lib/chat-thread-ref";
+import { toSafeId } from "@/lib/safe-id";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({
@@ -101,9 +103,11 @@ Object.defineProperty(HTMLElement.prototype, "clientWidth", {
 });
 
 const WORKSPACE_ID = "workspace-1";
-const ENTITY_ID = "entity-1";
-const DOCX_FIELD_ID = "docx-field-1";
-const PDF_FIELD_ID = "pdf-field-1";
+const ENTITY_ID = toSafeId<"entity">("entity-1");
+const ENTITY_VERSION_ID = toSafeId<"entityVersion">("entity-version-1");
+const DOCX_FIELD_ID = toSafeId<"field">("docx-field-1");
+const PDF_FIELD_ID = toSafeId<"field">("pdf-field-1");
+const PROPERTY_ID = toSafeId<"property">("property-1");
 
 const baseTab = {
   type: "pdf" as const,
@@ -121,7 +125,7 @@ const docxTab = {
   label: "Submission",
   mimeType:
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  propertyId: "property-1",
+  propertyId: PROPERTY_ID,
 };
 
 const pdfTab = {
@@ -130,7 +134,7 @@ const pdfTab = {
   id: PDF_FIELD_ID,
   label: "Exhibit",
   mimeType: "application/pdf",
-  propertyId: "property-1",
+  propertyId: PROPERTY_ID,
 };
 
 const noop = () => undefined;
@@ -241,11 +245,26 @@ function renderFileTab(tab: typeof docxTab | typeof pdfTab) {
     entityOptions(tab.workspaceId, tab.entityId).queryKey,
     {
       entityId: tab.entityId,
+      kind: "document",
+      name: tab.label,
+      currentVersionId: ENTITY_VERSION_ID,
+      currentVersionCreatedAt: "2026-10-17T00:00:00.000Z",
       extractionFileFieldId: null,
       currentVersionReference: null,
       fields: [
         {
-          content: { mimeType: tab.mimeType, type: "file" },
+          content: {
+            type: "file",
+            version: 1,
+            id: `file-${tab.id}`,
+            fileName: tab.fileName,
+            mimeType: tab.mimeType,
+            sizeBytes: 0,
+            encrypted: false,
+            sha256Hex: "sha256-file-tab-panel",
+            pdfFileId: null,
+            thumbnailFileId: null,
+          },
           id: tab.id,
           propertyId: tab.propertyId,
         },
@@ -264,19 +283,26 @@ function renderFileTab(tab: typeof docxTab | typeof pdfTab) {
         workspaceId: tab.workspaceId,
       },
     }).queryKey,
-    { threadExists: false, threadId: "draft-file-thread" },
+    {
+      threadExists: false,
+      threadId: toChatThreadId("draft-file-thread"),
+    },
   );
-  queryClient.setQueryData(mcpConnectorsOptions("organization-1").queryKey, []);
+  queryClient.setQueryData(mcpConnectorsOptions("organization-1").queryKey, {
+    canManageCustomConnectors: false,
+    connectors: [],
+    nativeTools: [],
+  });
 
-  const docxActionsRef =
-    React.createRef<Map<string, DocxBrowserEditorActions>>();
-  docxActionsRef.current = new Map();
+  const docxActionsRef = {
+    current: new Map<string, DocxBrowserEditorActions>(),
+  };
 
   const Harness = () => {
     const [, setParentRender] = React.useState(0);
     const [, setDocxCompatibilityByTab] = React.useState(new Map());
     const [docxScrollTopByTab, setDocxScrollTopByTab] = React.useState(
-      new Map([[tab.id, 120]]),
+      new Map<string, number>([[tab.id, 120]]),
     );
     const [editingDocxTabId, setEditingDocxTabId] = React.useState<
       string | null
