@@ -710,6 +710,9 @@ describe("online migrations", () => {
     const harness = createHarness();
     const records: MigrationTimingRecord[] = [];
     const firstLegacy = ONLINE_INDEX_REPLACEMENTS.at(0)?.legacyName;
+    if (firstLegacy === undefined) {
+      throw new TypeError("Expected a replaced index");
+    }
 
     const outcome = await runOnlineMigrations(harness.pool, {
       indexGate: heldIndexGate,
