@@ -1,5 +1,8 @@
 import type { MCPToolSource, ServerTool } from "@tanstack/ai";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import * as fc from "fast-check";
+
+import { assertProperty } from "@stll/property-testing";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import {
@@ -132,6 +135,108 @@ describe("assertModelSurfaceFreeOfTenantIds", () => {
         surface: "tool-schemas",
       },
     ]);
+  });
+
+  test("matches literal ids in Czech and Slovak text without case folding", () => {
+    const serialized = `Žaneta psala Jánu Šťastnému: 👩🏽‍⚖️ (${WS_B}); Ľubovi Žákovi: ${WS_A}.`;
+    assertModelSurfaceFreeOfTenantIds({
+      serialized,
+      surface: "tool-schemas",
+      workspaceIds: [WS_A, WS_B],
+    });
+    expect(analytics.exceptions()).toHaveLength(1);
+    expect(JSON.stringify(analytics.exceptions())).not.toContain(WS_A);
+    expect(JSON.stringify(analytics.exceptions())).not.toContain(WS_B);
+  });
+
+  test("empty lists and uppercase id spellings leave surfaces clean", () => {
+    for (const workspaceIds of [[], [WS_A, WS_B]]) {
+      assertModelSurfaceFreeOfTenantIds({
+        serialized: `Jiřímu Novákovi a Ľubovi: ${WS_A.toUpperCase()}`,
+        surface: "system-prompt",
+        workspaceIds,
+      });
+    }
+    assertModelSurfaceFreeOfTenantIds({
+      serialized: `${WS_A} ${WS_B}`,
+      surface: "system-prompt",
+      workspaceIds: [],
+    });
+    expect(analytics.exceptions()).toEqual([]);
+  });
+
+  test("reused id lists detect each literal position and ignore near misses", () => {
+    const workspaceIds = [WS_A, WS_B, WS_A];
+    for (const serialized of [WS_B, `(${WS_A})`, `😀${WS_B}${WS_A}`]) {
+      expect(() =>
+        assertModelSurfaceFreeOfTenantIds({
+          serialized,
+          surface: "system-prompt",
+          workspaceIds,
+        }),
+      ).toThrow("Model-bound system-prompt embeds a tenant workspace id");
+    }
+    assertModelSurfaceFreeOfTenantIds({
+      serialized: WS_A.replaceAll("-", "."),
+      surface: "system-prompt",
+      workspaceIds,
+    });
+    expect(analytics.exceptions()).toHaveLength(1);
+  });
+
+  test("model ingress matches literal workspace membership", () => {
+    assertProperty(
+      "model ingress matches literal workspace membership",
+      fc.property(
+        fc.array(
+          fc.constantFrom(
+            WS_A,
+            WS_B,
+            WS_A.toUpperCase(),
+            "Jiřímu Novákovi",
+            "Ľubovi Šťastnému",
+            "😀",
+            "\ud800",
+            ".",
+          ),
+          { maxLength: 8 },
+        ),
+        fc.subarray([WS_A, WS_B]),
+        (fragments, workspaceIds) => {
+          const serialized = fragments.join("");
+          const check = () =>
+            assertModelSurfaceFreeOfTenantIds({
+              serialized,
+              surface: "system-prompt",
+              workspaceIds,
+            });
+          if (workspaceIds.some((id) => serialized.includes(id))) {
+            expect(check).toThrow(
+              "Model-bound system-prompt embeds a tenant workspace id",
+            );
+            return;
+          }
+          expect(check).not.toThrow();
+        },
+      ),
+    );
+  });
+
+  test("changed id lists invalidate their cached matcher", () => {
+    const workspaceIds = [WS_A];
+    assertModelSurfaceFreeOfTenantIds({
+      serialized: WS_B,
+      surface: "system-prompt",
+      workspaceIds,
+    });
+    workspaceIds[0] = WS_B;
+    expect(() =>
+      assertModelSurfaceFreeOfTenantIds({
+        serialized: WS_B,
+        surface: "system-prompt",
+        workspaceIds,
+      }),
+    ).toThrow("Model-bound system-prompt embeds a tenant workspace id");
   });
 
   test("clean surfaces pass silently", () => {
