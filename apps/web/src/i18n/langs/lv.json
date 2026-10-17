@@ -29,11 +29,11 @@
   },
   "agentSetup": {
     "addressLabel": "Asistents prasīs šo adresi",
-    "copiedToast": "Norādījumi nokopēti. Ielīmējiet tos tērzēšanā ar asistentu.",
     "copy": "Nokopējiet tam norādījumus",
     "description": "Jautājiet Claude vai ChatGPT par savām lietām un dokumentiem. Izvēlieties asistentu, lai atvērtu īsu ceļvedi; tas aizņem apmēram minūti.",
     "instructions": "Pievieno mani stella, manai juridiskajai darbvietai. Izpildi sadaļu “Instructions for AI agents” vietnē {guideUrl} un izmanto šo servera adresi: {mcpUrl}",
     "openGuide": "Atvērt ceļvedi: {assistant}",
+    "pasteHint": "Ielīmējiet tos tērzēšanā ar asistentu.",
     "selfSetupHint": "Izmantojat Claude Code vai Codex?",
     "title": "Izmantojiet stella savā AI asistentā"
   },

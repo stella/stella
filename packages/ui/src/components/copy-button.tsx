@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import type { ComponentProps } from "react";
 
-import { CheckIcon, CopyIcon } from "../icons";
+import { CheckIcon, CopyToClipboardIcon } from "../icons";
 import { cn } from "../lib/utils";
 import { Button } from "./button";
 
@@ -23,6 +23,35 @@ type CopyButtonProps = Omit<
   /** Renders the glyph alone, with the labels as its accessible name. */
   iconOnly?: boolean;
   iconClassName?: string;
+  /** Classes for the visible label, e.g. to hide it on narrow screens. */
+  labelClassName?: string;
+};
+
+/**
+ * The in-place confirmation behind `CopyButton`, for a copy control whose
+ * own content is the thing copied (a reference chip, a permalink mark) and
+ * so cannot be a glyph button: `copied` is true for a moment after `copy`
+ * succeeds, and the control shows it where the user clicked. No toast.
+ */
+export const useCopyConfirmation = (onCopy: () => Promise<boolean>) => {
+  const [copied, setCopied] = useState(false);
+  const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const copy = async () => {
+    if (!(await onCopy())) {
+      return;
+    }
+    if (resetTimerRef.current !== null) {
+      clearTimeout(resetTimerRef.current);
+    }
+    setCopied(true);
+    resetTimerRef.current = setTimeout(() => {
+      resetTimerRef.current = null;
+      setCopied(false);
+    }, COPIED_RESET_MS);
+  };
+
+  return { copied, copy };
 };
 
 /**
@@ -36,25 +65,11 @@ export const CopyButton = ({
   copiedLabel,
   iconOnly = false,
   iconClassName = "size-3.5",
+  labelClassName,
   className,
   ...buttonProps
 }: CopyButtonProps) => {
-  const [copied, setCopied] = useState(false);
-  const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const handleClick = async () => {
-    if (!(await onCopy())) {
-      return;
-    }
-    if (resetTimerRef.current !== null) {
-      clearTimeout(resetTimerRef.current);
-    }
-    setCopied(true);
-    resetTimerRef.current = setTimeout(() => {
-      resetTimerRef.current = null;
-      setCopied(false);
-    }, COPIED_RESET_MS);
-  };
+  const { copied, copy } = useCopyConfirmation(onCopy);
 
   const currentLabel = copied ? copiedLabel : label;
   const shown = (isCopiedSlot: boolean) =>
@@ -69,17 +84,19 @@ export const CopyButton = ({
       className={className}
       data-copied={copied ? "" : undefined}
       onClick={() => {
-        handleClick().catch(reportError);
+        copy().catch(reportError);
       }}
     >
       <span aria-hidden="true" className="grid place-items-center">
-        <CopyIcon className={cn(SWAP_CLASS, shown(false), iconClassName)} />
+        <CopyToClipboardIcon
+          className={cn(SWAP_CLASS, shown(false), iconClassName)}
+        />
         <CheckIcon className={cn(SWAP_CLASS, shown(true), iconClassName)} />
       </span>
       {!iconOnly && (
         // Both labels share one grid cell, so the button keeps the wider
         // label's width and nothing beside it shifts.
-        <span className="grid">
+        <span className={cn("grid", labelClassName)}>
           <span
             aria-hidden={copied}
             className={cn(SWAP_CLASS, copied ? "opacity-0" : "opacity-100")}

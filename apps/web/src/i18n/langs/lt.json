@@ -29,11 +29,11 @@
   },
   "agentSetup": {
     "addressLabel": "Asistentas paprašys šio adreso",
-    "copiedToast": "Instrukcijos nukopijuotos. Įklijuokite jas į pokalbį su asistentu.",
     "copy": "Nukopijuokite jam instrukcijas",
     "description": "Klauskite Claude arba ChatGPT apie savo bylas ir dokumentus. Pasirinkite asistentą ir atsivers trumpas vadovas; tai užtruks apie minutę.",
     "instructions": "Prijunk mane prie stella, mano teisinės darbo srities. Vadovaukis DI agentų instrukcijomis adresu {guideUrl} ir naudok šį serverio adresą: {mcpUrl}",
     "openGuide": "Atidaryti vadovą: {assistant}",
+    "pasteHint": "Įklijuokite jas į pokalbį su asistentu.",
     "selfSetupHint": "Naudojate Claude Code ar Codex?",
     "title": "Naudokite stella savo DI asistente"
   },

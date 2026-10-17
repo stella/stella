@@ -29,11 +29,11 @@
   },
   "agentSetup": {
     "addressLabel": "Asystent poprosi o ten adres",
-    "copiedToast": "Instrukcje skopiowane. Wklej je do czatu z asystentem.",
     "copy": "Skopiuj mu instrukcje",
     "description": "Pytaj Claude lub ChatGPT o swoje sprawy i dokumenty. Wybierz asystenta, aby otworzyć krótką instrukcję; zajmie to około minuty.",
     "instructions": "Połącz mnie ze stellą, moim prawniczym obszarem roboczym. Postępuj zgodnie z sekcją „Instructions for AI agents” na {guideUrl} i użyj tego adresu serwera: {mcpUrl}",
     "openGuide": "Otwórz instrukcję dla {assistant}",
+    "pasteHint": "Wklej je do czatu z asystentem.",
     "selfSetupHint": "Korzystasz z Claude Code lub Codexa?",
     "title": "Korzystaj ze stelli w swoim asystencie AI"
   },

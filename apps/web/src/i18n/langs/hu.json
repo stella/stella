@@ -29,11 +29,11 @@
   },
   "agentSetup": {
     "addressLabel": "Az asszisztens ezt a címet fogja kérni",
-    "copiedToast": "Utasítások másolva. Illeszd be őket az asszisztenssel folytatott csevegésbe.",
     "copy": "Másold ki neki az utasításokat",
     "description": "Kérdezd a Claude-ot vagy a ChatGPT-t az ügyeidről és dokumentumaidról. Válaszd ki az asszisztensed egy rövid útmutatóhoz; nagyjából egy perc.",
     "instructions": "Csatlakoztass a stellához, a jogi munkaterületemhez. Kövesd az „Instructions for AI agents” részt itt: {guideUrl}, és ezt a szervercímet használd: {mcpUrl}",
     "openGuide": "Útmutató megnyitása: {assistant}",
+    "pasteHint": "Illeszd be őket az asszisztenssel folytatott csevegésbe.",
     "selfSetupHint": "Claude Code-ot vagy Codexet használsz?",
     "title": "Használd a stellát az AI-asszisztensedben"
   },

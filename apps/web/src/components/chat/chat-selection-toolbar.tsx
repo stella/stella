@@ -1,18 +1,11 @@
 import { useCallback, useState } from "react";
-import type { Dispatch, RefObject, SetStateAction } from "react";
+import type { RefObject } from "react";
 
-import { panic, Result } from "better-result";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { copyToClipboard } from "@stll/clipboard";
 import { Button } from "@stll/ui/button";
-import {
-  AiActionIcon,
-  CheckIcon,
-  CopyIcon,
-  NewChatIcon,
-  QuoteIcon,
-} from "@stll/ui/icons";
+import { AiActionIcon, NewChatIcon, QuoteIcon } from "@stll/ui/icons";
 
 import { useChatEditorManager } from "@/components/chat-editor-provider";
 import {
@@ -30,6 +23,7 @@ import {
 } from "@/components/chat/side-panel-chat-status";
 import { SIDE_PANEL_CHAT_STATUS } from "@/components/chat/side-panel-chat-status.logic";
 import { useSidePanelChat } from "@/components/chat/use-request-chat-about";
+import { CopyActionButton } from "@/components/copy-action-button";
 import { SelectionToolbar } from "@/components/selection-toolbar";
 import { selectionToolbarAnchor } from "@/components/selection-toolbar.logic";
 import type { SelectionToolbarAnchor } from "@/components/selection-toolbar.logic";
@@ -38,15 +32,11 @@ import { AnswerEditPanel } from "@/features/chat/answer-edit/answer-edit-panel";
 import { mapAnswerSelection } from "@/features/chat/answer-edit/answer-edit-selection";
 import { useChatSelectionEvents } from "@/features/chat/answer-edit/use-chat-selection-events";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
-import { getAnalytics } from "@/lib/analytics/provider";
-import { detached } from "@/lib/detached";
-import { notifyUserError } from "@/lib/errors/user-toast";
 import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 
 /** `ChatThreadMessages` marks every message it renders with its id. */
 const CHAT_MESSAGE_ATTRIBUTE = "data-chat-message-id";
 
-const COPIED_RESET_MS = 2000;
 const EMPTY_MESSAGES: readonly ChatUIMessage[] = [];
 
 /** Below `sm` a full row of localized labels outgrows the screen, so the
@@ -120,7 +110,6 @@ export const ChatSelectionToolbar = ({
   const refreshEditedAnswer = useCallback(async () => {
     await (editing === null ? undefined : onAnswerEdited?.(editing.messageId));
   }, [editing, onAnswerEdited]);
-  const [copied, setCopied] = useState(false);
   // Where the bar stood when its words went to a new chat: the confirmation
   // stays there, where the reader is looking, after the selection is gone.
   const [confirmAt, setConfirmAt] = useState<SelectionToolbarAnchor | null>(
@@ -154,10 +143,6 @@ export const ChatSelectionToolbar = ({
       if (anchor === null) {
         setSelected(null);
         return;
-      }
-      // A fresh selection must not inherit the previous one's confirmation.
-      if (selected?.quote !== quote) {
-        setCopied(false);
       }
       // Nor may the last confirmation return once this selection goes.
       setConfirmAt(null);
@@ -279,13 +264,6 @@ export const ChatSelectionToolbar = ({
     insertPastedTextIntoThread(source.threadRef, chip);
   };
 
-  const copy = async () =>
-    copySelectedText({
-      quote: selected.quote,
-      setCopied,
-      errorMessage: t("errors.actionFailed"),
-    });
-
   const actions = chatSelectionActions({
     quote: selected.quote,
     source,
@@ -391,24 +369,15 @@ export const ChatSelectionToolbar = ({
               }
               case CHAT_SELECTION_ACTION.copy: {
                 return (
-                  <Button
-                    key={action}
-                    onClick={() => {
-                      detached(copy(), "chat-selection-toolbar.copy");
-                    }}
+                  <CopyActionButton
+                    // A fresh selection starts unconfirmed.
+                    key={`${action}:${selected.quote}`}
+                    labelClassName={ACTION_LABEL_CLASS}
                     onMouseDown={(event) => event.preventDefault()}
                     size="sm"
+                    text={selected.quote}
                     variant="ghost"
-                  >
-                    {copied ? (
-                      <CheckIcon className="size-3.5" />
-                    ) : (
-                      <CopyIcon className="size-3.5" />
-                    )}
-                    <span className={ACTION_LABEL_CLASS}>
-                      {copied ? t("common.copied") : t("common.copy")}
-                    </span>
-                  </Button>
+                  />
                 );
               }
               default: {
@@ -423,27 +392,6 @@ export const ChatSelectionToolbar = ({
     </>
   );
 };
-
-type CopySelectedTextOptions = {
-  quote: string;
-  setCopied: Dispatch<SetStateAction<boolean>>;
-  errorMessage: string;
-};
-
-async function copySelectedText({
-  quote,
-  setCopied,
-  errorMessage,
-}: CopySelectedTextOptions) {
-  const result = await copyToClipboard(quote);
-  if (Result.isError(result)) {
-    getAnalytics().captureError(result.error);
-    notifyUserError(result.error, errorMessage);
-    return;
-  }
-  setCopied(true);
-  setTimeout(() => setCopied(false), COPIED_RESET_MS);
-}
 
 const answerEditIsDisabled = (
   messages: readonly ChatUIMessage[],

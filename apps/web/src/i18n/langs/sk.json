@@ -29,11 +29,11 @@
   },
   "agentSetup": {
     "addressLabel": "Asistent si vyžiada túto adresu",
-    "copiedToast": "Pokyny skopírované. Vložte ich do chatu so svojím asistentom.",
     "copy": "Skopírujte mu pokyny",
     "description": "Pýtajte sa Claude alebo ChatGPT na svoje spisy a dokumenty. Vyberte svojho asistenta a otvorí sa krátky návod; zaberie asi minútu.",
     "instructions": "Pripoj ma k stelle, môjmu právnemu pracovnému priestoru. Postupuj podľa časti „Instructions for AI agents“ na {guideUrl} a použi túto adresu servera: {mcpUrl}",
     "openGuide": "Otvoriť návod pre {assistant}",
+    "pasteHint": "Vložte ich do chatu so svojím asistentom.",
     "selfSetupHint": "Používate Claude Code alebo Codex?",
     "title": "Používajte stellu vo svojom AI asistentovi"
   },

@@ -15,6 +15,7 @@ export const NON_PLUGIN_MODULES: ReadonlySet<string> = new Set([
   "aggregate-lock-sites.ts",
   "budget-ledger.ts",
   "database-access.ts",
+  "icon-ownership.ts",
   "module-id.ts",
   "physical-properties.ts",
   "public-law-decision-surface-modules.ts",

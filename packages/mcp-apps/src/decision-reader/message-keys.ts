@@ -4,6 +4,7 @@ export const READER_MESSAGE_KEYS = {
   "statutes.diffRemoved": "statutes.diffRemoved",
   "statutes.diffInserted": "statutes.diffInserted",
   "common.copyLink": "common.copyLink",
+  "common.copied": "common.copied",
   "common.back": "common.back",
   "caseLaw.viewer.legalSentence": "caseLaw.viewer.legalSentence",
   "caseLaw.viewer.abstract": "caseLaw.viewer.abstract",
