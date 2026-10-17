@@ -94,7 +94,7 @@ export const flattenWorkflowSteps = (
           "Parallel groups cannot declare leaf step fields",
         );
       }
-      leaves.push(...flattenWorkflowSteps(step.parallel, readPool));
+      leaves.push(...flattenWorkflowSteps(step["parallel"], readPool));
       continue;
     }
     leaves.push(step);
