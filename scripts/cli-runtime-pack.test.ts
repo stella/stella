@@ -110,7 +110,7 @@ test("fresh CLI export includes preparation metadata imports", () => {
     missingPreparationImports(
       EXPORTED_PATHS.filter((file) => file !== "packages/scripts"),
     ),
-  ).toContain("packages/scripts/src/generated-files.ts");
+  ).toContain("packages/scripts/src/generated-file-inventory.ts");
 });
 
 const Sha = v.pipe(v.string(), v.regex(/^[0-9a-f]{40}$/u));
@@ -498,6 +498,34 @@ describe("generated imports", () => {
     expect(
       scan({ source: 'import type { R } from "./generated/runtime.js";' }),
     ).toEqual([]);
+  });
+
+  test("canonical preparation derives a package import only through its pack lifecycle", () => {
+    const prepared = {
+      ...derived,
+      write: ["bun", "scripts/probe.ts"],
+      prepare: ["bun", "--cwd=packages/probe", "run", "build"],
+    } as const satisfies Generator;
+    const scanPrepared = (scripts: Record<string, string>) =>
+      findUnbuildableGeneratedImports({
+        trackedFiles: ["packages/probe/package.json", importer],
+        readSource: () => 'import "./generated/runtime.js";',
+        readScripts: () => scripts,
+        generators: [prepared],
+      });
+    expect(
+      scanPrepared({
+        prepack: "bun run build",
+        build: "bun ../../scripts/probe.ts",
+      }),
+    ).toEqual([]);
+    expect(scanPrepared({ build: "bun ../../scripts/probe.ts" })).toEqual([
+      {
+        importer,
+        specifier: "./generated/runtime.js",
+        missing: "packages/probe/src/generated/runtime.ts",
+      },
+    ]);
   });
 
   test("a derived module whose script prepack never reaches is not", () => {

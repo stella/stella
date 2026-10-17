@@ -372,6 +372,7 @@ export const searchDecisionsHandler = async ({
   observer,
 }: SearchDecisionsHandlerArgs) => {
   const countryRead = readPublicLawCountry(body.country, {
+    domain: "caseLaw",
     admitted: PUBLIC_CASE_LAW_COUNTRIES,
     surface: "search",
   });
