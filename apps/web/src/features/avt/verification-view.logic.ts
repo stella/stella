@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 
 import type { ParagraphBlock } from "@stll/legal-ast/document-ast";
+import type { TextMarkState } from "@stll/ui/text-mark";
 
 import type {
   ClaimAnchor,
@@ -24,6 +25,30 @@ export const spanPresentation = ({
   dim: filterActive && !matches,
   highlight: filterActive && matches,
 });
+
+/**
+ * How one claim is marked over the original document: the selected claim is
+ * active, a claim the active filter matches is picked out, and a claim the
+ * filter leaves out is not drawn (a highlight cannot fade its words the way
+ * the reading view dims them).
+ */
+export const claimMark = ({
+  selected,
+  dim,
+  highlight,
+}: {
+  selected: boolean;
+  dim: boolean;
+  highlight: boolean;
+}): TextMarkState | null => {
+  if (selected) {
+    return "active";
+  }
+  if (dim) {
+    return null;
+  }
+  return highlight ? "matched" : "rest";
+};
 
 /**
  * A run of claims that sit in the same DOCX block or on the same PDF page,
