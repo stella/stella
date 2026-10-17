@@ -9,7 +9,7 @@ import {
   createTestPglite,
   HARNESS_RELATIONS_SQL,
   ROLE_GRANT_STATEMENTS,
-  schemaTableNames,
+  availableSchemaRelationNames as harnessSchemaRelationNames,
 } from "@/api/tests/pglite-test-db";
 import {
   deriveStellaTablePrivileges,
@@ -172,7 +172,7 @@ const grantedColumnPairs = (sqlText: string): Set<string> => {
   return pairs;
 };
 
-const schemaRelationNames = new Set<string>(
+const availableSchemaRelationNames = new Set<string>(
   Object.values(schema)
     .filter((value) => isTable(value) || isView(value))
     .map((relation) =>
@@ -203,7 +203,8 @@ describe("pglite role grants mirror the committed migrations", () => {
     const absent = [...harnessPairs].filter((pair) => {
       const [role, table = ""] = pair.split(":");
       return (
-        role === "stella_public_law_reader" && !schemaTableNames.has(table)
+        role === "stella_public_law_reader" &&
+        !harnessSchemaRelationNames.has(table)
       );
     });
 
@@ -220,7 +221,7 @@ describe("pglite role grants mirror the committed migrations", () => {
         return (
           !WHOLESALE_ROLES.has(role) &&
           !MIGRATION_REPLAYED_ROLES.has(role) &&
-          schemaRelationNames.has(table) &&
+          availableSchemaRelationNames.has(table) &&
           !harnessPairs.has(pair)
         );
       })
@@ -250,7 +251,7 @@ describe("pglite role grants mirror the committed migrations", () => {
       return (
         !COLUMN_UNSCOPED_ROLES.has(role) &&
         !MIGRATION_REPLAYED_ROLES.has(role) &&
-        schemaRelationNames.has(table)
+        availableSchemaRelationNames.has(table)
       );
     };
     const migrationColumns = [

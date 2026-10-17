@@ -325,12 +325,15 @@ const grantedPublicLawColumns = (
       ),
   );
 
-// Expansion releases may declare permitted grants before their tables exist.
+// Expansion releases may declare permitted grants before their relations exist.
 // The harness pushes only this checkout's schema, so it cannot grant those yet.
-export const schemaTableNames = new Set<string>(
-  Object.values(schema)
-    .filter((value) => isTable(value))
-    .map((table) => getTableName(table)),
+export const availableSchemaRelationNames = new Set<string>(
+  Object.values(schema).flatMap((relation) => {
+    if (isTable(relation)) {
+      return [getTableName(relation)];
+    }
+    return isPgView(relation) ? [getViewConfig(relation).name] : [];
+  }),
 );
 
 /**
@@ -594,7 +597,7 @@ export const ROLE_GRANT_STATEMENTS = [
   ...Object.entries(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION)
     .filter(
       ([relation, columns]) =>
-        schemaTableNames.has(relation) &&
+        availableSchemaRelationNames.has(relation) &&
         relation !== getTableName(schema.caseLawDecisionAliases) &&
         relation !== getTableName(schema.caseLawDecisionCitationStats) &&
         relation !== getTableName(schema.caseLawDecisionCitationStatsState) &&
