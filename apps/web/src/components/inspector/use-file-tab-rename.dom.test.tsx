@@ -43,13 +43,8 @@ const { createInspectorBroadcastSession: broadcast } =
 const { getAnalytics } = await import("@/lib/analytics/provider");
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
-const { entityViewKeys } =
-  await import("@/lib/workspaces/queries/entity-views");
-const { inboxKeys } = await import("@/lib/inbox/queries");
 const { entitiesKeys } =
   await import("@/lib/workspaces/queries/entities.logic");
-const { fileMetadataByFieldQueryRoot } =
-  await import("@/lib/files/file-metadata-query.logic");
 const { downloadTabFile } = await import("./file-download-service");
 const { toSafeId } = await import("@/lib/safe-id");
 const { readStoredJson } = await import("@/lib/stored-json");
@@ -300,7 +295,6 @@ describe("confirmed file rename state", () => {
       refetchCount += 1;
       return await refresh.promise;
     });
-    const invalidate = spyOn(client, "invalidateQueries");
     const completed: string[] = [];
     try {
       act(() =>
@@ -321,25 +315,6 @@ describe("confirmed file rename state", () => {
       expect(
         client.getQueryState(entitiesKeys.all("matter"))?.fetchStatus,
       ).toBe("fetching");
-      expect(
-        new Set(
-          invalidate.mock.calls.map(([filters]) =>
-            JSON.stringify(filters?.queryKey),
-          ),
-        ),
-      ).toEqual(
-        new Set([
-          JSON.stringify(entitiesKeys.all("matter")),
-          JSON.stringify(entityViewKeys.all("org", "user")),
-          JSON.stringify(inboxKeys.all("org", "user")),
-          JSON.stringify(
-            fileMetadataByFieldQueryRoot({
-              workspaceId: "matter",
-              fieldId: "field-A",
-            }),
-          ),
-        ]),
-      );
       act(() =>
         result.current.first.mutate({
           workspaceId: "matter",
@@ -353,7 +328,6 @@ describe("confirmed file rename state", () => {
       expect(tab("A")?.label).toBe("second.md");
     } finally {
       await act(async () => refresh.resolve([]));
-      invalidate.mockRestore();
     }
   });
 
@@ -592,29 +566,32 @@ describe("confirmed file rename state", () => {
     const invalidate = spyOn(client, "invalidateQueries").mockRejectedValue(
       new Error("Refresh unavailable"),
     );
-    act(() =>
-      result.current.first.mutate({
-        workspaceId: "matter",
-        entityId: "A",
-        name: "confirmed.md",
-      }),
-    );
-    await waitFor(() => expect(requests).toHaveLength(1));
-    await act(async () => success(0, "A", "confirmed.md"));
-    await waitFor(() => expect(client.isMutating()).toBe(0));
-    expect(tab("A")).toMatchObject({
-      label: "confirmed.md",
-      fileName: "confirmed.md",
-    });
-    expect(result.current.first.isSuccess).toBe(true);
-    expect(toast).not.toHaveBeenCalled();
-    expect(capture).toHaveBeenCalledWith(expect.any(Error), {
-      type: "detached",
-      operation: "entity-rename.refresh",
-    });
-    capture.mockRestore();
-    toast.mockRestore();
-    invalidate.mockRestore();
+    try {
+      act(() =>
+        result.current.first.mutate({
+          workspaceId: "matter",
+          entityId: "A",
+          name: "confirmed.md",
+        }),
+      );
+      await waitFor(() => expect(requests).toHaveLength(1));
+      await act(async () => success(0, "A", "confirmed.md"));
+      await waitFor(() => expect(client.isMutating()).toBe(0));
+      expect(tab("A")).toMatchObject({
+        label: "confirmed.md",
+        fileName: "confirmed.md",
+      });
+      expect(result.current.first.isSuccess).toBe(true);
+      expect(toast).not.toHaveBeenCalled();
+      expect(capture).toHaveBeenCalledWith(expect.any(Error), {
+        type: "detached",
+        operation: "resource-query.invalidate",
+      });
+    } finally {
+      capture.mockRestore();
+      toast.mockRestore();
+      invalidate.mockRestore();
+    }
   });
 
   test("a throwing refusal completion releases the next invocation", async () => {

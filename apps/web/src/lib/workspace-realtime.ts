@@ -4,7 +4,7 @@ import {
   type QueryClient,
   type QueryKey,
 } from "@tanstack/react-query";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import {
   parseWorkspaceRealtimeEvent,
@@ -16,6 +16,7 @@ import {
   type WorkspaceRealtimeEvent,
 } from "@stll/api-contract";
 
+import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import {
   fileContentByFieldQueryRoot,
@@ -502,11 +503,23 @@ export const applyResourceQueryActions = async (
       queryClient.removeQueries({ queryKey: action.queryKey, exact: false });
     }
   }
-  await Promise.all(
-    invalidations.map(async ({ queryKey }) => {
-      await queryClient.invalidateQueries({ queryKey, refetchType: "none" });
-    }),
+  const invalidated = await Result.tryPromise(
+    async () =>
+      await Promise.all(
+        invalidations.map(async ({ queryKey }) => {
+          await queryClient.invalidateQueries({
+            queryKey,
+            refetchType: "none",
+          });
+        }),
+      ),
   );
+  if (Result.isError(invalidated)) {
+    getAnalytics().captureError(invalidated.error, {
+      type: "detached",
+      operation: "resource-query.invalidate",
+    });
+  }
   // Refetch failure must not turn a committed write into a rejected mutation.
   detached(
     queryClient.refetchQueries({

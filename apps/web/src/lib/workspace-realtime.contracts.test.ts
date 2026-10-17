@@ -5,7 +5,7 @@ import {
   type QueryKey,
   type QueryMeta,
 } from "@tanstack/react-query";
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
@@ -16,6 +16,7 @@ import { SIGNAL_VIEW } from "@stll/api-contract/signals";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { linkIconOptions } from "@/features/chat/link-icons";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { fileMetadataOptions } from "@/lib/files/file-metadata-query";
 import { fileMetadataByFieldQueryRoot } from "@/lib/files/file-metadata-query.logic";
 import { fileOptions, textFileOptions } from "@/lib/files/queries";
@@ -289,6 +290,40 @@ test("each migrated mutation still invalidates every prior cache target", async 
         }
       }
     } finally {
+      queryClient.clear();
+    }
+  }
+});
+
+test("cache invalidation failures preserve every registered mutation's committed result", async () => {
+  const mutationNames = Object.keys(RESOURCE_MUTATION_CONTRACTS).filter(
+    (name): name is keyof typeof RESOURCE_MUTATION_CONTRACTS =>
+      Object.hasOwn(RESOURCE_MUTATION_CONTRACTS, name),
+  );
+  for (const mutation of mutationNames) {
+    const queryClient = new QueryClient();
+    const failure = new TypeError("Cache invalidation unavailable");
+    const invalidate = spyOn(
+      queryClient,
+      "invalidateQueries",
+    ).mockRejectedValue(failure);
+    const capture = spyOn(getAnalytics(), "captureError");
+    const committed = { workspaceId: WORKSPACE_ID, name: "confirmed" };
+    const write = resourceMutation({
+      mutation,
+      queryClient,
+      mutationFn: async () => committed,
+    });
+    try {
+      expect(await write({ workspaceId: WORKSPACE_ID })).toBe(committed);
+      expect(invalidate).toHaveBeenCalled();
+      expect(capture).toHaveBeenCalledWith(failure, {
+        type: "detached",
+        operation: "resource-query.invalidate",
+      });
+    } finally {
+      invalidate.mockRestore();
+      capture.mockRestore();
       queryClient.clear();
     }
   }
