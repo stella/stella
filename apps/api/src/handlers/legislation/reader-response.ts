@@ -162,7 +162,17 @@ export const statuteVersionsSuccessResponseSchema = t.Object(
     limit: t.Number(),
     nextCursor: nullableBoundedString(readerTextBytes.cursor),
   },
-  closed,
+  {
+    ...closed,
+    // The versions handler performs one amendment query for the page, then
+    // partitions those relations among versions. This is a page-wide budget,
+    // not a separate 500-relation allowance for every version.
+    "x-sharedArrayItems": {
+      arrayProperty: "items",
+      nestedArrayPath: ["amendedBy", "items"],
+      maxItems: LEGISLATION_AMENDMENT_PAGE_MAX,
+    },
+  },
 );
 
 export const statuteReaderSuccessResponseSchema = t.Object(

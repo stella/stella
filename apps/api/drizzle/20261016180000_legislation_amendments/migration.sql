@@ -47,5 +47,5 @@ CREATE POLICY "public_law_reader_access" ON "legislation_amendments" FOR SELECT 
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON "legislation_amendment_snapshots", "legislation_amendments" TO stella_ingestion;--> statement-breakpoint
 GRANT SELECT ON "legislation_amendment_snapshots", "legislation_amendments" TO stella;--> statement-breakpoint
-GRANT SELECT (source_id, target_eli, language, observed_at, coverage) ON "legislation_amendment_snapshots" TO stella_public_law_reader;--> statement-breakpoint
-GRANT SELECT (source_id, target_eli, language, publisher_id, amending_eli, amending_title, amending_anchor, affected_anchor, change_kind, effective_type, effective_date, effective_text, publisher_instruction) ON "legislation_amendments" TO stella_public_law_reader;
+GRANT SELECT (source_id, target_eli, language, observed_at, coverage) ON TABLE "legislation_amendment_snapshots" TO stella_public_law_reader;--> statement-breakpoint
+GRANT SELECT (source_id, target_eli, language, publisher_id, amending_eli, amending_title, amending_anchor, affected_anchor, change_kind, effective_type, effective_date, effective_text, publisher_instruction) ON TABLE "legislation_amendments" TO stella_public_law_reader;

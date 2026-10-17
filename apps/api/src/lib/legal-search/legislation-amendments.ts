@@ -11,6 +11,7 @@ import {
   legislationSources,
 } from "@/api/db/schema";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import { stripDangerousChars } from "@/api/lib/legal-search/corpus-sanitize";
 import type {
   LegislationAmendmentRelation,
@@ -325,23 +326,47 @@ export const readLegislationAmendments = async (
 export const readLegislationAmendmentSnapshot = async (
   tx: LegislationReadTransaction,
   work: LegislationWorkRef,
-) =>
-  (
-    await tx
-      .select({
-        observedAt: legislationAmendmentSnapshots.observedAt,
-        coverage: legislationAmendmentSnapshots.coverage,
-      })
-      .from(legislationAmendmentSnapshots)
-      .innerJoin(
-        legislationSources,
-        eq(legislationSources.id, legislationAmendmentSnapshots.sourceId),
+) => {
+  const capability = await tx.execute<{ available: boolean }>(sql`
+    SELECT COALESCE(
+      has_column_privilege(
+        current_user,
+        to_regclass('public.legislation_amendment_snapshots'),
+        'coverage',
+        'SELECT'
       )
-      .where(
-        and(
-          snapshotWork(work),
-          redistributableLegislationSourceFor(legislationSources.descriptor),
-        ),
-      )
-      .limit(1)
-  ).at(0) ?? null;
+      AND has_column_privilege(
+        current_user,
+        to_regclass('public.legislation_amendments'),
+        'publisher_id',
+        'SELECT'
+      ),
+      false
+    ) AS available
+  `);
+  if (executedRows(capability).at(0)?.available !== true) {
+    return null;
+  }
+
+  return (
+    (
+      await tx
+        .select({
+          observedAt: legislationAmendmentSnapshots.observedAt,
+          coverage: legislationAmendmentSnapshots.coverage,
+        })
+        .from(legislationAmendmentSnapshots)
+        .innerJoin(
+          legislationSources,
+          eq(legislationSources.id, legislationAmendmentSnapshots.sourceId),
+        )
+        .where(
+          and(
+            snapshotWork(work),
+            redistributableLegislationSourceFor(legislationSources.descriptor),
+          ),
+        )
+        .limit(1)
+    ).at(0) ?? null
+  );
+};
