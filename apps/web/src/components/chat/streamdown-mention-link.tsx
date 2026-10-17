@@ -8,7 +8,6 @@ import {
   type ChatSourceCitationTarget,
 } from "@stll/api-contract";
 import { isCaseLawDecisionId } from "@stll/api-contract/case-law-decision-route";
-import { ChatLink } from "@stll/chat/link";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { isFolioBlockId } from "@stll/folio-react";
 import { MailIcon } from "@stll/ui/icons";
@@ -43,6 +42,7 @@ import {
   referenceFromHref,
 } from "@/components/references/reference.logic";
 import { env } from "@/env";
+import { ProxyChatLink } from "@/features/chat/components/proxy-chat-link";
 import { useVerifiedEmailCitationTarget } from "@/hooks/use-verified-email-citation-target";
 import { useVerifiedOfficeCitationTarget } from "@/hooks/use-verified-office-citation-target";
 import { DOCX_MIME } from "@/lib/consts";
@@ -286,7 +286,7 @@ export const StreamdownMentionLink = ({
     );
   }
 
-  return <ChatLink href={href}>{children}</ChatLink>;
+  return <ProxyChatLink href={href}>{children}</ProxyChatLink>;
 };
 
 const SourceCitationChip = ({

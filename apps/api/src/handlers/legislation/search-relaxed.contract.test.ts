@@ -94,7 +94,10 @@ const admittedFixtureCountries = {
   unavailable: (country: string) =>
     country === "CZE" || country === "SVK"
       ? null
-      : publicLawCountryUnavailable(country, "search"),
+      : publicLawCountryUnavailable(country, {
+          domain: "legislation",
+          surface: "search",
+        }),
   isAdmitted: (country: string) => country === "CZE" || country === "SVK",
 };
 
@@ -892,8 +895,9 @@ describe.skipIf(!runEngineTests)(
         code: PUBLIC_COUNTRY_UNAVAILABLE_STATUS,
         response: {
           code: PUBLIC_COUNTRY_UNAVAILABLE_CODE,
+          domain: "legislation",
           country: "SVK",
-          reason: "pending_public",
+          reason: "pages_public",
         },
       });
       expect(searchCalls.length).toBe(callStart);

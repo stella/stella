@@ -65,6 +65,9 @@
     "runSelectedRows": "Futtatás {count, plural, one {# kijelölt sorra} other {# kijelölt sorra}}",
     "selectedRun": "AI-oszlopok futtatása {count, plural, one {# sorra} other {# sorra}}"
   },
+  "aiDisclosure": {
+    "caseLaw": "A bírósági határozatokról készült AI-összefoglalókat, -jegyzeteket és -elemzéseket a stella állítja elő; ezeket a bíróságok nem hagyták jóvá, és nem a bíróságok saját érvelését tükrözik. A jogi szakemberek munkáját segítő eszközök; a hiteles forrás továbbra is a határozat szövege."
+  },
   "appearance": {
     "calendar": "Naptár",
     "calendarGregorian": "Gergely",
@@ -1113,6 +1116,13 @@
       "provisionMentions": "{count, number}×",
       "provisionMentionsLabel": "{count, plural, one {# említés} other {# említés}}",
       "provisionsCited": "Hivatkozott rendelkezések",
+      "provisionsFailed": "A hivatkozások feldolgozása sikertelen",
+      "provisionsNoneFound": "Nem találhatók hivatkozott rendelkezések",
+      "provisionsProcessing": "A hivatkozások feldolgozása folyamatban van",
+      "provisionsUnavailable": "A hivatkozások nem érhetők el",
+      "provisionsUnplaceable": "A hivatkozások nem helyezhetők el a határozat szövegében",
+      "provisionsUnsupported": "A hivatkozások feldolgozása ennél a határozatnál nem támogatott",
+      "provisionsWithheld": "A hivatkozások nem hozzáférhetők",
       "sourceFields": {
         "decisionCategory": "Döntés kategóriája",
         "publishedOnWeb": "Weben közzétéve"
@@ -1205,6 +1215,11 @@
       "requesting": "Módosítások előkészítése…",
       "stale": "Ez a válasz megváltozott. Jelölje ki újra a szöveget.",
       "submit": "Módosítás kérése"
+    },
+    "answerQuote": {
+      "showInDecision": "Megjelenítés a határozatban",
+      "verified": "Ellenőrzött idézet",
+      "verifiedHint": "Szó szerint: {source}"
     },
     "applyMode": {
       "description": "A Word rögzíti, ki végezte az egyes módosításokat. Megjegyezzük a választását.",
@@ -1444,6 +1459,12 @@
       "title": "Beillesztett szöveg"
     },
     "placeholder": "Írja ide a kérdését, / a készségekhez, @ kontextus hozzáadásához",
+    "processSummary": {
+      "analyses": "{count, plural, one {# elemzés} other {# elemzés}}",
+      "changesSaved": "{count, plural, one {# mentett módosítás} other {# mentett módosítás}}",
+      "documentEdits": "{count, plural, one {# dokumentummódosítás} other {# dokumentummódosítás}}",
+      "sourcesChecked": "{count, plural, one {# ellenőrzött forrás} other {# ellenőrzött forrás}}"
+    },
     "promptImprovementStrategies": {
       "decompose": {
         "description": "Az összetett feladatot sorrendbe rendezett részfeladatokra bontja.",
@@ -1689,6 +1710,7 @@
       "interrupted": "Befejezés előtt megszakadt",
       "output": "Kimenet",
       "sourceCode": "Forráskód",
+      "statusWaiting": "Várakozik",
       "toggleDetails": "Részletek megjelenítése",
       "unrestoredFields": "Anonimizált módban {count, plural, one {# mezőt} other {# mezőt}} nem sikerült valódi értékekkel kitölteni. Ellenőrizze: {fields}"
     },
@@ -1714,7 +1736,8 @@
       "toggleLabel": "Webes keresés",
       "toggleOff": "Webes keresés kikapcsolása",
       "toggleOn": "Webes keresés bekapcsolása"
-    }
+    },
+    "workedFor": "Munkaidő: {duration}"
   },
   "clauses": {
     "addVariant": "Változat hozzáadása",
@@ -2592,11 +2615,14 @@
     "actionFailed": "A művelet sikertelen",
     "api": {
       "badRequest": "A kérést nem sikerült teljesíteni.",
+      "caseLawCountryUnavailable": "Az ország ítélkezési gyakorlata nem érhető el. Válasszon másik országot.",
+      "caseLawSearchUnavailable": "Az ország ítélkezési gyakorlatában nem lehet keresni. Nyilvános határozatait továbbra is olvashatja.",
       "conflict": "A kérés ütközik a jelenlegi állapottal.",
       "forbidden": "Nincs jogosultsága ehhez a művelethez.",
+      "legislationCountryUnavailable": "Az ország jogszabályai nem érhetők el. Válasszon másik országot.",
+      "legislationSearchUnavailable": "Az ország jogszabályaiban nem lehet keresni. Nyilvános jogszabályait továbbra is olvashatja.",
       "notFound": "A kért elem nem található.",
       "payloadTooLarge": "A kérés túl nagy.",
-      "publicCountryUnavailable": "Az ország jogszabályai és ítélkezési gyakorlata nem érhetők el. Válasszon másik országot.",
       "rateLimited": "Túl sok kérés. Próbálja újra később.",
       "server": "Hiba történt. Próbálja újra.",
       "serviceUnavailable": "A szolgáltatás átmenetileg nem érhető el. Próbálja újra.",

@@ -65,6 +65,9 @@
     "runSelectedRows": "Executar para {count, plural, one {# linha selecionada} other {# linhas selecionadas}}",
     "selectedRun": "Executar colunas de IA para {count, plural, one {# linha} other {# linhas}}"
   },
+  "aiDisclosure": {
+    "caseLaw": "Os resumos, notas e análises de decisões judiciais feitos por IA são gerados pelo stella, não são endossados pelos tribunais e não representam a fundamentação dos próprios tribunais; são ferramentas de apoio para profissionais do direito, e o texto da decisão continua sendo a fonte oficial."
+  },
   "appearance": {
     "calendar": "Calendário",
     "calendarGregorian": "Gregoriano",
@@ -1113,6 +1116,13 @@
       "provisionMentions": "{count, number}×",
       "provisionMentionsLabel": "{count, plural, one {# menção} other {# menções}}",
       "provisionsCited": "Dispositivos citados",
+      "provisionsFailed": "O processamento das citações falhou",
+      "provisionsNoneFound": "Nenhum dispositivo citado encontrado",
+      "provisionsProcessing": "As citações estão sendo processadas",
+      "provisionsUnavailable": "As citações não estão disponíveis",
+      "provisionsUnplaceable": "As citações não podem ser localizadas no texto da decisão",
+      "provisionsUnsupported": "O processamento de citações não é compatível com esta decisão",
+      "provisionsWithheld": "As citações não são divulgadas",
       "sourceFields": {
         "decisionCategory": "Categoria da decisão",
         "publishedOnWeb": "Publicado na web"
@@ -1205,6 +1215,11 @@
       "requesting": "Preparando alterações…",
       "stale": "Esta resposta mudou. Selecione o texto novamente.",
       "submit": "Solicitar alteração"
+    },
+    "answerQuote": {
+      "showInDecision": "Ver na decisão",
+      "verified": "Citação verificada",
+      "verifiedHint": "Palavra por palavra em {source}"
     },
     "applyMode": {
       "description": "O Word armazena quem fez cada alteração. Lembraremos da sua escolha.",
@@ -1444,6 +1459,12 @@
       "title": "Texto colado"
     },
     "placeholder": "Digite sua pergunta aqui, / para habilidades, @ para adicionar contexto",
+    "processSummary": {
+      "analyses": "{count, plural, one {# análise} other {# análises}}",
+      "changesSaved": "{count, plural, one {# alteração salva} other {# alterações salvas}}",
+      "documentEdits": "{count, plural, one {# edição do documento} other {# edições do documento}}",
+      "sourcesChecked": "{count, plural, one {# fonte consultada} other {# fontes consultadas}}"
+    },
     "promptImprovementStrategies": {
       "decompose": {
         "description": "Transforma um trabalho complexo em subtarefas ordenadas.",
@@ -1689,6 +1710,7 @@
       "interrupted": "Interrompido antes de concluir",
       "output": "Saída",
       "sourceCode": "Código-fonte",
+      "statusWaiting": "Aguardando",
       "toggleDetails": "Alternar detalhes",
       "unrestoredFields": "{count, plural, one {# campo não pôde ser preenchido} other {# campos não puderam ser preenchidos}} com valores reais no modo anonimizado. Revise: {fields}"
     },
@@ -1714,7 +1736,8 @@
       "toggleLabel": "Busca na web",
       "toggleOff": "Desativar busca na web",
       "toggleOn": "Ativar busca na web"
-    }
+    },
+    "workedFor": "Tempo de trabalho: {duration}"
   },
   "clauses": {
     "addVariant": "Adicionar variante",
@@ -2592,11 +2615,14 @@
     "actionFailed": "Falha na ação",
     "api": {
       "badRequest": "Não foi possível concluir a solicitação.",
+      "caseLawCountryUnavailable": "A jurisprudência deste país não está disponível. Escolha outro país.",
+      "caseLawSearchUnavailable": "A pesquisa de jurisprudência deste país não está disponível. Você ainda pode consultar suas decisões públicas.",
       "conflict": "A solicitação entra em conflito com o estado atual.",
       "forbidden": "Você não tem permissão para fazer isso.",
+      "legislationCountryUnavailable": "A legislação deste país não está disponível. Escolha outro país.",
+      "legislationSearchUnavailable": "A pesquisa de legislação deste país não está disponível. Você ainda pode consultar sua legislação pública.",
       "notFound": "Não encontramos o que você solicitou.",
       "payloadTooLarge": "A solicitação é grande demais.",
-      "publicCountryUnavailable": "A legislação e a jurisprudência deste país não estão disponíveis. Escolha outro país.",
       "rateLimited": "Muitas solicitações. Tente novamente mais tarde.",
       "server": "Algo deu errado. Tente novamente.",
       "serviceUnavailable": "O serviço está temporariamente indisponível. Tente novamente.",

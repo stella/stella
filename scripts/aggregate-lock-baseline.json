@@ -961,9 +961,9 @@
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row-update.ts",
-    "fingerprint": "c053c6081dba8dc6c9eb93df702a4f7c0c2c889102c377969f8f397dd7e11070",
+    "fingerprint": "60da0167e1e8232dbf418d1f799ee1496e32daf142bcd7c577eb70d889b160ae",
     "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/pipeline/decision-row-update.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "Pass the relation explicitly to the stored-payload owner in the existing ingestion row lock query; acquisition mode, target and count are unchanged."
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/source-totals.ts",
@@ -3025,15 +3025,15 @@
   },
   {
     "file": "apps/api/src/lib/legal-search/case-law-search-index.ts",
-    "fingerprint": "bfa8cd41da649399ea0a3cddf9920b10b0ca8c6443b5725f7b140b8c2fe074ef",
+    "fingerprint": "106aff206b13512ed7c0ece6e1a13fad32c4aef3e80a2e64179b24639147d456",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/case-law-search-index.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "Pass the relation explicitly to the publication owner in the existing projection write lock query; acquisition mode, target and count are unchanged."
   },
   {
     "file": "apps/api/src/lib/legal-search/case-law-search-index.ts",
-    "fingerprint": "da59847a805cb4732021f29074eb99924a9badb3111e781bf386e2723130b33a",
+    "fingerprint": "1216b0764623f970d8df9576ba0eb2695f2b571851d9aa52bc7f115e9f817f2b",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/case-law-search-index.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "Pass the relation explicitly to the publication owner in the existing projection retry lock query; acquisition mode, target and count are unchanged."
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-generation-store.ts",
@@ -3810,12 +3810,6 @@
     "reason": "builder-for in apps/api/src/lib/scheduler/tasks/case-law-redaction-tombstone-backfill.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
-    "file": "apps/api/src/lib/scheduler/tasks/case-law-redaction-tombstone-backfill.ts",
-    "fingerprint": "992cef74af15347a5ba81ec4d636488007f1b13b15e267c6b75bb7eaad5037ea",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/scheduler/tasks/case-law-redaction-tombstone-backfill.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
-  },
-  {
     "file": "apps/api/src/lib/scheduler/tasks/chat-thread-compactor-queue.ts",
     "fingerprint": "2de3c463d153cae55427b4ff77b5b6c62900465dea74526235bd8ee180904f2d",
     "count": 1,
@@ -4416,12 +4410,6 @@
     "reason": "transaction-boundary in apps/api/src/scripts/normalize-review-passage-references.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
   },
   {
-    "file": "apps/api/src/scripts/polarity-system-one-compare.ts",
-    "fingerprint": "725302c2a3fb1edb66ad8c7a13ca1bc4cbf3dac50329ebac080b58e4c1729347",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/scripts/polarity-system-one-compare.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
-  },
-  {
     "file": "apps/api/src/scripts/readjudicate-ambiguous-citations.ts",
     "fingerprint": "84fd44b054900aeed3671e1b4bf5433e232fd43428d8b52c07e013c1c71577dd",
     "count": 1,
@@ -4462,12 +4450,6 @@
     "fingerprint": "03d1c6577a21de3b6793a2be60e0c6bf0ed6b1e0d436a9c8af4a37c0611bc6ef",
     "count": 1,
     "reason": "transaction-boundary in apps/api/src/scripts/record-missing-organization-access-states.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/src/scripts/repair-case-law-jsonb.ts",
-    "fingerprint": "74ef7ed9478449eef0f314991584678ecf41706277c6d1f67576f63783519321",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/scripts/repair-case-law-jsonb.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
   },
   {
     "file": "apps/api/src/scripts/repair-decision-dates-plan.ts",
