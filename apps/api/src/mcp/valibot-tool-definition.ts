@@ -44,6 +44,7 @@ type ToolWithoutInputSchema<TDefinition> = TDefinition extends McpToolDefinition
 
 type ValibotMcpToolInput = ToolWithoutInputSchema<McpToolDefinition> & {
   inputSchema: NullAsAbsentInputSchema;
+  annotationReasons?: McpToolAnnotationReasons;
   /** Explicit kinds JSON Schema cannot express, keyed by dotted field path. */
   inputNormalization?: Readonly<
     Record<string, AgentInputNormalizationAnnotation>
@@ -53,7 +54,10 @@ type ValibotMcpToolInput = ToolWithoutInputSchema<McpToolDefinition> & {
 
 type ValibotMcpToolDefinition<TDefinition extends ValibotMcpToolInput> = Omit<
   TDefinition,
-  "inputSchema" | "inputNormalization" | "jsonSchemaProjectionWaiver"
+  | "inputSchema"
+  | "inputNormalization"
+  | "jsonSchemaProjectionWaiver"
+  | "annotationReasons"
 > & {
   annotationReasons: McpToolAnnotationReasons;
   inputSchema: McpToolInputSchema;
@@ -792,6 +796,7 @@ export const defineValibotMcpTool = <
     inputNormalization,
     inputSchema,
     jsonSchemaProjectionWaiver,
+    annotationReasons,
     ...toolDefinition
   } = definition;
   const { annotations } = toolDefinition;
@@ -808,7 +813,7 @@ export const defineValibotMcpTool = <
   }
   return {
     ...toolDefinition,
-    annotationReasons: {
+    annotationReasons: annotationReasons ?? {
       readOnlyHint: annotations.readOnlyHint
         ? `${subject} only retrieves or computes data.`
         : `${subject} changes state or starts stateful work.`,

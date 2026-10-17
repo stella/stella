@@ -65,17 +65,19 @@ export const SEARCH_CASE_LAW_INPUT_NORMALIZATION = {
 export const searchCaseLawArgsSchema = (texts: SearchCaseLawTexts) =>
   nullAsAbsent(
     v.strictObject({
-      queries: v.pipe(
-        v.array(
-          v.pipe(
-            v.string(),
-            v.minLength(LIMITS.mcpNonEmptyMin),
-            v.maxLength(LIMITS.searchQueryMaxLength),
+      queries: v.optional(
+        v.pipe(
+          v.array(
+            v.pipe(
+              v.string(),
+              v.minLength(LIMITS.mcpNonEmptyMin),
+              v.maxLength(LIMITS.searchQueryMaxLength),
+            ),
           ),
+          v.minLength(LIMITS.mcpNonEmptyMin),
+          v.maxLength(LIMITS.caseLawSearchQueriesMax),
+          v.description(texts.queries),
         ),
-        v.minLength(LIMITS.mcpNonEmptyMin),
-        v.maxLength(LIMITS.caseLawSearchQueriesMax),
-        v.description(texts.queries),
       ),
       limit: v.optional(
         v.pipe(
@@ -120,6 +122,16 @@ export const searchCaseLawArgsSchema = (texts: SearchCaseLawTexts) =>
           v.maxLength(LIMITS.caseLawFilterValueMaxChars),
           v.description(
             'Exact publisher category from metadata.category, for example "A" or "B"; this does not imply Sbírka publication. Applied to live rows within the bounded candidate scan; corpus-index facets and total are unavailable.',
+          ),
+        ),
+      ),
+      provision: v.optional(
+        v.pipe(
+          v.string(),
+          v.nonEmpty(),
+          v.maxLength(LIMITS.caseLawProvisionFilterMaxLength),
+          v.description(
+            'Only decisions citing this provision, as a lawyer writes it: "§ 316 odst. 2 ZP", "§ 52 písm. g) zákoníku práce", "čl. 10 Listiny". A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, exact total.',
           ),
         ),
       ),

@@ -10,7 +10,14 @@
  */
 
 import { panic, Result, type UnhandledException } from "better-result";
-import { and, eq, sql, TransactionRollbackError, type SQL } from "drizzle-orm";
+import {
+  and,
+  eq,
+  or,
+  sql,
+  TransactionRollbackError,
+  type SQL,
+} from "drizzle-orm";
 
 import type {
   AnalysisGenerating,
@@ -118,9 +125,10 @@ export type AnalysisStore = {
    */
   claim: (claim: AnalysisClaim) => Promise<AnalysisGenerating | null>;
   /**
-   * A plain read's claim: `claim`, also refused (null) while this reader's
-   * key has an applicable failure. An explicit retry and a writer that
-   * submits a finished analysis use `claim`. Fails with the database error
+   * A reader's claim: `claim`, also refused (null) while this reader's key
+   * has a failure the guard applies (see `FailureClaimGuard`; an explicit
+   * retry is refused only before the provider's retry time). A writer that
+   * submits a finished analysis uses `claim`. Fails with the database error
    * that ended the claim's transaction.
    */
   claimUnlessFailed: (
@@ -207,9 +215,10 @@ const releaseRun = async (
       RETURNING "id"
     )
     INSERT INTO "case_law_analysis_failures"
-      ("decision_id", "key_tag", "input_fingerprint", "code", "key_source", "provider", "recorded_at", "provider_diagnostic")
+      ("decision_id", "key_tag", "input_fingerprint", "code", "key_source", "provider", "recorded_at", "retry_after", "provider_diagnostic")
     SELECT "id", ${keyTag}, ${record.inputFingerprint}, ${record.code},
       ${record.keySource}, ${record.provider}, ${recordedAt}::timestamptz,
+      ${record.retryAfter === undefined ? null : record.retryAfter.toISOString()}::timestamptz,
       ${record.providerDiagnostic === undefined ? null : JSON.stringify(record.providerDiagnostic)}::text::jsonb
     FROM released
     ON CONFLICT ("decision_id", "key_tag") DO UPDATE SET
@@ -218,11 +227,16 @@ const releaseRun = async (
       "key_source" = EXCLUDED."key_source",
       "provider" = EXCLUDED."provider",
       "recorded_at" = EXCLUDED."recorded_at",
+      "retry_after" = EXCLUDED."retry_after",
       "provider_diagnostic" = EXCLUDED."provider_diagnostic"
   `);
   const expiredBefore = new Date(
     record.recordedAt.getTime() - ANALYSIS_FAILURE_HOLD_MS,
   ).toISOString();
+  // A record is expired once its hold has passed and so has any retry time
+  // its provider named, which may lie well beyond the hold.
+  const expired = sql`"recorded_at" < ${expiredBefore}::timestamptz
+    AND ("retry_after" IS NULL OR "retry_after" <= ${recordedAt}::timestamptz)`;
   // The expiry is checked on the deleted row itself as well as in the
   // candidate subquery. A candidate another writer refreshed while this
   // statement waited on its lock is rechecked against the outer condition
@@ -231,10 +245,10 @@ const releaseRun = async (
     DELETE FROM "case_law_analysis_failures"
     WHERE ("decision_id", "key_tag") IN (
         SELECT "decision_id", "key_tag" FROM "case_law_analysis_failures"
-        WHERE "recorded_at" < ${expiredBefore}::timestamptz
+        WHERE ${expired}
         ORDER BY "recorded_at" LIMIT ${FAILURE_SWEEP_BATCH}
       )
-      AND "recorded_at" < ${expiredBefore}::timestamptz
+      AND ${expired}
   `);
 };
 
@@ -285,7 +299,7 @@ export const createDbAnalysisStore = (
     unlessFailed,
   }) => {
     const sentinel = analysisSentinel(fingerprint, new Date());
-    // A plain claim, in one short transaction. Under READ COMMITTED a guard
+    // A guarded claim, in one short transaction. Under READ COMMITTED a guard
     // folded into the UPDATE would read failures from the statement's own
     // snapshot, and a concurrent failure write (which releases the row and
     // files the failure in one statement, under this row's lock) would then
@@ -317,7 +331,15 @@ export const createDbAnalysisStore = (
                 eq(caseLawAnalysisFailures.inputFingerprint, fingerprint),
                 eq(caseLawAnalysisFailures.keySource, unlessFailed.keySource),
                 sql`${caseLawAnalysisFailures.provider} IS NOT DISTINCT FROM ${unlessFailed.provider}`,
-                sql`${caseLawAnalysisFailures.recordedAt} > ${unlessFailed.heldSince.toISOString()}::timestamptz`,
+                // The same hold as `failureMatchesGuard`.
+                or(
+                  sql`${caseLawAnalysisFailures.retryAfter} > ${unlessFailed.now.toISOString()}::timestamptz`,
+                  ...(unlessFailed.heldSince === null
+                    ? []
+                    : [
+                        sql`${caseLawAnalysisFailures.recordedAt} > ${unlessFailed.heldSince.toISOString()}::timestamptz`,
+                      ]),
+                ),
               ),
             )
             .limit(1);
@@ -378,6 +400,7 @@ export const createDbAnalysisStore = (
         keySource: caseLawAnalysisFailures.keySource,
         provider: caseLawAnalysisFailures.provider,
         recordedAt: caseLawAnalysisFailures.recordedAt,
+        retryAfter: caseLawAnalysisFailures.retryAfter,
         providerDiagnostic: caseLawAnalysisFailures.providerDiagnostic,
       })
       .from(caseLawAnalysisFailures)
@@ -391,9 +414,10 @@ export const createDbAnalysisStore = (
     if (row === undefined) {
       return null;
     }
-    const { providerDiagnostic, ...failure } = row;
+    const { providerDiagnostic, retryAfter, ...failure } = row;
     return {
       ...failure,
+      ...(retryAfter === null ? {} : { retryAfter }),
       ...(providerDiagnostic === null
         ? {}
         : {

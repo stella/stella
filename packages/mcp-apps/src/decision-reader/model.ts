@@ -43,6 +43,7 @@ type ReaderPagerData = {
   blocks: Block[];
   citationAnchors: AvailablePage["citationAnchors"];
   provisionAnchors: AvailablePage["provisionAnchors"];
+  provisionStatus: AvailablePage["provisionStatus"];
   nextCursor: string | null;
   complete: boolean;
   phase: AvailablePage["phase"];
@@ -69,6 +70,7 @@ export const createReaderPager = (
   blocks: [],
   citationAnchors: [],
   provisionAnchors: [],
+  provisionStatus: null,
   nextCursor: null,
   complete: false,
   phase: "blocks",
@@ -123,6 +125,14 @@ const validateReaderPageContent = ({
   return null;
 };
 
+const retainProvisionStatus = ({
+  current,
+  page,
+}: {
+  current: AvailablePage["provisionStatus"];
+  page: AvailablePage["provisionStatus"];
+}) => page ?? current;
+
 export const appendReaderPage = ({
   state,
   page,
@@ -148,6 +158,7 @@ export const appendReaderPage = ({
       blocks: [],
       citationAnchors: [],
       provisionAnchors: [],
+      provisionStatus: null,
       nextCursor: null,
       complete: true,
       phase: "blocks",
@@ -249,6 +260,10 @@ export const appendReaderPage = ({
         ...state.provisionAnchors,
         ...content.provisionAnchors,
       ],
+      provisionStatus: retainProvisionStatus({
+        current: state.provisionStatus,
+        page: content.provisionStatus,
+      }),
       nextCursor: content.nextCursor,
       complete: content.nextCursor === null,
       phase: content.phase,

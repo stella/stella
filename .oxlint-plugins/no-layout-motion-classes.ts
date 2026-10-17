@@ -4,19 +4,26 @@
 // Interactions & Animations: `transition: all` repaints properties nobody chose
 // to animate, and `width`/`height`/`top`/`left`/`right`/`bottom`/`inset`/
 // `margin`/`padding`/`flex-basis`/`font-size` force a layout recalc on every
-// frame. Transform and opacity do not.
+// frame. Transform and opacity do not. UI motion also stays short and
+// responsive: `ease-in` starts slowly, so a surface feels late to react; an
+// entry from `scale-0` reads as appearing from nowhere; a transition longer than
+// 300ms makes people wait for the interface.
 //
-// Viewport & Responsive: `h-screen`/`w-screen` resolve against `100vh`/`100vw`,
-// which ignores mobile browser chrome and leaves the page scrolled or
-// overlapped. The dynamic-viewport units track it.
+// Viewport & Responsive: `h-screen`/`w-screen` and arbitrary `vh` values
+// (`max-h-[calc(100vh-3rem)]`) resolve against the largest viewport, which
+// ignores mobile browser chrome and leaves the page scrolled or overlapped.
+// The dynamic and small viewport units (`dvh`, `svh`) track it.
 //
 // Flagged:
 //   <div className="transition-all duration-150" />
 //   <div className="transition-[height] md:transition-[top]" />
 //   <div className={cn("min-h-screen", className)} />        → min-h-dvh
+//   <div className="max-h-[70vh]" />
+//   <div className="ease-in duration-500 data-starting-style:scale-0" />
 // Allowed:
 //   transition-opacity, transition-transform
-//   min-h-dvh, h-dvh, max-h-dvh, w-dvw
+//   min-h-dvh, h-dvh, max-h-dvh, w-dvw, max-h-[70dvh], pt-[8svh]
+//   ease-out, ease-in-out, duration-300, data-starting-style:scale-95
 //   animate-[pulse_700ms_ease-in-out_3]
 //
 // A surface that changes its own box is the documented exemption: a disclosure
@@ -24,8 +31,10 @@
 // progress bar may transition the box property it owns, because a transform
 // moves the paint but not what siblings lay out against. Those files are named
 // in the `allowedFiles` option with the exact utilities and a reason each. The
-// exemption covers only those existing layout transitions: `transition-all`,
-// viewport utilities, and any new layout-transition spelling stay reported.
+// same list carries the motion that is not interface feedback (a decorative
+// fade, a teaching animation, marketing motion), which may run longer. The
+// exemption covers only those exact utilities: `transition-all`, viewport
+// units, and any new spelling in the same file stay reported.
 //
 // Every class string in the configured scope is checked, not only the
 // `className` attribute: these utilities travel through `cn()`/`cva()`/`clsx()`
@@ -61,7 +70,47 @@ const VIEWPORT_REPLACEMENTS: ReadonlyMap<string, string> = new Map([
 
 const FIXABLE_UTILITIES = VIEWPORT_REPLACEMENTS;
 
-type MessageId = "layoutTransition" | "transitionAll" | "viewportUnit";
+// A `vh` length inside an arbitrary value. The digit immediately before the
+// unit is what separates it from `dvh`/`svh`/`lvh`; the lookahead keeps
+// `vhx`-style identifiers out.
+const LARGE_VIEWPORT_HEIGHT = /\dvh(?![a-z])/u;
+
+// Above this, a UI transition makes people wait for the interface.
+const MAX_UI_DURATION_MS = 300;
+const DURATION_UTILITY =
+  /^duration-(?:(\d+)|\[(\d+(?:\.\d+)?|\.\d+)(ms|s)\])$/u;
+
+const durationMs = (utility: string): number | undefined => {
+  const match = DURATION_UTILITY.exec(utility);
+  if (match === null) {
+    return undefined;
+  }
+  const [, scale, value, unit] = match;
+  if (scale !== undefined) {
+    return Number(scale);
+  }
+  return unit === "s" ? Number(value) * 1000 : Number(value);
+};
+
+// `scale-0` and its axis forms, plus the arbitrary zero spellings.
+const SCALE_FROM_ZERO = /^-?scale-(?:[xy]-)?(?:0|\[0(?:\.0+)?\])$/u;
+
+type MessageId =
+  | "easeIn"
+  | "layoutTransition"
+  | "longDuration"
+  | "scaleFromZero"
+  | "transitionAll"
+  | "viewportUnit";
+
+// Message ids an `allowedFiles` entry may exempt by exact utility. A
+// `transition-all` or a viewport unit is never a property of the surface.
+const ALLOWABLE_MESSAGE_IDS: ReadonlySet<MessageId> = new Set([
+  "easeIn",
+  "layoutTransition",
+  "longDuration",
+  "scaleFromZero",
+]);
 
 type UtilityParts = {
   leadingImportant: boolean;
@@ -129,6 +178,19 @@ const messageIdForUtility = (utility: string): MessageId | undefined => {
   if (VIEWPORT_REPLACEMENTS.has(utility)) {
     return "viewportUnit";
   }
+  if (LARGE_VIEWPORT_HEIGHT.test(utility)) {
+    return "viewportUnit";
+  }
+  if (utility === "ease-in") {
+    return "easeIn";
+  }
+  if (SCALE_FROM_ZERO.test(utility)) {
+    return "scaleFromZero";
+  }
+  const duration = durationMs(utility);
+  if (duration !== undefined) {
+    return duration > MAX_UI_DURATION_MS ? "longDuration" : undefined;
+  }
   if (!LAYOUT_PROPERTY.test(utility)) {
     return undefined;
   }
@@ -159,7 +221,7 @@ const messageIdIn = (
     if (messageId === undefined) {
       continue;
     }
-    if (messageId === "layoutTransition" && allowedUtilities.has(utility)) {
+    if (ALLOWABLE_MESSAGE_IDS.has(messageId) && allowedUtilities.has(utility)) {
       continue;
     }
     return messageId;
@@ -292,6 +354,22 @@ export default eslintCompatPlugin({
           },
         ],
         messages: {
+          easeIn:
+            "conventions-ux (Interactions & Animations): never use `ease-in` " +
+            "for UI; it starts slowly, so the interface feels late to react. " +
+            "Entering and exiting surfaces use ease-out; movement on screen " +
+            "uses ease-in-out.",
+          longDuration:
+            "conventions-ux (Interactions & Animations): UI transitions stay " +
+            "at or under 300ms (press 100-160ms, tooltip and small popover " +
+            "125-200ms, dropdown 150-250ms, dialog and sheet up to 300ms). " +
+            "Decorative or teaching motion that is not interface feedback " +
+            "goes in the rule's allowedFiles with a reason.",
+          scaleFromZero:
+            "conventions-ux (Interactions & Animations): never enter or exit " +
+            "from `scale-0`; nothing in the real world appears from a point. " +
+            "Start near full size with opacity 0 (scale-95 or scale-98 with " +
+            "opacity-0), scaled from the trigger with origin-(--transform-origin).",
           layoutTransition:
             "conventions-ux (Interactions & Animations): animate transform " +
             "and opacity only. This transition names a layout property " +
@@ -305,9 +383,11 @@ export default eslintCompatPlugin({
             "transition-transform.",
           viewportUnit:
             "conventions-ux (Viewport & Responsive): `h-screen`/`w-screen` " +
-            "resolve against 100vh/100vw and ignore mobile browser chrome, " +
-            "which causes scroll and overlap bugs. Use the dynamic-viewport " +
-            "units: min-h-dvh, h-dvh, max-h-dvh, w-dvw.",
+            "and `vh` lengths resolve against the largest viewport and " +
+            "ignore mobile browser chrome, which causes scroll and overlap " +
+            "bugs. Use the dynamic-viewport units: min-h-dvh, h-dvh, " +
+            "max-h-dvh, w-dvw, and dvh (or svh for a length that must not " +
+            "move while the toolbar collapses) inside arbitrary values.",
         },
       },
       createOnce(context) {

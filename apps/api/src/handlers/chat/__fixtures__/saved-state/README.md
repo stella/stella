@@ -1,6 +1,6 @@
 # Saved chat state from earlier releases
 
-Each JSON file holds the rows one version of the API stored for the same
+Each JSON file holds v3 content rows one version of the API stored for the same
 scripted conversation (`writeSavedStateConversation` in
 `apps/api/src/tests/helpers/chat-saved-state.ts`): a text answer, a server
 tool, an approved call, a denied call, a provider failure, and an approval the
@@ -38,14 +38,16 @@ The test `cover the shape the current code stores` compares the shape of what
 the current code writes (columns, content envelopes, part and tool-call
 states, turn rows, thread-name kinds) with every file here. When it fails:
 
-1. Keep every existing file. Each is a shape some deployment may still hold.
+1. Keep fixtures for supported persisted content versions. Legacy v1/v2
+   conversion coverage lives in the v3 backfill golden fixtures under
+   `apps/api/src/db/__fixtures__`.
 2. Run `bun run gen:chat-saved-state` in `apps/api`. It writes
    `main-<date>.json` from the current code.
 3. If the change ships a migration that rewrites stored chat rows, add it to
    `CHAT_DATA_MIGRATIONS`; the test fails until you do. A listed migration is
    replayed whole (without its `SET` lines), so keep it data-only.
 4. Run the test. A file that no longer loads or continues is a compat break to
-   fix in the reader, not a file to regenerate.
+   fix in the migration or reader, not a file to regenerate.
 
 Once a release ships, you may rename a `main-*` file after it and set its
 `release`. Files contain only test data from the scripted conversation.

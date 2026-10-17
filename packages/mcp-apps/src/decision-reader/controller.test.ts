@@ -66,6 +66,7 @@ const page = (
     blockFragments: [],
     citationAnchors: [],
     provisionAnchors: [],
+    provisionStatus: null,
     nextCursor,
     limit: 60_000,
   },

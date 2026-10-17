@@ -44,6 +44,7 @@ import {
   decisionPageSql,
   ID_PAGE_SIZE,
 } from "@/api/lib/case-law/provision-state-backfill/backfill";
+import { CASE_LAW_SURFACE_COUNTRIES } from "@/api/lib/case-law/public-subject";
 import {
   SITEMAP_REFRESH_PAGE_SIZE,
   sitemapRefreshPageSql,
@@ -386,6 +387,7 @@ export const QUERY_PLAN_REGISTRY = [
         decisionId: QUERY_PLAN_SAMPLE.caseLaw.decisionId,
         direction: "incoming",
         limit: citationPageSize,
+        countries: CASE_LAW_SURFACE_COUNTRIES.search,
         tx,
       }),
     seed: "case-law",
@@ -403,6 +405,7 @@ export const QUERY_PLAN_REGISTRY = [
         decisionId: QUERY_PLAN_SAMPLE.caseLaw.decisionId,
         direction: "outgoing",
         limit: citationPageSize,
+        countries: CASE_LAW_SURFACE_COUNTRIES.search,
         tx,
       }),
     seed: "case-law",
@@ -416,6 +419,7 @@ export const QUERY_PLAN_REGISTRY = [
       decisionCitationSummaryQuery({
         currentYear: 2026,
         decisionId: QUERY_PLAN_SAMPLE.caseLaw.decisionId,
+        countries: CASE_LAW_SURFACE_COUNTRIES.search,
         tx,
       }).summary,
     seed: "case-law",
@@ -443,6 +447,7 @@ export const QUERY_PLAN_REGISTRY = [
         limit: EXACT_CITATION_SUMMARY_MAX_ROWS + 1,
         currentYear: 2026,
         decisionId: QUERY_PLAN_SAMPLE.caseLaw.decisionId,
+        countries: CASE_LAW_SURFACE_COUNTRIES.search,
         tx,
       }),
     seed: "case-law",
@@ -456,6 +461,7 @@ export const QUERY_PLAN_REGISTRY = [
       decisionCitationSummaryQuery({
         currentYear: 2026,
         decisionId: QUERY_PLAN_SAMPLE.caseLaw.decisionId,
+        countries: CASE_LAW_SURFACE_COUNTRIES.search,
         tx,
       }).topCiting(CITATION_DIGEST_TOP_CITING),
     seed: "case-law",

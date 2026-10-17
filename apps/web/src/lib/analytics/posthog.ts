@@ -132,10 +132,13 @@ const domExceptionClass = (type: string, value: string): string => {
 const CANCELLED_REQUEST_CLASS = "AbortError";
 
 // Errors whose type names an expected outcome, handled where it happens: no
-// desktop app running, a public-law source down, a signed-out session.
+// desktop app running, a public-law source down, a signed-out session, a
+// model provider's failure the chat shows with its setup guidance (the API
+// reports the provider failures it does not classify itself).
 const EXPECTED_OUTCOME_TYPES: ReadonlySet<string> = new Set([
   "AuthClientError",
   "DesktopBridgeUnavailableError",
+  "ProviderDiagnosticError",
   "PublicLawUnavailableError",
 ]);
 
@@ -318,6 +321,10 @@ const apiErrorIdentity = (
 // `function`; a frame without them fails the whole exception. These carry
 // posthog-js's own defaults for a browser frame, with the function always
 // reported as unknown.
+//
+// `chunk_id` is the id the release build injected into the chunk and uploaded
+// its source map under. It is the only way the tracker finds that map: without
+// it, the tracker fetches the public bundle, which serves no maps.
 export const UNKNOWN_FRAME_FUNCTION = "?";
 const WEB_FRAME_PLATFORM = "web:javascript";
 
@@ -328,7 +335,11 @@ type SanitizedFrame = {
   filename?: string;
   lineno?: number;
   colno?: number;
+  chunk_id?: string;
 };
+
+// The CLI injects UUIDs; anything else is not a chunk id.
+const CHUNK_ID = /^[0-9a-f-]{1,64}$/iu;
 
 const stripUrlMetadata = (url: string): string => {
   const terminator = url.search(/[?#]/u);
@@ -342,6 +353,7 @@ export const sanitizeFrame = (frame: unknown): SanitizedFrame => {
   const inApp = fields["in_app"];
   const lineno = fields["lineno"];
   const colno = fields["colno"];
+  const chunkId = fields["chunk_id"];
   return {
     platform: typeof platform === "string" ? platform : WEB_FRAME_PLATFORM,
     function: UNKNOWN_FRAME_FUNCTION,
@@ -352,6 +364,9 @@ export const sanitizeFrame = (frame: unknown): SanitizedFrame => {
       : {}),
     ...(typeof lineno === "number" ? { lineno } : {}),
     ...(typeof colno === "number" ? { colno } : {}),
+    ...(typeof chunkId === "string" && CHUNK_ID.test(chunkId)
+      ? { chunk_id: chunkId }
+      : {}),
   };
 };
 
@@ -371,7 +386,34 @@ const sanitizeExceptionEntry = (entry: unknown) => {
   };
 };
 
-const sanitizeExceptionEvent = (event: CaptureResult): CaptureResult => {
+type RouteTemplateHistory = Map<string, string>;
+
+type TemplateUrl = { url: string; pathname: string };
+
+const templateUrl = (
+  history: RouteTemplateHistory,
+  value: unknown,
+): TemplateUrl | undefined => {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return undefined;
+  }
+  const template = history.get(parsed.pathname);
+  if (template === undefined) {
+    return undefined;
+  }
+  return { url: `${parsed.origin}${template}`, pathname: template };
+};
+
+const sanitizeExceptionEvent = (
+  event: CaptureResult,
+  history: RouteTemplateHistory,
+): CaptureResult => {
   const properties: Record<string, unknown> = event.properties;
   const appCommit = properties["app_commit"];
   const appVersion = properties["app_version"];
@@ -387,10 +429,22 @@ const sanitizeExceptionEvent = (event: CaptureResult): CaptureResult => {
   const safeArea =
     typeof area === "string" && TELEMETRY_AREA.test(area) ? area : undefined;
   const http = apiErrorIdentity(properties);
+  // Session and window ids join an exception to the page views and actions
+  // around it; they are random SDK ids that carry no user content.
+  const sessionId = properties["$session_id"];
+  const windowId = properties["$window_id"];
+  // The route template the exception happened on; a resolved URL with no
+  // recorded template is dropped rather than sent.
+  const route = templateUrl(history, properties["$current_url"]);
   return {
     ...event,
     properties: {
       ...pickIngestionRequired(properties),
+      ...(typeof sessionId === "string" ? { $session_id: sessionId } : {}),
+      ...(typeof windowId === "string" ? { $window_id: windowId } : {}),
+      ...(route === undefined
+        ? {}
+        : { $current_url: route.url, $pathname: route.pathname }),
       // Grouping identity derived from the sanitized list, so nothing the
       // redaction removed can reach it.
       $exception_fingerprint: fingerprintExceptionEvent({
@@ -428,7 +482,6 @@ let routeErrorLifecycleSanitizer: RouteErrorLifecycleSanitizer | undefined;
 // next navigation resolves. An unknown origin drops the URL fields
 // rather than mislabeling them.
 const ROUTE_TEMPLATE_HISTORY_LIMIT = 50;
-type RouteTemplateHistory = Map<string, string>;
 
 const recordRouteTemplate = (
   history: RouteTemplateHistory,
@@ -556,28 +609,6 @@ const sanitizeWebVitalsEvent = (
 // carry the template (our own `$pageview` override); `resolved` events get
 // those fields mapped through the history like every other resolved path.
 type SdkUrlSource = "route-template" | "resolved";
-
-type TemplateUrl = { url: string; pathname: string };
-
-const templateUrl = (
-  history: RouteTemplateHistory,
-  value: unknown,
-): TemplateUrl | undefined => {
-  if (typeof value !== "string") {
-    return undefined;
-  }
-  let parsed: URL;
-  try {
-    parsed = new URL(value);
-  } catch {
-    return undefined;
-  }
-  const template = history.get(parsed.pathname);
-  if (template === undefined) {
-    return undefined;
-  }
-  return { url: `${parsed.origin}${template}`, pathname: template };
-};
 
 // Referrers on another host are marketing signal and carry no resource ids;
 // same-host referrers are resolved in-app paths, and `$referring_domain`
@@ -743,7 +774,9 @@ export const createPostHogAnalytics = ({
       }
       switch (event.event) {
         case WEB_ANALYTICS_EVENTS.exception:
-          return isNoiseException(event) ? null : sanitizeExceptionEvent(event);
+          return isNoiseException(event)
+            ? null
+            : sanitizeExceptionEvent(event, routeTemplateHistory);
         case WEB_ANALYTICS_EVENTS.routeErrorRecovery:
           return routeErrorLifecycleSanitizer?.(event) ?? null;
         case WEB_ANALYTICS_EVENTS.webVitals:
@@ -759,6 +792,8 @@ export const createPostHogAnalytics = ({
         case WEB_ANALYTICS_EVENTS.guideStepSkipped:
         case WEB_ANALYTICS_EVENTS.feedbackDialogOpened:
         case WEB_ANALYTICS_EVENTS.feedbackReportSubmitted:
+        case WEB_ANALYTICS_EVENTS.provisionPlacementGaps:
+        case WEB_ANALYTICS_EVENTS.inspectorRestoreRecovered:
           return sanitizeSdkUrlContext(event, routeTemplateHistory, "resolved");
         default: {
           event.event satisfies never;
@@ -868,6 +903,15 @@ export const createPostHogAnalytics = ({
     },
     captureFeedbackReportSubmitted: (properties) => {
       posthog.capture(WEB_ANALYTICS_EVENTS.feedbackReportSubmitted, properties);
+    },
+    captureProvisionPlacementGaps: (properties) => {
+      posthog.capture(WEB_ANALYTICS_EVENTS.provisionPlacementGaps, properties);
+    },
+    captureInspectorRestoreRecovered: (properties) => {
+      posthog.capture(
+        WEB_ANALYTICS_EVENTS.inspectorRestoreRecovered,
+        properties,
+      );
     },
     captureRouteErrorLifecycle: async (properties) =>
       import("@/lib/analytics/posthog-route-error")

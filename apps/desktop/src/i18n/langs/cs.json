@@ -33,7 +33,8 @@
     "sessionMovedToAnotherDevice": "Přesunuto na jiné zařízení",
     "sessionNeedsAttention": "Vyžaduje pozornost",
     "sessionOpeningInOffice": "Otevírání v Office",
-    "sessionSavingDraft": "Ukládání konceptu"
+    "sessionSavingDraft": "Ukládání konceptu",
+    "reconnectAccount": "Znovu připojit k stella web…"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName} — Změny zůstávají lokální a budou automaticky zopakovány",
@@ -209,7 +210,13 @@
     "startOnLoginDescription": "Spustit stella desktop automaticky při přihlášení.",
     "stellaDesktop": "stella desktop",
     "support": "Podpora",
-    "title": "Nastavení"
+    "title": "Nastavení",
+    "serverLabel": "Server",
+    "connectToHost": "Připojit k {host}",
+    "connectToHostDescription": "Otevře {host} v prohlížeči, kde tento počítač schválíte.",
+    "reconnectNeeded": "Je potřeba znovu připojit",
+    "reconnect": "Znovu připojit",
+    "reconnectHostDescription": "Propojení s {host} je třeba obnovit. Schvalte tento počítač znovu v prohlížeči."
   },
   "clipboard": {
     "registryUnavailable": "Pro vaše jurisdikce nejsou povoleny žádné rejstříky.",
