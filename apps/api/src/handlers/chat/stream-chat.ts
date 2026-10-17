@@ -69,6 +69,7 @@ import {
   type ChatRunMode,
 } from "@/api/handlers/chat/chat-schema";
 import {
+  readChatTurnTiming,
   OWNER_LOST_OUTCOME,
   USER_STOP_OUTCOME,
 } from "@/api/handlers/chat/chat-turn-persistence";
@@ -83,6 +84,10 @@ import {
 } from "@/api/handlers/chat/chat-turn-settlement";
 import type { CutShortOutcome } from "@/api/handlers/chat/chat-turn-settlement";
 import type { ChatTurnFailureCode } from "@/api/handlers/chat/chat-turn-state";
+import {
+  createChatTurnTimingDurability,
+  withChatTurnTiming,
+} from "@/api/handlers/chat/chat-turn-timing-stream";
 import { compactModelMessagesForModel } from "@/api/handlers/chat/compaction";
 import {
   knownDecisionPassageStamper,
@@ -145,6 +150,7 @@ import type {
   ChatMessageUsage,
   ChatPart,
   ChatTurnOutcome,
+  ChatTurnTiming,
   PersistableChatMessage,
   PersistableTerminalAssistantMessage,
 } from "@/api/handlers/chat/types";
@@ -160,7 +166,7 @@ import {
   providerStatusFields,
 } from "@/api/lib/ai-error";
 import type { AIErrorKind } from "@/api/lib/ai-error";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, detached } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { TanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { arrayOrEmpty } from "@/api/lib/array";
@@ -213,17 +219,22 @@ import {
 } from "@/api/lib/chat/tanstack-chat-runtime";
 import type { PublicStreamChunk } from "@/api/lib/chat/tanstack-chat-runtime";
 import { ToolCallIdLedger } from "@/api/lib/chat/unique-tool-call-ids";
+import { readPresent, readUnavailable } from "@/api/lib/errors/read-outcome";
+import type { ReadOutcome } from "@/api/lib/errors/read-outcome";
 import {
   createProviderDiagnostic,
   redactedProviderDiagnostic,
 } from "@/api/lib/errors/redacted-provider-diagnostic";
 import {
+  AIGenerationCancelledError,
   ChatEmptyCompletionError,
   ChatLoopDetectedError,
 } from "@/api/lib/errors/tagged-errors";
 import type { ChatTerminalError } from "@/api/lib/errors/tagged-errors";
 import { errorFingerprint } from "@/api/lib/errors/utils";
+import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   providerErrorFields,
   providerErrorReason,
@@ -248,6 +259,12 @@ import {
 } from "@/api/lib/tanstack-ai-usage";
 import type { ManagedModelTier } from "@/api/lib/usage/managed-model-tier";
 import { projectVisualPreviewStream } from "@/api/lib/visual-preview-stream";
+import { withTimeout } from "@/api/lib/with-timeout";
+
+const TIMING_READ_FAILURE = failureSink({
+  event: "chat.turn.timing_read_failed",
+  expected: [],
+});
 
 const MAX_TOOL_STEPS = 100;
 const THIRD_PARTY_BOUNDARY_REFUSAL_MESSAGE =
@@ -815,6 +832,7 @@ export const streamChat = async ({
     source: projectVisualPreviewStream(stream),
     stamper: decisionPassageStamper,
   });
+  const timingPhase: { status: "running" | "settled" } = { status: "running" };
   const processedStream = processTurnForPersistence({
     visualOrigin,
     // Delivery detach does not reach the producer; Stop, ownership and budgets do.
@@ -898,11 +916,39 @@ export const streamChat = async ({
         yield chunk;
       }
     }
+    const terminalEvent = settlement.event;
+    if (
+      terminalEvent !== undefined &&
+      CUT_SHORT_OUTCOME[terminalEvent.outcome.type]
+    ) {
+      // Interruption is stored as turn data, not a provider error. Close the
+      // durable protocol too: EOF alone makes attached readers reconnect.
+      yield {
+        type: EventType.TEXT_MESSAGE_END,
+        messageId: terminalEvent.responseMessage.id,
+        metadata: { turnOutcome: terminalEvent.outcome },
+      } as const satisfies PublicStreamChunk;
+      finalChunks.splice(0, finalChunks.length, {
+        type: EventType.RUN_FINISHED,
+        runId,
+        threadId,
+        outcome: { type: "cancelled" },
+        timestamp: Temporal.Now.instant().epochMilliseconds,
+      });
+    }
     // The visual transform can flush buffered refs after the source terminal.
     // Deliver that content before terminalizing, and identify the last terminal
     // so every earlier iteration remains appendable under the execution fence.
     settlement.terminalChunk = finalChunks.at(-1);
-    yield* finalChunks;
+    for (const chunk of finalChunks) {
+      if (chunk === settlement.terminalChunk) {
+        timingPhase.status = "settled";
+      }
+      yield chunk;
+    }
+    if (settlement.event !== undefined) {
+      timingPhase.status = "settled";
+    }
   })();
   const finishSettlement = async () => {
     const { event } = settlement;
@@ -931,29 +977,44 @@ export const streamChat = async ({
     await settlement.finished;
   };
 
+  const readTiming = async (): Promise<ReadOutcome<ChatTurnTiming | null>> => {
+    const timing = await readChatTurnTiming({
+      execution: run.execution,
+      safeDb,
+    });
+    if (Result.isError(timing)) {
+      observeFailure(timing.error, {
+        sink: TIMING_READ_FAILURE,
+        ctx: { threadId },
+      });
+      return readUnavailable({ kind: "thrown", error: timing.error });
+    }
+    return readPresent(timing.value);
+  };
+
   return {
     type: "streaming",
-    response: run.produce(output, {
-      ...log,
-      append: async (chunks) => {
-        const offsets = await log.append(chunks);
-        if (
-          settlement.terminalChunk !== undefined &&
-          chunks.includes(settlement.terminalChunk)
-        ) {
-          // Append while fenced; persist the transcript before returning the
-          // offsets that allow the SDK to deliver the final terminal event.
-          await finishSettlement();
-        }
-        return offsets;
-      },
-      close: async () => {
-        // A producer cutoff can return its generator without emitting a
-        // terminal. The SDK flushes its cleanup batch before this callback.
-        await finishSettlement();
-        await log.close();
-      },
-    }),
+    response: run.produce(
+      withChatTurnTiming({
+        source: output,
+        getPhase: () => timingPhase.status,
+        readTiming,
+      }),
+      createChatTurnTimingDurability({
+        log,
+        getTerminal: () =>
+          settlement.event === undefined ||
+          settlement.terminalChunk === undefined
+            ? undefined
+            : {
+                chunk: settlement.terminalChunk,
+                messageId: settlement.event.responseMessage.id,
+              },
+        getPhase: () => timingPhase.status,
+        finishSettlement,
+        readTiming,
+      }),
+    ),
   };
 };
 
@@ -2856,6 +2917,103 @@ const failedRunDetails = ({ chunk, sourceChunk }: FailedRunDetailsOptions) => {
   };
 };
 
+const SOURCE_CLEANUP_AFTER_CUT_FAILURE = failureSink({
+  event: "chat.source_cleanup_after_cut_failed",
+  expected: [],
+});
+
+type ReadSourceUntilCutArgs = Pick<
+  ProcessServerChatStreamProps,
+  "initialMessages" | "mapMessageId" | "source"
+> & { signal: AbortSignal };
+
+/** A provider that ignores cancellation cannot hold the turn's settlement.
+ * @yields Source chunks until the run is cut short.
+ */
+const readSourceUntilCut = async function* ({
+  initialMessages,
+  mapMessageId,
+  source,
+  signal,
+}: ReadSourceUntilCutArgs): AsyncIterable<Result<PublicStreamChunk, unknown>> {
+  const cancellation = new AIGenerationCancelledError({
+    message: "Chat source iteration was cancelled",
+  });
+  const isRunCut = () => signal.aborted;
+  const iterator = ensureAssistantMessageStart({
+    getOrCreateMessageId: () =>
+      mapMessageId(ASSISTANT_RESPONSE_MESSAGE_ID_SENTINEL),
+    source: keepDeniedApprovalsOnScreen({
+      deniedApprovals: findDeniedApprovals(initialMessages),
+      source: remapOutgoingMessageIds({
+        existingMessageIds: new Set(initialMessages.map(({ id }) => id)),
+        mapMessageId,
+        source,
+      }),
+    }),
+  })[Symbol.asyncIterator]();
+  let ended = false;
+  try {
+    while (true) {
+      if (isRunCut()) {
+        yield Result.err(cancellation);
+        return;
+      }
+      const next = Result.tryPromise({
+        try: async () => await iterator.next(),
+        catch: (error: unknown) => error,
+      });
+      const raced = await Result.tryPromise({
+        try: async () =>
+          await withTimeout(async () => await next, {
+            label: "chat source iteration",
+            signal,
+            timeoutMs: 0,
+          }),
+        catch: (error: unknown) => error,
+      });
+      if (Result.isError(raced)) {
+        yield Result.err(isRunCut() ? cancellation : raced.error);
+        return;
+      }
+      const read = raced.value;
+      if (Result.isError(read)) {
+        yield Result.err(read.error);
+        return;
+      }
+      const step = read.value;
+      if (step.done) {
+        ended = true;
+        return;
+      }
+      yield Result.ok(step.value);
+    }
+  } finally {
+    if (!ended && iterator.return !== undefined) {
+      if (isRunCut()) {
+        // Async generator return waits for its outstanding next. Request
+        // cleanup, but let settlement finish while an uncooperative next is
+        // still blocked; the race already observes that next's rejection.
+        detached(
+          Result.tryPromise(async () => await iterator.return?.()).then(
+            (result) => {
+              if (Result.isError(result)) {
+                observeFailure(result.error, {
+                  sink: SOURCE_CLEANUP_AFTER_CUT_FAILURE,
+                });
+              }
+              return undefined;
+            },
+          ),
+          "chat.source-cleanup-after-cut",
+        );
+      } else {
+        await iterator.return();
+      }
+    }
+  }
+};
+
 const createClientAssistantOwner = (responseMessageId: string) => {
   let state: "active" | "inactive" = "inactive";
   return {
@@ -2945,20 +3103,17 @@ export const processServerChatStream = async function* ({
     terminal,
   });
   try {
-    const normalizedSource = ensureAssistantMessageStart({
-      getOrCreateMessageId: () =>
-        mapMessageId(ASSISTANT_RESPONSE_MESSAGE_ID_SENTINEL),
-      source: keepDeniedApprovalsOnScreen({
-        deniedApprovals: findDeniedApprovals(initialMessages),
-        source: remapOutgoingMessageIds({
-          existingMessageIds: new Set(initialMessages.map(({ id }) => id)),
-          mapMessageId,
-          source,
-        }),
-      }),
-    });
-
-    for await (const sourceChunk of normalizedSource) {
+    for await (const sourceRead of readSourceUntilCut({
+      initialMessages,
+      mapMessageId,
+      source,
+      signal: runSignal,
+    })) {
+      if (Result.isError(sourceRead)) {
+        const { error } = sourceRead;
+        throw error;
+      }
+      const sourceChunk = sourceRead.value;
       trackIncompleteToolCallInput(
         sourceChunk,
         rawArgumentsByIncompleteToolCallId,
@@ -3066,21 +3221,22 @@ export const processServerChatStream = async function* ({
     }
     const kind = classifyAIError(error);
     if (abortSignal.aborted) {
-      // An aborted stream is an expected exit (metered cutoff, ownership
-      // loss); its rejection shape is not a stream defect even
-      // when the classifier cannot name it.
-      captureError(error, { kind });
+      // Run control cancellation is an expected exit. Keep telemetry for
+      // other upstream failures that arrive during cancellation.
+      if (!AIGenerationCancelledError.is(error)) {
+        captureError(error, { kind });
+      }
       await terminalize({
         flushProcessor: true,
         outcome: cutShortOutcome(),
       });
-    } else {
-      reportStreamFailure(error, kind);
-      await terminalize({
-        flushProcessor: true,
-        outcome: { type: "failed", error: kind },
-      });
+      return;
     }
+    reportStreamFailure(error, kind);
+    await terminalize({
+      flushProcessor: true,
+      outcome: { type: "failed", error: kind },
+    });
     yield* clientAssistantOwner.announceBeforeFailure();
     yield {
       type: EventType.RUN_ERROR,

@@ -19,6 +19,7 @@ import {
   legislationFacetRefreshes,
   legislationSources,
 } from "@/api/db/schema";
+import { createStatuteCitationCountRepair } from "@/api/handlers/case-law/provisions/citation-count-repair";
 import {
   readStatuteByEliHandler,
   resolveStatuteWorkVersion,
@@ -452,6 +453,13 @@ beforeAll(
         versionValidTo: null,
       }),
     ]);
+
+    const repairCitationCounts = createStatuteCitationCountRepair(db);
+    let repair = await repairCitationCounts();
+    if (repair.status === "advanced") {
+      repair = await repairCitationCounts();
+    }
+    expect(repair).toEqual({ status: "ready", decisions: 0 });
 
     ownerDb = async (read) =>
       await db.transaction(
@@ -2163,7 +2171,10 @@ describe("statute country publication", () => {
   test.each(unpublishedStatutes)(
     "$country cannot be enumerated or reached through a document or work identifier",
     async ({ id, country, eli }) => {
-      const unavailable = publicCountryUnavailable(country, "search");
+      const unavailable = publicCountryUnavailable(country, {
+        domain: "legislation",
+        surface: "search",
+      });
       const listed = await listStatutesHandler({ country }, legislationDb);
       if (unavailable === null) {
         const page = expectPage(listed);
