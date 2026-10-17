@@ -115,6 +115,7 @@
         "@stll/permissions": "workspace:*",
         "@stll/portable-path": "workspace:*",
         "@stll/redis-config": "workspace:*",
+        "@stll/regex-set": "catalog:",
         "@stll/runtime-mode": "workspace:*",
         "@stll/sanctions": "workspace:*",
         "@stll/scripts": "workspace:*",
@@ -1586,6 +1587,7 @@
     "@stll/folio-core": "0.58.5",
     "@stll/folio-react": "0.26.0",
     "@stll/fuzzy-search": "1.1.5",
+    "@stll/regex-set": "1.0.5",
     "@t3-oss/env-core": "0.13.11",
     "@tailwindcss/postcss": "4.3.3",
     "@tailwindcss/vite": "4.3.3",
@@ -3199,6 +3201,20 @@
     "@stll/property-testing": ["@stll/property-testing@workspace:packages/property-testing"],
 
     "@stll/redis-config": ["@stll/redis-config@workspace:packages/redis-config"],
+
+    "@stll/regex-set": ["@stll/regex-set@1.0.5", "", { "optionalDependencies": { "@stll/regex-set-darwin-arm64": "1.0.5", "@stll/regex-set-darwin-x64": "1.0.5", "@stll/regex-set-linux-arm64-gnu": "1.0.5", "@stll/regex-set-linux-x64-gnu": "1.0.5", "@stll/regex-set-wasm32-wasi": "1.0.5", "@stll/regex-set-win32-x64-msvc": "1.0.5" } }, "sha512-dH91Z4nUQGzn0CQ5bPlhxfuUYEKdmNPoqybp2+k9cXzunDciE+C0kANqigbOSW+qoI4FKM9s+1BNUNgY0VdRyQ=="],
+
+    "@stll/regex-set-darwin-arm64": ["@stll/regex-set-darwin-arm64@1.0.5", "", { "os": "darwin", "cpu": "arm64" }, "sha512-Tzbh8Xv90sNP6NYEdz6IPpypjGq74llSLzP4Us3+gAGfNKw7kdfTbaydfPSUaelf5twhvrkdQ8dyh5RnY5W0FA=="],
+
+    "@stll/regex-set-darwin-x64": ["@stll/regex-set-darwin-x64@1.0.5", "", { "os": "darwin", "cpu": "x64" }, "sha512-s747EZXKU9ZHYe3AiE/Fkl5Hk6Hxb6O0/2VOw7aLk4k0PwhDP7/PuO6Khm539cedqJ1ipaCa9uB78qyexbpDjA=="],
+
+    "@stll/regex-set-linux-arm64-gnu": ["@stll/regex-set-linux-arm64-gnu@1.0.5", "", { "os": "linux", "cpu": "arm64" }, "sha512-pZqf1pxKGtEo+JI/CaJTzDpVsBaesDHK9qkyjmBJVoZfNEkYmxRQajEqUn4t2MNslrgSkcH+5HROqRKCTEdgzQ=="],
+
+    "@stll/regex-set-linux-x64-gnu": ["@stll/regex-set-linux-x64-gnu@1.0.5", "", { "os": "linux", "cpu": "x64" }, "sha512-tprT15L3Fmmmc6G5hJtmHOCw36GZ+I85jJ9UWe9Pf6arfJ7rS9mCCs6HgJYOOf51yp4U/MAYW1SreN7RgvW7yA=="],
+
+    "@stll/regex-set-wasm32-wasi": ["@stll/regex-set-wasm32-wasi@1.0.5", "", { "dependencies": { "@napi-rs/wasm-runtime": "^1.1.3" }, "cpu": "none" }, "sha512-xcK5XOo9TDji612ExBW4hSvekLGTq++VEUN2p9Yd5sMH4Ch7ivGCFST4Mwvj+A9AeDM996RWz2Sb2+KoFkP14Q=="],
+
+    "@stll/regex-set-win32-x64-msvc": ["@stll/regex-set-win32-x64-msvc@1.0.5", "", { "os": "win32", "cpu": "x64" }, "sha512-3NyR0UpI141KRQhFAqOmjzDmC8S4o32RluDqFOYzfd8bkFX+KQ1MRYn6TgN3HqbuTnzQBBiCDF9iaG/h8wzQqQ=="],
 
     "@stll/runtime-mode": ["@stll/runtime-mode@workspace:packages/runtime-mode"],
 

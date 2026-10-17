@@ -95,6 +95,11 @@ import {
 } from "@/api/handlers/chat/decision-passage-numbers";
 import type { DecisionPassageStamper } from "@/api/handlers/chat/decision-passage-numbers";
 import {
+  buildLenientPlaceholderCollector,
+  collectLenientPlaceholders,
+  type LenientPlaceholderCollector,
+} from "@/api/handlers/chat/lenient-placeholder-collector";
+import {
   createLoopRecoverySystemPrompt,
   detectModelLoop,
   getLoopRecoveryKey,
@@ -3683,7 +3688,7 @@ const createOutgoingChunkTransformer = ({
   const toolNamesByCallId = new Map<string, string>();
   const lenientCollector =
     boundary.type === "anonymized"
-      ? buildLenientPlaceholderCollector(boundary)
+      ? buildLenientPlaceholderCollector(boundary.redactionMap)
       : null;
 
   if (boundary.type === "anonymized") {
@@ -4136,8 +4141,6 @@ const getResolvedTextPrefixLength = (text: string): number => {
 
 const PARTIAL_PLACEHOLDER_TAIL = /\[[A-Z][A-Z0-9_]*$|\[$/u;
 const PLACEHOLDER_TOKEN = /\[[A-Z][A-Z0-9_]*\]/gu;
-const PLACEHOLDER_INNER_TOKEN = /^[A-Z][A-Z0-9_]*$/u;
-const REGEX_SPECIALS = /[\\^$.*+?()[\]{}|]/gu;
 
 const getDeanonymisablePrefixLength = (text: string): number => {
   const match = PARTIAL_PLACEHOLDER_TAIL.exec(text);
@@ -4181,59 +4184,6 @@ const collectTextPlaceholders = (text: string): Set<string> => {
   return placeholders;
 };
 
-type LenientPlaceholderCollector = {
-  pattern: RegExp;
-  placeholderByToken: ReadonlyMap<string, string>;
-};
-
-const escapeRegex = (value: string): string =>
-  value.replaceAll(REGEX_SPECIALS, "\\$&");
-
-const buildLenientPlaceholderCollector = (
-  boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>,
-): LenientPlaceholderCollector | null => {
-  const placeholderByToken = new Map<string, string>();
-  const bracketed: string[] = [];
-  const bracketless: string[] = [];
-
-  for (const placeholder of boundary.redactionMap.keys()) {
-    if (!placeholderByToken.has(placeholder)) {
-      placeholderByToken.set(placeholder, placeholder);
-      bracketed.push(escapeRegex(placeholder));
-    }
-
-    if (!placeholder.startsWith("[") || !placeholder.endsWith("]")) {
-      continue;
-    }
-
-    const inner = placeholder.slice(1, -1);
-    if (PLACEHOLDER_INNER_TOKEN.test(inner) && !placeholderByToken.has(inner)) {
-      placeholderByToken.set(inner, placeholder);
-      bracketless.push(escapeRegex(inner));
-    }
-  }
-
-  if (bracketed.length === 0 && bracketless.length === 0) {
-    return null;
-  }
-
-  bracketed.sort((a, b) => b.length - a.length);
-  bracketless.sort((a, b) => b.length - a.length);
-
-  const patterns: string[] = [];
-  if (bracketed.length > 0) {
-    patterns.push(bracketed.join("|"));
-  }
-  if (bracketless.length > 0) {
-    patterns.push(`\\b(?:${bracketless.join("|")})\\b`);
-  }
-
-  return {
-    pattern: new RegExp(patterns.join("|"), "gu"),
-    placeholderByToken,
-  };
-};
-
 const collectPlaceholdersFromText = (
   text: string,
   lenientCollector: LenientPlaceholderCollector | null,
@@ -4242,18 +4192,7 @@ const collectPlaceholdersFromText = (
     return collectTextPlaceholders(text);
   }
 
-  const placeholders = new Set<string>();
-  lenientCollector.pattern.lastIndex = 0;
-
-  let match: RegExpExecArray | null;
-  while ((match = lenientCollector.pattern.exec(text)) !== null) {
-    const placeholder = lenientCollector.placeholderByToken.get(match[0]);
-    if (placeholder !== undefined) {
-      placeholders.add(placeholder);
-    }
-  }
-
-  return placeholders;
+  return collectLenientPlaceholders(text, lenientCollector);
 };
 
 const collectUnknownStringPlaceholders = (
