@@ -69,7 +69,6 @@ import type { readWorkspaceMembersHandler } from "@/api/handlers/workspaces/work
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
-import { CITATION_READ_DIRECTIONS } from "@/api/lib/case-law/citation-vocabulary";
 import { DECISION_READ_STATUS } from "@/api/lib/case-law/decision-read-vocabulary";
 import {
   type CaseLawProvisionFilter,
@@ -232,6 +231,7 @@ import {
 } from "@/api/mcp/valibot-tool-definition";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
+import { readCaseLawCitationsArgsSchema } from "./case-law-citations-input";
 import { boundCaseLawSearchHeadnotes } from "./case-law-search-headnotes";
 
 const defaultReadWorkspaceHandler: typeof readWorkspaceHandler = async (
@@ -784,33 +784,6 @@ const readCaseLawDecisionArgsSchema = nullAsAbsent(
         ),
       ),
     ),
-  }),
-);
-
-const readCaseLawCitationsArgsSchema = nullAsAbsent(
-  v.strictObject({
-    decision_id: uuidInputSchema("Case-law decision ID"),
-    direction: v.pipe(
-      v.picklist(CITATION_READ_DIRECTIONS),
-      v.description(
-        "Which side of the citation graph to read: 'cites' for the decisions this decision cites, 'cited_by' for the decisions that cite it. Citing is not agreeing: both sides carry negative treatments.",
-      ),
-    ),
-    limit: v.optional(
-      v.pipe(
-        v.number(),
-        v.integer(),
-        v.minValue(1),
-        v.maxValue(LIMITS.caseLawDecisionCitationPageSize),
-        v.description(
-          `Citations per page; defaults to ${LIMITS.caseLawAgentCitationPageSizeDefault}, at most ${LIMITS.caseLawDecisionCitationPageSize}.`,
-        ),
-      ),
-    ),
-    cursor: cursorInput({
-      description:
-        "Opaque cursor from a previous read_case_law_citations call to read the next page",
-    }),
   }),
 );
 

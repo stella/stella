@@ -572,10 +572,6 @@
     "reason": "Existing listMattersArgsSchema MCP input bound; shared LIMITS migration pending."
   },
   {
-    "id": "apps/api/src/mcp/stella-tools.ts::readCaseLawCitationsArgsSchema::minValue:1::1",
-    "reason": "Existing readCaseLawCitationsArgsSchema MCP input bound; shared LIMITS migration pending."
-  },
-  {
     "id": "apps/api/src/mcp/stella-tools.ts::readCaseLawDecisionArgsSchema::minLength:1::1",
     "reason": "Existing readCaseLawDecisionArgsSchema MCP input bound; shared LIMITS migration pending."
   },
