@@ -2,12 +2,15 @@ import { describe, expect, test } from "bun:test";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import { createMigrationLockTelemetry } from "./migration-lock-observation";
+import type { MigrationLockEvent } from "./migration-lock-observation";
 import {
   analyzeTable,
   createIndexConcurrently,
   createUngatedTableGateForTests,
   dropIndexConcurrently,
   reindexIndexConcurrently,
+  runGatedTableWork,
   renameIndex,
   validateConstraint,
   validateOnlineConstraints,
@@ -218,5 +221,61 @@ describe("validateOnlineConstraints", () => {
         ),
       ),
     ).toContain("constraint first_check is missing");
+  });
+});
+
+test("a held table gate emits one deferred attempt without starting work", async () => {
+  const records: MigrationLockEvent[] = [];
+  const lockTelemetry = createMigrationLockTelemetry();
+  lockTelemetry.emit = (record) => {
+    records.push(record);
+  };
+  const connection: OnlineMigrationConnection = {
+    execute: async () => undefined,
+    query: async () => [{ pid: 11 }],
+    release: () => undefined,
+  };
+  const observer: OnlineMigrationConnection = {
+    execute: async () => undefined,
+    query: async () => [],
+    release: () => undefined,
+  };
+  let workCount = 0;
+  const result = await runGatedTableWork({
+    connection,
+    reserveObserver: async () => observer,
+    target: INDEX,
+    kind: "index_build",
+    gate: {
+      lockTelemetry,
+      log: () => undefined,
+      ebs: {
+        type: "reader",
+        read: async () => ({
+          indicator: "ebs_balance",
+          kind: "unknown",
+          value: null,
+          threshold: 70,
+          observedAt: null,
+          reason: "Metric unavailable",
+        }),
+      },
+    },
+    work: async () => {
+      workCount += 1;
+    },
+  });
+  expect(result.type).toBe("deferred");
+  expect(workCount).toBe(0);
+  expect(records).toHaveLength(1);
+  expect(records.at(0)).toMatchObject({
+    phase: "online",
+    outcome: "deferred",
+    step: INDEX.name,
+    table: INDEX.tableName,
+    attempt: 1,
+    retriesSpent: 0,
+    waitMs: 0,
+    blockers: [],
   });
 });

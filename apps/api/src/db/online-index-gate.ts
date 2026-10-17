@@ -25,6 +25,7 @@ import { createEbsSignalReader } from "../lib/db/ebs-signal-reader";
 import type { ConfiguredEbsConfiguration } from "../lib/db/ebs-signal-reader";
 import { getPgErrorCode, PG_ERROR } from "../lib/pg-error";
 import { isRecord } from "../lib/type-guards";
+import type { MigrationLockTelemetry } from "./migration-lock-observation";
 import { openOnlineIndexObserver } from "./online-index-observer";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
 
@@ -54,6 +55,7 @@ export type OnlineIndexEbsSource =
   | { type: "reader"; read: () => Promise<Signal> };
 
 export type OnlineIndexGateOptions = {
+  lockTelemetry?: MigrationLockTelemetry;
   ebs: OnlineIndexEbsSource;
   config?: OnlineIndexConfig;
   hold?: OnlineIndexHoldRef;

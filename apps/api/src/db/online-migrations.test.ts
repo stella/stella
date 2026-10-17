@@ -73,6 +73,9 @@ const runOnlineMigrations = async (
     reserveObserver: async () => ({
       execute: async () => undefined,
       query: async (query) => {
+        if (query.includes("pg_blocking_pids")) {
+          return [];
+        }
         if (query.includes("pg_backend_pid() AS pid")) {
           return [{ pid: 2, database: "test" }];
         }
@@ -238,6 +241,7 @@ describe("online migrations", () => {
     );
     for (const step of steps) {
       expect(step.durationMs, step.name).toBe(5);
+      expect(step.retriesSpent, step.name).toBe(0);
       expect(step.outcome, step.name).toBe("complete");
     }
   });
@@ -277,6 +281,7 @@ describe("online migrations", () => {
       kind: "index",
       name: REPORT_EXPORT_INDEX,
       durationMs: 0,
+      retriesSpent: 0,
       outcome: "deferred",
     });
   });
@@ -758,6 +763,7 @@ describe("online migrations", () => {
       kind: "replacement_drop",
       name: firstLegacy,
       durationMs: 0,
+      retriesSpent: 0,
       outcome: "deferred",
     });
     expect(indexOfStatement(harness.statements, DROP_INDEX_FRAGMENT)).toBe(-1);
@@ -811,6 +817,7 @@ describe("online migrations", () => {
         kind: "repair",
         name,
         durationMs: 0,
+        retriesSpent: 0,
         outcome: "deferred",
       });
       expect(
@@ -1139,6 +1146,7 @@ describe("online migrations", () => {
       kind: "repair",
       name: "probe-repair",
       durationMs: 0,
+      retriesSpent: 0,
       outcome: "failed",
     });
   });

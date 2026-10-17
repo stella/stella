@@ -15,6 +15,11 @@
 import { panic } from "better-result";
 
 import type { RequiredMigrationIndex } from "../lib/db/migration-history";
+import { isRecord } from "../lib/type-guards";
+import {
+  createMigrationLockTelemetry,
+  observeMigrationLockAttempt,
+} from "./migration-lock-observation";
 import { readConstraintValidated } from "./online-constraint-completion";
 import { createOnlineIndexGate } from "./online-index-gate";
 import type { OnlineIndexGateOptions } from "./online-index-gate";
@@ -226,10 +231,27 @@ export const runGatedTableWork = async ({
       kind,
     });
     try {
-      const outcome = await runtime.attempt(
-        async (guardedConnection) =>
-          await work(sessionOn(guardedConnection, target)),
-      );
+      const backend = (
+        await connection.query("SELECT pg_backend_pid() AS pid")
+      ).at(0);
+      if (!isRecord(backend) || typeof backend["pid"] !== "number") {
+        panic("Invalid migration backend pid response");
+      }
+      const outcome = await observeMigrationLockAttempt({
+        observer,
+        pid: backend["pid"],
+        phase: "online",
+        step: target.name,
+        table: target.tableName,
+        telemetry: gate.lockTelemetry ?? createMigrationLockTelemetry(),
+        cancelWork: connection.terminate,
+        work: async () =>
+          await runtime.attempt(
+            async (guardedConnection) =>
+              await work(sessionOn(guardedConnection, target)),
+          ),
+        outcome: (result) => (result === "done" ? "done" : "deferred"),
+      });
       switch (outcome) {
         case "done":
           return { type: "complete" };
