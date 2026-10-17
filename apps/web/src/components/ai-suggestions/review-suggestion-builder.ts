@@ -99,7 +99,7 @@ export const buildPreview = (
   if (block === undefined) {
     return null;
   }
-  const blockText = block.text;
+  const blockText = block.text.toWellFormed();
   switch (operation.type) {
     // Range-addressed edits render with the replaceInBlock preview: the
     // handle's offsets locate the replaced text inside the snapshot block
@@ -142,12 +142,13 @@ export const buildPreview = (
       return { type: "commentOnBlock", anchor };
     }
     case "replaceInBlock": {
-      const idx = blockText.indexOf(operation.find);
+      const find = operation.find.toWellFormed();
+      const idx = blockText.indexOf(find);
       if (idx === -1) {
         return {
           type: "replaceInBlock",
           contextBefore: blockText.slice(0, PREVIEW_CONTEXT_CHARS),
-          before: operation.find,
+          before: find,
           after: operation.replace,
           contextAfter: "",
           ...(block.previewRuns !== undefined && {
@@ -156,7 +157,7 @@ export const buildPreview = (
         };
       }
       const contextStart = Math.max(0, idx - PREVIEW_CONTEXT_CHARS);
-      const matchEnd = idx + operation.find.length;
+      const matchEnd = idx + find.length;
       const contextEnd = Math.min(
         blockText.length,
         matchEnd + PREVIEW_CONTEXT_CHARS,
@@ -164,7 +165,7 @@ export const buildPreview = (
       return {
         type: "replaceInBlock",
         contextBefore: blockText.slice(contextStart, idx),
-        before: operation.find,
+        before: find,
         after: operation.replace,
         contextAfter: blockText.slice(matchEnd, contextEnd),
         ...(block.previewRuns !== undefined && {
