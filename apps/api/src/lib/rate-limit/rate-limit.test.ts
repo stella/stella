@@ -629,6 +629,7 @@ describe("RedisRateLimitContext", () => {
     test(`applies ${failurePolicy} when the first connection times out`, async () => {
       const operations: string[] = [];
       let clientCreations = 0;
+      let sendCalls = 0;
       const context = new RedisRateLimitContext({
         createRedis: () => {
           clientCreations += 1;
@@ -637,7 +638,10 @@ describe("RedisRateLimitContext", () => {
               await new Promise<void>(() => {
                 // Intentionally left pending.
               }),
-            send: async () => [7, WINDOW_MS],
+            send: async () => {
+              sendCalls += 1;
+              throw new TypeError("Redis is not connected");
+            },
           };
         },
         failurePolicy,
@@ -656,14 +660,74 @@ describe("RedisRateLimitContext", () => {
       expect(counter.count).toBe(
         failurePolicy === "fail_open_local" ? 1 : Number.MAX_SAFE_INTEGER,
       );
-      expect(operations).toEqual(["connect", "increment"]);
+      expect(operations).toEqual(["connect"]);
       expect(clientCreations).toBe(1);
       await context.increment("api:client", WINDOW_MS, 1000);
-      expect(clientCreations).toBe(2);
+      expect(clientCreations).toBe(1);
+      expect(sendCalls).toBe(1);
+      expect(operations).toEqual(["connect", "increment"]);
 
       context.kill();
     });
   }
+
+  test("reuses a client after its first connection fails", async () => {
+    const operations: string[] = [];
+    let clientCreations = 0;
+    let connected = false;
+    let sendCalls = 0;
+    let timeoutCalls = 0;
+    const context = new RedisRateLimitContext({
+      createRedis: () => {
+        clientCreations += 1;
+        return {
+          connect: async () => {
+            throw new Error("connect ECONNREFUSED");
+          },
+          send: async () => {
+            sendCalls += 1;
+            if (!connected) {
+              throw new TypeError("Redis is not connected");
+            }
+            return [7, WINDOW_MS];
+          },
+        };
+      },
+      failurePolicy: "fail_open_local",
+      onRedisError: (_error, operation) => {
+        operations.push(operation);
+      },
+      scheduleTimeout: () => {
+        timeoutCalls += 1;
+        return () => undefined;
+      },
+    });
+    context.init(RATE_LIMIT_OPTIONS);
+
+    expect((await context.increment("api:client", WINDOW_MS, 1000)).count).toBe(
+      1,
+    );
+    expect(clientCreations).toBe(1);
+    expect(sendCalls).toBe(0);
+    expect(timeoutCalls).toBe(1);
+    expect(operations).toEqual(["connect"]);
+
+    expect((await context.increment("api:client", WINDOW_MS, 1000)).count).toBe(
+      2,
+    );
+    expect(clientCreations).toBe(1);
+    expect(sendCalls).toBe(1);
+    expect(timeoutCalls).toBe(2);
+    expect(operations).toEqual(["connect", "increment"]);
+
+    connected = true;
+    expect((await context.increment("api:client", WINDOW_MS, 1000)).count).toBe(
+      7,
+    );
+    expect(clientCreations).toBe(1);
+    expect(sendCalls).toBe(2);
+    context.kill();
+  });
 
   test("bounds a stalled command and cancels its timer", async () => {
     let clientClosed = false;

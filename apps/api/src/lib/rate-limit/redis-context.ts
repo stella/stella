@@ -151,6 +151,13 @@ class RedisRateLimitReplyError extends TaggedError("RedisRateLimitReplyError")<{
   reply: unknown;
 }> {}
 
+class ReportedRedisConnectError extends TaggedError(
+  "ReportedRedisConnectError",
+)<{
+  cause: unknown;
+  message: string;
+}> {}
+
 /** Replica-safe fixed-window context with a bounded, explicit outage policy. */
 export class RedisRateLimitContext implements ReadableRateLimitContext {
   private readonly commandTimeoutMs: number;
@@ -259,7 +266,7 @@ export class RedisRateLimitContext implements ReadableRateLimitContext {
     if (Result.isOk(result)) {
       return result.value;
     }
-    this.onRedisError(result.error, "read");
+    this.reportRedisOperationError(result.error, "read");
     if (this.failurePolicy === "fail_open_local") {
       this.onLocalFallback?.();
       const counter = this.fallback.read(counterKey);
@@ -309,7 +316,7 @@ export class RedisRateLimitContext implements ReadableRateLimitContext {
       catch: (error: unknown) => error,
     });
     if (Result.isError(redisResult)) {
-      this.onRedisError(redisResult.error, "increment");
+      this.reportRedisOperationError(redisResult.error, "increment");
       if (requestId !== null) {
         if (TimeoutError.is(redisResult.error)) {
           // The client gave up waiting, but the EVAL may already have
@@ -382,7 +389,7 @@ export class RedisRateLimitContext implements ReadableRateLimitContext {
         ]),
     );
     if (Result.isError(result)) {
-      this.onRedisError(result.error, "complete");
+      this.reportRedisOperationError(result.error, "complete");
     }
   }
 
@@ -411,7 +418,7 @@ export class RedisRateLimitContext implements ReadableRateLimitContext {
         ]),
     );
     if (Result.isError(result)) {
-      this.onRedisError(result.error, "decrement");
+      this.reportRedisOperationError(result.error, "decrement");
     }
   }
 
@@ -430,7 +437,7 @@ export class RedisRateLimitContext implements ReadableRateLimitContext {
         await this.sendCommand("DEL", [redisRateLimitKey(counterKey)]),
     );
     if (Result.isError(result)) {
-      this.onRedisError(result.error, "reset");
+      this.reportRedisOperationError(result.error, "reset");
     }
   }
 
@@ -467,21 +474,24 @@ export class RedisRateLimitContext implements ReadableRateLimitContext {
     let connection = this.redisConnection;
     if (connection === null) {
       const client = this.createRedis();
-      connection = { client, ready: null };
-      this.redisConnection = connection;
+      const createdConnection: RedisConnection = { client, ready: null };
+      connection = createdConnection;
+      this.redisConnection = createdConnection;
       if (client.connect !== undefined) {
-        connection.ready = withCommandTimeout({
+        createdConnection.ready = withCommandTimeout({
           command: Promise.resolve().then(async () => await client.connect?.()),
           commandTimeoutMs: this.commandTimeoutMs,
           label: "api-rate-limit-redis-connect",
           scheduleTimeout: this.scheduleTimeout,
         }).catch((error: unknown) => {
-          if (this.redisConnection === connection) {
-            this.redisConnection = null;
-            client.close?.();
+          if (this.redisConnection === createdConnection) {
+            createdConnection.ready = null;
             this.onRedisError(error, "connect");
           }
-          throw error;
+          throw new ReportedRedisConnectError({
+            cause: error,
+            message: "The initial Redis connection failed",
+          });
         });
       }
     }
@@ -492,6 +502,15 @@ export class RedisRateLimitContext implements ReadableRateLimitContext {
       }
     }
     return connection.client;
+  }
+
+  private reportRedisOperationError(
+    error: unknown,
+    operation: Exclude<RedisRateLimitOperation, "connect">,
+  ): void {
+    if (!ReportedRedisConnectError.is(error)) {
+      this.onRedisError(error, operation);
+    }
   }
 
   private async sendCommand(command: string, args: string[]): Promise<unknown> {
