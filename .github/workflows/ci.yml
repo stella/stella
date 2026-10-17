@@ -861,10 +861,12 @@ jobs:
           if (( ${#changed_files[@]} > 0 )); then
             printf '%s\0' "${changed_files[@]}" > "$RUNNER_TEMP/api-test-changed-paths"
           fi
-          echo "api_scope_unknown=$scope_unknown" >> "$GITHUB_OUTPUT"
-          printf '%s\0' "${changed_files[@]}" | jq -Rsc 'split("\u0000") | map(select(length > 0))' \
-            | sed 's/^/changed_files=/' >> "$GITHUB_OUTPUT"
-          echo "comparison_base=$comparison_base" >> "$GITHUB_OUTPUT"
+          {
+            echo "api_scope_unknown=$scope_unknown"
+            printf '%s\0' "${changed_files[@]}" | jq -Rsc 'split("\u0000") | map(select(length > 0))' \
+              | sed 's/^/changed_files=/'
+            echo "comparison_base=$comparison_base"
+          } >> "$GITHUB_OUTPUT"
 
           # Graph-based scope tools read scope_files; explicit per-path selectors
           # (dependency malware, lockfile ages, image and manifest inputs) keep
