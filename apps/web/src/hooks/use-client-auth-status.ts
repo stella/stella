@@ -42,11 +42,19 @@ export const useClientAuthStatus = ({
     ? sessionData.session.userId
     : undefined;
   // Read only for a member: a visitor's cache holds nothing of it.
-  const professionalUseQueries: ReturnType<typeof professionalUseOptions>[] =
-    enabled && !isPending && !isError && memberUserId !== undefined
-      ? [professionalUseOptions(memberUserId)]
-      : [];
-  const professionalUse = useQueries({ queries: professionalUseQueries }).at(0);
+  // A disabled read still observes the query so it serves what the cache
+  // holds; `enabled` only decides whether it may ask the server.
+  const professionalUse = useQueries({
+    queries:
+      memberUserId === undefined
+        ? []
+        : [
+            {
+              ...professionalUseOptions(memberUserId),
+              enabled: enabled && !isPending && !isError,
+            },
+          ],
+  }).at(0);
 
   if (isPending) {
     return {
