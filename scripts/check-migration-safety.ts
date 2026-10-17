@@ -2105,6 +2105,40 @@ const createAcknowledgementLookup = (
   };
 };
 
+// Share the statement boundary and acknowledgement contract with the lock census.
+export {
+  parseStatements as parseMigrationStatements,
+  indexTokens as migrationStatementTokens,
+  readIndexRelation as readMigrationRelation,
+  splitAlterActions as splitMigrationAlterActions,
+};
+
+export const reviewedMigrationLines = (source: string): Set<number> => {
+  const lines = source.split("\n");
+  const { acknowledgements, errors } = parseAcknowledgements(
+    "migration.sql",
+    lines,
+  );
+  if (errors.length > 0) {
+    return new Set();
+  }
+  const findAcknowledgement = createAcknowledgementLookup(
+    lines,
+    acknowledgements,
+  );
+  return new Set(
+    parseStatements(source)
+      .filter((statement) =>
+        GUARDED_RULES.some(
+          (rule) =>
+            guardedRuleMatches(rule, statement.text) &&
+            findAcknowledgement(statement, rule.id) !== undefined,
+        ),
+      )
+      .map(({ line }) => line),
+  );
+};
+
 type FileCheckResult = {
   invariantFindings: Finding[];
   guardedFindings: (Finding & { category: GuardedCategory })[];
