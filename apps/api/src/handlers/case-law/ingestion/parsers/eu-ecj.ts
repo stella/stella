@@ -1,3 +1,4 @@
+import * as cheerio from "cheerio";
 /**
  * Court of Justice of the European Union (CJEU) XHTML parser.
  *
@@ -39,10 +40,12 @@
  * shape is a bad reading experience; a decision missing a paragraph is
  * a wrong answer, and the reader cannot tell that it happened.
  */
-
-import * as cheerio from "cheerio";
 import { type AnyNode, type Element, isTag, isText } from "domhandler";
 
+import {
+  plainTextOf as inlinesToPlainText,
+  hasInlineChildren,
+} from "@stll/legal-ast/document-ast";
 import type {
   Block,
   DecisionDocumentAst,
@@ -51,20 +54,17 @@ import type {
   ParagraphBlock,
   ParagraphRole,
 } from "@stll/legal-ast/document-ast";
-import { hasInlineChildren } from "@stll/legal-ast/document-ast";
-
-import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
-import { sanitizeUrl } from "@/api/lib/sanitize-url";
 
 import {
   ANONYMIZED_CLASS,
   type WalkInlinesOptions,
   appendTextInline,
-  inlinesToPlainText,
   ownTableRows,
   visibleHtmlText,
   walkInlines,
-} from "./shared-inlines";
+} from "@/api/lib/legal-search/parsers/shared-inlines";
+import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
+import { sanitizeUrl } from "@/api/lib/sanitize-url";
 
 // ── Public API ─────────────────────────────────────────────
 

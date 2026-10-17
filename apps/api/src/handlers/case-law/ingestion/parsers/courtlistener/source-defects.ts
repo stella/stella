@@ -1,9 +1,9 @@
 import { panic } from "better-result";
 import * as cheerio from "cheerio";
 
+import { visibleHtmlText } from "@/api/lib/legal-search/parsers/shared-inlines";
 import type { ValidationResult } from "@/api/lib/legal-search/parsers/validate-ast";
 
-import { visibleHtmlText } from "../shared-inlines";
 import { conservesText } from "./blocks";
 import { markupResidueMatchesIn } from "./markup-residue";
 import type { ParsedOpinionText } from "./outcome";

@@ -37,7 +37,7 @@ import {
   appendTextInline,
   isExcludedHtmlTag,
   walkInlines,
-} from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
+} from "@/api/lib/legal-search/parsers/shared-inlines";
 
 import type { UnitPosition } from "./opinion-class";
 import type { TextUnit } from "./outcome";

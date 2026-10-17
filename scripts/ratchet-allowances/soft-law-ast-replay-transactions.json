@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/legal-search/soft-law-ast-replay.ts",
+  "delta": 1,
+  "reason": "Replay commits each parsed guidance version in a short compare-and-set transaction after bounded original reads. This streams progress without retaining every AST in the batch or holding database locks across object reads and PDF parsing."
+}

@@ -57,10 +57,6 @@ import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 import {
-  legacyQuarantineHtmlText,
-  visibleHtmlText,
-} from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
-import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
   checkedDecisionMetadata,
@@ -108,6 +104,10 @@ import {
   storedCaseNumberOf,
 } from "@/api/lib/legal-search/ingestion-normalization";
 import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
+import {
+  legacyQuarantineHtmlText,
+  visibleHtmlText,
+} from "@/api/lib/legal-search/parsers/shared-inlines";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";

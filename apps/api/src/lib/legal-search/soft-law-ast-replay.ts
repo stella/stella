@@ -60,63 +60,69 @@ export const loadSoftLawAstRaw = async ({
 }: LoadSoftLawAstRawOptions): Promise<
   Result<SoftLawDocumentInput["raw"], SoftLawAstReplayError>
 > => {
-  const loaded = await Result.tryPromise(async () => {
-    if (
-      rawObjects.length === 0 ||
-      rawObjects.length > SOFT_LAW_RAW_PART_LIMIT
-    ) {
-      throw new SoftLawAstReplayError({
+  if (rawObjects.length === 0 || rawObjects.length > SOFT_LAW_RAW_PART_LIMIT) {
+    return Result.err(
+      new SoftLawAstReplayError({
         message: "Stored original parts are missing or exceed the replay limit",
-      });
-    }
-    const raw: SoftLawDocumentInput["raw"][number][] = [];
-    let remaining = SOFT_LAW_RAW_BYTE_LIMIT;
-    const prefix = rawSourcePrefix({
-      family: RAW_SOURCE_FAMILY.SOFT_LAW,
-      sourceId,
-    });
-    for (const part of rawObjects) {
-      signal.throwIfAborted();
-      const digest = part.key.slice(prefix.length);
-      if (!part.key.startsWith(prefix) || !/^[a-f0-9]{64}$/u.test(digest)) {
-        throw new SoftLawAstReplayError({
-          message: "Stored original does not belong to this source",
-        });
-      }
-      // no-network-await-in-loop: Retained parts share one byte budget; each bounded read reduces the next ceiling.
-      const bytes = await readRaw({
-        key: part.key,
-        maxBytes: remaining,
-        signal,
-      });
-      if (
-        bytes === null ||
-        bytes.byteLength > remaining ||
-        sha256Hex(bytes) !== digest
-      ) {
-        throw new SoftLawAstReplayError({
-          message:
-            "Stored original is missing, oversized, or has a different digest",
-        });
-      }
-      remaining -= bytes.byteLength;
-      raw.push({
-        role: part.role,
-        bytes,
-        contentType: part.contentType,
-        ...(part.purpose ? { purpose: part.purpose } : {}),
-      });
-    }
-    return raw;
+      }),
+    );
+  }
+  const raw: SoftLawDocumentInput["raw"][number][] = [];
+  let remaining = SOFT_LAW_RAW_BYTE_LIMIT;
+  const prefix = rawSourcePrefix({
+    family: RAW_SOURCE_FAMILY.SOFT_LAW,
+    sourceId,
   });
-  return loaded.status === "ok"
-    ? Result.ok(loaded.value)
-    : Result.err(
+  for (const part of rawObjects) {
+    signal.throwIfAborted();
+    const digest = part.key.slice(prefix.length);
+    if (!part.key.startsWith(prefix) || !/^[a-f0-9]{64}$/u.test(digest)) {
+      return Result.err(
+        new SoftLawAstReplayError({
+          message: "Stored original does not belong to this source",
+        }),
+      );
+    }
+    // Retained parts share one byte budget; each read reduces the next ceiling.
+    const maxBytes = remaining;
+    const loaded = await Result.tryPromise(
+      async () =>
+        await readRaw({
+          key: part.key,
+          maxBytes,
+          signal,
+        }),
+    );
+    if (loaded.status === "error") {
+      return Result.err(
         new SoftLawAstReplayError({
           message: "Could not load retained guidance originals",
           cause: loaded.error.cause,
         }),
       );
+    }
+    const bytes = loaded.value;
+    if (
+      bytes === null ||
+      bytes.byteLength > remaining ||
+      sha256Hex(bytes) !== digest
+    ) {
+      return Result.err(
+        new SoftLawAstReplayError({
+          message:
+            "Stored original is missing, oversized, or has a different digest",
+        }),
+      );
+    }
+    remaining -= bytes.byteLength;
+    raw.push({
+      role: part.role,
+      bytes,
+      contentType: part.contentType,
+      ...(part.purpose ? { purpose: part.purpose } : {}),
+    });
+  }
+  return Result.ok(raw);
 };
 
 const isSoftLawAuthority = (authority: string): authority is SoftLawAuthority =>

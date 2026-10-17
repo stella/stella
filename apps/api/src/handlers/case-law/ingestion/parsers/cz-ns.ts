@@ -1,3 +1,4 @@
+import * as cheerio from "cheerio";
 /**
  * Czech Supreme Court (Nejvyšší soud) HTML parser.
  *
@@ -8,8 +9,6 @@
  *   2. Raw chunks -> semantic blocks (headings, paragraphs,
  *      ruling items, tables)
  */
-
-import * as cheerio from "cheerio";
 import { type AnyNode, Element, isTag, isText, Text } from "domhandler";
 
 import {
@@ -17,6 +16,7 @@ import {
   CZ_JUDGE_NAME_RE as SIGNATURE_RE,
   CZ_JUDGE_TITLE_RE as PREDSEDA_RE,
 } from "@stll/legal-ast/czech-document-roles";
+import { plainTextOf as inlinesToPlainText } from "@stll/legal-ast/document-ast";
 import type {
   Block,
   DecisionDocumentAst,
@@ -27,16 +27,14 @@ import type {
 } from "@stll/legal-ast/document-ast";
 
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
-import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
-import { sanitizeUrl } from "@/api/lib/sanitize-url";
-
 import {
-  inlinesToPlainText,
   isExcludedHtmlTag,
   ownTableRows,
   visibleHtmlText,
   walkInlines as walkInlinesShared,
-} from "./shared-inlines";
+} from "@/api/lib/legal-search/parsers/shared-inlines";
+import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
+import { sanitizeUrl } from "@/api/lib/sanitize-url";
 
 /**
  * Source text the AST is expected to account for.

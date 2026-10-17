@@ -3136,7 +3136,7 @@
         "job": "measure-3"
       }
     },
-    "src/handlers/case-law/ingestion/parsers/shared-inlines.property.test.ts": {
+    "src/lib/legal-search/parsers/shared-inlines.property.test.ts": {
       "peakMb": 193,
       "baselineMb": 193,
       "source": {
@@ -3144,7 +3144,7 @@
         "job": "measure-4"
       }
     },
-    "src/handlers/case-law/ingestion/parsers/shared-inlines.test.ts": {
+    "src/lib/legal-search/parsers/shared-inlines.test.ts": {
       "peakMb": 191,
       "baselineMb": 191,
       "source": {

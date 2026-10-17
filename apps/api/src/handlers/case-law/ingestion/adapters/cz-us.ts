@@ -66,11 +66,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { czechConstitutionalIdentifiersFromParallelCitations } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { parseUsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-us";
-import {
-  legacyQuarantineHtmlText,
-  ownTableRows,
-  visibleHtmlText,
-} from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import { stripAcademicTitles } from "@/api/handlers/case-law/judges/judge-name";
 import { czDecisionCourt } from "@/api/lib/case-law/cz-ecli-courts";
@@ -100,6 +95,11 @@ import type {
   RawIngestionResult,
   DecisionJudgeInput,
 } from "@/api/lib/legal-search/ingestion-types";
+import {
+  legacyQuarantineHtmlText,
+  ownTableRows,
+  visibleHtmlText,
+} from "@/api/lib/legal-search/parsers/shared-inlines";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";

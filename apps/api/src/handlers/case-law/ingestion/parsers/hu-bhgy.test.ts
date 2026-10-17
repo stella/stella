@@ -23,6 +23,7 @@ import {
   DECISION_IDENTIFIER_TYPES,
   isDecisionIdentifier,
 } from "@stll/legal-ast/decision-identifier";
+import { plainTextOf as inlinesToPlainText } from "@stll/legal-ast/document-ast";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
 
@@ -51,7 +52,6 @@ import {
   assertNotePath,
 } from "./document-note-paths.fixtures";
 import { assertRtfLineParity } from "./rtf-line-parity.fixtures";
-import { inlinesToPlainText } from "./shared-inlines";
 
 const readRtf = (input: Uint8Array) => {
   const document = readRtfDocument(input);

@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 /**
  * Reader for the decision XML the data-protection authority's portal serves.
  *
@@ -12,11 +13,10 @@
  * Structure is read from those elements only; nothing is inferred from the
  * wording.
  */
-
-import { Result } from "better-result";
 import * as cheerio from "cheerio";
 import { type AnyNode, type Element, isCDATA, isTag, isText } from "domhandler";
 
+import { plainTextOf as inlinesToPlainText } from "@stll/legal-ast/document-ast";
 import type {
   Block,
   DecisionDocumentAst,
@@ -28,12 +28,11 @@ import type {
 } from "@stll/legal-ast/document-ast";
 
 import { ParseXmlError } from "@/api/lib/errors/tagged-errors";
+import { appendTextInline } from "@/api/lib/legal-search/parsers/shared-inlines";
 import {
   buildValidationHtml,
   validateAndLog,
 } from "@/api/lib/legal-search/parsers/validate-ast";
-
-import { appendTextInline, inlinesToPlainText } from "./shared-inlines";
 
 /** Publisher recorded on the AST. */
 const PL_UODO_SOURCE_SYSTEM = "orzeczenia.uodo.gov.pl";

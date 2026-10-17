@@ -168,7 +168,7 @@ describe.serial("HTML parser helper ownership", () => {
     expect(
       await lint(
         source,
-        "apps/api/src/handlers/case-law/ingestion/parsers/shared-inlines.ts",
+        "apps/api/src/lib/legal-search/parsers/shared-inlines.ts",
       ),
     ).toEqual([]);
     expect(await lint(source, "other/shared-inlines.ts")).toEqual([3]);

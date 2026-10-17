@@ -1,13 +1,15 @@
 import { describe, expect, test } from "bun:test";
 
-import { hasBlockInlines } from "@stll/legal-ast/document-ast";
+import {
+  plainTextOf as inlinesToPlainText,
+  hasBlockInlines,
+} from "@stll/legal-ast/document-ast";
 import type { Block } from "@stll/legal-ast/document-ast";
 
 import { parseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
 import type { ParseNssDecisionInput } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
 
 import { nssUnitDecisionHtml } from "./cz-nss.test-fixture";
-import { inlinesToPlainText } from "./shared-inlines";
 
 // ── Helpers ─────────────────────────────────────────────────
 

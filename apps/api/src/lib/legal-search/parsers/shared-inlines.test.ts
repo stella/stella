@@ -2,15 +2,15 @@ import { describe, expect, test } from "bun:test";
 import * as cheerio from "cheerio";
 import { readFileSync } from "node:fs";
 
+import { plainTextOf as inlinesToPlainText } from "@stll/legal-ast/document-ast";
 import type { Inline } from "@stll/legal-ast/document-ast";
 import { stripInlinePrefix } from "@stll/legal-ast/inline-line";
 
 import {
   ASPOSE_SPACER_GAP,
-  inlinesToPlainText,
   walkInlines,
   type WalkInlinesOptions,
-} from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
+} from "@/api/lib/legal-search/parsers/shared-inlines";
 
 const walk = (html: string, options?: WalkInlinesOptions): Inline[] => {
   const $ = cheerio.load(html);
@@ -127,7 +127,7 @@ describe("walkInlines", () => {
   test("keeps the page boundary space in a recorded opinion heading", () => {
     const html = readFileSync(
       new URL(
-        "courtlistener/__fixtures__/html/heading-4696496-discussion-ii.html",
+        "../../../handlers/case-law/ingestion/parsers/courtlistener/__fixtures__/html/heading-4696496-discussion-ii.html",
         import.meta.url,
       ),
       "utf-8",

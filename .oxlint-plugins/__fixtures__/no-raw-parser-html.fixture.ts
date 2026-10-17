@@ -6,7 +6,7 @@ import {
   isExcludedHtmlTag,
   ownTableRows,
   visibleHtmlText,
-} from "../../apps/api/src/handlers/case-law/ingestion/parsers/shared-inlines";
+} from "../../apps/api/src/lib/legal-search/parsers/shared-inlines";
 
 const $ = cheerio.load("<table><tr><td>Visible</td></tr></table>");
 const table = $("table");

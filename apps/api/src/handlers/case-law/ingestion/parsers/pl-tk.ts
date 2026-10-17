@@ -1,3 +1,4 @@
+import * as cheerio from "cheerio";
 /**
  * Polish Constitutional Tribunal (ipo.trybunal.gov.pl) page reader.
  *
@@ -12,10 +13,9 @@
  * case's filings) rendered as titled panels. The labels are the source's field
  * names, and {@link listPlTkPageFields} reads them back for the inventory.
  */
-
-import * as cheerio from "cheerio";
 import { type AnyNode, isTag, isText } from "domhandler";
 
+import { plainTextOf as inlinesToPlainText } from "@stll/legal-ast/document-ast";
 import type {
   Block,
   DecisionDocumentAst,
@@ -26,12 +26,11 @@ import type {
 } from "@stll/legal-ast/document-ast";
 
 import {
-  inlinesToPlainText,
   isExcludedHtmlTag,
   ownTableRows,
   visibleHtmlText,
   walkInlines,
-} from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
+} from "@/api/lib/legal-search/parsers/shared-inlines";
 import {
   validateAndLog,
   type ValidationResult,

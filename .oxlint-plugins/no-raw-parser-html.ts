@@ -19,8 +19,7 @@ import {
 } from "./utils.ts";
 
 const RULE_NAME = "no-raw-parser-html";
-const OWNER =
-  "apps/api/src/handlers/case-law/ingestion/parsers/shared-inlines.ts";
+const OWNER = "apps/api/src/lib/legal-search/parsers/shared-inlines.ts";
 const CHEERIO_TYPES = new Set(["Cheerio", "CheerioAPI"]);
 const SELECTION_METHODS = new Set([
   "add",

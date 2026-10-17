@@ -6,12 +6,11 @@ import { type AnyNode, type Element, isTag, isText } from "domhandler";
 import type { Block, DecisionDocumentAst } from "@stll/legal-ast/document-ast";
 
 import { ParseXmlError } from "@/api/lib/errors/tagged-errors";
+import { visibleHtmlText } from "@/api/lib/legal-search/parsers/shared-inlines";
 import {
   buildValidationHtml,
   validateAndLog,
 } from "@/api/lib/legal-search/parsers/validate-ast";
-
-import { visibleHtmlText } from "./shared-inlines";
 
 export type ParseFindokDecisionInput = {
   caseNumber: string;

@@ -16,9 +16,9 @@ import { type AnyNode, isTag } from "domhandler";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Block, Inline } from "@stll/legal-ast/document-ast";
 
-import { visibleHtmlText } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import { markupResidueIn } from "@/api/lib/legal-search/parsers/markup-residue";
 import type { MarkupResidue } from "@/api/lib/legal-search/parsers/markup-residue";
+import { visibleHtmlText } from "@/api/lib/legal-search/parsers/shared-inlines";
 import { logger } from "@/api/lib/observability/logger";
 
 // ── Types ──────────────────────────────────────────────────

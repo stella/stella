@@ -21,15 +21,15 @@ import {
 import type { SoftLawKind } from "@stll/legal-ast/soft-law";
 
 import {
-  isExcludedHtmlTag,
-  ownTableRows,
-  walkInlines,
-} from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
-import {
   assemblePdfParagraphs,
   extractPdfParagraphLines,
   type PdfParagraphLine,
 } from "@/api/lib/legal-search/parsers/pdf-paragraphs";
+import {
+  isExcludedHtmlTag,
+  ownTableRows,
+  walkInlines,
+} from "@/api/lib/legal-search/parsers/shared-inlines";
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
 
 import type { SoftLawAuthority, SoftLawDocumentInput } from "./soft-law-types";

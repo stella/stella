@@ -2,7 +2,10 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import type { Document as FolioDocument } from "@stll/docx-core/model";
-import { hasBlockInlines } from "@stll/legal-ast/document-ast";
+import {
+  plainTextOf as inlinesToPlainText,
+  hasBlockInlines,
+} from "@stll/legal-ast/document-ast";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
 
@@ -32,7 +35,6 @@ import {
   assertNotePath,
 } from "./document-note-paths.fixtures";
 import { assertHtmlRtfLineParity } from "./rtf-line-parity.fixtures";
-import { inlinesToPlainText } from "./shared-inlines";
 
 test("CZ field results keep visible hyphens and omit instructions", () => {
   const line = usDocumentLinesOf(VISIBLE_FIELD_DOCUMENT).at(0);

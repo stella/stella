@@ -25,6 +25,7 @@ import { type AnyNode, type Element, isCDATA, isTag, isText } from "domhandler";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Block } from "@stll/legal-ast/document-ast";
 
+import { ANONYMIZED_CLASS } from "@/api/lib/legal-search/parsers/shared-inlines";
 import {
   buildValidationHtml,
   validateAndLog,
@@ -33,8 +34,6 @@ import type {
   ValidationResult,
   ValidationSubject,
 } from "@/api/lib/legal-search/parsers/validate-ast";
-
-import { ANONYMIZED_CLASS } from "./shared-inlines";
 
 /** The statute a `xLexLink` names, as the link states it. */
 type PlNcourtLegalReference = {

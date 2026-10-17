@@ -1,23 +1,4 @@
-// parser-output-unchanged: visible text walks the same nodes in the same order and skips the same script/style subtrees; inline and visible text output is unchanged.
-// parser-output-unchanged: [cz-regional] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
-// parser-output-unchanged: [sk-courts] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
-// parser-output-unchanged: [sk-us] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
-// parser-output-unchanged: [pl-sn] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
-// parser-output-unchanged: [pl-nsa] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
-// parser-output-unchanged: [at-courts] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
-// parser-output-unchanged: [at-vfgh] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
-// parser-output-unchanged: [at-vwgh] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
-// parser-output-unchanged: [at-bvwg] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
-// parser-output-unchanged: [at-lvwg] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
-// parser-output-unchanged: [at-asylgh] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
-// parser-output-unchanged: [at-ubas] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
-// parser-output-unchanged: [at-uvs] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
-// parser-output-unchanged: [at-verg] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
-// parser-output-unchanged: [at-umse] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
-// parser-output-unchanged: [at-bks] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
-// parser-output-unchanged: [hu-bhgy] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
-// parser-output-unchanged: [pl-uodo] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
-// parser-output-unchanged: [us-courtlistener] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
+// parser-output-unchanged: Shared HTML utilities relocated unchanged to their library owner.
 /**
  * Shared inline-tree utilities for case-law HTML parsers.
  *
@@ -40,10 +21,8 @@ import {
   isText,
 } from "domhandler";
 
-// parser-output-unchanged: imports the document AST from its package owner
 import type { Inline } from "@stll/legal-ast/document-ast";
-import { hasInlineChildren } from "@stll/legal-ast/document-ast";
-// parser-output-unchanged: the inline-line helpers moved unchanged to their package owner so library parsers can import them.
+import { plainTextOf } from "@stll/legal-ast/document-ast";
 import { stripInlinePrefix } from "@stll/legal-ast/inline-line";
 
 const EXCLUDED_HTML_TAGS = ["script", "style"];
@@ -345,20 +324,6 @@ export const walkInlines = (
   return walk(el, options.anonymized ?? false);
 };
 
-export const inlinesToPlainText = (inlines: readonly Inline[]): string => {
-  let text = "";
-  for (const node of inlines) {
-    if (node.type === "text") {
-      text += node.text;
-    } else if (node.type === "line-break") {
-      text += "\n";
-    } else if (hasInlineChildren(node)) {
-      text += inlinesToPlainText(node.children);
-    }
-  }
-  return text;
-};
-
 /**
  * Strip a leading run of presentational page furniture, matched by `pattern`
  * against the chunk's own plain text.
@@ -375,7 +340,7 @@ export const stripFurniturePrefix = (
   inlines: readonly Inline[],
   pattern: RegExp,
 ): Inline[] => {
-  const text = inlinesToPlainText(inlines);
+  const text = plainTextOf(inlines);
   const lead = text.length - text.trimStart().length;
   const match = pattern.exec(text.slice(lead))?.at(0);
 

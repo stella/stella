@@ -3,14 +3,14 @@ import * as cheerio from "cheerio";
 import type { AnyNode } from "domhandler";
 import fc from "fast-check";
 
+import { plainTextOf as inlinesToPlainText } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
 
 import {
-  inlinesToPlainText,
   ownTableRows,
   visibleHtmlText,
   walkInlines,
-} from "./shared-inlines";
+} from "@/api/lib/legal-search/parsers/shared-inlines";
 
 test("HTML text excludes scripts and styles at every nesting depth", () => {
   assertProperty(

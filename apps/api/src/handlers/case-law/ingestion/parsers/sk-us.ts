@@ -1,3 +1,4 @@
+import * as cheerio from "cheerio";
 /**
  * Slovak Constitutional Court document parser (the markup rendering).
  *
@@ -22,11 +23,10 @@
  * and marked anonymized, because a reader has to see that something stood
  * there.
  */
-
-import * as cheerio from "cheerio";
 import { type AnyNode, isTag, isText } from "domhandler";
 
 import { COURT_PARAGRAPH_NUMBERING_LIMITS } from "@stll/legal-ast/court-paragraph-numbers";
+import { plainTextOf as inlinesToPlainText } from "@stll/legal-ast/document-ast";
 import type {
   Block,
   DecisionDocumentAst,
@@ -46,13 +46,12 @@ import {
 } from "@stll/legal-ast/slovak-document-roles";
 import type { SkDocumentSection } from "@stll/legal-ast/slovak-document-roles";
 
+import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 import {
   ANONYMIZED_CLASS,
-  inlinesToPlainText,
   isExcludedHtmlTag,
   walkInlines,
-} from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
-import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
+} from "@/api/lib/legal-search/parsers/shared-inlines";
 import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
 
 /**

@@ -78,13 +78,15 @@ import {
 import { readRtfString } from "@/api/lib/legal-search/parsers/rtf-reader";
 import { runContentVisibleText } from "@/api/lib/legal-search/parsers/run-content-text";
 import {
+  visibleHtmlText,
+  stripFurniturePrefix,
+} from "@/api/lib/legal-search/parsers/shared-inlines";
+import {
   buildValidationHtml,
   validateAndLog,
 } from "@/api/lib/legal-search/parsers/validate-ast";
 import { RTF_SOURCE_OPTIONS } from "@/api/lib/legal-search/rtf-source-registry";
 import { segmentDecisionBlocks } from "@/api/lib/legal-search/segment-decision";
-
-import { visibleHtmlText, stripFurniturePrefix } from "./shared-inlines";
 
 // ── Public API ─────────────────────────────────────────────
 

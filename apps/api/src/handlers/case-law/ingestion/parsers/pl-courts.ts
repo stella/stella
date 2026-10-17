@@ -1,3 +1,4 @@
+import * as cheerio from "cheerio";
 /**
  * Polish Courts (SAOS) parser.
  *
@@ -9,10 +10,9 @@
  * to paragraph-based plaintext parsing when the source has no
  * HTML tags.
  */
-
-import * as cheerio from "cheerio";
 import { type AnyNode, isTag, isText } from "domhandler";
 
+import { plainTextOf as inlinesToPlainText } from "@stll/legal-ast/document-ast";
 import type {
   Block,
   DecisionDocumentAst,
@@ -23,19 +23,17 @@ import type {
 
 import { stripHtml } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import {
+  isExcludedHtmlTag,
+  ownTableRows,
+  appendTextInline,
+  walkInlines as walkInlinesShared,
+} from "@/api/lib/legal-search/parsers/shared-inlines";
+import {
   buildValidationHtml,
   validateAndLog,
 } from "@/api/lib/legal-search/parsers/validate-ast";
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
 import { includes } from "@/api/lib/type-guards";
-
-import {
-  isExcludedHtmlTag,
-  ownTableRows,
-  appendTextInline,
-  inlinesToPlainText,
-  walkInlines as walkInlinesShared,
-} from "./shared-inlines";
 
 type ParsePlDecisionInput = {
   caseNumber: string;

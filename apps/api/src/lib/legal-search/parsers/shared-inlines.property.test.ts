@@ -1,3 +1,4 @@
+import { describe, expect, test } from "bun:test";
 /**
  * Properties of the shared inline-tree normalizers.
  *
@@ -6,10 +7,9 @@
  * the axis the cz-nss letter-spacing defect got wrong. Example tests
  * cover the tree shapes someone drew; these generate the shape.
  */
-
-import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { plainTextOf as inlinesToPlainText } from "@stll/legal-ast/document-ast";
 import type { Inline } from "@stll/legal-ast/document-ast";
 import {
   normalizeInlineLine,
@@ -20,8 +20,6 @@ import {
   propertyConfig,
   propertySeed,
 } from "@stll/property-testing";
-
-import { inlinesToPlainText } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 
 // Seeded in PR CI so a counterexample is reproducible from the log, and
 // unseeded under the nightly sweep so it explores new inputs. See

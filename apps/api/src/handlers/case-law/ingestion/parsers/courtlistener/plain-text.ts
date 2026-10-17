@@ -19,9 +19,12 @@ import { type AnyNode, isTag, isText } from "domhandler";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Inline } from "@stll/legal-ast/document-ast";
 
+import {
+  isExcludedHtmlTag,
+  visibleHtmlText,
+} from "@/api/lib/legal-search/parsers/shared-inlines";
 import { buildValidationHtml } from "@/api/lib/legal-search/parsers/validate-ast";
 
-import { isExcludedHtmlTag, visibleHtmlText } from "../shared-inlines";
 import { conservesText, createUnitBuilder, graphicsIn } from "./blocks";
 import type { FormatInput } from "./harvard-xml";
 import { unitClass } from "./opinion-class";

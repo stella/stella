@@ -1,3 +1,4 @@
+import * as cheerio from "cheerio";
 /**
  * Czech Supreme Administrative Court (NSS) HTML parser.
  *
@@ -22,8 +23,6 @@
  *   V Brně dne ...
  *   Judge name + title
  */
-
-import * as cheerio from "cheerio";
 import { isComment, isText } from "domhandler";
 import type { AnyNode } from "domhandler";
 
@@ -32,6 +31,7 @@ import {
   CZ_CLOSING_RE as CLOSING_RE,
   CZ_JUDGE_TITLE_RE as SIGNATURE_RE,
 } from "@stll/legal-ast/czech-document-roles";
+import { plainTextOf as inlinesToPlainText } from "@stll/legal-ast/document-ast";
 import type {
   Block,
   DecisionDocumentAst,
@@ -41,16 +41,14 @@ import { normalizeInlineLine } from "@stll/legal-ast/inline-line";
 import { normalizeUnicode, collapseSpacedLetters } from "@stll/text-normalize";
 
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
-import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
-
 import {
-  inlinesToPlainText,
   isExcludedHtmlTag,
   ownTableRows,
   visibleHtmlText,
   stripFurniturePrefix,
   walkInlines as walkInlinesShared,
-} from "./shared-inlines";
+} from "@/api/lib/legal-search/parsers/shared-inlines";
+import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
 
 // ── Public API ─────────────────────────────────────────────
 

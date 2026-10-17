@@ -5,11 +5,11 @@ import * as cheerio from "cheerio";
 import { isTag } from "domhandler";
 import { parseXmlDocument } from "slimdom";
 
+import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import {
   isExcludedHtmlTag,
   visibleHtmlText,
-} from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
-import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+} from "@/api/lib/legal-search/parsers/shared-inlines";
 
 type PublisherPageReason =
   | "too-small"

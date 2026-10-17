@@ -22,9 +22,9 @@ import {
 
 import { normalizeUnicode } from "@stll/text-normalize";
 
+import { isExcludedHtmlTag } from "@/api/lib/legal-search/parsers/shared-inlines";
 import { buildValidationHtml } from "@/api/lib/legal-search/parsers/validate-ast";
 
-import { isExcludedHtmlTag } from "../shared-inlines";
 import {
   type BodyVocabulary,
   conservesText,

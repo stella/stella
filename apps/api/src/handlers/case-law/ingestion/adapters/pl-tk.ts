@@ -112,7 +112,6 @@ import type {
   PlTkCaseRecord,
   PlTkRuling,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-tk";
-import { visibleHtmlText } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import {
   TEXT_ABSENCE_REASON,
@@ -122,6 +121,7 @@ import {
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import { visibleHtmlText } from "@/api/lib/legal-search/parsers/shared-inlines";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
