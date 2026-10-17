@@ -160,7 +160,7 @@ test.each([
       aggregate: async () => Result.ok({ term_coverage }),
     });
     if (Result.isOk(result)) {
-      return expect.unreachable("Incomplete coverage must fail");
+      expect.unreachable("Incomplete coverage must fail");
     }
     expect(result.error).toMatchObject({
       message: "Search term coverage is incomplete",
@@ -186,7 +186,7 @@ test("an unavailable coverage read returns its tagged failure", async () => {
     aggregate: async () => Result.err(cause),
   });
   if (Result.isOk(result)) {
-    return expect.unreachable("Unavailable coverage must fail");
+    expect.unreachable("Unavailable coverage must fail");
   }
   expect(result.error).toMatchObject({
     _tag: "HandlerError",
@@ -224,7 +224,7 @@ test.each([
       }),
   });
   if (Result.isOk(result)) {
-    return expect.unreachable("Invalid coverage must fail");
+    expect.unreachable("Invalid coverage must fail");
   }
   expect(result.error).toMatchObject({
     _tag: "HandlerError",

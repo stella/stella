@@ -115,7 +115,9 @@ export const readTermCoverage = async ({
   const results = await mapWithConcurrency({
     items: queries,
     limit: TERM_COVERAGE_CONCURRENCY,
-    operation: async (query) => {
+    operation: async (
+      query,
+    ): Promise<Result<void, HandlerError<502 | 503>>> => {
       const answer = await aggregate({
         observer,
         indexId,
