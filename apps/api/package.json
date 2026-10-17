@@ -75,6 +75,7 @@
     "document-processing-worker": "bun src/scripts/document-processing-worker.ts",
     "dev:errors": "tail -F .dev-logs/errors.jsonl",
     "generate:capability-runtime": "bun scripts/generate-capability-runtime.ts && bun ../../scripts/prepare-mcp-apps.ts",
+    "generate:case-law-decision-view-grants": "bun scripts/generate-case-law-decision-view-grants.ts",
     "generate:mcp-app-contracts": "bun scripts/generate-mcp-app-contracts.ts",
     "generate:typecheck-declarations": "bun ../../packages/scripts/src/api-typecheck-declarations.ts tsconfig.declarations.json",
     "typecheck:src": "bun ../../packages/scripts/src/api-typecheck-config.ts tsconfig.src.json && bun check --no-pretty --all --project=tsconfig.src.json",
@@ -225,6 +226,7 @@
     "@myriaddreamin/typst-ts-web-compiler": "0.7.0",
     "@playwright/test": "^1.63.0",
     "@standard-schema/spec": "^1.1.0",
+    "@stll/playwright-tools": "workspace:*",
     "@stll/property-testing": "workspace:*",
     "@stll/test-kit": "workspace:*",
     "@stll/typescript-config": "workspace:*",
@@ -249,7 +251,7 @@
       "gate": "STELLA_RUN_POSTGRES_TESTS",
       "gateValue": "true",
       "runner": "scripts/run-postgres-tests.ts",
-      "testFileGlob": "{src,scripts}/**/*.test.{ts,tsx}"
+      "testFileGlob": "{src,evals,scripts}/**/*.test.{ts,tsx}"
     },
     "test:valkey": {
       "gate": "STELLA_RUN_VALKEY_TESTS",

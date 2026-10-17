@@ -69,6 +69,8 @@ const {
   noCover,
   notVerifiable,
   recordConflict,
+  WITNESS_STATEMENT_MARKED_TEXT,
+  witnessStatementRun,
 } = await import("./avt.test-fixtures");
 const messages = (await import("@/i18n/langs/en.json")).default;
 const workspaceId = "0199a3c4-5b6d-7e8f-9a0b-000000009099";
@@ -182,8 +184,7 @@ const SeededVerification = ({ runId }: { runId: string }) => {
   );
 };
 
-const mount = async () => {
-  const run = seededRun();
+const mount = async (run: VerificationRun = seededRun()) => {
   const client = new QueryClient({
     defaultOptions: {
       queries: { enabled: false, retry: false },
@@ -237,6 +238,52 @@ const claimButton = (suffix: number) => {
   });
 };
 const selectClaim = (suffix: number) => fireEvent.click(claimButton(suffix));
+
+test("the reader draws each stored block with its claims marked on the stored words", async () => {
+  const { run } = await mount(witnessStatementRun());
+  const marks = run.claims.map((claim) => {
+    const mark = document.querySelector<HTMLElement>(`#avt-claim-${claim.id}`);
+    if (mark === null) {
+      return panic(`Missing claim mark ${claim.id}`);
+    }
+    return mark;
+  });
+  // The reader paragraph is keyed by the stored block id, and its text is the
+  // stored text, so a claim's mark covers exactly the words it was anchored on.
+  for (const stored of run.blocks) {
+    const paragraph = document.querySelector<HTMLElement>(
+      `[data-anchor="${stored.blockId}"]`,
+    );
+    expect(paragraph?.tagName).toBe("P");
+    expect(
+      paragraph?.textContent.startsWith(stored.text.slice(0, 20)) === true,
+    ).toBe(true);
+  }
+  expect(
+    marks.map((mark) =>
+      [...mark.childNodes]
+        .filter((node) => node.nodeType === Node.TEXT_NODE)
+        .map((node) => node.textContent)
+        .join(""),
+    ),
+  ).toEqual([...WITNESS_STATEMENT_MARKED_TEXT]);
+  // The first claim in reading order starts selected; clicking another
+  // selects it and opens its detail.
+  expect(marks.at(0)?.getAttribute("aria-pressed")).toBe("true");
+  const opinion = marks.at(5);
+  if (opinion === undefined) {
+    panic("Missing opinion claim mark");
+  }
+  fireEvent.click(opinion);
+  expect(opinion.getAttribute("aria-pressed")).toBe("true");
+  expect(marks.at(0)?.getAttribute("aria-pressed")).toBe("false");
+  expect(
+    screen
+      .getAllByText("In my view the lender acted unfairly.")
+      .some((node) => node.tagName === "BLOCKQUOTE"),
+  ).toBe(true);
+  expect(requests).toEqual([]);
+});
 
 test("all verdicts expose their evidence and score explanations in the real detail panel", async () => {
   const { run } = await mount();

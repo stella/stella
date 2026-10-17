@@ -41,7 +41,7 @@ import {
 } from "@/api/lib/document-review/finding-write";
 import type { DocumentReviewFindingRow } from "@/api/lib/document-review/finding-write";
 import { fetchAndPrepareReviewFiles } from "@/api/lib/document-review/prepare-review-files";
-import { REFERENCE_GRADE_ROLE } from "@/api/lib/document-review/reference-grade";
+import { REFERENCE_GRADE_TASK } from "@/api/lib/document-review/reference-grade";
 import { referencePassageIds } from "@/api/lib/document-review/reference-passages";
 import { extractAskContents } from "@/api/lib/document-review/review-extract";
 import type { ReviewAsk } from "@/api/lib/document-review/review-extract";
@@ -76,7 +76,7 @@ import type { RootRunActor } from "@/api/lib/root-scoped-db";
 import { brandPersistedDocumentReviewRunId } from "@/api/lib/safe-id-boundaries";
 import {
   formatModelRef,
-  getTanStackTextModelInfoForRole,
+  getTanStackTextModelInfoForTask,
 } from "@/api/lib/tanstack-ai-models";
 import type { PreparedDocxFile } from "@/api/lib/workflow/generate-batch";
 import type { ResolvedFile } from "@/api/lib/workflow/generate-batch-shared";
@@ -619,8 +619,8 @@ const executeRun = async ({
         managedAIResidency,
         // Resolved here, where a role without a provider is already an
         // `ai_unavailable` run rather than a failure mid-grading.
-        graderModel: getTanStackTextModelInfoForRole(
-          REFERENCE_GRADE_ROLE,
+        graderModel: getTanStackTextModelInfoForTask(
+          REFERENCE_GRADE_TASK,
           orgAIConfig,
           {
             dataClass: "customer",
