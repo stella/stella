@@ -9,13 +9,20 @@
  * runs only inside `runGatedTableWork`: under the index gate, with the short
  * lock timeout lifted and the wait watched, so a busy table defers the phase
  * instead of failing it. The `confine-online-ddl` lint rule keeps the SQL text
- * of these statements out of every other database module.
+ * of these statements out of every other database module. A database function
+ * whose body runs such DDL is declared in `online-ddl-functions.ts` and called
+ * only through `callDeclaredFunction`.
  */
 
 import { panic } from "better-result";
 
 import type { RequiredMigrationIndex } from "../lib/db/migration-history";
 import { readConstraintValidated } from "./online-constraint-completion";
+import { DDL_FUNCTIONS } from "./online-ddl-functions";
+import type {
+  DdlFunctionDeclaration,
+  OnlineDdlFunctionName,
+} from "./online-ddl-functions";
 import { createOnlineIndexGate } from "./online-index-gate";
 import type { OnlineIndexGateOptions } from "./online-index-gate";
 import type {
@@ -156,6 +163,151 @@ export const validateConstraint = ({
 /** Takes SHARE UPDATE EXCLUSIVE, the same lock as a validation. */
 export const analyzeTable = (tableName: string): LockTakingStatement =>
   lockTaking(tableName, `ANALYZE public.${quoteIdentifier(tableName)}`);
+
+/**
+ * The lock budget of every ACCESS EXCLUSIVE statement below. A statement
+ * waiting for ACCESS EXCLUSIVE queues every later reader of its table behind
+ * it, so the gate's watched wait (lock budget lifted, cancelled only by its
+ * watchdog) would stall the table's reads for as long as the wait lasts.
+ * These statements instead keep a short budget LOCAL to their own
+ * transaction, and the gate defers the phase when it runs out, as it does on
+ * a cancellation.
+ */
+const ACCESS_EXCLUSIVE_LOCK_BUDGET = "1s";
+const BLOCK_TAG = "$online_ddl$";
+
+/** SQL text spliced into a block: one expression or statement, nothing more. */
+const spliced = (text: string): string => {
+  if (text.includes(";") || text.includes(BLOCK_TAG)) {
+    panic(`Online DDL text must be a single statement or expression: ${text}`);
+  }
+  return text;
+};
+
+/**
+ * One transaction under the short budget, so a statement list is atomic: a
+ * cancelled or timed-out block leaves the table as it was.
+ */
+const accessExclusive = (
+  tableName: string,
+  statements: readonly string[],
+): LockTakingStatement =>
+  lockTaking(
+    tableName,
+    `DO ${BLOCK_TAG} BEGIN SET LOCAL lock_timeout = '${ACCESS_EXCLUSIVE_LOCK_BUDGET}'; ${statements
+      .map((statement) => `${spliced(statement)};`)
+      .join(" ")} END ${BLOCK_TAG}`,
+  );
+
+/** A row-level security policy, with its expressions as rendered SQL. */
+export type PolicyDefinition = {
+  tableName: string;
+  name: string;
+  as: "permissive" | "restrictive";
+  for: "all" | "select" | "insert" | "update" | "delete";
+  role: string;
+  using?: string;
+  withCheck?: string;
+};
+
+const policyTarget = ({ tableName, name }: PolicyDefinition): string =>
+  `${quoteIdentifier(name)} ON "public".${quoteIdentifier(tableName)}`;
+
+const policyExpressions = ({ using, withCheck }: PolicyDefinition): string =>
+  [
+    using === undefined ? "" : ` USING (${spliced(using)})`,
+    withCheck === undefined ? "" : ` WITH CHECK (${spliced(withCheck)})`,
+  ].join("");
+
+const createPolicyText = (policy: PolicyDefinition): string =>
+  `CREATE POLICY ${policyTarget(policy)} AS ${policy.as.toUpperCase()} FOR ${policy.for.toUpperCase()} TO ${quoteIdentifier(policy.role)}${policyExpressions(policy)}`;
+
+const dropPolicyText = (
+  { tableName, name }: Pick<PolicyDefinition, "tableName" | "name">,
+  { ifExists }: { ifExists: boolean },
+): string =>
+  `DROP POLICY ${ifExists ? "IF EXISTS " : ""}${quoteIdentifier(name)} ON "public".${quoteIdentifier(tableName)}`;
+
+/** Policy DDL takes ACCESS EXCLUSIVE on its table. */
+export const createPolicy = (policy: PolicyDefinition): LockTakingStatement =>
+  accessExclusive(policy.tableName, [createPolicyText(policy)]);
+
+/** Changes the expressions of an existing policy; its role stays. */
+export const alterPolicy = (policy: PolicyDefinition): LockTakingStatement => {
+  if (policy.using === undefined && policy.withCheck === undefined) {
+    panic(`Policy ${policy.name} alteration changes no expression`);
+  }
+  return accessExclusive(policy.tableName, [
+    `ALTER POLICY ${policyTarget(policy)}${policyExpressions(policy)}`,
+  ]);
+};
+
+export const dropPolicy = (
+  policy: Pick<PolicyDefinition, "tableName" | "name">,
+  options: { ifExists: boolean },
+): LockTakingStatement =>
+  accessExclusive(policy.tableName, [dropPolicyText(policy, options)]);
+
+/**
+ * Drops the policy of that name, if any, and creates `policy`, in one
+ * transaction: the table keeps its old policy or gets the new one, never
+ * neither, whichever way the statement ends.
+ */
+export const replacePolicy = (policy: PolicyDefinition): LockTakingStatement =>
+  accessExclusive(policy.tableName, [
+    dropPolicyText(policy, { ifExists: true }),
+    createPolicyText(policy),
+  ]);
+
+/** ENABLE or FORCE ROW LEVEL SECURITY, each an ACCESS EXCLUSIVE ALTER TABLE. */
+export const setRowLevelSecurity = (
+  tableName: string,
+  mode: "enable" | "force",
+): LockTakingStatement =>
+  accessExclusive(tableName, [
+    `ALTER TABLE "public".${quoteIdentifier(tableName)} ${mode.toUpperCase()} ROW LEVEL SECURITY`,
+  ]);
+
+const quoteLiteral = (value: string): string =>
+  `'${value.replaceAll("'", "''")}'`;
+
+/**
+ * A call to a function declared `online` in `DDL_FUNCTIONS`, gated on the
+ * table it locks, under the same short budget as the policy statements: its
+ * body's DDL is ACCESS EXCLUSIVE work the type cannot see.
+ */
+export const callDeclaredFunction = ({
+  name,
+  tableName,
+}: {
+  name: OnlineDdlFunctionName;
+  tableName: string;
+}): LockTakingStatement => {
+  const declaration: DdlFunctionDeclaration = DDL_FUNCTIONS[name];
+  if (!declaration.online) {
+    return panic(`Function ${name} is not callable from the online phase`);
+  }
+  const { locks } = declaration;
+  switch (locks.type) {
+    case "table":
+      if (locks.tableName !== tableName) {
+        return panic(
+          `Function ${name} locks ${locks.tableName}, not ${tableName}`,
+        );
+      }
+      return accessExclusive(tableName, [
+        `PERFORM "public".${quoteIdentifier(name)}()`,
+      ]);
+    case "table-argument":
+      quoteIdentifier(tableName);
+      return accessExclusive(tableName, [
+        `PERFORM "public".${quoteIdentifier(name)}(${quoteLiteral(tableName)})`,
+      ]);
+    default:
+      locks satisfies never;
+      return panic(`Function ${name}: unexpected lock declaration`);
+  }
+};
 
 /**
  * What gated work sees of its session: catalog and data reads, and the

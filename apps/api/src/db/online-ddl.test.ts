@@ -2,17 +2,29 @@ import { describe, expect, test } from "bun:test";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import { blockStatementsOf } from "@/api/tests/helpers/lock-taking-sql";
+
 import {
+  alterPolicy,
   analyzeTable,
+  callDeclaredFunction,
   createIndexConcurrently,
+  createPolicy,
   createUngatedTableGateForTests,
   dropIndexConcurrently,
+  dropPolicy,
   reindexIndexConcurrently,
   renameIndex,
+  replacePolicy,
+  setRowLevelSecurity,
   validateConstraint,
   validateOnlineConstraints,
 } from "./online-ddl";
-import type { LockTakingStatement, OnlineTableGate } from "./online-ddl";
+import type {
+  LockTakingStatement,
+  OnlineTableGate,
+  PolicyDefinition,
+} from "./online-ddl";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
 
 const INDEX = {
@@ -217,5 +229,84 @@ describe("validateOnlineConstraints", () => {
         ),
       ),
     ).toContain("constraint first_check is missing");
+  });
+});
+
+const POLICY: PolicyDefinition = {
+  tableName: "probe",
+  name: "probe_policy",
+  as: "restrictive",
+  for: "all",
+  role: "stella",
+  using: "probe.gate = 'open'",
+  withCheck: "probe.gate = 'open'",
+};
+
+describe("online ACCESS EXCLUSIVE statements", () => {
+  test("each runs as one block under its own short lock budget", async () => {
+    const created =
+      'CREATE POLICY "probe_policy" ON "public"."probe" AS RESTRICTIVE FOR ALL TO "stella" USING (probe.gate = \'open\') WITH CHECK (probe.gate = \'open\')';
+    const cases: [LockTakingStatement, string[]][] = [
+      [createPolicy(POLICY), [created]],
+      [
+        createPolicy({
+          ...POLICY,
+          as: "permissive",
+          for: "select",
+          withCheck: undefined,
+        }),
+        [
+          'CREATE POLICY "probe_policy" ON "public"."probe" AS PERMISSIVE FOR SELECT TO "stella" USING (probe.gate = \'open\')',
+        ],
+      ],
+      [
+        alterPolicy({ ...POLICY, withCheck: undefined }),
+        [
+          'ALTER POLICY "probe_policy" ON "public"."probe" USING (probe.gate = \'open\')',
+        ],
+      ],
+      [
+        dropPolicy(POLICY, { ifExists: false }),
+        ['DROP POLICY "probe_policy" ON "public"."probe"'],
+      ],
+      [
+        replacePolicy(POLICY),
+        ['DROP POLICY IF EXISTS "probe_policy" ON "public"."probe"', created],
+      ],
+      [
+        setRowLevelSecurity("probe", "enable"),
+        ['ALTER TABLE "public"."probe" ENABLE ROW LEVEL SECURITY'],
+      ],
+      [
+        setRowLevelSecurity("probe", "force"),
+        ['ALTER TABLE "public"."probe" FORCE ROW LEVEL SECURITY'],
+      ],
+    ];
+    for (const [statement, statements] of cases) {
+      expect(statement.tableName).toBe("probe");
+      expect(await blockStatementsOf(statement)).toEqual(statements);
+    }
+  });
+
+  test("spliced text is one expression: a second statement never reaches SQL", () => {
+    expect(() =>
+      createPolicy({ ...POLICY, using: "true); DROP TABLE x; --" }),
+    ).toThrow("must be a single statement or expression");
+    expect(() =>
+      replacePolicy({ ...POLICY, withCheck: "$online_ddl$ x" }),
+    ).toThrow("must be a single statement or expression");
+    expect(() =>
+      alterPolicy({ ...POLICY, using: undefined, withCheck: undefined }),
+    ).toThrow("changes no expression");
+  });
+
+  test("only a function declared online is callable, on the table it locks", () => {
+    expect(() =>
+      callDeclaredFunction({
+        // @ts-expect-error The registry declares this function offline.
+        name: "entity_feature_gate_finish",
+        tableName: "entities",
+      }),
+    ).toThrow("is not callable from the online phase");
   });
 });

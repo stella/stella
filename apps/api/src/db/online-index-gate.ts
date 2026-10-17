@@ -293,6 +293,18 @@ const runObservedIndexWork = async ({
     ) {
       return { type: "retry" as const, history };
     }
+    // The gate lifts the session's lock budget, so only a statement that sets
+    // its own (an ACCESS EXCLUSIVE one, which must not queue the table's
+    // readers behind a long wait) runs out of one: the table is busy.
+    if (getPgErrorCode(outcome.error) === PG_ERROR.LOCK_NOT_AVAILABLE) {
+      emit({
+        decision: "cancel",
+        reason: "Statement lock budget exhausted",
+        verdict: combine(history.length ? history : initialVerdict.signals),
+        config: config.health,
+      });
+      return { type: "retry" as const, history };
+    }
     throw outcome.error;
   }
   return { type: "done" as const, history };
