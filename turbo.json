@@ -1401,7 +1401,12 @@
         "@stll/cli#codegen:runtime",
         "generate:capability-runtime"
       ],
-      "env": ["API_TEST_DURATIONS_HASH", "API_TEST_SHARD", "API_TEST_FILES"],
+      "env": [
+        "API_TEST_DURATIONS_HASH",
+        "API_TEST_SHARD",
+        "API_TEST_FILES",
+        "STELLA_RUN_SHARED_POSTGRES_TESTS"
+      ],
       // Lane count and diagnostics destinations never change test results;
       // pass them through without entering the cache key.
       "passThroughEnv": [
@@ -1412,7 +1417,12 @@
       ],
       "inputs": [
         "$TURBO_DEFAULT$",
-        "$TURBO_ROOT$/docker/postgres/prod-parity.conf",
+        "$TURBO_ROOT$/scripts/shared-test-postgres.sh",
+        "$TURBO_ROOT$/packages/scripts/src/shared-test-postgres.ts",
+        "$TURBO_ROOT$/packages/scripts/src/dev-postgres-lock.ts",
+        "$TURBO_ROOT$/packages/scripts/src/generation-lock.ts",
+        "$TURBO_ROOT$/packages/scripts/src/dev-docker.ts",
+        "$TURBO_ROOT$/docker/postgres/**",
         "$TURBO_ROOT$/.github/workflows/ai-provider-canary.yml",
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/apps/web/src/components/chat/**",

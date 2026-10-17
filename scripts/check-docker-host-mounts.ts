@@ -425,12 +425,14 @@ const RUN_OPTIONS_MESSAGE =
 const runValueFlags = new Set([
   "--entrypoint",
   "--env",
+  "--env-file",
   "--health-cmd",
   "--health-interval",
   "--health-retries",
   "--health-start-period",
   "--health-timeout",
   "--label",
+  "--memory",
   "--mount",
   "--name",
   "--network",
@@ -463,21 +465,33 @@ const runFlagWidth = (arg: string): number => {
   return runShortBooleanFlags.has(flag) && arg.length === 2 ? 1 : 0;
 };
 
-// Every word before the image must be a resolved, allowlisted flag; the image
-// and the command after it may be dynamic.
+// Option names must be resolved and allowlisted. Scalar argv values can be
+// dynamic except for mounts and drivers; shell values remain fully resolved.
 const hasResolvedRunOptions = (
   args: readonly (string | undefined)[],
+  values: "resolved" | "scalar" = "resolved",
 ): boolean => {
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
     if (arg === undefined) {
       return false;
     }
+    if (arg === "--") {
+      return index + 1 < args.length;
+    }
     if (!arg.startsWith("-")) {
       return true;
     }
     const width = runFlagWidth(arg);
-    if (width === 0 || (width === 2 && args[index + 1] === undefined)) {
+    if (width === 0 || (width === 2 && index + 1 >= args.length)) {
+      return false;
+    }
+    const requiresResolvedValue =
+      values === "resolved" ||
+      arg === "--mount" ||
+      arg === "--volume" ||
+      arg === "--volume-driver";
+    if (width === 2 && requiresResolvedValue && args[index + 1] === undefined) {
       return false;
     }
     index += width - 1;
@@ -876,7 +890,12 @@ const volumeCreateArrayFailures = (
     failures.push("Docker command options must be statically resolvable");
   } else if (command?.kind === "volume-create") {
     failures.push(...volumeCreateFailures(command.args));
-  } else if (command?.kind === "run" && !hasResolvedRunOptions(command.args)) {
+  } else if (
+    command?.kind === "run" &&
+    // A scalar argv value cannot inject options; a spread can add arbitrary words.
+    (array.elements.some(ts.isSpreadElement) ||
+      !hasResolvedRunOptions(command.args, "scalar"))
+  ) {
     failures.push(RUN_OPTIONS_MESSAGE);
   }
   if (!hasSafeVolumeDriverFlags(array.elements.map(staticArgument))) {

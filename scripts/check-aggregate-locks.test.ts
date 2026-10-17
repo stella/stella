@@ -11,6 +11,15 @@ import {
   parseAggregateLockGitBatch,
 } from "./check-aggregate-locks.ts";
 
+test("local Postgres cluster lock has an infrastructure owner", () => {
+  expect(
+    aggregateLockSourceIncluded("packages/scripts/src/dev-postgres-lock.ts"),
+  ).toBe(false);
+  expect(
+    aggregateLockSourceIncluded("packages/scripts/src/shared-test-postgres.ts"),
+  ).toBe(true);
+});
+
 test("enumerates production source while retaining owner and migration boundaries", () => {
   expect(aggregateLockSourceIncluded("apps/api/src/handlers/new.ts")).toBe(
     true,
