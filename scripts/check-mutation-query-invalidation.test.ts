@@ -234,6 +234,103 @@ export const plainWrapperRead = () => usePlainQuery({ queryKey: ["plain"], query
   ).toHaveLength(2);
 });
 
+test("custom query wrapper coverage requires tagged options to reach every reader", () => {
+  const fixture = (wrapper: string) => [
+    ...validSources.slice(0, 2),
+    {
+      file: "apps/web/src/features.ts",
+      text: `
+import { useQuery } from "@tanstack/react-query";
+import { RESOURCE_TYPE } from "@stll/api-contract";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
+${wrapper}
+const tagged = resourceQueryOptions(
+  { queryKey: ["tagged"], queryFn: async () => [] },
+  { resources: [RESOURCE_TYPE.ENTITY], scope: { type: "organization" } },
+);
+export const wrappedRead = () => useWrappedQuery(tagged);
+`,
+    },
+  ];
+  const ignoring = fixture(
+    `const useWrappedQuery = (_options: unknown) => useQuery({ queryKey: ["plain"], queryFn: async () => [] });`,
+  );
+  const forwarding = fixture(
+    `const useWrappedQuery = (options: unknown) => useQuery({ ...options, enabled: true });`,
+  );
+  const ignoringFindings = violations(ignoring).map(({ id }) => id);
+  const forwardingFindings = violations(forwarding).map(({ id }) => id);
+  const callerId =
+    "apps/web/src/features.ts:wrappedRead:useWrappedQuery:reader";
+  expect(ignoringFindings).toContain(callerId);
+  expect(forwardingFindings).not.toContain(callerId);
+  expect(forwardingFindings).toEqual([
+    "apps/web/src/features.ts:useWrappedQuery:useQuery:reader",
+  ]);
+});
+
+test("query wrappers lose coverage when their options parameter or aliases are mutated", () => {
+  const fixture = (mutation: string) => [
+    ...validSources.slice(0, 2),
+    {
+      file: "apps/web/src/features.ts",
+      text: `
+import { useQuery } from "@tanstack/react-query";
+import { RESOURCE_TYPE } from "@stll/api-contract";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
+const useWrappedQuery = (options: unknown) => {
+  const alias = options;
+  ${mutation}
+  return useQuery(options);
+};
+const tagged = resourceQueryOptions(
+  { queryKey: ["tagged"], queryFn: async () => [] },
+  { resources: [RESOURCE_TYPE.ENTITY], scope: { type: "organization" } },
+);
+export const wrappedRead = () => useWrappedQuery(tagged);
+`,
+    },
+  ];
+  for (const mutation of [
+    'options = { queryKey: ["other"], queryFn: async () => [] };',
+    "options.meta = {};",
+    "alias.meta.resourceReads = undefined;",
+  ]) {
+    const findings = violations(fixture(mutation)).map(({ id }) => id);
+    expect(findings).toContain(
+      "apps/web/src/features.ts:wrappedRead:useWrappedQuery:reader",
+    );
+  }
+});
+
+test("query wrappers require every nested wrapper to forward tagged options", () => {
+  const sources = [
+    ...validSources.slice(0, 2),
+    {
+      file: "apps/web/src/features.ts",
+      text: `
+import { useQuery } from "@tanstack/react-query";
+import { RESOURCE_TYPE } from "@stll/api-contract";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
+const useForwardingQuery = (options: unknown) => useQuery(options);
+const useIgnoringQuery = (_options: unknown) => useQuery({ queryKey: ["plain"], queryFn: async () => [] });
+const useBothQueries = (options: unknown) => {
+  useForwardingQuery(options);
+  return useIgnoringQuery();
+};
+const tagged = resourceQueryOptions(
+  { queryKey: ["tagged"], queryFn: async () => [] },
+  { resources: [RESOURCE_TYPE.ENTITY], scope: { type: "organization" } },
+);
+export const wrappedRead = () => useBothQueries(tagged);
+`,
+    },
+  ];
+  expect(violations(sources).map(({ id }) => id)).toContain(
+    "apps/web/src/features.ts:wrappedRead:useBothQueries:reader",
+  );
+});
+
 test("invalid resource reader metadata cannot be seeded into the baseline", () => {
   const wrongFixture = [
     ...validSources.slice(0, 2),
@@ -403,14 +500,20 @@ export const invokeOuter = () => useOuter();
   const middle = wrapperEntry("useInvalidMiddle");
   const outer = wrapperEntry("useOuter");
   expect(plain).toBeDefined();
+  if (!plain) {
+    return;
+  }
   expect(differentRoute?.ownWrites).toHaveLength(1);
   expect(sameRequest?.ownWrites).toHaveLength(1);
   expect(middle?.ownWrites).toHaveLength(1);
   expect(outer?.ownWrites).toHaveLength(1);
-  expect(findings.map(({ id }) => id)).not.toContain(`${plain?.id}:mutation`);
+  expect(findings.map(({ id }) => id)).not.toContain(`${plain.id}:mutation`);
   for (const entry of [differentRoute, sameRequest, middle, outer]) {
     expect(entry).toBeDefined();
-    expect(findings.map(({ id }) => id)).toContain(`${entry?.id}:mutation`);
+    if (!entry) {
+      continue;
+    }
+    expect(findings.map(({ id }) => id)).toContain(`${entry.id}:mutation`);
   }
   assertInvalidCannotBeBaselined(findings);
 });
@@ -539,8 +642,11 @@ export const readEntities = () => useQuery(alias);
     const census = inspectMutationQuerySources(sources);
     const reader = census.readers.find(({ callee }) => callee === "useQuery");
     expect(reader).toBeDefined();
+    if (!reader) {
+      continue;
+    }
     const findings = inspectMutationQueryInvalidation(census, sources);
-    expect(findings.map(({ id }) => id)).toEqual([`${reader?.id}:reader`]);
+    expect(findings.map(({ id }) => id)).toEqual([`${reader.id}:reader`]);
   }
 });
 

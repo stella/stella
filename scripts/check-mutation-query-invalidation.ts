@@ -22,6 +22,21 @@ const MUTATION_HELPER = "resourceMutation";
 const READER_HELPER = "resourceQueryOptions";
 const MUTATION_PRIMITIVES = new Set(["useMutation", "mutationOptions"]);
 const READER_PRIMITIVES = new Set(["queryOptions", "infiniteQueryOptions"]);
+const READER_EXECUTORS = new Set([
+  ...READER_PRIMITIVES,
+  "useQuery",
+  "useSuspenseQuery",
+  "useInfiniteQuery",
+  "useSuspenseInfiniteQuery",
+  "fetchQuery",
+  "prefetchQuery",
+  "ensureQueryData",
+  "fetchInfiniteQuery",
+  "prefetchInfiniteQuery",
+  "query",
+  "infiniteQuery",
+  "ensureInfiniteQueryData",
+]);
 const READER_SPREAD_OVERRIDES = new Set([
   "enabled",
   "select",
@@ -646,13 +661,21 @@ const mutationContractError = ({
     .getText()
     .replace(/\s+/gu, " ")
     .trim();
+  const unresolved = entry.unresolved.filter(
+    ({ reason, file, expression }) =>
+      !(
+        reason === "dynamic-options-spread" &&
+        file === CONTRACT_MODULE &&
+        expression === "options"
+      ),
+  );
   const unresolvedIsOnlyHelperReturn =
-    entry.unresolved.length === 1 &&
-    entry.unresolved[0]?.reason === "dynamic-operation-function" &&
+    unresolved.length === 1 &&
+    unresolved[0]?.reason === "dynamic-operation-function" &&
     [normalizedHelperCall, normalizedMutationFn].includes(
-      entry.unresolved[0].expression.replace(/\s+/gu, " ").trim(),
+      unresolved[0].expression.replace(/\s+/gu, " ").trim(),
     );
-  if (entry.unresolved.length > 0 && !unresolvedIsOnlyHelperReturn) {
+  if (unresolved.length > 0 && !unresolvedIsOnlyHelperReturn) {
     return "resourceMutation write analysis has unresolved operations.";
   }
   const observedWrites = entry.writes
@@ -721,13 +744,29 @@ const hasBindingPropertyMutation = (module: ModuleIndex, binding: Binding) => {
   };
   let mutated = false;
   const visit = (node: ts.Node) => {
+    const assignedExpression = ts.isBinaryExpression(node)
+      ? node.left
+      : undefined;
     if (
       ts.isBinaryExpression(node) &&
       node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
       node.operatorToken.kind <= ts.SyntaxKind.LastAssignment &&
-      (ts.isPropertyAccessExpression(node.left) ||
-        ts.isElementAccessExpression(node.left)) &&
-      refersToAlias(node.left.expression, node.left)
+      assignedExpression !== undefined &&
+      ((ts.isIdentifier(assignedExpression) &&
+        refersToAlias(assignedExpression, assignedExpression)) ||
+        ((ts.isPropertyAccessExpression(assignedExpression) ||
+          ts.isElementAccessExpression(assignedExpression)) &&
+          refersToAlias(assignedExpression.expression, assignedExpression)))
+    ) {
+      mutated = true;
+      return;
+    }
+    if (
+      (ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node)) &&
+      [ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken].includes(
+        node.operator,
+      ) &&
+      refersToAlias(node.operand, node)
     ) {
       mutated = true;
       return;
@@ -1382,6 +1421,167 @@ const functionReturnsTaggedReader = ({
   );
 };
 
+type ForwardedReaderOptionsArgs = {
+  module: ModuleIndex;
+  expression: ts.Expression;
+  reference: ts.Node;
+  parameter: ts.ParameterDeclaration;
+  seen: Set<Binding>;
+};
+
+const forwardsReaderOptions = ({
+  module,
+  expression,
+  reference,
+  parameter,
+  seen,
+}: ForwardedReaderOptionsArgs): boolean => {
+  const value = unwrap(expression);
+  if (ts.isIdentifier(value)) {
+    const parameterBinding = localBinding(module, value.text, reference);
+    if (
+      ts.isIdentifier(parameter.name) &&
+      value.text === parameter.name.text &&
+      parameterBinding?.scope === parameter.parent &&
+      !hasBindingPropertyMutation(module, parameterBinding)
+    ) {
+      return true;
+    }
+    const resolved = unchangedOptionsBinding({
+      module,
+      identifier: value,
+      reference,
+    });
+    if (!resolved || seen.has(resolved.binding)) {
+      return false;
+    }
+    return forwardsReaderOptions({
+      module,
+      expression: resolved.expression,
+      reference: resolved.reference,
+      parameter,
+      seen: new Set(seen).add(resolved.binding),
+    });
+  }
+  if (ts.isConditionalExpression(value)) {
+    return [value.whenTrue, value.whenFalse].every((branch) =>
+      forwardsReaderOptions({
+        module,
+        expression: branch,
+        reference,
+        parameter,
+        seen: new Set(seen),
+      }),
+    );
+  }
+  if (!ts.isObjectLiteralExpression(value)) {
+    return false;
+  }
+  return (
+    validateTaggedSpreadOverrides({
+      module,
+      expression: value,
+      reference,
+      allowedOverrides: READER_SPREAD_OVERRIDES,
+      isTaggedSpread: (spread, spreadReference) =>
+        forwardsReaderOptions({
+          module,
+          expression: spread,
+          reference: spreadReference,
+          parameter,
+          seen: new Set(seen),
+        }),
+    }) === "tagged"
+  );
+};
+
+type WrapperForwardsReaderOptionsArgs = {
+  module: ModuleIndex;
+  functionLike: ts.FunctionLikeDeclaration;
+  modules: ReadonlyMap<string, ModuleIndex>;
+  seen: Set<string>;
+};
+
+const wrapperForwardsReaderOptions = ({
+  module,
+  functionLike,
+  modules,
+  seen,
+}: WrapperForwardsReaderOptionsArgs): boolean | undefined => {
+  const parameter = functionLike.parameters.at(0);
+  if (!functionLike.body) {
+    return undefined;
+  }
+  const readerForwards: boolean[] = [];
+  const visit = (node: ts.Node) => {
+    if (readerForwards.includes(false)) {
+      return;
+    }
+    if (ts.isFunctionLike(node) && node !== functionLike) {
+      return;
+    }
+    if (!ts.isCallExpression(node)) {
+      ts.forEachChild(node, visit);
+      return;
+    }
+    const name = callName(node);
+    if (name && READER_EXECUTORS.has(name)) {
+      const options = node.arguments.at(0);
+      readerForwards.push(
+        parameter !== undefined &&
+          ts.isIdentifier(parameter.name) &&
+          options !== undefined &&
+          forwardsReaderOptions({
+            module,
+            expression: options,
+            reference: node,
+            parameter,
+            seen: new Set(),
+          }),
+      );
+      return;
+    }
+    const target = factoryFunction({
+      module,
+      expression: node.expression,
+      reference: node,
+      modules,
+      seen: new Set(),
+    });
+    if (target) {
+      const argument = node.arguments.at(0);
+      const key = `${target.module.file}:${target.functionLike.pos}:${target.functionLike.end}`;
+      const nestedForwards = !seen.has(key)
+        ? wrapperForwardsReaderOptions({
+            module: target.module,
+            functionLike: target.functionLike,
+            modules,
+            seen: new Set(seen).add(key),
+          })
+        : false;
+      if (nestedForwards !== undefined) {
+        readerForwards.push(
+          nestedForwards &&
+            parameter !== undefined &&
+            ts.isIdentifier(parameter.name) &&
+            argument !== undefined &&
+            forwardsReaderOptions({
+              module,
+              expression: argument,
+              reference: node,
+              parameter,
+              seen: new Set(),
+            }),
+        );
+      }
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(functionLike.body);
+  return readerForwards.length > 0 ? readerForwards.every(Boolean) : undefined;
+};
+
 const isTaggedReaderValue = ({
   module,
   expression,
@@ -1511,18 +1711,50 @@ const createReaderStates = ({
       return { entry, module, call, tagged: false };
     }
     const options = call.arguments.at(0);
-    const tagged =
-      entry.kind === "wrapper" || !READER_PRIMITIVES.has(callName(call) ?? "")
-        ? options !== undefined &&
-          isTaggedReaderValue({
-            module,
-            expression: options,
-            reference: call,
-            names,
-            modules: indexed,
-            seen: new Set(),
-          })
-        : wrappedReaderCall(module, call, names);
+    const target = factoryFunction({
+      module,
+      expression: call.expression,
+      reference: call,
+      modules: indexed,
+      seen: new Set(),
+    });
+    let tagged: boolean;
+    if (target) {
+      tagged =
+        options !== undefined &&
+        wrapperForwardsReaderOptions({
+          module: target.module,
+          functionLike: target.functionLike,
+          modules: indexed,
+          seen: new Set([
+            `${target.module.file}:${target.functionLike.pos}:${target.functionLike.end}`,
+          ]),
+        }) === true &&
+        isTaggedReaderValue({
+          module,
+          expression: options,
+          reference: call,
+          names,
+          modules: indexed,
+          seen: new Set(),
+        });
+    } else if (
+      entry.kind === "wrapper" ||
+      !READER_PRIMITIVES.has(callName(call) ?? "")
+    ) {
+      tagged =
+        options !== undefined &&
+        isTaggedReaderValue({
+          module,
+          expression: options,
+          reference: call,
+          names,
+          modules: indexed,
+          seen: new Set(),
+        });
+    } else {
+      tagged = wrappedReaderCall(module, call, names);
+    }
     return { entry, module, call, tagged };
   });
 

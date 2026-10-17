@@ -420,7 +420,7 @@ class CallScanner {
         break;
       default:
         this.mode satisfies never;
-        return panic("Unhandled mutation census scan mode");
+        panic("Unhandled mutation census scan mode");
     }
     if (
       this.mode === "outside-mutations" &&
