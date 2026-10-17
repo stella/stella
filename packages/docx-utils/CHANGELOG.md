@@ -1,5 +1,11 @@
 # @stll/docx-utils
 
+## 0.2.0
+
+### Minor Changes
+
+- [#5788](https://github.com/stella/stella/pull/5788) [`f91950d`](https://github.com/stella/stella/commit/f91950daaa6afc70fe0336669f15945abe2988d1) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `writeZipEntry`, which UTF-8 encodes text entries in one pass before handing them to JSZip. JSZip's own string encoding works in 16 KiB pieces and turns a character outside the Basic Multilingual Plane (such as an emoji) that straddles a piece boundary into two replacement characters.
+
 ## 0.1.5
 
 ### Patch Changes

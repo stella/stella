@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 
 import { allApiTests } from "./api-test-impact";
 import { FULL_TEST_JOB_SHARDS } from "./api-test-shard-plan";
+import { selectedTestJobs } from "./ci-affected-selection";
 import { parseApiTestImpact, planCiApiTests } from "./ci-api-test-plan";
 
 const selected = () => ({
@@ -107,4 +108,21 @@ test("merge groups select the batch union without narrowing API test files", () 
   expect(
     planCiApiTests({ ...options, scopeUnknown: true }).matrix.shard,
   ).toHaveLength(FULL_TEST_JOB_SHARDS.length);
+});
+
+test("matrix admission follows the executable Turbo test plan", () => {
+  const turboPlan = (packages: readonly string[]) =>
+    JSON.stringify({
+      tasks: packages.map((packageName) => ({
+        package: packageName,
+        task: "test",
+      })),
+    });
+  expect(selectedTestJobs(turboPlan(["@stll/web"]))).toEqual(["rest-web"]);
+  expect(selectedTestJobs(turboPlan(["@stll/api"]))).toEqual([
+    "api-1",
+    "api-2",
+    "api-3",
+  ]);
+  expect(selectedTestJobs(turboPlan([]))).toEqual([]);
 });

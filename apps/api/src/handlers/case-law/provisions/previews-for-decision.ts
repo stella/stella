@@ -7,7 +7,10 @@ import type { PublicCountrySurface } from "@stll/api-contract/public-country-cap
 import type { Block } from "@stll/legal-ast/document-ast";
 import { provisionHeadingAnchor } from "@stll/legal-ast/provision-preview";
 
-import { caseLawDecisions, legislationDocuments } from "@/api/db/schema";
+import {
+  publishedCaseLawDecisions,
+  legislationDocuments,
+} from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
 import {
@@ -275,9 +278,9 @@ export const readDecisionDate = async ({
   tx,
 }: RedistributableDecisionSubject): Promise<string | null> => {
   const [row] = await tx
-    .select({ decisionDate: caseLawDecisions.decisionDate })
-    .from(caseLawDecisions)
-    .where(eq(caseLawDecisions.id, id))
+    .select({ decisionDate: publishedCaseLawDecisions.decisionDate })
+    .from(publishedCaseLawDecisions)
+    .where(eq(publishedCaseLawDecisions.id, id))
     .limit(1);
 
   return row?.decisionDate ?? null;
