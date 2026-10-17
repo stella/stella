@@ -197,6 +197,18 @@ const readMigrationSql = async (): Promise<string> => {
 };
 
 describe("pglite role grants mirror the committed migrations", () => {
+  test("the public reader harness grants only relations present in its schema", () => {
+    const harnessPairs = grantedPairs(ROLE_GRANT_STATEMENTS.join(";\n"));
+    const absent = [...harnessPairs].filter((pair) => {
+      const [role, table = ""] = pair.split(":");
+      return (
+        role === "stella_public_law_reader" && !schemaTableNames.has(table)
+      );
+    });
+
+    expect(absent).toEqual([]);
+  });
+
   test("the migrations grant no table the harness leaves ungranted", async () => {
     const migrationPairs = grantedPairs(await readMigrationSql());
     const harnessPairs = grantedPairs(ROLE_GRANT_STATEMENTS.join(";\n"));
