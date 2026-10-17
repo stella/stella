@@ -114,10 +114,7 @@ const Timeline = ({
   };
   const content = selected === undefined ? null : versionWording(selected);
   const selectedUrl =
-    selected === undefined
-      ? null
-      : (parseLegalCitationHttpUrl(selected.appUrl) ??
-        parseLegalCitationHttpUrl(selected.url));
+    selected === undefined ? null : parseLegalCitationHttpUrl(selected.url);
   return (
     <main className="min-w-0 space-y-4 p-4">
       <h1 className="text-lg font-semibold">{t("timelineTitle")}</h1>

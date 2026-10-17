@@ -2388,7 +2388,7 @@ const caseLawSearchResult = ({
   return {
     matchedQueries,
     ...legalCitationLinkFields({
-      appUrl: buildCaseLawDecisionAppUrl({
+      url: buildCaseLawDecisionAppUrl({
         caseNumber: hit.caseNumber,
         country: hit.country,
         court: hit.court,
@@ -2973,7 +2973,7 @@ type FoundDecision = Extract<
 >["decision"];
 
 type DecisionTextPartOptions = {
-  appUrl: string | null;
+  url: string | null;
   language: string;
   located: readonly LocatedDecisionBlock[] | null;
   /** Notes for the entry's message; a page past the end adds one. */
@@ -2987,7 +2987,7 @@ type DecisionTextPartOptions = {
 
 /** The text an entry answers with: its page, or the paragraphs a query matched. */
 const decisionTextPart = ({
-  appUrl,
+  url,
   language,
   located,
   messages,
@@ -3022,7 +3022,7 @@ const decisionTextPart = ({
           headingPath: paragraph.headingPath,
           text: paragraph.text,
           ...(paragraph.hit ? { hit: true as const } : {}),
-          ...decisionBlockDeepLink({ appUrl, ...paragraph }),
+          ...decisionBlockDeepLink({ url, ...paragraph }),
         })),
         ...(found.truncated ? { truncated: true as const } : {}),
       },
@@ -3057,12 +3057,12 @@ const publishedTextFields = (read: ReadCaseLawDecisionSuccess) =>
 
 /** The optional fields `include` asked for, each only where it says something. */
 const decisionStaticFields = ({
-  appUrl,
+  url,
   digest,
   includedFields,
   read,
 }: {
-  appUrl: string | null;
+  url: string | null;
   digest: CitationDigestRead | undefined;
   includedFields: ReadonlySet<DecisionReadInclude>;
   read: ReadCaseLawDecisionSuccess;
@@ -3088,9 +3088,9 @@ const decisionStaticFields = ({
   const textFields = publishedTextFields(read);
   // The shared link contract over one publisher page: the decision's own,
   // else the source's public home, which is what the attribution resolves
-  // to. The legacy `appUrl` beside it would only repeat `url`.
+  // to.
   const links = legalCitationLinkFields({
-    appUrl,
+    url,
     sourceUrl: read.sourceAttributionUrl ?? read.documentUrl,
   });
   // The publisher's name says something only where it is not the court's.
@@ -3211,7 +3211,7 @@ const decisionItemResult = ({
   const readableText = blocks === null ? read.fulltext : astText;
   const plainText = aiTextAllowed ? readableText : null;
   const text = plainText === null || plainText.length === 0 ? null : plainText;
-  const appUrl = caseLawDecisionAppUrlOf(read);
+  const url = caseLawDecisionAppUrlOf(read);
 
   const messages: string[] =
     read.resolution.type === DECISION_READ_RESOLUTION.ABSORBED_SUPPLEMENT
@@ -3227,7 +3227,7 @@ const decisionItemResult = ({
     text === null || starts === null
       ? {}
       : decisionTextPart({
-          appUrl,
+          url,
           language: read.language,
           located: blocks === null ? null : locateDecisionBlocks(blocks, text),
           messages,
@@ -3254,7 +3254,7 @@ const decisionItemResult = ({
       decisionId: read.id,
       caseNumber: read.caseNumber,
       ...nonDocketReference(read),
-      ...decisionStaticFields({ appUrl, digest, includedFields, read }),
+      ...decisionStaticFields({ url, digest, includedFields, read }),
       ...textPart,
       ...(text === null
         ? {}
@@ -3269,7 +3269,7 @@ const decisionItemResult = ({
             outline: navigation.entries.map((entry) => ({
               title: entry.title,
               page: pageOfOffset(starts, entry.start),
-              ...decisionBlockDeepLink({ appUrl, ...entry }),
+              ...decisionBlockDeepLink({ url, ...entry }),
             })),
             ...(navigation.numberedEntriesTruncated
               ? { outlineNumberedEntriesTruncated: true as const }
@@ -3631,7 +3631,7 @@ const handleReadCaseLawCitationsTool: TypedMcpToolHandler<
             ? null
             : {
                 ...legalCitationLinkFields({
-                  appUrl: buildCaseLawDecisionAppUrl({
+                  url: buildCaseLawDecisionAppUrl({
                     caseNumber: item.decision.caseNumber,
                     country: item.decision.country,
                     court: item.decision.court,

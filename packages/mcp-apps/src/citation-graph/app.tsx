@@ -137,7 +137,7 @@ const Graph = ({ model, busy }: { model: GraphModel; busy: boolean }) => {
                   node.type === "resolved" &&
                   (busy ||
                     (!bridge.supportsTools() &&
-                      parseLegalCitationHttpUrl(node.decision.appUrl) === null))
+                      parseLegalCitationHttpUrl(node.decision.url) === null))
                 }
                 className="bg-background h-11 w-full truncate rounded-md px-2 text-xs focus-visible:outline-2"
                 title={nodeLabel(node, t)}
@@ -146,7 +146,7 @@ const Graph = ({ model, busy }: { model: GraphModel; busy: boolean }) => {
                   setSelected(node.id);
                   if (node.type === "resolved") {
                     bridge.detached(
-                      controller.open(node.id, node.decision.appUrl),
+                      controller.open(node.id, node.decision.url),
                       "citationGraph.openDecision",
                     );
                   }
@@ -202,7 +202,7 @@ const CitationList = ({
         const decision = edge.decision;
         const url =
           decision !== null
-            ? (parseLegalCitationHttpUrl(decision.appUrl)?.href ?? null)
+            ? (parseLegalCitationHttpUrl(decision.url)?.href ?? null)
             : null;
         return (
           <article
