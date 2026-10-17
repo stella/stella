@@ -116,6 +116,27 @@ const GENERATOR_DECLARATIONS = [
     after: [],
   },
   {
+    id: "case-law-publication-migration",
+    outputKind: "committed",
+    outputs: [
+      "apps/api/drizzle/20261010212100_case_law_publication_filter/migration.sql",
+    ],
+    inputs: [
+      "scripts/generate-case-law-publication-migration.ts",
+      "apps/api/src/lib/case-law/published-decisions-sql.ts",
+      "apps/api/src/lib/legal-search/partial-observation-sql.ts",
+      "apps/api/drizzle/20260916110000_published_statute_citation_counts/migration.sql",
+    ],
+    write: ["bun", "scripts/generate-case-law-publication-migration.ts"],
+    check: [
+      "bun",
+      "scripts/generate-case-law-publication-migration.ts",
+      "--check",
+    ],
+    autofix: false,
+    after: [],
+  },
+  {
     id: "status-tables",
     outputKind: "committed",
     outputs: ["apps/api/src/lib/db/status-tables.gen.ts"],
