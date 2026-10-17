@@ -219,24 +219,30 @@ export const searchRoute = new Elysia({ prefix: "/search" })
   .post("/", searchEndpoint.handler, {
     body: searchEndpoint.config.body,
     permissions: searchEndpoint.config.permissions,
+    accountAccess: searchEndpoint.config.accountAccess,
   })
   .post("/facets", searchFacetsEndpoint.handler, {
     body: searchFacetsEndpoint.config.body,
     permissions: searchFacetsEndpoint.config.permissions,
+    accountAccess: searchFacetsEndpoint.config.accountAccess,
   })
   .post("/preview", searchPreviewEndpoint.handler, {
     body: searchPreviewEndpoint.config.body,
     permissions: searchPreviewEndpoint.config.permissions,
+    accountAccess: searchPreviewEndpoint.config.accountAccess,
   })
   .post("/refine", refineSearchEndpoint.handler, {
     body: refineSearchEndpoint.config.body,
     permissions: refineSearchEndpoint.config.permissions,
+    accountAccess: refineSearchEndpoint.config.accountAccess,
   })
   .post("/summary", summarizeSearchEndpoint.handler, {
     body: summarizeSearchEndpoint.config.body,
     permissions: summarizeSearchEndpoint.config.permissions,
+    accountAccess: summarizeSearchEndpoint.config.accountAccess,
   })
   .post("/summary/chat", searchSummaryChatEndpoint.handler, {
     body: searchSummaryChatEndpoint.config.body,
     permissions: searchSummaryChatEndpoint.config.permissions,
+    accountAccess: searchSummaryChatEndpoint.config.accountAccess,
   });

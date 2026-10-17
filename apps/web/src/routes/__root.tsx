@@ -7,10 +7,13 @@ import {
   createRootRouteWithContext,
   HeadContent,
   Outlet,
+  redirect,
   Scripts,
   useRouterState,
+  useNavigate,
   type ErrorComponentProps,
 } from "@tanstack/react-router";
+import { panic } from "better-result";
 
 import { AppProviders } from "@/app-providers";
 import { ApiVersionMismatchProvider } from "@/components/api-version-mismatch-refresh";
@@ -18,7 +21,7 @@ import {
   DefaultErrorComponent,
   DefaultPendingComponent,
 } from "@/components/route-components";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useMountEffect, useExternalSyncEffect } from "@/hooks/use-effect";
 import { getLangDir, useI18nStore } from "@/i18n/i18n-store";
 import {
   applyDocumentLanguage,
@@ -26,9 +29,11 @@ import {
   resolveDocumentLanguage,
 } from "@/i18n/page-language";
 import "@/fonts.css";
+import { loadMcpHandoff, pendingHandoffPath } from "@/lib/account/mcp-handoff";
 import type { AnalyticsValue } from "@/lib/analytics/provider";
 import type { RouteErrorLifecycleController } from "@/lib/analytics/route-error-lifecycle";
 import { RouteErrorLifecycleProvider } from "@/lib/analytics/route-error-lifecycle-context";
+import { detached } from "@/lib/detached";
 import {
   isPublicKnowledgeEnabled,
   isPublicKnowledgeCrawlAllowed,
@@ -55,6 +60,11 @@ export const Route = createRootRouteWithContext<{
 }>()({
   ssr: ({ location: routeLocation }) => isPublicSsrPath(routeLocation.pathname),
   beforeLoad: async ({ context, location }) => {
+    const handoffRedirect = await loadMcpHandoff();
+    if (handoffRedirect) {
+      redirect({ ...handoffRedirect.options, throw: true });
+      panic("TanStack Router did not throw the handoff redirect.");
+    }
     await requireFreshDocument({ queryClient: context.queryClient, location });
   },
   shellComponent: RootDocument,
@@ -95,6 +105,22 @@ function RootErrorComponent(props: ErrorComponentProps) {
 }
 
 function RootComponent() {
+  const navigate = useNavigate();
+  // Public documents reuse server route context during hydration. Re-enter
+  // the clean location so the client root guard handles a captured handoff.
+  useMountEffect(() => {
+    const href = pendingHandoffPath();
+    if (!href) {
+      return;
+    }
+    detached(
+      navigate({
+        href,
+        replace: true,
+      }),
+      "mcp-handoff.route-entry",
+    );
+  });
   const appContext = Route.useRouteContext({
     select: (context) => ({
       analyticsValue: context.analyticsValue,
@@ -155,6 +181,7 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
       <head>
         <HeadContent />
 
+        <script src="/handoff-init.js" />
         <script src="/prepaint-init.js" />
       </head>
       <body>

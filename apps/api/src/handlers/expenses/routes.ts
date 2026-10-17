@@ -25,17 +25,21 @@ export const expensesRoute = new Elysia({
   })
   .get("/", readExpenses.handler, {
     permissions: readExpenses.config.permissions,
+    accountAccess: readExpenses.config.accountAccess,
     query: readExpenses.config.query,
   })
   .put("/", createExpense.handler, {
     body: createExpense.config.body,
     permissions: createExpense.config.permissions,
+    accountAccess: createExpense.config.accountAccess,
   })
   .patch("/", updateExpense.handler, {
     body: updateExpense.config.body,
     permissions: updateExpense.config.permissions,
+    accountAccess: updateExpense.config.accountAccess,
   })
   .delete("/", deleteExpense.handler, {
     body: deleteExpense.config.body,
     permissions: deleteExpense.config.permissions,
+    accountAccess: deleteExpense.config.accountAccess,
   });

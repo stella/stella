@@ -12,12 +12,15 @@ export const userFilesRoute = new Elysia({ prefix: "/user-files" })
   .get("/:fileId/visual", readUserFileVisual.handler, {
     params: readUserFileVisual.config.params,
     permissions: readUserFileVisual.config.permissions,
+    accountAccess: readUserFileVisual.config.accountAccess,
   })
   .get("/:fileId/content", readUserFileContent.handler, {
     params: readUserFileContent.config.params,
     permissions: readUserFileContent.config.permissions,
+    accountAccess: readUserFileContent.config.accountAccess,
   })
   .get("/:fileId/thumbnail", readUserFileThumbnail.handler, {
     params: readUserFileThumbnail.config.params,
     permissions: readUserFileThumbnail.config.permissions,
+    accountAccess: readUserFileThumbnail.config.accountAccess,
   });

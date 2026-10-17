@@ -1003,6 +1003,7 @@
       "inputs": [
         "$TURBO_ROOT$/packages/agent-input/**",
         "$TURBO_ROOT$/packages/ai-catalog/**",
+        "$TURBO_ROOT$/packages/analytics-config/**",
         "$TURBO_ROOT$/packages/anonymize-chat/**",
         "$TURBO_ROOT$/packages/api-contract/**",
         "$TURBO_ROOT$/packages/auth-model/**",
@@ -1011,6 +1012,7 @@
         "$TURBO_ROOT$/packages/calculations/**",
         "$TURBO_ROOT$/packages/catalogue/**",
         "$TURBO_ROOT$/packages/chat-limits/**",
+        "$TURBO_ROOT$/packages/chat/**",
         "$TURBO_ROOT$/packages/cli/**",
         "$TURBO_ROOT$/packages/collation/**",
         "$TURBO_ROOT$/packages/concurrency/**",
@@ -1040,6 +1042,7 @@
         "$TURBO_ROOT$/packages/text-normalize/**",
         "$TURBO_ROOT$/packages/time/**",
         "$TURBO_ROOT$/packages/transactional/**",
+        "$TURBO_ROOT$/packages/user-agent/**",
         "$TURBO_ROOT$/packages/uuid-codec/**",
         "$TURBO_ROOT$/types/**",
         "**",

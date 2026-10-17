@@ -161,6 +161,7 @@ test("expires unclaimed registrations and unused clients at a fixed point", asyn
   expect(await sweep()).toEqual({
     verificationsDeleted: 0,
     assertionsDeleted: 0,
+    handoffsDeleted: 0,
     replaysDeleted: 0,
     registrationsDeleted: 2,
     clientsDeleted: 5,
@@ -177,6 +178,7 @@ test("expires unclaimed registrations and unused clients at a fixed point", asyn
   expect(await sweep()).toEqual({
     verificationsDeleted: 0,
     assertionsDeleted: 0,
+    handoffsDeleted: 0,
     replaysDeleted: 0,
     registrationsDeleted: 0,
     clientsDeleted: 0,

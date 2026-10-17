@@ -34,6 +34,7 @@ import {
   finishReasonOf,
   type TanStackTextFinishReason,
 } from "@/api/lib/chat/tanstack-chat-runtime";
+import { sanitizeHandoffDiagnosticText } from "@/api/lib/errors/handoff-diagnostics";
 import { ModelRunError } from "@/api/lib/errors/provider-call-error";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
@@ -512,7 +513,9 @@ export const createTanStackAIAnalyticsCallbacks = ({
       context?.run?.providerStopReason ?? refusedFinish?.providerStopReason;
     const attributes = sanitizeErrorAttributesForOutput({
       "error.type": errorTag(error),
-      "ai.error_kind": sanitizeQueryErrorText(kind),
+      "ai.error_kind": sanitizeHandoffDiagnosticText(
+        sanitizeQueryErrorText(kind),
+      ),
       "ai.feature": config.feature,
       ...(typeof finishReason === "string"
         ? { "ai.finish_reason": finishReason }

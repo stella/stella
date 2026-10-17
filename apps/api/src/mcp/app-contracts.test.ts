@@ -178,7 +178,7 @@ describe("MCP app registry and contracts", () => {
     ]);
     expect(MCP_APP_OUTPUT_SCHEMAS).toHaveProperty("read_case_law_citations");
   });
-  test("the guard refuses a write call in a presentation app", () => {
+  test("the guard refuses a model-visible write call in a presentation app", () => {
     const apps = MCP_APPS.map((app) =>
       app.type === "presentation"
         ? { ...app, callableTools: ["write_capability"] }
@@ -190,7 +190,9 @@ describe("MCP app registry and contracts", () => {
         tools: DEFAULT_MCP_TOOL_DEFINITIONS,
         directories,
       }),
-    ).toContain("Presentation apps require read-only tools: write_capability");
+    ).toContain(
+      "Presentation apps cannot call model-visible write tools: write_capability",
+    );
   });
   test("the guard refuses an app with no call class", () => {
     expect(

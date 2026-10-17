@@ -9,6 +9,7 @@ import { stellaToast } from "@stll/ui/toast";
 import { notifyActionAdmissionRefusal } from "@/components/action-admission-outcome";
 import { ProviderDiagnosticToast } from "@/components/provider-diagnostic-content";
 import { getTranslator } from "@/i18n/translator";
+import { notifyStepUp } from "@/lib/account/mcp-step-up";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { providerDiagnosticFromThrown } from "@/lib/errors/provider-diagnostic";
@@ -24,6 +25,9 @@ export const notifyUserError = (
   fallback: string,
   { toastId, ...options }: UserErrorToastOptions = {},
 ): boolean => {
+  if (notifyStepUp(error)) {
+    return false;
+  }
   // The stable refusal id coalesces Eden's observer and local error handlers;
   // raw fetch and SDK errors also need to emit the same notice here.
   if (notifyActionAdmissionRefusal(error)) {

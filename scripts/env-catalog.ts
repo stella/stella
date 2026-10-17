@@ -202,6 +202,9 @@ const INTERNAL_SERVER_KEYS = new Set([
   "SELFHOST_LOCAL_PASSWORD_AUTH",
   "SESSION_TOKEN_ROTATION_ENABLED",
   "SESSION_LIFETIME_CAP_ENABLED",
+  "MCP_WEB_HANDOFF_MINT_ENABLED",
+  "MCP_WEB_HANDOFF_TEXT_ENABLED",
+  "MCP_WEB_HANDOFF_TEXT_SESSION_MAX_SECONDS",
   "SES_CONFIGURATION_SET",
   "SES_REGION",
   "STELLA_ALLOW_PRIVILEGED_DB_LOGIN_FOR_LOCAL_DEV",
@@ -568,6 +571,12 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "SHA-256 digest of a decoy machine API key. Keep its plaintext outside this environment.",
   SESSION_TOKEN_ROTATION_ENABLED:
     "Rotate browser session credentials on refresh. Defaults off; enable after every API instance supports prior credentials.",
+  MCP_WEB_HANDOFF_MINT_ENABLED:
+    "Enable sign-in handoffs on connected-app links. Defaults off.",
+  MCP_WEB_HANDOFF_TEXT_ENABLED:
+    "Include sign-in handoff codes in MCP text links. Defaults off; opt in separately from link minting.",
+  MCP_WEB_HANDOFF_TEXT_SESSION_MAX_SECONDS:
+    "Absolute lifetime in seconds for sessions created from MCP text links; defaults to twelve hours and cannot exceed it.",
   SESSION_LIFETIME_CAP_ENABLED:
     "Apply the ninety-day session cap at startup after one idle hour. Defaults off; enable after activity tracking is established.",
   SES_REGION: "AWS region used for SES transactional email delivery.",
@@ -932,6 +941,9 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   SERVICE_ACTIONS_EVALUATION_PERIOD_ACTIONS: ENV_CREDENTIAL_KIND.notCredential,
   SERVICE_ACTIONS_SELF_MANAGED_ACTIONS: ENV_CREDENTIAL_KIND.notCredential,
   SESSION_LIFETIME_CAP_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
+  MCP_WEB_HANDOFF_MINT_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
+  MCP_WEB_HANDOFF_TEXT_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
+  MCP_WEB_HANDOFF_TEXT_SESSION_MAX_SECONDS: ENV_CREDENTIAL_KIND.notCredential,
   SESSION_TOKEN_ROTATION_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
   SES_ACCESS_KEY_ID: ENV_CREDENTIAL_KIND.notCredential,
   SES_CONFIGURATION_SET: ENV_CREDENTIAL_KIND.notCredential,

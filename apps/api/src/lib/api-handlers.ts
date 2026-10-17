@@ -20,6 +20,8 @@ import {
 import { captureObservedError } from "@/api/lib/analytics/capture";
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/account-access";
+import type { AccountAccess } from "@/api/lib/auth/account-access";
 import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import type { FeatureAccessRequirement } from "@/api/lib/auth/feature-access/requirements";
 import { checkRestrictedAccountOperation } from "@/api/lib/auth/review-account";
@@ -465,14 +467,8 @@ export type WorkspaceHandlerConfig = WorkspaceHandlerConfigOf<HandlerConfig>;
  * and `account-control` (credentials, keys, billing, external connections,
  * organization configuration) also refuses the restricted review account.
  */
-export const ACCOUNT_ACCESS = {
-  standard: "standard",
-  sandbox: "sandbox",
-  accountControl: "account-control",
-} as const;
-
-export type AccountAccess =
-  (typeof ACCOUNT_ACCESS)[keyof typeof ACCOUNT_ACCESS];
+export { ACCOUNT_ACCESS } from "@/api/lib/auth/account-access";
+export type { AccountAccess } from "@/api/lib/auth/account-access";
 
 const requiresAccountCheck = (accountAccess: AccountAccess) =>
   accountAccess !== ACCOUNT_ACCESS.sandbox;
@@ -486,12 +482,16 @@ type SandboxAccountAccess = {
  * declares. A route census reads it: a mounted handler missing here skipped
  * every factory, so it carries no account decision of its own.
  */
-const safeHandlerAccountAccess = new WeakMap<object, AccountAccess>();
+const safeHandlerAccountAccess = new WeakMap<
+  object,
+  { accountAccess: AccountAccess; permissions?: PermissionInput }
+>();
 
 const recordSafeHandler = <
   TDefinition extends {
     config: WriteContract & {
       accountAccess: AccountAccess;
+      permissions?: PermissionInput;
       body?: unknown;
       description?: string;
     };
@@ -501,14 +501,16 @@ const recordSafeHandler = <
   definition: TDefinition,
 ): TDefinition => {
   recordWriteContract(definition.handler, definition.config);
-  safeHandlerAccountAccess.set(
-    definition.handler,
-    definition.config.accountAccess,
-  );
+  safeHandlerAccountAccess.set(definition.handler, definition.config);
   return definition;
 };
 
 export const getSafeHandlerAccountAccess = (handler: unknown) =>
+  typeof handler === "function"
+    ? safeHandlerAccountAccess.get(handler)?.accountAccess
+    : undefined;
+
+export const getSafeHandlerAccessMetadata = (handler: unknown) =>
   typeof handler === "function"
     ? safeHandlerAccountAccess.get(handler)
     : undefined;

@@ -223,6 +223,7 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   "oauth_resource",
   "oauth_client_resource",
   "oauth_client_assertion",
+  "mcp_web_handoff",
   "service_oauth_clients",
   // Machine API keys: credential digests plus the permission set each key
   // carries. A tenant-scoped connection must be able to neither read a digest

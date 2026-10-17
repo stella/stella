@@ -50,6 +50,7 @@ import {
   folioCollabRoomTokens,
   folioCollabRooms,
   mcpOAuthState,
+  mcpWebHandoff,
   mcpUserConnections,
   pdfSigningSessions,
   pendingUploads,
@@ -266,6 +267,7 @@ export const revokeAuthCredentialsAndInvitations = async ({
 };
 
 export const REVOKE_OAUTH_TOKENS_TABLES = [
+  mcpWebHandoff,
   oauthAccessToken,
   oauthRefreshToken,
   oauthConsent,
@@ -280,6 +282,8 @@ export const revokeOAuthTokensAndGrants = async (
   currentUserId: SafeId<"user">,
 ): Promise<void> => {
   await revokeAllUserOAuthTokens(tx, currentUserId);
+  // audit: skip - verifyAndDeleteUser records the parent account-deletion request in this transaction.
+  await tx.delete(mcpWebHandoff).where(eq(mcpWebHandoff.userId, currentUserId));
   await tx.delete(oauthConsent).where(eq(oauthConsent.userId, currentUserId));
   await tx.delete(oauthClient).where(eq(oauthClient.userId, currentUserId));
 };

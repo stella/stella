@@ -23,5 +23,6 @@ export const internalTimeEntriesRoute = new Elysia({
   .guard({ validateAuth: true })
   .post("/", createInternalTimeEntry.handler, {
     permissions: createInternalTimeEntry.config.permissions,
+    accountAccess: createInternalTimeEntry.config.accountAccess,
     body: createInternalTimeEntry.config.body,
   });

@@ -45,6 +45,28 @@ const censusEntry = ({
 });
 
 describe("outbound transport ownership", () => {
+  test("local Better Auth primitives stay separate from network SDKs", () => {
+    for (const module of [
+      "better-auth/cookies",
+      "better-auth/adapters/drizzle",
+      "better-auth/api",
+    ]) {
+      expect(references(`import * as primitive from "${module}";`)).toEqual([]);
+    }
+    for (const module of [
+      "better-auth",
+      "better-auth/plugins",
+      "better-auth/crypto",
+      "better-auth/db",
+      "@better-auth/cimd",
+      "@better-auth/oauth-provider/resource-client",
+    ]) {
+      expect(references(`import * as client from "${module}";`)).toEqual([
+        `module:${module}`,
+      ]);
+    }
+  });
+
   test("global request forms have one outbound capability", () => {
     const forms = [
       "void fetch(url);",

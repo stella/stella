@@ -9,6 +9,7 @@
       "noOtherSessions": "Žiadne iné aktívne relácie",
       "revokeOtherSessions": "Odhlásiť ostatné zariadenia",
       "revokeOtherSessionsConfirm": "Týmto ukončíte všetky relácie okrem aktuálnej.",
+      "signedInFrom": "Prihlásenie cez {clientName}",
       "unknownDevice": "Neznáme zariadenie"
     }
   },
@@ -117,6 +118,8 @@
       "generic": "Pri prihlasovaní sa niečo pokazilo. Skúste to znova.",
       "title": "Nepodarilo sa vás prihlásiť"
     },
+    "handoffAccount": "Pokračovať ako <account>{email}</account> v organizácii <organization>{organizationName}</organization>?",
+    "handoffTitle": "Pokračovať v aplikácii stella",
     "headline": "Jasno v každom prípade.",
     "invitation": {
       "declined": "Pozvánka odmietnutá",
@@ -137,6 +140,7 @@
     },
     "professionalUseStatement": "Vytvorením účtu potvrdzujete, že stellu používate na profesionálne účely, a beriete na vedomie, že stella je nástroj pre právnych profesionálov a nenahrádza právne poradenstvo.",
     "rateLimitExceeded": "Príliš veľa pokusov. Skúste to znova neskôr.",
+    "reauthenticationRequired": "Ak chcete pokračovať v tejto akcii, prihláste sa znova.",
     "resendCode": "Poslať kód znova na <email>{emailAddress}</email>",
     "selectOrganization": "Vyberte organizáciu",
     "signIn": "Prihlásiť sa",
@@ -4867,7 +4871,7 @@
       "description": "Používajte stellu zo svojho AI asistenta a majte prehľad, čo má prístup k vášmu účtu.",
       "developerDescription": "Adresy servera a nástroj pre príkazový riadok na technické nastavenia.",
       "developerTitle": "Prístup pre vývojárov",
-      "disconnectConfirmDescription": "Tým zrušíte prístup aplikácie {clientName} k vášmu účtu aj všetky tokeny, ktoré vydala. Kedykoľvek sa môžete znova pripojiť.",
+      "disconnectConfirmDescription": "Tým zrušíte prístup aplikácie {clientName} k vášmu účtu aj všetky tokeny, ktoré vydala. Kedykoľvek sa môžete znova pripojiť. Odhlásia sa aj relácie prehliadača vytvorené cez toto pripojenie.",
       "disconnectConfirmTitle": "Odpojiť aplikáciu {clientName}?",
       "disconnectSuccess": "Aplikácia {clientName} bola odpojená",
       "integrationsDescription": "Externé služby, ktoré za vás AI môže používať, napríklad úložisko dokumentov.",

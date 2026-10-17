@@ -88,6 +88,14 @@ beforeEach(() => {
   resetCaptureWindows();
 });
 
+test("error capture redacts handoff credentials from diagnostic context", () => {
+  const code = `sh1_${"a".repeat(43)}`;
+  captureError(new Error(`Request ${code} refused`), { requestId: code });
+  expect(captured).toHaveLength(1);
+  expect(captured.at(0)?.properties["requestId"]).toBe("[redacted]");
+  expect(JSON.stringify(captured)).not.toContain(code);
+});
+
 describe("captureError repeat suppression", () => {
   test("a loop failing at one site reports once, not once per iteration", () => {
     // The shape that motivates the throttle: a held ingestion cursor re-runs

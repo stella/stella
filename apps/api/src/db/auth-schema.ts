@@ -112,6 +112,15 @@ export const session = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     activeOrganizationId: text("active_organization_id"),
+    // OAuth consent that owns this handoff session and its revocation.
+    originConsentId: text("origin_consent_id").references(
+      () => oauthConsent.id,
+      {
+        onDelete: "cascade",
+      },
+    ),
+    // Fixed expiry for text handoffs; session refresh never extends this cap.
+    handoffAbsoluteExpiresAt: timestamptz("handoff_absolute_expires_at"),
     refreshMode: text("refresh_mode", { enum: SESSION_REFRESH_MODES })
       .default("automatic")
       .notNull(),
@@ -129,6 +138,7 @@ export const session = pgTable(
       table.activeOrganizationId,
     ),
     uniqueIndex("session_priorTokenHash_idx").on(table.priorTokenHash),
+    index("session_originConsentId_idx").on(table.originConsentId),
     ...denyStellaAccessPolicies(),
   ],
 );

@@ -9,6 +9,7 @@
       "noOtherSessions": "Brak innych aktywnych sesji",
       "revokeOtherSessions": "Wyloguj inne urządzenia",
       "revokeOtherSessionsConfirm": "Spowoduje to zakończenie wszystkich sesji z wyjątkiem bieżącej.",
+      "signedInFrom": "Zalogowano przez {clientName}",
       "unknownDevice": "Nieznane urządzenie"
     }
   },
@@ -117,6 +118,8 @@
       "generic": "Coś poszło nie tak podczas logowania. Spróbuj ponownie.",
       "title": "Nie udało się Cię zalogować"
     },
+    "handoffAccount": "Kontynuować jako <account>{email}</account> w organizacji <organization>{organizationName}</organization>?",
+    "handoffTitle": "Przejdź do stella",
     "headline": "Jasność w każdej sprawie.",
     "invitation": {
       "declined": "Zaproszenie odrzucone",
@@ -137,6 +140,7 @@
     },
     "professionalUseStatement": "Tworząc konto, potwierdzasz, że korzystasz ze stelli w celach zawodowych, i przyjmujesz do wiadomości, że stella jest narzędziem dla profesjonalistów z branży prawnej i nie zastępuje porady prawnej.",
     "rateLimitExceeded": "Zbyt wiele prób. Spróbuj ponownie później.",
+    "reauthenticationRequired": "Zaloguj się ponownie, aby kontynuować tę czynność.",
     "resendCode": "Wyślij kod ponownie na <email>{emailAddress}</email>",
     "selectOrganization": "Wybierz organizację",
     "signIn": "Zaloguj się",
@@ -4867,7 +4871,7 @@
       "description": "Korzystaj ze stelli w asystencie AI i sprawdzaj, co ma dostęp do Twojego konta.",
       "developerDescription": "Adresy serwera i narzędzie wiersza poleceń do konfiguracji technicznych.",
       "developerTitle": "Dostęp dla programistów",
-      "disconnectConfirmDescription": "Spowoduje to cofnięcie dostępu aplikacji {clientName} do Twojego konta oraz unieważnienie wszystkich wydanych przez nią tokenów. W każdej chwili możesz połączyć się ponownie.",
+      "disconnectConfirmDescription": "Spowoduje to cofnięcie dostępu aplikacji {clientName} do Twojego konta oraz unieważnienie wszystkich wydanych przez nią tokenów. W każdej chwili możesz połączyć się ponownie. Sesje przeglądarki utworzone przez to połączenie również zostaną wylogowane.",
       "disconnectConfirmTitle": "Rozłączyć {clientName}?",
       "disconnectSuccess": "Rozłączono {clientName}",
       "integrationsDescription": "Zewnętrzne usługi, z których AI może korzystać w Twoim imieniu, np. repozytorium dokumentów.",

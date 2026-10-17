@@ -12,6 +12,7 @@ type Messages = {
       "noOtherSessions": "No other active sessions";
       "revokeOtherSessions": "Sign out other devices";
       "revokeOtherSessionsConfirm": "This will end all sessions except your current one.";
+      "signedInFrom": "Signed in from {clientName}";
       "unknownDevice": "Unknown device";
     };
   };
@@ -120,6 +121,8 @@ type Messages = {
       "generic": "Something went wrong while signing you in. Please try again.";
       "title": "We couldn't sign you in";
     };
+    "handoffAccount": "Continue as <account>{email}</account> in <organization>{organizationName}</organization>?";
+    "handoffTitle": "Continue to stella";
     "headline": "Clarity for every case.";
     "invitation": {
       "declined": "Invitation declined";
@@ -140,6 +143,7 @@ type Messages = {
     };
     "professionalUseStatement": "By creating an account, you confirm that you use stella for professional purposes and understand that stella is a tool for legal professionals and not a substitute for legal advice.";
     "rateLimitExceeded": "Too many attempts. Please try again later.";
+    "reauthenticationRequired": "Sign in again to continue with this action.";
     "resendCode": "Send code again to <email>{emailAddress}</email>";
     "selectOrganization": "Select an organization";
     "signIn": "Sign in";
@@ -4870,7 +4874,7 @@ type Messages = {
       "description": "Use stella from your AI assistant and see what can access your account.";
       "developerDescription": "Server addresses and the command-line tool, for technical setups.";
       "developerTitle": "Developer access";
-      "disconnectConfirmDescription": "This revokes {clientName}'s access to your account, along with any tokens it has issued. You can reconnect at any time.";
+      "disconnectConfirmDescription": "This revokes {clientName}'s access to your account, along with any tokens it has issued. You can reconnect at any time. Browser sessions created from this connection will also be signed out.";
       "disconnectConfirmTitle": "Disconnect {clientName}?";
       "disconnectSuccess": "Disconnected {clientName}";
       "integrationsDescription": "Outside services the AI can use for you, such as your document drive.";

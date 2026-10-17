@@ -65,3 +65,22 @@ test("published catalogue documents require indexing permission", () => {
     }
   }
 });
+
+test("handoff confirmation always uses a private document with no referrer", () => {
+  for (const status of ["success", "pending", "error"]) {
+    expect(
+      documentResponsePolicyHeaders({
+        match: {
+          fullPath: "/auth/handoff",
+          pathname: "/auth/handoff",
+          status,
+          ssr: false,
+        },
+        crawl,
+      }),
+    ).toEqual({
+      [SSR_CACHE_CLASS_HEADER]: "private-no-store",
+      "Referrer-Policy": "no-referrer",
+    });
+  }
+});

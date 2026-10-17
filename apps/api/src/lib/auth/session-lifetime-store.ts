@@ -74,6 +74,14 @@ export const createDatabaseSessionLifetimeStore = (
     and(
       sql`${table.expiresAt} > ${now}::timestamptz`,
       or(
+        isNull(table.handoffAbsoluteExpiresAt),
+        sql`${table.handoffAbsoluteExpiresAt} > ${now}::timestamptz`,
+      ),
+      or(
+        isNull(table.originConsentId),
+        sql`COALESCE(${table.lastSeenAt}, ${table.createdAt}) > ${new Date(now.getTime() - SESSION_IDLE_AGE_MS)}::timestamptz`,
+      ),
+      or(
         isNull(table.lastSeenAt),
         sql`${table.expiresAt} > ${table.lastSeenAt}::timestamptz`,
       ),
@@ -143,7 +151,8 @@ export const createDatabaseSessionLifetimeStore = (
                 ),
               }
             : {}),
-          expiresAt,
+          // SDK refreshes must never extend a text handoff's absolute deadline.
+          expiresAt: sql`LEAST(${expiresAt}::timestamptz, ${session.handoffAbsoluteExpiresAt})`,
           updatedAt: now,
           lastSeenAt: sql`GREATEST(${session.lastSeenAt}, ${now}::timestamptz)`,
         })
