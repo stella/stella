@@ -963,22 +963,27 @@ const appliedPassages = () => {
         if (projection === undefined) {
           return [];
         }
-        let best: ScannedPassage | undefined;
-        let count = 0;
-        for (const [revision, passage] of revisions) {
-          const matches =
-            revision === null
-              ? projection.retrieval.type === "query_only"
-              : revision === projection.revision;
-          if (!matches) {
-            continue;
-          }
-          count += passage.count;
-          if (best === undefined || passage.best.position < best.position) {
-            best = passage.best;
-          }
+        const current = revisions.get(projection.revision);
+        const legacy =
+          projection.retrieval.type === "query_only"
+            ? revisions.get(null)
+            : undefined;
+        if (current === undefined) {
+          return legacy === undefined ? [] : [{ id, ...legacy }];
         }
-        return best === undefined ? [] : [{ id, best, count }];
+        if (legacy === undefined) {
+          return [{ id, ...current }];
+        }
+        return [
+          {
+            id,
+            best:
+              current.best.position < legacy.best.position
+                ? current.best
+                : legacy.best,
+            count: current.count + legacy.count,
+          },
+        ];
       })
       .toSorted((a, b) => a.best.position - b.best.position);
   return {

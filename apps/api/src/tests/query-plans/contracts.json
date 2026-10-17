@@ -213,19 +213,19 @@
         "index": "corpus_index_projection_states_pkey"
       },
       {
-        "position": "root/0/1/0/0/3",
+        "position": "root/0/1/0/0/4",
         "relation": "corpus_index_projection_intents",
         "nodeType": "Index Scan",
         "index": "corpus_index_projection_intents_identity_uidx"
       },
       {
-        "position": "root/0/1/0/0/3/0",
+        "position": "root/0/1/0/0/4/0",
         "relation": "corpus_index_projection_states",
         "nodeType": "Index Scan",
         "index": "corpus_index_projection_states_pkey"
       },
       {
-        "position": "root/0/1/0/0/4",
+        "position": "root/0/1/0/0/5",
         "relation": "case_law_decisions",
         "nodeType": "Index Scan",
         "index": "case_law_decisions_lang_group_idx"
