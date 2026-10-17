@@ -159,6 +159,7 @@ export const planPostgresTests = async ({
         (file) =>
           !isPostgresNoImpactPath(file, root) &&
           !hasApiWideningRule(file) &&
+          !file.startsWith(".github/") &&
           !/^(?:apps|packages)\/[^/]+\/.+\.(?:[cm]?[jt]s|[jt]sx)$/u.test(file),
       )
     ) {
