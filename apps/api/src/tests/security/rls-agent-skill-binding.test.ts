@@ -21,6 +21,7 @@ import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { dispatchGatewayToolCall } from "@/api/mcp/gateway/dispatch-call";
 import { loadVisibleSkillTools } from "@/api/mcp/gateway/skills";
+import { handleMcpToolCall } from "@/api/mcp/tools";
 import {
   handlerFailure,
   skillHandlerContext,
@@ -282,109 +283,138 @@ describe("bound agent skill RLS", () => {
     expect(updatedByAuthor).toEqual([{ id: skillId }]);
   });
 
-  test("a matter skill is unavailable outside its matter in chat, MCP and the API", async () => {
-    const skillId = await insertBoundSkill({
-      boundWorkspaceId: ids.wsA1,
-      scope: "team",
-      userId: ids.userA1,
-    });
-    const [skill] = await testDb
-      .select({ slug: agentSkills.slug })
-      .from(agentSkills)
-      .where(eq(agentSkills.id, skillId));
-    if (skill === undefined) {
-      throw new TypeError("expected the bound skill row");
-    }
-    // The outsider works in wsA2 and reaches only that matter.
-    const outsiderDb = asTestRaw<SafeDb>(
-      createSafeDb(testDb, [ids.wsA2], ids.orgA, ids.userA2),
-    );
-    const matterScope = await resolveSkillBindingScope({
-      homeWorkspaceId: ids.wsA2,
-      otherWorkspaceIds: [],
-      safeDb: outsiderDb,
-    });
-    if (Result.isError(matterScope)) {
-      throw matterScope.error;
-    }
-
-    // Chat
-    const loadSkill = asTestRaw<{
-      execute: (input: unknown, context: unknown) => Promise<unknown>;
-    }>(
-      createSkillTools({
-        bindingScope: matterScope.value,
-        organizationId: ids.orgA,
+  test.each([
+    { mode: "default", refusal: "default mode refuses skills" },
+    {
+      mode: "advanced",
+      refusal: "advanced mode refuses a skill bound to another matter",
+    },
+  ] as const)(
+    "a matter skill is unavailable outside its matter in chat, MCP and the API: $refusal",
+    async ({ mode }) => {
+      const skillId = await insertBoundSkill({
+        boundWorkspaceId: ids.wsA1,
+        scope: "team",
+        userId: ids.userA1,
+      });
+      const [skill] = await testDb
+        .select({ slug: agentSkills.slug })
+        .from(agentSkills)
+        .where(eq(agentSkills.id, skillId));
+      if (skill === undefined) {
+        throw new TypeError("expected the bound skill row");
+      }
+      // The outsider works in wsA2 and reaches only that matter.
+      const outsiderDb = asTestRaw<SafeDb>(
+        createSafeDb(testDb, [ids.wsA2], ids.orgA, ids.userA2),
+      );
+      const matterScope = await resolveSkillBindingScope({
+        homeWorkspaceId: ids.wsA2,
+        otherWorkspaceIds: [],
         safeDb: outsiderDb,
-        skills: offerSkillsToModel({
-          invokedSkillNames: new Set(),
-          skills: [
-            {
-              description: "Binding RLS test skill",
-              invocation: SKILL_INVOCATION.auto,
-              name: skill.slug,
-              version: null,
-            },
-          ],
+      });
+      if (Result.isError(matterScope)) {
+        throw matterScope.error;
+      }
+
+      // Chat
+      const loadSkill = asTestRaw<{
+        execute: (input: unknown, context: unknown) => Promise<unknown>;
+      }>(
+        createSkillTools({
+          bindingScope: matterScope.value,
+          organizationId: ids.orgA,
+          safeDb: outsiderDb,
+          skills: offerSkillsToModel({
+            invokedSkillNames: new Set(),
+            skills: [
+              {
+                description: "Binding RLS test skill",
+                invocation: SKILL_INVOCATION.auto,
+                name: skill.slug,
+                version: null,
+              },
+            ],
+          }),
+          userId: ids.userA2,
+        })["load-skill"],
+      );
+      const loaded = await Result.tryPromise({
+        try: async () => await loadSkill.execute({ skillName: skill.slug }, {}),
+        catch: (error) => error,
+      });
+      expect(
+        Result.isError(loaded) &&
+          loaded.error instanceof ChatToolError &&
+          loaded.error.kind === "not-found",
+      ).toBe(true);
+
+      // MCP
+      const context = asTestRaw<McpRequestContext>({
+        enabledRegistrySlugs: undefined,
+        grantedScopes: [],
+        memberRole: "member",
+        organizationId: ids.orgA,
+        recordAuditEvent: createAuditRecorder({
+          organizationId: ids.orgA,
+          request: new Request("http://localhost/mcp"),
+          server: null,
+          userId: ids.userA2,
+          workspaceId: null,
         }),
+        safeDb: outsiderDb,
         userId: ids.userA2,
-      })["load-skill"],
-    );
-    const loaded = await Result.tryPromise({
-      try: async () => await loadSkill.execute({ skillName: skill.slug }, {}),
-      catch: (error) => error,
-    });
-    expect(
-      Result.isError(loaded) &&
-        loaded.error instanceof ChatToolError &&
-        loaded.error.kind === "not-found",
-    ).toBe(true);
-
-    // MCP
-    const context = asTestRaw<McpRequestContext>({
-      enabledRegistrySlugs: undefined,
-      grantedScopes: [],
-      memberRole: "member",
-      organizationId: ids.orgA,
-      recordAuditEvent: createAuditRecorder({
-        organizationId: ids.orgA,
-        request: new Request("http://localhost/mcp"),
-        server: null,
-        userId: ids.userA2,
-        workspaceId: null,
-      }),
-      safeDb: outsiderDb,
-      userId: ids.userA2,
-    });
-    const toolName = namespaceSkillToolName(skill.slug);
-    const listed = await loadVisibleSkillTools({ context, mode: "default" });
-    expect(listed.map(({ exposedName }) => exposedName)).not.toContain(
-      toolName,
-    );
-    expect(
-      await dispatchGatewayToolCall({
-        args: {},
-        context,
-        mode: "default",
+      });
+      const toolName = namespaceSkillToolName(skill.slug);
+      const listed = await loadVisibleSkillTools({ context, mode });
+      expect(listed.map(({ exposedName }) => exposedName)).not.toContain(
         toolName,
-      }),
-    ).toMatchObject({
-      result: { error: { code: "unknown_tool" }, status: "error" },
-    });
+      );
+      switch (mode) {
+        case "default": {
+          const refused = await handleMcpToolCall({
+            args: {},
+            context,
+            mode,
+            toolName,
+          });
+          expect(refused.isError).toBe(true);
+          const content = refused.content.at(0);
+          const error: unknown =
+            content?.type === "text" ? JSON.parse(content.text) : undefined;
+          expect(error).toMatchObject({ error: { code: "unknown_tool" } });
+          break;
+        }
+        case "advanced":
+          expect(
+            await dispatchGatewayToolCall({
+              args: {},
+              context,
+              mode,
+              toolName,
+            }),
+          ).toMatchObject({
+            result: { error: { code: "unknown_tool" }, status: "error" },
+          });
+          break;
+        default:
+          mode satisfies never;
+      }
 
-    // API (what the CLI calls)
-    const read = await getSkill.handler({
-      ...skillHandlerContext<Parameters<typeof getSkill.handler>[0]>({
-        organizationId: ids.orgA,
-        params: { skillId },
-        role: "member",
-        testDb,
-        userId: ids.userA2,
-      }),
-      safeDb: outsiderDb,
-    });
-    expect(handlerFailure(read)?.code).toBe(404);
-  });
+      // API (what the CLI calls)
+      const read = await getSkill.handler({
+        ...skillHandlerContext<Parameters<typeof getSkill.handler>[0]>({
+          organizationId: ids.orgA,
+          params: { skillId },
+          role: "member",
+          testDb,
+          userId: ids.userA2,
+        }),
+        safeDb: outsiderDb,
+      });
+      expect(handlerFailure(read)?.code).toBe(404);
+    },
+  );
 
   test("a skill cannot be bound to a matter and a client at once", async () => {
     const error = await tryCatch(
