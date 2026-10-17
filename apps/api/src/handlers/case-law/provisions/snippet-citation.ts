@@ -1,3 +1,5 @@
+import { caseLawLiteralMatcher } from "@/api/handlers/case-law/literal-matcher";
+
 /** Exact UTF-16 offsets in the displayed sentence, only when the print is unambiguous. */
 export const snippetCitation = (
   sentenceText: string | null,
@@ -6,9 +8,12 @@ export const snippetCitation = (
   if (sentenceText === null || printText === null || printText === "") {
     return null;
   }
-  const start = sentenceText.indexOf(printText);
-  if (start === -1 || sentenceText.includes(printText, start + 1)) {
+  const matches = caseLawLiteralMatcher(printText).findOverlappingIter(
+    sentenceText.toWellFormed(),
+  );
+  const [match, ...others] = matches;
+  if (match === undefined || others.length > 0) {
     return null;
   }
-  return { start, end: start + printText.length };
+  return { start: match.start, end: match.end };
 };

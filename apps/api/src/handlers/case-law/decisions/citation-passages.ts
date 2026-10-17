@@ -27,6 +27,7 @@ import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { publishedCaseLawDecisions, caseLawSources } from "@/api/db/schema";
 import type { DecisionCitationRow } from "@/api/handlers/case-law/decisions/citation-graph";
 import { listDecisionCitationsHandler } from "@/api/handlers/case-law/decisions/citation-graph";
+import { caseLawLiteralMatcher } from "@/api/handlers/case-law/literal-matcher";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
   CaseLawPublicReadDb,
@@ -211,8 +212,9 @@ export const citationPassageIn = ({
   ast,
   citationText,
   sectionText,
-  evidenceQuote,
+  evidenceQuote: rawEvidenceQuote,
 }: CitationPassageOptions): CitationPassage | null => {
+  const evidenceQuote = rawEvidenceQuote?.toWellFormed();
   const match = findCitationPassage({
     blocks: ast.blocks,
     citationText,
@@ -224,22 +226,22 @@ export const citationPassageIn = ({
   // The quote anchors to the paragraph that carries it, which need not repeat
   // the citation: a court often discusses a precedent in the paragraph after
   // the one naming it. The citing paragraph wins when it carries the quote.
+  const quoteMatcher =
+    evidenceQuote === undefined || evidenceQuote.length === 0
+      ? undefined
+      : caseLawLiteralMatcher(evidenceQuote);
   const quoteBlocks =
-    evidenceQuote === null || evidenceQuote === undefined
+    quoteMatcher === undefined
       ? []
       : ast.blocks.filter(
           (block) =>
             hasBlockInlines(block) &&
-            plainTextOf(block.inlines).includes(evidenceQuote),
+            quoteMatcher.isMatch(plainTextOf(block.inlines).toWellFormed()),
         );
   const evidenceBlock =
     quoteBlocks.find((block) => block.id === match.blockId) ??
     quoteBlocks.at(0);
-  if (
-    evidenceQuote !== null &&
-    evidenceQuote !== undefined &&
-    evidenceBlock === undefined
-  ) {
+  if (evidenceQuote !== undefined && evidenceBlock === undefined) {
     logger.warn("case_law.citation_passage.doctrine_evidence_unavailable", {});
   }
   const excerpt = excerptAround(
@@ -252,9 +254,7 @@ export const citationPassageIn = ({
     text: excerpt.text,
     truncated: excerpt.truncated,
     mention: match.mention,
-    ...(evidenceBlock === undefined ||
-    evidenceQuote === null ||
-    evidenceQuote === undefined
+    ...(evidenceBlock === undefined || evidenceQuote === undefined
       ? {}
       : { evidenceQuote, evidenceAnchorId: evidenceBlock.anchorId }),
   };

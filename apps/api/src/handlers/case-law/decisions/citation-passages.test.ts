@@ -164,3 +164,87 @@ describe("the excerpt a citation travels with", () => {
     ).toBeNull();
   });
 });
+
+test("evidence quote discovery retains exact literals and citing-block priority", () => {
+  const citationText = "21 Cdo 500/2019";
+  const ast = astOf([
+    { anchorId: "p0", text: "😀 JUDr. Novákové, a.b" },
+    { anchorId: "p1", text: `${citationText}: JUDr. Novákové, a.b` },
+    { anchorId: "p2", text: "JUDr. Novakove, axb" },
+  ]);
+  for (const evidenceQuote of ["Novákové", "a.b"]) {
+    expect(
+      citationPassageIn({
+        ast,
+        citationText,
+        sectionText: undefined,
+        evidenceQuote,
+      })?.evidenceAnchorId,
+    ).toBe("p1");
+  }
+  expect(
+    citationPassageIn({
+      ast,
+      citationText,
+      sectionText: undefined,
+      evidenceQuote: "Nováková",
+    })?.evidenceAnchorId,
+  ).toBeUndefined();
+  expect(
+    citationPassageIn({
+      ast,
+      citationText,
+      sectionText: undefined,
+      evidenceQuote: "Novakove",
+    })?.evidenceAnchorId,
+  ).toBe("p2");
+  expect(
+    citationPassageIn({
+      ast: astOf([]),
+      citationText,
+      sectionText: undefined,
+      evidenceQuote: "",
+    }),
+  ).toBeNull();
+});
+
+test("evidence quotes use Unicode scalar boundaries", () => {
+  const ast = astOf([{ anchorId: "p", text: "21 Cdo 500/2019: 😀 x\ud801y" }]);
+  expect(
+    citationPassageIn({
+      ast,
+      citationText: "21 Cdo 500/2019",
+      sectionText: undefined,
+      evidenceQuote: "\ud800",
+    }),
+  ).toMatchObject({ evidenceAnchorId: "p", evidenceQuote: "�" });
+  expect(
+    citationPassageIn({
+      ast,
+      citationText: "21 Cdo 500/2019",
+      sectionText: undefined,
+      evidenceQuote: "\ud83d",
+    })?.evidenceAnchorId,
+  ).toBe("p");
+  const cleanAst = astOf([{ anchorId: "p", text: "21 Cdo 500/2019: 😀" }]);
+  expect(
+    citationPassageIn({
+      ast: cleanAst,
+      citationText: "21 Cdo 500/2019",
+      sectionText: undefined,
+      evidenceQuote: "\ud83d",
+    })?.evidenceAnchorId,
+  ).toBeUndefined();
+});
+
+test("empty evidence quotes do not identify an evidence block", () => {
+  const passage = citationPassageIn({
+    ast: astOf([{ anchorId: "p1", text: "😀 21 Cdo 500/2019" }]),
+    citationText: "21 Cdo 500/2019",
+    sectionText: undefined,
+    evidenceQuote: "",
+  });
+  expect(passage).not.toBeNull();
+  expect(passage).not.toHaveProperty("evidenceQuote");
+  expect(passage).not.toHaveProperty("evidenceAnchorId");
+});
