@@ -615,7 +615,7 @@ export class ChatTurnRun {
             ? output
             : this.trackUpstream(output),
           {
-            abortController: this.control.abortController,
+            // Run control cuts the provider; delivery drains its terminal events.
             durability: { adapter: durability },
             headers: { [CHAT_TURN_ID_HEADER]: this.execution.id },
           },

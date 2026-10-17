@@ -90,6 +90,9 @@
     "runSelectedRows": "Ejecutar para {count, plural, one {# fila seleccionada} other {# filas seleccionadas}}",
     "selectedRun": "Ejecutar columnas de IA para {count, plural, one {# fila} other {# filas}}"
   },
+  "aiDisclosure": {
+    "caseLaw": "Los resúmenes, notas y análisis de resoluciones judiciales elaborados con IA los genera stella; no están avalados por los tribunales ni reflejan su propio razonamiento. Son herramientas de apoyo para profesionales del derecho, y solo el texto de la resolución tiene valor fehaciente."
+  },
   "appearance": {
     "calendar": "Calendario",
     "calendarGregorian": "Gregoriano",
@@ -1746,7 +1749,8 @@
       "toggleLabel": "Búsqueda web",
       "toggleOff": "Desactivar búsqueda web",
       "toggleOn": "Activar búsqueda web"
-    }
+    },
+    "workedFor": "Tiempo de trabajo: {duration}"
   },
   "clauses": {
     "addVariant": "Añadir variante",
@@ -2624,11 +2628,14 @@
     "actionFailed": "Acción fallida",
     "api": {
       "badRequest": "No se pudo completar la solicitud.",
+      "caseLawCountryUnavailable": "La jurisprudencia de este país no está disponible. Elige otro país.",
+      "caseLawSearchUnavailable": "La búsqueda de jurisprudencia de este país no está disponible. Puedes seguir consultando sus resoluciones públicas.",
       "conflict": "La solicitud entra en conflicto con el estado actual.",
       "forbidden": "No tienes permiso para hacer esto.",
+      "legislationCountryUnavailable": "La legislación de este país no está disponible. Elige otro país.",
+      "legislationSearchUnavailable": "La búsqueda de legislación de este país no está disponible. Puedes seguir consultando su legislación pública.",
       "notFound": "No pudimos encontrar lo solicitado.",
       "payloadTooLarge": "La solicitud es demasiado grande.",
-      "publicCountryUnavailable": "La legislación y la jurisprudencia de este país no están disponibles. Elige otro país.",
       "rateLimited": "Demasiadas solicitudes. Inténtalo de nuevo más tarde.",
       "server": "Algo salió mal. Inténtalo de nuevo.",
       "serviceUnavailable": "El servicio no está disponible temporalmente. Inténtalo de nuevo.",

@@ -90,6 +90,9 @@
     "runSelectedRows": "Käivita {count, plural, one {# valitud real} other {# valitud real}}",
     "selectedRun": "Käivita tehisintellekti veerud {count, plural, one {# real} other {# real}}"
   },
+  "aiDisclosure": {
+    "caseLaw": "Kohtulahendite AI-kokkuvõtted, -märkmed ja -analüüsid koostab stella; kohtud ei ole neid heaks kiitnud ja need ei kajasta kohtute endi arutluskäiku. Need on abivahendid õigusala spetsialistidele ning määravaks allikaks jääb lahendi tekst."
+  },
   "appearance": {
     "calendar": "Kalender",
     "calendarGregorian": "Gregoriuse",
@@ -1746,7 +1749,8 @@
       "toggleLabel": "Veebiotsing",
       "toggleOff": "Lülita veebiotsing välja",
       "toggleOn": "Lülita veebiotsing sisse"
-    }
+    },
+    "workedFor": "Tööaeg: {duration}"
   },
   "clauses": {
     "addVariant": "Lisa variant",
@@ -2624,11 +2628,14 @@
     "actionFailed": "Toiming ebaõnnestus",
     "api": {
       "badRequest": "Päringut ei saanud lõpule viia.",
+      "caseLawCountryUnavailable": "Selle riigi kohtupraktika ei ole saadaval. Valige teine riik.",
+      "caseLawSearchUnavailable": "Selle riigi kohtupraktika otsing ei ole saadaval. Selle avalikke kohtulahendeid saate endiselt lugeda.",
       "conflict": "Päring on praeguse olekuga vastuolus.",
       "forbidden": "Teil pole selleks toiminguks õigust.",
+      "legislationCountryUnavailable": "Selle riigi õigusaktid ei ole saadaval. Valige teine riik.",
+      "legislationSearchUnavailable": "Selle riigi õigusaktide otsing ei ole saadaval. Selle avalikke õigusakte saate endiselt lugeda.",
       "notFound": "Soovitud üksust ei leitud.",
       "payloadTooLarge": "Päring on liiga suur.",
-      "publicCountryUnavailable": "Selle riigi õigusaktid ja kohtupraktika ei ole saadaval. Valige teine riik.",
       "rateLimited": "Liiga palju päringuid. Proovige hiljem uuesti.",
       "server": "Midagi läks valesti. Proovige uuesti.",
       "serviceUnavailable": "Teenus pole ajutiselt saadaval. Proovige uuesti.",
