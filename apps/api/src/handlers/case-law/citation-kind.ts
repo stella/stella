@@ -321,7 +321,7 @@ export const CITATION_KIND_EVIDENCE = {
   REGISTRY: "registry",
 } as const;
 
-export type CitationKindEvidence =
+type CitationKindEvidence =
   (typeof CITATION_KIND_EVIDENCE)[keyof typeof CITATION_KIND_EVIDENCE];
 
 export type CitationKindVerdict = {
@@ -377,25 +377,6 @@ export const classifyCitationVerdict = ({
 
 export const classifyCitation = (input: ClassifyCitationInput): CitationKind =>
   classifyCitationVerdict(input).kind;
-
-/**
- * How the heuristics would have classified this citation with the
- * publisher's account withheld.
- *
- * Where a publisher states a case's procedural history, that statement is
- * a free label for the tiers below it — and the only way to know whether
- * the cue lists work on sources that publish no such list. The comparison
- * is one-sided: a publisher naming a judgment proves it *is* procedural,
- * but its silence proves nothing, so this measures how much of the known
- * procedural set the heuristics recover, never how much they over-call.
- */
-export const classifyWithoutPublisher = (
-  input: ClassifyCitationInput,
-): CitationKindVerdict =>
-  classifyCitationVerdict({
-    citationText: input.citationText,
-    context: input.context,
-  });
 
 /**
  * Case numbers a publisher names as the decision's own procedural history.

@@ -7,7 +7,7 @@
  * domain to each other in both directions, so neither can move alone.
  */
 
-import type { ConstantMap } from "@/api/lib/constant-map";
+import type { ConstantMap } from "../constant-map";
 
 /**
  * One side of the citation graph, seen from a decision: the decisions it
