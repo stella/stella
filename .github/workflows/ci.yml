@@ -327,8 +327,10 @@ jobs:
       - name: Preserve GitHub API tooling across source checkouts
         run: |
           cp "$GITHUB_WORKSPACE/.workflow-tooling/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
-          cp "$GITHUB_WORKSPACE/.workflow-tooling/scripts/merge-target-base.sh" "$RUNNER_TEMP/merge-target-base.sh"
           echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+
+      - name: Preserve the comparison-base resolver across source checkouts
+        run: cp "$GITHUB_WORKSPACE/.workflow-tooling/scripts/merge-target-base.sh" "$RUNNER_TEMP/merge-target-base.sh"
 
       - name: Preserve this run's CI workflow for planning
         run: cp "$GITHUB_WORKSPACE/.workflow-tooling/.github/workflows/ci.yml" "$RUNNER_TEMP/ci-workflow.yml"

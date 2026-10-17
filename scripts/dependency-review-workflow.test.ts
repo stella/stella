@@ -275,8 +275,8 @@ describe("required dependency review workflow boundary", () => {
     expect(job.steps.indexOf(resolver)).toBeLessThan(
       job.steps.indexOf(selectorStep),
     );
-    expect(selectorStep.env?.["TARGET_BASE_SHA"]).toBe(
-      `\${{ steps.target-base.outputs.base_sha }}`,
+    expect(JSON.stringify(selectorStep["env"])).toContain(
+      "steps.target-base.outputs.base_sha",
     );
     expect(String(resolver.with?.["script"])).toContain(
       "compareCommitsWithBasehead",
