@@ -1449,6 +1449,7 @@ const config = defineConfig({
     stellaLowercasePluginSpecifier,
     "./.oxlint-plugins/no-raw-cache-control.ts",
     "./.oxlint-plugins/confine-sql-close.ts",
+    "./.oxlint-plugins/confine-online-ddl.ts",
     "./.oxlint-plugins/raw-hash-from-source-fingerprint.ts",
     "./.oxlint-plugins/no-raw-sha256.ts",
     "./.oxlint-plugins/no-hand-rolled-concurrency.ts",
@@ -1696,6 +1697,14 @@ const config = defineConfig({
       ],
       rules: {
         "confine-sql-close/confine-sql-close": "error",
+      },
+    },
+    {
+      // Tests, fixtures and the owner are skipped inside the rule; SQL
+      // migration files are not JavaScript, so oxlint never reads them.
+      files: ["apps/api/src/**/*.{ts,tsx,js,mjs}"],
+      rules: {
+        "confine-online-ddl/confine-online-ddl": "error",
       },
     },
     {
