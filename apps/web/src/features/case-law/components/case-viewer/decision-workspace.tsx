@@ -29,12 +29,17 @@ import {
   createCaseDecisionViewTab,
   navigateToCaseDecisionMain,
 } from "@/components/inspector/case-decision-view";
-import { ZoomControls } from "@/components/inspector/zoom-controls";
 import { AnnotationToolbar } from "@/components/legal-reader/annotations/annotation-toolbar";
 import { GuestAnnotationPrompt } from "@/components/legal-reader/annotations/guest-annotation-prompt";
 import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotations/reader-annotation-target";
 import type { SelectionAnchor } from "@/components/legal-reader/annotations/selection-anchor";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
+import {
+  LEGAL_READER_CONTENT_CLEARANCE_CLASS_NAME,
+  LEGAL_READER_LAYOUT_CLASS_NAME,
+  LegalReaderControls,
+} from "@/components/legal-reader/legal-reader-controls";
+import { useReaderElement } from "@/components/legal-reader/use-reader-element";
 import { useWebReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
 import { WebDecisionReader as DecisionText } from "@/components/legal-reader/web-decision-reader";
 import Tooltip from "@/components/tooltip";
@@ -54,6 +59,7 @@ import type {
   AnalysisMarginItem,
   AnswerMarginItem,
 } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
+import { useAnalysisReaderBreadcrumb } from "@/features/case-law/components/case-viewer/analysis/reader-breadcrumb";
 import {
   buildSectionMap,
   flattenAnalysisHeadings,
@@ -269,7 +275,13 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
     id: decisionId,
     name: caseName,
   } as const satisfies ReaderAnnotationTarget;
-  const mainRef = useRef<HTMLDivElement>(null);
+  const { element: contentElement, attach: attachContent } =
+    useReaderElement<HTMLElement>();
+  const {
+    readerRef: mainRef,
+    element: viewportElement,
+    attach: attachViewport,
+  } = useReaderElement<HTMLDivElement>();
   const provisions = useReaderProvisionMode(mainRef);
   const [notesFilter, setNotesFilter] = useState<NotesFilter>("all");
   const showAiNotes = NOTES_FILTER_SHOWS_AI[notesFilter];
@@ -324,7 +336,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
     annotations.setActiveAnnotationId(id);
   };
   useExternalSyncEffect(() => {
-    const root = mainRef.current;
+    const root = viewportElement;
     if (root === null) {
       return undefined;
     }
@@ -334,7 +346,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
       label: t("readerAnswers.expand"),
       onOpen: openAnswer,
     });
-  }, [visibleAnswers, openAnswer, t]);
+  }, [viewportElement, visibleAnswers, openAnswer, t]);
   const foreignDecisionIds = [
     ...new Set(
       answers.answers
@@ -527,6 +539,10 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   const completeAnalysis =
     analysisState.status === "done" ? analysisState.analysis : null;
 
+  const fallbackBreadcrumb = useAnalysisReaderBreadcrumb(
+    completeAnalysis?.tree ?? null,
+  );
+
   // The passage the reader was sent to, marked for as long as they are on it.
   // A jump anywhere else in the document is them leaving it, so the marker
   // goes. A new decision starts the question over, and so does a new fragment
@@ -695,20 +711,26 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <ChromeHeaderActions>
-        <ZoomControls
-          atMax={textScale.atMax}
-          atMin={textScale.atMin}
-          level={textScale.level}
-          onReset={textScale.reset}
-          onZoom={textScale.zoom}
-        />
         <ReaderProvisionModeToggle mode={provisions} size="page" />
       </ChromeHeaderActions>
       <GuestAnnotationPrompt count={annotations.guestCount} />
       <h1 className="sr-only" data-slot="decision-title">
         <BidiText as="span">{decision.caseNumber}</BidiText>
       </h1>
-      <div className="relative min-h-0 flex-1">
+      <div
+        className={cn(
+          LEGAL_READER_LAYOUT_CLASS_NAME,
+          "relative min-h-0 flex-1",
+        )}
+      >
+        <LegalReaderControls
+          blocks={ast === null ? [] : ast.blocks}
+          content={contentElement}
+          fallbackBreadcrumb={fallbackBreadcrumb}
+          viewport={viewportElement}
+          zoomControls={textScale}
+          key={decisionId}
+        />
         <div className="bg-background/80 supports-[backdrop-filter]:bg-background/55 shadow-floating absolute start-3 bottom-3 z-30 flex items-center overflow-hidden rounded-lg border backdrop-blur-xl max-lg:hidden">
           {notesFilterOptions.map((option) => {
             const Icon = option.icon;
@@ -806,7 +828,10 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                 scrollContainerRef={mainRef}
               />
             )}
-            <div className="reader-scroll h-full overflow-y-auto" ref={mainRef}>
+            <div
+              className="reader-scroll h-full overflow-y-auto"
+              ref={attachViewport}
+            >
               <ReaderStatusNotices
                 answersError={answers.error}
                 foreignDecisionFailed={foreignDecisionError !== undefined}
@@ -923,7 +948,11 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                 </aside>
 
                 <main
-                  className="reader-paper min-w-0 py-8"
+                  className={cn(
+                    "reader-paper min-w-0 pb-8",
+                    LEGAL_READER_CONTENT_CLEARANCE_CLASS_NAME,
+                  )}
+                  ref={attachContent}
                   data-slot="reader-document-column"
                 >
                   {/* Below lg the analysis column, and the offer in it, is

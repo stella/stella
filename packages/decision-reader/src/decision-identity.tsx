@@ -3,8 +3,7 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { BreadcrumbPage } from "@stll/ui/breadcrumb";
 
 import { CourtName } from "./court-name";
-
-export const DECISION_TITLE_SEPARATOR = "·";
+import { DECISION_TITLE_SEPARATOR } from "./decision-title";
 
 type DecisionIdentityProps = {
   caseNumber: string;
