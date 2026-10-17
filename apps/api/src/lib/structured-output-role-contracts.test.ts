@@ -9,13 +9,13 @@ import { repoRelativePath } from "@stll/portable-path";
 import { env } from "@/api/env";
 import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
-  generateTanStackObjectForRole,
-  streamTanStackObjectForRole,
+  generateTanStackObjectForTask,
+  streamTanStackObjectForTask,
 } from "@/api/lib/tanstack-ai-generate";
 import {
   createTanStackTextAdapterFactory,
   type ResolvedTanStackTextModel,
-  tanStackModelOptionsForRole,
+  tanStackModelOptionsForTask,
 } from "@/api/lib/tanstack-ai-models";
 import {
   cassetteFor,
@@ -235,11 +235,11 @@ const resolvedModel = ({
     keySource: "byok",
     modelId,
     provider,
-    modelOptions: tanStackModelOptionsForRole({
+    modelOptions: tanStackModelOptionsForTask({
       modelId,
       organizationId: null,
       provider,
-      role: "fast",
+      task: "short-text",
     }),
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- see SAFETY above
   } as ResolvedTanStackTextModel;
@@ -259,7 +259,7 @@ const objectOptions = (
     outputSchema: fixture.schema,
     prompt: "Answer from the attached material.",
     resolveTextModel: () => model,
-    role: "fast",
+    task: "short-text",
     serviceTier: "standard",
     tenantWorkspaceIds: [],
   }) as const;
@@ -276,7 +276,7 @@ describe("structured-output roles round-trip through every provider", () => {
           answer: fixture.answer,
         };
         const model = resolvedModel(providerModel);
-        const object = await generateTanStackObjectForRole(
+        const object = await generateTanStackObjectForTask(
           objectOptions(fixture, model),
         );
         expect(object).toEqual(expected);
@@ -289,7 +289,7 @@ describe("structured-output roles round-trip through every provider", () => {
         };
         const model = resolvedModel(providerModel);
         let completed: unknown;
-        for await (const event of streamTanStackObjectForRole(
+        for await (const event of streamTanStackObjectForTask(
           objectOptions(fixture, model),
         )) {
           if (event.type === "complete") {

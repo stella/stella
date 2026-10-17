@@ -18,7 +18,11 @@ import {
   sortResultRows,
 } from "@stll/mcp-apps/case-law-results/model";
 import { createCaseLawParser } from "@stll/mcp-apps/case-law-results/parse";
-import { CASE_LAW_RESULTS_APP, MCP_APPS } from "@stll/mcp-apps/manifest";
+import {
+  CASE_LAW_RESULTS_APP,
+  CITATION_GRAPH_APP,
+  MCP_APPS,
+} from "@stll/mcp-apps/manifest";
 import type {
   ResolveResults,
   SearchResults,
@@ -165,6 +169,14 @@ describe("MCP app registry and contracts", () => {
         directories,
       }),
     ).toEqual([]);
+  });
+  test("citation graph links its read tool and declares both read contracts", () => {
+    expect(CITATION_GRAPH_APP.linkedTools).toEqual(["read_case_law_citations"]);
+    expect(CITATION_GRAPH_APP.callableTools).toEqual([
+      "read_case_law_citations",
+      "open_case_law_decision",
+    ]);
+    expect(MCP_APP_OUTPUT_SCHEMAS).toHaveProperty("read_case_law_citations");
   });
   test("the guard refuses a write call in a presentation app", () => {
     const apps = MCP_APPS.map((app) =>

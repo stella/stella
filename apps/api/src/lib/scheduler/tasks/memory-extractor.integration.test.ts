@@ -91,7 +91,7 @@ const threadIds = [userThreadId, matterThreadId];
 const messageIds = [userMessageId, matterMessageId];
 
 const settingsSpy = spyOn(aiConfigLoader, "loadOrgAISettings");
-const generateSpy = spyOn(tanstackGenerate, "generateTanStackObjectForRole");
+const generateSpy = spyOn(tanstackGenerate, "generateTanStackObjectForTask");
 const transcriptSpy = spyOn(compactionTranscript, "loadCompactionTranscript");
 const warnSpy = spyOn(logger, "warn");
 const dedupSpy = spyOn(memoryDedup, "createMemoryDedupIdentity");
@@ -99,7 +99,7 @@ const originalFeature = env.FEATURE_AI_MEMORY;
 
 /** The model's reply, after `beforeReply` runs while the call is in flight. */
 const fakeExtraction = (beforeReply?: () => Promise<void>) =>
-  asTestRaw<typeof tanstackGenerate.generateTanStackObjectForRole>(async () => {
+  asTestRaw<typeof tanstackGenerate.generateTanStackObjectForTask>(async () => {
     await beforeReply?.();
     return {
       candidates: [

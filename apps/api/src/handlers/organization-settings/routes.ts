@@ -1,6 +1,7 @@
 import Elysia from "elysia";
 
 import readAIAvailability from "@/api/handlers/organization-settings/ai-availability/get";
+import previewAIConfigDefaults from "@/api/handlers/organization-settings/ai-config/defaults/preview";
 import readAnonymizationBlacklist from "@/api/handlers/organization-settings/anonymization-blacklist/get";
 import updateAnonymizationBlacklist from "@/api/handlers/organization-settings/anonymization-blacklist/update";
 import {
@@ -153,6 +154,10 @@ export const organizationSettingsRoute = new Elysia({
   })
   .get("/document-ocr-availability", getDocumentOcrAvailability.handler, {
     permissions: getDocumentOcrAvailability.config.permissions,
+  })
+  .post("/ai-config/defaults-preview", previewAIConfigDefaults.handler, {
+    body: previewAIConfigDefaults.config.body,
+    permissions: previewAIConfigDefaults.config.permissions,
   })
   .get("/ai-config", readAIConfig.handler, {
     permissions: readAIConfig.config.permissions,

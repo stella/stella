@@ -327,6 +327,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Maximum queued and running document verifications per organization (1–100; default 2).",
   LIST_VERIFICATION_DAILY_STARTS_MAX:
     "Maximum document verification starts per organization per Europe/Prague day (1–1000; default 20).",
+  CASE_LAW_DERIVED_AI:
+    'Model calls for case-law derived layers: "on" generates a missing decision analysis when a reader opens it and refreshes its significance from the citation graph; "off" (the default) serves stored analyses only, so local, seeded and CI stacks never reach a model by serving a decision.',
   CASE_LAW_EU_COMPLETION_ENABLED:
     "Enable bounded EU case-law completion. Defaults to false.",
   CASE_LAW_EU_COMPLETION_KILL_SWITCH:
@@ -745,6 +747,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   BETTER_AUTH_SECRET: ENV_CREDENTIAL_KIND.credential,
   BETTER_AUTH_URL: ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_DATABASE_POOL_MAX: ENV_CREDENTIAL_KIND.notCredential,
+  CASE_LAW_DERIVED_AI: ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_REPLAY_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_REPLAY_KILL_SWITCH: ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_REPLAY_DISABLED_SOURCES: ENV_CREDENTIAL_KIND.notCredential,
@@ -1464,6 +1467,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "APP_VERSION",
   "AWS_ENDPOINT_URL_BEDROCK_RUNTIME",
   "BASE_REF",
+  "COMPARISON_BASE",
   "BASE_SHA",
   "CANARY_PORT",
   "CANARY_PROBE_TOKEN",

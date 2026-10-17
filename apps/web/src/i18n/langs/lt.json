@@ -65,6 +65,9 @@
     "runSelectedRows": "Vykdyti {count, plural, one {# pasirinktai eilutei} few {# pasirinktoms eilutėms} many {# pasirinktos eilutės} other {# pasirinktų eilučių}}",
     "selectedRun": "Vykdyti DI stulpelius {count, plural, one {# eilutei} few {# eilutėms} many {# eilutės} other {# eilučių}}"
   },
+  "aiDisclosure": {
+    "caseLaw": "DI parengtas teismų sprendimų santraukas, pastabas ir analizes generuoja stella; teismai jų nėra patvirtinę ir jos neatspindi pačių teismų argumentacijos. Tai pagalbinės priemonės teisės specialistams, o oficialiu ir lemiamu šaltiniu išlieka sprendimo tekstas."
+  },
   "appearance": {
     "calendar": "Kalendorius",
     "calendarGregorian": "Grigaliaus",
@@ -1213,6 +1216,11 @@
       "stale": "Šis atsakymas pasikeitė. Pasirinkite tekstą iš naujo.",
       "submit": "Prašyti pakeitimo"
     },
+    "answerQuote": {
+      "showInDecision": "Rodyti sprendime",
+      "verified": "Patikrinta citata",
+      "verifiedHint": "Pažodžiui: {source}"
+    },
     "applyMode": {
       "description": "Word įrašo, kas atliko kiekvieną pakeitimą. Įsiminsime jūsų pasirinkimą.",
       "direct": "Ne, taikyti tiesiogiai",
@@ -1451,6 +1459,12 @@
       "title": "Įklijuotas tekstas"
     },
     "placeholder": "Čia įveskite klausimą, / įgūdžiams, @ kontekstui pridėti",
+    "processSummary": {
+      "analyses": "{count, plural, one {# analizė} few {# analizės} many {# analizės} other {# analizių}}",
+      "changesSaved": "{count, plural, one {# išsaugotas pakeitimas} few {# išsaugoti pakeitimai} many {# išsaugoto pakeitimo} other {# išsaugotų pakeitimų}}",
+      "documentEdits": "{count, plural, one {# dokumento pakeitimas} few {# dokumento pakeitimai} many {# dokumento pakeitimo} other {# dokumento pakeitimų}}",
+      "sourcesChecked": "{count, plural, one {# patikrintas šaltinis} few {# patikrinti šaltiniai} many {# patikrinto šaltinio} other {# patikrintų šaltinių}}"
+    },
     "promptImprovementStrategies": {
       "decompose": {
         "description": "Sudėtingą darbą suskaido į nuoseklias smulkesnes užduotis.",
@@ -1696,6 +1710,7 @@
       "interrupted": "Nutraukta nebaigus",
       "output": "Išvestis",
       "sourceCode": "Pirminis kodas",
+      "statusWaiting": "Laukiama",
       "toggleDetails": "Perjungti detales",
       "unrestoredFields": "Anonimizuotu režimu nepavyko tikromis reikšmėmis užpildyti {count, plural, one {# lauko} few {# laukų} many {# lauko} other {# laukų}}. Patikrinkite: {fields}"
     },

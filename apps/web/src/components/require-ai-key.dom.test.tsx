@@ -16,9 +16,43 @@ globalThis.fetch = Object.assign(
     if (url.pathname.endsWith("/organization-settings/ai-availability")) {
       return Response.json({ available: false });
     }
+    if (
+      url.pathname.endsWith("/organization-settings/ai-config/defaults-preview")
+    ) {
+      return Response.json({
+        defaultModels: {
+          chat: { provider: "google", modelId: "gemini-3.8-flash" },
+          fast: { provider: "google", modelId: "gemini-3.8-flash" },
+          reasoning: { provider: "google", modelId: "gemini-3.8-flash" },
+          pdf: { provider: "google", modelId: "gemini-3.8-flash" },
+        },
+        providerDefaultModels: [
+          {
+            provider: "google",
+            defaultModels: {
+              chat: { provider: "google", modelId: "gemini-3.8-flash" },
+              fast: { provider: "google", modelId: "gemini-3.8-flash" },
+              reasoning: { provider: "google", modelId: "gemini-3.8-flash" },
+              pdf: { provider: "google", modelId: "gemini-3.8-flash" },
+            },
+          },
+        ],
+      });
+    }
     if (url.pathname.endsWith("/organization-settings/ai-config")) {
       return configStatus === 200
-        ? Response.json({ providers: [], roleModels: {} })
+        ? Response.json({
+            configured: false,
+            instanceProvisioned: false,
+            decisionInstanceProvisioned: false,
+            providerDefaultModels: [],
+            defaultModels: {
+              chat: null,
+              fast: null,
+              reasoning: null,
+              pdf: null,
+            },
+          })
         : Response.json({ error: "Forbidden" }, { status: configStatus });
     }
     return Response.json({});

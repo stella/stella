@@ -31,12 +31,12 @@ const apiRoot = new URL("../../../", import.meta.url);
 const DISPATCH_ENTRY_POINTS = new Set([
   "collectTanStackTextRun",
   "generateTanStackChatObject",
-  "generateTanStackObjectForRole",
-  "generateTanStackTextForRole",
+  "generateTanStackObjectForTask",
+  "generateTanStackTextForTask",
   "resolveTanStackTextModel",
   "streamTanStackChatRun",
-  "streamTanStackObjectForRole",
-  "streamTanStackTextForRole",
+  "streamTanStackObjectForTask",
+  "streamTanStackTextForTask",
 ]);
 const DISPATCH_MODULE = "@/api/lib/tanstack-ai-generate";
 const CHAT_TOOLS_PREFIX = "handlers/chat/tools/";
@@ -79,7 +79,7 @@ const dispatchNamed = (
   if (ts.isPropertyAccessExpression(expression)) {
     return names.get(`.${expression.name.text}`);
   }
-  // `deps.generate ?? generateTanStackObjectForRole`: the fallback names it.
+  // `deps.generate ?? generateTanStackObjectForTask`: the fallback names it.
   if (
     ts.isBinaryExpression(expression) &&
     expression.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken
@@ -292,21 +292,21 @@ const importsRawChatRuntime = (file: string, source: string): boolean =>
 describe("model dispatch admission guard", () => {
   test("flags a dispatch without an admission however it names the entry point", () => {
     const offending = [
-      `import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
-       await generateTanStackTextForRole({ organizationId, role: "fast" });`,
-      `import { generateTanStackTextForRole as generate } from "@/api/lib/tanstack-ai-generate";
-       await generate({ organizationId, role: "fast" });`,
-      `import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
-       const run = async ({ generate = generateTanStackObjectForRole }) =>
+      `import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
+       await generateTanStackTextForTask({ organizationId, task: "short-text" });`,
+      `import { generateTanStackTextForTask as generate } from "@/api/lib/tanstack-ai-generate";
+       await generate({ organizationId, task: "short-text" });`,
+      `import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
+       const run = async ({ generate = generateTanStackObjectForTask }) =>
          await generate({ organizationId });`,
-      `import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
-       await (deps.generate ?? generateTanStackObjectForRole)({ organizationId });`,
+      `import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
+       await (deps.generate ?? generateTanStackObjectForTask)({ organizationId });`,
       `import { resolveTanStackTextModel } from "@/api/lib/tanstack-ai-generate";
        const resolve = deps.resolve ?? resolveTanStackTextModel;
-       await resolve({ organizationId, role: "chat" });`,
+       await resolve({ organizationId, task: "chat" });`,
       `import { resolveTanStackTextModel } from "@/api/lib/tanstack-ai-generate";
        const defaults = { resolveModel: resolveTanStackTextModel };
-       await dependencies.resolveModel({ organizationId, role: "chat" });`,
+       await dependencies.resolveModel({ organizationId, task: "chat" });`,
     ];
     for (const source of offending) {
       const result = scan(source);
@@ -317,14 +317,14 @@ describe("model dispatch admission guard", () => {
 
   test("accepts a dispatch that names its admission or passes typed options", () => {
     const compliant = [
-      `import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
-       await generateTanStackTextForRole({ organizationId, admission, role: "fast" });`,
-      `import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
-       await generateTanStackTextForRole({ organizationId, admission: context.admission });`,
-      `import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
-       await generateTanStackObjectForRole(options);`,
-      `import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
-       await generateTanStackTextForRole({ ...options, resolveTextModel });`,
+      `import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
+       await generateTanStackTextForTask({ organizationId, admission, task: "short-text" });`,
+      `import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
+       await generateTanStackTextForTask({ organizationId, admission: context.admission });`,
+      `import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
+       await generateTanStackObjectForTask(options);`,
+      `import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
+       await generateTanStackTextForTask({ ...options, resolveTextModel });`,
     ];
     for (const source of compliant) {
       const result = scan(source);
