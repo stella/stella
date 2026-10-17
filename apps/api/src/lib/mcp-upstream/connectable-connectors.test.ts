@@ -2,12 +2,14 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { createSafeId } from "@/api/lib/branded-types";
+import { toSafeId } from "@/api/lib/branded-types";
 import { loadConnectableMcpConnectorsForUser } from "@/api/lib/mcp-upstream/connections";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
-const organizationId = createSafeId<"organization">();
-const userId = createSafeId<"user">();
+const organizationId = toSafeId<"organization">(
+  "00000000-0000-0000-0000-000000000001",
+);
+const userId = toSafeId<"user">("00000000-0000-0000-0000-000000000002");
 
 describe("connectable connector catalog", () => {
   test.each([0, 1, 20, 21])(
@@ -43,7 +45,7 @@ describe("connectable connector catalog", () => {
           connectors: rows.slice(0, 20),
           continuation:
             count > 20
-              ? { type: "more-available", afterSlug: rows.at(19)?.slug }
+              ? { type: "more-available", afterSlug: "source-19" }
               : { type: "complete" },
         }),
       );

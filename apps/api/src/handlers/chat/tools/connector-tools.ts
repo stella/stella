@@ -13,9 +13,15 @@ import {
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
-import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { loadConnectableMcpConnectorsForUser } from "@/api/lib/mcp-upstream/connections";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
+
+const CONNECTOR_CATALOG_FAILED = failureSink({
+  event: "chat.connector_catalog_failed",
+  expected: [],
+});
 
 type ConnectorToolsContext = {
   safeDb: SafeDb;
@@ -53,7 +59,7 @@ export const createConnectorTools = (context: ConnectorToolsContext) => ({
     );
     const catalog = read.andThen((value) => value);
     if (Result.isError(catalog)) {
-      captureError(catalog.error, { operation: "list-connectable-connectors" });
+      observeFailure(catalog.error, { sink: CONNECTOR_CATALOG_FAILED });
       return {
         status: "unavailable",
         code: "catalog-unavailable",

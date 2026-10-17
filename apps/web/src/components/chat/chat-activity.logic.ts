@@ -46,6 +46,7 @@ const BUILT_IN_CHAT_TOOL_ACTIVITY_CATEGORIES = {
   get_document_outline: "research",
   infosoud_lookup_case: "research",
   link_matter_contact: "mutation",
+  list_connectable_connectors: "research",
   list_stories: "research",
   list_templates: "research",
   "load-skill": "research",

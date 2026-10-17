@@ -3,7 +3,13 @@ import { Result } from "better-result";
 import type { ConnectableMcpConnectorCatalog } from "@stll/api-contract/chat-connector";
 
 import type { SafeDbError } from "@/api/db/safe-db";
-import { captureError } from "@/api/lib/analytics/capture";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
+
+const OPTIONAL_PROMPT_SOURCE_FAILED = failureSink({
+  event: "chat.optional_prompt_source_failed",
+  expected: [],
+});
 
 type PromptSource<TRequirement, TValue> = {
   type: TRequirement;
@@ -25,7 +31,7 @@ const loadOptionalPromptSource = async <T>(
   const read = await Result.tryPromise(source.load);
   const result = read.andThen((value) => value);
   if (Result.isError(result)) {
-    captureError(result.error, { operation: "optional-turn-prompt-source" });
+    observeFailure(result.error, { sink: OPTIONAL_PROMPT_SOURCE_FAILED });
     return { type: "omitted", error: result.error } as const;
   }
   return { type: "loaded", value: result.value } as const;
@@ -39,7 +45,7 @@ export const loadTurnPromptSources = async ({
   const requiredRead = await Result.tryPromise(requestedSkills.load);
   const required = requiredRead.andThen((value) => value);
   if (Result.isError(required)) {
-    return required;
+    return Result.err(required.error);
   }
   const optional = await loadOptionalPromptSource(connectorCatalog);
   return Result.ok({

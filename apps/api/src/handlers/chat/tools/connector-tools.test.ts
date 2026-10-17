@@ -54,9 +54,12 @@ test("the catalog continuation expands through the tool in stable slug order", a
     if (first.value.continuation.type !== "more-available") {
       throw new Error("Expected a continuation for 21 connectors");
     }
-    const next = await createConnectorTools(
-      context,
-    ).list_connectable_connectors.execute({
+    const { execute } =
+      createConnectorTools(context).list_connectable_connectors;
+    if (execute === undefined) {
+      throw new Error("Catalog discovery requires server execution");
+    }
+    const next = await execute({
       afterSlug: first.value.continuation.afterSlug,
     });
     expect(next).toEqual({

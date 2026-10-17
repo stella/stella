@@ -270,6 +270,7 @@ const CHAT_TOOL_TITLE_KEYS = {
   get_document_outline: "chat.tool.get_document_outline",
   infosoud_lookup_case: "chat.tool.infosoud_lookup_case",
   link_matter_contact: "chat.tool.link_matter_contact",
+  list_connectable_connectors: "catalogue.filter.mcps",
   list_stories: "chat.tool.list_stories",
   list_templates: "chat.tool.list_templates",
   add_matter_member: "chat.tool.add_matter_member",
