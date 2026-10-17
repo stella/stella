@@ -105,13 +105,13 @@ export type HangDetectorOptions = {
 type ObserveFramesOptions = {
   browser: HangDetectorOptions["window"];
   sampled: boolean;
-  readAnalytics: () => HangAnalytics | undefined;
+  captureFrame: HangAnalytics["captureLongAnimationFrame"];
 };
 
 const observeLongAnimationFrames = ({
   browser,
   sampled,
-  readAnalytics,
+  captureFrame,
 }: ObserveFramesOptions) => {
   let frames = 0;
   const Observer = browser.PerformanceObserver;
@@ -123,11 +123,7 @@ const observeLongAnimationFrames = ({
     const observed = Result.try(() => {
       const instance = new Observer((list) => {
         for (const entry of list.getEntries()) {
-          if (
-            entry.duration <= 1000 ||
-            frames >= LOAF_SESSION_LIMIT ||
-            !readAnalytics()
-          ) {
+          if (entry.duration <= 1000 || frames >= LOAF_SESSION_LIMIT) {
             continue;
           }
           const frame = v.safeParse(
@@ -143,7 +139,7 @@ const observeLongAnimationFrames = ({
             entry,
           );
           frames += 1;
-          readAnalytics()?.captureLongAnimationFrame({
+          captureFrame({
             duration: entry.duration,
             scripts: frame.success ? frame.output.scripts : [],
           });
@@ -157,21 +153,45 @@ const observeLongAnimationFrames = ({
   return undefined;
 };
 
-/** Storage and browser APIs are optional at this boot boundary. */
-export const createWebHangDetector = ({
-  window: browser,
-  build,
-  now = () => Temporal.Now.instant().epochMilliseconds,
-  random = Math.random,
-}: HangDetectorOptions) => {
-  const local = browserStorage("local");
-  // sessionStorage is copied by duplicate/opener tabs: identity belongs to
-  // this document, so another document can never erase its evidence.
-  const key = `${HANG_MARKER_PREFIX}${createEphemeralId()}`;
-  const started = now();
+type FrameReport = Parameters<HangAnalytics["captureLongAnimationFrame"]>[0];
+
+/**
+ * Frames seen before analytics attaches (runtime initialization runs first)
+ * wait here and are delivered once on attachment. The observer's session
+ * limit bounds the queue.
+ */
+const createFrameRelay = () => {
+  let target: HangAnalytics | undefined;
+  const pending: FrameReport[] = [];
+  return {
+    capture: (frame: FrameReport) => {
+      if (target === undefined) {
+        pending.push(frame);
+        return;
+      }
+      target.captureLongAnimationFrame(frame);
+    },
+    attach: (analytics: HangAnalytics) => {
+      target = analytics;
+      for (const frame of pending.splice(0)) {
+        analytics.captureLongAnimationFrame(frame);
+      }
+    },
+    clear: () => {
+      pending.length = 0;
+    },
+  };
+};
+
+/**
+ * Reads the markers other documents left: visible boots that started earlier
+ * (retired later if they prove abandoned) and the most recent stale visible
+ * marker, which is the evidence of a stalled earlier load.
+ */
+const scanEarlierDocuments = (storage: Storage | null, started: number) => {
   const bootCandidates: BootCandidate[] = [];
   let previous: { key: string; marker: Marker } | undefined;
-  for (const { key: candidate, marker: stored } of readHangMarkers(local)) {
+  for (const { key: candidate, marker: stored } of readHangMarkers(storage)) {
     if (
       stored?.phase === "boot" &&
       stored.visible &&
@@ -190,6 +210,22 @@ export const createWebHangDetector = ({
       previous = { key: candidate, marker: stored };
     }
   }
+  return { bootCandidates, previous };
+};
+
+/** Storage and browser APIs are optional at this boot boundary. */
+export const createWebHangDetector = ({
+  window: browser,
+  build,
+  now = () => Temporal.Now.instant().epochMilliseconds,
+  random = Math.random,
+}: HangDetectorOptions) => {
+  const local = browserStorage("local");
+  // sessionStorage is copied by duplicate/opener tabs: identity belongs to
+  // this document, so another document can never erase its evidence.
+  const key = `${HANG_MARKER_PREFIX}${createEphemeralId()}`;
+  const started = now();
+  const { bootCandidates, previous } = scanEarlierDocuments(local, started);
   const prior = previous?.marker ?? null;
   const recovery = prior?.phase === "boot" && !prior.recovery;
   const restoredState = persistedUiStateFingerprint(local);
@@ -215,7 +251,7 @@ export const createWebHangDetector = ({
   let stopped = false;
   let reported = false;
   let notified = false;
-  let analytics: HangAnalytics | undefined;
+  const frameRelay = createFrameRelay();
   let idlePending = false;
   let retirementTimer: ReturnType<typeof browser.setTimeout> | undefined;
   const persist = () => {
@@ -269,7 +305,7 @@ export const createWebHangDetector = ({
     observer = observeLongAnimationFrames({
       browser,
       sampled: random() < LOAF_SAMPLE_RATE,
-      readAnalytics: () => analytics,
+      captureFrame: frameRelay.capture,
     });
   });
   if (Result.isError(installed)) {
@@ -286,7 +322,7 @@ export const createWebHangDetector = ({
       analytics: HangAnalytics;
       routeTemplates: ReadonlySet<string>;
     }) => {
-      analytics = options.analytics;
+      frameRelay.attach(options.analytics);
       if (!suspected || reported) {
         return;
       }
@@ -362,6 +398,7 @@ export const createWebHangDetector = ({
     dispose: () => {
       stopped = true;
       uninstall();
+      frameRelay.clear();
     },
   };
 };
