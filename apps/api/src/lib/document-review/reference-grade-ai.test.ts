@@ -16,7 +16,7 @@ import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import { toSafeId, type SafeId } from "@/api/lib/branded-types";
 import { NEUTRAL_PERSPECTIVE } from "@/api/lib/document-review/contract";
 import { gradeReferencePositions } from "@/api/lib/document-review/reference-grade";
-import type { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import type { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import {
   installRecordingAnalytics,
@@ -65,7 +65,7 @@ const generateObjectMock = mock(async (options: CapturedGenerateOptions) => {
   return await Promise.resolve(queuedAnswers.shift() ?? { findings: [] });
 });
 const generateObjectForTest =
-  asTestRaw<typeof generateTanStackObjectForRole>(generateObjectMock);
+  asTestRaw<typeof generateTanStackObjectForTask>(generateObjectMock);
 
 const organizationId = toSafeId<"organization">("organization-fixture");
 const workspaceId = toSafeId<"workspace">("workspace-fixture");
@@ -129,7 +129,7 @@ const grade = async () =>
     serviceTier: "standard",
     usageMetering,
     abortSignal: AbortSignal.timeout(1000),
-    generateObjectForRole: generateObjectForTest,
+    generateObjectForTask: generateObjectForTest,
   });
 
 describe("reference grading AI boundary", () => {
