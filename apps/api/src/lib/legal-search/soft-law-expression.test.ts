@@ -52,7 +52,7 @@ const referenceArbitrary = fc
   .map(([letter, number]) => `${letter} ${number}/2024`);
 
 test("EU expression identity preserves Unicode equivalence and ignores translated titles", async () =>
-  await assertProperty(
+  assertProperty(
     "EU expression identity preserves Unicode equivalence and ignores translated titles",
     fc.property(referenceArbitrary, fc.string(), (reference, title) => {
       expect(normalizeUnicode(reference, "NFC")).not.toBe(
@@ -80,7 +80,7 @@ test("EU expression identity preserves Unicode equivalence and ignores translate
   ));
 
 test("EU expression languages and source revisions never share an identity", async () =>
-  await assertProperty(
+  assertProperty(
     "EU expression languages and source revisions never share an identity",
     fc.property(
       fc.uniqueArray(fc.constantFrom("en", "cs", "de", "fr", "es", "pl"), {
@@ -146,7 +146,7 @@ test("a lifecycle transition revises content without changing expression identit
 });
 
 test("source relation ordering does not churn a stored expression", async () =>
-  await assertProperty(
+  assertProperty(
     "source relation ordering does not churn a stored expression",
     fc.property(
       fc.uniqueArray(fc.uuid(), { minLength: 2, maxLength: 8 }),
@@ -256,7 +256,7 @@ test("EU metadata cannot omit the publisher's document kind", () => {
 });
 
 test("discovery refreshes preserve document versions while document byte changes revise them", async () =>
-  await assertProperty(
+  assertProperty(
     "discovery refreshes preserve document versions while document byte changes revise them",
     fc.property(fc.uint8Array({ minLength: 1, maxLength: 100 }), (bytes) => {
       const discovery = {
@@ -299,7 +299,7 @@ test("discovery refreshes preserve document versions while document byte changes
   ));
 
 test("WP29 reference and revision typography share identity while letter suffixes remain distinct", async () =>
-  await assertProperty(
+  assertProperty(
     "WP29 reference and revision typography share identity while letter suffixes remain distinct",
     fc.property(fc.integer({ min: 1, max: 999 }), (number) => {
       const source = {
