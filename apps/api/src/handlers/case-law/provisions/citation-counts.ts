@@ -44,6 +44,7 @@ export const readStatuteCitationCountsHandler = async (
   // The filter is an equality on a stored alpha-3 code, so an unfolded
   // spelling answered an empty set rather than the counts that exist.
   const countryRead = readPublicLawCountry(query.jurisdiction, {
+    domain: "caseLaw",
     admitted: PUBLIC_CASE_LAW_COUNTRIES,
     surface: "search",
     parameter: "jurisdiction",
