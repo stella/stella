@@ -96,7 +96,6 @@ const SAMPLE_DOCUMENT_NAME = "Whitfield witness statement (sample).docx";
 
 const config = {
   contract: "patch",
-  idempotency: { type: "replay" },
   description:
     "Load the bundled AVT sample case into the current matter: one fact list " +
     `with ${SAMPLE_FACTS.length} facts and their evidential details, plus a DOCX witness statement. ` +

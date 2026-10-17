@@ -8,6 +8,7 @@ import type { ModelRole } from "@stll/ai-catalog";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import type { PermissionInput } from "@stll/permissions";
 
+import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { UsageActionType, UsageServiceTier } from "@/api/db/schema";
 import { env } from "@/api/env";
@@ -434,6 +435,7 @@ export type HandlerConfig = InputSchema &
     accountAccess: AccountAccess;
     /** Finite API-owned transport deadline for a generated capability command. */
     requestTimeoutMs?: number;
+    /** Scoped DB mutations only; external side effects require owner-specific receipt integration. */
     idempotency?: { type: "replay" };
     requiresUsage?: UsageMeteringConfig;
     featureAccess?: FeatureAccessRequirement;
@@ -1303,9 +1305,12 @@ export const runCheckedScopedHandler = async <
   // Response state is mutable request output, never an authorization input.
   ctx.set = scratch.ctx.set;
   const admission = config.actionAdmission;
-  const run = async () =>
+  const run = async (handlerContext: TContext) =>
     await runSafeHandler({
-      ctx: { ...ctx, ...(usageLane === undefined ? {} : { usageLane }) },
+      ctx: {
+        ...handlerContext,
+        ...(usageLane === undefined ? {} : { usageLane }),
+      },
       contentDelivery: config.contentDelivery,
       handler:
         admission === undefined
@@ -1320,7 +1325,7 @@ export const runCheckedScopedHandler = async <
     });
   const key = ctx.request.headers.get("Idempotency-Key");
   if (config.idempotency === undefined || key === null) {
-    return await run();
+    return await run(ctx);
   }
   return await runSafeHandler({
     ctx,
@@ -1342,7 +1347,12 @@ export const runCheckedScopedHandler = async <
                 params: ctx.params,
                 query: ctx.query,
               }),
-              run,
+              run: async (scopedDb) =>
+                await run({
+                  ...ctx,
+                  scopedDb,
+                  safeDb: safeDbFromScoped(scopedDb),
+                }),
               responseStatus: () =>
                 resolveResponseStatus({ response: undefined, set: ctx.set }),
             }),

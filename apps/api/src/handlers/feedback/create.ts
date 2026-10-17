@@ -28,7 +28,6 @@ const optionalCapped = (maxLength: number) =>
 
 const config = {
   contract: "patch",
-  idempotency: { type: "replay" },
   accountAccess: ACCOUNT_ACCESS.standard,
   description:
     "File a feedback report from the signed-in web app. The content is " +

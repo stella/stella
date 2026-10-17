@@ -108,7 +108,6 @@ const createTemplateFromStylesHandler = async function* ({
 
 const config = {
   contract: "patch",
-  idempotency: { type: "replay" },
   contentDelivery: {
     type: "none",
     reason:

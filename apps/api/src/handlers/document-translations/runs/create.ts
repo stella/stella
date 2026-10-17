@@ -34,7 +34,6 @@ import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const config = {
   contract: "patch",
-  idempotency: { type: "replay" },
   // The run is queued here; its worker takes a background slot.
   actionAdmission: {
     type: "handler",

@@ -1,5 +1,13 @@
 import { panic, Result } from "better-result";
-import { and, asc, eq, inArray, lt, sql } from "drizzle-orm";
+import {
+  and,
+  eq,
+  inArray,
+  lt,
+  or,
+  sql,
+  TransactionRollbackError,
+} from "drizzle-orm";
 import { ElysiaCustomStatusResponse } from "elysia";
 
 import {
@@ -19,7 +27,12 @@ import {
 } from "@/api/db/shared-pool-timeouts";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import {
+  withAggregateLock,
+  withAggregateSavepoint,
+  withSkipLockedBatch,
+} from "@/api/lib/db/aggregate-lock";
+import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { toJsonValue } from "@/api/lib/json-value";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
@@ -123,42 +136,45 @@ export const claimRequestReceipt = async ({
     return { type: "invalid_key" };
   }
   return await scopedDb(async (tx) => {
-    // audit: skip - Ephemeral request coordination; the create handler audits its resource mutation.
-    const id = createSafeId<"requestIdempotencyReceipt">();
-    const inserted = await tx
-      .insert(receipts)
-      .values({
-        id,
-        organizationId,
-        userId,
-        idempotencyKey: key,
-        route,
-        requestFingerprint: fingerprint,
-        state: "pending",
-        claimedAt: now,
-      })
-      .onConflictDoNothing({
-        target: [
-          receipts.organizationId,
-          receipts.userId,
-          receipts.idempotencyKey,
-        ],
-      })
-      .returning({ id: receipts.id });
-    if (inserted.length > 0) {
-      return { type: "claimed", id };
-    }
-
     const match = and(
       eq(receipts.organizationId, organizationId),
       eq(receipts.userId, userId),
       eq(receipts.idempotencyKey, key),
     );
+    const visible = (await tx.select().from(receipts).where(match).limit(1)).at(
+      0,
+    );
+    if (!visible) {
+      const id = createSafeId<"requestIdempotencyReceipt">();
+      // audit: skip - Request coordination; the create handler audits its resource mutation.
+      const inserted = await tx
+        .insert(receipts)
+        .values({
+          id,
+          organizationId,
+          userId,
+          idempotencyKey: key,
+          route,
+          requestFingerprint: fingerprint,
+          state: "pending",
+          claimedAt: now,
+        })
+        .onConflictDoNothing({
+          target: [
+            receipts.organizationId,
+            receipts.userId,
+            receipts.idempotencyKey,
+          ],
+        })
+        .returning({ id: receipts.id });
+      if (inserted.length > 0) {
+        return { type: "claimed", id };
+      }
+    }
     // Never run without observing ownership, even if the conflicting row
     // disappears between insertion and readback.
-    const existing = (
-      await tx.select().from(receipts).where(match).limit(1)
-    ).at(0);
+    const existing =
+      visible ?? (await tx.select().from(receipts).where(match).limit(1)).at(0);
     if (!existing) {
       return { type: "in_progress" };
     }
@@ -175,9 +191,8 @@ export const claimRequestReceipt = async ({
         body: existing.responseBody,
       };
     }
-    // A pending handler may still be running or may have committed before
-    // response persistence failed. Neither age nor a new receipt id fences
-    // its resource mutation, so ambiguous work must never be executed again.
+    // An active owner holds this row until its resource and response commit
+    // together. Only retention may remove an abandoned, unlocked pending row.
     return { type: "in_progress" };
   });
 };
@@ -200,7 +215,7 @@ export const completeRequestReceipt = async ({
 }: CompleteRequestReceiptOptions): Promise<void> => {
   await scopedDb(async (tx) => {
     // audit: skip - Completion caches an already audited create response for replay.
-    await tx
+    const completed = await tx
       .update(receipts)
       .set({
         state: "completed",
@@ -208,12 +223,16 @@ export const completeRequestReceipt = async ({
         responseBody: body,
         completedAt: new Date(),
       })
-      .where(and(eq(receipts.id, id), eq(receipts.state, "pending")));
+      .where(and(eq(receipts.id, id), eq(receipts.state, "pending")))
+      .returning({ id: receipts.id });
+    if (completed.length !== 1) {
+      panic("Receipt completion must update its owned pending row");
+    }
   });
 };
 
 type ReplayRequestOptions<T> = ClaimRequestReceiptOptions & {
-  run: () => Promise<T>;
+  run: (scopedDb: ScopedDb) => Promise<T>;
   responseStatus: () => number;
 };
 
@@ -269,32 +288,97 @@ export async function runWithRequestReceipt<T>({
         }),
       );
     case "claimed": {
-      const result = await run();
-      let body: unknown = result;
-      let status = responseStatus();
-      while (body instanceof ElysiaCustomStatusResponse) {
-        status = body.code;
-        body = body.response;
+      let refusal: { response: unknown } | undefined;
+      let receiptState: "pending" | "completed" = "pending";
+      try {
+        const outcome = await Result.tryPromise(
+          async () =>
+            await options.scopedDb(async (tx) => {
+              const lock = await withAggregateLock({
+                tx,
+                aggregate: "requestReceipt",
+                id: {
+                  id: claim.id,
+                  organizationId: options.organizationId,
+                  userId: options.userId,
+                },
+                mode: "update",
+                wait: "nowait",
+              });
+              switch (lock.status) {
+                case "missing":
+                case "busy":
+                  return Result.err(
+                    new HandlerError({
+                      status: 409,
+                      code: IDEMPOTENCY_IN_PROGRESS_CODE,
+                      message: "This request is still in progress.",
+                    }),
+                  );
+                case "locked":
+                  break;
+                default:
+                  lock satisfies never;
+                  return panic("Unhandled request receipt lock state");
+              }
+              // Every handler operation is a savepoint of the receipt-owning
+              // transaction. No resource can commit without its replay response.
+              const transactionalDb: ScopedDb = async (fn) =>
+                await withAggregateSavepoint(tx, fn);
+              const result = await run(transactionalDb);
+              let body: unknown = result;
+              let status = responseStatus();
+              while (body instanceof ElysiaCustomStatusResponse) {
+                status = body.code;
+                body = body.response;
+              }
+              if (status < 200 || status >= 300) {
+                refusal = { response: result };
+                return tx.rollback();
+              }
+              if (
+                body instanceof Response ||
+                body instanceof ReadableStream ||
+                body instanceof Blob ||
+                body instanceof ArrayBuffer ||
+                ArrayBuffer.isView(body)
+              ) {
+                panic("Idempotency replay requires a JSON handler");
+              }
+              await completeRequestReceipt({
+                scopedDb: transactionalDb,
+                id: claim.id,
+                status,
+                body,
+              });
+              return Result.ok(result);
+            }),
+        );
+        if (outcome.isErr()) {
+          if (
+            refusal !== undefined &&
+            outcome.error.cause instanceof TransactionRollbackError
+          ) {
+            return Result.ok(refusal.response);
+          }
+          return abortTransaction(outcome.error.cause);
+        }
+        if (outcome.value.isOk()) {
+          receiptState = "completed";
+        }
+        return outcome.value;
+      } finally {
+        if (receiptState === "pending") {
+          await options.scopedDb(async (tx) => {
+            // audit: skip - Rollback leaves no resource; completed receipts remain replayable.
+            await tx
+              .delete(receipts)
+              .where(
+                and(eq(receipts.id, claim.id), eq(receipts.state, "pending")),
+              );
+          });
+        }
       }
-      if (status < 200 || status >= 300) {
-        return Result.ok(result);
-      }
-      if (
-        body instanceof Response ||
-        body instanceof ReadableStream ||
-        body instanceof Blob ||
-        body instanceof ArrayBuffer ||
-        ArrayBuffer.isView(body)
-      ) {
-        panic("Idempotency replay requires a JSON handler");
-      }
-      await completeRequestReceipt({
-        scopedDb: options.scopedDb,
-        id: claim.id,
-        status,
-        body,
-      });
-      return Result.ok(result);
     }
     default: {
       claim satisfies never;
@@ -302,6 +386,8 @@ export async function runWithRequestReceipt<T>({
     }
   }
 }
+
+export const REQUEST_RECEIPT_PENDING_MS = 2 * 60 * 1000;
 
 export const REQUEST_RECEIPT_RETENTION_BATCH_SIZE = 128;
 const REQUEST_RECEIPT_RETENTION_MS = DAY_IN_MS;
@@ -332,34 +418,44 @@ export const sweepExpiredRequestReceipts = async ({
   if (elapsedMs() >= deadline) {
     return { deleted: 0, hasMore: true };
   }
-  const cutoff = new Date(now.getTime() - REQUEST_RECEIPT_RETENTION_MS);
+  const completedBefore = new Date(
+    now.getTime() - REQUEST_RECEIPT_RETENTION_MS,
+  );
+  const pendingBefore = new Date(now.getTime() - REQUEST_RECEIPT_PENDING_MS);
+  const expired = or(
+    and(
+      eq(receipts.state, "completed"),
+      lt(
+        receipts.claimedAt,
+        sql`${completedBefore.toISOString()}::timestamptz`,
+      ),
+    ),
+    and(
+      eq(receipts.state, "pending"),
+      lt(receipts.claimedAt, sql`${pendingBefore.toISOString()}::timestamptz`),
+    ),
+  );
   // The scheduler reads ownership globally; every delete runs under the row's
   // organization and user policies, even when the supplied connection bypasses RLS.
-  // Pending receipts are durable execution fences and cannot expire safely.
-  const candidates = await withAggregateTransaction(db, async (tx) => {
-    await setSharedStatementTimeout(
-      tx,
-      Math.max(
-        1,
-        Math.min(RETENTION_STATEMENT_BUDGET_MS, deadline - elapsedMs()),
-      ),
-    );
-    await setSharedLockTimeout(tx, RETENTION_LOCK_BUDGET_MS);
-    return await tx
-      .select({
-        id: receipts.id,
-        organizationId: receipts.organizationId,
-        userId: receipts.userId,
-      })
-      .from(receipts)
-      .where(
-        and(
-          eq(receipts.state, "completed"),
-          lt(receipts.claimedAt, sql`${cutoff.toISOString()}::timestamptz`),
-        ),
-      )
-      .orderBy(asc(receipts.claimedAt), asc(receipts.id))
-      .limit(REQUEST_RECEIPT_RETENTION_BATCH_SIZE);
+  // Pending rows become eligible after two minutes; the hourly bounded sweep
+  // skips live row locks regardless of age. A process crash releases its lock
+  // and rolls back its resource writes before the pending row can be removed.
+  // Discovery also skips live owners, so a full batch of active
+  // requests cannot starve abandoned rows behind it. Deletion locks again
+  // under each row's tenant scope and rechecks eligibility.
+  const candidates = await withSkipLockedBatch({
+    database: db,
+    limit: REQUEST_RECEIPT_RETENTION_BATCH_SIZE,
+    select: (tx) =>
+      tx
+        .select({
+          id: receipts.id,
+          organizationId: receipts.organizationId,
+          userId: receipts.userId,
+        })
+        .from(receipts)
+        .where(expired),
+    run: async (_tx, rows) => rows,
   });
   const groups = new Map<string, typeof candidates>();
   for (const row of candidates) {
@@ -386,31 +482,52 @@ export const sweepExpiredRequestReceipts = async ({
       first.organizationId,
       brandPersistedUserId(first.userId),
     );
-    const rows = await scopedDb(async (tx) => {
-      // audit: skip - Retention removes expired technical response receipts, not user resources.
-      await setSharedStatementTimeout(
-        tx,
-        Math.max(
-          1,
-          Math.min(RETENTION_STATEMENT_BUDGET_MS, deadline - elapsedMs()),
-        ),
-      );
-      await setSharedLockTimeout(tx, RETENTION_LOCK_BUDGET_MS);
-      return await tx
-        .delete(receipts)
-        .where(
-          and(
-            eq(receipts.state, "completed"),
-            eq(receipts.organizationId, first.organizationId),
-            eq(receipts.userId, first.userId),
-            inArray(
-              receipts.id,
-              group.map(({ id }) => id),
+    const rows = await withSkipLockedBatch({
+      database: { transaction: scopedDb },
+      limit: REQUEST_RECEIPT_RETENTION_BATCH_SIZE,
+      select: (tx) =>
+        tx
+          .select({ id: receipts.id })
+          .from(receipts)
+          .where(
+            and(
+              eq(receipts.organizationId, first.organizationId),
+              eq(receipts.userId, first.userId),
+              inArray(
+                receipts.id,
+                group.map(({ id }) => id),
+              ),
+              expired,
             ),
-            lt(receipts.claimedAt, sql`${cutoff.toISOString()}::timestamptz`),
           ),
-        )
-        .returning({ id: receipts.id });
+      run: async (tx, unlocked) => {
+        if (unlocked.length === 0) {
+          return [];
+        }
+        await setSharedStatementTimeout(
+          tx,
+          Math.max(
+            1,
+            Math.min(RETENTION_STATEMENT_BUDGET_MS, deadline - elapsedMs()),
+          ),
+        );
+        await setSharedLockTimeout(tx, RETENTION_LOCK_BUDGET_MS);
+        // audit: skip - Retention removes expired technical receipts under their tenant scope.
+        return await tx
+          .delete(receipts)
+          .where(
+            and(
+              eq(receipts.organizationId, first.organizationId),
+              eq(receipts.userId, first.userId),
+              inArray(
+                receipts.id,
+                unlocked.map(({ id }) => id),
+              ),
+              expired,
+            ),
+          )
+          .returning({ id: receipts.id });
+      },
     });
     deleted += rows.length;
     groupsProcessed += 1;

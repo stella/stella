@@ -48,6 +48,7 @@ import { isRecord } from "@/api/lib/type-guards";
 
 /** Registered blocking chains share one physical transaction order. */
 export const AGGREGATE_LOCKS = {
+  requestReceipt: { rank: -10, kind: "row" },
   organization: { rank: 0, kind: "row" },
   professionalUseAcceptance: { rank: 5, kind: "advisory" },
   orgFeatureAdmission: { rank: 10, kind: "advisory" },
@@ -106,6 +107,7 @@ export const queryOrganizationFencedRepairBatch = async ({
 
 /** Derive rank proofs from the same registry used for acquisitions. */
 export const AGGREGATE_CHAINS = {
+  requestReceipt: ["requestReceipt", "organization", "workspace", "entity"],
   existing: [
     "organization",
     "workspace",
@@ -202,6 +204,11 @@ const modeCovers = (
 };
 
 type AggregateIdentities = {
+  requestReceipt: {
+    id: SafeId<"requestIdempotencyReceipt">;
+    organizationId: SafeId<"organization">;
+    userId: SafeId<"user">;
+  };
   sampleCase: { workspaceId: SafeId<"workspace"> };
   organization: SafeId<"organization">;
   professionalUseAcceptance: { userId: SafeId<"user"> };
@@ -765,6 +772,14 @@ const memberCleanupRowResource = (
 };
 const rowResource = (options: RowIdentityOptions): RowResource => {
   switch (options.aggregate) {
+    case "requestReceipt":
+      return {
+        table: "request_idempotency_receipts",
+        columns: ["id"],
+        values: [options.id.id],
+        scopeColumns: ["organization_id", "user_id"],
+        scopeValues: [options.id.organizationId, options.id.userId],
+      };
     case "organization":
       return {
         table: "organization",

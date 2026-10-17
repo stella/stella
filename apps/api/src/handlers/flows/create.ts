@@ -14,7 +14,6 @@ import { LIMITS } from "@/api/lib/limits";
 
 const config = {
   contract: "patch",
-  idempotency: { type: "replay" },
   description:
     "Create an automation flow definition in the organization: name, " +
     "description, ordered steps, a trigger, and whether it is enabled. The " +

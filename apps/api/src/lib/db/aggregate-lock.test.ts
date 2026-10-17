@@ -203,6 +203,48 @@ test("the advisory namespace census rejects a duplicate", () => {
 });
 
 describe("aggregate acquisition ordering", () => {
+  test("a principal-scoped NOWAIT request receipt permits later handler aggregate locks", async () => {
+    const fixture = fences();
+    const statements: ReturnType<PgDialect["sqlToQuery"]>[] = [];
+    const tx = asTestRaw<Transaction>({
+      execute: async (statement: SQL) => {
+        statements.push(new PgDialect().sqlToQuery(statement));
+        return aggregateExecutionRows(statement);
+      },
+      transaction: async (
+        run: (transaction: Transaction) => Promise<unknown>,
+      ) => await run(asTestRaw<Transaction>({ execute: tx.execute })),
+    });
+    expect(
+      await withAggregateLock({
+        ...fixture.requestReceipt,
+        tx,
+        wait: "nowait",
+      }),
+    ).toEqual({ status: "locked" });
+    for (const fence of [
+      fixture.organization,
+      fixture.workspace,
+      fixture.entity,
+    ]) {
+      expect(await withAggregateLock({ ...fence, tx })).toEqual({
+        status: "locked",
+      });
+    }
+    expect(statements.at(0)?.sql).toContain(
+      'FROM "public"."request_idempotency_receipts"',
+    );
+    expect(statements.at(0)?.sql).toContain('"organization_id" =');
+    expect(statements.at(0)?.sql).toContain('"user_id" =');
+    expect(statements.at(0)?.sql).toContain("FOR UPDATE NOWAIT");
+    expect(statements.at(0)?.params).toEqual([
+      fixture.requestReceipt.id.id,
+      fixture.requestReceipt.id.organizationId,
+      fixture.requestReceipt.id.userId,
+    ]);
+    expect(statements).toHaveLength(4);
+  });
+
   test("locks chat receipts in thread, interaction and receipt order", async () => {
     const fixture = fences();
     const statements: SQL[] = [];

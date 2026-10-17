@@ -97,7 +97,7 @@ const receiptFixture = ({ openClient }: Fixture) => {
       ...(now === undefined ? {} : { now }),
     });
   const submit = <T>(
-    run: () => Promise<T>,
+    run: (scopedDb: ScopedDb) => Promise<T>,
     { status = 201, now }: SubmitOptions = {},
   ) =>
     runWithRequestReceipt({
@@ -111,8 +111,8 @@ const receiptFixture = ({ openClient }: Fixture) => {
       responseStatus: () => status,
       ...(now === undefined ? {} : { now }),
     });
-  const createContact = async () =>
-    await scopedDb(async (tx) => {
+  const createContact = async (transactionalDb: ScopedDb) =>
+    await transactionalDb(async (tx) => {
       const rows = await tx
         .insert(contacts)
         .values({
@@ -180,11 +180,12 @@ describe.skipIf(!enabled)("request receipt state machine (postgres)", () => {
     });
   });
 
-  test("handler failures retain the execution fence before propagating", async () => {
-    await withFixture(async ({ submit, claim }) => {
+  test("a thrown handler rolls back its resource and releases the key for a successful retry", async () => {
+    await withFixture(async ({ submit, scopedDb, createContact }) => {
       expect(
         await rejectionOf(
-          submit(async () => {
+          submit(async (database) => {
+            await createContact(database);
             throw new HandlerError({
               status: 503,
               message: "Injected failure",
@@ -192,7 +193,17 @@ describe.skipIf(!enabled)("request receipt state machine (postgres)", () => {
           }),
         ),
       ).toMatchObject({ status: 503, message: "Injected failure" });
-      expect((await claim()).type).toBe("in_progress");
+      expect(
+        await scopedDb(
+          async (tx) => await tx.select({ id: contacts.id }).from(contacts),
+        ),
+      ).toEqual([]);
+      const first = (await submit(createContact)).unwrap();
+      expect(
+        await scopedDb(
+          async (tx) => await tx.select({ id: contacts.id }).from(contacts),
+        ),
+      ).toEqual([first]);
     });
   });
 
@@ -257,91 +268,158 @@ describe.skipIf(!enabled)("request receipt state machine (postgres)", () => {
     });
   });
 
-  test("receipt persistence failure retains the claim after the handler succeeds", async () => {
-    await withFixture(
-      async ({
-        db,
-        scopedDb,
-        organizationId,
-        userId,
-        submit,
-        createContact,
-      }) => {
-        const startedAt = new Date("2026-10-15T10:00:00Z");
-        const retryAt = new Date("2026-10-15T10:02:01Z");
-        let transactions = 0;
-        const unavailableOnCompletion: ScopedDb = async (fn) => {
-          transactions += 1;
-          if (transactions === 2) {
-            throw new HandlerError({
-              status: 503,
-              message: "Receipt persistence unavailable",
-            });
+  test("safe handlers share the receipt transaction through both database handles", async () => {
+    await withFixture(async ({ scopedDb, organizationId, userId }) => {
+      let attempts = 0;
+      const endpoint = createSafeRootHandler(
+        {
+          contract: "patch",
+          permissions: { contact: ["create"] },
+          accountAccess: ACCOUNT_ACCESS.sandbox,
+          mcp: { type: "internal", reason: "health_infra" },
+          idempotency: { type: "replay" },
+        },
+        async function* ({ safeDb, scopedDb: handlerDb }) {
+          attempts += 1;
+          const rows = yield* Result.await(
+            safeDb(
+              async (tx) =>
+                await tx
+                  .insert(contacts)
+                  .values({
+                    id: createSafeId<"contact">(),
+                    organizationId,
+                    type: "person",
+                    displayName: "Atomic handler",
+                  })
+                  .returning({ id: contacts.id }),
+            ),
+          );
+          const contact =
+            rows.at(0) ?? panic("Create must return its resource");
+          const visible = yield* Result.await(
+            Result.tryPromise(
+              async () =>
+                await handlerDb(
+                  async (tx) =>
+                    await tx.select({ id: contacts.id }).from(contacts),
+                ),
+            ),
+          );
+          expect(visible).toEqual([contact]);
+          if (attempts === 1) {
+            return Result.err(
+              new HandlerError({
+                status: 503,
+                message: "Retry the same intent",
+              }),
+            );
           }
-          return await scopedDb(fn);
-        };
-        let effects = 0;
-        expect(
-          await rejectionOf(
-            runWithRequestReceipt({
-              scopedDb: unavailableOnCompletion,
-              organizationId,
-              userId,
-              key: "submit-intent",
-              route: "/test/create",
-              fingerprint: fingerprint({ name: "Original" }),
-              now: startedAt,
-              run: async () => {
-                effects += 1;
-                return await createContact();
-              },
-              responseStatus: () => 201,
+          return Result.ok(contact);
+        },
+      );
+      const invoke = async () =>
+        await endpoint.handler(
+          createTestHandlerContext<Parameters<typeof endpoint.handler>[0]>({
+            audit: NO_AUDIT,
+            scopedDb,
+            safeDb: safeDbFromScoped(scopedDb),
+            session: { activeOrganizationId: organizationId },
+            user: { id: userId },
+            request: new Request("https://example.test/test/create", {
+              method: "POST",
+              headers: { "Idempotency-Key": "submit-intent" },
             }),
-          ),
-        ).toMatchObject({ message: "Receipt persistence unavailable" });
-        expect(effects).toBe(1);
-        const retry = await submit(
-          async () => {
-            effects += 1;
-            return await createContact();
-          },
-          { now: retryAt },
-        );
-        expect(retry.isErr()).toBe(true);
-        if (retry.isErr()) {
-          expect(retry.error.code).toBe("idempotency_in_progress");
-        }
-        expect(effects).toBe(1);
-        // Retention must not erase an ambiguous execution fence either.
-        expect(
-          await sweepExpiredRequestReceipts({
-            db,
-            now: new Date("2026-10-17T10:00:00Z"),
-            signal: new AbortController().signal,
-            deadline: performance.now() + 30_000,
+            route: "/test/create",
+            body: ORIGINAL_BODY,
+            params: {},
+            query: {},
+            set: { status: 201, headers: {} },
           }),
-        ).toEqual({ deleted: 0, hasMore: false });
+        );
+      expect(await invoke()).toMatchObject({ code: 503 });
+      expect(
+        await scopedDb(
+          async (tx) => await tx.select({ id: contacts.id }).from(contacts),
+        ),
+      ).toEqual([]);
+      const created = await invoke();
+      expect(
+        await scopedDb(
+          async (tx) => await tx.select({ id: contacts.id }).from(contacts),
+        ),
+      ).toEqual([created]);
+      const replay = await invoke();
+      expect(replay).toBeInstanceOf(Response);
+      expect(attempts).toBe(2);
+    });
+  });
 
+  test("receipt completion failure rolls back the resource so a later retry creates exactly once", async () => {
+    await withFixture(async ({ submit, scopedDb, createContact }) => {
+      const startedAt = new Date("2026-10-15T10:00:00Z");
+      // JSONB response persistence fails after the resource insert, inside the
+      // same physical transaction; no completion collaborator is substituted.
+      expect(
+        await rejectionOf(
+          submit(
+            async (database) => ({
+              ...(await createContact(database)),
+              unpersistable: 1n,
+            }),
+            { now: startedAt },
+          ),
+        ),
+      ).toBeInstanceOf(TypeError);
+      expect(
+        await scopedDb(
+          async (tx) => await tx.select({ id: contacts.id }).from(contacts),
+        ),
+      ).toEqual([]);
+      expect(
+        await scopedDb(
+          async (tx) =>
+            await tx.execute(sql`SELECT id FROM request_idempotency_receipts`),
+        ),
+      ).toEqual([]);
+      const first = (
+        await submit(createContact, { now: new Date("2026-10-15T10:02:01Z") })
+      ).unwrap();
+      expect(
+        await scopedDb(
+          async (tx) => await tx.select({ id: contacts.id }).from(contacts),
+        ),
+      ).toEqual([first]);
+    });
+  });
+
+  test("non-success responses roll back their writes and let the same key succeed on retry", async () => {
+    for (const status of [400, 503]) {
+      await withFixture(async ({ submit, scopedDb, createContact }) => {
+        expect(
+          (
+            await submit(
+              async (database) => {
+                await createContact(database);
+                return { error: "retry" };
+              },
+              { status },
+            )
+          ).unwrap(),
+        ).toEqual({ error: "retry" });
         expect(
           await scopedDb(
             async (tx) => await tx.select({ id: contacts.id }).from(contacts),
           ),
-        ).toHaveLength(1);
-      },
-    );
-  });
-
-  test("non-success JSON responses retain the execution fence", async () => {
-    await withFixture(async ({ submit, claim }) => {
-      expect(
-        (
-          await submit(async () => ({ error: "retry" }), { status: 503 })
-        ).unwrap(),
-      ).toEqual({
-        error: "retry",
+        ).toEqual([]);
+        const first = (await submit(createContact)).unwrap();
+        expect(
+          await scopedDb(
+            async (tx) => await tx.select({ id: contacts.id }).from(contacts),
+          ),
+        ).toEqual([first]);
       });
-      expect((await claim()).type).toBe("in_progress");
-    });
+    }
   });
 
   test("commits one concurrent claim and rejects the other as in progress", async () => {
@@ -376,27 +454,35 @@ describe.skipIf(!enabled)("request receipt state machine (postgres)", () => {
   });
 
   test("a slow original handler keeps exclusive execution after the pending timeout", async () => {
-    await withFixture(async ({ submit, claim, createContact, scopedDb }) => {
+    await withFixture(async ({ db, submit, createContact, scopedDb }) => {
       const startedAt = new Date("2026-10-15T10:00:00Z");
       const retryAt = new Date("2026-10-15T10:02:01Z");
       const entered = Promise.withResolvers<undefined>();
       const finish = Promise.withResolvers<undefined>();
       let effects = 0;
       const original = submit(
-        async () => {
+        async (database) => {
           entered.resolve(undefined);
           await finish.promise;
           effects += 1;
-          return await createContact();
+          return await createContact(database);
         },
         { now: startedAt },
       );
       await entered.promise;
       try {
+        expect(
+          await sweepExpiredRequestReceipts({
+            db,
+            now: retryAt,
+            signal: new AbortController().signal,
+            deadline: performance.now() + 30_000,
+          }),
+        ).toEqual({ deleted: 0, hasMore: false });
         const retry = await submit(
-          async () => {
+          async (database) => {
             effects += 1;
-            return await createContact();
+            return await createContact(database);
           },
           { now: retryAt },
         );
@@ -415,12 +501,53 @@ describe.skipIf(!enabled)("request receipt state machine (postgres)", () => {
           async (tx) => await tx.select({ id: contacts.id }).from(contacts),
         ),
       ).toEqual([first]);
-      expect(await claim(undefined, retryAt)).toEqual({
-        type: "replay",
-        status: 201,
-        body: first,
-      });
+      const replay = (
+        await submit(
+          async (database) => {
+            effects += 1;
+            return await createContact(database);
+          },
+          { now: retryAt },
+        )
+      ).unwrap();
+      expect(replay).toBeInstanceOf(Response);
+      if (!(replay instanceof Response)) {
+        panic("Settled request must replay its stored response");
+      }
+      expect(replay.status).toBe(201);
+      expect(await replay.json()).toEqual(first);
+      expect(effects).toBe(1);
     });
+  });
+
+  test("retention removes abandoned pending work after two minutes so the intent can run", async () => {
+    await withFixture(
+      async ({ db, claim, submit, createContact, scopedDb }) => {
+        const startedAt = new Date("2026-10-15T10:00:00Z");
+        expect((await claim(undefined, startedAt)).type).toBe("claimed");
+        const sweep = async (now: Date) =>
+          await sweepExpiredRequestReceipts({
+            db,
+            now,
+            signal: new AbortController().signal,
+            deadline: performance.now() + 30_000,
+          });
+        expect(await sweep(new Date("2026-10-15T10:02:00Z"))).toEqual({
+          deleted: 0,
+          hasMore: false,
+        });
+        expect(await sweep(new Date("2026-10-15T10:02:01Z"))).toEqual({
+          deleted: 1,
+          hasMore: false,
+        });
+        const first = (await submit(createContact)).unwrap();
+        expect(
+          await scopedDb(
+            async (tx) => await tx.select({ id: contacts.id }).from(contacts),
+          ),
+        ).toEqual([first]);
+      },
+    );
   });
 
   test("retention deletes expired receipts and preserves the replay window", async () => {
@@ -524,7 +651,7 @@ describe.skipIf(!enabled)("request receipt state machine (postgres)", () => {
           deadline: 100,
           elapsedMs: () => {
             clockReads += 1;
-            return clockReads >= 5 ? 100 : 0;
+            return clockReads >= 4 ? 100 : 0;
           },
         });
         expect(interrupted).toEqual({ deleted: 1, hasMore: true });
