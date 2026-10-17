@@ -785,8 +785,11 @@ test("the CI changed-files output round-trips a path list as one compact JSON li
     `printf '%s\\0' "\${changed_files[@]}" | jq -Rsc`,
   );
   expect(start).toBeGreaterThan(-1);
-  const end = source.indexOf('>> "$GITHUB_OUTPUT"', start);
-  const command = `${source.slice(start, end)}>> "$GITHUB_OUTPUT"`;
+  // The pipeline alone: the step writes it inside a grouped redirect.
+  const tail = "sed 's/^/changed_files=/'";
+  const end = source.indexOf(tail, start);
+  expect(end).toBeGreaterThan(start);
+  const command = `${source.slice(start, end + tail.length)} >> "$GITHUB_OUTPUT"`;
   const directory = mkdtempSync(
     path.join(os.tmpdir(), "changed-files-output-"),
   );
