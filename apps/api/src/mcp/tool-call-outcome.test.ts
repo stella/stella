@@ -149,14 +149,14 @@ describe("MCP calls emit one private-data-free outcome across dispatch paths", (
     }
     const first = analytics.exceptions();
     expect(first).toHaveLength(2);
-    expect(first.at(0)?.properties.$exception_fingerprint).toContain(
+    expect(first.at(0)?.properties["$exception_fingerprint"]).toContain(
       "list_matters",
     );
-    expect(first.at(1)?.properties.$exception_fingerprint).toContain(
+    expect(first.at(1)?.properties["$exception_fingerprint"]).toContain(
       "save_time_entry",
     );
-    expect(first.at(0)?.properties.$exception_fingerprint).not.toBe(
-      first.at(1)?.properties.$exception_fingerprint,
+    expect(first.at(0)?.properties["$exception_fingerprint"]).not.toBe(
+      first.at(1)?.properties["$exception_fingerprint"],
     );
     await observeMcpToolCall({
       context,
@@ -166,7 +166,7 @@ describe("MCP calls emit one private-data-free outcome across dispatch paths", (
     });
     const events = analytics.exceptions();
     expect(events).toHaveLength(3);
-    expect(events.at(2)?.properties.$exception_fingerprint).toContain(
+    expect(events.at(2)?.properties["$exception_fingerprint"]).toContain(
       "external_mcp",
     );
     expect(JSON.stringify(events)).not.toContain(PRIVATE_TEXT);

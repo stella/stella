@@ -24,18 +24,20 @@ describe("sourceRegistryMembership", () => {
       }
       const captures = analytics.exceptions();
       expect(captures).toHaveLength(2);
-      expect(captures.at(0)?.properties.$exception_fingerprint).toContain(
+      expect(captures.at(0)?.properties["$exception_fingerprint"]).toContain(
         SOURCE_REPORT_FEATURE.coverage,
       );
-      expect(captures.at(1)?.properties.$exception_fingerprint).toContain(
+      expect(captures.at(1)?.properties["$exception_fingerprint"]).toContain(
         SOURCE_REPORT_FEATURE.ingestionStatus,
       );
-      expect(captures.at(0)?.properties.$exception_fingerprint).not.toBe(
-        captures.at(1)?.properties.$exception_fingerprint,
+      expect(captures.at(0)?.properties["$exception_fingerprint"]).not.toBe(
+        captures.at(1)?.properties["$exception_fingerprint"],
       );
       expect(
         JSON.stringify(
-          captures.map(({ properties }) => properties.$exception_fingerprint),
+          captures.map(
+            ({ properties }) => properties["$exception_fingerprint"],
+          ),
         ),
       ).not.toContain("unknown-adapter");
     } finally {

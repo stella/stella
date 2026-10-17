@@ -351,18 +351,20 @@ describe("the request lifecycle", () => {
     }
     const original = analytics.exceptions();
     expect(original).toHaveLength(2);
-    const first = original.at(0)?.properties.$exception_fingerprint;
+    const first = original.at(0)?.properties["$exception_fingerprint"];
     expect(first).toContain("/first/:id");
-    expect(original.at(1)?.properties.$exception_fingerprint).toContain(
+    expect(original.at(1)?.properties["$exception_fingerprint"]).toContain(
       "/second/:id",
     );
-    expect(first).not.toBe(original.at(1)?.properties.$exception_fingerprint);
+    expect(first).not.toBe(
+      original.at(1)?.properties["$exception_fingerprint"],
+    );
     sourceLine += 50;
     resetCaptureWindows();
     await app.handle(new Request("https://example.test/first/private-third"));
     const shifted = analytics.exceptions();
     expect(shifted).toHaveLength(3);
-    expect(shifted.at(2)?.properties.$exception_fingerprint).toBe(first);
+    expect(shifted.at(2)?.properties["$exception_fingerprint"]).toBe(first);
     expect(shifted.at(2)?.properties["error.frame"]).not.toBe(
       shifted.at(0)?.properties["error.frame"],
     );

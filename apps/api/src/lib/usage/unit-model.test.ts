@@ -228,7 +228,9 @@ describe("computeRawUsageMicroUnits", () => {
     );
     expect(
       new Set(
-        exceptions.map(({ properties }) => properties.$exception_fingerprint),
+        exceptions.map(
+          ({ properties }) => properties["$exception_fingerprint"],
+        ),
       ).size,
     ).toBe(fields.length);
 

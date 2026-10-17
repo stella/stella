@@ -7,6 +7,7 @@ import { describe, expect, mock, test } from "bun:test";
 
 import { createSha256 } from "@stll/sha256/node";
 
+import type { captureError } from "@/api/lib/analytics/capture";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -345,7 +346,7 @@ describe("document file upload surface", () => {
 
   test("reports a failed reservation cleanup without hiding the transfer failure", async () => {
     const captureCleanupFailure = mock(
-      (_error: unknown, _options: ReturnType<typeof handlerErrorContext>) =>
+      (_error: unknown, _options: Parameters<typeof captureError>[1]) =>
         undefined,
     );
     const result = await uploadRemoteDocumentVersion({

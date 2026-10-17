@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { expect, mock, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
@@ -48,8 +49,12 @@ test("drains every committed run while bounding concurrent queue handoffs", asyn
 
 test("captures one failed handoff and continues draining committed runs", async () => {
   const enqueueError = new Error("redis unavailable");
+  const failedRunId = runIds.at(1);
+  if (failedRunId === undefined) {
+    panic("Handoff failure fixture requires a second run");
+  }
   const enqueue = mock(async (runId: (typeof runIds)[number]) => {
-    if (runId === runIds.at(1)) {
+    if (runId === failedRunId) {
       throw enqueueError;
     }
   });
@@ -64,6 +69,6 @@ test("captures one failed handoff and continues draining committed runs", async 
   expect(enqueue).toHaveBeenCalledTimes(3);
   expect(captureEnqueueError).toHaveBeenCalledWith(
     enqueueError,
-    handlerErrorContext("documentProcessing.handoff", { runId: runIds.at(1) }),
+    handlerErrorContext("documentProcessing.handoff", { runId: failedRunId }),
   );
 });
