@@ -144,6 +144,7 @@ export const REVIEW_RESET_CLEARED_TABLES = [
   "playbook_definition_versions",
   "playbook_definitions",
   "rate_tables",
+  "request_idempotency_receipts",
   "sanctions_contact_marks",
   "sanctions_contact_matches",
   "sanctions_contact_screenings",

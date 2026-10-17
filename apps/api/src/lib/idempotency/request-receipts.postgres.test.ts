@@ -19,6 +19,7 @@ import {
   runWithRequestReceipt,
   sweepExpiredRequestReceipts,
 } from "@/api/lib/idempotency/request-receipts";
+import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import {
@@ -554,6 +555,37 @@ describe.skipIf(!enabled)("request receipt state machine (postgres)", () => {
         ).toEqual([first]);
       },
     );
+  });
+
+  test("retention discovery locks receipts without granting unscoped writes", async () => {
+    await withFixture(async ({ db, claim }) => {
+      const first = await claim();
+      if (first.type !== "claimed") {
+        panic("Initial request must claim the receipt");
+      }
+      const locked = await db.transaction(
+        async (tx) =>
+          await tx.execute(sql`
+            SELECT id FROM request_idempotency_receipts
+            WHERE id = ${first.id} FOR UPDATE SKIP LOCKED
+          `),
+      );
+      expect(locked).toEqual([{ id: first.id }]);
+      const failure = await rejectionOf(
+        db.execute(sql`
+          UPDATE request_idempotency_receipts SET claimed_at = claimed_at
+          WHERE id = ${first.id}
+        `),
+      );
+      expect(getPgErrorCode(failure)).toBe(PG_ERROR.INSUFFICIENT_PRIVILEGE);
+      expect(
+        await db.execute(sql`
+          DELETE FROM request_idempotency_receipts WHERE id = ${first.id}
+          RETURNING id
+        `),
+      ).toEqual([]);
+      expect(await claim()).toEqual({ type: "in_progress" });
+    });
   });
 
   test("retention deletes expired receipts and preserves the replay window", async () => {

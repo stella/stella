@@ -135,6 +135,36 @@ const withFeature = async (enabled: boolean, run: () => Promise<void>) => {
 };
 
 describe("finite HTTP action admission", () => {
+  test.each([undefined, { type: "replay" } as const])(
+    "unkeyed calls run with or without HTTP transport and replay declaration %p",
+    async (idempotency) => {
+      let calls = 0;
+      const endpoint = createSafeRootHandler(
+        {
+          contract: "patch",
+          permissions: { chat: ["create"] },
+          accountAccess: ACCOUNT_ACCESS.sandbox,
+          mcp: { type: "internal", reason: "assistant_chat" },
+          ...(idempotency === undefined ? {} : { idempotency }),
+        },
+        async function* () {
+          calls += 1;
+          return Result.ok({ call: calls });
+        },
+      );
+      const { request: _request, ...directContext } = context();
+
+      expect(await endpoint.handler(asTestRaw(directContext))).toEqual({
+        call: 1,
+      });
+      expect(await endpoint.handler(asTestRaw(directContext))).toEqual({
+        call: 2,
+      });
+      expect(await endpoint.handler(asTestRaw(context()))).toEqual({ call: 3 });
+      expect(calls).toBe(3);
+    },
+  );
+
   test("undeclared request replay rejects keys before running the handler", async () => {
     let calls = 0;
     const endpoint = createSafeRootHandler(

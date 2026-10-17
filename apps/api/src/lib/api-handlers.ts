@@ -1272,6 +1272,9 @@ const REALTIME_ANNOUNCEMENT_FAILURE = failureSink({
 
 const HANDLER_USAGE_ALLOWED = "HandlerUsageAllowed";
 
+// Direct operation callers do not necessarily enter through the HTTP transport.
+const scopedOperationRequest = ({ request }: { request?: Request }) => request;
+
 type ScopedOperationInput<
   TConfig extends HandlerConfig,
   TContext extends BaseHandlerContext<TConfig>,
@@ -1323,7 +1326,11 @@ export const runCheckedScopedHandler = async <
                 actionKind: admission.actionKind,
               }),
     });
-  const key = ctx.request.headers.get("Idempotency-Key");
+  const request = scopedOperationRequest(ctx);
+  if (request === undefined) {
+    return await run(ctx);
+  }
+  const key = request.headers.get("Idempotency-Key");
   if (key === null) {
     return await run(ctx);
   }
@@ -1360,7 +1367,7 @@ export const runCheckedScopedHandler = async <
               key,
               route: ctx.route,
               fingerprint: await fingerprintHttpRequest({
-                method: ctx.request.method,
+                method: request.method,
                 route: ctx.route,
                 body: ctx.body,
                 params: ctx.params,

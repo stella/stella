@@ -1,6 +1,8 @@
 import { readdirSync, readFileSync } from "node:fs";
 import ts from "typescript";
 
+import { compareCodeUnit } from "@stll/collation";
+
 import type { OwnershipEntry } from "../ownership-types.ts";
 
 // Deriving the published scope from declarations prevents documentation drift.
@@ -8,7 +10,10 @@ const handlersDirectory = new URL(
   "../../apps/api/src/handlers/",
   import.meta.url,
 );
-const replayHandlers = readdirSync(handlersDirectory, { recursive: true })
+const replayHandlers = readdirSync(handlersDirectory, {
+  recursive: true,
+  encoding: "utf-8",
+})
   .filter((file) => file.endsWith("/create.ts"))
   .filter((file) => {
     const source = ts.createSourceFile(
@@ -37,7 +42,7 @@ const replayHandlers = readdirSync(handlersDirectory, { recursive: true })
     };
     return declaresReplay(source);
   })
-  .toSorted()
+  .toSorted(compareCodeUnit)
   .map((file) => `\`apps/api/src/handlers/${file}\``)
   .join(", ");
 

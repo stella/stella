@@ -398,7 +398,7 @@ export async function runWithRequestReceipt<T>({
   }
 }
 
-export const REQUEST_RECEIPT_PENDING_MS = 2 * 60 * 1000;
+const REQUEST_RECEIPT_PENDING_MS = 2 * 60 * 1000;
 
 export const REQUEST_RECEIPT_RETENTION_BATCH_SIZE = 128;
 const REQUEST_RECEIPT_RETENTION_MS = DAY_IN_MS;
@@ -449,6 +449,7 @@ export const sweepExpiredRequestReceipts = async ({
   // Pending rows become eligible after two minutes; the hourly bounded sweep
   // skips live row locks regardless of age. A process crash releases its lock
   // and rolls back its resource writes before the pending row can be removed.
+  // The owner-only lock policy grants UPDATE visibility, not write permission.
   // Discovery also skips live owners, so a full batch of active
   // requests cannot starve abandoned rows behind it. Deletion locks again
   // under each row's tenant scope and rechecks eligibility.

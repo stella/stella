@@ -56,3 +56,8 @@ CREATE POLICY "user_delete" ON "request_idempotency_receipts" AS PERMISSIVE FOR 
 CREATE POLICY "retention_owner_select" ON "request_idempotency_receipts" FOR SELECT TO PUBLIC USING (
   current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.request_idempotency_receipts'::regclass)
 );--> statement-breakpoint
+-- FOR UPDATE discovery needs UPDATE visibility, but the owner cannot rewrite
+-- receipts without installing their organization and user scope.
+CREATE POLICY "retention_owner_lock" ON "request_idempotency_receipts" FOR UPDATE TO PUBLIC USING (
+  current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.request_idempotency_receipts'::regclass)
+) WITH CHECK (false);--> statement-breakpoint

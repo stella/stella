@@ -1,5 +1,0 @@
-{
-  "metric": "throw-outside-boundary",
-  "delta": 3,
-  "reason": "The request-receipt middleware is an HTTP boundary: invalid keys and the in-progress/reused-key refusals throw typed HandlerError values into runSafeHandler's existing response and telemetry boundary. This interrupts replay without widening each create handler's inferred JSON payload type."
-}

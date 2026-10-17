@@ -22,7 +22,7 @@ type SignalClient = ReturnType<typeof api.signals>;
 const signalClient = (signalId: string): SignalClient =>
   api.signals({ signalId: toSafeId<"signal">(signalId) });
 
-export type SignalMutationArgs = { signalId: string };
+type SignalMutationArgs = { signalId: string };
 
 export type ClientSignalAcceptanceResult = {
   type: "workspace";

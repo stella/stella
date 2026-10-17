@@ -66,5 +66,11 @@ export const requestIdempotencyReceipts = p.pgTable.withRLS(
       for: "select",
       using: ownerOnly,
     }),
+    // Discovery locks need UPDATE visibility; actual writes still require a user scope.
+    p.pgPolicy("retention_owner_lock", {
+      for: "update",
+      using: ownerOnly,
+      withCheck: sql`false`,
+    }),
   ],
 );
