@@ -1122,8 +1122,37 @@ export const generatorsForFiles = (files: readonly string[]) => {
       }
     }
   }
+  // A derived output is never committed, so a clean checkout lacks it: every
+  // derived generator a selected one reads from (through `after` or an output
+  // feeding its inputs) must run first, and so must its own prerequisites.
+  const pending = [...selected];
+  while (pending.length > 0) {
+    const id = pending.pop();
+    const generator = GENERATORS.find((candidate) => candidate.id === id);
+    if (generator === undefined) {
+      continue;
+    }
+    for (const upstream of derivedPrerequisites(generator)) {
+      if (!selected.has(upstream.id)) {
+        selected.add(upstream.id);
+        pending.push(upstream.id);
+      }
+    }
+  }
   return GENERATORS.filter((generator) => selected.has(generator.id));
 };
+
+/** Derived generators whose outputs `generator` needs present to run. */
+export const derivedPrerequisites = (generator: Generator) =>
+  GENERATORS.filter(
+    (upstream) =>
+      upstream.id !== generator.id &&
+      upstream.outputKind === "derived" &&
+      (generator.after.includes(upstream.id) ||
+        upstream.outputs.some((output) =>
+          generator.inputs.some((input) => outputFeedsInput(output, input)),
+        )),
+  );
 
 export const allowedOutputs = (generators: readonly Generator[]) => [
   // A planner cannot authorize recreating the retired ratchet budget.
@@ -1143,8 +1172,10 @@ export const orderGenerators = (
   );
   const ordered: Generator[] = [];
   while (pending.size > 0) {
-    const next = [...pending.values()].find((generator) =>
-      generator.after.every((id) => !pending.has(id)),
+    const next = [...pending.values()].find(
+      (generator) =>
+        generator.after.every((id) => !pending.has(id)) &&
+        derivedPrerequisites(generator).every(({ id }) => !pending.has(id)),
     );
     if (!next) {
       console.error("Generated-file dependency cycle");
