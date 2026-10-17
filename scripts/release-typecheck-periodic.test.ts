@@ -86,7 +86,7 @@ const plan = ({
             "github.event_name": event,
             "github.base_ref": "main",
             "github.event.pull_request.base.sha": "",
-            "github.event.merge_group.base_sha": "",
+            "steps.target-base.outputs.base_sha": "",
             "github.event.pull_request.title": "ordinary change",
             "steps.depth.outputs.suite_depth": depth,
             "inputs.heavy_only": heavyOnly,

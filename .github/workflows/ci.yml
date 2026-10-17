@@ -108,6 +108,9 @@ jobs:
       statuses: write
     outputs:
       trusted: ${{ steps.check.outputs.trusted }}
+      # What this run certifies its changes against (merge groups: the target
+      # branch, so a group covers every queue entry it merges).
+      target_base_sha: ${{ steps.target-base.outputs.base_sha }}
       generated_sources_input_hash: ${{ steps.generate.outputs.input_hash }}
       ci_tests_matrix: ${{ steps.api-tests.outputs.ci_tests_matrix }}
       api_test_files: ${{ steps.api-tests.outputs.api_test_files }}
@@ -320,6 +323,7 @@ jobs:
           sparse-checkout: |
             .github/workflows/ci.yml
             scripts/gh-retry.sh
+            scripts/merge-target-base.sh
             scripts/retry.sh
           sparse-checkout-cone-mode: false
 
@@ -327,6 +331,9 @@ jobs:
         run: |
           cp "$GITHUB_WORKSPACE/.workflow-tooling/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
           echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+
+      - name: Preserve the comparison-base resolver across source checkouts
+        run: cp "$GITHUB_WORKSPACE/.workflow-tooling/scripts/merge-target-base.sh" "$RUNNER_TEMP/merge-target-base.sh"
 
       - name: Preserve this run's CI workflow for planning
         run: cp "$GITHUB_WORKSPACE/.workflow-tooling/.github/workflows/ci.yml" "$RUNNER_TEMP/ci-workflow.yml"
@@ -403,6 +410,18 @@ jobs:
           filter: blob:none
           persist-credentials: false
 
+      # Only pull requests and merge groups have a base, and both fetched their
+      # history above. The resolver is this workflow revision's own copy, so
+      # the tree being certified cannot change how its base is chosen.
+      - name: Resolve comparison base
+        if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
+        id: target-base
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          TARGET_REF: ${{ github.event.merge_group.base_ref }}
+        run: bash "$RUNNER_TEMP/merge-target-base.sh"
+
       - name: Compute stable patch id
         id: patch-id
         if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
@@ -410,6 +429,8 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          # The patch id names this entry's own change, so it diffs against
+          # the previous queue entry on purpose (merge-target-base exemption).
           GROUP_BASE_SHA: ${{ github.event.merge_group.base_sha }}
           GROUP_HEAD_SHA: ${{ github.event.merge_group.head_sha }}
           WORKFLOW_SHA: ${{ github.workflow_sha }}
@@ -831,7 +852,7 @@ jobs:
         id: changed-files
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
+          BASE_SHA: ${{ steps.target-base.outputs.base_sha }}
           EVENT_NAME: ${{ github.event_name }}
           PR_TITLE: ${{ github.event.pull_request.title }}
           SUITE_DEPTH: ${{ steps.depth.outputs.suite_depth }}
@@ -1376,7 +1397,7 @@ jobs:
         id: root-checks
         if: steps.completed-depth.outputs.run_required != 'false' && steps.api-test-deps.outcome == 'success'
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
+          BASE_SHA: ${{ steps.target-base.outputs.base_sha }}
           EVENT_NAME: ${{ github.event_name }}
           API_SCOPE_UNKNOWN: ${{ steps.changed-files.outputs.api_scope_unknown }}
         run: |
@@ -2418,7 +2439,7 @@ jobs:
         env:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
-          MERGE_GROUP_BASE_SHA: ${{ github.event.merge_group.base_sha }}
+          MERGE_GROUP_BASE_SHA: ${{ github.event_name == 'merge_group' && needs.ci-plan.outputs.target_base_sha || '' }}
           BASE_REF: ${{ github.base_ref || 'main' }}
         run: |
           base="${MERGE_GROUP_BASE_SHA:-$(git merge-base "origin/$BASE_REF" HEAD)}"
@@ -2514,7 +2535,7 @@ jobs:
         env:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
+          BASE_SHA: ${{ needs.ci-plan.outputs.target_base_sha }}
         run: |
           bun test scripts/check-oxlint-rule-coverage.test.ts
           bun scripts/check-oxlint-rule-coverage.ts
@@ -2844,7 +2865,7 @@ jobs:
         env:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
+          BASE_SHA: ${{ needs.ci-plan.outputs.target_base_sha }}
         run: |
           required=true
           if [[ -n "$BASE_SHA" ]]; then
@@ -2878,7 +2899,7 @@ jobs:
         env:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Reads registry publish times, current date and base lockfile additions."
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          BASE_SHA: ${{ needs.ci-plan.outputs.target_base_sha }}
         run: |
           bun test scripts/check-lockfile-release-ages.test.ts
           bun scripts/check-lockfile-release-ages.ts --base "$BASE_SHA"
@@ -2933,7 +2954,7 @@ jobs:
         timeout-minutes: 1
         uses: ./.github/actions/prepare-network-baseline
         with:
-          base-sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
+          base-sha: ${{ needs.ci-plan.outputs.target_base_sha || github.sha }}
           token: ${{ github.token }}
 
       - name: Route network manifest coverage
@@ -3160,7 +3181,7 @@ jobs:
         env:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Reads base history and current GitHub release state."
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          BASE_SHA: ${{ needs.ci-plan.outputs.target_base_sha }}
           GH_TOKEN: ${{ github.token }}
         run: |
           if git diff --quiet "$BASE_SHA"...HEAD -- VERSION; then
@@ -3232,7 +3253,7 @@ jobs:
         env:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          BASE_SHA: ${{ needs.ci-plan.outputs.target_base_sha }}
         run: bun scripts/sql-perf-suppressions.ts
 
       - name: Release marketing provenance warning
@@ -3305,7 +3326,7 @@ jobs:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
           STELLA_VERIFY: check
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
+          BASE_SHA: ${{ needs.ci-plan.outputs.target_base_sha }}
         run: |
           bun test scripts/query-data-state-baseline.test.ts
           bun run check:query-data-state
@@ -3316,7 +3337,7 @@ jobs:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
           STELLA_VERIFY: check
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
+          BASE_SHA: ${{ needs.ci-plan.outputs.target_base_sha }}
         run: |
           bun test scripts/sql-perf-detector.test.ts scripts/sql-perf-baseline.test.ts
           bun scripts/sql-perf-baseline.ts --check
@@ -3327,7 +3348,7 @@ jobs:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
           STELLA_VERIFY: check
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
+          BASE_SHA: ${{ needs.ci-plan.outputs.target_base_sha }}
         run: |
           bun test scripts/failure-as-empty-baseline.test.ts
           bun run check:failure-as-empty
@@ -3594,7 +3615,7 @@ jobs:
         env:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
+          BASE_SHA: ${{ needs.ci-plan.outputs.target_base_sha }}
         run: |
           bun scripts/queue-authority.ts --self-test
           bun scripts/queue-authority.ts --check
@@ -5677,7 +5698,7 @@ jobs:
       - name: Select statute recall base from the target branch
         if: ${{ !cancelled() && needs.ci-plan.outputs.corpus_suites_required == 'true' }}
         env:
-          MERGE_GROUP_BASE_SHA: ${{ github.event.merge_group.base_sha }}
+          MERGE_GROUP_BASE_SHA: ${{ github.event_name == 'merge_group' && needs.ci-plan.outputs.target_base_sha || '' }}
           PULL_REQUEST_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           PUSH_BEFORE_SHA: ${{ github.event.before }}
         run: |
@@ -6417,7 +6438,7 @@ jobs:
       - name: Prepare merge-base network budget
         uses: ./.github/actions/prepare-network-baseline
         with:
-          base-sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
+          base-sha: ${{ needs.ci-plan.outputs.target_base_sha || github.sha }}
           token: ${{ github.token }}
 
       - name: Login to GitHub Container Registry for browser images
@@ -6561,7 +6582,7 @@ jobs:
         if: matrix.shard == 'network-baseline'
         uses: ./.github/actions/prepare-network-baseline
         with:
-          base-sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
+          base-sha: ${{ needs.ci-plan.outputs.target_base_sha || github.sha }}
           token: ${{ github.token }}
 
       - name: Login to GitHub Container Registry for browser images
@@ -8161,7 +8182,7 @@ jobs:
         continue-on-error: false
         env:
           EVENT_NAME: ${{ github.event_name }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
+          BASE_SHA: ${{ needs.ci-plan.outputs.target_base_sha }}
           HEAD_SHA: ${{ github.sha }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
         run: |
@@ -8268,6 +8289,15 @@ jobs:
       # A skipped plan passes only while the pull request is still a draft.
       pull-requests: read
     steps:
+      - name: Record the certified comparison base
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          TARGET_BASE_SHA: ${{ needs.ci-plan.outputs.target_base_sha }}
+        # A merge group certifies its changes against the target branch;
+        # the summary names the base so a run shows what it covered.
+        run: |
+          echo "Comparison base for this $EVENT_NAME run: ${TARGET_BASE_SHA:-none (full scope)}" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Fetch GitHub API tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

@@ -174,7 +174,14 @@ const selector = ({
         },
         summary,
       },
-      process: { env: { RUNNER_TEMP: "/runner/temp" } },
+      // A merge group reads the base its resolver step chose (the target
+      // branch), never the previous queue entry from the payload.
+      process: {
+        env: {
+          RUNNER_TEMP: "/runner/temp",
+          ...(event === "merge_group" ? { TARGET_BASE_SHA: base } : {}),
+        },
+      },
       require: (name: string) => {
         if (name === "node:path") {
           return path;
@@ -257,8 +264,26 @@ describe("required dependency review workflow boundary", () => {
     expect(checkout.if).toBe(reviewCondition);
     expect(review.if).toBe(reviewCondition);
     expect(checkout.with?.["persist-credentials"]).toBe(false);
+    // A merge group reviews against the target branch, resolved through the
+    // API in this job: no checked-out code runs next to the PR token.
+    const resolver = job.steps.find((step) => step.id === "target-base");
+    if (!resolver) {
+      throw new TypeError("Missing comparison base resolver");
+    }
+    expect(resolver.uses?.startsWith("actions/github-script@")).toBe(true);
+    expect(resolver.if).toBe("github.event_name == 'merge_group'");
+    expect(job.steps.indexOf(resolver)).toBeLessThan(
+      job.steps.indexOf(selectorStep),
+    );
+    expect(JSON.stringify(selectorStep["env"])).toContain(
+      "steps.target-base.outputs.base_sha",
+    );
+    expect(String(resolver.with?.["script"])).toContain(
+      "compareCommitsWithBasehead",
+    );
+    expect(String(resolver.with?.["script"])).toContain("core.setFailed");
     expect(review.with?.["base-ref"]).toBe(
-      `\${{ github.event.merge_group.base_sha || '' }}`,
+      `\${{ github.event_name == 'merge_group' && steps.target-base.outputs.base_sha || '' }}`,
     );
     expect(review.with?.["head-ref"]).toBe(
       `\${{ github.event.merge_group.head_sha || '' }}`,

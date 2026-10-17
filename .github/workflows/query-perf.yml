@@ -71,11 +71,15 @@ jobs:
         run: |
           bash scripts/configure-test-postgres.sh "${{ job.services.postgres.id }}" stella_owner
 
+      - name: Resolve comparison base
+        id: target-base
+        uses: ./.github/actions/merge-target-base
+
       - name: Resolve query performance baseline
         if: ${{ !(github.event_name == 'workflow_dispatch' && contains(github.workflow_ref, '/.github/workflows/query-perf.yml@')) }}
         id: base
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
+          BASE_SHA: ${{ steps.target-base.outputs.base_sha }}
           HEAVY_ONLY: ${{ inputs.heavy_only }}
           SHA: ${{ inputs.sha }}
         run: |
