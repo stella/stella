@@ -43,13 +43,11 @@ const { createInspectorBroadcastSession: broadcast } =
 const { getAnalytics } = await import("@/lib/analytics/provider");
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
-const { entityViewKeys } =
-  await import("@/lib/workspaces/queries/entity-views");
-const { inboxKeys } = await import("@/lib/inbox/queries");
 const { entitiesKeys } =
   await import("@/lib/workspaces/queries/entities.logic");
-const { fileMetadataByFieldQueryRoot } =
-  await import("@/lib/files/file-metadata-query.logic");
+const { myWorkKeys } = await import("@/lib/workspaces/queries/my-work");
+const { tasksQueryRoot } = await import("@/lib/resource-query-roots.logic");
+const { workspacesKeys } = await import("@/lib/workspaces/queries.logic");
 const { downloadTabFile } = await import("./file-download-service");
 const { toSafeId } = await import("@/lib/safe-id");
 const { readStoredJson } = await import("@/lib/stored-json");
@@ -330,14 +328,9 @@ describe("confirmed file rename state", () => {
       ).toEqual(
         new Set([
           JSON.stringify(entitiesKeys.all("matter")),
-          JSON.stringify(entityViewKeys.all("org", "user")),
-          JSON.stringify(inboxKeys.all("org", "user")),
-          JSON.stringify(
-            fileMetadataByFieldQueryRoot({
-              workspaceId: "matter",
-              fieldId: "field-A",
-            }),
-          ),
+          JSON.stringify(myWorkKeys.all),
+          JSON.stringify(tasksQueryRoot("matter")),
+          JSON.stringify(workspacesKeys.overview("matter")),
         ]),
       );
       act(() =>
@@ -592,29 +585,32 @@ describe("confirmed file rename state", () => {
     const invalidate = spyOn(client, "invalidateQueries").mockRejectedValue(
       new Error("Refresh unavailable"),
     );
-    act(() =>
-      result.current.first.mutate({
-        workspaceId: "matter",
-        entityId: "A",
-        name: "confirmed.md",
-      }),
-    );
-    await waitFor(() => expect(requests).toHaveLength(1));
-    await act(async () => success(0, "A", "confirmed.md"));
-    await waitFor(() => expect(client.isMutating()).toBe(0));
-    expect(tab("A")).toMatchObject({
-      label: "confirmed.md",
-      fileName: "confirmed.md",
-    });
-    expect(result.current.first.isSuccess).toBe(true);
-    expect(toast).not.toHaveBeenCalled();
-    expect(capture).toHaveBeenCalledWith(expect.any(Error), {
-      type: "detached",
-      operation: "entity-rename.refresh",
-    });
-    capture.mockRestore();
-    toast.mockRestore();
-    invalidate.mockRestore();
+    try {
+      act(() =>
+        result.current.first.mutate({
+          workspaceId: "matter",
+          entityId: "A",
+          name: "confirmed.md",
+        }),
+      );
+      await waitFor(() => expect(requests).toHaveLength(1));
+      await act(async () => success(0, "A", "confirmed.md"));
+      await waitFor(() => expect(client.isMutating()).toBe(0));
+      expect(tab("A")).toMatchObject({
+        label: "confirmed.md",
+        fileName: "confirmed.md",
+      });
+      expect(result.current.first.isSuccess).toBe(true);
+      expect(toast).not.toHaveBeenCalled();
+      expect(capture).toHaveBeenCalledWith(expect.any(Error), {
+        type: "detached",
+        operation: "resource-query.invalidate",
+      });
+    } finally {
+      capture.mockRestore();
+      toast.mockRestore();
+      invalidate.mockRestore();
+    }
   });
 
   test("a throwing refusal completion releases the next invocation", async () => {

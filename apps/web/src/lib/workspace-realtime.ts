@@ -1,5 +1,10 @@
-import { hashKey, type QueryKey } from "@tanstack/react-query";
-import { panic } from "better-result";
+import {
+  hashKey,
+  matchQuery,
+  type QueryClient,
+  type QueryKey,
+} from "@tanstack/react-query";
+import { panic, Result } from "better-result";
 
 import {
   parseWorkspaceRealtimeEvent,
@@ -11,6 +16,8 @@ import {
   type WorkspaceRealtimeEvent,
 } from "@stll/api-contract";
 
+import { getAnalytics } from "@/lib/analytics/provider";
+import { detached } from "@/lib/detached";
 import {
   fileContentByFieldQueryRoot,
   fileMetadataByFieldQueryRoot,
@@ -39,11 +46,108 @@ import {
 } from "@/lib/resource-query-roots.logic";
 import { workspacesKeys } from "@/lib/workspaces/queries.logic";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities.logic";
+import { myWorkKeys } from "@/lib/workspaces/queries/my-work";
 import { viewsRootKey } from "@/lib/workspaces/queries/views.logic";
 import {
   workspaceJustificationsQueryRoot,
   workspaceWorkflowQueryRoot,
 } from "@/lib/workspaces/queries/workspace.logic";
+
+type ResourceQueryScopeIdentity =
+  | { type: "workspace"; workspaceId: string }
+  | { type: "organization" };
+
+type ResourceReads =
+  | {
+      resources: readonly [ResourceType, ...ResourceType[]];
+      scope: ResourceQueryScopeIdentity;
+    }
+  | { type: "independent" };
+
+type ResourceQueryMeta = Record<string, unknown> & {
+  resourceReads?: ResourceReads;
+};
+
+declare module "@tanstack/react-query" {
+  // oxlint-disable-next-line typescript/consistent-type-definitions -- module augmentation requires an interface for declaration merging
+  interface Register {
+    queryMeta: ResourceQueryMeta;
+  }
+}
+
+/** Declares resource dependencies or independence without changing cache identity. */
+export const resourceQueryOptions = <
+  TOptions extends { queryKey: QueryKey; meta?: ResourceQueryMeta },
+  TReads extends ResourceReads,
+>(
+  options: TOptions,
+  resourceReads: TReads,
+) => ({
+  ...options,
+  meta: { ...options.meta, resourceReads },
+});
+
+export const RESOURCE_MUTATION_CONTRACTS = {
+  createInvoice: {
+    writes: [
+      { method: "PUT", route: "/invoices/:workspaceId" },
+      {
+        method: "POST",
+        route: "/invoices/:workspaceId/:invoiceId/transition",
+      },
+    ],
+    resources: [RESOURCE_TYPE.INVOICE],
+  },
+  transitionInvoice: {
+    writes: [
+      {
+        method: "POST",
+        route: "/invoices/:workspaceId/:invoiceId/transition",
+      },
+    ],
+    resources: [RESOURCE_TYPE.INVOICE],
+  },
+  renameEntity: {
+    writes: [{ method: "PATCH", route: "/entities/:workspaceId/rename" }],
+    resources: [RESOURCE_TYPE.ENTITY],
+  },
+} as const;
+
+type ResourceMutationOptions<
+  TVariables extends { workspaceId: string },
+  TData,
+> = {
+  mutation: keyof typeof RESOURCE_MUTATION_CONTRACTS;
+  queryClient: QueryClient;
+  mutationFn: (variables: TVariables) => Promise<TData>;
+};
+
+/** A committed write marks every registered reader stale before it settles. */
+export const resourceMutation =
+  <TVariables extends { workspaceId: string }, TData>({
+    mutation,
+    queryClient,
+    mutationFn,
+  }: ResourceMutationOptions<TVariables, TData>) =>
+  async (variables: TVariables) => {
+    const data = await mutationFn(variables);
+    const resources = RESOURCE_MUTATION_CONTRACTS[mutation].resources;
+    const actions = registeredResourceQueryActions({
+      queryClient,
+      resources,
+      scope: { type: "workspace", workspaceId: variables.workspaceId },
+    });
+    for (const resource of resources) {
+      actions.push(
+        ...getResourceTypeInvalidationActions(resource, variables.workspaceId),
+      );
+    }
+    await applyResourceQueryActions(
+      queryClient,
+      deduplicateQueryActions(actions),
+    );
+    return data;
+  };
 
 export const parseWorkspaceRealtimeMessage = (
   data: string,
@@ -109,6 +213,7 @@ const RESOURCE_QUERY_SCOPE = {
   JUSTIFICATIONS: "justifications",
   LEGAL_LISTS: "legal_lists",
   MCP: "mcp",
+  MY_WORK: "my_work",
   ORGANIZATION: "organization",
   PROPERTIES: "properties",
   RATES: "rates",
@@ -146,6 +251,7 @@ const RESOURCE_REALTIME_QUERY_POLICY = {
   [RESOURCE_TYPE.DOCUMENT_TYPE]: [],
   [RESOURCE_TYPE.ENTITY]: [
     RESOURCE_QUERY_SCOPE.ENTITIES,
+    RESOURCE_QUERY_SCOPE.MY_WORK,
     RESOURCE_QUERY_SCOPE.TASKS,
     RESOURCE_QUERY_SCOPE.WORKSPACE_OVERVIEW,
   ],
@@ -233,6 +339,8 @@ const getResourceQueryScopeKeys = (
       return [legalListsQueryRoot(workspaceId)];
     case RESOURCE_QUERY_SCOPE.MCP:
       return [mcpQueryRoot(), catalogueQueryRoot()];
+    case RESOURCE_QUERY_SCOPE.MY_WORK:
+      return [myWorkKeys.all];
     case RESOURCE_QUERY_SCOPE.ORGANIZATION:
       return [organizationQueryRoot(), organizationSettingsQueryRoot()];
     case RESOURCE_QUERY_SCOPE.PROPERTIES:
@@ -347,15 +455,97 @@ const deduplicateQueryActions = (
   return unique;
 };
 
+type RegisteredResourceQueryActionsOptions = {
+  queryClient: QueryClient;
+  resources: readonly ResourceType[];
+  scope: ResourceQueryScopeIdentity;
+};
+
+const registeredResourceQueryActions = ({
+  queryClient,
+  resources,
+  scope,
+}: RegisteredResourceQueryActionsOptions): WorkspaceRealtimeQueryAction[] =>
+  queryClient
+    .getQueryCache()
+    .findAll({
+      predicate: ({ meta }) => {
+        const reads = meta?.resourceReads;
+        if (
+          !reads ||
+          "type" in reads ||
+          !reads.resources.some((resource) => resources.includes(resource))
+        ) {
+          return false;
+        }
+        return (
+          scope.type === "organization" ||
+          reads.scope.type === "organization" ||
+          scope.workspaceId === reads.scope.workspaceId
+        );
+      },
+    })
+    .map(({ queryKey }) => ({
+      type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
+      queryKey,
+    }));
+
+/** One cache executor for local writes, remote events, and reconnect recovery. */
+export const applyResourceQueryActions = async (
+  queryClient: QueryClient,
+  actions: readonly WorkspaceRealtimeQueryAction[],
+) => {
+  const invalidations = actions.filter(
+    (action) => action.type === WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
+  );
+  for (const action of actions) {
+    if (action.type === WORKSPACE_REALTIME_QUERY_ACTION.REMOVE_PREFIX) {
+      queryClient.removeQueries({ queryKey: action.queryKey, exact: false });
+    }
+  }
+  const invalidated = await Result.tryPromise(
+    async () =>
+      await Promise.all(
+        invalidations.map(async ({ queryKey }) => {
+          await queryClient.invalidateQueries({
+            queryKey,
+            refetchType: "none",
+          });
+        }),
+      ),
+  );
+  if (Result.isError(invalidated)) {
+    getAnalytics().captureError(invalidated.error, {
+      type: "detached",
+      operation: "resource-query.invalidate",
+    });
+  }
+  // Refetch failure must not turn a committed write into a rejected mutation.
+  detached(
+    queryClient.refetchQueries({
+      type: "active",
+      predicate: (query) =>
+        invalidations.some(({ queryKey }) => matchQuery({ queryKey }, query)),
+    }),
+    "resource-query.refresh",
+  );
+};
+
 /**
  * What to refresh after the workspace stream reconnects: every scope any
  * event could invalidate, since the events missed while disconnected are not
  * replayed. Derived from the scope list itself, so a scope added for a new
  * event is refreshed on reconnect without a second list to update.
  */
-export const getWorkspaceReconnectQueryActions = (
-  workspaceId: string,
-): WorkspaceRealtimeQueryAction[] => {
+type WorkspaceQueryActionsScope = {
+  workspaceId: string;
+  queryClient: QueryClient;
+};
+
+export const getWorkspaceReconnectQueryActions = ({
+  workspaceId,
+  queryClient,
+}: WorkspaceQueryActionsScope): WorkspaceRealtimeQueryAction[] => {
   const actions: WorkspaceRealtimeQueryAction[] = [];
   for (const scope of Object.values(RESOURCE_QUERY_SCOPE)) {
     for (const queryKey of getResourceQueryScopeKeys(scope, workspaceId)) {
@@ -365,6 +555,13 @@ export const getWorkspaceReconnectQueryActions = (
       });
     }
   }
+  actions.push(
+    ...registeredResourceQueryActions({
+      queryClient,
+      resources: Object.values(RESOURCE_TYPE),
+      scope: { type: "workspace", workspaceId },
+    }),
+  );
   return deduplicateQueryActions(actions);
 };
 
@@ -372,7 +569,7 @@ export const getWorkspaceReconnectQueryActions = (
  * Total cache policy for every workspace realtime event kind. Producers emit
  * domain facts; this web-only adapter owns their React Query consequences.
  */
-export const getWorkspaceRealtimeQueryActions = (
+const getResourceEventQueryActions = (
   event: WorkspaceRealtimeEvent,
   workspaceId: string,
 ): WorkspaceRealtimeQueryAction[] => {
@@ -414,4 +611,38 @@ export const getWorkspaceRealtimeQueryActions = (
       event satisfies never;
       return panic(`Unhandled event: ${String(event)}`);
   }
+};
+
+export const getWorkspaceRealtimeQueryActions = (
+  event: WorkspaceRealtimeEvent,
+  { workspaceId, queryClient }: WorkspaceQueryActionsScope,
+): WorkspaceRealtimeQueryAction[] => {
+  const actions = getResourceEventQueryActions(event, workspaceId);
+  const resources: ResourceType[] = [];
+  switch (event.type) {
+    case REALTIME_EVENT_TYPE.RESOURCE_UPDATED:
+    case REALTIME_EVENT_TYPE.RESOURCE_DELETED:
+      resources.push(event.resource.type);
+      break;
+    case REALTIME_EVENT_TYPE.RESOURCES_CHANGED:
+      resources.push(...event.changes.map(({ resource }) => resource.type));
+      break;
+    case REALTIME_EVENT_TYPE.RESOURCE_SET_UPDATED:
+      resources.push(event.resourceType);
+      break;
+    case REALTIME_EVENT_TYPE.WORKFLOW_EXTRACTION_PREVIEW:
+    case REALTIME_EVENT_TYPE.FLOW_RUN_UPDATE:
+      break;
+    default:
+      event satisfies never;
+      return panic(`Unhandled event: ${String(event)}`);
+  }
+  return deduplicateQueryActions([
+    ...actions,
+    ...registeredResourceQueryActions({
+      queryClient,
+      resources,
+      scope: { type: "workspace", workspaceId },
+    }),
+  ]);
 };

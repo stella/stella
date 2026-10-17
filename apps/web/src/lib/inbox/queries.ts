@@ -1,5 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
 import { SIGNAL_VIEWS } from "@stll/api-contract/signals";
 import type { SignalView } from "@stll/api-contract/signals";
 
@@ -8,6 +9,7 @@ import { STALE_TIME } from "@/lib/consts";
 import { unwrapEden } from "@/lib/errors/api";
 import { localISODate } from "@/lib/local-iso-date";
 import { toSafeId } from "@/lib/safe-id";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 import { myWorkKeys } from "@/lib/workspaces/queries/my-work";
 
 export const INBOX_VIEWS = SIGNAL_VIEWS;
@@ -34,15 +36,18 @@ export const inboxKeys = {
  */
 export const inboxCountOptions = (organizationId: string, userId: string) => {
   const asOf = localISODate();
-  return queryOptions({
-    queryKey: inboxKeys.count(organizationId, userId, asOf),
-    queryFn: async ({ signal }) =>
-      unwrapEden(
-        await api.signals.count.get({ query: { asOf }, fetch: { signal } }),
-      ),
-    staleTime: INBOX_STALE_TIME_MS,
-    refetchInterval: STALE_TIME.FIVE.MINUTES,
-  });
+  return resourceQueryOptions(
+    queryOptions({
+      queryKey: inboxKeys.count(organizationId, userId, asOf),
+      queryFn: async ({ signal }) =>
+        unwrapEden(
+          await api.signals.count.get({ query: { asOf }, fetch: { signal } }),
+        ),
+      staleTime: INBOX_STALE_TIME_MS,
+      refetchInterval: STALE_TIME.FIVE.MINUTES,
+    }),
+    { resources: [RESOURCE_TYPE.ENTITY], scope: { type: "organization" } },
+  );
 };
 
 export const inboxSignalOptions = (
@@ -50,16 +55,19 @@ export const inboxSignalOptions = (
   userId: string,
   signalId: string,
 ) =>
-  queryOptions({
-    queryKey: inboxKeys.detail(organizationId, userId, signalId),
-    queryFn: async ({ signal }) =>
-      unwrapEden(
-        await api
-          .signals({ signalId: toSafeId<"signal">(signalId) })
-          .get({ fetch: { signal } }),
-      ),
-    staleTime: INBOX_STALE_TIME_MS,
-  });
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: inboxKeys.detail(organizationId, userId, signalId),
+      queryFn: async ({ signal }) =>
+        unwrapEden(
+          await api
+            .signals({ signalId: toSafeId<"signal">(signalId) })
+            .get({ fetch: { signal } }),
+        ),
+      staleTime: INBOX_STALE_TIME_MS,
+    }),
+    { resources: [RESOURCE_TYPE.ENTITY], scope: { type: "organization" } },
+  );
 
 /** Derived from the Eden response type. */
 type DetailQueryFn = NonNullable<
