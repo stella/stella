@@ -7,6 +7,7 @@ import type {
   ServerAnalytics,
   ServerAnalyticsCaptureParams,
 } from "@/api/lib/analytics/server-analytics";
+import { RELEASE_VERSION_PROPERTY } from "@/api/lib/observability/release-failure-contract";
 import { APP_COMMIT_SHA, APP_VERSION } from "@/api/lib/version";
 
 const ALLOWED_EVENTS = new Set<ServerAnalyticsCaptureParams["event"]>(
@@ -31,7 +32,7 @@ export const createPostHogNodeAnalytics = (
         properties: {
           ...properties,
           app_commit: APP_COMMIT_SHA,
-          app_version: APP_VERSION,
+          [RELEASE_VERSION_PROPERTY]: APP_VERSION,
         },
         // Mark `$exception` events as originating from a deliberate capture
         // path so posthog-node skips its built-in warning about

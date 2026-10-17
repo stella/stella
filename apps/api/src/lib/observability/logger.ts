@@ -14,6 +14,7 @@ import {
 
 import type { ErrorFingerprint } from "@/api/lib/errors/utils";
 import { SENSITIVE_LOG_ATTRIBUTE_KEY_PATTERN } from "@/api/lib/observability/log-attribute-policy";
+import { APP_VERSION, SERVICE_VERSION_KEY } from "@/api/lib/version";
 
 // Denylist of attribute-key substrings whose values may carry document
 // content, client-identifying text, PII, or credentials, none of which
@@ -279,12 +280,17 @@ const emit = ({
   // drops payload- and credential-shaped keys from every record regardless
   // of severity, so severity was never what kept payloads out. DEBUG stays
   // unmirrored as the escape hatch for hot loops.
+  //
+  // The release rides on every line as the OTel resource does on exported
+  // records, after the attributes so no caller key can replace it: a failure
+  // is attributable to a release without a deploy timeline.
   if (severityNumber >= SeverityNumber.INFO) {
     process[outputStream].write(
       `${JSON.stringify({
         severity: severityText,
         message: safeMessage,
         ...safeAttributes,
+        [SERVICE_VERSION_KEY]: APP_VERSION,
       })}\n`,
     );
   }

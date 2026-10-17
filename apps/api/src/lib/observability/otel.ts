@@ -8,6 +8,7 @@ import {
 } from "@opentelemetry/sdk-logs";
 
 import { envBase } from "@/api/env-base";
+import { APP_VERSION, SERVICE_VERSION_KEY } from "@/api/lib/version";
 
 /**
  * External log export is opt-in per deployment: the OTLP provider registers
@@ -32,6 +33,7 @@ if (
     ],
     resource: resourceFromAttributes({
       "service.name": "stella-api",
+      [SERVICE_VERSION_KEY]: APP_VERSION,
     }),
   });
   logs.setGlobalLoggerProvider(provider);

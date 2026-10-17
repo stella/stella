@@ -18,3 +18,6 @@ export const resolveStamp = (explicit: string | undefined) => {
 
 export const APP_VERSION = resolveStamp(process.env["STELLA_VERSION"]);
 export const APP_COMMIT_SHA = resolveStamp(process.env["STELLA_COMMIT_SHA"]);
+
+/** The OpenTelemetry resource key every record's release travels under. */
+export const SERVICE_VERSION_KEY = "service.version";

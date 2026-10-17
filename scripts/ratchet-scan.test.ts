@@ -88,6 +88,38 @@ describe("shared ratchet scan", () => {
     }
   });
 
+  test("the unclassified handler failure census counts only ungraded 5xx constructions", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "ratchet-unclassified-"));
+    const file = "apps/api/src/handlers/fixture.ts";
+    const metric =
+      RATCHET_METRICS.find(
+        ({ id }) => id === "unclassified-handler-failures",
+      ) ?? panic("Unclassified handler failure metric is missing");
+    try {
+      mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+      writeFileSync(
+        path.join(root, file),
+        [
+          'new HandlerError({ status: 500, message: "a" });',
+          'new HandlerError({ status: ok ? 404 : 503, message: "b" });',
+          'new HandlerError({ status: 502, code: "unknown", message: "c" });',
+          'new HandlerError({ status: 503, code: "upstream_unavailable", message: "d" });',
+          'classifyFailure(new HandlerError({ status: 500, message: "e" }), "rls_denied");',
+          'new HandlerError({ status: 404, message: "f" });',
+          'new HandlerError({ status, message: "g" });',
+        ].join("\n"),
+      );
+      expect(
+        scanTree({ tree: openSourceTree(root), metrics: [metric] }).snapshot[
+          metric.id
+        ],
+      ).toEqual({ count: 3, files: { [file]: 3 } });
+      expect(metric.perFile).toBe(true);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   test("counters parse through the shared per-file memo", async () => {
     const counters = await Bun.file(
       path.join(ROOT, "scripts/ratchet.ts"),

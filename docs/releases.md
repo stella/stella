@@ -195,7 +195,24 @@ or change deployed feature flags.
    leaves the tag, the immutable images, and the draft; rerunning the
    workflow for the same tag reuses them. RCs continue to target staging and
    are published as prereleases once the staging promotion finishes.
-9. After a stable release succeeds, `publish-npm.yml` checks out the same
+9. Once production serves a stable release, `release.yml` dispatches
+   `release-health.yml`. It waits until 60 minutes after publication, then
+   compares the release's failure fingerprints (handler, error class and
+   code, counted by the API as `release_failure_window` analytics events)
+   with the previous stable release's. Any `unclassified` failure, or a
+   fingerprint the previous release never produced that occurs at least
+   three times, makes the release unhealthy; a query that cannot answer
+   makes it inconclusive. The run records the verdict as
+   `release-health.json` on the GitHub release and fails unless the verdict
+   is healthy, which alerts through `scheduled-run-alerts.yml`. The query
+   reads the `POSTHOG_RELEASE_HEALTH_API_KEY` secret (a PostHog personal API
+   key limited to query read) and the `POSTHOG_PROJECT_ID` variable.
+
+   The next production promotion refuses while the previous stable release
+   is unhealthy, inconclusive, or still inside its window without a
+   verdict. After investigating, re-dispatch `release.yml` for the new tag
+   with `acknowledge_unhealthy_release` set to that previous release.
+10. After a stable release succeeds, `publish-npm.yml` checks out the same
    release commit, packs the CLI, installs that exact tarball under plain Node,
    and runs its unauthenticated compatibility canary against production. Only
    then can the hardened npm publishing job publish `@stll/cli`.
