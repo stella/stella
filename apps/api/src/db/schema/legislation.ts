@@ -503,14 +503,19 @@ export const legislationDocuments = p.pgTable(
 export const legislationWorkIdentifiers = p.pgTable(
   "legislation_work_identifiers",
   {
-    sourceId: safeUuid<"legislationSource">("source_id")
-      .notNull()
-      .references(() => legislationSources.id, { onDelete: "cascade" }),
+    sourceId: safeUuid<"legislationSource">("source_id").notNull(),
     identifier: p.varchar({ length: 512 }).notNull(),
     eli: p.varchar({ length: 512 }).notNull(),
   },
   (t) => [
     p.primaryKey({ columns: [t.sourceId, t.identifier] }),
+    p
+      .foreignKey({
+        name: "legislation_work_identifiers_source_fk",
+        columns: [t.sourceId],
+        foreignColumns: [legislationSources.id],
+      })
+      .onDelete("cascade"),
     p
       .index("legislation_work_identifiers_identifier_idx")
       .on(t.identifier, t.sourceId, t.eli),

@@ -127,9 +127,9 @@ SET lock_timeout = '1s';
 CREATE INDEX IF NOT EXISTS "legislation_work_identifiers_identifier_idx" ON "legislation_work_identifiers" (identifier,source_id,eli);
 --> statement-breakpoint
 -- stella-migration-safety: reviewed drop-constraint - Recreates only this migration's source foreign key on retry.
-ALTER TABLE "legislation_work_identifiers" DROP CONSTRAINT IF EXISTS "legislation_work_identifiers_source_id_legislation_sources_id_fk";
+ALTER TABLE "legislation_work_identifiers" DROP CONSTRAINT IF EXISTS "legislation_work_identifiers_source_fk";
 --> statement-breakpoint
-ALTER TABLE "legislation_work_identifiers" ADD CONSTRAINT "legislation_work_identifiers_source_id_legislation_sources_id_fk" FOREIGN KEY (source_id) REFERENCES legislation_sources(id) ON DELETE CASCADE NOT VALID;
+ALTER TABLE "legislation_work_identifiers" ADD CONSTRAINT "legislation_work_identifiers_source_fk" FOREIGN KEY (source_id) REFERENCES legislation_sources(id) ON DELETE CASCADE NOT VALID;
 --> statement-breakpoint
 -- stella-migration-safety: reviewed drop-constraint - Recreates only this migration's nonempty identifier CHECK on retry.
 ALTER TABLE "legislation_work_identifiers" DROP CONSTRAINT IF EXISTS "legislation_work_identifiers_nonempty";
@@ -138,7 +138,7 @@ ALTER TABLE "legislation_work_identifiers" ADD CONSTRAINT "legislation_work_iden
 --> statement-breakpoint
 SET statement_timeout = '10min';
 --> statement-breakpoint
-ALTER TABLE "legislation_work_identifiers" VALIDATE CONSTRAINT "legislation_work_identifiers_source_id_legislation_sources_id_fk";
+ALTER TABLE "legislation_work_identifiers" VALIDATE CONSTRAINT "legislation_work_identifiers_source_fk";
 --> statement-breakpoint
 ALTER TABLE "legislation_work_identifiers" VALIDATE CONSTRAINT "legislation_work_identifiers_nonempty";
 --> statement-breakpoint

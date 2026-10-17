@@ -206,8 +206,8 @@ describe("publisher legislation identity", () => {
     await store(input);
     const before = await rowsOf(sourceId);
     expect(
-      await rejectionOf(store({ ...input, expression: undefined })),
-    ).toMatchObject({ message: /publisher|identity|expression/iu });
+      (await rejectionOf(store({ ...input, expression: undefined }))).message,
+    ).toMatch(/publisher|identity|expression/iu);
     expect(await rowsOf(sourceId)).toEqual(before);
   });
 
@@ -240,7 +240,7 @@ describe("publisher legislation identity", () => {
       .from(legislationDocuments)
       .where(eq(legislationDocuments.id, saved.id));
     if (before === undefined) {
-      return panic("publisher source move fixture was not stored");
+      panic("publisher source move fixture was not stored");
     }
     const move = db.transaction(async (tx) => {
       await tx.execute(
@@ -347,17 +347,19 @@ describe("publisher legislation identity", () => {
       ...input,
       identifiers: ["publisher-alias:legacy"],
     };
-    expect(await rejectionOf(store(rejected))).toMatchObject({
-      message: /legacy|publisher|identity|identifier/iu,
-    });
+    expect((await rejectionOf(store(rejected))).message).toMatch(
+      /legacy|publisher|identity|identifier/iu,
+    );
     expect(await rowsOf(sourceId)).toEqual([]);
     const original = await store(input);
     const before = await rowsOf(sourceId);
     expect(
-      await rejectionOf(
-        store({ ...rejected, title: "A revision that must not commit" }),
-      ),
-    ).toMatchObject({ message: /legacy|publisher|identity|identifier/iu });
+      (
+        await rejectionOf(
+          store({ ...rejected, title: "A revision that must not commit" }),
+        )
+      ).message,
+    ).toMatch(/legacy|publisher|identity|identifier/iu);
     expect(await rowsOf(sourceId)).toEqual(before);
     expect((await store(input)).id).toBe(original.id);
     const aliases = await db
@@ -405,17 +407,19 @@ describe("publisher legislation identity", () => {
       .where(eq(legislationWorkIdentifiers.sourceId, sourceId))
       .orderBy(legislationWorkIdentifiers.identifier);
     expect(
-      await rejectionOf(
-        store({
-          ...document({
-            sourceId,
-            expressionId: "conflicting",
-            eli: "http://data.europa.eu/eli/reg/2020/2/oj",
+      (
+        await rejectionOf(
+          store({
+            ...document({
+              sourceId,
+              expressionId: "conflicting",
+              eli: "http://data.europa.eu/eli/reg/2020/2/oj",
+            }),
+            identifiers: [identifier, "32020R0002"],
           }),
-          identifiers: [identifier, "32020R0002"],
-        }),
-      ),
-    ).toMatchObject({ message: /identifier|alias|work/iu });
+        )
+      ).message,
+    ).toMatch(/identifier|alias|work/iu);
     expect(await rowsOf(sourceId)).toEqual(before);
     const afterAliases = await db
       .select({ identifier: legislationWorkIdentifiers.identifier })
