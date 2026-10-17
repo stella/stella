@@ -61,6 +61,7 @@ import { detached } from "@/lib/detached";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { UnsupportedAnonymizedExportError } from "@/lib/pdf/anonymized-export-errors";
 import { toSafeId } from "@/lib/safe-id";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
@@ -207,31 +208,37 @@ export const AnonymizationFacet = ({
   const termsQuery = useQuery(anonymizationTermsOptions(workspaceId));
   const termsQueryView = useQueryView(termsQuery);
   useQueryViewError(termsQueryView);
-  const createMutation = useMutation({
-    mutationFn: async (vars: {
-      workspaceId: string;
-      entries: readonly {
-        canonical: string;
-        label: string;
-        variants?: readonly string[];
-      }[];
-    }) => {
+  const createMutation = useIdempotentMutation({
+    mutationFn: async (
+      vars: {
+        workspaceId: string;
+        entries: readonly {
+          canonical: string;
+          label: string;
+          variants?: readonly string[];
+        }[];
+      },
+      request,
+    ) => {
       const response = await api
         .workspaces({ workspaceId: toSafeId<"workspace">(vars.workspaceId) })
-        ["anonymization-terms"].put({
-          entries: vars.entries.map((entry) =>
-            entry.variants
-              ? {
-                  canonical: entry.canonical,
-                  label: entry.label,
-                  variants: [...entry.variants],
-                }
-              : {
-                  canonical: entry.canonical,
-                  label: entry.label,
-                },
-          ),
-        });
+        ["anonymization-terms"].put(
+          {
+            entries: vars.entries.map((entry) =>
+              entry.variants
+                ? {
+                    canonical: entry.canonical,
+                    label: entry.label,
+                    variants: [...entry.variants],
+                  }
+                : {
+                    canonical: entry.canonical,
+                    label: entry.label,
+                  },
+            ),
+          },
+          request,
+        );
 
       // No `onError` capture here: the only caller awaits `mutateAsync` inside
       // a try/catch that captures and toasts, so a handler here would report
@@ -408,24 +415,30 @@ export const AnonymizationFacet = ({
     pipelineStatus === "ready" &&
     termsQuery.status === "success" &&
     allowlistQuery.status === "success";
-  const createAllowlistMutation = useMutation({
-    mutationFn: async (vars: {
-      workspaceId: string;
-      entityId: string | null;
-      canonical: string;
-      label: string;
-      scope: AllowlistScope;
-    }) => {
+  const createAllowlistMutation = useIdempotentMutation({
+    mutationFn: async (
+      vars: {
+        workspaceId: string;
+        entityId: string | null;
+        canonical: string;
+        label: string;
+        scope: AllowlistScope;
+      },
+      request,
+    ) => {
       const response = await api
         .workspaces({ workspaceId: toSafeId<"workspace">(vars.workspaceId) })
-        ["anonymization-allowlist"].put({
-          canonical: vars.canonical,
-          label: vars.label,
-          scope: vars.scope,
-          ...(vars.scope === "document" && vars.entityId
-            ? { entityId: toSafeId<"entity">(vars.entityId) }
-            : {}),
-        });
+        ["anonymization-allowlist"].put(
+          {
+            canonical: vars.canonical,
+            label: vars.label,
+            scope: vars.scope,
+            ...(vars.scope === "document" && vars.entityId
+              ? { entityId: toSafeId<"entity">(vars.entityId) }
+              : {}),
+          },
+          request,
+        );
       return unwrapEden(response);
     },
     onError: (error) => {

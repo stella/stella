@@ -65,6 +65,7 @@ const bodySchema = t.Object({
 });
 const config = {
   contract: "patch",
+  idempotency: { type: "replay" },
   featureAccess: { type: "required", featureId: LEGAL_LISTS_FEATURE_ID },
   description:
     "Submit the candidates a generation run produced: per candidate a name, " +

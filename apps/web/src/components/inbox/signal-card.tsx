@@ -30,12 +30,9 @@ import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import {
-  acceptSignal,
-  assignSignal,
   type ClientSignalAcceptanceResult,
-  dismissSignal,
   openSignalChat,
-  snoozeSignal,
+  useIdempotentSignalActions,
 } from "@/components/inbox/signal-actions";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { MatterRefLink } from "@/components/matter-ref-link";
@@ -77,12 +74,22 @@ type SignalCardProps = {
   onChanged?: () => Promise<void>;
 };
 
+const openSignalEvidence = (signal: InboxSignal) => {
+  useInspectorTabsStore.getState().openView({
+    type: INBOX_SIGNAL_VIEW,
+    id: inboxSignalTabId(signal.id),
+    label: signal.title,
+    payload: { signalId: signal.id },
+  });
+};
+
 export const SignalCard = ({
   signal,
   organizationId,
   presentation = "card",
   onChanged,
 }: SignalCardProps) => {
+  const signalActions = useIdempotentSignalActions();
   const t = useTranslations();
   const format = useFormatter();
   const analytics = useAnalytics();
@@ -130,15 +137,6 @@ export const SignalCard = ({
 
   const mutationArgs = { signalId: signal.id };
 
-  const openEvidence = () => {
-    useInspectorTabsStore.getState().openView({
-      type: INBOX_SIGNAL_VIEW,
-      id: inboxSignalTabId(signal.id),
-      label: signal.title,
-      payload: { signalId: signal.id },
-    });
-  };
-
   const askAboutThis = () => {
     openSignalChat(
       signal,
@@ -152,7 +150,7 @@ export const SignalCard = ({
   ) =>
     await run(
       async () =>
-        await acceptSignal({
+        await signalActions.acceptSignal({
           ...mutationArgs,
           suggestionKind,
           ...(result ? { result } : {}),
@@ -163,14 +161,14 @@ export const SignalCard = ({
 
   const assign = async (assigneeUserId: string) =>
     await run(async () => {
-      const assigned = await assignSignal({
+      const assigned = await signalActions.assignSignal({
         ...mutationArgs,
         assigneeUserId,
       });
       if (Result.isError(assigned)) {
         return assigned;
       }
-      return acceptSignal({
+      return signalActions.acceptSignal({
         ...mutationArgs,
         suggestionKind: SUGGESTION_KIND.ASSIGN,
       });
@@ -178,7 +176,8 @@ export const SignalCard = ({
 
   const dismiss = async (reason: string | null) =>
     await run(
-      async () => await dismissSignal({ ...mutationArgs, reason }),
+      async () =>
+        await signalActions.dismissSignal({ ...mutationArgs, reason }),
       null,
     );
 
@@ -257,7 +256,7 @@ export const SignalCard = ({
                     detached(
                       run(
                         async () =>
-                          await snoozeSignal({
+                          await signalActions.snoozeSignal({
                             ...mutationArgs,
                             until: snoozeUntil("tomorrow"),
                           }),
@@ -274,7 +273,7 @@ export const SignalCard = ({
                     detached(
                       run(
                         async () =>
-                          await snoozeSignal({
+                          await signalActions.snoozeSignal({
                             ...mutationArgs,
                             until: snoozeUntil("next-week"),
                           }),
@@ -321,7 +320,7 @@ export const SignalCard = ({
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <button
             className="text-start text-sm leading-5 font-medium text-balance wrap-anywhere hover:underline"
-            onClick={openEvidence}
+            onClick={() => openSignalEvidence(signal)}
             type="button"
           >
             <UserText>{signal.title}</UserText>

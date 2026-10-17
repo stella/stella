@@ -12,6 +12,8 @@ import {
 import { createChatThreadId, getChatThreadKey } from "@/lib/chat-thread-ref";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { unwrapEden } from "@/lib/errors/api";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
+import type { IdempotentRequest } from "@/lib/idempotency/use-idempotent-submit";
 import type { InboxSignal } from "@/lib/inbox/queries";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -20,68 +22,115 @@ type SignalClient = ReturnType<typeof api.signals>;
 const signalClient = (signalId: string): SignalClient =>
   api.signals({ signalId: toSafeId<"signal">(signalId) });
 
-export type SignalMutationArgs = { signalId: string };
+type SignalMutationArgs = { signalId: string };
 
 export type ClientSignalAcceptanceResult = {
   type: "workspace";
   workspaceId: string;
 };
 
-export const snoozeSignal = async ({
-  signalId,
-  until,
-}: SignalMutationArgs & { until: Date }) =>
+const snoozeSignal = async (
+  { signalId, until }: SignalMutationArgs & { until: Date },
+  request: IdempotentRequest,
+) =>
   Result.tryPromise(async () => {
     unwrapEden(
-      await signalClient(signalId).snoozes.post({ until: until.toISOString() }),
+      await signalClient(signalId).snoozes.post(
+        { until: until.toISOString() },
+        request,
+      ),
     );
   });
 
-export const dismissSignal = async ({
-  signalId,
-  reason,
-}: SignalMutationArgs & { reason: string | null }) =>
-  Result.tryPromise(async () => {
-    unwrapEden(await signalClient(signalId).dismissals.post({ reason }));
-  });
-
-export const assignSignal = async ({
-  signalId,
-  assigneeUserId,
-}: SignalMutationArgs & { assigneeUserId: string | null }) =>
+const dismissSignal = async (
+  { signalId, reason }: SignalMutationArgs & { reason: string | null },
+  request: IdempotentRequest,
+) =>
   Result.tryPromise(async () => {
     unwrapEden(
-      await signalClient(signalId).assignments.post({
-        assigneeUserId:
-          assigneeUserId === null ? null : toSafeId<"user">(assigneeUserId),
-      }),
+      await signalClient(signalId).dismissals.post({ reason }, request),
     );
   });
 
-export const acceptSignal = async ({
-  signalId,
-  suggestionKind,
-  result,
-}: SignalMutationArgs & {
-  suggestionKind: SuggestionKind;
-  result?: ClientSignalAcceptanceResult;
-}) =>
+const assignSignal = async (
+  {
+    signalId,
+    assigneeUserId,
+  }: SignalMutationArgs & { assigneeUserId: string | null },
+  request: IdempotentRequest,
+) =>
+  Result.tryPromise(async () => {
+    unwrapEden(
+      await signalClient(signalId).assignments.post(
+        {
+          assigneeUserId:
+            assigneeUserId === null ? null : toSafeId<"user">(assigneeUserId),
+        },
+        request,
+      ),
+    );
+  });
+
+const acceptSignal = async (
+  {
+    signalId,
+    suggestionKind,
+    result,
+  }: SignalMutationArgs & {
+    suggestionKind: SuggestionKind;
+    result?: ClientSignalAcceptanceResult;
+  },
+  request: IdempotentRequest,
+) =>
   Result.tryPromise(async () => {
     const accepted = unwrapEden(
-      await signalClient(signalId).acceptances.post({
-        suggestionKind,
-        ...(result
-          ? {
-              result: {
-                type: result.type,
-                workspaceId: toSafeId<"workspace">(result.workspaceId),
-              },
-            }
-          : {}),
-      }),
+      await signalClient(signalId).acceptances.post(
+        {
+          suggestionKind,
+          ...(result
+            ? {
+                result: {
+                  type: result.type,
+                  workspaceId: toSafeId<"workspace">(result.workspaceId),
+                },
+              }
+            : {}),
+        },
+        request,
+      ),
     );
     return accepted;
   });
+
+export const useIdempotentSignalActions = () => {
+  const submit = useIdempotentSubmit();
+  return {
+    snoozeSignal: async (body: Parameters<typeof snoozeSignal>[0]) =>
+      await submit.run({
+        operation: `signal-snooze:${body.signalId}`,
+        body,
+        send: snoozeSignal,
+      }),
+    dismissSignal: async (body: Parameters<typeof dismissSignal>[0]) =>
+      await submit.run({
+        operation: `signal-dismiss:${body.signalId}`,
+        body,
+        send: dismissSignal,
+      }),
+    assignSignal: async (body: Parameters<typeof assignSignal>[0]) =>
+      await submit.run({
+        operation: `signal-assign:${body.signalId}`,
+        body,
+        send: assignSignal,
+      }),
+    acceptSignal: async (body: Parameters<typeof acceptSignal>[0]) =>
+      await submit.run({
+        operation: `signal-accept:${body.signalId}`,
+        body,
+        send: acceptSignal,
+      }),
+  };
+};
 
 /**
  * Opens an inspector chat with the signal already in the composer. The

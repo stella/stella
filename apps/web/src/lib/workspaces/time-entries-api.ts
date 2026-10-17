@@ -35,6 +35,7 @@ type TimeEntryQueryValue = boolean | number | string | undefined;
 
 type TimeEntryRequestOptions<T> = {
   body?: unknown;
+  headers?: Record<string, string>;
   method?: "DELETE" | "GET" | "PATCH" | "POST" | "PUT";
   parse: (input: unknown) => T | null;
   path: "" | `/${string}`;
@@ -45,6 +46,7 @@ type TimeEntryRequestOptions<T> = {
 
 const requestTimeEntries = async <T>({
   body,
+  headers,
   method = "GET",
   parse,
   path,
@@ -68,6 +70,7 @@ const requestTimeEntries = async <T>({
     credentials: "include",
     headers: {
       ...getApiRequestHeaders(),
+      ...headers,
       ...(body === undefined ? {} : { "content-type": "application/json" }),
     },
     method,
@@ -158,11 +161,13 @@ type TimeEntryMutation =
   | { body: unknown; type: "suggestion_decision" };
 
 type SendTimeEntryMutationOptions = {
+  headers?: Record<string, string>;
   mutation: TimeEntryMutation;
   workspaceId: string;
 };
 
 export const sendTimeEntryMutation = async ({
+  headers,
   mutation,
   workspaceId,
 }: SendTimeEntryMutationOptions): Promise<void> => {
@@ -170,6 +175,7 @@ export const sendTimeEntryMutation = async ({
     case "create":
       await requestTimeEntries({
         body: mutation.body,
+        ...(headers === undefined ? {} : { headers }),
         method: "PUT",
         parse: parseTimeEntryIdResponse,
         path: "/",
@@ -179,6 +185,7 @@ export const sendTimeEntryMutation = async ({
     case "update":
       await requestTimeEntries({
         body: mutation.body,
+        ...(headers === undefined ? {} : { headers }),
         method: "PATCH",
         parse: parseTimeEntryIdResponse,
         path: "/",
@@ -188,6 +195,7 @@ export const sendTimeEntryMutation = async ({
     case "delete":
       await requestTimeEntries({
         body: mutation.body,
+        ...(headers === undefined ? {} : { headers }),
         method: "DELETE",
         parse: parseTimeEntryDeleteResponse,
         path: "/",
@@ -197,6 +205,7 @@ export const sendTimeEntryMutation = async ({
     case "batch_update":
       await requestTimeEntries({
         body: mutation.body,
+        ...(headers === undefined ? {} : { headers }),
         method: "POST",
         parse: parseTimeEntryUpdatedResponse,
         path: "/batch",
@@ -206,6 +215,7 @@ export const sendTimeEntryMutation = async ({
     case "batch_delete":
       await requestTimeEntries({
         body: mutation.body,
+        ...(headers === undefined ? {} : { headers }),
         method: "DELETE",
         parse: parseTimeEntryUpdatedResponse,
         path: "/batch",
@@ -215,6 +225,7 @@ export const sendTimeEntryMutation = async ({
     case "split":
       await requestTimeEntries({
         body: mutation.body,
+        ...(headers === undefined ? {} : { headers }),
         method: "POST",
         parse: parseTimeEntrySplitResponse,
         path: "/split",
@@ -224,6 +235,7 @@ export const sendTimeEntryMutation = async ({
     case "suggestion_decision":
       await requestTimeEntries({
         body: mutation.body,
+        ...(headers === undefined ? {} : { headers }),
         method: "POST",
         parse: parseTimeEntrySuggestionDecision,
         path: "/suggestions/decisions",

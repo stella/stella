@@ -158,6 +158,7 @@ export const createEntitiesHandler = async function* ({
 
 const config = {
   contract: "patch",
+  idempotency: { type: "replay" },
   description:
     "Create an empty document, folder, or task in a matter (kind defaults to " +
     "document) with a name and an optional parent folder. Nothing is " +

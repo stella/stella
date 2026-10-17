@@ -24,6 +24,7 @@ import {
 
 const config = {
   contract: "patch",
+  idempotency: { type: "replay" },
   description:
     "Snooze an inbox signal until a later time; it returns to the open feed " +
     "once that time passes.",

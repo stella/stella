@@ -8,6 +8,7 @@ import type { ModelRole } from "@stll/ai-catalog";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import type { PermissionInput } from "@stll/permissions";
 
+import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { UsageActionType, UsageServiceTier } from "@/api/db/schema";
 import { env } from "@/api/env";
@@ -60,6 +61,10 @@ import {
 } from "@/api/lib/files/content-delivery";
 import type { ContentDelivery } from "@/api/lib/files/content-delivery";
 import {
+  fingerprintHttpRequest,
+  runWithRequestReceipt,
+} from "@/api/lib/idempotency/request-receipts";
+import {
   publicReadTimeoutError,
   runPublicReadRequest,
 } from "@/api/lib/legal-search/public-read-timeout";
@@ -79,6 +84,7 @@ import {
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { getRequestContext } from "@/api/lib/observability/request-context";
+import { resolveResponseStatus } from "@/api/lib/observability/response-status";
 import {
   hasMemberPermission,
   readAuthorizedMemberRole,
@@ -429,6 +435,8 @@ export type HandlerConfig = InputSchema &
     accountAccess: AccountAccess;
     /** Finite API-owned transport deadline for a generated capability command. */
     requestTimeoutMs?: number;
+    /** Scoped DB mutations only; external side effects require owner-specific receipt integration. */
+    idempotency?: { type: "replay" };
     requiresUsage?: UsageMeteringConfig;
     featureAccess?: FeatureAccessRequirement;
     /** Finite synchronous work; streaming and queued execution need their own lifetimes. */
@@ -535,6 +543,7 @@ type ConfigRouteSchema<TConfig extends HandlerConfig> = UnwrapRoute<
     | "contentDelivery"
     | "transport"
     | "realtime"
+    | "idempotency"
   >
 >;
 
@@ -1089,11 +1098,24 @@ type FiniteHandlerGuard<TResult> = [Extract<TResult, Response>] extends [never]
   ? unknown
   : never;
 
-type ConfiguredFiniteHandlerGuard<TConfig, TResult> = TConfig extends {
-  actionAdmission: { type: "handler"; actionKind: PeriodActionKind };
+type NonJsonReplayPayload<T> =
+  T extends ElysiaCustomStatusResponse<infer _Code, infer Body>
+    ? NonJsonReplayPayload<Body>
+    : Extract<
+        T,
+        Response | ReadableStream | Blob | ArrayBuffer | ArrayBufferView
+      >;
+
+type ConfiguredFiniteHandlerGuard<TConfig, TResult> = (TConfig extends {
+  idempotency: { type: "replay" };
 }
-  ? NoInfer<FiniteHandlerGuard<TResult>>
-  : unknown;
+  ? NoInfer<[NonJsonReplayPayload<TResult>] extends [never] ? unknown : never>
+  : unknown) &
+  (TConfig extends {
+    actionAdmission: { type: "handler"; actionKind: PeriodActionKind };
+  }
+    ? NoInfer<FiniteHandlerGuard<TResult>>
+    : unknown);
 
 type FiniteActionContext = SafeHandlerLogContext & {
   user: { id: SafeId<"user"> };
@@ -1250,6 +1272,9 @@ const REALTIME_ANNOUNCEMENT_FAILURE = failureSink({
 
 const HANDLER_USAGE_ALLOWED = "HandlerUsageAllowed";
 
+// Direct operation callers do not necessarily enter through the HTTP transport.
+const scopedOperationRequest = ({ request }: { request?: Request }) => request;
+
 type ScopedOperationInput<
   TConfig extends HandlerConfig,
   TContext extends BaseHandlerContext<TConfig>,
@@ -1283,19 +1308,84 @@ export const runCheckedScopedHandler = async <
   // Response state is mutable request output, never an authorization input.
   ctx.set = scratch.ctx.set;
   const admission = config.actionAdmission;
+  const run = async (handlerContext: TContext) =>
+    await runSafeHandler({
+      ctx: {
+        ...handlerContext,
+        ...(usageLane === undefined ? {} : { usageLane }),
+      },
+      contentDelivery: config.contentDelivery,
+      handler:
+        admission === undefined
+          ? handler
+          : (context) =>
+              runAdmittedFiniteHandler({
+                ctx: context,
+                handler,
+                admit,
+                actionKind: admission.actionKind,
+              }),
+    });
+  const request = scopedOperationRequest(ctx);
+  if (request === undefined) {
+    return await run(ctx);
+  }
+  const key = request.headers.get("Idempotency-Key");
+  if (key === null) {
+    return await run(ctx);
+  }
+  if (config.idempotency === undefined) {
+    return await runSafeHandler({
+      ctx,
+      contentDelivery: undefined,
+      async *handler() {
+        return yield* Result.await(
+          Promise.resolve(
+            Result.err(
+              new HandlerError({
+                status: 400,
+                message:
+                  "This endpoint does not support Idempotency-Key. Omit the header and use its documented submission flow.",
+              }),
+            ),
+          ),
+        );
+      },
+    });
+  }
   return await runSafeHandler({
-    ctx: { ...ctx, ...(usageLane === undefined ? {} : { usageLane }) },
-    contentDelivery: config.contentDelivery,
-    handler:
-      admission === undefined
-        ? handler
-        : (context) =>
-            runAdmittedFiniteHandler({
-              ctx: context,
-              handler,
-              admit,
-              actionKind: admission.actionKind,
+    ctx,
+    contentDelivery: undefined,
+    async *handler() {
+      const result = yield* Result.await(
+        Result.tryPromise(
+          async () =>
+            await runWithRequestReceipt({
+              scopedDb: ctx.scopedDb,
+              organizationId: ctx.session.activeOrganizationId,
+              userId: ctx.user.id,
+              key,
+              route: ctx.route,
+              fingerprint: await fingerprintHttpRequest({
+                method: request.method,
+                route: ctx.route,
+                body: ctx.body,
+                params: ctx.params,
+                query: ctx.query,
+              }),
+              run: async (scopedDb) =>
+                await run({
+                  ...ctx,
+                  scopedDb,
+                  safeDb: safeDbFromScoped(scopedDb),
+                }),
+              responseStatus: () =>
+                resolveResponseStatus({ response: undefined, set: ctx.set }),
             }),
+        ),
+      );
+      return result;
+    },
   });
 };
 

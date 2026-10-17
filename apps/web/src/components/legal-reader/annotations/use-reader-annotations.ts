@@ -32,6 +32,7 @@ import {
 } from "@/components/legal-reader/annotations/reader-annotations-query";
 import type { ReaderAnnotation } from "@/components/legal-reader/annotations/reader-annotations-query";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useSessionStorage } from "@/hooks/use-session-storage";
 import { SIGNED_OUT_QUERY_OWNER } from "@/lib/account/queries";
 import { getAnalytics } from "@/lib/analytics/provider";
@@ -41,6 +42,7 @@ import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { toSafeId } from "@/lib/safe-id";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { createUuid } from "@/lib/uuid";
@@ -163,6 +165,15 @@ export const useReaderAnnotations = (
   const user = useMaybeAuthenticatedUser();
   const storage = useSessionStorage();
   const [localStore, setStore] = useState(EMPTY_GUEST_ANNOTATION_STORE);
+  const submitIntent = useIdempotentSubmit();
+  const migrateAnnotation = useLatestCallback(
+    async (body: Parameters<typeof api.reader.annotations.post>[0]) =>
+      await submitIntent.run({
+        operation: "reader.annotations.migrate",
+        body,
+        send: api.reader.annotations.post,
+      }),
+  );
   const pendingSequence = useRef(0);
   const targetKey = readerAnnotationTargetKey(target);
 
@@ -205,9 +216,10 @@ export const useReaderAnnotations = (
 
   const create = useMutation({
     mutationFn: async (input: CreateAnnotationInput) => {
-      const response = await api.reader.annotations.post({
-        ...input,
-        ...targetKey,
+      const response = await submitIntent.run({
+        operation: "reader.annotations.create",
+        body: { ...input, ...targetKey },
+        send: api.reader.annotations.post,
       });
       return unwrapEden(response);
     },
@@ -286,7 +298,7 @@ export const useReaderAnnotations = (
           limit: GUEST_ANNOTATION_MIGRATION_CONCURRENCY,
           operation: async (item) => {
             const migrated = await Result.tryPromise(async () => {
-              const response = await api.reader.annotations.post({
+              const response = await migrateAnnotation({
                 ...item.input,
                 requestId: toSafeId<"legalReaderAnnotation">(item.requestId),
                 targetId: item.targetId,
@@ -331,7 +343,7 @@ export const useReaderAnnotations = (
       })(),
       "legal-reader.migrate-guest-annotations",
     );
-  }, [queryClient, signedIn, storage, t]);
+  }, [migrateAnnotation, queryClient, signedIn, storage, t]);
 
   if (user !== null) {
     return {

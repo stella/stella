@@ -97,6 +97,7 @@ import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { toSafeId } from "@/lib/safe-id";
 import { downloadFile } from "@/lib/utils";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
@@ -1392,6 +1393,7 @@ export const TemplateForm = ({
   prefill,
   initialValues,
 }: TemplateFormProps) => {
+  const idempotentSubmit = useIdempotentSubmit();
   const t = useTranslations();
   const queryClient = useQueryClient();
   // Formula fields are derived server-side at fill time, never user-entered:
@@ -2054,16 +2056,16 @@ export const TemplateForm = ({
         conditionFields: aiConditionFields,
         conditions,
       });
-      const response = await api
-        .templates({ templateId })
-        ["fill-to"]({ workspaceId })
-        .post({
+      const response = await idempotentSubmit.run({
+        operation: `templates.${templateId}.fill-to.${workspaceId}`,
+        body: {
           values: submitValues,
           clauseOverrides,
-          ...(parentId !== null && {
-            parentId: toSafeId<"entity">(parentId),
-          }),
-        });
+          ...(parentId !== null && { parentId: toSafeId<"entity">(parentId) }),
+        },
+        send: async (body) =>
+          api.templates({ templateId })["fill-to"]({ workspaceId }).post(body),
+      });
 
       if (response.error) {
         notifyUserError(toAPIError(response.error), t("templates.fillFailed"));

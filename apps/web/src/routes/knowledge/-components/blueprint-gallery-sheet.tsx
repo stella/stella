@@ -33,6 +33,7 @@ import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 
 type SkillScope = "team" | "private";
 type BlueprintId =
@@ -118,11 +119,13 @@ const BlueprintGallerySheetBody = ({
     };
   };
 
+  const submitIntent = useIdempotentSubmit();
   const create = useMutation({
     mutationFn: async (id: BlueprintId) => {
-      const response = await api.skills["from-blueprint"].post({
-        scope,
-        blueprintId: id,
+      const response = await submitIntent.run({
+        operation: "skills.from-blueprint",
+        body: { scope, blueprintId: id },
+        send: api.skills["from-blueprint"].post,
       });
       return { id: unwrapEden(response).id };
     },

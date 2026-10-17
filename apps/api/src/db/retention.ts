@@ -3,6 +3,10 @@ export type TableRetention =
   | { boundedBy: string };
 
 export const TABLE_RETENTION = {
+  request_idempotency_receipts: {
+    ttlColumn: "claimed_at",
+    sweeper: "requests.sweepReceipts",
+  },
   desktop_time_entry_batches: {
     boundedBy:
       "One receipt per authenticated account, organization and idempotency key; cascade-deleted with its account or organization.",

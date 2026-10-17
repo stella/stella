@@ -177,6 +177,7 @@ export const createEntityLinkHandler = async function* ({
 const createEntityLink = createSafeHandler(
   {
     contract: "patch",
+    idempotency: { type: "replay" },
     description:
       "Link a task to another document, folder, or task, with a link type " +
       "that defaults to related. Both ends must be in this matter, an entity " +

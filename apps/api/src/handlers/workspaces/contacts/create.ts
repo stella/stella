@@ -36,6 +36,7 @@ const createWorkspaceContactBodySchema = t.Object({
 
 const config = {
   contract: "patch",
+  idempotency: { type: "replay" },
   description:
     "Link a contact to a matter in a party role (opposing party/counsel, " +
     "co-counsel, witness, expert witness, third party, judge, mediator, or " +

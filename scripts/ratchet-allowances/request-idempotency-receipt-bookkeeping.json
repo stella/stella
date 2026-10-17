@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 5,
+  "reason": "Request receipts are ephemeral replay coordination. Claim, completion, failure release and bounded retention do not change a user resource; create handlers retain their existing business audit events. Organization-member receipt cleanup shares the membership-removal transaction and its existing lifecycle audit. Recording these receipt operations separately would duplicate those events and retain technical replay metadata beyond the receipt lifetime."
+}

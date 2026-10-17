@@ -4,6 +4,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { PropertyContentType } from "@/lib/api-contract";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { toSafeId } from "@/lib/safe-id";
 import type {
   PropertyDependency,
@@ -31,36 +32,43 @@ export const useCreateProperty = ({ workspaceId }: { workspaceId: string }) => {
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
 
-  return useMutation({
-    mutationFn: async ({
-      name,
-      contentType,
-      toolType,
-      prompt,
-      dependencies,
-      options,
-      fallback,
-    }: CreatePropertyVars) => {
+  return useIdempotentMutation({
+    idempotencyScope: workspaceId,
+    mutationFn: async (
+      {
+        name,
+        contentType,
+        toolType,
+        prompt,
+        dependencies,
+        options,
+        fallback,
+      }: CreatePropertyVars,
+      request,
+    ) => {
       const response = await api
         .properties({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .put({
-          name,
-          contentType,
-          ...(toolType ? { toolType } : {}),
-          ...(prompt === undefined ? {} : { prompt }),
-          ...(dependencies && dependencies.length > 0
-            ? {
-                dependencies: dependencies.map((dep) => ({
-                  dependsOnPropertyId: toSafeId<"property">(
-                    dep.dependsOnPropertyId,
-                  ),
-                  condition: dep.condition,
-                })),
-              }
-            : {}),
-          ...(options && options.length > 0 ? { options } : {}),
-          ...(fallback !== undefined ? { fallback } : {}),
-        });
+        .put(
+          {
+            name,
+            contentType,
+            ...(toolType ? { toolType } : {}),
+            ...(prompt === undefined ? {} : { prompt }),
+            ...(dependencies && dependencies.length > 0
+              ? {
+                  dependencies: dependencies.map((dep) => ({
+                    dependsOnPropertyId: toSafeId<"property">(
+                      dep.dependsOnPropertyId,
+                    ),
+                    condition: dep.condition,
+                  })),
+                }
+              : {}),
+            ...(options && options.length > 0 ? { options } : {}),
+            ...(fallback !== undefined ? { fallback } : {}),
+          },
+          request,
+        );
 
       return unwrapEden(response);
     },
@@ -96,32 +104,38 @@ export const useCreatePropertiesBatch = ({
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
 
-  return useMutation({
-    mutationFn: async ({ items }: { items: CreatePropertySpec[] }) => {
+  return useIdempotentMutation({
+    idempotencyScope: workspaceId,
+    mutationFn: async ({ items }: { items: CreatePropertySpec[] }, request) => {
       const response = await api
         .properties({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .batch.put({
-          items: items.map((item) => ({
-            name: item.name,
-            contentType: item.contentType,
-            ...(item.toolType ? { toolType: item.toolType } : {}),
-            ...(item.prompt === undefined ? {} : { prompt: item.prompt }),
-            ...(item.dependencies && item.dependencies.length > 0
-              ? {
-                  dependencies: item.dependencies.map((dep) => ({
-                    dependsOnPropertyId: toSafeId<"property">(
-                      dep.dependsOnPropertyId,
-                    ),
-                    condition: dep.condition,
-                  })),
-                }
-              : {}),
-            ...(item.options && item.options.length > 0
-              ? { options: item.options }
-              : {}),
-            ...(item.fallback !== undefined ? { fallback: item.fallback } : {}),
-          })),
-        });
+        .batch.put(
+          {
+            items: items.map((item) => ({
+              name: item.name,
+              contentType: item.contentType,
+              ...(item.toolType ? { toolType: item.toolType } : {}),
+              ...(item.prompt === undefined ? {} : { prompt: item.prompt }),
+              ...(item.dependencies && item.dependencies.length > 0
+                ? {
+                    dependencies: item.dependencies.map((dep) => ({
+                      dependsOnPropertyId: toSafeId<"property">(
+                        dep.dependsOnPropertyId,
+                      ),
+                      condition: dep.condition,
+                    })),
+                  }
+                : {}),
+              ...(item.options && item.options.length > 0
+                ? { options: item.options }
+                : {}),
+              ...(item.fallback !== undefined
+                ? { fallback: item.fallback }
+                : {}),
+            })),
+          },
+          request,
+        );
 
       return unwrapEden(response);
     },

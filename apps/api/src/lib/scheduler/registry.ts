@@ -149,6 +149,10 @@ import {
   reconcileReportExports,
 } from "@/api/lib/scheduler/tasks/report-export-reconcile";
 import {
+  SWEEP_REQUEST_RECEIPTS_TASK,
+  sweepRequestReceipts,
+} from "@/api/lib/scheduler/tasks/request-receipt-retention";
+import {
   RESET_REVIEW_ORGANIZATION_TASK,
   resetReviewOrganizationTask,
 } from "@/api/lib/scheduler/tasks/review-organization-reset";
@@ -210,6 +214,7 @@ const noopTask: SchedulerTask = ({ logger }) => {
 };
 
 const SCHEDULER_TASKS = {
+  [SWEEP_REQUEST_RECEIPTS_TASK]: sweepRequestReceipts,
   [REDACT_HOSTED_USAGE_WEBHOOK_EVENTS_TASK]: redactHostedUsageWebhookEvents,
   [BACKFILL_AGENT_CLIENT_STORAGE_TASK]: backfillAgentClientStorage,
   [BACKFILL_HEARTBEAT_TASK]: emitBackfillHeartbeats,

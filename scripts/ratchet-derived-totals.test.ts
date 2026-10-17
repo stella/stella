@@ -147,6 +147,8 @@ const withClone = (exercise: (root: string) => void, branch?: string) => {
       path.join(clone, "node_modules"),
       "dir",
     );
+    // Ownership declarations inventory handlers; this synthetic tree has none.
+    mkdirSync(path.join(clone, "apps/api/src/handlers"), { recursive: true });
     exercise(clone);
   } finally {
     rmSync(temporary, { recursive: true, force: true });

@@ -34,6 +34,7 @@ const fromRunBodySchema = t.Object({
 
 const config = {
   contract: "patch",
+  idempotency: { type: "replay" },
   description:
     "Save the position list a completed document review ran against as a new " +
     "draft playbook in the organization, taking the same create path a " +

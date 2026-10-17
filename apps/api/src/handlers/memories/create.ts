@@ -13,6 +13,7 @@ import {
 
 const config = {
   contract: "patch",
+  idempotency: { type: "replay" },
   // Memory is part of the AI assistant; gate on the chat capability.
   // Firm-scoped writes go through the separate, permission-gated route.
   permissions: { chat: ["create"] },

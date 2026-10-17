@@ -25,6 +25,7 @@ import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { knowledgeKeys } from "@/lib/knowledge/queries";
 import { catalogueKeys } from "@/lib/knowledge/queries/catalogue";
 import { openMcpOAuthWindow } from "@/lib/mcp-oauth-channel";
@@ -130,7 +131,7 @@ export const AddMcpServerSheet = ({
     onError: handleApiError,
   });
 
-  const addServerMutation = useMutation({
+  const addServerMutation = useIdempotentMutation({
     mutationFn: async (params: AddServerParams) => {
       const response = await api.mcp.connectors.post(params);
       return unwrapEden(response);
@@ -156,7 +157,7 @@ export const AddMcpServerSheet = ({
     onError: handleApiError,
   });
 
-  const saveTokenMutation = useMutation({
+  const saveTokenMutation = useIdempotentMutation({
     mutationFn: async (payload: { connectorSlug: string; token: string }) => {
       const response = await api.mcp.connections.post({
         connectorSlug: payload.connectorSlug,
