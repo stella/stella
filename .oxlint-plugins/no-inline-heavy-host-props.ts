@@ -1,4 +1,6 @@
-import { eslintCompatPlugin, type ESTree } from "@oxlint/plugins";
+import { eslintCompatPlugin } from "@oxlint/plugins";
+
+import { jsxName } from "./utils.ts";
 
 const HEAVY_HOSTS = new Set([
   "DocxEditorSlot",
@@ -8,9 +10,6 @@ const HEAVY_HOSTS = new Set([
   "OfficeFileViewer",
   "PeekPdfViewer",
 ]);
-
-const jsxName = (name: ESTree.JSXOpeningElement["name"]): string | null =>
-  name.type === "JSXIdentifier" ? name.name : null;
 
 export default eslintCompatPlugin({
   meta: { name: "no-inline-heavy-host-props" },
