@@ -2074,10 +2074,23 @@ type StatementAcknowledgementLookup = (
   ruleId: string,
 ) => Acknowledgement | undefined;
 
-const createAcknowledgementLookup = (
-  lines: string[],
-  acknowledgements: Acknowledgement[],
-): StatementAcknowledgementLookup => {
+type AcknowledgementLookupOptions = {
+  lines: string[];
+  acknowledgements: Acknowledgement[];
+  statements: Statement[];
+};
+
+const createAcknowledgementLookup = ({
+  lines,
+  acknowledgements,
+  statements,
+}: AcknowledgementLookupOptions): StatementAcknowledgementLookup => {
+  const firstStatementByLine = new Map<number, Statement>();
+  for (const statement of statements) {
+    if (!firstStatementByLine.has(statement.line)) {
+      firstStatementByLine.set(statement.line, statement);
+    }
+  }
   const blockCache = new Map<number, Set<number>>();
   const blockFor = (statementLine: number): Set<number> => {
     const cached = blockCache.get(statementLine);
@@ -2090,7 +2103,13 @@ const createAcknowledgementLookup = (
   };
 
   return (statement, ruleId) => {
-    const candidateLines = new Set(blockFor(statement.line));
+    // A preceding comment block belongs to the first statement on a line.
+    // Executable bodies retain their explicit enclosing-statement contract.
+    const candidateLines = new Set(
+      firstStatementByLine.get(statement.line) === statement
+        ? blockFor(statement.line)
+        : [],
+    );
     if (statement.enclosingLine !== undefined) {
       for (const lineNumber of blockFor(statement.enclosingLine)) {
         candidateLines.add(lineNumber);
@@ -2103,6 +2122,48 @@ const createAcknowledgementLookup = (
         acknowledgement.ruleIds.includes(ruleId),
     );
   };
+};
+
+// Share the statement boundary and acknowledgement contract with the lock census.
+export {
+  parseStatements as parseMigrationStatements,
+  indexTokens as migrationStatementTokens,
+  readIndexRelation as readMigrationRelation,
+  splitAlterActions as splitMigrationAlterActions,
+};
+
+export type MigrationGuardedRuleId = (typeof GUARDED_RULES)[number]["id"];
+
+export const matchingMigrationGuardedRules = (sql: string) =>
+  GUARDED_RULES.filter((rule) => guardedRuleMatches(rule, sql)).map(
+    ({ id }) => id,
+  );
+
+export const reviewedMigrationStatements = (source: string) => {
+  const lines = source.split("\n");
+  const { acknowledgements, errors } = parseAcknowledgements(
+    "migration.sql",
+    lines,
+  );
+  const reviewed = new Map<number, Set<MigrationGuardedRuleId>>();
+  if (errors.length > 0) {
+    return reviewed;
+  }
+  const statements = parseStatements(source);
+  const findAcknowledgement = createAcknowledgementLookup({
+    lines,
+    acknowledgements,
+    statements,
+  });
+  for (const [statementIndex, statement] of statements.entries()) {
+    const rules = matchingMigrationGuardedRules(statement.text).filter(
+      (rule) => findAcknowledgement(statement, rule) !== undefined,
+    );
+    if (rules.length > 0) {
+      reviewed.set(statementIndex, new Set(rules));
+    }
+  }
+  return reviewed;
 };
 
 type FileCheckResult = {
@@ -2150,10 +2211,11 @@ const checkSource = (
 
   const { acknowledgements, errors: acknowledgementErrors } =
     parseAcknowledgements(file, lines);
-  const findAcknowledgement = createAcknowledgementLookup(
+  const findAcknowledgement = createAcknowledgementLookup({
     lines,
     acknowledgements,
-  );
+    statements,
+  });
   const guardedFindings: FileCheckResult["guardedFindings"] = [];
 
   for (const [position, statement] of statements.entries()) {
