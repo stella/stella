@@ -1107,7 +1107,10 @@ describe("projectForChat", () => {
       READ_TOOL_REF_FIELD_MAP.search_legislation.projection,
     ];
     for (const country of PUBLIC_COUNTRIES) {
-      const payload = publicCountryUnavailable(country, "search");
+      const payload = publicCountryUnavailable(country, {
+        domain: "caseLaw",
+        surface: "search",
+      });
       if (payload === null) {
         continue;
       }

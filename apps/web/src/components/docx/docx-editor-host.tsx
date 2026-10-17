@@ -117,11 +117,14 @@ const DocxEditorSlotInstance = ({
 
   // Constructed per branch rather than spread over a previous claim, so the
   // inspector's scroll position cannot leak into the full view's claim.
+  // Keyed by the document's fields, not its identity: a caller that builds
+  // the document inline must not rewrite the claim on every render.
+  const { entityId, fileFieldId, propertyId, workspaceId } = document;
   const claim: DocxEditorClaim = useMemo(() => {
     const base = {
       bindings,
       canUnlock,
-      document,
+      document: { entityId, fileFieldId, propertyId, workspaceId },
       isEditing,
       scaleOffset,
       sequence,
@@ -137,12 +140,15 @@ const DocxEditorSlotInstance = ({
   }, [
     bindings,
     canUnlock,
-    document,
+    entityId,
+    fileFieldId,
     initialScrollTop,
     isEditing,
+    propertyId,
     scaleOffset,
     sequence,
     slot,
+    workspaceId,
   ]);
 
   useExternalSyncEffect(() => {
