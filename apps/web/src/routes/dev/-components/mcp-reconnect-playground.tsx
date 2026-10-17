@@ -1,6 +1,7 @@
 import type { ComponentProps } from "react";
 
 import { McpReconnectNoticeContent } from "@/components/chat/mcp-reconnect-notice";
+import { AuthenticatedUserProvider } from "@/lib/authenticated-user-context";
 import { toSafeId } from "@/lib/safe-id";
 
 const candidates = [
@@ -37,9 +38,22 @@ export const McpReconnectPlayground = () => (
     className="w-full max-w-2xl space-y-4 p-4"
     data-playground-section="mcp-reconnect"
   >
-    <McpReconnectNoticeContent
-      candidates={candidates}
-      text="Use Registry Search, Document Archive and Team Records"
-    />
+    <AuthenticatedUserProvider
+      user={{
+        activeOrganizationId: "mcp-reconnect-fixture-org",
+        id: "mcp-reconnect-fixture-user",
+        email: "member@example.test",
+        image: null,
+        name: "Member",
+        preferredName: null,
+        timezoneId: "UTC",
+        wordEditShortcut: null,
+      }}
+    >
+      <McpReconnectNoticeContent
+        candidates={candidates}
+        text="Use Registry Search, Document Archive and Team Records"
+      />
+    </AuthenticatedUserProvider>
   </section>
 );
