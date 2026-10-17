@@ -2824,6 +2824,14 @@ jobs:
             bun scripts/check-tauri-package-alignment.ts
           fi
 
+      - name: Tauri package alignment tests
+        env:
+          CI_CHECK_KIND: STATIC
+          CI_CHECK_INPUTS: tracked-tree+generated-inputs
+        id: tauri_alignment_tests
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_tauri_alignment_tests != 'true') }}
+        run: bun test scripts/check-tauri-package-alignment.test.ts
+
       - name: Tauri counterpart autofix tests
         env:
           CI_CHECK_KIND: STATIC
@@ -2994,6 +3002,13 @@ jobs:
       # checks contend with the foreground step at once.
       - name: Wait for capability shard checks
         wait: [capability_parity]
+
+      - name: Check test execution paths and disabled states
+        env:
+          CI_CHECK_KIND: CONTEXTUAL
+          CI_CHECK_CONTEXT: "Compares the scenario ledger with the Git merge-base."
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun scripts/test-gate.ts
 
       - name: Test release image CI gate
         env:
@@ -8169,6 +8184,18 @@ jobs:
           CHANGED_MARKDOWN: ${{ needs.ci-plan.outputs.docs_changed_files }}
 
       # The job condition is this part's condition, so it always runs here.
+      - name: "dated-waiver-expiry: Test CI output producer proofs"
+        if: ${{ !cancelled() }}
+        run: >-
+          bun test --timeout 50000
+          scripts/ci-plan.test.ts
+          scripts/ci-pr-pilot.test.ts
+          scripts/ci-completed-depth.test.ts
+          scripts/workflow-run-trust.test.ts
+          scripts/detect-e2e-changes.test.ts
+          scripts/ci-static-checks.test.ts
+          scripts/test-gate.test.ts
+
       - name: "dated-waiver-expiry: List tracked files for dated waiver guard"
         if: ${{ !cancelled() }}
         run: git ls-files -z > "$RUNNER_TEMP/dated-waiver-tracked-files"

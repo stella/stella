@@ -29,7 +29,7 @@
     "validate": "bun scripts/validate.ts",
     "check-upstream": "bun scripts/check-upstream.ts",
     "check-pinned": "bun --preload ../../scripts/offline-network-preload.ts scripts/check-pinned-content.ts --check",
-    "test": "bun scripts/generate-manifest.ts --check && bun scripts/validate.ts && bun test src",
+    "test": "bun scripts/generate-manifest.ts --check || exit 1; bun scripts/validate.ts || exit 1; bun test src",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/catalogue",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/catalogue",

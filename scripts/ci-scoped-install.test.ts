@@ -5,6 +5,7 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -878,7 +879,7 @@ test("landing diagnostics follow the browser configuration output directory", ()
     );
     writeFileSync(
       path.join(sdkDirectory, "config.js"),
-      'export const defineConfig = (value) => value; export const devices = { "Desktop Chrome": {} };',
+      'export const defineConfig = (...values) => Object.assign({}, ...values); export const devices = { "Desktop Chrome": {} };',
     );
     for (const file of ["marketing-config.ts", "env.ts"]) {
       writeFileSync(
@@ -889,11 +890,34 @@ test("landing diagnostics follow the browser configuration output directory", ()
         ),
       );
     }
+    const packageDirectory = path.dirname(configDirectory);
+    writeFileSync(
+      path.join(packageDirectory, "package.json"),
+      readFileSync(
+        path.join(root, "packages/playwright-tools/package.json"),
+        "utf-8",
+      ),
+    );
+    mkdirSync(path.join(directory, "node_modules/@stll"), { recursive: true });
+    symlinkSync(
+      packageDirectory,
+      path.join(directory, "node_modules/@stll/playwright-tools"),
+      "dir",
+    );
+    const landingDirectory = path.join(directory, "apps/landing/e2e");
+    mkdirSync(landingDirectory, { recursive: true });
+    writeFileSync(
+      path.join(landingDirectory, "playwright.config.ts"),
+      readFileSync(
+        path.join(root, "apps/landing/e2e/playwright.config.ts"),
+        "utf-8",
+      ),
+    );
     const result = Bun.spawnSync(
       [
         process.execPath,
         "-e",
-        'import { marketingConfig } from "./packages/playwright-tools/src/marketing-config.ts"; console.log(JSON.stringify(marketingConfig({ testDir: ".", project: "landing" })));',
+        'import config from "./apps/landing/e2e/playwright.config.ts"; console.log(JSON.stringify(config));',
       ],
       { cwd: directory },
     );

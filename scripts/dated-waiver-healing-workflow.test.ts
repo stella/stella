@@ -221,7 +221,7 @@ test("required CI expiry checks cannot be skipped by paths, reuse, or queue dept
   const guardSteps = expiry.steps.filter(({ name }) =>
     name.startsWith("dated-waiver-expiry: "),
   );
-  expect(guardSteps).toHaveLength(2);
+  expect(guardSteps).toHaveLength(3);
   for (const event of ["pull_request", "merge_group", "workflow_dispatch"]) {
     const context = {
       values: {
