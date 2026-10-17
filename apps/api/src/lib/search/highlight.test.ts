@@ -272,6 +272,27 @@ describe("search result highlighting", () => {
 });
 
 describe("preview literal selection", () => {
+  test("bounds restoration work for repetitive sources and overlapping fragments", () => {
+    const source = "a".repeat(50_000);
+    const fragments = Array.from({ length: 64 }, (_, index) =>
+      "a".repeat(index + 1),
+    );
+    const started = performance.now();
+    const restored = restoreOriginalSearchPreview({
+      source,
+      normalizedSource: source,
+      headline: fragments.join(SEARCH_PREVIEW_FRAGMENT_DELIMITER),
+      maxLength: 10_000,
+      useUnaccent: false,
+    });
+    const elapsedMs = performance.now() - started;
+
+    expect(restored).toBe(fragments.join(SEARCH_PREVIEW_FRAGMENT_SEPARATOR));
+    // Source alignment is linear; enumerating every overlapping occurrence
+    // instead creates more than three million unnecessary match records.
+    expect(elapsedMs).toBeLessThan(1000);
+  });
+
   test("preserves first-listed candidate priority at a tied lexeme start", () => {
     const source = "00000 catapultmmm tail";
     expect(

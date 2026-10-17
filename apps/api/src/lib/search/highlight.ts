@@ -1,6 +1,5 @@
 import { panic } from "better-result";
 
-import { AhoCorasick } from "@stll/aho-corasick";
 import { RegexSet } from "@stll/regex-set";
 import {
   escapeRegExp,
@@ -798,8 +797,6 @@ const truncateHighlightAware = (text: string, maxLength: number): string => {
   return truncated;
 };
 
-let lastFragmentMatcher: { key: string; matcher: AhoCorasick } | undefined;
-
 export const restoreOriginalSearchPreview = ({
   headline: rawHeadline,
   maxLength,
@@ -825,36 +822,16 @@ export const restoreOriginalSearchPreview = ({
     .split(SEARCH_PREVIEW_FRAGMENT_DELIMITER)
     .map(parseHeadlineFragment)
     .filter(({ text }) => text.length > 0);
-  const needles = Array.from(new Set(fragments.map(({ text }) => text)));
-  const matcherKey = JSON.stringify(needles);
-  const matcher =
-    lastFragmentMatcher?.key === matcherKey
-      ? lastFragmentMatcher.matcher
-      : new AhoCorasick(needles);
-  lastFragmentMatcher = { key: matcherKey, matcher };
-  const fragmentMatches = new Map<string, { starts: number[]; next: number }>();
-  for (const match of matcher.findOverlappingIter(
-    alignedSource.text.toWellFormed(),
-  )) {
-    const matches = fragmentMatches.get(match.text);
-    if (matches === undefined) {
-      fragmentMatches.set(match.text, { starts: [match.start], next: 0 });
-    } else {
-      matches.starts.push(match.start);
-    }
-  }
   const restored: string[] = [];
   let searchFrom = 0;
   for (const parsedFragment of fragments) {
-    const matches = fragmentMatches.get(parsedFragment.text);
-    if (matches === undefined) {
-      break;
-    }
-    while ((matches.starts.at(matches.next) ?? Infinity) < searchFrom) {
-      matches.next += 1;
-    }
-    const normalizedStart = matches.starts.at(matches.next);
-    if (normalizedStart === undefined) {
+    // Each fragment needs only its first occurrence after the previous one;
+    // collecting all overlapping matches makes repetitive sources unbounded.
+    const normalizedStart = alignedSource.text.indexOf(
+      parsedFragment.text,
+      searchFrom,
+    );
+    if (normalizedStart === -1) {
       break;
     }
     const fragment = restoreFragment({
@@ -868,7 +845,6 @@ export const restoreOriginalSearchPreview = ({
     }
     restored.push(fragment.text);
     searchFrom = fragment.nextSearchFrom;
-    matches.next += 1;
   }
   const content =
     restored.length > 0
