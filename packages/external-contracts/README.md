@@ -27,8 +27,9 @@ requires re-characterisation. Existing pin drift can be recorded in
 `scripts/external-contract-pin-allowances.json` with exact current values and an
 expiry no more than seven days after its checked date. An allowance applies only
 while those pins match the merge base and no executable code has changed in
-any registered owner's local runtime import closure that reaches a pinned SDK. Relative and workspace
-package imports resolve independently against the merge base and current tree;
+any registered owner's local runtime import closure that reaches a pinned SDK.
+Image and API-version pins cover every registered owner's runtime closure, regardless of SDK imports.
+Relative and workspace package imports resolve independently against the merge base and current tree;
 external packages stop traversal. Changed, added or removed reachable files
 invalidate the allowance, including calls through derived clients and aliases.
 Unresolved local imports and non-literal runtime module references fail closed

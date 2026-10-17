@@ -20,7 +20,10 @@ import {
   findVersionDrift,
 } from "../packages/external-contracts/src/guard";
 import { EXTERNAL_CONTRACTS } from "../packages/external-contracts/src/registry";
-import type { ExternalContractEntry } from "../packages/external-contracts/src/types";
+import type {
+  ExternalContractEntry,
+  PinSource,
+} from "../packages/external-contracts/src/types";
 import {
   admittedPinDrift,
   baselinePinSourceFiles,
@@ -73,10 +76,11 @@ const withBlobIds = (read: RuntimeSnapshotReader): RuntimeSnapshotReader => {
   });
 };
 const hasChangedLocalRuntimeClosure = (
-  options: Parameters<typeof compareLocalRuntimeClosure>[0],
+  options: Omit<Parameters<typeof compareLocalRuntimeClosure>[0], "scope">,
 ) =>
   compareLocalRuntimeClosure({
     ...options,
+    scope: "sdk-reachable",
     baseline: withBlobIds(options.baseline),
     current: withBlobIds(options.current),
   });
@@ -843,6 +847,99 @@ test("non-literal module references invalidate even unchanged pinned owners", ()
     }),
   ).toBe(true);
 });
+
+test.each([
+  { type: "image", file: "images.json", name: "quickwit" },
+  { type: "constant", file: "version.ts", name: "API_VERSIONS" },
+] as const satisfies readonly PinSource[])(
+  "$type pin allowances reject executable client and helper edits without SDK imports",
+  (source) => {
+    const root = mkdtempSync(path.join(tmpdir(), "external-transport-debt-"));
+    try {
+      const owner = "corpus-index-client.ts";
+      const helper = "request.ts";
+      const files = new Map([
+        ["package.json", "{}"],
+        ["bun.lock", '{"packages":{}}'],
+        [
+          "images.json",
+          '[{"name":"quickwit","source":"quickwit@sha256:current"}]',
+        ],
+        ["version.ts", 'export const API_VERSIONS = ["v2"] as const;'],
+        [
+          owner,
+          'import { body } from "./request"; export const request = () => body;',
+        ],
+        [helper, 'export const body = "old";'],
+        ["replay.test.ts", 'import "./corpus-index-client";'],
+      ]);
+      for (const [file, text] of files) {
+        writeFileSync(path.join(root, file), text);
+      }
+      const entry = {
+        owners: [{ path: owner, role: "primary" }],
+        sdks: [],
+        pinSources: [source],
+        driftTriggers: ["pin-bump"],
+        status: "characterised",
+        fixtures: [
+          {
+            path: "replay.test.ts",
+            replayFiles: ["replay.test.ts"],
+            replay: "fetch-replay",
+            metadata: "receipt.json",
+            provenance: { type: "authored", kind: "synthetic-from-spec" },
+          },
+        ],
+        uncharacterisedScope: { owners: [], sdks: [] },
+      } as const satisfies ExternalContractEntry;
+      const pins = readCurrentPins(root, entry);
+      writeFileSync(
+        path.join(root, "receipt.json"),
+        JSON.stringify({
+          characterisedAt: Object.fromEntries(
+            Object.keys(pins).map((key) => [key, "older"]),
+          ),
+          coveredOwners: [owner],
+          coveredSdks: [],
+          fixtureSet: "replay.test.ts",
+          provenance: entry.fixtures[0].provenance,
+        }),
+      );
+      const options = {
+        root,
+        system: "quickwit",
+        entry,
+        baseline: (file: string) => files.get(file),
+        admitted: { ...pinDebt, system: "quickwit", pins },
+        now: new Date("2026-10-15T00:00:00.000Z"),
+      };
+      expect(checkContractEntry(options)).toEqual([]);
+      for (const file of [owner, helper]) {
+        const original = files.get(file) ?? panic("Missing runtime fixture");
+        writeFileSync(
+          path.join(root, file),
+          `${original}\nexport const addedRequest = "new";`,
+        );
+        expect(readCurrentPins(root, entry)).toEqual(pins);
+        const problems = checkContractEntry(options).join("\n");
+        expect(problems).toContain("ExternalContractAllowanceInvalidated");
+        expect(problems).toContain("re-characterise quickwit");
+        expect(problems).toContain(
+          "runtime closure changed or could not be resolved",
+        );
+        writeFileSync(
+          path.join(root, file),
+          `// updated comment\n${original}\ntype Request = string;`,
+        );
+        expect(checkContractEntry(options)).toEqual([]);
+        writeFileSync(path.join(root, file), original);
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  },
+);
 
 test("local runtime closure changes invalidate dated debt", () => {
   const root = "/fixture";
@@ -1777,6 +1874,7 @@ test("an uncommitted tracked data edit invalidates a pin allowance", () => {
     );
     expect(current.blobId("input.bin")).not.toBe(baseline.blobId("input.bin"));
     const usageChanged = compareLocalRuntimeClosure({
+      scope: "sdk-reachable",
       root,
       owners: ["owner.ts"],
       sdks: ["vendor"],
@@ -1848,6 +1946,7 @@ test("a newly staged generator input invalidates a pin allowance", () => {
     );
     expect(current.files).toContain("inputs/new.json");
     const usageChanged = compareLocalRuntimeClosure({
+      scope: "sdk-reachable",
       root,
       owners: ["owner.ts"],
       sdks: ["vendor"],

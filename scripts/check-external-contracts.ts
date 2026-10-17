@@ -928,6 +928,7 @@ type ChangedLocalRuntimeClosureOptions = {
   root: string;
   owners: readonly string[];
   sdks: readonly string[];
+  scope: "sdk-reachable" | "all-owners";
   baseline: RuntimeSnapshotReader;
   current: RuntimeSnapshotReader;
   generators?: Parameters<
@@ -943,6 +944,7 @@ export const hasChangedLocalRuntimeClosure = ({
   root,
   owners,
   sdks,
+  scope,
   baseline,
   current,
   generators,
@@ -1028,8 +1030,9 @@ export const hasChangedLocalRuntimeClosure = ({
             return panic("Unhandled runtime module reference");
         }
       });
+    // Image and API-version pins govern the transport even without an SDK import.
     // An unresolved edge can hide SDK reachability, so check problems before scope.
-    if (!reachesPinnedSdk) {
+    if (scope === "sdk-reachable" && !reachesPinnedSdk) {
       continue;
     }
     if (previous.dataBlobIds.size !== present.dataBlobIds.size) {
@@ -1184,6 +1187,9 @@ export const checkContractEntry = ({
       root,
       owners: entry.owners.map(({ path: file }) => file),
       sdks: entry.sdks,
+      scope: entry.pinSources.some((source) => source.type !== "manifest")
+        ? "all-owners"
+        : "sdk-reachable",
       baseline,
       onInvalidation: (reason) => {
         problems.push(
