@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
 
@@ -32,10 +32,16 @@ const matches = (file: string, pattern: string) => {
   return file === pattern;
 };
 
+/**
+ * Repository files the compiler read that Turbo would not rehash. A file is
+ * covered when an input includes it and no input excludes it, or when a task
+ * this one depends on declares it as an output (Turbo hashes that task).
+ */
 export const uncoveredCompilerInputs = (
   stamp: CompilerInputStamp,
   repoRoot: string,
   turboInputs: readonly string[],
+  dependencyOutputs: readonly string[],
 ) => {
   const included = turboInputs
     .filter((input) => input.startsWith(ROOT_PREFIX) && !input.startsWith("!"))
@@ -57,27 +63,88 @@ export const uncoveredCompilerInputs = (
         !file.startsWith("../") &&
         !file.startsWith("node_modules/") &&
         !file.includes("/node_modules/") &&
-        !included.some((pattern) => matches(file, pattern)),
+        (!included.some((pattern) => matches(file, pattern)) ||
+          excluded.some((pattern) => matches(file, pattern))) &&
+        !dependencyOutputs.some((pattern) => matches(file, pattern)),
     )
-    .filter((file) => !excluded.some((pattern) => matches(file, pattern)))
     .toSorted();
 };
 
+const API_TYPES_TASK = "@stll/web#generate:api-types";
+
 const turboConfigSchema = v.object({
-  tasks: v.object({
-    "@stll/web#generate:api-types": v.object({ inputs: v.array(v.string()) }),
-  }),
+  tasks: v.record(
+    v.string(),
+    v.looseObject({
+      inputs: v.optional(v.array(v.string())),
+      outputs: v.optional(v.array(v.string())),
+      dependsOn: v.optional(v.array(v.string())),
+    }),
+  ),
 });
 
-export const webApiTurboInputs = (repoRoot: string): string[] => {
+const readTurboTasks = (repoRoot: string) => {
   const config = v.safeParse(
     turboConfigSchema,
     Bun.JSONC.parse(readFileSync(path.join(repoRoot, "turbo.json"), "utf-8")),
   );
   if (!config.success) {
-    return panic(
-      "generate-web-api-types: turbo.json has no string inputs for @stll/web#generate:api-types",
-    );
+    return panic("generate-web-api-types: turbo.json tasks are unreadable");
   }
-  return config.output.tasks["@stll/web#generate:api-types"].inputs;
+  return config.output.tasks;
+};
+
+export const webApiTurboInputs = (repoRoot: string): string[] =>
+  readTurboTasks(repoRoot)[API_TYPES_TASK]?.inputs ??
+  panic(
+    `generate-web-api-types: turbo.json has no string inputs for ${API_TYPES_TASK}`,
+  );
+
+const workspaceDirectories = (repoRoot: string) =>
+  new Map(
+    ["apps", "packages"].flatMap((group) =>
+      readdirSync(path.join(repoRoot, group), { withFileTypes: true })
+        .filter((entry) => entry.isDirectory())
+        .flatMap((entry) => {
+          const directory = `${group}/${entry.name}`;
+          const manifestPath = path.join(repoRoot, directory, "package.json");
+          if (!existsSync(manifestPath)) {
+            return [];
+          }
+          const manifest = v.safeParse(
+            v.object({ name: v.string() }),
+            Bun.JSONC.parse(readFileSync(manifestPath, "utf-8")),
+          );
+          return manifest.success
+            ? [[manifest.output.name, directory] as const]
+            : [];
+        }),
+    ),
+  );
+
+/**
+ * Repository paths the API types task's dependencies declare as outputs.
+ * A dependency without declared outputs contributes nothing, so its files
+ * stay uncovered unless an input names them.
+ */
+export const webApiDependencyOutputs = (repoRoot: string): string[] => {
+  const tasks = readTurboTasks(repoRoot);
+  const [ownPackage = ""] = API_TYPES_TASK.split("#");
+  const directories = workspaceDirectories(repoRoot);
+  return (tasks[API_TYPES_TASK]?.dependsOn ?? []).flatMap((dependency) => {
+    if (dependency.startsWith("^")) {
+      return [];
+    }
+    const qualified = dependency.includes("#")
+      ? dependency
+      : `${ownPackage}#${dependency}`;
+    const [packageName = ""] = qualified.split("#");
+    const directory = directories.get(packageName);
+    if (directory === undefined) {
+      return [];
+    }
+    return (tasks[qualified]?.outputs ?? [])
+      .filter((output) => !output.startsWith("!"))
+      .map((output) => `${directory}/${output}`);
+  });
 };

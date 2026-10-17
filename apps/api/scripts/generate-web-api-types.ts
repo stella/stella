@@ -75,6 +75,7 @@ import {
 } from "./lib/web-api-alias-names";
 import {
   uncoveredCompilerInputs,
+  webApiDependencyOutputs,
   webApiTurboInputs,
 } from "./lib/web-api-turbo-inputs";
 import { orderUnionMembers } from "./lib/web-api-union-order";
@@ -1498,6 +1499,7 @@ const main = async () => {
     stamp,
     REPO_ROOT,
     webApiTurboInputs(REPO_ROOT),
+    webApiDependencyOutputs(REPO_ROOT),
   );
   if (uncovered.length > 0) {
     panic(
