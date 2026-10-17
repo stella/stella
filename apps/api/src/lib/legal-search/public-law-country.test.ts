@@ -259,11 +259,12 @@ describe("a pages_public country on the shared read", () => {
 test("EU provision jurisdiction does not depend on EU decision admission", () => {
   const capabilities = {
     ...PUBLIC_COUNTRY_CAPABILITIES,
-    EU: "withdrawn" as const,
+    EU: { ...PUBLIC_COUNTRY_CAPABILITIES.EU, caseLaw: "withdrawn" as const },
   };
   for (const input of ["EU", "eu", "European Union"]) {
     expect(
       readPublicLawCountry(input, {
+        domain: "caseLaw",
         admitted: ["CZE"],
         surface: "search",
         jurisdictionType: "provision",
@@ -272,6 +273,7 @@ test("EU provision jurisdiction does not depend on EU decision admission", () =>
     ).toEqual({ kind: "read", country: "EU" });
     expect(
       readPublicLawCountry(input, {
+        domain: "caseLaw",
         admitted: ["CZE"],
         surface: "search",
         capabilities,
@@ -280,10 +282,14 @@ test("EU provision jurisdiction does not depend on EU decision admission", () =>
   }
   expect(
     readPublicLawCountry("SVK", {
+      domain: "caseLaw",
       admitted: ["CZE"],
       surface: "search",
       jurisdictionType: "provision",
-      capabilities: { ...capabilities, SVK: "withdrawn" },
+      capabilities: {
+        ...capabilities,
+        SVK: { ...capabilities.SVK, caseLaw: "withdrawn" },
+      },
     }).kind,
   ).toBe("unavailable");
 });

@@ -996,8 +996,8 @@ test("EU cited-by lists and counts share decision admission and publication gate
         unit: "article" as const,
         section: 6,
         workCollection: "EUR-Lex",
-        workNumber: 679,
-        workYear: 2016,
+        euWorkNumber: 679,
+        euWorkYear: 2016,
       })),
     ),
   );
@@ -1024,5 +1024,58 @@ test("EU cited-by lists and counts share decision admission and publication gate
   ).toEqual({
     status: "ready",
     provisions: [{ anchor: "art_6", decisionCount: 2 }],
+  });
+});
+
+test("EU provision responses read nullable identity columns rather than legacy rollout slots", async () => {
+  await db.insert(caseLawProvisionCitations).values([
+    {
+      ...provisionRow({
+        decisionId: highAuthorityId,
+        anchor: "art_5",
+        decisionDate: "2025-01-01",
+        spanStart: 150,
+        workIdentifier: "12016M/TXT",
+        workEli: "http://data.europa.eu/eli/treaty/teu_2016/oj",
+      }),
+      jurisdiction: "EU",
+      unit: "article",
+      section: 5,
+      workCollection: "EUR-Lex",
+      workNumber: 0,
+      workYear: 0,
+    },
+    {
+      ...provisionRow({
+        decisionId: highAuthorityId,
+        anchor: "art_7",
+        decisionDate: "2025-01-01",
+        spanStart: 170,
+        workIdentifier: "32016R0679",
+        workEli: "http://data.europa.eu/eli/reg/2016/679/oj",
+      }),
+      jurisdiction: "EU",
+      unit: "article",
+      section: 7,
+      workCollection: "EUR-Lex",
+      euWorkNumber: 679,
+      euWorkYear: 2016,
+    },
+  ]);
+  const page = await withSubject(
+    highAuthorityId,
+    async (subject) =>
+      await listDecisionProvisionsHandler({ subject, query: { limit: 100 } }),
+  );
+  if (!("items" in page)) {
+    panic("Expected a provision page");
+  }
+  expect(page.items.find(({ spanStart }) => spanStart === 150)).toMatchObject({
+    workNumber: null,
+    workYear: null,
+  });
+  expect(page.items.find(({ spanStart }) => spanStart === 170)).toMatchObject({
+    workNumber: 679,
+    workYear: 2016,
   });
 });

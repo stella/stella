@@ -286,6 +286,8 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     jurisdiction: "required",
     work_identifier: "required",
     work_number: "required",
+    eu_work_number: "required",
+    eu_work_year: "required",
     work_year: "required",
     work_collection: "required",
     work_eli: "required",

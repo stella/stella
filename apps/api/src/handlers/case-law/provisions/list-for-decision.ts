@@ -92,8 +92,14 @@ const LEGACY_CITATION_FIELDS = {
   // Drizzle detects absent left-join rows from the first column; keep it non-null.
   jurisdiction: caseLawProvisionCitations.jurisdiction,
   workIdentifier: caseLawProvisionCitations.workIdentifier,
-  workNumber: caseLawProvisionCitations.workNumber,
-  workYear: caseLawProvisionCitations.workYear,
+  workNumber: sql<
+    number | null
+  >`CASE WHEN ${caseLawProvisionCitations.jurisdiction} = 'EU'
+    THEN ${caseLawProvisionCitations.euWorkNumber} ELSE ${caseLawProvisionCitations.workNumber} END`,
+  workYear: sql<
+    number | null
+  >`CASE WHEN ${caseLawProvisionCitations.jurisdiction} = 'EU'
+    THEN ${caseLawProvisionCitations.euWorkYear} ELSE ${caseLawProvisionCitations.workYear} END`,
   workCollection: caseLawProvisionCitations.workCollection,
   workEli: caseLawProvisionCitations.workEli,
   workSource: caseLawProvisionCitations.workSource,

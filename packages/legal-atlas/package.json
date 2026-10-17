@@ -75,6 +75,10 @@
       "types": "./src/document-stage-observer.ts",
       "import": "./src/document-stage-observer.ts"
     },
+    "./eu-legal-identity": {
+      "types": "./src/eu-legal-identity.ts",
+      "import": "./src/eu-legal-identity.ts"
+    },
     "./eu-provision-citations": {
       "types": "./src/eu-provision-citations.ts",
       "import": "./src/eu-provision-citations.ts"

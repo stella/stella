@@ -1,6 +1,7 @@
 /** Every stored citation reaches a placement or one of these explicit outcomes. */
 export const PROVISION_PLACEMENT_FAILURE_REASONS = [
   "work-unresolved",
+  "work-identity-invalid",
   "statute-not-loaded",
   "no-version-in-force",
   "version-not-stated",
@@ -23,6 +24,7 @@ export type ProvisionPlacementFailureReason =
  */
 export const PROVISION_PLACEMENT_FAILURE_KIND = {
   "work-unresolved": "expected",
+  "work-identity-invalid": "defect",
   "statute-not-loaded": "expected",
   "no-version-in-force": "expected",
   "version-not-stated": "expected",

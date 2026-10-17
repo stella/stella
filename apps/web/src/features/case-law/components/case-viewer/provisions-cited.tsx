@@ -1,7 +1,6 @@
 import { useState } from "react";
 
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { provisionVersionAsOf } from "@stll/api-contract/provision-version-basis";
@@ -363,26 +362,33 @@ const WorkReferences = ({
           </p>
         )}
         <div className="flex flex-wrap gap-1.5">
-          {group.provisions.map((provision) => (
-            <ProvisionReferenceChip
-              target={
-                group.jurisdiction === "EU"
-                  ? {
-                      type: "external",
-                      href:
-                        euProvisionSourceUrl(group.workIdentifier, provision) ??
-                        panic("EU provision has invalid work identity"),
-                    }
-                  : { type: "hosted", document: documentFor(provision) }
-              }
-              key={provision.key}
-              label={formatProvisionReference(provision, renderPart)}
-              provision={provision}
-              versionMarker={
-                exceptions.has(provision.key) ? "exception" : "group"
-              }
-            />
-          ))}
+          {group.provisions.map((provision) => {
+            const href =
+              group.jurisdiction === "EU"
+                ? euProvisionSourceUrl(group.workIdentifier, provision)
+                : null;
+            return (
+              <ProvisionReferenceChip
+                target={
+                  href !== null
+                    ? { type: "external", href }
+                    : {
+                        type: "hosted",
+                        document:
+                          group.jurisdiction === "EU"
+                            ? null
+                            : documentFor(provision),
+                      }
+                }
+                key={provision.key}
+                label={formatProvisionReference(provision, renderPart)}
+                provision={provision}
+                versionMarker={
+                  exceptions.has(provision.key) ? "exception" : "group"
+                }
+              />
+            );
+          })}
         </div>
       </AccordionPanel>
     </AccordionItem>

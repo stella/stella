@@ -400,3 +400,28 @@ test("EU provisions open EUR-Lex without resolving hosted text", async () => {
   expect(link.getAttribute("target")).toBe("_blank");
   expect(requests).toBe(0);
 });
+
+test("invalid EU identities keep the cited reference visible without a source link", async () => {
+  for (const workIdentifier of ["32016R0000", "39999R0679"]) {
+    const view = mount([
+      provision({
+        jurisdiction: "EU",
+        workCollection: "EU",
+        workIdentifier,
+        workEli: null,
+        anchor: "art_6",
+        unit: "article",
+        section: 6,
+        sectionSuffix: null,
+        subsection: null,
+        sentenceText: "Article 6 applies.",
+      }),
+    ]);
+    const reference = screen.getByRole("button", { name: "Art. 6" });
+    expect(reference.textContent).toContain("6");
+    reference.focus();
+    await screen.findByText("Article 6 applies.");
+    expect(screen.queryByRole("link")).toBeNull();
+    view.unmount();
+  }
+});

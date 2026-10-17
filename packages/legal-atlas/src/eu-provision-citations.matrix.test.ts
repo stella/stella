@@ -70,26 +70,27 @@ const CITATION_MARKERS = {
 >;
 
 describe("EU provision citation language, act-kind and numbering-era matrix", () => {
-  for (const language of EU_PROVISION_CITATION_LANGUAGES) {
-    for (const { kind, celexLetter, eliKind } of Object.values(
-      ACT_IDENTIFIERS,
-    )) {
-      for (const { name: era, year: yearArbitrary } of Object.values(
-        NUMBERING_ERAS,
-      )) {
-        const id = `eu-provision-matrix-${language}-${kind}-${era}`;
-        test(id, () => {
-          assertProperty(
-            id,
-            fc.property(
-              yearArbitrary,
-              fc.oneof(
-                fc.integer({ min: 1, max: 999 }),
-                // Numbers resembling modern short years expose legacy-order ambiguity.
-                fc.integer({ min: 15, max: 20 }),
-              ),
-              fc.integer({ min: 1, max: 500 }),
-              (year, number, article) => {
+  test("eu-provision-matrix-preserves-language-kind-era-identities", () => {
+    assertProperty(
+      "eu-provision-matrix-preserves-language-kind-era-identities",
+      fc.property(
+        fc.record({
+          legacyYear: NUMBERING_ERAS.legacy.year,
+          modernYear: NUMBERING_ERAS.modern.year,
+          number: fc.oneof(
+            fc.integer({ min: 1, max: 999 }),
+            // Numbers resembling modern short years expose legacy-order ambiguity.
+            fc.integer({ min: 15, max: 20 }),
+          ),
+          article: fc.integer({ min: 1, max: 500 }),
+        }),
+        ({ legacyYear, modernYear, number, article }) => {
+          for (const language of EU_PROVISION_CITATION_LANGUAGES) {
+            for (const { kind, celexLetter, eliKind } of Object.values(
+              ACT_IDENTIFIERS,
+            )) {
+              for (const { name: era } of Object.values(NUMBERING_ERAS)) {
+                const year = era === "legacy" ? legacyYear : modernYear;
                 // Modern instruments use a four-digit year; legacy citations
                 // must retain the same identity with either year spelling.
                 const printedYears =
@@ -137,13 +138,13 @@ describe("EU provision citation language, act-kind and numbering-era matrix", ()
                     }
                   }
                 }
-              },
-            ),
-          );
-        });
-      }
-    }
-  }
+              }
+            }
+          }
+        },
+      ),
+    );
+  });
 
   test("a legacy regulation's two short components retain number/year order", () => {
     expect(

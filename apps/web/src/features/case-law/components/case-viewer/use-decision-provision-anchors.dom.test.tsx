@@ -10,6 +10,8 @@ import { PROVISION_CITATION_GRAMMARS } from "@stll/legal-atlas/provision-citatio
 import { toSafeId } from "@/lib/safe-id";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
+import { provision } from "./provisions-cited.fixture";
+
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 const { cleanup, renderHook, waitFor } = await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
@@ -19,6 +21,9 @@ const { decisionProvisionsForLinkingOptions } =
   await import("@/features/case-law/queries/provisions");
 const { useDecisionProvisionAnchors } =
   await import("./use-decision-provision-anchors");
+const { AnalyticsProvider } =
+  await import("@/lib/analytics/analytics-provider");
+const { noopAnalytics } = await import("@/lib/analytics/noop");
 const messages = (await import("@/i18n/langs/en.json")).default;
 const originalFetch = globalThis.fetch;
 const clients: InstanceType<typeof QueryClient>[] = [];
@@ -95,4 +100,79 @@ test("legacy EU decision fallback never requests hosted statute text", async () 
   await waitFor(() => expect(client.isFetching()).toBe(0));
   expect(result.current).toEqual({ anchors: [], externalAnchors: [] });
   expect(requests).toEqual([]);
+});
+
+test("invalid EU identities omit external anchors and report a placement defect", async () => {
+  const decisionId = toSafeId<"caseLawDecision">(
+    "00000000-0000-4000-8000-000000000004",
+  );
+  const client = new QueryClient({
+    defaultOptions: { queries: { enabled: false, retry: false } },
+  });
+  clients.push(client);
+  const options = decisionProvisionsForLinkingOptions(decisionId);
+  client.setQueryData(options.queryKey, {
+    items: ["32016R0000", "39999R0679"].map((workIdentifier, index) =>
+      provision({
+        jurisdiction: "EU",
+        workCollection: "EU",
+        workIdentifier,
+        workEli: null,
+        anchor: "art_6",
+        unit: "article",
+        section: 6,
+        sectionSuffix: null,
+        spanStart: index,
+      }),
+    ),
+    nextCursor: null,
+    previews: [],
+    status: { type: "legacy" },
+    generation: "0",
+  } satisfies Awaited<ReturnType<NonNullable<typeof options.queryFn>>>);
+  const gaps: Parameters<
+    typeof noopAnalytics.captureProvisionPlacementGaps
+  >[0][] = [];
+  const analytics = {
+    ...noopAnalytics,
+    captureProvisionPlacementGaps: (
+      gap: Parameters<typeof noopAnalytics.captureProvisionPlacementGaps>[0],
+    ) => {
+      gaps.push(gap);
+    },
+  };
+  const { result } = renderHook(
+    () =>
+      useDecisionProvisionAnchors({
+        blocks: [],
+        country: "EU",
+        decisionDate: "2024-01-01",
+        court: "Court of Justice",
+        caseNumber: "C-1/24",
+        decisionId,
+        surface: "full-reader",
+      }),
+    {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <AnalyticsProvider value={{ analytics, client: null }}>
+          <QueryClientProvider client={client}>
+            <IntlProvider locale="en" messages={messages} timeZone="UTC">
+              {children}
+            </IntlProvider>
+          </QueryClientProvider>
+        </AnalyticsProvider>
+      ),
+    },
+  );
+  await waitFor(() =>
+    expect(gaps).toEqual([
+      {
+        count: 2,
+        kind: "defect",
+        reason: "work-identity-invalid",
+        surface: "full-reader",
+      },
+    ]),
+  );
+  expect(result.current).toEqual({ anchors: [], externalAnchors: [] });
 });

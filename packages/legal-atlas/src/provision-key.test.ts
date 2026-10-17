@@ -500,7 +500,7 @@ describe("provision identity construction", () => {
     );
   });
 
-  test.each(CZ_STATUTE_COLLECTION.spellings)(
+  test.each([...CZ_STATUTE_COLLECTION.spellings])(
     "normalizes the declared collection spelling %s",
     (spelling) => {
       expect(grammar.gazette.parse(`89/2012 ${spelling}`)?.identifier).toBe(

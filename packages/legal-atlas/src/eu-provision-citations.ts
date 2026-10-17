@@ -2,6 +2,8 @@ import type { AppliedProvisionVersion } from "@stll/api-contract/provision-appli
 import type { ProvisionReference } from "@stll/legal-ast/provision-reference";
 import { Temporal } from "@stll/time";
 
+import { normalizeEuLegalIdentifier } from "./eu-legal-identity";
+
 export const EU_PROVISION_CITATION_LANGUAGES = [
   "cs",
   "sk",
@@ -67,13 +69,19 @@ export const EU_PRIMARY_WORKS = {
 } as const satisfies Record<string, EuActIdentity>;
 
 export const parseEuWorkIdentifier = (raw: string): EuActIdentity | null => {
+  const identifier = normalizeEuLegalIdentifier(raw);
+  if (identifier === null) {
+    return null;
+  }
   const primary = Object.values(EU_PRIMARY_WORKS).find(
-    ({ celex }) => celex === raw,
+    ({ celex }) => celex === identifier,
   );
   if (primary !== undefined) {
     return primary;
   }
-  const match = /^3(?<year>\d{4})(?<kind>[LR])(?<number>\d{4})$/u.exec(raw);
+  const match = /^3(?<year>\d{4})(?<kind>[LR])(?<number>\d{4})$/u.exec(
+    identifier,
+  );
   const year = match?.groups?.["year"];
   const number = match?.groups?.["number"];
   if (
@@ -96,14 +104,15 @@ export const euProvisionSourceUrl = (
   workIdentifier: string,
   reference?: ProvisionReference,
 ): string | null => {
-  if (parseEuWorkIdentifier(workIdentifier) === null) {
+  const work = parseEuWorkIdentifier(workIdentifier);
+  if (work === null) {
     return null;
   }
   const anchor =
     reference === undefined
       ? ""
       : `#art_${String(reference.section)}${reference.sectionSuffix ?? ""}`;
-  return `https://eur-lex.europa.eu/legal-content/AUTO/?uri=CELEX:${encodeURIComponent(workIdentifier)}${anchor}`;
+  return `https://eur-lex.europa.eu/legal-content/AUTO/?uri=CELEX:${encodeURIComponent(work.celex)}${anchor}`;
 };
 
 export type LocatedEuProvisionCitation = {

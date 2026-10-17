@@ -74,7 +74,7 @@ describe("EU provision citations", () => {
     }
   });
 
-  test("located spans resolve to exactly one CELEX", () => {
+  test("eu-citation-spans-resolve-one-celex", () => {
     assertProperty(
       "eu-citation-spans-resolve-one-celex",
       fc.property(
@@ -144,7 +144,7 @@ describe("EU primary-law work identity", () => {
     ).toEqual({ type: "not_stated" });
   });
 
-  test("EU provision references round-trip their CELEX identity independently of hosted text", () => {
+  test("eu-provision-celex-key-roundtrip", () => {
     assertProperty(
       "eu-provision-celex-key-roundtrip",
       fc.property(
@@ -231,15 +231,17 @@ describe("EU act numbering with a citing date", () => {
         ).toEqual([celex]);
       }
     });
+  }
 
-    test(`eu-secondary-law-year-never-follows-citing-date-${language}`, () => {
-      assertProperty(
-        `eu-secondary-law-year-never-follows-citing-date-${language}`,
-        fc.property(
-          fc.integer({ min: 1, max: 999 }),
-          fc.integer({ min: 1950, max: 2020 }),
-          fc.integer({ min: 1950, max: 2020 }),
-          (number, year, citingYear) => {
+  test("eu-secondary-law-year-never-follows-citing-date", () => {
+    assertProperty(
+      "eu-secondary-law-year-never-follows-citing-date",
+      fc.property(
+        fc.integer({ min: 1, max: 999 }),
+        fc.integer({ min: 1950, max: 2020 }),
+        fc.integer({ min: 1950, max: 2020 }),
+        (number, year, citingYear) => {
+          for (const spelling of Object.values(legacyRegulationSpellings)) {
             const printed = spelling
               .replace("{number}", () => String(year < 2015 ? number : year))
               .replace("{year}", () => String(year < 2015 ? year : number));
@@ -258,11 +260,11 @@ describe("EU act numbering with a citing date", () => {
             if (year <= citingYear) {
               expect(citations).toHaveLength(1);
             }
-          },
-        ),
-      );
-    });
-  }
+          }
+        },
+      ),
+    );
+  });
 
   test("future and implausible identities are refused instead of reinterpreted", () => {
     for (const printed of [

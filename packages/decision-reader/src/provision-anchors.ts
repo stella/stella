@@ -79,7 +79,7 @@ const referencePattern = ({
   const number = `${String(section)}${sectionSuffix === null ? "" : escapeRegExp(sectionSuffix)}`;
   const head =
     unit === "article"
-      ? String.raw`(?:(?:čl\.|článk\p{Ll}*|art\.|Art\.?|Article|Artikel)\s*${number}(?![\p{N}\p{L}])|${number}\.\s*cikk)`
+      ? String.raw`(?:(?:čl\.|článek|článok|článk\p{Ll}*|art\.|Art\.?|Article|Artikel)\s*${number}(?![\p{N}\p{L}])|${number}\.\s*cikk)`
       : String.raw`§\s*${number}(?![\p{N}\p{L}])`;
   const parts = [head];
   if (subsection !== null) {

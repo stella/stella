@@ -301,9 +301,11 @@ export const useDecisionProvisionAnchors = ({
   for (const row of rows) {
     const id = `${row.anchor}-${String(row.spanStart)}`;
     if (row.jurisdiction === "EU") {
-      const href =
-        euProvisionSourceUrl(row.workIdentifier, row) ??
-        panic("EU provision has invalid work identity");
+      const href = euProvisionSourceUrl(row.workIdentifier, row);
+      if (href === null) {
+        failures.push({ id, reason: "work-identity-invalid" });
+        continue;
+      }
       externalAnchors.push({
         id,
         occurrence: occurrences.get(id),
