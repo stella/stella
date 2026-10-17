@@ -17,6 +17,7 @@ on:
         type: string
   workflow_run:
     workflows: [CI Checks]
+    branches: [chore/provenance-update, bot/model-catalog-refresh]
     types: [completed]
 
 permissions: {}
