@@ -5371,7 +5371,6 @@ jobs:
           NPM_TOKEN: ""
 
       - name: Typecheck coverage
-        continue-on-error: ${{ github.event_name == 'merge_group' }}
         # Loaders can execute a TypeScript file that belongs to no project in
         # the turbo typecheck graph. Compare every repository source with the
         # compiler's own --listFilesOnly output so none bypass typechecking.

@@ -55,6 +55,16 @@ export const CONTINUE_ON_ERROR: Readonly<
   "time-based": MERGE_GROUP_ONLY,
 };
 
+/**
+ * Steps named "baseline", "budget" or "coverage" that are nonetheless
+ * correctness guards: two passing changes can combine into a defect, so they
+ * block merge groups too and may never be classed or softened.
+ */
+export const CORRECTNESS_GUARDS: Readonly<Record<string, string>> = {
+  "Typecheck coverage":
+    "Finds source files outside every TypeScript project; one change can add files while another changes project inclusion.",
+};
+
 export const CI_GATES: Readonly<Record<string, JobGate>> = {
   "ci-plan": {
     class: "correctness",
@@ -115,12 +125,7 @@ export const CI_GATES: Readonly<Record<string, JobGate>> = {
   "api-test-durations": { class: "advisory" },
   "ci-browser": { class: "correctness" },
   "code-quality-api": { class: "correctness" },
-  "code-quality-web-rest": {
-    class: "correctness",
-    steps: {
-      "Typecheck coverage": { class: "budget", owner: "code-health" },
-    },
-  },
+  "code-quality-web-rest": { class: "correctness" },
   "query-perf": { class: "correctness" },
   "postgres-service-suites": { class: "correctness" },
   "service-suites": { class: "correctness" },

@@ -1,7 +1,11 @@
 import { expect, test } from "bun:test";
 import * as v from "valibot";
 
-import { CI_GATES, CONTINUE_ON_ERROR } from "./ci-gate-classes";
+import {
+  CI_GATES,
+  CONTINUE_ON_ERROR,
+  CORRECTNESS_GUARDS,
+} from "./ci-gate-classes";
 
 const Step = v.object({
   name: v.optional(v.string()),
@@ -56,5 +60,29 @@ test("only classed steps soften failures, so no step is lenient by accident", ()
         `${job} / ${step.name ?? "(unnamed)"} sets continue-on-error without a gate class`,
       ).toBe(true);
     }
+  }
+});
+
+test("correctness guards are never classed or softened in any job", () => {
+  for (const [job, spec] of Object.entries(workflow.jobs)) {
+    for (const step of spec.steps ?? []) {
+      if (step.name === undefined || !(step.name in CORRECTNESS_GUARDS)) {
+        continue;
+      }
+      expect(CI_GATES[job]?.steps?.[step.name], `${job} / ${step.name}`).toBe(
+        undefined,
+      );
+      expect(step["continue-on-error"], `${job} / ${step.name}`).toBe(
+        undefined,
+      );
+    }
+  }
+  for (const name of Object.keys(CORRECTNESS_GUARDS)) {
+    expect(
+      Object.values(workflow.jobs).some((spec) =>
+        (spec.steps ?? []).some((step) => step.name === name),
+      ),
+      name,
+    ).toBe(true);
   }
 });
