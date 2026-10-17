@@ -1,5 +1,8 @@
 import { lazy, Suspense } from "react";
 
+import { useInfiniteQuery } from "@tanstack/react-query";
+
+import { timeTimersOptions } from "@/features/time-timers/queries";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useTimeBillingPreviewEnabled } from "@/hooks/use-time-billing-preview";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -14,6 +17,12 @@ export const GlobalTimer = ({ workspaceId }: { workspaceId?: string }) => {
   const enabled = useTimeBillingPreviewEnabled();
   const canRead = usePermissions({ timeEntry: ["read"] });
   const user = useAuthenticatedUser();
+  // Start the timers request with the flag, not after the lazy chunk loads:
+  // waiting for the chunk adds a sequential network round to every page.
+  useInfiniteQuery({
+    ...timeTimersOptions(user.activeOrganizationId, user.id),
+    enabled: enabled && canRead,
+  });
   if (!enabled || !canRead) {
     return null;
   }
