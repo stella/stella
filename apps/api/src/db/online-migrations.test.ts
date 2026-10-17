@@ -654,6 +654,71 @@ describe("online migrations", () => {
     ).toBeGreaterThan(indexOfStatement(harness.statements, ACCOUNT_INDEX));
   });
 
+  const dropRecords = async (
+    failedDrops: NonNullable<HarnessOptions["failedDrops"]>,
+  ) => {
+    const harness = createHarness({ failedDrops });
+    const records: { kind?: string; name?: string; outcome: string }[] = [];
+    await runOnlineMigrations(harness.pool, {
+      timing: {
+        clock: () => 0,
+        emit: (record) => {
+          records.push(record);
+        },
+      },
+    });
+    const attempts = harness.statements.filter((statement) =>
+      statement.includes(
+        `DROP INDEX CONCURRENTLY IF EXISTS public."${LEGACY_SOURCE_CASE_INDEX}"`,
+      ),
+    ).length;
+    const outcome = records.find(
+      ({ kind, name }) =>
+        kind === "replacement_drop" && name === LEGACY_SOURCE_CASE_INDEX,
+    )?.outcome;
+    return { harness, attempts, outcome };
+  };
+
+  test("retries a legacy drop that waits past the lock timeout until the table yields", async () => {
+    const { attempts, outcome } = await dropRecords({
+      [LEGACY_SOURCE_CASE_INDEX]: { sqlState: "55P03", attempts: 2 },
+    });
+    expect(attempts).toBe(3);
+    expect(outcome).toBe("complete");
+  });
+
+  test("defers a legacy drop the table never yields and keeps retiring the rest", async () => {
+    const { harness, attempts, outcome } = await dropRecords({
+      [LEGACY_SOURCE_CASE_INDEX]: {
+        sqlState: "55P03",
+        attempts: Number.POSITIVE_INFINITY,
+      },
+    });
+    expect(attempts).toBe(5);
+    expect(outcome).toBe("deferred");
+    // A busy table delays only its own retirement.
+    expect(
+      indexOfStatement(
+        harness.statements,
+        `DROP INDEX CONCURRENTLY IF EXISTS public."${LEGACY_ACCOUNT_INDEX}"`,
+      ),
+    ).toBeGreaterThan(-1);
+  });
+
+  test("fails the phase when a legacy drop fails for any other reason", async () => {
+    const harness = createHarness({
+      failedDrops: {
+        [LEGACY_SOURCE_CASE_INDEX]: { sqlState: "42501", attempts: 1 },
+      },
+    });
+
+    const rejection: unknown = await runOnlineMigrations(harness.pool).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(rejection).toMatchObject({ message: "drop failed" });
+  });
+
   test("preserves the account issuer index when its replacement is not ready", async () => {
     // Valid on the index phase's read, not ready on the retirement gate's:
     // the phase has to pass for the gate to be what refuses, and an invalid
@@ -1202,6 +1267,13 @@ type Artifacts = Readonly<Record<string, Artifact[]>>;
 type HarnessOptions = {
   artifacts?: Artifacts;
   /**
+   * Legacy index drops that fail with a server error (SQLSTATE) for the given
+   * number of attempts, then succeed.
+   */
+  failedDrops?: Readonly<
+    Record<string, { sqlState: string; attempts: number }>
+  >;
+  /**
    * Constraints `pg_constraint` reports as not validated until a repair's
    * VALIDATE statement runs; the rest are validated from the start.
    */
@@ -1225,8 +1297,10 @@ const createHarness = ({
   missingIndexes = [],
   emptyRepairTables = false,
   timeoutRepairBatch = false,
+  failedDrops = {},
 }: HarnessOptions = {}) => {
   const statements: string[] = [];
+  const dropAttempts = new Map<string, number>();
   const backfillStates = new Map<
     unknown,
     { cursor: unknown; batch: unknown }
@@ -1264,6 +1338,19 @@ const createHarness = ({
           }
           if (!query.includes(DROP_INDEX_FRAGMENT)) {
             return;
+          }
+          for (const [name, failure] of Object.entries(failedDrops)) {
+            if (!query.includes(`"${name}"`)) {
+              continue;
+            }
+            const attempt = (dropAttempts.get(name) ?? 0) + 1;
+            dropAttempts.set(name, attempt);
+            if (attempt <= failure.attempts) {
+              throw Object.assign(new Error("drop failed"), {
+                code: "ERR_POSTGRES_SERVER_ERROR",
+                errno: failure.sqlState,
+              });
+            }
           }
           for (const [name, values] of remainingArtifacts) {
             remainingArtifacts.set(

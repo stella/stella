@@ -9,6 +9,7 @@ import {
   DOCUMENT_OUTSTANDING_DATE_INDEX,
   DOCUMENT_OUTSTANDING_INDEX,
 } from "@/api/lib/legal-search/sk-document-outstanding-index";
+import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 
 import {
   REWRITTEN_MIGRATION_INDEXES,
@@ -945,6 +946,9 @@ const assertRepairDeployable = (
   }
 };
 
+/** Lock-timeout attempts at a legacy index drop before it waits for the next run. */
+const LEGACY_DROP_ATTEMPTS = 5;
+
 const retireReplacedIndexAt = async (
   connection: OnlineMigrationConnection,
   timing: MigrationTiming,
@@ -964,11 +968,32 @@ const retireReplacedIndexAt = async (
     timing,
     work: async () => {
       await assertReplacementIndexAt(connection, replacement);
-      await connection.execute(
-        `DROP INDEX CONCURRENTLY IF EXISTS public.${quoteIdentifier(replacement.legacyName)}`,
-      );
+      // A drop waits for every lock on the table; autovacuum (an ANALYZE right
+      // after a bulk load) yields only once deadlock_timeout passes, which
+      // can equal the phase's lock timeout. Each attempt keeps that timeout,
+      // so retrying gives the yield a chance without ever blocking writers.
+      for (let attempt = 1; ; attempt += 1) {
+        const dropped = await Result.tryPromise({
+          try: async () =>
+            await connection.execute(
+              `DROP INDEX CONCURRENTLY IF EXISTS public.${quoteIdentifier(replacement.legacyName)}`,
+            ),
+          catch: (cause: unknown) => cause,
+        });
+        if (!Result.isError(dropped)) {
+          return "complete" as const;
+        }
+        if (!isPgError(dropped.error, PG_ERROR.LOCK_NOT_AVAILABLE)) {
+          throw dropped.error;
+        }
+        // The replacement is already proven ready, so keeping the legacy
+        // index for one more run is harmless: the next run retires it.
+        if (attempt >= LEGACY_DROP_ATTEMPTS) {
+          return "deferred" as const;
+        }
+      }
     },
-    describe: () => ({ ...step, outcome: "complete" }),
+    describe: (outcome) => ({ ...step, outcome }),
     failure: { ...step, outcome: "failed" },
   });
   await retireReplacedIndexAt(connection, timing, offset + 1);
