@@ -10,6 +10,7 @@
 
 import { panic } from "better-result";
 
+import { AhoCorasick } from "@stll/aho-corasick";
 import { READER_ANNOTATION_QUOTE_MAX_LENGTH } from "@stll/api-contract/legal-reader-annotations";
 import { plainTextOf, tableCellPieceId } from "@stll/legal-ast/document-ast";
 import type { Block } from "@stll/legal-ast/document-ast";
@@ -84,29 +85,18 @@ const compact = (raw: string): CompactText => {
   return { text, rawIndex };
 };
 
-type Occurrence = { startOffset: number; endOffset: number };
+type Occurrence = { pattern: number; startOffset: number; endOffset: number };
 
-const findOccurrences = (raw: string, quote: string): Occurrence[] => {
+const findOccurrences = (raw: string, matcher: AhoCorasick): Occurrence[] => {
   const haystack = compact(raw);
-  const needle = compact(quote).text;
-  if (needle.length === 0) {
-    return [];
-  }
-  const occurrences: Occurrence[] = [];
-  let from = 0;
-  for (;;) {
-    const at = haystack.text.indexOf(needle, from);
-    if (at === -1) {
-      return occurrences;
-    }
-    const startOffset = haystack.rawIndex[at];
-    const last = haystack.rawIndex[at + needle.length - 1];
+  return matcher.findOverlappingIter(haystack.text).map((match) => {
+    const startOffset = haystack.rawIndex[match.start];
+    const last = haystack.rawIndex[match.end - 1];
     if (startOffset === undefined || last === undefined) {
       return panic("A compact match lies outside its own text");
     }
-    occurrences.push({ startOffset, endOffset: last + 1 });
-    from = at + 1;
-  }
+    return { pattern: match.pattern, startOffset, endOffset: last + 1 };
+  });
 };
 
 /** The places a block's words are rendered, each under its own anchor. */
@@ -116,7 +106,12 @@ const piecesOf = (block: Block): TextPiece[] => {
   switch (block.type) {
     case "heading":
     case "paragraph":
-      return [{ anchorId: block.anchorId, text: plainTextOf(block.inlines) }];
+      return [
+        {
+          anchorId: block.anchorId,
+          text: plainTextOf(block.inlines).toWellFormed(),
+        },
+      ];
     case "table":
       return block.rows.flatMap((row, rowIndex) =>
         row.map((cell, columnIndex) => ({
@@ -125,7 +120,7 @@ const piecesOf = (block: Block): TextPiece[] => {
             columnIndex,
             rowIndex,
           }),
-          text: plainTextOf(cell.inlines),
+          text: plainTextOf(cell.inlines).toWellFormed(),
         })),
       );
     case "image":
@@ -139,6 +134,7 @@ const piecesOf = (block: Block): TextPiece[] => {
 type LocateContext = {
   blocks: readonly Block[];
   blocksByAnchor: ReadonlyMap<string, Block>;
+  findMatches: ReturnType<typeof createPassageMatcher>;
 };
 
 type LocateOneResult =
@@ -162,19 +158,55 @@ const quoteNotFoundMessage = (block: Block | undefined): string => {
 /** How many candidate anchors an ambiguity issue names. */
 const AMBIGUITY_ANCHORS_SHOWN = 8;
 
-const matchesIn = (blocks: readonly Block[], quote: string) =>
-  blocks.flatMap((block) =>
-    piecesOf(block).flatMap((piece) =>
-      findOccurrences(piece.text, quote).map((occurrence) => ({
-        block,
-        occurrence,
-        piece,
-      })),
+type MatchedPiece = { block: Block; piece: TextPiece; occurrence: Occurrence };
+
+let lastPassageMatcher: { key: string; matcher: AhoCorasick } | undefined;
+
+const createPassageMatcher = (passages: readonly AnnotationPassage[]) => {
+  const needles = Array.from(
+    new Set(
+      passages
+        .map(({ quote }) => compact(quote.toWellFormed()).text)
+        .filter((quote) => quote.length > 0),
     ),
   );
+  const needleIds = new Map(needles.map((needle, index) => [needle, index]));
+  const matcherKey = JSON.stringify(needles);
+  const matcher =
+    lastPassageMatcher?.key === matcherKey
+      ? lastPassageMatcher.matcher
+      : new AhoCorasick(needles);
+  lastPassageMatcher = { key: matcherKey, matcher };
+  const matchesByBlock = new Map<Block, MatchedPiece[]>();
+  return (blocks: readonly Block[], quote: string) => {
+    const needle = compact(quote.toWellFormed()).text;
+    if (needle.length === 0) {
+      return [];
+    }
+    const needleId =
+      needleIds.get(needle) ??
+      panic("A passage quote is absent from its matcher");
+    return blocks.flatMap((block) => {
+      let matches = matchesByBlock.get(block);
+      if (matches === undefined) {
+        matches = piecesOf(block).flatMap((piece) =>
+          findOccurrences(piece.text, matcher).map((occurrence) => ({
+            block,
+            occurrence,
+            piece,
+          })),
+        );
+        matchesByBlock.set(block, matches);
+      }
+      return matches.filter(
+        ({ occurrence }) => occurrence.pattern === needleId,
+      );
+    });
+  };
+};
 
 const locateOne = (
-  { blocks, blocksByAnchor }: LocateContext,
+  { blocks, blocksByAnchor, findMatches }: LocateContext,
   { anchor, quote }: AnnotationPassage,
   passageIndex: number,
 ): LocateOneResult => {
@@ -195,7 +227,7 @@ const locateOne = (
       message: `Block "${block.anchorId}" is an image and has no text to mark.`,
     });
   }
-  const matches = matchesIn(block === undefined ? blocks : [block], quote);
+  const matches = findMatches(block === undefined ? blocks : [block], quote);
   const [match, ...others] = matches;
   if (match === undefined) {
     return issue({
@@ -253,6 +285,7 @@ export const locatePassages = (
 ): LocatePassagesResult => {
   const context: LocateContext = {
     blocks,
+    findMatches: createPassageMatcher(passages),
     blocksByAnchor: new Map(
       blocks.map((block) => [block.anchorId, block] as const),
     ),
