@@ -987,22 +987,16 @@ const clauseParagraphArgSchema = v.strictObject({
     ),
   ),
   numbering: v.optional(
-    v.pipe(
-      v.strictObject({
-        kind: v.pipe(
-          v.literal("levelOnly"),
-          v.description("Set only the paragraph's list nesting depth"),
-        ),
-        ilvl: v.pipe(
-          v.number(),
-          v.integer(),
-          v.minValue(LIMITS.clauseNumberingLevelMin),
-          v.maxValue(LIMITS.clauseNumberingLevelMax),
-          v.description("0-based list nesting depth for a list item"),
-        ),
-      }),
-      v.description("List nesting depth for the paragraph"),
-    ),
+    v.strictObject({
+      kind: v.literal("levelOnly"),
+      ilvl: v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(LIMITS.clauseNumberingLevelMin),
+        v.maxValue(LIMITS.clauseNumberingLevelMax),
+        v.description("0-based list nesting depth for a list item"),
+      ),
+    }),
   ),
   is_directive: v.optional(
     v.pipe(
@@ -2256,9 +2250,7 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
     description:
       "Create or update a clause in the organization's clause library. Omit " +
       "clause_id to create (title and body required); pass clause_id to update. " +
-      "body is an ordered array of paragraphs, each with text and optional " +
-      "style, level, runs, list_kind, numbering, is_directive, directive_kind, " +
-      "and directive_expression. Use balanced {% ... %} tags. " +
+      "body contains ordered paragraphs. Use balanced {% ... %} tags. " +
       "Keep num(), ref(), clause() and ai(adapt=true) in the template body. " +
       "category_id, language, description, usage_notes, and metadata " +
       "accept null to clear them on update. Set snapshot_version true on an " +
