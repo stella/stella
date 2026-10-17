@@ -1,7 +1,14 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
-import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readdir,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
 import { pathToFileURL } from "node:url";
@@ -1107,33 +1114,64 @@ test("web messages have one derived owner and are generated wherever the route t
   expect(root.scripts.generate).toContain("generate:messages");
 });
 
+// Runs in a copy of the tracked files the checks read, never by deleting the
+// checkout's declarations: other test files read them concurrently.
 test("web catalog checks pass without the derived message declarations", async () => {
-  const output = new URL(
-    "../apps/web/src/i18n/langs/messages.gen.ts",
-    import.meta.url,
+  const repo = new URL("..", import.meta.url).pathname;
+  const tracked = Bun.spawnSync(
+    [
+      "git",
+      "ls-files",
+      "-z",
+      "--",
+      "apps/web/package.json",
+      "apps/web/src",
+      "apps/web/scripts",
+      "apps/web/public/prepaint-init.js",
+      "packages/ai-catalog/src",
+    ],
+    { cwd: repo, stdout: "pipe", stderr: "pipe" },
   );
-  const existing = (await Bun.file(output).exists())
-    ? await Bun.file(output).bytes()
-    : undefined;
-  await rm(output, { force: true });
+  expect(tracked.exitCode).toBe(0);
+  const files = tracked.stdout.toString().split("\0").filter(Boolean);
+  expect(files).not.toContain("apps/web/src/i18n/langs/messages.gen.ts");
+  const copy = await mkdtemp(nodePath.join(tmpdir(), "web-catalog-check-"));
   try {
-    const check = Bun.spawnSync(
-      ["bun", "--filter", "@stll/web", "i18n:check"],
-      {
-        cwd: new URL("..", import.meta.url).pathname,
-        stdout: "pipe",
-        stderr: "pipe",
-      },
-    );
-    expect(new TextDecoder().decode(check.stderr)).toBe("");
-    expect(check.exitCode).toBe(0);
-    expect(await Bun.file(output).exists()).toBe(false);
-  } finally {
-    if (existing !== undefined) {
-      await writeFile(output, existing);
+    for (const file of files) {
+      await mkdir(nodePath.dirname(nodePath.join(copy, file)), {
+        recursive: true,
+      });
+      await writeFile(
+        nodePath.join(copy, file),
+        await Bun.file(nodePath.join(repo, file)).bytes(),
+      );
     }
+    // Code and dependencies are shared read-only with the checkout.
+    for (const link of [
+      "node_modules",
+      "apps/web/node_modules",
+      "packages/scripts",
+    ]) {
+      if (existsSync(nodePath.join(repo, link))) {
+        await symlink(nodePath.join(repo, link), nodePath.join(copy, link));
+      }
+    }
+    const check = Bun.spawnSync(["bun", "run", "i18n:check"], {
+      cwd: nodePath.join(copy, "apps/web"),
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(new TextDecoder().decode(check.stderr)).not.toContain("error");
+    expect(check.exitCode).toBe(0);
+    expect(
+      existsSync(
+        nodePath.join(copy, "apps/web/src/i18n/langs/messages.gen.ts"),
+      ),
+    ).toBe(false);
+  } finally {
+    await rm(copy, { recursive: true, force: true });
   }
-}, 30_000);
+}, 60_000);
 
 test("long optional runs accept dispatch only", () => {
   for (const file of [
