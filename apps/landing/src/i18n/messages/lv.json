@@ -569,7 +569,7 @@
           "question": "No kurienes nāk dati?"
         },
         "1": {
-          "answer": "Divi saraksti, abi paplašinās. Pievienotie reģistri jau ietver ARES (Čehija), Companies House (Apvienotā Karaliste), SEC EDGAR (ASV), KRS (Polija), PRH (Somija) un VIES (ES PVN). Papildus reģistriem oficiālie avoti tiek pievienoti jurisdikciju pēc jurisdikcijas; piemēram, Čehijai, Spānijai un Taivānai jau ir pievienoti avoti, un tiesu prakses lasītājs ir veidots tā, lai pārlūkotu un filtrētu pēc jurisdikcijas, pievienojot arvien vairāk oficiālo avotu.",
+          "answer": "Publiskajā tiesu prakses lasītājā pašlaik ir pieejami Čehijas nolēmumi. Pievienotie uzņēmumu reģistri ietver ARES (Čehija), Companies House (Apvienotā Karaliste), SEC EDGAR (ASV), KRS (Polija), PRH (Somija) un VIES (ES PVN).",
           "question": "Kādas jurisdikcijas un reģistri ir aptverti?"
         },
         "2": {
@@ -892,9 +892,11 @@
     "bringWorkspaceToFront": "Pārvietot lietotnes stella darbvietu priekšplānā",
     "controlBody": "stella ir <gh>atvērtā pirmkoda</gh> juridiskā programmatūra, ko varat izvietot savā infrastruktūrā: pārbaudiet kodu, darbiniet to pēc saviem noteikumiem un eksportējiet visu standarta formātos.",
     "controlTitle": "Tehnoloģija paliek jūsu rokās.",
-    "dataBody": "Tiesu prakse un uzņēmumu reģistri no visām jurisdikcijām, kurās strādājat, nonāk tieši lietā. Anonimizācija neļauj identificējošai informācijai nonākt pie AI.",
+    "dataBody": "Lasiet Čehijas tiesu praksi ar AI piezīmēm par tiesību jautājumiem, izcēlumiem, pasvītrojumiem, jurista komentāriem un atbildēm ar atsaucēm uz avotiem. Meklējiet uzņēmumus pievienotajos oficiālajos reģistros un atsaucieties uz avotiem no lietas.",
+    "dataConstitutionalAlt": "Čehijas Konstitucionālās tiesas nolēmums IV.ÚS 1394/24 ar numurētām rindkopām, AI piezīmi par tiesību jautājumu, izcēlumu, pasvītrojumu, jurista komentāru un sarunu ar diviem jautājumiem un atbildēm ar atsaucēm uz avotiem.",
     "dataEyebrow": "Juridiskie dati",
-    "dataMainAlt": "Oficiāls tiesas nolēmums, atvērts lietotnē stella",
+    "dataMainAlt": "Čehijas Augstākās tiesas nolēmums 27 Cdo 59/2022 ar numurētām rindkopām, AI piezīmi par tiesību jautājumu, izcēlumu, pasvītrojumu, jurista komentāru un sarunu ar diviem jautājumiem un atbildēm ar atsaucēm uz avotiem.",
+    "dataSupremeAlt": "Čehijas Augstākās tiesas nolēmums 27 Cdo 1525/2025 ar numurētām rindkopām, AI piezīmi par tiesību jautājumu, izcēlumu, pasvītrojumu, jurista komentāru un sarunu ar diviem jautājumiem un atbildēm ar atsaucēm uz avotiem.",
     "dataTitle": "Tiesu prakse un reģistri pa rokai.",
     "exploreAgent": "Iepazīt AI aģentu",
     "exploreAnonymization": "Iepazīt anonimizāciju",

@@ -30,6 +30,15 @@ ignore = [
   # Cargo cannot select the remediated quick-xml 0.41 line yet.
   "RUSTSEC-2026-0194",
   "RUSTSEC-2026-0195",
+  # zip 4 reaches the graph only through tauri-plugin-updater, whose 2.x and
+  # 3.0 pre-releases still require it; these advisories are fixed in zip 9,
+  # which the app's own dependency already uses. The updater verifies an
+  # update's signature against the configured public key before extracting
+  # it, and extracts zip archives only when installing on Windows.
+  # Review by 2026-11-16; remove once an updater release accepts zip >= 9.
+  "RUSTSEC-2026-0367",
+  "RUSTSEC-2026-0368",
+  "RUSTSEC-2026-0369",
 ]
 
 [licenses]

@@ -137,5 +137,5 @@ export const answerNeedsRun = ({
 /** The model configuration a column's answers are produced with. */
 export type CaseLawResearchColumnTool = {
   version: 1;
-  role: "fast";
+  task: "short-text";
 };

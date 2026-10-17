@@ -2,14 +2,16 @@ import { panic } from "better-result";
 
 import {
   BYOK_MODEL_OPTIONS,
-  DEFAULT_MODELS,
-  BYOK_DEFAULT_MODELS,
-  resolveWorkingBYOKModelForRole,
+  MODEL_TASK_OVERRIDE_GROUP,
+  MODEL_OVERRIDE_GROUP_TASK,
+  resolveDefaultModel,
+  resolveWorkingBYOKModelForTask,
 } from "@stll/ai-catalog";
 import type {
   AIProvider,
   BYOKProvider,
-  ModelRole,
+  ModelTask,
+  ModelOverrideGroup,
   DecisionModelProvider,
 } from "@stll/ai-catalog";
 
@@ -36,15 +38,7 @@ export const supportsRegion = (_provider: AIProvider): boolean => false;
  * Legal work prioritizes determinism over creativity. Every role
  * is pinned to 0 so the same input yields the same output.
  */
-const TEMPERATURE_PER_ROLE = {
-  fast: 0,
-  chat: 0,
-  reasoning: 0,
-  pdf: 0,
-} as const satisfies Record<ModelRole, number>;
-
-export const getTemperatureForRole = (role: ModelRole): number =>
-  TEMPERATURE_PER_ROLE[role];
+export const getTemperatureForTask = (_task: ModelTask): number => 0;
 
 /**
  * Whether stella may annotate this AI request with prompt-cache
@@ -60,26 +54,18 @@ export type CachingDecision =
   | { enabled: false; reason: "org-disabled" }
   | { enabled: true; ttl: "5m"; scopeKey: string | null };
 
-const TTL_BY_ROLE = {
-  fast: "5m",
-  chat: "5m",
-  reasoning: "5m",
-  pdf: "5m",
-} as const satisfies Record<ModelRole, "5m">;
-
 export const resolveCaching = ({
   promptCachingEnabled,
-  role,
   scopeKey,
 }: {
   promptCachingEnabled: boolean;
-  role: ModelRole;
+  task: ModelTask;
   scopeKey: string | null;
 }): CachingDecision => {
   if (!promptCachingEnabled) {
     return { enabled: false, reason: "org-disabled" };
   }
-  return { enabled: true, ttl: TTL_BY_ROLE[role], scopeKey };
+  return { enabled: true, ttl: "5m", scopeKey };
 };
 
 export type OrgAIConfig = {
@@ -90,7 +76,7 @@ export type OrgAIConfig = {
    * be stored for later assignment.
    */
   overrideModels: Partial<
-    Record<ModelRole, OrgAIModelSelection | undefined>
+    Record<ModelOverrideGroup, OrgAIModelSelection | undefined>
   > | null;
   /**
    * The model typed decisions go to (see `lib/decisions/decide.ts`). It is
@@ -216,16 +202,16 @@ const isBYOKProviderId = (provider: AIProvider): provider is BYOKProvider =>
  * to a different provider.
  */
 const healOverrideModel = (
-  role: ModelRole,
+  role: ModelOverrideGroup,
   selection: OrgAIModelSelection,
 ): OrgAIModelSelection => {
   if (!isBYOKProviderId(selection.provider)) {
     return selection;
   }
-  const working = resolveWorkingBYOKModelForRole({
+  const working = resolveWorkingBYOKModelForTask({
     provider: selection.provider,
     modelId: selection.modelId,
-    role,
+    task: MODEL_OVERRIDE_GROUP_TASK[role],
   });
   if (!working || working === selection.modelId) {
     return selection;
@@ -257,26 +243,22 @@ const healOverrideModels = (
   };
 };
 
-/** Resolve defaults without turning them into persisted custom selections. */
-export const resolveOrgAIModelForRole = (
+/** Task defaults stay distinct from persisted override groups. */
+export const resolveOrgAIModelForTask = (
   config: OrgAIConfig,
-  role: ModelRole,
+  task: ModelTask,
 ): OrgAIModelSelection | null => {
-  const override = config.overrideModels?.[role];
+  const override = config.overrideModels?.[MODEL_TASK_OVERRIDE_GROUP[task]];
   if (override !== undefined) {
     return override;
   }
-  for (const { provider } of config.providers) {
-    if (isBYOKProviderId(provider)) {
-      const entry = BYOK_DEFAULT_MODELS[provider][role];
-      if (entry.kind === "unsupported") {
-        continue;
-      }
-      return { provider, modelId: entry.modelId };
-    }
-    return { provider, modelId: DEFAULT_MODELS[provider][role] };
-  }
-  return null;
+  const candidate = resolveDefaultModel({
+    task,
+    orgProviders: config.providers.map(({ provider }) => provider),
+  });
+  return candidate === null
+    ? null
+    : { provider: candidate.provider, modelId: candidate.modelId };
 };
 
 export const normalizeOrgAIConfig = (config: OrgAIConfig): OrgAIConfig => ({

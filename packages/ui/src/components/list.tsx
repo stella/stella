@@ -8,6 +8,7 @@ import { cva } from "class-variance-authority";
 import type { VariantProps } from "class-variance-authority";
 
 import { cn } from "../lib/utils";
+import { AnimatedCount } from "./animated-count";
 
 /**
  * Grouped list: a titled section holding one surface of hairline-divided
@@ -68,19 +69,23 @@ const ListGroupTitle = ({
   </h2>
 );
 
-/** Quiet item count after the title; shows matches while a search filters. */
+/**
+ * Quiet item count after the title; shows matches while a search filters,
+ * and a changed digit fades in rather than snapping. `count` arrives
+ * formatted in the caller's locale.
+ */
 const ListGroupCount = ({
   className,
+  count,
   ...props
-}: React.ComponentProps<"span">) => (
+}: Omit<React.ComponentProps<"span">, "children"> & { count: string }) => (
   <span
-    className={cn(
-      "text-muted-foreground ms-1.5 font-normal tabular-nums",
-      className,
-    )}
+    className={cn("text-muted-foreground ms-1.5 font-normal", className)}
     data-slot="list-group-count"
     {...props}
-  />
+  >
+    <AnimatedCount value={count} />
+  </span>
 );
 
 const ListGroupDescription = ({
