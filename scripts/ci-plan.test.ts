@@ -7300,7 +7300,7 @@ test("only the resolver chooses a merge group's comparison base", () => {
         "utf-8",
       );
       for (const [index, line] of source.split("\n").entries()) {
-        if (!line.includes("github.event.merge_group.base_sha")) {
+        if (!/merge_group\??\.base_sha/u.test(line)) {
           continue;
         }
         // The patch id names an entry's own change, so it alone diffs

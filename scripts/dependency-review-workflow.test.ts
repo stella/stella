@@ -174,7 +174,14 @@ const selector = ({
         },
         summary,
       },
-      process: { env: { RUNNER_TEMP: "/runner/temp" } },
+      // A merge group reads the base its resolver step chose (the target
+      // branch), never the previous queue entry from the payload.
+      process: {
+        env: {
+          RUNNER_TEMP: "/runner/temp",
+          ...(event === "merge_group" ? { TARGET_BASE_SHA: base } : {}),
+        },
+      },
       require: (name: string) => {
         if (name === "node:path") {
           return path;
@@ -264,8 +271,12 @@ describe("required dependency review workflow boundary", () => {
       throw new TypeError("Missing comparison base resolver");
     }
     expect(resolver.uses?.startsWith("actions/github-script@")).toBe(true);
-    expect(resolver.if).toBe(
-      `github.event_name == 'merge_group' && (${reviewCondition})`,
+    expect(resolver.if).toBe("github.event_name == 'merge_group'");
+    expect(job.steps.indexOf(resolver)).toBeLessThan(
+      job.steps.indexOf(selectorStep),
+    );
+    expect(selectorStep.env?.["TARGET_BASE_SHA"]).toBe(
+      `\${{ steps.target-base.outputs.base_sha }}`,
     );
     expect(String(resolver.with?.["script"])).toContain(
       "compareCommitsWithBasehead",

@@ -403,7 +403,10 @@ jobs:
           filter: blob:none
           persist-credentials: false
 
+      # Only pull requests and merge groups have a base; both run the checkout
+      # above, which puts the local action in the workspace.
       - name: Resolve comparison base
+        if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
         id: target-base
         uses: ./.github/actions/merge-target-base
 
