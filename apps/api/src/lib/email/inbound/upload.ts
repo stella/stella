@@ -469,7 +469,6 @@ const fileUploadedDataBoxMessage = async ({
   }
   const scannedFiles = [];
   for (const file of parsed.value.files) {
-    // db-await-in-loop: scans only, no database work; bounded by DATA_BOX_MESSAGE_LIMITS.maxFiles
     const scanned = await scanAttachment({
       bytes: file.bytes,
       fileName: sanitizeFilename(file.fileName),
