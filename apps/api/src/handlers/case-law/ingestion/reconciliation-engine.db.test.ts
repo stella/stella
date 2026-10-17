@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -25,7 +26,10 @@ import {
   RECONCILIATION_ITEM_STATUS,
   relations,
 } from "@/api/db/schema";
+import { listAdapters } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import { PL_COURTS_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/pl-courts.metadata-urls";
+import { plTkAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-tk";
+import type { PlTkListingRow } from "@/api/handlers/case-law/ingestion/adapters/pl-tk";
 import { plUodoHeldWithoutDetail } from "@/api/handlers/case-law/ingestion/adapters/pl-uodo";
 import { metadataUrlSchemaForAdapter } from "@/api/handlers/case-law/ingestion/metadata-url-schemas";
 import { readSourceContract } from "@/api/handlers/case-law/ingestion/pipeline/source-contract";
@@ -68,6 +72,7 @@ import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingLogger } from "@/api/tests/helpers/recording-telemetry";
+import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 // A settled short slice is short forever — that is what settled means — so it
 // is never re-walked and its `checkedAt` never moves on its own. The candidate
@@ -125,32 +130,32 @@ const SETTLED_SLICES = Array.from({ length: WINDOW }, (_, index) =>
 
 const listed: ReconciliationSlicePageOptions[] = [];
 
-const DOCUMENT_KEYS = [
-  "2f0a1d6c-9c7f-4a58-bd4a-6c1e0f7a1b23",
-  "6b1c4e57-2d38-4f19-9a02-71f5c8d3e004",
-].map(
-  (sourceDocumentId) =>
-    listingIdentityKey({ type: "document", sourceDocumentId }) ?? "",
-);
-
+// Synthetic identities and docket-shaped values; no publisher records are fetched.
 const LISTING_ITEMS = [
   {
-    jednaciCislo: "11 C 153/2025-38",
-    soud: "Krajský soud v Brně",
+    jednaciCislo: "999 C 1/2099-1",
+    soud: "Fixture court A",
     odkaz:
-      "https://rozhodnuti.justice.cz/api/finaldoc/2f0a1d6c-9c7f-4a58-bd4a-6c1e0f7a1b23",
+      "https://case-law.example.test/api/finaldoc/00000000-0000-4000-8000-000000000001",
   },
   {
-    jednaciCislo: "31 Cm 8/2024-102",
-    soud: "Krajský soud v Ostravě",
+    jednaciCislo: "999 Cm 2/2099-1",
+    soud: "Fixture court B",
     odkaz:
-      "https://rozhodnuti.justice.cz/api/finaldoc/6b1c4e57-2d38-4f19-9a02-71f5c8d3e004",
+      "https://case-law.example.test/api/finaldoc/00000000-0000-4000-8000-000000000002",
   },
-] as const;
-
-/** Real dockets, so the fallback identity key is the shape the ledger keys. */
-const FIXTURE_CASE_NUMBERS = ["11 C 153/2025", "31 Cm 8/2024"] as const;
-const FIXTURE_COURT = "Krajský soud v Brně";
+] satisfies [unknown, unknown];
+const DOCUMENT_KEYS = LISTING_ITEMS.map(
+  ({ odkaz }) =>
+    listingIdentityKey({
+      type: "document",
+      sourceDocumentId:
+        odkaz.split("/").at(-1) ??
+        panic("Fixture URL needs a document identity"),
+    }) ?? panic("Fixture document identity must be keyable"),
+);
+const FIXTURE_CASE_NUMBERS = ["999 C 1/2099", "999 Cm 2/2099"] as const;
+const FIXTURE_COURT = "Fixture court A";
 const FIXTURE_LANGUAGE = "cs";
 
 /**
@@ -872,63 +877,125 @@ test("a walk leaves unchanged tracked payloads to the retry path", async () => {
   });
 });
 
-test("a completed walk drops retired rows the slice no longer lists", async () => {
-  // Settledness weighs the terminal count against `reported`/`collected`,
-  // which describe the listing as it is now. A retired row for an identity the
-  // publisher has since dropped would otherwise keep vouching for a shortfall
-  // it has nothing to do with, and could mark a slice settled while a
-  // genuinely missing decision sits behind the ingest budget.
-  const sourceId = await seedSource();
-  await seedFreshTip(sourceId);
-  await seedSlice({
-    sourceId,
-    slice: OWED_SLICE,
-    reported: 3,
-    collected: 0,
-    checkedAt: addUtcDays(NOW, -2),
-  });
+test.each(Object.values(RECONCILIATION_ITEM_STATUS))(
+  "a completed walk drops withdrawn %s rows before their payload can be retried",
+  async (status) => {
+    // Settledness weighs the terminal count against `reported`/`collected`,
+    // which describe the listing as it is now. A retired row for an identity the
+    // publisher has since dropped would otherwise keep vouching for a shortfall
+    // it has nothing to do with, and could mark a slice settled while a
+    // genuinely missing decision sits behind the ingest budget.
+    const sourceId = await seedSource();
+    await seedFreshTip(sourceId);
+    await seedSlice({
+      sourceId,
+      slice: OWED_SLICE,
+      reported: 3,
+      collected: 0,
+      checkedAt: addUtcDays(NOW, -2),
+    });
 
-  const staleTerminalKey =
-    listingIdentityKey({
-      type: "document",
-      sourceDocumentId: "0d9e3a11-7c52-4c88-b6f4-9a1b2c3d4e5f",
-    }) ?? "";
-  // Retired under this slice, but nowhere in the listing it now returns.
-  await seedItem(sourceId, staleTerminalKey, {
-    status: RECONCILIATION_ITEM_STATUS.TERMINAL,
-    attempts: 6,
-    nextAttemptAt: null,
-  });
+    const staleTerminalKey =
+      listingIdentityKey({
+        type: "document",
+        sourceDocumentId: "0d9e3a11-7c52-4c88-b6f4-9a1b2c3d4e5f",
+      }) ?? "";
+    // The retained payload could still build, but the publisher withdrew it.
+    const withdrawnPayload = { withdrawn: true };
+    const originalDueAt = addUtcDays(NOW, 1);
+    await seedItem(sourceId, staleTerminalKey, {
+      status,
+      attempts: 6,
+      payload: withdrawnPayload,
+      nextAttemptAt:
+        status === RECONCILIATION_ITEM_STATUS.PARKED ? originalDueAt : null,
+    });
 
-  const outcome = await runUnit(sourceId);
+    const outcome = await runUnit(sourceId);
 
-  expect(outcome).toMatchObject({
-    type: "worked",
-    summary: { slice: OWED_SLICE, pruned: 1 },
-  });
-  expect(
-    await db
-      .select({ identityKey: caseLawReconciliationItems.identityKey })
-      .from(caseLawReconciliationItems)
-      .where(
-        and(
-          eq(caseLawReconciliationItems.sourceId, sourceId),
-          eq(caseLawReconciliationItems.identityKey, staleTerminalKey),
-        ),
-      )
-      .limit(1),
-  ).toEqual([]);
+    expect(outcome).toMatchObject({
+      type: "worked",
+      summary: { slice: OWED_SLICE, pruned: 1 },
+    });
+    expect(
+      await db
+        .select({ identityKey: caseLawReconciliationItems.identityKey })
+        .from(caseLawReconciliationItems)
+        .where(
+          and(
+            eq(caseLawReconciliationItems.sourceId, sourceId),
+            eq(caseLawReconciliationItems.identityKey, staleTerminalKey),
+          ),
+        )
+        .limit(1),
+    ).toEqual([]);
 
-  // The two identities the slice does list were parked by this walk and are
-  // deliberately kept: they still describe the listing.
-  expect(
-    await db
-      .select({ identityKey: caseLawReconciliationItems.identityKey })
-      .from(caseLawReconciliationItems)
-      .where(eq(caseLawReconciliationItems.sourceId, sourceId))
-      .limit(10),
-  ).toHaveLength(2);
-});
+    // The two identities the slice does list were parked by this walk and are
+    // deliberately kept: they still describe the listing.
+    expect(
+      await db
+        .select({ identityKey: caseLawReconciliationItems.identityKey })
+        .from(caseLawReconciliationItems)
+        .where(eq(caseLawReconciliationItems.sourceId, sourceId))
+        .limit(10),
+    ).toHaveLength(2);
+    builds.length = 0;
+    expect(
+      await runUnitWith({ sourceId, now: () => originalDueAt }),
+    ).toMatchObject({ type: "worked", summary: { unit: "parked-retries" } });
+    expect(builds).toEqual(LISTING_ITEMS);
+    expect(builds).not.toContainEqual(withdrawnPayload);
+  },
+);
+
+test.each(Object.values(RECONCILIATION_ITEM_STATUS))(
+  "a failed partial listing preserves tracked %s rows",
+  async (status) => {
+    const sourceId = await seedSource();
+    await seedFreshTip(sourceId);
+    await seedSlice({
+      sourceId,
+      slice: OWED_SLICE,
+      reported: 3,
+      collected: 0,
+      checkedAt: addUtcDays(NOW, -2),
+    });
+    const identityKey = "document:possibly-withdrawn";
+    await seedItem(sourceId, identityKey, {
+      status,
+      attempts: 6,
+      nextAttemptAt:
+        status === RECONCILIATION_ITEM_STATUS.PARKED
+          ? addUtcDays(NOW, 1)
+          : null,
+      payload: { retained: true },
+    });
+    const read = async () =>
+      await db
+        .select()
+        .from(caseLawReconciliationItems)
+        .where(eq(caseLawReconciliationItems.sourceId, sourceId));
+    const before = await read();
+    const reconciliation: SourceReconciliation = {
+      ...stubReconciliation,
+      listSlicePage: async ({ page }) => {
+        if (page > 0) {
+          throw new AdapterFetchError({
+            message: "listing interrupted",
+            adapterKey: "engine-fixture",
+            cursor: OWED_SLICE,
+          });
+        }
+        return { items: [], totalPages: 2 };
+      },
+    };
+    const rejected = await rejectionOf(runUnit(sourceId, reconciliation));
+    expect(rejected).toBeInstanceOf(AdapterFetchError);
+    expect(rejected).toMatchObject({ message: "listing interrupted" });
+    expect(await read()).toEqual(before);
+    expect(builds).toEqual([]);
+  },
+);
 
 test("a publisher claiming an absurd page count is refused, not walked", async () => {
   // `totalPages` is the publisher's own number and the response validators
@@ -1523,6 +1590,120 @@ const seedDocumentIdentityRows = async (
   }
 };
 
+// Use the registered builders themselves: a newly registered source enters
+// this census automatically, including adapters that share one implementation.
+test.each(
+  listAdapters().map(
+    ({ key, reconciliation }) => [key, reconciliation] as const,
+  ),
+)(
+  "%s: an explicit unkeyable build retires malformed input",
+  async (key, reconciliation) => {
+    const sourceId = await seedSource();
+    const identityKey = `document:${key}-malformed-fixture`;
+    await seedItem(sourceId, identityKey, {
+      status: RECONCILIATION_ITEM_STATUS.PARKED,
+      attempts: 8,
+      nextAttemptAt: new Date(NOW.getTime() - 1),
+      payload: "invalid retained listing payload",
+    });
+    expect(
+      await reconciliation.buildDecision("invalid retained listing payload"),
+    ).toEqual({ type: "unkeyable" });
+    const outcome = await runUnit(sourceId, reconciliation);
+    expect(outcome).toMatchObject({
+      type: "worked",
+      summary: { unit: "parked-retries", terminal: 1, parked: 0 },
+    });
+    const rows = await db
+      .select({
+        status: caseLawReconciliationItems.status,
+        lastError: caseLawReconciliationItems.lastError,
+        nextAttemptAt: caseLawReconciliationItems.nextAttemptAt,
+      })
+      .from(caseLawReconciliationItems)
+      .where(eq(caseLawReconciliationItems.sourceId, sourceId));
+    expect(rows).toEqual([
+      {
+        status: RECONCILIATION_ITEM_STATUS.TERMINAL,
+        lastError: "unkeyable",
+        nextAttemptAt: null,
+      },
+    ]);
+  },
+);
+
+test("a real publisher session refusal never retires a listed document after repeated due retries", async () => {
+  const sourceId = await seedSource();
+  const payload = {
+    stage: "merits",
+    documentId: "25564",
+    caseId: "29150",
+    caseNumber: "K 2/26",
+    decisionForm: "Wyrok",
+    decisionDate: "2026-06-25",
+    subject: undefined,
+    rowHtml: undefined,
+    defect: undefined,
+  } satisfies PlTkListingRow;
+  const identityKey = "document:25564";
+  await seedItem(sourceId, identityKey, {
+    status: RECONCILIATION_ITEM_STATUS.PARKED,
+    attempts: 5,
+    nextAttemptAt: new Date(NOW.getTime() - 1),
+    payload,
+  });
+  const originalFetch = globalThis.fetch;
+  let requests = 0;
+  globalThis.fetch = asFetchMock(async () => {
+    requests += 1;
+    return new Response("publisher session refused", {
+      status: 429,
+      headers: { "Retry-After": "60" },
+    });
+  });
+  try {
+    let now = NOW;
+    const clock = () => now;
+    for (let retry = 1; retry <= 8; retry += 1) {
+      const outcome = await runUnitWith({
+        sourceId,
+        reconciliation: plTkAdapter.reconciliation,
+        now: clock,
+      });
+      expect(outcome).toMatchObject({
+        type: "worked",
+        summary: { unit: "parked-retries", failed: 1, parked: 1, terminal: 0 },
+      });
+      const row = (
+        await db
+          .select()
+          .from(caseLawReconciliationItems)
+          .where(eq(caseLawReconciliationItems.sourceId, sourceId))
+          .limit(1)
+      ).at(0);
+      expect(row).toMatchObject({
+        status: RECONCILIATION_ITEM_STATUS.PARKED,
+        attempts: 5 + retry,
+        lastError: "AdapterFetchError",
+      });
+      const next =
+        row?.nextAttemptAt ??
+        panic("A refused session must retain its durable retry");
+      expect(next.getTime() - now.getTime()).toBe(7 * DAY_IN_MS);
+      now = next;
+    }
+    expect(requests).toBeGreaterThan(0);
+    expect(
+      logs.records.filter(
+        ({ message }) => message === "case_law.reconciliation.item_terminal",
+      ),
+    ).toEqual([]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("due held identities resolve without fetching while listing-only identities retry", async () => {
   const sourceId = await seedSource();
   await seedFreshTip(sourceId);
@@ -1541,7 +1722,13 @@ test("due held identities resolve without fetching while listing-only identities
   });
   expect(outcome).toMatchObject({
     type: "worked",
-    summary: { unit: "parked-retries", keyable: 2, heldBefore: 1, terminal: 1 },
+    summary: {
+      unit: "parked-retries",
+      keyable: 2,
+      heldBefore: 1,
+      parked: 1,
+      terminal: 0,
+    },
   });
   expect(builds).toEqual([LISTING_ITEMS[0]]);
   expect(listed).toEqual([]);
@@ -1556,7 +1743,7 @@ test("due held identities resolve without fetching while listing-only identities
   expect(remaining).toEqual([
     {
       identityKey: DOCUMENT_KEYS[0] ?? "",
-      status: RECONCILIATION_ITEM_STATUS.TERMINAL,
+      status: RECONCILIATION_ITEM_STATUS.PARKED,
       attempts: 6,
     },
   ]);

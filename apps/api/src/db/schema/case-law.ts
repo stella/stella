@@ -1663,21 +1663,21 @@ export const caseLawCoverageSlices = p.pgTable(
 );
 
 /**
- * Where a listed decision sits once it has repeatedly refused to be ingested.
+ * Durable retries and deliberate terminal dispositions for listed decisions.
  *
- * The reconciliation loop hunts the difference between what a publisher lists
- * for a slice and what is held. Without this, an item the publisher lists but
- * never serves is re-fetched on every visit and the slice never settles: the
- * hunt has no fixed point. A row here is that item's memory — how often it has
- * been tried, when it may be tried again, and, once the schedule is exhausted,
- * that it is `terminal` and counts as accounted for rather than missing.
+ * A parked row remembers when an unavailable document may be tried again.
+ * Repetition cannot establish permanent absence: only an explicit unkeyable
+ * outcome retires a listing and counts it as accounted for. Existing terminal
+ * rows, including historical retry exhaustion, need a reset or listing revision.
+ * Parked rows stay missing in coverage while the rest of a slice progresses.
+ * Source-scoped identity prevents duplicate retries of the same listing.
  */
 export const RECONCILIATION_ITEM_STATUSES = ["parked", "terminal"] as const;
 
 export const RECONCILIATION_ITEM_STATUS = {
   /** Awaiting its next attempt; `next_attempt_at` says when. */
   PARKED: RECONCILIATION_ITEM_STATUSES[0],
-  /** The retry schedule is exhausted; nothing re-attempts this on its own. */
+  /** Deliberately retired; nothing re-attempts this on its own. */
   TERMINAL: RECONCILIATION_ITEM_STATUSES[1],
 } as const;
 
@@ -1701,7 +1701,7 @@ export const caseLawReconciliationItems = p.pgTable(
     payload: jsonb().$type<unknown>().notNull(),
     /** Lazy listing revision fingerprint; null is a row written before revision tracking. */
     payloadHash: p.varchar("payload_hash", { length: 64 }),
-    /** Lifetime terminal revivals; failed revived attempts preserve the retry budget. */
+    /** Lifetime terminal revivals; ordinary retry failures do not consume revivals. */
     revivalCount: p.integer("revival_count").default(0).notNull(),
     status: p
       .varchar({ length: 16, enum: RECONCILIATION_ITEM_STATUSES })

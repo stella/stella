@@ -11,9 +11,10 @@ import { panic, Result } from "better-result";
  *
  * The hunt has to end. An item the publisher lists but never serves would
  * otherwise keep its slice short forever and be re-fetched on every visit, so
- * a repeatedly failing item is parked on a widening schedule and finally
- * retired; a retired item counts as accounted for, which is what lets a slice
- * settle and stay settled.
+ * an unavailable item is parked on a widening schedule with capped backoff.
+ * Only an explicit unkeyable outcome retires an item; repeated failure never
+ * proves a listed document permanently absent. A retired item counts as
+ * accounted for, which is what lets a slice settle and stay settled.
  *
  * Everything here runs under the source's ingestion lease, because it writes
  * through the same `processDecision` a crawl feeds and must not interleave
@@ -116,7 +117,7 @@ import {
 import {
   countTerminalReconciliationItemsBySlice,
   parkReconciliationItem,
-  pruneUnlistedTerminalItems,
+  pruneUnlistedReconciliationItems,
   resolveReconciliationItem,
   resolveReconciliationItems,
   retireReconciliationItem,
@@ -167,7 +168,7 @@ const LIST_DELAY_MS = 200;
  * avoid.
  */
 const LIST_TIMEOUT_MS = 5 * 60_000;
-/** Terminal rows examined when pruning a walked slice. */
+/** Tracked rows removed when pruning a completed listing walk. */
 const PRUNE_ROW_LIMIT = 1000;
 /**
  * One item's build; nothing in it should take longer. Sized like
@@ -1290,7 +1291,7 @@ const ingestListedItem = async ({
           slice,
           identityKey: item.identityKey,
           payload: item.payload,
-          errorTag: "unkeyable",
+          errorTag: built.type,
           now,
         });
         if (retired.outcome === "recorded") {
@@ -1583,14 +1584,12 @@ const walkSlice = async ({
     });
   }
 
-  // This walk saw every page, so it is authoritative about what the slice
-  // lists. Retired rows naming anything else no longer describe this slice and
-  // must stop vouching for its shortfall: settledness weighs the terminal count
-  // against `reported`/`collected`, and those two describe the listing as it is
-  // now. Only reachable on a complete walk — a listing that failed part way
-  // through throws above and never gets here.
+  // Only a completed listing is authoritative about withdrawals. Remove
+  // unlisted parked rows before they can retry a withdrawn payload, and
+  // unlisted terminal rows before they can vouch for this slice's shortfall.
+  // A partial or failed listing never reaches this boundary.
   await lease.beforeDatabaseMark();
-  const prune = await pruneUnlistedTerminalItems(scopedDb, {
+  const prune = await pruneUnlistedReconciliationItems(scopedDb, {
     sourceId,
     leaseToken: lease.leaseToken,
     slice,
