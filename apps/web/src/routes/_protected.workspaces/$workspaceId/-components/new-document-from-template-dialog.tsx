@@ -25,6 +25,8 @@ import { detached } from "@/lib/detached";
 import { templatesOptions } from "@/lib/knowledge/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 
+import { filterTemplatesByName } from "./new-document-from-template-dialog.logic";
+
 /**
  * "New document from template" inside a matter: pick a saved template
  * (filterable list), fill it — with optional AI prefill from this matter's
@@ -141,13 +143,7 @@ const TemplatePickList = ({
   }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
 
   const templates = data ? data.pages.flatMap((page) => page.items) : [];
-  const query = search.trim().toLowerCase();
-  const visibleTemplates =
-    query === ""
-      ? templates
-      : templates.filter((template) =>
-          template.name.toLowerCase().includes(query),
-        );
+  const visibleTemplates = filterTemplatesByName(templates, search);
 
   if (isLoading) {
     return (
