@@ -19,6 +19,13 @@ const visualLoaders = {
       return { default: HandoffConfirmationPlayground };
     },
   },
+  "hungarian-decision": {
+    load: async () => {
+      const { HungarianDecisionPlayground } =
+        await import("./-components/hungarian-decision-playground");
+      return { default: HungarianDecisionPlayground };
+    },
+  },
   "table-chart": {
     load: async () => {
       const { TableChartPlayground } =

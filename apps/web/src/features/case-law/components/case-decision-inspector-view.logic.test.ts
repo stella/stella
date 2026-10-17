@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import { createCaseDecisionViewTab } from "@/components/inspector/case-decision-view";
-import { readerTargetCitation } from "@/components/legal-reader/annotations/reader-annotation-target";
+import { readerTargetCitation } from "@/components/legal-reader/annotations/reader-copy-text.logic";
 import { decisionInspectorAnnotationTarget } from "@/features/case-law/components/case-decision-inspector-view.logic";
 
 describe("the inspector decision citation", () => {
@@ -35,7 +35,7 @@ describe("the inspector decision citation", () => {
       payload,
     });
 
-    expect(readerTargetCitation({ locator: null, target })).toBe(
+    expect(readerTargetCitation({ locator: null, target }).inline).toBe(
       "rozsudek Krajského soudu v Plzni ze dne 18. 3. 2026, sp. zn. 56 Co 24/2026",
     );
   });
