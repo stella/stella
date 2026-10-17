@@ -610,6 +610,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "POST /v1/number-series/:numberSeriesId/default": "crud",
   "POST /v1/organization-settings/": "crud",
   "POST /v1/organization-settings/ai-config": "crud",
+  "POST /v1/organization-settings/ai-config/defaults-preview": "crud",
   "POST /v1/organization-settings/business-registry-credentials": "crud",
   "POST /v1/organization-settings/correspondence/allowed-senders": "crud",
   "POST /v1/organization-settings/correspondence/allowed-senders/:senderId/scope":
