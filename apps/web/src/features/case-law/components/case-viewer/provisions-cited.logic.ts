@@ -33,7 +33,10 @@ export type ProvisionGroup = ProvisionReference &
     occurrences: ProvisionOccurrence[];
   };
 
-export type WorkGroup = Pick<ProvisionRow, "jurisdiction" | "workEli"> & {
+export type WorkGroup = Pick<
+  ProvisionRow,
+  "jurisdiction" | "workEli" | "workIdentifier"
+> & {
   key: string;
   provisions: ProvisionGroup[];
   title: string;
@@ -234,6 +237,7 @@ export const groupProvisionsByWork = (
           provisions: [],
           title: workTitle(row),
           workEli: row.workEli,
+          workIdentifier: row.workIdentifier,
         },
       };
       works.set(workKey, entry);

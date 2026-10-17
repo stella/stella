@@ -10,6 +10,10 @@ import {
   TEXT_ABSENCE_REASON,
 } from "@stll/api-contract/case-law-text-field";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import {
+  euProvisionSourceUrl,
+  locateEuProvisionCitations,
+} from "@stll/legal-atlas/eu-provision-citations";
 
 import { CitedProvisionExpansion, CitedProvisionPeek } from "./cited-provision";
 import type { FullProvisionRead } from "./cited-provision";
@@ -768,5 +772,66 @@ test("a hover preview scrolls a long provision inside a viewport-bound cap while
     ).toBeNull();
   } finally {
     await GlobalRegistrator.unregister();
+  }
+});
+
+test("EU provisions link to EUR-Lex in every supported citation language without hosted cards", () => {
+  const citations = [
+    "Article 6(1)(a) of Regulation (EU) 2016/679",
+    "čl. 6 odst. 1 písm. a) nařízení (EU) 2016/679",
+    "čl. 6 ods. 1 písm. a) nariadenia (EÚ) 2016/679",
+    "art. 6 ust. 1 lit. a) rozporządzenia 2016/679",
+    "6. cikk (1) bekezdés a) pont 2016/679/EU rendelet",
+    "Artikel 6 Abs. 1 Buchst. a) der Verordnung (EU) 2016/679",
+    "Article 6 paragraphe 1 lettre a) du règlement (UE) 2016/679",
+  ];
+  for (const sentenceText of citations) {
+    const citation = locateEuProvisionCitations(sentenceText).at(0);
+    expect(citation).toBeDefined();
+    if (citation === undefined) {
+      throw new TypeError("EU citation fixture was not recognized");
+    }
+    const href = euProvisionSourceUrl(citation.act.celex, citation.reference);
+    expect(href).not.toBeNull();
+    if (href === null) {
+      throw new TypeError("EU citation fixture has no publisher URL");
+    }
+    const placements = prepareDecisionTextPlacements({
+      adapters: fakeReaderAdapters,
+      blocks: [
+        {
+          id: "eu",
+          anchorId: "eu",
+          type: "paragraph",
+          plainText: sentenceText,
+          inlines: [{ type: "text", text: sentenceText }],
+        },
+      ],
+      annotationAnchors: [],
+      statuteCitationAnchors: [],
+      citationAnchors: [],
+      provisionAnchors: [],
+      externalProvisionAnchors: [
+        {
+          id: "eu-reference",
+          sentenceText,
+          spanStart: citation.start,
+          reference: citation.reference,
+          target: { href },
+        },
+      ],
+    });
+    expect(placements.failures).toEqual([]);
+    const anchor = placements.anchorsByPieceId["eu"]?.at(0);
+    expect(anchor).toBeDefined();
+    if (anchor === undefined) {
+      throw new TypeError("EU citation fixture was not placed");
+    }
+    const markup = renderToStaticMarkup(
+      anchor.render(sentenceText.slice(anchor.start, anchor.end)),
+    );
+    expect(markup).toContain(`href="${href.replaceAll("&", "&amp;")}"`);
+    expect(markup).toContain('target="_blank"');
+    expect(placements.provisionsByAnchorId.size).toBe(0);
   }
 });

@@ -9,6 +9,7 @@ import {
   referencesOutsideVersion,
   versionCoversDate,
 } from "@stll/api-contract/statute-version";
+import { euProvisionSourceUrl } from "@stll/legal-atlas/eu-provision-citations";
 import {
   Accordion,
   AccordionItem,
@@ -105,7 +106,11 @@ export const ProvisionsCited = ({
       group.provisions
         .map((provision) => provisionVersionAsOf(provision, decisionAsOf))
         .find((date) => date !== null) ?? null;
-    if (group.workEli !== null && asOf !== null) {
+    if (
+      group.jurisdiction !== "EU" &&
+      group.workEli !== null &&
+      asOf !== null
+    ) {
       citedWorkByGroup.set(group.key, {
         asOf,
         country: group.jurisdiction,
@@ -357,17 +362,33 @@ const WorkReferences = ({
           </p>
         )}
         <div className="flex flex-wrap gap-1.5">
-          {group.provisions.map((provision) => (
-            <ProvisionReferenceChip
-              document={documentFor(provision)}
-              key={provision.key}
-              label={formatProvisionReference(provision, renderPart)}
-              provision={provision}
-              versionMarker={
-                exceptions.has(provision.key) ? "exception" : "group"
-              }
-            />
-          ))}
+          {group.provisions.map((provision) => {
+            const href =
+              group.jurisdiction === "EU"
+                ? euProvisionSourceUrl(group.workIdentifier, provision)
+                : null;
+            return (
+              <ProvisionReferenceChip
+                target={
+                  href !== null
+                    ? { type: "external", href }
+                    : {
+                        type: "hosted",
+                        document:
+                          group.jurisdiction === "EU"
+                            ? null
+                            : documentFor(provision),
+                      }
+                }
+                key={provision.key}
+                label={formatProvisionReference(provision, renderPart)}
+                provision={provision}
+                versionMarker={
+                  exceptions.has(provision.key) ? "exception" : "group"
+                }
+              />
+            );
+          })}
         </div>
       </AccordionPanel>
     </AccordionItem>

@@ -14,12 +14,17 @@ import {
 } from "@stll/api-contract/statute-version";
 import { locateAbbreviatedProvisionCitations } from "@stll/decision-reader/fallback-legal-anchors";
 import { provisionOccurrenceContexts } from "@stll/decision-reader/provision-anchors";
-import type { DecisionProvisionAnchor } from "@stll/decision-reader/reader-types";
+import type {
+  ExternalDecisionProvisionAnchor,
+  DecisionProvisionAnchor,
+} from "@stll/decision-reader/reader-types";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { provisionHeadingAnchor } from "@stll/legal-ast/provision-preview";
+import { euProvisionSourceUrl } from "@stll/legal-atlas/eu-provision-citations";
 import { PROVISION_CITATION_GRAMMARS } from "@stll/legal-atlas/provision-citation-grammars";
 import type { SupportedProvisionCitationGrammar } from "@stll/legal-atlas/provision-citation-grammars";
 
+import type { ProvisionRow } from "@/features/case-law/components/case-viewer/provisions-cited.logic";
 import type { DecisionReaderSurface } from "@/features/case-law/decision-reader-surfaces";
 import { formatProvisionReference } from "@/features/case-law/provision-label";
 import { resolveProvisionDocument } from "@/features/case-law/provision-placement";
@@ -91,7 +96,9 @@ const useCitingProvisionCitationGrammar = (
     return null;
   }
   const grammar = PROVISION_CITATION_GRAMMARS[declared];
-  return grammar.status === "supported" ? grammar : null;
+  return grammar.status === "supported" && grammar.target === "hosted"
+    ? grammar
+    : null;
 };
 
 type WorkKey = { asOf: string; eli: string; jurisdiction: string };
@@ -110,47 +117,18 @@ const workKeyOf = ({
   jurisdiction,
 }: Pick<WorkKey, "eli" | "jurisdiction">): string => `${jurisdiction}/${eli}`;
 
-/**
- * The provisions a decision applies, each resolved to the consolidation it
- * was made against, ready to be located in the text. A reference whose work
- * the corpus does not hold, or whose cited version is not yet known, is left
- * out: it reads as text until it can link somewhere it belongs.
- */
-export const useDecisionProvisionAnchors = ({
-  blocks,
-  country,
-  court,
-  caseNumber,
-  decisionDate,
-  decisionId,
-  surface,
-}: UseDecisionProvisionAnchorsOptions): DecisionProvisionAnchor[] => {
-  const renderPart = useProvisionPartRenderer();
-  const dataQuery = useQuery(decisionProvisionsForLinkingOptions(decisionId));
-  const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
-  const data = itemsOf(dataView);
-  const rows = optionalArray(data?.items);
-  // The list carries the wording of the provisions it could read, keyed by
-  // the server that resolved them; a row it could not read hovers to its own
-  // preview request.
-  const previewByKey = new Map(
-    optionalArray(data?.previews).map(
-      (preview) => [preview.key, preview] as const,
-    ),
-  );
-
-  const grammar = useCitingProvisionCitationGrammar(country);
-  const fallbackReferences =
-    grammar === null || !allowsLegacyProvisionFallback(data)
-      ? []
-      : locateAbbreviatedProvisionCitations(blocks, grammar);
+const collectHostedWorks = (
+  rows: readonly ProvisionRow[],
+  decisionAsOf: string | null,
+): LinkedWork[] => {
   const works: LinkedWork[] = [];
   const seen = new Set<string>();
-  const rowsByWork = new Map<string, (typeof rows)[number][]>();
-  const decisionAsOf = decisionDateToIso(decisionDate);
+  const rowsByWork = new Map<
+    string,
+    Parameters<typeof provisionVersionAsOf>[0][]
+  >();
   for (const row of rows) {
-    if (row.workEli === null) {
+    if (row.jurisdiction === "EU" || row.workEli === null) {
       continue;
     }
     const key = workKeyOf({ eli: row.workEli, jurisdiction: row.jurisdiction });
@@ -175,6 +153,46 @@ export const useDecisionProvisionAnchors = ({
       rows: workRows,
     });
   }
+  return works;
+};
+
+/**
+ * The provisions a decision applies, each resolved to the consolidation it
+ * was made against, ready to be located in the text. A reference whose work
+ * the corpus does not hold, or whose cited version is not yet known, is left
+ * out: it reads as text until it can link somewhere it belongs.
+ */
+export const useDecisionProvisionAnchors = ({
+  blocks,
+  country,
+  court,
+  caseNumber,
+  decisionDate,
+  decisionId,
+  surface,
+}: UseDecisionProvisionAnchorsOptions) => {
+  const renderPart = useProvisionPartRenderer();
+  const dataQuery = useQuery(decisionProvisionsForLinkingOptions(decisionId));
+  const dataView = useQueryView(dataQuery);
+  useQueryViewError(dataView);
+  const data = itemsOf(dataView);
+  const rows = optionalArray(data?.items);
+  // The list carries the wording of the provisions it could read, keyed by
+  // the server that resolved them; a row it could not read hovers to its own
+  // preview request.
+  const previewByKey = new Map(
+    optionalArray(data?.previews).map(
+      (preview) => [preview.key, preview] as const,
+    ),
+  );
+
+  const grammar = useCitingProvisionCitationGrammar(country);
+  const fallbackReferences =
+    grammar === null || !allowsLegacyProvisionFallback(data)
+      ? []
+      : locateAbbreviatedProvisionCitations(blocks, grammar);
+  const decisionAsOf = decisionDateToIso(decisionDate);
+  const works = collectHostedWorks(rows, decisionAsOf);
   for (const reference of fallbackReferences) {
     if (decisionAsOf === null) {
       continue;
@@ -191,7 +209,6 @@ export const useDecisionProvisionAnchors = ({
       });
       continue;
     }
-    seen.add(key);
     works.push({
       asOf: decisionAsOf,
       eli: reference.abbreviation.eli,
@@ -276,12 +293,29 @@ export const useDecisionProvisionAnchors = ({
     })),
   );
   const anchors: DecisionProvisionAnchor[] = [];
+  const externalAnchors: ExternalDecisionProvisionAnchor[] = [];
   const failures: ProvisionPlacementFailure[] = [];
   if (data !== undefined && data.nextCursor !== null) {
     failures.push({ id: "linking-page-limit", reason: "page-limit-reached" });
   }
   for (const row of rows) {
     const id = `${row.anchor}-${String(row.spanStart)}`;
+    if (row.jurisdiction === "EU") {
+      const href = euProvisionSourceUrl(row.workIdentifier, row);
+      if (href === null) {
+        failures.push({ id, reason: "work-identity-invalid" });
+        continue;
+      }
+      externalAnchors.push({
+        id,
+        occurrence: occurrences.get(id),
+        reference: row,
+        sentenceText: row.sentenceText,
+        spanStart: row.spanStart,
+        target: { href },
+      });
+      continue;
+    }
     const key = workKeyOf({
       eli: row.workEli ?? "",
       jurisdiction: row.jurisdiction,
@@ -411,5 +445,5 @@ export const useDecisionProvisionAnchors = ({
   }
 
   useProvisionPlacementTelemetry({ decisionId, failures, surface });
-  return anchors;
+  return { anchors, externalAnchors };
 };

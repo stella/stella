@@ -76,18 +76,22 @@ const referencePattern = ({
   subsection,
   unit,
 }: ProvisionAnchorSource["reference"]): RegExp => {
-  const head =
-    unit === "article" ? String.raw`(?:čl\.|článk\p{Ll}*|art\.|Art\.)` : "§";
   const number = `${String(section)}${sectionSuffix === null ? "" : escapeRegExp(sectionSuffix)}`;
-  const parts = [String.raw`${head}\s*${number}(?![\p{N}\p{L}])`];
+  const head =
+    unit === "article"
+      ? String.raw`(?:(?:čl\.|článek|článok|článk\p{Ll}*|art\.|Art\.?|Article|Artikel)\s*${number}(?![\p{N}\p{L}])|${number}\.\s*cikk)`
+      : String.raw`§\s*${number}(?![\p{N}\p{L}])`;
+  const parts = [head];
   if (subsection !== null) {
+    const paragraph = escapeRegExp(subsection);
     parts.push(
-      String.raw`(?:\s*(?:odst\.|odstav\p{Ll}*|odsek\p{Ll}*|ods\.|ust\.|para\.)\s*${escapeRegExp(subsection)}(?![\p{N}\p{L}]))`,
+      String.raw`(?:\s*(?:(?:odst\.|odstav\p{Ll}*|odsek\p{Ll}*|ods\.|ust\.|para\.|paragraphe|Abs\.)\s*${paragraph}(?![\p{N}\p{L}])|\(${paragraph}\)(?:\s*bekezdés)?))`,
     );
   }
   if (letter !== null) {
+    const point = escapeRegExp(letter);
     parts.push(
-      String.raw`(?:\s*(?:písm\.|písmeno|lit\.)\s*${escapeRegExp(letter)}\)?)`,
+      String.raw`(?:\s*(?:(?:písm\.|písmeno|lit\.|Buchst\.|lettre)\s*${point}\)?|\(${point}\)|${point}\)\s*pont))`,
     );
   }
   return new RegExp(parts.join(""), "u");

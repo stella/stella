@@ -351,3 +351,28 @@ test("more specific stored references reserve their own occurrences before secti
     }
   }
 });
+
+test("Czech and Slovak article words place the complete printed reference", () => {
+  for (const articleWord of ["článek", "článok", "článku", "článkom"]) {
+    const printed = `${articleWord} 6`;
+    const sentence = `Použije se ${printed}.`;
+    const result = locateProvisionAnchors({
+      blocks: [paragraph("text", sentence)],
+      provisions: [
+        {
+          id: "article",
+          reference: { ...reference(6), unit: "article" },
+          sentenceText: sentence,
+          spanStart: sentence.indexOf(printed),
+          target: "eu-act",
+        },
+      ],
+    });
+    expect(result.failures).toEqual([]);
+    expect(
+      result.anchorsByPieceId["text"]?.map(({ start, end }) =>
+        sentence.slice(start, end),
+      ),
+    ).toEqual([printed]);
+  }
+});

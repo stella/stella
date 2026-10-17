@@ -1400,7 +1400,7 @@ describe("OpenAI-compatible MCP tools", () => {
           minLength: 1,
           maxLength: 256,
           description:
-            'Only decisions citing this provision, as a lawyer writes it: "§ 316 odst. 2 ZP", "§ 52 písm. g) zákoníku práce", "čl. 10 Listiny". A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, exact total.',
+            'Only decisions citing this provision, as a lawyer writes it: "§ 316 odst. 2 ZP", "§ 52 písm. g) zákoníku práce", "čl. 10 Listiny", "Article 6(1)(a) GDPR". EU provisions work for every decision country. A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, exact total.',
         },
         has_legal_sentence: {
           type: "boolean",
@@ -5159,6 +5159,17 @@ describe("OpenAI-compatible MCP tools", () => {
         { work: "262/2006 Sb.", unit: "section", section: 52, letter: "g" },
       ],
       ["čl. 10 Listiny", { unit: "article", section: 10 }],
+      [
+        "Article 6(1)(a) GDPR",
+        {
+          jurisdiction: "EU",
+          work: "32016R0679",
+          unit: "article",
+          section: 6,
+          subsection: "1",
+          letter: "a",
+        },
+      ],
     ])(
       "reads the provision %s onto every phrasing's search",
       async (provision, expected) => {
@@ -5190,6 +5201,9 @@ describe("OpenAI-compatible MCP tools", () => {
       ["§ 10 Listiny", "is not divided into the units"],
       ["§ 316 odst. 2 a 3 ZP", "several provisions or a range"],
       ["§ 316–318 ZP", "several provisions or a range"],
+      ["Article 5 and Article 6 GDPR", "several provisions"],
+      ["Article 6 GDPR and 7", "several provisions"],
+      ["Article 6 GDPR and Article 7 GDPR", "several provisions"],
     ])(
       "refuses the provision %s before any search, naming the fix",
       async (provision, message) => {

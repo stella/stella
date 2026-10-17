@@ -965,3 +965,117 @@ test("citation-count order labels a short result complete and other sorts unboun
     snapshot: null,
   });
 });
+
+test("EU cited-by lists and counts share decision admission and publication gates", async () => {
+  const eli = "http://data.europa.eu/eli/reg/2016/679/oj";
+  const pendingId = createSafeId<"caseLawDecision">();
+  await db.insert(caseLawDecisions).values({
+    ...decisionRow({
+      id: pendingId,
+      caseNumber: "pending EU citation",
+      citationAuthority: 0,
+      decisionDate: "2025-01-01",
+      sourceId: openSourceId,
+    }),
+    country: "SVK",
+    language: "sk",
+  });
+  const ids = [highAuthorityId, lowAuthorityId, closedDecisionId, pendingId];
+  await db.insert(caseLawProvisionCitations).values(
+    ids.flatMap((decisionId) =>
+      [100, 120].map((spanStart) => ({
+        ...provisionRow({
+          decisionId,
+          anchor: "art_6",
+          decisionDate: "2025-01-01",
+          spanStart,
+          workIdentifier: "32016R0679",
+          workEli: eli,
+        }),
+        jurisdiction: "EU",
+        unit: "article" as const,
+        section: 6,
+        workCollection: "EUR-Lex",
+        euWorkNumber: 679,
+        euWorkYear: 2016,
+      })),
+    ),
+  );
+  const page = await listCitingDecisionsHandler(
+    { jurisdiction: "EU", work: "32016R0679", limit: 10 },
+    { caseLawDb, courtRegistry: new Map() },
+  );
+  if (!("items" in page)) {
+    throw new Error("Expected EU citing decisions page");
+  }
+  expect(new Set(page.items.map(({ decisionId }) => decisionId))).toEqual(
+    new Set([highAuthorityId, lowAuthorityId]),
+  );
+  expect(
+    page.items.every(
+      ({ country, mentionCount }) => country === "CZE" && mentionCount === 2,
+    ),
+  ).toBe(true);
+  expect(
+    await readStatuteCitationCountsHandler(
+      { jurisdiction: "EU", eli },
+      caseLawDb,
+    ),
+  ).toEqual({
+    status: "ready",
+    provisions: [{ anchor: "art_6", decisionCount: 2 }],
+  });
+});
+
+test("EU provision responses read nullable identity columns rather than legacy rollout slots", async () => {
+  await db.insert(caseLawProvisionCitations).values([
+    {
+      ...provisionRow({
+        decisionId: highAuthorityId,
+        anchor: "art_5",
+        decisionDate: "2025-01-01",
+        spanStart: 150,
+        workIdentifier: "12016M/TXT",
+        workEli: "http://data.europa.eu/eli/treaty/teu_2016/oj",
+      }),
+      jurisdiction: "EU",
+      unit: "article",
+      section: 5,
+      workCollection: "EUR-Lex",
+      workNumber: 0,
+      workYear: 0,
+    },
+    {
+      ...provisionRow({
+        decisionId: highAuthorityId,
+        anchor: "art_7",
+        decisionDate: "2025-01-01",
+        spanStart: 170,
+        workIdentifier: "32016R0679",
+        workEli: "http://data.europa.eu/eli/reg/2016/679/oj",
+      }),
+      jurisdiction: "EU",
+      unit: "article",
+      section: 7,
+      workCollection: "EUR-Lex",
+      euWorkNumber: 679,
+      euWorkYear: 2016,
+    },
+  ]);
+  const page = await withSubject(
+    highAuthorityId,
+    async (subject) =>
+      await listDecisionProvisionsHandler({ subject, query: { limit: 100 } }),
+  );
+  if (!("items" in page)) {
+    panic("Expected a provision page");
+  }
+  expect(page.items.find(({ spanStart }) => spanStart === 150)).toMatchObject({
+    workNumber: null,
+    workYear: null,
+  });
+  expect(page.items.find(({ spanStart }) => spanStart === 170)).toMatchObject({
+    workNumber: 679,
+    workYear: 2016,
+  });
+});

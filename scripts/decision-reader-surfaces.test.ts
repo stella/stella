@@ -133,7 +133,7 @@ const includeReaderAliases = (
 const readBindings = (nodes: readonly ts.Node[]) => {
   const byScope = new Map<ts.Node, Map<string, ts.Expression | undefined>>();
   for (const node of nodes) {
-    if (!ts.isVariableDeclaration(node) || !ts.isIdentifier(node.name)) {
+    if (!ts.isVariableDeclaration(node)) {
       continue;
     }
     const scope = functionScope(node);
@@ -142,7 +142,26 @@ const readBindings = (nodes: readonly ts.Node[]) => {
       bindings = new Map();
       byScope.set(scope, bindings);
     }
-    bindings.set(node.name.text, node.initializer);
+    if (ts.isIdentifier(node.name)) {
+      bindings.set(node.name.text, node.initializer);
+      continue;
+    }
+    if (!ts.isObjectBindingPattern(node.name)) {
+      continue;
+    }
+    for (const element of node.name.elements) {
+      const property = element.propertyName ?? element.name;
+      if (
+        element.dotDotDotToken ||
+        element.initializer ||
+        !ts.isIdentifier(element.name) ||
+        !(ts.isIdentifier(property) || ts.isStringLiteral(property)) ||
+        property.text !== "anchors"
+      ) {
+        continue;
+      }
+      bindings.set(element.name.text, node.initializer);
+    }
   }
   return byScope;
 };
@@ -425,6 +444,35 @@ test("decision reader census accepts aliases with matching decision text inputs"
       fixtureRegistry,
     ),
   ).toEqual([]);
+});
+
+test("decision reader census tracks destructured anchor results without accepting other hook fields", () => {
+  for (const binding of ["{ anchors }", "{ anchors: renamed }"]) {
+    expect(
+      inspectReaderSurfaces(
+        fixture(
+          `const ${binding} = load({ ${loaderInput} }); return <Reader ${readerProps.replace("{anchors}", () => (binding.includes("renamed") ? "{renamed}" : "{anchors}"))} />;`,
+        ),
+        fixtureRegistry,
+      ),
+    ).toEqual([]);
+  }
+  for (const binding of [
+    "{ externalAnchors: anchors }",
+    "{ ...anchors }",
+    "{ anchors = [] }",
+  ]) {
+    expect(
+      inspectReaderSurfaces(
+        fixture(
+          `const ${binding} = load({ ${loaderInput} }); return <Reader ${readerProps} />;`,
+        ),
+        fixtureRegistry,
+      ),
+    ).toEqual([
+      `${fixturePath}: provisionAnchors must receive this reader's useDecisionProvisionAnchors result`,
+    ]);
+  }
 });
 
 test("decision reader census rejects every loader and surface bypass", () => {

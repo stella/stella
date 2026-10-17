@@ -99,6 +99,9 @@ export type CitedProvisionTarget = {
   payload: ProvisionViewPayload;
   preview: ProvisionPreviewData | null;
 };
+export type ExternalDecisionProvisionAnchor = ProvisionAnchorSource<{
+  href: string;
+}>;
 export type DecisionProvisionAnchor =
   ProvisionAnchorSource<CitedProvisionTarget>;
 export type DecisionStatuteCitationAnchor = StatuteCitationAnchor & {
