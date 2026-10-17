@@ -27,6 +27,8 @@ export const BASELINE_PATHS = {
   testRealTimers: "scripts/test-real-timers-baseline.json",
   /** scripts/seed-test-determinism-baselines.ts */
   testWallclockAssertion: "scripts/test-wallclock-assertion-baseline.json",
+  /** scripts/check-rust-test-determinism.ts */
+  rustTestDeterminism: "scripts/rust-test-determinism-baseline.json",
   /** scripts/check-aggregate-locks.ts */
   aggregateLocks: "scripts/aggregate-lock-baseline.json",
   /** scripts/check-write-contracts.ts */

@@ -24,9 +24,11 @@ import {
   ownsCodeCheckPath,
   type CodeCheckLeg,
 } from "../packages/scripts/src/code-quality-partition";
+import { RUST_TEST_DISCOVERY_INPUTS } from "./check-rust-test-determinism";
 import { runBudgetedCheck, TASK_STALL_MS } from "./code-quality-task-budget";
 import configuredBudgets from "./code-quality-task-budgets.json" with { type: "json" };
 import { isChangedLintPath } from "./lint-paths";
+import { matches } from "./oxlint-config-scopes";
 import { measureResultBoundaryDebt } from "./ratchet";
 import {
   isResultConventionExcludedFile,
@@ -130,6 +132,13 @@ export const LINT_ONLY_CACHE_INPUTS = [
   "$TURBO_ROOT$/tsconfig.tooling.json",
 ] as const;
 export const PLUGIN_FIXTURE_INPUTS = [
+  ...Object.values(RUST_TEST_DISCOVERY_INPUTS).map(
+    (input) => `$TURBO_ROOT$/${input}`,
+  ),
+  "$TURBO_ROOT$/scripts/check-rust-test-determinism.ts",
+  "$TURBO_ROOT$/scripts/rust-test-determinism-scan.ts",
+  "$TURBO_ROOT$/scripts/check-rust-test-determinism.test.ts",
+  "$TURBO_ROOT$/scripts/rust-test-determinism-baseline.json",
   ...DEPENDENCY_CACHE_INPUTS,
   ...SHARED_COMPILER_CACHE_INPUTS,
   ...OXLINT_CONFIGURATION_CACHE_INPUTS,
@@ -156,7 +165,6 @@ export const ROOT_SCRIPT_LINT_INPUTS = [
 ] as const;
 const TURBO_CONFIG_PATH = "turbo.json";
 const TURBO_ROOT_INPUT_PREFIX = "$TURBO_ROOT$/";
-const RECURSIVE_GLOB_SUFFIX = "/**";
 
 const ROOT_CHECKS = {
   assets: "assets",
@@ -218,11 +226,7 @@ const matchesTurboInput = (file: string, input: string): boolean => {
     return false;
   }
   const relativeInput = input.slice(TURBO_ROOT_INPUT_PREFIX.length);
-  if (!relativeInput.endsWith(RECURSIVE_GLOB_SUFFIX)) {
-    return file === relativeInput;
-  }
-  const directory = relativeInput.slice(0, -RECURSIVE_GLOB_SUFFIX.length);
-  return file.startsWith(`${directory}/`);
+  return matches(relativeInput, file);
 };
 
 const invalidatesAllWorkspaceChecks = (file: string): boolean =>
@@ -361,6 +365,8 @@ type Options = {
   leg?: CodeCheckLeg;
   scope: CheckScope;
   dryRun: boolean;
+  /** Pre-push leaves a change that needs the full check to CI. */
+  skipFullFallback: boolean;
 };
 
 const parseArgs = (args: readonly string[]): Options => {
@@ -368,11 +374,16 @@ const parseArgs = (args: readonly string[]): Options => {
   let base: string | null = null;
   let all = false;
   let dryRun = false;
+  let skipFullFallback = false;
 
   const argv = args.values();
   for (const argument of argv) {
     if (argument === "--dry-run") {
       dryRun = true;
+      continue;
+    }
+    if (argument === "--skip-full-fallback") {
+      skipFullFallback = true;
       continue;
     }
     if (argument === "--all") {
@@ -407,6 +418,7 @@ const parseArgs = (args: readonly string[]): Options => {
       ? { type: "all" }
       : { type: "affected", base: base ?? DEFAULT_BASE },
     dryRun,
+    skipFullFallback,
   };
 };
 
@@ -860,8 +872,27 @@ const parseAffectedWorkspacePaths = (output: string): string[] => {
 };
 
 const THREE_TASK_MEMORY_BYTES = 12 * 1024 ** 3;
-export const codeCheckConcurrency = (memoryBytes = totalmem()): number =>
-  memoryBytes >= THREE_TASK_MEMORY_BYTES ? 3 : 2;
+/** Memory-based task count; a valid request may only lower it. */
+export const codeCheckConcurrency = (
+  memoryBytes: number,
+  requested?: string,
+): number => {
+  const memoryDefault = memoryBytes >= THREE_TASK_MEMORY_BYTES ? 3 : 2;
+  const override = Number(requested);
+  if (
+    requested !== undefined &&
+    Number.isSafeInteger(override) &&
+    override > 0
+  ) {
+    return Math.min(override, memoryDefault);
+  }
+  return memoryDefault;
+};
+
+// CODE_CHECK_CONCURRENCY lowers the task count on a busy host (pre-push runs
+// one task at a time); child Turbo runs inherit it.
+export const configuredCodeCheckConcurrency = (): number =>
+  codeCheckConcurrency(totalmem(), process.env["CODE_CHECK_CONCURRENCY"]);
 
 const turboCommand = (tasks: readonly string[], scope: TaskScope): string[] => [
   "bun",
@@ -869,7 +900,7 @@ const turboCommand = (tasks: readonly string[], scope: TaskScope): string[] => [
   "turbo",
   "run",
   ...tasks,
-  `--concurrency=${codeCheckConcurrency()}`,
+  `--concurrency=${configuredCodeCheckConcurrency()}`,
   "--summarize",
   "--remote-cache-timeout=20",
   "--log-order=stream",
@@ -1060,7 +1091,7 @@ export const scopedCommands = (
       "turbo",
       "run",
       "typecheck:repo",
-      `--concurrency=${codeCheckConcurrency()}`,
+      `--concurrency=${configuredCodeCheckConcurrency()}`,
       "--summarize",
       "--remote-cache-timeout=20",
       "--log-order=stream",
@@ -1235,6 +1266,18 @@ const main = async (): Promise<Result<number, CommandFailedError>> => {
     commands.push(resultBoundaryCommand);
   }
 
+  if (plan.type === "fallback" && options.skipFullFallback) {
+    process.stdout.write(
+      `code-check: skipped; ${plan.changedPath} requires the full repository check, which CI runs\n`,
+    );
+    return Result.ok(
+      await executeCheckCommands({
+        commands,
+        dryRun: options.dryRun,
+        budgetDeadlineMs,
+      }),
+    );
+  }
   if (plan.type === "fallback") {
     process.stdout.write(
       `code-check: full repository (${plan.changedPath} requires fallback)\n`,

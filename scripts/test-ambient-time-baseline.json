@@ -1,4 +1,9 @@
 {
+  "apps/api/scripts/lib/generated-output-store.test.ts": {
+    "count": 3,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
   "apps/api/scripts/seed-route-smoke-correspondence.postgres.test.ts": {
     "count": 2,
     "owner": "api",
@@ -49,6 +54,11 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
+  "apps/api/src/db/migration-rehearsal-writer-gap.db.test.ts": {
+    "count": 7,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
   "apps/api/src/db/migration-runner.db.test.ts": {
     "count": 6,
     "owner": "api",
@@ -95,7 +105,7 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/api/src/handlers/case-law/analysis/generate-failure.db.test.ts": {
-    "count": 4,
+    "count": 11,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -341,6 +351,11 @@
   },
   "apps/api/src/handlers/chat/fork/create.integration.test.ts": {
     "count": 2,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/handlers/chat/link-icons/cache.valkey.test.ts": {
+    "count": 3,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -610,6 +625,11 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/api/src/handlers/lists/items/list.db.test.ts": {
+    "count": 2,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/handlers/lists/sample-case/create.postgres.test.ts": {
     "count": 2,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
@@ -909,13 +929,18 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
+  "apps/api/src/lib/case-law/decision-write-extension.postgres.test.ts": {
+    "count": 2,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
   "apps/api/src/lib/case-law/plain-text.test.ts": {
     "count": 2,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/api/src/lib/chat/run-log.postgres.test.ts": {
-    "count": 3,
+    "count": 5,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -1649,6 +1674,11 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
+  "apps/api/src/lib/tanstack-ai-provider-retry.test.ts": {
+    "count": 3,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
   "apps/api/src/lib/template-clause-links.db.test.ts": {
     "count": 1,
     "owner": "api",
@@ -1719,6 +1749,21 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
+  "apps/api/src/lib/workspaces/authorized-workspace-ids.postgres.test.ts": {
+    "count": 2,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/workspaces/create-workspace-row.postgres.test.ts": {
+    "count": 3,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/workspaces/matter-access-differential.postgres.test.ts": {
+    "count": 2,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
   "apps/api/src/mcp/capability-tools.test.ts": {
     "count": 1,
     "owner": "api",
@@ -1730,7 +1775,7 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/api/src/mcp/tool-outputs.db.test.ts": {
-    "count": 3,
+    "count": 4,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -1934,6 +1979,21 @@
     "owner": "web",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
+  "apps/web/src/components/chat/chat-turn-duration.dom.test.tsx": {
+    "count": 1,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/components/chat/chat-turn-duration.test.tsx": {
+    "count": 1,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/features/chat/components/proxy-chat-link.dom.test.tsx": {
+    "count": 1,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
   "apps/web/src/features/chat/stream-chunk-commit-budget.dom.test.tsx": {
     "count": 1,
     "owner": "web",
@@ -2100,12 +2160,17 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "scripts/cleanup-queued-pr-runs.test.ts": {
-    "count": 2,
+    "count": 1,
     "owner": "scripts",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "scripts/code-quality-task-budget.test.ts": {
     "count": 6,
+    "owner": "scripts",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "scripts/flake-gate-process.test.ts": {
+    "count": 3,
     "owner": "scripts",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -2121,6 +2186,11 @@
   },
   "scripts/network-baseline-scope.test.ts": {
     "count": 1,
+    "owner": "scripts",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "scripts/pre-push-affected.test.ts": {
+    "count": 2,
     "owner": "scripts",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   }

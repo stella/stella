@@ -44,6 +44,11 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
+  "apps/api/src/lib/case-law/decision-write-extension.postgres.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
   "apps/api/src/lib/corpus-index/chunking.test.ts": {
     "count": 1,
     "owner": "api",
@@ -105,6 +110,11 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/api/src/lib/tanstack-ai-generate.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/tanstack-ai-provider-retry.test.ts": {
     "count": 1,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"

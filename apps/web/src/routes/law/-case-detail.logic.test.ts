@@ -3,7 +3,10 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
-import { publicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
+import {
+  CASE_LAW_BROWSER_COUNTRIES,
+  publicCaseLawCountry,
+} from "@stll/api-contract/case-law-launch-readiness";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
@@ -90,7 +93,7 @@ const PUBLISHED_DECISION = {
 } satisfies DecisionBySlug;
 
 test("textless decision heads stay noindex until the text arrives", async () => {
-  for (const country of ["CZE", "SVK", "POL"]) {
+  for (const country of CASE_LAW_BROWSER_COUNTRIES) {
     const params = {
       country: country.toLowerCase(),
       court: "synthetic-court",

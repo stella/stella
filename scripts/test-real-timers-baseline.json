@@ -1,6 +1,6 @@
 {
   ".claude/mcp/stella-docs-http.test.ts": {
-    "count": 1,
+    "count": 3,
     "owner": ".claude",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -36,6 +36,11 @@
   },
   "apps/api/src/db/entity-feature-gate-maintenance.postgres.test.ts": {
     "count": 4,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/db/migration-rehearsal-writer-gap.db.test.ts": {
+    "count": 2,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -219,6 +224,11 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
+  "apps/api/src/lib/chat/run-log.postgres.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
   "apps/api/src/lib/chat/tanstack-chat-runtime.test.ts": {
     "count": 5,
     "owner": "api",
@@ -240,7 +250,7 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/api/src/lib/db/member-access-hold.postgres.test.ts": {
-    "count": 1,
+    "count": 3,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -420,12 +430,7 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/api/src/lib/safe-outbound-fetch.test.ts": {
-    "count": 1,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/lib/scheduler/runner.postgres.test.ts": {
-    "count": 1,
+    "count": 2,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -465,6 +470,11 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/api/src/lib/subprocess.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/tanstack-ai-provider-retry.test.ts": {
     "count": 1,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
@@ -619,6 +629,16 @@
     "owner": "web",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
+  "apps/web/src/components/inspector/inspector-find.dom.test.tsx": {
+    "count": 3,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/components/inspector/inspector-tabs-store.test.ts": {
+    "count": 2,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
   "apps/web/src/components/inspector/maximize-tab.test.ts": {
     "count": 1,
     "owner": "web",
@@ -635,11 +655,6 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/web/src/components/provision-version-basis.dom.test.tsx": {
-    "count": 2,
-    "owner": "web",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/web/src/components/workspaces/list-source-action.dom.test.tsx": {
     "count": 2,
     "owner": "web",
     "reason": "pre-kit census; migrate to @stll/test-kit"
@@ -674,6 +689,11 @@
     "owner": "web",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
+  "apps/web/src/features/case-law/components/case-viewer/decision-reader-toggles.dom.test.tsx": {
+    "count": 7,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
   "apps/web/src/features/case-law/components/case-viewer/decision-text.provisions.dom.test.tsx": {
     "count": 1,
     "owner": "web",
@@ -681,6 +701,11 @@
   },
   "apps/web/src/features/case-law/components/case-viewer/provisions-cited.dom.test.tsx": {
     "count": 1,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/features/case-law/components/case-viewer/use-reader-answers.dom.test.tsx": {
+    "count": 4,
     "owner": "web",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -829,6 +854,11 @@
     "owner": "web",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
+  "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/list-source-action.dom.test.tsx": {
+    "count": 2,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
   "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/report-export-refusal.dom.test.tsx": {
     "count": 1,
     "owner": "web",
@@ -946,6 +976,11 @@
   },
   "scripts/gh-retry-processes.test.ts": {
     "count": 2,
+    "owner": "scripts",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "scripts/pre-push-affected.test.ts": {
+    "count": 1,
     "owner": "scripts",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   }

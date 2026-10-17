@@ -27,7 +27,7 @@ export const parseTestBaseline = (text: string, label: string): string[] => {
   const members: string[] = [];
   for (const [file, entry] of Object.entries(parsed)) {
     if (
-      !/\.(?:test|spec)\.[cm]?[jt]sx?$/u.test(file) ||
+      !/(?:\.(?:test|spec)\.[cm]?[jt]sx?|\.rs)$/u.test(file) ||
       file.includes("\\") ||
       file.includes(":") ||
       file

@@ -331,6 +331,15 @@ export const citationSummaryOutput = (
 
   return {
     citedBy: {
+      doctrineCounts:
+        digest.doctrineSummary.status === "unavailable"
+          ? { status: "unavailable" as const }
+          : {
+              status: "available" as const,
+              counts: digest.doctrineSummary.counts.incoming,
+              capped: digest.doctrineSummary.capped.incoming,
+              candidateWindow: digest.doctrineSummary.candidateWindow,
+            },
       count: citedByCount,
       ...(digest.summary.precision.status === "bounded" &&
       digest.summary.precision.capped.incoming
@@ -342,6 +351,15 @@ export const citationSummaryOutput = (
       top: topResult,
     },
     cites: {
+      doctrineCounts:
+        digest.doctrineSummary.status === "unavailable"
+          ? { status: "unavailable" as const }
+          : {
+              status: "available" as const,
+              counts: digest.doctrineSummary.counts.outgoing,
+              capped: digest.doctrineSummary.capped.outgoing,
+              candidateWindow: digest.doctrineSummary.candidateWindow,
+            },
       count: totalOf(digest.summary.outgoing),
       ...(digest.summary.precision.status === "bounded" &&
       digest.summary.precision.capped.outgoing
