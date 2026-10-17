@@ -643,7 +643,7 @@ test("Gemini structured output preserves its provider HTTP status", async () => 
     apiKey: "cassette-replay-no-credentials",
     provider: "google",
   })(model);
-  const result = await Result.tryPromise(() =>
+  const result = await Result.tryPromise(async () =>
     adapter.structuredOutput({
       chatOptions: {
         logger: resolveDebugOption(false),
