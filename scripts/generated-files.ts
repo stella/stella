@@ -1154,6 +1154,15 @@ export const derivedPrerequisites = (generator: Generator) =>
       generator.after.includes(upstream.id),
   );
 
+/**
+ * The check that proves `generator`'s outputs are current, so a run may skip
+ * `write`. A derived output is never committed, so a passing check (it guards
+ * tracking, not presence) says nothing about whether a clean checkout has it:
+ * derived generators always write.
+ */
+export const upToDateCheck = (generator: Generator) =>
+  generator.outputKind === "committed" ? generator.check : null;
+
 export const allowedOutputs = (generators: readonly Generator[]) => [
   // A planner cannot authorize recreating the retired ratchet budget.
   ...new Set(

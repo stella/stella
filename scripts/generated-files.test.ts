@@ -23,6 +23,7 @@ import {
   generatorsForFiles,
   matchesGeneratedGlob,
   orderGenerators,
+  upToDateCheck,
 } from "./generated-files";
 import {
   checkRouteGeneratorVersion,
@@ -1185,6 +1186,24 @@ test("every plan builds the derived outputs its generators read before running t
     }
   }
   expect([...new Set(problems)]).toEqual([]);
+});
+
+// Building a prerequisite first is useless if the run then skips it: a derived
+// generator's check guards tracking, so it passes on a clean checkout that
+// lacks the outputs.
+test("a planned derived generator always writes its outputs", () => {
+  for (const owner of GENERATORS) {
+    expect({ id: owner.id, check: upToDateCheck(owner) }).toEqual({
+      id: owner.id,
+      check: owner.outputKind === "derived" ? null : owner.check,
+    });
+  }
+  const runner = readFileSync(
+    new URL("autofix-plan.ts", import.meta.url),
+    "utf-8",
+  );
+  expect(runner).toContain("upToDateCheck(generator)");
+  expect(runner).not.toContain("generator.check");
 });
 
 test("a CLI registry change plans the MCP app bundles it reads", () => {

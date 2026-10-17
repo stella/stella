@@ -1,5 +1,10 @@
 import { planAutofix } from "./autofix-push-scope";
-import { GENERATORS, allowedOutputs, orderGenerators } from "./generated-files";
+import {
+  GENERATORS,
+  allowedOutputs,
+  orderGenerators,
+  upToDateCheck,
+} from "./generated-files";
 
 // The explicit type lets calls narrow the values they reject.
 const fail: (message: string) => never = (message) => {
@@ -56,8 +61,9 @@ switch (mode) {
   case "run": {
     const selected = selectedFromIds(args.at(0) ?? "");
     for (const generator of selected) {
-      if (generator.check) {
-        const checked = Bun.spawnSync([...generator.check], {
+      const check = upToDateCheck(generator);
+      if (check) {
+        const checked = Bun.spawnSync([...check], {
           stdout: "inherit",
           stderr: "inherit",
         });
