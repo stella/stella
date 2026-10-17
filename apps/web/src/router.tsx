@@ -9,7 +9,16 @@ import {
   DefaultNotFoundComponent,
   DefaultPendingComponent,
 } from "@/components/route-components";
+import { initializeDocumentUser } from "@/i18n/document-presentation";
+import {
+  initializeRenderedLocale,
+  loadLocaleMessages,
+  useI18nStore,
+} from "@/i18n/i18n-store";
 import { installUserScopedStorage } from "@/lib/account/install-user-scoped-storage";
+import { defaultPresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
+import { initializeBrowserPresentationPrefs } from "@/lib/account/presentation-prefs/provider";
+import { readPresentationPrefs } from "@/lib/account/presentation-prefs/server";
 import { installSessionChangeListener } from "@/lib/account/session-change-listener";
 import { listenForSessionDocumentRestore } from "@/lib/account/session-document";
 import { listenForSessionChange } from "@/lib/account/session-signal";
@@ -23,6 +32,7 @@ import { createAppQueryClient } from "@/lib/react-query";
 import { isAuthFlowPathname } from "@/lib/redirect";
 import { installSessionCacheGuard } from "@/lib/session-cache-guard";
 import { installTableStoreReconcile } from "@/lib/workspaces/table-store";
+import { loadAuthContext } from "@/routes/-auth-context";
 import { routeTree } from "@/routeTree.gen";
 
 enableMapSet();
@@ -72,8 +82,30 @@ export function getRouter() {
 
   const router = createRouter({
     routeTree,
+    dehydrate: async () => ({
+      locale: useI18nStore.getState().loadedLang,
+      prefs: await readPresentationPrefs(),
+    }),
+    hydrate: async (presentation) => {
+      const [messages, { user }] = await Promise.all([
+        loadLocaleMessages(presentation.locale),
+        loadAuthContext(queryClient),
+      ]);
+      initializeDocumentUser(queryClient, user?.id ?? null);
+      initializeBrowserPresentationPrefs(presentation.prefs);
+      initializeRenderedLocale({
+        locale: presentation.locale,
+        prefs: presentation.prefs,
+        messages,
+      });
+    },
     defaultPreload: "intent",
-    context: { analyticsValue, queryClient, routeErrorLifecycle },
+    context: {
+      analyticsValue,
+      queryClient,
+      routeErrorLifecycle,
+      presentationPrefs: defaultPresentationPrefs,
+    },
     defaultOnCatch: () => {
       routeErrorLifecycle.caught(readCaughtRouteTemplate());
     },

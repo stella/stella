@@ -2,6 +2,8 @@ import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, spyOn, test } from "bun:test";
 import * as v from "valibot";
 
+import { runInRequest } from "@stll/test-kit/request";
+
 import { statutesInfiniteOptions } from "@/features/statutes/queries/statutes";
 import { statutesIndexSearchSchema } from "@/features/statutes/statute-index-search.logic";
 import { statuteDocumentIdentity } from "@/lib/legal/statute-act-number";
@@ -60,14 +62,18 @@ test("publication year reaches the public statute list request", async () => {
   );
   const queryClient = new QueryClient();
   try {
-    await queryClient.infiniteQuery(
-      statutesInfiniteOptions(
-        createStatuteListFilters(
-          "svk",
-          v.parse(statutesIndexSearchSchema, { year: 1964 }),
+    // Server-side API reads forward the incoming request's cookies, so the
+    // read runs inside a request as it does during SSR.
+    await runInRequest(async () => {
+      await queryClient.infiniteQuery(
+        statutesInfiniteOptions(
+          createStatuteListFilters(
+            "svk",
+            v.parse(statutesIndexSearchSchema, { year: 1964 }),
+          ),
         ),
-      ),
-    );
+      );
+    }, new Request("http://localhost:3000/law"));
     expect(requests).toHaveLength(1);
     expect(requests.at(0)?.pathname).toBe("/v1/law/statutes");
     expect(requests.at(0)?.searchParams.get("country")).toBe("SVK");

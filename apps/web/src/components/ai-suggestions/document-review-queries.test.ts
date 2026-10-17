@@ -1,7 +1,8 @@
 import { QueryClient } from "@tanstack/react-query";
-import { afterEach, expect, mock, test } from "bun:test";
+import { afterEach, expect, mock } from "bun:test";
 
 import { APIError } from "@/lib/errors/api";
+import { requestTest as test } from "@/testing/request-test";
 
 const originalFetch = globalThis.fetch;
 

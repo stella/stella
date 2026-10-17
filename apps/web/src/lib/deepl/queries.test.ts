@@ -1,5 +1,7 @@
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
-import { afterEach, expect, test } from "bun:test";
+import { afterEach, expect } from "bun:test";
+
+import { requestTest as test } from "@/testing/request-test";
 
 import { deepLAvailabilityOptions } from "./queries";
 

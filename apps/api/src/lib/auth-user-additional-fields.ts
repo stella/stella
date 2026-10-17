@@ -5,6 +5,11 @@ export const AUTH_USER_ADDITIONAL_FIELDS = {
     required: false,
     defaultValue: "UTC",
   },
+  locale: {
+    type: "string",
+    required: false,
+    defaultValue: "en",
+  },
   preferredName: {
     type: "string",
     required: false,

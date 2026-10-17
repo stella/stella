@@ -175,6 +175,7 @@ import {
   socialCallbackErrorUrl,
   socialSignInProvider,
 } from "@/api/lib/auth/social-sign-in-outcome";
+import { validateUserLocale } from "@/api/lib/auth/user-locale";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -1803,6 +1804,7 @@ export const createAuth = (
                 path: ctx?.path,
               });
               yield* validateTimezoneId(user["timezoneId"]);
+              yield* validateUserLocale(user["locale"]);
               // Email-OTP and some social providers leave `name` blank.
               // The `notNull` schema constraint allows empty strings, which
               // surfaces as a blank "Author" everywhere the user is shown.
@@ -1836,9 +1838,9 @@ export const createAuth = (
         },
         update: {
           before: async (user) => {
-            const data = validateTimezoneId(user["timezoneId"]).andThen(() =>
-              normalizeUserPreferences(ensureDisplayName(user)),
-            );
+            const data = validateTimezoneId(user["timezoneId"])
+              .andThen(() => validateUserLocale(user["locale"]))
+              .andThen(() => normalizeUserPreferences(ensureDisplayName(user)));
             if (Result.isError(data)) {
               throw data.error;
             }

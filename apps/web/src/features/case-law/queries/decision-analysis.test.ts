@@ -1,5 +1,5 @@
 import { QueryClient } from "@tanstack/react-query";
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect } from "bun:test";
 
 import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
 
@@ -8,6 +8,7 @@ import {
   decisionOptions,
   publicDecisionReadFilter,
 } from "@/features/case-law/queries/decisions";
+import { requestTest as test } from "@/testing/request-test";
 
 const DECISION_ID = "01a02a37-2222-7222-8222-222222222222";
 const ANALYSIS_PATH = `/case/decisions/${DECISION_ID}/analysis`;

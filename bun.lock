@@ -526,6 +526,7 @@
         "@stll/property-testing": "workspace:*",
         "@stll/scripts": "workspace:*",
         "@stll/ssr-testkit": "workspace:^",
+        "@stll/test-kit": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "@tailwindcss/vite": "catalog:",
         "@tanstack/devtools-vite": "^0.8.5",
@@ -878,7 +879,6 @@
         "@stll/text-normalize": "workspace:*",
         "@stll/ui": "workspace:*",
         "better-result": "catalog:",
-        "valibot": "catalog:",
       },
       "devDependencies": {
         "@happy-dom/global-registrator": "20.14.5",
@@ -1327,6 +1327,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@stll/time": "workspace:*",
+        "@tanstack/react-start": "^1.168.60",
         "better-result": "catalog:",
         "drizzle-orm": "catalog:",
       },

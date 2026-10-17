@@ -46,6 +46,7 @@ import {
 import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
 
+import { setLang } from "@/i18n/change-language";
 import {
   LANG_ENDONYMS,
   REGIONAL_FORMAT_LABELS,
@@ -938,7 +939,6 @@ const PreferenceRow = ({
 const LocalePreferences = () => {
   const t = useTranslations();
   const lang = useI18nStore((s) => s.lang);
-  const setLang = useI18nStore((s) => s.setLang);
   const regionalFormat = useI18nStore((s) => s.regionalFormat);
   const setRegionalFormat = useI18nStore((s) => s.setRegionalFormat);
   const calendar = useI18nStore((s) => s.calendar);

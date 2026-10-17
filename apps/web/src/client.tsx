@@ -4,13 +4,9 @@ import { hydrateRoot } from "react-dom/client";
 import { CancelledError } from "@tanstack/react-query";
 import { StartClient } from "@tanstack/react-start/client";
 
-import { bootHydratedClient } from "@stll/ssr-kit/hydration";
-
 import { RenderStormCanary } from "@/components/render-storm-canary";
-import { initializeI18n } from "@/i18n/i18n-store";
 import { detached } from "@/lib/detached";
 import { installPreloadErrorRecovery } from "@/lib/preload-error-recovery";
-import { isPublicSsrPath } from "@/lib/public-ssr-paths";
 
 type HydrationCommitSignalProps = {
   onCommit: () => void;
@@ -55,17 +51,6 @@ const hydrate = async () => {
 // Recover from failed route-chunk imports before they blank the screen.
 installPreloadErrorRecovery();
 
-// The server renders public paths with bundled English. They hydrate against
-// that same state before persisted browser state loads after the hydration
-// commit.
-// Client-only paths resolve browser state before their first render.
-detached(
-  bootHydratedClient({
-    type: isPublicSsrPath(window.location.pathname)
-      ? "server-rendered"
-      : "client-rendered",
-    hydrate,
-    initializeClientState: initializeI18n,
-  }),
-  "client.i18n",
-);
+// Router hydration restores the server's exact catalogue and preferences
+// before React renders the document.
+detached(hydrate(), "client.hydration");

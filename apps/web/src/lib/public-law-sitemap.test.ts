@@ -913,7 +913,7 @@ describe("public law sitemap", () => {
     expectNoDirectAuthImport(source);
   });
 
-  test("root route streams only public law app paths", async () => {
+  test("root route renders every path with document presentation", async () => {
     const source = await readSource("apps/web/src/routes/__root.tsx");
 
     expect(isPublicSsrPath("/law")).toBe(true);
@@ -922,9 +922,8 @@ describe("public law sitemap", () => {
     expect(isPublicSsrPath("/auth")).toBe(false);
     expect(isPublicSsrPath("/workspaces/workspace-id")).toBe(false);
     expect(isPublicSsrPath("/")).toBe(false);
-    expect(source).toContain(
-      "ssr: ({ location: routeLocation }) => isPublicSsrPath(routeLocation.pathname)",
-    );
+    expect(source).toContain("ssr: true");
+    expect(source).toContain("loadDocumentPresentation(context.queryClient)");
     expect(source).toContain("shellComponent: RootDocument");
   });
 
@@ -1085,16 +1084,29 @@ describe("public law sitemap", () => {
     expect(searchSource).toContain("usePublicLawPreviewEnabled");
   });
 
-  test("start client orders i18n around hydration per path kind", async () => {
-    const source = await readSource("apps/web/src/client.tsx");
+  test("router restores document presentation before hydration", async () => {
+    const source = await readSource("apps/web/src/router.tsx");
+    const clientSource = await readSource("apps/web/src/client.tsx");
 
-    // Public SSR paths hydrate first (against the server's English) and
-    // load the persisted locale after first paint; app paths keep the
-    // resolve-locale-then-hydrate boot model.
-    expect(source).toContain('from "@stll/ssr-kit/hydration"');
-    expect(source).toMatch(
-      /detached\(\s*bootHydratedClient\(\{\s*type:\s*isPublicSsrPath\(window\.location\.pathname\)\s*\?\s*"server-rendered"\s*:\s*"client-rendered",\s*hydrate,\s*initializeClientState:\s*initializeI18n,\s*\}\),\s*"client\.i18n",\s*\);/u,
+    expect(source).toContain("locale: useI18nStore.getState().loadedLang");
+    expect(source).toContain("prefs: await readPresentationPrefs()");
+    expect(source).toContain(
+      "initializeDocumentUser(queryClient, user?.id ?? null)",
     );
+    expect(source).toContain("loadLocaleMessages(presentation.locale)");
+    expect(source).not.toContain("localeUserId");
+    expect(
+      source.slice(
+        source.indexOf("dehydrate:"),
+        source.indexOf("hydrate: async (presentation)"),
+      ),
+    ).not.toContain("loadAuthContext");
+    expect(source).toContain(
+      "initializeBrowserPresentationPrefs(presentation.prefs)",
+    );
+    expect(source).toContain("initializeRenderedLocale({");
+    expect(clientSource).toContain('detached(hydrate(), "client.hydration")');
+    expect(clientSource).not.toContain("initializeI18n");
   });
 
   test("app provider preserves browser time zones for app timestamps", async () => {
@@ -1107,7 +1119,9 @@ describe("public law sitemap", () => {
     expect(timeZoneSource).toContain('globalThis.addEventListener("focus"');
     expect(timeZoneSource).toContain('globalThis.removeEventListener("focus"');
 
-    const providerSource = await readSource("apps/web/src/app-providers.tsx");
+    const appSource = await readSource("apps/web/src/app-providers.tsx");
+    expect(appSource).toContain("<I18nProvider>");
+    const providerSource = await readSource("apps/web/src/i18n/provider.tsx");
     expect(providerSource).toContain(
       "useHydrationSafeTimeZone(synchronizeFormatterTimeZone)",
     );

@@ -72,6 +72,7 @@ const mount = (emailAvailable: boolean) => {
           email: "member@example.test",
           emailVerified: true,
           id: "user",
+          locale: "en",
           name: "Member",
           timezoneId: "UTC",
           twoFactorEnabled: false,

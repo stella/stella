@@ -9,6 +9,7 @@ import type {
   WebRoutes,
 } from "@/generated/api-routes.gen";
 import { getAnalytics } from "@/lib/analytics/provider";
+import { externalApiOrigin } from "@/lib/api-origins";
 import {
   getApiRequestHeaders,
   waitForSimulatedApiDelay,
@@ -59,7 +60,7 @@ const clientOptions = {
 } satisfies StellaEdenClientOptions;
 
 const eden = createStellaEdenClient<EdenRoutesApp<WebRoutes>>(
-  browserApiBaseUrl(),
+  import.meta.env.SSR ? externalApiOrigin() : browserApiBaseUrl(),
   clientOptions,
 );
 const linkIconsEden = createStellaEdenClient<EdenRoutesApp<WebRoutes>>(
@@ -77,15 +78,21 @@ const linkIconsEden = createStellaEdenClient<EdenRoutesApp<WebRoutes>>(
   },
 );
 const memoriesEden = createStellaEdenClient<EdenRoutesApp<MemoriesRoutes>>(
-  browserApiBaseUrl(),
+  import.meta.env.SSR ? externalApiOrigin() : browserApiBaseUrl(),
   clientOptions,
 );
 const correspondenceEden = createStellaEdenClient<
   EdenRoutesApp<CorrespondenceRoutes>
->(browserApiBaseUrl(), clientOptions);
+>(
+  import.meta.env.SSR ? externalApiOrigin() : browserApiBaseUrl(),
+  clientOptions,
+);
 const myTimeEntriesEden = createStellaEdenClient<
   EdenRoutesApp<MyTimeEntriesRoutes>
->(browserApiBaseUrl(), clientOptions);
+>(
+  import.meta.env.SSR ? externalApiOrigin() : browserApiBaseUrl(),
+  clientOptions,
+);
 
 export const api = eden.v1;
 export const linkIconsApi = linkIconsEden.v1.chat["link-icons"];

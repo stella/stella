@@ -6,6 +6,7 @@
   "type": "module",
   "sideEffects": false,
   "exports": {
+    "./public-law-table": "./src/public-law-table.ts",
     ".": "./src/index.ts",
     "./search-history-identity": "./src/search-history-identity.ts",
     "./search-history-title": "./src/search-history-title.ts",
