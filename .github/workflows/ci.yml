@@ -1189,7 +1189,9 @@ jobs:
                 ;;
             esac
             case "$file" in
-              apps/desktop/*|scripts/*|.github/actions/desktop-windows-build/*|.github/workflows/release-desktop.yml|.github/workflows/ci.yml|package.json|bun.lock)
+              # Only the scripts the Windows desktop build and its receipt run;
+              # unrelated repository scripts do not select this ~11 min job.
+              apps/desktop/*|scripts/desktop-*|scripts/*tauri*|scripts/detect-desktop-*|scripts/check-desktop-*|scripts/ci-windows-dry-run-*|scripts/wasm-*|scripts/test-wasm-offline.sh|scripts/run-oxfmt.ts|scripts/check-format-environment.ts|scripts/ci-install*|.github/actions/desktop-windows-build/*|.github/workflows/release-desktop.yml|.github/workflows/ci.yml|package.json|bun.lock)
                 if [[ "$file" != *.md && "$file" != *.mdx ]]; then
                   desktop_windows_dry_run_required=true
                 fi
