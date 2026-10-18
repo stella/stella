@@ -403,7 +403,7 @@ case_law_reconciliation_items.slice            varchar      not null          ca
 case_law_reconciliation_items.identity_key     varchar      not null          case-law.ts:1730  `document:<id>` or `case-number:<language>:<docket>`; see `listingIdentityKey`.
 case_law_reconciliation_items.payload          jsonb        not null          case-law.ts:1732  The listing item verbatim, so a retry needs no second listing walk.
 case_law_reconciliation_items.payload_hash     varchar      null              case-law.ts:1734  Lazy listing revision fingerprint; null is a row written before revision tracking.
-case_law_reconciliation_items.revival_count    integer      default,not null  case-law.ts:1736  Lifetime terminal revivals; failed revived attempts preserve the retry budget.
+case_law_reconciliation_items.revival_count    integer      default,not null  case-law.ts:1736  Lifetime terminal revivals; ordinary retry failures do not consume revivals.
 case_law_reconciliation_items.status           varchar      default,not null  case-law.ts:1737
 case_law_reconciliation_items.attempts         integer      default,not null  case-law.ts:1741
 case_law_reconciliation_items.next_attempt_at  timestamptz  null              case-law.ts:1742

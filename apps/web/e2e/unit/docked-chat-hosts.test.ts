@@ -35,3 +35,19 @@ test("docked chat census includes reader and inspector hosts but excludes non-pa
     ),
   ).toBe(false);
 });
+
+test("docked chat census follows the frame a route's parent layout selects", () => {
+  const { hosts } = readDockedChatHosts();
+  // The admin console mounts its own frame without the docked inspector.
+  expect(
+    hosts.some(
+      ({ template, surfaces }) =>
+        (template === "/admin" || template.startsWith("/admin/")) &&
+        surfaces.includes("inspector"),
+    ),
+  ).toBe(false);
+  expect(
+    hosts.find((host) => host.template === "/settings/account/profile")
+      ?.surfaces,
+  ).toContain("inspector");
+});

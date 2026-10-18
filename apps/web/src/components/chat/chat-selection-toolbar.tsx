@@ -1,15 +1,15 @@
 import { useCallback, useState } from "react";
-import type { RefObject } from "react";
+import type { Dispatch, RefObject, SetStateAction } from "react";
 
-import { panic } from "better-result";
+import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { copyToClipboard } from "@stll/clipboard";
 import { Button } from "@stll/ui/button";
-import { AiActionIcon, NewChatIcon, QuoteIcon } from "@stll/ui/icons";
+import { AiActionIcon } from "@stll/ui/icons";
 
 import { useChatEditorManager } from "@/components/chat-editor-provider";
 import {
-  CHAT_SELECTION_ACTION,
   chatQuoteChip,
   chatSelectionActions,
   normalizeChatSelectionText,
@@ -23,27 +23,34 @@ import {
 } from "@/components/chat/side-panel-chat-status";
 import { SIDE_PANEL_CHAT_STATUS } from "@/components/chat/side-panel-chat-status.logic";
 import { useSidePanelChat } from "@/components/chat/use-request-chat-about";
-import { CopyActionButton } from "@/components/copy-action-button";
 import { SelectionToolbar } from "@/components/selection-toolbar";
 import { selectionToolbarAnchor } from "@/components/selection-toolbar.logic";
 import type { SelectionToolbarAnchor } from "@/components/selection-toolbar.logic";
 import type { AnswerEditAnchor } from "@/features/chat/answer-edit/answer-edit-api";
 import { AnswerEditPanel } from "@/features/chat/answer-edit/answer-edit-panel";
+import type { AnswerSourceSelection } from "@/features/chat/answer-edit/answer-edit-selection";
 import { mapAnswerSelection } from "@/features/chat/answer-edit/answer-edit-selection";
+import {
+  AnswerFormatPanel,
+  AnswerFormattingControls,
+} from "@/features/chat/answer-edit/answer-format-panel";
+import type { AnswerFormatEntry } from "@/features/chat/answer-edit/answer-format-panel";
+import { ChatSelectionActions } from "@/features/chat/answer-edit/chat-selection-actions";
 import { useChatSelectionEvents } from "@/features/chat/answer-edit/use-chat-selection-events";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
+import { getAnalytics } from "@/lib/analytics/provider";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 
 /** `ChatThreadMessages` marks every message it renders with its id. */
 const CHAT_MESSAGE_ATTRIBUTE = "data-chat-message-id";
 
+const COPIED_RESET_MS = 2000;
 const EMPTY_MESSAGES: readonly ChatUIMessage[] = [];
 
 /** Below `sm` a full row of localized labels outgrows the screen, so the
  *  labels become the buttons' accessible names and the glyphs stay. */
 const ACTION_LABEL_CLASS = "max-sm:sr-only";
-
-type AnswerEditing = AnswerEditAnchor & SelectionToolbarAnchor;
 
 type Selected = {
   quote: string;
@@ -107,14 +114,18 @@ export const ChatSelectionToolbar = ({
   const [selected, setSelected] = useState<Selected | null>(null);
   const [editing, setEditing] = useState<AnswerEditing | null>(null);
   const [editError, setEditError] = useState(false);
-  const refreshEditedAnswer = useCallback(async () => {
-    await (editing === null ? undefined : onAnswerEdited?.(editing.messageId));
-  }, [editing, onAnswerEdited]);
+  const [copied, setCopied] = useState(false);
   // Where the bar stood when its words went to a new chat: the confirmation
   // stays there, where the reader is looking, after the selection is gone.
   const [confirmAt, setConfirmAt] = useState<SelectionToolbarAnchor | null>(
     null,
   );
+
+  const refreshEditedAnswer = useCallback(async () => {
+    if (editing !== null) {
+      await onAnswerEdited?.(editing.anchor.messageId);
+    }
+  }, [editing, onAnswerEdited]);
 
   const readSelection = useLatestCallback(
     (ownerDoc: Document, pointer?: { x: number; y: number }) => {
@@ -144,6 +155,10 @@ export const ChatSelectionToolbar = ({
         setSelected(null);
         return;
       }
+      // A fresh selection must not inherit the previous one's confirmation.
+      if (selected?.quote !== quote) {
+        setCopied(false);
+      }
       // Nor may the last confirmation return once this selection goes.
       setConfirmAt(null);
       const messageNode = messageElementOf(range.startContainer, root);
@@ -155,8 +170,7 @@ export const ChatSelectionToolbar = ({
         messageNode !== null &&
         message?.role === "assistant" &&
         message.revision !== undefined &&
-        onAnswerEdited !== undefined &&
-        answerRewriteAvailability === "available"
+        onAnswerEdited !== undefined
       ) {
         edit = mapAnswerSelection({
           message,
@@ -185,19 +199,34 @@ export const ChatSelectionToolbar = ({
           doc={doc}
           key="edit"
         >
-          <AnswerEditPanel
-            key={`${editing.messageId}:${editing.baseRevision}:${editing.start}:${editing.end}`}
-            anchor={editing}
-            threadId={source.threadRef.threadId}
-            disabled={
-              editsDisabled || answerRewriteAvailability !== "available"
-            }
-            onCancel={() => {
-              setEditing(null);
-              setSelected(null);
-            }}
-            onAnswerEdited={refreshEditedAnswer}
-          />
+          {editing.type === "format" ? (
+            <AnswerFormatPanel
+              entry={editing.entry}
+              selection={editing.selection}
+              anchor={editing.anchor}
+              threadId={source.threadRef.threadId}
+              disabled={editsDisabled}
+              onCancel={() => {
+                setEditing(null);
+                setSelected(null);
+              }}
+              onAnswerEdited={refreshEditedAnswer}
+            />
+          ) : (
+            <AnswerEditPanel
+              key={`${editing.anchor.messageId}:${editing.anchor.baseRevision}:${editing.anchor.start}:${editing.anchor.end}`}
+              anchor={editing.anchor}
+              threadId={source.threadRef.threadId}
+              disabled={
+                editsDisabled || answerRewriteAvailability !== "available"
+              }
+              onCancel={() => {
+                setEditing(null);
+                setSelected(null);
+              }}
+              onAnswerEdited={refreshEditedAnswer}
+            />
+          )}
         </SelectionToolbar>
         {announcer}
       </>
@@ -264,6 +293,13 @@ export const ChatSelectionToolbar = ({
     insertPastedTextIntoThread(source.threadRef, chip);
   };
 
+  const copy = async () =>
+    copySelectedText({
+      quote: selected.quote,
+      setCopied,
+      errorMessage: t("errors.actionFailed"),
+    });
+
   const actions = chatSelectionActions({
     quote: selected.quote,
     source,
@@ -281,6 +317,26 @@ export const ChatSelectionToolbar = ({
         {/* Wraps rather than run off a narrow screen; on a phone the
             actions go icon-only and keep their labels as accessible names. */}
         <div className="flex flex-wrap items-center gap-1">
+          {selected.edit.status !== "unavailable" && (
+            <AnswerFormattingControls
+              disabled={editsDisabled}
+              onSelect={(entry) => {
+                if (selected.edit.status !== "available") {
+                  setEditError(true);
+                  return;
+                }
+                setEditing({
+                  type: "format",
+                  anchor: selected.edit.anchor,
+                  selection: selected.edit.selection,
+                  entry,
+                  rect: selected.rect,
+                  bounds: selected.bounds,
+                });
+                doc?.getSelection()?.removeAllRanges();
+              }}
+            />
+          )}
           {selected.edit.status !== "unavailable" &&
             answerRewriteAvailability === "available" && (
               <CapabilityAction action={{ capability: "ai" }} surface="control">
@@ -293,7 +349,8 @@ export const ChatSelectionToolbar = ({
                         return;
                       }
                       setEditing({
-                        ...selected.edit.anchor,
+                        type: "ai",
+                        anchor: selected.edit.anchor,
                         bounds: selected.bounds,
                         rect: selected.rect,
                       });
@@ -317,81 +374,51 @@ export const ChatSelectionToolbar = ({
               {t("chat.answerEdit.invalidSelection")}
             </p>
           )}
-          {actions.map((action) => {
-            switch (action) {
-              case CHAT_SELECTION_ACTION.askInNewChat: {
-                return (
-                  <CapabilityAction
-                    action={{ capability: "ai" }}
-                    key={action}
-                    surface="control"
-                  >
-                    {(capabilityProps) => (
-                      <Button
-                        onClick={askInNewChat}
-                        onMouseDown={(event) => event.preventDefault()}
-                        size="sm"
-                        variant="ghost"
-                        {...capabilityProps}
-                      >
-                        <NewChatIcon className="size-3.5" />
-                        <span className={ACTION_LABEL_CLASS}>
-                          {t("chat.selection.askInNewChat")}
-                        </span>
-                      </Button>
-                    )}
-                  </CapabilityAction>
-                );
-              }
-              case CHAT_SELECTION_ACTION.quoteInReply: {
-                return (
-                  <CapabilityAction
-                    action={{ capability: "ai" }}
-                    key={action}
-                    surface="control"
-                  >
-                    {(capabilityProps) => (
-                      <Button
-                        onClick={quoteInReply}
-                        onMouseDown={(event) => event.preventDefault()}
-                        size="sm"
-                        variant="ghost"
-                        {...capabilityProps}
-                      >
-                        <QuoteIcon className="size-3.5" />
-                        <span className={ACTION_LABEL_CLASS}>
-                          {t("chat.selection.quoteInReply")}
-                        </span>
-                      </Button>
-                    )}
-                  </CapabilityAction>
-                );
-              }
-              case CHAT_SELECTION_ACTION.copy: {
-                return (
-                  <CopyActionButton
-                    // A fresh selection starts unconfirmed.
-                    key={`${action}:${selected.quote}`}
-                    labelClassName={ACTION_LABEL_CLASS}
-                    onMouseDown={(event) => event.preventDefault()}
-                    size="sm"
-                    text={selected.quote}
-                    variant="ghost"
-                  />
-                );
-              }
-              default: {
-                action satisfies never;
-                return panic(`Unhandled selection action: ${String(action)}`);
-              }
-            }
-          })}
+          <ChatSelectionActions
+            actions={actions}
+            askInNewChat={askInNewChat}
+            quoteInReply={quoteInReply}
+            copy={copy}
+            copied={copied}
+          />
         </div>
       </SelectionToolbar>
       {announcer}
     </>
   );
 };
+
+type CopySelectedTextOptions = {
+  quote: string;
+  setCopied: Dispatch<SetStateAction<boolean>>;
+  errorMessage: string;
+};
+
+async function copySelectedText({
+  quote,
+  setCopied,
+  errorMessage,
+}: CopySelectedTextOptions) {
+  const result = await copyToClipboard(quote);
+  if (Result.isError(result)) {
+    getAnalytics().captureError(result.error);
+    notifyUserError(result.error, errorMessage);
+    return;
+  }
+  setCopied(true);
+  setTimeout(() => setCopied(false), COPIED_RESET_MS);
+}
+
+type AnswerEditing = SelectionToolbarAnchor &
+  (
+    | { type: "ai"; anchor: AnswerEditAnchor }
+    | {
+        type: "format";
+        anchor: AnswerEditAnchor;
+        selection: AnswerSourceSelection;
+        entry: AnswerFormatEntry;
+      }
+  );
 
 const answerEditIsDisabled = (
   messages: readonly ChatUIMessage[],

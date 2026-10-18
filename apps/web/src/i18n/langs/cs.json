@@ -12,6 +12,31 @@
       "unknownDevice": "Neznámé zařízení"
     }
   },
+  "admin": {
+    "ai": "AI",
+    "backToApp": "Zpět do aplikace",
+    "billingAndUsage": "Fakturace a využití",
+    "billingProfiles": "Fakturační profily",
+    "deleteDescription": "Trvale smažete tuto organizaci a její data. Tuto akci nelze vrátit zpět.",
+    "deleteOrganization": "Smazat organizaci",
+    "deleteRefusedSubscription": "Tato organizace má předplatné, které se obnovuje. Nejprve ho zrušte v sekci Tarif a využití, poté organizaci smažte.",
+    "deleteTypeToConfirm": "Pro potvrzení zadejte {name}.",
+    "firmSetup": "Nastavení kanceláře",
+    "general": "Obecné",
+    "leaveDescription": "Ztratíte přístup ke spisům a datům této organizace.",
+    "leaveOrganization": "Opustit organizaci",
+    "leaveRefusedOnlyOwner": "Jste jediný vlastník. Než organizaci opustíte, udělejte vlastníkem jiného člena.",
+    "modelsAndProviders": "Modely a poskytovatelé",
+    "noPlan": "Žádný aktivní tarif",
+    "organizationDeleted": "Organizace byla smazána.",
+    "organizationId": "ID organizace",
+    "organizationLeft": "Opustili jste organizaci.",
+    "overviewDescription": "Spravujte organizaci, lidi a nástroje.",
+    "people": "Lidé",
+    "planAndUsage": "Tarif a využití",
+    "title": "Správa organizace",
+    "toolsDescription": "Zapněte nebo vypněte vestavěné nástroje pro všechny v této organizaci."
+  },
   "agentClaim": {
     "access": "Získá přístup",
     "accessReadSearch": "Přístup pro čtení a vyhledávání",
@@ -1058,7 +1083,6 @@
       }
     },
     "sameCaseNumber": "{count, plural, one {# rozhodnutí nese} few {# rozhodnutí nesou} other {# rozhodnutí nese}} tuto spisovou značku. Vyberte soud.",
-    "searchAskPrompt": "{query} (judikatura, {country})",
     "searchLabel": "Hledat v judikatuře",
     "searchPlaceholder": "Spisová značka, ECLI nebo slova, např. 22 Cdo 2653/2012",
     "searchUnavailable": {
@@ -1206,15 +1230,32 @@
     },
     "answerEdit": {
       "acceptFailed": "Úpravu se nepodařilo uložit. Zkuste to znovu.",
+      "aiKind": "Úprava na požádání",
       "ask": "Požádat o úpravy",
+      "authorUnknown": "Neznámý autor",
+      "autolinkLabel": "Tento text se automaticky změní na odkaz. Před odebráním odkazu změňte jeho popisek.",
+      "change": "Změna {revision}",
+      "editedLabel": "Upravená odpověď",
       "failed": "Úpravu se nepodařilo připravit. Zkuste to znovu.",
+      "formatKind": "Formátování",
+      "heading": "Nadpis {level}",
+      "history": "Historie odpovědi",
+      "historyEmpty": "Žádné starší verze.",
       "instruction": "Popište úpravu",
       "instructionRequired": "Popište, jak upravit vybraný text.",
       "invalidSelection": "Výběr nelze upravit, vyberte souvislý text.",
+      "invalidUrl": "Zadejte platnou adresu HTTP nebo HTTPS.",
+      "linkAddress": "Adresa odkazu",
+      "orderedList": "Číslovaný seznam",
       "proposal": "Navržená úprava",
       "requesting": "Příprava úprav…",
+      "restoreRefreshFailed": "Odpověď byla obnovena, ale nepodařilo se načíst její aktuální stav. Obnovte ji a načtěte obnovenou odpověď.",
+      "revertKind": "Obnovená verze",
       "stale": "Odpověď se změnila. Vyberte text znovu.",
-      "submit": "Požádat o úpravu"
+      "submit": "Požádat o úpravu",
+      "textStyle": "Styl textu",
+      "unorderedList": "Seznam s odrážkami",
+      "wholeBlockRequired": "Pro změnu stylu vyberte celý odstavec nebo seznam."
     },
     "answerQuote": {
       "showInDecision": "Zobrazit v rozhodnutí",
@@ -1405,7 +1446,12 @@
     "maxAttachmentsReached": "Maximálně {count} souborů na zprávu",
     "mention": {
       "category": {
-        "entities": "V tomto spisu"
+        "entities": "V tomto spisu",
+        "sources": "Zdroje"
+      },
+      "corpus": {
+        "caseLaw": "Judikatura · {country}",
+        "legislation": "Právní předpisy · {country}"
       },
       "loadError": "Nepodařilo se načíst položky"
     },
@@ -5133,7 +5179,6 @@
     "provisionTextUnavailable": "Text není pro toto znění k dispozici",
     "publisherWindowInconsistent": "K tomuto dni nelze určit účinné znění: údaje vydavatele si odporují.",
     "resolvedAlias": "Rozpoznáno jako {label}",
-    "searchAskPrompt": "{query} (právní předpisy: {country})",
     "searchLabel": "Hledat v právních předpisech",
     "searchPlaceholder": "Číslo, zkratka nebo název, např. 89/2012 Sb.",
     "showCitedPartOnly": "Zobrazit jen citovanou část",
@@ -6262,7 +6307,6 @@
         }
       },
       "atAGlance": "Přehled",
-      "edited": "upravil(a)",
       "getStarted": "Začněte nahráním dokumentů nebo vytvořením první složky.",
       "matterDetails": "Podrobnosti spisu",
       "membersCount": "{count, plural, one {# člen} few {# členové} other {# členů}}",

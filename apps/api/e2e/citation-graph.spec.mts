@@ -52,7 +52,6 @@ const citation = (
       decisionId === null
         ? null
         : {
-            appUrl: decisionUrl(decisionId),
             url: decisionUrl(decisionId),
             caseNumber: caseNumber(index),
             caseNumberType: "case-number",
@@ -255,7 +254,7 @@ const mountGraph = async ({
                   status: "unavailable",
                   metadata: {
                     decisionId,
-                    appUrl: `https://stella.example/law/cze/cases/${decisionId}`,
+                    url: `https://stella.example/law/cze/cases/${decisionId}`,
                     caseNumber: "Fixture case",
                     caseNumberType: "case-number",
                     courtAbbreviation: null,

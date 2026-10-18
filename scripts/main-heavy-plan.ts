@@ -96,8 +96,19 @@ export const prDepthJobs = (workflow: unknown) => {
   ) {
     panic("Expected FAST_REQUIRED job names");
   }
-  return fastRequired.filter(
+  const checks = fastRequired.filter(
     (job) => job.startsWith("ci-checks-") || job.startsWith("code-quality-"),
+  );
+  // The checks' producers (generated sources) run with them.
+  const producers = checks.flatMap((job) => {
+    const needs: unknown = record(jobs[job])["needs"];
+    if (typeof needs === "string") {
+      return [needs];
+    }
+    return Array.isArray(needs) ? needs : [];
+  });
+  return [...new Set([...checks, ...producers])].filter(
+    (job): job is string => typeof job === "string" && job !== "ci-plan",
   );
 };
 
@@ -108,6 +119,8 @@ export const MERGE_GROUP_EXCEPTIONS = {
     "Negative proof against the pull request base, rather than the queued tree.",
   "heavy-web-build":
     "Heavy-dispatch artifact producer; web-build produces the merge-group artifact.",
+  "pr-heavy-gate":
+    "Pull request ordering gate; a merge group starts its suites after the plan.",
 } as const;
 
 export const queueAdmittedJobs = (workflow: unknown) => {

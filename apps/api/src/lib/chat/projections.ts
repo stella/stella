@@ -1776,9 +1776,7 @@ export const SEARCH_LEGISLATION_PROJECTION = v.union([
       paginationOutcome: v.optional(SEARCH_PAGINATION_OUTCOME_SCHEMA),
       results: v.array(
         v.strictObject({
-          // Null while the public-law surface is off (`FEATURE_PUBLIC_LAW`);
-          // without a stored slug the canonical route uses the document id.
-          appUrl: v.nullable(v.string()),
+          // The reader is primary when served; otherwise use the publisher.
           url: v.nullable(publicUrl()),
           source_url: v.optional(publicUrl()),
           country: v.string(),
@@ -1817,8 +1815,7 @@ export const READ_STATUTE_PROJECTION = v.strictObject({
   // whole consolidation and do not continue, so only the text pages.
   nextCursor: v.nullable(passthroughId()),
   statute: v.strictObject({
-    // Nullable for the same reasons as search_legislation's `appUrl`.
-    appUrl: v.nullable(v.string()),
+    // Nullable for the same reasons as search_legislation's `url`.
     url: v.nullable(publicUrl()),
     source_url: v.optional(publicUrl()),
     charCount: v.nullable(v.number()),
@@ -1831,14 +1828,16 @@ export const READ_STATUTE_PROJECTION = v.strictObject({
     // The consolidation's heading blocks in document order. Each `anchorId`
     // is what read_statute_provisions and read_provision_history take as
     // `anchor`, in the publisher's own scheme.
-    outline: v.array(
-      v.strictObject({
-        anchorId: passthroughId(),
-        level: v.number(),
-        text: contentText(),
-      }),
+    outline: v.optional(
+      v.array(
+        v.strictObject({
+          anchorId: passthroughId(),
+          level: v.number(),
+          text: contentText(),
+        }),
+      ),
     ),
-    outlineTruncated: v.boolean(),
+    outlineTruncated: v.optional(v.boolean()),
     resourceName: passthroughId(),
     // The publisher's own document URL, which may embed the publisher's own
     // UUID — never a Stella tenant id, so it is forwarded unchanged.
@@ -1853,7 +1852,7 @@ export const READ_STATUTE_PROJECTION = v.strictObject({
     versionValidFrom: v.nullable(v.string()),
     versionValidTo: v.nullable(v.string()),
     ...statuteExpressionLabel,
-    versions: v.array(STATUTE_VERSION_PROJECTION),
+    versions: v.optional(v.array(STATUTE_VERSION_PROJECTION)),
   }),
 });
 
