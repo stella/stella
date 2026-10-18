@@ -2,6 +2,8 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, getTableName, sql } from "drizzle-orm";
 
+import { createTestClock } from "@stll/test-kit";
+
 import {
   accountDeletionEffectChunks,
   accountDeletionRequests,
@@ -23,6 +25,7 @@ describe.skipIf(!enabled)("account deletion storage deadlines", () => {
       panic("DATABASE_URL required");
     }
     await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      const testClock = createTestClock();
       const { db, sql: client } = openClient();
       const schema = `deletion_effect_${Bun.randomUUIDv7().replaceAll("-", "")}`;
       await db.execute(sql`CREATE SCHEMA ${sql.identifier(schema)}`);
@@ -38,7 +41,7 @@ describe.skipIf(!enabled)("account deletion storage deadlines", () => {
         }
         await client.unsafe(`SET search_path TO ${schema}, public`);
         const requestId = createSafeId<"accountDeletionRequest">();
-        const notBefore = new Date(Date.now() + 60 * 60 * 1000);
+        const notBefore = new Date(testClock.now() + 60 * 60 * 1000);
         await db.transaction(async (tx) => {
           await recordAccountDeletionRequest({
             tx,

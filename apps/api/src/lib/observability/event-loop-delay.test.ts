@@ -115,7 +115,13 @@ describe("event-loop delay monitoring", () => {
     setMetricLineSinkForTesting((line) => {
       lines.push(line);
     });
-    const originalSetInterval = globalThis.setInterval;
+    const inertTimer = {
+      ref: () => inertTimer,
+      unref: () => inertTimer,
+      hasRef: () => false,
+      refresh: () => inertTimer,
+      [Symbol.toPrimitive]: () => 0,
+    };
     let reportTick: (() => void) | undefined;
     const interval = spyOn(globalThis, "setInterval").mockImplementation(
       (
@@ -124,7 +130,7 @@ describe("event-loop delay monitoring", () => {
         if (delay === 200 && typeof handler === "function") {
           reportTick = () => handler(...args);
         }
-        return originalSetInterval(handler, delay, ...args);
+        return inertTimer;
       },
     );
     const reports: EventLoopDelayReport[] = [];

@@ -499,11 +499,6 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/handlers/entities/join-folio-collab-room.db.test.ts": {
-    "count": 5,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/api/src/handlers/entities/move.postgres.test.ts": {
     "count": 1,
     "owner": "api",
@@ -1003,6 +998,11 @@
     "count": 4,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/db/pending-contract-migrations/pending-contract-migrations.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "deadline check compares registered contract deadlines with the real date, so it reads the wall clock by design"
   },
   "apps/api/src/lib/db/read-bounded.db.test.ts": {
     "count": 1,
@@ -2156,11 +2156,6 @@
   },
   "scripts/ci-store-save.test.ts": {
     "count": 3,
-    "owner": "scripts",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "scripts/cleanup-queued-pr-runs.test.ts": {
-    "count": 1,
     "owner": "scripts",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },

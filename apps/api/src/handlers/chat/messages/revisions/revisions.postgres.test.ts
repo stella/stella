@@ -6,6 +6,7 @@ import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
 import { CHAT_MESSAGE_EDIT_TYPE } from "@stll/api-contract/chat-message-revisions";
 import { sha256Hex } from "@stll/sha256/bun";
+import { createTestClock } from "@stll/test-kit";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
@@ -731,6 +732,7 @@ if (!databaseUrl || !runPostgres) {
 
     test("editing an answer inside an active compaction retires its summary and returns the edited answer to next-turn history", async () => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const testClock = createTestClock();
         const db = openClient().db;
         const fixture = await seedFixture(db);
         try {
@@ -762,7 +764,7 @@ if (!databaseUrl || !runPostgres) {
               recapText: "Original answer recap",
               recapMessageId: keptMessageId,
               recapPromptVersion: 1,
-              recapGeneratedAt: new Date(),
+              recapGeneratedAt: new Date(testClock.now()),
             })
             .where(eq(chatThreads.id, fixture.threadId));
           await db.insert(chatThreadCompactions).values({
@@ -1106,6 +1108,7 @@ if (!databaseUrl || !runPostgres) {
 
     test("an audit failure rolls back content, revision snapshots and compaction epoch", async () => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const testClock = createTestClock();
         const db = openClient().db;
         const fixture = await seedFixture(db);
         try {
@@ -1115,7 +1118,7 @@ if (!databaseUrl || !runPostgres) {
               recapText: "Original answer recap",
               recapMessageId: fixture.messageId,
               recapPromptVersion: 1,
-              recapGeneratedAt: new Date(),
+              recapGeneratedAt: new Date(testClock.now()),
             })
             .where(eq(chatThreads.id, fixture.threadId));
           const before = await fixture.observe();
@@ -1154,6 +1157,7 @@ if (!databaseUrl || !runPostgres) {
 
     test("rejects user messages and unsettled turns without changing revision state", async () => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const testClock = createTestClock();
         const db = openClient().db;
         const fixture = await seedFixture(db);
         try {
@@ -1212,7 +1216,7 @@ if (!databaseUrl || !runPostgres) {
             organizationId: fixture.organizationId,
             userId: fixture.userId,
             userMessageId,
-            leaseExpiresAt: new Date(Date.now() + 60_000),
+            leaseExpiresAt: new Date(testClock.now() + 60_000),
           });
           const beforeActive = await fixture.observe();
           expect(await fixture.write(db, acceptedChange)).toEqual({

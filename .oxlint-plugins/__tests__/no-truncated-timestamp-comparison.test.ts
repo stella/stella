@@ -44,3 +44,18 @@ function before(cutoff:Date) {return gt(rows.createdAt,cutoff);}`,
     ),
   ).toEqual([3]);
 });
+
+test("allows test-kit clock cutoffs but rejects dates rebuilt from stored values", async () => {
+  expect(
+    await lintSingleRule(
+      "no-truncated-timestamp-comparison",
+      `import {lt} from "drizzle-orm";
+import {createTestClock} from "@stll/test-kit";
+const testClock = createTestClock();
+lt(rows.createdAt,new Date(testClock.now() - 60_000));
+lt(rows.createdAt,new Date(cursor.createdAt));
+const clockLookalike = {now: () => 0};
+lt(rows.createdAt,new Date(clockLookalike.now()));`,
+    ),
+  ).toEqual([5, 7]);
+});

@@ -3,6 +3,8 @@ import { describe, expect, test } from "bun:test";
 import { inArray } from "drizzle-orm";
 import JSZip from "jszip";
 
+import { createTestClock } from "@stll/test-kit";
+
 import { ACCOUNT_EXPORT_PROJECTIONS } from "@/api/account-export-projections";
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
@@ -38,6 +40,7 @@ describe.skipIf(!enabled)("account export personal data", () => {
       panic("DATABASE_URL required");
     }
     await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      const testClock = createTestClock();
       const { db } = openClient();
       const scopedDatabase = markRlsDatabase(db);
       const organizations = [
@@ -66,7 +69,7 @@ describe.skipIf(!enabled)("account export personal data", () => {
             id,
             name: "Export organization",
             slug: id,
-            createdAt: new Date(),
+            createdAt: new Date(testClock.now()),
           })),
         );
         await db.insert(member).values(
@@ -76,7 +79,7 @@ describe.skipIf(!enabled)("account export personal data", () => {
               organizationId,
               userId: memberUserId,
               role: "member",
-              createdAt: new Date(),
+              createdAt: new Date(testClock.now()),
             })),
           ),
         );
@@ -99,7 +102,10 @@ describe.skipIf(!enabled)("account export personal data", () => {
               panic("Organization query fixture required");
             }
             return await prepareSearchHistoryRows({ organizationId, userId }, [
-              { entry: { kind: "search", query }, usedAt: new Date() },
+              {
+                entry: { kind: "search", query },
+                usedAt: new Date(testClock.now()),
+              },
             ]);
           }),
         );

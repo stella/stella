@@ -581,7 +581,7 @@ test("repeat runs never overlap across files", async () => {
     run: async () => {
       active += 1;
       peak = Math.max(peak, active);
-      await Bun.sleep(1);
+      await Promise.resolve();
       active -= 1;
       return { type: "executed", passed: true, status: 0, ranTests: true };
     },

@@ -10,7 +10,7 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/api/scripts/test-db-snapshot-cache.test.ts": {
-    "count": 4,
+    "count": 3,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -95,7 +95,7 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/api/src/handlers/chat/chat-turn-run-ownership.integration.test.ts": {
-    "count": 10,
+    "count": 9,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -499,11 +499,6 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/mcp/server.test.ts": {
-    "count": 1,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/api/src/scripts/corpus-generation.postgres.test.ts": {
     "count": 1,
     "owner": "api",
@@ -834,26 +829,6 @@
     "owner": "web",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/web/src/routes/_protected.settings/-components/organization/ai-config-navigation.dom.test.tsx": {
-    "count": 1,
-    "owner": "web",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/web/src/routes/_protected.settings/-components/organization/ai-provider-rows.dom.test.tsx": {
-    "count": 1,
-    "owner": "web",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/web/src/routes/_protected.settings/-components/organization/jurisdictions-card.dom.test.tsx": {
-    "count": 1,
-    "owner": "web",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/web/src/routes/_protected.settings/-hooks/use-settings-mutation.dom.test.tsx": {
-    "count": 1,
-    "owner": "web",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/list-source-action.dom.test.tsx": {
     "count": 2,
     "owner": "web",
@@ -890,7 +865,7 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "packages/concurrency/src/index.test.ts": {
-    "count": 15,
+    "count": 14,
     "owner": "concurrency",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -960,11 +935,6 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "scripts/check-journeys.test.ts": {
-    "count": 1,
-    "owner": "scripts",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "scripts/check-lockfile-release-ages.test.ts": {
     "count": 1,
     "owner": "scripts",
     "reason": "pre-kit census; migrate to @stll/test-kit"

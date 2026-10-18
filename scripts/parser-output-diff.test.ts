@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { waitFor } from "@stll/test-kit";
 
 import {
   compareCheckouts,
@@ -37,18 +38,18 @@ test("parser workers respect their concurrency bound and preserve result order",
     return value;
   });
   const results = runWithConcurrency(tasks, 2);
-  while (releases.length < 2) {
-    await Bun.sleep(1);
-  }
+  await waitFor(async () => (releases.length >= 2 ? true : undefined), {
+    description: "the first parser worker pair to start",
+  });
   expect(active).toBe(2);
   releases.shift()?.();
-  while (releases.length < 2) {
-    await Bun.sleep(1);
-  }
+  await waitFor(async () => (releases.length >= 2 ? true : undefined), {
+    description: "the next parser worker to start",
+  });
   releases.shift()?.();
-  while (releases.length < 2) {
-    await Bun.sleep(1);
-  }
+  await waitFor(async () => (releases.length >= 2 ? true : undefined), {
+    description: "the final parser worker to start",
+  });
   for (const release of releases.splice(0)) {
     release();
   }

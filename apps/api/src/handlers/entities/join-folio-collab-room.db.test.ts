@@ -20,6 +20,7 @@ import {
   parseDocx,
 } from "@stll/folio-core/server";
 import { sha256Hex as legacyHex } from "@stll/sha256/node";
+import { createTestClock } from "@stll/test-kit";
 
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import {
@@ -75,6 +76,7 @@ import joinFolioCollabRoom, {
 } from "./join-folio-collab-room";
 
 let testDb: TestDatabase;
+const testClock = createTestClock();
 let ids: TestIds;
 let scopedQuery: Awaited<ReturnType<typeof getRlsFixture>>["scopedQuery"];
 let dryScopedQuery: Awaited<ReturnType<typeof getRlsFixture>>["dryScopedQuery"];
@@ -130,7 +132,7 @@ const insertRoom = async ({
 }) => {
   const roomId = createSafeId<"folioCollabRoom">();
   const seeded = seedState === "seeded";
-  const snapshotAt = new Date();
+  const snapshotAt = new Date(testClock.now());
   roomIds.push(roomId);
   await testDb.insert(folioCollabRooms).values({
     baseVersionId: ids.entityVersionA1,
@@ -181,7 +183,7 @@ const claimConcurrently = async ({
             .update(folioCollabRooms)
             .set({
               generation: sql`${folioCollabRooms.generation} + 1`,
-              seedClaimedAt: new Date(),
+              seedClaimedAt: new Date(testClock.now()),
               seedClaimedBy: userId,
               seedState: "claimed",
             })
@@ -274,7 +276,9 @@ describe("folio collaboration room seed generation CAS", () => {
   });
 
   test("stale-claim recovery also has one generation winner", async () => {
-    const staleAt = new Date(Date.now() - FOLIO_COLLAB_SEED_CLAIM_STALE_MS - 1);
+    const staleAt = new Date(
+      testClock.now() - FOLIO_COLLAB_SEED_CLAIM_STALE_MS - 1,
+    );
     const roomId = await insertRoom({
       generation: 1,
       seedClaimedAt: staleAt,
@@ -299,7 +303,7 @@ describe("folio collaboration room seed generation CAS", () => {
   });
 
   test("a seeded room is never claimable again", async () => {
-    const seededAt = new Date();
+    const seededAt = new Date(testClock.now());
     expect(
       decideFolioCollabSeedClaim({
         now: seededAt,
@@ -367,7 +371,7 @@ describe("folio collaboration room seed generation CAS", () => {
     async ({ state, receiptOrder, hashCut }) => {
       const snapshotBytes = deployedSnapshot(state);
       const expectDiscardNotice = state === "dirty" || hashCut !== "exact";
-      const seededAt = new Date(Date.now() + 1000);
+      const seededAt = new Date(testClock.now() + 1000);
       const snapshotAt = new Date(
         seededAt.getTime() + (state === "dirty" ? 1000 : 0),
       );
@@ -415,7 +419,7 @@ describe("folio collaboration room seed generation CAS", () => {
           docxCheckpointSha256Hex: oldCheckpointHash,
           docxCheckpointSnapshotSha256Hex: legacyHex(deployedSnapshot("clean")),
           docxCheckpointSizeBytes: 1,
-          docxCheckpointUpdatedAt: new Date(),
+          docxCheckpointUpdatedAt: new Date(testClock.now()),
           sourceVersionId:
             hashCut === "historical" ? ids.entityVersionA1 : staleVersionId,
           savedSnapshotCut:
@@ -570,7 +574,7 @@ describe("folio collaboration room seed generation CAS", () => {
                 ),
                 checkpointSizeBytes: 1,
                 checkpointScanWarnings: null,
-                checkpointUpdatedAt: new Date(),
+                checkpointUpdatedAt: new Date(testClock.now()),
                 entityId: ids.entityA1,
                 fileName: "contract.docx",
                 generation: 4,
@@ -807,7 +811,7 @@ test("edits in the first durable snapshot remain unsaved after the pristine seed
     generation: 4,
     seedState: "claimed",
     seedClaimedBy: ids.userA1,
-    seedClaimedAt: new Date(),
+    seedClaimedAt: new Date(testClock.now()),
   });
   const scopedDb = asTestRaw<
     Parameters<typeof loadFolioCollabSnapshot>[0]["scopedDb"]
@@ -824,7 +828,7 @@ test("edits in the first durable snapshot remain unsaved after the pristine seed
     propertyId: ids.filePropertyA1,
     roomId,
     scopedDb,
-    tokenExpiresAt: new Date(Date.now() + 60_000),
+    tokenExpiresAt: new Date(testClock.now() + 60_000),
     tokenId: createSafeId<"folioCollabRoomToken">(),
     userId: ids.userA1,
     userName: "Editor",
@@ -918,14 +922,14 @@ test("publishing a checkpoint retains its snapshot cut when later edits already 
           docxCheckpointSha256Hex: checkpointHash,
           docxCheckpointSnapshotSha256Hex: savedSnapshotHash,
           docxCheckpointSizeBytes: 1,
-          docxCheckpointUpdatedAt: new Date(),
+          docxCheckpointUpdatedAt: new Date(testClock.now()),
           savedSnapshotCut: {
             versionId: ids.entityVersionA1,
             sha256Hex: savedSnapshotHash,
           },
           yjsSnapshotRevision: 2,
           yjsSnapshotSizeBytes: deployedSnapshot("dirty").byteLength,
-          yjsSnapshotUpdatedAt: new Date(),
+          yjsSnapshotUpdatedAt: new Date(testClock.now()),
         })
         .where(eq(folioCollabRooms.id, roomId));
       const cut = {
@@ -1011,7 +1015,7 @@ describe("stale pending seed recovery notices", () => {
     "preserves the discard notice across successive stale reclaims with a %s saved cut",
     async (cutState) => {
       const staleAt = new Date(
-        Date.now() - FOLIO_COLLAB_SEED_CLAIM_STALE_MS - 1,
+        testClock.now() - FOLIO_COLLAB_SEED_CLAIM_STALE_MS - 1,
       );
       const roomId = await insertRoom({
         generation: 4,
@@ -1165,7 +1169,7 @@ describe("folio collaboration room token retention", () => {
       .where(
         and(
           eq(folioCollabRoomTokens.roomId, roomId),
-          lt(folioCollabRoomTokens.expiresAt, new Date()),
+          lt(folioCollabRoomTokens.expiresAt, new Date(testClock.now())),
         ),
       );
     expect(remainingExpired).toHaveLength(1);
@@ -1195,7 +1199,7 @@ test("deleting a claimant before seed acknowledgement warns the next member abou
   const roomId = await insertRoom({
     generation: 4,
     seedState: "claimed",
-    seedClaimedAt: new Date(),
+    seedClaimedAt: new Date(testClock.now()),
     seedClaimedBy: ids.userA1,
   });
   const scopedDb = asTestRaw<
@@ -1299,11 +1303,11 @@ test("deleting a pending seed claimant retires its stored snapshot under the roo
   const roomId = await insertRoom({
     generation: 4,
     seedState: "claimed",
-    seedClaimedAt: new Date(),
+    seedClaimedAt: new Date(testClock.now()),
     seedClaimedBy: ids.userA1,
     yjsSnapshotRevision: 1,
     yjsSnapshotSizeBytes: 10,
-    yjsSnapshotUpdatedAt: new Date(),
+    yjsSnapshotUpdatedAt: new Date(testClock.now()),
   });
   await testDb
     .update(folioCollabRooms)
