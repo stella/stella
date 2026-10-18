@@ -48,6 +48,12 @@ export const createPublisherFetch = ({
         ...(resolveAddresses ? { resolveAddresses } : {}),
       }),
     fetcher: async (target, init) => {
+      // The archive CLI only reads; refusing a body beats sending it empty.
+      if (init?.body !== undefined && init.body !== null) {
+        throw new PublisherFetchCliError({
+          message: "The publisher CLI transport does not send request bodies",
+        });
+      }
       const fetched = await fetchStreamWithResolvedAddress({
         addresses: target.addresses,
         headers: new Headers(init?.headers),
