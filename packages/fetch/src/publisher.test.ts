@@ -1027,6 +1027,27 @@ describe("publisher scheduler", () => {
     );
   });
 
+  test("an unparsable redirect location is a typed refusal", async () => {
+    const request = createPolitePublisherFetch({
+      validateTarget: allowTarget,
+      fetcher: async (input) =>
+        new URL(input instanceof Request ? input.url : input).pathname ===
+        "/robots.txt"
+          ? new Response(null, { status: 404 })
+          : new Response(null, {
+              status: 302,
+              headers: { location: "http://[bad" },
+            }),
+      defaultMinimumIntervalMs: 0,
+    });
+
+    const outcome = await request("https://publisher.example/start");
+
+    expect(Result.isError(outcome) && outcome.error._tag).toBe(
+      "publisher_target_refused",
+    );
+  });
+
   test("returns a typed refusal when redirects exceed the bound", async () => {
     let issued = 0;
     let cancelled = 0;

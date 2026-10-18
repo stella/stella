@@ -760,13 +760,6 @@ const createRobotsCache = (options: RobotsCacheOptions) => {
     if (cached && cached.expiresAt > options.now()) {
       return cached.state;
     }
-    const robotsTarget = await validatePublisherTarget(
-      new URL("/robots.txt", origin),
-      options.validateTarget,
-    );
-    if (Result.isError(robotsTarget)) {
-      return { type: "unavailable", cause: robotsTarget.error } as const;
-    }
     const activeLoad = pending.get(origin);
     if (activeLoad) {
       const activeResult = await activeLoad;
@@ -1010,6 +1003,16 @@ const walkPublisherRedirects = async (
     }
     if (redirects >= MAX_REDIRECTS) {
       return redirectLimitResult(state);
+    }
+    if (!URL.canParse(location, state.url)) {
+      return Result.err(
+        new PublisherTargetRefusedError({
+          message: "publisher redirect location is invalid",
+          url: state.url.href,
+          origin: state.url.origin,
+          cause: location,
+        }),
+      );
     }
     const nextUrl = new URL(location, state.url);
     const redirected = redirectedRequestInit({
