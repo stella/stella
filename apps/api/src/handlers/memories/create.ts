@@ -10,6 +10,7 @@ import {
   persistExplicitMemory,
   resolveMemoryWriteScope,
 } from "@/api/lib/memory/persist-explicit-memory";
+import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
 const config = {
   contract: "patch",
@@ -30,6 +31,9 @@ const config = {
     reason: "assistant_memory",
     consumesServices: false,
   },
+  realtime: noResourceSetUpdates(
+    "Memory mutation callers invalidate the caller-scoped memory queries after a successful write.",
+  ),
   body: createMemoryBodySchema,
 } satisfies HandlerConfig;
 

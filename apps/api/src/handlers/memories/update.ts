@@ -13,6 +13,7 @@ import { sanitizePersonMemoryContent } from "@/api/lib/memory/memory-content-saf
 import { createMemoryDedupIdentity } from "@/api/lib/memory/memory-dedup";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import { PG_ERROR } from "@/api/lib/pg-error";
+import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
 const config = {
   contract: "patch",
@@ -30,6 +31,9 @@ const config = {
     reason: "assistant_memory",
     consumesServices: false,
   },
+  realtime: noResourceSetUpdates(
+    "Memory mutation callers invalidate the caller-scoped memory queries after a successful write.",
+  ),
   params: t.Object({ memoryId: tSafeId("aiMemory") }),
   body: t.Object({
     // Accept a suggestion (-> active) or dismiss/retire it (-> archived).

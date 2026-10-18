@@ -10,6 +10,7 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
 const config = {
   contract: "patch",
@@ -26,6 +27,9 @@ const config = {
     reason: "notification_inbox",
     consumesServices: false,
   },
+  realtime: noResourceSetUpdates(
+    "Read state belongs only to the caller, who receives the updated unread count in this response.",
+  ),
   access: "write",
   params: notificationParamsSchema,
 } satisfies HandlerConfig;

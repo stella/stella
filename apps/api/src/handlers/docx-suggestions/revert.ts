@@ -11,6 +11,7 @@ import {
   lockDocxSuggestionPendingCapacity,
 } from "@/api/lib/docx/suggestion-pending-capacity";
 import { unreachable } from "@/api/lib/errors/tagged-errors";
+import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
 const REVERT_OUTCOME = {
   reverted: "reverted",
@@ -49,6 +50,9 @@ const revertDocxSuggestion = createSafeHandler(
       reason: "document_processing",
       consumesServices: false,
     },
+    realtime: noResourceSetUpdates(
+      "The document review store updates reverted suggestions locally and hydrates them when the document opens.",
+    ),
     params: workspaceParams({
       entityId: tSafeId("entity"),
       suggestionId: tSafeId("docxSuggestion"),

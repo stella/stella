@@ -28,7 +28,7 @@ describe.serial("suppression IDs follow their configured spelling", () => {
     const reason = " --  keep spacing, punctuation: -- unchanged; café";
     // oxlint's JSON report for one file is cut short on Linux once it outgrows
     // a pipe buffer, so every alias is checked in batches of a bounded size.
-    const BATCH = 40;
+    const BATCH = 300;
     for (let start = 0; start < entries.length; start += BATCH) {
       const batch = entries.slice(start, start + BATCH);
       const source = batch
@@ -141,15 +141,29 @@ describe.serial("suppression IDs follow their configured spelling", () => {
       throw new Error("Node build did not produce an artifact");
     }
     await Bun.write(output, artifact);
-    const result = Bun.spawnSync([
-      "node",
-      "--input-type=module",
-      "-e",
-      `import { builtinRules } from ${JSON.stringify(pathToFileURL(output).href)}; process.stdout.write(JSON.stringify(builtinRules()));`,
+    // Drain the catalog while Node writes it: a synchronous child blocks the
+    // test worker and can exhaust every concurrent test's deadline on a pipe.
+    const child = Bun.spawn({
+      cmd: [
+        "node",
+        "--input-type=module",
+        "-e",
+        `import { builtinRules } from ${JSON.stringify(pathToFileURL(output).href)}; process.stdout.write(JSON.stringify(builtinRules()));`,
+      ],
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+      child.exited,
     ]);
     rmSync(output, { force: true });
-    expect(childExitStatus(result)).toBe(0);
-    expect(JSON.parse(result.stdout.toString())).toEqual(builtinRules());
+    expect(
+      childExitStatus({ exitCode, signalCode: child.signalCode }),
+      stderr,
+    ).toBe(0);
+    expect(JSON.parse(stdout)).toEqual(builtinRules());
   });
 
   test("new config rules and overrides enter the lookup automatically", () => {

@@ -470,7 +470,7 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     ],
   },
   "notifications/read-all.ts": { kind: "not-per-user", reason: WRITE },
-  "notifications/read.ts": { kind: "not-per-user", reason: WRITE },
+  "notifications/read-state/update.ts": { kind: "not-per-user", reason: WRITE },
   "playbooks/recent/list.ts": {
     kind: "keyed",
     calls: ["api.playbooks.recent.get"],
