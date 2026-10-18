@@ -106,18 +106,19 @@ export const AddMcpServerSheet = ({
     });
   };
 
+  const connectMutationFn = resourceMutation({
+    mutation: "connectMcpServer",
+    queryClient,
+    scope: { type: "organization" },
+    mutationFn: async (connector: CreatedConnector) => {
+      const response = await api.mcp
+        .connectors({ slug: connector.slug })
+        .connect.post({});
+      return { connector, data: unwrapEden(response) };
+    },
+  });
   const connectMutation = useMutation({
-    mutationFn: resourceMutation({
-      mutation: "connectMcpServer",
-      queryClient,
-      scope: { type: "organization" },
-      mutationFn: async (connector: CreatedConnector) => {
-        const response = await api.mcp
-          .connectors({ slug: connector.slug })
-          .connect.post({});
-        return { connector, data: unwrapEden(response) };
-      },
-    }),
+    mutationFn: connectMutationFn,
     onSuccess: ({ connector, data }) => {
       if (data.type === "bearer") {
         setWizard({ step: "token", createdConnector: connector, token: "" });
@@ -145,16 +146,17 @@ export const AddMcpServerSheet = ({
     onError: handleApiError,
   });
 
+  const addServerMutationFn = resourceMutation({
+    mutation: "addMcpServer",
+    queryClient,
+    scope: { type: "organization" },
+    mutationFn: async (params: AddServerParams) => {
+      const response = await api.mcp.connectors.post(params);
+      return unwrapEden(response);
+    },
+  });
   const addServerMutation = useMutation({
-    mutationFn: resourceMutation({
-      mutation: "addMcpServer",
-      queryClient,
-      scope: { type: "organization" },
-      mutationFn: async (params: AddServerParams) => {
-        const response = await api.mcp.connectors.post(params);
-        return unwrapEden(response);
-      },
-    }),
+    mutationFn: addServerMutationFn,
     onSuccess: (data, { url }) => {
       switch (data.type) {
         case "confirmation_required":
@@ -176,19 +178,20 @@ export const AddMcpServerSheet = ({
     onError: handleApiError,
   });
 
+  const saveTokenMutationFn = resourceMutation({
+    mutation: "saveMcpToken",
+    queryClient,
+    scope: { type: "organization" },
+    mutationFn: async (payload: { connectorSlug: string; token: string }) => {
+      const response = await api.mcp.connections.post({
+        connectorSlug: payload.connectorSlug,
+        token: payload.token,
+      });
+      return unwrapEden(response);
+    },
+  });
   const saveTokenMutation = useMutation({
-    mutationFn: resourceMutation({
-      mutation: "saveMcpToken",
-      queryClient,
-      scope: { type: "organization" },
-      mutationFn: async (payload: { connectorSlug: string; token: string }) => {
-        const response = await api.mcp.connections.post({
-          connectorSlug: payload.connectorSlug,
-          token: payload.token,
-        });
-        return unwrapEden(response);
-      },
-    }),
+    mutationFn: saveTokenMutationFn,
     onSuccess: () => {
       stellaToast.add({
         title: t("knowledge.mcp.connectedToast"),
