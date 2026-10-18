@@ -42,10 +42,8 @@ const PURE_AUTOFIX = {
   // contracts; setup-env supplies static validation defaults, never live data.
   "capability-catalog": "apps/api/scripts/export-capability-catalog.ts",
   "cli-registry": "codegen",
-  "mcp-app-contracts": "generate:mcp-app-contracts",
   // Compiler input discovery and pinned bundlers consume repository sources.
   "api-typecheck-projects": "packages/scripts/src/api-typecheck-regenerate.ts",
-  "mcp-app-bundles": "build",
   "visual-sandbox-bundle": "build:visual-sandbox",
   // Fixed image construction uses integer pixels, not external image tools.
   "scan-engine-fixtures": "generate:fixtures",
@@ -104,6 +102,8 @@ const EXCLUDED_AUTOFIX = {
   "scan-engine-wasm":
     "Requires canonical Linux Rust host and external WASM toolchain",
   "chat-transcripts": "Runs service-backed chat recording suites",
+  "case-law-publication-migration":
+    "Migration SQL requires review rather than automatic rewriting",
 } as const;
 
 test("every committed generator has an explicit autofix purity decision", () => {
