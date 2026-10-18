@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import {
   copyFile,
@@ -11,6 +12,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { compareCodeUnit } from "../packages/collation/src/collation";
 import { generateCloudSetupArtifacts } from "./generate-cloud-setup";
 import { writeOrCheckArtifacts } from "./generated-artifacts";
 
@@ -29,6 +31,9 @@ const expectCloudSetupPins = ({
   tools: Record<string, string>;
 }) => {
   const bunVersion = /^bun@(.+)$/u.exec(packageManager)?.at(1);
+  if (bunVersion === undefined) {
+    panic("package.json packageManager must use the bun@x.y.z format");
+  }
   expect(
     script,
     `package.json packageManager must match .agents/cloud-setup.sh BUN_VERSION; change package.json or run ${regeneration}`,
@@ -44,11 +49,14 @@ const expectCloudSetupPins = ({
     ] ?? "";
   const installed = [
     ...installTools.matchAll(/\binstall_([a-z0-9_]+)\b/gu),
-  ].map(([, tool]) => tool);
+  ].flatMap((match) => {
+    const tool = match.at(1);
+    return tool === undefined ? [] : [tool];
+  });
   expect(
-    installed.toSorted(),
+    installed.toSorted(compareCodeUnit),
     `stll-toolchain.json cloud.tools must exactly match tools installed by .agents/cloud-setup.sh; change stll-toolchain.json or run ${regeneration}`,
-  ).toEqual(Object.keys(tools).toSorted());
+  ).toEqual(Object.keys(tools).toSorted(compareCodeUnit));
   for (const [tool, version] of Object.entries(tools)) {
     const block = new RegExp(
       `install_${tool}\\(\\) \\(\\n(?<body>[\\s\\S]*?)\\n\\)`,
@@ -142,6 +150,48 @@ test("cloud setup bytes come from the shared generator and bind the Node selecto
     const changed = await generateCloudSetupArtifacts(directory);
     expect(changed.at(0)?.contents).not.toBe(original.at(0)?.contents);
     expect(changed.at(0)?.contents).toContain("NODE_VERSION='26.10.1'");
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("cloud setup preserves user-owned Claude settings", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "cloud-settings-user-"));
+  const userSettings = {
+    enabledPlugins: { "typescript-lsp@claude-plugins-official": false },
+    mcpServers: {
+      playwright: {
+        command: "npx",
+        args: ["@playwright/mcp@latest", "--viewport-size", "1280x720"],
+      },
+    },
+  };
+  try {
+    for (const file of [
+      "package.json",
+      "stll-toolchain.json",
+      ".node-version",
+    ]) {
+      await copyFile(path.join(root, file), path.join(directory, file));
+    }
+    await mkdir(path.join(directory, ".claude"), { recursive: true });
+    await writeFile(
+      path.join(directory, ".claude/settings.json"),
+      `${JSON.stringify(userSettings, undefined, 2)}\n`,
+    );
+    await symlink(
+      path.join(root, "node_modules"),
+      path.join(directory, "node_modules"),
+    );
+
+    const artifacts = await generateCloudSetupArtifacts(directory);
+    const settings = artifacts.find(({ path: artifactPath }) =>
+      artifactPath.endsWith(".claude/settings.json"),
+    );
+    const generated = JSON.parse(settings?.contents ?? "");
+    expect(generated.enabledPlugins).toEqual(userSettings.enabledPlugins);
+    expect(generated.mcpServers).toEqual(userSettings.mcpServers);
+    expect(generated.hooks.SessionStart).toHaveLength(1);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

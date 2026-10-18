@@ -133,6 +133,17 @@ const context = (
   },
   steps: {
     "changed-files": { outputs: plan },
+    "completed-depth": {
+      outputs: {
+        run_required: plan["run_required"] ?? "true",
+        pr_heavy_suites: plan["pr_heavy_suites"] ?? "run",
+      },
+    },
+    "e2e-pr-plan": {
+      outputs: {
+        selection_required: plan["browser_spec_selection_required"] ?? "false",
+      },
+    },
     "marketing-release": {
       outputs: { required: plan["marketing_screenshots_required"] },
     },

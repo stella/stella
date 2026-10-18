@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { copyFile, mkdtemp, readFile, rm } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -11,6 +11,7 @@ import { writeOrCheckArtifacts } from "./generated-artifacts";
 export const generateCloudSetupArtifacts = async (root: string) => {
   const directory = await mkdtemp(path.join(tmpdir(), "cloud-setup-inputs-"));
   const inputs = ["package.json", "stll-toolchain.json", ".node-version"];
+  const settings = ".claude/settings.json";
   const run = (command: string[]) => {
     const result = Bun.spawnSync(command, {
       cwd: directory,
@@ -24,6 +25,11 @@ export const generateCloudSetupArtifacts = async (root: string) => {
   try {
     for (const file of inputs) {
       await copyFile(path.join(root, file), path.join(directory, file));
+    }
+    if (await Bun.file(path.join(root, settings)).exists()) {
+      await mkdir(path.join(directory, ".claude"), { recursive: true });
+      await copyFile(path.join(root, settings), path.join(directory, settings));
+      inputs.push(settings);
     }
     run(["git", "init", "--quiet"]);
     run(["git", "add", ...inputs]);
