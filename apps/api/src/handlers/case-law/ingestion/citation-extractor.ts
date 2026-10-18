@@ -675,8 +675,11 @@ export type CueGatedCitationPattern = {
   identifierType: DecisionIdentifierType;
 };
 
+// A proceeding number may carry the decision's own reference after a hyphen
+// ("ÚOHS-S0123/2024/VZ-12345/2024/500/JNe"); it is part of the identity, and
+// any other continuation is refused rather than cut to the proceeding.
 const CZ_UOHS_PATTERN =
-  /(?<![\p{L}\d])(?<caseNumber>ÚOHS-(?:[SR]\d{1,6}\/\d{4}\/[A-Z]{2}|\d{1,6}\/\d{4}\/\d{3}(?:\/[A-Z]{2,6})?))(?![\p{L}\d/])/gu;
+  /(?<![\p{L}\d])(?<caseNumber>ÚOHS-(?:[SR]\d{1,6}\/\d{4}\/[A-Z]{2}(?:-\d{1,6}\/\d{4}\/\d{3}(?:\/\p{L}{2,6})?)?|\d{1,6}\/\d{4}\/\d{3}(?:\/\p{L}{2,6})?))(?![\p{L}\d/-])/gu;
 const CZ_UOOU_PATTERN =
   /(?<![\p{L}\d])(?<caseNumber>UOOU-(?:\d{1,6}\/\d{2}-\d{1,4}|\d{6,10}-\d{1,4}))(?![\p{L}\d-])/gu;
 

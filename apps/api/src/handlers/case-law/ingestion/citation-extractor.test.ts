@@ -42,6 +42,14 @@ describe("extractCitations", () => {
       "ÚOHS-12345/2024/500",
     ],
     ["rozhodnutí předsedy ÚOHS-54321/2025/500/ABC", "ÚOHS-54321/2025/500/ABC"],
+    [
+      "ÚOHS ÚOHS-S123/2024/VZ-12345/2024/500/JNe",
+      "ÚOHS-S123/2024/VZ-12345/2024/500/JNe",
+    ],
+    [
+      "ÚOHS ÚOHS-R456/2025/VZ-54321/2025/310",
+      "ÚOHS-R456/2025/VZ-54321/2025/310",
+    ],
     ["ÚOOÚ UOOU-12345/17-12", "UOOU-12345/17-12"],
     ["Úřad pro ochranu osobních údajů UOOU-123417-12", "UOOU-123417-12"],
   ])("extracts Czech authority decision shape %s", (text, number) => {
@@ -53,6 +61,17 @@ describe("extractCitations", () => {
       }),
     );
   });
+
+  test.each(["ÚOHS ÚOHS-S123/2024/VZ-abc", "ÚOHS ÚOHS-S123/2024/VZ-12345"])(
+    "never cuts an unsupported continuation of %s to the proceeding number",
+    (text) => {
+      expect(
+        extractCitations([{ index: 0, text }]).map(
+          ({ citationText }) => citationText,
+        ),
+      ).not.toContain("ÚOHS-S123/2024/VZ");
+    },
+  );
 
   test("rejects Czech authority numbers without their own cue", () => {
     expect(
