@@ -3,7 +3,7 @@ import { panic } from "better-result";
 import { AhoCorasick } from "@stll/aho-corasick";
 import { normalizeUnicode, foldToAscii } from "@stll/text-normalize";
 
-import { STATUTE_ALIASES } from "./statute-aliases";
+import { STATUTE_ALIASES, type StatuteAliasTarget } from "./statute-aliases";
 import { CZE_CASE_LAW_REPORTER_TAIL_RE } from "./statute-gazette";
 import type { StatuteQueryCountry } from "./statute-query-capability";
 import { foldStatuteQuery, parseStatuteQuery } from "./statute-query-intent";
@@ -181,8 +181,10 @@ export const readStatuteQueryReferences = (
     }
     matches.push(match);
   }
+  const aliasTargets: Readonly<Record<string, StatuteAliasTarget | undefined>> =
+    STATUTE_ALIASES[country];
   for (const [pattern, alias] of EMBEDDED_ALIASES[country].entries()) {
-    const target = STATUTE_ALIASES[country][alias];
+    const target = aliasTargets[alias];
     if (target === undefined) {
       return panic(`Embedded statute alias is missing: ${alias}`);
     }
