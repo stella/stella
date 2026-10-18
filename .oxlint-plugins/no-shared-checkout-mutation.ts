@@ -147,6 +147,19 @@ const afterLastAbsolute = (parts: readonly unknown[]): unknown[] => {
   return parts.slice(last + 1);
 };
 
+// A path operation by what it is, not how it is spelled: `join as joinPath`
+// from node:path is still join.
+const operationName = (
+  context: ScopeContext,
+  callee: unknown,
+): string | null => {
+  const binding = resolveImport(context, callee);
+  return binding !== null &&
+    (binding.moduleId === "node:path" || binding.moduleId === "path")
+    ? binding.imported
+    : calleeName(callee);
+};
+
 const createPathResolver = (context: ScopeContext) => {
   const variableOf = (node: unknown) =>
     isIdentifierReference(node) ? resolveVariable(context, node) : null;
@@ -186,7 +199,7 @@ const createPathResolver = (context: ScopeContext) => {
       return true;
     }
     const parts: unknown[] = node.arguments;
-    const operation = calleeName(node.callee);
+    const operation = operationName(context, node.callee);
     // path.resolve: the last absolute segment decides, as for checkout paths.
     if (operation === "resolve") {
       const scan = afterLastAbsolute(parts);
@@ -255,7 +268,7 @@ const createPathResolver = (context: ScopeContext) => {
     if (!Array.isArray(node.arguments)) {
       return false;
     }
-    const operation = calleeName(node.callee);
+    const operation = operationName(context, node.callee);
     const parts: unknown[] = node.arguments;
     // path.resolve: the last absolute segment decides the destination.
     if (operation === "resolve") {

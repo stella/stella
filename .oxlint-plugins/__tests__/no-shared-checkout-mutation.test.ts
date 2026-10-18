@@ -69,6 +69,14 @@ describe(RULE, () => {
     ).toEqual([3, 4]);
   });
 
+  test("follows path operations imported under another name", async () => {
+    expect(
+      await lint(
+        'import { mkdtempSync, writeFileSync } from "node:fs";\nimport { join as joinPath, resolve as resolvePath } from "node:path";\nconst scratch = mkdtempSync(joinPath(import.meta.dir, "scratch-"));\nwriteFileSync(joinPath(scratch, "out.json"), "data");\nwriteFileSync(joinPath(scratch, "..", "baseline.json"), "data");\nwriteFileSync(resolvePath(import.meta.dir, "/tmp/out.json"), "data");',
+      ),
+    ).toEqual([5]);
+  });
+
   test("allows URLs resolved against a system temporary directory", async () => {
     expect(
       await lint(
