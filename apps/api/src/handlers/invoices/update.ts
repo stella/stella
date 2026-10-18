@@ -3,6 +3,7 @@ import { and, eq, isNull, ne, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { INVOICE_LINE_SOURCE } from "@stll/api-contract";
+import type { InvoiceLanguage } from "@stll/api-contract";
 import type { InvoiceDocumentType } from "@stll/invoicing";
 
 import type { Transaction } from "@/api/db/root";
@@ -31,6 +32,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { pickDefined } from "@/api/lib/pick-defined";
 
 import { tInvoiceDocumentType, validateInvoiceDocument } from "./document-type";
+import { tInvoiceLanguage } from "./invoice-language";
 import { recalculateInvoiceTotals } from "./invoice-lines";
 
 const updateInvoiceBodySchema = t.Object({
@@ -43,6 +45,7 @@ const updateInvoiceBodySchema = t.Object({
   dueDate: t.Optional(t.Nullable(t.String({ format: "date" }))),
   reference: t.Optional(t.Nullable(t.String({ maxLength: 256 }))),
   currency: t.Optional(tCurrencyCode),
+  language: t.Optional(tInvoiceLanguage),
   notes: t.Optional(t.Nullable(t.String({ maxLength: 10_000 }))),
   taxableSupplyDate: t.Optional(t.Nullable(t.String({ format: "date" }))),
   sellerProfileId: t.Optional(t.Nullable(tSafeId("sellerProfile"))),
@@ -73,6 +76,7 @@ const invoiceParamsSchema = workspaceParams({ invoiceId: tSafeId("invoice") });
 
 type InvoiceUpdateSource = {
   currency: string;
+  language: InvoiceLanguage;
   dueDate: string | null;
   invoiceDate: string;
   invoiceNumber: string | null;
@@ -133,6 +137,12 @@ const buildInvoiceUpdateAuditChanges = (
     changes["currency"] = {
       old: existing.currency,
       new: changedFields.currency,
+    };
+  }
+  if (changedFields.language !== undefined) {
+    changes["language"] = {
+      old: existing.language,
+      new: changedFields.language,
     };
   }
   if (changedFields.taxableSupplyDate !== undefined) {
@@ -269,6 +279,7 @@ const updateInvoice = createSafeHandler(
       "reference",
       "notes",
       "currency",
+      "language",
       "taxableSupplyDate",
       "sellerProfileId",
     ]);

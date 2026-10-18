@@ -28,6 +28,7 @@ export const invoiceFixture = (lineCount: number) =>
       dueDate: "2026-10-14",
       taxableSupplyDate: "2026-09-30",
       currency: "CZK",
+      language: "cs",
       reference: "0987654321",
       notes: CEE_DIACRITICS,
       buyerName: "Řehoř Žďárský",
@@ -73,8 +74,6 @@ export const invoiceFixture = (lineCount: number) =>
       ],
     },
     originalNumber: null,
-    locale: "cs-CZ",
-    lang: "cs",
   }) satisfies RenderInvoicePdfOptions;
 
 export const DUMMY_ISDOC = `<?xml version="1.0" encoding="UTF-8"?>

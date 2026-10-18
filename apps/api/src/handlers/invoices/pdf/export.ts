@@ -11,10 +11,6 @@ import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import {
-  extractFormattingLocale,
-  extractLangFromRequest,
-} from "@/api/lib/locale";
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 import { writeS3ObjectWithRetry } from "@/api/lib/s3";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
@@ -50,7 +46,6 @@ export const createInvoicePdfExport = (writeObject = writeS3ObjectWithRetry) =>
       workspaceId,
       session,
       params,
-      request,
       recordAuditEvent,
     }) {
       const loaded = yield* Result.await(
@@ -140,8 +135,6 @@ export const createInvoicePdfExport = (writeObject = writeS3ObjectWithRetry) =>
                 })),
               },
               totals: amounts.totals,
-              locale: extractFormattingLocale(request),
-              lang: extractLangFromRequest(request),
             }),
         ),
       );

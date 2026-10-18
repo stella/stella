@@ -1,5 +1,6 @@
 import {
   INVOICE_LINE_SOURCES,
+  INVOICE_LANGUAGES,
   INVOICE_STATUS,
   INVOICE_STATUSES,
   NUMBER_SERIES_DOCUMENT_TYPES,
@@ -977,6 +978,8 @@ export const invoices = p.pgTable(
     taxableSupplyDate: p.date("taxable_supply_date"),
     dueDate: p.date("due_date"),
     currency: p.varchar({ length: 3 }).notNull(),
+    /** Language frozen onto the invoice so every reader sees the same document. */
+    language: p.text({ enum: INVOICE_LANGUAGES }).notNull().default("en"),
     sellerProfileId: safeUuid<"sellerProfile">("seller_profile_id").references(
       () => sellerProfiles.id,
     ),
@@ -1006,6 +1009,13 @@ export const invoices = p.pgTable(
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
+    p.check(
+      "invoices_language_check",
+      sql`${table.language} IN (${sql.join(
+        INVOICE_LANGUAGES.map((value) => sql`${value}`),
+        sql`, `,
+      )})`,
+    ),
     p.check(
       "invoices_billing_mode_check",
       sql`${table.billingMode} IN (${sql.join(

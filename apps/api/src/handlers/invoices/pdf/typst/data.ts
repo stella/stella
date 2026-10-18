@@ -147,7 +147,8 @@ const party = (
 });
 
 export const buildInvoiceTemplateData = (options: RenderInvoicePdfOptions) => {
-  const { invoice, seller, totals, locale, lang, originalNumber } = options;
+  const { invoice, seller, totals, originalNumber } = options;
+  const lang = invoice.language;
   const l = INVOICE_PDF_LABELS[lang];
   const profile =
     INVOICE_COUNTRY_PROFILES[
@@ -155,7 +156,7 @@ export const buildInvoiceTemplateData = (options: RenderInvoicePdfOptions) => {
     ];
   const { money, date, vatRate, quantity } = createInvoiceFormatters({
     currency: invoice.currency,
-    locale,
+    locale: invoice.language,
   });
   const titles = {
     invoice: l.invoice,

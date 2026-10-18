@@ -1,22 +1,9 @@
+import { INVOICE_LANGUAGES, type InvoiceLanguage } from "@stll/api-contract";
+
 import type { VatTreatment } from "../types";
 import { INVOICE_PDF_LABELS } from "./pdf-labels";
 
-export const INVOICE_LANGUAGES = [
-  "en",
-  "cs",
-  "sk",
-  "de",
-  "fr",
-  "es",
-  "pt-BR",
-  "pl",
-  "hu",
-  "et",
-  "lv",
-  "lt",
-  "ar",
-] as const;
-export type InvoiceLanguage = (typeof INVOICE_LANGUAGES)[number];
+export { INVOICE_LANGUAGES, type InvoiceLanguage };
 
 export const INVOICE_COUNTRIES = ["SK", "CZ", "EU"] as const;
 export type InvoiceCountry = (typeof INVOICE_COUNTRIES)[number];

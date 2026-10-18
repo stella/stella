@@ -46,6 +46,7 @@ import { PG_ERROR } from "@/api/lib/pg-error";
 
 import { INVOICE_ENTRIES_MODIFIED_MESSAGE } from "./concurrent-modification";
 import { tInvoiceDocumentType, validateInvoiceDocument } from "./document-type";
+import { tInvoiceLanguage } from "./invoice-language";
 
 type InvoiceDocumentType = Static<typeof tInvoiceDocumentType>;
 
@@ -57,6 +58,7 @@ const createInvoiceBodySchema = t.Object({
   dueDate: t.Optional(t.Nullable(t.String({ format: "date" }))),
   reference: t.Optional(t.Nullable(t.String({ maxLength: 256 }))),
   currency: tCurrencyCode,
+  language: t.Optional(tInvoiceLanguage),
   notes: t.Optional(t.Nullable(t.String({ maxLength: 10_000 }))),
   timeEntryIds: t.Array(tSafeId("timeEntry"), {
     minItems: 0,
@@ -508,15 +510,13 @@ const resolveCreationDefaults = async (
     documentType === "credit_note"
       ? body.invoiceDate
       : await lastWorkDate(tx, { workspaceId, body });
-  const prefill =
-    documentType === "credit_note"
-      ? null
-      : await resolveInvoicePrefill(tx, {
-          organizationId,
-          workspaceId,
-          sellerProfileId: body.sellerProfileId,
-          supplyDate: body.taxableSupplyDate ?? workDate,
-        });
+  const resolvedPrefill = await resolveInvoicePrefill(tx, {
+    organizationId,
+    workspaceId,
+    sellerProfileId: body.sellerProfileId,
+    supplyDate: body.taxableSupplyDate ?? workDate,
+  });
+  const prefill = documentType === "credit_note" ? null : resolvedPrefill;
   if (prefill?.sellerSource === "not_found") {
     return Result.err(
       new HandlerError({
@@ -535,7 +535,12 @@ const resolveCreationDefaults = async (
     body.dueDate === undefined && prefill !== null
       ? dueDateAfter(body.invoiceDate, prefill.dueDays)
       : (body.dueDate ?? null);
-  return Result.ok({ prefill, taxableSupplyDate, dueDate });
+  return Result.ok({
+    prefill,
+    taxableSupplyDate,
+    dueDate,
+    language: body.language ?? resolvedPrefill.language,
+  });
 };
 
 type CreateDraftInvoiceOptions = {
@@ -833,7 +838,7 @@ const createDraftInvoice = async (
   if (defaults.isErr()) {
     return Result.err(defaults.error);
   }
-  const { prefill, taxableSupplyDate, dueDate } = defaults.value;
+  const { prefill, taxableSupplyDate, dueDate, language } = defaults.value;
   if (prefill?.vat.reason === "no_vat_rate") {
     return Result.err(
       new HandlerError({
@@ -871,6 +876,7 @@ const createDraftInvoice = async (
       taxableSupplyDate,
       reference: body.reference ?? null,
       currency: body.currency,
+      language,
       notes: body.notes ?? null,
       status: INVOICE_STATUS.DRAFT,
       sellerProfileId: prefill?.seller?.id ?? null,

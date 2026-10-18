@@ -58,6 +58,7 @@ beforeAll(async () => {
     invoiceDate: "2026-09-30",
     status: INVOICE_STATUS.DRAFT,
     currency: "CZK",
+    language: "sk",
     netAmount: cents(500_000),
     vatAmount: cents(105_000),
     totalAmount: cents(605_000),
@@ -133,6 +134,7 @@ const context = (
     promptCachingEnabled: false,
     request: new Request("https://example.test/invoice/pdf", {
       method: "POST",
+      headers: { "Accept-Language": "en" },
     }),
     route: "/test/invoice/pdf",
     safeDb: createSafeDb(testDb, [workspaceId], organizationId, userId),
@@ -188,8 +190,8 @@ describe("invoice document export", () => {
       .map((page) => page.text)
       .join("\n");
     expect(text).toContain("Contract review");
-    expect(text).toContain("Quantity: 2.5 h");
-    expect(text).toContain("Unit price:");
+    expect(text).toContain("Množstvo: 2,5 h");
+    expect(text).toContain("Jednotková cena:");
     expect(events).toHaveLength(1);
     expect(events.at(0)).toMatchObject({
       action: "download",
@@ -197,6 +199,32 @@ describe("invoice document export", () => {
       resourceId: invoiceId,
       workspaceId: fixture.ids.wsA1,
     });
+  });
+  test("renders English stored on the invoice despite a Slovak request", async () => {
+    await fixture.testDb
+      .update(invoices)
+      .set({ language: "en" })
+      .where(eq(invoices.id, invoiceId));
+    let pdf: Uint8Array | null = null;
+    const handler = createInvoicePdfExport(async (object) => {
+      pdf = object.data;
+      return S3_OBJECT_WRITE_CERTAINTY.CONFIRMED;
+    });
+    const requestContext = context("own", []);
+    requestContext.request = new Request("https://example.test/invoice/pdf", {
+      method: "POST",
+      headers: { "Accept-Language": "sk" },
+    });
+    await handler.handler(requestContext);
+    if (pdf === null) {
+      throw new Error("the export stored no PDF bytes");
+    }
+    const text = (await PDF.load(pdf))
+      .extractText()
+      .map((page) => page.text)
+      .join("\n");
+    expect(text).toContain("Quantity: 2.5 h");
+    expect(text).toContain("Unit price:");
   });
   test("refuses delivery without a download audit when storage fails", async () => {
     const events: AuditEvent[] = [];

@@ -6,10 +6,12 @@ import { standardVatRateOn } from "@stll/invoicing";
 import type { Transaction } from "@/api/db/root";
 import {
   contacts,
+  organizationSettings,
   sellerProfiles,
   vatRates,
   workspaces,
 } from "@/api/db/schema";
+import { invoiceLanguageForCountry } from "@/api/handlers/invoices/invoice-language";
 import type { SafeId } from "@/api/lib/branded-types";
 import { readBounded } from "@/api/lib/db/read-bounded";
 
@@ -39,6 +41,7 @@ const SELLER_COLUMNS = {
   vatId: sellerProfiles.vatId,
   vatPayer: sellerProfiles.vatPayer,
   defaultCurrency: sellerProfiles.defaultCurrency,
+  country: sellerProfiles.country,
 } as const;
 
 /**
@@ -69,6 +72,8 @@ export const resolveInvoicePrefill = async (
       addresses: contacts.addresses,
       paymentTermDays: contacts.paymentTermDays,
       clientCurrency: contacts.currency,
+      clientInvoiceLanguage: contacts.invoiceLanguage,
+      organizationInvoiceLanguage: organizationSettings.invoiceLanguage,
     })
     .from(workspaces)
     .leftJoin(
@@ -77,6 +82,10 @@ export const resolveInvoicePrefill = async (
         eq(contacts.id, workspaces.clientId),
         eq(contacts.organizationId, workspaces.organizationId),
       ),
+    )
+    .leftJoin(
+      organizationSettings,
+      eq(organizationSettings.organizationId, workspaces.organizationId),
     )
     .where(
       and(
@@ -151,6 +160,10 @@ export const resolveInvoicePrefill = async (
       buyer.buyerName === null ? ("none" as const) : ("client" as const),
     clientId: matter?.clientId ?? null,
     clientCurrency: matter?.clientCurrency ?? null,
+    language:
+      matter?.clientInvoiceLanguage ??
+      matter?.organizationInvoiceLanguage ??
+      invoiceLanguageForCountry(seller?.country ?? null),
     vat: decideInvoiceVat({
       seller: seller ?? null,
       buyerVatId: buyer.buyerVatId,

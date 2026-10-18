@@ -28,6 +28,7 @@ const options = {
     dueDate: "2026-10-14",
     taxableSupplyDate: "2026-09-30",
     currency: "CZK",
+    language: "cs",
     reference: "0987654321",
     notes: "Vyřízení záležitosti bez dalších průtahů.",
     buyerName: "Řehoř Žďárský",
@@ -65,8 +66,6 @@ const options = {
     vatBreakdown: [],
   },
   originalNumber: null,
-  locale: "cs-CZ",
-  lang: "cs",
 } satisfies RenderInvoicePdfOptions;
 
 const textOf = async (value: RenderInvoicePdfOptions) => {
@@ -297,11 +296,10 @@ describe("country invoice wording", () => {
     async (lang) => {
       const { text } = await textOf({
         ...options,
-        lang,
-        locale: lang === "sk" ? "sk-SK" : "en",
         seller: { ...options.seller, country: "SK", vatId: "SK1234567890" },
         invoice: {
           ...options.invoice,
+          language: lang,
           lines: [{ ...sampleLine, vatTreatment: "reverse_charge" }],
         },
       });
@@ -315,10 +313,10 @@ describe("country invoice wording", () => {
   test("prints an exemption reason with the Slovak prescribed phrase", async () => {
     const { text } = await textOf({
       ...options,
-      lang: "en",
       seller: { ...options.seller, country: "SK", vatId: "SK1234567890" },
       invoice: {
         ...options.invoice,
+        language: "en",
         lines: [
           { ...sampleLine, vatTreatment: "exempt", exemptionReason: "§ 38" },
         ],

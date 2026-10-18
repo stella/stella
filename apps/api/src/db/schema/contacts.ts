@@ -1,6 +1,10 @@
 import type { SQLWrapper } from "drizzle-orm";
 
-import { CONTACT_TYPES, WORKSPACE_CONTACT_ROLES } from "@stll/api-contract";
+import {
+  CONTACT_TYPES,
+  INVOICE_LANGUAGES,
+  WORKSPACE_CONTACT_ROLES,
+} from "@stll/api-contract";
 
 import { workspaceInsertCheck } from "@/api/db/rls";
 import {
@@ -96,6 +100,8 @@ export const contacts = p.pgTable(
     defaultHourlyRate: centsColumn("default_hourly_rate"),
     currency: p.varchar({ length: 3 }),
     paymentTermDays: p.integer("payment_term_days"),
+    /** Language preferred for invoices sent to this contact; null uses the issuer default. */
+    invoiceLanguage: p.text("invoice_language", { enum: INVOICE_LANGUAGES }),
 
     // Attorney responsibility
     originatingAttorneyId: p
@@ -115,6 +121,13 @@ export const contacts = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    p.check(
+      "contacts_invoice_language_check",
+      sql`${table.invoiceLanguage} IS NULL OR ${table.invoiceLanguage} IN (${sql.join(
+        INVOICE_LANGUAGES.map((value) => sql`${value}`),
+        sql`, `,
+      )})`,
+    ),
     p.unique("contacts_org_id_unique").on(table.organizationId, table.id),
     p.index("contacts_organization_id_idx").on(table.organizationId),
     p.index("contacts_org_type_idx").on(table.organizationId, table.type),

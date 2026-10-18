@@ -56,6 +56,7 @@ const golden = ({
     dueDate: "2026-11-02",
     taxableSupplyDate: "2026-10-15",
     currency: "EUR",
+    language: "sk",
     reference: "20260042",
     notes: null,
     buyerName: "Šťastný a Ďuriš s. r. o.",
@@ -98,8 +99,6 @@ const golden = ({
     ],
   },
   originalNumber: null,
-  locale: "sk-SK",
-  lang: "sk",
 });
 
 const textOf = async (value: RenderInvoicePdfOptions) => {

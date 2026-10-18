@@ -62,6 +62,7 @@ export {
   DEFAULT_INVOICE_DUE_DAYS,
   INVOICE_DUE_DAY_PRESETS,
   EXPENSE_CATEGORIES,
+  INVOICE_LANGUAGES,
   INVOICE_LINE_SOURCE,
   INVOICE_LINE_SOURCES,
   INVOICE_STATUS,
@@ -77,6 +78,7 @@ export {
 } from "./billing";
 export type {
   ExpenseCategory,
+  InvoiceLanguage,
   InvoiceLineSource,
   InvoiceStatus,
   TimeEntrySource,

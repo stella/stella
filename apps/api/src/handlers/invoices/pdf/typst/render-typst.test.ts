@@ -196,11 +196,10 @@ describe("Typst country invoice wording", () => {
       }
       const input = {
         ...fixture,
-        lang,
-        locale: lang === "sk" ? "sk-SK" : "en",
         seller: { ...fixture.seller, country: "SK", vatId: "SK1234567890" },
         invoice: {
           ...fixture.invoice,
+          language: lang,
           lines: [{ ...sourceLine, vatTreatment: "reverse_charge" as const }],
         },
       };
@@ -231,10 +230,10 @@ describe("Typst country invoice wording", () => {
     }
     const input = {
       ...fixture,
-      lang: "en" as const,
       seller: { ...fixture.seller, country: "SK", vatId: "SK1234567890" },
       invoice: {
         ...fixture.invoice,
+        language: "en" as const,
         lines: [
           {
             ...sourceLine,

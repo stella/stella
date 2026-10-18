@@ -3,6 +3,8 @@ import { count, eq } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
+import { INVOICE_LANGUAGES } from "@stll/api-contract";
+
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { contacts } from "@/api/db/schema";
@@ -65,6 +67,7 @@ export const createContactBodySchema = t.Object({
   defaultHourlyRate: t.Optional(tMinorUnitAmount(0)),
   currency: t.Optional(t.String({ minLength: 3, maxLength: 3 })),
   paymentTermDays: t.Optional(t.Integer({ minimum: 0, maximum: 365 })),
+  invoiceLanguage: t.Optional(t.Nullable(t.UnionEnum(INVOICE_LANGUAGES))),
   originatingAttorneyId: t.Optional(tUserId),
   responsibleAttorneyId: t.Optional(tUserId),
 });
@@ -156,6 +159,7 @@ export const insertContactRow = async ({
           : cents(body.defaultHourlyRate),
       currency: body.currency,
       paymentTermDays: body.paymentTermDays,
+      invoiceLanguage: body.invoiceLanguage,
       originatingAttorneyId: body.originatingAttorneyId,
       responsibleAttorneyId: body.responsibleAttorneyId,
       createdBy: userId,

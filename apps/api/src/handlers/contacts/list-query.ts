@@ -57,6 +57,7 @@ const UNPROJECTED_CONTACT_LIST_COLUMNS = [
   "defaultHourlyRate",
   "currency",
   "paymentTermDays",
+  "invoiceLanguage",
   // Attorney assignment surfaces on the matter (workspace) contact fields,
   // not the standalone directory row.
   "originatingAttorneyId",

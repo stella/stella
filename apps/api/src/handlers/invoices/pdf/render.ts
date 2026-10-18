@@ -12,7 +12,7 @@ import {
 import { panic, Result } from "better-result";
 import { encode } from "uqr";
 
-import type { InvoiceStatus } from "@stll/api-contract";
+import type { InvoiceLanguage, InvoiceStatus } from "@stll/api-contract";
 import {
   buildCzechQrPaymentPayload,
   buildPayBySquarePayload,
@@ -42,7 +42,6 @@ import {
   POP_DIRECTIONAL_ISOLATE,
   STAMP_UNITS_PER_EM,
 } from "@/api/lib/files/pdf-signing/stamp-layout";
-import type { SupportedLang } from "@/api/lib/locale";
 
 export type RenderInvoicePdfOptions = {
   invoice: {
@@ -53,6 +52,7 @@ export type RenderInvoicePdfOptions = {
     dueDate: string | null;
     taxableSupplyDate: string | null;
     currency: string;
+    language: InvoiceLanguage;
     reference: string | null;
     notes: string | null;
     buyerName: string | null;
@@ -97,8 +97,6 @@ export type RenderInvoicePdfOptions = {
   } | null;
   totals: InvoiceTotals;
   originalNumber: string | null;
-  locale: string;
-  lang: SupportedLang;
 };
 
 export const buildInvoicePaymentPayload = ({
@@ -172,7 +170,7 @@ const LINE_HEIGHT = 15;
 const QR_SIZE = 120;
 
 type ShapedRow = Parameters<typeof drawStampRows>[0]["rows"][number];
-type InvoiceWriterOptions = { pdf: PDF; lang: SupportedLang };
+type InvoiceWriterOptions = { pdf: PDF; lang: InvoiceLanguage };
 const createInvoiceWriter = async ({ pdf, lang }: InvoiceWriterOptions) => {
   const font = pdf.embedFont(
     new Uint8Array(await Bun.file(dejaVuPath).arrayBuffer()),
@@ -377,18 +375,14 @@ const writeProfileId = ({
   }
 };
 
-const invoiceLegalNotes = ({
-  invoice,
-  seller,
-  lang,
-}: RenderInvoicePdfOptions) => {
+const invoiceLegalNotes = ({ invoice, seller }: RenderInvoicePdfOptions) => {
   const profile =
     INVOICE_COUNTRY_PROFILES[
       invoiceCountryOf(seller ?? { country: null, vatId: null })
     ];
   return legalNotesFor({
     profile,
-    language: lang,
+    language: invoice.language,
     treatments: invoice.lines.map((line) => line.vatTreatment),
     exemptionReasons: invoice.lines.flatMap((line) =>
       line.exemptionReason ? [line.exemptionReason] : [],
@@ -397,7 +391,8 @@ const invoiceLegalNotes = ({
 };
 
 export const renderInvoicePdf = async (options: RenderInvoicePdfOptions) => {
-  const { invoice, seller, totals, locale, lang, originalNumber } = options;
+  const { invoice, seller, totals, originalNumber } = options;
+  const lang = invoice.language;
   const l = INVOICE_PDF_LABELS[lang];
   const profile =
     INVOICE_COUNTRY_PROFILES[
@@ -416,7 +411,7 @@ export const renderInvoicePdf = async (options: RenderInvoicePdfOptions) => {
   const title = `${titles[invoice.documentType]}${invoice.status === "draft" || invoice.invoiceNumber === null ? "" : ` ${invoice.invoiceNumber}`}`;
   const { money, date, vatRate, quantity } = createInvoiceFormatters({
     currency: invoice.currency,
-    locale,
+    locale: invoice.language,
   });
   const treatments = {
     domestic_vat: l.vat,

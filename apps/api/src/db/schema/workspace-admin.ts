@@ -1,4 +1,7 @@
-import { BUSINESS_REGISTRY_CREDENTIAL_SLUGS } from "@stll/api-contract";
+import {
+  BUSINESS_REGISTRY_CREDENTIAL_SLUGS,
+  INVOICE_LANGUAGES,
+} from "@stll/api-contract";
 import type { TimeZoneId } from "@stll/time";
 
 import { entityFeaturePolicies } from "@/api/db/entity-feature-policies";
@@ -185,6 +188,8 @@ export const organizationSettings = p.pgTable(
       .text("personal_api_key_policy", { enum: PERSONAL_API_KEY_POLICIES })
       .notNull()
       .default("enabled"),
+    /** Default document language for invoices; null derives it from the seller. */
+    invoiceLanguage: p.text("invoice_language", { enum: INVOICE_LANGUAGES }),
     sanctionsMonitoringMode: p
       .text("sanctions_monitoring_mode", { enum: SANCTIONS_MONITORING_MODES })
       .notNull()
