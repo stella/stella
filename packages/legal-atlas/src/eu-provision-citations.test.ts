@@ -25,6 +25,10 @@ const fixtures = [
 ] as const;
 
 describe("EU provision citations", () => {
+  test("does not read an article marker from the end of a word", () => {
+    expect(locateEuProvisionCitations("Part 6 GDPR")).toEqual([]);
+  });
+
   for (const sentence of fixtures) {
     test(`reads ${sentence}`, () => {
       const citation = locateEuProvisionCitations(sentence).at(0);
@@ -82,7 +86,7 @@ describe("EU provision citations", () => {
         fc.string({ maxLength: 40 }),
         fc.string({ maxLength: 40 }),
         (fixture, prefix, suffix) => {
-          const text = `${prefix}${fixture}${suffix}`;
+          const text = `${prefix} ${fixture} ${suffix}`;
           const citations = locateEuProvisionCitations(text);
           expect(citations).toHaveLength(1);
           const citation = citations.at(0);

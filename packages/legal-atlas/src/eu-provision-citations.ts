@@ -156,7 +156,7 @@ export const EU_ACT_ALIASES = {
   },
 } as const satisfies Record<string, EuActAlias>;
 
-const ARTICLE = String.raw`(?:Article|Art\.?|čl\.?|cikk|Artikel)\s*(?<article>\d+[a-zA-Z]?)`;
+const ARTICLE = String.raw`(?<!\p{L})(?:Article|Art\.?|čl\.?|cikk|Artikel)\s*(?<article>\d+[a-zA-Z]?)`;
 const PARAGRAPH = String.raw`(?:\s*(?:\((?<parenParagraph>\d+)\)|(?:odst\.?|ods\.?|ust\.?|bekezd(?:és)?|paragraphe|paragraph|para\.?|Abs\.?)\s*(?<wordParagraph>\d+)))?`;
 const POINT = String.raw`(?:\s*(?:\((?<parenthesizedPoint>[a-z])\)|(?:(?:písm\.?|pism\.?|lit\.?|point|lettre|Buchst\.?|pont)\s*)?(?<point>[a-z])\)))?`;
 const YEAR_NUMBER = String.raw`(?<first>\d{1,4})\s*\/\s*(?<second>\d{1,4})`;
