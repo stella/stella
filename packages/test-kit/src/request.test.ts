@@ -29,14 +29,15 @@ test("an asynchronous assertion also rejects outside the HTTP error boundary", a
 
 test.each([undefined, null, "non-Error rejection"])(
   "preserves the original rejection value: %j",
-  async (error) => {
+  async (rejection) => {
     expect(
       await rejectionOf(
         runInRequest(() => {
-          throw error;
+          // oxlint-disable-next-line typescript/only-throw-error -- Non-Error values are the request-boundary rejection cases under test.
+          throw rejection;
         }),
       ),
-    ).toBe(error);
+    ).toBe(rejection);
   },
 );
 

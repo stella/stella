@@ -56,14 +56,14 @@ test.each([
         write: async (patch: Partial<PresentationPrefs>) => {
           const incoming = cookie;
           if (
-            patch[preference]?.cze !== undefined &&
-            patch[preference]?.pol === undefined
+            patch[preference]?.["cze"] !== undefined &&
+            patch[preference]["pol"] === undefined
           ) {
             started.resolve(undefined);
             await release.promise;
           }
           cookie = { ...incoming, ...patch };
-          if (patch[preference]?.pol !== undefined) {
+          if (patch[preference]?.["pol"] !== undefined) {
             finished.resolve(undefined);
           }
           return cookie;
