@@ -2,15 +2,15 @@ import { expect, test } from "bun:test";
 
 import { decisionBlockDeepLink } from "./case-law-decision-link";
 
-const appUrl = "https://example.test/law/cze/cases/court/decision";
+const url = "https://example.test/law/cze/cases/court/decision";
 
 test("decision links prefer court numbers and preserve parser anchors otherwise", () => {
   for (const number of [1, 48, Number.MAX_SAFE_INTEGER]) {
     for (const anchorId of ["p-1", null]) {
-      expect(decisionBlockDeepLink({ appUrl, anchorId, number })).toEqual({
-        url: `${appUrl}#par=${String(number)}`,
+      expect(decisionBlockDeepLink({ url, anchorId, number })).toEqual({
+        url: `${url}#par=${String(number)}`,
       });
-      expect(decisionBlockDeepLink({ appUrl: null, anchorId, number })).toEqual(
+      expect(decisionBlockDeepLink({ url: null, anchorId, number })).toEqual(
         {},
       );
     }
@@ -26,15 +26,13 @@ test("decision links prefer court numbers and preserve parser anchors otherwise"
     Infinity,
   ]) {
     expect(
-      decisionBlockDeepLink({ appUrl, anchorId: "p-1/část", number }),
+      decisionBlockDeepLink({ url, anchorId: "p-1/část", number }),
     ).toEqual({
-      url: `${appUrl}#p-1/%C4%8D%C3%A1st`,
+      url: `${url}#p-1/%C4%8D%C3%A1st`,
     });
-    expect(decisionBlockDeepLink({ appUrl, anchorId: null, number })).toEqual(
-      {},
-    );
+    expect(decisionBlockDeepLink({ url, anchorId: null, number })).toEqual({});
     expect(
-      decisionBlockDeepLink({ appUrl: null, anchorId: "p-1", number }),
+      decisionBlockDeepLink({ url: null, anchorId: "p-1", number }),
     ).toEqual({});
   }
 });
@@ -47,7 +45,7 @@ test("unnumbered anchor links round-trip through the reader's URI decoding", () 
     "p-1 space",
     "p-1😀",
   ]) {
-    const link = decisionBlockDeepLink({ appUrl, anchorId });
+    const link = decisionBlockDeepLink({ url, anchorId });
     if (link.url === undefined) {
       throw new Error("Expected an unnumbered anchor link");
     }
