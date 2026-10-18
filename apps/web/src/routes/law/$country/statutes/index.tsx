@@ -41,7 +41,10 @@ import {
   reachablePublicLawPage,
 } from "@/components/public-law-table/public-law-pagination.logic";
 import type { PublicLawPageSize } from "@/components/public-law-table/public-law-pagination.logic";
-import { publicLawRowsPhase } from "@/components/public-law-table/public-law-results-state.logic";
+import {
+  publicLawRowsPhase,
+  publicLawShowsPager,
+} from "@/components/public-law-table/public-law-results-state.logic";
 import type { PublicLawRouteState } from "@/components/public-law-table/public-law-results-state.logic";
 import {
   PublicLawFilterChips,
@@ -742,28 +745,34 @@ function PublicStatuteList({
             statutes={find.rows}
           />
         )}
-        <PublicLawPager
-          navigation={{
-            type: "chain",
-            model: pager,
-            isWalking: isFetchingNextPage,
-            onWalkForward: walkForward,
-          }}
-          onPageRequest={requestPage}
-          onPageSizeChange={setPageSize}
-          pageLink={({ label, page }) => (
-            <Link
-              aria-label={label}
-              from={Route.fullPath}
-              search={(previous) => ({
-                ...previous,
-                page: publicLawPageSearchValue(page),
-              })}
-              to="."
-            />
-          )}
-          pageSize={pageSize}
-        />
+        {publicLawShowsPager({
+          rowsPhase: rows,
+          rowCount: find.rows.length,
+          currentPage: pager.currentPage,
+        }) && (
+          <PublicLawPager
+            navigation={{
+              type: "chain",
+              model: pager,
+              isWalking: isFetchingNextPage,
+              onWalkForward: walkForward,
+            }}
+            onPageRequest={requestPage}
+            onPageSizeChange={setPageSize}
+            pageLink={({ label, page }) => (
+              <Link
+                aria-label={label}
+                from={Route.fullPath}
+                search={(previous) => ({
+                  ...previous,
+                  page: publicLawPageSearchValue(page),
+                })}
+                to="."
+              />
+            )}
+            pageSize={pageSize}
+          />
+        )}
       </div>
     </main>
   );

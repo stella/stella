@@ -162,6 +162,20 @@ export const PublicLawTable = <
     ...tableState.listeners,
   });
 
+  // A search that found nothing draws its reason alone: column headers over
+  // an empty grid read as a table that failed to fill, not as an answer.
+  if (rows.length === 0 && !isLoading) {
+    return (
+      <div aria-busy={isRefreshing} data-slot="public-law-empty-results">
+        {emptyState ?? (
+          <div className="text-muted-foreground p-4 text-sm">
+            {t("common.noResults")}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <MobileTableOrientationGate>
       <div
@@ -190,13 +204,6 @@ export const PublicLawTable = <
             table={table}
           />
         </FindHighlightScope>
-        {rows.length === 0 &&
-          !isLoading &&
-          (emptyState ?? (
-            <div className="text-muted-foreground p-4 text-sm">
-              {t("common.noResults")}
-            </div>
-          ))}
       </div>
     </MobileTableOrientationGate>
   );

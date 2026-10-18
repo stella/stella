@@ -145,3 +145,22 @@ export const queryAnsweredByRows = ({
   shown,
 }: QueryAnsweredByRowsInput): string | undefined =>
   phase === "stale" ? shown : requested;
+
+type PublicLawShowsPagerInput = {
+  rowsPhase: PublicLawRowsPhase;
+  /** Rows the results region draws for this page. */
+  rowCount: number;
+  currentPage: number;
+};
+
+/**
+ * Whether the pager belongs under the results. A first page that found
+ * nothing is an answer, not a page of a list: it shows its empty state alone.
+ * A later page that came back empty keeps the pager, the way back.
+ */
+export const publicLawShowsPager = ({
+  rowsPhase,
+  rowCount,
+  currentPage,
+}: PublicLawShowsPagerInput): boolean =>
+  rowsPhase === "skeleton" || rowCount > 0 || currentPage > 1;

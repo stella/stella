@@ -5,6 +5,7 @@ import {
   publicLawRowsPhase,
   publicLawLoadMode,
   publicLawSearchOutage,
+  publicLawShowsPager,
   queryAnsweredByRows,
   rowsAnswerRequestedSearch,
 } from "./public-law-results-state.logic";
@@ -217,5 +218,35 @@ describe("whether an action beside the rows may act on the URL's search", () => 
 
   test("settled rows and the URL are one search, so it is offered", () => {
     expect(rowsAnswerRequestedSearch("rows")).toBe(true);
+  });
+});
+
+describe("whether the pager stands under the results", () => {
+  test("a first page that found nothing shows its empty state alone", () => {
+    expect(
+      publicLawShowsPager({ rowsPhase: "rows", rowCount: 0, currentPage: 1 }),
+    ).toBe(false);
+  });
+
+  test("a page with rows keeps its pager", () => {
+    expect(
+      publicLawShowsPager({ rowsPhase: "rows", rowCount: 3, currentPage: 1 }),
+    ).toBe(true);
+  });
+
+  test("an empty later page keeps the pager as the way back", () => {
+    expect(
+      publicLawShowsPager({ rowsPhase: "rows", rowCount: 0, currentPage: 4 }),
+    ).toBe(true);
+  });
+
+  test("a waiting page keeps its pager in place", () => {
+    expect(
+      publicLawShowsPager({
+        rowsPhase: "skeleton",
+        rowCount: 0,
+        currentPage: 1,
+      }),
+    ).toBe(true);
   });
 });

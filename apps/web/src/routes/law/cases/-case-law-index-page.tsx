@@ -31,6 +31,7 @@ import { publicLawNumberedPagerModel } from "@/components/public-law-table/publi
 import {
   publicLawRowsPhase,
   publicLawSearchOutage,
+  publicLawShowsPager,
   queryAnsweredByRows,
   rowsAnswerRequestedSearch,
 } from "@/components/public-law-table/public-law-results-state.logic";
@@ -781,22 +782,28 @@ export function PublicCaseLawIndex({
               referenceKind={referenceKind}
               selectedIds={selectedIds}
             />
-            <PublicLawPager
-              navigation={{ type: "numbered", model: pager }}
-              onPageRequest={requestPage}
-              onPageSizeChange={setPageSize}
-              pageLink={({ label, page }) => (
-                <Link
-                  aria-label={label}
-                  search={(previous) => ({
-                    ...previous,
-                    page: publicLawPageSearchValue(page),
-                  })}
-                  to="/law/cases"
-                />
-              )}
-              pageSize={pageSize}
-            />
+            {publicLawShowsPager({
+              rowsPhase: rows,
+              rowCount: find.rows.length,
+              currentPage: pager.currentPage,
+            }) && (
+              <PublicLawPager
+                navigation={{ type: "numbered", model: pager }}
+                onPageRequest={requestPage}
+                onPageSizeChange={setPageSize}
+                pageLink={({ label, page }) => (
+                  <Link
+                    aria-label={label}
+                    search={(previous) => ({
+                      ...previous,
+                      page: publicLawPageSearchValue(page),
+                    })}
+                    to="/law/cases"
+                  />
+                )}
+                pageSize={pageSize}
+              />
+            )}
           </>
         )}
       </div>
