@@ -27,6 +27,8 @@ export type PoolCheck = {
   run: string;
   env: Readonly<Record<string, string>>;
   timeoutMinutes: number | undefined;
+  /** `continue-on-error` as declared: a literal or a `${{ }}` expression. */
+  continueOnError: boolean | string | undefined;
   step: Readonly<Record<string, unknown>>;
 };
 
@@ -37,6 +39,7 @@ const CHECK_KEYS = new Set([
   "env",
   "run",
   "timeout-minutes",
+  "continue-on-error",
 ]);
 
 const isCheckPoolJob = (job: string): job is CheckPoolJob =>
@@ -84,6 +87,7 @@ export const parseCheckPool = (source: string): PoolCheck[] => {
     const { name, id, env = {}, run } = entry;
     const condition = entry["if"];
     const timeout = entry["timeout-minutes"];
+    const continueOnError = entry["continue-on-error"];
     if (typeof name !== "string" || name.trim() === "" || names.has(name)) {
       throw new CheckPoolRegistryError(
         `Pooled check names must be unique: ${String(name)}`,
@@ -117,6 +121,13 @@ export const parseCheckPool = (source: string): PoolCheck[] => {
     ) {
       throw new CheckPoolRegistryError(`${name}: invalid timeout-minutes`);
     }
+    if (
+      continueOnError !== undefined &&
+      typeof continueOnError !== "boolean" &&
+      (typeof continueOnError !== "string" || continueOnError.trim() === "")
+    ) {
+      throw new CheckPoolRegistryError(`${name}: invalid continue-on-error`);
+    }
     return {
       name,
       id: typeof id === "string" ? id : undefined,
@@ -126,6 +137,7 @@ export const parseCheckPool = (source: string): PoolCheck[] => {
         Object.entries(env).map(([key, value]) => [key, String(value)]),
       ),
       timeoutMinutes: typeof timeout === "number" ? timeout : undefined,
+      continueOnError,
       step: entry,
     };
   });

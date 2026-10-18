@@ -6,7 +6,9 @@
 // changed inputs and static-receipt reuse behave exactly as they did per step.
 // Selected checks run concurrently, one fewer than the runner CPUs; each log is
 // printed whole, in registry order, and every failure is annotated. Any failed
-// check fails the step after all selected checks have finished.
+// check fails the step after all selected checks have finished, unless its
+// `continue-on-error` holds: then, as for a step, the failure is reported as a
+// warning and its conclusion is success.
 //
 // The pool runs even when dependency installation failed (install-free checks
 // still run), so it imports no packages.
@@ -108,6 +110,26 @@ export const conditionHolds = (condition: string, context: Context) => {
   return truthy(value);
 };
 
+/**
+ * Whether a failure of this check may let the pool pass, as `continue-on-error`
+ * does for a step. An expression the pool cannot decide fails closed: the
+ * check stays blocking.
+ */
+export const continueOnErrorHolds = (
+  declared: PoolCheck["continueOnError"],
+  context: Context,
+) => {
+  if (declared === undefined || typeof declared === "boolean") {
+    return declared === true;
+  }
+  try {
+    const value = evaluate(declared, context);
+    return value !== UNKNOWN && truthy(value);
+  } catch {
+    return false;
+  }
+};
+
 const EXPRESSION = /^\$\{\{([\s\S]*)\}\}$/u;
 /** Resolve `${{ }}` env values the way the runner renders them into a step. */
 export const resolveEnv = (
@@ -138,7 +160,12 @@ export const resolveEnv = (
   );
 
 export type PlannedCheck =
-  | { check: PoolCheck; status: "selected"; env: Record<string, string> }
+  | {
+      check: PoolCheck;
+      status: "selected";
+      env: Record<string, string>;
+      continueOnError: boolean;
+    }
   | { check: PoolCheck; status: "skipped" }
   | { check: PoolCheck; status: "invalid"; message: string };
 
@@ -153,6 +180,10 @@ export const planChecks = (
             check,
             status: "selected",
             env: resolveEnv(check.env, context),
+            continueOnError: continueOnErrorHolds(
+              check.continueOnError,
+              context,
+            ),
           }
         : { check, status: "skipped" };
     } catch (error) {
@@ -173,6 +204,8 @@ export type CheckResult = {
   name: string;
   id: string | undefined;
   outcome: "success" | "failure" | "skipped";
+  /** A failure that `continue-on-error` lets pass: conclusion success. */
+  continuedOnError: boolean;
   detail: string;
   seconds: number;
   maxRssBytes: number | undefined;
@@ -237,6 +270,7 @@ export const runChecks = async ({
     const base = {
       name: entry.check.name,
       id: entry.check.id,
+      continuedOnError: false,
       seconds: 0,
       maxRssBytes: undefined,
     };
@@ -248,7 +282,14 @@ export const runChecks = async ({
       settle(index, { ...base, outcome: "failure", detail: entry.message });
       return [];
     }
-    return [{ index, check: entry.check, env: entry.env }];
+    return [
+      {
+        index,
+        check: entry.check,
+        env: entry.env,
+        continueOnError: entry.continueOnError,
+      },
+    ];
   });
   const worker = async () => {
     for (let item = queue.shift(); item !== undefined; item = queue.shift()) {
@@ -257,11 +298,14 @@ export const runChecks = async ({
       try {
         const launched = await launch(item.index, item.check, item.env);
         const seconds = (now() - started) / 1000;
+        const outcome = launchedOutcome(launched, item.check);
         settle(item.index, {
           ...base,
           seconds,
           maxRssBytes: launched.maxRssBytes,
-          ...launchedOutcome(launched, item.check),
+          ...outcome,
+          continuedOnError:
+            item.continueOnError && outcome.outcome === "failure",
         });
       } catch (error) {
         settle(item.index, {
@@ -269,6 +313,7 @@ export const runChecks = async ({
           seconds: (now() - started) / 1000,
           maxRssBytes: undefined,
           outcome: "failure",
+          continuedOnError: item.continueOnError,
           detail: error instanceof Error ? error.message : String(error),
         });
       }
@@ -381,9 +426,12 @@ export const summaryTable = (results: readonly CheckResult[]) =>
     "| Check | Result | Seconds | Peak RSS (MiB) |",
     "| --- | --- | ---: | ---: |",
     ...results.map((result) => {
+      const failure = result.continuedOnError
+        ? "failure (continue-on-error)"
+        : "failure";
       const outcome =
         result.outcome === "failure"
-          ? `failure: ${result.detail}`
+          ? `${failure}: ${result.detail}`
           : result.outcome;
       const elapsed =
         result.outcome === "skipped" ? "" : result.seconds.toFixed(1);
@@ -413,6 +461,13 @@ const writeOut = (text: string) => {
 const print = (...parts: string[]) => {
   writeOut(`${parts.join(" ")}\n`);
 };
+
+/** Failures that fail the pool step: those `continue-on-error` does not cover. */
+export const blockingFailures = (results: readonly CheckResult[]) =>
+  results.filter(
+    ({ outcome, continuedOnError }) =>
+      outcome === "failure" && !continuedOnError,
+  );
 
 const isPoolJob = (job: string): job is CheckPoolJob =>
   CHECK_POOL_JOBS.some((known) => known === job);
@@ -474,7 +529,12 @@ const main = async () => {
         print(`Skipped: ${result.name} (${result.detail})`);
         return;
       }
-      const label = result.outcome === "success" ? "passed" : "FAILED";
+      let label = "passed";
+      if (result.outcome === "failure") {
+        label = result.continuedOnError
+          ? "FAILED (continue-on-error)"
+          : "FAILED";
+      }
       print(`::group::${result.name}: ${label} in ${seconds(result.seconds)}`);
       if (planned[index]?.status === "selected") {
         const output = readFileSync(logPath(directory, index), "utf-8");
@@ -483,8 +543,10 @@ const main = async () => {
       }
       print("::endgroup::");
       if (result.outcome === "failure") {
+        const level = result.continuedOnError ? "warning" : "error";
+        const suffix = result.continuedOnError ? " (continue-on-error)" : "";
         print(
-          `::error title=${escapeProperty(result.name)}::${escapeData(`${result.name} failed: ${result.detail}`)}`,
+          `::${level} title=${escapeProperty(result.name)}::${escapeData(`${result.name} failed${suffix}: ${result.detail}`)}`,
         );
       }
     },
@@ -501,13 +563,23 @@ const main = async () => {
     resultsPath,
     JSON.stringify(
       Object.fromEntries(
-        results.flatMap(({ id, outcome }) =>
-          id === undefined ? [] : [[id, { outcome, conclusion: outcome }]],
+        results.flatMap(({ id, outcome, continuedOnError }) =>
+          id === undefined
+            ? []
+            : [
+                [
+                  id,
+                  {
+                    outcome,
+                    conclusion: continuedOnError ? "success" : outcome,
+                  },
+                ],
+              ],
         ),
       ),
     ),
   );
-  const failed = results.filter(({ outcome }) => outcome === "failure");
+  const failed = blockingFailures(results);
   if (failed.length > 0) {
     print(
       `${failed.length} check(s) failed: ${failed.map(({ name }) => name).join("; ")}`,

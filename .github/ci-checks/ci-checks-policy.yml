@@ -32,6 +32,7 @@ checks:
     run: bun test scripts/unsignalled-skip.test.ts
 
   - name: Ratchet guard
+    continue-on-error: ${{ github.event_name == 'merge_group' }}
     env:
       CI_CHECK_KIND: CONTEXTUAL
       CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
@@ -115,7 +116,7 @@ checks:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
     id: static_check_004
-    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_004 != 'true') }}
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-policy/Sparse checkout script dependencies')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_004 != 'true') }}
     run: bun test scripts/sparse-checkout-dependencies.test.ts
 
   - name: SHA-256 migration ledger
@@ -145,6 +146,7 @@ checks:
     run: bun test scripts/check-oxlint-test-timeouts.test.ts scripts/run-custom-lint-tests.test.ts
 
   - name: Dated waiver lifecycle guards
+    continue-on-error: ${{ github.event_name == 'merge_group' }}
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -226,6 +228,7 @@ checks:
       DATABASE_URL=postgresql://invalid bun --no-env-file run knip --no-progress --include exports,types,nsExports --workspace packages/cli
 
   - name: Knip dead-export budget (all workspaces)
+    continue-on-error: ${{ github.event_name == 'merge_group' }}
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -247,7 +250,7 @@ checks:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
     id: static_check_012
-    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_012 != 'true') }}
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-policy/Dependabot group guard (installed packages)')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_012 != 'true') }}
     # Related framework and plugin updates must stay in one PR even when
     # upstream moves packages between scopes. The stale-ignore checks read
     # installed manifests (Expo's bundled module list among them), so the

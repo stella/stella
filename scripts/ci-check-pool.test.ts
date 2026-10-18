@@ -7,6 +7,8 @@ import path from "node:path";
 import { assertProperty } from "@stll/property-testing";
 
 import {
+  blockingFailures,
+  continueOnErrorHolds,
   planChecks,
   poolContext,
   processLauncher,
@@ -40,6 +42,7 @@ const check = (name: string, extra: Partial<PoolCheck> = {}): PoolCheck => ({
   run: "true",
   env: {},
   timeoutMinutes: undefined,
+  continueOnError: undefined,
   step: { name },
   ...extra,
 });
@@ -79,7 +82,6 @@ test("the registry rejects fields the pool cannot honour", () => {
     "    uses: actions/checkout@v4\n",
     "    background: true\n",
     "    shell: sh\n",
-    "    continue-on-error: true\n",
     "    timeout-minutes: 0\n",
   ]) {
     expect(() => parseCheckPool(entry(field))).toThrow(
@@ -89,6 +91,16 @@ test("the registry rejects fields the pool cannot honour", () => {
   expect(() =>
     parseCheckPool(`${entry("")}  - name: A\n    if: x\n    run: y\n`),
   ).toThrow("unique");
+  expect(() => parseCheckPool(entry("    continue-on-error: 1\n"))).toThrow(
+    "invalid continue-on-error",
+  );
+  // Guards read the entry as a step, so they see its continue-on-error too.
+  const queueOnly = `\${{ github.event_name == 'merge_group' }}`;
+  const lenient = entry(`    continue-on-error: ${queueOnly}\n`);
+  expect(parseCheckPool(lenient)[0]).toMatchObject({
+    continueOnError: queueOnly,
+    step: { "continue-on-error": queueOnly },
+  });
 });
 
 const context = (event: string, rootChecks: string, steps = {}) =>
@@ -205,7 +217,12 @@ test("the pool bounds concurrency, reports in order and reports every failure", 
         const planned: PlannedCheck[] = entries.map((entry, index) => {
           const pooled = check(`check ${index}`);
           if (entry.status === "selected") {
-            return { check: pooled, status: "selected", env: {} };
+            return {
+              check: pooled,
+              status: "selected",
+              env: {},
+              continueOnError: false,
+            };
           }
           return entry.status === "skipped"
             ? { check: pooled, status: "skipped" }
@@ -291,6 +308,7 @@ test("the summary table keeps one row per check whatever a failure says", () => 
       name: "A | B",
       id: undefined,
       outcome: "failure",
+      continuedOnError: false,
       detail: "exit code 1\nsee a|b \\ c",
       seconds: 1.25,
       maxRssBytes: 2 * 1_048_576,
@@ -299,6 +317,7 @@ test("the summary table keeps one row per check whatever a failure says", () => 
       name: "C",
       id: undefined,
       outcome: "skipped",
+      continuedOnError: false,
       detail: "condition false",
       seconds: 0,
       maxRssBytes: undefined,
@@ -309,4 +328,80 @@ test("the summary table keeps one row per check whatever a failure says", () => 
     String.raw`| A \| B | failure: exit code 1 see a\|b \\ c | 1.3 | 2 |`,
   );
   expect(table[3]).toBe("| C | skipped |  |  |");
+});
+
+test("continue-on-error lets a failed check pass the pool only when it holds", async () => {
+  const queue = context("merge_group", "");
+  const pr = context("pull_request", "");
+  const lenient = EXPRESSION("github.event_name == 'merge_group'");
+  const run = async (declared: PoolCheck["continueOnError"], at = queue) =>
+    runChecks({
+      planned: planChecks([check("fails", { continueOnError: declared })], at),
+      concurrency: 1,
+      report: () => undefined,
+      launch: async (): Promise<Launched> => ({
+        exitCode: 1,
+        timedOut: false,
+        maxRssBytes: undefined,
+      }),
+    });
+  const continued = await run(lenient);
+  expect(continued[0]).toMatchObject({
+    outcome: "failure",
+    continuedOnError: true,
+  });
+  expect(blockingFailures(continued)).toEqual([]);
+  expect(blockingFailures(await run(true))).toEqual([]);
+  // False, absent, or an expression that does not hold: the failure blocks.
+  for (const results of [
+    await run(lenient, pr),
+    await run(false),
+    await run(undefined),
+  ]) {
+    expect(results[0]?.continuedOnError).toBe(false);
+    expect(blockingFailures(results)).toHaveLength(1);
+  }
+});
+
+test("an undecidable continue-on-error fails closed", async () => {
+  const queue = context("merge_group", "");
+  // `failure()` is a status function the pool cannot decide.
+  const unknown = EXPRESSION("failure()");
+  expect(continueOnErrorHolds(unknown, queue)).toBe(false);
+  expect(continueOnErrorHolds(EXPRESSION("("), queue)).toBe(false);
+  const results = await runChecks({
+    planned: planChecks([check("fails", { continueOnError: unknown })], queue),
+    concurrency: 1,
+    report: () => undefined,
+    launch: async (): Promise<Launched> => ({
+      exitCode: 1,
+      timedOut: false,
+      maxRssBytes: undefined,
+    }),
+  });
+  expect(blockingFailures(results)).toHaveLength(1);
+});
+
+test("every real pooled continue-on-error is decidable in both events", () => {
+  for (const job of CHECK_POOL_JOBS) {
+    for (const pooled of readCheckPool(job)) {
+      if (typeof pooled.continueOnError !== "string") {
+        continue;
+      }
+      expect(
+        continueOnErrorHolds(
+          pooled.continueOnError,
+          context("merge_group", ""),
+        ),
+        pooled.name,
+      ).toBe(true);
+      expect(
+        continueOnErrorHolds(
+          pooled.continueOnError,
+          context("pull_request", ""),
+        ),
+        pooled.name,
+      ).toBe(false);
+    }
+  }
 });
