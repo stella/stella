@@ -50,12 +50,23 @@ describe(RULE, () => {
     ).toEqual([4]);
   });
 
-  test("rejects URL traversal out of a temporary directory inside the checkout", async () => {
+  // URL resolution can leave a directory in ways a path cannot (a base
+  // without a trailing slash, encoded dots), so a URL against a temporary
+  // directory inside the checkout is judged by where it was created.
+  test("rejects URLs resolved against a temporary directory inside the checkout", async () => {
     expect(
       await lint(
-        `import { mkdtempSync, writeFileSync } from "node:fs";\nimport path from "node:path";\nimport { pathToFileURL } from "node:url";\nconst scratch = mkdtempSync(path.join(import.meta.dir, "scratch-"));\nwriteFileSync(new URL("../baseline.json", pathToFileURL(scratch + "/")), "changed");\nwriteFileSync(new URL("../baseline.json", \`file://\${scratch}/\`), "changed");\nwriteFileSync(new URL("fixture.json", pathToFileURL(scratch + "/")), "changed");`,
+        `import { mkdtempSync, writeFileSync } from "node:fs";\nimport path from "node:path";\nimport { pathToFileURL } from "node:url";\nconst scratch = mkdtempSync(path.join(import.meta.dir, "scratch-"));\nwriteFileSync(new URL("../baseline.json", pathToFileURL(scratch + "/")), "changed");\nwriteFileSync(new URL("../baseline.json", \`file://\${scratch}/\`), "changed");\nwriteFileSync(new URL("baseline.json", pathToFileURL(scratch)), "changed");\nwriteFileSync(new URL("%2e%2e/baseline.json", pathToFileURL(scratch + "/")), "changed");\nwriteFileSync(new URL("fixture.json", pathToFileURL(scratch + "/")), "changed");`,
       ),
-    ).toEqual([5, 6]);
+    ).toEqual([5, 6, 7, 8, 9]);
+  });
+
+  test("allows URLs resolved against a system temporary directory", async () => {
+    expect(
+      await lint(
+        `import { mkdtempSync, writeFileSync } from "node:fs";\nimport { tmpdir } from "node:os";\nimport path from "node:path";\nimport { pathToFileURL } from "node:url";\nconst scratch = mkdtempSync(path.join(tmpdir(), "rule-"));\nwriteFileSync(new URL("fixture.json", pathToFileURL(scratch + "/")), "changed");`,
+      ),
+    ).toEqual([]);
   });
 
   // path.resolve discards every segment before an absolute one.

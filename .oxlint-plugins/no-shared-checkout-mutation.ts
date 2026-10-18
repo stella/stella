@@ -335,17 +335,13 @@ const createPathResolver = (context: ScopeContext) => {
       if (!isIdentifierReference(node.callee) || node.callee.name !== "URL") {
         return false;
       }
-      // new URL(relative, base): the base keeps a temporary directory's
-      // exemption only when the relative part cannot climb out of it.
+      // new URL(relative, base): URL resolution (a base without a trailing
+      // slash, encoded dots) can leave a temporary directory, so a base is
+      // always judged by where it was created.
       const [relative, base] = node.arguments;
       return (
         isCheckoutPath(relative, new Set(seen), exempt) ||
-        (base !== undefined &&
-          isCheckoutPath(
-            base,
-            new Set(seen),
-            exempt && staysInside([relative]),
-          ))
+        isCheckoutPath(base, new Set(seen), false)
       );
     }
     if (isAstNode(node) && node.type === "MemberExpression") {
