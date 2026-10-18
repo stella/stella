@@ -177,6 +177,9 @@ export const AnnotationToolbar = ({
   // the space below the trigger cannot fit the menu.
   const [copyOpensUp, setCopyOpensUp] = useState(false);
   const { copied, confirm: confirmCopied } = useCopiedFeedback();
+  // Counts selection changes, so a clipboard write that settles after the
+  // reader moved on to other words never confirms a copy of those words.
+  const selectionGenerationRef = useRef(0);
   // A new highlight is private; sharing is a deliberate second step on the mark.
   const visibility: AnnotationVisibility = "private";
 
@@ -393,7 +396,10 @@ export const AnnotationToolbar = ({
       selectionPointer = { x: event.clientX, y: event.clientY };
       readSelection(selectionPointer);
     };
-    const onSelectionChange = () => readSelection(selectionPointer);
+    const onSelectionChange = () => {
+      selectionGenerationRef.current += 1;
+      readSelection(selectionPointer);
+    };
     const onCopy = () => {
       const selection = ownerDoc.getSelection();
       if (
@@ -702,6 +708,7 @@ export const AnnotationToolbar = ({
         <div className="relative">
           <Button
             aria-label={copied ? t("common.copied") : t("common.copy")}
+            data-copy-trigger=""
             onClick={(event) => {
               const MENU_ESTIMATED_HEIGHT_PX = 200;
               const triggerRect = event.currentTarget.getBoundingClientRect();
@@ -764,6 +771,7 @@ export const AnnotationToolbar = ({
                         selected,
                         target,
                       });
+                      const generation = selectionGenerationRef.current;
                       detached(
                         (async () => {
                           const copyResult = await copyToClipboard(text);
@@ -774,11 +782,18 @@ export const AnnotationToolbar = ({
                             );
                             return;
                           }
-                          confirmCopied();
+                          if (generation === selectionGenerationRef.current) {
+                            confirmCopied();
+                          }
                         })(),
                         "legal-reader.selection-copy",
                       );
                       setCopyOpen(false);
+                      // The option unmounts with the menu; keep keyboard
+                      // focus on the trigger that now shows the confirmation.
+                      barRef.current
+                        ?.querySelector<HTMLElement>("[data-copy-trigger]")
+                        ?.focus();
                     }}
                     onFocus={() => setCopyPreviewMode(copyMode)}
                     onMouseDown={(event) => event.preventDefault()}

@@ -174,3 +174,39 @@ test("a failed copy reports the error without confirming", async () => {
   expect(view.queryByRole("button", { name: "Copied" })).toBeNull();
   toast.mockRestore();
 });
+
+test("picking a copy format returns focus to the copy trigger", async () => {
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: { writeText: async () => undefined },
+  });
+  const view = await mountToolbar();
+
+  fireEvent.click(view.getByRole("button", { name: "Copy" }));
+  const option = view.getByRole("button", { name: "Text only" });
+  option.focus();
+  fireEvent.click(option);
+
+  const trigger = await view.findByRole("button", { name: "Copied" });
+  expect(document.activeElement).toBe(trigger);
+});
+
+test("a copy that settles after the selection changed does not confirm", async () => {
+  const pending = Promise.withResolvers<undefined>();
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: { writeText: async () => await pending.promise },
+  });
+  const view = await mountToolbar();
+
+  fireEvent.click(view.getByRole("button", { name: "Copy" }));
+  fireEvent.click(view.getByRole("button", { name: "Text only" }));
+  await act(async () => document.dispatchEvent(new Event("selectionchange")));
+  await act(async () => {
+    pending.resolve(undefined);
+    await pending.promise;
+  });
+
+  expect(view.queryByRole("button", { name: "Copied" })).toBeNull();
+  expect(view.getByRole("button", { name: "Copy" })).toBeTruthy();
+});
