@@ -57,6 +57,14 @@ describe(RULE, () => {
     ).toEqual([4]);
   });
 
+  test("rejects appends, directory removal and truncation of checkout files", async () => {
+    expect(
+      await lint(
+        'import { appendFileSync, rmdirSync, truncateSync } from "node:fs";\nimport path from "node:path";\nappendFileSync(new URL("baseline.json", import.meta.url), "row");\nrmdirSync(path.join(path.dirname(import.meta.filename), "fixtures"));\ntruncateSync(import.meta.path);',
+      ),
+    ).toEqual([3, 4, 5]);
+  });
+
   test("checks the destination of synchronous copies", async () => {
     expect(
       await lint(

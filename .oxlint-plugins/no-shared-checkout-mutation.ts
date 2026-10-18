@@ -26,6 +26,12 @@ const MUTATORS = new Set([
   "writeFileSync",
   "rename",
   "renameSync",
+  "appendFile",
+  "appendFileSync",
+  "rmdir",
+  "rmdirSync",
+  "truncate",
+  "truncateSync",
   "cp",
   "cpSync",
   "copyFile",
@@ -123,7 +129,12 @@ const createPathResolver = (context: ScopeContext) => {
     seen = new Set<Variable>(),
   ): boolean => {
     const node = unwrapExpression(input);
-    if (isImportMetaProperty(node, new Set(["dir", "dirname", "url"]))) {
+    if (
+      isImportMetaProperty(
+        node,
+        new Set(["dir", "dirname", "url", "path", "filename"]),
+      )
+    ) {
       return true;
     }
     if (isIdentifierReference(node)) {
