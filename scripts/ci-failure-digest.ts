@@ -168,6 +168,51 @@ const logLines = (rawLines: readonly string[]): LogLine[] =>
     }));
   });
 
+// The pool's plain record of a failed check (FAILED_CHECK_RECORD in
+// ci-check-pool.ts; a test binds the two). Runner-rendered logs keep it, while
+// they reduce the pool's `::error` annotation to its message. The pool prints
+// each check's own output inside a log group, so only lines outside a group
+// are records.
+export const POOLED_FAILURE_PREFIX = "FAILED check: ";
+const POOLED_FAILURE_SEPARATOR = " -- ";
+
+const pooledFailureRecords = (
+  rawLines: readonly string[],
+): { name: string; cause: string }[] => {
+  const records: { name: string; cause: string }[] = [];
+  let grouped = false;
+  for (const raw of rawLines) {
+    const { text } = logLine(raw);
+    if (text.startsWith("##[group]")) {
+      grouped = true;
+      continue;
+    }
+    if (text.startsWith("##[endgroup]")) {
+      grouped = false;
+      continue;
+    }
+    if (grouped || !text.startsWith(POOLED_FAILURE_PREFIX)) {
+      continue;
+    }
+    const record = text.slice(POOLED_FAILURE_PREFIX.length);
+    const separator = record.indexOf(POOLED_FAILURE_SEPARATOR);
+    if (separator === -1) {
+      continue;
+    }
+    // `%25` decodes last, so an escaped `%` never starts another escape.
+    records.push({
+      name: record
+        .slice(0, separator)
+        .replaceAll("%2D", "-")
+        .replaceAll("%0A", "\n")
+        .replaceAll("%0D", "\r")
+        .replaceAll("%25", "%"),
+      cause: record.slice(separator + POOLED_FAILURE_SEPARATOR.length),
+    });
+  }
+  return records;
+};
+
 // ---------------------------------------------------------------------------
 // Failure extraction
 
@@ -1056,7 +1101,7 @@ export const buildDigest = ({ jobs, logFor }: DigestOptions): FailureRecord[] =>
       failedSteps.length > 0
         ? failedSteps
         : [{ name: "(job)", number: 0, conclusion: "failure" }];
-    return steps.map((step): FailureRecord => {
+    return steps.flatMap((step): FailureRecord[] => {
       const segment =
         step.name === "(job)"
           ? (segments.findLast(({ failed }) => failed) ?? segments.at(-1))
@@ -1065,6 +1110,20 @@ export const buildDigest = ({ jobs, logFor }: DigestOptions): FailureRecord[] =>
       if (position !== -1) {
         unused.splice(position, 1);
       }
+      const pooled =
+        segment === undefined ? [] : pooledFailureRecords(segment.lines);
+      if (pooled.length > 0) {
+        return pooled.map(({ name, cause }) => {
+          const lines = [{ message: cause }];
+          return {
+            job: job.name,
+            step: name,
+            kind: classify(name, lines),
+            url: job.html_url ?? "",
+            lines,
+          };
+        });
+      }
       const found = segment === undefined ? [] : failureLines(segment.lines);
       const link = job.html_url ? ` See ${job.html_url}` : "";
       const missing =
@@ -1072,13 +1131,15 @@ export const buildDigest = ({ jobs, logFor }: DigestOptions): FailureRecord[] =>
           ? `Log of job "${job.name}" was unavailable to the digest.${link}`
           : `No log output found for this step.${link}`;
       const lines = found.length > 0 ? found : [{ message: missing }];
-      return {
-        job: job.name,
-        step: step.name,
-        kind: classify(step.name, lines),
-        url: job.html_url ?? "",
-        lines,
-      };
+      return [
+        {
+          job: job.name,
+          step: step.name,
+          kind: classify(step.name, lines),
+          url: job.html_url ?? "",
+          lines,
+        },
+      ];
     });
   });
 
