@@ -61,6 +61,7 @@ describe("native review suggestion staging", () => {
     });
 
     expect(applyDocumentOperations).toHaveBeenCalledWith({
+      undefinedReferences: "refuse",
       snapshot,
       batch: {
         version: 1,
