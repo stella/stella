@@ -18,11 +18,7 @@ import {
   SANCTIONS_SOURCES,
   screen,
 } from "../src/index";
-import type {
-  ScreeningIndex,
-  ScreeningResult,
-  ScreeningWorkUsage,
-} from "../src/screening";
+import type { ScreeningIndex, ScreeningWorkUsage } from "../src/screening";
 import { compactLists } from "../src/test-fixtures/compact-lists";
 import { processPeakMemoryBytes } from "../src/test-fixtures/process-peak-memory";
 
@@ -236,11 +232,15 @@ const measure = (
   for (let repetition = 0; repetition < REPETITIONS; repetition += 1) {
     for (const query of QUERIES) {
       const start = performance.now();
-      const result: ScreeningResult = screen(index, query, {
+      const screened = screen(index, query, {
         cutoff: DEFAULT_CUTOFF,
         limit: entryCount,
         onWork: observeWork,
-      }).unwrap(`${label}: common-name screening must complete`);
+      });
+      if (screened.isErr()) {
+        panic(`${label}: common-name screening must complete`, screened.error);
+      }
+      const result = screened.value;
       milliseconds.push(performance.now() - start);
       assert.equal(
         result.truncated,
