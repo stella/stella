@@ -601,10 +601,6 @@ describe("public case-law route boundary", () => {
           ],
           [decodeCitationCursor, encodePaginationCursor([id])],
           [
-            decodeDecisionCitationCursor,
-            encodePaginationCursor([id, TEST_CITATION_ID]),
-          ],
-          [
             decodeCitingDecisionsCursor,
             encodePaginationCursor([TEST_CONTEXT, "2026-01-01", id]),
           ],
@@ -638,8 +634,14 @@ describe("public case-law route boundary", () => {
           decodeCitationCursor(encodeCitationCursor(TEST_CITATION_ID)),
           decodeDecisionCitationCursor(
             encodeDecisionCitationCursor({
-              from: { after: TEST_CITATION_ID, status: "continue" },
-              to: { after: TEST_CITATION_ID, status: "continue" },
+              from: {
+                after: encodeCitationCursor(TEST_CITATION_ID),
+                status: "continue",
+              },
+              to: {
+                after: encodeCitationCursor(TEST_CITATION_ID),
+                status: "continue",
+              },
             }),
           ),
           decodeProvisionCursor(
