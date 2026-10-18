@@ -11,7 +11,7 @@ import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
-import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
+import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
 
 /**
  * Bump when the recap prompt or output shape changes so cached
@@ -113,7 +113,7 @@ export const generateThreadRecapText = async ({
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     dataClass: "customer",
     feature: "chat.thread_recap",
-    modelRole: "fast",
+    modelTask: "short-text",
     orgAIConfig,
     modelTier: admission.modelTier,
     properties: workspaceId ? { workspace_id: workspaceId } : {},
@@ -121,12 +121,12 @@ export const generateThreadRecapText = async ({
   });
 
   try {
-    const text = await generateTanStackTextForRole({
+    const text = await generateTanStackTextForTask({
       dataClass: "customer",
       abortSignal: AbortSignal.timeout(RECAP_GENERATION_TIMEOUT_MS),
       finishPolicy: "allow-incomplete",
       maxOutputTokens: RECAP_MAX_OUTPUT_TOKENS,
-      role: "fast",
+      task: "short-text",
       serviceTier: "standard",
       orgAIConfig,
       managedAIResidency,
@@ -135,7 +135,7 @@ export const generateThreadRecapText = async ({
       analytics: aiAnalytics,
       caching: resolveCaching({
         promptCachingEnabled,
-        role: "fast",
+        task: "short-text",
         scopeKey: threadId,
       }),
       tenantWorkspaceIds: workspaceId ? [workspaceId] : [],

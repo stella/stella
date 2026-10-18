@@ -61,7 +61,7 @@ const config = {
     consumesServices: true,
   },
   body: suggestPromptBodySchema,
-  requiresUsage: { actionType: "chat", modelRole: "fast" },
+  requiresUsage: { actionType: "chat", modelTask: "short-text" },
 } satisfies WorkspaceHandlerConfig;
 
 const suggestPrompt = createSafeHandler(

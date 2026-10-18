@@ -52,7 +52,9 @@ import { serviceSuiteCliOutput } from "./detect-service-suite-changes";
 import { GENERATORS } from "./generated-files";
 import {
   type Context,
+  contextWithPlanOutputs,
   evaluate as evaluateExpression,
+  UNKNOWN,
 } from "./github-expression";
 import {
   mainHeavyJobs,
@@ -68,6 +70,7 @@ import { flattenWorkflowSteps } from "./workflow-steps";
 // Ordinary events never run the main PR-depth caller and reuse nothing unless
 // a case says so; cases that exercise either set the value explicitly.
 const ORDINARY_EVENT_VALUES = {
+  "github.event.action": "synchronize",
   "inputs.pr_depth_only": false,
   "needs.ci-plan.outputs.pr_depth_reused": "false",
 };
@@ -622,7 +625,20 @@ test("desktop Windows dry run follows release inputs and skips unrelated changes
   ]) {
     expect(runSelector([file], [output]), file).toEqual(["true"]);
   }
-  expect(runSelector(["docs/guide.md"], [output])).toEqual(["false"]);
+  for (const file of [
+    "docs/guide.md",
+    "scripts/check-marketing-content.ts",
+    "scripts/ci-plan.ts",
+  ]) {
+    expect(runSelector([file], [output]), file).toEqual(["false"]);
+  }
+  for (const file of [
+    "scripts/ci-windows-dry-run-result.ts",
+    "scripts/wasm-toolchain.sh",
+    "scripts/run-oxfmt.ts",
+  ]) {
+    expect(runSelector([file], [output]), file).toEqual(["true"]);
+  }
 });
 
 const MatrixEntry = v.object({ runner: v.string(), platform: v.string() });
@@ -711,6 +727,48 @@ const jobIf = (job: unknown) =>
   v.parse(v.object({ if: v.optional(v.string()) }), job).if ?? "";
 
 const ciJobs = workflowJobs(workflow);
+
+// What the planner's own derivation step publishes as pr_heavy_jobs.
+const derivePrHeavyJobs = () => {
+  const { steps } = v.parse(
+    v.object({
+      steps: v.array(
+        v.looseObject({
+          id: v.optional(v.string()),
+          run: v.optional(v.string()),
+        }),
+      ),
+    }),
+    ciJobs["ci-plan"],
+  );
+  const script = v.parse(
+    v.string(),
+    steps.find(({ id }) => id === "pr-heavy-plan")?.run,
+  );
+  const runnerTemp = mkdtempSync(nodePath.join(tmpdir(), "pr-heavy-plan-"));
+  try {
+    writeFileSync(nodePath.join(runnerTemp, "ci-workflow.yml"), workflow);
+    const output = nodePath.join(runnerTemp, "output");
+    writeFileSync(output, "");
+    const result = Bun.spawnSync(["ruby", "-e", script], {
+      cwd: runnerTemp,
+      env: { ...process.env, GITHUB_OUTPUT: output, RUNNER_TEMP: runnerTemp },
+    });
+    if (result.exitCode !== 0) {
+      panic(`PR heavy-job derivation failed: ${result.stderr.toString()}`);
+    }
+    const published = /^pr_heavy_jobs=(.*)$/u.exec(
+      readFileSync(output, "utf-8").trim(),
+    )?.[1];
+    return v.parse(
+      v.array(v.string()),
+      JSON.parse(published ?? panic("No pr_heavy_jobs output")),
+    );
+  } finally {
+    rmSync(runnerTemp, { recursive: true, force: true });
+  }
+};
+const PR_HEAVY_JOBS = derivePrHeavyJobs();
 const releaseJobs = workflowJobs(
   readFileSync(
     new URL("../.github/workflows/release.yml", import.meta.url),
@@ -747,6 +805,8 @@ const resultJob = v.parse(
 const CANCEL_REUSABLE_JOB = "marketing-screenshots-cancel";
 const MAIN_ONLY_JOBS = new Set(["api-test-durations"]);
 const CANCELLATION_EXCEPTIONS = new Set([
+  // Runs only for pull requests, so it never has a merge group to cancel.
+  "pr-heavy-gate",
   "query-perf",
   "fix-tests-on-base",
   "heavy-web-build",
@@ -943,6 +1003,26 @@ const jobScopes = v.parse(
   JSON.parse(resultStep.env["JOB_SCOPES"] ?? ""),
 );
 
+/**
+ * What a heavy job reads besides its scope once ci-plan succeeded: a pull
+ * request's heavy-suite gate passed, and any other event skipped it.
+ */
+const heavyGateContext = (event: string) => ({
+  values: {
+    "github.event_name": event,
+    "needs.ci-plan.result": "success",
+    "needs.pr-heavy-gate.result":
+      event === EVENT.pullRequest ? "success" : "skipped",
+  },
+  status: { cancelled: false },
+});
+
+// Scopes ci-plan computes in its outputs rather than in the path selector.
+const COMPUTED_SCOPES: ReadonlySet<string> = new Set([
+  "ci_browser_required",
+  "pr_heavy_gate_required",
+]);
+
 const fastJobScopes = v.parse(
   v.record(v.string(), v.string()),
   JSON.parse(resultStep.env["FAST_JOB_SCOPES"] ?? ""),
@@ -1048,6 +1128,14 @@ afterAll(() => {
 
 // The ci-result step as GitHub would run it, with every job succeeding and
 // every scope selected unless the options say otherwise.
+// ci-result's view of the planner's heavy-suite reuse verdict.
+const prHeavyEnv = (plannedOutputs: Record<string, string>) => ({
+  PR_HEAVY_SUITES: plannedOutputs["pr_heavy_suites"] ?? "run",
+  PR_HEAVY_SOURCE_RUN_ID: plannedOutputs["pr_heavy_source_run_id"] ?? "",
+  PR_HEAVY_SOURCE_SHA: plannedOutputs["pr_heavy_source_sha"] ?? "",
+  PR_HEAVY_JOBS: JSON.stringify(PR_HEAVY_JOBS),
+});
+
 const resultGateCase = ({
   event,
   results,
@@ -1207,6 +1295,7 @@ const resultGateCase = ({
       PR_DEPTH_REUSED: plannedOutputs["pr_depth_reused"] ?? "false",
       PR_DEPTH_SOURCE_RUN_ID: plannedOutputs["pr_depth_source_run_id"] ?? "99",
       PR_DEPTH_JOBS: JSON.stringify(prDepthJobs({ jobs: ciJobs })),
+      ...prHeavyEnv(plannedOutputs),
       QUEUE_DEPTH: plannedOutputs["queue_depth"] ?? "full",
       HEAVY_ONLY: String(heavyOnly),
       HEAVY_JOBS: JSON.stringify(mainHeavyJobNames),
@@ -4701,6 +4790,9 @@ test("service-suite scopes run on pull requests only for selected corpus coverag
           () => `'${suiteDepth}'`,
         )
         .replaceAll("needs.ci-plan.outputs.trusted", "'true'")
+        .replaceAll("!cancelled()", "'true' == 'true'")
+        .replaceAll("needs.ci-plan.result", "'success'")
+        .replaceAll("needs.pr-heavy-gate.result", "'success'")
         .replaceAll("github.event_name", "'pull_request'"),
       exitCode: selected && corpusSelected ? 0 : 1,
     })),
@@ -5125,6 +5217,9 @@ test("pull requests and merge groups preserve corpus engine detector scope at ev
       .replaceAll("needs.ci-plan.outputs.suite_depth", () => `'${suiteDepth}'`)
       .replaceAll("needs.ci-plan.outputs.queue_depth", () => `'${queueDepth}'`)
       .replaceAll("vars.CI_POSTGRES_PR_SELECTION", "'off'")
+      .replaceAll("!cancelled()", "'true' == 'true'")
+      .replaceAll("needs.ci-plan.result", "'success'")
+      .replaceAll("needs.pr-heavy-gate.result", "'skipped'")
       .replaceAll("github.event_name", "'merge_group'");
     expect(
       Bun.spawnSync(["bash", "-c", `[[ ${executable} ]]`]).exitCode,
@@ -5294,6 +5389,11 @@ const runsAtDepth = (
         "needs.ci-plan.outputs.heavy_web_build_required": String(
           heavyOnly === true,
         ),
+        "needs.ci-plan.outputs.pr_heavy_gate_required": String(
+          event === EVENT.pullRequest,
+        ),
+        "needs.pr-heavy-gate.result":
+          event === EVENT.pullRequest ? "success" : "skipped",
       },
       status: { always: true, success: true, failure: false, cancelled: false },
       fallback: (path) => {
@@ -5998,7 +6098,7 @@ test("the exact docs-only README change plans only Markdown checks in PRs and me
     ...new Set([
       ...Object.values(jobScopes).filter(
         (scope): scope is string =>
-          scope !== null && scope !== "ci_browser_required",
+          scope !== null && !COMPUTED_SCOPES.has(scope),
       ),
       "desktop_browser_required",
       ...Object.values(fastJobScopes),
@@ -6025,6 +6125,7 @@ test("the exact docs-only README change plans only Markdown checks in PRs and me
       desktopRequired: plan["desktop_browser_required"] ?? "",
       packageChecksRequired: plan["package_checks_required"] ?? "",
     });
+    plan["pr_heavy_gate_required"] = heavyGatePlanOutput({ event, plan });
     expect(plan["package_checks_required"]).toBe("false");
     expect(plan["docs_checks_required"]).toBe("true");
     expect(JSON.parse(plan["docs_changed_files"] ?? "null")).toEqual([
@@ -6119,7 +6220,7 @@ test("mixed documentation and code changes retain the complete code plan", () =>
     ...new Set([
       ...Object.values(jobScopes).filter(
         (scope): scope is string =>
-          scope !== null && scope !== "ci_browser_required",
+          scope !== null && !COMPUTED_SCOPES.has(scope),
       ),
       "desktop_browser_required",
       ...Object.values(fastJobScopes),
@@ -6148,13 +6249,14 @@ test("mixed documentation and code changes retain the complete code plan", () =>
       desktopRequired: plan["desktop_browser_required"] ?? "",
       packageChecksRequired: plan["package_checks_required"] ?? "",
     });
+    plan["pr_heavy_gate_required"] = heavyGatePlanOutput({ event, plan });
     expect(plan["package_checks_required"]).toBe("true");
     expect(plan["docs_checks_required"]).toBe("false");
     if (event !== EVENT.mergeGroup) {
       continue;
     }
     const values = {
-      "github.event_name": event,
+      ...heavyGateContext(event).values,
       "inputs.heavy_only": false,
       "inputs.pr_depth_only": false,
       "needs.ci-plan.outputs.trusted": "true",
@@ -6269,12 +6371,25 @@ test("API test matrix omits unaffected API shards and keeps whole affected merge
     "! timeout --kill-after=10s 120s bun scripts/ci-api-test-plan.ts; then",
   );
   expect(planner?.run).toContain("api_test_shards=3");
+  expect(planner?.env?.["COMPARISON_BASE"]).toBe(
+    `\${{ steps.changed-files.outputs.comparison_base }}`,
+  );
   const runner = jobSteps(ciJobs["ci-tests"]).find(
     (step) => step.name === "Test API or rest",
   );
   expect(runner?.env?.["API_TEST_FILES"]).toBe(
     `\${{ needs.ci-plan.outputs.api_test_files }}`,
   );
+  expect(runner?.env?.["TEST_SCOPE"]).toBe(
+    `\${{ needs.ci-plan.outputs.test_scope }}`,
+  );
+  expect(runner?.run).not.toContain("scripts/test-scope.ts");
+  expect(runner?.run).toContain('read -r -a args <<<"$TEST_SCOPE"');
+  expect(
+    v.parse(v.object({ needs: v.array(v.string()) }), ciJobs["ci-result"])
+      .needs,
+  ).toContain("ci-tests");
+  expect(jobIf(ciJobs["ci-result"])).toBe("always()");
 });
 
 test("a crashed API planner widens the real workflow outputs", () => {
@@ -6604,9 +6719,17 @@ test("Postgres plans are visible on PRs while execution requires explicit opt-in
         expect(evaluate(planner?.if ?? "false", { values })).toBe(
           event === EVENT.mergeGroup || event === EVENT.pullRequest,
         );
-        expect(evaluate(jobCondition, { values: jobValues })).toBe(
-          event !== EVENT.pullRequest || enabled,
-        );
+        expect(
+          evaluate(jobCondition, {
+            values: {
+              ...jobValues,
+              "needs.ci-plan.result": "success",
+              "needs.pr-heavy-gate.result":
+                event === EVENT.pullRequest ? "success" : "skipped",
+            },
+            status: { cancelled: false },
+          }),
+        ).toBe(event !== EVENT.pullRequest || enabled);
         expect(evaluate(runner?.if ?? "false", { values })).toBe(
           event !== EVENT.pullRequest || prSwitch === "on",
         );
@@ -6747,6 +6870,38 @@ type BrowserPlanOptions = {
   packageChecksRequired?: string;
   browserScopeRequired?: string;
 };
+type HeavyGatePlanOptions = {
+  event: Event;
+  /** Selector outputs by name, as the changed-files step publishes them. */
+  plan: Record<string, string>;
+};
+// The gate scope of a code run that found no reusable evidence.
+const heavyGatePlanOutput = ({ event, plan }: HeavyGatePlanOptions) => {
+  const { outputs } = v.parse(
+    v.object({ outputs: v.record(v.string(), v.string()) }),
+    ciJobs["ci-plan"],
+  );
+  // GitHub publishes a boolean output as its string form.
+  return String(
+    v.parse(
+      v.boolean(),
+      evaluate(outputs["pr_heavy_gate_required"] ?? "", {
+        values: {
+          "github.event_name": event,
+          "steps.completed-depth.outputs.run_required": "true",
+          "steps.completed-depth.outputs.pr_heavy_suites": "run",
+          "steps.changed-files.outputs.package_checks_required":
+            plan["package_checks_required"] ?? "",
+          "steps.changed-files.outputs.collab_redis_required":
+            plan["collab_redis_required"] ?? "",
+          "steps.e2e-pr-plan.outputs.selection_required":
+            plan["browser_spec_selection_required"] ?? "",
+        },
+      }),
+    ),
+  );
+};
+
 const browserPlanOutput = ({
   event,
   depth,
@@ -6808,9 +6963,12 @@ test("Playwright image-only changes admit browser suites in merge groups", () =>
         browserScopeRequired ?? panic("Missing browser scope"),
     });
     expect(planned, file).toBe("true");
+    const gate = heavyGateContext(EVENT.mergeGroup);
     expect(
       evaluate(jobIf(ciJobs["ci-browser"]), {
+        ...gate,
         values: {
+          ...gate.values,
           "inputs.pr_depth_only": false,
           "needs.ci-plan.outputs.ci_browser_required": planned,
           "needs.ci-plan.outputs.coverage_profile": "normal-v1",
@@ -7014,9 +7172,12 @@ test("browser planning, scheduling and result gates agree across events and dept
         ? options.desktopRequired === "true"
         : options.depth === SUITE_DEPTH.full);
     expect(planned, JSON.stringify(options)).toBe(expected ? "true" : "false");
+    const gate = heavyGateContext(options.event);
     expect(
       evaluate(jobIf(ciJobs["ci-browser"]), {
+        ...gate,
         values: {
+          ...gate.values,
           "needs.ci-plan.outputs.ci_browser_required": planned,
           "needs.ci-plan.outputs.coverage_profile": "normal-v1",
         },
@@ -7126,9 +7287,12 @@ test("a planted desktop path plans the PR desktop browser leg while unrelated pa
         expect(planned).toBe(
           expected === "true" && runRequired === "true" ? "true" : "false",
         );
+        const gate = heavyGateContext(EVENT.pullRequest);
         expect(
           evaluate(jobIf(ciJobs["ci-browser"]), {
+            ...gate,
             values: {
+              ...gate.values,
               "needs.ci-plan.outputs.ci_browser_required": planned,
               "needs.ci-plan.outputs.coverage_profile": "normal-v1",
             },
@@ -7215,4 +7379,319 @@ test("Postgres PR required checks follow trust, run eligibility and the general 
       }
     }
   }
+});
+
+// The jobs that wait on pr-heavy-gate directly; the rest wait through them.
+const GATED_HEAVY_ROOTS = [
+  "ci-browser",
+  "ci-tests",
+  "postgres-service-suites",
+  "service-suites",
+  "web-build",
+] as const;
+
+test("the planner derives the PR heavy jobs from everything waiting on the gate", () => {
+  expect(PR_HEAVY_JOBS).toEqual([
+    "api-test-durations",
+    "ci-browser",
+    "ci-tests",
+    "e2e-production-shard",
+    "e2e-report",
+    "marketing-screenshots",
+    "marketing-screenshots-cancel",
+    "postgres-service-suites",
+    "route-smoke",
+    "service-suites",
+    "web-build",
+  ]);
+  for (const job of GATED_HEAVY_ROOTS) {
+    expect(
+      v.parse(v.object({ needs: v.array(v.string()) }), ciJobs[job]).needs,
+      job,
+    ).toEqual(["ci-plan", "pr-heavy-gate"]);
+  }
+  expect(fastRequired.filter((job) => PR_HEAVY_JOBS.includes(job))).toEqual(
+    expect.arrayContaining(["ci-tests", "ci-browser", "web-build"]),
+  );
+});
+
+type HeavyRunOptions = { event: Event; gate: string };
+// Resolve the heavy jobs in dependency order, each job seeing the results of
+// the heavy jobs it needs, with every plan scope planned.
+const heavyJobsThatRun = ({ event, gate }: HeavyRunOptions) => {
+  const results = new Map<string, string>([["pr-heavy-gate", gate]]);
+  const pending = [...PR_HEAVY_JOBS];
+  while (pending.length > 0) {
+    const index = pending.findIndex((job) =>
+      v
+        .parse(
+          v.object({ needs: v.union([v.string(), v.array(v.string())]) }),
+          ciJobs[job],
+        )
+        .needs.toString()
+        .split(",")
+        .every((need) => !PR_HEAVY_JOBS.includes(need) || results.has(need)),
+    );
+    const [job] = pending.splice(index, 1);
+    if (index === -1 || job === undefined) {
+      panic("PR heavy jobs form a dependency cycle");
+    }
+    const runs = evaluate(jobIf(ciJobs[job]), {
+      values: {
+        "github.event_name": event,
+        "inputs.heavy_only": false,
+        "inputs.pr_depth_only": false,
+        "needs.ci-plan.result": "success",
+        "needs.ci-plan.outputs.coverage_profile": "normal-v1",
+        "needs.ci-plan.outputs.pilot_fast_jobs": "[]",
+        "needs.ci-plan.outputs.suite_depth":
+          event === EVENT.pullRequest ? SUITE_DEPTH.fast : SUITE_DEPTH.full,
+        "needs.ci-plan.outputs.queue_depth": "full",
+        "needs.ci-plan.outputs.heavy_web_build_required": "false",
+        "vars.CI_POSTGRES_PR_SELECTION": "on",
+        "vars.QUEUE_BROWSER_SUITES": "",
+        "github.ref": "refs/heads/main",
+        // Only a heavy-only dispatch builds through heavy-web-build.
+        "needs.heavy-web-build.result": "skipped",
+        ...Object.fromEntries(
+          [...results].map(([need, result]) => [
+            `needs.${need}.result`,
+            result,
+          ]),
+        ),
+      },
+      status: { always: true, success: true, failure: false, cancelled: false },
+      fallback: (path) => {
+        if (path.startsWith("needs.ci-plan.outputs.")) {
+          return "true";
+        }
+        return /^needs\.[\w-]+\.result$/u.test(path) ? "success" : undefined;
+      },
+    });
+    if (typeof runs !== "boolean") {
+      panic(`Unresolved heavy job predicate: ${job}`);
+    }
+    results.set(job, runs ? "success" : "skipped");
+  }
+  return PR_HEAVY_JOBS.filter((job) => results.get(job) === "success");
+};
+
+test("a pull request starts no heavy suite unless its gate passed; a merge group never waits on it", () => {
+  expect(
+    heavyJobsThatRun({ event: EVENT.pullRequest, gate: "success" }),
+  ).toEqual(
+    expect.arrayContaining([...GATED_HEAVY_ROOTS, "e2e-production-shard"]),
+  );
+  for (const gate of ["skipped", "failure", "cancelled"]) {
+    expect(heavyJobsThatRun({ event: EVENT.pullRequest, gate }), gate).toEqual(
+      [],
+    );
+  }
+  for (const event of [EVENT.mergeGroup, EVENT.workflowDispatch]) {
+    expect(heavyJobsThatRun({ event, gate: "skipped" }), event).toEqual(
+      expect.arrayContaining([...GATED_HEAVY_ROOTS]),
+    );
+  }
+  expect(jobIf(ciJobs["pr-heavy-gate"])).toContain(
+    "needs.ci-plan.outputs.pr_heavy_gate_required == 'true'",
+  );
+  expect(
+    v.parse(v.object({ needs: v.string() }), ciJobs["pr-heavy-gate"]).needs,
+  ).toBe("ci-plan");
+});
+
+// The changed-file and planner verdicts the PR heavy jobs are selected by.
+const HEAVY_SCOPE_AXES = [
+  "steps.changed-files.outputs.package_checks_required",
+  "steps.changed-files.outputs.collab_redis_required",
+  "steps.changed-files.outputs.ci_browser_scope_required",
+  "steps.changed-files.outputs.desktop_browser_required",
+  "steps.changed-files.outputs.postgres_suites_required",
+  "steps.changed-files.outputs.service_suites_pr_required",
+  "steps.changed-files.outputs.corpus_suites_required",
+  "steps.e2e-pr-plan.outputs.selection_required",
+  "steps.e2e-pr-plan.outputs.required",
+] as const;
+
+test("every scope that plans a pull request heavy suite also plans its gate", () => {
+  const { outputs } = v.parse(
+    v.object({ outputs: v.record(v.string(), v.string()) }),
+    ciJobs["ci-plan"],
+  );
+  let combinations: Record<string, string>[] = [{}];
+  for (const axis of HEAVY_SCOPE_AXES) {
+    combinations = combinations.flatMap((scopes) =>
+      ["true", "false"].map((value) => ({ ...scopes, [axis]: value })),
+    );
+  }
+  let planned = 0;
+  for (const scopes of combinations) {
+    const context = contextWithPlanOutputs({
+      outputs,
+      context: {
+        values: {
+          ...scopes,
+          "github.event_name": EVENT.pullRequest,
+          "inputs.heavy_only": false,
+          "inputs.pr_depth_only": false,
+          "vars.CI_POSTGRES_PR_SELECTION": "on",
+          "steps.check.outputs.trusted": "true",
+          "steps.completed-depth.outputs.run_required": "true",
+          "steps.completed-depth.outputs.pr_heavy_suites": "run",
+          "steps.depth.outputs.suite_depth": SUITE_DEPTH.fast,
+          "steps.pilot.outputs.coverage_profile": "normal-v1",
+          "needs.ci-plan.result": "success",
+          "needs.pr-heavy-gate.result": "success",
+        },
+        status: { cancelled: false },
+        // GitHub reads an output its producing step never set as empty.
+        fallback: (path) => (path.startsWith("steps.") ? "" : undefined),
+      },
+    });
+    const gate = context.fallback?.(
+      "needs.ci-plan.outputs.pr_heavy_gate_required",
+    );
+    for (const job of GATED_HEAVY_ROOTS) {
+      const runs = evaluateExpression(jobIf(ciJobs[job]), context);
+      expect(runs === UNKNOWN, `${job} ${JSON.stringify(scopes)}`).toBe(false);
+      if (runs === true) {
+        planned++;
+        expect(gate, `${job} ${JSON.stringify(scopes)}`).toBe("true");
+      }
+    }
+  }
+  expect(planned).toBeGreaterThan(0);
+});
+
+type GateRunOptions = {
+  polls: readonly { status: string; conclusion?: string }[];
+};
+const runGate = async ({ polls }: GateRunOptions) => {
+  const step = v.parse(
+    v.object({
+      steps: v.tuple([
+        v.looseObject({ with: v.object({ script: v.string() }) }),
+      ]),
+    }),
+    ciJobs["pr-heavy-gate"],
+  ).steps[0];
+  const requests: unknown[] = [];
+  const failures: string[] = [];
+  const listJobsForWorkflowRun = Symbol("listJobsForWorkflowRun");
+  await new Script(`(async () => {${step.with.script}\n})()`).runInNewContext({
+    context: { repo: { owner: "stella", repo: "stella" }, runId: 123 },
+    core: { setFailed: (message: string) => failures.push(message) },
+    github: {
+      rest: { actions: { listJobsForWorkflowRun } },
+      paginate: async (method: symbol, request: unknown) => {
+        expect(method).toBe(listJobsForWorkflowRun);
+        const poll =
+          polls.at(requests.length) ?? panic("Gate polled past its fixture");
+        requests.push(request);
+        return [
+          { name: "ci-tests (api-1)", status: "queued" },
+          { name: "ci-quick-checks", ...poll },
+        ];
+      },
+    },
+    setTimeout: (resolve: () => void) => resolve(),
+  });
+  return { requests, failures };
+};
+
+test("the gate waits for the quick checks and passes only on their success", async () => {
+  // The gate finds the quick checks by job name, which is their id.
+  expect(
+    v.parse(
+      v.object({ name: v.optional(v.string()) }),
+      ciJobs["ci-quick-checks"],
+    ).name,
+  ).toBeUndefined();
+  const passed = await runGate({
+    polls: [
+      { status: "queued" },
+      { status: "in_progress" },
+      { status: "completed", conclusion: "success" },
+    ],
+  });
+  expect(passed.failures).toEqual([]);
+  expect(passed.requests).toHaveLength(3);
+  expect(passed.requests.at(0)).toEqual({
+    owner: "stella",
+    repo: "stella",
+    run_id: 123,
+    filter: "latest",
+    per_page: 100,
+  });
+  for (const conclusion of ["failure", "cancelled", "skipped", "timed_out"]) {
+    const failed = await runGate({
+      polls: [{ status: "completed", conclusion }],
+    });
+    expect(failed.failures, conclusion).toEqual([
+      `ci-quick-checks concluded ${conclusion}; the heavy suites do not start.`,
+    ]);
+  }
+});
+
+test("a merge-from-base head skips its heavy suites only on verified reuse, and says why", () => {
+  const skipped: Record<string, string> = Object.fromEntries(
+    ["pr-heavy-gate", ...PR_HEAVY_JOBS]
+      .filter((job) => resultJob.needs.includes(job))
+      .map((job) => [job, "skipped"]),
+  );
+  const parent = "a".repeat(40);
+  const reused = {
+    pr_heavy_suites: "reused",
+    pr_heavy_source_run_id: "99",
+    pr_heavy_source_sha: parent,
+  };
+  // On reuse ci-plan leaves the gate unplanned along with the heavy suites.
+  const pullRequest = {
+    event: EVENT.pullRequest,
+    unplannedScopes: ["pr_heavy_gate_required"],
+  } as const;
+  const outcome = onlyOutcome(
+    evaluateResults(
+      [{ ...pullRequest, results: skipped, plannedOutputs: reused }],
+      (item) => item,
+    ),
+  );
+  expect(outcome.exitCode, outcome.stderr).toBe(0);
+  expect(outcome.stdout).toContain(
+    `Heavy suites skipped: this head only merges the base into ${parent}, whose run 99 passed with the same patch id`,
+  );
+  expectResultGates([
+    {
+      label: "heavy skips without the planner's reuse verdict",
+      options: { ...pullRequest, results: skipped },
+      exitCode: 1,
+    },
+    ...[
+      { ...reused, pr_heavy_source_run_id: "" },
+      { ...reused, pr_heavy_source_run_id: "0" },
+      { ...reused, pr_heavy_source_sha: "main" },
+    ].map((plannedOutputs) => ({
+      label: `malformed reuse ${JSON.stringify(plannedOutputs)}`,
+      options: { ...pullRequest, results: skipped, plannedOutputs },
+      exitCode: 1,
+    })),
+    ...["ci-quick-checks", "ci-checks-rest", "code-quality-api"].map((job) => ({
+      label: `reuse keeps ${job} required`,
+      options: {
+        ...pullRequest,
+        results: { ...skipped, [job]: "skipped" },
+        plannedOutputs: reused,
+      },
+      exitCode: 1,
+    })),
+    {
+      label: "reuse keeps failures red",
+      options: {
+        ...pullRequest,
+        results: { ...skipped, "ci-quick-checks": "failure" },
+        plannedOutputs: reused,
+      },
+      exitCode: 1,
+    },
+  ]);
 });
