@@ -61,6 +61,14 @@ describe(RULE, () => {
     ).toEqual([5, 6, 7, 8, 9]);
   });
 
+  test("rejects writes and removals derived from CommonJS module locations", async () => {
+    expect(
+      await lint(
+        'const { unlinkSync, writeFileSync } = require("node:fs");\nconst path = require("node:path");\nwriteFileSync(path.join(__dirname, "baseline.json"), "changed");\nunlinkSync(__filename);\nconst shadowed = (__dirname) => writeFileSync(path.join(__dirname, "out.json"), "changed");',
+      ),
+    ).toEqual([3, 4]);
+  });
+
   test("allows URLs resolved against a system temporary directory", async () => {
     expect(
       await lint(

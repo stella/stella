@@ -38,6 +38,9 @@ const MUTATORS = new Set([
   "copyFile",
   "copyFileSync",
 ]);
+// CommonJS module locations, available as globals.
+const CHECKOUT_GLOBALS = new Set(["__dirname", "__filename"]);
+
 // Calls whose result names the same location as their first argument.
 const LOCATION_PRESERVING = new Set([
   "pathToFileURL",
@@ -312,7 +315,11 @@ const createPathResolver = (context: ScopeContext) => {
     }
     if (isIdentifierReference(node)) {
       const variable = variableOf(node);
-      if (variable === null || seen.has(variable)) {
+      // An undeclared __dirname or __filename is CommonJS's module location.
+      if (variable === null || variable.defs.length === 0) {
+        return CHECKOUT_GLOBALS.has(node.name);
+      }
+      if (seen.has(variable)) {
         return false;
       }
       seen.add(variable);
