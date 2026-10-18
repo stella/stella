@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, spyOn, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 
 import {
   EVENT_LOOP_STALL_THRESHOLD_MS,
@@ -28,9 +28,12 @@ const startRecording = (options: {
 }) => {
   const reports: EventLoopDelayReport[] = [];
   const stalls: number[] = [];
+  let reportIntervals = 0;
   const monitor = startEventLoopDelayMonitor({
     ...options,
-    onReportInterval: () => {},
+    onReportInterval: () => {
+      reportIntervals += 1;
+    },
     onReport: (report) => {
       reports.push(report);
     },
@@ -38,7 +41,12 @@ const startRecording = (options: {
       stalls.push(stallMs);
     },
   });
-  return { monitor, reports, stalls };
+  return {
+    monitor,
+    reports,
+    stalls,
+    getReportIntervals: () => reportIntervals,
+  };
 };
 
 afterEach(() => {
@@ -77,7 +85,7 @@ describe("event-loop delay monitoring", () => {
   });
 
   test("a loop that is never held reports its delay and no stall", async () => {
-    const { monitor, reports, stalls } = startRecording({
+    const { monitor, reports, stalls, getReportIntervals } = startRecording({
       probeIntervalMs: 20,
       reportIntervalMs: 100,
     });
@@ -88,6 +96,7 @@ describe("event-loop delay monitoring", () => {
     }
 
     expect(stalls).toEqual([]);
+    expect(getReportIntervals()).toBeLessThanOrEqual(4);
     expect(reports.length).toBeGreaterThan(0);
     for (const report of reports) {
       expect(report.maxMs).toBeLessThan(EVENT_LOOP_STALL_THRESHOLD_MS);
@@ -115,27 +124,14 @@ describe("event-loop delay monitoring", () => {
     setMetricLineSinkForTesting((line) => {
       lines.push(line);
     });
-    const inertTimer = {
-      ref: () => inertTimer,
-      unref: () => inertTimer,
-      hasRef: () => false,
-      refresh: () => inertTimer,
-      [Symbol.toPrimitive]: () => 0,
-    };
     let reportTick: (() => void) | undefined;
-    const interval = spyOn(globalThis, "setInterval").mockImplementation(
-      (
-        ...[handler, delay, ...args]: Parameters<typeof globalThis.setInterval>
-      ) => {
-        if (delay === 200 && typeof handler === "function") {
-          reportTick = () => handler(...args);
-        }
-        return inertTimer;
-      },
-    );
     const reports: EventLoopDelayReport[] = [];
     const monitor = startEventLoopDelayMonitor({
       reportIntervalMs: 200,
+      scheduleInterval: (tick) => {
+        reportTick = tick;
+        return { stop: () => {} };
+      },
       onReportInterval: () =>
         emitProcessMemoryLog({
           rssBytes: 10,
@@ -164,7 +160,6 @@ describe("event-loop delay monitoring", () => {
       ]);
     } finally {
       monitor.stop();
-      interval.mockRestore();
     }
   });
 

@@ -49,6 +49,16 @@ type StartEventLoopDelayMonitorOptions = {
   reportIntervalMs?: number;
   probeIntervalMs?: number;
   stallThresholdMs?: number;
+  scheduleInterval?: (tick: () => void, ms: number) => { stop: () => void };
+};
+
+const scheduleIntervalWithGlobalTimer = (
+  tick: () => void,
+  ms: number,
+): { stop: () => void } => {
+  const timer = globalThis.setInterval(tick, ms);
+  timer.unref();
+  return { stop: () => globalThis.clearInterval(timer) };
 };
 
 const toMilliseconds = (nanoseconds: number): number =>
@@ -60,6 +70,7 @@ export const startEventLoopDelayMonitor = ({
   onStall,
   probeIntervalMs = DEFAULT_PROBE_INTERVAL_MS,
   reportIntervalMs = DEFAULT_REPORT_INTERVAL_MS,
+  scheduleInterval = scheduleIntervalWithGlobalTimer,
   stallThresholdMs = EVENT_LOOP_STALL_THRESHOLD_MS,
 }: StartEventLoopDelayMonitorOptions): { stop: () => void } => {
   const histogram = monitorEventLoopDelay({
@@ -67,7 +78,7 @@ export const startEventLoopDelayMonitor = ({
   });
   histogram.enable();
 
-  const reportTimer = setInterval(() => {
+  const reportTimer = scheduleInterval(() => {
     onReportInterval();
     // A window with no samples has nothing to say; its zeros would read as
     // a perfectly idle loop.
@@ -82,7 +93,6 @@ export const startEventLoopDelayMonitor = ({
     }
     histogram.reset();
   }, reportIntervalMs);
-  reportTimer.unref();
 
   let expectedAt = performance.now() + probeIntervalMs;
   const probeTimer = setInterval(() => {
@@ -97,7 +107,7 @@ export const startEventLoopDelayMonitor = ({
 
   return {
     stop: () => {
-      clearInterval(reportTimer);
+      reportTimer.stop();
       clearInterval(probeTimer);
       histogram.disable();
     },
