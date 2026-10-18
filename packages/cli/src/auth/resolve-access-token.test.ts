@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { chmod, mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -606,32 +606,14 @@ describe("resolveAccessToken", () => {
         buildCredential(provider.serverUrl, { expiresAt: now - 1000 }),
       );
 
-      // Force the persist step specifically — not the read — to fail. The
-      // store write is atomic (temp file + rename, see credential-store.ts),
-      // so a read-only `credentials.json` no longer blocks it: `rename`
-      // replaces the target inode, which only requires the *directory* to be
-      // writable. Drop the directory's write bit instead — that blocks the
-      // temp file from ever being created — while keeping read+execute so
-      // `checkForNewerStoredGeneration`'s re-read still sees the real,
-      // unchanged credential on disk. `resolveAccessToken` has no
-      // `AtomicWriteOps` injection point of its own (that seam is exercised
-      // directly against `writeCredentialFile` in credential-store.test.ts),
-      // so this stays a filesystem-level simulation. Deterministic and
-      // root-safe-enough for this repo's CI runners (non-root); permissions
-      // are restored in `finally` so `afterEach`'s recursive cleanup of
-      // `configDir` can still remove it.
-      await chmod(configDir, 0o500);
-
-      let result: Awaited<ReturnType<typeof resolveAccessToken>>;
-      try {
-        result = await resolveAccessToken({
-          configDir,
-          serverUrl: provider.serverUrl,
-          now,
-        });
-      } finally {
-        await chmod(configDir, 0o700);
-      }
+      const result = await resolveAccessToken({
+        configDir,
+        serverUrl: provider.serverUrl,
+        now,
+        persistCredential: async () => {
+          throw new Error("forced credential write failure");
+        },
+      });
 
       // The refresh itself succeeded — the in-memory token is valid and
       // must not be discarded just because it couldn't be saved.

@@ -110,6 +110,8 @@ const seedPersistedThread = (client: InstanceType<typeof QueryClient>) => {
 // The matter title reads whether numbering is on; this suite fails only the
 // breadcrumb's own read.
 const organizationSettings = {
+  aiInstructions: "",
+  aiInstructionsMaxLength: 3000,
   declaredFeatureIds: [],
   deploymentFeatures: { legalLists: true },
   capabilities: {},
