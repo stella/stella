@@ -152,6 +152,26 @@ const GENERATOR_DECLARATIONS = [
     after: [],
   },
   {
+    id: "account-export-tables",
+    outputKind: "committed",
+    outputs: ["apps/api/src/lib/account-export/user-owned-tables.gen.ts"],
+    inputs: [
+      "apps/api/src/db/schema/**",
+      "apps/api/src/db/auth-schema.ts",
+      "apps/api/src/db/agent-auth-schema.ts",
+      "apps/api/src/lib/account-export/schema-census.ts",
+      "apps/api/scripts/generate-account-export-tables.ts",
+    ],
+    write: [
+      "bun",
+      "apps/api/scripts/generate-account-export-tables.ts",
+      "--write",
+    ],
+    check: ["bun", "apps/api/scripts/generate-account-export-tables.ts"],
+    autofix: true,
+    after: [],
+  },
+  {
     id: "schema-index",
     outputKind: "committed",
     outputs: ["apps/api/src/db/schema-index/*.md"],

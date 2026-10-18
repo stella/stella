@@ -37,9 +37,11 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+import { checkPoolRegistryPath } from "./ci-check-pool-registry";
 import {
   mergeWorkflowParallelProofs,
   synchronizeWorkflowBackgroundSteps,
+  withPooledChecks,
 } from "./workflow-steps";
 
 export type Classification =
@@ -1924,7 +1926,12 @@ export const installFreeInvocations = ({
       initial: [],
       job: id,
       prefix: "",
-      steps: Array.isArray(job["steps"]) ? job["steps"] : [],
+      // Pooled checks run as steps of their job (scripts/workflow-steps.ts).
+      steps: Array.isArray(job["steps"])
+        ? withPooledChecks(job["steps"], (pool) =>
+            readFileSync(path.join(root, checkPoolRegistryPath(pool)), "utf-8"),
+          )
+        : [],
     }).invocations;
   });
 };
