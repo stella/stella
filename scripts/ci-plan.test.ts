@@ -7549,6 +7549,8 @@ test("only the resolver chooses a merge group's comparison base", () => {
   for (const pattern of [
     ".github/workflows/*.yml",
     ".github/actions/*/action.yml",
+    // Pooled checks evaluate their own expressions, so they read the base too.
+    ".github/ci-checks/*.yml",
   ]) {
     for (const file of new Bun.Glob(pattern).scanSync({
       cwd: nodePath.join(import.meta.dir, ".."),
