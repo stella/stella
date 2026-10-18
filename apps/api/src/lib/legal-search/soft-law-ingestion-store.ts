@@ -317,56 +317,6 @@ const persistSoftLawRows = async (
   { items, sourceId, adapter, runId, observedAt }: PersistSoftLawRowsOptions,
 ) => {
   // audit: skip - background ingestion of public documents and locator history
-  // db-await-in-loop-disable: only repaired placeholders merge, rarely and one at a time; each merge's steps must run in order inside this transaction
-  for (const item of items) {
-    switch (item.identityResolution.kind) {
-      case "create":
-      case "attach":
-        break;
-      case "merge_repaired_placeholder": {
-        const { placeholderDocumentId } = item.identityResolution;
-        const maximumSequence = (
-          await tx
-            .select({
-              value: sql<number>`coalesce(max(${softLawDocumentVersions.sequence}), 0)::integer`,
-            })
-            .from(softLawDocumentVersions)
-            .where(eq(softLawDocumentVersions.documentId, item.documentId))
-        ).at(0)?.value;
-        if (maximumSequence === undefined) {
-          panic("Could not read repaired document version sequence");
-        }
-        await tx
-          .update(softLawDocumentVersions)
-          .set({ observedTo: observedAt })
-          .where(
-            and(
-              eq(softLawDocumentVersions.documentId, placeholderDocumentId),
-              sql`${softLawDocumentVersions.observedTo} IS NULL`,
-            ),
-          );
-        await tx
-          .update(softLawDocumentVersions)
-          .set({
-            documentId: item.documentId,
-            sequence: sql`${softLawDocumentVersions.sequence} + ${maximumSequence}`,
-          })
-          .where(eq(softLawDocumentVersions.documentId, placeholderDocumentId));
-        await tx
-          .update(softLawDocumentLocators)
-          .set({ documentId: item.documentId })
-          .where(eq(softLawDocumentLocators.documentId, placeholderDocumentId));
-        await tx
-          .delete(softLawDocuments)
-          .where(eq(softLawDocuments.id, placeholderDocumentId));
-        break;
-      }
-      default:
-        item.identityResolution satisfies never;
-        panic("Unknown soft-law identity resolution");
-    }
-  }
-  // db-await-in-loop-enable
   const rows = items.map((item) => {
     const { metadata } = item.input;
     return {
@@ -416,6 +366,62 @@ const persistSoftLawRows = async (
           lastSeenRun: sql`excluded.last_seen_run`,
         },
       });
+    // A repaired placeholder may merge into an owner inserted just above on
+    // this page, so its versions and locators move only once that row exists.
+    // db-await-in-loop-disable: only repaired placeholders merge, rarely and one at a time; each merge's steps must run in order inside this transaction
+    for (const item of items) {
+      switch (item.identityResolution.kind) {
+        case "create":
+        case "attach":
+          break;
+        case "merge_repaired_placeholder": {
+          const { placeholderDocumentId } = item.identityResolution;
+          const maximumSequence = (
+            await tx
+              .select({
+                value: sql<number>`coalesce(max(${softLawDocumentVersions.sequence}), 0)::integer`,
+              })
+              .from(softLawDocumentVersions)
+              .where(eq(softLawDocumentVersions.documentId, item.documentId))
+          ).at(0)?.value;
+          if (maximumSequence === undefined) {
+            panic("Could not read repaired document version sequence");
+          }
+          await tx
+            .update(softLawDocumentVersions)
+            .set({ observedTo: observedAt })
+            .where(
+              and(
+                eq(softLawDocumentVersions.documentId, placeholderDocumentId),
+                sql`${softLawDocumentVersions.observedTo} IS NULL`,
+              ),
+            );
+          await tx
+            .update(softLawDocumentVersions)
+            .set({
+              documentId: item.documentId,
+              sequence: sql`${softLawDocumentVersions.sequence} + ${maximumSequence}`,
+            })
+            .where(
+              eq(softLawDocumentVersions.documentId, placeholderDocumentId),
+            );
+          await tx
+            .update(softLawDocumentLocators)
+            .set({ documentId: item.documentId })
+            .where(
+              eq(softLawDocumentLocators.documentId, placeholderDocumentId),
+            );
+          await tx
+            .delete(softLawDocuments)
+            .where(eq(softLawDocuments.id, placeholderDocumentId));
+          break;
+        }
+        default:
+          item.identityResolution satisfies never;
+          panic("Unknown soft-law identity resolution");
+      }
+    }
+    // db-await-in-loop-enable
     await tx
       .insert(softLawDocumentLocators)
       .values(
