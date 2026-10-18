@@ -15,14 +15,14 @@ import * as v from "valibot";
 import { drawPropertySamples } from "@stll/property-testing";
 
 import { markdownReaders } from "./ci-package-scope";
-import { computeChangedFileScope } from "./ci-plan-scope";
+import { computeChangedFileScope, type ScopeOutput } from "./ci-plan-scope";
 import { GENERATORS } from "./generated-files";
 
 markdownReaders();
 
 type SelectorCase = {
   files: readonly string[];
-  outputs: readonly string[];
+  outputs: readonly ScopeOutput[];
   suiteDepth?: string;
   event?: string;
   title?: string;
@@ -40,14 +40,12 @@ const planSelector = <C extends SelectorCase>(cases: readonly C[]) =>
     });
     return {
       item,
-      plan: item.outputs.map(
-        (output) => scope[output as keyof typeof scope] ?? "",
-      ),
+      plan: item.outputs.map((output) => scope[output] ?? ""),
     };
   });
 const runSelector = (
   files: readonly string[],
-  outputs: readonly string[],
+  outputs: readonly ScopeOutput[],
   suiteDepth = "fast",
   _e2eLandingRequired = "false",
   event = "pull_request",
@@ -382,7 +380,7 @@ test("a fix pull request that changes an API test plans the fix-tests-on-base ch
 const apiSourceSiblings = fc.array(fc.uuid(), { maxLength: 4 });
 
 test("a pull request builds the API image for arm64 unless it releases", () => {
-  const outputs = ["api_image_platforms"];
+  const outputs = ["api_image_platforms"] as const;
   const expectations = drawPropertySamples(apiSourceSiblings, {
     numRuns: 10,
   }).flatMap(({ value: names, label }) => {

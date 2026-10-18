@@ -20,6 +20,7 @@ import { compareCodeUnit } from "@stll/collation";
 import { repoRelativePath } from "@stll/portable-path";
 import { drawPropertySamples, propertyConfig } from "@stll/property-testing";
 
+import eventPolicies from "../.github/ci-event-policy.json" with { type: "json" };
 import {
   POSTGRES_SHARD_TEST_BUDGET_SECONDS,
   POSTGRES_TEST_SHARD_IDS,
@@ -37,7 +38,11 @@ import {
   PR_CODE_QUALITY_JOBS,
 } from "./ci-cancellation-contract";
 import { markdownReaders, requiresPackageChecks } from "./ci-package-scope";
-import { computeChangedFileScope } from "./ci-plan-scope";
+import {
+  computeChangedFileScope,
+  OUTPUT_ORDER,
+  type ScopeOutput,
+} from "./ci-plan-scope";
 import { selectRootChecks } from "./ci-root-checks";
 import { withoutStaticReuseCondition } from "./ci-static-checks.test-support";
 import { GENERATORS } from "./generated-files";
@@ -201,7 +206,7 @@ const onlyOutcome = <T>(outcomes: readonly T[]): T => {
 
 type SelectorCase = {
   files: readonly string[];
-  outputs: readonly string[];
+  outputs: readonly ScopeOutput[];
   suiteDepth?: string;
   e2eLandingRequired?: string;
   event?: string;
@@ -224,7 +229,7 @@ const planSelector = <C extends SelectorCase>(cases: readonly C[]) =>
 
 const runSelector = (
   files: readonly string[],
-  outputs: readonly string[],
+  outputs: readonly ScopeOutput[],
   suiteDepth = "fast",
   e2eLandingRequired = "false",
   event = "pull_request",
@@ -235,6 +240,14 @@ const runSelector = (
       { files, outputs, suiteDepth, e2eLandingRequired, event, title },
     ]),
   ).plan;
+
+const releaseExtraFiles = fc.array(fc.string(), { maxLength: 8 });
+
+const unrelatedDocNames = fc.array(fc.uuid(), { maxLength: 8 });
+
+const MatrixEntry = v.object({ runner: v.string(), platform: v.string() });
+
+const apiSourceSiblings = fc.array(fc.uuid(), { maxLength: 4 });
 
 // Property samples are drawn up front and evaluated as one batch, since each
 // evaluation runs bash. Each sample's label carries its replay seed and index.
@@ -572,6 +585,8 @@ const COMPUTED_SCOPES: ReadonlySet<string> = new Set([
   "ci_browser_required",
   "pr_heavy_gate_required",
 ]);
+const isScopeOutput = (output: string): output is ScopeOutput =>
+  OUTPUT_ORDER.some((candidate) => candidate === output);
 
 const fastJobScopes = v.parse(
   v.record(v.string(), v.string()),
@@ -3026,6 +3041,188 @@ test.each([1, 2])(
   },
 );
 
+const queueOnlyJobs = Object.fromEntries(
+  Object.entries(eventPolicies.jobs)
+    .filter(
+      ([key, policy]) =>
+        (policy === "queue" ||
+          key === "ci.yml/service-suites" ||
+          key === "ci.yml/postgres-service-suites") &&
+        key.startsWith("ci.yml/") &&
+        gatedJobs.includes(key.slice("ci.yml/".length)),
+    )
+    .map(([key]) => [
+      key.slice("ci.yml/".length),
+      key === "ci.yml/service-suites" ||
+      key === "ci.yml/postgres-service-suites"
+        ? "Postgres PR switch is off by default"
+        : "queue-only because its declared event policy certifies the merged tree",
+    ]),
+);
+
+// Evaluate the actual predicate with a successful trusted plan. Unfamiliar
+// expression syntax fails closed instead of silently evading parity.
+type DepthContext = {
+  event: Event;
+  depth: SuiteDepth;
+  heavyOnly?: boolean;
+  queueDepth?: "full" | "thin";
+  prDepthReused?: "false" | "true";
+  proveFix?: boolean;
+  /** The QUEUE_BROWSER_SUITES repository variable; GitHub reads unset as ''. */
+  queueBrowserSuites?: string;
+  corpusRequired?: boolean;
+};
+const bareExpression = (condition: string) =>
+  /^\$\{\{([\s\S]*)\}\}$/u.exec(condition.trim())?.[1] ?? condition;
+
+const runsAtDepth = (
+  condition: string,
+  {
+    event,
+    depth,
+    heavyOnly,
+    queueDepth = "full",
+    prDepthReused = "false",
+    proveFix = false,
+    queueBrowserSuites = "",
+    corpusRequired = false,
+  }: DepthContext,
+) => {
+  const selectedQueueDepth = event === EVENT.mergeGroup ? queueDepth : "full";
+  return v.parse(
+    v.boolean(),
+    evaluate(condition, {
+      values: {
+        "github.event_name": event,
+        "github.event.pull_request.labels.*.name": proveFix
+          ? ["prove-fix"]
+          : [],
+        "github.event.pull_request.draft": false,
+        "inputs.heavy_only": heavyOnly === true,
+        "inputs.pr_depth_only": false,
+        "needs.ci-plan.outputs.pr_depth_reused": prDepthReused,
+        "needs.ci-plan.outputs.coverage_profile": "normal-v1",
+        "needs.ci-plan.outputs.pilot_fast_jobs": "[]",
+        "needs.ci-plan.outputs.suite_depth": depth,
+        "needs.ci-plan.outputs.queue_depth": selectedQueueDepth,
+        "vars.QUEUE_BROWSER_SUITES": queueBrowserSuites,
+        "vars.CI_POSTGRES_PR_SELECTION": "off",
+        "needs.ci-plan.outputs.postgres_pr_required": "false",
+        "needs.ci-plan.outputs.corpus_suites_required": String(corpusRequired),
+        "needs.ci-plan.outputs.ci_browser_required": browserPlanOutput({
+          event,
+          depth,
+          desktopRequired: "true",
+          queueDepth: selectedQueueDepth,
+        }),
+        "needs.ci-plan.outputs.heavy_web_build_required": String(
+          heavyOnly === true,
+        ),
+        "needs.ci-plan.outputs.pr_heavy_gate_required": String(
+          event === EVENT.pullRequest,
+        ),
+        "needs.pr-heavy-gate.result":
+          event === EVENT.pullRequest ? "success" : "skipped",
+      },
+      status: { always: true, success: true, failure: false, cancelled: false },
+      fallback: (path) => {
+        if (path.startsWith("needs.ci-plan.outputs.")) {
+          return "true";
+        }
+        if (/^needs\.[\w-]+\.result$/u.test(path)) {
+          return "success";
+        }
+        if (path === "steps.install.outcome") {
+          return "success";
+        }
+        throw new TypeError(`Unknown CI predicate context: ${path}`);
+      },
+    }),
+  );
+};
+
+type ParityJob = { name: string; condition: string; required: boolean };
+const parityViolations = (
+  jobs: readonly ParityJob[],
+  exceptions: Record<string, string>,
+) => {
+  const violations: string[] = [];
+  for (const name of Object.keys(exceptions)) {
+    const job = jobs.find((candidate) => candidate.name === name);
+    if (
+      job === undefined ||
+      !runsAtDepth(job.condition, {
+        event: EVENT.mergeGroup,
+        depth: SUITE_DEPTH.full,
+      }) ||
+      runsAtDepth(job.condition, {
+        event: EVENT.pullRequest,
+        depth: SUITE_DEPTH.fast,
+      })
+    ) {
+      violations.push(`${name}: stale queue-only exception`);
+    }
+  }
+  for (const job of jobs) {
+    if (
+      !runsAtDepth(job.condition, {
+        event: EVENT.mergeGroup,
+        depth: SUITE_DEPTH.full,
+      })
+    ) {
+      continue;
+    }
+    if (
+      runsAtDepth(job.condition, {
+        event: EVENT.pullRequest,
+        depth: SUITE_DEPTH.fast,
+      }) &&
+      job.required
+    ) {
+      continue;
+    }
+    if (!Object.hasOwn(exceptions, job.name)) {
+      violations.push(
+        `${job.name}: missing required PR path or queue-only reason`,
+      );
+    }
+  }
+  return violations;
+};
+
+type ScopedCheck = {
+  name: string;
+  scope: string;
+  condition: string;
+  requiredOnPr: boolean;
+  requiredOnThin: boolean;
+};
+const scopedCoverageViolations = (checks: readonly ScopedCheck[]) => {
+  const scopes = new Set(checks.map(({ scope }) => scope));
+  return [...scopes].filter(
+    (scope) =>
+      !checks.some(
+        (check) =>
+          check.scope === scope &&
+          (check.requiredOnPr || check.requiredOnThin) &&
+          (!check.requiredOnPr ||
+            runsAtDepth(check.condition, {
+              event: EVENT.pullRequest,
+              depth: SUITE_DEPTH.fast,
+            })) &&
+          (!check.requiredOnThin ||
+            ["thin", "full"].every((queueDepth) =>
+              runsAtDepth(check.condition, {
+                event: EVENT.mergeGroup,
+                depth: SUITE_DEPTH.full,
+                queueDepth: queueDepth === "thin" ? "thin" : "full",
+              }),
+            )),
+      ),
+  );
+};
+
 test("a selected PR leg passes only its selected specs without sharding", () => {
   const spec = "apps/web/e2e/specs/guides.spec.ts";
   const result = runPlaywrightSelection({
@@ -3895,7 +4092,7 @@ test("route-relevant changes plan the required merge-group smoke", () => {
 }, 30_000);
 
 test("a merge group plans both browser suites for app changes and neither for docs", () => {
-  const scopes = ["route_smoke_required", "e2e_production_required"];
+  const scopes = ["route_smoke_required", "e2e_production_required"] as const;
   const appChange = [
     "apps/api/src/handlers/workspaces/read-activity.ts",
     "apps/web/src/components/app-sidebar.logic.ts",
@@ -4119,11 +4316,6 @@ test("service-suite scopes run on pull requests only for selected corpus coverag
   );
 }, 30_000);
 
-// The one selector run that spawns the real detector CLIs: it proves the
-// wiring the in-process plans above stand in for. Each case starts three bun
-// processes, and each service-suite process rebuilds its import graph (about
-// a second), so a run measures ~1.3 s locally; 30 s leaves a cold runner a
-// margin above 20x.
 test("drawn property samples are the inputs fc.assert would run", () => {
   // Both sides share one explicit seed: the exploratory tier leaves the
   // default seed unset, which would give each draw an independent one.
@@ -4211,7 +4403,7 @@ test("image scopes remain planned while pull requests skip execution", () => {
         { file: "docs/guide.md", required: false },
       ],
     },
-  ]) {
+  ] as const) {
     const condition = jobIf(ciJobs[job]);
     expect(condition, job).toContain(
       "needs.ci-plan.outputs.suite_depth == 'fast'",
@@ -4274,7 +4466,7 @@ test("each split service step follows its own dependency scope and execution dep
     "corpus_suites_required",
     "valkey_suites_required",
     "collaboration_suite_required",
-  ];
+  ] as const;
   const timePlan = runSelector(
     ["packages/time/src/index.ts"],
     [...scopes, "collab_redis_required", "service_suites_pr_required"],
@@ -4432,7 +4624,7 @@ test("pull requests and merge groups preserve corpus engine detector scope at ev
     "corpus_suites_required",
     "valkey_suites_required",
     "service_suites_pr_required",
-  ];
+  ] as const;
   const changed = ["apps/api/src/handlers/example.test.ts"];
   expect(runSelector(changed, scopes)).toEqual([
     "true",
@@ -4493,7 +4685,7 @@ test("an empty full-depth diff preserves the original API service-suite selectio
     "postgres_suites_required",
     "corpus_suites_required",
     "valkey_suites_required",
-  ]) {
+  ] as const) {
     expect(outputs[scope]).toBe("true");
   }
   expect(outputs["collaboration_suite_required"]).toBe("false");
@@ -4657,7 +4849,7 @@ test("every gated merge-group job has a required PR path or an explicit queue-on
     v.object({ outputs: v.record(v.string(), v.string()) }),
     ciJobs["ci-plan"],
   );
-  const pathScopes = new Set<string>();
+  const pathScopes = new Set<ScopeOutput>();
   for (const { name, condition } of parityJobs) {
     if (
       !runsAtDepth(condition, {
@@ -4679,7 +4871,7 @@ test("every gated merge-group job has a required PR path or an explicit queue-on
         /steps\.changed-files\.outputs\.(\w+)/gu,
       )) {
         if (match[1] !== undefined) {
-          pathScopes.add(match[1]);
+          pathScopes.add(v.parse(v.picklist(OUTPUT_ORDER), match[1]));
         }
       }
     }
@@ -5108,14 +5300,14 @@ test("the advisory base proof runs only for pull requests opting in with prove-f
 });
 
 test("the exact docs-only README change plans only Markdown checks in PRs and merge groups", () => {
-  const outputs = [
-    ...new Set([
+  const outputs: ScopeOutput[] = [
+    ...new Set<ScopeOutput>([
       ...Object.values(jobScopes).filter(
-        (scope): scope is string =>
-          scope !== null && !COMPUTED_SCOPES.has(scope),
+        (scope): scope is ScopeOutput =>
+          scope !== null && !COMPUTED_SCOPES.has(scope) && isScopeOutput(scope),
       ),
       "desktop_browser_required",
-      ...Object.values(fastJobScopes),
+      ...Object.values(fastJobScopes).filter(isScopeOutput),
       "docs_checks_required",
       "docs_changed_files",
     ]),
@@ -5230,14 +5422,14 @@ test("the exact docs-only README change plans only Markdown checks in PRs and me
 });
 
 test("mixed documentation and code changes retain the complete code plan", () => {
-  const outputs = [
-    ...new Set([
+  const outputs: ScopeOutput[] = [
+    ...new Set<ScopeOutput>([
       ...Object.values(jobScopes).filter(
-        (scope): scope is string =>
-          scope !== null && !COMPUTED_SCOPES.has(scope),
+        (scope): scope is ScopeOutput =>
+          scope !== null && !COMPUTED_SCOPES.has(scope) && isScopeOutput(scope),
       ),
       "desktop_browser_required",
-      ...Object.values(fastJobScopes),
+      ...Object.values(fastJobScopes).filter(isScopeOutput),
       "docs_checks_required",
       "docs_changed_files",
     ]),

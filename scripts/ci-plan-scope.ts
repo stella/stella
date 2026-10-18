@@ -447,7 +447,7 @@ const deriveNormalScopeFacts = (
   } as const;
 };
 
-const OUTPUT_ORDER = [
+export const OUTPUT_ORDER = [
   "api_scope_unknown",
   "changed_files",
   "comparison_base",
