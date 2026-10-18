@@ -320,14 +320,11 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
-      # The merge-queue yield reads workflow runs and their jobs.
-      actions: read
       # The push scope reads earlier autofix results.
       checks: read
       contents: read
       pull-requests: read
     outputs:
-      deferred: ${{ steps.merge-queue.outputs.result == 'skip' }}
       ready: ${{ steps.planner.outputs.ready }}
       run: ${{ steps.scope.outputs.run }}
       ids: ${{ steps.scope.outputs.ids }}
@@ -348,36 +345,7 @@ jobs:
           persist-credentials: false
           sparse-checkout: |
             scripts/gh-retry.sh
-            scripts/merge-queue-waiting.mjs
           sparse-checkout-cone-mode: false
-
-      # Autofix is a convenience; CI's format, lint and drift guards still
-      # enforce. While the merge queue has waiting work, a first attempt
-      # skips the fixer instead of taking a runner; a re-run never skips.
-      - name: Yield to the merge queue
-        id: merge-queue
-        continue-on-error: true
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
-        env:
-          CI_YIELD_TO_MERGE_QUEUE: ${{ vars.CI_YIELD_TO_MERGE_QUEUE }}
-        with:
-          retries: 0
-          result-encoding: string
-          script: |
-            const { pathToFileURL } = require("node:url");
-            const { resolve } = require("node:path");
-            const { mergeQueueGate } = await import(pathToFileURL(
-              resolve(".gh-retry/scripts/merge-queue-waiting.mjs")).href);
-            return mergeQueueGate({
-              github,
-              context,
-              enabled: process.env.CI_YIELD_TO_MERGE_QUEUE === "on",
-              attempt: Number(process.env.GITHUB_RUN_ATTEMPT ?? "1"),
-              polls: 0,
-              intervalMs: 0,
-              sleep: async () => {},
-              notice: (message) => core.notice(message),
-            });
 
       - name: Preserve GitHub API tooling across source checkouts
         run: |
@@ -480,7 +448,6 @@ jobs:
     if: >-
       needs.regenerate-scope.result == 'success'
       && needs.regenerate-scope.outputs.ready == 'true'
-      && needs.regenerate-scope.outputs.deferred != 'true'
       && needs.regenerate-scope.outputs.needed != 'false'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
