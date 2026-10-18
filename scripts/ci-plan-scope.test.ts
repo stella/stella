@@ -182,6 +182,19 @@ test("everything the API image is built from requires the API image smoke", () =
   }
 });
 
+test("path patterns match changed names containing newlines, tabs, quotes and backslashes", () => {
+  // Bash case wildcards match every character, so a newline in a name cannot
+  // move a file out of its scope.
+  const unusual = 'quote"back\\slash\ttab\nnewline';
+  for (const file of [
+    `apps/api/src/${unusual}.ts`,
+    `apps/api/src/new\nfile.ts`,
+    `docker/postgres/${unusual}.sql`,
+  ]) {
+    expect(imageSmokePlan([file]).at(0), JSON.stringify(file)).toBe("true");
+  }
+});
+
 test("paths outside the API image do not schedule its smoke", () => {
   for (const file of [
     "apps/web/src/routes/index.tsx",

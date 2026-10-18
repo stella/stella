@@ -47,7 +47,8 @@ const shellPattern = (pattern: string) => {
       .replace(/[.+^${}()|[\]\\]/gu, "\\$&")
       .replaceAll("*", ".*")
       .replaceAll("?", ".")}$`,
-    "u",
+    // Bash case wildcards match every character, newlines included.
+    "su",
   );
   compiledShellPatterns.set(pattern, compiled);
   return compiled;
@@ -592,8 +593,8 @@ export const OUTPUT_RULES = {
       bool(desktopBrowser),
     ),
   ci_browser_scope_required: (facts) =>
-    scopeRule(facts, "ci_browser_scope_required", ({ root, scopeFiles }) =>
-      bool(ciBrowserScopePredicate({ root })(scopeFiles)),
+    scopeRule(facts, "ci_browser_scope_required", ({ input, scopeFiles }) =>
+      bool(ciBrowserScopePredicate({ root: input.root })(scopeFiles)),
     ),
   e2e_core_required: (facts) =>
     scopeRule(facts, "e2e_core_required", ({ e2eCore }) => bool(e2eCore)),
