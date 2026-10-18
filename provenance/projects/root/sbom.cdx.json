@@ -637,16 +637,16 @@
             "location": "apps/web/src/lib/workspaces/queries/entities.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/use-ai-config-drafts.ts#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/use-ai-config-drafts.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/use-ai-config-form.ts#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/use-ai-config-form.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-hooks/use-ai-settings-keys.ts#1"
+            "location": "apps/web/src/routes/_protected.admin/-hooks/use-ai-settings-keys.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-hooks/use-ai-settings-toggles.ts#1"
+            "location": "apps/web/src/routes/_protected.admin/-hooks/use-ai-settings-toggles.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/group-scope.ts#1"
@@ -2410,73 +2410,73 @@
             "location": "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/ai-provider-rows.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/ai-provider-rows.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/anonymization-deny-list-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/anonymization-deny-list-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/document-processing-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/document-processing-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx#9"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/document-types-card.tsx#9"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/jurisdictions-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/jurisdictions-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/list-toolbar.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/list-toolbar.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/matter-numbering-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/matter-numbering-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/member-role-cell.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/member-role-cell.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/memory/memory-create-form.tsx#1"
+            "location": "apps/web/src/routes/_protected.settings/-components/account/memory/memory-create-form.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/memory/memory-panel.tsx#1"
+            "location": "apps/web/src/routes/_protected.settings/-components/account/memory/memory-panel.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/memory/memory-row.tsx#1"
+            "location": "apps/web/src/routes/_protected.settings/-components/account/memory/memory-row.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/month-lock-picker.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/month-lock-picker.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/number-series-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/number-series-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/number-series-form.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/number-series-form.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/profile-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/profile-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/seller-profile-form.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/seller-profile-form.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/seller-profiles-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/seller-profiles-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/time-policy-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/time-policy-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/time-zone-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/time-zone-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/usage-plans-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/usage-plans-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/vat-rate-form.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/vat-rate-form.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/vat-rates-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/vat-rates-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/settings-page-header.tsx#1"
+            "location": "apps/web/src/components/settings-page-header.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/account.connections.tsx#1"
@@ -3931,7 +3931,7 @@
             "location": "apps/web/src/features/knowledge/playbook-editor/position-editor.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx#11"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/document-types-card.tsx#11"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx#3"
@@ -4000,7 +4000,7 @@
             "location": "apps/web/src/features/knowledge/playbook-editor/position-editor.tsx#5"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx#13"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/document-types-card.tsx#13"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-entity-chip.tsx#4"
@@ -4021,7 +4021,7 @@
             "location": "apps/web/src/features/knowledge/playbook-editor/position-editor.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx#12"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/document-types-card.tsx#12"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#12"
@@ -5135,16 +5135,16 @@
             "location": "apps/web/src/lib/workspaces/queries/entities.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/use-ai-config-drafts.ts#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/use-ai-config-drafts.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/use-ai-config-form.ts#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/use-ai-config-form.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-hooks/use-ai-settings-keys.ts#1"
+            "location": "apps/web/src/routes/_protected.admin/-hooks/use-ai-settings-keys.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-hooks/use-ai-settings-toggles.ts#1"
+            "location": "apps/web/src/routes/_protected.admin/-hooks/use-ai-settings-toggles.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/group-scope.ts#1"
@@ -6908,73 +6908,73 @@
             "location": "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/ai-provider-rows.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/ai-provider-rows.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/anonymization-deny-list-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/anonymization-deny-list-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/document-processing-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/document-processing-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx#9"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/document-types-card.tsx#9"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/jurisdictions-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/jurisdictions-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/list-toolbar.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/list-toolbar.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/matter-numbering-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/matter-numbering-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/member-role-cell.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/member-role-cell.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/memory/memory-create-form.tsx#1"
+            "location": "apps/web/src/routes/_protected.settings/-components/account/memory/memory-create-form.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/memory/memory-panel.tsx#1"
+            "location": "apps/web/src/routes/_protected.settings/-components/account/memory/memory-panel.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/memory/memory-row.tsx#1"
+            "location": "apps/web/src/routes/_protected.settings/-components/account/memory/memory-row.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/month-lock-picker.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/month-lock-picker.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/number-series-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/number-series-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/number-series-form.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/number-series-form.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/profile-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/profile-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/seller-profile-form.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/seller-profile-form.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/seller-profiles-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/seller-profiles-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/time-policy-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/time-policy-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/time-zone-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/time-zone-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/usage-plans-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/usage-plans-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/vat-rate-form.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/vat-rate-form.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/vat-rates-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/vat-rates-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/settings-page-header.tsx#1"
+            "location": "apps/web/src/components/settings-page-header.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/account.connections.tsx#1"
@@ -8621,7 +8621,7 @@
             "location": "apps/web/src/routes/_protected.contacts/-components/contact-custom-fields-editor.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/anonymization-deny-list-card.tsx#2"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/anonymization-deny-list-card.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/account.profile.tsx#2"
@@ -13262,19 +13262,19 @@
             "location": "apps/web/src/routes/_protected.contacts/index.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/number-series-form.tsx#3"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/number-series-form.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/profile-card.tsx#3"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/profile-card.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/seller-profile-form.tsx#3"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/seller-profile-form.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/time-policy-card.tsx#3"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/time-policy-card.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/vat-rate-form.tsx#3"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/vat-rate-form.tsx#3"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/billing-codes-dialog.tsx#3"
@@ -14213,22 +14213,22 @@
             "location": "apps/web/src/routes/-protected-guard.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/use-ai-config-form.ts#3"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/use-ai-config-form.ts#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-hooks/use-ai-settings-toggles.ts#3"
+            "location": "apps/web/src/routes/_protected.admin/-hooks/use-ai-settings-toggles.ts#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-hooks/use-settings-mutation.ts#1"
+            "location": "apps/web/src/routes/_protected.admin/-hooks/use-settings-mutation.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-hooks/use-settings-mutation.ts#2"
+            "location": "apps/web/src/routes/_protected.admin/-hooks/use-settings-mutation.ts#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-queries/anonymization-blacklist.ts#1"
+            "location": "apps/web/src/routes/_protected.admin/-queries/anonymization-blacklist.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-queries/audit-logs.ts#1"
+            "location": "apps/web/src/routes/_protected.admin/-queries/audit-logs.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-queries/connections.ts#1"
@@ -14243,7 +14243,7 @@
             "location": "apps/web/src/routes/_protected.settings/-queries/memory-matters.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-queries/usage-policies.ts#1"
+            "location": "apps/web/src/routes/_protected.admin/-queries/usage-policies.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/matter-name-map.ts#1"
@@ -14891,73 +14891,73 @@
             "location": "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.tsx#9"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/ai-config-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/ai-config-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/anonymization-deny-list-card.tsx#4"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/anonymization-deny-list-card.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/deepl-key-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/deepl-key-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/document-processing-card.tsx#3"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/document-processing-card.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx#14"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/document-types-card.tsx#14"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/jurisdictions-card.tsx#3"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/jurisdictions-card.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/matter-numbering-card.tsx#3"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/matter-numbering-card.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/memory/memory-create-form.tsx#3"
+            "location": "apps/web/src/routes/_protected.settings/-components/account/memory/memory-create-form.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/memory/memory-panel.tsx#3"
+            "location": "apps/web/src/routes/_protected.settings/-components/account/memory/memory-panel.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/memory/memory-row.tsx#3"
+            "location": "apps/web/src/routes/_protected.settings/-components/account/memory/memory-row.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/memory/suggestions-queue.tsx#5"
+            "location": "apps/web/src/routes/_protected.settings/-components/account/memory/suggestions-queue.tsx#5"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/memory-extraction-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/memory-extraction-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/number-series-card.tsx#3"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/number-series-card.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/number-series-preview.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/number-series-preview.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/number-series-seller-picker.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/number-series-seller-picker.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/profile-card.tsx#4"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/profile-card.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/prompt-caching-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/prompt-caching-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/seller-profiles-card.tsx#3"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/seller-profiles-card.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/time-policy-card.tsx#4"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/time-policy-card.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/time-zone-card.tsx#3"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/time-zone-card.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/usage-plans-card.tsx#3"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/usage-plans-card.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/vat-rates-card.tsx#3"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/vat-rates-card.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/web-search-keys-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/web-search-keys-card.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/account.profile.tsx#9"
@@ -15848,25 +15848,25 @@
             "location": "apps/web/src/routes/_protected.settings/-components/account/connections/integrations-group.tsx#8"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/ai-config-card.tsx#2"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/ai-config-card.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/anonymization-deny-list-card.tsx#5"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/anonymization-deny-list-card.tsx#5"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx#15"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/document-types-card.tsx#15"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/list-toolbar.tsx#3"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/list-toolbar.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/memory/memory-create-form.tsx#4"
+            "location": "apps/web/src/routes/_protected.settings/-components/account/memory/memory-create-form.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/memory/memory-panel.tsx#4"
+            "location": "apps/web/src/routes/_protected.settings/-components/account/memory/memory-panel.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/memory/suggestions-queue.tsx#6"
+            "location": "apps/web/src/routes/_protected.settings/-components/account/memory/suggestions-queue.tsx#6"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/account.beta.tsx#1"
@@ -17355,16 +17355,16 @@
             "location": "apps/web/src/lib/workspaces/queries/entities.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/use-ai-config-drafts.ts#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/use-ai-config-drafts.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/use-ai-config-form.ts#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/use-ai-config-form.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-hooks/use-ai-settings-keys.ts#1"
+            "location": "apps/web/src/routes/_protected.admin/-hooks/use-ai-settings-keys.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-hooks/use-ai-settings-toggles.ts#1"
+            "location": "apps/web/src/routes/_protected.admin/-hooks/use-ai-settings-toggles.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/group-scope.ts#1"
@@ -19128,73 +19128,73 @@
             "location": "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/ai-provider-rows.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/ai-provider-rows.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/anonymization-deny-list-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/anonymization-deny-list-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/document-processing-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/document-processing-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx#9"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/document-types-card.tsx#9"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/jurisdictions-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/jurisdictions-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/list-toolbar.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/list-toolbar.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/matter-numbering-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/matter-numbering-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/member-role-cell.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/member-role-cell.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/memory/memory-create-form.tsx#1"
+            "location": "apps/web/src/routes/_protected.settings/-components/account/memory/memory-create-form.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/memory/memory-panel.tsx#1"
+            "location": "apps/web/src/routes/_protected.settings/-components/account/memory/memory-panel.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/memory/memory-row.tsx#1"
+            "location": "apps/web/src/routes/_protected.settings/-components/account/memory/memory-row.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/month-lock-picker.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/month-lock-picker.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/number-series-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/number-series-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/number-series-form.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/number-series-form.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/profile-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/profile-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/seller-profile-form.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/seller-profile-form.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/seller-profiles-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/seller-profiles-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/time-policy-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/time-policy-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/time-zone-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/time-zone-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/usage-plans-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/usage-plans-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/vat-rate-form.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/vat-rate-form.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/vat-rates-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/vat-rates-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/settings-page-header.tsx#1"
+            "location": "apps/web/src/components/settings-page-header.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/account.connections.tsx#1"
@@ -21671,16 +21671,16 @@
             "location": "apps/web/src/lib/workspaces/queries/entities.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/use-ai-config-drafts.ts#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/use-ai-config-drafts.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/use-ai-config-form.ts#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/use-ai-config-form.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-hooks/use-ai-settings-keys.ts#1"
+            "location": "apps/web/src/routes/_protected.admin/-hooks/use-ai-settings-keys.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-hooks/use-ai-settings-toggles.ts#1"
+            "location": "apps/web/src/routes/_protected.admin/-hooks/use-ai-settings-toggles.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/group-scope.ts#1"
@@ -23444,73 +23444,73 @@
             "location": "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/ai-provider-rows.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/ai-provider-rows.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/anonymization-deny-list-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/anonymization-deny-list-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/document-processing-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/document-processing-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx#9"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/document-types-card.tsx#9"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/jurisdictions-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/jurisdictions-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/list-toolbar.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/list-toolbar.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/matter-numbering-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/matter-numbering-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/member-role-cell.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/member-role-cell.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/memory/memory-create-form.tsx#1"
+            "location": "apps/web/src/routes/_protected.settings/-components/account/memory/memory-create-form.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/memory/memory-panel.tsx#1"
+            "location": "apps/web/src/routes/_protected.settings/-components/account/memory/memory-panel.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/memory/memory-row.tsx#1"
+            "location": "apps/web/src/routes/_protected.settings/-components/account/memory/memory-row.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/month-lock-picker.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/month-lock-picker.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/number-series-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/number-series-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/number-series-form.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/number-series-form.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/profile-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/profile-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/seller-profile-form.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/seller-profile-form.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/seller-profiles-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/seller-profiles-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/time-policy-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/time-policy-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/time-zone-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/time-zone-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/usage-plans-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/usage-plans-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/vat-rate-form.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/vat-rate-form.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/vat-rates-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/vat-rates-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/settings-page-header.tsx#1"
+            "location": "apps/web/src/components/settings-page-header.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/account.connections.tsx#1"
@@ -32690,22 +32690,22 @@
             "location": "apps/web/src/routes/_protected.contacts/-contact-import-request.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/time-policy.logic.ts#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/time-policy.logic.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/time-zone-card.logic.ts#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/time-zone-card.logic.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/use-ai-config-form.ts#4"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/use-ai-config-form.ts#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-hooks/use-ai-settings-keys.ts#3"
+            "location": "apps/web/src/routes/_protected.admin/-hooks/use-ai-settings-keys.ts#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-hooks/use-ai-settings-toggles.ts#4"
+            "location": "apps/web/src/routes/_protected.admin/-hooks/use-ai-settings-toggles.ts#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-hooks/use-settings-mutation.ts#3"
+            "location": "apps/web/src/routes/_protected.admin/-hooks/use-settings-mutation.ts#3"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel.logic.ts#1"
@@ -34634,25 +34634,25 @@
             "location": "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.tsx#10"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/audit-change-details.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/audit-change-details.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/ai-settings-section.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/ai-settings-section.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/number-series-card.tsx#4"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/number-series-card.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/number-series-seller-picker.tsx#2"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/number-series-seller-picker.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/seller-profiles-card.tsx#4"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/seller-profiles-card.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/time-zone-card.tsx#4"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/time-zone-card.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/vat-rates-card.tsx#4"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/vat-rates-card.tsx#4"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization.audit-logs.tsx#5"
@@ -45604,7 +45604,7 @@
             "location": "apps/web/src/routes/_protected.contacts/-components/contact-custom-fields-editor.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/anonymization-deny-list-card.tsx#2"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/anonymization-deny-list-card.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/account.profile.tsx#2"
@@ -46494,16 +46494,16 @@
             "location": "apps/web/src/lib/workspaces/queries/entities.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/use-ai-config-drafts.ts#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/use-ai-config-drafts.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/use-ai-config-form.ts#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/use-ai-config-form.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-hooks/use-ai-settings-keys.ts#1"
+            "location": "apps/web/src/routes/_protected.admin/-hooks/use-ai-settings-keys.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-hooks/use-ai-settings-toggles.ts#1"
+            "location": "apps/web/src/routes/_protected.admin/-hooks/use-ai-settings-toggles.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/group-scope.ts#1"
@@ -48267,73 +48267,73 @@
             "location": "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/ai-provider-rows.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/ai-provider-rows.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/anonymization-deny-list-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/anonymization-deny-list-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/document-processing-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/document-processing-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx#9"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/document-types-card.tsx#9"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/jurisdictions-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/jurisdictions-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/list-toolbar.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/list-toolbar.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/matter-numbering-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/matter-numbering-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/member-role-cell.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/member-role-cell.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/memory/memory-create-form.tsx#1"
+            "location": "apps/web/src/routes/_protected.settings/-components/account/memory/memory-create-form.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/memory/memory-panel.tsx#1"
+            "location": "apps/web/src/routes/_protected.settings/-components/account/memory/memory-panel.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/memory/memory-row.tsx#1"
+            "location": "apps/web/src/routes/_protected.settings/-components/account/memory/memory-row.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/month-lock-picker.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/month-lock-picker.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/number-series-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/number-series-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/number-series-form.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/number-series-form.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/profile-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/profile-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/seller-profile-form.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/seller-profile-form.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/seller-profiles-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/seller-profiles-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/time-policy-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/time-policy-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/time-zone-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/time-zone-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/usage-plans-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/usage-plans-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/vat-rate-form.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/vat-rate-form.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/vat-rates-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/vat-rates-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/settings-page-header.tsx#1"
+            "location": "apps/web/src/components/settings-page-header.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/account.connections.tsx#1"
@@ -51178,10 +51178,10 @@
             "location": "apps/web/src/routes/_protected.contacts/index.tsx#25"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/list-toolbar.tsx#4"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/list-toolbar.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/matter-numbering-card.tsx#4"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/matter-numbering-card.tsx#4"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel.tsx#17"
@@ -51420,13 +51420,13 @@
             "location": "apps/web/src/queries/feature-enrolments.ts#8"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/use-ai-config-form.ts#5"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/use-ai-config-form.ts#5"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-hooks/use-ai-settings-keys.ts#4"
+            "location": "apps/web/src/routes/_protected.admin/-hooks/use-ai-settings-keys.ts#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-hooks/use-ai-settings-toggles.ts#5"
+            "location": "apps/web/src/routes/_protected.admin/-hooks/use-ai-settings-toggles.ts#5"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-workspace-calculation-labels.ts#1"
@@ -52833,112 +52833,112 @@
             "location": "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.tsx#12"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/audit-change-details.tsx#2"
+            "location": "apps/web/src/routes/_protected.admin/-components/audit-change-details.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/ai-config-advanced.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/ai-config-advanced.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/ai-config-card.tsx#3"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/ai-config-card.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/ai-config-decision-model.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/ai-config-decision-model.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/ai-provider-rows.tsx#3"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/ai-provider-rows.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/ai-settings-section.tsx#2"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/ai-settings-section.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/anonymization-deny-list-card.tsx#6"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/anonymization-deny-list-card.tsx#6"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/deepl-key-card.tsx#2"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/deepl-key-card.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/document-processing-card.tsx#4"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/document-processing-card.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx#16"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/document-types-card.tsx#16"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/jurisdictions-card.tsx#4"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/jurisdictions-card.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/list-toolbar.tsx#5"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/list-toolbar.tsx#5"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/matter-numbering-card.tsx#5"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/matter-numbering-card.tsx#5"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/member-role-cell.tsx#3"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/member-role-cell.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/memory/memory-create-form.tsx#5"
+            "location": "apps/web/src/routes/_protected.settings/-components/account/memory/memory-create-form.tsx#5"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/memory/memory-panel.tsx#5"
+            "location": "apps/web/src/routes/_protected.settings/-components/account/memory/memory-panel.tsx#5"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/memory/memory-row.tsx#4"
+            "location": "apps/web/src/routes/_protected.settings/-components/account/memory/memory-row.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/memory/suggestions-queue.tsx#7"
+            "location": "apps/web/src/routes/_protected.settings/-components/account/memory/suggestions-queue.tsx#7"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/memory-extraction-card.tsx#2"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/memory-extraction-card.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/month-lock-picker.tsx#3"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/month-lock-picker.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/number-series-card.tsx#5"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/number-series-card.tsx#5"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/number-series-form.tsx#4"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/number-series-form.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/number-series-preview.tsx#2"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/number-series-preview.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/number-series-seller-picker.tsx#3"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/number-series-seller-picker.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/profile-card.tsx#5"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/profile-card.tsx#5"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/prompt-caching-card.tsx#2"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/prompt-caching-card.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/seller-profile-form.tsx#4"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/seller-profile-form.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/seller-profile-refusal.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/seller-profile-refusal.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/seller-profiles-card.tsx#5"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/seller-profiles-card.tsx#5"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/time-policy-card.tsx#5"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/time-policy-card.tsx#5"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/time-zone-card.tsx#5"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/time-zone-card.tsx#5"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/usage-plans-card.tsx#4"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/usage-plans-card.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/vat-rate-display.tsx#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/vat-rate-display.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/vat-rate-form.tsx#4"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/vat-rate-form.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/vat-rates-card.tsx#5"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/vat-rates-card.tsx#5"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/web-search-keys-card.tsx#2"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/web-search-keys-card.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/account.beta.tsx#2"
@@ -54806,16 +54806,16 @@
             "location": "apps/web/src/routes/_protected.contacts/-components/contact-metadata.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/number-series-form.logic.ts#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/number-series-form.logic.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/seller-profile-form.logic.ts#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/seller-profile-form.logic.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/time-policy.logic.ts#2"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/time-policy.logic.ts#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/vat-rate-form.logic.ts#1"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/vat-rate-form.logic.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/use-column-widths.ts#1"
@@ -55172,9 +55172,6 @@
             "location": "scripts/queue-authority.ts#50"
           },
           {
-            "location": "scripts/relief-cancel-pr-runs.ts#19"
-          },
-          {
             "location": "scripts/rule-census.ts#15"
           },
           {
@@ -55232,13 +55229,13 @@
             "location": "apps/web/src/routes/_protected.contacts/index.tsx#27"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/list-toolbar.tsx#6"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/list-toolbar.tsx#6"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/number-series-form.tsx#5"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/number-series-form.tsx#5"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/profile-card.tsx#6"
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/profile-card.tsx#6"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization.route.tsx#2"

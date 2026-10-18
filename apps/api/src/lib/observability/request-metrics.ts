@@ -12,11 +12,10 @@ import type { PublicCorpusClass } from "@/api/public-corpus-policy";
  * Per-request latency, split by request class, emitted as a CloudWatch
  * Embedded Metric Format (EMF) line on stdout.
  *
- * Why EMF on stdout rather than the structured `logger`: the OTel logs
- * pipeline has no exporter wired (see `otel.ts`), so `logger.info`
- * records never leave the process. EMF instead rides the container's
- * stdout into the awslogs driver, where CloudWatch auto-extracts the
- * embedded metric — no agent, no metric filter, no log exporter needed.
+ * Direct stdout preserves the nested `_aws` object CloudWatch extracts.
+ * Structured logging serializes nested attributes, while EMF needs the
+ * directive as an object. The container's awslogs driver delivers these
+ * records without a metric filter or log exporter.
  *
  * The `class` dimension is the whole point: it lets the p95 latency
  * alarm watch `class=crud` in isolation, so an inherently multi-second
@@ -34,6 +33,39 @@ import { isLocalDevOpen } from "@/api/runtime-mode";
 const METRIC_NAMESPACE = "Stella/Api";
 const METRIC_NAME = "RequestDuration";
 const FAILURE_METRIC_NAME = "RequestTransientFailures";
+
+type McpRequestMetricInput = {
+  method: string;
+  mode: string;
+  overlap: boolean;
+  path: string;
+  toolName?: string;
+  phases: Record<
+    "auth" | "context" | "server_build" | "tool_projection" | "dispatch",
+    number
+  >;
+  queryCount: number;
+  totalMs: number;
+};
+
+export const buildMcpRequestMetricRecord = ({
+  phases,
+  totalMs,
+  ...fields
+}: McpRequestMetricInput) => ({
+  event: "mcp.request.phases",
+  ...fields,
+  auth: Math.floor(phases.auth),
+  context: Math.floor(phases.context),
+  server_build: Math.floor(phases.server_build),
+  tool_projection: Math.floor(phases.tool_projection),
+  dispatch: Math.floor(phases.dispatch),
+  total: Math.ceil(totalMs),
+});
+
+export const emitMcpRequestMetric = (input: McpRequestMetricInput): void => {
+  writeMetricLine(buildMcpRequestMetricRecord(input));
+};
 
 /** One rejection per budget name; caller identifiers are never dimensions. */
 export const emitRateLimitRejectedMetric = (budgetName: BudgetName): void => {
@@ -206,13 +238,6 @@ const EVENT_LOOP_DELAY_METRIC = {
   p99: "EventLoopDelayP99",
 } as const;
 
-const PROCESS_MEMORY_METRIC = {
-  rss: "ProcessRssBytes",
-  heapUsed: "ProcessHeapUsedBytes",
-  arrayBuffers: "ProcessArrayBuffersBytes",
-  uploadFinalizeInFlight: "UploadFinalizeInFlightBytes",
-} as const;
-
 /**
  * The process's memory at the end of a reporting window. File work holds its
  * bytes in array buffers outside the JS heap, so those are reported apart
@@ -225,6 +250,15 @@ export type ProcessMemoryReport = {
   uploadFinalizeInFlightBytes: number;
 };
 
+/** Log-only: memory diagnostics must not create billable custom metrics. */
+export const emitProcessMemoryLog = (memory: ProcessMemoryReport): void => {
+  writeMetricLine({
+    severity: "INFO",
+    message: "runtime.process_memory",
+    ...memory,
+  });
+};
+
 /**
  * One reporting window of the process's event-loop delay. Undimensioned: the
  * process is the unit, and a task or route id would only multiply series.
@@ -233,12 +267,10 @@ export const emitEventLoopDelayMetric = ({
   maxMs,
   p99Ms,
   rootPool,
-  memory,
 }: {
   maxMs: number;
   p99Ms: number;
   rootPool?: RootPoolReport;
-  memory?: ProcessMemoryReport;
 }): void => {
   writeMetricLine({
     _aws: {
@@ -250,12 +282,6 @@ export const emitEventLoopDelayMetric = ({
           Metrics: [
             { Name: EVENT_LOOP_DELAY_METRIC.max, Unit: "Milliseconds" },
             { Name: EVENT_LOOP_DELAY_METRIC.p99, Unit: "Milliseconds" },
-            ...(memory === undefined
-              ? []
-              : Object.values(PROCESS_MEMORY_METRIC).map((Name) => ({
-                  Name,
-                  Unit: "Bytes",
-                }))),
           ],
         },
       ],
@@ -264,15 +290,6 @@ export const emitEventLoopDelayMetric = ({
     ...(rootPool === undefined ? {} : { rootPool }),
     [EVENT_LOOP_DELAY_METRIC.max]: maxMs,
     [EVENT_LOOP_DELAY_METRIC.p99]: p99Ms,
-    ...(memory === undefined
-      ? {}
-      : {
-          [PROCESS_MEMORY_METRIC.rss]: memory.rssBytes,
-          [PROCESS_MEMORY_METRIC.heapUsed]: memory.heapUsedBytes,
-          [PROCESS_MEMORY_METRIC.arrayBuffers]: memory.arrayBuffersBytes,
-          [PROCESS_MEMORY_METRIC.uploadFinalizeInFlight]:
-            memory.uploadFinalizeInFlightBytes,
-        }),
   });
 };
 
