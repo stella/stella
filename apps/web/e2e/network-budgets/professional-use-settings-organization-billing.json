@@ -1,5 +1,5 @@
 {
-  "route": "/settings/organization/billing",
+  "route": "/admin/billing",
   "reason": "Load professional-use acceptance before protected route data is requested.",
   "budget": {
     "depth": 3,

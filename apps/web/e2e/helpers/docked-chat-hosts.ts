@@ -354,13 +354,16 @@ export const readDockedChatHosts = (): {
     if (routeId === undefined) {
       throw new Error(`No route id in ${file}`);
     }
-    const routeIds = ["__root__", routeId];
-    if (symbol.startsWith("Protected")) {
-      routeIds.push("/_protected");
-    }
-    if (symbol.startsWith("Knowledge")) {
-      routeIds.push("/knowledge");
-    }
+    // Every layout above the route takes part in frame selection, as in the
+    // router's matches (e.g. `/_protected/admin` picks the admin frame).
+    const segments = routeId.split("/").filter((segment) => segment !== "");
+    const routeIds = [
+      "__root__",
+      ...segments.map(
+        (_, index) => `/${segments.slice(0, index + 1).join("/")}`,
+      ),
+      routeId,
+    ];
     const surfaces = new Set(discover(file));
     const memberFrame =
       selectAppFrame({

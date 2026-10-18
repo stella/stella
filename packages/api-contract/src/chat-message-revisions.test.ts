@@ -26,8 +26,10 @@ describe("accepted answer edit boundaries", () => {
         start: 0,
         end: 5,
         format: "link",
+        intent: "set",
         url: "https://example.org",
       },
+      { type: "format", start: 0, end: 5, format: "link", intent: "remove" },
       { type: "format", start: 0, end: 5, format: "style", style: "heading-1" },
     ];
     for (const edit of edits) {
@@ -73,6 +75,7 @@ describe("accepted answer edit boundaries", () => {
         start: 0,
         end: 5,
         format: "link",
+        intent: "set",
         url,
       } as const satisfies ChatMessageAcceptedEdit;
       const parsed = v.safeParse(chatMessageAcceptedEditSchema, edit);
@@ -132,4 +135,17 @@ describe("accepted answer edit boundaries", () => {
       }).success,
     ).toBe(false);
   });
+});
+
+test("link intent rejects implicit toggles and mixed set/remove payloads", () => {
+  const link = { type: "format", format: "link", start: 0, end: 5 };
+  for (const payload of [
+    { ...link, url: "https://example.test/" },
+    { ...link, intent: "set" },
+    { ...link, intent: "remove", url: "https://example.test/" },
+  ]) {
+    expect(v.safeParse(chatMessageAcceptedEditSchema, payload).success).toBe(
+      false,
+    );
+  }
 });

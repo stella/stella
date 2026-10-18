@@ -1,4 +1,7 @@
-import type { templateLookupFormats } from "@/api/db/schema";
+import type {
+  templateLookupFormatUserDefaults,
+  templateLookupFormats,
+} from "@/api/db/schema";
 import type {
   UnbackedProjectionKeys,
   UnprojectedColumns,
@@ -23,6 +26,21 @@ export const toResponse = ({
   name,
   format,
   createdAt: createdAt.toISOString(),
+});
+
+/** A member's saved choice, without the organization format's shared content. */
+export const toUserDefaultAccountExport = ({
+  organizationId,
+  registry,
+  formatId,
+  createdAt,
+  updatedAt,
+}: typeof templateLookupFormatUserDefaults.$inferSelect) => ({
+  organizationId,
+  registry,
+  formatId,
+  createdAt: createdAt.toISOString(),
+  updatedAt: updatedAt.toISOString(),
 });
 
 type LookupFormatRow = typeof templateLookupFormats.$inferSelect;
