@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   checkDocumentIdentitySources,
   missingRequiredSurfaces,
+  undetectedBadgeRemovals,
   REQUIRED_DOCUMENT_IDENTITY_SURFACES,
 } from "./document-identity-guard";
 
@@ -294,5 +295,29 @@ describe("document identity ownership guard", () => {
         REQUIRED_DOCUMENT_IDENTITY_SURFACES,
       ),
     ).toEqual([removed]);
+  });
+
+  test.each(Object.entries(ROWS))(
+    "reports removing the shared badge from a discovered %s",
+    (_name, row) => {
+      const sources = fixture(
+        "apps/web/src/features/statutes/new-results.tsx",
+        IMPORT + row,
+      );
+      const { surfaces } = checkDocumentIdentitySources(sources);
+      expect(surfaces).toHaveLength(1);
+      expect(undetectedBadgeRemovals(sources, surfaces)).toEqual([]);
+    },
+  );
+
+  test("names a discovered surface whose badge removal goes unreported", () => {
+    const sources = fixture(
+      "apps/web/src/features/statutes/new-results.tsx",
+      IMPORT + ROWS.statute,
+    );
+    const unreported = "apps/web/src/features/statutes/elsewhere.tsx#Elsewhere";
+    expect(undetectedBadgeRemovals(sources, [unreported])).toEqual([
+      unreported,
+    ]);
   });
 });

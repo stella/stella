@@ -755,14 +755,49 @@ export const missingRequiredSurfaces = (
   required: readonly string[],
 ) => required.filter((surface) => !result.surfaces.includes(surface));
 
-if (import.meta.main) {
-  const result = checkDocumentIdentitySources(
-    readDocumentIdentitySources(process.cwd()),
+/**
+ * Replace every shared badge with a hand-rolled identity renderer. The guard
+ * must then report each surface it discovered, or it can no longer see the
+ * rendered badge it claims to enforce.
+ */
+const withUnsharedBadges = (sources: ReadonlyMap<string, string>) =>
+  new Map(
+    [...sources].map(([filename, source]) => [
+      filename,
+      source.includes("<DocumentIdentityBadge")
+        ? `${source.replaceAll("<DocumentIdentityBadge", "<UnsharedDocumentIdentityBadge")}
+            const UnsharedDocumentIdentityBadge = ({ identity }) =>
+              identity.kind === "decision"
+                ? <span>{identity.courtAbbreviation}</span>
+                : <span>{identity.number}/{identity.year}</span>;`
+        : source,
+    ]),
   );
+
+/** Discovered surfaces whose badge removal the guard would not report. */
+export const undetectedBadgeRemovals = (
+  sources: ReadonlyMap<string, string>,
+  surfaces: readonly string[],
+) => {
+  const reported = new Set(
+    checkDocumentIdentitySources(withUnsharedBadges(sources)).violations,
+  );
+  return surfaces.filter((surface) => !reported.has(surface));
+};
+
+if (import.meta.main) {
+  const sources = readDocumentIdentitySources(process.cwd());
+  const result = checkDocumentIdentitySources(sources);
   const missing = missingRequiredSurfaces(
     result,
     REQUIRED_DOCUMENT_IDENTITY_SURFACES,
   );
+  const undetected = undetectedBadgeRemovals(sources, result.surfaces);
+  for (const surface of undetected) {
+    console.error(
+      `Removing the shared badge from this surface would go unreported: ${surface}`,
+    );
+  }
   for (const violation of result.violations) {
     console.error(
       `Document row or rail must render DocumentIdentityBadge: ${violation}`,
@@ -773,7 +808,11 @@ if (import.meta.main) {
       `Required document identity surface was not discovered: ${surface}`,
     );
   }
-  if (result.violations.length > 0 || missing.length > 0) {
+  if (
+    result.violations.length > 0 ||
+    missing.length > 0 ||
+    undetected.length > 0
+  ) {
     process.exitCode = 1;
   } else {
     console.log(
