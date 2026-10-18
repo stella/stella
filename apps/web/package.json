@@ -5,6 +5,10 @@
   "license": "Apache-2.0",
   "type": "module",
   "imports": {
+    "#aho-corasick": {
+      "browser": "@stll/aho-corasick-wasm",
+      "default": "@stll/aho-corasick"
+    },
     "#regex-set": {
       "browser": "@stll/regex-set-wasm",
       "default": "@stll/regex-set"

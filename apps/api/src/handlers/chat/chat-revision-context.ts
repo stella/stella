@@ -26,7 +26,7 @@ export type ChatRevisionContextChange = {
 
 const nextRevision = alias(chatMessageRevisions, "next_chat_message_revision");
 
-const revisionText = (content: PersistedChatMessageContent): string =>
+export const revisionText = (content: PersistedChatMessageContent): string =>
   normalizePersistedChatMessageContent(content)
     .parts.filter((part) => part.type === "text")
     .map((part) => part.content)

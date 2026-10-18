@@ -8,6 +8,8 @@ import type { ChatAnonPair } from "@stll/anonymize-chat";
 
 import { runAnonymizeDemo } from "../anonymize-demo-worker-client";
 
+import { AhoCorasick } from "#aho-corasick";
+
 /**
  * Live, in-browser run of stella's real anonymization engine (the same
  * WASM pipeline the workspace runs off the main thread for chat and
@@ -128,9 +130,18 @@ type Segment = {
   sourceEnd: number;
 };
 
-const REGEX_SPECIAL = /[.*+?^${}()|[\]\\]/gu;
-const escapeRegExp = (value: string): string =>
-  value.replaceAll(REGEX_SPECIAL, "\\$&");
+let cachedSegmentMatcher: { key: string; matcher: AhoCorasick } | undefined;
+
+const segmentMatcher = (originals: string[]): AhoCorasick => {
+  const key = JSON.stringify(originals);
+  if (cachedSegmentMatcher?.key !== key) {
+    cachedSegmentMatcher = {
+      key,
+      matcher: new AhoCorasick(originals, { matchKind: "leftmost-longest" }),
+    };
+  }
+  return cachedSegmentMatcher.matcher;
+};
 
 /**
  * Splits `text` into plain/highlighted segments by locating each detected
@@ -139,28 +150,36 @@ const escapeRegExp = (value: string): string =>
  * placeholder), longest-first, so a highlight for "Edison Bank plc"
  * takes priority over one for "Edison" alone.
  */
-const buildSegments = (
-  text: string,
+export const buildSegments = (
+  rawText: string,
   pairs: readonly HighlightPair[],
 ): Segment[] => {
+  const text = rawText.toWellFormed();
   if (text.length === 0 || pairs.length === 0) {
     return [{ text, sourceStart: 0, sourceEnd: text.length }];
   }
   const bucketByOriginal = new Map<string, Bucket>();
   for (const pair of pairs) {
-    if (!bucketByOriginal.has(pair.original)) {
-      bucketByOriginal.set(pair.original, bucketOf(pair.label));
+    const original = pair.original.toWellFormed();
+    if (original === "") {
+      continue;
     }
+    if (!bucketByOriginal.has(original)) {
+      bucketByOriginal.set(original, bucketOf(pair.label));
+    }
+  }
+  if (bucketByOriginal.size === 0) {
+    return [{ text, sourceStart: 0, sourceEnd: text.length }];
   }
   const originals = [...bucketByOriginal.keys()].toSorted(
     (a, b) => b.length - a.length,
   );
-  const pattern = new RegExp(originals.map(escapeRegExp).join("|"), "gu");
+  const matcher = segmentMatcher(originals);
   const segments: Segment[] = [];
   let lastIndex = 0;
-  for (const match of text.matchAll(pattern)) {
-    const index = match.index;
-    const matched = match[0];
+  for (const match of matcher.findIter(text)) {
+    const index = match.start;
+    const matched = match.text;
     if (index > lastIndex) {
       segments.push({
         text: text.slice(lastIndex, index),
