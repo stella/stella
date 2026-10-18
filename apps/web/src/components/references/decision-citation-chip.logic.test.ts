@@ -1,6 +1,13 @@
+import { createElement } from "react";
+
 import { describe, expect, test } from "bun:test";
 
-import { citationTextNamesCase } from "@/components/references/decision-citation-chip.logic";
+import {
+  citationNodeText,
+  citationTextNamesCase,
+  inlineDecisionCitationPresentation,
+  normalizeDecisionCaseNumber,
+} from "@/components/references/decision-citation-chip.logic";
 
 describe("citation text naming its case", () => {
   test("matches the case number whatever the spacing or case", () => {
@@ -16,6 +23,42 @@ describe("citation text naming its case", () => {
     expect(citationTextNamesCase("27 Cdo 1525/2025", "27 Cdo 1525/2025")).toBe(
       true,
     );
+  });
+
+  test("normalises international punctuation, whitespace and registry decoration", () => {
+    expect(normalizeDecisionCaseNumber("III.\u00a0ÚS 2429/24")).toBe(
+      normalizeDecisionCaseNumber("III.ÚS 2429/24"),
+    );
+    for (const [prose, stored] of [
+      ["23 Cdo 651/2023", "NS 23 Cdo 651/2023-123"],
+      ["3 Cdo 12/2020", "NS SR 3 Cdo 12/2020"],
+      ["1 BvR 123/20", "BVerfG, 1 BvR 123/20"],
+      ["410 U.S. 113", "SCOTUS 410 U.S. 113"],
+    ]) {
+      expect(citationTextNamesCase(prose ?? "", stored ?? "")).toBe(true);
+    }
+  });
+
+  test("extracts rich link text and chooses one closed inline presentation", () => {
+    const rich = createElement(
+      "span",
+      null,
+      "rozsudek ",
+      createElement("strong", null, "23\u00a0Cdo"),
+      createElement("code", null, " 651/2023"),
+      " ze dne",
+    );
+    expect(citationNodeText(rich)).toBe("rozsudek 23\u00a0Cdo 651/2023 ze dne");
+    expect(
+      inlineDecisionCitationPresentation(rich, "NS 23 Cdo 651/2023-7"),
+    ).toEqual({
+      kind: "chip-replaces-text",
+      before: "rozsudek ",
+      after: " ze dne",
+    });
+    expect(
+      inlineDecisionCitationPresentation("this decision", "23 Cdo 651/2023"),
+    ).toEqual({ kind: "prose-trigger", label: "this decision" });
   });
 
   test("keeps the badge when the prose names another case or none", () => {

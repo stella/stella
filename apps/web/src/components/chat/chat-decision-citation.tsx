@@ -26,9 +26,7 @@ import type { ChatUIMessage } from "@/components/chat/chat-ui-tools";
 import { useExternalSourceStore } from "@/components/chat/external-source-store";
 import { collectSourceChipEntries } from "@/components/chat/source-chips.logic";
 import { DecisionCitationChip } from "@/components/references/decision-citation-chip";
-import { citationTextNamesCase } from "@/components/references/decision-citation-chip.logic";
-import { decisionCitationPresentationsById } from "@/components/references/decision-citation-presentation.logic";
-import type { DecisionCitationPresentation } from "@/components/references/decision-citation-presentation.logic";
+import { inlineDecisionCitationPresentation } from "@/components/references/decision-citation-chip.logic";
 import type { CitedDecisionParagraph } from "@/components/references/reference.logic";
 import { env } from "@/env";
 import { publicCaseLawPageCountryFromParam } from "@/features/case-law/case-law-jurisdiction";
@@ -54,7 +52,6 @@ type CitationCacheRequest =
 type AnswerDecisionContextValue = {
   reads: ReadonlyMap<string, DecisionCitationRead>;
   routes: ReadonlyMap<string, DecisionCitationRead>;
-  presentations: ReadonlyMap<string, DecisionCitationPresentation>;
 };
 type CommonCitationProps = {
   passage?: ReactNode;
@@ -85,19 +82,6 @@ const withAnchor = (href: string, anchorId: string | undefined): string => {
   return `${base}#${encodeURIComponent(anchorId)}`;
 };
 
-// The text of a link's children when they are plain text, as Markdown link
-// text usually is; null for anything richer, which keeps its badge.
-const plainText = (node: ReactNode): string | null => {
-  if (typeof node === "string" || typeof node === "number") {
-    return String(node);
-  }
-  if (Array.isArray(node)) {
-    const parts = node.map((child: ReactNode) => plainText(child));
-    return parts.every((part) => part !== null) ? parts.join("") : null;
-  }
-  return null;
-};
-
 const CitationView = ({
   read,
   passage,
@@ -105,11 +89,9 @@ const CitationView = ({
   originalUrl,
   paragraph,
   renderPassage = true,
-  presentationById,
   onOpen,
 }: CommonCitationProps & {
   read: DecisionCitationRead;
-  presentationById: AnswerDecisionContextValue["presentations"] | undefined;
   onOpen: () => void;
 }) => {
   const metadata = readyCitationMetadata(read);
@@ -126,38 +108,45 @@ const CitationView = ({
     readerUrl: withAnchor(readerUrl ?? metadata.readerUrl, paragraph?.anchorId),
     originalUrl: originalUrl === undefined ? metadata.originalUrl : originalUrl,
   };
-  // Prose that names the case ("v nálezu III. ÚS 2429/24") is the citation:
-  // it opens the card itself, and no badge repeats the court beside it.
-  const passageText = plainText(passage);
-  if (
-    renderPassage &&
-    passageText !== null &&
-    citationTextNamesCase(passageText, metadata.caseNumber)
-  ) {
+  const presentation = inlineDecisionCitationPresentation(
+    passage,
+    metadata.caseNumber,
+  );
+  if (renderPassage && presentation.kind === "chip-replaces-text") {
     return (
       <>
+        {presentation.before}
         <DecisionCitationChip
           decision={decision}
-          label={passage}
           onOpen={onOpen}
+          presentation="inline"
           paragraphNumber={paragraph?.courtParagraphNumber ?? null}
         />
+        {presentation.after}
         <CitationReadFeedback read={read} />
       </>
     );
   }
   return (
     <>
-      {renderPassage && passage}
-      <span className="ms-1">
+      {renderPassage ? (
         <DecisionCitationChip
           decision={decision}
+          label={
+            presentation.kind === "prose-trigger" ? presentation.label : passage
+          }
           passage={passage}
-          presentation={presentationById?.get(metadata.decisionId) ?? "compact"}
           paragraphNumber={paragraph?.courtParagraphNumber ?? null}
           onOpen={onOpen}
         />
-      </span>
+      ) : (
+        <DecisionCitationChip
+          decision={decision}
+          passage={passage}
+          paragraphNumber={paragraph?.courtParagraphNumber ?? null}
+          onOpen={onOpen}
+        />
+      )}
       <CitationReadFeedback read={read} />
     </>
   );
@@ -182,7 +171,6 @@ const ActiveChatDecisionCitation = ({
       read={
         scopedRead?.type === "source" ? scopedRead : { type: "query", view }
       }
-      presentationById={answer?.presentations}
       onOpen={() =>
         detached(
           view.type === "items"
@@ -218,7 +206,6 @@ const ActiveChatRouteDecisionCitation = ({
       read={
         scopedRead?.type === "source" ? scopedRead : { type: "query", view }
       }
-      presentationById={answer?.presentations}
       onOpen={() =>
         detached(
           view.type === "items"
@@ -361,17 +348,8 @@ export const ChatAnswerDecisionProvider = ({
       routes.set(request.key, read);
     }
   }
-  const decisions = targets.flatMap((target) => {
-    const read =
-      target.type === "id"
-        ? reads.get(target.decisionId)
-        : routes.get(createCaseLawDecisionPath(target.params));
-    const metadata = read === undefined ? null : readyCitationMetadata(read);
-    return metadata === null ? [] : [metadata];
-  });
-  const presentations = decisionCitationPresentationsById(decisions);
   return (
-    <AnswerDecisionContext value={{ reads, routes, presentations }}>
+    <AnswerDecisionContext value={{ reads, routes }}>
       {children}
     </AnswerDecisionContext>
   );
