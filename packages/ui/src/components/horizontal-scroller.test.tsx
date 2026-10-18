@@ -72,6 +72,8 @@ test("shows directional controls and scrolls forward", () => {
   expect(view.getByLabelText("Previous").getAttribute("aria-disabled")).toBe(
     "true",
   );
+  expect(view.getByLabelText("Previous").tabIndex).toBe(-1);
+  expect(view.getByLabelText("Next").tabIndex).toBe(0);
   fireEvent.click(view.getByLabelText("Next"));
   expect(scrollBy).toHaveBeenCalledWith({ behavior: "smooth", left: 80 });
   Object.defineProperty(viewport, "scrollLeft", {
@@ -290,6 +292,9 @@ test("keeps focus on a control that scrolled the row to its edge", () => {
 
   expect(document.activeElement).toBe(next);
   expect(next.getAttribute("aria-disabled")).toBe("true");
+  expect(next.tabIndex).toBe(-1);
+  expect(next.className).toContain("focus-visible:opacity-100");
+  expect(view.getByLabelText("Previous").tabIndex).toBe(0);
   fireEvent.click(next);
   expect(scrollBy).not.toHaveBeenCalled();
 });

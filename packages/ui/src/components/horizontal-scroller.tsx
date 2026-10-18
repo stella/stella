@@ -150,15 +150,18 @@ export const HorizontalScroller = ({
       {(state.canScrollStart || state.canScrollEnd) && (
         // Both controls stay mounted while the row overflows: one that
         // reached its edge turns inert instead of unmounting, so keyboard
-        // focus on it survives the scroll that got it there.
+        // focus on it survives the scroll that got it there. An inert one
+        // leaves the tab order and shows only while it still holds focus.
         <>
           <button
             aria-disabled={!state.canScrollStart}
+            tabIndex={state.canScrollStart ? undefined : -1}
             aria-label={previousLabel}
             className={cn(
               CONTROL_CLASS,
               "start-1",
-              !state.canScrollStart && "pointer-events-none opacity-0",
+              !state.canScrollStart &&
+                "pointer-events-none opacity-0 focus-visible:opacity-100",
             )}
             onClick={() => {
               if (state.canScrollStart) {
@@ -171,11 +174,13 @@ export const HorizontalScroller = ({
           </button>
           <button
             aria-disabled={!state.canScrollEnd}
+            tabIndex={state.canScrollEnd ? undefined : -1}
             aria-label={nextLabel}
             className={cn(
               CONTROL_CLASS,
               "end-1",
-              !state.canScrollEnd && "pointer-events-none opacity-0",
+              !state.canScrollEnd &&
+                "pointer-events-none opacity-0 focus-visible:opacity-100",
             )}
             onClick={() => {
               if (state.canScrollEnd) {
