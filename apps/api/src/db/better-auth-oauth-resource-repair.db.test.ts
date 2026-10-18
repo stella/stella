@@ -109,7 +109,9 @@ const onlineConnection = (transaction: TestDatabaseTransaction) => {
   };
 };
 
-const captureRejection = async (operation: Promise<void>): Promise<unknown> =>
+const captureRejection = async (
+  operation: Promise<unknown>,
+): Promise<unknown> =>
   await operation.then(
     () => null,
     (error: unknown) => error,

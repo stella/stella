@@ -35,10 +35,8 @@ import type {
   MigrationTiming,
   MigrationTimingRecord,
 } from "./migration-timing";
-import {
-  ONLINE_MIGRATION_INDEXES,
-  type OnlineMigrationOutcome,
-} from "./online-migrations";
+import type { OnlineMigrationOutcome } from "./online-migration-connection";
+import { ONLINE_MIGRATION_INDEXES } from "./online-migrations";
 
 const databaseUrl = process.env["DATABASE_URL"];
 // Scratch databases are not RDS; the migrator requires an explicit choice.
@@ -730,7 +728,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
             );
           const deferred = {
             type: "deferred",
-            index: "probe_idx",
+            step: "probe_idx",
             retryAfterMs: 7,
           } as const satisfies OnlineMigrationOutcome;
           const connection = await openClient().reserve();
@@ -747,7 +745,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
             });
             expect(single).toMatchObject({
               status: "online_deferred",
-              index: deferred.index,
+              step: deferred.step,
               insertedNames: [A],
             });
             expect(await laneOpenToWriters()).toBe(true);
@@ -906,7 +904,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
             stderr: "pipe",
           });
           let output = "";
-          const decisions: { index: string; retryAfterMs: number }[] = [];
+          const decisions: { step: string; retryAfterMs: number }[] = [];
           const deadline = setTimeout(() => child.kill(), 30_000);
           try {
             const readOutput = async () => {
@@ -926,15 +924,15 @@ if (!runPostgresTests || databaseUrl === undefined) {
                   if (
                     typeof record !== "object" ||
                     record === null ||
-                    !("index" in record) ||
-                    typeof record.index !== "string" ||
+                    !("step" in record) ||
+                    typeof record.step !== "string" ||
                     !("retryAfterMs" in record) ||
                     typeof record.retryAfterMs !== "number"
                   ) {
                     throw new TypeError("Invalid migrate deferral event");
                   }
                   decisions.push({
-                    index: record.index,
+                    step: record.step,
                     retryAfterMs: record.retryAfterMs,
                   });
                   if (decisions.length === 2) {
@@ -954,7 +952,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
             ).toBeGreaterThanOrEqual(2);
             const first = decisions.at(0);
             expect(first).toMatchObject({
-              index: firstIndex.name,
+              step: firstIndex.name,
               retryAfterMs: 13,
             });
             expect(decisions.at(1)).toEqual(first);

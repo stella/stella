@@ -48,6 +48,8 @@ import { isRecord } from "@/api/lib/type-guards";
 
 /** Registered blocking chains share one physical transaction order. */
 export const AGGREGATE_LOCKS = {
+  account: { rank: -20, kind: "row" },
+  accountExport: { rank: -10, kind: "row" },
   organization: { rank: 0, kind: "row" },
   professionalUseAcceptance: { rank: 5, kind: "advisory" },
   orgFeatureAdmission: { rank: 10, kind: "advisory" },
@@ -148,6 +150,7 @@ export const AGGREGATE_CHAINS = {
     "obligation",
     "entity",
   ],
+  accountExport: ["account", "accountExport"],
   professionalUseAcceptance: ["professionalUseAcceptance"],
   desktopRenewal: ["desktopMembership", "desktopCredential"],
   organizationSettings: ["organization", "organizationSettings"],
@@ -213,6 +216,8 @@ const modeCovers = (
 };
 
 type AggregateIdentities = {
+  account: SafeId<"user">;
+  accountExport: { id: string; userId: SafeId<"user"> };
   sampleCase: { workspaceId: SafeId<"workspace"> };
   organization: SafeId<"organization">;
   organizationSettings: SafeId<"organization">;
@@ -761,6 +766,18 @@ const byIdWithin = (
   scopeColumns: [scopeColumn],
   scopeValues: [scopeValue],
 });
+// A root row found by its own key, with no owning scope to check.
+const byUnscopedKey = (
+  table: string,
+  column: string,
+  value: string | number,
+): RowResource => ({
+  table,
+  columns: [column],
+  values: [value],
+  scopeColumns: [],
+  scopeValues: [],
+});
 const memberCleanupRowResource = (
   id: AggregateIdentities["memberCleanup"],
 ): RowResource => {
@@ -781,22 +798,26 @@ const memberCleanupRowResource = (
 };
 const rowResource = (options: RowIdentityOptions): RowResource => {
   switch (options.aggregate) {
+    case "account":
     case "organization":
-      return {
-        table: "organization",
-        columns: ["id"],
-        values: [options.id],
-        scopeColumns: [],
-        scopeValues: [],
-      };
+      return byUnscopedKey(
+        options.aggregate === "account" ? "user" : "organization",
+        "id",
+        options.id,
+      );
     case "organizationSettings":
-      return {
-        table: "organization_settings",
-        columns: ["organization_id"],
-        values: [options.id],
-        scopeColumns: [],
-        scopeValues: [],
-      };
+      return byUnscopedKey(
+        "organization_settings",
+        "organization_id",
+        options.id,
+      );
+    case "accountExport":
+      return byIdWithin(
+        "account_exports",
+        options.id.id,
+        "user_id",
+        options.id.userId,
+      );
     case "desktopMembership":
       return {
         table: "member",
@@ -894,13 +915,7 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
         options.id.organizationId,
       );
     case "schedulerClaim":
-      return {
-        table: "scheduler_jobs",
-        columns: ["id"],
-        values: [options.id.id],
-        scopeColumns: [],
-        scopeValues: [],
-      };
+      return byUnscopedKey("scheduler_jobs", "id", options.id.id);
     case "definition":
       return byIdWithin(
         "flow_definitions",

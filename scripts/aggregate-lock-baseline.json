@@ -2053,12 +2053,6 @@
   },
   {
     "file": "apps/api/src/lib/account-deletion-effect-store.ts",
-    "fingerprint": "46b68b0d57def866090b26c2ad58e996e260671b74e32b4845ba64c9a1bb7633",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/account-deletion-effect-store.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/src/lib/account-deletion-effect-store.ts",
     "fingerprint": "5c3e8a63752e7159de0df32cd056cc60b96326036650b0ca3078cee49a1c0b2e",
     "count": 1,
     "reason": "builder-for in apps/api/src/lib/account-deletion-effect-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
@@ -2470,12 +2464,6 @@
     "fingerprint": "9b33dce73b04603dfab29eb2fa9119276c4c6410a9613e5e9c63fc2135cacc84",
     "count": 1,
     "reason": "transaction-boundary in apps/api/src/lib/confirmation-otp.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/src/lib/db/account-row.ts",
-    "fingerprint": "115d00ac74f55ff2252700c165a064e2612b60563875cb96097642e7144061ea",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/db/account-row.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
     "file": "apps/api/src/lib/db/account-row.ts",

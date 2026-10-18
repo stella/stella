@@ -1,41 +1,35 @@
-import { Result } from "better-result";
-
 import { readConstraintCompletion } from "./online-constraint-completion";
+import { validateOnlineConstraints } from "./online-ddl";
+import type { OnlineConstraintValidation } from "./online-ddl";
 import type { OnlineRepair } from "./online-migration-connection";
-import { setSharedQueryTimeouts } from "./shared-pool-timeouts";
 
-const CONSTRAINT_NAME = "organization_settings_ai_instructions_length_check";
-
-export const ORGANIZATION_AI_INSTRUCTIONS_CONSTRAINT_VALIDATION = {
-  name: CONSTRAINT_NAME,
-  readCompletion: async (connection) =>
-    await readConstraintCompletion({
-      connection,
-      tableName: "organization_settings",
-      constraintName: CONSTRAINT_NAME,
-      repairName: CONSTRAINT_NAME,
-    }),
-  repair: async (connection) => {
-    // The schema transaction has committed before the online phase starts;
-    // validation therefore retains no lock from adding the column and CHECK.
-    await connection.execute("BEGIN");
-    const outcome = await Result.tryPromise({
-      try: async () => {
-        await setSharedQueryTimeouts(connection.query, {
-          statementTimeoutMs: 10_000,
-          lockTimeoutMs: 1000,
-        });
-        await connection.execute(
-          `ALTER TABLE public."organization_settings" VALIDATE CONSTRAINT "${CONSTRAINT_NAME}"`,
-        );
-        await connection.execute("COMMIT");
-      },
-      catch: (cause: unknown) => cause,
-    });
-    if (Result.isOk(outcome)) {
-      return;
-    }
-    await connection.execute("ROLLBACK");
-    throw outcome.error;
+export const ORGANIZATION_AI_INSTRUCTIONS_CONSTRAINTS = [
+  {
+    tableName: "organization_settings",
+    constraintName: "organization_settings_ai_instructions_length_check",
   },
-} satisfies OnlineRepair;
+] as const satisfies readonly OnlineConstraintValidation[];
+
+// The schema transaction has committed before the online phase starts, so the
+// validation scan holds no lock from adding the column and CHECK; the table
+// gate bounds its lock wait. Catalog completion makes retries converge.
+export const ORGANIZATION_AI_INSTRUCTIONS_CONSTRAINT_VALIDATIONS =
+  ORGANIZATION_AI_INSTRUCTIONS_CONSTRAINTS.map(
+    ({ tableName, constraintName }) =>
+      ({
+        name: constraintName,
+        readCompletion: async (connection) =>
+          await readConstraintCompletion({
+            connection,
+            tableName,
+            constraintName,
+            repairName: constraintName,
+          }),
+        repair: async (connection, tables) =>
+          await validateOnlineConstraints({
+            connection,
+            tables,
+            constraints: [{ tableName, constraintName }],
+          }),
+      }) satisfies OnlineRepair,
+  );

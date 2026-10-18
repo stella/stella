@@ -614,6 +614,134 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
     });
   });
 
+  test("rates interleaved requests against their bound models without changing shared callbacks", async () => {
+    const { createTanStackAIAnalyticsCallbacks } =
+      await loadTanStackAIAnalytics();
+    const { usageUnitsFromTokens } = await import("@/api/lib/usage/unit-model");
+    const insertedRows: unknown[] = [];
+    const { safeDb } = createScopedDbMock({
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            limit: async () => [
+              {
+                currentPeriodEnd: new Date("2026-07-01T00:00:00.000Z"),
+                currentPeriodStart: new Date("2026-06-01T00:00:00.000Z"),
+                status: "active",
+              },
+            ],
+            for: async () => [{ id: workspaceId }],
+          }),
+        }),
+      }),
+      insert: () => ({
+        values: (values: unknown) => {
+          insertedRows.push(values);
+          return {
+            onConflictDoNothing: () => ({
+              returning: async () => [{ id: "usage_event_1" }],
+            }),
+          };
+        },
+      }),
+    });
+    const events: Parameters<ServerAnalytics["capture"]>[0][] = [];
+    const callbacks = createTanStackAIAnalyticsCallbacks({
+      modelTier: MANAGED_MODEL_TIER.standard,
+      dataClass: "public_corpus",
+      analytics: {
+        capture: (event) => {
+          events.push(event);
+        },
+        flush: async () => undefined,
+        identifyOrganizationGroup: () => undefined,
+      },
+      feature: "structured.answer",
+      modelTask: "chat",
+      orgAIConfig: createOpenAIOrgAIConfig(),
+      traceId: "trace_bound_models",
+      usageMetering: {
+        actionType: "chat",
+        organizationId: orgId,
+        safeDb,
+        serviceTier: "standard",
+        userId,
+        workspaceId,
+      },
+    });
+    const deferred: Promise<unknown>[] = [];
+    const originalContext = createMiddlewareContext({
+      deferred,
+      runId: "original",
+    });
+    // Prime the shared callback's cached primary identity before binding.
+    await callbacks.middleware.onUsage?.(originalContext, usage);
+    const fallback = callbacks.forModel({
+      keySource: "instance",
+      modelId: "claude-sonnet-5",
+      provider: "anthropic",
+    });
+    const primary = callbacks.forModel({
+      keySource: "byok",
+      modelId: "gpt-5.6",
+      provider: "openai",
+    });
+    await fallback.middleware.onUsage?.(
+      createMiddlewareContext({ deferred, runId: "fallback" }),
+      usage,
+    );
+    await primary.middleware.onUsage?.(
+      createMiddlewareContext({ deferred, runId: "primary" }),
+      usage,
+    );
+    await callbacks.middleware.onUsage?.(
+      createMiddlewareContext({ deferred, runId: "original", iteration: 1 }),
+      usage,
+    );
+    await Promise.all(deferred);
+
+    const expectedModels = [
+      { modelId: "gpt-5.4-mini", provider: "openai", isByok: true },
+      { modelId: "claude-sonnet-5", provider: "anthropic", isByok: false },
+      { modelId: "gpt-5.6", provider: "openai", isByok: true },
+      { modelId: "gpt-5.4-mini", provider: "openai", isByok: true },
+    ];
+    const generations = events.filter(
+      (event) => event.event === SERVER_ANALYTICS_EVENTS.aiGeneration,
+    );
+    expect(insertedRows).toHaveLength(expectedModels.length);
+    expect(generations).toHaveLength(expectedModels.length);
+    const expectedRates = expectedModels.map(({ modelId, isByok }) =>
+      usageUnitsFromTokens({
+        actionType: "chat",
+        isByok,
+        modelId,
+        outputTokens: usage.completionTokens,
+        serviceTier: "standard",
+        uncachedInputTokens: usage.promptTokens,
+      }),
+    );
+    expect(expectedRates[0]?.rawUsageMicroUnits).not.toBe(
+      expectedRates[1]?.rawUsageMicroUnits,
+    );
+    for (const [index, model] of expectedModels.entries()) {
+      expect(insertedRows[index]).toMatchObject({
+        ...expectedRates[index],
+        isByok: model.isByok,
+        organizationId: orgId,
+        traceId: "trace_bound_models",
+      });
+      expect(generations[index]).toMatchObject({
+        groups: { organization: orgId },
+        properties: {
+          $ai_model: model.modelId,
+          $ai_provider: model.provider,
+        },
+      });
+    }
+    expect(fallback.usageMetering).toBe(callbacks.usageMetering);
+  });
+
   test("meters standard-tier fallback usage as standard", async () => {
     const { createTanStackAIAnalyticsCallbacks } =
       await loadTanStackAIAnalytics();

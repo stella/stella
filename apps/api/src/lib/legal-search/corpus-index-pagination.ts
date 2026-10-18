@@ -165,6 +165,10 @@ export const NATIVE_SCAN_TRANSPORT = {
   type: "native",
 } as const satisfies CorpusIndexScanTransport;
 
+export const SCORED_SCAN_TRANSPORT = {
+  type: "scored",
+} as const satisfies CorpusIndexScanTransport;
+
 /** Document identity and optional passage metadata, owned by the scan. */
 const CORPUS_INDEX_SCAN_PASSAGE_FIELDS = [
   "document_id",
@@ -187,8 +191,11 @@ type CorpusIndexSearchPageInput<TContext> = {
    * says where the page begins. Absent for every other page.
    */
   skip?: number | undefined;
-  /** Defaults to `native`. */
-  scanTransport?: CorpusIndexScanTransport | undefined;
+  /**
+   * Required: on a document-layout index a native round carries every hit's
+   * whole stored text, so the caller decides what each round costs.
+   */
+  scanTransport: CorpusIndexScanTransport;
   /** A coverage fallback spends one scan round; only emitted hits are highlighted. */
   maxRounds?: number | undefined;
   /**
@@ -927,7 +934,7 @@ const readWindowPage = async <TContext>({
   limit,
   order,
   parsedCursor,
-  scanTransport = NATIVE_SCAN_TRANSPORT,
+  scanTransport,
   maxRounds = LIMITS.corpusIndexSearchMaxRounds,
   snippetFields,
   projectionRevisionField,
@@ -1356,7 +1363,7 @@ const readBm25SearchPage = async <TContext>(
   } = options;
   if (
     order.type !== "relevance" ||
-    scanTransport?.type !== "scored" ||
+    scanTransport.type !== "scored" ||
     (parsedCursor !== null && parsedCursor.windowStart !== 0)
   ) {
     panic("BM25 ranking requires a scored relevance scan in window zero");
