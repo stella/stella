@@ -347,6 +347,28 @@ export type NameIndex = {
   maxWeight: number;
 };
 
+const cloneVocabularyWithoutCache = (vocabulary: Vocabulary): Vocabulary => ({
+  strings: vocabulary.strings,
+  spellingIds: vocabulary.spellingIds,
+  spellings: vocabulary.spellings,
+  ids: vocabulary.ids,
+  bigrams: vocabulary.bigrams,
+  gramPostings: vocabulary.gramPostings,
+  postings: vocabulary.postings,
+  joinPostings: vocabulary.joinPostings,
+  similarityCache: new BoundedCache(SIMILARITY_CACHE_LIMIT),
+});
+
+/** Shares immutable index storage while discarding query-derived state. */
+export const cloneNameIndexWithoutCache = (index: NameIndex): NameIndex => {
+  const folded = cloneVocabularyWithoutCache(index.folded);
+  const raw =
+    index.raw === index.folded
+      ? folded
+      : cloneVocabularyWithoutCache(index.raw);
+  return { ...index, folded, raw };
+};
+
 const emptyVocabulary = (spellings: Spellings): BuildingVocabulary => {
   const spellingIds = new NumberColumn();
   return {
