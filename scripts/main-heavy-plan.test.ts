@@ -131,21 +131,20 @@ const context = (
     pr_depth_only: false,
     query_perf_mode: "compare",
   },
+  // Repository switches at their defaults: unset reads as "".
+  vars: { CI_POSTGRES_PR_SELECTION: "" },
   steps: {
     "changed-files": { outputs: plan },
+    "marketing-release": {
+      outputs: { required: plan["marketing_screenshots_required"] },
+    },
+    // The completed-depth lookup: a run reuses evidence exactly when the plan
+    // says so; otherwise it tests its own head and plans its heavy suites.
     "completed-depth": {
       outputs: {
         run_required: plan["run_required"] ?? "true",
-        pr_heavy_suites: plan["pr_heavy_suites"] ?? "run",
+        pr_heavy_suites: "run",
       },
-    },
-    "e2e-pr-plan": {
-      outputs: {
-        selection_required: plan["browser_spec_selection_required"] ?? "false",
-      },
-    },
-    "marketing-release": {
-      outputs: { required: plan["marketing_screenshots_required"] },
     },
   },
   needs: Object.fromEntries(
