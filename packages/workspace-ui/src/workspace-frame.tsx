@@ -133,7 +133,8 @@ export type WorkspaceFrameProps = {
       composition: "host-responsive";
       navigation: ComponentProps<typeof WorkspaceShell>["navigation"];
       topBar: ComponentProps<typeof WorkspaceShell>["topBar"];
-      endDock: ReactElement;
+      /** Omitted when the host has nothing for the inline-end edge. */
+      endDock?: ReactElement | undefined;
     }
 );
 
@@ -273,7 +274,7 @@ const DescribedWorkspaceFrame = ({
       {frame}
       {inspectorPresentation === "mobile" ? (
         <SheetPopup
-          className="h-dvh w-full max-w-none border-0 p-0"
+          className="h-dvh w-full max-w-none border-0"
           showCloseButton={false}
           side="inline-end"
         >

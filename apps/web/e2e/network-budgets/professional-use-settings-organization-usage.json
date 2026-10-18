@@ -1,5 +1,5 @@
 {
-  "route": "/settings/organization/usage",
+  "route": "/admin/usage",
   "reason": "Load professional-use acceptance before protected route data is requested.",
   "budget": {
     "depth": 5,

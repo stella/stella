@@ -1,8 +1,10 @@
+import type { FolioAIEditOperation } from "@stll/folio-core";
 import {
   BLOCK_DIRECTIVE_KINDS,
   type BlockDirectiveKind,
 } from "@stll/template-conditions";
 
+import { LIMITS } from "@/api/lib/limits";
 import { includes, isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
 export type ClauseRun = {
@@ -13,6 +15,14 @@ export type ClauseRun = {
 
 export const CLAUSE_LIST_KINDS = ["bullet", "ordered"] as const;
 export type ClauseListKind = (typeof CLAUSE_LIST_KINDS)[number];
+
+type ClauseNumbering = Extract<
+  Extract<
+    FolioAIEditOperation,
+    { type: "setBlockParagraphProperties" }
+  >["properties"]["numbering"],
+  { kind: "levelOnly" }
+>;
 
 export type ClauseParagraph = {
   text: string;
@@ -25,7 +35,7 @@ export type ClauseParagraph = {
   /** When set, this paragraph is a list item; bullet or ordered. */
   listKind?: ClauseListKind;
   /** 0-based nesting depth of the list item (0 = top level). */
-  listLevel?: number;
+  numbering?: ClauseNumbering;
 };
 
 export type ClauseBody = ClauseParagraph[];
@@ -63,7 +73,7 @@ export const normalizeClauseBody = (
     const style = fields["style"];
     const level = fields["level"];
     const listKind = fields["listKind"] ?? fields["list_kind"];
-    const listLevel = fields["listLevel"] ?? fields["list_level"];
+    const numbering = fields["numbering"];
     const isDirective = fields["isDirective"] ?? fields["is_directive"];
     const directiveKind = fields["directiveKind"] ?? fields["directive_kind"];
     const directiveExpression =
@@ -78,8 +88,13 @@ export const normalizeClauseBody = (
       ...(typeof listKind === "string" && includes(CLAUSE_LIST_KINDS, listKind)
         ? { listKind }
         : {}),
-      ...(typeof listLevel === "number" && Number.isInteger(listLevel)
-        ? { listLevel }
+      ...(isRecord(numbering) &&
+      numbering["kind"] === "levelOnly" &&
+      typeof numbering["ilvl"] === "number" &&
+      Number.isInteger(numbering["ilvl"]) &&
+      numbering["ilvl"] >= LIMITS.clauseNumberingLevelMin &&
+      numbering["ilvl"] <= LIMITS.clauseNumberingLevelMax
+        ? { numbering: { kind: "levelOnly", ilvl: numbering["ilvl"] } as const }
         : {}),
       ...(typeof isDirective === "boolean" ? { isDirective } : {}),
       ...(typeof directiveKind === "string" &&

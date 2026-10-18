@@ -3,18 +3,14 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  NETWORK_DEPTH_METHOD,
   type NetworkBaseline,
   type RouteNetworkMetrics,
-  browserRequestInterval,
-  countsTowardsWaterfall,
-  deepestWaterfallSequence,
   diffNetworkBaseline,
   mergeNetworkBaseline,
-  mergeResampledMetrics,
   normalizeApiPath,
   responseSizeAllowance,
   waitForQuietPeriod,
-  waterfallDepth,
 } from "../helpers/network";
 
 const UUID = "11111111-2222-4333-8444-555555555555";
@@ -37,439 +33,6 @@ describe("normalizeApiPath", () => {
 
   test("matches uppercase hex", () => {
     expect(normalizeApiPath(`/v1/files/${UUID_UPPER}`)).toBe("/v1/files/:id");
-  });
-});
-
-describe("waterfallDepth", () => {
-  test("empty input is 0", () => {
-    expect(waterfallDepth([])).toBe(0);
-  });
-
-  test("fully parallel requests are one round", () => {
-    expect(
-      waterfallDepth([
-        { start: 0, end: 10 },
-        { start: 1, end: 9 },
-        { start: 2, end: 8 },
-      ]),
-    ).toBe(1);
-  });
-
-  test("distinct non-overlapping waves are separate rounds", () => {
-    expect(
-      waterfallDepth([
-        { start: 0, end: 10 },
-        { start: 10, end: 20 },
-        { start: 20, end: 30 },
-      ]),
-    ).toBe(3);
-  });
-
-  test("mixed overlap counts only distinct waves", () => {
-    expect(
-      waterfallDepth([
-        { start: 0, end: 100 },
-        { start: 2, end: 12 },
-        { start: 100, end: 120 },
-      ]),
-    ).toBe(2);
-  });
-
-  test("a long parallel request prevents false chains through fast replies", () => {
-    expect(
-      waterfallDepth([
-        { start: 0, end: 500 },
-        { start: 2, end: 10 },
-        { start: 10, end: 20 },
-        { start: 20, end: 30 },
-      ]),
-    ).toBe(1);
-  });
-
-  test("a faster response can raise the reading by one", () => {
-    // Pins the asymmetry the route-smoke resampling exists for: the same two
-    // requests read as one round or two depending only on how quickly the
-    // first one answered. Any change that makes this deterministic can drop
-    // WATERFALL_DEPTH_RESAMPLES.
-    const overlapping = [
-      { start: 0, end: 100 },
-      { start: 90, end: 200 },
-    ];
-    const firstAnsweredFaster = [
-      { start: 0, end: 80 },
-      { start: 90, end: 200 },
-    ];
-
-    expect(waterfallDepth(overlapping)).toBe(1);
-    expect(waterfallDepth(firstAnsweredFaster)).toBe(2);
-  });
-
-  test("resampling keeps the shallowest depth but every other regression", () => {
-    const first: RouteNetworkMetrics = {
-      requests: ["GET /v1/a", "GET /v1/new"],
-      requestCounts: { "GET /v1/a": 2, "GET /v1/new": 1 },
-      depth: 4,
-      depthChain: [
-        ["GET /v1/a"],
-        ["GET /v1/a"],
-        ["GET /v1/new"],
-        ["GET /v1/a"],
-      ],
-      dbQueries: { "GET /v1/a": 40 },
-      missingDbQueryCounts: { "GET /v1/new": 1 },
-      responseSizes: { "GET /v1/a": 90_000 },
-      missingResponseSizeCounts: {},
-    };
-    const shallower: RouteNetworkMetrics = {
-      requests: ["GET /v1/a"],
-      requestCounts: { "GET /v1/a": 1 },
-      depth: 3,
-      depthChain: [["GET /v1/a"], ["GET /v1/a"], ["GET /v1/a"]],
-      dbQueries: { "GET /v1/a": 4 },
-      missingDbQueryCounts: {},
-      responseSizes: { "GET /v1/a": 1000 },
-      missingResponseSizeCounts: { "GET /v1/a": 1 },
-    };
-
-    expect(mergeResampledMetrics(first, shallower)).toEqual({
-      requests: ["GET /v1/a", "GET /v1/new"],
-      requestCounts: { "GET /v1/a": 2, "GET /v1/new": 1 },
-      depth: 3,
-      depthChain: [["GET /v1/a"], ["GET /v1/a"], ["GET /v1/a"]],
-      dbQueries: { "GET /v1/a": 40 },
-      missingDbQueryCounts: { "GET /v1/new": 1 },
-      responseSizes: { "GET /v1/a": 90_000 },
-      missingResponseSizeCounts: { "GET /v1/a": 1 },
-    });
-  });
-
-  test("the kept depth keeps its own chain when the second sample is deeper", () => {
-    const shallow: RouteNetworkMetrics = {
-      requests: ["GET /v1/a"],
-      requestCounts: { "GET /v1/a": 1 },
-      depth: 2,
-      depthChain: [["GET /v1/a"], ["GET /v1/b"]],
-      dbQueries: {},
-      missingDbQueryCounts: {},
-      responseSizes: {},
-      missingResponseSizeCounts: {},
-    };
-    const deeper: RouteNetworkMetrics = {
-      ...shallow,
-      depth: 3,
-      depthChain: [["GET /v1/a"], ["GET /v1/b"], ["GET /v1/c"]],
-    };
-
-    const merged = mergeResampledMetrics(shallow, deeper);
-    expect(merged.depth).toBe(2);
-    expect(merged.depthChain).toEqual([["GET /v1/a"], ["GET /v1/b"]]);
-  });
-
-  test("an independent late request does not chain", () => {
-    // A quiet gap between launches makes this an idle prefetch, not another
-    // route-load round.
-    expect(
-      waterfallDepth([
-        { start: 0, end: 10 },
-        { start: 800, end: 900 },
-      ]),
-    ).toBe(1);
-  });
-
-  test("a strict chain of n requests is depth n", () => {
-    const chain = Array.from({ length: 6 }, (_, index) => ({
-      start: index * 20,
-      end: index * 20 + 20,
-    }));
-
-    expect(waterfallDepth(chain)).toBe(6);
-  });
-
-  test("a stalled parallel burst is still one round", () => {
-    const burst = [
-      { start: 0, end: 40 },
-      { start: 1, end: 55 },
-      { start: 2, end: 30 },
-    ];
-    const underLoad = burst.map(({ start, end }) => ({
-      start,
-      end: end * 20,
-    }));
-
-    expect(waterfallDepth(burst)).toBe(1);
-    expect(waterfallDepth(underLoad)).toBe(1);
-  });
-
-  test("a slower response cannot close an idle gap into an extra level", () => {
-    // The CI failure shape: an idle prefetch launched after a quiet gap is its
-    // own observation sequence. A response that grows under load may now run
-    // past that launch, and must not thereby fold the prefetch into the route's
-    // round count.
-    const observed = [
-      { start: 0, end: 10 },
-      { start: 600, end: 610 },
-      { start: 615, end: 625 },
-    ];
-    const underLoad = [
-      { start: 0, end: 150 },
-      { start: 600, end: 610 },
-      { start: 615, end: 625 },
-    ];
-
-    expect(waterfallDepth(observed)).toBe(2);
-    expect(waterfallDepth(underLoad)).toBe(2);
-  });
-
-  test("a chain whose parent outruns the sequence gap opens a new sequence", () => {
-    // The documented sensitivity cost of reading launch times: telling this
-    // apart from an idle prefetch would need the parent's duration, and every
-    // rule that reads response ends loses load-monotonicity.
-    expect(
-      waterfallDepth([
-        { start: 0, end: 600 },
-        { start: 600, end: 610 },
-      ]),
-    ).toBe(1);
-  });
-
-  // Deterministic LCG so the properties replay the same timelines every run.
-  const pseudoRandom = (seed: number) => {
-    let state = seed;
-    return () => {
-      state = (state * 48_271) % 2_147_483_647;
-      return state;
-    };
-  };
-
-  // Launch gaps deliberately straddle the 500ms observation-sequence boundary.
-  // A generator whose starts all sit a few ms apart never reaches that branch,
-  // which is how the previous formulation's non-monotonicity survived a
-  // property test.
-  const STARTS = [0, 2, 75, 77, 150, 225, 900, 905, 1600, 1610, 1612];
-
-  test("a slower response never deepens a waterfall", () => {
-    for (let seed = 1; seed <= 256; seed++) {
-      const nextRandom = pseudoRandom(seed);
-      const intervals = STARTS.map((start) => ({
-        start,
-        end: start + 1 + (nextRandom() % 100),
-      }));
-      const underLoad = intervals.map(({ start, end }) => ({
-        start,
-        end: end + (nextRandom() % 1000),
-      }));
-
-      expect(waterfallDepth(underLoad)).toBeLessThanOrEqual(
-        waterfallDepth(intervals),
-      );
-    }
-  });
-
-  test("a uniformly slower runner never deepens a waterfall", () => {
-    for (let seed = 1; seed <= 256; seed++) {
-      const nextRandom = pseudoRandom(seed);
-      const intervals = STARTS.map((start) => ({
-        start,
-        end: start + 1 + (nextRandom() % 300),
-      }));
-      const scale = 1 + (nextRandom() % 10);
-      const underLoad = intervals.map(({ start, end }) => ({
-        start: start * scale,
-        end: end * scale,
-      }));
-
-      expect(waterfallDepth(underLoad)).toBeLessThanOrEqual(
-        waterfallDepth(intervals),
-      );
-    }
-  });
-
-  test("interval order cannot change launch rounds", () => {
-    const intervals = [
-      { start: 0, end: 10 },
-      { start: 2, end: 12 },
-      { start: 12, end: 20 },
-      { start: 15, end: 25 },
-      { start: 25, end: 35 },
-    ];
-
-    expect(waterfallDepth(intervals)).toBe(3);
-    expect(waterfallDepth(intervals.toReversed())).toBe(3);
-  });
-});
-
-describe("deepestWaterfallSequence", () => {
-  const keyed = (
-    starts: readonly { start: number; end: number; key: string }[],
-  ) => deepestWaterfallSequence([...starts]);
-
-  test("empty input has no levels", () => {
-    expect(deepestWaterfallSequence([])).toEqual([]);
-  });
-
-  test("a strict chain names one request per level, in launch order", () => {
-    const chain = Array.from({ length: 4 }, (_, index) => ({
-      start: index * 20,
-      end: index * 20 + 20,
-      key: `GET /v1/step-${index}`,
-    }));
-
-    expect(keyed(chain)).toEqual([
-      ["GET /v1/step-0"],
-      ["GET /v1/step-1"],
-      ["GET /v1/step-2"],
-      ["GET /v1/step-3"],
-    ]);
-  });
-
-  test("a parallel burst is one level holding every key", () => {
-    expect(
-      keyed([
-        { start: 0, end: 40, key: "GET /v1/a" },
-        { start: 1, end: 55, key: "GET /v1/b" },
-        { start: 2, end: 30, key: "GET /v1/c" },
-      ]),
-    ).toEqual([["GET /v1/a", "GET /v1/b", "GET /v1/c"]]);
-  });
-
-  test("a faster response names the request that reads as the extra level", () => {
-    // Same pair as "a faster response can raise the reading by one": the chain
-    // has to say which request moved, so a re-run can be judged.
-    const overlapping = [
-      { start: 0, end: 100, key: "GET /v1/a" },
-      { start: 90, end: 200, key: "GET /v1/b" },
-    ];
-    const firstAnsweredFaster = [
-      { start: 0, end: 80, key: "GET /v1/a" },
-      { start: 90, end: 200, key: "GET /v1/b" },
-    ];
-
-    expect(keyed(overlapping)).toEqual([["GET /v1/a", "GET /v1/b"]]);
-    expect(keyed(firstAnsweredFaster)).toEqual([["GET /v1/a"], ["GET /v1/b"]]);
-  });
-
-  test("reports the deepest sequence, not the last one", () => {
-    expect(
-      keyed([
-        { start: 0, end: 10, key: "GET /v1/a" },
-        { start: 10, end: 20, key: "GET /v1/b" },
-        { start: 20, end: 30, key: "GET /v1/c" },
-        { start: 900, end: 910, key: "GET /v1/late" },
-        { start: 910, end: 920, key: "GET /v1/later" },
-      ]),
-    ).toEqual([["GET /v1/a"], ["GET /v1/b"], ["GET /v1/c"]]);
-  });
-
-  test("a request still open across a launch gap is named in the new sequence", () => {
-    // A stays in flight past the gap after B launches; B..E overlap A, not each
-    // other, so A is what makes them one level and must appear in it.
-    expect(
-      keyed([
-        { start: 0, end: 2000, key: "GET /v1/a" },
-        { start: 600, end: 610, key: "GET /v1/b" },
-        { start: 1000, end: 1010, key: "GET /v1/c" },
-        { start: 1400, end: 1410, key: "GET /v1/d" },
-        { start: 1800, end: 1810, key: "GET /v1/e" },
-        { start: 2000, end: 2010, key: "GET /v1/f" },
-      ]),
-    ).toEqual([
-      ["GET /v1/a", "GET /v1/b", "GET /v1/c", "GET /v1/d", "GET /v1/e"],
-      ["GET /v1/f"],
-    ]);
-  });
-
-  test("keyless intervals still yield one level per round", () => {
-    expect(
-      deepestWaterfallSequence([
-        { start: 0, end: 10 },
-        { start: 10, end: 20 },
-      ]),
-    ).toEqual([[], []]);
-  });
-
-  test("depth is the chain length", () => {
-    const intervals = [
-      { start: 0, end: 10, key: "GET /v1/a" },
-      { start: 2, end: 12, key: "GET /v1/b" },
-      { start: 12, end: 20, key: "GET /v1/c" },
-      { start: 15, end: 25, key: "GET /v1/d" },
-      { start: 25, end: 35, key: "GET /v1/e" },
-    ];
-
-    expect(deepestWaterfallSequence(intervals)).toHaveLength(
-      waterfallDepth(intervals),
-    );
-  });
-});
-
-describe("countsTowardsWaterfall", () => {
-  test("keeps streamed requests in coverage without counting a load round", () => {
-    expect(
-      countsTowardsWaterfall({
-        pathname: "/v1/events",
-        resourceType: "eventsource",
-        streamed: true,
-      }),
-    ).toBe(false);
-    expect(
-      countsTowardsWaterfall({
-        pathname: "/v1/chat",
-        resourceType: "fetch",
-        streamed: true,
-      }),
-    ).toBe(false);
-  });
-
-  test("keeps the version poll in coverage without counting a load round", () => {
-    expect(
-      countsTowardsWaterfall({
-        pathname: "/health",
-        resourceType: "fetch",
-        streamed: false,
-      }),
-    ).toBe(false);
-  });
-
-  test("counts finite API responses", () => {
-    expect(
-      countsTowardsWaterfall({
-        pathname: "/v1/templates",
-        resourceType: "fetch",
-        streamed: false,
-      }),
-    ).toBe(true);
-  });
-});
-
-describe("browserRequestInterval", () => {
-  const timing = (
-    startTime: number,
-    responseEnd: number,
-  ): Parameters<typeof browserRequestInterval>[0] => ({
-    startTime,
-    domainLookupStart: -1,
-    domainLookupEnd: -1,
-    connectStart: -1,
-    secureConnectionStart: -1,
-    connectEnd: -1,
-    requestStart: -1,
-    responseStart: -1,
-    responseEnd,
-  });
-
-  test("resolves the relative response end against the epoch start", () => {
-    expect(browserRequestInterval(timing(1_700_000_000_000, 42))).toEqual({
-      start: 1_700_000_000_000,
-      end: 1_700_000_000_042,
-    });
-  });
-
-  test("rejects an unavailable response end", () => {
-    expect(browserRequestInterval(timing(1_700_000_000_000, -1))).toBeNull();
-  });
-
-  test("rejects an unavailable start", () => {
-    expect(browserRequestInterval(timing(-1, 42))).toBeNull();
   });
 });
 
@@ -555,7 +118,11 @@ const metrics = (
 
 describe("diffNetworkBaseline", () => {
   const baseline: NetworkBaseline = {
-    "/contacts": { depth: 2, requests: ["GET /v1/contacts"] },
+    "/contacts": {
+      depth: 2,
+      depthMethod: NETWORK_DEPTH_METHOD,
+      requests: ["GET /v1/contacts"],
+    },
   };
 
   test("missing baseline file is a single problem", () => {
@@ -576,6 +143,49 @@ describe("diffNetworkBaseline", () => {
     expect(problems).toEqual([]);
     expect(notices).toEqual([]);
   });
+
+  test.each([undefined, "timing-v1"])(
+    "a different depth method reports depth only and retains every other budget (%s)",
+    (depthMethod) => {
+      const entry = {
+        depth: 1,
+        ...(depthMethod === undefined ? {} : { depthMethod }),
+        requests: ["GET /v1/contacts"],
+        requestCounts: { "GET /v1/contacts": 1 },
+        dbQueries: { "GET /v1/contacts": 1 },
+        responseSizes: { "GET /v1/contacts": 1024 },
+      };
+      const depthOnly = diffNetworkBaseline(
+        { "/contacts": entry },
+        new Map([["/contacts", metrics(entry.requests, 5)]]),
+      );
+      expect(depthOnly.problems).toEqual([]);
+      expect(depthOnly.notices.join("\n")).toContain(
+        "observed depth 5 (baseline 1)",
+      );
+      expect(depthOnly.notices.join("\n")).toContain("method differs");
+      const increased = diffNetworkBaseline(
+        { "/contacts": entry },
+        new Map([
+          [
+            "/contacts",
+            metrics(
+              ["GET /v1/contacts", "GET /v1/new"],
+              5,
+              { "GET /v1/contacts": 20 },
+              { "GET /v1/contacts": 3, "GET /v1/new": 1 },
+              {},
+              { "GET /v1/contacts": 100_000 },
+            ),
+          ],
+        ]),
+      );
+      expect(increased.problems).toHaveLength(4);
+      expect(
+        increased.problems.some((problem) => problem.includes("waterfall")),
+      ).toBe(false);
+    },
+  );
 
   test("a new route is a problem", () => {
     const { problems } = diffNetworkBaseline(
@@ -662,6 +272,7 @@ describe("diffNetworkBaseline", () => {
       {
         "/contacts": {
           depth: 2,
+          depthMethod: NETWORK_DEPTH_METHOD,
           requests: ["GET /v1/contacts"],
           requestCounts: { "GET /v1/contacts": 2 },
         },
@@ -918,6 +529,7 @@ describe("mergeNetworkBaseline", () => {
     expect(merged).toEqual({
       "/contacts": {
         depth: 2,
+        depthMethod: NETWORK_DEPTH_METHOD,
         requests: ["GET /v1/contacts"],
         requestCounts: { "GET /v1/contacts": 1 },
         dbQueries: {},
@@ -926,9 +538,36 @@ describe("mergeNetworkBaseline", () => {
     });
   });
 
+  test.each([undefined, "timing-v1"])(
+    "recording replaces incompatible depth and retains other budgets (%s)",
+    (depthMethod) => {
+      const previous = {
+        depth: 9,
+        ...(depthMethod === undefined ? {} : { depthMethod }),
+        requests: ["GET /v1/contacts"],
+        requestCounts: { "GET /v1/contacts": 3 },
+        dbQueries: { "GET /v1/contacts": 7 },
+        responseSizes: { "GET /v1/contacts": 4096 },
+      };
+      const recorded = mergeNetworkBaseline(
+        { "/contacts": previous },
+        new Map([["/contacts", metrics(previous.requests, 2)]]),
+      );
+      expect(recorded["/contacts"]).toEqual({
+        ...previous,
+        depth: 2,
+        depthMethod: NETWORK_DEPTH_METHOD,
+      });
+    },
+  );
+
   test("requests accumulate as a union and depth takes the max", () => {
     const existing: NetworkBaseline = {
-      "/contacts": { depth: 3, requests: ["GET /v1/contacts"] },
+      "/contacts": {
+        depth: 3,
+        depthMethod: NETWORK_DEPTH_METHOD,
+        requests: ["GET /v1/contacts"],
+      },
     };
     const merged = mergeNetworkBaseline(
       existing,
@@ -937,6 +576,7 @@ describe("mergeNetworkBaseline", () => {
     expect(merged).toEqual({
       "/contacts": {
         depth: 3,
+        depthMethod: NETWORK_DEPTH_METHOD,
         requests: ["GET /v1/contacts", "GET /v1/views/:id"],
         requestCounts: {
           "GET /v1/contacts": 1,
@@ -952,6 +592,7 @@ describe("mergeNetworkBaseline", () => {
     const existing: NetworkBaseline = {
       "/contacts": {
         depth: 2,
+        depthMethod: NETWORK_DEPTH_METHOD,
         requests: ["GET /v1/contacts"],
         requestCounts: { "GET /v1/contacts": 2 },
       },
@@ -974,6 +615,7 @@ describe("mergeNetworkBaseline", () => {
     const existing: NetworkBaseline = {
       "/contacts": {
         depth: 2,
+        depthMethod: NETWORK_DEPTH_METHOD,
         requests: ["GET /v1/contacts"],
         dbQueries: { "GET /v1/contacts": 5, "GET /health": 0 },
       },
@@ -997,6 +639,7 @@ describe("mergeNetworkBaseline", () => {
     const existing: NetworkBaseline = {
       "/contacts": {
         depth: 2,
+        depthMethod: NETWORK_DEPTH_METHOD,
         requests: ["GET /v1/contacts"],
         responseSizes: { "GET /v1/contacts": 2048, "GET /health": 1024 },
       },
@@ -1049,7 +692,11 @@ describe("mergeNetworkBaseline", () => {
 
   test("merge records the raw observed depth", () => {
     const existing: NetworkBaseline = {
-      "/contacts": { depth: 2, requests: ["GET /v1/contacts"] },
+      "/contacts": {
+        depth: 2,
+        depthMethod: NETWORK_DEPTH_METHOD,
+        requests: ["GET /v1/contacts"],
+      },
     };
     const merged = mergeNetworkBaseline(
       existing,
@@ -1073,6 +720,7 @@ describe("mergeNetworkBaseline", () => {
 describe("merge-base scoped comparison", () => {
   const entry = {
     depth: 1,
+    depthMethod: NETWORK_DEPTH_METHOD,
     requests: ["GET /v1/contacts"],
     dbQueries: { "GET /v1/contacts": 2 },
     responseSizes: { "GET /v1/contacts": 1024 },

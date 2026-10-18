@@ -1,8 +1,9 @@
 import { expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
-import { pgTable, text } from "drizzle-orm/pg-core";
+import { PgDialect, pgTable, text } from "drizzle-orm/pg-core";
 
 import { timestamptz } from "@/api/db/columns";
+import { publishedCaseLawDecisions } from "@/api/db/schema";
 import { groupableSql } from "@/api/lib/groupable-sql";
 
 const decisions = pgTable("decisions", {
@@ -62,9 +63,18 @@ test("accepts an sql.raw-inlined list join", () => {
   ).not.toThrow();
 });
 
-test("the migrated sitemap fragments construct without panicking", async () => {
-  const fragments = await import("@/api/lib/case-law/sitemap-shard-sql");
-  expect(fragments.decisionYearSql).toBeInstanceOf(sql`x`.constructor);
-  expect(fragments.decisionMonthSql).toBeInstanceOf(sql`x`.constructor);
-  expect(fragments.decisionBucketSql).toBeInstanceOf(sql`x`.constructor);
+test("sitemap fragments bind to the supplied published relation without parameters", async () => {
+  const { decisionYearSqlFor, decisionMonthSqlFor, decisionBucketSqlFor } =
+    await import("@/api/lib/case-law/sitemap-shard-sql");
+  const dialect = new PgDialect();
+  for (const fragment of [
+    decisionYearSqlFor(publishedCaseLawDecisions),
+    decisionMonthSqlFor(publishedCaseLawDecisions),
+    decisionBucketSqlFor(publishedCaseLawDecisions),
+  ]) {
+    const rendered = dialect.sqlToQuery(fragment);
+    expect(rendered.params).toEqual([]);
+    expect(rendered.sql).toContain('"case_law_published_decisions".');
+    expect(rendered.sql).not.toContain('"case_law_decisions".');
+  }
 });

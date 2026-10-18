@@ -21,17 +21,25 @@
 import { panic } from "better-result";
 
 import {
+  CHAT_CORPUS_HREF_PREFIX,
   CHAT_DECISION_PASSAGE_HREF_PREFIX,
   isEntityKind,
+  parseChatCorpusHref,
+  parseChatCorpusId,
   parseChatDecisionPassageHref,
   parseChatResourceHref,
   RESOURCE_TYPE,
   resourceRef,
   SKILL_REF_HREF_PREFIX,
+  toChatCorpusHref,
   toChatMentionResourceHref,
   toChatResourceHref,
 } from "@stll/api-contract";
-import type { ChatMentionResourceHref, EntityKind } from "@stll/api-contract";
+import type {
+  ChatCorpusScope,
+  ChatMentionResourceHref,
+  EntityKind,
+} from "@stll/api-contract";
 import type { CaseLawDecisionRouteParams } from "@stll/api-contract/case-law-decision-route";
 
 import type { CaseLawDecisionLocator } from "@/components/chat/case-law-open";
@@ -67,7 +75,9 @@ export type ChatReference =
       label: string;
     }
   | { type: "skill"; slug: string; label: string }
-  | { type: "user"; userId: string; label: string };
+  | { type: "user"; userId: string; label: string }
+  /** A public corpus the turn is scoped to ("@Case law · Czechia"). */
+  | { type: "corpus"; scope: ChatCorpusScope; label: string };
 
 /** What a source string resolved to: a reference, a reference the server
  * marked unresolvable (renders as its plain label), or not a reference. */
@@ -99,7 +109,8 @@ export const isReferenceHref = (href: string): boolean =>
   parseChatDecisionPassageHref(href) !== null ||
   href.startsWith(LEGACY_ENTITY_REF_PREFIX) ||
   href.startsWith(LEGACY_MATTER_REF_PREFIX) ||
-  href.startsWith(SKILL_REF_HREF_PREFIX);
+  href.startsWith(SKILL_REF_HREF_PREFIX) ||
+  href.startsWith(CHAT_CORPUS_HREF_PREFIX);
 
 type HrefContext = {
   /** The matter the surface renders in, for an entity href that names none. */
@@ -161,6 +172,13 @@ export const referenceFromHref = (
           ? passage.anchorId
           : label,
     });
+  }
+
+  if (href.startsWith(CHAT_CORPUS_HREF_PREFIX)) {
+    const scope = parseChatCorpusHref(href);
+    return scope === null
+      ? { type: "unresolved" }
+      : asReference({ type: "corpus", scope, label });
   }
 
   if (href.startsWith(SKILL_REF_HREF_PREFIX)) {
@@ -287,6 +305,10 @@ export const referenceFromMentionAttrs = (
         paragraph: null,
         label,
       };
+    case "corpus": {
+      const scope = parseChatCorpusId(id);
+      return scope === null ? null : { type: "corpus", scope, label };
+    }
     case "entity": {
       const kind = attrs["kind"];
       return {
@@ -349,6 +371,10 @@ export const mentionAttrsToHref = (attrs: unknown): string | null => {
           id: toSafeId<"caseLawDecision">(id),
         }),
       });
+    case "corpus": {
+      const scope = parseChatCorpusId(id);
+      return scope === null ? null : toChatCorpusHref(scope);
+    }
     case "entity": {
       const sourceWorkspaceId = readString(attrs, "sourceWorkspaceId");
       return sourceWorkspaceId === null
@@ -396,6 +422,7 @@ export type ReferenceGlyph =
   | { type: "matter" }
   | { type: "decision" }
   | { type: "skill" }
+  | { type: "corpus"; corpus: ChatCorpusScope["corpus"] }
   | { type: "user"; name: string; image: string | null; deleted: boolean };
 
 export type ReferenceMatterColor =
@@ -525,6 +552,13 @@ export const resolveReferenceVisual = (
         matter: { type: "none" },
         label: reference.label,
       };
+    case "corpus":
+      return {
+        type: "chip",
+        glyph: { type: "corpus", corpus: reference.scope.corpus },
+        matter: { type: "none" },
+        label: reference.label,
+      };
     case "user":
       // Only people the viewer's organization lists get a person chip; any
       // other id stays the plain text the message already shows.
@@ -560,6 +594,7 @@ export const referenceMatterId = (reference: ChatReference): string | null => {
       return reference.matterId;
     case "decision":
     case "skill":
+    case "corpus":
     case "user":
       return null;
     default:

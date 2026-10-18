@@ -26,7 +26,7 @@ export type CapabilityReason =
   | "featureUnavailable"
   | "availabilityUnknown";
 const CAPABILITY_SETTINGS_ROUTES = {
-  ai: "/settings/organization/ai",
+  ai: "/admin/ai",
   desktop: "/settings/account/desktop",
   features: "/settings/account/beta",
 } as const satisfies Record<string, NonNullable<LinkProps["to"]>>;

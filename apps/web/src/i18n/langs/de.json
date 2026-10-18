@@ -12,6 +12,31 @@
       "unknownDevice": "Unbekanntes Gerät"
     }
   },
+  "admin": {
+    "ai": "KI",
+    "backToApp": "Zurück zur App",
+    "billingAndUsage": "Abrechnung und Nutzung",
+    "billingProfiles": "Abrechnungsprofile",
+    "deleteDescription": "Diese Organisation und ihre Daten werden dauerhaft gelöscht. Dies kann nicht rückgängig gemacht werden.",
+    "deleteOrganization": "Organisation löschen",
+    "deleteRefusedSubscription": "Diese Organisation hat ein Abonnement, das sich verlängert. Kündigen Sie es zuerst unter Tarif und Nutzung und löschen Sie dann die Organisation.",
+    "deleteTypeToConfirm": "Geben Sie zur Bestätigung {name} ein.",
+    "firmSetup": "Kanzleieinstellungen",
+    "general": "Allgemein",
+    "leaveDescription": "Sie verlieren den Zugriff auf die Akten und Daten dieser Organisation.",
+    "leaveOrganization": "Organisation verlassen",
+    "leaveRefusedOnlyOwner": "Sie sind der einzige Inhaber. Machen Sie ein anderes Mitglied zum Inhaber, bevor Sie die Organisation verlassen.",
+    "modelsAndProviders": "Modelle und Anbieter",
+    "noPlan": "Kein aktiver Tarif",
+    "organizationDeleted": "Die Organisation wurde gelöscht.",
+    "organizationId": "Organisations-ID",
+    "organizationLeft": "Sie haben die Organisation verlassen.",
+    "overviewDescription": "Verwalten Sie Ihre Organisation, Personen und Werkzeuge.",
+    "people": "Personen",
+    "planAndUsage": "Tarif und Nutzung",
+    "title": "Organisationsverwaltung",
+    "toolsDescription": "Aktivieren oder deaktivieren Sie integrierte Werkzeuge für alle in dieser Organisation."
+  },
   "agentClaim": {
     "access": "Erhält Zugriff",
     "accessReadSearch": "Lese- und Suchzugriff",
@@ -64,6 +89,9 @@
     "runRemainingPage": "Verbleibende ausführen (diese Seite)",
     "runSelectedRows": "Ausführen für {count, plural, one {# ausgewählte Zeile} other {# ausgewählte Zeilen}}",
     "selectedRun": "KI-Spalten ausführen für {count, plural, one {# Zeile} other {# Zeilen}}"
+  },
+  "aiDisclosure": {
+    "caseLaw": "KI-Zusammenfassungen, -Notizen und -Analysen von Gerichtsentscheidungen erstellt stella; sie sind von den Gerichten nicht gebilligt und geben nicht deren eigene Erwägungen wieder. Sie dienen juristischen Fachleuten als Hilfsmittel; maßgeblich bleibt der Text der Entscheidung."
   },
   "appearance": {
     "calendar": "Kalender",
@@ -1055,7 +1083,6 @@
       }
     },
     "sameCaseNumber": "{count, plural, one {# Entscheidung trägt} other {# Entscheidungen tragen}} dieses Aktenzeichen. Wählen Sie das Gericht.",
-    "searchAskPrompt": "{query} (Rechtsprechung, {country})",
     "searchLabel": "Rechtsprechung durchsuchen",
     "searchPlaceholder": "Aktenzeichen, ECLI oder Stichwörter, z. B. 22 Cdo 2653/2012",
     "searchUnavailable": {
@@ -1203,15 +1230,37 @@
     },
     "answerEdit": {
       "acceptFailed": "Die Änderung konnte nicht gespeichert werden. Versuchen Sie es erneut.",
+      "aiKind": "Angeforderte Bearbeitung",
       "ask": "Änderungen anfordern",
+      "authorUnknown": "Unbekannter Autor",
+      "autolinkLabel": "Dieser Text wird automatisch zu einem Link. Ändern Sie die Beschriftung, bevor Sie den Link entfernen.",
+      "change": "Änderung {revision}",
+      "editedLabel": "Bearbeitete Antwort",
       "failed": "Die Änderung konnte nicht vorbereitet werden. Versuchen Sie es erneut.",
+      "formatKind": "Formatierung",
+      "heading": "Überschrift {level}",
+      "history": "Antwortverlauf",
+      "historyEmpty": "Keine früheren Versionen.",
       "instruction": "Beschreiben Sie die Änderung",
       "instructionRequired": "Beschreiben Sie, wie der ausgewählte Text geändert werden soll.",
       "invalidSelection": "Diese Auswahl kann nicht bearbeitet werden. Wählen Sie zusammenhängenden Text aus.",
+      "invalidUrl": "Geben Sie eine gültige HTTP- oder HTTPS-Adresse ein.",
+      "linkAddress": "Linkadresse",
+      "orderedList": "Nummerierte Liste",
       "proposal": "Vorgeschlagene Änderung",
       "requesting": "Änderungen werden vorbereitet…",
+      "restoreRefreshFailed": "Die Antwort wurde wiederhergestellt, konnte aber nicht aktualisiert werden. Aktualisieren Sie, um die wiederhergestellte Antwort zu laden.",
+      "revertKind": "Wiederhergestellte Version",
       "stale": "Diese Antwort wurde geändert. Wählen Sie den Text erneut aus.",
-      "submit": "Änderung anfordern"
+      "submit": "Änderung anfordern",
+      "textStyle": "Textstil",
+      "unorderedList": "Aufzählung",
+      "wholeBlockRequired": "Wählen Sie einen ganzen Absatz oder eine ganze Liste aus, um den Stil zu ändern."
+    },
+    "answerQuote": {
+      "showInDecision": "In der Entscheidung zeigen",
+      "verified": "Verifiziertes Zitat",
+      "verifiedHint": "Wörtlich in {source}"
     },
     "applyMode": {
       "description": "Word speichert, wer welche Änderung vorgenommen hat. Wir merken uns Ihre Auswahl.",
@@ -1397,7 +1446,12 @@
     "maxAttachmentsReached": "Maximal {count} Dateien pro Nachricht",
     "mention": {
       "category": {
-        "entities": "In dieser Akte"
+        "entities": "In dieser Akte",
+        "sources": "Quellen"
+      },
+      "corpus": {
+        "caseLaw": "Rechtsprechung · {country}",
+        "legislation": "Rechtsvorschriften · {country}"
       },
       "loadError": "Einträge konnten nicht geladen werden"
     },
@@ -1451,6 +1505,12 @@
       "title": "Eingefügter Text"
     },
     "placeholder": "Geben Sie hier Ihre Frage ein, / für Skills, @ für Kontext",
+    "processSummary": {
+      "analyses": "{count, plural, one {# Analyse} other {# Analysen}}",
+      "changesSaved": "{count, plural, one {# Änderung gespeichert} other {# Änderungen gespeichert}}",
+      "documentEdits": "{count, plural, one {# Dokumentänderung} other {# Dokumentänderungen}}",
+      "sourcesChecked": "{count, plural, one {# Quelle geprüft} other {# Quellen geprüft}}"
+    },
     "promptImprovementStrategies": {
       "decompose": {
         "description": "Teilt komplexe Aufgaben in geordnete Teilaufgaben auf.",
@@ -1696,6 +1756,7 @@
       "interrupted": "Vor Abschluss unterbrochen",
       "output": "Ausgabe",
       "sourceCode": "Quellcode",
+      "statusWaiting": "Wartet",
       "toggleDetails": "Details ein-/ausblenden",
       "unrestoredFields": "{count, plural, one {# Feld konnte} other {# Felder konnten}} im anonymisierten Modus nicht mit echten Werten gefüllt werden. Bitte prüfen: {fields}"
     },
@@ -1721,7 +1782,8 @@
       "toggleLabel": "Websuche",
       "toggleOff": "Websuche ausschalten",
       "toggleOn": "Websuche einschalten"
-    }
+    },
+    "workedFor": "Bearbeitungszeit: {duration}"
   },
   "clauses": {
     "addVariant": "Variante hinzufügen",
@@ -2599,11 +2661,14 @@
     "actionFailed": "Aktion fehlgeschlagen",
     "api": {
       "badRequest": "Die Anfrage konnte nicht abgeschlossen werden.",
+      "caseLawCountryUnavailable": "Die Rechtsprechung dieses Landes ist nicht verfügbar. Wählen Sie ein anderes Land.",
+      "caseLawSearchUnavailable": "Die Suche in der Rechtsprechung dieses Landes ist nicht verfügbar. Die öffentlichen Entscheidungen können Sie weiterhin lesen.",
       "conflict": "Die Anfrage steht im Konflikt mit dem aktuellen Zustand.",
       "forbidden": "Sie haben keine Berechtigung für diese Aktion.",
+      "legislationCountryUnavailable": "Die Rechtsvorschriften dieses Landes sind nicht verfügbar. Wählen Sie ein anderes Land.",
+      "legislationSearchUnavailable": "Die Suche in den Rechtsvorschriften dieses Landes ist nicht verfügbar. Die öffentlichen Rechtsvorschriften können Sie weiterhin lesen.",
       "notFound": "Das Angeforderte konnte nicht gefunden werden.",
       "payloadTooLarge": "Die Anfrage ist zu groß.",
-      "publicCountryUnavailable": "Rechtsvorschriften und Rechtsprechung für dieses Land sind nicht verfügbar. Wählen Sie ein anderes Land.",
       "rateLimited": "Zu viele Anfragen. Bitte versuchen Sie es später erneut.",
       "server": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
       "serviceUnavailable": "Der Dienst ist vorübergehend nicht verfügbar. Bitte versuchen Sie es erneut.",
@@ -5114,7 +5179,6 @@
     "provisionTextUnavailable": "Für diese Fassung ist kein Text verfügbar",
     "publisherWindowInconsistent": "Für dieses Datum lässt sich keine geltende Fassung bestimmen: Die Angaben des Herausgebers sind widersprüchlich.",
     "resolvedAlias": "Erkannt als {label}",
-    "searchAskPrompt": "{query} (Rechtsvorschriften: {country})",
     "searchLabel": "Rechtsvorschriften durchsuchen",
     "searchPlaceholder": "Nummer, Kurzname oder Titel, z. B. 89/2012 Sb.",
     "showCitedPartOnly": "Nur zitierten Teil anzeigen",
@@ -6243,7 +6307,6 @@
         }
       },
       "atAGlance": "Auf einen Blick",
-      "edited": "bearbeitet",
       "getStarted": "Laden Sie Dokumente hoch oder erstellen Sie Ihren ersten Ordner.",
       "matterDetails": "Aktendetails",
       "membersCount": "{count, plural, one {# Mitglied} other {# Mitglieder}}",

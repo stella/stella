@@ -569,7 +569,7 @@
           "question": "Iš kur gaunami duomenys?"
         },
         "1": {
-          "answer": "Du sąrašai, abu vis plečiami. Prijungti registrai jau apima ARES (Čekija), Companies House (Jungtinė Karalystė), SEC EDGAR (JAV), KRS (Lenkija), PRH (Suomija) ir VIES (ES PVM). Be registrų, oficialūs šaltiniai prijungiami jurisdikcija po jurisdikcijos; pavyzdžiui, Čekija, Ispanija ir Taivanas jau turi prijungtų šaltinių, o teismų praktikos skaityklė sukurta naršyti ir filtruoti pagal jurisdikciją, prijungiant vis daugiau oficialių šaltinių.",
+          "answer": "Viešas teismų praktikos skaitytuvas šiuo metu pateikia Čekijos teismų sprendimus. Prijungti bendrovių registrai apima ARES (Čekija), Companies House (Jungtinė Karalystė), SEC EDGAR (JAV), KRS (Lenkija), PRH (Suomija) ir VIES (ES PVM).",
           "question": "Kokios jurisdikcijos ir registrai apimami?"
         },
         "2": {
@@ -892,9 +892,11 @@
     "bringWorkspaceToFront": "Perkelti programos stella darbo sritį į priekinį planą",
     "controlBody": "stella – <gh>atvirojo kodo</gh> teisinė programinė įranga, kurią galite įdiegti savo serveryje: peržiūrėkite kodą, paleiskite ją savaip ir eksportuokite viską standartiniais formatais.",
     "controlTitle": "Technologijos lieka jūsų rankose.",
-    "dataBody": "Teismų praktika ir įmonių registrai iš visų jurisdikcijų, kuriose dirbate, įkeliami tiesiai į bylą. Anonimizavimas saugo identifikuojančius duomenis nuo DI.",
+    "dataBody": "Skaitykite Čekijos teismų praktiką su DI pastabomis apie teisinius klausimus, paryškintomis ir pabrauktomis ištraukomis, teisininko komentarais ir atsakymais su nuorodomis į šaltinius. Ieškokite bendrovių prijungtuose oficialiuose registruose ir nurodykite šaltinius byloje.",
+    "dataConstitutionalAlt": "Čekijos Konstitucinio Teismo sprendimas IV.ÚS 1394/24 su numeruotomis pastraipomis, DI pastaba apie teisinį klausimą, viena paryškinta ir viena pabraukta ištrauka, teisininko komentaru ir pokalbiu su dviem klausimais bei atsakymais su nuorodomis į šaltinius.",
     "dataEyebrow": "Teisiniai duomenys",
-    "dataMainAlt": "Oficialus teismo sprendimas, atvertas programoje stella",
+    "dataMainAlt": "Čekijos Aukščiausiojo Teismo sprendimas 27 Cdo 59/2022 su numeruotomis pastraipomis, DI pastaba apie teisinį klausimą, viena paryškinta ir viena pabraukta ištrauka, teisininko komentaru ir pokalbiu su dviem klausimais bei atsakymais su nuorodomis į šaltinius.",
+    "dataSupremeAlt": "Čekijos Aukščiausiojo Teismo sprendimas 27 Cdo 1525/2025 su numeruotomis pastraipomis, DI pastaba apie teisinį klausimą, viena paryškinta ir viena pabraukta ištrauka, teisininko komentaru ir pokalbiu su dviem klausimais bei atsakymais su nuorodomis į šaltinius.",
     "dataTitle": "Teismų praktika ir registrai po ranka.",
     "exploreAgent": "Susipažinti su DI agentu",
     "exploreAnonymization": "Susipažinti su anonimizavimu",

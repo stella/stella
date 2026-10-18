@@ -14,6 +14,7 @@ import {
 } from "@stll/agent-input";
 import { resolveLegalCitationLinks } from "@stll/api-contract/legal-citation-links";
 import { declareFailureClass } from "@stll/errors";
+import { distance as levenshtein } from "@stll/fuzzy-search";
 
 import { captureError } from "@/api/lib/analytics/capture";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
@@ -903,8 +904,8 @@ export const toolNameDistance = (target: string, name: string): number =>
  * {@link toolNameDistance}, used to hint an agent that fat-fingered a tool
  * name. Only candidates within a lenient edit budget (roughly half the longer
  * name) are kept, so an unrelated miss returns nothing rather than a confusing
- * suggestion. No dependency: a tiny DP implementation is enough for the short,
- * small candidate set.
+ * suggestion. Distances count Unicode scalar values, so an astral character
+ * contributes one edit.
  */
 export const closestToolNames = (
   target: string,
@@ -944,30 +945,6 @@ export const didYouMean = (labels: readonly string[]): string => {
   return rest.length === 0
     ? `Did you mean ${only}?`
     : `Did you mean one of ${labels.join(", ")}?`;
-};
-
-const levenshtein = (a: string, b: string): number => {
-  // Rolling single-row DP. `previous` always holds `b.length + 1` entries and
-  // every read below is in range by construction; `panic` documents that as a
-  // hard invariant instead of masking an out-of-range read with a default.
-  const cell = (row: readonly number[], index: number): number =>
-    row[index] ?? panic("levenshtein: DP cell index out of range");
-
-  const previous = Array.from({ length: b.length + 1 }, (_unused, i) => i);
-  for (let i = 1; i <= a.length; i += 1) {
-    let diagonal = cell(previous, 0);
-    previous[0] = i;
-    for (let j = 1; j <= b.length; j += 1) {
-      const candidate = Math.min(
-        cell(previous, j) + 1,
-        cell(previous, j - 1) + 1,
-        diagonal + (a[i - 1] === b[j - 1] ? 0 : 1),
-      );
-      diagonal = cell(previous, j);
-      previous[j] = candidate;
-    }
-  }
-  return cell(previous, b.length);
 };
 
 export const isToolErrorResult = (
@@ -1237,21 +1214,20 @@ export const buildMatterUrl = (workspaceId: string) =>
 
 export { buildDocumentUrl } from "@/api/lib/mcp-connectors/app-urls";
 
-/** Keep the legacy app URL beside the shared primary/source link contract. */
+/** Return the primary reader or publisher link with its distinct source. */
 export const legalCitationLinkFields = ({
-  appUrl,
+  url,
   sourceUrl,
 }: {
-  appUrl: string | null;
+  url: string | null;
   sourceUrl: string | null;
 }) => {
   const links = resolveLegalCitationLinks({
-    appUrl,
+    url,
     sourceUrl,
     appOrigins: new Set([new URL(getAppBaseUrl()).origin]),
   });
   return {
-    appUrl,
     url: links.url,
     ...(links.type === "external" || links.source_url === undefined
       ? {}
