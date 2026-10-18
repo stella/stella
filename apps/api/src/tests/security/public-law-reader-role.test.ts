@@ -19,6 +19,8 @@ import {
   caseLawDecisions,
   caseLawSources,
   corpusIndexGenerations,
+  publishedCaseLawDecisions,
+  unredactedCaseLawDecisions,
 } from "@/api/db/schema";
 import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
 import { readCaseLawCoverageSourcesQuery } from "@/api/handlers/case-law/decisions/coverage";
@@ -74,7 +76,10 @@ import {
   type PublicLawDatabaseRolePermissions,
 } from "@/api/lib/public-law-read-db";
 import {
+  CASE_LAW_DECISION_VIEWS,
+  CASE_LAW_DECISION_VIEW_SELECT_GRANTS_BY_ROLE,
   PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
+  caseLawDecisionViewGrantStatements,
   publicLawColumnPairs,
   ROLLOUT_CASE_LAW_RELATIONS,
   ROLLOUT_CASE_LAW_SOURCE_COLUMNS,
@@ -171,6 +176,39 @@ const readableColumnPairs = async () => {
   return result.rows;
 };
 
+const existingDeclaredColumns = async (
+  database: Pick<TestDatabaseTransaction, "execute"> = testDb,
+) => {
+  const result = await database.execute<{
+    relation: string;
+    column: string;
+  }>(sql`
+    SELECT tables.relname AS relation, columns.attname AS "column"
+    FROM pg_attribute AS columns
+    INNER JOIN pg_class AS tables ON tables.oid = columns.attrelid
+    INNER JOIN pg_namespace AS schemas ON schemas.oid = tables.relnamespace
+    WHERE schemas.nspname = 'public'
+      AND tables.relkind IN ('r', 'p', 'v', 'm', 'f')
+      AND columns.attnum > 0
+      AND NOT columns.attisdropped
+    ORDER BY relation, "column"
+  `);
+  const declared = new Set(expectedQualifiedColumns);
+  const existing = new Map<string, string[]>();
+  for (const { relation, column } of result.rows) {
+    if (!declared.has(`${relation}.${column}`)) {
+      continue;
+    }
+    const columns = existing.get(relation);
+    if (columns === undefined) {
+      existing.set(relation, [column]);
+      continue;
+    }
+    columns.push(column);
+  }
+  return existing;
+};
+
 let testDb: TestDatabase;
 
 const revokeOtherDatabaseConnectFromPublic = async (
@@ -231,6 +269,14 @@ const caseLawReaderDb = (): CaseLawPublicReadDb => {
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test-only branded read handle
   return readDb as unknown as CaseLawPublicReadDb;
 };
+
+const caseLawApplicationDb = asTestRaw<CaseLawPublicReadDb>(
+  async <T>(fn: (tx: CaseLawPublicReadTransaction) => Promise<T>): Promise<T> =>
+    await testDb.transaction(async (tx) => {
+      await tx.execute(sql.raw(`SET LOCAL ROLE ${quoted(stella.name)}`));
+      return await fn(asTestRaw<CaseLawPublicReadTransaction>(tx));
+    }),
+);
 
 /**
  * The configuration search headlines are cut with. Migrations create it; the
@@ -307,6 +353,64 @@ afterAll(async () => {
 });
 
 describe("public-law reader role", () => {
+  test("request subject reads both decision views with committed application grants", async () => {
+    const decisionId = createSafeId<"caseLawDecision">();
+    const sourceId = createSafeId<"caseLawSource">();
+
+    try {
+      await testDb.insert(caseLawSources).values({
+        id: sourceId,
+        adapterKey: `decision-view-role-${sourceId}`,
+        name: "Decision view role test",
+        descriptor: {
+          allowsDerivedAi: true,
+          allowsRedistribution: true,
+          attribution: null,
+          license: "permitted-redistribution",
+        },
+      });
+      await testDb.insert(caseLawDecisions).values({
+        id: decisionId,
+        sourceId,
+        caseNumber: `DECISION-${decisionId}`,
+        court: "Test Court",
+        country: "CZE",
+        language: "cs",
+      });
+      const reads = await withRedistributableSubject(
+        caseLawApplicationDb,
+        "pages",
+        { kind: "id", id: decisionId },
+        async ({ tx }) => {
+          const published = await tx
+            .select({ id: publishedCaseLawDecisions.id })
+            .from(publishedCaseLawDecisions)
+            .where(eq(publishedCaseLawDecisions.id, decisionId));
+          const unredacted = await tx
+            .select({ id: unredactedCaseLawDecisions.id })
+            .from(unredactedCaseLawDecisions)
+            .where(eq(unredactedCaseLawDecisions.id, decisionId));
+          return {
+            published: published.map(({ id }) => id),
+            unredacted: unredacted.map(({ id }) => id),
+          };
+        },
+      );
+
+      expect(reads).toEqual({
+        published: [decisionId],
+        unredacted: [decisionId],
+      });
+    } finally {
+      await testDb
+        .delete(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, decisionId));
+      await testDb
+        .delete(caseLawSources)
+        .where(eq(caseLawSources.id, sourceId));
+    }
+  });
+
   test("readable columns contain every required column and only declared columns", async () => {
     const readable = (await readableColumnPairs()).map(
       ({ relation, column }) => `${relation}.${column}`,
@@ -451,16 +555,13 @@ describe("public-law reader role", () => {
   // over-privilege.
   test("startup attestation under an older map refuses a later release's grants", async () => {
     const accepted: string[] = [];
-    for (const [relation, declaredColumns] of Object.entries(
-      PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
-    )) {
+    for (const [relation, columns] of await existingDeclaredColumns()) {
       const olderMap = Object.fromEntries(
         Object.entries(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION).filter(
           ([name]) => name !== relation,
         ),
       );
       const permissions = await rolePermissionsAfter(async (tx) => {
-        const columns = Object.keys(declaredColumns);
         await tx.execute(
           sql.raw(
             `GRANT SELECT (${columns.map(quoted).join(", ")}) ON TABLE ${quoted(relation)} TO ${quoted(READER_ROLE)}`,
@@ -726,12 +827,10 @@ describe("public-law reader role", () => {
             `GRANT ${quoted(READER_ROLE)} TO reader_attestation_admin WITH ADMIN TRUE, INHERIT FALSE, SET FALSE`,
           ),
         );
-        for (const [relation, columns] of Object.entries(
-          PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
-        )) {
+        for (const [relation, columns] of await existingDeclaredColumns(tx)) {
           await tx.execute(
             sql.raw(
-              `GRANT SELECT (${Object.keys(columns).map(quoted).join(", ")}) ON TABLE ${quoted(relation)} TO reader_attestation_admin`,
+              `GRANT SELECT (${columns.map(quoted).join(", ")}) ON TABLE ${quoted(relation)} TO reader_attestation_admin`,
             ),
           );
         }
@@ -826,10 +925,11 @@ describe("public-law reader role", () => {
 
   test("cannot write any relation it reads", async () => {
     const written: string[] = [];
-    for (const [relation, columns] of Object.entries(
-      PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
-    )) {
-      const column = quoted(Object.keys(columns).at(0) ?? "");
+    for (const [relation, columns] of await existingDeclaredColumns()) {
+      const column = quoted(
+        columns.at(0) ??
+          panic("An existing relation must have a declared column"),
+      );
       for (const statement of [
         `UPDATE ${quoted(relation)} SET ${column} = ${column}`,
         `DELETE FROM ${quoted(relation)}`,
@@ -1207,6 +1307,23 @@ describe("public-law reader role", () => {
     );
   });
 
+  test("reads the case-law views and the previous base-table reads still work", async () => {
+    await testDb.transaction(async (tx) => {
+      await tx.execute(sql.raw(`SET LOCAL ROLE ${quoted(READER_ROLE)}`));
+      await tx.execute(
+        sql.raw('SELECT "id" FROM "case_law_published_decisions" LIMIT 0'),
+      );
+      await tx.execute(
+        sql.raw('SELECT "id" FROM "case_law_unredacted_decisions" LIMIT 0'),
+      );
+      await tx.execute(
+        sql.raw(
+          'SELECT "id", "case_number", "fulltext", "metadata" FROM "case_law_decisions" LIMIT 0',
+        ),
+      );
+    });
+  });
+
   test("has SELECT policies for required relations and only declared relations", async () => {
     const result = await testDb.execute<{ tablename: string }>(sql`
       SELECT tablename
@@ -1218,16 +1335,28 @@ describe("public-law reader role", () => {
     `);
 
     const policies = result.rows.map(({ tablename }) => tablename);
+    const viewRelations = new Set([
+      "case_law_published_decisions",
+      "case_law_unredacted_decisions",
+    ]);
     const requiredRelations = declaredColumnPairs
       .filter(({ grant }) => grant === "required")
       .map(({ relation }) => relation);
+    const policyRelations = requiredRelations.filter(
+      (relation) =>
+        relation !== "case_law_published_decisions" &&
+        relation !== "case_law_unredacted_decisions",
+    );
     const declaredRelations = Object.keys(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION);
     expect(
-      requiredRelations.filter((relation) => !policies.includes(relation)),
+      policyRelations.filter((relation) => !policies.includes(relation)),
     ).toEqual([]);
     expect(
       policies.filter((relation) => !declaredRelations.includes(relation)),
     ).toEqual([]);
+    expect(policies.filter((relation) => viewRelations.has(relation))).toEqual(
+      [],
+    );
   });
 
   test("keeps the previous reader policies during rollout", async () => {
@@ -1332,6 +1461,43 @@ const sortedColumns = (grants: EffectiveSelectGrants) =>
   );
 
 describe("public-law reader migrations", () => {
+  test("committed decision-view grants match the canonical role registry", () => {
+    const migrations = readdirSync(DRIZZLE_DIR, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) =>
+        nodePath.resolve(DRIZZLE_DIR, entry.name, "migration.sql"),
+      )
+      .filter((path) => existsSync(path))
+      .map((path) => readFileSync(path, "utf-8"))
+      .filter((source) =>
+        source.includes("-- generated case-law decision view grants: start"),
+      );
+    expect(migrations).toHaveLength(1);
+    const migration = migrations.at(0) ?? panic("Grant migration not found");
+    const startMarker = "-- generated case-law decision view grants: start";
+    const endMarker = "-- generated case-law decision view grants: end";
+    const start = migration.indexOf(startMarker) + startMarker.length;
+    const end = migration.indexOf(endMarker);
+    expect(end).toBeGreaterThan(start);
+    const statements = migration
+      .slice(start, end)
+      .replaceAll("--> statement-breakpoint", "")
+      .split(";")
+      .map((statement) => statement.trim())
+      .filter(Boolean);
+    const expected = caseLawDecisionViewGrantStatements();
+
+    expect(statements).toEqual(expected);
+    expect(expected).toHaveLength(
+      Object.keys(CASE_LAW_DECISION_VIEW_SELECT_GRANTS_BY_ROLE).length,
+    );
+    for (const statement of statements) {
+      for (const view of CASE_LAW_DECISION_VIEWS) {
+        expect(statement).toContain(`"${view}"`);
+      }
+    }
+  });
+
   // The attestation's bounds, held against what the migrations grant: every
   // required column, nothing beyond required plus permitted, and no table-wide
   // grant. A permitted column may be granted or not; one whose read has gone
@@ -1365,7 +1531,7 @@ describe("public-law reader migrations", () => {
     expect([...granted].filter((column) => !declared.has(column))).toEqual([]);
   });
 
-  test("keeps the previous reader grants unchanged during rollout", () => {
+  test("keeps the legacy base-table grant beside the published views", () => {
     const sources = readdirSync(DRIZZLE_DIR, { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
       .map((entry) =>
@@ -1377,9 +1543,9 @@ describe("public-law reader migrations", () => {
 
     const grants = foldReaderSelectGrants(sources, ROLLOUT_READER_ROLE);
 
-    expect([...grants.tables].toSorted()).toEqual([
-      ...ROLLOUT_CASE_LAW_WHOLE_RELATIONS,
-    ]);
+    expect([...grants.tables].toSorted()).toEqual(
+      [...ROLLOUT_CASE_LAW_WHOLE_RELATIONS].toSorted(),
+    );
     expect(sortedColumns(grants)).toEqual({
       [ROLLOUT_CASE_LAW_SOURCE_RELATION]: [
         ...ROLLOUT_CASE_LAW_SOURCE_COLUMNS,

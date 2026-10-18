@@ -2,6 +2,17 @@ import type { ChatSendMode } from "@stll/anonymize-chat";
 
 import type { SafeId } from "./safe-id";
 
+export type ChatTurnTiming =
+  | {
+      status: "running";
+      durationMs: number;
+      startedAt: string;
+      observedAt: string;
+      /** Active segment elapsed at the database observation, excluding durationMs. */
+      elapsedMs: number;
+    }
+  | { status: "finished"; durationMs: number };
+
 /** Pasted attachments stay native text so every text processing boundary applies. */
 export const CHAT_TEXT_ATTACHMENT_TYPE = { pastedText: "pasted_text" } as const;
 

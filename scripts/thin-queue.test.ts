@@ -191,6 +191,7 @@ const context = ({
     event_name: event,
     ref: refFor(event),
     event: {
+      action: "synchronize",
       head_commit: { message },
       pull_request: {
         draft: false,
@@ -205,7 +206,14 @@ const context = ({
   },
   inputs: { heavy_only: false, pr_depth_only: false },
   steps: {
-    "completed-depth": { outputs: { normal_completion: "required" } },
+    // The completed-depth lookup: no reuse, so a pull request plans its heavy
+    // suites (the pull-request heavy gate reads these outputs).
+    "completed-depth": {
+      outputs: {
+        normal_completion: "required",
+        pr_heavy_suites: "run",
+      },
+    },
     "pilot-queue-plan": { outputs: { queue_jobs: "[]" } },
   },
   needs: Object.fromEntries(
@@ -223,12 +231,38 @@ const context = ({
   failure: () => false,
   startsWith: (value: string, prefix: string) => value.startsWith(prefix),
 });
+// ci-plan's run_required comes from the completed-depth lookup; cases set it
+// on the plan outputs, so the lookup reports the same value.
+const withLookup = (value: object) => {
+  const nested = value as {
+    steps?: Record<string, { outputs?: Record<string, string> }>;
+    needs?: Record<string, { outputs?: Record<string, string> }>;
+  };
+  const lookup = nested.steps?.["completed-depth"];
+  if (lookup === undefined) {
+    return value;
+  }
+  return {
+    ...nested,
+    steps: {
+      ...nested.steps,
+      "completed-depth": {
+        ...lookup,
+        outputs: {
+          ...lookup.outputs,
+          run_required:
+            nested.needs?.["ci-plan"]?.outputs?.["run_required"] ?? "true",
+        },
+      },
+    },
+  };
+};
 const selected = (condition: string | undefined, value: object) => {
   const expression = condition ?? "true";
   const result = evaluateExpression(
     expression,
     contextWithPlanOutputs({
-      context: contextFromNested(value),
+      context: contextFromNested(withLookup(value)),
       outputs: planOutputs,
     }),
   );
@@ -894,6 +928,7 @@ test("unset and full preserve historical predicates except declared PR, Postgres
         ),
         "api-test-durations",
         "postgres-service-suites",
+        "pr-heavy-gate",
         "marketing-screenshots-cancel",
         "ci-quick-checks",
         "code-quality-web-rest",

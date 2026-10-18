@@ -1,0 +1,5 @@
+{
+  "metric": "lint-suppression-directives",
+  "delta": 1,
+  "reason": "The public model-default preview is synchronous, but createSafeRootHandler requires an async generator for Result.gen error capture. The handler follows the existing AI availability endpoint convention: suppress require-yield and typescript/require-await on that generator rather than introduce artificial asynchronous work. Its tests verify provider-order defaults without database access, input bounds and settings authorization; the account-policy census covers admission."
+}

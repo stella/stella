@@ -65,6 +65,9 @@
     "runSelectedRows": "Käivita {count, plural, one {# valitud real} other {# valitud real}}",
     "selectedRun": "Käivita tehisintellekti veerud {count, plural, one {# real} other {# real}}"
   },
+  "aiDisclosure": {
+    "caseLaw": "Kohtulahendite AI-kokkuvõtted, -märkmed ja -analüüsid koostab stella; kohtud ei ole neid heaks kiitnud ja need ei kajasta kohtute endi arutluskäiku. Need on abivahendid õigusala spetsialistidele ning määravaks allikaks jääb lahendi tekst."
+  },
   "appearance": {
     "calendar": "Kalender",
     "calendarGregorian": "Gregoriuse",
@@ -1055,7 +1058,6 @@
       }
     },
     "sameCaseNumber": "{count, plural, one {# lahend kannab} other {# lahendit kannavad}} seda kohtuasja numbrit. Valige kohus.",
-    "searchAskPrompt": "{query} (kohtupraktika, {country})",
     "searchLabel": "Otsi kohtupraktikast",
     "searchPlaceholder": "Kohtuasja number, ECLI või sõnad, nt 22 Cdo 2653/2012",
     "searchUnavailable": {
@@ -1203,15 +1205,37 @@
     },
     "answerEdit": {
       "acceptFailed": "Muudatust ei saanud salvestada. Proovige uuesti.",
+      "aiKind": "Soovitud muudatus",
       "ask": "Taotle muudatusi",
+      "authorUnknown": "Tundmatu autor",
+      "autolinkLabel": "Sellest tekstist saab automaatselt link. Muutke silti enne lingi eemaldamist.",
+      "change": "Muudatus {revision}",
+      "editedLabel": "Muudetud vastus",
       "failed": "Muudatust ei saanud ette valmistada. Proovige uuesti.",
+      "formatKind": "Vormindus",
+      "heading": "Pealkiri {level}",
+      "history": "Vastuse ajalugu",
+      "historyEmpty": "Varasemaid versioone pole.",
       "instruction": "Kirjeldage muudatust",
       "instructionRequired": "Kirjeldage, kuidas valitud teksti muuta.",
       "invalidSelection": "Seda valikut ei saa muuta. Valige järjestikune tekstilõik.",
+      "invalidUrl": "Sisestage kehtiv HTTP- või HTTPS-aadress.",
+      "linkAddress": "Lingi aadress",
+      "orderedList": "Nummerdatud loend",
       "proposal": "Soovitatud muudatus",
       "requesting": "Muudatuste ettevalmistamine…",
+      "restoreRefreshFailed": "Vastus taastati, kuid seda ei saanud värskendada. Värskendage, et taastatud vastus laadida.",
+      "revertKind": "Taastatud versioon",
       "stale": "See vastus on muutunud. Valige tekst uuesti.",
-      "submit": "Taotle muudatust"
+      "submit": "Taotle muudatust",
+      "textStyle": "Teksti stiil",
+      "unorderedList": "Täpploend",
+      "wholeBlockRequired": "Stiili muutmiseks valige terve lõik või loend."
+    },
+    "answerQuote": {
+      "showInDecision": "Näita lahendis",
+      "verified": "Kontrollitud tsitaat",
+      "verifiedHint": "Sõna-sõnalt: {source}"
     },
     "applyMode": {
       "description": "Word salvestab, kes iga muudatuse tegi. Jätame sinu valiku meelde.",
@@ -1397,7 +1421,12 @@
     "maxAttachmentsReached": "Maksimaalselt {count} faili sõnumi kohta",
     "mention": {
       "category": {
-        "entities": "Selles toimikus"
+        "entities": "Selles toimikus",
+        "sources": "Allikad"
+      },
+      "corpus": {
+        "caseLaw": "Kohtupraktika · {country}",
+        "legislation": "Õigusaktid · {country}"
       },
       "loadError": "Üksuste laadimine ebaõnnestus"
     },
@@ -1451,6 +1480,12 @@
       "title": "Kleebitud tekst"
     },
     "placeholder": "Kirjutage oma küsimus siia, / oskuste jaoks, @ konteksti lisamiseks",
+    "processSummary": {
+      "analyses": "{count, plural, one {# analüüs} other {# analüüsi}}",
+      "changesSaved": "{count, plural, one {# salvestatud muudatus} other {# salvestatud muudatust}}",
+      "documentEdits": "{count, plural, one {# dokumendi muudatus} other {# dokumendi muudatust}}",
+      "sourcesChecked": "{count, plural, one {# kontrollitud allikas} other {# kontrollitud allikat}}"
+    },
     "promptImprovementStrategies": {
       "decompose": {
         "description": "Jagab keeruka töö järjestatud alamülesanneteks.",
@@ -1696,6 +1731,7 @@
       "interrupted": "Katkes enne lõpetamist",
       "output": "Väljund",
       "sourceCode": "Lähtekood",
+      "statusWaiting": "Ootel",
       "toggleDetails": "Üksikasjade lülitamine",
       "unrestoredFields": "Anonüümitud režiimis ei õnnestunud {count, plural, one {# välja} other {# välja}} tegelike väärtustega täita. Kontrollige: {fields}"
     },
@@ -1721,7 +1757,8 @@
       "toggleLabel": "Veebiotsing",
       "toggleOff": "Lülita veebiotsing välja",
       "toggleOn": "Lülita veebiotsing sisse"
-    }
+    },
+    "workedFor": "Tööaeg: {duration}"
   },
   "clauses": {
     "addVariant": "Lisa variant",
@@ -2599,11 +2636,14 @@
     "actionFailed": "Toiming ebaõnnestus",
     "api": {
       "badRequest": "Päringut ei saanud lõpule viia.",
+      "caseLawCountryUnavailable": "Selle riigi kohtupraktika ei ole saadaval. Valige teine riik.",
+      "caseLawSearchUnavailable": "Selle riigi kohtupraktika otsing ei ole saadaval. Selle avalikke kohtulahendeid saate endiselt lugeda.",
       "conflict": "Päring on praeguse olekuga vastuolus.",
       "forbidden": "Teil pole selleks toiminguks õigust.",
+      "legislationCountryUnavailable": "Selle riigi õigusaktid ei ole saadaval. Valige teine riik.",
+      "legislationSearchUnavailable": "Selle riigi õigusaktide otsing ei ole saadaval. Selle avalikke õigusakte saate endiselt lugeda.",
       "notFound": "Soovitud üksust ei leitud.",
       "payloadTooLarge": "Päring on liiga suur.",
-      "publicCountryUnavailable": "Selle riigi õigusaktid ja kohtupraktika ei ole saadaval. Valige teine riik.",
       "rateLimited": "Liiga palju päringuid. Proovige hiljem uuesti.",
       "server": "Midagi läks valesti. Proovige uuesti.",
       "serviceUnavailable": "Teenus pole ajutiselt saadaval. Proovige uuesti.",
@@ -5114,7 +5154,6 @@
     "provisionTextUnavailable": "Selle redaktsiooni tekst pole saadaval",
     "publisherWindowInconsistent": "Sellel kuupäeval kehtivat redaktsiooni ei saa kindlaks teha: väljaandja andmed on vastuolulised.",
     "resolvedAlias": "Tuvastatud kui {label}",
-    "searchAskPrompt": "{query} ({country} õigusaktid)",
     "searchLabel": "Otsi õigusaktidest",
     "searchPlaceholder": "Number, lühinimi või pealkiri, nt 89/2012 Sb.",
     "showCitedPartOnly": "Näita ainult viidatud osa",
@@ -6243,7 +6282,6 @@
         }
       },
       "atAGlance": "Ülevaade",
-      "edited": "muutis",
       "getStarted": "Alustage dokumentide üleslaadimisega või looge oma esimene kaust.",
       "matterDetails": "Toimiku detailid",
       "membersCount": "{count, plural, one {# liige} other {# liiget}}",

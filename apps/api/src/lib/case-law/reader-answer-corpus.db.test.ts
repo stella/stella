@@ -226,9 +226,10 @@ describe("reader answer tool public corpus boundary", () => {
       reads.some(({ query }) => query.includes("case_law_citations")),
     ).toBe(true);
     expect(
-      reads.some(({ query }) => query.includes("case_law_decisions")),
+      reads.some(({ query }) => query.includes("case_law_published_decisions")),
     ).toBe(true);
     for (const { query, params } of reads) {
+      expect(query).not.toContain("case_law_decisions");
       expect(query).not.toMatch(
         /\b(?:INSERT\s+INTO|UPDATE|DELETE\s+FROM|MERGE\s+INTO)\b/iu,
       );

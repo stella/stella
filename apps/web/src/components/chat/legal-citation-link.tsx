@@ -5,7 +5,6 @@ import { useTranslations } from "use-intl";
 
 import { extractCaseLawDecisionIdFromIdRouteParam } from "@stll/api-contract/case-law-decision-route";
 import { resolveLegalCitationLinks } from "@stll/api-contract/legal-citation-links";
-import { ChatLink } from "@stll/chat/link";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { BidiText } from "@stll/ui/bidi-text";
 import { ScrollTextIcon } from "@stll/ui/icons";
@@ -22,6 +21,7 @@ import { InlinePill } from "@/components/inline-pill";
 import { isPlainPrimaryClick } from "@/components/inspector/case-decision-view";
 import type { CitedDecisionParagraph } from "@/components/references/reference.logic";
 import { env } from "@/env";
+import { ProxyChatLink } from "@/features/chat/components/proxy-chat-link";
 import { detached } from "@/lib/detached";
 
 type LegalCitationLinks = ReturnType<typeof resolveLegalCitationLinks>;
@@ -97,12 +97,12 @@ const LegalCitationView = ({
         {label}
       </a>
       {citation.source_url !== undefined && (
-        <ChatLink
+        <ProxyChatLink
           href={citation.source_url}
           newTabLabel={t("common.openInNewTab")}
         >
           {t("common.source")}
-        </ChatLink>
+        </ProxyChatLink>
       )}
     </span>
   );
@@ -142,7 +142,7 @@ const InteractiveLegalCitation = ({
   return <LegalCitationView {...props} citation={citation} onClick={onClick} />;
 };
 
-// A publisher alias can carry its paragraph anchor only in the stored app URL.
+// A publisher alias can carry its paragraph anchor only in the stored reader URL.
 const readUrlAnchor = (href: string): string | undefined => {
   const { hash } = new URL(href);
   if (hash === "") {
@@ -167,7 +167,7 @@ export const LegalCitationLink = (props: LegalCitationLinkProps) => {
     ...(typeof window === "undefined" ? [] : [window.location.origin]),
   ]);
   const citation = resolveLegalCitationLinks({
-    appUrl: props.source.appUrl ?? props.source.url,
+    url: props.source.url,
     sourceUrl: props.source.sourceUrl ?? props.source.url,
     appOrigins,
   });
@@ -228,34 +228,18 @@ export const LegalCitationLink = (props: LegalCitationLinkProps) => {
     );
   }
   switch (citation.type) {
-    case "external": {
-      const label =
-        props.appearance === "tray" ? (
-          <BidiText as="span" className="max-w-[20ch] truncate">
-            {props.children}
-          </BidiText>
-        ) : (
-          props.children
-        );
-      const link =
-        citation.url === null ? (
-          <span>{label}</span>
-        ) : (
-          <ChatLink
-            href={props.externalHref ?? citation.url}
-            newTabLabel={t("common.openInNewTab")}
-          >
-            {label}
-          </ChatLink>
-        );
-      return props.appearance === "tray" ? (
-        <span className="bg-muted/50 hover:bg-muted inline-flex shrink-0 items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs">
-          {link}
-        </span>
-      ) : (
-        link
+    case "external":
+      return (
+        <ProxyChatLink
+          appearance={props.appearance}
+          href={
+            citation.url === null ? "" : (props.externalHref ?? citation.url)
+          }
+          newTabLabel={t("common.openInNewTab")}
+        >
+          {props.children}
+        </ProxyChatLink>
       );
-    }
     case "statute":
       return props.interactive ? (
         <InteractiveLegalCitation

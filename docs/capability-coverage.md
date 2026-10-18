@@ -282,6 +282,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `lists.items.sources.verification.update` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists items-sources-verification-update` |
 | `lists.items.update` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists items-update` |
 | `lists.list` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists list` |
+| `lists.sample-case.create` | write | stella:documents_write, stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists sample-case-create` |
 | `lists.sections.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists sections-create` |
 | `lists.update` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists update` |
 | `lists.verifications.claim-reviews.bulk.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-claim-reviews-bulk-create` |
@@ -686,7 +687,7 @@ mechanics, and similar), not gaps in coverage.
 | assistant_chat | 17 |
 | auth_plumbing | 32 |
 | billing_ui | 1 |
-| chat_thread_ui | 11 |
+| chat_thread_ui | 12 |
 | compound_consent | 1 |
 | deploy_mechanics | 1 |
 | document_processing | 25 |
@@ -694,11 +695,11 @@ mechanics, and similar), not gaps in coverage.
 | hosted_billing | 7 |
 | mcp_transport | 12 |
 | native_tool_ui | 10 |
-| provider_secret | 33 |
+| provider_secret | 34 |
 | public_indexing | 9 |
 | realtime_stream | 9 |
 | search_ui | 18 |
-| session_token_exchange | 20 |
+| session_token_exchange | 21 |
 | ui_navigation_state | 14 |
 | upload_mechanics | 20 |
 | url_preview | 2 |

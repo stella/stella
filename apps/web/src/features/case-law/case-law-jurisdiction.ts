@@ -27,7 +27,7 @@ export const caseLawCountryRegion = (country: string): string | null =>
   REGIONS[country.toUpperCase()] ?? null;
 
 /** Expects the corpus form (`CZE`), which `fromCaseLawCountryParam` produces. */
-const isCaseLawBrowserCountry = (
+export const isCaseLawBrowserCountry = (
   country: string,
 ): country is CaseLawBrowserCountry =>
   Object.hasOwn(REGION_BY_COUNTRY, country);

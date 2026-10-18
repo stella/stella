@@ -65,6 +65,9 @@
     "runSelectedRows": "Spustiť pre {count, plural, one {# vybraný riadok} few {# vybrané riadky} many {# vybraného riadka} other {# vybraných riadkov}}",
     "selectedRun": "Spustiť AI stĺpce pre {count, plural, one {# riadok} few {# riadky} many {# riadka} other {# riadkov}}"
   },
+  "aiDisclosure": {
+    "caseLaw": "AI zhrnutia, poznámky a analýzy súdnych rozhodnutí vytvára stella. Súdy ich neschvaľujú a nejde o vlastné úvahy súdov; slúžia ako pomôcka pre právnikov a rozhodujúcim zdrojom zostáva text rozhodnutia."
+  },
   "appearance": {
     "calendar": "Kalendár",
     "calendarGregorian": "Gregoriánsky",
@@ -1055,7 +1058,6 @@
       }
     },
     "sameCaseNumber": "{count, plural, one {# rozhodnutie nesie} few {# rozhodnutia nesú} other {# rozhodnutí nesie}} túto spisovú značku. Vyberte súd.",
-    "searchAskPrompt": "{query} (judikatúra, {country})",
     "searchLabel": "Hľadať v judikatúre",
     "searchPlaceholder": "Spisová značka, ECLI alebo slová, napr. 1Cdo/12/2020",
     "searchUnavailable": {
@@ -1203,15 +1205,37 @@
     },
     "answerEdit": {
       "acceptFailed": "Úpravu sa nepodarilo uložiť. Skúste to znova.",
+      "aiKind": "Úprava na požiadanie",
       "ask": "Požiadať o úpravy",
+      "authorUnknown": "Neznámy autor",
+      "autolinkLabel": "Tento text sa automaticky zmení na odkaz. Pred odstránením odkazu zmeňte jeho označenie.",
+      "change": "Zmena {revision}",
+      "editedLabel": "Upravená odpoveď",
       "failed": "Úpravu sa nepodarilo pripraviť. Skúste to znova.",
+      "formatKind": "Formátovanie",
+      "heading": "Nadpis {level}",
+      "history": "História odpovede",
+      "historyEmpty": "Žiadne staršie verzie.",
       "instruction": "Opíšte úpravu",
       "instructionRequired": "Opíšte, ako upraviť vybraný text.",
       "invalidSelection": "Výber nemožno upraviť, vyberte súvislý text.",
+      "invalidUrl": "Zadajte platnú adresu HTTP alebo HTTPS.",
+      "linkAddress": "Adresa odkazu",
+      "orderedList": "Číslovaný zoznam",
       "proposal": "Navrhnutá úprava",
       "requesting": "Príprava úprav…",
+      "restoreRefreshFailed": "Odpoveď bola obnovená, ale nepodarilo sa ju obnoviť v zobrazení. Obnovte zobrazenie, aby sa načítala obnovená odpoveď.",
+      "revertKind": "Obnovená verzia",
       "stale": "Odpoveď sa zmenila. Vyberte text znova.",
-      "submit": "Požiadať o úpravu"
+      "submit": "Požiadať o úpravu",
+      "textStyle": "Štýl textu",
+      "unorderedList": "Zoznam s odrážkami",
+      "wholeBlockRequired": "Na zmenu štýlu vyberte celý odsek alebo zoznam."
+    },
+    "answerQuote": {
+      "showInDecision": "Zobraziť v rozhodnutí",
+      "verified": "Overená citácia",
+      "verifiedHint": "Doslovne v {source}"
     },
     "applyMode": {
       "description": "Word ukladá, kto urobil každú zmenu. Vašu voľbu si zapamätáme.",
@@ -1397,7 +1421,12 @@
     "maxAttachmentsReached": "Maximálne {count} súborov na správu",
     "mention": {
       "category": {
-        "entities": "V tomto spise"
+        "entities": "V tomto spise",
+        "sources": "Zdroje"
+      },
+      "corpus": {
+        "caseLaw": "Judikatúra · {country}",
+        "legislation": "Právne predpisy · {country}"
       },
       "loadError": "Nepodarilo sa načítať položky"
     },
@@ -1451,6 +1480,12 @@
       "title": "Vložený text"
     },
     "placeholder": "Sem napíšte svoju otázku, / pre zručnosti, @ na pridanie kontextu",
+    "processSummary": {
+      "analyses": "{count, plural, one {# analýza} few {# analýzy} other {# analýz}}",
+      "changesSaved": "{count, plural, one {# uložená zmena} few {# uložené zmeny} other {# uložených zmien}}",
+      "documentEdits": "{count, plural, one {# úprava dokumentu} few {# úpravy dokumentu} other {# úprav dokumentu}}",
+      "sourcesChecked": "{count, plural, one {# preverený zdroj} few {# preverené zdroje} other {# preverených zdrojov}}"
+    },
     "promptImprovementStrategies": {
       "decompose": {
         "description": "Rozdelí zložitú úlohu na zoradené čiastkové kroky.",
@@ -1696,6 +1731,7 @@
       "interrupted": "Prerušené pred dokončením",
       "output": "Výstup",
       "sourceCode": "Zdrojový kód",
+      "statusWaiting": "Čaká",
       "toggleDetails": "Prepnúť podrobnosti",
       "unrestoredFields": "{count, plural, one {# pole sa nepodarilo} few {# polia sa nepodarilo} many {# poľa sa nepodarilo} other {# polí sa nepodarilo}} v anonymizovanom režime vyplniť skutočnými hodnotami. Skontrolujte: {fields}"
     },
@@ -1721,7 +1757,8 @@
       "toggleLabel": "Vyhľadávanie na webe",
       "toggleOff": "Vypnúť vyhľadávanie na webe",
       "toggleOn": "Zapnúť vyhľadávanie na webe"
-    }
+    },
+    "workedFor": "Pracovalo {duration}"
   },
   "clauses": {
     "addVariant": "Pridať variant",
@@ -2599,11 +2636,14 @@
     "actionFailed": "Akcia zlyhala",
     "api": {
       "badRequest": "Požiadavku sa nepodarilo dokončiť.",
+      "caseLawCountryUnavailable": "Judikatúra tejto krajiny nie je dostupná. Vyberte inú krajinu.",
+      "caseLawSearchUnavailable": "Vyhľadávanie judikatúry tejto krajiny nie je dostupné. Jej verejné rozhodnutia si môžete naďalej čítať.",
       "conflict": "Požiadavka je v konflikte s aktuálnym stavom.",
       "forbidden": "Na túto akciu nemáte oprávnenie.",
+      "legislationCountryUnavailable": "Právne predpisy tejto krajiny nie sú dostupné. Vyberte inú krajinu.",
+      "legislationSearchUnavailable": "Vyhľadávanie právnych predpisov tejto krajiny nie je dostupné. Jej verejné právne predpisy si môžete naďalej čítať.",
       "notFound": "Požadovanú položku sa nepodarilo nájsť.",
       "payloadTooLarge": "Požiadavka je príliš veľká.",
-      "publicCountryUnavailable": "Právne predpisy a judikatúra tejto krajiny nie sú dostupné. Vyberte inú krajinu.",
       "rateLimited": "Príliš veľa požiadaviek. Skúste to prosím neskôr.",
       "server": "Niečo sa pokazilo. Skúste to prosím znova.",
       "serviceUnavailable": "Služba je dočasne nedostupná. Skúste to prosím znova.",
@@ -5114,7 +5154,6 @@
     "provisionTextUnavailable": "Text nie je pre toto znenie k dispozícii",
     "publisherWindowInconsistent": "K tomuto dňu nemožno určiť účinné znenie: údaje vydavateľa si odporujú.",
     "resolvedAlias": "Rozpoznané ako {label}",
-    "searchAskPrompt": "{query} (právne predpisy: {country})",
     "searchLabel": "Hľadať v právnych predpisoch",
     "searchPlaceholder": "Číslo, skratka alebo názov, napr. 40/1964 Zb.",
     "showCitedPartOnly": "Zobraziť len citovanú časť",
@@ -6243,7 +6282,6 @@
         }
       },
       "atAGlance": "Prehľad",
-      "edited": "upravil(a)",
       "getStarted": "Začnite nahraním dokumentov alebo vytvorením prvého priečinka.",
       "matterDetails": "Detaily spisu",
       "membersCount": "{count, plural, one {# člen} few {# členovia} other {# členov}}",

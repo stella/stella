@@ -65,6 +65,9 @@
     "runSelectedRows": "Exécuter pour {count, plural, one {# ligne sélectionnée} other {# lignes sélectionnées}}",
     "selectedRun": "Exécuter les colonnes IA pour {count, plural, one {# ligne} other {# lignes}}"
   },
+  "aiDisclosure": {
+    "caseLaw": "Les résumés, notes et analyses de décisions de justice produits par l’IA sont générés par stella ; ils ne sont pas approuvés par les juridictions et ne reflètent pas leur propre raisonnement. Ce sont des outils d’aide destinés aux professionnels du droit ; seul le texte de la décision fait foi."
+  },
   "appearance": {
     "calendar": "Calendrier",
     "calendarGregorian": "Grégorien",
@@ -1055,7 +1058,6 @@
       }
     },
     "sameCaseNumber": "{count, plural, one {# décision porte} other {# décisions portent}} ce numéro d'affaire. Choisissez la juridiction.",
-    "searchAskPrompt": "{query} (jurisprudence, {country})",
     "searchLabel": "Rechercher dans la jurisprudence",
     "searchPlaceholder": "Numéro d'affaire, ECLI ou mots-clés, p. ex. 22 Cdo 2653/2012",
     "searchUnavailable": {
@@ -1203,15 +1205,37 @@
     },
     "answerEdit": {
       "acceptFailed": "La modification n’a pas pu être enregistrée. Réessayez.",
+      "aiKind": "Modification demandée",
       "ask": "Demander des modifications",
+      "authorUnknown": "Auteur inconnu",
+      "autolinkLabel": "Ce texte devient automatiquement un lien. Modifiez son libellé avant de supprimer le lien.",
+      "change": "Modification {revision}",
+      "editedLabel": "Réponse modifiée",
       "failed": "La modification n’a pas pu être préparée. Réessayez.",
+      "formatKind": "Mise en forme",
+      "heading": "Titre {level}",
+      "history": "Historique de la réponse",
+      "historyEmpty": "Aucune version antérieure.",
       "instruction": "Décrivez la modification",
       "instructionRequired": "Décrivez comment modifier le texte sélectionné.",
       "invalidSelection": "Cette sélection ne peut pas être modifiée. Sélectionnez un passage continu.",
+      "invalidUrl": "Saisissez une adresse HTTP ou HTTPS valide.",
+      "linkAddress": "Adresse du lien",
+      "orderedList": "Liste numérotée",
       "proposal": "Modification proposée",
       "requesting": "Préparation des modifications…",
+      "restoreRefreshFailed": "La réponse a été restaurée, mais n’a pas pu être actualisée. Actualisez pour charger la réponse restaurée.",
+      "revertKind": "Version restaurée",
       "stale": "Cette réponse a été modifiée. Sélectionnez à nouveau le texte.",
-      "submit": "Demander une modification"
+      "submit": "Demander une modification",
+      "textStyle": "Style de texte",
+      "unorderedList": "Liste à puces",
+      "wholeBlockRequired": "Sélectionnez un paragraphe ou une liste entière pour changer son style."
+    },
+    "answerQuote": {
+      "showInDecision": "Afficher dans la décision",
+      "verified": "Citation vérifiée",
+      "verifiedHint": "Mot pour mot dans {source}"
     },
     "applyMode": {
       "description": "Word enregistre l’auteur de chaque modification. Nous mémoriserons votre choix.",
@@ -1397,7 +1421,12 @@
     "maxAttachmentsReached": "Maximum {count} fichiers par message",
     "mention": {
       "category": {
-        "entities": "Dans ce dossier"
+        "entities": "Dans ce dossier",
+        "sources": "Sources"
+      },
+      "corpus": {
+        "caseLaw": "Jurisprudence · {country}",
+        "legislation": "Législation · {country}"
       },
       "loadError": "Échec du chargement des éléments"
     },
@@ -1451,6 +1480,12 @@
       "title": "Texte collé"
     },
     "placeholder": "Saisissez votre question ici, / pour les compétences, @ pour ajouter du contexte",
+    "processSummary": {
+      "analyses": "{count, plural, one {# analyse} other {# analyses}}",
+      "changesSaved": "{count, plural, one {# modification enregistrée} other {# modifications enregistrées}}",
+      "documentEdits": "{count, plural, one {# modification du document} other {# modifications du document}}",
+      "sourcesChecked": "{count, plural, one {# source vérifiée} other {# sources vérifiées}}"
+    },
     "promptImprovementStrategies": {
       "decompose": {
         "description": "Transforme un travail complexe en sous-tâches ordonnées.",
@@ -1696,6 +1731,7 @@
       "interrupted": "Interrompu avant la fin",
       "output": "Résultat",
       "sourceCode": "Code source",
+      "statusWaiting": "En attente",
       "toggleDetails": "Afficher les détails",
       "unrestoredFields": "En mode anonymisé, {count, plural, one {# champ n’a pas pu être rempli} other {# champs n’ont pas pu être remplis}} avec des valeurs réelles. À vérifier : {fields}"
     },
@@ -1721,7 +1757,8 @@
       "toggleLabel": "Recherche web",
       "toggleOff": "Désactiver la recherche web",
       "toggleOn": "Activer la recherche web"
-    }
+    },
+    "workedFor": "Temps de travail : {duration}"
   },
   "clauses": {
     "addVariant": "Ajouter une variante",
@@ -2599,11 +2636,14 @@
     "actionFailed": "Action échouée",
     "api": {
       "badRequest": "La requête n’a pas pu être terminée.",
+      "caseLawCountryUnavailable": "La jurisprudence de ce pays n’est pas disponible. Choisissez un autre pays.",
+      "caseLawSearchUnavailable": "La recherche dans la jurisprudence de ce pays n’est pas disponible. Vous pouvez toujours consulter ses décisions publiques.",
       "conflict": "La requête est en conflit avec l’état actuel.",
       "forbidden": "Vous n’avez pas l’autorisation d’effectuer cette action.",
+      "legislationCountryUnavailable": "Les textes législatifs de ce pays ne sont pas disponibles. Choisissez un autre pays.",
+      "legislationSearchUnavailable": "La recherche dans les textes législatifs de ce pays n’est pas disponible. Vous pouvez toujours consulter ses textes législatifs publics.",
       "notFound": "Nous n’avons pas trouvé l’élément demandé.",
       "payloadTooLarge": "La requête est trop volumineuse.",
-      "publicCountryUnavailable": "Les textes législatifs et la jurisprudence de ce pays ne sont pas disponibles. Choisissez un autre pays.",
       "rateLimited": "Trop de requêtes. Veuillez réessayer plus tard.",
       "server": "Une erreur s’est produite. Veuillez réessayer.",
       "serviceUnavailable": "Le service est temporairement indisponible. Veuillez réessayer.",
@@ -5114,7 +5154,6 @@
     "provisionTextUnavailable": "Texte indisponible pour cette version",
     "publisherWindowInconsistent": "Aucune version en vigueur ne peut être établie à cette date : les données de l'éditeur sont incohérentes.",
     "resolvedAlias": "Reconnu comme {label}",
-    "searchAskPrompt": "{query} (législation : {country})",
     "searchLabel": "Rechercher dans la législation",
     "searchPlaceholder": "Numéro, nom ou intitulé, p. ex. 89/2012 Sb.",
     "showCitedPartOnly": "Afficher seulement la partie citée",
@@ -6243,7 +6282,6 @@
         }
       },
       "atAGlance": "En un coup d'œil",
-      "edited": "a modifié",
       "getStarted": "Commencez en téléversant des documents ou en créant votre premier dossier.",
       "matterDetails": "Détails du dossier",
       "membersCount": "{count, plural, one {# membre} other {# membres}}",

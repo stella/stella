@@ -118,7 +118,7 @@ class ContentDeliveryInspector {
       .at(0);
   };
   private readonly importFile = (specifier: string, from: string) => {
-    if (/\.(?:json|ttf|otf|woff2?|png|svg)$/u.test(specifier)) {
+    if (/\.(?:json|ttf|otf|woff2?|png|svg|docx)$/u.test(specifier)) {
       return undefined;
     }
     const resolved = this.options.resolveImport(specifier, from);
