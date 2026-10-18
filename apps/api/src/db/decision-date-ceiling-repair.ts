@@ -38,9 +38,12 @@ import type { CorruptDecisionDateRow } from "../scripts/repair-decision-dates-pl
 import { repairDecisionDateBatch } from "../scripts/repair-decision-dates-plan";
 import { createBackfillRuntime } from "./backfill-runtime";
 import { readConstraintCompletion } from "./online-constraint-completion";
+import { validateOnlineConstraints } from "./online-ddl";
+import type { OnlineConstraintValidation, OnlineTableGate } from "./online-ddl";
 import { onlineMigrationParams } from "./online-migration-connection";
 import type {
   OnlineMigrationConnection,
+  OnlineMigrationOutcome,
   OnlineRepair,
 } from "./online-migration-connection";
 
@@ -62,13 +65,6 @@ const BATCH = 50;
  */
 const BATCH_LOCK_TIMEOUT = "30s";
 const BATCH_STATEMENT_TIMEOUT = "5min";
-/**
- * VALIDATE takes SHARE UPDATE EXCLUSIVE, which queues behind an autovacuum of
- * the table until that vacuum notices the waiter and yields. Longer than the
- * online phase's default, which is sized for index builds; the phase restores
- * its own setting afterwards.
- */
-const VALIDATE_LOCK_TIMEOUT = "1min";
 
 const dialect = new PgDialect();
 
@@ -158,16 +154,27 @@ const repairUntilEmpty = async (
   }
 };
 
+export const DECISION_DATE_CEILING_CONSTRAINTS = [
+  {
+    tableName: TABLE_NAME,
+    constraintName: CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT,
+  },
+] as const satisfies readonly OnlineConstraintValidation[];
+
+/**
+ * VALIDATE takes SHARE UPDATE EXCLUSIVE, which queues behind an autovacuum of
+ * the table until that vacuum notices the waiter and yields; the gate watches
+ * that wait and defers the phase rather than failing it.
+ */
 const validateConstraint = async (
   connection: OnlineMigrationConnection,
-): Promise<void> => {
-  await connection.execute(`SET lock_timeout = '${VALIDATE_LOCK_TIMEOUT}'`);
-  // A no-op on an already validated constraint, which is what makes the
-  // repair a fixed point.
-  await connection.execute(
-    `ALTER TABLE public."${TABLE_NAME}" VALIDATE CONSTRAINT "${CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT}"`,
-  );
-};
+  tables: OnlineTableGate,
+): Promise<OnlineMigrationOutcome> =>
+  await validateOnlineConstraints({
+    connection,
+    tables,
+    constraints: DECISION_DATE_CEILING_CONSTRAINTS,
+  });
 
 type RepairRuntimeOptions = {
   readVerdict?: () => Promise<Verdict>;
@@ -188,20 +195,19 @@ export const createDecisionDateCeilingRepair = (
       backfillName: REPAIR_NAME,
       tableName: TABLE_NAME,
     }),
-  repair: async (connection) => {
+  repair: async (connection, tables) => {
     // Empty fresh databases have no heavy data work and no metric source yet.
     if (
       (await connection.query(`SELECT 1 FROM public."${TABLE_NAME}" LIMIT 1`))
         .length === 0
     ) {
-      await validateConstraint(connection);
-      return;
+      return await validateConstraint(connection, tables);
     }
     const pass = await repairUntilEmpty(connection, options);
     if (pass.isErr()) {
       throw pass.error;
     }
-    await validateConstraint(connection);
+    return await validateConstraint(connection, tables);
   },
 });
 

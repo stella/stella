@@ -7,6 +7,7 @@ import {
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import {
   DESTRUCTIVE_EFFECT_CHUNK_INSERT_BATCH_SIZE,
   DESTRUCTIVE_EFFECT_LEGACY_STALE_PROCESSING_MS,
@@ -157,7 +158,7 @@ export const ensureAccountDeletionEffectChunks = async (
   requestId: SafeId<"accountDeletionRequest">,
   db: AccountDeletionEffectDb,
 ): Promise<number> =>
-  await db.transaction(async (tx) => {
+  await withAggregateTransaction(db, async (tx) => {
     const existing = (
       await tx
         .select({ id: accountDeletionEffectChunks.id })
@@ -221,11 +222,30 @@ export const ensureAccountDeletionEffectChunks = async (
     return chunks.length;
   });
 
+// The deadline is fixed when the request is recorded. No object is deleted
+// before it, so no export attempt can still publish an object it removes.
+const storageCleanupDeferred = async (
+  requestId: SafeId<"accountDeletionRequest">,
+  db: AccountDeletionEffectDb,
+): Promise<boolean> => {
+  const deadlines = await db
+    .select({
+      deferred: sql<boolean>`coalesce((${accountDeletionRequests.storageCleanup} ->> 'notBefore')::timestamptz > clock_timestamp(), false)`,
+    })
+    .from(accountDeletionRequests)
+    .where(eq(accountDeletionRequests.id, requestId))
+    .limit(1);
+  return deadlines.at(0)?.deferred === true;
+};
+
 export const claimNextAccountDeletionEffectChunk = async (
   requestId: SafeId<"accountDeletionRequest">,
   db: AccountDeletionEffectDb,
-): Promise<AccountDeletionEffectClaim | null> =>
-  await db.transaction(async (tx) => {
+): Promise<AccountDeletionEffectClaim | null> => {
+  if (await storageCleanupDeferred(requestId, db)) {
+    return null;
+  }
+  return await db.transaction(async (tx) => {
     const candidate = (
       await tx
         .select({
@@ -328,6 +348,7 @@ export const claimNextAccountDeletionEffectChunk = async (
       s3Keys: claimed.s3Keys,
     };
   });
+};
 
 export const completeAccountDeletionEffectChunk = async (
   claim: AccountDeletionEffectClaim,
