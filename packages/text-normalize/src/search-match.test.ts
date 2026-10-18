@@ -27,6 +27,13 @@ describe("foldSearchMatchText", () => {
     expect(foldSearchMatchText("Søren Đorđe")).toBe("soren dorde");
     expect(foldSearchMatchText("Straße")).toBe("strasse");
   });
+
+  test("keeps spacing marks that are text, not accents", () => {
+    expect(foldSearchMatchText("コーヒー")).toBe("コーヒー");
+    expect(findSearchMatchRanges("コーヒーとコヒ", "コヒ")).toEqual([
+      { start: 5, end: 7 },
+    ]);
+  });
 });
 
 describe("findSearchMatchRanges", () => {

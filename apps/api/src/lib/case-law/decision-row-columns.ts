@@ -1,4 +1,4 @@
-import { caseLawDecisions } from "@/api/db/schema";
+import { publishedCaseLawDecisions } from "@/api/db/schema";
 import {
   publisherHeadnoteMetadataSql,
   publisherKeywordsMetadataSql,
@@ -16,23 +16,23 @@ import {
  * instead of sharing one set of descriptors across the process.
  */
 export const publicDecisionRowColumns = () => ({
-  id: caseLawDecisions.id,
-  caseNumber: caseLawDecisions.caseNumber,
-  caseNumberType: caseLawDecisions.caseNumberType,
-  slug: caseLawDecisions.slug,
-  ecli: caseLawDecisions.ecli,
-  court: caseLawDecisions.court,
+  id: publishedCaseLawDecisions.id,
+  caseNumber: publishedCaseLawDecisions.caseNumber,
+  caseNumberType: publishedCaseLawDecisions.caseNumberType,
+  slug: publishedCaseLawDecisions.slug,
+  ecli: publishedCaseLawDecisions.ecli,
+  court: publishedCaseLawDecisions.court,
   // A directory court is presented by its id's rank, not by its name.
-  courtId: caseLawDecisions.courtId,
-  country: caseLawDecisions.country,
-  language: caseLawDecisions.language,
-  languageGroupKey: caseLawDecisions.languageGroupKey,
-  decisionDate: caseLawDecisions.decisionDate,
-  decisionType: caseLawDecisions.decisionType,
-  sourceUrl: caseLawDecisions.sourceUrl,
+  courtId: publishedCaseLawDecisions.courtId,
+  country: publishedCaseLawDecisions.country,
+  language: publishedCaseLawDecisions.language,
+  languageGroupKey: publishedCaseLawDecisions.languageGroupKey,
+  decisionDate: publishedCaseLawDecisions.decisionDate,
+  decisionType: publishedCaseLawDecisions.decisionType,
+  sourceUrl: publishedCaseLawDecisions.sourceUrl,
   // The publisher's own two kinds, kept apart all the way to the cell.
-  headnote: publisherHeadnoteMetadataSql(caseLawDecisions.metadata),
-  keywords: publisherKeywordsMetadataSql(caseLawDecisions.metadata),
-  citationCount: caseLawDecisions.citationCount,
-  createdAt: caseLawDecisions.createdAt,
+  headnote: publisherHeadnoteMetadataSql(publishedCaseLawDecisions.metadata),
+  keywords: publisherKeywordsMetadataSql(publishedCaseLawDecisions.metadata),
+  citationCount: publishedCaseLawDecisions.citationCount,
+  createdAt: publishedCaseLawDecisions.createdAt,
 });

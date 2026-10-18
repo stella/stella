@@ -65,6 +65,9 @@
     "runSelectedRows": "Vykdyti {count, plural, one {# pasirinktai eilutei} few {# pasirinktoms eilutėms} many {# pasirinktos eilutės} other {# pasirinktų eilučių}}",
     "selectedRun": "Vykdyti DI stulpelius {count, plural, one {# eilutei} few {# eilutėms} many {# eilutės} other {# eilučių}}"
   },
+  "aiDisclosure": {
+    "caseLaw": "DI parengtas teismų sprendimų santraukas, pastabas ir analizes generuoja stella; teismai jų nėra patvirtinę ir jos neatspindi pačių teismų argumentacijos. Tai pagalbinės priemonės teisės specialistams, o oficialiu ir lemiamu šaltiniu išlieka sprendimo tekstas."
+  },
   "appearance": {
     "calendar": "Kalendorius",
     "calendarGregorian": "Grigaliaus",
@@ -1055,7 +1058,6 @@
       }
     },
     "sameCaseNumber": "{count, plural, one {# sprendimas turi} few {# sprendimai turi} many {# sprendimo turi} other {# sprendimų turi}} šį bylos numerį. Pasirinkite teismą.",
-    "searchAskPrompt": "{query} (teismų praktika, {country})",
     "searchLabel": "Ieškoti teismų praktikoje",
     "searchPlaceholder": "Bylos numeris, ECLI arba žodžiai, pvz. 22 Cdo 2653/2012",
     "searchUnavailable": {
@@ -1212,6 +1214,11 @@
       "requesting": "Ruošiami pakeitimai…",
       "stale": "Šis atsakymas pasikeitė. Pasirinkite tekstą iš naujo.",
       "submit": "Prašyti pakeitimo"
+    },
+    "answerQuote": {
+      "showInDecision": "Rodyti sprendime",
+      "verified": "Patikrinta citata",
+      "verifiedHint": "Pažodžiui: {source}"
     },
     "applyMode": {
       "description": "Word įrašo, kas atliko kiekvieną pakeitimą. Įsiminsime jūsų pasirinkimą.",
@@ -1397,7 +1404,12 @@
     "maxAttachmentsReached": "Daugiausiai {count} failų vienoje žinutėje",
     "mention": {
       "category": {
-        "entities": "Šioje byloje"
+        "entities": "Šioje byloje",
+        "sources": "Šaltiniai"
+      },
+      "corpus": {
+        "caseLaw": "Teismų praktika · {country}",
+        "legislation": "Teisės aktai · {country}"
       },
       "loadError": "Nepavyko įkelti elementų"
     },
@@ -1451,6 +1463,12 @@
       "title": "Įklijuotas tekstas"
     },
     "placeholder": "Čia įveskite klausimą, / įgūdžiams, @ kontekstui pridėti",
+    "processSummary": {
+      "analyses": "{count, plural, one {# analizė} few {# analizės} many {# analizės} other {# analizių}}",
+      "changesSaved": "{count, plural, one {# išsaugotas pakeitimas} few {# išsaugoti pakeitimai} many {# išsaugoto pakeitimo} other {# išsaugotų pakeitimų}}",
+      "documentEdits": "{count, plural, one {# dokumento pakeitimas} few {# dokumento pakeitimai} many {# dokumento pakeitimo} other {# dokumento pakeitimų}}",
+      "sourcesChecked": "{count, plural, one {# patikrintas šaltinis} few {# patikrinti šaltiniai} many {# patikrinto šaltinio} other {# patikrintų šaltinių}}"
+    },
     "promptImprovementStrategies": {
       "decompose": {
         "description": "Sudėtingą darbą suskaido į nuoseklias smulkesnes užduotis.",
@@ -1696,6 +1714,7 @@
       "interrupted": "Nutraukta nebaigus",
       "output": "Išvestis",
       "sourceCode": "Pirminis kodas",
+      "statusWaiting": "Laukiama",
       "toggleDetails": "Perjungti detales",
       "unrestoredFields": "Anonimizuotu režimu nepavyko tikromis reikšmėmis užpildyti {count, plural, one {# lauko} few {# laukų} many {# lauko} other {# laukų}}. Patikrinkite: {fields}"
     },
@@ -1721,7 +1740,8 @@
       "toggleLabel": "Paieška internete",
       "toggleOff": "Išjungti paiešką internete",
       "toggleOn": "Įjungti paiešką internete"
-    }
+    },
+    "workedFor": "Darbo trukmė: {duration}"
   },
   "clauses": {
     "addVariant": "Pridėti variantą",
@@ -2599,11 +2619,14 @@
     "actionFailed": "Veiksmas nepavyko",
     "api": {
       "badRequest": "Užklausos nepavyko užbaigti.",
+      "caseLawCountryUnavailable": "Šios šalies teismų praktika nepasiekiama. Pasirinkite kitą šalį.",
+      "caseLawSearchUnavailable": "Šios šalies teismų praktikos paieška nepasiekiama. Jos viešus teismų sprendimus vis tiek galite skaityti.",
       "conflict": "Užklausa nesuderinama su dabartine būsena.",
       "forbidden": "Neturite teisės atlikti šio veiksmo.",
+      "legislationCountryUnavailable": "Šios šalies teisės aktai nepasiekiami. Pasirinkite kitą šalį.",
+      "legislationSearchUnavailable": "Šios šalies teisės aktų paieška nepasiekiama. Jos viešus teisės aktus vis tiek galite skaityti.",
       "notFound": "Nepavyko rasti prašomo objekto.",
       "payloadTooLarge": "Užklausa per didelė.",
-      "publicCountryUnavailable": "Šios šalies teisės aktai ir teismų praktika nepasiekiami. Pasirinkite kitą šalį.",
       "rateLimited": "Per daug užklausų. Bandykite dar kartą vėliau.",
       "server": "Kažkas nepavyko. Bandykite dar kartą.",
       "serviceUnavailable": "Paslauga laikinai nepasiekiama. Bandykite dar kartą.",
@@ -5114,7 +5137,6 @@
     "provisionTextUnavailable": "Šios redakcijos tekstas nepasiekiamas",
     "publisherWindowInconsistent": "Šiai dienai galiojančios redakcijos nustatyti negalima: leidėjo duomenys prieštaringi.",
     "resolvedAlias": "Atpažinta kaip {label}",
-    "searchAskPrompt": "{query} ({country} teisės aktai)",
     "searchLabel": "Ieškoti teisės aktų",
     "searchPlaceholder": "Numeris, pavadinimas arba antraštė, pvz. 89/2012 Sb.",
     "showCitedPartOnly": "Rodyti tik cituojamą dalį",

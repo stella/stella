@@ -1329,7 +1329,7 @@ export const searchLegislationHandler = async (
       : (
           dependencies.countryAdmission?.unavailable ??
           publicLawCountryUnavailable
-        )(body.jurisdiction, "search");
+        )(body.jurisdiction, { domain: "legislation", surface: "search" });
   if (unavailable !== null) {
     return unavailable;
   }

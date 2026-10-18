@@ -136,8 +136,7 @@
   {
     "id": "apps/api/src/lib/account-deletion-steps.ts::resetFolioCollabUserState",
     "writes": {
-      "delete:folioCollabRoomTokens": 1,
-      "update:folioCollabRooms": 1
+      "delete:folioCollabRoomTokens": 1
     },
     "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
   },
@@ -499,13 +498,6 @@
       "update:caseLawResearchAnswers": 1
     },
     "reason": "Shared public corpus or index maintenance with no tenant actor."
-  },
-  {
-    "id": "apps/api/src/lib/chat/run-log.ts::closeChatRunLogOnTx",
-    "writes": {
-      "update:chatRunLogs": 1
-    },
-    "reason": "Background work state transition; the request that started the work records the audit event."
   },
   {
     "id": "apps/api/src/lib/chat/run-log.ts::createChatRunLog.append",

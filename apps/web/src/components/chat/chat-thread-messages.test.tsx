@@ -875,11 +875,12 @@ describe("chat thread messages", () => {
       />,
     );
 
-    // The whole run sits behind one step-count summary, collapsed by
-    // default; a failed step reads as a short human line with the raw
-    // output tucked behind its own disclosure.
-    expect(html).toContain("3 steps");
-    expect(html).not.toContain(">1 step<");
+    // The whole run sits behind one summary of the work that landed,
+    // collapsed by default: the failed call is left out of it, and inside
+    // it reads as a short human line with the raw output tucked behind its
+    // own disclosure.
+    expect(html).toContain(">1 analysis<");
+    expect(html).not.toContain("3 steps");
     expect(html).not.toContain("<details open");
     expect(html).toContain("This step failed — stella will work around it.");
     expect(html).toContain(">Show details<");

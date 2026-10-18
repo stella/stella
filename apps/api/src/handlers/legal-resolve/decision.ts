@@ -202,7 +202,7 @@ export const resolveDecision = async ({
   if (!isPublicCountry(country)) {
     return { status: "country_unavailable" };
   }
-  if (PUBLIC_COUNTRY_CAPABILITIES[country] !== "admitted") {
+  if (PUBLIC_COUNTRY_CAPABILITIES[country].caseLaw !== "admitted") {
     return { status: "country_unavailable" };
   }
   const grammar = decisionDocketGrammarForCountry(country);

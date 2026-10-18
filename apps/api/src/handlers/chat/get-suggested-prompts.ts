@@ -25,8 +25,8 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cloneOperationInput } from "@/api/lib/proofs/checked-transaction";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
-import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
-import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
+import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
+import { requireTanStackAIAvailableForTask } from "@/api/lib/tanstack-ai-models";
 
 // How many follow-up suggestions to generate. The composer shows the
 // first and reveals the rest behind a toggle.
@@ -153,11 +153,11 @@ const getSuggestedPrompts = createSafeRootHandler(
     } = ctx;
     if (
       Result.isError(
-        requireTanStackAIAvailableForRole({
+        requireTanStackAIAvailableForTask({
           dataClass: "customer",
           configStatus: orgAIConfigStatus,
           orgConfig: orgAIConfig,
-          role: "fast",
+          task: "short-text",
         }),
       )
     ) {
@@ -238,7 +238,7 @@ const getSuggestedPrompts = createSafeRootHandler(
     }
 
     const authorization = await authorizeHandlerUsage({
-      metering: { actionType: "chat", modelRole: "fast" },
+      metering: { actionType: "chat", modelTask: "short-text" },
       organizationId: session.activeOrganizationId,
       orgAIConfig,
       workspaceId: persistedWorkspaceId,
@@ -275,7 +275,7 @@ const getSuggestedPrompts = createSafeRootHandler(
               workspaceId: checked.workspaceId,
             },
             feature: "chat.suggested_prompts",
-            modelRole: "fast",
+            modelTask: "short-text",
             organizationId: checked.organizationId,
             orgAIConfig: checked.orgAIConfig,
             modelTier: modelAdmission.modelTier,
@@ -286,10 +286,10 @@ const getSuggestedPrompts = createSafeRootHandler(
           });
 
           try {
-            const text = await generateTanStackTextForRole({
+            const text = await generateTanStackTextForTask({
               dataClass: "customer",
               finishPolicy: "allow-incomplete",
-              role: "fast",
+              task: "short-text",
               orgAIConfig: checked.orgAIConfig,
               managedAIResidency: checked.managedAIResidency,
               organizationId: checked.organizationId,
@@ -297,7 +297,7 @@ const getSuggestedPrompts = createSafeRootHandler(
               analytics: aiAnalytics,
               caching: resolveCaching({
                 promptCachingEnabled: checked.promptCachingEnabled,
-                role: "fast",
+                task: "short-text",
                 scopeKey: checked.threadId,
               }),
               tenantWorkspaceIds: checked.workspaceId

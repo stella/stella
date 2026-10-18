@@ -190,7 +190,7 @@ const FACTS: readonly ReferenceSection[] = [
       "versions and the outline, and `textWithheldReason` in place of " +
       `\`text\`; ${READ_STATUTE_PROVISIONS} and ${READ_PROVISION_HISTORY} ` +
       "answer `text_withheld` for the versions it covers. Follow the " +
-      "statute's `appUrl` and read it there instead; retrying will not " +
+      "statute's `url` and read it there instead; retrying will not " +
       "change the answer.",
   },
   {

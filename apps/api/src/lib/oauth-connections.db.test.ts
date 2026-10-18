@@ -1,5 +1,6 @@
 import {
   afterAll,
+  afterEach,
   beforeAll,
   describe,
   expect,
@@ -17,6 +18,7 @@ import {
 } from "@/api/db/auth-schema";
 import { meRoute } from "@/api/handlers/me/routes";
 import { getAuth } from "@/api/lib/auth";
+import { resetLogSinkForTesting } from "@/api/lib/observability/logger";
 import { signInHuman } from "@/api/tests/helpers/human-session";
 import type { HumanBrowser } from "@/api/tests/helpers/human-session";
 import {
@@ -35,6 +37,7 @@ import type {
   OAuthGrant,
   RegisteredOAuthClient,
 } from "@/api/tests/helpers/oauth-grant";
+import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 // Disconnecting a connected app from the settings page, through the real
@@ -52,6 +55,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await releaseAgentAuthTestDb();
 });
+afterEach(resetLogSinkForTesting);
 
 const BASE = "http://localhost";
 
@@ -277,6 +281,7 @@ describe("disconnecting a connected app", () => {
       storedRefreshTokens: 0,
       consents: 0,
     });
+    const telemetry = installRecordingLogger();
     expect(
       (
         await refreshOAuthGrant({
@@ -285,6 +290,24 @@ describe("disconnecting a connected app", () => {
         })
       ).ok,
     ).toBe(false);
+    const refusals = telemetry.records.filter(
+      ({ message }) => message === "auth.request_refused",
+    );
+    expect(refusals).toHaveLength(1);
+    expect(refusals.at(0)?.attributes).toMatchObject({
+      "oauth.refusal_reason": "unknown_token",
+      "oauth.client_id": disconnectedClient.clientId,
+      "oauth.grant_family": "none",
+    });
+    expect(JSON.stringify(refusals)).not.toContain(
+      disconnectedGrant.refreshToken,
+    );
+    if (disconnectedClient.clientSecret !== undefined) {
+      expect(JSON.stringify(refusals)).not.toContain(
+        disconnectedClient.clientSecret,
+      );
+    }
+    telemetry.restore();
     expect(
       (await listConnections(browser)).map(({ clientId }) => clientId),
     ).toEqual([keptClient.clientId]);
