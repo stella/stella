@@ -123,7 +123,7 @@ describe("completion request boundary", () => {
         });
       },
     });
-    expect(sent).toEqual([1100, 2100]);
+    expect(sent).toEqual([1100, 2100, 3100]);
   });
   test.each([401, 403])(
     "HTTP %s refuses the run after one request",

@@ -276,6 +276,17 @@ export const createSoftLawFetch = ({
       },
       userAgent: policy.userAgent,
       enforcement: "audit",
+      inspectResponse: (response) => {
+        const location = response.headers.get("location");
+        if (
+          location &&
+          /challenge|captcha|cdn-cgi|access-denied/iu.test(location)
+        ) {
+          blocked = "challenge";
+          return Result.ok("return");
+        }
+        return Result.ok("follow");
+      },
       beforeHop: async () => {
         await reserve(policy.publisherGate, signal);
         if (!softLawAccessWindowOpen(policy, now())) {

@@ -320,6 +320,36 @@ describe("publisher scheduler", () => {
     expect(requested).toEqual([]);
   });
 
+  test("a cold-cache admission refusal is not reused by the next caller", async () => {
+    const requested: string[] = [];
+    const request = createPolitePublisherFetch({
+      validateTarget: allowTarget,
+      fetcher: async (input) => {
+        const url = new URL(input instanceof Request ? input.url : input);
+        requested.push(url.pathname);
+        return url.pathname === "/robots.txt"
+          ? new Response(null, { status: 404 })
+          : new Response("document");
+      },
+    });
+    const refused = await request("https://publisher.example/case", {
+      userAgent: "Stella/1.0",
+      enforcement: "audit",
+      beforeHop: async () => Result.err(new Error("gate refused")),
+    });
+    const admitted = await request("https://publisher.example/case", {
+      userAgent: "Stella/1.0",
+      enforcement: "audit",
+      beforeHop: async () => Result.ok(undefined),
+    });
+
+    expect(refused.isErr() && refused.error._tag).toBe("publisher_hop_refused");
+    expect(admitted.isOk() && (await admitted.value.response.text())).toBe(
+      "document",
+    );
+    expect(requested).toEqual(["/robots.txt", "/case"]);
+  });
+
   test("returns an inspected redirect without contacting its target", async () => {
     const requested: string[] = [];
     const request = createPolitePublisherFetch({

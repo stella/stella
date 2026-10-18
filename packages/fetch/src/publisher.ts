@@ -546,6 +546,7 @@ type LoadRobotsOptions = {
   robotsTtlMs: number;
   robotsRetryMs: number;
   robotsLoadTimeoutMs: number;
+  firstRequestAdmitted: boolean;
   beforeRequest: (url: URL) => Promise<Result<void, PublisherHopRefusedError>>;
 };
 
@@ -557,8 +558,12 @@ const loadRobots = async ({
   robotsTtlMs,
   robotsRetryMs,
   robotsLoadTimeoutMs,
+  firstRequestAdmitted,
   beforeRequest,
-}: LoadRobotsOptions): Promise<CachedRobots> => {
+}: LoadRobotsOptions): Promise<
+  | { type: "cacheable"; robots: CachedRobots }
+  | { type: "refused"; state: RobotsState }
+> => {
   const deadline = AbortSignal.timeout(robotsLoadTimeoutMs);
   let target = new URL("/robots.txt", origin);
   let finalResponse: Response | undefined;
@@ -573,10 +578,12 @@ const loadRobots = async ({
       failure = validated.error;
       break;
     }
-    const admitted = await beforeRequest(validated.value);
-    if (Result.isError(admitted)) {
-      failure = admitted.error;
-      break;
+    if (redirects > 0 || !firstRequestAdmitted) {
+      const admitted = await beforeRequest(validated.value);
+      if (Result.isError(admitted)) {
+        failure = admitted.error;
+        break;
+      }
     }
     const fetched = await Result.tryPromise(async () =>
       fetcher(validated.value, {
@@ -622,18 +629,39 @@ const loadRobots = async ({
     target = new URL(location, requestTarget);
   }
   if (!finalResponse) {
+    if (
+      PublisherTargetRefusedError.is(failure) ||
+      PublisherHopRefusedError.is(failure)
+    ) {
+      return {
+        type: "refused",
+        state: { type: "unavailable", cause: failure },
+      };
+    }
     return {
-      state: { type: "unavailable", cause: failure },
-      expiresAt: now() + robotsRetryMs,
+      type: "cacheable",
+      robots: {
+        state: { type: "unavailable", cause: failure },
+        expiresAt: now() + robotsRetryMs,
+      },
     };
   }
   if (finalResponse.status >= 400 && finalResponse.status < 500) {
-    return { state: { type: "allow-all" }, expiresAt: now() + robotsTtlMs };
+    return {
+      type: "cacheable",
+      robots: {
+        state: { type: "allow-all" },
+        expiresAt: now() + robotsTtlMs,
+      },
+    };
   }
   if (finalResponse.status >= 500) {
     return {
-      state: { type: "unavailable" },
-      expiresAt: now() + robotsRetryMs,
+      type: "cacheable",
+      robots: {
+        state: { type: "unavailable" },
+        expiresAt: now() + robotsRetryMs,
+      },
     };
   }
   const body = await Result.tryPromise(async () =>
@@ -641,22 +669,31 @@ const loadRobots = async ({
   );
   if (Result.isError(body)) {
     return {
-      state: {
-        type: "unavailable",
-        cause: body.error.cause,
+      type: "cacheable",
+      robots: {
+        state: {
+          type: "unavailable",
+          cause: body.error.cause,
+        },
+        expiresAt: now() + robotsRetryMs,
       },
-      expiresAt: now() + robotsRetryMs,
     };
   }
   if (Result.isError(body.value)) {
     return {
-      state: { type: "unavailable", cause: body.value.error },
-      expiresAt: now() + robotsRetryMs,
+      type: "cacheable",
+      robots: {
+        state: { type: "unavailable", cause: body.value.error },
+        expiresAt: now() + robotsRetryMs,
+      },
     };
   }
   return {
-    state: { type: "rules", groups: parseRobots(body.value.value) },
-    expiresAt: now() + robotsTtlMs,
+    type: "cacheable",
+    robots: {
+      state: { type: "rules", groups: parseRobots(body.value.value) },
+      expiresAt: now() + robotsTtlMs,
+    },
   };
 };
 
@@ -671,7 +708,7 @@ type RobotsCacheOptions = Pick<
 
 const createRobotsCache = (options: RobotsCacheOptions) => {
   const settled = new Map<string, CachedRobots>();
-  const pending = new Map<string, Promise<CachedRobots>>();
+  const pending = new Map<string, ReturnType<typeof loadRobots>>();
   return async (
     origin: string,
     beforeRequest: LoadRobotsOptions["beforeRequest"],
@@ -680,16 +717,40 @@ const createRobotsCache = (options: RobotsCacheOptions) => {
     if (cached && cached.expiresAt > options.now()) {
       return cached.state;
     }
+    const robotsTarget = await validatePublisherTarget(
+      new URL("/robots.txt", origin),
+      options.validateTarget,
+    );
+    if (Result.isError(robotsTarget)) {
+      return { type: "unavailable", cause: robotsTarget.error } as const;
+    }
+    const admitted = await beforeRequest(robotsTarget.value);
+    if (Result.isError(admitted)) {
+      return { type: "unavailable", cause: admitted.error } as const;
+    }
     const activeLoad = pending.get(origin);
     if (activeLoad) {
-      return (await activeLoad).state;
+      const activeResult = await activeLoad;
+      if (activeResult.type === "cacheable") {
+        return activeResult.robots.state;
+      }
     }
-    const load = loadRobots({ ...options, origin, beforeRequest });
+    const load = loadRobots({
+      ...options,
+      origin,
+      firstRequestAdmitted: true,
+      beforeRequest,
+    });
     pending.set(origin, load);
     const loaded = await load;
-    pending.delete(origin);
-    settled.set(origin, loaded);
-    return loaded.state;
+    if (pending.get(origin) === load) {
+      pending.delete(origin);
+    }
+    if (loaded.type === "refused") {
+      return loaded.state;
+    }
+    settled.set(origin, loaded.robots);
+    return loaded.robots.state;
   };
 };
 
