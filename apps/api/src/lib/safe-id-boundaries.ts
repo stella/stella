@@ -34,6 +34,11 @@ export const brandPersistedWorkspaceId = (
   workspaceId: string,
 ): SafeId<"workspace"> => toSafeId<"workspace">(workspaceId);
 
+export const parsePersistedAgentSkillId = (
+  id: string,
+): SafeId<"agentSkill"> | null =>
+  isUuid(id) ? toSafeId<"agentSkill">(id) : null;
+
 export const brandPersistedSavedTimeNarrativeId = (
   id: string,
 ): SafeId<"savedTimeNarrative"> => toSafeId<"savedTimeNarrative">(id);

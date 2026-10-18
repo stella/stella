@@ -468,6 +468,7 @@ export const listAvailableChatSkillMetadata = async ({
 export type LoadedChatSkill = {
   body: string;
   compatibility: string | null;
+  contentHash: string | null;
   description: string;
   license: string | null;
   metadata: Record<string, string>;
@@ -554,6 +555,7 @@ export const loadAvailableChatSkills = async ({
         row.slug,
         {
           body: row.body,
+          contentHash: row.contentHash,
           compatibility: row.compatibility,
           description: row.description,
           id: row.id,
@@ -579,6 +581,7 @@ const loadBuiltInSkill = (skillName: string): LoadedChatSkill => {
   return {
     body: skill.body,
     compatibility: skill.compatibility ?? null,
+    contentHash: null,
     description: skill.description,
     license: skill.license ?? null,
     metadata: skill.metadata ?? {},
@@ -599,6 +602,7 @@ export type AvailableChatSkillResourceRead =
   | {
       status: typeof SKILL_RESOURCE_READ_STATUS.found;
       content: string;
+      contentHash: string | null;
       skill: ChatSkillRef;
     }
   | {
@@ -671,6 +675,7 @@ export const readAvailableChatSkillResource = async ({
   return Result.ok({
     status: SKILL_RESOURCE_READ_STATUS.found,
     content: resource.content,
+    contentHash: row.contentHash,
     skill,
   });
 };
@@ -696,6 +701,7 @@ const readBuiltInSkillResource = ({
   return {
     status: SKILL_RESOURCE_READ_STATUS.found,
     content: resource.content,
+    contentHash: null,
     skill,
   };
 };
@@ -741,6 +747,7 @@ const findInstalledSkills = async ({
       .select({
         boundClientId: agentSkills.boundClientId,
         boundWorkspaceId: agentSkills.boundWorkspaceId,
+        contentHash: agentSkills.contentHash,
         id: agentSkills.id,
         scope: agentSkills.scope,
         slug: agentSkills.slug,
@@ -789,6 +796,7 @@ const findInstalledSkills = async ({
 type InstalledSkillRow = {
   boundClientId: SafeId<"contact"> | null;
   boundWorkspaceId: SafeId<"workspace"> | null;
+  contentHash: string;
   body: string;
   compatibility: string | null;
   description: string;
@@ -802,38 +810,52 @@ type InstalledSkillRow = {
 };
 
 /**
- * The bindings of installed skills already loaded into chat history. This uses
- * the same name resolution as a fresh read, but deliberately reads outside the
- * current binding scope so the history projection can identify reads that are
- * no longer allowed.
+ * Resolves installed skills already loaded into chat history by immutable row
+ * id, never by their reusable slug. Current row visibility remains authoritative:
+ * an inaccessible or deleted identity is absent and therefore withheld.
  */
+export type ReadableChatSkillBinding = SkillBinding & {
+  contentHash: string;
+};
+
 export const loadReadableChatSkillBindings = async ({
   organizationId,
   safeDb,
-  skillNames,
+  skillIds,
   userId,
 }: ChatSkillCaller & {
-  skillNames: readonly string[];
-}): Promise<Result<Map<string, SkillBinding>, SafeDbError>> => {
-  const rows = await findInstalledSkills({
-    bindingScope: ANY_READABLE_BINDING,
-    includeDisabled: true,
-    organizationId,
-    safeDb,
-    skillNames,
-    userId,
-  });
+  skillIds: readonly SafeId<"agentSkill">[];
+}): Promise<Result<Map<string, ReadableChatSkillBinding>, SafeDbError>> => {
+  if (skillIds.length === 0) {
+    return Result.ok(new Map());
+  }
+  const rows = await safeDb((tx) =>
+    tx
+      .select({
+        boundClientId: agentSkills.boundClientId,
+        boundWorkspaceId: agentSkills.boundWorkspaceId,
+        contentHash: agentSkills.contentHash,
+        id: agentSkills.id,
+      })
+      .from(agentSkills)
+      .where(
+        and(
+          eq(agentSkills.organizationId, organizationId),
+          inArray(agentSkills.id, [...skillIds]),
+          or(eq(agentSkills.scope, "team"), eq(agentSkills.userId, userId)),
+        ),
+      )
+      .limit(LIMITS.agentSkillsPerUser),
+  );
   if (Result.isError(rows)) {
     return Result.err(rows.error);
   }
   return Result.ok(
     new Map(
-      [...rows.value].map(
-        ([name, { boundClientId, boundWorkspaceId }]): [
-          string,
-          SkillBinding,
-        ] => [name, { boundClientId, boundWorkspaceId }],
-      ),
+      rows.value.map(({ boundClientId, boundWorkspaceId, contentHash, id }) => [
+        id,
+        { boundClientId, boundWorkspaceId, contentHash },
+      ]),
     ),
   );
 };

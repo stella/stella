@@ -291,6 +291,7 @@ describe("available active chat skills", () => {
     expect(activeReadResult.value).toEqual({
       status: "found",
       content: "team resource",
+      contentHash: "0".repeat(64),
       skill: { source: "installed", id: activeTeamSkillId, origin: "authored" },
     });
   });

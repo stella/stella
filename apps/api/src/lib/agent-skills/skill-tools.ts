@@ -10,6 +10,7 @@ import { agentSkillResources, agentSkills } from "@/api/db/schema";
 import type { SkillBindingScope } from "@/api/lib/agent-skills/binding";
 import type { ModelOfferedSkills } from "@/api/lib/agent-skills/invocation";
 import { RESOURCE_PATH_PATTERN } from "@/api/lib/agent-skills/resource-path";
+import { SKILL_CONTENT_TOOL_NAME } from "@/api/lib/agent-skills/skill-content-tools";
 import {
   recordSkillReadAudit,
   SKILL_READ_OUTCOME,
@@ -118,14 +119,14 @@ export const createSkillTools = ({
   const forValidation = purpose === CHAT_TOOL_SET_PURPOSE.validation;
   if (availableSkillIds.size === 0 && !forValidation) {
     return {
-      "load-skill": undefined,
-      "read-skill-resource": undefined,
+      [SKILL_CONTENT_TOOL_NAME.load]: undefined,
+      [SKILL_CONTENT_TOOL_NAME.readResource]: undefined,
       ...currentSkillEditTools,
     };
   }
 
   return {
-    "load-skill": toolDefinition({
+    [SKILL_CONTENT_TOOL_NAME.load]: toolDefinition({
       name: "load-skill",
       description:
         "Load the full instructions for one stella skill. The system " +
@@ -164,7 +165,9 @@ export const createSkillTools = ({
         slug: skill.name,
       });
       return {
+        contentHash: skill.contentHash,
         name: skill.name,
+        skillId: chatSkillId(skill),
         version: skill.version,
         description: skill.description,
         instructions: skill.body,
@@ -172,7 +175,7 @@ export const createSkillTools = ({
       };
     }),
 
-    "read-skill-resource": toolDefinition({
+    [SKILL_CONTENT_TOOL_NAME.readResource]: toolDefinition({
       name: "read-skill-resource",
       description:
         "Read one resource from a loaded stella skill. Use only paths " +
@@ -230,6 +233,7 @@ export const createSkillTools = ({
             slug: skillName,
           });
           return {
+            contentHash: read.contentHash,
             skillName,
             path,
             mimeType: inferSkillResourceMimeType(path),

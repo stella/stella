@@ -1,14 +1,21 @@
-import { Result } from "better-result";
+import { panic, type Result } from "better-result";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import type { ChatMessage, ChatPart } from "@/api/handlers/chat/types";
 import {
   skillBindingAllows,
-  type SkillBinding,
   type SkillBindingScope,
 } from "@/api/lib/agent-skills/binding";
-import { loadReadableChatSkillBindings } from "@/api/lib/agent-skills/skills";
+import {
+  SKILL_CONTENT_TOOL_NAME,
+  type SkillContentToolName,
+} from "@/api/lib/agent-skills/skill-content-tools";
+import {
+  loadReadableChatSkillBindings,
+  type ReadableChatSkillBinding,
+} from "@/api/lib/agent-skills/skills";
 import type { SafeId } from "@/api/lib/branded-types";
+import { parsePersistedAgentSkillId } from "@/api/lib/safe-id-boundaries";
 
 export const SKILL_HISTORY_UNAVAILABLE = {
   reason: "binding-scope",
@@ -21,21 +28,54 @@ type SkillUnavailableOutput = typeof SKILL_HISTORY_UNAVAILABLE & {
   skillName: string;
 };
 
+type HistoricalSkillContent = {
+  contentHash: string;
+  skillId: SafeId<"agentSkill">;
+  skillName: string;
+};
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
-const loadedSkillName = (part: ChatPart): string | null => {
+const historicalInstalledSkill = (
+  part: Extract<ChatPart, { type: "tool-call" }>,
+): HistoricalSkillContent | null => {
   if (
-    part.type !== "tool-call" ||
-    part.name !== "load-skill" ||
     part.state !== "complete" ||
     !isRecord(part.output) ||
-    typeof part.output["name"] !== "string" ||
-    typeof part.output["instructions"] !== "string"
+    typeof part.output["skillId"] !== "string" ||
+    typeof part.output["contentHash"] !== "string"
   ) {
     return null;
   }
-  return part.output["name"];
+  const skillId = parsePersistedAgentSkillId(part.output["skillId"]);
+  if (skillId === null) {
+    return null;
+  }
+  const skillName =
+    part.name === SKILL_CONTENT_TOOL_NAME.load
+      ? part.output["name"]
+      : part.output["skillName"];
+  return typeof skillName === "string"
+    ? {
+        contentHash: part.output["contentHash"],
+        skillId,
+        skillName,
+      }
+    : null;
+};
+
+const historicalSkillName = (
+  part: Extract<ChatPart, { type: "tool-call" }>,
+): string | null => {
+  if (part.state !== "complete" || !isRecord(part.output)) {
+    return null;
+  }
+  const name =
+    part.name === SKILL_CONTENT_TOOL_NAME.load
+      ? part.output["name"]
+      : part.output["skillName"];
+  return typeof name === "string" ? name : null;
 };
 
 const unavailableOutput = (skillName: string): SkillUnavailableOutput => ({
@@ -43,49 +83,110 @@ const unavailableOutput = (skillName: string): SkillUnavailableOutput => ({
   skillName,
 });
 
-/** Model-only projection: stored messages retain the original skill body. */
+export const SKILL_HISTORY_PROJECTION_BY_TOOL = {
+  [SKILL_CONTENT_TOOL_NAME.load]: "withhold-load",
+  [SKILL_CONTENT_TOOL_NAME.readResource]: "withhold-resource",
+} as const satisfies Record<SkillContentToolName, string>;
+
+type SkillContentCall = Extract<
+  ChatPart,
+  { name: SkillContentToolName; type: "tool-call" }
+>;
+
+const isSkillContentCall = (part: ChatPart): part is SkillContentCall =>
+  part.type === "tool-call" &&
+  Object.hasOwn(SKILL_HISTORY_PROJECTION_BY_TOOL, part.name);
+
+const projectUnavailable = (
+  part: SkillContentCall,
+  skillName: string,
+): SkillContentCall => {
+  switch (part.name) {
+    case SKILL_CONTENT_TOOL_NAME.load:
+      return {
+        ...part,
+        output: {
+          contentHash: null,
+          description: SKILL_HISTORY_UNAVAILABLE_TEXT,
+          instructions: SKILL_HISTORY_UNAVAILABLE_TEXT,
+          name: skillName,
+          resources: [],
+          skillId: null,
+          version: null,
+        },
+      };
+    case SKILL_CONTENT_TOOL_NAME.readResource:
+      return {
+        ...part,
+        output: {
+          content: SKILL_HISTORY_UNAVAILABLE_TEXT,
+          contentHash: null,
+          mimeType: "text/plain",
+          path: "unavailable",
+          skillId: null,
+          skillName,
+        },
+      };
+    default: {
+      part satisfies never;
+      return panic("unknown skill-content history tool");
+    }
+  }
+};
+
+const isAllowed = (
+  historical: HistoricalSkillContent | null,
+  bindings: ReadonlyMap<string, ReadableChatSkillBinding>,
+  scope: SkillBindingScope,
+): boolean => {
+  if (historical === null) {
+    return false;
+  }
+  const binding = bindings.get(historical.skillId);
+  return (
+    binding !== undefined &&
+    binding.contentHash === historical.contentHash &&
+    skillBindingAllows(scope, binding)
+  );
+};
+
+/** Model-only projection: stored messages retain original skill-owned content. */
 export const projectLoadedSkillHistory = ({
   bindings,
   messages,
   scope,
 }: {
-  bindings: ReadonlyMap<string, SkillBinding>;
+  bindings: ReadonlyMap<string, ReadableChatSkillBinding>;
   messages: readonly ChatMessage[];
   scope: SkillBindingScope;
-}): ChatMessage[] => {
-  const projected: ChatMessage[] = [];
-  for (const message of messages) {
+}): ChatMessage[] =>
+  messages.map((message) => {
     const withheldByCallId = new Map<string, SkillUnavailableOutput>();
-    const parts: ChatPart[] = message.parts.map((part) => {
-      const skillName = loadedSkillName(part);
-      if (
-        skillName === null ||
-        part.type !== "tool-call" ||
-        part.name !== "load-skill"
-      ) {
+    const callsProjected = message.parts.map((part): ChatPart => {
+      if (!isSkillContentCall(part)) {
         return part;
       }
-      const binding = bindings.get(skillName);
-      if (binding === undefined || skillBindingAllows(scope, binding)) {
+      const skillName = historicalSkillName(part);
+      if (skillName === null) {
+        return part;
+      }
+      const historical = historicalInstalledSkill(part);
+      // A null skill id identifies shipped, unbound content. Missing identity
+      // fields on older installed reads are deliberately unresolvable.
+      if (isRecord(part.output) && part.output["skillId"] === null) {
+        return part;
+      }
+      if (isAllowed(historical, bindings, scope)) {
         return part;
       }
       const output = unavailableOutput(skillName);
       withheldByCallId.set(part.id, output);
-      return {
-        ...part,
-        output: {
-          description: SKILL_HISTORY_UNAVAILABLE_TEXT,
-          instructions: SKILL_HISTORY_UNAVAILABLE_TEXT,
-          name: skillName,
-          resources: [],
-          version: null,
-        },
-      };
+      return projectUnavailable(part, skillName);
     });
 
-    projected.push({
+    return {
       ...message,
-      parts: parts.map((part) => {
+      parts: callsProjected.map((part) => {
         if (part.type !== "tool-result") {
           return part;
         }
@@ -94,10 +195,8 @@ export const projectLoadedSkillHistory = ({
           ? part
           : { ...part, content: JSON.stringify(output) };
       }),
-    });
-  }
-  return projected;
-};
+    };
+  });
 
 export const enforceLoadedSkillHistoryBindings = async ({
   messages,
@@ -112,22 +211,22 @@ export const enforceLoadedSkillHistoryBindings = async ({
   scope: SkillBindingScope;
   userId: SafeId<"user">;
 }): Promise<Result<ChatMessage[], SafeDbError>> => {
-  const skillNames = new Set<string>();
+  const skillIds = new Set<SafeId<"agentSkill">>();
   for (const message of messages) {
     for (const part of message.parts) {
-      const name = loadedSkillName(part);
-      if (name !== null) {
-        skillNames.add(name);
+      if (!isSkillContentCall(part)) {
+        continue;
+      }
+      const historical = historicalInstalledSkill(part);
+      if (historical !== null) {
+        skillIds.add(historical.skillId);
       }
     }
-  }
-  if (skillNames.size === 0) {
-    return Result.ok([...messages]);
   }
   const bindings = await loadReadableChatSkillBindings({
     organizationId,
     safeDb,
-    skillNames: [...skillNames],
+    skillIds: [...skillIds],
     userId,
   });
   return bindings.map((resolved) =>
