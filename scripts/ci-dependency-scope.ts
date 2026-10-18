@@ -6,7 +6,7 @@ import {
   type Lockfile,
 } from "./landing-deploy-scope";
 
-type DependencyScope =
+export type DependencyScope =
   | { type: "none"; files: readonly string[] }
   | { type: "dev-tooling"; files: readonly string[] }
   | { type: "runtime"; files: readonly string[] }
