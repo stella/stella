@@ -361,7 +361,7 @@ const searchDecisions = async ({
     }
     for (const hit of result.hits) {
       const links = legalCitationLinkFields({
-        appUrl: buildCaseLawDecisionAppUrl({
+        url: buildCaseLawDecisionAppUrl({
           caseNumber: hit.caseNumber,
           country: hit.country,
           court: hit.court,
@@ -479,7 +479,7 @@ const searchStatutes = async ({
       // publisher's own is then the one address there is, and a hit with
       // neither is dropped rather than answered with an empty url.
       const links = legalCitationLinkFields({
-        appUrl: buildLegislationDocumentAppUrl({
+        url: buildLegislationDocumentAppUrl({
           country: hit.country,
           documentId: hit.documentId,
           eli: hit.eli,
@@ -617,7 +617,7 @@ export const readCompatDecision = async ({
   }
 
   const links = legalCitationLinkFields({
-    appUrl: buildCaseLawDecisionAppUrl({
+    url: buildCaseLawDecisionAppUrl({
       caseNumber: decision.caseNumber,
       country: decision.country,
       court: decision.court,
@@ -684,7 +684,7 @@ export const readCompatStatute = async ({
   }
 
   const links = legalCitationLinkFields({
-    appUrl: buildLegislationDocumentAppUrl({
+    url: buildLegislationDocumentAppUrl({
       country: document.country,
       documentId: document.id,
       eli: document.eli,

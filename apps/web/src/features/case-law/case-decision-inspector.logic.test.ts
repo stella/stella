@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { extractCaseLawDecisionIdFromIdRouteParam } from "@stll/api-contract/case-law-decision-route";
+import { CASE_LAW_BROWSER_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 import { propertyConfig } from "@stll/property-testing";
 
 import {
@@ -231,7 +232,7 @@ describe("case decision inspector", () => {
       fc.property(
         fc.record({
           caseNumber: fc.string({ minLength: 1 }),
-          country: fc.constantFrom("CZE", "POL", "SVK", "EU"),
+          country: fc.constantFrom(...CASE_LAW_BROWSER_COUNTRIES),
           court: fc.constantFrom(
             "Nejvyšší soud",
             "Sąd Najwyższy",

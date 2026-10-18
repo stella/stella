@@ -5,7 +5,7 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import {
   hasTanStackInstanceProvider,
-  isDeferredServiceTierAvailableForRole,
+  isDeferredServiceTierAvailableForTask,
   mockAnswersForOrganization,
 } from "@/api/lib/tanstack-ai-models";
 
@@ -47,7 +47,7 @@ const readAIAvailability = createSafeRootHandler(
       available:
         orgAIConfigStatus === ORG_AI_CONFIG_STATUS.ok &&
         (instanceProvisioned || orgConfigured),
-      deferredServiceTierAvailable: isDeferredServiceTierAvailableForRole(
+      deferredServiceTierAvailable: isDeferredServiceTierAvailableForTask(
         "pdf",
         orgAIConfig,
       ),

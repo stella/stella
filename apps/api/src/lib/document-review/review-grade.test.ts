@@ -166,7 +166,12 @@ const target: PreparedDocxFile = {
   fileFieldId: FILE_FIELD_ID,
   fileId: "file-1",
   blocks: [
-    { kind: "paragraph", id: "paragraph-1", text: "Ten days' written notice." },
+    {
+      kind: "paragraph",
+      statedNumbering: { kind: "inherit" },
+      id: "paragraph-1",
+      text: "Ten days' written notice.",
+    },
   ],
   simplifiedName: "F0",
 };

@@ -15,6 +15,7 @@ fetch() {
     --retry-connrefused --connect-timeout 20 "$1" -o "$2"
 }
 
+retry="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../scripts" && pwd)/retry.sh"
 name="cargo-deny-${CARGO_DENY_VERSION}-aarch64-apple-darwin"
 release="${CARGO_DENY_RELEASE_URL:-https://github.com/EmbarkStudios/cargo-deny/releases/download/${CARGO_DENY_VERSION}}"
 bin_dir="${HOME}/.cargo-deny/bin"
@@ -24,7 +25,7 @@ trap 'rm -rf "$work"' EXIT
 # Only transport errors permit the source build. A hash mismatch always fails.
 if ! fetch "${release}/${name}.tar.gz" "${work}/archive.tar.gz"; then
   echo "::warning::cargo-deny release download failed; building ${CARGO_DENY_VERSION} from source"
-  cargo install cargo-deny --version "$CARGO_DENY_VERSION" --locked --root "${HOME}/.cargo-deny"
+  bash "$retry" cargo install cargo-deny --version "$CARGO_DENY_VERSION" --locked --root "${HOME}/.cargo-deny"
 else
   actual="$(shasum -a 256 "${work}/archive.tar.gz" | cut -d' ' -f1)"
   if [[ "$actual" != "$CARGO_DENY_SHA256" ]]; then

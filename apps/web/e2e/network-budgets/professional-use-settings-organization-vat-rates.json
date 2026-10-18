@@ -1,5 +1,5 @@
 {
-  "route": "/settings/organization/vat-rates",
+  "route": "/admin/vat-rates",
   "reason": "Load professional-use acceptance before protected route data is requested.",
   "budget": {
     "depth": 4,

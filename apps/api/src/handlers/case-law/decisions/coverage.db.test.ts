@@ -10,6 +10,7 @@ import { PROVISION_LINK_CAPABILITIES } from "@stll/api-contract/provision-link-c
 
 import {
   caseLawDecisions,
+  publishedCaseLawDecisions,
   caseLawSearchDocuments,
   caseLawSources,
 } from "@/api/db/schema";
@@ -28,9 +29,10 @@ import {
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { readProvisionPendingCounts } from "@/api/lib/case-law/provision-pending";
+import { readPendingTextCountsBySource } from "@/api/lib/case-law/public-subject";
 import {
-  publishedUnredactedCaseLawDecisionFor,
-  publishedUnredactedCaseLawDecisionSqlFor,
+  publishedCaseLawDecisionFor,
+  publishedCaseLawDecisionSqlFor,
 } from "@/api/lib/case-law/published-decisions-sql";
 import { refreshCaseLawSourceArrivals } from "@/api/lib/case-law/source-arrivals-refresh";
 import { SOURCE_ARRIVALS_FRESHNESS_MS } from "@/api/lib/case-law/source-arrivals-window";
@@ -428,41 +430,46 @@ test(
         })),
       );
       const decision = alias(caseLawDecisions, "publication_parity_decisions");
-      await readAsReader(async (tx) => {
-        const published = await tx
+      {
+        const published = await db
           .select({ id: caseLawDecisions.id })
           .from(caseLawDecisions)
           .where(
             and(
               eq(caseLawDecisions.sourceId, sourceId),
-              publishedUnredactedCaseLawDecisionFor(caseLawDecisions),
+              publishedCaseLawDecisionFor(caseLawDecisions),
             ),
           );
-        const aliased = await tx
+        const aliased = await db
           .select({ id: decision.id })
           .from(decision)
           .where(
             and(
               eq(decision.sourceId, sourceId),
-              publishedUnredactedCaseLawDecisionFor(decision),
+              publishedCaseLawDecisionFor(decision),
             ),
           );
-        const raw = await tx
+        const raw = await db
           .select({ id: decision.id })
           .from(decision)
           .where(
             and(
               eq(decision.sourceId, sourceId),
               sql.raw(
-                publishedUnredactedCaseLawDecisionSqlFor(
-                  "publication_parity_decisions",
-                ),
+                publishedCaseLawDecisionSqlFor("publication_parity_decisions"),
               ),
             ),
           );
         for (const rows of [published, aliased, raw]) {
           expect(rows.map(({ id }) => id).toSorted()).toEqual(expectedIds);
         }
+      }
+      await readAsReader(async (tx) => {
+        const published = await tx
+          .select({ id: publishedCaseLawDecisions.id })
+          .from(publishedCaseLawDecisions)
+          .where(eq(publishedCaseLawDecisions.sourceId, sourceId));
+        expect(published.map(({ id }) => id).toSorted()).toEqual(expectedIds);
       });
       const fixture = await client.query(
         `
@@ -512,6 +519,60 @@ test(
         decisionYearFrom: null,
         decisionYearTo: null,
       });
+    } finally {
+      await db
+        .delete(caseLawDecisions)
+        .where(eq(caseLawDecisions.sourceId, sourceId));
+      await db.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
+    }
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+test(
+  "pending-text aggregates count listing-only rows and exclude erased or completed rows",
+  async () => {
+    const db = drizzle({ client });
+    const sourceId = createSafeId<"caseLawSource">();
+    await db.insert(caseLawSources).values(
+      caseLawSourceRow({
+        id: sourceId,
+        adapterKey: `pending-text-${sourceId}`,
+        name: "Pending-text fixture",
+      }),
+    );
+    try {
+      await db.insert(caseLawDecisions).values(
+        [
+          { caseNumber: "pending a", metadata: LISTING_ONLY },
+          { caseNumber: "pending b", metadata: LISTING_ONLY },
+          { caseNumber: "erased", metadata: LISTING_ONLY, redactedAt: NOW },
+          {
+            caseNumber: "completed",
+            metadata: LISTING_ONLY,
+            fulltext: "Decision text",
+          },
+          { caseNumber: "detail", metadata: {} },
+        ].map((row) =>
+          decisionRow({
+            ...row,
+            country: "CZE",
+            court: "Nejvyšší soud",
+            sourceId,
+            createdAt: NOW,
+          }),
+        ),
+      );
+      const counts = await readAsReader(
+        async (tx) =>
+          await readPendingTextCountsBySource(tx, [sourceId, withheldSourceId]),
+      );
+      expect(counts).toEqual([{ sourceId, pendingTextCount: 2 }]);
+      expect(
+        await readAsReader(
+          async (tx) => await readPendingTextCountsBySource(tx, []),
+        ),
+      ).toEqual([]);
     } finally {
       await db
         .delete(caseLawDecisions)

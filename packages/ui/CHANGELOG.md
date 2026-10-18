@@ -1,5 +1,27 @@
 # @stll/ui
 
+## 0.47.0
+
+### Minor Changes
+
+- [#5914](https://github.com/stella/stella/pull/5914) [`55d62c9`](https://github.com/stella/stella/commit/55d62c989b81bf063cc4cef899aae4a3efe00077) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `StatusMark`, `SwapText` and `AnimatedCount`. `ListGroupCount` now takes its count through a `count` prop.
+
+## 0.46.0
+
+### Minor Changes
+
+- [#5768](https://github.com/stella/stella/pull/5768) [`4a9c808`](https://github.com/stella/stella/commit/4a9c808a3c3d68cfcc53496913c3a531c8bcfe94) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add shared chat link detection, inline link chips and composer/markdown adapters, with bundled site icons and a local proxy-image seam. Export the X brand icon.
+
+- [#5486](https://github.com/stella/stella/pull/5486) [`1b7773e`](https://github.com/stella/stella/commit/1b7773effd472e11422bc82d0d417fdf22ce9ff1) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Export shared matter icons and colour utilities.
+
+- [#5623](https://github.com/stella/stella/pull/5623) [`ad3cd0a`](https://github.com/stella/stella/commit/ad3cd0a68ebcb2bee63dc8a8d12a0fb3c9783975) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add a deterministic SVG table chart with bar, line, pie, and scatter presentations, accessible summaries, theme tokens, and locale-aware numbers.
+
+### Patch Changes
+
+- [#5680](https://github.com/stella/stella/pull/5680) [`eac3ba7`](https://github.com/stella/stella/commit/eac3ba744bf28f96adcec06a6ebc9edf6b60d1c1) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `AiLabel`, an inline mark for generated content that opens a short disclosure in a popover. Case-law analysis reads now return `aiDisclosure` with the analysis, the sentence to show beside it.
+
+- [#5646](https://github.com/stella/stella/pull/5646) [`4479e67`](https://github.com/stella/stella/commit/4479e67c3290234e3a73fc307b213eb061f74870) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Pad edge-attached surfaces (workspace shell, rails, sheets, bottom-stuck dialogs, toasts) with the device safe-area insets, contain overscroll in shared scrollers, keep long-press from selecting control labels, use a strong ease-out for entering and exiting motion, and give `Button` a short press scale while it is enabled.
+
 ## 0.45.0
 
 ### Minor Changes

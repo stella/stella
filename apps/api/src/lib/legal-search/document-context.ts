@@ -1,10 +1,12 @@
+import { eq } from "drizzle-orm";
+
 import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 
+import { publishedCaseLawDecisions } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
 import type { SafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
-import { publishedCaseLawDecisionFor } from "@/api/lib/case-law/published-decisions";
 import {
   readCorpusAst,
   readCorpusText,
@@ -21,22 +23,22 @@ export const readDocumentContextDecision = definePublicLawSharedQuery(
   async (
     tx: CaseLawPublicReadTransaction,
     decisionId: SafeId<"caseLawDecision">,
-  ) =>
-    await tx.query.caseLawDecisions.findFirst({
-      where: {
-        id: { eq: decisionId },
-        RAW: (table) => publishedCaseLawDecisionFor(table.metadata),
-      },
-      columns: {
-        id: true,
-        caseNumber: true,
-        court: true,
-        documentAst: true,
-        fulltext: true,
-        astS3Key: true,
-        textS3Key: true,
-      },
-    }),
+  ) => {
+    const [row] = await tx
+      .select({
+        id: publishedCaseLawDecisions.id,
+        caseNumber: publishedCaseLawDecisions.caseNumber,
+        court: publishedCaseLawDecisions.court,
+        documentAst: publishedCaseLawDecisions.documentAst,
+        fulltext: publishedCaseLawDecisions.fulltext,
+        astS3Key: publishedCaseLawDecisions.astS3Key,
+        textS3Key: publishedCaseLawDecisions.textS3Key,
+      })
+      .from(publishedCaseLawDecisions)
+      .where(eq(publishedCaseLawDecisions.id, decisionId))
+      .limit(1);
+    return row;
+  },
 );
 
 /**

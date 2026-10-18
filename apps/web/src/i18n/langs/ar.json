@@ -12,6 +12,31 @@
       "unknownDevice": "جهاز غير معروف"
     }
   },
+  "admin": {
+    "ai": "الذكاء الاصطناعي",
+    "backToApp": "العودة إلى التطبيق",
+    "billingAndUsage": "الفوترة والاستخدام",
+    "billingProfiles": "ملفات الفوترة",
+    "deleteDescription": "حذف هذه المؤسسة وبياناتها نهائيًا. لا يمكن التراجع عن هذا الإجراء.",
+    "deleteOrganization": "حذف المؤسسة",
+    "deleteRefusedSubscription": "لدى هذه المؤسسة اشتراك يتجدد. ألغِه أولًا من صفحة الخطة والاستخدام، ثم احذف المؤسسة.",
+    "deleteTypeToConfirm": "اكتب {name} للتأكيد.",
+    "firmSetup": "إعداد المكتب",
+    "general": "عام",
+    "leaveDescription": "ستفقد الوصول إلى الملفات القانونية والبيانات الخاصة بهذه المؤسسة.",
+    "leaveOrganization": "مغادرة المؤسسة",
+    "leaveRefusedOnlyOwner": "أنت المالك الوحيد. اجعل عضوًا آخر مالكًا قبل المغادرة.",
+    "modelsAndProviders": "النماذج ومقدمو الخدمات",
+    "noPlan": "لا توجد خطة نشطة",
+    "organizationDeleted": "تم حذف المؤسسة.",
+    "organizationId": "معرّف المؤسسة",
+    "organizationLeft": "لقد غادرت المؤسسة.",
+    "overviewDescription": "إدارة مؤسستك والأشخاص والأدوات.",
+    "people": "الأشخاص",
+    "planAndUsage": "الخطة والاستخدام",
+    "title": "إدارة المؤسسة",
+    "toolsDescription": "تفعيل الأدوات المدمجة أو تعطيلها لجميع الأشخاص في هذه المؤسسة."
+  },
   "agentClaim": {
     "access": "الصلاحيات التي سيحصل عليها",
     "accessReadSearch": "صلاحية القراءة والبحث",
@@ -64,6 +89,9 @@
     "runRemainingPage": "تشغيل المتبقي (هذه الصفحة)",
     "runSelectedRows": "تشغيل لـ {count, plural, zero {# صف محدد} one {# صف محدد} two {# صفين محددين} few {# صفوف محددة} many {# صفًا محددًا} other {# صف محدد}}",
     "selectedRun": "تشغيل أعمدة الذكاء الاصطناعي لـ {count, plural, zero {# صف} one {# صف} two {# صفين} few {# صفوف} many {# صفًا} other {# صف}}"
+  },
+  "aiDisclosure": {
+    "caseLaw": "تُنشئ stella الملخصات والملاحظات والتحليلات المولَّدة بالذكاء الاصطناعي للأحكام القضائية، وهي غير معتمدة من المحاكم ولا تمثّل تعليل المحاكم ذاتها؛ فهي أدوات مساعدة للمهنيين القانونيين، ويظل نص الحكم هو المرجع الأصيل."
   },
   "appearance": {
     "calendar": "تقويم",
@@ -1055,7 +1083,6 @@
       }
     },
     "sameCaseNumber": "{count, plural, zero {لا يوجد حكم يحمل} one {حكم واحد يحمل} two {حكمان يحملان} few {# أحكام تحمل} many {# حكمًا تحمل} other {# حكم تحمل}} رقم القضية هذا. اختر المحكمة.",
-    "searchAskPrompt": "{query} (السوابق القضائية في {country})",
     "searchLabel": "البحث في السوابق القضائية",
     "searchPlaceholder": "رقم القضية أو ECLI أو كلمات، مثل 22 Cdo 2653/2012",
     "searchUnavailable": {
@@ -1203,15 +1230,37 @@
     },
     "answerEdit": {
       "acceptFailed": "تعذّر حفظ التعديل. حاول مرة أخرى.",
+      "aiKind": "تعديل مطلوب",
       "ask": "طلب تعديلات",
+      "authorUnknown": "مؤلف غير معروف",
+      "autolinkLabel": "يصبح هذا النص رابطًا تلقائيًا. غيّر التسمية قبل إزالة الرابط.",
+      "change": "التغيير {revision}",
+      "editedLabel": "إجابة معدّلة",
       "failed": "تعذّر إعداد التعديل. حاول مرة أخرى.",
+      "formatKind": "تنسيق",
+      "heading": "عنوان {level}",
+      "history": "سجل الإجابة",
+      "historyEmpty": "لا توجد نسخ سابقة.",
       "instruction": "صِف التعديل",
       "instructionRequired": "صِف كيفية تعديل النص المحدد.",
       "invalidSelection": "لا يمكن تعديل هذا التحديد. حدد مقطعًا متصلًا من النص.",
+      "invalidUrl": "أدخل عنوان HTTP أو HTTPS صالحًا.",
+      "linkAddress": "عنوان الرابط",
+      "orderedList": "قائمة مرقمة",
       "proposal": "التعديل المقترح",
       "requesting": "جارٍ إعداد التعديلات…",
+      "restoreRefreshFailed": "تمت استعادة الإجابة، لكن تعذّر تحديثها. حدّثها لتحميل الإجابة المستعادة.",
+      "revertKind": "نسخة مستعادة",
       "stale": "تغيّرت هذه الإجابة. حدد النص مرة أخرى.",
-      "submit": "طلب تعديل"
+      "submit": "طلب تعديل",
+      "textStyle": "نمط النص",
+      "unorderedList": "قائمة نقطية",
+      "wholeBlockRequired": "حدد فقرة أو قائمة بالكامل لتغيير نمطها."
+    },
+    "answerQuote": {
+      "showInDecision": "عرض في القرار",
+      "verified": "اقتباس موثَّق",
+      "verifiedHint": "حرفيًا في {source}"
     },
     "applyMode": {
       "description": "يُخزّن Word مَن أجرى كل تغيير. وسنتذكّر اختيارك.",
@@ -1397,7 +1446,12 @@
     "maxAttachmentsReached": "بحدّ أقصى {count} ملفات لكل رسالة",
     "mention": {
       "category": {
-        "entities": "في هذا الملف القانوني"
+        "entities": "في هذا الملف القانوني",
+        "sources": "المصادر"
+      },
+      "corpus": {
+        "caseLaw": "السوابق القضائية · {country}",
+        "legislation": "التشريعات · {country}"
       },
       "loadError": "تعذّر تحميل العناصر"
     },
@@ -1451,6 +1505,12 @@
       "title": "نص ملصق"
     },
     "placeholder": "اكتب سؤالك هنا، / للمهارات، @ لإضافة سياق",
+    "processSummary": {
+      "analyses": "{count, plural, zero {# تحليلات} one {تحليل واحد} two {تحليلان} few {# تحليلات} many {# تحليلًا} other {# تحليل}}",
+      "changesSaved": "{count, plural, zero {# تغييرات محفوظة} one {تغيير واحد محفوظ} two {تغييران محفوظان} few {# تغييرات محفوظة} many {# تغييرًا محفوظًا} other {# تغيير محفوظ}}",
+      "documentEdits": "{count, plural, zero {# تعديلات على المستند} one {تعديل واحد على المستند} two {تعديلان على المستند} few {# تعديلات على المستند} many {# تعديلًا على المستند} other {# تعديل على المستند}}",
+      "sourcesChecked": "{count, plural, zero {# مصادر تمت مراجعتها} one {مصدر واحد تمت مراجعته} two {مصدران تمت مراجعتهما} few {# مصادر تمت مراجعتها} many {# مصدرًا تمت مراجعته} other {# مصدر تمت مراجعته}}"
+    },
     "promptImprovementStrategies": {
       "decompose": {
         "description": "يحوّل العمل المعقد إلى مهام فرعية مرتبة.",
@@ -1696,6 +1756,7 @@
       "interrupted": "توقّف قبل الاكتمال",
       "output": "المخرجات",
       "sourceCode": "الشيفرة المصدرية",
+      "statusWaiting": "في الانتظار",
       "toggleDetails": "إظهار/إخفاء التفاصيل",
       "unrestoredFields": "تعذّر ملء {count, plural, zero {# حقل} one {حقل واحد} two {حقلين} few {# حقول} many {# حقلًا} other {# حقل}} بالقيم الحقيقية في وضع إخفاء الهوية. راجِع: {fields}"
     },
@@ -1721,7 +1782,8 @@
       "toggleLabel": "البحث على الويب",
       "toggleOff": "إيقاف البحث على الويب",
       "toggleOn": "تشغيل البحث على الويب"
-    }
+    },
+    "workedFor": "مدة العمل: {duration}"
   },
   "clauses": {
     "addVariant": "إضافة صيغة",
@@ -2599,11 +2661,14 @@
     "actionFailed": "فشل الإجراء",
     "api": {
       "badRequest": "تعذر إكمال الطلب.",
+      "caseLawCountryUnavailable": "الأحكام القضائية لهذا البلد غير متاحة. اختر بلدًا آخر.",
+      "caseLawSearchUnavailable": "البحث في الأحكام القضائية لهذا البلد غير متاح. لا يزال بإمكانك قراءة أحكامه القضائية العامة.",
       "conflict": "يتعارض الطلب مع الحالة الحالية.",
       "forbidden": "ليست لديك صلاحية لتنفيذ ذلك.",
+      "legislationCountryUnavailable": "التشريعات لهذا البلد غير متاحة. اختر بلدًا آخر.",
+      "legislationSearchUnavailable": "البحث في التشريعات لهذا البلد غير متاح. لا يزال بإمكانك قراءة تشريعاته العامة.",
       "notFound": "تعذر العثور على ما طلبته.",
       "payloadTooLarge": "الطلب كبير جدًا.",
-      "publicCountryUnavailable": "التشريعات والأحكام القضائية لهذا البلد غير متاحة. اختر بلدًا آخر.",
       "rateLimited": "طلبات كثيرة جدًا. يرجى المحاولة لاحقًا.",
       "server": "حدث خطأ ما. يرجى المحاولة مرة أخرى.",
       "serviceUnavailable": "الخدمة غير متاحة مؤقتًا. يرجى المحاولة مرة أخرى.",
@@ -5114,7 +5179,6 @@
     "provisionTextUnavailable": "النص غير متاح لهذه النسخة",
     "publisherWindowInconsistent": "لا يمكن تحديد النص النافذ في هذا التاريخ: بيانات الناشر متعارضة.",
     "resolvedAlias": "تم التعرف عليه باسم {label}",
-    "searchAskPrompt": "{query} (تشريعات {country})",
     "searchLabel": "البحث في التشريعات",
     "searchPlaceholder": "الرقم أو الاسم أو العنوان، مثل 89/2012 Sb.",
     "showCitedPartOnly": "عرض الجزء المستشهد به فقط",
@@ -6243,7 +6307,6 @@
         }
       },
       "atAGlance": "لمحة سريعة",
-      "edited": "تم التعديل",
       "getStarted": "ابدأ برفع المستندات أو إنشاء أول مجلد لك.",
       "matterDetails": "تفاصيل الملف القانوني",
       "membersCount": "{count, plural, zero {لا أعضاء} one {عضو واحد} two {عضوان} few {# أعضاء} many {# عضوًا} other {# عضو}}",

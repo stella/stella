@@ -26,8 +26,8 @@ import {
   extractFileText,
   resolveExtractionMimeType,
 } from "@/api/lib/search/extract-content";
-import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
-import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
+import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
+import { requireTanStackAIAvailableForTask } from "@/api/lib/tanstack-ai-models";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const MAX_SOURCE_CHARS = 30_000;
@@ -97,7 +97,7 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "upload_mechanics" },
   body: extractProcuracaoBodySchema,
-  requiresUsage: { actionType: "chat", modelRole: "fast" },
+  requiresUsage: { actionType: "chat", modelTask: "short-text" },
 } satisfies HandlerConfig;
 
 /**
@@ -121,11 +121,11 @@ const extractProcuracao = createSafeRootHandler(
   }) {
     const organizationId = session.activeOrganizationId;
 
-    yield* requireTanStackAIAvailableForRole({
+    yield* requireTanStackAIAvailableForTask({
       dataClass: "customer",
       configStatus: orgAIConfigStatus,
       orgConfig: orgAIConfig,
-      role: "fast",
+      task: "short-text",
     });
 
     const claimToken = Bun.randomUUIDv7();
@@ -284,7 +284,7 @@ const extractProcuracao = createSafeRootHandler(
           workspaceId: null,
         },
         feature: "contacts.extractProcuracao",
-        modelRole: "fast",
+        modelTask: "short-text",
         orgAIConfig,
         modelTier: configuredModelAdmission({ modelAdmission }).modelTier,
         properties: { organization_id: organizationId },
@@ -295,10 +295,10 @@ const extractProcuracao = createSafeRootHandler(
       const truncated = normalizedText.length > MAX_SOURCE_CHARS;
       const generated = await Result.tryPromise({
         try: async () =>
-          await generateTanStackObjectForRole({
+          await generateTanStackObjectForTask({
             dataClass: "customer",
             admission: configuredModelAdmission({ modelAdmission }),
-            role: "fast",
+            task: "short-text",
             orgAIConfig,
             managedAIResidency,
             organizationId,
@@ -306,7 +306,7 @@ const extractProcuracao = createSafeRootHandler(
             analytics: aiAnalytics,
             caching: resolveCaching({
               promptCachingEnabled: false,
-              role: "fast",
+              task: "short-text",
               scopeKey: organizationId,
             }),
             system: SYSTEM_PROMPT,

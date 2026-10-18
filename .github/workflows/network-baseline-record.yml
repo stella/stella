@@ -42,6 +42,7 @@ jobs:
           save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install dependencies
+        timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
@@ -84,6 +85,7 @@ jobs:
           save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install dependencies
+        timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
@@ -91,6 +93,7 @@ jobs:
       # Both comparison and recording use the same action, artifact, seed,
       # browser and production server. The recorder receives no secrets.
       - name: Setup production browser stack
+        timeout-minutes: 9
         id: stack
         uses: ./.github/actions/setup-production-e2e
         with:
@@ -114,6 +117,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Pull the pinned browser image and clear registry credentials
+        timeout-minutes: 2
         run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" --prepare
 
       - name: Log out of GitHub Container Registry
@@ -121,6 +125,7 @@ jobs:
         run: docker logout ghcr.io
 
       - name: Record network baseline
+        timeout-minutes: 6
         env:
           E2E_EXECUTION_PROFILE: network-baseline
           E2E_EXPECT_DEV_ROUTES: "false"

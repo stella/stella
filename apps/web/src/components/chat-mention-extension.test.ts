@@ -1,10 +1,18 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import {
+  parseChatCorpusId,
+  resourceRef,
+  RESOURCE_TYPE,
+} from "@stll/api-contract";
 
 import type { ChatMentionOption } from "@/components/chat-mention-extension";
 import { selectChatSuggestionItems } from "@/components/chat-mention-extension";
-import { toChatMentionNodeAttrs } from "@/components/chat-mention-node-attrs";
+import {
+  chatMentionOptionId,
+  toChatMentionNodeAttrs,
+} from "@/components/chat-mention-node-attrs";
 import { toSafeId } from "@/lib/safe-id";
 
 const option = ({
@@ -51,6 +59,14 @@ const option = ({
         kind: "decision",
         mimeType: null,
       };
+    case "corpus":
+      return {
+        scope: parseChatCorpusId(id) ?? panic(`Not a corpus chip id: ${id}`),
+        label,
+        category,
+        kind: "corpus",
+        mimeType: null,
+      };
     default:
       return category satisfies never;
   }
@@ -62,11 +78,21 @@ describe("chat mention suggestions", () => {
       option({ category: "entity", id: "entity-1", label: "Contract" }),
       option({ category: "workspace", id: "workspace-1", label: "Matter" }),
       option({ category: "decision", id: "decision-1", label: "Decision" }),
+      option({
+        category: "corpus",
+        id: "case_law:CZE",
+        label: "Case law · Czechia",
+      }),
     ];
 
     for (const mention of mentions) {
-      expect(toChatMentionNodeAttrs(mention).id).toBe(mention.resource.id);
+      expect(toChatMentionNodeAttrs(mention).id).toBe(
+        chatMentionOptionId(mention),
+      );
     }
+    expect(toChatMentionNodeAttrs(mentions[3] ?? panic("corpus")).id).toBe(
+      "case_law:CZE",
+    );
   });
 
   test("keeps searched decision hits even when the case number does not match the query", () => {
@@ -82,7 +108,7 @@ describe("chat mention suggestions", () => {
       ],
     });
 
-    expect(result.map((item) => String(item.resource.id))).toEqual([
+    expect(result.map((item) => chatMentionOptionId(item))).toEqual([
       "decision-1",
     ]);
   });
@@ -97,7 +123,7 @@ describe("chat mention suggestions", () => {
       searchedItems: [],
     });
 
-    expect(result.map((item) => String(item.resource.id))).toEqual([
+    expect(result.map((item) => chatMentionOptionId(item))).toEqual([
       "entity-1",
     ]);
   });

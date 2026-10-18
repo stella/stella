@@ -47,6 +47,10 @@ export const DECISION_DOCKET_GRAMMAR_FIXTURES = {
   ],
   HUN: [
     {
+      canonical: "Pfv.21.123/2019/5.",
+      variants: ["Pfv.21123/2019/5", "Pfv.21.123/2019/5"],
+    },
+    {
       canonical: "Xyz.IV.99.999/2099/9",
       variants: [
         "xyz.iv.99999/2099/9",

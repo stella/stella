@@ -113,6 +113,31 @@ test("live anonymization demo highlights a city as an address", async ({
     .toMatchObject({ highlighted: [CITY], legend: [ADDRESS_LEGEND] });
 });
 
+test("isolated browser demo matches detector output literally", async ({
+  page,
+}) => {
+  await page.goto(DEMO_URL, { waitUntil: "domcontentloaded" });
+  expect(await page.evaluate(() => window.crossOriginIsolated)).toBe(true);
+  await expect(page.locator(DEMO_SELECTORS.textarea)).toBeVisible();
+
+  await expect
+    .poll(
+      async () => (await page.evaluate(readDemoState, DEMO_SELECTORS)).status,
+      { message: "the demo's engine finishes booting", timeout: 90_000 },
+    )
+    .toMatch(/detected/u);
+
+  // The detector-derived sample includes `+` and `.`, which must remain
+  // literal characters when the browser bundle builds highlight segments.
+  await expect
+    .poll(
+      async () =>
+        (await page.evaluate(readDemoState, DEMO_SELECTORS)).highlighted,
+      { message: "the live browser output preserves literal sample matches" },
+    )
+    .toEqual(SAMPLE_HIGHLIGHTS);
+});
+
 test("live anonymization demo does not expose runtime errors", async ({
   page,
 }) => {

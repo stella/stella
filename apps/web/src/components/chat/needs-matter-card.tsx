@@ -31,6 +31,7 @@ import {
 } from "@/components/chat/create-document-draft.logic";
 import { DocumentIcon } from "@/components/document-icon";
 import { MarkdownPreview } from "@/components/markdown-preview";
+import { filterMatterPickerItems } from "@/components/matter-picker-search.logic";
 import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import type { QueryView } from "@/lib/query-view.logic";
@@ -337,15 +338,11 @@ const MatterPickerSection = ({
     (matter) => matter.id === selectedMatterId,
   );
 
-  const query = deferredSearch.trim().toLowerCase();
-  const filtered =
-    query.length === 0
-      ? matters
-      : matters.filter(
-          (matter) =>
-            matter.name.toLowerCase().includes(query) ||
-            (matter.client?.displayName ?? "").toLowerCase().includes(query),
-        );
+  const filtered = filterMatterPickerItems({
+    getClientLabel: (matter) => matter.client?.displayName ?? "",
+    items: matters,
+    query: deferredSearch,
+  });
 
   const handleContinue = async () => {
     if (!selectedMatter || isSubmitting || isDownloading) {

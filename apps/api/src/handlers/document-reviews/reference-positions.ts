@@ -61,13 +61,13 @@ import {
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
-  generateTanStackObjectForRole,
-  streamTanStackObjectForRole,
+  generateTanStackObjectForTask,
+  streamTanStackObjectForTask,
 } from "@/api/lib/tanstack-ai-generate";
 import type { PreparedDocxFile } from "@/api/lib/workflow/generate-batch";
 import type { Position } from "@/api/lib/workflow/playbook-positions";
 
-const ROLE = "pdf" as const;
+const MODEL_TASK = "pdf" as const;
 
 /** The batch path holds a request open with nothing to show, so it fails
  *  before a reviewer gives up on it. */
@@ -169,7 +169,7 @@ const buildProposalRequest = ({
 }: ProposalRequestArgs) => {
   const caching = resolveCaching({
     promptCachingEnabled,
-    role: ROLE,
+    task: MODEL_TASK,
     scopeKey: reviewDocumentsScopeKey(
       targetEntityVersionId,
       references.map((reference) => reference.entityVersionId),
@@ -178,7 +178,7 @@ const buildProposalRequest = ({
   const analytics = createTanStackAIAnalyticsCallbacks({
     dataClass: "customer",
     feature: "document-review.positions",
-    modelRole: ROLE,
+    modelTask: MODEL_TASK,
     orgAIConfig,
     modelTier: admission.modelTier,
     properties: {
@@ -219,7 +219,7 @@ const buildProposalRequest = ({
     analytics,
     options: {
       dataClass: "customer" as const,
-      role: ROLE,
+      task: MODEL_TASK,
       orgAIConfig,
       managedAIResidency,
       organizationId,
@@ -260,7 +260,7 @@ export const proposeReferencePositions = async ({
   return await Result.tryPromise({
     try: async () =>
       normalizeProposal({
-        output: await generateTanStackObjectForRole(options),
+        output: await generateTanStackObjectForTask(options),
         seededPositions: request.seededPositions,
         sources: request.references,
         positionsMax,
@@ -328,7 +328,7 @@ export const streamReferenceProposal = async function* ({
   };
 
   try {
-    for await (const chunk of streamTanStackObjectForRole(options)) {
+    for await (const chunk of streamTanStackObjectForTask(options)) {
       switch (chunk.type) {
         case "delta":
           break;

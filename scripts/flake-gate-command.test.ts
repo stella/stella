@@ -126,6 +126,11 @@ test("the generic parser records unsupported shell shapes independently of dedic
         "script": "packages/cli/package.json:test",
       },
       {
+        "command": "bun ../../scripts/prepare-mcp-apps.ts && bun test",
+        "reason": "shell-syntax",
+        "script": "packages/mcp-apps/package.json:test",
+      },
+      {
         "command": "bun run test:bun && cargo test",
         "reason": "shell-syntax",
         "script": "packages/scan-engine/package.json:test",

@@ -5,12 +5,26 @@ import * as v from "valibot";
 
 import { workflowJobSteps, workflowStepByName } from "./workflow-steps";
 
-const workflow = Bun.YAML.parse(
-  readFileSync(
-    new URL("../.github/workflows/bot-refresh-auto-merge.yml", import.meta.url),
-    "utf-8",
+const workflow = v.parse(
+  v.looseObject({ on: v.record(v.string(), v.unknown()) }),
+  Bun.YAML.parse(
+    readFileSync(
+      new URL(
+        "../.github/workflows/bot-refresh-auto-merge.yml",
+        import.meta.url,
+      ),
+      "utf-8",
+    ),
   ),
 );
+test("queues only for generated-refresh CI branches", () => {
+  expect(workflow.on["workflow_run"]).toEqual({
+    workflows: ["CI Checks"],
+    branches: ["chore/provenance-update", "bot/model-catalog-refresh"],
+    types: ["completed"],
+  });
+});
+
 const steps = workflowJobSteps(workflow, "arm");
 const step = (name: string) => workflowStepByName(steps, name);
 const selection = v.parse(

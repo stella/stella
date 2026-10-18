@@ -31,4 +31,5 @@ jobs:
         with:
           persist-credentials: false
       - name: Install Safe Chain
+        timeout-minutes: 2
         uses: ./.github/actions/safe-chain

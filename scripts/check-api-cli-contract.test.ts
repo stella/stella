@@ -259,7 +259,7 @@ describe("API and CLI release contract", () => {
     expect(migrationSmoke).toContain("curl -fsS http://127.0.0.1:3001/live");
     expect(migrationSmoke).toContain(`grep -q '"message":"scheduler.started"'`);
     expect(apiPackage.scripts["generate:capability-runtime"]).toBe(
-      "bun scripts/generate-capability-runtime.ts",
+      "bun scripts/generate-capability-runtime.ts && bun ../../scripts/prepare-mcp-apps.ts",
     );
     const prepareRuntime = migrationSmoke.indexOf(
       "bun --filter @stll/api generate:capability-runtime",
