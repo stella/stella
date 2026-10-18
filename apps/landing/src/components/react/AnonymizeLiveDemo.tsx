@@ -8,7 +8,7 @@ import type { ChatAnonPair } from "@stll/anonymize-chat";
 
 import { runAnonymizeDemo } from "../anonymize-demo-worker-client";
 
-import { AhoCorasick } from "#aho-corasick";
+import type { AhoCorasick } from "#aho-corasick";
 
 /**
  * Live, in-browser run of stella's real anonymization engine (the same
@@ -130,17 +130,78 @@ type Segment = {
   sourceEnd: number;
 };
 
-let cachedSegmentMatcher: { key: string; matcher: AhoCorasick } | undefined;
+/** One highlighted span of the text, in UTF-16 source positions. */
+type HighlightMatch = { start: number; end: number; bucket: Bucket };
 
-const segmentMatcher = (originals: string[]): AhoCorasick => {
+/**
+ * Where {@link PRECOMPUTED_SAMPLE_PAIRS} occur in {@link INITIAL_TEXT}, so the
+ * first paint needs no matcher: in the browser the matcher is wasm, loaded
+ * with the engine. A test pins these to what the matcher finds.
+ */
+export const PRECOMPUTED_SAMPLE_MATCHES = [
+  { start: 47, end: 62, bucket: "person" },
+  { start: 67, end: 91, bucket: "address" },
+  { start: 97, end: 126, bucket: "organization" },
+  { start: 158, end: 173, bucket: "organization" },
+  { start: 175, end: 190, bucket: "person" },
+  { start: 209, end: 226, bucket: "phone" },
+  { start: 230, end: 269, bucket: "email" },
+  { start: 297, end: 311, bucket: "id" },
+] as const satisfies readonly HighlightMatch[];
+
+/** The matcher class, loaded with the engine rather than with this module. */
+export type Matcher = typeof AhoCorasick;
+
+let cachedSegmentMatcher:
+  | { key: string; Matcher: Matcher; matcher: AhoCorasick }
+  | undefined;
+
+const segmentMatcher = (Matcher: Matcher, originals: string[]): AhoCorasick => {
   const key = JSON.stringify(originals);
-  if (cachedSegmentMatcher?.key !== key) {
+  if (
+    cachedSegmentMatcher?.key !== key ||
+    cachedSegmentMatcher.Matcher !== Matcher
+  ) {
     cachedSegmentMatcher = {
       key,
-      matcher: new AhoCorasick(originals, { matchKind: "leftmost-longest" }),
+      Matcher,
+      matcher: new Matcher(originals, { matchKind: "leftmost-longest" }),
     };
   }
   return cachedSegmentMatcher.matcher;
+};
+
+/** Splits `text` into plain and highlighted segments at known matches. */
+export const segmentsFromMatches = (
+  text: string,
+  matches: readonly HighlightMatch[],
+): Segment[] => {
+  const segments: Segment[] = [];
+  let lastIndex = 0;
+  for (const { start, end, bucket } of matches) {
+    if (start > lastIndex) {
+      segments.push({
+        text: text.slice(lastIndex, start),
+        sourceStart: lastIndex,
+        sourceEnd: start,
+      });
+    }
+    segments.push({
+      text: text.slice(start, end),
+      bucket,
+      sourceStart: start,
+      sourceEnd: end,
+    });
+    lastIndex = end;
+  }
+  if (lastIndex < text.length || segments.length === 0) {
+    segments.push({
+      text: text.slice(lastIndex),
+      sourceStart: lastIndex,
+      sourceEnd: text.length,
+    });
+  }
+  return segments;
 };
 
 /**
@@ -153,6 +214,7 @@ const segmentMatcher = (originals: string[]): AhoCorasick => {
 export const buildSegments = (
   rawText: string,
   pairs: readonly HighlightPair[],
+  Matcher: Matcher,
 ): Segment[] => {
   const text = rawText.toWellFormed();
   if (text.length === 0 || pairs.length === 0) {
@@ -174,41 +236,57 @@ export const buildSegments = (
   const originals = [...bucketByOriginal.keys()].toSorted(
     (a, b) => b.length - a.length,
   );
-  const matcher = segmentMatcher(originals);
-  const segments: Segment[] = [];
-  let lastIndex = 0;
-  for (const match of matcher.findIter(text)) {
-    const index = match.start;
-    const matched = match.text;
-    if (index > lastIndex) {
-      segments.push({
-        text: text.slice(lastIndex, index),
-        sourceStart: lastIndex,
-        sourceEnd: index,
-      });
-    }
-    segments.push({
-      text: matched,
-      bucket: bucketByOriginal.get(matched),
-      sourceStart: index,
-      sourceEnd: index + matched.length,
-    });
-    lastIndex = index + matched.length;
-  }
-  if (lastIndex < text.length) {
-    segments.push({
-      text: text.slice(lastIndex),
-      sourceStart: lastIndex,
-      sourceEnd: text.length,
-    });
-  }
-  return segments;
+  const matches = segmentMatcher(Matcher, originals)
+    .findIter(text)
+    .map(({ start, text: matched }): HighlightMatch => ({
+      start,
+      end: start + matched.length,
+      bucket: bucketByOriginal.get(matched) ?? "misc",
+    }));
+  return segmentsFromMatches(text, matches);
+};
+
+let matcherLoad: Promise<Matcher> | undefined;
+
+/**
+ * The matcher loads with the engine, never with this module: in the browser
+ * it is wasm, and a failed download must surface as an engine error instead
+ * of stopping the demo from hydrating at all. A failed load is retried.
+ */
+const loadMatcher = (): Promise<Matcher> => {
+  matcherLoad ??= import("#aho-corasick").then(
+    (module) => module.AhoCorasick,
+    (error: unknown) => {
+      matcherLoad = undefined;
+      throw error;
+    },
+  );
+  return matcherLoad;
 };
 
 type EngineState =
   | { status: "warming" }
-  | { status: "ready"; pairs: readonly HighlightPair[] }
+  | { status: "ready"; pairs: readonly HighlightPair[]; Matcher: Matcher }
   | { status: "error" };
+
+/** Starts one engine run: the anonymization pass and the matcher together. */
+export const startEngine = async (
+  value: string,
+  dependencies: {
+    run: (value: string) => Promise<{ pairs: readonly HighlightPair[] }>;
+    loadMatcher: () => Promise<Matcher>;
+  },
+): Promise<EngineState> => {
+  try {
+    const [result, Matcher] = await Promise.all([
+      dependencies.run(value),
+      dependencies.loadMatcher(),
+    ]);
+    return { status: "ready", pairs: result.pairs, Matcher };
+  } catch {
+    return { status: "error" };
+  }
+};
 
 /**
  * Which detection the backdrop renders. `precomputed` only ever applies to the
@@ -248,10 +326,10 @@ export const AnonymizeLiveDemo = () => {
   const run = (value: string) => {
     latestRequestRef.current += 1;
     const requestId = latestRequestRef.current;
-    runAnonymizeDemo(value)
-      .then((result) => {
+    startEngine(value, { run: runAnonymizeDemo, loadMatcher })
+      .then((state) => {
         if (requestId === latestRequestRef.current) {
-          setEngine({ status: "ready", pairs: result.pairs });
+          setEngine(state);
         }
         return;
       })
@@ -270,10 +348,15 @@ export const AnonymizeLiveDemo = () => {
   }, [runDebounced, text]);
 
   const highlights = highlightsFor(engine, text);
-  const segments = useMemo(
-    () => buildSegments(text, highlights.pairs),
-    [text, highlights.pairs],
-  );
+  const segments = useMemo(() => {
+    if (engine.status === "ready") {
+      return buildSegments(text, engine.pairs, engine.Matcher);
+    }
+    return segmentsFromMatches(
+      text.toWellFormed(),
+      highlights.source === "precomputed" ? PRECOMPUTED_SAMPLE_MATCHES : [],
+    );
+  }, [text, engine, highlights.source]);
 
   const legend = useMemo(() => {
     const buckets = new Set<Bucket>();
