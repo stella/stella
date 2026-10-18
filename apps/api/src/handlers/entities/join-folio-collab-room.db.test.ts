@@ -371,7 +371,7 @@ describe("folio collaboration room seed generation CAS", () => {
     async ({ state, receiptOrder, hashCut }) => {
       const snapshotBytes = deployedSnapshot(state);
       const expectDiscardNotice = state === "dirty" || hashCut !== "exact";
-      const seededAt = new Date(testClock.now() + 1000);
+      const seededAt = new Date(Date.now() + 1000);
       const snapshotAt = new Date(
         seededAt.getTime() + (state === "dirty" ? 1000 : 0),
       );

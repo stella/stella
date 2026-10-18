@@ -1157,7 +1157,6 @@ if (!databaseUrl || !runPostgres) {
 
     test("rejects user messages and unsettled turns without changing revision state", async () => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
-        const testClock = createTestClock();
         const db = openClient().db;
         const fixture = await seedFixture(db);
         try {
@@ -1216,7 +1215,7 @@ if (!databaseUrl || !runPostgres) {
             organizationId: fixture.organizationId,
             userId: fixture.userId,
             userMessageId,
-            leaseExpiresAt: new Date(testClock.now() + 60_000),
+            leaseExpiresAt: new Date(Date.now() + 60_000),
           });
           const beforeActive = await fixture.observe();
           expect(await fixture.write(db, acceptedChange)).toEqual({

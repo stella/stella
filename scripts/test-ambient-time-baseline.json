@@ -370,9 +370,9 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/api/src/handlers/chat/messages/revisions/revisions.postgres.test.ts": {
-    "count": 8,
+    "count": 9,
     "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
+    "reason": "compares against the Postgres clock"
   },
   "apps/api/src/handlers/chat/send-message-refs.integration.test.ts": {
     "count": 1,
@@ -503,6 +503,11 @@
     "count": 1,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/handlers/entities/join-folio-collab-room.db.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "compares against the Postgres clock"
   },
   "apps/api/src/handlers/entities/move.postgres.test.ts": {
     "count": 1,
@@ -798,6 +803,11 @@
     "count": 2,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/account-deletion-effects.postgres.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "compares against the Postgres clock"
   },
   "apps/api/src/lib/account-deletion-work-obligations.integration.test.ts": {
     "count": 1,
