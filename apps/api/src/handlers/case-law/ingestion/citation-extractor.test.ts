@@ -3650,6 +3650,10 @@ describe("European Commission competition case numbers", () => {
     "case no. sp. zn. 21 C 123/2020",
     "vec sp. zn.: 4 C 309/2020",
     "sprawa sygn. akt IV C 123/2020",
+    "case no. 21    C 123/2020",
+    "case no. 21\n\t C 123/2020",
+    "sprawa sygn. akt IV      C 123/2020",
+    "sprawa sygn. akt IV\nC 123/2020",
   ])(
     "does not read a national docket tail as a Commission identifier: %s",
     (text) => {

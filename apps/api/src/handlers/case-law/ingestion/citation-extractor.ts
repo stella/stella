@@ -762,13 +762,41 @@ const COMMISSION_CASE_CUE_RE = new RegExp(
 const COMMISSION_CASE_CUE_WINDOW = 40;
 
 const COMMISSION_CASE_NUMBER_PATTERN =
-  /(?<![\p{L}\d])(?<caseNumber>(?:AT\s*\.\s*\d{4,6}|COMP\s*\/\s*\d{2}\s*\.\s*\d{3}|M\s*\.\s*\d{1,6}|SA\s*\.\s*\d{3,6}|(?<!\d\s{0,3})(?:C|N|NN)\s+\d{1,3}\s*\/\s*\d{4}))(?![\p{L}\d/])/giu;
+  /(?<![\p{L}\d])(?<caseNumber>(?:AT\s*\.\s*\d{4,6}|COMP\s*\/\s*\d{2}\s*\.\s*\d{3}|M\s*\.\s*\d{1,6}|SA\s*\.\s*\d{3,6}|(?:C|N|NN)\s+\d{1,3}\s*\/\s*\d{4}))(?![\p{L}\d/])/giu;
 const COMMISSION_SHORT_CASE_NUMBER_RE = /^(?:C|N|NN)\s/iu;
-/** A Roman court division (`IV C 123/2020`) owns the docket; at most 8 numerals and 3 spaces. */
-const NATIONAL_DOCKET_ROMAN_DIVISION_RE =
-  /(?<![\p{L}\d])[IVXLCDM]{1,8}\s{1,3}$/u;
-/** Numerals, spaces and one boundary character: the regex never scans the whole section. */
-const NATIONAL_DOCKET_ROMAN_DIVISION_WINDOW = 12;
+const ROMAN_NUMERALS = new Set(["I", "V", "X", "L", "C", "D", "M"]);
+const MAX_ROMAN_DIVISION_LENGTH = 8;
+
+/**
+ * Whether a short `C|N|NN 123/2020` form is the tail of a national docket:
+ * a senate number (`21 C 123/2020`) or a Roman court division
+ * (`IV C 123/2020`) precedes it across any amount of whitespace. A linear
+ * backwards scan, so neither whitespace runs nor long sections cost more.
+ */
+const followsNationalDocketDivision = (
+  text: string,
+  matchIndex: number,
+): boolean => {
+  let end = matchIndex - 1;
+  while (end >= 0 && /\s/u.test(text.charAt(end))) {
+    end -= 1;
+  }
+  if (end < 0 || end === matchIndex - 1) {
+    return false;
+  }
+  if (/\d/u.test(text.charAt(end))) {
+    return true;
+  }
+  let start = end;
+  while (
+    start >= 0 &&
+    end - start < MAX_ROMAN_DIVISION_LENGTH &&
+    ROMAN_NUMERALS.has(text.charAt(start))
+  ) {
+    start -= 1;
+  }
+  return start < end && (start < 0 || !/[\p{L}\d]/u.test(text.charAt(start)));
+};
 
 const isCommissionCaseNumberMatch = ({
   pattern,
@@ -787,12 +815,7 @@ const isCommissionCaseNumberMatch = ({
   if (
     caseNumber !== undefined &&
     COMMISSION_SHORT_CASE_NUMBER_RE.test(caseNumber) &&
-    NATIONAL_DOCKET_ROMAN_DIVISION_RE.test(
-      text.slice(
-        Math.max(0, matchIndex - NATIONAL_DOCKET_ROMAN_DIVISION_WINDOW),
-        matchIndex,
-      ),
-    )
+    followsNationalDocketDivision(text, matchIndex)
   ) {
     return false;
   }
