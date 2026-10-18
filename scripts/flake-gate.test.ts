@@ -650,7 +650,13 @@ test("repeat runs never overlap across files", async () => {
       peak = Math.max(peak, active);
       await Bun.sleep(1);
       active -= 1;
-      return { type: "executed", passed: true, status: 0, ranTests: true };
+      return {
+        type: "executed",
+        passed: true,
+        status: 0,
+        ranTests: true,
+        failedTests: [],
+      };
     },
   });
   expect(report.results.map(({ runs }) => runs)).toEqual([REPEATS, REPEATS]);
@@ -666,6 +672,7 @@ test("five shuffled iterations name the failing iteration", async () => {
       passed: seed !== 3,
       status: seed === 3 ? 1 : 0,
       ranTests: true,
+      failedTests: seed === 3 ? ["fails on the third shuffle"] : [],
     }),
   });
   const result = report.results.at(0);

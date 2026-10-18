@@ -7,7 +7,7 @@ defaults:
 # Lifecycle of scripts/flaky-test-quarantine.json on main. Pull requests and
 # merge groups only annotate an elapsed entry (scripts/dated-waivers.ts), so a
 # date never fails an unrelated change; here an elapsed entry fails the run
-# and an issue mentions its owner. The scan proposes entries for tests that
+# with one error annotation per entry. The scan proposes entries for tests that
 # failed and then passed on the same commit across several commits.
 
 on:
@@ -32,7 +32,6 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
-      issues: write
     steps:
       - name: Checkout default branch
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -55,13 +54,6 @@ jobs:
       - name: Check quarantine expiry
         id: expiry
         run: bun scripts/flaky-test-quarantine.ts expired --json "$RUNNER_TEMP/expired.json"
-
-      - name: Ping owners of expired entries
-        if: failure() && steps.expiry.outcome == 'failure'
-        timeout-minutes: 5
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: bun scripts/flaky-test-history.ts ping-expired --expired "$RUNNER_TEMP/expired.json"
 
   propose:
     name: Propose quarantine entries

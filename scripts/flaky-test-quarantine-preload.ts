@@ -41,7 +41,6 @@ import {
 const DEFAULT_BUDGET_MS = 60_000;
 const RUNNER_GRACE_MS = 5000;
 const MAX_MESSAGE = 300;
-const TEST_FILE = /[._](?:test|spec)\.[cm]?[jt]sx?$/u;
 
 type TestFunction = (...args: unknown[]) => unknown;
 type Outcome = { status: "passed" } | { status: "failed"; message: string };
@@ -247,6 +246,8 @@ const install = (reportDir: string): void => {
 };
 
 const reportDir = process.env[QUARANTINE_REPORT_DIR_ENV];
-if (reportDir !== undefined && reportDir !== "" && TEST_FILE.test(Bun.main)) {
+// BUN_OPTIONS preloads run before Bun assigns the selected test file to
+// `Bun.main`. Registration still checks `Bun.main`, after the runner has set it.
+if (reportDir !== undefined && reportDir !== "") {
   install(reportDir);
 }

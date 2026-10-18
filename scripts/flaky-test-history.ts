@@ -1,4 +1,4 @@
-// Flaky-test history: per-test evidence, quarantine proposals and summaries.
+// Flaky-test and check history: evidence, quarantine proposals and summaries.
 //
 // Evidence comes from artifacts CI already publishes: the result gate's
 // failure digest (`ci-failures`, structured test identities per failed
@@ -9,9 +9,6 @@
 //     A CI test job: annotates each quarantined outcome the preload recorded,
 //     flags entries that matched no test, and writes each quarantined test's
 //     outcome and recent history to the job summary.
-//   bun scripts/flaky-test-history.ts ping-expired --expired <file>
-//     The scheduled expiry check: opens one issue per elapsed entry that
-//     mentions its owner, unless an open one exists.
 //   bun scripts/flaky-test-history.ts scan --out <dir> [--summary <file>]
 //       [--pr-body <file>] [--write-registry]
 //     The scheduled scan: collects the last seven days of evidence, writes the
@@ -43,7 +40,6 @@ import {
   annotationProperty,
   DAY_MS,
   isExpired,
-  parseRegistry,
   quarantineRecordSchema,
   readRegistry,
   REGISTRY_FILE,
@@ -109,6 +105,18 @@ const OBSERVATION_ROLE = {
 const historySchema = v.strictObject({
   generatedAt: v.string(),
   tests: v.record(v.string(), v.array(observationSchema)),
+  flakyChecks: v.optional(
+    v.array(
+      v.strictObject({
+        job: v.string(),
+        step: v.string(),
+        flakyFailures: v.number(),
+        commits: v.number(),
+        lastSeen: v.string(),
+      }),
+    ),
+    [],
+  ),
 });
 export type History = v.InferOutput<typeof historySchema>;
 
@@ -135,6 +143,7 @@ export type Evidence = {
   readonly runs: readonly CiRun[];
   readonly digests: readonly (ArtifactSource & {
     readonly tests: readonly FailedTest[];
+    readonly checks: readonly { readonly job: string; readonly step: string }[];
   })[];
   readonly flakeReports: readonly (ArtifactSource & {
     readonly results: readonly FlakeResult[];
@@ -142,6 +151,76 @@ export type Evidence = {
   readonly quarantineReports: readonly (ArtifactSource & {
     readonly records: readonly QuarantineRecord[];
   })[];
+};
+
+export type FlakyCheck = {
+  readonly job: string;
+  readonly step: string;
+  readonly flakyFailures: number;
+  readonly commits: number;
+  readonly lastSeen: string;
+};
+
+const isCancellationStep = ({ job, step }: { job: string; step: string }) =>
+  /cancel(?:led|lation|ing)?/iu.test(job) ||
+  /cancel(?:led|lation|ing)?/iu.test(step);
+
+/** Failed check steps whose commit had a later successful workflow run. */
+export const findFlakyChecks = (evidence: Evidence): FlakyCheck[] => {
+  const checks = new Map<
+    string,
+    {
+      job: string;
+      step: string;
+      failures: number;
+      commits: Set<string>;
+      lastSeen: string;
+    }
+  >();
+  for (const digest of evidence.digests) {
+    const laterSuccess = evidence.runs.some(
+      (run) =>
+        run.headSha === digest.headSha &&
+        run.conclusion === "success" &&
+        Date.parse(run.startedAt) > Date.parse(digest.createdAt),
+    );
+    if (!laterSuccess) {
+      continue;
+    }
+    for (const check of digest.checks) {
+      if (check.job === "ci-result" || isCancellationStep(check)) {
+        continue;
+      }
+      const key = `${check.job}\0${check.step}`;
+      const found = checks.get(key);
+      if (found === undefined) {
+        checks.set(key, {
+          ...check,
+          failures: 1,
+          commits: new Set([digest.headSha]),
+          lastSeen: digest.createdAt,
+        });
+      } else {
+        found.failures += 1;
+        found.commits.add(digest.headSha);
+        if (Date.parse(digest.createdAt) > Date.parse(found.lastSeen)) {
+          found.lastSeen = digest.createdAt;
+        }
+      }
+    }
+  }
+  return [...checks.values()]
+    .map(({ failures, commits, ...check }) => ({
+      ...check,
+      flakyFailures: failures,
+      commits: commits.size,
+    }))
+    .toSorted((left, right) =>
+      compareCodeUnit(
+        `${left.job}\0${left.step}`,
+        `${right.job}\0${right.step}`,
+      ),
+    );
 };
 
 /**
@@ -320,7 +399,7 @@ type ProposeOptions = {
 export type Proposal = {
   readonly registry: Registry;
   readonly added: readonly QuarantineEntry[];
-  // Candidates whose test file has no commit author to own the entry.
+  // Candidates whose test file has no matching CODEOWNERS rule.
   readonly unowned: readonly Candidate[];
 };
 
@@ -521,13 +600,30 @@ type ScanSummaryOptions = {
   readonly registry: Registry;
   readonly proposal: Proposal;
   readonly skipped: number;
+  readonly flakyChecks: readonly FlakyCheck[];
 };
+
+const flakyChecksTable = (checks: readonly FlakyCheck[]): string[] =>
+  checks.length === 0
+    ? []
+    : [
+        "## Flaky checks",
+        "",
+        "| Job | Step | Flaky failures | Commits | Last seen |",
+        "| --- | --- | ---: | ---: | --- |",
+        ...checks.map(
+          (check) =>
+            `| ${markdown(check.job)} | ${markdown(check.step)} | ${check.flakyFailures} | ${check.commits} | ${check.lastSeen.slice(0, 10)} |`,
+        ),
+        "",
+      ];
 
 export const scanSummary = ({
   tests,
   registry,
   proposal,
   skipped,
+  flakyChecks,
 }: ScanSummaryOptions): string => {
   const section = (id: string): string =>
     `### \`${markdown(id)}\`\n\n${renderObservations(tests[id] ?? [])}\n`;
@@ -544,6 +640,7 @@ export const scanSummary = ({
     "",
     ...proposal.added.map(({ id }) => section(id)),
     ...proposal.unowned.map(({ id }) => section(id)),
+    ...flakyChecksTable(flakyChecks),
     ...(quarantined.length > 0
       ? ["## Quarantined", "", ...quarantined.map(section)]
       : []),
@@ -553,16 +650,18 @@ export const scanSummary = ({
 type ProposalBodyOptions = {
   readonly proposal: Proposal;
   readonly tests: Readonly<Record<string, readonly Observation[]>>;
+  readonly flakyChecks: readonly FlakyCheck[];
 };
 
 export const proposalBody = ({
   proposal,
   tests,
+  flakyChecks,
 }: ProposalBodyOptions): string =>
   [
     `These tests failed and then passed on the same commit on at least ${PROPOSAL_THRESHOLD} commits in the last ${HISTORY_WINDOW_DAYS} days. Quarantined, they keep running and reporting, but their failures no longer fail pull requests or merge groups.`,
     "",
-    `Each entry expires after ${PROPOSED_QUARANTINE_DAYS} days. The owner is the author of the latest commit to the test file; change it before merging if someone else should fix the test.`,
+    `Each entry expires after ${PROPOSED_QUARANTINE_DAYS} days. The owner comes from the last matching rule in \`.github/CODEOWNERS\`.`,
     "",
     ...proposal.added.flatMap(({ id, owner }) => [
       `### \`${markdown(id)}\` (owner: ${markdown(owner)})`,
@@ -574,6 +673,17 @@ export const proposalBody = ({
       ),
       "",
     ]),
+    ...(proposal.unowned.length === 0
+      ? []
+      : [
+          "## Needs an owner",
+          "",
+          "These test files have no matching `.github/CODEOWNERS` rule, so no quarantine entry was added.",
+          "",
+          ...proposal.unowned.map(({ id }) => `- \`${markdown(id)}\``),
+          "",
+        ]),
+    ...flakyChecksTable(flakyChecks),
     "Opened by the scheduled flaky-test quarantine scan.",
     "",
   ].join("\n");
@@ -635,6 +745,8 @@ const artifactPagesSchema = v.array(
 // Digests from before structured test identities parse as unreadable.
 const digestFileSchema = v.array(
   v.object({
+    job: v.string(),
+    step: v.string(),
     tests: v.array(
       v.object({ scope: v.string(), file: v.string(), name: v.string() }),
     ),
@@ -808,7 +920,13 @@ export const collectEvidence = async ({
         );
         return records === undefined
           ? []
-          : [{ ...source, tests: records.flatMap(({ tests }) => tests) }];
+          : [
+              {
+                ...source,
+                tests: records.flatMap(({ tests }) => tests),
+                checks: records.map(({ job, step }) => ({ job, step })),
+              },
+            ];
       }),
       flakeReports: flakeReports.value.flatMap(({ dir, ...source }) => {
         const report = readOr(
@@ -828,38 +946,39 @@ export const collectEvidence = async ({
   });
 };
 
-const commitAuthorSchema = v.array(
-  v.object({ author: v.nullable(v.object({ login: v.string() })) }),
-);
-
-type OwnerOptions = {
-  readonly gh: Gh;
-  readonly repository: string;
-  readonly files: readonly string[];
-};
-
-/** The GitHub login of the latest commit to each file, where it has one. */
-export const resolveOwners = async ({
-  gh,
-  repository,
-  files,
-}: OwnerOptions): Promise<Result<Map<string, string>, GhCommandError>> => {
+/** Resolve files with CODEOWNERS semantics: gitignore-style patterns, last match wins. */
+export const resolveOwners = (
+  content: string,
+  files: readonly string[],
+): Map<string, string> => {
   const owners = new Map<string, string>();
-  for (const file of new Set(files)) {
-    const commits = await gh([
-      "api",
-      `repos/${repository}/commits?path=${encodeURIComponent(file)}&per_page=1`,
-    ]);
-    if (commits.isErr()) {
-      return commits;
+  for (const raw of content.split("\n")) {
+    const line = raw.trim();
+    if (line === "" || line.startsWith("#")) {
+      continue;
     }
-    const login = v.parse(commitAuthorSchema, JSON.parse(commits.value)).at(0)
-      ?.author?.login;
-    if (login !== undefined) {
-      owners.set(file, login);
+    const [rawPattern, rawOwner] = line.split(/\s+/u);
+    if (rawPattern === undefined || rawOwner?.startsWith("@") !== true) {
+      continue;
+    }
+    const rooted = rawPattern.startsWith("/");
+    let pattern = rawPattern.replace(/^\//u, "");
+    if (pattern.endsWith("/")) {
+      pattern += "**";
+    } else if (!rooted && !pattern.includes("/")) {
+      pattern = `**/${pattern}`;
+    }
+    const glob = new Bun.Glob(pattern);
+    for (const file of new Set(files)) {
+      if (
+        glob.match(file) ||
+        (!pattern.includes("/") && glob.match(path.posix.basename(file)))
+      ) {
+        owners.set(file, rawOwner.slice(1));
+      }
     }
   }
-  return Result.ok(owners);
+  return owners;
 };
 
 type LatestHistoryOptions = {
@@ -918,92 +1037,6 @@ export const fetchLatestHistory = async ({
   return Result.ok(
     v.parse(historySchema, readJson(path.join(dir, HISTORY_FILE))),
   );
-};
-
-// --- Expiry pings -----------------------------------------------------------
-
-const expiredMarker = (entry: QuarantineEntry): string =>
-  `<!-- flaky-test-quarantine-expired: ${JSON.stringify(entry.id)} ${entry.expires} -->`;
-
-export const expiredIssue = (
-  entry: QuarantineEntry,
-): { readonly title: string; readonly body: string } => {
-  const identity =
-    splitTestId(entry.id) ?? panic(`Invalid quarantine id: ${entry.id}`);
-  const title = identity.name.split(" > ").at(-1) ?? identity.name;
-  return {
-    title:
-      `Flaky-test quarantine expired: ${path.posix.basename(identity.file)} › ${title}`.slice(
-        0,
-        250,
-      ),
-    body: [
-      `@${entry.owner}, the quarantine of \`${entry.id}\` expired at the end of ${entry.expires} (UTC), so the scheduled flaky-test quarantine check now fails on main.`,
-      "",
-      `Reason: ${entry.reason}`,
-      ...(entry.issue === undefined ? [] : [`Tracking issue: ${entry.issue}`]),
-      "",
-      `Fix the test and remove its entry from \`${REGISTRY_FILE}\`. Keeping it quarantined needs a new, reviewed entry.`,
-      "",
-      expiredMarker(entry),
-    ].join("\n"),
-  };
-};
-
-const openIssuesSchema = v.array(
-  v.array(v.object({ body: v.nullable(v.string()) })),
-);
-
-type PingOptions = {
-  readonly gh: Gh;
-  readonly repository: string;
-  readonly entries: readonly QuarantineEntry[];
-};
-
-/** Opens one issue per elapsed entry that mentions its owner; idempotent. */
-export const pingExpiredOwners = async ({
-  gh,
-  repository,
-  entries,
-}: PingOptions): Promise<Result<readonly string[], GhCommandError>> => {
-  if (entries.length === 0) {
-    return Result.ok([]);
-  }
-  const listed = await gh([
-    "api",
-    "--paginate",
-    "--slurp",
-    `repos/${repository}/issues?state=open&creator=${encodeURIComponent("github-actions[bot]")}&per_page=100`,
-  ]);
-  if (listed.isErr()) {
-    return listed;
-  }
-  const bodies = v
-    .parse(openIssuesSchema, JSON.parse(listed.value))
-    .flat()
-    .map(({ body }) => body ?? "");
-  const pinged: string[] = [];
-  for (const entry of entries) {
-    if (bodies.some((body) => body.includes(expiredMarker(entry)))) {
-      continue;
-    }
-    const { title, body } = expiredIssue(entry);
-    const created = await gh([
-      "api",
-      "--method",
-      "POST",
-      `repos/${repository}/issues`,
-      "-f",
-      `title=${title}`,
-      "-f",
-      `body=${body}`,
-    ]);
-    if (created.isErr()) {
-      return created;
-    }
-    pinged.push(entry.id);
-  }
-  return Result.ok(pinged);
 };
 
 // --- CLI --------------------------------------------------------------------
@@ -1077,24 +1110,23 @@ const runScan = async (args: readonly string[]): Promise<void> => {
     return;
   }
   const tests = buildHistory({ evidence: collected.value.evidence, exists });
-  const history: History = { generatedAt: now.toISOString(), tests };
+  const flakyChecks = findFlakyChecks(collected.value.evidence);
+  const history: History = {
+    generatedAt: now.toISOString(),
+    tests,
+    flakyChecks,
+  };
   writeFileSync(path.join(out, HISTORY_FILE), `${JSON.stringify(history)}\n`);
   const registry = readRegistry();
   const candidates = quarantineCandidates({ tests, registry, now, exists });
-  const owners = await resolveOwners({
-    gh: ghRetry,
-    repository,
-    files: candidates.flatMap(({ id }) => splitTestId(id)?.file ?? []),
-  });
-  if (owners.isErr()) {
-    console.error(owners.error.message);
-    process.exitCode = 1;
-    return;
-  }
+  const owners = resolveOwners(
+    readFileSync(path.join(REPOSITORY_ROOT, ".github/CODEOWNERS"), "utf-8"),
+    candidates.flatMap(({ id }) => splitTestId(id)?.file ?? []),
+  );
   const proposal = proposeQuarantine({
     registry,
     candidates,
-    owners: owners.value,
+    owners,
     now,
   });
   const summary = option(args, "--summary");
@@ -1106,12 +1138,13 @@ const runScan = async (args: readonly string[]): Promise<void> => {
         registry,
         proposal,
         skipped: collected.value.skipped,
+        flakyChecks,
       }),
     );
   }
   const body = option(args, "--pr-body");
   if (body !== undefined) {
-    writeFileSync(body, proposalBody({ proposal, tests }));
+    writeFileSync(body, proposalBody({ proposal, tests, flakyChecks }));
   }
   if (args.includes("--write-registry") && proposal.added.length > 0) {
     writeFileSync(
@@ -1121,33 +1154,9 @@ const runScan = async (args: readonly string[]): Promise<void> => {
   }
 };
 
-const runPingExpired = async (args: readonly string[]): Promise<void> => {
-  const file =
-    option(args, "--expired") ??
-    panic("Usage: flaky-test-history.ts ping-expired --expired <file>");
-  const parsed = parseRegistry({ entries: readJson(file) });
-  if (parsed.status === "invalid") {
-    return panic(parsed.errors.join("\n"));
-  }
-  const pinged = await pingExpiredOwners({
-    gh: ghRetry,
-    repository: requiredRepository(),
-    entries: parsed.registry.entries,
-  });
-  if (pinged.isErr()) {
-    console.error(pinged.error.message);
-    process.exitCode = 1;
-    return;
-  }
-  console.log(`Opened ${pinged.value.length} expiry issues.`);
-};
-
 if (import.meta.main) {
   const [command = "", ...args] = process.argv.slice(2);
   switch (command) {
-    case "ping-expired":
-      await runPingExpired(args);
-      break;
     case "job-summary":
       await runJobSummary(args);
       break;
@@ -1156,7 +1165,7 @@ if (import.meta.main) {
       break;
     default:
       panic(
-        "Usage: bun scripts/flaky-test-history.ts <job-summary | scan | ping-expired> ...",
+        "Usage: bun scripts/flaky-test-history.ts <job-summary | scan> ...",
       );
   }
 }

@@ -9,19 +9,20 @@ import type { FailureRecord } from "./ci-failure-digest";
 import {
   buildHistory,
   collectEvidence,
-  expiredIssue,
   fetchLatestHistory,
+  findFlakyChecks,
   GhCommandError,
   HISTORY_ARTIFACT,
   HISTORY_FILE,
   HISTORY_WINDOW_DAYS,
   jobSummary,
-  pingExpiredOwners,
   PROPOSAL_THRESHOLD,
   PROPOSED_QUARANTINE_DAYS,
+  proposalBody,
   proposeQuarantine,
   quarantineArtifactName,
   quarantineCandidates,
+  resolveOwners,
   resolveTestFile,
   type Evidence,
   type Gh,
@@ -108,6 +109,7 @@ describe("flake evidence", () => {
         name: "widget > renders",
       },
     ],
+    checks: [{ job: "ci-tests (rest-web)", step: "Test web" }],
   } satisfies Evidence["digests"][number] & {
     tests: FailureRecord["tests"];
   };
@@ -313,6 +315,7 @@ describe("job summary", () => {
       history: {
         generatedAt: NOW.toISOString(),
         tests: { [ID]: [retryPass(1)] },
+        flakyChecks: [],
       },
       now: NOW,
     });
@@ -506,6 +509,7 @@ describe("evidence collection", () => {
     const history = {
       generatedAt: NOW.toISOString(),
       tests: { [ID]: [retryPass(1)] },
+      flakyChecks: [],
     };
     const gh: Gh = async (args) => {
       if (args.at(0) === "run") {
@@ -530,58 +534,80 @@ describe("evidence collection", () => {
   });
 });
 
-describe("expiry pings", () => {
-  test("an elapsed entry opens one issue that mentions its owner, once", async () => {
-    const calls: (readonly string[])[] = [];
-    let open: { body: string }[] = [];
-    const gh: Gh = async (args) => {
-      calls.push(args);
-      if (args.includes("POST")) {
-        const body =
-          args.find((arg) => arg.startsWith("body="))?.slice(5) ?? "";
-        open = [...open, { body }];
-        return Result.ok("{}");
-      }
-      return Result.ok(JSON.stringify([open]));
+describe("check flakes", () => {
+  test("only a failed check later successful on the same commit is flaky", () => {
+    const source = {
+      createdAt: at(2),
+      url: "https://github.com/stella/stella/actions/runs/1",
+      tests: [],
     };
-    const ping = async () =>
-      await pingExpiredOwners({
-        gh,
-        repository: "stella/stella",
-        entries: [entry()],
-      });
-    const first = await ping();
-    expect(first.isOk() ? first.value : undefined).toEqual([ID]);
-    const created = calls.find((args) => args.includes("POST")) ?? [];
-    expect(created.find((arg) => arg.startsWith("body="))).toStartWith(
-      "body=@octocat,",
+    expect(
+      findFlakyChecks(
+        evidence({
+          digests: [
+            {
+              ...source,
+              headSha: sha(1),
+              checks: [
+                { job: "ci-checks", step: "Typecheck" },
+                { job: "ci-result", step: "Aggregate" },
+              ],
+            },
+            {
+              ...source,
+              headSha: sha(2),
+              checks: [{ job: "lint", step: "Lint" }],
+            },
+          ],
+          runs: [
+            { headSha: sha(1), conclusion: "success", startedAt: at(1) },
+            { headSha: sha(3), conclusion: "success", startedAt: at(1) },
+          ],
+        }),
+      ),
+    ).toEqual([
+      {
+        job: "ci-checks",
+        step: "Typecheck",
+        flakyFailures: 1,
+        commits: 1,
+        lastSeen: at(2),
+      },
+    ]);
+  });
+});
+
+describe("CODEOWNERS proposals", () => {
+  const candidates = [
+    { id: ID, commits: [sha(1)], observations: [retryPass(1)] },
+  ];
+
+  test("last matching pattern wins, including directory patterns", () => {
+    const owners = resolveOwners(
+      "*.test.ts @broad\napps/web/ @directory\n/apps/web/src/widget.test.ts @specific\n",
+      [FILE],
     );
-    expect(created.find((arg) => arg.startsWith("title="))).toBe(
-      "title=Flaky-test quarantine expired: widget.test.ts › renders",
-    );
-    const second = await ping();
-    expect(second.isOk() ? second.value : undefined).toEqual([]);
-    // A renewed entry with a new expiry is a new lapse and pings again.
-    const renewed = await pingExpiredOwners({
-      gh,
-      repository: "stella/stella",
-      entries: [entry({ expires: "2026-10-30" })],
-    });
-    expect(renewed.isOk() ? renewed.value : undefined).toEqual([ID]);
-    expect(expiredIssue(entry()).body).toContain(
-      "scripts/flaky-test-quarantine.json",
+    expect(owners.get(FILE)).toBe("specific");
+    expect(resolveOwners("apps/web/ @directory\n", [FILE]).get(FILE)).toBe(
+      "directory",
     );
   });
 
-  test("no elapsed entries make no GitHub calls", async () => {
-    const gh: Gh = async () => {
-      throw new TypeError("unexpected call");
-    };
-    const pinged = await pingExpiredOwners({
-      gh,
-      repository: "stella/stella",
-      entries: [],
+  test("an unmatched test needs an owner and gets no entry", () => {
+    const proposal = proposeQuarantine({
+      registry: empty,
+      candidates,
+      owners: resolveOwners("scripts/ @scripts\n", [FILE]),
+      now: NOW,
     });
-    expect(pinged.isOk()).toBe(true);
+    expect(proposal.added).toEqual([]);
+    expect(proposal.unowned).toEqual(candidates);
+    expect(
+      proposalBody({
+        proposal,
+        tests: { [ID]: [retryPass(1)] },
+        flakyChecks: [],
+      }),
+    ).toContain("## Needs an owner");
   });
 });

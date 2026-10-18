@@ -5,7 +5,8 @@
 // failing the process, so one known flake cannot eject a merge-queue entry.
 // Every entry names an owner and expires: the dated-waiver inventory annotates
 // an elapsed entry on pull requests and merge groups, and the scheduled
-// flaky-test-quarantine workflow fails on main and pings the owner.
+// flaky-test-quarantine workflow fails on main with one owner annotation per
+// elapsed entry.
 //
 //   bun scripts/flaky-test-quarantine.ts digest
 //     Prints the cache identity of the quarantine (registry and its runtime).
@@ -31,8 +32,6 @@ export const BUN_TEST_FILE = /\.test\.[cm]?[jt]sx?$/u;
 const TEST_ID_SEPARATOR = "::";
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/u;
 const GITHUB_LOGIN = /^[A-Za-z\d](?:[A-Za-z\d]|-(?=[A-Za-z\d])){0,38}$/u;
-const ISSUE_URL =
-  /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/issues\/[1-9]\d*$/u;
 
 const isCalendarDate = (value: string): boolean =>
   ISO_DATE.test(value) &&
@@ -91,9 +90,6 @@ const entrySchema = v.strictObject({
   ),
   created: dateSchema,
   expires: dateSchema,
-  issue: v.optional(
-    v.pipe(v.string(), v.regex(ISSUE_URL, "must be a GitHub issue URL")),
-  ),
 });
 
 const registrySchema = v.strictObject({ entries: v.array(entrySchema) });

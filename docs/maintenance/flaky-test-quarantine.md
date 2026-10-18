@@ -12,8 +12,7 @@ test still runs and reports; only its verdict changes.
   "owner": "octocat",
   "reason": "Times out under parallel load.",
   "created": "2026-10-17",
-  "expires": "2026-10-31",
-  "issue": "https://github.com/stella/stella/issues/123"
+  "expires": "2026-10-31"
 }
 ```
 
@@ -22,7 +21,6 @@ test still runs and reports; only its verdict changes.
 - `owner`: a GitHub login, without `@`.
 - `created` and `expires`: UTC calendar dates. The entry covers the whole expiry
   day and at most 30 days in total.
-- `issue`: optional.
 
 Entries stay sorted by `id`. `scripts/flaky-test-quarantine.test.ts` validates
 the schema, the canonical serialization, and that each file exists and still
@@ -48,10 +46,10 @@ so a cached pass never replays under a different registry.
 Expiry is time-based, so it never fails an unrelated change: on pull requests
 and merge groups the dated-waiver check (`scripts/dated-waivers.ts`) only
 annotates an elapsed entry. The daily `flaky-test-quarantine.yml` run on main
-fails on an elapsed entry and opens one issue mentioning its owner. The
-dated-waiver healing workflow probes entries in the five days before expiry,
-running the test 20 times without its entry, and proposes the removal when
-every run passes.
+fails on an elapsed entry with one error annotation naming its test, owner and
+expiry. The dated-waiver healing workflow probes entries in the five days
+before expiry, running the test 20 times without its entry, and proposes the
+removal when every run passes.
 
 ## Proposals
 
@@ -59,7 +57,11 @@ The same workflow scans the last seven days of CI evidence: the result gate's
 failure digests (`ci-failures`, failed tests per attempt), the changed-test
 flake gate's per-test repeat counts, and the quarantine outcomes. A test that
 failed and then passed on the same commit, on three commits, is proposed in a
-pull request on `chore/flaky-test-quarantine`, owned by the author of the
-latest commit to its file, expiring after 14 days. Proposals are never queued
+pull request on `chore/flaky-test-quarantine`, owned by the last matching rule
+in `.github/CODEOWNERS`, and expiring after 14 days. Files without a matching
+owner are listed in the proposal but are not added. Proposals are never queued
 automatically. The scan also publishes the `flaky-test-history` artifact that
-CI job summaries read.
+CI job summaries read. It reports non-aggregate, non-cancellation CI check
+steps that failed before a successful run or re-run of the same commit in the
+history JSON and the proposal's **Flaky checks** table. Check flakes are never
+added to the test quarantine registry.

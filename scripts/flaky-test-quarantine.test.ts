@@ -65,15 +65,8 @@ describe("committed quarantine registry", () => {
 });
 
 describe("registry schema", () => {
-  test("accepts a complete entry, with or without an issue link", () => {
+  test("accepts a complete entry", () => {
     expect(parseRegistry({ entries: [entry()] }).status).toBe("valid");
-    expect(
-      parseRegistry({
-        entries: [
-          entry({ issue: "https://github.com/stella/stella/issues/12" }),
-        ],
-      }).status,
-    ).toBe("valid");
   });
 
   test.each([
@@ -90,11 +83,7 @@ describe("registry schema", () => {
       entry({ id: "apps/web/src/a.test.ts" }),
       "id",
     ],
-    [
-      "a non-issue link",
-      entry({ issue: "https://example.com/issues/1" }),
-      "issue",
-    ],
+    ["an issue field", { ...entry(), issue: "https://example.com" }, "issue"],
   ])("rejects %s", (_label, value, field) => {
     expect(errorsOf({ entries: [value] }).join("\n")).toContain(field);
   });

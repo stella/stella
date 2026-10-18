@@ -52,6 +52,19 @@ test("unquarantined", () => {
   expect(existsSync("fail-unquarantined")).toBe(false);
 });
 `;
+const RUNNER = `import { existsSync, readFileSync } from "node:fs";
+const reportDir = process.env["${QUARANTINE_REPORT_DIR_ENV}"];
+const registry = JSON.parse(readFileSync(process.env["${QUARANTINE_REGISTRY_ENV}"], "utf-8"));
+if (reportDir && registry.entries.length > 0 && !existsSync(reportDir)) {
+  throw new Error("quarantine preload did not initialize in the package runner");
+}
+const result = Bun.spawnSync({
+  cmd: [process.execPath, "test", "./${FIXTURE}"],
+  stdout: "inherit",
+  stderr: "inherit",
+});
+process.exit(result.exitCode);
+`;
 
 const roots: string[] = [];
 afterEach(() => {
@@ -89,16 +102,20 @@ const run = ({
     serializeRegistry({ entries: names.map(entry) }),
   );
   writeFileSync(path.join(root, FIXTURE), SOURCE);
+  writeFileSync(path.join(root, "runner.ts"), RUNNER);
   if (failUnquarantined) {
     writeFileSync(path.join(root, "fail-unquarantined"), "");
   }
   const reports = path.join(root, "reports");
   const { BUN_OPTIONS: _options, ...inherited } = process.env;
   const result = Bun.spawnSync({
-    cmd: [process.execPath, "test", "--preload", PRELOAD, `./${FIXTURE}`],
+    // CI loads the preload into a package runner through BUN_OPTIONS; that
+    // runner then spawns the actual Bun test process.
+    cmd: [process.execPath, "runner.ts"],
     cwd: root,
     env: {
       ...inherited,
+      BUN_OPTIONS: `--preload=${PRELOAD}`,
       [QUARANTINE_REGISTRY_ENV]: path.join(
         root,
         "scripts/flaky-test-quarantine.json",
