@@ -1,12 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import * as v from "valibot";
 
 import {
   loadGlobalRuleInputs,
   matchesGlobalRuleInput,
 } from "./global-rule-inputs";
+import { workflowJobSteps } from "./workflow-steps";
 
 const REPOSITORY_ROOT = new URL("../", import.meta.url);
 const STATIC_CHECK_JOB_ROOTS = [
@@ -24,32 +25,61 @@ const trackedFiles = execFileSync("git", ["ls-files", "-z"], {
   .split("\0")
   .filter(Boolean);
 
+// Pooled checks (.github/ci-checks/*.yml) are steps of their job, so read jobs
+// through the workflow-steps owner rather than the raw ci.yml step list.
 const getRunCommands = () => {
   const workflow: unknown = Bun.YAML.parse(
     readFileSync(new URL(".github/workflows/ci.yml", REPOSITORY_ROOT), "utf-8"),
   );
   const parsed = v.parse(
-    v.looseObject({
-      jobs: v.record(
-        v.string(),
-        v.looseObject({
-          steps: v.optional(
-            v.array(v.looseObject({ run: v.optional(v.string()) })),
-            [],
-          ),
-        }),
-      ),
-    }),
+    v.looseObject({ jobs: v.record(v.string(), v.unknown()) }),
     workflow,
   );
-
-  return Object.entries(parsed.jobs)
+  return Object.keys(parsed.jobs)
     .filter(
-      ([name]) =>
+      (name) =>
         STATIC_CHECK_JOB_ROOTS.some((root) => root === name) ||
         STATIC_CHECK_JOB_PREFIXES.some((prefix) => name.startsWith(prefix)),
     )
-    .flatMap(([, job]) => job.steps.flatMap(({ run }) => (run ? [run] : [])));
+    .flatMap((name) =>
+      workflowJobSteps(workflow, name).flatMap(({ run }) =>
+        typeof run === "string" ? [run] : [],
+      ),
+    );
+};
+
+const transpiler = new Bun.Transpiler({ loader: "ts" });
+
+// A check's verdict also depends on the repository modules it imports (a
+// gate table, an env catalog), so those are rule inputs as much as the
+// script the workflow names.
+const withRelativeImports = (paths: readonly string[]) => {
+  const seen = new Set(paths);
+  const pending = [...paths];
+  for (const file of pending) {
+    if (!file.endsWith(".ts")) {
+      continue;
+    }
+    const source = readFileSync(new URL(file, REPOSITORY_ROOT), "utf-8");
+    for (const { path: specifier } of transpiler.scanImports(source)) {
+      if (!specifier.startsWith(".")) {
+        continue;
+      }
+      const target = decodeURIComponent(
+        new URL(specifier, new URL(file, REPOSITORY_ROOT)).pathname,
+      ).slice(decodeURIComponent(REPOSITORY_ROOT.pathname).length);
+      const resolved = [target, `${target}.ts`].find(
+        (candidate) =>
+          candidate.endsWith(".ts") &&
+          existsSync(new URL(candidate, REPOSITORY_ROOT)),
+      );
+      if (resolved !== undefined && !seen.has(resolved)) {
+        seen.add(resolved);
+        pending.push(resolved);
+      }
+    }
+  }
+  return [...seen].toSorted();
 };
 
 const collectScriptPaths = (commands: string[]) => {
@@ -130,7 +160,7 @@ describe("global rule inputs", () => {
   test("every static-check repository script has an explicit scope", () => {
     const inputs = loadGlobalRuleInputs();
     const changeScoped = new Set(inputs.changeScoped.map(({ path }) => path));
-    const scripts = collectScriptPaths(getRunCommands());
+    const scripts = withRelativeImports(collectScriptPaths(getRunCommands()));
     const unclassified = scripts.filter(
       (path) =>
         !matchesGlobalRuleInput(path, inputs) && !changeScoped.has(path),
