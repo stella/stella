@@ -9,7 +9,6 @@ COMMIT;--> statement-breakpoint
 -- squawk-ignore transaction-nesting, ban-uncommitted-transaction
 BEGIN;--> statement-breakpoint
 SET statement_timeout = '5min';--> statement-breakpoint
--- stella-migration-safety: reviewed bulk-update - only pending legacy soft-law receipts lacking the discriminator are rewritten; jsonb_set is idempotent and bounded to retryable rows.
 UPDATE "soft_law_ingestion_attempts"
 SET "entry" = jsonb_set("entry", '{type}', '"document"', true)
 WHERE "status" = 'retryable' AND "entry"->>'type' IS NULL;--> statement-breakpoint

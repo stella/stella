@@ -317,6 +317,7 @@ const persistSoftLawRows = async (
   { items, sourceId, adapter, runId, observedAt }: PersistSoftLawRowsOptions,
 ) => {
   // audit: skip - background ingestion of public documents and locator history
+  // db-await-in-loop-disable: only repaired placeholders merge, rarely and one at a time; each merge's steps must run in order inside this transaction
   for (const item of items) {
     switch (item.identityResolution.kind) {
       case "create":
@@ -365,6 +366,7 @@ const persistSoftLawRows = async (
         panic("Unknown soft-law identity resolution");
     }
   }
+  // db-await-in-loop-enable
   const rows = items.map((item) => {
     const { metadata } = item.input;
     return {
