@@ -685,6 +685,8 @@ export const LIMITS = {
     documentType: 128 * 4,
     status: 32 * 4,
     effectiveDate: 32,
+    versionValidFrom: 10,
+    versionValidTo: 10,
     sourceUrl: 2048 * 4,
     headline: 4096,
   },

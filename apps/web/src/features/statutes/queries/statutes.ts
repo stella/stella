@@ -158,6 +158,7 @@ export const statutesInfiniteOptions = (
 const PUBLIC_STATUTE_SEARCH_PAGE_SIZE = PUBLIC_STATUTE_SEARCH_PAGE_SIZE_MAX;
 
 export type StatuteSearchFilters = {
+  asOf?: string;
   country: string;
   query: string;
   documentType?: string;
