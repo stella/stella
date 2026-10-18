@@ -4192,6 +4192,10 @@
     "archivedEmpty": "Arhiveeritud mälu puudub.",
     "archivedToast": "Mälu arhiveeritud",
     "createdToast": "Mällu salvestatud",
+    "deleteConfirmation": "Kinnitamiseks sisestage {confirmation}",
+    "deleteDescription": "See kustutab selle mälu jäädavalt. Seda toimingut ei saa tagasi võtta.",
+    "deleteTitle": "Kas kustutada mälu?",
+    "deletedToast": "Mälu kustutatud",
     "empty": "Mälus pole veel midagi.",
     "kinds": {
       "decision": "Otsus",

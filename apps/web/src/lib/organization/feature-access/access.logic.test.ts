@@ -168,7 +168,10 @@ test("undeclared Legal Lists needs deployment and an enabled verification caller
         deploymentFeatures: { legalLists: deploymentEnabled },
       };
       const enabled = deploymentEnabled && status === "enabled";
-      for (const feature of Object.values(CALLER_FEATURE)) {
+      for (const feature of [
+        CALLER_FEATURE.legalLists,
+        CALLER_FEATURE.verification,
+      ]) {
         expect(callerFeatureEnabled(state, feature)).toBe(enabled);
         let calls = 0;
         const admission = await runForCallerFeature({

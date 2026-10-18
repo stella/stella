@@ -20,10 +20,11 @@ import {
 } from "@/components/ai-config-role-models.logic";
 import { CopyActionButton } from "@/components/copy-action-button";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
-import { env } from "@/env";
 import { detached } from "@/lib/detached";
 import { providerSetupGuidance } from "@/lib/errors/provider-setup-guidance";
 import { aiConfigOptions } from "@/lib/organization/ai-config-queries";
+import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/access";
+import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
 import { AIProviderRows } from "@/routes/_protected.settings/-components/organization/ai-provider-rows";
 
 import { SettingsPageHeader } from "../settings-page-header";
@@ -207,28 +208,31 @@ type AuxiliaryCardsProps = {
 
 const AuxiliaryCards = ({
   form: { toggleSections, keySections, saving },
-}: AuxiliaryCardsProps) => (
-  <>
-    <PromptCachingCard {...toggleSections.promptCaching} disabled={saving} />
-    <DocumentProcessingCard
-      {...toggleSections.documentProcessing}
-      disabled={saving}
-    />
-    {env.VITE_FEATURE_AI_MEMORY && (
-      <MemoryExtractionCard
-        {...toggleSections.memoryExtraction}
+}: AuxiliaryCardsProps) => {
+  const memoryEnabled = useCallerFeatureEnabled(CALLER_FEATURE.aiMemory);
+  return (
+    <>
+      <PromptCachingCard {...toggleSections.promptCaching} disabled={saving} />
+      <DocumentProcessingCard
+        {...toggleSections.documentProcessing}
         disabled={saving}
       />
-    )}
-    <div className="my-8 border-t" />
-    <DeepLKeyCard {...keySections.deepl} disabled={saving} />
-    <div className="my-8 border-t" />
-    <WebSearchKeysCard
-      search={{ ...keySections.search, disabled: saving }}
-      fetch={{ ...keySections.fetch, disabled: saving }}
-    />
-  </>
-);
+      {memoryEnabled && (
+        <MemoryExtractionCard
+          {...toggleSections.memoryExtraction}
+          disabled={saving}
+        />
+      )}
+      <div className="my-8 border-t" />
+      <DeepLKeyCard {...keySections.deepl} disabled={saving} />
+      <div className="my-8 border-t" />
+      <WebSearchKeysCard
+        search={{ ...keySections.search, disabled: saving }}
+        fetch={{ ...keySections.fetch, disabled: saving }}
+      />
+    </>
+  );
+};
 
 export const AIConfigForm = ({
   readState,

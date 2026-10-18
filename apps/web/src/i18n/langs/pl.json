@@ -4192,6 +4192,10 @@
     "archivedEmpty": "Brak zarchiwizowanych wspomnień.",
     "archivedToast": "Pamięć zarchiwizowana",
     "createdToast": "Zapisano w pamięci",
+    "deleteConfirmation": "Wpisz {confirmation}, aby potwierdzić",
+    "deleteDescription": "Spowoduje to trwałe usunięcie tej pamięci. Tej czynności nie można cofnąć.",
+    "deleteTitle": "Usunąć pamięć?",
+    "deletedToast": "Pamięć usunięta",
     "empty": "Nic jeszcze w pamięci.",
     "kinds": {
       "decision": "Decyzja",

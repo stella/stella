@@ -4195,6 +4195,10 @@ type Messages = {
     "archivedEmpty": "No archived memory.";
     "archivedToast": "Memory archived";
     "createdToast": "Memory saved";
+    "deleteConfirmation": "Type {confirmation} to confirm";
+    "deleteDescription": "This permanently removes this memory. This action cannot be undone.";
+    "deleteTitle": "Delete memory?";
+    "deletedToast": "Memory deleted";
     "empty": "No memory yet.";
     "kinds": {
       "decision": "Decision";
