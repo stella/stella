@@ -134,7 +134,7 @@ export const DecisionCitationChip = ({
           paragraph,
         });
   const links = resolveLegalCitationLinks({
-    appUrl: decision.readerUrl,
+    url: decision.readerUrl,
     sourceUrl: decision.originalUrl,
     appOrigins: new Set([
       new URL(env.VITE_PUBLIC_APP_URL).origin,
