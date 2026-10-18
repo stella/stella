@@ -641,12 +641,11 @@ test("autofix selection closes over generated outputs and ordering dependencies"
       expect(ids.has(id), `${file} selects ${id}`).toBe(true);
     }
     for (const upstream of selected) {
-      const trackedOutputs = upstream.outputs.map((output) => ({
-        files: tracked.filter((outputFile) =>
+      const generatedOutputFiles = tracked.filter((outputFile) =>
+        upstream.outputs.some((output) =>
           matchesGeneratedGlob(output, outputFile),
         ),
-        output,
-      }));
+      );
       for (const downstream of GENERATORS.filter(({ autofix }) => autofix)) {
         if (downstream.after.some((id) => id === upstream.id)) {
           expect(
@@ -654,18 +653,16 @@ test("autofix selection closes over generated outputs and ordering dependencies"
             `${upstream.id} feeds ${downstream.id}`,
           ).toBe(true);
         }
-        for (const { files, output } of trackedOutputs) {
-          const feedsDownstream = files.some((outputFile) =>
-            downstream.inputs.some((input) =>
-              matchesGeneratedGlob(input, outputFile),
-            ),
-          );
-          if (feedsDownstream) {
-            expect(
-              ids.has(downstream.id),
-              `${output} feeds ${downstream.id}`,
-            ).toBe(true);
-          }
+        const feedsDownstream = generatedOutputFiles.some((outputFile) =>
+          downstream.inputs.some((input) =>
+            matchesGeneratedGlob(input, outputFile),
+          ),
+        );
+        if (feedsDownstream) {
+          expect(
+            ids.has(downstream.id),
+            `${upstream.id} output feeds ${downstream.id}`,
+          ).toBe(true);
         }
       }
     }
