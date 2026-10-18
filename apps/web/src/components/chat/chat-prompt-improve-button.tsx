@@ -16,6 +16,7 @@ import { stellaToast } from "@stll/ui/toast";
 
 import type { ChatEditorController } from "@/components/chat-editor-provider";
 import { composerStoredMarkdown } from "@/components/chat-editor-source";
+import { getLiveEditor } from "@/components/live-editor";
 import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -74,8 +75,8 @@ export const ChatPromptImproveButton = ({
   const [open, setOpen] = useState(false);
 
   const improvePrompt = async (strategy: ChatPromptImprovementStrategy) => {
-    const { editor } = controller;
-    if (!editor || editor.isDestroyed || !isPlainTextDraft(editor)) {
+    const editor = getLiveEditor(controller.editor);
+    if (!editor || !isPlainTextDraft(editor)) {
       stellaToast.add({
         title: t("chat.improvePromptPlainTextOnly"),
         type: "warning",
@@ -206,10 +207,10 @@ const isCurrentDraftUnchanged = ({
   editor: NonNullable<ChatEditorController["editor"]>;
   prompt: string;
 }): boolean => {
-  const currentEditor = controller.editor;
+  const currentEditor = getLiveEditor(controller.editor);
   return (
+    currentEditor !== null &&
     currentEditor === editor &&
-    !currentEditor.isDestroyed &&
     currentEditor.getText().trim() === prompt
   );
 };

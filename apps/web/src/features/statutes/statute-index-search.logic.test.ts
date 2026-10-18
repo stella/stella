@@ -19,6 +19,7 @@ describe("statute search mode transitions", () => {
         const previous = v.parse(statutesIndexSearchSchema, {
           page: 3,
           pageSize: 25,
+          asOf: "2027-01-01",
           q: "89/2012",
           type: "statute",
           validity,
@@ -33,6 +34,7 @@ describe("statute search mode transitions", () => {
         expect(fullText).toEqual({
           page: undefined,
           pageSize: 25,
+          asOf: "2027-01-01",
           q: "contractual obligations",
           type: "statute",
           validity: undefined,
@@ -47,6 +49,7 @@ describe("statute search mode transitions", () => {
           expect(readStatuteIntent(country, list.q).type).toBe(
             query ? "act" : "empty",
           );
+          expect(list.asOf).toBe("2027-01-01");
           expect(list.validity).toBeUndefined();
           expect(list.type).toBe("statute");
           expect(list.page).toBeUndefined();
