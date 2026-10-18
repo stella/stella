@@ -1,3 +1,5 @@
+import { canonicalizePublicCountry } from "@stll/api-contract/public-country-capability";
+
 import { layoutForSurface } from "@/components/public-law-table/public-law-table-layout.logic";
 import type {
   PublicLawTableLayout,
@@ -41,12 +43,13 @@ export const usePublicLawTableLayout = <TLayout extends PublicLawTableLayout>(
   store: PublicLawTableLayoutStore<TLayout>,
   surface: string,
 ) => {
+  const jurisdiction = canonicalizePublicCountry(surface);
   const { prefs, setPrefs } = usePresentationPrefs();
   const layouts = store.layouts(prefs);
   const layout = layoutForSurface({
     defaults: store.defaultLayout,
     layouts,
-    surface,
+    surface: jurisdiction,
   });
   return {
     layout,
@@ -56,9 +59,12 @@ export const usePublicLawTableLayout = <TLayout extends PublicLawTableLayout>(
         const current = layoutForSurface({
           defaults: store.defaultLayout,
           layouts: latestLayouts,
-          surface,
+          surface: jurisdiction,
         });
-        return store.patch({ ...latestLayouts, [surface]: update(current) });
+        return store.patch({
+          ...latestLayouts,
+          [jurisdiction]: update(current),
+        });
       }),
   };
 };

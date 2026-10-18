@@ -1,6 +1,9 @@
 import * as v from "valibot";
 
-import { PUBLIC_COUNTRIES } from "@stll/api-contract/public-country-capability";
+import {
+  canonicalizePublicCountry,
+  PUBLIC_COUNTRIES,
+} from "@stll/api-contract/public-country-capability";
 import { STATUTE_COLUMN_IDS } from "@stll/api-contract/public-law-table";
 
 import {
@@ -29,7 +32,7 @@ export const StoredStatuteLayoutSchema = v.pipe(
       typeof value === "object" && value !== null && !Array.isArray(value),
   ),
   v.record(
-    v.picklist(PUBLIC_COUNTRIES),
+    v.picklist(PUBLIC_COUNTRIES.map(canonicalizePublicCountry)),
     v.strictObject(publicLawStoredLayoutEntries(STATUTE_COLUMN_IDS)),
   ),
 );

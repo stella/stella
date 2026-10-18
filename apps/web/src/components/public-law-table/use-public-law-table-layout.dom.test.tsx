@@ -3,7 +3,12 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { DEFAULT_DECISION_TABLE_LAYOUT } from "@/features/case-law/decision-column-preferences.logic";
 import { DEFAULT_STATUTE_TABLE_LAYOUT } from "@/features/statutes/statute-table-layout.logic";
-import { defaultPresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
+import {
+  defaultPresentationPrefs,
+  decisionLayoutsCookieSchema,
+  serializeTableLayoutCookie,
+  statuteLayoutsCookieSchema,
+} from "@/lib/account/presentation-prefs/preferences";
 import type { PresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
 import { createPresentationPrefsSync } from "@/lib/account/presentation-prefs/sync";
 import { createPrefsWriteLock } from "@/lib/account/presentation-prefs/sync.test-fixtures";
@@ -32,6 +37,10 @@ test.each([
     const release = Promise.withResolvers<undefined>();
     const finished = Promise.withResolvers<undefined>();
     const store = publicLawTableLayoutStore(preference, defaults);
+    const schema =
+      preference === "decisionLayouts"
+        ? decisionLayoutsCookieSchema
+        : statuteLayoutsCookieSchema;
     const Surface = ({ country }: { country: string }) => {
       const { layout, setLayout } = usePublicLawTableLayout(store, country);
       return (
@@ -56,14 +65,25 @@ test.each([
         write: async (patch: Partial<PresentationPrefs>) => {
           const incoming = cookie;
           if (
-            patch[preference]?.["cze"] !== undefined &&
-            patch[preference]["pol"] === undefined
+            patch[preference]?.["CZE"] !== undefined &&
+            patch[preference]["POL"] === undefined
           ) {
             started.resolve(undefined);
             await release.promise;
           }
-          cookie = { ...incoming, ...patch };
-          if (patch[preference]?.["pol"] !== undefined) {
+          const layouts = patch[preference];
+          cookie = {
+            ...incoming,
+            ...patch,
+            ...(layouts === undefined
+              ? {}
+              : {
+                  [preference]: JSON.parse(
+                    serializeTableLayoutCookie(layouts, schema),
+                  ),
+                }),
+          };
+          if (patch[preference]?.["POL"] !== undefined) {
             finished.resolve(undefined);
           }
           return cookie;
@@ -90,8 +110,8 @@ test.each([
         await finished.promise;
       });
       expect(cookie[preference]).toMatchObject({
-        cze: { contentMode: "fit-content" },
-        pol: { contentMode: "fit-content" },
+        CZE: { contentMode: "fit-content" },
+        POL: { contentMode: "fit-content" },
       });
       view.unmount();
       const reload = render(

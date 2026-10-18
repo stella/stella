@@ -526,6 +526,29 @@ export const useI18nStore = Object.assign(
   },
 );
 
+type FormattingPreferences = Pick<
+  PresentationPrefs,
+  "calendar" | "numberingSystem" | "region" | "regionalFormat" | "weekStart"
+>;
+
+/** Apply committed presentation preferences without persisting them again. */
+export const synchronizeFormattingPreferences = (
+  preferences: FormattingPreferences,
+): void => {
+  const state = browserI18nStore.getState();
+  if (
+    state.calendar === preferences.calendar &&
+    state.numberingSystem === preferences.numberingSystem &&
+    state.region === preferences.region &&
+    state.regionalFormat === preferences.regionalFormat &&
+    state.weekStart === preferences.weekStart
+  ) {
+    return;
+  }
+  browserI18nStore.setState(preferences);
+  recomputeFormatterForState(browserI18nStore.getState());
+};
+
 type RenderedLocaleOptions = {
   locale: SupportedLanguage;
   messages: LocaleMessages;

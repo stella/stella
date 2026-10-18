@@ -8,7 +8,7 @@ GlobalRegistrator.register({ url: "http://localhost:3000/law/cases" });
 const { useState } = await import("react");
 const { renderToString } = await import("react-dom/server");
 const { hydrateRoot } = await import("react-dom/client");
-const { act, within } = await import("@testing-library/react");
+const { act, render, within } = await import("@testing-library/react");
 const {
   createMemoryHistory,
   createRootRoute,
@@ -18,10 +18,17 @@ const {
   RouterProvider,
 } = await import("@tanstack/react-router");
 const { useTranslations } = await import("use-intl");
+const { useLocale } = await import("./formatting-context");
 const { initializeRenderedLocale, loadLocaleMessages } =
   await import("./i18n-store");
-const { parseVisitorPresentationPrefs } =
+const { defaultPresentationPrefs, parseVisitorPresentationPrefs } =
   await import("@/lib/account/presentation-prefs/preferences");
+const { createPresentationPrefsSync } =
+  await import("@/lib/account/presentation-prefs/sync");
+const { createPrefsBroadcastHub, createPrefsWriteLock } =
+  await import("@/lib/account/presentation-prefs/sync.test-fixtures");
+const { PresentationPrefsProvider, usePresentationPrefs } =
+  await import("@/lib/account/presentation-prefs/provider");
 const { I18nProvider } = await import("./provider");
 
 const { withRequestI18n } = await import("./request-i18n.server");
@@ -97,3 +104,60 @@ test.each(["ar-SA", "ar-AE"])(
       }
     }),
 );
+
+test("formatting preferences propagate between mounted providers", async () => {
+  const hub = createPrefsBroadcastHub();
+  const withLock = createPrefsWriteLock();
+  let saved = defaultPresentationPrefs;
+  const messages = await loadLocaleMessages("en");
+  initializeRenderedLocale({ locale: "en", messages, prefs: saved });
+  const createTab = () =>
+    createPresentationPrefsSync({
+      initialPrefs: saved,
+      read: async () => await Promise.resolve(saved),
+      write: async (patch) => {
+        saved = { ...saved, ...patch };
+        return saved;
+      },
+      withLock,
+      openChannel: hub.open,
+    });
+  const FormattingControls = ({ tab }: { tab: string }) => {
+    const locale = useLocale();
+    const { setPrefs } = usePresentationPrefs();
+    return (
+      <>
+        <output aria-label={`${tab} locale`}>{locale}</output>
+        <button
+          type="button"
+          aria-label={`${tab} Arabic numerals`}
+          onClick={() => setPrefs(() => ({ numberingSystem: "arab" }))}
+        >
+          {tab}
+        </button>
+      </>
+    );
+  };
+  const Tab = ({ tab }: { tab: string }) => (
+    <PresentationPrefsProvider initialPrefs={saved} sync={createTab()}>
+      <I18nProvider>
+        <FormattingControls tab={tab} />
+      </I18nProvider>
+    </PresentationPrefsProvider>
+  );
+  const view = render(
+    <>
+      <Tab tab="A" />
+      <Tab tab="B" />
+    </>,
+  );
+  try {
+    await act(async () => {
+      view.getByRole("button", { name: "A Arabic numerals" }).click();
+    });
+    expect(view.getByLabelText("B locale").textContent).toContain("nu-arab");
+  } finally {
+    await act(async () => view.unmount());
+  }
+  expect(hub.connected()).toBe(0);
+});

@@ -1,6 +1,9 @@
 import * as v from "valibot";
 
-import { PUBLIC_COUNTRIES } from "@stll/api-contract/public-country-capability";
+import {
+  canonicalizePublicCountry,
+  PUBLIC_COUNTRIES,
+} from "@stll/api-contract/public-country-capability";
 import {
   DECISION_COLUMN_IDS,
   DEFAULT_HIDDEN_DECISION_COLUMN_IDS,
@@ -47,7 +50,7 @@ export const StoredDecisionLayoutSchema = v.pipe(
       typeof value === "object" && value !== null && !Array.isArray(value),
   ),
   v.record(
-    v.picklist(PUBLIC_COUNTRIES),
+    v.picklist(PUBLIC_COUNTRIES.map(canonicalizePublicCountry)),
     v.strictObject({
       ...publicLawStoredLayoutEntries(DECISION_COLUMN_IDS),
       excerpt: v.optional(v.picklist(SEARCH_EXCERPTS)),
