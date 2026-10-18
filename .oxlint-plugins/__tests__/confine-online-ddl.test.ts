@@ -58,6 +58,22 @@ describe(RULE, () => {
     ).toEqual([]);
   });
 
+  test("lowercase maintenance statements and escaped newlines read as SQL", async () => {
+    expect(
+      await lint(
+        [
+          'await connection.execute("reindex index concurrently public.x");',
+          'await connection.execute("analyze public.t");',
+          'await connection.execute("vacuum verbose \\"t\\"");',
+          "await connection.execute(`DROP\\nINDEX CONCURRENTLY public.x`);",
+          `await connection.execute(\`analyze ${slot("table")}\`);`,
+          'const reason = "reindex artifacts are dropped first";',
+          'const reason2 = "analyze the table before the cutover";',
+        ].join("\n"),
+      ),
+    ).toEqual([1, 2, 3, 4, 5]);
+  });
+
   test("an index declaration's createSql is exempt, and reading it is the violation", async () => {
     expect(
       await lint(
@@ -90,17 +106,26 @@ describe(RULE, () => {
     ]);
   });
 
-  test("namespace, re-export and dynamic imports cannot bypass gate ownership", async () => {
+  test("a namespace import does not open the gate either", async () => {
     expect(
       await lint(
         [
           'import * as gate from "./online-index-gate";',
-          "gate.createOnlineIndexGate(options);",
-          'export { createOnlineIndexGate } from "./online-index-gate";',
-          '(await import("./online-index-gate")).createOnlineIndexGate(options);',
+          "const runtime = gate.createOnlineIndexGate(options);",
+          'const ungated = gate["createUngatedTableGateForTests"];',
+          "const { createOnlineIndexGate: open } = gate;",
+          'const { createUngatedTableGateForTests } = await import("./online-ddl");',
         ].join("\n"),
       ),
-    ).toEqual([2, 3, 4]);
+    ).toEqual([2, 3, 4, 5]);
+  });
+
+  test("a re-export cannot hand out a gate opener", async () => {
+    expect(
+      await lint(
+        'export { createOnlineIndexGate } from "./online-index-gate";',
+      ),
+    ).toEqual([1]);
   });
 
   test("the owner, tests, fixtures and the schema phase are out of scope", async () => {

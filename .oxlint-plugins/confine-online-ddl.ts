@@ -47,28 +47,34 @@ const GATE_OPENERS = new Set([
 ]);
 
 // Multi-word keywords match in any case: prose rarely says "alter table".
-// REINDEX and the maintenance verbs are uppercase-only, because "reindex" and
-// "analyze" are ordinary words in messages.
+// "reindex" and the maintenance verbs are ordinary words in messages, so in
+// lowercase they match only in a statement's shape: REINDEX followed by its
+// object kind, a maintenance verb followed by a table or nothing at all.
 const LOCK_TAKING_SQL = [
   /\bcreate\s+(?:unique\s+)?index\b/iu,
   /\bdrop\s+index\b/iu,
   /\bREINDEX\b/u,
+  /\breindex\s+(?:\([^)]*\)\s*)?(?:index|table|schema|database|system)\b/iu,
   /\balter\s+(?:table|index)\b/iu,
   /\block\s+table\b/iu,
   /\bvalidate\s+constraint\b/iu,
   /^\s*(?:ANALYZE|VACUUM|CLUSTER)\b/u,
+  /^\s*(?:analyze|vacuum|cluster)(?: +verbose)?(?:$|;| +(?:public\.|"|\?|[a-z_]\w*(?:$|;|\()))/iu,
 ];
 
 const SQL_COMMENT = /--[^\n]*|\/\*[\S\s]*?\*\//gu;
 
+// The text the template produces (`cooked`), so an escaped newline reads as
+// one; `raw` only where a tagged template's escape leaves no cooked text.
 const quasiText = (quasi: unknown): string => {
   const value = isAstNode(quasi) ? quasi.value : undefined;
-  return typeof value === "object" &&
-    value !== null &&
-    "raw" in value &&
-    typeof value.raw === "string"
-    ? value.raw
-    : "";
+  if (typeof value !== "object" || value === null) {
+    return "";
+  }
+  if ("cooked" in value && typeof value.cooked === "string") {
+    return value.cooked;
+  }
+  return "raw" in value && typeof value.raw === "string" ? value.raw : "";
 };
 
 // A template literal's static chunks joined around each interpolation: its
@@ -183,16 +189,22 @@ export default eslintCompatPlugin({
             if (name === DECLARED_BUILD) {
               context.report({ node, messageId: "declaredBuildRead" });
             }
+            // `gate.createOnlineIndexGate(...)` through a namespace import.
             if (name !== null && GATE_OPENERS.has(name)) {
               context.report({ node, messageId: "gateOpener" });
             }
           },
           Property(node) {
-            if (
-              node.parent.type === "ObjectPattern" &&
-              propertyKeyName(node) === DECLARED_BUILD
-            ) {
+            if (node.parent.type !== "ObjectPattern") {
+              return;
+            }
+            const key = propertyKeyName(node);
+            if (key === DECLARED_BUILD) {
               context.report({ node, messageId: "declaredBuildRead" });
+            }
+            // `const { createOnlineIndexGate } = gate` or `= await import(...)`.
+            if (key !== null && GATE_OPENERS.has(key)) {
+              context.report({ node, messageId: "gateOpener" });
             }
           },
           ImportSpecifier(node) {
