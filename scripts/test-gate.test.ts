@@ -3589,7 +3589,8 @@ context("root test runner coverage", () => {
               job: "e2e-production-shard",
               step: "Run Playwright shard",
               pin: "e2eProductionShards.planSha256",
-              condition: "success()",
+              condition:
+                "steps.e2e-stack.outcome == 'success' && matrix.shard != 'network-baseline'",
             },
           },
         ],
@@ -3634,11 +3635,7 @@ context("root test runner coverage", () => {
           "shard: [1, 2]",
         ),
         "e2e-production-shard",
-        (job) =>
-          job.replace(
-            "        if: >-\n          steps.e2e-stack.outcome == 'success'\n          && matrix.shard != 'network-baseline'\n",
-            "        if: success()\n",
-          ),
+        (job) => job,
       );
       expect(unconditionalWorkflow).not.toBe(workflow);
       expect(failureFor(unconditionalWorkflow)).toBeUndefined();
@@ -3661,7 +3658,10 @@ context("root test runner coverage", () => {
           "edited collector condition",
           (source) =>
             editJob(source, "e2e-production-shard", (job) =>
-              job.replace("        if: success()", "        if: always()"),
+              job.replace(
+                "        if: >-\n          steps.e2e-stack.outcome == 'success'\n          && matrix.shard != 'network-baseline'",
+                "        if: always()",
+              ),
             ),
         ],
         [
@@ -3712,7 +3712,10 @@ context("root test runner coverage", () => {
           "collector is disabled",
           (source) =>
             editJob(source, "e2e-production-shard", (job) =>
-              job.replace("        if: success()\n", "        if: false\n"),
+              job.replace(
+                "        if: >-\n          steps.e2e-stack.outcome == 'success'\n          && matrix.shard != 'network-baseline'",
+                "        if: false",
+              ),
             ),
         ],
         [

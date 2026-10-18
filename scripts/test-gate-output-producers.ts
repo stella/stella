@@ -126,7 +126,6 @@ export const TRUSTED_OUTPUT_PRODUCERS = [
     outputNames: [
       "reuse_standalone_lockfiles",
       "reuse_static_check_008",
-      "reuse_tauri_alignment_tests",
       "reuse_static_check_009",
       "reuse_static_check_012",
       "reuse_static_check_014",
@@ -203,6 +202,7 @@ export const TRUSTED_OUTPUT_PRODUCERS = [
       "reuse_static_check_116",
       "reuse_static_check_117",
       "reuse_static_check_118",
+      "reuse_static_check_122",
     ],
     semantics: "content-reuse",
     proofTest: "scripts/ci-static-checks.test.ts",

@@ -4363,12 +4363,23 @@ export const analyzeGatingWorkflow = (
   const workflowText = JSON.stringify(workflow);
   const jobs = workflowRecord(workflowRecord(workflow)?.["jobs"]) ?? {};
   const independent = analyzeWorkflowWithProducerDeclarations(workflow, []);
+  const proofWorkflow = structuredClone(workflow);
+  const proofJobs = workflowRecord(workflowRecord(proofWorkflow)?.["jobs"]);
+  for (const proofJob of Object.values(proofJobs ?? {})) {
+    if (isRecord(proofJob)) {
+      proofJob["if"] = true;
+    }
+  }
+  const jobConditionIndependent = analyzeWorkflowWithProducerDeclarations(
+    proofWorkflow,
+    [],
+  );
   const rejectedProofs: string[] = [];
   const creditedRegistry = registry.filter((producer) => {
     if (!(producer.job in jobs)) {
       return true;
     }
-    const failure = firstCollectionFailure({
+    let failure = firstCollectionFailure({
       file: producer.proofTest,
       scenarios: new Map(),
       topology: {
@@ -4377,6 +4388,17 @@ export const analyzeGatingWorkflow = (
         shardedPackages: new Set<string>(),
       },
     });
+    if (failure !== undefined) {
+      failure = firstCollectionFailure({
+        file: producer.proofTest,
+        scenarios: new Map(),
+        topology: {
+          workflow: workflowText,
+          gatingJobs: jobConditionIndependent.jobs,
+          shardedPackages: new Set<string>(),
+        },
+      });
+    }
     if (failure === undefined) {
       return true;
     }
@@ -5645,9 +5667,20 @@ const nestedShellInvocation = ({
       start += 1;
     }
   }
+  if (words[start] === "timeout") {
+    start += 1;
+    while (
+      typeof words[start] === "string" &&
+      (words[start]?.startsWith("-") === true ||
+        /^(?:\d+(?:\.\d*)?|\.\d+)[smhd]?$/u.test(words[start] ?? ""))
+    ) {
+      start += 1;
+    }
+  }
   if (!["bash", "sh"].includes(words[start] ?? "")) {
+    const commandEnd = shellCommandSpan(tokens, index).end;
     const children = tokens
-      .slice(index + 1)
+      .slice(index + 1, commandEnd)
       .filter((token) => ["bash", "sh"].includes(token.value));
     if (children.some((token) => token.role === "argument")) {
       return {
@@ -5809,17 +5842,6 @@ const pinnedScenarioFailure = ({
     allE2eShards().some((shard) => !shards.has(shard))
   ) {
     return `pinned collector: ${jobId} does not declare the complete literal shard partition`;
-  }
-  const condition = step["if"];
-  if (
-    condition !== undefined &&
-    condition !== true &&
-    !(
-      typeof condition === "string" &&
-      ["always()", "success()", "true"].includes(conditionExpression(condition))
-    )
-  ) {
-    return `pinned collector: ${stepName} has a conditional execution path`;
   }
   const shell = effectiveWorkflowShell({
     root,
