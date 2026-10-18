@@ -57,7 +57,8 @@ const withRelativeImports = (paths: readonly string[]) => {
   const seen = new Set(paths);
   const pending = [...paths];
   for (const file of pending) {
-    if (!file.endsWith(".ts")) {
+    // A glob in a command is scope-checked as written; only files have imports.
+    if (!file.endsWith(".ts") || !existsSync(new URL(file, REPOSITORY_ROOT))) {
       continue;
     }
     const source = readFileSync(new URL(file, REPOSITORY_ROOT), "utf-8");
