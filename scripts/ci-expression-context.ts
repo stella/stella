@@ -1,0 +1,316 @@
+import { panic } from "better-result";
+
+type Event =
+  | "merge_group"
+  | "pull_request"
+  | "push"
+  | "schedule"
+  | "workflow_dispatch";
+
+type RunContextOptions = {
+  event?: Event;
+  action?: string;
+  heavyOnly?: boolean;
+  prDepthOnly?: boolean;
+  plan?: Record<string, string>;
+  vars?: Record<string, string>;
+  needsResults?: Record<string, string>;
+  stepOutputs?: Record<string, Record<string, string>>;
+};
+
+type ModelledStep = {
+  outputs: Record<string, string>;
+  outcome?: string;
+};
+
+type ModelledRunContext = {
+  github: {
+    event_name: Event;
+    ref: string;
+    sha: string;
+    workflow_sha: string;
+    event: {
+      action: string;
+      head_commit: { message: string };
+      pull_request: { draft: boolean; labels: { name: string }[] };
+    };
+  };
+  inputs: Record<string, string | boolean> & {
+    heavy_only: boolean;
+    pr_depth_only: boolean;
+    query_perf_mode: string;
+    sha: string;
+  };
+  vars: Record<string, string> & {
+    CI_POSTGRES_PR_SELECTION: string;
+    MERGE_QUEUE_DEPTH: string;
+    QUEUE_BROWSER_SUITES: string;
+  };
+  steps: Record<string, ModelledStep>;
+  needs: Record<string, { result: string; outputs: Record<string, string> }>;
+  always: () => boolean;
+  cancelled: () => boolean;
+  failure: () => boolean;
+  success: () => boolean;
+  startsWith: (value: string, prefix: string) => boolean;
+  format: (template: string, value: string) => string;
+};
+
+const REF_BY_EVENT: Record<Event, string> = {
+  merge_group: "refs/heads/gh-readonly-queue/main/pr-1-0000000",
+  pull_request: "refs/pull/1/merge",
+  push: "refs/heads/main",
+  schedule: "refs/heads/main",
+  workflow_dispatch: "refs/heads/main",
+};
+
+const PLAN_BOOLEAN_OUTPUTS = [
+  "api_image_smoke_required",
+  "browser_spec_selection_required",
+  "ci_browser_required",
+  "corpus_suites_required",
+  "dependency_malware_required",
+  "desktop_rust_checks_required",
+  "desktop_windows_dry_run_required",
+  "docker_checks_pr_required",
+  "docker_checks_required",
+  "e2e_core_required",
+  "e2e_landing_required",
+  "e2e_production_required",
+  "fix_tests_on_base_required",
+  "heavy_web_build_required",
+  "landing_build_required",
+  "legal_atlas_image_pr_required",
+  "legal_atlas_image_required",
+  "marketing_screenshots_required",
+  "migration_rehearsal_required",
+  "mobile_build_required",
+  "package_checks_required",
+  "postgres_service_suites_required",
+  "pr_heavy_gate_required",
+  "query_perf_required",
+  "release_typecheck_required",
+  "route_smoke_required",
+  "scan_engine_wasm_required",
+  "service_suites_pr_required",
+  "service_suites_required",
+  "stack_redaction_browsers_required",
+  "web_build_required",
+  "web_image_smoke_required",
+  "windows_scripts_required",
+] as const;
+
+const defaultPlan = () => ({
+  ...Object.fromEntries(PLAN_BOOLEAN_OUTPUTS.map((name) => [name, "false"])),
+  api_test_shards: "4",
+  coverage_profile: "normal-v1",
+  pilot_fast_jobs: "[]",
+  pr_depth_reused: "false",
+  queue_depth: "full",
+  run_required: "true",
+  suite_depth: "full",
+  trusted: "true",
+});
+
+const DEFAULT_STEP_OUTPUTS: Record<string, Record<string, string>> = {
+  "api-test-durations": { hash: "", key: "" },
+  "api-tests": {
+    api_test_files: "[]",
+    api_test_shards: "4",
+    ci_tests_matrix: "[]",
+    test_scope: "",
+  },
+  "changed-files": {
+    agent_sandbox_docker_required: "false",
+    api_image_deps_required: "false",
+    api_image_platforms: "[]",
+    api_image_smoke_required: "false",
+    changed_files: "",
+    ci_browser_scope_required: "false",
+    collab_redis_required: "false",
+    collaboration_suite_required: "false",
+    comparison_base: "",
+    corpus_suites_required: "false",
+    dependency_malware_required: "false",
+    desktop_browser_required: "false",
+    desktop_rust_checks_required: "false",
+    desktop_windows_dry_run_required: "false",
+    docker_checks_pr_required: "false",
+    docker_checks_required: "false",
+    docs_changed_files: "",
+    docs_checks_required: "false",
+    e2e_core_required: "false",
+    e2e_landing_required: "false",
+    fix_tests_on_base_required: "false",
+    landing_build_required: "false",
+    legal_atlas_image_pr_required: "false",
+    legal_atlas_image_required: "false",
+    lockfile_ages_required: "false",
+    migration_rehearsal_required: "false",
+    mobile_build_required: "false",
+    model_catalog_drift_required: "false",
+    package_checks_required: "false",
+    postgres_suites_required: "false",
+    published_exports_required: "false",
+    release_typecheck_required: "false",
+    route_smoke_required: "false",
+    route_tree_required: "false",
+    scan_engine_wasm_required: "false",
+    service_suites_pr_required: "false",
+    stack_redaction_browsers_required: "false",
+    valkey_suites_required: "false",
+    web_api_types_required: "false",
+    web_build_required: "false",
+    web_image_smoke_required: "false",
+    windows_scripts_required: "false",
+  },
+  check: { trusted: "true" },
+  "completed-depth": {
+    completed_run_id: "",
+    marker: "",
+    metadata_only: "false",
+    normal_completion: "required",
+    pr_depth_reused: "false",
+    pr_depth_source_run_id: "",
+    pr_heavy_source_run_id: "",
+    pr_heavy_source_sha: "",
+    pr_heavy_suites: "run",
+    queue_validation: "required",
+    run_required: "true",
+  },
+  depth: { queue_depth: "full", suite_depth: "full" },
+  "e2e-pr-plan": {
+    matrix: "[]",
+    mode: "none",
+    required: "false",
+    selection_required: "false",
+    specs: "[]",
+  },
+  generate: { input_hash: "" },
+  "heavy-plan": { heavy_jobs: "[]", queue_jobs: "[]", thin_jobs: "[]" },
+  images: { playwright: "", postgres: "", quickwit: "", redis: "", valkey: "" },
+  "legal-atlas-scope": { api_source_required: "false" },
+  "marketing-release": { required: "false" },
+  "patch-id": { patch_id: "", workflow_version: "" },
+  "pilot-plan": { fast_jobs: "[]" },
+  "pilot-queue-plan": { queue_jobs: "[]" },
+  pilot: { coverage_profile: "normal-v1" },
+  "postgres-test-durations": { hash: "" },
+  "postgres-test-plan": {
+    postgres_selection_reason: "",
+    postgres_test_selection: "[]",
+  },
+  "pr-depth-plan": { pr_depth_jobs: "[]" },
+  "pr-heavy-plan": { pr_heavy_jobs: "[]" },
+  "query-perf-scope": { query_perf_required: "false" },
+  "root-checks": { root_checks: "[]" },
+};
+
+const NEEDS = [
+  "ci-plan",
+  "ci-tests",
+  "e2e-production-shard",
+  "e2e-vite-canary",
+  "heavy-web-build",
+  "postgres-service-suites",
+  "pr-heavy-gate",
+  "web-build",
+] as const;
+
+/** Builds the complete GitHub expression context model used by CI contract tests. */
+export const ciExpressionContext = ({
+  event = "pull_request",
+  action = "synchronize",
+  heavyOnly = false,
+  prDepthOnly = false,
+  plan: planOverrides = {},
+  vars = {},
+  needsResults = {},
+  stepOutputs = {},
+}: RunContextOptions = {}): ModelledRunContext => {
+  const plan = { ...defaultPlan(), ...planOverrides };
+  const steps = Object.fromEntries(
+    Object.entries(DEFAULT_STEP_OUTPUTS).map(([id, outputs]) => [
+      id,
+      { outputs: { ...outputs, ...stepOutputs[id] } },
+    ]),
+  );
+  for (const [id, outputs] of Object.entries(stepOutputs)) {
+    steps[id] ??= { outputs: { ...outputs } };
+  }
+  steps["changed-files"] = {
+    outputs: { ...steps["changed-files"]?.outputs, ...planOverrides },
+  };
+  steps["completed-depth"] = {
+    outputs: {
+      ...steps["completed-depth"]?.outputs,
+      run_required: plan.run_required,
+    },
+  };
+  const modelledSteps: Record<string, ModelledStep> = {
+    ...Object.fromEntries(
+      Object.entries(steps).map(([id, step]) => [
+        id,
+        { outputs: step.outputs, outcome: "" },
+      ]),
+    ),
+    ...Object.fromEntries(
+      [
+        "api-deps",
+        "assert-cleanup",
+        "canary",
+        "cleanup",
+        "image",
+        "install",
+        "isolation",
+        "network",
+        "protocol",
+        "pull",
+      ].map((id) => [id, { outputs: {}, outcome: "success" }]),
+    ),
+  };
+
+  return {
+    github: {
+      event_name: event,
+      ref: REF_BY_EVENT[event] ?? panic(`No modelled ref for event ${event}`),
+      sha: "",
+      workflow_sha: "",
+      event: {
+        action,
+        head_commit: { message: "ordinary" },
+        pull_request: { draft: false, labels: [] },
+      },
+    },
+    inputs: {
+      heavy_only: heavyOnly,
+      pr_depth_only: prDepthOnly,
+      query_perf_mode: "compare",
+      sha: "",
+    },
+    vars: {
+      CI_POSTGRES_PR_SELECTION: "",
+      MERGE_QUEUE_DEPTH: "",
+      QUEUE_BROWSER_SUITES: "",
+      ...vars,
+    },
+    steps: modelledSteps,
+    needs: Object.fromEntries(
+      [...new Set([...NEEDS, ...Object.keys(needsResults)])].map((job) => [
+        job,
+        {
+          result: needsResults[job] ?? "success",
+          outputs: job === "ci-plan" ? plan : {},
+        },
+      ]),
+    ),
+    always: () => true,
+    cancelled: () => false,
+    failure: () => false,
+    success: () => true,
+    startsWith: (value: string, prefix: string) =>
+      value.toLowerCase().startsWith(prefix.toLowerCase()),
+    format: (template: string, value: string) =>
+      template.replace("{0}", () => value),
+  };
+};

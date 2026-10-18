@@ -12,6 +12,7 @@ import path from "node:path";
 import { Script } from "node:vm";
 import * as v from "valibot";
 
+import { ciExpressionContext } from "./ci-expression-context";
 import {
   contextFromNested,
   contextWithPlanOutputs,
@@ -161,17 +162,6 @@ const events = [
   { event: "schedule", message: "ordinary" },
   { event: "workflow_dispatch", message: "ordinary" },
 ];
-// Main-only jobs gate on `github.ref`, so every modelled event needs the ref
-// GitHub gives it; an unknown ref would leave those conditions unresolved.
-const REF_BY_EVENT: Record<string, string> = {
-  merge_group: "refs/heads/gh-readonly-queue/main/pr-1-0000000",
-  pull_request: "refs/pull/1/merge",
-  push: "refs/heads/main",
-  schedule: "refs/heads/main",
-  workflow_dispatch: "refs/heads/main",
-};
-const refFor = (event: string) =>
-  REF_BY_EVENT[event] ?? panic(`No modelled ref for event ${event}`);
 type ContextOptions = {
   event: (typeof events)[number];
   variable: string;
@@ -186,83 +176,55 @@ const context = ({
   queueDepth,
   proveFix = false,
   queueBrowserSuites = "",
-}: ContextOptions) => ({
-  github: {
-    event_name: event,
-    ref: refFor(event),
-    event: {
-      action: "synchronize",
-      head_commit: { message },
-      pull_request: {
-        draft: false,
-        labels: proveFix ? [{ name: "prove-fix" }] : [],
-      },
+}: ContextOptions) => {
+  const value = ciExpressionContext({
+    event: event as
+      | "merge_group"
+      | "pull_request"
+      | "push"
+      | "schedule"
+      | "workflow_dispatch",
+    plan: {
+      ...plan,
+      queue_depth: queueDepth,
+      ...(event === "pull_request"
+        ? { fix_tests_on_base_required: "true" }
+        : {}),
     },
-  },
-  vars: {
-    MERGE_QUEUE_DEPTH: variable,
-    QUEUE_BROWSER_SUITES: queueBrowserSuites,
-    CI_POSTGRES_PR_SELECTION: "",
-  },
-  inputs: { heavy_only: false, pr_depth_only: false },
-  steps: {
-    // The completed-depth lookup: no reuse, so a pull request plans its heavy
-    // suites (the pull-request heavy gate reads these outputs).
+    vars: {
+      MERGE_QUEUE_DEPTH: variable,
+      QUEUE_BROWSER_SUITES: queueBrowserSuites,
+    },
+    needsResults: Object.fromEntries(needs.map((job) => [job, "success"])),
+  });
+  value.github.event.head_commit.message = message;
+  value.github.event.pull_request.labels = proveFix
+    ? [{ name: "prove-fix" }]
+    : [];
+  value.steps = {
     "completed-depth": {
       outputs: {
         normal_completion: "required",
         pr_heavy_suites: "run",
+        run_required: value.needs["ci-plan"]?.outputs["run_required"] ?? "true",
       },
     },
     "pilot-queue-plan": { outputs: { queue_jobs: "[]" } },
-  },
-  needs: Object.fromEntries(
-    needs.map((job) => {
-      const outputs: Record<string, string> =
-        job === "ci-plan" ? { ...plan, queue_depth: queueDepth } : {};
-      if (job === "ci-plan" && event === "pull_request") {
-        outputs["fix_tests_on_base_required"] = "true";
-      }
-      return [job, { result: "success", outputs }];
-    }),
-  ),
-  always: () => true,
-  cancelled: () => false,
-  failure: () => false,
-  startsWith: (value: string, prefix: string) => value.startsWith(prefix),
-});
-// ci-plan's run_required comes from the completed-depth lookup; cases set it
-// on the plan outputs, so the lookup reports the same value.
-const withLookup = (value: object) => {
-  const nested = value as {
-    steps?: Record<string, { outputs?: Record<string, string> }>;
-    needs?: Record<string, { outputs?: Record<string, string> }>;
   };
-  const lookup = nested.steps?.["completed-depth"];
-  if (lookup === undefined) {
-    return value;
-  }
-  return {
-    ...nested,
-    steps: {
-      ...nested.steps,
-      "completed-depth": {
-        ...lookup,
-        outputs: {
-          ...lookup.outputs,
-          run_required:
-            nested.needs?.["ci-plan"]?.outputs?.["run_required"] ?? "true",
-        },
-      },
-    },
-  };
+  return value;
 };
 const selected = (condition: string | undefined, value: object) => {
   const expression = condition ?? "true";
+  const nested = value as ReturnType<typeof context>;
+  const lookup = nested.steps?.["completed-depth"];
+  if (lookup !== undefined) {
+    lookup.outputs["run_required"] =
+      nested.needs?.["ci-plan"]?.outputs["run_required"] ?? "true";
+  }
   const result = evaluateExpression(
     expression,
     contextWithPlanOutputs({
-      context: contextFromNested(withLookup(value)),
+      context: contextFromNested(value),
       outputs: planOutputs,
     }),
   );
@@ -337,9 +299,9 @@ test("fast merge-group browser admission follows the planned jobs until normal c
         panic("Missing browser planner context");
       }
       planner.outputs["suite_depth"] = "fast";
-      value.steps["completed-depth"].outputs.normal_completion =
+      value.steps["completed-depth"]!.outputs["normal_completion"] =
         normalCompletion;
-      value.steps["pilot-queue-plan"].outputs.queue_jobs = JSON.stringify(
+      value.steps["pilot-queue-plan"]!.outputs["queue_jobs"] = JSON.stringify(
         queuedBrowser ? ["ci-browser"] : [],
       );
       expect(
