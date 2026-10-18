@@ -13,13 +13,14 @@ type DecisionCitationCourtInput = CourtAbbreviationInput & {
 // separators that identify the case do not ("1/23" is not "12/3").
 const IDENTIFIER_CHARACTER = /[\p{L}\p{N}]/u;
 const SPACING = /\s/u;
+// Every dash a docket may be typed with; the suffix patterns use the same set.
 const DASH = /[\u2010-\u2015\u2212]/u;
-const CASE_NUMBER_SUFFIX = /[-\u2013\u2014]\s*[\p{L}\p{N}]+$/u;
+const CASE_NUMBER_SUFFIX = /[-\u2010-\u2015\u2212]\s*[\p{L}\p{N}]+$/u;
 // A suffix in prose may follow a space ("23 Cdo 651/2023 -123"); spaced, it
 // must start with a digit, so a dash opening a clause ("... 651/2023 - the
 // court held") stays prose.
 const LEADING_CASE_NUMBER_SUFFIX =
-  /^(?:[-\u2013\u2014]\s*[\p{L}\p{N}]+|\s+[-\u2013\u2014]\s*\p{N}[\p{L}\p{N}]*)/u;
+  /^(?:[-\u2010-\u2015\u2212]\s*[\p{L}\p{N}]+|\s+[-\u2010-\u2015\u2212]\s*\p{N}[\p{L}\p{N}]*)/u;
 
 /** The characters that identify a case, with each one's index in `value`. */
 const comparable = (value: string): { text: string; origin: number[] } => {

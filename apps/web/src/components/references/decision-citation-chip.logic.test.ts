@@ -115,6 +115,21 @@ describe("citation text naming its case", () => {
     expect(citationTextNamesCase("Nos. 17\u20131618", "17-1618")).toBe(true);
   });
 
+  test("reads every dash variant as a suffix separator", () => {
+    for (const dash of ["\u2010", "\u2011", "\u2212", "\u2013"]) {
+      const prose = `23 Cdo 651/2023${dash}123`;
+      expect(
+        inlineDecisionCitationPresentation(prose, "23 Cdo 651/2023-7"),
+      ).toEqual({ kind: "chip-after-text", label: prose });
+      expect(
+        inlineDecisionCitationPresentation(
+          `${prose} follows`,
+          "23 Cdo 651/2023",
+        ),
+      ).toEqual({ kind: "chip-replaces-text", before: "", after: " follows" });
+    }
+  });
+
   test("never matches a longer hyphenated identifier outside dated dockets", () => {
     expect(inlineDecisionCitationPresentation("A-123-B held", "A-123")).toEqual(
       { kind: "chip-after-text", label: "A-123-B held" },
