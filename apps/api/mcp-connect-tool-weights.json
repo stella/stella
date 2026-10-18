@@ -272,10 +272,10 @@
     {
       "name": "open_case_law_decision",
       "nameChars": 22,
-      "descriptionChars": 237,
+      "descriptionChars": 234,
       "inputSchemaChars": 470,
-      "totalChars": 729,
-      "estimatedTokens": 283
+      "totalChars": 726,
+      "estimatedTokens": 282
     },
     {
       "name": "open_document_version_upload",
@@ -615,7 +615,7 @@
     }
   ],
   "totals": {
-    "characters": 126191,
-    "estimatedTokens": 50007
+    "characters": 126188,
+    "estimatedTokens": 50006
   }
 }
