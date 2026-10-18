@@ -27,6 +27,22 @@ const nextTurn = async () =>
     setImmediate(resolve);
   });
 
+const completeWithin = async <T>(promise: Promise<T>, label: string) => {
+  const expired = Promise.withResolvers<never>();
+  const timeout = setTimeout(() => {
+    expired.reject(
+      new Error(`Timed out waiting for ${label}`, {
+        cause: new Error("A shared lint request remained unsettled"),
+      }),
+    );
+  }, 1000);
+  try {
+    return await Promise.race([promise, expired.promise]);
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
 const fakeRunnerFor =
   (code: string, reportedText: string) => async (args: readonly string[]) => {
     const formatIndex = args.indexOf("json");
@@ -274,6 +290,65 @@ test("seeded delay orders preserve lines in one held batch", async () => {
       expect(
         sharedRuns.filter((run) => run.code === code).slice(before),
       ).toEqual([{ code, cases: 3 }]);
+    }
+  } finally {
+    restoreRunner();
+  }
+});
+
+test("setup failures settle only their request and never retain the lint slot", async () => {
+  const plugin = "batching-setup-failure";
+  const code = `${plugin}(isolated-setup-failure)`;
+  const reportedText = "reportSetupFailure";
+  const sources = [
+    `const clean = true;`,
+    `${reportedText}();`,
+    `const first = true;\n${reportedText}();`,
+  ] as const;
+  const restoreRunner = setLintRunnerForTest(
+    code,
+    fakeRunnerFor(code, reportedText),
+  );
+
+  try {
+    for (const point of SHARED_AWAIT_POINTS) {
+      holdSharedRunUntilPendingForTest(code, sources.length);
+      const batch = sources.map(async (source, index) =>
+        Result.tryPromise(async () =>
+          lintSingleRule("isolated-setup-failure", source, {
+            plugin,
+            settings: { failedAt: point },
+            delayBeforeSharedAwaitForTest: async (current) => {
+              if (index === 1 && current === point) {
+                throw new Error(`injected ${point} setup failure`);
+              }
+            },
+          }),
+        ),
+      );
+      const results = await completeWithin(
+        Promise.all(batch),
+        `${point} setup-failure batch`,
+      );
+      expect(results[0]?.isOk() && results[0].value).toEqual([]);
+      expect(results[1]?.isErr() && results[1].error.message).toContain(
+        `injected ${point} setup failure`,
+      );
+      expect(results[2]?.isOk() && results[2].value).toEqual([2]);
+
+      holdSharedRunUntilPendingForTest(code, 2);
+      const following = await completeWithin(
+        Promise.all(
+          [sources[0], sources[2]].map(async (source) =>
+            lintSingleRule("isolated-setup-failure", source, {
+              plugin,
+              settings: { followsFailureAt: point },
+            }),
+          ),
+        ),
+        `${point} following shared run`,
+      );
+      expect(following).toEqual([[], [2]]);
     }
   } finally {
     restoreRunner();

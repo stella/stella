@@ -179,10 +179,23 @@ type SharedOutcome =
   | { readonly alone: AloneRun };
 
 type SharedRequest = {
-  readonly lintCase: Promise<LintCase>;
+  readonly preparation: Promise<CasePreparation>;
   readonly onBatchTakenForTest: (() => void) | undefined;
   readonly resolve: (outcome: SharedOutcome) => void;
   readonly reject: (reason: unknown) => void;
+};
+
+type CasePreparation =
+  | { readonly status: "ready"; readonly lintCase: LintCase }
+  | { readonly status: "failed"; readonly error: unknown };
+
+const settlePreparation = async (
+  prepare: () => Promise<LintCase>,
+): Promise<CasePreparation> => {
+  const result = await Result.tryPromise(prepare);
+  return Result.isError(result)
+    ? { status: "failed", error: result.error }
+    : { status: "ready", lintCase: result.value };
 };
 
 /**
@@ -262,18 +275,15 @@ export const holdSharedRunUntilPendingForTest = (
 };
 
 const lintTogether = async (
-  requests: readonly SharedRequest[],
+  lintCases: readonly LintCase[],
   code: string,
 ): Promise<SharedOutcome[]> => {
-  const lintCases = await Promise.all(
-    requests.map(async ({ lintCase }) => await lintCase),
-  );
   const [first] = lintCases;
   if (first === undefined) {
     return [];
   }
-  claimedBatches.push({ code, cases: requests.length });
-  if (requests.length > 1) {
+  claimedBatches.push({ code, cases: lintCases.length });
+  if (lintCases.length > 1) {
     const sourceFiles = lintCases.map(({ sourceFile }) => sourceFile);
     const lines = sharedLines(
       await lintRunner(code)(
@@ -284,7 +294,7 @@ const lintTogether = async (
       code,
     );
     if (lines !== null) {
-      sharedRuns.push({ code, cases: requests.length });
+      sharedRuns.push({ code, cases: lintCases.length });
       return lintCases.map((lintCase, index) => ({
         shared: {
           lines: lines[index] ?? [],
@@ -322,16 +332,15 @@ export const lintsAlone = ({
 const lintShared = (
   configKey: string,
   code: string,
+  prepare: () => Promise<LintCase>,
   onBatchTakenForTest?: () => void,
 ): {
   readonly outcome: Promise<SharedOutcome>;
-  readonly setLintCase: (lintCase: LintCase) => void;
-  readonly rejectLintCase: (reason: unknown) => void;
 } => {
-  const lintCase = Promise.withResolvers<LintCase>();
   const outcome = new Promise<SharedOutcome>((resolve, reject) => {
+    let claimedRequests: readonly SharedRequest[] = [];
     const request = {
-      lintCase: lintCase.promise,
+      preparation: settlePreparation(prepare),
       onBatchTakenForTest,
       resolve,
       reject,
@@ -359,12 +368,30 @@ const lintShared = (
         pendingGates.delete(code);
       }
       const requests = pendingByConfig.get(configKey) ?? [];
+      claimedRequests = requests;
       pendingByConfig.delete(configKey);
       requests.at(0)?.onBatchTakenForTest?.();
-      const outcomes = await Result.tryPromise(async () =>
-        lintTogether(requests, code),
+      const preparations = await Promise.all(
+        requests.map(async ({ preparation }) => await preparation),
       );
-      for (const [index, queuedRequest] of requests.entries()) {
+      const readyRequests: SharedRequest[] = [];
+      const lintCases: LintCase[] = [];
+      for (const [index, preparation] of preparations.entries()) {
+        const queuedRequest = requests[index];
+        if (queuedRequest === undefined) {
+          continue;
+        }
+        if (preparation.status === "failed") {
+          queuedRequest.reject(preparation.error);
+        } else {
+          readyRequests.push(queuedRequest);
+          lintCases.push(preparation.lintCase);
+        }
+      }
+      const outcomes = await Result.tryPromise(async () =>
+        lintTogether(lintCases, code),
+      );
+      for (const [index, queuedRequest] of readyRequests.entries()) {
         if (Result.isError(outcomes)) {
           queuedRequest.reject(outcomes.error);
         } else {
@@ -376,13 +403,17 @@ const lintShared = (
           }
         }
       }
-    }).catch(reject);
+    }).catch((error) => {
+      if (claimedRequests.length === 0) {
+        reject(error);
+        return;
+      }
+      for (const claimedRequest of claimedRequests) {
+        claimedRequest.reject(error);
+      }
+    });
   });
-  return {
-    outcome,
-    setLintCase: lintCase.resolve,
-    rejectLintCase: lintCase.reject,
-  };
+  return { outcome };
 };
 
 const recordCoverage = (ruleId: string, lines: readonly number[]) => {
@@ -440,12 +471,6 @@ export const runSingleRule = async (
   const alone = lintsAlone({ cwd, overrides, fix });
   const fixedConfig =
     ruleOptionsForRoot === undefined ? makeConfig(ruleOptions) : undefined;
-  // Register before any filesystem await. The slot takes one atomic snapshot
-  // of these requests; readiness affects execution, never batch membership.
-  const sharedRequest =
-    !alone && fixedConfig !== undefined
-      ? lintShared(fixedConfig, code, onSharedBatchTakenForTest)
-      : undefined;
   const delay = async (
     point:
       | "mkdtemp"
@@ -458,16 +483,20 @@ export const runSingleRule = async (
       await delayBeforeSharedAwaitForTest?.(point);
     }
   };
-  // Override globs must use the real cwd when the temporary root is a symlink.
-  await delay("mkdtemp");
-  const temporaryDirectory = await mkdtemp(
-    path.join(tmpdir(), `stella-${ruleName}-`),
-  );
-  await delay("realpath");
-  const directory = await realpath(temporaryDirectory);
-  const options = ruleOptionsForRoot?.(directory) ?? ruleOptions;
-  const lintResult = await Result.tryPromise(async () => {
+  let directory: string | undefined;
+  let preparedConfig: string | undefined;
+  const prepare = async (): Promise<LintCase> => {
+    // Override globs must use the real cwd when the temporary root is a symlink.
+    await delay("mkdtemp");
+    const temporaryDirectory = await mkdtemp(
+      path.join(tmpdir(), `stella-${ruleName}-`),
+    );
+    directory = temporaryDirectory;
+    await delay("realpath");
+    directory = await realpath(temporaryDirectory);
+    const options = ruleOptionsForRoot?.(directory) ?? ruleOptions;
     const config = fixedConfig ?? makeConfig(options);
+    preparedConfig = config;
     const configPath = path.join(directory, "oxlint.json");
     await delay("config-write");
     await Bun.write(configPath, config);
@@ -482,23 +511,38 @@ export const runSingleRule = async (
       sourcePath,
     };
     await delay("shared-ready");
+    return lintCase;
+  };
+  // Register before preparation starts. The slot takes one atomic snapshot of
+  // requests; readiness and failure affect execution, never batch membership.
+  const sharedRequest =
+    !alone && fixedConfig !== undefined
+      ? lintShared(fixedConfig, code, prepare, onSharedBatchTakenForTest)
+      : undefined;
+  const lintResult = await Result.tryPromise(async () => {
+    if (sharedRequest !== undefined) {
+      return await sharedRequest.outcome;
+    }
+    const lintCase = await prepare();
     if (alone) {
       return {
         alone: await withLintSlot(code, async () => lintAlone(lintCase, code)),
       };
     }
-    if (sharedRequest !== undefined) {
-      sharedRequest.setLintCase(lintCase);
-      return await sharedRequest.outcome;
+    if (preparedConfig === undefined) {
+      return panic("lint case completed without a prepared configuration");
     }
-    const lateRequest = lintShared(config, code, onSharedBatchTakenForTest);
-    lateRequest.setLintCase(lintCase);
+    const lateRequest = lintShared(
+      preparedConfig,
+      code,
+      async () => lintCase,
+      onSharedBatchTakenForTest,
+    );
     return await lateRequest.outcome;
   });
-  if (Result.isError(lintResult)) {
-    sharedRequest?.rejectLintCase(lintResult.error);
+  if (directory !== undefined) {
+    await rm(directory, { force: true, recursive: true });
   }
-  await rm(directory, { force: true, recursive: true });
   if (Result.isError(lintResult)) {
     return panic(`oxlint run failed: ${lintResult.error.message}`);
   }
