@@ -367,6 +367,11 @@ export const CitedProvisionExpansion = ({
     passage.blocks.length > 0;
   const toggleExpanded = () => setExpanded((current) => !current);
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    // A key pressed on a control inside the card belongs to that control:
+    // only the card's own focus toggles it.
+    if (event.target !== event.currentTarget) {
+      return;
+    }
     if (event.key !== "Enter" && event.key !== " ") {
       return;
     }

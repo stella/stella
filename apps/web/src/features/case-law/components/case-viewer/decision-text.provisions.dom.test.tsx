@@ -416,6 +416,29 @@ describe("compact provision cards", () => {
     }
   });
 
+  test("a key on a control inside the card is that control's, not the card's", async () => {
+    const view = await renderDecision(true);
+    const card =
+      firstCard(view) ?? panic("Expected an expanded provision card");
+    expect(card.getAttribute("aria-expanded")).toBe("false");
+    const open = within(card as HTMLElement).getByRole("button", {
+      name: messages.statutes.openProvision,
+    });
+    // Enter on the nested button leaves the card as it was: the browser's own
+    // activation of that button is not cancelled by the card.
+    const nestedKey = new KeyboardEvent("keydown", {
+      bubbles: true,
+      cancelable: true,
+      key: "Enter",
+    });
+    open.dispatchEvent(nestedKey);
+    expect(nestedKey.defaultPrevented).toBe(false);
+    expect(card.getAttribute("aria-expanded")).toBe("false");
+    // Enter on the card itself still toggles it.
+    fireEvent.keyDown(card, { key: "Enter" });
+    expect(card.getAttribute("aria-expanded")).toBe("true");
+  });
+
   test("shows where a provision sits only where its label does not say so", async () => {
     const placed = withTarget((target) => ({
       ...target,
