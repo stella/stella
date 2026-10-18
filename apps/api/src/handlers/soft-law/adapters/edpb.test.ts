@@ -92,11 +92,12 @@ test.each(["Tracked changes", "Track changes", "track-changes version"])(
     ).first();
     const marked = original.clone();
     const anchor = marked.find(".file__title a").first();
+    const href = anchor.attr("href");
+    if (!href) {
+      panic("Official EDPB fixture has no document href");
+    }
     anchor.text(`${anchor.text()} ${label}`);
-    anchor.attr(
-      "href",
-      `${anchor.attr("href")?.replace(/\.pdf/u, "_tracked.pdf")}`,
-    );
+    anchor.attr("href", href.replace(/\.pdf/u, "_tracked.pdf"));
     marked.find("option[data-url]").remove();
     original.after(marked);
 

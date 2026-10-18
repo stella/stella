@@ -16,6 +16,7 @@ import {
   SoftLawIngestionError,
   SoftLawItemError,
   SOFT_LAW_BATCH_LIMIT,
+  softLawItemErrorRejection,
 } from "@/api/lib/legal-search/soft-law-types";
 import type {
   SoftLawEntry,
@@ -705,15 +706,6 @@ export const wp29Adapter = {
       return detailResponse;
     }
     const detail = detailResponse.value;
-    const parsedDocument = parseWp29NewsroomDocument({
-      html: new TextDecoder().decode(detail.bytes),
-      url,
-      indexUrl,
-    });
-    if (parsedDocument.status === "error") {
-      return parsedDocument;
-    }
-    const entries = parsedDocument.value;
     const nextCategory = state.category + 1;
     let nextCursor: string | null = null;
     if (state.offset + 1 < items.length) {
@@ -721,21 +713,39 @@ export const wp29Adapter = {
     } else if (nextCategory < CATEGORIES.length) {
       nextCursor = `newsroom:${nextCategory}:0`;
     }
+    const sourceRaw = [
+      {
+        role: "source-page-0",
+        contentBase64: Buffer.from(index.bytes).toString("base64"),
+        contentType: index.contentType,
+      },
+      {
+        role: "source-page-1",
+        contentBase64: Buffer.from(detail.bytes).toString("base64"),
+        contentType: detail.contentType,
+      },
+    ];
+    const parsedDocument = parseWp29NewsroomDocument({
+      html: new TextDecoder().decode(detail.bytes),
+      url,
+      indexUrl,
+    });
+    if (parsedDocument.status === "error") {
+      const rejection = softLawItemErrorRejection({
+        error: parsedDocument.error,
+        url,
+        sourceRaw,
+      });
+      if (rejection) {
+        return Result.ok({ entries: [rejection], nextCursor });
+      }
+      return parsedDocument;
+    }
+    const entries = parsedDocument.value;
     return Result.ok({
       entries: entries.map((entry) => ({
         ...entry,
-        sourceRaw: [
-          {
-            role: "source-page-0",
-            contentBase64: Buffer.from(index.bytes).toString("base64"),
-            contentType: index.contentType,
-          },
-          {
-            role: "source-page-1",
-            contentBase64: Buffer.from(detail.bytes).toString("base64"),
-            contentType: detail.contentType,
-          },
-        ],
+        sourceRaw,
       })),
       nextCursor,
     });

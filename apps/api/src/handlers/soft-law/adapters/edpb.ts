@@ -16,10 +16,10 @@ import {
   SoftLawIngestionError,
   SoftLawItemError,
   SOFT_LAW_BATCH_LIMIT,
+  softLawItemErrorRejection,
 } from "@/api/lib/legal-search/soft-law-types";
 import type {
   SoftLawEntry,
-  SoftLawDiscoveryEntry,
   SoftLawMetadata,
   SoftLawSourceAdapter,
 } from "@/api/lib/legal-search/soft-law-types";
@@ -656,18 +656,14 @@ export const edpbAdapter = {
         sourcePages: [indexUrl, detailUrl],
       });
       if (parsed.isErr()) {
-        if (!SoftLawItemError.is(parsed.error)) {
+        const rejection = softLawItemErrorRejection({
+          error: parsed.error,
+          url: detailUrl,
+          sourceRaw: captured,
+        });
+        if (!rejection) {
           return yield* Result.err(parsed.error);
         }
-        const rejection: SoftLawDiscoveryEntry = {
-          type: "rejected",
-          url: detailUrl,
-          rejection: {
-            tag: parsed.error.tag,
-            reason: parsed.error.message,
-          },
-          sourceRaw: captured,
-        };
         return Result.ok({
           entries: [rejection],
           nextCursor,

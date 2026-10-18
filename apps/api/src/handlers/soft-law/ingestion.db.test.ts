@@ -36,6 +36,7 @@ import { SoftLawIngestionError } from "@/api/lib/legal-search/soft-law-types";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 
+import { wp29Adapter } from "./adapters/wp29";
 import { runSoftLawIngestion } from "./ingestion";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -447,6 +448,86 @@ if (!databaseUrl || !enabled) {
               reason: "EDPB document language is not stated",
             },
           },
+        });
+      }));
+
+    test("a malformed WP29 detail is recorded while a later publication is ingested across resumed runs", async () =>
+      await withSource(databaseUrl, async ({ db, sourceId, run }) => {
+        const indexUrl =
+          "https://ec.europa.eu/newsroom/article29/items/itemType/1360";
+        const malformedUrl =
+          "https://ec.europa.eu/newsroom/article29/redirection/item/1";
+        const validUrl =
+          "https://ec.europa.eu/newsroom/article29/redirection/item/2";
+        const pdfUrl =
+          "https://ec.europa.eu/newsroom/article29/files/valid.pdf";
+        const listing = `<div id="leftentityselect"></div><main id="main-content"><a href="${malformedUrl}">Malformed</a><a href="${validUrl}">Valid</a></main>`;
+        const detail = (language: string) =>
+          `<main id="main-content"><h1 class="ecl-page-header__title">Guidelines WP 123</h1><div class="ecl-file"><span class="ecl-file__meta">PDF</span><span class="ecl-file__language">${language}</span><a class="ecl-file__download" href="${pdfUrl}">Download</a></div></main>`;
+        const responses = new Map([
+          [indexUrl, { body: listing, contentType: "text/html" }],
+          [malformedUrl, { body: detail("Unknown"), contentType: "text/html" }],
+          [validUrl, { body: detail("English"), contentType: "text/html" }],
+          [pdfUrl, { body: "%PDF-1.4\n%%EOF", contentType: "application/pdf" }],
+        ]);
+        const requested: string[] = [];
+        const request: typeof fetchWithTimeout = async (input) => {
+          let url: string;
+          if (typeof input === "string") {
+            url = input;
+          } else if (input instanceof URL) {
+            url = input.href;
+          } else {
+            url = input.url;
+          }
+          requested.push(url);
+          const response = responses.get(url);
+          if (!response) {
+            return new Response("missing", { status: 404 });
+          }
+          return new Response(response.body, {
+            headers: { "content-type": response.contentType },
+          });
+        };
+        const sourceAdapter = {
+          ...wp29Adapter,
+          discover: async (
+            options: Parameters<SoftLawSourceAdapter["discover"]>[0],
+          ) => {
+            const cursor = options.cursor ?? "newsroom:0:0";
+            const result = await wp29Adapter.discover({ ...options, cursor });
+            if (result.isErr() || cursor !== "newsroom:0:1") {
+              return result;
+            }
+            return Result.ok({ ...result.value, nextCursor: null });
+          },
+        } satisfies SoftLawSourceAdapter;
+
+        expect(await run(sourceAdapter, { request })).toEqual({
+          status: "complete",
+        });
+        expect(await run(sourceAdapter, { request })).toEqual({
+          status: "complete",
+        });
+        expect(requested.filter((url) => url === malformedUrl)).toHaveLength(2);
+        expect(requested.filter((url) => url === validUrl)).toHaveLength(2);
+        expect(
+          await db
+            .select()
+            .from(softLawDocuments)
+            .where(eq(softLawDocuments.sourceId, sourceId)),
+        ).toHaveLength(1);
+        expect(
+          (
+            await db
+              .select()
+              .from(softLawIngestionAttempts)
+              .where(eq(softLawIngestionAttempts.sourceId, sourceId))
+          ).find((attempt) => attempt.url === malformedUrl),
+        ).toMatchObject({
+          status: "rejected",
+          tag: "invalid_document",
+          entry: { type: "rejected", url: malformedUrl },
         });
       }));
 

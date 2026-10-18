@@ -251,6 +251,24 @@ export class SoftLawItemError extends TaggedError("SoftLawItemError")<{
   message: string;
   tag: Exclude<(typeof SOFT_LAW_ITEM_TAGS)[number], "identity_collision">;
 }> {}
+type SoftLawItemErrorRejectionOptions = {
+  error: unknown;
+  url: string;
+  sourceRaw: NonNullable<SoftLawRejectedEntry["sourceRaw"]>;
+};
+export const softLawItemErrorRejection = ({
+  error,
+  url,
+  sourceRaw,
+}: SoftLawItemErrorRejectionOptions): SoftLawRejectedEntry | null =>
+  SoftLawItemError.is(error)
+    ? {
+        type: "rejected",
+        url,
+        rejection: { tag: error.tag, reason: error.message },
+        sourceRaw,
+      }
+    : null;
 export class SoftLawListingIncompleteError extends TaggedError(
   "SoftLawListingIncompleteError",
 )<{ message: string }> {}

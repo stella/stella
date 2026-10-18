@@ -1,6 +1,9 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { SoftLawAccessError } from "@/api/lib/legal-search/soft-law-access-types";
+import type { SoftLawFetch } from "@/api/lib/legal-search/soft-law-access-types";
+
 import {
   wp29Adapter,
   parseWp29Archive,
@@ -23,7 +26,93 @@ const TRANSPARENCY =
 const parseTransparency = (html: string) =>
   parseWp29NewsroomDocument({ html, url: TRANSPARENCY, indexUrl: GUIDELINES });
 
+const fakeFetch = (
+  responses: ReadonlyMap<string, { bytes: Uint8Array; contentType: string }>,
+): SoftLawFetch =>
+  Object.assign(
+    async (url: string) => {
+      const response = responses.get(url);
+      return response
+        ? Result.ok(response)
+        : Result.err(
+            new SoftLawAccessError({ message: "Fixture response unavailable" }),
+          );
+    },
+    {
+      getBlockReason: () => null,
+      getWindowState: () => "open" as const,
+      getLeaseState: () => "active" as const,
+    },
+  );
+
 describe("WP29 official source shapes", () => {
+  test("newsroom discovery rejects one malformed detail and continues from its cursor", async () => {
+    const malformedUrl =
+      "https://ec.europa.eu/newsroom/article29/redirection/item/1";
+    const validUrl =
+      "https://ec.europa.eu/newsroom/article29/redirection/item/2";
+    const listing = `<div id="leftentityselect"></div><main id="main-content"><a href="${malformedUrl}">Malformed</a><a href="${validUrl}">Valid</a></main>`;
+    const detail = (language: string, pdf: string) =>
+      `<main id="main-content"><h1 class="ecl-page-header__title">Guidelines WP 123</h1><div class="ecl-file"><span class="ecl-file__meta">PDF</span><span class="ecl-file__language">${language}</span><a class="ecl-file__download" href="${pdf}">Download</a></div></main>`;
+    const responses = new Map([
+      [GUIDELINES, { bytes: Buffer.from(listing), contentType: "text/html" }],
+      [
+        malformedUrl,
+        {
+          bytes: Buffer.from(
+            detail("Unknown", "/newsroom/article29/files/malformed.pdf"),
+          ),
+          contentType: "text/html",
+        },
+      ],
+      [
+        validUrl,
+        {
+          bytes: Buffer.from(
+            detail("English", "/newsroom/article29/files/valid.pdf"),
+          ),
+          contentType: "text/html",
+        },
+      ],
+    ]);
+
+    const rejected = (
+      await wp29Adapter.discover({
+        cursor: "newsroom:0:0",
+        signal: new AbortController().signal,
+        fetch: fakeFetch(responses),
+      })
+    ).unwrap();
+    expect(rejected).toMatchObject({
+      entries: [
+        {
+          type: "rejected",
+          url: malformedUrl,
+          rejection: {
+            tag: "invalid_document",
+            reason: "WP29 PDF URL or language is missing",
+          },
+          sourceRaw: [{ role: "source-page-0" }, { role: "source-page-1" }],
+        },
+      ],
+      nextCursor: "newsroom:0:1",
+    });
+
+    const resumed = (
+      await wp29Adapter.discover({
+        cursor: rejected.nextCursor,
+        signal: new AbortController().signal,
+        fetch: fakeFetch(responses),
+      })
+    ).unwrap();
+    expect(resumed.entries).toMatchObject([
+      {
+        type: "document",
+        url: "https://ec.europa.eu/newsroom/article29/files/valid.pdf",
+      },
+    ]);
+  });
+
   test("the body acronym is not mistaken for an instrument reference", () => {
     const html = `<div class="contentsection block"><h2>2018</h2><ul><li><a class="link-ico" href="/justice/article-29/documentation/opinion-recommendation/files/2018/example_en.pdf"><span>WP29 transparency opinion</span></a></li></ul></div>`;
     const entry = parseWp29Archive(html).unwrap().at(0);
