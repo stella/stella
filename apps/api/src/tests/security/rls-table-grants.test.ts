@@ -164,6 +164,9 @@ const POST_BOOTSTRAP_INSERT_ONLY_TABLES = new Set(["system_audit_runs"]);
 const POST_BOOTSTRAP_MUTABLE_PROJECTION_TABLES = new Set([
   "time_entry_timer_states",
   "time_daily_targets",
+  // Account export ledger: request transactions create and transition rows;
+  // only the table owner deletes them, during account erasure.
+  "account_exports",
 ]);
 const MUTABLE_PROJECTION_PRIVILEGES = new Set(["select", "insert", "update"]);
 
