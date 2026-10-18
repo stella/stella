@@ -59,6 +59,10 @@ export const handleAuthMetadataPreflightRequest = (
   });
 };
 
+export const authMetadataPreflightRoute = new Elysia().onRequest(
+  ({ request, set }) => handleAuthMetadataPreflightRequest(request, set),
+);
+
 const getSocialAuthCapabilities = () => ({
   google: !!(env.GOOGLE_AUTH_CLIENT_ID && env.GOOGLE_AUTH_CLIENT_SECRET),
   microsoft: !!(
