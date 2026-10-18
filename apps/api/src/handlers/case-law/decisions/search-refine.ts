@@ -1,8 +1,8 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
+import { AI_FAILURE_CODES } from "@stll/api-contract";
 import {
-  AI_FAILURE_CODES,
   PUBLIC_CASE_LAW_COUNTRIES,
   publicCaseLawCountry,
 } from "@stll/api-contract/case-law-launch-readiness";
