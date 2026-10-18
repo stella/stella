@@ -111,7 +111,6 @@ import { NeedsMatterCard } from "@/components/chat/needs-matter-card";
 import type { CreateDocumentDestination } from "@/components/chat/needs-matter-card";
 import { rehypeAnonSpans } from "@/components/chat/rehype-anon-spans";
 import { RequestSecretCard } from "@/components/chat/request-secret-card";
-import { SourceChips } from "@/components/chat/source-chips";
 import { SpawnSubagentsCard } from "@/components/chat/spawn-subagents-card";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import {
@@ -130,6 +129,7 @@ import {
   mentionAttrsToHref,
   mentionTagAttrs,
 } from "@/components/references/reference.logic";
+import { AssistantAnswerMetadata } from "@/features/chat/answer-edit/assistant-answer-metadata";
 import {
   findChatRequestError,
   type ChatRequestError,
@@ -430,11 +430,14 @@ export const ChatThreadMessages = ({
                           onResend={onResend}
                           threadRef={threadRef}
                         />
-                        <SourceChips
-                          messageId={message.id}
-                          parts={message.parts}
-                          sourceDocuments={message.metadata?.sourceDocuments}
+                        <AssistantAnswerMetadata
+                          message={message}
                           workspaceId={workspaceId}
+                          threadId={threadRef?.threadId}
+                          disabled={
+                            generationActive || !!awaitedAssistantMessageId
+                          }
+                          onAnswerEdited={onAnswerEdited}
                         />
                       </div>
                     </ChatAnswerDecisionProvider>
