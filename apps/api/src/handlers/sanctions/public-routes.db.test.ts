@@ -1308,10 +1308,6 @@ describe("public sanctions search parity", () => {
           analytics.restore();
           logger.restore();
         }
-        // The worker phase reads and compiles the full corpus. Retire it before
-        // the product phase compiles the independently loaded, digest-checked rows.
-        await pool.close();
-        pools.delete(pool);
         const parityCaches = {
           product: createSanctionsIndexCache({
             build: (lists) => {
