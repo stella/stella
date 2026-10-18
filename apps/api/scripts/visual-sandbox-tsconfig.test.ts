@@ -5,7 +5,6 @@ import ts from "typescript";
 
 const API_ROOT = path.resolve(import.meta.dir, "..");
 const API_CONFIG = path.join(API_ROOT, "tsconfig.json");
-const PATHS_CONFIG = "./tsconfig.paths.json";
 const VISUAL_SANDBOX_CONFIG = path.join(
   API_ROOT,
   "tsconfig.visual-sandbox.json",
@@ -24,13 +23,29 @@ const readConfig = (filename: string) => {
   return config.config;
 };
 
-test("API projects inherit one path-alias configuration", () => {
-  expect(readConfig(API_CONFIG).extends).toBe(PATHS_CONFIG);
-  expect(readConfig(VISUAL_SANDBOX_CONFIG).extends).toBe(PATHS_CONFIG);
+const apiAliases = (filename: string): Record<string, string[]> => {
+  const paths = readConfig(filename).compilerOptions?.paths;
+  const aliases: Record<string, string[]> = {};
+  for (const [alias, targets] of Object.entries(paths ?? {})) {
+    if (!alias.startsWith("@/api/")) {
+      continue;
+    }
+    if (
+      !Array.isArray(targets) ||
+      !targets.every((target) => typeof target === "string")
+    ) {
+      throw new Error(`${filename}: ${alias} must map to an array of paths`);
+    }
+    aliases[alias] = targets;
+  }
+  return aliases;
+};
+
+test("the visual sandbox mirrors every API path alias", () => {
+  expect(apiAliases(VISUAL_SANDBOX_CONFIG)).toEqual(apiAliases(API_CONFIG));
 });
 
-test("the visual sandbox resolves API aliases", () => {
-  const filename = path.resolve(VISUAL_SANDBOX_CONFIG);
+const resolveApiAlias = (filename: string) => {
   const config = readConfig(filename);
   const parsed = ts.parseJsonConfigFileContent(
     config,
@@ -52,7 +67,11 @@ test("the visual sandbox resolves API aliases", () => {
     );
   }
 
-  expect(resolved.resolvedFileName).toBe(
-    path.join(API_ROOT, "src/lib/constant-map.ts"),
+  return resolved.resolvedFileName;
+};
+
+test("the visual sandbox resolves API aliases identically to the API", () => {
+  expect(resolveApiAlias(VISUAL_SANDBOX_CONFIG)).toBe(
+    resolveApiAlias(API_CONFIG),
   );
 });
