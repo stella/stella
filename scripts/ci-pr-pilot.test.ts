@@ -274,7 +274,8 @@ test("off and unset preserve today's job plan across every event and depth", asy
         ),
         "postgres-service-suites",
         "generated-sources",
-
+        "migration-check",
+        "migration-apply-fresh",
         "pr-heavy-gate",
       ]),
     ].toSorted(),

@@ -6687,6 +6687,7 @@ jobs:
     needs: ci-plan
     if: >-
       always()
+      && inputs.pr_depth_only != true
       && needs.ci-plan.result == 'success'
       && needs.ci-plan.outputs.run_required != 'false'
       && needs.ci-plan.outputs.trusted == 'true'
@@ -6734,6 +6735,7 @@ jobs:
     needs: ci-plan
     if: >-
       always()
+      && inputs.pr_depth_only != true
       && needs.ci-plan.result == 'success'
       && needs.ci-plan.outputs.run_required != 'false'
       && needs.ci-plan.outputs.trusted == 'true'
