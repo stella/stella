@@ -18,7 +18,10 @@ import { Result, panic } from "better-result";
 // parser-output-unchanged: retry delays use the shared arithmetic owner; parsed content is unchanged.
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import { fetchWithTimeout, type FetchWithTimeoutInit } from "@stll/fetch";
-import { createPolitePublisherFetch } from "@stll/fetch/publisher";
+import {
+  createPolitePublisherFetch,
+  PublisherHopRefusedError,
+} from "@stll/fetch/publisher";
 import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 import { Temporal } from "@stll/time";
@@ -117,6 +120,8 @@ export type PublisherFetchInit = FetchWithTimeoutInit & {
   refusalMode?: PublisherRefusalMode | undefined;
   /** Publisher-defined redirect target; use manual redirects to inspect it. */
   isRateLimitRedirect?: (response: Response) => boolean;
+  /** Policy transport override for deterministic boundary tests. */
+  publisherFetch?: typeof auditedPublisherFetch;
 };
 
 /**
@@ -252,6 +257,7 @@ const fetchPublisherRequest = async (
     fetchStage,
     expectedContentType,
     isRateLimitRedirect: _isRateLimitRedirect,
+    publisherFetch = auditedPublisherFetch,
     ...requestInit
   } = init;
   const gateId = publisherGate ?? ADAPTER_PUBLISHER_GATES[adapterKey];
@@ -262,17 +268,42 @@ const fetchPublisherRequest = async (
   ) => {
     // Each request, including a redirect or backoff attempt, is observed.
     const sendRequest = async () => {
-      const outcome = await auditedPublisherFetch(target, {
+      const outcome = await publisherFetch(target, {
         init: { ...requestOptions, signal: requestOptions.signal ?? null },
         userAgent:
           new Headers(requestOptions.headers).get("User-Agent") ??
           INGESTION_USER_AGENT,
         enforcement: "audit",
+        beforeHop: async (hopUrl) =>
+          await Result.gen(async function* () {
+            yield* publisherTarget(adapterKey, hopUrl);
+            if (controls !== undefined) {
+              yield* Result.await(controls.check());
+              yield* Result.await(controls.chargeRequest());
+            }
+            yield* Result.await(
+              Result.tryPromise({
+                try: async () =>
+                  await reservePublisherGateSlot(gateId, requestOptions.signal),
+                catch: (error) => error,
+              }),
+            );
+            if (controls !== undefined) {
+              yield* controls.checkBeforeSend();
+            }
+            return Result.ok(undefined);
+          }),
       });
       if (Result.isError(outcome)) {
-        return panic(
-          "Audit-mode publisher policy unexpectedly refused a request",
-        );
+        if (PublisherHopRefusedError.is(outcome.error)) {
+          throw outcome.error.cause;
+        }
+        throw new AdapterFetchError({
+          message: "Publisher request failed",
+          adapterKey,
+          cursor: null,
+          cause: outcome.error,
+        });
       }
       return outcome.value.response;
     };
@@ -286,7 +317,6 @@ const fetchPublisherRequest = async (
     });
   };
   if (controls === undefined) {
-    await reservePublisherGateSlot(gateId, requestInit.signal);
     return await request(url, requestInit);
   }
   const fetchTarget = async (
@@ -294,17 +324,7 @@ const fetchPublisherRequest = async (
     redirects: number,
   ): Promise<Result<Response, unknown>> =>
     await Result.gen(async function* () {
-      yield* Result.await(controls.check());
       const target = yield* publisherTarget(adapterKey, requestedTarget);
-      yield* Result.await(controls.chargeRequest());
-      yield* Result.await(
-        Result.tryPromise({
-          try: async () =>
-            await reservePublisherGateSlot(gateId, requestInit.signal),
-          catch: (error) => error,
-        }),
-      );
-      yield* controls.checkBeforeSend();
       const fetched = await Result.tryPromise({
         try: async () =>
           await request(target, { ...requestInit, redirect: "manual" }),

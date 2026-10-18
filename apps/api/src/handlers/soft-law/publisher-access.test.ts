@@ -164,6 +164,85 @@ test("publisher fetch applies the contact user agent, rejects redirects and fore
   ).toBeInstanceOf(SoftLawAccessError);
 });
 
+test("same-origin redirects reserve and renew authorization before every hop", async () => {
+  const events: string[] = [];
+  let resourceRequests = 0;
+  const fetch = createSoftLawFetch({
+    policy,
+    signal: new AbortController().signal,
+    reserve: async () => {
+      events.push("reserve");
+    },
+    beforeRequest: async () => {
+      events.push("authorize");
+      return Result.ok(undefined);
+    },
+    validateTarget: async (url) =>
+      Result.ok({ addresses: [], url: new URL(url) }),
+    request: async (input) => {
+      const url = new URL(input instanceof Request ? input.url : input);
+      if (url.pathname === "/robots.txt") {
+        return new Response(null, { status: 404 });
+      }
+      resourceRequests++;
+      events.push(`request:${url.pathname}`);
+      return resourceRequests === 1
+        ? new Response(null, {
+            status: 302,
+            headers: { location: "/final" },
+          })
+        : new Response("document");
+    },
+  });
+  expect(
+    new TextDecoder().decode(
+      (await fetch("https://uoou.gov.cz/start")).unwrap().bytes,
+    ),
+  ).toBe("document");
+  expect(events).toEqual([
+    "reserve",
+    "authorize",
+    "request:/start",
+    "reserve",
+    "authorize",
+    "request:/final",
+  ]);
+});
+
+test("a redirect hop with refused authorization never reaches transport", async () => {
+  let authorizations = 0;
+  const requested: string[] = [];
+  const fetch = createSoftLawFetch({
+    policy,
+    signal: new AbortController().signal,
+    reserve: async () => {},
+    beforeRequest: async () => {
+      authorizations++;
+      return authorizations === 1
+        ? Result.ok(undefined)
+        : Result.err(new SoftLawAccessError({ message: "Lease lost" }));
+    },
+    validateTarget: async (url) =>
+      Result.ok({ addresses: [], url: new URL(url) }),
+    request: async (input) => {
+      const url = new URL(input instanceof Request ? input.url : input);
+      if (url.pathname === "/robots.txt") {
+        return new Response(null, { status: 404 });
+      }
+      requested.push(url.pathname);
+      return new Response(null, {
+        status: 302,
+        headers: { location: "/final" },
+      });
+    },
+  });
+  expect(fetchError(await fetch("https://uoou.gov.cz/start"))).toBeInstanceOf(
+    SoftLawAccessError,
+  );
+  expect(requested).toEqual(["/start"]);
+  expect(fetch.getLeaseState()).toBe("lost");
+});
+
 test("off-peak windows use the declared zone across midnight", () => {
   const night = {
     ...policy,

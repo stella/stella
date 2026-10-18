@@ -4781,6 +4781,7 @@ const config = defineConfig({
     },
     {
       files: [
+        ".oxlint-plugins/__fixtures__/require-polite-publisher-fetch.fixture.ts",
         "apps/api/src/handlers/case-law/ingestion/**/*.{ts,tsx}",
         "apps/api/src/handlers/soft-law/**/*.{ts,tsx}",
         "scripts/**/*.{ts,tsx}",

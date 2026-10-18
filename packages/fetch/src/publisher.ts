@@ -53,6 +53,9 @@ export class PublisherBodyNotReplayableError extends TaggedError(
 export class PublisherRequestAbortedError extends TaggedError(
   "publisher_request_aborted",
 )<RefusalFields & { cause: unknown }> {}
+export class PublisherHopRefusedError extends TaggedError(
+  "publisher_hop_refused",
+)<RefusalFields & { hopIndex: number; cause: unknown }> {}
 export type PublisherPolicyError =
   | RobotsDisallowedError
   | AgentExcludedError
@@ -61,7 +64,8 @@ export type PublisherPolicyError =
   | PublisherRedirectLimitError
   | PublisherTargetRefusedError
   | PublisherBodyNotReplayableError
-  | PublisherRequestAbortedError;
+  | PublisherRequestAbortedError
+  | PublisherHopRefusedError;
 
 export type PublisherFetchResult = {
   response: Response;
@@ -98,6 +102,7 @@ type PublisherFetchOptions = {
   userAgent: string;
   policy?: PublisherPolicy;
   enforcement: PublisherEnforcement;
+  beforeHop?: (url: URL, hopIndex: number) => Promise<Result<void, unknown>>;
 };
 
 type CompiledPattern = {
@@ -830,6 +835,18 @@ const walkPublisherRedirects = async (
     const interval = await enforcePublisherPolicy(state, options, runtime);
     if (Result.isError(interval)) {
       return interval;
+    }
+    const admitted = await options.beforeHop?.(state.url, redirects);
+    if (admitted && Result.isError(admitted)) {
+      return Result.err(
+        new PublisherHopRefusedError({
+          message: "Publisher request hop was refused",
+          url: state.url.href,
+          origin: state.url.origin,
+          hopIndex: redirects,
+          cause: admitted.error,
+        }),
+      );
     }
     if (options.enforcement === "enforce") {
       const reserved = await Result.tryPromise(async () =>

@@ -148,6 +148,7 @@ type CreateSoftLawFetchOptions = {
   request?: typeof fetchWithTimeout;
   reserve?: typeof reservePublisherGateSlot;
   beforeRequest?: () => Promise<void | Result<void, unknown>>;
+  validateTarget?: typeof validateOutboundFetchTarget;
 };
 
 /** Every response is inspected before the adapter receives it; no retries. */
@@ -158,6 +159,7 @@ export const createSoftLawFetch = ({
   request = fetchWithTimeout,
   reserve = reservePublisherGateSlot,
   beforeRequest,
+  validateTarget = validateOutboundFetchTarget,
 }: CreateSoftLawFetchOptions): SoftLawFetch => {
   let blocked: SoftLawBlockReason | null = null;
   const gate = PUBLISHER_GATES[policy.publisherGate];
@@ -186,7 +188,7 @@ export const createSoftLawFetch = ({
           }),
         );
       }
-      const target = await validateOutboundFetchTarget(restricted, {
+      const target = await validateTarget(restricted, {
         protocolPolicy: OUTBOUND_PROTOCOL_POLICY.HTTP_AND_HTTPS,
         signal,
         timeoutMs: REQUEST_TIMEOUT_MS,
@@ -268,49 +270,51 @@ export const createSoftLawFetch = ({
         }),
       );
     }
-    await reserve(policy.publisherGate, signal);
-    if (!softLawAccessWindowOpen(policy, now())) {
-      windowState = "deferred_window";
-      return Result.err(
-        new SoftLawAccessError({
-          message: "Publisher access window is closed",
-        }),
-      );
-    }
-    signal.throwIfAborted();
-    const reservedBlock = getBlockReason();
-    if (reservedBlock) {
-      return stop(reservedBlock);
-    }
-    const lease = await Result.tryPromise(async () => await beforeRequest?.());
-    if (
-      Result.isError(lease) ||
-      (lease.value !== undefined && Result.isError(lease.value))
-    ) {
-      leaseState = "lost";
-      return Result.err(
-        new SoftLawAccessError({
-          message: "Ingestion lease was lost",
-          cause: Result.isError(lease) ? lease.error.cause : lease.value,
-        }),
-      );
-    }
-    signal.throwIfAborted();
-    if (getLeaseState() === "lost") {
-      return Result.err(
-        new SoftLawAccessError({ message: "Ingestion lease was lost" }),
-      );
-    }
-    const renewedBlock = getBlockReason();
-    if (renewedBlock) {
-      return stop(renewedBlock);
-    }
     const publisherOutcome = await auditedPublisherFetch(url, {
       init: {
         signal,
       },
       userAgent: policy.userAgent,
       enforcement: "audit",
+      beforeHop: async () => {
+        await reserve(policy.publisherGate, signal);
+        if (!softLawAccessWindowOpen(policy, now())) {
+          windowState = "deferred_window";
+          return Result.err(
+            new SoftLawAccessError({
+              message: "Publisher access window is closed",
+            }),
+          );
+        }
+        signal.throwIfAborted();
+        const reservedBlock = getBlockReason();
+        if (reservedBlock) {
+          return stop(reservedBlock);
+        }
+        const lease = await Result.tryPromise(
+          async () => await beforeRequest?.(),
+        );
+        if (
+          Result.isError(lease) ||
+          (lease.value !== undefined && Result.isError(lease.value))
+        ) {
+          leaseState = "lost";
+          return Result.err(
+            new SoftLawAccessError({
+              message: "Ingestion lease was lost",
+              cause: Result.isError(lease) ? lease.error.cause : lease.value,
+            }),
+          );
+        }
+        signal.throwIfAborted();
+        if (getLeaseState() === "lost") {
+          return Result.err(
+            new SoftLawAccessError({ message: "Ingestion lease was lost" }),
+          );
+        }
+        const renewedBlock = getBlockReason();
+        return renewedBlock ? stop(renewedBlock) : Result.ok(undefined);
+      },
     });
     if (Result.isError(publisherOutcome)) {
       if (blocked) {

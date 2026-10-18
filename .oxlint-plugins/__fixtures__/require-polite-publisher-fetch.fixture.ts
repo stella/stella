@@ -1,8 +1,11 @@
 // Passive regression fixture for
 // `require-polite-publisher-fetch/require-polite-publisher-fetch`.
 
-import { politePublisherFetch } from "@stll/fetch/publisher";
+import type { createPolitePublisherFetch } from "@stll/fetch/publisher";
 
+declare const politePublisherFetch: ReturnType<
+  typeof createPolitePublisherFetch
+>;
 declare const options: Parameters<typeof politePublisherFetch>[1];
 declare const url: string;
 

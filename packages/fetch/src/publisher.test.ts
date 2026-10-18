@@ -273,6 +273,35 @@ describe("publisher scheduler", () => {
     expect(telemetry).toEqual([3_600_000, 3_600_000]);
   });
 
+  test("runs admission before every redirect hop and returns a typed refusal", async () => {
+    const admitted: string[] = [];
+    const requested: string[] = [];
+    const request = createPolitePublisherFetch({
+      validateTarget: allowTarget,
+      fetcher: async (input) => {
+        const url = new URL(input instanceof Request ? input.url : input);
+        if (url.pathname === "/robots.txt") {
+          return new Response(null, { status: 404 });
+        }
+        requested.push(url.pathname);
+        return Response.redirect("https://publisher.example/final", 302);
+      },
+    });
+    const outcome = await request("https://publisher.example/start", {
+      userAgent: "Stella/1.0",
+      enforcement: "audit",
+      beforeHop: async (url, hopIndex) => {
+        admitted.push(`${hopIndex}:${url.pathname}`);
+        return hopIndex === 0
+          ? Result.ok(undefined)
+          : Result.err(new Error("authorization expired"));
+      },
+    });
+    expect(outcome.isErr() && outcome.error._tag).toBe("publisher_hop_refused");
+    expect(admitted).toEqual(["0:/start", "1:/final"]);
+    expect(requested).toEqual(["/start"]);
+  });
+
   test("preserves a caller-provided transport timeout", async () => {
     const seen: unknown[] = [];
     const request = createPolitePublisherFetch({
