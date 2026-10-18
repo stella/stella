@@ -35,6 +35,7 @@
     "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts')"
   },
   "dependencies": {
+    "@stll/aho-corasick": "catalog:",
     "@stll/api": "workspace:*",
     "@stll/concurrency": "workspace:*",
     "@stll/errors": "workspace:*",
