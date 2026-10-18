@@ -2,6 +2,7 @@
   "cloud": {
     "install": "bun install --frozen-lockfile --ignore-scripts",
     "services": ["postgres", "valkey"],
+    "tools": { "gitleaks": "8.30.1" },
     "envFile": "apps/api/.env.test"
   }
 }

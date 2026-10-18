@@ -137,7 +137,7 @@ const PICK_AN_ANCHOR_HINT =
 
 /** One sentence for the one reason wording is withheld, in both tools. */
 const WITHHELD_WORDING_MESSAGE =
-  "The source licence does not permit AI use of this wording. Read it at the statute's appUrl instead.";
+  "The source licence does not permit AI use of this wording. Read it at the statute's url instead.";
 
 const eliInputSchema = v.pipe(
   v.string(),
@@ -621,7 +621,7 @@ const handleSearchLegislationTool: TypedMcpToolHandler<
       paginationOutcome: result.paginationOutcome,
       results: result.items.map((hit) => ({
         ...legalCitationLinkFields({
-          appUrl: buildLegislationDocumentAppUrl({
+          url: buildLegislationDocumentAppUrl({
             country: hit.country,
             documentId: hit.documentId,
             eli: hit.eli,
@@ -771,7 +771,7 @@ const handleReadStatuteTool: TypedMcpToolHandler<
       nextCursor: window?.nextCursor ?? null,
       statute: {
         ...legalCitationLinkFields({
-          appUrl: buildLegislationDocumentAppUrl({
+          url: buildLegislationDocumentAppUrl({
             country: document.country,
             documentId: document.id,
             eli: document.eli,
@@ -906,7 +906,7 @@ const provisionItemResult = ({
         };
       }
       const links = legalCitationLinkFields({
-        appUrl: buildLegislationDocumentAppUrl({
+        url: buildLegislationDocumentAppUrl({
           country: version.country,
           documentId: version.id,
           eli: item.eli,
@@ -1258,7 +1258,7 @@ const handleReadProvisionHistoryTool: TypedMcpToolHandler<
   const items = page.items.map((item) => {
     const version = {
       ...legalCitationLinkFields({
-        appUrl: buildLegislationDocumentAppUrl({
+        url: buildLegislationDocumentAppUrl({
           country: item.country,
           documentId: item.documentId,
           eli,

@@ -2605,7 +2605,6 @@ describe("OpenAI-compatible MCP tools", () => {
       ],
       results: [
         {
-          appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/cs/stable-official-slug`,
           url: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/cs/stable-official-slug`,
           source_url: "https://example.test/decision",
           caseNumber: "29 Cdo 123/2024",
@@ -2928,7 +2927,6 @@ describe("OpenAI-compatible MCP tools", () => {
       ],
       results: [
         {
-          appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/stable-official-slug`,
           url: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/stable-official-slug`,
           source_url: "https://example.test/decision",
           caseNumber: "29 Cdo 123/2024",
@@ -3584,7 +3582,6 @@ describe("OpenAI-compatible MCP tools", () => {
         expect(parseToolPayload(result)).toMatchObject({
           results: [
             {
-              appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/stable-official-slug`,
               url: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/stable-official-slug`,
               decisionId: DECISION_ID,
               resourceName: `stella://resource/case_law_decision/id=${DECISION_ID}`,
@@ -3620,7 +3617,7 @@ describe("OpenAI-compatible MCP tools", () => {
               decisionType: "judgment",
               ecli: "ECLI:CZ:NS:2025:31.CDO.900.2025.1",
               language: "cs",
-              // Multilingual: the appUrl names the version, as the web route does.
+              // Multilingual: the url names the version, as the web route does.
               languageAlternates: [
                 { language: "cs", id: CITING_DECISION_ID },
                 { language: "en", id: DECISION_ID },
@@ -3680,7 +3677,6 @@ describe("OpenAI-compatible MCP tools", () => {
           polarity: "negative",
           doctrine: "unread",
           decision: {
-            appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/cs/ns-31-cdo-900-2025`,
             url: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/cs/ns-31-cdo-900-2025`,
             caseNumber: "31 Cdo 900/2025",
             citationAuthority: 2.5,
@@ -4008,7 +4004,6 @@ describe("OpenAI-compatible MCP tools", () => {
         paginationOutcome: SEARCH_PAGINATION_COMPLETE,
         results: [
           {
-            appUrl: `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik`,
             url: `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik`,
             source_url: "https://example.test/89-2012",
             country: "CZE",
@@ -4159,7 +4154,6 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(parseToolPayload(result)).toEqual({
       nextCursor: encodePaginationCursor([8000]),
       statute: {
-        appUrl: `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik/v/2014-01-01`,
         url: `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik/v/2014-01-01`,
         source_url: "https://example.test/89-2012",
         charCount: expectedText.length,
@@ -4629,7 +4623,7 @@ describe("OpenAI-compatible MCP tools", () => {
           anchor: PROVISION_ANCHOR,
           eli: STATUTE_ELI,
           message:
-            "The source licence does not permit AI use of this wording. Read it at the statute's appUrl instead.",
+            "The source licence does not permit AI use of this wording. Read it at the statute's url instead.",
           status: "text_withheld",
         },
       ],
@@ -4741,7 +4735,6 @@ describe("OpenAI-compatible MCP tools", () => {
       eli: STATUTE_ELI,
       items: [
         {
-          appUrl: `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik/v/2014-01-01#${PROVISION_ANCHOR}`,
           url: `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik/v/2014-01-01#${PROVISION_ANCHOR}`,
           source_url: "https://www.e-sbirka.cz/sb/2012/89",
           documentId: STATUTE_ID,
@@ -4755,7 +4748,6 @@ describe("OpenAI-compatible MCP tools", () => {
           ...EFFECTIVE_LABEL,
         },
         {
-          appUrl: `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik/v/2012-03-22#${PROVISION_ANCHOR}`,
           url: `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik/v/2012-03-22#${PROVISION_ANCHOR}`,
           source_url: "https://www.e-sbirka.cz/sb/2012/89",
           documentId: STATUTE_PRIOR_ID,
@@ -4821,7 +4813,6 @@ describe("OpenAI-compatible MCP tools", () => {
       eli: STATUTE_ELI,
       items: [
         {
-          appUrl: `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik/v/2014-01-01#${PROVISION_ANCHOR}`,
           url: `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik/v/2014-01-01#${PROVISION_ANCHOR}`,
           source_url: "https://www.e-sbirka.cz/sb/2012/89",
           documentId: STATUTE_ID,
@@ -4835,12 +4826,11 @@ describe("OpenAI-compatible MCP tools", () => {
           ...EFFECTIVE_LABEL,
         },
         {
-          appUrl: `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik/v/2012-03-22#${PROVISION_ANCHOR}`,
           url: `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik/v/2012-03-22#${PROVISION_ANCHOR}`,
           source_url: "https://www.e-sbirka.cz/sb/2012/89",
           documentId: STATUTE_PRIOR_ID,
           message:
-            "The source licence does not permit AI use of this wording. Read it at the statute's appUrl instead.",
+            "The source licence does not permit AI use of this wording. Read it at the statute's url instead.",
           resourceName: `stella://resource/legislation_document/id=${STATUTE_PRIOR_ID}`,
           status: "text_withheld",
           versionValidFrom: "2012-03-22",
