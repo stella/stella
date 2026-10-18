@@ -38,6 +38,7 @@ import {
 } from "@stll/ui/landing";
 import { Skeleton } from "@stll/ui/skeleton";
 
+import { publicLawAskScope } from "@/components/public-law-search";
 import {
   publicCaseLawCountryFromParam,
   toCaseLawCountryParam,
@@ -400,12 +401,13 @@ function LawHome() {
         <>
           <LawHomeGreeting>{t("lawHome.prompt")}</LawHomeGreeting>
           <LawEntryBox
-            askPrompt={(entry) =>
-              t("caseLaw.searchAskPrompt", {
+            askScope={publicLawAskScope(
+              "case_law",
+              scope,
+              t("chat.mention.corpus.caseLaw", {
                 country: caseLawCountryName(format, scope),
-                query: entry,
-              })
-            }
+              }),
+            )}
             maxLength={SEARCH_QUERY_MAX_LENGTH}
             onQueryChange={setQueryInput}
             onSubmit={() => detached(runEntry(queryInput), "law-home.submit")}

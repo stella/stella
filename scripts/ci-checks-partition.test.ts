@@ -11,10 +11,11 @@ import { assertProperty } from "@stll/property-testing";
 
 import { testProcessBudgets } from "../apps/api/scripts/test-process-supervisor";
 import { CANONICAL_CANCEL_STEP } from "./ci-cancellation-contract";
+import { CI_GATES, CONTINUE_ON_ERROR } from "./ci-gate-classes";
 import { rootCheckGate } from "./ci-root-check-gate";
-import { ROOT_CHECK_INPUTS } from "./ci-root-checks";
 import { STATIC_RECEIPT_STEP_NAMES } from "./ci-static-checks";
 import { withoutStaticReuseCondition } from "./ci-static-checks.test-support";
+import { DELEGATED_CHECKS_ENV } from "./generated-files-guard";
 import { customLintTestCommand } from "./run-custom-lint-tests";
 import { jobCachePolicy } from "./workflow-cache-policy.ts";
 import { flattenWorkflowSteps, isWorkflowBarrier } from "./workflow-steps";
@@ -461,7 +462,34 @@ const withoutStepId = (step: Step): Step => {
   delete original["id"];
   return original;
 };
-const withoutContinuation = (step: Step): Step => {
+// Budget and time-based guards carry the continue-on-error their gate class
+// in scripts/ci-gate-classes.ts implies; that table and its census own it.
+const gateLenience = (name: string) => {
+  for (const job of [
+    "ci-checks-generated",
+    "ci-checks-policy",
+    "ci-checks-rest",
+  ]) {
+    const gate = CI_GATES[job]?.steps?.[name];
+    if (gate !== undefined && gate.enforcedBy === undefined) {
+      return CONTINUE_ON_ERROR[gate.class];
+    }
+  }
+  return undefined;
+};
+
+const withoutGateLenience = (step: Step): Step => {
+  const lenience = gateLenience(step.name);
+  if (lenience === undefined || step["continue-on-error"] !== lenience) {
+    return step;
+  }
+  const original = { ...step };
+  delete original["continue-on-error"];
+  return original;
+};
+
+const withoutContinuation = (gated: Step): Step => {
+  const step = withoutGateLenience(gated);
   const condition = v.parse(
     v.looseObject({ if: v.optional(v.string()) }),
     step,
@@ -672,6 +700,27 @@ const withoutTestTimeout = (step: Step): Step => {
   };
 };
 
+// Delegation drops only a family whose owning job runs the same check in this
+// run; scripts/generated-files-guard.test.ts binds it to that job's `if:`.
+const withoutDelegatedGeneratorChecks = (step: Step): Step => {
+  const { env } = v.parse(
+    v.looseObject({ env: v.optional(v.record(v.string(), v.unknown())) }),
+    step,
+  );
+  if (
+    step.name !== "Generated files manifest guard" ||
+    env === undefined ||
+    !Object.hasOwn(env, DELEGATED_CHECKS_ENV)
+  ) {
+    return step;
+  }
+  const { [DELEGATED_CHECKS_ENV]: _delegated, ...environment } = env;
+  const { env: _env, ...original } = step;
+  return Object.keys(environment).length === 0
+    ? original
+    : { ...original, env: environment };
+};
+
 // A step deadline bounds a hung command; the step still fails when it fires,
 // so it changes no coverage. With continue-on-error a fired deadline would
 // pass silently, so those steps keep the timeout in the comparison.
@@ -771,6 +820,7 @@ const ownedSteps = (steps: readonly Step[]) =>
     .map(withoutContinuation)
     .map(withoutPreparedGeneration)
     .map(withoutTestTimeout)
+    .map(withoutDelegatedGeneratorChecks)
     .map(withoutStepTimeout)
     .map(withoutStepId)
     .map((step) =>
@@ -908,15 +958,9 @@ const normalizeRootSelection = (step: Step, job: string) => {
   const suffix = ` && ${rootCheckGate({ job, name: step.name })}`;
   const tokens = condition?.replace(/^\$\{\{\s*([\s\S]*?)\s*\}\}$/u, "$1");
   const normalized = { ...step };
+  // Base and head both normalize here; validateRootCheckCensus owns the
+  // head's gate-to-declaration agreement, and a base gate may be removed.
   if (tokens?.endsWith(suffix)) {
-    const inputs = Object.entries(ROOT_CHECK_INPUTS).find(
-      ([id]) => id === job,
-    )?.[1][step.name];
-    expect(
-      inputs,
-      "root scope must have an explicit declaration",
-    ).toBeDefined();
-    expect(inputs).not.toContain("**");
     normalized["if"] = `\${{ ${tokens.slice(0, -suffix.length)} }}`;
   }
   return normalized;
@@ -1092,7 +1136,11 @@ test("parallel CI checks preserve every merge-base check exactly once", () => {
 
 test("task result cache checks belong exactly once to the rest leg", () => {
   const checks = partitions.flatMap(({ steps }, index) =>
-    ownedSteps(steps)
+    ownedSteps(
+      steps.map((step) =>
+        normalizeRootSelection(step, partitionIds.at(index) ?? ""),
+      ),
+    )
       .filter(
         ({ run }) =>
           typeof run === "string" &&
@@ -1936,7 +1984,7 @@ const expectContinuation = (steps: readonly Step[], leg: string) => {
         `${CONTINUATION_PREFIXES.checkout}${leg === "ci-checks-policy" ? "" : ` && (${PACKAGE_SCOPE})`}${safety} }}`,
       );
     }
-    expect(continueOnError, step.name).toBeUndefined();
+    expect(continueOnError, step.name).toBe(gateLenience(step.name));
   }
 };
 
