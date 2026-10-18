@@ -67,6 +67,10 @@ export type Classification =
   | { eligible: true; conflicts: Conflict[]; ids: string[]; allowed: string[] }
   | { eligible: false; conflicts: Conflict[]; reasons: string[] };
 
+// Computed filesystem reads are the conflicted files, lockfiles and manifests
+// of the branch being resolved, never repository Markdown inputs.
+export const CI_MARKDOWN_READER_INPUTS: readonly string[] = [];
+
 const LOCKFILE =
   /(?:^|\/)(?:bun\.lockb?|Cargo\.lock|package-lock\.json|yarn\.lock|pnpm-lock\.yaml|uv\.lock|poetry\.lock|Gemfile\.lock)$/u;
 
