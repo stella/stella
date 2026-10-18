@@ -183,17 +183,10 @@ export const readCheckInputs = (
   return checks;
 };
 
-export const affectedPackages = (
-  changed: readonly string[],
-  graph: SelectionGraph,
-) => {
-  const affected = new Set<string>();
+// Generated files need not exist in a clean checkout. Propagate their input
+// identities to consumers, repeatedly, including generator-to-generator edges.
+export const withDerivedOutputs = (changed: readonly string[]) => {
   const files = new Set(changed);
-  if (requiresFullSelection(changed, graph)) {
-    return new Set(graph.packages.keys());
-  }
-  // Generated files need not exist in a clean checkout. Propagate their input
-  // identities to consumers, repeatedly, including generator-to-generator edges.
   let expanded = true;
   while (expanded) {
     expanded = false;
@@ -216,6 +209,18 @@ export const affectedPackages = (
       }
     }
   }
+  return files;
+};
+
+export const affectedPackages = (
+  changed: readonly string[],
+  graph: SelectionGraph,
+) => {
+  const affected = new Set<string>();
+  if (requiresFullSelection(changed, graph)) {
+    return new Set(graph.packages.keys());
+  }
+  const files = withDerivedOutputs(changed);
   for (const file of files) {
     const owner = ownerOf(file, graph);
     if (owner !== undefined) {
@@ -284,17 +289,27 @@ export const selectChecks = ({
   return { affected, selected };
 };
 
-export const selectedTestJobs = (
-  changed: readonly string[],
-  repository = root,
-) => {
+export const selectedTestJobs = (turboPlan: string, repository = root) => {
   const graph = readSelectionGraph(repository);
-  const { selected } = selectChecks({
-    changed,
-    graph,
-    checks: readCheckInputs(graph, repository),
-  });
+  const parsed = v.parse(
+    v.object({
+      tasks: v.array(v.object({ package: v.string(), task: v.string() })),
+    }),
+    JSON.parse(turboPlan),
+  );
+  const selectedPackages = new Set(
+    parsed.tasks
+      .filter(({ task }) => task === "test")
+      .map(({ package: packageName }) => packageName),
+  );
+  const packageNames = [...graph.packages]
+    .filter(([, value]) => value.tests)
+    .map(([name]) => name);
   return FULL_TEST_JOB_SHARDS.filter((shard) =>
-    selected.has(`ci-tests (${shard})`),
+    TEST_JOB_SHARDS[shard].some((testShard) =>
+      shardPackages({ packageNames, shard: testShard }).some((packageName) =>
+        selectedPackages.has(packageName),
+      ),
+    ),
   );
 };

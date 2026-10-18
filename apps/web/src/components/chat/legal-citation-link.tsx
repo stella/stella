@@ -142,7 +142,7 @@ const InteractiveLegalCitation = ({
   return <LegalCitationView {...props} citation={citation} onClick={onClick} />;
 };
 
-// A publisher alias can carry its paragraph anchor only in the stored app URL.
+// A publisher alias can carry its paragraph anchor only in the stored reader URL.
 const readUrlAnchor = (href: string): string | undefined => {
   const { hash } = new URL(href);
   if (hash === "") {
@@ -167,7 +167,7 @@ export const LegalCitationLink = (props: LegalCitationLinkProps) => {
     ...(typeof window === "undefined" ? [] : [window.location.origin]),
   ]);
   const citation = resolveLegalCitationLinks({
-    appUrl: props.source.appUrl ?? props.source.url,
+    url: props.source.url,
     sourceUrl: props.source.sourceUrl ?? props.source.url,
     appOrigins,
   });
