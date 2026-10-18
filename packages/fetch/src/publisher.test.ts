@@ -903,28 +903,39 @@ describe("publisher scheduler", () => {
     },
   );
 
-  test("refuses a 307 redirect when the request body cannot be replayed", async () => {
-    const request = createPolitePublisherFetch({
-      validateTarget: allowTarget,
-      fetcher: async (input) =>
-        new URL(input instanceof Request ? input.url : input).pathname ===
-        "/robots.txt"
-          ? new Response(null, { status: 404 })
-          : Response.redirect("https://publisher.example/end", 307),
-      defaultMinimumIntervalMs: 0,
-    });
-    const outcome = await request("https://publisher.example/start", {
-      init: {
-        body: new ReadableStream(),
-        method: "POST",
-      },
-    });
+  test.each([
+    [307, "POST"],
+    [308, "POST"],
+    [301, "PUT"],
+    [302, "PATCH"],
+  ] as const)(
+    "refuses a %d redirect of %s when the request body cannot be replayed",
+    async (status, method) => {
+      let requests = 0;
+      const request = createPolitePublisherFetch({
+        validateTarget: allowTarget,
+        fetcher: async (input) => {
+          if (
+            new URL(input instanceof Request ? input.url : input).pathname ===
+            "/robots.txt"
+          ) {
+            return new Response(null, { status: 404 });
+          }
+          requests += 1;
+          return Response.redirect("https://publisher.example/end", status);
+        },
+        defaultMinimumIntervalMs: 0,
+      });
+      const outcome = await request("https://publisher.example/start", {
+        init: { body: new ReadableStream(), method },
+      });
 
-    expect(outcome.isErr()).toBe(true);
-    if (outcome.isErr()) {
-      expect(outcome.error._tag).toBe("publisher_body_not_replayable");
-    }
-  });
+      expect(Result.isError(outcome) && outcome.error._tag).toBe(
+        "publisher_body_not_replayable",
+      );
+      expect(requests).toBe(1);
+    },
+  );
 
   test("returns a typed refusal when redirects exceed the bound", async () => {
     let issued = 0;

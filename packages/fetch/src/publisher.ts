@@ -528,11 +528,9 @@ const redirectedRequestInit = ({
   const dropBody =
     (response.status === 303 && method !== "HEAD") ||
     ((response.status === 301 || response.status === 302) && method === "POST");
-  if (
-    !dropBody &&
-    (response.status === 307 || response.status === 308) &&
-    requestInit?.body instanceof ReadableStream
-  ) {
+  // A stream body was consumed by the first request; any redirect that keeps
+  // the body would resend nothing.
+  if (!dropBody && requestInit?.body instanceof ReadableStream) {
     return Result.err(
       new PublisherBodyNotReplayableError({
         message: "Publisher redirect requires a replayable request body",

@@ -16,7 +16,8 @@ import {
 
 const usage = "Usage: bun scripts/publisher-fetch.ts <url> --archive <dir>";
 const ARCHIVE_MAX_BYTES = 256 * 1024 * 1024;
-const BODY_TIMEOUT_MS = 5 * 60_000;
+// One deadline covers the pacing wait, response headers and the body.
+const FETCH_TIMEOUT_MS = 5 * 60_000;
 class PublisherFetchCliError extends TaggedError("PublisherFetchCliError")<{
   message: string;
 }> {}
@@ -46,16 +47,26 @@ const run = async () => {
     });
   }
   const requestedAt = new Date().toISOString();
-  const outcome = await politePublisherFetch(url);
+  const deadline = AbortSignal.timeout(FETCH_TIMEOUT_MS);
+  const outcome = await Result.tryPromise(async () =>
+    politePublisherFetch(url, { init: { signal: deadline } }),
+  );
   if (Result.isError(outcome)) {
-    process.stderr.write(`${outcome.error._tag}: ${outcome.error.message}\n`);
+    process.stderr.write(`request_failed: ${String(outcome.error.cause)}\n`);
     process.exitCode = 2;
     return;
   }
+  if (Result.isError(outcome.value)) {
+    const refusal = outcome.value.error;
+    process.stderr.write(`${refusal._tag}: ${refusal.message}\n`);
+    process.exitCode = 2;
+    return;
+  }
+  const fetched = outcome.value.value;
   const body = await Result.tryPromise(async () =>
-    readBoundedBody(outcome.value.response, {
+    readBoundedBody(fetched.response, {
       maxBytes: ARCHIVE_MAX_BYTES,
-      signal: AbortSignal.timeout(BODY_TIMEOUT_MS),
+      signal: deadline,
     }),
   );
   if (Result.isError(body)) {
@@ -85,9 +96,9 @@ const run = async () => {
     `${JSON.stringify({
       url: url.href,
       time: requestedAt,
-      status: outcome.value.response.status,
-      robotsDecision: outcome.value.robotsDecision,
-      delayAppliedMs: outcome.value.delayAppliedMs,
+      status: fetched.response.status,
+      robotsDecision: fetched.robotsDecision,
+      delayAppliedMs: fetched.delayAppliedMs,
     })}\n`,
   );
 };
