@@ -135,6 +135,8 @@ const context = (
   vars: { CI_POSTGRES_PR_SELECTION: "" },
   steps: {
     "changed-files": { outputs: plan },
+    // The completed-depth lookup: a run reuses evidence exactly when the plan
+    // says so; otherwise it tests its own head and plans its heavy suites.
     // Unarmed pull requests and merge groups without armed proof.
     "completed-depth": {
       outputs: {
@@ -146,14 +148,6 @@ const context = (
     },
     "marketing-release": {
       outputs: { required: plan["marketing_screenshots_required"] },
-    },
-    // The completed-depth lookup: a run reuses evidence exactly when the plan
-    // says so; otherwise it tests its own head and plans its heavy suites.
-    "completed-depth": {
-      outputs: {
-        run_required: plan["run_required"] ?? "true",
-        pr_heavy_suites: "run",
-      },
     },
   },
   needs: Object.fromEntries(

@@ -211,6 +211,7 @@ const context = ({
       outputs: {
         normal_completion: "required",
         run_required: "true",
+        pr_heavy_suites: "run",
         armed: "false",
         armed_proof: "",
       },
