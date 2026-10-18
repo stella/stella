@@ -31,11 +31,11 @@ export const IN_PROCESS_DEPENDENCIES = {
   "@formatjs/icu-messageformat-parser":
     "Locale message parsing utility used during formatting.",
   "@gdp-ts/core": "Local document processing utility.",
+  "@embedpdf/pdfium":
+    "Local PDFium WebAssembly runtime used for in-process document rendering.",
   "@happy-dom/global-registrator": "DOM test environment registration.",
   "@hocuspocus/server":
     "Collaboration server framework; this package hosts the service rather than acting as a remote client.",
-  "@hyzyla/pdfium":
-    "Local PDFium runtime and WASM assets for document processing.",
   "@jitl/quickjs-wasmfile-release-asyncify":
     "Local PDFium runtime and WASM assets for document processing.",
   "@libpdf/core": "Local PDF reading and writing library.",
@@ -69,6 +69,10 @@ export const IN_PROCESS_DEPENDENCIES = {
     "Bundled Chromium runtime used by local server-side rendering.",
   "@standard-schema/spec":
     "Schema/type interoperability utility used in-process.",
+  "@stll/aho-corasick":
+    "In-process string matching library used by local text analysis.",
+  "@stll/aho-corasick-wasm":
+    "WebAssembly bindings for in-process Aho-Corasick text matching.",
   "@stll/agent-engine":
     "Workspace package used as an internal module; implementation stays within the monorepo.",
   "@stll/agent-input":
@@ -163,6 +167,10 @@ export const IN_PROCESS_DEPENDENCIES = {
     "Workspace helpers for portable path identifiers and local filesystem containment.",
   "@stll/property-testing":
     "Workspace package used as an internal module; implementation stays within the monorepo.",
+  "@stll/regex-set":
+    "In-process regular-expression set matching for local text analysis.",
+  "@stll/regex-set-wasm":
+    "WebAssembly bindings for in-process regular-expression set matching.",
   "@stll/redis-config":
     "Workspace package used as an internal module; implementation stays within the monorepo.",
   "@stll/runtime-mode":
@@ -303,6 +311,8 @@ export const IN_PROCESS_DEPENDENCIES = {
     "Type declarations or compiler support; no runtime client is instantiated.",
   "@types/d3-scale":
     "Type declarations or compiler support; no runtime client is instantiated.",
+  "@types/emscripten":
+    "Compile-time declarations for locally executed Emscripten modules.",
   "@types/hast":
     "Type declarations or compiler support; no runtime client is instantiated.",
   "@types/node":
@@ -412,6 +422,17 @@ export const IN_PROCESS_DEPENDENCIES = {
   pkijs:
     "Local parsing, serialization, document processing, or embedded runtime utility.",
   "playwright-core": "Test or browser automation tooling.",
+  "prosemirror-commands": "In-process rich-text editor commands.",
+  "prosemirror-dropcursor": "In-process rich-text editor drop-cursor UI.",
+  "prosemirror-gapcursor": "In-process rich-text editor gap-cursor UI.",
+  "prosemirror-history": "In-process rich-text editor undo history.",
+  "prosemirror-inputrules": "In-process rich-text editor input rules.",
+  "prosemirror-keymap": "In-process rich-text editor keyboard bindings.",
+  "prosemirror-model": "In-process rich-text editor document model.",
+  "prosemirror-state": "In-process rich-text editor state management.",
+  "prosemirror-tables": "In-process rich-text editor table support.",
+  "prosemirror-transform": "In-process rich-text document transforms.",
+  "prosemirror-view": "In-process rich-text editor rendering.",
   "postal-mime":
     "Local parsing, serialization, document processing, or embedded runtime utility.",
   postcss:
@@ -470,6 +491,7 @@ export const IN_PROCESS_DEPENDENCIES = {
     "In-process application utility, validation, formatting, or UI component.",
   vite: "Repository or application build, validation, or release tooling.",
   wxt: "Repository or application build, validation, or release tooling.",
+  "y-protocols": "In-process CRDT synchronization protocol implementation.",
   "y-prosemirror":
     "Local parsing, serialization, document processing, or embedded runtime utility.",
   yjs: "Local parsing, serialization, document processing, or embedded runtime utility.",
