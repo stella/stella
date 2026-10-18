@@ -1058,7 +1058,6 @@
       }
     },
     "sameCaseNumber": "{count, plural, one {# lahend kannab} other {# lahendit kannavad}} seda kohtuasja numbrit. Valige kohus.",
-    "searchAskPrompt": "{query} (kohtupraktika, {country})",
     "searchLabel": "Otsi kohtupraktikast",
     "searchPlaceholder": "Kohtuasja number, ECLI või sõnad, nt 22 Cdo 2653/2012",
     "searchUnavailable": {
@@ -1411,7 +1410,12 @@
     },
     "mention": {
       "category": {
-        "entities": "Selles toimikus"
+        "entities": "Selles toimikus",
+        "sources": "Allikad"
+      },
+      "corpus": {
+        "caseLaw": "Kohtupraktika · {country}",
+        "legislation": "Õigusaktid · {country}"
       },
       "loadError": "Üksuste laadimine ebaõnnestus"
     },
@@ -5139,7 +5143,6 @@
     "provisionTextUnavailable": "Selle redaktsiooni tekst pole saadaval",
     "publisherWindowInconsistent": "Sellel kuupäeval kehtivat redaktsiooni ei saa kindlaks teha: väljaandja andmed on vastuolulised.",
     "resolvedAlias": "Tuvastatud kui {label}",
-    "searchAskPrompt": "{query} ({country} õigusaktid)",
     "searchLabel": "Otsi õigusaktidest",
     "searchPlaceholder": "Number, lühinimi või pealkiri, nt 89/2012 Sb.",
     "showCitedPartOnly": "Näita ainult viidatud osa",
