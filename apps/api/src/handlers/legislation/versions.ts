@@ -157,19 +157,6 @@ export const listStatuteVersionsHandler = async ({
       )
       .limit(limit + 1);
 
-    const effectiveDates = page.flatMap((row) =>
-      row.versionValidFrom === null ? [] : [row.versionValidFrom],
-    );
-    const snapshot = await readLegislationAmendmentSnapshot(tx, work);
-    const amendments =
-      snapshot === null
-        ? { items: [], limit: LEGISLATION_AMENDMENT_PAGE_MAX, nextCursor: null }
-        : await readLegislationAmendments(tx, {
-            work,
-            direction: "incoming",
-            limit: LEGISLATION_AMENDMENT_PAGE_MAX,
-            effectiveDates,
-          });
     const amendmentOwnerByOpeningDate = new Map<
       string,
       (typeof page)[number]
@@ -187,6 +174,18 @@ export const listStatuteVersionsHandler = async ({
         amendmentOwnerByOpeningDate.set(openingDate, row);
       }
     }
+    // Query only dates some returned version owns, so relations nobody can
+    // receive never spend the shared page budget.
+    const snapshot = await readLegislationAmendmentSnapshot(tx, work);
+    const amendments =
+      snapshot === null || amendmentOwnerByOpeningDate.size === 0
+        ? { items: [], limit: LEGISLATION_AMENDMENT_PAGE_MAX, nextCursor: null }
+        : await readLegislationAmendments(tx, {
+            work,
+            direction: "incoming",
+            limit: LEGISLATION_AMENDMENT_PAGE_MAX,
+            effectiveDates: [...amendmentOwnerByOpeningDate.keys()],
+          });
     const amendmentsByOwner = new Map<
       SafeId<"legislationDocument">,
       typeof amendments.items

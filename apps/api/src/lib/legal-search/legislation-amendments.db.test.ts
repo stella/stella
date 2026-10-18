@@ -356,6 +356,55 @@ describe("publisher amendment snapshots", () => {
     ).toBeInstanceOf(TransactionRollbackError);
   });
 
+  test("effects of the look-ahead version never crowd out a returned version", async () => {
+    await db.insert(legislationDocuments).values({
+      id: toSafeId<"legislationDocument">(
+        "0198e331-e578-7000-8000-000000001a04",
+      ),
+      sourceId,
+      eli: work.eli,
+      title: "Civil Code",
+      country: "CZE",
+      language: work.language,
+      contentHash: "c".repeat(64),
+      versionValidFrom: "2026-01-01",
+    });
+    const opening = {
+      ...relation,
+      publisherId: "publisher:z-opening",
+    } satisfies LegislationAmendmentRelation;
+    const earlier = Array.from(
+      { length: LEGISLATION_AMENDMENT_PAGE_MAX },
+      (_, index) =>
+        ({
+          ...relation,
+          publisherId: `publisher:a-${index.toString().padStart(3, "0")}`,
+          effective: { type: "date", on: "2026-01-01" },
+        }) satisfies LegislationAmendmentRelation,
+    );
+    await sync(snapshot("2026-10-18T11:00:00Z", [...earlier, opening]));
+
+    const versions = await listStatuteVersionsHandler({
+      documentId,
+      query: { limit: 1 },
+      legislationDb: async (read) =>
+        await withPublicLawReaderRole(db, async (tx) =>
+          read(asTestRaw<LegislationReadTransaction>(tx)),
+        ),
+      surface: "pages",
+    });
+    if (!("items" in versions)) {
+      throw new Error("Expected version fixtures to exist");
+    }
+
+    expect(
+      versions.items.map(({ id, amendedBy }) => ({
+        id,
+        effects: amendedBy?.items.map(({ publisherId }) => publisherId),
+      })),
+    ).toEqual([{ id: documentId, effects: [opening.publisherId] }]);
+  });
+
   test("public reads tolerate the pre-grant schema and expose amendments after the grant", async () => {
     await sync(snapshot("2026-10-16T11:00:00Z", [relation]));
     const amendmentRelations = [
