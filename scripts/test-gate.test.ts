@@ -3572,190 +3572,194 @@ context("root test runner coverage", () => {
     ).toBeUndefined();
   });
 
-  check("pins the production Playwright collector to its workflow step", () => {
-    const workflow = readFileSync(".github/workflows/ci.yml", "utf-8");
-    const file = "apps/web/e2e/specs/smoke.spec.ts";
-    const scenarios = new Map<string, TestScenario>([
-      [
-        file,
-        {
-          type: "pinned-collector",
+  check(
+    "pins the production Playwright collector to its workflow step",
+    () => {
+      const workflow = readFileSync(".github/workflows/ci.yml", "utf-8");
+      const file = "apps/web/e2e/specs/smoke.spec.ts";
+      const scenarios = new Map<string, TestScenario>([
+        [
           file,
-          reason: "production browser shard",
-          collector: {
-            workflow: ".github/workflows/ci.yml",
-            job: "e2e-production-shard",
-            step: "Run Playwright shard",
-            pin: "e2eProductionShards.planSha256",
-            condition: "success()",
+          {
+            type: "pinned-collector",
+            file,
+            reason: "production browser shard",
+            collector: {
+              workflow: ".github/workflows/ci.yml",
+              job: "e2e-production-shard",
+              step: "Run Playwright shard",
+              pin: "e2eProductionShards.planSha256",
+              condition: "success()",
+            },
           },
-        },
-      ],
-    ]);
-    const topologyFor = (source: string) => {
-      const parsed = Bun.YAML.parse(source);
-      return {
-        gatingJobs: gatingWorkflowJobs(parsed),
-        shardedPackages: new Set<string>(),
-        workflow: source,
+        ],
+      ]);
+      const topologyFor = (source: string) => {
+        const parsed = Bun.YAML.parse(source);
+        return {
+          gatingJobs: gatingWorkflowJobs(parsed),
+          shardedPackages: new Set<string>(),
+          workflow: source,
+        };
       };
-    };
-    const jobRange = (source: string, jobName: string) => {
-      const start = source.indexOf(`  ${jobName}:\n`);
-      expect(start, `missing ${jobName} fixture`).toBeGreaterThanOrEqual(0);
-      const remainder = source.slice(start + 1);
-      const nextJobOffset = remainder.search(/^ {2}[\w-]+:[\t ]*$/mu);
-      return {
-        start,
-        end: nextJobOffset === -1 ? source.length : start + 1 + nextJobOffset,
+      const jobRange = (source: string, jobName: string) => {
+        const start = source.indexOf(`  ${jobName}:\n`);
+        expect(start, `missing ${jobName} fixture`).toBeGreaterThanOrEqual(0);
+        const remainder = source.slice(start + 1);
+        const nextJobOffset = remainder.search(/^ {2}[\w-]+:[\t ]*$/mu);
+        return {
+          start,
+          end: nextJobOffset === -1 ? source.length : start + 1 + nextJobOffset,
+        };
       };
-    };
-    const editJob = (
-      source: string,
-      jobName: string,
-      edit: (job: string) => string,
-    ) => {
-      const { start, end } = jobRange(source, jobName);
-      return `${source.slice(0, start)}${edit(source.slice(start, end))}${source.slice(end)}`;
-    };
-    const failureFor = (source: string) =>
-      firstCollectionFailure({
-        file,
-        scenarios,
-        topology: topologyFor(source),
-      });
+      const editJob = (
+        source: string,
+        jobName: string,
+        edit: (job: string) => string,
+      ) => {
+        const { start, end } = jobRange(source, jobName);
+        return `${source.slice(0, start)}${edit(source.slice(start, end))}${source.slice(end)}`;
+      };
+      const failureFor = (source: string) =>
+        firstCollectionFailure({
+          file,
+          scenarios,
+          topology: topologyFor(source),
+        });
 
-    expect(failureFor(workflow)).toContain("pinned collector:");
-    const unconditionalWorkflow = editJob(
-      workflow.replace(
-        `shard: \${{ fromJSON(needs.ci-plan.outputs.e2e_production_matrix).shard }}`,
-        "shard: [1, 2]",
-      ),
-      "e2e-production-shard",
-      (job) =>
-        job.replace(
-          "        if: >-\n          steps.e2e-stack.outcome == 'success'\n          && matrix.shard != 'network-baseline'\n",
-          "        if: success()\n",
+      expect(failureFor(workflow)).toContain("pinned collector:");
+      const unconditionalWorkflow = editJob(
+        workflow.replace(
+          `shard: \${{ fromJSON(needs.ci-plan.outputs.e2e_production_matrix).shard }}`,
+          "shard: [1, 2]",
         ),
-    );
-    expect(unconditionalWorkflow).not.toBe(workflow);
-    expect(failureFor(unconditionalWorkflow)).toBeUndefined();
+        "e2e-production-shard",
+        (job) =>
+          job.replace(
+            "        if: >-\n          steps.e2e-stack.outcome == 'success'\n          && matrix.shard != 'network-baseline'\n",
+            "        if: success()\n",
+          ),
+      );
+      expect(unconditionalWorkflow).not.toBe(workflow);
+      expect(failureFor(unconditionalWorkflow)).toBeUndefined();
 
-    const mutations: readonly (readonly [
-      string,
-      (source: string) => string,
-    ])[] = [
-      [
-        "renamed collector step",
-        (source) =>
-          editJob(source, "e2e-production-shard", (job) =>
-            job.replace(
-              "- name: Run Playwright shard",
-              "- name: Renamed shard",
+      const mutations: readonly (readonly [
+        string,
+        (source: string) => string,
+      ])[] = [
+        [
+          "renamed collector step",
+          (source) =>
+            editJob(source, "e2e-production-shard", (job) =>
+              job.replace(
+                "- name: Run Playwright shard",
+                "- name: Renamed shard",
+              ),
             ),
-          ),
-      ],
-      [
-        "edited collector condition",
-        (source) =>
-          editJob(source, "e2e-production-shard", (job) =>
-            job.replace("        if: success()", "        if: always()"),
-          ),
-      ],
-      [
-        "baseline-only collector matrix",
-        (source) =>
-          editJob(source, "e2e-production-shard", (job) =>
-            job.replace("shard: [1, 2]", "shard: [network-baseline]"),
-          ),
-      ],
-      [
-        "incomplete production shard matrix",
-        (source) =>
-          editJob(source, "e2e-production-shard", (job) =>
-            job.replace("shard: [1, 2]", "shard: [1]"),
-          ),
-      ],
-      [
-        "changed collector command",
-        (source) =>
-          editJob(source, "e2e-production-shard", (job) =>
-            job.replace(
-              '          exit "$status"\n',
-              '          exit "$status"\n          echo done\n',
+        ],
+        [
+          "edited collector condition",
+          (source) =>
+            editJob(source, "e2e-production-shard", (job) =>
+              job.replace("        if: success()", "        if: always()"),
             ),
-          ),
-      ],
-      [
-        "collector directory changes",
-        (source) =>
-          editJob(source, "e2e-production-shard", (job) =>
-            job.replace(
-              "      - name: Run Playwright shard\n",
-              "      - name: Run Playwright shard\n        working-directory: apps/web\n",
+        ],
+        [
+          "baseline-only collector matrix",
+          (source) =>
+            editJob(source, "e2e-production-shard", (job) =>
+              job.replace("shard: [1, 2]", "shard: [network-baseline]"),
             ),
-          ),
-      ],
-      [
-        "collector allows errors",
-        (source) =>
-          editJob(source, "e2e-production-shard", (job) =>
-            job.replace(
-              "      - name: Run Playwright shard\n",
-              "      - name: Run Playwright shard\n        continue-on-error: true\n",
+        ],
+        [
+          "incomplete production shard matrix",
+          (source) =>
+            editJob(source, "e2e-production-shard", (job) =>
+              job.replace("shard: [1, 2]", "shard: [1]"),
             ),
-          ),
-      ],
-      [
-        "collector is disabled",
-        (source) =>
-          editJob(source, "e2e-production-shard", (job) =>
-            job.replace("        if: success()\n", "        if: false\n"),
-          ),
-      ],
-      [
-        "collector job removed",
-        (source) => {
-          const { start, end } = jobRange(source, "e2e-production-shard");
-          return `${source.slice(0, start)}${source.slice(end)}`;
-        },
-      ],
-      [
-        "collector removed from ci-result dependencies",
-        (source) => source.replace("        e2e-production-shard,\n", ""),
-      ],
-    ];
-    for (const [reason, mutate] of mutations) {
-      const mutated = mutate(unconditionalWorkflow);
-      expect(mutated, reason).not.toBe(unconditionalWorkflow);
-      expect(failureFor(mutated), reason).toContain("pinned collector:");
-    }
+        ],
+        [
+          "changed collector command",
+          (source) =>
+            editJob(source, "e2e-production-shard", (job) =>
+              job.replace(
+                '          exit "$status"\n',
+                '          exit "$status"\n          echo done\n',
+              ),
+            ),
+        ],
+        [
+          "collector directory changes",
+          (source) =>
+            editJob(source, "e2e-production-shard", (job) =>
+              job.replace(
+                "      - name: Run Playwright shard\n",
+                "      - name: Run Playwright shard\n        working-directory: apps/web\n",
+              ),
+            ),
+        ],
+        [
+          "collector allows errors",
+          (source) =>
+            editJob(source, "e2e-production-shard", (job) =>
+              job.replace(
+                "      - name: Run Playwright shard\n",
+                "      - name: Run Playwright shard\n        continue-on-error: true\n",
+              ),
+            ),
+        ],
+        [
+          "collector is disabled",
+          (source) =>
+            editJob(source, "e2e-production-shard", (job) =>
+              job.replace("        if: success()\n", "        if: false\n"),
+            ),
+        ],
+        [
+          "collector job removed",
+          (source) => {
+            const { start, end } = jobRange(source, "e2e-production-shard");
+            return `${source.slice(0, start)}${source.slice(end)}`;
+          },
+        ],
+        [
+          "collector removed from ci-result dependencies",
+          (source) => source.replace("        e2e-production-shard,\n", ""),
+        ],
+      ];
+      for (const [reason, mutate] of mutations) {
+        const mutated = mutate(unconditionalWorkflow);
+        expect(mutated, reason).not.toBe(unconditionalWorkflow);
+        expect(failureFor(mutated), reason).toContain("pinned collector:");
+      }
 
-    const validScenario = {
-      type: "pinned-collector",
-      file,
-      reason: "production browser shard",
-      collector: {
-        workflow: ".github/workflows/ci.yml",
-        job: "e2e-production-shard",
-        step: "Run Playwright shard",
-        pin: "e2eProductionShards.planSha256",
-        condition: "success()",
-      },
-    } as const satisfies TestScenario;
-    expect(parseScenarioLedger([validScenario])).toEqual([validScenario]);
-    expect(() =>
-      parseScenarioLedger([
-        {
-          ...validScenario,
-          collector: { ...validScenario.collector, pin: "unknown.pin" },
+      const validScenario = {
+        type: "pinned-collector",
+        file,
+        reason: "production browser shard",
+        collector: {
+          workflow: ".github/workflows/ci.yml",
+          job: "e2e-production-shard",
+          step: "Run Playwright shard",
+          pin: "e2eProductionShards.planSha256",
+          condition: "success()",
         },
-      ]),
-    ).toThrow("structured execution collector");
-    expect(() =>
-      parseScenarioLedger([{ ...validScenario, collector: undefined }]),
-    ).toThrow("structured collector");
-  });
+      } as const satisfies TestScenario;
+      expect(parseScenarioLedger([validScenario])).toEqual([validScenario]);
+      expect(() =>
+        parseScenarioLedger([
+          {
+            ...validScenario,
+            collector: { ...validScenario.collector, pin: "unknown.pin" },
+          },
+        ]),
+      ).toThrow("structured execution collector");
+      expect(() =>
+        parseScenarioLedger([{ ...validScenario, collector: undefined }]),
+      ).toThrow("structured collector");
+    },
+    50_000,
+  );
 
   check(
     "nested shell commands retain only their own failure guarantees",

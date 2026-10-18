@@ -2110,14 +2110,26 @@ const beforeWorkspaceTest = (command: string): string => {
 const runtimeScopeArguments = (command: string): boolean => {
   const prefix = beforeWorkspaceTest(command);
   const lines = prefix.split("\n").map((line) => line.trim());
-  return (
-    lines.filter((line) => line.startsWith("args=")).join("") === "args=()" &&
+  const normalized = lines.join("\n");
+  const directScope =
     lines.filter((line) => line.startsWith("scope=")).join("") ===
       'scope=$(bun scripts/test-scope.ts --base "origin/$BASE_REF")' &&
     lines.filter((line) => line.startsWith("read -r -a args ")).join("") ===
-      'read -r -a args <<<"$scope"' &&
+      'read -r -a args <<<"$scope"';
+  const plannedScope = normalized.includes(
+    [
+      'if [[ -n "$AFFECTED_FLAG" ]]; then',
+      'read -r -a args <<<"$TEST_SCOPE"',
+      "fi",
+    ].join("\n"),
+  );
+  return (
+    lines.filter((line) => line.startsWith("args=")).join("") === "args=()" &&
+    (directScope || plannedScope) &&
     !lines.some((line) =>
-      /\b(?:eval|source)\b|^\.\s|args\+=|args\[[^\]]+\]=/u.test(line),
+      /\b(?:eval|source)\b|^\.\s|args\+=|args\[[^\]]+\]=|^(?:AFFECTED_FLAG|TEST_SCOPE)(?:\+?=|\[)|^unset\s+(?:AFFECTED_FLAG|TEST_SCOPE)\b/u.test(
+        line,
+      ),
     )
   );
 };
