@@ -43,17 +43,31 @@ const clauseRunSchema = t.Object({
   italic: t.Optional(t.Boolean()),
 });
 
-const clauseParagraphSchema = t.Object({
-  text: t.String(),
-  style: t.Optional(t.String()),
-  level: t.Optional(t.Integer()),
-  runs: t.Optional(t.Array(clauseRunSchema)),
-  listKind: t.Optional(clauseListKindSchema),
-  listLevel: t.Optional(t.Integer()),
-  isDirective: t.Optional(t.Boolean()),
-  directiveKind: t.Optional(blockDirectiveKindSchema),
-  directiveExpression: t.Optional(t.String()),
-});
+const clauseParagraphSchema = t.Object(
+  {
+    text: t.String(),
+    style: t.Optional(t.String()),
+    level: t.Optional(t.Integer()),
+    runs: t.Optional(t.Array(clauseRunSchema)),
+    listKind: t.Optional(clauseListKindSchema),
+    numbering: t.Optional(
+      t.Object(
+        {
+          kind: t.Literal("levelOnly"),
+          ilvl: t.Integer({
+            minimum: LIMITS.clauseNumberingLevelMin,
+            maximum: LIMITS.clauseNumberingLevelMax,
+          }),
+        },
+        { additionalProperties: false },
+      ),
+    ),
+    isDirective: t.Optional(t.Boolean()),
+    directiveKind: t.Optional(blockDirectiveKindSchema),
+    directiveExpression: t.Optional(t.String()),
+  },
+  { additionalProperties: false },
+);
 
 export const clauseBodySchema = t.Array(clauseParagraphSchema, {
   minItems: 1,
