@@ -55,8 +55,7 @@ const citation = ({
   doctrine: null,
   decision: decision
     ? {
-        appUrl: `https://stll.app/case-law/${decisionId}`,
-        url: `https://example.org/cases/${decisionId}`,
+        url: `https://stll.app/case-law/${decisionId}`,
         caseNumber: `Synthetic ${decisionId}`,
         citationAuthority: 1,
         court: "Synthetic Court",

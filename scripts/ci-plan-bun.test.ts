@@ -99,6 +99,8 @@ const events = [
 
 const axes = [
   ["github.event_name", events],
+  // Read by the patch-id steps: an enqueued head computes no patch identity.
+  ["github.event.action", ["synchronize", "enqueued"]],
   ["inputs.heavy_only", [false, true]],
   ["steps.depth.outputs.suite_depth", ["fast", "full"]],
   ["steps.depth.outputs.queue_depth", ["", "full", "thin"]],
@@ -132,6 +134,12 @@ const contexts = combinations
     const suiteDepth = values["steps.depth.outputs.suite_depth"];
     const queueDepth = values["steps.depth.outputs.queue_depth"];
     if ((event === "push" || event === "schedule") && !heavyOnly) {
+      return false;
+    }
+    if (
+      event !== "pull_request" &&
+      values["github.event.action"] === "enqueued"
+    ) {
       return false;
     }
     if ((heavyOnly || event === "merge_group") && suiteDepth !== "full") {

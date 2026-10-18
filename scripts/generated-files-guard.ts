@@ -335,8 +335,43 @@ export const runGeneratorChecks = async (
   });
 };
 
+export const DELEGATED_CHECKS_ENV = "GENERATED_CHECKS_IN_OTHER_JOBS";
+
+// CI names families whose `checkedBy` step runs the same check on the same
+// commit in another job of this run, so Guard B does not repeat that work.
+// Unset means none; anything that cannot be proven delegated panics.
+export const delegatedGeneratorIds = (value: string | undefined) => {
+  if (value === undefined) {
+    return new Set<string>();
+  }
+  const parsed = Result.try((): unknown => JSON.parse(value));
+  if (
+    Result.isError(parsed) ||
+    !Array.isArray(parsed.value) ||
+    !parsed.value.every((id): id is string => typeof id === "string")
+  ) {
+    panic(`${DELEGATED_CHECKS_ENV} must be a JSON array of generator ids`);
+  }
+  for (const id of parsed.value) {
+    const generator = GENERATORS.find((candidate) => candidate.id === id);
+    if (generator?.checkedBy === undefined || generator.check === null) {
+      panic(`Generator ${id} has no check delegated to another CI step`);
+    }
+  }
+  return new Set(parsed.value);
+};
+
 const guardB = async () => {
-  const failures = await runGeneratorChecks(GENERATORS);
+  const delegated = delegatedGeneratorIds(process.env[DELEGATED_CHECKS_ENV]);
+  const failures = await runGeneratorChecks(GENERATORS, async (generator) => {
+    if (!delegated.has(generator.id)) {
+      return checkGenerator(generator);
+    }
+    console.log(
+      `Skipping ${generator.id}: checked in this run by "${String(generator.checkedBy)}"`,
+    );
+    return 0;
+  });
   if (failures.length > 0) {
     panic(
       `Generator checks failed:\n${failures.map(({ id, failure }) => `${id}: ${failure}`).join("\n")}`,

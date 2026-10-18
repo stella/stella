@@ -95,7 +95,7 @@ const dependencies = (
     expect(input.anchor).toBe(anchor);
     return {
       ...preview,
-      appUrl: buildLegislationDocumentAppUrl({
+      url: buildLegislationDocumentAppUrl({
         country: "CZE",
         documentId,
         eli,

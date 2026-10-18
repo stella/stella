@@ -28,10 +28,6 @@ export const DOC_SOURCES = {
     dependencies: ["@anthropic-ai/sdk"],
     url: "https://platform.claude.com/llms.txt",
   },
-  Mistral: {
-    dependencies: ["@mistralai/mistralai"],
-    url: "https://docs.mistral.ai/llms.txt",
-  },
   OpenAI: {
     dependencies: ["openai"],
     url: "https://developers.openai.com/llms.txt",

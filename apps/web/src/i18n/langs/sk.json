@@ -1058,7 +1058,6 @@
       }
     },
     "sameCaseNumber": "{count, plural, one {# rozhodnutie nesie} few {# rozhodnutia nesú} other {# rozhodnutí nesie}} túto spisovú značku. Vyberte súd.",
-    "searchAskPrompt": "{query} (judikatúra, {country})",
     "searchLabel": "Hľadať v judikatúre",
     "searchPlaceholder": "Spisová značka, ECLI alebo slová, napr. 1Cdo/12/2020",
     "searchUnavailable": {
@@ -1206,15 +1205,32 @@
     },
     "answerEdit": {
       "acceptFailed": "Úpravu sa nepodarilo uložiť. Skúste to znova.",
+      "aiKind": "Úprava na požiadanie",
       "ask": "Požiadať o úpravy",
+      "authorUnknown": "Neznámy autor",
+      "autolinkLabel": "Tento text sa automaticky zmení na odkaz. Pred odstránením odkazu zmeňte jeho označenie.",
+      "change": "Zmena {revision}",
+      "editedLabel": "Upravená odpoveď",
       "failed": "Úpravu sa nepodarilo pripraviť. Skúste to znova.",
+      "formatKind": "Formátovanie",
+      "heading": "Nadpis {level}",
+      "history": "História odpovede",
+      "historyEmpty": "Žiadne staršie verzie.",
       "instruction": "Opíšte úpravu",
       "instructionRequired": "Opíšte, ako upraviť vybraný text.",
       "invalidSelection": "Výber nemožno upraviť, vyberte súvislý text.",
+      "invalidUrl": "Zadajte platnú adresu HTTP alebo HTTPS.",
+      "linkAddress": "Adresa odkazu",
+      "orderedList": "Číslovaný zoznam",
       "proposal": "Navrhnutá úprava",
       "requesting": "Príprava úprav…",
+      "restoreRefreshFailed": "Odpoveď bola obnovená, ale nepodarilo sa ju obnoviť v zobrazení. Obnovte zobrazenie, aby sa načítala obnovená odpoveď.",
+      "revertKind": "Obnovená verzia",
       "stale": "Odpoveď sa zmenila. Vyberte text znova.",
-      "submit": "Požiadať o úpravu"
+      "submit": "Požiadať o úpravu",
+      "textStyle": "Štýl textu",
+      "unorderedList": "Zoznam s odrážkami",
+      "wholeBlockRequired": "Na zmenu štýlu vyberte celý odsek alebo zoznam."
     },
     "answerQuote": {
       "showInDecision": "Zobraziť v rozhodnutí",
@@ -1405,7 +1421,12 @@
     "maxAttachmentsReached": "Maximálne {count} súborov na správu",
     "mention": {
       "category": {
-        "entities": "V tomto spise"
+        "entities": "V tomto spise",
+        "sources": "Zdroje"
+      },
+      "corpus": {
+        "caseLaw": "Judikatúra · {country}",
+        "legislation": "Právne predpisy · {country}"
       },
       "loadError": "Nepodarilo sa načítať položky"
     },
@@ -5133,7 +5154,6 @@
     "provisionTextUnavailable": "Text nie je pre toto znenie k dispozícii",
     "publisherWindowInconsistent": "K tomuto dňu nemožno určiť účinné znenie: údaje vydavateľa si odporujú.",
     "resolvedAlias": "Rozpoznané ako {label}",
-    "searchAskPrompt": "{query} (právne predpisy: {country})",
     "searchLabel": "Hľadať v právnych predpisoch",
     "searchPlaceholder": "Číslo, skratka alebo názov, napr. 40/1964 Zb.",
     "showCitedPartOnly": "Zobraziť len citovanú časť",
@@ -6262,7 +6282,6 @@
         }
       },
       "atAGlance": "Prehľad",
-      "edited": "upravil(a)",
       "getStarted": "Začnite nahraním dokumentov alebo vytvorením prvého priečinka.",
       "matterDetails": "Detaily spisu",
       "membersCount": "{count, plural, one {# člen} few {# členovia} other {# členov}}",

@@ -226,6 +226,7 @@ test("required CI expiry checks cannot be skipped by paths, reuse, or queue dept
     const context = {
       values: {
         "github.event_name": event,
+        "github.event.action": "reopened",
         "github.event.pull_request.draft": false,
         "needs.ci-plan.outputs.run_required": "false",
         "needs.ci-plan.outputs.package_checks_required": "false",
@@ -249,6 +250,14 @@ test("required CI expiry checks cannot be skipped by paths, reuse, or queue dept
       }),
       event,
     ).toBe(false);
+    // An enqueued head skips it: its merge group runs it on the queued tree.
+    expect(
+      evaluate(expiry.if, {
+        ...context,
+        values: { ...context.values, "github.event.action": "enqueued" },
+      }),
+      event,
+    ).toBe(event !== "pull_request");
   }
   const install = expiry.steps.find(
     ({ name }) => name === "Install dependencies",

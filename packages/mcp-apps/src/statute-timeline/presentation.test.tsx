@@ -10,7 +10,6 @@ import type { StatuteTimelineHistory, ProvisionVersion } from "./parse";
 import { TimelineChart, VersionLabel } from "./presentation";
 
 const historical = {
-  appUrl: null,
   url: null,
   documentId: "historical-version",
   resourceName: "historical-resource",

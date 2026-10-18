@@ -816,10 +816,6 @@
     "reason": "Existing TimeEntryNarrativeField UI validation or presentation bound; contract migration pending."
   },
   {
-    "id": "apps/web/src/components/chat-mention-category.tsx::MENTION_CATEGORY_ORDER::domain:[\"entity\",\"workspace\",\"decision\"]::1",
-    "reason": "Existing MENTION_CATEGORY_ORDER domain; contract ownership pending migration."
-  },
-  {
     "id": "apps/web/src/components/chat-pasted-text-extension.ts::PASTED_TEXT_SOURCES::domain:[\"paste\",\"prompt\",\"skill\",\"command\"]::1",
     "reason": "Existing PASTED_TEXT_SOURCES domain; contract ownership pending migration."
   },
