@@ -248,7 +248,7 @@ describe("publisher scheduler", () => {
         }
         return await new Promise<never>((_resolve, reject) => {
           init?.signal?.addEventListener("abort", () =>
-            reject(init.signal?.reason),
+            reject(new Error("aborted", { cause: init.signal?.reason })),
           );
         });
       },

@@ -891,23 +891,25 @@ const enforcePublisherPolicy = async (
     runtime.defaultMinimumIntervalMs,
   );
   state.decision = evaluated.decision ?? state.decision;
+  const intervalMs = Math.min(evaluated.intervalMs, MAX_CRAWL_DELAY_MS);
+  if (!evaluated.refusal) {
+    return Result.ok(intervalMs);
+  }
   const policy =
     state.url.origin === state.requestedOrigin ? options.policy : undefined;
-  if (evaluated.refusal && policy?.type !== "licensed") {
+  if (policy?.type !== "licensed") {
     return Result.err(evaluated.refusal);
   }
-  if (evaluated.refusal) {
-    runtime.onTelemetry({
-      event: "publisher_fetch_policy_bypass",
-      url: state.url.href,
-      origin: state.url.origin,
-      refusal: evaluated.refusal,
-      policy,
-      delayMs: Math.min(evaluated.intervalMs, MAX_CRAWL_DELAY_MS),
-    });
-    state.decision = "licensed_bypass";
-  }
-  return Result.ok(Math.min(evaluated.intervalMs, MAX_CRAWL_DELAY_MS));
+  runtime.onTelemetry({
+    event: "publisher_fetch_policy_bypass",
+    url: state.url.href,
+    origin: state.url.origin,
+    refusal: evaluated.refusal,
+    policy,
+    delayMs: intervalMs,
+  });
+  state.decision = "licensed_bypass";
+  return Result.ok(intervalMs);
 };
 
 const redirectLimitResult = (state: WalkState) => {

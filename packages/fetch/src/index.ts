@@ -1,4 +1,4 @@
-// parser-output-unchanged: transport timeout policies do not change parsed output.
+// parser-output-unchanged: transport timeout fields on the fetcher type do not change parsed output.
 export { isConnectionFailure } from "./connection-failure";
 
 export type FetchTimeout =
