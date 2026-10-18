@@ -35,6 +35,21 @@ jobs:
     env:
       RELEASE_REF: ${{ inputs.release_ref }}
     steps:
+      - name: Checkout GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .gh-retry
+          persist-credentials: false
+          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve GitHub API tooling across source checkouts
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+
       - name: Checkout release health tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -64,12 +79,12 @@ jobs:
             echo "::error::release_ref must be a stable release such as v1.2.3"
             exit 1
           fi
-          published_at="$(bash scripts/gh-retry.sh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_REF}" --jq '.published_at // empty')"
+          published_at="$(bash "$GH_RETRY_SCRIPT" api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_REF}" --jq '.published_at // empty')"
           if [[ -z "$published_at" ]]; then
             echo "::error::${RELEASE_REF} is not a published release"
             exit 1
           fi
-          bash scripts/gh-retry.sh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100" > "$RUNNER_TEMP/releases.json"
+          bash "$GH_RETRY_SCRIPT" api "repos/${GITHUB_REPOSITORY}/releases?per_page=100" > "$RUNNER_TEMP/releases.json"
           previous="$(bun scripts/release-health.ts previous --release "$RELEASE_REF" --releases "$RUNNER_TEMP/releases.json")"
           {
             echo "window_end=$(bun scripts/release-health.ts window-end --published-at "$published_at")"
