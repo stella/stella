@@ -12,6 +12,8 @@ type ScrollDirection = "ltr" | "rtl";
 type HorizontalScrollerProps = ComponentProps<"div"> & {
   nextLabel: string;
   previousLabel: string;
+  /** Lays out the items: the row that may grow wider than the viewport. */
+  contentClassName?: string;
   viewportClassName?: string;
 };
 
@@ -25,6 +27,7 @@ export const HorizontalScroller = ({
   className,
   nextLabel,
   previousLabel,
+  contentClassName,
   viewportClassName,
   ...props
 }: HorizontalScrollerProps) => {
@@ -53,21 +56,12 @@ export const HorizontalScroller = ({
       }
       // Overflow changes when the viewport resizes and also when its content
       // does at a fixed viewport size (an item added, removed or relabelled),
-      // so both the viewport and each child are observed.
+      // so the viewport and the content row are both observed.
       const observer = new ResizeObserver(() => measure(node));
-      const observeAll = () => {
-        observer.disconnect();
-        observer.observe(node);
-        for (const child of node.children) {
-          observer.observe(child);
-        }
-      };
-      observeAll();
-      const childList = new MutationObserver(() => {
-        observeAll();
-        measure(node);
-      });
-      childList.observe(node, { childList: true });
+      observer.observe(node);
+      if (node.firstElementChild !== null) {
+        observer.observe(node.firstElementChild);
+      }
       measure(node);
       // A vertical wheel scrolls the row sideways. React registers wheel
       // handlers as passive, where preventDefault is ignored and the page
@@ -102,7 +96,6 @@ export const HorizontalScroller = ({
       node.addEventListener("wheel", onWheel, { passive: false });
       return () => {
         observer.disconnect();
-        childList.disconnect();
         node.removeEventListener("wheel", onWheel);
       };
     },
@@ -141,7 +134,9 @@ export const HorizontalScroller = ({
         onScroll={onScroll}
         ref={viewportRef}
       >
-        {children}
+        <div className={cn("w-max min-w-full", contentClassName)}>
+          {children}
+        </div>
       </div>
       {state.canScrollStart && (
         <>
