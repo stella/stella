@@ -3,6 +3,7 @@ import { useTranslations } from "use-intl";
 
 import { Skeleton } from "@stll/ui/skeleton";
 
+import { SettingsPageHeader } from "@/components/settings-page-header";
 import { env } from "@/env";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { authClient } from "@/lib/auth-client";
@@ -11,8 +12,7 @@ import {
   ensureRouteInfiniteQueryData,
   ensureRouteQueryData,
 } from "@/lib/react-query";
-import { MemoryPanel } from "@/routes/_protected.settings/-components/organization/memory/memory-panel";
-import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
+import { MemoryPanel } from "@/routes/_protected.settings/-components/account/memory/memory-panel";
 import { memoriesOptions } from "@/routes/_protected.settings/-queries/memories";
 
 export const Route = createFileRoute("/_protected/settings/account/memory")({

@@ -133,7 +133,8 @@ export type WorkspaceFrameProps = {
       composition: "host-responsive";
       navigation: ComponentProps<typeof WorkspaceShell>["navigation"];
       topBar: ComponentProps<typeof WorkspaceShell>["topBar"];
-      endDock: ReactElement;
+      /** Omitted when the host has nothing for the inline-end edge. */
+      endDock?: ReactElement | undefined;
     }
 );
 

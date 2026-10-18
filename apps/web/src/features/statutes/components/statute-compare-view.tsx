@@ -541,7 +541,7 @@ const LINE_METRICS = {
     lineGap: HEADING_LINE_GAP_PX,
     lineHeight: HEADING_LINE_HEIGHT_PX,
   },
-  text: {
+  paragraph: {
     charsPerLine: CHARS_PER_LINE,
     lineGap: 0,
     lineHeight: LINE_HEIGHT_PX,

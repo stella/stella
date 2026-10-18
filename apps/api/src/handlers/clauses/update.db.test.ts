@@ -194,7 +194,7 @@ describe("clause body preconditions", () => {
       {
         text: "List text",
         listKind: "bullet",
-        listLevel: 1,
+        numbering: { kind: "levelOnly", ilvl: 1 },
         style: null,
         level: "wrong",
         extra: "extension",
@@ -246,7 +246,11 @@ describe("clause body preconditions", () => {
       throw new Error("Expected a clause body in the HTTP response");
     }
     expect(read["body"]).toEqual([
-      { text: "List text", listKind: "bullet", listLevel: 1 },
+      {
+        text: "List text",
+        listKind: "bullet",
+        numbering: { kind: "levelOnly", ilvl: 1 },
+      },
       {
         text: "{% if party %}",
         isDirective: true,
