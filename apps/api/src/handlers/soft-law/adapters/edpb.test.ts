@@ -1,5 +1,6 @@
 import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
+import { load } from "cheerio";
 import { readFile } from "node:fs/promises";
 import { gunzipSync } from "node:zlib";
 
@@ -79,6 +80,36 @@ test("EDPB language expressions retain distinct publisher locators without summa
     });
   }
 });
+
+test.each(["Tracked changes", "Track changes", "track-changes version"])(
+  "EDPB %s PDFs beside the clean PDF are not instrument expressions",
+  async (label) => {
+    const html = await fixture("consent");
+    const clean = parseEdpbDocument({ html, url: CONSENT }).unwrap();
+    const $ = load(html);
+    const original = $(
+      ".document-full__files .paragraph-documents-file-partial",
+    ).first();
+    const marked = original.clone();
+    const anchor = marked.find(".file__title a").first();
+    anchor.text(`${anchor.text()} ${label}`);
+    anchor.attr(
+      "href",
+      `${anchor.attr("href")?.replace(/\.pdf/u, "_tracked.pdf")}`,
+    );
+    marked.find("option[data-url]").remove();
+    original.after(marked);
+
+    const entries = parseEdpbDocument({
+      html: $.html(),
+      url: CONSENT,
+    }).unwrap();
+
+    expect(entries.map((entry) => entry.url)).toEqual(
+      clean.map((entry) => entry.url),
+    );
+  },
+);
 
 test("EDPB consultation and adopted editions keep independent dates and supersession evidence", async () => {
   const draft = parseEdpbDocument({ html: await fixture("draft"), url: DRAFT })

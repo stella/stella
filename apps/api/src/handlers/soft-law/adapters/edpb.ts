@@ -239,7 +239,9 @@ const readEdpbFiles = ($: CheerioAPI, url: string) =>
       const label = compact(anchor.text());
       // Summaries, consultation reports and tracked changes are accompanying material.
       if (
-        /\b(summary|report|track.?changes|information purposes)\b/iu.test(label)
+        /\b(summary|report|track(?:ed)?.?changes|information purposes)\b/iu.test(
+          label,
+        )
       ) {
         continue;
       }
