@@ -54,11 +54,19 @@ const auditedPublisherFetch = createPolitePublisherFetch({
     return target.map(({ url: validatedUrl }) => validatedUrl);
   },
   fetcher: async (input, init) => {
-    const { signal, ...requestInit } = init ?? {};
+    const { signal, timeout, timeoutMs, ...requestInit } = init ?? {};
+    const commonInit = { ...requestInit, signal: signal ?? undefined };
+    if (timeout !== undefined) {
+      // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- canonical publisher boundary; callers validate the target before the policy owner invokes this transport
+      return await fetchWithTimeout(input, { ...commonInit, timeout });
+    }
+    if (timeoutMs !== undefined) {
+      // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- canonical publisher boundary; callers validate the target before the policy owner invokes this transport
+      return await fetchWithTimeout(input, { ...commonInit, timeoutMs });
+    }
     // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- canonical publisher boundary; callers validate the target before the policy owner invokes this transport
     return await fetchWithTimeout(input, {
-      ...requestInit,
-      signal: signal ?? undefined,
+      ...commonInit,
       timeout: { type: "headers", ms: ADAPTER_TIMEOUT.REQUEST },
     });
   },

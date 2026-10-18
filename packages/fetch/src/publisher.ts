@@ -1,11 +1,13 @@
 import { Result, TaggedError } from "better-result";
 
-import type { Fetcher } from "./index";
+import type { Fetcher, TransportRequestInit } from "./index";
 
 const ROBOTS_MAX_BYTES = 512 * 1024;
 const ROBOTS_TTL_MS = 60 * 60 * 1000;
 const ROBOTS_RETRY_MS = 60 * 1000;
 const DEFAULT_MINIMUM_INTERVAL_MS = 1000;
+const MAX_CRAWL_DELAY_MS = 60_000;
+const ROBOTS_LOAD_TIMEOUT_MS = 10_000;
 const MAX_REDIRECTS = 5;
 const PRODUCT_TOKEN = "Stella";
 
@@ -36,6 +38,9 @@ export class AgentExcludedError extends TaggedError(
 export class RobotsUnavailableError extends TaggedError("robots_unavailable")<
   RefusalFields & { cause?: unknown }
 > {}
+export class CrawlDelayUnsupportedError extends TaggedError(
+  "crawl_delay_unsupported",
+)<RefusalFields & { crawlDelayMs: number; maximumMs: number }> {}
 export class PublisherRedirectLimitError extends TaggedError(
   "publisher_redirect_limit",
 )<RefusalFields> {}
@@ -45,13 +50,18 @@ export class PublisherTargetRefusedError extends TaggedError(
 export class PublisherBodyNotReplayableError extends TaggedError(
   "publisher_body_not_replayable",
 )<RefusalFields> {}
+export class PublisherRequestAbortedError extends TaggedError(
+  "publisher_request_aborted",
+)<RefusalFields & { cause: unknown }> {}
 export type PublisherPolicyError =
   | RobotsDisallowedError
   | AgentExcludedError
   | RobotsUnavailableError
+  | CrawlDelayUnsupportedError
   | PublisherRedirectLimitError
   | PublisherTargetRefusedError
-  | PublisherBodyNotReplayableError;
+  | PublisherBodyNotReplayableError
+  | PublisherRequestAbortedError;
 
 export type PublisherFetchResult = {
   response: Response;
@@ -66,6 +76,7 @@ export type PublisherTelemetry = {
   refusal: PublisherPolicyError;
   enforcement: PublisherEnforcement;
   policy: PublisherPolicy;
+  delayMs: number;
 };
 
 type Clock = {
@@ -79,16 +90,26 @@ type PublisherFetcherOptions = {
   robotsTtlMs?: number;
   robotsRetryMs?: number;
   defaultMinimumIntervalMs?: number;
+  robotsLoadTimeoutMs?: number;
   onTelemetry?: (event: PublisherTelemetry) => void;
 };
 type PublisherFetchOptions = {
-  init?: Omit<RequestInit, "redirect">;
+  init?: Omit<TransportRequestInit, "redirect">;
   userAgent: string;
   policy?: PublisherPolicy;
   enforcement: PublisherEnforcement;
 };
 
-type Rule = { type: "allow" | "disallow"; pattern: string };
+type CompiledPattern = {
+  anchored: boolean;
+  pattern: string;
+  specificity: number;
+};
+type Rule = {
+  type: "allow" | "disallow";
+  pattern: string;
+  compiled?: CompiledPattern;
+};
 type Group = { agents: string[]; rules: Rule[]; crawlDelayMs?: number };
 type RobotsState =
   | { type: "rules"; groups: Group[] }
@@ -127,6 +148,18 @@ const publisherPolicyFor = (
     PRODUCT_TOKEN,
     `${url.pathname}${url.search}`,
   );
+  if (evaluated.crawlDelayMs > MAX_CRAWL_DELAY_MS) {
+    return {
+      intervalMs: evaluated.crawlDelayMs,
+      refusal: new CrawlDelayUnsupportedError({
+        message: "robots.txt crawl delay exceeds the supported maximum",
+        url: url.href,
+        origin: url.origin,
+        crawlDelayMs: evaluated.crawlDelayMs,
+        maximumMs: MAX_CRAWL_DELAY_MS,
+      }),
+    };
+  }
   let refusal: AgentExcludedError | RobotsDisallowedError | undefined;
   if (!evaluated.allowed) {
     refusal = evaluated.agentExcluded
@@ -184,7 +217,11 @@ const parseRobots = (body: string): Group[] => {
     if (field === "allow" || field === "disallow") {
       sawRule = true;
       if (value !== "") {
-        current.rules.push({ type: field, pattern: value });
+        current.rules.push({
+          type: field,
+          pattern: value,
+          compiled: compilePattern(value),
+        });
       }
       continue;
     }
@@ -216,14 +253,48 @@ const selectedGroups = (groups: Group[], productToken: string) => {
     .map(({ group }) => group);
 };
 
-const ruleExpression = (pattern: string) => {
+const compilePattern = (pattern: string): CompiledPattern => {
   const normalized = normalizeOctets(pattern);
   const anchored = normalized.endsWith("$");
-  const source = (anchored ? normalized.slice(0, -1) : normalized)
-    .split("*")
-    .map((part) => part.replace(/[|\\{}()[\]^$+?.]/gu, "\\$&"))
-    .join(".*");
-  return new RegExp(`^${source}${anchored ? "$" : ""}`, "u");
+  const body = anchored ? normalized.slice(0, -1) : normalized;
+  return {
+    anchored,
+    pattern: body,
+    specificity: body.replaceAll("*", "").length,
+  };
+};
+
+const wildcardMatches = (compiled: CompiledPattern, value: string) => {
+  let patternIndex = 0;
+  let valueIndex = 0;
+  let starIndex = -1;
+  let starValueIndex = -1;
+  while (valueIndex < value.length) {
+    if (
+      patternIndex < compiled.pattern.length &&
+      compiled.pattern[patternIndex] === value[valueIndex]
+    ) {
+      patternIndex += 1;
+      valueIndex += 1;
+      continue;
+    }
+    if (compiled.pattern[patternIndex] === "*") {
+      starIndex = patternIndex;
+      starValueIndex = valueIndex;
+      patternIndex += 1;
+      continue;
+    }
+    if (starIndex === -1) {
+      return !compiled.anchored && patternIndex === compiled.pattern.length;
+    }
+    patternIndex = starIndex + 1;
+    starValueIndex += 1;
+    valueIndex = starValueIndex;
+  }
+  while (compiled.pattern[patternIndex] === "*") {
+    patternIndex += 1;
+  }
+  return patternIndex === compiled.pattern.length;
 };
 
 export const evaluatePublisherRobots = (
@@ -240,12 +311,14 @@ export const evaluatePublisherRobots = (
   const rules = selected.flatMap(({ rules: groupRules }) => groupRules);
   const normalizedPath = normalizeOctets(path);
   const matches = rules
-    .filter(({ pattern }) => ruleExpression(pattern).test(normalizedPath))
     .map((rule) => ({
       ...rule,
-      specificity: normalizeOctets(rule.pattern)
-        .replaceAll("*", "")
-        .replace(/\$$/u, "").length,
+      compiled: rule.compiled ?? compilePattern(rule.pattern),
+    }))
+    .filter(({ compiled }) => wildcardMatches(compiled, normalizedPath))
+    .map((rule) => ({
+      ...rule,
+      specificity: rule.compiled.specificity,
     }));
   const longest = Math.max(
     -1,
@@ -267,17 +340,33 @@ export const evaluatePublisherRobots = (
   };
 };
 
-const readBoundedText = async (response: Response) => {
+const abortPromise = async (signal: AbortSignal) =>
+  await new Promise<never>((_resolve, reject) => {
+    const reason = () =>
+      signal.reason instanceof Error
+        ? signal.reason
+        : new DOMException("The operation was aborted", "AbortError");
+    if (signal.aborted) {
+      reject(reason());
+      return;
+    }
+    signal.addEventListener("abort", () => reject(reason()), {
+      once: true,
+    });
+  });
+
+const readBoundedText = async (response: Response, signal: AbortSignal) => {
   if (!response.body) {
     return Result.ok("");
   }
   const chunks: Uint8Array[] = [];
   let size = 0;
   let exceeded = false;
+  // oxlint-disable-next-line require-stream-reader-disposal/require-stream-reader-disposal -- the finally block below cancels with the same overall deadline before releasing
   const reader = response.body.getReader();
   try {
     while (true) {
-      const next = await reader.read();
+      const next = await Promise.race([reader.read(), abortPromise(signal)]);
       if (next.done) {
         break;
       }
@@ -290,7 +379,7 @@ const readBoundedText = async (response: Response) => {
     }
   } finally {
     try {
-      await reader.cancel();
+      await Promise.race([reader.cancel(), abortPromise(signal)]);
     } finally {
       reader.releaseLock();
     }
@@ -337,7 +426,7 @@ type RedirectedRequestInitOptions = {
   response: Response;
   currentUrl: URL;
   nextUrl: URL;
-  requestInit: Omit<RequestInit, "redirect"> | undefined;
+  requestInit: Omit<TransportRequestInit, "redirect"> | undefined;
   headers: Headers;
 };
 
@@ -396,6 +485,7 @@ type LoadRobotsOptions = {
   now: () => number;
   robotsTtlMs: number;
   robotsRetryMs: number;
+  robotsLoadTimeoutMs: number;
 };
 
 const loadRobots = async ({
@@ -405,7 +495,9 @@ const loadRobots = async ({
   now,
   robotsTtlMs,
   robotsRetryMs,
+  robotsLoadTimeoutMs,
 }: LoadRobotsOptions): Promise<CachedRobots> => {
+  const deadline = AbortSignal.timeout(robotsLoadTimeoutMs);
   let target = new URL("/robots.txt", origin);
   let finalResponse: Response | undefined;
   let failure: unknown;
@@ -423,6 +515,7 @@ const loadRobots = async ({
       fetcher(validated.value, {
         headers: { "User-Agent": PRODUCT_TOKEN },
         redirect: "manual",
+        signal: deadline,
       }),
     );
     if (Result.isError(fetched)) {
@@ -453,7 +546,7 @@ const loadRobots = async ({
       break;
     }
     const cancelled = await Result.tryPromise(async () =>
-      fetched.value.body?.cancel(),
+      Promise.race([fetched.value.body?.cancel(), abortPromise(deadline)]),
     );
     if (Result.isError(cancelled)) {
       failure = cancelled.error.cause;
@@ -477,7 +570,7 @@ const loadRobots = async ({
     };
   }
   const body = await Result.tryPromise(async () =>
-    readBoundedText(finalResponse),
+    readBoundedText(finalResponse, deadline),
   );
   if (Result.isError(body)) {
     return {
@@ -500,6 +593,7 @@ const loadRobots = async ({
   };
 };
 
+// oxlint-disable-next-line eslint/max-lines-per-function -- one closure owns the shared robots cache, origin queues, and redirect policy
 export const createPolitePublisherFetch = ({
   validateTarget,
   fetcher = globalThis.fetch,
@@ -507,12 +601,15 @@ export const createPolitePublisherFetch = ({
     now: () => performance.now(),
     sleep: async (ms, signal) => {
       signal?.throwIfAborted();
-      await Bun.sleep(ms);
+      await (signal
+        ? Promise.race([Bun.sleep(ms), abortPromise(signal)])
+        : Bun.sleep(ms));
       signal?.throwIfAborted();
     },
   },
   robotsTtlMs = ROBOTS_TTL_MS,
   robotsRetryMs = ROBOTS_RETRY_MS,
+  robotsLoadTimeoutMs = ROBOTS_LOAD_TIMEOUT_MS,
   defaultMinimumIntervalMs = DEFAULT_MINIMUM_INTERVAL_MS,
   onTelemetry = () => undefined,
 }: PublisherFetcherOptions) => {
@@ -537,6 +634,7 @@ export const createPolitePublisherFetch = ({
       now: clock.now,
       robotsTtlMs,
       robotsRetryMs,
+      robotsLoadTimeoutMs,
     });
     robotsLoads.set(origin, pending);
     const loaded = await pending;
@@ -618,15 +716,29 @@ export const createPolitePublisherFetch = ({
           refusal,
           enforcement,
           policy,
+          delayMs: intervalMs,
         });
         decision =
           policy.type === "licensed" ? "licensed_bypass" : "audit_bypass";
       }
-      delayAppliedMs += await reserve(
-        url.origin,
-        intervalMs,
-        requestInit?.signal ?? undefined,
-      );
+      if (enforcement === "enforce") {
+        const reservationOrigin = url.origin;
+        const reservationSignal = requestInit?.signal ?? undefined;
+        const reserved = await Result.tryPromise(async () =>
+          reserve(reservationOrigin, intervalMs, reservationSignal),
+        );
+        if (Result.isError(reserved)) {
+          return Result.err(
+            new PublisherRequestAbortedError({
+              message: "Publisher request was aborted while waiting",
+              url: url.href,
+              origin: url.origin,
+              cause: reserved.error.cause,
+            }),
+          );
+        }
+        delayAppliedMs += reserved.value;
+      }
       const headers = new Headers(requestInit?.headers);
       headers.set("User-Agent", userAgent);
       const response = await fetcher(url, {
@@ -665,6 +777,7 @@ export const createPolitePublisherFetch = ({
           refusal: redirectRefusal,
           enforcement,
           policy,
+          delayMs: 0,
         });
         return Result.ok({
           response,

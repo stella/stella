@@ -33,3 +33,19 @@ test("accepts the publisher policy owner and its factory", async () => {
     ),
   ).toEqual([]);
 });
+
+test("rejects global, namespace, and Node HTTP member transports", async () => {
+  expect(
+    await lint(
+      [
+        'import * as undici from "undici";',
+        'import * as http from "node:http";',
+        'import * as https from "node:https";',
+        "await globalThis.fetch(url);",
+        "await undici.fetch(url);",
+        "http.get(url);",
+        "https.request(url);",
+      ].join("\n"),
+    ),
+  ).toEqual([4, 5, 6, 7]);
+});

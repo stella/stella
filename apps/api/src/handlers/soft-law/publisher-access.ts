@@ -159,9 +159,34 @@ export const createSoftLawFetch = ({
   reserve = reservePublisherGateSlot,
   beforeRequest,
 }: CreateSoftLawFetchOptions): SoftLawFetch => {
+  let blocked: SoftLawBlockReason | null = null;
+  const gate = PUBLISHER_GATES[policy.publisherGate];
   const auditedPublisherFetch = createPolitePublisherFetch({
     validateTarget: async (url) => {
-      const target = await validateOutboundFetchTarget(url, {
+      const restricted = restrictOutboundUrl({
+        rawUrl: url.href,
+        hostPolicy: {
+          type: "exact-origin",
+          origins: gate.hosts.map((host) => `https://${host}`),
+        },
+      });
+      if (!restricted) {
+        return Result.err(
+          new SoftLawAccessError({
+            message: "URL is outside the publisher policy",
+          }),
+        );
+      }
+      if (/challenge|captcha|cdn-cgi|access-denied/iu.test(restricted.href)) {
+        blocked = "challenge";
+        return Result.err(
+          new SoftLawBlockedError({
+            message: "Publisher redirected to a challenge",
+            reason: "challenge",
+          }),
+        );
+      }
+      const target = await validateOutboundFetchTarget(restricted, {
         protocolPolicy: OUTBOUND_PROTOCOL_POLICY.HTTP_AND_HTTPS,
         signal,
         timeoutMs: REQUEST_TIMEOUT_MS,
@@ -169,7 +194,12 @@ export const createSoftLawFetch = ({
       return target.map(({ url: validatedUrl }) => validatedUrl);
     },
     fetcher: async (input, init) => {
-      const { signal: requestSignal, ...requestInit } = init ?? {};
+      const {
+        signal: requestSignal,
+        timeout: _timeout,
+        timeoutMs: _timeoutMs,
+        ...requestInit
+      } = init ?? {};
       return await request(input, {
         ...requestInit,
         signal: requestSignal ?? undefined,
@@ -188,7 +218,6 @@ export const createSoftLawFetch = ({
       });
     },
   });
-  let blocked: SoftLawBlockReason | null = null;
   let windowState: "open" | "deferred_window" = "open";
   let leaseState: "active" | "lost" = "active";
   const getLeaseState = () => leaseState;
@@ -215,7 +244,6 @@ export const createSoftLawFetch = ({
     if (initialBlock) {
       return stop(initialBlock);
     }
-    const gate = PUBLISHER_GATES[policy.publisherGate];
     if (
       gate.intervalMs < 1000 ||
       !/^Stella\/[^\s]+ \(\+https:\/\/[^\s)]+\)$/u.test(policy.userAgent)
@@ -285,6 +313,9 @@ export const createSoftLawFetch = ({
       enforcement: "audit",
     });
     if (Result.isError(publisherOutcome)) {
+      if (blocked) {
+        return stop(blocked);
+      }
       return Result.err(
         new SoftLawAccessError({
           message: "Publisher robots policy could not be evaluated",

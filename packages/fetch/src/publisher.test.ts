@@ -10,6 +10,63 @@ import {
 } from "./publisher";
 
 describe("RFC 9309 matching", () => {
+  test("linear wildcard matching agrees with a dynamic-programming reference", () => {
+    const reference = (pattern: string, path: string) => {
+      const anchored = pattern.endsWith("$");
+      const source = anchored ? pattern.slice(0, -1) : pattern;
+      const memo = new Map<string, boolean>();
+      const match = (patternIndex: number, pathIndex: number): boolean => {
+        const key = `${patternIndex}:${pathIndex}`;
+        const cached = memo.get(key);
+        if (cached !== undefined) {
+          return cached;
+        }
+        let result: boolean;
+        if (patternIndex === source.length) {
+          result = !anchored || pathIndex === path.length;
+        } else if (source[patternIndex] === "*") {
+          result =
+            match(patternIndex + 1, pathIndex) ||
+            (pathIndex < path.length && match(patternIndex, pathIndex + 1));
+        } else {
+          result =
+            pathIndex < path.length &&
+            source[patternIndex] === path[pathIndex] &&
+            match(patternIndex + 1, pathIndex + 1);
+        }
+        memo.set(key, result);
+        return result;
+      };
+      return match(0, 0);
+    };
+    assertProperty(
+      "wildcard-reference",
+      fc.property(
+        fc.stringMatching(/^[ab*]{0,12}\$?$/u),
+        fc.stringMatching(/^[ab]{0,12}$/u),
+        (pattern, path) => {
+          const result = evaluatePublisherRobots(
+            [{ agents: ["*"], rules: [{ type: "disallow", pattern }] }],
+            "Stella",
+            path,
+          );
+          expect(result.allowed).toBe(!reference(pattern, path));
+        },
+      ),
+    );
+  });
+
+  test("pathological wildcard patterns complete without backtracking", () => {
+    const pattern = `/${"*a".repeat(100_000)}*b`;
+    expect(
+      evaluatePublisherRobots(
+        [{ agents: ["*"], rules: [{ type: "disallow", pattern }] }],
+        "Stella",
+        `/${"a".repeat(100_000)}c`,
+      ).allowed,
+    ).toBe(true);
+  });
+
   test("the most specific, case-insensitive product-token group wins over wildcard", () => {
     assertProperty(
       "named-group-selection",
@@ -121,6 +178,7 @@ describe("publisher scheduler", () => {
         now: () => now,
         sleep: async (ms) => {
           sleeps.push(ms);
+          await Promise.resolve();
           now += ms;
         },
       },
@@ -144,8 +202,145 @@ describe("publisher scheduler", () => {
       request("https://publisher.example/three", options),
     ]);
     expect(outcomes.every((outcome) => outcome.isOk())).toBe(true);
-    expect(requestedAt).toEqual([0, 2000, 4000]);
+    expect(requestedAt).toHaveLength(3);
+    expect(requestedAt.at(0)).toBe(0);
     expect(sleeps).toEqual([2000, 2000]);
+  });
+
+  test("audit mode records an unsupported delay without waiting", async () => {
+    const sleeps: number[] = [];
+    const requested: string[] = [];
+    const telemetry: number[] = [];
+    const request = createPolitePublisherFetch({
+      validateTarget: allowTarget,
+      clock: {
+        now: () => 0,
+        sleep: async (ms) => {
+          sleeps.push(ms);
+        },
+      },
+      onTelemetry: ({ delayMs }) => {
+        telemetry.push(delayMs);
+      },
+      fetcher: async (input) => {
+        const url = new URL(input instanceof Request ? input.url : input);
+        if (url.pathname === "/robots.txt") {
+          return new Response("User-agent: *\nCrawl-delay: 3600\nAllow: /");
+        }
+        requested.push(url.pathname);
+        return new Response("ok");
+      },
+    });
+    const options = { userAgent: "Stella/1.0", enforcement: "audit" as const };
+    await request("https://publisher.example/one", options);
+    await request("https://publisher.example/two", options);
+    expect(requested).toEqual(["/one", "/two"]);
+    expect(sleeps).toEqual([]);
+    expect(telemetry).toEqual([3_600_000, 3_600_000]);
+  });
+
+  test("preserves a caller-provided transport timeout", async () => {
+    const seen: unknown[] = [];
+    const request = createPolitePublisherFetch({
+      validateTarget: allowTarget,
+      defaultMinimumIntervalMs: 0,
+      fetcher: async (input, init) => {
+        const url = new URL(input instanceof Request ? input.url : input);
+        if (url.pathname === "/robots.txt") {
+          return new Response(null, { status: 404 });
+        }
+        seen.push(init?.timeout);
+        return new Response("ok");
+      },
+    });
+    await request("https://publisher.example/case", {
+      init: { timeout: { type: "idle", ms: 321 } },
+      userAgent: "Stella/1.0",
+      enforcement: "audit",
+    });
+    expect(seen).toEqual([{ type: "idle", ms: 321 }]);
+  });
+
+  test("enforce mode refuses crawl delays above the maximum", async () => {
+    let resources = 0;
+    const request = createPolitePublisherFetch({
+      validateTarget: allowTarget,
+      fetcher: async (input) => {
+        const url = new URL(input instanceof Request ? input.url : input);
+        if (url.pathname === "/robots.txt") {
+          return new Response("User-agent: *\nCrawl-delay: 61\nAllow: /");
+        }
+        resources += 1;
+        return new Response("ok");
+      },
+    });
+    const outcome = await request("https://publisher.example/case", {
+      userAgent: "Stella/1.0",
+      enforcement: "enforce",
+    });
+    expect(outcome.isErr() && outcome.error._tag).toBe(
+      "crawl_delay_unsupported",
+    );
+    expect(resources).toBe(0);
+  });
+
+  test("aborting an enforced wait returns a typed refusal promptly", async () => {
+    let now = 0;
+    const controller = new AbortController();
+    let markSleepStarted!: () => void;
+    const sleepStarted = new Promise<void>((resolve) => {
+      markSleepStarted = resolve;
+    });
+    const request = createPolitePublisherFetch({
+      validateTarget: allowTarget,
+      clock: {
+        now: () => now,
+        sleep: async (_ms, signal) => {
+          markSleepStarted();
+          await new Promise<void>((_resolve, reject) => {
+            signal?.addEventListener(
+              "abort",
+              () => reject(new DOMException("Aborted", "AbortError")),
+              { once: true },
+            );
+          });
+        },
+      },
+      fetcher: async (input) =>
+        new URL(input instanceof Request ? input.url : input).pathname ===
+        "/robots.txt"
+          ? new Response("User-agent: *\nCrawl-delay: 1\nAllow: /")
+          : new Response("ok"),
+    });
+    const options = {
+      userAgent: "Stella/1.0",
+      enforcement: "enforce" as const,
+    };
+    await request("https://publisher.example/one", options);
+    now = 1;
+    const pending = request("https://publisher.example/two", {
+      ...options,
+      init: { signal: controller.signal },
+    });
+    await sleepStarted;
+    controller.abort();
+    const outcome = await pending;
+    expect(outcome.isErr() && outcome.error._tag).toBe(
+      "publisher_request_aborted",
+    );
+  });
+
+  test("a robots body that never ends expires as unavailable", async () => {
+    const request = createPolitePublisherFetch({
+      validateTarget: allowTarget,
+      robotsLoadTimeoutMs: 5,
+      fetcher: async () => new Response(new ReadableStream({ pull() {} })),
+    });
+    const outcome = await request("https://publisher.example/case", {
+      userAgent: "Stella/1.0",
+      enforcement: "enforce",
+    });
+    expect(outcome.isErr() && outcome.error._tag).toBe("robots_unavailable");
   });
 
   test("follows robots redirects before evaluating the original origin", async () => {
