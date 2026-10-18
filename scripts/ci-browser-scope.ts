@@ -80,14 +80,17 @@ export const browserSuiteInputs = (source: string): readonly string[] => {
   return [...inputs];
 };
 
-type ScopeOptions = { changed: readonly string[]; root?: string };
+type ScopeOptions = {
+  changed: readonly string[];
+  root?: string | undefined;
+};
 const browserPredicates = new Map<
   string,
   (changed: readonly string[]) => boolean
 >();
 export const ciBrowserScopePredicate = ({
   root = ROOT,
-}: { root?: string } = {}) => {
+}: { root?: string | undefined } = {}) => {
   const cached = browserPredicates.get(root);
   if (cached !== undefined) {
     return cached;

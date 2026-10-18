@@ -1433,7 +1433,10 @@ export const markdownChecks = ({
   return [...checks.values()];
 };
 
-type ScopeOptions = { changed: readonly string[]; root?: string };
+type ScopeOptions = {
+  changed: readonly string[];
+  root?: string | undefined;
+};
 const packageScopeInputs = new Map<
   string,
   { lock: ReturnType<typeof parseLockfile>; turbo: unknown }

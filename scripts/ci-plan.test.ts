@@ -204,9 +204,14 @@ const onlyOutcome = <T>(outcomes: readonly T[]): T => {
   return outcome;
 };
 
+const isScopeOutput = (output: string): output is ScopeOutput =>
+  OUTPUT_ORDER.some((candidate) => candidate === output);
+
 type SelectorCase = {
   files: readonly string[];
-  outputs: readonly ScopeOutput[];
+  // Job-level ci-plan outputs derived in ci.yml from path scopes are not path
+  // scopes themselves: they read as unset here.
+  outputs: readonly string[];
   suiteDepth?: string;
   e2eLandingRequired?: string;
   event?: string;
@@ -224,12 +229,17 @@ const planSelector = <C extends SelectorCase>(cases: readonly C[]) =>
       heavyOnly: false,
       prTitle: item.title ?? "",
     });
-    return { item, plan: item.outputs.map((output) => scope[output] ?? "") };
+    return {
+      item,
+      plan: item.outputs.map((output) =>
+        isScopeOutput(output) ? scope[output] : "",
+      ),
+    };
   });
 
 const runSelector = (
   files: readonly string[],
-  outputs: readonly ScopeOutput[],
+  outputs: readonly string[],
   suiteDepth = "fast",
   e2eLandingRequired = "false",
   event = "pull_request",
@@ -585,8 +595,6 @@ const COMPUTED_SCOPES: ReadonlySet<string> = new Set([
   "ci_browser_required",
   "pr_heavy_gate_required",
 ]);
-const isScopeOutput = (output: string): output is ScopeOutput =>
-  OUTPUT_ORDER.some((candidate) => candidate === output);
 
 const fastJobScopes = v.parse(
   v.record(v.string(), v.string()),
@@ -2401,18 +2409,19 @@ test("a manual run plans the depth it was dispatched with, the merge queue alway
 });
 
 test("the landing site is built once when its browser checks are planned", () => {
-  const landingBuild = (suiteDepth: string, e2eLandingRequired: string) =>
-    runSelector(
-      ["apps/landing/src/pages/index.astro"],
-      ["landing_build_required"],
-      suiteDepth,
-      e2eLandingRequired,
-    ).at(0);
+  const withE2e = "apps/landing/src/pages/index.astro";
+  const withoutE2e = "docs/changelog/entry.md";
+  expect(runSelector([withE2e], ["e2e_landing_required"])).toEqual(["true"]);
+  expect(runSelector([withoutE2e], ["e2e_landing_required"])).toEqual([
+    "false",
+  ]);
+  const landingBuild = (suiteDepth: string, file: string) =>
+    runSelector([file], ["landing_build_required"], suiteDepth).at(0);
   // e2e-landing runs only at full depth, and builds the site itself there.
-  expect(landingBuild("full", "true")).toBe("false");
-  expect(landingBuild("full", "false")).toBe("true");
-  expect(landingBuild("fast", "true")).toBe("true");
-  expect(landingBuild("fast", "false")).toBe("true");
+  expect(landingBuild("full", withE2e)).toBe("false");
+  expect(landingBuild("full", withoutE2e)).toBe("true");
+  expect(landingBuild("fast", withE2e)).toBe("true");
+  expect(landingBuild("fast", withoutE2e)).toBe("true");
   expect(ciJobs["e2e-landing"]).toBeDefined();
   expect(jobSteps(ciJobs["e2e-landing"]).map(({ run }) => run)).toContain(
     jobSteps(ciJobs["landing-build"]).find(
@@ -2589,10 +2598,14 @@ test("CI rehearses every released API platform with the shared release smoke con
       runSelector(["docs/x.md"], ["api_image_platforms"], "full").at(0) ?? "",
     ),
   );
-  // workflow_dispatch plans every scope without running the selector.
-  const dispatchPlatforms = /echo 'api_image_platforms=(\[.*\])'/u.exec(
-    workflow,
-  )?.[1];
+  // workflow_dispatch plans every scope.
+  const dispatchPlatforms = runSelector(
+    [],
+    ["api_image_platforms"],
+    "full",
+    "false",
+    EVENT.workflowDispatch,
+  ).at(0);
   for (const platforms of [
     fullDepthPlatforms,
     v.parse(v.array(MatrixEntry), JSON.parse(dispatchPlatforms ?? "")),
@@ -4119,29 +4132,16 @@ test("route smoke consumes the production build and fails when its stack cannot 
   const plan = jobSteps(ciJobs["ci-plan"]).find(
     ({ name }) => name === "Check changed file scope",
   );
-  // Keep the dependency implication executable: baseline-scope edits need a
-  // build even when the ordinary app-source build filter would not select it.
-  const implicationStart = workflow.indexOf(
-    "          # The production e2e shards",
-  );
-  const implicationEnd = workflow.indexOf(
-    "          printf 'Changed files:",
-    implicationStart,
-  );
-  expect(implicationEnd).toBeGreaterThan(implicationStart);
-  const implication = workflow.slice(implicationStart, implicationEnd);
-  const result = Bun.spawnSync([
-    "bash",
-    "-e",
-    "-c",
-    `e2e_core_required=false; route_smoke_required=true; web_build_required=false
-${implication}
-[[ "$web_build_required" == true ]]`,
-  ]);
-  expect(result.exitCode).toBe(0);
-  expect(plan?.run).toContain(
-    'echo "route_smoke_required=$route_smoke_required"',
-  );
+  expect(plan?.run).toBe("bun scripts/ci-plan-scope.ts");
+  // The production e2e shards consume web-build's artifact: baseline-scope
+  // edits need a build even when the ordinary app-source filter would not
+  // select it.
+  expect(
+    runSelector(
+      ["scripts/network-baseline-check.ts"],
+      ["e2e_core_required", "route_smoke_required", "web_build_required"],
+    ),
+  ).toEqual(["true", "true", "true"]);
   expect(workflow).toContain(
     [
       "route_smoke_required: $",
@@ -4175,40 +4175,19 @@ ${implication}
 });
 
 test("an unreadable PR diff requires route smoke while manual and queue runs retain their suites", () => {
-  const start = workflow.indexOf(
-    "          # An unreadable diff must widen every scope",
-  );
-  const end = workflow.indexOf(
-    "          desktop_rust_checks_required=$(",
-    start,
-  );
-  expect(start).toBeGreaterThan(-1);
-  expect(end).toBeGreaterThan(start);
-  const directory = mkdtempSync(nodePath.join(tmpdir(), "route-smoke-plan-"));
-  const output = nodePath.join(directory, "output");
-  try {
-    for (const event of Object.values(EVENT)) {
-      writeFileSync(output, "");
-      const result = Bun.spawnSync(
-        ["bash", "-e", "-c", workflow.slice(start, end)],
-        {
-          env: {
-            EVENT_NAME: event,
-            SUITE_DEPTH: "full",
-            scope_unknown: "true",
-            GITHUB_OUTPUT: output,
-          },
-          stdout: "ignore",
-          stderr: "pipe",
-        },
-      );
-      expect(result.exitCode, result.stderr.toString()).toBe(0);
-      expect(readFileSync(output, "utf-8"))
-        .toContain(`route_smoke_required=${event === EVENT.pullRequest || event === EVENT.mergeGroup}
-`);
-    }
-  } finally {
-    rmSync(directory, { recursive: true, force: true });
+  for (const event of Object.values(EVENT)) {
+    const scope = computeChangedFileScope({
+      changedFiles: [],
+      comparisonBase: "",
+      scopeUnknown: true,
+      eventName: event,
+      suiteDepth: SUITE_DEPTH.full,
+      heavyOnly: false,
+      prTitle: "",
+    });
+    expect(scope.route_smoke_required, event).toBe(
+      String(event === EVENT.pullRequest || event === EVENT.mergeGroup),
+    );
   }
 });
 test("service-suite scopes run on pull requests only for selected corpus coverage", () => {
@@ -5300,14 +5279,14 @@ test("the advisory base proof runs only for pull requests opting in with prove-f
 });
 
 test("the exact docs-only README change plans only Markdown checks in PRs and merge groups", () => {
-  const outputs: ScopeOutput[] = [
-    ...new Set<ScopeOutput>([
+  const outputs = [
+    ...new Set([
       ...Object.values(jobScopes).filter(
-        (scope): scope is ScopeOutput =>
-          scope !== null && !COMPUTED_SCOPES.has(scope) && isScopeOutput(scope),
+        (scope): scope is string =>
+          scope !== null && !COMPUTED_SCOPES.has(scope),
       ),
       "desktop_browser_required",
-      ...Object.values(fastJobScopes).filter(isScopeOutput),
+      ...Object.values(fastJobScopes),
       "docs_checks_required",
       "docs_changed_files",
     ]),
@@ -5422,14 +5401,14 @@ test("the exact docs-only README change plans only Markdown checks in PRs and me
 });
 
 test("mixed documentation and code changes retain the complete code plan", () => {
-  const outputs: ScopeOutput[] = [
-    ...new Set<ScopeOutput>([
+  const outputs = [
+    ...new Set([
       ...Object.values(jobScopes).filter(
-        (scope): scope is ScopeOutput =>
-          scope !== null && !COMPUTED_SCOPES.has(scope) && isScopeOutput(scope),
+        (scope): scope is string =>
+          scope !== null && !COMPUTED_SCOPES.has(scope),
       ),
       "desktop_browser_required",
-      ...Object.values(fastJobScopes).filter(isScopeOutput),
+      ...Object.values(fastJobScopes),
       "docs_checks_required",
       "docs_changed_files",
     ]),

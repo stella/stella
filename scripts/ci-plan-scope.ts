@@ -13,6 +13,7 @@ import {
 } from "./ci-package-scope";
 import { routeSmokeAffected } from "./detect-route-smoke-changes";
 import { planServiceSuites } from "./detect-service-suite-changes";
+import { productionE2eChanged } from "./production-e2e-inputs.mjs";
 
 const TRUE = "true";
 const FALSE = "false";
@@ -24,13 +25,13 @@ export type ChangedFileScopeInput = {
   changedFiles: readonly string[];
   comparisonBase: string;
   scopeUnknown: boolean;
-  dependencyScope?: DependencyScope;
+  dependencyScope?: DependencyScope | undefined;
   eventName: string;
   suiteDepth: string;
   heavyOnly: boolean;
   prTitle: string;
   versionChangedInHead?: boolean;
-  root?: string;
+  root?: string | undefined;
 };
 
 export type ChangedFileScope = Record<ScopeOutput, string>;
@@ -101,10 +102,7 @@ const commonE2e = [
   "package.json",
   "patches/*",
 ] as const;
-const e2eRequired = (
-  scope: "core" | "landing" | "pr-core",
-  files: readonly string[],
-) => {
+const e2eRequired = (scope: "core" | "landing", files: readonly string[]) => {
   if (anyMatches(files, commonE2e)) {
     return true;
   }
@@ -126,20 +124,13 @@ const e2eRequired = (
         ]),
     );
   }
-  if (scope === "landing") {
-    return anyMatches(files, [
-      "apps/landing/*",
-      "packages/playwright-tools/*",
-      "packages/ui/*",
-      "packages/anonymize-*",
-      "packages/locales/*",
-    ]);
-  }
-  return files.some(
-    (file) =>
-      file.startsWith("apps/web/e2e/") &&
-      !file.startsWith("apps/web/e2e/marketing/"),
-  );
+  return anyMatches(files, [
+    "apps/landing/*",
+    "packages/playwright-tools/*",
+    "packages/ui/*",
+    "packages/anonymize-*",
+    "packages/locales/*",
+  ]);
 };
 
 const desktopRustRequired = (files: readonly string[]) =>
@@ -643,8 +634,7 @@ export const OUTPUT_RULES = {
         bool(
           full
             ? e2eCore
-            : input.eventName === "pull_request" &&
-                e2eRequired("pr-core", files),
+            : input.eventName === "pull_request" && productionE2eChanged(files),
         ),
     ),
   e2e_landing_required: (facts) =>

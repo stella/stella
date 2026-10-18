@@ -101,21 +101,22 @@ export const productionE2eInputs = (configPath) => {
   return { testDirectory, files };
 };
 
+/** @param {readonly string[]} changedFiles Paths relative to the working directory. */
+export const productionE2eChanged = (changedFiles) => {
+  const root = path.dirname(CONFIG_PATH);
+  const absoluteFiles = changedFiles.map((file) => path.resolve(file));
+  if (!absoluteFiles.some((file) => isPathStrictlyInside(root, file))) {
+    return false;
+  }
+  const { testDirectory, files } = productionE2eInputs(CONFIG_PATH);
+  return absoluteFiles.some(
+    (file) => isPathStrictlyInside(testDirectory, file) || files.has(file),
+  );
+};
+
 if (
   process.argv[1] !== undefined &&
   import.meta.filename === path.resolve(process.argv[1])
 ) {
-  const changedFiles = process.argv.slice(2);
-  const root = path.dirname(CONFIG_PATH);
-  const absoluteFiles = changedFiles.map((file) => path.resolve(file));
-  if (!absoluteFiles.some((file) => isPathStrictlyInside(root, file))) {
-    console.log(false);
-  } else {
-    const { testDirectory, files } = productionE2eInputs(CONFIG_PATH);
-    console.log(
-      absoluteFiles.some(
-        (file) => isPathStrictlyInside(testDirectory, file) || files.has(file),
-      ),
-    );
-  }
+  console.log(productionE2eChanged(process.argv.slice(2)));
 }
