@@ -21,7 +21,7 @@ export const SKILL_HISTORY_UNAVAILABLE = {
   reason: "binding-scope",
   status: "skill-unavailable",
 } as const;
-export const SKILL_HISTORY_UNAVAILABLE_TEXT =
+const SKILL_HISTORY_UNAVAILABLE_TEXT =
   "Skill unavailable in this conversation scope.";
 
 type SkillUnavailableOutput = typeof SKILL_HISTORY_UNAVAILABLE & {

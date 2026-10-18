@@ -29,6 +29,7 @@ import type {
 } from "@/api/lib/agent-skills/binding";
 import { requireEditableSkillOrigin } from "@/api/lib/agent-skills/origin";
 import type { SafeId } from "@/api/lib/branded-types";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
@@ -829,24 +830,32 @@ export const loadReadableChatSkillBindings = async ({
   if (skillIds.length === 0) {
     return Result.ok(new Map());
   }
-  const rows = await safeDb((tx) =>
-    tx
-      .select({
-        boundClientId: agentSkills.boundClientId,
-        boundWorkspaceId: agentSkills.boundWorkspaceId,
-        contentHash: agentSkills.contentHash,
-        id: agentSkills.id,
-      })
-      .from(agentSkills)
-      .where(
-        and(
-          eq(agentSkills.organizationId, organizationId),
-          inArray(agentSkills.id, [...skillIds]),
-          or(eq(agentSkills.scope, "team"), eq(agentSkills.userId, userId)),
+  const rows = await safeDb(async (tx) => {
+    const read = await readBounded(
+      tx
+        .select({
+          boundClientId: agentSkills.boundClientId,
+          boundWorkspaceId: agentSkills.boundWorkspaceId,
+          contentHash: agentSkills.contentHash,
+          id: agentSkills.id,
+        })
+        .from(agentSkills)
+        .where(
+          and(
+            eq(agentSkills.organizationId, organizationId),
+            inArray(agentSkills.id, [...skillIds]),
+            or(eq(agentSkills.scope, "team"), eq(agentSkills.userId, userId)),
+          ),
         ),
-      )
-      .limit(LIMITS.agentSkillsPerUser),
-  );
+      LIMITS.agentSkillsPerUser,
+    );
+    if (read.type === "overflow") {
+      return panic("Readable chat skill bindings exceeded their bounded read", {
+        cap: read.cap,
+      });
+    }
+    return read.rows;
+  });
   if (Result.isError(rows)) {
     return Result.err(rows.error);
   }

@@ -16,11 +16,15 @@ import {
   skillBindingAllows,
 } from "@/api/lib/agent-skills/binding";
 import { SKILL_CONTENT_TOOL_NAMES } from "@/api/lib/agent-skills/skill-content-tools";
-import { CHAT_SKILL_SOURCE } from "@/api/lib/agent-skills/skills";
+import {
+  CHAT_SKILL_SOURCE,
+  loadReadableChatSkillBindings,
+} from "@/api/lib/agent-skills/skills";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LIMITS } from "@/api/lib/limits";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const THREAD_ID = toSafeId<"chatThread">(
@@ -218,6 +222,49 @@ const scopeFor = async (
 };
 
 describe("loaded skill bodies in chat history", () => {
+  test("refuses an overflowing binding lookup instead of truncating it", async () => {
+    let requestedLimit: number | undefined;
+    const rows = Array.from(
+      { length: LIMITS.agentSkillsPerUser + 1 },
+      (_, index) => ({
+        boundClientId: null,
+        boundWorkspaceId: null,
+        contentHash: `${index}`,
+        id: toSafeId<"agentSkill">(
+          `00000000-0000-4000-8000-${index.toString().padStart(12, "0")}`,
+        ),
+      }),
+    );
+    const result = await loadReadableChatSkillBindings({
+      organizationId: toSafeId<"organization">(
+        "00000000-0000-4000-8000-0000000000ef",
+      ),
+      safeDb: asTestRaw<SafeDb>(
+        async (run: (tx: unknown) => Promise<unknown>) =>
+          await Result.tryPromise(
+            async () =>
+              await run({
+                select: () => ({
+                  from: () => ({
+                    where: () => ({
+                      limit: async (limit: number) => {
+                        requestedLimit = limit;
+                        return rows.slice(0, limit);
+                      },
+                    }),
+                  }),
+                }),
+              }),
+          ),
+      ),
+      skillIds: [SKILL_ID],
+      userId: toSafeId<"user">("00000000-0000-4000-8000-0000000000f0"),
+    });
+
+    expect(requestedLimit).toBe(LIMITS.agentSkillsPerUser + 1);
+    expect(Result.isError(result)).toBe(true);
+  });
+
   test("withholds a matter-bound body after another client's matter is added", async () => {
     const history = [loadedSkillMessage()];
     const binding = readableBinding(MATTER_A);
