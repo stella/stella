@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { readdir } from "node:fs/promises";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 const WORKFLOW_DIRECTORY = path.join(import.meta.dir, "../.github/workflows");
@@ -34,26 +34,26 @@ const workflowRunsTests = (workflow: Record<string, unknown>): boolean => {
       return false;
     }
 
-    return job["steps"].some(
-      (step) =>
-        isRecord(step) &&
-        typeof step["run"] === "string" &&
-        TEST_COMMAND_PATTERNS.some((pattern) =>
-          pattern.test(step["run"] as string),
-        ),
-    );
+    return job["steps"].some((step) => {
+      const run = isRecord(step) ? step["run"] : undefined;
+      return (
+        typeof run === "string" &&
+        TEST_COMMAND_PATTERNS.some((pattern) => pattern.test(run))
+      );
+    });
   });
 };
 
-test("workflows that run tests disable Git background maintenance", async () => {
-  const workflowFiles = (await readdir(WORKFLOW_DIRECTORY))
+test("workflows that run tests disable Git background maintenance", () => {
+  const workflowFiles = readdirSync(WORKFLOW_DIRECTORY)
     .filter((file) => file.endsWith(".yml") || file.endsWith(".yaml"))
     .toSorted();
   const violations: string[] = [];
 
   for (const file of workflowFiles) {
-    const workflowPath = path.join(WORKFLOW_DIRECTORY, file);
-    const parsed: unknown = Bun.YAML.parse(await Bun.file(workflowPath).text());
+    const parsed: unknown = Bun.YAML.parse(
+      readFileSync(path.join(WORKFLOW_DIRECTORY, file), "utf-8"),
+    );
     if (!isRecord(parsed) || !workflowRunsTests(parsed)) {
       continue;
     }
