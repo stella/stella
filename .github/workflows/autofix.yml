@@ -593,14 +593,42 @@ jobs:
 
           if (( ${#lint_paths[@]} > 0 )); then
             # Type-aware fixes need the complete generated type graph. set -e
-            # aborts on preparation or compiler errors before any fixer runs.
+            # aborts on preparation errors before any fixer runs.
             bun scripts/ci-generated-sources.ts prepare
-            bun scripts/typecheck-coverage.ts --autofix "${lint_paths[@]}"
+            backup="$RUNNER_TEMP/autofix-lint-backup"
+            for path in "${lint_paths[@]}"; do
+              mkdir -p "$backup/$(dirname "$path")"
+              cp -p "$path" "$backup/$path"
+            done
             # --fix applies safe fixes only. CI's lint job reports anything left.
+            restore_lint_paths() {
+              for path in "${lint_paths[@]}"; do
+                cp -p "$backup/$path" "$path"
+              done
+            }
             lint_status=0
             bun --bun oxlint -c oxlint.config.ts --no-error-on-unmatched-pattern --type-aware --fix "${lint_paths[@]}" || lint_status=$?
             if (( lint_status > 1 )); then
+              restore_lint_paths
               exit "$lint_status"
+            fi
+            # A type-aware fix is kept only when its project type-checks. A
+            # push the fixer leaves unchanged has nothing to keep, so it skips
+            # the full project check; CI's typecheck reports its types.
+            fixed=false
+            for path in "${lint_paths[@]}"; do
+              if ! cmp -s "$path" "$backup/$path"; then
+                fixed=true
+                break
+              fi
+            done
+            if [[ "$fixed" == true ]]; then
+              typecheck_status=0
+              bun scripts/typecheck-coverage.ts --autofix "${lint_paths[@]}" || typecheck_status=$?
+              if (( typecheck_status != 0 )); then
+                restore_lint_paths
+                exit "$typecheck_status"
+              fi
             fi
           fi
           if (( ${#format_paths[@]} > 0 )); then
