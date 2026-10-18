@@ -16,6 +16,7 @@ import {
 import type {
   CitationAnchorSource,
   DecisionProvisionAnchor,
+  ExternalDecisionProvisionAnchor,
   DecisionStatuteCitationAnchor,
 } from "@stll/decision-reader/reader-types";
 import { locateCitationSpans } from "@stll/legal-ast/citation-passage";
@@ -37,6 +38,9 @@ export type WebDecisionReaderProps = Omit<
   surface: DecisionReaderSurface;
   landingSessionId?: string | undefined;
   citationAnchors?: readonly CitationAnchorSource[] | undefined;
+  externalProvisionAnchors?:
+    | readonly ExternalDecisionProvisionAnchor[]
+    | undefined;
   provisionAnchors?: readonly DecisionProvisionAnchor[] | undefined;
   statuteCitationAnchors?: readonly DecisionStatuteCitationAnchor[] | undefined;
 };
@@ -52,6 +56,7 @@ const WebDecisionReaderContent = ({
   annotationAnchors = NO_ANCHORS,
   citationAnchors = NO_ANCHORS,
   provisionAnchors = NO_ANCHORS,
+  externalProvisionAnchors = NO_ANCHORS,
   statuteCitationAnchors = NO_ANCHORS,
   surface,
   landingSessionId,
@@ -98,6 +103,7 @@ const WebDecisionReaderContent = ({
     annotationAnchors: hydrated ? annotationAnchors : NO_ANCHORS,
     citationAnchors: citations,
     provisionAnchors: hydrated ? provisionAnchors : NO_ANCHORS,
+    externalProvisionAnchors: hydrated ? externalProvisionAnchors : NO_ANCHORS,
     statuteCitationAnchors: hydrated ? statuteCitationAnchors : NO_ANCHORS,
   });
   useProvisionPlacementTelemetry({
