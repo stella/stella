@@ -145,7 +145,7 @@
     "ci.yml/e2e-production-shard": "pr-fast",
     "ci.yml/stack-redaction-browsers": "queue",
     "ci.yml/e2e-vite-canary": "queue",
-    "ci.yml/e2e-landing": "queue",
+    "ci.yml/e2e-landing": "pr-fast",
     "ci.yml/marketing-screenshots": "queue",
     "ci.yml/marketing-screenshots-cancel": "queue",
     "ci.yml/e2e-report": "queue",

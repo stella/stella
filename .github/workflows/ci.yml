@@ -6891,7 +6891,7 @@ jobs:
           FAST_JOB_SCOPES: >-
             {"postgres-service-suites": "postgres_service_suites_required", "service-suites": "service_suites_pr_required", "docker-checks": "docker_checks_pr_required", "legal-atlas-image": "legal_atlas_image_pr_required", "web-build": "browser_spec_selection_required"}
           FAST_REQUIRED: >-
-            ["ci-quick-checks", "generated-sources", "pr-heavy-gate", "desktop-rust-lint", "ci-browser", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "code-quality-api", "code-quality-web-rest", "dependency-malware", "ci-tests", "e2e-production-shard", "web-build", "scan-engine-wasm-drift", "query-perf"]
+            ["ci-quick-checks", "generated-sources", "pr-heavy-gate", "desktop-rust-lint", "ci-browser", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "code-quality-api", "code-quality-web-rest", "dependency-malware", "ci-tests", "e2e-landing", "e2e-production-shard", "web-build", "scan-engine-wasm-drift", "query-perf"]
         run: |
           # The run's own record of which jobs it required. Every job this
           # step waits on except ci-plan is either required, with its
