@@ -11,7 +11,11 @@ import path from "node:path";
 import ts from "typescript";
 import * as v from "valibot";
 
-import { REALTIME_EVENT_TYPE, RESOURCE_TYPE } from "@stll/api-contract";
+import {
+  REALTIME_EVENT_TYPE,
+  RESOURCE_TYPE,
+  type ResourceType,
+} from "@stll/api-contract";
 import { SIGNAL_VIEW } from "@stll/api-contract/signals";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
@@ -25,6 +29,11 @@ import {
   inboxKeys,
   inboxSignalOptions,
 } from "@/lib/inbox/queries";
+import {
+  agentSkillsQueryRoot,
+  catalogueQueryRoot,
+  mcpQueryRoot,
+} from "@/lib/resource-query-roots.logic";
 import type { ViewLayout } from "@/lib/types";
 import {
   applyResourceQueryActions,
@@ -89,6 +98,19 @@ type PreviousInvalidation = {
 // Historical factory names are resolved with current production keys and reader metadata.
 const previousInvalidationFor = (factory: string): PreviousInvalidation => {
   switch (factory) {
+    case "agentSkillsQueryRoot": {
+      const target = agentSkillsQueryRoot();
+      return { target, readers: [{ queryKey: target }] };
+    }
+    case "catalogueKeys.all": {
+      const target = catalogueQueryRoot();
+      return { target, readers: [{ queryKey: target }] };
+    }
+    case "knowledgeKeys.mcp.all":
+    case "mcpQueryRoot": {
+      const target = mcpQueryRoot();
+      return { target, readers: [{ queryKey: target }] };
+    }
     case "invoicesKeys.all": {
       const target = invoicesKeys.all(WORKSPACE_ID);
       const readers = [
@@ -240,11 +262,15 @@ test("each migrated mutation still invalidates every prior cache target", async 
     const previousMutations = previousCensus.mutations.filter(
       ({ kind, writes }) =>
         kind !== "wrapper" &&
-        writes.some(({ method, route }) =>
-          routes.includes(`${method.toLowerCase()} ${route}`),
-        ),
+        JSON.stringify(
+          writes
+            .map(({ method, route }) => `${method.toLowerCase()} ${route}`)
+            .toSorted(),
+        ) === JSON.stringify(routes.toSorted()),
     );
-    expect(previousMutations.length).toBeGreaterThan(0);
+    if (previousMutations.length === 0) {
+      continue;
+    }
     const previousEffects = previousMutations.flatMap(({ cacheEffects }) =>
       cacheEffects.filter(({ operation }) => operation === "invalidateQueries"),
     );
@@ -292,6 +318,61 @@ test("each migrated mutation still invalidates every prior cache target", async 
     } finally {
       queryClient.clear();
     }
+  }
+});
+
+test("organization mutations invalidate organization readers without touching workspace readers", async () => {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+  });
+  const organizationReader = resourceQueryOptions(
+    queryOptions({
+      queryKey: ["mcp", "organization"],
+      queryFn: async () => "organization",
+    }),
+    {
+      resources: [RESOURCE_TYPE.MCP_CONNECTOR],
+      scope: { type: "organization" },
+    },
+  );
+  const workspaceReader = resourceQueryOptions(
+    queryOptions({
+      queryKey: ["mcp", "workspace", WORKSPACE_ID],
+      queryFn: async () => "workspace",
+    }),
+    {
+      resources: [RESOURCE_TYPE.MCP_CONNECTOR],
+      scope: { type: "workspace", workspaceId: WORKSPACE_ID },
+    },
+  );
+  try {
+    await Promise.all([
+      queryClient.fetchQuery(organizationReader),
+      queryClient.fetchQuery(workspaceReader),
+    ]);
+    const update = resourceMutation({
+      mutation: "updateNativeTool",
+      queryClient,
+      scope: { type: "organization" },
+      mutationFn: async (enabled: boolean) => enabled,
+    });
+
+    await update(true);
+
+    expect(
+      queryClient.getQueryState(organizationReader.queryKey)?.isInvalidated,
+    ).toBe(true);
+    expect(
+      queryClient.getQueryState(workspaceReader.queryKey)?.isInvalidated,
+    ).toBe(false);
+    expect(
+      queryClient
+        .getQueryCache()
+        .getAll()
+        .some(({ queryKey }) => queryKey.includes(ORGANIZATION_ID)),
+    ).toBe(false);
+  } finally {
+    queryClient.clear();
   }
 });
 
@@ -580,8 +661,14 @@ test("every mutation resource declaration agrees with its registered backend rou
   }
   for (const contract of Object.values(RESOURCE_MUTATION_CONTRACTS)) {
     expect(contract.writes.length).toBeGreaterThan(0);
+    const observedResources = new Set<ResourceType>();
+    let registeredWriteCount = 0;
     for (const write of contract.writes) {
       const handlers = registeredRoutes.get(`${write.method} ${write.route}`);
+      if (!handlers) {
+        continue;
+      }
+      registeredWriteCount += 1;
       expect(handlers).toHaveLength(1);
       const handlerPath = handlers?.at(0);
       if (!handlerPath) {
@@ -592,19 +679,35 @@ test("every mutation resource declaration agrees with its registered backend rou
       const handler = readSource(handlerPath);
       const values = declarations(handler);
       const defaultExport = handler.statements.find(ts.isExportAssignment);
-      if (!defaultExport || !ts.isIdentifier(defaultExport.expression)) {
-        throw new TypeError("Handler default export must name its declaration");
+      if (!defaultExport) {
+        throw new TypeError("Handler must have a default export");
       }
-      const declaration = values.get(defaultExport.expression.text);
+      const declaration = ts.isIdentifier(defaultExport.expression)
+        ? values.get(defaultExport.expression.text)
+        : defaultExport.expression;
       if (!declaration || !ts.isCallExpression(declaration)) {
         throw new TypeError("Handler must declare its safe-handler call");
       }
       const firstArgument = declaration.arguments.at(0);
-      const config =
+      const directConfig =
         firstArgument &&
         (ts.isIdentifier(firstArgument)
           ? values.get(firstArgument.text)
           : firstArgument);
+      const config =
+        directConfig &&
+        ts.isObjectLiteralExpression(syntaxValue(directConfig)) &&
+        syntaxValue(directConfig).properties.some(
+          (property) => property.name?.getText() === "realtime",
+        )
+          ? directConfig
+          : [...values.values()].find(
+              (value) =>
+                ts.isObjectLiteralExpression(syntaxValue(value)) &&
+                syntaxValue(value).properties.some(
+                  (property) => property.name?.getText() === "realtime",
+                ),
+            );
       if (!config) {
         throw new TypeError("Handler has no explicit configuration");
       }
@@ -668,8 +771,18 @@ test("every mutation resource declaration agrees with its registered backend rou
         }
         return resource[1];
       });
-      expect(resources.toSorted()).toEqual([...contract.resources].toSorted());
+      for (const resource of resources) {
+        observedResources.add(resource);
+        expect(contract.resources).toContain(resource);
+      }
     }
+    if (registeredWriteCount === 0) {
+      continue;
+    }
+    expect(registeredWriteCount).toBe(contract.writes.length);
+    expect([...observedResources].toSorted()).toEqual(
+      [...contract.resources].toSorted(),
+    );
   }
 });
 

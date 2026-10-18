@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
+import { compareCodeUnit } from "@stll/collation";
+
 import {
   inspectMutationQuerySources,
   isMutationQueryCensusSource,
@@ -81,6 +83,36 @@ test("transitive reader wrappers retain bound keys and routes without classifyin
   });
   expect(wrappers.filter(({ callee }) => callee === "load")).toHaveLength(2);
   expect(census.readers.some(({ callee }) => callee === "factory")).toBe(false);
+});
+
+test("route reader helpers census their options argument", () => {
+  const census = inspectMutationQuerySources([
+    {
+      file: "apps/web/src/route.ts",
+      text: `
+        import { ensureRouteInfiniteQueryData, ensureRouteQueryData } from "@/lib/react-query";
+        const tagged = { queryKey: ["organization", "settings"], queryFn: async () => null };
+        ensureRouteQueryData(queryClient, tagged);
+        ensureRouteInfiniteQueryData(queryClient, { queryKey: ["organization", "pages"], queryFn: async () => null });
+      `,
+    },
+  ]);
+  expect(
+    census.readers
+      .map(({ callee, key }) => ({ callee, key }))
+      .toSorted((left, right) => compareCodeUnit(left.callee, right.callee)),
+  ).toEqual([
+    {
+      callee: "ensureRouteInfiniteQueryData",
+      key: expect.objectContaining({ staticPrefix: ["organization", "pages"] }),
+    },
+    {
+      callee: "ensureRouteQueryData",
+      key: expect.objectContaining({
+        staticPrefix: ["organization", "settings"],
+      }),
+    },
+  ]);
 });
 
 test("installed QueryClient read methods retain readers and exclude resolved key factories", () => {

@@ -1,6 +1,10 @@
 import { useState } from "react";
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueryClient,
+  type QueryClient,
+} from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -28,6 +32,7 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import { knowledgeKeys } from "@/lib/knowledge/queries";
 import { catalogueKeys } from "@/lib/knowledge/queries/catalogue";
 import { openMcpOAuthWindow } from "@/lib/mcp-oauth-channel";
+import { resourceMutation } from "@/lib/workspace-realtime";
 
 type CreatedConnector = {
   slug: string;
@@ -58,6 +63,24 @@ type AddServerParams = {
 
 const initialWizard = (): WizardState => ({ step: "url", url: "" });
 
+const invalidateMcpQueries = (
+  queryClient: QueryClient,
+  organizationId: string,
+) => {
+  detached(
+    queryClient.invalidateQueries({
+      queryKey: catalogueKeys.all(organizationId),
+    }),
+    "add-mcp-server-sheet.invalidate",
+  );
+  detached(
+    queryClient.invalidateQueries({
+      queryKey: knowledgeKeys.mcp.all(organizationId),
+    }),
+    "add-mcp-server-sheet.invalidate",
+  );
+};
+
 export const AddMcpServerSheet = ({
   open,
   onOpenChange,
@@ -67,20 +90,7 @@ export const AddMcpServerSheet = ({
   const queryClient = useQueryClient();
   const [wizard, setWizard] = useState<WizardState>(initialWizard);
 
-  const invalidate = () => {
-    detached(
-      queryClient.invalidateQueries({
-        queryKey: catalogueKeys.all(organizationId),
-      }),
-      "add-mcp-server-sheet.invalidate",
-    );
-    detached(
-      queryClient.invalidateQueries({
-        queryKey: knowledgeKeys.mcp.all(organizationId),
-      }),
-      "add-mcp-server-sheet.invalidate",
-    );
-  };
+  const invalidate = () => invalidateMcpQueries(queryClient, organizationId);
 
   const close = () => {
     setWizard(initialWizard());
@@ -97,12 +107,17 @@ export const AddMcpServerSheet = ({
   };
 
   const connectMutation = useMutation({
-    mutationFn: async (connector: CreatedConnector) => {
-      const response = await api.mcp
-        .connectors({ slug: connector.slug })
-        .connect.post({});
-      return { connector, data: unwrapEden(response) };
-    },
+    mutationFn: resourceMutation({
+      mutation: "connectMcpServer",
+      queryClient,
+      scope: { type: "organization" },
+      mutationFn: async (connector: CreatedConnector) => {
+        const response = await api.mcp
+          .connectors({ slug: connector.slug })
+          .connect.post({});
+        return { connector, data: unwrapEden(response) };
+      },
+    }),
     onSuccess: ({ connector, data }) => {
       if (data.type === "bearer") {
         setWizard({ step: "token", createdConnector: connector, token: "" });
@@ -131,10 +146,15 @@ export const AddMcpServerSheet = ({
   });
 
   const addServerMutation = useMutation({
-    mutationFn: async (params: AddServerParams) => {
-      const response = await api.mcp.connectors.post(params);
-      return unwrapEden(response);
-    },
+    mutationFn: resourceMutation({
+      mutation: "addMcpServer",
+      queryClient,
+      scope: { type: "organization" },
+      mutationFn: async (params: AddServerParams) => {
+        const response = await api.mcp.connectors.post(params);
+        return unwrapEden(response);
+      },
+    }),
     onSuccess: (data, { url }) => {
       switch (data.type) {
         case "confirmation_required":
@@ -157,13 +177,18 @@ export const AddMcpServerSheet = ({
   });
 
   const saveTokenMutation = useMutation({
-    mutationFn: async (payload: { connectorSlug: string; token: string }) => {
-      const response = await api.mcp.connections.post({
-        connectorSlug: payload.connectorSlug,
-        token: payload.token,
-      });
-      return unwrapEden(response);
-    },
+    mutationFn: resourceMutation({
+      mutation: "saveMcpToken",
+      queryClient,
+      scope: { type: "organization" },
+      mutationFn: async (payload: { connectorSlug: string; token: string }) => {
+        const response = await api.mcp.connections.post({
+          connectorSlug: payload.connectorSlug,
+          token: payload.token,
+        });
+        return unwrapEden(response);
+      },
+    }),
     onSuccess: () => {
       stellaToast.add({
         title: t("knowledge.mcp.connectedToast"),

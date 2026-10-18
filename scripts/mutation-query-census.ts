@@ -6,7 +6,12 @@ import ts from "typescript";
 import { compareCodeUnit } from "@stll/collation";
 
 const MUTATIONS = new Set(["useMutation", "mutationOptions"]);
+const ROUTE_READER_HELPERS = new Set([
+  "ensureRouteQueryData",
+  "ensureRouteInfiniteQueryData",
+]);
 const READERS = new Set([
+  ...ROUTE_READER_HELPERS,
   "queryOptions",
   "infiniteQueryOptions",
   "useQuery",
@@ -183,6 +188,8 @@ const callName = (node: ts.Node): string | undefined => {
   }
   return undefined;
 };
+const readerOptionsIndex = (primitive: string | undefined): number =>
+  ROUTE_READER_HELPERS.has(primitive ?? "") ? 1 : 0;
 const nearestScope = (node: ts.Node): ts.Node => {
   let scope = node.parent;
   while (
@@ -439,7 +446,9 @@ class CallScanner {
     const route = this.analyzer.routeOf(node);
     if (this.analyzer.isExecutingReader(node)) {
       this.readerOf.add(this.analyzer.location(node).id);
-      const argument = node.arguments.at(0);
+      const argument = node.arguments.at(
+        ROUTE_READER_HELPERS.has(name ?? "") ? 1 : 0,
+      );
       if (argument) {
         const options = this.analyzer.optionsOf({
           node: argument,
@@ -1341,7 +1350,7 @@ class CensusAnalyzer {
     if (reader && !readerWrapper && readerDisposition === "ambiguous") {
       unknown("unresolved-query-client-receiver", call.expression);
     }
-    const argument = call.arguments.at(0);
+    const argument = call.arguments.at(readerOptionsIndex(primitive));
     const env: Environment = new Map();
     if ((mutation && !MUTATIONS.has(primitive ?? "")) || readerWrapper) {
       const body = this.invocation(call, env);

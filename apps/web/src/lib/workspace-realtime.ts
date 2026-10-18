@@ -111,36 +111,89 @@ export const RESOURCE_MUTATION_CONTRACTS = {
     writes: [{ method: "PATCH", route: "/entities/:workspaceId/rename" }],
     resources: [RESOURCE_TYPE.ENTITY],
   },
+  installCatalogueEntry: {
+    writes: [
+      { method: "POST", route: "/catalogue/install-skill" },
+      { method: "POST", route: "/mcp/connectors" },
+      { method: "PATCH", route: "/mcp/native-tools/:slug" },
+    ],
+    resources: [RESOURCE_TYPE.AGENT_SKILL, RESOURCE_TYPE.MCP_CONNECTOR],
+  },
+  uninstallCatalogueEntry: {
+    writes: [
+      { method: "DELETE", route: "/mcp/connectors/:slug" },
+      { method: "PATCH", route: "/mcp/native-tools/:slug" },
+      { method: "DELETE", route: "/skills/:skillId" },
+    ],
+    resources: [
+      RESOURCE_TYPE.AGENT_SKILL,
+      RESOURCE_TYPE.AGENT_SKILL_COMMENT,
+      RESOURCE_TYPE.AGENT_SKILL_PROPOSAL,
+      RESOURCE_TYPE.AGENT_SKILL_RESOURCE,
+      RESOURCE_TYPE.AGENT_SKILL_REVISION,
+      RESOURCE_TYPE.MCP_CONNECTOR,
+    ],
+  },
+  updateNativeTool: {
+    writes: [{ method: "PATCH", route: "/mcp/native-tools/:slug" }],
+    resources: [RESOURCE_TYPE.MCP_CONNECTOR],
+  },
+  addMcpServer: {
+    writes: [{ method: "POST", route: "/mcp/connectors" }],
+    resources: [RESOURCE_TYPE.MCP_CONNECTOR],
+  },
+  connectMcpServer: {
+    writes: [{ method: "POST", route: "/mcp/connectors/:slug/connect" }],
+    resources: [RESOURCE_TYPE.MCP_CONNECTOR],
+  },
+  saveMcpToken: {
+    writes: [{ method: "POST", route: "/mcp/connections" }],
+    resources: [RESOURCE_TYPE.MCP_CONNECTOR],
+  },
+  deleteOrganization: {
+    writes: [{ method: "DELETE", route: "/organization" }],
+    resources: [RESOURCE_TYPE.ORGANIZATION],
+  },
 } as const;
 
-type ResourceMutationOptions<
-  TVariables extends { workspaceId: string },
-  TData,
-> = {
+type ResourceMutationOptions<TVariables, TData> = {
   mutation: keyof typeof RESOURCE_MUTATION_CONTRACTS;
   queryClient: QueryClient;
   mutationFn: (variables: TVariables) => Promise<TData>;
-};
+} & ({ scope?: { type: "workspace" } } | { scope: { type: "organization" } });
 
 /** A committed write marks every registered reader stale before it settles. */
 export const resourceMutation =
-  <TVariables extends { workspaceId: string }, TData>({
+  <TVariables, TData>({
     mutation,
     queryClient,
     mutationFn,
+    scope,
   }: ResourceMutationOptions<TVariables, TData>) =>
   async (variables: TVariables) => {
     const data = await mutationFn(variables);
     const resources = RESOURCE_MUTATION_CONTRACTS[mutation].resources;
+    const resourceScope =
+      scope?.type === "organization"
+        ? scope
+        : {
+            type: "workspace" as const,
+            workspaceId: (variables as { workspaceId: string }).workspaceId,
+          };
     const actions = registeredResourceQueryActions({
       queryClient,
       resources,
-      scope: { type: "workspace", workspaceId: variables.workspaceId },
+      scope: resourceScope,
     });
-    for (const resource of resources) {
-      actions.push(
-        ...getResourceTypeInvalidationActions(resource, variables.workspaceId),
-      );
+    if (resourceScope.type === "workspace") {
+      for (const resource of resources) {
+        actions.push(
+          ...getResourceTypeInvalidationActions(
+            resource,
+            resourceScope.workspaceId,
+          ),
+        );
+      }
     }
     await applyResourceQueryActions(
       queryClient,
@@ -203,6 +256,7 @@ export type WorkspaceRealtimeQueryAction =
 const RESOURCE_QUERY_SCOPE = {
   ANONYMIZATION: "anonymization",
   BILLING_CODES: "billing_codes",
+  CATALOGUE: "catalogue",
   CONTACTS: "contacts",
   ENTITIES: "entities",
   EXPENSES: "expenses",
@@ -232,7 +286,10 @@ type ResourceQueryScope =
 
 /** Every resource type must explicitly choose its web-cache behavior. */
 const RESOURCE_REALTIME_QUERY_POLICY = {
-  [RESOURCE_TYPE.AGENT_SKILL]: [RESOURCE_QUERY_SCOPE.SKILLS],
+  [RESOURCE_TYPE.AGENT_SKILL]: [
+    RESOURCE_QUERY_SCOPE.CATALOGUE,
+    RESOURCE_QUERY_SCOPE.SKILLS,
+  ],
   [RESOURCE_TYPE.AGENT_SKILL_COMMENT]: [RESOURCE_QUERY_SCOPE.SKILLS],
   [RESOURCE_TYPE.AGENT_SKILL_PROPOSAL]: [RESOURCE_QUERY_SCOPE.SKILLS],
   [RESOURCE_TYPE.AGENT_SKILL_RESOURCE]: [RESOURCE_QUERY_SCOPE.SKILLS],
@@ -272,7 +329,10 @@ const RESOURCE_REALTIME_QUERY_POLICY = {
   [RESOURCE_TYPE.LEGAL_LIST]: [RESOURCE_QUERY_SCOPE.LEGAL_LISTS],
   [RESOURCE_TYPE.LEGISLATION_DOCUMENT]: [],
   [RESOURCE_TYPE.LEGISLATION_SOURCE]: [],
-  [RESOURCE_TYPE.MCP_CONNECTOR]: [RESOURCE_QUERY_SCOPE.MCP],
+  [RESOURCE_TYPE.MCP_CONNECTOR]: [
+    RESOURCE_QUERY_SCOPE.CATALOGUE,
+    RESOURCE_QUERY_SCOPE.MCP,
+  ],
   [RESOURCE_TYPE.NUMBER_SERIES]: [RESOURCE_QUERY_SCOPE.ORGANIZATION],
   [RESOURCE_TYPE.VAT_RATE]: [RESOURCE_QUERY_SCOPE.ORGANIZATION],
   [RESOURCE_TYPE.ORGANIZATION]: [RESOURCE_QUERY_SCOPE.ORGANIZATION],
@@ -316,6 +376,8 @@ const getResourceQueryScopeKeys = (
       ];
     case RESOURCE_QUERY_SCOPE.BILLING_CODES:
       return [billingCodesQueryRoot(workspaceId)];
+    case RESOURCE_QUERY_SCOPE.CATALOGUE:
+      return [catalogueQueryRoot()];
     case RESOURCE_QUERY_SCOPE.CONTACTS:
       return [contactsQueryRoot(), workspaceContactsQueryRoot(workspaceId)];
     case RESOURCE_QUERY_SCOPE.ENTITIES:
@@ -479,9 +541,11 @@ const registeredResourceQueryActions = ({
           return false;
         }
         return (
-          scope.type === "organization" ||
-          reads.scope.type === "organization" ||
-          scope.workspaceId === reads.scope.workspaceId
+          (scope.type === "organization" &&
+            reads.scope.type === "organization") ||
+          (scope.type === "workspace" &&
+            (reads.scope.type === "organization" ||
+              scope.workspaceId === reads.scope.workspaceId))
         );
       },
     })

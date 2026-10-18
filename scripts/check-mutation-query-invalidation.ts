@@ -23,8 +23,13 @@ const MUTATION_HELPER = "resourceMutation";
 const READER_HELPER = "resourceQueryOptions";
 const MUTATION_PRIMITIVES = new Set(["useMutation", "mutationOptions"]);
 const READER_PRIMITIVES = new Set(["queryOptions", "infiniteQueryOptions"]);
+const ROUTE_READER_HELPERS = new Set([
+  "ensureRouteQueryData",
+  "ensureRouteInfiniteQueryData",
+]);
 const READER_EXECUTORS = new Set([
   ...READER_PRIMITIVES,
+  ...ROUTE_READER_HELPERS,
   "useQuery",
   "useSuspenseQuery",
   "useInfiniteQuery",
@@ -655,9 +660,34 @@ const mutationContractError = ({
   const options = call.arguments.at(0);
   if (
     !options ||
-    !hasExactProperties(options, ["mutation", "queryClient", "mutationFn"])
+    !(
+      hasExactProperties(options, ["mutation", "queryClient", "mutationFn"]) ||
+      hasExactProperties(options, [
+        "mutation",
+        "queryClient",
+        "mutationFn",
+        "scope",
+      ])
+    )
   ) {
-    return "resourceMutation options must contain exactly mutation, queryClient, and mutationFn.";
+    return "resourceMutation options must contain mutation, queryClient, mutationFn, and optionally scope.";
+  }
+  const scope = objectProperty(options, "scope");
+  if (scope !== undefined) {
+    const scopeValue = unwrap(scope);
+    const scopeType =
+      ts.isObjectLiteralExpression(scopeValue) &&
+      hasExactProperties(scopeValue, ["type"])
+        ? objectProperty(scopeValue, "type")
+        : undefined;
+    const scopeTypeValue = scopeType ? unwrap(scopeType) : undefined;
+    if (
+      !scopeTypeValue ||
+      !ts.isStringLiteral(scopeTypeValue) ||
+      !["workspace", "organization"].includes(scopeTypeValue.text)
+    ) {
+      return "resourceMutation scope must be a closed workspace or organization scope literal.";
+    }
   }
   const mutation = objectProperty(options, "mutation");
   if (!mutation) {
@@ -1731,7 +1761,9 @@ const createReaderStates = ({
     if (!module || !call) {
       return { entry, module, call, tagged: false };
     }
-    const options = call.arguments.at(0);
+    const options = call.arguments.at(
+      ROUTE_READER_HELPERS.has(callName(call) ?? "") ? 1 : 0,
+    );
     const target = factoryFunction({
       module,
       expression: call.expression,
@@ -1740,7 +1772,18 @@ const createReaderStates = ({
       seen: new Set(),
     });
     let tagged: boolean;
-    if (target) {
+    if (ROUTE_READER_HELPERS.has(callName(call) ?? "")) {
+      tagged =
+        options !== undefined &&
+        isTaggedReaderValue({
+          module,
+          expression: options,
+          reference: call,
+          names,
+          modules: indexed,
+          seen: new Set(),
+        });
+    } else if (target) {
       tagged =
         options !== undefined &&
         wrapperForwardsReaderOptions({
