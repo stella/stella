@@ -663,7 +663,7 @@ export const runMigrations = async ({
     if (online.type === "deferred") {
       return {
         status: "online_deferred" as const,
-        index: online.index,
+        step: online.step,
         retryAfterMs: online.retryAfterMs,
         predictedNames,
         insertedNames,
@@ -712,7 +712,7 @@ export const runMigrationsUntilSettled = async ({
   process.stdout.write(
     `${JSON.stringify({
       event: "migrate.online_deferred",
-      index: result.index,
+      step: result.step,
       retryAfterMs: result.retryAfterMs,
     })}\n`,
   );
