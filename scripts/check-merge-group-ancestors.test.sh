@@ -27,6 +27,10 @@ fi
 cat "$response"
 EOF
 chmod +x "$stub_dir/gh"
+# Stands in for the retry owner: passes each call to the stub unchanged.
+cat > "$stub_dir/retry.sh" <<'EOF2'
+"$STUB_GH" "$@"
+EOF2
 
 main=1111111111111111111111111111111111111111
 a=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
@@ -69,6 +73,7 @@ check() {
     MERGE_GROUP_BASE_SHA="$b" MERGE_GROUP_BASE_REF=refs/heads/main \
     ANCESTOR_WAIT_SECONDS="$wait_seconds" ANCESTOR_POLL_SECONDS=0 \
     FIXTURES="$fixtures" PATH="$stub_dir:$PATH" \
+    GH_RETRY_SCRIPT="$stub_dir/retry.sh" STUB_GH="$stub_dir/gh" \
     bash "$subject" >"$stub_dir/output" 2>"$stub_dir/error"
 }
 expect_pass() {

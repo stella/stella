@@ -19,12 +19,9 @@ wait_seconds="${ANCESTOR_WAIT_SECONDS:-3600}"
 poll_seconds="${ANCESTOR_POLL_SECONDS:-60}"
 deadline=$(($(date +%s) + wait_seconds))
 
+# Every GitHub API read goes through the retry owner; CI sets its path.
 gh_api() {
-  if [[ -n "${GH_RETRY_SCRIPT:-}" ]]; then
-    bash "$GH_RETRY_SCRIPT" api "$@"
-  else
-    gh api "$@"
-  fi
+  bash "${GH_RETRY_SCRIPT:?GH_RETRY_SCRIPT is required}" api "$@"
 }
 
 # One line per queued group ahead, oldest first: "<sha> <subject>". Each
