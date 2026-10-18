@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { t, type Context, type Static } from "elysia";
 
+import { dropOriginBoundCors } from "@/api/handlers/public-cors";
 import {
   ACCOUNT_ACCESS,
   createSafeBoundedPublicHandler,
@@ -10,7 +11,6 @@ import type {
   PublicHandlerConfig,
   SafeHandlerGenerator,
 } from "@/api/lib/api-handlers";
-import { dropOriginBoundCors } from "@/api/lib/public-cors";
 import { DISCOVERY_METADATA_CACHE_POLICY } from "@/api/lib/security-headers";
 import {
   STELLA_API_CONTRACT,

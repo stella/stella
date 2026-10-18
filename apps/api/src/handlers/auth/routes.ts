@@ -3,6 +3,7 @@ import Elysia from "elysia";
 import { env } from "@/api/env";
 import { createAuthMetadataPreflightHeaders } from "@/api/handlers/auth/metadata";
 import metadataHandler from "@/api/handlers/auth/read-authorization-server-metadata";
+import { dropCredentialedCors } from "@/api/handlers/public-cors";
 import {
   OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH,
   OPENID_CONFIGURATION_DISCOVERY_PATH,
@@ -10,7 +11,6 @@ import {
 } from "@/api/lib/auth/auth-paths";
 import { isReviewAccountConfigured } from "@/api/lib/auth/review-account";
 import { isTransactionalEmailConfigured } from "@/api/lib/email/email";
-import { dropCredentialedCors } from "@/api/lib/public-cors";
 import { setSecurityHeaders } from "@/api/lib/security-headers";
 import {
   isSelfhostFirstUserRequired,

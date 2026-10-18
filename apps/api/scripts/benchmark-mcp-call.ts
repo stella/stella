@@ -9,7 +9,7 @@
  *
  * Usage:
  *   bun --filter @stll/api bench:mcp-call
- *   MCP_BENCH_ITERATIONS=2000 bun --filter @stll/api bench:mcp-call
+ *   bun --filter @stll/api bench:mcp-call --iterations=2000
  *   bun --filter @stll/api bench:mcp-call --json
  */
 import {
@@ -38,10 +38,12 @@ const WARMUP_ITERATIONS = 50;
 const PROTOCOL_VERSION = "2026-07-28";
 
 const iterations = Number(
-  process.env["MCP_BENCH_ITERATIONS"] ?? DEFAULT_ITERATIONS,
+  process.argv
+    .find((argument) => argument.startsWith("--iterations="))
+    ?.slice("--iterations=".length) ?? DEFAULT_ITERATIONS,
 );
 if (!Number.isInteger(iterations) || iterations <= 0) {
-  panic("MCP_BENCH_ITERATIONS must be a positive integer");
+  panic("--iterations must be a positive integer");
 }
 
 const organizationId = toSafeId<"organization">("org_bench");

@@ -1,6 +1,6 @@
 import { env } from "@/api/env";
+import { PUBLIC_CORS_PREFLIGHT_MAX_AGE_SECONDS } from "@/api/handlers/public-cors";
 import { getAuthIssuerUrl } from "@/api/lib/auth/auth-paths";
-import { PUBLIC_CORS_PREFLIGHT_MAX_AGE_SECONDS } from "@/api/lib/public-cors";
 import type { McpMode } from "@/api/mcp/constants";
 import {
   getMcpResourceScopes,

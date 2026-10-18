@@ -2,8 +2,8 @@ import { oauthProviderAuthServerMetadata } from "@better-auth/oauth-provider";
 import { panic } from "better-result";
 
 import { getAgentAuthMetadataBlock } from "@/api/agent-auth/metadata";
+import { PUBLIC_CORS_PREFLIGHT_MAX_AGE_SECONDS } from "@/api/handlers/public-cors";
 import { getAuth } from "@/api/lib/auth";
-import { PUBLIC_CORS_PREFLIGHT_MAX_AGE_SECONDS } from "@/api/lib/public-cors";
 import { CACHE_CONTROL_HEADER } from "@/api/lib/security-headers";
 import { MCP_PROTOCOL_VERSION_HEADER } from "@/api/mcp/constants";
 

@@ -8,9 +8,9 @@ import {
   readLawMetadata,
 } from "@/api/handlers/mcp/read-discovery-metadata";
 import type { createMcpAuthenticationFailureLimiter } from "@/api/handlers/mcp/transport-rate-limit";
+import { dropCredentialedCors } from "@/api/handlers/public-cors";
 import { resolveRateLimitClientAddress } from "@/api/lib/client-ip";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
-import { dropCredentialedCors } from "@/api/lib/public-cors";
 import {
   MCP_ADVANCED_DISCOVERY_PATH,
   MCP_ADVANCED_HTTP_PATH,

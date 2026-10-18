@@ -1,11 +1,11 @@
 import { Result } from "better-result";
 
 import { handleOAuthAuthorizationServerMetadataRequest } from "@/api/handlers/auth/metadata";
+import { dropOriginBoundCors } from "@/api/handlers/public-cors";
 import {
   ACCOUNT_ACCESS,
   createSafePublicHandler,
 } from "@/api/lib/api-handlers";
-import { dropOriginBoundCors } from "@/api/lib/public-cors";
 import { DISCOVERY_METADATA_CACHE_POLICY } from "@/api/lib/security-headers";
 
 const readAuthorizationServerMetadata = createSafePublicHandler(

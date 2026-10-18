@@ -5,7 +5,7 @@ import {
   createMcpRoute,
   handleMcpPreflightRequest,
 } from "@/api/handlers/mcp/routes-core";
-import { PUBLIC_CORS_PREFLIGHT_MAX_AGE_SECONDS } from "@/api/lib/public-cors";
+import { PUBLIC_CORS_PREFLIGHT_MAX_AGE_SECONDS } from "@/api/handlers/public-cors";
 import {
   MCP_ANONYMIZED_DISCOVERY_PATH,
   MCP_ANONYMIZED_HTTP_PATH,

@@ -12,6 +12,7 @@ import {
   authMetadataRoute,
   handleAuthMetadataPreflightRequest,
 } from "@/api/handlers/auth/routes";
+import { PUBLIC_CORS_PREFLIGHT_MAX_AGE_SECONDS } from "@/api/handlers/public-cors";
 import {
   getAuthEndpointUrl,
   getAuthIssuerUrl,
@@ -19,7 +20,6 @@ import {
   OPENID_CONFIGURATION_DISCOVERY_PATH,
   ROOT_OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH,
 } from "@/api/lib/auth/auth-paths";
-import { PUBLIC_CORS_PREFLIGHT_MAX_AGE_SECONDS } from "@/api/lib/public-cors";
 
 describe("OAuth authorization server metadata", () => {
   const assertMetadataResponse = async (path: string) => {
