@@ -346,6 +346,7 @@ const persistSoftLawRows = async (
       .onConflictDoUpdate({
         target: softLawDocuments.id,
         set: {
+          identityKey: sql`excluded.identity_key`,
           title: sql`excluded.title`,
           kind: sql`excluded.kind`,
           statedReference: sql`excluded.stated_reference`,

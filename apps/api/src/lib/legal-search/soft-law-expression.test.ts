@@ -136,6 +136,24 @@ test("EDPB opinion series participate in numbered identity", () => {
   );
 });
 
+test("WP29 titles do not participate in numbered identity", () => {
+  const wp29 = {
+    ...metadata,
+    statedReference: { state: "stated", value: "WP 240" },
+  } as const;
+  expect(
+    softLawIdentityKey("eu-wp29", {
+      ...wp29,
+      sourceKind: "Original title",
+    }).unwrap(),
+  ).toBe(
+    softLawIdentityKey("eu-wp29", {
+      ...wp29,
+      sourceKind: "Corrected title",
+    }).unwrap(),
+  );
+});
+
 test("a lifecycle transition revises content without changing expression identity", () => {
   const consultation = {
     ...metadata,

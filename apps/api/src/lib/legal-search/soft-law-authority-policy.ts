@@ -13,6 +13,9 @@ type KindDisposition =
 type AuthorityPolicy = {
   expression: "optional" | "required";
   referenceStyle: "literal" | "wp_number";
+  identitySeries:
+    | { type: "none" }
+    | { type: "source-kind"; values: readonly string[] };
   kinds: Record<(typeof SOFT_LAW_KINDS)[number], KindDisposition>;
 };
 
@@ -26,6 +29,7 @@ export const SOFT_LAW_AUTHORITY_POLICIES = {
   "cz-uoou": {
     expression: "optional",
     referenceStyle: "literal",
+    identitySeries: { type: "none" },
     kinds: {
       methodology: eligible,
       recommendation: eligible,
@@ -42,6 +46,18 @@ export const SOFT_LAW_AUTHORITY_POLICIES = {
   "eu-edpb": {
     expression: "required",
     referenceStyle: "literal",
+    identitySeries: {
+      type: "source-kind",
+      values: [
+        "Guideline",
+        "Guidelines",
+        "Recommendation",
+        "Statement",
+        "Opinion of the Board (Art. 64)",
+        "Legislative opinion",
+        "Adequacy",
+      ],
+    },
     kinds: {
       methodology: excluded,
       recommendation: eligible,
@@ -58,6 +74,7 @@ export const SOFT_LAW_AUTHORITY_POLICIES = {
   "eu-wp29": {
     expression: "required",
     referenceStyle: "wp_number",
+    identitySeries: { type: "none" },
     kinds: {
       methodology: excluded,
       recommendation: eligible,
@@ -77,6 +94,7 @@ export const SOFT_LAW_AUTHORITY_POLICIES = {
 export const validateSoftLawAuthorityMetadata = (
   authority: SoftLawAuthority,
   metadata: SoftLawMetadata,
+  extractionQuality?: "extraction_failed",
 ) => {
   const policy = SOFT_LAW_AUTHORITY_POLICIES[authority];
   if (policy.kinds[metadata.kind].type === "excluded") {
@@ -92,8 +110,9 @@ export const validateSoftLawAuthorityMetadata = (
     policy.expression === "required" &&
     (!metadata.sourceKind?.trim() ||
       (metadata.statedReference.state !== "stated" &&
-        (policy.referenceStyle === "wp_number" ||
-          !metadata.sourceDocumentId?.trim())) ||
+        (policy.referenceStyle === "wp_number"
+          ? extractionQuality !== "extraction_failed"
+          : !metadata.sourceDocumentId?.trim())) ||
       metadata.expression?.type !== "identified" ||
       !metadata.stage ||
       !metadata.relations)
@@ -102,6 +121,18 @@ export const validateSoftLawAuthorityMetadata = (
       new SoftLawItemError({
         message:
           "EU soft law requires language, revision and lifecycle metadata",
+        tag: "invalid_document",
+      }),
+    );
+  }
+  if (
+    policy.identitySeries.type === "source-kind" &&
+    metadata.sourceKind &&
+    !policy.identitySeries.values.some((value) => value === metadata.sourceKind)
+  ) {
+    return Result.err(
+      new SoftLawItemError({
+        message: "Document source kind is outside the identity series",
         tag: "invalid_document",
       }),
     );

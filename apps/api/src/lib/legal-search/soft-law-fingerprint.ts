@@ -58,8 +58,13 @@ const compareCanonicalKeys = (left: string, right: string) => {
 export const softLawIdentityKey = (
   authority: SoftLawAuthority,
   metadata: SoftLawMetadata,
+  extractionQuality?: "extraction_failed",
 ): Result<string, SoftLawItemError> => {
-  const admitted = validateSoftLawAuthorityMetadata(authority, metadata);
+  const admitted = validateSoftLawAuthorityMetadata(
+    authority,
+    metadata,
+    extractionQuality,
+  );
   if (admitted.status === "error") {
     return admitted;
   }
@@ -140,11 +145,15 @@ export const softLawIdentityKey = (
         )}`;
       }
     }
+    const identitySeries =
+      SOFT_LAW_AUTHORITY_POLICIES[authority].identitySeries;
     return Result.ok(
       JSON.stringify([
         authority,
         "reference",
-        normalizeReference(metadata.sourceKind ?? metadata.kind),
+        ...(identitySeries.type === "source-kind"
+          ? [normalizeReference(metadata.sourceKind ?? metadata.kind)]
+          : []),
         reference,
         ...expressionKey,
       ]),

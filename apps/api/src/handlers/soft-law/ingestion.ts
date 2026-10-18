@@ -123,7 +123,13 @@ const fetchSoftLawItem = async ({
     return fetched;
   }
   const input = fetched.value;
-  const identity = softLawIdentityKey(adapter.authority, input.metadata);
+  const identity = softLawIdentityKey(
+    adapter.authority,
+    input.metadata,
+    input.extractionQuality === "extraction_failed"
+      ? input.extractionQuality
+      : undefined,
+  );
   if (identity.status === "error") {
     return identity;
   }
@@ -331,7 +337,14 @@ const prepareSoftLawPage = async (options: PrepareSoftLawPageOptions) => {
       (row) => row.document.identityKey === identityKey,
     );
     const locator = known.find((row) => row.locator?.url === entry.url);
-    if (locator && locator.document.identityKey !== identityKey) {
+    const repairsFailedExtraction =
+      locator?.version?.extractionQuality === "extraction_failed" &&
+      input.extractionQuality !== "extraction_failed";
+    if (
+      locator &&
+      locator.document.identityKey !== identityKey &&
+      !repairsFailedExtraction
+    ) {
       attempts.push({
         entry,
         count,
@@ -375,6 +388,7 @@ const prepareSoftLawPage = async (options: PrepareSoftLawPageOptions) => {
     }
     const existing = matches.at(0);
     const documentId =
+      locator?.document.id ??
       existing?.document.id ??
       accepted?.documentId ??
       createSafeId<"softLawDocument">();

@@ -120,6 +120,9 @@ test("issue dates are validated before storage and reference keys use NFKC witho
     softLawIdentityKey("cz-uoou", metadata).unwrap(),
   );
   expect(fullwidth.statedReference.value).toBe("０２/２０２４");
+  expect(softLawIdentityKey("cz-uoou", metadata).unwrap()).toBe(
+    JSON.stringify(["cz-uoou", "reference", "02/2024"]),
+  );
 });
 
 test("WP29 revision keys discard leading zeroes", () => {
