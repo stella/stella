@@ -57,8 +57,8 @@ import {
   type GlobalSearchHit,
   type GlobalSearchResultType,
 } from "@/api/lib/search/types";
-import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
-import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
+import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
+import { requireTanStackAIAvailableForTask } from "@/api/lib/tanstack-ai-models";
 
 const SEARCH_SUMMARY_RESULT_LIMIT = 5;
 const SEARCH_CONTEXT_CHARS_PER_RESULT = 3000;
@@ -337,9 +337,9 @@ const generateRefinedSearchQuery = async ({
 }: GenerateRefinedSearchQueryOptions) =>
   await Result.tryPromise({
     try: async () =>
-      await generateTanStackObjectForRole({
+      await generateTanStackObjectForTask({
         dataClass: "customer",
-        role: "fast",
+        task: "short-text",
         serviceTier: "standard",
         orgAIConfig,
         managedAIResidency,
@@ -377,11 +377,11 @@ export const refineSearchQuery = async ({
 }: SearchAIContext & {
   body: RefineSearchBody;
 }) => {
-  const gate = requireTanStackAIAvailableForRole({
+  const gate = requireTanStackAIAvailableForTask({
     dataClass: "customer",
     configStatus: orgAIConfigStatus,
     orgConfig: orgAIConfig,
-    role: "fast",
+    task: "short-text",
   });
   if (gate.isErr()) {
     return status(gate.error.status, { message: gate.error.message });
@@ -398,7 +398,7 @@ export const refineSearchQuery = async ({
       workspaceId: null,
     },
     feature: "search.refine",
-    modelRole: "fast",
+    modelTask: "short-text",
     orgAIConfig,
     modelTier: admission.modelTier,
     properties: { organization_id: organizationId },
@@ -419,7 +419,7 @@ export const refineSearchQuery = async ({
       analytics: aiAnalytics,
       caching: resolveCaching({
         promptCachingEnabled,
-        role: "fast",
+        task: "short-text",
         scopeKey: null,
       }),
     });
@@ -476,11 +476,11 @@ export const summarizeSearchResults = async ({
 }: SearchSummaryContext & {
   body: SummarizeSearchBody;
 }) => {
-  const gate = requireTanStackAIAvailableForRole({
+  const gate = requireTanStackAIAvailableForTask({
     dataClass: "customer",
     configStatus: orgAIConfigStatus,
     orgConfig: orgAIConfig,
-    role: "fast",
+    task: "short-text",
   });
   if (gate.isErr()) {
     return status(gate.error.status, { message: gate.error.message });
@@ -524,7 +524,7 @@ export const summarizeSearchResults = async ({
       workspaceId: null,
     },
     feature: "search.summary",
-    modelRole: "fast",
+    modelTask: "short-text",
     orgAIConfig,
     modelTier: admission.modelTier,
     properties: {
@@ -536,9 +536,9 @@ export const summarizeSearchResults = async ({
 
   const result = await Result.tryPromise({
     try: async () =>
-      await generateTanStackObjectForRole({
+      await generateTanStackObjectForTask({
         dataClass: "customer",
-        role: "fast",
+        task: "short-text",
         serviceTier: "standard",
         orgAIConfig,
         managedAIResidency,
@@ -548,7 +548,7 @@ export const summarizeSearchResults = async ({
         analytics: aiAnalytics,
         caching: resolveCaching({
           promptCachingEnabled,
-          role: "fast",
+          task: "short-text",
           scopeKey: null,
         }),
         system: SEARCH_SUMMARY_SYSTEM,

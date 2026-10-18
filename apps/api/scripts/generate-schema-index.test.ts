@@ -31,13 +31,17 @@ export const locks = p.pgTable.withRLS("locks", {
   key: p.text().primaryKey(),
 });
 
+export const threadView = p.pgView("chat_threads_view").as((qb) =>
+  qb.select().from(threads),
+);
+
 export const notATable = { id: 1 };
 const unexported = p.pgTable("hidden", { id: p.text() });
 `;
 
 const tables = indexSchemaSource({ fileName: "chat.ts", source: SOURCE });
 
-test("indexes each exported table with its SQL name, export, line and summary", () => {
+test("indexes each exported relation with its SQL name, export, line and summary", () => {
   expect(
     tables.map(({ exportName, line, rls, sqlName, summary }) => ({
       exportName,
@@ -61,6 +65,13 @@ test("indexes each exported table with its SQL name, export, line and summary", 
       sqlName: "locks",
       summary: "",
     },
+    {
+      exportName: "threadView",
+      line: 30,
+      rls: false,
+      sqlName: "chat_threads_view",
+      summary: "",
+    },
   ]);
 });
 
@@ -76,6 +87,23 @@ export const plain = p.pgTable("plain", { id: p.text() });
     { rls: true, sqlName: "audited" },
     { rls: false, sqlName: "plain" },
   ]);
+});
+
+test("derives view columns from the referenced table declaration", () => {
+  const view = tables.find(({ exportName }) => exportName === "threadView");
+
+  expect(view?.sqlName).toBe("chat_threads_view");
+  expect(
+    view?.columns.map(({ key, sqlName, builder }) => ({
+      key,
+      sqlName,
+      builder,
+    })),
+  ).toEqual(
+    tables
+      .at(0)
+      ?.columns.map(({ key, sqlName, builder }) => ({ key, sqlName, builder })),
+  );
 });
 
 test("reads a column's SQL name, builder and flags from its builder chain", () => {

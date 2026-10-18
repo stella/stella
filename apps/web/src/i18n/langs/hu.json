@@ -65,6 +65,9 @@
     "runSelectedRows": "Futtatás {count, plural, one {# kijelölt sorra} other {# kijelölt sorra}}",
     "selectedRun": "AI-oszlopok futtatása {count, plural, one {# sorra} other {# sorra}}"
   },
+  "aiDisclosure": {
+    "caseLaw": "A bírósági határozatokról készült AI-összefoglalókat, -jegyzeteket és -elemzéseket a stella állítja elő; ezeket a bíróságok nem hagyták jóvá, és nem a bíróságok saját érvelését tükrözik. A jogi szakemberek munkáját segítő eszközök; a hiteles forrás továbbra is a határozat szövege."
+  },
   "appearance": {
     "calendar": "Naptár",
     "calendarGregorian": "Gergely",
@@ -1055,7 +1058,6 @@
       }
     },
     "sameCaseNumber": "{count, plural, one {# határozat viseli} other {# határozat viseli}} ezt az ügyszámot. Válasszon bíróságot.",
-    "searchAskPrompt": "{query} (joggyakorlat, {country})",
     "searchLabel": "Keresés a joggyakorlatban",
     "searchPlaceholder": "Ügyszám, ECLI vagy szavak, pl. 22 Cdo 2653/2012",
     "searchUnavailable": {
@@ -1212,6 +1214,11 @@
       "requesting": "Módosítások előkészítése…",
       "stale": "Ez a válasz megváltozott. Jelölje ki újra a szöveget.",
       "submit": "Módosítás kérése"
+    },
+    "answerQuote": {
+      "showInDecision": "Megjelenítés a határozatban",
+      "verified": "Ellenőrzött idézet",
+      "verifiedHint": "Szó szerint: {source}"
     },
     "applyMode": {
       "description": "A Word rögzíti, ki végezte az egyes módosításokat. Megjegyezzük a választását.",
@@ -1397,7 +1404,12 @@
     "maxAttachmentsReached": "Üzenetenként legfeljebb {count} fájl",
     "mention": {
       "category": {
-        "entities": "Ebben az ügyben"
+        "entities": "Ebben az ügyben",
+        "sources": "Források"
+      },
+      "corpus": {
+        "caseLaw": "Joggyakorlat · {country}",
+        "legislation": "Jogszabályok · {country}"
       },
       "loadError": "Az elemek betöltése sikertelen"
     },
@@ -1451,6 +1463,12 @@
       "title": "Beillesztett szöveg"
     },
     "placeholder": "Írja ide a kérdését, / a készségekhez, @ kontextus hozzáadásához",
+    "processSummary": {
+      "analyses": "{count, plural, one {# elemzés} other {# elemzés}}",
+      "changesSaved": "{count, plural, one {# mentett módosítás} other {# mentett módosítás}}",
+      "documentEdits": "{count, plural, one {# dokumentummódosítás} other {# dokumentummódosítás}}",
+      "sourcesChecked": "{count, plural, one {# ellenőrzött forrás} other {# ellenőrzött forrás}}"
+    },
     "promptImprovementStrategies": {
       "decompose": {
         "description": "Az összetett feladatot sorrendbe rendezett részfeladatokra bontja.",
@@ -1696,6 +1714,7 @@
       "interrupted": "Befejezés előtt megszakadt",
       "output": "Kimenet",
       "sourceCode": "Forráskód",
+      "statusWaiting": "Várakozik",
       "toggleDetails": "Részletek megjelenítése",
       "unrestoredFields": "Anonimizált módban {count, plural, one {# mezőt} other {# mezőt}} nem sikerült valódi értékekkel kitölteni. Ellenőrizze: {fields}"
     },
@@ -5118,7 +5137,6 @@
     "provisionTextUnavailable": "Ehhez a változathoz nem érhető el szöveg",
     "publisherWindowInconsistent": "Erre a napra nem állapítható meg hatályos szöveg: a kiadó adatai ellentmondásosak.",
     "resolvedAlias": "Felismerve: {label}",
-    "searchAskPrompt": "{query} ({country} jogszabályai)",
     "searchLabel": "Keresés a jogszabályok között",
     "searchPlaceholder": "Szám, rövid név vagy cím, pl. 89/2012 Sb.",
     "showCitedPartOnly": "Csak az idézett rész megjelenítése",

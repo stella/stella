@@ -105,8 +105,8 @@ const batchFilenames = [
  * every schema it passes (`structured-output-role-contracts.test.ts`).
  */
 export const STRUCTURED_OUTPUT_ENTRY_POINTS = [
-  "generateTanStackObjectForRole",
-  "streamTanStackObjectForRole",
+  "generateTanStackObjectForTask",
+  "streamTanStackObjectForTask",
   "generateTanStackChatObject",
   "createVerificationCall",
 ] as const;
