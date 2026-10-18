@@ -1,5 +1,14 @@
 import { expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import nodePath from "node:path";
 import * as v from "valibot";
 
 import { PROBE_PHASE_BUDGET_MS } from "./dated-waiver-probes";
@@ -278,12 +287,112 @@ test("required CI expiry checks cannot be skipped by paths, reuse, or queue dept
     "--frozen-lockfile",
     "--ignore-scripts",
   ]);
-  expect(trackedFiles?.run).toBe(
-    'git ls-files -z > "$RUNNER_TEMP/dated-waiver-tracked-files"',
-  );
-  expect(check?.run).toBe(
-    'bun --preload ./scripts/offline-network-preload.ts scripts/dated-waivers.ts --check --tracked-files "$RUNNER_TEMP/dated-waiver-tracked-files"',
-  );
+  expect(trackedFiles?.env).toEqual({
+    EVENT_NAME: `\${{ github.event_name }}`,
+    PLAN_RESULT: `\${{ needs.ci-plan.result }}`,
+    CHANGED_FILES_KNOWN: `\${{ needs.ci-plan.outputs.changed_files_known }}`,
+    CHANGED_FILES_JSON: `\${{ needs.ci-plan.outputs.changed_files }}`,
+  });
+  // A pull request or merge group whose plan read its diff scopes the guard
+  // to that change; every other run keeps the whole tree in scope.
+  const temp = mkdtempSync(nodePath.join(tmpdir(), "dated-waiver-scope-"));
+  try {
+    const bin = nodePath.join(temp, "bin");
+    mkdirSync(bin);
+    // Records the guard's arguments instead of running it.
+    writeFileSync(
+      nodePath.join(bin, "bun"),
+      '#!/usr/bin/env bash\nprintf "%s\\n" "$@" > "$RUNNER_TEMP/guard-args"\n',
+    );
+    chmodSync(nodePath.join(bin, "bun"), 0o755);
+    const runStep = (run: string | undefined, env: Record<string, string>) => {
+      const step = Bun.spawnSync(
+        ["bash", "-e", "-o", "pipefail", "-c", run ?? ""],
+        {
+          env: {
+            PATH: `${bin}:${process.env["PATH"] ?? ""}`,
+            RUNNER_TEMP: temp,
+            ...env,
+          },
+        },
+      );
+      expect(step.exitCode, step.stderr.toString()).toBe(0);
+    };
+    const changed = JSON.stringify(["apps/api/a.ts", "docs/b c.md"]);
+    for (const [env, scoped] of [
+      [
+        {
+          EVENT_NAME: "pull_request",
+          PLAN_RESULT: "success",
+          CHANGED_FILES_KNOWN: "true",
+        },
+        true,
+      ],
+      [
+        {
+          EVENT_NAME: "merge_group",
+          PLAN_RESULT: "success",
+          CHANGED_FILES_KNOWN: "true",
+        },
+        true,
+      ],
+      [
+        {
+          EVENT_NAME: "push",
+          PLAN_RESULT: "success",
+          CHANGED_FILES_KNOWN: "true",
+        },
+        false,
+      ],
+      [
+        {
+          EVENT_NAME: "pull_request",
+          PLAN_RESULT: "failure",
+          CHANGED_FILES_KNOWN: "true",
+        },
+        false,
+      ],
+      [
+        {
+          EVENT_NAME: "pull_request",
+          PLAN_RESULT: "success",
+          CHANGED_FILES_KNOWN: "false",
+        },
+        false,
+      ],
+    ] as const) {
+      const label = JSON.stringify(env);
+      runStep(trackedFiles?.run, { ...env, CHANGED_FILES_JSON: changed });
+      expect(
+        readFileSync(
+          nodePath.join(temp, "dated-waiver-changed-files"),
+          "utf-8",
+        ),
+        label,
+      ).toBe(scoped ? "apps/api/a.ts\0docs/b c.md\0" : "");
+      expect(
+        readFileSync(
+          nodePath.join(temp, "dated-waiver-tracked-files"),
+          "utf-8",
+        ),
+        label,
+      ).toContain("scripts/dated-waivers.ts\0");
+      runStep(check?.run, {});
+      const args = readFileSync(nodePath.join(temp, "guard-args"), "utf-8")
+        .trim()
+        .split("\n");
+      expect(args.slice(0, 5), label).toEqual([
+        "--preload",
+        "./scripts/offline-network-preload.ts",
+        "scripts/dated-waivers.ts",
+        "--check",
+        "--tracked-files",
+      ]);
+      expect(args.includes("--changed-files"), label).toBe(scoped);
+    }
+  } finally {
+    rmSync(temp, { recursive: true, force: true });
+  }
   for (const step of expiry.steps) {
     expect(step.env?.["GH_TOKEN"]).toBeUndefined();
     expect(step["continue-on-error"]).not.toBe(true);
