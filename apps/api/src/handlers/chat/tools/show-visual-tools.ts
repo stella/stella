@@ -41,6 +41,10 @@ const PREVIEW_FAILED_SINK = failureSink({
 });
 
 const SHOW_VISUAL_INSTRUCTIONS =
+  "Use show_visual whenever the user asks to visualise information: a chart, graph, timeline, diagram, " +
+  "visual overview, a page, or nice HTML. Recognize equivalent intents in any language. " +
+  "Render the requested view in chat by calling this tool; do not answer with an HTML code block. " +
+  "If the user explicitly asks for source code rather than a rendered view, provide the requested source. " +
   "Display an interactive Generated view in this chat. Supply a short title, HTML and finite JSON data. " +
   "Keep only data fields referenced literally by the page. Read them with stella.data. " +
   "Use stella.drill({court, year}) to offer a user-sent follow-up, stella.openDecision(linkId) for links " +

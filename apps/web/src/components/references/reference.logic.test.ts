@@ -397,3 +397,51 @@ describe("labels and decisions", () => {
     });
   });
 });
+
+describe("a corpus scope chip", () => {
+  const CORPUS_ATTRS = {
+    id: "case_law:CZE",
+    label: "Case law · Czechia",
+    category: "corpus",
+    kind: "corpus",
+  };
+
+  test("the composer chip, the sent tag and the persisted href are one reference", () => {
+    const expected: ChatReference = {
+      type: "corpus",
+      scope: { corpus: "case_law", country: "CZE" },
+      label: "Case law · Czechia",
+    };
+    expect(referenceFromMentionAttrs(CORPUS_ATTRS)).toEqual(expected);
+    const href = mentionAttrsToHref(CORPUS_ATTRS);
+    expect(href).toBe("#stella-corpus=case_law:CZE");
+    expect(
+      referenceOf(referenceFromHref(href ?? "", "Case law · Czechia")),
+    ).toEqual(expected);
+  });
+
+  test("draws its corpus glyph and no matter colour", () => {
+    const reference = referenceOf(
+      referenceFromHref(
+        "#stella-corpus=legislation:SVK",
+        "Legislation · Slovakia",
+      ),
+    );
+    expect(resolveReferenceVisual(reference, PENDING_FACTS)).toEqual({
+      type: "chip",
+      glyph: { type: "corpus", corpus: "legislation" },
+      matter: { type: "none" },
+      label: "Legislation · Slovakia",
+    });
+  });
+
+  test("a scope that names no public corpus does not look real", () => {
+    expect(referenceFromHref("#stella-corpus=registry:CZE", "x")).toEqual({
+      type: "unresolved",
+    });
+    expect(
+      referenceFromMentionAttrs({ ...CORPUS_ATTRS, id: "case_law:XXX" }),
+    ).toBeNull();
+    expect(mentionAttrsToHref({ ...CORPUS_ATTRS, id: "case_law" })).toBeNull();
+  });
+});
