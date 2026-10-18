@@ -415,11 +415,11 @@ jobs:
             for _ in {1..20}; do
               [[ "$ref" =~ /pr-([0-9]+)-([0-9a-f]{40})$ ]] || break
               number="${BASH_REMATCH[1]}" from="${BASH_REMATCH[2]}"
-              git merge-base --is-ancestor "$from" "$tip" && ! git diff --quiet "$from..$tip" || break
+              if ! git merge-base --is-ancestor "$from" "$tip" || git diff --quiet "$from..$tip"; then break; fi
               id=$(git diff --binary "$from..$tip" | git patch-id --stable | awk 'NR == 1 { print $1 }')
               [[ "$id" =~ ^[0-9a-f]{40}$ ]] || break
               chain=$(jq -c --argjson pr "$number" --arg id "$id" '. + [{pr: $pr, patch_id: $id}]' <<< "$chain")
-              [[ "$from" == "$base" ]] && { entry_chain="$chain"; break; }
+              if [[ "$from" == "$base" ]]; then entry_chain="$chain"; break; fi
               ref=$(awk -v sha="$from" '$1 == sha { print $2; exit }' <<< "$refs") tip="$from"
             done
           fi
