@@ -123,6 +123,7 @@ export type History = v.InferOutput<typeof historySchema>;
 export type CiRun = {
   readonly headSha: string;
   readonly conclusion: string | null;
+  readonly url?: string;
   // The latest attempt's start: a re-run moves it past the failed attempt.
   readonly startedAt: string;
   readonly successfulChecks?: readonly {
@@ -146,7 +147,10 @@ type FlakeResult = {
 export type Evidence = {
   readonly runs: readonly CiRun[];
   readonly digests: readonly (ArtifactSource & {
-    readonly tests: readonly FailedTest[];
+    readonly tests: readonly (FailedTest & {
+      readonly job: string;
+      readonly step: string;
+    })[];
     readonly checks: readonly { readonly job: string; readonly step: string }[];
   })[];
   readonly flakeReports: readonly (ArtifactSource & {
@@ -282,21 +286,46 @@ export const buildHistory = ({
   };
   for (const digest of evidence.digests) {
     const failedAt = Date.parse(digest.createdAt);
-    const retried = evidence.runs.some(
+    const retries = evidence.runs.filter(
       (run) =>
         run.headSha === digest.headSha &&
         run.conclusion === "success" &&
         Date.parse(run.startedAt) > failedAt,
     );
-    if (!retried) {
-      continue;
+    const ids = new Set<string>();
+    for (const failed of digest.tests) {
+      const file = resolveTestFile(failed, exists);
+      if (file === undefined) {
+        continue;
+      }
+      const id = testId({ file, name: failed.name });
+      const job = failed.job.replace(/ \([^()]+\)$/u, "");
+      const passed = retries.some((run) => {
+        const received = run.successfulChecks?.some(
+          (receipt) =>
+            receipt.job.replace(/ \([^()]+\)$/u, "") === job &&
+            receipt.step === failed.step,
+        );
+        if (received !== true) {
+          return false;
+        }
+        const outcomes = evidence.quarantineReports
+          .filter((report) => report.url === run.url)
+          .flatMap(({ records }) => records)
+          .filter(
+            (record) =>
+              (record.type === "passed" || record.type === "failed") &&
+              record.id === id,
+          );
+        return (
+          outcomes.length === 0 ||
+          outcomes.some(({ type }) => type === "passed")
+        );
+      });
+      if (passed) {
+        ids.add(id);
+      }
     }
-    const ids = new Set(
-      digest.tests.flatMap((test) => {
-        const file = resolveTestFile(test, exists);
-        return file === undefined ? [] : [testId({ file, name: test.name })];
-      }),
-    );
     for (const id of ids) {
       add(id, {
         kind: "retry-pass",
@@ -932,7 +961,9 @@ export const collectEvidence = async ({
       : [
           {
             ...source,
-            tests: records.flatMap(({ tests }) => tests),
+            tests: records.flatMap(({ tests, job, step }) =>
+              tests.map((test) => ({ ...test, job, step })),
+            ),
             checks: records.map(({ job, step }) => ({ job, step })),
           },
         ];
@@ -992,6 +1023,7 @@ export const collectEvidence = async ({
       runs: workflowRuns.map((run) => ({
         headSha: run.head_sha,
         conclusion: run.conclusion,
+        url: `https://github.com/${repository}/actions/runs/${run.id}`,
         startedAt: run.run_started_at,
         successfulChecks: receipts.get(run.id) ?? [],
       })),

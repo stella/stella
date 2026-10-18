@@ -108,18 +108,45 @@ describe("flake evidence", () => {
         scope: "@stll/web",
         file: "src/widget.test.ts",
         name: "widget > renders",
+        job: "ci-tests (rest-web)",
+        step: "Test web",
       },
     ],
     checks: [{ job: "ci-tests (rest-web)", step: "Test web" }],
-  } satisfies Evidence["digests"][number] & {
-    tests: FailureRecord["tests"];
-  };
+  } satisfies Evidence["digests"][number];
 
-  test("a failure whose commit later passed is a retry flake", () => {
+  test("a same-head success that skipped the test step is not a retry flake", () => {
     const tests = buildHistory({
       evidence: evidence({
         digests: [failure],
-        runs: [{ headSha: sha(1), conclusion: "success", startedAt: at(1.9) }],
+        runs: [
+          {
+            headSha: sha(1),
+            conclusion: "success",
+            startedAt: at(1.9),
+            successfulChecks: [
+              { job: "ci-tests (rest-web)", step: "Checkout" },
+            ],
+          },
+        ],
+      }),
+      exists,
+    });
+    expect(tests[ID]).toBeUndefined();
+  });
+
+  test("a same-head success that ran and passed the test step is a retry flake", () => {
+    const tests = buildHistory({
+      evidence: evidence({
+        digests: [failure],
+        runs: [
+          {
+            headSha: sha(1),
+            conclusion: "success",
+            startedAt: at(1.9),
+            successfulChecks: [{ job: "ci-tests (api)", step: "Test web" }],
+          },
+        ],
       }),
       exists,
     });

@@ -89,6 +89,60 @@ const timeoutOf = (options: unknown): number | undefined => {
   return undefined;
 };
 
+const objectValue = (row: unknown, key: string): unknown => {
+  let value = row;
+  for (const part of key.split(".")) {
+    if (typeof value !== "object" || value === null || !(part in value)) {
+      return undefined;
+    }
+    value = Reflect.get(value, part);
+  }
+  return value;
+};
+
+const formatTitleValue = (value: unknown): string =>
+  typeof value === "object" && value !== null
+    ? inspect(value, { breakLength: Infinity, compact: true })
+    : String(value);
+
+const formatEachTitle = (
+  title: string,
+  values: readonly unknown[],
+  index: number,
+): string => {
+  const row = values.length === 1 ? values.at(0) : undefined;
+  const withVariables = title.replace(/\$([\w.]+)/gu, (match, key: string) => {
+    const value = objectValue(row, key);
+    return value === undefined ? match : formatTitleValue(value);
+  });
+  let valueIndex = 0;
+  return withVariables.replace(/%%|%[sdifjo#]/gu, (placeholder): string => {
+    if (placeholder === "%%") {
+      return "%";
+    }
+    if (placeholder === "%#") {
+      return String(index);
+    }
+    const value = values.at(valueIndex++);
+    switch (placeholder) {
+      case "%s":
+        return String(value);
+      case "%d":
+        return String(Number(value));
+      case "%i":
+        return String(Number.parseInt(String(value), 10));
+      case "%f":
+        return String(Number.parseFloat(String(value)));
+      case "%j":
+        return JSON.stringify(value);
+      case "%o":
+        return inspect(value, { breakLength: Infinity, compact: true });
+      default:
+        return panic(`Unhandled each title placeholder: ${placeholder}`);
+    }
+  });
+};
+
 const install = (reportDir: string): void => {
   const registryPath =
     process.env[QUARANTINE_REGISTRY_ENV] ??
@@ -157,6 +211,38 @@ const install = (reportDir: string): void => {
   const describe = new Proxy(bunTest.describe, {
     get: (target, key) => {
       const value: unknown = Reflect.get(target, key, target);
+      if (key === "each" && isFunction(value)) {
+        return (...eachArgs: unknown[]) => {
+          const registerRows = value.apply(target, eachArgs);
+          if (!isFunction(registerRows)) {
+            return registerRows;
+          }
+          return (...args: unknown[]) => {
+            const [label, body, ...rest] = args;
+            if (typeof label !== "string" || !isFunction(body)) {
+              return registerRows(...args);
+            }
+            let rowIndex = 0;
+            return registerRows(
+              label,
+              (...bodyArgs: unknown[]) => {
+                const scope = [
+                  ...describePath,
+                  formatEachTitle(label, bodyArgs, rowIndex++),
+                ];
+                const outer = describePath;
+                describePath = scope;
+                try {
+                  return body(...bodyArgs);
+                } finally {
+                  describePath = outer;
+                }
+              },
+              ...rest,
+            );
+          };
+        };
+      }
       return isFunction(value) ? wrapDescribe(value.bind(target)) : value;
     },
     apply: (target, _self, args: unknown[]) =>

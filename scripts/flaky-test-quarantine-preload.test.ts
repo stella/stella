@@ -43,6 +43,27 @@ describe.concurrent("modified group", () => {
     throw new Error("describe modifier flake");
   });
 });
+describe.each([["one"]])("parameterized %s", () => {
+  test("case", () => {
+    throw new Error("parameterized group flake");
+  });
+});
+describe.each([["word", "2", "3", "4.5", { x: 1 }, { y: 2 }]])(
+  "formats %s %d %i %f %j %o %# %%",
+  () => {
+    test("case", () => {
+      throw new Error("formatted placeholders flake");
+    });
+  },
+);
+describe.each([{ word: "one", nested: { value: 2 } }])(
+  "object $word $nested.value",
+  () => {
+    test("case", () => {
+      throw new Error("formatted variables flake");
+    });
+  },
+);
 it("rejects", async () => {
   await Promise.reject(new Error("network flake"));
 });
@@ -158,6 +179,9 @@ const FAILING = [
   "hangs",
   "concurrent throw",
   "modified group > modified case",
+  "parameterized one > case",
+  'formats word 2 3 4.5 {"x":1} { y: 2 } 0 % > case',
+  "object one 2 > case",
 ];
 
 describe("flaky-test quarantine preload", () => {
@@ -179,6 +203,12 @@ describe("flaky-test quarantine preload", () => {
           `${FIXTURE}::modified group > modified case`,
           "describe modifier flake",
         ],
+        [`${FIXTURE}::parameterized one > case`, "parameterized group flake"],
+        [
+          `${FIXTURE}::formats word 2 3 4.5 {"x":1} { y: 2 } 0 % > case`,
+          "formatted placeholders flake",
+        ],
+        [`${FIXTURE}::object one 2 > case`, "formatted variables flake"],
         [`${FIXTURE}::hangs`, "timed out after 50ms"],
         [
           `${FIXTURE}::outer > inner > throws`,
