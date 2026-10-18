@@ -78,11 +78,6 @@ const softLawExpressionIdentityParts = (
     revisionKey,
   ] as const;
 };
-export const softLawExpressionIdentityKey = (
-  authority: SoftLawAuthority,
-  metadata: SoftLawMetadata,
-) => JSON.stringify(softLawExpressionIdentityParts(authority, metadata));
-
 /** The locator never supplies identity; numbered references normalize compatibility characters. */
 export const softLawIdentityKey = (
   authority: SoftLawAuthority,
