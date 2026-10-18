@@ -158,6 +158,7 @@ jobs:
       pr_heavy_gate_required: ${{ github.event_name == 'pull_request' && steps.completed-depth.outputs.run_required != 'false' && steps.completed-depth.outputs.pr_heavy_suites == 'run' && (steps.changed-files.outputs.package_checks_required == 'true' || steps.changed-files.outputs.collab_redis_required == 'true' || steps.e2e-pr-plan.outputs.selection_required == 'true') }}
       patch_id: ${{ steps.patch-id.outputs.patch_id }}
       pr_depth_workflow_version: ${{ steps.patch-id.outputs.workflow_version }}
+      plan_config: ${{ steps.patch-id.outputs.plan_config }}
       heavy_web_build_required: ${{ inputs.heavy_only == true && 'true' || 'false' }}
       agent_sandbox_docker_required: ${{ steps.changed-files.outputs.agent_sandbox_docker_required }}
       api_image_deps_required: ${{ steps.changed-files.outputs.api_image_deps_required }}
@@ -427,6 +428,13 @@ jobs:
           GROUP_BASE_SHA: ${{ github.event.merge_group.base_sha }}
           GROUP_HEAD_SHA: ${{ github.event.merge_group.head_sha }}
           WORKFLOW_SHA: ${{ github.workflow_sha }}
+          # Every repository variable this job reads: a change to any of them
+          # can change the planned suites, so completed evidence names them.
+          PLAN_CI_POSTGRES_PR_SELECTION: ${{ vars.CI_POSTGRES_PR_SELECTION }}
+          PLAN_CI_PR_DEPTH_PILOT: ${{ vars.CI_PR_DEPTH_PILOT }}
+          PLAN_CI_PR_DEPTH_PILOT_CERTIFIED_UNTIL: ${{ vars.CI_PR_DEPTH_PILOT_CERTIFIED_UNTIL }}
+          PLAN_CI_YIELD_TO_MERGE_QUEUE: ${{ vars.CI_YIELD_TO_MERGE_QUEUE }}
+          PLAN_MERGE_QUEUE_DEPTH: ${{ vars.MERGE_QUEUE_DEPTH }}
         run: |
           if [[ "$EVENT_NAME" == merge_group ]]; then
             base="$GROUP_BASE_SHA"
@@ -451,14 +459,21 @@ jobs:
           merge_parent=""
           if [[ "$EVENT_NAME" == pull_request ]]; then
             read -r _ first_parent second_parent other_parents < <(git rev-list --parents -n 1 "$head")
-            if [[ -n "${second_parent:-}" && -z "${other_parents:-}" ]] && git merge-base --is-ancestor "$second_parent" "$PR_BASE_SHA"; then
+            # The head must also be exactly the conflict-free automatic merge
+            # of its parents, so no hand edit can ride the reuse.
+            if [[ -n "${second_parent:-}" && -z "${other_parents:-}" ]] && git merge-base --is-ancestor "$second_parent" "$PR_BASE_SHA" \
+              && merged=$(git merge-tree --write-tree --no-messages "$first_parent" "$second_parent" 2> /dev/null) \
+              && [[ "$merged" == "$(git rev-parse "$head^{tree}")" ]]; then
               merge_parent="$first_parent"
             fi
           fi
+          plan_config=$({ env | grep -E '^PLAN_[A-Z0-9_]+=' || true; } | LC_ALL=C sort | sha256sum | cut -d ' ' -f 1)
+          [[ "$plan_config" =~ ^[0-9a-f]{64}$ ]] || { echo "::error::Unable to fingerprint the planning configuration."; exit 1; }
           {
             echo "patch_id=$patch_id"
             echo "workflow_version=$workflow_version"
             echo "merge_parent=$merge_parent"
+            echo "plan_config=$plan_config"
           } >> "$GITHUB_OUTPUT"
 
       - name: Derive PR-depth jobs
@@ -515,6 +530,7 @@ jobs:
           PATCH_ID: ${{ steps.patch-id.outputs.patch_id }}
           WORKFLOW_VERSION: ${{ steps.patch-id.outputs.workflow_version }}
           MERGE_PARENT: ${{ steps.patch-id.outputs.merge_parent }}
+          PLAN_CONFIG: ${{ steps.patch-id.outputs.plan_config }}
           PR_DEPTH_JOBS: ${{ steps.pr-depth-plan.outputs.pr_depth_jobs }}
         with:
           retries: 0
@@ -657,13 +673,15 @@ jobs:
                 : body).toString("utf8"));
               const results = evidence?.jobs;
               const planned = evidence?.planned;
-              if (evidence?.version !== 6
+              if (evidence?.version !== 7
                   || evidence.marker !== testedMarker
                   || evidence.event !== "pull_request"
                   || evidence.run_id !== sourceId
                   || !/^[0-9a-f]{40}$/.test(process.env.PATCH_ID || "")
                   || evidence.patch_id !== process.env.PATCH_ID
                   || evidence.workflow_version !== process.env.WORKFLOW_VERSION
+                  || !/^[0-9a-f]{64}$/.test(process.env.PLAN_CONFIG || "")
+                  || evidence.plan_config !== process.env.PLAN_CONFIG
                   || !Number.isSafeInteger(evidence.run_attempt)
                   || evidence.run_attempt < 1
                   || evidence.pr_number !== pr.number
@@ -8514,6 +8532,7 @@ jobs:
           HEAD_REPO_ID: ${{ github.event.pull_request.head.repo.id }}
           PATCH_ID: ${{ needs.ci-plan.outputs.patch_id }}
           WORKFLOW_VERSION: ${{ needs.ci-plan.outputs.pr_depth_workflow_version }}
+          PLAN_CONFIG: ${{ needs.ci-plan.outputs.plan_config }}
           PR_DEPTH_JOBS: ${{ needs.ci-plan.outputs.pr_depth_jobs || '[]' }}
           PR_DEPTH_REUSED: ${{ needs.ci-plan.outputs.pr_depth_reused }}
           PR_DEPTH_ONLY: ${{ inputs.pr_depth_only }}
@@ -8856,7 +8875,7 @@ jobs:
             evidence=$(jq -ce --argjson plan "$PLAN" --argjson scopes "$evidence_scopes" --argjson required "$evidence_required" \
               --arg marker "$COMPLETION_MARKER" --arg run "$GITHUB_RUN_ID" --arg attempt "$GITHUB_RUN_ATTEMPT" \
               --arg pr "$PR_NUMBER" --arg repo "$HEAD_REPO_ID" --arg head "$HEAD_SHA" --arg base "$BASE_SHA" \
-              --arg depth "$SUITE_DEPTH" --arg profile "${COVERAGE_PROFILE:-normal-v1}" --arg patch "$PATCH_ID" --arg workflow "$WORKFLOW_VERSION" --argjson pr_depth "$PR_DEPTH_JOBS" '
+              --arg depth "$SUITE_DEPTH" --arg profile "${COVERAGE_PROFILE:-normal-v1}" --arg patch "$PATCH_ID" --arg workflow "$WORKFLOW_VERSION" --arg plan_config "$PLAN_CONFIG" --argjson pr_depth "$PR_DEPTH_JOBS" '
               (with_entries(.value = .value.result)) as $jobs
               | ([$required[] | select($scopes[.] == null or $plan[$scopes[.]] == "true")] | unique) as $planned
               | select(($jobs | length) > 1 and $jobs["ci-plan"] == "success"
@@ -8864,10 +8883,10 @@ jobs:
                 and ($planned | length) > 0
                 and all($planned[]; . as $job | $jobs[$job] == "success")
                 and ($head | test("^[0-9a-f]{40}$")) and ($base | test("^[0-9a-f]{40}$")))
-              | {version: 6, marker: $marker, event: "pull_request",
+              | {version: 7, marker: $marker, event: "pull_request",
                 run_id: ($run | tonumber), run_attempt: ($attempt | tonumber),
                 pr_number: ($pr | tonumber), head_repo_id: ($repo | tonumber),
-                head_sha: $head, base_sha: $base, patch_id: $patch, workflow_version: $workflow, pr_depth_jobs: $pr_depth, suite_depth: $depth,
+                head_sha: $head, base_sha: $base, patch_id: $patch, workflow_version: $workflow, plan_config: $plan_config, pr_depth_jobs: $pr_depth, suite_depth: $depth,
                 coverage_profile: (if $profile == "" then "normal-v1" else $profile end),
                 planned: $planned, jobs: $jobs}' <<< "$NEEDS") || evidence=""
             if [[ -n "$evidence" ]]; then

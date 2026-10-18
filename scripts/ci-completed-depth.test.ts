@@ -29,6 +29,7 @@ const stepSchema = v.looseObject({
   id: v.optional(v.string()),
   if: v.optional(v.string()),
   run: v.optional(v.string()),
+  env: v.optional(v.record(v.string(), v.unknown())),
   with: v.optional(v.looseObject({ script: v.optional(v.string()) })),
 });
 const workflow = v.parse(
@@ -52,6 +53,8 @@ const workflow = v.parse(
 const jobs = workflow.jobs;
 const prDepth = prDepthJobs({ jobs });
 const patchId = "d".repeat(40);
+// The patch-id step's fingerprint of the planning configuration.
+const planConfig = "c".repeat(64);
 const planner = jobs["ci-plan"];
 const result = jobs["ci-result"];
 if (!planner || !result) {
@@ -98,7 +101,7 @@ const successfulRun = {
 };
 // The evidence ci-result records for a run whose planned jobs all succeeded.
 const evidenceFor = (depth: string, profile = "normal-v1") => ({
-  version: 6,
+  version: 7,
   marker: marker(depth, profile),
   event: "pull_request",
   run_id: 99,
@@ -109,6 +112,7 @@ const evidenceFor = (depth: string, profile = "normal-v1") => ({
   base_sha: pr.base.sha,
   patch_id: patchId,
   workflow_version: pr.head.sha,
+  plan_config: planConfig,
   pr_depth_jobs: prDepth,
   suite_depth: depth,
   coverage_profile: profile,
@@ -233,6 +237,7 @@ const decide = async ({
         PATCH_ID: currentPatchId,
         MERGE_PARENT: mergeParent,
         WORKFLOW_VERSION: pr.head.sha,
+        PLAN_CONFIG: planConfig,
         PR_DEPTH_JOBS: JSON.stringify(prDepth),
       },
     },
@@ -569,6 +574,7 @@ const recordEvidence = (
         COVERAGE_PROFILE: "normal-v1",
         PATCH_ID: patchId,
         WORKFLOW_VERSION: pr.head.sha,
+        PLAN_CONFIG: planConfig,
         PR_DEPTH_JOBS: JSON.stringify(prDepth),
         JOB_SCOPES: resultEnv["JOB_SCOPES"] ?? "",
         FAST_JOB_SCOPES: resultEnv["FAST_JOB_SCOPES"] ?? "",
@@ -630,7 +636,8 @@ test("recorded evidence lets an unchanged head skip, and only that head", async 
   }
   const recorded: unknown = JSON.parse(text);
   expect(recorded).toMatchObject({
-    version: 6,
+    version: 7,
+    plan_config: planConfig,
     run_id: 99,
     head_sha: pr.head.sha,
     marker: marker("fast"),
@@ -664,6 +671,8 @@ test("only exact green PR-depth evidence reuses checks", async () => {
     head: { ...valid, head_sha: "e".repeat(40) },
     patch: { ...valid, patch_id: "e".repeat(40) },
     workflow: { ...valid, workflow_version: "e".repeat(40) },
+    // A planning variable changed since: its planned suites may differ.
+    planConfig: { ...valid, plan_config: "e".repeat(64) },
     run: { ...valid, run_id: 98 },
     emptySet: { ...valid, pr_depth_jobs: [] },
     otherSet: { ...valid, pr_depth_jobs: prDepth.slice(1) },
@@ -1205,6 +1214,7 @@ test("thin groups require queued code checks regardless of normal PR completion"
           COVERAGE_PROFILE: "normal-v1",
           PATCH_ID: patchId,
           WORKFLOW_VERSION: pr.head.sha,
+          PLAN_CONFIG: planConfig,
           PR_DEPTH_JOBS: JSON.stringify(prDepth),
           GITHUB_STEP_SUMMARY: "/dev/null",
           PR_DEPTH_REUSED: evidence.outputs.get("pr_depth_reused") ?? "false",
@@ -1358,13 +1368,38 @@ type PatchIdStepOptions = {
   event?: string;
   base: string;
   head: string;
+  /** Repository variables the step fingerprints, as PLAN_<name>. */
+  planVariables?: Record<string, string>;
 };
 const patchIdStep = planner.steps.find((step) => step.id === "patch-id")?.run;
+
+// Completed evidence names the planning configuration, so every repository
+// variable the planner reads must be part of the fingerprint.
+test("the planning fingerprint covers every repository variable the planner reads", () => {
+  const read = [
+    ...new Set(
+      [...JSON.stringify(planner).matchAll(/\bvars\.([A-Z0-9_]+)/gu)].map(
+        ([, name]) => name,
+      ),
+    ),
+  ].toSorted();
+  expect(read.length).toBeGreaterThan(0);
+  const step = planner.steps.find(({ id }) => id === "patch-id");
+  const fingerprinted = Object.entries(step?.env ?? {})
+    .filter(([name]) => name.startsWith("PLAN_"))
+    .map(([name, value]) => {
+      expect(value).toBe(`\${{ vars.${name.slice("PLAN_".length)} }}`);
+      return name.slice("PLAN_".length);
+    })
+    .toSorted();
+  expect(fingerprinted).toEqual(read);
+});
 const runPatchIdStep = ({
   repository,
   event = "pull_request",
   base,
   head,
+  planVariables = {},
 }: PatchIdStepOptions) => {
   const output = nodePath.join(repository, ".git", "step-output");
   writeFileSync(output, "");
@@ -1381,6 +1416,7 @@ const runPatchIdStep = ({
         GROUP_HEAD_SHA: head,
         WORKFLOW_SHA: head,
         GITHUB_OUTPUT: output,
+        ...planVariables,
       },
     },
   );
@@ -1449,6 +1485,31 @@ test("the patch-id step names the parent only of a merge of the base, with the p
     expect(after["patch_id"]).toMatch(/^[0-9a-f]{40}$/u);
     expect(after["patch_id"]).toBe(before["patch_id"]);
 
+    // Any hand edit in the merge commit, even whitespace, names no parent:
+    // the head is no longer the automatic merge of its parents.
+    write("unrelated.txt", ["one", "two "]);
+    git("add", "--all");
+    git("commit", "--quiet", "--amend", "--no-edit");
+    expect(
+      runPatchIdStep({ repository, base: far, head: git("rev-parse", "HEAD") })[
+        "merge_parent"
+      ],
+    ).toBe("");
+    git("reset", "--quiet", "--hard", merged);
+
+    // The planning configuration is fingerprinted: any variable change moves it.
+    expect(after["plan_config"]).toMatch(/^[0-9a-f]{64}$/u);
+    const configured = (value: string) =>
+      runPatchIdStep({
+        repository,
+        base: far,
+        head: merged,
+        planVariables: { PLAN_CI_POSTGRES_PR_SELECTION: value },
+      })["plan_config"];
+    expect(configured("on")).toBe(configured("on"));
+    expect(configured("on")).not.toBe(configured("off"));
+    expect(configured("off")).not.toBe(after["plan_config"]);
+
     // A merge-queue run never names a parent.
     expect(
       runPatchIdStep({
@@ -1499,4 +1560,4 @@ test("the patch-id step names the parent only of a merge of the base, with the p
   } finally {
     rmSync(repository, { recursive: true, force: true });
   }
-});
+}, 30_000);
