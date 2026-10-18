@@ -52,6 +52,7 @@ import type { McpRequestContext } from "@/api/mcp/context";
 import { MCP_ERROR_CODES, projectMcpRefusal } from "@/api/mcp/error-codes";
 import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
 import { MAX_LIST_LIMIT } from "@/api/mcp/tool-utils";
+import { aggregateExecutionRows } from "@/api/tests/fixtures/aggregate-lock-order";
 import { modelViewOf } from "@/api/tests/helpers/mcp-model-view";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
@@ -541,9 +542,9 @@ describe("list verification access grants across MCP tools", () => {
         });
       },
       // Row locks (the sample loader's matter lock) read no rows here.
-      execute: async () => {
+      execute: async (statement: SQL) => {
         resourceLookups += 1;
-        return [];
+        return aggregateExecutionRows(statement, false);
       },
       insert: () => ({ values: async () => [] }),
       // A reader comment is written through its own guarded predicate; no
