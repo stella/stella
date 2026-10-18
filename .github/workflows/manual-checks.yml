@@ -126,8 +126,7 @@ jobs:
         if: ${{ !cancelled() && inputs.check == 'typecheck-parity' && steps.run-check.outcome == 'success' }}
         run: |
           {
-            cat CLOUD_REPORT.md
-            printf '\n## CI parity output\n\n```text\n'
+            printf '# Bun typecheck parity report\n\n## CI parity output\n\n```text\n'
             cat "$RUNNER_TEMP/manual-check.log"
             printf '\n```\n'
           } > "$RUNNER_TEMP/CLOUD_REPORT.md"

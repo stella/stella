@@ -700,23 +700,16 @@ jobs:
         with:
           bun-version-file: package.json
 
-      - name: Check tracked symlink archive targets
+      - name: Check tracked repository hygiene
         if: >-
           steps.completed-depth.outputs.run_required != 'false'
           && (
           steps.check.outputs.trusted == 'true'
           || github.event_name == 'workflow_dispatch'
           )
-        run: bun scripts/check-tracked-symlinks.ts
-
-      - name: Check tracked cloud task reports
-        if: >-
-          steps.completed-depth.outputs.run_required != 'false'
-          && (
-          steps.check.outputs.trusted == 'true'
-          || github.event_name == 'workflow_dispatch'
-          )
-        run: bun scripts/check-tracked-cloud-reports.ts
+        run: |
+          bun scripts/check-tracked-symlinks.ts
+          bun scripts/check-tracked-cloud-reports.ts
 
       - name: Login to GitHub Container Registry for image resolution
         id: registry

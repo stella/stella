@@ -1,6 +1,13 @@
 import { expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -44,7 +51,7 @@ test("a repository without a cloud report passes", () => {
   });
 });
 
-test("a staged root cloud report fails", () => {
+test("a tracked root cloud report fails", () => {
   withRepository(["CLOUD_REPORT.md"], (root) => {
     const result = runCheck(root);
     expect(result.status).toBe(1);
@@ -52,7 +59,7 @@ test("a staged root cloud report fails", () => {
   });
 });
 
-test("a staged nested cloud report fails", () => {
+test("a tracked nested cloud report fails", () => {
   withRepository(["docs/x/CLOUD_REPORT.md"], (root) => {
     const result = runCheck(root);
     expect(result.status).toBe(1);
@@ -74,4 +81,34 @@ test("an unrelated plural report passes", () => {
     expect(result.status).toBe(0);
     expect(result.stderr).toBe("");
   });
+});
+
+test("an untracked cloud report passes", () => {
+  withRepository([], (root) => {
+    writeFileSync(path.join(root, "CLOUD_REPORT.md"), "local proof\n");
+    const result = runCheck(root);
+    expect(result.status).toBe(0);
+    expect(result.stderr).toBe("");
+  });
+});
+
+test("pre-commit does not refuse staged cloud reports", () => {
+  const lefthook = readFileSync(
+    path.resolve(import.meta.dirname, "../lefthook.yml"),
+    "utf-8",
+  );
+  expect(lefthook).not.toContain("check-tracked-cloud-reports.ts");
+  expect(lefthook).not.toContain("tracked-cloud-reports:");
+});
+
+test("workflows never read a cloud report from the checkout", () => {
+  const workflows = path.resolve(import.meta.dirname, "../.github/workflows");
+  for (const file of readdirSync(workflows).filter((name) =>
+    /\.ya?ml$/u.test(name),
+  )) {
+    const source = readFileSync(path.join(workflows, file), "utf-8");
+    expect(source, file).not.toMatch(
+      /(?:cat|head|tail|less|more|sed|awk|grep)\s+(?:--\s+)?["']?(?:\.\/)?CLOUD_REPORT\.md\b/iu,
+    );
+  }
 });
