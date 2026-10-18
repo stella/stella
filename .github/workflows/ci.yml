@@ -3040,6 +3040,10 @@ jobs:
         env:
           CI_CHECK_KIND: STATIC
           CI_CHECK_INPUTS: tracked-tree+generated-inputs
+          # scan-engine-wasm-drift builds the WebAssembly on this commit
+          # exactly when its `if:` holds; scripts/generated-files-guard.test.ts
+          # binds this expression to that condition.
+          GENERATED_CHECKS_IN_OTHER_JOBS: ${{ inputs.pr_depth_only != true && needs.ci-plan.outputs.scan_engine_wasm_required == 'true' && '["scan-engine-wasm"]' || '[]' }}
         id: generated_manifest
         background: true
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_generated_manifest != 'true') }}
