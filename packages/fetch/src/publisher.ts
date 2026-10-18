@@ -1,6 +1,10 @@
 import { Result, TaggedError } from "better-result";
 
-import type { Fetcher, TransportRequestInit } from "./index";
+import {
+  fetchWithTimeout,
+  type Fetcher,
+  type TransportRequestInit,
+} from "./index";
 
 const ROBOTS_MAX_BYTES = 512 * 1024;
 const ROBOTS_TTL_MS = 60 * 60 * 1000;
@@ -958,9 +962,29 @@ const walkPublisherRedirects = async (
   }
 };
 
+// globalThis.fetch ignores the transport timeout fields callers may set.
+const timeoutAwareFetch: Fetcher = async (input, init = {}) => {
+  const { timeout, timeoutMs, signal, ...rest } = init;
+  if (timeout) {
+    return await fetchWithTimeout(input, {
+      ...rest,
+      signal: signal ?? undefined,
+      timeout,
+    });
+  }
+  if (timeoutMs !== undefined) {
+    return await fetchWithTimeout(input, {
+      ...rest,
+      signal: signal ?? undefined,
+      timeoutMs,
+    });
+  }
+  return await globalThis.fetch(input, init);
+};
+
 export const createPolitePublisherFetch = ({
   validateTarget,
-  fetcher = globalThis.fetch,
+  fetcher = timeoutAwareFetch,
   clock = {
     now: () => performance.now(),
     sleep: async (ms, signal) => {

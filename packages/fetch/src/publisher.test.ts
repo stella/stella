@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
@@ -237,6 +237,35 @@ describe("publisher scheduler", () => {
     expect(requestedAt).toHaveLength(3);
     expect(requestedAt.at(0)).toBe(0);
     expect(sleeps).toEqual([2000, 2000]);
+  });
+
+  test("the default transport enforces a caller timeout on a stalled request", async () => {
+    const stalled = spyOn(globalThis, "fetch").mockImplementation(
+      async (input, init) => {
+        const url = new URL(input instanceof Request ? input.url : input);
+        if (url.pathname === "/robots.txt") {
+          return new Response(null, { status: 404 });
+        }
+        return await new Promise<never>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () =>
+            reject(init.signal?.reason),
+          );
+        });
+      },
+    );
+    const request = createPolitePublisherFetch({
+      validateTarget: allowTarget,
+      defaultMinimumIntervalMs: 0,
+    });
+
+    const outcome = Result.tryPromise(async () =>
+      request("https://publisher.example/case", {
+        init: { timeout: { type: "headers", ms: 20 } },
+      }),
+    );
+
+    expect(Result.isError(await outcome)).toBe(true);
+    stalled.mockRestore();
   });
 
   test("preserves a caller-provided transport timeout", async () => {
