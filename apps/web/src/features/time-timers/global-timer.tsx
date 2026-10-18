@@ -4,6 +4,7 @@ import type { ComponentType } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 
 import { timeTimersOptions } from "@/features/time-timers/queries";
+import { useHasMounted } from "@/hooks/use-chrome-query";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useTimeBillingPreviewEnabled } from "@/hooks/use-time-billing-preview";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -27,9 +28,11 @@ export const GlobalTimer = ({
   const user = useAuthenticatedUser();
   // Start the timers request with the flag, not after the lazy chunk loads:
   // waiting for the chunk adds a sequential network round to every page.
+  // Chrome fetches still wait for mount (see useChromeQuery).
+  const mounted = useHasMounted();
   useInfiniteQuery({
     ...timeTimersOptions(user.activeOrganizationId, user.id),
-    enabled: enabled && canRead,
+    enabled: mounted && enabled && canRead,
   });
   if (!enabled || !canRead) {
     return null;

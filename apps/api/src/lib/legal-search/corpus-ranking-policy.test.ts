@@ -7,6 +7,7 @@ import { assertProperty } from "@stll/property-testing";
 
 import { envBaseServerSchema } from "@/api/env-base-schema";
 import {
+  NATIVE_SCAN_TRANSPORT,
   readCorpusIndexSearchPage,
   type SearchCursor,
 } from "@/api/lib/legal-search/corpus-index-pagination";
@@ -469,7 +470,7 @@ test("BM25 pages honor and carry the groups their cursor excludes", async () => 
 
 test("BM25 ranking refuses a transport without scores or a date order", async () => {
   for (const options of [
-    { ...rankingTestOptions, scanTransport: undefined },
+    { ...rankingTestOptions, scanTransport: NATIVE_SCAN_TRANSPORT },
     {
       ...rankingTestOptions,
       order: { type: "newest", timestampField: "decision_date_ts" } as const,

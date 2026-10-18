@@ -2372,7 +2372,7 @@ const jobSteps = (job: unknown) =>
     v.object({
       steps: v.pipe(
         v.unknown(),
-        v.transform(flattenWorkflowSteps),
+        v.transform((steps) => flattenWorkflowSteps(steps)),
         v.transform((steps) => steps.map(withoutStaticReuseCondition)),
         v.array(
           v.object({
@@ -6200,7 +6200,7 @@ test("the exact docs-only README change plans only Markdown checks in PRs and me
         );
     expect(partSelected("ci-checks-docs: ")).toEqual([true]);
     expect(partSelected("parser-version-guard: ")).toEqual([false]);
-    expect(partSelected("dated-waiver-expiry: ")).toEqual([true, true]);
+    expect(partSelected("dated-waiver-expiry: ")).toEqual([true, true, true]);
     expect(
       evaluateResult({
         event,

@@ -23,6 +23,7 @@ import {
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   corpusIndexLexicalScore,
+  NATIVE_SCAN_TRANSPORT,
   readCorpusIndexSearchPage,
 } from "@/api/lib/legal-search/corpus-index-pagination";
 import { CORPUS_BM25_RATIO_POWER } from "@/api/lib/legal-search/corpus-ranking-policy";
@@ -388,6 +389,7 @@ test("legislation scan counts retained omissions once as eligible candidates gro
   const eligibleCounts: number[] = [];
   try {
     const page = await readCorpusIndexSearchPage({
+      scanTransport: NATIVE_SCAN_TRANSPORT,
       observer: "unobserved",
       cluster: "q09",
       indexId: PROJECTED_INDEX_ID,

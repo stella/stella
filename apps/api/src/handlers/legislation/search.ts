@@ -52,6 +52,7 @@ import { requireCorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-
 import {
   type SearchCursor,
   readCorpusIndexSearchPage,
+  SCORED_SCAN_TRANSPORT,
   type CorpusCandidateRankingInput,
 } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
@@ -221,6 +222,11 @@ const buildCorpusIndexQuery = (
     );
   }
   return clauses.join(" AND ");
+};
+
+const extractCorpusDocumentId = (hit: Record<string, unknown>) => {
+  const id = hit["document_id"];
+  return typeof id === "string" && isUuid(id) ? id : null;
 };
 
 const extractCorpusSnippet = (
@@ -1111,6 +1117,9 @@ const corpusIndexSearch = async ({
       query,
       limit: pageLimit,
       order: RELEVANCE_ORDER,
+      // A legislation hit is a whole statute version; the native endpoint
+      // would return its full stored text for each of up to 300 hits a round.
+      scanTransport: SCORED_SCAN_TRANSPORT,
       parsedCursor: cursor,
       ...(active.type === "relaxed"
         ? {
@@ -1122,10 +1131,7 @@ const corpusIndexSearch = async ({
         "legislation",
         generation,
       ).projection.projectionRevisionField,
-      extractId: (hit) => {
-        const id = hit["document_id"];
-        return typeof id === "string" && isUuid(id) ? id : null;
-      },
+      extractId: extractCorpusDocumentId,
       extractSnippet: extractCorpusSnippet,
       unseenScoreUpperBound:
         active.type === "strict" ? stableBlendUpperBound : (score) => score,

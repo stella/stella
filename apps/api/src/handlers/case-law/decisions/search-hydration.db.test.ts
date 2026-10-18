@@ -47,6 +47,7 @@ import {
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   corpusIndexLexicalScore,
+  NATIVE_SCAN_TRANSPORT,
   readCorpusIndexSearchPage,
 } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
@@ -1354,6 +1355,7 @@ test("provider scan counts retained omissions once as eligible candidates grow",
   const eligibleCounts: number[] = [];
   try {
     const page = await readCorpusIndexSearchPage({
+      scanTransport: NATIVE_SCAN_TRANSPORT,
       observer: "unobserved",
       cluster: "q09",
       indexId: INDEX_ID,

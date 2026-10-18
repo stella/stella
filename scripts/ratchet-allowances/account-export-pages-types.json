@@ -1,0 +1,6 @@
+{
+  "metric": "root-connection-type-imports",
+  "file": "apps/api/src/lib/account-export/pages.ts",
+  "delta": 2,
+  "reason": "The personal page source accepts a select-only account dependency and a separate branded RLS transaction dependency inferred from the existing owners. Keeping their types separate prevents worker owner-level reads from replacing user-scoped tenant pages."
+}
