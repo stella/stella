@@ -50,7 +50,10 @@ import type {
 } from "@/api/lib/legal-search/corpus-index-generation-store";
 import { requireCorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
 import type { SearchCursor } from "@/api/lib/legal-search/corpus-index-pagination";
-import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
+import {
+  readCorpusIndexSearchPage,
+  SCORED_SCAN_TRANSPORT,
+} from "@/api/lib/legal-search/corpus-index-pagination";
 import type { CorpusProjectionRevision } from "@/api/lib/legal-search/corpus-index-revision-clause";
 import {
   corpusFreeTextClause,
@@ -1092,6 +1095,9 @@ const corpusIndexSearch = async ({
       query,
       limit: pageLimit,
       order: RELEVANCE_ORDER,
+      // A legislation hit is a whole statute version; the native endpoint
+      // would return its full stored text for each of up to 300 hits a round.
+      scanTransport: SCORED_SCAN_TRANSPORT,
       parsedCursor: cursor,
       ...(active.type === "relaxed"
         ? {

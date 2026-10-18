@@ -1,0 +1,576 @@
+import { useState } from "react";
+import { useFormStatus } from "react-dom";
+
+import { useQuery } from "@tanstack/react-query";
+import { useRouteContext } from "@tanstack/react-router";
+import { Result } from "better-result";
+import { useTranslations } from "use-intl";
+
+import { DEFAULT_CHAT_ANON_ENTITY_LABELS } from "@stll/anonymize-chat";
+import { Button } from "@stll/ui/button";
+import {
+  Combobox,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+  ComboboxPopup,
+} from "@stll/ui/combobox";
+import { openFilePicker } from "@stll/ui/file-picker";
+import { Frame, FramePanel } from "@stll/ui/frame";
+import { Trash2Icon as Trash2, UploadIcon } from "@stll/ui/icons";
+import { Input } from "@stll/ui/input";
+import { stellaToast } from "@stll/ui/toast";
+
+import { QueryViewFeedback } from "@/components/query-view-feedback";
+import type { TranslationKey } from "@/i18n/types";
+import { getAnalytics } from "@/lib/analytics/provider";
+import { api } from "@/lib/api";
+import { normalizeOptionalArray } from "@/lib/arrays";
+import { detached } from "@/lib/detached";
+import { unwrapEden } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
+import { useQueryView } from "@/lib/use-query-view";
+import { useSettingsMutation } from "@/routes/_protected.admin/-hooks/use-settings-mutation";
+import {
+  organizationAnonymizationBlacklistKeys,
+  organizationAnonymizationBlacklistOptions,
+} from "@/routes/_protected.admin/-queries/anonymization-blacklist";
+
+type OrgAnonymizationBlacklistEntry = {
+  canonical: string;
+  label: string;
+  variants?: readonly string[];
+  enabled?: boolean;
+};
+
+type UpdateBlacklistVars = {
+  entries: readonly OrgAnonymizationBlacklistEntry[];
+};
+
+// Entity labels come from the pipeline package so the firm-wide
+// catalog never drifts out of sync with the recogniser's known
+// kinds. The wasm matcher keys gazetteer hits on canonical text
+// only — the label is metadata for grouping/display — so we
+// prepend a generic "miscellaneous" bucket that paste-in lists
+// can land in without forcing the user to pick a category they
+// don't care about.
+const MISCELLANEOUS_LABEL = "miscellaneous" as const;
+const LABEL_OPTIONS = [
+  MISCELLANEOUS_LABEL,
+  ...DEFAULT_CHAT_ANON_ENTITY_LABELS,
+] as const;
+
+type LabelOption = (typeof LABEL_OPTIONS)[number];
+
+const DEFAULT_LABEL: LabelOption = MISCELLANEOUS_LABEL;
+
+// Saved values stay in their canonical English form (the
+// pipeline matches by string equality); the dropdown + sublabel
+// render via i18n. `as const satisfies` keeps the literal key
+// types so the typed `t()` accepts a single argument and the
+// `satisfies TranslationKey` check fails the build if a key
+// goes stale.
+const LABEL_TRANSLATION_KEY = {
+  miscellaneous: "common.anonymizationLabels.miscellaneous",
+  person: "common.anonymizationLabels.person",
+  organization: "common.anonymizationLabels.organization",
+  "phone number": "common.anonymizationLabels.phoneNumber",
+  address: "common.anonymizationLabels.address",
+  country: "common.country",
+  "email address": "common.anonymizationLabels.emailAddress",
+  date: "common.anonymizationLabels.date",
+  "date of birth": "common.anonymizationLabels.dateOfBirth",
+  "bank account number": "common.anonymizationLabels.bankAccountNumber",
+  iban: "common.anonymizationLabels.iban",
+  "tax identification number":
+    "common.anonymizationLabels.taxIdentificationNumber",
+  "identity card number": "common.anonymizationLabels.identityCardNumber",
+  "birth number": "common.anonymizationLabels.birthNumber",
+  "national identification number":
+    "common.anonymizationLabels.nationalIdentificationNumber",
+  "social security number": "common.anonymizationLabels.socialSecurityNumber",
+  "registration number": "common.anonymizationLabels.registrationNumber",
+  "case number": "caseLaw.columns.caseNumber",
+  "credit card number": "common.anonymizationLabels.creditCardNumber",
+  "passport number": "common.anonymizationLabels.passportNumber",
+  crypto: "common.anonymizationLabels.crypto",
+  "monetary amount": "common.anonymizationLabels.monetaryAmount",
+  "land parcel": "common.anonymizationLabels.landParcel",
+  misc: "common.anonymizationLabels.miscellaneous",
+} as const satisfies Record<LabelOption, TranslationKey>;
+
+const isKnownLabel = (label: string): label is LabelOption =>
+  LABEL_OPTIONS.some((option) => option === label);
+
+/**
+ * Best-effort parse of an uploaded deny list. Supports:
+ *   - JSON: an array of strings (canonicals only, default label
+ *     applied) or an array of `{ canonical, label?, variants? }`.
+ *   - CSV: header optional; columns `canonical, label, variants`
+ *     where variants are `|`-separated within a single cell.
+ *   - TXT / fallback: one canonical per line.
+ *
+ * Returns `null` when nothing usable was found so the caller can
+ * surface a single "couldn't parse the file" toast instead of
+ * silently inserting empty rows.
+ */
+const isStringArray = (value: unknown): value is readonly string[] =>
+  Array.isArray(value) && value.every((v) => typeof v === "string");
+
+const readField = (value: unknown, key: string): unknown => {
+  if (typeof value !== "object" || value === null) {
+    return undefined;
+  }
+  return Reflect.get(value, key);
+};
+
+const trimNonEmpty = (values: readonly string[]): string[] => {
+  const result: string[] = [];
+  for (const value of values) {
+    const trimmed = value.trim();
+    if (trimmed.length > 0) {
+      result.push(trimmed);
+    }
+  }
+  return result;
+};
+
+const parseJsonItem = (
+  item: unknown,
+  defaultLabel: LabelOption,
+): OrgAnonymizationBlacklistEntry | null => {
+  if (typeof item === "string") {
+    const canonical = item.trim();
+    return canonical.length > 0 ? { canonical, label: defaultLabel } : null;
+  }
+  const rawCanonical = readField(item, "canonical");
+  const canonical = typeof rawCanonical === "string" ? rawCanonical.trim() : "";
+  if (canonical.length === 0) {
+    return null;
+  }
+  const rawLabel = readField(item, "label");
+  const label =
+    typeof rawLabel === "string" && rawLabel.trim().length > 0
+      ? rawLabel.trim()
+      : defaultLabel;
+  const rawVariants = readField(item, "variants");
+  const variants = isStringArray(rawVariants)
+    ? trimNonEmpty(rawVariants)
+    : undefined;
+  return {
+    canonical,
+    label,
+    ...(variants && variants.length > 0 ? { variants } : {}),
+  };
+};
+
+const parseJson = (
+  trimmed: string,
+  defaultLabel: LabelOption,
+): OrgAnonymizationBlacklistEntry[] | null => {
+  const parsed = Result.try((): unknown => JSON.parse(trimmed));
+  if (Result.isError(parsed) || !Array.isArray(parsed.value)) {
+    return null;
+  }
+  const rows: OrgAnonymizationBlacklistEntry[] = [];
+  for (const item of parsed.value) {
+    const entry = parseJsonItem(item, defaultLabel);
+    if (entry) {
+      rows.push(entry);
+    }
+  }
+  return rows.length > 0 ? rows : null;
+};
+
+const parseCsvLine = (
+  line: string,
+  defaultLabel: LabelOption,
+): OrgAnonymizationBlacklistEntry | null => {
+  // Naive split — quoted CSV values aren't expected for PII
+  // canonicals, so the unquoted parser keeps the import short
+  // and predictable. Variants column uses `|` as inner
+  // separator to avoid colliding with the CSV delimiter.
+  const cells = line.split(/[,;]/u).map((cell) => cell.trim());
+  const canonical = cells[0] ?? "";
+  if (canonical.length === 0) {
+    return null;
+  }
+  const cellLabel = cells[1];
+  const label = cellLabel && cellLabel.length > 0 ? cellLabel : defaultLabel;
+  const variantsCell = cells[2];
+  const variants = variantsCell
+    ? variantsCell
+        .split("|")
+        .map((v) => v.trim())
+        .filter((v) => v.length > 0)
+    : undefined;
+  return {
+    canonical,
+    label,
+    ...(variants && variants.length > 0 ? { variants } : {}),
+  };
+};
+
+const parseImport = (
+  text: string,
+  fileName: string,
+  defaultLabel: LabelOption,
+): OrgAnonymizationBlacklistEntry[] | null => {
+  const lower = fileName.toLowerCase();
+  const trimmed = text.trim();
+  if (trimmed.length === 0) {
+    return null;
+  }
+
+  if (lower.endsWith(".json") || trimmed.startsWith("[")) {
+    return parseJson(trimmed, defaultLabel);
+  }
+
+  const lines = trimmed
+    .split(/\r?\n/u)
+    .filter((line) => line.trim().length > 0);
+  if (lines.length === 0) {
+    return null;
+  }
+
+  const first = lines[0] ?? "";
+  const isCsv =
+    lower.endsWith(".csv") || first.includes(",") || first.includes(";");
+  if (!isCsv) {
+    const txtRows: OrgAnonymizationBlacklistEntry[] = [];
+    for (const line of lines) {
+      const canonical = line.trim();
+      if (canonical.length > 0) {
+        txtRows.push({ canonical, label: defaultLabel });
+      }
+    }
+    return txtRows;
+  }
+
+  // CSV: drop an optional header row (`canonical,...`).
+  const headerLooksLikeHeader =
+    first.toLowerCase().split(/[,;]/u).at(0)?.trim() === "canonical";
+  const dataLines = headerLooksLikeHeader ? lines.slice(1) : lines;
+  const rows: OrgAnonymizationBlacklistEntry[] = [];
+  for (const line of dataLines) {
+    const entry = parseCsvLine(line, defaultLabel);
+    if (entry) {
+      rows.push(entry);
+    }
+  }
+  return rows.length > 0 ? rows : null;
+};
+
+const dedupeByCanonical = (
+  entries: readonly OrgAnonymizationBlacklistEntry[],
+): OrgAnonymizationBlacklistEntry[] => {
+  const seen = new Map<string, OrgAnonymizationBlacklistEntry>();
+  for (const entry of entries) {
+    const key = entry.canonical.toLocaleLowerCase();
+    if (!seen.has(key)) {
+      seen.set(key, entry);
+    }
+  }
+  return [...seen.values()];
+};
+
+export const AnonymizationDenyListCard = () => {
+  const t = useTranslations();
+  const activeOrganizationId = useRouteContext({
+    from: "/_protected",
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
+  const blacklistQuery = useQuery(
+    organizationAnonymizationBlacklistOptions({
+      organizationId: activeOrganizationId,
+    }),
+  );
+  const blacklistView = useQueryView(blacklistQuery);
+  // Replace the org-wide deny list. Endpoint performs a full
+  // upsert: rows missing from the request are deleted, present
+  // rows are upserted (keyed on lowercased canonical). Callers
+  // therefore submit the full target list, not a delta.
+  const updateMutation = useSettingsMutation({
+    mutationFn: async ({ entries }: UpdateBlacklistVars) =>
+      unwrapEden(
+        await api["organization-settings"]["anonymization-blacklist"].put({
+          entries: entries.map((entry) => ({
+            canonical: entry.canonical,
+            label: entry.label,
+            ...(entry.variants ? { variants: [...entry.variants] } : {}),
+            ...(entry.enabled !== undefined ? { enabled: entry.enabled } : {}),
+          })),
+        }),
+      ),
+    invalidate: organizationAnonymizationBlacklistKeys.byOrganization({
+      organizationId: activeOrganizationId,
+    }),
+  });
+
+  const [pendingCanonical, setPendingCanonical] = useState("");
+  const [pendingLabel, setPendingLabel] = useState<LabelOption>(DEFAULT_LABEL);
+
+  const entries =
+    blacklistView.type === "items" ? blacklistView.items.entries : undefined;
+  const renderedEntries = normalizeOptionalArray(entries);
+
+  const submitTerm = async () => {
+    const canonical = pendingCanonical.trim();
+    if (canonical.length === 0 || entries === undefined) {
+      return;
+    }
+    const next = dedupeByCanonical([
+      ...entries.map((entry) => ({
+        canonical: entry.canonical,
+        label: entry.label,
+        variants: entry.variants,
+        enabled: entry.enabled,
+      })),
+      { canonical, label: pendingLabel },
+    ]);
+    const saved = await Result.tryPromise({
+      try: async () => await updateMutation.mutateAsync({ entries: next }),
+      catch: (error) => error,
+    });
+    if (Result.isError(saved)) {
+      getAnalytics().captureError(saved.error);
+      notifyUserError(saved.error, t("errors.actionFailed"));
+      return;
+    }
+    setPendingCanonical("");
+    setPendingLabel(DEFAULT_LABEL);
+    stellaToast.add({
+      title: t("settings.organization.anonymization.termAddedToast", {
+        value: canonical,
+      }),
+      type: "success",
+    });
+  };
+
+  const removeEntry = (canonical: string) => {
+    if (entries === undefined) {
+      return;
+    }
+
+    const next: OrgAnonymizationBlacklistEntry[] = [];
+    for (const entry of entries) {
+      if (entry.canonical !== canonical) {
+        next.push({
+          canonical: entry.canonical,
+          label: entry.label,
+          variants: entry.variants,
+          enabled: entry.enabled,
+        });
+      }
+    }
+    updateMutation.mutate(
+      { entries: next },
+      {
+        onError: (error) => {
+          notifyUserError(error, t("errors.actionFailed"));
+        },
+      },
+    );
+  };
+
+  const handleImportFile = async (file: File) => {
+    if (entries === undefined) {
+      return;
+    }
+
+    const text = await file.text();
+    const parsed = parseImport(text, file.name, pendingLabel);
+    if (!parsed || parsed.length === 0) {
+      notifyUserError(
+        undefined,
+        t("settings.organization.anonymization.importParseError"),
+      );
+      return;
+    }
+    const merged = dedupeByCanonical([
+      ...entries.map((entry) => ({
+        canonical: entry.canonical,
+        label: entry.label,
+        variants: entry.variants,
+        enabled: entry.enabled,
+      })),
+      ...parsed,
+    ]);
+    updateMutation.mutate(
+      { entries: merged },
+      {
+        onSuccess: () => {
+          stellaToast.add({
+            title: t("settings.organization.anonymization.importSuccessToast", {
+              count: String(parsed.length),
+            }),
+            type: "success",
+          });
+        },
+        onError: (error) => {
+          notifyUserError(error, t("errors.actionFailed"));
+        },
+      },
+    );
+  };
+
+  if (blacklistView.type !== "items") {
+    return <QueryViewFeedback view={blacklistView} />;
+  }
+
+  return (
+    <Frame>
+      <FramePanel>
+        <div className="flex flex-col gap-3 p-1">
+          <QueryViewFeedback view={blacklistView} />
+          <form
+            action={submitTerm}
+            className="flex flex-col gap-2 rounded-md border p-3"
+          >
+            <Input
+              autoComplete="off"
+              disabled={updateMutation.isPending}
+              onChange={(event) => setPendingCanonical(event.target.value)}
+              placeholder={t(
+                "settings.organization.anonymization.addPlaceholder",
+              )}
+              value={pendingCanonical}
+            />
+            <div className="flex items-center gap-2">
+              <Combobox<LabelOption>
+                autoHighlight
+                disabled={updateMutation.isPending}
+                items={[...LABEL_OPTIONS]}
+                itemToStringLabel={(option) => t(LABEL_TRANSLATION_KEY[option])}
+                onValueChange={(next) => {
+                  if (next) {
+                    setPendingLabel(next);
+                  }
+                }}
+                value={pendingLabel}
+              >
+                <ComboboxInput
+                  aria-label={t(
+                    "settings.organization.anonymization.labelPickerAriaLabel",
+                  )}
+                  className="h-9 min-w-0 flex-1 text-xs"
+                  placeholder={t(
+                    "settings.organization.anonymization.labelPickerPlaceholder",
+                  )}
+                />
+                <ComboboxPopup>
+                  <ComboboxList>
+                    {(option: LabelOption) => (
+                      <ComboboxItem key={option} value={option}>
+                        {t(LABEL_TRANSLATION_KEY[option])}
+                      </ComboboxItem>
+                    )}
+                  </ComboboxList>
+                  <ComboboxEmpty>
+                    {t("settings.organization.anonymization.labelPickerEmpty")}
+                  </ComboboxEmpty>
+                </ComboboxPopup>
+              </Combobox>
+              <AddTermSubmitButton
+                disabled={
+                  pendingCanonical.trim().length === 0 ||
+                  entries === undefined ||
+                  updateMutation.isPending
+                }
+                label={t("common.add")}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                disabled={entries === undefined || updateMutation.isPending}
+                onClick={() => {
+                  openFilePicker({
+                    accept:
+                      ".csv,.txt,.json,text/csv,text/plain,application/json",
+                    onPick: ([file]) => {
+                      detached(
+                        handleImportFile(file),
+                        "anonymization-deny-list-card.import-file",
+                      );
+                    },
+                  });
+                }}
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                <UploadIcon className="size-3.5" />
+                {t("common.import")}
+              </Button>
+              <span className="text-muted-foreground text-xs">
+                {t("settings.organization.anonymization.importHint")}
+              </span>
+            </div>
+          </form>
+
+          <div className="flex flex-col gap-1">
+            <div className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+              {t("settings.organization.anonymization.entriesHeading", {
+                count: String(renderedEntries.length),
+              })}
+            </div>
+            {blacklistQuery.isLoading && (
+              <div className="text-muted-foreground py-6 text-center text-xs">
+                {t("common.loading")}
+              </div>
+            )}
+            {!blacklistQuery.isLoading && renderedEntries.length === 0 && (
+              <div className="text-muted-foreground rounded-md border border-dashed py-6 text-center text-xs">
+                {t("settings.organization.anonymization.emptyState")}
+              </div>
+            )}
+            {renderedEntries.map((entry) => (
+              <div
+                className="hover:bg-muted/50 flex items-center justify-between gap-2 rounded-md border px-3 py-2"
+                key={entry.id}
+              >
+                <div className="flex min-w-0 flex-col">
+                  <span className="truncate text-sm font-medium">
+                    {entry.canonical}
+                  </span>
+                  <span className="text-muted-foreground text-xs">
+                    {isKnownLabel(entry.label)
+                      ? t(LABEL_TRANSLATION_KEY[entry.label])
+                      : entry.label}
+                  </span>
+                </div>
+                <Button
+                  disabled={updateMutation.isPending}
+                  onClick={() => removeEntry(entry.canonical)}
+                  size="icon"
+                  variant="ghost"
+                >
+                  <Trash2 className="size-4" />
+                  <span className="sr-only">
+                    {t("settings.organization.anonymization.deleteAction")}
+                  </span>
+                </Button>
+              </div>
+            ))}
+          </div>
+        </div>
+      </FramePanel>
+    </Frame>
+  );
+};
+
+const AddTermSubmitButton = ({
+  disabled,
+  label,
+}: {
+  disabled: boolean;
+  label: string;
+}) => {
+  const { pending } = useFormStatus();
+  return (
+    <Button disabled={disabled || pending} size="sm" type="submit">
+      {label}
+    </Button>
+  );
+};

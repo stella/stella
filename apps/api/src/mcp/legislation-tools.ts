@@ -43,10 +43,12 @@ import {
   ACTION_COST_CALL_KIND,
   actionRequestObserver,
 } from "@/api/lib/usage/action-costs/context";
+import type { McpRequestContext } from "@/api/mcp/context";
 import {
   isProvisionTextCursor,
   windowProvisionText,
 } from "@/api/mcp/provision-text-window";
+import type { StatuteDocument } from "@/api/mcp/public-law-handlers";
 import {
   isLegislationSearchSuccess,
   isStatuteDocument,
@@ -407,7 +409,8 @@ const LEGISLATION_TOOL_DEFINITIONS = [
       "window, `pendingChanges` (publisher-stated future or undated effects), " +
       "`versions` (the newest page of the work's consolidations, with `amendedBy` effects), " +
       "`outline` (its heading anchors, the input read_statute_provisions " +
-      "takes) and its plain text. Long text comes back in windows; pass the " +
+      "takes) on page 1, plus its plain text. Later pages omit outline and " +
+      "versions; pass the " +
       "returned nextCursor back as cursor to read more. A source that bars " +
       "AI use of its wording still answers with metadata, versions and " +
       "outline, and `textWithheldReason` in place of the text. " +
@@ -684,6 +687,56 @@ const buildStatuteOutline = (blocks: readonly Block[]) => {
   };
 };
 
+type ReadStatutePageContextOptions = {
+  cursor: string | undefined;
+  document: StatuteDocument;
+  context: McpRequestContext;
+};
+
+// Versions and navigation describe the whole consolidation; only its first
+// text page reads and emits them.
+const readStatutePageContext = async ({
+  cursor,
+  document,
+  context,
+}: ReadStatutePageContextOptions) => {
+  if (cursor !== undefined) {
+    return {};
+  }
+  const versionsPage = await (
+    context.testDependencies?.listStatuteVersionsHandler ??
+    defaultListStatuteVersionsHandler
+  )({
+    documentId: document.id,
+    query: {
+      limit: normalizeTenantPageLimit(
+        LIMITS.legislationVersionsPageSizeDefault,
+      ),
+    },
+    legislationDb: legislationPublicReadDb,
+    surface: "search",
+  });
+  if (!isStatuteVersionsPage(versionsPage)) {
+    return notFoundResult("Legislation not found", FIND_THE_ELI_HINT);
+  }
+  const navigation = hasUsableAst(document.documentAst)
+    ? buildStatuteOutline(document.documentAst.blocks)
+    : { outline: [], outlineTruncated: false };
+  return {
+    ...navigation,
+    versions: versionsPage.items.map((version) => ({
+      amendedBy: version.amendedBy ?? null,
+      documentId: version.id,
+      resourceName: legislationResourceName(version.id),
+      versionValidFrom: version.versionValidFrom,
+      versionValidTo: version.versionValidTo,
+      expressionKind: version.expressionKind,
+      windowDisposition: version.windowDisposition,
+      windowDispositionBasis: version.windowDispositionBasis,
+    })),
+  };
+};
+
 const handleReadStatuteTool: TypedMcpToolHandler<
   v.InferInput<typeof READ_STATUTE_PROJECTION>
 > = async ({ args, context }) => {
@@ -721,28 +774,14 @@ const handleReadStatuteTool: TypedMcpToolHandler<
     return notFoundResult("Legislation not found", FIND_THE_ELI_HINT);
   }
 
-  // What makes the version endpoint covered: the read that answers for one
-  // consolidation also says which other consolidations of the work exist.
-  const versionsPage = await (
-    context.testDependencies?.listStatuteVersionsHandler ??
-    defaultListStatuteVersionsHandler
-  )({
-    documentId: resolved.id,
-    query: {
-      limit: normalizeTenantPageLimit(
-        LIMITS.legislationVersionsPageSizeDefault,
-      ),
-    },
-    legislationDb: legislationPublicReadDb,
-    surface: "search",
+  const pageContext = await readStatutePageContext({
+    cursor,
+    document,
+    context,
   });
-  if (!isStatuteVersionsPage(versionsPage)) {
-    return notFoundResult("Legislation not found", FIND_THE_ELI_HINT);
+  if (isToolErrorResult(pageContext)) {
+    return pageContext;
   }
-
-  const { outline, outlineTruncated } = hasUsableAst(document.documentAst)
-    ? buildStatuteOutline(document.documentAst.blocks)
-    : { outline: [], outlineTruncated: false };
   const ast = hasUsableAst(document.documentAst) ? document.documentAst : null;
 
   // Displaying the wording and feeding it to a model are separate
@@ -787,8 +826,7 @@ const handleReadStatuteTool: TypedMcpToolHandler<
         effectiveDate: document.effectiveDate,
         eli: document.eli,
         language: document.language,
-        outline,
-        outlineTruncated,
+        ...pageContext,
         resourceName: legislationResourceName(document.id),
         sourceUrl: document.sourceUrl,
         status: document.status,
@@ -801,16 +839,6 @@ const handleReadStatuteTool: TypedMcpToolHandler<
         windowDisposition: document.windowDisposition,
         windowDispositionBasis: document.windowDispositionBasis,
         pendingChanges: document.pendingChanges,
-        versions: versionsPage.items.map((version) => ({
-          amendedBy: version.amendedBy ?? null,
-          documentId: version.id,
-          resourceName: legislationResourceName(version.id),
-          versionValidFrom: version.versionValidFrom,
-          versionValidTo: version.versionValidTo,
-          expressionKind: version.expressionKind,
-          windowDisposition: version.windowDisposition,
-          windowDispositionBasis: version.windowDispositionBasis,
-        })),
         ...(document.allowsDerivedAi
           ? {}
           : {
