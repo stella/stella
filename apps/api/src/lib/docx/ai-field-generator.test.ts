@@ -903,7 +903,7 @@ describe("buildAiConditionDecider decision tier", () => {
         skillContext: { organizationId, userId, safeDb: skillDb },
         generation: {
           dataClass: "customer",
-          role: "fast",
+          task: "classify",
           serviceTier: "standard",
           orgAIConfig,
           managedAIResidency: "eu",
@@ -912,7 +912,7 @@ describe("buildAiConditionDecider decision tier", () => {
           tenantWorkspaceIds: [],
           caching: resolveCaching({
             promptCachingEnabled: false,
-            role: "fast",
+            task: "classify",
             scopeKey: organizationId,
           }),
           prompt: "Decide the template conditions from their current values.",

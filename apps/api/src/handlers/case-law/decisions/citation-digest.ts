@@ -14,8 +14,9 @@ import { panic } from "better-result";
 import { eq } from "drizzle-orm";
 
 import type { DecisionTextWithheldReason } from "@stll/api-contract/case-law-text-field";
+import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
 
-import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import { publishedCaseLawDecisions, caseLawSources } from "@/api/db/schema";
 import {
   listDecisionCitationsHandler,
   listTopCitingDecisionsHandler,
@@ -53,15 +54,19 @@ export type DecisionCitationDigest = {
 export type ReadDecisionCitationDigestOptions = {
   caseLawDb: CaseLawPublicReadDb;
   decisionId: SafeId<"caseLawDecision">;
+  /** The surface the read serves; its country list decides publication. */
+  surface: PublicCountrySurface;
 };
 
 /** Null is the publication gate's answer, as for the decision read itself. */
 export const readGatedDecisionCitationDigest = async ({
   caseLawDb,
   decisionId,
+  surface,
 }: ReadDecisionCitationDigestOptions): Promise<DecisionCitationDigest | null> =>
   await withRedistributableSubject(
     caseLawDb,
+    surface,
     { kind: "id", id: decisionId },
     async (subject) => {
       // One transaction, one connection: the statements run in turn.
@@ -85,12 +90,12 @@ export const readGatedDecisionCitationDigest = async ({
       }
       const [source] = await subject.tx
         .select({ descriptor: caseLawSources.descriptor })
-        .from(caseLawDecisions)
+        .from(publishedCaseLawDecisions)
         .innerJoin(
           caseLawSources,
-          eq(caseLawSources.id, caseLawDecisions.sourceId),
+          eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
         )
-        .where(eq(caseLawDecisions.id, subject.id))
+        .where(eq(publishedCaseLawDecisions.id, subject.id))
         .limit(1);
       if (source === undefined) {
         return panic(`No source for gated decision ${String(subject.id)}`);

@@ -68,6 +68,8 @@ jobs:
         if: github.event_name == 'pull_request' && steps.changes.outputs.required != 'false'
         continue-on-error: true
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          CI_YIELD_TO_MERGE_QUEUE: ${{ vars.CI_YIELD_TO_MERGE_QUEUE }}
         with:
           retries: 0
           script: |
@@ -78,6 +80,7 @@ jobs:
             await mergeQueueGate({
               github,
               context,
+              enabled: process.env.CI_YIELD_TO_MERGE_QUEUE === "on",
               attempt: Number(process.env.GITHUB_RUN_ATTEMPT ?? "1"),
               polls: 20,
               intervalMs: 60_000,
@@ -138,6 +141,7 @@ jobs:
           save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install dependencies
+        timeout-minutes: 2
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
@@ -205,6 +209,7 @@ jobs:
           save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install dependencies
+        timeout-minutes: 2
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose

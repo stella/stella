@@ -285,6 +285,25 @@ describe("workflow_run trust", () => {
     expect(problems).toEqual([]);
   });
 
+  test("high-volume workflow_run entry points filter branches before queuing", () => {
+    const workflows = allWorkflows();
+    const trigger = (file: string) => {
+      const workflow = workflows.find((entry) => entry.file === file)?.workflow;
+      if (!isRecord(workflow) || !isRecord(workflow["on"])) {
+        expect.unreachable(`${file} requires mapped triggers`);
+      }
+      return workflow["on"]["workflow_run"];
+    };
+    expect(trigger("scheduled-run-alerts.yml")).toMatchObject({
+      branches: ["main"],
+      types: ["completed"],
+    });
+    expect(trigger("bot-refresh-auto-merge.yml")).toMatchObject({
+      branches: ["chore/provenance-update", "bot/model-catalog-refresh"],
+      types: ["completed"],
+    });
+  });
+
   test("every release-chain workflow is covered by failed-run alerts", () => {
     const workflows = allWorkflows();
     const alerting = failedRunAlerting(workflows);

@@ -3,11 +3,9 @@ import * as v from "valibot";
 
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 
-import {
-  containsRawUuid,
-  projectForChat,
-} from "@/api/lib/chat/projection-schema";
+import { projectForChat } from "@/api/lib/chat/projection-schema";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import { containsRawUuid } from "@/api/lib/chat/uuid-mask";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { isRecord } from "@/api/lib/type-guards";
 import { BILLING_TOOL_HANDLERS } from "@/api/mcp/billing-tools";
@@ -190,6 +188,16 @@ export type RunRegistryReadToolProps = {
    * meets, without a database.
    */
   handler?: McpToolHandler | undefined;
+  /**
+   * Narrows the normalized arguments before the handler runs (the turn's
+   * corpus scope). It sees canonical values, so it compares a country as the
+   * handler will read it; a refusal stops the read.
+   */
+  scopeArgs?:
+    | ((
+        args: Record<string, unknown>,
+      ) => Promise<Result<Record<string, unknown>, ChatToolError>>)
+    | undefined;
 };
 
 /**
@@ -269,6 +277,7 @@ export const runRegistryReadTool = async ({
   context,
   refRegistry,
   handler,
+  scopeArgs,
 }: RunRegistryReadToolProps): Promise<Result<unknown, ChatToolError>> => {
   if (!isProjectableRegistryReadToolName(toolName)) {
     return Result.err(
@@ -327,15 +336,22 @@ export const runRegistryReadTool = async ({
       ),
     );
   }
+  const scoped =
+    scopeArgs === undefined
+      ? Result.ok(normalized.value)
+      : await scopeArgs(normalized.value);
+  if (Result.isError(scoped)) {
+    return Result.err(scoped.error);
+  }
 
   const response =
     handler === undefined
       ? await REGISTRY_READ_TOOL_HANDLERS[toolName]({
-          args: normalized.value,
+          args: scoped.value,
           context,
         })
       : await runInjectedHandler({
-          args: normalized.value,
+          args: scoped.value,
           context,
           toolName,
           handler,

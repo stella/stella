@@ -27,8 +27,6 @@
 import { panic, Result, TaggedError } from "better-result";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 
-import type { ReasoningEffort } from "@stll/ai-catalog";
-
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
@@ -52,10 +50,10 @@ import {
 } from "@/api/lib/chat/compaction-summary";
 import type { IncrementalSummaryPrompt } from "@/api/lib/chat/compaction-summary";
 import {
-  COMPACTION_GENERATION_POLICY,
   FILE_PART_ESTIMATED_TOKENS,
   MAX_TEXT_PART_CHARS,
   MESSAGE_OVERHEAD_TOKENS,
+  compactionGenerationRequest,
   estimateTextTokens,
   renderTaggedValue,
   safeStringify,
@@ -71,7 +69,7 @@ import type { ThreadStoredContentSendMode } from "@/api/lib/chat/thread-stored-c
 import type { TimestampIdCursor } from "@/api/lib/db-pagination";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
-import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
+import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
 
 /**
  * Rows one run may pull past the checkpoint cursor. The bound is what makes a
@@ -164,7 +162,6 @@ type RunChatThreadCompactionOptions = {
   managedAIResidency: ManagedAIResidency;
   organizationId: SafeId<"organization">;
   preserveTokens: number;
-  reasoningEffort?: ReasoningEffort | undefined;
   safeDb: SafeDb;
   /** Test seam. Defaults to the real structured-summary model call. */
   summarize?: ChatCompactionSummarize | undefined;
@@ -684,24 +681,22 @@ const summarizeDelta = async ({
 const createModelSummarizer =
   (options: RunChatThreadCompactionOptions): ChatCompactionSummarize =>
   async (prompt) =>
-    await generateTanStackTextForRole({
+    await generateTanStackTextForTask({
       dataClass: "customer",
       abortSignal: options.abortSignal,
       analytics: options.analytics,
       caching: resolveCaching({
         promptCachingEnabled: false,
-        role: "chat",
+        task: "chat",
         scopeKey: null,
       }),
-      ...COMPACTION_GENERATION_POLICY,
+      ...compactionGenerationRequest(renderIncrementalCompactionPrompt(prompt)),
       modelId: options.modelId,
       organizationId: options.organizationId,
       admission: options.admission,
       orgAIConfig: options.orgAIConfig,
       managedAIResidency: options.managedAIResidency,
-      reasoningEffort: options.reasoningEffort,
-      prompt: renderIncrementalCompactionPrompt(prompt),
-      role: "chat",
+      task: "chat",
       serviceTier: "batch",
       system: CHAT_INCREMENTAL_COMPACTION_SYSTEM_PROMPT,
       systemPromptOrigin: "server-built",

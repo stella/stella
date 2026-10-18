@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { status } from "elysia";
 import * as v from "valibot";
 
+import { PROVISION_LINK_STATUS_TYPES } from "@stll/api-contract/provision-link-status";
 import { blockSchema } from "@stll/legal-ast/document-ast";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
@@ -85,16 +86,16 @@ const sourceOf = (
         end: 8,
         citationId: "citation",
         decisionId: otherId,
-        appUrl: "https://example.test/law/cze/cases/test/cited",
+        url: "https://example.test/law/cze/cases/test/cited",
       },
     ],
+    provisionStatus: { type: "pending" },
     provisionAnchors: [
       {
         pieceId: "block-0",
         start: 10,
         end: 16,
-        appUrl:
-          "https://example.test/law/cze/statutes/fixture/v/2026-01-01#par_1-odst_1",
+        url: "https://example.test/law/cze/statutes/fixture/v/2026-01-01#par_1-odst_1",
         provision: {
           document_id: documentId,
           anchor: "par_1",
@@ -160,7 +161,7 @@ describe("decision reader tool contracts", () => {
         end: 8,
         citationId: `citation-${page}-${index}`,
         decisionId: otherId,
-        appUrl: "https://example.test/law/cze/cases/test/cited",
+        url: "https://example.test/law/cze/cases/test/cited",
       })),
     );
     const provisionPages = [3, 2].map((count, page) =>
@@ -168,8 +169,7 @@ describe("decision reader tool contracts", () => {
         pieceId: `provision-${page}-${index}`,
         start: 0,
         end: 8,
-        appUrl:
-          "https://example.test/law/cze/statutes/fixture/v/2026-01-01#par_1-odst_1",
+        url: "https://example.test/law/cze/statutes/fixture/v/2026-01-01#par_1-odst_1",
         provision: {
           document_id: documentId,
           anchor: `par_${page}_${index}`,
@@ -266,7 +266,7 @@ describe("decision reader tool contracts", () => {
       "court-0",
       "court-1",
     ]);
-    expect(result.data.metadata.appUrl).toEndWith("#par=48-49");
+    expect(result.data.metadata.url).toEndWith("#par=48-49");
     expect(JSON.stringify(result.data).length).toBeLessThan(12_000);
     expect(result.data).not.toHaveProperty("items");
   });
@@ -446,7 +446,7 @@ describe("decision reader tool contracts", () => {
         end: 8,
         citationId: `citation-${index}`,
         decisionId: target,
-        appUrl: null,
+        url: null,
       }));
     let citationAnchors = citationsOf(otherId);
     const source = sourceOf(astOf(1));
@@ -455,6 +455,7 @@ describe("decision reader tool contracts", () => {
         ...source,
         citationAnchors: phase === "citations" ? citationAnchors : [],
         provisionAnchors: [],
+        provisionStatus: null,
         referenceNextCursor: null,
       }),
     });
@@ -514,7 +515,7 @@ describe("decision reader tool contracts", () => {
       throw new Error("Expected a withheld opening");
     }
     expect(JSON.stringify(model.data)).not.toContain("Paragraph 48");
-    expect(model.data.metadata.appUrl).toEndWith("#par=48-49");
+    expect(model.data.metadata.url).toEndWith("#par=48-49");
 
     const shown = await blocks({ args: { decision_id: id }, context });
     if (
@@ -549,7 +550,7 @@ describe("decision reader tool contracts", () => {
       throw new Error("Expected opening metadata");
     }
     expect(result.data.status).toBe("unavailable");
-    expect(result.data.metadata.appUrl).toEndWith("#par=48-49");
+    expect(result.data.metadata.url).toEndWith("#par=48-49");
   });
   test("missing or gated decisions are typed not-found and expose no source data", async () => {
     const context = contextWith({ readDecisionReaderSource: async () => null });
@@ -574,8 +575,7 @@ describe("decision reader tool contracts", () => {
         expect(anchor).toBe("par_1");
         expect(citedAnchor).toBe("par_1-odst_1");
         return {
-          appUrl:
-            "https://example.test/law/cze/statutes/fixture/v/2026-01-01#par_1-odst_1",
+          url: "https://example.test/law/cze/statutes/fixture/v/2026-01-01#par_1-odst_1",
           documentId,
           language: "cs",
           anchorId: anchor,
@@ -607,7 +607,7 @@ describe("decision reader tool contracts", () => {
       throw new Error("Expected a provision preview");
     }
     expect(v.safeParse(provisionPreviewOutput, result.data).success).toBe(true);
-    expect(result.data.appUrl).toBe(
+    expect(result.data.url).toBe(
       "https://example.test/law/cze/statutes/fixture/v/2026-01-01#par_1-odst_1",
     );
     expect(reads).toBe(1);
@@ -624,3 +624,40 @@ describe("decision reader tool contracts", () => {
     }
   });
 });
+
+test.each(PROVISION_LINK_STATUS_TYPES)(
+  "returns %s status for empty provision anchors",
+  async (type) => {
+    const source = sourceOf(astOf(1));
+    const context = contextWith({
+      readDecisionReaderSource: async ({ phase }) => ({
+        ...source,
+        citationAnchors: [],
+        provisionAnchors: [],
+        provisionStatus: phase === "provisions" ? { type } : null,
+      }),
+    });
+    let cursor: string | undefined;
+    for (let index = 0; index < 3; index += 1) {
+      const result = await blocks({
+        args: { decision_id: id, ...(cursor === undefined ? {} : { cursor }) },
+        context,
+      });
+      if (
+        result.status !== "success" ||
+        result.data.content.status !== "available"
+      ) {
+        throw new Error("Expected an available reader page");
+      }
+      const content = result.data.content;
+      if (content.phase === "provisions") {
+        expect(content.provisionAnchors).toEqual([]);
+        expect(content.provisionStatus).toEqual({ type });
+        expect(content.nextCursor).toBeNull();
+        return;
+      }
+      cursor = content.nextCursor ?? undefined;
+    }
+    throw new Error("Expected a provision page");
+  },
+);

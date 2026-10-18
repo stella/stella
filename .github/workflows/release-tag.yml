@@ -123,6 +123,7 @@ jobs:
         run: git checkout --detach "$RELEASE_SHA"
 
       - name: Install dependencies for the release audit
+        timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
@@ -213,6 +214,7 @@ jobs:
           bun-version-file: "package.json"
 
       - name: Install dependencies
+        timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""

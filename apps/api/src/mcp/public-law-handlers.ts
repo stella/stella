@@ -70,22 +70,22 @@ export const defaultSearchLegislationHandler: typeof searchLegislationHandler =
     ).searchLegislationHandler(body, legislationDb, observer);
 
 export const defaultResolveStatuteExpression: typeof resolveStatuteExpression =
-  async (query, legislationDb) =>
+  async (query, legislationDb, surface) =>
     await (
       await import("@/api/handlers/legislation/by-eli")
-    ).resolveStatuteExpression(query, legislationDb);
+    ).resolveStatuteExpression(query, legislationDb, surface);
 
 export const defaultResolveStatuteWorkVersion: typeof resolveStatuteWorkVersion =
-  async (query, legislationDb) =>
+  async (query, legislationDb, surface) =>
     await (
       await import("@/api/handlers/legislation/by-eli")
-    ).resolveStatuteWorkVersion(query, legislationDb);
+    ).resolveStatuteWorkVersion(query, legislationDb, surface);
 
 export const defaultReadPublicLegislationHandler: typeof readPublicLegislationHandler =
-  async (documentId, legislationDb) =>
+  async (documentId, legislationDb, surface) =>
     await (
       await import("@/api/handlers/legislation/get")
-    ).readPublicLegislationHandler(documentId, legislationDb);
+    ).readPublicLegislationHandler(documentId, legislationDb, surface);
 
 export const defaultListStatuteVersionsHandler: typeof listStatuteVersionsHandler =
   async (options) =>

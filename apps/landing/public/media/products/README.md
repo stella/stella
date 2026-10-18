@@ -6,6 +6,11 @@ and available product states stay tied to production code.
 
 ## Refreshing the PNG screenshots
 
+The stills capture at the recordings' 2x device pixel ratio (`CAPTURE_DPR`):
+clips are CSS pixels, so each file is twice the clip size (`workspace.png`
+is 2274x1420 for a 1137x710 clip). The landing page sizes them with CSS, never
+by intrinsic width.
+
 The `.png` baselines are regenerated on the pre-release runner. Pull-request,
 merge-group, main-heavy and nightly CI do not compare marketing screenshots.
 The release PR workflow regenerates its branch, and the release-tag preflight

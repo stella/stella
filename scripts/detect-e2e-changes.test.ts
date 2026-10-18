@@ -1257,7 +1257,7 @@ describe("detect-e2e-changes", () => {
     );
 
     const webBuild = workflowJob("web-build");
-    expect(webBuild).toContain("needs: ci-plan");
+    expect(webBuild).toContain("needs: [ci-plan, pr-heavy-gate]");
     expect(webBuild).toContain("Upload production E2E web build");
     expect(webBuild).toContain("uses: ./.github/actions/build-e2e-web");
 

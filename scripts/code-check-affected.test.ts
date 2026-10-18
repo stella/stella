@@ -28,6 +28,8 @@ import {
   failureExitCode,
   formatCheckFailure,
   LINT_ONLY_CACHE_INPUTS,
+  lintAllTrace,
+  matchedLintAllInputs,
   executeCheckCommands,
   planCheck,
   planningCommandTimeout,
@@ -88,6 +90,12 @@ describe("changed-file result boundary lint", () => {
         },
       }),
     ).toBeNull();
+  });
+
+  test("names the matched shared input in the lint-all trace", () => {
+    expect(lintAllTrace(["scripts/design-lint-baseline.json"])).toBe(
+      "code-check: lint all shared inputs: $TURBO_ROOT$/scripts/design-lint-baseline.json\n",
+    );
   });
 
   test("reuses the affected scope's merge base when measuring candidate debt", () => {
@@ -177,14 +185,13 @@ describe("changed-file result boundary lint", () => {
     ]);
   });
 
-  test("skips measured debt, boundaries, generated output, tests, and unrelated source", () => {
+  test("skips measured debt, boundaries, tests, and unrelated source", () => {
     expect(
       resultBoundaryLintCommand(
         [
           "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts",
           "apps/api/src/lib/document-processing-queue.ts",
           "apps/api/src/lib/document-processing-queue.test.ts",
-          "apps/api/src/mcp/generated/capability-dispatch/matters.list.ts",
           "packages/start-runtime/src/runtime.ts",
           "packages/ssr-testkit/src/assert-document.ts",
           "apps/web/src/server.ts",
@@ -423,6 +430,51 @@ describe("affected code-check planning", () => {
       rootLintPaths: [],
       rootChecks: ["env", "assets", "rule-decisions", "repo-typecheck"],
     });
+  });
+
+  test.each([
+    "apps/api/drizzle/20261016000000_example/migration.sql",
+    "apps/api/drizzle/20261016000000_example/cutover.sql",
+    "apps/api/src/lib/db/status-tables.gen.ts",
+  ])("keeps workspace-local lint input %s scoped to the API", (changedPath) => {
+    const planned = plan([changedPath], ["apps/api"]);
+    expect(planned.type).toBe("scoped");
+    if (planned.type !== "scoped") {
+      throw new Error("Expected a scoped code-check plan");
+    }
+    expect(planned.lint).toEqual({
+      type: "targets",
+      targets: ["apps/api"],
+    });
+  });
+
+  test("a status-table change relints the plugin fixtures that read it", () => {
+    const planned = plan(
+      ["apps/api/src/lib/db/status-tables.gen.ts"],
+      ["apps/api"],
+    );
+    expect(planned.type).toBe("scoped");
+    if (planned.type !== "scoped") {
+      throw new Error("Expected a scoped code-check plan");
+    }
+    expect(planned.rootChecks).toContain("plugin-fixtures");
+  });
+
+  test.each([
+    "scripts/design-lint-baseline.json",
+    "scripts/ownership/status-transition.ts",
+  ])("retains cross-workspace lint input %s", (changedPath) => {
+    const planned = plan([changedPath], []);
+    expect(planned.type).toBe("scoped");
+    if (planned.type !== "scoped") {
+      throw new Error("Expected a scoped code-check plan");
+    }
+    expect(planned.lint).toEqual({ type: "all" });
+    expect(matchedLintAllInputs([changedPath])).toContain(
+      changedPath === "scripts/design-lint-baseline.json"
+        ? "$TURBO_ROOT$/scripts/design-lint-baseline.json"
+        : "$TURBO_ROOT$/scripts/ownership/*.ts",
+    );
   });
 
   test.each([

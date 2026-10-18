@@ -31,7 +31,6 @@ import "@/features/case-law/case-decision-details-inspector-registration";
 import "@/features/case-law/case-decision-inspector-registration";
 import "@/features/inbox/signal-inspector-registration";
 import "@/features/knowledge/playbook-editor/playbook-draft-view-registration";
-import { resolveSidebarWorkspaceId } from "@/components/app-sidebar.logic";
 import "@/features/statutes/provision-inspector-registration";
 import "@/features/statutes/statute-inspector-registration";
 import { AppBreadcrumbs } from "@/components/breadcrumbs/app-breadcrumbs";
@@ -41,8 +40,10 @@ import { DocxEditorHost } from "@/components/docx/docx-editor-host";
 import { DragAndDropLiveRegion } from "@/components/drag-and-drop-live-region";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import type { InspectorTab } from "@/components/inspector/inspector-tabs-store";
+import { newChatMatterScope } from "@/components/inspector/new-chat-scope";
 import { useSharedInspectorPaneWidth } from "@/components/inspector/pane-width-storage";
 import { useInspectorTabPersistence } from "@/components/inspector/use-inspector-tab-persistence";
+import { useRouteWorkspaceId } from "@/components/inspector/use-route-workspace-id";
 import { KeyboardShortcutsDialog } from "@/components/keyboard-shortcuts-dialog";
 import { NotificationBell } from "@/components/notification-bell";
 import { QuickEntry } from "@/components/quick-entry";
@@ -196,18 +197,7 @@ export const ProtectedAppFrame = ({
   const analyticsUser = user;
   const inspectorBroadcastUserId = user.id;
   const inspectorBroadcastOrganizationId = user.activeOrganizationId;
-  const workspaceMatch = useMatch({
-    from: "/_protected/workspaces/$workspaceId",
-    shouldThrow: false,
-  });
-  const workspaceChatMatch = useMatch({
-    from: "/_protected/chat/workspaces/$workspaceId/$threadId",
-    shouldThrow: false,
-  });
-  const activeWorkspaceId = resolveSidebarWorkspaceId({
-    chatWorkspaceId: workspaceChatMatch?.params.workspaceId,
-    workspaceId: workspaceMatch?.params.workspaceId,
-  });
+  const activeWorkspaceId = useRouteWorkspaceId();
   const workspaceNavigationView = useQueryView(
     useChromeQuery(
       workspacesNavigationOptions({
@@ -256,22 +246,14 @@ export const ProtectedAppFrame = ({
       return;
     }
     if (activeWorkspaceId) {
-      store.openChat({
-        workspaceId: activeWorkspaceId,
-        contextMatterIds: [activeWorkspaceId],
-      });
+      store.openChat(newChatMatterScope(activeWorkspaceId));
     }
   }, [activeWorkspaceId]);
   useHotkey(useEffectiveHotkey("toggleChat"), handleToggleInspectorHotkey);
   useHotkey(useEffectiveHotkey("newChat"), () => {
-    useInspectorTabsStore.getState().openChat(
-      activeWorkspaceId === undefined
-        ? {}
-        : {
-            workspaceId: activeWorkspaceId,
-            contextMatterIds: [activeWorkspaceId],
-          },
-    );
+    useInspectorTabsStore
+      .getState()
+      .openChat(newChatMatterScope(activeWorkspaceId));
   });
 
   return (
@@ -684,7 +666,7 @@ function WorkspaceInspectorSidePanel({
         open={showPaneContent}
       >
         <SheetPopup
-          className="h-dvh w-full max-w-none border-0 p-0 md:hidden"
+          className="h-dvh w-full max-w-none border-0 md:hidden"
           showCloseButton={false}
           side="inline-end"
           style={routeMatterChromeStyle}

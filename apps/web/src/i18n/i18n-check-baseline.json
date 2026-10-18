@@ -366,6 +366,9 @@
     "chat.landing.skills": [
       "de"
     ],
+    "chat.mention.category.sources": [
+      "fr"
+    ],
     "chat.pastedText.fromPromptFallback": [
       "de"
     ],
@@ -1255,7 +1258,6 @@
     "workspaces.views.fields",
     "workspaces.views.reportExport.action",
     "workspaces.views.timeline.noDates",
-    "workspaces.views.timeline.showTable",
     "workspaces.workflow.allManualInputsDescription",
     "workspaces.workflow.allManualInputsTitle",
     "workspaces.workflow.generate",

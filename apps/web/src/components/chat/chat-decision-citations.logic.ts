@@ -79,7 +79,7 @@ export const chatAnswerDecisionTargets = ({
         continue;
       }
       const source = sources.find((entry) =>
-        [entry.url, entry.appUrl, entry.sourceUrl].some(
+        [entry.url, entry.sourceUrl].some(
           (url) =>
             url !== undefined && citationUrlKey(url) === citationUrlKey(href),
         ),
@@ -92,7 +92,7 @@ export const chatAnswerDecisionTargets = ({
         continue;
       }
       const link = resolveLegalCitationLinks({
-        appUrl: href,
+        url: href,
         sourceUrl: null,
         appOrigins,
       });

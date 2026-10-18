@@ -3,10 +3,14 @@ import { eq, inArray } from "drizzle-orm";
 
 import { provisionVersionAsOf } from "@stll/api-contract/provision-version-basis";
 import type { ProvisionVersionBasis } from "@stll/api-contract/provision-version-basis";
+import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { provisionHeadingAnchor } from "@stll/legal-ast/provision-preview";
 
-import { caseLawDecisions, legislationDocuments } from "@/api/db/schema";
+import {
+  publishedCaseLawDecisions,
+  legislationDocuments,
+} from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
 import {
@@ -14,6 +18,7 @@ import {
   previewVersionColumns,
 } from "@/api/lib/legal-search/legislation-provision-preview";
 import type { ProvisionPreview } from "@/api/lib/legal-search/legislation-provision-preview";
+import { legislationCountriesFor } from "@/api/lib/legal-search/legislation-redistribution";
 import {
   readVersionBlocks,
   versionAstColumns,
@@ -112,6 +117,7 @@ type ResolvedWorks = {
 const resolveWorkVersions = async (
   requests: readonly WorkRequest[],
   legislationDb: LegislationReadDb,
+  surface: PublicCountrySurface,
 ): Promise<ResolvedWorks> => {
   const versionByWork = new Map<string, ResolvedVersion>();
   if (requests.length === 0) {
@@ -121,7 +127,11 @@ const resolveWorkVersions = async (
   const { works, versions } = await legislationDb(async (tx) => {
     // Linking follows applicable versions only: a Work a publisher
     // inconsistency leaves unanswered at that date gets no preview.
-    const { idByKey: idByWork } = await resolveWorksAtDate(tx, requests);
+    const { idByKey: idByWork } = await resolveWorksAtDate(
+      tx,
+      requests,
+      legislationCountriesFor(surface),
+    );
 
     const ids = [...new Set(idByWork.values())];
     if (ids.length === 0) {
@@ -152,12 +162,14 @@ type PreviewsForPageOptions<TRow extends CitationRow> = {
   page: Page<TRow>;
   decisionDate: string | null;
   legislationDb: LegislationReadDb;
+  /** The surface the previews are read for; its country list decides publication. */
+  surface: PublicCountrySurface;
 };
 
 /** A preview plus the key this page's items reference it by. */
 type KeyedProvisionPreview = ProvisionPreview & {
   key: string;
-  appUrl: string | null;
+  url: string | null;
 };
 
 type PreviewsForPage<TRow extends CitationRow> = Page<
@@ -181,9 +193,14 @@ export const attachDecisionProvisionPreviews = async <
   page,
   decisionDate,
   legislationDb,
+  surface,
 }: PreviewsForPageOptions<TRow>): Promise<PreviewsForPage<TRow>> => {
   const requests = workRequestsFor(page.items, decisionDate);
-  const { versionByWork } = await resolveWorkVersions(requests, legislationDb);
+  const { versionByWork } = await resolveWorkVersions(
+    requests,
+    legislationDb,
+    surface,
+  );
 
   // One read per consolidation, outside any transaction: corpus payloads are
   // whole objects in storage, so a block range is sliced from the version the
@@ -197,6 +214,7 @@ export const attachDecisionProvisionPreviews = async <
             version,
             // db-await-in-loop: one storage read per distinct consolidation version, deduplicated above; the page bounds the set
             await readVersionBlocks({
+              surface,
               row: version,
               legislationDb,
               step: PREVIEWS_READ_STEP,
@@ -228,7 +246,7 @@ export const attachDecisionProvisionPreviews = async <
 
       previewByKey.set(key, {
         key,
-        appUrl: buildLegislationDocumentAppUrl({
+        url: buildLegislationDocumentAppUrl({
           country: version.country,
           documentId: version.id,
           eli: version.eli,
@@ -260,9 +278,9 @@ export const readDecisionDate = async ({
   tx,
 }: RedistributableDecisionSubject): Promise<string | null> => {
   const [row] = await tx
-    .select({ decisionDate: caseLawDecisions.decisionDate })
-    .from(caseLawDecisions)
-    .where(eq(caseLawDecisions.id, id))
+    .select({ decisionDate: publishedCaseLawDecisions.decisionDate })
+    .from(publishedCaseLawDecisions)
+    .where(eq(publishedCaseLawDecisions.id, id))
     .limit(1);
 
   return row?.decisionDate ?? null;
