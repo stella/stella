@@ -10,6 +10,8 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
@@ -56,6 +58,12 @@ const createChatToolGrant = createSafeRootHandler(
 
     const stored = yield* Result.await(
       safeDb(async (tx) => {
+        await withAggregateLock({
+          tx,
+          aggregate: "chatThread",
+          id: { id: threadId, organizationId, userId: user.id },
+          mode: "update",
+        });
         const thread = (
           await tx
             .select({ id: chatThreads.id })
@@ -75,6 +83,11 @@ const createChatToolGrant = createSafeRootHandler(
           );
         }
 
+        await withAggregateLock({
+          tx,
+          aggregate: "chatToolGrants",
+          id: { organizationId, userId: user.id },
+        });
         const subject = await resolveStoredGrantSubject({
           organizationId,
           toolName,
@@ -127,5 +140,10 @@ const createChatToolGrant = createSafeRootHandler(
     return stored;
   },
 );
+
+declareAggregateMutation(createChatToolGrant.handler, {
+  type: "aggregate",
+  aggregates: ["chatThread", "chatToolGrants"],
+});
 
 export default createChatToolGrant;

@@ -7,6 +7,8 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 
 const config = {
   contract: "patch",
@@ -28,6 +30,11 @@ const deleteChatToolGrant = createSafeRootHandler(
   }) {
     const deleted = yield* Result.await(
       safeDb(async (tx) => {
+        await withAggregateLock({
+          tx,
+          aggregate: "chatToolGrants",
+          id: { organizationId: session.activeOrganizationId, userId: user.id },
+        });
         const rows = await tx
           .delete(chatToolGrants)
           .where(
@@ -63,5 +70,10 @@ const deleteChatToolGrant = createSafeRootHandler(
     return Result.ok({ deleted: deleted.length > 0 });
   },
 );
+
+declareAggregateMutation(deleteChatToolGrant.handler, {
+  type: "aggregate",
+  aggregates: ["chatToolGrants"],
+});
 
 export default deleteChatToolGrant;

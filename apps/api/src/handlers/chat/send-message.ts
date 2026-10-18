@@ -130,6 +130,7 @@ import {
   chatMessageExistsForThread,
   resolveTruncationTarget,
 } from "@/api/handlers/chat/history-window";
+import { corpusScopesOfLatestUserMessage } from "@/api/handlers/chat/latest-corpus-scopes";
 import { isExternalMcpToolPart } from "@/api/handlers/chat/mcp-tool-parts";
 import { loadClientMessages } from "@/api/handlers/chat/message-page";
 import type { MessagePersistencePlan } from "@/api/handlers/chat/persist-message";
@@ -2994,6 +2995,9 @@ export const createSendMessage = (
           grants: chatToolGrants,
           tools: getChatTools({
             ...chatToolContext,
+            corpusScopes: corpusScopesOfLatestUserMessage(
+              latestMessagePlan.messages,
+            ),
             modelAdmission,
             externalTools: externalMcpTools?.tools ?? {},
             skillMetadata: chatContext.skillMetadata,

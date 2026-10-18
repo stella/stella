@@ -1058,7 +1058,6 @@
       }
     },
     "sameCaseNumber": "{count, plural, one {# decisão tem} other {# decisões têm}} este número de processo. Escolha o tribunal.",
-    "searchAskPrompt": "{query} (jurisprudência de {country})",
     "searchLabel": "Pesquisar jurisprudência",
     "searchPlaceholder": "Número do processo, ECLI ou palavras, p. ex. 22 Cdo 2653/2012",
     "searchUnavailable": {
@@ -1416,7 +1415,12 @@
     "maxAttachmentsReached": "Máximo de arquivos {count} por mensagem",
     "mention": {
       "category": {
-        "entities": "Neste caso"
+        "entities": "Neste caso",
+        "sources": "Fontes"
+      },
+      "corpus": {
+        "caseLaw": "Jurisprudência · {country}",
+        "legislation": "Legislação · {country}"
       },
       "loadError": "Falha ao carregar itens"
     },
@@ -5145,7 +5149,6 @@
     "provisionTextUnavailable": "Texto indisponível para esta versão",
     "publisherWindowInconsistent": "Não é possível determinar a versão em vigor nesta data: os dados do editor são inconsistentes.",
     "resolvedAlias": "Reconhecido como {label}",
-    "searchAskPrompt": "{query} (legislação: {country})",
     "searchLabel": "Buscar na legislação",
     "searchPlaceholder": "Número, nome ou título, ex.: 89/2012 Sb.",
     "showCitedPartOnly": "Mostrar apenas a parte citada",

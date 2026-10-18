@@ -162,6 +162,10 @@ export const aggregateFences = () => {
     },
     contactCapacity: { aggregate: "contactCapacity", id: { organizationId } },
     sampleCase: { aggregate: "sampleCase", id: { workspaceId } },
+    chatToolGrants: {
+      aggregate: "chatToolGrants",
+      id: { organizationId, userId },
+    },
     personalCatalog: {
       aggregate: "personalCatalog",
       id: { organizationId, userId: mintAuthProviderId<"user">() },

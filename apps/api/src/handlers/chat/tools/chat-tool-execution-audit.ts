@@ -145,12 +145,6 @@ const recordExecution = async ({
       },
     });
   });
-  if (Result.isError(result)) {
-    observeFailure(result.error, {
-      sink: EXECUTION_AUDIT_FAILED,
-      ctx: { source: "chat-tool-execution-audit", operation: policyKind },
-    });
-  }
   return result;
 };
 
@@ -189,6 +183,10 @@ const auditedTool = ({
     // Without a durable record of the dispatch the call does not run.
     const dispatched = await record("dispatched");
     if (Result.isError(dispatched)) {
+      observeFailure(dispatched.error, {
+        sink: EXECUTION_AUDIT_FAILED,
+        ctx: { source: "chat-tool-execution-audit", operation: policyKind },
+      });
       return raiseChatToolError(
         new ChatToolError({
           kind: "transient",
@@ -201,11 +199,20 @@ const auditedTool = ({
       try: async (): Promise<unknown> => await execute(...args),
       catch: (error: unknown) => error,
     });
+    const recorded = await record(
+      Result.isError(settled) ? "error" : "success",
+    );
+    if (Result.isError(recorded)) {
+      // The call already ran; preserve its outcome so an audit outage cannot
+      // invite a retry of a completed mutation.
+      observeFailure(recorded.error, {
+        sink: EXECUTION_AUDIT_FAILED,
+        ctx: { source: "chat-tool-execution-audit", operation: policyKind },
+      });
+    }
     if (Result.isError(settled)) {
-      await record("error");
       return reraiseChatToolFailure(settled.error);
     }
-    await record("success");
     return settled.value;
   };
   auditedExecutes.add(auditedExecute);
