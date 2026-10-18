@@ -69,11 +69,16 @@ const copyGenerator = ({ directory, file, copied }: CopyGeneratorOptions) => {
   }
 };
 
-const fixtureEnvironment = (inherited: NodeJS.ProcessEnv) => {
+const fixtureEnvironment = (
+  inherited: NodeJS.ProcessEnv,
+  directory: string,
+) => {
   const env = { ...inherited };
   delete env["CI_GENERATED_SOURCES_MANIFEST"];
   return {
     ...env,
+    // A host-wide cache hit would skip the cold-generation assertions.
+    STELLA_GENERATED_STORE: path.join(directory, ".cache/generated-store"),
     GIT_CONFIG_GLOBAL: "/dev/null",
     GIT_CONFIG_NOSYSTEM: "1",
     GIT_AUTHOR_NAME: "Fixture",
@@ -86,7 +91,7 @@ const fixtureEnvironment = (inherited: NodeJS.ProcessEnv) => {
 const run = (directory: string, command: string[]) => {
   const result = Bun.spawnSync(command, {
     cwd: directory,
-    env: fixtureEnvironment(process.env),
+    env: fixtureEnvironment(process.env, directory),
   });
   expect({
     exitCode: result.exitCode,
@@ -297,6 +302,7 @@ test("API determinism check rejects output that changes between generation passe
     );
     const result = Bun.spawnSync([process.execPath, generator, "--check"], {
       cwd: directory,
+      env: fixtureEnvironment(process.env, directory),
     });
     expect(result.exitCode).not.toBe(0);
     expect(result.stderr.toString()).toMatch(
@@ -340,6 +346,7 @@ test("consumer generation prints once while the dedicated check validates identi
     );
     const result = Bun.spawnSync([process.execPath, generator, "--check"], {
       cwd: directory,
+      env: fixtureEnvironment(process.env, directory),
     });
     expect(result.exitCode).not.toBe(0);
     expect(result.stderr.toString()).toContain(
@@ -350,24 +357,31 @@ test("consumer generation prints once while the dedicated check validates identi
   }
 }, 30_000);
 
-test("fixture subprocesses do not inherit another checkout's prepared sources", () => {
+test("fixture subprocesses own their generated store and prepared sources", () => {
   const inherited = {
     ...process.env,
     CI_GENERATED_SOURCES_MANIFEST: "/other-checkout/manifest.json",
+    STELLA_GENERATED_STORE: "/other-checkout/generated-store",
   };
   const child = Bun.spawnSync(
     [
       process.execPath,
       "-e",
-      "process.stdout.write(JSON.stringify(process.env.CI_GENERATED_SOURCES_MANIFEST ?? null))",
+      "process.stdout.write(JSON.stringify({ prepared: process.env.CI_GENERATED_SOURCES_MANIFEST ?? null, store: process.env.STELLA_GENERATED_STORE }))",
     ],
     {
-      env: fixtureEnvironment(inherited),
+      env: fixtureEnvironment(inherited, "/fixture-checkout"),
     },
   );
   expect(child.exitCode, child.stderr.toString()).toBe(0);
-  expect(child.stdout.toString()).toBe("null");
+  expect(JSON.parse(child.stdout.toString())).toEqual({
+    prepared: null,
+    store: path.join("/fixture-checkout", ".cache/generated-store"),
+  });
   expect(inherited.CI_GENERATED_SOURCES_MANIFEST).toBe(
     "/other-checkout/manifest.json",
+  );
+  expect(inherited.STELLA_GENERATED_STORE).toBe(
+    "/other-checkout/generated-store",
   );
 });

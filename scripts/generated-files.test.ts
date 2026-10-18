@@ -633,6 +633,12 @@ test("autofix selection closes over generated outputs and ordering dependencies"
       "capability-catalog",
     ],
   ] as const;
+  const downstreams = GENERATORS.filter(({ autofix }) => autofix).map(
+    (owner) => ({
+      owner,
+      inputs: owner.inputs.map((input) => new Bun.Glob(input)),
+    }),
+  );
   for (const [file, ...required] of changedPaths) {
     const selected = generatorsForFiles([file]);
     const ids = new Set(selected.map(({ id }) => id));
@@ -640,20 +646,23 @@ test("autofix selection closes over generated outputs and ordering dependencies"
       expect(ids.has(id), `${file} selects ${id}`).toBe(true);
     }
     for (const upstream of selected) {
-      for (const downstream of GENERATORS.filter(({ autofix }) => autofix)) {
+      const outputs = upstream.outputs.map((output) => {
+        const glob = new Bun.Glob(output);
+        return {
+          output,
+          files: tracked.filter((outputFile) => glob.match(outputFile)),
+        };
+      });
+      for (const { owner: downstream, inputs } of downstreams) {
         if (downstream.after.some((id) => id === upstream.id)) {
           expect(
             ids.has(downstream.id),
             `${upstream.id} feeds ${downstream.id}`,
           ).toBe(true);
         }
-        for (const output of upstream.outputs) {
-          const feedsDownstream = tracked.some(
-            (outputFile) =>
-              matchesGeneratedGlob(output, outputFile) &&
-              downstream.inputs.some((input) =>
-                matchesGeneratedGlob(input, outputFile),
-              ),
+        for (const { output, files } of outputs) {
+          const feedsDownstream = files.some((outputFile) =>
+            inputs.some((input) => input.match(outputFile)),
           );
           if (feedsDownstream) {
             expect(
