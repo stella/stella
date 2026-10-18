@@ -752,6 +752,7 @@ const streamTanStackTextDeltas = async function* ({
   temperature: number | undefined;
   onFinish?: ((finish: TextRunFinish) => void) | undefined;
 }): AsyncIterable<string> {
+  const modelAnalytics = analytics?.forModel(model);
   yield* iterateWithStandardServiceTierFallback({
     abortSignal: abortController?.signal,
     model,
@@ -768,7 +769,7 @@ const streamTanStackTextDeltas = async function* ({
           serviceTier: requestedServiceTier,
           temperature,
         }),
-        ...(analytics ? { middleware: [analytics.middleware] } : {}),
+        ...(modelAnalytics ? { middleware: [modelAnalytics.middleware] } : {}),
         ...(abortController ? { abortController } : {}),
       }),
     onChunk: (chunk) => {
