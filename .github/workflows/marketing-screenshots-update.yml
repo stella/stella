@@ -91,7 +91,21 @@ jobs:
             const { data: comparison } = await github.rest.repos.compareCommits({
               owner, repo, base: head, head: main.object.sha,
             });
-            if (!['ahead', 'identical'].includes(comparison.status)) refuse('commit is not on main');
+            if (!['ahead', 'identical'].includes(comparison.status)) {
+              // A release candidate outside main is a release pull request
+              // head (its tree proof was checked by the caller): capture it
+              // on that pull request's own branch.
+              const pulls = await github.paginate(github.rest.repos.listPullRequestsAssociatedWithCommit, {
+                owner, repo, commit_sha: head, per_page: 100,
+              });
+              const heads = pulls.filter(pull => pull.state === 'open' && pull.head.sha === head
+                && pull.head.repo?.full_name === `${owner}/${repo}` && pull.base.ref === 'main');
+              if (heads.length !== 1) refuse('commit is not on main or the head of one open pull request into main');
+              core.setOutput('branch', heads[0].head.ref);
+              core.setOutput('head', head);
+              core.setOutput('target', 'existing-pr');
+              return;
+            }
             core.setOutput('branch', `release/marketing-screenshots-${head}`);
             core.setOutput('head', head);
             core.setOutput('target', 'new-pr');

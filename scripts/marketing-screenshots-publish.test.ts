@@ -753,6 +753,7 @@ describe("release tree selection", () => {
             compareCommits: async () => ({
               data: { status: input.comparison },
             }),
+            listPullRequestsAssociatedWithCommit: "repos.associated",
           },
         },
       },
@@ -766,6 +767,26 @@ describe("release tree selection", () => {
       target: "existing-pr",
     });
   });
+  // The release-tag preflight passes a candidate its tree proof accepted;
+  // outside main that is a release pull request head, captured on its branch.
+  test("selects a release candidate outside main by its open pull request", async () => {
+    const input = scenario();
+    input.branch = "";
+    input.ref = HEAD;
+    input.comparison = "diverged";
+    const pulls = input.pulls.map((pull) => ({ ...pull, state: "open" }));
+    expect(await selectFor({ ...input, pulls })).toEqual({
+      branch: "release/test",
+      head: HEAD,
+      target: "existing-pr",
+    });
+    expect(await rejectionOf(selectFor({ ...input, pulls: [] }))).toMatchObject(
+      {
+        message: expect.stringContaining("head of one open pull request"),
+      },
+    );
+  });
+
   test("selects main or its verified ancestor for a new review branch", async () => {
     for (const ref of ["", "c".repeat(40)]) {
       const input = scenario();
