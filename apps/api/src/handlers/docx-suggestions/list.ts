@@ -13,6 +13,10 @@ import {
 } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createCursorPage } from "@/api/lib/pagination";
+import type {
+  UnbackedProjectionKeys,
+  UnprojectedColumns,
+} from "@/api/lib/projection-totality";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 
 import { docxSuggestionCursor } from "./cursor";
@@ -36,6 +40,44 @@ const DOCX_SUGGESTION_ORIGIN = {
 
 type DocxSuggestionOrigin =
   (typeof DOCX_SUGGESTION_ORIGIN)[keyof typeof DOCX_SUGGESTION_ORIGIN];
+
+type DocxSuggestionRow = typeof docxSuggestions.$inferSelect;
+
+const DOCX_SUGGESTION_LIST_COLUMNS = {
+  id: docxSuggestions.id,
+  opPayload: docxSuggestions.opPayload,
+  comment: docxSuggestions.comment,
+  severity: docxSuggestions.severity,
+  area: docxSuggestions.area,
+  status: docxSuggestions.status,
+  appliedMode: docxSuggestions.appliedMode,
+  createdAt: docxSuggestions.createdAt,
+  originReviewFindingId: docxSuggestions.originReviewFindingId,
+} as const;
+
+const UNPROJECTED_DOCX_SUGGESTION_COLUMNS = [
+  "entityFeatureGate", // RLS state is internal to the entity feature gate.
+  "workspaceId", // The authorized route already identifies the matter.
+  "entityId", // The route parameter already identifies the document.
+  "originThreadId", // The response exposes only the user-facing origin kind.
+  "sourceDataWorkspaceIds", // RLS enforces source visibility; clients do not need its policy inputs.
+  "resolvedByUserId", // The list displays resolution state, not the internal actor id.
+  "resolvedAt", // Resolution state is sufficient for the current list contract.
+] as const satisfies readonly (keyof DocxSuggestionRow)[];
+
+type MissingDocxSuggestionColumn = UnprojectedColumns<
+  DocxSuggestionRow,
+  typeof DOCX_SUGGESTION_LIST_COLUMNS,
+  (typeof UNPROJECTED_DOCX_SUGGESTION_COLUMNS)[number]
+>;
+type UnexpectedDocxSuggestionColumn = UnbackedProjectionKeys<
+  DocxSuggestionRow,
+  typeof DOCX_SUGGESTION_LIST_COLUMNS,
+  (typeof UNPROJECTED_DOCX_SUGGESTION_COLUMNS)[number]
+>;
+
+true satisfies MissingDocxSuggestionColumn extends never ? true : never;
+true satisfies UnexpectedDocxSuggestionColumn extends never ? true : never;
 
 // Annotated: an inline ternary in the projection literal would widen to
 // `string`, and the client would lose the union.
@@ -158,15 +200,7 @@ const listDocxSuggestions = createSafeHandler(
       safeDb((tx) =>
         tx
           .select({
-            id: docxSuggestions.id,
-            opPayload: docxSuggestions.opPayload,
-            comment: docxSuggestions.comment,
-            severity: docxSuggestions.severity,
-            area: docxSuggestions.area,
-            status: docxSuggestions.status,
-            appliedMode: docxSuggestions.appliedMode,
-            createdAt: docxSuggestions.createdAt,
-            originReviewFindingId: docxSuggestions.originReviewFindingId,
+            ...DOCX_SUGGESTION_LIST_COLUMNS,
             createdAtCursor:
               docxSuggestionCursor.cursorValue.as("created_at_cursor"),
           })
