@@ -8,7 +8,7 @@ type WriteRegeneratedFileOptions = {
   environment?: Readonly<Record<string, string | undefined>>;
 };
 
-export class RegenerationFlagError extends Error {
+class RegenerationFlagError extends Error {
   override readonly name = "RegenerationFlagError";
 }
 

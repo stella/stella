@@ -100,3 +100,6 @@ packages/mcp-apps/src/*/generated/*
 !packages/mcp-apps/src/shared/generated/style.css.d.ts
 !packages/mcp-apps/src/shared/generated/tsconfig.json
 packages/mcp-apps/src/generated/
+
+# Per-run build directories of the rule catalog test.
+scripts/.oxlint-rule-ids-*/
