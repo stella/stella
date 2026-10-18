@@ -898,7 +898,7 @@ type CgroupMount = { version: 1 | 2; root: string; mountpoint: string };
  * the memory controller (alone or combined, wherever they are mounted).
  */
 export const cgroupMounts = (mountinfo: string): CgroupMount[] =>
-  mountinfo.split("\n").flatMap((line) => {
+  mountinfo.split("\n").flatMap((line): CgroupMount[] => {
     const [mounted, filesystem] = line.split(" - ");
     const fields = mounted?.split(" ") ?? [];
     const [type, , options] = filesystem?.split(" ") ?? [];
