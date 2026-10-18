@@ -19,7 +19,6 @@ test("published reader subpaths bundle for browsers", async () => {
   const result = await Bun.build({
     entrypoints,
     target: "browser",
-    write: false,
   });
   expect(result.success).toBe(true);
   expect(result.logs.filter(({ level }) => level === "error")).toEqual([]);

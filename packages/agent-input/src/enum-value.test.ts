@@ -4,6 +4,7 @@ import fc from "fast-check";
 import { assertProperty } from "@stll/property-testing";
 
 import { normalizeEnumValue } from "./enum-value";
+import type { Normalized } from "./normalized";
 
 const legacyDistanceWithin = (
   left: string,
@@ -40,7 +41,7 @@ const legacyDistanceWithin = (
 const legacyNormalizeEnumValue = (
   input: string,
   allowed: readonly string[],
-) => {
+): Normalized<string> => {
   const listed = `The allowed values are ${allowed.map((value) => `"${value}"`).join(", ")}.`;
   const exact = allowed.find((value) => value === input);
   if (exact !== undefined) {
@@ -145,7 +146,9 @@ describe("closed enum values", () => {
 
   test("ASCII enum normalization matches the previous edit-distance behavior", () => {
     const asciiCharacters = [
-      ..."abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+      ...Array.from(
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+      ),
       "-",
       "_",
       " ",
