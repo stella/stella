@@ -87,9 +87,9 @@ describe("RFC 9309 matching", () => {
     ).toBe(true);
   });
 
-  test("the most specific, case-insensitive product-token group wins over wildcard", () => {
+  test("a case-insensitive product-token group wins over wildcard", () => {
     assertProperty(
-      "the most specific, case-insensitive product-token group wins over wildcard",
+      "a case-insensitive product-token group wins over wildcard",
       fc.property(
         fc.array(fc.constantFrom("Stella", "STELLA", "stella"), {
           minLength: 1,
@@ -108,6 +108,35 @@ describe("RFC 9309 matching", () => {
           const result = evaluatePublisherRobots(groups, "Stella", "/case");
           expect(result.allowed).toBe(false);
           expect(result.agentExcluded).toBe(true);
+        },
+      ),
+    );
+  });
+
+  test("a group for a different product token never matches", () => {
+    assertProperty(
+      "a group for a different product token never matches",
+      fc.property(
+        fc.oneof(
+          fc.integer({ min: 1, max: 5 }).map((end) => "stella".slice(0, end)),
+          fc.stringMatching(/^[a-z]{1,8}$/u).map((suffix) => `stella${suffix}`),
+        ),
+        (agent) => {
+          const result = evaluatePublisherRobots(
+            [
+              {
+                agents: [agent],
+                rules: [{ type: "allow", pattern: "/" }],
+              },
+              {
+                agents: ["*"],
+                rules: [{ type: "disallow", pattern: "/" }],
+              },
+            ],
+            "Stella",
+            "/case",
+          );
+          expect(result.allowed).toBe(false);
         },
       ),
     );

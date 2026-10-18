@@ -250,22 +250,14 @@ const parseRobots = (body: string): Group[] => {
   return groups;
 };
 
+// RFC 9309 matches the product token case-insensitively by equality and
+// combines every matching group; wildcard groups apply only when none match.
 const selectedGroups = (groups: Group[], productToken: string) => {
   const token = productToken.toLowerCase();
-  const agentScore = (agent: string) => {
-    if (agent === "*") {
-      return 0;
-    }
-    return token.startsWith(agent) ? agent.length : -1;
-  };
-  const scored = groups.map((group) => ({
-    group,
-    score: Math.max(...group.agents.map(agentScore)),
-  }));
-  const best = Math.max(-1, ...scored.map(({ score }) => score));
-  return scored
-    .filter(({ score }) => score === best && score >= 0)
-    .map(({ group }) => group);
+  const named = groups.filter(({ agents }) => agents.includes(token));
+  return named.length > 0
+    ? named
+    : groups.filter(({ agents }) => agents.includes("*"));
 };
 
 const compilePattern = (pattern: string): CompiledPattern => {
