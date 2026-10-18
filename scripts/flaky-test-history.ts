@@ -946,6 +946,17 @@ export const collectEvidence = async ({
   });
 };
 
+// CODEOWNERS paths are gitignore-style: a leading or inner slash anchors the
+// pattern to the repository root, otherwise it matches at any depth, and a
+// pattern also covers everything inside a directory of that name.
+const codeownersGlobs = (rawPattern: string): Bun.Glob[] => {
+  const trimmed = rawPattern.replace(/^\/|\/$/gu, "");
+  const anchored = rawPattern.startsWith("/") || trimmed.includes("/");
+  const base = anchored ? trimmed : `**/${trimmed}`;
+  const inside = new Bun.Glob(`${base}/**`);
+  return rawPattern.endsWith("/") ? [inside] : [new Bun.Glob(base), inside];
+};
+
 /** Resolve files with CODEOWNERS semantics: gitignore-style patterns, last match wins. */
 export const resolveOwners = (
   content: string,
@@ -961,19 +972,9 @@ export const resolveOwners = (
     if (rawPattern === undefined || rawOwner?.startsWith("@") !== true) {
       continue;
     }
-    const rooted = rawPattern.startsWith("/");
-    let pattern = rawPattern.replace(/^\//u, "");
-    if (pattern.endsWith("/")) {
-      pattern += "**";
-    } else if (!rooted && !pattern.includes("/")) {
-      pattern = `**/${pattern}`;
-    }
-    const glob = new Bun.Glob(pattern);
+    const globs = codeownersGlobs(rawPattern);
     for (const file of new Set(files)) {
-      if (
-        glob.match(file) ||
-        (!pattern.includes("/") && glob.match(path.posix.basename(file)))
-      ) {
+      if (globs.some((glob) => glob.match(file))) {
         owners.set(file, rawOwner.slice(1));
       }
     }

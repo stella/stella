@@ -593,6 +593,33 @@ describe("CODEOWNERS proposals", () => {
     );
   });
 
+  test("patterns anchor and cover directories as GitHub's CODEOWNERS does", () => {
+    const paths = [
+      "scripts/a.test.ts",
+      "packages/scripts/src/b.test.ts",
+      "apps/api/src/c.test.ts",
+      "package.json",
+      "apps/web/package.json",
+    ];
+    const owned = (content: string) =>
+      [...resolveOwners(content, paths).keys()].toSorted();
+    // An unanchored directory pattern matches that directory at any depth.
+    expect(owned("scripts/ @s\n")).toEqual([
+      "packages/scripts/src/b.test.ts",
+      "scripts/a.test.ts",
+    ]);
+    // A rooted path without a trailing slash also covers a directory's contents.
+    expect(owned("/apps/api @api\n")).toEqual(["apps/api/src/c.test.ts"]);
+    // A leading slash anchors a file to the root; without one it matches anywhere.
+    expect(owned("/package.json @root\n")).toEqual(["package.json"]);
+    expect(owned("package.json @any\n")).toEqual([
+      "apps/web/package.json",
+      "package.json",
+    ]);
+    // An inner slash anchors the pattern too.
+    expect(owned("src/c.test.ts @inner\n")).toEqual([]);
+  });
+
   test("an unmatched test needs an owner and gets no entry", () => {
     const proposal = proposeQuarantine({
       registry: empty,
