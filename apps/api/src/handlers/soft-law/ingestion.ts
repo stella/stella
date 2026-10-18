@@ -29,6 +29,7 @@ import {
 import type {
   SoftLawSourceAdapter,
   SoftLawEntry,
+  SoftLawDiscoveryEntry,
   SoftLawDocumentInput,
 } from "@/api/lib/legal-search/soft-law-types";
 
@@ -85,7 +86,7 @@ const assertPublisherAvailable = (fetch: SoftLawFetch) => {
   return Result.ok();
 };
 type PrepareSoftLawPageOptions = {
-  entries: readonly SoftLawEntry[];
+  entries: readonly SoftLawDiscoveryEntry[];
   store: ReturnType<typeof createSoftLawIngestionStore>;
   adapter: SoftLawSourceAdapter;
   sourceId: SafeId<"softLawSource">;
@@ -171,7 +172,7 @@ const fetchSoftLawItem = async ({
   });
 };
 const rejectedAttempt = (
-  entry: SoftLawEntry,
+  entry: SoftLawDiscoveryEntry,
   error: unknown,
   count: number,
 ): SoftLawAttempt => {
@@ -227,6 +228,22 @@ const fetchSoftLawPage = async ({
     const previous = prior.get(entry.url);
     if (previous && previous.status !== "retryable") {
       continue;
+    }
+    switch (entry.type) {
+      case "rejected":
+        attempts.push({
+          entry,
+          status: "rejected",
+          tag: entry.rejection.tag,
+          count: (previous?.count ?? 0) + 1,
+          rawObjects: [],
+        });
+        continue;
+      case "document":
+        break;
+      default:
+        entry satisfies never;
+        return panic("Unknown soft-law discovery entry");
     }
     if (capacity === "exhausted" || retainedRawBytes === PAGE_RAW_BYTE_LIMIT) {
       attempts.push({

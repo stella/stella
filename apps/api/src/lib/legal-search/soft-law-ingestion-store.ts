@@ -25,6 +25,7 @@ import {
 } from "@/api/lib/legal-search/soft-law-types";
 import type {
   SoftLawEntry,
+  SoftLawDiscoveryEntry,
   SoftLawDocumentInput,
   SoftLawSourceAdapter,
   SoftLawRawObject,
@@ -166,7 +167,7 @@ const renewSoftLawLease = async ({
   return Result.ok();
 };
 export type SoftLawAttempt = {
-  entry: SoftLawEntry;
+  entry: SoftLawDiscoveryEntry;
   count: number;
   /** Exact discovery snapshots are retained even when the instrument's content is unchanged. */
   rawObjects: SoftLawObservation["rawObjects"];
@@ -215,7 +216,10 @@ const loadSoftLawCollisions = async (
   );
 const loadSoftLawAttempts = async (
   { sourceId, scopedDb }: SoftLawStoreContext,
-  { runId, entries }: { runId: string; entries: readonly SoftLawEntry[] },
+  {
+    runId,
+    entries,
+  }: { runId: string; entries: readonly SoftLawDiscoveryEntry[] },
 ) =>
   await scopedDb(
     async (tx) =>
@@ -833,7 +837,7 @@ export const createSoftLawIngestionStore = (
       await storeResult(async () => await renewSoftLawLease(context)),
     loadAttempts: async (query: {
       runId: string;
-      entries: readonly SoftLawEntry[];
+      entries: readonly SoftLawDiscoveryEntry[];
     }) => await loadSoftLawAttempts(context, query),
     loadMatches: async (query: LoadSoftLawMatchesOptions) =>
       await loadSoftLawMatches(context, query),

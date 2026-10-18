@@ -188,7 +188,7 @@ test("EDPB discovery snapshots survive a retry without refetching mutable metada
     })
   ).unwrap();
   const entry = discovered.entries.at(0);
-  if (!entry) {
+  if (!entry || entry.type !== "document") {
     panic("Official EDPB detail fixture has no expressions");
   }
   const serialized = JSON.stringify(entry);
@@ -265,9 +265,14 @@ test("EDPB discovery records a malformed detail and advances its cursor", async 
   ).unwrap();
   expect(discovered.nextCursor).not.toBeNull();
   expect(discovered.entries).toHaveLength(1);
-  expect(discovered.entries.at(0)?.discoveryRejection).toEqual({
-    tag: "invalid_document",
-    reason: "EDPB document language is not stated",
+  expect(discovered.entries.at(0)).toEqual({
+    type: "rejected",
+    url: detailUrl,
+    rejection: {
+      tag: "invalid_document",
+      reason: "EDPB document language is not stated",
+    },
+    sourceRaw: expect.any(Array),
   });
 });
 

@@ -2,7 +2,7 @@ import { caseLawIngestionOnlyPolicies } from "@/api/db/rls";
 import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-source";
 import type {
   SoftLawMetadata,
-  SoftLawEntry,
+  SoftLawDiscoveryEntry,
   SoftLawRawObject,
 } from "@/api/lib/legal-search/soft-law-types";
 import {
@@ -234,7 +234,7 @@ export const softLawIngestionAttempts = p.pgTable.withRLS(
     sourceId: safeUuid<"softLawSource">("source_id").notNull(),
     runId: p.uuid("run_id").notNull(),
     url: p.text().notNull(),
-    entry: jsonb().$type<SoftLawEntry>().notNull(),
+    entry: jsonb().$type<SoftLawDiscoveryEntry>().notNull(),
     /** Per-run source snapshots, including unchanged-document discovery evidence. */
     rawObjects: jsonb("raw_objects")
       .$type<readonly SoftLawRawObject[]>()

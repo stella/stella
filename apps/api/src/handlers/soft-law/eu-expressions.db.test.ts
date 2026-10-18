@@ -43,6 +43,7 @@ type EntryOptions = {
   stage: "consultation" | "adopted";
 };
 const entry = ({ language, revision, stage }: EntryOptions): SoftLawEntry => ({
+  type: "document",
   url: `https://www.edpb.europa.eu/guidelines/example/${language}/${revision}`,
   metadata: {
     title: "Guidelines on processing",

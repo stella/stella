@@ -19,6 +19,7 @@ import {
 } from "@/api/lib/legal-search/soft-law-types";
 import type {
   SoftLawEntry,
+  SoftLawDiscoveryEntry,
   SoftLawMetadata,
   SoftLawSourceAdapter,
 } from "@/api/lib/legal-search/soft-law-types";
@@ -414,6 +415,7 @@ export const parseEdpbDocument = ({
     const files = yield* readEdpbFiles($, url);
     for (const asset of files) {
       entries.set(asset.url, {
+        type: "document",
         url: asset.url,
         sourcePages,
         metadata: {
@@ -655,25 +657,14 @@ export const edpbAdapter = {
         if (!SoftLawItemError.is(parsed.error)) {
           return yield* Result.err(parsed.error);
         }
-        const rejection: SoftLawEntry = {
+        const rejection: SoftLawDiscoveryEntry = {
+          type: "rejected",
           url: detailUrl,
-          discoveryRejection: {
+          rejection: {
             tag: parsed.error.tag,
             reason: parsed.error.message,
           },
           sourceRaw: captured,
-          metadata: {
-            title: detailUrl,
-            kind: "other",
-            sourceKind: "Rejected EDPB detail",
-            statedReference: { state: "not_stated" },
-            issuedOn: { state: "not_stated" },
-            expression: { type: "unspecified" },
-            stage: { state: "not_stated" },
-            relations: [],
-            validity: { state: "not_stated", basis: "source_stated" },
-          },
-          sourceDates: {},
         };
         return Result.ok({
           entries: [rejection],
@@ -681,20 +672,16 @@ export const edpbAdapter = {
         });
       }
       const entries = parsed.value.map((entry) => ({
-        ...entry,
+        type: "document" as const,
+        url: entry.url,
+        ...(entry.sourcePages ? { sourcePages: entry.sourcePages } : {}),
         sourceRaw: captured,
+        metadata: entry.metadata,
+        sourceDates: entry.sourceDates,
       }));
       return Result.ok({ entries, nextCursor });
     }),
   fetchDocument: async (entry, { fetch: read }) => {
-    if (entry.discoveryRejection) {
-      return Result.err(
-        new SoftLawItemError({
-          message: entry.discoveryRejection.reason,
-          tag: entry.discoveryRejection.tag,
-        }),
-      );
-    }
     const captured = entry.sourceRaw;
     if (
       !captured ||

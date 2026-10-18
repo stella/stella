@@ -64,6 +64,7 @@ const entry = (
   title = "Doporučení",
   reference = "02/2024",
 ): SoftLawEntry => ({
+  type: "document",
   url,
   metadata: {
     title,
@@ -319,6 +320,86 @@ if (!databaseUrl || !enabled) {
           .where(eq(softLawDocuments.sourceId, sourceId));
         expect(rows).toHaveLength(2);
         expect(rows.every((row) => row.listingState === "listed")).toBe(true);
+      }));
+
+    test("a rejected discovery entry advances the cursor without creating document rows", async () =>
+      await withSource(databaseUrl, async ({ db, sourceId, run }) => {
+        const cursors: (string | null)[] = [];
+        let documentFetches = 0;
+        const sourceRaw = [
+          {
+            role: "detail",
+            contentBase64: Buffer.from("malformed detail").toString("base64"),
+            contentType: "text/html",
+          },
+        ];
+        const sourceAdapter = {
+          ...adapter([]),
+          discover: async ({ cursor }) => {
+            cursors.push(cursor);
+            return Result.ok(
+              cursor === null
+                ? {
+                    entries: [
+                      {
+                        type: "rejected" as const,
+                        url: "https://www.edpb.europa.eu/malformed-detail",
+                        sourceRaw,
+                        rejection: {
+                          tag: "invalid_document" as const,
+                          reason: "EDPB document language is not stated",
+                        },
+                      },
+                    ],
+                    nextCursor: "after-rejection",
+                  }
+                : { entries: [], nextCursor: null },
+            );
+          },
+          fetchDocument: async (item: SoftLawEntry) => {
+            documentFetches++;
+            return Result.ok(document(item));
+          },
+        } satisfies SoftLawSourceAdapter;
+
+        expect(await run(sourceAdapter)).toEqual({ status: "complete" });
+        expect(cursors).toEqual([null, "after-rejection"]);
+        expect(documentFetches).toBe(0);
+        expect(
+          await db
+            .select()
+            .from(softLawDocuments)
+            .where(eq(softLawDocuments.sourceId, sourceId)),
+        ).toHaveLength(0);
+        expect(
+          await db
+            .select()
+            .from(softLawDocumentVersions)
+            .innerJoin(
+              softLawDocuments,
+              eq(softLawDocumentVersions.documentId, softLawDocuments.id),
+            )
+            .where(eq(softLawDocuments.sourceId, sourceId)),
+        ).toHaveLength(0);
+        expect(
+          (
+            await db
+              .select()
+              .from(softLawIngestionAttempts)
+              .where(eq(softLawIngestionAttempts.sourceId, sourceId))
+          ).at(0),
+        ).toMatchObject({
+          status: "rejected",
+          tag: "invalid_document",
+          entry: {
+            type: "rejected",
+            sourceRaw,
+            rejection: {
+              tag: "invalid_document",
+              reason: "EDPB document language is not stated",
+            },
+          },
+        });
       }));
 
     test("overlapping source runs grant only one writer", async () =>
@@ -1722,6 +1803,7 @@ if (!databaseUrl || !enabled) {
           async (title, contents) =>
             await withSource(databaseUrl, async ({ db, sourceId, run }) => {
               const items = ["a", "b"].map((slug) => ({
+                type: "document" as const,
                 url: `https://uoou.gov.cz/${slug}`,
                 metadata: {
                   title,

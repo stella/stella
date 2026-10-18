@@ -121,12 +121,8 @@ export type SoftLawMetadata = {
   };
 };
 export type SoftLawEntry = {
+  type: "document";
   url: string;
-  /** A detail page that was listed but could not be admitted as a document. */
-  discoveryRejection?: {
-    tag: Exclude<(typeof SOFT_LAW_ITEM_TAGS)[number], "identity_collision">;
-    reason: string;
-  };
   /** Publisher index/detail responses retained alongside the document bytes. */
   sourcePages?: readonly string[];
   /** Exact discovery responses survive a durable retry; base64 preserves their bytes in JSONB. */
@@ -138,6 +134,21 @@ export type SoftLawEntry = {
   metadata: SoftLawMetadata;
   sourceDates: Readonly<Record<string, string>>;
 };
+export type SoftLawRejectedEntry = {
+  type: "rejected";
+  url: string;
+  /** Exact discovery responses retained so the rejection can be audited. */
+  sourceRaw?: readonly {
+    role: string;
+    contentBase64: string;
+    contentType: string;
+  }[];
+  rejection: {
+    tag: Exclude<(typeof SOFT_LAW_ITEM_TAGS)[number], "identity_collision">;
+    reason: string;
+  };
+};
+export type SoftLawDiscoveryEntry = SoftLawEntry | SoftLawRejectedEntry;
 export type SoftLawDocumentInput = {
   metadata: SoftLawMetadata;
   raw: readonly {
@@ -192,7 +203,7 @@ export type SoftLawSourceAdapter = {
   }) => Promise<
     Result<
       {
-        entries: readonly SoftLawEntry[];
+        entries: readonly SoftLawDiscoveryEntry[];
         nextCursor: string | null;
       },
       SoftLawIngestionError | SoftLawItemError | SoftLawFetchError

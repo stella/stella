@@ -206,6 +206,7 @@ export const parseWp29Archive = (html: string) => {
         seen.add(resolved.value);
         const date = /\(([^()]*)\)\s*$/u.exec(rowText)?.at(1);
         entries.push({
+          type: "document",
           url: resolved.value,
           metadata: metadata({
             title,
@@ -345,6 +346,7 @@ export const parseWp29NewsroomDocument = ({
     }
     seen.add(resolved.value);
     entries.push({
+      type: "document",
       url: resolved.value,
       metadata: metadata({
         title,
