@@ -22,7 +22,7 @@
 // does not state typed. New rows fail; rows that no longer
 // occur must be removed. scripts/failure-as-empty-baseline.ts rejects added
 // rows against the base revision. Regenerate (drops fixed rows only):
-//   STELLA_UPDATE_PLAN_CONTRACTS=1 bun run test <this file>
+//   READ_FAULT_BASELINE=write bun run test <this file>
 import { panic } from "better-result";
 import {
   afterAll,
@@ -133,7 +133,7 @@ const BASELINE_FILE = new URL(
   import.meta.url,
 );
 const recorded: Readonly<Record<string, string>> = baseline.rows;
-const writing = process.env["STELLA_UPDATE_PLAN_CONTRACTS"] === "1";
+const writing = process.env["READ_FAULT_BASELINE"] === "write";
 const observedRows = new Map<string, string>();
 
 const originalFetch = globalThis.fetch;
@@ -146,7 +146,7 @@ beforeAll(() => {
 afterEach(() => {
   globalThis.fetch = originalFetch;
 });
-afterAll(async () => {
+afterAll(() => {
   mock.restore();
   if (writing) {
     const rows = Object.fromEntries(
@@ -154,10 +154,12 @@ afterAll(async () => {
         .toSorted()
         .map((key) => [key, recorded[key] ?? observedRows.get(key)]),
     );
-    await writeRegeneratedFile(
-      BASELINE_FILE,
-      `${JSON.stringify({ comment: baseline.comment, rows }, null, 2)}\n`,
-    );
+    writeRegeneratedFile({
+      flag: "READ_FAULT_BASELINE",
+      value: "write",
+      file: BASELINE_FILE,
+      contents: `${JSON.stringify({ comment: baseline.comment, rows }, null, 2)}\n`,
+    });
   }
 });
 

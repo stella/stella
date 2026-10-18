@@ -1,22 +1,29 @@
-const REGENERATION_FLAG = "STELLA_UPDATE_PLAN_CONTRACTS";
+import { writeFileSync } from "node:fs";
 
-class RegenerationDisabledError extends Error {
-  override readonly name = "RegenerationDisabledError";
+type WriteRegeneratedFileOptions = {
+  flag: string;
+  value: string;
+  file: string | URL;
+  contents: string | Uint8Array;
+  environment?: Readonly<Record<string, string | undefined>>;
+};
+
+export class RegenerationFlagError extends Error {
+  override readonly name = "RegenerationFlagError";
 }
 
-export const writeRegeneratedFile = async (
-  path: URL | string,
-  contents:
-    | ArrayBufferLike
-    | Blob
-    | NodeJS.TypedArray
-    | ReadableStream
-    | string,
-) => {
-  if (process.env[REGENERATION_FLAG] !== "1") {
-    throw new RegenerationDisabledError(
-      `Set ${REGENERATION_FLAG}=1 to regenerate committed test files`,
+/** Write a checked-in test artifact only after an explicit opt-in. */
+export const writeRegeneratedFile = ({
+  flag,
+  value,
+  file,
+  contents,
+  environment = process.env,
+}: WriteRegeneratedFileOptions): void => {
+  if (environment[flag] !== value) {
+    throw new RegenerationFlagError(
+      `Set ${flag}=${value} to regenerate this file`,
     );
   }
-  return Bun.write(path, contents);
+  writeFileSync(file, contents);
 };
