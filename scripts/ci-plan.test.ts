@@ -1778,6 +1778,7 @@ test("a run that passes as superseded records no completion evidence", () => {
           HEAD_REPO_ID: "456",
           PATCH_ID: "c".repeat(40),
           WORKFLOW_VERSION: "d".repeat(40),
+          PLAN_CONFIG: "e".repeat(64),
           PR_DEPTH_JOBS: JSON.stringify(prDepthJobs({ jobs: ciJobs })),
         },
       };
