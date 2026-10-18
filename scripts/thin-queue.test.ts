@@ -191,6 +191,7 @@ const context = ({
     event_name: event,
     ref: refFor(event),
     event: {
+      action: "synchronize",
       head_commit: { message },
       pull_request: {
         draft: false,
@@ -895,6 +896,7 @@ test("unset and full preserve historical predicates except declared PR, Postgres
         "api-test-durations",
         "generated-sources",
         "postgres-service-suites",
+        "pr-heavy-gate",
         "marketing-screenshots-cancel",
         "ci-quick-checks",
         "code-quality-web-rest",

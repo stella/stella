@@ -376,7 +376,7 @@ for (const { kind, path } of citations) {
                     arguments: "{}",
                     output: {
                       title,
-                      appUrl: held ? internal : null,
+                      url: held ? internal : null,
                       sourceUrl: publisher,
                     },
                   },
@@ -449,7 +449,7 @@ test("held decision tray and answer share a compact annotation without moving th
               arguments: "{}",
               output: {
                 title: quotedPassage,
-                appUrl: internal,
+                url: internal,
                 sourceUrl: publisher,
                 caseLawDecision: {
                   decisionId: documentId,
@@ -490,8 +490,7 @@ test("default markdown and clarification analysis share publisher aliases and in
   useExternalSourceStore.getState().registerSources([
     {
       title: "Provision",
-      url: publisher,
-      appUrl: internal,
+      url: internal,
       sourceUrl: publisher,
     },
   ]);
@@ -616,8 +615,7 @@ for (const anchorId of [null, "p-12"]) {
     useExternalSourceStore.getState().registerSources([
       {
         title: target.caseNumber,
-        url: publisher,
-        appUrl: internal,
+        url: internal,
         sourceUrl: publisher,
         caseLawDecision: {
           decisionId: documentId,
@@ -823,7 +821,7 @@ test("a publisher alias with a canonical decision keeps the passage before the s
 });
 
 for (const explicitAnchorId of [undefined, "p-30"]) {
-  test(`a publisher alias opens its decision at the ${explicitAnchorId === undefined ? "anchor stored in its app URL" : "explicit anchor over the stored one"}`, async () => {
+  test(`a publisher alias opens its decision at the ${explicitAnchorId === undefined ? "anchor stored in its reader URL" : "explicit anchor over the stored one"}`, async () => {
     const publisher = "https://publisher.example.test/stored-anchor";
     const internal = new URL(`${decisionPath}#p-12`, window.location.origin)
       .href;
@@ -831,8 +829,7 @@ for (const explicitAnchorId of [undefined, "p-30"]) {
       <LegalCitationLink
         source={{
           title: fullDecision.caseNumber,
-          url: publisher,
-          appUrl: internal,
+          url: internal,
           sourceUrl: publisher,
         }}
         anchorId={explicitAnchorId}
