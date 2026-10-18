@@ -2372,7 +2372,7 @@ const jobSteps = (job: unknown) =>
     v.object({
       steps: v.pipe(
         v.unknown(),
-        v.transform(flattenWorkflowSteps),
+        v.transform((steps) => flattenWorkflowSteps(steps)),
         v.transform((steps) => steps.map(withoutStaticReuseCondition)),
         v.array(
           v.object({
