@@ -130,6 +130,7 @@ jobs:
       # Builds, images, browsers and services certify the merge group.
       run_required: ${{ steps.completed-depth.outputs.run_required }}
       completion_marker: ${{ steps.completed-depth.outputs.marker }}
+      plan_config: ${{ steps.completed-depth.outputs.plan_config }}
       completed_run_id: ${{ steps.completed-depth.outputs.completed_run_id }}
       queue_validation: ${{ steps.completed-depth.outputs.queue_validation }}
       metadata_only: ${{ steps.completed-depth.outputs.metadata_only }}
@@ -503,6 +504,7 @@ jobs:
             }
             const scope = require("node:crypto").createHash("sha256")
               .update(JSON.stringify([pr.title, pr.body || "", proof])).digest("hex");
+            if (!mergeGroup) core.setOutput("plan_config", scope);
             const profile = mergeGroup ? "normal-v1" : process.env.COVERAGE_PROFILE || "normal-v1";
             const markerFor = (sha) => `ci-completed-v6-${profile}-${pr.number}-${pr.head.repo.id}-${sha}-${depth}-${scope}`;
             const marker = markerFor(pr.head.sha);
@@ -594,6 +596,7 @@ jobs:
                   || !/^[0-9a-f]{40}$/.test(process.env.PATCH_ID || "")
                   || evidence.patch_id !== process.env.PATCH_ID
                   || evidence.workflow_version !== process.env.WORKFLOW_VERSION
+                  || evidence.plan_config !== scope
                   || !Number.isSafeInteger(evidence.run_attempt)
                   || evidence.run_attempt < 1
                   || evidence.pr_number !== pr.number
@@ -6764,6 +6767,7 @@ jobs:
           RUN_REQUIRED: ${{ needs.ci-plan.outputs.run_required }}
           COMPLETED_RUN_ID: ${{ needs.ci-plan.outputs.completed_run_id }}
           COMPLETION_MARKER: ${{ needs.ci-plan.outputs.completion_marker }}
+          PLAN_CONFIG: ${{ needs.ci-plan.outputs.plan_config }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_REPO_ID: ${{ github.event.pull_request.head.repo.id }}
@@ -7102,34 +7106,68 @@ jobs:
           # suite, so only a run that planned and ran them records it: every
           # planned job succeeded and no job was cancelled or failed. A run
           # that passed as superseded never completed its suite.
-          if [[ "$EVENT" == pull_request && "${RUN_REQUIRED:-}" == true && -n "${COMPLETION_MARKER:-}" ]]; then
-            if [[ "$SUITE_DEPTH" == full ]]; then
-              evidence_scopes="$JOB_SCOPES"
-              evidence_required=$(jq -c 'keys' <<< "$JOB_SCOPES")
+          if [[ "$EVENT" == pull_request && "${RUN_REQUIRED:-}" == true ]]; then
+            # This list owns both validation and jq argument construction. An
+            # evidence input therefore cannot bypass either side of the boundary.
+            evidence_inputs=(
+              "PLAN:plan:json-object" "JOB_SCOPES:job_scopes:json-object" "FAST_JOB_SCOPES:fast_scopes:json-object"
+              "FAST_REQUIRED:fast_required:json-array" "NEEDS:needs:json-object" "PR_DEPTH_JOBS:pr_depth:json-array"
+              "COMPLETION_MARKER:marker:nonempty" "GITHUB_RUN_ID:run:positive-integer" "GITHUB_RUN_ATTEMPT:attempt:positive-integer"
+              "PR_NUMBER:pr:positive-integer" "HEAD_REPO_ID:repo:positive-integer" "HEAD_SHA:head:hex40" "BASE_SHA:base:hex40"
+              "SUITE_DEPTH:depth:suite-depth" "COVERAGE_PROFILE:profile:nonempty" "PATCH_ID:patch:hex40" "WORKFLOW_VERSION:workflow:hex40"
+              "PLAN_CONFIG:plan_config:hex64"
+            )
+            evidence_args=()
+            invalid_evidence_input=""
+            for evidence_input in "${evidence_inputs[@]}"; do
+              IFS=: read -r input_name jq_name input_kind <<< "$evidence_input"
+              input_value="${!input_name-}"
+              input_valid=true
+              case "$input_kind" in
+                json-array) jq -e 'type == "array"' <<< "$input_value" > /dev/null 2>&1 ;;
+                json-object) jq -e 'type == "object"' <<< "$input_value" > /dev/null 2>&1 ;;
+                positive-integer) [[ "$input_value" =~ ^[1-9][0-9]*$ ]] ;;
+                hex40) [[ "$input_value" =~ ^[0-9a-f]{40}$ ]] ;;
+                hex64) [[ "$input_value" =~ ^[0-9a-f]{64}$ ]] ;;
+                suite-depth) [[ "$input_value" == fast || "$input_value" == full ]] ;;
+                nonempty) [[ -n "$input_value" ]] ;;
+                *) false ;;
+              esac || input_valid=false
+              if [[ "$input_valid" != true ]]; then
+                echo "::error::Invalid or missing completion evidence input: $input_name."
+                echo "Completion evidence was skipped because $input_name is missing or malformed."
+                invalid_evidence_input="$input_name"
+                break
+              fi
+              if [[ "$input_kind" == json-* ]]; then
+                evidence_args+=(--argjson "$jq_name" "$input_value")
+              else
+                evidence_args+=(--arg "$jq_name" "$input_value")
+              fi
+            done
+            if [[ -n "$invalid_evidence_input" ]]; then
+              evidence=""
             else
-              evidence_scopes=$(jq -cn --argjson full "$JOB_SCOPES" --argjson fast "$FAST_JOB_SCOPES" '$full + $fast')
-              evidence_required="$FAST_REQUIRED"
-            fi
-            evidence=$(jq -ce --argjson plan "$PLAN" --argjson scopes "$evidence_scopes" --argjson required "$evidence_required" \
-              --arg marker "$COMPLETION_MARKER" --arg run "$GITHUB_RUN_ID" --arg attempt "$GITHUB_RUN_ATTEMPT" \
-              --arg pr "$PR_NUMBER" --arg repo "$HEAD_REPO_ID" --arg head "$HEAD_SHA" --arg base "$BASE_SHA" \
-              --arg depth "$SUITE_DEPTH" --arg profile "${COVERAGE_PROFILE:-normal-v1}" --arg patch "$PATCH_ID" --arg workflow "$WORKFLOW_VERSION" --argjson pr_depth "$PR_DEPTH_JOBS" '
-              (with_entries(.value = .value.result)) as $jobs
+              evidence=$(jq -nce "${evidence_args[@]}" '
+              ($needs | with_entries(.value = .value.result)) as $jobs
+              | (if $depth == "full" then $job_scopes else $job_scopes + $fast_scopes end) as $scopes
+              | (if $depth == "full" then ($job_scopes | keys) else $fast_required end) as $required
               | ([$required[] | select($scopes[.] == null or $plan[$scopes[.]] == "true")] | unique) as $planned
               | select(($jobs | length) > 1 and $jobs["ci-plan"] == "success"
                 and all($jobs[]; . == "success" or . == "skipped")
                 and ($planned | length) > 0
                 and all($planned[]; . as $job | $jobs[$job] == "success")
                 and ($head | test("^[0-9a-f]{40}$")) and ($base | test("^[0-9a-f]{40}$")))
-              | {version: 6, marker: $marker, event: "pull_request",
+              | {version: 6, marker: $marker, event: "pull_request", plan_config: $plan_config,
                 run_id: ($run | tonumber), run_attempt: ($attempt | tonumber),
                 pr_number: ($pr | tonumber), head_repo_id: ($repo | tonumber),
                 head_sha: $head, base_sha: $base, patch_id: $patch, workflow_version: $workflow, pr_depth_jobs: $pr_depth, suite_depth: $depth,
                 coverage_profile: (if $profile == "" then "normal-v1" else $profile end),
-                planned: $planned, jobs: $jobs}' <<< "$NEEDS") || evidence=""
+                planned: $planned, jobs: $jobs}') || evidence=""
+            fi
             if [[ -n "$evidence" ]]; then
               echo "evidence=$evidence" >> "$GITHUB_OUTPUT"
-            else
+            elif [[ -z "$invalid_evidence_input" ]]; then
               echo "Not every planned CI job succeeded in this run; recording no completion evidence."
             fi
           fi

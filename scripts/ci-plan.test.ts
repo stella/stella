@@ -1806,6 +1806,7 @@ test("a run that passes as superseded records no completion evidence", () => {
           HEAD_REPO_ID: "456",
           PATCH_ID: "c".repeat(40),
           WORKFLOW_VERSION: "d".repeat(40),
+          PLAN_CONFIG: "e".repeat(64),
           PR_DEPTH_JOBS: JSON.stringify(prDepthJobs({ jobs: ciJobs })),
         },
       };
@@ -1818,6 +1819,104 @@ test("a run that passes as superseded records no completion evidence", () => {
       );
       if (item.label !== "complete") {
         expect(stdout, item.label).toContain("superseded");
+      }
+    }
+  } finally {
+    rmSync(directory, { force: true, recursive: true });
+  }
+});
+
+test("completion evidence names every missing evidence input without changing the verdict", () => {
+  const directory = mkdtempSync(
+    nodePath.join(tmpdir(), "ci-result-evidence-inputs-"),
+  );
+  const evidenceInputBlock =
+    /evidence_inputs=\(\n(?<inputs>[\s\S]*?)\n\s*\)/u.exec(resultStep.run)
+      ?.groups?.["inputs"];
+  if (evidenceInputBlock === undefined) {
+    throw new TypeError("Evaluate CI outcome has no evidence input list");
+  }
+  const requiredInputs = [
+    ...evidenceInputBlock.matchAll(/"(?<name>[A-Z_]+):[^"\n]+"/gu),
+  ].map((match) => match.groups?.["name"] ?? "");
+  expect(requiredInputs).not.toContain("");
+  try {
+    const cases: {
+      label: string;
+      invalid?: string;
+      mutation?: "malformed" | "missing";
+    }[] = [
+      { label: "complete" },
+      ...requiredInputs.flatMap((invalid) => [
+        { label: `${invalid} missing`, invalid, mutation: "missing" as const },
+        {
+          label: `${invalid} malformed`,
+          invalid,
+          mutation: "malformed" as const,
+        },
+      ]),
+    ];
+    for (const { item, exitCode, stdout } of runBashBatch(cases, (entry) => {
+      let invalidation = "";
+      if (entry.invalid !== undefined) {
+        if (entry.mutation === "missing") {
+          invalidation = `unset ${entry.invalid}\n`;
+        } else {
+          const value = ["COMPLETION_MARKER", "COVERAGE_PROFILE"].includes(
+            entry.invalid,
+          )
+            ? "''"
+            : "malformed";
+          invalidation = `${entry.invalid}=${value}\n`;
+        }
+      }
+      const outcomeScript = resultStep.run.replace(
+        "# Completion evidence lets a later unchanged-head run skip every\n",
+        () =>
+          `${invalidation}# Completion evidence lets a later unchanged-head run skip every\n`,
+      );
+      expect(outcomeScript === resultStep.run, entry.label).toBe(
+        entry.invalid === undefined,
+      );
+      const base = resultGateCase({
+        event: EVENT.pullRequest,
+        results: {},
+        suiteDepth: SUITE_DEPTH.fast,
+        outcomeScript,
+      });
+      return {
+        ...base,
+        env: {
+          ...base.env,
+          GITHUB_OUTPUT: nodePath.join(directory, entry.label),
+          RUN_REQUIRED: "true",
+          COMPLETION_MARKER: "ci-completed-v6-fixture",
+          HEAD_SHA: "a".repeat(40),
+          BASE_SHA: "b".repeat(40),
+          HEAD_REPO_ID: "456",
+          PATCH_ID: "c".repeat(40),
+          WORKFLOW_VERSION: "d".repeat(40),
+          PLAN_CONFIG: "e".repeat(64),
+          PR_DEPTH_JOBS: JSON.stringify(prDepthJobs({ jobs: ciJobs })),
+        },
+      };
+    })) {
+      expect(exitCode, item.label).toBe(0);
+      const output = nodePath.join(directory, item.label);
+      const written = existsSync(output) ? readFileSync(output, "utf-8") : "";
+      expect(written.includes("evidence="), item.label).toBe(
+        item.invalid === undefined,
+      );
+      if (item.invalid !== undefined) {
+        expect(stdout, item.label).toContain(
+          `Completion evidence was skipped because ${item.invalid} is missing or malformed.`,
+        );
+        expect(stdout, item.label).toContain(
+          `::error::Invalid or missing completion evidence input: ${item.invalid}.`,
+        );
+        expect(stdout, item.label).not.toContain(
+          "Not every planned CI job succeeded",
+        );
       }
     }
   } finally {
