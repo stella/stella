@@ -1,7 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import type { StopReason as BedrockStopReason } from "@aws-sdk/client-bedrock-runtime";
 import type { FinishReason as GeminiFinishReason } from "@google/genai";
-import type { CompletionResponseStreamChoiceFinishReason as MistralFinishReasons } from "@mistralai/mistralai/models/components";
 import type { ChatFinishReasonEnum as OpenRouterFinishReasons } from "@openrouter/sdk/models";
 import { EventType } from "@tanstack/ai";
 import type { AnyTextAdapter, StreamChunk } from "@tanstack/ai";
@@ -14,6 +13,7 @@ import type {
   AnthropicWebFetchTool,
   AnthropicWebSearchTool,
 } from "@tanstack/ai-anthropic/tools";
+import type { CompletionResponseStreamChoiceFinishReason as MistralFinishReasons } from "@tanstack/ai-mistral";
 import { panic } from "better-result";
 import type OpenAI from "openai";
 
@@ -150,16 +150,17 @@ const OPENROUTER = {
   error: "unfinished",
 } as const satisfies Record<OpenRouterFinishReason, StopOutcome>;
 
-export const PROVIDER_STOP_REASONS: Readonly<
-  Record<TanStackAIProvider, Readonly<Record<string, StopOutcome>>>
-> = {
+export const PROVIDER_STOP_REASONS = {
   anthropic: ANTHROPIC,
   bedrock: BEDROCK,
   google: GOOGLE,
   mistral: MISTRAL,
   openai: OPENAI,
   openrouter: OPENROUTER,
-};
+} as const satisfies Record<
+  TanStackAIProvider,
+  Readonly<Record<string, StopOutcome>>
+>;
 
 /** The outcome of `reason` from `provider`: `null` is a stream that ended
  *  without one, and a reason the SDK does not know is `unrecognized`. */
@@ -170,7 +171,8 @@ const stopOutcomeOf = (
   if (reason === null) {
     return "unfinished";
   }
-  const table = PROVIDER_STOP_REASONS[provider];
+  const table: Readonly<Record<string, StopOutcome>> =
+    PROVIDER_STOP_REASONS[provider];
   return Object.hasOwn(table, reason)
     ? (table[reason] ?? "unrecognized")
     : "unrecognized";

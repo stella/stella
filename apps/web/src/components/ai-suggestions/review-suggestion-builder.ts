@@ -13,10 +13,8 @@
 
 import { panic } from "better-result";
 
-import type {
-  FolioAIEditOperation,
-  FolioAIEditSnapshot,
-} from "@stll/folio-react";
+import type { FolioAIParagraphBlock } from "@stll/folio-core";
+import type { FolioAIEditOperation } from "@stll/folio-react";
 
 import { describeOperationSummary } from "@/components/ai-suggestions/review-operation-labels";
 import type { ReviewSuggestionPreview } from "@/components/ai-suggestions/review-store";
@@ -27,13 +25,10 @@ import { getTranslator } from "@/i18n/i18n-store";
  * subset of `FolioAIEditSnapshot["blocks"][number]`, so a snapshot's
  * blocks can be fed straight in.
  */
-export type SnapshotBlock = {
-  id: string;
-  text: string;
-  displayLabel?: string | undefined;
-  styleId?: string;
-  previewRuns?: FolioAIEditSnapshot["blocks"][number]["previewRuns"];
-};
+export type SnapshotBlock = Pick<
+  FolioAIParagraphBlock,
+  "id" | "text" | "displayLabel" | "styleId" | "previewRuns"
+>;
 
 const PREVIEW_CONTEXT_CHARS = 60;
 const PREVIEW_ANCHOR_CHARS = 80;
