@@ -320,6 +320,9 @@ type CensusForm = {
   line: number;
   statementIndex: number;
   sql: string;
+  // The statement targets a table this migration created unconditionally
+  // earlier: no deployed code can reach it yet, so its lock blocks no one.
+  newRelation: boolean;
 };
 
 // Every guarded rule explicitly decides which classified operations it reviews.
@@ -368,16 +371,64 @@ const FORM_ENTRIES = Object.entries(DDL_FORMS).flatMap(([form, definition]) =>
 const DDL_VERB =
   /\b(?:CREATE|ALTER|DROP|REINDEX|ANALYZE|COMMENT|TRUNCATE|LOCK|VACUUM|CLUSTER|REFRESH|SECURITY|IMPORT|REASSIGN)\b/iu;
 
+type StatementTokens = ReturnType<typeof migrationStatementTokens>;
+
+// `CREATE [UNLOGGED|TEMP|TEMPORARY] TABLE name` without IF NOT EXISTS: the
+// relation is new exactly when this statement runs.
+const createdRelationKey = (tokens: StatementTokens): string | undefined => {
+  if (tokens.at(0)?.value !== "create") {
+    return undefined;
+  }
+  let cursor = 1;
+  if (/^(?:unlogged|temp|temporary)$/u.test(tokens[cursor]?.value ?? "")) {
+    cursor++;
+  }
+  if (tokens[cursor]?.value !== "table" || tokens[cursor + 1]?.value === "if") {
+    return undefined;
+  }
+  return readMigrationRelation(tokens, cursor + 1)?.relation.key;
+};
+
+// The table `CREATE [UNIQUE] INDEX` or `CREATE POLICY` / `CREATE TRIGGER` acts on.
+const onRelationKey = (tokens: StatementTokens): string | undefined => {
+  const kind =
+    tokens.at(1)?.value === "unique"
+      ? tokens.at(2)?.value
+      : tokens.at(1)?.value;
+  if (
+    tokens.at(0)?.value !== "create" ||
+    !/^(?:index|policy|trigger)$/u.test(kind ?? "")
+  ) {
+    return undefined;
+  }
+  const on = tokens.findIndex(
+    (token) => token.kind === "word" && token.value === "on",
+  );
+  if (on === -1) {
+    return undefined;
+  }
+  const start = tokens[on + 1]?.value === "only" ? on + 2 : on + 1;
+  return readMigrationRelation(tokens, start)?.relation.key;
+};
+
 export const censusSql = (source: string) => {
   const forms: CensusForm[] = [];
   const errors: string[] = [];
+  const createdRelations = new Set<string>();
   type ClassifyOptions = {
     sql: string;
     line: number;
     alter: boolean;
     statementIndex: number;
+    target: string | undefined;
   };
-  const classify = ({ sql, line, alter, statementIndex }: ClassifyOptions) => {
+  const classify = ({
+    sql,
+    line,
+    alter,
+    statementIndex,
+    target,
+  }: ClassifyOptions) => {
     const normalized = sql.replace(/\s+/gu, " ").trim().replace(/;$/u, "");
     const match = FORM_ENTRIES.find(
       ([, { pattern, scope }]) =>
@@ -396,6 +447,7 @@ export const censusSql = (source: string) => {
       line,
       statementIndex,
       sql: alter ? `ALTER TABLE census_target ${normalized}` : normalized,
+      newRelation: target !== undefined && createdRelations.has(target),
     });
   };
   for (const [statementIndex, statement] of parseMigrationStatements(
@@ -448,6 +500,7 @@ export const censusSql = (source: string) => {
               line: statement.line,
               alter: true,
               statementIndex,
+              target: relation.relation.key,
             });
           }
         }
@@ -457,7 +510,12 @@ export const censusSql = (source: string) => {
           line: statement.line,
           alter: false,
           statementIndex,
+          target: onRelationKey(sqlTokens),
         });
+        const created = createdRelationKey(sqlTokens);
+        if (created !== undefined) {
+          createdRelations.add(created);
+        }
       }
     }
     // SQL passed to EXECUTE/format is executable, unlike ordinary string data.
@@ -565,7 +623,14 @@ export const checkMigrationLocks = ({
     const census = censusSql(source);
     errors.push(...census.errors.map((error) => `${file}: ${error}`));
     const reviewed = reviewedMigrationStatements(source);
-    for (const { form, lockMode, line, statementIndex, sql } of census.forms) {
+    for (const {
+      form,
+      lockMode,
+      line,
+      statementIndex,
+      sql,
+      newRelation,
+    } of census.forms) {
       counts.set(lockMode, (counts.get(lockMode) ?? 0) + 1);
       const key = `${migration}/${form}`;
       const historical = remaining.get(key) ?? 0;
@@ -573,7 +638,7 @@ export const checkMigrationLocks = ({
         remaining.set(key, historical - 1);
         continue;
       }
-      if (lockMode !== "ACCESS EXCLUSIVE") {
+      if (lockMode !== "ACCESS EXCLUSIVE" || newRelation) {
         continue;
       }
       if (

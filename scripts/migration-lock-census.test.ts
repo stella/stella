@@ -221,6 +221,33 @@ describe("migration lock census", () => {
     ).toContain("ACCESS EXCLUSIVE add-column needs");
   });
 
+  test("strong locks on a table created earlier in the migration need no review", () => {
+    const strong = [
+      'ALTER TABLE "probe" ENABLE ROW LEVEL SECURITY;',
+      'CREATE POLICY "probe_select" ON "probe" FOR SELECT USING (true);',
+    ].join("\n");
+    const errorsFor = (sql: string) =>
+      checkMigrationLocks({ sources: source(sql), baseline: [] }).errors;
+
+    expect(errorsFor(`CREATE TABLE "probe" (id uuid);\n${strong}`)).toEqual([]);
+    expect(
+      errorsFor(`CREATE TABLE public.probe (id uuid);\n${strong}`),
+    ).toEqual([]);
+    expect(errorsFor(strong).join("\n")).toContain(
+      "ACCESS EXCLUSIVE row-level-security needs",
+    );
+    expect(
+      errorsFor(`CREATE TABLE IF NOT EXISTS "probe" (id uuid);\n${strong}`)
+        .length,
+    ).toBeGreaterThan(0);
+    expect(
+      errorsFor(`${strong}\nCREATE TABLE "probe" (id uuid);`).length,
+    ).toBeGreaterThan(0);
+    expect(
+      errorsFor(`CREATE TABLE "other" (id uuid);\n${strong}`).length,
+    ).toBeGreaterThan(0);
+  });
+
   test("typed allowances name the migration and form and carry a reason", () => {
     const sources = source("ALTER TABLE probe ADD COLUMN title text;");
     expect(
