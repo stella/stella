@@ -332,7 +332,8 @@ const fixture = ({
           (candidate) =>
             `${candidate.base.sha}...${candidate.head.sha}` === basehead,
         );
-        const entry = queuePages
+        // An entry may first appear in a re-read snapshot.
+        const entry = [...queuePages, ...(rebuiltQueuePages ?? [])]
           .flat()
           .find(
             (candidate) =>
