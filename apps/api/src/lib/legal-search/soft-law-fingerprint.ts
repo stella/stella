@@ -87,12 +87,12 @@ export const softLawExpressionIdentityKey = (
 export const softLawIdentityKey = (
   authority: SoftLawAuthority,
   metadata: SoftLawMetadata,
-  extractionQuality?: "extraction_failed",
+  extraction?: Pick<SoftLawDocumentInput, "extractionQuality" | "text">,
 ): Result<string, SoftLawItemError> => {
   const admitted = validateSoftLawAuthorityMetadata(
     authority,
     metadata,
-    extractionQuality,
+    extraction,
   );
   if (admitted.status === "error") {
     return admitted;

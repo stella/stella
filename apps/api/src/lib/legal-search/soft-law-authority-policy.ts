@@ -5,6 +5,8 @@ import {
   type SoftLawMetadata,
   type SOFT_LAW_KINDS,
   SoftLawItemError,
+  isTextlessExtraction,
+  type SoftLawDocumentInput,
 } from "./soft-law-types";
 
 type KindDisposition =
@@ -94,7 +96,7 @@ export const SOFT_LAW_AUTHORITY_POLICIES = {
 export const validateSoftLawAuthorityMetadata = (
   authority: SoftLawAuthority,
   metadata: SoftLawMetadata,
-  extractionQuality?: "extraction_failed",
+  extraction?: Pick<SoftLawDocumentInput, "extractionQuality" | "text">,
 ) => {
   const policy = SOFT_LAW_AUTHORITY_POLICIES[authority];
   if (policy.kinds[metadata.kind].type === "excluded") {
@@ -111,7 +113,8 @@ export const validateSoftLawAuthorityMetadata = (
     (!metadata.sourceKind?.trim() ||
       (metadata.statedReference.state !== "stated" &&
         (policy.referenceStyle === "wp_number"
-          ? extractionQuality !== "extraction_failed"
+          ? !extraction ||
+            !isTextlessExtraction(extraction.text, extraction.extractionQuality)
           : !metadata.sourceDocumentId?.trim())) ||
       metadata.expression?.type !== "identified" ||
       !metadata.stage ||

@@ -25,6 +25,7 @@ import {
   SoftLawItemError,
   SoftLawListingIncompleteError,
   SOFT_LAW_BATCH_LIMIT,
+  isTextlessExtraction,
 } from "@/api/lib/legal-search/soft-law-types";
 import type {
   SoftLawSourceAdapter,
@@ -133,7 +134,11 @@ const isUnnumberedExtractionPlaceholder = (
   row: StoredSoftLawMatch,
 ): row is ExtractionPlaceholderMatch =>
   row.document.statedReferenceState === "not_stated" &&
-  row.version?.extractionQuality === "extraction_failed";
+  row.version !== null &&
+  isTextlessExtraction(
+    row.version.extractedText,
+    row.version.extractionQuality,
+  );
 const hasCompatibleRecoveredExpression = (
   stored: SoftLawMetadata,
   incoming: SoftLawMetadata,
@@ -171,13 +176,7 @@ const fetchSoftLawItem = async ({
     return fetched;
   }
   const input = fetched.value;
-  const identity = softLawIdentityKey(
-    adapter.authority,
-    input.metadata,
-    input.extractionQuality === "extraction_failed"
-      ? input.extractionQuality
-      : undefined,
-  );
+  const identity = softLawIdentityKey(adapter.authority, input.metadata, input);
   if (identity.status === "error") {
     return identity;
   }
@@ -388,7 +387,6 @@ const prepareSoftLawPage = async (options: PrepareSoftLawPageOptions) => {
     const repairsExtractionPlaceholder =
       locator !== undefined &&
       isUnnumberedExtractionPlaceholder(locator) &&
-      input.extractionQuality !== "extraction_failed" &&
       hasCompatibleRecoveredExpression(
         locator.version.metadata,
         input.metadata,

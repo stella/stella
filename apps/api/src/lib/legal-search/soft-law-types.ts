@@ -57,6 +57,13 @@ export const SOFT_LAW_EXTRACTION_QUALITY_RANK = {
   text_layer: 3,
   html: 4,
 } as const satisfies Record<SoftLawExtractionQuality, number>;
+export const isTextlessExtraction = (
+  text: string | null,
+  extractionQuality: SoftLawExtractionQuality,
+) =>
+  text === null &&
+  SOFT_LAW_EXTRACTION_QUALITY_RANK[extractionQuality] <
+    SOFT_LAW_EXTRACTION_QUALITY_RANK.text_layer;
 export const SOFT_LAW_STATED_STATES = ["stated", "not_stated"] as const;
 export const SOFT_LAW_RUN_STATES = [
   "idle",
