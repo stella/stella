@@ -851,11 +851,11 @@ jobs:
 
           # An unreadable diff must widen every scope rather than skip checks.
           if [[ "$EVENT_NAME" == "workflow_dispatch" || "$scope_unknown" == "true" || "${HEAVY_ONLY:-false}" == true ]]; then
-            # e2e-landing runs, and builds the landing site, at full depth only.
-            landing_build_required=true
+            # e2e-landing is planned here at every depth and builds the landing
+            # site itself, so a separate landing build only repeats it.
+            landing_build_required=false
             e2e_production_required=false
             if [[ "$SUITE_DEPTH" == "full" ]]; then
-              landing_build_required=false
               e2e_production_required=true
             fi
             release_typecheck_required=false
