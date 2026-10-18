@@ -15,6 +15,24 @@ describe(RULE, () => {
     ).toEqual([4, 6]);
   });
 
+  // path.resolve keeps the last absolute segment: a checkout part beside a
+  // temporary one still targets the checkout.
+  test("rejects a checkout path resolved beside a temporary one", async () => {
+    expect(
+      await lint(
+        'import { writeFile } from "node:fs/promises";\nimport { tmpdir } from "node:os";\nimport path from "node:path";\nawait writeFile(path.resolve(tmpdir(), import.meta.dir, "baseline.json"), "changed");',
+      ),
+    ).toEqual([4]);
+  });
+
+  test("rejects checkout paths built with template literals", async () => {
+    expect(
+      await lint(
+        `import { rm, writeFile } from "node:fs/promises";\nimport path from "node:path";\nawait rm(\`\${import.meta.dir}/fixture.json\`);\nconst checkout = path.join(import.meta.dir, "../..");\nawait writeFile(\`\${checkout}/baseline.json\`, "changed");`,
+      ),
+    ).toEqual([3, 5]);
+  });
+
   test("allows temporary and unrelated relative paths", async () => {
     expect(
       await lint(

@@ -29,7 +29,6 @@ const MUTATORS = new Set([
   "cp",
   "copyFile",
 ]);
-const TEMP_CREATORS = new Set(["mkdtemp", "mkdtempSync"]);
 
 const isImportMetaProperty = (input: unknown, names: ReadonlySet<string>) => {
   const node = unwrapExpression(input);
@@ -46,64 +45,13 @@ const createPathResolver = (context: ScopeContext) => {
   const variableOf = (node: unknown) =>
     isIdentifierReference(node) ? resolveVariable(context, node) : null;
 
-  const isCallImportedFrom = (
-    input: unknown,
-    modules: ReadonlySet<string>,
-    names: ReadonlySet<string>,
-  ) => {
-    const node = unwrapExpression(input);
-    if (!isAstNode(node) || node.type !== "CallExpression") {
-      return false;
-    }
-    const binding = resolveImport(context, node.callee);
-    return (
-      binding !== null &&
-      modules.has(binding.moduleId) &&
-      names.has(binding.imported)
-    );
-  };
-
-  const isTemporary = (input: unknown, seen = new Set<Variable>()): boolean => {
-    const node = unwrapExpression(input);
-    if (
-      isCallImportedFrom(node, new Set(["node:os", "os"]), new Set(["tmpdir"]))
-    ) {
-      return true;
-    }
-    if (isCallImportedFrom(node, NODE_FS_MODULES, TEMP_CREATORS)) {
-      return true;
-    }
-    if (isIdentifierReference(node)) {
-      const variable = variableOf(node);
-      if (variable === null || seen.has(variable)) {
-        return false;
-      }
-      seen.add(variable);
-      return isTemporary(stableInitializer(variable), seen);
-    }
-    if (
-      isAstNode(node) &&
-      node.type === "CallExpression" &&
-      Array.isArray(node.arguments)
-    ) {
-      return node.arguments.some((argument) =>
-        isTemporary(argument, new Set(seen)),
-      );
-    }
-    if (isAstNode(node) && node.type === "MemberExpression") {
-      return isTemporary(node.object, seen);
-    }
-    return false;
-  };
-
   const isCheckoutPath = (
     input: unknown,
     seen = new Set<Variable>(),
   ): boolean => {
     const node = unwrapExpression(input);
-    if (isTemporary(node)) {
-      return false;
-    }
+    // Any checkout-derived part makes the destination a checkout path, even
+    // beside a temporary one: path.resolve keeps the last absolute segment.
     if (isImportMetaProperty(node, new Set(["dir", "dirname", "url"]))) {
       return true;
     }
@@ -114,6 +62,15 @@ const createPathResolver = (context: ScopeContext) => {
       }
       seen.add(variable);
       return isCheckoutPath(stableInitializer(variable), seen);
+    }
+    if (
+      isAstNode(node) &&
+      node.type === "TemplateLiteral" &&
+      Array.isArray(node.expressions)
+    ) {
+      return node.expressions.some((expression) =>
+        isCheckoutPath(expression, new Set(seen)),
+      );
     }
     if (
       isAstNode(node) &&
