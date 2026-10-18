@@ -193,7 +193,9 @@ const labelSource = (labels: readonly EuProvisionLabel[]): string =>
 const ARTICLE = String.raw`(?<!\p{L})(?:${labelSource(EU_PROVISION_ARTICLE_LABELS)})\s*(?<article>\d+[a-zA-Z]?)`;
 const PARAGRAPH = String.raw`(?:\s*(?:\((?<parenParagraph>\d+)\)|(?:${labelSource(EU_PROVISION_PARAGRAPH_LABELS)})\s*(?<wordParagraph>\d+)))?`;
 const POINT = String.raw`(?:\s*(?:\((?<parenthesizedPoint>[a-z])\)|(?:(?:${labelSource(EU_PROVISION_POINT_LABELS)})\s*)?(?<point>[a-z])\)))?`;
-const YEAR_NUMBER = String.raw`(?<first>\d{1,4})\s*\/\s*(?<second>\d{1,4})`;
+// Both components are bounded by non-digits: a longer number is a different
+// (or unsupported) instrument, never a truncated prefix of one.
+const YEAR_NUMBER = String.raw`(?<!\d)(?<first>\d{1,4})\s*\/\s*(?<second>\d{1,4})(?!\d)`;
 const ACT_KIND = {
   directive: String.raw`(?:Directive|směrnic(?:e|i)|smernic(?:a|e|i)|dyrektyw(?:a|y)|irányelv|Richtlinie|directive)`,
   regulation: String.raw`(?:Regulation|nařízen(?:í|i)|nariaden(?:ie|ia)|rozporządzeni(?:e|a)|rendelet|Verordnung|règlement)`,

@@ -29,6 +29,15 @@ describe("EU provision citations", () => {
     expect(locateEuProvisionCitations("Part 6 GDPR")).toEqual([]);
   });
 
+  test("never truncates a longer act number into another instrument", () => {
+    expect(
+      locateEuProvisionCitations("Article 1 of Regulation (EU) 2024/12345"),
+    ).toEqual([]);
+    expect(
+      locateEuProvisionCitations("Article 1 of Regulation (EU) 12024/123"),
+    ).toEqual([]);
+  });
+
   for (const sentence of fixtures) {
     test(`reads ${sentence}`, () => {
       const citation = locateEuProvisionCitations(sentence).at(0);
