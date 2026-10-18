@@ -942,19 +942,13 @@ export const cgroupMemoryLimitFiles = (
       },
     ];
   };
-  const within = (cgroupPath: string, root: string) => {
-    if (root === "/") {
-      return cgroupPath;
-    }
-    // A cgroup namespace reports its own root as `/` while the mount keeps
-    // the host path; the mount root is then this process's cgroup.
-    if (cgroupPath === "/") {
-      return "";
-    }
+  const mountRelative = (cgroupPath: string, root: string) => {
     if (cgroupPath === root || cgroupPath.startsWith(`${root}/`)) {
       return cgroupPath.slice(root.length);
     }
-    return undefined;
+    // Inside a cgroup namespace the path is relative to the namespace root,
+    // which is the root of a mount inherited with its host path.
+    return cgroupPath;
   };
   const ancestry = (cgroupPath: string) => {
     const parts = cgroupPath.split("/").filter((part) => part !== "");
@@ -974,10 +968,7 @@ export const cgroupMemoryLimitFiles = (
     const version = controllers === "" ? 2 : 1;
     const file = version === 2 ? "memory.max" : "memory.limit_in_bytes";
     for (const mount of mountsFor(version)) {
-      const inside = within(cgroupPath, mount.root);
-      if (inside === undefined) {
-        continue;
-      }
+      const inside = mountRelative(cgroupPath, mount.root);
       files.push(
         ...ancestry(inside).map((dir) => `${mount.mountpoint}${dir}/${file}`),
         // The mount root: a namespaced container sees its own cgroup there.

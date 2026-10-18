@@ -1360,6 +1360,24 @@ describe("parallel code-quality legs", () => {
     ).toBe(16 * GiB);
   });
 
+  test("a namespaced child cgroup limit is read below the mount root", () => {
+    const GiB = 1024 ** 3;
+    const files: Record<string, string> = {
+      "/proc/self/cgroup": "4:cpu,memory:/job\n",
+      "/proc/self/mountinfo":
+        "31 25 0:27 /docker/abc /mnt/cg/cpu,memory rw,nosuid - cgroup cgroup rw,cpu,memory",
+      "/mnt/cg/cpu,memory/memory.limit_in_bytes": "9223372036854771712\n",
+      "/mnt/cg/cpu,memory/job/memory.limit_in_bytes": `${16 * GiB}\n`,
+    };
+    expect(
+      memoryLimitBytes({
+        total: 64 * GiB,
+        read: (file) => files[file],
+        requested: "",
+      }),
+    ).toBe(16 * GiB);
+  });
+
   test("an explicit memory size replaces detection", () => {
     expect(
       memoryLimitBytes({ total: 8, read: () => "4", requested: "64" }),
