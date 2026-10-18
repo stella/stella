@@ -15,11 +15,11 @@ export const lockTakingSqlOf = async (
 ): Promise<string> => {
   const statements: string[] = [];
   await createUngatedTableGateForTests({
-    execute: (query) => {
+    execute: async (query) => {
       statements.push(query);
-      return Promise.resolve();
+      await Promise.resolve();
     },
-    query: () => Promise.resolve([]),
+    query: async () => await Promise.resolve([]),
   }).run({
     target: { tableName: statement.tableName, name: "probe" },
     kind: "index_repair",
