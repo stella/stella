@@ -714,6 +714,7 @@ const ANY_READABLE_BINDING = Symbol("any readable binding");
 const findInstalledSkills = async ({
   activeSkillId,
   bindingScope,
+  includeDisabled = false,
   organizationId,
   safeDb,
   skillNames,
@@ -721,19 +722,25 @@ const findInstalledSkills = async ({
 }: ChatSkillCaller & {
   activeSkillId?: SafeId<"agentSkill"> | undefined;
   bindingScope: SkillBindingScope | typeof ANY_READABLE_BINDING;
+  includeDisabled?: boolean | undefined;
   skillNames: readonly string[];
 }) => {
   if (skillNames.length === 0) {
     return Result.ok(new Map<string, InstalledSkillRow>());
   }
-  const enabledOrActive =
+  const activeSkillEnabledCondition =
     activeSkillId === undefined
       ? eq(agentSkills.enabled, true)
       : or(eq(agentSkills.enabled, true), eq(agentSkills.id, activeSkillId));
+  const enabledOrActive = includeDisabled
+    ? undefined
+    : activeSkillEnabledCondition;
 
   const rows = await safeDb((tx) =>
     tx
       .select({
+        boundClientId: agentSkills.boundClientId,
+        boundWorkspaceId: agentSkills.boundWorkspaceId,
         id: agentSkills.id,
         scope: agentSkills.scope,
         slug: agentSkills.slug,
@@ -780,6 +787,8 @@ const findInstalledSkills = async ({
 };
 
 type InstalledSkillRow = {
+  boundClientId: SafeId<"contact"> | null;
+  boundWorkspaceId: SafeId<"workspace"> | null;
   body: string;
   compatibility: string | null;
   description: string;
@@ -790,6 +799,43 @@ type InstalledSkillRow = {
   scope: "team" | "private";
   slug: string;
   version: string | null;
+};
+
+/**
+ * The bindings of installed skills already loaded into chat history. This uses
+ * the same name resolution as a fresh read, but deliberately reads outside the
+ * current binding scope so the history projection can identify reads that are
+ * no longer allowed.
+ */
+export const loadReadableChatSkillBindings = async ({
+  organizationId,
+  safeDb,
+  skillNames,
+  userId,
+}: ChatSkillCaller & {
+  skillNames: readonly string[];
+}): Promise<Result<Map<string, SkillBinding>, SafeDbError>> => {
+  const rows = await findInstalledSkills({
+    bindingScope: ANY_READABLE_BINDING,
+    includeDisabled: true,
+    organizationId,
+    safeDb,
+    skillNames,
+    userId,
+  });
+  if (Result.isError(rows)) {
+    return Result.err(rows.error);
+  }
+  return Result.ok(
+    new Map(
+      [...rows.value].map(
+        ([name, { boundClientId, boundWorkspaceId }]): [
+          string,
+          SkillBinding,
+        ] => [name, { boundClientId, boundWorkspaceId }],
+      ),
+    ),
+  );
 };
 
 type InstalledSkillMetadataRow = {

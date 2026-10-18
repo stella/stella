@@ -151,6 +151,7 @@ import {
   readThreadValidationState,
 } from "@/api/handlers/chat/send-message-thread";
 import type { ChatThreadState } from "@/api/handlers/chat/send-message-thread";
+import { enforceLoadedSkillHistoryBindings } from "@/api/handlers/chat/skill-history-binding";
 import { hydrateMessages, streamChat } from "@/api/handlers/chat/stream-chat";
 import type { StreamChatFinishEvent } from "@/api/handlers/chat/stream-chat";
 import type { StoredHistory } from "@/api/handlers/chat/stream-message-identity";
@@ -3583,6 +3584,15 @@ const prepareChatContext = async ({
         safeDb,
       }),
     );
+    const modelMessages = yield* Result.await(
+      enforceLoadedSkillHistoryBindings({
+        messages: messagesWithMentionKinds,
+        organizationId,
+        safeDb,
+        scope: skillBindingScope,
+        userId,
+      }),
+    );
 
     return Result.ok({
       promptCacheKey: buildChatPromptCacheKey(systemPrompt.cacheStablePrefix),
@@ -3592,7 +3602,7 @@ const prepareChatContext = async ({
       skillBindingScope,
       activeSkillContext: systemPrompt.activeSkillContext,
       decisionPassageNumbers: systemPrompt.decisionPassageNumbers,
-      hydratedMessages: messagesWithMentionKinds,
+      hydratedMessages: modelMessages,
     });
   });
 
