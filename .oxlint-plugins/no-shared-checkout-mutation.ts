@@ -240,7 +240,11 @@ const createPathResolver = (context: ScopeContext) => {
         )
       );
     }
-    return parts.some((argument) => isCheckoutPath(argument, new Set(seen)));
+    // Any other call (dirname, normalize, ...) may climb out of a temporary
+    // directory, so its arguments are judged by where they were created.
+    return parts.some((argument) =>
+      isCheckoutPath(argument, new Set(seen), false),
+    );
   };
 
   // `exempt: false` once a later segment may climb out of a temporary

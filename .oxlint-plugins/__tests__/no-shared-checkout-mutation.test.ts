@@ -42,6 +42,14 @@ describe(RULE, () => {
     ).toEqual([4, 5, 7, 8, 9, 10]);
   });
 
+  test("rejects removing the parent of a temporary directory inside the checkout", async () => {
+    expect(
+      await lint(
+        'import { mkdtemp, rm } from "node:fs/promises";\nimport path from "node:path";\nconst scratch = await mkdtemp(path.join(import.meta.dir, "scratch-"));\nawait rm(path.dirname(scratch), { recursive: true, force: true });\nawait rm(path.normalize(scratch), { recursive: true, force: true });',
+      ),
+    ).toEqual([4, 5]);
+  });
+
   test("allows traversal out of a system temporary directory", async () => {
     expect(
       await lint(
