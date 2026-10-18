@@ -46,11 +46,106 @@ const localSpecifier = (specifier: string) =>
   path.isAbsolute(specifier) ||
   specifier.startsWith("@/");
 
+type RuntimeModuleSyntax =
+  | "esm-import"
+  | "dynamic-import"
+  | "require"
+  | "import-equals-require";
+
+const resolutionModeFor = (
+  syntax: RuntimeModuleSyntax,
+): Exclude<ts.ResolutionMode, undefined> => {
+  switch (syntax) {
+    case "require":
+    case "import-equals-require":
+      return ts.ModuleKind.CommonJS;
+    case "esm-import":
+    case "dynamic-import":
+      return ts.ModuleKind.ESNext;
+    default:
+      syntax satisfies never;
+      return panic("Unhandled runtime module syntax");
+  }
+};
+
+type ResolveRuntimeReferenceOptions = {
+  fromDir: string;
+  specifier: string;
+  syntax: RuntimeModuleSyntax;
+  importer: string;
+  compilerOptions: ts.CompilerOptions;
+  host: ts.ModuleResolutionHost;
+  cache: Map<string, string | undefined>;
+};
+
+/** The sole owner of runtime module resolution and its syntax-sensitive cache. */
+export const resolveRuntimeReference = ({
+  fromDir,
+  specifier,
+  syntax,
+  importer,
+  compilerOptions,
+  host,
+  cache,
+}: ResolveRuntimeReferenceOptions): string | undefined => {
+  const key = `${fromDir}\0${specifier}\0${syntax}`;
+  if (cache.has(key)) {
+    return cache.get(key);
+  }
+  const resolved = ts.resolveModuleName(
+    specifier,
+    importer,
+    compilerOptions,
+    host,
+    undefined,
+    undefined,
+    resolutionModeFor(syntax),
+  ).resolvedModule?.resolvedFileName;
+  cache.set(key, resolved);
+  return resolved;
+};
+
 type EvidenceResolverOptions = {
   repositoryRoot: string;
   read: (file: string) => string | undefined;
   label: (file: string) => string;
   problems: string[];
+};
+
+const readWorkspacePackageRoots = (
+  repositoryRoot: string,
+  read: (file: string) => string | undefined,
+) => {
+  const packages = new Map<string, string>();
+  for (const container of ["apps", "packages"]) {
+    const directory = path.join(repositoryRoot, container);
+    const entries = Result.try(() =>
+      readdirSync(directory, { withFileTypes: true }),
+    );
+    if (entries.isErr()) {
+      continue;
+    }
+    for (const entry of entries.value) {
+      const packageDirectory = path.join(directory, entry.name);
+      const manifest = entry.isDirectory()
+        ? read(path.join(packageDirectory, "package.json"))
+        : undefined;
+      if (manifest === undefined) {
+        continue;
+      }
+      const parsed = Result.try((): unknown => JSON.parse(manifest));
+      if (
+        parsed.isOk() &&
+        typeof parsed.value === "object" &&
+        parsed.value !== null &&
+        "name" in parsed.value &&
+        typeof parsed.value.name === "string"
+      ) {
+        packages.set(parsed.value.name, packageDirectory);
+      }
+    }
+  }
+  return packages;
 };
 
 const createEvidenceResolver = ({
@@ -61,6 +156,11 @@ const createEvidenceResolver = ({
 }: EvidenceResolverOptions) => {
   const configs = new Map<string, ts.ParsedCommandLine | undefined>();
   const resolutions = new Map<string, string | undefined>();
+  const runtimeHost = {
+    ...ts.sys,
+    fileExists: (file: string) =>
+      !DECLARATION_SOURCE.test(file) && ts.sys.fileExists(file),
+  };
   const configAt = (directory: string) => {
     if (configs.has(directory)) {
       return configs.get(directory);
@@ -86,17 +186,32 @@ const createEvidenceResolver = ({
     configs.set(directory, parsed);
     return parsed;
   };
-  const resolveCandidate = (candidate: string, directory: string) => {
-    const result = Result.try(() =>
-      realpathSync(Bun.resolveSync(candidate, directory)),
-    );
-    return result.isOk() && !DECLARATION_SOURCE.test(result.value)
-      ? result.value
-      : undefined;
+  const resolveCandidate = (
+    candidate: string,
+    directory: string,
+    syntax: RuntimeModuleSyntax,
+  ) => {
+    const resolved = resolveRuntimeReference({
+      fromDir: directory,
+      specifier: candidate,
+      syntax,
+      importer: path.join(directory, "__runtime_reference__.ts"),
+      compilerOptions: {
+        ...configAt(directory)?.options,
+        ...SNAPSHOT_COMPILER_OPTIONS,
+      },
+      host: runtimeHost,
+      cache: resolutions,
+    });
+    if (resolved === undefined || DECLARATION_SOURCE.test(resolved)) {
+      return undefined;
+    }
+    return Result.try(() => realpathSync(resolved)).unwrapOr(undefined);
   };
   const aliasResolution = (
     specifier: string,
     directory: string,
+    syntax: RuntimeModuleSyntax,
   ): string | undefined => {
     let current = directory;
     while (isPathInside(repositoryRoot, current)) {
@@ -130,7 +245,7 @@ const createEvidenceResolver = ({
               base,
               replacement.replace("*", () => match),
             );
-            const resolved = resolveCandidate(candidate, directory);
+            const resolved = resolveCandidate(candidate, directory, syntax);
             if (resolved !== undefined) {
               return resolved;
             }
@@ -147,54 +262,24 @@ const createEvidenceResolver = ({
     }
     return undefined;
   };
-  const workspacePackages = new Map<string, string>();
-  for (const container of ["apps", "packages"]) {
-    const directory = path.join(repositoryRoot, container);
-    const entries = Result.try(() =>
-      readdirSync(directory, { withFileTypes: true }),
-    );
-    if (entries.isErr()) {
-      continue;
-    }
-    for (const entry of entries.value) {
-      if (!entry.isDirectory()) {
-        continue;
-      }
-      const packageDirectory = path.join(directory, entry.name);
-      const manifest = read(path.join(packageDirectory, "package.json"));
-      if (manifest === undefined) {
-        continue;
-      }
-      const parsed = Result.try((): unknown => JSON.parse(manifest));
-      if (
-        parsed.isOk() &&
-        typeof parsed.value === "object" &&
-        parsed.value !== null &&
-        "name" in parsed.value &&
-        typeof parsed.value.name === "string"
-      ) {
-        workspacePackages.set(parsed.value.name, packageDirectory);
-      }
-    }
-  }
-  const resolveImport = (specifier: string, importer: string) => {
+  const workspacePackages = readWorkspacePackageRoots(repositoryRoot, read);
+  const resolveImport = (
+    specifier: string,
+    importer: string,
+    syntax: RuntimeModuleSyntax,
+  ) => {
     const directory = path.dirname(importer);
-    const key = `${directory}\0${specifier}`;
-    if (resolutions.has(key)) {
-      return resolutions.get(key);
-    }
-    let resolved = resolveCandidate(specifier, directory);
+    let resolved = resolveCandidate(specifier, directory, syntax);
     if (resolved === undefined && isPathInside(repositoryRoot, importer)) {
-      resolved = aliasResolution(specifier, directory);
+      resolved = aliasResolution(specifier, directory, syntax);
     }
     const identity = packageIdentity(specifier);
     const workspace =
       identity === undefined ? undefined : workspacePackages.get(identity);
     if (resolved === undefined && workspace !== undefined) {
       // Bun applies the workspace package's runtime exports from its own directory.
-      resolved = resolveCandidate(specifier, workspace);
+      resolved = resolveCandidate(specifier, workspace, syntax);
     }
-    resolutions.set(key, resolved);
     return resolved;
   };
   const workspaceSpecifier = (specifier: string) => {
@@ -272,12 +357,6 @@ const typeOnlyExport = (node: ts.ExportDeclaration) => {
   );
 };
 
-type RuntimeModuleSyntax =
-  | "esm-import"
-  | "dynamic-import"
-  | "require"
-  | "import-equals-require";
-
 type RuntimeModuleReference =
   | {
       readonly type: "literal";
@@ -289,22 +368,6 @@ type RuntimeModuleReference =
       readonly syntax: RuntimeModuleSyntax;
       readonly reason?: string;
     };
-
-const resolutionModeFor = (
-  syntax: RuntimeModuleSyntax,
-): Exclude<ts.ResolutionMode, undefined> => {
-  switch (syntax) {
-    case "require":
-    case "import-equals-require":
-      return ts.ModuleKind.CommonJS;
-    case "esm-import":
-    case "dynamic-import":
-      return ts.ModuleKind.ESNext;
-    default:
-      syntax satisfies never;
-      return panic("Unhandled runtime module syntax");
-  }
-};
 
 type RuntimeModuleReferencesOptions = { file: string; text: string };
 
@@ -857,6 +920,7 @@ const createLocalSnapshotResolver = (snapshot: LocalRuntimeSnapshotOptions) => {
   } = createSnapshotFileReader(snapshot);
   const configs = new Map<string, ts.CompilerOptions>();
   const resolutions = new Map<string, LocalImportResolution>();
+  const runtimeResolutions = new Map<string, string | undefined>();
   const generated = createGeneratedClosureReader(snapshot);
   const hasBlob = (file: string) => {
     const absolute = canonical(file);
@@ -943,12 +1007,12 @@ const createLocalSnapshotResolver = (snapshot: LocalRuntimeSnapshotOptions) => {
   type LocalImportOptions = {
     specifier: string;
     importer: string;
-    resolutionMode: Exclude<ts.ResolutionMode, undefined>;
+    syntax: RuntimeModuleSyntax;
   };
   const resolveImport = ({
     specifier,
     importer,
-    resolutionMode,
+    syntax,
   }: LocalImportOptions): LocalImportResolution => {
     if (
       isBuiltin(specifier) ||
@@ -984,7 +1048,7 @@ const createLocalSnapshotResolver = (snapshot: LocalRuntimeSnapshotOptions) => {
     if (!local) {
       return { type: "external", specifier };
     }
-    const key = `${importer}\0${specifier}\0${resolutionMode}`;
+    const key = `${path.dirname(importer)}\0${specifier}\0${syntax}`;
     const cached = resolutions.get(key);
     if (cached) {
       return cached;
@@ -1005,17 +1069,17 @@ const createLocalSnapshotResolver = (snapshot: LocalRuntimeSnapshotOptions) => {
       resolutions.set(key, result);
       return result;
     }
-    const resolved = ts.resolveModuleName(
+    const resolvedFileName = resolveRuntimeReference({
+      fromDir: path.dirname(importer),
       specifier,
+      syntax,
       importer,
-      options,
+      compilerOptions: options,
       host,
-      undefined,
-      undefined,
-      resolutionMode,
-    ).resolvedModule;
+      cache: runtimeResolutions,
+    });
     const file =
-      resolved === undefined ? undefined : canonical(resolved.resolvedFileName);
+      resolvedFileName === undefined ? undefined : canonical(resolvedFileName);
     const result =
       file !== undefined &&
       isPathInside(repositoryRoot, file) &&
@@ -1177,7 +1241,7 @@ export const createLocalRuntimeClosureReader = (
             const resolution = resolveImport({
               specifier,
               importer: file,
-              resolutionMode: resolutionModeFor(reference.syntax),
+              syntax: reference.syntax,
             });
             for (const input of resolution.inputs ?? []) {
               pending.push({
@@ -1396,7 +1460,7 @@ export const readFixtureEvidence = ({
       problems.push(`Cannot read runtime source ${label(file)}`);
       continue;
     }
-    const follow = (specifier: string) => {
+    const follow = (specifier: string, syntax: RuntimeModuleSyntax) => {
       if (
         isBuiltin(specifier) ||
         specifier === "bun" ||
@@ -1406,7 +1470,7 @@ export const readFixtureEvidence = ({
       }
       const identity = packageIdentity(specifier);
       const target = identity !== undefined && targets.has(identity);
-      const resolved = resolveImport(specifier, file);
+      const resolved = resolveImport(specifier, file, syntax);
       if (resolved === undefined) {
         if (
           localSpecifier(specifier) ||
@@ -1441,7 +1505,7 @@ export const readFixtureEvidence = ({
     for (const reference of runtimeModuleReferences({ file, text })) {
       switch (reference.type) {
         case "literal":
-          follow(reference.specifier);
+          follow(reference.specifier, reference.syntax);
           break;
         case "dynamic":
           problems.push(

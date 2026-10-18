@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import {
   mkdtempSync,
   mkdirSync,
+  readFileSync,
   rmSync,
   writeFileSync,
   symlinkSync,
@@ -42,6 +43,66 @@ const sdkFiles = {
   }),
   "node_modules/@example/sdk/runtime.js": "export const client = 1;",
 };
+
+test("runtime resolution stays owned by the syntax-aware resolver", () => {
+  const evidenceSource = readFileSync(
+    path.join(import.meta.dir, "external-contract-evidence.ts"),
+    "utf-8",
+  );
+  const checkSource = readFileSync(
+    path.join(import.meta.dir, "check-external-contracts.ts"),
+    "utf-8",
+  );
+  const directCalls =
+    /(?:Bun\.resolveSync|ts\.resolveModuleName|require\.resolve)\s*\(/gu;
+
+  expect(evidenceSource.match(directCalls)).toHaveLength(1);
+  expect(checkSource.match(directCalls)).toBeNull();
+  expect(evidenceSource).toContain("export const resolveRuntimeReference");
+});
+
+test("fixture evidence caches import and require export branches separately", () => {
+  withProject({
+    files: {
+      "package.json": JSON.stringify({ workspaces: ["packages/*"] }),
+      "replay.ts": "",
+      "packages/helper/package.json": JSON.stringify({
+        name: "@stll/helper",
+        exports: {
+          ".": {
+            import: "./src/import.ts",
+            require: "./src/require.ts",
+          },
+        },
+      }),
+      "packages/helper/src/import.ts": 'export const target = "import";',
+      "packages/helper/src/require.ts": 'export const target = "require";',
+    },
+    run: (root) => {
+      const evidenceFor = (source: string) => {
+        writeFileSync(path.join(root, "replay.ts"), source);
+        return readFixtureEvidence({
+          root,
+          replayFiles: ["replay.ts"],
+          sdkNames: [],
+        });
+      };
+      const imported = evidenceFor('import "@stll/helper";');
+      const required = evidenceFor('require("@stll/helper");');
+      const both = evidenceFor(
+        'import "@stll/helper"; require("@stll/helper");',
+      );
+
+      expect(imported.owners).toContain("packages/helper/src/import.ts");
+      expect(imported.owners).not.toContain("packages/helper/src/require.ts");
+      expect(required.owners).toContain("packages/helper/src/require.ts");
+      expect(required.owners).not.toContain("packages/helper/src/import.ts");
+      expect(both.problems).toEqual([]);
+      expect(both.owners).toContain("packages/helper/src/import.ts");
+      expect(both.owners).toContain("packages/helper/src/require.ts");
+    },
+  });
+});
 
 test.each(["installed", "symlinked", "workspace"])(
   "SDK claims require resolved membership in the %s package root",
