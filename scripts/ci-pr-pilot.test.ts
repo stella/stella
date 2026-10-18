@@ -235,6 +235,9 @@ const DECLARED_NORMAL_PLAN_CHANGES = new Set([
   "web-build",
   "scan-engine-wasm-drift",
 ]);
+// Jobs that now also run at fast depth: on a pull request they run, and every
+// other event keeps the plan its former predicate had at full depth.
+const DECLARED_EVERY_DEPTH_CHANGES = new Set(["e2e-landing"]);
 
 // Jobs that became parts of one shared job: the part's steps, under the
 // shared job's condition, keep the job's former plan.
@@ -305,6 +308,20 @@ test("off and unset preserve today's job plan across every event and depth", asy
         for (const depth of ["fast", "full"]) {
           const context = conditionContext("normal-v1", event, depth);
           for (const [name, job] of Object.entries(original.jobs)) {
+            if (DECLARED_EVERY_DEPTH_CHANGES.has(name)) {
+              const actual = evaluate(
+                workflow.jobs[name]?.if ?? "true",
+                context,
+              );
+              const baseline = evaluate(
+                job.if ?? "true",
+                conditionContext("normal-v1", event, "full"),
+              );
+              expect(actual, name).toBe(
+                event === "pull_request" ? true : baseline,
+              );
+              continue;
+            }
             if (DECLARED_NORMAL_PLAN_CHANGES.has(name)) {
               const actual = evaluate(
                 workflow.jobs[name]?.if ?? "true",
@@ -329,6 +346,7 @@ test("off and unset preserve today's job plan across every event and depth", asy
     "web-build",
     "scan-engine-wasm-drift",
   ]);
+  expect([...DECLARED_EVERY_DEPTH_CHANGES]).toEqual(["e2e-landing"]);
 });
 
 test("Postgres PR execution follows explicit opt-in in either pilot profile", () => {

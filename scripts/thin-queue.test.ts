@@ -372,6 +372,7 @@ type ExpectedPrSelectionOptions = {
 };
 const DECLARED_PR_PLAN_CHANGES = new Set([
   "ci-browser",
+  "e2e-landing",
   "e2e-production-shard",
   "scan-engine-wasm-drift",
   "web-build",
@@ -406,6 +407,17 @@ const expectedPrSelection = ({
       value.needs["ci-plan"]?.outputs["trusted"] === "true" &&
       value.needs["ci-plan"].outputs["browser_spec_selection_required"] ===
         "true"
+    );
+  }
+  // A landing change is checked in its own pull request, behind the gate.
+  if (job === "e2e-landing") {
+    expect(DECLARED_PR_PLAN_CHANGES.has(job)).toBe(true);
+    return (
+      value.needs["ci-plan"]?.outputs["run_required"] !== "false" &&
+      value.needs["ci-plan"]?.outputs["trusted"] === "true" &&
+      value.needs["ci-plan"].outputs["e2e_landing_required"] === "true" &&
+      value.needs["ci-plan"].outputs["coverage_profile"] === "normal-v1" &&
+      value.needs["pr-heavy-gate"]?.result === "success"
     );
   }
   if (job === "e2e-production-shard") {
@@ -942,6 +954,7 @@ test("unset and full preserve historical predicates except declared PR, Postgres
   );
   expect([...DECLARED_PR_PLAN_CHANGES].toSorted()).toEqual([
     "ci-browser",
+    "e2e-landing",
     "e2e-production-shard",
     "scan-engine-wasm-drift",
     "web-build",

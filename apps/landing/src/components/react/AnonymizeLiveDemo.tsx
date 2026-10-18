@@ -448,7 +448,7 @@ export const AnonymizeLiveDemo = () => {
               }}
               onClick={retry}
             >
-              Retry
+              {engine.recovery === "reload" ? "Reload" : "Retry"}
             </button>
           )}
         </div>
@@ -496,7 +496,9 @@ const describeEngineStatus = (
         : "Reading your text…";
     }
     case "error": {
-      return "Something went wrong.";
+      return engine.recovery === "reload"
+        ? "Something went wrong. Reload the page to try again."
+        : "Something went wrong.";
     }
     case "ready": {
       if (highlights.pairs.length === 0) {
