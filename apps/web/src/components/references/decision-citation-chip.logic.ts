@@ -58,8 +58,18 @@ export const citationNodeText = (node: ReactNode): string => {
 
 type CitationTextMatch = { start: number; end: number };
 
+// A registry suffix follows a dated docket ("23 Cdo 651/2023-7"). Elsewhere a
+// hyphenated segment is the identifier itself ("A-123", "17-1618"), so it is
+// never stripped there.
+const DATED_DOCKET = /\/\s*\p{N}{2,4}$/u;
+
+const withoutRegistrySuffix = (caseNumber: string): string => {
+  const stripped = caseNumber.replace(CASE_NUMBER_SUFFIX, "");
+  return DATED_DOCKET.test(stripped) ? stripped : caseNumber;
+};
+
 const caseNumberCandidates = (caseNumber: string): string[] => {
-  const withoutSuffix = caseNumber.replace(CASE_NUMBER_SUFFIX, "");
+  const withoutSuffix = withoutRegistrySuffix(caseNumber);
   const firstDigit = withoutSuffix.search(/\p{N}/u);
   const withoutCourtPrefix =
     firstDigit >= 0 && /\p{L}/u.test(withoutSuffix.slice(firstDigit + 1))
@@ -77,7 +87,10 @@ export const citationTextCaseMatch = (
   caseNumber: string,
 ): CitationTextMatch | null => {
   const prose = comparable(text);
-  const storedSuffix = caseNumber.match(CASE_NUMBER_SUFFIX)?.at(0);
+  const storedSuffix =
+    withoutRegistrySuffix(caseNumber) === caseNumber
+      ? undefined
+      : caseNumber.match(CASE_NUMBER_SUFFIX)?.at(0);
   for (const needle of caseNumberCandidates(caseNumber)) {
     for (
       let at = prose.text.indexOf(needle);
@@ -110,7 +123,9 @@ export const citationTextCaseMatch = (
 
 export type InlineDecisionCitationPresentation =
   | { kind: "chip-replaces-text"; before: string; after: string }
-  | { kind: "prose-trigger"; label: ReactNode };
+  // The prose does not name the case: it stays, and the chip after it shows
+  // the verified identity, so a link label can never stand in for it.
+  | { kind: "chip-after-text"; label: ReactNode };
 
 /** Chooses the only two valid inline citation shapes. */
 export const inlineDecisionCitationPresentation = (
@@ -120,7 +135,7 @@ export const inlineDecisionCitationPresentation = (
   const text = citationNodeText(label);
   const match = citationTextCaseMatch(text, caseNumber);
   if (match === null) {
-    return { kind: "prose-trigger", label };
+    return { kind: "chip-after-text", label };
   }
   return {
     kind: "chip-replaces-text",

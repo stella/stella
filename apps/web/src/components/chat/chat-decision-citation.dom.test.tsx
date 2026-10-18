@@ -139,8 +139,8 @@ test("two decisions from one court render each case number once as the accessibl
   }
 });
 
-test("different registry suffixes preserve the prose identifier without combining numbers", async () => {
-  const decision = { ...first, caseNumber: "23 Cdo 651/2023-7" };
+const mountSingle = (caseNumber: string, passage: string) => {
+  const decision = { ...first, caseNumber };
   const client = new QueryClient({
     defaultOptions: {
       queries: { retry: false, staleTime: Number.POSITIVE_INFINITY },
@@ -148,21 +148,35 @@ test("different registry suffixes preserve the prose identifier without combinin
   });
   clients.push(client);
   client.setQueryData(decisionOptions(decision.id).queryKey, decision);
-  const proseCaseNumber = "23 Cdo 651/2023-123";
-  const screen = mount(
+  return mount(
     client,
     <ChatDecisionCitation
       decisionId={decision.id}
-      passage={proseCaseNumber}
+      passage={passage}
       interactive
     />,
   );
+};
+
+test("different registry suffixes keep the prose and show the verified number beside it", async () => {
+  const screen = mountSingle("23 Cdo 651/2023-7", "23 Cdo 651/2023-123");
   await waitFor(() =>
     expect(
       screen.container.querySelector("[data-decision-citation]")?.textContent,
-    ).toBe(proseCaseNumber),
+    ).toContain("23 Cdo 651/2023-7"),
   );
+  expect(screen.container.textContent).toContain("23 Cdo 651/2023-123");
   expect(screen.container.textContent).not.toContain("-7-123");
+});
+
+test("a link label that does not name the case still shows the verified identity", async () => {
+  const screen = mountSingle("23 Cdo 651/2023", "Decision A");
+  await waitFor(() =>
+    expect(
+      screen.container.querySelector("[data-decision-citation]")?.textContent,
+    ).toContain("23 Cdo 651/2023"),
+  );
+  expect(screen.container.textContent).toContain("Decision A");
   expect(screen.container.textContent?.split("23 Cdo 651/2023")).toHaveLength(
     2,
   );

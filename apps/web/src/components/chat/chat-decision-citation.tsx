@@ -130,15 +130,17 @@ const CitationView = ({
   return (
     <>
       {renderPassage ? (
-        <DecisionCitationChip
-          decision={decision}
-          label={
-            presentation.kind === "prose-trigger" ? presentation.label : passage
-          }
-          passage={passage}
-          paragraphNumber={paragraph?.courtParagraphNumber ?? null}
-          onOpen={onOpen}
-        />
+        <>
+          {presentation.kind === "chip-after-text"
+            ? presentation.label
+            : passage}{" "}
+          <DecisionCitationChip
+            decision={decision}
+            onOpen={onOpen}
+            presentation="inline"
+            paragraphNumber={paragraph?.courtParagraphNumber ?? null}
+          />
+        </>
       ) : (
         <DecisionCitationChip
           decision={decision}

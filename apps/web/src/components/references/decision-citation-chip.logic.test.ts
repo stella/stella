@@ -58,7 +58,7 @@ describe("citation text naming its case", () => {
     });
     expect(
       inlineDecisionCitationPresentation("this decision", "23 Cdo 651/2023"),
-    ).toEqual({ kind: "prose-trigger", label: "this decision" });
+    ).toEqual({ kind: "chip-after-text", label: "this decision" });
   });
 
   test("keeps the badge when the prose names another case or none", () => {
@@ -87,7 +87,7 @@ describe("citation text naming its case", () => {
         "23 Cdo 651/2023-123",
         "23 Cdo 651/2023-7",
       ),
-    ).toEqual({ kind: "prose-trigger", label: "23 Cdo 651/2023-123" });
+    ).toEqual({ kind: "chip-after-text", label: "23 Cdo 651/2023-123" });
     expect(
       inlineDecisionCitationPresentation(
         "23 Cdo 651/2023-123 follows",
@@ -108,13 +108,26 @@ describe("citation text naming its case", () => {
     ).toEqual({ kind: "chip-replaces-text", before: "", after: " follows" });
   });
 
+  test("keeps hyphenated identifiers whole outside dated dockets", () => {
+    expect(inlineDecisionCitationPresentation("a decision", "A-123")).toEqual({
+      kind: "chip-after-text",
+      label: "a decision",
+    });
+    expect(
+      inlineDecisionCitationPresentation("No. 17 of the list", "17-1618"),
+    ).toEqual({ kind: "chip-after-text", label: "No. 17 of the list" });
+    expect(
+      inlineDecisionCitationPresentation("No. 17-1618 held", "17-1618"),
+    ).toEqual({ kind: "chip-replaces-text", before: "No. ", after: " held" });
+  });
+
   test("consumes a registry suffix written after a space", () => {
     expect(
       inlineDecisionCitationPresentation(
         "23 Cdo 651/2023 -123",
         "23 Cdo 651/2023-7",
       ),
-    ).toEqual({ kind: "prose-trigger", label: "23 Cdo 651/2023 -123" });
+    ).toEqual({ kind: "chip-after-text", label: "23 Cdo 651/2023 -123" });
     expect(
       inlineDecisionCitationPresentation(
         "23 Cdo 651/2023 \u2013 123 follows",
