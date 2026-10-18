@@ -849,7 +849,6 @@
         "unavailable": "Für diese Entscheidung ist keine KI-Analyse verfügbar."
       },
       "generate": "KI-Leitsätze erzeugen",
-      "holdingAnchor": "Zum Absatz",
       "invitation": "Mit einem kostenlosen Konto erstellt die KI Arbeitsnotizen zu dieser Entscheidung.",
       "topics": "Themen",
       "treatment": "Spätere Rezeption"
@@ -1135,6 +1134,7 @@
       "judges": "Richter",
       "legalArea": "Rechtsgebiet",
       "legalSentence": "Leitsatz",
+      "paragraphReference": "Absatz {number}",
       "popularName": "Populärer Name",
       "portraitCredit": "Quelle der Porträts: {source}",
       "provisionMentions": "{count, number}×",

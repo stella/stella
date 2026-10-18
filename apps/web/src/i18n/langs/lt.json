@@ -849,7 +849,6 @@
         "unavailable": "Šiam sprendimui DI analizė neprieinama."
       },
       "generate": "Parengti DI santraukas",
-      "holdingAnchor": "Pereiti prie pastraipos",
       "invitation": "Su nemokama paskyra DI parengia darbines pastabas apie šį sprendimą.",
       "topics": "Temos",
       "treatment": "Vėlesnis vertinimas"
@@ -1135,6 +1134,7 @@
       "judges": "Teisėjai",
       "legalArea": "Teisės sritis",
       "legalSentence": "Teisinė tezė",
+      "paragraphReference": "{number} pastraipa",
       "popularName": "Populiarus pavadinimas",
       "portraitCredit": "Portretų šaltinis: {source}",
       "provisionMentions": "{count, number}×",

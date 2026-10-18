@@ -849,7 +849,6 @@
         "unavailable": "Ehhez a határozathoz nem érhető el AI-elemzés."
       },
       "generate": "AI jogi tételek elkészítése",
-      "holdingAnchor": "Ugrás a bekezdésre",
       "invitation": "Ingyenes fiókkal az AI munkajegyzeteket készít ehhez a határozathoz.",
       "topics": "Témák",
       "treatment": "Későbbi megítélés"
@@ -1135,6 +1134,7 @@
       "judges": "Bírák",
       "legalArea": "Jogterület",
       "legalSentence": "Elvi bírósági határozat",
+      "paragraphReference": "{number}. bekezdés",
       "popularName": "Népszerű név",
       "portraitCredit": "A portrék forrása: {source}",
       "provisionMentions": "{count, number}×",

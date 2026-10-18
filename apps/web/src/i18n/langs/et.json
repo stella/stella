@@ -849,7 +849,6 @@
         "unavailable": "Selle lahendi AI-analüüs pole saadaval."
       },
       "generate": "Koosta AI lühikokkuvõtted",
-      "holdingAnchor": "Mine lõigu juurde",
       "invitation": "Tasuta kontoga koostab AI selle lahendi kohta töömärkmed.",
       "topics": "Teemad",
       "treatment": "Hilisem käsitlus"
@@ -1135,6 +1134,7 @@
       "judges": "Kohtunikud",
       "legalArea": "Õigusvaldkond",
       "legalSentence": "Õiguslause",
+      "paragraphReference": "Lõik {number}",
       "popularName": "Rahvanimi",
       "portraitCredit": "Portreede allikas: {source}",
       "provisionMentions": "{count, number}×",

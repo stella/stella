@@ -852,7 +852,6 @@ type Messages = {
         "unavailable": "AI analysis is not available for this decision.";
       };
       "generate": "Generate AI headnotes";
-      "holdingAnchor": "Go to paragraph";
       "invitation": "With a free account, AI drafts working notes on this decision.";
       "topics": "Topics";
       "treatment": "Later treatment";
@@ -1138,6 +1137,7 @@ type Messages = {
       "judges": "Judges";
       "legalArea": "Legal area";
       "legalSentence": "Legal sentence";
+      "paragraphReference": "Paragraph {number}";
       "popularName": "Popular name";
       "portraitCredit": "Portrait source: {source}";
       "provisionMentions": "{count, number}×";

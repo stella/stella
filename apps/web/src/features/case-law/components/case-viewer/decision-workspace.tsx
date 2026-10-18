@@ -552,7 +552,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
     sessionId: landingSessionId,
   });
 
-  const jumpToAnchor = (anchorId: string) => {
+  const jumpToAnchor = (anchorId: string, endAnchorId = anchorId) => {
     setLandingAnchorId(undefined);
     const container = mainRef.current;
     const el = container?.querySelector<HTMLElement>(
@@ -568,9 +568,34 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
         container.scrollTop,
       behavior: "instant",
     });
-    delete el.dataset["highlight"];
+    const startIndex = ast?.blocks.findIndex(
+      (block) => block.anchorId === anchorId,
+    );
+    const endIndex = ast?.blocks.findIndex(
+      (block) => block.anchorId === endAnchorId,
+    );
+    const highlighted =
+      startIndex !== undefined &&
+      endIndex !== undefined &&
+      startIndex >= 0 &&
+      endIndex >= startIndex
+        ? ast?.blocks.slice(startIndex, endIndex + 1)
+        : [];
+    const highlightedElements = highlighted
+      .map((block) =>
+        container.querySelector<HTMLElement>(`#${CSS.escape(block.anchorId)}`),
+      )
+      .filter((blockElement) => blockElement !== null);
+    if (highlightedElements.length === 0) {
+      highlightedElements.push(el);
+    }
+    for (const blockElement of highlightedElements) {
+      delete blockElement.dataset["highlight"];
+    }
     forceReflow(el);
-    el.dataset["highlight"] = "";
+    for (const blockElement of highlightedElements) {
+      blockElement.dataset["highlight"] = "";
+    }
   };
 
   // The model's headnote and abstract open the decision, under the court's
@@ -581,7 +606,11 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
     completeAnalysis !== null &&
     showAiNotes &&
     hasAiHeadnotes(completeAnalysis) ? (
-      <AiHeadnotes analysis={completeAnalysis} onAnchorClick={jumpToAnchor} />
+      <AiHeadnotes
+        analysis={completeAnalysis}
+        blocks={ast?.blocks ?? []}
+        onAnchorClick={jumpToAnchor}
+      />
     ) : null;
 
   const sectionMap = (() => {

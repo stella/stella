@@ -849,7 +849,6 @@
         "unavailable": "AI analýza není pro toto rozhodnutí k dispozici."
       },
       "generate": "Sestavit právní věty pomocí AI",
-      "holdingAnchor": "Přejít na odstavec",
       "invitation": "S bezplatným účtem vám AI k rozhodnutí připraví pracovní poznámky.",
       "topics": "Témata",
       "treatment": "Pozdější judikatura"
@@ -1135,6 +1134,7 @@
       "judges": "Soudci",
       "legalArea": "Oblast práva",
       "legalSentence": "Právní věta",
+      "paragraphReference": "Odstavec {number}",
       "popularName": "Populární název",
       "portraitCredit": "Zdroj portrétů: {source}",
       "provisionMentions": "{count, number}×",
