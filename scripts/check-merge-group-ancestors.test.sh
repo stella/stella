@@ -52,17 +52,22 @@ run() {
 }
 no_run='{"check_runs":[]}'
 
+# Each case starts from a merge group with the default wait.
 fixtures=""
+event=merge_group
+wait_seconds=60
 reset() {
   fixtures="$(mktemp -d "$stub_dir/case.XXXX")"
+  event=merge_group
+  wait_seconds=60
 }
 put() {
   printf '%s\n' "$2" > "$fixtures/$1"
 }
 check() {
-  EVENT_NAME="${EVENT:-merge_group}" REPOSITORY=stella/stella \
+  EVENT_NAME="$event" REPOSITORY=stella/stella \
     MERGE_GROUP_BASE_SHA="$b" MERGE_GROUP_BASE_REF=refs/heads/main \
-    ANCESTOR_WAIT_SECONDS="${WAIT:-60}" ANCESTOR_POLL_SECONDS=0 \
+    ANCESTOR_WAIT_SECONDS="$wait_seconds" ANCESTOR_POLL_SECONDS=0 \
     FIXTURES="$fixtures" PATH="$stub_dir:$PATH" \
     bash "$subject" >"$stub_dir/output" 2>"$stub_dir/error"
 }
@@ -80,7 +85,8 @@ expect_fail() {
 
 # Pull requests never consult the queue.
 reset
-EVENT=pull_request expect_pass 'a pull request'
+event=pull_request
+expect_pass 'a pull request'
 
 # The first group in the queue has nothing ahead.
 reset
@@ -124,7 +130,8 @@ for pending in "$(run in_progress null)" "$no_run"; do
   reset
   put compare.1 "$(queue ahead "$b")"
   put "runs-$b.1" "$pending"
-  WAIT=0 expect_fail 'a group ahead that never finishes' "did not finish within 0s: $b"
+  wait_seconds=0
+  expect_fail 'a group ahead that never finishes' "did not finish within 0s: $b"
 done
 
 # A failed group the queue replaced is not in the base's history; only its
@@ -153,7 +160,8 @@ put compare.1 "$(jq -cn --args '{status: "ahead", total_commits: 3, commits: [$A
 put "runs-$a.1" "$(run completed '"success"')"
 put "runs-$b.1" "$(run completed '"success"')"
 put "runs-$pull.1" "$no_run"
-WAIT=0 expect_pass 'a merge commit group with pull request commits'
+wait_seconds=0
+expect_pass 'a merge commit group with pull request commits'
 [[ ! -e "$fixtures/runs-$pull.count" ]]
 
 # A truncated comparison may hide a failing group, so it fails closed.
