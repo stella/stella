@@ -62,14 +62,15 @@ test("failed checks emit one annotation with their first actionable cause", () =
   ).toBe(
     "::error title=FAILED check%3A Unit tests::(fail) test A -- error: expected A",
   );
-  // A runner that prints the error after the marker still names it.
+  // Output after the marker belongs to the next test, so a failed test
+  // without its own diagnostic is named alone.
   expect(
     failedCheckAnnotation(
       result,
-      "(pass) earlier\n(fail) parser > rejects invalid input\ntrace\nerror: expected a value\n(pass) later",
+      "(pass) earlier\n(fail) parser > rejects invalid input\ntrace\nerror: expected a value\n(fail) later",
     ),
   ).toBe(
-    "::error title=FAILED check%3A Unit tests::(fail) parser > rejects invalid input -- error: expected a value",
+    "::error title=FAILED check%3A Unit tests::(fail) parser > rejects invalid input",
   );
   expect(
     failedCheckAnnotation(result, "loading\nERROR: compiler stopped"),

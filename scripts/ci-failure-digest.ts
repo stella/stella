@@ -170,28 +170,48 @@ const logLines = (rawLines: readonly string[]): LogLine[] =>
 
 // The pool's plain record of a failed check (FAILED_CHECK_RECORD in
 // ci-check-pool.ts; a test binds the two). Runner-rendered logs keep it, while
-// they reduce the pool's `::error` annotation to its message.
+// they reduce the pool's `::error` annotation to its message. The pool prints
+// each check's own output inside a log group, so only lines outside a group
+// are records.
 export const POOLED_FAILURE_PREFIX = "FAILED check: ";
+const POOLED_FAILURE_SEPARATOR = " -- ";
 
 const pooledFailureRecords = (
   rawLines: readonly string[],
-): { name: string; cause: string }[] =>
-  rawLines.flatMap((raw) => {
-    const text = logLine(raw).text;
-    if (!text.startsWith(POOLED_FAILURE_PREFIX)) {
-      return [];
+): { name: string; cause: string }[] => {
+  const records: { name: string; cause: string }[] = [];
+  let grouped = false;
+  for (const raw of rawLines) {
+    const { text } = logLine(raw);
+    if (text.startsWith("##[group]")) {
+      grouped = true;
+      continue;
+    }
+    if (text.startsWith("##[endgroup]")) {
+      grouped = false;
+      continue;
+    }
+    if (grouped || !text.startsWith(POOLED_FAILURE_PREFIX)) {
+      continue;
     }
     const record = text.slice(POOLED_FAILURE_PREFIX.length);
-    const separator = record.indexOf(" -- ");
-    return separator === -1
-      ? []
-      : [
-          {
-            name: record.slice(0, separator),
-            cause: record.slice(separator + " -- ".length),
-          },
-        ];
-  });
+    const separator = record.indexOf(POOLED_FAILURE_SEPARATOR);
+    if (separator === -1) {
+      continue;
+    }
+    // `%25` decodes last, so an escaped `%` never starts another escape.
+    records.push({
+      name: record
+        .slice(0, separator)
+        .replaceAll("%2D", "-")
+        .replaceAll("%0A", "\n")
+        .replaceAll("%0D", "\r")
+        .replaceAll("%25", "%"),
+      cause: record.slice(separator + POOLED_FAILURE_SEPARATOR.length),
+    });
+  }
+  return records;
+};
 
 // ---------------------------------------------------------------------------
 // Failure extraction

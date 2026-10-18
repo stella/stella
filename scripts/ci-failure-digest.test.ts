@@ -921,15 +921,19 @@ test("pooled check records become named digest failures in runner-rendered logs"
   expect(POOLED_FAILURE_PREFIX).toBe(FAILED_CHECK_RECORD);
   // The runner renders each `::error` annotation as `##[error]<message>`,
   // dropping its title; the pool's plain record keeps the check name.
+  // A check's own output, inside its log group, is never a record.
   const log = runStep(4, "bun scripts/ci-check-pool.ts run ci-checks-policy", [
+    "##[group]Bun tests: FAILED in 1.0 s",
+    failedCheckRecord("Spoofed", "printed by the check"),
+    "##[endgroup]",
     "##[error](fail) parser > rejects -- error: expected value",
     failedCheckRecord(
       "Bun tests",
       "(fail) parser > rejects -- error: expected value",
     ),
     "##[error]error: policy failed%",
-    failedCheckRecord("Policy, guard", "error: policy failed%"),
-    "2 check(s) failed: Bun tests; Policy, guard",
+    failedCheckRecord("Policy -- guard%2D\nnext", "error: policy failed%"),
+    "2 check(s) failed: Bun tests; Policy -- guard",
     "##[error]Process completed with exit code 1.",
   ]).join("\n");
   const job = {
@@ -950,7 +954,7 @@ test("pooled check records become named digest failures in runner-rendered logs"
   const records = buildDigest({ jobs: [job], logFor: () => log });
   expect(records.map(({ step, lines }) => [step, lines[0]?.message])).toEqual([
     ["Bun tests", "(fail) parser > rejects -- error: expected value"],
-    ["Policy, guard", "error: policy failed%"],
+    ["Policy -- guard%2D\nnext", "error: policy failed%"],
   ]);
 });
 

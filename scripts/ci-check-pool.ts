@@ -433,29 +433,31 @@ const isResultMarker = (line: string) =>
 
 // Bun prints a test's diagnostics before its `(fail)` line, so the test's own
 // error lies between the previous result marker and its marker; output after
-// it (up to the next marker) is the fallback for runners that print later.
+// the marker belongs to the next test, even a passing one that logs errors.
 const errorOfTest = (lines: readonly string[], failureIndex: number) => {
   let start = failureIndex;
   while (start > 0 && !isResultMarker(lines.at(start - 1) ?? "")) {
     start -= 1;
   }
-  const next = lines.findIndex(
-    (line, index) => index > failureIndex && isResultMarker(line),
-  );
-  const window = [
-    ...lines.slice(start, failureIndex),
-    ...lines.slice(failureIndex + 1, next === -1 ? lines.length : next),
-  ];
-  return window.find((line) => /^error/iu.test(line.trimStart()))?.trim();
+  return lines
+    .slice(start, failureIndex)
+    .find((line) => /^error/iu.test(line.trimStart()))
+    ?.trim();
 };
 
 // The runner renders `::error` commands as `##[error]<message>` in downloaded
 // logs and drops the title, so the digest reads this plain record instead.
 export const FAILED_CHECK_RECORD = "FAILED check: ";
 
-/** The plain log record of one failed pooled check: name and first cause. */
+export const FAILED_CHECK_SEPARATOR = " -- ";
+
+/**
+ * The plain log record of one failed pooled check: name and first cause, one
+ * line. The name is escaped so it can hold neither the separator nor a line
+ * break; ci-failure-digest.ts decodes it.
+ */
 export const failedCheckRecord = (name: string, cause: string) =>
-  `${FAILED_CHECK_RECORD}${name} -- ${cause.replaceAll(/\r?\n/gu, " ")}`;
+  `${FAILED_CHECK_RECORD}${escapeData(name).replaceAll("--", "%2D%2D")}${FAILED_CHECK_SEPARATOR}${cause.replaceAll(/\r?\n/gu, " ")}`;
 
 /** The first actionable cause of one failed pooled check. */
 export const failedCheckCause = (
@@ -470,11 +472,17 @@ export const failedCheckCause = (
     failureIndex === -1 ? undefined : lines.at(failureIndex)?.trim();
   const testError =
     failureIndex === -1 ? undefined : errorOfTest(lines, failureIndex);
-  const firstError = lines.find((line) => /error/iu.test(line))?.trim();
+  // A later line's error may belong to another test, so a failed test without
+  // its own diagnostic is named alone.
+  if (failure !== undefined) {
+    return (
+      testError === undefined
+        ? failure
+        : `${failure}${FAILED_CHECK_SEPARATOR}${testError}`
+    ).slice(0, FAILURE_CAUSE_LIMIT);
+  }
   return (
-    failure !== undefined && testError !== undefined
-      ? `${failure} -- ${testError}`
-      : (firstError ?? result.detail)
+    lines.find((line) => /error/iu.test(line))?.trim() ?? result.detail
   ).slice(0, FAILURE_CAUSE_LIMIT);
 };
 
