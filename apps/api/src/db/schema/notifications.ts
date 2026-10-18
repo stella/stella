@@ -73,6 +73,11 @@ export const notifications = p.pgTable(
     metadata: jsonb().$type<NotificationMetadataValue>().notNull(),
     entityType: p.text("entity_type", { enum: NOTIFICATION_ENTITY_TYPES }),
     entityId: p.text("entity_id"),
+    /** Deployment feature that owns this retained notification. */
+    featureOwner: p
+      .text("feature_owner", { enum: ["shared", "flows"] })
+      .notNull()
+      .default("shared"),
     idempotencyKey: p.text("idempotency_key").notNull(),
     /** NULL means unread. There is no `is_read` mirror to drift from this. */
     readAt: timestamptz("read_at"),

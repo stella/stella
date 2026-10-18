@@ -17,7 +17,8 @@ notifications.kind             text                not null          notificatio
 notifications.metadata         jsonb               not null          notifications.ts:73  Exactly the ICU parameters this kind's message renders.
 notifications.entity_type      text                null              notifications.ts:74
 notifications.entity_id        text                null              notifications.ts:75
-notifications.idempotency_key  text                not null          notifications.ts:76
-notifications.read_at          timestamptz         null              notifications.ts:78  NULL means unread.
-notifications.created_at       timestamptz         default,not null  notifications.ts:79
+notifications.feature_owner    text                default,not null  notifications.ts:77  Deployment feature that owns this retained notification.
+notifications.idempotency_key  text                not null          notifications.ts:81
+notifications.read_at          timestamptz         null              notifications.ts:83  NULL means unread.
+notifications.created_at       timestamptz         default,not null  notifications.ts:84
 ```

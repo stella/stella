@@ -1,19 +1,19 @@
 import { panic } from "better-result";
-import { and, eq, inArray, ne } from "drizzle-orm";
+import { and, eq, inArray, ne, sql } from "drizzle-orm";
 
 import { newNotificationRealtimeEvent } from "@stll/api-contract";
 import type {
-  NOTIFICATION_KIND,
   NotificationEntityType,
   NotificationKind,
   NotificationMetadataByKind,
 } from "@stll/api-contract/notifications";
+import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import { member as organizationMember, user } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
-import { notifications, workspaceMembers } from "@/api/db/schema";
+import { flowRunSteps, notifications, workspaceMembers } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
@@ -160,17 +160,54 @@ const insertNotifications = async (
 
   const inserted: NotificationInsertRow[] = [];
   for (const batch of chunkItems(values, NOTIFICATION_INSERT_BATCH_SIZE)) {
-    const batchRows = await writeBatch(
-      async (tx) =>
-        await tx
-          .insert(notifications)
-          .values(batch)
-          .onConflictDoNothing()
-          .returning({
-            userId: notifications.userId,
-            organizationId: notifications.organizationId,
-          }),
-    );
+    const batchRows = await writeBatch(async (tx) => {
+      const mentionEntityIds = batch.flatMap((row) =>
+        row.kind === NOTIFICATION_KIND.MENTION && row.entityId !== null
+          ? [row.entityId]
+          : [],
+      );
+      const flowOwnedEntities = new Set<string>();
+      if (mentionEntityIds.length > 0) {
+        const linked = await tx
+          .select({
+            entityId: flowRunSteps.reviewTaskEntityId,
+            workspaceId: flowRunSteps.workspaceId,
+          })
+          .from(flowRunSteps)
+          .where(
+            inArray(
+              sql`${flowRunSteps.reviewTaskEntityId}::text`,
+              mentionEntityIds,
+            ),
+          );
+        for (const { entityId, workspaceId } of linked) {
+          if (entityId !== null) {
+            flowOwnedEntities.add(`${workspaceId}:${entityId}`);
+          }
+        }
+      }
+      return await tx
+        .insert(notifications)
+        .values(
+          batch.map((row) => ({
+            ...row,
+            featureOwner:
+              row.kind === NOTIFICATION_KIND.FLOW_RUN_COMPLETED ||
+              row.kind === NOTIFICATION_KIND.FLOW_RUN_FAILED ||
+              row.kind === NOTIFICATION_KIND.FLOW_RUN_AWAITING_APPROVAL ||
+              (row.workspaceId !== null &&
+                row.entityId !== null &&
+                flowOwnedEntities.has(`${row.workspaceId}:${row.entityId}`))
+                ? ("flows" as const)
+                : ("shared" as const),
+          })),
+        )
+        .onConflictDoNothing()
+        .returning({
+          userId: notifications.userId,
+          organizationId: notifications.organizationId,
+        });
+    });
     inserted.push(...batchRows);
   }
 

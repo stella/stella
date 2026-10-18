@@ -31,6 +31,8 @@ const UNPROJECTED_NOTIFICATION_COLUMNS = [
   "organizationId",
   // Producer-only dedup key for replay-safe inserts; never read back.
   "idempotencyKey",
+  // Server-side admission marker; clients receive only admitted rows.
+  "featureOwner",
 ] as const satisfies readonly (keyof NotificationRow)[];
 
 export const notificationParamsSchema = t.Object({

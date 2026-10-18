@@ -577,6 +577,11 @@ export const auditLogs = p.pgTable(
     activityCategory: p.text("activity_category", {
       enum: AUDIT_ACTIVITY_CATEGORIES,
     }),
+    /** Deployment feature that owns this retained event, independent of live pointers. */
+    featureOwner: p
+      .text("feature_owner", { enum: ["shared", "flows"] })
+      .notNull()
+      .default("shared"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [

@@ -1,4 +1,4 @@
-import { and, eq, inArray, notInArray, or, sql } from "drizzle-orm";
+import { and, eq, inArray, ne, or, sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
 import * as v from "valibot";
 
@@ -8,12 +8,6 @@ import {
   resourceRef,
   type ResourceDeletion,
 } from "@stll/api-contract";
-import {
-  NOTIFICATION_ENTITY_TYPE,
-  NOTIFICATION_KIND,
-  NOTIFICATION_KINDS,
-} from "@stll/api-contract/notifications";
-import type { NotificationKind } from "@stll/api-contract/notifications";
 
 import type { Transaction } from "@/api/db/root";
 import type { entityLinks } from "@/api/db/schema";
@@ -167,20 +161,6 @@ export const flowRelatedTaskVisibilityConditions = (
     sql`${flowOwnedEntityVisibilitySql({ ...options, entityId: sql`${sourceEntityId}`, workspaceId: sql`${workspaceId}` })} AND ${flowOwnedEntityVisibilitySql({ ...options, entityId: sql`${targetEntityId}`, workspaceId: sql`${workspaceId}` })}`,
 });
 
-const NOTIFICATION_FEATURE_OWNER = {
-  [NOTIFICATION_KIND.MENTION]: "shared",
-  [NOTIFICATION_KIND.REPORT_EXPORT_SUCCEEDED]: "shared",
-  [NOTIFICATION_KIND.REPORT_EXPORT_FAILED]: "shared",
-  [NOTIFICATION_KIND.FLOW_RUN_COMPLETED]: "flows",
-  [NOTIFICATION_KIND.FLOW_RUN_FAILED]: "flows",
-  [NOTIFICATION_KIND.FLOW_RUN_AWAITING_APPROVAL]: "flows",
-  [NOTIFICATION_KIND.ANNOUNCEMENT]: "shared",
-} as const satisfies Record<NotificationKind, "flows" | "shared">;
-
-const FLOW_NOTIFICATION_KINDS = NOTIFICATION_KINDS.filter(
-  (kind) => NOTIFICATION_FEATURE_OWNER[kind] === "flows",
-);
-
 /** Hide retained outcomes and mentions of linked review tasks on opt-out. */
 export const flowNotificationVisibilityCondition = ({
   organizationId,
@@ -191,17 +171,5 @@ export const flowNotificationVisibilityCondition = ({
     workspaceId: notifications.workspaceId,
     userId,
   });
-  return sql`${or(
-    admission,
-    and(
-      notInArray(notifications.kind, FLOW_NOTIFICATION_KINDS),
-      sql`${notifications.entityType} IS DISTINCT FROM ${NOTIFICATION_ENTITY_TYPE.FLOW_RUN}`,
-    ),
-  )} AND NOT EXISTS (
-    SELECT 1 FROM ${flowRunSteps}
-    WHERE ${notifications.entityType} = ${NOTIFICATION_ENTITY_TYPE.ENTITY}
-      AND ${flowRunSteps.workspaceId} = ${notifications.workspaceId}
-      AND ${flowRunSteps.reviewTaskEntityId}::text = ${notifications.entityId}
-      AND NOT (${admission})
-  )`;
+  return or(ne(notifications.featureOwner, "flows"), admission) ?? sql`false`;
 };
