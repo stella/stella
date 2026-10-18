@@ -1,4 +1,4 @@
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 
 /** Findings carry counts and URLs only, never page text, so reports are safe to share. */
 
@@ -225,22 +225,36 @@ type FetchTextOptions = {
 const causeMessage = (cause: unknown): string =>
   cause instanceof Error ? cause.message : String(cause);
 
+type FetchFailure =
+  | { type: "missing"; status: number }
+  | { type: "http"; status: number }
+  | { type: "transport"; cause: unknown };
+
 const fetchFailureMessage = ({
   country,
-  status,
+  failure,
   step,
   url,
 }: {
   country?: string | undefined;
-  status?: number;
+  failure: FetchFailure;
   step: FetchStep;
   url: string;
 }): string => {
-  const detail = status === undefined ? "" : ` (HTTP ${status})`;
-  if (step === "country shard" && country !== undefined) {
-    return `country ${country} has no sitemap shard at ${url}${detail}: is the jurisdiction pages_public on this deployment?`;
+  switch (failure.type) {
+    case "missing":
+      if (step === "country shard" && country !== undefined) {
+        return `country ${country} has no sitemap shard at ${url} (HTTP ${failure.status}): is the jurisdiction pages_public on this deployment?`;
+      }
+      return `${step} fetch failed at ${url} (HTTP ${failure.status})`;
+    case "http":
+      return `${step} fetch failed at ${url} (HTTP ${failure.status})`;
+    case "transport":
+      return `${step} fetch failed at ${url}: ${causeMessage(failure.cause)}`;
+    default:
+      failure satisfies never;
+      return panic("Unhandled fetch failure");
   }
-  return `${step} fetch failed at ${url}${detail}`;
 };
 
 const failedResponse = ({
@@ -253,15 +267,40 @@ const failedResponse = ({
   status: number;
   step: FetchStep;
   url: string;
-}): Result<never, PublicLawFetchError> =>
-  Result.err(
+}): Result<never, PublicLawFetchError> => {
+  const failure: FetchFailure =
+    status === 404 || status === 410
+      ? { type: "missing", status }
+      : { type: "http", status };
+  return Result.err(
     new PublicLawFetchError({
-      message: fetchFailureMessage({ country, status, step, url }),
+      message: fetchFailureMessage({ country, failure, step, url }),
       status,
       step,
       url,
     }),
   );
+};
+
+const transportFailure = ({
+  cause,
+  country,
+  step,
+  url,
+}: {
+  cause: unknown;
+  country?: string | undefined;
+  step: FetchStep;
+  url: string;
+}): PublicLawFetchError => {
+  const failure: FetchFailure = { type: "transport", cause };
+  return new PublicLawFetchError({
+    cause,
+    message: fetchFailureMessage({ country, failure, step, url }),
+    step,
+    url,
+  });
+};
 
 export const fetchText = async ({
   country,
@@ -271,13 +310,7 @@ export const fetchText = async ({
 }: FetchTextOptions): Promise<Result<string, PublicLawFetchError>> => {
   const fetched = await Result.tryPromise({
     try: async () => await fetch(url),
-    catch: (cause) =>
-      new PublicLawFetchError({
-        cause,
-        message: `${fetchFailureMessage({ country, step, url })}: ${causeMessage(cause)}`,
-        step,
-        url,
-      }),
+    catch: (cause) => transportFailure({ cause, country, step, url }),
   });
   if (fetched.isErr()) {
     return fetched;
@@ -287,13 +320,7 @@ export const fetchText = async ({
   }
   const body = await Result.tryPromise({
     try: async () => await fetched.value.text(),
-    catch: (cause) =>
-      new PublicLawFetchError({
-        cause,
-        message: `${fetchFailureMessage({ country, step, url })}: ${causeMessage(cause)}`,
-        step,
-        url,
-      }),
+    catch: (cause) => transportFailure({ cause, country, step, url }),
   });
   return body;
 };
@@ -375,12 +402,7 @@ export const runPublicLawCheck = async ({
     const response = await Result.tryPromise({
       try: async () => await fetch(target),
       catch: (cause) =>
-        new PublicLawFetchError({
-          cause,
-          message: `${fetchFailureMessage({ step: "page sample", url: target })}: ${causeMessage(cause)}`,
-          step: "page sample",
-          url: target,
-        }),
+        transportFailure({ cause, step: "page sample", url: target }),
     });
     if (response.isErr()) {
       fetchErrors.push(response.error.message);
@@ -400,12 +422,7 @@ export const runPublicLawCheck = async ({
     const html = await Result.tryPromise({
       try: async () => await response.value.text(),
       catch: (cause) =>
-        new PublicLawFetchError({
-          cause,
-          message: `${fetchFailureMessage({ step: "page sample", url: target })}: ${causeMessage(cause)}`,
-          step: "page sample",
-          url: target,
-        }),
+        transportFailure({ cause, step: "page sample", url: target }),
     });
     if (html.isErr()) {
       fetchErrors.push(html.error.message);

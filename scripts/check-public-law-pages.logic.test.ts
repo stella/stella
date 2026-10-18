@@ -331,6 +331,43 @@ describe("public law fetch failures", () => {
     }
   });
 
+  test("reports an unavailable country shard without missing-shard guidance", async () => {
+    const result = await run(async (url) =>
+      url.endsWith("/sitemaps/law.xml")
+        ? response(indexXml)
+        : response("unavailable", 503),
+    );
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.message).toBe(
+        `country shard fetch failed at ${shardUrl} (HTTP 503)`,
+      );
+      expect(result.error.message).not.toContain("pages_public");
+    }
+  });
+
+  test("reports a country shard timeout without missing-shard guidance", async () => {
+    const timeout = new DOMException("The operation timed out", "TimeoutError");
+    const result = await run(async (url) => {
+      if (url.endsWith("/sitemaps/law.xml")) {
+        return response(indexXml);
+      }
+      throw timeout;
+    });
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error).toMatchObject({
+        cause: timeout,
+        step: "country shard",
+        url: shardUrl,
+      });
+      expect(result.error.message).toBe(
+        `country shard fetch failed at ${shardUrl}: The operation timed out`,
+      );
+      expect(result.error.message).not.toContain("pages_public");
+    }
+  });
+
   test("reports a failed page while checking the remaining sample", async () => {
     const goodUrl = "https://canonical.test/law/svk/good";
     const badUrl = "https://canonical.test/law/svk/bad";
@@ -363,22 +400,6 @@ describe("public law fetch failures", () => {
     }
     expect(requested).toContain(`${baseUrl}/law/svk/good`);
     expect(requested).toContain(`${baseUrl}/law/svk/bad`);
-  });
-
-  test("explains a network timeout", async () => {
-    const timeout = new DOMException("The operation timed out", "TimeoutError");
-    const result = await run(async () => {
-      throw timeout;
-    });
-    expect(result.isErr()).toBe(true);
-    if (result.isErr()) {
-      expect(result.error).toMatchObject({
-        cause: timeout,
-        step: "sitemap index",
-        url: `${baseUrl}/sitemaps/law.xml`,
-      });
-      expect(result.error.message).toContain("The operation timed out");
-    }
   });
 
   test("returns a passing report for successful fetches", async () => {
