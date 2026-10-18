@@ -7630,14 +7630,14 @@ test("a merge group skips proven queue-only suites but never kept or unproven on
     ...mergeGroupHeavyKeep
       .filter((job) => heavyProofList.includes(job))
       .map((job) => ({
-      label: `kept ${job} stays required in a proven group`,
-      options: {
-        event: EVENT.mergeGroup,
-        results: { ...allSkipped, [job]: "skipped" },
-        plannedOutputs: { heavy_proof: "false", queue_depth: "thin" },
-      },
-      exitCode: 1,
-    })),
+        label: `kept ${job} stays required in a proven group`,
+        options: {
+          event: EVENT.mergeGroup,
+          results: { ...allSkipped, [job]: "skipped" },
+          plannedOutputs: { heavy_proof: "false", queue_depth: "thin" },
+        },
+        exitCode: 1,
+      })),
     ...skippable.flatMap((job) => [
       {
         label: `unproven group requires ${job}`,
@@ -7819,9 +7819,7 @@ test("an armed delta skips every normal job but still runs the queue-only suites
       rmSync(directory, { recursive: true, force: true });
     }
   };
-  expect(resolve("true", "true")).toBe(
-    "run_required=false\narmed_delta=true",
-  );
+  expect(resolve("true", "true")).toBe("run_required=false\narmed_delta=true");
   // Route smoke needs this run's web build, so it keeps the full run.
   expect(resolve("true", "true", "true")).toBe(
     "run_required=true\narmed_delta=false",
