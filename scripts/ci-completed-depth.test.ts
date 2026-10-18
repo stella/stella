@@ -1782,7 +1782,7 @@ test("the patch-id step names the parent only of a merge of the base, with the p
 });
 
 test("armed proof counts only when ci-result uploaded it after every other job", async () => {
-  const group = (jobs: unknown[]) =>
+  const group = async (jobs: unknown[]) =>
     decide({
       event: "merge_group",
       queueDepth: "thin",
