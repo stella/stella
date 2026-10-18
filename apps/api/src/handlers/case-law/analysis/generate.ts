@@ -109,6 +109,9 @@ import { refreshSignificance } from "./significance-run";
  */
 export const ANALYSIS_GENERATION_DEADLINE_MS = 45_000;
 
+/** At most one partial-section write per this interval while a run streams. */
+const PARTIAL_PUBLISH_INTERVAL_MS = 1000;
+
 /**
  * The output an analysis needs, in tokens: about six times the ~2.6k a full
  * analysis takes, so the visible answer fits beside whatever reasoning the
@@ -387,6 +390,24 @@ const runGeneration = async ({
     let processedCount = 0;
     const partialTree: DecisionAnalysis["tree"] = [];
     let lastPublishedAt = Number.NEGATIVE_INFINITY;
+    // Sections completed since the last write. A section that lands inside
+    // the throttle window waits for the next event past it, not for the end.
+    let unpublished = false;
+    const publishIfDue = async () => {
+      const now = Temporal.Now.instant().epochMilliseconds;
+      if (!unpublished || now - lastPublishedAt < PARTIAL_PUBLISH_INTERVAL_MS) {
+        return;
+      }
+      // Attempts are paced too: a superseded run's refused writes must not
+      // turn into a write per streamed token.
+      lastPublishedAt = now;
+      if (await store.savePartial({ decisionId, partialTree, sentinel })) {
+        unpublished = false;
+      }
+    };
+    // One deadline for the whole run: a fallback after an invalid stream gets
+    // what is left of it, never a fresh one.
+    const runStartedAt = performance.now();
     try {
       result = await withGenerationDeadline(
         generationOptions,
@@ -408,9 +429,6 @@ const runGeneration = async ({
             // The last array member is still being written. A following member
             // proves every member before it is complete.
             const completeCount = Math.max(0, headings.length - 1);
-            if (completeCount <= processedCount) {
-              continue;
-            }
             for (const heading of headings.slice(
               processedCount,
               completeCount,
@@ -423,20 +441,11 @@ const runGeneration = async ({
                     language: input.language,
                   }),
                 );
+                unpublished = true;
               }
             }
-            processedCount = completeCount;
-            if (
-              Temporal.Now.instant().epochMilliseconds - lastPublishedAt <
-              1000
-            ) {
-              continue;
-            }
-            if (
-              await store.savePartial({ decisionId, partialTree, sentinel })
-            ) {
-              lastPublishedAt = Temporal.Now.instant().epochMilliseconds;
-            }
+            processedCount = Math.max(processedCount, completeCount);
+            await publishIfDue();
           }
           return undefined;
         },
@@ -447,7 +456,13 @@ const runGeneration = async ({
       if (classifyAIError(streamError) !== "output_invalid") {
         throw streamError;
       }
-      result = await generateTanStackObjectForTask(generationOptions);
+      result = await generateTanStackObjectForTask({
+        ...generationOptions,
+        deadlineMs: Math.max(
+          1,
+          Math.floor(deadlineMs - (performance.now() - runStartedAt)),
+        ),
+      });
     }
     if (result === undefined) {
       return panic("Structured analysis stream ended without a result");
