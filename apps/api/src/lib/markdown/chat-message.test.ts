@@ -31,6 +31,7 @@ describe("chat message markdown serializer", () => {
       '<p>Viz <entity-mention data-id="decision)final" data-label="28 Cdo 5171/2008" data-category="decision"></entity-mention>.</p>';
 
     expect(normalizeChatMessageHtml(html, [])).toEqual({
+      corpusScopes: [],
       mentions: [],
       text: "Viz [28 Cdo 5171/2008](#stella-decision=decision%29final).",
     });
@@ -41,6 +42,7 @@ describe("chat message markdown serializer", () => {
       '<p>Check <entity-mention data-id="ent_123" data-label="Retention Memo" data-category="entity" data-source-workspace-id="ws_123"></entity-mention>.</p>';
 
     expect(normalizeChatMessageHtml(html, ["ws_123"])).toEqual({
+      corpusScopes: [],
       mentions: [
         {
           category: "entity",
@@ -55,6 +57,45 @@ describe("chat message markdown serializer", () => {
       ],
       text: "Check [Retention Memo](#stella-entity=ws_123:ent_123).",
     });
+  });
+
+  test("serializes a corpus chip to a scope link and returns its scope", () => {
+    const html =
+      '<p>Ask <entity-mention data-id="case_law:CZE" data-label="Case law · Czechia" data-category="corpus"></entity-mention> about leases.</p>';
+
+    expect(normalizeChatMessageHtml(html, [])).toEqual({
+      corpusScopes: [{ corpus: "case_law", country: "CZE" }],
+      mentions: [],
+      text: "Ask [Case law · Czechia](#stella-corpus=case_law:CZE) about leases.",
+    });
+  });
+
+  test("unwraps a corpus chip whose id names no corpus scope", () => {
+    for (const id of ["case_law:XXX", "statutes:CZE", "case_law:CZE:extra"]) {
+      const html = `<p>Ask <entity-mention data-id="${id}" data-label="Case law" data-category="corpus"></entity-mention>.</p>`;
+
+      expect(normalizeChatMessageHtml(html, [])).toEqual({
+        corpusScopes: [],
+        mentions: [],
+        text: "Ask Case law.",
+      });
+    }
+  });
+
+  test("dedupes repeated corpus chips and keeps them out of workspace mentions", () => {
+    const chip = (id: string) =>
+      `<entity-mention data-id="${id}" data-label="${id}" data-category="corpus"></entity-mention>`;
+    const html = `<p>${chip("case_law:CZE")} ${chip("legislation:CZE")} ${chip("case_law:CZE")} <entity-mention data-id="ws_123" data-label="Alpha" data-category="workspace"></entity-mention></p>`;
+
+    const { corpusScopes, mentions } = normalizeChatMessageHtml(html, [
+      "ws_123",
+    ]);
+
+    expect(corpusScopes).toEqual([
+      { corpus: "case_law", country: "CZE" },
+      { corpus: "legislation", country: "CZE" },
+    ]);
+    expect(mentions.map((mention) => mention.category)).toEqual(["workspace"]);
   });
 
   test("strips unsafe markup while preserving safe links", () => {

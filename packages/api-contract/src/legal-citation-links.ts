@@ -23,7 +23,7 @@ export type LegalCitationLinks =
 
 type ResolveLegalCitationLinksOptions = {
   /** A corpus reader URL, absent when this deployment cannot serve the item. */
-  appUrl: string | null;
+  url: string | null;
   /** The publisher URL, preserved separately from the primary reader link. */
   sourceUrl: string | null;
   appOrigins: ReadonlySet<string>;
@@ -44,12 +44,12 @@ export const parseLegalCitationHttpUrl = (
 
 /** The primary legal citation always opens a served corpus item before its publisher. */
 export const resolveLegalCitationLinks = ({
-  appUrl,
+  url,
   appOrigins,
   sourceUrl,
 }: ResolveLegalCitationLinksOptions): LegalCitationLinks => {
   const base = appOrigins.values().next().value;
-  const internal = parseLegalCitationHttpUrl(appUrl, base);
+  const internal = parseLegalCitationHttpUrl(url, base);
   const source = parseLegalCitationHttpUrl(sourceUrl, base);
   if (internal === null || !appOrigins.has(internal.origin)) {
     return { type: "external", url: source?.href ?? null };
