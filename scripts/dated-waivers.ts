@@ -68,17 +68,15 @@ const unwrap = (expression: ts.Expression): ts.Expression => {
 };
 
 const staticObjectMap = (
-  expression: ts.CallExpression,
+  callback: ts.Expression,
   elements: readonly ts.Expression[],
 ): readonly ts.Expression[] => {
-  const callback = expression.arguments[0];
   if (
-    !callback ||
     !ts.isArrowFunction(callback) ||
     callback.modifiers?.length ||
     callback.parameters.length !== 1
   ) {
-    return invalidRegistry(expression);
+    return invalidRegistry(callback);
   }
   const parameter = callback.parameters[0];
   if (
@@ -88,7 +86,7 @@ const staticObjectMap = (
     parameter.dotDotDotToken ||
     ts.isBlock(callback.body)
   ) {
-    return invalidRegistry(expression);
+    return invalidRegistry(callback);
   }
   const parameterName = parameter.name.text;
   const body = unwrap(callback.body);
@@ -197,19 +195,6 @@ export const readDocumentationExclusions = (
       next.add(unwrapped.text);
       return registryElements(initializer, next);
     }
-    // This is the registry's established static shorthand. The callback is
-    // fixed, while the receiver still has to resolve to a local array literal.
-    if (
-      ts.isCallExpression(unwrapped) &&
-      ts.isPropertyAccessExpression(unwrapped.expression) &&
-      unwrapped.expression.name.text === "map" &&
-      unwrapped.arguments.length === 1 &&
-      unwrapped.arguments[0] !== undefined &&
-      ts.isIdentifier(unwrapped.arguments[0]) &&
-      unwrapped.arguments[0].text === "noLlmsTxt"
-    ) {
-      return registryElements(unwrapped.expression.expression, resolving);
-    }
     if (
       ts.isCallExpression(unwrapped) &&
       ts.isPropertyAccessExpression(unwrapped.expression) &&
@@ -231,8 +216,18 @@ export const readDocumentationExclusions = (
       unwrapped.expression.name.text === "map" &&
       unwrapped.arguments.length === 1
     ) {
+      const argument = unwrapped.arguments[0];
+      if (!argument) {
+        return invalidRegistry(unwrapped);
+      }
+      const callback = ts.isIdentifier(argument)
+        ? moduleConstInitializer(argument.text)
+        : argument;
+      if (!callback) {
+        return invalidRegistry(argument);
+      }
       return staticObjectMap(
-        unwrapped,
+        unwrap(callback),
         registryElements(unwrapped.expression.expression, resolving),
       );
     }
@@ -249,13 +244,7 @@ export const readDocumentationExclusions = (
         return resolved;
       }
     }
-    return panic("Documentation waiver value must be a static string");
-  };
-  const defaults = {
-    checkedAt: moduleString("NO_LLMS_TXT_CHECKED_AT"),
-    explanation: moduleString("NO_LLMS_TXT_EXPLANATION"),
-    expiresAt: moduleString("NO_LLMS_TXT_EXPIRES_AT"),
-    reason: "no-llms-txt",
+    return invalidRegistry(unwrapped);
   };
   const exclusions: unknown[] = [];
   for (const element of registryElements(owner.initializer)) {
@@ -269,10 +258,6 @@ export const readDocumentationExclusions = (
         ),
       );
       exclusions.push(entry);
-      continue;
-    }
-    if (ts.isStringLiteral(unwrapped)) {
-      exclusions.push({ ...defaults, dependency: unwrapped.text });
       continue;
     }
     invalidRegistry(unwrapped);

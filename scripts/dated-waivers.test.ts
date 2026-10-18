@@ -188,17 +188,17 @@ test("documentation inventory derives from injected typed owners including none"
     );
   }
 });
-test("documentation inventory preserves the deadline from each supplied tree reader", () => {
+test("documentation inventory preserves helper deadlines independently of similarly named constants", () => {
   const documentationSource = (expiresAt: string) =>
     `
 const NO_LLMS_TXT_EXPLANATION = "https://example.com/llms.txt returns 404";
 const NO_LLMS_TXT_CHECKED_AT = "2026-09-01T00:00:00.000Z";
-const NO_LLMS_TXT_EXPIRES_AT = __EXPIRES_AT__;
+const NO_LLMS_TXT_EXPIRES_AT = "2027-01-01T00:00:00.000Z";
 const noLlmsTxt = (dependency: string) => ({
   checkedAt: NO_LLMS_TXT_CHECKED_AT,
   dependency,
   explanation: NO_LLMS_TXT_EXPLANATION,
-  expiresAt: NO_LLMS_TXT_EXPIRES_AT,
+  expiresAt: __EXPIRES_AT__,
   reason: "no-llms-txt",
 });
 export const DOC_SOURCE_EXCLUSIONS = ["doc-package"].map(noLlmsTxt);
@@ -227,8 +227,15 @@ test("documentation registry resolves local const array aliases through static w
 const NO_LLMS_TXT_EXPLANATION = "https://example.com/llms.txt returns 404";
 const NO_LLMS_TXT_CHECKED_AT = "2026-09-01T00:00:00.000Z";
 const NO_LLMS_TXT_EXPIRES_AT = "2026-10-01T00:00:00.000Z";
+const noLlmsTxt = (dependency: string) => ({
+  checkedAt: NO_LLMS_TXT_CHECKED_AT,
+  dependency,
+  explanation: NO_LLMS_TXT_EXPLANATION,
+  expiresAt: NO_LLMS_TXT_EXPIRES_AT,
+  reason: "no-llms-txt",
+});
 const exclusions = (["doc-package"] as const) satisfies readonly string[];
-export const DOC_SOURCE_EXCLUSIONS = exclusions;
+export const DOC_SOURCE_EXCLUSIONS = exclusions.map(noLlmsTxt);
 `);
 
   expect(entries).toEqual([
@@ -244,12 +251,19 @@ test("documentation registry aliases ignore same-name constants in nested scopes
 const NO_LLMS_TXT_EXPLANATION = "https://example.com/llms.txt returns 404";
 const NO_LLMS_TXT_CHECKED_AT = "2026-09-01T00:00:00.000Z";
 const NO_LLMS_TXT_EXPIRES_AT = "2026-10-01T00:00:00.000Z";
+const noLlmsTxt = (dependency: string) => ({
+  checkedAt: NO_LLMS_TXT_CHECKED_AT,
+  dependency,
+  explanation: NO_LLMS_TXT_EXPLANATION,
+  expiresAt: NO_LLMS_TXT_EXPIRES_AT,
+  reason: "no-llms-txt",
+});
 const exclusions = ["doc-package"];
 function helper() {
   const exclusions = [];
   return exclusions;
 }
-export const DOC_SOURCE_EXCLUSIONS = exclusions;
+export const DOC_SOURCE_EXCLUSIONS = exclusions.map(noLlmsTxt);
 `);
 
   expect(entries).toEqual([
@@ -276,10 +290,36 @@ test("documentation registry accepts its direct static array shorthand", () => {
 const NO_LLMS_TXT_EXPLANATION = "https://example.com/llms.txt returns 404";
 const NO_LLMS_TXT_CHECKED_AT = "2026-09-06T00:00:00.000Z";
 const NO_LLMS_TXT_EXPIRES_AT = "2026-10-06T00:00:00.000Z";
+const noLlmsTxt = (dependency: string) => ({
+  checkedAt: NO_LLMS_TXT_CHECKED_AT,
+  dependency,
+  explanation: NO_LLMS_TXT_EXPLANATION,
+  expiresAt: NO_LLMS_TXT_EXPIRES_AT,
+  reason: "no-llms-txt",
+});
 export const DOC_SOURCE_EXCLUSIONS = ["doc-package"].map(noLlmsTxt);
 `;
 
   expect(readDocumentationExclusions(source)).toEqual([doc]);
+});
+test("documentation registry rejects helper implementations without a proven static return", () => {
+  for (const callback of [
+    "(dependency) => lookup(dependency)",
+    "(dependency) => { return lookup(dependency); }",
+    "async (dependency) => ({ dependency })",
+    "importedHelper",
+  ]) {
+    const source = `
+const NO_LLMS_TXT_EXPLANATION = "${doc.explanation}";
+const NO_LLMS_TXT_CHECKED_AT = "${doc.checkedAt}";
+const NO_LLMS_TXT_EXPIRES_AT = "${doc.expiresAt}";
+const noLlmsTxt = ${callback};
+export const DOC_SOURCE_EXCLUSIONS = ["doc-package"].map(noLlmsTxt);
+`;
+    expect(() => readDocumentationExclusions(source)).toThrow(
+      DocumentationExclusionParseError,
+    );
+  }
 });
 test("documentation registry reads literal object maps spread into concat without executing source", () => {
   for (const field of ["dependency", "dependency: dependency"]) {
