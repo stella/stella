@@ -83,6 +83,7 @@ test("refuses moving an active review task and retains both matters", async () =
         id: taskEntityId,
         workspaceId,
         kind: "task",
+        featureOwner: "flows",
         name: "Review task",
         status: "open",
       });

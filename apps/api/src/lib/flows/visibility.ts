@@ -1,5 +1,6 @@
-import { and, eq, inArray, ne, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import * as v from "valibot";
 
 import {
@@ -12,14 +13,18 @@ import {
 import type { Transaction } from "@/api/db/root";
 import type { entityLinks } from "@/api/db/schema";
 import {
+  auditLogs,
   entities,
-  flowRunSteps,
   notifications,
   workspaces,
 } from "@/api/db/schema";
+import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log.constants";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
-import { backgroundFeatureActorExists } from "@/api/lib/feature-access/background";
+import {
+  backgroundFeatureActorExists,
+  backgroundFeatureMemberExists,
+} from "@/api/lib/feature-access/background";
 
 const classifiedEntityDeletionOwnershipSchema = v.pipe(
   v.picklist(Object.values(RESOURCE_DELETION_OWNERSHIP)),
@@ -31,48 +36,54 @@ type ClassifyEntityResourceDeletionsOptions = {
   entityIds: readonly SafeId<"entity">[];
 };
 
-/** Read before DELETE clears review-task foreign keys, inside the deleting transaction. */
+/** Classify deletions from persisted entity ownership in the deleting transaction. */
 export const classifyEntityResourceDeletions = async (
   tx: Pick<Transaction, "select">,
   { workspaceId, entityIds }: ClassifyEntityResourceDeletionsOptions,
 ) => {
-  const linked =
+  const flowOwnedEntities =
     entityIds.length === 0
       ? []
       : await tx
           .select({
-            entityId: flowRunSteps.reviewTaskEntityId,
+            entityId: entities.id,
             organizationId: workspaces.organizationId,
           })
-          .from(flowRunSteps)
-          .innerJoin(workspaces, eq(workspaces.id, flowRunSteps.workspaceId))
+          .from(entities)
+          .innerJoin(workspaces, eq(workspaces.id, entities.workspaceId))
           .where(
             and(
-              eq(flowRunSteps.workspaceId, workspaceId),
-              inArray(flowRunSteps.reviewTaskEntityId, [...entityIds]),
+              eq(entities.workspaceId, workspaceId),
+              eq(entities.featureOwner, "flows"),
+              inArray(entities.id, [...entityIds]),
             ),
           )
-          .groupBy(flowRunSteps.reviewTaskEntityId, workspaces.organizationId)
+          .groupBy(entities.id, workspaces.organizationId)
           .limit(entityIds.length);
-  const linkedIds = new Set(linked.map(({ entityId }) => entityId));
+  const flowOwnedEntityIds = new Set(
+    flowOwnedEntities.map(({ entityId }) => entityId),
+  );
   const deletions = entityIds.map(
     (id) =>
       ({
         resource: resourceRef({ type: RESOURCE_TYPE.ENTITY, id }),
         deletionOwnership: v.parse(
           classifiedEntityDeletionOwnershipSchema,
-          linkedIds.has(id)
+          flowOwnedEntityIds.has(id)
             ? RESOURCE_DELETION_OWNERSHIP.FLOW_REVIEW_TASK
             : RESOURCE_DELETION_OWNERSHIP.ORDINARY,
         ),
       }) as const satisfies ResourceDeletion,
   );
-  return { deletions, linkedOrganizationId: linked.at(0)?.organizationId };
+  return {
+    deletions,
+    linkedOrganizationId: flowOwnedEntities.at(0)?.organizationId,
+  };
 };
 
 type FlowFeatureActorVisibilityOptions = {
-  organizationId: SafeId<"organization">;
-  userId: string;
+  organizationId: SQLWrapper | SafeId<"organization">;
+  userId: SQLWrapper | string;
   workspaceId: SQLWrapper | string;
 };
 
@@ -84,6 +95,68 @@ export const flowFeatureActorVisibilitySql = (
     ? backgroundFeatureActorExists({ ...options, featureId: "flows" })
     : sql`false`;
 
+type ActivityFeatureOwnerVisibilityOptions = {
+  featureOwner: SQLWrapper;
+  organizationId: SQLWrapper | SafeId<"organization">;
+  workspaceId: SQLWrapper | string;
+  userId: SQLWrapper | string | null;
+};
+
+/** Shared retained activity is visible; feature-owned rows require live admission. */
+export const activityFeatureOwnerVisibilitySql = ({
+  featureOwner,
+  organizationId,
+  workspaceId,
+  userId,
+}: ActivityFeatureOwnerVisibilityOptions) =>
+  or(
+    eq(featureOwner, "shared"),
+    and(
+      eq(featureOwner, "flows"),
+      userId === null
+        ? sql`false`
+        : flowFeatureActorVisibilitySql({
+            organizationId,
+            workspaceId,
+            userId,
+          }),
+    ),
+  ) ?? sql`false`;
+
+/** Audit readers hide retained flow activity unless its reader is admitted. */
+export const flowAuditVisibilityCondition = ({
+  organizationId,
+  userId,
+}: {
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user"> | null;
+}) => {
+  const organizationAdmission =
+    userId !== null && isDeploymentFeatureEnabled("FEATURE_FLOWS")
+      ? backgroundFeatureMemberExists({
+          organizationId,
+          userId,
+          featureId: "flows",
+        })
+      : sql`false`;
+  return (
+    or(
+      activityFeatureOwnerVisibilitySql({
+        featureOwner: auditLogs.featureOwner,
+        organizationId,
+        workspaceId: auditLogs.workspaceId,
+        userId,
+      }),
+      and(
+        eq(auditLogs.featureOwner, "flows"),
+        eq(auditLogs.resourceType, AUDIT_RESOURCE_TYPE.FLOW_DEFINITION),
+        isNull(auditLogs.workspaceId),
+        organizationAdmission,
+      ),
+    ) ?? sql`false`
+  );
+};
+
 type FlowOwnedEntityVisibilitySqlOptions = {
   organizationId: SafeId<"organization">;
   userId: string;
@@ -91,39 +164,26 @@ type FlowOwnedEntityVisibilitySqlOptions = {
   workspaceId: SQL;
 };
 
-type FlowOwnedEntityVisibilityOptions = FlowOwnedEntityVisibilitySqlOptions & {
-  entityMatch: SQL;
-};
-
-const flowOwnedEntityVisibilityCondition = ({
+/** Correlated live admission uses the owner persisted by the creating operation. */
+export const flowOwnedEntityVisibilitySql = ({
   organizationId,
   userId,
   workspaceId,
-  entityMatch,
-}: FlowOwnedEntityVisibilityOptions) => sql`NOT EXISTS (
-  SELECT 1 FROM ${flowRunSteps}
-  WHERE ${flowRunSteps.workspaceId} = ${workspaceId}
-    AND ${entityMatch}
-    AND NOT (${flowFeatureActorVisibilitySql({ organizationId, workspaceId, userId })})
-)`;
-
-/** Correlated live admission keeps hidden review tasks out of reads and facets. */
-export const flowOwnedEntityVisibilitySql = (
-  options: FlowOwnedEntityVisibilitySqlOptions,
-) =>
-  flowOwnedEntityVisibilityCondition({
-    ...options,
-    entityMatch: sql`${flowRunSteps.reviewTaskEntityId} = ${options.entityId}`,
-  });
-
-/** Audit targets are text and may be legacy identifiers; never cast them to UUID. */
-export const flowOwnedEntityTextVisibilitySql = (
-  options: FlowOwnedEntityVisibilitySqlOptions,
-) =>
-  flowOwnedEntityVisibilityCondition({
-    ...options,
-    entityMatch: sql`${flowRunSteps.reviewTaskEntityId}::text = ${options.entityId}`,
-  });
+  entityId,
+}: FlowOwnedEntityVisibilitySqlOptions) => {
+  const flowVisibilityEntity = alias(entities, "flow_visibility_entity");
+  return sql`EXISTS (
+    SELECT 1 FROM ${flowVisibilityEntity}
+    WHERE ${flowVisibilityEntity.workspaceId} = ${workspaceId}
+      AND ${flowVisibilityEntity.id} = ${entityId}
+      AND (${activityFeatureOwnerVisibilitySql({
+        featureOwner: flowVisibilityEntity.featureOwner,
+        organizationId,
+        workspaceId: flowVisibilityEntity.workspaceId,
+        userId,
+      })})
+  )`;
+};
 
 type FlowReviewTaskVisibilityOptions = {
   organizationId: SafeId<"organization">;
@@ -165,11 +225,10 @@ export const flowRelatedTaskVisibilityConditions = (
 export const flowNotificationVisibilityCondition = ({
   organizationId,
   userId,
-}: FlowReviewTaskVisibilityOptions) => {
-  const admission = flowFeatureActorVisibilitySql({
+}: FlowReviewTaskVisibilityOptions) =>
+  activityFeatureOwnerVisibilitySql({
+    featureOwner: notifications.featureOwner,
     organizationId,
     workspaceId: notifications.workspaceId,
     userId,
   });
-  return or(ne(notifications.featureOwner, "flows"), admission) ?? sql`false`;
-};

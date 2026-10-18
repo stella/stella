@@ -101,6 +101,7 @@ type CreateTaskWorkObligationSource = {
   type: WorkObligationSource;
   description: string | null;
   entityId?: SafeId<"entity">;
+  featureOwner?: typeof entities.$inferInsert.featureOwner;
 };
 
 export type CreateTaskEntityHandlerProps = SafeDbOrTx & {
@@ -122,6 +123,7 @@ export const createTaskEntityHandler = async function* ({
     recordAuditEvent,
     body,
     entityId: requestedEntityId,
+    featureOwner = "shared",
     features = deployedTaskFeatures(),
     workObligationSource,
   } = props;
@@ -345,6 +347,7 @@ export const createTaskEntityHandler = async function* ({
       const entityId = requestedEntityId ?? createSafeId<"entity">();
       await tx.insert(entities).values({
         id: entityId,
+        featureOwner,
         workspaceId,
         kind: "task",
         listItemType,

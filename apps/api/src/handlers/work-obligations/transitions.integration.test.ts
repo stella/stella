@@ -133,6 +133,7 @@ const seedFlowReviewWork = async () => {
     id: entityId,
     workspaceId: ids.wsA1,
     kind: "task",
+    featureOwner: "flows",
     name: "Letter flow · Partner sign-off",
     status: "open",
     createdBy: ids.userA1,

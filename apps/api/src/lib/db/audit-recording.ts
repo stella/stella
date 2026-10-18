@@ -1,14 +1,18 @@
 import { panic } from "better-result";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, or, sql } from "drizzle-orm";
 import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import type { MaybePromise } from "elysia";
 
+import type {
+  EntityFeatureOwner,
+  RetainedActivityFeatureOwner,
+} from "@/api/db/feature-owner";
 import type { Transaction } from "@/api/db/root";
 import type {
   AUDIT_ACTIVITY_CATEGORIES,
   SearchHistoryKind,
 } from "@/api/db/schema";
-import { accountAuditLogs, auditLogs, flowRunSteps } from "@/api/db/schema";
+import { accountAuditLogs, auditLogs, entities } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { insertInChunks } from "@/api/lib/db/bulk-write";
 import { recordContentDeliveryReceipt } from "@/api/lib/files/content-delivery";
@@ -202,6 +206,8 @@ export type AuditExecutionContext = {
 type AuditEventFields = {
   action: AuditAction;
   resourceId: string;
+  /** Server snapshot captured before a destructive mutation. */
+  featureOwner?: RetainedActivityFeatureOwner;
   // Merged onto the base request metadata (IP, UA, forwardedFor).
   // Use for non-diff context (download s3Key, fileName, etc.).
   metadata?: AuditMetadata;
@@ -552,35 +558,55 @@ export const recordAuditGroups = async ({
     );
     return;
   }
-  const flowOwnedEntities = new Set<string>();
+  const entityOwners = new Map<string, EntityFeatureOwner>();
   for (const { bindings, events } of groups) {
-    if (bindings.workspaceId === null) {
-      continue;
-    }
-    const entityIds = events.flatMap((event) => {
+    const entityIdsByWorkspace = new Map<SafeId<"workspace">, string[]>();
+    for (const event of events) {
+      const workspaceId =
+        event.workspaceId === undefined
+          ? bindings.workspaceId
+          : event.workspaceId;
       const owner = AUDIT_OWNER_BY_RESOURCE_TYPE[event.resourceType];
-      if (owner.type !== "entity") {
-        return [];
+      if (
+        workspaceId === null ||
+        owner.type !== "entity" ||
+        event.featureOwner !== undefined
+      ) {
+        continue;
       }
       const entityId = owner.resolve(event);
-      return entityId === null ? [] : [entityId];
-    });
-    if (entityIds.length === 0) {
+      if (entityId === null) {
+        continue;
+      }
+      const ids = entityIdsByWorkspace.get(workspaceId);
+      if (ids) {
+        ids.push(entityId);
+      } else {
+        entityIdsByWorkspace.set(workspaceId, [entityId]);
+      }
+    }
+    if (entityIdsByWorkspace.size === 0) {
       continue;
     }
     const linked = await tx
-      .select({ entityId: flowRunSteps.reviewTaskEntityId })
-      .from(flowRunSteps)
+      .select({
+        entityId: entities.id,
+        workspaceId: entities.workspaceId,
+        featureOwner: entities.featureOwner,
+      })
+      .from(entities)
       .where(
-        and(
-          eq(flowRunSteps.workspaceId, bindings.workspaceId),
-          inArray(sql`${flowRunSteps.reviewTaskEntityId}::text`, entityIds),
+        or(
+          ...[...entityIdsByWorkspace].map(([workspaceId, entityIds]) =>
+            and(
+              eq(entities.workspaceId, workspaceId),
+              inArray(sql`${entities.id}::text`, entityIds),
+            ),
+          ),
         ),
       );
-    for (const { entityId } of linked) {
-      if (entityId !== null) {
-        flowOwnedEntities.add(`${bindings.workspaceId}:${entityId}`);
-      }
+    for (const { entityId, workspaceId, featureOwner } of linked) {
+      entityOwners.set(`${workspaceId}:${entityId}`, featureOwner);
     }
   }
 
@@ -595,13 +621,27 @@ export const recordAuditGroups = async ({
         event.workspaceId === undefined
           ? bindings.workspaceId
           : event.workspaceId;
-      const featureOwner =
-        owner.type === "flows" ||
-        (owningEntityId !== null &&
-          workspaceId !== null &&
-          flowOwnedEntities.has(`${workspaceId}:${owningEntityId}`))
-          ? ("flows" as const)
-          : ("shared" as const);
+      const featureOwner = ((): RetainedActivityFeatureOwner => {
+        if (event.featureOwner !== undefined) {
+          return event.featureOwner;
+        }
+        switch (owner.type) {
+          case "flows":
+            return "flows";
+          case "shared":
+            return "shared";
+          case "entity":
+            if (owningEntityId === null || workspaceId === null) {
+              return "unknown";
+            }
+            return (
+              entityOwners.get(`${workspaceId}:${owningEntityId}`) ?? "unknown"
+            );
+          default:
+            owner satisfies never;
+            return panic("Audit ownership requires a disposition");
+        }
+      })();
       return {
         action: event.action,
         changes: auditChangesForResource(event.resourceType, event.changes),

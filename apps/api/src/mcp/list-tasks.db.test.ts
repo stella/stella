@@ -320,6 +320,7 @@ test("ordinary task detail omits related flow reviews after revoke in HTTP and M
         id: reviewId,
         workspaceId: ids.wsA1,
         kind: "task",
+        featureOwner: "flows",
         name: "Hidden flow review",
         parentId: taskA1,
       },

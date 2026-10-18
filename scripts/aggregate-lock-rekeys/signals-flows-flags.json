@@ -102,5 +102,11 @@
     "from": "6f45b0e7a54052216a8316e7653dc6f16afcd26a3cc5d76817405e295c2630f2",
     "to": "7011ffbb361ac016b08176f861dd1bc0e2cddb5da8d55822e5add8c21ccf8450",
     "reason": "existing acquisition, query changed by #5308; selected step projection now includes the opaque startedAtToken and uses the equivalent getColumns API; mode/table/key/predicate identical; migrates with owner extension follow-up"
+  },
+  {
+    "file": "apps/api/src/handlers/entities/delete.ts",
+    "from": "773f5255e8b0f9dc8120324f75eda2dc6fd8343afc463bd81d98ba34fbf2c77d",
+    "to": "8ed8573dd45c78f9d78d2c97d01c92fd072188261760833f885e93937ad674e3",
+    "reason": "The existing entity acquisition also selects persisted feature ownership for the deletion audit. Lock mode, entity predicate, workspace predicate, ordering and limit are unchanged."
   }
 ]

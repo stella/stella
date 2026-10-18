@@ -89,6 +89,7 @@ const seedNotification = async ({
 }) => {
   const id = createSafeId<"notification">();
   await testDb.insert(notifications).values({
+    featureOwner: "shared",
     id,
     userId,
     organizationId,
@@ -269,6 +270,7 @@ describe("notification list scoping", () => {
           ids.userA1,
         )(async (tx) => {
           await tx.insert(notifications).values({
+            featureOwner: "shared",
             id: createSafeId<"notification">(),
             userId: ids.userA2,
             organizationId: ids.orgA,
@@ -318,6 +320,7 @@ describe("notification list scoping", () => {
           ids.userA1,
         )(async (tx) => {
           await tx.insert(notifications).values({
+            featureOwner: "shared",
             id: createSafeId<"notification">(),
             userId: ids.userA1,
             organizationId: ids.orgB,
@@ -727,6 +730,7 @@ test("revoking flows hides retained notifications and linked work until re-grant
       id: taskId,
       workspaceId: ids.wsA1,
       kind: "task",
+      featureOwner: "flows",
       name: "Flow review",
       status: "open",
       createdBy: userId,
@@ -774,6 +778,7 @@ test("revoking flows hides retained notifications and linked work until re-grant
     });
     for (const [index, id] of hiddenIds.entries()) {
       await testDb.insert(notifications).values({
+        featureOwner: "flows",
         id,
         ...actor,
         workspaceId: ids.wsA1,

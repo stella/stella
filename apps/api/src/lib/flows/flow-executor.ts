@@ -1515,6 +1515,7 @@ const raiseReviewTask = async ({
   const task = await Result.gen(() =>
     createTaskEntityHandler({
       tx,
+      featureOwner: "flows",
       workspaceId,
       userId: actorUserId,
       recordAuditEvent,

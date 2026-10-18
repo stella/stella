@@ -235,6 +235,7 @@ describe("matter search preview", () => {
           id: reviewTaskId,
           workspaceId: ids.wsA1,
           kind: "task",
+          featureOwner: "flows",
           name: "Review preview",
           dueDate: "2999-01-01",
           status: "open",

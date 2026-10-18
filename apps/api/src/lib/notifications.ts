@@ -11,11 +11,13 @@ import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import { member as organizationMember, user } from "@/api/db/auth-schema";
+import type { EntityFeatureOwner } from "@/api/db/feature-owner";
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
-import { flowRunSteps, notifications, workspaceMembers } from "@/api/db/schema";
+import { entities, notifications, workspaceMembers } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { activityFeatureOwnerVisibilitySql } from "@/api/lib/flows/visibility";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { broadcastToUser } from "@/api/lib/sse";
@@ -81,6 +83,16 @@ type NotificationEntityRefByKind = TotalEntityRefMap<{
     workspaceId: null;
   };
 }>;
+
+const NOTIFICATION_OWNER_BY_KIND = {
+  [NOTIFICATION_KIND.MENTION]: "entity",
+  [NOTIFICATION_KIND.REPORT_EXPORT_SUCCEEDED]: "shared",
+  [NOTIFICATION_KIND.REPORT_EXPORT_FAILED]: "shared",
+  [NOTIFICATION_KIND.FLOW_RUN_COMPLETED]: "flows",
+  [NOTIFICATION_KIND.FLOW_RUN_FAILED]: "flows",
+  [NOTIFICATION_KIND.FLOW_RUN_AWAITING_APPROVAL]: "flows",
+  [NOTIFICATION_KIND.ANNOUNCEMENT]: "shared",
+} as const satisfies Record<NotificationKind, "entity" | EntityFeatureOwner>;
 
 /**
  * One notification to file. The kind fixes both the metadata shape (exactly
@@ -166,47 +178,68 @@ const insertNotifications = async (
           ? [row.entityId]
           : [],
       );
-      const flowOwnedEntities = new Set<string>();
+      const entityOwners = new Map<string, EntityFeatureOwner>();
       if (mentionEntityIds.length > 0) {
         const linked = await tx
           .select({
-            entityId: flowRunSteps.reviewTaskEntityId,
-            workspaceId: flowRunSteps.workspaceId,
+            entityId: entities.id,
+            workspaceId: entities.workspaceId,
+            featureOwner: entities.featureOwner,
           })
-          .from(flowRunSteps)
-          .where(
-            inArray(
-              sql`${flowRunSteps.reviewTaskEntityId}::text`,
-              mentionEntityIds,
-            ),
-          );
-        for (const { entityId, workspaceId } of linked) {
-          if (entityId !== null) {
-            flowOwnedEntities.add(`${workspaceId}:${entityId}`);
-          }
+          .from(entities)
+          .where(inArray(sql`${entities.id}::text`, mentionEntityIds));
+        for (const { entityId, workspaceId, featureOwner } of linked) {
+          entityOwners.set(`${workspaceId}:${entityId}`, featureOwner);
         }
       }
-      return await tx
+      const insertedRows = await tx
         .insert(notifications)
         .values(
-          batch.map((row) => ({
-            ...row,
-            featureOwner:
-              row.kind === NOTIFICATION_KIND.FLOW_RUN_COMPLETED ||
-              row.kind === NOTIFICATION_KIND.FLOW_RUN_FAILED ||
-              row.kind === NOTIFICATION_KIND.FLOW_RUN_AWAITING_APPROVAL ||
-              (row.workspaceId !== null &&
-                row.entityId !== null &&
-                flowOwnedEntities.has(`${row.workspaceId}:${row.entityId}`))
-                ? ("flows" as const)
-                : ("shared" as const),
-          })),
+          batch.map((row) => {
+            const owner = NOTIFICATION_OWNER_BY_KIND[row.kind];
+            switch (owner) {
+              case "shared":
+              case "flows":
+                return { ...row, featureOwner: owner };
+              case "entity":
+                return {
+                  ...row,
+                  featureOwner:
+                    entityOwners.get(`${row.workspaceId}:${row.entityId}`) ??
+                    "unknown",
+                };
+              default:
+                owner satisfies never;
+                return panic("Notification ownership requires a disposition");
+            }
+          }),
         )
         .onConflictDoNothing()
-        .returning({
+        .returning({ id: notifications.id });
+      if (insertedRows.length === 0) {
+        return [];
+      }
+      // Admission applies to the recipient, including cross-user fan-out.
+      return await tx
+        .select({
           userId: notifications.userId,
           organizationId: notifications.organizationId,
-        });
+        })
+        .from(notifications)
+        .where(
+          and(
+            inArray(
+              notifications.id,
+              insertedRows.map(({ id }) => id),
+            ),
+            activityFeatureOwnerVisibilitySql({
+              featureOwner: notifications.featureOwner,
+              organizationId: notifications.organizationId,
+              workspaceId: notifications.workspaceId,
+              userId: notifications.userId,
+            }),
+          ),
+        );
     });
     inserted.push(...batchRows);
   }

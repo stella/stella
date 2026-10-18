@@ -1,9 +1,9 @@
-import { and, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
+import { and, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 
 import { auditLogs } from "@/api/db/schema";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { flowFeatureActorVisibilitySql } from "@/api/lib/flows/visibility";
+import { flowAuditVisibilityCondition } from "@/api/lib/flows/visibility";
 
 import {
   FEED_ACTIVITY_RESOURCE_TYPES,
@@ -29,13 +29,7 @@ type VisibleActivityOptions = {
 
 export const visibleActivityCondition = (options: VisibleActivityOptions) =>
   and(
-    or(
-      ne(auditLogs.featureOwner, "flows"),
-      flowFeatureActorVisibilitySql({
-        ...options,
-        workspaceId: auditLogs.workspaceId,
-      }),
-    ),
+    flowAuditVisibilityCondition(options),
     inArray(auditLogs.action, VISIBLE_ACTIVITY_ACTIONS),
     // Every feed row must resolve to a named target, so the query admits only
     // the resource types the projection names. A resource excluded there can

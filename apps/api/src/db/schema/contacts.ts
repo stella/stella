@@ -2,7 +2,8 @@ import type { SQLWrapper } from "drizzle-orm";
 
 import { CONTACT_TYPES, WORKSPACE_CONTACT_ROLES } from "@stll/api-contract";
 
-import { workspaceInsertCheck } from "@/api/db/rls";
+import { RETAINED_ACTIVITY_FEATURE_OWNERS } from "@/api/db/feature-owner";
+import { retainedActivityOwnerCheck, workspaceInsertCheck } from "@/api/db/rls";
 import { systemScopePolicies } from "@/api/db/system-scope-policies";
 import {
   ACCOUNT_AUDIT_EVENT_TYPES,
@@ -579,12 +580,19 @@ export const auditLogs = p.pgTable(
     }),
     /** Deployment feature that owns this retained event, independent of live pointers. */
     featureOwner: p
-      .text("feature_owner", { enum: ["shared", "flows"] })
+      .text("feature_owner", { enum: RETAINED_ACTIVITY_FEATURE_OWNERS })
       .notNull()
-      .default("shared"),
+      .default("unknown"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    p.check(
+      "audit_logs_feature_owner_check",
+      sql`${table.featureOwner} IN (${sql.join(
+        RETAINED_ACTIVITY_FEATURE_OWNERS.map((owner) => sql`${owner}`),
+        sql`, `,
+      )})`.inlineParams(),
+    ),
     p.check(
       "audit_logs_performer_type_check",
       sql`${table.performerType} in (${sql.join(AUDIT_PERFORMER_TYPE_SQL_VALUES, sql`, `)})`,
@@ -660,7 +668,7 @@ export const auditLogs = p.pgTable(
     p.pgPolicy("audit_logs_select", {
       for: "select",
       to: stella,
-      using: organizationCheck,
+      using: sql`${organizationCheck} AND ${retainedActivityOwnerCheck("audit_logs")}`,
     }),
     p.pgPolicy("audit_logs_insert", {
       for: "insert",

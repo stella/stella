@@ -22,6 +22,7 @@ import { auditReadChangesSql } from "@/api/lib/audit-log-details";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
+import { flowAuditVisibilityCondition } from "@/api/lib/flows/visibility";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
 
@@ -183,6 +184,7 @@ export const loadTimeSuggestions = async function* ({
           and(
             eq(auditLogs.organizationId, organizationId),
             eq(auditLogs.workspaceId, workspaceId),
+            flowAuditVisibilityCondition({ organizationId, userId }),
             eq(auditLogs.userId, userId),
             eq(auditLogs.performerType, "user"),
             notInArray(auditLogs.resourceType, [

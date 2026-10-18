@@ -129,6 +129,7 @@ export const deleteEntitiesHandler = async function* ({
       const lockedEntities = await tx
         .select({
           currentVersionId: entities.currentVersionId,
+          featureOwner: entities.featureOwner,
           id: entities.id,
           readOnly: entities.readOnly,
         })
@@ -174,6 +175,10 @@ export const deleteEntitiesHandler = async function* ({
           error: removalState.error,
         };
       }
+
+      const featureOwnerByEntityId = new Map(
+        lockedEntities.map(({ id, featureOwner }) => [id, featureOwner]),
+      );
 
       const entityVersionIds = tx
         .select({ id: entityVersions.id })
@@ -310,6 +315,7 @@ export const deleteEntitiesHandler = async function* ({
             action: AUDIT_ACTION.DELETE,
             resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
             resourceId: entity.id,
+            featureOwner: featureOwnerByEntityId.get(entity.id) ?? "unknown",
             changes: {
               deleted: {
                 old: {

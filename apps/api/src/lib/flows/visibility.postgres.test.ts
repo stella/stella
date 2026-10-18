@@ -84,6 +84,7 @@ if (!databaseUrl || !enabled) {
           await db.insert(notifications).values([
             {
               id: flowId,
+              featureOwner: "flows",
               idempotencyKey: flowId,
               organizationId: fixture.organizationId,
               workspaceId: fixture.workspaceId,
@@ -95,6 +96,7 @@ if (!databaseUrl || !enabled) {
             },
             {
               id: mentionId,
+              featureOwner: "flows",
               idempotencyKey: mentionId,
               organizationId: fixture.organizationId,
               workspaceId: fixture.workspaceId,
@@ -106,6 +108,7 @@ if (!databaseUrl || !enabled) {
             },
             {
               id: sharedId,
+              featureOwner: "shared",
               idempotencyKey: sharedId,
               organizationId: fixture.organizationId,
               workspaceId: fixture.workspaceId,

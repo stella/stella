@@ -198,6 +198,7 @@ test("review-task identifiers require current grant while ordinary invalidations
       id: taskEntityId,
       workspaceId,
       kind: "task",
+      featureOwner: "flows",
       name: "Review task",
     });
     await db.insert(flowRuns).values({
@@ -276,7 +277,13 @@ test("committed task deletions preserve recipient-specific single and mixed chan
   const recipients = [enrolledUserId, ungrantedUserId];
   try {
     await db.insert(entities).values([
-      { id: taskEntityId, workspaceId, kind: "task", name: "Review task" },
+      {
+        id: taskEntityId,
+        workspaceId,
+        kind: "task",
+        featureOwner: "flows",
+        name: "Review task",
+      },
       {
         id: ordinaryEntityId,
         workspaceId,

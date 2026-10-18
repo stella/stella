@@ -408,6 +408,7 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
         id: taskEntityId,
         workspaceId,
         kind: "task",
+        featureOwner: "flows",
         name: "Review task",
         status: "open",
       });

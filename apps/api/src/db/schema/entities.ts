@@ -2,6 +2,7 @@ import type { ApiFileSecurityRejectionDetails } from "@stll/api-contract";
 import { DESKTOP_HANDOFF_FAILURE_REASONS } from "@stll/api-contract/desktop-handoff";
 import type { DocumentTranslationSourceLanguageCode } from "@stll/api-contract/document-translation";
 
+import { ENTITY_FEATURE_OWNERS } from "@/api/db/feature-owner";
 import { systemScopePolicies } from "@/api/db/system-scope-policies";
 import { DESKTOP_EDIT_FILE_TYPES } from "@/api/lib/desktop-edit-file-types";
 import {
@@ -81,6 +82,11 @@ export const entities = p.pgTable(
   "entities",
   {
     ...entityFeatureGateColumns(),
+    /** Owner assigned by the creating operation before any activity is recorded. */
+    featureOwner: p
+      .text("feature_owner", { enum: ENTITY_FEATURE_OWNERS })
+      .notNull()
+      .default("shared"),
     id: pUuid<"entity">().primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
@@ -193,6 +199,13 @@ export const entities = p.pgTable(
       .on(table.workspaceId, table.dueDate)
       .where(isNotNull(table.dueDate)),
     ...entityFeatureGateChecks(table),
+    p.check(
+      "entities_feature_owner_check",
+      sql`${table.featureOwner} IN (${sql.join(
+        ENTITY_FEATURE_OWNERS.map((owner) => sql`${owner}`),
+        sql`, `,
+      )})`.inlineParams(),
+    ),
     p.check(
       "entities_list_item_type_task_only",
       sql`${table.listItemType} IS NULL OR (${table.kind} = 'task' AND ${table.listItemType} IN (${sql.join(LIST_ITEM_TYPE_SQL_VALUES, sql`, `)}))`,

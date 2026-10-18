@@ -32,6 +32,7 @@ type FlowReviewGateFixtureOptions = {
   intermediate: boolean;
   governed?: boolean;
   initialRunStatus?: "pending" | "awaiting_review";
+  taskSetup?: "seeded" | "worker";
 };
 
 export const flowReviewGateFixture = async (
@@ -40,6 +41,7 @@ export const flowReviewGateFixture = async (
     intermediate,
     governed = false,
     initialRunStatus = "awaiting_review",
+    taskSetup = "seeded",
   }: FlowReviewGateFixtureOptions,
 ) => {
   const organizationId = mintAuthProviderId<"organization">();
@@ -93,24 +95,27 @@ export const flowReviewGateFixture = async (
       reference: workspaceId,
     });
     await db.insert(workspaceMembers).values({ workspaceId, userId });
-    await db.insert(entities).values({
-      id: taskEntityId,
-      workspaceId,
-      kind: "task",
-      name: "Review task",
-      status: "open",
-    });
-    if (governed) {
-      await db.insert(workObligations).values({
-        entityId: taskEntityId,
+    if (taskSetup === "seeded") {
+      await db.insert(entities).values({
+        id: taskEntityId,
         workspaceId,
-        sourceType: WORK_OBLIGATION_SOURCE.FLOW,
-        status: "active",
-        ownerUserId: userId,
-        acknowledgedAt: new Date(),
-        acknowledgedByUserId: userId,
-        createdByUserId: userId,
+        kind: "task",
+        featureOwner: "flows",
+        name: "Review task",
+        status: "open",
       });
+      if (governed) {
+        await db.insert(workObligations).values({
+          entityId: taskEntityId,
+          workspaceId,
+          sourceType: WORK_OBLIGATION_SOURCE.FLOW,
+          status: "active",
+          ownerUserId: userId,
+          acknowledgedAt: new Date(),
+          acknowledgedByUserId: userId,
+          createdByUserId: userId,
+        });
+      }
     }
     await db.insert(flowRuns).values({
       id: runId,
@@ -126,7 +131,8 @@ export const flowReviewGateFixture = async (
         runId,
         index,
         kind: step.kind,
-        reviewTaskEntityId: index === 0 ? taskEntityId : null,
+        reviewTaskEntityId:
+          index === 0 && taskSetup === "seeded" ? taskEntityId : null,
         status: index === 0 ? initialRunStatus : ("pending" as const),
       })),
     );
