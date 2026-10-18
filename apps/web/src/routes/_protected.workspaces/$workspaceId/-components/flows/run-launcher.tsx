@@ -35,6 +35,8 @@ import { useQueryView } from "@/lib/use-query-view";
 import { entitySummariesOptions } from "@/lib/workspaces/queries/entities";
 import { flowRunsKeys } from "@/lib/workspaces/queries/flow-runs";
 
+import { filterEntitiesByName } from "./run-launcher.logic";
+
 type RunLauncherProps = {
   workspaceId: string;
   organizationId: string;
@@ -79,9 +81,10 @@ export const RunLauncher = ({
       ? flowsData.items.filter((flow) => flow.enabled)
       : [];
 
-  const filteredEntities = entities?.filter((entity) =>
-    (entity.name ?? "").toLowerCase().includes(entityFilter.toLowerCase()),
-  );
+  const filteredEntities =
+    entities === undefined
+      ? undefined
+      : filterEntitiesByName(entities, entityFilter);
 
   const exceedsInputEntitiesLimit =
     selectedEntityIds.length > FLOW_RUN_INPUT_ENTITIES_MAX;
