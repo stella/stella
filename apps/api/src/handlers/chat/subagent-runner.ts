@@ -2,7 +2,7 @@ import { EventType, maxIterations } from "@tanstack/ai";
 import type { TokenUsage, UIMessage } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 
-import type { ModelRole } from "@stll/ai-catalog";
+import type { ModelTask } from "@stll/ai-catalog";
 import type { AIErrorKind } from "@stll/api-contract";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -16,7 +16,7 @@ import {
 } from "@/api/handlers/chat/third-party-boundary";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-config";
-import { getTemperatureForRole, resolveCaching } from "@/api/lib/ai-config";
+import { getTemperatureForTask, resolveCaching } from "@/api/lib/ai-config";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
@@ -60,7 +60,7 @@ export type RunSubagentOptions = {
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
-  role: ModelRole;
+  task: ModelTask;
   modelId?: string | undefined;
   /**
    * Server-built framing and tool catalog. Sent verbatim, never anonymized,
@@ -214,7 +214,7 @@ export const runSubagent = async (
     organizationId: options.organizationId,
     admission: options.admission,
     orgAIConfig: options.orgAIConfig,
-    role: options.role,
+    task: options.task,
   });
 
   const abortController = abortControllerFromSignal(
@@ -232,7 +232,7 @@ export const runSubagent = async (
       workspaceId: options.metering.workspaceId,
     },
     feature: options.metering.feature,
-    modelRole: options.role,
+    modelTask: options.task,
     orgAIConfig: options.orgAIConfig,
     modelTier: options.admission.modelTier,
     properties: {
@@ -258,7 +258,7 @@ export const runSubagent = async (
   // is left disabled here rather than guessing at a scope.
   const caching = resolveCaching({
     promptCachingEnabled: false,
-    role: options.role,
+    task: options.task,
     scopeKey: null,
   });
 
@@ -322,7 +322,7 @@ export const runSubagent = async (
       modelTools,
       serviceTier: options.metering.serviceTier,
       system: guardedSystem,
-      temperature: getTemperatureForRole(options.role),
+      temperature: getTemperatureForTask(options.task),
     }),
     middleware: [analytics.middleware],
     context: { delegationDepth: options.delegationDepth },

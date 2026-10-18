@@ -1,12 +1,11 @@
 import { and, eq, inArray } from "drizzle-orm";
 
-import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import { publishedCaseLawDecisions, caseLawSources } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { publicDecisionRowColumns } from "@/api/lib/case-law/decision-row-columns";
 import { readDecisionHeadnote } from "@/api/lib/case-law/decision-text";
 import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
-import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { decisionTextWithheldReason } from "@/api/lib/legal-search/corpus-source";
 
@@ -33,16 +32,15 @@ export const readPublicDecisionSummaries = async ({
         ...publicDecisionRowColumns(),
         sourceDescriptor: caseLawSources.descriptor,
       })
-      .from(caseLawDecisions)
+      .from(publishedCaseLawDecisions)
       .innerJoin(
         caseLawSources,
-        eq(caseLawSources.id, caseLawDecisions.sourceId),
+        eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
       )
       .where(
         and(
-          inArray(caseLawDecisions.id, [...decisionIds]),
+          inArray(publishedCaseLawDecisions.id, [...decisionIds]),
           redistributableCaseLawSource,
-          publishedCaseLawDecision,
         ),
       )
       .limit(decisionIds.length),

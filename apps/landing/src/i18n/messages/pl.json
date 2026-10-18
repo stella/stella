@@ -569,7 +569,7 @@
           "question": "Skąd pochodzą te dane?"
         },
         "1": {
-          "answer": "Dwie listy, obie rosną. Podłączone rejestry obejmują już ARES (Czechy), Companies House (Wielka Brytania), SEC EDGAR (USA), KRS (Polska), PRH (Finlandia) i VIES (VAT w UE). Poza rejestrami oficjalne źródła dochodzą jurysdykcja po jurysdykcji; podłączone źródła mają już na przykład Czechy, Hiszpania i Tajwan, a czytnik orzecznictwa jest zbudowany tak, aby przeglądać i filtrować według jurysdykcji w miarę dodawania kolejnych oficjalnych źródeł.",
+          "answer": "Czytnik publicznego orzecznictwa udostępnia obecnie czeskie orzeczenia. Połączone rejestry spółek obejmują ARES (Czechy), Companies House (Wielka Brytania), SEC EDGAR (USA), KRS (Polska), PRH (Finlandia) i VIES (VAT w UE).",
           "question": "Które jurysdykcje i rejestry są objęte?"
         },
         "2": {
@@ -892,9 +892,11 @@
     "bringWorkspaceToFront": "Przenieś na wierzch obszar roboczy aplikacji stella",
     "controlBody": "stella to prawnicze oprogramowanie <gh>open source</gh>, które uruchomisz na własnej infrastrukturze: przejrzyj kod, korzystaj z niego na swoich zasadach i eksportuj wszystko w standardowych formatach.",
     "controlTitle": "Zachowaj kontrolę nad swoją technologią.",
-    "dataBody": "Orzecznictwo i rejestry spółek z każdej jurysdykcji, w której pracujesz, trafiają wprost do sprawy. Anonimizacja trzyma dane identyfikujące z dala od AI.",
+    "dataBody": "Czytaj czeskie orzecznictwo z uwagami AI dotyczącymi zagadnień prawnych, zaznaczeniami, podkreśleniami, komentarzami prawnika i odpowiedziami z odnośnikami do źródeł. Wyszukuj spółki w połączonych oficjalnych rejestrach i odwołuj się do źródeł ze sprawy.",
+    "dataConstitutionalAlt": "Orzeczenie czeskiego Trybunału Konstytucyjnego IV.ÚS 1394/24 z numerowanymi akapitami, uwagą AI dotyczącą zagadnienia prawnego, zaznaczeniem, podkreśleniem, komentarzem prawnika i rozmową zawierającą dwa pytania i odpowiedzi z odnośnikami do źródeł.",
     "dataEyebrow": "Dane prawne",
-    "dataMainAlt": "Oficjalne orzeczenie sądu otwarte w aplikacji stella",
+    "dataMainAlt": "Orzeczenie czeskiego Sądu Najwyższego 27 Cdo 59/2022 z numerowanymi akapitami, uwagą AI dotyczącą zagadnienia prawnego, zaznaczeniem, podkreśleniem, komentarzem prawnika i rozmową zawierającą dwa pytania i odpowiedzi z odnośnikami do źródeł.",
+    "dataSupremeAlt": "Orzeczenie czeskiego Sądu Najwyższego 27 Cdo 1525/2025 z numerowanymi akapitami, uwagą AI dotyczącą zagadnienia prawnego, zaznaczeniem, podkreśleniem, komentarzem prawnika i rozmową zawierającą dwa pytania i odpowiedzi z odnośnikami do źródeł.",
     "dataTitle": "Orzecznictwo i rejestry pod ręką.",
     "exploreAgent": "Poznaj agenta AI",
     "exploreAnonymization": "Poznaj anonimizację",

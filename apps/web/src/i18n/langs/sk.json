@@ -1058,7 +1058,6 @@
       }
     },
     "sameCaseNumber": "{count, plural, one {# rozhodnutie nesie} few {# rozhodnutia nesú} other {# rozhodnutí nesie}} túto spisovú značku. Vyberte súd.",
-    "searchAskPrompt": "{query} (judikatúra, {country})",
     "searchLabel": "Hľadať v judikatúre",
     "searchPlaceholder": "Spisová značka, ECLI alebo slová, napr. 1Cdo/12/2020",
     "searchUnavailable": {
@@ -1215,6 +1214,11 @@
       "requesting": "Príprava úprav…",
       "stale": "Odpoveď sa zmenila. Vyberte text znova.",
       "submit": "Požiadať o úpravu"
+    },
+    "answerQuote": {
+      "showInDecision": "Zobraziť v rozhodnutí",
+      "verified": "Overená citácia",
+      "verifiedHint": "Doslovne v {source}"
     },
     "applyMode": {
       "description": "Word ukladá, kto urobil každú zmenu. Vašu voľbu si zapamätáme.",
@@ -1400,7 +1404,12 @@
     "maxAttachmentsReached": "Maximálne {count} súborov na správu",
     "mention": {
       "category": {
-        "entities": "V tomto spise"
+        "entities": "V tomto spise",
+        "sources": "Zdroje"
+      },
+      "corpus": {
+        "caseLaw": "Judikatúra · {country}",
+        "legislation": "Právne predpisy · {country}"
       },
       "loadError": "Nepodarilo sa načítať položky"
     },
@@ -1454,6 +1463,12 @@
       "title": "Vložený text"
     },
     "placeholder": "Sem napíšte svoju otázku, / pre zručnosti, @ na pridanie kontextu",
+    "processSummary": {
+      "analyses": "{count, plural, one {# analýza} few {# analýzy} other {# analýz}}",
+      "changesSaved": "{count, plural, one {# uložená zmena} few {# uložené zmeny} other {# uložených zmien}}",
+      "documentEdits": "{count, plural, one {# úprava dokumentu} few {# úpravy dokumentu} other {# úprav dokumentu}}",
+      "sourcesChecked": "{count, plural, one {# preverený zdroj} few {# preverené zdroje} other {# preverených zdrojov}}"
+    },
     "promptImprovementStrategies": {
       "decompose": {
         "description": "Rozdelí zložitú úlohu na zoradené čiastkové kroky.",
@@ -1699,6 +1714,7 @@
       "interrupted": "Prerušené pred dokončením",
       "output": "Výstup",
       "sourceCode": "Zdrojový kód",
+      "statusWaiting": "Čaká",
       "toggleDetails": "Prepnúť podrobnosti",
       "unrestoredFields": "{count, plural, one {# pole sa nepodarilo} few {# polia sa nepodarilo} many {# poľa sa nepodarilo} other {# polí sa nepodarilo}} v anonymizovanom režime vyplniť skutočnými hodnotami. Skontrolujte: {fields}"
     },
@@ -5121,7 +5137,6 @@
     "provisionTextUnavailable": "Text nie je pre toto znenie k dispozícii",
     "publisherWindowInconsistent": "K tomuto dňu nemožno určiť účinné znenie: údaje vydavateľa si odporujú.",
     "resolvedAlias": "Rozpoznané ako {label}",
-    "searchAskPrompt": "{query} (právne predpisy: {country})",
     "searchLabel": "Hľadať v právnych predpisoch",
     "searchPlaceholder": "Číslo, skratka alebo názov, napr. 40/1964 Zb.",
     "showCitedPartOnly": "Zobraziť len citovanú časť",

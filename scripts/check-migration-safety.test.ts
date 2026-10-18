@@ -407,6 +407,21 @@ describe("check-migration-safety", () => {
       );
     });
 
+    // .squawk.toml excludes squawk's ban-drop-function because this rule owns
+    // function drops; pin that the acknowledgement is still required.
+    it("requires a reviewed drop-object acknowledgement for DROP FUNCTION", () => {
+      expectFinding(
+        runChecker(`DROP FUNCTION "documents_is_live"(jsonb);`),
+        "drop-object",
+      );
+      expectClean(
+        runChecker(`
+          -- stella-migration-safety: reviewed drop-object - every caller was replaced above
+          DROP FUNCTION "documents_is_live"(jsonb);
+        `),
+      );
+    });
+
     it("still flags a DROP INDEX with no matching CREATE", () => {
       expectFinding(
         runChecker(`

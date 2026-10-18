@@ -6,7 +6,7 @@ import type { AnthropicTextMetadata } from "@tanstack/ai-anthropic";
 import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
-import type { ModelRole } from "@stll/ai-catalog";
+import type { ModelTask } from "@stll/ai-catalog";
 
 import { resolveCaching } from "@/api/lib/ai-config";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
@@ -34,11 +34,11 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { markTanStackCacheBreakpoint } from "@/api/lib/tanstack-ai-caching";
-import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 
-const DISPOSITION_ROLE = "fast" as const;
-const GLOSSARY_ROLE = "chat" as const;
-const TRANSLATION_ROLE = "chat" as const;
+const DISPOSITION_TASK = "classify" as const;
+const GLOSSARY_TASK = "chat" as const;
+const TRANSLATION_TASK = "chat" as const;
 const SERVICE_TIER = "standard" as const;
 const CALL_TIMEOUT_MS = 90_000;
 const PREVIEW_CHARS = 240;
@@ -65,7 +65,7 @@ export type BilingualAIContext = {
   /** Stable key for prompt-cache scoping, typically the entity version id. */
   scopeKey: string;
   /** External model-dispatch boundary; supplied by focused integration tests. */
-  generateObjectForRole?: typeof generateTanStackObjectForRole | undefined;
+  generateObjectForTask?: typeof generateTanStackObjectForTask | undefined;
 };
 
 export type BilingualAIDocumentContext = BilingualAIContext & {
@@ -97,12 +97,12 @@ export const translationLanguageInstruction = (
 const analyticsFor = (
   context: BilingualAIContext,
   feature: string,
-  modelRole: ModelRole,
+  modelTask: ModelTask,
 ) =>
   createTanStackAIAnalyticsCallbacks({
     dataClass: "customer",
     feature,
-    modelRole,
+    modelTask,
     orgAIConfig: context.orgAIConfig,
     modelTier: context.admission.modelTier,
     properties: {
@@ -150,12 +150,12 @@ const serializeSourceDocument = (units: readonly BilingualUnit[]): string => {
  */
 export const buildBilingualDocumentRequest = (
   context: BilingualAIDocumentContext,
-  role: ModelRole,
+  task: ModelTask,
   request: string,
 ): { caching: ReturnType<typeof resolveCaching>; messages: ModelMessage[] } => {
   const caching = resolveCaching({
     promptCachingEnabled: context.promptCachingEnabled,
-    role,
+    task,
     scopeKey: context.scopeKey,
   });
   const source: TextPart<AnthropicTextMetadata> = {
@@ -231,7 +231,7 @@ export const decideDispositions = async (
     const analytics = analyticsFor(
       context,
       "bilingual.dispositions",
-      DISPOSITION_ROLE,
+      DISPOSITION_TASK,
     );
     const chunk = BILINGUAL_LIMITS.dispositionChunk;
     const overlap = 10;
@@ -248,14 +248,14 @@ export const decideDispositions = async (
       if (!slice.every((unit) => decided.has(unit.ordinal))) {
         const request = buildBilingualDocumentRequest(
           context,
-          DISPOSITION_ROLE,
+          DISPOSITION_TASK,
           `${translationLanguageInstruction(languages)}\n\n${formatDispositionRows(slice, decided)}`,
         );
         const output = await (
-          context.generateObjectForRole ?? generateTanStackObjectForRole
+          context.generateObjectForTask ?? generateTanStackObjectForTask
         )({
           dataClass: "customer",
-          role: DISPOSITION_ROLE,
+          task: DISPOSITION_TASK,
           orgAIConfig: context.orgAIConfig,
           managedAIResidency: context.managedAIResidency,
           organizationId: context.organizationId,
@@ -353,7 +353,7 @@ export const proposeGlossary = async (
   languages: TranslationLanguages,
   context: BilingualAIDocumentContext,
 ): Promise<BilingualGlossaryEntry[]> => {
-  const analytics = analyticsFor(context, "bilingual.glossary", GLOSSARY_ROLE);
+  const analytics = analyticsFor(context, "bilingual.glossary", GLOSSARY_TASK);
   let sample = "";
   for (const text of texts) {
     if (sample.length + text.length > GLOSSARY_SAMPLE_CHARS) {
@@ -363,14 +363,14 @@ export const proposeGlossary = async (
   }
   const request = buildBilingualDocumentRequest(
     context,
-    GLOSSARY_ROLE,
+    GLOSSARY_TASK,
     `${translationLanguageInstruction(languages)}\n\nDefined terms found:\n${candidates.map((term) => `- ${term}`).join("\n") || "(none)"}\n\nDocument sample:\n${sample}`,
   );
   const output = await (
-    context.generateObjectForRole ?? generateTanStackObjectForRole
+    context.generateObjectForTask ?? generateTanStackObjectForTask
   )({
     dataClass: "customer",
-    role: GLOSSARY_ROLE,
+    task: GLOSSARY_TASK,
     orgAIConfig: context.orgAIConfig,
     managedAIResidency: context.managedAIResidency,
     organizationId: context.organizationId,
@@ -469,7 +469,7 @@ export const translateBatch = async (
   const analytics = analyticsFor(
     context,
     "bilingual.translate",
-    TRANSLATION_ROLE,
+    TRANSLATION_TASK,
   );
   const glossaryLines = glossary
     .filter((entry) => entry.target !== "")
@@ -487,14 +487,14 @@ export const translateBatch = async (
 
   const request = buildBilingualDocumentRequest(
     context,
-    TRANSLATION_ROLE,
+    TRANSLATION_TASK,
     `${translationLanguageInstruction(languages)}\n\nGlossary:\n${glossaryLines || "(none)"}\n\nPreceding rows (context only):\n${contextLines || "(start of document)"}\n\nRows to translate:\n${rowLines}`,
   );
   const output = await (
-    context.generateObjectForRole ?? generateTanStackObjectForRole
+    context.generateObjectForTask ?? generateTanStackObjectForTask
   )({
     dataClass: "customer",
-    role: TRANSLATION_ROLE,
+    task: TRANSLATION_TASK,
     orgAIConfig: context.orgAIConfig,
     managedAIResidency: context.managedAIResidency,
     organizationId: context.organizationId,
@@ -617,7 +617,7 @@ export const translateFormattedBatch = async (
   const analytics = analyticsFor(
     context,
     "bilingual.translate",
-    TRANSLATION_ROLE,
+    TRANSLATION_TASK,
   );
   const glossaryLines = glossary
     .filter((entry) => entry.target !== "")
@@ -644,14 +644,14 @@ export const translateFormattedBatch = async (
         : "\n\nContract repair: return every listed row with exactly the provided text span ids, once and in order.";
     const request = buildBilingualDocumentRequest(
       context,
-      TRANSLATION_ROLE,
+      TRANSLATION_TASK,
       `${translationLanguageInstruction(languages)}\n\nGlossary:\n${glossaryLines || "(none)"}\n\nPreceding rows (context only):\n${contextLines || "(start of document)"}\n\nFormatted rows to translate:\n${serialized.value}${repairInstruction}`,
     );
     const output = await (
-      context.generateObjectForRole ?? generateTanStackObjectForRole
+      context.generateObjectForTask ?? generateTanStackObjectForTask
     )({
       dataClass: "customer",
-      role: TRANSLATION_ROLE,
+      task: TRANSLATION_TASK,
       orgAIConfig: context.orgAIConfig,
       managedAIResidency: context.managedAIResidency,
       organizationId: context.organizationId,
