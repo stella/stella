@@ -8934,8 +8934,11 @@ jobs:
           fi
 
       # The required-jobs record as a run artifact, whatever the verdict.
+      # Reporting only: a failed write or upload is annotated but never turns
+      # a passing verdict red (a reader without the record refuses on its own).
       - name: Write required-jobs record
         if: always() && steps.outcome.outcome != 'skipped'
+        continue-on-error: true
         env:
           REQUIRED_SUMMARY: ${{ steps.outcome.outputs.required_summary }}
           RECORD_PATH: ${{ runner.temp }}/ci-required-summary/ci-required-summary.json
@@ -8949,6 +8952,7 @@ jobs:
 
       - name: Upload required-jobs record
         if: always() && steps.outcome.outcome != 'skipped'
+        continue-on-error: true
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ci-required-summary
