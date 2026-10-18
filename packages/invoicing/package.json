@@ -21,7 +21,8 @@
   "dependencies": {
     "@stll/money": "workspace:*",
     "@stll/text-normalize": "workspace:*",
-    "better-result": "catalog:"
+    "better-result": "catalog:",
+    "bysquare": "4.1.0"
   },
   "devDependencies": {
     "@stll/property-testing": "workspace:*",

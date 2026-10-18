@@ -149,7 +149,7 @@ describe("Typst invoice renderer", () => {
   });
 });
 
-describe("SPAYD QR as SVG", () => {
+describe("payment QR as SVG", () => {
   test("the SVG paths reproduce the encoder's module matrix exactly", () => {
     const payment = buildInvoicePaymentPayload(invoiceFixture(1));
     expect(payment).not.toBeNull();

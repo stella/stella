@@ -13,13 +13,18 @@ import { panic, Result } from "better-result";
 import { encode } from "uqr";
 
 import type { InvoiceStatus } from "@stll/api-contract";
-import { buildCzechQrPaymentPayload } from "@stll/invoicing";
+import {
+  buildCzechQrPaymentPayload,
+  buildPayBySquarePayload,
+  paymentQrSchemeFor,
+  variableSymbolOf,
+} from "@stll/invoicing";
 import type {
   InvoiceDocumentType,
   InvoiceTotals,
   VatTreatment,
 } from "@stll/invoicing";
-import { formatMoneyCents } from "@stll/money";
+import { formatMoneyCents, toMajorUnits } from "@stll/money";
 import { parsePlainDate } from "@stll/time";
 
 import { savePdfRewrite } from "@/api/lib/files/pdf-signatures";
@@ -453,19 +458,55 @@ export const buildInvoicePaymentPayload = ({
   ) {
     return null;
   }
-  return buildCzechQrPaymentPayload({
-    documentType: invoice.documentType,
+  const scheme = paymentQrSchemeFor({
     iban: seller.iban,
-    amountMinor: totals.grossAmountMinor,
     currency: invoice.currency,
-    ...(invoice.dueDate === null ? {} : { dueDate: invoice.dueDate }),
-    ...(invoice.reference !== null && /^\d{1,10}$/u.test(invoice.reference)
-      ? { variableSymbol: invoice.reference }
-      : {}),
-    ...(invoice.status === "draft" || invoice.invoiceNumber === null
-      ? {}
-      : { message: invoice.invoiceNumber }),
   });
+  const variableSymbol = variableSymbolOf({
+    number: invoice.invoiceNumber ?? "",
+    reference: invoice.reference,
+  });
+  switch (scheme) {
+    case "spayd":
+      return buildCzechQrPaymentPayload({
+        documentType: invoice.documentType,
+        iban: seller.iban,
+        amountMinor: totals.grossAmountMinor,
+        currency: invoice.currency,
+        ...(invoice.dueDate === null ? {} : { dueDate: invoice.dueDate }),
+        ...(variableSymbol === null ? {} : { variableSymbol }),
+        ...(invoice.status === "draft" || invoice.invoiceNumber === null
+          ? {}
+          : { message: invoice.invoiceNumber }),
+      });
+    case "pay_by_square": {
+      if (invoice.dueDate === null) {
+        return null;
+      }
+      return buildPayBySquarePayload({
+        amount: toMajorUnits({
+          amountCents: totals.grossAmountMinor,
+          currency: invoice.currency,
+        }),
+        currency: invoice.currency,
+        dueDate: invoice.dueDate,
+        ...(variableSymbol === null ? {} : { variableSymbol }),
+        paymentNote:
+          invoice.status === "draft" || invoice.invoiceNumber === null
+            ? ""
+            : invoice.invoiceNumber,
+        iban: seller.iban,
+        ...(seller.bic === null ? {} : { bic: seller.bic }),
+        beneficiaryName: seller.legalName,
+      });
+    }
+    case null:
+      return null;
+    default: {
+      scheme satisfies never;
+      return panic("Unknown payment QR scheme");
+    }
+  }
 };
 
 const PAGE_WIDTH = 595.28;

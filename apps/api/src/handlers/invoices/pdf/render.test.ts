@@ -1,6 +1,7 @@
 import { PDF } from "@libpdf/core";
 import { describe, expect, test } from "bun:test";
 
+import { buildPayBySquarePayload } from "@stll/invoicing";
 import { cents, formatMoneyCents } from "@stll/money";
 
 import { buildInvoicePaymentPayload, renderInvoicePdf } from "./render";
@@ -216,6 +217,40 @@ describe("invoice PDF", () => {
 
 describe("invoice QR payment", () => {
   test("matches canonical SPAYD account, amount, symbol, due date and message", () => {
+    expect(buildInvoicePaymentPayload(options)?.unwrap()).toEqual({
+      status: "payable",
+      payload:
+        "SPD*1.0*ACC:CZ3301000000000002970297*AM:555.55*CC:CZK*X-VS:0987654321*DT:20261014*MSG:2026-001",
+    });
+  });
+
+  test("embeds PAY by square for a Slovak EUR invoice and keeps Czech SPAYD", () => {
+    const slovak = {
+      ...options,
+      invoice: { ...options.invoice, currency: "EUR" },
+      seller: {
+        ...options.seller,
+        legalName: "Fiktívna právna kancelária",
+        iban: "SK27 1100 0000 1234 5678 9012",
+        bic: "FIKTSKBA",
+      },
+    } satisfies RenderInvoicePdfOptions;
+    const payment = buildInvoicePaymentPayload(slovak)?.unwrap();
+    if (payment?.status !== "payable") {
+      throw new Error("Slovak EUR fixture must be payable");
+    }
+    expect(payment).toEqual(
+      buildPayBySquarePayload({
+        amount: 555.55,
+        currency: "EUR",
+        dueDate: "2026-10-14",
+        variableSymbol: "0987654321",
+        paymentNote: "2026-001",
+        iban: "SK27 1100 0000 1234 5678 9012",
+        bic: "FIKTSKBA",
+        beneficiaryName: "Fiktívna právna kancelária",
+      }).unwrap(),
+    );
     expect(buildInvoicePaymentPayload(options)?.unwrap()).toEqual({
       status: "payable",
       payload:

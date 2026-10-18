@@ -1,4 +1,5 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
+import { encode as encodePayBySquare, PaymentOptions } from "bysquare/pay";
 
 import { cents, currencyMinorUnitDigits, type CentsAmount } from "@stll/money";
 import { normalizeUnicode } from "@stll/text-normalize";
@@ -23,6 +24,143 @@ export type CzechQrPaymentResult =
 
 const QR_PAYMENT_VERSION = "1.0";
 const MAX_MESSAGE_LENGTH = 60;
+const PAY_BY_SQUARE_MAX_NOTE_LENGTH = 140;
+const PAY_BY_SQUARE_MAX_NAME_LENGTH = 70;
+const PAY_BY_SQUARE_AMOUNT_SCALE = 10 ** 2;
+
+export type PayBySquareInput = {
+  amount: number;
+  currency: string;
+  dueDate: string;
+  variableSymbol?: string;
+  paymentNote: string;
+  iban: string;
+  bic?: string;
+  beneficiaryName: string;
+};
+
+export type PaymentQrScheme = "spayd" | "pay_by_square";
+
+/** Selects the domestic payment standard from validated account geography and currency. */
+export const paymentQrSchemeFor = ({
+  iban,
+  currency,
+}: Pick<PayBySquareInput, "iban" | "currency">): PaymentQrScheme | null => {
+  const account = parseIban(iban);
+  if (account.isErr()) {
+    return null;
+  }
+  const country = account.value.slice(0, 2);
+  let accountRegion: "cz" | "sk" | "other" = "other";
+  if (country === "CZ") {
+    accountRegion = "cz";
+  } else if (country === "SK") {
+    accountRegion = "sk";
+  }
+  switch (accountRegion) {
+    case "cz":
+      switch (currency.toUpperCase()) {
+        case "CZK":
+        case "EUR":
+          return "spayd";
+        default:
+          return null;
+      }
+    case "sk":
+      return currency.toUpperCase() === "EUR" ? "pay_by_square" : null;
+    case "other":
+      return null;
+    default: {
+      accountRegion satisfies never;
+      return panic("Unknown payment account region");
+    }
+  }
+};
+
+/** Builds a PAY by square 1.2 payment-order document. */
+export const buildPayBySquarePayload = ({
+  amount,
+  currency,
+  dueDate,
+  variableSymbol,
+  paymentNote,
+  iban,
+  bic,
+  beneficiaryName,
+}: PayBySquareInput): InvoicingResult<CzechQrPaymentResult> => {
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return invalidInput("PAY by square amount must be positive");
+  }
+  const normalizedCurrency = currency.toUpperCase();
+  if (!Intl.supportedValuesOf("currency").includes(normalizedCurrency)) {
+    return invalidInput("PAY by square requires an ISO currency code");
+  }
+  const account = parseIban(iban);
+  if (account.isErr()) {
+    return invalidInput(
+      account.error.message === "IBAN checksum is invalid"
+        ? "PAY by square requires a valid IBAN checksum"
+        : "PAY by square requires a valid IBAN",
+    );
+  }
+  const symbol =
+    variableSymbol === undefined
+      ? Result.ok(undefined)
+      : validateVariableSymbol(variableSymbol);
+  if (symbol.isErr()) {
+    return Result.err(symbol.error);
+  }
+  const date = formatDate(dueDate);
+  if (date.isErr()) {
+    return Result.err(date.error);
+  }
+  const normalizedBic = bic?.replaceAll(/\s/gu, "").toUpperCase();
+  if (
+    normalizedBic !== undefined &&
+    !/^[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}(?:[A-Z0-9]{3})?$/u.test(normalizedBic)
+  ) {
+    return invalidInput("PAY by square requires a valid BIC");
+  }
+  const name = clipPayBySquareField(
+    beneficiaryName,
+    PAY_BY_SQUARE_MAX_NAME_LENGTH,
+  );
+  if (name === "") {
+    return invalidInput("PAY by square requires a beneficiary name");
+  }
+
+  const roundedAmount =
+    Math.round((amount + Number.EPSILON) * PAY_BY_SQUARE_AMOUNT_SCALE) /
+    PAY_BY_SQUARE_AMOUNT_SCALE;
+  const payload = encodePayBySquare(
+    {
+      payments: [
+        {
+          type: PaymentOptions.PaymentOrder,
+          amount: roundedAmount,
+          currencyCode: normalizedCurrency,
+          paymentDueDate: date.value,
+          ...(symbol.value === undefined
+            ? {}
+            : { variableSymbol: symbol.value }),
+          paymentNote: clipPayBySquareField(
+            paymentNote,
+            PAY_BY_SQUARE_MAX_NOTE_LENGTH,
+          ),
+          bankAccounts: [
+            {
+              iban: account.value,
+              ...(normalizedBic === undefined ? {} : { bic: normalizedBic }),
+            },
+          ],
+          beneficiary: { name },
+        },
+      ],
+    },
+    { deburr: false, validate: false },
+  );
+  return Result.ok({ status: "payable", payload });
+};
 
 export const buildCzechQrPaymentPayload = ({
   documentType,
@@ -158,3 +296,12 @@ const sanitizeFieldValue = (value: string): string => {
   }
   return encoded.join("");
 };
+
+const clipPayBySquareField = (value: string, maxLength: number): string =>
+  Array.from(
+    normalizeUnicode(value, "NFC")
+      .replaceAll(/[\t\r\n]+/gu, " ")
+      .trim(),
+  )
+    .slice(0, maxLength)
+    .join("");
