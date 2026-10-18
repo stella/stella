@@ -918,7 +918,15 @@ if (import.meta.main) {
   const repoRoot = path.resolve(import.meta.dir, "..");
   if (process.argv.includes("--self-test")) {
     const result = Bun.spawnSync(
-      ["bun", "test", "scripts/test-subject-reachability.test.ts"],
+      // CI runs this beside other checks; the slowest fixture test took
+      // 6.4 s there, so allow about 2.5 times that instead of Bun's 5 s.
+      [
+        "bun",
+        "test",
+        "--timeout",
+        "15000",
+        "scripts/test-subject-reachability.test.ts",
+      ],
       {
         cwd: repoRoot,
         stdout: "inherit",
