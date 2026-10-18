@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import {
   planVariablesExpression,
   predicateVariables,
+  withPlanVariablesOutput,
 } from "./ci-plan-variables";
 
 const readWorkflow = (file: string): unknown =>
@@ -58,4 +59,18 @@ test("empty census records a JSON object", () => {
   expect(planVariablesExpression(() => ({ jobs: { plain: {} } }))).toBe(
     `\${{ '{}' }}`,
   );
+});
+
+test("the variables output is written in place of the one existing line", () => {
+  const source = `jobs:\n  ci-plan:\n    outputs:\n      variables: \${{ '{}' }}\n`;
+  expect(withPlanVariablesOutput(source, `\${{ 'x' }}`)).toBe(
+    `jobs:\n  ci-plan:\n    outputs:\n      variables: \${{ 'x' }}\n`,
+  );
+});
+
+test("a workflow without exactly one variables output line is refused", () => {
+  const missing = "jobs:\n  ci-plan:\n    outputs:\n      other: x\n";
+  expect(() => withPlanVariablesOutput(missing, "x")).toThrow("found 0");
+  const twice = "      variables: a\n      variables: b\n";
+  expect(() => withPlanVariablesOutput(twice, "x")).toThrow("found 2");
 });

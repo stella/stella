@@ -84,6 +84,25 @@ export const planVariablesExpression = (
   return `\${{ format('{{${fields}}}', ${values}) }}`;
 };
 
+const PLAN_VARIABLES_OUTPUT = /^ {6}variables: .*$/gmu;
+
+/** The workflow with the ci-plan `variables` output set to `expression`. */
+export const withPlanVariablesOutput = (
+  source: string,
+  expression: string,
+): string => {
+  const matches = source.match(PLAN_VARIABLES_OUTPUT) ?? [];
+  if (matches.length !== 1) {
+    throw new CiPlanVariablesError(
+      `Expected exactly one ci-plan variables output line, found ${matches.length}`,
+    );
+  }
+  return source.replace(
+    PLAN_VARIABLES_OUTPUT,
+    () => `      variables: ${expression}`,
+  );
+};
+
 if (import.meta.main) {
   const file = ".github/workflows/ci.yml";
   const expression = planVariablesExpression((path) =>
@@ -95,11 +114,5 @@ if (import.meta.main) {
       "Usage: bun scripts/ci-plan-variables.ts --write",
     );
   }
-  writeFileSync(
-    file,
-    source.replace(
-      /^ {6}variables: .*$/mu,
-      () => `      variables: ${expression}`,
-    ),
-  );
+  writeFileSync(file, withPlanVariablesOutput(source, expression));
 }
