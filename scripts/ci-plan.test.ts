@@ -2099,6 +2099,87 @@ const fastRequired = v.parse(
   JSON.parse(resultStep.env["FAST_REQUIRED"] ?? ""),
 );
 
+const requiredJobsRecord = (stdout: string) => {
+  const serialized = /^Required jobs record: (\{.*\})$/mu.exec(stdout)?.[1];
+  return v.parse(
+    v.object({
+      version: v.literal(1),
+      verdict: v.picklist(["success", "failure"]),
+      required: v.array(v.object({ job: v.string(), conclusion: v.string() })),
+      not_required: v.array(
+        v.object({ job: v.string(), conclusion: v.string() }),
+      ),
+    }),
+    JSON.parse(serialized ?? panic(`No required jobs record in:\n${stdout}`)),
+  );
+};
+
+test("the required-jobs record names every workflow job once and carries the verdict", () => {
+  const outsideFastRequired = "legal-atlas-image";
+  expect(fastRequired).not.toContain(outsideFastRequired);
+  const cases = [
+    {
+      label: "full",
+      options: { event: EVENT.mergeGroup, results: {} },
+    },
+    {
+      label: "thin",
+      options: {
+        event: EVENT.mergeGroup,
+        results: {},
+        plannedOutputs: { queue_depth: "thin" },
+      },
+    },
+    {
+      label: "fast",
+      options: { event: EVENT.pullRequest, results: {} },
+    },
+    {
+      label: "fast failure outside FAST_REQUIRED",
+      options: {
+        event: EVENT.pullRequest,
+        results: { [outsideFastRequired]: "failure" },
+        cancellationEvidence: "missing",
+      },
+    },
+  ] satisfies readonly {
+    label: string;
+    options: EvaluateResultOptions;
+  }[];
+
+  for (const { item, stdout, exitCode } of evaluateResults(
+    cases,
+    ({ options }) => options,
+  )) {
+    const record = requiredJobsRecord(stdout);
+    expect(record.verdict, item.label).toBe(
+      item.label === "fast failure outside FAST_REQUIRED"
+        ? "failure"
+        : "success",
+    );
+    expect(exitCode, item.label).toBe(record.verdict === "success" ? 0 : 1);
+    const entries = [...record.required, ...record.not_required];
+    expect(entries.map(({ job }) => job).toSorted(), item.label).toEqual(
+      resultJob.needs.filter((job) => job !== "ci-plan").toSorted(),
+    );
+    expect(new Set(entries.map(({ job }) => job)).size, item.label).toBe(
+      entries.length,
+    );
+    expect(
+      record.not_required.filter(({ conclusion }) =>
+        ["failure", "cancelled"].includes(conclusion),
+      ),
+      item.label,
+    ).toEqual([]);
+    if (item.label === "fast failure outside FAST_REQUIRED") {
+      expect(record.required, item.label).toContainEqual({
+        job: outsideFastRequired,
+        conclusion: "failure",
+      });
+    }
+  }
+});
+
 test("a planned release screenshot check certifies the merge group", () => {
   // The planner selects it only for release pull requests and tags, so a
   // full-depth gate would skip it on the pull request every time.

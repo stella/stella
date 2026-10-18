@@ -8661,12 +8661,29 @@ jobs:
             exit 1
           fi
 
+          write_required_jobs_record() {
+            local verdict="$1"
+            local record
+            record=$(jq -ce --arg verdict "$verdict" --argjson required "$VERDICT_REQUIRED" '
+              [to_entries[] | select(.key != "ci-plan") | {job: .key, conclusion: .value.result}] as $jobs
+              | ($required | unique) as $required
+              | {version: 1, verdict: $verdict,
+                  required: [$jobs[] | select(.job as $job | $required | index($job))],
+                  not_required: [$jobs[] | select(.job as $job | $required | index($job) | not)]}
+              ' <<< "$NEEDS") || exit 1
+            echo "Required jobs record: $record"
+            printf 'Required jobs record: `%s`\n' "$record" >> "$GITHUB_STEP_SUMMARY"
+          }
+
           if [[ "${PR_DEPTH_ONLY:-false}" == true ]]; then
-            violations=$(jq -r --argjson required "$PR_DEPTH_JOBS" '[to_entries[] | select(.key as $job | $required | index($job)) | select(.value.result != "success") | "\(.key) (\(.value.result))"] | join(", ")' <<< "$NEEDS")
+            VERDICT_REQUIRED="$PR_DEPTH_JOBS"
+            violations=$(jq -r --argjson required "$VERDICT_REQUIRED" '[to_entries[] | select(.key as $job | $required | index($job)) | select(.value.result != "success") | "\(.key) (\(.value.result))"] | join(", ")' <<< "$NEEDS")
             if [[ -n "$violations" || $(jq 'length' <<< "$PR_DEPTH_JOBS") -eq 0 ]]; then
+              write_required_jobs_record failure
               echo "::error::Main PR-depth checks did not succeed: $violations"
               exit 1
             fi
+            write_required_jobs_record success
             echo "All derived PR-depth checks succeeded."
             exit 0
           fi
@@ -8702,10 +8719,17 @@ jobs:
           fi
           case "$SUITE_DEPTH" in
             full)
+              if [[ "$QUEUE_DEPTH" == thin ]]; then
+                VERDICT_REQUIRED="$THIN_JOBS"
+              else
+                VERDICT_REQUIRED=$(jq -c 'keys' <<< "$JOB_SCOPES")
+              fi
+              VERDICT_REQUIRED=$(jq -cn --argjson required "$VERDICT_REQUIRED" --argjson needs "$NEEDS" '
+                $required + [$needs | to_entries[] | select(.value.result == "failure" or .value.result == "cancelled" or .value.result == "timed_out") | .key] | unique') || exit 1
               # Planned checks must succeed. The derived queue list includes
               # every code gate; only reasoned non-code exceptions may skip.
-              violations=$(jq -r --argjson plan "$PLAN" --argjson scopes "$JOB_SCOPES" --arg queue "${QUEUE_DEPTH:-full}" --argjson thin "${THIN_JOBS:-[]}" '
-                [to_entries[] | select(.key != "ci-plan") | .key as $job | .value.result as $result
+              violations=$(jq -r --argjson plan "$PLAN" --argjson scopes "$JOB_SCOPES" --arg queue "${QUEUE_DEPTH:-full}" --argjson thin "${THIN_JOBS:-[]}" --argjson required "$VERDICT_REQUIRED" '
+                [to_entries[] | select(.key != "ci-plan") | .key as $job | select($required | index($job)) | .value.result as $result
                   | if $queue == "thin" and ($thin | index($job) | not) then
                       (if $result == "success" or $result == "skipped" then empty else "\($job) (\($result))" end)
                     elif ($scopes | has($job) | not) then "\($job) (no entry in JOB_SCOPES)"
@@ -8724,21 +8748,27 @@ jobs:
                 | join(", ")' <<< "$NEEDS")
               violations="${violations}${violations:+${folded_violations:+, }}${folded_violations}"
               if [[ -n "$violations" ]]; then
+                write_required_jobs_record failure
                 echo "::error::CI checks did not succeed: $violations"
                 exit 1
               fi
+              write_required_jobs_record success
               ;;
             fast)
+              VERDICT_REQUIRED=$(jq -cn --argjson required "$FAST_REQUIRED" --argjson needs "$NEEDS" '
+                $required + [$needs | to_entries[] | select(.value.result == "failure" or .value.result == "cancelled" or .value.result == "timed_out") | .key] | unique') || exit 1
               # Only an unlabelled pull request or a manual run plans `fast`:
               # its heavy suites skip by design. A cancelled dependency can
               # also mean a timeout; verify a newer run and reject timeout annotations.
               if [[ "$EVENT" == "merge_group" ]]; then
+                write_required_jobs_record failure
                 echo "::error::$EVENT run planned suite depth 'fast'; the heavy suites must run."
                 exit 1
               fi
               # A failure stands even when a sibling job was cancelled.
-              failed=$(jq -r '[to_entries[] | select(.value.result as $r | ["success", "skipped", "cancelled"] | index($r) | not) | "\(.key) (\(.value.result))"] | join(", ")' <<< "$NEEDS")
+              failed=$(jq -r --argjson required "$VERDICT_REQUIRED" '[to_entries[] | select(.key as $job | $required | index($job)) | select(.value.result as $r | ["success", "skipped", "cancelled"] | index($r) | not) | "\(.key) (\(.value.result))"] | join(", ")' <<< "$NEEDS")
               if [[ -n "$failed" ]]; then
+                write_required_jobs_record failure
                 # Plain text: the failure digest below annotates each failed
                 # step, and this step's exit is annotated by the runner.
                 echo "CI checks failed: $failed"
@@ -8746,23 +8776,26 @@ jobs:
               fi
               # Fast-required jobs must run when their scope is planned;
               # scope-less jobs are always planned.
-              skipped=$(jq -r --argjson plan "$PLAN" --argjson scopes "$(jq -cn --argjson full "$JOB_SCOPES" --argjson fast "$FAST_JOB_SCOPES" '$full + $fast')" --argjson required "$FAST_REQUIRED" '
+              skipped=$(jq -r --argjson plan "$PLAN" --argjson scopes "$(jq -cn --argjson full "$JOB_SCOPES" --argjson fast "$FAST_JOB_SCOPES" '$full + $fast')" --argjson required "$VERDICT_REQUIRED" '
                 [to_entries[] | .key as $job | select($required | index($job))
                   | select(($scopes[$job] == null or $plan[$scopes[$job]] == "true") and .value.result == "skipped")
                   | "\($job) (planned, skipped)"]
                 | join(", ")' <<< "$NEEDS")
               if [[ -n "$skipped" ]]; then
+                write_required_jobs_record failure
                 echo "::error::CI checks did not run: $skipped"
                 exit 1
               fi
-              cancelled=$(jq -r '[to_entries[] | select(.value.result == "cancelled") | .key] | join(", ")' <<< "$NEEDS")
+              cancelled=$(jq -r --argjson required "$VERDICT_REQUIRED" '[to_entries[] | select(.key as $job | $required | index($job)) | select(.value.result == "cancelled") | .key] | join(", ")' <<< "$NEEDS")
               if [[ -n "$cancelled" ]]; then
                 if ! cancelled_dependencies_were_superseded; then
+                  write_required_jobs_record failure
                   echo "::error::CI jobs were cancelled without verified supersession: $cancelled"
                   exit 1
                 fi
                 echo "CI run was superseded by a newer run (cancel-in-progress): $cancelled. Passing."
               fi
+              write_required_jobs_record success
               ;;
             *)
               echo "::error::CI plan produced no suite depth ('$SUITE_DEPTH')."
