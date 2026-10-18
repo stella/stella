@@ -34,7 +34,9 @@
 # Wired into CI in .github/workflows/ci.yml and scripts/verify.sh.
 set -uo pipefail
 
-SCRIPT="$(cd "$(dirname "$0")/.." && pwd)/scripts/detect-desktop-release-changes.sh"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/git-test-env.sh"
+SCRIPT="$SCRIPT_DIR/detect-desktop-release-changes.sh"
 
 WORK="$(mktemp -d)"
 STUB_BIN="$WORK/bin"

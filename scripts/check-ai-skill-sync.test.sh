@@ -2,6 +2,7 @@
 set -euo pipefail
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+source "$script_dir/git-test-env.sh"
 script="$script_dir/check-ai-skill-sync.sh"
 source_check="$script_dir/check-ai-skill-sources.sh"
 test_root="$(mktemp -d)"

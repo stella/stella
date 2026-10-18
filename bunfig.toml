@@ -84,6 +84,7 @@ minimumReleaseAgeExcludes = [
 ]
 
 [test]
+preload = ["./scripts/test-git-environment.ts"]
 # Custom lint rule tests spend their time awaiting oxlint. Running each file's
 # tests concurrently lets .oxlint-plugins/__tests__/lint-single-rule.ts lint
 # every waiting case of one rule configuration in a single oxlint run.

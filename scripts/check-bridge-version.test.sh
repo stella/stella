@@ -10,7 +10,9 @@
 # Runs in CI:     wired in .github/workflows/ci.yml
 set -uo pipefail
 
-SCRIPT="$(cd "$(dirname "$0")/.." && pwd)/scripts/check-bridge-version.sh"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/git-test-env.sh"
+SCRIPT="$SCRIPT_DIR/check-bridge-version.sh"
 PASS=0
 FAIL=0
 FAIL_NAMES=()
