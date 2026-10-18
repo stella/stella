@@ -128,13 +128,15 @@ const localActionReferences = (value: unknown): string[] => {
   if (isRecord(value["runs"]) && "steps" in value["runs"]) {
     groups.push(value["runs"]["steps"]);
   }
-  return groups.flatMap(flattenWorkflowSteps).flatMap((step) => {
-    const uses = step["uses"];
-    return typeof uses === "string" &&
-      (uses.startsWith("$/") || uses.startsWith("./"))
-      ? [uses]
-      : [];
-  });
+  return groups
+    .flatMap((steps) => flattenWorkflowSteps(steps))
+    .flatMap((step) => {
+      const uses = step["uses"];
+      return typeof uses === "string" &&
+        (uses.startsWith("$/") || uses.startsWith("./"))
+        ? [uses]
+        : [];
+    });
 };
 
 type LocalActionReferencesOptions = {

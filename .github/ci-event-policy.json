@@ -118,6 +118,7 @@
     "deploy-landing.yml/deploy": "main",
     "safe-chain-cache.yml/warm": "main",
     "ci.yml/ci-plan": "pr-fast",
+    "ci.yml/generated-sources": "pr-fast",
     "ci.yml/docker-checks": "queue",
     "ci.yml/ci-checks-generated": "pr-fast",
     "ci.yml/ci-checks-policy": "pr-fast",
