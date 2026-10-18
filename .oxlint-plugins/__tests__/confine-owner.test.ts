@@ -786,7 +786,7 @@ describe.serial("checked operation ownership", () => {
         ...entry.owner,
       ];
       const linesBySource = await Promise.all(
-        sourcePaths.map((sourcePath) =>
+        sourcePaths.map(async (sourcePath) =>
           lintSingleRule("confine-owner", source, {
             sourcePath,
             ruleOptions: { entries: [entry] },
