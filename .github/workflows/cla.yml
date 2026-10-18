@@ -388,7 +388,7 @@ jobs:
               for (const commit of added.commits) {
                 if (!validSha(commit?.sha) || !Array.isArray(commit.parents) || commit.parents.length !== 1 ||
                     commit.parents[0]?.sha !== base || typeof commit.commit?.message !== "string") fail("CLA_UNEXPECTED_GROUP_COMMIT");
-                const number = Number(/\(#([1-9][0-9]*)\)$/u.exec(commit.commit.message.split("\n", 1)[0].trimEnd())?.[1]);
+                const number = Number(commit.commit.message.split("\n", 1)[0].trimEnd().match(/\(#([1-9][0-9]*)\)$/u)?.[1]);
                 if (!positiveInteger(number)) fail("CLA_UNEXPECTED_GROUP_COMMIT");
                 entries.push({ number, baseCommit: { oid: base }, headCommit: { oid: commit.sha } });
                 base = commit.sha;
