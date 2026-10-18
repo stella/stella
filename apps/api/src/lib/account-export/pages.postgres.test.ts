@@ -16,6 +16,7 @@ import {
   legalReaderAnnotations,
   searchHistoryEntries,
   workspaceMembers,
+  workspaceViewTemplates,
   workspaces,
 } from "@/api/db/schema";
 import { markRlsDatabase } from "@/api/db/scoped";
@@ -51,10 +52,13 @@ describe.skipIf(!enabled)("account export personal data", () => {
       const exportingUserId = mintAuthProviderId<"user">();
       const otherUserId = mintAuthProviderId<"user">();
       const users = [exportingUserId, otherUserId];
+      const membershipIds = [Bun.randomUUIDv7(), Bun.randomUUIDv7()];
       const workspaceId = createSafeId<"workspace">();
       const entityId = createSafeId<"entity">();
       const verificationRunId = createSafeId<"legalListVerificationRun">();
       const verificationClaimId = createSafeId<"legalListClaim">();
+      const ownTemplateId = createSafeId<"workspaceViewTemplate">();
+      const otherTemplateId = createSafeId<"workspaceViewTemplate">();
       const createdAt = new Date("2026-10-18T10:00:00.000Z");
       const updatedAt = new Date("2026-10-18T11:00:00.000Z");
       const ownComments = [
@@ -96,8 +100,8 @@ describe.skipIf(!enabled)("account export personal data", () => {
           createdAt: new Date(),
         });
         await db.insert(member).values(
-          users.map((userId) => ({
-            id: Bun.randomUUIDv7(),
+          users.map((userId, index) => ({
+            id: membershipIds[index] ?? panic("Membership id required"),
             organizationId,
             userId,
             role: "member",
@@ -117,6 +121,36 @@ describe.skipIf(!enabled)("account export personal data", () => {
             userId,
           })),
         );
+        await db.insert(workspaceViewTemplates).values([
+          {
+            id: ownTemplateId,
+            organizationId,
+            userId: exportingUserId,
+            name: "Exporting author's template",
+            layout: {
+              type: "filesystem",
+              version: 1,
+              filters: [],
+              sorts: [],
+              hiddenProperties: [],
+              calculations: [],
+            },
+          },
+          {
+            id: otherTemplateId,
+            organizationId,
+            userId: otherUserId,
+            name: "Other author's template",
+            layout: {
+              type: "filesystem",
+              version: 1,
+              filters: [],
+              sorts: [],
+              hiddenProperties: [],
+              calculations: [],
+            },
+          },
+        ]);
         await db.insert(entities).values({
           id: entityId,
           workspaceId,
@@ -217,11 +251,76 @@ describe.skipIf(!enabled)("account export personal data", () => {
               },
             })),
         );
-        expect(
-          exported.some(({ data }) =>
-            otherComments.some(({ id }) => id === data.id),
-          ),
-        ).toBe(false);
+        for (const { id } of otherComments) {
+          expect(exported).not.toContainEqual({
+            organizationId,
+            data: expect.objectContaining({ id }),
+          });
+        }
+
+        const exportedAsOtherMember = await Array.fromAsync(
+          exportAccountRows({
+            projections: ACCOUNT_EXPORT_PROJECTIONS,
+            db,
+            userId: otherUserId,
+            table: "legal_reader_annotations",
+            signal: new AbortController().signal,
+            scopedDatabase,
+          }),
+        );
+
+        expect(exportedAsOtherMember).toHaveLength(otherComments.length);
+        for (const { id } of otherComments) {
+          expect(exportedAsOtherMember).toContainEqual({
+            organizationId,
+            data: expect.objectContaining({ id }),
+          });
+        }
+        for (const { id } of ownComments) {
+          expect(exportedAsOtherMember).not.toContainEqual({
+            organizationId,
+            data: expect.objectContaining({ id }),
+          });
+        }
+
+        const exportedTemplates = await Array.fromAsync(
+          exportAccountRows({
+            projections: ACCOUNT_EXPORT_PROJECTIONS,
+            db,
+            userId: exportingUserId,
+            table: "workspace_view_templates",
+            signal: new AbortController().signal,
+            scopedDatabase,
+          }),
+        );
+        expect(exportedTemplates).toEqual([
+          {
+            organizationId,
+            data: expect.objectContaining({ id: ownTemplateId }),
+          },
+        ]);
+        expect(exportedTemplates).not.toContainEqual({
+          organizationId,
+          data: expect.objectContaining({ id: otherTemplateId }),
+        });
+
+        const exportedMemberships = await Array.fromAsync(
+          exportAccountRows({
+            projections: ACCOUNT_EXPORT_PROJECTIONS,
+            db,
+            userId: exportingUserId,
+            table: "member",
+            signal: new AbortController().signal,
+            scopedDatabase,
+          }),
+        );
+        expect(exportedMemberships).toHaveLength(1);
+        expect(exportedMemberships).toContainEqual(
+          expect.objectContaining({ id: membershipIds.at(0) }),
+        );
+        expect(exportedMemberships).not.toContainEqual(
+          expect.objectContaining({ id: membershipIds.at(1) }),
+        );
       } finally {
         await db
           .delete(organization)

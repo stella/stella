@@ -87,7 +87,8 @@ type FeedbackReportPageRow = Awaited<
 >[number];
 type ExportOrganizationPageOptions = {
   projections: AccountExportProjections;
-  scopedDb: ScopedDb;
+  narrowScopedDb: ScopedDb;
+  membershipScopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   table: Exclude<
@@ -108,17 +109,21 @@ const projectRows = <T extends { id: string }>(
 
 type OrganizationPageQueryOptions = Omit<
   ExportOrganizationPageOptions,
-  "table"
+  "table" | "membershipScopedDb"
+>;
+type MembershipOrganizationPageQueryOptions = Omit<
+  ExportOrganizationPageOptions,
+  "table" | "narrowScopedDb"
 >;
 
 const readChatThreadsPage = async ({
   projections,
-  scopedDb,
+  narrowScopedDb,
   organizationId,
   userId,
   cursor,
 }: OrganizationPageQueryOptions) =>
-  await scopedDb(async (tx) => {
+  await narrowScopedDb(async (tx) => {
     const rows = await tx
       .select()
       .from(chatThreads)
@@ -137,12 +142,12 @@ const readChatThreadsPage = async ({
 
 const readChatMessagesPage = async ({
   projections,
-  scopedDb,
+  narrowScopedDb,
   organizationId,
   userId,
   cursor,
 }: OrganizationPageQueryOptions) =>
-  await scopedDb(async (tx) => {
+  await narrowScopedDb(async (tx) => {
     const rows = await tx
       .select({ row: chatMessages })
       .from(chatMessages)
@@ -168,12 +173,12 @@ const readChatMessagesPage = async ({
 
 const readChatMessageRevisionsPage = async ({
   projections,
-  scopedDb,
+  narrowScopedDb,
   organizationId,
   userId,
   cursor,
 }: OrganizationPageQueryOptions) =>
-  await scopedDb(async (tx) => {
+  await narrowScopedDb(async (tx) => {
     const rows = await tx
       .select({ row: chatMessageRevisions, role: chatMessages.role })
       .from(chatMessageRevisions)
@@ -207,12 +212,12 @@ const readChatMessageRevisionsPage = async ({
 
 const readAiMemoriesPage = async ({
   projections,
-  scopedDb,
+  narrowScopedDb,
   organizationId,
   userId,
   cursor,
 }: OrganizationPageQueryOptions) =>
-  await scopedDb(async (tx) => {
+  await narrowScopedDb(async (tx) => {
     const rows = await tx
       .select()
       .from(aiMemories)
@@ -235,12 +240,12 @@ const readAiMemoriesPage = async ({
 
 const readAgentSkillsPage = async ({
   projections,
-  scopedDb,
+  narrowScopedDb,
   organizationId,
   userId,
   cursor,
 }: OrganizationPageQueryOptions) =>
-  await scopedDb(async (tx) => {
+  await narrowScopedDb(async (tx) => {
     const rows = await tx
       .select()
       .from(agentSkills)
@@ -288,12 +293,12 @@ const readAgentSkillsPage = async ({
 
 const readAgentSkillRevisionsPage = async ({
   projections,
-  scopedDb,
+  narrowScopedDb,
   organizationId,
   userId,
   cursor,
 }: OrganizationPageQueryOptions) =>
-  await scopedDb(async (tx) => {
+  await narrowScopedDb(async (tx) => {
     const rows = await tx
       .select({ row: agentSkillRevisions })
       .from(agentSkillRevisions)
@@ -318,12 +323,12 @@ const readAgentSkillRevisionsPage = async ({
 
 const readSavedSearchesPage = async ({
   projections,
-  scopedDb,
+  narrowScopedDb,
   organizationId,
   userId,
   cursor,
 }: OrganizationPageQueryOptions) =>
-  await scopedDb(async (tx) => {
+  await narrowScopedDb(async (tx) => {
     const rows = await tx
       .select()
       .from(savedSearches)
@@ -349,12 +354,12 @@ const readSavedSearchesPage = async ({
 
 const readSearchHistoryPage = async ({
   projections,
-  scopedDb,
+  narrowScopedDb,
   organizationId,
   userId,
   cursor,
 }: OrganizationPageQueryOptions) =>
-  await scopedDb(async (tx) => {
+  await narrowScopedDb(async (tx) => {
     const rows = await tx
       .select()
       .from(searchHistoryEntries)
@@ -378,12 +383,12 @@ const readSearchHistoryPage = async ({
 
 const readLegalReaderAnnotationsPage = async ({
   projections,
-  scopedDb,
+  membershipScopedDb,
   organizationId,
   userId,
   cursor,
-}: OrganizationPageQueryOptions) =>
-  await scopedDb(async (tx) => {
+}: MembershipOrganizationPageQueryOptions) =>
+  await membershipScopedDb(async (tx) => {
     const rows = await tx
       .select()
       .from(legalReaderAnnotations)
@@ -406,12 +411,12 @@ const readLegalReaderAnnotationsPage = async ({
 
 const readLegalReaderAnswersPage = async ({
   projections,
-  scopedDb,
+  narrowScopedDb,
   organizationId,
   userId,
   cursor,
 }: OrganizationPageQueryOptions) =>
-  await scopedDb(async (tx) => {
+  await narrowScopedDb(async (tx) => {
     const rows = await tx
       .select()
       .from(legalReaderAnswers)
@@ -463,12 +468,12 @@ const readLegalReaderAnswersPage = async ({
 
 const readSavedTimeNarrativesPage = async ({
   projections,
-  scopedDb,
+  narrowScopedDb,
   organizationId,
   userId,
   cursor,
 }: OrganizationPageQueryOptions) =>
-  await scopedDb(async (tx) => {
+  await narrowScopedDb(async (tx) => {
     const rows = await tx
       .select()
       .from(savedTimeNarratives)
@@ -487,12 +492,12 @@ const readSavedTimeNarrativesPage = async ({
 
 const readTemplateDefaultsPage = async ({
   projections,
-  scopedDb,
+  narrowScopedDb,
   organizationId,
   userId,
   cursor,
 }: OrganizationPageQueryOptions) =>
-  await scopedDb(async (tx) => {
+  await narrowScopedDb(async (tx) => {
     const rows = await tx
       .select()
       .from(templateLookupFormatUserDefaults)
@@ -514,12 +519,12 @@ const readTemplateDefaultsPage = async ({
 
 const readWorkspaceViewTemplatesPage = async ({
   projections,
-  scopedDb,
+  narrowScopedDb,
   organizationId,
   userId,
   cursor,
 }: OrganizationPageQueryOptions) =>
-  await scopedDb(async (tx) => {
+  await narrowScopedDb(async (tx) => {
     const rows = await tx
       .select()
       .from(workspaceViewTemplates)
@@ -536,8 +541,8 @@ const readWorkspaceViewTemplatesPage = async ({
     return projectRows(rows, projections.workspace_view_templates);
   });
 
-// Every page runs under the requesting user's current membership scope.
-// Table-specific readers preserve the matching owner and membership filters.
+// Only annotations need membership scope to read an author's workspace comments.
+// Every other organization page retains the narrower empty-workspace scope.
 const readOrganizationPage = async ({
   table,
   ...options
@@ -663,7 +668,8 @@ export async function* exportAccountRows({
     const organizationId = brandPersistedOrganizationId(
       membership.organizationId,
     );
-    const scopedDb = createMembershipScopedDb(database, {
+    const narrowScopedDb = createScopedDb(database, [], organizationId, userId);
+    const membershipScopedDb = createMembershipScopedDb(database, {
       organizationId,
       serverValidatedWorkspaceIds: [],
       userId,
@@ -672,7 +678,8 @@ export async function* exportAccountRows({
       async (cursor) =>
         await readOrganizationPage({
           projections,
-          scopedDb,
+          narrowScopedDb,
+          membershipScopedDb,
           organizationId,
           userId,
           table,
@@ -690,10 +697,10 @@ export async function* exportAccountRows({
   }
 }
 
-type UserFileObjectsPageOptions = Omit<
+type UserFileObjectsPageOptions = Pick<
   OrganizationPageQueryOptions,
-  "projections"
->;
+  "organizationId" | "userId" | "cursor"
+> & { scopedDb: ScopedDb };
 const readUserFileObjectsPage = async ({
   scopedDb,
   organizationId,
