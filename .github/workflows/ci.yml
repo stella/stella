@@ -143,10 +143,8 @@ jobs:
       completed_run_id: ${{ steps.completed-depth.outputs.completed_run_id }}
       queue_validation: ${{ steps.completed-depth.outputs.queue_validation }}
       metadata_only: ${{ steps.completed-depth.outputs.metadata_only }}
-      # The one owner of the queue-only (armed heavy) suites: an armed pull
-      # request run proves them, a merge group runs them only when its queued
-      # head lacks that proof, and manual and main runs keep them. Every
-      # queue-only job gates on this; scripts/ci-plan.test.ts enumerates them.
+      # Every queue-only job gates on this: armed pull request runs, merge
+      # groups without armed proof, manual and main runs.
       heavy_proof: >-
         ${{ steps.completed-depth.outputs.run_required != 'false'
         && ((github.event_name == 'pull_request'
@@ -413,32 +411,21 @@ jobs:
               merge_parent="$first_parent"
             fi
           fi
-          # A batched group's patch spans every entry from the group base, and
-          # armed proof belongs to each queued pull request alone. Each queue
-          # ref names the tree its entry was queued onto, the previous entry's
-          # head, so walking the refs down to the group base yields every
-          # entry's own change. A chain that does not reach the base is null.
+          # Armed proof covers one entry's own patch: walk the queue refs (each
+          # names its entry's base) down to the group base; unresolved is null.
           entry_chain=null
           if [[ "$EVENT_NAME" == merge_group ]]; then
-            queue_refs=$(git ls-remote origin 'refs/heads/gh-readonly-queue/*') || queue_refs=""
-            chain='[]'
-            ref="$GROUP_HEAD_REF"
-            entry_head="$head"
+            refs=$(git ls-remote origin 'refs/heads/gh-readonly-queue/*') || refs=""
+            chain='[]' ref="$GROUP_HEAD_REF" tip="$head"
             for _ in {1..20}; do
               [[ "$ref" =~ /pr-([0-9]+)-([0-9a-f]{40})$ ]] || break
-              number="${BASH_REMATCH[1]}"
-              entry_base="${BASH_REMATCH[2]}"
-              git merge-base --is-ancestor "$entry_base" "$entry_head" || break
-              ! git diff --quiet "$entry_base..$entry_head" || break
-              entry_patch=$(git diff --binary "$entry_base..$entry_head" | git patch-id --stable | awk 'NR == 1 { print $1 }')
-              [[ "$entry_patch" =~ ^[0-9a-f]{40}$ ]] || break
-              chain=$(jq -c --argjson pr "$number" --arg patch "$entry_patch" '. + [{pr: $pr, patch_id: $patch}]' <<< "$chain")
-              if [[ "$entry_base" == "$base" ]]; then
-                entry_chain="$chain"
-                break
-              fi
-              ref=$(awk -v sha="$entry_base" '$1 == sha { print $2; exit }' <<< "$queue_refs")
-              entry_head="$entry_base"
+              number="${BASH_REMATCH[1]}" from="${BASH_REMATCH[2]}"
+              git merge-base --is-ancestor "$from" "$tip" && ! git diff --quiet "$from..$tip" || break
+              id=$(git diff --binary "$from..$tip" | git patch-id --stable | awk 'NR == 1 { print $1 }')
+              [[ "$id" =~ ^[0-9a-f]{40}$ ]] || break
+              chain=$(jq -c --argjson pr "$number" --arg id "$id" '. + [{pr: $pr, patch_id: $id}]' <<< "$chain")
+              [[ "$from" == "$base" ]] && { entry_chain="$chain"; break; }
+              ref=$(awk -v sha="$from" '$1 == sha { print $2; exit }' <<< "$refs") tip="$from"
             done
           fi
           {
@@ -723,35 +710,24 @@ jobs:
                 core.setOutput("pr_depth_source_run_id", String(fast.sourceId));
                 if (queue) core.setOutput("normal_completion", "complete");
               }
-              // A batched group merges every entry from its base, so it skips
-              // the queue-only suites only when each entry's armed pull request
-              // run proved them for that entry's own patch; otherwise it runs
-              // them. The chain lists the queued pull request first.
+              // Skip the queue-only suites only when every entry's armed run
+              // proved them for its own patch; the queued pull request leads.
               const chain = JSON.parse(process.env.ENTRY_CHAIN || "null");
-              if (!Array.isArray(chain) || chain.length === 0 || chain.at(0)?.pr !== pr.number
+              if (!Array.isArray(chain) || chain.at(0)?.pr !== pr.number
                   || new Set(chain.map((entry) => entry?.pr)).size !== chain.length
-                  || !chain.every((entry) => Number.isSafeInteger(entry?.pr) && entry.pr > 0
-                    && /^[0-9a-f]{40}$/.test(entry.patch_id || ""))) return;
-              let anchorProof = null;
-              for (const entry of chain) {
-                let pull = pr;
-                if (entry.pr !== pr.number) {
-                  try {
-                    ({ data: pull } = await github.rest.pulls.get({
-                      ...context.repo, pull_number: entry.pr, request: { timeout: 10000 },
-                    }));
-                  } catch {
-                    core.info(`Queued PR #${entry.pr} unavailable; running queue-only suites.`);
-                    return;
-                  }
-                  if (!wellFormed(pull) || pull.number !== entry.pr) return;
-                }
-                const heavy = await completedEvidence({ pull, sha: pull.head.sha, heavy: true, patchId: entry.patch_id });
-                if (!heavy) return;
-                anchorProof ??= heavy;
+                  || !chain.every((entry) => Number.isSafeInteger(entry?.pr) && /^[0-9a-f]{40}$/.test(entry.patch_id || ""))) return;
+              const proofs = [];
+              for (const { pr: number, patch_id: patchId } of chain) {
+                const pull = number === pr.number ? pr : await github.rest.pulls.get({
+                  ...context.repo, pull_number: number, request: { timeout: 10000 },
+                }).then(({ data }) => data, () => null);
+                if (!wellFormed(pull) || pull.number !== number) return;
+                const proof = await completedEvidence({ pull, sha: pull.head.sha, heavy: true, patchId });
+                if (!proof) return;
+                proofs.push(proof);
               }
               core.setOutput("armed_proof", "complete");
-              core.setOutput("armed_proof_source_run_id", String(anchorProof.sourceId));
+              core.setOutput("armed_proof_source_run_id", String(proofs[0].sourceId));
               return;
             }
             // A moved base never forces a re-test of an identical change: the
@@ -1753,10 +1729,7 @@ jobs:
           fi
 
 
-      # An armed delta reuses the normal suites: every normal job reads
-      # run_required, which is false here, while planning reads the
-      # completed-depth value and still runs. Route smoke and release
-      # screenshots need this run's web build, so they keep the full run.
+      # Route smoke and release screenshots need this run's web build: no delta.
       - name: Resolve which suites run
         id: suites
         env:
