@@ -140,7 +140,7 @@ jobs:
         timeout-minutes: 5
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bash scripts/gh-retry.sh release upload "$RELEASE_REF" "$RUNNER_TEMP/release-health.json" --clobber
+        run: bash "$GH_RETRY_SCRIPT" release upload "$RELEASE_REF" "$RUNNER_TEMP/release-health.json" --clobber
 
       - name: Fail a release that is not healthy
         if: steps.evaluate.outputs.verdict != 'healthy'
