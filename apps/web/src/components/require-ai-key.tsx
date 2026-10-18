@@ -6,6 +6,7 @@ import { Link } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
@@ -58,6 +59,7 @@ import {
   updateCachedAIAvailability,
 } from "@/lib/organization/ai-config-queries";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
 type AIAvailabilityContextValue = {
   ensureAIAvailable: () => Promise<boolean>;
@@ -437,24 +439,32 @@ export const AIKeyRequiredDialog = ({
   const storedProviderValues = config?.configured
     ? config.providers.map(({ provider }) => provider)
     : [];
-  const defaultsQuery = useChromeQuery({
-    ...aiDefaultsPreviewOptions({
-      organizationId: activeOrganizationId,
-      providers: providerValues,
-    }),
-    enabled: open && configQuery.status === "success",
-    ...(config !== undefined &&
-    JSON.stringify(providerValues) === JSON.stringify(storedProviderValues)
-      ? {
-          initialData: {
-            defaultModels: projectDefaultRoleModels(config.defaultModels),
-            providerDefaultModels: projectProviderDefaultRoleModels(
-              config.providerDefaultModels,
-            ),
-          },
-        }
-      : {}),
-  });
+  const defaultsQuery = useChromeQuery(
+    resourceQueryOptions(
+      {
+        ...aiDefaultsPreviewOptions({
+          organizationId: activeOrganizationId,
+          providers: providerValues,
+        }),
+        enabled: open && configQuery.status === "success",
+        ...(config !== undefined &&
+        JSON.stringify(providerValues) === JSON.stringify(storedProviderValues)
+          ? {
+              initialData: {
+                defaultModels: projectDefaultRoleModels(config.defaultModels),
+                providerDefaultModels: projectProviderDefaultRoleModels(
+                  config.providerDefaultModels,
+                ),
+              },
+            }
+          : {}),
+      },
+      {
+        resources: [RESOURCE_TYPE.ORGANIZATION],
+        scope: { type: "organization" },
+      },
+    ),
+  );
   const defaultsView = useQueryView(defaultsQuery);
   useQueryViewError(defaultsView);
   const defaultModels =
