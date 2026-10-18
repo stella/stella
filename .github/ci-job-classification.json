@@ -1238,14 +1238,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/cla.yml",
-      "digest": "9615f3d0fb1bde9e36dcf20a7fc0af2e8cd6410b72cf3288b8fc02ef23e83da9",
+      "digest": "7b3d3cfb7fe8c1727c3d71c958e6154dfdb91cccc2966502f8459daf9343a204",
       "references": [],
       "jobs": [
         {
           "id": "verify-signatures",
           "kind": "ordinary",
-          "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "3c24ce7822923832372b46aba7c9fa99d6e6755ef0dd5aaa12e638f55599c4b1"
+          "qualifier": "Verifies contributor signatures and reports merge-gating CLA checks; no publication, tag creation, or deployment.",
+          "digest": "a263ab93be8cc3bd00068637c45da19733aaa205d0ef5e9c27f7d20cc9a6ebcc"
         }
       ],
       "edges": {

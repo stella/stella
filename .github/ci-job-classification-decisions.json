@@ -261,7 +261,7 @@
   },
   "candidate:.github/workflows/cla.yml/verify-signatures": {
     "kind": "ordinary",
-    "qualifier": "Checks; no publication, tag creation, or deployment."
+    "qualifier": "Verifies contributor signatures and reports merge-gating CLA checks; no publication, tag creation, or deployment."
   },
   "candidate:.github/workflows/codeql.yml/scope": {
     "kind": "ordinary",
