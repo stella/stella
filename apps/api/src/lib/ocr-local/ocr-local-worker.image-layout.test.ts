@@ -65,7 +65,7 @@ describe.skipIf(!modelsPresent)("ocr-local-worker image layout", () => {
 
       // Worker-relative sidecars, as the Dockerfile copies them.
       await cp(
-        path.join(REPO_ROOT, "node_modules/@hyzyla/pdfium/dist/pdfium.wasm"),
+        path.join(REPO_ROOT, "node_modules/@embedpdf/pdfium/dist/pdfium.wasm"),
         path.join(workersDir, "pdfium.wasm"),
       );
       await cp(

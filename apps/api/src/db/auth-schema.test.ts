@@ -37,8 +37,8 @@ import {
   AUTH_SESSION_STORAGE_OPTIONS,
   AUTH_VERIFICATION_STORAGE_OPTIONS,
 } from "@/api/lib/auth-adapter-options";
-import { AUTH_USER_ADDITIONAL_FIELDS } from "@/api/lib/auth-user-additional-fields";
 import { SESSION_LIFETIME_FIELDS } from "@/api/lib/auth/session-lifetime";
+import { AUTH_USER_ADDITIONAL_FIELDS } from "@/api/lib/auth/user-additional-fields";
 
 const PRODUCT_AUTH_MODEL_NAMES = [
   "twoFactor",
