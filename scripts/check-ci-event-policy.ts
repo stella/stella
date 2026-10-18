@@ -15,7 +15,6 @@ const policySchema = v.object({
       "pr-fast",
       "queue",
       "main",
-      "schema-pr",
       "pr-opt-in",
       "release-pr",
       "dispatch-only",
@@ -351,9 +350,6 @@ const checkJobEventPolicy = ({
       problems.push(`${key}: advisory proof must require the prove-fix label`);
     }
     return problems;
-  }
-  if (eventPolicy === "schema-pr" && file !== "db-migrations.yml") {
-    problems.push(`${key}: schema policy belongs to Database Migrations`);
   }
   if (periodic) {
     const condition =

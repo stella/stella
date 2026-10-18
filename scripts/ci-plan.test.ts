@@ -314,7 +314,8 @@ const selectorCase = (
       : {};
   return {
     flags: ["-e"],
-    script: `${detectors === DETECTORS.inProcess ? SERVED_BUN_SHIM : ""}changed_files=("$@"); scope_files=("$@"); e2e_core_required=$(bash scripts/detect-e2e-changes.sh core "$@")
+    script: `${detectors === DETECTORS.inProcess ? SERVED_BUN_SHIM : ""}changed_files=("$@"); scope_files=("$@"); migration_checks_required=$(bash scripts/detect-security-workflow-changes.sh migrations --files "$@")
+e2e_core_required=$(bash scripts/detect-e2e-changes.sh core "$@")
 desktop_rust_checks_required=$(bash scripts/detect-tauri-rust-changes.sh "$@")
 e2e_landing_required="$E2E_LANDING_REQUIRED"
 package_checks_required=true
@@ -1512,6 +1513,22 @@ test("a full-depth run fails every planned job that did not succeed", () => {
   )) {
     expect(exitCode, label).toBe(1);
   }
+});
+
+test("apply-fresh failure is required exactly when migration checks are planned", () => {
+  expect(
+    evaluateResult({
+      event: EVENT.pullRequest,
+      results: { "apply-fresh": "failure" },
+    }),
+  ).toBe(1);
+  expect(
+    evaluateResult({
+      event: EVENT.pullRequest,
+      results: { "apply-fresh": "skipped" },
+      unplannedScopes: ["migration_checks_required"],
+    }),
+  ).toBe(0);
 });
 
 test("a full-depth run passes jobs whose scope was not planned only when skipped", () => {
@@ -4275,7 +4292,13 @@ test("dependency inputs plan a malware scan and unrelated paths do not", () => {
 type RunChangedFilesOptions = {
   suiteDepth?: SuiteDepth;
   baseRef?: string;
-  changedPath?: "bun.lock" | "package.json" | "e2e-spec" | "documentation";
+  changedPath?:
+    | "bun.lock"
+    | "package.json"
+    | "e2e-spec"
+    | "documentation"
+    | "migration"
+    | "web";
   gitShim?: string;
 };
 
@@ -4333,19 +4356,39 @@ const runChangedFilesStep = ({
 
     git(["switch", "--quiet", "-c", "feature"]);
     const unusualDirectory = 'quote"back\\slash\ttab\nnewline';
-    const paths =
-      changedPath === undefined
-        ? []
-        : [
-            changedPath === "e2e-spec"
-              ? nodePath.join(
-                  "apps",
-                  "web",
-                  "e2e",
-                  `${unusualDirectory}.spec.ts`,
-                )
-              : nodePath.join("fixtures", unusualDirectory, changedPath),
-          ];
+    let changedFile: string | undefined;
+    switch (changedPath) {
+      case undefined:
+        break;
+      case "e2e-spec":
+        changedFile = nodePath.join(
+          "apps",
+          "web",
+          "e2e",
+          `${unusualDirectory}.spec.ts`,
+        );
+        break;
+      case "migration":
+        changedFile = nodePath.join(
+          "apps",
+          "api",
+          "drizzle",
+          unusualDirectory,
+          "migration.sql",
+        );
+        break;
+      case "web":
+        changedFile = nodePath.join(
+          "apps",
+          "web",
+          "src",
+          `${unusualDirectory}.ts`,
+        );
+        break;
+      default:
+        changedFile = nodePath.join("fixtures", unusualDirectory, changedPath);
+    }
+    const paths = changedFile === undefined ? [] : [changedFile];
     for (const [index, file] of paths.entries()) {
       const absolute = nodePath.join(repository, file);
       mkdirSync(nodePath.dirname(absolute), { recursive: true });
@@ -4409,6 +4452,24 @@ test("the production changed-file step skips scans for unrelated or empty diffs"
     expect(outputs.get("e2e_core_required")).toBe("false");
     expect(outputs.get("service_suites_pr_required")).toBe("false");
   }
+});
+
+test("migration checks follow the migration detector and fail open", () => {
+  expect(
+    runChangedFilesStep({ changedPath: "migration" }).get(
+      "migration_checks_required",
+    ),
+  ).toBe("true");
+  expect(
+    runChangedFilesStep({ changedPath: "web" }).get(
+      "migration_checks_required",
+    ),
+  ).toBe("false");
+  expect(
+    runChangedFilesStep({ baseRef: "missing-base" }).get(
+      "migration_checks_required",
+    ),
+  ).toBe("true");
 });
 
 test("an unknown diff base plans malware and e2e scans", () => {

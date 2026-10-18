@@ -34,7 +34,6 @@ const readWorkflow = (name: string) =>
     ),
   );
 const codeql = readWorkflow("codeql");
-const migrations = readWorkflow("db-migrations");
 const analyze = v.parse(
   v.looseObject({
     strategy: v.looseObject({
@@ -230,7 +229,7 @@ test("migration coverage includes schema, runtime and check inputs and excludes 
     "apps/api/src/db/shared-pool-timeouts.ts",
     "apps/api/src/db/adaptive-backfill.test.ts",
     "apps/api/src/lib/db/client.ts",
-    ".github/workflows/db-migrations.yml",
+    ".github/workflows/ci.yml",
     "scripts/detect-security-workflow-changes.sh",
     "scripts/detect-security-workflow-changes.test.ts",
     "scripts/rehearse-better-auth-constraint-retry.sh",
@@ -329,35 +328,32 @@ test("a complete Git diff selects changed code and deletion paths, including ren
   }
 });
 
-test("both workflows gate every expensive job and run on detector failure", () => {
-  for (const workflow of [codeql, migrations]) {
-    const scope = v.parse(
-      v.looseObject({
-        outputs: v.object({ required: v.string() }),
-        steps: v.array(v.looseObject({ run: v.optional(v.string()) })),
-      }),
-      workflow.jobs["scope"],
-    );
-    expect(scope.outputs.required).toContain("steps.changes.outputs.required");
-    const detector = scope.steps.find(({ run }) =>
-      run?.includes("detect-security-workflow-changes.sh"),
-    );
-    expect(detector?.run).toContain("required=true");
-    expect(detector?.run).toContain("skipped: no");
-    for (const [id, value] of Object.entries(workflow.jobs)) {
-      if (id === "scope") {
-        continue;
-      }
-      const job = v.parse(
-        v.looseObject({ needs: v.literal("scope"), if: v.string() }),
-        value,
-      );
-      expect(job.if).toContain("always()");
-      expect(job.if).toContain("needs.scope.result != 'success'");
-      expect(job.if).toContain("needs.scope.outputs.required != 'false'");
+test("CodeQL gates every expensive job and runs on detector failure", () => {
+  const scope = v.parse(
+    v.looseObject({
+      outputs: v.object({ required: v.string() }),
+      steps: v.array(v.looseObject({ run: v.optional(v.string()) })),
+    }),
+    codeql.jobs["scope"],
+  );
+  expect(scope.outputs.required).toContain("steps.changes.outputs.required");
+  const detector = scope.steps.find(({ run }) =>
+    run?.includes("detect-security-workflow-changes.sh"),
+  );
+  expect(detector?.run).toContain("required=true");
+  expect(detector?.run).toContain("skipped: no");
+  for (const [id, value] of Object.entries(codeql.jobs)) {
+    if (id === "scope") {
+      continue;
     }
+    const job = v.parse(
+      v.looseObject({ needs: v.literal("scope"), if: v.string() }),
+      value,
+    );
+    expect(job.if).toContain("always()");
+    expect(job.if).toContain("needs.scope.result != 'success'");
+    expect(job.if).toContain("needs.scope.outputs.required != 'false'");
   }
-  expect(migrations.on.pull_request.paths).toBeUndefined();
   const triggers = v.parse(
     v.looseObject({
       schedule: v.array(v.object({ cron: v.string() })),

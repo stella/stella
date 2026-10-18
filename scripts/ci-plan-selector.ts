@@ -60,7 +60,8 @@ export const runPlanSelector = ({
       "bash",
       "-e",
       "-c",
-      `changed_files=("$@"); e2e_core_required=$(bash scripts/detect-e2e-changes.sh core "$@")
+      `changed_files=("$@"); migration_checks_required=$(bash scripts/detect-security-workflow-changes.sh migrations --files "$@")
+e2e_core_required=$(bash scripts/detect-e2e-changes.sh core "$@")
 e2e_landing_required=\${E2E_LANDING_REQUIRED:-$(bash scripts/detect-e2e-changes.sh landing "$@")}
 desktop_rust_checks_required=$(bash scripts/detect-tauri-rust-changes.sh "$@")
 ${selector}
