@@ -5498,6 +5498,7 @@ jobs:
         || github.event_name == 'workflow_dispatch'
       )
       && needs.ci-plan.outputs.e2e_landing_required == 'true'
+      && needs.ci-plan.outputs.coverage_profile == 'normal-v1'
       )
     runs-on: ubuntu-latest
     timeout-minutes: 35
