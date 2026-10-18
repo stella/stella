@@ -144,8 +144,7 @@ export const resolveCzechLaw = async (
       title: document.title,
       section: section.section,
       readerUrl:
-        preview.appUrl ??
-        panic("Resolved public-law provision has no reader URL"),
+        preview.url ?? panic("Resolved public-law provision has no reader URL"),
       inForce,
       versionStatus: isInForceOn(inForce.from, inForce.to, today())
         ? "current"
