@@ -937,6 +937,41 @@ describe("publisher scheduler", () => {
     },
   );
 
+  test("an aborting caller stops waiting for a shared robots load that others still use", async () => {
+    let releaseRobots = () => {};
+    const robotsGate = new Promise<void>((resolve) => {
+      releaseRobots = resolve;
+    });
+    const request = createPolitePublisherFetch({
+      validateTarget: allowTarget,
+      fetcher: async (input) => {
+        if (
+          new URL(input instanceof Request ? input.url : input).pathname ===
+          "/robots.txt"
+        ) {
+          await robotsGate;
+          return new Response(null, { status: 404 });
+        }
+        return new Response("ok");
+      },
+      robotsLoadTimeoutMs: 60_000,
+      defaultMinimumIntervalMs: 0,
+    });
+
+    const aborting = request("https://publisher.example/a", {
+      init: { signal: AbortSignal.timeout(20) },
+    });
+    const waiting = request("https://publisher.example/b");
+    const aborted = await aborting;
+    releaseRobots();
+    const completed = await waiting;
+
+    expect(Result.isError(aborted) && aborted.error._tag).toBe(
+      "publisher_request_aborted",
+    );
+    expect(completed.isOk()).toBe(true);
+  });
+
   test("a redirect body whose cancel never settles still ends at the caller deadline", async () => {
     const request = createPolitePublisherFetch({
       validateTarget: allowTarget,

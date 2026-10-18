@@ -847,7 +847,26 @@ const enforcePublisherPolicy = async (
   options: PublisherFetchOptions,
   runtime: PublisherRuntime,
 ) => {
-  const robots = await runtime.robotsFor(state.url.origin);
+  // The robots load is shared; an aborting caller stops waiting for it
+  // without cancelling it for the others.
+  const signal = state.requestInit?.signal ?? undefined;
+  const loaded = await Result.tryPromise(async () =>
+    Promise.race([
+      runtime.robotsFor(state.url.origin),
+      ...(signal ? [abortPromise(signal)] : []),
+    ]),
+  );
+  if (Result.isError(loaded)) {
+    return Result.err(
+      new PublisherRequestAbortedError({
+        message: "Publisher request was aborted while loading robots.txt",
+        url: state.url.href,
+        origin: state.url.origin,
+        cause: loaded.error.cause,
+      }),
+    );
+  }
+  const robots = loaded.value;
   if (
     robots.type === "unavailable" &&
     PublisherTargetRefusedError.is(robots.cause)
