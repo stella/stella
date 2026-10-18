@@ -12,6 +12,31 @@
       "unknownDevice": "Nieznane urządzenie"
     }
   },
+  "admin": {
+    "ai": "AI",
+    "backToApp": "Powrót do aplikacji",
+    "billingAndUsage": "Rozliczenia i wykorzystanie",
+    "billingProfiles": "Profile rozliczeniowe",
+    "deleteDescription": "Trwale usuniesz tę organizację i jej dane. Tej operacji nie można cofnąć.",
+    "deleteOrganization": "Usuń organizację",
+    "deleteRefusedSubscription": "Ta organizacja ma subskrypcję, która się odnawia. Najpierw anuluj ją w sekcji Plan i wykorzystanie, a następnie usuń organizację.",
+    "deleteTypeToConfirm": "Wpisz {name}, aby potwierdzić.",
+    "firmSetup": "Ustawienia kancelarii",
+    "general": "Ogólne",
+    "leaveDescription": "Utracisz dostęp do spraw i danych tej organizacji.",
+    "leaveOrganization": "Opuść organizację",
+    "leaveRefusedOnlyOwner": "Jesteś jedynym właścicielem. Zanim odejdziesz, nadaj rolę właściciela innemu członkowi.",
+    "modelsAndProviders": "Modele i dostawcy",
+    "noPlan": "Brak aktywnego planu",
+    "organizationDeleted": "Organizacja została usunięta.",
+    "organizationId": "ID organizacji",
+    "organizationLeft": "Opuszczono organizację.",
+    "overviewDescription": "Zarządzaj organizacją, osobami i narzędziami.",
+    "people": "Osoby",
+    "planAndUsage": "Plan i wykorzystanie",
+    "title": "Administracja organizacji",
+    "toolsDescription": "Włącz lub wyłącz wbudowane narzędzia dla wszystkich osób w tej organizacji."
+  },
   "agentClaim": {
     "access": "Uzyskany dostęp",
     "accessReadSearch": "Dostęp do odczytu i wyszukiwania",

@@ -1,0 +1,329 @@
+/**
+ * Firm-wide document-type taxonomy editor. The list is the single source of
+ * truth referenced by playbook scopes (via the stable `key`) and surfaced in
+ * the workspace "Document Type" classifier. `key` is derived server-side on
+ * create and never changes on rename, so existing playbook scopes never
+ * orphan; deleting a type in use is blocked by the API and surfaced here.
+ */
+
+import { useState } from "react";
+
+import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
+import { preserveOffsetOnSource } from "@atlaskit/pragmatic-drag-and-drop/utils/preserve-offset-on-source";
+import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/utils/set-custom-native-drag-preview";
+import { useQuery } from "@tanstack/react-query";
+import { useRouteContext } from "@tanstack/react-router";
+import { useTranslations } from "use-intl";
+
+import { Button } from "@stll/ui/button";
+import { GripVerticalIcon, PlusIcon, Trash2Icon } from "@stll/ui/icons";
+import { Input } from "@stll/ui/input";
+import { cn } from "@stll/ui/utils";
+
+import {
+  withDragAnnouncementData,
+  withDropAnnouncementData,
+} from "@/components/drag-and-drop-live-region.logic";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
+import { useSingleFlight } from "@/hooks/use-single-flight";
+import { api } from "@/lib/api";
+import { detached } from "@/lib/detached";
+import {
+  draggable,
+  dropTargetForElements,
+} from "@/lib/drag-and-drop/element-registration";
+import { unwrapEden } from "@/lib/errors/api";
+import { documentTypesOptions, knowledgeKeys } from "@/lib/knowledge/queries";
+import { toSafeId } from "@/lib/safe-id";
+import type { SafeId } from "@/lib/safe-id";
+import { useQueryView } from "@/lib/use-query-view";
+import { useSettingsMutation } from "@/routes/_protected.admin/-hooks/use-settings-mutation";
+
+const DOCUMENT_TYPE_DRAG_TYPE = "stella/document-type";
+
+type DocumentType = {
+  id: SafeId<"documentType">;
+  key: string;
+  label: string;
+  sortOrder: number;
+};
+
+// Shared across the settings list and the playbook editor's Type picker, so
+// invalidating the factory's root refreshes wherever the taxonomy is shown.
+const documentTypesInvalidationKey = knowledgeKeys.documentTypes.root;
+
+export const DocumentTypesCard = () => {
+  const t = useTranslations();
+  const activeOrganizationId = useRouteContext({
+    from: "/_protected",
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
+
+  const settingsQuery = useQuery(documentTypesOptions(activeOrganizationId));
+  const settingsView = useQueryView(settingsQuery, {
+    isEmpty: (data) => data.items.length === 0,
+  });
+  const data = settingsView.type === "items" ? settingsView.items : undefined;
+  const items = data ? data.items : [];
+
+  const [newLabel, setNewLabel] = useState("");
+  // Created through a settings mutation, not a create hook: guard it here.
+  const once = useSingleFlight();
+
+  const createMutation = useSettingsMutation({
+    mutationFn: async (label: string) =>
+      unwrapEden(await api["document-types"].post({ label })),
+    invalidate: documentTypesInvalidationKey,
+    errorToast: {
+      title: t("errors.actionFailed"),
+      description: t("errors.actionFailed"),
+    },
+    onSuccess: () => setNewLabel(""),
+  });
+
+  const reorderMutation = useSettingsMutation({
+    mutationFn: async (orderedIds: SafeId<"documentType">[]) =>
+      unwrapEden(await api["document-types"].reorder.post({ orderedIds })),
+    invalidate: documentTypesInvalidationKey,
+    invalidateOn: "settled",
+    errorToast: { title: t("errors.actionFailed") },
+  });
+
+  const handleReorder = (
+    draggedId: SafeId<"documentType">,
+    targetId: SafeId<"documentType">,
+  ) => {
+    if (draggedId === targetId) {
+      return;
+    }
+    const ids = items.map((item) => item.id);
+    const from = ids.indexOf(draggedId);
+    const to = ids.indexOf(targetId);
+    if (from === -1 || to === -1) {
+      return;
+    }
+    reorderMutation.mutate(ids.toSpliced(from, 1).toSpliced(to, 0, draggedId));
+  };
+
+  const submitNew = () => {
+    const label = newLabel.trim();
+    if (label.length === 0) {
+      return;
+    }
+    detached(
+      once.runSettled((settled) => {
+        createMutation.mutate(label, { onSettled: settled });
+      }),
+      "document-types-card.create",
+    );
+  };
+
+  if (settingsView.type === "pending" || settingsView.type === "error") {
+    return <QueryViewFeedback view={settingsView} />;
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      <QueryViewFeedback view={settingsView} />
+      {items.length > 0 && (
+        <ul className="flex flex-col gap-2">
+          {items.map((item) => (
+            <DocumentTypeRow
+              key={item.id}
+              onReorder={handleReorder}
+              type={item}
+            />
+          ))}
+        </ul>
+      )}
+
+      <form
+        className="flex items-center gap-2"
+        onSubmit={(event) => {
+          event.preventDefault();
+          submitNew();
+        }}
+      >
+        <Input
+          aria-label={t("settings.organization.documentTypes.addPlaceholder")}
+          onChange={(event) => setNewLabel(event.target.value)}
+          placeholder={t("settings.organization.documentTypes.addPlaceholder")}
+          value={newLabel}
+        />
+        <Button
+          disabled={newLabel.trim().length === 0 || createMutation.isPending}
+          type="submit"
+        >
+          <PlusIcon />
+          {t("common.add")}
+        </Button>
+      </form>
+    </div>
+  );
+};
+
+type DocumentTypeRowProps = {
+  type: DocumentType;
+  onReorder: (
+    draggedId: SafeId<"documentType">,
+    targetId: SafeId<"documentType">,
+  ) => void;
+};
+
+const DocumentTypeRow = ({ type, onReorder }: DocumentTypeRowProps) => {
+  const t = useTranslations();
+
+  const [rowRef, setRowRef] = useState<HTMLElement | null>(null);
+  const [gripRef, setGripRef] = useState<HTMLButtonElement | null>(null);
+  const [isDropTarget, setIsDropTarget] = useState(false);
+  const [draft, setDraft] = useState(type.label);
+  const handleReorder = useLatestCallback(onReorder);
+
+  // Resync the rename draft when the label changes upstream (a refetch after
+  // this or another client renames the type); `type.label` is stable while the
+  // user types, so this never clobbers an in-progress edit.
+  useExternalSyncEffect(() => {
+    setDraft(type.label);
+  }, [type.label]);
+
+  useExternalSyncEffect(() => {
+    if (!rowRef || !gripRef) {
+      return undefined;
+    }
+    return combine(
+      draggable({
+        element: rowRef,
+        dragHandle: gripRef,
+        getInitialData: () =>
+          withDragAnnouncementData(
+            { type: DOCUMENT_TYPE_DRAG_TYPE, id: type.id },
+            type.label,
+          ),
+        onGenerateDragPreview: ({ location, nativeSetDragImage }) => {
+          setCustomNativeDragPreview({
+            nativeSetDragImage,
+            getOffset: preserveOffsetOnSource({
+              element: rowRef,
+              input: location.current.input,
+            }),
+            render: ({ container }) => {
+              const clone = rowRef.cloneNode(true);
+              if (!(clone instanceof HTMLElement)) {
+                return;
+              }
+              clone.style.width = `${rowRef.getBoundingClientRect().width}px`;
+              container.append(clone);
+            },
+          });
+        },
+      }),
+      dropTargetForElements({
+        element: rowRef,
+        canDrop: ({ source }) =>
+          source.data["type"] === DOCUMENT_TYPE_DRAG_TYPE &&
+          source.data["id"] !== type.id,
+        getData: () =>
+          withDropAnnouncementData({}, { type: "reorder", name: type.label }),
+        onDragEnter: () => setIsDropTarget(true),
+        onDragLeave: () => setIsDropTarget(false),
+        onDrop: ({ source }) => {
+          setIsDropTarget(false);
+          const draggedId = source.data["id"];
+          if (typeof draggedId === "string") {
+            handleReorder(toSafeId<"documentType">(draggedId), type.id);
+          }
+        },
+      }),
+    );
+  }, [rowRef, gripRef, type.id, type.label, handleReorder]);
+
+  const renameMutation = useSettingsMutation({
+    mutationFn: async (label: string) =>
+      unwrapEden(
+        await api["document-types"]({ documentTypeId: type.id }).patch({
+          label,
+        }),
+      ),
+    invalidate: documentTypesInvalidationKey,
+    errorToast: {
+      title: t("errors.actionFailed"),
+      description: t("errors.actionFailed"),
+    },
+    onError: () => setDraft(type.label),
+  });
+
+  const deleteMutation = useSettingsMutation({
+    mutationFn: async () =>
+      unwrapEden(
+        await api["document-types"]({ documentTypeId: type.id }).delete(),
+      ),
+    invalidate: documentTypesInvalidationKey,
+    // Surfaces the API's "in use by N playbook(s)" guard message.
+    errorToast: {
+      title: t("settings.organization.documentTypes.deleteFailed"),
+      description: t("errors.actionFailed"),
+    },
+  });
+
+  const commitRename = () => {
+    const label = draft.trim();
+    if (label.length === 0) {
+      setDraft(type.label);
+      return;
+    }
+    if (label === type.label) {
+      return;
+    }
+    renameMutation.mutate(label);
+  };
+
+  return (
+    <li
+      className={cn(
+        "bg-card flex items-center gap-2 rounded-lg border px-2 py-1.5",
+        isDropTarget && "ring-primary ring-2",
+      )}
+      ref={setRowRef}
+    >
+      <Button
+        aria-label={t("settings.organization.documentTypes.reorder")}
+        className="shrink-0 cursor-grab"
+        ref={setGripRef}
+        size="icon-xs"
+        type="button"
+        variant="ghost"
+      >
+        <GripVerticalIcon />
+      </Button>
+      <Input
+        aria-label={t("settings.organization.documentTypes.labelAria")}
+        className="h-8 flex-1 border-transparent bg-transparent shadow-none"
+        onBlur={commitRename}
+        onChange={(event) => setDraft(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            event.currentTarget.blur();
+          }
+        }}
+        value={draft}
+      />
+      <span className="text-muted-foreground shrink-0 font-mono text-xs">
+        {type.key}
+      </span>
+      <Button
+        aria-label={t("common.delete")}
+        className="shrink-0"
+        disabled={deleteMutation.isPending}
+        onClick={() => deleteMutation.mutate()}
+        size="icon-xs"
+        type="button"
+        variant="ghost"
+      >
+        <Trash2Icon />
+      </Button>
+    </li>
+  );
+};
