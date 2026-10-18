@@ -116,6 +116,12 @@ type SoftLawIdentityResolution =
       documentId: SafeId<"softLawDocument">;
       placeholderDocumentId: SafeId<"softLawDocument">;
     };
+type SoftLawIdentityOwner =
+  | {
+      kind: "persisted" | "accepted" | "locator";
+      documentId: SafeId<"softLawDocument">;
+    }
+  | { kind: "new" };
 type FetchSoftLawItemOptions = Pick<
   PrepareSoftLawPageOptions,
   "adapter" | "signal" | "fetch"
@@ -397,31 +403,44 @@ const prepareSoftLawPage = async (options: PrepareSoftLawPageOptions) => {
       continue;
     }
     const existing = matches.at(0);
-    const resolution: SoftLawIdentityResolution = (() => {
-      if (
-        repairsFailedExtraction &&
-        existing &&
-        locator.document.id !== existing.document.id
-      ) {
-        return {
-          kind: "merge_repaired_placeholder",
-          documentId: existing.document.id,
-          placeholderDocumentId: locator.document.id,
-        };
-      }
-      if (locator) {
-        return { kind: "attach", documentId: locator.document.id };
-      }
+    const owner: SoftLawIdentityOwner = (() => {
       if (existing) {
-        return { kind: "attach", documentId: existing.document.id };
+        return { kind: "persisted", documentId: existing.document.id };
       }
       if (accepted) {
-        return { kind: "attach", documentId: accepted.documentId };
+        return { kind: "accepted", documentId: accepted.documentId };
       }
-      return {
-        kind: "create",
-        documentId: createSafeId<"softLawDocument">(),
-      };
+      if (locator) {
+        return { kind: "locator", documentId: locator.document.id };
+      }
+      return { kind: "new" };
+    })();
+    const resolution: SoftLawIdentityResolution = (() => {
+      switch (owner.kind) {
+        case "persisted":
+        case "accepted":
+          if (
+            repairsFailedExtraction &&
+            locator.document.id !== owner.documentId
+          ) {
+            return {
+              kind: "merge_repaired_placeholder",
+              documentId: owner.documentId,
+              placeholderDocumentId: locator.document.id,
+            };
+          }
+          return { kind: "attach", documentId: owner.documentId };
+        case "locator":
+          return { kind: "attach", documentId: owner.documentId };
+        case "new":
+          return {
+            kind: "create",
+            documentId: createSafeId<"softLawDocument">(),
+          };
+        default:
+          owner satisfies never;
+          return panic("Unknown soft-law identity owner");
+      }
     })();
     let identityResolution: SoftLawObservation["identityResolution"];
     switch (resolution.kind) {

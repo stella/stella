@@ -1164,6 +1164,137 @@ if (!databaseUrl || !enabled) {
         ).toHaveLength(3);
       }));
 
+    test("a repaired WP29 placeholder merges into a same-page new identity owner", async () =>
+      await withSource(databaseUrl, async ({ db, sourceId, run }) => {
+        const unnumberedMetadata = {
+          title: "Transparency opinion",
+          kind: "opinion",
+          sourceKind: "Transparency opinion",
+          statedReference: { state: "not_stated" },
+          issuedOn: { state: "not_stated" },
+          expression: {
+            type: "identified",
+            language: "en",
+            revision: { state: "not_stated" },
+          },
+          stage: { state: "not_stated" },
+          relations: [],
+          validity: {
+            state: "not_stated",
+            basis: "archived_source_stated",
+          },
+        } as const;
+        const numberedMetadata = {
+          ...unnumberedMetadata,
+          statedReference: { state: "stated", value: "WP 260" },
+        } as const;
+        const placeholder = {
+          type: "document",
+          url: "https://ec.europa.eu/justice/article-29/archive.doc",
+          metadata: unnumberedMetadata,
+          sourceDates: {},
+        } as const satisfies SoftLawEntry;
+        const numbered = {
+          ...placeholder,
+          url: "https://ec.europa.eu/newsroom/article-29/wp260.doc",
+          metadata: numberedMetadata,
+        } as const satisfies SoftLawEntry;
+        let repaired = false;
+        const sourceAdapter = (items: readonly SoftLawEntry[]) =>
+          ({
+            ...adapter(items),
+            authority: "eu-wp29",
+            fetchDocument: async (item: SoftLawEntry) => {
+              if (item.url === placeholder.url && !repaired) {
+                return Result.ok({
+                  metadata: unnumberedMetadata,
+                  raw: [
+                    {
+                      role: "document-word",
+                      purpose: "document",
+                      bytes: new TextEncoder().encode("failed placeholder"),
+                      contentType: "application/msword",
+                    },
+                  ],
+                  text: null,
+                  extractionQuality: "extraction_failed",
+                  extractionFailure: "Binary Word extraction failed",
+                  sourceDates: {},
+                });
+              }
+              return Result.ok({
+                metadata: numberedMetadata,
+                raw: [
+                  {
+                    role: "document-word",
+                    purpose: "document",
+                    bytes: new TextEncoder().encode("WP 260"),
+                    contentType: "application/msword",
+                  },
+                ],
+                text: "WP 260 Transparency opinion",
+                extractionQuality: "text_layer",
+                sourceDates: {},
+              });
+            },
+          }) satisfies SoftLawSourceAdapter;
+
+        expect(await run(sourceAdapter([placeholder]))).toEqual({
+          status: "complete",
+        });
+        const placeholderId = (
+          await db
+            .select({ id: softLawDocuments.id })
+            .from(softLawDocuments)
+            .where(eq(softLawDocuments.sourceId, sourceId))
+        ).at(0)?.id;
+        if (!placeholderId) {
+          panic("WP29 placeholder was not stored");
+        }
+
+        repaired = true;
+        expect(await run(sourceAdapter([numbered, placeholder]))).toEqual({
+          status: "complete",
+        });
+        const documents = await db
+          .select()
+          .from(softLawDocuments)
+          .where(eq(softLawDocuments.sourceId, sourceId));
+        expect(documents).toHaveLength(1);
+        expect(documents.at(0)?.identityKey).toContain("wp260");
+        expect(documents.at(0)?.id).not.toBe(placeholderId);
+        const ownerId = documents.at(0)?.id;
+        if (!ownerId) {
+          panic("Same-page WP29 owner was not stored");
+        }
+        expect(
+          (
+            await db
+              .select({ url: softLawDocumentLocators.url })
+              .from(softLawDocumentLocators)
+              .where(eq(softLawDocumentLocators.documentId, ownerId))
+          ).map(({ url }) => url),
+        ).toEqual(expect.arrayContaining([numbered.url, placeholder.url]));
+        const versions = await db
+          .select()
+          .from(softLawDocumentVersions)
+          .where(eq(softLawDocumentVersions.documentId, ownerId));
+        expect(versions).toHaveLength(2);
+        expect(
+          versions.map(({ extractionQuality }) => extractionQuality),
+        ).toEqual(expect.arrayContaining(["extraction_failed", "text_layer"]));
+
+        expect(await run(sourceAdapter([numbered, placeholder]))).toEqual({
+          status: "complete",
+        });
+        expect(
+          await db
+            .select()
+            .from(softLawDocumentVersions)
+            .where(eq(softLawDocumentVersions.documentId, ownerId)),
+        ).toHaveLength(2);
+      }));
+
     test("page capacity durably defers valid items without consuming their failure budget", async () =>
       await withSource(databaseUrl, async ({ db, sourceId, run }) => {
         const entries = ["first", "second", "third"].map((slug) =>
