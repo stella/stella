@@ -692,11 +692,14 @@ test("CI metadata events cannot cancel the code run for the same head", async ()
       },
     }),
   ).not.toBe(await groupFor(file, metadataRun));
-  // A draft runs no CI, so ready_for_review is the first code run, and a
-  // prove-fix label changes the suites: both stay in the code-run group.
+  // A draft runs no CI, so ready_for_review is the first code run, and the
+  // prove-fix and merge-armed labels change the suites: all stay in the
+  // code-run group and supersede it.
   for (const event of [
     { ...codeRun.event, action: "ready_for_review" },
     { ...codeRun.event, action: "labeled", label: { name: "prove-fix" } },
+    { ...codeRun.event, action: "labeled", label: { name: "merge-armed" } },
+    { ...codeRun.event, action: "unlabeled", label: { name: "merge-armed" } },
   ]) {
     expect(await groupFor(file, { ...codeRun, event })).toBe("CI Checks-pr-12");
     expect(
@@ -706,4 +709,14 @@ test("CI metadata events cannot cancel the code run for the same head", async ()
       }),
     ).toBe("true");
   }
+  // Auto-merge starts the armed suites in the code-run group, but waits
+  // behind a running code run instead of cancelling it.
+  const armed = {
+    ...codeRun,
+    event: { ...codeRun.event, action: "auto_merge_enabled" },
+  };
+  expect(await groupFor(file, armed)).toBe("CI Checks-pr-12");
+  expect(await concurrencyValueFor(file, "cancel-in-progress", armed)).toBe(
+    "false",
+  );
 });

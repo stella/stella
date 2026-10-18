@@ -133,6 +133,15 @@ const context = (
   },
   steps: {
     "changed-files": { outputs: plan },
+    // Unarmed pull requests and merge groups without armed proof.
+    "completed-depth": {
+      outputs: {
+        armed: plan["armed"] ?? "false",
+        armed_proof: plan["armed_proof"] ?? "",
+        run_required: plan["run_required"] ?? "true",
+        pr_heavy_suites: plan["pr_heavy_suites"] ?? "run",
+      },
+    },
     "marketing-release": {
       outputs: { required: plan["marketing_screenshots_required"] },
     },
@@ -645,7 +654,7 @@ test("heavy event policies exclude pull requests and preserve existing full cert
           const queueJob = Object.entries(eventPolicies.jobs).some(
             ([key, policy]) =>
               key === `ci.yml/${job}` &&
-              (policy === "queue" || policy === "main"),
+              (policy === "queue" || policy === "main" || policy === "armed"),
           );
           if (event === "pull_request" && queueJob) {
             expected = false;

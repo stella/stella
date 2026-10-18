@@ -32,6 +32,7 @@ import timeoutAnnotations from "./__fixtures__/ci-cancellation/timeout.json" wit
 import { selectApiTestImpact } from "./api-test-impact";
 import { FULL_TEST_JOB_SHARDS } from "./api-test-shard-plan";
 import { requiresMalwareScan } from "./check-standalone-lockfiles";
+import { readSelectionGraph } from "./ci-affected-selection";
 import { planCiApiTests } from "./ci-api-test-plan";
 import { ciBrowserScopePredicate } from "./ci-browser-scope";
 import {
@@ -46,6 +47,7 @@ import {
   requiresPackageChecks,
 } from "./ci-package-scope";
 import { extractPlanSelector } from "./ci-plan-selector";
+import { selectRootChecks } from "./ci-root-checks";
 import { withoutStaticReuseCondition } from "./ci-static-checks.test-support";
 import { routeSmokeAffected } from "./detect-route-smoke-changes";
 import { serviceSuiteCliOutput } from "./detect-service-suite-changes";
@@ -57,7 +59,11 @@ import {
   UNKNOWN,
 } from "./github-expression";
 import {
+  ARMED_LABEL,
+  HEAVY_PROOF_GATE,
+  heavyProofJobs,
   mainHeavyJobs,
+  MERGE_GROUP_HEAVY_KEEP,
   prDepthJobs,
   queueAdmittedJobs,
   MERGE_GROUP_EXCEPTIONS,
@@ -289,6 +295,7 @@ type SelectorCase = {
   e2eLandingRequired?: string;
   event?: string;
   title?: string;
+  armed?: boolean;
 };
 
 const selectorCase = (
@@ -299,6 +306,7 @@ const selectorCase = (
     e2eLandingRequired = "false",
     event = "pull_request",
     title = "",
+    armed = false,
   }: SelectorCase,
   detectors: Detectors,
 ): BashCase => {
@@ -327,6 +335,7 @@ printf "%s\\n" ${outputs.map((output) => `"$${output}"`).join(" ")}`,
       )
         ? "true"
         : String(requiresPackageChecks({ changed: files })),
+      ARMED: String(armed),
       E2E_LANDING_REQUIRED: e2eLandingRequired,
       EVENT_NAME: event,
       PATH: Bun.env["PATH"] ?? "",
@@ -682,7 +691,7 @@ test("a fix pull request that changes an API test plans the fix-tests-on-base ch
 
 const apiSourceSiblings = fc.array(fc.uuid(), { maxLength: 4 });
 
-test("a pull request builds the API image for arm64 unless it releases", () => {
+test("a pull request builds the API image for arm64 unless it releases or is armed", () => {
   const outputs = ["api_image_platforms"];
   const expectations = drawPropertySamples(apiSourceSiblings, {
     numRuns: 10,
@@ -701,6 +710,15 @@ test("a pull request builds the API image for arm64 unless it releases", () => {
         files,
         outputs,
         suiteDepth: "full",
+        platforms: ["linux/amd64", "linux/arm64"],
+        label,
+      },
+      // An armed pull request proves the image at merge-group scope.
+      {
+        files,
+        outputs,
+        suiteDepth: "fast",
+        armed: true,
         platforms: ["linux/amd64", "linux/arm64"],
         label,
       },
@@ -893,9 +911,7 @@ test("every eligible CI job cancels a failed merge group in its final step with 
   expect(jobIf(ciJobs["fix-tests-on-base"])).toContain(
     "github.event_name == 'pull_request'",
   );
-  expect(jobIf(ciJobs["route-smoke"])).toContain(
-    "github.event_name != 'pull_request'",
-  );
+  expect(jobIf(ciJobs["route-smoke"])).toContain(HEAVY_PROOF_GATE);
   expect(jobIf(ciJobs["heavy-web-build"])).toContain(
     "needs.ci-plan.outputs.heavy_web_build_required == 'true'",
   );
@@ -1126,6 +1142,22 @@ afterAll(() => {
   rmSync(fakeGhDirectory, { force: true, recursive: true });
 });
 
+// Unarmed pull requests and merge groups without armed proof, unless the
+// planned outputs say otherwise.
+const heavyProofEnv = (
+  event: EvaluateResultOptions["event"],
+  plannedOutputs: Record<string, string>,
+) => ({
+  HEAVY_PROOF:
+    plannedOutputs["heavy_proof"] ?? String(event !== EVENT.pullRequest),
+  HEAVY_PROOF_JOBS: resultStep.env["HEAVY_PROOF_JOBS"] ?? "",
+  MERGE_GROUP_HEAVY_KEEP: resultStep.env["MERGE_GROUP_HEAVY_KEEP"] ?? "",
+  ARMED_PROOF_SOURCE_RUN_ID: plannedOutputs["armed_proof_source_run_id"] ?? "",
+  ARMED_DELTA: plannedOutputs["armed_delta"] ?? "false",
+  NORMAL_SOURCE_RUN_ID: plannedOutputs["normal_source_run_id"] ?? "",
+  RUN_REQUIRED: plannedOutputs["run_required"] ?? "true",
+});
+
 // The ci-result step as GitHub would run it, with every job succeeding and
 // every scope selected unless the options say otherwise.
 // ci-result's view of the planner's heavy-suite reuse verdict.
@@ -1316,6 +1348,7 @@ const resultGateCase = ({
       NEEDS: JSON.stringify(needs),
       FAST_REQUIRED: resultStep.env["FAST_REQUIRED"] ?? "",
       FAST_JOB_SCOPES: resultStep.env["FAST_JOB_SCOPES"] ?? "",
+      ...heavyProofEnv(event, plannedOutputs),
       PATH: `${fakeGhDirectory}:${process.env["PATH"] ?? ""}`,
       PR_NUMBER: event === EVENT.pullRequest ? PULL_REQUEST.number : "",
       REPO: PULL_REQUEST.repo,
@@ -1358,6 +1391,7 @@ const expectResultGates = (gates: readonly ExpectedResultGate[]) => {
 const FULL_DEPTH_PREDICATE = "needs.ci-plan.outputs.suite_depth == 'full'";
 const heavyJobs = Object.entries(ciJobs).flatMap(([job, body]) =>
   jobIf(body).includes(FULL_DEPTH_PREDICATE) ||
+  jobIf(body).includes(HEAVY_PROOF_GATE) ||
   jobIf(body).includes("github.event_name != 'pull_request' && (")
     ? [job]
     : [],
@@ -2179,6 +2213,10 @@ test("desktop Rust tests select classified merge-group changes at every queue de
               "inputs.pr_depth_only": false,
               "needs.ci-plan.outputs.run_required": runRequired,
               "needs.ci-plan.outputs.queue_depth": queueDepth,
+              // An unarmed pull request; a group without armed proof.
+              "needs.ci-plan.outputs.heavy_proof": String(
+                event === EVENT.mergeGroup && runRequired === "true",
+              ),
               "needs.ci-plan.outputs.trusted": "true",
               "needs.ci-plan.outputs.desktop_rust_checks_required":
                 required ?? "",
@@ -2713,7 +2751,7 @@ test("a manual run supersedes only an older manual run on the same branch", () =
     Bun.YAML.parse(workflow),
   ).concurrency;
   expect(concurrency["cancel-in-progress"]).toBe(
-    `\${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || (inputs.heavy_only != true && ((github.event_name == 'pull_request' && (contains(fromJSON('["opened","synchronize","reopened","ready_for_review"]'), github.event.action) || github.event.label.name == 'prove-fix')) || github.event_name == 'workflow_dispatch')) }}`,
+    `\${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || (inputs.heavy_only != true && ((github.event_name == 'pull_request' && (contains(fromJSON('["opened","synchronize","reopened","ready_for_review"]'), github.event.action) || contains(fromJSON('["prove-fix","merge-armed"]'), github.event.label.name))) || github.event_name == 'workflow_dispatch')) }}`,
   );
   expect(concurrency.group).toContain(
     "github.event_name == 'workflow_dispatch' && format('ci-dispatch-{0}', github.ref)",
@@ -2750,12 +2788,16 @@ test("metadata runs cannot replace the required code result and scope-changing l
     v.object({ with: v.object({ script: v.string() }) }),
     completedDepth,
   ).with.script;
-  expect(script).toContain('context.payload.label?.name === "prove-fix"');
-  expect(script).toContain("if (metadataAction && !proofScopeChanged)");
-  // ready_for_review starts the first code run of a draft and prove-fix
-  // changes scope: neither is metadata, so both report ci-result.
+  // prove-fix and the armed label change suite scope; ready_for_review
+  // starts the first code run of a draft and auto_merge_enabled starts the
+  // armed suites: none is metadata, so all report ci-result.
+  expect(script).toContain(
+    '["prove-fix", ARMED_LABEL].includes(context.payload.label?.name)',
+  );
+  expect(script).toContain(
+    '&& ["labeled", "unlabeled"].includes(context.payload.action)\n  && !scopeLabel;',
+  );
   expect(script).not.toMatch(/"enqueued", "ready_for_review"\]\.includes/u);
-  expect(script).toContain('context.payload.label?.name !== "prove-fix"');
   expect(script).toContain('core.setOutput("run_required", "false")');
 });
 
@@ -3426,9 +3468,9 @@ test("spec-tree PRs plan production shards and their web build at fast depth", (
     );
     expect(planned, file).toEqual(["true", "true"]);
     expect(jobScopes["e2e-production-shard"]).toBe("e2e_production_required");
-    expect(fastJobScopes["web-build"]).toBe("browser_spec_selection_required");
+    expect(fastJobScopes["web-build"]).toBe("web_build_pr_required");
     expect(jobIf(ciJobs["web-build"])).toContain(
-      "needs.ci-plan.outputs.browser_spec_selection_required == 'true'",
+      "needs.ci-plan.outputs.web_build_pr_required == 'true'",
     );
     expect(jobIf(ciJobs["e2e-production-shard"])).toContain(
       "needs.ci-plan.outputs.e2e_production_required == 'true'",
@@ -3469,6 +3511,7 @@ test("PR e2e selection schedules its build and shard together", () => {
     "needs.ci-plan.outputs.queue_depth": "full",
     "needs.ci-plan.outputs.web_build_required": "false",
     "needs.ci-plan.outputs.browser_spec_selection_required": "false",
+    "needs.ci-plan.outputs.web_build_pr_required": "false",
     "needs.ci-plan.outputs.e2e_production_required": "false",
     "needs.web-build.result": "skipped",
     "needs.heavy-web-build.result": "skipped",
@@ -5316,6 +5359,7 @@ const queueOnlyJobs = Object.fromEntries(
     .filter(
       ([key, policy]) =>
         (policy === "queue" ||
+          policy === "armed" ||
           key === "ci.yml/service-suites" ||
           key === "ci.yml/postgres-service-suites") &&
         key.startsWith("ci.yml/") &&
@@ -5326,7 +5370,7 @@ const queueOnlyJobs = Object.fromEntries(
       key === "ci.yml/service-suites" ||
       key === "ci.yml/postgres-service-suites"
         ? "Postgres PR switch is off by default"
-        : "queue-only because its declared event policy certifies the merged tree",
+        : "queue-only until the pull request is armed for merge",
     ]),
 );
 
@@ -5372,6 +5416,10 @@ const runsAtDepth = (
         "inputs.heavy_only": heavyOnly === true,
         "inputs.pr_depth_only": false,
         "needs.ci-plan.outputs.pr_depth_reused": prDepthReused,
+        // An unarmed pull request; a merge group without armed proof.
+        "needs.ci-plan.outputs.heavy_proof": String(
+          event !== EVENT.pullRequest,
+        ),
         "needs.ci-plan.outputs.coverage_profile": "normal-v1",
         "needs.ci-plan.outputs.pilot_fast_jobs": "[]",
         "needs.ci-plan.outputs.suite_depth": depth,
@@ -5814,6 +5862,13 @@ test("workflow and planner changes run every planner test as a merge-group gate"
     expect(plan, item.files.join(",")).toEqual(["true"]);
   }
   const admitted = queueAdmittedJobs({ jobs: ciJobs });
+  const rootChecks = JSON.stringify(
+    selectRootChecks({
+      changed: changes,
+      graph: readSelectionGraph(root),
+      pathChange: "content",
+    }),
+  );
   const gated = new Set<string>();
   for (const file of plannerTests) {
     const selected = owners.get(file) ?? [];
@@ -5841,6 +5896,7 @@ test("workflow and planner changes run every planner test as a merge-group gate"
               "github.event_name": EVENT.mergeGroup,
               "needs.ci-plan.outputs.package_checks_required": "true",
               "needs.ci-plan.outputs.queue_depth": queueDepth,
+              "needs.ci-plan.outputs.root_checks": rootChecks,
               "needs.ci-plan.outputs.suite_depth": SUITE_DEPTH.full,
             },
             status: {
@@ -6922,6 +6978,7 @@ const browserPlanOutput = ({
       values: {
         "github.event_name": event,
         "steps.completed-depth.outputs.run_required": runRequired,
+        "steps.completed-depth.outputs.normal_reused": "",
         "steps.check.outputs.trusted": trusted,
         "steps.changed-files.outputs.desktop_browser_required": desktopRequired,
         "steps.changed-files.outputs.ci_browser_scope_required":
@@ -6971,6 +7028,7 @@ test("Playwright image-only changes admit browser suites in merge groups", () =>
           ...gate.values,
           "inputs.pr_depth_only": false,
           "needs.ci-plan.outputs.ci_browser_required": planned,
+          "needs.ci-plan.outputs.run_required": "true",
           "needs.ci-plan.outputs.coverage_profile": "normal-v1",
         },
       }),
@@ -7003,6 +7061,7 @@ test("browser scope vetoes otherwise eligible execution", () => {
       evaluate(jobIf(ciJobs["ci-browser"]), {
         values: {
           "needs.ci-plan.outputs.ci_browser_required": planned,
+          "needs.ci-plan.outputs.run_required": "true",
           "needs.ci-plan.outputs.coverage_profile": "normal-v1",
         },
       }),
@@ -7120,6 +7179,7 @@ test("Legal Atlas API source scope vetoes otherwise eligible execution", () => {
           "inputs.pr_depth_only": false,
           "github.event_name": EVENT.mergeGroup,
           "needs.ci-plan.outputs.run_required": "true",
+          "needs.ci-plan.outputs.heavy_proof": "true",
           "needs.ci-plan.outputs.trusted": "true",
           "needs.ci-plan.outputs.legal_atlas_image_required": String(planned),
           "needs.ci-plan.outputs.suite_depth": SUITE_DEPTH.full,
@@ -7179,6 +7239,7 @@ test("browser planning, scheduling and result gates agree across events and dept
         values: {
           ...gate.values,
           "needs.ci-plan.outputs.ci_browser_required": planned,
+          "needs.ci-plan.outputs.run_required": "true",
           "needs.ci-plan.outputs.coverage_profile": "normal-v1",
         },
       }),
@@ -7236,6 +7297,7 @@ test("untrusted PRs skip browser CI while the result gate preserves its trust fa
       evaluate(jobIf(ciJobs["ci-browser"]), {
         values: {
           "needs.ci-plan.outputs.ci_browser_required": planned,
+          "needs.ci-plan.outputs.run_required": "true",
           "needs.ci-plan.outputs.coverage_profile": "normal-v1",
         },
       }),
@@ -7294,6 +7356,7 @@ test("a planted desktop path plans the PR desktop browser leg while unrelated pa
             values: {
               ...gate.values,
               "needs.ci-plan.outputs.ci_browser_required": planned,
+              "needs.ci-plan.outputs.run_required": "true",
               "needs.ci-plan.outputs.coverage_profile": "normal-v1",
             },
           }),
@@ -7378,6 +7441,410 @@ test("Postgres PR required checks follow trust, run eligibility and the general 
         }
       }
     }
+  }
+});
+
+// Armed heavy proof: the queue-only suites move into the pull request run
+// once it is armed for merge, and a merge group skips them only for a head
+// that carries that proof.
+const heavyProofList = v.parse(
+  v.array(v.string()),
+  JSON.parse(resultStep.env["HEAVY_PROOF_JOBS"] ?? ""),
+);
+const mergeGroupHeavyKeep = v.parse(
+  v.array(v.string()),
+  JSON.parse(resultStep.env["MERGE_GROUP_HEAVY_KEEP"] ?? ""),
+);
+const LEGACY_QUEUE_ONLY = "github.event_name != 'pull_request' && (";
+const armedRuns = (
+  condition: string,
+  event: Event,
+  heavyProof: "true" | "false",
+) =>
+  v.parse(
+    v.boolean(),
+    evaluateExpression(condition, {
+      values: {
+        "github.event_name": event,
+        "github.event.pull_request.draft": false,
+        // A manual proof of the queue-only suites is a heavy dispatch.
+        "inputs.heavy_only": event === EVENT.workflowDispatch,
+        "inputs.pr_depth_only": false,
+        "needs.ci-plan.outputs.heavy_proof": heavyProof,
+        "needs.ci-plan.outputs.run_required": "true",
+        "needs.ci-plan.outputs.trusted": "true",
+        "needs.ci-plan.outputs.suite_depth":
+          event === EVENT.pullRequest ? SUITE_DEPTH.fast : SUITE_DEPTH.full,
+        "needs.ci-plan.outputs.queue_depth":
+          event === EVENT.mergeGroup ? "thin" : "full",
+        "needs.ci-plan.outputs.heavy_web_build_required": "false",
+        "vars.CI_POSTGRES_PR_SELECTION": "off",
+        "vars.QUEUE_BROWSER_SUITES": "",
+        "github.event.pull_request.labels.*.name": [],
+        "needs.ci-plan.outputs.coverage_profile": "normal-v1",
+        "needs.ci-plan.outputs.pilot_fast_jobs": "[]",
+      },
+      status: { always: true, success: true, failure: false, cancelled: false },
+      fallback: (path) => {
+        if (path.startsWith("needs.ci-plan.outputs.")) {
+          return "true";
+        }
+        if (/^needs\.[\w-]+\.result$/u.test(path)) {
+          // e2e-report runs only after a browser suite failed.
+          return path.includes("e2e-") ? "failure" : "success";
+        }
+        throw new TypeError(`Unknown CI predicate context: ${path}`);
+      },
+    }),
+  );
+
+test("every queue-only job follows the armed proof and skips proven merge groups unless kept", () => {
+  const gated = heavyProofJobs({ jobs: ciJobs });
+  expect(gated.length).toBeGreaterThan(0);
+  // One owner: no queue-only job keeps its own pull request exclusion,
+  // except the heavy-dispatch artifact producer that never runs in a group.
+  expect(
+    Object.entries(ciJobs)
+      .filter(([, body]) => jobIf(body).includes(LEGACY_QUEUE_ONLY))
+      .map(([job]) => job),
+  ).toEqual(["heavy-web-build"]);
+  for (const [key, policy] of Object.entries(eventPolicies.jobs)) {
+    if (!key.startsWith("ci.yml/")) {
+      continue;
+    }
+    const job = key.slice("ci.yml/".length);
+    expect(policy === "armed", job).toBe(gated.includes(job));
+  }
+  expect(heavyProofList.toSorted()).toEqual(
+    gated.filter((job) => resultJob.needs.includes(job)).toSorted(),
+  );
+  expect(mergeGroupHeavyKeep.toSorted()).toEqual(
+    Object.keys(MERGE_GROUP_HEAVY_KEEP).toSorted(),
+  );
+  for (const [job, reason] of Object.entries(MERGE_GROUP_HEAVY_KEEP)) {
+    expect(gated, job).toContain(job);
+    expect(reason.trim().length, job).toBeGreaterThan(0);
+  }
+  for (const job of gated) {
+    const condition = jobIf(ciJobs[job]);
+    expect(condition, job).toContain(HEAVY_PROOF_GATE);
+    const kept = Object.hasOwn(MERGE_GROUP_HEAVY_KEEP, job);
+    expect(armedRuns(condition, EVENT.pullRequest, "false"), job).toBe(false);
+    expect(armedRuns(condition, EVENT.pullRequest, "true"), job).toBe(true);
+    expect(armedRuns(condition, EVENT.mergeGroup, "true"), job).toBe(true);
+    expect(armedRuns(condition, EVENT.mergeGroup, "false"), job).toBe(kept);
+    expect(armedRuns(condition, EVENT.workflowDispatch, "true"), job).toBe(
+      true,
+    );
+  }
+});
+
+test("heavy_proof is computed once from arming, armed evidence and the event", () => {
+  const plan = v.parse(
+    v.object({ outputs: v.record(v.string(), v.string()) }),
+    ciJobs["ci-plan"],
+  );
+  const expression = plan.outputs["heavy_proof"] ?? "";
+  const heavyProof = (event: string, completed: Record<string, string>) =>
+    evaluateExpression(expression, {
+      values: {
+        "github.event_name": event,
+        "steps.completed-depth.outputs.armed": completed["armed"] ?? "",
+        "steps.completed-depth.outputs.run_required":
+          completed["run_required"] ?? "true",
+        "steps.completed-depth.outputs.armed_proof":
+          completed["armed_proof"] ?? "",
+      },
+    });
+  expect(heavyProof("pull_request", { armed: "true" })).toBe(true);
+  expect(heavyProof("pull_request", { armed: "false" })).toBe(false);
+  // Reused armed evidence starts nothing.
+  expect(
+    heavyProof("pull_request", { armed: "true", run_required: "false" }),
+  ).toBe(false);
+  expect(heavyProof("merge_group", {})).toBe(true);
+  expect(heavyProof("merge_group", { armed_proof: "complete" })).toBe(false);
+  expect(heavyProof("workflow_dispatch", {})).toBe(true);
+});
+
+test("the armed label owns ci-result and supersedes like prove-fix", () => {
+  const result = v.parse(v.object({ name: v.string() }), ciJobs["ci-result"]);
+  const resultName = (action: string, label: string) =>
+    evaluateExpression(bareExpression(result.name), {
+      values: {
+        "github.event_name": "pull_request",
+        "github.event.action": action,
+        "github.event.label.name": label,
+      },
+    });
+  expect(resultName("labeled", ARMED_LABEL)).toBe("ci-result");
+  expect(resultName("unlabeled", ARMED_LABEL)).toBe("ci-result");
+  expect(resultName("labeled", "prove-fix")).toBe("ci-result");
+  expect(resultName("labeled", "other")).toBe("ci-metadata-result");
+  // auto_merge_enabled starts the armed suites, so it owns ci-result too.
+  expect(resultName("auto_merge_enabled", "")).toBe("ci-result");
+  const lookup = v
+    .parse(
+      v.object({
+        steps: v.array(
+          v.looseObject({
+            id: v.optional(v.string()),
+            with: v.optional(v.looseObject({ script: v.optional(v.string()) })),
+          }),
+        ),
+      }),
+      ciJobs["ci-plan"],
+    )
+    .steps.find((step) => step.id === "completed-depth")?.with?.script;
+  expect(lookup).toContain(`const ARMED_LABEL = "${ARMED_LABEL}";`);
+  // Concurrency and the result name read the same label list.
+  expect(workflow.split(`'["prove-fix","${ARMED_LABEL}"]'`).length - 1).toBe(3);
+});
+
+test("a merge group skips proven queue-only suites but never kept or unproven ones", () => {
+  const skippable = heavyProofList.filter(
+    (job) => !mergeGroupHeavyKeep.includes(job),
+  );
+  const allSkipped = Object.fromEntries(
+    skippable.map((job) => [job, "skipped"]),
+  );
+  expectResultGates([
+    {
+      label: "proven group skips every skippable queue-only suite",
+      options: {
+        event: EVENT.mergeGroup,
+        results: allSkipped,
+        plannedOutputs: { heavy_proof: "false", queue_depth: "thin" },
+      },
+      exitCode: 0,
+    },
+    {
+      label: "proven full-depth queue skips them too",
+      options: {
+        event: EVENT.mergeGroup,
+        results: allSkipped,
+        plannedOutputs: { heavy_proof: "false" },
+      },
+      exitCode: 0,
+    },
+    ...mergeGroupHeavyKeep
+      .filter((job) => heavyProofList.includes(job))
+      .map((job) => ({
+      label: `kept ${job} stays required in a proven group`,
+      options: {
+        event: EVENT.mergeGroup,
+        results: { ...allSkipped, [job]: "skipped" },
+        plannedOutputs: { heavy_proof: "false", queue_depth: "thin" },
+      },
+      exitCode: 1,
+    })),
+    ...skippable.flatMap((job) => [
+      {
+        label: `unproven group requires ${job}`,
+        options: {
+          event: EVENT.mergeGroup,
+          results: { [job]: "skipped" },
+          plannedOutputs: { heavy_proof: "true", queue_depth: "thin" },
+        },
+        exitCode: 1,
+      },
+      {
+        label: `proven group still rejects a failed ${job}`,
+        options: {
+          event: EVENT.mergeGroup,
+          results: { ...allSkipped, [job]: "failure" },
+          plannedOutputs: { heavy_proof: "false", queue_depth: "thin" },
+        },
+        exitCode: 1,
+      },
+    ]),
+  ]);
+});
+
+test("an armed pull request run requires every planned queue-only suite", () => {
+  const allSkipped = Object.fromEntries(
+    heavyProofList.map((job) => [job, "skipped"]),
+  );
+  expectResultGates([
+    {
+      label: "an unarmed pull request skips the queue-only suites",
+      options: { event: EVENT.pullRequest, results: allSkipped },
+      exitCode: 0,
+    },
+    {
+      label: "an armed run with every suite green passes",
+      options: {
+        event: EVENT.pullRequest,
+        results: {},
+        plannedOutputs: { heavy_proof: "true" },
+      },
+      exitCode: 0,
+    },
+    ...heavyProofList.flatMap((job) => [
+      {
+        label: `an armed run requires planned ${job}`,
+        options: {
+          event: EVENT.pullRequest,
+          results: { [job]: "skipped" },
+          plannedOutputs: { heavy_proof: "true" },
+        },
+        exitCode: 1,
+      },
+      {
+        label: `an armed run may skip unplanned ${job}`,
+        options: {
+          event: EVENT.pullRequest,
+          results: { [job]: "skipped" },
+          unplannedScopes: [jobScopes[job] ?? ""],
+          plannedOutputs: { heavy_proof: "true" },
+        },
+        exitCode: 0,
+      },
+    ]),
+    {
+      label: "an armed run checks folded docker suites",
+      options: {
+        event: EVENT.pullRequest,
+        results: {},
+        suiteResults: { "agent-sandbox-docker": "failure" },
+        plannedOutputs: { heavy_proof: "true" },
+      },
+      exitCode: 1,
+    },
+  ]);
+});
+
+test("an armed delta proves only the queue-only suites on reused normal evidence", () => {
+  const normalSkipped = Object.fromEntries(
+    resultJob.needs
+      .filter(
+        (job) =>
+          job !== "ci-plan" &&
+          job !== "ci-quick-checks" &&
+          !heavyProofList.includes(job),
+      )
+      .map((job) => [job, "skipped"]),
+  );
+  const delta = {
+    heavy_proof: "true",
+    armed_delta: "true",
+    run_required: "false",
+    normal_source_run_id: "99",
+  };
+  expectResultGates([
+    {
+      label: "normal suites skipped, queue-only suites green",
+      options: {
+        event: EVENT.pullRequest,
+        results: normalSkipped,
+        plannedOutputs: delta,
+      },
+      exitCode: 0,
+    },
+    {
+      label: "a delta without a reusable source run fails",
+      options: {
+        event: EVENT.pullRequest,
+        results: normalSkipped,
+        plannedOutputs: { ...delta, normal_source_run_id: "" },
+      },
+      exitCode: 1,
+    },
+    {
+      label: "a delta never certifies a merge group",
+      options: {
+        event: EVENT.mergeGroup,
+        results: normalSkipped,
+        plannedOutputs: delta,
+      },
+      exitCode: 1,
+    },
+    ...heavyProofList.map((job) => ({
+      label: `a delta requires planned ${job}`,
+      options: {
+        event: EVENT.pullRequest,
+        results: { ...normalSkipped, [job]: "skipped" },
+        plannedOutputs: delta,
+      },
+      exitCode: 1,
+    })),
+    {
+      label: "without the delta a skipped normal suite still fails",
+      options: {
+        event: EVENT.pullRequest,
+        results: normalSkipped,
+        plannedOutputs: { heavy_proof: "true" },
+      },
+      exitCode: 1,
+    },
+  ]);
+});
+
+test("an armed delta skips every normal job but still runs the queue-only suites", () => {
+  const plan = v.parse(
+    v.object({
+      outputs: v.record(v.string(), v.string()),
+      steps: v.array(v.unknown()),
+    }),
+    ciJobs["ci-plan"],
+  );
+  expect(plan.outputs["run_required"]).toBe(
+    `\${{ steps.suites.outputs.run_required }}`,
+  );
+  const suites = v.parse(
+    v.object({ run: v.string() }),
+    flattenWorkflowSteps(plan.steps).find((step) => step["id"] === "suites"),
+  ).run;
+  const resolve = (
+    normalReused: string,
+    runRequired: string,
+    routeSmoke = "false",
+  ) => {
+    const directory = mkdtempSync(nodePath.join(tmpdir(), "ci-suites-"));
+    try {
+      const output = nodePath.join(directory, "output");
+      const child = Bun.spawnSync(["bash", "-euc", suites], {
+        env: {
+          PATH: Bun.env["PATH"] ?? "",
+          GITHUB_OUTPUT: output,
+          NORMAL_REUSED: normalReused,
+          RUN_REQUIRED: runRequired,
+          ROUTE_SMOKE_REQUIRED: routeSmoke,
+          MARKETING_REQUIRED: "false",
+        },
+      });
+      expect(child.exitCode, child.stderr.toString()).toBe(0);
+      return readFileSync(output, "utf-8").trim();
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  };
+  expect(resolve("true", "true")).toBe(
+    "run_required=false\narmed_delta=true",
+  );
+  // Route smoke needs this run's web build, so it keeps the full run.
+  expect(resolve("true", "true", "true")).toBe(
+    "run_required=true\narmed_delta=false",
+  );
+  expect(resolve("", "true")).toBe("run_required=true\narmed_delta=false");
+  expect(resolve("", "false")).toBe("run_required=false\narmed_delta=false");
+  expect(plan.outputs["armed_delta"]).toBe(
+    `\${{ steps.suites.outputs.armed_delta }}`,
+  );
+  const gated = heavyProofJobs({ jobs: ciJobs });
+  for (const job of resultJob.needs) {
+    if (job === "ci-plan" || job === "ci-quick-checks") {
+      continue;
+    }
+    const scheduled = armedRuns(
+      jobIf(ciJobs[job]).replaceAll(
+        "needs.ci-plan.outputs.run_required",
+        "'false'",
+      ),
+      EVENT.pullRequest,
+      "true",
+    );
+    expect(scheduled, job).toBe(gated.includes(job));
   }
 });
 

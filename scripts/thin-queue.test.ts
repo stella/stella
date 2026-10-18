@@ -206,7 +206,15 @@ const context = ({
   },
   inputs: { heavy_only: false, pr_depth_only: false },
   steps: {
-    "completed-depth": { outputs: { normal_completion: "required" } },
+    // Unarmed pull requests and merge groups without armed proof.
+    "completed-depth": {
+      outputs: {
+        normal_completion: "required",
+        run_required: "true",
+        armed: "false",
+        armed_proof: "",
+      },
+    },
     "pilot-queue-plan": { outputs: { queue_jobs: "[]" } },
   },
   needs: Object.fromEntries(
@@ -386,6 +394,8 @@ const expectedPrSelection = ({
     );
   }
   switch (disposition) {
+    // These contexts model unarmed pull requests.
+    case "armed":
     case "queue":
     case "main":
       return false;
@@ -793,8 +803,8 @@ test("failure-only cancellation jobs resolve both successful and failed dependen
   }
 });
 
-test("route smoke certifies planned queue and heavy builds while skipping PRs", () => {
-  expect(eventPolicy["ci.yml/route-smoke"]).toBe("queue");
+test("route smoke certifies planned queue and heavy builds while skipping unarmed PRs", () => {
+  expect(eventPolicy["ci.yml/route-smoke"]).toBe("armed");
   const cases = events
     .flatMap((event) =>
       ["full", "thin"].map((queueDepth) => ({ event, queueDepth })),

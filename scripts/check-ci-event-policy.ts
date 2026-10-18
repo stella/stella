@@ -6,6 +6,7 @@ import {
   definitelyFalse,
   evaluate,
 } from "./github-expression";
+import { HEAVY_PROOF_GATE } from "./heavy-proof-gate";
 import { flattenWorkflowSteps } from "./workflow-steps";
 
 const policySchema = v.object({
@@ -14,6 +15,7 @@ const policySchema = v.object({
     v.picklist([
       "pr-fast",
       "queue",
+      "armed",
       "main",
       "schema-pr",
       "pr-opt-in",
@@ -282,6 +284,43 @@ const checkCompilerProofPolicy = ({
   return problems;
 };
 
+// Queue-only suites a pull request runs once it is armed for merge: the one
+// ci-plan output decides, so no other path can run them on an unarmed pull
+// request.
+const checkArmedPolicy = ({
+  key,
+  job,
+  eventPolicy,
+  triggers,
+}: Pick<
+  CheckJobEventPolicyOptions,
+  "key" | "job" | "eventPolicy" | "triggers"
+>) => {
+  const problems: string[] = [];
+  if (eventPolicy !== "armed") {
+    return problems;
+  }
+  const condition =
+    typeof job.if === "boolean" ? String(job.if) : (job.if ?? "true");
+  if (!condition.includes(HEAVY_PROOF_GATE)) {
+    problems.push(`${key}: armed job must gate on ${HEAVY_PROOF_GATE}`);
+  }
+  for (const event of ["pull_request", "pull_request_target"]) {
+    if (
+      Object.hasOwn(triggers, event) &&
+      !definitelyFalse(condition, {
+        values: {
+          "github.event_name": event,
+          "needs.ci-plan.outputs.heavy_proof": "false",
+        },
+      })
+    ) {
+      problems.push(`${key}: armed job can run on an unarmed ${event}`);
+    }
+  }
+  return problems;
+};
+
 const checkJobEventPolicy = ({
   key,
   file,
@@ -374,6 +413,7 @@ const checkJobEventPolicy = ({
           "inputs.heavy_only": true,
           "inputs.pr_depth_only": false,
           "needs.ci-plan.outputs.run_required": "true",
+          "needs.ci-plan.outputs.heavy_proof": "true",
           "needs.ci-plan.outputs.queue_depth": "full",
           "needs.ci-plan.outputs.trusted": "true",
         },
@@ -542,6 +582,12 @@ export const checkCiEventPolicies = ({
       }
       problems.push(
         ...checkCompilerProofPolicy({
+          key,
+          job,
+          eventPolicy,
+          triggers: workflow.on,
+        }),
+        ...checkArmedPolicy({
           key,
           job,
           eventPolicy,

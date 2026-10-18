@@ -207,6 +207,8 @@ const conditionContext = (profile: string, event: string, depth: string) => {
     "needs.ci-plan.outputs.queue_depth": "full",
     "needs.ci-plan.outputs.trusted": "true",
     "needs.ci-plan.outputs.e2e_production_required": "true",
+    // An unarmed pull request; a merge group without armed proof.
+    "needs.ci-plan.outputs.heavy_proof": String(event !== "pull_request"),
   };
   for (const name of Object.keys(workflow.jobs)) {
     values[`needs.${name}.result`] = "success";

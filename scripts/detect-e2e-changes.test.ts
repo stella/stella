@@ -16,6 +16,7 @@ import { Script } from "node:vm";
 import { parseBunLockText } from "./bun-lock-text";
 import { rootCheckGate } from "./ci-root-check-gate";
 import { withoutStaticReuseCondition } from "./ci-static-checks.test-support";
+import { HEAVY_PROOF_GATE } from "./heavy-proof-gate";
 import { workflowJobSteps, workflowStepByName } from "./workflow-steps";
 
 const script = path.join(import.meta.dirname, "detect-e2e-changes.sh");
@@ -835,8 +836,9 @@ describe("detect-e2e-changes", () => {
     expect(releaseTypecheck).toContain(
       "needs.ci-plan.outputs.release_typecheck_required == 'true'",
     );
-    // Release compiles gate merge groups (and heavy runs), never pull requests.
-    expect(releaseTypecheck).toContain("github.event_name != 'pull_request'");
+    // Release compiles gate merge groups, armed pull requests and heavy
+    // runs, never an unarmed pull request.
+    expect(releaseTypecheck).toContain(HEAVY_PROOF_GATE);
     expect(releaseTypecheck).toContain("(github.event_name == 'merge_group'");
     expect(releaseTypecheck).toContain(
       "run: bun run typecheck --concurrency=1 && bun run typecheck:repo",
@@ -973,7 +975,13 @@ describe("detect-e2e-changes", () => {
     const predicate = requiredExpression(
       ciContract.jobs["marketing-screenshots"]?.if,
     );
-    for (const event of ["pull_request", "merge_group", "workflow_dispatch"]) {
+    // The armed proof runs them on a pull request; a merge group whose head
+    // carries it skips them.
+    for (const [event, heavyProof] of [
+      "pull_request",
+      "merge_group",
+      "workflow_dispatch",
+    ].flatMap((name) => [[name, false] as const, [name, true] as const])) {
       for (const planned of [false, true]) {
         for (const trusted of [false, true]) {
           for (const buildRequired of [false, true]) {
@@ -988,6 +996,7 @@ describe("detect-e2e-changes", () => {
                         outputs: {
                           queue_depth: "full",
                           run_required: "true",
+                          heavy_proof: String(heavyProof),
                           trusted: String(trusted),
                           marketing_screenshots_required: String(planned),
                           web_build_required: String(buildRequired),
@@ -1000,7 +1009,7 @@ describe("detect-e2e-changes", () => {
                     cancelled: () => cancelled,
                   };
                   const certified =
-                    event !== "pull_request" &&
+                    heavyProof &&
                     planned &&
                     (trusted || event === "workflow_dispatch") &&
                     (!buildRequired ||

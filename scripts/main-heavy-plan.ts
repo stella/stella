@@ -1,6 +1,8 @@
 import { panic } from "better-result";
 import { readFileSync } from "node:fs";
 
+import { HEAVY_PROOF_GATE } from "./heavy-proof-gate";
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
@@ -111,6 +113,30 @@ export const MERGE_GROUP_EXCEPTIONS = {
   "pr-heavy-gate":
     "Pull request ordering gate; a merge group starts its suites after the plan.",
 } as const;
+
+export {
+  ARMED_LABEL,
+  HEAVY_PROOF_GATE,
+  MERGE_GROUP_HEAVY_KEEP,
+} from "./heavy-proof-gate";
+
+const jobCondition = (job: unknown) => {
+  const condition = record(job)["if"];
+  return typeof condition === "string" ? condition : "";
+};
+
+// The gate as a conjunct. A job that only offers it as one alternative
+// (web-build, which also builds for selected browser specs) is not gated.
+const GATED = new RegExp(
+  `(?<!\\|\\|\\s*)${HEAVY_PROOF_GATE.replaceAll(".", "\\.")}`,
+  "u",
+);
+
+/** Every job gated on the armed heavy proof, in workflow order. */
+export const heavyProofJobs = (workflow: unknown) =>
+  Object.entries(record(record(workflow)["jobs"])).flatMap(([name, job]) =>
+    GATED.test(jobCondition(job)) ? [name] : [],
+  );
 
 export const queueAdmittedJobs = (workflow: unknown) => {
   const gated = [...thinJobs(workflow), ...mainHeavyJobs(workflow)];

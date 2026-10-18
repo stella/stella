@@ -63,12 +63,15 @@ on:
 
 # Code-changing PR runs supersede their predecessors. Metadata events use the
 # immutable head SHA so they cannot cancel the code run they are inspecting.
+# Arming (auto-merge or the merge-armed label) starts the armed heavy proof,
+# so it joins the code group: the label supersedes like prove-fix, while
+# auto-merge waits behind the running code run instead of cancelling it.
 # Manual runs supersede only older manual runs on the same branch; merge-group
 # runs remain isolated. Main calls coalesce under a child group distinct from
 # the caller's group.
 concurrency:
-  group: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && github.workflow || inputs.heavy_only == true && format('main-heavy-suites-{0}', inputs.sha) || github.workflow }}-${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'ci-' || '' }}${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && github.ref || github.event_name == 'pull_request' && (contains(fromJSON('["labeled","unlabeled","auto_merge_enabled"]'), github.event.action) && github.event.label.name != 'prove-fix') && format('pr-{0}-{1}-meta', github.event.pull_request.number, github.event.pull_request.head.sha) || github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number || github.ref) || github.event_name == 'workflow_dispatch' && format('ci-dispatch-{0}', github.ref) || format('run-{0}', github.run_id) }}
-  cancel-in-progress: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || (inputs.heavy_only != true && ((github.event_name == 'pull_request' && (contains(fromJSON('["opened","synchronize","reopened","ready_for_review"]'), github.event.action) || github.event.label.name == 'prove-fix')) || github.event_name == 'workflow_dispatch')) }}
+  group: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && github.workflow || inputs.heavy_only == true && format('main-heavy-suites-{0}', inputs.sha) || github.workflow }}-${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'ci-' || '' }}${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && github.ref || github.event_name == 'pull_request' && (contains(fromJSON('["labeled","unlabeled"]'), github.event.action) && !contains(fromJSON('["prove-fix","merge-armed"]'), github.event.label.name)) && format('pr-{0}-{1}-meta', github.event.pull_request.number, github.event.pull_request.head.sha) || github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number || github.ref) || github.event_name == 'workflow_dispatch' && format('ci-dispatch-{0}', github.ref) || format('run-{0}', github.run_id) }}
+  cancel-in-progress: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || (inputs.heavy_only != true && ((github.event_name == 'pull_request' && (contains(fromJSON('["opened","synchronize","reopened","ready_for_review"]'), github.event.action) || contains(fromJSON('["prove-fix","merge-armed"]'), github.event.label.name))) || github.event_name == 'workflow_dispatch')) }}
 
 permissions: {}
 
@@ -132,11 +135,29 @@ jobs:
       # Pull requests run lightweight guards, lint and type checks.
       # Test shards retain PR coverage and certify affected merge groups.
       # Builds, images, browsers and services certify the merge group.
-      run_required: ${{ steps.completed-depth.outputs.run_required }}
+      # An armed run whose head already has green normal evidence runs only
+      # the queue-only suites (armed_delta): every normal job skips here,
+      # while planning still runs (steps read the step-level value).
+      run_required: ${{ steps.suites.outputs.run_required }}
+      armed_delta: ${{ steps.suites.outputs.armed_delta }}
+      normal_source_run_id: ${{ steps.completed-depth.outputs.normal_source_run_id }}
       completion_marker: ${{ steps.completed-depth.outputs.marker }}
       completed_run_id: ${{ steps.completed-depth.outputs.completed_run_id }}
       queue_validation: ${{ steps.completed-depth.outputs.queue_validation }}
       metadata_only: ${{ steps.completed-depth.outputs.metadata_only }}
+      # The one owner of the queue-only (armed heavy) suites: an armed pull
+      # request run proves them, a merge group runs them only when its queued
+      # head lacks that proof, and manual and main runs keep them. Every
+      # queue-only job gates on this; scripts/ci-plan.test.ts enumerates them.
+      heavy_proof: >-
+        ${{ steps.completed-depth.outputs.run_required != 'false'
+        && ((github.event_name == 'pull_request'
+        && steps.completed-depth.outputs.armed == 'true')
+        || (github.event_name == 'merge_group'
+        && steps.completed-depth.outputs.armed_proof != 'complete')
+        || (github.event_name != 'pull_request' && github.event_name != 'merge_group'))
+        }}
+      armed_proof_source_run_id: ${{ steps.completed-depth.outputs.armed_proof_source_run_id }}
       coverage_profile: ${{ steps.pilot.outputs.coverage_profile }}
       pilot_fast_jobs: ${{ steps.pilot-plan.outputs.fast_jobs }}
       queue_required_jobs: ${{ steps.heavy-plan.outputs.queue_jobs || '[]' }}
@@ -174,6 +195,14 @@ jobs:
       e2e_production_mode: ${{ steps.e2e-pr-plan.outputs.mode }}
       e2e_production_specs: ${{ steps.e2e-pr-plan.outputs.specs }}
       browser_spec_selection_required: ${{ steps.e2e-pr-plan.outputs.selection_required }}
+      # Selected browser specs build the web app on a pull request, and so
+      # do an armed run's route smoke and release screenshots.
+      web_build_pr_required: >-
+        ${{ steps.e2e-pr-plan.outputs.selection_required == 'true'
+        || (steps.completed-depth.outputs.armed == 'true'
+        && (steps.changed-files.outputs.route_smoke_required == 'true'
+        || steps.marketing-release.outputs.required == 'true'))
+        }}
       e2e_landing_required: ${{ steps.changed-files.outputs.e2e_landing_required }}
       fix_tests_on_base_required: ${{ steps.changed-files.outputs.fix_tests_on_base_required }}
       landing_build_required: ${{ steps.changed-files.outputs.landing_build_required }}
@@ -426,6 +455,7 @@ jobs:
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           GROUP_BASE_SHA: ${{ github.event.merge_group.base_sha }}
           GROUP_HEAD_SHA: ${{ github.event.merge_group.head_sha }}
+          GROUP_HEAD_REF: ${{ github.event.merge_group.head_ref }}
           WORKFLOW_SHA: ${{ github.workflow_sha }}
         run: |
           if [[ "$EVENT_NAME" == merge_group ]]; then
@@ -455,10 +485,21 @@ jobs:
               merge_parent="$first_parent"
             fi
           fi
+          # A batched group's patch spans every entry; armed proof belongs to
+          # the queued pull request alone, so it compares that entry's own
+          # change: from the tree it was queued onto to the group head.
+          entry_patch_id=""
+          if [[ "$EVENT_NAME" == merge_group && "$GROUP_HEAD_REF" =~ /pr-[0-9]+-([0-9a-f]{40})$ ]]; then
+            entry_base="${BASH_REMATCH[1]}"
+            if git merge-base --is-ancestor "$entry_base" "$head" && ! git diff --quiet "$entry_base..$head"; then
+              entry_patch_id=$(git diff --binary "$entry_base..$head" | git patch-id --stable | awk 'NR == 1 { print $1 }')
+            fi
+          fi
           {
             echo "patch_id=$patch_id"
             echo "workflow_version=$workflow_version"
             echo "merge_parent=$merge_parent"
+            echo "entry_patch_id=$entry_patch_id"
           } >> "$GITHUB_OUTPUT"
 
       - name: Derive PR-depth jobs
@@ -515,6 +556,7 @@ jobs:
           PATCH_ID: ${{ steps.patch-id.outputs.patch_id }}
           WORKFLOW_VERSION: ${{ steps.patch-id.outputs.workflow_version }}
           MERGE_PARENT: ${{ steps.patch-id.outputs.merge_parent }}
+          ENTRY_PATCH_ID: ${{ steps.patch-id.outputs.entry_patch_id }}
           PR_DEPTH_JOBS: ${{ steps.pr-depth-plan.outputs.pr_depth_jobs }}
         with:
           retries: 0
@@ -526,13 +568,21 @@ jobs:
               core.setOutput("queue_validation", "true");
               return;
             }
+            // Arming a pull request for merge (auto-merge, or this label that
+            // the merge bar adds before it arms) moves the queue-only suites
+            // into the pull request run; a merge group skips them only for a
+            // head that carries this armed evidence.
+            const ARMED_LABEL = "merge-armed";
             const mergeGroup = context.eventName === "merge_group";
+            const scopeLabel = ["labeled", "unlabeled"].includes(context.payload.action)
+              && ["prove-fix", ARMED_LABEL].includes(context.payload.label?.name);
             const metadataAction = context.eventName === "pull_request"
               // enqueued keeps its queue-validation path and its ci-result.
-              && ["labeled", "unlabeled", "auto_merge_enabled"].includes(context.payload.action)
               // A draft runs no CI, so ready_for_review starts the first code
-              // run, and prove-fix changes suite scope: both own ci-result.
-              && context.payload.label?.name !== "prove-fix";
+              // run; prove-fix and the armed label change suite scope, and
+              // auto_merge_enabled starts the armed suites: all own ci-result.
+              && ["labeled", "unlabeled"].includes(context.payload.action)
+              && !scopeLabel;
             if (metadataAction) core.setOutput("metadata_only", "true");
             const queue = mergeGroup && process.env.QUEUE_DEPTH === "thin";
             if (queue) core.setOutput("normal_completion", "required");
@@ -561,21 +611,21 @@ jobs:
                 || !Number.isSafeInteger(pr.head?.repo?.id)
                 || !/^[a-f0-9]{40}$/.test(pr.head?.sha || "")
                 || !/^[a-f0-9]{40}$/.test(pr.base?.sha || "")) return;
-            const proof = Array.isArray(pr.labels)
-              && pr.labels.some((label) => label.name === "prove-fix");
-            const proofScopeChanged = ["labeled", "unlabeled"].includes(context.payload.action)
-              && context.payload.label?.name === "prove-fix";
+            const proof = pr.labels.some((label) => label.name === "prove-fix");
+            const armed = !mergeGroup
+              && (pr.auto_merge != null || pr.labels.some((label) => label.name === ARMED_LABEL));
+            if (!mergeGroup) core.setOutput("armed", String(armed));
             // Metadata that cannot change suite scope consumes completed
             // evidence when available, but never starts a duplicate suite.
-            // Ready events and prove-fix transitions still need their suites.
-            if (metadataAction && !proofScopeChanged) {
+            if (metadataAction) {
               core.setOutput("run_required", "false");
             }
             const scope = require("node:crypto").createHash("sha256")
               .update(JSON.stringify([pr.title, pr.body || "", proof])).digest("hex");
             const profile = mergeGroup ? "normal-v1" : process.env.COVERAGE_PROFILE || "normal-v1";
-            const markerFor = (sha) => `ci-completed-v6-${profile}-${pr.number}-${pr.head.repo.id}-${sha}-${depth}-${scope}`;
-            const marker = markerFor(pr.head.sha);
+            const markerFor = (sha, heavy) =>
+              `ci-completed-v6-${profile}-${pr.number}-${pr.head.repo.id}-${sha}-${depth}${heavy ? "-armed" : ""}-${scope}`;
+            const marker = markerFor(pr.head.sha, armed);
             if (!mergeGroup) core.setOutput("marker", marker);
             // A push that only merges the base into a head whose run passed
             // reuses that run's heavy suites when the patch id is unchanged:
@@ -587,124 +637,176 @@ jobs:
               && /^[a-f0-9]{40}$/.test(mergeParent) && mergeParent !== pr.head.sha;
             if (!mergeGroup && !heavyReuse && !["labeled", "unlabeled", "ready_for_review", "reopened", "auto_merge_enabled", "enqueued"].includes(context.payload.action)) return;
             const testedSha = heavyReuse ? mergeParent : pr.head.sha;
-            const testedMarker = markerFor(testedSha);
-            try {
-              if (mergeGroup) {
+            // Completed evidence for one head: the named artifact from a
+            // successful pull request run whose recorded contents show that
+            // it planned its suites for that head and patch and that every
+            // planned job succeeded. Any lookup failure finds nothing.
+            const completedEvidence = async ({ sha, heavy, patchId }) => {
+              const wanted = markerFor(sha, heavy);
+              try {
+                const { data } = await github.rest.actions.listArtifactsForRepo({
+                  ...context.repo, name: wanted, per_page: 100,
+                  request: { timeout: 10000 },
+                });
+                if (!Array.isArray(data.artifacts)) return null;
+                const completed = data.artifacts.find((artifact) =>
+                  typeof artifact?.name === "string"
+                  && artifact.name === wanted
+                  && artifact.expired === false
+                  && Date.parse(artifact.expires_at) > Date.now()
+                  && artifact.workflow_run?.head_sha === sha
+                  && artifact.workflow_run?.head_repository_id === pr.head.repo.id
+                  && Number.isSafeInteger(artifact.workflow_run?.id)
+                  && artifact.workflow_run.id > 0
+                  && artifact.workflow_run.id !== context.runId);
+                if (!completed) return null;
+                const sourceId = completed.workflow_run.id;
+                const { data: sourceRun } = await github.rest.actions.getWorkflowRun({
+                  ...context.repo, run_id: sourceId,
+                  request: { timeout: 10000 },
+                });
+                if (sourceRun.id !== sourceId || sourceRun.head_sha !== sha
+                    || sourceRun.event !== "pull_request"
+                    || sourceRun.path !== ".github/workflows/ci.yml"
+                    || sourceRun.status !== "completed"
+                    || sourceRun.conclusion !== "success") return null;
+                // Armed proof lets a merge group skip suites, so its artifact
+                // must come from ci-result itself: every other job of that run
+                // had finished before it was uploaded, and only ci-result runs
+                // after all of them. A job running pull request code cannot
+                // backdate an upload past its own end.
+                if (heavy) {
+                  const runJobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
+                    ...context.repo, run_id: sourceId, filter: "latest", per_page: 100,
+                    request: { timeout: 10000 },
+                  });
+                  const result = runJobs.filter((job) => job.name === "ci-result");
+                  const uploaded = Math.min(Date.parse(completed.created_at), Date.parse(completed.updated_at));
+                  if (result.length !== 1 || result[0].conclusion !== "success"
+                      || !Number.isFinite(uploaded)
+                      || !(uploaded >= Date.parse(result[0].started_at))
+                      || !runJobs.every((job) => job.name === "ci-result"
+                        || (job.status === "completed" && Date.parse(job.completed_at) <= uploaded))) return null;
+                }
+                // The name alone proves nothing: a superseded run once published
+                // it. Reuse only evidence whose contents show that the producing
+                // run planned its suites for this exact head and that every
+                // planned job succeeded with no job cancelled or failed.
+                if (!Number.isSafeInteger(completed.id) || completed.id <= 0
+                    || !Number.isSafeInteger(completed.size_in_bytes)
+                    || completed.size_in_bytes <= 0
+                    || completed.size_in_bytes > 65536) return null;
+                const { data: archive } = await github.rest.actions.downloadArtifact({
+                  ...context.repo, artifact_id: completed.id, archive_format: "zip",
+                  request: { timeout: 10000 },
+                });
+                // upload-artifact zips the one evidence file; read it through
+                // the central directory, since a streamed entry defers its sizes.
+                const zip = Buffer.from(archive);
+                const end = zip.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
+                if (end < 0 || zip.readUInt16LE(end + 10) !== 1) return null;
+                const entry = zip.readUInt32LE(end + 16);
+                if (zip.readUInt32LE(entry) !== 0x02014b50) return null;
+                const method = zip.readUInt16LE(entry + 10);
+                const packed = zip.readUInt32LE(entry + 20);
+                const nameLength = zip.readUInt16LE(entry + 28);
+                const local = zip.readUInt32LE(entry + 42);
+                if (zip.toString("utf8", entry + 46, entry + 46 + nameLength) !== "ci-completed-depth.json"
+                    || zip.readUInt32LE(local) !== 0x04034b50
+                    || packed > 65536) return null;
+                const start = local + 30 + zip.readUInt16LE(local + 26) + zip.readUInt16LE(local + 28);
+                const body = zip.subarray(start, start + packed);
+                if (body.length !== packed || ![0, 8].includes(method)) return null;
+                const evidence = JSON.parse((method === 8
+                  ? require("node:zlib").inflateRawSync(body, { maxOutputLength: 65536 })
+                  : body).toString("utf8"));
+                const results = evidence?.jobs;
+                const planned = evidence?.planned;
+                if (evidence?.version !== 6
+                    || evidence.marker !== wanted
+                    || evidence.event !== "pull_request"
+                    || evidence.run_id !== sourceId
+                    || !/^[0-9a-f]{40}$/.test(patchId || "")
+                    || evidence.patch_id !== patchId
+                    || evidence.workflow_version !== process.env.WORKFLOW_VERSION
+                    || !Number.isSafeInteger(evidence.run_attempt)
+                    || evidence.run_attempt < 1
+                    || evidence.pr_number !== pr.number
+                    || evidence.head_repo_id !== pr.head.repo.id
+                    || evidence.head_sha !== sha
+                    || evidence.suite_depth !== depth
+                    || evidence.coverage_profile !== profile
+                    || (evidence.heavy_proof === true) !== heavy
+                    || results === null || typeof results !== "object" || Array.isArray(results)
+                    || results["ci-plan"] !== "success"
+                    || Object.keys(results).length < 2
+                    || !Object.values(results).every((outcome) => outcome === "success" || outcome === "skipped")
+                    || !Array.isArray(planned) || planned.length === 0
+                    || new Set(planned).size !== planned.length
+                    || !planned.every((job) => typeof job === "string"
+                      && Object.hasOwn(results, job) && results[job] === "success")) return null;
+                return { evidence, sourceId };
+              } catch {
+                core.info(`Completed-depth evidence ${wanted} unavailable.`);
+                return null;
+              }
+            };
+            if (mergeGroup) {
+              try {
                 const { data: comparison } = await github.rest.repos.compareCommits({
                   ...context.repo, base: pr.head.sha, head: context.payload.merge_group.head_sha,
                   request: { timeout: 10000 },
                 });
                 if (!["ahead", "identical"].includes(comparison.status)
                     || comparison.merge_base_commit?.sha !== pr.head.sha) return;
+              } catch {
+                core.info("Queued tree comparison unavailable; running queued checks.");
+                return;
               }
-              const { data } = await github.rest.actions.listArtifactsForRepo({
-                ...context.repo, name: testedMarker, per_page: 100,
-                request: { timeout: 10000 },
-              });
-              if (!Array.isArray(data.artifacts)) return;
-              const completed = data.artifacts.find((artifact) =>
-                typeof artifact?.name === "string"
-                && artifact.name === testedMarker
-                && artifact.expired === false
-                && Date.parse(artifact.expires_at) > Date.now()
-                && artifact.workflow_run?.head_sha === testedSha
-                && artifact.workflow_run?.head_repository_id === pr.head.repo.id
-                && Number.isSafeInteger(artifact.workflow_run?.id)
-                && artifact.workflow_run.id > 0
-                && artifact.workflow_run.id !== context.runId);
-              if (!completed) return;
-              const sourceId = completed.workflow_run.id;
-              const { data: sourceRun } = await github.rest.actions.getWorkflowRun({
-                ...context.repo, run_id: sourceId,
-                request: { timeout: 10000 },
-              });
-              if (sourceRun.id !== sourceId || sourceRun.head_sha !== testedSha
-                  || sourceRun.event !== "pull_request"
-                  || sourceRun.path !== ".github/workflows/ci.yml"
-                  || sourceRun.status !== "completed"
-                  || sourceRun.conclusion !== "success") return;
-              // The name alone proves nothing: a superseded run once published
-              // it. Reuse only evidence whose contents show that the producing
-              // run planned its suites for this exact head and that every
-              // planned job succeeded with no job cancelled or failed.
-              if (!Number.isSafeInteger(completed.id) || completed.id <= 0
-                  || !Number.isSafeInteger(completed.size_in_bytes)
-                  || completed.size_in_bytes <= 0
-                  || completed.size_in_bytes > 65536) return;
-              const { data: archive } = await github.rest.actions.downloadArtifact({
-                ...context.repo, artifact_id: completed.id, archive_format: "zip",
-                request: { timeout: 10000 },
-              });
-              // upload-artifact zips the one evidence file; read it through
-              // the central directory, since a streamed entry defers its sizes.
-              const zip = Buffer.from(archive);
-              const end = zip.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
-              if (end < 0 || zip.readUInt16LE(end + 10) !== 1) return;
-              const entry = zip.readUInt32LE(end + 16);
-              if (zip.readUInt32LE(entry) !== 0x02014b50) return;
-              const method = zip.readUInt16LE(entry + 10);
-              const packed = zip.readUInt32LE(entry + 20);
-              const nameLength = zip.readUInt16LE(entry + 28);
-              const local = zip.readUInt32LE(entry + 42);
-              if (zip.toString("utf8", entry + 46, entry + 46 + nameLength) !== "ci-completed-depth.json"
-                  || zip.readUInt32LE(local) !== 0x04034b50
-                  || packed > 65536) return;
-              const start = local + 30 + zip.readUInt16LE(local + 26) + zip.readUInt16LE(local + 28);
-              const body = zip.subarray(start, start + packed);
-              if (body.length !== packed || ![0, 8].includes(method)) return;
-              const evidence = JSON.parse((method === 8
-                ? require("node:zlib").inflateRawSync(body, { maxOutputLength: 65536 })
-                : body).toString("utf8"));
-              const results = evidence?.jobs;
-              const planned = evidence?.planned;
-              if (evidence?.version !== 6
-                  || evidence.marker !== testedMarker
-                  || evidence.event !== "pull_request"
-                  || evidence.run_id !== sourceId
-                  || !/^[0-9a-f]{40}$/.test(process.env.PATCH_ID || "")
-                  || evidence.patch_id !== process.env.PATCH_ID
-                  || evidence.workflow_version !== process.env.WORKFLOW_VERSION
-                  || !Number.isSafeInteger(evidence.run_attempt)
-                  || evidence.run_attempt < 1
-                  || evidence.pr_number !== pr.number
-                  || evidence.head_repo_id !== pr.head.repo.id
-                  || evidence.head_sha !== testedSha
-                  || evidence.suite_depth !== depth
-                  || evidence.coverage_profile !== profile
-                  || results === null || typeof results !== "object" || Array.isArray(results)
-                  || results["ci-plan"] !== "success"
-                  || Object.keys(results).length < 2
-                  || !Object.values(results).every((outcome) => outcome === "success" || outcome === "skipped")
-                  || !Array.isArray(planned) || planned.length === 0
-                  || new Set(planned).size !== planned.length
-                  || !planned.every((job) => typeof job === "string"
-                    && Object.hasOwn(results, job) && results[job] === "success")) return;
-              // A moved base never forces a re-test of an identical change:
-              // the patch id matches, and the merge group validates the queued
-              // tree on the current base. A merge group records PR-depth
-              // evidence only; its queued checks still run.
-              if (mergeGroup && (!Array.isArray(evidence.pr_depth_jobs)
-                  || JSON.stringify(evidence.pr_depth_jobs) !== process.env.PR_DEPTH_JOBS
-                  || evidence.pr_depth_jobs.length === 0
-                  || !evidence.pr_depth_jobs.every((job) => typeof job === "string"
-                    && results[job] === "success"))) return;
-              if (mergeGroup) {
+              // A merge group records PR-depth evidence for an identical
+              // change; queued checks still run. A moved base is allowed.
+              const fast = await completedEvidence({ sha: pr.head.sha, heavy: false, patchId: process.env.PATCH_ID });
+              if (fast && Array.isArray(fast.evidence.pr_depth_jobs)
+                  && JSON.stringify(fast.evidence.pr_depth_jobs) === process.env.PR_DEPTH_JOBS
+                  && fast.evidence.pr_depth_jobs.length > 0
+                  && fast.evidence.pr_depth_jobs.every((job) => typeof job === "string"
+                    && fast.evidence.jobs[job] === "success")) {
                 core.setOutput("pr_depth_reused", "true");
-                core.setOutput("pr_depth_source_run_id", String(sourceId));
+                core.setOutput("pr_depth_source_run_id", String(fast.sourceId));
                 if (queue) core.setOutput("normal_completion", "complete");
-                return;
               }
-              if (heavyReuse) {
-                core.setOutput("pr_heavy_suites", "reused");
-                core.setOutput("pr_heavy_source_run_id", String(sourceId));
-                core.setOutput("pr_heavy_source_sha", testedSha);
-                return;
+              // The armed pull request run proved the queue-only suites for
+              // this pull request's own patch (a batched group's patch spans
+              // every entry); without that evidence the group runs them.
+              const heavy = await completedEvidence({ sha: pr.head.sha, heavy: true, patchId: process.env.ENTRY_PATCH_ID });
+              if (heavy) {
+                core.setOutput("armed_proof", "complete");
+                core.setOutput("armed_proof_source_run_id", String(heavy.sourceId));
               }
-              core.setOutput("completed_run_id", String(sourceId));
-              core.setOutput("run_required", "false");
-            } catch {
-              core.info("Completed-depth evidence unavailable; running CI.");
+              return;
             }
+            // A moved base never forces a re-test of an identical change: the
+            // patch id matches, and the merge group validates the queued tree
+            // on the current base.
+            const found = await completedEvidence({ sha: testedSha, heavy: armed, patchId: process.env.PATCH_ID });
+            if (found && heavyReuse) {
+              core.setOutput("pr_heavy_suites", "reused");
+              core.setOutput("pr_heavy_source_run_id", String(found.sourceId));
+              core.setOutput("pr_heavy_source_sha", testedSha);
+              return;
+            }
+            if (found) {
+              core.setOutput("completed_run_id", String(found.sourceId));
+              core.setOutput("run_required", "false");
+              return;
+            }
+            // Arming a head whose normal suites are already green runs only
+            // the queue-only suites: the armed delta.
+            if (!armed || metadataAction || heavyReuse) return;
+            const normal = await completedEvidence({ sha: pr.head.sha, heavy: false, patchId: process.env.PATCH_ID });
+            if (!normal) return;
+            core.setOutput("normal_reused", "true");
+            core.setOutput("normal_source_run_id", String(normal.sourceId));
 
       - name: Check if PR is trusted
         id: check
@@ -903,6 +1005,7 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           PR_TITLE: ${{ github.event.pull_request.title }}
           SUITE_DEPTH: ${{ steps.depth.outputs.suite_depth }}
+          ARMED: ${{ steps.completed-depth.outputs.armed }}
           HEAVY_ONLY: ${{ inputs.heavy_only }}
         run: |
           changed_files=()
@@ -1071,6 +1174,12 @@ jobs:
           # Path scopes for the build/smoke jobs, computed here so a job whose
           # scope did not change is skipped entirely instead of scheduling a
           # runner just to decide it has nothing to do.
+          # An armed pull request proves the queue-only suites at the scope
+          # a merge group would give them.
+          heavy_scope=false
+          if [[ "$SUITE_DEPTH" == full || ("$EVENT_NAME" == pull_request && "${ARMED:-false}" == true) ]]; then
+            heavy_scope=true
+          fi
           package_checks_required=true
           if [[ "$dependency_class" != dev-tooling && ("$EVENT_NAME" == pull_request || "$EVENT_NAME" == merge_group) ]]; then
             package_scope=$(bun scripts/ci-package-scope.ts --package-checks "${scope_files[@]}") || package_scope=true
@@ -1216,7 +1325,7 @@ jobs:
             esac
             case "$file" in
               apps/landing/*|docs/changelog/*|VERSION|packages/*|patches/*|bun.lock|package.json|.github/workflows/ci.yml)
-                if [[ "$EVENT_NAME" != pull_request ]]; then
+                if [[ "$EVENT_NAME" != pull_request || "$heavy_scope" == true ]]; then
                   landing_build_required=true
                 fi
                 ;;
@@ -1308,10 +1417,10 @@ jobs:
             esac
           done
           # A pull request builds the API image for arm64, the production
-          # architecture. Full depth and a version change build every
-          # architecture release.yml publishes.
+          # architecture. Full depth, an armed pull request and a version
+          # change build every architecture release.yml publishes.
           api_image_platforms='[{"runner":"ubuntu-24.04-arm","platform":"linux/arm64"}]'
-          if [[ "$SUITE_DEPTH" == "full" || "$version_changed" == "true" ]]; then
+          if [[ "$heavy_scope" == true || "$version_changed" == "true" ]]; then
             api_image_platforms='[{"runner":"ubuntu-24.04-arm","platform":"linux/arm64"},{"runner":"ubuntu-latest","platform":"linux/amd64"}]'
           fi
 
@@ -1326,7 +1435,7 @@ jobs:
           # e2e-landing runs the same landing build before it tests the
           # preview, so when it is planned a separate landing build only
           # repeats that work.
-          if [[ "$SUITE_DEPTH" == "full" && "$e2e_landing_required" == "true" ]]; then
+          if [[ "$heavy_scope" == true && "$e2e_landing_required" == "true" ]]; then
             landing_build_required=false
           fi
 
@@ -1674,6 +1783,29 @@ jobs:
             } >> "$GITHUB_OUTPUT"
           fi
 
+
+      # An armed delta reuses the normal suites: every normal job reads
+      # run_required, which is false here, while planning reads the
+      # completed-depth value and still runs. Route smoke and release
+      # screenshots need this run's web build, so they keep the full run.
+      - name: Resolve which suites run
+        id: suites
+        env:
+          RUN_REQUIRED: ${{ steps.completed-depth.outputs.run_required }}
+          NORMAL_REUSED: ${{ steps.completed-depth.outputs.normal_reused }}
+          ROUTE_SMOKE_REQUIRED: ${{ steps.changed-files.outputs.route_smoke_required }}
+          MARKETING_REQUIRED: ${{ steps.marketing-release.outputs.required }}
+        run: |
+          armed_delta=false
+          if [[ "${NORMAL_REUSED:-}" == true && "${ROUTE_SMOKE_REQUIRED:-}" != true && "${MARKETING_REQUIRED:-}" != true ]]; then
+            armed_delta=true
+            RUN_REQUIRED=false
+          fi
+          {
+            echo "run_required=$RUN_REQUIRED"
+            echo "armed_delta=$armed_delta"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Plan API test files and shards
         if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
         id: api-tests
@@ -1819,7 +1951,7 @@ jobs:
   # start straight after the plan.
   pr-heavy-gate:
     needs: ci-plan
-    if: inputs.heavy_only != true && inputs.pr_depth_only != true && needs.ci-plan.outputs.pr_heavy_gate_required == 'true'
+    if: inputs.heavy_only != true && inputs.pr_depth_only != true && needs.ci-plan.outputs.run_required != 'false' && needs.ci-plan.outputs.pr_heavy_gate_required == 'true'
     runs-on: ubuntu-latest
     # ci-quick-checks' own 15-minute budget plus its wait for a runner.
     timeout-minutes: 40
@@ -1856,11 +1988,11 @@ jobs:
     needs: ci-plan
     if: >-
       inputs.pr_depth_only != true
-      && (github.event_name == 'merge_group' || needs.ci-plan.outputs.run_required != 'false')
-      && github.event_name != 'pull_request'
+      && needs.ci-plan.outputs.heavy_proof == 'true'
       && (needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.docker_checks_required == 'true'
       && (github.event_name == 'merge_group'
+          || github.event_name == 'pull_request'
           || needs.ci-plan.outputs.suite_depth == 'full'
           || (needs.ci-plan.outputs.suite_depth == 'fast'
               && needs.ci-plan.outputs.docker_checks_pr_required == 'true'))
@@ -5032,6 +5164,7 @@ jobs:
       && needs.ci-plan.result == 'success'
       && (github.event_name != 'pull_request' || needs.pr-heavy-gate.result == 'success')
       && inputs.pr_depth_only != true
+      && needs.ci-plan.outputs.run_required != 'false'
       &&
       (needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1' || contains(fromJSON(needs.ci-plan.outputs.pilot_fast_jobs || '[]'), 'ci-browser'))
       && needs.ci-plan.outputs.ci_browser_required == 'true'
@@ -5913,14 +6046,12 @@ jobs:
     needs: ci-plan
     if: >-
       inputs.pr_depth_only != true
-      &&
-      needs.ci-plan.outputs.run_required != 'false'
       && (
-      github.event_name != 'pull_request' && (
+      (needs.ci-plan.outputs.heavy_proof == 'true' || github.event_name == 'merge_group') && (
       ((needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.migration_rehearsal_required == 'true'
-      && needs.ci-plan.outputs.suite_depth == 'full'
+      && (needs.ci-plan.outputs.suite_depth == 'full' || github.event_name == 'pull_request')
       )
       )
       )
@@ -6023,11 +6154,10 @@ jobs:
     needs: ci-plan
     if: >-
       inputs.pr_depth_only != true
-      &&
-      needs.ci-plan.outputs.run_required != 'false'
       && (
-      github.event_name != 'pull_request' && (
+      needs.ci-plan.outputs.heavy_proof == 'true' && (
       (github.event_name == 'merge_group'
+       || github.event_name == 'pull_request'
        || inputs.heavy_only == true)
       && needs.ci-plan.outputs.release_typecheck_required == 'true'
       && needs.ci-plan.outputs.trusted == 'true'
@@ -6173,7 +6303,7 @@ jobs:
       && needs.ci-plan.outputs.web_build_required == 'true')
       || (github.event_name == 'pull_request'
       && needs.ci-plan.outputs.coverage_profile == 'normal-v1'
-      && needs.ci-plan.outputs.browser_spec_selection_required == 'true'))
+      && needs.ci-plan.outputs.web_build_pr_required == 'true'))
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -6290,10 +6420,8 @@ jobs:
     needs: ci-plan
     if: >-
       inputs.pr_depth_only != true
-      &&
-      needs.ci-plan.outputs.run_required != 'false'
       && (
-      github.event_name != 'pull_request' && (
+      needs.ci-plan.outputs.heavy_proof == 'true' && (
       ((needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.web_image_smoke_required == 'true'
@@ -6394,14 +6522,12 @@ jobs:
     needs: ci-plan
     if: >-
       inputs.pr_depth_only != true
-      &&
-      needs.ci-plan.outputs.run_required != 'false'
       && (
-      github.event_name != 'pull_request' && (
+      needs.ci-plan.outputs.heavy_proof == 'true' && (
       ((needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.mobile_build_required == 'true'
-      && needs.ci-plan.outputs.suite_depth == 'full'
+      && (needs.ci-plan.outputs.suite_depth == 'full' || github.event_name == 'pull_request')
       )
       )
       )
@@ -6447,10 +6573,8 @@ jobs:
     needs: ci-plan
     if: >-
       inputs.pr_depth_only != true
-      &&
-      needs.ci-plan.outputs.run_required != 'false'
       && (
-      github.event_name != 'pull_request' && (
+      needs.ci-plan.outputs.heavy_proof == 'true' && (
       ((needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.landing_build_required == 'true'
@@ -6547,16 +6671,14 @@ jobs:
     # Affected browser suites certify the queued tree at every queue depth.
     if: >-
       inputs.pr_depth_only != true
-      &&
-      needs.ci-plan.outputs.run_required != 'false'
       && (
-      github.event_name != 'pull_request' && (
+      needs.ci-plan.outputs.heavy_proof == 'true' && (
       (always()
       && (github.event_name != 'merge_group' || !cancelled())
       && needs.ci-plan.outputs.trusted == 'true'
       && needs.ci-plan.outputs.route_smoke_required == 'true'
       && (needs.web-build.result == 'success' || needs.heavy-web-build.result == 'success')
-      && (github.event_name == 'merge_group' || inputs.heavy_only == true)
+      && (github.event_name == 'merge_group' || github.event_name == 'pull_request' || inputs.heavy_only == true)
       )
       )
       )
@@ -6921,14 +7043,12 @@ jobs:
     needs: ci-plan
     if: >-
       inputs.pr_depth_only != true
-      &&
-      needs.ci-plan.outputs.run_required != 'false'
       && (
-      github.event_name != 'pull_request' && (
+      needs.ci-plan.outputs.heavy_proof == 'true' && (
       ((needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.stack_redaction_browsers_required == 'true'
-      && needs.ci-plan.outputs.suite_depth == 'full'
+      && (needs.ci-plan.outputs.suite_depth == 'full' || github.event_name == 'pull_request')
       )
       )
       )
@@ -6996,14 +7116,12 @@ jobs:
     needs: ci-plan
     if: >-
       inputs.pr_depth_only != true
-      &&
-      needs.ci-plan.outputs.run_required != 'false'
       && (
-      github.event_name != 'pull_request' && (
+      needs.ci-plan.outputs.heavy_proof == 'true' && (
       ((needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.e2e_core_required == 'true'
-      && needs.ci-plan.outputs.suite_depth == 'full'
+      && (needs.ci-plan.outputs.suite_depth == 'full' || github.event_name == 'pull_request')
       )
       )
       )
@@ -7215,14 +7333,12 @@ jobs:
     needs: ci-plan
     if: >-
       inputs.pr_depth_only != true
-      &&
-      needs.ci-plan.outputs.run_required != 'false'
       && (
-      github.event_name != 'pull_request' && (
+      needs.ci-plan.outputs.heavy_proof == 'true' && (
       ((needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.e2e_landing_required == 'true'
-      && needs.ci-plan.outputs.suite_depth == 'full'
+      && (needs.ci-plan.outputs.suite_depth == 'full' || github.event_name == 'pull_request')
       )
       )
       )
@@ -7345,10 +7461,8 @@ jobs:
     needs: [ci-plan, web-build, heavy-web-build]
     if: >-
       inputs.pr_depth_only != true
-      &&
-      needs.ci-plan.outputs.run_required != 'false'
       && (
-      github.event_name != 'pull_request' && (
+      needs.ci-plan.outputs.heavy_proof == 'true' && (
       (always()
       && (github.event_name != 'merge_group' || !cancelled())
       && (needs.ci-plan.outputs.trusted == 'true'
@@ -7437,10 +7551,8 @@ jobs:
     needs: [ci-plan, e2e-production-shard, e2e-vite-canary]
     if: >-
       inputs.pr_depth_only != true
-      &&
-      needs.ci-plan.outputs.run_required != 'false'
       && (
-      github.event_name != 'pull_request' && (
+      (needs.ci-plan.outputs.heavy_proof == 'true' || github.event_name == 'merge_group') && (
       !cancelled()
       && needs.ci-plan.outputs.e2e_core_required == 'true'
       && (needs.e2e-production-shard.result == 'failure'
@@ -7501,10 +7613,8 @@ jobs:
     needs: ci-plan
     if: >-
       inputs.pr_depth_only != true
-      &&
-      needs.ci-plan.outputs.run_required != 'false'
       && (
-      github.event_name != 'pull_request' && (
+      needs.ci-plan.outputs.heavy_proof == 'true' && (
       ((needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.api_image_smoke_required == 'true'
@@ -7677,14 +7787,12 @@ jobs:
     needs: ci-plan
     if: >-
       inputs.pr_depth_only != true
-      &&
-      needs.ci-plan.outputs.run_required != 'false'
       && (
-      github.event_name != 'pull_request' && (
+      needs.ci-plan.outputs.heavy_proof == 'true' && (
       ((needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.legal_atlas_image_required == 'true'
-      && (needs.ci-plan.outputs.suite_depth == 'full'
+      && ((needs.ci-plan.outputs.suite_depth == 'full' || github.event_name == 'pull_request')
           || (needs.ci-plan.outputs.suite_depth == 'fast'
               && needs.ci-plan.outputs.legal_atlas_image_pr_required == 'true'))
       )
@@ -7766,10 +7874,8 @@ jobs:
     needs: ci-plan
     if: >-
       inputs.pr_depth_only != true
-      &&
-      needs.ci-plan.outputs.run_required != 'false'
       && (
-      github.event_name != 'pull_request' && (
+      needs.ci-plan.outputs.heavy_proof == 'true' && (
       ((needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.desktop_windows_dry_run_required == 'true'
@@ -7894,10 +8000,8 @@ jobs:
     needs: ci-plan
     if: >-
       inputs.pr_depth_only != true
-      &&
-      needs.ci-plan.outputs.run_required != 'false'
       && (
-      github.event_name != 'pull_request' && (
+      needs.ci-plan.outputs.heavy_proof == 'true' && (
       ((needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.windows_scripts_required == 'true'
@@ -8071,8 +8175,7 @@ jobs:
     needs: ci-plan
     if: >-
       inputs.pr_depth_only != true
-      && needs.ci-plan.outputs.run_required != 'false'
-      && github.event_name != 'pull_request'
+      && needs.ci-plan.outputs.heavy_proof == 'true'
       && (needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.desktop_rust_checks_required == 'true'
     strategy:
@@ -8425,7 +8528,7 @@ jobs:
     # A metadata run has a distinct check name. It can reuse a completed code
     # run or exercise a changed scope, but can never overwrite the required
     # ci-result while that code run is pending or failed.
-    name: ${{ github.event_name == 'pull_request' && (contains(fromJSON('["labeled","unlabeled","auto_merge_enabled"]'), github.event.action) && github.event.label.name != 'prove-fix') && 'ci-metadata-result' || 'ci-result' }}
+    name: ${{ github.event_name == 'pull_request' && (contains(fromJSON('["labeled","unlabeled"]'), github.event.action) && !contains(fromJSON('["prove-fix","merge-armed"]'), github.event.label.name)) && 'ci-metadata-result' || 'ci-result' }}
     if: always()
     needs:
       [
@@ -8535,6 +8638,20 @@ jobs:
           THIN_JOBS: ${{ needs.ci-plan.outputs.thin_jobs || '[]' }}
           QUEUE_REQUIRED_JOBS: ${{ needs.ci-plan.outputs.queue_required_jobs || '[]' }}
           TRUSTED: ${{ needs.ci-plan.outputs.trusted }}
+          HEAVY_PROOF: ${{ needs.ci-plan.outputs.heavy_proof }}
+          ARMED_DELTA: ${{ needs.ci-plan.outputs.armed_delta }}
+          NORMAL_SOURCE_RUN_ID: ${{ needs.ci-plan.outputs.normal_source_run_id }}
+          ARMED_PROOF_SOURCE_RUN_ID: ${{ needs.ci-plan.outputs.armed_proof_source_run_id }}
+          # The queue-only suites gated by ci-plan's heavy_proof output. An
+          # armed pull request run must see each planned one succeed (at its
+          # JOB_SCOPES scope); a merge group whose queued head carries that
+          # armed proof skips all but MERGE_GROUP_HEAVY_KEEP, the suites a
+          # combination of proven pull requests can still break.
+          # scripts/ci-plan.test.ts derives both lists from the job gates.
+          HEAVY_PROOF_JOBS: >-
+            ["docker-checks", "migration-upgrade-rehearsal", "release-typecheck", "web-image-smoke", "mobile-build", "landing-build", "route-smoke", "stack-redaction-browsers", "e2e-vite-canary", "e2e-landing", "marketing-screenshots", "api-image-smoke", "legal-atlas-image", "desktop-windows-dry-run", "windows-scripts", "desktop-rust-tests"]
+          MERGE_GROUP_HEAVY_KEEP: >-
+            ["migration-upgrade-rehearsal", "e2e-report"]
           # The ci-plan output each job's `if:` selects it by; null for a job
           # that always runs at full depth. scripts/ci-plan.test.ts binds each
           # entry to its job's `if:`, and a job missing here fails the run.
@@ -8581,10 +8698,17 @@ jobs:
           # Jobs a fast-depth run must also see succeed once their scope is
           # planned; any other job may skip there.
           FAST_JOB_SCOPES: >-
-            {"postgres-service-suites": "postgres_service_suites_required", "service-suites": "service_suites_pr_required", "docker-checks": "docker_checks_pr_required", "legal-atlas-image": "legal_atlas_image_pr_required", "web-build": "browser_spec_selection_required"}
+            {"postgres-service-suites": "postgres_service_suites_required", "service-suites": "service_suites_pr_required", "docker-checks": "docker_checks_pr_required", "legal-atlas-image": "legal_atlas_image_pr_required", "web-build": "web_build_pr_required"}
           FAST_REQUIRED: >-
             ["ci-quick-checks", "pr-heavy-gate", "desktop-rust-lint", "ci-browser", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "code-quality-api", "code-quality-web-rest", "dependency-malware", "ci-tests", "e2e-production-shard", "web-build", "scan-engine-wasm-drift", "query-perf"]
         run: |
+          # Queue-only suites a merge group may skip: its queued head carries
+          # armed proof. Everything else stays required at its planned scope.
+          heavy_skippable='[]'
+          if [[ "$EVENT" == merge_group && "${HEAVY_PROOF:-}" == false ]]; then
+            heavy_skippable=$(jq -cn --argjson heavy "$HEAVY_PROOF_JOBS" --argjson keep "$MERGE_GROUP_HEAVY_KEEP" '$heavy - $keep') || exit 1
+            echo "Queue-only suites proven by armed pull request run ${ARMED_PROOF_SOURCE_RUN_ID:-unknown}; this group skips them." >> "$GITHUB_STEP_SUMMARY"
+          fi
           if [[ "$QUEUE_DEPTH" == thin ]]; then
             THIN_JOBS=$(jq -cn --argjson thin "$THIN_JOBS" --argjson required "$QUEUE_REQUIRED_JOBS" '$thin + $required | unique') || exit 1
           fi
@@ -8751,7 +8875,18 @@ jobs:
             echo "::error::Thin queue has no derived required job set."
             exit 1
           fi
-          if [[ "${RUN_REQUIRED:-true}" == false ]]; then
+          armed_delta=false
+          if [[ "${ARMED_DELTA:-}" == true ]]; then
+            # Only the queue-only suites ran; the normal suites passed in the
+            # recorded run this armed run reuses.
+            if [[ "$EVENT" != pull_request || "${HEAVY_PROOF:-}" != true || "$SUITE_DEPTH" != fast || ! "${NORMAL_SOURCE_RUN_ID:-}" =~ ^[1-9][0-9]*$ ]]; then
+              echo "::error::Invalid armed delta: no reusable normal evidence."
+              exit 1
+            fi
+            armed_delta=true
+            echo "Normal suites reused from run ${NORMAL_SOURCE_RUN_ID}; this run proves the queue-only suites." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [[ "${RUN_REQUIRED:-true}" == false && "$armed_delta" != true ]]; then
             if [[ "$METADATA_ONLY" == true && -z "$COMPLETED_RUN_ID" ]]; then
               echo "No completed evidence exists for this metadata event; the code run owns ci-result."
               exit 0
@@ -8776,9 +8911,9 @@ jobs:
             full)
               # Planned checks must succeed. The derived queue list includes
               # every code gate; only reasoned non-code exceptions may skip.
-              violations=$(jq -r --argjson plan "$PLAN" --argjson scopes "$JOB_SCOPES" --arg queue "${QUEUE_DEPTH:-full}" --argjson thin "${THIN_JOBS:-[]}" '
+              violations=$(jq -r --argjson plan "$PLAN" --argjson scopes "$JOB_SCOPES" --arg queue "${QUEUE_DEPTH:-full}" --argjson thin "${THIN_JOBS:-[]}" --argjson skippable "$heavy_skippable" '
                 [to_entries[] | select(.key != "ci-plan") | .key as $job | .value.result as $result
-                  | if $queue == "thin" and ($thin | index($job) | not) then
+                  | if ($skippable | index($job)) or ($queue == "thin" and ($thin | index($job) | not)) then
                       (if $result == "success" or $result == "skipped" then empty else "\($job) (\($result))" end)
                     elif ($scopes | has($job) | not) then "\($job) (no entry in JOB_SCOPES)"
                     elif ($scopes[$job] == null or $plan[$scopes[$job]] == "true") then
@@ -8787,9 +8922,9 @@ jobs:
                     else "\($job) (\($result))"
                     end]
                 | join(", ")' <<< "$NEEDS")
-              folded_violations=$(jq -r --argjson plan "$PLAN" --argjson suites "$FOLDED_SUITES" '
+              folded_violations=$(jq -r --argjson plan "$PLAN" --argjson suites "$FOLDED_SUITES" --argjson skippable "$heavy_skippable" '
                 . as $needs
-                | [$suites | to_entries[] | .key as $job | .value | to_entries[]
+                | [$suites | to_entries[] | .key as $job | select($skippable | index($job) | not) | .value | to_entries[]
                   | select(($needs | has($job)) and $plan[.value] == "true") | .key as $suite
                   | ($needs[$job].outputs[$suite] // "missing") as $result
                   | select($result != "success") | "\($suite) (planned, \($result))"]
@@ -8817,8 +8952,33 @@ jobs:
                 exit 1
               fi
               # Fast-required jobs must run when their scope is planned;
-              # scope-less jobs are always planned.
-              skipped=$(jq -r --argjson plan "$PLAN" --argjson scopes "$(jq -cn --argjson full "$JOB_SCOPES" --argjson fast "$FAST_JOB_SCOPES" '$full + $fast')" --argjson required "$FAST_REQUIRED" '
+              # scope-less jobs are always planned. An armed pull request run
+              # also requires its planned queue-only suites.
+              fast_scopes=$(jq -cn --argjson full "$JOB_SCOPES" --argjson fast "$FAST_JOB_SCOPES" '$full + $fast')
+              armed_scopes=""
+              if [[ "$EVENT" == pull_request && "${HEAVY_PROOF:-}" == true ]]; then
+                # The queue-only suites, at the scope a merge group gives them.
+                armed_scopes=$(jq -cn --argjson scopes "$fast_scopes" --argjson full "$JOB_SCOPES" --argjson heavy "$HEAVY_PROOF_JOBS" '
+                  $scopes + ($full | with_entries(select(.key as $job | $heavy | index($job))))') || exit 1
+                if [[ "$armed_delta" == true ]]; then
+                  FAST_REQUIRED="$HEAVY_PROOF_JOBS"
+                else
+                  FAST_REQUIRED=$(jq -cn --argjson required "$FAST_REQUIRED" --argjson heavy "$HEAVY_PROOF_JOBS" '$required + $heavy | unique') || exit 1
+                fi
+                fast_scopes="$armed_scopes"
+                folded_violations=$(jq -r --argjson plan "$PLAN" --argjson suites "$FOLDED_SUITES" '
+                  . as $needs
+                  | [$suites | to_entries[] | .key as $job | select($needs[$job].result == "success") | .value | to_entries[]
+                    | select($plan[.value] == "true") | .key as $suite
+                    | ($needs[$job].outputs[$suite] // "missing") as $result
+                    | select($result != "success") | "\($suite) (planned, \($result))"]
+                  | join(", ")' <<< "$NEEDS")
+                if [[ -n "$folded_violations" ]]; then
+                  echo "::error::CI checks did not succeed: $folded_violations"
+                  exit 1
+                fi
+              fi
+              skipped=$(jq -r --argjson plan "$PLAN" --argjson scopes "$fast_scopes" --argjson required "$FAST_REQUIRED" '
                 [to_entries[] | .key as $job | select($required | index($job))
                   | select(($scopes[$job] == null or $plan[$scopes[$job]] == "true") and .value.result == "skipped")
                   | "\($job) (planned, skipped)"]
@@ -8845,10 +9005,18 @@ jobs:
           # suite, so only a run that planned and ran them records it: every
           # planned job succeeded and no job was cancelled or failed. A run
           # that passed as superseded never completed its suite.
-          if [[ "$EVENT" == pull_request && "${RUN_REQUIRED:-}" == true && -n "${COMPLETION_MARKER:-}" ]]; then
+          if [[ "$EVENT" == pull_request && ("${RUN_REQUIRED:-}" == true || "${ARMED_DELTA:-}" == true) && -n "${COMPLETION_MARKER:-}" ]]; then
             if [[ "$SUITE_DEPTH" == full ]]; then
               evidence_scopes="$JOB_SCOPES"
               evidence_required=$(jq -c 'keys' <<< "$JOB_SCOPES")
+            elif [[ "${HEAVY_PROOF:-}" == true ]]; then
+              # The armed proof: the queue-only suites at merge-group scope.
+              evidence_scopes=$(jq -cn --argjson full "$JOB_SCOPES" --argjson fast "$FAST_JOB_SCOPES" --argjson heavy "$HEAVY_PROOF_JOBS" '
+                ($full + $fast) + ($full | with_entries(select(.key as $job | $heavy | index($job))))')
+              evidence_required=$(jq -cn --argjson required "$FAST_REQUIRED" --argjson heavy "$HEAVY_PROOF_JOBS" '$required + $heavy | unique')
+              if [[ "${ARMED_DELTA:-}" == true ]]; then
+                evidence_required="$HEAVY_PROOF_JOBS"
+              fi
             else
               evidence_scopes=$(jq -cn --argjson full "$JOB_SCOPES" --argjson fast "$FAST_JOB_SCOPES" '$full + $fast')
               evidence_required="$FAST_REQUIRED"
@@ -8856,7 +9024,7 @@ jobs:
             evidence=$(jq -ce --argjson plan "$PLAN" --argjson scopes "$evidence_scopes" --argjson required "$evidence_required" \
               --arg marker "$COMPLETION_MARKER" --arg run "$GITHUB_RUN_ID" --arg attempt "$GITHUB_RUN_ATTEMPT" \
               --arg pr "$PR_NUMBER" --arg repo "$HEAD_REPO_ID" --arg head "$HEAD_SHA" --arg base "$BASE_SHA" \
-              --arg depth "$SUITE_DEPTH" --arg profile "${COVERAGE_PROFILE:-normal-v1}" --arg patch "$PATCH_ID" --arg workflow "$WORKFLOW_VERSION" --argjson pr_depth "$PR_DEPTH_JOBS" '
+              --arg depth "$SUITE_DEPTH" --arg profile "${COVERAGE_PROFILE:-normal-v1}" --arg patch "$PATCH_ID" --arg workflow "$WORKFLOW_VERSION" --argjson pr_depth "$PR_DEPTH_JOBS" --arg heavy_proof "${HEAVY_PROOF:-false}" --arg normal_source "${NORMAL_SOURCE_RUN_ID:-}" '
               (with_entries(.value = .value.result)) as $jobs
               | ([$required[] | select($scopes[.] == null or $plan[$scopes[.]] == "true")] | unique) as $planned
               | select(($jobs | length) > 1 and $jobs["ci-plan"] == "success"
@@ -8868,6 +9036,8 @@ jobs:
                 run_id: ($run | tonumber), run_attempt: ($attempt | tonumber),
                 pr_number: ($pr | tonumber), head_repo_id: ($repo | tonumber),
                 head_sha: $head, base_sha: $base, patch_id: $patch, workflow_version: $workflow, pr_depth_jobs: $pr_depth, suite_depth: $depth,
+                heavy_proof: ($heavy_proof == "true"),
+                normal_source_run_id: (if $normal_source == "" then null else ($normal_source | tonumber) end),
                 coverage_profile: (if $profile == "" then "normal-v1" else $profile end),
                 planned: $planned, jobs: $jobs}' <<< "$NEEDS") || evidence=""
             if [[ -n "$evidence" ]]; then
@@ -8940,14 +9110,14 @@ jobs:
       # Only an actual validated PR run publishes evidence; reuse never renews
       # it, and a superseded or cancelled run never completed its suite.
       - name: Record completed suite depth
-        if: success() && github.event_name == 'pull_request' && needs.ci-plan.outputs.run_required == 'true' && needs.ci-plan.outputs.completion_marker != '' && !contains(needs.*.result, 'cancelled') && !contains(needs.*.result, 'failure') && steps.outcome.outputs.evidence != ''
+        if: success() && github.event_name == 'pull_request' && (needs.ci-plan.outputs.run_required == 'true' || needs.ci-plan.outputs.armed_delta == 'true') && needs.ci-plan.outputs.completion_marker != '' && !contains(needs.*.result, 'cancelled') && !contains(needs.*.result, 'failure') && steps.outcome.outputs.evidence != ''
         env:
           EVIDENCE: ${{ steps.outcome.outputs.evidence }}
           MARKER_PATH: ${{ runner.temp }}/ci-completed-depth.json
         run: printf '%s\n' "$EVIDENCE" > "$MARKER_PATH"
 
       - name: Publish completed suite depth
-        if: success() && github.event_name == 'pull_request' && needs.ci-plan.outputs.run_required == 'true' && needs.ci-plan.outputs.completion_marker != '' && !contains(needs.*.result, 'cancelled') && !contains(needs.*.result, 'failure') && steps.outcome.outputs.evidence != ''
+        if: success() && github.event_name == 'pull_request' && (needs.ci-plan.outputs.run_required == 'true' || needs.ci-plan.outputs.armed_delta == 'true') && needs.ci-plan.outputs.completion_marker != '' && !contains(needs.*.result, 'cancelled') && !contains(needs.*.result, 'failure') && steps.outcome.outputs.evidence != ''
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ needs.ci-plan.outputs.completion_marker }}

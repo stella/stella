@@ -89,6 +89,8 @@ const plan = ({
             "github.event.merge_group.base_sha": "",
             "github.event.pull_request.title": "ordinary change",
             "steps.depth.outputs.suite_depth": depth,
+            // Only an armed pull request sets it.
+            "steps.completed-depth.outputs.armed": "",
             "inputs.heavy_only": heavyOnly,
             "inputs.pr_depth_only": false,
           },
@@ -158,6 +160,8 @@ const assertPeriodic = (candidate = script, bindings = plannerEnv) => {
         "needs.ci-plan.outputs.release_typecheck_required": required,
         "needs.ci-plan.outputs.trusted": "true",
         "needs.ci-plan.outputs.run_required": "true",
+        // Scheduled main runs keep the queue-only suites.
+        "needs.ci-plan.outputs.heavy_proof": "true",
         "needs.ci-plan.outputs.queue_depth": "full",
       },
     }),
