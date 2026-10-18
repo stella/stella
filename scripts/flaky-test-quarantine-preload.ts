@@ -127,21 +127,19 @@ const install = (reportDir: string): void => {
   // Bun defers nested describe bodies, so each body restores the path it was
   // declared under instead of relying on call nesting.
   let describePath: readonly string[] = [];
-  const describe = new Proxy(bunTest.describe, {
-    get: (target, key) => {
-      const value: unknown = Reflect.get(target, key, target);
-      return isFunction(value) ? value.bind(target) : value;
-    },
-    apply: (target, self, args: unknown[]) => {
+  const wrapDescribe =
+    (original: TestFunction): TestFunction =>
+    (...args: unknown[]) => {
       const [label, body, ...rest] = args;
       if (!isFunction(body)) {
-        return Reflect.apply(target, self, args);
+        const result = original(...args);
+        return isFunction(result) ? wrapDescribe(result) : result;
       }
       const scope = [
         ...describePath,
         isFunction(label) ? label.name : String(label),
       ];
-      return Reflect.apply(target, self, [
+      return original(
         label,
         (...bodyArgs: unknown[]) => {
           const outer = describePath;
@@ -153,8 +151,18 @@ const install = (reportDir: string): void => {
           }
         },
         ...rest,
-      ]);
+      );
+    };
+
+  const describe = new Proxy(bunTest.describe, {
+    get: (target, key) => {
+      const value: unknown = Reflect.get(target, key, target);
+      return isFunction(value) ? wrapDescribe(value.bind(target)) : value;
     },
+    apply: (target, _self, args: unknown[]) =>
+      wrapDescribe((...forwarded: unknown[]) =>
+        Reflect.apply(target, undefined, forwarded),
+      )(...args),
   });
 
   const quarantine =

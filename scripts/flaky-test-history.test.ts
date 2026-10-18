@@ -31,6 +31,7 @@ import {
 import {
   DAY_MS,
   parseRegistry,
+  serializeRegistry,
   type QuarantineEntry,
   type Registry,
 } from "./flaky-test-quarantine";
@@ -425,16 +426,19 @@ describe("evidence collection", () => {
             {
               workflow_runs: [
                 {
+                  id: 1,
                   head_sha: sha(1),
                   conclusion: "success",
                   run_started_at: at(1),
                 },
                 {
+                  id: 2,
                   head_sha: sha(2),
                   conclusion: "success",
                   run_started_at: at(1),
                 },
                 {
+                  id: 3,
                   head_sha: sha(3),
                   conclusion: "failure",
                   run_started_at: at(1),
@@ -443,6 +447,23 @@ describe("evidence collection", () => {
             },
           ]),
         );
+      }
+      if (url.includes("/actions/runs/1/jobs?")) {
+        return Result.ok(
+          JSON.stringify([
+            {
+              jobs: [
+                {
+                  name: "ci-tests (rest-web)",
+                  steps: [{ name: "Test web", conclusion: "success" }],
+                },
+              ],
+            },
+          ]),
+        );
+      }
+      if (url.includes("/actions/runs/2/jobs?")) {
+        return Result.ok(JSON.stringify([{ jobs: [] }]));
       }
       return Result.ok(
         url.includes("name=ci-failures") ? artifacts([1, 2, 3]) : artifacts([]),
@@ -535,8 +556,36 @@ describe("evidence collection", () => {
 });
 
 describe("check flakes", () => {
-  test("only a failed check later successful on the same commit is flaky", () => {
-    const source = {
+  const source = {
+    createdAt: at(2),
+    url: "https://github.com/stella/stella/actions/runs/1",
+    tests: [],
+    headSha: sha(1),
+    checks: [{ job: "ci-checks (ubuntu)", step: "Typecheck" }],
+  };
+
+  test("a successful run that skipped the failed step is not flaky", () => {
+    expect(
+      findFlakyChecks(
+        evidence({
+          digests: [source],
+          runs: [
+            {
+              headSha: sha(1),
+              conclusion: "success",
+              startedAt: at(1),
+              successfulChecks: [
+                { job: "ci-checks (ubuntu)", step: "Checkout" },
+              ],
+            },
+          ],
+        }),
+      ),
+    ).toEqual([]);
+  });
+
+  test("a successful receipt for the same job and step is flaky", () => {
+    const runSource = {
       createdAt: at(2),
       url: "https://github.com/stella/stella/actions/runs/1",
       tests: [],
@@ -546,7 +595,7 @@ describe("check flakes", () => {
         evidence({
           digests: [
             {
-              ...source,
+              ...runSource,
               headSha: sha(1),
               checks: [
                 { job: "ci-checks", step: "Typecheck" },
@@ -554,14 +603,26 @@ describe("check flakes", () => {
               ],
             },
             {
-              ...source,
+              ...runSource,
               headSha: sha(2),
               checks: [{ job: "lint", step: "Lint" }],
             },
           ],
           runs: [
-            { headSha: sha(1), conclusion: "success", startedAt: at(1) },
-            { headSha: sha(3), conclusion: "success", startedAt: at(1) },
+            {
+              headSha: sha(1),
+              conclusion: "success",
+              startedAt: at(1),
+              successfulChecks: [
+                { job: "ci-checks (macos)", step: "Typecheck" },
+              ],
+            },
+            {
+              headSha: sha(3),
+              conclusion: "success",
+              startedAt: at(1),
+              successfulChecks: [],
+            },
           ],
         }),
       ),
@@ -636,5 +697,20 @@ describe("CODEOWNERS proposals", () => {
         flakyChecks: [],
       }),
     ).toContain("## Needs an owner");
+  });
+
+  test("a team-owned rule produces a valid canonical proposal", () => {
+    const proposal = proposeQuarantine({
+      registry: empty,
+      candidates,
+      owners: resolveOwners("apps/web/ @stella/quality-team\n", [FILE]),
+      now: NOW,
+    });
+    expect(proposal.added.at(0)?.owner).toBe("stella/quality-team");
+    const serialized = serializeRegistry(proposal.registry);
+    expect(parseRegistry(JSON.parse(serialized))).toMatchObject({
+      status: "valid",
+    });
+    expect(serialized).toBe(serializeRegistry(proposal.registry));
   });
 });

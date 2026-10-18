@@ -38,6 +38,11 @@ describe("outer", () => {
     expect(1).toBe(1);
   });
 });
+describe.concurrent("modified group", () => {
+  test("modified case", () => {
+    throw new Error("describe modifier flake");
+  });
+});
 it("rejects", async () => {
   await Promise.reject(new Error("network flake"));
 });
@@ -152,6 +157,7 @@ const FAILING = [
   "calls done with an error",
   "hangs",
   "concurrent throw",
+  "modified group > modified case",
 ];
 
 describe("flaky-test quarantine preload", () => {
@@ -169,6 +175,10 @@ describe("flaky-test quarantine preload", () => {
       [
         [`${FIXTURE}::calls done with an error`, "late flake"],
         [`${FIXTURE}::concurrent throw`, "concurrent flake"],
+        [
+          `${FIXTURE}::modified group > modified case`,
+          "describe modifier flake",
+        ],
         [`${FIXTURE}::hangs`, "timed out after 50ms"],
         [
           `${FIXTURE}::outer > inner > throws`,

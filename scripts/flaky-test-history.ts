@@ -125,6 +125,10 @@ export type CiRun = {
   readonly conclusion: string | null;
   // The latest attempt's start: a re-run moves it past the failed attempt.
   readonly startedAt: string;
+  readonly successfulChecks?: readonly {
+    readonly job: string;
+    readonly step: string;
+  }[];
 };
 
 type ArtifactSource = {
@@ -178,17 +182,28 @@ export const findFlakyChecks = (evidence: Evidence): FlakyCheck[] => {
     }
   >();
   for (const digest of evidence.digests) {
-    const laterSuccess = evidence.runs.some(
+    const laterSuccesses = evidence.runs.filter(
       (run) =>
         run.headSha === digest.headSha &&
         run.conclusion === "success" &&
         Date.parse(run.startedAt) > Date.parse(digest.createdAt),
     );
-    if (!laterSuccess) {
+    if (laterSuccesses.length === 0) {
       continue;
     }
     for (const check of digest.checks) {
       if (check.job === "ci-result" || isCancellationStep(check)) {
+        continue;
+      }
+      const job = check.job.replace(/ \([^()]+\)$/u, "");
+      const received = laterSuccesses.some((run) =>
+        run.successfulChecks?.some(
+          (receipt) =>
+            receipt.job.replace(/ \([^()]+\)$/u, "") === job &&
+            receipt.step === check.step,
+        ),
+      );
+      if (!received) {
         continue;
       }
       const key = `${check.job}\0${check.step}`;
@@ -720,9 +735,23 @@ const runPagesSchema = v.array(
   v.object({
     workflow_runs: v.array(
       v.object({
+        id: v.number(),
         head_sha: v.string(),
         conclusion: v.nullable(v.string()),
         run_started_at: v.string(),
+      }),
+    ),
+  }),
+);
+
+const jobPagesSchema = v.array(
+  v.object({
+    jobs: v.array(
+      v.object({
+        name: v.string(),
+        steps: v.array(
+          v.object({ name: v.string(), conclusion: v.nullable(v.string()) }),
+        ),
       }),
     ),
   }),
@@ -808,14 +837,9 @@ export const collectEvidence = async ({
   if (runsJson.isErr()) {
     return runsJson;
   }
-  const runs = v
+  const workflowRuns = v
     .parse(runPagesSchema, JSON.parse(runsJson.value))
-    .flatMap((page) => page.workflow_runs)
-    .map((run): CiRun => ({
-      headSha: run.head_sha,
-      conclusion: run.conclusion,
-      startedAt: run.run_started_at,
-    }));
+    .flatMap((page) => page.workflow_runs);
 
   type Located = ArtifactSource & { readonly dir: string };
   const download = async (
@@ -888,15 +912,68 @@ export const collectEvidence = async ({
 
   // Only a failure its commit later passed is flake evidence; skip the rest.
   const digests = await download(FAILURE_DIGEST_ARTIFACT, (source) =>
-    runs.some(
+    workflowRuns.some(
       (run) =>
-        run.headSha === source.headSha &&
+        run.head_sha === source.headSha &&
         run.conclusion === "success" &&
-        Date.parse(run.startedAt) > Date.parse(source.createdAt),
+        Date.parse(run.run_started_at) > Date.parse(source.createdAt),
     ),
   );
   if (digests.isErr()) {
     return digests;
+  }
+  const parsedDigests = digests.value.flatMap(({ dir, ...source }) => {
+    const records = readOr(
+      digestFileSchema,
+      path.join(dir, "ci-failures.json"),
+    );
+    return records === undefined
+      ? []
+      : [
+          {
+            ...source,
+            tests: records.flatMap(({ tests }) => tests),
+            checks: records.map(({ job, step }) => ({ job, step })),
+          },
+        ];
+  });
+  const receipts = new Map<
+    number,
+    { readonly job: string; readonly step: string }[]
+  >();
+  for (const run of workflowRuns) {
+    const needsReceipt =
+      run.conclusion === "success" &&
+      parsedDigests.some(
+        (digest) =>
+          digest.headSha === run.head_sha &&
+          Date.parse(run.run_started_at) > Date.parse(digest.createdAt),
+      );
+    if (!needsReceipt) {
+      continue;
+    }
+    const jobsJson = await gh([
+      "api",
+      "--paginate",
+      "--slurp",
+      `repos/${repository}/actions/runs/${run.id}/jobs?filter=latest&per_page=100`,
+    ]);
+    if (jobsJson.isErr()) {
+      return jobsJson;
+    }
+    receipts.set(
+      run.id,
+      v
+        .parse(jobPagesSchema, JSON.parse(jobsJson.value))
+        .flatMap(({ jobs }) => jobs)
+        .flatMap((job) =>
+          job.steps.flatMap((step) =>
+            step.conclusion === "success"
+              ? [{ job: job.name, step: step.name }]
+              : [],
+          ),
+        ),
+    );
   }
   const flakeReports = await download(FLAKE_REPORT_ARTIFACT, () => true);
   if (flakeReports.isErr()) {
@@ -912,22 +989,13 @@ export const collectEvidence = async ({
   }
   return Result.ok({
     evidence: {
-      runs,
-      digests: digests.value.flatMap(({ dir, ...source }) => {
-        const records = readOr(
-          digestFileSchema,
-          path.join(dir, "ci-failures.json"),
-        );
-        return records === undefined
-          ? []
-          : [
-              {
-                ...source,
-                tests: records.flatMap(({ tests }) => tests),
-                checks: records.map(({ job, step }) => ({ job, step })),
-              },
-            ];
-      }),
+      runs: workflowRuns.map((run) => ({
+        headSha: run.head_sha,
+        conclusion: run.conclusion,
+        startedAt: run.run_started_at,
+        successfulChecks: receipts.get(run.id) ?? [],
+      })),
+      digests: parsedDigests,
       flakeReports: flakeReports.value.flatMap(({ dir, ...source }) => {
         const report = readOr(
           flakeReportFileSchema,

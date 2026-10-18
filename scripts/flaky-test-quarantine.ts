@@ -32,6 +32,10 @@ export const BUN_TEST_FILE = /\.test\.[cm]?[jt]sx?$/u;
 const TEST_ID_SEPARATOR = "::";
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/u;
 const GITHUB_LOGIN = /^[A-Za-z\d](?:[A-Za-z\d]|-(?=[A-Za-z\d])){0,38}$/u;
+const GITHUB_OWNER = new RegExp(
+  `^(?:${GITHUB_LOGIN.source.slice(1, -1)})(?:/[a-z\\d_-]+)?$`,
+  "u",
+);
 
 const isCalendarDate = (value: string): boolean =>
   ISO_DATE.test(value) &&
@@ -78,7 +82,10 @@ const entrySchema = v.strictObject({
   ),
   owner: v.pipe(
     v.string(),
-    v.regex(GITHUB_LOGIN, "must be a GitHub login without `@`"),
+    v.regex(
+      GITHUB_OWNER,
+      "must be a GitHub login or org/team slug without `@`",
+    ),
   ),
   reason: v.pipe(
     v.string(),
