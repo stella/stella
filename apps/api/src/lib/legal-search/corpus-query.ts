@@ -1073,6 +1073,7 @@ export type CaseLawCorpusQueryOptions = {
   keywordFields?: readonly string[] | undefined;
   functionWords?: ReadonlySet<string> | null | undefined;
   legalAlternatives?: CorpusTermExpander | null | undefined;
+  match?: "all" | "any" | undefined;
 };
 
 /**
@@ -1095,12 +1096,14 @@ export const caseLawCorpusQuery = ({
   functionWords,
   legalAlternatives,
   legacyStemming,
+  match,
 }: CaseLawCorpusQueryOptions): string | null => {
   // An empty id set admits nothing: the page is empty without asking.
   if (filters.decisionIds?.length === 0) {
     return null;
   }
   const freeText = corpusFreeTextClause(text, {
+    match,
     jurisdiction,
     queryVariant,
     expand,

@@ -39,6 +39,11 @@ const CASE_LAW_SEARCH_WARNING_DISPLAY = {
     messageKey: "caseLaw.searchWarnings.resultsFor",
     actionKey: "caseLaw.searchWarnings.searchEveryWord",
   },
+  relaxed_match: {
+    surface: "resultsLine",
+    messageKey: "caseLaw.searchWarnings.relaxedMatch",
+    actionKey: "caseLaw.searchWarnings.searchEveryWord",
+  },
   no_hits: {
     surface: "emptyState",
     messageKey: "caseLaw.searchWarnings.noHits.message",

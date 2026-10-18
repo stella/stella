@@ -1098,6 +1098,7 @@
         "hint": "Zrušte alebo rozšírte filter a hľadajte znova.",
         "message": "Zvoleným filtrom nič nezodpovedá."
       },
+      "relaxedMatch": "Výsledky zahŕňajú rozhodnutia zodpovedajúce iba niektorým slovám.",
       "resultsFor": "Výsledky pre: <bdi>{query}</bdi>",
       "searchEveryWord": "Hľadať všetky slová"
     },

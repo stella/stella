@@ -1101,6 +1101,7 @@ type Messages = {
         "hint": "Drop or widen a filter and search again.";
         "message": "Nothing matched under the filters you narrowed with.";
       };
+      "relaxedMatch": "Results include decisions matching only some of the words.";
       "resultsFor": "Results for: <bdi>{query}</bdi>";
       "searchEveryWord": "Search every word";
     };

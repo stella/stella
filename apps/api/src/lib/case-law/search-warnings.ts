@@ -41,6 +41,8 @@ type CaseLawSearchWarningsOptions = {
    * that had hits, so "nothing matched" would be false there.
    */
   emptyResultSet: boolean;
+  /** Whether this page includes any-word fallback results. */
+  relaxedMatch?: boolean | undefined;
 };
 
 export const functionWordsWarning = (
@@ -84,10 +86,14 @@ export const caseLawSearchWarnings = ({
   droppedFunctionWords,
   filters,
   emptyResultSet,
+  relaxedMatch = false,
 }: CaseLawSearchWarningsOptions): CaseLawSearchWarning[] => {
   const warnings: CaseLawSearchWarning[] = [];
   if (droppedFunctionWords.length > 0) {
     warnings.push(functionWordsWarning(droppedFunctionWords));
+  }
+  if (relaxedMatch) {
+    warnings.push(relaxedMatchWarning());
   }
   if (!emptyResultSet) {
     return warnings;
@@ -97,6 +103,12 @@ export const caseLawSearchWarnings = ({
   );
   return warnings;
 };
+
+const relaxedMatchWarning = (): CaseLawSearchWarning => ({
+  code: "relaxed_match",
+  message: "Results include decisions matching only some of the search words.",
+  hint: "Pass strict: true to search every word.",
+});
 
 /**
  * Warnings only an agent surface raises, about a filter value it had to read
@@ -234,6 +246,7 @@ export const withFacetValues = (
  */
 export const CASE_LAW_SEARCH_WARNING_PRODUCERS = {
   function_words_optional: () => functionWordsWarning(["na"]),
+  relaxed_match: relaxedMatchWarning,
   no_hits: noHitsWarning,
   no_hits_filtered: () => noHitsFilteredWarning(["court"]),
 } as const satisfies Record<

@@ -201,6 +201,7 @@ type SearchAnswerOptions = {
    * hits, so "nothing matched" would be false there.
    */
   countsResultSet: boolean;
+  relaxedMatch?: boolean | undefined;
 };
 
 export type SearchAnswer = {
@@ -217,11 +218,13 @@ export const searchAnswer = ({
   interpretation,
   hitCount,
   countsResultSet,
+  relaxedMatch,
 }: SearchAnswerOptions): SearchAnswer => ({
   queryUsed: interpretation.queryUsed,
   warnings: caseLawSearchWarnings({
     droppedFunctionWords: interpretation.droppedFunctionWords,
     filters: narrowingFilters(body),
     emptyResultSet: countsResultSet && hitCount === 0,
+    relaxedMatch,
   }),
 });

@@ -1098,6 +1098,7 @@
         "hint": "Remova ou amplie um filtro e pesquise novamente.",
         "message": "Nada corresponde aos filtros aplicados."
       },
+      "relaxedMatch": "Os resultados incluem decisões que correspondem apenas a algumas palavras.",
       "resultsFor": "Resultados de: <bdi>{query}</bdi>",
       "searchEveryWord": "Pesquisar todas as palavras"
     },

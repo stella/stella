@@ -130,6 +130,7 @@ import {
 } from "@/api/lib/legal-search/rerank";
 import type { ScoredCandidate } from "@/api/lib/legal-search/rerank";
 import { searchIndexUnavailableResponse } from "@/api/lib/legal-search/search-index-unavailable";
+import { runTwoPhaseSearch } from "@/api/lib/legal-search/two-phase-search";
 import {
   legislationPublicReadDb,
   type LegislationReadDb,
@@ -1227,72 +1228,32 @@ const corpusIndexSearch = async ({
           target: null,
           phase: active,
         });
-  const page = await readPhase({
-    active: phase,
-    pageLimit: limit,
+  const result = await runTwoPhaseSearch({
     cursor: parsedCursor,
-  });
-  if (page === null) {
-    return {
-      hits: [],
-      nextCursor: null,
-      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
-    };
-  }
-  const hits = hitsOf(page, phase);
-  // A continuation means strict results remain. Only an exhausted first page can append coverage hits.
-  if (
-    phase.type === "relaxed" ||
-    parsedCursor !== null ||
-    hits.length >= limit ||
-    page.nextCursor !== null ||
-    page.paginationOutcome.type === "truncated"
-  ) {
-    return {
-      hits,
-      nextCursor: cursorOf(page, phase),
-      paginationOutcome: page.paginationOutcome,
-    };
-  }
-  const strictWorkTokens = [
-    ...new Set(
-      hits.map((hit) => {
-        const row = page.context.byId.get(hit.documentId);
-        return row === undefined
-          ? panic("Strict legislation hit has no Work")
-          : corpusSearchGroupToken(legislationWorkRefKey(row));
-      }),
-    ),
-  ];
-  const relaxed: CorpusSearchPhase = {
-    type: "relaxed",
     fingerprint,
     generation,
-    strictWorkTokens,
-  };
-  // This synthetic boundary admits every relaxed score while carrying the strict Works to exclude.
-  const boundary: SearchCursor = {
-    score: Number.MAX_VALUE,
-    id: "00000000-0000-0000-0000-000000000000",
-    sort: DEFAULT_SEARCH_SORT,
-    windowStart: 0,
-  };
-  const extra = await readPhase({
-    active: relaxed,
-    pageLimit: limit - hits.length,
-    cursor: boundary,
+    limit,
+    strictOnly: false,
+    read: async (active, pageLimit, cursor) => {
+      const page = await readPhase({ active, pageLimit, cursor });
+      return page === null ? null : { ...page, hits: hitsOf(page, active) };
+    },
+    encodeCursor: (page, active) => cursorOf(page, active),
+    groupToken: (hit, page) => {
+      const row = page.context.byId.get(hit.documentId);
+      return row === undefined
+        ? panic("Strict legislation hit has no Work")
+        : corpusSearchGroupToken(legislationWorkRefKey(row));
+    },
+    hitId: (hit) => hit.documentId,
+    // Quickwit's OR score is additive by matched term, then BM25 within equal coverage.
+    relaxedCoverage: (hit) => hit.score,
+    score: (hit) => hit.score,
   });
-  if (extra === null) {
-    return {
-      hits,
-      nextCursor: null,
-      paginationOutcome: page.paginationOutcome,
-    };
-  }
   return {
-    hits: [...hits, ...hitsOf(extra, relaxed)],
-    nextCursor: cursorOf(extra, relaxed),
-    paginationOutcome: extra.paginationOutcome,
+    hits: result.hits,
+    nextCursor: result.nextCursor,
+    paginationOutcome: result.paginationOutcome,
   };
 };
 

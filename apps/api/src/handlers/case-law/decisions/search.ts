@@ -191,6 +191,7 @@ import { requireCorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-
 import type {
   CorpusIndexScanReport,
   CorpusIndexScanTransport,
+  SearchCursor,
 } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
   emptyCorpusIndexScan,
@@ -227,6 +228,7 @@ import {
 } from "@/api/lib/legal-search/corpus-rehydration-disposition";
 import {
   type CorpusSearchCursor,
+  type CorpusSearchPhase,
   decodeCorpusSearchCursor,
   encodeCorpusSearchCursor,
   isStaleCorpusSearchCursor,
@@ -265,6 +267,7 @@ import type {
   ScoredCandidate,
 } from "@/api/lib/legal-search/rerank";
 import { searchIndexUnavailableResponse } from "@/api/lib/legal-search/search-index-unavailable";
+import { runTwoPhaseSearch } from "@/api/lib/legal-search/two-phase-search";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 import {
@@ -909,7 +912,6 @@ const searchPostgresDecisions = async (
       reporters: decisionReporterGrammarForJurisdiction(body.country),
     }),
   });
-
   const configs = await loadPublicFtsSearchConfigs();
   // One registry for both places the statements read it: the tier prior on
   // the decision itself, and the weight each incoming citation carries.
@@ -1119,6 +1121,7 @@ type CorpusIndexQueryOptions = {
   /** Passed in for the same reason: `strict` matches only the words typed. */
   legalAlternatives: CorpusTermExpander | null;
   queryVariant: CorpusIndexQueryVariant;
+  match?: "all" | "any" | undefined;
 };
 
 const buildCorpusIndexQuery = ({
@@ -1130,6 +1133,7 @@ const buildCorpusIndexQuery = ({
   functionWords,
   legalAlternatives,
   queryVariant,
+  match,
 }: CorpusIndexQueryOptions): string | null =>
   caseLawCorpusQuery({
     jurisdiction: body.country,
@@ -1137,6 +1141,7 @@ const buildCorpusIndexQuery = ({
     queryVariant,
     functionWords,
     legalAlternatives,
+    match,
     filters: {
       court: body.court,
       courts: body.courts,
@@ -1208,6 +1213,7 @@ type ResolveCorpusIndexQueryOptions = {
 
 type ResolvedCorpusIndexQuery = {
   resolved: ExpandedCorpusQuery;
+  relaxedQuery: string | null;
   /**
    * The same query with one facet's own filter left out, built with whichever
    * expansion the resolver executed. A facet counted under a query built from
@@ -1297,6 +1303,21 @@ const resolveCorpusIndexQuery = async ({
       );
   };
 
+  const relaxedQuery =
+    resolved.type === "empty"
+      ? null
+      : buildCorpusIndexQuery({
+          body,
+          jurisdictionClause,
+          contract,
+          fields,
+          expand: expanderByQuery.get(resolved.query),
+          functionWords,
+          legalAlternatives,
+          queryVariant,
+          match: "any",
+        });
+
   return {
     // The alternatives are part of the ranking, so the identity a cursor
     // pins names them too: a continuation asked with others is stale.
@@ -1312,6 +1333,7 @@ const resolveCorpusIndexQuery = async ({
             type: resolved.type,
           },
     facetQueries,
+    relaxedQuery,
   };
 };
 
@@ -2324,6 +2346,26 @@ const cursorMatchesCorpusReadTarget = (
   target: string | null,
 ): boolean => cursor === null || cursor.target === target;
 
+const expectedCaseLawPhase = ({
+  cursor,
+  fingerprint,
+  generation,
+}: {
+  cursor: CorpusSearchCursor | null;
+  fingerprint: string;
+  generation: string;
+}): CorpusSearchPhase => {
+  if (cursor?.phase?.type !== "relaxed") {
+    return { type: "strict", fingerprint, generation };
+  }
+  return {
+    type: "relaxed",
+    fingerprint,
+    generation,
+    strictWorkTokens: cursor.phase.strictWorkTokens,
+  };
+};
+
 type SearchCorpusIndexDecisionsOptions = {
   body: SearchDecisionsBody;
   caseLawDb: CaseLawPublicReadDb;
@@ -2434,6 +2476,9 @@ export const searchCorpusIndexDecisions = async ({
     intent,
     configuredVariant,
   });
+  const fingerprint = sha256Hex(
+    JSON.stringify({ ...body, cursor: undefined, limit: undefined }),
+  );
   const queryClass = decisionQueryClass(intent);
   const report = (hitsReturned: number, scan: CorpusIndexScanReport): void => {
     reportCaseLawSearchCompleted({
@@ -2632,15 +2677,16 @@ export const searchCorpusIndexDecisions = async ({
   // read may reach (`corpusIndexReadTarget`).
   const { indexId, jurisdictionClause } = route;
 
-  const { facetQueries, resolved } = await resolveCorpusIndexQuery({
-    body,
-    generation,
-    jurisdictionClause,
-    contract,
-    functionWords: interpretation.functionWords,
-    legalAlternatives: interpretation.legalAlternatives,
-    queryVariant: interpretation.queryVariant,
-  });
+  const { facetQueries, relaxedQuery, resolved } =
+    await resolveCorpusIndexQuery({
+      body,
+      generation,
+      jurisdictionClause,
+      contract,
+      functionWords: interpretation.functionWords,
+      legalAlternatives: interpretation.legalAlternatives,
+      queryVariant: interpretation.queryVariant,
+    });
   if (resolved.type === "empty") {
     report(0, emptyCorpusIndexScan());
     return projectCaseLawSearchResponse(
@@ -2670,6 +2716,11 @@ export const searchCorpusIndexDecisions = async ({
       dictionary: resolved.dictionary,
       sort,
       target: cursorTarget,
+      phase: expectedCaseLawPhase({
+        cursor: parsedCursor,
+        fingerprint,
+        generation,
+      }),
     })
   ) {
     return status(400, { message: "Invalid cursor" });
@@ -2697,50 +2748,100 @@ export const searchCorpusIndexDecisions = async ({
   const excerptTokens = tokenizeCorpusFreeText(body.query);
 
   const concurrentStartedAt = performance.now();
-  const pageRead = readCorpusIndexSearchPage({
-    hitDispositions,
-    observer,
-    cluster: serving.cluster,
-    indexId,
-    query: scopedQuery,
-    limit,
-    order: corpusSearchOrder(sort),
-    parsedCursor,
-    skip: offset,
-    scanTransport: caseLawScanTransport(sort),
-    rankingMode,
-    snippetFields: ["text"],
-    projectionRevisionField: requireCorpusIndexManifest("case_law", generation)
-      .projection.projectionRevisionField,
-    extractId: (hit) => {
-      const id = hit["document_id"];
-      return typeof id === "string" && isUuid(id) ? id : null;
-    },
-    extractSnippet: (snippet, hit) =>
-      corpusExcerpt({
-        engineSnippet: extractCorpusSnippet(snippet),
-        excerpt,
-        sentenceAligned: body.sentenceAlignedExcerpt,
-        language: excerptFields.stemming?.language ?? null,
-        passage: hit["text"],
-        tokens: excerptTokens,
-      }),
-    unseenScoreUpperBound: caseLawUnseenScoreUpperBound(sort),
-    // The scan names the groups to leave out: a page addressed by offset
-    // walks windows the request's own cursor never named.
-    rankCandidates: async (candidates, { excludedGroups }) =>
-      await rehydrateCaseLawCandidates({
-        hitDispositions,
-        body,
-        candidates,
-        caseLawDb,
-        courtWeights,
+  const readPhase = async (
+    active: CorpusSearchPhase,
+    pageLimit: number,
+    cursor: SearchCursor | null,
+  ) => {
+    const query = active.type === "strict" ? scopedQuery : relaxedQuery;
+    if (query === null) {
+      return null;
+    }
+    const page = await readCorpusIndexSearchPage({
+      hitDispositions,
+      observer,
+      cluster: serving.cluster,
+      indexId,
+      query:
+        active.type === "strict"
+          ? query
+          : withCaseLawDatedDecisions(query, sort),
+      limit: pageLimit,
+      order: corpusSearchOrder(sort),
+      parsedCursor: cursor,
+      skip: active.type === "strict" ? offset : 0,
+      scanTransport: caseLawScanTransport(sort),
+      rankingMode,
+      snippetFields: ["text"],
+      projectionRevisionField: requireCorpusIndexManifest(
+        "case_law",
         generation,
-        hydrated,
-        excludedGroups,
-        timeDbRead: async (run) =>
-          await dbTimer.time(CASE_LAW_SEARCH_DB_READ.candidates, run),
-      }),
+      ).projection.projectionRevisionField,
+      extractId: (hit) => {
+        const id = hit["document_id"];
+        return typeof id === "string" && isUuid(id) ? id : null;
+      },
+      extractSnippet: (snippet, hit) =>
+        corpusExcerpt({
+          engineSnippet: extractCorpusSnippet(snippet),
+          excerpt,
+          sentenceAligned: body.sentenceAlignedExcerpt,
+          language: excerptFields.stemming?.language ?? null,
+          passage: hit["text"],
+          tokens: excerptTokens,
+        }),
+      unseenScoreUpperBound: caseLawUnseenScoreUpperBound(sort),
+      rankCandidates: async (candidates, { excludedGroups }) =>
+        await rehydrateCaseLawCandidates({
+          hitDispositions,
+          body,
+          candidates,
+          caseLawDb,
+          courtWeights,
+          generation,
+          hydrated,
+          excludedGroups: new Set([
+            ...excludedGroups,
+            ...(active.type === "relaxed" ? active.strictWorkTokens : []),
+          ]),
+          timeDbRead: async (run) =>
+            await dbTimer.time(CASE_LAW_SEARCH_DB_READ.candidates, run),
+        }),
+    });
+    return { ...page, hits: page.pageRanked };
+  };
+  const pageRead = runTwoPhaseSearch({
+    cursor: parsedCursor,
+    fingerprint,
+    generation,
+    limit,
+    strictOnly: body.strict === true,
+    read: readPhase,
+    encodeCursor: (page, active) =>
+      page.nextCursor === null
+        ? null
+        : encodeCorpusSearchCursor({
+            ...page.nextCursor,
+            dictionary: resolved.dictionary,
+            target: cursorTarget,
+            phase: active,
+          }),
+    groupToken: (hit) => {
+      const groupKey = hydrated.get(hit.id)?.languageGroupKey ?? null;
+      return corpusSearchGroupToken(
+        groupKey === null ? `document:${hit.id}` : `language:${groupKey}`,
+      );
+    },
+    hitId: (hit) => hit.id,
+    relaxedCoverage: (hit, page) => {
+      const snippet = page.snippetById.get(hit.id)?.toLocaleLowerCase() ?? "";
+      return new Set(
+        excerptTokens
+          .map((token) => token.value.toLocaleLowerCase())
+          .filter((term) => snippet.includes(term)),
+      ).size;
+    },
+    score: (hit) => hit.score,
   });
   // Stamped where it resolves rather than after the phase: the reader waits on
   // the slower arm, and which arm that was is the whole point of the pair.
@@ -2765,25 +2866,27 @@ export const searchCorpusIndexDecisions = async ({
         return read;
       })
     : null;
-  const [searchPage, facetsAndTotal] = await Promise.all([pageRead, facetRead]);
+  const [twoPhase, facetsAndTotal] = await Promise.all([pageRead, facetRead]);
+  const searchPage =
+    twoPhase.pages.at(-1) ?? panic("Search returned no phase page");
   scanAndFacetsMs = performance.now() - concurrentStartedAt;
 
-  const { anchorIdById, passageCountById, revisionById, scan, snippetById } =
-    searchPage;
+  const mergedMap = <Value>(
+    select: (phasePage: typeof searchPage) => ReadonlyMap<string, Value>,
+  ): Map<string, Value> =>
+    new Map(twoPhase.pages.flatMap((phasePage) => [...select(phasePage)]));
+  const anchorIdById = mergedMap((phasePage) => phasePage.anchorIdById);
+  const passageCountById = mergedMap((phasePage) => phasePage.passageCountById);
+  const revisionById = mergedMap((phasePage) => phasePage.revisionById);
+  const snippetById = mergedMap((phasePage) => phasePage.snippetById);
+  const { scan } = searchPage;
   const pageRanked = withPinnedDecisions({
     pinned,
     pinnedIds,
-    ranked: searchPage.pageRanked,
+    ranked: twoPhase.hits,
   });
 
-  const nextCursor =
-    searchPage.nextCursor === null
-      ? null
-      : encodeCorpusSearchCursor({
-          ...searchPage.nextCursor,
-          dictionary: resolved.dictionary,
-          target: cursorTarget,
-        });
+  const nextCursor = twoPhase.nextCursor;
 
   // A row the candidate read saw and this one no longer answers for was
   // scrubbed mid-request; it drops out of the page rather than being served
@@ -2865,6 +2968,7 @@ export const searchCorpusIndexDecisions = async ({
         body,
         interpretation,
         hitCount: page.hits.length,
+        relaxedMatch: twoPhase.relaxedShown,
         countsResultSet:
           isFirstPage && searchPageEnd(searchPage) === SEARCH_PAGE_END.COMPLETE,
       }),

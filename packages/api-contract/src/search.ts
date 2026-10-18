@@ -110,9 +110,11 @@ export const countedSearchTotal = (
  * - `no_hits_filtered`: nothing matched under the filters the request
  *   narrowed with, which is a different answer from `no_hits` because the
  *   caller can drop a filter.
+ * - `relaxed_match`: at least one result matched only some query words.
  */
 export const CASE_LAW_SEARCH_WARNING_CODES = [
   "function_words_optional",
+  "relaxed_match",
   "no_hits",
   "no_hits_filtered",
 ] as const;

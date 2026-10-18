@@ -1098,6 +1098,7 @@
         "hint": "Töröljön vagy bővítsen egy szűrőt, és keressen újra.",
         "message": "Semmi nem felel meg a beállított szűrőknek."
       },
+      "relaxedMatch": "A találatok között olyan határozatok is vannak, amelyek csak néhány szóra illeszkednek.",
       "resultsFor": "Találatok erre: <bdi>{query}</bdi>",
       "searchEveryWord": "Minden szó keresése"
     },

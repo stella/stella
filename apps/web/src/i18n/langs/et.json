@@ -1098,6 +1098,7 @@
         "hint": "Eemaldage filter või laiendage seda ja otsige uuesti.",
         "message": "Miski ei vasta valitud filtritele."
       },
+      "relaxedMatch": "Tulemused sisaldavad lahendeid, mis vastavad ainult mõnele sõnale.",
       "resultsFor": "Tulemused päringule: <bdi>{query}</bdi>",
       "searchEveryWord": "Otsi kõiki sõnu"
     },

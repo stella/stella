@@ -1098,6 +1098,7 @@
         "hint": "Pašalinkite filtrą arba jį išplėskite ir ieškokite dar kartą.",
         "message": "Niekas neatitiko pasirinktų filtrų."
       },
+      "relaxedMatch": "Rezultatuose yra sprendimų, atitinkančių tik kai kuriuos žodžius.",
       "resultsFor": "Rezultatai pagal: <bdi>{query}</bdi>",
       "searchEveryWord": "Ieškoti visų žodžių"
     },

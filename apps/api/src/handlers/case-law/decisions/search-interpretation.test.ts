@@ -248,6 +248,20 @@ describe("searchAnswer", () => {
   test("a strict page with hits carries no warning at all", () => {
     expect(answerFor(request({ strict: true }), 3).warnings).toEqual([]);
   });
+
+  test("a page containing relaxed corpus matches reports the fallback", () => {
+    const body = request();
+    const interpretation = interpret(body);
+    expect(
+      searchAnswer({
+        body,
+        interpretation,
+        hitCount: 2,
+        countsResultSet: true,
+        relaxedMatch: true,
+      }).warnings.map(({ code }) => code),
+    ).toContain("relaxed_match");
+  });
 });
 
 test.each([

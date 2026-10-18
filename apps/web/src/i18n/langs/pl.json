@@ -1098,6 +1098,7 @@
         "hint": "Usuń lub poszerz filtr i wyszukaj ponownie.",
         "message": "Nic nie odpowiada wybranym filtrom."
       },
+      "relaxedMatch": "Wyniki obejmują orzeczenia pasujące tylko do niektórych słów.",
       "resultsFor": "Wyniki dla: <bdi>{query}</bdi>",
       "searchEveryWord": "Szukaj wszystkich słów"
     },

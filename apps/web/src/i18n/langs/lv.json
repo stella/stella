@@ -1098,6 +1098,7 @@
         "hint": "Noņemiet vai paplašiniet filtru un meklējiet vēlreiz.",
         "message": "Nekas neatbilst izvēlētajiem filtriem."
       },
+      "relaxedMatch": "Rezultātos ir lēmumi, kas atbilst tikai dažiem vārdiem.",
       "resultsFor": "Rezultāti vaicājumam: <bdi>{query}</bdi>",
       "searchEveryWord": "Meklēt visus vārdus"
     },
