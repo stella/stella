@@ -227,7 +227,9 @@ describe("closest tool names", () => {
 
   test("ASCII closest-name ranking matches the previous algorithm", () => {
     const asciiCharacters = [
-      ..."abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+      ...Array.from(
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+      ),
       "-",
       "_",
       " ",
