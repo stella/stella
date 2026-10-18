@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 
 import {
   checkQuarantineExcludes,
@@ -21,6 +23,41 @@ minimumReleaseAgeExcludes = [
 `;
 
 describe("quarantine exclude guard", () => {
+  test("rejects a duplicated package with every declaration line", () => {
+    const result = checkQuarantineExcludes({
+      bunfig: createBunfig(
+        '"@stll/native", # quarantine-excluded-since: 2026-08-08T00:22:40.000Z',
+      ),
+      lockfile,
+    });
+
+    expect(result.errors).toContain(
+      'bunfig.toml minimumReleaseAgeExcludes lists duplicate package "@stll/native" on lines 5, 6',
+    );
+  });
+
+  test("accepts a list without duplicate packages", () => {
+    const result = checkQuarantineExcludes({
+      bunfig: createBunfig(
+        '"better-result", # quarantine-expires: 2099-01-01T00:00:00.000Z',
+      ),
+      lockfile,
+    });
+
+    expect(result.errors).toEqual([]);
+  });
+
+  test("accepts the repository bunfig", () => {
+    const repositoryRoot = path.resolve(import.meta.dir, "..");
+    const result = checkQuarantineExcludes({
+      bunfig: readFileSync(path.join(repositoryRoot, "bunfig.toml"), "utf-8"),
+      lockfile: readFileSync(path.join(repositoryRoot, "bun.lock"), "utf-8"),
+      now: new Date("2026-10-18T00:00:00.000Z"),
+    });
+
+    expect(result.errors).toEqual([]);
+  });
+
   test("rejects every undated third-party exclusion", () => {
     const result = checkQuarantineExcludes({
       bunfig: createBunfig('"better-result",'),

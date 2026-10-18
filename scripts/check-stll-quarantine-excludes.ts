@@ -182,6 +182,35 @@ export const readInstallPolicy = (bunfig: string): InstallPolicy => ({
 const excludeDeclaration = (line: string): string | undefined =>
   /^\s*"(?<name>[^"]+)",?\s*(?:#.*)?$/u.exec(line)?.groups?.["name"];
 
+const readDuplicateExcludeErrors = (bunfig: string): string[] => {
+  const range = findExcludeBlockRange(bunfig);
+  if (range === undefined) {
+    return [];
+  }
+
+  const firstBlockLine = bunfig.slice(0, range.start).split("\n").length;
+  const declarationLines = new Map<string, number[]>();
+  for (const [index, line] of bunfig
+    .slice(range.start, range.end)
+    .split("\n")
+    .entries()) {
+    const name = excludeDeclaration(line);
+    if (name === undefined) {
+      continue;
+    }
+    const lineNumbers = declarationLines.get(name) ?? [];
+    lineNumbers.push(firstBlockLine + index);
+    declarationLines.set(name, lineNumbers);
+  }
+
+  return [...declarationLines]
+    .filter(([, lineNumbers]) => lineNumbers.length > 1)
+    .map(
+      ([name, lineNumbers]) =>
+        `${BUNFIG} minimumReleaseAgeExcludes lists duplicate package "${name}" on lines ${lineNumbers.join(", ")}`,
+    );
+};
+
 const exactUtcTimestampError = ({
   marker,
   name,
@@ -446,6 +475,7 @@ export const checkQuarantineExcludes = ({
   const temporary = readTemporaryExcludes(bunfig);
   const errors = [
     ...temporary.errors,
+    ...readDuplicateExcludeErrors(bunfig),
     ...readExcludeAnnotationErrors(bunfig, now),
     ...readReleaseAgeExceptionErrors(releaseAgeExceptionSources, now),
   ];
