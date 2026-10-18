@@ -155,7 +155,7 @@ export const assertFrozenLockfile = ({
   }
 };
 
-/** Final autofix boundary: compare the collected lockfile with its approved pins. */
+/** Final autofix boundary: require approved pins and current workspace metadata. */
 export const assertFinalAutofixLockfile = ({
   repo,
   frozen,
@@ -163,9 +163,21 @@ export const assertFinalAutofixLockfile = ({
   repo: string;
   frozen: string;
 }) => {
+  const before = parseBunLockText(readFileSync(frozen, "utf-8"));
+  const after = parseBunLockText(
+    readFileSync(path.join(repo, "bun.lock"), "utf-8"),
+  );
   assertFrozenLockfile({
-    before: parseBunLockText(readFileSync(frozen, "utf-8")),
-    after: parseBunLockText(readFileSync(path.join(repo, "bun.lock"), "utf-8")),
+    before,
+    after,
+  });
+  assertLockfileWorkspaces({
+    before,
+    after,
+    readManifest: (workspace) =>
+      JSON.parse(
+        readFileSync(path.join(repo, workspace, "package.json"), "utf-8"),
+      ),
   });
 };
 

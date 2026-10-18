@@ -162,14 +162,19 @@ describe("conservative format and lockfile proofs", () => {
     ).toThrow("frozen pins or policy");
   });
 
-  test("the final autofix boundary rejects pin drift after refresh", () => {
+  test("the final autofix boundary rejects lockfile drift after refresh", () => {
     const root = mkdtempSync(path.join(tmpdir(), "autofix-final-lock-"));
     const frozen = path.join(root, "refresh-approved.lock");
+    const manifest = {
+      name: "fixture",
+      dependencies: { a: "1.0.0" },
+    };
     const approved = {
       lockfileVersion: 3,
-      workspaces: { "": { name: "fixture" } },
+      workspaces: { "": manifest },
       packages: { a: ["a@1.0.0", "", {}, "sha512-approved"] },
     };
+    writeFileSync(path.join(root, "package.json"), JSON.stringify(manifest));
     writeFileSync(frozen, JSON.stringify(approved));
     writeFileSync(path.join(root, "bun.lock"), JSON.stringify(approved));
 
@@ -181,12 +186,22 @@ describe("conservative format and lockfile proofs", () => {
       path.join(root, "bun.lock"),
       JSON.stringify({
         ...approved,
-        workspaces: { "": { name: "fixture", version: "1.0.0" } },
+        workspaces: {
+          "": { ...approved.workspaces[""], dependencies: { a: "*" } },
+        },
       }),
     );
-    expect(() =>
-      assertFinalAutofixLockfile({ repo: root, frozen }),
-    ).not.toThrow();
+    expect(() => assertFinalAutofixLockfile({ repo: root, frozen })).toThrow(
+      "differs from merged manifest",
+    );
+
+    writeFileSync(
+      path.join(root, "bun.lock"),
+      JSON.stringify({ ...approved, workspaces: {} }),
+    );
+    expect(() => assertFinalAutofixLockfile({ repo: root, frozen })).toThrow(
+      "changed the merged workspace set",
+    );
 
     writeFileSync(
       path.join(root, "bun.lock"),
