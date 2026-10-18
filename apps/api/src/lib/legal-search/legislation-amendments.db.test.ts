@@ -12,6 +12,7 @@ import { drizzle } from "drizzle-orm/pglite";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import type { ScopedDb } from "@/api/db/safe-db";
 import {
   legislationAmendments,
   legislationAmendmentSnapshots,
@@ -19,6 +20,8 @@ import {
   legislationSources,
 } from "@/api/db/schema";
 import { readPublicLegislationHandler } from "@/api/handlers/legislation/get";
+import { processLegislationDocument } from "@/api/handlers/legislation/ingestion";
+import type { LegislationCorpusDependencies } from "@/api/handlers/legislation/ingestion";
 import { listStatuteVersionsHandler } from "@/api/handlers/legislation/versions";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
@@ -28,6 +31,7 @@ import {
   syncLegislationAmendmentsTx,
 } from "@/api/lib/legal-search/legislation-amendments";
 import type {
+  LegislationDocumentInput,
   LegislationAmendmentRelation,
   LegislationAmendmentSnapshot,
 } from "@/api/lib/legal-search/legislation-ingestion-types";
@@ -71,6 +75,11 @@ const snapshot = (
   });
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;
+let scopedDb: ScopedDb;
+const corpus = {
+  mode: "off",
+  write: async () => await Promise.resolve({ type: "skipped-empty" as const }),
+} satisfies LegislationCorpusDependencies;
 const sync = async (input: LegislationAmendmentSnapshot) =>
   await db.transaction(
     async (tx) =>
@@ -89,6 +98,8 @@ const incoming = async (limit = 10, cursor: string | null = null) =>
 beforeAll(async () => {
   client = await createTestPglite();
   db = drizzle({ client });
+  scopedDb = async (callback) =>
+    await db.transaction(async (tx) => await callback(asTestRaw(tx)));
 });
 beforeEach(async () => {
   await db
@@ -115,6 +126,107 @@ afterAll(async () => {
 });
 
 describe("publisher amendment snapshots", () => {
+  test("ingestion carries amendment observations through public statute and version reads", async () => {
+    const dated = {
+      ...relation,
+      publisherId: "publisher:201-2026-1",
+      amendingEli: "eli/cz/sb/2026/201",
+      amendingTitle: "Act 201/2026",
+    } satisfies LegislationAmendmentRelation;
+    const notStated = {
+      ...relation,
+      publisherId: "publisher:202-2026-1",
+      amendingEli: "eli/cz/sb/2026/202",
+      amendingTitle: "Act 202/2026",
+      effective: {
+        type: "not-stated",
+        text: "On the occurrence of the stated event",
+      },
+    } satisfies LegislationAmendmentRelation;
+    const amendments = snapshot("2026-10-16T11:00:00Z", [dated, notStated]);
+    const input = {
+      sourceId,
+      eli: "eli/cz/sb/2012/90",
+      title: "Act 90/2012",
+      country: "CZE",
+      language: "cs",
+      version: {
+        type: "consolidation",
+        validFrom: "2027-01-01",
+        end: { type: "open" },
+      },
+      fulltext: "§ 1",
+      rawHash: "amendment-contract-v1",
+      amendments,
+    } satisfies LegislationDocumentInput;
+    const stored = await processLegislationDocument(input, scopedDb, {
+      corpus,
+    });
+    expect(stored.type).toBe("stored");
+    if (stored.type !== "stored") {
+      throw new Error(`Expected a stored document, got ${stored.type}`);
+    }
+    const legislationDb: LegislationReadDb = async (read) =>
+      await withPublicLawReaderRole(db, async (tx) =>
+        read(asTestRaw<LegislationReadTransaction>(tx)),
+      );
+    const readAmendmentIds = async () => {
+      const statute = await readPublicLegislationHandler(
+        stored.id,
+        legislationDb,
+        "pages",
+      );
+      const versions = await listStatuteVersionsHandler({
+        documentId: stored.id,
+        query: {},
+        legislationDb,
+        surface: "pages",
+      });
+      return {
+        pending: statute.pendingChanges?.items
+          .map(({ publisherId }) => publisherId)
+          .toSorted(),
+        amendedBy: versions.items
+          .flatMap(
+            ({ amendedBy }) =>
+              amendedBy?.items.map(({ publisherId }) => publisherId) ?? [],
+          )
+          .toSorted(),
+      };
+    };
+    const expected = [dated.publisherId, notStated.publisherId].toSorted();
+
+    setSystemTime(new Date("2026-10-18T10:00:00.000Z"));
+    try {
+      expect(await readAmendmentIds()).toEqual({
+        pending: expected,
+        amendedBy: [dated.publisherId],
+      });
+
+      await processLegislationDocument(
+        { ...input, amendments: undefined },
+        scopedDb,
+        { corpus },
+      );
+      expect(await readAmendmentIds()).toEqual({
+        pending: expected,
+        amendedBy: [dated.publisherId],
+      });
+
+      await processLegislationDocument(
+        {
+          ...input,
+          amendments: snapshot("2026-10-17T11:00:00Z", []),
+        },
+        scopedDb,
+        { corpus },
+      );
+      expect(await readAmendmentIds()).toEqual({ pending: [], amendedBy: [] });
+    } finally {
+      setSystemTime();
+    }
+  });
+
   test("public reads tolerate the pre-grant schema and expose amendments after the grant", async () => {
     await sync(snapshot("2026-10-16T11:00:00Z", [relation]));
     const amendmentRelations = [
