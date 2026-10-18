@@ -57,6 +57,30 @@ describe("the mock model's stream kinds", () => {
     expect(mockAiStreamKindOf("Draft the NDA")).toBeUndefined();
   });
 
+  test("marker selection preserves listed priority and literal case", () => {
+    for (const first of KINDS) {
+      for (const second of KINDS) {
+        const expected = KINDS.find(
+          (kind) => kind === first || kind === second,
+        );
+        expect(
+          mockAiStreamKindOf(
+            `😀Žluťoučký, ${MOCK_AI_STREAM_KIND_MARKERS[second]}! ${MOCK_AI_STREAM_KIND_MARKERS[first]}`,
+          ),
+        ).toBe(expected);
+      }
+      expect(
+        mockAiStreamKindOf(MOCK_AI_STREAM_KIND_MARKERS[first].toLowerCase()),
+      ).toBeUndefined();
+      expect(
+        mockAiStreamKindOf(
+          `${MOCK_AI_STREAM_KIND_MARKERS[first]} repeated ${MOCK_AI_STREAM_KIND_MARKERS[first]}`,
+        ),
+      ).toBe(first);
+    }
+    expect(mockAiStreamKindOf("")).toBeUndefined();
+  });
+
   test.each(KINDS)(
     "%s streams its kind as many deltas, then ends the run",
     async (kind) => {

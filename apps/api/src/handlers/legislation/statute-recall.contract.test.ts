@@ -257,7 +257,7 @@ describe.skipIf(!runEngineTests)(
     let legislationDb: LegislationReadDb;
     let restoreSearch: (() => void) | undefined;
     let fixtureIndexCreated = false;
-    const nativeReads: { query: string; documentIds: unknown[] }[] = [];
+    const engineReads: { query: string; documentIds: unknown[] }[] = [];
     beforeAll(async () => {
       databaseClient = await createTestPglite();
       const db = drizzle({ client: databaseClient });
@@ -384,7 +384,7 @@ describe.skipIf(!runEngineTests)(
             indexId: INDEX_ID,
           });
           if (result.isOk()) {
-            nativeReads.push({
+            engineReads.push({
               query: options.query,
               documentIds: result.value.hits.map((hit) => hit["document_id"]),
             });
@@ -392,7 +392,29 @@ describe.skipIf(!runEngineTests)(
           return result;
         },
       );
-      restoreSearch = () => searchSpy.mockRestore();
+      const originalScoredSearch = corpusClient.scoredSearch.bind(corpusClient);
+      const scoredSearchSpy = spyOn(
+        corpusClient,
+        "scoredSearch",
+      ).mockImplementation(async (options) => {
+        const result = await originalScoredSearch({
+          ...options,
+          indexId: INDEX_ID,
+        });
+        if (result.isOk()) {
+          engineReads.push({
+            query: options.query,
+            documentIds: result.value.hits.map(
+              (hit) => hit.fields["document_id"],
+            ),
+          });
+        }
+        return result;
+      });
+      restoreSearch = () => {
+        searchSpy.mockRestore();
+        scoredSearchSpy.mockRestore();
+      };
     }, ENGINE_TIMEOUT_MS);
 
     afterAll(async () => {
@@ -440,14 +462,14 @@ describe.skipIf(!runEngineTests)(
         url.searchParams.set("query", protectedRelaxedQuery.query);
         url.searchParams.set("country", "CZE");
         url.searchParams.set("limit", "10");
-        const firstRead = nativeReads.length;
+        const firstRead = engineReads.length;
         const response = await app.handle(new Request(url.href));
         expect(response.status).toBe(200);
         const body: unknown = await response.json();
         if (!Value.Check(searchLegislationSuccessResponseSchema, body)) {
           panic("Protected public statute query returned an invalid response");
         }
-        const reads = nativeReads.slice(firstRead);
+        const reads = engineReads.slice(firstRead);
         const strictClause = corpusFreeTextClause(protectedRelaxedQuery.query);
         expect(strictClause).not.toBeNull();
         if (strictClause === null) {
