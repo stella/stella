@@ -170,6 +170,42 @@ export const listStatuteVersionsHandler = async ({
             limit: LEGISLATION_AMENDMENT_PAGE_MAX,
             effectiveDates,
           });
+    const amendmentOwnerByOpeningDate = new Map<
+      string,
+      (typeof page)[number]
+    >();
+    // The look-ahead row is dropped by the cursor page, so it never owns relations.
+    for (const row of page.slice(0, limit)) {
+      const openingDate = row.versionValidFrom;
+      if (openingDate === null || !effectOpensVersion(openingDate, row)) {
+        continue;
+      }
+      const currentOwner = amendmentOwnerByOpeningDate.get(openingDate);
+      // A relation belongs to one response version: prefer the default when it
+      // opens that day, otherwise retain the first eligible row in page order.
+      if (currentOwner === undefined || row.id === defaultId) {
+        amendmentOwnerByOpeningDate.set(openingDate, row);
+      }
+    }
+    const amendmentsByOwner = new Map<
+      SafeId<"legislationDocument">,
+      typeof amendments.items
+    >();
+    for (const relation of amendments.items) {
+      if (relation.effectiveDate === null) {
+        continue;
+      }
+      const owner = amendmentOwnerByOpeningDate.get(relation.effectiveDate);
+      if (owner === undefined) {
+        continue;
+      }
+      const owned = amendmentsByOwner.get(owner.id);
+      if (owned === undefined) {
+        amendmentsByOwner.set(owner.id, [relation]);
+      } else {
+        owned.push(relation);
+      }
+    }
     return page.map((row) =>
       projectStatuteVersion({
         ...row,
@@ -180,9 +216,7 @@ export const listStatuteVersionsHandler = async ({
           snapshot,
           page: {
             ...amendments,
-            items: amendments.items.filter((relation) =>
-              effectOpensVersion(relation.effectiveDate, row),
-            ),
+            items: amendmentsByOwner.get(row.id) ?? [],
           },
         }),
       }),

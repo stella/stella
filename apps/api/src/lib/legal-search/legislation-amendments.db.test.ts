@@ -25,6 +25,7 @@ import type { LegislationCorpusDependencies } from "@/api/handlers/legislation/i
 import { listStatuteVersionsHandler } from "@/api/handlers/legislation/versions";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
+  LEGISLATION_AMENDMENT_PAGE_MAX,
   readLegislationAmendments,
   readLegislationAmendmentSnapshot,
   sanitizeLegislationAmendments,
@@ -282,6 +283,77 @@ describe("publisher amendment snapshots", () => {
     } finally {
       setSystemTime();
     }
+  });
+
+  test("a versions page assigns same-day effects to its default version once", async () => {
+    const otherVersionId = toSafeId<"legislationDocument">(
+      "0198e331-e578-7000-8000-000000001a03",
+    );
+    const relations = Array.from(
+      { length: LEGISLATION_AMENDMENT_PAGE_MAX },
+      (_, index) => ({
+        ...relation,
+        publisherId: `publisher:same-day-${index.toString().padStart(3, "0")}`,
+      }),
+    );
+
+    expect(
+      await rejectionOf(
+        db.transaction(async (tx) => {
+          // Production identity constraints normally collapse same-date rows. The
+          // handler still defends its response budget while such rows are present.
+          await tx.execute(
+            sql`DROP INDEX legislation_documents_eli_version_lang_idx`,
+          );
+          await tx.insert(legislationDocuments).values({
+            id: otherVersionId,
+            sourceId,
+            eli: work.eli,
+            title: "Civil Code as one text",
+            country: "CZE",
+            language: work.language,
+            contentHash: "b".repeat(64),
+            versionValidFrom: "2027-01-01",
+            expressionKind: "unversioned",
+          });
+          await syncLegislationAmendmentsTx(asTestRaw(tx), {
+            work,
+            snapshot: snapshot("2026-10-18T11:00:00Z", relations),
+          });
+          const versions = await listStatuteVersionsHandler({
+            documentId,
+            query: {},
+            legislationDb: async (read) =>
+              await read(asTestRaw<LegislationReadTransaction>(tx)),
+            surface: "pages",
+          });
+          if (!("items" in versions)) {
+            throw new Error("Expected same-day version fixtures to exist");
+          }
+
+          const projected = versions.items.flatMap(({ id, amendedBy }) =>
+            (amendedBy?.items ?? []).map((effect) => ({
+              ownerId: id,
+              publisherId: effect.publisherId,
+            })),
+          );
+          expect(projected.length).toBeLessThanOrEqual(
+            LEGISLATION_AMENDMENT_PAGE_MAX,
+          );
+          expect(
+            projected.map(({ publisherId }) => publisherId).toSorted(),
+          ).toEqual(relations.map(({ publisherId }) => publisherId).toSorted());
+          expect(
+            new Set(projected.map(({ publisherId }) => publisherId)).size,
+          ).toBe(LEGISLATION_AMENDMENT_PAGE_MAX);
+          expect(
+            projected.every(({ ownerId }) => ownerId === otherVersionId),
+          ).toBe(true);
+
+          tx.rollback();
+        }),
+      ),
+    ).toBeInstanceOf(TransactionRollbackError);
   });
 
   test("public reads tolerate the pre-grant schema and expose amendments after the grant", async () => {
