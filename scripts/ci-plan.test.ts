@@ -1808,6 +1808,10 @@ const requiredRecordSchema = v.strictObject({
   depth: v.nullable(v.string()),
   coverage_profile: v.nullable(v.string()),
   reused_from_run_id: v.nullable(v.number()),
+  basis: v.picklist(["evaluated", "pass_through"]),
+  pass_through_reason: v.nullable(
+    v.picklist(["enqueued", "draft", "superseded", "metadata", "reused"]),
+  ),
   required: v.array(
     v.strictObject({ job: v.string(), conclusion: v.string() }),
   ),
@@ -1931,6 +1935,16 @@ test("the required-jobs record names every workflow job once and carries the ver
         METADATA_ONLY: "false",
       },
     },
+    {
+      // Arming a pull request reruns CI only to hand validation to the queue.
+      label: "pull-request-enqueued",
+      options: {
+        event: EVENT.pullRequest,
+        results: {},
+        suiteDepth: SUITE_DEPTH.fast,
+      },
+      env: { PR_ACTION: "enqueued", QUEUE_VALIDATION: "true" },
+    },
   ]);
   const byLabel = new Map(outcomes.map((outcome) => [outcome.label, outcome]));
   const take = (label: string) =>
@@ -2006,12 +2020,38 @@ test("the required-jobs record names every workflow job once and carries the ver
   expect(superseded.exitCode).toBe(0);
   expect(superseded.record.verdict).toBe("success");
 
+  // Every evaluating branch says so; an exit that evaluated nothing names
+  // why, so a consumer never reads its success as evidence.
+  for (const label of [
+    "merge-group-success",
+    "merge-group-failure",
+    "pull-request-fast",
+    "pull-request-fast-outside-failure",
+    "pull-request-fast-superseded-cancel",
+  ]) {
+    expect(take(label).record, label).toMatchObject({
+      basis: "evaluated",
+      pass_through_reason: null,
+    });
+  }
+
   const reused = take("pull-request-reused");
   expect(reused.exitCode).toBe(0);
   expect(reused.record).toMatchObject({
     reused_from_run_id: 99,
     required: [],
     verdict: "success",
+    basis: "pass_through",
+    pass_through_reason: "reused",
+  });
+
+  const enqueued = take("pull-request-enqueued");
+  expect(enqueued.exitCode).toBe(0);
+  expect(enqueued.record).toMatchObject({
+    required: [],
+    verdict: "success",
+    basis: "pass_through",
+    pass_through_reason: "enqueued",
   });
 });
 

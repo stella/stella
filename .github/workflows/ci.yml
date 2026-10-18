@@ -8600,6 +8600,8 @@ jobs:
           RECORDED_NEEDS="$NEEDS"
           required_jobs='[]'
           reused_from_run_id=""
+          # Set by each exit that passes without evaluating any job.
+          pass_through_reason=""
           record_required_jobs() {
             local status=$1 depth=${SUITE_DEPTH:-} record
             if [[ "${PR_DEPTH_ONLY:-false}" == true ]]; then
@@ -8612,7 +8614,8 @@ jobs:
             record=$(jq -ce --argjson required "$required_jobs" --arg status "$status" \
               --arg event "${EVENT:-}" --arg head "${HEAD_SHA:-}" --arg base "${BASE_SHA:-}" \
               --arg run "${GITHUB_RUN_ID:-}" --arg attempt "${GITHUB_RUN_ATTEMPT:-}" \
-              --arg depth "$depth" --arg profile "${COVERAGE_PROFILE:-}" --arg reused "$reused_from_run_id" '
+              --arg depth "$depth" --arg profile "${COVERAGE_PROFILE:-}" --arg reused "$reused_from_run_id" \
+              --arg pass_through "$pass_through_reason" '
               def nonempty: if . == "" then null else . end;
               def count: if test("^[1-9][0-9]*$") then tonumber else null end;
               . as $needs
@@ -8627,6 +8630,8 @@ jobs:
                 run_id: ($run | count), run_attempt: ($attempt | count),
                 depth: ($depth | nonempty), coverage_profile: ($profile | nonempty),
                 reused_from_run_id: ($reused | count),
+                basis: (if $pass_through == "" then "evaluated" else "pass_through" end),
+                pass_through_reason: ($pass_through | nonempty),
                 required: [$counted[] | {job: ., conclusion: ($needs[.].result // "missing")}],
                 not_required: ([keys[] | select(. != "ci-plan")] - $counted),
                 verdict: (if $status == "0" then "success" else "failure" end)}' <<< "$RECORDED_NEEDS") || return 1
@@ -8658,6 +8663,7 @@ jobs:
           if [[ "$QUEUE_VALIDATION" == true && "$EVENT" == pull_request && "$PR_ACTION" == enqueued ]] &&
             jq -e 'all(.[]; .result == "success" or .result == "skipped")' <<< "$NEEDS" >/dev/null; then
             echo "Queued tree validation belongs to merge_group."
+            pass_through_reason=enqueued
             exit 0
           fi
           # Read failure and timeout evidence before any early aggregation exit.
@@ -8754,6 +8760,7 @@ jobs:
             fi
             if [[ "$draft" == "true" ]]; then
               echo "CI plan skipped for a draft pull request. Passing."
+              pass_through_reason=draft
               exit 0
             fi
             echo "::error::CI plan was skipped, but the pull request is not a draft; re-run CI Checks."
@@ -8765,6 +8772,7 @@ jobs:
           if [[ "$PLAN_RESULT" == "cancelled" && "$EVENT" != "merge_group" ]]; then
             if jq -e 'all(.[]; .result == "success" or .result == "skipped" or .result == "cancelled")' <<< "$NEEDS" > /dev/null && cancelled_dependencies_were_superseded; then
               echo "CI run was superseded by a newer run (cancel-in-progress). Passing."
+              pass_through_reason=superseded
               exit 0
             fi
             echo "::error::CI planning was cancelled without verified supersession."
@@ -8803,6 +8811,7 @@ jobs:
           if [[ "${RUN_REQUIRED:-true}" == false ]]; then
             if [[ "$METADATA_ONLY" == true && -z "$COMPLETED_RUN_ID" ]]; then
               echo "No completed evidence exists for this metadata event; the code run owns ci-result."
+              pass_through_reason=metadata
               exit 0
             fi
             if [[ "$EVENT" != pull_request || ! "$COMPLETED_RUN_ID" =~ ^[1-9][0-9]*$ ]] || ! jq -e 'all(.[]; .result == "success" or .result == "skipped")' <<< "$NEEDS" > /dev/null; then
@@ -8813,6 +8822,7 @@ jobs:
             reuse_reason="Not re-tested: run $COMPLETED_RUN_ID already passed this head at this depth; the merge queue validates it on the current base."
             echo "$reuse_reason"
             printf '%s\n' "$reuse_reason" >> "$GITHUB_STEP_SUMMARY"
+            pass_through_reason=reused
             exit 0
           fi
           if [[ "$EVENT" == merge_group && "${PR_DEPTH_REUSED:-false}" == true ]]; then
