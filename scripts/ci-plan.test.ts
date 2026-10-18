@@ -622,7 +622,20 @@ test("desktop Windows dry run follows release inputs and skips unrelated changes
   ]) {
     expect(runSelector([file], [output]), file).toEqual(["true"]);
   }
-  expect(runSelector(["docs/guide.md"], [output])).toEqual(["false"]);
+  for (const file of [
+    "docs/guide.md",
+    "scripts/check-marketing-content.ts",
+    "scripts/ci-plan.ts",
+  ]) {
+    expect(runSelector([file], [output]), file).toEqual(["false"]);
+  }
+  for (const file of [
+    "scripts/ci-windows-dry-run-result.ts",
+    "scripts/wasm-toolchain.sh",
+    "scripts/run-oxfmt.ts",
+  ]) {
+    expect(runSelector([file], [output]), file).toEqual(["true"]);
+  }
 });
 
 const MatrixEntry = v.object({ runner: v.string(), platform: v.string() });

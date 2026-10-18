@@ -5,8 +5,16 @@ import {
   webFetchTool,
   webSearchTool,
 } from "@tanstack/ai-anthropic/tools";
+import type { CompletionResponseStreamChoiceFinishReason as MistralFinishReasons } from "@tanstack/ai-mistral";
 import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  expectTypeOf,
+  test,
+} from "bun:test";
 
 import { TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
 import type { TanStackAIProvider } from "@stll/ai-catalog";
@@ -157,6 +165,18 @@ const UNLISTED_STEPS = {
 >;
 
 describe("a provider stop reason", () => {
+  test("maps every Mistral SDK finish reason and requires a decision for new values", () => {
+    type AdapterFinishReason =
+      (typeof MistralFinishReasons)[keyof typeof MistralFinishReasons];
+
+    expectTypeOf(PROVIDER_STOP_REASONS.mistral).toExtend<
+      Record<AdapterFinishReason, StopOutcome>
+    >();
+    expectTypeOf(PROVIDER_STOP_REASONS.mistral).not.toExtend<
+      Record<AdapterFinishReason | "unmapped_upstream_reason", StopOutcome>
+    >();
+  });
+
   test("reads as a finished answer only when the model ended its turn", async () => {
     const endings: Record<string, string> = {};
     const expected: Record<string, string> = {};
