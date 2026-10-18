@@ -1,10 +1,6 @@
 import { Result, TaggedError } from "better-result";
 
-import {
-  fetchWithTimeout,
-  type Fetcher,
-  type TransportRequestInit,
-} from "./index";
+import type { TransportRequestInit } from "./index";
 
 const ROBOTS_MAX_BYTES = 512 * 1024;
 const ROBOTS_TTL_MS = 60 * 60 * 1000;
@@ -87,9 +83,14 @@ type Clock = {
   now: () => number;
   sleep: (ms: number, signal?: AbortSignal) => Promise<void>;
 };
-type PublisherFetcherOptions = {
-  validateTarget: (url: URL) => Promise<Result<URL, unknown>>;
-  fetcher?: Fetcher;
+type PublisherTarget = { url: URL };
+type PublisherFetcher<Target extends PublisherTarget> = (
+  target: Target,
+  init?: TransportRequestInit,
+) => Promise<Response>;
+type PublisherFetcherOptions<Target extends PublisherTarget> = {
+  validateTarget: (url: URL) => Promise<Result<Target, unknown>>;
+  fetcher: PublisherFetcher<Target>;
   clock?: Clock;
   robotsTtlMs?: number;
   robotsRetryMs?: number;
@@ -433,7 +434,6 @@ export const readBoundedBody = async (
   const chunks: Uint8Array[] = [];
   let size = 0;
   let exceeded = false;
-  // oxlint-disable-next-line require-stream-reader-disposal/require-stream-reader-disposal -- the finally block below cancels with the same overall deadline before releasing
   const reader = response.body.getReader();
   try {
     while (true) {
@@ -496,9 +496,9 @@ const REDIRECT_STATUSES: ReadonlySet<number> = new Set([
 const isRedirect = (response: Response) =>
   REDIRECT_STATUSES.has(response.status);
 
-const validatePublisherTarget = async (
+const validatePublisherTarget = async <Target extends PublisherTarget>(
   url: URL,
-  validateTarget: PublisherFetcherOptions["validateTarget"],
+  validateTarget: (url: URL) => Promise<Result<Target, unknown>>,
 ) => {
   const validated = await validateTarget(url);
   return Result.isError(validated)
@@ -577,9 +577,9 @@ const discardBody = async (
     raceAbort(response.body?.cancel() ?? Promise.resolve(), signal),
   );
 
-type LoadRobotsOptions = {
-  fetcher: Fetcher;
-  validateTarget: PublisherFetcherOptions["validateTarget"];
+type LoadRobotsOptions<Target extends PublisherTarget> = {
+  fetcher: PublisherFetcher<Target>;
+  validateTarget: PublisherFetcherOptions<Target>["validateTarget"];
   origin: string;
   now: () => number;
   robotsTtlMs: number;
@@ -587,7 +587,7 @@ type LoadRobotsOptions = {
   robotsLoadTimeoutMs: number;
 };
 
-const loadRobots = async ({
+const loadRobots = async <Target extends PublisherTarget>({
   fetcher,
   validateTarget,
   origin,
@@ -595,7 +595,7 @@ const loadRobots = async ({
   robotsTtlMs,
   robotsRetryMs,
   robotsLoadTimeoutMs,
-}: LoadRobotsOptions): Promise<
+}: LoadRobotsOptions<Target>): Promise<
   | { type: "cacheable"; robots: CachedRobots }
   | { type: "refused"; state: RobotsState }
 > => {
@@ -744,8 +744,8 @@ const loadRobots = async ({
   };
 };
 
-type RobotsCacheOptions = Pick<
-  LoadRobotsOptions,
+type RobotsCacheOptions<Target extends PublisherTarget> = Pick<
+  LoadRobotsOptions<Target>,
   | "fetcher"
   | "validateTarget"
   | "robotsTtlMs"
@@ -753,7 +753,9 @@ type RobotsCacheOptions = Pick<
   | "robotsLoadTimeoutMs"
 > & { now: () => number };
 
-const createRobotsCache = (options: RobotsCacheOptions) => {
+const createRobotsCache = <Target extends PublisherTarget>(
+  options: RobotsCacheOptions<Target>,
+) => {
   const settled = new Map<string, CachedRobots>();
   const pending = new Map<string, ReturnType<typeof loadRobots>>();
   return async (origin: string) => {
@@ -826,9 +828,9 @@ const createOriginScheduler = (clock: Clock) => {
   };
 };
 
-type PublisherRuntime = {
-  fetcher: Fetcher;
-  validateTarget: PublisherFetcherOptions["validateTarget"];
+type PublisherRuntime<Target extends PublisherTarget> = {
+  fetcher: PublisherFetcher<Target>;
+  validateTarget: PublisherFetcherOptions<Target>["validateTarget"];
   robotsFor: (origin: string) => Promise<RobotsState>;
   reserve: (
     origin: string,
@@ -848,10 +850,10 @@ type WalkState = {
   delayAppliedMs: number;
 };
 
-const enforcePublisherPolicy = async (
+const enforcePublisherPolicy = async <Target extends PublisherTarget>(
   state: WalkState,
   options: PublisherFetchOptions,
-  runtime: PublisherRuntime,
+  runtime: PublisherRuntime<Target>,
 ) => {
   // The robots load is shared; an aborting caller stops waiting for it
   // without cancelling it for the others.
@@ -912,10 +914,10 @@ const redirectLimitResult = (state: WalkState) => {
   return Result.err(refusal);
 };
 
-const walkPublisherRedirects = async (
+const walkPublisherRedirects = async <Target extends PublisherTarget>(
   input: string | URL,
   options: PublisherFetchOptions,
-  runtime: PublisherRuntime,
+  runtime: PublisherRuntime<Target>,
 ): Promise<Result<PublisherFetchResult, PublisherPolicyError>> => {
   const url = new URL(input);
   const state: WalkState = {
@@ -947,7 +949,7 @@ const walkPublisherRedirects = async (
     if (Result.isError(validated)) {
       return validated;
     }
-    state.url = validated.value;
+    state.url = validated.value.url;
     const interval = await enforcePublisherPolicy(state, options, runtime);
     if (Result.isError(interval)) {
       return interval;
@@ -972,7 +974,7 @@ const walkPublisherRedirects = async (
     state.delayAppliedMs += reserved.value;
     const headers = new Headers(state.requestInit?.headers);
     headers.set("User-Agent", PUBLISHER_USER_AGENT);
-    const response = await runtime.fetcher(state.url, {
+    const response = await runtime.fetcher(validated.value, {
       ...state.requestInit,
       headers,
       redirect: "manual",
@@ -1028,29 +1030,9 @@ const walkPublisherRedirects = async (
   }
 };
 
-// globalThis.fetch ignores the transport timeout fields callers may set.
-const timeoutAwareFetch: Fetcher = async (input, init = {}) => {
-  const { timeout, timeoutMs, signal, ...rest } = init;
-  if (timeout) {
-    return await fetchWithTimeout(input, {
-      ...rest,
-      signal: signal ?? undefined,
-      timeout,
-    });
-  }
-  if (timeoutMs !== undefined) {
-    return await fetchWithTimeout(input, {
-      ...rest,
-      signal: signal ?? undefined,
-      timeoutMs,
-    });
-  }
-  return await globalThis.fetch(input, init);
-};
-
-export const createPolitePublisherFetch = ({
+export const createPolitePublisherFetch = <Target extends PublisherTarget>({
   validateTarget,
-  fetcher = timeoutAwareFetch,
+  fetcher,
   clock = {
     now: () => performance.now(),
     sleep: async (ms, signal) => {
@@ -1064,7 +1046,7 @@ export const createPolitePublisherFetch = ({
   robotsLoadTimeoutMs = ROBOTS_LOAD_TIMEOUT_MS,
   defaultMinimumIntervalMs = DEFAULT_MINIMUM_INTERVAL_MS,
   onTelemetry = () => undefined,
-}: PublisherFetcherOptions) => {
+}: PublisherFetcherOptions<Target>) => {
   const robotsFor = createRobotsCache({
     fetcher,
     validateTarget,

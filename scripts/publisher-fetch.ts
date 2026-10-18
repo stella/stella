@@ -10,6 +10,11 @@ import {
 import { sha256Hex } from "@stll/sha256/bun";
 
 import {
+  grantThirdPartyOutboundPermit,
+  type ThirdPartyOutboundPermit,
+} from "@/api/lib/auth/third-party-outbound-permit";
+import {
+  fetchStreamWithResolvedAddress,
   OUTBOUND_PROTOCOL_POLICY,
   validateOutboundFetchTarget,
 } from "@/api/lib/safe-outbound-fetch";
@@ -18,16 +23,60 @@ const usage = "Usage: bun scripts/publisher-fetch.ts <url> --archive <dir>";
 const ARCHIVE_MAX_BYTES = 256 * 1024 * 1024;
 // One deadline covers the pacing wait, response headers and the body.
 const FETCH_TIMEOUT_MS = 5 * 60_000;
+const HEADER_TIMEOUT_MS = 30_000;
+const NULL_BODY_STATUSES = new Set([204, 205, 304]);
 class PublisherFetchCliError extends TaggedError("PublisherFetchCliError")<{
   message: string;
 }> {}
-const politePublisherFetch = createPolitePublisherFetch({
-  validateTarget: async (url) => {
-    const target = await validateOutboundFetchTarget(url, {
-      protocolPolicy: OUTBOUND_PROTOCOL_POLICY.HTTP_AND_HTTPS,
-    });
-    return target.map(({ url: validatedUrl }) => validatedUrl);
-  },
+type PublisherFetchFactoryOptions = {
+  permit: ThirdPartyOutboundPermit;
+  resolveAddresses?: NonNullable<
+    Parameters<typeof validateOutboundFetchTarget>[1]
+  >["resolveAddresses"];
+  headerTimeoutMs?: number;
+};
+
+export const createPublisherFetch = ({
+  permit,
+  resolveAddresses,
+  headerTimeoutMs = HEADER_TIMEOUT_MS,
+}: PublisherFetchFactoryOptions) =>
+  createPolitePublisherFetch({
+    validateTarget: async (url) =>
+      await validateOutboundFetchTarget(url, {
+        protocolPolicy: OUTBOUND_PROTOCOL_POLICY.HTTP_AND_HTTPS,
+        ...(resolveAddresses ? { resolveAddresses } : {}),
+      }),
+    fetcher: async (target, init) => {
+      const fetched = await fetchStreamWithResolvedAddress({
+        addresses: target.addresses,
+        headers: new Headers(init?.headers),
+        maxBytes: ARCHIVE_MAX_BYTES,
+        method: init?.method,
+        permit,
+        redirect: "manual",
+        signal: init?.signal ?? undefined,
+        timeoutMs: headerTimeoutMs,
+        url: target.url,
+      });
+      if (Result.isError(fetched)) {
+        throw fetched.error;
+      }
+      const body = NULL_BODY_STATUSES.has(fetched.value.status)
+        ? null
+        : fetched.value.body;
+      if (body === null) {
+        await fetched.value.body.cancel();
+      }
+      return new Response(body, {
+        headers: fetched.value.headers,
+        status: fetched.value.status,
+      });
+    },
+  });
+
+const politePublisherFetch = createPublisherFetch({
+  permit: grantThirdPartyOutboundPermit(),
 });
 
 const run = async () => {

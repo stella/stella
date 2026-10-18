@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { describe, expect, spyOn, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
@@ -250,7 +250,50 @@ describe("RFC 9309 matching", () => {
 });
 
 describe("publisher scheduler", () => {
-  const allowTarget = async (url: URL) => Result.ok(url);
+  const allowTarget = async (url: URL) => Result.ok({ url });
+
+  test("transports only validator-produced targets for robots, resources, and redirects", async () => {
+    const produced = new Set<object>();
+    const validatedUrls: string[] = [];
+    const fetchedUrls: string[] = [];
+    const request = createPolitePublisherFetch({
+      validateTarget: async (url) => {
+        const target = { url, validation: Symbol(url.href) };
+        produced.add(target);
+        validatedUrls.push(url.href);
+        return Result.ok(target);
+      },
+      fetcher: async (target) => {
+        expect(produced.has(target)).toBe(true);
+        produced.delete(target);
+        fetchedUrls.push(target.url.href);
+        if (target.url.href === "https://publisher.example/robots.txt") {
+          return Response.redirect("https://policy.example/robots.txt", 302);
+        }
+        if (target.url.href === "https://policy.example/robots.txt") {
+          return new Response("User-agent: *\nAllow: /");
+        }
+        if (target.url.href === "https://publisher.example/start") {
+          return Response.redirect("https://publisher.example/final", 302);
+        }
+        return new Response("ok");
+      },
+      defaultMinimumIntervalMs: 0,
+    });
+
+    const outcome = await request("https://publisher.example/start");
+
+    expect(outcome.isOk()).toBe(true);
+    expect(fetchedUrls.toSorted()).toEqual(validatedUrls.toSorted());
+    expect(fetchedUrls).toEqual([
+      "https://publisher.example/robots.txt",
+      "https://policy.example/robots.txt",
+      "https://publisher.example/start",
+      "https://publisher.example/final",
+    ]);
+    expect(produced.size).toBe(0);
+  });
+
   test("serializes concurrent callers and waits for Crawl-delay", async () => {
     let now = 0;
     const sleeps: number[] = [];
@@ -266,7 +309,7 @@ describe("publisher scheduler", () => {
         },
       },
       fetcher: async (input) => {
-        const url = new URL(input instanceof Request ? input.url : input);
+        const url = input.url;
         if (url.pathname === "/robots.txt") {
           // oxlint-disable-next-line stella-lowercase/stella-lowercase -- Fixture exercises the registered HTTP product token.
           return new Response("User-agent: Stella\nCrawl-delay: 2\nAllow: /");
@@ -287,49 +330,13 @@ describe("publisher scheduler", () => {
     expect(sleeps).toEqual([2000, 2000]);
   });
 
-  test("the default transport enforces a caller timeout on a stalled request", async () => {
-    const originalFetch = globalThis.fetch;
-    const stalled = spyOn(globalThis, "fetch").mockImplementation(
-      Object.assign(
-        async (
-          input: Parameters<typeof fetch>[0],
-          init: Parameters<typeof fetch>[1],
-        ) => {
-          const url = new URL(input instanceof Request ? input.url : input);
-          if (url.pathname === "/robots.txt") {
-            return new Response(null, { status: 404 });
-          }
-          return await new Promise<never>((_resolve, reject) => {
-            init?.signal?.addEventListener("abort", () =>
-              reject(new Error("aborted", { cause: init.signal?.reason })),
-            );
-          });
-        },
-        { preconnect: originalFetch.preconnect },
-      ),
-    );
-    const request = createPolitePublisherFetch({
-      validateTarget: allowTarget,
-      defaultMinimumIntervalMs: 0,
-    });
-
-    const outcome = Result.tryPromise(async () =>
-      request("https://publisher.example/case", {
-        init: { timeout: { type: "headers", ms: 20 } },
-      }),
-    );
-
-    expect(Result.isError(await outcome)).toBe(true);
-    stalled.mockRestore();
-  });
-
   test("preserves a caller-provided transport timeout", async () => {
     const seen: unknown[] = [];
     const request = createPolitePublisherFetch({
       validateTarget: allowTarget,
       defaultMinimumIntervalMs: 0,
       fetcher: async (input, init) => {
-        const url = new URL(input instanceof Request ? input.url : input);
+        const url = input.url;
         if (url.pathname === "/robots.txt") {
           return new Response(null, { status: 404 });
         }
@@ -348,7 +355,7 @@ describe("publisher scheduler", () => {
     const request = createPolitePublisherFetch({
       validateTarget: allowTarget,
       fetcher: async (input) => {
-        const url = new URL(input instanceof Request ? input.url : input);
+        const url = input.url;
         if (url.pathname === "/robots.txt") {
           return new Response("User-agent: *\nCrawl-delay: 61\nAllow: /");
         }
@@ -368,7 +375,7 @@ describe("publisher scheduler", () => {
     const request = createPolitePublisherFetch({
       validateTarget: allowTarget,
       fetcher: async (input, init) => {
-        const url = new URL(input instanceof Request ? input.url : input);
+        const url = input.url;
         agents.push(new Headers(init?.headers).get("user-agent"));
         if (url.pathname === "/robots.txt") {
           return new Response(
@@ -404,7 +411,7 @@ describe("publisher scheduler", () => {
     const request = createPolitePublisherFetch({
       validateTarget: allowTarget,
       fetcher: async (input) => {
-        const url = new URL(input instanceof Request ? input.url : input);
+        const url = input.url;
         requested.push(url.href);
         if (url.pathname === "/robots.txt") {
           return new Response("User-agent: *\nDisallow: /");
@@ -502,7 +509,7 @@ describe("publisher scheduler", () => {
     const request = createPolitePublisherFetch({
       validateTarget: allowTarget,
       fetcher: async (input) => {
-        const url = new URL(input instanceof Request ? input.url : input);
+        const url = input.url;
         return url.pathname === "/robots.txt"
           ? new Response(null, { status: 404 })
           : new Response("ok");
@@ -528,7 +535,7 @@ describe("publisher scheduler", () => {
       const request = createPolitePublisherFetch({
         validateTarget: allowTarget,
         fetcher: async (input) => {
-          const url = new URL(input instanceof Request ? input.url : input);
+          const url = input.url;
           requested.push(url.href);
           if (url.pathname === "/robots.txt") {
             return new Response(null, { status: 404 });
@@ -569,7 +576,7 @@ describe("publisher scheduler", () => {
     const request = createPolitePublisherFetch({
       validateTarget: allowTarget,
       fetcher: async (input) => {
-        const url = new URL(input instanceof Request ? input.url : input);
+        const url = input.url;
         if (url.pathname === "/robots.txt") {
           return new Response(
             "User-agent: *\nCrawl-delay: 61\nUser-agent: stella\nAllow: /",
@@ -601,8 +608,7 @@ describe("publisher scheduler", () => {
         policies.push(policy);
       },
       fetcher: async (input) =>
-        new URL(input instanceof Request ? input.url : input).pathname ===
-        "/robots.txt"
+        input.url.pathname === "/robots.txt"
           ? new Response("User-agent: *\nCrawl-delay: 3600\nDisallow: /")
           : new Response("licensed document"),
     });
@@ -646,8 +652,7 @@ describe("publisher scheduler", () => {
         },
       },
       fetcher: async (input) =>
-        new URL(input instanceof Request ? input.url : input).pathname ===
-        "/robots.txt"
+        input.url.pathname === "/robots.txt"
           ? new Response("User-agent: *\nCrawl-delay: 1\nAllow: /")
           : new Response("ok"),
     });
@@ -700,7 +705,7 @@ describe("publisher scheduler", () => {
         },
       },
       fetcher: async (input) => {
-        const url = new URL(input instanceof Request ? input.url : input);
+        const url = input.url;
         if (url.pathname === "/robots.txt") {
           return new Response("User-agent: *\nCrawl-delay: 1\nAllow: /");
         }
@@ -754,7 +759,7 @@ describe("publisher scheduler", () => {
       validateTarget: async (url) =>
         url.pathname === "/robots.txt"
           ? await new Promise<never>(() => {})
-          : Result.ok(url),
+          : Result.ok({ url }),
       robotsLoadTimeoutMs: 5,
       fetcher: async () => new Response("unexpected request"),
     });
@@ -777,7 +782,7 @@ describe("publisher scheduler", () => {
     const request = createPolitePublisherFetch({
       validateTarget: allowTarget,
       fetcher: async (input) => {
-        const url = new URL(input instanceof Request ? input.url : input);
+        const url = input.url;
         requested.push(url.href);
         if (url.pathname === "/robots.txt") {
           return Response.redirect("https://policy.example/rules.txt", 301);
@@ -808,7 +813,7 @@ describe("publisher scheduler", () => {
     const request = createPolitePublisherFetch({
       validateTarget: allowTarget,
       fetcher: async (input, init) => {
-        const url = new URL(input instanceof Request ? input.url : input);
+        const url = input.url;
         if (url.pathname === "/robots.txt") {
           // oxlint-disable-next-line stella-lowercase/stella-lowercase -- Fixture exercises the registered HTTP product token.
           return new Response("User-agent: Stella\nDisallow: /private");
@@ -843,7 +848,7 @@ describe("publisher scheduler", () => {
         },
       },
       fetcher: async (input) => {
-        const url = new URL(input instanceof Request ? input.url : input);
+        const url = input.url;
         if (url.pathname === "/robots.txt") {
           return new Response(
             url.hostname === "destination.example"
@@ -880,9 +885,9 @@ describe("publisher scheduler", () => {
         validateTarget: async (url) =>
           url.hostname === privateHost
             ? Result.err(new Error("private target"))
-            : Result.ok(url),
+            : Result.ok({ url }),
         fetcher: async (input) => {
-          const url = new URL(input instanceof Request ? input.url : input);
+          const url = input.url;
           requested.push(url.href);
           if (url.pathname === "/robots.txt") {
             return new Response(null, { status: 404 });
@@ -908,9 +913,9 @@ describe("publisher scheduler", () => {
       validateTarget: async (url) =>
         url.hostname === "127.0.0.1"
           ? Result.err(new Error("private target"))
-          : Result.ok(url),
+          : Result.ok({ url }),
       fetcher: async (input) => {
-        const url = new URL(input instanceof Request ? input.url : input);
+        const url = input.url;
         requested.push(url.href);
         return Response.redirect("http://127.0.0.1/robots.txt", 302);
       },
@@ -928,7 +933,7 @@ describe("publisher scheduler", () => {
     const request = createPolitePublisherFetch({
       validateTarget: allowTarget,
       fetcher: async (input, init) => {
-        const url = new URL(input instanceof Request ? input.url : input);
+        const url = input.url;
         if (url.pathname === "/robots.txt") {
           return new Response(null, { status: 404 });
         }
@@ -979,7 +984,7 @@ describe("publisher scheduler", () => {
       const request = createPolitePublisherFetch({
         validateTarget: allowTarget,
         fetcher: async (input, init) => {
-          const url = new URL(input instanceof Request ? input.url : input);
+          const url = input.url;
           if (url.pathname === "/robots.txt") {
             return new Response(null, { status: 404 });
           }
@@ -1027,10 +1032,7 @@ describe("publisher scheduler", () => {
       const request = createPolitePublisherFetch({
         validateTarget: allowTarget,
         fetcher: async (input) => {
-          if (
-            new URL(input instanceof Request ? input.url : input).pathname ===
-            "/robots.txt"
-          ) {
+          if (input.url.pathname === "/robots.txt") {
             return new Response(null, { status: 404 });
           }
           requests += 1;
@@ -1057,10 +1059,7 @@ describe("publisher scheduler", () => {
     const request = createPolitePublisherFetch({
       validateTarget: allowTarget,
       fetcher: async (input) => {
-        if (
-          new URL(input instanceof Request ? input.url : input).pathname ===
-          "/robots.txt"
-        ) {
+        if (input.url.pathname === "/robots.txt") {
           await robotsGate;
           return new Response(null, { status: 404 });
         }
@@ -1088,10 +1087,7 @@ describe("publisher scheduler", () => {
     const request = createPolitePublisherFetch({
       validateTarget: allowTarget,
       fetcher: async (input) => {
-        if (
-          new URL(input instanceof Request ? input.url : input).pathname ===
-          "/robots.txt"
-        ) {
+        if (input.url.pathname === "/robots.txt") {
           return new Response(null, { status: 404 });
         }
         return new Response(
@@ -1120,8 +1116,7 @@ describe("publisher scheduler", () => {
     const request = createPolitePublisherFetch({
       validateTarget: allowTarget,
       fetcher: async (input) =>
-        new URL(input instanceof Request ? input.url : input).pathname ===
-        "/robots.txt"
+        input.url.pathname === "/robots.txt"
           ? new Response(null, { status: 404 })
           : new Response(null, {
               status: 302,
@@ -1143,7 +1138,7 @@ describe("publisher scheduler", () => {
     const request = createPolitePublisherFetch({
       validateTarget: allowTarget,
       fetcher: async (input) => {
-        const url = new URL(input instanceof Request ? input.url : input);
+        const url = input.url;
         if (url.pathname === "/robots.txt") {
           return new Response(null, { status: 404 });
         }
@@ -1180,7 +1175,7 @@ describe("publisher scheduler", () => {
       validateTarget: allowTarget,
       clock: { now: () => now, sleep: async () => undefined },
       fetcher: async (input) => {
-        const url = new URL(input instanceof Request ? input.url : input);
+        const url = input.url;
         if (url.pathname !== "/robots.txt") {
           return new Response("ok");
         }
@@ -1224,8 +1219,7 @@ describe("publisher scheduler", () => {
       const request = createPolitePublisherFetch({
         validateTarget: allowTarget,
         fetcher: async (input) =>
-          new URL(input instanceof Request ? input.url : input).pathname ===
-          "/robots.txt"
+          input.url.pathname === "/robots.txt"
             ? new Response(errorBody, { status })
             : new Response("ok"),
         defaultMinimumIntervalMs: 0,
