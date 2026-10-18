@@ -1229,6 +1229,8 @@ const corpusIndexSearch = async ({
           phase: active,
         });
   const result = await runTwoPhaseSearch({
+    // The chain pager pages by cursor only: a read without one starts the list.
+    atStart: true,
     cursor: parsedCursor,
     fingerprint,
     generation,
@@ -1246,9 +1248,6 @@ const corpusIndexSearch = async ({
         : corpusSearchGroupToken(legislationWorkRefKey(row));
     },
     hitId: (hit) => hit.documentId,
-    // Quickwit's OR score is additive by matched term, then BM25 within equal coverage.
-    relaxedCoverage: (hit) => hit.score,
-    score: (hit) => hit.score,
   });
   return {
     hits: result.hits,

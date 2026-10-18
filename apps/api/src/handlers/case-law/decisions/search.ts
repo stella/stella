@@ -2811,6 +2811,7 @@ export const searchCorpusIndexDecisions = async ({
     return { ...page, hits: page.pageRanked };
   };
   const pageRead = runTwoPhaseSearch({
+    atStart: isFirstPage,
     cursor: parsedCursor,
     fingerprint,
     generation,
@@ -2833,15 +2834,6 @@ export const searchCorpusIndexDecisions = async ({
       );
     },
     hitId: (hit) => hit.id,
-    relaxedCoverage: (hit, page) => {
-      const snippet = page.snippetById.get(hit.id)?.toLocaleLowerCase() ?? "";
-      return new Set(
-        excerptTokens
-          .map((token) => token.value.toLocaleLowerCase())
-          .filter((term) => snippet.includes(term)),
-      ).size;
-    },
-    score: (hit) => hit.score,
   });
   // Stamped where it resolves rather than after the phase: the reader waits on
   // the slower arm, and which arm that was is the whole point of the pair.

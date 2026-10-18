@@ -16,9 +16,10 @@ test("a short case-law page appends relaxed hits and emits relaxed_match", async
     query: "možné opilost vyhodit zaměstnance",
     limit: 3,
   };
-  const strictHit = { id: "strict", coverage: 4, score: 1 };
-  const relaxedHit = { id: "relaxed", coverage: 3, score: 0.8 };
+  const strictHit = { id: "strict" };
+  const relaxedHit = { id: "relaxed" };
   const result = await runTwoPhaseSearch({
+    atStart: true,
     cursor: null,
     fingerprint: "a".repeat(64),
     generation: "case_law_v7",
@@ -33,8 +34,6 @@ test("a short case-law page appends relaxed hits and emits relaxed_match", async
     encodeCursor: () => null,
     groupToken: ({ id }) => id.padEnd(6, "0").slice(0, 6),
     hitId: ({ id }) => id,
-    relaxedCoverage: ({ coverage }) => coverage,
-    score: ({ score }) => score,
   });
   const interpretation = interpretDecisionQuery({
     body,

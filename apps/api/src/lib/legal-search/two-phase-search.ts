@@ -16,6 +16,12 @@ export type TwoPhaseSearchPage<Hit> = {
 };
 
 type TwoPhaseSearchOptions<Page extends TwoPhaseSearchPage<Hit>, Hit> = {
+  /**
+   * The strict read begins at the first result. Only that read may top up:
+   * a later page (by cursor or by offset) cannot know which strict hits the
+   * pages before it already showed, so a top-up there could repeat them.
+   */
+  atStart: boolean;
   cursor: CorpusSearchCursor | null;
   fingerprint: string;
   generation: string;
@@ -29,8 +35,6 @@ type TwoPhaseSearchOptions<Page extends TwoPhaseSearchPage<Hit>, Hit> = {
   encodeCursor: (page: Page, phase: CorpusSearchPhase) => string | null;
   groupToken: (hit: Hit, page: Page) => string;
   hitId: (hit: Hit) => string;
-  relaxedCoverage: (hit: Hit, page: Page) => number;
-  score: (hit: Hit) => number;
 };
 
 export type TwoPhaseSearchResult<Page, Hit> = {
@@ -41,11 +45,17 @@ export type TwoPhaseSearchResult<Page, Hit> = {
   relaxedShown: boolean;
 };
 
-/** Runs an exhausted strict first page into a deduplicated coverage-ranked phase. */
+/**
+ * Runs an exhausted strict first page into a deduplicated relaxed phase. The
+ * relaxed phase keeps the engine's order on every page: its any-word score
+ * already grows with each matched term, and a cursor continues that order, so
+ * no page re-ranks what another page cannot.
+ */
 export const runTwoPhaseSearch = async <
   Page extends TwoPhaseSearchPage<Hit>,
   Hit,
 >({
+  atStart,
   cursor,
   fingerprint,
   generation,
@@ -55,8 +65,6 @@ export const runTwoPhaseSearch = async <
   encodeCursor,
   groupToken,
   hitId,
-  relaxedCoverage,
-  score,
 }: TwoPhaseSearchOptions<Page, Hit>): Promise<
   TwoPhaseSearchResult<Page, Hit>
 > => {
@@ -75,6 +83,7 @@ export const runTwoPhaseSearch = async <
   if (
     phase.type === "relaxed" ||
     strictOnly ||
+    !atStart ||
     cursor !== null ||
     hits.length >= limit ||
     page.nextCursor !== null ||
@@ -114,11 +123,6 @@ export const runTwoPhaseSearch = async <
   const seen = new Set(hits.map(hitId));
   const relaxedHits = extra.hits
     .filter((hit) => !seen.has(hitId(hit)))
-    .toSorted(
-      (left, right) =>
-        relaxedCoverage(right, extra) - relaxedCoverage(left, extra) ||
-        score(right) - score(left),
-    )
     .slice(0, limit - hits.length);
   return {
     hits: [...hits, ...relaxedHits],

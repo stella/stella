@@ -34,14 +34,17 @@ const run = async ({
   relaxed,
   strictOnly = false,
   cursor = null,
+  atStart = true,
 }: {
   strict: ReturnType<typeof page>;
   relaxed: ReturnType<typeof page>;
   strictOnly?: boolean;
   cursor?: ReturnType<typeof decodeCorpusSearchCursor>;
+  atStart?: boolean;
 }) => {
   const phases: string[] = [];
   const result = await runTwoPhaseSearch({
+    atStart,
     cursor,
     fingerprint,
     generation,
@@ -62,8 +65,6 @@ const run = async ({
           }),
     groupToken: ({ id }) => id.padEnd(6, "0").slice(0, 6),
     hitId: ({ id }) => id,
-    relaxedCoverage: ({ coverage }) => coverage,
-    score: ({ score }) => score,
   });
   return { phases, result };
 };
@@ -77,18 +78,49 @@ describe("two-phase corpus search", () => {
     expect(phases).toEqual(["strict"]);
   });
 
-  test("appends unique relaxed hits ordered by coverage and then score", async () => {
+  test("appends unique relaxed hits in the engine's order", async () => {
     const { result } = await run({
       strict: page([hit("a", 3, 1)]),
       relaxed: page([
         hit("a", 3, 99),
         hit("b", 1, 9),
-        hit("c", 2, 1),
+        hit("c", 2, 5),
         hit("d", 2, 2),
       ]),
     });
-    expect(result.hits.map(({ id }) => id)).toEqual(["a", "d", "c"]);
+    expect(result.hits.map(({ id }) => id)).toEqual(["a", "b", "c"]);
     expect(result.relaxedShown).toBe(true);
+  });
+
+  test("a later strict page never tops up, so earlier strict hits cannot return", async () => {
+    // Four strict matches read at offset 3 with limit 3: the page holds only
+    // the fourth. Topping it up would read the relaxed phase, which knows
+    // nothing of the three matches page one showed.
+    const { phases, result } = await run({
+      strict: page([hit("d", 3, 1)]),
+      relaxed: page([hit("a", 3, 9), hit("b", 3, 8), hit("c", 3, 7)]),
+      atStart: false,
+    });
+    expect(phases).toEqual(["strict"]);
+    expect(result.hits.map(({ id }) => id)).toEqual(["d"]);
+    expect(result.relaxedShown).toBe(false);
+  });
+
+  test("the first relaxed page and its continuation keep one order", async () => {
+    // Scores fall across the two pages while word coverage does not: no page
+    // re-ranks, so the order a reader sees is the order the cursor continues.
+    const first = await run({
+      strict: page([], null),
+      relaxed: page([hit("b", 1, 9), hit("c", 3, 8), hit("d", 2, 7)], boundary),
+    });
+    expect(first.result.hits.map(({ id }) => id)).toEqual(["b", "c", "d"]);
+    const cursor = decodeCorpusSearchCursor(first.result.nextCursor ?? "");
+    const resumed = await run({
+      strict: page([]),
+      relaxed: page([hit("e", 3, 6), hit("f", 1, 5)]),
+      cursor,
+    });
+    expect(resumed.result.hits.map(({ id }) => id)).toEqual(["e", "f"]);
   });
 
   test("strict mode never reads the relaxed phase", async () => {
