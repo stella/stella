@@ -230,7 +230,7 @@ const relatedDecisionLookup = (
     .as("graph_related_decision");
 const relatedSource = alias(caseLawSources, "graph_related_source");
 
-const decodeCitationCursor = (
+export const decodeCitationCursor = (
   cursor: string | undefined,
 ): SafeId<"caseLawCitation"> | null | undefined => {
   if (cursor === undefined) {
@@ -245,6 +245,9 @@ const decodeCitationCursor = (
 
   return brandPersistedCaseLawCitationId(id);
 };
+
+export const encodeCitationCursor = (id: SafeId<"caseLawCitation">): string =>
+  encodePaginationCursor([id]);
 
 type ScannedRow = {
   id: SafeId<"caseLawCitation">;

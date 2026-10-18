@@ -8,6 +8,7 @@ import {
   hasUsableAst,
   omitDerivablePlainText,
 } from "@stll/legal-ast/document-ast";
+import { isUuid } from "@stll/uuid-codec";
 
 import {
   caseLawDecisionIdentifiers,
@@ -151,7 +152,7 @@ const decodeCitationStreamCursor = (
   if (value === null) {
     return { status: CITATION_STREAM_CURSOR_STATUS.EXHAUSTED };
   }
-  if (typeof value === "string") {
+  if (typeof value === "string" && isUuid(value)) {
     return { after: value, status: CITATION_STREAM_CURSOR_STATUS.CONTINUE };
   }
   return null;

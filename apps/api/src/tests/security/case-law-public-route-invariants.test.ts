@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { PgDialect } from "drizzle-orm/pg-core";
+import fc from "fast-check";
 import nodePath from "node:path";
 
 import {
@@ -7,18 +8,55 @@ import {
   PUBLIC_CASE_LAW_PAGE_COUNTRIES,
 } from "@stll/api-contract/case-law-launch-readiness";
 import { PUBLIC_COUNTRIES } from "@stll/api-contract/public-country-capability";
+import { assertProperty } from "@stll/property-testing";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions } from "@/api/db/schema";
 import { env } from "@/api/env";
+import {
+  decodeCitationCursor,
+  encodeCitationCursor,
+} from "@/api/handlers/case-law/decisions/citation-graph";
+import {
+  decodeDecisionCitationCursor,
+  encodeDecisionCitationCursor,
+} from "@/api/handlers/case-law/decisions/get";
+import {
+  decodeDecisionDateCursor,
+  encodeDecisionDateCursor,
+} from "@/api/handlers/case-law/decisions/list";
+import {
+  decodeCitingDecisionsCursor,
+  encodeCitingDecisionsCursor,
+} from "@/api/handlers/case-law/provisions/citing-decisions";
+import {
+  decodeProvisionCursor,
+  encodeProvisionCursor,
+} from "@/api/handlers/case-law/provisions/list-for-decision";
 import { publicCaseLawRoute } from "@/api/handlers/case-law/public-routes";
+import {
+  decodeListCursor,
+  encodeListCursor,
+} from "@/api/handlers/legislation/list";
+import {
+  decodeProvisionHistoryCursor,
+  encodeProvisionHistoryCursor,
+} from "@/api/handlers/legislation/provision-history";
 import { publicLegislationRoute } from "@/api/handlers/legislation/public-routes";
+import {
+  decodeVersionCursor,
+  encodeVersionCursor,
+} from "@/api/handlers/legislation/versions";
 import { isPublicReadBudgetHandler } from "@/api/lib/api-handlers";
 import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import {
+  decodeDecisionSearchCursor,
+  encodeDecisionSearchCursor,
+} from "@/api/lib/case-law/decision-search-cursor";
 import { CASE_LAW_SURFACE_COUNTRIES } from "@/api/lib/case-law/public-subject";
 import {
   publishedCaseLawDecisionFor,
@@ -26,9 +64,21 @@ import {
 } from "@/api/lib/case-law/published-decisions-sql";
 import { corpusIndexReadContract } from "@/api/lib/legal-search/corpus-index-read-contract";
 import {
+  decodeCorpusSearchCursor,
+  encodeCorpusSearchCursor,
+} from "@/api/lib/legal-search/corpus-search-cursor";
+import { NO_EXPANSION_DICTIONARY_IDENTITY } from "@/api/lib/legal-search/morphology/dictionary";
+import {
   PARTIAL_OBSERVATION_FIELD,
   PARTIAL_OBSERVATION_KEY,
 } from "@/api/lib/legal-search/partial-observation-sql";
+import { encodePaginationCursor } from "@/api/lib/pagination";
+import {
+  brandPersistedCaseLawCitationId,
+  brandPersistedCaseLawDecisionId,
+  brandPersistedLegislationDocumentId,
+} from "@/api/lib/safe-id-boundaries";
+import { encodeCursor } from "@/api/lib/search/cursor";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 
 type ScopedDbIsPublicReadDb = ScopedDb extends CaseLawPublicReadDb
@@ -151,6 +201,104 @@ const readPublicReadDbSource = async () =>
   await readSource(PUBLIC_READ_DB_FILE);
 
 const DECISION_TABLE_MENTION = /caseLawDecisions|case_law_decisions/u;
+
+const TEST_DECISION_ID = brandPersistedCaseLawDecisionId(
+  "00000000-0000-4000-8000-000000000001",
+);
+const TEST_CITATION_ID = brandPersistedCaseLawCitationId(
+  "00000000-0000-4000-8000-000000000002",
+);
+const TEST_DOCUMENT_ID = brandPersistedLegislationDocumentId(
+  "00000000-0000-4000-8000-000000000003",
+);
+const TEST_CONTEXT = "a".repeat(64);
+
+const publicCursorRouteKey = (method: string, path: string, field: string) =>
+  `${method} ${path}#${field}`;
+
+const cursorFields = (hooks: unknown, location: "body" | "query") => {
+  if (typeof hooks !== "object" || hooks === null || !(location in hooks)) {
+    return [];
+  }
+  const schema: unknown = Reflect.get(hooks, location);
+  if (
+    typeof schema !== "object" ||
+    schema === null ||
+    !("properties" in schema) ||
+    typeof schema.properties !== "object" ||
+    schema.properties === null
+  ) {
+    return [];
+  }
+  return Object.keys(schema.properties).filter((field) =>
+    field.toLowerCase().endsWith("cursor"),
+  );
+};
+
+const publicCursorRoutes = [publicCaseLawRoute, publicLegislationRoute]
+  .flatMap((app) => app.routes)
+  .flatMap((route) =>
+    (["query", "body"] as const).flatMap((location) =>
+      cursorFields(route.hooks, location).map((field) => ({
+        field,
+        key: publicCursorRouteKey(route.method, route.path, field),
+        location,
+      })),
+    ),
+  );
+
+const publicCursorRouteRequests: Record<string, () => Request> = {
+  "GET /case/decisions#cursor": () =>
+    new Request(
+      "http://localhost/case/decisions?country=CZE&cursor=not-a-cursor",
+    ),
+  "GET /case/decisions/by-slug/:slug#citationsCursor": () =>
+    new Request(
+      "http://localhost/case/decisions/by-slug/test?country=CZE&citationsCursor=not-a-cursor",
+    ),
+  "GET /case/decisions/:decisionId#citationsCursor": () =>
+    new Request(
+      `http://localhost/case/decisions/${TEST_DECISION_ID}?citationsCursor=not-a-cursor`,
+    ),
+  "GET /case/decisions/:decisionId/citations#cursor": () =>
+    new Request(
+      `http://localhost/case/decisions/${TEST_DECISION_ID}/citations?direction=incoming&cursor=not-a-cursor`,
+    ),
+  "GET /case/decisions/:decisionId/provisions#cursor": () =>
+    new Request(
+      `http://localhost/case/decisions/${TEST_DECISION_ID}/provisions?cursor=not-a-cursor`,
+    ),
+  "GET /case/provisions/citing-decisions#cursor": () =>
+    new Request(
+      "http://localhost/case/provisions/citing-decisions?jurisdiction=CZE&work=test&cursor=not-a-cursor",
+    ),
+  "POST /case/decisions/search#cursor": () =>
+    new Request("http://localhost/case/decisions/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        country: "CZE",
+        query: "test",
+        cursor: "not-a-cursor",
+      }),
+    }),
+  "GET /law/statutes#cursor": () =>
+    new Request(
+      "http://localhost/law/statutes?country=CZE&cursor=not-a-cursor",
+    ),
+  "GET /law/statutes/search#cursor": () =>
+    new Request(
+      "http://localhost/law/statutes/search?country=CZE&query=test&cursor=not-a-cursor",
+    ),
+  "GET /law/statutes/:documentId/versions#cursor": () =>
+    new Request(
+      `http://localhost/law/statutes/${TEST_DOCUMENT_ID}/versions?cursor=not-a-cursor`,
+    ),
+  "GET /law/statutes/:documentId/provisions/:anchor/history#cursor": () =>
+    new Request(
+      `http://localhost/law/statutes/${TEST_DOCUMENT_ID}/provisions/p-1/history?cursor=not-a-cursor`,
+    ),
+};
 
 const publicRouteBlock = (source: string): string => {
   const start = source.indexOf("export const publicCaseLawRoute");
@@ -413,14 +561,142 @@ describe("public case-law route boundary", () => {
     expect(source).toContain('sourceId: t.Optional(tSafeId("caseLawSource"))');
   });
 
-  test("public cursors validate IDs before SQL filters", async () => {
-    const [listSource, searchSource] = await Promise.all([
-      readListSource(),
-      readSearchSource(),
-    ]);
+  test("every public pagination cursor route has a behavioural guard", async () => {
+    const enumerated = publicCursorRoutes.map(({ key }) => key).toSorted();
+    const covered = Object.keys(publicCursorRouteRequests).toSorted();
 
-    expect(listSource).toContain("!isUuid(id)");
-    expect(searchSource).toContain("!isUuid(parsedCursor.id)");
+    expect(covered).toEqual(enumerated);
+
+    for (const { key } of publicCursorRoutes) {
+      const requestForRoute = publicCursorRouteRequests[key];
+      if (requestForRoute === undefined) {
+        throw new Error(`Missing public cursor route guard for ${key}`);
+      }
+      const request = requestForRoute();
+      const route = request.url.includes("/case/")
+        ? publicCaseLawRoute
+        : publicLegislationRoute;
+      const response = await route.handle(request);
+
+      expect({ key, status: response.status }).toEqual({ key, status: 400 });
+      expect(await response.json()).toEqual({ message: "Invalid cursor" });
+    }
+  });
+
+  test("public cursor decoders reject invalid IDs and round-trip issued cursors", () => {
+    const invalidId = fc.constantFrom(
+      "",
+      "' OR 1=1 --",
+      "x".repeat(513),
+      "v2:00000000-0000-4000-8000-000000000001",
+    );
+
+    assertProperty(
+      "public cursor decoders reject invalid IDs and round-trip issued cursors",
+      fc.property(invalidId, (id) => {
+        const invalidCursors = [
+          [
+            decodeDecisionDateCursor,
+            encodePaginationCursor(["2026-01-01", id]),
+          ],
+          [decodeCitationCursor, encodePaginationCursor([id])],
+          [
+            decodeDecisionCitationCursor,
+            encodePaginationCursor([id, TEST_CITATION_ID]),
+          ],
+          [
+            decodeCitingDecisionsCursor,
+            encodePaginationCursor([TEST_CONTEXT, "2026-01-01", id]),
+          ],
+          [
+            decodeListCursor,
+            encodePaginationCursor(["recent-v1", "2026-01-01", id]),
+          ],
+          [decodeVersionCursor, encodePaginationCursor(["2026-01-01", id])],
+          [
+            decodeProvisionHistoryCursor,
+            encodePaginationCursor(["2026-01-01", id]),
+          ],
+          [decodeDecisionSearchCursor, encodeCursor(1, `relevance:${id}`)],
+          [decodeCorpusSearchCursor, encodeCursor(1, `0:none:relevance:${id}`)],
+        ] as const;
+
+        for (const [index, [decode, cursor]] of invalidCursors.entries()) {
+          const value = decode(cursor);
+          if (value !== null) {
+            throw new Error(`decoder ${index} accepted ${JSON.stringify(id)}`);
+          }
+        }
+
+        const roundTrips = [
+          decodeDecisionDateCursor(
+            encodeDecisionDateCursor({
+              decisionDate: "2026-01-01",
+              id: TEST_DECISION_ID,
+            }),
+          ),
+          decodeCitationCursor(encodeCitationCursor(TEST_CITATION_ID)),
+          decodeDecisionCitationCursor(
+            encodeDecisionCitationCursor({
+              from: { after: TEST_CITATION_ID, status: "continue" },
+              to: { after: TEST_CITATION_ID, status: "continue" },
+            }),
+          ),
+          decodeProvisionCursor(
+            encodeProvisionCursor({
+              generation: "1",
+              spanStart: 0,
+              anchor: "p-1",
+            }),
+          ),
+          decodeCitingDecisionsCursor(
+            encodeCitingDecisionsCursor({
+              context: TEST_CONTEXT,
+              decisionDate: "2026-01-01",
+              decisionId: TEST_DECISION_ID,
+            }),
+          ),
+          decodeListCursor(
+            encodeListCursor({
+              type: "recent-v1",
+              validFrom: "2026-01-01",
+              id: TEST_DOCUMENT_ID,
+            }),
+          ),
+          decodeVersionCursor(
+            encodeVersionCursor({
+              validFrom: "2026-01-01",
+              id: TEST_DOCUMENT_ID,
+            }),
+          ),
+          decodeProvisionHistoryCursor(
+            encodeProvisionHistoryCursor({
+              validFrom: "2026-01-01",
+              id: TEST_DOCUMENT_ID,
+            }),
+          ),
+          decodeDecisionSearchCursor(
+            encodeDecisionSearchCursor({
+              id: TEST_DECISION_ID,
+              sort: "relevance",
+              sortKey: 1,
+            }),
+          ),
+          decodeCorpusSearchCursor(
+            encodeCorpusSearchCursor({
+              dictionary: NO_EXPANSION_DICTIONARY_IDENTITY,
+              id: TEST_DECISION_ID,
+              score: 1,
+              sort: "relevance",
+              target: null,
+              windowStart: 0,
+            }),
+          ),
+        ];
+        expect(roundTrips.every((cursor) => cursor !== null)).toBe(true);
+      }),
+      { numRuns: 40 },
+    );
   });
 
   test("public language alternates are gated, bounded and route-safe", async () => {

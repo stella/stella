@@ -1,5 +1,7 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
+
+import { sha256Base64Url as hashSha256Base64Url } from "@stll/sha256/bun";
 /**
  * The wire format of a corpus-index search cursor: its one owner.
  *
@@ -80,8 +82,7 @@ import * as v from "valibot";
  *
  * One metadata segment therefore means a window rank and nothing else.
  */
-
-import { sha256Base64Url as hashSha256Base64Url } from "@stll/sha256/bun";
+import { isUuid } from "@stll/uuid-codec";
 
 import type { SearchCursor } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
@@ -503,7 +504,7 @@ export const decodeCorpusSearchCursor = (
   }
   const segments = decoded.id.split(":");
   const id = segments.at(-1);
-  if (id === undefined || id.length === 0) {
+  if (id === undefined || !isUuid(id)) {
     return null;
   }
   const cursorOf = ({

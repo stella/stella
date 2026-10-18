@@ -59,7 +59,7 @@ type VersionCursor = {
   id: SafeId<"legislationDocument">;
 };
 
-const decodeVersionCursor = (cursor: string): VersionCursor | null => {
+export const decodeVersionCursor = (cursor: string): VersionCursor | null => {
   const parts = decodePaginationCursor(cursor);
 
   if (parts?.length !== 2) {
@@ -77,6 +77,9 @@ const decodeVersionCursor = (cursor: string): VersionCursor | null => {
 
   return { validFrom, id: brandPersistedLegislationDocumentId(id) };
 };
+
+export const encodeVersionCursor = (cursor: VersionCursor): string =>
+  encodePaginationCursor([cursor.validFrom, cursor.id]);
 
 /**
  * Every consolidated version of the work the given document belongs to,

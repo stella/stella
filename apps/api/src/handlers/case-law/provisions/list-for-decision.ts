@@ -66,7 +66,9 @@ type ProvisionCursor = {
   anchor: string;
 };
 
-const decodeProvisionCursor = (cursor: string): ProvisionCursor | null => {
+export const decodeProvisionCursor = (
+  cursor: string,
+): ProvisionCursor | null => {
   const parts = decodePaginationCursor(cursor);
   if (parts?.length !== 3) {
     return null;
@@ -87,6 +89,9 @@ const decodeProvisionCursor = (cursor: string): ProvisionCursor | null => {
 
   return { generation, spanStart, anchor };
 };
+
+export const encodeProvisionCursor = (cursor: ProvisionCursor): string =>
+  encodePaginationCursor([cursor.generation, cursor.spanStart, cursor.anchor]);
 
 const LEGACY_CITATION_FIELDS = {
   // Drizzle detects absent left-join rows from the first column; keep it non-null.
