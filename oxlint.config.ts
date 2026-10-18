@@ -5281,6 +5281,7 @@ const config = defineConfig({
       files: [
         "**/*.test.{ts,tsx,js,jsx,mjs,cjs,mts,cts}",
         "**/*.spec.{ts,tsx,js,jsx,mjs,cjs,mts,cts}",
+        ".oxlint-plugins/__fixtures__/no-shared-checkout-mutation.fixture.ts",
       ],
       rules: {
         "no-direct-test-state/no-direct-test-state": "error",
