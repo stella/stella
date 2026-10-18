@@ -10,9 +10,11 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import ts from "typescript";
 import * as v from "valibot";
 
 import { compareCodeUnit } from "@stll/collation";
+import { isPathInside } from "@stll/portable-path";
 
 import {
   QUARANTINE_REGISTRY_ENV,
@@ -161,6 +163,7 @@ const run = ({
       ),
   );
   return {
+    root,
     exitCode: result.exitCode,
     output: `${result.stdout.toString()}${result.stderr.toString()}`,
     records,
@@ -185,6 +188,57 @@ const FAILING = [
 ];
 
 describe("flaky-test quarantine preload", () => {
+  test("its static import graph uses only builtins and relative scripts files", () => {
+    const pending = [PRELOAD];
+    const visited = new Set<string>();
+    while (pending.length > 0) {
+      const file = pending.pop();
+      expect(file).toBeDefined();
+      if (file === undefined || visited.has(file)) {
+        continue;
+      }
+      visited.add(file);
+      const source = ts.createSourceFile(
+        file,
+        readFileSync(file, "utf-8"),
+        ts.ScriptTarget.Latest,
+        false,
+        ts.ScriptKind.TS,
+      );
+      for (const statement of source.statements) {
+        if (
+          !ts.isImportDeclaration(statement) ||
+          !ts.isStringLiteral(statement.moduleSpecifier)
+        ) {
+          continue;
+        }
+        const specifier = statement.moduleSpecifier.text;
+        if (specifier.startsWith("node:") || specifier.startsWith("bun:")) {
+          continue;
+        }
+        expect(specifier.startsWith(".")).toBe(true);
+        const resolved = path.resolve(path.dirname(file), specifier);
+        expect(isPathInside(import.meta.dir, resolved)).toBe(true);
+        pending.push(
+          path.extname(resolved) === "" ? `${resolved}.ts` : resolved,
+        );
+      }
+    }
+  });
+
+  test("loads without node_modules and records a quarantined failure", () => {
+    const result = run({ names: FAILING });
+    expect(existsSync(path.join(result.root, "node_modules"))).toBe(false);
+    expect(result.exitCode).toBe(0);
+    expect(result.output).toContain("(quarantined fail)");
+    expect(result.records).toContainEqual(
+      expect.objectContaining({
+        type: "failed",
+        id: `${FIXTURE}::outer > inner > throws`,
+      }),
+    );
+  });
+
   test("a run whose only failures are quarantined exits zero and records each one", () => {
     const { exitCode, records, output } = run({ names: FAILING });
     expect(output).toContain("(quarantined fail)");

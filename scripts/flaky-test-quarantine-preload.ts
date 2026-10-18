@@ -14,26 +14,97 @@
 // table forms (`test.each`) stay outside the wrapper; an entry that matches no
 // registration in a file that ran is reported as stale.
 
-import { panic } from "better-result";
 import * as bunTest from "bun:test";
 import { mock } from "bun:test";
+import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { appendFileSync, mkdirSync, realpathSync } from "node:fs";
+import { appendFileSync, mkdirSync, readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
 import { inspect, stripVTControlCharacters } from "node:util";
 
-import { repoRelativePath } from "@stll/portable-path";
+const QUARANTINE_REPORT_DIR_ENV = "FLAKY_TEST_QUARANTINE_REPORT_DIR";
+const QUARANTINE_REGISTRY_ENV = "FLAKY_TEST_QUARANTINE_REGISTRY";
+const TEST_ID_SEPARATOR = "::";
+const BUN_TEST_FILE = /\.test\.[cm]?[jt]sx?$/u;
 
-import {
-  QUARANTINE_REGISTRY_ENV,
-  QUARANTINE_REPORT_DIR_ENV,
-  readRegistry,
-  REGISTRY_FILE,
-  REPOSITORY_ROOT,
-  splitTestId,
-  testId,
-  type QuarantineRecord,
-} from "./flaky-test-quarantine";
+type QuarantineRecord =
+  | { readonly type: "loaded"; readonly file: string }
+  | { readonly type: "registered"; readonly id: string }
+  | {
+      readonly type: "passed";
+      readonly id: string;
+      readonly durationMs: number;
+    }
+  | {
+      readonly type: "failed";
+      readonly id: string;
+      readonly durationMs: number;
+      readonly message: string;
+    };
+
+const splitTestId = (
+  id: string,
+): { file: string; name: string } | undefined => {
+  const index = id.indexOf(TEST_ID_SEPARATOR);
+  if (index === -1) {
+    return undefined;
+  }
+  const file = id.slice(0, index);
+  const name = id.slice(index + TEST_ID_SEPARATOR.length);
+  if (
+    !BUN_TEST_FILE.test(file) ||
+    path.posix.isAbsolute(file) ||
+    path.posix.normalize(file) !== file ||
+    file.startsWith("../") ||
+    name.trim() !== name ||
+    name === ""
+  ) {
+    return undefined;
+  }
+  return { file, name };
+};
+
+const testId = ({ file, name }: { file: string; name: string }): string =>
+  `${file}${TEST_ID_SEPARATOR}${name}`;
+
+const readQuarantinedIds = (file: string): readonly string[] => {
+  let value: unknown;
+  try {
+    value = JSON.parse(readFileSync(file, "utf-8"));
+  } catch (error) {
+    console.warn(
+      `Flaky-test quarantine disabled: invalid ${file}: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return [];
+  }
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    !("entries" in value) ||
+    !Array.isArray(value.entries)
+  ) {
+    console.warn(
+      `Flaky-test quarantine disabled: invalid ${file}: registry must contain an entries array`,
+    );
+    return [];
+  }
+  const ids = value.entries.map((entry: unknown) =>
+    typeof entry === "object" &&
+    entry !== null &&
+    "id" in entry &&
+    typeof entry.id === "string" &&
+    splitTestId(entry.id) !== undefined
+      ? entry.id
+      : undefined,
+  );
+  if (ids.some((id) => id === undefined)) {
+    console.warn(
+      `Flaky-test quarantine disabled: invalid ${file}: every registry entry must contain a valid id`,
+    );
+    return [];
+  }
+  return ids.flatMap((id) => (id === undefined ? [] : [id]));
+};
 
 // Without a declared timeout a quarantined test gets this budget, then the
 // runner's own deadline a grace period later, so a hang is recorded rather
@@ -68,7 +139,7 @@ const invoke = async (fn: TestFunction): Promise<unknown> => {
     if (error === undefined || error === null) {
       resolve(undefined);
     } else {
-      reject(error instanceof Error ? error : new Error(inspect(error)));
+      reject(error instanceof Error ? error : inspect(error));
     }
   });
   return await promise;
@@ -138,7 +209,7 @@ const formatEachTitle = (
       case "%o":
         return inspect(value, { breakLength: Infinity, compact: true });
       default:
-        return panic(`Unhandled each title placeholder: ${placeholder}`);
+        return assert.fail(`Unhandled each title placeholder: ${placeholder}`);
     }
   });
 };
@@ -146,14 +217,12 @@ const formatEachTitle = (
 const install = (reportDir: string): void => {
   const registryPath =
     process.env[QUARANTINE_REGISTRY_ENV] ??
-    path.join(REPOSITORY_ROOT, REGISTRY_FILE);
+    path.join(import.meta.dir, "flaky-test-quarantine.json");
   // The registry sits in <root>/scripts/, and ids are relative to <root>.
   // Bun.main is a real path, so the root is too (a symlinked checkout or
   // temporary directory would otherwise match no test file).
   const root = realpathSync(path.resolve(path.dirname(registryPath), ".."));
-  const quarantined = new Set(
-    readRegistry(registryPath).entries.map(({ id }) => id),
-  );
+  const quarantined = new Set(readQuarantinedIds(registryPath));
   if (quarantined.size === 0) {
     return;
   }
@@ -167,7 +236,12 @@ const install = (reportDir: string): void => {
   };
   const loaded = new Set<string>();
   const currentFile = (): string | undefined => {
-    const relative = repoRelativePath(root, Bun.main);
+    // Registered ids are files under the root; anything else is not quarantined.
+    const prefix = `${root}${path.sep}`;
+    if (!Bun.main.startsWith(prefix)) {
+      return undefined;
+    }
+    const relative = Bun.main.slice(prefix.length).replaceAll(path.sep, "/");
     if (!files.has(relative)) {
       return undefined;
     }
@@ -277,18 +351,13 @@ const install = (reportDir: string): void => {
       ]);
       clearTimeout(timer);
       const durationMs = Math.round(performance.now() - started);
-      switch (outcome.status) {
-        case "passed":
-          record({ type: "passed", id, durationMs });
-          return;
-        case "failed":
-          record({ type: "failed", id, durationMs, message: outcome.message });
-          console.error(`(quarantined fail) ${id}: ${outcome.message}`);
-          return;
-        default:
-          outcome satisfies never;
-          panic("Unhandled quarantined outcome");
+      if (outcome.status === "passed") {
+        record({ type: "passed", id, durationMs });
+        return;
       }
+      // Narrowed to "failed": a new status without a message stops compiling here.
+      record({ type: "failed", id, durationMs, message: outcome.message });
+      console.error(`(quarantined fail) ${id}: ${outcome.message}`);
     };
 
   const register =
