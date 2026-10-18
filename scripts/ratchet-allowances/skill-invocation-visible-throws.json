@@ -1,0 +1,5 @@
+{
+  "metric": "throw-outside-boundary",
+  "delta": 15,
+  "reason": "No throw is added in apps/api/src/lib/agent-skills/skill-tools.ts. The line counter strips literals before comments, so the apostrophe in the original one-line skill catalog comment hides its closing */ and existing throws below it. Expanding that comment makes the counter see 15 existing throws again."
+}

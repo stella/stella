@@ -37,7 +37,7 @@ test("a configured publicLawReadDb in one file never satisfies another file", as
 
 test("search implementations in one file never satisfy another file", async () => {
   const implemented =
-    '// one\nimport { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";\nfunction searchPostgresDecisions() { return readPublicDecisionLanguageAlternatesByGroup(); }\nconst searchCorpusIndexDecisions = () => readPublicDecisionLanguageAlternatesByGroup();';
+    '// one\nimport { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";\nfunction searchPostgresDecisions() { return readPublicDecisionLanguageAlternatesByGroup(); }\nconst searchCorpusIndexDecisions = () => readPublicDecisionLanguageAlternatesByGroup();\nconst listCaseLawProvisionDecisions = () => readPublicDecisionLanguageAlternatesByGroup();';
   const missing = MISSING;
   for (const files of orders(implemented, missing)) {
     const lines = await lintRuleAcrossFiles(
@@ -47,7 +47,7 @@ test("search implementations in one file never satisfy another file", async () =
     );
     const missingFile = files["a.ts"] === missing ? "a.ts" : "b.ts";
     const implementedFile = missingFile === "a.ts" ? "b.ts" : "a.ts";
-    expect(lines[missingFile]).toEqual([1, 1]);
+    expect(lines[missingFile]).toEqual([1, 1, 1]);
     expect(lines[implementedFile]).toEqual([]);
   }
 });

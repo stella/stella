@@ -3,6 +3,7 @@ import { panic } from "better-result";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
 import type { ChatHistoryItem } from "@/features/chat/queries";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type { ChatThreadDecision } from "./chat-thread-decision";
 
@@ -25,7 +26,7 @@ afterEach(() => {
   useInspectorTabsStore.setState({ tabs: [], activeId: null });
 });
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const DECISION_ID = "00000000-0000-0000-0000-000000000006";

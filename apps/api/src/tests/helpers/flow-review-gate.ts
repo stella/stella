@@ -1,5 +1,3 @@
-import { panic } from "better-result";
-import type { SQL } from "bun";
 import { eq } from "drizzle-orm";
 
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -205,22 +203,4 @@ export const flowReviewGateFixture = async (
     read,
     cleanup,
   };
-};
-
-// A query logger marks arrival; this observation proves the session waited.
-// This bounded DB observation is used only in concurrency regressions.
-export const waitForBlockedPid = async (
-  observer: SQL,
-  { waitingPid, holdingPid }: { waitingPid: number; holdingPid: number },
-) => {
-  const deadline = performance.now() + 3000;
-  while (performance.now() < deadline) {
-    const rows = await observer<
-      { waiting: boolean }[]
-    >`select ${holdingPid} = any(pg_blocking_pids(${waitingPid})) as waiting`;
-    if (rows.at(0)?.waiting === true) {
-      return;
-    }
-  }
-  panic(`Session ${waitingPid} did not wait for ${holdingPid}`);
 };

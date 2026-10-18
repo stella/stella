@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import nodePath from "node:path";
 
+import { CASE_LAW_BROWSER_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 import {
   PUBLIC_ROBOTS_ALLOWED_SEARCH_USER_AGENTS,
   PUBLIC_ROBOTS_DENIED_USER_AGENTS,
@@ -8,8 +9,15 @@ import {
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 // Type-only, so the decision reader's component graph never loads here.
+import {
+  PUBLIC_CASE_LAW_PAGE_COUNTRIES,
+  toCaseLawCountryParam,
+} from "@/features/case-law/case-law-jurisdiction";
 import type { DecisionWorkspaceProps } from "@/features/case-law/components/case-viewer/decision-workspace";
-import { publicToolCrawlPaths } from "@/public-crawl-policy";
+import {
+  isPublicLawPathIndexable,
+  publicToolCrawlPaths,
+} from "@/public-crawl-policy";
 
 /** Whether an AI-mode branch carries the authenticated availability gate. */
 type CarriesAvailabilityGate<TMode> = "ensureAIAvailable" extends keyof TMode
@@ -140,6 +148,34 @@ const requestUrlForTest = (input: Request | URL | string): string => {
 };
 
 describe("public law sitemap", () => {
+  test.each(CASE_LAW_BROWSER_COUNTRIES)(
+    "%s shard publication follows the public page countries",
+    async (country) => {
+      const segment = country.toLowerCase();
+      const shard = {
+        bucket: "all",
+        country: segment,
+        lastmod: "2026-01-01",
+        month: "03",
+        year: "2019",
+      };
+      const published = PUBLIC_CASE_LAW_PAGE_COUNTRIES.some(
+        (candidate) => candidate === country,
+      );
+      const shards = await fetchPublicSitemapShards({
+        fetchImpl: async () =>
+          Response.json({ items: [shard], limit: 50_000, nextCursor: null }),
+      });
+      expect(shards).toEqual(published ? [shard] : []);
+      const xml = createPublicLawSitemapIndexXml([shard], {
+        publicLawIndexingEnabled: true,
+      });
+      expect(xml.includes(`/sitemaps/law-cases/${segment}/2019/03.xml`)).toBe(
+        published,
+      );
+    },
+  );
+
   test("app robots response blocks bulk and AI crawlers while retaining the deployment crawl policy", async () => {
     expect(robotsRoute.options.server?.handlers).toBe(robotsHandlers);
     const response = robotsHandlers.GET();
@@ -451,6 +487,44 @@ describe("public law sitemap", () => {
     expect(xml).not.toContain("matter");
   });
 
+  test("every static sitemap URL is allowed by robots.txt and its path policy", () => {
+    const robots = createRobotsTxt({
+      publicKnowledgeCrawlAllowed: false,
+      publicLawCrawlAllowed: true,
+      publicToolsCrawlAllowed: false,
+      seoIndexable: true,
+    });
+    const allowed = (path: string): boolean =>
+      robots
+        .split("\n")
+        .filter((line) => line.startsWith("Allow: "))
+        .map((line) => line.slice("Allow: ".length))
+        .some((rule) =>
+          rule.endsWith("$")
+            ? path === rule.slice(0, -1)
+            : path.startsWith(rule),
+        );
+    const xml = createPublicLawStaticSitemapXml({
+      publicLawIndexingEnabled: true,
+    });
+    const paths = [...xml.matchAll(/<loc>([^<]+)<\/loc>/gu)].map(
+      ([, loc]) => new URL(loc ?? "").pathname,
+    );
+
+    expect(paths.length).toBeGreaterThan(0);
+    for (const path of paths) {
+      expect(allowed(path)).toBe(true);
+      expect(isPublicLawPathIndexable(path, true)).toBe(true);
+    }
+    // Pages robots.txt leaves disallowed are neither listed nor indexable.
+    for (const path of ["/law/coverage", "/law/cases/research", "/law/de/x"]) {
+      expect(allowed(path)).toBe(false);
+      expect(paths).not.toContain(path);
+      expect(isPublicLawPathIndexable(path, true)).toBe(false);
+    }
+    expect(isPublicLawPathIndexable("/law", false)).toBe(false);
+  });
+
   test("case-law shard sitemaps do not duplicate the case-law index URL", () => {
     const xml = createPublicCaseLawSitemapXml([
       {
@@ -710,12 +784,21 @@ describe("public law sitemap", () => {
     // Boundary-anchored rules: dir prefixes emit a subtree + exact-path pair,
     // the sitemap.xml file prefix emits just the exact-path rule.
     expect(allowLines).toEqual([
-      "Allow: /law/",
       "Allow: /law$",
+      // One subtree per pages-public jurisdiction, from the capability state.
+      ...PUBLIC_CASE_LAW_PAGE_COUNTRIES.flatMap((country) => {
+        const path = `/law/${toCaseLawCountryParam(country)}`;
+        return [`Allow: ${path}/`, `Allow: ${path}$`];
+      }),
+      "Allow: /law/cases$",
       "Allow: /sitemap.xml$",
       "Allow: /sitemaps/",
       "Allow: /sitemaps$",
     ]);
+    // A jurisdiction whose pages are not public stays behind Disallow: /.
+    expect(allowLines.some((line) => line.startsWith("Allow: /law/svk"))).toBe(
+      PUBLIC_CASE_LAW_PAGE_COUNTRIES.some((country) => country === "SVK"),
+    );
     // Sibling-path regression: never emit a bare un-anchored prefix (which
     // would also match /lawyer, /law-admin, …). Every Allow rule ends in / or $.
     for (const line of allowLines) {

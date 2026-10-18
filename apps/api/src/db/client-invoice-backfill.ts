@@ -3,6 +3,8 @@ import { panic } from "better-result";
 import { isRecord } from "@/api/lib/type-guards";
 
 import { readConstraintCompletion } from "./online-constraint-completion";
+import { validateOnlineConstraints } from "./online-ddl";
+import type { OnlineConstraintValidation } from "./online-ddl";
 import type { OnlineRepair } from "./online-migration-connection";
 
 const CLIENT_BACKFILL_BATCH_SIZE = 500;
@@ -48,7 +50,7 @@ export const CLIENT_INVOICE_BACKFILL = {
   },
 } satisfies OnlineRepair;
 
-const CLIENT_INVOICE_CONSTRAINTS = [
+export const CLIENT_INVOICE_CONSTRAINTS = [
   { tableName: "invoices", constraintName: "invoices_scope_check" },
   { tableName: "invoices", constraintName: "invoices_client_organization_fk" },
   {
@@ -59,24 +61,25 @@ const CLIENT_INVOICE_CONSTRAINTS = [
     tableName: "invoice_lines",
     constraintName: "invoice_lines_recorded_snapshot_check",
   },
-] as const;
+] as const satisfies readonly OnlineConstraintValidation[];
 
 export const CLIENT_INVOICE_CONSTRAINT_VALIDATIONS =
   CLIENT_INVOICE_CONSTRAINTS.map(
-    ({ tableName, constraintName }) =>
+    (constraint) =>
       ({
-        name: constraintName,
+        name: constraint.constraintName,
         readCompletion: async (connection) =>
           await readConstraintCompletion({
             connection,
-            tableName,
-            constraintName,
-            repairName: constraintName,
+            tableName: constraint.tableName,
+            constraintName: constraint.constraintName,
+            repairName: constraint.constraintName,
           }),
-        repair: async (connection) => {
-          await connection.execute(
-            `ALTER TABLE public."${tableName}" VALIDATE CONSTRAINT "${constraintName}"`,
-          );
-        },
+        repair: async (connection, tables) =>
+          await validateOnlineConstraints({
+            connection,
+            tables,
+            constraints: [constraint],
+          }),
       }) satisfies OnlineRepair,
   );

@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import { writeZipEntry } from "@stll/docx-utils";
+
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
 import { lookupFormatMarkerPaths } from "@/api/lib/docx/template-manifest";
 import type { FieldMeta } from "@/api/lib/docx/types";
@@ -19,13 +21,15 @@ const P = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
 
 const makeDocx = async (...paragraphs: string[]) => {
   const zip = new JSZip();
-  zip.file(
+  writeZipEntry(
+    zip,
     "word/document.xml",
     `<?xml version="1.0" encoding="UTF-8"?>` +
       `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">` +
       `<w:body>${paragraphs.map(P).join("")}</w:body></w:document>`,
   );
-  zip.file(
+  writeZipEntry(
+    zip,
     "[Content_Types].xml",
     `<?xml version="1.0" encoding="UTF-8"?>` +
       `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +

@@ -10,6 +10,7 @@ import {
 } from "@/features/statutes/statute-page-search";
 import type { api } from "@/lib/api";
 import type { PublicLawData } from "@/lib/public-law-api";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 const originalFetch = globalThis.fetch;
@@ -38,7 +39,7 @@ afterAll(async () => {
   await act(async () => {
     await sleep(0);
   });
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const responsePage = {

@@ -74,6 +74,7 @@ const PRESENT_FILTERS = {
   language: "cs",
   dateFrom: "1999-01-01",
   dateTo: "2030-01-01",
+  asOf: "2026-01-01",
 } as const satisfies Required<RequestFilters>;
 
 const DIFFERENT_FILTERS = {
@@ -84,6 +85,7 @@ const DIFFERENT_FILTERS = {
   language: { language: "sk" },
   dateFrom: { dateFrom: "1998-01-01" },
   dateTo: { dateTo: "2031-01-01" },
+  asOf: { asOf: "2027-01-01" },
 } as const satisfies {
   [Field in keyof RequestFilters]-?: Required<Pick<RequestFilters, Field>>;
 };
@@ -94,7 +96,10 @@ const admittedFixtureCountries = {
   unavailable: (country: string) =>
     country === "CZE" || country === "SVK"
       ? null
-      : publicLawCountryUnavailable(country),
+      : publicLawCountryUnavailable(country, {
+          domain: "legislation",
+          surface: "search",
+        }),
   isAdmitted: (country: string) => country === "CZE" || country === "SVK",
 };
 
@@ -202,6 +207,8 @@ describe.skipIf(!runEngineTests)(
     let fixtureIndexCreated = false;
     const searchCalls: Parameters<typeof corpusClient.search>[0][] = [];
     const highlightedIdsByCall: string[][] = [];
+    /** Native reads without snippet fields: a scan round fetching whole statutes. */
+    const nativeScanQueries: string[] = [];
 
     beforeAll(async () => {
       expect(
@@ -367,6 +374,9 @@ describe.skipIf(!runEngineTests)(
       const searchSpy = spyOn(corpusClient, "search").mockImplementation(
         async (options) => {
           searchCalls.push(options);
+          if (options.snippetFields === undefined) {
+            nativeScanQueries.push(options.query);
+          }
           const result = await originalSearch({
             ...options,
             indexId: INDEX_ID,
@@ -387,7 +397,24 @@ describe.skipIf(!runEngineTests)(
           return result;
         },
       );
-      restoreSearch = () => searchSpy.mockRestore();
+      const originalScoredSearch = corpusClient.scoredSearch.bind(corpusClient);
+      const scoredSearchSpy = spyOn(
+        corpusClient,
+        "scoredSearch",
+      ).mockImplementation(async (options) => {
+        searchCalls.push({
+          observer: options.observer,
+          indexId: options.indexId,
+          query: options.query,
+          maxHits: options.size,
+          startOffset: options.from,
+        });
+        return await originalScoredSearch({ ...options, indexId: INDEX_ID });
+      });
+      restoreSearch = () => {
+        searchSpy.mockRestore();
+        scoredSearchSpy.mockRestore();
+      };
     }, ENGINE_TIMEOUT_MS);
 
     afterAll(async () => {
@@ -547,6 +574,19 @@ describe.skipIf(!runEngineTests)(
           call.query.startsWith('("závazek" AND "pohledávka")'),
         ),
       ).toBe(true);
+    });
+
+    test("strict and relaxed scan rounds never fetch whole statutes through the native endpoint", async () => {
+      const nativeStart = nativeScanQueries.length;
+      const callStart = searchCalls.length;
+      await search({
+        query: "závazek pohledávka",
+        jurisdiction: "CZE",
+        limit: 3,
+      });
+      await search({ query: QUERY, jurisdiction: "CZE", limit: 3 });
+      expect(searchCalls.length).toBeGreaterThan(callStart);
+      expect(nativeScanQueries.slice(nativeStart)).toEqual([]);
     });
 
     test("a full strict page never invokes the relaxed pass", async () => {
@@ -892,8 +932,9 @@ describe.skipIf(!runEngineTests)(
         code: PUBLIC_COUNTRY_UNAVAILABLE_STATUS,
         response: {
           code: PUBLIC_COUNTRY_UNAVAILABLE_CODE,
+          domain: "legislation",
           country: "SVK",
-          reason: "pending_public",
+          reason: "pages_public",
         },
       });
       expect(searchCalls.length).toBe(callStart);

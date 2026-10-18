@@ -11,9 +11,9 @@ import {
   findUnsettledStoredToolCalls,
 } from "@/api/handlers/chat/chat-turn-settlement";
 import type { ToolCallState } from "@/api/handlers/chat/chat-turn-settlement";
-import type { ChatTurnStatus } from "@/api/handlers/chat/chat-turn-state";
 import type { ChatTurnOutcome } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ChatTurnStatus } from "@/api/lib/chat/turn-status";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 /**

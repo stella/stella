@@ -7,7 +7,7 @@ import { isUuid } from "@stll/uuid-codec";
 
 import {
   caseLawDecisionIdentifiers,
-  caseLawDecisions,
+  publishedCaseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
@@ -19,7 +19,6 @@ import {
   type CaseLawPublicReadDb,
 } from "@/api/lib/case-law-public-read-db";
 import { decisionIdentifierProjection } from "@/api/lib/case-law/decision-identifiers";
-import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import {
   caseLawCorpusAppliedRevision,
@@ -52,7 +51,7 @@ import {
   corpusRankingCursorTarget,
 } from "@/api/lib/legal-search/corpus-ranking-policy";
 import {
-  partitionCorpusRehydration,
+  partitionReturnedCorpusRecords,
   recordCorpusRehydrationDispositions,
 } from "@/api/lib/legal-search/corpus-rehydration-disposition";
 import {
@@ -154,12 +153,16 @@ export const rehydrateCorpusIndexProviderCandidatesStatement = (
   tx: CaseLawPublicReadTransaction,
   { generation, ids }: RehydrateCorpusIndexCandidatesOptions,
 ) => {
+  const requestedIds = sql`(SELECT unnest(ARRAY[${sql.join(
+    ids.map((id) => sql`${id}::uuid`),
+    sql`, `,
+  )}]::uuid[]) AS id) AS requested`;
   const eligibleRows = tx
     .select({
-      id: caseLawDecisions.id,
-      caseNumber: caseLawDecisions.caseNumber,
-      caseNumberType: caseLawDecisions.caseNumberType,
-      ecli: caseLawDecisions.ecli,
+      id: publishedCaseLawDecisions.id,
+      caseNumber: publishedCaseLawDecisions.caseNumber,
+      caseNumberType: publishedCaseLawDecisions.caseNumberType,
+      ecli: publishedCaseLawDecisions.ecli,
       identifiers: sql<unknown>`coalesce((
         SELECT jsonb_agg(
           jsonb_build_object(
@@ -169,28 +172,30 @@ export const rehydrateCorpusIndexProviderCandidatesStatement = (
           ORDER BY identifier.type, identifier.value
         )
         FROM ${caseLawDecisionIdentifiers} identifier
-        WHERE identifier.decision_id = ${caseLawDecisions.id}
+        WHERE identifier.decision_id = ${publishedCaseLawDecisions.id}
       ), '[]'::jsonb)`.as("identifiers"),
-      court: caseLawDecisions.court,
-      country: caseLawDecisions.country,
-      language: caseLawDecisions.language,
-      decisionDate: caseLawDecisions.decisionDate,
-      decisionType: caseLawDecisions.decisionType,
-      sourceUrl: caseLawDecisions.sourceUrl,
-      citationCount: caseLawDecisions.citationCount,
-      citationAuthority: caseLawDecisions.citationAuthority,
-      createdAt: caseLawDecisions.createdAt,
+      court: publishedCaseLawDecisions.court,
+      country: publishedCaseLawDecisions.country,
+      language: publishedCaseLawDecisions.language,
+      decisionDate: publishedCaseLawDecisions.decisionDate,
+      decisionType: publishedCaseLawDecisions.decisionType,
+      sourceUrl: publishedCaseLawDecisions.sourceUrl,
+      citationCount: publishedCaseLawDecisions.citationCount,
+      citationAuthority: publishedCaseLawDecisions.citationAuthority,
+      createdAt: publishedCaseLawDecisions.createdAt,
       canRecur: caseLawCorpusDocumentCanRecur(generation).as("can_recur"),
       appliedRevision:
         caseLawCorpusAppliedRevision(generation).as("applied_revision"),
     })
-    .from(caseLawDecisions)
-    .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
+    .from(publishedCaseLawDecisions)
+    .innerJoin(
+      caseLawSources,
+      eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
+    )
     .where(
       and(
-        inArray(caseLawDecisions.id, ids),
+        inArray(publishedCaseLawDecisions.id, ids),
         redistributableCaseLawSource,
-        publishedCaseLawDecision,
         currentCaseLawCorpusProjection(generation),
       ),
     )
@@ -198,10 +203,9 @@ export const rehydrateCorpusIndexProviderCandidatesStatement = (
     .limit(ids.length)
     .as("eligible_provider");
   return tx
-    .select({ id: caseLawDecisions.id, row: getColumns(eligibleRows) })
-    .from(caseLawDecisions)
-    .leftJoin(eligibleRows, eq(caseLawDecisions.id, eligibleRows.id))
-    .where(inArray(caseLawDecisions.id, ids))
+    .select({ id: sql<string>`requested.id`, row: getColumns(eligibleRows) })
+    .from(requestedIds)
+    .leftJoin(eligibleRows, sql`requested.id = ${eligibleRows.id}`)
     .limit(ids.length);
 };
 
@@ -209,10 +213,9 @@ export const rehydrateCorpusIndexProviderCandidatesQuery = async (
   tx: CaseLawPublicReadTransaction,
   options: RehydrateCorpusIndexCandidatesOptions,
 ) =>
-  partitionCorpusRehydration({
-    ids: options.ids,
-    records: await rehydrateCorpusIndexProviderCandidatesStatement(tx, options),
-  });
+  partitionReturnedCorpusRecords(
+    await rehydrateCorpusIndexProviderCandidatesStatement(tx, options),
+  );
 
 export const rehydrateCorpusIndexProviderCandidates =
   definePublicLawSharedQuery(

@@ -11,6 +11,7 @@ import { sleep } from "@stll/concurrency/sleep";
 
 import ar from "@/i18n/langs/ar.json";
 import en from "@/i18n/langs/en.json";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register();
 const { act, cleanup, fireEvent, render, screen, waitFor } =
@@ -37,7 +38,7 @@ afterAll(async () => {
   await act(async () => {
     await sleep(50);
   });
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 for (const [locale, messages] of Object.entries(messagesByLocale)) {

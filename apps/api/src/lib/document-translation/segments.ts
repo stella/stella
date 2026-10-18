@@ -1,6 +1,7 @@
 import { panic, Result, TaggedError } from "better-result";
 import * as slimdom from "slimdom";
 
+import { writeZipEntry } from "@stll/docx-utils";
 import type { FolioReviewChangeKind } from "@stll/folio-core/server";
 
 import { loadDocxArchive } from "@/api/lib/docx-archive";
@@ -523,7 +524,7 @@ export const applyDocxTranslationSegments = async (
     );
     for (const patchedPart of patchedParts) {
       const { path, xml } = yield* patchedPart;
-      archive.zip.file(path, xml);
+      writeZipEntry(archive.zip, path, xml);
     }
     return Result.ok(await archive.zip.generateAsync({ type: "arraybuffer" }));
   });

@@ -25,7 +25,7 @@ jobs:
   scope:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 30
     permissions:
       contents: read
       packages: read
@@ -112,6 +112,7 @@ jobs:
           save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install dependencies
+        timeout-minutes: 2
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
@@ -143,7 +144,7 @@ jobs:
 
     services:
       postgres:
-        image: ${{ needs.scope.outputs.postgres || 'docker.io/library/postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280' }}
+        image: ${{ needs.scope.outputs.postgres || 'docker.io/library/postgres:18.6@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336' }}
         credentials: ${{ startsWith(needs.scope.outputs.postgres, 'ghcr.io/') && fromJSON(format('{{"username":"{0}","password":"{1}"}}', github.actor, secrets.GITHUB_TOKEN)) || fromJSON('{}') }}
         env:
           POSTGRES_USER: stella_owner
@@ -179,6 +180,7 @@ jobs:
           save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install dependencies
+        timeout-minutes: 2
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose

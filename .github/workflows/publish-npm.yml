@@ -314,6 +314,7 @@ jobs:
       # depend on install lifecycle scripts; other CI jobs build the same
       # packages from --ignore-scripts installs.
       - run: bash scripts/retry.sh bun ci --ignore-scripts
+        timeout-minutes: 5
 
       - name: Build and pack selected packages
         id: pack
@@ -413,6 +414,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Smoke-test the packed CLI under plain Node # zizmor: ignore[adhoc-packages] intentionally installs the locally packed artifact as a consumer
+        timeout-minutes: 5
         if: contains(fromJSON(steps.pack.outputs.packages), 'cli')
         run: |
           set -euo pipefail
@@ -420,7 +422,7 @@ jobs:
           smoke="$(mktemp -d)"
           cd "$smoke"
           npm init -y >/dev/null
-          npm install --ignore-scripts "$tarball"
+          bash "${GITHUB_WORKSPACE}/scripts/retry.sh" npm install --ignore-scripts "$tarball"
           cli="node_modules/@stll/cli/dist/cli.js"
           node "$cli" --version
           node "$cli" --help
@@ -436,6 +438,7 @@ jobs:
         run: bun scripts/check-api-deployment.ts
 
       - name: Canary the exact packed CLI against production # zizmor: ignore[adhoc-packages] the exact local tarball is the canary subject
+        timeout-minutes: 5
         if: >-
           contains(fromJSON(steps.pack.outputs.packages), 'cli')
           && (github.event_name == 'workflow_run' || inputs.publish)
@@ -445,7 +448,7 @@ jobs:
           canary="$(mktemp -d)"
           cd "$canary"
           npm init -y >/dev/null
-          npm install --ignore-scripts "$tarball"
+          bash "${GITHUB_WORKSPACE}/scripts/retry.sh" npm install --ignore-scripts "$tarball"
           node node_modules/@stll/cli/dist/cli.js compatibility check \
             --server https://api.stll.app
 

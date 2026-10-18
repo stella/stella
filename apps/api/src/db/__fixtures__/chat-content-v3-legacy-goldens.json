@@ -1,0 +1,1197 @@
+[
+  {
+    "name": "v0.7.22:01a0e6c5-9aa2-7398-9a1f-8ad0a9c1c54a",
+    "input": {
+      "data": [
+        {
+          "type": "text",
+          "content": "What is this matter about?"
+        }
+      ],
+      "version": 2
+    },
+    "expected": {
+      "data": [
+        {
+          "type": "text",
+          "content": "What is this matter about?"
+        }
+      ],
+      "version": 3
+    }
+  },
+  {
+    "name": "v0.7.22:01a0e6c5-9c34-74ae-8ae5-dded2fe29a53",
+    "input": {
+      "data": [
+        {
+          "type": "text",
+          "content": "The matter concerns a commercial lease."
+        }
+      ],
+      "version": 2,
+      "metadata": {
+        "usage": {
+          "totalTokens": 2,
+          "promptTokens": 1,
+          "completionTokens": 1
+        },
+        "refContext": {
+          "version": 1,
+          "entities": [],
+          "workspaceScope": [],
+          "unresolvedInputs": []
+        },
+        "refEncoding": "persisted-resource-refs-v2",
+        "turnOutcome": {
+          "type": "completed"
+        }
+      }
+    },
+    "expected": {
+      "data": [
+        {
+          "type": "text",
+          "content": "The matter concerns a commercial lease."
+        }
+      ],
+      "metadata": {
+        "usage": {
+          "totalTokens": 2,
+          "promptTokens": 1,
+          "completionTokens": 1
+        },
+        "refContext": {
+          "version": 1,
+          "entities": [],
+          "workspaceScope": [],
+          "unresolvedInputs": []
+        },
+        "refEncoding": "persisted-resource-refs-v2",
+        "turnOutcome": {
+          "type": "completed"
+        }
+      },
+      "version": 3
+    }
+  },
+  {
+    "name": "v0.7.22:01a0e6c5-9c6d-73fa-b137-bfa02536713c",
+    "input": {
+      "data": [
+        {
+          "type": "text",
+          "content": "Which templates do we have?"
+        }
+      ],
+      "version": 2
+    },
+    "expected": {
+      "data": [
+        {
+          "type": "text",
+          "content": "Which templates do we have?"
+        }
+      ],
+      "version": 3
+    }
+  },
+  {
+    "name": "v0.7.22:01a0e6c5-9d33-72d7-b606-7e2899e9736d",
+    "input": {
+      "data": [
+        {
+          "id": "call-templates",
+          "name": "list_templates",
+          "type": "tool-call",
+          "input": {},
+          "state": "complete",
+          "output": {
+            "templates": [
+              {
+                "id": "01a0e6c5-9977-7678-ba62-98d14f0b08fe",
+                "name": "Tmpl A",
+                "tags": null,
+                "whenToUse": null,
+                "fieldCount": 0,
+                "whenNotToUse": null
+              }
+            ]
+          },
+          "arguments": "{}"
+        },
+        {
+          "type": "tool-result",
+          "state": "complete",
+          "content": "{\"templates\":[{\"id\":\"01a0e6c5-9977-7678-ba62-98d14f0b08fe\",\"name\":\"Tmpl A\",\"fieldCount\":0,\"tags\":null,\"whenToUse\":null,\"whenNotToUse\":null}]}",
+          "toolCallId": "call-templates"
+        },
+        {
+          "type": "text",
+          "content": "There are no templates yet."
+        }
+      ],
+      "version": 2,
+      "metadata": {
+        "usage": {
+          "totalTokens": 2,
+          "promptTokens": 1,
+          "completionTokens": 1
+        },
+        "refContext": {
+          "version": 1,
+          "entities": [],
+          "workspaceScope": [],
+          "unresolvedInputs": []
+        },
+        "refEncoding": "persisted-resource-refs-v2",
+        "turnOutcome": {
+          "type": "completed"
+        }
+      }
+    },
+    "expected": {
+      "data": [
+        {
+          "id": "call-templates",
+          "input": {
+            "status": "parsed",
+            "value": {}
+          },
+          "name": "list_templates",
+          "output": {
+            "value": {
+              "templates": [
+                {
+                  "id": "01a0e6c5-9977-7678-ba62-98d14f0b08fe",
+                  "name": "Tmpl A",
+                  "tags": null,
+                  "whenToUse": null,
+                  "fieldCount": 0,
+                  "whenNotToUse": null
+                }
+              ]
+            }
+          },
+          "state": "complete",
+          "type": "tool-call",
+          "metadata": {
+            "stellaToolExecutor": "server"
+          }
+        },
+        {
+          "content": {
+            "type": "text",
+            "value": "{\"templates\":[{\"id\":\"01a0e6c5-9977-7678-ba62-98d14f0b08fe\",\"name\":\"Tmpl A\",\"fieldCount\":0,\"tags\":null,\"whenToUse\":null,\"whenNotToUse\":null}]}"
+          },
+          "state": "complete",
+          "toolCallId": "call-templates",
+          "type": "tool-result"
+        },
+        {
+          "type": "text",
+          "content": "There are no templates yet."
+        }
+      ],
+      "metadata": {
+        "usage": {
+          "totalTokens": 2,
+          "promptTokens": 1,
+          "completionTokens": 1
+        },
+        "refContext": {
+          "version": 1,
+          "entities": [],
+          "workspaceScope": [],
+          "unresolvedInputs": []
+        },
+        "refEncoding": "persisted-resource-refs-v2",
+        "turnOutcome": {
+          "type": "completed"
+        }
+      },
+      "version": 3
+    }
+  },
+  {
+    "name": "v0.7.22:01a0e6c5-9d64-7189-841e-458c93fdbe69",
+    "input": {
+      "data": [
+        {
+          "type": "text",
+          "content": "Delete the old draft."
+        }
+      ],
+      "version": 2
+    },
+    "expected": {
+      "data": [
+        {
+          "type": "text",
+          "content": "Delete the old draft."
+        }
+      ],
+      "version": 3
+    }
+  },
+  {
+    "name": "v0.7.22:01a0e6c5-9e0e-73c6-965c-4406ed13aeca",
+    "input": {
+      "data": [
+        {
+          "id": "call-draft",
+          "name": "mcp__external__delete",
+          "type": "tool-call",
+          "input": {
+            "name": "draft"
+          },
+          "state": "approval-responded",
+          "approval": {
+            "id": "approval_call-draft",
+            "approved": true,
+            "needsApproval": true
+          },
+          "arguments": "{\"name\":\"draft\"}"
+        }
+      ],
+      "version": 2,
+      "metadata": {
+        "usage": {
+          "totalTokens": 2,
+          "promptTokens": 1,
+          "completionTokens": 1
+        },
+        "refContext": {
+          "version": 1,
+          "entities": [],
+          "workspaceScope": [],
+          "unresolvedInputs": []
+        },
+        "refEncoding": "persisted-resource-refs-v2",
+        "turnOutcome": {
+          "type": "awaiting-user",
+          "interaction": {
+            "type": "approval",
+            "toolCallId": "call-draft"
+          }
+        }
+      }
+    },
+    "expected": {
+      "data": [
+        {
+          "approval": {
+            "id": "approval_call-draft",
+            "approved": true,
+            "needsApproval": true
+          },
+          "id": "call-draft",
+          "input": {
+            "status": "parsed",
+            "value": {
+              "name": "draft"
+            }
+          },
+          "name": "mcp__external__delete",
+          "state": "approval-responded",
+          "type": "tool-call",
+          "metadata": {
+            "stellaToolExecutor": "server"
+          }
+        }
+      ],
+      "metadata": {
+        "usage": {
+          "totalTokens": 2,
+          "promptTokens": 1,
+          "completionTokens": 1
+        },
+        "refContext": {
+          "version": 1,
+          "entities": [],
+          "workspaceScope": [],
+          "unresolvedInputs": []
+        },
+        "refEncoding": "persisted-resource-refs-v2",
+        "turnOutcome": {
+          "type": "awaiting-user",
+          "interaction": {
+            "type": "approval",
+            "toolCallId": "call-draft"
+          }
+        }
+      },
+      "version": 3
+    }
+  },
+  {
+    "name": "v0.7.22:01a0e6c5-9ea7-7420-b293-c3b0175e55d4",
+    "input": {
+      "data": [
+        {
+          "type": "text",
+          "content": "The old draft is deleted."
+        }
+      ],
+      "version": 2,
+      "metadata": {
+        "usage": {
+          "totalTokens": 2,
+          "promptTokens": 1,
+          "completionTokens": 1
+        },
+        "refContext": {
+          "version": 1,
+          "entities": [],
+          "workspaceScope": [],
+          "unresolvedInputs": []
+        },
+        "refEncoding": "persisted-resource-refs-v2",
+        "turnOutcome": {
+          "type": "completed"
+        }
+      }
+    },
+    "expected": {
+      "data": [
+        {
+          "type": "text",
+          "content": "The old draft is deleted."
+        }
+      ],
+      "metadata": {
+        "usage": {
+          "totalTokens": 2,
+          "promptTokens": 1,
+          "completionTokens": 1
+        },
+        "refContext": {
+          "version": 1,
+          "entities": [],
+          "workspaceScope": [],
+          "unresolvedInputs": []
+        },
+        "refEncoding": "persisted-resource-refs-v2",
+        "turnOutcome": {
+          "type": "completed"
+        }
+      },
+      "version": 3
+    }
+  },
+  {
+    "name": "v0.7.22:01a0e6c5-9ebc-7264-972a-62d7649c4580",
+    "input": {
+      "data": [
+        {
+          "type": "text",
+          "content": "Delete the memo."
+        }
+      ],
+      "version": 2
+    },
+    "expected": {
+      "data": [
+        {
+          "type": "text",
+          "content": "Delete the memo."
+        }
+      ],
+      "version": 3
+    }
+  },
+  {
+    "name": "v0.7.22:01a0e6c5-9f51-72f9-b5fc-cd3b2e5a8f16",
+    "input": {
+      "data": [
+        {
+          "type": "text",
+          "content": "The old draft is deleted."
+        },
+        {
+          "id": "call-memo",
+          "name": "mcp__external__delete",
+          "type": "tool-call",
+          "input": {
+            "name": "memo"
+          },
+          "state": "approval-responded",
+          "approval": {
+            "id": "approval_call-memo",
+            "approved": false,
+            "needsApproval": true
+          },
+          "arguments": "{\"name\":\"memo\"}"
+        }
+      ],
+      "version": 2,
+      "metadata": {
+        "usage": {
+          "totalTokens": 2,
+          "promptTokens": 1,
+          "completionTokens": 1
+        },
+        "refContext": {
+          "version": 1,
+          "entities": [],
+          "workspaceScope": [],
+          "unresolvedInputs": []
+        },
+        "refEncoding": "persisted-resource-refs-v2",
+        "turnOutcome": {
+          "type": "awaiting-user",
+          "interaction": {
+            "type": "approval",
+            "toolCallId": "call-memo"
+          }
+        }
+      }
+    },
+    "expected": {
+      "data": [
+        {
+          "type": "text",
+          "content": "The old draft is deleted."
+        },
+        {
+          "approval": {
+            "id": "approval_call-memo",
+            "approved": false,
+            "needsApproval": true
+          },
+          "id": "call-memo",
+          "input": {
+            "status": "parsed",
+            "value": {
+              "name": "memo"
+            }
+          },
+          "name": "mcp__external__delete",
+          "state": "approval-responded",
+          "type": "tool-call",
+          "metadata": {
+            "stellaToolExecutor": "server"
+          }
+        }
+      ],
+      "metadata": {
+        "usage": {
+          "totalTokens": 2,
+          "promptTokens": 1,
+          "completionTokens": 1
+        },
+        "refContext": {
+          "version": 1,
+          "entities": [],
+          "workspaceScope": [],
+          "unresolvedInputs": []
+        },
+        "refEncoding": "persisted-resource-refs-v2",
+        "turnOutcome": {
+          "type": "awaiting-user",
+          "interaction": {
+            "type": "approval",
+            "toolCallId": "call-memo"
+          }
+        }
+      },
+      "version": 3
+    }
+  },
+  {
+    "name": "v0.7.22:01a0e6c5-9fd6-73cf-a513-17a3d76b83c7",
+    "input": {
+      "data": [],
+      "version": 2,
+      "metadata": {
+        "refContext": {
+          "version": 1,
+          "entities": [],
+          "workspaceScope": [],
+          "unresolvedInputs": []
+        },
+        "refEncoding": "persisted-resource-refs-v2",
+        "turnOutcome": {
+          "type": "failed",
+          "error": "unknown"
+        }
+      }
+    },
+    "expected": {
+      "data": [],
+      "metadata": {
+        "refContext": {
+          "version": 1,
+          "entities": [],
+          "workspaceScope": [],
+          "unresolvedInputs": []
+        },
+        "refEncoding": "persisted-resource-refs-v2",
+        "turnOutcome": {
+          "type": "failed",
+          "error": "unknown"
+        }
+      },
+      "version": 3
+    }
+  },
+  {
+    "name": "v0.7.22:01a0e6c5-9ff0-7595-afb7-b3f090202af0",
+    "input": {
+      "data": [
+        {
+          "type": "text",
+          "content": "Summarize the lease."
+        }
+      ],
+      "version": 2
+    },
+    "expected": {
+      "data": [
+        {
+          "type": "text",
+          "content": "Summarize the lease."
+        }
+      ],
+      "version": 3
+    }
+  },
+  {
+    "name": "v0.7.22:01a0e6c5-a06f-7407-b831-fa1f40a3e4cf",
+    "input": {
+      "data": [
+        {
+          "type": "text",
+          "content": "The old draft is deleted."
+        },
+        {
+          "id": "call-memo",
+          "name": "mcp__external__delete",
+          "type": "tool-call",
+          "input": {
+            "name": "memo"
+          },
+          "state": "approval-responded",
+          "approval": {
+            "id": "approval_call-memo",
+            "approved": false,
+            "needsApproval": true
+          },
+          "arguments": "{\"name\":\"memo\"}"
+        }
+      ],
+      "version": 2,
+      "metadata": {
+        "refContext": {
+          "version": 1,
+          "entities": [],
+          "workspaceScope": [],
+          "unresolvedInputs": []
+        },
+        "refEncoding": "persisted-resource-refs-v2",
+        "turnOutcome": {
+          "type": "failed",
+          "error": "unknown"
+        }
+      }
+    },
+    "expected": {
+      "data": [
+        {
+          "type": "text",
+          "content": "The old draft is deleted."
+        },
+        {
+          "approval": {
+            "id": "approval_call-memo",
+            "approved": false,
+            "needsApproval": true
+          },
+          "id": "call-memo",
+          "input": {
+            "status": "parsed",
+            "value": {
+              "name": "memo"
+            }
+          },
+          "name": "mcp__external__delete",
+          "state": "approval-responded",
+          "type": "tool-call",
+          "metadata": {
+            "stellaToolExecutor": "server"
+          }
+        }
+      ],
+      "metadata": {
+        "refContext": {
+          "version": 1,
+          "entities": [],
+          "workspaceScope": [],
+          "unresolvedInputs": []
+        },
+        "refEncoding": "persisted-resource-refs-v2",
+        "turnOutcome": {
+          "type": "failed",
+          "error": "unknown"
+        }
+      },
+      "version": 3
+    }
+  },
+  {
+    "name": "v0.7.22:01a0e6c5-a07f-77aa-9f62-de4c4e3d1e3a",
+    "input": {
+      "data": [
+        {
+          "type": "text",
+          "content": "Delete the lease."
+        }
+      ],
+      "version": 2
+    },
+    "expected": {
+      "data": [
+        {
+          "type": "text",
+          "content": "Delete the lease."
+        }
+      ],
+      "version": 3
+    }
+  },
+  {
+    "name": "v0.7.22:01a0e6c5-a10d-7081-9f8a-f2888524740e",
+    "input": {
+      "data": [
+        {
+          "type": "text",
+          "content": "The old draft is deleted."
+        },
+        {
+          "id": "call-memo",
+          "name": "mcp__external__delete",
+          "type": "tool-call",
+          "input": {
+            "name": "memo"
+          },
+          "state": "approval-responded",
+          "approval": {
+            "id": "approval_call-memo",
+            "approved": false,
+            "needsApproval": true
+          },
+          "arguments": "{\"name\":\"memo\"}"
+        },
+        {
+          "id": "call-lease",
+          "name": "mcp__external__delete",
+          "type": "tool-call",
+          "input": {
+            "name": "lease"
+          },
+          "state": "approval-requested",
+          "approval": {
+            "id": "approval_call-lease",
+            "needsApproval": true
+          },
+          "arguments": "{\"name\":\"lease\"}"
+        }
+      ],
+      "version": 2,
+      "metadata": {
+        "usage": {
+          "totalTokens": 2,
+          "promptTokens": 1,
+          "completionTokens": 1
+        },
+        "refContext": {
+          "version": 1,
+          "entities": [],
+          "workspaceScope": [],
+          "unresolvedInputs": []
+        },
+        "refEncoding": "persisted-resource-refs-v2",
+        "turnOutcome": {
+          "type": "awaiting-user",
+          "interaction": {
+            "type": "approval",
+            "toolCallId": "call-lease"
+          }
+        }
+      }
+    },
+    "expected": {
+      "data": [
+        {
+          "type": "text",
+          "content": "The old draft is deleted."
+        },
+        {
+          "approval": {
+            "id": "approval_call-memo",
+            "approved": false,
+            "needsApproval": true
+          },
+          "id": "call-memo",
+          "input": {
+            "status": "parsed",
+            "value": {
+              "name": "memo"
+            }
+          },
+          "name": "mcp__external__delete",
+          "state": "approval-responded",
+          "type": "tool-call",
+          "metadata": {
+            "stellaToolExecutor": "server"
+          }
+        },
+        {
+          "approval": {
+            "id": "approval_call-lease",
+            "needsApproval": true
+          },
+          "id": "call-lease",
+          "input": {
+            "status": "parsed",
+            "value": {
+              "name": "lease"
+            }
+          },
+          "name": "mcp__external__delete",
+          "state": "approval-requested",
+          "type": "tool-call",
+          "metadata": {
+            "stellaToolExecutor": "server"
+          }
+        }
+      ],
+      "metadata": {
+        "usage": {
+          "totalTokens": 2,
+          "promptTokens": 1,
+          "completionTokens": 1
+        },
+        "refContext": {
+          "version": 1,
+          "entities": [],
+          "workspaceScope": [],
+          "unresolvedInputs": []
+        },
+        "refEncoding": "persisted-resource-refs-v2",
+        "turnOutcome": {
+          "type": "awaiting-user",
+          "interaction": {
+            "type": "approval",
+            "toolCallId": "call-lease"
+          }
+        }
+      },
+      "version": 3
+    }
+  },
+  {
+    "name": "v1-text-file-metadata",
+    "input": {
+      "version": 1,
+      "data": [
+        {
+          "type": "text",
+          "text": "Legacy answer"
+        },
+        {
+          "type": "file",
+          "filename": "../brief:v2.pdf",
+          "mediaType": "application/pdf",
+          "url": "https://files.example/brief.pdf"
+        },
+        {
+          "type": "data-stella-anon-restorations",
+          "data": {
+            "pairs": [
+              {
+                "placeholder": "[PERSON_1]",
+                "original": "Ada"
+              }
+            ]
+          }
+        },
+        {
+          "type": "data-stella-mentions",
+          "data": {
+            "mentions": []
+          }
+        },
+        {
+          "type": "data-stella-source-document",
+          "data": {
+            "kind": "document",
+            "title": "Brief.pdf"
+          }
+        }
+      ]
+    },
+    "expected": {
+      "data": [
+        {
+          "type": "text",
+          "content": "Legacy answer"
+        },
+        {
+          "type": "document",
+          "source": {
+            "type": "url",
+            "value": "https://files.example/brief.pdf",
+            "mimeType": "application/pdf"
+          },
+          "metadata": {
+            "filename": "___brief_v2.pdf"
+          }
+        }
+      ],
+      "metadata": {
+        "anonRestorations": {
+          "pairs": [
+            {
+              "placeholder": "[PERSON_1]",
+              "original": "Ada"
+            }
+          ]
+        },
+        "mentions": {
+          "mentions": []
+        },
+        "sourceDocuments": [
+          {
+            "kind": "document",
+            "title": "Brief.pdf"
+          }
+        ]
+      },
+      "version": 3
+    }
+  },
+  {
+    "name": "v1-complete-tool",
+    "input": {
+      "version": 1,
+      "data": [
+        {
+          "type": "tool-search",
+          "toolCallId": "legacy-search",
+          "state": "output-available",
+          "input": {
+            "query": "contract"
+          },
+          "output": {
+            "hits": []
+          }
+        }
+      ]
+    },
+    "expected": {
+      "data": [
+        {
+          "id": "legacy-search",
+          "input": {
+            "status": "parsed",
+            "value": {
+              "query": "contract"
+            }
+          },
+          "name": "search",
+          "output": {
+            "value": {
+              "hits": []
+            }
+          },
+          "state": "complete",
+          "type": "tool-call",
+          "metadata": {
+            "stellaToolExecutor": "server"
+          }
+        }
+      ],
+      "version": 3
+    }
+  },
+  {
+    "name": "v1-create-document-markdown",
+    "input": {
+      "version": 1,
+      "data": [
+        {
+          "type": "tool-create-document",
+          "toolCallId": "tool-call-1",
+          "state": "input-available",
+          "input": {
+            "markdown": "@title Legacy agreement",
+            "name": "Legacy agreement",
+            "workspaceId": "legacy-matter-id"
+          }
+        }
+      ]
+    },
+    "expected": {
+      "data": [
+        {
+          "id": "tool-call-1",
+          "input": {
+            "status": "parsed",
+            "value": {
+              "name": "Legacy agreement",
+              "source": "@title Legacy agreement"
+            }
+          },
+          "name": "create-document",
+          "state": "input-complete",
+          "type": "tool-call",
+          "metadata": {
+            "stellaToolExecutor": "client"
+          }
+        }
+      ],
+      "version": 3
+    }
+  },
+  {
+    "name": "v1-create-document-source-wins",
+    "input": {
+      "version": 1,
+      "data": [
+        {
+          "type": "tool-create-document",
+          "toolCallId": "tool-call-1",
+          "state": "input-available",
+          "input": {
+            "markdown": "@title Old",
+            "source": "@title Current",
+            "name": "Current agreement"
+          }
+        }
+      ]
+    },
+    "expected": {
+      "data": [
+        {
+          "id": "tool-call-1",
+          "input": {
+            "status": "parsed",
+            "value": {
+              "name": "Current agreement",
+              "source": "@title Current"
+            }
+          },
+          "name": "create-document",
+          "state": "input-complete",
+          "type": "tool-call",
+          "metadata": {
+            "stellaToolExecutor": "client"
+          }
+        }
+      ],
+      "version": 3
+    }
+  },
+  {
+    "name": "v1-create-document-output-routes",
+    "input": {
+      "version": 1,
+      "data": [
+        {
+          "type": "tool-create-document",
+          "toolCallId": "tool-call-1",
+          "state": "output-available",
+          "input": {
+            "source": "@title Legacy agreement",
+            "name": "Legacy agreement"
+          },
+          "output": {
+            "success": true,
+            "fileName": "Legacy agreement.docx",
+            "entityRef": "MAT-001/0001.v1",
+            "matterRef": "MAT-001",
+            "href": "/workspaces/legacy-matter-id",
+            "mention": "@Legacy agreement"
+          }
+        }
+      ]
+    },
+    "expected": {
+      "data": [
+        {
+          "id": "tool-call-1",
+          "input": {
+            "status": "parsed",
+            "value": {
+              "name": "Legacy agreement",
+              "source": "@title Legacy agreement"
+            }
+          },
+          "name": "create-document",
+          "output": {
+            "value": {
+              "success": true,
+              "fileName": "Legacy agreement.docx",
+              "entityId": "",
+              "fieldId": "",
+              "workspaceId": "",
+              "entityRef": "MAT-001/0001.v1",
+              "matterRef": "MAT-001",
+              "href": "/workspaces/legacy-matter-id",
+              "mention": "@Legacy agreement"
+            }
+          },
+          "state": "complete",
+          "type": "tool-call",
+          "metadata": {
+            "stellaToolExecutor": "client"
+          }
+        }
+      ],
+      "version": 3
+    }
+  },
+  {
+    "name": "v2-complete-raw-arguments",
+    "input": {
+      "version": 2,
+      "data": [
+        {
+          "type": "tool-call",
+          "id": "legacy-search",
+          "name": "mcp__external__search",
+          "state": "input-complete",
+          "arguments": "{\"query\":\"contract\"}"
+        }
+      ]
+    },
+    "expected": {
+      "data": [
+        {
+          "id": "legacy-search",
+          "input": {
+            "status": "parsed",
+            "value": {
+              "query": "contract"
+            }
+          },
+          "name": "mcp__external__search",
+          "state": "input-complete",
+          "type": "tool-call",
+          "metadata": {
+            "stellaToolExecutor": "server"
+          }
+        }
+      ],
+      "version": 3
+    }
+  },
+  {
+    "name": "v2-malformed-raw-arguments",
+    "input": {
+      "version": 2,
+      "data": [
+        {
+          "type": "tool-call",
+          "id": "legacy-error",
+          "name": "mcp__external__search",
+          "state": "error",
+          "arguments": "{\"query\":",
+          "output": {
+            "error": "Invalid arguments"
+          }
+        }
+      ]
+    },
+    "expected": {
+      "data": [
+        {
+          "id": "legacy-error",
+          "input": {
+            "rawArguments": "{\"query\":",
+            "status": "raw"
+          },
+          "name": "mcp__external__search",
+          "output": {
+            "value": {
+              "error": "Invalid arguments"
+            }
+          },
+          "state": "error",
+          "type": "tool-call",
+          "metadata": {
+            "stellaToolExecutor": "server"
+          }
+        }
+      ],
+      "version": 3
+    }
+  },
+  {
+    "name": "v2-input-streaming-raw-arguments",
+    "input": {
+      "version": 2,
+      "data": [
+        {
+          "type": "tool-call",
+          "id": "legacy-streaming",
+          "name": "mcp__external__search",
+          "state": "input-streaming",
+          "arguments": "{\"query\":"
+        }
+      ]
+    },
+    "expected": {
+      "data": [
+        {
+          "id": "legacy-streaming",
+          "input": {
+            "rawArguments": "{\"query\":",
+            "status": "raw"
+          },
+          "name": "mcp__external__search",
+          "state": "input-streaming",
+          "type": "tool-call",
+          "metadata": {
+            "stellaToolExecutor": "server"
+          }
+        }
+      ],
+      "version": 3
+    }
+  },
+  {
+    "name": "v2-awaiting-input-raw-arguments",
+    "input": {
+      "version": 2,
+      "data": [
+        {
+          "type": "tool-call",
+          "id": "legacy-streaming",
+          "name": "mcp__external__search",
+          "state": "awaiting-input",
+          "arguments": "{\"query\":"
+        }
+      ]
+    },
+    "expected": {
+      "data": [
+        {
+          "id": "legacy-streaming",
+          "input": {
+            "rawArguments": "{\"query\":",
+            "status": "raw"
+          },
+          "name": "mcp__external__search",
+          "state": "awaiting-input",
+          "type": "tool-call",
+          "metadata": {
+            "stellaToolExecutor": "server"
+          }
+        }
+      ],
+      "version": 3
+    }
+  }
+]

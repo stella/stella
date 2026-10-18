@@ -18,9 +18,9 @@ import {
 import { env } from "@/api/env";
 import { DEFAULT_TIME_POLICY } from "@/api/lib/billing-time";
 import { toSafeId } from "@/api/lib/branded-types";
-import { aggregateExecutionRows } from "@/api/lib/db/aggregate-lock-order.fixture";
 import { LIMITS } from "@/api/lib/limits";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { aggregateExecutionRows } from "@/api/tests/fixtures/aggregate-lock-order";
 import {
   claimFixtureDeviceProof,
   createDesktopDeviceSigner,

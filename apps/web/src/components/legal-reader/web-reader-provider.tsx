@@ -40,13 +40,7 @@ export const WebReaderProvider = ({ children }: { children: ReactNode }) => {
             </CitedProvisionLink>
           );
         case "provision-expansion":
-          return (
-            <CitedProvisionExpansion
-              label={props.label}
-              provision={props.provision}
-              version={props.version}
-            />
-          );
+          return <CitedProvisionExpansion citations={props.citations} />;
         default:
           props satisfies never;
           return panic("Unhandled reader statute link");

@@ -16,9 +16,10 @@ import {
 } from "@/components/chat/markdown-selection.logic";
 import { rehypeMarkdownSourceOffsets } from "@/components/chat/rehype-markdown-source-offsets";
 import { mapAnswerSelection } from "@/features/chat/answer-edit/answer-edit-selection";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register();
-afterAll(async () => await GlobalRegistrator.unregister());
+afterAll(async () => await unregisterDomEnvironment());
 
 const renderMarkdown = (source: string) => {
   const root = document.createElement("div");

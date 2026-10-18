@@ -59,6 +59,7 @@ let caseLawDb: CaseLawPublicReadDb;
 const readJudges = async () =>
   await withRedistributableSubject(
     caseLawDb,
+    "pages",
     { kind: "id", id: decisionId },
     async (subject) => {
       const decision = await readDecisionHandler({

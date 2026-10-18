@@ -1,3 +1,4 @@
+import type { AIErrorKind } from "@stll/api-contract";
 import type {
   FeedbackArea,
   FeedbackKind,
@@ -72,6 +73,14 @@ type AIGenerationFailedProperties = SafeAIAnalyticsMetadata & {
   error_message_kind?: "non_standard";
   error_type: string;
   failure_reason: AIFailureReason;
+  /**
+   * The classified kind (`classifyAIError`): what the failure was, where
+   * `failure_reason` only says which side it came from. Typed, so it survives
+   * the message sanitizer that drops provider text.
+   */
+  failure_kind: AIErrorKind;
+  /** The provider's HTTP status, when the failure carried one. */
+  provider_status?: string;
   feature: string;
   latency_bucket?: LatencyBucket;
   model?: string;

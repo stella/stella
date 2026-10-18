@@ -9,15 +9,15 @@ import {
   CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT as CITATION_SUMMARY_SCAN_LIMIT,
   CASE_LAW_CITATION_TIMELINE_MAX_YEARS,
 } from "@stll/api-contract";
-import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 import type { DecisionPrimaryReferenceType } from "@stll/legal-ast/decision-identifier";
 import { Temporal } from "@stll/time";
 
 import {
   caseLawCitations,
+  caseLawCitationDoctrineReviews,
   caseLawDecisionCitationStats,
   caseLawDecisionCitationStatsState,
-  caseLawDecisions,
+  publishedCaseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
 import { CITATION_KIND } from "@/api/handlers/case-law/citation-kind";
@@ -33,10 +33,11 @@ import type {
   CitationTreatment,
 } from "@/api/lib/case-law/citation-vocabulary";
 import { decisionCourtAbbreviation } from "@/api/lib/case-law/court-presentation";
+import { DOCTRINAL_TREATMENTS } from "@/api/lib/case-law/doctrine";
+import type { DoctrineTreatment } from "@/api/lib/case-law/doctrine";
 import { readPublicDecisionLanguageAlternatesInTx } from "@/api/lib/case-law/language-alternates";
 import type { PublicDecisionLanguageAlternate } from "@/api/lib/case-law/language-alternates";
 import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
-import { publishedCaseLawDecisionFor } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { boundedAll } from "@/api/lib/db/bounded-all";
@@ -48,7 +49,10 @@ import {
   isUuidPaginationCursorPart,
   type Page,
 } from "@/api/lib/pagination";
-import { PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION } from "@/api/lib/public-law-relations";
+import {
+  DOCTRINE_COLUMN_GRANTS_BY_RELATION,
+  PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
+} from "@/api/lib/public-law-relations";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedCaseLawCitationId } from "@/api/lib/safe-id-boundaries";
 import { includes } from "@/api/lib/type-guards";
@@ -64,6 +68,54 @@ export const treatmentOf = (polarity: string | null): CitationTreatment => {
   }
   return polarity === POLARITY.UNKNOWN ? "unclassified" : polarity;
 };
+
+/** Expand release permits these columns; a following release grants them. */
+const canReadCitationDoctrine = async (tx: CaseLawPublicReadTransaction) => {
+  const predicates = Object.entries(DOCTRINE_COLUMN_GRANTS_BY_RELATION).flatMap(
+    ([relation, columns]) =>
+      Object.keys(columns).map(
+        (column) =>
+          sql`has_column_privilege(current_user, ${`public.${relation}`}, ${column}, 'SELECT')`,
+      ),
+  );
+  const rows = await tx
+    .select({ available: sql<boolean>`${sql.join(predicates, sql` AND `)}` })
+    .from(sql`(SELECT 1) AS citation_doctrine_permission_probe`);
+  return (
+    rows.at(0) ?? panic("Citation doctrine permission probe returned no result")
+  ).available;
+};
+
+const doctrineOf = (
+  doctrineAvailable: boolean,
+  doctrine: DoctrineTreatment | null,
+): DoctrineTreatment | "unread" | null =>
+  doctrineAvailable ? (doctrine ?? "unread") : null;
+
+/**
+ * The stored doctrine when the reader may see it. Both branches share one
+ * SQL type so the subqueries built over it keep their field types.
+ */
+const doctrinalTreatmentField = (available: boolean) =>
+  (available
+    ? sql<DoctrineTreatment | null>`${caseLawCitations.doctrinalTreatment}`
+    : sql<DoctrineTreatment | null>`NULL::varchar`
+  ).as("doctrinal_treatment");
+
+/**
+ * The quote behind the citation's current doctrine. A correlated read rather
+ * than a join, so a reader without the review grants never names the table;
+ * the unique (citing decision, citation key) index makes it a point lookup.
+ */
+const doctrineEvidenceQuoteField = (available: boolean) =>
+  (available
+    ? sql<string | null>`(SELECT ${caseLawCitationDoctrineReviews.evidenceQuote}
+        FROM ${caseLawCitationDoctrineReviews}
+        WHERE ${caseLawCitationDoctrineReviews.citingDecisionId} = ${caseLawCitations.citingDecisionId}
+          AND ${caseLawCitationDoctrineReviews.citationKey} = ${caseLawCitations.citationKey}
+          AND ${caseLawCitationDoctrineReviews.doctrinalTreatment} = ${caseLawCitations.doctrinalTreatment})`
+    : sql<string | null>`NULL::text`
+  ).as("evidence_quote");
 
 export const listDecisionCitationsQuerySchema = t.Object({
   direction: t.UnionEnum(CITATION_DIRECTIONS),
@@ -139,6 +191,8 @@ export type DecisionCitationRow = {
   citationText: string;
   sectionIndex: number | null;
   treatment: CitationTreatment;
+  doctrine: DoctrineTreatment | "unread" | null;
+  evidenceQuote: string | null;
   /**
    * Null only for an outgoing citation the corpus could not resolve to a
    * held decision; such a row is text and nothing more. An incoming citation
@@ -147,8 +201,33 @@ export type DecisionCitationRow = {
   decision: RankedRelatedDecision | null;
 };
 
-/** The decision at the far end of the citation, whichever way it points. */
-const relatedDecision = alias(caseLawDecisions, "graph_related_decision");
+/** Each capped citation probes one published decision through the view boundary. */
+const relatedDecisionLookup = (
+  tx: CaseLawPublicReadTransaction,
+  relatedId: SQLWrapper,
+) =>
+  tx
+    .select({
+      id: publishedCaseLawDecisions.id,
+      sourceId: publishedCaseLawDecisions.sourceId,
+      caseNumber: publishedCaseLawDecisions.caseNumber,
+      caseNumberType: publishedCaseLawDecisions.caseNumberType,
+      country: publishedCaseLawDecisions.country,
+      court: publishedCaseLawDecisions.court,
+      courtId: publishedCaseLawDecisions.courtId,
+      sourceUrl: publishedCaseLawDecisions.sourceUrl,
+      decisionDate: publishedCaseLawDecisions.decisionDate,
+      decisionType: publishedCaseLawDecisions.decisionType,
+      ecli: publishedCaseLawDecisions.ecli,
+      language: publishedCaseLawDecisions.language,
+      languageGroupKey: publishedCaseLawDecisions.languageGroupKey,
+      slug: publishedCaseLawDecisions.slug,
+      citationAuthority: publishedCaseLawDecisions.citationAuthority,
+    })
+    .from(publishedCaseLawDecisions)
+    .where(eq(publishedCaseLawDecisions.id, relatedId))
+    .limit(1)
+    .as("graph_related_decision");
 const relatedSource = alias(caseLawSources, "graph_related_source");
 
 const decodeCitationCursor = (
@@ -172,11 +251,14 @@ type ScannedRow = {
   citationText: string;
   sectionIndex: number | null;
   polarity: string | null;
+  doctrinalTreatment: DoctrineTreatment | null;
+  evidenceQuote: string | null;
   visible: boolean;
   decision: RankedRelatedDecisionRow | null;
 };
 
 type CreateScannedPageOptions = {
+  doctrineAvailable: boolean;
   rows: readonly ScannedRow[];
   limit: number;
   toRelatedDecision: (row: RankedRelatedDecisionRow) => RankedRelatedDecision;
@@ -188,6 +270,7 @@ type CreateScannedPageOptions = {
  * and a page may legitimately hold fewer than `limit` items.
  */
 const createScannedPage = ({
+  doctrineAvailable,
   rows,
   limit,
   toRelatedDecision,
@@ -203,6 +286,8 @@ const createScannedPage = ({
       citationText: row.citationText,
       sectionIndex: row.sectionIndex,
       treatment: treatmentOf(row.polarity),
+      doctrine: doctrineOf(doctrineAvailable, row.doctrinalTreatment),
+      evidenceQuote: row.evidenceQuote,
       decision: row.decision === null ? null : toRelatedDecision(row.decision),
     });
   }
@@ -257,36 +342,25 @@ const DIRECTION_SPECS = {
 const visibleFor = ({
   keepsUnresolved,
   related,
-  farEnd,
+  country,
+  countries,
 }: {
   keepsUnresolved: boolean;
-  farEnd: "decision" | "projection";
+  /**
+   * The far end's country. Its row comes from the published-decision view or
+   * from the citation projection, which holds only published far ends, so
+   * publication needs no second check here.
+   */
+  country: SQLWrapper;
+  /** The subject's own country list; the far end answers to the same list. */
+  countries: readonly string[];
   /** The far-end id as the enclosing query can see it. */
   related: SQLWrapper;
 }): SQL<boolean> => {
-  const visibility = (() => {
-    switch (farEnd) {
-      case "decision":
-        return {
-          country: relatedDecision.country,
-          published: publishedCaseLawDecisionFor(relatedDecision.metadata),
-        };
-      case "projection":
-        // The trigger projection contains only published far endpoints.
-        return {
-          country: caseLawDecisionCitationStats.relatedCountry,
-          published: sql`true`,
-        };
-      default:
-        farEnd satisfies never;
-        return panic("Unhandled citation visibility input");
-    }
-  })();
   const resolvedAndOpen = sql`(
     ${relatedSource.id} IS NOT NULL
     AND ${redistributableCaseLawSourceFor(relatedSource.descriptor)}
-    AND ${visibility.published}
-    AND ${inArray(visibility.country, [...PUBLIC_CASE_LAW_COUNTRIES])}
+    AND ${inArray(country, [...countries])}
   )`;
   return keepsUnresolved
     ? sql<boolean>`(${related} IS NULL OR ${resolvedAndOpen})`
@@ -315,7 +389,7 @@ type ListDecisionCitationsOptions = {
 };
 
 export const listDecisionCitationsHandler = async ({
-  subject: { id: decisionId, tx },
+  subject: { id: decisionId, countries, tx },
   query,
   limit = LIMITS.caseLawDecisionCitationPageSize,
 }: ListDecisionCitationsOptions) => {
@@ -326,11 +400,14 @@ export const listDecisionCitationsHandler = async ({
   const pageSize = normalizeTenantPageLimit(
     Math.min(limit, LIMITS.caseLawDecisionCitationPageSize),
   );
+  const doctrineAvailable = await canReadCitationDoctrine(tx);
   const rows = await decisionCitationPageQuery({
+    doctrineAvailable,
     cursorId,
     decisionId,
     direction: query.direction,
     limit: pageSize,
+    countries,
     tx,
   });
   const toRelatedDecision = await withLanguageAlternates(
@@ -338,22 +415,37 @@ export const listDecisionCitationsHandler = async ({
     rows.map((row) => (row.visible ? row.decision : null)),
   );
 
-  return createScannedPage({ rows, limit: pageSize, toRelatedDecision });
+  return {
+    ...createScannedPage({
+      doctrineAvailable,
+      rows,
+      limit: pageSize,
+      toRelatedDecision,
+    }),
+    doctrineAvailability: doctrineAvailable
+      ? ("available" as const)
+      : ("unavailable" as const),
+  };
 };
 
 type DecisionCitationPageQueryOptions = {
+  /** Whether this reader holds the doctrine grants. */
+  doctrineAvailable: boolean;
   cursorId: SafeId<"caseLawCitation"> | undefined;
   decisionId: SafeId<"caseLawDecision">;
   direction: CitationDirection;
   limit: number;
+  countries: readonly string[];
   tx: CaseLawPublicReadTransaction;
 };
 
 export const decisionCitationPageQuery = ({
+  doctrineAvailable,
   cursorId,
   decisionId,
   direction,
   limit,
+  countries,
   tx,
 }: DecisionCitationPageQueryOptions) => {
   const spec = DIRECTION_SPECS[direction];
@@ -365,6 +457,8 @@ export const decisionCitationPageQuery = ({
       relatedId: spec.related,
       sectionIndex: caseLawCitations.sectionIndex,
       polarity: caseLawCitations.polarity,
+      doctrinalTreatment: doctrinalTreatmentField(doctrineAvailable),
+      evidenceQuote: doctrineEvidenceQuoteField(doctrineAvailable),
     })
     .from(caseLawCitations)
     .where(
@@ -377,16 +471,20 @@ export const decisionCitationPageQuery = ({
     .orderBy(asc(caseLawCitations.id))
     .limit(limit + 1)
     .as("citation_graph_candidates");
+  const relatedDecision = relatedDecisionLookup(tx, candidates.relatedId);
   return tx
     .select({
       id: candidates.id,
       citationText: candidates.citationText,
       sectionIndex: candidates.sectionIndex,
       polarity: candidates.polarity,
+      doctrinalTreatment: candidates.doctrinalTreatment,
+      evidenceQuote: candidates.evidenceQuote,
       visible: visibleFor({
-        farEnd: "decision",
+        countries,
         keepsUnresolved: spec.keepsUnresolved,
         related: candidates.relatedId,
+        country: relatedDecision.country,
       }),
       decision: {
         id: relatedDecision.id,
@@ -406,7 +504,7 @@ export const decisionCitationPageQuery = ({
       },
     })
     .from(candidates)
-    .leftJoin(relatedDecision, eq(relatedDecision.id, candidates.relatedId))
+    .leftJoinLateral(relatedDecision, sql`true`)
     .leftJoin(relatedSource, eq(relatedSource.id, relatedDecision.sourceId))
     .orderBy(asc(candidates.id))
     .limit(limit + 1);
@@ -458,7 +556,9 @@ type SummaryRow = {
 type DecisionCitationSummaryQueryOptions = {
   currentYear: number;
   decisionId: SafeId<"caseLawDecision">;
+  countries: readonly string[];
   tx: CaseLawPublicReadTransaction;
+  doctrineAvailable?: boolean;
 };
 
 export const decisionCitationStatsStateQuery = ({
@@ -513,6 +613,7 @@ export const exactDecisionCitationSummaryQuery = ({
   limit,
   currentYear,
   decisionId,
+  countries,
   tx,
 }: DecisionCitationSummaryQueryOptions & { limit: number }) => {
   const stats = caseLawDecisionCitationStats;
@@ -536,9 +637,10 @@ export const exactDecisionCitationSummaryQuery = ({
       and(
         eq(stats.decisionId, decisionId),
         visibleFor({
-          farEnd: "projection",
+          countries,
           keepsUnresolved: true,
           related: stats.relatedSourceId,
+          country: stats.relatedCountry,
         }),
       ),
     )
@@ -556,7 +658,7 @@ export const exactDecisionCitationSummaryQuery = ({
  * Pending projections keep the bounded edge scan and advertise lower bounds.
  */
 export const summarizeDecisionCitationsHandler = async ({
-  subject: { id: decisionId, tx },
+  subject: { id: decisionId, countries, tx },
   currentYear = Temporal.Now.plainDateISO("UTC").year,
 }: SummarizeDecisionCitationsOptions) => {
   const canReadStats = await canReadDecisionCitationStats(tx);
@@ -579,12 +681,17 @@ export const summarizeDecisionCitationsHandler = async ({
           exactDecisionCitationSummaryQuery({
             currentYear,
             decisionId,
+            countries,
             tx,
             limit,
           }),
       })
-    : await decisionCitationSummaryQuery({ currentYear, decisionId, tx })
-        .summary;
+    : await decisionCitationSummaryQuery({
+        currentYear,
+        decisionId,
+        countries,
+        tx,
+      }).summary;
 
   const totals: Record<CitationDirection, CitationTreatmentCounts> = {
     incoming: emptyTreatmentCounts(),
@@ -637,8 +744,10 @@ export type DecisionCitationSummary = Awaited<
  * non-precedent and hidden edges still occupy places in this window.
  */
 export const decisionCitationSummaryQuery = ({
+  doctrineAvailable = false,
   currentYear,
   decisionId,
+  countries,
   tx,
 }: DecisionCitationSummaryQueryOptions) => {
   const candidatesFor = (direction: CitationDirection) => {
@@ -648,6 +757,7 @@ export const decisionCitationSummaryQuery = ({
         id: caseLawCitations.id,
         relatedId: spec.related,
         polarity: caseLawCitations.polarity,
+        doctrinalTreatment: doctrinalTreatmentField(doctrineAvailable),
         kind: caseLawCitations.kind,
       })
       .from(caseLawCitations)
@@ -659,6 +769,7 @@ export const decisionCitationSummaryQuery = ({
       .select({
         relatedId: candidates.relatedId,
         polarity: candidates.polarity,
+        doctrinalTreatment: candidates.doctrinalTreatment,
         kind: candidates.kind,
         ordinal: sql<number>`row_number() OVER (ORDER BY ${candidates.id})`.as(
           "ordinal",
@@ -668,17 +779,22 @@ export const decisionCitationSummaryQuery = ({
       .as(`${direction}_summary_numbered`);
   };
 
+  const incomingCandidates = candidatesFor("incoming");
+  const relatedDecision = relatedDecisionLookup(
+    tx,
+    incomingCandidates.relatedId,
+  );
   const firstYear = currentYear - (CITATION_TIMELINE_MAX_YEARS - 1);
   const citingYearInSpan = sql<number | null>`CASE
     WHEN ${relatedDecision.decisionDate} >= make_date(${firstYear}::int, 1, 1)
      AND ${relatedDecision.decisionDate} < make_date(${currentYear + 1}::int, 1, 1)
     THEN extract(year from ${relatedDecision.decisionDate})::int
   END`;
-  const incomingCandidates = candidatesFor("incoming");
   const incomingVisible = visibleFor({
-    farEnd: "decision",
+    countries,
     keepsUnresolved: false,
     related: incomingCandidates.relatedId,
+    country: relatedDecision.country,
   });
 
   const incoming = tx
@@ -686,6 +802,7 @@ export const decisionCitationSummaryQuery = ({
       direction: sql<CitationDirection>`'incoming'`.as("direction"),
       year: citingYearInSpan.as("year"),
       polarity: incomingCandidates.polarity,
+      doctrinalTreatment: incomingCandidates.doctrinalTreatment,
       count:
         sql<number>`count(*) FILTER (WHERE ${incomingCandidates.ordinal} <= ${CITATION_SUMMARY_SCAN_LIMIT} AND ${eq(incomingCandidates.kind, CITATION_KIND.PRECEDENT)} AND ${incomingVisible})::int`.as(
           "count",
@@ -696,20 +813,26 @@ export const decisionCitationSummaryQuery = ({
         ),
     })
     .from(incomingCandidates)
-    .leftJoin(
-      relatedDecision,
-      eq(relatedDecision.id, incomingCandidates.relatedId),
-    )
+    .leftJoinLateral(relatedDecision, sql`true`)
     .leftJoin(relatedSource, eq(relatedSource.id, relatedDecision.sourceId))
     // By ordinal: the year expression binds its bounds as parameters, and
     // a second rendering would bind fresh ones the planner cannot match.
-    .groupBy(sql`2`, incomingCandidates.polarity);
+    .groupBy(
+      sql`2`,
+      incomingCandidates.polarity,
+      incomingCandidates.doctrinalTreatment,
+    );
 
   const outgoingCandidates = candidatesFor("outgoing");
+  const outgoingDecision = relatedDecisionLookup(
+    tx,
+    outgoingCandidates.relatedId,
+  );
   const outgoingVisible = visibleFor({
-    farEnd: "decision",
+    countries,
     keepsUnresolved: true,
     related: outgoingCandidates.relatedId,
+    country: outgoingDecision.country,
   });
 
   const outgoing = tx
@@ -717,6 +840,7 @@ export const decisionCitationSummaryQuery = ({
       direction: sql<CitationDirection>`'outgoing'`.as("direction"),
       year: sql<number | null>`NULL::int`.as("year"),
       polarity: outgoingCandidates.polarity,
+      doctrinalTreatment: outgoingCandidates.doctrinalTreatment,
       count:
         sql<number>`count(*) FILTER (WHERE ${outgoingCandidates.ordinal} <= ${CITATION_SUMMARY_SCAN_LIMIT} AND ${eq(outgoingCandidates.kind, CITATION_KIND.PRECEDENT)} AND ${outgoingVisible})::int`.as(
           "count",
@@ -727,12 +851,12 @@ export const decisionCitationSummaryQuery = ({
         ),
     })
     .from(outgoingCandidates)
-    .leftJoin(
-      relatedDecision,
-      eq(relatedDecision.id, outgoingCandidates.relatedId),
-    )
-    .leftJoin(relatedSource, eq(relatedSource.id, relatedDecision.sourceId))
-    .groupBy(outgoingCandidates.polarity);
+    .leftJoinLateral(outgoingDecision, sql`true`)
+    .leftJoin(relatedSource, eq(relatedSource.id, outgoingDecision.sourceId))
+    .groupBy(
+      outgoingCandidates.polarity,
+      outgoingCandidates.doctrinalTreatment,
+    );
 
   /**
    * The few decisions citing this one a reader should see first, one row per
@@ -742,57 +866,57 @@ export const decisionCitationSummaryQuery = ({
    */
   const topCiting = (limit: number) => {
     const candidates = candidatesFor("incoming");
-    const citedBy = eq(relatedDecision.id, candidates.relatedId);
-    const publishedBy = eq(relatedSource.id, relatedDecision.sourceId);
-    return (
-      tx
-        .select({
-          id: relatedDecision.id,
-          caseNumber: relatedDecision.caseNumber,
-          caseNumberType: relatedDecision.caseNumberType,
-          country: relatedDecision.country,
-          court: relatedDecision.court,
-          courtId: relatedDecision.courtId,
-          sourceUrl: relatedDecision.sourceUrl,
-          decisionDate: relatedDecision.decisionDate,
-          decisionType: relatedDecision.decisionType,
-          ecli: relatedDecision.ecli,
-          language: relatedDecision.language,
-          languageGroupKey: relatedDecision.languageGroupKey,
-          slug: relatedDecision.slug,
-          citationAuthority: relatedDecision.citationAuthority,
-        })
-        .from(candidates)
-        .innerJoin(relatedDecision, citedBy)
-        .innerJoin(relatedSource, publishedBy)
-        .where(
-          and(
-            lte(candidates.ordinal, CITATION_SUMMARY_SCAN_LIMIT),
-            eq(candidates.kind, CITATION_KIND.PRECEDENT),
-            visibleFor({
-              farEnd: "decision",
-              keepsUnresolved: false,
-              related: candidates.relatedId,
-            }),
-          ),
-        )
-        // Grouped by the far decision's key, so its other columns are
-        // functionally dependent and one decision is one row.
-        .groupBy(relatedDecision.id)
-        .orderBy(
-          desc(relatedDecision.citationAuthority),
-          sql`${relatedDecision.decisionDate} DESC NULLS LAST`,
-          asc(relatedDecision.id),
-        )
-        .limit(limit)
-    );
+    const citingDecision = relatedDecisionLookup(tx, candidates.relatedId);
+    const publishedBy = eq(relatedSource.id, citingDecision.sourceId);
+    const columns = {
+      id: citingDecision.id,
+      caseNumber: citingDecision.caseNumber,
+      caseNumberType: citingDecision.caseNumberType,
+      country: citingDecision.country,
+      court: citingDecision.court,
+      courtId: citingDecision.courtId,
+      sourceUrl: citingDecision.sourceUrl,
+      decisionDate: citingDecision.decisionDate,
+      decisionType: citingDecision.decisionType,
+      ecli: citingDecision.ecli,
+      language: citingDecision.language,
+      languageGroupKey: citingDecision.languageGroupKey,
+      slug: citingDecision.slug,
+      citationAuthority: citingDecision.citationAuthority,
+    };
+    return tx
+      .select(columns)
+      .from(candidates)
+      .innerJoinLateral(citingDecision, sql`true`)
+      .innerJoin(relatedSource, publishedBy)
+      .where(
+        and(
+          lte(candidates.ordinal, CITATION_SUMMARY_SCAN_LIMIT),
+          eq(candidates.kind, CITATION_KIND.PRECEDENT),
+          visibleFor({
+            countries,
+            keepsUnresolved: false,
+            related: candidates.relatedId,
+            country: citingDecision.country,
+          }),
+        ),
+      )
+      .groupBy(...Object.values(columns))
+      .orderBy(
+        desc(citingDecision.citationAuthority),
+        sql`${citingDecision.decisionDate} DESC NULLS LAST`,
+        asc(citingDecision.id),
+      )
+      .limit(limit);
   };
 
   return {
     // One row per (direction, year-or-null, stored polarity): the span and
     // the polarity check constraint already cap it, this states the cap.
     summary: unionAll(incoming, outgoing).limit(
-      (CITATION_TIMELINE_MAX_YEARS + 2) * (POLARITIES.length + 1),
+      (CITATION_TIMELINE_MAX_YEARS + 2) *
+        (POLARITIES.length + 1) *
+        (DOCTRINAL_TREATMENTS.length + 1),
     ),
     topCiting,
     incomingWindowOverflow: tx
@@ -800,6 +924,67 @@ export const decisionCitationSummaryQuery = ({
       .from(incomingCandidates)
       .where(gt(incomingCandidates.ordinal, CITATION_SUMMARY_SCAN_LIMIT))
       .limit(1),
+  };
+};
+
+type DoctrineCounts = Record<DoctrineTreatment | "unread", number>;
+
+export type DecisionDoctrineSummary =
+  | { status: "unavailable" }
+  | {
+      status: "available";
+      counts: Record<CitationDirection, DoctrineCounts>;
+      capped: Record<CitationDirection, boolean>;
+      candidateWindow: typeof CITATION_SUMMARY_SCAN_LIMIT;
+    };
+
+export const summarizeDecisionDoctrineHandler = async ({
+  subject: { id: decisionId, countries, tx },
+}: SummarizeDecisionCitationsOptions): Promise<DecisionDoctrineSummary> => {
+  if (!(await canReadCitationDoctrine(tx))) {
+    return { status: "unavailable" };
+  }
+  const rows = await decisionCitationSummaryQuery({
+    currentYear: 0,
+    decisionId,
+    countries,
+    tx,
+    doctrineAvailable: true,
+  }).summary;
+  const countOf = (
+    direction: CitationDirection,
+    treatment: DoctrineTreatment | "unread",
+  ) => {
+    let total = 0;
+    for (const row of rows) {
+      if (
+        row.direction === direction &&
+        (row.doctrinalTreatment ?? "unread") === treatment
+      ) {
+        total += row.count;
+      }
+    }
+    return total;
+  };
+  const countsFor = (direction: CitationDirection): DoctrineCounts => ({
+    distinguishes: countOf(direction, "distinguishes"),
+    limits: countOf(direction, "limits"),
+    not_stated: countOf(direction, "not_stated"),
+    unread: countOf(direction, "unread"),
+  });
+  const cappedFor = (direction: CitationDirection) =>
+    rows.some((row) => row.direction === direction && row.capped);
+  return {
+    status: "available",
+    counts: {
+      incoming: countsFor("incoming"),
+      outgoing: countsFor("outgoing"),
+    },
+    capped: {
+      incoming: cappedFor("incoming"),
+      outgoing: cappedFor("outgoing"),
+    },
+    candidateWindow: CITATION_SUMMARY_SCAN_LIMIT,
   };
 };
 
@@ -832,13 +1017,14 @@ export type TopCitingDecisionsResult = { items: RankedRelatedDecision[] } & (
  * decision cited mostly one way still names `limit` citing decisions.
  */
 export const listTopCitingDecisionsHandler = async ({
-  subject: { id: decisionId, tx },
+  subject: { id: decisionId, countries, tx },
   summary,
   limit,
 }: TopCitingDecisionsOptions): Promise<TopCitingDecisionsResult> => {
   const query = decisionCitationSummaryQuery({
     currentYear: TOP_CITING_TIMELINE_YEAR,
     decisionId,
+    countries,
     tx,
   });
   const rows = await query.topCiting(limit);
@@ -915,10 +1101,11 @@ END`;
  * so the two surfaces agree on what "leading" means.
  */
 export const listLeadingCitationsHandler = async ({
-  subject: { id: decisionId, tx },
+  subject: { id: decisionId, countries, tx },
   query,
 }: ListLeadingCitationsOptions): Promise<{ items: LeadingCitationRow[] }> => {
   const spec = DIRECTION_SPECS[query.direction];
+  const relatedDecision = relatedDecisionLookup(tx, spec.related);
 
   // One row per (treatment, far decision): its first citation in the text.
   const mentions = tx
@@ -936,7 +1123,7 @@ export const listLeadingCitationsHandler = async ({
       )`.as("mention_rank"),
     })
     .from(caseLawCitations)
-    .innerJoin(relatedDecision, eq(relatedDecision.id, spec.related))
+    .innerJoinLateral(relatedDecision, sql`true`)
     .innerJoin(relatedSource, eq(relatedSource.id, relatedDecision.sourceId))
     .where(
       and(
@@ -945,9 +1132,10 @@ export const listLeadingCitationsHandler = async ({
         // Before ranking, so a hidden decision cannot take a leader's place.
         // Only a held decision can lead, whatever the direction keeps.
         visibleFor({
-          farEnd: "decision",
+          countries,
           keepsUnresolved: false,
           related: spec.related,
+          country: relatedDecision.country,
         }),
       ),
     )
@@ -968,6 +1156,10 @@ export const listLeadingCitationsHandler = async ({
     .from(mentions)
     .where(eq(mentions.mentionRank, 1))
     .as("leading_ranked");
+  const rankedDecision = relatedDecisionLookup(
+    tx,
+    sql`${ranked.relatedId}::uuid`,
+  );
 
   const rows = await tx
     .select({
@@ -976,28 +1168,25 @@ export const listLeadingCitationsHandler = async ({
       sectionIndex: ranked.sectionIndex,
       polarity: ranked.polarity,
       decision: {
-        id: relatedDecision.id,
-        caseNumber: relatedDecision.caseNumber,
-        caseNumberType: relatedDecision.caseNumberType,
-        country: relatedDecision.country,
-        court: relatedDecision.court,
-        courtId: relatedDecision.courtId,
-        sourceUrl: relatedDecision.sourceUrl,
-        decisionDate: relatedDecision.decisionDate,
-        decisionType: relatedDecision.decisionType,
-        ecli: relatedDecision.ecli,
-        language: relatedDecision.language,
-        languageGroupKey: relatedDecision.languageGroupKey,
-        slug: relatedDecision.slug,
-        citationAuthority: relatedDecision.citationAuthority,
+        id: rankedDecision.id,
+        caseNumber: rankedDecision.caseNumber,
+        caseNumberType: rankedDecision.caseNumberType,
+        country: rankedDecision.country,
+        court: rankedDecision.court,
+        courtId: rankedDecision.courtId,
+        sourceUrl: rankedDecision.sourceUrl,
+        decisionDate: rankedDecision.decisionDate,
+        decisionType: rankedDecision.decisionType,
+        ecli: rankedDecision.ecli,
+        language: rankedDecision.language,
+        languageGroupKey: rankedDecision.languageGroupKey,
+        slug: rankedDecision.slug,
+        citationAuthority: rankedDecision.citationAuthority,
       },
     })
     .from(ranked)
-    .innerJoin(
-      relatedDecision,
-      sql`${relatedDecision.id} = ${ranked.relatedId}::uuid`,
-    )
-    .where(sql`${ranked.rank} <= ${LEADING_CITATIONS_PER_TREATMENT}`)
+    .innerJoinLateral(rankedDecision, sql`true`)
+    .where(and(sql`${ranked.rank} <= ${LEADING_CITATIONS_PER_TREATMENT}`))
     .orderBy(asc(ranked.rank), asc(ranked.id))
     .limit(CITATION_TREATMENTS.length * LEADING_CITATIONS_PER_TREATMENT);
   const toRelatedDecision = await withLanguageAlternates(

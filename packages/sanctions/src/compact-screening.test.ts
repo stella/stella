@@ -236,31 +236,81 @@ test("compact screening preserves legacy work-limit and query errors", () => {
   }
 });
 
-test("cached absent spellings preserve legacy results at every work-budget boundary", () => {
+test("cached absent spellings replay uncached results at every work-budget boundary", () => {
   const lists = equivalenceLists([20, 10, 10]);
   const compact = buildScreeningIndex(lists);
   const legacy = buildLegacyScreeningIndex(lists);
   const query = { name: "Kelori Velnr", entityType: "person" } as const;
   expect(compact.names.raw.ids.get("velnr")).toBeUndefined();
-  expect(screen(compact, query, { cutoff: 0.65 }).unwrap()).toEqual(
+  const complete = screen(compact, query, { cutoff: 0.65 }).unwrap();
+  expect(complete).toEqual(
     legacyScreen(legacy, query, { cutoff: 0.65 }).unwrap(),
   );
-  let failures = 0;
-  let successes = 0;
-  for (let maxWork = 1; maxWork <= 3000; maxWork += 25) {
+  // Fuzzy selection spends less work than the legacy scan, so fresh compact
+  // indexes place the boundary. Binary search keeps that oracle inexpensive.
+  const highestBudget = 3000;
+  let lowestFailure = 1;
+  let lowestSuccess = highestBudget;
+  expect(
+    screen(buildScreeningIndex(lists), query, {
+      cutoff: 0.65,
+      maxWork: lowestFailure,
+    }).isErr(),
+  ).toBe(true);
+  expect(
+    screen(buildScreeningIndex(lists), query, {
+      cutoff: 0.65,
+      maxWork: lowestSuccess,
+    }).isOk(),
+  ).toBe(true);
+  while (lowestFailure + 1 < lowestSuccess) {
+    const maxWork = Math.floor((lowestFailure + lowestSuccess) / 2);
+    const outcome = screen(buildScreeningIndex(lists), query, {
+      cutoff: 0.65,
+      maxWork,
+    });
+    if (outcome.isErr()) {
+      expect(outcome.error.code).toBe("work-limit");
+      lowestFailure = maxWork;
+    } else {
+      expect(outcome.value).toEqual(complete);
+      lowestSuccess = maxWork;
+    }
+  }
+
+  const budgets = [
+    1,
+    Math.floor(lowestSuccess / 3),
+    Math.floor((lowestSuccess * 2) / 3),
+    lowestSuccess - 1,
+    lowestSuccess,
+    lowestSuccess + 1,
+    lowestSuccess + Math.floor((highestBudget - lowestSuccess) / 3),
+    lowestSuccess + Math.floor(((highestBudget - lowestSuccess) * 2) / 3),
+    highestBudget,
+  ]
+    .filter((maxWork) => maxWork >= 1 && maxWork <= highestBudget)
+    .filter((maxWork, index, values) => values.indexOf(maxWork) === index)
+    .toSorted((left, right) => left - right);
+  const outcomes: ("failure" | "success")[] = [];
+  for (const maxWork of budgets) {
     const options = { cutoff: 0.65, maxWork };
-    const expected = legacyScreen(legacy, query, options);
+    const expected = screen(buildScreeningIndex(lists), query, options);
     const actual = screen(compact, query, options);
     expect(legacyScreenOutcome(actual)).toEqual(legacyScreenOutcome(expected));
     if (expected.isErr()) {
       expect(expected.error.code).toBe("work-limit");
-      failures += 1;
+      outcomes.push("failure");
     } else {
-      successes += 1;
+      expect(expected.value).toEqual(complete);
+      outcomes.push("success");
     }
   }
-  expect(failures).toBeGreaterThan(0);
-  expect(successes).toBeGreaterThan(0);
+  expect(outcomes.at(0)).toBe("failure");
+  expect(outcomes.at(-1)).toBe("success");
+  expect(
+    outcomes.filter((outcome, index) => outcome !== outcomes.at(index - 1)),
+  ).toEqual(["failure", "success"]);
 });
 
 test("identifier-only screening preserves shared postings and legacy work limits", () => {

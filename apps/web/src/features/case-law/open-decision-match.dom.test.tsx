@@ -8,6 +8,8 @@ import {
   type SearchPageReach,
 } from "@stll/api-contract/search";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 GlobalRegistrator.register({ url: "http://localhost:3000/law/cases" });
 const originalFetch = globalThis.fetch;
 const { QueryClient } = await import("@tanstack/react-query");
@@ -63,7 +65,7 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const openWith = async (pageReach: SearchPageReach) => {

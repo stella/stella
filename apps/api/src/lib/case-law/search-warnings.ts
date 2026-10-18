@@ -43,7 +43,7 @@ type CaseLawSearchWarningsOptions = {
   emptyResultSet: boolean;
 };
 
-const functionWordsWarning = (
+export const functionWordsWarning = (
   dropped: readonly string[],
 ): CaseLawSearchWarning => ({
   code: "function_words_optional",
@@ -113,11 +113,15 @@ export const caseLawSearchWarnings = ({
  *   filled fewer result slots than it was given, so dropping a word is the
  *   likelier fix than paging. Raised only under `MCP_CASE_LAW_SEARCH_GUIDANCE`
  *   `v1`, from the page already returned: it costs no search.
+ * - `provision_cited_widely`: the provision filter is cited by more decisions
+ *   than one search can filter by, so the page holds the topic's best matches
+ *   that cite it rather than every one; the count and the narrowing are said.
  */
 export const AGENT_CASE_LAW_SEARCH_WARNING_CODES = [
   "filter_read",
   "filter_dropped",
   "many_required_terms",
+  "provision_cited_widely",
 ] as const;
 
 type AgentCaseLawSearchWarningCode =
@@ -187,6 +191,20 @@ export const manyRequiredTermsWarning = ({
   hint: "Drop the least central of these words, or move an alternative wording into a phrasing of its own: a hit holds every required word in the same passage.",
 });
 
+export const provisionCitedWidelyWarning = ({
+  provision,
+  citingDecisions,
+}: {
+  /** The provision as the caller wrote it. */
+  provision: string;
+  /** How many decisions cite it, counted exactly. */
+  citingDecisions: number;
+}): AgentCaseLawSearchWarning => ({
+  code: "provision_cited_widely",
+  message: `${provision} is cited by ${String(citingDecisions)} decisions, more than one search can filter by: these results are the topic's best matches that cite it, not all of them.`,
+  hint: "Add a subsection or letter to the provision, or more topic words, to narrow; or omit queries to list every decision citing it, with an exact total.",
+});
+
 /**
  * The values a facet counted for an empty page's filters, appended to its
  * `no_hits_filtered` hint so the next call can pick a value that exists
@@ -236,6 +254,11 @@ export const AGENT_CASE_LAW_SEARCH_WARNING_PRODUCERS = {
       filter: "court",
       received: '"Česká republika"',
       known: 'Known values include "Nejvyšší soud".',
+    }),
+  provision_cited_widely: () =>
+    provisionCitedWidelyWarning({
+      provision: "§ 2910 OZ",
+      citingDecisions: 4037,
     }),
   many_required_terms: () =>
     manyRequiredTermsWarning({

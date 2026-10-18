@@ -10,6 +10,7 @@ import { browserStateStorage } from "@/lib/account/browser-storage";
 import { userStorageKey } from "@/lib/account/user-scoped-storage";
 import { sessionOptions } from "@/lib/auth-query-options";
 import { LAW_HISTORY_STORAGE_KEY } from "@/lib/law-search-history/law-search-history.logic";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 const { QueryClient, QueryClientProvider } =
@@ -23,7 +24,7 @@ afterEach(async () => {
   await act(async () => cleanup());
 });
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 test("server history stays visible while a local import recovers", async () => {

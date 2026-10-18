@@ -246,6 +246,7 @@ mod tests {
     }
 
     let sandbox = TestDirectory::new();
+    let _children = crate::test_child_processes::exclusive();
     let output = Command::new(std::env::current_exe().unwrap())
       .args([
         "--exact",

@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 GlobalRegistrator.register();
 const { QueryClient, QueryObserver } = await import("@tanstack/react-query");
 const { cleanup, fireEvent, render, waitFor } =
@@ -11,7 +13,7 @@ const { queryView } = await import("@/lib/query-view.logic");
 const messages = (await import("@/i18n/langs/en.json")).default;
 afterEach(cleanup);
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const savedNameFixture = "Rename saved name";

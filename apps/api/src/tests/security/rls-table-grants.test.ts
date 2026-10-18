@@ -164,6 +164,9 @@ const POST_BOOTSTRAP_INSERT_ONLY_TABLES = new Set(["system_audit_runs"]);
 const POST_BOOTSTRAP_MUTABLE_PROJECTION_TABLES = new Set([
   "time_entry_timer_states",
   "time_daily_targets",
+  // Account export ledger: request transactions create and transition rows;
+  // only the table owner deletes them, during account erasure.
+  "account_exports",
 ]);
 const MUTABLE_PROJECTION_PRIVILEGES = new Set(["select", "insert", "update"]);
 
@@ -200,6 +203,9 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   "eu_completion_controls",
   "action_cost_records",
   "action_cost_calls",
+  // Chat content repair receipts: forced owner-only RLS; the owner-run
+  // backfill and deploy repair write them, request roles never see them.
+  "chat_content_v3_backfill_receipts",
   // Search backfill retries are ingestion control state, not request data.
   "case_law_search_backfill_failures",
   // Professional-use acceptances are written once at account or
@@ -247,6 +253,7 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   // Reviewed citation labels: read by ingestion, written by the operator
   // script on the owner connection, never read through the request role.
   "case_law_citation_reviews",
+  "case_law_citation_doctrine_reviews",
   // Legislation work-change queue: written only by triggers on
   // legislation_documents, as the legislation writer.
   "legislation_work_changes",

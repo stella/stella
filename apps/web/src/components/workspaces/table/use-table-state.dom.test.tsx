@@ -4,6 +4,8 @@ import { afterAll, expect, test } from "bun:test";
 
 import { sleep } from "@stll/concurrency/sleep";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 GlobalRegistrator.register({ url: "http://localhost:3000/table" });
 const { act, cleanup, renderHook } = await import("@testing-library/react");
 const { QueryClient } = await import("@tanstack/react-query");
@@ -15,7 +17,7 @@ const { useTableState } = await import("./use-table-state");
 
 afterAll(async () => {
   cleanup();
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 test("pending table widths publish only for the owner that resized them", async () => {

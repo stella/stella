@@ -154,6 +154,15 @@ export type {
   ChatDecisionPassageTarget,
 } from "./chat-decision-passage-link";
 export {
+  CHAT_CORPORA,
+  CHAT_CORPUS_HREF_PREFIX,
+  formatChatCorpusId,
+  parseChatCorpusHref,
+  parseChatCorpusId,
+  toChatCorpusHref,
+} from "./chat-corpus-scope";
+export type { ChatCorpus, ChatCorpusScope } from "./chat-corpus-scope";
+export {
   CHAT_MENTION_CATEGORIES,
   CHAT_MENTION_HREF_PREFIXES,
   CHAT_REFERENCE_CATEGORIES,
@@ -309,6 +318,7 @@ export type {
 export {
   CLAUSE_VERSION_LIMIT_ERROR_CODE,
   API_FILE_SECURITY_REJECTED_ERROR_CODE,
+  API_VALIDATION_CONSTRAINTS,
   API_VALIDATION_ERROR_CODE,
   API_VERSION_CONFLICT_ERROR_CODE,
   CLAUSE_DIRECTIVES_INVALID_CODE,
@@ -320,6 +330,7 @@ export {
   MEMBER_REMOVAL_BUSY_CODE,
   normalizeApiError,
   parseApiErrorValue,
+  parseApiValidationIssues,
 } from "./error";
 export type {
   ApiErrorInput,
@@ -328,7 +339,9 @@ export type {
   ApiFileSecurityIssue,
   ApiFileSecurityRejection,
   ApiFileSecurityRejectionDetails,
+  ApiValidationConstraint,
   ApiValidationErrorValue,
+  ApiValidationIssue,
   FileSecurityRemediation,
   NormalizedApiError,
 } from "./error";
@@ -369,6 +382,7 @@ export {
   CASE_LAW_RESEARCH_COLUMNS_PER_ORGANIZATION_MAX,
   CASE_LAW_RESEARCH_RUN_DECISIONS_MAX,
   CASE_LAW_RESEARCH_SUGGEST_SAMPLES_MAX,
+  CLAUSE_NUMBERING_LEVEL_LIMITS,
   DOCX_SUGGESTIONS_PAGE_SIZE_MAX,
   DOCX_SUGGESTIONS_PENDING_MAX,
   ENTITIES_PER_WORKSPACE_MAX,

@@ -12,6 +12,31 @@
       "unknownDevice": "Nezināma ierīce"
     }
   },
+  "admin": {
+    "ai": "AI",
+    "backToApp": "Atpakaļ uz lietotni",
+    "billingAndUsage": "Norēķini un lietojums",
+    "billingProfiles": "Norēķinu profili",
+    "deleteDescription": "Neatgriezeniski dzēsiet šo organizāciju un tās datus. Šo darbību nevar atsaukt.",
+    "deleteOrganization": "Dzēst organizāciju",
+    "deleteRefusedSubscription": "Šai organizācijai ir abonements, kas tiek atjaunots. Vispirms atceliet to sadaļā Plāns un lietojums, pēc tam izdzēsiet organizāciju.",
+    "deleteTypeToConfirm": "Lai apstiprinātu, ievadiet {name}.",
+    "firmSetup": "Biroja iestatījumi",
+    "general": "Vispārīgi",
+    "leaveDescription": "Jūs zaudēsiet piekļuvi šīs organizācijas lietām un datiem.",
+    "leaveOrganization": "Pamest organizāciju",
+    "leaveRefusedOnlyOwner": "Jūs esat vienīgais īpašnieks. Pirms aiziešanas padariet par īpašnieku citu dalībnieku.",
+    "modelsAndProviders": "Modeļi un pakalpojumu sniedzēji",
+    "noPlan": "Nav aktīva plāna",
+    "organizationDeleted": "Organizācija ir dzēsta.",
+    "organizationId": "Organizācijas ID",
+    "organizationLeft": "Jūs pametāt organizāciju.",
+    "overviewDescription": "Pārvaldiet organizāciju, cilvēkus un rīkus.",
+    "people": "Cilvēki",
+    "planAndUsage": "Plāns un lietojums",
+    "title": "Organizācijas administrēšana",
+    "toolsDescription": "Iespējojiet vai atspējojiet iebūvētos rīkus visiem šīs organizācijas dalībniekiem."
+  },
   "agentClaim": {
     "access": "Saņemtā piekļuve",
     "accessReadSearch": "Lasīšanas un meklēšanas piekļuve",
@@ -64,6 +89,9 @@
     "runRemainingPage": "Palaist atlikušās (šajā lapā)",
     "runSelectedRows": "Palaist {count, plural, zero {# atlasītai rindai} one {# atlasītai rindai} other {# atlasītām rindām}}",
     "selectedRun": "Palaist AI kolonnas {count, plural, zero {# rindai} one {# rindai} other {# rindām}}"
+  },
+  "aiDisclosure": {
+    "caseLaw": "AI veidotos tiesu nolēmumu kopsavilkumus, piezīmes un analīzes ģenerē stella; tiesas tos nav apstiprinājušas, un tie neatspoguļo pašu tiesu argumentāciju. Tie ir palīglīdzekļi juridiskās jomas speciālistiem, un noteicošais avots joprojām ir nolēmuma teksts."
   },
   "appearance": {
     "calendar": "Kalendārs",
@@ -173,6 +201,7 @@
       "heldDescription": "Šo izvilkumu <strong>nozīme patiešām ir neskaidra</strong>: saturs ir provizorisks vai neapstiprināts, nevis tikai rakstīts ar roku. Tie netiek vērtēti, kamēr pārbaudītājs tos neapstiprina, nerediģē vai neievada vēlreiz. Salasāms avots nekad netiek nosūtīts pārskatīšanai tikai tā nesēja dēļ.",
       "heldForReview": "Aizturēts pārskatīšanai",
       "holdOutOfScoring": "Izslēgt no vērtējuma",
+      "inScoring": "Iekļauts vērtējumā",
       "includeInScoring": "Iekļaut vērtējumā",
       "interpretationNote": "Interpretācijas piezīme",
       "interpretationNotePlaceholder": "Ja šī pierādījuma nozīme ir apstrīdēta, aprakstiet, kā. Ja nav, atstājiet lauku tukšu.",
@@ -363,6 +392,8 @@
       "chooseList": "Izvēlēties sarakstu",
       "createList": "Izveidot sarakstu",
       "evidenceList": "Fakti no",
+      "loadSample": "Ielādēt parauga lietu",
+      "loadSampleFailed": "Neizdevās ielādēt parauga lietu",
       "noLists": "Šai lietai nav sarakstu.",
       "pickList": "Izvēlieties sarakstu, pret kura faktiem tiek pārbaudīti šīs lietas dokumenti."
     }
@@ -829,6 +860,7 @@
         "answerIncomplete": "{source, select, organization {Jūsu organizācijas {provider} atslēga atgrieza nepilnīgu atbildi.} other {AI modelis atgrieza nepilnīgu atbildi.}}",
         "providerRefused": "{source, select, organization {{provider} noraidīja pieprasījumu, kas veikts ar jūsu organizācijas atslēgu. Pārbaudiet atslēgu, tās kvotu un norēķinus organizācijas iestatījumos.} other {AI pakalpojumu sniedzējs noraidīja pieprasījumu.}}",
         "providerUnavailable": "{source, select, organization {{provider} pašlaik nav pieejams ar jūsu organizācijas atslēgu.} other {AI pakalpojumu sniedzējs pašlaik nav pieejams.}}",
+        "retryAfter": "Vēlreiz mēģināt varēsiet pēc {time}.",
         "timedOut": "{source, select, organization {{provider} neatbildēja laikā, izmantojot jūsu organizācijas atslēgu.} other {AI modelis neatbildēja laikā.}}",
         "unavailable": "Šim nolēmumam AI analīze nav pieejama."
       },
@@ -1067,7 +1099,6 @@
       }
     },
     "sameCaseNumber": "{count, plural, zero {# nolēmumu ir} one {# nolēmumam ir} other {# nolēmumiem ir}} šis lietas numurs. Izvēlieties tiesu.",
-    "searchAskPrompt": "{query} (judikatūra, {country})",
     "searchLabel": "Meklēt judikatūrā",
     "searchPlaceholder": "Lietas numurs, ECLI vai vārdi, piem. 22 Cdo 2653/2012",
     "searchUnavailable": {
@@ -1125,6 +1156,13 @@
       "provisionMentions": "{count, number}×",
       "provisionMentionsLabel": "{count, plural, zero {# pieminējumu} one {# pieminējums} other {# pieminējumi}}",
       "provisionsCited": "Citētās normas",
+      "provisionsFailed": "Citātu apstrāde neizdevās",
+      "provisionsNoneFound": "Citētas normas nav atrastas",
+      "provisionsProcessing": "Citāti tiek apstrādāti",
+      "provisionsUnavailable": "Citāti nav pieejami",
+      "provisionsUnplaceable": "Citātus nevar atrast nolēmuma tekstā",
+      "provisionsUnsupported": "Šī nolēmuma citātu apstrāde netiek atbalstīta",
+      "provisionsWithheld": "Citāti netiek izpausti",
       "sourceFields": {
         "decisionCategory": "Nolēmuma kategorija",
         "publishedOnWeb": "Publicēts tīmeklī"
@@ -1208,15 +1246,37 @@
     },
     "answerEdit": {
       "acceptFailed": "Neizdevās saglabāt izmaiņu. Mēģiniet vēlreiz.",
+      "aiKind": "Pieprasītā rediģēšana",
       "ask": "Pieprasīt izmaiņas",
+      "authorUnknown": "Nezināms autors",
+      "autolinkLabel": "Šis teksts automātiski kļūst par saiti. Pirms saites noņemšanas mainiet tās etiķeti.",
+      "change": "Izmaiņa {revision}",
+      "editedLabel": "Rediģēta atbilde",
       "failed": "Neizdevās sagatavot izmaiņu. Mēģiniet vēlreiz.",
+      "formatKind": "Formatēšana",
+      "heading": "Virsraksts {level}",
+      "history": "Atbildes vēsture",
+      "historyEmpty": "Nav agrāku versiju.",
       "instruction": "Aprakstiet izmaiņu",
       "instructionRequired": "Aprakstiet, kā mainīt atlasīto tekstu.",
       "invalidSelection": "Šo atlasi nevar rediģēt. Atlasiet nepārtrauktu teksta fragmentu.",
+      "invalidUrl": "Ievadiet derīgu HTTP vai HTTPS adresi.",
+      "linkAddress": "Saites adrese",
+      "orderedList": "Numurēts saraksts",
       "proposal": "Ieteiktā izmaiņa",
       "requesting": "Izmaiņu sagatavošana…",
+      "restoreRefreshFailed": "Atbilde ir atjaunota, taču neizdevās to atsvaidzināt. Atsvaidziniet, lai ielādētu atjaunoto atbildi.",
+      "revertKind": "Atjaunotā versija",
       "stale": "Šī atbilde ir mainījusies. Atlasiet tekstu vēlreiz.",
-      "submit": "Pieprasīt izmaiņu"
+      "submit": "Pieprasīt izmaiņu",
+      "textStyle": "Teksta stils",
+      "unorderedList": "Aizzīmju saraksts",
+      "wholeBlockRequired": "Lai mainītu stilu, atlasiet visu rindkopu vai sarakstu."
+    },
+    "answerQuote": {
+      "showInDecision": "Rādīt nolēmumā",
+      "verified": "Pārbaudīts citāts",
+      "verifiedHint": "Vārds vārdā: {source}"
     },
     "applyMode": {
       "description": "Word saglabā, kurš veica katru izmaiņu. Mēs atcerēsimies jūsu izvēli.",
@@ -1375,6 +1435,7 @@
       "overflow": "+{count, number}",
       "unnamed": "{count, plural, zero {un vēl #} one {un vēl #} other {un vēl #}}"
     },
+    "historyTrimmed": "Agrākās ziņas neizdevās apkopot, tāpēc šajā atbildē ņemta vērā tikai jaunākā sarunas daļa.",
     "improvePrompt": "Uzlabot uzvedni",
     "improvePromptDraftChanged": "Melnraksts mainījās, tāpēc uzlabojums netika lietots.",
     "improvePromptPlainTextOnly": "Uzvedni var uzlabot tikai vienkārša teksta formā.",
@@ -1401,11 +1462,17 @@
     "maxAttachmentsReached": "Maksimāli {count} faili vienā ziņojumā",
     "mention": {
       "category": {
-        "entities": "Šajā lietā"
+        "entities": "Šajā lietā",
+        "sources": "Avoti"
+      },
+      "corpus": {
+        "caseLaw": "Judikatūra · {country}",
+        "legislation": "Tiesību akti · {country}"
       },
       "loadError": "Neizdevās ielādēt vienumus"
     },
     "messageTimestampToday": "Šodien, {time}",
+    "messageUnavailable": "Šo ziņojumu nevar parādīt.",
     "mockModel": {
       "description": "Iepriekš sagatavotas lokālā simulētā modeļa atbildes",
       "label": "Simulēts AI"
@@ -1454,6 +1521,12 @@
       "title": "Ielīmētais teksts"
     },
     "placeholder": "Ierakstiet jautājumu šeit, / prasmēm, @ konteksta pievienošanai",
+    "processSummary": {
+      "analyses": "{count, plural, zero {# analīžu} one {# analīze} other {# analīzes}}",
+      "changesSaved": "{count, plural, zero {# saglabātu izmaiņu} one {# saglabāta izmaiņa} other {# saglabātas izmaiņas}}",
+      "documentEdits": "{count, plural, zero {# dokumenta labojumu} one {# dokumenta labojums} other {# dokumenta labojumi}}",
+      "sourcesChecked": "{count, plural, zero {# pārbaudītu avotu} one {# pārbaudīts avots} other {# pārbaudīti avoti}}"
+    },
     "promptImprovementStrategies": {
       "decompose": {
         "description": "Sadala sarežģītu darbu secīgos apakšuzdevumos.",
@@ -1565,12 +1638,25 @@
       "rejected": "Noraidīts"
     },
     "tabToAsk": "→, lai jautātu: “{prompt}”",
+    "tableChart": {
+      "bar": "Stabiņu",
+      "kind": "Diagrammas veids",
+      "line": "Līniju",
+      "loading": "Tiek izvēlēta diagramma…",
+      "pie": "Sektoru",
+      "scatter": "Izkliedes",
+      "showChart": "Rādīt kā diagrammu",
+      "summary": "Attēloto vērtību skaits: {n, number}.",
+      "unavailable": "Neizdevās izvēlēties diagrammu. Tiek rādīta tabula.",
+      "values": "{label}: {value, number}"
+    },
     "thinking": "Strādāju ar kontekstu",
     "threadFiles": {
       "title": "Šīs tērzēšanas faili"
     },
     "tool": {
       "add_comment": "Komentāra pievienošana",
+      "add_matter_member": "Pievienot lietas dalībnieku",
       "apply-active-docx-edits": "Dokumenta izmaiņu sagatavošana",
       "ares_lookup_company": "Uzņēmuma datu meklēšana",
       "ares_search_companies": "Uzņēmumu datu meklēšana",
@@ -1627,7 +1713,6 @@
       "list_stories": "Dokumenta daļu uzskaitīšana",
       "list_templates": "Veidņu saraksts",
       "load-skill": "Norādījumu lasīšana",
-      "manage_organization": "Pārvaldīt organizāciju",
       "read-contact": "Kontaktpersonas lasīšana",
       "read-content-across-matters": "Satura lasīšana vairākās lietās",
       "read-skill-resource": "Norādījumu lasīšana",
@@ -1637,6 +1722,7 @@
       "read_section": "Sadaļas lasīšana",
       "read_story": "Dokumenta daļas lasīšana",
       "remember": "Saglabāšana atmiņā",
+      "remove_matter_member": "Noņemt lietas dalībnieku",
       "reply_comment": "Atbildēšana uz komentāru",
       "request_secret": "Pieprasa privātu piekļuves informāciju",
       "resolve_comment": "Komentāra atrisināšana",
@@ -1670,6 +1756,7 @@
       "suggest_template_fields": "Iesaka veidnes laukus",
       "unknown": "Rīka izmantošana",
       "update-entity-fields": "Metadatu atjaunināšana",
+      "update_organization_settings": "Atjaunināt komandas iestatījumus",
       "update_reader_annotation": "Rediģēt izcēlumu vai komentāru",
       "use-browser": "Jūsu pārlūkprogrammas izmantošana",
       "use_connector_secret": "Izmanto savienotāja piekļuves informāciju",
@@ -1685,6 +1772,7 @@
       "interrupted": "Pārtraukts pirms pabeigšanas",
       "output": "Izvade",
       "sourceCode": "Pirmkods",
+      "statusWaiting": "Gaida",
       "toggleDetails": "Pārslēgt detaļas",
       "unrestoredFields": "Anonimizētajā režīmā ar īstajām vērtībām neizdevās aizpildīt {count, plural, zero {# laukus} one {# lauku} other {# laukus}}. Pārbaudiet: {fields}"
     },
@@ -1710,7 +1798,8 @@
       "toggleLabel": "Meklēšana tīmeklī",
       "toggleOff": "Izslēgt meklēšanu tīmeklī",
       "toggleOn": "Ieslēgt meklēšanu tīmeklī"
-    }
+    },
+    "workedFor": "Darba ilgums: {duration}"
   },
   "clauses": {
     "addVariant": "Pievienot variantu",
@@ -2155,6 +2244,7 @@
     "versionLabel": "{version}. versija",
     "viewSource": "Skatīt avotu",
     "website": "Vietne",
+    "whenToUse": "Kad izmantot",
     "workflow": "Darbplūsma",
     "workflows": "Darbplūsmas",
     "zoomIn": "Tuvināt",
@@ -2587,11 +2677,14 @@
     "actionFailed": "Darbība neizdevās",
     "api": {
       "badRequest": "Pieprasījumu neizdevās pabeigt.",
+      "caseLawCountryUnavailable": "Šīs valsts judikatūra nav pieejama. Izvēlieties citu valsti.",
+      "caseLawSearchUnavailable": "Šīs valsts judikatūras meklēšana nav pieejama. Tās publiskos tiesu nolēmumus joprojām varat lasīt.",
       "conflict": "Pieprasījums konfliktē ar pašreizējo stāvokli.",
       "forbidden": "Jums nav atļaujas veikt šo darbību.",
+      "legislationCountryUnavailable": "Šīs valsts tiesību akti nav pieejami. Izvēlieties citu valsti.",
+      "legislationSearchUnavailable": "Šīs valsts tiesību aktu meklēšana nav pieejama. Tās publiskos tiesību aktus joprojām varat lasīt.",
       "notFound": "Pieprasīto vienumu neizdevās atrast.",
       "payloadTooLarge": "Pieprasījums ir pārāk liels.",
-      "publicCountryUnavailable": "Šīs valsts tiesību akti un judikatūra nav pieejami. Izvēlieties citu valsti.",
       "rateLimited": "Pārāk daudz pieprasījumu. Lūdzu, mēģiniet vēlāk.",
       "server": "Radās kļūda. Lūdzu, mēģiniet vēlreiz.",
       "serviceUnavailable": "Pakalpojums īslaicīgi nav pieejams. Lūdzu, mēģiniet vēlreiz.",
@@ -2634,6 +2727,10 @@
       "providerRateLimited": "Sasniegts pakalpojuma sniedzēja pieprasījumu limits. Drīzumā mēģiniet vēlreiz.",
       "thirdPartyBoundaryRefusal": "Pieprasījums mēģināja izmantot saturu ārpus atļautā darbvietas konteksta.",
       "usageLimitExceeded": "Sasniegts lietošanas limits.",
+      "validationInvalid": "Laukā ir vērtība, ko nevar saglabāt.",
+      "validationRequired": "Obligātais lauks ir tukšs.",
+      "validationTooLong": "Pārāk garš: izmantojiet ne vairāk kā {limit, number} rakstzīmes.",
+      "validationTooShort": "Pārāk īss: izmantojiet vismaz {limit, number} rakstzīmes.",
       "verificationActiveLimitReached": "Jūsu organizācija ir sasniegusi vienlaicīgu pārbaužu limitu. Pagaidiet, līdz kāda pārbaude beidzas, un mēģiniet vēlreiz.",
       "verificationDailyLimitReached": "Jūsu organizācija ir sasniegusi pārbaužu dienas limitu. Mēģiniet vēlreiz pēc pusnakts (Europe/Prague).",
       "versionConflict": "Kāds cits to mainīja, kamēr rediģējāt. Pārlādējiet, lai iegūtu pašreizējo versiju."
@@ -3004,6 +3101,7 @@
     "checkingDocxEditDescription": "stella vēl pārbauda, vai šo DOCX var droši rediģēt. Mēģiniet vēlreiz, kad dokuments būs pilnībā ielādēts.",
     "checkingDocxEditTitle": "Pārbauda dokumentu",
     "chooseEvidence": "Izvēlieties failu, lai ievietotu numurētu pierādījuma atsauci.",
+    "collaborationSnapshotRecovered": "Saglabāto sadarbības kopiju nevarēja atvērt atkārtoti. Telpa tika atjaunota no pēdējā saglabātā dokumenta; nesaglabātās izmaiņas varēja tikt zaudētas.",
     "comment": "Komentārs",
     "comments": {
       "addPlaceholder": "Pievienot komentāru…",
@@ -3728,6 +3826,10 @@
       "importTitle": "Importēt prasmi",
       "importedSkills": "{count, plural, zero {Importētas # prasmes} one {Importēta # prasme} other {Importētas # prasmes}}",
       "invalidPath": "Ceļā drīkst izmantot tikai mazos burtus, ciparus, punktus, defises vai pasvītras",
+      "invocationAuto": "Automātiski",
+      "invocationAutoHelp": "AI var pats izmantot šo prasmi, ja tā atbilst pieprasījumam.",
+      "invocationManual": "Tikai pēc izsaukuma",
+      "invocationManualHelp": "Tiek izmantota tikai tad, kad to izsaucat ar / vai pievienojat savai ziņai.",
       "license": "Licence: {license}",
       "newFile": "Jauns fails",
       "newFileFilenamePlaceholder": "notes.md",
@@ -4418,6 +4520,8 @@
         "yearMonthSequential": "Gads-mēnesis / Secīgs (2026-02/001)",
         "yearSequential": "Gads / Secīgs (2026/001)"
       },
+      "showInTitle": "Rādīt numuru blakus lietas nosaukumam",
+      "showInTitleDescription": "Ja tas ir izslēgts, virsraksts ir tieši ievadītais nosaukums.",
       "title": "Lietu numerācija",
       "tokenHelp": "Pieejamie marķieri: '{'SEQ'}' (kārtas numurs), '{'YYYY'}' (gads), '{'YY'}' (2 ciparu gads), '{'MM'}' (mēnesis)"
     },
@@ -4588,6 +4692,25 @@
     "tokenHelp": "Kā iegūt tokenu",
     "viewOnGithub": "Skatīt vietnē GitHub"
   },
+  "readerAnswers": {
+    "budgetError": "Atbilžu budžets ir izsmelts.",
+    "citation": "¶{paragraph}",
+    "expand": "Izvērst atbildi",
+    "explain": "Izskaidrot",
+    "externalCitation": "{decision} · ¶{paragraph}",
+    "followUp": "Uzdot papildjautājumu",
+    "invalidCitations": "{count, plural, zero {Neizdevās pārbaudīt # atsauču.} one {Neizdevās pārbaudīt # atsauci.} other {Neizdevās pārbaudīt # atsauces.}}",
+    "loading": "Tiek ģenerēta atbilde…",
+    "minimise": "Sakļaut atbildi",
+    "modelError": "Modelis nevarēja pabeigt šo atbildi.",
+    "networkError": "Savienojums tika pārtraukts. Mēģiniet vēlreiz.",
+    "regenerate": "Ģenerēt atbildi atkārtoti",
+    "selectionError": "Atlasiet tekstu vienā rindkopā (līdz 2000 rakstzīmēm).",
+    "send": "Nosūtīt papildjautājumu",
+    "share": "Kopīgot ar komandu",
+    "timeoutError": "Atbildes saņemšanas laiks ir beidzies. Mēģiniet vēlreiz.",
+    "title": "Atbilde par atlasīto tekstu"
+  },
   "routeError": {
     "backToMatters": "Atgriezties pie lietām",
     "copyReference": "Kopēt kļūdas atsauci",
@@ -4714,9 +4837,19 @@
       "deleteAccountWarningExplanation": "Mēs nosūtīsim apstiprinājuma kodu uz jūsu e-pasta adresi, lai apstiprinātu šo pieprasījumu. Pabeigtā darba vietu vēsture paliks piesaistīta jūsu dzēstajam kontam.",
       "desktop": "Datorlietotne",
       "desktopAppDescription": "Atrodiet visu kopēto un atveriet stella dokumentus jau izmantotajās datora lietotnēs.",
+      "desktopCardApproveDetail": "Apstipriniet, lai saistītu šo datoru ar <bdi>{identity}</bdi> serverī {host}.",
+      "desktopCardApproveTitle": "stella desktop lūdz savienojumu",
+      "desktopCardConnectedDetail": "Saistīts ar <bdi>{identity}</bdi> serverī {host} · versija {version}",
+      "desktopCardConnectedDetailNoVersion": "Saistīts ar <bdi>{identity}</bdi> serverī {host}",
+      "desktopCardConnectedTitle": "stella desktop ir sasaistīts",
+      "desktopCardMissingDetail": "Instalējiet to vai savienojiet, ja tas jau ir instalēts šajā datorā.",
+      "desktopCardMissingTitle": "stella desktop vēl nav sasaistīts",
+      "desktopCardOutdatedDetail": "Versija {version} ir saistīta ar <bdi>{identity}</bdi>. Instalējiet jaunāko versiju, lai dokumenti un aktivitāte turpinātu darboties.",
+      "desktopCardOutdatedTitle": "stella desktop jāatjaunina",
       "desktopClipboardDescription": "Atveriet, meklējiet, kārtojiet un atkārtoti izmantojiet tekstu, kas kopēts no jebkuras lietotnes.",
       "desktopClipboardTitle": "Meklējama starpliktuves vēsture",
       "desktopConnectFailed": "Neizdevās izveidot savienojumu ar stella desktop.",
+      "desktopConnectInstalled": "Ir instalēts, savienot",
       "desktopConnectedAs": "Savienots kā <bdi>{email}</bdi>",
       "desktopDescription": "Starpliktuves vēsture un dokumentu rīki jūsu datorā",
       "desktopDocumentsDescription": "Atveriet stella failus datora lietotnēs; labojumi atgriezīsies pareizajā lietā.",
@@ -5051,17 +5184,21 @@
     "provisionAskSummarize": "Apkopot, kā tiesas piemēro šo normu",
     "provisionAskSummarizePrompt": "Apkopo, kā tiesas piemēro {subject}, un atsaucies uz nolēmumiem, uz kuriem balsties.",
     "provisionDetailsFor": "{provision} informācija",
+    "provisionEffectiveFrom": "spēkā no {date}",
     "provisionHistoryEarliest": "Senākā zināmā redakcija.",
     "provisionHistoryEmpty": "Šai normai nav nevienas redakcijas.",
     "provisionHistoryLoadOlder": "Ielādējiet vecākas redakcijas, lai tās salīdzinātu.",
     "provisionHistoryUnavailable": "Neizdevās ielādēt šīs normas vēsturi.",
+    "provisionPartTextUnavailable": "{provisionLabel} teksts nav pieejams",
     "provisionPromptSubject": "{statute} ({eli}) {provision} redakcijā, kas ir spēkā kopš {date}",
     "provisionPromptSubjectUndated": "{statute} ({eli}) {provision}",
+    "provisionTextUnavailable": "Šīs redakcijas teksts nav pieejams",
     "publisherWindowInconsistent": "Šai dienai spēkā esošo redakciju nevar noteikt: izdevēja dati ir pretrunīgi.",
     "resolvedAlias": "Atpazīts kā {label}",
-    "searchAskPrompt": "{query} ({country} tiesību akti)",
     "searchLabel": "Meklēt tiesību aktos",
     "searchPlaceholder": "Numurs, nosaukums vai virsraksts, piem. 89/2012 Sb.",
+    "showCitedPartOnly": "Rādīt tikai citēto daļu",
+    "showFullProvision": "Rādīt visu normu",
     "showInText": "Rādīt tekstā",
     "statedWindow": "Izdevēja norādītie datumi: {range}",
     "status": {
@@ -5077,7 +5214,6 @@
     "title": "Tiesību akti",
     "validity": "Spēkā no {from} līdz {to}",
     "versionAppliedInDecision": "Nolēmumā <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> piemērotā redakcija (<bdi>{range}</bdi>) · {status}",
-    "wordingValidFrom": "Redakcija ir spēkā kopš {date}",
     "wordingVersionUnknown": "Redakcijas versijas datums nav pieejams"
   },
   "styleSets": {
@@ -5630,7 +5766,6 @@
     "viewVersion": "Skatīt",
     "whenNotToUse": "Kad neizmantot",
     "whenNotToUsePlaceholder": "Kad no šīs veidnes izvairīties?",
-    "whenToUse": "Kad izmantot",
     "whenToUsePlaceholder": "Kad šī veidne būtu jāizmanto? (palīdz AI izvēlēties veidni)"
   },
   "timesheets": {
@@ -5751,7 +5886,7 @@
       "title": "Kopēt uz lietu"
     },
     "create": {
-      "ownerTypeToggle": "Lietas veids",
+      "matterName": "Lietas nosaukums",
       "personalDescription": "Personīgās lietas ir privātas un nav nepieciešams klients. Vēlāk tās var paaugstināt, lai dalītos ar komandu."
     },
     "createNewWorkspace": "Izveidot jaunu lietu",
@@ -6188,7 +6323,6 @@
         }
       },
       "atAGlance": "Apskats",
-      "edited": "rediģēja",
       "getStarted": "Sāciet, augšupielādējot dokumentus vai izveidojot pirmo mapi.",
       "matterDetails": "Lietas detaļas",
       "membersCount": "{count, plural, zero {# dalībnieku} one {# dalībnieks} other {# dalībnieki}}",
@@ -6203,15 +6337,12 @@
       "upcomingTasks": "Gaidāmā agenda",
       "uploaded": "augšupielādēja"
     },
-    "ownerType": {
-      "client": "Klients",
-      "personal": "Personīga"
-    },
     "parties": {
       "addParty": "Pievienot pusi",
       "changeClient": "Mainīt klientu",
       "client": "Klients",
       "noClient": "Klients nav piešķirts",
+      "noClientOptional": "Bez klienta (neobligāti)",
       "noParties": "Šai lietai nav pievienotas puses.",
       "partyRoles": {
         "co_counsel": "Līdzadvokāts",

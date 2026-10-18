@@ -49,7 +49,7 @@ export const ApplicationRailContent = ({
 }: React.ComponentProps<"div">) => (
   <div
     className={cn(
-      "flex min-h-0 flex-1 [scrollbar-width:none] flex-col gap-2 overflow-x-hidden overflow-y-auto [&::-webkit-scrollbar]:hidden",
+      "flex min-h-0 flex-1 [scrollbar-width:none] flex-col gap-2 overflow-x-hidden overflow-y-auto overscroll-contain [&::-webkit-scrollbar]:hidden",
       className,
     )}
     data-slot="application-rail-content"

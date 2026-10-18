@@ -17,6 +17,7 @@ Object.assign(import.meta.env, {
   VITE_PUBLIC_APP_URL: "http://localhost:3000",
 });
 
+const { isPublicLawPathIndexable } = await import("@/public-crawl-policy");
 const {
   createLegalCollectionJsonLd,
   createCaseLawDecisionJsonLd,
@@ -26,6 +27,23 @@ const {
 } = await import("@/lib/public-law-seo");
 
 describe("public law SEO", () => {
+  test("a path robots.txt disallows is noindex even when law crawling is on", () => {
+    const robotsOf = (path: `/${string}`) =>
+      createPublicLawHead({
+        crawlAllowed: isPublicLawPathIndexable(path, true),
+        path,
+        title: "t",
+        type: "website",
+      }).meta.find((entry) => "name" in entry && entry.name === "robots");
+
+    expect(robotsOf("/law/coverage")).toMatchObject({
+      content: "noindex,nofollow",
+    });
+    expect(robotsOf("/law")).toMatchObject({
+      content: expect.stringContaining("index,follow"),
+    });
+  });
+
   test("textless pages explicitly emit noindex without changing the default head", () => {
     const input = {
       crawlAllowed: true,

@@ -41,9 +41,7 @@ const isAmbiguousOptionalBag = (typeNode: unknown): boolean => {
   if (typeNode.type === "TSTypeLiteral") {
     const members = Array.isArray(typeNode.members) ? typeNode.members : [];
     const propertyMembers = members.filter(
-      (member) =>
-        isAstNode(member) &&
-        member.type === "TSPropertySignature",
+      (member) => isAstNode(member) && member.type === "TSPropertySignature",
     );
     const optionalCount = propertyMembers.filter(
       (member) => member.optional === true,
@@ -66,14 +64,18 @@ const parameterType = (parameter: unknown) => {
   if (!isAstNode(annotation) || annotation.type !== "TSTypeAnnotation") {
     return null;
   }
-  return isAstNode(annotation.typeAnnotation) ? annotation.typeAnnotation : null;
+  return isAstNode(annotation.typeAnnotation)
+    ? annotation.typeAnnotation
+    : null;
 };
 
 const mutationFunctionFromOptions = (options: unknown) => {
   if (!isAstNode(options) || options.type !== "ObjectExpression") {
     return null;
   }
-  const properties = Array.isArray(options.properties) ? options.properties : [];
+  const properties = Array.isArray(options.properties)
+    ? options.properties
+    : [];
   for (const property of properties) {
     if (
       !isAstNode(property) ||
@@ -142,6 +144,13 @@ export default eslintCompatPlugin({
         };
 
         return {
+          // createOnce state outlives a file: start every file empty, or a
+          // later file reports earlier files' calls.
+          before() {
+            useMutationNames.clear();
+            localTypeNodes.clear();
+            callExpressions.length = 0;
+          },
           ImportDeclaration(node) {
             if (
               !isStringLiteral(node.source) ||

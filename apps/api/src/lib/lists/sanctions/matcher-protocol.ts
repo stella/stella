@@ -4,6 +4,7 @@ import type {
   SanctionsSource,
   ScreeningQuery,
   ScreeningResult,
+  ScreeningWorkUsage,
 } from "@stll/sanctions";
 
 export type SanctionsMatcherRequest = {
@@ -48,7 +49,7 @@ export type SanctionsMatcherMessage =
 
 // Plain data only: Result and tagged-error prototypes do not cross threads.
 export type SanctionsMatcherReply =
-  | { status: "screened"; result: ScreeningResult }
+  | { status: "screened"; result: ScreeningResult; work: ScreeningWorkUsage }
   | { status: "work-limit" }
   | { status: "unavailable" }
   | { status: "entries-loaded" }

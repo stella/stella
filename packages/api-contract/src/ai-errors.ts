@@ -6,6 +6,7 @@ export const AI_ERROR_KINDS = [
   "provider_unavailable",
   "provider_stream_incomplete",
   "output_incomplete",
+  "output_moderated",
   "output_invalid",
   "deadline_exceeded",
   "loop_detected",

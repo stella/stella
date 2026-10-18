@@ -3,6 +3,8 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { sleep } from "@stll/concurrency/sleep";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 import type { AuthCapabilities } from "./sign-in-panel.logic";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/auth/sign-in" });
@@ -41,7 +43,7 @@ afterEach(() => {
 afterAll(async () => {
   await sleep(0);
   globalThis.fetch = originalFetch;
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 // The server sets this cookie after a sign-in; the page only reads it.

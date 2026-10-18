@@ -13,6 +13,7 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import { mapWithConcurrency } from "@stll/concurrency";
+import { locateQuote } from "@stll/legal-ast/quote-locate";
 
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -31,7 +32,6 @@ import {
   createVerificationCall,
 } from "@/api/lib/lists/verification/model-call";
 import type { VerificationModelDeps } from "@/api/lib/lists/verification/model-call";
-import { locateQuote } from "@/api/lib/lists/verification/quote-locate";
 
 /** Blocks per extraction call: small enough that the model does not skim. */
 const WINDOW_BLOCKS = 40;
@@ -47,7 +47,8 @@ const rawClaimSchema = v.strictObject({
   framing: v.picklist(CLAIM_FRAMINGS),
 });
 
-const extractionSchema = v.strictObject({
+/** Read by the structured-output role contract test. @public */
+export const extractionSchema = v.strictObject({
   claims: v.array(rawClaimSchema),
 });
 

@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import { writeZipEntry } from "@stll/docx-utils";
+
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 
@@ -27,11 +29,11 @@ const buildDocx = async (
   const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`;
   const rels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`;
   const zip = new JSZip();
-  zip.file("[Content_Types].xml", contentTypes);
-  zip.file("_rels/.rels", rels);
-  zip.file("word/document.xml", documentXml);
+  writeZipEntry(zip, "[Content_Types].xml", contentTypes);
+  writeZipEntry(zip, "_rels/.rels", rels);
+  writeZipEntry(zip, "word/document.xml", documentXml);
   if (options?.numberingXml !== undefined) {
-    zip.file("word/numbering.xml", options.numberingXml);
+    writeZipEntry(zip, "word/numbering.xml", options.numberingXml);
   }
   return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
 };

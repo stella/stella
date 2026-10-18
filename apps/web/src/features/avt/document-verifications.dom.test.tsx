@@ -4,6 +4,8 @@ import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 
 import { sleep } from "@stll/concurrency/sleep";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 Object.assign(import.meta.env, { VITE_API_URL: "http://localhost:3001" });
 
@@ -151,7 +153,7 @@ afterAll(async () => {
   });
   notice.mockRestore();
   fetchBoundary.mockRestore();
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 test("a large document starts only after confirming its displayed estimate", async () => {

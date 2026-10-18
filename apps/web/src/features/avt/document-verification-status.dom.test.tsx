@@ -7,6 +7,7 @@ import { stellaToast } from "@stll/ui/toast";
 
 import messages from "@/i18n/langs/en.json";
 import type { WorkspaceFile } from "@/lib/workspaces/queries/entities";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 let respondLatest: (request: Request) => Promise<Response> | Response = () => {
@@ -98,7 +99,7 @@ afterAll(async () => {
     await sleep(50);
   });
   fetchBoundary.mockRestore();
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 test("an empty matter shows its document empty state without requesting statuses", () => {
   const boundary = answerLatest(() => Response.json({ runs: [] }));

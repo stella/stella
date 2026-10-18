@@ -13,7 +13,7 @@ import {
   readExcludedChatTools,
   readSkillDisplayName,
 } from "@stll/skills/frontmatter";
-import type { SkillMetadata } from "@stll/skills/frontmatter";
+import type { SkillInvocation, SkillMetadata } from "@stll/skills/frontmatter";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
@@ -83,6 +83,8 @@ export const chatSkillId = (
 
 export type AvailableChatSkill = SkillMetadata & {
   displayName: string;
+  /** Applied by `offerSkillsToModel` before any model sees the skill. */
+  invocation: SkillInvocation;
 } & (
     | { source: typeof CHAT_SKILL_SOURCE.installed; id: SafeId<"agentSkill"> }
     | { source: typeof CHAT_SKILL_SOURCE.builtIn }
@@ -403,6 +405,7 @@ export const listAvailableChatSkillMetadata = async ({
         name: agentSkills.name,
         slug: agentSkills.slug,
         description: agentSkills.description,
+        invocation: agentSkills.invocation,
         version: agentSkills.version,
         license: agentSkills.license,
         compatibility: agentSkills.compatibility,
@@ -740,6 +743,7 @@ type InstalledSkillMetadataRow = {
   compatibility: string | null;
   description: string;
   id: SafeId<"agentSkill">;
+  invocation: SkillInvocation;
   license: string | null;
   metadata: Record<string, string>;
   name: string;
@@ -771,6 +775,7 @@ const resolveSkillPrecedence = (
       description: row.description,
       displayName: row.name,
       id: row.id,
+      invocation: row.invocation,
       license: row.license,
       metadata: row.metadata,
       name: row.slug,

@@ -5,8 +5,8 @@ import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { toSafeId } from "@/api/lib/branded-types";
-import { containsRawUuid } from "@/api/lib/chat/projection-schema";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import { containsRawUuid } from "@/api/lib/chat/uuid-mask";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
   brandPersistedEntityId,

@@ -20,6 +20,7 @@ import { eq } from "drizzle-orm";
 import JSZip from "jszip";
 
 import { API_FILE_SECURITY_REJECTED_ERROR_CODE } from "@stll/api-contract";
+import { writeZipEntry } from "@stll/docx-utils";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { styleSets, templates, templateVersions } from "@/api/db/schema";
@@ -154,13 +155,15 @@ const expectErr = <T, E>(result: Result<T, E>): E => {
  *  the upload scan rejects. */
 const attachedTemplateDocx = async (): Promise<Uint8Array> => {
   const zip = new JSZip();
-  zip.file(
+  writeZipEntry(
+    zip,
     "word/document.xml",
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
       "<w:body><w:p><w:r><w:t>{{ client_name }}</w:t></w:r></w:p></w:body></w:document>",
   );
-  zip.file(
+  writeZipEntry(
+    zip,
     "word/_rels/document.xml.rels",
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +

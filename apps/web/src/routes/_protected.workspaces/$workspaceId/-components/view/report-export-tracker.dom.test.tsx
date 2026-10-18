@@ -4,6 +4,7 @@ import { afterAll, expect, spyOn, test } from "bun:test";
 import { sleep } from "@stll/concurrency/sleep";
 
 import messages from "@/i18n/langs/en.json";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/exports" });
 const { cleanup, render, waitFor } = await import("@testing-library/react");
@@ -24,7 +25,7 @@ afterAll(async () => {
   await act(async () => {
     await sleep(50);
   });
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 test("failed exports preserve worker reasons when adding or settling their toast", async () => {

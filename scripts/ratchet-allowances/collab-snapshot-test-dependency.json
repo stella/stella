@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "API snapshot recovery tests construct and encode persisted Yjs state; declare their direct test dependency."
+}

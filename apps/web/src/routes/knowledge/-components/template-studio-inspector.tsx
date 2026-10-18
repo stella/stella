@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
+import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
 import type {
   DirectiveRange,
   TemplatePreviewSpan,
@@ -206,7 +207,7 @@ function TemplateStudioInspectorView({
 
   const facetLabels: Record<StudioFacet, string> = {
     fields: t("templates.fields"),
-    guidance: t("templates.whenToUse"),
+    guidance: t("common.whenToUse"),
     history: t("common.history"),
     fill: t("templates.fill"),
   };
@@ -259,6 +260,7 @@ function TemplateStudioInspectorView({
         rename={{
           active: rename.active,
           value: rename.value,
+          maxLength: DEFAULT_VARCHAR_MAX_LENGTH,
           onChange: (value) => setRename({ active: true, value }),
           onCommit: () =>
             detached(commitRename(), "template-studio-inspector.commit-rename"),
@@ -1511,7 +1513,7 @@ const GuidanceFields = ({
   return (
     <div className="flex flex-col gap-4 p-4">
       <GuidanceNote
-        label={t("templates.whenToUse")}
+        label={t("common.whenToUse")}
         onBlur={() => detached(commit(), "template-studio-inspector.commit")}
         onChange={setUseText}
         placeholder={t("templates.whenToUsePlaceholder")}

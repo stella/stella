@@ -20,6 +20,7 @@ import {
 } from "@/api/lib/api-handlers";
 import {
   publicCountryUnavailableAnswer,
+  readPublicLawCountry,
   withPublicCountryUnavailable,
 } from "@/api/lib/legal-search/public-law-country";
 import { resetFailureObservationsForTesting } from "@/api/lib/observability/failure-shadow";
@@ -32,13 +33,14 @@ import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry"
 import type { RecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 
 const pendingCountry = PUBLIC_COUNTRIES.find(
-  (country) => PUBLIC_COUNTRY_CAPABILITIES[country] !== "admitted",
+  (country) => PUBLIC_COUNTRY_CAPABILITIES[country].legislation !== "admitted",
 );
 
 // Built through the owner rather than read from the capability map, so the
 // lifecycle is proven even once every advertised country is admitted.
 const constructedRefusal: PublicCountryUnavailable = {
   code: PUBLIC_COUNTRY_UNAVAILABLE_CODE,
+  domain: "caseLaw",
   status: "unavailable",
   country: PUBLIC_COUNTRIES.at(0) ?? panic("No advertised public country"),
   reason: "withdrawn",
@@ -72,8 +74,8 @@ const buildApp = () =>
     })
     .onError((context) => answerRequestError(context))
     .onAfterHandle(async (context) => await completeRequest(context))
-    .use(publicLegislationRoute)
-    .get("/refusing", refusing.handler, refusing.config);
+    .group("/v1", (app) => app.use(publicLegislationRoute))
+    .get("/v1/contacts/search", refusing.handler, refusing.config);
 
 describe("typed public country unavailability through the request lifecycle", () => {
   let logs: RecordingLogger;
@@ -106,7 +108,7 @@ describe("typed public country unavailability through the request lifecycle", ()
 
   test("an owner-built refusal answers its status and is not a server fault", async () => {
     const response = await buildApp().handle(
-      new Request("http://localhost/refusing"),
+      new Request("http://localhost/v1/contacts/search"),
     );
 
     expect(response.status).toBe(PUBLIC_COUNTRY_UNAVAILABLE_STATUS);
@@ -120,12 +122,17 @@ describe("typed public country unavailability through the request lifecycle", ()
       const country = pendingCountry ?? panic("No pending public country");
       const response = await buildApp().handle(
         new Request(
-          `http://localhost/law/statutes/search?country=${country}&query=synthetic`,
+          `http://localhost/v1/law/statutes/search?country=${country}&query=synthetic`,
         ),
       );
 
       expect(response.status).toBe(PUBLIC_COUNTRY_UNAVAILABLE_STATUS);
-      expect(await response.json()).toEqual(publicCountryUnavailable(country));
+      expect(await response.json()).toEqual(
+        publicCountryUnavailable(country, {
+          domain: "legislation",
+          surface: "search",
+        }),
+      );
       expectAnsweredClientOutcome();
     },
   );
@@ -213,5 +220,38 @@ describe("declared public country unavailability", () => {
         .map(({ name }) => name)
         .filter((name) => !declaring.has(name)),
     ).toEqual([]);
+  });
+});
+
+describe("a pages_public country on the shared read", () => {
+  const capabilities = {
+    ...PUBLIC_COUNTRY_CAPABILITIES,
+    SVK: { ...PUBLIC_COUNTRY_CAPABILITIES.SVK, caseLaw: "pages_public" },
+  } as const;
+  const admitted = ["CZE", "SVK"];
+
+  test("a page read succeeds", () => {
+    expect(
+      readPublicLawCountry("SVK", {
+        domain: "caseLaw",
+        admitted,
+        capabilities,
+        surface: "pages",
+      }),
+    ).toEqual({ kind: "read", country: "SVK" });
+  });
+
+  test("a search read stops with the unavailable answer before any query", () => {
+    expect(
+      readPublicLawCountry("SVK", {
+        domain: "caseLaw",
+        admitted,
+        capabilities,
+        surface: "search",
+      }),
+    ).toMatchObject({
+      kind: "unavailable",
+      answer: { response: { country: "SVK", reason: "pages_public" } },
+    });
   });
 });

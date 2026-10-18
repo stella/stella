@@ -17,12 +17,13 @@ const unsafeScriptUrl = ["java", "script:alert(1)"].join("");
 
 const {
   ChatRichMessagePart,
-  RichContentErrorBoundary,
   applyMcpAppFrameTitle,
   normalizeUiResourcePart,
   toRenderableMediaSource,
   withMcpAppFrameTitle,
 } = await import("@/components/chat/chat-rich-message-part");
+const { ChatRenderErrorBoundary } =
+  await import("@/components/chat/chat-render-error-boundary");
 
 const renderMediaPart = (part: RichChatPart) =>
   renderToStaticMarkup(
@@ -54,7 +55,8 @@ describe("rich chat message parts", () => {
   });
 
   test("renders the local fallback after a rich-part failure", () => {
-    const boundary = new RichContentErrorBoundary({
+    const boundary = new ChatRenderErrorBoundary({
+      surface: "chat-rich-content",
       children: createElement("div", null, "interactive resource"),
       fallback: createElement("div", null, "rich content unavailable"),
     });
@@ -63,7 +65,11 @@ describe("rich chat message parts", () => {
       "interactive resource",
     );
 
-    boundary.state = RichContentErrorBoundary.getDerivedStateFromError();
+    // React merges derived state into the current state.
+    boundary.state = {
+      ...boundary.state,
+      ...ChatRenderErrorBoundary.getDerivedStateFromError(),
+    };
 
     expect(renderToStaticMarkup(boundary.render())).toContain(
       "rich content unavailable",

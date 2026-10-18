@@ -14,6 +14,7 @@ import { panic } from "better-result";
 import ts from "typescript";
 
 import { HIGH_VOLUME_TABLES } from "../apps/api/src/db/high-volume-tables.ts";
+import { PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT } from "../apps/api/src/lib/public-law-relations.ts";
 
 export type SqlPerfHit = {
   kind:
@@ -47,7 +48,7 @@ export const isBaselinedSqlPerfKind = (kind: SqlPerfHit["kind"]): boolean =>
 
 const LIKE = /\b(?:NOT\s+)?I?LIKE\b/giu;
 const CORPUS =
-  /\b(?:case_law_decisions|legislation_documents|case_law_[a-z_]*citation[a-z_]*|caseLawDecisions|legislationDocuments|caseLaw\w*Citation\w*)\b/iu;
+  /\b(?:case_law_(?:published_|unredacted_)?decisions|legislation_documents|case_law_[a-z_]*citation[a-z_]*|(?:published|unredacted)?CaseLawDecisions|legislationDocuments|caseLaw\w*Citation\w*)\b/iu;
 const GROUP_EXPRESSION =
   /\b(?:to_char|date_trunc|extract|substring|split_part|coalesce|lower|cast)\s*\(|::\s*text\b|->>/iu;
 const GROUP_NON_COLUMNS =
@@ -513,26 +514,146 @@ const COMPARISONS = new Set([
 const CURSOR_COMPARISONS = new Set(["gt", "gte", "lt", "lte"]);
 const REPORT_CORPUS_TABLES = new Set([
   ...HIGH_VOLUME_TABLES,
+  PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT.publishedCaseLawDecisions,
+  PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT.unredactedCaseLawDecisions,
   "legislation_documents",
   "legislation_search_documents",
 ]);
 
+const schemaRelationNames = new Map<string, string>(
+  Object.entries(PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT),
+);
 const sqlTableName = (name: string): string =>
+  schemaRelationNames.get(name) ??
   name.replaceAll(/([a-z\d])([A-Z])/gu, "$1_$2").toLowerCase();
 
-const isCorpusColumn = (column: string, bindings: ConstBindings): boolean => {
+type SelectedColumnOfOptions = {
+  expression: ts.Expression;
+  name: string;
+  bindings: ConstBindings;
+  seen?: Set<string>;
+};
+
+const selectedColumnOf = ({
+  expression,
+  name,
+  bindings,
+  seen = new Set<string>(),
+}: SelectedColumnOfOptions): ts.Expression | undefined => {
+  let current = expression;
+  if (
+    ts.isCallExpression(current) &&
+    ts.isIdentifier(current.expression) &&
+    !seen.has(current.expression.text)
+  ) {
+    seen.add(current.expression.text);
+    const producer = bindings.get(current.expression.text)?.at(0)?.initializer;
+    if (producer !== undefined && ts.isArrowFunction(producer)) {
+      if (!ts.isBlock(producer.body)) {
+        return selectedColumnOf({
+          expression: producer.body,
+          name,
+          bindings,
+          seen,
+        });
+      }
+      const statement = producer.body.statements.at(0);
+      if (
+        producer.body.statements.length === 1 &&
+        statement !== undefined &&
+        ts.isReturnStatement(statement) &&
+        statement.expression !== undefined
+      ) {
+        return selectedColumnOf({
+          expression: statement.expression,
+          name,
+          bindings,
+          seen,
+        });
+      }
+    }
+  }
+  while (
+    ts.isCallExpression(current) &&
+    ts.isPropertyAccessExpression(current.expression)
+  ) {
+    if (current.expression.name.text === "select") {
+      const projection = current.arguments.at(0);
+      if (
+        projection === undefined ||
+        !ts.isObjectLiteralExpression(projection)
+      ) {
+        return undefined;
+      }
+      const selected = projection.properties.find(
+        (property) =>
+          ts.isPropertyAssignment(property) &&
+          ((ts.isIdentifier(property.name) && property.name.text === name) ||
+            (ts.isStringLiteralLike(property.name) &&
+              property.name.text === name)),
+      );
+      return selected !== undefined && ts.isPropertyAssignment(selected)
+        ? selected.initializer
+        : undefined;
+    }
+    current = current.expression.expression;
+  }
+  return undefined;
+};
+
+type IsCorpusColumnOptions = {
+  column: string;
+  bindings: ConstBindings;
+  seen?: Set<string>;
+};
+
+const isCorpusColumn = ({
+  column,
+  bindings,
+  seen = new Set<string>(),
+}: IsCorpusColumnOptions): boolean => {
   const owner = column.slice(0, column.lastIndexOf("."));
+  if (owner.length === 0) {
+    return false;
+  }
   if (REPORT_CORPUS_TABLES.has(sqlTableName(owner))) {
     return true;
   }
+  if (seen.has(column)) {
+    return false;
+  }
+  seen.add(column);
   const alias = bindings.get(owner)?.at(0)?.initializer;
-  return (
+  if (
     alias !== undefined &&
     ts.isCallExpression(alias) &&
     ts.isIdentifier(alias.expression) &&
     alias.expression.text === "alias" &&
     alias.arguments[0] !== undefined &&
     REPORT_CORPUS_TABLES.has(sqlTableName(alias.arguments[0].getText()))
+  ) {
+    return true;
+  }
+  const declarations = bindings.get(owner);
+  return (
+    declarations !== undefined &&
+    declarations.length > 0 &&
+    declarations.every(({ initializer }) => {
+      const selected = selectedColumnOf({
+        expression: initializer,
+        name: column.slice(column.lastIndexOf(".") + 1),
+        bindings,
+      });
+      return (
+        selected !== undefined &&
+        ts.isPropertyAccessExpression(selected) &&
+        isCorpusColumn({
+          column: selected.getText(),
+          bindings,
+          seen: new Set(seen),
+        })
+      );
+    })
   );
 };
 
@@ -669,8 +790,8 @@ const isSourceRestrictionColumn = (
   const owner = resolve(column.expression, bindings).getText(file);
   if (column.name.text === "sourceId") {
     return (
-      isCorpusColumn(column.getText(file), bindings) ||
-      isCorpusColumn(`${owner}.sourceId`, bindings)
+      isCorpusColumn({ column: column.getText(file), bindings }) ||
+      isCorpusColumn({ column: `${owner}.sourceId`, bindings })
     );
   }
   return (
@@ -728,11 +849,14 @@ const drizzleSourceCount = (
   const state = {
     corpus:
       countTable !== undefined &&
-      (isCorpusColumn(`${countTable.getText(file)}.sourceId`, bindings) ||
-        isCorpusColumn(
-          `${resolve(countTable, bindings).getText(file)}.sourceId`,
+      (isCorpusColumn({
+        column: `${countTable.getText(file)}.sourceId`,
+        bindings,
+      }) ||
+        isCorpusColumn({
+          column: `${resolve(countTable, bindings).getText(file)}.sourceId`,
           bindings,
-        )),
+        })),
     count: dollarCount,
     source: false,
   };
@@ -777,11 +901,14 @@ const drizzleSourceCount = (
           const table = value.arguments.at(0);
           if (table !== undefined) {
             state.corpus ||=
-              isCorpusColumn(`${table.getText(file)}.sourceId`, bindings) ||
-              isCorpusColumn(
-                `${resolve(table, bindings).getText(file)}.sourceId`,
+              isCorpusColumn({
+                column: `${table.getText(file)}.sourceId`,
                 bindings,
-              );
+              }) ||
+              isCorpusColumn({
+                column: `${resolve(table, bindings).getText(file)}.sourceId`,
+                bindings,
+              });
           }
         }
       }
@@ -854,7 +981,10 @@ const drizzleSourceCount = (
             otherValue !== undefined &&
             (!ts.isPropertyAccessExpression(otherValue) ||
               (!isSourceRestrictionColumn(otherValue, context) &&
-                !isCorpusColumn(otherValue.getText(file), bindings)))
+                !isCorpusColumn({
+                  column: otherValue.getText(file),
+                  bindings,
+                })))
           ) {
             state.source ||= isSourceRestrictionColumn(column, context);
           }
@@ -1001,7 +1131,7 @@ export const reportSqlPerfOrColumns = (
       if (
         columns.size > 1 &&
         !isKeysetOr(node, imports, bindings, file) &&
-        [...columns].some((column) => isCorpusColumn(column, bindings))
+        [...columns].some((column) => isCorpusColumn({ column, bindings }))
       ) {
         hits.push(location(file, node.getStart(file)));
       }
@@ -1025,7 +1155,7 @@ export const reportSqlPerfOrColumns = (
           const expression = expressions[Number(expressionIndex)];
           return (
             expression !== undefined &&
-            isCorpusColumn(expression.getText(file), bindings)
+            isCorpusColumn({ column: expression.getText(file), bindings })
           );
         }
         const owner = column.slice(0, column.lastIndexOf("."));

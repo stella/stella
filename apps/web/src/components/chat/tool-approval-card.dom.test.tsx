@@ -2,6 +2,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { testChatApprovalContextValue } from "@/components/chat/chat-approval-context.test-fixtures";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "https://app.example.test" });
 const { cleanup, render } = await import("@testing-library/react");
@@ -14,7 +15,7 @@ const { ToolApprovalCard } = await import("./tool-approval-card");
 
 afterEach(cleanup);
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 test("a denied approval restored as an SDK error shows only its denial status", () => {

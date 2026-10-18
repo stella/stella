@@ -1,10 +1,12 @@
 import { and, desc, eq } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
+import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
+
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  publishedLegislationDocument,
+  publishedLegislationDocumentFor,
   publishedLegislationCountryFor,
 } from "@/api/lib/legal-search/legislation-redistribution";
 import {
@@ -38,6 +40,7 @@ export type LegislationWorkKey = {
 export const selectWorkKey = async (
   tx: LegislationReadTransaction,
   documentId: SafeId<"legislationDocument">,
+  surface: PublicCountrySurface,
 ): Promise<LegislationWorkKey | null> => {
   const [work] = await tx
     .select({
@@ -53,7 +56,7 @@ export const selectWorkKey = async (
     .where(
       and(
         eq(legislationDocuments.id, documentId),
-        publishedLegislationDocument,
+        publishedLegislationDocumentFor(surface),
       ),
     )
     .limit(1);
@@ -62,8 +65,11 @@ export const selectWorkKey = async (
 };
 
 /** Restricts a `legislation_documents` scan to one Work. */
-export const workKeyConditions = (work: LegislationWorkKey): SQL[] => [
-  publishedLegislationCountryFor(legislationDocuments.country),
+export const workKeyConditions = (
+  work: LegislationWorkKey,
+  surface: PublicCountrySurface,
+): SQL[] => [
+  publishedLegislationCountryFor(legislationDocuments.country, surface),
   eq(legislationDocuments.sourceId, work.sourceId),
   eq(legislationDocuments.eli, work.eli),
   eq(legislationDocuments.language, work.language),
@@ -88,11 +94,12 @@ export const workKeyConditions = (work: LegislationWorkKey): SQL[] => [
 export const selectDefaultVersionId = async (
   tx: LegislationReadTransaction,
   work: LegislationWorkKey,
+  surface: PublicCountrySurface,
 ): Promise<SafeId<"legislationDocument"> | null> => {
   const [version] = await tx
     .select({ id: legislationDocuments.id })
     .from(legislationDocuments)
-    .where(and(...workKeyConditions(work), notWithdrawn(documentRef)))
+    .where(and(...workKeyConditions(work, surface), notWithdrawn(documentRef)))
     .orderBy(
       desc(inForceToday(documentRef)),
       desc(eligibleExpression(documentRef)),

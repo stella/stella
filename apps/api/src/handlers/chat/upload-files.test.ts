@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import JSZip from "jszip";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
+import { writeZipEntry } from "@stll/docx-utils";
 import { sha256Hex as legacySha256Hex } from "@stll/sha256/node";
 
 import type { Transaction } from "@/api/db/root";
@@ -57,7 +58,8 @@ const requestKeys = (method: "DELETE" | "GET" | "PUT"): string[] =>
 /** Minimal DOCX with a heading and a body paragraph, for extraction tests. */
 const makeDocxBytes = async (): Promise<Uint8Array> => {
   const zip = new JSZip();
-  zip.file(
+  writeZipEntry(
+    zip,
     "word/document.xml",
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
@@ -66,7 +68,8 @@ const makeDocxBytes = async (): Promise<Uint8Array> => {
   <w:p><w:r><w:t>Jan Novak signs here.</w:t></w:r></w:p>
 </w:body></w:document>`,
   );
-  zip.file(
+  writeZipEntry(
+    zip,
     "[Content_Types].xml",
     `<?xml version="1.0" encoding="UTF-8"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">

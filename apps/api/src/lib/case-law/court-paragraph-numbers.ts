@@ -2,7 +2,7 @@ import { inArray } from "drizzle-orm";
 
 import { courtParagraphNumbersByAnchor } from "@stll/legal-ast/court-paragraph-number";
 
-import { caseLawDecisions } from "@/api/db/schema";
+import { publishedCaseLawDecisions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
@@ -46,6 +46,7 @@ export const loadCourtParagraphNumbers = async ({
   }
   const rows = await withRedistributableDecisions(
     caseLawDb,
+    "search",
     ids,
     async (subjects) => {
       const [first] = subjects;
@@ -53,15 +54,15 @@ export const loadCourtParagraphNumbers = async ({
         ? []
         : await first.tx
             .select({
-              id: caseLawDecisions.id,
-              astS3Key: caseLawDecisions.astS3Key,
-              contentHash: caseLawDecisions.contentHash,
-              documentAst: caseLawDecisions.documentAst,
+              id: publishedCaseLawDecisions.id,
+              astS3Key: publishedCaseLawDecisions.astS3Key,
+              contentHash: publishedCaseLawDecisions.contentHash,
+              documentAst: publishedCaseLawDecisions.documentAst,
             })
-            .from(caseLawDecisions)
+            .from(publishedCaseLawDecisions)
             .where(
               inArray(
-                caseLawDecisions.id,
+                publishedCaseLawDecisions.id,
                 subjects.map((subject) => subject.id),
               ),
             );

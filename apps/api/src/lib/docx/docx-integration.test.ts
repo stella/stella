@@ -10,6 +10,8 @@
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import JSZip from "jszip";
 
+import { writeZipEntry } from "@stll/docx-utils";
+
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 
@@ -43,8 +45,9 @@ const splitRuns = (text: string, chunkSize: number) => {
 
 const makeDocx = async (documentXml: string): Promise<ScannedFile> => {
   const zip = new JSZip();
-  zip.file("word/document.xml", documentXml);
-  zip.file(
+  writeZipEntry(zip, "word/document.xml", documentXml);
+  writeZipEntry(
+    zip,
     "[Content_Types].xml",
     [
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
@@ -57,7 +60,8 @@ const makeDocx = async (documentXml: string): Promise<ScannedFile> => {
       "</Types>",
     ].join(""),
   );
-  zip.file(
+  writeZipEntry(
+    zip,
     "_rels/.rels",
     [
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
@@ -80,10 +84,11 @@ const makeDocxWithHeaderFooter = async (
   footerXml: string,
 ): Promise<ScannedFile> => {
   const zip = new JSZip();
-  zip.file("word/document.xml", bodyXml);
-  zip.file("word/header1.xml", headerXml);
-  zip.file("word/footer1.xml", footerXml);
-  zip.file(
+  writeZipEntry(zip, "word/document.xml", bodyXml);
+  writeZipEntry(zip, "word/header1.xml", headerXml);
+  writeZipEntry(zip, "word/footer1.xml", footerXml);
+  writeZipEntry(
+    zip,
     "[Content_Types].xml",
     [
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
@@ -102,7 +107,8 @@ const makeDocxWithHeaderFooter = async (
       "</Types>",
     ].join(""),
   );
-  zip.file(
+  writeZipEntry(
+    zip,
     "_rels/.rels",
     [
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
@@ -115,7 +121,8 @@ const makeDocxWithHeaderFooter = async (
       "</Relationships>",
     ].join(""),
   );
-  zip.file(
+  writeZipEntry(
+    zip,
     "word/_rels/document.xml.rels",
     [
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
@@ -333,7 +340,7 @@ describe("a legacy custom XML manifest never leaves in a filled document", () =>
     docx: ScannedFile,
   ): Promise<ScannedFile> => {
     const zip = await JSZip.loadAsync(docx.bytes);
-    zip.file("customXml/item1.xml", LEGACY_MANIFEST_PART);
+    writeZipEntry(zip, "customXml/item1.xml", LEGACY_MANIFEST_PART);
     return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
   };
 

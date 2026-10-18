@@ -23,6 +23,8 @@ import {
   ModelDeadlineExceededError,
   ModelOutputIncompleteError,
   ModelOutputInvalidError,
+  ModelOutputModeratedError,
+  ModelRunUnfinishedError,
   ProviderCallError,
 } from "@/api/lib/errors/provider-call-error";
 import {
@@ -101,6 +103,8 @@ const structuredOutputFailureKind = (
 const NAMED_RUN_FAILURE_KINDS = [
   [ModelOutputIncompleteError, "output_incomplete"],
   [ModelOutputInvalidError, "output_invalid"],
+  [ModelOutputModeratedError, "output_moderated"],
+  [ModelRunUnfinishedError, "provider_stream_incomplete"],
   [ModelDeadlineExceededError, "deadline_exceeded"],
 ] as const satisfies readonly (readonly [
   abstract new (...args: never) => Error,
@@ -478,6 +482,7 @@ export const AI_ERROR_KIND_FAILURE_REASON = {
   provider_stream_incomplete: "provider_stream_incomplete",
   output_incomplete: "model_output_incomplete",
   output_invalid: "model_output_invalid",
+  output_moderated: "model_output_moderated",
   deadline_exceeded: "model_deadline_exceeded",
   loop_detected: "chat_loop_detected",
   empty_completion: "chat_empty_completion",
@@ -579,6 +584,13 @@ const aiKindHandlerError = (
           "The AI model's answer did not have the expected structure. Please try again.",
         cause: error,
       });
+    case "output_moderated":
+      return new HandlerError({
+        status: 502,
+        message:
+          "The AI provider stopped the answer under its content policy. Rephrase the request or choose another model.",
+        cause: error,
+      });
     case "deadline_exceeded":
       return new HandlerError({
         status: 502,
@@ -635,6 +647,7 @@ export const aiHandlerError = (
           kind: error.kind,
           requestId: error.requestId,
           providerDiagnostic: error.providerDiagnostic,
+          retryAfterMs: error.retryAfterMs,
           facts:
             error.providerStatus === undefined
               ? undefined

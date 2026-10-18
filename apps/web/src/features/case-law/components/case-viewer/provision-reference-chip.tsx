@@ -135,7 +135,7 @@ export const ProvisionReferenceChip = ({
               </Button>
             </div>
           )}
-          {wording !== undefined && (
+          {wording !== undefined && wording !== null && (
             <BidiText
               as="span"
               className="line-clamp-6 text-xs leading-relaxed"

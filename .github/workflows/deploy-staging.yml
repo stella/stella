@@ -62,6 +62,7 @@ jobs:
     permissions:
       contents: read
       statuses: read
+      checks: read
       actions: read
       issues: read
       pull-requests: read
@@ -134,6 +135,15 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      # Bun runs the release queue history check the pinned-proof health gate
+      # needs before a merge-group receipt may stand in for the heavy statuses.
+      - name: Setup Bun
+        if: inputs.proof_sha != ''
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: package.json
+          no-cache: true
+
       - name: Resolve the commit to deploy
         id: resolve
         env:
@@ -188,6 +198,7 @@ jobs:
           echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
 
       - name: Probe staging health
+        timeout-minutes: 3
         id: probe
         env:
           STAGING_HEALTH_URL: https://api-staging.stll.app/ready
@@ -611,6 +622,7 @@ jobs:
           save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install dependencies
+        timeout-minutes: 5
         id: smoke-deps
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
@@ -627,6 +639,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Verify image-provided Chromium
+        timeout-minutes: 4
         uses: ./.github/actions/setup-playwright
 
       - name: Run staging web smoke

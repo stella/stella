@@ -1,7 +1,7 @@
 /**
  * Lazy adapter module registry.
  *
- * Shared between health-check.ts and update-fixtures.ts to
+ * Shared between health-check.ts and update-adapter-fixtures.ts to
  * avoid duplicating the adapter import map. Uses dynamic
  * imports to avoid pulling in the full app dependency graph.
  */

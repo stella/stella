@@ -5,6 +5,7 @@ import JSZip from "jszip";
 
 import { DOCUMENT_PROPERTY_KEYS } from "@stll/api-contract";
 import type { DocumentProperty } from "@stll/api-contract";
+import { writeZipEntry } from "@stll/docx-utils";
 
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
@@ -32,7 +33,7 @@ const toArrayBuffer = (source: Uint8Array): ArrayBuffer => {
 const zipOf = async (entries: Record<string, string>): Promise<ArrayBuffer> => {
   const zip = new JSZip();
   for (const [path, body] of Object.entries(entries)) {
-    zip.file(path, body);
+    writeZipEntry(zip, path, body);
   }
   return toArrayBuffer(await zip.generateAsync({ type: "uint8array" }));
 };
@@ -41,9 +42,9 @@ const odfZipOf = async (
   entries: Record<string, string>,
 ): Promise<ArrayBuffer> => {
   const zip = new JSZip();
-  zip.file("mimetype", ODT_MIME_TYPE, { compression: "STORE" });
+  writeZipEntry(zip, "mimetype", ODT_MIME_TYPE, { compression: "STORE" });
   for (const [path, body] of Object.entries(entries)) {
-    zip.file(path, body);
+    writeZipEntry(zip, path, body);
   }
   return toArrayBuffer(await zip.generateAsync({ type: "uint8array" }));
 };

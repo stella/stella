@@ -9,6 +9,7 @@ import { sleep } from "@stll/concurrency/sleep";
 
 import arabicMessages from "@/i18n/langs/ar.json";
 import englishMessages from "@/i18n/langs/en.json";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "https://app.example.test" });
 const { act } = await import("react");
@@ -30,7 +31,7 @@ afterAll(async () => {
   await act(async () => {
     await sleep(50);
   });
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 test("every refusal renders a calm localized outcome with only the permitted recovery action", () => {

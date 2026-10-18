@@ -17,6 +17,7 @@ import {
   VERIFICATION_CODE_ALPHABET,
   VERIFICATION_CODE_LENGTH,
 } from "@stll/api-contract";
+import { writeZipEntry } from "@stll/docx-utils";
 
 import { DESKTOP_EDIT_FILE_TYPE_CONFIG } from "@/api/lib/desktop-edit-file-types";
 import type { DocxArchive } from "@/api/lib/docx-archive";
@@ -483,7 +484,7 @@ const removePartDeclaration = async (
   }
   const stripped = removeSelfClosingElements(xml, tagName, marker);
   if (stripped !== xml) {
-    archive.zip.file(path, stripped);
+    writeZipEntry(archive.zip, path, stripped);
   }
 };
 
@@ -510,7 +511,7 @@ const stripCustomProperties = async (
   }
 
   if (ANY_PROPERTY_RE.test(stripped)) {
-    archive.zip.file(CUSTOM_PROPS_PATH, stripped);
+    writeZipEntry(archive.zip, CUSTOM_PROPS_PATH, stripped);
     return true;
   }
 
@@ -744,7 +745,7 @@ const stripStampParagraph = async (archive: DocxArchive): Promise<boolean> => {
       continue;
     }
 
-    archive.zip.file(path, rewrittenFooter);
+    writeZipEntry(archive.zip, path, rewrittenFooter);
     await removePartDeclaration(
       archive,
       footerRelsPathFor(path),
@@ -767,7 +768,8 @@ const injectCustomProperties = async (
   const existingXml = await archive.readEntryString(CUSTOM_PROPS_PATH);
 
   if (existingXml) {
-    archive.zip.file(
+    writeZipEntry(
+      archive.zip,
       CUSTOM_PROPS_PATH,
       updateCustomProperties(existingXml, stamp, verificationCode),
     );
@@ -775,7 +777,8 @@ const injectCustomProperties = async (
   }
 
   // Create new custom.xml
-  archive.zip.file(
+  writeZipEntry(
+    archive.zip,
     CUSTOM_PROPS_PATH,
     buildCustomPropertiesXml(stamp, verificationCode),
   );
@@ -864,7 +867,8 @@ const ensureContentType = async (archive: DocxArchive): Promise<void> => {
   const override =
     `<Override PartName="/${CUSTOM_PROPS_PATH}"` +
     ` ContentType="${CUSTOM_PROPS_CONTENT_TYPE}"/>`;
-  archive.zip.file(
+  writeZipEntry(
+    archive.zip,
     CONTENT_TYPES_PATH,
     ct.replace("</Types>", () => `${override}\n</Types>`),
   );
@@ -877,7 +881,8 @@ const ensureCustomPropsRelationship = async (
   const rels = await archive.readEntryString(relsPath);
 
   if (!rels) {
-    archive.zip.file(
+    writeZipEntry(
+      archive.zip,
       relsPath,
       [
         '<?xml version="1.0" encoding="UTF-8"?>',
@@ -899,7 +904,8 @@ const ensureCustomPropsRelationship = async (
     '"rIdCustomProps"' +
     ` Type="${CUSTOM_PROPS_REL_TYPE}"` +
     ` Target="${CUSTOM_PROPS_PATH}"/>`;
-  archive.zip.file(
+  writeZipEntry(
+    archive.zip,
     relsPath,
     rels.replace(
       "</Relationships>",
@@ -1083,7 +1089,8 @@ const updateExistingFooter = async ({
   const hyperlinkRId = STAMP_HYPERLINK_REL_ID;
 
   // Ensure hyperlink relationship exists
-  archive.zip.file(
+  writeZipEntry(
+    archive.zip,
     footer.relsPath,
     ensureHyperlinkRel(footerRels, hyperlinkRId, verifyUrl),
   );
@@ -1096,10 +1103,15 @@ const updateExistingFooter = async ({
   );
   if (footer.xml.includes(STAMP_BOOKMARK)) {
     // Replace existing stamp paragraph
-    archive.zip.file(footer.path, replaceStampParagraph(footer.xml, stampPara));
+    writeZipEntry(
+      archive.zip,
+      footer.path,
+      replaceStampParagraph(footer.xml, stampPara),
+    );
   } else {
     // Append stamp paragraph before </w:ftr>
-    archive.zip.file(
+    writeZipEntry(
+      archive.zip,
       footer.path,
       footer.xml.replace(CLOSING_FTR_RE, () => `${stampPara}\n</w:ftr>`),
     );
@@ -1140,10 +1152,11 @@ const createNewFooter = async ({
     body,
     "</w:ftr>",
   ].join("\n");
-  archive.zip.file(footerPath, footerXml);
+  writeZipEntry(archive.zip, footerPath, footerXml);
 
   // Create footer rels with hyperlink
-  archive.zip.file(
+  writeZipEntry(
+    archive.zip,
     footerRelsPath,
     [
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
@@ -1163,7 +1176,8 @@ const createNewFooter = async ({
     ` Target="${footerFileName}"/>`;
 
   if (docRels) {
-    archive.zip.file(
+    writeZipEntry(
+      archive.zip,
       docRelsPath,
       docRels.replace(
         "</Relationships>",
@@ -1171,7 +1185,8 @@ const createNewFooter = async ({
       ),
     );
   } else {
-    archive.zip.file(
+    writeZipEntry(
+      archive.zip,
       docRelsPath,
       [
         '<?xml version="1.0" encoding="UTF-8"?>',
@@ -1183,7 +1198,11 @@ const createNewFooter = async ({
   }
 
   // Reference footer in document.xml section properties
-  archive.zip.file("word/document.xml", addFooterReference(docXml, footerRId));
+  writeZipEntry(
+    archive.zip,
+    "word/document.xml",
+    addFooterReference(docXml, footerRId),
+  );
 
   // Ensure Content_Types knows about the footer
   await ensureFooterContentType(archive, footerFileName);
@@ -1286,7 +1305,8 @@ const ensureFooterContentType = async (
   const override =
     `<Override PartName="/word/${footerFileName}"` +
     ` ContentType="${FOOTER_CONTENT_TYPE}"/>`;
-  archive.zip.file(
+  writeZipEntry(
+    archive.zip,
     CONTENT_TYPES_PATH,
     ct.replace("</Types>", () => `${override}\n</Types>`),
   );

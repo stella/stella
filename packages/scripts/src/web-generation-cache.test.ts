@@ -132,7 +132,7 @@ test("web sources generate once across compiler tasks and restore until source i
         name: "cache-fixture",
         private: true,
         packageManager: "bun@1.4.2",
-        workspaces: ["apps/*"],
+        workspaces: ["apps/*", "packages/*"],
       }),
     );
     symlinkSync(
@@ -177,13 +177,43 @@ test("web sources generate once across compiler tasks and restore until source i
     ) {
       panic("Missing API runtime producer outputs");
     }
+    const mcpTask = tasks["@stll/mcp-apps#build"];
+    if (
+      !isRecord(mcpTask) ||
+      !Array.isArray(mcpTask["outputs"]) ||
+      !mcpTask["outputs"].every((output) => typeof output === "string")
+    ) {
+      panic("Missing MCP app producer outputs");
+    }
+    const mcpOutputs = mcpTask["outputs"].map((output) =>
+      output.replaceAll("**", "fixture.ts").replaceAll("*", "fixture"),
+    );
+    write(
+      "packages/mcp-apps/package.json",
+      JSON.stringify({
+        name: "@stll/mcp-apps",
+        scripts: { build: "bun scripts/build-mcp-apps.ts" },
+      }),
+    );
+    write("packages/mcp-apps/src/fixture/app.html", "<!doctype html>");
+    write(
+      "packages/mcp-apps/scripts/build-mcp-apps.ts",
+      [
+        "import { mkdirSync, writeFileSync } from 'node:fs';",
+        "import path from 'node:path';",
+        `for (const output of ${JSON.stringify(mcpOutputs)}) { mkdirSync(path.dirname(output), { recursive: true }); writeFileSync(output, 'generated MCP bytes'); }`,
+      ].join("\n"),
+    );
+    const apiOutputs = apiTask["outputs"].map((output) =>
+      output.replaceAll("**", "fixture.ts").replaceAll("*", "fixture"),
+    );
     write(
       "apps/api/scripts/generate-capability-runtime.ts",
       [
         "import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';",
         "import path from 'node:path';",
         "process.chdir(path.resolve(import.meta.dir, '..'));",
-        `for (const output of ${JSON.stringify(apiTask["outputs"])}) { mkdirSync(path.dirname(output), { recursive: true }); writeFileSync(output, 'generated API bytes'); }`,
+        `for (const output of ${JSON.stringify(apiOutputs)}) { mkdirSync(path.dirname(output), { recursive: true }); writeFileSync(output, 'generated API bytes'); }`,
         "appendFileSync('../../runs.log', 'api-runtime\\n');",
       ].join("\n"),
     );
@@ -193,7 +223,9 @@ test("web sources generate once across compiler tasks and restore until source i
         "outputs"
       ]
         .map((output) => `apps/api/${output}\n`)
-        .join("")}`,
+        .join(
+          "",
+        )}${mcpTask["outputs"].map((output) => `packages/mcp-apps/${output}\n`).join("")}`,
     );
     write("apps/api/src/contract.ts", "export type Contract = string;\n");
     write("apps/web/src/routes/index.tsx", "export const route = '/';\n");
@@ -221,6 +253,7 @@ test("web sources generate once across compiler tasks and restore until source i
       JSON.stringify({
         tasks: {
           "@stll/api#generate:capability-runtime": apiTask,
+          "@stll/mcp-apps#build": mcpTask,
           "@stll/api#generate:typecheck-declarations": {
             inputs: ["src/**"],
             outputs: [],
@@ -243,6 +276,7 @@ test("web sources generate once across compiler tasks and restore until source i
           "": { name: "cache-fixture" },
           "apps/api": { name: "@stll/api" },
           "apps/web": { name: "@stll/web" },
+          "packages/mcp-apps": { name: "@stll/mcp-apps" },
         },
         packages: {},
       }),
@@ -299,7 +333,7 @@ test("web sources generate once across compiler tasks and restore until source i
       readFileSync(path.join(directory, "runs.log"), "utf-8")
         .split("\n")
         .filter(Boolean),
-    ).toHaveLength(4);
+    ).toHaveLength(5);
     write(
       "apps/web/src/routes/index.tsx",
       "export const route = '/changed';\n",
@@ -309,7 +343,7 @@ test("web sources generate once across compiler tasks and restore until source i
       readFileSync(path.join(directory, "runs.log"), "utf-8")
         .trim()
         .split("\n"),
-    ).toHaveLength(6);
+    ).toHaveLength(7);
     run([
       process.execPath,
       "--cwd=apps/api",
@@ -352,6 +386,14 @@ test("web sources generate once across compiler tasks and restore until source i
       "console.log('CLI runtime generated');",
     );
     write("apps/web/scripts/typegen.ts", "console.log('messages generated');");
+    write(
+      "scripts/prepare-mcp-apps.ts",
+      [
+        "import path from 'node:path';",
+        "const build = Bun.spawnSync([process.execPath, 'run', 'build'], { cwd: path.resolve(import.meta.dir, '../packages/mcp-apps'), stdout: 'inherit', stderr: 'inherit' });",
+        "process.exit(build.exitCode);",
+      ].join("\n"),
+    );
     const bin = path.join(directory, "bin");
     mkdirSync(bin);
     symlinkSync(process.execPath, path.join(bin, "bun"));
@@ -374,6 +416,13 @@ test("web sources generate once across compiler tasks and restore until source i
         [process.execPath, "scripts/ci-generated-sources.ts", "prepare"],
         { cwd: directory, env: prepareEnv, stdout: "pipe", stderr: "pipe" },
       );
+    write(
+      "scripts/check-mcp-generated-tracking.ts",
+      readFileSync(
+        path.join(root, "scripts/check-mcp-generated-tracking.ts"),
+        "utf-8",
+      ),
+    );
     const prepared = prepare();
     expect(prepared.exitCode, prepared.stderr.toString()).toBe(0);
     expect(readFileSync(output, "utf-8")).toBe("generated bytes\n");

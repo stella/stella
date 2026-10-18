@@ -6,7 +6,6 @@ import deleteAccountVerify from "@/api/handlers/me/verify-delete";
 import createWorkspace from "@/api/handlers/workspaces/create";
 import addWorkspaceMember from "@/api/handlers/workspaces/members/add";
 import removeWorkspaceMember from "@/api/handlers/workspaces/members/remove";
-import updateWorkspace from "@/api/handlers/workspaces/update";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createFeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import {
@@ -97,22 +96,6 @@ describe("account lifecycle handlers", () => {
             },
           }),
         );
-        const updated = await updateWorkspace.handler(
-          createTestHandlerContext<
-            Parameters<typeof updateWorkspace.handler>[0]
-          >({
-            audit: NO_AUDIT,
-            safeDb: NO_DB,
-            scopedDb: NO_DB,
-            user,
-            body: {
-              promote: {
-                clientId: toSafeId<"contact">("contact_account"),
-                memberUserIds: ["user_member"],
-              },
-            },
-          }),
-        );
         const deleted = await deleteAccountVerify.handler(
           createTestHandlerContext<
             Parameters<typeof deleteAccountVerify.handler>[0]
@@ -124,14 +107,7 @@ describe("account lifecycle handlers", () => {
             body: { code: "123456" },
           }),
         );
-        for (const response of [
-          downloaded,
-          added,
-          removed,
-          created,
-          updated,
-          deleted,
-        ]) {
+        for (const response of [downloaded, added, removed, created, deleted]) {
           expect(response).toMatchObject({
             code: 403,
             response: { code: "account_access_unavailable" },

@@ -14,6 +14,7 @@ import { toSafeId } from "@stll/api-contract/safe-id";
 import type { ChatUIMessage } from "@/components/chat/chat-ui-tools";
 import { publicCaseLawCountryFromParam } from "@/features/case-law/case-law-jurisdiction";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import { dockedChatLegalPayloads } from "../../../e2e/helpers/docked-chat-legal-payloads";
 
@@ -92,7 +93,7 @@ afterEach(() => {
   clients.length = 0;
   useExternalSourceStore.setState({ sourcesByUrl: {} });
 });
-afterAll(async () => GlobalRegistrator.unregister());
+afterAll(async () => unregisterDomEnvironment());
 
 test("same-decision repetitions stay compact while two actually cited decisions sharing a court expand", async () => {
   const client = clientWithDecisions();
@@ -259,8 +260,7 @@ test("passive answer links and complete carried source metadata schedule no deci
   ).href;
   useExternalSourceStore.getState().registerSources([
     {
-      url: first.sourceUrl,
-      appUrl: readerUrl,
+      url: readerUrl,
       sourceUrl: first.sourceUrl,
       title: first.caseNumber,
       caseLawDecision: {
@@ -334,8 +334,7 @@ test("the court's number the link carries shows at first paint, from a read or a
   ).href;
   useExternalSourceStore.getState().registerSources([
     {
-      url: first.sourceUrl,
-      appUrl: readerUrl,
+      url: readerUrl,
       sourceUrl: first.sourceUrl,
       title: first.caseNumber,
       caseLawDecision: {

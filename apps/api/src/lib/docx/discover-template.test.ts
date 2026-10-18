@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import { writeZipEntry } from "@stll/docx-utils";
 import { evaluateCondition } from "@stll/template-conditions";
 
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
@@ -13,8 +14,9 @@ import { discoverTemplate } from "./discover-template";
 
 const makeDocx = async (documentXml: string): Promise<ScannedFile> => {
   const zip = new JSZip();
-  zip.file("word/document.xml", documentXml);
-  zip.file(
+  writeZipEntry(zip, "word/document.xml", documentXml);
+  writeZipEntry(
+    zip,
     "[Content_Types].xml",
     `<?xml version="1.0" encoding="UTF-8"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
@@ -855,7 +857,8 @@ describe("row-form block markers", () => {
 
 test("derived manifests cache every distinct clause slot target from template content", async () => {
   const zip = new JSZip();
-  zip.file(
+  writeZipEntry(
+    zip,
     "word/document.xml",
     WRAP(
       [
@@ -865,7 +868,8 @@ test("derived manifests cache every distinct clause slot target from template co
       ].join(""),
     ),
   );
-  zip.file(
+  writeZipEntry(
+    zip,
     "word/header1.xml",
     `<w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">${P(
       '{{ clause("Header", "latest") }}',

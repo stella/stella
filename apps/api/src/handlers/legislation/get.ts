@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { status, t } from "elysia";
 
+import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
 import {
@@ -21,7 +22,7 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { legislationExpressionLabelColumns } from "@/api/lib/legal-search/legislation-expression-label";
 import {
   derivedAiLegislationSource,
-  publishedLegislationDocument,
+  publishedLegislationDocumentFor,
 } from "@/api/lib/legal-search/legislation-redistribution";
 import {
   readVersionAst,
@@ -46,6 +47,7 @@ import {
 export const readPublicLegislationHandler = async (
   documentId: SafeId<"legislationDocument">,
   legislationDb: LegislationReadDb,
+  surface: PublicCountrySurface,
 ) => {
   const [document] = await legislationDb(
     async (tx) =>
@@ -93,7 +95,7 @@ export const readPublicLegislationHandler = async (
         .where(
           and(
             eq(legislationDocuments.id, documentId),
-            publishedLegislationDocument,
+            publishedLegislationDocumentFor(surface),
           ),
         )
         .limit(1),
@@ -112,6 +114,7 @@ export const readPublicLegislationHandler = async (
   } = document;
 
   const documentAst = await readVersionAst({
+    surface,
     row: { id: documentId, astS3Key, documentAst: pgAst },
     legislationDb,
     step: "readLegislation.corpusAst",
@@ -120,6 +123,7 @@ export const readPublicLegislationHandler = async (
   const fulltext = hasUsableAst(documentAst)
     ? null
     : await readVersionText({
+        surface,
         row: { id: documentId, textS3Key, fulltext: pgText },
         legislationDb,
         step: "readLegislation.corpusText",
@@ -153,6 +157,7 @@ const readLegislation = createSafeRootHandler(
           await readPublicLegislationHandler(
             documentId,
             legislationPublicReadDb,
+            "pages",
           ),
       ),
     );

@@ -48,6 +48,7 @@ jobs:
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
       - name: Install dependencies
+        timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
@@ -56,8 +57,11 @@ jobs:
           bun test scripts/type-cost-measurement.test.ts
           mkdir -p "$RUNNER_TEMP/type-cost-inputs"
           bun scripts/ci-generated-sources.ts produce "$RUNNER_TEMP/type-cost-inputs/generated"
-          bun --cwd=apps/extension x --no-install wxt prepare
-          tar -czf "$RUNNER_TEMP/type-cost-inputs/declarations.tar.gz" apps/api/.cache/typecheck-declarations apps/extension/.wxt
+      - name: Prepare extension types
+        working-directory: apps/extension
+        run: bunx --no-install wxt prepare
+      - name: Package compiler inputs
+        run: tar -czf "$RUNNER_TEMP/type-cost-inputs/declarations.tar.gz" apps/api/.cache/typecheck-declarations apps/extension/.wxt
       - name: Upload compiler inputs
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -85,6 +89,7 @@ jobs:
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
       - name: Install dependencies
+        timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""

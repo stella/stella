@@ -5,7 +5,11 @@ import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { Temporal } from "@stll/time";
 import { stellaToast } from "@stll/ui/toast";
 
-import { isFileFacet } from "@/components/inspector/inspector-broadcast";
+import {
+  holdInspectorRestoreSettle,
+  isFileFacet,
+  startNewPageLoadForTest,
+} from "@/components/inspector/inspector-broadcast";
 import {
   buildSkillResourceTabId,
   closeInspectorTabsForEntities,
@@ -174,6 +178,7 @@ const installFakeBroadcastChannel = () => {
     value: {
       BroadcastChannel: FakeBroadcastChannel,
       localStorage: new MemoryStorage(),
+      sessionStorage: new MemoryStorage(),
     },
   });
 };
@@ -1367,6 +1372,166 @@ describe("Inspector tab broadcast", () => {
     const restored = useInspectorTabsStore.getState().tabs.at(0);
     expect(restored).toMatchObject({ id: "field-1", type: "pdf" });
     expect(restored).not.toHaveProperty("metadataLane");
+  });
+
+  test("a restore that never settled reopens minimized on the next start", () => {
+    installFakeBroadcastChannel();
+    const scope = { organizationId: "org-1", userId: "user-1" };
+    const recovered = spyOn(getAnalytics(), "captureInspectorRestoreRecovered");
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    openFullscreenFileTab();
+    useInspectorTabsStore.setState({ minimized: false });
+
+    // A load that restores the tab, then never settles (no timer runs).
+    cleanupInspectorBroadcast();
+    useInspectorTabsStore.setState({ tabs: [], activeId: null });
+    startNewPageLoadForTest();
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    expect(useInspectorTabsStore.getState().minimized).toBe(false);
+    expect(recovered).not.toHaveBeenCalled();
+
+    // The next start still finds the flag: tabs come back, the pane stays shut.
+    cleanupInspectorBroadcast();
+    useInspectorTabsStore.setState({
+      tabs: [],
+      activeId: null,
+      minimized: false,
+    });
+    startNewPageLoadForTest();
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    expect(useInspectorTabsStore.getState().minimized).toBe(true);
+    expect(useInspectorTabsStore.getState().tabs.at(0)).toMatchObject({
+      id: "field-1",
+    });
+    expect(recovered).toHaveBeenCalledTimes(1);
+    expect(recovered).toHaveBeenCalledWith({ tabCount: 1 });
+    recovered.mockRestore();
+  });
+
+  test("a restore that settles leaves the next start unchanged", async () => {
+    installFakeBroadcastChannel();
+    const scope = { organizationId: "org-1", userId: "user-1" };
+    const recovered = spyOn(getAnalytics(), "captureInspectorRestoreRecovered");
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    openFullscreenFileTab();
+    useInspectorTabsStore.setState({ minimized: false });
+
+    cleanupInspectorBroadcast();
+    useInspectorTabsStore.setState({ tabs: [], activeId: null });
+    startNewPageLoadForTest();
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    // The page stays responsive past the settle delay.
+    await Bun.sleep(2200);
+
+    cleanupInspectorBroadcast();
+    useInspectorTabsStore.setState({
+      tabs: [],
+      activeId: null,
+      minimized: false,
+    });
+    startNewPageLoadForTest();
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    expect(useInspectorTabsStore.getState().minimized).toBe(false);
+    expect(useInspectorTabsStore.getState().tabs).toHaveLength(1);
+    expect(recovered).not.toHaveBeenCalled();
+    recovered.mockRestore();
+  });
+
+  test("another start in the same page while its restore settles keeps the pane open", () => {
+    installFakeBroadcastChannel();
+    const scope = { organizationId: "org-1", userId: "user-1" };
+    const recovered = spyOn(getAnalytics(), "captureInspectorRestoreRecovered");
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    openFullscreenFileTab();
+    useInspectorTabsStore.setState({ minimized: false });
+
+    // A load restores the tab and has not settled yet.
+    cleanupInspectorBroadcast();
+    useInspectorTabsStore.setState({ tabs: [], activeId: null });
+    startNewPageLoadForTest();
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    expect(useInspectorTabsStore.getState().minimized).toBe(false);
+
+    // A shell in the same page attaches the store again (a client navigation),
+    // inside the settle delay: its own pending restore is not a stalled load.
+    cleanupInspectorBroadcast();
+    useInspectorTabsStore.setState({ tabs: [], activeId: null });
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    expect(useInspectorTabsStore.getState().minimized).toBe(false);
+    expect(useInspectorTabsStore.getState().tabs.at(0)).toMatchObject({
+      id: "field-1",
+    });
+    expect(recovered).not.toHaveBeenCalled();
+    recovered.mockRestore();
+  });
+
+  test("leaving the page before the settle delay is not a stalled restore", () => {
+    installFakeBroadcastChannel();
+    const pagehide = new EventTarget();
+    const addListener = spyOn(
+      globalThis,
+      "addEventListener",
+    ).mockImplementation(
+      (...args: Parameters<typeof globalThis.addEventListener>) => {
+        pagehide.addEventListener(...args);
+      },
+    );
+    const scope = { organizationId: "org-1", userId: "user-1" };
+    const recovered = spyOn(getAnalytics(), "captureInspectorRestoreRecovered");
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    openFullscreenFileTab();
+    useInspectorTabsStore.setState({ minimized: false });
+
+    cleanupInspectorBroadcast();
+    useInspectorTabsStore.setState({ tabs: [], activeId: null });
+    startNewPageLoadForTest();
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    // A quick reload: the page leaves well inside the settle delay.
+    pagehide.dispatchEvent(new Event("pagehide"));
+
+    cleanupInspectorBroadcast();
+    useInspectorTabsStore.setState({
+      tabs: [],
+      activeId: null,
+      minimized: false,
+    });
+    startNewPageLoadForTest();
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    expect(useInspectorTabsStore.getState().minimized).toBe(false);
+    expect(recovered).not.toHaveBeenCalled();
+    recovered.mockRestore();
+    addListener.mockRestore();
+  });
+
+  test("a viewer still loading past the settle delay keeps the flag", async () => {
+    installFakeBroadcastChannel();
+    const scope = { organizationId: "org-1", userId: "user-1" };
+    const recovered = spyOn(getAnalytics(), "captureInspectorRestoreRecovered");
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    openFullscreenFileTab();
+    useInspectorTabsStore.setState({ minimized: false });
+
+    cleanupInspectorBroadcast();
+    useInspectorTabsStore.setState({ tabs: [], activeId: null });
+    startNewPageLoadForTest();
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    // The restored viewer mounts and its document is still downloading.
+    const release = holdInspectorRestoreSettle();
+    await Bun.sleep(2200);
+
+    // It stalled after the delay: the next start must still recover.
+    cleanupInspectorBroadcast();
+    useInspectorTabsStore.setState({
+      tabs: [],
+      activeId: null,
+      minimized: false,
+    });
+    startNewPageLoadForTest();
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    expect(useInspectorTabsStore.getState().minimized).toBe(true);
+    expect(recovered).toHaveBeenCalledTimes(1);
+    release();
+    recovered.mockRestore();
   });
 
   test("keeps each window's own file tab lane across syncs", () => {

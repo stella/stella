@@ -25,6 +25,7 @@ import type {
   DocumentPropertyKey,
   DocumentPropertyValue,
 } from "@stll/api-contract";
+import { writeZipEntry } from "@stll/docx-utils";
 import {
   isOfficeCollaborationPart,
   officeIdentityFields,
@@ -665,13 +666,13 @@ const scrubZipArchive = async (
     }
     const cleared = part.clear(xml);
     if (typeof cleared === "string") {
-      archive.zip.file(part.path, cleared);
+      writeZipEntry(archive.zip, part.path, cleared);
       continue;
     }
     if (cleared.isErr()) {
       return { status: "unreadable" };
     }
-    archive.zip.file(part.path, cleared.value);
+    writeZipEntry(archive.zip, part.path, cleared.value);
   }
   await prepare?.(archive);
   return {
@@ -864,7 +865,9 @@ const scrubOdf = async (
           message: "ODF mimetype must be the first ZIP entry",
         });
       }
-      archive.zip.file("mimetype", mimetype, { compression: "STORE" });
+      writeZipEntry(archive.zip, "mimetype", mimetype, {
+        compression: "STORE",
+      });
     },
   );
 };
@@ -1062,11 +1065,13 @@ const declareOoxmlParts = async (
     })
     .join("");
 
-  archive.zip.file(
+  writeZipEntry(
+    archive.zip,
     CONTENT_TYPES_PATH,
     contentTypes.replace(/<\/Types>/u, () => `${overrides}</Types>`),
   );
-  archive.zip.file(
+  writeZipEntry(
+    archive.zip,
     PACKAGE_RELS_PATH,
     rels.replace(
       /<\/Relationships>/u,
@@ -1209,7 +1214,7 @@ export const writeDocumentProperties = async ({
           );
         }
       }
-      archive.zip.file(OOXML_PART_PATH[part], updated);
+      writeZipEntry(archive.zip, OOXML_PART_PATH[part], updated);
     }
     return {
       status: "written",

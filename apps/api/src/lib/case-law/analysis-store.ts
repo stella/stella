@@ -138,8 +138,17 @@ const readsSharedCorpus = (): boolean =>
  * update one there. A development process keeps its analyses in memory
  * instead, which is what makes the local reader work.
  */
-export const storesAnalyses = (): boolean =>
-  !readsSharedCorpus() || isLocalDevOpen();
+const storesAnalyses = (): boolean => !readsSharedCorpus() || isLocalDevOpen();
+
+/**
+ * Whether this deployment may ask a model for a decision's derived layers:
+ * an analysis generated on open, or a significance refreshed from the graph.
+ * The one reader of `CASE_LAW_DERIVED_AI`, so every path that would reach a
+ * model is fenced by the same decision. A deployment that cannot store an
+ * analysis never generates one either.
+ */
+export const writesDerivedAnalyses = (): boolean =>
+  storesAnalyses() && envBase.CASE_LAW_DERIVED_AI === "on";
 
 export const analysisStore = (): AnalysisStore =>
   readsSharedCorpus() ? memoryAnalysisStore : dbAnalysisStore;

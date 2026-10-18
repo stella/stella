@@ -15,6 +15,8 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import { writeZipEntry } from "@stll/docx-utils";
+
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
 import { W_NS } from "@/api/lib/docx/ooxml";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
@@ -45,12 +47,14 @@ const blockXml = (block: Block): string =>
 
 const buildDocx = async (blocks: readonly Block[]): Promise<ScannedFile> => {
   const zip = new JSZip();
-  zip.file(
+  writeZipEntry(
+    zip,
     "word/document.xml",
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       `<w:document xmlns:w="${W_NS}"><w:body>${blocks.map(blockXml).join("")}</w:body></w:document>`,
   );
-  zip.file(
+  writeZipEntry(
+    zip,
     "[Content_Types].xml",
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
@@ -58,7 +62,8 @@ const buildDocx = async (blocks: readonly Block[]): Promise<ScannedFile> => {
       '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
       "</Types>",
   );
-  zip.file(
+  writeZipEntry(
+    zip,
     "_rels/.rels",
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +

@@ -3,6 +3,7 @@ import JSZip from "jszip";
 import * as slimdom from "slimdom";
 
 import type { Paragraph } from "@stll/docx-core/model";
+import { writeZipEntry } from "@stll/docx-utils";
 import {
   createDocx,
   createEmptyDocument,
@@ -122,7 +123,8 @@ const addExtendedInlineControls = async (
   if (!marker.test(xml)) {
     throw new Error("fixture has no italic text marker");
   }
-  zip.file(
+  writeZipEntry(
+    zip,
     "word/document.xml",
     xml.replaceAll(marker, "$1<w:cr/><w:noBreakHyphen/><w:softHyphen/>"),
   );
@@ -154,7 +156,11 @@ const addParagraphPropertyTabStop = async (
   tab.setAttributeNS(W_NS, "w:pos", "720");
   tabs.append(tab);
   paragraphProperties.append(tabs);
-  zip.file("word/document.xml", slimdom.serializeToWellFormedString(doc));
+  writeZipEntry(
+    zip,
+    "word/document.xml",
+    slimdom.serializeToWellFormedString(doc),
+  );
   return await zip.generateAsync({ type: "arraybuffer" });
 };
 

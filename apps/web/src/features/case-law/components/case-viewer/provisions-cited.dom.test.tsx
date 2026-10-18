@@ -5,6 +5,7 @@ import { sleep } from "@stll/concurrency/sleep";
 
 import { toSafeId } from "@/lib/safe-id";
 import type { provisionPreviewOptions } from "@/lib/statutes/provision-preview";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import { provision } from "./provisions-cited.fixture";
 
@@ -44,7 +45,7 @@ afterAll(async () => {
   await act(async () => {
     await sleep(0);
   });
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 type ProvisionsPage = Awaited<
@@ -83,6 +84,8 @@ const mount = (items: ReturnType<typeof provision>[], resolveTitle = false) => {
     status: { type: "legacy" },
     generation: "0",
     publishedProjectionDigest: null,
+    capability: { type: "supported", languages: ["cs"] },
+    pendingSince: null,
   } satisfies ProvisionsPage;
   client.setQueryData(decisionProvisionsInfiniteOptions(decisionId).queryKey, {
     pageParams: [null],

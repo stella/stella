@@ -12,6 +12,7 @@ import {
   type JsonLdObject,
   type PublicHeadInput,
 } from "@/lib/public-seo";
+import { isPublicLawPathIndexable } from "@/public-crawl-policy";
 
 type PublicLawHeadInput = Omit<PublicHeadInput, "crawlAllowed"> & {
   crawlAllowed?: boolean;
@@ -93,10 +94,13 @@ const absoluteUrlOrNull = (value: string | null | undefined): string | null => {
 
 export const createPublicLawCanonicalUrl = createPublicCanonicalUrl;
 
-export const createPublicLawHead = ({
-  crawlAllowed = isPublicLawCrawlAllowed(),
-  ...rest
-}: PublicLawHeadInput) => createPublicHead({ crawlAllowed, ...rest });
+export const createPublicLawHead = (input: PublicLawHeadInput) =>
+  createPublicHead({
+    ...input,
+    crawlAllowed:
+      input.crawlAllowed ??
+      isPublicLawPathIndexable(input.path, isPublicLawCrawlAllowed()),
+  });
 
 export const createCaseLawDecisionJsonLd = async ({
   canonicalUrl,

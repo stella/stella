@@ -10,8 +10,10 @@ import {
 } from "@stll/legal-ast/document-ast";
 
 import {
+  caseLawDecisionIdentifiers,
   caseLawDecisionJudges,
-  caseLawDecisions,
+  caseLawSources,
+  publishedCaseLawDecisions,
   caseLawJudges,
 } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
@@ -78,10 +80,10 @@ export const decisionTextPresenceQuery = (
 ) =>
   tx
     .select({
-      written: sql<boolean>`${caseLawDecisions.fulltext} IS NOT NULL`,
+      written: sql<boolean>`${publishedCaseLawDecisions.fulltext} IS NOT NULL`,
     })
-    .from(caseLawDecisions)
-    .where(eq(caseLawDecisions.id, decisionId))
+    .from(publishedCaseLawDecisions)
+    .where(eq(publishedCaseLawDecisions.id, decisionId))
     .limit(1);
 
 export const readDecisionTextColumnWritten = definePublicLawSharedQuery(
@@ -308,52 +310,59 @@ export const decisionRecordQuery = (
   tx: CaseLawPublicReadTransaction,
   decisionId: SafeId<"caseLawDecision">,
 ) =>
-  tx.query.caseLawDecisions.findFirst({
-    where: { id: { eq: decisionId } },
-    extras: { hasDocument: publicRowHoldsDocumentFor },
-    columns: {
-      id: true,
-      caseNumber: true,
-      caseNumberType: true,
-      slug: true,
-      ecli: true,
-      court: true,
-      courtId: true,
-      country: true,
-      language: true,
-      languageGroupKey: true,
-      decisionDate: true,
-      decisionType: true,
-      documentAst: true,
-      sections: true,
-      sourceUrl: true,
-      documentUrl: true,
-      metadata: true,
-      createdAt: true,
-      updatedAt: true,
-      // Object-storage keys: never returned to the client, only used
-      // to fetch canonical payloads when corpus storage is enabled.
-      astS3Key: true,
-      textS3Key: true,
-      contentHash: true,
-      redactedAt: true,
-      // fulltext: only as fallback when no AST
-    },
-    with: {
-      identifiers: {
-        columns: { type: true, value: true },
-      },
+  tx
+    .select({
+      id: publishedCaseLawDecisions.id,
+      caseNumber: publishedCaseLawDecisions.caseNumber,
+      caseNumberType: publishedCaseLawDecisions.caseNumberType,
+      slug: publishedCaseLawDecisions.slug,
+      ecli: publishedCaseLawDecisions.ecli,
+      court: publishedCaseLawDecisions.court,
+      courtId: publishedCaseLawDecisions.courtId,
+      country: publishedCaseLawDecisions.country,
+      language: publishedCaseLawDecisions.language,
+      languageGroupKey: publishedCaseLawDecisions.languageGroupKey,
+      decisionDate: publishedCaseLawDecisions.decisionDate,
+      decisionType: publishedCaseLawDecisions.decisionType,
+      documentAst: publishedCaseLawDecisions.documentAst,
+      sections: publishedCaseLawDecisions.sections,
+      sourceUrl: publishedCaseLawDecisions.sourceUrl,
+      documentUrl: publishedCaseLawDecisions.documentUrl,
+      metadata: publishedCaseLawDecisions.metadata,
+      createdAt: publishedCaseLawDecisions.createdAt,
+      updatedAt: publishedCaseLawDecisions.updatedAt,
+      hasDocument: publicRowHoldsDocumentFor(publishedCaseLawDecisions),
+      astS3Key: publishedCaseLawDecisions.astS3Key,
+      textS3Key: publishedCaseLawDecisions.textS3Key,
+      contentHash: publishedCaseLawDecisions.contentHash,
+      redactedAt: publishedCaseLawDecisions.redactedAt,
       source: {
-        // descriptor: only for `allowsDerivedAi` below, never returned to
-        // the client. Redistribution was decided when the subject was
-        // resolved.
-        columns: { id: true, name: true, adapterKey: true, descriptor: true },
+        id: caseLawSources.id,
+        name: caseLawSources.name,
+        adapterKey: caseLawSources.adapterKey,
+        descriptor: caseLawSources.descriptor,
       },
-    },
-  });
+      identifiers: sql<unknown>`coalesce((
+        SELECT jsonb_agg(
+          jsonb_build_object(
+            'type', identifier.type,
+            'value', identifier.value
+          ) ORDER BY identifier.type, identifier.value
+        )
+        FROM ${caseLawDecisionIdentifiers} identifier
+        WHERE identifier.decision_id = ${publishedCaseLawDecisions.id}
+      ), '[]'::jsonb)`,
+    })
+    .from(publishedCaseLawDecisions)
+    .leftJoin(
+      caseLawSources,
+      eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
+    )
+    .where(eq(publishedCaseLawDecisions.id, decisionId))
+    .limit(1);
 
 const readDecisionRecord = async (subject: RedistributableDecisionSubject) =>
-  await decisionRecordQuery(subject.tx, subject.id);
+  (await decisionRecordQuery(subject.tx, subject.id)).at(0);
 
 export const readDecisionHandler = definePublicLawSharedQuery(
   PUBLIC_LAW_SHARED_QUERY.caseLawDecisionRead,
@@ -406,6 +415,7 @@ export const readDecisionHandler = definePublicLawSharedQuery(
             tx,
             cursor: citationPageCursor(citationCursors.from),
             decisionId,
+            countries: subject.countries,
           }),
       citationCursors.to.status === CITATION_STREAM_CURSOR_STATUS.EXHAUSTED
         ? emptyCitationPage()
@@ -413,6 +423,7 @@ export const readDecisionHandler = definePublicLawSharedQuery(
             tx,
             cursor: citationPageCursor(citationCursors.to),
             decisionId,
+            countries: subject.countries,
           }),
     ]);
 
@@ -827,10 +838,11 @@ const resolveFulltext = async ({
   readTombstones,
 }: ResolveFulltextInput): Promise<CorpusReadOutcome<string>> => {
   const postgresFulltext = async (): Promise<string | null> => {
-    const fallback = await tx.query.caseLawDecisions.findFirst({
-      where: { id: { eq: decisionId } },
-      columns: { fulltext: true },
-    });
+    const [fallback] = await tx
+      .select({ fulltext: publishedCaseLawDecisions.fulltext })
+      .from(publishedCaseLawDecisions)
+      .where(eq(publishedCaseLawDecisions.id, decisionId))
+      .limit(1);
     return fallback?.fulltext ?? null;
   };
 

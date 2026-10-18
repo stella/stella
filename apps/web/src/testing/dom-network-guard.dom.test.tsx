@@ -3,6 +3,7 @@ import { afterAll, describe, expect, test } from "bun:test";
 import http from "node:http";
 import https from "node:https";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 import { takeRefusedRequests } from "@/testing/dom-network-guard";
 
 // Read before any DOM exists: these are the functions the guard must hand
@@ -18,7 +19,7 @@ GlobalRegistrator.register({ url: "http://localhost:3000/" });
 
 afterAll(async () => {
   if (GlobalRegistrator.isRegistered) {
-    await GlobalRegistrator.unregister();
+    await unregisterDomEnvironment();
   }
 });
 
@@ -75,7 +76,7 @@ describe("the DOM test network guard", () => {
     expect(guarded.httpsRequest).not.toBe(originalClient.httpsRequest);
     expect(guarded.httpsGet).not.toBe(originalClient.httpsGet);
 
-    await GlobalRegistrator.unregister();
+    await unregisterDomEnvironment();
 
     const restored = currentClient();
     expect(restored.httpRequest).toBe(originalClient.httpRequest);

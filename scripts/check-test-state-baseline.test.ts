@@ -10,8 +10,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
-  parseTestStateBaseline,
-  validateTestStateBaselineFiles,
+  parseTestBaseline,
+  validateTestBaselineFiles,
 } from "./check-test-state-baseline.ts";
 import { addedEntries } from "./ledger-membership.ts";
 
@@ -42,16 +42,16 @@ test.each([
   ["nonstring reason", { ...metadata, reason: [] }, "reason"],
 ] as const)("rejects baseline metadata with %s", (_name, entry, field) => {
   expect(() =>
-    parseTestStateBaseline(JSON.stringify({ [FILE]: entry }), "baseline"),
+    parseTestBaseline(JSON.stringify({ [FILE]: entry }), "baseline"),
   ).toThrow(`${FILE} ${field}`);
 });
 
 test.each([[null], [[]], ["baseline"], [2]] as const)(
   "rejects a nonobject baseline %j",
   (value) => {
-    expect(() =>
-      parseTestStateBaseline(JSON.stringify(value), "baseline"),
-    ).toThrow("must be an object keyed by repository test filename");
+    expect(() => parseTestBaseline(JSON.stringify(value), "baseline")).toThrow(
+      "must be an object keyed by repository test filename",
+    );
   },
 );
 
@@ -66,24 +66,21 @@ test.each([
   "apps/api/src/provider.test.ts/",
 ])("rejects invalid repository test filename %s", (file) => {
   expect(() =>
-    parseTestStateBaseline(JSON.stringify({ [file]: metadata }), "baseline"),
+    parseTestBaseline(JSON.stringify({ [file]: metadata }), "baseline"),
   ).toThrow("must be a repository-relative test filename");
 });
 
 test("state access budgets only shrink within each existing file", () => {
-  const base = parseTestStateBaseline(
-    JSON.stringify({ [FILE]: metadata }),
-    "base",
-  );
-  const shrink = parseTestStateBaseline(
+  const base = parseTestBaseline(JSON.stringify({ [FILE]: metadata }), "base");
+  const shrink = parseTestBaseline(
     JSON.stringify({ [FILE]: { ...metadata, count: 1 } }),
     "current",
   );
-  const grow = parseTestStateBaseline(
+  const grow = parseTestBaseline(
     JSON.stringify({ [FILE]: { ...metadata, count: 3 } }),
     "current",
   );
-  const swap = parseTestStateBaseline(
+  const swap = parseTestBaseline(
     JSON.stringify({ [OTHER_FILE]: metadata }),
     "current",
   );
@@ -101,13 +98,18 @@ test("state access budgets only shrink within each existing file", () => {
 test("current baselines reject missing, untracked and nonregular test files", () => {
   const repoRoot = mkdtempSync(path.join(tmpdir(), "test-state-baseline-"));
   const directory = path.join(repoRoot, path.dirname(FILE));
-  const members = parseTestStateBaseline(
+  const members = parseTestBaseline(
     JSON.stringify({ [FILE]: metadata }),
     "baseline",
   );
   const trackedFiles = new Set([FILE]);
   const validate = () =>
-    validateTestStateBaselineFiles({ members, repoRoot, trackedFiles });
+    validateTestBaselineFiles({
+      members,
+      repoRoot,
+      trackedFiles,
+      baselineRel: "scripts/test-state-baseline.json",
+    });
   const failure = `${FILE} must exist as a regular tracked test file; delete its baseline entry`;
   try {
     mkdirSync(directory, { recursive: true });
@@ -115,10 +117,11 @@ test("current baselines reject missing, untracked and nonregular test files", ()
     writeFileSync(path.join(repoRoot, FILE), "test fixture");
     expect(validate).not.toThrow();
     expect(() =>
-      validateTestStateBaselineFiles({
+      validateTestBaselineFiles({
         members,
         repoRoot,
         trackedFiles: new Set(),
+        baselineRel: "scripts/test-state-baseline.json",
       }),
     ).toThrow(failure);
     rmSync(path.join(repoRoot, FILE));

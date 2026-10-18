@@ -4,6 +4,7 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 import { DECISION_CITATION_PRESENTATION } from "@/components/references/decision-citation-presentation.logic";
 import type { DecisionCitationPresentation } from "@/components/references/decision-citation-presentation.logic";
 import { env } from "@/env";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://self-hosted.example.test/chat" });
 const { act, cleanup, fireEvent, render, screen, waitFor } =
@@ -34,7 +35,7 @@ afterEach(async () => {
   });
 });
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const mount = (

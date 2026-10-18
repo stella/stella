@@ -594,7 +594,10 @@ describe("API deployment health receipt", () => {
     expect(production).toContain(
       '"VITE_PUBLIC_KNOWLEDGE_INDEXING_ENABLED": "false"',
     );
-    expect(production).not.toContain('"VITE_SEO_INDEXABLE"');
+    // Production is indexable; which pages crawlers reach is the crawl
+    // policy's (admitted jurisdictions' law pages), not this flag's.
+    expect(production).toContain('"VITE_SEO_INDEXABLE": "true"');
+    expect(production).toContain('"VITE_PUBLIC_LAW_INDEXING_ENABLED": "true"');
   });
 
   test("release promotion preserves the full online-migration window", async () => {

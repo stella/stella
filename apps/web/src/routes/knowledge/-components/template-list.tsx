@@ -751,7 +751,7 @@ const TemplateGuidanceDialogBody = ({
       <DialogPanel className="grid gap-4">
         <div className="grid gap-1.5">
           <label className="text-sm font-medium" htmlFor="template-when-to-use">
-            {t("templates.whenToUse")}
+            {t("common.whenToUse")}
           </label>
           <Textarea
             className="min-h-[60px]"

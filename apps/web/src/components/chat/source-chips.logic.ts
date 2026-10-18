@@ -298,13 +298,11 @@ export const collectExternalSources = (
     return;
   }
 
-  const appUrl = getStringField(value, ["appUrl"]);
   const publisherUrl = getStringField(value, ["source_url", "sourceUrl"]);
   const url = getStringField(value, [
     "url",
     "source_url",
     "sourceUrl",
-    "appUrl",
     "pdfUrl",
     "rtfUrl",
     "registryUrl",
@@ -313,7 +311,6 @@ export const collectExternalSources = (
     const safeUrl = sanitizeHref(url);
     if (safeUrl) {
       sources.push({
-        appUrl: appUrl !== undefined ? sanitizeHref(appUrl) : undefined,
         sourceUrl:
           publisherUrl !== undefined && isHttpUrl(publisherUrl)
             ? sanitizeHref(publisherUrl)
@@ -360,7 +357,6 @@ export const dedupeExternalSources = (
       source.url,
       existing
         ? {
-            appUrl: source.appUrl ?? existing.appUrl,
             sourceUrl: source.sourceUrl ?? existing.sourceUrl,
             businessRegistry:
               source.businessRegistry ?? existing.businessRegistry,
@@ -437,7 +433,6 @@ export const collectSourceChipEntries = ({
       externalSources.push({
         ...source,
         caseLawDecision: mcpToolInfo ? undefined : source.caseLawDecision,
-        appUrl: mcpToolInfo ? undefined : source.appUrl,
         sourceUrl: mcpToolInfo ? undefined : source.sourceUrl,
         connectorSlug: source.connectorSlug ?? mcpToolInfo?.connectorSlug,
         sourceToolName: source.sourceToolName ?? mcpToolInfo?.sourceToolName,

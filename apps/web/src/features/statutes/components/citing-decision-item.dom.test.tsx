@@ -5,6 +5,7 @@ import { DECISION_DATE_VERSION_BASIS } from "@stll/api-contract/provision-versio
 import { sleep } from "@stll/concurrency/sleep";
 
 import { toSafeId } from "@/lib/safe-id";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type { CitingDecisionRow } from "./provision-citing-decisions";
 
@@ -40,7 +41,7 @@ afterAll(async () => {
   await act(async () => {
     await sleep(0);
   });
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const createClient = () => {

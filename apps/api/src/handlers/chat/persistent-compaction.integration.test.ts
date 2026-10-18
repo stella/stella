@@ -9,7 +9,10 @@ import {
   chatThreads,
 } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
-import { toPersistableChatMessage } from "@/api/handlers/chat/chat-message-parts";
+import {
+  toPersistedChatMessageContentV3,
+  toPersistableChatMessage,
+} from "@/api/handlers/chat/chat-message-parts";
 import type { MessagePersistencePlan } from "@/api/handlers/chat/persist-message";
 import { reconcileChatCompactionChainOnTx } from "@/api/handlers/chat/persistent-compaction";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -90,10 +93,9 @@ const seedThread = async ({
   const offsets = boundarySharesMillisecond ? [0, 1, 1, 2] : [0, 1, 2, 3];
   await testDb.insert(chatMessages).values(
     messageIds.map((id, index) => ({
-      content: {
-        version: 1 as const,
-        data: [{ type: "text" as const, text: `message ${index}` }],
-      },
+      content: toPersistedChatMessageContentV3({
+        data: [{ type: "text" as const, content: `message ${index}` }],
+      }),
       createdAt: new Date(base + (offsets[index] ?? panic("offset"))),
       id,
       role: index % 2 === 0 ? ("user" as const) : ("assistant" as const),

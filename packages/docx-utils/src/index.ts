@@ -6,6 +6,7 @@ export {
   extractBinary,
   repackZip,
 } from "./zip.ts";
+export { writeZipEntry, type ZipEntryContent } from "./zip-entry.ts";
 export {
   findNextRId,
   ensureContentType,

@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, expect, spyOn, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 GlobalRegistrator.register({ url: "http://localhost:3000/workspaces" });
 Object.assign(import.meta.env, { VITE_API_URL: "http://localhost:3001" });
 
@@ -23,7 +25,7 @@ if (typeof loader !== "function") {
 
 afterAll(async () => {
   globalThis.fetch = originalFetch;
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 for (const deploymentEnabled of [false, true]) {

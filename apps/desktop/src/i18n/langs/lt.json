@@ -33,7 +33,8 @@
     "sessionMovedToAnotherDevice": "Perkelta į kitą įrenginį",
     "sessionNeedsAttention": "Reikia dėmesio",
     "sessionOpeningInOffice": "Atidaroma Office programoje",
-    "sessionSavingDraft": "Išsaugomas juodraštis"
+    "sessionSavingDraft": "Išsaugomas juodraštis",
+    "reconnectAccount": "Iš naujo prisijungti prie stella web…"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName} — Pakeitimai lieka vietiniai ir bus automatiškai bandomi iš naujo",
@@ -209,7 +210,13 @@
     "startOnLoginDescription": "Automatiškai paleisti stella desktop prisijungiant.",
     "stellaDesktop": "stella desktop",
     "support": "Palaikymas",
-    "title": "Nustatymai"
+    "title": "Nustatymai",
+    "serverLabel": "Serveris",
+    "connectToHost": "Prisijungti prie {host}",
+    "connectToHostDescription": "Naršyklėje atidaro {host}, kur galite patvirtinti šį kompiuterį.",
+    "reconnectNeeded": "Reikia prisijungti iš naujo",
+    "reconnect": "Prisijungti iš naujo",
+    "reconnectHostDescription": "Ryšį su {host} reikia atnaujinti. Naršyklėje dar kartą patvirtinkite šį kompiuterį."
   },
   "clipboard": {
     "registryUnavailable": "Jūsų praktikos jurisdikcijose nėra įjungtų registrų.",

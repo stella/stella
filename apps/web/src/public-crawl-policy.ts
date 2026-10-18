@@ -1,9 +1,19 @@
 import { loadCatalogue } from "@stll/catalogue";
 
+import {
+  PUBLIC_CASE_LAW_PAGE_COUNTRIES,
+  toCaseLawCountryParam,
+} from "./features/case-law/case-law-jurisdiction";
+
 type PublicCrawlRoute = {
   path: `/${string}`;
   route: `/${string}`;
-  scope: "exact" | "subtree" | "catalogue";
+  /**
+   * `jurisdictions`: the path itself, plus a subtree per jurisdiction whose
+   * pages are public. A country whose pages are not public stays outside the
+   * crawl, whatever it may serve.
+   */
+  scope: "exact" | "subtree" | "catalogue" | "jurisdictions";
   permission: "law" | "tools" | "knowledge";
   format: "html" | "xml";
 };
@@ -12,7 +22,16 @@ export const PUBLIC_CRAWL_ROUTES = [
   {
     path: "/law",
     route: "/law",
-    scope: "subtree",
+    scope: "jurisdictions",
+    permission: "law",
+    format: "html",
+  },
+  // The case-law hub lists the admitted jurisdictions' decisions; its
+  // search URLs stay behind Disallow: / as everything else does.
+  {
+    path: "/law/cases",
+    route: "/law/cases/",
+    scope: "exact",
     permission: "law",
     format: "html",
   },
@@ -65,6 +84,12 @@ export type PublicCrawlRule = {
   scope: "exact" | "subtree";
 };
 
+/** The pages-public jurisdictions' law subtrees, read from the capability state. */
+const publicLawJurisdictionCrawlPaths = (): readonly `/${string}`[] =>
+  PUBLIC_CASE_LAW_PAGE_COUNTRIES.map(
+    (country): `/${string}` => `/law/${toCaseLawCountryParam(country)}`,
+  );
+
 export const publicToolCrawlPaths = (
   toolsBasePath: PublicCrawlOptions["toolsBasePath"],
 ): readonly `/${string}`[] => [
@@ -91,6 +116,13 @@ export const createPublicCrawlRules = ({
     if (!permissions[entry.permission]) {
       continue;
     }
+    if (entry.scope === "jurisdictions") {
+      rules.push({ path: entry.path, scope: "exact" });
+      for (const path of publicLawJurisdictionCrawlPaths()) {
+        rules.push({ path, scope: "subtree" });
+      }
+      continue;
+    }
     if (entry.scope === "catalogue") {
       if (entry.path === toolsBasePath) {
         for (const path of publicToolCrawlPaths(toolsBasePath)) {
@@ -113,3 +145,19 @@ export const isPublicCrawlPath = (
       path === rule.path ||
       (rule.scope === "subtree" && path.startsWith(`${rule.path}/`)),
   );
+
+/**
+ * The one owner of "may a crawler index this law page": robots.txt, the law
+ * sitemap and each page's meta robots all ask this, so a page is listed and
+ * `index,follow` exactly when robots.txt allows it.
+ */
+export const isPublicLawPathIndexable = (
+  path: string,
+  publicLawCrawlAllowed: boolean,
+): boolean =>
+  isPublicCrawlPath(path, {
+    publicKnowledgeCrawlAllowed: false,
+    publicLawCrawlAllowed,
+    publicToolsCrawlAllowed: false,
+    toolsBasePath: "/tools",
+  });

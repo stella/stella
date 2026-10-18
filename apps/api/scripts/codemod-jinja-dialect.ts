@@ -25,6 +25,7 @@ import { readdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import * as slimdom from "slimdom";
 
+import { writeZipEntry } from "@stll/docx-utils";
 import {
   legacyLoopAlias,
   markerPattern,
@@ -280,7 +281,7 @@ export const migrateDocx = async (bytes: Buffer): Promise<Buffer | null> => {
       partChanged = true;
     }
     if (partChanged) {
-      zip.file(partName, slimdom.serializeToWellFormedString(doc));
+      writeZipEntry(zip, partName, slimdom.serializeToWellFormedString(doc));
       changed = true;
     }
   }

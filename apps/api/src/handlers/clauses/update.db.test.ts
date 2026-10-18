@@ -6,6 +6,7 @@ import fc from "fast-check";
 import JSZip from "jszip";
 
 import { CLAUSE_VERSION_LIMIT_ERROR_CODE } from "@stll/api-contract";
+import { writeZipEntry } from "@stll/docx-utils";
 import { assertProperty } from "@stll/property-testing";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
@@ -193,7 +194,7 @@ describe("clause body preconditions", () => {
       {
         text: "List text",
         listKind: "bullet",
-        listLevel: 1,
+        numbering: { kind: "levelOnly", ilvl: 1 },
         style: null,
         level: "wrong",
         extra: "extension",
@@ -245,7 +246,11 @@ describe("clause body preconditions", () => {
       throw new Error("Expected a clause body in the HTTP response");
     }
     expect(read["body"]).toEqual([
-      { text: "List text", listKind: "bullet", listLevel: 1 },
+      {
+        text: "List text",
+        listKind: "bullet",
+        numbering: { kind: "levelOnly", ilvl: 1 },
+      },
       {
         text: "{% if party %}",
         isDirective: true,
@@ -821,7 +826,8 @@ test("stored legacy versions fill literal markers with warnings and remain tenan
       slotName: "Terms",
     });
     const zip = new JSZip();
-    zip.file(
+    writeZipEntry(
+      zip,
       "word/document.xml",
       '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>{{ clause("Terms") }}</w:t></w:r></w:p></w:body></w:document>',
     );

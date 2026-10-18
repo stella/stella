@@ -1247,20 +1247,6 @@
   },
   {
     "file": "apps/api/src/lib/files/gotenberg.ts",
-    "function": "module/chromiumHtmlToPdf",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/lib/files/gotenberg.ts",
-    "function": "module/chromiumHtmlToPdf",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/lib/files/gotenberg.ts",
     "function": "module/convertToPdf",
     "kind": "numeric-timeout",
     "count": 1,

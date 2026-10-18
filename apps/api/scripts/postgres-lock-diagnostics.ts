@@ -165,8 +165,9 @@ export const observePostgresTestProcess = async ({
     write: (chunk: Uint8Array) => void,
   ) => {
     let suffix = "";
+    const decoder = new TextDecoder();
     for await (const chunk of stream) {
-      const text = suffix + new TextDecoder().decode(chunk);
+      const text = suffix + decoder.decode(chunk, { stream: true });
       diagnostics.lockTimeoutObserved ||= text.includes("55P03");
       suffix = text.slice(-4);
       write(chunk);

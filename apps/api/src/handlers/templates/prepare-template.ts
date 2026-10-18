@@ -9,6 +9,7 @@
  * rewrite in apply-field-suggestions.ts.
  */
 
+import { writeZipEntry } from "@stll/docx-utils";
 import { filtersFromFieldConfig } from "@stll/template-conditions";
 
 import { loadDocx } from "@/api/lib/docx-archive";
@@ -83,7 +84,7 @@ export const prepareTemplateFromDocument = async ({
     const partXml = await entry.async("text");
     const result = applyFieldSuggestions(partXml, suggestions);
     if (result.xml !== partXml) {
-      zip.file(partName, result.xml);
+      writeZipEntry(zip, partName, result.xml);
     }
     for (const field of result.fields) {
       if (!seenPaths.has(field.path)) {

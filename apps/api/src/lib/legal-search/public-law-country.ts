@@ -26,8 +26,13 @@ import {
 } from "@stll/agent-input";
 import {
   PUBLIC_COUNTRY_UNAVAILABLE_STATUS,
-  publicCountryUnavailable,
+  PUBLIC_LAW_DOMAIN,
+  PUBLIC_COUNTRY_CAPABILITIES,
+  publicCountryUnavailableIn,
   publicCountryUnavailableSchema,
+  type PublicCountryCapabilities,
+  type PublicLawDomain,
+  type PublicCountrySurface,
   type PublicCountryUnavailable,
 } from "@stll/api-contract/public-country-capability";
 
@@ -39,6 +44,7 @@ export const tPublicCountryUnavailable = t.Object(
   {
     code: t.Literal(unavailableFields.code.literal),
     status: t.Literal(unavailableFields.status.literal),
+    domain: t.Enum(PUBLIC_LAW_DOMAIN),
     country: t.Enum(
       Object.fromEntries(
         unavailableFields.country.options.map(
@@ -64,10 +70,26 @@ export type PublicCountryUnavailableAnswer = ReturnType<
 
 /** The answer for a country an HTTP route names, or null when it is admitted
  *  or not advertised at all. */
+type PublicLawCountryUnavailableOptions = {
+  domain: PublicLawDomain;
+  surface: PublicCountrySurface;
+  capabilities?: PublicCountryCapabilities;
+};
+
 export const publicLawCountryUnavailable = (
   input: string,
+  {
+    domain,
+    surface,
+    capabilities = PUBLIC_COUNTRY_CAPABILITIES,
+  }: PublicLawCountryUnavailableOptions,
 ): PublicCountryUnavailableAnswer | null => {
-  const response = publicCountryUnavailable(input);
+  const response = publicCountryUnavailableIn({
+    capabilities,
+    domain,
+    input,
+    surface,
+  });
   return response === null ? null : publicCountryUnavailableAnswer(response);
 };
 
@@ -124,11 +146,17 @@ export type PublicLawCountryRead =
   | { kind: "unavailable"; answer: PublicCountryUnavailableAnswer };
 
 type PublicLawCountryOptions = {
+  domain: PublicLawDomain;
   /** The canonical codes this surface holds law for, named in the ask so a
    *  caller that guessed wrong can see what there is to ask for. */
   admitted: readonly string[];
+  /** Which public surface is asking: `pages` serves decision and statute pages
+   *  and sitemaps, `search` is search, listing and the agent surfaces. */
+  surface: PublicCountrySurface;
   /** The query property, which is `jurisdiction` on the provision surfaces. */
   parameter?: string;
+  /** The capability map the read answers from; tests inject one. */
+  capabilities?: PublicCountryCapabilities;
 };
 
 /**
@@ -140,7 +168,13 @@ type PublicLawCountryOptions = {
  */
 export const readPublicLawCountry = (
   input: unknown,
-  { admitted, parameter }: PublicLawCountryOptions,
+  {
+    admitted,
+    capabilities = PUBLIC_COUNTRY_CAPABILITIES,
+    domain,
+    parameter,
+    surface,
+  }: PublicLawCountryOptions,
 ): PublicLawCountryRead => {
   const normalized = normalizeCountry(input, {
     spelling: "alpha-3",
@@ -148,7 +182,11 @@ export const readPublicLawCountry = (
     parameter,
   });
   if (normalized.ok) {
-    const answer = publicLawCountryUnavailable(normalized.value.alpha3);
+    const answer = publicLawCountryUnavailable(normalized.value.alpha3, {
+      domain,
+      surface,
+      capabilities,
+    });
     if (answer !== null) {
       return { kind: "unavailable", answer };
     }

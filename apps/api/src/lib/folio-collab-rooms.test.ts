@@ -1,6 +1,15 @@
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import type { Subquery, SQL } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/bun-sql";
+import type { PgTable, SelectedFields } from "drizzle-orm/pg-core";
+import { PgDialect } from "drizzle-orm/pg-core";
+import { Doc, XmlElement, XmlText, encodeStateAsUpdate } from "yjs";
 
+import { FOLIO_YJS_ATTR_SCHEMA_VERSION } from "@stll/folio-core/server";
+import { sha256Hex } from "@stll/sha256/node";
+
+import { folioCollabRooms, workspaces } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
@@ -15,10 +24,12 @@ type QueuedRows = Row[] | (() => Row[]);
 
 type QueryBuilder = {
   for: () => QueryBuilder;
-  from: () => QueryBuilder;
-  innerJoin: () => QueryBuilder;
+  from: (table?: PgTable) => QueryBuilder;
+  as: (alias: string) => Subquery;
+  toSQL: () => { sql: string };
+  innerJoin: (table?: PgTable, predicate?: SQL) => QueryBuilder;
   leftJoin: () => QueryBuilder;
-  where: () => QueryBuilder;
+  where: (predicate?: SQL) => QueryBuilder;
   limit: () => QueryBuilder;
   returning: () => QueryBuilder;
   set: () => QueryBuilder;
@@ -27,9 +38,9 @@ type QueryBuilder = {
 
 type QueryApi = {
   delete: () => QueryBuilder;
-  execute: () => Promise<void>;
+  execute: (query: SQL) => Promise<Row[]>;
   insert: () => QueryBuilder;
-  select: () => QueryBuilder;
+  select: (selectedFields?: SelectedFields) => QueryBuilder;
   update: () => QueryBuilder;
 };
 
@@ -50,21 +61,52 @@ const createQueryBuilder = ({
   captureValues = false,
   onLock,
   resolveRows,
+  selectedFields = {},
 }: {
+  selectedFields?: SelectedFields;
   captureValues?: boolean;
   onLock?: () => void;
   resolveRows: (lockRead: boolean) => Row[];
 }): QueryBuilder => {
   let lockRead = false;
-  const query = Promise.resolve().then(() => resolveRows(lockRead));
+  let selectedTable: PgTable | undefined;
+  const metadataFor = (table: PgTable) =>
+    drizzle.mock().select(selectedFields).from(table).$dynamic();
+  let metadata = metadataFor(folioCollabRooms);
+  const query = Promise.resolve().then(() => {
+    const rows = resolveRows(lockRead);
+    if (!lockRead) {
+      return rows;
+    }
+    if (selectedTable === folioCollabRooms) {
+      return rows.map((row) => ({ id: roomId, workspaceId, ...row }));
+    }
+    if (selectedTable === workspaces) {
+      return rows.map((row) => ({ id: workspaceId, organizationId, ...row }));
+    }
+    return rows;
+  });
   const builder: QueryBuilder = Object.assign(query, {
     for: () => {
       lockRead = true;
       onLock?.();
       return builder;
     },
-    from: () => builder,
-    innerJoin: () => builder,
+    from: (table?: PgTable) => {
+      if (table) {
+        selectedTable = table;
+        metadata = metadataFor(table);
+      }
+      return builder;
+    },
+    as: (alias: string) => metadata.as(alias),
+    toSQL: () => metadata.toSQL(),
+    innerJoin: (table?: PgTable, predicate?: SQL) => {
+      if (table) {
+        metadata = metadata.innerJoin(table, predicate);
+      }
+      return builder;
+    },
     leftJoin: () => builder,
     limit: () => builder,
     returning: () => builder,
@@ -75,7 +117,12 @@ const createQueryBuilder = ({
       }
       return builder;
     },
-    where: () => builder,
+    where: (predicate?: SQL) => {
+      if (predicate) {
+        metadata = metadata.where(predicate);
+      }
+      return builder;
+    },
   });
   return builder;
 };
@@ -83,12 +130,15 @@ const createQueryBuilder = ({
 const createScopedQueryBuilder = ({
   captureValues = false,
   readsRows = true,
+  selectedFields = {},
 }: {
   captureValues?: boolean;
   readsRows?: boolean;
+  selectedFields?: SelectedFields;
 } = {}): QueryBuilder =>
   createQueryBuilder({
     captureValues,
+    selectedFields,
     onLock: () => {
       scopedPendingLockReads += 1;
     },
@@ -109,10 +159,23 @@ const scopedTransaction: QueryApi = {
     scopedDeleteCalls += 1;
     return createScopedQueryBuilder();
   },
-  execute: async () => undefined,
+  execute: async (query) => {
+    const { sql } = new PgDialect().sqlToQuery(query);
+    if (sql.includes("pg_advisory_xact_lock")) {
+      return [{}];
+    }
+    if (/FOR (?:NO KEY )?UPDATE/u.test(sql)) {
+      return [{ id: workspaceId, organizationId }];
+    }
+    const rows = resolveQueuedRows(scopedRows.shift());
+    if (sql.includes("AS count FROM changed")) {
+      return [{ count: rows.length }];
+    }
+    return rows;
+  },
   insert: () =>
     createScopedQueryBuilder({ captureValues: true, readsRows: false }),
-  select: () => createScopedQueryBuilder(),
+  select: (selectedFields = {}) => createScopedQueryBuilder({ selectedFields }),
   update: () => createScopedQueryBuilder(),
 };
 
@@ -186,6 +249,29 @@ const snapshotKey = (fileId: string) =>
     workspaceId,
   });
 
+const currentFolioSnapshot = () => {
+  const doc = new Doc();
+  doc
+    .getMap("folio:document-metadata")
+    .set("attrSchemaVersion", FOLIO_YJS_ATTR_SCHEMA_VERSION);
+  const update = encodeStateAsUpdate(doc);
+  doc.destroy();
+  return update;
+};
+
+const refusedFolioSnapshot = () => {
+  const doc = new Doc();
+  doc.getMap("folio:document-metadata").set("attrSchemaVersion", 11);
+  const paragraph = new XmlElement("paragraph");
+  const text = new XmlText();
+  text.insert(0, "1", { footnoteRef: { id: 1 } });
+  paragraph.insert(0, [text]);
+  doc.getXmlFragment("prosemirror").insert(0, [paragraph]);
+  const update = encodeStateAsUpdate(doc);
+  doc.destroy();
+  return update;
+};
+
 const validRow = (overrides: Row = {}): Row => ({
   entityId,
   expiresAt: new Date(Date.now() + FOLIO_COLLAB_TOKEN_TTL_MS),
@@ -200,8 +286,7 @@ const validRow = (overrides: Row = {}): Row => ({
   userId: "user_1",
   userName: "Authorized user",
   workspaceId,
-  workspaceClientId: "client_1",
-  workspaceMemberId: null,
+  reachesMatter: true,
   workspaceStatus: "active",
   ...overrides,
 });
@@ -231,25 +316,9 @@ describe("authorizeFolioCollabRoom", () => {
     expect(await authorize(validRow({ organizationRole: null }))).toEqual({
       status: "workspace-access-revoked",
     });
-    expect(
-      await authorize(
-        validRow({ organizationRole: "member", workspaceMemberId: null }),
-      ),
-    ).toEqual({ status: "workspace-access-revoked" });
-  });
-
-  test("requires personal-matter membership even for organization admins", async () => {
-    expect(
-      await authorize(
-        validRow({ workspaceClientId: null, workspaceMemberId: null }),
-      ),
-    ).toEqual({ status: "workspace-access-revoked" });
-
-    expect(
-      await authorize(
-        validRow({ workspaceClientId: null, workspaceMemberId: "wm_1" }),
-      ),
-    ).toMatchObject({ status: "authorized" });
+    expect(await authorize(validRow({ reachesMatter: false }))).toEqual({
+      status: "workspace-access-revoked",
+    });
   });
 
   test("rejects credentials minted for an abandoned seed generation", async () => {
@@ -259,9 +328,7 @@ describe("authorizeFolioCollabRoom", () => {
   });
 
   test("downgrades edit permission on the next authorization", async () => {
-    const result = await authorize(
-      validRow({ organizationRole: "intern", workspaceMemberId: "wm_1" }),
-    );
+    const result = await authorize(validRow({ organizationRole: "intern" }));
 
     expect(result.status).toBe("authorized");
     if (result.status === "authorized") {
@@ -279,8 +346,7 @@ describe("authorizeFolioCollabRoom", () => {
         organizationRole: "owner",
         tokenCanEdit: false,
         tokenGeneration: 3,
-        workspaceClientId: "client_1",
-        workspaceMemberId: null,
+        reachesMatter: true,
         workspaceStatus: "active",
       }),
     ).toEqual({ status: "authorized", canEdit: false });
@@ -305,6 +371,39 @@ describe("folio collaboration room token lifetime", () => {
 });
 
 describe("folio collaboration room snapshot generation", () => {
+  test("corrupt persisted snapshots return a handler failure without resetting the room", async () => {
+    const authorized = await authorize(validRow());
+    if (authorized.status !== "authorized") {
+      throw new Error("Expected an authorized snapshot target");
+    }
+    scopedRows = [
+      [
+        {
+          generation: 3,
+          yjsSnapshotFileId,
+          yjsSnapshotRevision: 4,
+          yjsSnapshotUpdatedAt: new Date(),
+        },
+      ],
+    ];
+
+    const loaded = await loadFolioCollabSnapshot(
+      authorized.value,
+      async () => new ArrayBuffer(0),
+    );
+    expect(Result.isError(loaded)).toBe(true);
+    if (!Result.isError(loaded)) {
+      throw new TypeError("Expected corrupt snapshot failure");
+    }
+    expect(loaded.error).toMatchObject({
+      _tag: "HandlerError",
+      status: 500,
+      cause: { code: "invalid_update" },
+    });
+    expect(scopedCalls).toBe(1);
+    expect(scopedInsertedRows).toEqual([]);
+  });
+
   test("retries the current pointer when a concurrent store removes the old object", async () => {
     const authorized = await authorize(validRow());
     expect(authorized.status).toBe("authorized");
@@ -333,16 +432,20 @@ describe("folio collaboration room snapshot generation", () => {
     ];
     // Only the replacement object exists: the concurrent store published a
     // new pointer and removed the object the first pointer named.
+    const snapshot = currentFolioSnapshot();
     fake.put(
       envBase.S3_BUCKET,
       snapshotKey(nextSnapshotFileId),
-      "next",
+      snapshot,
       FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
     );
 
-    expect(await loadFolioCollabSnapshot(authorized.value)).toEqual({
+    const loaded = (await loadFolioCollabSnapshot(authorized.value)).unwrap()
+      ?.snapshot;
+    expect(loaded).toEqual({
       generation: 3,
-      snapshotBase64: "bmV4dA==",
+      loadOutcome: "loaded",
+      snapshotBase64: Buffer.from(snapshot).toString("base64"),
       snapshotRevision: 5,
     });
     // The store confirming the first key is gone is what sends the read back
@@ -351,6 +454,203 @@ describe("folio collaboration room snapshot generation", () => {
       `GET ${snapshotKey(yjsSnapshotFileId)}`,
       `GET ${snapshotKey(nextSnapshotFileId)}`,
     ]);
+  });
+
+  test("returns the hash of persisted bytes before snapshot normalization", async () => {
+    const authorized = await authorize(validRow());
+    if (authorized.status !== "authorized") {
+      throw new Error("Expected an authorized snapshot target");
+    }
+    const snapshot = new Uint8Array(
+      await Bun.file(
+        new URL(
+          "files/fixtures/folio-core-0.58.5/migratable.yjs",
+          import.meta.url,
+        ),
+      ).arrayBuffer(),
+    );
+    scopedRows = [
+      [
+        {
+          generation: 3,
+          yjsSnapshotFileId,
+          yjsSnapshotRevision: 4,
+          yjsSnapshotUpdatedAt: new Date(),
+        },
+      ],
+    ];
+    fake.put(
+      envBase.S3_BUCKET,
+      snapshotKey(yjsSnapshotFileId),
+      snapshot,
+      FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
+    );
+    const loaded = (await loadFolioCollabSnapshot(authorized.value)).unwrap();
+    expect(loaded?.rawSnapshotSha256Hex).toBe(sha256Hex(snapshot));
+    expect(loaded?.snapshot.loadOutcome).toBe("loaded");
+    const normalized = loaded?.snapshot.snapshotBase64;
+    if (normalized === null || normalized === undefined) {
+      throw new Error("Expected normalized persisted snapshot bytes");
+    }
+    expect(sha256Hex(Buffer.from(normalized, "base64"))).not.toBe(
+      sha256Hex(snapshot),
+    );
+  });
+
+  test.each(["loaded", "rematerialize-from-docx", "conflict"] as const)(
+    "recovery handles a concurrent replacement: %s",
+    async (replacementOutcome) => {
+      const authorized = await authorize(validRow());
+      expect(authorized.status).toBe("authorized");
+      if (authorized.status !== "authorized") {
+        throw new Error("Expected an authorized snapshot target");
+      }
+      const nextFileId = toSafeId<"userFile">("file_yjs_replacement");
+      const pointer = {
+        baseVersionId: toSafeId<"entityVersion">("ev_saved"),
+        savedVersionCreatedAt: new Date(0),
+        savedSnapshotCut: null,
+        sourceVersionId: toSafeId<"entityVersion">("ev_saved"),
+        docxCheckpointFileId,
+        docxCheckpointUpdatedAt: null,
+        seededAt: new Date(0),
+        generation: 3,
+        yjsSnapshotFileId,
+        yjsSnapshotRevision: 4,
+        yjsSnapshotUpdatedAt: new Date(),
+      };
+      const replacement =
+        replacementOutcome === "loaded"
+          ? currentFolioSnapshot()
+          : refusedFolioSnapshot();
+      scopedRows = [
+        [pointer],
+        [], // The first recovery CAS loses to the replacement writer.
+        [{ ...pointer, yjsSnapshotFileId: nextFileId, yjsSnapshotRevision: 5 }],
+      ];
+      switch (replacementOutcome) {
+        case "rematerialize-from-docx":
+          scopedRows.push([{ generation: 4 }]);
+          break;
+        case "conflict":
+          scopedRows.push([]);
+          break;
+        case "loaded":
+          break;
+      }
+      fake.put(
+        envBase.S3_BUCKET,
+        snapshotKey(yjsSnapshotFileId),
+        refusedFolioSnapshot(),
+        FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
+      );
+      fake.put(
+        envBase.S3_BUCKET,
+        snapshotKey(nextFileId),
+        replacement,
+        FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
+      );
+
+      if (replacementOutcome === "conflict") {
+        const result = await loadFolioCollabSnapshot(authorized.value);
+        expect(Result.isError(result) && result.error).toMatchObject({
+          status: 503,
+          code: "folio_collab_snapshot_recovery_conflict",
+        });
+      } else {
+        expect(
+          (await loadFolioCollabSnapshot(authorized.value)).unwrap()?.snapshot,
+        ).toEqual(
+          replacementOutcome === "loaded"
+            ? {
+                generation: 3,
+                loadOutcome: "loaded",
+                snapshotBase64: Buffer.from(replacement).toString("base64"),
+                snapshotRevision: 5,
+              }
+            : {
+                generation: 4,
+                resetGeneration: 3,
+                loadOutcome: "rematerialize-from-docx",
+                snapshotBase64: null,
+                snapshotRevision: 0,
+              },
+        );
+      }
+      expect(scopedRows).toEqual([]);
+      expect(
+        scopedInsertedRows.filter((row) => row["resourceId"] === roomId),
+      ).toHaveLength(replacementOutcome === "rematerialize-from-docx" ? 1 : 0);
+      expect(
+        scopedInsertedRows.flatMap((row) =>
+          typeof row["objectKey"] === "string" ? [row["objectKey"]] : [],
+        ),
+      ).toEqual(
+        replacementOutcome === "rematerialize-from-docx"
+          ? [snapshotKey(nextFileId)]
+          : [],
+      );
+      expect(
+        fake.requests.map(({ method, key }) => `${method} ${key}`),
+      ).toEqual([
+        `GET ${snapshotKey(yjsSnapshotFileId)}`,
+        `GET ${snapshotKey(nextFileId)}`,
+      ]);
+    },
+  );
+
+  test("a refused snapshot resets its own generation and retires only its object", async () => {
+    const authorized = await authorize(validRow());
+    if (authorized.status !== "authorized") {
+      throw new Error("Expected an authorized snapshot target");
+    }
+    scopedRows = [
+      [
+        {
+          baseVersionId: toSafeId<"entityVersion">("ev_saved"),
+          savedVersionCreatedAt: new Date(0),
+          savedSnapshotCut: null,
+          sourceVersionId: toSafeId<"entityVersion">("ev_saved"),
+          docxCheckpointFileId,
+          docxCheckpointUpdatedAt: null,
+          seededAt: new Date(0),
+          generation: 3,
+          yjsSnapshotFileId,
+          yjsSnapshotRevision: 4,
+          yjsSnapshotUpdatedAt: new Date(),
+        },
+      ],
+      [{ generation: 4 }],
+    ];
+    fake.put(
+      envBase.S3_BUCKET,
+      snapshotKey(yjsSnapshotFileId),
+      refusedFolioSnapshot(),
+      FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
+    );
+
+    expect(
+      (await loadFolioCollabSnapshot(authorized.value)).unwrap()?.snapshot,
+    ).toEqual({
+      generation: 4,
+      resetGeneration: 3,
+      loadOutcome: "rematerialize-from-docx",
+      snapshotBase64: null,
+      snapshotRevision: 0,
+    });
+    expect(
+      scopedInsertedRows.find((row) => row["resourceId"] === roomId),
+    ).toMatchObject({
+      changes: { generation: { old: 3, new: 4 } },
+      performerType: "service",
+      triggerType: "system",
+    });
+    expect(scopedRows).toEqual([]);
+    expect(
+      scopedInsertedRows.flatMap((row) =>
+        typeof row["objectKey"] === "string" ? [row["objectKey"]] : [],
+      ),
+    ).toEqual([snapshotKey(yjsSnapshotFileId)]);
   });
 
   test("rejects a store from a stale generation", () => {

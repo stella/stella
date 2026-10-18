@@ -561,6 +561,9 @@ async fn offer_parked_handoff(
       crate::account::ConnectionStart::Started => {
         tracing::info!(target: crate::logging::TRAIL_TARGET, event = "account.link_started");
       }
+      crate::account::ConnectionStart::Resumed => {
+        tracing::info!(target: crate::logging::TRAIL_TARGET, event = "account.link_resumed");
+      }
       crate::account::ConnectionStart::SameOriginPending => {}
       crate::account::ConnectionStart::DifferentOriginPending => {
         // Keep this token for its own offer after the other connection completes.

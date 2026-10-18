@@ -3,6 +3,7 @@ import fc from "fast-check";
 import JSZip from "jszip";
 import * as slimdom from "slimdom";
 
+import { writeZipEntry } from "@stll/docx-utils";
 import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
 
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
@@ -30,7 +31,7 @@ const TBL = (...rows: string[]) => `<w:tbl>${rows.join("")}</w:tbl>`;
 
 const makeDocx = async (documentXml: string): Promise<ScannedFile> => {
   const zip = new JSZip();
-  zip.file("word/document.xml", documentXml);
+  writeZipEntry(zip, "word/document.xml", documentXml);
   return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
 };
 

@@ -140,7 +140,6 @@ beforeAll(
         db,
         async (tx) =>
           await fn({
-            query: tx.query,
             select: tx.select.bind(tx),
             execute: () => panic("This corpus prompt does not execute raw SQL"),
           }),
@@ -261,6 +260,7 @@ test.each(fixtures)(
       userId,
     });
     const fallbackAst = await readStoredVersionAst({
+      surface: "search",
       legislationDb,
       id: fixture.statuteId,
       purpose: "derived-ai",

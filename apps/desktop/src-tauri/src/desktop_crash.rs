@@ -607,6 +607,7 @@ mod tests {
 
   #[test]
   fn replacement_is_monitored_after_the_previous_instance_releases_its_lock() {
+    let _children = crate::test_child_processes::shared();
     let path = path();
     let previous = lock_run(&path).unwrap().unwrap();
     begin_run(&previous, 100, 41).unwrap();
@@ -660,6 +661,7 @@ mod tests {
 
   #[test]
   fn retries_are_bounded_and_clean_exit_prevents_late_marker_creation() {
+    let _children = crate::test_child_processes::shared();
     let path = path();
     let previous = lock_run(&path).unwrap().unwrap();
     let replacement = waiting_monitor(path.clone(), new_marker(200, 42));
@@ -699,6 +701,7 @@ mod tests {
 
   #[test]
   fn opt_out_discards_stale_crashes_even_if_reenabled_before_acquiring_ownership() {
+    let _children = crate::test_child_processes::shared();
     let path = path();
     let previous = lock_run(&path).unwrap().unwrap();
     begin_run(&previous, 100, 41).unwrap();
@@ -723,6 +726,7 @@ mod tests {
 
   #[test]
   fn concurrent_startup_cannot_claim_or_consume_another_runs_marker() {
+    let _children = crate::test_child_processes::shared();
     let path = path();
     let lock = lock_run(&path).unwrap().unwrap();
     assert!(lock_run(&path).unwrap().is_none());
@@ -734,6 +738,7 @@ mod tests {
 
   #[test]
   fn clean_exit_clears_the_run_and_is_idempotent() {
+    let _children = crate::test_child_processes::shared();
     let path = path();
     let lock = lock_run(&path).unwrap().unwrap();
     assert!(begin_run(&lock, 100, 41).unwrap().is_none());
@@ -749,6 +754,7 @@ mod tests {
 
   #[test]
   fn failed_update_restores_the_marker_after_before_exit_cleanup() {
+    let _children = crate::test_child_processes::shared();
     let path = path();
     let lock = lock_run(&path).unwrap().unwrap();
     begin_run(&lock, 100, 41).unwrap();
@@ -766,6 +772,7 @@ mod tests {
 
   #[test]
   fn leftover_is_consumed_once_and_live_owners_are_never_overwritten() {
+    let _children = crate::test_child_processes::shared();
     let path = path();
     let lock = lock_run(&path).unwrap().unwrap();
     assert!(begin_run(&lock, 100, 41).unwrap().is_none());
@@ -788,6 +795,7 @@ mod tests {
 
   #[test]
   fn stale_marker_with_an_unrelated_live_pid_is_consumed_when_lock_is_available() {
+    let _children = crate::test_child_processes::shared();
     let path = path();
     fs::create_dir_all(path.parent().unwrap()).unwrap();
     // The test process is alive, but never owned this stale app run.
@@ -811,6 +819,7 @@ mod tests {
 
   #[test]
   fn disabled_telemetry_discards_old_diagnostics_after_claiming_ownership() {
+    let _children = crate::test_child_processes::shared();
     let path = path();
     let lock = lock_run(&path).unwrap().unwrap();
     begin_run(&lock, 100, std::process::id()).unwrap();
@@ -823,6 +832,7 @@ mod tests {
 
   #[test]
   fn invalid_regular_markers_do_not_disable_future_runs() {
+    let _children = crate::test_child_processes::shared();
     let path = path();
     let lock = lock_run(&path).unwrap().unwrap();
     for bytes in [
@@ -893,6 +903,7 @@ mod tests {
   // their default hook and never share marker ownership.
   #[test]
   fn panic_hook_records_location_before_unwinding() {
+    let _children = crate::test_child_processes::exclusive();
     let path = path();
     let status = std::process::Command::new(std::env::current_exe().unwrap())
       .args([

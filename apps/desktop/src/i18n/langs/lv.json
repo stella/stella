@@ -33,7 +33,8 @@
     "sessionMovedToAnotherDevice": "Pārvietots uz citu ierīci",
     "sessionNeedsAttention": "Nepieciešama uzmanība",
     "sessionOpeningInOffice": "Tiek atvērts Office",
-    "sessionSavingDraft": "Tiek saglabāts melnraksts"
+    "sessionSavingDraft": "Tiek saglabāts melnraksts",
+    "reconnectAccount": "Atkārtoti savienot ar stella web…"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName} — Izmaiņas paliek lokālas un tiks automātiski mēģinātas vēlreiz",
@@ -209,7 +210,13 @@
     "startOnLoginDescription": "Automātiski palaist stella desktop, piesakoties sistēmā.",
     "stellaDesktop": "stella desktop",
     "support": "Atbalsts",
-    "title": "Iestatījumi"
+    "title": "Iestatījumi",
+    "serverLabel": "Serveris",
+    "connectToHost": "Savienot ar {host}",
+    "connectToHostDescription": "Atver {host} pārlūkā, lai jūs varētu apstiprināt šo datoru.",
+    "reconnectNeeded": "Jāsavieno atkārtoti",
+    "reconnect": "Savienot atkārtoti",
+    "reconnectHostDescription": "Savienojums ar {host} ir jāatjauno. Pārlūkā vēlreiz apstipriniet šo datoru."
   },
   "clipboard": {
     "registryUnavailable": "Jūsu prakses jurisdikcijām nav iespējotu reģistru.",

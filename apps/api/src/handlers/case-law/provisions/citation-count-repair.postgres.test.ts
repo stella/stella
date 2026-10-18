@@ -21,7 +21,13 @@ if (!databaseUrl || !runPostgresTests) {
     });
   });
 } else {
-  for (const transition of ["publish", "unpublish", "repair"] as const) {
+  for (const transition of [
+    "publish",
+    "unpublish",
+    "redact",
+    "restore",
+    "repair",
+  ] as const) {
     for (const firstOperation of ["writer", "transition"] as const) {
       test(`${firstOperation} serializes with ${transition} and leaves exact citation counts`, async () => {
         await withGatedTestClients(databaseUrl, async ({ openClient }) => {
@@ -65,6 +71,12 @@ if (!databaseUrl || !runPostgresTests) {
               case "unpublish":
                 await client`UPDATE case_law_decisions SET metadata = '{"_stellaPartialObservation":{"isListingOnly":true}}'::jsonb WHERE id = ${decisionId}::uuid`;
                 return;
+              case "redact":
+                await client`UPDATE case_law_decisions SET redacted_at = now() WHERE id = ${decisionId}::uuid`;
+                return;
+              case "restore":
+                await client`UPDATE case_law_decisions SET redacted_at = NULL WHERE id = ${decisionId}::uuid`;
+                return;
               case "repair":
                 await client`SELECT refresh_case_law_statute_citation_memberships(${decisionId}::uuid)`;
                 return;
@@ -81,6 +93,10 @@ if (!databaseUrl || !runPostgresTests) {
               language: "cs",
               caseNumber: decisionId,
               metadata: transition === "publish" ? listingOnly : {},
+              redactedAt:
+                transition === "restore"
+                  ? new Date("2026-01-01T00:00:00Z")
+                  : null,
             });
             const first = firstClient.begin(async (client) => {
               await client`SET LOCAL statement_timeout = '5s'`;
@@ -125,7 +141,7 @@ if (!databaseUrl || !runPostgresTests) {
             FROM case_law_statute_citation_counts WHERE source_id = ${source.id}::uuid
             ORDER BY target_type`;
             expect([...counts]).toEqual(
-              transition === "unpublish"
+              transition === "unpublish" || transition === "redact"
                 ? []
                 : [
                     { target_type: "provision", decision_count: 1 },

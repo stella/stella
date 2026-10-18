@@ -48,6 +48,8 @@ import type { SkillMetadata } from "@stll/skills/frontmatter";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
   legalReaderAnnotations,
+  caseLawSources,
+  publishedCaseLawDecisions,
   entities,
   entityVersions,
   fields,
@@ -90,6 +92,8 @@ import {
 import type { RegistryReadToolName } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { CHAT_REFERENCE_HREF_PREFIXES } from "@/api/handlers/chat/types";
 import type { ChatMessage } from "@/api/handlers/chat/types";
+import { offerSkillsToModel } from "@/api/lib/agent-skills/invocation";
+import type { ModelOfferedSkills } from "@/api/lib/agent-skills/invocation";
 import type { RequestedSkills } from "@/api/lib/agent-skills/requested-skills";
 import {
   describeMissingSkillTools,
@@ -141,8 +145,8 @@ import { allowsDerivedAi } from "@/api/lib/legal-search/corpus-source";
 import { readCorpusPayloadOrFallback } from "@/api/lib/legal-search/corpus-storage";
 import { canonicalLegislationTextSource } from "@/api/lib/legal-search/legislation-canonical-source";
 import {
-  publishedLegislationDocument,
-  redistributableLegislationVersion,
+  publishedLegislationDocumentFor,
+  redistributableLegislationVersionFor,
 } from "@/api/lib/legal-search/legislation-redistribution";
 import {
   readVersionBlocks,
@@ -540,8 +544,10 @@ export type ChatUntrustedPromptSuffix = v.InferOutput<
 type ChatFullPrompt = v.InferOutput<typeof chatFullPromptSchema>;
 
 /** The turn's prompt, and what the turn may stamp onto the answer it gets. */
-export type ChatSystemPromptParts = ChatPromptParts & {
+export type ChatSystemPromptParts = Omit<ChatPromptParts, "skillMetadata"> & {
   decisionPassageNumbers: DecisionPassageNumbers;
+  /** The turn's catalog, invocation rule applied; what the skill tools serve. */
+  skillMetadata: ModelOfferedSkills<PromptSkillMetadata>;
 };
 
 export type ChatPromptParts = {
@@ -697,6 +703,12 @@ type BuildChatSystemPromptProps = {
   refRegistry: ChatRefRegistry;
   safeDb: SafeDb;
   messages: readonly Pick<ChatMessage, "id" | "role">[];
+  /**
+   * Skills the latest user message invokes explicitly (skill references, by
+   * slug). A `manual` skill joins the turn's catalog only when invoked here
+   * or as the thread's active skill.
+   */
+  requestedSkillNames: ReadonlySet<string>;
   threadId: SafeId<"chatThread">;
   /**
    * The conditionally-registered tools handed to the model this turn.
@@ -900,6 +912,7 @@ export const buildChatSystemPromptParts = async ({
   refRegistry,
   safeDb,
   messages,
+  requestedSkillNames,
   threadId,
   toolAvailability,
   userContext,
@@ -924,6 +937,7 @@ export const buildChatSystemPromptParts = async ({
         activeSkillContext,
         listedSkills,
         offeredToolNames: offeredToolNamesForSkills,
+        requestedSkillNames,
       });
 
     // The "safe" half is built by the workspace / global builders:
@@ -2102,20 +2116,6 @@ const ACTIVE_DECISION_TEXT_READ_STEP = "chatPrompt.activeDecisionText";
  * document itself is resolved through. A canonical row's payload columns are
  * trimmed and the corpus objects are the document.
  */
-const ACTIVE_DECISION_COLUMNS = {
-  id: true,
-  astS3Key: true,
-  caseNumber: true,
-  contentHash: true,
-  country: true,
-  court: true,
-  decisionDate: true,
-  decisionType: true,
-  documentAst: true,
-  fulltext: true,
-  textS3Key: true,
-} as const;
-
 type ActiveDecisionAstPointers = {
   astS3Key: string | null;
   contentHash: string | null;
@@ -2252,13 +2252,36 @@ export const buildActiveDecisionSection = async ({
         try: async () => {
           const row = await withRedistributableSubject(
             caseLawDb,
+            "search",
             { kind: "id", id: activeDecision.decisionId },
-            async ({ id, tx }) =>
-              await tx.query.caseLawDecisions.findFirst({
-                where: { id: { eq: id } },
-                columns: ACTIVE_DECISION_COLUMNS,
-                with: { source: { columns: { descriptor: true } } },
-              }),
+            async ({ id, tx }) => {
+              const [decisionRow] = await tx
+                .select({
+                  id: publishedCaseLawDecisions.id,
+                  astS3Key: publishedCaseLawDecisions.astS3Key,
+                  caseNumber: publishedCaseLawDecisions.caseNumber,
+                  contentHash: publishedCaseLawDecisions.contentHash,
+                  country: publishedCaseLawDecisions.country,
+                  court: publishedCaseLawDecisions.court,
+                  decisionDate: publishedCaseLawDecisions.decisionDate,
+                  decisionType: publishedCaseLawDecisions.decisionType,
+                  documentAst: publishedCaseLawDecisions.documentAst,
+                  fulltext: publishedCaseLawDecisions.fulltext,
+                  textS3Key: publishedCaseLawDecisions.textS3Key,
+                  source: {
+                    id: caseLawSources.id,
+                    descriptor: caseLawSources.descriptor,
+                  },
+                })
+                .from(publishedCaseLawDecisions)
+                .leftJoin(
+                  caseLawSources,
+                  eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
+                )
+                .where(eq(publishedCaseLawDecisions.id, id))
+                .limit(1);
+              return decisionRow;
+            },
           );
           if (row === null || row === undefined) {
             return null;
@@ -2557,7 +2580,7 @@ const readActiveStatuteFulltext = async (
         .where(
           and(
             eq(legislationDocuments.id, documentId),
-            redistributableLegislationVersion,
+            redistributableLegislationVersionFor("search"),
           ),
         )
         .limit(1),
@@ -2641,7 +2664,7 @@ export const buildActiveStatuteSection = async ({
                 .where(
                   and(
                     eq(legislationDocuments.id, activeStatute.documentId),
-                    publishedLegislationDocument,
+                    publishedLegislationDocumentFor("search"),
                   ),
                 )
                 .limit(1),
@@ -2656,6 +2679,7 @@ export const buildActiveStatuteSection = async ({
 
           // Outside the transaction above: the AST lives in object storage.
           const blocks = await readVersionBlocks({
+            surface: "search",
             row: version,
             legislationDb,
             step: ACTIVE_STATUTE_READ_STEP,
@@ -2831,19 +2855,22 @@ const buildActiveExternalSection = ({
  * A listed skill whose tools the turn does not offer is left out. An active
  * skill the turn cannot run keeps its read and edit context (the active-skill
  * section) but stays out of the runnable catalog, so neither `load-skill` nor
- * a skill reference can start it.
+ * a skill reference can start it. A `manual` skill joins only when the
+ * latest message references it or it is the active skill.
  */
 const resolveTurnSkillCatalog = ({
   activeSkillContext,
   listedSkills,
   offeredToolNames,
+  requestedSkillNames,
 }: {
   activeSkillContext: ActiveChatSkillContext | null;
   listedSkills: readonly PromptSkillMetadata[];
   offeredToolNames: () => ReadonlySet<string>;
+  requestedSkillNames: ReadonlySet<string>;
 }): {
   activeSkillMissingTools: readonly string[];
-  promptSkillMetadata: readonly PromptSkillMetadata[];
+  promptSkillMetadata: ModelOfferedSkills<PromptSkillMetadata>;
 } => {
   const skillMetadata = filterSkillsWithAvailableTools({
     offeredToolNames,
@@ -2855,12 +2882,18 @@ const resolveTurnSkillCatalog = ({
       : activeSkillContext.requiredTools.filter(
           (name) => !offeredToolNames().has(name),
         );
+  const activeSkillRuns =
+    activeSkillContext !== null && activeSkillMissingTools.length === 0;
   return {
     activeSkillMissingTools,
-    promptSkillMetadata:
-      activeSkillMissingTools.length === 0
+    promptSkillMetadata: offerSkillsToModel({
+      invokedSkillNames: activeSkillRuns
+        ? new Set([...requestedSkillNames, activeSkillContext.toolName])
+        : requestedSkillNames,
+      skills: activeSkillRuns
         ? mergeActiveSkillMetadata({ activeSkillContext, skillMetadata })
         : skillMetadata,
+    }),
   };
 };
 

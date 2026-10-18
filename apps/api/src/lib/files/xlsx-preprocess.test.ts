@@ -1,6 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import JSZip from "jszip";
 
+import { writeZipEntry } from "@stll/docx-utils";
+
 import { DOCX_MAX_ENTRIES } from "@/api/lib/docx-archive";
 
 import { applyFitToPage, patchSheetXml } from "./xlsx-preprocess";
@@ -140,11 +142,12 @@ describe("patchSheetXml", () => {
 /** Build a minimal in-memory XLSX (OOXML ZIP) with 1 sheet. */
 const makeXlsx = async (sheetXml: string): Promise<ArrayBuffer> => {
   const zip = new JSZip();
-  zip.file(
+  writeZipEntry(
+    zip,
     "xl/workbook.xml",
     '<?xml version="1.0"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"></workbook>',
   );
-  zip.file("xl/worksheets/sheet1.xml", sheetXml);
+  writeZipEntry(zip, "xl/worksheets/sheet1.xml", sheetXml);
   return zip.generateAsync({ type: "arraybuffer" });
 };
 
@@ -182,10 +185,10 @@ describe("applyFitToPage", () => {
     // The patch is optional print styling, so an archive the bounded reader
     // refuses is forwarded untouched rather than inflated in-process.
     const zip = new JSZip();
-    zip.file("xl/workbook.xml", "<workbook/>");
-    zip.file("xl/worksheets/sheet1.xml", sheetXmlWithNoPageSetup);
+    writeZipEntry(zip, "xl/workbook.xml", "<workbook/>");
+    writeZipEntry(zip, "xl/worksheets/sheet1.xml", sheetXmlWithNoPageSetup);
     for (let index = 0; index < DOCX_MAX_ENTRIES; index += 1) {
-      zip.file(`filler/${index}.txt`, "x");
+      writeZipEntry(zip, `filler/${index}.txt`, "x");
     }
     const buf = await zip.generateAsync({ type: "arraybuffer" });
 
@@ -196,7 +199,7 @@ describe("applyFitToPage", () => {
   it("returns unchanged when ZIP has no xl/workbook.xml (e.g. a DOCX)", async () => {
     // Build a DOCX-like ZIP without xl/workbook.xml
     const zip = new JSZip();
-    zip.file("word/document.xml", "<document/>");
+    writeZipEntry(zip, "word/document.xml", "<document/>");
     const buf = await zip.generateAsync({ type: "arraybuffer" });
 
     const out = await applyFitToPage(buf);

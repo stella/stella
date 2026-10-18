@@ -11,6 +11,7 @@ import {
 } from "bun:test";
 
 import { browserStorage } from "@/lib/account/browser-storage";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 const sessionArea = () =>
   browserStorage("session") ?? panic("Test requires session browser storage");
@@ -51,7 +52,7 @@ afterEach(() => {
 
 afterAll(async () => {
   globalThis.fetch = originalFetch;
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const installOwner = (userId: string | null) => {

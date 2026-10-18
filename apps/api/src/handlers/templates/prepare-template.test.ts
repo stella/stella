@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import { writeZipEntry } from "@stll/docx-utils";
+
 import { deriveManifestFromDocx } from "@/api/lib/docx/derived-manifest";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
@@ -15,9 +17,9 @@ const makeDocx = async (paragraphs: string[]): Promise<ScannedFile> => {
     `<w:p><w:r><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
   const doc = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${paragraphs.map(para).join("")}<w:sectPr/></w:body></w:document>`;
   const zip = new JSZip();
-  zip.file("[Content_Types].xml", CONTENT_TYPES);
-  zip.file("_rels/.rels", RELS);
-  zip.file("word/document.xml", doc);
+  writeZipEntry(zip, "[Content_Types].xml", CONTENT_TYPES);
+  writeZipEntry(zip, "_rels/.rels", RELS);
+  writeZipEntry(zip, "word/document.xml", doc);
   return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
 };
 

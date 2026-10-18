@@ -17,6 +17,7 @@ import type { Logger } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/bun-sql";
 
 import { databaseRelations } from "@/api/db/database-relations";
+import { forceClosePool } from "@/api/db/sql-close";
 
 const openDatabase = (client: SQL, logger?: Logger) =>
   drizzle({ client, relations: databaseRelations, logger });
@@ -95,15 +96,9 @@ type GatedTestClientScope = {
   readonly openClient: (options?: OpenClientOptions) => GatedTestClient;
 };
 
-// Bun's pinned driver treats zero like an unbounded close; use a positive bound.
-export const GATED_TEST_FORCE_CLOSE_TIMEOUT_SECONDS = 0.001;
-
 type GatedTestClientsOptions = {
-  /**
-   * Seconds each close waits for in-flight queries before it terminates
-   * them. Omit to drain queries; forced termination needs a positive value.
-   */
-  readonly closeTimeout?: number;
+  /** Draining waits for queries; forced cleanup terminates them through the pool owner. */
+  readonly closeMode?: "drain" | "force";
 };
 
 /**
@@ -115,16 +110,8 @@ type GatedTestClientsOptions = {
 export const withGatedTestClients = async <T>(
   databaseUrl: string,
   fn: (scope: GatedTestClientScope) => Promise<T>,
-  { closeTimeout }: GatedTestClientsOptions = {},
+  { closeMode = "drain" }: GatedTestClientsOptions = {},
 ): Promise<T> => {
-  if (
-    closeTimeout !== undefined &&
-    (!Number.isFinite(closeTimeout) || closeTimeout <= 0)
-  ) {
-    panic(
-      "Gated test closeTimeout must be finite and positive; omit it to drain queries",
-    );
-  }
   const opened: SQL[] = [];
   const openClient = ({
     databaseUrl: clientDatabaseUrl = databaseUrl,
@@ -147,12 +134,21 @@ export const withGatedTestClients = async <T>(
     return await fn({ openClient });
   } finally {
     await Promise.all(
-      opened.map(
-        async (client) =>
-          await client.close(
-            closeTimeout === undefined ? undefined : { timeout: closeTimeout },
-          ),
-      ),
+      opened.map(async (client) => {
+        switch (closeMode) {
+          case "drain":
+            await client.close();
+            return;
+          case "force":
+            await forceClosePool(client);
+            return;
+          default:
+            panic(
+              "Unexpected test client close mode",
+              closeMode satisfies never,
+            );
+        }
+      }),
     );
   }
 };

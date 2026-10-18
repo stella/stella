@@ -51,6 +51,10 @@
       "types": "./src/provision-citation-profiles.ts",
       "import": "./src/provision-citation-profiles.ts"
     },
+    "./provision-citation-resolve": {
+      "types": "./src/provision-citation-resolve.ts",
+      "import": "./src/provision-citation-resolve.ts"
+    },
     "./provision-extraction-admission": {
       "types": "./src/provision-extraction-admission.ts",
       "import": "./src/provision-extraction-admission.ts"

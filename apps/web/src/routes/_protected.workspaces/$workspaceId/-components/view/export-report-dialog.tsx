@@ -414,7 +414,7 @@ const ExportReportDialogBody = ({
           {t("workspaces.views.reportExport.description")}
         </DialogDescription>
       </DialogHeader>
-      <DialogPanel className="flex max-h-[70vh] flex-col gap-4 overflow-y-auto">
+      <DialogPanel className="flex max-h-[70dvh] flex-col gap-4 overflow-y-auto">
         <div className="flex flex-col gap-1.5">
           <span className="text-sm font-medium" id="report-template-label">
             {t("workspaces.views.reportExport.templateLabel")}

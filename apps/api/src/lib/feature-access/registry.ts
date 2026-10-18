@@ -1,4 +1,5 @@
 // parser-output-unchanged: registering desktop activity access leaves existing ingestion features and parsed records unchanged.
+// parser-output-unchanged: assigning the sample case handlers to list verification leaves parsed records unchanged.
 import type { DesktopFeatureId } from "@stll/api-contract/desktop-feature-access";
 import { VISUAL_PREVIEW_TOOL_NAME } from "@stll/api-contract/visual-preview";
 
@@ -6,7 +7,8 @@ import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
 import { defineFeatureRegistry } from "@/api/lib/feature-access/prerequisites";
 
 type FeatureDefinition = {
-  enrolment: "invitation" | "self-serve";
+  // parser-output-unchanged: enrolment kinds gate access only, never parsed decision output
+  enrolment: "invitation" | "self-serve" | "general-availability";
   deploymentFeature?: DeploymentFeatureFlag;
   prerequisites?: readonly string[];
   ownership?: {
@@ -53,7 +55,7 @@ export const FEATURE_REGISTRY = defineFeatureRegistry({
     enrolment: "invitation",
   },
   [GENERATED_VIEWS_FEATURE_ID]: {
-    enrolment: "invitation",
+    enrolment: "general-availability",
     deploymentFeature: "FEATURE_GENERATED_VIEWS",
     ownership: {
       handlerDirectories: [],
@@ -123,6 +125,7 @@ export const FEATURE_REGISTRY = defineFeatureRegistry({
     ownership: {
       handlerDirectories: [
         "apps/api/src/handlers/lists/verifications",
+        "apps/api/src/handlers/lists/sample-case",
         "apps/api/src/handlers/lists/items/fact-details",
         "apps/api/src/handlers/lists/items/sources/verification",
       ],

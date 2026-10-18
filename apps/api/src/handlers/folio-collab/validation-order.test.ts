@@ -48,6 +48,10 @@ const serviceAuthFailure =
 const credentialPaths = [
   {
     expected: { body: NOT_FOUND_BODY, status: 404 as const },
+    path: "/folio-collab-rooms/snapshot/seed",
+  },
+  {
+    expected: { body: NOT_FOUND_BODY, status: 404 as const },
     path: "/folio-collab-rooms/authorize",
   },
   {

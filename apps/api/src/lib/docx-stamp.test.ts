@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import { writeZipEntry } from "@stll/docx-utils";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { DESKTOP_EDIT_FILE_TYPE_CONFIG } from "@/api/lib/desktop-edit-file-types";
@@ -46,7 +47,8 @@ const makeDocx = async (opts?: {
 }): Promise<ArrayBuffer> => {
   const zip = new JSZip();
 
-  zip.file(
+  writeZipEntry(
+    zip,
     "word/document.xml",
     opts?.documentXml ??
       [
@@ -60,28 +62,32 @@ const makeDocx = async (opts?: {
       ].join("\n"),
   );
 
-  zip.file("[Content_Types].xml", opts?.contentTypes ?? CONTENT_TYPES_XML);
+  writeZipEntry(
+    zip,
+    "[Content_Types].xml",
+    opts?.contentTypes ?? CONTENT_TYPES_XML,
+  );
 
   if (opts?.docRels) {
-    zip.file("word/_rels/document.xml.rels", opts.docRels);
+    writeZipEntry(zip, "word/_rels/document.xml.rels", opts.docRels);
   }
   if (opts?.footerXml) {
-    zip.file("word/footer1.xml", opts.footerXml);
+    writeZipEntry(zip, "word/footer1.xml", opts.footerXml);
   }
   if (opts?.footerRels) {
-    zip.file("word/_rels/footer1.xml.rels", opts.footerRels);
+    writeZipEntry(zip, "word/_rels/footer1.xml.rels", opts.footerRels);
   }
   if (opts?.customXml) {
-    zip.file("docProps/custom.xml", opts.customXml);
+    writeZipEntry(zip, "docProps/custom.xml", opts.customXml);
   }
   if (opts?.coreXml) {
-    zip.file("docProps/core.xml", opts.coreXml);
+    writeZipEntry(zip, "docProps/core.xml", opts.coreXml);
   }
   if (opts?.appXml) {
-    zip.file("docProps/app.xml", opts.appXml);
+    writeZipEntry(zip, "docProps/app.xml", opts.appXml);
   }
   for (const [path, contents] of Object.entries(opts?.additionalFiles ?? {})) {
-    zip.file(path, contents);
+    writeZipEntry(zip, path, contents);
   }
 
   return zip.generateAsync({ type: "arraybuffer" });
@@ -784,7 +790,8 @@ describe("stripStamp", () => {
     const { mainPartContentType, mainPartPath } =
       DESKTOP_EDIT_FILE_TYPE_CONFIG.xlsx;
     const zip = new JSZip();
-    zip.file(
+    writeZipEntry(
+      zip,
       "[Content_Types].xml",
       [
         '<?xml version="1.0" encoding="UTF-8"?>',
@@ -793,8 +800,9 @@ describe("stripStamp", () => {
         "</Types>",
       ].join("\n"),
     );
-    zip.file(mainPartPath, "<workbook/>");
-    zip.file(
+    writeZipEntry(zip, mainPartPath, "<workbook/>");
+    writeZipEntry(
+      zip,
       "docProps/custom.xml",
       [
         '<?xml version="1.0" encoding="UTF-8"?>',

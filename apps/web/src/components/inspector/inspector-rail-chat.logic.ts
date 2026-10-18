@@ -15,6 +15,7 @@
 import { activeLegalDocumentRef } from "@/components/ai-suggestions/active-legal-document";
 import type { ActiveLegalDocument } from "@/components/ai-suggestions/active-legal-document";
 import type { ChatTab } from "@/components/inspector/inspector-store-types";
+import { newChatMatterScope } from "@/components/inspector/new-chat-scope";
 import type { LegalDocumentChatKey } from "@/features/chat/legal-document-chat-key";
 
 type RailChatOpenArgsOptions = {
@@ -45,10 +46,9 @@ export const railChatOpenArgs = ({
   // No label travels with the skill either: an untitled tab names its skill
   // where it is drawn, so a built-in title follows the reader's language.
   const skillContext = activeSkill === undefined ? {} : { activeSkill };
-  const matterContext =
-    workspaceId === undefined
-      ? {}
-      : { workspaceId, contextMatterIds: [workspaceId] };
-
-  return { ...legalContext, ...skillContext, ...matterContext };
+  return {
+    ...legalContext,
+    ...skillContext,
+    ...newChatMatterScope(workspaceId),
+  };
 };

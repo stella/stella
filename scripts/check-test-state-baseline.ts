@@ -7,10 +7,7 @@ import { runLedgerMembershipGuard } from "./ledger-membership.ts";
 
 const BASELINE_REL = BASELINE_PATHS.testState;
 
-export const parseTestStateBaseline = (
-  text: string,
-  label: string,
-): string[] => {
+export const parseTestBaseline = (text: string, label: string): string[] => {
   const parsed: unknown = JSON.parse(text);
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     return panic(
@@ -21,7 +18,7 @@ export const parseTestStateBaseline = (
   const members: string[] = [];
   for (const [file, entry] of Object.entries(parsed)) {
     if (
-      !/\.(?:test|spec)\.[cm]?[jt]sx?$/u.test(file) ||
+      !/(?:\.(?:test|spec)\.[cm]?[jt]sx?|\.rs)$/u.test(file) ||
       file.includes("\\") ||
       file.includes(":") ||
       file
@@ -63,17 +60,19 @@ export const parseTestStateBaseline = (
   return members;
 };
 
-type ValidateTestStateBaselineFilesOptions = {
+type ValidateTestBaselineFilesOptions = {
   members: readonly string[];
   repoRoot: string;
   trackedFiles: ReadonlySet<string>;
+  baselineRel: string;
 };
 
-export const validateTestStateBaselineFiles = ({
+export const validateTestBaselineFiles = ({
   members,
   repoRoot,
   trackedFiles,
-}: ValidateTestStateBaselineFilesOptions): void => {
+  baselineRel,
+}: ValidateTestBaselineFilesOptions): void => {
   const files = new Set(members.map((member) => member.replace(/::\d+$/u, "")));
   for (const file of files) {
     if (
@@ -81,7 +80,7 @@ export const validateTestStateBaselineFiles = ({
       !lstatSync(path.join(repoRoot, file), { throwIfNoEntry: false })?.isFile()
     ) {
       panic(
-        `${BASELINE_REL}: ${file} must exist as a regular tracked test file; delete its baseline entry`,
+        `${baselineRel}: ${file} must exist as a regular tracked test file; delete its baseline entry`,
       );
     }
   }
@@ -104,9 +103,14 @@ if (import.meta.main) {
       ledgerRel: BASELINE_REL,
       repoRoot,
       parseLedger: (text, label) => {
-        const members = parseTestStateBaseline(text, label);
+        const members = parseTestBaseline(text, label);
         if (label === BASELINE_REL) {
-          validateTestStateBaselineFiles({ members, repoRoot, trackedFiles });
+          validateTestBaselineFiles({
+            members,
+            repoRoot,
+            trackedFiles,
+            baselineRel: BASELINE_REL,
+          });
         }
         return members;
       },

@@ -1,4 +1,7 @@
+import * as v from "valibot";
+
 import type { LegalResolveResponse } from "./legal-resolve";
+import { publicCountryUnavailableSchema } from "./public-country-capability";
 
 export const APP_SEARCH_FIXTURE = {
   headnotes: "included" as const,
@@ -23,6 +26,7 @@ export const APP_SEARCH_FIXTURE = {
       warnings: [
         {
           code: "function_words_optional" as const,
+          audience: "agent" as const,
           message: "Search notice",
           hint: "Try another query.",
         },
@@ -31,7 +35,6 @@ export const APP_SEARCH_FIXTURE = {
   ],
   results: [
     {
-      appUrl: "https://stll.app/case-law/fixture-decision",
       url: "https://stll.app/case-law/fixture-decision",
       caseNumber: "I. ÚS 123/24",
       citationCount: 3,
@@ -102,11 +105,12 @@ export const APP_RESOLVE_STATUS_FIXTURES = [
   { status: "country_unavailable" as const },
 ] satisfies LegalResolveResponse[];
 
-export const APP_UNAVAILABLE_FIXTURE = {
-  code: "public_country_unavailable" as const,
-  status: "unavailable" as const,
-  country: "CZE" as const,
-  reason: "pending_public" as const,
+export const APP_UNAVAILABLE_FIXTURE = v.parse(publicCountryUnavailableSchema, {
+  code: "public_country_unavailable",
+  domain: "caseLaw",
+  status: "unavailable",
+  country: "CZE",
+  reason: "pending_public",
   message: "Corpus unavailable.",
   hint: "Choose another country.",
-};
+});

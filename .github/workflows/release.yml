@@ -206,6 +206,7 @@ jobs:
       # Smoke the artifact that was actually pushed (with its release build
       # args baked in), not a local rebuild that could drift from it.
       - name: Pull pushed image by digest
+        timeout-minutes: 3
         env:
           IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           IMAGE_DIGEST: ${{ needs.build.outputs.digest-arm64 }}
@@ -219,11 +220,12 @@ jobs:
           docker tag "${IMAGE}@${IMAGE_DIGEST}" stella-api:smoke
 
       - name: Pull smoke service images
+        timeout-minutes: 2
         env:
           CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
         run: |
           set -euo pipefail
-          POSTGRES_IMAGE="$(bun .workflow-tooling/scripts/ci-service-images.ts --image docker.io/library/postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280)"
+          POSTGRES_IMAGE="$(bun .workflow-tooling/scripts/ci-service-images.ts --image docker.io/library/postgres:18.6@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336)"
           REDIS_IMAGE="$(bun .workflow-tooling/scripts/ci-service-images.ts --image docker.io/library/redis:8@sha256:298e5b3bc566bade82f46ad5511777a4a07a294097ce16ada2f6a42be5239df5)"
           bash .workflow-tooling/scripts/retry.sh docker pull "$POSTGRES_IMAGE"
           bash .workflow-tooling/scripts/retry.sh docker pull "$REDIS_IMAGE"
@@ -235,6 +237,7 @@ jobs:
 
       # CI rehearses this same runtime contract before a VERSION bump merges.
       - name: Smoke release artifact
+        timeout-minutes: 2
         run: bash scripts/smoke-api-image.sh stella-api:smoke
 
   build:

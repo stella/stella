@@ -19,7 +19,7 @@ jobs:
   heal:
     if: github.repository == 'stella/stella'
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    timeout-minutes: 92
     permissions:
       contents: read
       pull-requests: read
@@ -40,7 +40,7 @@ jobs:
       # Neither package installation nor probe commands receive a write token.
       - name: Install dependencies
         timeout-minutes: 20
-        run: bun ci --ignore-scripts
+        run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
 
@@ -95,6 +95,16 @@ jobs:
           GH_READ_TOKEN: ${{ github.token }}
           DATED_WAIVER_FIX_REPO: ${{ github.repository_owner }}/${{ vars.DATED_WAIVER_FIX_REPOSITORY }}
           MERGE_HOLD: ${{ vars.STELLA_MERGE_HOLD }}
+
+      # The full expiry check: pull requests only fail on waivers they touch,
+      # so the default branch is where every expired waiver fails, and the
+      # scheduled-run alert reaches its owner.
+      - name: Check every dated waiver on the default branch
+        timeout-minutes: 2
+        if: ${{ !cancelled() }}
+        run: |
+          git ls-files -z > "$RUNNER_TEMP/dated-waiver-tracked-files"
+          bun --preload ./scripts/offline-network-preload.ts scripts/dated-waivers.ts --check --tracked-files "$RUNNER_TEMP/dated-waiver-tracked-files"
 
       - name: Remove local evidence
         timeout-minutes: 1

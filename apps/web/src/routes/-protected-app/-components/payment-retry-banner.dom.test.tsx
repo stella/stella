@@ -3,6 +3,8 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { sleep } from "@stll/concurrency/sleep";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 Object.assign(import.meta.env, {
   VITE_API_URL: "http://localhost:3001",
@@ -38,7 +40,7 @@ afterAll(async () => {
   await act(async () => {
     await sleep(50);
   });
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const paymentRetry = (endsAt: string) => ({

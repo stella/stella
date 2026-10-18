@@ -7,6 +7,8 @@ import {
   SEARCH_PAGINATION_COMPLETE,
 } from "@stll/api-contract/search";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 import type { DecisionListFilters } from "./decisions";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law/cases" });
@@ -122,7 +124,7 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 /** One page on screen, warming the page after it the way the results route does. */

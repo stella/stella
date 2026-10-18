@@ -6,7 +6,9 @@ defaults:
 
 on:
   schedule:
-    - cron: "0 8 * * 1" # Monday 08:00 UTC
+    # Daily: settings changed through the API must not drift from the
+    # checked-in rulesets for long, since the next sync would revert them.
+    - cron: "0 8 * * *"
   workflow_dispatch:
 
 concurrency:

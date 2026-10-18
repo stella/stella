@@ -151,6 +151,23 @@ const allSchemaExports: Record<string, unknown> = {
 
 const userTableName = getTableConfig(authSchema.user).name;
 
+test("chat repair metadata cascades with the organization and has no account ownership", () => {
+  const { foreignKeys } = getTableConfig(schema.chatContentV3BackfillReceipts);
+  expect(
+    foreignKeys.map((key) => ({
+      table: getTableConfig(key.reference().foreignTable).name,
+      columns: key.reference().columns.map((column) => column.name),
+      onDelete: key.onDelete,
+    })),
+  ).toEqual([
+    {
+      table: "organization",
+      columns: ["organization_id"],
+      onDelete: "cascade",
+    },
+  ]);
+});
+
 /**
  * Names of every Better Auth (`auth-schema.ts`) table. Account deletion
  * soft-deletes the `user` row (anonymize + `deletedAt`) and never hard-deletes

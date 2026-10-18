@@ -260,8 +260,8 @@ test("an in-scope API leg rejects help, empty or another shard's output", () => 
   for (const output of [
     "",
     "Usage: bun run [flags] <script>",
-    "API test shard 1/4: 0/10 files",
-    "API test shard 2/4: 5/10 files",
+    "API test shard 1/3: 0/10 files",
+    "API test shard 2/3: 5/10 files",
   ]) {
     expect(() =>
       assertApiShardExecuted({ shard: "api-1", taskIds, output }),
@@ -270,7 +270,7 @@ test("an in-scope API leg rejects help, empty or another shard's output", () => 
   assertApiShardExecuted({
     shard: "api-1",
     taskIds,
-    output: "@stll/api:test: API test shard 1/4: 5/10 files",
+    output: "@stll/api:test: API test shard 1/3: 5/10 files",
   });
   assertApiShardExecuted({ shard: "api-1", taskIds: [], output: "" });
   assertApiShardExecuted({ shard: "rest", taskIds, output: "" });
@@ -285,9 +285,9 @@ test("dynamic API shard counts certify the selected partition and allow zero API
     taskIds: ["@stll/scripts#test"],
     output: "",
   });
-  for (const count of [1, 2, 3, 4]) {
+  for (const count of [1, 2, 3]) {
     for (const [index, shard] of (
-      ["api-1", "api-2", "api-3", "api-4"] as const
+      ["api-1", "api-2", "api-3"] as const
     ).entries()) {
       if (index >= count) {
         expect(() => apiShardValue(shard, count)).toThrow(

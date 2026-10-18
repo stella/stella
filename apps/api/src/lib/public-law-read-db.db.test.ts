@@ -2,7 +2,11 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
-import { withSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
+import {
+  setSharedTransactionTimeouts,
+  withSharedStatementTimeout,
+  withSharedTransactionTimeoutRestoration,
+} from "@/api/db/shared-pool-timeouts";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   configureReadTransaction,
@@ -76,6 +80,35 @@ test("nested query budgets restore the prior tighter budget", async () => {
     expect(await readSetting(tx, "statement_timeout")).toBe("30s");
   });
 });
+
+test.each([
+  { statementTimeoutMs: 0, lockTimeoutMs: 0 },
+  { statementTimeoutMs: 2000, lockTimeoutMs: 1000 },
+  { statementTimeoutMs: 0, lockTimeoutMs: 1000 },
+  { statementTimeoutMs: 2000, lockTimeoutMs: 0 },
+])(
+  "combined query budgets restore captured settings $statementTimeoutMs/$lockTimeoutMs",
+  async (previous) => {
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT
+      set_config('statement_timeout', ${`${previous.statementTimeoutMs}ms`}, true),
+      set_config('lock_timeout', ${`${previous.lockTimeoutMs}ms`}, true)`);
+      const statementTimeout = await readSetting(tx, "statement_timeout");
+      const lockTimeout = await readSetting(tx, "lock_timeout");
+      await withSharedTransactionTimeoutRestoration(tx, async (captured) => {
+        expect(captured).toEqual(previous);
+        await setSharedTransactionTimeouts(tx, {
+          statementTimeoutMs: 100,
+          lockTimeoutMs: 50,
+        });
+        expect(await readSetting(tx, "statement_timeout")).toBe("100ms");
+        expect(await readSetting(tx, "lock_timeout")).toBe("50ms");
+      });
+      expect(await readSetting(tx, "statement_timeout")).toBe(statementTimeout);
+      expect(await readSetting(tx, "lock_timeout")).toBe(lockTimeout);
+    });
+  },
+);
 
 test("a failed nested read restores its budget when the transaction remains usable", async () => {
   await db.transaction(async (tx) => {

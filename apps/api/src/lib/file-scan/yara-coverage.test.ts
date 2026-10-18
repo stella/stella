@@ -10,6 +10,7 @@ import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
 import { compileLegalSourceToDocx } from "@stll/docx-core";
+import { writeZipEntry } from "@stll/docx-utils";
 
 import { scanFile } from "@/api/lib/file-scan/scan";
 import { yaraRuleNames } from "@/api/lib/file-scan/yara";
@@ -39,10 +40,14 @@ const pdf = async (payload = ""): Promise<Fixture> => {
 /** DEFLATE-compressed, as a real OOXML writer produces. */
 const docx = async (files: Record<string, string>): Promise<Fixture> => {
   const zip = new JSZip();
-  zip.file("[Content_Types].xml", '<?xml version="1.0"?><Types></Types>');
-  zip.file("word/document.xml", "<document/>");
+  writeZipEntry(
+    zip,
+    "[Content_Types].xml",
+    '<?xml version="1.0"?><Types></Types>',
+  );
+  writeZipEntry(zip, "word/document.xml", "<document/>");
   for (const [name, content] of Object.entries(files)) {
-    zip.file(name, content);
+    writeZipEntry(zip, name, content);
   }
   return {
     buffer: await zip.generateAsync({

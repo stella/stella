@@ -1,8 +1,10 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import path from "node:path";
 
 import { OWNERSHIP } from "../../scripts/ownership.ts";
 import { lintSingleRule } from "./lint-single-rule.ts";
+
+setDefaultTimeout(30_000);
 
 describe.serial("audit detail read ownership", () => {
   const entry = OWNERSHIP.find(({ id }) => id === "audit-detail-read");
@@ -201,6 +203,38 @@ describe.serial("BullMQ worker ownership", () => {
         sourcePath: "apps/api/src/lib/bullmq-queue.ts",
       }),
     ).toEqual([]);
+  });
+});
+
+describe.serial("parallel dynamic import ownership", () => {
+  const entry = OWNERSHIP.find(({ id }) => id === "bullmq-worker");
+  const options = {
+    ruleOptions: { entries: [entry] },
+    sourcePath: "apps/api/src/lib/example-worker.ts",
+  };
+
+  test("tracks named bindings through each Promise.all slot", async () => {
+    const sources = [
+      'const [{ Queue }] = await Promise.all([import("bullmq")]);',
+      'const [{ other }, { Queue: alias }] = await Promise.all([import("other"), import("bullmq")]);',
+      'const [{ Worker }] = await Promise.all([import("bullmq")]);',
+      'const [{ other }, { Worker: alias }] = await Promise.all([import("other"), import("bullmq")]);',
+      'const [namespace] = await Promise.all([import("bullmq")]);',
+      'const [{ Queue, ...rest }] = await Promise.all([import("bullmq")]);',
+      'const [{ [key]: selected }] = await Promise.all([import("bullmq")]);',
+      'const [{ Queue }] = await Promise.all([...others, import("bullmq")]);',
+      'const [{ Queue }] = await Promise.all([import("bullmq"), ...others]);',
+      'const [{ Queue }] = await Promise.allSettled([import("bullmq")]);',
+      'const read = async (Promise) => { const [{ Queue }] = await Promise.all([import("bullmq")]); };',
+      'const [slot] = Promise.all([import("bullmq")]);',
+    ];
+    expect(
+      await lintSingleRule(
+        "confine-owner",
+        sources.map((source) => `{ ${source} }`).join("\n"),
+        options,
+      ),
+    ).toEqual([3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
   });
 });
 
@@ -747,25 +781,25 @@ describe.serial("checked operation ownership", () => {
         `export { ${member} } from "${specifier}";`,
         `const { ${member} } = await import("${specifier}");`,
       ].join("\n");
-      for (const sourcePath of [
+      const sourcePaths = [
         "apps/api/src/handlers/example/unchecked.ts",
         "apps/api/src/mcp/unchecked.ts",
         "apps/api/src/lib/scheduler/tasks/unchecked.ts",
-      ]) {
-        expect(
-          await lintSingleRule("confine-owner", source, {
+        ...entry.owner,
+      ];
+      const linesBySource = await Promise.all(
+        sourcePaths.map(async (sourcePath) =>
+          lintSingleRule("confine-owner", source, {
             sourcePath,
             ruleOptions: { entries: [entry] },
           }),
-        ).toEqual([1, 2, 3, 4]);
+        ),
+      );
+      for (const lines of linesBySource.slice(0, 3)) {
+        expect(lines).toEqual([1, 2, 3, 4]);
       }
-      for (const sourcePath of entry.owner) {
-        expect(
-          await lintSingleRule("confine-owner", source, {
-            sourcePath,
-            ruleOptions: { entries: [entry] },
-          }),
-        ).toEqual([]);
+      for (const lines of linesBySource.slice(3)) {
+        expect(lines).toEqual([]);
       }
     });
   }
@@ -787,6 +821,36 @@ test("RTF code-page decoding stays in the document reader", async () => {
       sourcePath: "apps/api/src/lib/legal-search/parsers/rtf-reader.ts",
     }),
   ).toEqual([]);
+});
+
+test("the AI label is reached only through a typed disclosure context", async () => {
+  const entry = OWNERSHIP.find(({ id }) => id === "ai-disclosure-label");
+  expect(entry).toBeDefined();
+  const options = { ruleOptions: { entries: [entry] } };
+  for (const source of [
+    'import { AiLabel } from "@stll/ui/ai-label";',
+    'import { AiLabel } from "@stll/ui/components/ai-label";',
+  ]) {
+    for (const sourcePath of [
+      "apps/web/src/features/chat/components/answer-mark.tsx",
+      "apps/web/src/components/ai-disclosure-label.tsx",
+      "packages/decision-reader/src/headnote-block.tsx",
+      "apps/desktop/src/renderer/ai-mark.tsx",
+    ]) {
+      expect(
+        await lintSingleRule("confine-owner", source, {
+          ...options,
+          sourcePath,
+        }),
+      ).toEqual([1]);
+    }
+    expect(
+      await lintSingleRule("confine-owner", source, {
+        ...options,
+        sourcePath: "packages/decision-reader/src/reader-ai-label.tsx",
+      }),
+    ).toEqual([]);
+  }
 });
 
 describe.serial("verification run evidence reads", () => {

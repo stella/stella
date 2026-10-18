@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 GlobalRegistrator.register({ url: "https://app.example.test" });
 const { createRef } = await import("react");
 const { act } = await import("react");
@@ -10,7 +12,7 @@ const { ComposerSubmenuSearch } = await import("./composer-submenu-search");
 afterEach(cleanup);
 afterAll(async () => {
   cleanup();
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 type RenderPickerOptions = {

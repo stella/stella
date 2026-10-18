@@ -2,6 +2,12 @@ import { panic, Result } from "better-result";
 
 import type { SafeDbError } from "@/api/db/safe-db";
 import {
+  narrowModelOfferedSkills,
+  offerSkillsToModel,
+  SKILL_INVOCATION,
+} from "@/api/lib/agent-skills/invocation";
+import type { ModelOfferedSkills } from "@/api/lib/agent-skills/invocation";
+import {
   anySkillRequiresTools,
   resolveSkillToolAvailability,
   SKILL_TOOL_AVAILABILITY_STATUS,
@@ -104,10 +110,12 @@ const loadSkillTools = async ({
 };
 
 /**
- * The skills this session is offered: a skill whose required tools the
+ * The skills this session offers as tools: a skill whose required tools the
  * session does not list is left out, so a client cannot start a skill it
- * cannot finish. `scopes` are the session's granted scopes (`undefined`
- * grants all, as for `tools/list` without a scope filter).
+ * cannot finish. A tool call is the model's own pick, so a `manual` skill is
+ * never a tool; it is served as a prompt (`loadSkillPrompts`), which the
+ * user starts. `scopes` are the session's granted scopes (`undefined` grants
+ * all, as for `tools/list` without a scope filter).
  */
 export const loadVisibleSkillTools = async ({
   context,
@@ -117,16 +125,45 @@ export const loadVisibleSkillTools = async ({
   context: McpRequestContext;
   mode: McpMode;
   scopes?: readonly string[] | undefined;
-}): Promise<ResolvedSkillTool[]> =>
-  (await loadSkillTools({ context, mode, scopes })).filter(
-    ({ availability }) =>
-      availability.status === SKILL_TOOL_AVAILABILITY_STATUS.available,
+}): Promise<ModelOfferedSkills<ResolvedSkillTool>> =>
+  narrowModelOfferedSkills(
+    offerSkillsToModel({
+      invokedSkillNames: new Set(),
+      skills: await loadSkillTools({ context, mode, scopes }),
+    }),
+    isSkillToolAvailable,
   );
 
 /**
- * Resolves a called skill by its exposed name, unavailable ones included, so
- * a call naming a hidden skill is refused with the reason rather than as an
- * unknown tool.
+ * The `manual` skills this session serves as prompts: the user picks one in
+ * the client, which is the explicit invocation such a skill needs. Same
+ * availability rule as the tools.
+ */
+export const loadSkillPrompts = async ({
+  context,
+  mode,
+  scopes,
+}: {
+  context: McpRequestContext;
+  mode: McpMode;
+  scopes?: readonly string[] | undefined;
+}): Promise<ResolvedSkillTool[]> =>
+  (await loadSkillTools({ context, mode, scopes })).filter(
+    (skill) =>
+      skill.invocation === SKILL_INVOCATION.manual &&
+      isSkillToolAvailable(skill),
+  );
+
+const isSkillToolAvailable = ({
+  availability,
+}: Pick<ResolvedSkillTool, "availability">): boolean =>
+  availability.status === SKILL_TOOL_AVAILABILITY_STATUS.available;
+
+/**
+ * Resolves a called skill by its exposed name, unavailable and `manual` ones
+ * included, so a call naming a hidden skill is refused with the reason rather
+ * than as an unknown tool. Dispatch refuses a `manual` one
+ * (`modelMayStartUninvoked`) before reading anything.
  */
 export const resolveSkillTool = async ({
   context,

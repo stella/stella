@@ -5,6 +5,7 @@ import { afterAll, afterEach, expect, test, spyOn } from "bun:test";
 
 import englishMessages from "@/i18n/langs/en.json";
 import type { WorkspaceEntity } from "@/lib/types";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 const originalFetch = globalThis.fetch;
@@ -247,7 +248,7 @@ afterAll(async () => {
   await new Promise<void>((resolve) => {
     setImmediate(resolve);
   });
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 const edit = (scope: HTMLElement, name: string) => {
   const input = within(scope).getByRole("textbox");

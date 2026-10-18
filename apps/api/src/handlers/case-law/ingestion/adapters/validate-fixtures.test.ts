@@ -5,7 +5,7 @@
  * expected IngestionResult shape. Catches schema drift
  * when a source API changes its response format.
  *
- * Run after `update-fixtures.ts` to verify the new
+ * Run after `update-adapter-fixtures.ts` to verify the new
  * fixtures are valid. Also runs in CI to catch stale
  * fixtures that no longer parse correctly.
  */
@@ -103,7 +103,7 @@ describe("fixture validation", () => {
 
     expect(
       fixtures.length,
-      "No page fixtures found. Run update-fixtures.ts first.",
+      "No page fixtures found. Run update-adapter-fixtures.ts first.",
     ).toBeGreaterThan(0);
 
     for (const { filename, data } of fixtures) {
@@ -142,7 +142,7 @@ describe("fixture validation", () => {
 
     expect(
       fixtures.length,
-      "No page fixtures found. Run update-fixtures.ts first.",
+      "No page fixtures found. Run update-adapter-fixtures.ts first.",
     ).toBeGreaterThan(0);
 
     const now = Date.now();

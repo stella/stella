@@ -4,7 +4,7 @@ import * as v from "valibot";
  * the template Studio history and the entity (.docx file) version
  * panel; both resolve version content server-side and pass only the
  * computed diff text here. Uses the same structured-output plumbing
- * as `suggest-template-fields` (generateTanStackObjectForRole).
+ * as `suggest-template-fields` (generateTanStackObjectForTask).
  */
 
 import type { OrgAIConfig } from "@/api/lib/ai-config";
@@ -13,13 +13,14 @@ import type { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tan
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
-import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 
 const SUMMARY_TIMEOUT_MS = 30_000;
 
 // strictObject (not object): OpenAI strict structured output rejects
 // schema objects without `additionalProperties: false`.
-const changeSummarySchema = v.strictObject({
+/** Read by the structured-output role contract test. @public */
+export const changeSummarySchema = v.strictObject({
   summary: v.string(),
 });
 
@@ -46,9 +47,9 @@ export const summarizeVersionDiff = async ({
   admission,
   aiAnalytics,
 }: SummarizeVersionDiffOptions): Promise<string> => {
-  const { summary } = await generateTanStackObjectForRole({
+  const { summary } = await generateTanStackObjectForTask({
     dataClass: "customer",
-    role: "fast",
+    task: "short-text",
     orgAIConfig,
     managedAIResidency,
     organizationId,
@@ -59,7 +60,7 @@ export const summarizeVersionDiff = async ({
     analytics: aiAnalytics,
     caching: resolveCaching({
       promptCachingEnabled: false,
-      role: "fast",
+      task: "short-text",
       scopeKey: organizationId,
     }),
     system: SYSTEM_PROMPT,

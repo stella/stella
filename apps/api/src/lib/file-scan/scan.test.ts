@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
 import { compileLegalSourceToDocx } from "@stll/docx-core";
+import { writeZipEntry } from "@stll/docx-utils";
 
 import { scanFile } from "./scan";
 
@@ -57,20 +58,21 @@ type ThreatDocxOpts = {
  */
 const makeThreatDocx = async (opts: ThreatDocxOpts): Promise<Uint8Array> => {
   const zip = new JSZip();
-  zip.file(
+  writeZipEntry(
+    zip,
     "[Content_Types].xml",
     opts.contentTypesXml ?? '<?xml version="1.0"?><Types></Types>',
   );
-  zip.file("word/document.xml", "<document/>");
+  writeZipEntry(zip, "word/document.xml", "<document/>");
   if (opts.vbaContent !== undefined) {
-    zip.file("word/vbaProject.bin", opts.vbaContent);
+    writeZipEntry(zip, "word/vbaProject.bin", opts.vbaContent);
   }
   if (opts.relsXml !== undefined) {
-    zip.file("word/_rels/document.xml.rels", opts.relsXml);
+    writeZipEntry(zip, "word/_rels/document.xml.rels", opts.relsXml);
   }
   if (opts.extraFiles) {
     for (const [name, content] of Object.entries(opts.extraFiles)) {
-      zip.file(name, content);
+      writeZipEntry(zip, name, content);
     }
   }
   return zip.generateAsync({ type: "uint8array", compression: "DEFLATE" });
@@ -777,7 +779,7 @@ describe("ooxml threats", () => {
 
   test("ordinary ZIP files with non-OPC .rels entries are not rejected", async () => {
     const zip = new JSZip();
-    zip.file("notes.rels", "not XML");
+    writeZipEntry(zip, "notes.rels", "not XML");
     const result = Result.unwrap(
       await scanFile({
         buffer: await zip.generateAsync({ type: "uint8array" }),

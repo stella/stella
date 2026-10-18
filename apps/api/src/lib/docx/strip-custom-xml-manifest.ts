@@ -17,6 +17,7 @@ import type JSZip from "jszip";
 import * as slimdom from "slimdom";
 
 import { compareCodeUnit } from "@stll/collation";
+import { writeZipEntry } from "@stll/docx-utils";
 
 import { loadDocx } from "@/api/lib/docx-archive";
 
@@ -122,7 +123,8 @@ const removeManifestSlot = async (
   }
 
   const ctXml = await ctEntry.async("string");
-  zip.file(
+  writeZipEntry(
+    zip,
     CONTENT_TYPES_PATH,
     ctXml.replace(
       new RegExp(

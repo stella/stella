@@ -3,6 +3,7 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 
 import messages from "@/i18n/langs/en.json";
 import { toSafeId } from "@/lib/safe-id";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 const { act } = await import("react");
@@ -37,7 +38,7 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const renderParties = async () => {

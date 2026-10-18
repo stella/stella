@@ -1,4 +1,9 @@
-import { expect, type APIRequestContext } from "@playwright/test";
+import {
+  expect,
+  type APIRequestContext,
+  type Page,
+  type TestInfo,
+} from "@playwright/test";
 import { Result, panic } from "better-result";
 import { randomUUID } from "node:crypto";
 
@@ -108,10 +113,26 @@ export const createTestWorkspaceWithOperations = async (
   throw initialized.error.cause;
 };
 
+type DeleteTestWorkspaceOptions = {
+  /** A page still open on the workspace. After a passing test it leaves
+   * first, so refetches it starts during teardown cannot read storage the
+   * deletion removes. After a failure it stays, so the failure screenshot
+   * Playwright takes after the hooks still shows the failing state. */
+  leave?: { page: Page; testInfo: TestInfo };
+};
+
 export const deleteTestWorkspace = async (
   request: APIRequestContext,
   workspaceId: string,
+  { leave }: DeleteTestWorkspaceOptions = {},
 ): Promise<void> => {
+  if (
+    leave !== undefined &&
+    leave.testInfo.status === leave.testInfo.expectedStatus &&
+    !leave.page.isClosed()
+  ) {
+    await leave.page.goto("about:blank", { waitUntil: "commit" });
+  }
   const path = `/workspaces/${workspaceId}`;
   const outcome: { failure: Error | null } = { failure: null };
   await expect
