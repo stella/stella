@@ -14,6 +14,7 @@ import {
 import { createSafeId } from "@/api/lib/branded-types";
 import { rawSourcePayloadKey } from "@/api/lib/legal-search/raw-source-storage";
 import type {
+  SoftLawExtractionQuality,
   SoftLawEntry,
   SoftLawSourceAdapter,
 } from "@/api/lib/legal-search/soft-law-types";
@@ -71,10 +72,24 @@ const entry = ({ language, revision, stage }: EntryOptions): SoftLawEntry => ({
   ],
   sourceDates: {},
 });
-type ExtractionState = { state: "failed"; message: string } | { state: "html" };
+type ExtractionState =
+  | {
+      extractionQuality: "extraction_failed";
+      text: null;
+      extractionFailure: string;
+    }
+  | {
+      extractionQuality: Exclude<SoftLawExtractionQuality, "extraction_failed">;
+      text: string | null;
+      extractionFailure?: never;
+    };
+const DEFAULT_EXTRACTION = {
+  extractionQuality: "html",
+  text: "Unchanged publisher bytes",
+} as const satisfies ExtractionState;
 const adapter = (
   entries: readonly SoftLawEntry[],
-  extraction?: ExtractionState,
+  extraction?: ExtractionState | ((item: SoftLawEntry) => ExtractionState),
 ) =>
   ({
     key: "eu-expression-test",
@@ -85,8 +100,12 @@ const adapter = (
       window: { type: "any_time" },
     },
     discover: async () => Result.ok({ entries, nextCursor: null }),
-    fetchDocument: async (item) =>
-      Result.ok({
+    fetchDocument: async (item) => {
+      const extractionState =
+        typeof extraction === "function"
+          ? extraction(item)
+          : (extraction ?? DEFAULT_EXTRACTION);
+      return Result.ok({
         metadata: item.metadata,
         raw: [
           ...(item.sourceRaw ?? []).map(
@@ -104,18 +123,10 @@ const adapter = (
             contentType: "text/html",
           },
         ],
-        ...(extraction?.state === "failed"
-          ? ({
-              text: null,
-              extractionQuality: "extraction_failed",
-              extractionFailure: extraction.message,
-            } as const)
-          : ({
-              text: "Unchanged publisher bytes",
-              extractionQuality: "html",
-            } as const)),
+        ...extractionState,
         sourceDates: item.sourceDates,
-      }),
+      });
+    },
     getTotalCount: async () => ({ type: "no-count-endpoint" }),
     sliceWalk: { type: "unsupported", reason: "Complete fixture listing" },
     sourceFields: {
@@ -132,6 +143,138 @@ if (!databaseUrl || !enabled) {
   });
 } else {
   describe("EU soft-law expression persistence", () => {
+    test("unchanged documents retain the strongest successful extraction without adding history", async () =>
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db } = openClient({ max: 3 });
+        const sourceId = createSafeId<"softLawSource">();
+        const adapterKey = `eu-extraction-rank-test-${sourceId}`;
+        const entries = [
+          entry({ language: "en", revision: "1.0", stage: "adopted" }),
+          entry({ language: "cs", revision: "1.0", stage: "adopted" }),
+          entry({ language: "de", revision: "1.0", stage: "adopted" }),
+          entry({ language: "fr", revision: "1.0", stage: "adopted" }),
+        ];
+        await db.insert(softLawSources).values({
+          id: sourceId,
+          adapterKey,
+          descriptor: {
+            license: "public-domain",
+            attribution: null,
+            allowsRedistribution: true,
+            allowsDerivedAi: true,
+          },
+        });
+        const run = async (
+          extractions: Readonly<Record<string, ExtractionState>>,
+        ) =>
+          await runSoftLawIngestion({
+            sourceId,
+            adapter: {
+              ...adapter(
+                entries,
+                (item) =>
+                  extractions[
+                    item.metadata.expression?.type === "identified"
+                      ? item.metadata.expression.language
+                      : ""
+                  ] ?? panic("Extraction fixture absent"),
+              ),
+              key: adapterKey,
+            },
+            scopedDb: async (work) => await db.transaction(work),
+            signal: new AbortController().signal,
+            writeRaw: async (options) => rawSourcePayloadKey(options),
+            accessDependencies: { reserve: async () => {} },
+          });
+        const versions = async () =>
+          await db
+            .select({
+              metadata: softLawDocumentVersions.metadata,
+              extractionQuality: softLawDocumentVersions.extractionQuality,
+              extractedText: softLawDocumentVersions.extractedText,
+              extractionFailure: softLawDocumentVersions.extractionFailure,
+            })
+            .from(softLawDocumentVersions)
+            .innerJoin(
+              softLawDocuments,
+              eq(softLawDocumentVersions.documentId, softLawDocuments.id),
+            )
+            .where(eq(softLawDocuments.sourceId, sourceId));
+        try {
+          expect(
+            await run({
+              en: { extractionQuality: "text_layer", text: "Layer text" },
+              cs: { extractionQuality: "needs_ocr", text: null },
+              de: {
+                extractionQuality: "extraction_failed",
+                text: null,
+                extractionFailure: "Initial extraction failure",
+              },
+              fr: { extractionQuality: "html", text: "HTML text" },
+            }),
+          ).toEqual({ status: "complete" });
+          expect(
+            await run({
+              en: { extractionQuality: "needs_ocr", text: null },
+              cs: { extractionQuality: "text_layer", text: "Vrstva textu" },
+              de: { extractionQuality: "html", text: "HTML-Text" },
+              fr: {
+                extractionQuality: "extraction_failed",
+                text: null,
+                extractionFailure: "Transient extraction failure",
+              },
+            }),
+          ).toEqual({ status: "complete" });
+
+          const rows = await versions();
+          expect(rows).toHaveLength(4);
+          const byLanguage = new Map(
+            rows.map((row) => [
+              row.metadata.expression?.type === "identified"
+                ? row.metadata.expression.language
+                : panic("Expression language absent"),
+              row,
+            ]),
+          );
+          expect(byLanguage.get("en")).toMatchObject({
+            extractionQuality: "text_layer",
+            extractedText: "Layer text",
+            extractionFailure: null,
+          });
+          expect(byLanguage.get("cs")).toMatchObject({
+            extractionQuality: "text_layer",
+            extractedText: "Vrstva textu",
+            extractionFailure: null,
+          });
+          expect(byLanguage.get("de")).toMatchObject({
+            extractionQuality: "html",
+            extractedText: "HTML-Text",
+            extractionFailure: null,
+          });
+          expect(byLanguage.get("fr")).toMatchObject({
+            extractionQuality: "html",
+            extractedText: "HTML text",
+            extractionFailure: null,
+          });
+        } finally {
+          await db
+            .delete(softLawIngestionAttempts)
+            .where(eq(softLawIngestionAttempts.sourceId, sourceId));
+          await db.execute(
+            sql`DELETE FROM soft_law_document_locators WHERE document_id IN (SELECT id FROM soft_law_documents WHERE source_id = ${sourceId})`,
+          );
+          await db.execute(
+            sql`DELETE FROM soft_law_document_versions WHERE document_id IN (SELECT id FROM soft_law_documents WHERE source_id = ${sourceId})`,
+          );
+          await db
+            .delete(softLawDocuments)
+            .where(eq(softLawDocuments.sourceId, sourceId));
+          await db
+            .delete(softLawSources)
+            .where(eq(softLawSources.id, sourceId));
+        }
+      }));
+
     test("languages and revisions coexist while lifecycle updates preserve expression history and replay reaches a fixed point", async () =>
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const { db } = openClient({ max: 3 });
@@ -195,8 +338,9 @@ if (!databaseUrl || !enabled) {
           ];
           expect(
             await run([draft, ...others], {
-              state: "failed",
-              message: "Publisher text extraction failed",
+              extractionQuality: "extraction_failed",
+              text: null,
+              extractionFailure: "Publisher text extraction failed",
             }),
           ).toEqual({ status: "complete" });
           const failedVersions = await versions();
@@ -238,8 +382,9 @@ if (!databaseUrl || !enabled) {
           }
           expect(
             await run([draft, ...others], {
-              state: "failed",
-              message: "Transient extraction failure",
+              extractionQuality: "extraction_failed",
+              text: null,
+              extractionFailure: "Transient extraction failure",
             }),
           ).toEqual({ status: "complete" });
           for (const version of await versions()) {

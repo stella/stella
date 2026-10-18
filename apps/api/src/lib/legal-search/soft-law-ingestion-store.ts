@@ -21,6 +21,8 @@ import {
 import {
   SOFT_LAW_AUTHORITIES,
   SOFT_LAW_BATCH_LIMIT,
+  SOFT_LAW_EXTRACTION_QUALITIES,
+  SOFT_LAW_EXTRACTION_QUALITY_RANK,
   SoftLawIngestionError,
 } from "@/api/lib/legal-search/soft-law-types";
 import type {
@@ -31,9 +33,19 @@ import type {
   SoftLawRawObject,
 } from "@/api/lib/legal-search/soft-law-types";
 import { commitReplaySafeIngestionBatch } from "@/api/lib/replay-safe-ingestion";
+import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
 const LEASE_SECONDS = 300;
 const MINIMUM_LISTING_FRACTION = 0.8;
+const extractionQualityRank = (quality: SQL) =>
+  sqlCaseFragment({
+    operand: quality,
+    branches: SOFT_LAW_EXTRACTION_QUALITIES.map(
+      (value) =>
+        sql`WHEN ${value} THEN ${SOFT_LAW_EXTRACTION_QUALITY_RANK[value]}`,
+    ),
+    fallback: sql`-1`,
+  });
 export type SoftLawObservation = {
   entry: SoftLawEntry;
   input: SoftLawDocumentInput;
@@ -498,6 +510,7 @@ const persistSoftLawVersions = async (
     ...new Map(items.map((item) => [item.documentId, item])).values(),
   ];
   if (currentObservations.length) {
+    const preserveStoredExtraction = sql`excluded.extracted_text IS NULL OR ${extractionQualityRank(sql`excluded.extraction_quality`)} < ${extractionQualityRank(sql`${softLawDocumentVersions.extractionQuality}`)}`;
     await tx
       .insert(softLawDocumentVersions)
       .values(
@@ -528,9 +541,9 @@ const persistSoftLawVersions = async (
           softLawDocumentVersions.sequence,
         ],
         set: {
-          extractedText: sql`CASE WHEN excluded.extraction_quality = 'extraction_failed' THEN ${softLawDocumentVersions.extractedText} ELSE excluded.extracted_text END`,
-          extractionQuality: sql`CASE WHEN excluded.extraction_quality = 'extraction_failed' THEN ${softLawDocumentVersions.extractionQuality} ELSE excluded.extraction_quality END`,
-          extractionFailure: sql`CASE WHEN excluded.extraction_quality = 'extraction_failed' THEN ${softLawDocumentVersions.extractionFailure} ELSE excluded.extraction_failure END`,
+          extractedText: sql`CASE WHEN ${preserveStoredExtraction} THEN ${softLawDocumentVersions.extractedText} ELSE excluded.extracted_text END`,
+          extractionQuality: sql`CASE WHEN ${preserveStoredExtraction} THEN ${softLawDocumentVersions.extractionQuality} ELSE excluded.extraction_quality END`,
+          extractionFailure: sql`CASE WHEN ${preserveStoredExtraction} THEN ${softLawDocumentVersions.extractionFailure} ELSE excluded.extraction_failure END`,
         },
       });
   }

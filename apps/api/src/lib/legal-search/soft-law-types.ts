@@ -47,6 +47,16 @@ export const SOFT_LAW_EXTRACTION_QUALITIES = [
   "scanned_ocr",
   "extraction_failed",
 ] as const;
+export type SoftLawExtractionQuality =
+  (typeof SOFT_LAW_EXTRACTION_QUALITIES)[number];
+/** Higher ranks represent more useful extracted content and may replace lower ranks. */
+export const SOFT_LAW_EXTRACTION_QUALITY_RANK = {
+  extraction_failed: 0,
+  needs_ocr: 1,
+  scanned_ocr: 2,
+  text_layer: 3,
+  html: 4,
+} as const satisfies Record<SoftLawExtractionQuality, number>;
 export const SOFT_LAW_STATED_STATES = ["stated", "not_stated"] as const;
 export const SOFT_LAW_RUN_STATES = [
   "idle",
