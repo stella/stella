@@ -946,6 +946,11 @@ export const cgroupMemoryLimitFiles = (
     if (root === "/") {
       return cgroupPath;
     }
+    // A cgroup namespace reports its own root as `/` while the mount keeps
+    // the host path; the mount root is then this process's cgroup.
+    if (cgroupPath === "/") {
+      return "";
+    }
     if (cgroupPath === root || cgroupPath.startsWith(`${root}/`)) {
       return cgroupPath.slice(root.length);
     }

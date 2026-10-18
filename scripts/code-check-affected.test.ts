@@ -1342,6 +1342,24 @@ describe("parallel code-quality legs", () => {
     ).toBe(64 * GiB);
   });
 
+  // A cgroup namespace reports `/` while the mount keeps the host root.
+  test("a namespaced cgroup v1 limit is read at the mount root", () => {
+    const GiB = 1024 ** 3;
+    const files: Record<string, string> = {
+      "/proc/self/cgroup": "4:cpu,memory:/\n",
+      "/proc/self/mountinfo":
+        "31 25 0:27 /docker/abc /mnt/cg/cpu,memory rw,nosuid - cgroup cgroup rw,cpu,memory",
+      "/mnt/cg/cpu,memory/memory.limit_in_bytes": `${16 * GiB}\n`,
+    };
+    expect(
+      memoryLimitBytes({
+        total: 64 * GiB,
+        read: (file) => files[file],
+        requested: "",
+      }),
+    ).toBe(16 * GiB);
+  });
+
   test("an explicit memory size replaces detection", () => {
     expect(
       memoryLimitBytes({ total: 8, read: () => "4", requested: "64" }),
