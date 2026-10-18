@@ -861,7 +861,7 @@
       "feature": "FEATURE_PUBLIC_LAW"
     },
     "name": "open_case_law_decision",
-    "description": "Open one decision when the user asks to read or open it. Returns metadata, outline and a small target window. paragraphs names the court's printed numbers (48 or 48-53); appUrl opens the web reader at that range. At most once per answer.",
+    "description": "Open one decision when the user asks to read or open it. Returns metadata, outline and a small target window. paragraphs names the court's printed numbers (48 or 48-53); url opens the web reader at that range. At most once per answer.",
     "inputSchema": {
       "type": "object",
       "required": ["decision_id"],

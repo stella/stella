@@ -1058,7 +1058,6 @@
       }
     },
     "sameCaseNumber": "{count, plural, zero {لا يوجد حكم يحمل} one {حكم واحد يحمل} two {حكمان يحملان} few {# أحكام تحمل} many {# حكمًا تحمل} other {# حكم تحمل}} رقم القضية هذا. اختر المحكمة.",
-    "searchAskPrompt": "{query} (السوابق القضائية في {country})",
     "searchLabel": "البحث في السوابق القضائية",
     "searchPlaceholder": "رقم القضية أو ECLI أو كلمات، مثل 22 Cdo 2653/2012",
     "searchUnavailable": {
@@ -1407,7 +1406,12 @@
     "maxAttachmentsReached": "بحدّ أقصى {count} ملفات لكل رسالة",
     "mention": {
       "category": {
-        "entities": "في هذا الملف القانوني"
+        "entities": "في هذا الملف القانوني",
+        "sources": "المصادر"
+      },
+      "corpus": {
+        "caseLaw": "السوابق القضائية · {country}",
+        "legislation": "التشريعات · {country}"
       },
       "loadError": "تعذّر تحميل العناصر"
     },
@@ -5135,7 +5139,6 @@
     "provisionTextUnavailable": "النص غير متاح لهذه النسخة",
     "publisherWindowInconsistent": "لا يمكن تحديد النص النافذ في هذا التاريخ: بيانات الناشر متعارضة.",
     "resolvedAlias": "تم التعرف عليه باسم {label}",
-    "searchAskPrompt": "{query} (تشريعات {country})",
     "searchLabel": "البحث في التشريعات",
     "searchPlaceholder": "الرقم أو الاسم أو العنوان، مثل 89/2012 Sb.",
     "showCitedPartOnly": "عرض الجزء المستشهد به فقط",

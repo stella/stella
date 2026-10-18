@@ -92,7 +92,7 @@ export type CaseLawBridge = ReturnType<
   typeof createPresentationBridge<CaseLawView>
 >;
 type OpenReader = (
-  row: Pick<ResultRow, "decisionId" | "appUrl" | "type">,
+  row: Pick<ResultRow, "decisionId" | "url" | "type">,
   trigger: HTMLElement,
 ) => void;
 type SearchPage = Extract<CaseLawView, { type: "search" }>;
@@ -126,7 +126,7 @@ const ResultTableRow = ({
         return panic("Unknown headnote state", headnote satisfies never);
     }
   })();
-  const url = row.appUrl;
+  const url = row.url;
   const sourceUrl = row.source_url;
   const openWeb = () => {
     if (url !== null) {
@@ -848,7 +848,7 @@ const ResolveResults = ({
               <li key={candidate.decisionId}>
                 <Button
                   variant="link"
-                  disabled={candidate.appUrl === null}
+                  disabled={candidate.url === null}
                   onClick={(event) => onOpen(candidate, event.currentTarget)}
                 >
                   <bdi>{candidate.identifier}</bdi>
@@ -891,8 +891,8 @@ export const CaseLawApp = ({ bridge }: { bridge: CaseLawBridge }) => {
   } | null>(null);
   const onOpen: OpenReader = (row, trigger) => {
     if (row.type === "resolve" || !bridge.supportsTools()) {
-      if (row.appUrl !== null) {
-        bridge.detached(bridge.openLink(row.appUrl), "open case-law decision");
+      if (row.url !== null) {
+        bridge.detached(bridge.openLink(row.url), "open case-law decision");
       }
       return;
     }
@@ -901,10 +901,9 @@ export const CaseLawApp = ({ bridge }: { bridge: CaseLawBridge }) => {
       scrollX: window.scrollX,
       scrollY: window.scrollY,
     };
-    const appUrl =
-      row.appUrl === null ? null : parseLegalCitationHttpUrl(row.appUrl);
+    const url = row.url === null ? null : parseLegalCitationHttpUrl(row.url);
     const paragraphs =
-      appUrl === null ? null : parseDecisionParagraphFragment(appUrl.hash);
+      url === null ? null : parseDecisionParagraphFragment(url.hash);
     setScreen("reader");
     window.scrollTo(0, 0);
     embeddedReaderBridge.detached(

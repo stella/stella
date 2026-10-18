@@ -16,7 +16,7 @@ const identityFields = [
   "decisionDate",
   "caseNumber",
   "ecli",
-  "appUrl",
+  "url",
   "source_url",
   "match",
 ] as const;

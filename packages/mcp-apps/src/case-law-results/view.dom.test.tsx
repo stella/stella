@@ -123,7 +123,7 @@ test("resolved decisions preserve citations and open the external link", () => {
             decisionDate: null,
             caseNumber: "25 Cdo 123/2024",
             ecli: "ECLI:CZ:NS:2024:25.CDO.123.2024.1",
-            appUrl: "https://stella.example/decision/1",
+            url: "https://stella.example/decision/1",
             source_url: undefined,
           },
         ],

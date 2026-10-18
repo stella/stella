@@ -44,6 +44,7 @@ import {
   deriveRefMediationEntry,
   projectForChat,
 } from "@/api/lib/chat/projection-schema";
+import * as projectionModule from "@/api/lib/chat/projection-schema";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { encryptContent } from "@/api/lib/content-encryption";
@@ -2151,7 +2152,7 @@ const recordedExceptions = () =>
   (analytics ?? panic("recording analytics is not installed")).exceptions();
 
 // Production serves the public-law pages, so every corpus result carries an
-// `appUrl`; a decision or statute without a slug is addressed by its id there.
+// `url`; a decision or statute without a slug is addressed by its id there.
 let previousFeaturePublicLaw = env.FEATURE_PUBLIC_LAW;
 
 afterEach(() => {
@@ -2232,7 +2233,6 @@ describe("registry projection contract", () => {
           if (!isRecord(item)) {
             panic("Invalid citation result");
           }
-          expect(item["appUrl"]).toBeNull();
           expect(item["url"]).toBe(item["sourceUrl"]);
           expect(item["url"]).toMatch(/^https:/u);
           expect(item["source_url"]).toBeUndefined();
@@ -2243,6 +2243,25 @@ describe("registry projection contract", () => {
       }
     });
   }
+
+  test("every registry projection omits the redundant reader URL alias", () => {
+    const visited = new Set<unknown>();
+    const assertNoAlias = (value: unknown) => {
+      if (typeof value !== "object" || value === null || visited.has(value)) {
+        return;
+      }
+      visited.add(value);
+      expect(Object.hasOwn(value, "appUrl")).toBe(false);
+      for (const child of Object.values(value)) {
+        assertNoAlias(child);
+      }
+    };
+    for (const entry of Object.values(READ_TOOL_REF_FIELD_MAP)) {
+      if (entry.chatProjectable) {
+        assertNoAlias(entry.projection);
+      }
+    }
+  });
 
   test("every declared outputRef path is exercised by some fixture call", () => {
     for (const [toolName, calls] of corpusEntries()) {
@@ -2270,6 +2289,7 @@ describe("registry projection contract", () => {
         const refRegistry = createChatRefRegistry();
         const context = contextFor(toolName, call.tx?.() ?? {});
 
+        const projectionSpy = spyOn(projectionModule, "projectForChat");
         const { result, fetched } = await recordOutboundFetches(
           async () =>
             await runRegistryReadTool({
@@ -2279,6 +2299,8 @@ describe("registry projection contract", () => {
               toolName,
             }),
         );
+        const projectionCalls = [...projectionSpy.mock.calls];
+        projectionSpy.mockRestore();
         expect(
           fetched,
           `${toolName} (${call.mode}): the read sent a request past its seams`,
@@ -2308,24 +2330,29 @@ describe("registry projection contract", () => {
           if (typeof value !== "object" || value === null) {
             return;
           }
-          if ("appUrl" in value) {
-            expect(
-              "url" in value,
-              `${toolName}: every reader link has a primary url`,
-            ).toBe(true);
-            if ("url" in value && typeof value.appUrl === "string") {
-              expect(value.url).toBe(value.appUrl);
-              if ("sourceUrl" in value && typeof value.sourceUrl === "string") {
-                expect("source_url" in value && value.source_url).toBe(
-                  new URL(value.sourceUrl).href,
-                );
-              }
-            }
+          expect(
+            "appUrl" in value,
+            `${toolName}: primary/source links must not expose appUrl`,
+          ).toBe(false);
+          if (
+            "url" in value &&
+            typeof value.url === "string" &&
+            "sourceUrl" in value &&
+            typeof value.sourceUrl === "string" &&
+            value.url !== new URL(value.sourceUrl).href
+          ) {
+            expect("source_url" in value && value.source_url).toBe(
+              new URL(value.sourceUrl).href,
+            );
           }
           for (const child of Object.values(value)) {
             assertCitationLinks(child);
           }
         };
+        expect(projectionCalls.length).toBeGreaterThan(0);
+        for (const [projection] of projectionCalls) {
+          assertCitationLinks(projection.payload);
+        }
         assertCitationLinks(payload);
         if (call.expectPayloadContains) {
           const serialized = JSON.stringify(payload);
