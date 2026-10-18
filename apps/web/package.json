@@ -4,6 +4,12 @@
   "private": true,
   "license": "Apache-2.0",
   "type": "module",
+  "imports": {
+    "#aho-corasick": {
+      "browser": "@stll/aho-corasick-wasm",
+      "default": "@stll/aho-corasick"
+    }
+  },
   "scripts": {
     "dev": "([ -n \"$TURBO_HASH\" ] || bun run generate:route-tree) && vite dev",
     "build": "([ -n \"$TURBO_HASH\" ] || bun run generate:route-tree) && vite build && bun build --target=bun --outfile=dist/runtime.js --external ./server/server.js src/runtime.ts && bun scripts/assert-start-runtime-build.ts",
@@ -193,6 +199,7 @@
     "@types/react-dom": "catalog:react19",
     "@vitejs/plugin-react": "catalog:",
     "bun-types": "catalog:",
+    "fast-check": "catalog:",
     "happy-dom": "20.14.5",
     "oxc-transform-react": "catalog:",
     "rollup-plugin-visualizer": "^7.1.1",

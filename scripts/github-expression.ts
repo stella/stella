@@ -13,10 +13,29 @@
  * guessing.
  */
 
-import { panic, Result as OperationResult } from "better-result";
+// The check pool evaluates step conditions before dependency installation
+// may have succeeded; keep this module free of package imports.
+class GitHubExpressionError extends Error {
+  override name = "GitHubExpressionError";
+  readonly _tag = "GitHubExpressionError";
+}
+const panic: (message: string) => never = (message) => {
+  throw new GitHubExpressionError(message);
+};
+// Output-condition analysis probes a parse and reports an unparsable
+// expression as unresolved, so it needs the failure as a value.
+const attempt = <T>(
+  run: () => T,
+): { ok: true; value: T } | { ok: false; error: unknown } => {
+  try {
+    return { ok: true, value: run() };
+  } catch (error) {
+    return { ok: false, error };
+  }
+};
 
 export const UNKNOWN = Symbol("unknown");
-type Value =
+export type Value =
   | string
   | number
   | boolean
@@ -434,7 +453,7 @@ export const compileOutputAliases = ({
       };
     }
     visiting.add(reference);
-    const parsed = OperationResult.try(() => {
+    const parsed = attempt(() => {
       const tokens = ungroupTokens(tokenize(definition.expression));
       const first = tokens.at(0);
       // Copying an output preserves its 'true'/'false' string value.
@@ -458,7 +477,7 @@ export const compileOutputAliases = ({
         boundReferences,
       });
     });
-    const node: OutputCondition = parsed.isOk()
+    const node: OutputCondition = parsed.ok
       ? parsed.value
       : {
           type: "unresolved",
@@ -612,7 +631,7 @@ export const conjunctiveOutputConditions = ({
   context = { values: {} },
   substitutions = new Map(),
 }: ConjunctiveOutputConditionsOptions): ConjunctiveOutputConditionsResult => {
-  const parsed = OperationResult.try(() => {
+  const parsed = attempt(() => {
     let path: OutputCondition = { type: "literal", value: true };
     for (const condition of conditions) {
       evaluate(condition, { values: {} });
@@ -628,7 +647,7 @@ export const conjunctiveOutputConditions = ({
     }
     return path;
   });
-  if (parsed.isErr()) {
+  if (!parsed.ok) {
     return { type: "unresolved", reason: "output condition parse failure" };
   }
   const disjunction = expandOutputCondition(parsed.value, context);
@@ -711,7 +730,7 @@ const compare = (operator: string, left: Result, right: Result): Result => {
   return a >= b;
 };
 
-const toValue = (parsed: unknown): Value => {
+export const toValue = (parsed: unknown): Value => {
   if (
     parsed === null ||
     typeof parsed === "string" ||
@@ -842,8 +861,21 @@ const callFunction = (
       return text(first).toLowerCase().startsWith(text(second).toLowerCase());
     case "endswith":
       return text(first).toLowerCase().endsWith(text(second).toLowerCase());
+    case "format":
+      return text(first).replaceAll(
+        /\{\{|\}\}|\{(\d+)\}/gu,
+        (token, index: string | undefined) => {
+          if (index === undefined) {
+            return token.slice(1);
+          }
+          const value = values[Number(index) + 1];
+          return value === undefined
+            ? panic(`format index ${index}`)
+            : text(value);
+        },
+      );
     default:
-      // format, join, hashFiles and friends: no guard depends on their value.
+      // join, hashFiles and friends: no guard depends on their value.
       return UNKNOWN;
   }
 };
@@ -892,7 +924,9 @@ export const evaluate = (source: string, context: Context): Result => {
     if (Object.hasOwn(context.values, path)) {
       return context.values[path] ?? null;
     }
-    return context.fallback?.(path) ?? UNKNOWN;
+    // A fallback's null is a known null (a missing property), not unknown.
+    const value = context.fallback?.(path);
+    return value === undefined ? UNKNOWN : value;
   };
 
   const call = (name: string): Result => {

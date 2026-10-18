@@ -50,7 +50,10 @@ test("every partition task declares its inputs or contextual dependency and exac
       switch (env["CI_CHECK_KIND"]) {
         case "STATIC":
           expect(step["if"]).toContain(gate);
-          expect(steps.indexOf(step)).toBeGreaterThan(
+          // Pooled checks are re-read per call; compare positions by name.
+          expect(
+            steps.findIndex((candidate) => candidate["name"] === step["name"]),
+          ).toBeGreaterThan(
             steps.findIndex(
               (candidate) => candidate["id"] === "static_receipts",
             ),
