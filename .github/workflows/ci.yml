@@ -189,8 +189,7 @@ jobs:
       e2e_production_mode: ${{ steps.e2e-pr-plan.outputs.mode }}
       e2e_production_specs: ${{ steps.e2e-pr-plan.outputs.specs }}
       browser_spec_selection_required: ${{ steps.e2e-pr-plan.outputs.selection_required }}
-      # Selected browser specs build the web app on a pull request, and so
-      # do an armed run's route smoke and release screenshots.
+      # Selected browser specs, armed route smoke and screenshots build the web app.
       web_build_pr_required: >-
         ${{ steps.e2e-pr-plan.outputs.selection_required == 'true'
         || (steps.completed-depth.outputs.armed == 'true'
@@ -508,8 +507,7 @@ jobs:
             const metadataAction = context.eventName === "pull_request"
               // enqueued keeps its queue-validation path and its ci-result.
               // A draft runs no CI, so ready_for_review starts the first code
-              // run; prove-fix and the armed label change suite scope, and
-              // auto_merge_enabled starts the armed suites: all own ci-result.
+              // run; prove-fix, the armed label and auto-merge own ci-result.
               && ["labeled", "unlabeled"].includes(context.payload.action)
               && !scopeLabel;
             if (metadataAction) core.setOutput("metadata_only", "true");
@@ -686,8 +684,7 @@ jobs:
                 core.info("Queued tree comparison unavailable; running queued checks.");
                 return;
               }
-              // A merge group records PR-depth evidence for an identical
-              // change; queued checks still run. A moved base is allowed.
+              // PR-depth evidence for an identical change; queued checks still run.
               const fast = await completedEvidence({ sha: pr.head.sha, heavy: false, patchId: process.env.PATCH_ID });
               if (fast && Array.isArray(fast.evidence.pr_depth_jobs)
                   && JSON.stringify(fast.evidence.pr_depth_jobs) === process.env.PR_DEPTH_JOBS
@@ -731,8 +728,7 @@ jobs:
               core.setOutput("run_required", "false");
               return;
             }
-            // Arming a head whose normal suites are already green runs only
-            // the queue-only suites: the armed delta.
+            // Arming a head with green normal suites runs only the armed delta.
             if (!armed || metadataAction || heavyReuse) return;
             const normal = await completedEvidence({ sha: pr.head.sha, heavy: false, patchId: process.env.PATCH_ID });
             if (!normal) return;
@@ -1105,8 +1101,7 @@ jobs:
           # Path scopes for the build/smoke jobs, computed here so a job whose
           # scope did not change is skipped entirely instead of scheduling a
           # runner just to decide it has nothing to do.
-          # An armed pull request proves the queue-only suites at the scope
-          # a merge group would give them.
+          # An armed pull request proves the queue-only suites at merge-group scope.
           heavy_scope=false
           if [[ "$SUITE_DEPTH" == full || ("$EVENT_NAME" == pull_request && "${ARMED:-false}" == true) ]]; then
             heavy_scope=true
@@ -1348,8 +1343,7 @@ jobs:
             esac
           done
           # A pull request builds the API image for arm64, the production
-          # architecture. Full depth, an armed pull request and a version
-          # change build every architecture release.yml publishes.
+          # architecture; full depth, arming and a version change build all.
           api_image_platforms='[{"runner":"ubuntu-24.04-arm","platform":"linux/arm64"}]'
           if [[ "$heavy_scope" == true || "$version_changed" == "true" ]]; then
             api_image_platforms='[{"runner":"ubuntu-24.04-arm","platform":"linux/arm64"},{"runner":"ubuntu-latest","platform":"linux/amd64"}]'
@@ -8652,8 +8646,7 @@ jobs:
           FAST_REQUIRED: >-
             ["ci-quick-checks", "pr-heavy-gate", "desktop-rust-lint", "ci-browser", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "code-quality-api", "code-quality-web-rest", "dependency-malware", "ci-tests", "e2e-production-shard", "web-build", "scan-engine-wasm-drift", "query-perf"]
         run: |
-          # Queue-only suites a merge group may skip: its queued head carries
-          # armed proof. Everything else stays required at its planned scope.
+          # Queue-only suites a proven merge group may skip; the rest stay required.
           heavy_skippable='[]'
           if [[ "$EVENT" == merge_group && "${HEAVY_PROOF:-}" == false ]]; then
             heavy_skippable=$(jq -cn --argjson heavy "$HEAVY_PROOF_JOBS" --argjson keep "$MERGE_GROUP_HEAVY_KEEP" '$heavy - $keep') || exit 1
@@ -8827,8 +8820,7 @@ jobs:
           fi
           armed_delta=false
           if [[ "${ARMED_DELTA:-}" == true ]]; then
-            # Only the queue-only suites ran; the normal suites passed in the
-            # recorded run this armed run reuses.
+            # Only the queue-only suites ran; the reused run passed the rest.
             if [[ "$EVENT" != pull_request || "${HEAVY_PROOF:-}" != true || "$SUITE_DEPTH" != fast || ! "${NORMAL_SOURCE_RUN_ID:-}" =~ ^[1-9][0-9]*$ ]]; then
               echo "::error::Invalid armed delta: no reusable normal evidence."
               exit 1
@@ -8902,8 +8894,7 @@ jobs:
                 exit 1
               fi
               # Fast-required jobs must run when their scope is planned;
-              # scope-less jobs are always planned. An armed pull request run
-              # also requires its planned queue-only suites.
+              # scope-less jobs are always planned; arming adds the queue-only ones.
               fast_scopes=$(jq -cn --argjson full "$JOB_SCOPES" --argjson fast "$FAST_JOB_SCOPES" '$full + $fast')
               armed_scopes=""
               if [[ "$EVENT" == pull_request && "${HEAVY_PROOF:-}" == true ]]; then
