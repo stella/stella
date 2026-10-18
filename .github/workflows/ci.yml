@@ -151,7 +151,7 @@ jobs:
       pr_heavy_jobs: ${{ steps.pr-heavy-plan.outputs.pr_heavy_jobs }}
       # Any heavy job a pull request can plan is selected by one of these
       # scopes; scripts/ci-plan.test.ts proves none runs without the gate.
-      pr_heavy_gate_required: ${{ github.event_name == 'pull_request' && steps.completed-depth.outputs.run_required != 'false' && steps.completed-depth.outputs.pr_heavy_suites == 'run' && (steps.changed-files.outputs.package_checks_required == 'true' || steps.changed-files.outputs.collab_redis_required == 'true' || steps.e2e-pr-plan.outputs.selection_required == 'true') }}
+      pr_heavy_gate_required: ${{ github.event_name == 'pull_request' && steps.completed-depth.outputs.run_required != 'false' && steps.completed-depth.outputs.pr_heavy_suites == 'run' && (steps.changed-files.outputs.package_checks_required == 'true' || steps.changed-files.outputs.collab_redis_required == 'true' || steps.e2e-pr-plan.outputs.selection_required == 'true' || steps.changed-files.outputs.e2e_landing_required == 'true') }}
       patch_id: ${{ steps.patch-id.outputs.patch_id }}
       pr_depth_workflow_version: ${{ steps.patch-id.outputs.workflow_version }}
       heavy_web_build_required: ${{ inputs.heavy_only == true && 'true' || 'false' }}
@@ -967,6 +967,12 @@ jobs:
           desktop_rust_checks_required=$(bash scripts/detect-tauri-rust-changes.sh "${changed_files[@]}")
           e2e_core_required=$(bash scripts/detect-e2e-changes.sh core "${changed_files[@]}")
           e2e_landing_required=$(bash scripts/detect-e2e-changes.sh landing "${changed_files[@]}")
+          # The site also reads every workspace it depends on, transitively,
+          # and the external packages they resolve to; the deploy scope owns
+          # that graph. An unresolvable range counts as affected.
+          if [[ "$e2e_landing_required" != true ]]; then
+            e2e_landing_required=$(bun scripts/landing-deploy-scope.ts --base "$comparison_base" --head HEAD) || e2e_landing_required=true
+          fi
           # Path scopes for the build/smoke jobs, computed here so a job whose
           # scope did not change is skipped entirely instead of scheduling a
           # runner just to decide it has nothing to do.
@@ -1225,7 +1231,7 @@ jobs:
           # e2e-landing runs the same landing build before it tests the
           # preview, so when it is planned a separate landing build only
           # repeats that work.
-          if [[ "$SUITE_DEPTH" == "full" && "$e2e_landing_required" == "true" ]]; then
+          if [[ "$e2e_landing_required" == "true" ]]; then
             landing_build_required=false
           fi
 
@@ -5439,20 +5445,23 @@ jobs:
 
       - *merge_group_cancel
 
+  # Every depth: a landing change is checked in its own pull request and
+  # merge group, not only by the scheduled full run.
   e2e-landing:
-    needs: ci-plan
+    needs: [ci-plan, pr-heavy-gate]
     if: >-
-      inputs.pr_depth_only != true
+      !cancelled()
+      && needs.ci-plan.result == 'success'
+      && (github.event_name != 'pull_request' || needs.pr-heavy-gate.result == 'success')
+      && inputs.pr_depth_only != true
       &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
-      github.event_name != 'pull_request' && (
-      ((needs.ci-plan.outputs.trusted == 'true'
-       || github.event_name == 'workflow_dispatch')
+      (
+        needs.ci-plan.outputs.trusted == 'true'
+        || github.event_name == 'workflow_dispatch'
+      )
       && needs.ci-plan.outputs.e2e_landing_required == 'true'
-      && needs.ci-plan.outputs.suite_depth == 'full'
-      )
-      )
       )
     runs-on: ubuntu-latest
     timeout-minutes: 35
