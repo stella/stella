@@ -335,7 +335,11 @@ export const verifyAndDeleteUser = async (
             currentUserId,
             s3KeysToDelete,
           });
-          await deleteUserFiles({ tx, currentUserId, s3KeysToDelete });
+          const storageCleanupNotBefore = await deleteUserFiles({
+            tx,
+            currentUserId,
+            s3KeysToDelete,
+          });
           await deleteChatThreadsAndFileLinks(tx, currentUserId);
           await deletePersonalAiMemories(tx, currentUserId);
           await deletePersonalWorkspaceViewTemplatesAndAgentSkills(
@@ -353,6 +357,7 @@ export const verifyAndDeleteUser = async (
             workspaceIds,
             taskReassignmentCount,
             s3KeysToDelete,
+            storageCleanupNotBefore,
           });
 
           await anonymizeDeletedAccountRow(tx, currentUserId);

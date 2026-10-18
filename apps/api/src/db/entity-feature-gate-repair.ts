@@ -6,8 +6,11 @@ import { defaultConfig } from "@stll/db-load-gate/health";
 import { isRecord } from "@/api/lib/type-guards";
 
 import { createBackfillRuntime } from "./backfill-runtime";
+import { analyzeTable, validateConstraint } from "./online-ddl";
+import type { OnlineTableGate } from "./online-ddl";
 import type {
   OnlineMigrationConnection,
+  OnlineMigrationOutcome,
   OnlineRepair,
 } from "./online-migration-connection";
 import { setSharedQueryTimeouts } from "./shared-pool-timeouts";
@@ -15,8 +18,6 @@ import { setSharedQueryTimeouts } from "./shared-pool-timeouts";
 const REPAIR_NAME = "entity-feature-row-gates";
 const BATCH_SIZE = 128;
 const MAX_BATCH_SIZE = 2048;
-const quoteIdentifier = (identifier: string) =>
-  `"${identifier.replaceAll('"', '""')}"`;
 
 type GateRelation = {
   tableName: string;
@@ -66,27 +67,40 @@ const runMaintenanceTransaction = async (
   }
 };
 
+/** Validated on every relation of the runtime gate graph. */
+export const ENTITY_FEATURE_GATE_CONSTRAINT_NAMES = [
+  "entity_feature_gate_states_check",
+  "entity_feature_gate_ready_check",
+] as const;
+
+/**
+ * ANALYZE and VALIDATE each take SHARE UPDATE EXCLUSIVE, which queues behind
+ * an autovacuum of the table, so they run through the gate, one table at a
+ * time; a deferral leaves the next run to repeat them.
+ */
 const analyzeAndValidate = async (
-  connection: OnlineMigrationConnection,
-  table: string,
-) =>
-  await runMaintenanceTransaction(connection, async () => {
-    // Readiness is a durable no-pending proof. Cutover checks this catalog flag,
-    // avoiding a second scan under the locks that replace all 47 policies.
-    await connection.execute(`ANALYZE ${table}`);
-    await connection.execute(
-      `ALTER TABLE ${table} VALIDATE CONSTRAINT entity_feature_gate_states_check`,
-    );
-    await connection.execute(
-      `ALTER TABLE ${table} VALIDATE CONSTRAINT entity_feature_gate_ready_check`,
-    );
+  tables: OnlineTableGate,
+  tableName: string,
+): Promise<OnlineMigrationOutcome> =>
+  await tables.run({
+    target: { tableName, name: `${tableName}.entity_feature_gate` },
+    kind: "index_build",
+    work: async (session) => {
+      // Readiness is a durable no-pending proof. Cutover checks this catalog
+      // flag, avoiding a second scan under the locks that replace all 47
+      // policies.
+      await session.run(analyzeTable(tableName));
+      for (const constraintName of ENTITY_FEATURE_GATE_CONSTRAINT_NAMES) {
+        await session.run(validateConstraint({ tableName, constraintName }));
+      }
+    },
   });
 
 const backfillRelation = async (
   connection: OnlineMigrationConnection,
+  tables: OnlineTableGate,
   { tableName }: GateRelation,
-): Promise<void> => {
-  const table = `public.${quoteIdentifier(tableName)}`;
+): Promise<OnlineMigrationOutcome> => {
   const pendingRows = await connection.query(
     "SELECT pending FROM public.entity_feature_gate_backfill($1, NULL, 0)",
     [tableName],
@@ -96,8 +110,7 @@ const backfillRelation = async (
     return panic("Invalid entity feature backfill readiness");
   }
   if (!pendingRow["pending"]) {
-    await analyzeAndValidate(connection, table);
-    return;
+    return await analyzeAndValidate(tables, tableName);
   }
   const runtime = createBackfillRuntime({
     name: `${REPAIR_NAME}:${tableName}`,
@@ -146,7 +159,7 @@ const backfillRelation = async (
   }
   // Gate and empty-array selectivity must describe the backfilled data before
   // cutover; otherwise the planner can choose a nested loop over the tenant.
-  await analyzeAndValidate(connection, table);
+  return await analyzeAndValidate(tables, tableName);
 };
 
 export const ENTITY_FEATURE_GATE_REPAIR: OnlineRepair = {
@@ -217,12 +230,16 @@ export const ENTITY_FEATURE_GATE_REPAIR: OnlineRepair = {
       heldSince: batch["heldSince"],
     };
   },
-  repair: async (connection) => {
+  repair: async (connection, tables) => {
     for (const relation of await readRelations(connection)) {
-      await backfillRelation(connection, relation);
+      const outcome = await backfillRelation(connection, tables, relation);
+      if (outcome.type === "deferred") {
+        return outcome;
+      }
     }
     await runMaintenanceTransaction(connection, async () => {
       await connection.execute("SELECT public.entity_feature_gate_finish()");
     });
+    return { type: "complete" };
   },
 };

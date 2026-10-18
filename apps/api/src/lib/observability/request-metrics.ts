@@ -33,6 +33,39 @@ const METRIC_NAMESPACE = "Stella/Api";
 const METRIC_NAME = "RequestDuration";
 const FAILURE_METRIC_NAME = "RequestTransientFailures";
 
+type McpRequestMetricInput = {
+  method: string;
+  mode: string;
+  overlap: boolean;
+  path: string;
+  toolName?: string;
+  phases: Record<
+    "auth" | "context" | "server_build" | "tool_projection" | "dispatch",
+    number
+  >;
+  queryCount: number;
+  totalMs: number;
+};
+
+export const buildMcpRequestMetricRecord = ({
+  phases,
+  totalMs,
+  ...fields
+}: McpRequestMetricInput) => ({
+  event: "mcp.request.phases",
+  ...fields,
+  auth: Math.floor(phases.auth),
+  context: Math.floor(phases.context),
+  server_build: Math.floor(phases.server_build),
+  tool_projection: Math.floor(phases.tool_projection),
+  dispatch: Math.floor(phases.dispatch),
+  total: Math.ceil(totalMs),
+});
+
+export const emitMcpRequestMetric = (input: McpRequestMetricInput): void => {
+  writeMetricLine(buildMcpRequestMetricRecord(input));
+};
+
 /** One rejection per budget name; caller identifiers are never dimensions. */
 export const emitRateLimitRejectedMetric = (budgetName: BudgetName): void => {
   writeMetricLine({

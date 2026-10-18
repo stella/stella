@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/handlers/case-law/ingestion/reconciliation-engine.ts",
+  "delta": 1,
+  "reason": "Withdrawal pruning deletes in bounded batches under the ingestion lease and must repeat until a batch comes back short; each batch depends on the previous one having removed its rows, so the batches cannot run in parallel."
+}

@@ -32,6 +32,7 @@ import timeoutAnnotations from "./__fixtures__/ci-cancellation/timeout.json" wit
 import { selectApiTestImpact } from "./api-test-impact";
 import { FULL_TEST_JOB_SHARDS } from "./api-test-shard-plan";
 import { requiresMalwareScan } from "./check-standalone-lockfiles";
+import { readSelectionGraph } from "./ci-affected-selection";
 import { planCiApiTests } from "./ci-api-test-plan";
 import { ciBrowserScopePredicate } from "./ci-browser-scope";
 import {
@@ -46,6 +47,7 @@ import {
   requiresPackageChecks,
 } from "./ci-package-scope";
 import { extractPlanSelector } from "./ci-plan-selector";
+import { selectRootChecks } from "./ci-root-checks";
 import { withoutStaticReuseCondition } from "./ci-static-checks.test-support";
 import { routeSmokeAffected } from "./detect-route-smoke-changes";
 import { serviceSuiteCliOutput } from "./detect-service-suite-changes";
@@ -775,6 +777,34 @@ const releaseJobs = workflowJobs(
     "utf-8",
   ),
 );
+// Every check waits for the plan, so it stays install-light: one planner
+// install, and generation runs in its own job for its consumers only.
+test("the plan installs dependencies once and never generates sources", () => {
+  const steps = v.parse(
+    v.object({
+      steps: v.array(
+        v.looseObject({
+          name: v.optional(v.string()),
+          uses: v.optional(v.string()),
+          run: v.optional(v.string()),
+        }),
+      ),
+    }),
+    ciJobs["ci-plan"],
+  ).steps;
+  const installs = steps.filter(
+    ({ uses, run }) =>
+      uses === "$/.github/actions/ci-install" ||
+      /\bbun (?:ci|install)\b/u.test(run ?? ""),
+  );
+  expect(installs.map(({ name }) => name)).toEqual([
+    "Install planner dependencies",
+  ]);
+  expect(
+    steps.filter(({ run }) => run?.includes("ci-generated-sources.ts")),
+  ).toEqual([]);
+});
+
 // An undeclared output becomes an empty string, overriding even an environment
 // value established by an earlier step.
 test("CI planner output references name declared outputs", () => {
@@ -2370,7 +2400,7 @@ const jobSteps = (job: unknown) =>
     v.object({
       steps: v.pipe(
         v.unknown(),
-        v.transform(flattenWorkflowSteps),
+        v.transform((steps) => flattenWorkflowSteps(steps)),
         v.transform((steps) => steps.map(withoutStaticReuseCondition)),
         v.array(
           v.object({
@@ -5814,6 +5844,13 @@ test("workflow and planner changes run every planner test as a merge-group gate"
     expect(plan, item.files.join(",")).toEqual(["true"]);
   }
   const admitted = queueAdmittedJobs({ jobs: ciJobs });
+  const rootChecks = JSON.stringify(
+    selectRootChecks({
+      changed: changes,
+      graph: readSelectionGraph(root),
+      pathChange: "content",
+    }),
+  );
   const gated = new Set<string>();
   for (const file of plannerTests) {
     const selected = owners.get(file) ?? [];
@@ -5841,6 +5878,7 @@ test("workflow and planner changes run every planner test as a merge-group gate"
               "github.event_name": EVENT.mergeGroup,
               "needs.ci-plan.outputs.package_checks_required": "true",
               "needs.ci-plan.outputs.queue_depth": queueDepth,
+              "needs.ci-plan.outputs.root_checks": rootChecks,
               "needs.ci-plan.outputs.suite_depth": SUITE_DEPTH.full,
             },
             status: {
@@ -6190,7 +6228,7 @@ test("the exact docs-only README change plans only Markdown checks in PRs and me
         );
     expect(partSelected("ci-checks-docs: ")).toEqual([true]);
     expect(partSelected("parser-version-guard: ")).toEqual([false]);
-    expect(partSelected("dated-waiver-expiry: ")).toEqual([true, true]);
+    expect(partSelected("dated-waiver-expiry: ")).toEqual([true, true, true]);
     expect(
       evaluateResult({
         event,
@@ -6581,7 +6619,7 @@ test("API planning only loads dependencies after installation and emits install-
     (step) => step.name === "Select affected API test files",
   );
   expect(select?.if).toBe(
-    "steps.completed-depth.outputs.run_required != 'false' && (github.event_name == 'pull_request' || github.event_name == 'merge_group') && steps.api-test-deps.outcome == 'success'",
+    "steps.completed-depth.outputs.run_required != 'false' && (github.event_name == 'pull_request' || github.event_name == 'merge_group') && steps.planner-deps.outcome == 'success' && steps.api-test-deps.outcome == 'success'",
   );
   const plan = steps.find(
     (step) => step.name === "Plan API test files and shards",
@@ -6674,6 +6712,7 @@ test("Postgres plans are visible on PRs while execution requires explicit opt-in
           "github.event_name": event,
           "vars.CI_POSTGRES_PR_SELECTION": prSwitch,
           "steps.completed-depth.outputs.run_required": "true",
+          "steps.planner-deps.outcome": "success",
           "steps.api-test-deps.outcome": "success",
           "needs.ci-plan.outputs.run_required": "true",
           "needs.ci-plan.outputs.queue_depth": "full",
@@ -7031,6 +7070,7 @@ test("Legal Atlas scope deadlines conservatively select the image after timeout 
       evaluate(condition, {
         values: {
           "steps.completed-depth.outputs.run_required": runRequired,
+          "steps.planner-deps.outcome": "success",
           "steps.api-test-deps.outcome": "success",
           "steps.changed-files.outputs.legal_atlas_image_required": "true",
         },

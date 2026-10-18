@@ -101,6 +101,9 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   "view-templates": WAIVER_REASON.preExistingGap,
   views: WAIVER_REASON.preExistingGap,
   workspaces: WAIVER_REASON.preExistingGap,
+  // Account-owned export ledger keyed by the authenticated user, never by
+  // organization or matter; no tenant-scoped input.
+  "account-exports": WAIVER_REASON.noTenantReadSurface,
   "agent-auth": WAIVER_REASON.noTenantReadSurface,
   auth: WAIVER_REASON.noTenantReadSurface,
   dev: WAIVER_REASON.noTenantReadSurface,
