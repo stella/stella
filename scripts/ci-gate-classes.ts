@@ -121,6 +121,7 @@ export const CI_GATES: Readonly<Record<string, JobGate>> = {
       "Failure-as-empty baseline": { class: "budget", owner: "code-health" },
     },
   },
+  "pr-heavy-gate": { class: "correctness" },
   "ci-tests": { class: "correctness" },
   "api-test-durations": { class: "advisory" },
   "ci-browser": { class: "correctness" },
