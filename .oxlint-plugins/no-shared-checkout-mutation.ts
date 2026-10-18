@@ -96,9 +96,26 @@ const createPathResolver = (context: ScopeContext) => {
     ) {
       return true;
     }
-    // path.join/resolve built on a temporary base stays temporary.
-    const first: unknown = node.arguments[0];
-    return first !== undefined && isTemporaryRoot(first, seen);
+    const parts: unknown[] = node.arguments;
+    const operation = calleeName(node.callee);
+    // path.resolve: the last absolute segment decides, as for checkout paths.
+    if (operation === "resolve") {
+      for (const part of parts.toReversed()) {
+        if (isCheckoutPath(part, new Set(seen))) {
+          return false;
+        }
+        if (isTemporaryRoot(part, new Set(seen))) {
+          return true;
+        }
+      }
+      return false;
+    }
+    // path.join: the first segment is the base.
+    return (
+      operation === "join" &&
+      parts.length > 0 &&
+      isTemporaryRoot(parts[0], new Set(seen))
+    );
   };
 
   const isCheckoutPath = (
