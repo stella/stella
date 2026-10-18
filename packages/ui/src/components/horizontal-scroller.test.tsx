@@ -234,3 +234,28 @@ test("hands the wheel back to the page at the edge it would move past", () => {
   expect(wheel(24)).toBe(true);
   expect(wheel(-24)).toBe(false);
 });
+
+test("lets keyboard users reach and operate an overflowing row of static content", () => {
+  const scrollBy = mock(() => undefined);
+  const view = render(
+    <HorizontalScroller previousLabel="Previous" nextLabel="Next">
+      <span>Static item</span>
+    </HorizontalScroller>,
+  );
+  const viewport = view.getByText("Static item").parentElement
+    ?.parentElement as HTMLDivElement;
+  Object.defineProperties(viewport, {
+    clientWidth: { value: 100 },
+    scrollWidth: { value: 300 },
+    scrollBy: { value: scrollBy },
+  });
+  act(() =>
+    TestResizeObserver.callback?.([], new TestResizeObserver(() => undefined)),
+  );
+  const next = view.getByLabelText("Next");
+  expect(next.tabIndex).toBe(0);
+  next.focus();
+  expect(document.activeElement).toBe(next);
+  fireEvent.click(next);
+  expect(scrollBy).toHaveBeenCalledWith({ behavior: "smooth", left: 80 });
+});

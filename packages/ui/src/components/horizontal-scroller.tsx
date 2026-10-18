@@ -145,7 +145,6 @@ export const HorizontalScroller = ({
             aria-label={previousLabel}
             className="bg-background/90 text-foreground absolute start-1 top-1/2 -translate-y-1/2 rounded-full border p-1 shadow-sm"
             onClick={() => scroll(-1)}
-            tabIndex={-1}
             type="button"
           >
             <ChevronLeftIcon className="size-4 rtl:rotate-180" />
@@ -159,7 +158,6 @@ export const HorizontalScroller = ({
             aria-label={nextLabel}
             className="bg-background/90 text-foreground absolute end-1 top-1/2 -translate-y-1/2 rounded-full border p-1 shadow-sm"
             onClick={() => scroll(1)}
-            tabIndex={-1}
             type="button"
           >
             <ChevronRightIcon className="size-4 rtl:rotate-180" />
