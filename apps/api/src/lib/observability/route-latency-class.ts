@@ -574,6 +574,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "POST /v1/folio-collab-rooms/heartbeat": "crud",
   "POST /v1/folio-collab-rooms/refresh-token": "crud",
   "POST /v1/folio-collab-rooms/snapshot/load": "crud",
+  "POST /v1/folio-collab-rooms/snapshot/seed": "crud",
   "POST /v1/folio-collab-rooms/snapshot/store": "crud",
   "POST /v1/invoices/:workspaceId/:invoiceId/entries": "crud",
   "POST /v1/invoices/:workspaceId/:invoiceId/lines": "crud",
@@ -614,6 +615,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "POST /v1/number-series/:numberSeriesId/default": "crud",
   "POST /v1/organization-settings/": "crud",
   "POST /v1/organization-settings/ai-config": "crud",
+  "POST /v1/organization-settings/ai-config/defaults-preview": "crud",
   "POST /v1/organization-settings/business-registry-credentials": "crud",
   "POST /v1/organization-settings/correspondence/allowed-senders": "crud",
   "POST /v1/organization-settings/correspondence/allowed-senders/:senderId/scope":

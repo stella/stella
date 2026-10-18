@@ -23,7 +23,7 @@ import {
 import { FOLIO_COLLAB_TRANSITION_IDENTITIES } from "@/api/lib/db/folio-collab-transition-identities";
 import { READER_ANSWER_TRANSITION_IDENTITIES } from "@/api/lib/db/reader-answer-transition-identities";
 import type {
-  STATUS_COLUMNS,
+  WRITABLE_STATUS_COLUMNS,
   StatusTable,
 } from "@/api/lib/db/status-tables.gen";
 import {
@@ -250,7 +250,7 @@ const EU_COMPLETION_APPROVAL_PROOF = defineFixedLifecycle({
 });
 
 type StatusColumns<TTable extends StatusTable> =
-  (typeof STATUS_COLUMNS)[TTable];
+  (typeof WRITABLE_STATUS_COLUMNS)[TTable];
 
 // Each table's decision covers exactly its inventoried lifecycle columns.
 type TransitionDecision<TTable extends StatusTable> =

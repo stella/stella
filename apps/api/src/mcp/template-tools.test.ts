@@ -1465,7 +1465,7 @@ describe("MCP template tools", () => {
         abortSignal: expect.any(AbortSignal),
         generation: expect.objectContaining({
           dataClass: "customer",
-          role: "fast",
+          task: "classify",
           orgAIConfig: null,
           organizationId: toSafeId<"organization">("org_1"),
           managedAIResidency: "eu",

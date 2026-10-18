@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 
 import { courtAbbreviation } from "@stll/api-contract/case-law-court-abbreviations";
 import {
@@ -7,6 +7,7 @@ import {
 } from "@stll/api-contract/case-law-court-tiers";
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
+import { publishedCaseLawDecisions } from "@/api/db/schema";
 import { withSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
@@ -14,8 +15,7 @@ import {
   courtTierLabelFromMap,
   type CourtWeightMap,
 } from "@/api/lib/case-law/court-weights";
-import { publishedCaseLawDecisionSqlFor } from "@/api/lib/case-law/published-decisions";
-import { servedCaseLawDecisionFor } from "@/api/lib/case-law/published-decisions-sql";
+import { servedCaseLawSearchDocumentFor } from "@/api/lib/case-law/search-sql";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import type { LegalSearchEngine } from "@/api/lib/legal-search/types";
 import {
@@ -158,7 +158,7 @@ export const readCaseLawCourtCountQuery = definePublicLawSharedQuery(
       engine: LegalSearchEngine;
     },
   ): Promise<number | null> => {
-    const eligibility = servedCaseLawDecisionFor("d", engine);
+    const eligibility = servedCaseLawSearchDocumentFor("d", engine);
     if (eligibility === null) {
       return null;
     }
@@ -176,7 +176,7 @@ export const readCaseLawCourtCountQuery = definePublicLawSharedQuery(
       async () =>
         await tx.execute(sql`
         SELECT count(DISTINCT d.court)::integer AS courts
-        FROM case_law_decisions d
+        FROM ${publishedCaseLawDecisions} AS d
         WHERE d.country = ${country}
           AND ${served}
           ${admitted}
@@ -237,13 +237,10 @@ export const readCaseLawCourtActivityQuery = definePublicLawSharedQuery(
     const sinceDay = new Date(now.getTime() - DAY_IN_MS);
     const sinceWeek = new Date(now.getTime() - WEEK_IN_MS);
     const scanFrom = new Date(sinceWeek.getTime() - CLOCK_SKEW_MARGIN_MS);
-    // Emitted only when a source is actually withheld, so the ordinary read
-    // stays on the index alone.
-    const published = sql`AND ${sql.raw(publishedCaseLawDecisionSqlFor("d"))}`;
-    const admitted =
+    const admitted = (sourceId: SQL) =>
       excludedSourceIds.length === 0
-        ? sql``
-        : sql`AND d.source_id <> ALL(
+        ? sql`TRUE`
+        : sql`${sourceId} <> ALL(
               SELECT value::uuid
               FROM jsonb_array_elements_text(${JSON.stringify([...excludedSourceIds])}::text::jsonb) AS value
             )`;
@@ -261,25 +258,23 @@ export const readCaseLawCourtActivityQuery = definePublicLawSharedQuery(
       FROM jsonb_array_elements_text(${JSON.stringify([...courts])}::text::jsonb)
         WITH ORDINALITY AS named(court, ordinality)
       LEFT JOIN LATERAL (
-        SELECT d.updated_at
-        FROM case_law_decisions d
-        WHERE d.country = ${country}
-          AND d.court = named.court
-          ${published}
-          ${admitted}
-        ORDER BY d.updated_at DESC
+        SELECT latest_decision.updated_at
+        FROM ${publishedCaseLawDecisions} AS latest_decision
+        WHERE latest_decision.country = ${country}
+          AND latest_decision.court = named.court
+          AND ${admitted(sql`latest_decision.source_id`)}
+        ORDER BY latest_decision.updated_at DESC
         LIMIT 1
       ) latest ON true
       LEFT JOIN LATERAL (
         SELECT
-          count(*) FILTER (WHERE d.created_at >= ${sinceDay}::timestamptz) AS added_last_day,
-          count(*) FILTER (WHERE d.created_at >= ${sinceWeek}::timestamptz) AS added_last_week
-        FROM case_law_decisions d
-        WHERE d.country = ${country}
-          AND d.court = named.court
-          AND d.updated_at >= ${scanFrom}::timestamptz
-          ${published}
-          ${admitted}
+          count(*) FILTER (WHERE recent_decision.created_at >= ${sinceDay}::timestamptz) AS added_last_day,
+          count(*) FILTER (WHERE recent_decision.created_at >= ${sinceWeek}::timestamptz) AS added_last_week
+        FROM ${publishedCaseLawDecisions} AS recent_decision
+        WHERE recent_decision.country = ${country}
+          AND recent_decision.court = named.court
+          AND recent_decision.updated_at >= ${scanFrom}::timestamptz
+          AND ${admitted(sql`recent_decision.source_id`)}
       ) recent ON true
       ORDER BY named.ordinality
     `),

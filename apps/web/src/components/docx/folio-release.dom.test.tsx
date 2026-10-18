@@ -176,6 +176,7 @@ test("published editor echoes agent comments and saves applied operations for re
   }
   const applied = await act(async () =>
     getEditor().applyDocumentOperations({
+      undefinedReferences: "refuse",
       snapshot: operationSnapshot,
       batch: {
         version: 1,
@@ -217,6 +218,7 @@ test("published editor echoes agent comments and saves applied operations for re
   }
   const secondApply = await act(async () =>
     getEditor().applyDocumentOperations({
+      undefinedReferences: "refuse",
       snapshot: undoSnapshot,
       batch: {
         version: 1,
