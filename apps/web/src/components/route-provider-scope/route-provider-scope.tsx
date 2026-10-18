@@ -4,7 +4,16 @@ import type { Context, PropsWithChildren } from "react";
 import { useRouterState } from "@tanstack/react-router";
 import { panic } from "better-result";
 
-import type { ProviderScope } from "@/routes/-app-frame-scope";
+import type { AppFrameScope, ProviderScope } from "@/routes/-app-frame-scope";
+
+declare module "@tanstack/react-router" {
+  // oxlint-disable-next-line typescript/consistent-type-definitions -- router static data uses declaration merging
+  interface StaticDataRouteOption {
+    appFrame?: AppFrameScope;
+    providerScopes?: readonly ProviderScope[];
+    organizationSettingsAdmission?: "time-billing";
+  }
+}
 
 type RouteProviderScope = {
   routeId: string;
@@ -22,7 +31,11 @@ export const RouteProviderScopeBoundary = ({ children }: PropsWithChildren) => {
       routeId: matches.at(-1)?.routeId ?? "__root__",
       scopes: [
         ...new Set(
-          matches.flatMap(({ staticData }) => staticData.providerScopes ?? []),
+          matches.flatMap(({ staticData }) =>
+            staticData.providerScopes === undefined
+              ? []
+              : staticData.providerScopes,
+          ),
         ),
       ],
     }),

@@ -5,7 +5,7 @@ import type { PublicCaseLawDecision } from "@/features/case-law/public-decision"
 import type { PublicStatute } from "@/features/statutes/queries/statutes";
 import type { api } from "@/lib/api";
 import { toSafeId } from "@/lib/safe-id";
-import type { PublicStatuteRouteData } from "@/routes/law/-statute-detail.logic";
+import type { Route as StatuteRoute } from "@/routes/law/$country/statutes/$slug/index";
 
 export const publicRouteExceptions: Record<string, string> = {
   "/": "RootRedirect immediately navigates according to the audience; it has no stable leaf body. Destination routes are covered separately.",
@@ -106,7 +106,7 @@ const statuteData = {
   versions: [],
   windowGap: null,
   work: statute,
-} satisfies PublicStatuteRouteData;
+} satisfies typeof StatuteRoute.types.loaderData;
 
 export const publicFixtureLoaderData = (routeId: string) => {
   switch (routeId) {
@@ -150,7 +150,7 @@ export const publicFixtureResponse = (
     case "/v1/contacts/00000000-0000-4000-8000-000000000003":
       return Response.json({
         id: toSafeId<"contact">("00000000-0000-4000-8000-000000000003"),
-        organizationId: "org-fixture",
+        organizationId: toSafeId<"organization">("org-fixture"),
         type: "person",
         prefix: null,
         firstName: "Fixture",
@@ -275,6 +275,7 @@ export const publicFixtureResponse = (
         items: [],
         limit: 25,
         nextCursor: null,
+        doctrineAvailability: "available",
       } satisfies NonNullable<
         Awaited<ReturnType<DecisionEndpoint["citations"]["get"]>>["data"]
       >);

@@ -16,15 +16,6 @@ export type ProviderScope =
   (typeof PROVIDER_SCOPE)[keyof typeof PROVIDER_SCOPE];
 export const MEMBER_PROVIDER_SCOPES = Object.values(PROVIDER_SCOPE);
 
-declare module "@tanstack/react-router" {
-  // oxlint-disable-next-line typescript/consistent-type-definitions -- router static data uses declaration merging
-  interface StaticDataRouteOption {
-    appFrame?: AppFrameScope;
-    providerScopes?: readonly ProviderScope[];
-    organizationSettingsAdmission?: "time-billing";
-  }
-}
-
 export const matchedAppFrameScope = (
   matches: readonly { staticData: { appFrame?: AppFrameScope } }[],
 ): AppFrameScope => {

@@ -77,6 +77,7 @@ import {
 import type { MountedEditors } from "@/components/mounted-editors.logic";
 import { createPromptEditorDocument } from "@/components/prompt-editor.logic";
 import { seedReferenceHints } from "@/components/references/reference-hints";
+import { useRequiredRouteProvider } from "@/components/route-provider-scope/route-provider-scope";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useUnsavedWork } from "@/hooks/use-unsaved-work";
@@ -94,7 +95,6 @@ import {
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { getChatThreadKey } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
-import { useRequiredRouteProvider } from "@/lib/route-provider-scope";
 import { createUuid } from "@/lib/uuid";
 import { PROVIDER_SCOPE } from "@/routes/-app-frame-scope";
 

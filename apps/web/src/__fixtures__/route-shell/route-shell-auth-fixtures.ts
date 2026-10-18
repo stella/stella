@@ -37,7 +37,7 @@ const invitation = {
   inviterEmail: "member@example.test",
   role: "member",
   status: "pending",
-} satisfies NonNullable<
+} as const satisfies NonNullable<
   Awaited<ReturnType<typeof authClient.organization.getInvitation>>["data"]
 >;
 

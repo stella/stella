@@ -43,6 +43,7 @@ import type {
   RoleValue,
 } from "@/components/ai-config-role-models.logic";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
+import { useRequiredRouteProvider } from "@/components/route-provider-scope/route-provider-scope";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { useMountEffect } from "@/hooks/use-effect";
 import { getAnalytics, useAnalytics } from "@/lib/analytics/provider";
@@ -57,7 +58,6 @@ import {
   aiDefaultsPreviewOptions,
   updateCachedAIAvailability,
 } from "@/lib/organization/ai-config-queries";
-import { useRequiredRouteProvider } from "@/lib/route-provider-scope";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { PROVIDER_SCOPE } from "@/routes/-app-frame-scope";
 

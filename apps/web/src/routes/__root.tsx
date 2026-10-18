@@ -18,6 +18,7 @@ import {
   DefaultErrorComponent,
   DefaultPendingComponent,
 } from "@/components/route-components";
+import { RouteProviderScopeBoundary } from "@/components/route-provider-scope/route-provider-scope";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getLangDir, useI18nStore } from "@/i18n/i18n-store";
 import {
@@ -26,8 +27,8 @@ import {
   resolveDocumentLanguage,
 } from "@/i18n/page-language";
 import type { AnalyticsValue } from "@/lib/analytics/provider";
-import type { RouteErrorLifecycleController } from "@/lib/analytics/route-error-lifecycle";
 import "@/fonts.css";
+import type { RouteErrorLifecycleController } from "@/lib/analytics/route-error-lifecycle";
 import { RouteErrorLifecycleProvider } from "@/lib/analytics/route-error-lifecycle-context";
 import {
   isPublicKnowledgeEnabled,
@@ -37,7 +38,6 @@ import { publicToolsBasePath } from "@/lib/knowledge/public-tools-path";
 import { isPublicLawCrawlAllowed } from "@/lib/public-law-launch";
 import { isPublicSsrPath } from "@/lib/public-ssr-paths";
 import { isPublicToolsCrawlAllowed } from "@/lib/public-tools-launch";
-import { RouteProviderScopeBoundary } from "@/lib/route-provider-scope";
 import { requireFreshDocument } from "@/lib/session-cache-guard";
 import { documentResponsePolicyHeaders } from "@/route-response-policy";
 import { AppFrameHost } from "@/routes/-app-frame-host";

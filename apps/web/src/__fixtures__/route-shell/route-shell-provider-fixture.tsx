@@ -6,27 +6,28 @@ import { afterAll, expect, mock, test } from "bun:test";
 
 import { parseTimeZoneId } from "@stll/time";
 
-import type { api } from "@/lib/api";
-import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 import {
   authFixtureBeforeLoadData,
   authFixtureLoaderData,
   authFixtureResponse,
-} from "@/test-fixtures/route-shell-auth-fixtures";
+} from "@/__fixtures__/route-shell/route-shell-auth-fixtures";
 import {
   knowledgeFixtureResponse,
   knowledgeFixtureLoaderData,
   knowledgeFixtureReadyText,
   KNOWLEDGE_FIXTURE_TOOL_SLUG,
-} from "@/test-fixtures/route-shell-knowledge-fixtures";
+} from "@/__fixtures__/route-shell/route-shell-knowledge-fixtures";
 import {
   publicFixtureLoaderData,
   publicFixtureResponse,
   publicFixtureReadyText,
   publicFixtureReadySelector,
   publicRouteExceptions,
-} from "@/test-fixtures/route-shell-public-fixtures";
+} from "@/__fixtures__/route-shell/route-shell-public-fixtures";
+import type { api } from "@/lib/api";
+import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
+import { toSafeId } from "@/lib/safe-id";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 type RouteShellProviderFixtureOptions = {
   mode: "public-knowledge" | "legacy-tools";
@@ -79,6 +80,7 @@ const createFixtureEventSource = () =>
     onerror: EventSource["onerror"] = null;
     onmessage: EventSource["onmessage"] = null;
     onopen: EventSource["onopen"] = null;
+    private readonly eventListeners = new Map<unknown, EventListener>();
     constructor(url: string | URL, init: EventSourceInit = {}) {
       super();
       this.url = String(url);
@@ -98,7 +100,86 @@ const createFixtureEventSource = () =>
     close() {
       this.readyState = 2;
     }
+    override addEventListener<K extends keyof EventSourceEventMap>(
+      type: K,
+      listener: (this: EventSource, event: EventSourceEventMap[K]) => unknown,
+      options?: boolean | AddEventListenerOptions,
+    ): void;
+    override addEventListener(
+      type: string,
+      listener: (this: EventSource, event: MessageEvent) => unknown,
+      options?: boolean | AddEventListenerOptions,
+    ): void;
+    override addEventListener(
+      type: string,
+      listener: EventListenerOrEventListenerObject,
+      options?: boolean | AddEventListenerOptions,
+    ): void;
+    override addEventListener(
+      type: string,
+      listener: unknown,
+      options?: boolean | AddEventListenerOptions,
+    ) {
+      super.addEventListener(
+        type,
+        eventListener(this.eventListeners, listener, this),
+        options,
+      );
+    }
+    override removeEventListener<K extends keyof EventSourceEventMap>(
+      type: K,
+      listener: (this: EventSource, event: EventSourceEventMap[K]) => unknown,
+      options?: boolean | EventListenerOptions,
+    ): void;
+    override removeEventListener(
+      type: string,
+      listener: (this: EventSource, event: MessageEvent) => unknown,
+      options?: boolean | EventListenerOptions,
+    ): void;
+    override removeEventListener(
+      type: string,
+      listener: EventListenerOrEventListenerObject,
+      options?: boolean | EventListenerOptions,
+    ): void;
+    override removeEventListener(
+      type: string,
+      listener: unknown,
+      options?: boolean | EventListenerOptions,
+    ) {
+      super.removeEventListener(
+        type,
+        eventListener(this.eventListeners, listener, this),
+        options,
+      );
+    }
   };
+
+const eventListener = (
+  listeners: Map<unknown, EventListener>,
+  listener: unknown,
+  target: EventSource,
+) => {
+  const existing = listeners.get(listener);
+  if (existing !== undefined) {
+    return existing;
+  }
+  const wrapped: EventListener = (event) => {
+    if (typeof listener === "function") {
+      Reflect.apply(listener, target, [event]);
+      return;
+    }
+    if (
+      typeof listener === "object" &&
+      listener !== null &&
+      "handleEvent" in listener &&
+      typeof listener.handleEvent === "function"
+    ) {
+      Reflect.apply(listener.handleEvent, listener, [event]);
+    }
+  };
+  listeners.set(listener, wrapped);
+  return wrapped;
+};
 
 const installFixtureNetwork = () => {
   const originalFetch = globalThis.fetch;
@@ -120,7 +201,10 @@ const installFixtureNetwork = () => {
     timezoneId: "UTC",
     wordEditShortcut: null,
   } satisfies Omit<AuthenticatedUser, "activeOrganizationId">;
-  const session = { userId: user.id, activeOrganizationId: "org-fixture" };
+  const session = {
+    userId: toSafeId<"user">(user.id),
+    activeOrganizationId: toSafeId<"organization">("org-fixture"),
+  };
   const originalEventSource = globalThis.EventSource;
   globalThis.EventSource = createFixtureEventSource();
   const timeZone = parseTimeZoneId("UTC");
@@ -149,7 +233,7 @@ const installFixtureNetwork = () => {
     Awaited<ReturnType<(typeof api)["organization-settings"]["get"]>>["data"]
   >;
   const workspace = {
-    id: "00000000-0000-4000-8000-000000000001",
+    id: toSafeId<"workspace">("00000000-0000-4000-8000-000000000001"),
     organizationId: session.activeOrganizationId,
     name: "Fixture matter",
     reference: "2026/1",
@@ -336,7 +420,7 @@ const installFixtureNetwork = () => {
             nextCursor: null,
             limit: 20,
             scope: {
-              userId: user.id,
+              userId: toSafeId<"user">(user.id),
               organizationId: session.activeOrganizationId,
             },
           } satisfies NonNullable<
@@ -404,7 +488,7 @@ const loadFixtureRuntime = async (
   }));
 
   const { routeTree } = await import("@/routeTree.gen");
-  const { QueryClient } = await import("@tanstack/react-query");
+  const { createAppQueryClient } = await import("@/lib/react-query");
   const { createMemoryHistory, createRouter, RouterProvider, useMatches } =
     await import("@tanstack/react-router");
   const {
@@ -432,16 +516,17 @@ const loadFixtureRuntime = async (
     await import("@/lib/analytics/route-error-lifecycle");
 
   const createFixtureRouter = (initialEntry: string) => {
-    const queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
-    });
+    const queryClient = createAppQueryClient();
+    queryClient.setDefaultOptions({ queries: { retry: false } });
     const routeErrorLifecycle =
       createRouteErrorLifecycleController(noopAnalytics);
     const caughtErrors: Error[] = [];
     const router = createRouter({
       routeTree,
       defaultOnCatch: (error) => {
-        caughtErrors.push(error);
+        caughtErrors.push(
+          error instanceof Error ? error : new Error(String(error)),
+        );
       },
       history: createMemoryHistory({ initialEntries: [initialEntry] }),
       context: {
@@ -558,6 +643,20 @@ const fixtureSearch = (routeId: string, email: string) => {
       return {};
   }
 };
+const fixtureLocation = (
+  fullPath: string,
+  params: Record<string, string>,
+  search: Record<string, string>,
+) => {
+  const pathname = fullPath.replace(/\$([A-Za-z][A-Za-z0-9]*)/gu, (_, key) => {
+    const value = params[key];
+    return value === undefined
+      ? panic(`Missing route fixture param: ${key}`)
+      : value;
+  });
+  const query = new URLSearchParams(search).toString();
+  return query.length === 0 ? pathname : `${pathname}?${query}`;
+};
 const declareCensus = (fixture: FixtureRuntime) => {
   const {
     mode,
@@ -602,7 +701,6 @@ const declareLeafCases = (fixture: FixtureRuntime) => {
   const {
     mode,
     createFixtureRouter,
-    census,
     ancestors,
     selectedLeaves,
     exercised,
@@ -661,12 +759,7 @@ const declareLeafCases = (fixture: FixtureRuntime) => {
       expectedCases.push(caseId);
       test(`${mode}: ${caseId} receives its ${protectedLeaf ? "shell" : "original page and shell"} providers`, async () => {
         const search = fixtureSearch(route.id, user.email);
-        const location = census.router.buildLocation({
-          to: route.fullPath,
-          params,
-          search,
-        });
-        const path = location.href;
+        const path = fixtureLocation(route.fullPath, params, search);
         const scope = matchedAppFrameScope(
           ancestors(route).map(({ options }) => ({
             staticData: options.staticData ?? {},
@@ -811,10 +904,12 @@ const declareLeafCases = (fixture: FixtureRuntime) => {
           }
           exercised.add(caseId);
         } finally {
-          cleanup();
           route.update(original);
-          await queryClient.cancelQueries();
-          queryClient.clear();
+          await act(async () => {
+            await queryClient.cancelQueries();
+            queryClient.clear();
+            cleanup();
+          });
         }
       });
     }
@@ -983,12 +1078,14 @@ const declareLawCases = async (fixture: FixtureRuntime) => {
           }
           expect(unexpectedRequests).toEqual([]);
         } finally {
-          cleanup();
           lawLeaf.update(originalLeafOptions);
           lawLayout.update(originalLayoutOptions);
           useInspectorTabsStore.setState(originalTabs, true);
-          await queryClient.cancelQueries();
-          queryClient.clear();
+          await act(async () => {
+            await queryClient.cancelQueries();
+            queryClient.clear();
+            cleanup();
+          });
         }
       });
     }

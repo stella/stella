@@ -130,6 +130,7 @@ export const knowledgeFixtureResponse = (
       items: [],
       nextCursor: null,
       limit: 50,
+      styleSetsCountLimit: 100,
     } satisfies NonNullable<
       Awaited<ReturnType<(typeof api)["style-sets"]["get"]>>["data"]
     >);
@@ -142,11 +143,9 @@ export const knowledgeFixtureResponse = (
     } satisfies NonNullable<Awaited<ReturnType<typeof api.flows.get>>["data"]>);
   }
   if (pathname === "/v1/clause-categories") {
-    return Response.json(
-      [] satisfies NonNullable<
-        Awaited<ReturnType<(typeof api)["clause-categories"]["get"]>>["data"]
-      >,
-    );
+    return Response.json({ categories: [] } satisfies NonNullable<
+      Awaited<ReturnType<(typeof api)["clause-categories"]["get"]>>["data"]
+    >);
   }
   if (pathname === "/v1/clauses") {
     return Response.json({
@@ -185,11 +184,9 @@ export const knowledgeFixtureResponse = (
     >);
   }
   if (pathname === "/v1/template-categories") {
-    return Response.json(
-      [] satisfies NonNullable<
-        Awaited<ReturnType<(typeof api)["template-categories"]["get"]>>["data"]
-      >,
-    );
+    return Response.json({ categories: [] } satisfies NonNullable<
+      Awaited<ReturnType<(typeof api)["template-categories"]["get"]>>["data"]
+    >);
   }
   if (pathname === "/v1/playbooks") {
     return Response.json({

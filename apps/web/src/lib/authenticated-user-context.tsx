@@ -1,7 +1,7 @@
 import { createContext, use } from "react";
 import type { PropsWithChildren } from "react";
 
-import { useRequiredRouteProvider } from "@/lib/route-provider-scope";
+import { useRequiredRouteProvider } from "@/components/route-provider-scope/route-provider-scope";
 import { PROVIDER_SCOPE } from "@/routes/-app-frame-scope";
 
 export type AuthenticatedUser = {
