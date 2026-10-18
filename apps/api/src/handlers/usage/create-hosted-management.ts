@@ -64,7 +64,7 @@ const createHostedManagement = createSafeRootHandler(
     const sessionResult = await createHostedManagementSession({
       credentials,
       accountRef: dbResult.hostedAccountRef,
-      returnUrl: `${env.FRONTEND_URL.replace(/\/$/u, "")}/settings/organization/usage`,
+      returnUrl: `${env.FRONTEND_URL.replace(/\/$/u, "")}/admin/usage`,
     });
     if (Result.isError(sessionResult)) {
       return Result.err(

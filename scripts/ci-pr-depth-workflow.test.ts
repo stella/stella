@@ -106,6 +106,7 @@ test("the hourly workflow calls the derived PR-depth set and publishes its statu
     "ci-checks-rest",
     "code-quality-api",
     "code-quality-web-rest",
+    "generated-sources",
   ]);
 });
 

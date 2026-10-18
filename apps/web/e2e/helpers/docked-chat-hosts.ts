@@ -108,6 +108,9 @@ export const declaredAppFrameScope = (
           case "member":
             scope = APP_FRAME_SCOPE.member;
             break;
+          case "admin":
+            scope = APP_FRAME_SCOPE.admin;
+            break;
           case "knowledge":
             scope = APP_FRAME_SCOPE.knowledge;
             break;

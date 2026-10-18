@@ -398,9 +398,23 @@ test("capture landing product screenshots", async ({
           scroller.scrollTop += anchorTop - frameTop - 16;
         }, clip.y);
         await page.evaluate(() => window.scrollTo({ left: 0, top: 0 }));
+        // The left notes column is the point of this shot. Require the
+        // seeded AI note and comment as typed margin notes, not merely text
+        // in some `aside`, and no visitor placeholders in their place.
+        const notesColumn = page.locator("aside[data-reader-notes-column]");
+        await expect(notesColumn).toBeVisible();
+        await expect(
+          notesColumn.locator('[data-margin-note="example"]'),
+        ).toHaveCount(0);
         const requiredElements = [
-          page.locator("aside").getByText(scenario.aiNote, { exact: true }),
-          page.locator("aside").getByText(scenario.comment, { exact: true }),
+          notesColumn
+            .locator(
+              '[data-margin-note="card"], [data-margin-note="annotation"]',
+            )
+            .getByText(scenario.aiNote, { exact: true }),
+          notesColumn
+            .locator('[data-margin-note="comment"]')
+            .getByText(scenario.comment, { exact: true }),
         ];
         for (const [anchor, variant, paragraphNumber] of [
           [
