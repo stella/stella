@@ -48,6 +48,13 @@
       "date": "2026-10-03"
     }
   ],
+  "apps/api/src/handlers/chat/messages/revisions/span-proposal.test.ts::plain-text edits preserve generated prose containing Markdown punctuation": [
+    {
+      "seed": 20260901,
+      "note": "Regression coverage",
+      "date": "2026-10-10"
+    }
+  ],
   "apps/api/src/handlers/chat/snapshot-reconciliation.property.test.ts::mixed provenance preserves exact delta placement and snapshot insertions": [
     {
       "seed": 20260901,
