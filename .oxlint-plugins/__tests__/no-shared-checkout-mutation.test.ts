@@ -49,6 +49,14 @@ describe(RULE, () => {
     ).toEqual([]);
   });
 
+  test("applies last-absolute-segment resolution inside nested resolves", async () => {
+    expect(
+      await lint(
+        'import { writeFile } from "node:fs/promises";\nimport { tmpdir } from "node:os";\nimport path from "node:path";\nawait writeFile(path.resolve(import.meta.dir, path.resolve(tmpdir(), import.meta.dir, "baseline.json")), "changed");\nawait writeFile(path.resolve(import.meta.dir, path.resolve(import.meta.dir, tmpdir(), "fixture.json")), "data");',
+      ),
+    ).toEqual([4]);
+  });
+
   test("checks the destination of synchronous copies", async () => {
     expect(
       await lint(
