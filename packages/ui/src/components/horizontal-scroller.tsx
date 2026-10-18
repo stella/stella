@@ -51,8 +51,23 @@ export const HorizontalScroller = ({
       if (!node) {
         return undefined;
       }
+      // Overflow changes when the viewport resizes and also when its content
+      // does at a fixed viewport size (an item added, removed or relabelled),
+      // so both the viewport and each child are observed.
       const observer = new ResizeObserver(() => measure(node));
-      observer.observe(node);
+      const observeAll = () => {
+        observer.disconnect();
+        observer.observe(node);
+        for (const child of node.children) {
+          observer.observe(child);
+        }
+      };
+      observeAll();
+      const childList = new MutationObserver(() => {
+        observeAll();
+        measure(node);
+      });
+      childList.observe(node, { childList: true });
       measure(node);
       // A vertical wheel scrolls the row sideways. React registers wheel
       // handlers as passive, where preventDefault is ignored and the page
@@ -66,11 +81,15 @@ export const HorizontalScroller = ({
           return;
         }
         event.preventDefault();
-        node.scrollBy({ left: event.deltaY });
+        // Down means towards later items: inline end, which is negative
+        // scrollLeft in a right-to-left row.
+        const rtl = getComputedStyle(node).direction === "rtl";
+        node.scrollBy({ left: rtl ? -event.deltaY : event.deltaY });
       };
       node.addEventListener("wheel", onWheel, { passive: false });
       return () => {
         observer.disconnect();
+        childList.disconnect();
         node.removeEventListener("wheel", onWheel);
       };
     },

@@ -5,16 +5,23 @@ GlobalRegistrator.register();
 
 class TestResizeObserver {
   static callback: ResizeObserverCallback | undefined;
+  static observed = new Set<Element>();
   constructor(callback: ResizeObserverCallback) {
     TestResizeObserver.callback = callback;
   }
-  disconnect() {}
-  observe() {}
-  unobserve() {}
+  disconnect() {
+    TestResizeObserver.observed.clear();
+  }
+  observe(target: Element) {
+    TestResizeObserver.observed.add(target);
+  }
+  unobserve(target: Element) {
+    TestResizeObserver.observed.delete(target);
+  }
 }
 globalThis.ResizeObserver = TestResizeObserver;
 
-const { act, cleanup, fireEvent, render } =
+const { act, cleanup, fireEvent, render, waitFor } =
   await import("@testing-library/react");
 const { HorizontalScroller, scrollState } =
   await import("./horizontal-scroller");
@@ -109,4 +116,63 @@ test("keeps a visible subtle scrollbar", () => {
   expect(getByText("Item").parentElement?.className).not.toContain(
     "scrollbar-none",
   );
+});
+
+test("scrolls a right-to-left row towards its inline end on a downward wheel", () => {
+  const scrollBy = mock(() => undefined);
+  const view = render(
+    <HorizontalScroller previousLabel="Previous" nextLabel="Next">
+      <button type="button">Item</button>
+    </HorizontalScroller>,
+  );
+  const viewport = view.getByText("Item").parentElement as HTMLDivElement;
+  viewport.style.direction = "rtl";
+  Object.defineProperties(viewport, {
+    clientWidth: { value: 100 },
+    scrollWidth: { value: 300 },
+    scrollBy: { value: scrollBy },
+  });
+  fireEvent.wheel(viewport, { deltaX: 0, deltaY: 24 });
+  expect(scrollBy).toHaveBeenCalledWith({ left: -24 });
+});
+
+test("updates its controls when content changes at a fixed viewport size", async () => {
+  const items = (count: number) =>
+    Array.from({ length: count }, (_, index) => (
+      <button key={index} type="button">
+        Item {index}
+      </button>
+    ));
+  const view = render(
+    <HorizontalScroller previousLabel="Previous" nextLabel="Next">
+      {items(1)}
+    </HorizontalScroller>,
+  );
+  const viewport = view.getByText("Item 0").parentElement as HTMLDivElement;
+  let scrollWidth = 100;
+  Object.defineProperties(viewport, {
+    clientWidth: { value: 100 },
+    scrollWidth: { get: () => scrollWidth },
+  });
+  act(() =>
+    TestResizeObserver.callback?.([], new TestResizeObserver(() => undefined)),
+  );
+  expect(view.queryByLabelText("Next")).toBeNull();
+
+  scrollWidth = 300;
+  view.rerender(
+    <HorizontalScroller previousLabel="Previous" nextLabel="Next">
+      {items(4)}
+    </HorizontalScroller>,
+  );
+  await waitFor(() => expect(view.getByLabelText("Next")).toBeTruthy());
+  expect(TestResizeObserver.observed.has(view.getByText("Item 3"))).toBe(true);
+
+  scrollWidth = 100;
+  view.rerender(
+    <HorizontalScroller previousLabel="Previous" nextLabel="Next">
+      {items(1)}
+    </HorizontalScroller>,
+  );
+  await waitFor(() => expect(view.queryByLabelText("Next")).toBeNull());
 });
