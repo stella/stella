@@ -12,6 +12,31 @@
       "unknownDevice": "Ismeretlen eszköz"
     }
   },
+  "admin": {
+    "ai": "MI",
+    "backToApp": "Vissza az alkalmazáshoz",
+    "billingAndUsage": "Számlázás és használat",
+    "billingProfiles": "Számlázási profilok",
+    "deleteDescription": "Véglegesen törli ezt a szervezetet és az adatait. Ez a művelet nem vonható vissza.",
+    "deleteOrganization": "Szervezet törlése",
+    "deleteRefusedSubscription": "Ennek a szervezetnek megújuló előfizetése van. Először mondja le a Csomag és használat oldalon, majd törölje a szervezetet.",
+    "deleteTypeToConfirm": "A megerősítéshez írja be: {name}.",
+    "firmSetup": "Iroda beállításai",
+    "general": "Általános",
+    "leaveDescription": "Elveszíti a hozzáférést a szervezet ügyeihez és adataihoz.",
+    "leaveOrganization": "Kilépés a szervezetből",
+    "leaveRefusedOnlyOwner": "Ön az egyetlen tulajdonos. Mielőtt kilép, tegyen tulajdonossá egy másik tagot.",
+    "modelsAndProviders": "Modellek és szolgáltatók",
+    "noPlan": "Nincs aktív csomag",
+    "organizationDeleted": "A szervezet törölve lett.",
+    "organizationId": "Szervezetazonosító",
+    "organizationLeft": "Kilépett a szervezetből.",
+    "overviewDescription": "Kezelje szervezetét, a személyeket és az eszközöket.",
+    "people": "Személyek",
+    "planAndUsage": "Csomag és használat",
+    "title": "Szervezet adminisztrációja",
+    "toolsDescription": "Engedélyezze vagy tiltsa le a beépített eszközöket a szervezet minden tagja számára."
+  },
   "agentClaim": {
     "access": "Megkapott hozzáférés",
     "accessReadSearch": "Olvasási és keresési hozzáférés",
@@ -1058,7 +1083,6 @@
       }
     },
     "sameCaseNumber": "{count, plural, one {# határozat viseli} other {# határozat viseli}} ezt az ügyszámot. Válasszon bíróságot.",
-    "searchAskPrompt": "{query} (joggyakorlat, {country})",
     "searchLabel": "Keresés a joggyakorlatban",
     "searchPlaceholder": "Ügyszám, ECLI vagy szavak, pl. 22 Cdo 2653/2012",
     "searchUnavailable": {
@@ -1206,15 +1230,32 @@
     },
     "answerEdit": {
       "acceptFailed": "Nem sikerült menteni a módosítást. Próbálja újra.",
+      "aiKind": "Kért szerkesztés",
       "ask": "Módosítások kérése",
+      "authorUnknown": "Ismeretlen szerző",
+      "autolinkLabel": "Ez a szöveg automatikusan hivatkozássá válik. A hivatkozás eltávolítása előtt módosítsa a címkét.",
+      "change": "Módosítás {revision}",
+      "editedLabel": "Szerkesztett válasz",
       "failed": "Nem sikerült előkészíteni a módosítást. Próbálja újra.",
+      "formatKind": "Formázás",
+      "heading": "Címsor {level}",
+      "history": "Válasz előzményei",
+      "historyEmpty": "Nincsenek korábbi verziók.",
       "instruction": "Írja le a módosítást",
       "instructionRequired": "Írja le, hogyan módosítsuk a kijelölt szöveget.",
       "invalidSelection": "Ez a kijelölés nem szerkeszthető. Jelöljön ki összefüggő szöveget.",
+      "invalidUrl": "Adjon meg érvényes HTTP- vagy HTTPS-címet.",
+      "linkAddress": "Hivatkozás címe",
+      "orderedList": "Számozott lista",
       "proposal": "Javasolt módosítás",
       "requesting": "Módosítások előkészítése…",
+      "restoreRefreshFailed": "A válasz visszaállítása sikerült, de a frissítése nem. Frissítsen a visszaállított válasz betöltéséhez.",
+      "revertKind": "Visszaállított verzió",
       "stale": "Ez a válasz megváltozott. Jelölje ki újra a szöveget.",
-      "submit": "Módosítás kérése"
+      "submit": "Módosítás kérése",
+      "textStyle": "Szövegstílus",
+      "unorderedList": "Felsorolás",
+      "wholeBlockRequired": "A stílus módosításához jelöljön ki egy teljes bekezdést vagy listát."
     },
     "answerQuote": {
       "showInDecision": "Megjelenítés a határozatban",
@@ -1405,7 +1446,12 @@
     "maxAttachmentsReached": "Üzenetenként legfeljebb {count} fájl",
     "mention": {
       "category": {
-        "entities": "Ebben az ügyben"
+        "entities": "Ebben az ügyben",
+        "sources": "Források"
+      },
+      "corpus": {
+        "caseLaw": "Joggyakorlat · {country}",
+        "legislation": "Jogszabályok · {country}"
       },
       "loadError": "Az elemek betöltése sikertelen"
     },
@@ -5133,7 +5179,6 @@
     "provisionTextUnavailable": "Ehhez a változathoz nem érhető el szöveg",
     "publisherWindowInconsistent": "Erre a napra nem állapítható meg hatályos szöveg: a kiadó adatai ellentmondásosak.",
     "resolvedAlias": "Felismerve: {label}",
-    "searchAskPrompt": "{query} ({country} jogszabályai)",
     "searchLabel": "Keresés a jogszabályok között",
     "searchPlaceholder": "Szám, rövid név vagy cím, pl. 89/2012 Sb.",
     "showCitedPartOnly": "Csak az idézett rész megjelenítése",
@@ -6262,7 +6307,6 @@
         }
       },
       "atAGlance": "Áttekintés",
-      "edited": "szerkesztette",
       "getStarted": "Kezdje el dokumentumok feltöltésével vagy az első mappa létrehozásával.",
       "matterDetails": "Ügy részletei",
       "membersCount": "{count, plural, one {# tag} other {# tag}}",

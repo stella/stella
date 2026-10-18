@@ -1,9 +1,9 @@
 import type { SystemPrompt } from "@tanstack/ai";
 import { panic } from "better-result";
 
-import type { ModelRole } from "@stll/ai-catalog";
+import type { ModelTask } from "@stll/ai-catalog";
 
-import { getTemperatureForRole } from "@/api/lib/ai-config";
+import { getTemperatureForTask } from "@/api/lib/ai-config";
 import type {
   AIRequestServiceTier,
   CachingDecision,
@@ -140,7 +140,7 @@ export const chatRequestOptions = ({
   }),
 });
 
-type ChatAttemptRole = Extract<ModelRole, "chat" | "reasoning">;
+type ChatAttemptTask = Extract<ModelTask, "chat" | "reasoning">;
 
 /**
  * What a chat attempt hands the engine that shapes the provider request: the
@@ -154,7 +154,7 @@ export const chatAttemptRequestOptions = ({
   maxOutputTokens,
   model,
   modelTools,
-  role,
+  task,
   system,
   systemLayers,
   toolCallIds,
@@ -163,7 +163,7 @@ export const chatAttemptRequestOptions = ({
   maxOutputTokens?: number | undefined;
   model: ResolvedTanStackTextModel;
   modelTools: ChatRequestOptionsInput["modelTools"];
-  role: ChatAttemptRole;
+  task: ChatAttemptTask;
   system: string | undefined;
   systemLayers?: ChatSafePromptLayers | undefined;
   toolCallIds: ToolCallIdLedger;
@@ -177,6 +177,6 @@ export const chatAttemptRequestOptions = ({
     serviceTier: "standard",
     system,
     systemLayers,
-    temperature: getTemperatureForRole(role),
+    temperature: getTemperatureForTask(task),
   }),
 });

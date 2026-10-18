@@ -131,8 +131,33 @@
         "astro.config.*",
         "e2e/**/*.ts"
       ],
-      // Tailwind scans workspace-ui through the CSS @source directive.
-      "ignoreDependencies": ["@tailwindcss/postcss", "@stll/workspace-ui"]
+      "ignoreDependencies": [
+        // Tailwind scans workspace-ui through the CSS @source directive.
+        "@tailwindcss/postcss",
+        "@stll/workspace-ui",
+        // Folio requires host-owned peers loaded by its editor implementation.
+        "prosemirror-commands",
+        "prosemirror-dropcursor",
+        "prosemirror-gapcursor",
+        "prosemirror-inputrules",
+        "prosemirror-keymap",
+        "prosemirror-transform",
+        "y-prosemirror",
+        "y-protocols"
+      ]
+    },
+    "apps/playground": {
+      // Folio requires host-owned peers loaded by its editor implementation.
+      "ignoreDependencies": [
+        "prosemirror-commands",
+        "prosemirror-dropcursor",
+        "prosemirror-gapcursor",
+        "prosemirror-inputrules",
+        "prosemirror-keymap",
+        "prosemirror-transform",
+        "y-prosemirror",
+        "y-protocols"
+      ]
     },
     "apps/legal-atlas-runner": {
       "entry": ["src/index.ts", "src/**/*.test.ts"],
@@ -275,5 +300,15 @@
   },
   "exclude": ["exports", "types"],
   "ignoreBinaries": ["docker", "oxfmt", "tsc", "bun", "tail"],
-  "ignoreDependencies": ["@stll/typescript-config"]
+  "ignoreDependencies": [
+    "@stll/typescript-config",
+    // Declared ahead of the text-search engine migration so its PRs share one
+    // dependency set. Each migration PR imports these in its workspace; the
+    // last one removes these entries (knip then flags any unused declaration).
+    "@stll/aho-corasick",
+    "@stll/aho-corasick-wasm",
+    "@stll/fuzzy-search",
+    "@stll/regex-set",
+    "@stll/regex-set-wasm"
+  ]
 }

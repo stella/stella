@@ -164,10 +164,11 @@ test("a checkout under other parents restores only while its ancestors resolve a
   );
   expect(await restore(other)).toBeUndefined();
 
-  // A deeper checkout walks ancestors the publisher never probed.
+  // A deeper checkout restores while the ancestors the publisher never probed
+  // provide nothing (compiler-input-stamp tests cover one that does).
   const deeper = path.join(scratch, "parent-c/deeper/repo");
   cpSync(publisher, deeper, { recursive: true });
-  expect(await restore(deeper)).toBeUndefined();
+  expect((await restore(deeper))?.output.toString()).toBe("printed");
 });
 
 test("a changed source or dependency misses", async () => {

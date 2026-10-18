@@ -18,6 +18,12 @@ import {
   useDestructiveActionConfirmation,
 } from "./destructive-action-confirmation";
 
+/**
+ * What a settled confirm asks of the dialog: `keep-open` when the action was
+ * refused and the dialog shows why, so the caller need not throw to keep it.
+ */
+type DestructiveConfirmOutcome = "keep-open";
+
 type DestructiveConfirmDialogProps = {
   cancelLabel: React.ReactNode;
   confirmLabel: React.ReactNode;
@@ -25,7 +31,8 @@ type DestructiveConfirmDialogProps = {
   description: React.ReactNode;
   inputLabel: React.ReactNode;
   loading?: boolean | undefined;
-  onConfirm: () => Promise<void> | void;
+  /** Settles to `"keep-open"` to keep the dialog; anything else closes it. */
+  onConfirm: () => unknown;
   onOpenChange: (open: boolean) => void;
   open: boolean;
   title: React.ReactNode;
@@ -58,8 +65,10 @@ const DestructiveConfirmDialog = ({
     }
 
     try {
-      await onConfirm();
-      handleOpenChange(false);
+      const outcome: unknown = await onConfirm();
+      if (outcome !== ("keep-open" satisfies DestructiveConfirmOutcome)) {
+        handleOpenChange(false);
+      }
     } catch {
       // Callers surface mutation errors; keep the dialog open for retry.
     }
@@ -107,4 +116,4 @@ const DestructiveConfirmDialog = ({
 };
 
 export { DestructiveConfirmDialog };
-export type { DestructiveConfirmDialogProps };
+export type { DestructiveConfirmDialogProps, DestructiveConfirmOutcome };

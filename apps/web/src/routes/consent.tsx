@@ -332,7 +332,7 @@ function ConsentPage() {
           </p>
           <Link
             className="text-primary text-sm font-medium hover:underline"
-            to="/settings/organization/members"
+            to="/admin/members"
             target="_blank"
             rel="noopener noreferrer"
           >

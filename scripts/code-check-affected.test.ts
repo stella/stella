@@ -28,6 +28,8 @@ import {
   failureExitCode,
   formatCheckFailure,
   LINT_ONLY_CACHE_INPUTS,
+  lintAllTrace,
+  matchedLintAllInputs,
   executeCheckCommands,
   planCheck,
   planningCommandTimeout,
@@ -43,6 +45,7 @@ import {
 } from "./code-check-affected";
 import configuredBudgets from "./code-quality-task-budgets.json" with { type: "json" };
 import { isChangedLintPath } from "./lint-paths";
+import { rootScriptLintPaths } from "./root-script-lint";
 
 const WORKSPACES = new Set([
   "apps/api",
@@ -88,6 +91,12 @@ describe("changed-file result boundary lint", () => {
         },
       }),
     ).toBeNull();
+  });
+
+  test("names the matched shared input in the lint-all trace", () => {
+    expect(lintAllTrace(["scripts/design-lint-baseline.json"])).toBe(
+      "code-check: lint all shared inputs: $TURBO_ROOT$/scripts/design-lint-baseline.json\n",
+    );
   });
 
   test("reuses the affected scope's merge base when measuring candidate debt", () => {
@@ -321,6 +330,45 @@ describe("affected code-check planning", () => {
     expect(oxc?.at(-1)).toBe("scripts/guard.ts");
   });
 
+  test("runs the real type-aware lint only for changed root scripts", () => {
+    const fixture = "scripts/code-check-affected-type-aware.fixture.ts";
+    const unchanged = "scripts/generate-cloud-setup.test.ts";
+    writeFileSync(
+      fixture,
+      [
+        "const unsafe: unknown = {};\n",
+        "console.log(`value: $",
+        "{unsafe}`);\n",
+      ].join(""),
+    );
+    try {
+      expect(rootScriptLintPaths([unchanged, fixture])).toEqual([
+        fixture,
+        unchanged,
+      ]);
+      const planned = plan([fixture], []);
+      if (planned.type !== "scoped") {
+        throw new Error("Expected a scoped code-check plan");
+      }
+      const command = scopedCommands(planned).find((candidate) =>
+        candidate.includes("oxlint"),
+      );
+      expect(command).toBeDefined();
+      expect(command).toContain(fixture);
+      expect(command).not.toContain(unchanged);
+      const result = Bun.spawnSync(command ?? [], {
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      expect(result.exitCode).not.toBe(0);
+      expect(
+        `${result.stdout.toString()}${result.stderr.toString()}`,
+      ).toContain("Invalid type used in template literal expression");
+    } finally {
+      rmSync(fixture, { force: true });
+    }
+  }, 30_000);
+
   test("checks configured adapter paths without trying to lint a deleted source", () => {
     expect(plan(["packages/ui/src/removed.ts"], ["packages/ui"], [])).toEqual({
       type: "scoped",
@@ -422,6 +470,51 @@ describe("affected code-check planning", () => {
       rootLintPaths: [],
       rootChecks: ["env", "assets", "rule-decisions", "repo-typecheck"],
     });
+  });
+
+  test.each([
+    "apps/api/drizzle/20261016000000_example/migration.sql",
+    "apps/api/drizzle/20261016000000_example/cutover.sql",
+    "apps/api/src/lib/db/status-tables.gen.ts",
+  ])("keeps workspace-local lint input %s scoped to the API", (changedPath) => {
+    const planned = plan([changedPath], ["apps/api"]);
+    expect(planned.type).toBe("scoped");
+    if (planned.type !== "scoped") {
+      throw new Error("Expected a scoped code-check plan");
+    }
+    expect(planned.lint).toEqual({
+      type: "targets",
+      targets: ["apps/api"],
+    });
+  });
+
+  test("a status-table change relints the plugin fixtures that read it", () => {
+    const planned = plan(
+      ["apps/api/src/lib/db/status-tables.gen.ts"],
+      ["apps/api"],
+    );
+    expect(planned.type).toBe("scoped");
+    if (planned.type !== "scoped") {
+      throw new Error("Expected a scoped code-check plan");
+    }
+    expect(planned.rootChecks).toContain("plugin-fixtures");
+  });
+
+  test.each([
+    "scripts/design-lint-baseline.json",
+    "scripts/ownership/status-transition.ts",
+  ])("retains cross-workspace lint input %s", (changedPath) => {
+    const planned = plan([changedPath], []);
+    expect(planned.type).toBe("scoped");
+    if (planned.type !== "scoped") {
+      throw new Error("Expected a scoped code-check plan");
+    }
+    expect(planned.lint).toEqual({ type: "all" });
+    expect(matchedLintAllInputs([changedPath])).toContain(
+      changedPath === "scripts/design-lint-baseline.json"
+        ? "$TURBO_ROOT$/scripts/design-lint-baseline.json"
+        : "$TURBO_ROOT$/scripts/ownership/*.ts",
+    );
   });
 
   test.each([

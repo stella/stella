@@ -88,6 +88,7 @@ jobs:
           bun-version-file: "package.json"
 
       - name: Install dependencies
+        timeout-minutes: 5
         if: steps.credential.outputs.configured == 'true'
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
@@ -142,6 +143,7 @@ jobs:
           bun-version-file: "package.json"
 
       - name: Install dependencies
+        timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""

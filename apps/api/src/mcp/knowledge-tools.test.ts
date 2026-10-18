@@ -433,6 +433,26 @@ describe("MCP knowledge tools", () => {
     });
   });
 
+  test.each(["listLevel", "list_level"])(
+    "save_clause rejects removed %s list depth field",
+    async (field) => {
+      const result = await handleMcpToolCall({
+        args: { title: "Terms", body: [{ text: "Item", [field]: 1 }] },
+        context: createContext(),
+        toolName: "save_clause",
+      });
+      expect(result.isError).toBe(true);
+      expect(parseToolPayload(result)).toMatchObject({
+        error: {
+          code: "validation_error",
+          issues: expect.arrayContaining([
+            expect.objectContaining({ path: `body.0.${field}` }),
+          ]),
+        },
+      });
+    },
+  );
+
   test.each(["create", "update"])(
     "save_clause refuses publishing unbalanced markers in %s mode",
     async (mode) => {
@@ -489,7 +509,7 @@ describe("MCP knowledge tools", () => {
             text: "The Supplier shall indemnify.",
             runs: [{ text: "The Supplier shall indemnify.", bold: true }],
             list_kind: "bullet",
-            list_level: 1,
+            numbering: { kind: "levelOnly", ilvl: 1 },
           },
           { text: "{% endif %}", is_directive: true, directive_kind: "endif" },
         ],
@@ -512,7 +532,7 @@ describe("MCP knowledge tools", () => {
           text: "The Supplier shall indemnify.",
           runs: [{ text: "The Supplier shall indemnify.", bold: true }],
           listKind: "bullet",
-          listLevel: 1,
+          numbering: { kind: "levelOnly", ilvl: 1 },
         },
         { text: "{% endif %}", isDirective: true, directiveKind: "endif" },
       ]);
@@ -561,7 +581,7 @@ describe("MCP knowledge tools", () => {
         {
           text: "List",
           listKind: "ordered",
-          listLevel: 1,
+          numbering: { kind: "levelOnly", ilvl: 1 },
           runs: [{ text: "List", bold: true }],
         },
         {
@@ -635,7 +655,13 @@ describe("MCP knowledge tools", () => {
         id: CLAUSE_ID,
         title: "Clause",
         currentVersion: 1,
-        body: [{ text: "Read", listKind: "bullet", listLevel: 1 }],
+        body: [
+          {
+            text: "Read",
+            listKind: "bullet",
+            numbering: { kind: "levelOnly", ilvl: 1 },
+          },
+        ],
       };
       const scopedDb = asTestRaw<McpRequestContext["scopedDb"]>(
         async (run: (tx: unknown) => unknown) =>
@@ -664,7 +690,7 @@ describe("MCP knowledge tools", () => {
             {
               text: expectation === "matching" ? "Read" : "Older",
               list_kind: "bullet",
-              list_level: 1,
+              numbering: { kind: "levelOnly", ilvl: 1 },
             },
           ],
         },

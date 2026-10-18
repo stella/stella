@@ -36,8 +36,8 @@ import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch
 import { parsePickedEntityIdsJson } from "@/api/lib/safe-id-boundaries";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { extractFileText } from "@/api/lib/search/extract-content";
-import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
-import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
+import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
+import { requireTanStackAIAvailableForTask } from "@/api/lib/tanstack-ai-models";
 import {
   readStoredTemplateFile,
   STORED_TEMPLATE_FILE_COLUMNS,
@@ -147,10 +147,10 @@ const extractFieldValues = async ({
   aiAnalytics: ReturnType<typeof createTanStackAIAnalyticsCallbacks>;
   timezone: string;
 }): Promise<PrefillSuggestion[]> => {
-  const { fields } = await generateTanStackObjectForRole({
+  const { fields } = await generateTanStackObjectForTask({
     dataClass: "customer",
     admission,
-    role: "fast",
+    task: "short-text",
     orgAIConfig,
     managedAIResidency,
     organizationId,
@@ -160,7 +160,7 @@ const extractFieldValues = async ({
     analytics: aiAnalytics,
     caching: resolveCaching({
       promptCachingEnabled: false,
-      role: "fast",
+      task: "short-text",
       scopeKey: organizationId,
     }),
     // Anchor relative dates in the sources ("as of today", deadlines) to the
@@ -217,7 +217,7 @@ const config = {
   },
   params: prefillParamsSchema,
   body: prefillBodySchema,
-  requiresUsage: { actionType: "chat", modelRole: "fast" },
+  requiresUsage: { actionType: "chat", modelTask: "short-text" },
 } satisfies HandlerConfig;
 
 /**
@@ -241,11 +241,11 @@ const prefillTemplate = createSafeRootHandler(config, async function* (ctx) {
   } = ctx;
   const organizationId = session.activeOrganizationId;
 
-  yield* requireTanStackAIAvailableForRole({
+  yield* requireTanStackAIAvailableForTask({
     dataClass: "customer",
     configStatus: orgAIConfigStatus,
     orgConfig: orgAIConfig,
-    role: "fast",
+    task: "short-text",
   });
 
   const template = yield* Result.await(
@@ -445,7 +445,7 @@ const prefillTemplate = createSafeRootHandler(config, async function* (ctx) {
           workspaceId: null,
         },
         feature: "templates.prefill",
-        modelRole: "fast",
+        modelTask: "short-text",
         orgAIConfig,
         modelTier: modelAdmission.modelTier,
         properties: { organization_id: organizationId },

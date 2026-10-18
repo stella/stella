@@ -36,7 +36,7 @@ export const sourceCitationMetadata = ({
       continue;
     }
     const links = resolveLegalCitationLinks({
-      appUrl: source.appUrl ?? source.url,
+      url: source.url,
       sourceUrl: source.sourceUrl ?? source.url,
       appOrigins,
     });

@@ -26,6 +26,7 @@ export const APP_SEARCH_FIXTURE = {
       warnings: [
         {
           code: "function_words_optional" as const,
+          audience: "agent" as const,
           message: "Search notice",
           hint: "Try another query.",
         },
@@ -34,7 +35,6 @@ export const APP_SEARCH_FIXTURE = {
   ],
   results: [
     {
-      appUrl: "https://stll.app/case-law/fixture-decision",
       url: "https://stll.app/case-law/fixture-decision",
       caseNumber: "I. ÚS 123/24",
       citationCount: 3,

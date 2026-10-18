@@ -255,7 +255,7 @@ test("case-law app filters, pages and opens links through the MCP host", async (
     .click();
   await expect
     .poll(async () => hostHistory(page, "appLinks"))
-    .toEqual([APP_SEARCH_FIXTURE.results.at(0)?.appUrl]);
+    .toEqual([APP_SEARCH_FIXTURE.results.at(0)?.url]);
   await page.evaluate((payload) => {
     const first = payload.results.at(0);
     if (first === undefined) {
@@ -750,11 +750,11 @@ test("reader and publisher buttons open their own URLs only after a click", asyn
     await reader.first().click();
     await expect
       .poll(async () => hostHistory(page, "appLinks"))
-      .toEqual([first.appUrl]);
+      .toEqual([first.url]);
     await original.click();
     await expect
       .poll(async () => hostHistory(page, "appLinks"))
-      .toEqual([first.appUrl, sourceUrl]);
+      .toEqual([first.url, sourceUrl]);
   }
 });
 
@@ -774,18 +774,18 @@ test("missing and non-HTTP decision URLs do not expose link actions", async ({
       (protocol) => `${protocol}:fixture`,
     ),
   ];
-  for (const appUrl of rejectedUrls) {
+  for (const url of rejectedUrls) {
     await page.evaluate(
-      ({ payload, appUrl: decisionUrl }) =>
+      ({ payload, url: decisionUrl }) =>
         globalThis.appFixtureHost.sendAppResult({
           ...payload,
           results: payload.results.map((row) => ({
             ...row,
-            appUrl: decisionUrl,
+            url: decisionUrl,
             source_url: "file:///fixture",
           })),
         }),
-      { payload: APP_SEARCH_FIXTURE, appUrl },
+      { payload: APP_SEARCH_FIXTURE, url },
     );
     await expect(app.locator("tbody tr")).toHaveCount(1);
     await expect(
@@ -936,7 +936,7 @@ for (const theme of ["light", "dark"] as const) {
       await expect(trigger).toHaveAttribute("aria-expanded", "true");
       await expect
         .poll(async () => hostHistory(page, "appLinks"))
-        .toEqual([first.appUrl]);
+        .toEqual([first.url]);
       await row.locator(".snippet").click();
       await expect(trigger).toHaveAttribute("aria-expanded", "false");
       await page.evaluate(

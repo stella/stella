@@ -11,6 +11,7 @@ const MAX_BASELINE_BYTES = 5 * 1024 * 1024;
 
 type BaselineEntry = {
   depth: number;
+  depthMethod?: string;
   requests: string[];
   requestCounts?: Record<string, number>;
   dbQueries?: Record<string, number>;
@@ -45,6 +46,8 @@ const isBaselineEntry = (value: unknown): value is BaselineEntry => {
     typeof value["depth"] !== "number" ||
     !Number.isInteger(value["depth"]) ||
     value["depth"] < 0 ||
+    (value["depthMethod"] !== undefined &&
+      typeof value["depthMethod"] !== "string") ||
     !Array.isArray(value["requests"]) ||
     !value["requests"].every(
       (item) => typeof item === "string" && item.length > 0,
@@ -74,6 +77,7 @@ const isBaselineEntry = (value: unknown): value is BaselineEntry => {
   return Object.keys(value).every((field) =>
     [
       "depth",
+      "depthMethod",
       "requests",
       "requestCounts",
       "dbQueries",

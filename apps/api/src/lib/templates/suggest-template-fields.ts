@@ -6,7 +6,7 @@ import * as v from "valibot";
  * the document from the returned suggestions.
  *
  * Uses the same structured-output pattern as workflow generation
- * (`generateTanStackObjectForRole`). An empty list means the model looked and
+ * (`generateTanStackObjectForTask`). An empty list means the model looked and
  * found nothing to suggest; a call failure (BYOK misconfiguration, provider
  * outage, timeout) instead rejects. `suggestTemplateFields` is the throwing
  * primitive for a caller that wants the failure surfaced
@@ -25,7 +25,7 @@ import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import type { FieldSuggestion } from "@/api/lib/docx/apply-field-suggestions";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
-import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 
 const SUGGEST_TIMEOUT_MS = 45_000;
 
@@ -103,7 +103,7 @@ export const suggestTemplateFields = async ({
   organizationId,
   admission,
   aiAnalytics,
-  generateObjectForRole,
+  generateObjectForTask,
 }: {
   documentText: string;
   instructions?: string | undefined;
@@ -113,17 +113,17 @@ export const suggestTemplateFields = async ({
   admission: ModelDispatchAdmission;
   aiAnalytics: ReturnType<typeof createTanStackAIAnalyticsCallbacks>;
   /** External model-dispatch boundary; supplied by focused integration tests. */
-  generateObjectForRole?: typeof generateTanStackObjectForRole | undefined;
+  generateObjectForTask?: typeof generateTanStackObjectForTask | undefined;
 }): Promise<SuggestedTemplateField[]> => {
   // No try/catch here: a call failure (BYOK misconfiguration, provider
   // outage, timeout) propagates to the caller, which decides whether to
   // surface it (suggest-fields.ts) or degrade to [] after capturing it
   // (prepare.ts) — see the module doc comment.
   const { suggestions } = await (
-    generateObjectForRole ?? generateTanStackObjectForRole
+    generateObjectForTask ?? generateTanStackObjectForTask
   )({
     dataClass: "customer",
-    role: "fast",
+    task: "short-text",
     orgAIConfig,
     managedAIResidency,
     organizationId,
@@ -133,7 +133,7 @@ export const suggestTemplateFields = async ({
     analytics: aiAnalytics,
     caching: resolveCaching({
       promptCachingEnabled: false,
-      role: "fast",
+      task: "short-text",
       scopeKey: organizationId,
     }),
     system: SYSTEM_PROMPT,

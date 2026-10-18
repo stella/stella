@@ -58,6 +58,7 @@ jobs:
           bun-version-file: "package.json"
 
       - name: Install dependencies
+        timeout-minutes: 2
         if: github.event_name != 'pull_request' || steps.lockfile.outputs.changed == 'true'
         # The audit reads bun.lock; its scripts import root workspace packages only.
         run: bash scripts/retry.sh bun ci --frozen-lockfile --ignore-scripts --filter stella
@@ -104,6 +105,7 @@ jobs:
           persist-credentials: false
 
       - name: Install cargo-deny
+        timeout-minutes: 10
         uses: ./.github/actions/cargo-deny
 
       # The cache keeps each fetch incremental; the newest entry is restored and
@@ -126,6 +128,7 @@ jobs:
           key: cargo-desktop-crates-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock') }}
 
       - name: Fetch dependencies and advisory database
+        timeout-minutes: 10
         env:
           CARGO_NET_RETRY: "5"
         run: bash .github/actions/cargo-deny/fetch.sh apps/desktop/src-tauri/Cargo.toml db index
@@ -166,6 +169,7 @@ jobs:
           save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install dependencies
+        timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
