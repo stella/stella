@@ -9,6 +9,7 @@ import {
   createTestPglite,
   HARNESS_RELATIONS_SQL,
   ROLE_GRANT_STATEMENTS,
+  availableSchemaRelationNames as harnessSchemaRelationNames,
 } from "@/api/tests/pglite-test-db";
 import {
   deriveStellaTablePrivileges,
@@ -171,7 +172,7 @@ const grantedColumnPairs = (sqlText: string): Set<string> => {
   return pairs;
 };
 
-const schemaRelationNames = new Set<string>(
+const availableSchemaRelationNames = new Set<string>(
   Object.values(schema)
     .filter((value) => isTable(value) || isView(value))
     .map((relation) =>
@@ -197,6 +198,19 @@ const readMigrationSql = async (): Promise<string> => {
 };
 
 describe("pglite role grants mirror the committed migrations", () => {
+  test("the public reader harness grants only relations present in its schema", () => {
+    const harnessPairs = grantedPairs(ROLE_GRANT_STATEMENTS.join(";\n"));
+    const absent = [...harnessPairs].filter((pair) => {
+      const [role, table = ""] = pair.split(":");
+      return (
+        role === "stella_public_law_reader" &&
+        !harnessSchemaRelationNames.has(table)
+      );
+    });
+
+    expect(absent).toEqual([]);
+  });
+
   test("the migrations grant no table the harness leaves ungranted", async () => {
     const migrationPairs = grantedPairs(await readMigrationSql());
     const harnessPairs = grantedPairs(ROLE_GRANT_STATEMENTS.join(";\n"));
@@ -207,7 +221,7 @@ describe("pglite role grants mirror the committed migrations", () => {
         return (
           !WHOLESALE_ROLES.has(role) &&
           !MIGRATION_REPLAYED_ROLES.has(role) &&
-          schemaRelationNames.has(table) &&
+          availableSchemaRelationNames.has(table) &&
           !harnessPairs.has(pair)
         );
       })
@@ -237,7 +251,7 @@ describe("pglite role grants mirror the committed migrations", () => {
       return (
         !COLUMN_UNSCOPED_ROLES.has(role) &&
         !MIGRATION_REPLAYED_ROLES.has(role) &&
-        schemaRelationNames.has(table)
+        availableSchemaRelationNames.has(table)
       );
     };
     const migrationColumns = [

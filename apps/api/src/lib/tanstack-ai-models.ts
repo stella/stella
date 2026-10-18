@@ -345,6 +345,96 @@ export const isAllowedBYOKModelForTask = ({
   );
 };
 
+type ModelSelectionAvailabilityOptions = {
+  dataClass: AIDataClass;
+  provider: AIProvider;
+  modelId: string;
+  orgAIConfig: OrgAIConfig | null | undefined;
+  task: ModelTask;
+};
+
+export const isModelSelectionAvailableForTask = ({
+  dataClass,
+  provider,
+  modelId,
+  orgAIConfig,
+  task,
+}: ModelSelectionAvailabilityOptions): boolean => {
+  if (!isAllowedBYOKModelForTask({ provider, modelId, task })) {
+    return false;
+  }
+  if (orgAIConfig) {
+    return orgAIConfig.providers.some(
+      (providerConfig) => providerConfig.provider === provider,
+    );
+  }
+  return (
+    hasConfiguredTanStackInstanceProvider() &&
+    (isMockTextAdapterActive() ||
+      isManagedProviderAvailable(provider, dataClass)) &&
+    getActiveProvider() === provider
+  );
+};
+
+type StructuredOutputFallbackModelOptions = {
+  failedModelId: string;
+  orgAIConfig: OrgAIConfig | null | undefined;
+  task: ModelTask;
+  modelTier: ManagedModelTier;
+} & AIRequestPolicy;
+
+/** Select once in catalog order; dispatch still proves admission and policy. */
+export const getStructuredOutputFallbackModelId = ({
+  failedModelId,
+  orgAIConfig,
+  task,
+  modelTier,
+  dataClass,
+}: StructuredOutputFallbackModelOptions): string | null => {
+  // Managed fast-tier resolution pins every selection to the fast primary.
+  if (!orgAIConfig && modelTier === MANAGED_MODEL_TIER.fast) {
+    return null;
+  }
+  const assignedProvider = orgAIConfig
+    ? resolveOrgAIModelForTask(orgAIConfig, task)?.provider
+    : getActiveProvider();
+  for (const provider of TANSTACK_AI_PROVIDERS) {
+    if (provider !== assignedProvider) {
+      continue;
+    }
+    for (const modelId of BYOK_MODEL_OPTIONS[provider]) {
+      if (
+        modelId === failedModelId ||
+        !isModelSelectionAvailableForTask({
+          dataClass,
+          provider,
+          modelId,
+          orgAIConfig,
+          task,
+        })
+      ) {
+        continue;
+      }
+      if (!orgAIConfig) {
+        if (
+          !isManagedProviderAvailable(provider, dataClass) ||
+          getModelRate(modelId) === undefined
+        ) {
+          continue;
+        }
+        if (
+          provider === "openrouter" &&
+          Result.isError(assertManagedOpenRouterModel(modelId))
+        ) {
+          continue;
+        }
+      }
+      return `${provider}::${modelId}`;
+    }
+  }
+  return null;
+};
+
 type ModelOverride = {
   modelId: string;
   provider?: AIProvider | undefined;

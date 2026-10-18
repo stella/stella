@@ -3807,6 +3807,7 @@ describe("OpenAI-compatible MCP tools", () => {
       "language",
       "date_from",
       "date_to",
+      "as_of",
       "limit",
       "cursor",
     ]);
@@ -3837,9 +3838,11 @@ describe("OpenAI-compatible MCP tools", () => {
       ),
     );
     expect(schema?.["additionalProperties"]).toBe(false);
-    // The corpus search has no as-of filter, so it must not advertise one:
-    // a point-in-time question is answered by read_statute.
-    expect(schema?.properties?.["as_of"]).toBeUndefined();
+    expect(schema?.properties?.["as_of"]).toMatchObject({
+      type: "string",
+      format: "date",
+      maxLength: 10,
+    });
     expect(searchTool?.description).toContain("No facets are returned");
   });
 
@@ -3968,6 +3971,8 @@ describe("OpenAI-compatible MCP tools", () => {
           {
             documentId: STATUTE_ID,
             effectiveDate: "2014-01-01",
+            versionValidFrom: "2014-01-01",
+            versionValidTo: null,
             eli: STATUTE_ELI,
             country: "CZE",
             documentType: "act",
@@ -3989,12 +3994,17 @@ describe("OpenAI-compatible MCP tools", () => {
       const result = await handleMcpToolCall({
         // Lower case on the wire: the country is folded by the contract, so a
         // model writing `cze` reaches the same jurisdiction.
-        args: { country: "cze", query: "nahrada skody" },
+        args: {
+          as_of: "2027-01-01",
+          country: "cze",
+          query: "nahrada skody",
+        },
         context: createContext(),
         toolName: "search_legislation",
       });
 
       expect(searchLegislationHandlerMock.mock.calls.at(0)?.at(0)).toEqual({
+        asOf: "2027-01-01",
         jurisdiction: "CZE",
         limit: 10,
         query: "nahrada skody",
@@ -4010,6 +4020,8 @@ describe("OpenAI-compatible MCP tools", () => {
             documentId: STATUTE_ID,
             documentType: "act",
             effectiveDate: "2014-01-01",
+            versionValidFrom: "2014-01-01",
+            versionValidTo: null,
             eli: STATUTE_ELI,
             language: "cs",
             match: { type: matchType },
@@ -4194,6 +4206,63 @@ describe("OpenAI-compatible MCP tools", () => {
         ],
       },
     });
+  });
+
+  test("read_statute emits navigation once and reassembles every text window", async () => {
+    resolveStatuteExpressionMock.mockResolvedValue({
+      type: "expression",
+      id: STATUTE_ID,
+    });
+    readPublicLegislationHandlerMock.mockResolvedValue(
+      createStatuteReadResult(),
+    );
+    listStatuteVersionsHandlerMock.mockResolvedValue(
+      createStatuteVersionsPage(),
+    );
+
+    type StatuteTextPage = {
+      nextCursor: string | null;
+      statute: {
+        text: string | null;
+        outline?: unknown;
+        outlineTruncated?: unknown;
+        versions?: unknown;
+      };
+    };
+    const pages: StatuteTextPage[] = [];
+    let cursor: string | undefined;
+    do {
+      const payload = asTestRaw<StatuteTextPage>(
+        parseToolPayload(
+          await handleMcpToolCall({
+            args: {
+              eli: STATUTE_ELI,
+              ...(cursor === undefined ? {} : { cursor }),
+            },
+            context: createContext(),
+            toolName: "read_statute",
+          }),
+        ),
+      );
+      pages.push(payload);
+      cursor = payload.nextCursor ?? undefined;
+    } while (cursor !== undefined);
+
+    expect(pages.length).toBeGreaterThan(1);
+    expect(
+      pages
+        .slice(1)
+        .every(
+          ({ statute }) =>
+            !("outline" in statute) &&
+            !("outlineTruncated" in statute) &&
+            !("versions" in statute),
+        ),
+    ).toBe(true);
+    expect(pages.map(({ statute }) => statute.text ?? "").join("")).toBe(
+      `\u00a7 1729\n\n${LONG_PROVISION_BODY}`,
+    );
+    expect(listStatuteVersionsHandlerMock).toHaveBeenCalledTimes(1);
   });
 
   test("read_statute tells an unknown act apart from a date the corpus does not cover", async () => {
