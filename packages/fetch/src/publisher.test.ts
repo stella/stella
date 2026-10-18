@@ -438,10 +438,11 @@ describe("publisher scheduler", () => {
   });
 
   const trackLiveListeners = (signal: AbortSignal) => {
-    const live = { count: 0 };
+    const live = { added: 0, count: 0 };
     const add = signal.addEventListener.bind(signal);
     const remove = signal.removeEventListener.bind(signal);
     signal.addEventListener = (...args: Parameters<typeof add>) => {
+      live.added += 1;
       live.count += 1;
       add(...args);
     };
@@ -472,6 +473,7 @@ describe("publisher scheduler", () => {
     const read = await readBoundedBody(response, { maxBytes: 4096, signal });
 
     expect(Result.isOk(read) && read.value.byteLength).toBe(1000);
+    expect(live.added).toBeGreaterThan(0);
     expect(live.count).toBe(0);
   });
 
@@ -491,11 +493,12 @@ describe("publisher scheduler", () => {
 
     for (const path of ["/a", "/b", "/c"]) {
       const outcome = await request(`https://publisher.example${path}`, {
-        signal,
+        init: { signal },
       });
       expect(Result.isOk(outcome)).toBe(true);
     }
 
+    expect(live.added).toBeGreaterThan(0);
     expect(live.count).toBe(0);
   });
 
