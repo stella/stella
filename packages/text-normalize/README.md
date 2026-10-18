@@ -70,6 +70,35 @@ highlights wrap the text the user sees even where folding changes string
 length; it accepts content pre-folded with `foldSearchMatchTextWithOffsets`
 so repeated queries against the same text fold it once.
 
+Import the literal helpers from `@stll/text-normalize/search-match-key`:
+
+```ts
+import {
+  containsSearchMatchKey,
+  findSearchMatchKeyRanges,
+} from "@stll/text-normalize/search-match-key";
+```
+
+`containsSearchMatchKey(content, query)` checks a literal substring in keys
+already prepared by the caller. It does not trim or fold either input, so a
+picker can retain locale-specific casing or accent-sensitive matching. Empty
+queries match every key. For accent-insensitive highlight ranges into original
+text, use `findSearchMatchRanges` from `@stll/text-normalize` instead.
+
+`findSearchMatchKeyRanges(content, query, { start?, end?, maxMatches? })`
+returns non-overlapping literal matches as UTF-16 ranges into `content`.
+It applies no trimming, case conversion, or diacritic folding. Empty queries return no ranges; this differs from
+`containsSearchMatchKey`, where an empty query passes a list filter.
+
+`start` is inclusive and `end` exclusive; both default to the content's
+bounds, are truncated to integers, and clamped to `[0, content.length]`.
+Only complete matches inside that window are returned. `maxMatches` is
+floored; zero or negative limits, reversed windows, and NaN options return
+no ranges. Infinite bounds clamp to the content and an infinite limit
+returns all matches. Use `{ maxMatches: 1 }` for the first occurrence of a
+scope, then pass its `start` and `end` to search within that scope. Existing
+callers retain their own casing or folding before calling either helper.
+
 ## Spaced letters
 
 `collapseSpacedLetters` joins letter-spaced court headings
@@ -79,3 +108,9 @@ lists (`a b c`) are left intact. `spacedLetterRunRegex()` returns the
 underlying matcher for callers that need per-match offsets (find-in-page
 highlighting). Index-time and query-time collapse share this one
 threshold so a heading collapses identically on both sides.
+
+Both match-key helpers replace lone surrogates with U+FFFD on both sides via
+`toWellFormed()` before matching Unicode scalars. A lone surrogate can match
+U+FFFD or another lone surrogate, and cannot match half of an astral character.
+Offsets remain UTF-16 offsets into the well-formed content; replacement does not
+change its length. Caller-owned case, accent, and whitespace policies remain.
