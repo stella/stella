@@ -52,7 +52,7 @@ export const workflowSchema = v.looseObject({
       steps: v.optional(
         v.pipe(
           v.unknown(),
-          v.transform(flattenWorkflowSteps),
+          v.transform((steps) => flattenWorkflowSteps(steps)),
           v.array(
             v.looseObject({
               env: v.optional(v.record(v.string(), v.unknown())),

@@ -1084,7 +1084,7 @@
       "feature": "FEATURE_PUBLIC_LAW"
     },
     "name": "read_statute",
-    "description": "Read one statute by ELI as it stood on a date: `as_of` picks the consolidation in force that day, and omitting it reads the text in force today. Returns that consolidation's metadata and validity window, `versions` (the newest page of the work's consolidations), `outline` (its heading anchors, the input read_statute_provisions takes) and its plain text. Long text comes back in windows; pass the returned nextCursor back as cursor to read more. A source that bars AI use of its wording still answers with metadata, versions and outline, and `textWithheldReason` in place of the text. Use `url` for the stella reader when served, otherwise the publisher; `source_url` is the publisher source.",
+    "description": "Read one statute by ELI as it stood on a date: `as_of` picks the consolidation in force that day, and omitting it reads the text in force today. Returns that consolidation's metadata and validity window, `versions` (the newest page of the work's consolidations), `outline` (its heading anchors, the input read_statute_provisions takes) on page 1, plus its plain text. Later pages omit outline and versions; pass the returned nextCursor back as cursor to read more. A source that bars AI use of its wording still answers with metadata, versions and outline, and `textWithheldReason` in place of the text. Use `url` for the stella reader when served, otherwise the publisher; `source_url` is the publisher source.",
     "inputSchema": {
       "type": "object",
       "required": ["eli"],

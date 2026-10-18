@@ -276,14 +276,24 @@ export const expiredWaiverAnnotations = (
         `::warning file=${escapeCommand(entry.source).replaceAll(",", "%2C").replaceAll(":", "%3A")},line=${entry.line}::${escapeCommand(`${entry.id} (${entry.kind}) expired at ${entry.expiresAt}; ${RECHECK_INSTRUCTIONS[entry.kind]}`)}`,
     );
 
+/**
+ * Expired waivers that fail this check. A pull request or merge group passes
+ * `changedFiles`: an expiry fails it only when the change touches the file that
+ * declares the waiver (adding, renewing or editing it, or the waived code a
+ * test quarantine sits on). Time alone never fails an unrelated change; the
+ * scheduled run on the default branch checks every waiver and alerts owners.
+ */
 export const expiredWaiverFailures = (
   entries: readonly DatedWaiver[],
   now: Date,
+  changedFiles?: ReadonlySet<string>,
 ): string[] =>
   entries
     .filter(
       (entry) =>
-        entry.kind !== "release-age-exclusion" && isExpired(entry, now),
+        entry.kind !== "release-age-exclusion" &&
+        isExpired(entry, now) &&
+        (changedFiles === undefined || changedFiles.has(entry.source)),
     )
     .map(
       (entry) =>
@@ -516,6 +526,13 @@ if (import.meta.main) {
   }
   const trackedFilesPath =
     trackedFilesFlag === -1 ? undefined : process.argv.at(trackedFilesFlag + 1);
+  // NUL-separated paths the change touches; absent on the scheduled full check.
+  const changedFilesFlag = process.argv.indexOf("--changed-files");
+  const changedFilesPath =
+    changedFilesFlag === -1 ? undefined : process.argv.at(changedFilesFlag + 1);
+  if (changedFilesFlag !== -1 && !changedFilesPath) {
+    panic("--changed-files requires a path");
+  }
   if (trackedFilesFlag !== -1 && !trackedFilesPath) {
     panic("--tracked-files requires a path");
   }
@@ -528,7 +545,15 @@ if (import.meta.main) {
     for (const annotation of expiredWaiverAnnotations(entries, now)) {
       console.log(annotation);
     }
-    const failures = expiredWaiverFailures(entries, now);
+    const changedFiles =
+      changedFilesPath === undefined
+        ? undefined
+        : new Set(
+            readFileSync(changedFilesPath, "utf-8")
+              .split("\0")
+              .filter((file) => file !== ""),
+          );
+    const failures = expiredWaiverFailures(entries, now, changedFiles);
     if (failures.length > 0) {
       console.error(failures.join("\n"));
       process.exitCode = 1;
