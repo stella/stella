@@ -69,7 +69,9 @@ test("shows directional controls and scrolls forward", () => {
   act(() =>
     TestResizeObserver.callback?.([], new TestResizeObserver(() => undefined)),
   );
-  expect(view.queryByLabelText("Previous")).toBeNull();
+  expect(view.getByLabelText("Previous").getAttribute("aria-disabled")).toBe(
+    "true",
+  );
   fireEvent.click(view.getByLabelText("Next"));
   expect(scrollBy).toHaveBeenCalledWith({ behavior: "smooth", left: 80 });
   Object.defineProperty(viewport, "scrollLeft", {
@@ -77,7 +79,9 @@ test("shows directional controls and scrolls forward", () => {
     value: 100,
   });
   fireEvent.scroll(viewport);
-  expect(view.getByLabelText("Previous")).toBeTruthy();
+  expect(view.getByLabelText("Previous").getAttribute("aria-disabled")).toBe(
+    "false",
+  );
 });
 
 test("converts vertical wheel input and reveals focused content", () => {
@@ -258,4 +262,34 @@ test("lets keyboard users reach and operate an overflowing row of static content
   expect(document.activeElement).toBe(next);
   fireEvent.click(next);
   expect(scrollBy).toHaveBeenCalledWith({ behavior: "smooth", left: 80 });
+});
+
+test("keeps focus on a control that scrolled the row to its edge", () => {
+  const scrollBy = mock(() => undefined);
+  const view = render(
+    <HorizontalScroller previousLabel="Previous" nextLabel="Next">
+      <span>Static item</span>
+    </HorizontalScroller>,
+  );
+  const viewport = view.getByText("Static item").parentElement
+    ?.parentElement as HTMLDivElement;
+  let scrollLeft = 0;
+  Object.defineProperties(viewport, {
+    clientWidth: { value: 100 },
+    scrollWidth: { value: 300 },
+    scrollLeft: { get: () => scrollLeft },
+    scrollBy: { value: scrollBy },
+  });
+  act(() =>
+    TestResizeObserver.callback?.([], new TestResizeObserver(() => undefined)),
+  );
+  const next = view.getByLabelText("Next");
+  next.focus();
+  scrollLeft = 200;
+  fireEvent.scroll(viewport);
+
+  expect(document.activeElement).toBe(next);
+  expect(next.getAttribute("aria-disabled")).toBe("true");
+  fireEvent.click(next);
+  expect(scrollBy).not.toHaveBeenCalled();
 });

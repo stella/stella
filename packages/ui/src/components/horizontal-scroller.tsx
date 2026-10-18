@@ -7,6 +7,9 @@ import { containedEventHandler } from "../hooks/use-contained-handler";
 import { ChevronLeftIcon, ChevronRightIcon } from "../icons";
 import { cn } from "../lib/utils";
 
+const CONTROL_CLASS =
+  "bg-background/90 text-foreground absolute top-1/2 -translate-y-1/2 rounded-full border p-1 shadow-sm";
+
 type ScrollDirection = "ltr" | "rtl";
 
 type HorizontalScrollerProps = ComponentProps<"div"> & {
@@ -139,25 +142,46 @@ export const HorizontalScroller = ({
         </div>
       </div>
       {state.canScrollStart && (
+        <div className="from-background pointer-events-none absolute inset-y-0 start-0 w-10 bg-linear-to-r to-transparent rtl:bg-linear-to-l" />
+      )}
+      {state.canScrollEnd && (
+        <div className="from-background pointer-events-none absolute inset-y-0 end-0 w-10 bg-linear-to-l to-transparent rtl:bg-linear-to-r" />
+      )}
+      {(state.canScrollStart || state.canScrollEnd) && (
+        // Both controls stay mounted while the row overflows: one that
+        // reached its edge turns inert instead of unmounting, so keyboard
+        // focus on it survives the scroll that got it there.
         <>
-          <div className="from-background pointer-events-none absolute inset-y-0 start-0 w-10 bg-linear-to-r to-transparent rtl:bg-linear-to-l" />
           <button
+            aria-disabled={!state.canScrollStart}
             aria-label={previousLabel}
-            className="bg-background/90 text-foreground absolute start-1 top-1/2 -translate-y-1/2 rounded-full border p-1 shadow-sm"
-            onClick={() => scroll(-1)}
+            className={cn(
+              CONTROL_CLASS,
+              "start-1",
+              !state.canScrollStart && "pointer-events-none opacity-0",
+            )}
+            onClick={() => {
+              if (state.canScrollStart) {
+                scroll(-1);
+              }
+            }}
             type="button"
           >
             <ChevronLeftIcon className="size-4 rtl:rotate-180" />
           </button>
-        </>
-      )}
-      {state.canScrollEnd && (
-        <>
-          <div className="from-background pointer-events-none absolute inset-y-0 end-0 w-10 bg-linear-to-l to-transparent rtl:bg-linear-to-r" />
           <button
+            aria-disabled={!state.canScrollEnd}
             aria-label={nextLabel}
-            className="bg-background/90 text-foreground absolute end-1 top-1/2 -translate-y-1/2 rounded-full border p-1 shadow-sm"
-            onClick={() => scroll(1)}
+            className={cn(
+              CONTROL_CLASS,
+              "end-1",
+              !state.canScrollEnd && "pointer-events-none opacity-0",
+            )}
+            onClick={() => {
+              if (state.canScrollEnd) {
+                scroll(1);
+              }
+            }}
             type="button"
           >
             <ChevronRightIcon className="size-4 rtl:rotate-180" />
