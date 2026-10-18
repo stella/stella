@@ -311,7 +311,7 @@ are omitted here. Input union keys are required unless marked `?`.
 - `stella legislation search`
   - `--query` — Search query (string)
   - `--country` — Required corpus country. Admitted: CZE. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
-  - optional: --document-type, --status, --language, --date-from, --date-to
+  - optional: --document-type, --status, --language, --date-from, --date-to, --as-of
 - `stella matter add-member`
   - `--matter-id` — Matter ID (string)
   - `--user-id` — Existing organization member ID (string)
