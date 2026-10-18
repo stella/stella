@@ -393,18 +393,30 @@ const scopeTransitionsStep: ProvisionBackfillStep = {
   advance: async (connection) =>
     await inTransaction(connection, async () => {
       // Empty admitted scopes still need the function's generation fence and
-      // completion write, but must not consume one scheduler unit each. Each
-      // invocation remains one keyset page; the batch is bounded in scopes.
+      // completion write, but must not consume one scheduler unit each. Stop
+      // after the first non-empty decision page so the transaction's locks
+      // remain bounded to one page.
       await connection.query(
-        `SELECT run_case_law_provision_scope_transition_page(
-           pending.country, pending.language, pending.generation)
-         FROM (
-           SELECT country, language, generation
+        `WITH RECURSIVE pending AS MATERIALIZED (
+           SELECT country, language, generation,
+             row_number() OVER (ORDER BY country, language, generation) AS ordinal
            FROM case_law_provision_scope_transitions
            WHERE completed_at IS NULL
            ORDER BY country, language, generation LIMIT ${SCOPE_PAGE_SIZE}
-         ) pending
-         ORDER BY pending.country, pending.language, pending.generation`,
+         ), processed AS (
+           SELECT pending.ordinal,
+             run_case_law_provision_scope_transition_page(
+               pending.country, pending.language, pending.generation) AS non_empty
+           FROM pending WHERE pending.ordinal = 1
+           UNION ALL
+           SELECT pending.ordinal,
+             run_case_law_provision_scope_transition_page(
+               pending.country, pending.language, pending.generation) AS non_empty
+           FROM processed
+           JOIN pending ON pending.ordinal = processed.ordinal + 1
+           WHERE NOT processed.non_empty
+         )
+         SELECT non_empty FROM processed ORDER BY ordinal`,
       );
     }),
 };

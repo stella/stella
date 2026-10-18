@@ -307,6 +307,63 @@ describe("provision state backfill", () => {
     ).toEqual([{ enqueue_reason: "scope_activated" }]);
   });
 
+  test("scope transition units process one populated decision page", async () => {
+    const scopes = [
+      { country: "ZPA", language: "p1" },
+      { country: "ZPB", language: "p2" },
+    ] as const;
+    for (const scope of scopes) {
+      const ids = Array.from({ length: 50 }, () =>
+        createSafeId<"caseLawDecision">(),
+      );
+      await db.insert(caseLawDecisions).values(
+        ids.map((id) => ({
+          id,
+          sourceId: source.id,
+          ...scope,
+          court: "Court",
+          caseNumber: id,
+          decisionDate: "2020-03-01",
+          metadata: {},
+        })),
+      );
+      await connection.execute(
+        `UPDATE case_law_provision_extraction_scopes
+         SET status = 'active', generation = generation + 1
+         WHERE country = $1 AND language = $2`,
+        [scope.country, scope.language],
+      );
+      await connection.execute(
+        `INSERT INTO case_law_provision_scope_transitions
+           (country, language, generation, action)
+         SELECT country, language, generation, 'activate'
+         FROM case_law_provision_extraction_scopes
+         WHERE country = $1 AND language = $2`,
+        [scope.country, scope.language],
+      );
+    }
+
+    const extractionCounts = async () =>
+      await rows(`SELECT decision.country, count(state.decision_id)::int AS count
+        FROM case_law_decisions decision
+        LEFT JOIN case_law_provision_extractions state
+          ON state.decision_id = decision.id
+        WHERE decision.country IN ('ZPA', 'ZPB')
+        GROUP BY decision.country ORDER BY decision.country`);
+
+    (await stepNamed("scope-transitions").advance(connection)).unwrap();
+    expect(await extractionCounts()).toEqual([
+      { country: "ZPA", count: 50 },
+      { country: "ZPB", count: 0 },
+    ]);
+
+    (await stepNamed("scope-transitions").advance(connection)).unwrap();
+    expect(await extractionCounts()).toEqual([
+      { country: "ZPA", count: 50 },
+      { country: "ZPB", count: 50 },
+    ]);
+  });
+
   test("a committed transition page resumes and later decision moves converge", async () => {
     const movedIn = await insertDecision("ZZP", "p3");
     const ids = Array.from({ length: 51 }, () =>

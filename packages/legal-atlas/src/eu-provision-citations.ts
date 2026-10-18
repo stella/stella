@@ -156,9 +156,43 @@ export const EU_ACT_ALIASES = {
   },
 } as const satisfies Record<string, EuActAlias>;
 
-const ARTICLE = String.raw`(?<!\p{L})(?:Article|Art\.?|čl\.?|cikk|Artikel)\s*(?<article>\d+[a-zA-Z]?)`;
-const PARAGRAPH = String.raw`(?:\s*(?:\((?<parenParagraph>\d+)\)|(?:odst\.?|ods\.?|ust\.?|bekezd(?:és)?|paragraphe|paragraph|para\.?|Abs\.?)\s*(?<wordParagraph>\d+)))?`;
-const POINT = String.raw`(?:\s*(?:\((?<parenthesizedPoint>[a-z])\)|(?:(?:písm\.?|pism\.?|lit\.?|point|lettre|Buchst\.?|pont)\s*)?(?<point>[a-z])\)))?`;
+type EuProvisionLabel = { example: string; pattern: string };
+
+export const EU_PROVISION_ARTICLE_LABELS = [
+  { example: "Article", pattern: "Article" },
+  { example: "Art.", pattern: String.raw`Art\.?` },
+  { example: "čl.", pattern: String.raw`čl\.?` },
+  { example: "cikk", pattern: "cikk" },
+  { example: "Artikel", pattern: "Artikel" },
+] as const satisfies readonly EuProvisionLabel[];
+
+export const EU_PROVISION_PARAGRAPH_LABELS = [
+  { example: "odst.", pattern: String.raw`odst\.?` },
+  { example: "ods.", pattern: String.raw`ods\.?` },
+  { example: "ust.", pattern: String.raw`ust\.?` },
+  { example: "bekezdés", pattern: String.raw`bekezd(?:és)?` },
+  { example: "paragraphe", pattern: "paragraphe" },
+  { example: "paragraph", pattern: "paragraph" },
+  { example: "para", pattern: String.raw`para\.?` },
+  { example: "Abs.", pattern: String.raw`Abs\.?` },
+] as const satisfies readonly EuProvisionLabel[];
+
+export const EU_PROVISION_POINT_LABELS = [
+  { example: "písm.", pattern: String.raw`písm\.?` },
+  { example: "pism.", pattern: String.raw`pism\.?` },
+  { example: "lit.", pattern: String.raw`lit\.?` },
+  { example: "point", pattern: "point" },
+  { example: "lettre", pattern: "lettre" },
+  { example: "Buchst.", pattern: String.raw`Buchst\.?` },
+  { example: "pont", pattern: "pont" },
+] as const satisfies readonly EuProvisionLabel[];
+
+const labelSource = (labels: readonly EuProvisionLabel[]): string =>
+  labels.map(({ pattern }) => pattern).join("|");
+
+const ARTICLE = String.raw`(?<!\p{L})(?:${labelSource(EU_PROVISION_ARTICLE_LABELS)})\s*(?<article>\d+[a-zA-Z]?)`;
+const PARAGRAPH = String.raw`(?:\s*(?:\((?<parenParagraph>\d+)\)|(?:${labelSource(EU_PROVISION_PARAGRAPH_LABELS)})\s*(?<wordParagraph>\d+)))?`;
+const POINT = String.raw`(?:\s*(?:\((?<parenthesizedPoint>[a-z])\)|(?:(?:${labelSource(EU_PROVISION_POINT_LABELS)})\s*)?(?<point>[a-z])\)))?`;
 const YEAR_NUMBER = String.raw`(?<first>\d{1,4})\s*\/\s*(?<second>\d{1,4})`;
 const ACT_KIND = {
   directive: String.raw`(?:Directive|směrnic(?:e|i)|smernic(?:a|e|i)|dyrektyw(?:a|y)|irányelv|Richtlinie|directive)`,

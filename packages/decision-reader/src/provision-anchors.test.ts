@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
 import type { Block } from "@stll/legal-ast/document-ast";
+import {
+  EU_PROVISION_ARTICLE_LABELS,
+  EU_PROVISION_PARAGRAPH_LABELS,
+  EU_PROVISION_POINT_LABELS,
+} from "@stll/legal-atlas/eu-provision-citations";
 
 import {
   locateProvisionAnchors,
@@ -401,6 +406,51 @@ test("extracted article capitalization variants retain their placements", () => 
         printed.slice(start, end),
       ),
     ).toEqual([printed.slice(0, printed.indexOf(" GDPR"))]);
+  }
+});
+
+test("every extracted EU provision label is accepted by placement", () => {
+  const cases = [
+    ...EU_PROVISION_ARTICLE_LABELS.map(({ example }) => ({
+      printed: `${example} 6`,
+      reference: { ...reference(6), unit: "article" as const },
+    })),
+    ...EU_PROVISION_PARAGRAPH_LABELS.map(({ example }) => ({
+      printed: `Article 6 ${example} 2`,
+      reference: {
+        ...reference(6, "2"),
+        unit: "article" as const,
+      },
+    })),
+    ...EU_PROVISION_POINT_LABELS.map(({ example }) => ({
+      printed: `Article 6 ${example} a)`,
+      reference: {
+        ...reference(6),
+        letter: "a",
+        unit: "article" as const,
+      },
+    })),
+  ];
+
+  for (const { printed, reference: provisionReference } of cases) {
+    const result = locateProvisionAnchors({
+      blocks: [paragraph("text", printed)],
+      provisions: [
+        {
+          id: "article",
+          reference: provisionReference,
+          sentenceText: printed,
+          spanStart: 0,
+          target: "eu-act",
+        },
+      ],
+    });
+    expect(result.failures).toEqual([]);
+    expect(
+      result.anchorsByPieceId["text"]?.map(({ start, end }) =>
+        printed.slice(start, end),
+      ),
+    ).toEqual([printed]);
   }
 });
 
