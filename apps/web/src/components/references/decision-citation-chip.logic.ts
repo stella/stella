@@ -75,9 +75,14 @@ const withoutRegistrySuffix = (caseNumber: string): string => {
 
 const caseNumberCandidates = (caseNumber: string): string[] => {
   const withoutSuffix = withoutRegistrySuffix(caseNumber);
+  // A court decoration is a separate word before the number ("NS 23 Cdo",
+  // "BVerfG, 1 BvR"); a letter joined to the number by a hyphen ("A-123-B")
+  // is part of the identifier and is never dropped.
   const firstDigit = withoutSuffix.search(/\p{N}/u);
+  const decorated =
+    firstDigit > 0 && /[\s,]/u.test(withoutSuffix.charAt(firstDigit - 1));
   const withoutCourtPrefix =
-    firstDigit >= 0 && /\p{L}/u.test(withoutSuffix.slice(firstDigit + 1))
+    decorated && /\p{L}/u.test(withoutSuffix.slice(firstDigit + 1))
       ? withoutSuffix.slice(firstDigit)
       : "";
   return [...new Set([withoutSuffix, withoutCourtPrefix])]

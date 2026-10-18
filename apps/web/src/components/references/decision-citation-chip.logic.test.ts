@@ -134,6 +134,9 @@ describe("citation text naming its case", () => {
     expect(inlineDecisionCitationPresentation("A-123-B held", "A-123")).toEqual(
       { kind: "chip-after-text", label: "A-123-B held" },
     );
+    expect(
+      inlineDecisionCitationPresentation("C-123-B held", "A-123-B"),
+    ).toEqual({ kind: "chip-after-text", label: "C-123-B held" });
   });
 
   test("keeps hyphenated identifiers whole outside dated dockets", () => {
