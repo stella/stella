@@ -570,6 +570,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "POST /v1/folio-collab-rooms/heartbeat": "crud",
   "POST /v1/folio-collab-rooms/refresh-token": "crud",
   "POST /v1/folio-collab-rooms/snapshot/load": "crud",
+  "POST /v1/folio-collab-rooms/snapshot/seed": "crud",
   "POST /v1/folio-collab-rooms/snapshot/store": "crud",
   "POST /v1/invoices/:workspaceId/:invoiceId/entries": "crud",
   "POST /v1/invoices/:workspaceId/:invoiceId/lines": "crud",
