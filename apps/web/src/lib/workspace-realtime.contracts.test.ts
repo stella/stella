@@ -694,20 +694,19 @@ test("every mutation resource declaration agrees with its registered backend rou
         (ts.isIdentifier(firstArgument)
           ? values.get(firstArgument.text)
           : firstArgument);
+      const declaresRealtime = (value: ts.Node) => {
+        const literal = syntaxValue(value);
+        return (
+          ts.isObjectLiteralExpression(literal) &&
+          literal.properties.some(
+            (property) => property.name?.getText() === "realtime",
+          )
+        );
+      };
       const config =
-        directConfig &&
-        ts.isObjectLiteralExpression(syntaxValue(directConfig)) &&
-        syntaxValue(directConfig).properties.some(
-          (property) => property.name?.getText() === "realtime",
-        )
+        directConfig && declaresRealtime(directConfig)
           ? directConfig
-          : [...values.values()].find(
-              (value) =>
-                ts.isObjectLiteralExpression(syntaxValue(value)) &&
-                syntaxValue(value).properties.some(
-                  (property) => property.name?.getText() === "realtime",
-                ),
-            );
+          : [...values.values()].find(declaresRealtime);
       if (!config) {
         throw new TypeError("Handler has no explicit configuration");
       }
@@ -771,9 +770,10 @@ test("every mutation resource declaration agrees with its registered backend rou
         }
         return resource[1];
       });
+      const declaredResources: readonly string[] = contract.resources;
       for (const resource of resources) {
         observedResources.add(resource);
-        expect(contract.resources).toContain(resource);
+        expect(declaredResources).toContain(resource);
       }
     }
     if (registeredWriteCount === 0) {

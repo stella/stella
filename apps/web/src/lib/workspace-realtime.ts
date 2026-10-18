@@ -160,47 +160,83 @@ type ResourceMutationOptions<TVariables, TData> = {
   mutation: keyof typeof RESOURCE_MUTATION_CONTRACTS;
   queryClient: QueryClient;
   mutationFn: (variables: TVariables) => Promise<TData>;
-} & ({ scope?: { type: "workspace" } } | { scope: { type: "organization" } });
+};
 
-/** A committed write marks every registered reader stale before it settles. */
-export const resourceMutation =
-  <TVariables, TData>({
-    mutation,
+const invalidateAfterResourceMutation = async ({
+  mutation,
+  queryClient,
+  scope,
+}: {
+  mutation: keyof typeof RESOURCE_MUTATION_CONTRACTS;
+  queryClient: QueryClient;
+  scope: ResourceQueryScopeIdentity;
+}) => {
+  const resources = RESOURCE_MUTATION_CONTRACTS[mutation].resources;
+  const actions = registeredResourceQueryActions({
     queryClient,
-    mutationFn,
+    resources,
     scope,
-  }: ResourceMutationOptions<TVariables, TData>) =>
-  async (variables: TVariables) => {
-    const data = await mutationFn(variables);
-    const resources = RESOURCE_MUTATION_CONTRACTS[mutation].resources;
-    const resourceScope =
-      scope?.type === "organization"
-        ? scope
-        : {
-            type: "workspace" as const,
-            workspaceId: (variables as { workspaceId: string }).workspaceId,
-          };
-    const actions = registeredResourceQueryActions({
-      queryClient,
-      resources,
-      scope: resourceScope,
-    });
-    if (resourceScope.type === "workspace") {
-      for (const resource of resources) {
-        actions.push(
-          ...getResourceTypeInvalidationActions(
-            resource,
-            resourceScope.workspaceId,
-          ),
-        );
-      }
+  });
+  if (scope.type === "workspace") {
+    for (const resource of resources) {
+      actions.push(
+        ...getResourceTypeInvalidationActions(resource, scope.workspaceId),
+      );
     }
-    await applyResourceQueryActions(
+  }
+  await applyResourceQueryActions(
+    queryClient,
+    deduplicateQueryActions(actions),
+  );
+};
+
+const workspaceIdOf = (variables: unknown): string =>
+  typeof variables === "object" &&
+  variables !== null &&
+  "workspaceId" in variables &&
+  typeof variables.workspaceId === "string"
+    ? variables.workspaceId
+    : panic("A workspace-scoped resource mutation needs a workspaceId");
+
+/**
+ * A committed write marks every registered reader stale before it settles.
+ * Workspace writes carry their workspace in the variables; organization
+ * writes declare `scope: { type: "organization" }` and need none.
+ */
+export function resourceMutation<
+  TVariables extends { workspaceId: string },
+  TData,
+>(
+  options: ResourceMutationOptions<TVariables, TData> & {
+    scope?: { type: "workspace" };
+  },
+): (variables: TVariables) => Promise<TData>;
+export function resourceMutation<TVariables, TData>(
+  options: ResourceMutationOptions<TVariables, TData> & {
+    scope: { type: "organization" };
+  },
+): (variables: TVariables) => Promise<TData>;
+export function resourceMutation<TVariables, TData>({
+  mutation,
+  queryClient,
+  mutationFn,
+  scope,
+}: ResourceMutationOptions<TVariables, TData> & {
+  scope?: { type: "workspace" } | { type: "organization" };
+}): (variables: TVariables) => Promise<TData> {
+  return async (variables: TVariables) => {
+    const data = await mutationFn(variables);
+    await invalidateAfterResourceMutation({
+      mutation,
       queryClient,
-      deduplicateQueryActions(actions),
-    );
+      scope:
+        scope?.type === "organization"
+          ? scope
+          : { type: "workspace", workspaceId: workspaceIdOf(variables) },
+    });
     return data;
   };
+}
 
 export const parseWorkspaceRealtimeMessage = (
   data: string,
