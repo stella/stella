@@ -450,8 +450,6 @@ export const IN_PROCESS_DEPENDENCIES = {
     "Repository tooling or local application library; no remote service client role identified.",
   "temporal-polyfill":
     "In-process application utility, validation, formatting, or UI component.",
-  "thinking-orbs":
-    "Repository tooling or local application library; no remote service client role identified.",
   tldts:
     "In-process application utility, validation, formatting, or UI component.",
   tsdown: "Repository or application build, validation, or release tooling.",
