@@ -14,6 +14,7 @@ import path from "node:path";
 
 import {
   assertFrozenLockfile,
+  assertFinalAutofixLockfile,
   assertLockfileWorkspaces,
   indentationOnly,
   mergeLockfile,
@@ -159,6 +160,45 @@ describe("conservative format and lockfile proofs", () => {
         after: { ...before, trustedDependencies: ["a"] },
       }),
     ).toThrow("frozen pins or policy");
+  });
+
+  test("the final autofix boundary rejects pin drift after refresh", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "autofix-final-lock-"));
+    const frozen = path.join(root, "refresh-approved.lock");
+    const approved = {
+      lockfileVersion: 3,
+      workspaces: { "": { name: "fixture" } },
+      packages: { a: ["a@1.0.0", "", {}, "sha512-approved"] },
+    };
+    writeFileSync(frozen, JSON.stringify(approved));
+    writeFileSync(path.join(root, "bun.lock"), JSON.stringify(approved));
+
+    expect(() =>
+      assertFinalAutofixLockfile({ repo: root, frozen }),
+    ).not.toThrow();
+
+    writeFileSync(
+      path.join(root, "bun.lock"),
+      JSON.stringify({
+        ...approved,
+        workspaces: { "": { name: "fixture", version: "1.0.0" } },
+      }),
+    );
+    expect(() =>
+      assertFinalAutofixLockfile({ repo: root, frozen }),
+    ).not.toThrow();
+
+    writeFileSync(
+      path.join(root, "bun.lock"),
+      JSON.stringify({
+        ...approved,
+        packages: { a: ["a@2.0.0", "", {}, "sha512-changed"] },
+      }),
+    );
+    expect(() => assertFinalAutofixLockfile({ repo: root, frozen })).toThrow(
+      "frozen pins or policy",
+    );
+    rmSync(root, { recursive: true });
   });
 });
 

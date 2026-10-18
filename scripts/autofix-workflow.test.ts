@@ -717,3 +717,27 @@ test("source fixes use only the documented safe-rule allowlist and never save PR
     "refresh-lock --repo .",
   );
 });
+
+test("rechecks refresh-approved lockfile pins at the final collection boundary", () => {
+  const steps = workflowJobSteps(
+    Bun.YAML.parse(readFileSync(WORKFLOW_URL, "utf-8")),
+    "regenerate-derived-files",
+  );
+  expect(workflowStepByName(steps, "Refresh merged lockfile")["run"]).toContain(
+    'cp -- bun.lock "$RUNNER_TEMP/autofix-frozen-bun.lock"',
+  );
+  const restriction: unknown = workflowStepByName(
+    steps,
+    "Restrict autofix changes",
+  )["run"];
+  if (typeof restriction !== "string") {
+    throw new TypeError("Restrict autofix changes must be a shell step");
+  }
+  expect(restriction).toContain("assert-frozen-lock --repo .");
+  expect(restriction).toContain(
+    '--frozen "$RUNNER_TEMP/autofix-frozen-bun.lock"',
+  );
+  expect(restriction.indexOf("assert-frozen-lock")).toBeLessThan(
+    restriction.indexOf('excludes+=(":(exclude,literal)bun.lock")'),
+  );
+});

@@ -155,6 +155,20 @@ export const assertFrozenLockfile = ({
   }
 };
 
+/** Final autofix boundary: compare the collected lockfile with its approved pins. */
+export const assertFinalAutofixLockfile = ({
+  repo,
+  frozen,
+}: {
+  repo: string;
+  frozen: string;
+}) => {
+  assertFrozenLockfile({
+    before: parseBunLockText(readFileSync(frozen, "utf-8")),
+    after: parseBunLockText(readFileSync(path.join(repo, "bun.lock"), "utf-8")),
+  });
+};
+
 type AssertLockfileWorkspacesOptions = {
   before: unknown;
   after: unknown;
@@ -1242,6 +1256,12 @@ if (import.meta.main) {
     case "refresh-lock":
       refreshLockfile(path.resolve(required(args, "--repo")));
       break;
+    case "assert-frozen-lock":
+      assertFinalAutofixLockfile({
+        repo: path.resolve(required(args, "--repo")),
+        frozen: path.resolve(required(args, "--frozen")),
+      });
+      break;
     case "collect":
       collect({
         repo: path.resolve(required(args, "--repo")),
@@ -1271,7 +1291,7 @@ if (import.meta.main) {
     }
     default:
       console.error(
-        "Usage: bun scripts/generated-conflicts.ts plan|collect|apply|push (see the header)",
+        "Usage: bun scripts/generated-conflicts.ts plan|refresh-lock|assert-frozen-lock|collect|apply|push (see the header)",
       );
       process.exitCode = 1;
   }
