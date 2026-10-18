@@ -23,6 +23,7 @@ import {
 import { readDecisionReaderSource } from "@/api/handlers/case-law/decisions/reader";
 import type { LawReadAdmission } from "@/api/handlers/legal-resolve/admission";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import { CASE_LAW_SURFACE_COUNTRIES } from "@/api/lib/case-law/public-subject";
 import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import { buildCaseLawDecisionUrl } from "@/api/lib/legal-search/public-law-app-urls";
 import { LIMITS } from "@/api/lib/limits";
@@ -224,6 +225,7 @@ export const resolveDecision = async ({
   const rows = await lookup({
     caseLawDb: caseLawPublicReadDb,
     country,
+    countries: CASE_LAW_SURFACE_COUNTRIES.identity,
     locator: decisionIdentityLocatorOf(intent),
   });
   const resolution = resolveDecisionIdentity(intent, rows, { reporters });

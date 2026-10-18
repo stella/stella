@@ -451,8 +451,14 @@ test("EU ECLI resolution returns one decision with its stored language versions"
     country: "EU",
     identifier: euEcli,
     dependencies: {
-      lookup: async ({ country, locator }) =>
-        await lookupDecisionsByIdentity({ caseLawDb, country, locator }),
+      lookup: async ({ country, countries, locator }) =>
+        await lookupDecisionsByIdentity({
+          caseLawDb,
+          country,
+          countries:
+            countries ?? panic("Decision resolution omitted its country gate"),
+          locator,
+        }),
       read: async (options) =>
         await readDecisionReaderSource({ ...options, caseLawDb }),
     },

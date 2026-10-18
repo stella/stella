@@ -61,6 +61,7 @@ import {
 import { readPublicDecisionLanguageAlternatesInTx } from "@/api/lib/case-law/language-alternates";
 import type { PublicDecisionLanguageAlternate } from "@/api/lib/case-law/language-alternates";
 import { loadPublicCourtWeightsWithin } from "@/api/lib/case-law/public-case-law-config";
+import { CASE_LAW_SURFACE_COUNTRIES } from "@/api/lib/case-law/public-subject";
 import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution-sql";
 import { collapseByLanguageGroup } from "@/api/lib/legal-search/language-group-collapse";
 import { LIMITS } from "@/api/lib/limits";
@@ -190,6 +191,7 @@ export type DecisionIdentityRow = {
 type LookupDecisionsByIdentityOptions = {
   caseLawDb: CaseLawPublicReadDb;
   country: string;
+  countries?: readonly string[];
   locator: DecisionIdentityLocator;
 };
 
@@ -477,6 +479,7 @@ export const readDecisionIdentityHits = async (
 export const lookupDecisionsByIdentity = async ({
   caseLawDb,
   country,
+  countries = CASE_LAW_SURFACE_COUNTRIES.pages,
   locator,
 }: LookupDecisionsByIdentityOptions): Promise<DecisionIdentityRow[]> => {
   const rows = await caseLawDb(async (tx) => {
@@ -533,6 +536,7 @@ export const lookupDecisionsByIdentity = async ({
     const alternates = await readPublicDecisionLanguageAlternatesInTx(
       tx,
       decisions.map((decision) => decision.languageGroupKey),
+      countries,
     );
 
     const registry = await readCourtRegistry(
