@@ -8,7 +8,7 @@ import { createPublisherFetch } from "./publisher-fetch";
 
 const PUBLIC_ADDRESS = { address: "93.184.216.34", family: 4 } as const;
 
-const streamResponse = (status: number, headers: HeadersInit = {}) =>
+const streamResponse = (status: number, headers: Record<string, string> = {}) =>
   Result.ok({
     body: new Response("ok").body ?? new ReadableStream<Uint8Array>(),
     headers: new Headers(headers),
