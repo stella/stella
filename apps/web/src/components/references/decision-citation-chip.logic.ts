@@ -8,10 +8,12 @@ type DecisionCitationCourtInput = CourtAbbreviationInput & {
   courtAbbreviation?: string | null | undefined;
 };
 
-// Spacing and case vary between a model's prose and the registry ("III. ÚS
-// 2429/24" against "III.ÚS 2429/24"); the characters that identify the case
-// do not.
+// Spacing, dash typography and case vary between a model's prose and the
+// registry ("III. ÚS 2429/24" against "III.ÚS 2429/24"); the characters and
+// separators that identify the case do not ("1/23" is not "12/3").
 const IDENTIFIER_CHARACTER = /[\p{L}\p{N}]/u;
+const SPACING = /\s/u;
+const DASH = /[\u2010-\u2015\u2212]/u;
 const CASE_NUMBER_SUFFIX = /[-\u2013\u2014]\s*[\p{L}\p{N}]+$/u;
 // A suffix in prose may follow a space ("23 Cdo 651/2023 -123"); spaced, it
 // must start with a digit, so a dash opening a clause ("... 651/2023 - the
@@ -25,11 +27,13 @@ const comparable = (value: string): { text: string; origin: number[] } => {
   const origin: number[] = [];
   // UTF-16 units, so each index is a position in `value`.
   for (const [index, character] of value.split("").entries()) {
-    if (!IDENTIFIER_CHARACTER.test(character)) {
+    if (SPACING.test(character)) {
       continue;
     }
     // Lowercasing can lengthen a character ("İ"); each unit maps back to it.
-    const lowered = character.toLocaleLowerCase("und");
+    const lowered = DASH.test(character)
+      ? "-"
+      : character.toLocaleLowerCase("und");
     text += lowered;
     for (const _unit of lowered.split("")) {
       origin.push(index);
@@ -99,10 +103,17 @@ export const citationTextCaseMatch = (
     ) {
       const first = prose.origin.at(at) ?? 0;
       const last = prose.origin.at(at + needle.length - 1) ?? 0;
-      const suffix = text
+      // Only a dated docket carries a registry suffix; anywhere else a
+      // following hyphenated segment makes it a longer, different identifier.
+      const trailing = text
         .slice(last + 1)
         .match(LEADING_CASE_NUMBER_SUFFIX)
         ?.at(0);
+      const dated = DATED_DOCKET.test(text.slice(first, last + 1));
+      if (!dated && trailing !== undefined) {
+        continue;
+      }
+      const suffix = dated ? trailing : undefined;
       const end = last + 1 + (suffix?.length ?? 0);
       if (
         !IDENTIFIER_CHARACTER.test(text.charAt(first - 1)) &&

@@ -108,6 +108,19 @@ describe("citation text naming its case", () => {
     ).toEqual({ kind: "chip-replaces-text", before: "", after: " follows" });
   });
 
+  test("keeps identifier separators significant", () => {
+    expect(citationTextNamesCase("see 12/3 here", "1/23")).toBe(false);
+    expect(citationTextNamesCase("see 1/23 here", "1/23")).toBe(true);
+    expect(citationTextNamesCase("see 1 / 23 here", "1/23")).toBe(true);
+    expect(citationTextNamesCase("Nos. 17\u20131618", "17-1618")).toBe(true);
+  });
+
+  test("never matches a longer hyphenated identifier outside dated dockets", () => {
+    expect(inlineDecisionCitationPresentation("A-123-B held", "A-123")).toEqual(
+      { kind: "chip-after-text", label: "A-123-B held" },
+    );
+  });
+
   test("keeps hyphenated identifiers whole outside dated dockets", () => {
     expect(inlineDecisionCitationPresentation("a decision", "A-123")).toEqual({
       kind: "chip-after-text",
