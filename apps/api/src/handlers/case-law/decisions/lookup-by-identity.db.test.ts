@@ -458,7 +458,7 @@ test("EU ECLI resolution returns one decision with its stored language versions"
     },
   });
   if (result.status !== "resolved" || result.document.kind !== "decision") {
-    return panic("EU ECLI did not resolve to one decision");
+    panic("EU ECLI did not resolve to one decision");
   }
   expect(result.document.ecli).toBe(euEcli);
   expect(result.document.country).toBe("EU");
