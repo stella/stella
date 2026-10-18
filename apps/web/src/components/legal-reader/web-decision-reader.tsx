@@ -23,7 +23,10 @@ import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 
 import { CitedDecisionLink } from "@/components/legal-reader/cited-decision-link";
 import { WebReaderProvider } from "@/components/legal-reader/web-reader-provider";
-import { decisionCitationCourtLabel } from "@/components/references/decision-citation-chip.logic";
+import {
+  decisionCitationCourtLabel,
+  presentationBesideCitationText,
+} from "@/components/references/decision-citation-chip.logic";
 import { decisionCitationPresentationsById } from "@/components/references/decision-citation-presentation.logic";
 import type { DecisionReaderSurface } from "@/features/case-law/decision-reader-surfaces";
 import { useProvisionPlacementTelemetry } from "@/features/case-law/use-provision-placement-telemetry";
@@ -87,10 +90,13 @@ const WebDecisionReaderContent = ({
             citation,
             textDecisionId: props.decisionId,
           }}
-          presentation={
-            presentations.get(linkProps.decision.id) ??
-            panic("Reader citation missing collected identity")
-          }
+          presentation={presentationBesideCitationText({
+            caseNumber: linkProps.decision.caseNumber,
+            citationText: citation.citationText,
+            presentation:
+              presentations.get(linkProps.decision.id) ??
+              panic("Reader citation missing collected identity"),
+          })}
         />
       ),
     },
