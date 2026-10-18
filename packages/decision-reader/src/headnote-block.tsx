@@ -32,7 +32,7 @@ export type HeadnoteOrigin =
  * a chip for it. The model's mark is the shared AI label, which opens what
  * the reader should know about text the court did not write.
  */
-const OriginMark = ({ origin }: { origin: HeadnoteOrigin }) => {
+export const HeadnoteOriginLabel = ({ origin }: { origin: HeadnoteOrigin }) => {
   const messages = useReaderMessages();
 
   switch (origin.type) {
@@ -104,7 +104,7 @@ export const HeadnoteBlock = ({
         data-reader-chrome=""
         data-slot="headnote-origin"
       >
-        <OriginMark origin={origin} />
+        <HeadnoteOriginLabel origin={origin} />
       </span>
       <details
         data-reader-chrome={origin.type === "court" ? undefined : ""}

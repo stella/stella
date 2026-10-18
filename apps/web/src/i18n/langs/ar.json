@@ -877,6 +877,7 @@
     },
     "citation": {
       "citedAtLeast": "ذُكر في {count} استشهادات على الأقل",
+      "citedByCount": "استشهد به في {count} قرارًا",
       "citedSummary": "{count, plural, =0 {لم يُستشهد به} zero {لم يُستشهد به} one {استُشهد به مرة واحدة} two {استُشهد به مرتين} few {استُشهد به # مرات} many {استُشهد به # مرة} other {استُشهد به # مرة}}",
       "dateUnavailable": "التاريخ غير متاح",
       "decisionCount": "{count, plural, =0 {لا توجد أحكام} zero {لا توجد أحكام} one {حكم واحد} two {حكمان} few {# أحكام} many {# حكمًا} other {# حكم}}",

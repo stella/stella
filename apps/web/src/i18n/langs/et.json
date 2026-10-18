@@ -877,6 +877,7 @@
     },
     "citation": {
       "citedAtLeast": "Viidatud vähemalt {count} korda",
+      "citedByCount": "Viidatud {count} lahendis",
       "citedSummary": "{count, plural, =0 {Viitamata} one {Viidatud üks kord} other {Viidatud # korda}}",
       "dateUnavailable": "Kuupäev pole saadaval",
       "decisionCount": "{count, plural, =0 {Lahendeid pole} one {# lahend} other {# lahendit}}",

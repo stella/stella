@@ -877,6 +877,7 @@
     },
     "citation": {
       "citedAtLeast": "Legalább {count} alkalommal idézték",
+      "citedByCount": "{count} hivatkozás",
       "citedSummary": "{count, plural, =0 {Nem hivatkozták} one {Egyszer hivatkozták} other {#-szor hivatkozták}}",
       "dateUnavailable": "Dátum nem érhető el",
       "decisionCount": "{count, plural, =0 {Nincs határozat} one {# határozat} other {# határozat}}",

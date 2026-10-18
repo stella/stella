@@ -1,79 +1,121 @@
 import type { ReactNode } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
 
-import { describe, expect, test } from "bun:test";
-import { IntlProvider } from "use-intl";
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { afterAll, afterEach, expect, test } from "bun:test";
 
-import { CitedDecisionPreview } from "@/components/legal-reader/cited-decision-link";
-import { CitationPassageQuote } from "@/features/case-law/components/case-viewer/citation-passage-preview";
-import { FormattingProvider } from "@/i18n/formatting-context";
-import messages from "@/i18n/langs/en.json";
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
-const render = (node: ReactNode): string =>
-  renderToStaticMarkup(
-    <IntlProvider locale="en" messages={messages} timeZone="UTC">
-      <FormattingProvider locale="en" timeZone="UTC">
-        {node}
-      </FormattingProvider>
-    </IntlProvider>,
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
+import { dockedChatLegalPayloads } from "../../../e2e/helpers/docked-chat-legal-payloads";
+
+GlobalRegistrator.register({ url: "http://localhost:3000/law/cze/cases" });
+const { cleanup, render, screen } = await import("@testing-library/react");
+const { QueryClient, QueryClientProvider } =
+  await import("@tanstack/react-query");
+const { IntlProvider } = await import("use-intl");
+const { WebReaderPresentationProvider } =
+  await import("@/components/legal-reader/web-reader-presentation");
+const { decisionOptions } =
+  await import("@/features/case-law/queries/decisions");
+const { FormattingProvider } = await import("@/i18n/formatting-context");
+const { CitedDecisionCard } = await import("./cited-decision-link");
+const messages = (await import("@/i18n/langs/en.json")).default;
+
+const cited = {
+  ...dockedChatLegalPayloads.decision,
+  citationCount: 23,
+  court: "Nejvyšší soud",
+  courtAbbreviation: "NS",
+  courtTier: "supreme" as const,
+  decisionDate: "2019-10-16",
+  decisionType: "usnesení",
+  headnote: {
+    type: "present" as const,
+    text: "The cited decision's official legal sentence.",
+  },
+  identifiers: [
+    {
+      type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+      value: "29 Cdo 4097/2014",
+    },
+    {
+      type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+      value: "Sb. NS 10/2019",
+    },
+  ],
+};
+const clients: InstanceType<typeof QueryClient>[] = [];
+
+const mount = (decision: typeof cited, children: ReactNode) => {
+  const client = new QueryClient();
+  clients.push(client);
+  client.setQueryData(decisionOptions(decision.id).queryKey, decision);
+  return render(
+    <QueryClientProvider client={client}>
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
+        <FormattingProvider locale="en" timeZone="UTC">
+          <WebReaderPresentationProvider>
+            {children}
+          </WebReaderPresentationProvider>
+        </FormattingProvider>
+      </IntlProvider>
+    </QueryClientProvider>,
+  );
+};
+
+afterEach(() => {
+  cleanup();
+  for (const client of clients) {
+    client.clear();
+  }
+  clients.length = 0;
+});
+afterAll(async () => unregisterDomEnvironment());
+
+test("describes the cited decision instead of repeating the citing paragraph", () => {
+  const citingParagraph = "The paragraph already visible in the reader.";
+  mount(
+    cited,
+    <>
+      <span>{citingParagraph}</span>
+      <CitedDecisionCard decisionId={cited.id} treatment="supportive" />
+    </>,
   );
 
-describe("CitedDecisionPreview", () => {
-  test("states how the citing text treats the decision", () => {
-    const markup = render(<CitedDecisionPreview treatment="negative" />);
-
-    expect(markup).toContain(messages.caseLaw.citation.treatment.negative);
-  });
-
-  test("says nothing about treatment where the citation carries none", () => {
-    const markup = render(<CitedDecisionPreview />);
-
-    // Every label, not a chosen few: a treatment added later cannot creep
-    // into a preview that was given none.
-    for (const label of Object.values(messages.caseLaw.citation.treatment)) {
-      expect(markup).not.toContain(label);
-    }
-  });
+  expect(screen.getByText(cited.court)).toBeTruthy();
+  expect(screen.getByText(cited.caseNumber)).toBeTruthy();
+  expect(screen.getByText("usnesení")).toBeTruthy();
+  expect(screen.getByText(cited.headnote.text)).toBeTruthy();
+  expect(screen.getByText("NS")).toBeTruthy();
+  expect(screen.getByText("Cited by 23")).toBeTruthy();
+  expect(screen.getByText("Sb. NS 10/2019")).toBeTruthy();
+  expect(
+    screen.getByText(messages.caseLaw.citation.treatment.supportive).className,
+  ).toContain("rounded-full");
+  expect(screen.getAllByText(citingParagraph)).toHaveLength(1);
 });
 
-describe("CitationPassageQuote", () => {
-  const text = "Soud odkázal na nález Pl. ÚS 36/08 a převzal jeho závěry.";
+test("omits absent headnote, decision type, date and publication", () => {
+  const sparse = {
+    ...cited,
+    decisionDate: null,
+    decisionType: null,
+    headnote: { type: "absent" as const, reason: "not_published" as const },
+    identifiers: cited.identifiers.slice(0, 1),
+  };
+  mount(
+    sparse,
+    <CitedDecisionCard decisionId={sparse.id} treatment={undefined} />,
+  );
 
-  test("quotes the citing sentence with the citation set off", () => {
-    const markup = render(
-      <CitationPassageQuote
-        read={{
-          passage: {
-            anchorId: "p-12",
-            blockId: "b-12",
-            end: text.indexOf("Pl. ÚS 36/08") + "Pl. ÚS 36/08".length,
-            mention: "sole",
-            start: text.indexOf("Pl. ÚS 36/08"),
-            text,
-          },
-          status: "found",
-        }}
-      />,
-    );
-
-    expect(markup).toContain("Soud odkázal na nález");
-    expect(markup).toContain("a převzal jeho závěry.");
-    expect(markup).toContain("<blockquote");
-  });
-
-  test("says when the text does not carry the citation", () => {
-    expect(
-      render(
-        <CitationPassageQuote read={{ passage: null, status: "absent" }} />,
-      ),
-    ).toContain(messages.caseLaw.citation.passageNotFound);
-  });
-
-  test("a failed read of the citing text says so rather than quoting nothing", () => {
-    expect(
-      render(
-        <CitationPassageQuote read={{ passage: null, status: "failed" }} />,
-      ),
-    ).toContain(messages.errors.actionFailed);
-  });
+  expect(screen.queryByText(cited.headnote.text)).toBeNull();
+  expect(screen.queryByText("usnesení")).toBeNull();
+  expect(screen.queryByText("Sb. NS 10/2019")).toBeNull();
+  expect(
+    screen.queryByText(messages.caseLaw.citation.dateUnavailable),
+  ).toBeNull();
+  expect(
+    screen.queryByText(messages.caseLaw.citation.treatment.supportive),
+  ).toBeNull();
 });
