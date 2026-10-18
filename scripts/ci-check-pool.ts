@@ -428,6 +428,27 @@ const escapeData = (value: string) =>
 
 const FAILURE_CAUSE_LIMIT = 500;
 
+const isResultMarker = (line: string) =>
+  /^\((?:pass|fail|skip|todo)\) /u.test(line.trimStart());
+
+// Bun prints a test's diagnostics before its `(fail)` line, so the test's own
+// error lies between the previous result marker and its marker; output after
+// it (up to the next marker) is the fallback for runners that print later.
+const errorOfTest = (lines: readonly string[], failureIndex: number) => {
+  let start = failureIndex;
+  while (start > 0 && !isResultMarker(lines.at(start - 1) ?? "")) {
+    start -= 1;
+  }
+  const next = lines.findIndex(
+    (line, index) => index > failureIndex && isResultMarker(line),
+  );
+  const window = [
+    ...lines.slice(start, failureIndex),
+    ...lines.slice(failureIndex + 1, next === -1 ? lines.length : next),
+  ];
+  return window.find((line) => /^error/iu.test(line.trimStart()))?.trim();
+};
+
 /** The single workflow annotation emitted for one failed pooled check. */
 export const failedCheckAnnotation = (
   result: Pick<CheckResult, "name" | "detail">,
@@ -437,18 +458,14 @@ export const failedCheckAnnotation = (
   const failureIndex = lines.findIndex((line) =>
     line.trimStart().startsWith("(fail) "),
   );
-  const failure = lines.at(failureIndex)?.trim();
-  const followingError =
-    failureIndex === -1
-      ? undefined
-      : lines
-          .slice(failureIndex + 1)
-          .find((line) => /^error/iu.test(line.trimStart()))
-          ?.trim();
+  const failure =
+    failureIndex === -1 ? undefined : lines.at(failureIndex)?.trim();
+  const testError =
+    failureIndex === -1 ? undefined : errorOfTest(lines, failureIndex);
   const firstError = lines.find((line) => /error/iu.test(line))?.trim();
   const cause = (
-    failure !== undefined && followingError !== undefined
-      ? `${failure} -- ${followingError}`
+    failure !== undefined && testError !== undefined
+      ? `${failure} -- ${testError}`
       : (firstError ?? result.detail)
   ).slice(0, FAILURE_CAUSE_LIMIT);
   return `::error title=${escapeProperty(`FAILED check: ${result.name}`)}::${escapeData(cause)}`;

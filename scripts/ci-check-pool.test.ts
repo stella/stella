@@ -52,10 +52,21 @@ const check = (name: string, extra: Partial<PoolCheck> = {}): PoolCheck => ({
 
 test("failed checks emit one annotation with their first actionable cause", () => {
   const result = { name: "Unit tests", detail: "exit code 1" };
+  // Bun prints a test's error before its (fail) line; a later test's error is
+  // not the first failure's cause.
   expect(
     failedCheckAnnotation(
       result,
-      "error: setup noise\n(fail) parser > rejects invalid input\ntrace\nerror: expected a value",
+      "(pass) earlier\nerror: expected A\n(fail) test A\nerror: expected B\n(fail) test B",
+    ),
+  ).toBe(
+    "::error title=FAILED check%3A Unit tests::(fail) test A -- error: expected A",
+  );
+  // A runner that prints the error after the marker still names it.
+  expect(
+    failedCheckAnnotation(
+      result,
+      "(pass) earlier\n(fail) parser > rejects invalid input\ntrace\nerror: expected a value\n(pass) later",
     ),
   ).toBe(
     "::error title=FAILED check%3A Unit tests::(fail) parser > rejects invalid input -- error: expected a value",
