@@ -13,6 +13,7 @@ import { pinnedParserInputs } from "../packages/catalogue/scripts/pinned-content
 import { repoRelativePath } from "../packages/portable-path/src/index";
 import { API_TYPECHECK_REGENERATION_COMMANDS } from "../packages/scripts/src/api-typecheck-regenerate";
 import { ciGeneratedFiles } from "../packages/scripts/src/generated-file-inventory";
+import { CHECK_POOL_JOBS } from "./ci-check-pool-registry";
 import {
   GENERATORS,
   CI_GENERATED_FILES,
@@ -23,6 +24,7 @@ import {
   generatorsForFiles,
   matchesGeneratedGlob,
   orderGenerators,
+  runGenerators,
 } from "./generated-files";
 import {
   checkRouteGeneratorVersion,
@@ -700,9 +702,14 @@ test("manifest paths and named guards resolve against tracked files and CI", asy
     .decode(Bun.spawnSync(["git", "ls-files", "-z"], { stdout: "pipe" }).stdout)
     .split("\0")
     .filter(Boolean);
-  const steps = new Set(
-    [...ci.matchAll(/^\s+- name: (.+)$/gmu)].map((match) => match[1]),
-  );
+  // Pooled checks are steps of their job, so resolve names through them.
+  const workflow: unknown = Bun.YAML.parse(ci);
+  const steps = new Set([
+    ...[...ci.matchAll(/^\s+- name: (.+)$/gmu)].map((match) => match[1]),
+    ...CHECK_POOL_JOBS.flatMap((job) =>
+      workflowJobSteps(workflow, job).map(({ name }) => name),
+    ),
+  ]);
   for (const entry of GENERATORS) {
     for (const glob of entry.inputs) {
       expect(
@@ -1185,6 +1192,34 @@ test("every plan builds the derived outputs its generators read before running t
     }
   }
   expect([...new Set(problems)]).toEqual([]);
+});
+
+// Building a prerequisite first is useless if the run then skips it: a derived
+// generator's check guards tracking, so it passes on a clean checkout that
+// lacks the outputs. Every check here passes; only committed outputs may skip.
+test("a run writes every derived generator even when its check passes", () => {
+  const spawned: string[] = [];
+  const failed = runGenerators(
+    orderGenerators(GENERATORS.filter(({ autofix }) => autofix)),
+    (command) => {
+      spawned.push(command.join(" "));
+      return 0;
+    },
+    () => undefined,
+  );
+  expect(failed).toBeNull();
+  for (const owner of GENERATORS.filter(({ autofix }) => autofix)) {
+    expect(spawned.includes(owner.write.join(" ")), owner.id).toBe(
+      owner.outputKind === "derived" || owner.check === null,
+    );
+  }
+  expect(
+    runGenerators(
+      [generator("mcp-app-bundles")],
+      () => 1,
+      () => undefined,
+    )?.id,
+  ).toBe("mcp-app-bundles");
 });
 
 test("a CLI registry change plans the MCP app bundles it reads", () => {

@@ -111,6 +111,12 @@ export const QUEUE_AUTHORITY = {
     worker: "apps/api/src/lib/account-deletion-cleanup-queue.ts",
     reason: "Platform cleanup after an account deletion request.",
   },
+  "account-exports": {
+    authority: "org-automation",
+    worker: "apps/api/src/lib/account-export/queue.ts",
+    reason:
+      "Builds an account's own personal data archive; every organization page rechecks current membership under that account's row-level scope.",
+  },
   "bilingual-translation-runs": {
     authority: "member-run",
     worker: "apps/api/src/lib/bilingual/run-queue.ts",
