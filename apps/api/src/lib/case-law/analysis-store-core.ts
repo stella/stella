@@ -89,8 +89,13 @@ type AnalysisSave = {
    * two runs over the same document, so a writer that computed from
    * something beside the document (the citation graph) passes what it saw
    * and loses the race rather than overwriting a fresher result.
+   *
+   * Always a finished analysis, never a generation sentinel: an in-progress
+   * row changes while its run streams sections into it, so whole-value
+   * equality with the claimed sentinel would refuse the run's own save. A
+   * generation run's final save is fenced by fingerprint and content hash.
    */
-  expected?: unknown;
+  expected?: DecisionAnalysis;
 };
 
 type AnalysisRelease = {
