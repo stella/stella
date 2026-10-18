@@ -1,7 +1,8 @@
 /**
- * AVT verification screen: the document's claims underlined by verdict, the
- * filter and triage toolbar, and the claim detail panel. Sentence granularity
- * and one two-column layout (stacked below `md`).
+ * AVT verification screen: the document's text in the shared legal reader
+ * with its claims underlined by verdict, the filter and triage toolbar, and
+ * the claim detail panel. Sentence granularity and one two-column layout
+ * (stacked below `md`).
  */
 
 import * as React from "react";
@@ -9,6 +10,8 @@ import * as React from "react";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { LiteralTextProvider } from "@stll/decision-reader/display-elision-policy";
+import { BlockRenderer } from "@stll/decision-reader/document-ast-text";
 import { Button } from "@stll/ui/button";
 import {
   CheckIcon,
@@ -137,6 +140,28 @@ export const VerificationView = ({
     goTo: goToMatch,
   });
 
+  // One claim mark, wherever the pane draws it: over the reader's text, or
+  // on its own in a passage.
+  const renderClaim = (claim: VerificationClaim, children: React.ReactNode) => {
+    const { dim, highlight } = spanPresentation({
+      filterActive: filter !== "all",
+      matches: matches(claim, filter),
+    });
+    return (
+      <ClaimSpan
+        claim={claim}
+        contested={isContested(claim, contested)}
+        dim={dim}
+        highlight={highlight}
+        onSelect={setSelected}
+        selected={claim.id === selected}
+        state={effectiveState(claim, claim.review)}
+      >
+        {children}
+      </ClaimSpan>
+    );
+  };
+
   const stats: {
     key: string;
     label: string;
@@ -257,90 +282,79 @@ export const VerificationView = ({
           )}
           <ScrollArea className="min-h-0 flex-1">
             <div className="space-y-4 p-5">
-              {presentation.type === "prose"
-                ? presentation.blocks.map((block) => (
-                    <div className="space-y-1" key={block.ordinal}>
-                      {block.pageNumber !== null && (
-                        <div className="text-muted-foreground text-2xs font-medium">
-                          {t("common.page", {
-                            page: format.number(block.pageNumber),
-                          })}
-                        </div>
-                      )}
-                      <p
-                        className="font-serif text-base leading-relaxed text-pretty whitespace-pre-wrap"
-                        dir="auto"
+              {presentation.type === "prose" ? (
+                // The shared reader draws the stored text; each claim is a
+                // text anchor over its block, so the marks sit on the same
+                // offsets the server stored.
+                <LiteralTextProvider>
+                  <div className="space-y-4" style={READER_STYLE}>
+                    {presentation.blocks.map((block) => (
+                      <div
+                        className="space-y-1 whitespace-pre-wrap"
+                        key={block.ordinal}
                       >
-                        {block.segments.map((segment) => {
-                          if (segment.type === "plain") {
-                            return segment.text;
-                          }
-                          const claim = segment.claim;
-                          const { dim, highlight } = spanPresentation({
-                            filterActive: filter !== "all",
-                            matches: matches(claim, filter),
-                          });
-                          return (
-                            <ClaimSpan
-                              claim={claim}
-                              contested={isContested(claim, contested)}
-                              dim={dim}
-                              highlight={highlight}
-                              key={claim.id}
-                              onSelect={setSelected}
-                              selected={claim.id === selected}
-                              state={effectiveState(claim, claim.review)}
-                              text={segment.text}
-                            />
-                          );
-                        })}
-                      </p>
-                    </div>
-                  ))
-                : presentation.passages.map((passage) => (
-                    <div className="space-y-1" key={passage.key}>
-                      {passage.pageNumber !== null && (
-                        <div className="text-muted-foreground text-2xs font-medium">
-                          {t("common.page", {
-                            page: format.number(passage.pageNumber),
-                          })}
+                        {block.pageNumber !== null && (
+                          <div className="text-muted-foreground text-2xs font-sans font-medium">
+                            {t("common.page", {
+                              page: format.number(block.pageNumber),
+                            })}
+                          </div>
+                        )}
+                        <div dir="auto">
+                          <BlockRenderer
+                            activeMatchIndex={NO_ACTIVE_MATCH}
+                            anchorPresentation="embedded"
+                            anchorsByPieceId={{
+                              [block.paragraph.id]: block.claimSpans.map(
+                                ({ claim, start, end }) => ({
+                                  start,
+                                  end,
+                                  key: claim.id,
+                                  render: (children) =>
+                                    renderClaim(claim, children),
+                                }),
+                              ),
+                            }}
+                            block={block.paragraph}
+                            rangesByPieceId={NO_RANGES}
+                            variant="case-law"
+                          />
                         </div>
-                      )}
-                      <p
-                        className="font-serif text-base leading-relaxed"
-                        dir="auto"
-                      >
-                        {passage.claims.map((claim, index) => {
-                          const { dim, highlight } = spanPresentation({
-                            filterActive: filter !== "all",
-                            matches: matches(claim, filter),
-                          });
-                          return (
-                            <React.Fragment key={claim.id}>
-                              {index > 0 && (
-                                <span
-                                  aria-hidden="true"
-                                  className="text-muted-foreground"
-                                >
-                                  {" … "}
-                                </span>
-                              )}
-                              <ClaimSpan
-                                claim={claim}
-                                contested={isContested(claim, contested)}
-                                dim={dim}
-                                highlight={highlight}
-                                onSelect={setSelected}
-                                selected={claim.id === selected}
-                                state={effectiveState(claim, claim.review)}
-                                text={claim.text}
-                              />
-                            </React.Fragment>
-                          );
+                      </div>
+                    ))}
+                  </div>
+                </LiteralTextProvider>
+              ) : (
+                presentation.passages.map((passage) => (
+                  <div className="space-y-1" key={passage.key}>
+                    {passage.pageNumber !== null && (
+                      <div className="text-muted-foreground text-2xs font-medium">
+                        {t("common.page", {
+                          page: format.number(passage.pageNumber),
                         })}
-                      </p>
-                    </div>
-                  ))}
+                      </div>
+                    )}
+                    <p
+                      className="font-serif text-base leading-relaxed"
+                      dir="auto"
+                    >
+                      {passage.claims.map((claim, index) => (
+                        <React.Fragment key={claim.id}>
+                          {index > 0 && (
+                            <span
+                              aria-hidden="true"
+                              className="text-muted-foreground"
+                            >
+                              {" … "}
+                            </span>
+                          )}
+                          {renderClaim(claim, claim.text)}
+                        </React.Fragment>
+                      ))}
+                    </p>
+                  </div>
+                ))
+              )}
               <div className="flex flex-wrap gap-2 border-t pt-3">
                 {LEGEND_STATES.map((state) => (
                   <StateChip key={state} state={state} />
@@ -387,6 +401,17 @@ true satisfies Exclude<ClaimState, (typeof STAT_STATES)[number]> extends never
   : never;
 
 const LEGEND_STATES = STAT_STATES;
+
+// The pane has no find bar: the reader draws no search marks.
+const NO_RANGES = {};
+const NO_ACTIVE_MATCH = -1;
+
+/** The reader's body typography, as the statute reader sets it. */
+const READER_STYLE = {
+  fontFamily: "var(--reader-body-font)",
+  fontSize: "var(--reader-body-size)",
+  lineHeight: "var(--reader-body-line-height)",
+} as const;
 
 const claimDomId = (claimId: string): string => `avt-claim-${claimId}`;
 
@@ -490,7 +515,8 @@ type ClaimSpanProps = {
   highlight: boolean;
   contested: boolean;
   onSelect: (id: VerificationClaim["id"]) => void;
-  text: string;
+  /** The claim's words, as the reader or the passage drew them. */
+  children: React.ReactNode;
 };
 
 const ClaimSpan = ({
@@ -501,7 +527,7 @@ const ClaimSpan = ({
   highlight,
   contested,
   onSelect,
-  text,
+  children,
 }: ClaimSpanProps) => {
   const t = useTranslations();
   const reviewStatus = claim.review?.status ?? null;
@@ -522,7 +548,7 @@ const ClaimSpan = ({
       onClick={() => onSelect(claim.id)}
       type="button"
     >
-      {text}
+      {children}
       {contested && (
         <CircleAlertIcon
           aria-hidden="true"

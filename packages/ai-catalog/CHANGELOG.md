@@ -1,5 +1,17 @@
 # @stll/ai-catalog
 
+## 0.8.0
+
+### Minor Changes
+
+- [#5588](https://github.com/stella/stella/pull/5588) [`187f232`](https://github.com/stella/stella/commit/187f2321dddcd7776e00b789a84411bd7f319f61) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Replace model roles with separate task and organization override-group types. Resolve defaults and request modes from a total task ledger; use Claude Haiku 5.5 for search expansion, classification, and short text on Anthropic, Bedrock, and OpenRouter.
+
+## 0.7.1
+
+### Patch Changes
+
+- [#5769](https://github.com/stella/stella/pull/5769) [`7d21fdb`](https://github.com/stella/stella/commit/7d21fdb179373956566d4c5f2098a0dfb37af275) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Offer Gemini 4 Argon on the Google and OpenRouter routes.
+
 ## 0.7.0
 
 ### Minor Changes
