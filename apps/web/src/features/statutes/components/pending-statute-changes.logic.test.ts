@@ -18,6 +18,15 @@ test("inert identifiers have no link destination", () => {
   expect(resolveAmendmentHref("publisher-record-159")).toBeUndefined();
 });
 
-test("an ELI from a country without statute routes remains plain text", () => {
-  expect(resolveAmendmentHref("eli/at/bgbl/2026/159")).toBeUndefined();
+test.each(["eli/at/bgbl/2026/159", "/eli/at/bgbl/2026/159", "/publisher/159"])(
+  "an unresolved relative identifier %s remains plain text",
+  (identifier) => {
+    expect(resolveAmendmentHref(identifier)).toBeUndefined();
+  },
+);
+
+test("an absolute publisher URL stays a link", () => {
+  expect(resolveAmendmentHref("https://example.test/2026/159")).toBe(
+    "https://example.test/2026/159",
+  );
 });

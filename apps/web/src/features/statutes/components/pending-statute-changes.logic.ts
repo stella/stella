@@ -35,5 +35,6 @@ export const resolveAmendmentHref = (
     }
   }
 
-  return sanitizeHref(identifier);
+  // A publisher's relative path names its own site, never one of our routes.
+  return URL.canParse(identifier) ? sanitizeHref(identifier) : undefined;
 };
