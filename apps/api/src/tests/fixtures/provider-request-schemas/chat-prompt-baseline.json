@@ -40,6 +40,10 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 32845
+      },
+      {
+        "reason": "Record the organization AI instructions setting in the default tool surface.",
+        "tokens": 33036
       }
     ],
     "anthropic/extended": [
@@ -82,6 +86,10 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 33336
+      },
+      {
+        "reason": "Record the organization AI instructions setting in the default tool surface.",
+        "tokens": 33525
       }
     ],
     "bedrock/default": [
@@ -124,6 +132,10 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 33078
+      },
+      {
+        "reason": "Record the organization AI instructions setting in the default tool surface.",
+        "tokens": 33280
       }
     ],
     "bedrock/extended": [
@@ -166,6 +178,10 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 33567
+      },
+      {
+        "reason": "Record the organization AI instructions setting in the default tool surface.",
+        "tokens": 33768
       }
     ],
     "google/default": [
@@ -204,6 +220,10 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 32188
+      },
+      {
+        "reason": "Record the organization AI instructions setting in the default tool surface.",
+        "tokens": 32400
       }
     ],
     "google/extended": [
@@ -238,6 +258,10 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 32666
+      },
+      {
+        "reason": "Record the organization AI instructions setting in the default tool surface.",
+        "tokens": 32879
       }
     ],
     "mistral/default": [
@@ -280,6 +304,10 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 34330
+      },
+      {
+        "reason": "Record the organization AI instructions setting in the default tool surface.",
+        "tokens": 34559
       }
     ],
     "mistral/extended": [
@@ -322,6 +350,10 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 34857
+      },
+      {
+        "reason": "Record the organization AI instructions setting in the default tool surface.",
+        "tokens": 35085
       }
     ],
     "openai/default": [
@@ -364,6 +396,10 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 33933
+      },
+      {
+        "reason": "Record the organization AI instructions setting in the default tool surface.",
+        "tokens": 34151
       }
     ],
     "openai/extended": [
@@ -406,6 +442,10 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 34449
+      },
+      {
+        "reason": "Record the organization AI instructions setting in the default tool surface.",
+        "tokens": 34666
       }
     ],
     "openrouter-anthropic/default": [
