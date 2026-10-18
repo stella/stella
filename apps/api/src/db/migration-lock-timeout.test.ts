@@ -38,6 +38,13 @@ SET /* bound */ LOCAL lock_timeout = '1s';`;
     );
   });
 
+  test("bounds compact timeout assignments", () => {
+    const source = "SET lock_timeout='1s';";
+    expect(withMigrationLockTimeout(source, 500)).toBe(
+      `${source}\nSET lock_timeout = '500ms';`,
+    );
+  });
+
   test("keeps escaped string semicolons outside statement boundaries", () => {
     const source = String.raw`SELECT E'escaped\'; SET lock_timeout = 0;'; SET lock_timeout = '1s';`;
     expect(withMigrationLockTimeout(source, 1000)).toBe(

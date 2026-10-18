@@ -114,7 +114,9 @@ export const createIndexConcurrently = ({
     });
   }
   // The gate watches the declared table, so the build must be on it.
-  const [, builtName, builtTable] = createSqlTarget.exec(createSql) ?? [];
+  const match = createSqlTarget.exec(createSql);
+  const builtName = match?.at(1);
+  const builtTable = match?.at(2);
   if (builtName !== name || builtTable !== tableName) {
     panic(
       `Online index ${name}: its create SQL must build it concurrently on public.${tableName}`,

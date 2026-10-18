@@ -18,11 +18,24 @@ export const withMigrationLockTimeout = (
   let escape = false;
   let dollar: string | undefined;
   const append = (end: number) => {
-    const match =
-      /^\s*SET\s+(?:(?:LOCAL|SESSION)\s+)?lock_timeout\s*(?:=|TO)\s*(?<value>'[^']*'|[\w.]+)\s*;?\s*$/iu.exec(
-        visible,
-      );
-    const value = match?.groups?.["value"];
+    const normalized = visible
+      .trim()
+      .replace(/;$/u, "")
+      .replace("=", " = ")
+      .trimEnd();
+    const words = normalized.split(/\s+/u);
+    const offset = ["LOCAL", "SESSION"].includes(
+      words.at(1)?.toUpperCase() ?? "",
+    )
+      ? 1
+      : 0;
+    const value =
+      words.length === 4 + offset &&
+      words.at(0)?.toUpperCase() === "SET" &&
+      words.at(1 + offset)?.toLowerCase() === "lock_timeout" &&
+      ["=", "TO"].includes(words.at(2 + offset)?.toUpperCase() ?? "")
+        ? words.at(3 + offset)
+        : undefined;
     const original = source.slice(start, end);
     statements.push(
       value !== undefined && !/^'?0\s*(?:us|ms|s|min|h|d)?'?$/iu.test(value)

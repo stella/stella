@@ -21,11 +21,9 @@ const configs = fc.record({
 });
 const sample = fc.double({ min: 0, max: 1, noNaN: true });
 
-const planInvariant =
-  "lock retry plans preserve queue bounds and stop permanently";
-test(planInvariant, () => {
+test("lock retry plans preserve queue bounds and stop permanently", () => {
   assertProperty(
-    planInvariant,
+    "lock retry plans preserve queue bounds and stop permanently",
     fc.property(
       configs,
       fc.array(sample, { minLength: 16, maxLength: 16 }),
@@ -67,11 +65,9 @@ const lockLoss = () =>
     severity: "ERROR",
   });
 
-const executionInvariant =
-  "lock retry execution spends only its planned queue budget";
-test(executionInvariant, async () => {
+test("lock retry execution spends only its planned queue budget", async () => {
   await assertProperty(
-    executionInvariant,
+    "lock retry execution spends only its planned queue budget",
     fc.asyncProperty(configs, sample, async (config, random) => {
       let clock = 0;
       const timeouts: number[] = [];
@@ -119,11 +115,9 @@ test("full jitter includes both ends of each exponentially capped pause", () => 
   }
 });
 
-const fatalInvariant =
-  "non-lock failures propagate unchanged on the initial attempt";
-test(fatalInvariant, async () => {
+test("non-lock failures propagate unchanged on the initial attempt", async () => {
   await assertProperty(
-    fatalInvariant,
+    "non-lock failures propagate unchanged on the initial attempt",
     fc.asyncProperty(
       fc.constantFrom("40P01", "57014", "23505", "42501", "08006"),
       sample,
