@@ -109,13 +109,6 @@
     "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
   },
   {
-    "id": "apps/api/src/lib/account-deletion-steps.ts::deleteUserFiles",
-    "writes": {
-      "delete:userFiles": 1
-    },
-    "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
-  },
-  {
     "id": "apps/api/src/lib/account-deletion-steps.ts::reassignActiveTaskAssignmentsAndDropMemberships",
     "writes": {
       "delete:member": 1,

@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
 
+import { assertProperty } from "@stll/property-testing";
+import { stripDiacritics } from "@stll/text-normalize";
 import type { OutlineItem } from "@stll/ui/outline-rail";
 
 import {
@@ -89,6 +92,41 @@ describe("rankOutlineMatches", () => {
     expect(byTitle.exactId).toBeNull();
   });
 
+  test.each([
+    ["Čapkově", ["czech"]],
+    ["capkov", ["czech"]],
+    ["C\u030capkov", ["czech"]],
+    ["[a+b]", ["punctuation"]],
+    ["a.b", []],
+    ["strasse", []],
+    ["filing", []],
+    ["σ", []],
+    ["😀", ["astral"]],
+    // A half-emoji query becomes U+FFFD instead of matching inside the emoji.
+    ["\ud83d", ["unpaired"]],
+    // Distinct lone surrogates normalize to the same replacement character.
+    ["\ud800", ["unpaired"]],
+    ["capek novak", []],
+  ])(
+    "preserves literal substring and existing folding for %s",
+    (query, expected) => {
+      const entries: OutlineItem[] = [
+        { id: "czech", label: "O Čapkově návrhu", level: 0 },
+        { id: "punctuation", label: "[a+b]", level: 0 },
+        { id: "german", label: "Straße", level: 0 },
+        { id: "ligature", label: "ﬁling", level: 0 },
+        { id: "greek", label: "ΟΣ", level: 0 },
+        { id: "astral", label: "😀", level: 0 },
+        { id: "unpaired", label: "\ud801", level: 0 },
+        { id: "words", label: "Čapek a Novák", level: 0 },
+      ];
+      expect(
+        rankOutlineMatches(entries, query).matches.map(({ item }) => item.id),
+      ).toEqual(expected);
+      expect(rankOutlineMatches([], query).matches).toEqual([]);
+    },
+  );
+
   test("an empty field leaves the outline to the caller", () => {
     expect(rankOutlineMatches(items, "   ")).toEqual({
       exactId: null,
@@ -151,4 +189,71 @@ describe("clampSelectedIndex", () => {
     expect(clampSelectedIndex({ count: 3, index: -1 })).toBe(0);
     expect(clampSelectedIndex({ count: 3, index: 1 })).toBe(1);
   });
+});
+
+const searchText = fc.string({
+  unit: fc.constantFrom(
+    "a",
+    "A",
+    "Č",
+    "ě",
+    "ß",
+    "ﬁ",
+    "Σ",
+    "ς",
+    "1",
+    "[",
+    "]",
+    "+",
+    ".",
+    " ",
+    "\n",
+    "\u030c",
+    "😀",
+    "\ud800",
+    "\ud801",
+  ),
+  size: "medium",
+});
+
+test("outline literal engine agrees with scalar substring oracle", () => {
+  assertProperty(
+    "outline literal engine agrees with scalar substring oracle",
+    fc.property(fc.array(searchText), searchText, (texts, query) => {
+      const entries = texts.map((title, index) => ({
+        id: String(index),
+        label: "entry",
+        level: 0,
+        title,
+      }));
+      const fold = (value: string) =>
+        stripDiacritics(value.toWellFormed()).toLowerCase();
+      const expected =
+        fold(query.trim()) === ""
+          ? []
+          : entries.filter(({ title }) =>
+              fold(`entry ${title} `).includes(fold(query.trim())),
+            );
+      expect(
+        rankOutlineMatches(entries, query).matches.map(({ item }) => item),
+      ).toEqual(expected);
+    }),
+  );
+});
+
+test("drops queries that fold to an empty search key", () => {
+  expect(
+    rankOutlineMatches([{ id: "astral", label: "😀", level: 0 }], "\u030c"),
+  ).toEqual({ exactId: null, matches: [] });
+});
+
+test("matches a long literal query across outline entries", () => {
+  const query = "Čapek".repeat(512);
+  const entries = [
+    { id: "long", label: "entry", level: 0, title: `Návrh ${query} závěr` },
+    { id: "other", label: "entry", level: 0, title: "Čapkův návrh" },
+  ];
+  expect(
+    rankOutlineMatches(entries, query).matches.map(({ item }) => item.id),
+  ).toEqual(["long"]);
 });
