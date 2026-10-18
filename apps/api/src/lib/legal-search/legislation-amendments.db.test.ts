@@ -30,10 +30,10 @@ import {
   sanitizeLegislationAmendments,
   syncLegislationAmendmentsTx,
 } from "@/api/lib/legal-search/legislation-amendments";
+import type { SanitizedLegislationAmendmentSnapshot } from "@/api/lib/legal-search/legislation-amendments";
 import type {
-  LegislationDocumentInput,
   LegislationAmendmentRelation,
-  LegislationAmendmentSnapshot,
+  LegislationDocumentInput,
 } from "@/api/lib/legal-search/legislation-ingestion-types";
 import type {
   LegislationReadDb,
@@ -67,7 +67,7 @@ const relation = {
 const snapshot = (
   observedAt: string,
   relations: LegislationAmendmentRelation[],
-): LegislationAmendmentSnapshot =>
+): SanitizedLegislationAmendmentSnapshot =>
   sanitizeLegislationAmendments({
     observedAt,
     relations,
@@ -78,9 +78,14 @@ let db: ReturnType<typeof drizzle>;
 let scopedDb: ScopedDb;
 const corpus = {
   mode: "off",
-  write: async () => await Promise.resolve({ type: "skipped-empty" as const }),
+  write: async () =>
+    await Promise.resolve({
+      type: "skipped-empty" as const,
+      written: null,
+      contentHash: "0".repeat(64),
+    }),
 } satisfies LegislationCorpusDependencies;
-const sync = async (input: LegislationAmendmentSnapshot) =>
+const sync = async (input: SanitizedLegislationAmendmentSnapshot) =>
   await db.transaction(
     async (tx) =>
       await syncLegislationAmendmentsTx(asTestRaw(tx), {
@@ -126,6 +131,55 @@ afterAll(async () => {
 });
 
 describe("publisher amendment snapshots", () => {
+  test("unchanged ingestion sanitizes a newer amendment observation", async () => {
+    const input = {
+      sourceId,
+      eli: "eli/cz/sb/2012/91",
+      title: "Act 91/2012",
+      country: "CZE",
+      language: "cs",
+      version: {
+        type: "consolidation",
+        validFrom: "2027-01-01",
+        end: { type: "open" },
+      },
+      fulltext: "§ 1",
+      rawHash: "unchanged-amendment-contract-v1",
+      amendments: {
+        observedAt: "2026-10-16T11:00:00Z",
+        relations: [relation],
+        coverage: { type: "complete" },
+      },
+    } satisfies LegislationDocumentInput;
+    const first = await processLegislationDocument(input, scopedDb, { corpus });
+    expect(first).toMatchObject({ type: "stored", skipped: false });
+
+    const stored = await processLegislationDocument(
+      {
+        ...input,
+        amendments: {
+          ...input.amendments,
+          observedAt: "2026-10-17T11:00:00Z",
+          relations: [{ ...relation, amendingTitle: "Act\u0000 159/2026" }],
+        },
+      },
+      scopedDb,
+      { corpus },
+    );
+
+    expect(stored).toMatchObject({ type: "stored", skipped: true });
+    expect(
+      (
+        await readLegislationAmendments(asTestRaw(db), {
+          work: { ...work, eli: input.eli },
+          direction: "incoming",
+          limit: 10,
+        })
+      ).items.find(({ publisherId }) => publisherId === relation.publisherId)
+        ?.amendingTitle,
+    ).toBe("Act 159/2026");
+  });
+
   test("ingestion carries amendment observations through public statute and version reads", async () => {
     const dated = {
       ...relation,
@@ -182,6 +236,9 @@ describe("publisher amendment snapshots", () => {
         legislationDb,
         surface: "pages",
       });
+      if ("code" in statute || "code" in versions) {
+        throw new Error("Expected amendment reader fixtures to exist");
+      }
       return {
         pending: statute.pendingChanges?.items
           .map(({ publisherId }) => publisherId)
@@ -348,14 +405,16 @@ describe("publisher amendment snapshots", () => {
       effectiveText: conditional.effective.text,
     });
     expect(
-      await sync({
-        observedAt: "2026-10-18T10:00:00Z",
-        relations: [],
-        coverage: {
-          type: "not-stated",
-          reason: "No relation model in this source channel",
-        },
-      }),
+      await sync(
+        sanitizeLegislationAmendments({
+          observedAt: "2026-10-18T10:00:00Z",
+          relations: [],
+          coverage: {
+            type: "not-stated",
+            reason: "No relation model in this source channel",
+          },
+        }),
+      ),
     ).toBe("not-observed");
     expect(await incoming()).toEqual(rows);
     expect(await sync(first)).toBe("superseded");
@@ -416,14 +475,16 @@ describe("publisher amendment snapshots", () => {
     ).toBe("2026-10-16T11:00:00.000Z");
   });
   test("relation-bearing observations supersede an absence-only channel even when fetched earlier", async () => {
-    await sync({
-      observedAt: "2026-10-18T10:00:00Z",
-      relations: [],
-      coverage: {
-        type: "not-stated",
-        reason: "No relation model in this source channel",
-      },
-    });
+    await sync(
+      sanitizeLegislationAmendments({
+        observedAt: "2026-10-18T10:00:00Z",
+        relations: [],
+        coverage: {
+          type: "not-stated",
+          reason: "No relation model in this source channel",
+        },
+      }),
+    );
     expect(await sync(snapshot("2026-10-16T11:00:00Z", [relation]))).toBe(
       "applied",
     );

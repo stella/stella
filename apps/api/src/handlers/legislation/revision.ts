@@ -15,13 +15,21 @@ import {
 } from "@/api/lib/legal-search/corpus-storage";
 import type { CorpusWriteOutcome } from "@/api/lib/legal-search/corpus-storage";
 import { sanitizeLegislationAmendments } from "@/api/lib/legal-search/legislation-amendments";
+import type { SanitizedLegislationAmendmentSnapshot } from "@/api/lib/legal-search/legislation-amendments";
 import { typedLegislationClassification } from "@/api/lib/legal-search/legislation-expression-classification";
 import type { LegislationExpressionClassification } from "@/api/lib/legal-search/legislation-expression-classification";
 import type { LegislationDocumentInput } from "@/api/lib/legal-search/legislation-ingestion-types";
 
+type SanitizedLegislationDocumentInput = Omit<
+  LegislationDocumentInput,
+  "amendments"
+> & {
+  amendments?: SanitizedLegislationAmendmentSnapshot | undefined;
+};
+
 const sanitizeInput = (
   input: LegislationDocumentInput,
-): LegislationDocumentInput => ({
+): SanitizedLegislationDocumentInput => ({
   ...input,
   eli: stripDangerousChars(input.eli),
   title: stripDangerousChars(input.title),
@@ -153,7 +161,7 @@ type RevisionSourceRaw = {
 
 /** One fetched revision owns both its database fields and corpus payload. */
 export class LegislationRevision {
-  readonly #input: LegislationDocumentInput;
+  readonly #input: SanitizedLegislationDocumentInput;
   readonly #contentHash: string;
 
   constructor(input: LegislationDocumentInput) {

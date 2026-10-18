@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/legal-search/legislation-amendments.ts",
+  "delta": 1,
+  "reason": "An amendment snapshot is replaced atomically in one transaction; its relation rows are inserted in bounded chunks so each statement stays below the PostgreSQL bind-parameter ceiling, and the chunks must run in sequence within that transaction."
+}

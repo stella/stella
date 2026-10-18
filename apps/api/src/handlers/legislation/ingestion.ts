@@ -623,7 +623,7 @@ const commitLegislationVersion = async ({
     await declareWriterContract(tx);
     await syncLegislationAmendmentsTx(tx, {
       work: input,
-      snapshot: input.amendments,
+      snapshot: revision.input.amendments,
     });
     // Settle and the write-error retry take the projection source before the
     // row; this write takes them in the same order so they cannot deadlock.
@@ -864,28 +864,32 @@ type ProcessLegislationDocumentOptions = {
  * the PostgreSQL full-text projection remains asynchronous.
  */
 export const processLegislationDocument = async (
-  raw: LegislationDocumentInput,
+  input: LegislationDocumentInput,
   scopedDb: ScopedDb,
   {
     corpus = LEGISLATION_CORPUS_DEPENDENCIES,
     writeSourceRaw = writeRawSourcePayload,
   }: ProcessLegislationDocumentOptions = {},
 ): Promise<ProcessLegislationResult> => {
-  const revision = new LegislationRevision(raw);
-  const input = revision.input;
+  const revision = new LegislationRevision(input);
+  const revisionInput = revision.input;
   const window = revision.window;
-  const stated = statedClassification(input);
+  const stated = statedClassification(revisionInput);
   const expectedContentHash = revision.contentHash;
 
-  let existing = await findStoredVersion({ input, window, scopedDb });
-  let classification = storedClassification(input, stated, existing);
+  let existing = await findStoredVersion({
+    input: revisionInput,
+    window,
+    scopedDb,
+  });
+  let classification = storedClassification(revisionInput, stated, existing);
   let sourceHash = revision.sourceHash(classification);
   const existingCorpusPlan =
     existing === undefined
       ? null
       : planCorpusDocumentWrite({
           documentId: existing.id,
-          jurisdiction: input.country,
+          jurisdiction: revisionInput.country,
           ...revision.payload,
           stored: storedCorpusWrite(existing),
         });
@@ -908,8 +912,8 @@ export const processLegislationDocument = async (
   ) {
     await scopedDb(async (tx) => {
       await syncLegislationAmendmentsTx(tx, {
-        work: input,
-        snapshot: input.amendments,
+        work: revisionInput,
+        snapshot: revision.input.amendments,
       });
     });
     await settleLegislationCorpusProjection({
@@ -926,7 +930,11 @@ export const processLegislationDocument = async (
     };
   }
 
-  const sourceRaw = await storeSourceRaw({ input, existing, writeSourceRaw });
+  const sourceRaw = await storeSourceRaw({
+    input: revisionInput,
+    existing,
+    writeSourceRaw,
+  });
   if (sourceRaw === null) {
     return { type: "source-raw-write-failed" };
   }
@@ -946,7 +954,7 @@ export const processLegislationDocument = async (
   sourceHash = written.sourceHash;
 
   await reportWindowJunctions({
-    input,
+    input: revisionInput,
     window,
     classification,
     documentId: id,
@@ -984,7 +992,7 @@ export const processLegislationDocument = async (
       corpusWriteFailed = true;
       captureError(error, {
         documentId: id,
-        sourceId: input.sourceId,
+        sourceId: revisionInput.sourceId,
         step: "processLegislationDocument.corpusWrite",
       });
       await preserveLegislationCorpusWriteRetry({

@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 3,
+  "reason": "Publisher amendment snapshots, their relation rows and the observation watermark are derived public legislation data written by background ingestion together with the observed document; there is no workspace actor or member-visible action to record."
+}

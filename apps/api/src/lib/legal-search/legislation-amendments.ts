@@ -1,5 +1,7 @@
 import { panic } from "better-result";
 import { and, asc, eq, gt, inArray, or, sql } from "drizzle-orm";
+import { brand, custom, parse, pipe } from "valibot";
+import type { Brand } from "valibot";
 
 import { compareCodeUnit } from "@stll/collation";
 import { parsePlainDate, Temporal } from "@stll/time";
@@ -25,15 +27,29 @@ import {
   decodePaginationCursor,
   encodePaginationCursor,
 } from "@/api/lib/pagination";
+import { isRecord } from "@/api/lib/type-guards";
 
 export const LEGISLATION_AMENDMENT_PAGE_MAX = 500;
 export const LEGISLATION_AMENDMENT_SNAPSHOT_MAX = 50_000;
 const AMENDMENT_INSERT_BATCH_SIZE = 1000;
 
+export type SanitizedLegislationAmendmentSnapshot =
+  LegislationAmendmentSnapshot & Brand<"SanitizedLegislationAmendmentSnapshot">;
+
+const isLegislationAmendmentSnapshot = (
+  value: unknown,
+): value is LegislationAmendmentSnapshot =>
+  typeof value === "object" && value !== null;
+
+const sanitizedLegislationAmendmentSnapshotSchema = pipe(
+  custom<LegislationAmendmentSnapshot>(isLegislationAmendmentSnapshot),
+  brand("SanitizedLegislationAmendmentSnapshot"),
+);
+
 /** Sanitize before hashing, and reject identities whose effects would collide. */
 export const sanitizeLegislationAmendments = (
   snapshot: LegislationAmendmentSnapshot,
-): LegislationAmendmentSnapshot => {
+): SanitizedLegislationAmendmentSnapshot => {
   Temporal.Instant.from(snapshot.observedAt);
   if (snapshot.relations.length > LEGISLATION_AMENDMENT_SNAPSHOT_MAX) {
     return panic("Legislation amendment snapshot exceeds its relation limit");
@@ -102,14 +118,14 @@ export const sanitizeLegislationAmendments = (
   if (coverage.type === "not-stated" && relations.length > 0) {
     return panic("Unstated legislation amendments cannot carry relations");
   }
-  return {
+  return parse(sanitizedLegislationAmendmentSnapshotSchema, {
     observedAt: Temporal.Instant.from(snapshot.observedAt).toString(),
     relations,
     coverage:
       coverage.type === "complete"
         ? { type: "complete" }
         : { ...coverage, reason: stripDangerousChars(coverage.reason) },
-  };
+  });
 };
 
 const snapshotWork = (work: LegislationWorkRef) =>
@@ -121,7 +137,7 @@ const snapshotWork = (work: LegislationWorkRef) =>
 
 type SyncLegislationAmendmentsOptions = {
   work: LegislationWorkRef;
-  snapshot: LegislationAmendmentSnapshot | undefined;
+  snapshot: SanitizedLegislationAmendmentSnapshot | undefined;
 };
 
 /** Work-level lock precedes expression locks in the ingestion transaction. */
@@ -344,7 +360,8 @@ export const readLegislationAmendmentSnapshot = async (
       false
     ) AS available
   `);
-  if (executedRows(capability).at(0)?.available !== true) {
+  const capabilityRow = executedRows(capability).at(0);
+  if (!isRecord(capabilityRow) || capabilityRow["available"] !== true) {
     return null;
   }
 
