@@ -7,10 +7,9 @@ CREATE TABLE "legislation_amendment_snapshots" (
   "language" varchar(16) NOT NULL,
   "observed_at" timestamptz NOT NULL,
   "coverage" jsonb NOT NULL,
-  CONSTRAINT "legislation_amendment_snapshots_pk" PRIMARY KEY ("source_id", "target_eli", "language")
+  CONSTRAINT "legislation_amendment_snapshots_pk" PRIMARY KEY ("source_id", "target_eli", "language"),
+  CONSTRAINT "legislation_amendment_snapshots_source_fk" FOREIGN KEY ("source_id") REFERENCES "legislation_sources"("id") ON DELETE CASCADE
 );--> statement-breakpoint
-ALTER TABLE "legislation_amendment_snapshots" ADD CONSTRAINT "legislation_amendment_snapshots_source_fk" FOREIGN KEY ("source_id") REFERENCES "legislation_sources"("id") ON DELETE CASCADE NOT VALID;--> statement-breakpoint
-ALTER TABLE "legislation_amendment_snapshots" VALIDATE CONSTRAINT "legislation_amendment_snapshots_source_fk";--> statement-breakpoint
 CREATE TABLE "legislation_amendments" (
   "source_id" uuid NOT NULL REFERENCES "legislation_sources"("id") ON DELETE CASCADE,
   "target_eli" varchar(512) NOT NULL,
