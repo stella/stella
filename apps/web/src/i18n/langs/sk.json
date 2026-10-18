@@ -802,6 +802,8 @@
     "total": "Celkom",
     "vatRates": {
       "add": "Pridať sadzbu DPH",
+      "addCzechia": "Pridať sadzby pre Česko",
+      "addSlovakia": "Pridať sadzby pre Slovensko",
       "archiveConfirm": "Archivovať túto sadzbu DPH? Nebude už dostupná pre nové doklady.",
       "code": "Kód sadzby",
       "current": "Aktuálna sadzba",
@@ -816,6 +818,7 @@
       "overlap": "Obdobia platnosti pre rovnaký kód sadzby sa nesmú prekrývať.",
       "past": "Predchádzajúca sadzba",
       "periodHelp": "Počiatočný dátum je zahrnutý; koncový dátum nie je zahrnutý. Pre obdobie bez konca ponechajte koncový dátum prázdny.",
+      "presetResult": "Pridané: {added}; preskočené: {skipped}.",
       "rate": "Percentuálna sadzba DPH",
       "title": "Sadzby DPH",
       "validFrom": "Platí od",

@@ -3,6 +3,7 @@ import Elysia from "elysia";
 import archiveVatRate from "@/api/handlers/vat-rates/archive";
 import createVatRate from "@/api/handlers/vat-rates/create";
 import listVatRates from "@/api/handlers/vat-rates/list";
+import applyVatRatePreset from "@/api/handlers/vat-rates/presets/create";
 import updateVatRate from "@/api/handlers/vat-rates/update";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
 import { featureAccessGate } from "@/api/lib/auth/feature-access/route";
@@ -26,6 +27,10 @@ export const vatRateRoute = new Elysia({ prefix: "/vat-rates" })
   .post("/", createVatRate.handler, {
     permissions: createVatRate.config.permissions,
     body: createVatRate.config.body,
+  })
+  .post("/apply-preset", applyVatRatePreset.handler, {
+    permissions: applyVatRatePreset.config.permissions,
+    body: applyVatRatePreset.config.body,
   })
   .patch("/:vatRateId", updateVatRate.handler, {
     permissions: updateVatRate.config.permissions,

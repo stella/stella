@@ -28,10 +28,16 @@ export type VatRateInput = Parameters<(typeof api)["vat-rates"]["post"]>[0];
 export type VatRateCommand =
   | { type: "create"; values: VatRateInput }
   | { type: "update"; id: string; values: VatRateInput }
-  | { type: "archive"; id: string };
+  | { type: "archive"; id: string }
+  | { type: "applyPreset"; country: "SK" | "CZ" };
 export const sendVatRateCommand = async (command: VatRateCommand) => {
   if (command.type === "create") {
     return unwrapEden(await api["vat-rates"].post(command.values));
+  }
+  if (command.type === "applyPreset") {
+    return unwrapEden(
+      await api["vat-rates"]["apply-preset"].post({ country: command.country }),
+    );
   }
   const rate = api["vat-rates"]({ vatRateId: toSafeId<"vatRate">(command.id) });
   switch (command.type) {

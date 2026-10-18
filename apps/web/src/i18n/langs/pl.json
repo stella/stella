@@ -802,6 +802,8 @@
     "total": "Razem",
     "vatRates": {
       "add": "Dodaj stawkę VAT",
+      "addCzechia": "Dodaj stawki dla Czech",
+      "addSlovakia": "Dodaj stawki dla Słowacji",
       "archiveConfirm": "Zarchiwizować tę stawkę VAT? Nie będzie już dostępna dla nowych dokumentów.",
       "code": "Kod stawki",
       "current": "Bieżąca stawka",
@@ -816,6 +818,7 @@
       "overlap": "Okresy obowiązywania tego samego kodu stawki nie mogą się nakładać.",
       "past": "Poprzednia stawka",
       "periodHelp": "Data początkowa jest włączona; data końcowa jest wyłączona. Pozostaw datę końcową pustą, aby okres był otwarty.",
+      "presetResult": "Dodano: {added}; pominięto: {skipped}.",
       "rate": "Procent VAT",
       "title": "Stawki VAT",
       "validFrom": "Obowiązuje od",

@@ -982,3 +982,4 @@ export type {
   RulingIdentityKeys,
   RulingIdentityDefect,
 } from "./decision-ruling-identity";
+export * from "./vat-rate-presets";

@@ -802,6 +802,8 @@
     "total": "Összesen",
     "vatRates": {
       "add": "Áfakulcs hozzáadása",
+      "addCzechia": "Csehországi kulcsok hozzáadása",
+      "addSlovakia": "Szlovákiai kulcsok hozzáadása",
       "archiveConfirm": "Archiválja ezt az áfakulcsot? Új bizonylatokhoz többé nem lesz elérhető.",
       "code": "Áfakulcs kódja",
       "current": "Jelenlegi áfakulcs",
@@ -816,6 +818,7 @@
       "overlap": "Az azonos áfakulcskódhoz tartozó érvényességi időszakok nem fedhetik egymást.",
       "past": "Korábbi áfakulcs",
       "periodHelp": "A kezdő dátum az időszak része; a záró dátum már nem. Nyitott időszakhoz hagyja üresen a záró dátumot.",
+      "presetResult": "Hozzáadva: {added}; kihagyva: {skipped}.",
       "rate": "Áfa százalékban",
       "title": "Áfakulcsok",
       "validFrom": "Érvényes ettől",

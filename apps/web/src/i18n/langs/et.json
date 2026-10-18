@@ -802,6 +802,8 @@
     "total": "Kokku",
     "vatRates": {
       "add": "Lisa käibemaksumäär",
+      "addCzechia": "Lisa Tšehhi määrad",
+      "addSlovakia": "Lisa Slovakkia määrad",
       "archiveConfirm": "Kas arhiveerida see käibemaksumäär? Seda ei saa enam uute dokumentide jaoks kasutada.",
       "code": "Määra kood",
       "current": "Praegune määr",
@@ -816,6 +818,7 @@
       "overlap": "Sama määra koodi kehtivusajad ei tohi kattuda.",
       "past": "Varasem määr",
       "periodHelp": "Alguskuupäev on kaasatud; lõppkuupäev ei ole kaasatud. Jätke lõppkuupäev tühjaks, kui periood on avatud.",
+      "presetResult": "Lisatud: {added}; vahele jäetud: {skipped}.",
       "rate": "Käibemaksuprotsent",
       "title": "Käibemaksumäärad",
       "validFrom": "Kehtib alates",

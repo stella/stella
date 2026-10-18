@@ -802,6 +802,8 @@
     "total": "Gesamt",
     "vatRates": {
       "add": "Umsatzsteuersatz hinzufügen",
+      "addCzechia": "Sätze für Tschechien hinzufügen",
+      "addSlovakia": "Sätze für die Slowakei hinzufügen",
       "archiveConfirm": "Diesen Umsatzsteuersatz archivieren? Er steht dann für neue Belege nicht mehr zur Verfügung.",
       "code": "Steuersatzcode",
       "current": "Aktueller Steuersatz",
@@ -816,6 +818,7 @@
       "overlap": "Gültigkeitszeiträume mit demselben Steuersatzcode dürfen sich nicht überschneiden.",
       "past": "Früherer Steuersatz",
       "periodHelp": "Das Anfangsdatum ist eingeschlossen; das Enddatum ist ausgeschlossen. Lassen Sie das Enddatum für einen offenen Zeitraum leer.",
+      "presetResult": "Hinzugefügt: {added}; übersprungen: {skipped}.",
       "rate": "Umsatzsteuer in Prozent",
       "title": "Umsatzsteuersätze",
       "validFrom": "Gültig ab",

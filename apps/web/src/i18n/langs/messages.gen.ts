@@ -805,6 +805,8 @@ type Messages = {
     "total": "Total";
     "vatRates": {
       "add": "Add VAT rate";
+      "addCzechia": "Add rates for Czechia";
+      "addSlovakia": "Add rates for Slovakia";
       "archiveConfirm": "Archive this VAT rate? It will no longer be available for new documents.";
       "code": "Rate code";
       "current": "Current rate";
@@ -819,6 +821,7 @@ type Messages = {
       "overlap": "Validity periods for the same rate code cannot overlap.";
       "past": "Past rate";
       "periodHelp": "The start date is included; the end date is excluded. Leave the end date blank for an open period.";
+      "presetResult": "Added {added}; skipped {skipped}.";
       "rate": "VAT percentage";
       "title": "VAT rates";
       "validFrom": "Valid since";

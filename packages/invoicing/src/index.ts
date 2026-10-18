@@ -17,6 +17,12 @@ export {
   type PaymentQrScheme,
 } from "./qr-payment";
 export { standardVatRateOn, type VatRatePeriod } from "./vat-rate-period";
+export {
+  VAT_RATE_PRESET_COUNTRIES,
+  VAT_RATE_PRESETS,
+  type VatRatePreset,
+  type VatRatePresetCountry,
+} from "./vat-rate-presets";
 export type {
   BankPaymentDetails,
   InvoiceDocument,

@@ -802,6 +802,8 @@
     "total": "Iš viso",
     "vatRates": {
       "add": "Pridėti PVM tarifą",
+      "addCzechia": "Pridėti Čekijos tarifus",
+      "addSlovakia": "Pridėti Slovakijos tarifus",
       "archiveConfirm": "Archyvuoti šį PVM tarifą? Jis nebebus prieinamas naujiems dokumentams.",
       "code": "Tarifo kodas",
       "current": "Dabartinis tarifas",
@@ -816,6 +818,7 @@
       "overlap": "To paties tarifo kodo galiojimo laikotarpiai negali persidengti.",
       "past": "Ankstesnis tarifas",
       "periodHelp": "Pradžios data įtraukiama; pabaigos data neįtraukiama. Atviram laikotarpiui palikite pabaigos datą tuščią.",
+      "presetResult": "Pridėta: {added}; praleista: {skipped}.",
       "rate": "PVM procentas",
       "title": "PVM tarifai",
       "validFrom": "Galioja nuo",

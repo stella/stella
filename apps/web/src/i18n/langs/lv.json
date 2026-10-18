@@ -802,6 +802,8 @@
     "total": "Kopā",
     "vatRates": {
       "add": "Pievienot PVN likmi",
+      "addCzechia": "Pievienot Čehijas likmes",
+      "addSlovakia": "Pievienot Slovākijas likmes",
       "archiveConfirm": "Arhivēt šo PVN likmi? Tā vairs nebūs pieejama jauniem dokumentiem.",
       "code": "Likmes kods",
       "current": "Pašreizējā likme",
@@ -816,6 +818,7 @@
       "overlap": "Viena likmes koda derīguma periodi nedrīkst pārklāties.",
       "past": "Iepriekšējā likme",
       "periodHelp": "Sākuma datums ir iekļauts; beigu datums nav iekļauts. Atvērtam periodam atstājiet beigu datumu tukšu.",
+      "presetResult": "Pievienotas: {added}; izlaistas: {skipped}.",
       "rate": "PVN procentuālā likme",
       "title": "PVN likmes",
       "validFrom": "Spēkā no",

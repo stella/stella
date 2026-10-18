@@ -802,6 +802,8 @@
     "total": "Celkem",
     "vatRates": {
       "add": "Přidat sazbu DPH",
+      "addCzechia": "Přidat sazby pro Česko",
+      "addSlovakia": "Přidat sazby pro Slovensko",
       "archiveConfirm": "Archivovat tuto sazbu DPH? Nebude již dostupná pro nové doklady.",
       "code": "Kód sazby",
       "current": "Aktuální sazba",
@@ -816,6 +818,7 @@
       "overlap": "Období platnosti pro stejný kód sazby se nesmějí překrývat.",
       "past": "Dřívější sazba",
       "periodHelp": "Počáteční datum je zahrnuto; koncové datum není zahrnuto. Pro období bez konce ponechte koncové datum prázdné.",
+      "presetResult": "Přidáno: {added}; přeskočeno: {skipped}.",
       "rate": "Procentní sazba DPH",
       "title": "Sazby DPH",
       "validFrom": "Platí od",

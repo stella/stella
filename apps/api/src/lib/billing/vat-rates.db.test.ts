@@ -12,6 +12,7 @@ import type { Transaction } from "@/api/db/root";
 import { vatRates } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import createVatRate from "@/api/handlers/vat-rates/create";
+import applyVatRatePreset from "@/api/handlers/vat-rates/presets/create";
 import updateVatRate from "@/api/handlers/vat-rates/update";
 import { resolveVatRate } from "@/api/lib/billing/vat-rates";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -27,12 +28,17 @@ import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 setDefaultTimeout(120_000);
+const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
+if (!runPostgresTests) {
+  throw new TypeError("VAT rate database tests require Postgres");
+}
 let testDb: TestDatabase;
 let ids: TestIds;
 const createdIds: SafeId<"vatRate">[] = [];
 type RateValues = typeof vatRates.$inferInsert & { id: SafeId<"vatRate"> };
 type CreateContext = Parameters<typeof createVatRate.handler>[0];
 type UpdateContext = Parameters<typeof updateVatRate.handler>[0];
+type ApplyPresetContext = Parameters<typeof applyVatRatePreset.handler>[0];
 
 const seedRates = async (values: RateValues[]) => {
   createdIds.push(...values.map(({ id }) => id));
@@ -78,6 +84,41 @@ afterAll(async () => {
 });
 
 describe("VAT rate validity", () => {
+  test("applies a preset idempotently and skips an overlapping existing code", async () => {
+    const existingId = createSafeId<"vatRate">();
+    await seedRates([
+      {
+        id: existingId,
+        organizationId: ids.orgA,
+        code: "sk-reduced-19",
+        name: "Custom",
+        rateBps: 1800,
+        validFrom: "2025-06-01",
+      },
+    ]);
+    const context = asTestRaw<ApplyPresetContext>({
+      ...requestContext(),
+      request: new Request("https://example.test/v1/vat-rates/apply-preset", {
+        method: "POST",
+      }),
+      route: "/v1/vat-rates/apply-preset",
+      body: { country: "SK" },
+    });
+    const first = await applyVatRatePreset.handler(context);
+    const second = await applyVatRatePreset.handler(context);
+    expect(first).toEqual({ added: 5, skipped: 1 });
+    expect(second).toEqual({ added: 0, skipped: 6 });
+    const rows = await testDb
+      .select()
+      .from(vatRates)
+      .where(eq(vatRates.organizationId, ids.orgA));
+    const presetRows = rows.filter(({ code }) => code.startsWith("sk-"));
+    createdIds.push(
+      ...presetRows.filter(({ id }) => id !== existingId).map(({ id }) => id),
+    );
+    expect(presetRows).toHaveLength(6);
+  });
+
   test("resolves inclusive starts, exclusive ends, gaps and an open-ended period", async () => {
     const code = `boundary-${Bun.randomUUIDv7()}`;
     const firstId = createSafeId<"vatRate">();

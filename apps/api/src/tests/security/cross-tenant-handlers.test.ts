@@ -153,6 +153,7 @@ import listMyTimeTimers from "@/api/handlers/time-timers/list";
 import readUserFileContent from "@/api/handlers/user-files/read-content";
 import readUserFileThumbnail from "@/api/handlers/user-files/read-thumbnail";
 import listVatRates from "@/api/handlers/vat-rates/list";
+import applyVatRatePreset from "@/api/handlers/vat-rates/presets/create";
 import updateVatRate from "@/api/handlers/vat-rates/update";
 import listMyWork from "@/api/handlers/work-obligations/queues/list";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
@@ -1240,6 +1241,19 @@ const isolationCases: IsolationCase[] = [
       }),
     expectDenied: expectStatus(404),
     expectPositive: (result) => expectRecordFieldEquals(result, "id", vatRateB),
+  },
+  {
+    name: "VAT rate preset applies only to the active organization",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(applyVatRatePreset, workspaceA, {
+        body: { country: "CZ" },
+      }),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(applyVatRatePreset, workspaceB, {
+        body: { country: "CZ" },
+      }),
+    expectDenied: (result) => expectRecordFieldEquals(result, "added", 5),
+    expectPositive: (result) => expectRecordFieldEquals(result, "added", 5),
   },
   {
     name: "time entry read by id",
