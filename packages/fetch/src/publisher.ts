@@ -564,9 +564,16 @@ const redirectedRequestInit = ({
 };
 
 // Unread response bodies hold their connection open until cancelled.
-const discardBody = async (response: Response, deadline: AbortSignal) =>
+// Without a signal the caller chose no deadline, so cancel is awaited as is.
+const discardBody = async (
+  response: Response,
+  signal: AbortSignal | undefined,
+) =>
   Result.tryPromise(async () =>
-    Promise.race([response.body?.cancel(), abortPromise(deadline)]),
+    Promise.race([
+      response.body?.cancel(),
+      ...(signal ? [abortPromise(signal)] : []),
+    ]),
   );
 
 type LoadRobotsOptions = {
@@ -940,7 +947,20 @@ const walkPublisherRedirects = async (
         delayAppliedMs: state.delayAppliedMs,
       });
     }
-    await response.body?.cancel();
+    const discarded = await discardBody(
+      response,
+      state.requestInit?.signal ?? undefined,
+    );
+    if (Result.isError(discarded)) {
+      return Result.err(
+        new PublisherRequestAbortedError({
+          message: "Publisher request was aborted while discarding a redirect",
+          url: state.url.href,
+          origin: state.url.origin,
+          cause: discarded.error.cause,
+        }),
+      );
+    }
     if (redirects >= MAX_REDIRECTS) {
       return redirectLimitResult(state);
     }

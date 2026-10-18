@@ -937,6 +937,38 @@ describe("publisher scheduler", () => {
     },
   );
 
+  test("a redirect body whose cancel never settles still ends at the caller deadline", async () => {
+    const request = createPolitePublisherFetch({
+      validateTarget: allowTarget,
+      fetcher: async (input) => {
+        if (
+          new URL(input instanceof Request ? input.url : input).pathname ===
+          "/robots.txt"
+        ) {
+          return new Response(null, { status: 404 });
+        }
+        return new Response(
+          new ReadableStream<Uint8Array>({
+            cancel: async () => await new Promise<never>(() => {}),
+          }),
+          {
+            status: 302,
+            headers: { location: "https://publisher.example/end" },
+          },
+        );
+      },
+      defaultMinimumIntervalMs: 0,
+    });
+
+    const outcome = await request("https://publisher.example/start", {
+      init: { signal: AbortSignal.timeout(20) },
+    });
+
+    expect(Result.isError(outcome) && outcome.error._tag).toBe(
+      "publisher_request_aborted",
+    );
+  });
+
   test("returns a typed refusal when redirects exceed the bound", async () => {
     let issued = 0;
     let cancelled = 0;
