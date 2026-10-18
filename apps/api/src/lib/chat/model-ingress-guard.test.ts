@@ -2,6 +2,7 @@ import type { MCPToolSource, ServerTool } from "@tanstack/ai";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { WORKSPACES_PER_ORGANIZATION_MAX } from "@stll/api-contract";
 import { assertProperty } from "@stll/property-testing";
 
 import { toSafeId } from "@/api/lib/branded-types";
@@ -80,7 +81,10 @@ describe("literal tenant id matching", () => {
     assertProperty(
       "non-overlapping tenant redaction equals sequential replacement",
       fc.property(
-        fc.array(fc.uuid(), { maxLength: 20 }),
+        fc.array(fc.uuid(), {
+          maxLength: WORKSPACES_PER_ORGANIZATION_MAX,
+          size: "small",
+        }),
         fc.string(),
         (ids, prefix) => {
           // Separators prevent adjacent suffix/prefix alignments. Remove any
