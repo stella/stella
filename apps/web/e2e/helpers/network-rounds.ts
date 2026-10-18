@@ -45,12 +45,14 @@ export const createNetworkRoundController = <Token>() => {
     },
     /** Reject incomplete measurements, while allowing held responses to drain. */
     finish: () => {
-      const undrained = requests.size;
+      const undrained = [...requests.values()].map(
+        ({ key, status: state }) => `${key} (${state})`,
+      );
       status = "loaded";
       requests.clear();
-      if (undrained > 0) {
+      if (undrained.length > 0) {
         throw new Error(
-          `Network rounds did not drain before the measurement ended: ${String(undrained)} request(s) still held or in flight`,
+          `Network rounds did not drain before the measurement ended: ${String(undrained.length)} request(s) still held or in flight: ${undrained.join(", ")}`,
         );
       }
     },
