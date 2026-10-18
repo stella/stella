@@ -64,6 +64,11 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
+  "apps/api/src/db/online-ddl-contention.postgres.test.ts": {
+    "count": 2,
+    "owner": "api",
+    "reason": "measures real lock waits against the database clock, so its gate clock must advance in real time"
+  },
   "apps/api/src/db/online-repair-holds.db.test.ts": {
     "count": 1,
     "owner": "api",

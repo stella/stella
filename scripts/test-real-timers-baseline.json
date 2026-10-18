@@ -49,6 +49,11 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
+  "apps/api/src/db/online-ddl-contention.postgres.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "polls pg_stat_activity until a real backend lock wait appears; the gate's wait contract gives up silently after its budget"
+  },
   "apps/api/src/db/online-index-gate.postgres.test.ts": {
     "count": 6,
     "owner": "api",
