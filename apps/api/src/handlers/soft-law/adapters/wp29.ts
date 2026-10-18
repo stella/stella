@@ -833,14 +833,14 @@ export const wp29Adapter = {
       }
     }
     const text = texts.length ? texts.join("\n\n") : null;
-    const recoveredMetadata = text
-      ? recoverWp29Reference(entry.metadata, text)
-      : Result.ok(entry.metadata);
-    if (recoveredMetadata.status === "error") {
-      return recoveredMetadata;
-    }
-    const documentMetadata = recoveredMetadata.value;
     if (extractionFailures.length) {
+      let documentMetadata = entry.metadata;
+      if (text) {
+        const recoveredMetadata = recoverWp29Reference(entry.metadata, text);
+        if (recoveredMetadata.status === "ok") {
+          documentMetadata = recoveredMetadata.value;
+        }
+      }
       return Result.ok({
         metadata: documentMetadata,
         raw,
@@ -850,8 +850,14 @@ export const wp29Adapter = {
         sourceDates: entry.sourceDates,
       });
     }
+    const recoveredMetadata = text
+      ? recoverWp29Reference(entry.metadata, text)
+      : Result.ok(entry.metadata);
+    if (recoveredMetadata.status === "error") {
+      return recoveredMetadata;
+    }
     return Result.ok({
-      metadata: documentMetadata,
+      metadata: recoveredMetadata.value,
       raw,
       text,
       extractionQuality,

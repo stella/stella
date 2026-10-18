@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { createTextPdf } from "@/api/lib/files/text-pdf";
 import { SoftLawAccessError } from "@/api/lib/legal-search/soft-law-access-types";
 import type { SoftLawFetch } from "@/api/lib/legal-search/soft-law-access-types";
 
@@ -163,6 +164,73 @@ describe("WP29 official source shapes", () => {
       extractionQuality: "extraction_failed",
     });
   });
+
+  test.each([
+    {
+      pdfText: "A readable opinion without an instrument number",
+      statedReference: { state: "not_stated" } as const,
+    },
+    {
+      pdfText: "Opinion WP 123 on transparent processing",
+      statedReference: { state: "stated", value: "WP 123" } as const,
+    },
+  ])(
+    "mixed archive assets preserve raw bytes and best-effort reference metadata ($pdfText)",
+    async ({ pdfText, statedReference }) => {
+      const wordUrl =
+        "https://ec.europa.eu/justice/article-29/documentation/opinion-recommendation/files/2018/mixed_en.doc";
+      const pdfUrl =
+        "https://ec.europa.eu/justice/article-29/documentation/opinion-recommendation/files/2018/mixed_en.pdf";
+      const html = `<div class="contentsection block"><h2>2018</h2><ul><li><a class="link-ico" href="${wordUrl}"><span>Transparency opinion</span></a><a class="link-ico" href="${pdfUrl}"><span>Transparency opinion PDF</span></a></li></ul></div>`;
+      const entry = parseWp29Archive(html).unwrap().at(0);
+      if (!entry) {
+        panic("Mixed WP29 test entry was not parsed");
+      }
+      const wordBytes = new Uint8Array([0xd0, 0xcf, 0x11, 0xe0]);
+      const pdfBytes = createTextPdf("Transparency opinion", pdfText);
+      const result = await wp29Adapter.fetchDocument(
+        {
+          ...entry,
+          sourceRaw: [
+            {
+              role: "source-page-0",
+              contentBase64: Buffer.from(html).toString("base64"),
+              contentType: "text/html",
+            },
+          ],
+        },
+        {
+          signal: new AbortController().signal,
+          fetch: fakeFetch(
+            new Map([
+              [
+                wordUrl,
+                { bytes: wordBytes, contentType: "application/msword" },
+              ],
+              [pdfUrl, { bytes: pdfBytes, contentType: "application/pdf" }],
+            ]),
+          ),
+        },
+      );
+
+      expect(result.status).toBe("ok");
+      if (result.status === "error") {
+        return;
+      }
+      expect(result.value).toMatchObject({
+        metadata: { statedReference },
+        extractionQuality: "extraction_failed",
+        text: null,
+      });
+      expect(
+        result.value.raw.filter(({ purpose }) => purpose === "document"),
+      ).toEqual([
+        expect.objectContaining({ role: "document-word", bytes: wordBytes }),
+        expect.objectContaining({ role: "document-pdf-1", bytes: pdfBytes }),
+      ]);
+    },
+  );
+
   test("archive revisions retain their source identities and excluded annual reports stay outside the collection", async () => {
     const result = parseWp29Archive(await fixture("wp29-archive.html.gz"));
     expect(result.status).toBe("ok");

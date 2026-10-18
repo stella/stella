@@ -23,6 +23,7 @@ import {
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import { createTextPdf } from "@/api/lib/files/text-pdf";
 import { rawSourcePayloadKey } from "@/api/lib/legal-search/raw-source-storage";
 import type { WriteRawSourcePayload } from "@/api/lib/legal-search/raw-source-storage";
 import { SoftLawAccessError } from "@/api/lib/legal-search/soft-law-access-types";
@@ -36,7 +37,7 @@ import { SoftLawIngestionError } from "@/api/lib/legal-search/soft-law-types";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 
-import { wp29Adapter } from "./adapters/wp29";
+import { parseWp29Archive, wp29Adapter } from "./adapters/wp29";
 import { runSoftLawIngestion } from "./ingestion";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -1119,6 +1120,101 @@ if (!databaseUrl || !enabled) {
           ).toEqual([extraction.extractionQuality, "text_layer"]);
         }),
     );
+
+    test("a mixed unnumbered WP29 row stores an extraction placeholder with every raw asset", async () =>
+      await withSource(databaseUrl, async ({ db, sourceId, run }) => {
+        const wordUrl =
+          "https://ec.europa.eu/justice/article-29/documentation/opinion-recommendation/files/2018/mixed_en.doc";
+        const pdfUrl =
+          "https://ec.europa.eu/justice/article-29/documentation/opinion-recommendation/files/2018/mixed_en.pdf";
+        const html = `<div class="contentsection block"><h2>2018</h2><ul><li><a class="link-ico" href="${wordUrl}"><span>Transparency opinion</span></a><a class="link-ico" href="${pdfUrl}"><span>Transparency opinion PDF</span></a></li></ul></div>`;
+        const parsed = parseWp29Archive(html).unwrap().at(0);
+        if (!parsed) {
+          panic("Mixed WP29 database entry was not parsed");
+        }
+        const wordBytes = new Uint8Array([0xd0, 0xcf, 0x11, 0xe0]);
+        const pdfBytes = createTextPdf(
+          "Transparency opinion",
+          "A readable opinion without an instrument number",
+        );
+        const sourceAdapter = {
+          ...wp29Adapter,
+          discover: async () =>
+            Result.ok({
+              entries: [
+                {
+                  ...parsed,
+                  sourceRaw: [
+                    {
+                      role: "source-page-0",
+                      contentBase64: Buffer.from(html).toString("base64"),
+                      contentType: "text/html",
+                    },
+                  ],
+                },
+              ],
+              nextCursor: null,
+            }),
+        } satisfies SoftLawSourceAdapter;
+        const written = new Map<string, Uint8Array>();
+        const request: typeof fetchWithTimeout = async (input) => {
+          let url: string;
+          if (typeof input === "string") {
+            url = input;
+          } else if (input instanceof URL) {
+            url = input.href;
+          } else {
+            url = input.url;
+          }
+          if (url === wordUrl) {
+            return new Response(wordBytes, {
+              headers: { "content-type": "application/msword" },
+            });
+          }
+          if (url === pdfUrl) {
+            return new Response(pdfBytes, {
+              headers: { "content-type": "application/pdf" },
+            });
+          }
+          return new Response("missing", { status: 404 });
+        };
+
+        expect(
+          await run(sourceAdapter, {
+            request,
+            writeRaw: async (options) => {
+              const key = rawSourcePayloadKey(options);
+              written.set(
+                key,
+                typeof options.data === "string"
+                  ? new TextEncoder().encode(options.data)
+                  : options.data,
+              );
+              return key;
+            },
+          }),
+        ).toEqual({ status: "complete" });
+        const stored = await db
+          .select()
+          .from(softLawDocumentVersions)
+          .innerJoin(
+            softLawDocuments,
+            eq(softLawDocumentVersions.documentId, softLawDocuments.id),
+          )
+          .where(eq(softLawDocuments.sourceId, sourceId));
+        expect(stored).toHaveLength(1);
+        expect(stored.at(0)?.soft_law_document_versions).toMatchObject({
+          extractionQuality: "extraction_failed",
+          extractedText: null,
+          rawObjects: [
+            expect.objectContaining({ role: "source-page-0" }),
+            expect.objectContaining({ role: "document-word" }),
+            expect.objectContaining({ role: "document-pdf-1" }),
+          ],
+        });
+        expect([...written.values()]).toContainEqual(wordBytes);
+        expect([...written.values()]).toContainEqual(pdfBytes);
+      }));
 
     test.each([
       {
