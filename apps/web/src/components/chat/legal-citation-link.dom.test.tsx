@@ -48,7 +48,7 @@ const { createStatutePath, createStatuteRouteParams } =
   await import("@stll/api-contract/statute-route");
 const { createCaseLawDecisionPath, createCaseLawDecisionRouteParams } =
   await import("@stll/api-contract/case-law-decision-route");
-const { SourceChips } = await import("./source-chips");
+const { SourceChips } = await import("@/features/chat/source-chips");
 const { StreamdownMentionLink } = await import("./streamdown-mention-link");
 const { LegalCitationLink } = await import("./legal-citation-link");
 const { DecisionMainViewAction } =
