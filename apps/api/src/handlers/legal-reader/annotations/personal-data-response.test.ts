@@ -4,7 +4,6 @@ import { projectPrivateAnnotationForAccountExport } from "@/api/handlers/legal-r
 import { createSafeId } from "@/api/lib/branded-types";
 
 const exportingUserId = "exporting-user";
-const otherUserId = "other-user";
 const claimId = createSafeId<"legalListClaim">();
 const runId = createSafeId<"legalListVerificationRun">();
 const workspaceId = createSafeId<"workspace">();
@@ -58,15 +57,5 @@ describe("claim comments in a personal-data response", () => {
       createdAt: createdAt.toISOString(),
       updatedAt: updatedAt.toISOString(),
     });
-  });
-
-  test("the account query's ownership boundary excludes another author's comment", () => {
-    const rows = [claimComment(exportingUserId), claimComment(otherUserId)];
-    const response = rows
-      .filter(({ userId }) => userId === exportingUserId)
-      .map(projectPrivateAnnotationForAccountExport);
-
-    expect(response).toHaveLength(1);
-    expect(response.at(0)?.userId).toBe(exportingUserId);
   });
 });

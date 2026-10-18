@@ -26,7 +26,7 @@ import {
   userProfessionalUseAcceptances,
   workspaceViewTemplates,
 } from "@/api/db/schema";
-import { createScopedDb } from "@/api/db/scoped";
+import { createMembershipScopedDb, createScopedDb } from "@/api/db/scoped";
 import type { AccountExportProjections } from "@/api/lib/account-export/projections";
 import type { ExportedAccountTableName } from "@/api/lib/account-export/registry";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -536,8 +536,8 @@ const readWorkspaceViewTemplatesPage = async ({
     return projectRows(rows, projections.workspace_view_templates);
   });
 
-// Every page runs under the requesting user's RLS scope with an empty matter
-// set. Table-specific readers preserve the matching owner and membership filters.
+// Every page runs under the requesting user's current membership scope.
+// Table-specific readers preserve the matching owner and membership filters.
 const readOrganizationPage = async ({
   table,
   ...options
@@ -663,7 +663,11 @@ export async function* exportAccountRows({
     const organizationId = brandPersistedOrganizationId(
       membership.organizationId,
     );
-    const scopedDb = createScopedDb(database, [], organizationId, userId);
+    const scopedDb = createMembershipScopedDb(database, {
+      organizationId,
+      serverValidatedWorkspaceIds: [],
+      userId,
+    });
     const pages = idPages(
       async (cursor) =>
         await readOrganizationPage({

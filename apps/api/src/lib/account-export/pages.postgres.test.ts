@@ -1,14 +1,21 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import JSZip from "jszip";
+
+import { compareCodeUnit } from "@stll/collation";
 
 import { ACCOUNT_EXPORT_PROJECTIONS } from "@/api/account-export-projections";
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
   aiMemories,
   contacts,
+  entities,
+  legalListClaims,
+  legalListVerificationRuns,
+  legalReaderAnnotations,
   searchHistoryEntries,
+  workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
 import { markRlsDatabase } from "@/api/db/scoped";
@@ -33,6 +40,197 @@ const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
 describe.skipIf(!enabled)("account export personal data", () => {
+  test("exports only the requesting author's verification-claim comments", async () => {
+    if (databaseUrl === undefined) {
+      panic("DATABASE_URL required");
+    }
+    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      const { db } = openClient();
+      const scopedDatabase = markRlsDatabase(db);
+      const organizationId = mintAuthProviderId<"organization">();
+      const exportingUserId = mintAuthProviderId<"user">();
+      const otherUserId = mintAuthProviderId<"user">();
+      const users = [exportingUserId, otherUserId];
+      const workspaceId = createSafeId<"workspace">();
+      const entityId = createSafeId<"entity">();
+      const verificationRunId = createSafeId<"legalListVerificationRun">();
+      const verificationClaimId = createSafeId<"legalListClaim">();
+      const createdAt = new Date("2026-10-18T10:00:00.000Z");
+      const updatedAt = new Date("2026-10-18T11:00:00.000Z");
+      const ownComments = [
+        {
+          id: createSafeId<"legalReaderAnnotation">(),
+          visibility: "shared" as const,
+          body: "Exporting author's shared comment",
+        },
+        {
+          id: createSafeId<"legalReaderAnnotation">(),
+          visibility: "private" as const,
+          body: "Exporting author's private comment",
+        },
+      ];
+      const otherComments = [
+        {
+          id: createSafeId<"legalReaderAnnotation">(),
+          visibility: "shared" as const,
+          body: "Other author's shared comment",
+        },
+        {
+          id: createSafeId<"legalReaderAnnotation">(),
+          visibility: "private" as const,
+          body: "Other author's private comment",
+        },
+      ];
+      await db.insert(user).values(
+        users.map((id) => ({
+          id,
+          name: "Claim comment author",
+          email: `${id}@example.test`,
+        })),
+      );
+      try {
+        await db.insert(organization).values({
+          id: organizationId,
+          name: "Claim comment organization",
+          slug: organizationId,
+          createdAt: new Date(),
+        });
+        await db.insert(member).values(
+          users.map((userId) => ({
+            id: Bun.randomUUIDv7(),
+            organizationId,
+            userId,
+            role: "member",
+            createdAt: new Date(),
+          })),
+        );
+        await db.insert(workspaces).values({
+          id: workspaceId,
+          organizationId,
+          name: "Claim comment matter",
+          reference: Bun.randomUUIDv7(),
+        });
+        await db.insert(workspaceMembers).values(
+          users.map((userId) => ({
+            id: createSafeId<"workspaceMember">(),
+            workspaceId,
+            userId,
+          })),
+        );
+        await db.insert(entities).values({
+          id: entityId,
+          workspaceId,
+          name: "Verified document",
+        });
+        await db.insert(legalListVerificationRuns).values({
+          id: verificationRunId,
+          organizationId,
+          workspaceId,
+          entityId,
+          fileFieldId: createSafeId<"field">(),
+          entityVersionId: createSafeId<"entityVersion">(),
+          contentSha256: "a".repeat(64),
+          evidence: { listId: createSafeId<"legalList">(), facts: [] },
+          status: "completed",
+          entityFeatureGate: "open",
+        });
+        await db.insert(legalListClaims).values({
+          id: verificationClaimId,
+          workspaceId,
+          runId: verificationRunId,
+          position: 1,
+          type: "fact",
+          state: "supported",
+          score: 100,
+          text: "Claim",
+          anchor: { type: "docx-block", blockId: "claim", start: 0, end: 5 },
+          refs: [{ factEntityId: entityId, rel: "supports" }],
+          entityFeatureGate: "open",
+        });
+        const annotation = (
+          userId: SafeId<"user">,
+          comment: (typeof ownComments)[number],
+        ) => ({
+          ...comment,
+          organizationId,
+          userId,
+          targetType: "verification-claim" as const,
+          targetId: verificationClaimId,
+          workspaceId,
+          verificationRunId,
+          verificationClaimId,
+          kind: "comment" as const,
+          color: null,
+          style: null,
+          blockAnchorId: "claim",
+          startOffset: 0,
+          endOffset: 5,
+          quote: "Claim",
+          createdAt,
+          updatedAt,
+        });
+        await db
+          .insert(legalReaderAnnotations)
+          .values([
+            ...ownComments.map((comment) =>
+              annotation(exportingUserId, comment),
+            ),
+            ...otherComments.map((comment) => annotation(otherUserId, comment)),
+          ]);
+
+        const exported = await Array.fromAsync(
+          exportAccountRows({
+            projections: ACCOUNT_EXPORT_PROJECTIONS,
+            db,
+            userId: exportingUserId,
+            table: "legal_reader_annotations",
+            signal: new AbortController().signal,
+            scopedDatabase,
+          }),
+        );
+
+        expect(exported).toEqual(
+          ownComments
+            .toSorted((left, right) => compareCodeUnit(left.id, right.id))
+            .map((comment) => ({
+              organizationId,
+              data: {
+                id: comment.id,
+                userId: exportingUserId,
+                targetType: "verification-claim",
+                targetId: verificationClaimId,
+                workspaceId,
+                verificationRunId,
+                verificationClaimId,
+                groupId: null,
+                kind: "comment",
+                visibility: comment.visibility,
+                color: null,
+                style: null,
+                blockAnchorId: "claim",
+                startOffset: 0,
+                endOffset: 5,
+                quote: "Claim",
+                body: comment.body,
+                createdAt: createdAt.toISOString(),
+                updatedAt: updatedAt.toISOString(),
+              },
+            })),
+        );
+        expect(
+          exported.some(({ data }) =>
+            otherComments.some(({ id }) => id === data.id),
+          ),
+        ).toBe(false);
+      } finally {
+        await db
+          .delete(organization)
+          .where(eq(organization.id, organizationId));
+        await db.delete(user).where(inArray(user.id, users));
+      }
+    });
+  });
+
   test("projects encrypted personal history across memberships into the archive", async () => {
     if (databaseUrl === undefined) {
       panic("DATABASE_URL required");
