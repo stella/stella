@@ -27,14 +27,27 @@ gh_api() {
   fi
 }
 
-# One line per queued group ahead, oldest first: "<sha> <subject>".
+# One line per queued group ahead, oldest first: "<sha> <subject>". Each
+# group adds one commit on the first-parent line from the base; commits a
+# merged pull request brings along sit off that line and are not groups.
 ancestors() {
   local comparison status
   comparison=$(gh_api "repos/$repository/compare/$base_branch...$base_sha")
   status=$(jq -r '.status' <<<"$comparison")
+  if [[ "$status" == ahead ]] && jq -e '.total_commits != (.commits | length)' <<<"$comparison" >/dev/null; then
+    echo "::error::The comparison of $base_branch...$base_sha is truncated, so the groups ahead cannot all be verified." >&2
+    return 1
+  fi
   case "$status" in
     identical) ;;
-    ahead) jq -r '.commits[] | "\(.sha) \(.commit.message | split("\n")[0])"' <<<"$comparison" ;;
+    ahead)
+      jq -r --arg base "$base_sha" '
+        (.commits | map({key: .sha, value: .}) | from_entries) as $by
+        | [$base | recurse(if $by[.] then $by[.].parents[0].sha else empty end) | select($by[.])]
+        | reverse
+        | .[]
+        | "\(.) \($by[.].commit.message | split("\n")[0])"' <<<"$comparison"
+      ;;
     *)
       echo "::error::Merge group base $base_sha is $status relative to $base_branch, so the groups ahead cannot be verified." >&2
       return 1
