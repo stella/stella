@@ -145,6 +145,180 @@ describe("publisher scheduler", () => {
     expect(sleeps).toEqual([2000, 2000]);
   });
 
+  test("follows robots redirects before evaluating the original origin", async () => {
+    const requested: string[] = [];
+    const request = createPolitePublisherFetch({
+      fetcher: async (input) => {
+        const url = new URL(input instanceof Request ? input.url : input);
+        requested.push(url.href);
+        if (url.pathname === "/robots.txt") {
+          return Response.redirect("https://policy.example/rules.txt", 301);
+        }
+        if (url.hostname === "policy.example") {
+          // oxlint-disable-next-line stella-lowercase/stella-lowercase -- Fixture exercises the registered HTTP product token.
+          return new Response("User-agent: Stella\nDisallow: /private");
+        }
+        return new Response("unexpected resource fetch");
+      },
+      defaultMinimumIntervalMs: 0,
+    });
+
+    const outcome = await request("https://publisher.example/private/case", {
+      userAgent: "Stella/1.0 (+https://stella.law)",
+      enforcement: "enforce",
+    });
+
+    expect(outcome.isErr()).toBe(true);
+    if (outcome.isErr()) {
+      expect(outcome.error._tag).toBe("robots_disallowed");
+    }
+    expect(requested).toEqual([
+      "https://publisher.example/robots.txt",
+      "https://policy.example/rules.txt",
+    ]);
+  });
+
+  test("refuses a same-origin redirect to a disallowed path", async () => {
+    const fetchedResources: string[] = [];
+    const request = createPolitePublisherFetch({
+      fetcher: async (input, init) => {
+        const url = new URL(input instanceof Request ? input.url : input);
+        if (url.pathname === "/robots.txt") {
+          // oxlint-disable-next-line stella-lowercase/stella-lowercase -- Fixture exercises the registered HTTP product token.
+          return new Response("User-agent: Stella\nDisallow: /private");
+        }
+        fetchedResources.push(url.pathname);
+        if (url.pathname === "/public" && init?.redirect !== "manual") {
+          fetchedResources.push("/private");
+          return new Response("secret");
+        }
+        return url.pathname === "/public"
+          ? Response.redirect("https://publisher.example/private", 302)
+          : new Response("secret");
+      },
+      defaultMinimumIntervalMs: 0,
+    });
+
+    const outcome = await request("https://publisher.example/public", {
+      userAgent: "Stella/1.0 (+https://stella.law)",
+      enforcement: "enforce",
+    });
+
+    expect(outcome.isErr()).toBe(true);
+    expect(fetchedResources).toEqual(["/public"]);
+  });
+
+  test("applies destination robots rules and scheduling across origins", async () => {
+    let now = 0;
+    const resourceRequests: { host: string; time: number }[] = [];
+    const request = createPolitePublisherFetch({
+      clock: {
+        now: () => now,
+        sleep: async (ms) => {
+          now += ms;
+        },
+      },
+      fetcher: async (input) => {
+        const url = new URL(input instanceof Request ? input.url : input);
+        if (url.pathname === "/robots.txt") {
+          return new Response(
+            url.hostname === "destination.example"
+              ? "User-agent: *\nCrawl-delay: 2\nAllow: /"
+              : "User-agent: *\nAllow: /",
+          );
+        }
+        resourceRequests.push({ host: url.hostname, time: now });
+        return url.hostname === "source.example"
+          ? Response.redirect("https://destination.example/first", 302)
+          : new Response("ok");
+      },
+      defaultMinimumIntervalMs: 0,
+    });
+    const options = {
+      userAgent: "Stella/1.0 (+https://stella.law)",
+      enforcement: "enforce" as const,
+    };
+
+    const redirected = await request("https://source.example/start", options);
+    const second = await request("https://destination.example/second", options);
+
+    expect(redirected.isOk()).toBe(true);
+    expect(second.isOk()).toBe(true);
+    expect(resourceRequests).toEqual([
+      { host: "source.example", time: 0 },
+      { host: "destination.example", time: 0 },
+      { host: "destination.example", time: 2000 },
+    ]);
+  });
+
+  test("returns a typed refusal when redirects exceed the bound", async () => {
+    const request = createPolitePublisherFetch({
+      fetcher: async (input) => {
+        const url = new URL(input instanceof Request ? input.url : input);
+        if (url.pathname === "/robots.txt") {
+          return new Response(null, { status: 404 });
+        }
+        return Response.redirect(
+          new URL(
+            `/loop/${Number(url.pathname.split("/").at(-1) ?? 0) + 1}`,
+            url,
+          ),
+          302,
+        );
+      },
+      defaultMinimumIntervalMs: 0,
+    });
+
+    const outcome = await request("https://publisher.example/loop/0", {
+      userAgent: "Stella/1.0 (+https://stella.law)",
+      enforcement: "enforce",
+    });
+
+    expect(outcome.isErr()).toBe(true);
+    if (outcome.isErr()) {
+      expect(outcome.error._tag).toBe("publisher_redirect_limit");
+    }
+  });
+
+  test("reloads robots after a stream failure and retry interval", async () => {
+    let now = 0;
+    let robotsRequests = 0;
+    const request = createPolitePublisherFetch({
+      clock: { now: () => now, sleep: async () => undefined },
+      fetcher: async (input) => {
+        const url = new URL(input instanceof Request ? input.url : input);
+        if (url.pathname !== "/robots.txt") {
+          return new Response("ok");
+        }
+        robotsRequests += 1;
+        if (robotsRequests === 1) {
+          return new Response(
+            new ReadableStream({
+              pull(controller) {
+                controller.error(new Error("robots stream failed"));
+              },
+            }),
+          );
+        }
+        return new Response("User-agent: *\nAllow: /");
+      },
+      robotsRetryMs: 10,
+      defaultMinimumIntervalMs: 0,
+    });
+    const options = {
+      userAgent: "Stella/1.0 (+https://stella.law)",
+      enforcement: "enforce" as const,
+    };
+
+    const failed = await request("https://publisher.example/case", options);
+    now = 11;
+    const recovered = await request("https://publisher.example/case", options);
+
+    expect(failed.isErr()).toBe(true);
+    expect(recovered.isOk()).toBe(true);
+    expect(robotsRequests).toBe(2);
+  });
+
   test("4xx permits access while 5xx is a typed refusal", async () => {
     for (const [status, allowed] of [
       [404, true],

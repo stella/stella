@@ -268,7 +268,6 @@ export const createSoftLawFetch = ({
     const publisherOutcome = await auditedPublisherFetch(url, {
       init: {
         signal,
-        redirect: "manual",
       },
       userAgent: policy.userAgent,
       enforcement: "audit",

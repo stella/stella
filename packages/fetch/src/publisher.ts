@@ -6,6 +6,7 @@ const ROBOTS_MAX_BYTES = 512 * 1024;
 const ROBOTS_TTL_MS = 60 * 60 * 1000;
 const ROBOTS_RETRY_MS = 60 * 1000;
 const DEFAULT_MINIMUM_INTERVAL_MS = 1000;
+const MAX_REDIRECTS = 5;
 const PRODUCT_TOKEN = "Stella";
 
 export type PublisherPolicy =
@@ -35,10 +36,14 @@ export class AgentExcludedError extends TaggedError(
 export class RobotsUnavailableError extends TaggedError("robots_unavailable")<
   RefusalFields & { cause?: unknown }
 > {}
+export class PublisherRedirectLimitError extends TaggedError(
+  "publisher_redirect_limit",
+)<RefusalFields> {}
 export type PublisherPolicyError =
   | RobotsDisallowedError
   | AgentExcludedError
-  | RobotsUnavailableError;
+  | RobotsUnavailableError
+  | PublisherRedirectLimitError;
 
 export type PublisherFetchResult = {
   response: Response;
@@ -68,7 +73,7 @@ type PublisherFetcherOptions = {
   onTelemetry?: (event: PublisherTelemetry) => void;
 };
 type PublisherFetchOptions = {
-  init?: RequestInit;
+  init?: Omit<RequestInit, "redirect">;
   userAgent: string;
   policy?: PublisherPolicy;
   enforcement: PublisherEnforcement;
@@ -248,6 +253,110 @@ const readBoundedText = async (response: Response) => {
   return Result.ok(new TextDecoder().decode(bytes));
 };
 
+const isRedirect = (response: Response) =>
+  response.status >= 300 && response.status < 400;
+
+type LoadRobotsOptions = {
+  fetcher: Fetcher;
+  origin: string;
+  now: () => number;
+  robotsTtlMs: number;
+  robotsRetryMs: number;
+};
+
+const loadRobots = async ({
+  fetcher,
+  origin,
+  now,
+  robotsTtlMs,
+  robotsRetryMs,
+}: LoadRobotsOptions): Promise<CachedRobots> => {
+  let target = new URL("/robots.txt", origin);
+  let finalResponse: Response | undefined;
+  let failure: unknown;
+  for (let redirects = 0; ; redirects += 1) {
+    const requestTarget = target;
+    const fetched = await Result.tryPromise(async () =>
+      fetcher(requestTarget, {
+        headers: { "User-Agent": PRODUCT_TOKEN },
+        redirect: "manual",
+      }),
+    );
+    if (Result.isError(fetched)) {
+      failure = fetched.error.cause;
+      break;
+    }
+    if (!isRedirect(fetched.value)) {
+      finalResponse = fetched.value;
+      break;
+    }
+    const location = fetched.value.headers.get("location");
+    if (!location || redirects >= MAX_REDIRECTS) {
+      failure = new RobotsUnavailableError({
+        message: location
+          ? "robots.txt exceeded the redirect limit"
+          : "robots.txt redirect has no location",
+        url: requestTarget.href,
+        origin,
+      });
+      break;
+    }
+    if (!URL.canParse(location, requestTarget.href)) {
+      failure = new RobotsUnavailableError({
+        message: "robots.txt redirect location is invalid",
+        url: requestTarget.href,
+        origin,
+      });
+      break;
+    }
+    const cancelled = await Result.tryPromise(async () =>
+      fetched.value.body?.cancel(),
+    );
+    if (Result.isError(cancelled)) {
+      failure = cancelled.error.cause;
+      break;
+    }
+    target = new URL(location, requestTarget);
+  }
+  if (!finalResponse) {
+    return {
+      state: { type: "unavailable", cause: failure },
+      expiresAt: now() + robotsRetryMs,
+    };
+  }
+  if (finalResponse.status >= 400 && finalResponse.status < 500) {
+    return { state: { type: "allow-all" }, expiresAt: now() + robotsTtlMs };
+  }
+  if (finalResponse.status >= 500) {
+    return {
+      state: { type: "unavailable" },
+      expiresAt: now() + robotsRetryMs,
+    };
+  }
+  const body = await Result.tryPromise(async () =>
+    readBoundedText(finalResponse),
+  );
+  if (Result.isError(body)) {
+    return {
+      state: {
+        type: "unavailable",
+        cause: body.error.cause,
+      },
+      expiresAt: now() + robotsRetryMs,
+    };
+  }
+  if (Result.isError(body.value)) {
+    return {
+      state: { type: "unavailable", cause: body.value.error },
+      expiresAt: now() + robotsRetryMs,
+    };
+  }
+  return {
+    state: { type: "rules", groups: parseRobots(body.value.value) },
+    expiresAt: now() + robotsTtlMs,
+  };
+};
+
 export const createPolitePublisherFetch = ({
   fetcher = globalThis.fetch,
   clock = {
@@ -263,48 +372,32 @@ export const createPolitePublisherFetch = ({
   defaultMinimumIntervalMs = DEFAULT_MINIMUM_INTERVAL_MS,
   onTelemetry = () => undefined,
 }: PublisherFetcherOptions = {}) => {
-  const robotsCache = new Map<string, Promise<CachedRobots>>();
+  const robotsCache = new Map<string, CachedRobots>();
+  const robotsLoads = new Map<string, Promise<CachedRobots>>();
   const originQueues = new Map<string, Promise<void>>();
   const nextAllowedAt = new Map<string, number>();
 
   const robotsFor = async (origin: string) => {
     const cached = robotsCache.get(origin);
-    if (cached) {
-      const resolved = await cached;
-      if (resolved.expiresAt > clock.now()) {
-        return resolved.state;
-      }
+    if (cached && cached.expiresAt > clock.now()) {
+      return cached.state;
     }
-    const pending = (async (): Promise<CachedRobots> => {
-      let state: RobotsState;
-      let ttl = robotsTtlMs;
-      const outcome = await Result.tryPromise(async () =>
-        fetcher(`${origin}/robots.txt`, {
-          headers: { "User-Agent": PRODUCT_TOKEN },
-          redirect: "manual",
-        }),
-      );
-      if (Result.isError(outcome)) {
-        state = { type: "unavailable", cause: outcome.error.cause };
-        ttl = robotsRetryMs;
-      } else if (outcome.value.status >= 400 && outcome.value.status < 500) {
-        state = { type: "allow-all" };
-      } else if (outcome.value.status >= 500) {
-        state = { type: "unavailable" };
-        ttl = robotsRetryMs;
-      } else {
-        const body = await readBoundedText(outcome.value);
-        if (Result.isError(body)) {
-          state = { type: "unavailable", cause: body.error };
-          ttl = robotsRetryMs;
-        } else {
-          state = { type: "rules", groups: parseRobots(body.value) };
-        }
-      }
-      return { state, expiresAt: clock.now() + ttl };
-    })();
-    robotsCache.set(origin, pending);
-    return (await pending).state;
+    const activeLoad = robotsLoads.get(origin);
+    if (activeLoad) {
+      return (await activeLoad).state;
+    }
+    const pending = loadRobots({
+      fetcher,
+      origin,
+      now: clock.now,
+      robotsTtlMs,
+      robotsRetryMs,
+    });
+    robotsLoads.set(origin, pending);
+    const loaded = await pending;
+    robotsLoads.delete(origin);
+    robotsCache.set(origin, loaded);
+    return loaded.state;
   };
 
   const reserve = async (
@@ -346,65 +439,112 @@ export const createPolitePublisherFetch = ({
       enforcement,
     }: PublisherFetchOptions,
   ): Promise<Result<PublisherFetchResult, PublisherPolicyError>> => {
-    const url = new URL(input);
-    const state = await robotsFor(url.origin);
-    let refusal: PublisherPolicyError | undefined;
-    let intervalMs = defaultMinimumIntervalMs;
+    let url = new URL(input);
     let decision: PublisherRobotsDecision = "allowed";
-    if (state.type === "unavailable") {
-      refusal = new RobotsUnavailableError({
-        message: "robots.txt is unavailable",
-        url: url.href,
-        origin: url.origin,
-        cause: state.cause,
-      });
-    } else if (state.type === "allow-all") {
-      decision = "allow_all_4xx";
-    } else {
-      const evaluated = evaluatePublisherRobots(
-        state.groups,
-        PRODUCT_TOKEN,
-        `${url.pathname}${url.search}`,
-      );
-      intervalMs = Math.max(intervalMs, evaluated.crawlDelayMs);
-      if (!evaluated.allowed) {
-        refusal = evaluated.agentExcluded
-          ? new AgentExcludedError({
-              message: "robots.txt excludes the stella agent",
-              url: url.href,
-              origin: url.origin,
-            })
-          : new RobotsDisallowedError({
-              message: "robots.txt disallows this URL",
-              url: url.href,
-              origin: url.origin,
-            });
+    let delayAppliedMs = 0;
+    for (let redirects = 0; ; redirects += 1) {
+      const state = await robotsFor(url.origin);
+      let refusal: PublisherPolicyError | undefined;
+      let intervalMs = defaultMinimumIntervalMs;
+      if (state.type === "unavailable") {
+        refusal = new RobotsUnavailableError({
+          message: "robots.txt is unavailable",
+          url: url.href,
+          origin: url.origin,
+          cause: state.cause,
+        });
+      } else if (state.type === "allow-all") {
+        decision = "allow_all_4xx";
+      } else {
+        const evaluated = evaluatePublisherRobots(
+          state.groups,
+          PRODUCT_TOKEN,
+          `${url.pathname}${url.search}`,
+        );
+        intervalMs = Math.max(intervalMs, evaluated.crawlDelayMs);
+        if (!evaluated.allowed) {
+          refusal = evaluated.agentExcluded
+            ? new AgentExcludedError({
+                message: "robots.txt excludes the stella agent",
+                url: url.href,
+                origin: url.origin,
+              })
+            : new RobotsDisallowedError({
+                message: "robots.txt disallows this URL",
+                url: url.href,
+                origin: url.origin,
+              });
+        }
       }
-    }
-    if (refusal && policy.type === "obey" && enforcement === "enforce") {
-      return Result.err(refusal);
-    }
-    if (refusal) {
-      onTelemetry({
-        event: "publisher_fetch_policy_bypass",
-        url: url.href,
-        origin: url.origin,
-        refusal,
-        enforcement,
-        policy,
+      if (refusal && policy.type === "obey" && enforcement === "enforce") {
+        return Result.err(refusal);
+      }
+      if (refusal) {
+        onTelemetry({
+          event: "publisher_fetch_policy_bypass",
+          url: url.href,
+          origin: url.origin,
+          refusal,
+          enforcement,
+          policy,
+        });
+        decision =
+          policy.type === "licensed" ? "licensed_bypass" : "audit_bypass";
+      }
+      delayAppliedMs += await reserve(
+        url.origin,
+        intervalMs,
+        init?.signal ?? undefined,
+      );
+      const headers = new Headers(init?.headers);
+      headers.set("User-Agent", userAgent);
+      const response = await fetcher(url, {
+        ...init,
+        headers,
+        redirect: "manual",
       });
-      decision =
-        policy.type === "licensed" ? "licensed_bypass" : "audit_bypass";
+      if (!isRedirect(response)) {
+        return Result.ok({
+          response,
+          robotsDecision: decision,
+          delayAppliedMs,
+        });
+      }
+      const location = response.headers.get("location");
+      if (!location) {
+        return Result.ok({
+          response,
+          robotsDecision: decision,
+          delayAppliedMs,
+        });
+      }
+      if (redirects >= MAX_REDIRECTS) {
+        const redirectRefusal = new PublisherRedirectLimitError({
+          message: "publisher response exceeded the redirect limit",
+          url: url.href,
+          origin: url.origin,
+        });
+        if (policy.type === "obey" && enforcement === "enforce") {
+          return Result.err(redirectRefusal);
+        }
+        onTelemetry({
+          event: "publisher_fetch_policy_bypass",
+          url: url.href,
+          origin: url.origin,
+          refusal: redirectRefusal,
+          enforcement,
+          policy,
+        });
+        return Result.ok({
+          response,
+          robotsDecision:
+            policy.type === "licensed" ? "licensed_bypass" : "audit_bypass",
+          delayAppliedMs,
+        });
+      }
+      await response.body?.cancel();
+      url = new URL(location, url);
     }
-    const delayAppliedMs = await reserve(
-      url.origin,
-      intervalMs,
-      init?.signal ?? undefined,
-    );
-    const headers = new Headers(init?.headers);
-    headers.set("User-Agent", userAgent);
-    const response = await fetcher(url, { ...init, headers });
-    return Result.ok({ response, robotsDecision: decision, delayAppliedMs });
   };
 };
 
