@@ -50,7 +50,10 @@ import { repoRelativePath } from "@stll/portable-path";
 import { sha256Hex } from "@stll/sha256/bun";
 
 import { withGenerationLock } from "../../../packages/scripts/src/generation-lock";
-import { hasPreparedGeneratedSources } from "../../../packages/scripts/src/prepared-generated-sources";
+import {
+  hasPreparedGeneratedSources,
+  preparedGeneratedFile,
+} from "../../../packages/scripts/src/prepared-generated-sources";
 import { withoutTsgoOnlyOptionDiagnostics } from "../../../packages/scripts/src/tsgo-compiler-options";
 import {
   type CompilerInputRecorder,
@@ -1520,17 +1523,18 @@ const main = async () => {
   if (check) {
     Bun.gc(true);
   }
-  const preparedOutput = readOptional(OUTPUT_PATH);
-  const determinismReference = check
-    ? verifyDeterminism({
+  // The generated-sources job's printout for these exact inputs, when it is
+  // still on disk, is the independent second generation.
+  const outcome = check
+    ? `verified deterministic against ${verifyDeterminism({
         output,
-        prepared:
-          preparedOutput !== undefined && hasPreparedGeneratedSources(REPO_ROOT)
-            ? preparedOutput
-            : undefined,
+        prepared: preparedGeneratedFile(
+          REPO_ROOT,
+          repoRelativePath(REPO_ROOT, OUTPUT_PATH),
+        ),
         regenerate: () => generate({ validation: "print" }),
-      })
-    : undefined;
+      })}`
+    : "wrote";
   writeAtomically(OUTPUT_PATH, output);
   // The copy first: a stamp never names a printout that is not on disk.
   writeAtomically(CACHED_OUTPUT_PATH, output);
@@ -1556,7 +1560,7 @@ const main = async () => {
     );
   }
   console.log(
-    `generate-web-api-types: ${check ? `verified deterministic against ${determinismReference}` : "wrote"} ${repoRelativePath(REPO_ROOT, OUTPUT_PATH)} ` +
+    `generate-web-api-types: ${outcome} ${repoRelativePath(REPO_ROOT, OUTPUT_PATH)} ` +
       `(${Buffer.byteLength(output)} bytes) in ${Math.round(performance.now() - started)} ms, ` +
       // maxRSS is in kilobytes on every platform Node and Bun report it for.
       `peak RSS ${Math.round(process.resourceUsage().maxRSS / 1024)} MiB`,
