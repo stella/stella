@@ -1229,9 +1229,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       "Read citations with citing passages. `cited_by` reads citers; `cites` reads citations. " +
       "Filters `doctrine` and `polarity` combine with AND. `polarity`: " +
       "'unclassified' means unread; 'mixed' means mentions disagreed. " +
-      "`doctrine` is 'distinguishes' or 'limits' only " +
-      "where a reviewed reading found the court doing so in its own words; " +
-      "the call refuses a `doctrine` filter when doctrine is unavailable. " +
+      "`doctrine` is reviewed 'distinguishes' or 'limits'; rejected when unavailable. " +
       "'not_stated' does not mean followed; 'unread' means none " +
       "was read; null when `doctrineAvailability` is 'unavailable'. " +
       "`passage.evidenceQuote` is the verbatim evidence when text is " +
