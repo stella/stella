@@ -1058,7 +1058,6 @@
       }
     },
     "sameCaseNumber": "{count, plural, one {# lahend kannab} other {# lahendit kannavad}} seda kohtuasja numbrit. Valige kohus.",
-    "searchAskPrompt": "{query} (kohtupraktika, {country})",
     "searchLabel": "Otsi kohtupraktikast",
     "searchPlaceholder": "Kohtuasja number, ECLI või sõnad, nt 22 Cdo 2653/2012",
     "searchUnavailable": {
@@ -1215,6 +1214,11 @@
       "requesting": "Muudatuste ettevalmistamine…",
       "stale": "See vastus on muutunud. Valige tekst uuesti.",
       "submit": "Taotle muudatust"
+    },
+    "answerQuote": {
+      "showInDecision": "Näita lahendis",
+      "verified": "Kontrollitud tsitaat",
+      "verifiedHint": "Sõna-sõnalt: {source}"
     },
     "applyMode": {
       "description": "Word salvestab, kes iga muudatuse tegi. Jätame sinu valiku meelde.",
@@ -1400,7 +1404,12 @@
     "maxAttachmentsReached": "Maksimaalselt {count} faili sõnumi kohta",
     "mention": {
       "category": {
-        "entities": "Selles toimikus"
+        "entities": "Selles toimikus",
+        "sources": "Allikad"
+      },
+      "corpus": {
+        "caseLaw": "Kohtupraktika · {country}",
+        "legislation": "Õigusaktid · {country}"
       },
       "loadError": "Üksuste laadimine ebaõnnestus"
     },
@@ -1454,6 +1463,12 @@
       "title": "Kleebitud tekst"
     },
     "placeholder": "Kirjutage oma küsimus siia, / oskuste jaoks, @ konteksti lisamiseks",
+    "processSummary": {
+      "analyses": "{count, plural, one {# analüüs} other {# analüüsi}}",
+      "changesSaved": "{count, plural, one {# salvestatud muudatus} other {# salvestatud muudatust}}",
+      "documentEdits": "{count, plural, one {# dokumendi muudatus} other {# dokumendi muudatust}}",
+      "sourcesChecked": "{count, plural, one {# kontrollitud allikas} other {# kontrollitud allikat}}"
+    },
     "promptImprovementStrategies": {
       "decompose": {
         "description": "Jagab keeruka töö järjestatud alamülesanneteks.",
@@ -1699,6 +1714,7 @@
       "interrupted": "Katkes enne lõpetamist",
       "output": "Väljund",
       "sourceCode": "Lähtekood",
+      "statusWaiting": "Ootel",
       "toggleDetails": "Üksikasjade lülitamine",
       "unrestoredFields": "Anonüümitud režiimis ei õnnestunud {count, plural, one {# välja} other {# välja}} tegelike väärtustega täita. Kontrollige: {fields}"
     },
@@ -5121,7 +5137,6 @@
     "provisionTextUnavailable": "Selle redaktsiooni tekst pole saadaval",
     "publisherWindowInconsistent": "Sellel kuupäeval kehtivat redaktsiooni ei saa kindlaks teha: väljaandja andmed on vastuolulised.",
     "resolvedAlias": "Tuvastatud kui {label}",
-    "searchAskPrompt": "{query} ({country} õigusaktid)",
     "searchLabel": "Otsi õigusaktidest",
     "searchPlaceholder": "Number, lühinimi või pealkiri, nt 89/2012 Sb.",
     "showCitedPartOnly": "Näita ainult viidatud osa",

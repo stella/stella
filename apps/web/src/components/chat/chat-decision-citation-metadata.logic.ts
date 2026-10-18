@@ -36,7 +36,7 @@ export const sourceCitationMetadata = ({
       continue;
     }
     const links = resolveLegalCitationLinks({
-      appUrl: source.appUrl ?? source.url,
+      url: source.url,
       sourceUrl: source.sourceUrl ?? source.url,
       appOrigins,
     });
@@ -54,6 +54,29 @@ export const sourceCitationMetadata = ({
   return null;
 };
 
+/** What a citation shows of a loaded decision, and where it opens. */
+export const decisionCitationMetadata = (
+  decision: PublicCaseLawDecision,
+): DecisionCitationMetadata => ({
+  decisionId: decision.id,
+  court: decision.court,
+  courtShortCode: decisionCitationCourtLabel(decision),
+  caseNumber: decision.caseNumber,
+  decisionDate: decision.decisionDate,
+  readerUrl: createCaseLawDecisionPath(
+    createCaseLawDecisionRouteParams({
+      caseNumber: decision.caseNumber,
+      country: decision.country,
+      court: decision.court,
+      decisionId: decision.id,
+      language: decision.language,
+      languageAlternates: decision.languageAlternates,
+      slug: decision.slug,
+    }),
+  ),
+  originalUrl: decision.sourceUrl ?? decision.documentUrl ?? null,
+});
+
 export const readyCitationMetadata = (
   read: DecisionCitationRead,
 ): DecisionCitationMetadata | null => {
@@ -66,28 +89,8 @@ export const readyCitationMetadata = (
         case "error":
         case "empty":
           return null;
-        case "items": {
-          const decision = read.view.items;
-          return {
-            decisionId: decision.id,
-            court: decision.court,
-            courtShortCode: decisionCitationCourtLabel(decision),
-            caseNumber: decision.caseNumber,
-            decisionDate: decision.decisionDate,
-            readerUrl: createCaseLawDecisionPath(
-              createCaseLawDecisionRouteParams({
-                caseNumber: decision.caseNumber,
-                country: decision.country,
-                court: decision.court,
-                decisionId: decision.id,
-                language: decision.language,
-                languageAlternates: decision.languageAlternates,
-                slug: decision.slug,
-              }),
-            ),
-            originalUrl: decision.sourceUrl ?? decision.documentUrl ?? null,
-          };
-        }
+        case "items":
+          return decisionCitationMetadata(read.view.items);
         default:
           read.view satisfies never;
           return panic("Unhandled citation query state");

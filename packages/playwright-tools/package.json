@@ -7,6 +7,7 @@
   "type": "module",
   "sideEffects": false,
   "exports": {
+    "./marketing-case-law.json": "./src/marketing-case-law.json",
     "./marketing-config": "./src/marketing-config.ts"
   },
   "scripts": {

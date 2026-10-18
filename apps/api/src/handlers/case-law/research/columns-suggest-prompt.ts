@@ -55,7 +55,7 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "search_ui" },
   body: suggestResearchColumnPromptBodySchema,
-  requiresUsage: { actionType: "chat", modelRole: "fast" },
+  requiresUsage: { actionType: "chat", modelTask: "short-text" },
 } satisfies HandlerConfig;
 
 const suggestResearchColumnPrompt = createSafeRootHandler(

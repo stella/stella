@@ -1061,7 +1061,6 @@ type Messages = {
       };
     };
     "sameCaseNumber": "{count, plural, one {# decision shares} other {# decisions share}} this case number. Pick the court.";
-    "searchAskPrompt": "{query} (case law of {country})";
     "searchLabel": "Search case law";
     "searchPlaceholder": "Case number, ECLI or words, e.g. 22 Cdo 2653/2012";
     "searchUnavailable": {
@@ -1218,6 +1217,11 @@ type Messages = {
       "requesting": "Preparing changes…";
       "stale": "This answer changed. Select the text again.";
       "submit": "Request change";
+    };
+    "answerQuote": {
+      "showInDecision": "Show in decision";
+      "verified": "Verified citation";
+      "verifiedHint": "Word for word in {source}";
     };
     "applyMode": {
       "description": "Word stores who made each change. We'll remember your choice.";
@@ -1404,6 +1408,11 @@ type Messages = {
     "mention": {
       "category": {
         "entities": "In this matter";
+        "sources": "Sources";
+      };
+      "corpus": {
+        "caseLaw": "Case law · {country}";
+        "legislation": "Legislation · {country}";
       };
       "loadError": "Failed to load items";
     };
@@ -1457,6 +1466,12 @@ type Messages = {
       "title": "Pasted text";
     };
     "placeholder": "Type your question here, / for skills, @ to add context";
+    "processSummary": {
+      "analyses": "{count, plural, one {# analysis} other {# analyses}}";
+      "changesSaved": "{count, plural, one {# change saved} other {# changes saved}}";
+      "documentEdits": "{count, plural, one {# document edit} other {# document edits}}";
+      "sourcesChecked": "{count, plural, one {# source checked} other {# sources checked}}";
+    };
     "promptImprovementStrategies": {
       "decompose": {
         "description": "Turn complex work into ordered sub-tasks.";
@@ -1702,6 +1717,7 @@ type Messages = {
       "interrupted": "Interrupted before finishing";
       "output": "Output";
       "sourceCode": "Source code";
+      "statusWaiting": "Waiting";
       "toggleDetails": "Toggle details";
       "unrestoredFields": "{count, plural, one {# field} other {# fields}} could not be filled with real values in anonymized mode. Review: {fields}";
     };
@@ -5124,7 +5140,6 @@ type Messages = {
     "provisionTextUnavailable": "Text not available for this version";
     "publisherWindowInconsistent": "No in-force reading for this date: the publisher's data is inconsistent.";
     "resolvedAlias": "Recognized as {label}";
-    "searchAskPrompt": "{query} (legislation of {country})";
     "searchLabel": "Search statutes";
     "searchPlaceholder": "Number, name or title, e.g. 89/2012 Sb.";
     "showCitedPartOnly": "Show cited part only";
