@@ -8,10 +8,10 @@ import { READER_COPY_MODES } from "@stll/api-contract/legal-reader-annotations";
 import type { ReaderCopyMode } from "@stll/api-contract/legal-reader-annotations";
 import { copyToClipboard } from "@stll/clipboard";
 import { Button } from "@stll/ui/button";
+import { CopyFeedback, useCopiedFeedback } from "@stll/ui/copy-button";
 import {
   Building2Icon,
   ChevronDownIcon,
-  CopyIcon,
   HighlighterIcon,
   LockIcon,
   AddCommentIcon,
@@ -22,7 +22,6 @@ import {
   WavesIcon,
 } from "@stll/ui/icons";
 import { MenuPreviewLayout, PreviewPane } from "@stll/ui/preview-pane";
-import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -177,6 +176,7 @@ export const AnnotationToolbar = ({
   // selection), so it does its own collision handling: open upward when
   // the space below the trigger cannot fit the menu.
   const [copyOpensUp, setCopyOpensUp] = useState(false);
+  const { copied, confirm: confirmCopied } = useCopiedFeedback();
   // A new highlight is private; sharing is a deliberate second step on the mark.
   const visibility: AnnotationVisibility = "private";
 
@@ -394,6 +394,18 @@ export const AnnotationToolbar = ({
       readSelection(selectionPointer);
     };
     const onSelectionChange = () => readSelection(selectionPointer);
+    const onCopy = () => {
+      const selection = ownerDoc.getSelection();
+      if (
+        barRef.current !== null &&
+        selection !== null &&
+        !selection.isCollapsed &&
+        root.contains(selection.anchorNode) &&
+        root.contains(selection.focusNode)
+      ) {
+        confirmCopied();
+      }
+    };
     const onViewportChange = () => {
       selectionPointer = undefined;
       readSelection();
@@ -415,6 +427,7 @@ export const AnnotationToolbar = ({
       writePassage(event.dataTransfer, quote);
     };
     ownerDoc.addEventListener("selectionchange", onSelectionChange);
+    ownerDoc.addEventListener("copy", onCopy);
     ownerDoc.addEventListener("keydown", onKeyDown);
     ownerDoc.addEventListener("pointerdown", onPointerDown);
     ownerDoc.addEventListener("pointercancel", onPointerCancel);
@@ -429,6 +442,7 @@ export const AnnotationToolbar = ({
       observer.disconnect();
       cancelAnimationFrame(frame);
       ownerDoc.removeEventListener("selectionchange", onSelectionChange);
+      ownerDoc.removeEventListener("copy", onCopy);
       ownerDoc.removeEventListener("keydown", onKeyDown);
       ownerDoc.removeEventListener("pointerdown", onPointerDown);
       ownerDoc.removeEventListener("pointercancel", onPointerCancel);
@@ -687,6 +701,7 @@ export const AnnotationToolbar = ({
       <div className="flex flex-wrap items-center gap-1">
         <div className="relative">
           <Button
+            aria-label={copied ? t("common.copied") : t("common.copy")}
             onClick={(event) => {
               const MENU_ESTIMATED_HEIGHT_PX = 200;
               const triggerRect = event.currentTarget.getBoundingClientRect();
@@ -702,8 +717,11 @@ export const AnnotationToolbar = ({
             size="sm"
             variant="ghost"
           >
-            <CopyIcon className="size-3.5" />
-            {t("common.copy")}
+            <CopyFeedback
+              copied={copied}
+              copiedLabel={t("common.copied")}
+              label={t("common.copy")}
+            />
             <ChevronDownIcon className="size-3" />
           </Button>
           {copyOpen && (
@@ -748,23 +766,19 @@ export const AnnotationToolbar = ({
                       });
                       detached(
                         (async () => {
-                          const copied = await copyToClipboard(text);
-                          if (Result.isError(copied)) {
+                          const copyResult = await copyToClipboard(text);
+                          if (Result.isError(copyResult)) {
                             notifyUserError(
-                              copied.error,
+                              copyResult.error,
                               t("errors.actionFailed"),
                             );
                             return;
                           }
-                          stellaToast.add({
-                            title: t("common.copied"),
-                            type: "success",
-                          });
+                          confirmCopied();
                         })(),
                         "legal-reader.selection-copy",
                       );
                       setCopyOpen(false);
-                      clearSelection();
                     }}
                     onFocus={() => setCopyPreviewMode(copyMode)}
                     onMouseDown={(event) => event.preventDefault()}

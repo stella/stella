@@ -1,8 +1,18 @@
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { describe, expect, test } from "bun:test";
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { afterAll, afterEach, describe, expect, jest, test } from "bun:test";
 
-import { CopyButton } from "./copy-button";
+import { COPIED_RESET_MS, CopyButton, useCopiedFeedback } from "./copy-button";
+
+GlobalRegistrator.register({ url: "https://example.test" });
+const { act, cleanup, renderHook } = await import("@testing-library/react");
+
+afterEach(() => {
+  cleanup();
+  jest.useRealTimers();
+});
+afterAll(() => GlobalRegistrator.unregister());
 
 const copy = async () => await Promise.resolve(true);
 
@@ -25,5 +35,23 @@ describe("CopyButton", () => {
 
     expect(markup).toContain('aria-label="Copy"');
     expect(markup).not.toMatch(/>Copy</u);
+  });
+});
+
+describe("copied feedback", () => {
+  test("confirms, resets, and restarts the reset timer", () => {
+    jest.useFakeTimers();
+    const hook = renderHook(() => useCopiedFeedback());
+
+    act(() => hook.result.current.confirm());
+    expect(hook.result.current.copied).toBe(true);
+
+    act(() => jest.advanceTimersByTime(COPIED_RESET_MS - 1));
+    act(() => hook.result.current.confirm());
+    act(() => jest.advanceTimersByTime(COPIED_RESET_MS - 1));
+    expect(hook.result.current.copied).toBe(true);
+
+    act(() => jest.advanceTimersByTime(1));
+    expect(hook.result.current.copied).toBe(false);
   });
 });
