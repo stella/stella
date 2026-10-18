@@ -1420,6 +1420,7 @@
         "$TURBO_ROOT$/apps/web/src/features/chat/chat-runtime.ts",
         "$TURBO_ROOT$/apps/web/src/fonts.css",
         "$TURBO_ROOT$/apps/web/public/fonts/**",
+        "$TURBO_ROOT$/apps/web/public/stella-logo-512.png",
         "$TURBO_ROOT$/packages/mcp-apps/src/**",
         "$TURBO_ROOT$/packages/skills/blueprints/**",
         "$TURBO_ROOT$/packages/skills/skills/**",
