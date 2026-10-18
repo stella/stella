@@ -1661,6 +1661,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-stream-reader-disposal.ts",
     "./.oxlint-plugins/no-auth-token-in-web-storage.ts",
     "./.oxlint-plugins/no-path-prefix-containment.ts",
+    "./.oxlint-plugins/no-shared-temp-sweep.ts",
     "./.oxlint-plugins/no-raw-path-relative.ts",
     "./.oxlint-plugins/no-direct-unicode-normalize.ts",
     "./.oxlint-plugins/no-string-zip-entry.ts",
@@ -2623,6 +2624,17 @@ const config = defineConfig({
       ],
       rules: {
         "no-path-prefix-containment/no-path-prefix-containment": "error",
+      },
+    },
+    {
+      files: [
+        "apps/**/*.{ts,tsx}",
+        "packages/**/*.{ts,tsx}",
+        "scripts/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-shared-temp-sweep.fixture.ts",
+      ],
+      rules: {
+        "no-shared-temp-sweep/no-shared-temp-sweep": "error",
       },
     },
     {

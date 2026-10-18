@@ -136,6 +136,7 @@ const withClone = (exercise: (root: string) => void, branch?: string) => {
       temporary,
       "clone",
       "--quiet",
+      "--no-local",
       ...(branch === undefined ? [] : ["--single-branch", "--branch", branch]),
       seed,
       clone,
