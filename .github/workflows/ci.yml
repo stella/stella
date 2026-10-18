@@ -111,6 +111,7 @@ jobs:
       generated_sources_input_hash: ${{ steps.generate.outputs.input_hash }}
       ci_tests_matrix: ${{ steps.api-tests.outputs.ci_tests_matrix }}
       api_test_files: ${{ steps.api-tests.outputs.api_test_files }}
+      changed_files: ${{ steps.changed-files.outputs.changed_files }}
       test_scope: ${{ steps.api-tests.outputs.test_scope }}
       comparison_base: ${{ steps.changed-files.outputs.comparison_base }}
       root_checks: ${{ steps.root-checks.outputs.root_checks }}
@@ -860,8 +861,12 @@ jobs:
           if (( ${#changed_files[@]} > 0 )); then
             printf '%s\0' "${changed_files[@]}" > "$RUNNER_TEMP/api-test-changed-paths"
           fi
-          echo "api_scope_unknown=$scope_unknown" >> "$GITHUB_OUTPUT"
-          echo "comparison_base=$comparison_base" >> "$GITHUB_OUTPUT"
+          {
+            echo "api_scope_unknown=$scope_unknown"
+            printf '%s\0' "${changed_files[@]}" | jq -Rsc 'split("\u0000") | map(select(length > 0))' \
+              | sed 's/^/changed_files=/'
+            echo "comparison_base=$comparison_base"
+          } >> "$GITHUB_OUTPUT"
 
           # Graph-based scope tools read scope_files; explicit per-path selectors
           # (dependency malware, lockfile ages, image and manifest inputs) keep
@@ -4783,6 +4788,16 @@ jobs:
             exit "$status"
           }
           bun scripts/test-shards.ts --verify-output "$SHARD" "$plan" "$output"
+
+      - name: Repeat changed tests
+        if: >-
+          !cancelled()
+          && github.event_name == 'pull_request'
+          && matrix.shard == 'rest-web'
+          && needs.ci-plan.outputs.package_checks_required == 'true'
+        env:
+          CHANGED_FILES_JSON: ${{ needs.ci-plan.outputs.changed_files }}
+        run: bun scripts/flake-gate.ts --blocking
 
       - name: Upload test diagnostics
         if: always()
