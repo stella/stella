@@ -309,11 +309,7 @@ const lintShared = (
     const pending = pendingByConfig.get(configKey);
     if (pending !== undefined) {
       pending.push(request);
-      if (
-        gate !== undefined &&
-        gate.configKey === configKey &&
-        pending.length >= gate.cases
-      ) {
+      if (gate?.configKey === configKey && pending.length >= gate.cases) {
         gate.resolve(undefined);
       }
       return;
