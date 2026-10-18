@@ -131,6 +131,11 @@ jobs:
             const MAX_WRITE_ATTEMPTS = 3;
             const MAX_API_ATTEMPTS = 3;
             const API_BACKOFF_MS = 2000;
+            // GitHub fills in queue entries' commits while it builds groups, so a
+            // snapshot read at group creation can lack them; re-read for a bounded
+            // settle window before an unresolved chain fails.
+            const QUEUE_SETTLE_ATTEMPTS = 6;
+            const QUEUE_SETTLE_MS = 15000;
             const TIMEOUT_CODES = new Set([
               "ETIMEDOUT", "ESOCKETTIMEDOUT", "UND_ERR_CONNECT_TIMEOUT",
               "UND_ERR_HEADERS_TIMEOUT", "UND_ERR_BODY_TIMEOUT",
@@ -416,14 +421,25 @@ jobs:
               const anchor = group.head_ref.match(/\/pr-(\d+)-[0-9a-f]+$/u);
               if (!anchor || !positiveInteger(Number(anchor[1]))) fail("CLA_INVALID_QUEUE_REF");
               const baseRef = group.base_ref.replace(/^refs\/heads\//u, "");
-              const entries = await readQueueEntries(baseRef);
-              try {
-                await verifyGroupChain({ id, group, baseRef, entries, anchor: Number(anchor[1]) });
-              } catch (error) {
-                if (error.name !== "ClaPolicyError" || !GROUP_CHANGE_CODES.has(error.message) || !entries.has(group.head_sha)) throw error;
-                if ((await readQueueEntries(baseRef)).has(group.head_sha)) throw error;
-                await completeCheck(id, "neutral", "CLA_GROUP_SUPERSEDED",
-                  `The merge group changed during verification (${error.message}); the rebuilt group is verified by its own run.`);
+              let entries = await readQueueEntries(baseRef);
+              let seen = entries.has(group.head_sha);
+              for (let attempt = 1; ; attempt++) {
+                try {
+                  await verifyGroupChain({ id, group, baseRef, entries, anchor: Number(anchor[1]) });
+                  return;
+                } catch (error) {
+                  if (error.name !== "ClaPolicyError" || !GROUP_CHANGE_CODES.has(error.message)) throw error;
+                  const settling = error.message === "CLA_INCOMPLETE_MERGE_GROUP" && attempt < QUEUE_SETTLE_ATTEMPTS;
+                  if (settling) await new Promise((resolve) => setTimeout(resolve, QUEUE_SETTLE_MS));
+                  entries = await readQueueEntries(baseRef);
+                  if (seen && !entries.has(group.head_sha)) {
+                    await completeCheck(id, "neutral", "CLA_GROUP_SUPERSEDED",
+                      `The merge group changed during verification (${error.message}); the rebuilt group is verified by its own run.`);
+                    return;
+                  }
+                  seen ||= entries.has(group.head_sha);
+                  if (!settling) throw error;
+                }
               }
             };
             const verifyGroupChain = async ({ id, group, baseRef, entries, anchor }) => {

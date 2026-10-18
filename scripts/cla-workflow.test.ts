@@ -1673,6 +1673,26 @@ describe("contributor signature workflow", () => {
     await brokenChain.execute();
     expect(brokenChain.errors).toEqual(["CLA_INCOMPLETE_MERGE_GROUP"]);
     expect(lastOutput(brokenChain).conclusion).toBe("failure");
+    // It fails only after the bounded settle window: five 15 s re-reads.
+    expect(brokenChain.delays).toEqual([
+      15_000, 15_000, 15_000, 15_000, 15_000,
+    ]);
+    // A snapshot read while GitHub still builds the predecessor's group verifies
+    // once a re-read links the chain.
+    const settled = fixture({
+      ...options,
+      queuePages: [
+        [
+          groupHeadEntry,
+          { baseCommit: null, headCommit: null, pullRequest: { number: 18 } },
+        ],
+      ],
+      rebuiltQueuePages: [group],
+    });
+    await settled.execute();
+    expect(settled.errors).toEqual([]);
+    expect(lastOutput(settled).conclusion).toBe("success");
+    expect(settled.delays).toEqual([15_000]);
     // An unexpected commit shape is not a membership change, even in a rebuilt group.
     const reshaped = fixture({
       ...options,
