@@ -1,6 +1,7 @@
 {
   "ci-checks-rest": {
     "Resolve static check receipts": ["**"],
+    "Run repository checks": ["**"],
     "Record static check receipts": ["**"],
     "Check AI prompt sync": ["**"],
     "Check AI verification guards": [
@@ -605,6 +606,7 @@
   },
   "ci-checks-policy": {
     "Resolve static check receipts": ["**"],
+    "Run policy checks": ["**"],
     "Record static check receipts": ["**"],
     "Prepare environment": ["**"],
     "Restore generated sources": ["**"],
