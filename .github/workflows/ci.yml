@@ -8293,7 +8293,9 @@ jobs:
     needs: ci-plan
     if: >-
       inputs.heavy_only != true
+      && inputs.pr_depth_only != true
       && (github.event_name == 'pull_request' || github.event_name == 'merge_group')
+      && needs.ci-plan.outputs.run_required != 'false'
       && needs.ci-plan.outputs.dependency_changes_required == 'true'
     runs-on: ubuntu-latest
     permissions:
@@ -8308,7 +8310,7 @@ jobs:
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
-          save: false
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Install dependencies
@@ -8321,8 +8323,12 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
         run: bun scripts/dependency-audit.ts --check-diff "$BASE_SHA"
 
+      # A lockfile-only rewrite resolves from bun.lock alone, and an unchanged
+      # lockfile proves there is nothing to deduplicate.
       - name: Check lockfile deduplication
-        run: bun --no-env-file dedupe --check
+        run: |
+          bun --no-env-file dedupe --lockfile-only --ignore-scripts
+          git diff --exit-code -- bun.lock
 
       - name: Check trusted lifecycle dependencies
         run: bun --no-env-file scripts/check-trusted-dependencies.ts
@@ -8331,7 +8337,9 @@ jobs:
     needs: ci-plan
     if: >-
       inputs.heavy_only != true
+      && inputs.pr_depth_only != true
       && (github.event_name == 'pull_request' || github.event_name == 'merge_group')
+      && needs.ci-plan.outputs.run_required != 'false'
       && needs.ci-plan.outputs.dependency_changes_required == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
