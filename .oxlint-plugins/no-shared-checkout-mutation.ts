@@ -230,7 +230,10 @@ export default eslintCompatPlugin({
             ) {
               mutator = "Bun.write";
             }
-            if (mutator === "Bun.write" || MUTATORS.has(mutator ?? "")) {
+            if (
+              mutator !== null &&
+              (mutator === "Bun.write" || MUTATORS.has(mutator))
+            ) {
               const pathArguments =
                 mutator === "rename" || mutator === "renameSync"
                   ? node.arguments.slice(0, 2)
