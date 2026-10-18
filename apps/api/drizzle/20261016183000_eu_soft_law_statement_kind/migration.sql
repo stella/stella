@@ -6,12 +6,12 @@ SET LOCAL statement_timeout = '5s';--> statement-breakpoint
 ALTER TABLE "soft_law_documents"
   DROP CONSTRAINT "soft_law_documents_kind_check",
   ADD CONSTRAINT "soft_law_documents_kind_check"
-    CHECK ("kind" IN ('methodology','recommendation','opinion','faq','guideline','position','statement','inspection_report','annual_report','other'));
+    CHECK ("kind" IN ('methodology','recommendation','opinion','faq','guideline','position','statement','inspection_report','annual_report','other')) NOT VALID;
 --> statement-breakpoint
 ALTER TABLE "soft_law_document_versions"
   ADD COLUMN "extraction_failure" text,
   ADD CONSTRAINT "soft_law_versions_extraction_failure_check"
-    CHECK ("extraction_failure" IS NULL OR ("extraction_quality" = 'extraction_failed' AND length(btrim("extraction_failure")) > 0));
+    CHECK ("extraction_failure" IS NULL OR ("extraction_quality" = 'extraction_failed' AND length(btrim("extraction_failure")) > 0)) NOT VALID;
 --> statement-breakpoint
 ALTER TABLE "soft_law_ingestion_attempts"
   ADD COLUMN "raw_objects" jsonb DEFAULT '[]'::jsonb NOT NULL;
@@ -20,4 +20,23 @@ ALTER TABLE "soft_law_ingestion_attempts"
 ALTER TABLE "soft_law_ingestion_attempts"
   DROP CONSTRAINT "soft_law_attempts_count_check",
   ADD CONSTRAINT "soft_law_attempts_count_check"
-    CHECK ("count" BETWEEN 0 AND 3 AND ("count" > 0 OR "status" = 'retryable'));
+    CHECK ("count" BETWEEN 0 AND 3 AND ("count" > 0 OR "status" = 'retryable')) NOT VALID;
+--> statement-breakpoint
+
+-- Release the ADD CONSTRAINT locks before scanning existing rows.
+-- squawk-ignore transaction-nesting
+COMMIT;
+--> statement-breakpoint
+-- squawk-ignore transaction-nesting, ban-uncommitted-transaction
+BEGIN;
+SET LOCAL statement_timeout = '5s';--> statement-breakpoint
+SET LOCAL lock_timeout = '1s';--> statement-breakpoint
+
+ALTER TABLE "soft_law_documents"
+  VALIDATE CONSTRAINT "soft_law_documents_kind_check";
+--> statement-breakpoint
+ALTER TABLE "soft_law_document_versions"
+  VALIDATE CONSTRAINT "soft_law_versions_extraction_failure_check";
+--> statement-breakpoint
+ALTER TABLE "soft_law_ingestion_attempts"
+  VALIDATE CONSTRAINT "soft_law_attempts_count_check";
