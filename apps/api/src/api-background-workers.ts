@@ -1,6 +1,8 @@
+import { ACCOUNT_EXPORT_PROJECTIONS } from "@/api/account-export-projections";
 import { rootDb } from "@/api/db/root";
 import { initReportExportWorker } from "@/api/handlers/reports/report-export-queue";
 import { initAccountDeletionCleanupWorker } from "@/api/lib/account-deletion-cleanup-queue";
+import { createAccountExportWorker } from "@/api/lib/account-export/queue";
 import { initBilingualRunWorker } from "@/api/lib/bilingual/run-queue";
 import { createBullMqWorkerHost } from "@/api/lib/bullmq-queue";
 import type { BullMqWorkerHostMode } from "@/api/lib/bullmq-queue";
@@ -27,6 +29,7 @@ export const initApiBackgroundWorkers = async (mode: BullMqWorkerHostMode) => {
   await assertDatabaseLoginPosture(rootDb);
   return createBullMqWorkerHost("api", { db: rootDb }, mode, [
     initAccountDeletionCleanupWorker,
+    createAccountExportWorker(ACCOUNT_EXPORT_PROJECTIONS),
     initBilingualRunWorker,
     initDocumentDeadlineScoutWorker,
     initDocumentReviewRunWorker,

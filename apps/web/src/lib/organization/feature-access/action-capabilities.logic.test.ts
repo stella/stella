@@ -14,13 +14,13 @@ import type {
 } from "./action-capabilities.logic";
 
 const cases = {
-  ai: { reason: "aiMissing", route: "/settings/organization/ai" },
-  deepl: { reason: "deeplMissing", route: "/settings/organization/ai" },
+  ai: { reason: "aiMissing", route: "/admin/ai" },
+  deepl: { reason: "deeplMissing", route: "/admin/ai" },
   translation: {
     reason: "translationMissing",
-    route: "/settings/organization/ai",
+    route: "/admin/ai",
   },
-  ocr: { reason: "ocrUnavailable", route: "/settings/organization/ai" },
+  ocr: { reason: "ocrUnavailable", route: "/admin/ai" },
   desktop: { reason: "desktopUnavailable", route: "/settings/account/desktop" },
   verification: {
     reason: "featureUnavailable",
