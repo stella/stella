@@ -285,11 +285,11 @@ const checkpointFolioCollabRoom = createSafeHandler(
     if (Result.isError(snapshotResult)) {
       return Result.err(snapshotResult.error);
     }
-    const persistedSnapshot = snapshotResult.value;
+    const persisted = snapshotResult.value;
     if (
-      persistedSnapshot === null ||
-      persistedSnapshot.loadOutcome === "rematerialize-from-docx" ||
-      persistedSnapshot.snapshotBase64 === null
+      persisted === null ||
+      persisted.snapshot.loadOutcome === "rematerialize-from-docx" ||
+      persisted.snapshot.snapshotBase64 === null
     ) {
       return Result.err(
         new HandlerError({
@@ -301,7 +301,7 @@ const checkpointFolioCollabRoom = createSafeHandler(
     }
     const materialized = await materializeYjsOverScannedDocx({
       source: sourceDocx,
-      yjsUpdate: Buffer.from(persistedSnapshot.snapshotBase64, "base64"),
+      yjsUpdate: Buffer.from(persisted.snapshot.snapshotBase64, "base64"),
     });
     if (materialized.byteLength > FOLIO_COLLAB_CHECKPOINT_MAX_BYTES) {
       return Result.err(
@@ -456,6 +456,7 @@ const checkpointFolioCollabRoom = createSafeHandler(
           docxCheckpointFileId: nextFileId,
           docxCheckpointScanWarnings: scanWarnings,
           docxCheckpointSha256Hex: sha256Hex,
+          docxCheckpointSnapshotSha256Hex: persisted.rawSnapshotSha256Hex,
           docxCheckpointSizeBytes: checkpointBytes.byteLength,
           docxCheckpointUpdatedAt: checkpointedAt,
         })
