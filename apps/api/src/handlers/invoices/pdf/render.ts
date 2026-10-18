@@ -16,6 +16,10 @@ import type { InvoiceStatus } from "@stll/api-contract";
 import {
   buildCzechQrPaymentPayload,
   buildPayBySquarePayload,
+  INVOICE_COUNTRY_PROFILES,
+  INVOICE_PDF_LABELS,
+  invoiceCountryOf,
+  legalNotesFor,
   paymentQrSchemeFor,
   variableSymbolOf,
 } from "@stll/invoicing";
@@ -69,6 +73,7 @@ export type RenderInvoicePdfOptions = {
       grossAmount: number;
       vatRateBps: number;
       vatTreatment: VatTreatment;
+      exemptionReason?: string | null;
     }[];
   };
   seller: {
@@ -90,361 +95,6 @@ export type RenderInvoicePdfOptions = {
   locale: string;
   lang: SupportedLang;
 };
-
-const EN_LABELS = {
-  invoice: "Invoice",
-  advance: "Advance invoice",
-  credit: "Credit note",
-  draft: "Draft",
-  seller: "Seller",
-  buyer: "Buyer",
-  issueDate: "Issue date",
-  dueDate: "Due date",
-  taxDate: "Taxable supply date",
-  reference: "Reference",
-  original: "Original invoice",
-  net: "Net",
-  vat: "VAT",
-  total: "Total",
-  registration: "Registration ID",
-  vatId: "VAT ID",
-  description: "Description",
-  quantity: "Quantity",
-  unitPrice: "Unit price",
-  payment: "Payment",
-  notes: "Notes",
-  reverse: "Reverse charge",
-  outsideScope: "Outside the scope of VAT",
-  exempt: "Exempt",
-  nonPayer: "Not a VAT payer",
-} as const;
-export const INVOICE_PDF_LABELS = {
-  en: EN_LABELS,
-  cs: {
-    invoice: "Faktura",
-    advance: "Zálohová faktura",
-    credit: "Dobropis",
-    draft: "Koncept",
-    seller: "Dodavatel",
-    buyer: "Odběratel",
-    issueDate: "Datum vystavení",
-    dueDate: "Datum splatnosti",
-    taxDate: "Datum zdanitelného plnění",
-    reference: "Reference",
-    original: "Původní faktura",
-    net: "Základ",
-    vat: "DPH",
-    total: "Celkem",
-    registration: "IČO",
-    vatId: "DIČ",
-    description: "Popis",
-    quantity: "Množství",
-    unitPrice: "Jednotková cena",
-    payment: "Platba",
-    notes: "Poznámky",
-    reverse: "Přenesení daňové povinnosti",
-    outsideScope: "Plnění není předmětem daně v tuzemsku",
-    exempt: "Osvobozeno",
-    nonPayer: "Neplátce DPH",
-  },
-  sk: {
-    invoice: "Faktúra",
-    advance: "Zálohová faktúra",
-    credit: "Dobropis",
-    draft: "Koncept",
-    seller: "Dodávateľ",
-    buyer: "Odberateľ",
-    issueDate: "Dátum vystavenia",
-    dueDate: "Dátum splatnosti",
-    taxDate: "Dátum zdaniteľného plnenia",
-    reference: "Referencia",
-    original: "Pôvodná faktúra",
-    net: "Základ",
-    vat: "DPH",
-    total: "Spolu",
-    registration: "IČO",
-    vatId: "IČ DPH",
-    description: "Popis",
-    quantity: "Množstvo",
-    unitPrice: "Jednotková cena",
-    payment: "Platba",
-    notes: "Poznámky",
-    reverse: "Prenesenie daňovej povinnosti",
-    outsideScope: "Plnenie nie je predmetom dane v tuzemsku",
-    exempt: "Oslobodené",
-    nonPayer: "Neplatiteľ DPH",
-  },
-  de: {
-    invoice: "Rechnung",
-    advance: "Vorauszahlungsrechnung",
-    credit: "Gutschrift",
-    draft: "Entwurf",
-    seller: "Verkäufer",
-    buyer: "Käufer",
-    issueDate: "Ausstellungsdatum",
-    dueDate: "Fälligkeitsdatum",
-    taxDate: "Leistungsdatum",
-    reference: "Referenz",
-    original: "Ursprüngliche Rechnung",
-    net: "Netto",
-    vat: "Umsatzsteuer",
-    total: "Gesamt",
-    registration: "Registrierungsnummer",
-    vatId: "USt-IdNr.",
-    description: "Beschreibung",
-    quantity: "Menge",
-    unitPrice: "Einzelpreis",
-    payment: "Zahlung",
-    notes: "Anmerkungen",
-    reverse: "Steuerschuldnerschaft des Leistungsempfängers",
-    outsideScope: "Im Inland nicht steuerbar",
-    exempt: "Steuerbefreit",
-    nonPayer: "Nicht umsatzsteuerpflichtig",
-  },
-  fr: {
-    invoice: "Facture",
-    advance: "Facture d’acompte",
-    credit: "Avoir",
-    draft: "Brouillon",
-    seller: "Vendeur",
-    buyer: "Acheteur",
-    issueDate: "Date d’émission",
-    dueDate: "Date d’échéance",
-    taxDate: "Date de livraison",
-    reference: "Référence",
-    original: "Facture d’origine",
-    net: "Hors taxe",
-    vat: "TVA",
-    total: "Total",
-    registration: "Numéro d’immatriculation",
-    vatId: "Numéro de TVA",
-    description: "Description",
-    quantity: "Quantité",
-    unitPrice: "Prix unitaire",
-    payment: "Paiement",
-    notes: "Notes",
-    reverse: "Autoliquidation",
-    outsideScope: "Hors du champ d'application de la TVA",
-    exempt: "Exonéré",
-    nonPayer: "Non assujetti à la TVA",
-  },
-  es: {
-    invoice: "Factura",
-    advance: "Factura de anticipo",
-    credit: "Factura rectificativa",
-    draft: "Borrador",
-    seller: "Vendedor",
-    buyer: "Comprador",
-    issueDate: "Fecha de emisión",
-    dueDate: "Fecha de vencimiento",
-    taxDate: "Fecha de operación",
-    reference: "Referencia",
-    original: "Factura original",
-    net: "Base imponible",
-    vat: "IVA",
-    total: "Total",
-    registration: "Número de registro",
-    vatId: "Número de IVA",
-    description: "Descripción",
-    quantity: "Cantidad",
-    unitPrice: "Precio unitario",
-    payment: "Pago",
-    notes: "Notas",
-    reverse: "Inversión del sujeto pasivo",
-    outsideScope: "Fuera del ámbito de aplicación del IVA",
-    exempt: "Exento",
-    nonPayer: "No sujeto al IVA",
-  },
-  "pt-BR": {
-    invoice: "Fatura",
-    advance: "Fatura de adiantamento",
-    credit: "Nota de crédito",
-    draft: "Rascunho",
-    seller: "Vendedor",
-    buyer: "Comprador",
-    issueDate: "Data de emissão",
-    dueDate: "Data de vencimento",
-    taxDate: "Data da operação",
-    reference: "Referência",
-    original: "Fatura original",
-    net: "Valor líquido",
-    vat: "IVA",
-    total: "Total",
-    registration: "Número de registro",
-    vatId: "Número de IVA",
-    description: "Descrição",
-    quantity: "Quantidade",
-    unitPrice: "Preço unitário",
-    payment: "Pagamento",
-    notes: "Observações",
-    reverse: "Inversão do sujeito passivo",
-    outsideScope: "Fora do âmbito de aplicação do IVA",
-    exempt: "Isento",
-    nonPayer: "Não contribuinte do IVA",
-  },
-  pl: {
-    invoice: "Faktura",
-    advance: "Faktura zaliczkowa",
-    credit: "Faktura korygująca",
-    draft: "Wersja robocza",
-    seller: "Sprzedawca",
-    buyer: "Nabywca",
-    issueDate: "Data wystawienia",
-    dueDate: "Termin płatności",
-    taxDate: "Data dostawy",
-    reference: "Numer referencyjny",
-    original: "Faktura pierwotna",
-    net: "Netto",
-    vat: "VAT",
-    total: "Razem",
-    registration: "Numer rejestracyjny",
-    vatId: "Numer VAT",
-    description: "Opis",
-    quantity: "Ilość",
-    unitPrice: "Cena jednostkowa",
-    payment: "Płatność",
-    notes: "Uwagi",
-    reverse: "Odwrotne obciążenie",
-    outsideScope: "Niepodlegające opodatkowaniu VAT w kraju",
-    exempt: "Zwolnione",
-    nonPayer: "Nie jest podatnikiem VAT",
-  },
-  hu: {
-    invoice: "Számla",
-    advance: "Előlegszámla",
-    credit: "Jóváíró számla",
-    draft: "Piszkozat",
-    seller: "Eladó",
-    buyer: "Vevő",
-    issueDate: "Kiállítás dátuma",
-    dueDate: "Fizetési határidő",
-    taxDate: "Teljesítés dátuma",
-    reference: "Hivatkozás",
-    original: "Eredeti számla",
-    net: "Nettó",
-    vat: "ÁFA",
-    total: "Összesen",
-    registration: "Nyilvántartási szám",
-    vatId: "ÁFA-szám",
-    description: "Leírás",
-    quantity: "Mennyiség",
-    unitPrice: "Egységár",
-    payment: "Fizetés",
-    notes: "Megjegyzések",
-    reverse: "Fordított adózás",
-    outsideScope: "Az ÁFA hatályán kívül",
-    exempt: "Adómentes",
-    nonPayer: "Nem ÁFA-alany",
-  },
-  et: {
-    invoice: "Arve",
-    advance: "Ettemaksuarve",
-    credit: "Kreeditarve",
-    draft: "Mustand",
-    seller: "Müüja",
-    buyer: "Ostja",
-    issueDate: "Väljastamise kuupäev",
-    dueDate: "Maksetähtpäev",
-    taxDate: "Tarne kuupäev",
-    reference: "Viide",
-    original: "Algne arve",
-    net: "Netosumma",
-    vat: "Käibemaks",
-    total: "Kokku",
-    registration: "Registrikood",
-    vatId: "KMKR number",
-    description: "Kirjeldus",
-    quantity: "Kogus",
-    unitPrice: "Ühikuhind",
-    payment: "Makse",
-    notes: "Märkused",
-    reverse: "Pöördmaksustamine",
-    outsideScope: "Ei kuulu käibemaksu kohaldamisalasse",
-    exempt: "Maksuvaba",
-    nonPayer: "Ei ole käibemaksukohustuslane",
-  },
-  lv: {
-    invoice: "Rēķins",
-    advance: "Avansa rēķins",
-    credit: "Kredītrēķins",
-    draft: "Melnraksts",
-    seller: "Pārdevējs",
-    buyer: "Pircējs",
-    issueDate: "Izrakstīšanas datums",
-    dueDate: "Apmaksas termiņš",
-    taxDate: "Piegādes datums",
-    reference: "Atsauce",
-    original: "Sākotnējais rēķins",
-    net: "Neto",
-    vat: "PVN",
-    total: "Kopā",
-    registration: "Reģistrācijas numurs",
-    vatId: "PVN numurs",
-    description: "Apraksts",
-    quantity: "Daudzums",
-    unitPrice: "Vienības cena",
-    payment: "Maksājums",
-    notes: "Piezīmes",
-    reverse: "Apgrieztā maksāšana",
-    outsideScope: "Neietilpst PVN piemērošanas jomā",
-    exempt: "Atbrīvots",
-    nonPayer: "Nav PVN maksātājs",
-  },
-  lt: {
-    invoice: "Sąskaita",
-    advance: "Avansinė sąskaita",
-    credit: "Kreditinė sąskaita",
-    draft: "Juodraštis",
-    seller: "Pardavėjas",
-    buyer: "Pirkėjas",
-    issueDate: "Išrašymo data",
-    dueDate: "Mokėjimo terminas",
-    taxDate: "Tiekimo data",
-    reference: "Nuoroda",
-    original: "Pradinė sąskaita",
-    net: "Neto",
-    vat: "PVM",
-    total: "Iš viso",
-    registration: "Registracijos numeris",
-    vatId: "PVM numeris",
-    description: "Aprašymas",
-    quantity: "Kiekis",
-    unitPrice: "Vieneto kaina",
-    payment: "Mokėjimas",
-    notes: "Pastabos",
-    reverse: "Atvirkštinis apmokestinimas",
-    outsideScope: "Nepatenka į PVM taikymo sritį",
-    exempt: "Neapmokestinama",
-    nonPayer: "Ne PVM mokėtojas",
-  },
-  ar: {
-    invoice: "فاتورة",
-    advance: "فاتورة مقدمة",
-    credit: "إشعار دائن",
-    draft: "مسودة",
-    seller: "البائع",
-    buyer: "المشتري",
-    issueDate: "تاريخ الإصدار",
-    dueDate: "تاريخ الاستحقاق",
-    taxDate: "تاريخ التوريد",
-    reference: "مرجع",
-    original: "الفاتورة الأصلية",
-    net: "الصافي",
-    vat: "ضريبة القيمة المضافة",
-    total: "الإجمالي",
-    registration: "رقم التسجيل",
-    vatId: "الرقم الضريبي",
-    description: "الوصف",
-    quantity: "الكمية",
-    unitPrice: "سعر الوحدة",
-    payment: "الدفع",
-    notes: "ملاحظات",
-    reverse: "الاحتساب العكسي",
-    outsideScope: "خارج نطاق ضريبة القيمة المضافة",
-    exempt: "معفى",
-    nonPayer: "غير مسجل في ضريبة القيمة المضافة",
-  },
-} satisfies Record<SupportedLang, Record<keyof typeof EN_LABELS, string>>;
 
 export const buildInvoicePaymentPayload = ({
   invoice,
@@ -704,9 +354,50 @@ export const createInvoiceFormatters = ({
   return { money, date, vatRate, quantity };
 };
 
+const writeProfileId = ({
+  field,
+  ids,
+  id,
+  label,
+  value,
+}: {
+  field: (label: string, value: string | null) => void;
+  ids: readonly ("registration" | "vatId")[];
+  id: "registration" | "vatId";
+  label: string;
+  value: string | null;
+}) => {
+  if (ids.includes(id)) {
+    field(label, value);
+  }
+};
+
+const invoiceLegalNotes = ({
+  invoice,
+  seller,
+  lang,
+}: RenderInvoicePdfOptions) => {
+  const profile =
+    INVOICE_COUNTRY_PROFILES[
+      invoiceCountryOf(seller ?? { country: null, vatId: null })
+    ];
+  return legalNotesFor({
+    profile,
+    language: lang,
+    treatments: invoice.lines.map((line) => line.vatTreatment),
+    exemptionReasons: invoice.lines.flatMap((line) =>
+      line.exemptionReason ? [line.exemptionReason] : [],
+    ),
+  });
+};
+
 export const renderInvoicePdf = async (options: RenderInvoicePdfOptions) => {
   const { invoice, seller, totals, locale, lang, originalNumber } = options;
   const l = INVOICE_PDF_LABELS[lang];
+  const profile =
+    INVOICE_COUNTRY_PROFILES[
+      invoiceCountryOf(seller ?? { country: null, vatId: null })
+    ];
   const pdf = PDF.create();
   const { write, field, isolate, writeQr, finish } = await createInvoiceWriter({
     pdf,
@@ -740,7 +431,7 @@ export const renderInvoicePdf = async (options: RenderInvoicePdfOptions) => {
     field(l.dueDate, date(invoice.dueDate));
   }
   if (invoice.taxableSupplyDate !== null) {
-    field(l.taxDate, date(invoice.taxableSupplyDate));
+    field(profile.supplyDateLabel[lang], date(invoice.taxableSupplyDate));
   }
   field(l.reference, invoice.reference);
   write("");
@@ -759,8 +450,20 @@ export const renderInvoicePdf = async (options: RenderInvoicePdfOptions) => {
         write(value);
       }
     }
-    field(l.registration, seller.registrationId);
-    field(l.vatId, seller.vatId);
+    writeProfileId({
+      field,
+      ids: profile.partyIds.seller,
+      id: "registration",
+      label: l.registration,
+      value: seller.registrationId,
+    });
+    writeProfileId({
+      field,
+      ids: profile.partyIds.seller,
+      id: "vatId",
+      label: l.vatId,
+      value: seller.vatId,
+    });
   }
   write("");
   write(l.buyer);
@@ -777,8 +480,20 @@ export const renderInvoicePdf = async (options: RenderInvoicePdfOptions) => {
       write(value);
     }
   }
-  field(l.registration, invoice.buyerRegistrationId);
-  field(l.vatId, invoice.buyerVatId);
+  writeProfileId({
+    field,
+    ids: profile.partyIds.buyer,
+    id: "registration",
+    label: l.registration,
+    value: invoice.buyerRegistrationId,
+  });
+  writeProfileId({
+    field,
+    ids: profile.partyIds.buyer,
+    id: "vatId",
+    label: l.vatId,
+    value: invoice.buyerVatId,
+  });
   write("");
   for (const line of invoice.lines) {
     field(l.description, line.description);
@@ -799,6 +514,9 @@ export const renderInvoicePdf = async (options: RenderInvoicePdfOptions) => {
   field(l.net, money(totals.netAmountMinor));
   field(l.vat, money(totals.vatAmountMinor));
   field(l.total, money(totals.grossAmountMinor));
+  for (const legalNote of invoiceLegalNotes(options)) {
+    write(legalNote);
+  }
   for (const breakdown of totals.vatBreakdown) {
     write(
       `${treatments[breakdown.vatTreatment]} ${isolate(vatRate(breakdown.vatRateBps))}: ${isolate(money(breakdown.netAmountMinor))} / ${isolate(money(breakdown.vatAmountMinor))}`,

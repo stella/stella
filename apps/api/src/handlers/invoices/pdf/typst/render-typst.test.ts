@@ -184,3 +184,82 @@ describe("payment QR as SVG", () => {
     expect(data.payment?.qrSvg).toBeNull();
   });
 });
+
+describe("Typst country invoice wording", () => {
+  test.each(["sk", "en"] as const)(
+    "extracts mandated Slovak reverse-charge wording in %s",
+    async (lang) => {
+      const fixture = invoiceFixture(1);
+      const sourceLine = fixture.invoice.lines.at(0);
+      if (sourceLine === undefined) {
+        throw new Error("Fixture must contain an invoice line");
+      }
+      const input = {
+        ...fixture,
+        lang,
+        locale: lang === "sk" ? "sk-SK" : "en",
+        seller: { ...fixture.seller, country: "SK", vatId: "SK1234567890" },
+        invoice: {
+          ...fixture.invoice,
+          lines: [{ ...sourceLine, vatTreatment: "reverse_charge" as const }],
+        },
+      };
+      const outcome = (
+        await renderInvoiceWithTypst({
+          invoice: input,
+          session,
+          attachments: [isdoc],
+          createdAt: CREATED_AT,
+        })
+      ).unwrap();
+      if (outcome.status !== "rendered") {
+        throw new Error(outcome.diagnostics.join("\n"));
+      }
+      const text = (await PDF.load(outcome.pdf))
+        .extractText()
+        .map((page) => page.text)
+        .join("\n");
+      expect(text).toContain("Prenesenie daňovej povinnosti.");
+    },
+  );
+
+  test("extracts a Slovak exemption reason", async () => {
+    const fixture = invoiceFixture(1);
+    const sourceLine = fixture.invoice.lines.at(0);
+    if (sourceLine === undefined) {
+      throw new Error("Fixture must contain an invoice line");
+    }
+    const input = {
+      ...fixture,
+      lang: "en" as const,
+      seller: { ...fixture.seller, country: "SK", vatId: "SK1234567890" },
+      invoice: {
+        ...fixture.invoice,
+        lines: [
+          {
+            ...sourceLine,
+            vatTreatment: "exempt" as const,
+            exemptionReason: "§ 38",
+          },
+        ],
+      },
+    };
+    const outcome = (
+      await renderInvoiceWithTypst({
+        invoice: input,
+        session,
+        attachments: [isdoc],
+        createdAt: CREATED_AT,
+      })
+    ).unwrap();
+    if (outcome.status !== "rendered") {
+      throw new Error(outcome.diagnostics.join("\n"));
+    }
+    const text = (await PDF.load(outcome.pdf))
+      .extractText()
+      .map((page) => page.text)
+      .join("\n");
+    expect(text).toContain("Dodanie je oslobodené od dane.");
+    expect(text).toContain("§ 38");
+  });
+});

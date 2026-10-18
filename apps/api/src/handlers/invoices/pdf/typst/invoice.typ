@@ -132,6 +132,12 @@
       text(fill: white, weight: "bold", size: 17pt, data.totals.gross),
     ))
 }))
+#if data.legalNotes.len() > 0 {
+  block(fill: tint, inset: 9pt, radius: 4pt, width: 100%,
+    data.legalNotes.map(note => [#note \ ]).join())
+  v(12pt)
+}
+
 #v(16pt)
 
 // Payment block with the domestic payment QR code.

@@ -1,13 +1,16 @@
 import { Result } from "better-result";
 import { encode } from "uqr";
 
-import type { InvoiceDocumentType, VatTreatment } from "@stll/invoicing";
-
 import {
-  buildInvoicePaymentPayload,
-  createInvoiceFormatters,
+  INVOICE_COUNTRY_PROFILES,
   INVOICE_PDF_LABELS,
-} from "../render";
+  invoiceCountryOf,
+  legalNotesFor,
+  type InvoiceDocumentType,
+  type VatTreatment,
+} from "@stll/invoicing";
+
+import { buildInvoicePaymentPayload, createInvoiceFormatters } from "../render";
 import type { RenderInvoicePdfOptions } from "../render";
 
 type Labels = (typeof INVOICE_PDF_LABELS)[keyof typeof INVOICE_PDF_LABELS];
@@ -68,6 +71,7 @@ type InvoiceTemplateData = {
     /** SVG markup of the domestic payment QR code, or null when unsupported. */
     qrSvg: string | null;
   } | null;
+  legalNotes: string[];
   notes: string | null;
   footerNotes: string | null;
 };
@@ -120,6 +124,7 @@ const party = (
     registrationId: string | null;
     vatId: string | null;
   },
+  printedIds: readonly ("registration" | "vatId")[],
 ): Party => ({
   heading,
   name: value.name,
@@ -130,14 +135,21 @@ const party = (
     value.country,
   ]),
   ids: fields([
-    [l.registration, value.registrationId],
-    [l.vatId, value.vatId],
+    [
+      l.registration,
+      printedIds.includes("registration") ? value.registrationId : null,
+    ],
+    [l.vatId, printedIds.includes("vatId") ? value.vatId : null],
   ]),
 });
 
 export const buildInvoiceTemplateData = (options: RenderInvoicePdfOptions) => {
   const { invoice, seller, totals, locale, lang, originalNumber } = options;
   const l = INVOICE_PDF_LABELS[lang];
+  const profile =
+    INVOICE_COUNTRY_PROFILES[
+      invoiceCountryOf(seller ?? { country: null, vatId: null })
+    ];
   const { money, date, vatRate, quantity } = createInvoiceFormatters({
     currency: invoice.currency,
     locale,
@@ -180,7 +192,7 @@ export const buildInvoiceTemplateData = (options: RenderInvoicePdfOptions) => {
       [l.issueDate, date(invoice.invoiceDate)],
       [l.dueDate, invoice.dueDate === null ? null : date(invoice.dueDate)],
       [
-        l.taxDate,
+        profile.supplyDateLabel[lang],
         invoice.taxableSupplyDate === null
           ? null
           : date(invoice.taxableSupplyDate),
@@ -190,17 +202,27 @@ export const buildInvoiceTemplateData = (options: RenderInvoicePdfOptions) => {
     seller:
       seller === null
         ? null
-        : party(l.seller, l, { ...seller, name: seller.legalName }),
-    buyer: party(l.buyer, l, {
-      name: invoice.buyerName,
-      addressLine1: invoice.buyerAddressLine1,
-      addressLine2: invoice.buyerAddressLine2,
-      postalCode: invoice.buyerPostalCode,
-      city: invoice.buyerCity,
-      country: invoice.buyerCountry,
-      registrationId: invoice.buyerRegistrationId,
-      vatId: invoice.buyerVatId,
-    }),
+        : party(
+            l.seller,
+            l,
+            { ...seller, name: seller.legalName },
+            profile.partyIds.seller,
+          ),
+    buyer: party(
+      l.buyer,
+      l,
+      {
+        name: invoice.buyerName,
+        addressLine1: invoice.buyerAddressLine1,
+        addressLine2: invoice.buyerAddressLine2,
+        postalCode: invoice.buyerPostalCode,
+        city: invoice.buyerCity,
+        country: invoice.buyerCountry,
+        registrationId: invoice.buyerRegistrationId,
+        vatId: invoice.buyerVatId,
+      },
+      profile.partyIds.buyer,
+    ),
     labels: {
       description: l.description,
       quantity: l.quantity,
@@ -249,6 +271,14 @@ export const buildInvoiceTemplateData = (options: RenderInvoicePdfOptions) => {
             accountNumber: seller.accountNumber,
             qrSvg: qr,
           },
+    legalNotes: legalNotesFor({
+      profile,
+      language: lang,
+      treatments: invoice.lines.map((line) => line.vatTreatment),
+      exemptionReasons: invoice.lines.flatMap((line) =>
+        line.exemptionReason ? [line.exemptionReason] : [],
+      ),
+    }),
     notes: invoice.notes,
     footerNotes: seller?.footerNotes ?? null,
   };

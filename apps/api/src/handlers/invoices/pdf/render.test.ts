@@ -282,3 +282,47 @@ describe("invoice QR payment", () => {
     ).toBeNull();
   });
 });
+
+describe("country invoice wording", () => {
+  test.each(["sk", "en"] as const)(
+    "prints mandated Slovak reverse-charge wording in %s",
+    async (lang) => {
+      const { text } = await textOf({
+        ...options,
+        lang,
+        locale: lang === "sk" ? "sk-SK" : "en",
+        seller: { ...options.seller, country: "SK", vatId: "SK1234567890" },
+        invoice: {
+          ...options.invoice,
+          lines: [{ ...sampleLine, vatTreatment: "reverse_charge" }],
+        },
+      });
+      expect(text).toContain("Prenesenie daňovej povinnosti.");
+      expect(text).toContain(
+        lang === "sk" ? "Dátum dodania" : "Taxable supply date",
+      );
+    },
+  );
+
+  test("prints an exemption reason with the Slovak prescribed phrase", async () => {
+    const { text } = await textOf({
+      ...options,
+      lang: "en",
+      seller: { ...options.seller, country: "SK", vatId: "SK1234567890" },
+      invoice: {
+        ...options.invoice,
+        lines: [
+          { ...sampleLine, vatTreatment: "exempt", exemptionReason: "§ 38" },
+        ],
+      },
+    });
+    expect(text).toContain("Dodanie je oslobodené od dane.");
+    expect(text).toContain("§ 38");
+  });
+
+  test("keeps Czech labels while adding the Czech profile note", async () => {
+    const { text } = await textOf(options);
+    expect(text).toContain("Datum zdanitelného plnění");
+    expect(text).toContain("Dodavatel není plátcem DPH.");
+  });
+});

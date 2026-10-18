@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { and, eq, inArray, isNull, ne } from "drizzle-orm";
 import { t } from "elysia";
 
+import { INVOICE_COUNTRY_PROFILES, invoiceCountryOf } from "@stll/invoicing";
+
 import type { Transaction } from "@/api/db/root";
 import { resultTx } from "@/api/db/safe-db";
 import {
@@ -211,6 +213,55 @@ const releaseInvoiceEntries = async (
   return Result.ok(undefined);
 };
 
+type VatCurrencyGuardOptions = {
+  tx: Transaction;
+  sellerProfileId: SafeId<"sellerProfile"> | null;
+  organizationId: string;
+  currency: string;
+  vatAmountMinor: number;
+};
+
+const vatCurrencyError = async ({
+  tx,
+  sellerProfileId,
+  organizationId,
+  currency,
+  vatAmountMinor,
+}: VatCurrencyGuardOptions): Promise<HandlerError | null> => {
+  if (vatAmountMinor === 0 || sellerProfileId === null) {
+    return null;
+  }
+  const seller = await tx.query.sellerProfiles.findFirst({
+    where: {
+      id: { eq: sellerProfileId },
+      organizationId: { eq: organizationId },
+    },
+    columns: { country: true, vatId: true },
+  });
+  if (seller === undefined) {
+    return null;
+  }
+  const { vatCurrency } = INVOICE_COUNTRY_PROFILES[invoiceCountryOf(seller)];
+  if (vatCurrency === null || vatCurrency === currency) {
+    return null;
+  }
+  return new HandlerError({
+    status: 409,
+    message: `This seller's VAT invoices must state the VAT amount in ${vatCurrency}`,
+    hint: `Issue the invoice in ${vatCurrency}; converting the VAT amount from another currency is not supported yet.`,
+  });
+};
+
+const duplicateInvoiceNumberError = (
+  error: HandlerError,
+): HandlerError | null =>
+  DatabaseError.is(error) && error.code === PG_ERROR.UNIQUE_VIOLATION
+    ? new HandlerError({
+        status: 409,
+        message: "An invoice with this number already exists",
+      })
+    : null;
+
 const transitionInvoice = createSafeHandler(
   {
     contract: "patch",
@@ -220,7 +271,9 @@ const transitionInvoice = createSafeHandler(
       "using the issue date; configure a default number series first. Manual numbers " +
       "and numbers kept after reverting to draft are preserved. A credit note must " +
       "reference an eligible original and cannot exceed its total. Voiding releases " +
-      "attached entries and clears the paid timestamp.",
+      "attached entries and clears the paid timestamp. A VAT invoice must use the " +
+      "currency its seller's country requires for the VAT amount (EUR for Slovakia, " +
+      "CZK for Czechia).",
     permissions: { invoice: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     featureAccess: { featureId: "time-billing", type: "required" },
@@ -329,6 +382,16 @@ const transitionInvoice = createSafeHandler(
           if (totals.isErr()) {
             return Result.err(totals.error);
           }
+          const currencyError = await vatCurrencyError({
+            tx,
+            sellerProfileId: existing.sellerProfileId,
+            organizationId: session.activeOrganizationId,
+            currency: existing.currency,
+            vatAmountMinor: totals.value.vatAmountMinor,
+          });
+          if (currencyError !== null) {
+            return Result.err(currencyError);
+          }
           set.finalizedAt = existing.finalizedAt ?? now;
           if (existing.invoiceNumber === null) {
             const series = await findDefaultNumberSeries(
@@ -415,20 +478,13 @@ const transitionInvoice = createSafeHandler(
         return Result.ok({ id: row.id });
       },
     );
-    if (
-      result.isErr() &&
-      DatabaseError.is(result.error) &&
-      result.error.code === PG_ERROR.UNIQUE_VIOLATION
-    ) {
-      return Result.err(
-        new HandlerError({
-          status: 409,
-          message: "An invoice with this number already exists",
-        }),
-      );
+    const conflict = result.isErr()
+      ? duplicateInvoiceNumberError(result.error)
+      : null;
+    if (conflict !== null) {
+      return Result.err(conflict);
     }
-    const transitioned = yield* result;
-    return Result.ok(transitioned);
+    return Result.ok(yield* result);
   },
 );
 
