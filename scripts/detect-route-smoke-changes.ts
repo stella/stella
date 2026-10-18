@@ -137,6 +137,8 @@ export const routeSmokeImportClosure = (
   return visited;
 };
 
+const routeSmokeClosures = new Map<string, ReadonlySet<string>>();
+
 export const routeSmokeAffected = (
   changedFiles: readonly string[],
   root = REPO_ROOT,
@@ -145,7 +147,11 @@ export const routeSmokeAffected = (
   if (files.some(runtimePath)) {
     return true;
   }
-  const imports = routeSmokeImportClosure(root);
+  let imports = routeSmokeClosures.get(root);
+  if (imports === undefined) {
+    imports = routeSmokeImportClosure(root);
+    routeSmokeClosures.set(root, imports);
+  }
   return files.some((file) => imports.has(file));
 };
 

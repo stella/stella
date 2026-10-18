@@ -81,20 +81,32 @@ export const browserSuiteInputs = (source: string): readonly string[] => {
 };
 
 type ScopeOptions = { changed: readonly string[]; root?: string };
+const browserPredicates = new Map<
+  string,
+  (changed: readonly string[]) => boolean
+>();
 export const ciBrowserScopePredicate = ({
   root = ROOT,
 }: { root?: string } = {}) => {
+  const cached = browserPredicates.get(root);
+  if (cached !== undefined) {
+    return cached;
+  }
   try {
     const inputs = browserSuiteInputs(
       readFileSync(path.join(root, ".github/workflows/ci.yml"), "utf-8"),
     );
-    return (changed: readonly string[]): boolean =>
+    const predicate = (changed: readonly string[]): boolean =>
       changed.some((file) =>
         inputs.some((input) => file === input || file.startsWith(`${input}/`)),
       ) || requiresDesktopBrowser({ changed, root });
+    browserPredicates.set(root, predicate);
+    return predicate;
   } catch (error) {
     console.error("Browser scope unavailable; retaining browser suites", error);
-    return (_changed: readonly string[]): boolean => true;
+    const predicate = (_changed: readonly string[]): boolean => true;
+    browserPredicates.set(root, predicate);
+    return predicate;
   }
 };
 

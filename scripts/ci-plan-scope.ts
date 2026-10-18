@@ -36,14 +36,22 @@ export type ChangedFileScopeInput = {
 export type ChangedFileScope = Record<ScopeOutput, string>;
 
 const bool = String;
-const shellPattern = (pattern: string) =>
-  new RegExp(
+const compiledShellPatterns = new Map<string, RegExp>();
+const shellPattern = (pattern: string) => {
+  const cached = compiledShellPatterns.get(pattern);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const compiled = new RegExp(
     `^${pattern
       .replace(/[.+^${}()|[\]\\]/gu, "\\$&")
       .replaceAll("*", ".*")
       .replaceAll("?", ".")}$`,
     "u",
   );
+  compiledShellPatterns.set(pattern, compiled);
+  return compiled;
+};
 const matches = (file: string, patterns: readonly string[]) =>
   patterns.some((pattern) => shellPattern(pattern).test(file));
 const anyMatches = (files: readonly string[], patterns: readonly string[]) =>

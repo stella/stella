@@ -1434,6 +1434,26 @@ export const markdownChecks = ({
 };
 
 type ScopeOptions = { changed: readonly string[]; root?: string };
+const packageScopeInputs = new Map<
+  string,
+  { lock: ReturnType<typeof parseLockfile>; turbo: unknown }
+>();
+const readPackageScopeInputs = (root: string) => {
+  const cached = packageScopeInputs.get(root);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const inputs = {
+    lock: parseLockfile(
+      Bun.JSONC.parse(readFileSync(path.join(root, "bun.lock"), "utf-8")),
+    ),
+    turbo: Bun.JSONC.parse(
+      readFileSync(path.join(root, "turbo.json"), "utf-8"),
+    ),
+  };
+  packageScopeInputs.set(root, inputs);
+  return inputs;
+};
 export const requiresPackageChecks = ({
   changed,
   root = ROOT,
@@ -1494,9 +1514,7 @@ export const requiresLandingBuild = ({
     ) {
       return true;
     }
-    const lock = parseLockfile(
-      Bun.JSONC.parse(readFileSync(path.join(root, "bun.lock"), "utf-8")),
-    );
+    const { lock, turbo } = readPackageScopeInputs(root);
     if (lock === undefined) {
       return true;
     }
@@ -1526,9 +1544,6 @@ export const requiresLandingBuild = ({
         }
       }
     }
-    const turbo: unknown = Bun.JSONC.parse(
-      readFileSync(path.join(root, "turbo.json"), "utf-8"),
-    );
     const inputs = landingBuildRootInputs(turbo);
     // An absent task/input declaration cannot prove the landing is unaffected.
     if (inputs.length === 0) {
@@ -1554,9 +1569,7 @@ export const requiresDesktopBrowser = ({
     if (changed.some((file) => GLOBAL.test(file))) {
       return true;
     }
-    const lock = parseLockfile(
-      Bun.JSONC.parse(readFileSync(path.join(root, "bun.lock"), "utf-8")),
-    );
+    const { lock, turbo } = readPackageScopeInputs(root);
     if (lock === undefined) {
       return true;
     }
@@ -1595,9 +1608,6 @@ export const requiresDesktopBrowser = ({
         }
       }
     }
-    const turbo: unknown = Bun.JSONC.parse(
-      readFileSync(path.join(root, "turbo.json"), "utf-8"),
-    );
     if (typeof turbo !== "object" || turbo === null || !("tasks" in turbo)) {
       return true;
     }
