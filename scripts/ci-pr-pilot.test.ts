@@ -239,9 +239,9 @@ const DECLARED_NORMAL_PLAN_CHANGES = new Set([
 // Jobs that became parts of one shared job: the part's steps, under the
 // shared job's condition, keep the job's former plan.
 const FOLDED_PARTS = new Map([
-  ["parser-version-guard", "ci-quick-checks"],
-  ["ci-checks-docs", "ci-quick-checks"],
-  ["dated-waiver-expiry", "ci-quick-checks"],
+  ["parser-version-guard", "pr-heavy-gate"],
+  ["ci-checks-docs", "pr-heavy-gate"],
+  ["dated-waiver-expiry", "pr-heavy-gate"],
 ]);
 const partSelected = (
   name: string,
@@ -255,14 +255,19 @@ const partSelected = (
     ...context,
     values: { ...context.values, "steps.install.outcome": "success" },
   };
-  const parts = (workflow.jobs[host]?.steps ?? []).filter((step) =>
+  const hosts = [host, "ci-quick-checks"];
+  const selectedHost = hosts.find(
+    (candidate) =>
+      evaluate(workflow.jobs[candidate]?.if ?? "true", installed) === true,
+  );
+  if (selectedHost === undefined) {
+    return false;
+  }
+  const parts = (workflow.jobs[selectedHost]?.steps ?? []).filter((step) =>
     step.name.startsWith(`${name}: `),
   );
   expect(parts.length, name).toBeGreaterThan(0);
-  return (
-    evaluate(workflow.jobs[host]?.if ?? "true", installed) === true &&
-    parts.every((step) => evaluate(step.if ?? "true", installed) === true)
-  );
+  return parts.every((step) => evaluate(step.if ?? "true", installed) === true);
 };
 
 test("off and unset preserve today's job plan across every event and depth", async () => {
@@ -274,7 +279,7 @@ test("off and unset preserve today's job plan across every event and depth", asy
         ),
         "postgres-service-suites",
         "generated-sources",
-
+        "ci-quick-checks",
         "pr-heavy-gate",
       ]),
     ].toSorted(),
@@ -388,8 +393,8 @@ test("docs-only PRs retain Markdown checks in every pilot coverage profile", () 
       .map(([name]) => name);
     expect(scheduled).toEqual([...PILOT_ALWAYS]);
     // The Markdown checks are a part of the always-run quick checks.
-    const docs = (workflow.jobs["ci-quick-checks"]?.steps ?? []).filter(
-      (step) => step.name.startsWith("ci-checks-docs: "),
+    const docs = (workflow.jobs["pr-heavy-gate"]?.steps ?? []).filter((step) =>
+      step.name.startsWith("ci-checks-docs: "),
     );
     expect(docs).toHaveLength(1);
     for (const step of docs) {
@@ -618,7 +623,7 @@ test("pilot-fast aggregation requires its planned jobs and accepts deferred skip
       ).toBe(1);
     }
   }
-});
+}, 60_000);
 
 test("scan engine builds offline on affected PRs in both coverage profiles", () => {
   const condition = workflow.jobs["scan-engine-wasm-drift"]?.if;

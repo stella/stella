@@ -899,7 +899,11 @@ test("every eligible CI job cancels a failed merge group in its final step with 
       body.steps?.filter(({ name }) => name === CANONICAL_CANCEL_STEP.name) ??
       [];
     expect(cancellations.length, id).toBe(
-      Number(eligible.has(id) || id === CANCEL_REUSABLE_JOB),
+      Number(
+        eligible.has(id) ||
+          id === CANCEL_REUSABLE_JOB ||
+          id === "pr-heavy-gate",
+      ),
     );
     if (!eligible.has(id)) {
       continue;
@@ -1416,6 +1420,16 @@ const failedGatedJobs = fc.tuple(
   fc.constantFrom(...Object.values(EVENT)),
 );
 
+const activeJobForEvent = (job: string, event: Event) => {
+  if (event === EVENT.pullRequest && job === "ci-quick-checks") {
+    return "pr-heavy-gate";
+  }
+  if (event !== EVENT.pullRequest && job === "pr-heavy-gate") {
+    return "ci-quick-checks";
+  }
+  return job;
+};
+
 test("the result gate evaluates every job in the workflow", () => {
   expect(new Set(resultJob.needs)).toEqual(
     new Set(
@@ -1457,7 +1471,9 @@ test("the result gate evaluates every job in the workflow", () => {
     drawPropertySamples(failedGatedJobs, { numRuns: 100 }),
     ({ value: [job, result, event] }) => ({
       event,
-      results: { [job]: result },
+      results: {
+        [activeJobForEvent(job, event)]: result,
+      },
     }),
   )) {
     expect(exitCode, label).toBe(1);
@@ -1506,7 +1522,9 @@ test("a full-depth run fails every planned job that did not succeed", () => {
     drawPropertySamples(unsuccessfulFullDepthJobs, { numRuns: 100 }),
     ({ value: [job, result, event] }) => ({
       event,
-      results: { [job]: result },
+      results: {
+        [activeJobForEvent(job, event)]: result,
+      },
       suiteDepth: SUITE_DEPTH.full,
     }),
   )) {
@@ -1611,6 +1629,12 @@ test.each(resultJob.needs)(
   (failedJob) => {
     const gates: ExpectedResultGate[] = [];
     for (const event of [EVENT.mergeGroup, EVENT.pullRequest]) {
+      if (
+        (event === EVENT.pullRequest && failedJob === "ci-quick-checks") ||
+        (event !== EVENT.pullRequest && failedJob === "pr-heavy-gate")
+      ) {
+        continue;
+      }
       for (const cancellationEvidence of ["missing", "superseded"] as const) {
         const results = Object.fromEntries(
           resultJob.needs.map((job) => [job, "cancelled"]),
@@ -1659,7 +1683,7 @@ test.each(resultJob.needs)(
         expect(
           evaluateResult({
             event,
-            results: { [job]: "cancelled" },
+            results: { [activeJobForEvent(job, event)]: "cancelled" },
             suiteDepth: SUITE_DEPTH.fast,
             cancellationEvidence,
           }),
@@ -1790,7 +1814,13 @@ test("a run that passes as superseded records no completion evidence", () => {
     for (const { item, exitCode, stdout } of runBashBatch(cases, (entry) => {
       const base = resultGateCase({
         event: EVENT.pullRequest,
-        results: entry.results,
+        results:
+          entry.label === "complete"
+            ? entry.results
+            : {
+                [activeJobForEvent(entry.label, EVENT.pullRequest)]:
+                  "cancelled",
+              },
         suiteDepth: SUITE_DEPTH.fast,
         cancellationEvidence: "superseded",
       });
@@ -1833,7 +1863,7 @@ test("cancelled jobs retain failed-step evidence and cannot pass verified supers
     cases,
     ({ event, job }) => ({
       event,
-      results: { [job]: "cancelled" },
+      results: { [activeJobForEvent(job, event)]: "cancelled" },
       cancellationEvidence: "superseded",
       embeddedStepFailure: true,
     }),
@@ -6201,9 +6231,13 @@ test("the exact docs-only README change plans only Markdown checks in PRs and me
     );
     // The quick checks carry the wall-clock expiry check, which runs on every
     // candidate, and the Markdown checks; the parser guard stays unplanned.
-    expect(scheduled).toEqual(["ci-quick-checks"]);
-    expect(resultJob.needs).toContain("ci-quick-checks");
-    expect(fastRequired).toContain("ci-quick-checks");
+    const quickChecksJob =
+      event === EVENT.pullRequest ? "pr-heavy-gate" : "ci-quick-checks";
+    expect(scheduled).toEqual([quickChecksJob]);
+    expect(resultJob.needs).toContain(quickChecksJob);
+    if (event === EVENT.pullRequest) {
+      expect(fastRequired).toContain(quickChecksJob);
+    }
     const partSelected = (prefix: string) =>
       v
         .parse(
@@ -6212,7 +6246,7 @@ test("the exact docs-only README change plans only Markdown checks in PRs and me
               v.looseObject({ name: v.string(), if: v.optional(v.string()) }),
             ),
           }),
-          ciJobs["ci-quick-checks"],
+          ciJobs[quickChecksJob],
         )
         .steps.filter(({ name }) => name.startsWith(prefix))
         .map((step) =>
@@ -6247,7 +6281,7 @@ test("the exact docs-only README change plans only Markdown checks in PRs and me
       evaluateResult({
         event,
         suiteDepth: depth,
-        results: { "ci-quick-checks": "failure" },
+        results: { [quickChecksJob]: "failure" },
       }),
     ).toBe(1);
   }
@@ -7533,7 +7567,7 @@ test("a pull request starts no heavy suite unless its gate passed; a merge group
     );
   }
   expect(jobIf(ciJobs["pr-heavy-gate"])).toContain(
-    "needs.ci-plan.outputs.pr_heavy_gate_required == 'true'",
+    "github.event_name == 'pull_request'",
   );
   expect(
     v.parse(v.object({ needs: v.string() }), ciJobs["pr-heavy-gate"]).needs,
@@ -7603,93 +7637,61 @@ test("every scope that plans a pull request heavy suite also plans its gate", ()
   expect(planned).toBeGreaterThan(0);
 });
 
-type GateRunOptions = {
-  polls: readonly { status: string; conclusion?: string }[];
-};
-const runGate = async ({ polls }: GateRunOptions) => {
-  const step = v.parse(
-    v.object({
-      steps: v.tuple([
-        v.looseObject({ with: v.object({ script: v.string() }) }),
-      ]),
-    }),
+test("both quick-check jobs use the identical shared step list", () => {
+  const gate = v.parse(
+    v.object({ steps: v.array(v.unknown()), "timeout-minutes": v.number() }),
     ciJobs["pr-heavy-gate"],
-  ).steps[0];
-  const requests: unknown[] = [];
-  const failures: string[] = [];
-  const listJobsForWorkflowRun = Symbol("listJobsForWorkflowRun");
-  await new Script(`(async () => {${step.with.script}\n})()`).runInNewContext({
-    context: { repo: { owner: "stella", repo: "stella" }, runId: 123 },
-    core: { setFailed: (message: string) => failures.push(message) },
-    github: {
-      rest: { actions: { listJobsForWorkflowRun } },
-      paginate: async (method: symbol, request: unknown) => {
-        expect(method).toBe(listJobsForWorkflowRun);
-        const poll =
-          polls.at(requests.length) ?? panic("Gate polled past its fixture");
-        requests.push(request);
-        return [
-          { name: "ci-tests (api-1)", status: "queued" },
-          { name: "ci-quick-checks", ...poll },
-        ];
-      },
-    },
-    setTimeout: (resolve: () => void) => resolve(),
-  });
-  return { requests, failures };
-};
+  );
+  const standalone = v.parse(
+    v.object({ steps: v.array(v.unknown()), "timeout-minutes": v.number() }),
+    ciJobs["ci-quick-checks"],
+  );
+  expect(gate.steps).toEqual(standalone.steps);
+  expect(gate["timeout-minutes"]).toBe(15);
+  expect(standalone["timeout-minutes"]).toBe(15);
+});
 
-test("the gate waits for the quick checks and passes only on their success", async () => {
-  // The gate finds the quick checks by job name, which is their id.
+test("a failed PR quick check fails ci-result and skips a heavy suite", () => {
   expect(
-    v.parse(
-      v.object({ name: v.optional(v.string()) }),
-      ciJobs["ci-quick-checks"],
-    ).name,
-  ).toBeUndefined();
-  const passed = await runGate({
-    polls: [
-      { status: "queued" },
-      { status: "in_progress" },
-      { status: "completed", conclusion: "success" },
-    ],
-  });
-  expect(passed.failures).toEqual([]);
-  expect(passed.requests).toHaveLength(3);
-  expect(passed.requests.at(0)).toEqual({
-    owner: "stella",
-    repo: "stella",
-    run_id: 123,
-    filter: "latest",
-    per_page: 100,
-  });
-  for (const conclusion of ["failure", "cancelled", "skipped", "timed_out"]) {
-    const failed = await runGate({
-      polls: [{ status: "completed", conclusion }],
-    });
-    expect(failed.failures, conclusion).toEqual([
-      `ci-quick-checks concluded ${conclusion}; the heavy suites do not start.`,
-    ]);
+    evaluateResult({
+      event: EVENT.pullRequest,
+      results: { "pr-heavy-gate": "failure", "ci-tests": "skipped" },
+    }),
+  ).toBe(1);
+  expect(
+    heavyJobsThatRun({ event: EVENT.pullRequest, gate: "failure" }),
+  ).not.toContain("ci-tests");
+});
+
+test("merge-group heavy suites do not depend on the standalone quick-check job", () => {
+  for (const job of GATED_HEAVY_ROOTS) {
+    const needs = v.parse(
+      v.object({ needs: v.array(v.string()) }),
+      ciJobs[job],
+    ).needs;
+    expect(needs).not.toContain("ci-quick-checks");
   }
+  expect(
+    heavyJobsThatRun({ event: EVENT.mergeGroup, gate: "skipped" }),
+  ).toEqual(expect.arrayContaining([...GATED_HEAVY_ROOTS]));
 });
 
 test("a merge-from-base head skips its heavy suites only on verified reuse, and says why", () => {
   const skipped: Record<string, string> = Object.fromEntries(
-    ["pr-heavy-gate", ...PR_HEAVY_JOBS]
-      .filter((job) => resultJob.needs.includes(job))
-      .map((job) => [job, "skipped"]),
+    PR_HEAVY_JOBS.filter((job) => resultJob.needs.includes(job)).map((job) => [
+      job,
+      "skipped",
+    ]),
   );
+  skipped["pr-heavy-gate"] = "success";
   const parent = "a".repeat(40);
   const reused = {
     pr_heavy_suites: "reused",
     pr_heavy_source_run_id: "99",
     pr_heavy_source_sha: parent,
   };
-  // On reuse ci-plan leaves the gate unplanned along with the heavy suites.
-  const pullRequest = {
-    event: EVENT.pullRequest,
-    unplannedScopes: ["pr_heavy_gate_required"],
-  } as const;
+  // Reuse skips the heavy suites, but quick checks still run in the gate.
+  const pullRequest = { event: EVENT.pullRequest } as const;
   const outcome = onlyOutcome(
     evaluateResults(
       [{ ...pullRequest, results: skipped, plannedOutputs: reused }],
@@ -7715,7 +7717,7 @@ test("a merge-from-base head skips its heavy suites only on verified reuse, and 
       options: { ...pullRequest, results: skipped, plannedOutputs },
       exitCode: 1,
     })),
-    ...["ci-quick-checks", "ci-checks-rest", "code-quality-api"].map((job) => ({
+    ...["pr-heavy-gate", "ci-checks-rest", "code-quality-api"].map((job) => ({
       label: `reuse keeps ${job} required`,
       options: {
         ...pullRequest,
@@ -7728,7 +7730,7 @@ test("a merge-from-base head skips its heavy suites only on verified reuse, and 
       label: "reuse keeps failures red",
       options: {
         ...pullRequest,
-        results: { ...skipped, "ci-quick-checks": "failure" },
+        results: { ...skipped, "pr-heavy-gate": "failure" },
         plannedOutputs: reused,
       },
       exitCode: 1,
