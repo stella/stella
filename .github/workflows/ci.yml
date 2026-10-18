@@ -8616,13 +8616,19 @@ jobs:
               def nonempty: if . == "" then null else . end;
               def count: if test("^[1-9][0-9]*$") then tonumber else null end;
               . as $needs
+              # A failing verdict also counted every job that failed, timed out
+              # or was cancelled, whichever branch decided it.
+              | ($required + (if $status == "0" then [] else
+                  [to_entries[] | select(.key != "ci-plan")
+                    | select(.value.result == "failure" or .value.result == "timed_out" or .value.result == "cancelled")
+                    | .key] end) | unique) as $counted
               | {version: 1, event: $event,
                 head_sha: ($head | nonempty), base_sha: ($base | nonempty),
                 run_id: ($run | count), run_attempt: ($attempt | count),
                 depth: ($depth | nonempty), coverage_profile: ($profile | nonempty),
                 reused_from_run_id: ($reused | count),
-                required: [$required[] | {job: ., conclusion: ($needs[.].result // "missing")}],
-                not_required: ([keys[] | select(. != "ci-plan")] - $required),
+                required: [$counted[] | {job: ., conclusion: ($needs[.].result // "missing")}],
+                not_required: ([keys[] | select(. != "ci-plan")] - $counted),
                 verdict: (if $status == "0" then "success" else "failure" end)}' <<< "$RECORDED_NEEDS") || return 1
             echo "required_summary=$record" >> "${GITHUB_OUTPUT:-}"
           }

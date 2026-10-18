@@ -1899,6 +1899,15 @@ test("the required-jobs record names every workflow job once and carries the ver
       env: { HEAD_SHA: "c".repeat(40), BASE_SHA: "d".repeat(40) },
     },
     {
+      // A job outside the fast-required set still fails the verdict.
+      label: "pull-request-fast-outside-failure",
+      options: {
+        event: EVENT.pullRequest,
+        results: { "e2e-landing": "failure" },
+        suiteDepth: SUITE_DEPTH.fast,
+      },
+    },
+    {
       label: "pull-request-reused",
       options: {
         event: EVENT.pullRequest,
@@ -1966,6 +1975,16 @@ test("the required-jobs record names every workflow job once and carries the ver
   // A fast run leaves its heavy suites to the queue.
   expect(fast.record.not_required).toContain("e2e-landing");
   expect(fastRequired.length).toBeLessThan(success.record.required.length);
+
+  // The record holds every job the verdict counted, not only the fast set.
+  const outside = take("pull-request-fast-outside-failure");
+  expect(outside.exitCode).toBe(1);
+  expect(outside.record.verdict).toBe("failure");
+  expect(outside.record.required).toContainEqual({
+    job: "e2e-landing",
+    conclusion: "failure",
+  });
+  expect(outside.record.not_required).not.toContain("e2e-landing");
 
   const reused = take("pull-request-reused");
   expect(reused.exitCode).toBe(0);
