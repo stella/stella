@@ -85,6 +85,30 @@ const ownersOf = (
       generator.outputs.some((output) => matchesGeneratedGlob(output, file)),
   );
 
+/**
+ * Why the owners of `file` cannot take it over automatically, or null when
+ * every owner writes the whole file and is autofix-eligible. Shared by the
+ * regenerate and keep-deletion paths so both apply the same safeguards.
+ */
+const ownerReason = (
+  file: string,
+  owners: readonly Generator[],
+): string | null => {
+  if (owners.length === 0) {
+    return `${file}: not a generated output`;
+  }
+  if (
+    owners.some((owner) => owner.blocks?.some((block) => block.path === file))
+  ) {
+    // Only part of the file is generated; the conflict may be in prose.
+    return `${file}: has hand-written regions`;
+  }
+  if (!owners.every((owner) => owner.autofix)) {
+    return `${file}: its generator is not autofix-eligible`;
+  }
+  return null;
+};
+
 /** Why `conflict` needs a person, or null when its owner can regenerate it. */
 const conflictReason = (
   conflict: Conflict,
@@ -101,20 +125,7 @@ const conflictReason = (
   if (kind === "delete-modify") {
     return deletions.has(file) ? null : `${file}: one side deleted it`;
   }
-  const owners = ownersOf(file, generators);
-  if (owners.length === 0) {
-    return `${file}: not a generated output`;
-  }
-  if (
-    owners.some((owner) => owner.blocks?.some((block) => block.path === file))
-  ) {
-    // Only part of the file is generated; the conflict may be in prose.
-    return `${file}: has hand-written regions`;
-  }
-  if (!owners.every((owner) => owner.autofix)) {
-    return `${file}: its generator is not autofix-eligible`;
-  }
-  return null;
+  return ownerReason(file, ownersOf(file, generators));
 };
 
 /** Pure: decide whether every conflict is a regenerable output. */
@@ -380,7 +391,10 @@ const deletionsFor = ({
         !pathInTree(gitDir, head, file) &&
         pathInTree(gitDir, main, file) &&
         ignoredInTree(gitDir, head, file) &&
-        ownersOf(file, generators, ["committed", "derived"]).length > 0,
+        ownerReason(
+          file,
+          ownersOf(file, generators, ["committed", "derived"]),
+        ) === null,
     )
     .map(({ path: file }) => file)
     .toSorted();

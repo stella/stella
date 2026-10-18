@@ -471,6 +471,25 @@ describe("resolution across runs", () => {
       fixture: () => deletionFixture({ file: "src/source.ts" }),
       generators: [deletionGenerator("committed")],
     },
+    // The same owner safeguards as a regenerated conflict: a generator that
+    // writes only marked regions does not own the prose around them.
+    {
+      name: "its owner writes only regions of the file",
+      fixture: () => deletionFixture(),
+      generators: [
+        {
+          ...deletionGenerator("committed"),
+          blocks: [
+            { path: DERIVED, begin: "<!-- begin -->", end: "<!-- end -->" },
+          ],
+        },
+      ],
+    },
+    {
+      name: "its owner is not autofix-eligible",
+      fixture: () => deletionFixture(),
+      generators: [{ ...deletionGenerator("committed"), autofix: false }],
+    },
   ];
   test.each(forgedDeletionRejections)(
     "the trusted run rejects a forged deletion when $name",
