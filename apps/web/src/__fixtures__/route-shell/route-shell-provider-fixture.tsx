@@ -250,7 +250,7 @@ const installFixtureNetwork = () => {
     Awaited<ReturnType<ReturnType<typeof api.workspaces>["get"]>>["data"]
   >;
   globalThis.fetch = Object.assign(
-    (input: RequestInfo | URL) => {
+    async (input: RequestInfo | URL) => {
       const url = input instanceof Request ? input.url : String(input);
       const pathname = new URL(url, window.location.origin).pathname;
       requests.push(pathname);
@@ -497,7 +497,7 @@ const loadFixtureRuntime = async (
     render,
     waitFor: waitForDom,
   } = await import("@testing-library/react");
-  const waitFor = (assertion: () => void) =>
+  const waitFor = async (assertion: () => void) =>
     waitForDom(assertion, { onTimeout: (error) => error });
   const { initializeI18n } = await import("@/i18n/i18n-store");
   const { useFormatter, useLocale } = await import("@/i18n/formatting-context");
