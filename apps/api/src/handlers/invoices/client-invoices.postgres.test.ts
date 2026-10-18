@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
-import { eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { cents } from "@stll/money";
 
@@ -15,6 +15,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { createMembershipScopedDb, markRlsDatabase } from "@/api/db/scoped";
+import { invoiceInMatter } from "@/api/handlers/invoices/invoice-scope";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { getPgErrorCode } from "@/api/lib/pg-error";
@@ -304,6 +305,71 @@ if (!databaseUrl || !runPostgres) {
             .where(eq(invoiceLines.invoiceId, scenario.invoiceId)),
         })),
       ).toEqual({ invoices: [], lines: [] });
+    });
+
+    test("a client invoice with no lines left is visible and writable only to owners and admins", async () => {
+      const scenario = await seedScenario();
+      await db
+        .delete(invoiceLines)
+        .where(eq(invoiceLines.invoiceId, scenario.invoiceId));
+      for (const [kind, actor] of Object.entries(scenario.actors)) {
+        const result = await scoped(
+          scenario,
+          actor,
+        )(async (tx) => ({
+          invoices: await tx
+            .select({ id: invoices.id })
+            .from(invoices)
+            .where(eq(invoices.id, scenario.invoiceId)),
+          updated: await tx
+            .update(invoices)
+            .set({ notes: "Draft edit" })
+            .where(eq(invoices.id, scenario.invoiceId))
+            .returning({ id: invoices.id }),
+        }));
+        const expected =
+          kind === "owner" || kind === "admin"
+            ? [{ id: scenario.invoiceId }]
+            : [];
+        expect(result).toEqual({ invoices: expected, updated: expected });
+      }
+    });
+
+    test("a single-matter invoice is addressable only through its own matter", async () => {
+      const scenario = await seedScenario();
+      const invoiceId = createSafeId<"invoice">();
+      await db.insert(invoices).values({
+        id: invoiceId,
+        organizationId: scenario.orgId,
+        workspaceId: scenario.firstMatterId,
+        invoiceDate: "2026-10-15",
+        currency: "EUR",
+      });
+      const addressedThrough = async (workspaceId: SafeId<"workspace">) =>
+        await db
+          .select({ id: invoices.id })
+          .from(invoices)
+          .where(
+            and(
+              eq(invoices.id, invoiceId),
+              invoiceInMatter(invoices, workspaceId),
+            ),
+          );
+      expect(await addressedThrough(scenario.firstMatterId)).toEqual([
+        { id: invoiceId },
+      ]);
+      expect(await addressedThrough(scenario.secondMatterId)).toEqual([]);
+      expect(
+        await db
+          .select({ id: invoices.id })
+          .from(invoices)
+          .where(
+            and(
+              eq(invoices.id, scenario.invoiceId),
+              invoiceInMatter(invoices, scenario.secondMatterId),
+            ),
+          ),
+      ).toEqual([{ id: scenario.invoiceId }]);
     });
 
     test("line constraints reject a different client and cross-tenant invoice or matter even on a root write", async () => {

@@ -18,13 +18,17 @@ export const invoiceTouchesMatter = (
 ) =>
   sql`(${table.workspaceId} = ${workspaceId} OR EXISTS (SELECT 1 FROM public.invoice_lines scope_line WHERE scope_line.invoice_id = ${table.id} AND scope_line.workspace_id = ${workspaceId}))`;
 
-/** A client draft remains addressable after its last line for the URL matter is removed. */
+/**
+ * A client invoice stays addressable through any matter of its client after
+ * its last line for the URL matter is removed. A single-matter invoice is
+ * addressable only through its own matter.
+ */
 // sql-perf-allow: bounded by one invoice ID for point operations; workspaces primary key resolves the client.
 export const invoiceInMatter = (
   table: InvoiceScopeColumns,
   workspaceId: SafeId<"workspace">,
 ) =>
-  sql`(${invoiceTouchesMatter(table, workspaceId)} OR EXISTS (SELECT 1 FROM public.workspaces invoice_matter WHERE invoice_matter.id = ${workspaceId} AND invoice_matter.organization_id = ${table.organizationId} AND invoice_matter.client_id = ${table.clientId}))`;
+  sql`(${invoiceTouchesMatter(table, workspaceId)} OR (${table.workspaceId} IS NULL AND EXISTS (SELECT 1 FROM public.workspaces invoice_matter WHERE invoice_matter.id = ${workspaceId} AND invoice_matter.organization_id = ${table.organizationId} AND invoice_matter.client_id = ${table.clientId})))`;
 
 type InvoiceShareColumns = {
   id: SQLWrapper;

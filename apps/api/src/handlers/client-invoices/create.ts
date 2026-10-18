@@ -4,7 +4,6 @@ import { t } from "elysia";
 
 import { resultTx } from "@/api/db/safe-db";
 import { expenses, invoices, timeEntries, workspaces } from "@/api/db/schema";
-import { createInvoiceBodySchema } from "@/api/handlers/invoices/create-contract";
 import {
   createDraftInvoice,
   createInvoiceInput,
@@ -22,32 +21,8 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
 import { appendClientInvoiceMatter } from "./append-matter";
+import { clientInvoiceBody } from "./create-contract";
 import { validateClientInvoiceSelection } from "./selection";
-
-const clientInvoiceBody = t.Composite([
-  t.Omit(createInvoiceBodySchema, [
-    "timeEntryIds",
-    "expenseIds",
-    "entryAdjustments",
-    "documentType",
-    "originalInvoiceId",
-    "invoiceNumber",
-  ]),
-  t.Object({
-    matters: t.Array(
-      t.Object({
-        workspaceId: tSafeId("workspace"),
-        timeEntryIds: t.Array(tSafeId("timeEntry"), {
-          maxItems: LIMITS.clientInvoiceMatters0,
-        }),
-        expenseIds: t.Array(tSafeId("expense"), {
-          maxItems: LIMITS.clientInvoiceMatters0,
-        }),
-      }),
-      { minItems: 1, maxItems: LIMITS.clientInvoiceMatters },
-    ),
-  }),
-]);
 
 const createClientInvoice = createSafeRootHandler(
   {

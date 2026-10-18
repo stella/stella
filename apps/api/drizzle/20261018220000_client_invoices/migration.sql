@@ -40,7 +40,11 @@ RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalo
  AND EXISTS (SELECT 1 FROM public.member m WHERE m.organization_id = org_id
    AND m.user_id = current_setting('app.user_id', true)
    AND (m.role IN ('owner', 'admin') OR (
-     (matter_id IS NULL OR matter_id IN (SELECT authorized_workspace_id FROM public.stella_authorized_workspaces))
+     -- A client invoice is visible to members who can open every matter on it;
+     -- one with no lines left has no such matter, so only billing admins see it.
+     (CASE WHEN matter_id IS NULL
+       THEN EXISTS (SELECT 1 FROM public.invoice_lines any_line WHERE any_line.invoice_id = stella_invoice_access.invoice_id)
+       ELSE matter_id IN (SELECT authorized_workspace_id FROM public.stella_authorized_workspaces) END)
      AND NOT EXISTS (SELECT 1 FROM public.invoice_lines l WHERE l.invoice_id = stella_invoice_access.invoice_id
        AND l.workspace_id NOT IN (SELECT authorized_workspace_id FROM public.stella_authorized_workspaces))
    )))
