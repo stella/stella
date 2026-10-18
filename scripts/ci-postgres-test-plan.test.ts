@@ -540,3 +540,43 @@ test("verification suites participate in general Postgres discovery and changed-
     );
   }
 }, 30_000);
+
+test("a change to any online lock-taking declaration selects the contention suite", async () => {
+  const suite = "src/db/online-ddl-contention.postgres.test.ts";
+  const runner = packageJson.ciGateTestRunners["test:postgres"];
+  expect(await discoverGatedTestFiles({ apiRoot, ...runner })).toContain(suite);
+  // The registries, the owner and every repair live in the database modules,
+  // whose rule widens to the whole suite.
+  for (const file of [
+    "apps/api/src/db/online-migrations.ts",
+    "apps/api/src/db/online-ddl.ts",
+    "apps/api/src/db/sanctions-monitoring-constraint-validation.ts",
+  ]) {
+    expect(API_ALL_RULES.database.test(file), file).toBe(true);
+  }
+  // Declarations outside them reach the suite through its import graph, each
+  // on its own.
+  const declarations = [
+    "apps/api/src/lib/case-law/coverage-index.ts",
+    "apps/api/src/lib/case-law/published-decisions-sql.ts",
+    "apps/api/src/lib/legal-search/sk-document-outstanding-index.ts",
+    "apps/api/src/lib/db/migration-history.ts",
+  ];
+  for (const file of declarations) {
+    expect(
+      Object.values(API_ALL_RULES).some((rule) => rule.test(file)),
+      file,
+    ).toBe(false);
+  }
+  for (const file of declarations) {
+    const selection = await planPostgresTests({
+      event: "pull_request",
+      scopeUnknown: false,
+      changed: [file],
+    });
+    expect(selection.mode, file).toBe("selected");
+    if (selection.mode === "selected") {
+      expect(selection.files, file).toContain(suite);
+    }
+  }
+}, 60_000);
