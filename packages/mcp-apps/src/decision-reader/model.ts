@@ -163,9 +163,9 @@ export const appendReaderPage = ({
   const stripFragment = (url: string | null) => url?.split("#", 1).at(0);
   if (
     Object.entries(state.metadata).some(
-      ([key, value]) => key !== "appUrl" && metadataEntries.get(key) !== value,
+      ([key, value]) => key !== "url" && metadataEntries.get(key) !== value,
     ) ||
-    stripFragment(state.metadata.appUrl) !== stripFragment(page.metadata.appUrl)
+    stripFragment(state.metadata.url) !== stripFragment(page.metadata.url)
   ) {
     return invalidPage("Decision metadata changed between pages");
   }
@@ -297,7 +297,7 @@ const readerDocumentAst = ({ metadata, blocks }: ReaderPager): DocumentAst => ({
   source: {
     system: metadata.country,
     documentId: metadata.decisionId,
-    webUrl: metadata.appUrl ?? "",
+    webUrl: metadata.url ?? "",
     printUrl: "",
   },
   metadata: {

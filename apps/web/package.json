@@ -4,6 +4,12 @@
   "private": true,
   "license": "Apache-2.0",
   "type": "module",
+  "imports": {
+    "#aho-corasick": {
+      "browser": "@stll/aho-corasick-wasm",
+      "default": "@stll/aho-corasick"
+    }
+  },
   "scripts": {
     "dev": "([ -n \"$TURBO_HASH\" ] || bun run generate:route-tree) && vite dev",
     "build": "([ -n \"$TURBO_HASH\" ] || bun run generate:route-tree) && vite build && bun build --target=bun --outfile=dist/runtime.js --external ./server/server.js src/runtime.ts && bun scripts/assert-start-runtime-build.ts",
@@ -48,6 +54,8 @@
     "@neftaly/editcontext-polyfill": "^0.1.1",
     "@silurus/ooxml": "catalog:",
     "@standard-schema/spec": "^1.1.0",
+    "@stll/aho-corasick": "catalog:",
+    "@stll/aho-corasick-wasm": "catalog:",
     "@stll/ai-catalog": "workspace:*",
     "@stll/analytics-config": "workspace:*",
     "@stll/anonymize-chat": "workspace:*",
@@ -81,6 +89,8 @@
     "@stll/money": "workspace:*",
     "@stll/permissions": "workspace:*",
     "@stll/portable-path": "workspace:*",
+    "@stll/regex-set": "catalog:",
+    "@stll/regex-set-wasm": "catalog:",
     "@stll/scan-engine": "workspace:*",
     "@stll/sha256": "workspace:*",
     "@stll/skills": "workspace:*",
@@ -189,6 +199,7 @@
     "@types/react-dom": "catalog:react19",
     "@vitejs/plugin-react": "catalog:",
     "bun-types": "catalog:",
+    "fast-check": "catalog:",
     "happy-dom": "20.14.5",
     "oxc-transform-react": "catalog:",
     "rollup-plugin-visualizer": "^7.1.1",

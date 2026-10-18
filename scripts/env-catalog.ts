@@ -1476,6 +1476,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "CHANNEL",
   "CHAT_SAVED_STATE_WRITE",
   "CHAT_TRANSCRIPTS_WRITE",
+  // JSON paths handed from ci-plan to the changed-test repeat in ci-tests.
+  "CHANGED_FILES_JSON",
   // Exact-base CI rehearsal: loopback URL for the separate disposable clean cluster.
   "CLEAN_DATABASE_URL",
   "CODEX_API_KEY",
@@ -1644,6 +1646,15 @@ export const TOOLING_ENV_KEYS = new Set([
   "TEST_API_ERROR",
   "TEST_LATER",
   "CI_GENERATED_SOURCES_MANIFEST",
+  // Check pool: the job context its step hands over and an optional
+  // concurrency override; the pool strips the context before running checks.
+  "CI_CHECK_POOL_NEEDS",
+  "CI_CHECK_POOL_STEPS",
+  "CI_CHECK_POOL_INPUTS",
+  "CI_CHECK_POOL_TOKEN",
+  "CI_CHECK_POOL_CONCURRENCY",
+  // Generator families another job of the same CI run checks on this commit.
+  "GENERATED_CHECKS_IN_OTHER_JOBS",
   // Queue proof outcomes and resolved hosted-runner image for static receipts.
   "CHECK_OUTCOMES",
   "ImageOS",

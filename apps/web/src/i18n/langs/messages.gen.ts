@@ -15,6 +15,31 @@ type Messages = {
       "unknownDevice": "Unknown device";
     };
   };
+  "admin": {
+    "ai": "AI";
+    "backToApp": "Back to app";
+    "billingAndUsage": "Billing and usage";
+    "billingProfiles": "Billing profiles";
+    "deleteDescription": "Permanently delete this organization and its data. This cannot be undone.";
+    "deleteOrganization": "Delete organization";
+    "deleteRefusedSubscription": "This organization has a subscription that renews. Cancel it in Plan and usage first, then delete the organization.";
+    "deleteTypeToConfirm": "Type {name} to confirm.";
+    "firmSetup": "Firm setup";
+    "general": "General";
+    "leaveDescription": "You will lose access to this organization's matters and data.";
+    "leaveOrganization": "Leave organization";
+    "leaveRefusedOnlyOwner": "You are the only owner. Make another member an owner before you leave.";
+    "modelsAndProviders": "Models and providers";
+    "noPlan": "No active plan";
+    "organizationDeleted": "The organization has been deleted.";
+    "organizationId": "Organization ID";
+    "organizationLeft": "You have left the organization.";
+    "overviewDescription": "Manage your organization, people and tools.";
+    "people": "People";
+    "planAndUsage": "Plan and usage";
+    "title": "Organization admin";
+    "toolsDescription": "Enable or disable native tools for everyone in this organization.";
+  };
   "agentClaim": {
     "access": "Access it will get";
     "accessReadSearch": "Read and search access";
@@ -1061,7 +1086,6 @@ type Messages = {
       };
     };
     "sameCaseNumber": "{count, plural, one {# decision shares} other {# decisions share}} this case number. Pick the court.";
-    "searchAskPrompt": "{query} (case law of {country})";
     "searchLabel": "Search case law";
     "searchPlaceholder": "Case number, ECLI or words, e.g. 22 Cdo 2653/2012";
     "searchUnavailable": {
@@ -1209,15 +1233,32 @@ type Messages = {
     };
     "answerEdit": {
       "acceptFailed": "The change could not be saved. Try again.";
+      "aiKind": "Requested edit";
       "ask": "Request edits";
+      "authorUnknown": "Unknown author";
+      "autolinkLabel": "This text becomes a link automatically. Change the label before removing the link.";
+      "change": "Change {revision}";
+      "editedLabel": "Edited answer";
       "failed": "The change could not be prepared. Try again.";
+      "formatKind": "Formatting";
+      "heading": "Heading {level}";
+      "history": "Answer history";
+      "historyEmpty": "No earlier versions.";
       "instruction": "Describe the change";
       "instructionRequired": "Describe how to change the selected text.";
       "invalidSelection": "This selection cannot be edited. Select continuous text.";
+      "invalidUrl": "Enter a valid HTTP or HTTPS address.";
+      "linkAddress": "Link address";
+      "orderedList": "Numbered list";
       "proposal": "Suggested change";
       "requesting": "Preparing changes…";
+      "restoreRefreshFailed": "The answer was restored, but could not be refreshed. Refresh to load the restored answer.";
+      "revertKind": "Restored version";
       "stale": "This answer changed. Select the text again.";
       "submit": "Request change";
+      "textStyle": "Text style";
+      "unorderedList": "Bulleted list";
+      "wholeBlockRequired": "Select a whole paragraph or list to change its style.";
     };
     "answerQuote": {
       "showInDecision": "Show in decision";
@@ -1409,6 +1450,11 @@ type Messages = {
     "mention": {
       "category": {
         "entities": "In this matter";
+        "sources": "Sources";
+      };
+      "corpus": {
+        "caseLaw": "Case law · {country}";
+        "legislation": "Legislation · {country}";
       };
       "loadError": "Failed to load items";
     };
@@ -5136,7 +5182,6 @@ type Messages = {
     "provisionTextUnavailable": "Text not available for this version";
     "publisherWindowInconsistent": "No in-force reading for this date: the publisher's data is inconsistent.";
     "resolvedAlias": "Recognized as {label}";
-    "searchAskPrompt": "{query} (legislation of {country})";
     "searchLabel": "Search statutes";
     "searchPlaceholder": "Number, name or title, e.g. 89/2012 Sb.";
     "showCitedPartOnly": "Show cited part only";
@@ -5212,7 +5257,7 @@ type Messages = {
       "previewIntroduction": "This agreement is entered into between Example Labs Ltd. (the “Company”) and the investor named on the signature page (the “Investor”).";
       "previewLevel1": "Investment";
       "previewLevel1Second": "Company representations";
-      "previewLevel1Third": "General";
+      "previewLevel1Third": "General provisions";
       "previewLevel2": "Equity financing";
       "previewLevel2Second": "Liquidity event";
       "previewLevel3": "Conversion price";
@@ -6265,7 +6310,6 @@ type Messages = {
         };
       };
       "atAGlance": "At a glance";
-      "edited": "edited";
       "getStarted": "Get started by uploading documents or creating your first folder.";
       "matterDetails": "Matter details";
       "membersCount": "{count, plural, one {# member} other {# members}}";

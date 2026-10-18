@@ -12,6 +12,31 @@
       "unknownDevice": "Nežinomas įrenginys"
     }
   },
+  "admin": {
+    "ai": "DI",
+    "backToApp": "Grįžti į programą",
+    "billingAndUsage": "Atsiskaitymas ir naudojimas",
+    "billingProfiles": "Atsiskaitymo profiliai",
+    "deleteDescription": "Visam laikui ištrinkite šią organizaciją ir jos duomenis. Šio veiksmo negalima atšaukti.",
+    "deleteOrganization": "Ištrinti organizaciją",
+    "deleteRefusedSubscription": "Ši organizacija turi atsinaujinančią prenumeratą. Pirmiausia ją atšaukite skiltyje Planas ir naudojimas, tada ištrinkite organizaciją.",
+    "deleteTypeToConfirm": "Norėdami patvirtinti, įveskite {name}.",
+    "firmSetup": "Kontoros nustatymai",
+    "general": "Bendra",
+    "leaveDescription": "Prarasite prieigą prie šios organizacijos bylų ir duomenų.",
+    "leaveOrganization": "Išeiti iš organizacijos",
+    "leaveRefusedOnlyOwner": "Esate vienintelis savininkas. Prieš išeidami paskirkite savininku kitą narį.",
+    "modelsAndProviders": "Modeliai ir teikėjai",
+    "noPlan": "Nėra aktyvaus plano",
+    "organizationDeleted": "Organizacija ištrinta.",
+    "organizationId": "Organizacijos ID",
+    "organizationLeft": "Išėjote iš organizacijos.",
+    "overviewDescription": "Tvarkykite organizaciją, žmones ir įrankius.",
+    "people": "Žmonės",
+    "planAndUsage": "Planas ir naudojimas",
+    "title": "Organizacijos administravimas",
+    "toolsDescription": "Įjunkite arba išjunkite integruotus įrankius visiems šios organizacijos nariams."
+  },
   "agentClaim": {
     "access": "Gaunama prieiga",
     "accessReadSearch": "Skaitymo ir paieškos prieiga",
@@ -1058,7 +1083,6 @@
       }
     },
     "sameCaseNumber": "{count, plural, one {# sprendimas turi} few {# sprendimai turi} many {# sprendimo turi} other {# sprendimų turi}} šį bylos numerį. Pasirinkite teismą.",
-    "searchAskPrompt": "{query} (teismų praktika, {country})",
     "searchLabel": "Ieškoti teismų praktikoje",
     "searchPlaceholder": "Bylos numeris, ECLI arba žodžiai, pvz. 22 Cdo 2653/2012",
     "searchUnavailable": {
@@ -1206,15 +1230,32 @@
     },
     "answerEdit": {
       "acceptFailed": "Nepavyko išsaugoti pakeitimo. Bandykite dar kartą.",
+      "aiKind": "Prašytas redagavimas",
       "ask": "Prašyti pakeitimų",
+      "authorUnknown": "Nežinomas autorius",
+      "autolinkLabel": "Šis tekstas automatiškai tampa nuoroda. Prieš pašalindami nuorodą pakeiskite jos pavadinimą.",
+      "change": "Pakeitimas {revision}",
+      "editedLabel": "Redaguotas atsakymas",
       "failed": "Nepavyko paruošti pakeitimo. Bandykite dar kartą.",
+      "formatKind": "Formatavimas",
+      "heading": "Antraštė {level}",
+      "history": "Atsakymo istorija",
+      "historyEmpty": "Ankstesnių versijų nėra.",
       "instruction": "Aprašykite pakeitimą",
       "instructionRequired": "Aprašykite, kaip pakeisti pasirinktą tekstą.",
       "invalidSelection": "Šios ištraukos negalima redaguoti. Pasirinkite vientisą tekstą.",
+      "invalidUrl": "Įveskite galiojantį HTTP arba HTTPS adresą.",
+      "linkAddress": "Nuorodos adresas",
+      "orderedList": "Numeruotas sąrašas",
       "proposal": "Siūlomas pakeitimas",
       "requesting": "Ruošiami pakeitimai…",
+      "restoreRefreshFailed": "Atsakymas atkurtas, bet jo nepavyko atnaujinti. Atnaujinkite, kad įkeltumėte atkurtą atsakymą.",
+      "revertKind": "Atkurta versija",
       "stale": "Šis atsakymas pasikeitė. Pasirinkite tekstą iš naujo.",
-      "submit": "Prašyti pakeitimo"
+      "submit": "Prašyti pakeitimo",
+      "textStyle": "Teksto stilius",
+      "unorderedList": "Ženklintas sąrašas",
+      "wholeBlockRequired": "Norėdami pakeisti stilių, pažymėkite visą pastraipą arba sąrašą."
     },
     "answerQuote": {
       "showInDecision": "Rodyti sprendime",
@@ -1405,7 +1446,12 @@
     "maxAttachmentsReached": "Daugiausiai {count} failų vienoje žinutėje",
     "mention": {
       "category": {
-        "entities": "Šioje byloje"
+        "entities": "Šioje byloje",
+        "sources": "Šaltiniai"
+      },
+      "corpus": {
+        "caseLaw": "Teismų praktika · {country}",
+        "legislation": "Teisės aktai · {country}"
       },
       "loadError": "Nepavyko įkelti elementų"
     },
@@ -5133,7 +5179,6 @@
     "provisionTextUnavailable": "Šios redakcijos tekstas nepasiekiamas",
     "publisherWindowInconsistent": "Šiai dienai galiojančios redakcijos nustatyti negalima: leidėjo duomenys prieštaringi.",
     "resolvedAlias": "Atpažinta kaip {label}",
-    "searchAskPrompt": "{query} ({country} teisės aktai)",
     "searchLabel": "Ieškoti teisės aktų",
     "searchPlaceholder": "Numeris, pavadinimas arba antraštė, pvz. 89/2012 Sb.",
     "showCitedPartOnly": "Rodyti tik cituojamą dalį",
@@ -6262,7 +6307,6 @@
         }
       },
       "atAGlance": "Apžvalga",
-      "edited": "redagavo",
       "getStarted": "Pradėkite įkeldami dokumentus arba sukurdami pirmąjį aplanką.",
       "matterDetails": "Bylos detalės",
       "membersCount": "{count, plural, one {# narys} few {# nariai} other {# narių}}",

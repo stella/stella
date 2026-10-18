@@ -366,7 +366,10 @@ unfinished or failed rows block deployment. After an interruption, rerun the
 migration command above (or `bun --filter @stll/api db:migrate` from source).
 If a receipt records a failed row, repair its stored data, then run
 `bun --filter @stll/api db:backfill-chat-content-v3 --apply --retry-failed` and rerun
-the migration command. Successful rows are not converted again.
+the migration command. Successful rows are not converted again. When the
+database is too busy to validate the content constraints, the backfill exits
+with code 75 and names the step it stopped at; rerun it after the delay it
+prints.
 
 After migrations, run the usage policy seed explicitly inside the API image with `STELLA_USAGE_POLICY_SEEDS` set to the deployment's JSON configuration; it never runs on API startup.
 
