@@ -915,6 +915,35 @@ test("each log segment explains at most one failed step", () => {
   expect(messages.join(",")).toContain("boom two");
 });
 
+test("pooled check annotations become named digest failures", () => {
+  const log = runStep(4, "bun scripts/ci-check-pool.ts run ci-checks-policy", [
+    "::error title=FAILED check%3A Bun tests::(fail) parser > rejects -- error: expected value",
+    "::error title=FAILED check%3A Policy%2C guard::error: policy failed%25",
+    "2 check(s) failed: Bun tests; Policy, guard",
+    "##[error]Process completed with exit code 1.",
+  ]).join("\n");
+  const job = {
+    id: 14,
+    name: "ci-checks-policy",
+    conclusion: "failure",
+    html_url: "https://github.com/o/r/actions/runs/1/job/14",
+    steps: [
+      {
+        name: "Run policy checks",
+        number: 4,
+        conclusion: "failure",
+        started_at: "2026-10-12T10:00:04Z",
+        completed_at: "2026-10-12T10:00:05Z",
+      },
+    ],
+  };
+  const records = buildDigest({ jobs: [job], logFor: () => log });
+  expect(records.map(({ step, lines }) => [step, lines[0]?.message])).toEqual([
+    ["Bun tests", "(fail) parser > rejects -- error: expected value"],
+    ["Policy, guard", "error: policy failed%"],
+  ]);
+});
+
 test("the digest command writes JSON, a summary and annotations", () => {
   const directory = mkdtempSync(path.join(tmpdir(), "ci-failure-digest-"));
   try {

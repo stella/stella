@@ -7,8 +7,8 @@
 // Selected checks run concurrently, one fewer than the runner CPUs; each log is
 // printed whole, in registry order, and every failure is annotated. Any failed
 // check fails the step after all selected checks have finished, unless its
-// `continue-on-error` holds: then, as for a step, the failure is reported as a
-// warning and its conclusion is success.
+// `continue-on-error` holds: then its conclusion is success. Every failed check
+// still emits an error annotation so the failure digest can report its cause.
 //
 // The pool runs even when dependency installation failed (install-free checks
 // still run), so it imports no packages.
@@ -426,6 +426,34 @@ const escapeProperty = (value: string) =>
 const escapeData = (value: string) =>
   value.replaceAll("%", "%25").replaceAll("\r", "%0D").replaceAll("\n", "%0A");
 
+const FAILURE_CAUSE_LIMIT = 500;
+
+/** The single workflow annotation emitted for one failed pooled check. */
+export const failedCheckAnnotation = (
+  result: Pick<CheckResult, "name" | "detail">,
+  output: string,
+) => {
+  const lines = output.split(/\r?\n/u);
+  const failureIndex = lines.findIndex((line) =>
+    line.trimStart().startsWith("(fail) "),
+  );
+  const failure = lines.at(failureIndex)?.trim();
+  const followingError =
+    failureIndex === -1
+      ? undefined
+      : lines
+          .slice(failureIndex + 1)
+          .find((line) => /^error/iu.test(line.trimStart()))
+          ?.trim();
+  const firstError = lines.find((line) => /error/iu.test(line))?.trim();
+  const cause = (
+    failure !== undefined && followingError !== undefined
+      ? `${failure} -- ${followingError}`
+      : (firstError ?? result.detail)
+  ).slice(0, FAILURE_CAUSE_LIMIT);
+  return `::error title=${escapeProperty(`FAILED check: ${result.name}`)}::${escapeData(cause)}`;
+};
+
 const seconds = (value: number) => `${value.toFixed(1)} s`;
 const mebibytes = (bytes: number | undefined) =>
   bytes === undefined ? "" : String(Math.round(bytes / 1_048_576));
@@ -553,18 +581,17 @@ const main = async () => {
           : "FAILED";
       }
       print(`::group::${result.name}: ${label} in ${seconds(result.seconds)}`);
+      const output =
+        planned[index]?.status === "selected"
+          ? readFileSync(logPath(directory, index), "utf-8")
+          : "";
       if (planned[index]?.status === "selected") {
-        const output = readFileSync(logPath(directory, index), "utf-8");
         const text = output.replace(NESTED_GROUP, " $1");
         writeOut(text === "" || text.endsWith("\n") ? text : `${text}\n`);
       }
       print("::endgroup::");
       if (result.outcome === "failure") {
-        const level = result.continuedOnError ? "warning" : "error";
-        const suffix = result.continuedOnError ? " (continue-on-error)" : "";
-        print(
-          `::${level} title=${escapeProperty(result.name)}::${escapeData(`${result.name} failed${suffix}: ${result.detail}`)}`,
-        );
+        print(failedCheckAnnotation(result, output));
       }
     },
   });

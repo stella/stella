@@ -168,6 +168,35 @@ const logLines = (rawLines: readonly string[]): LogLine[] =>
     }));
   });
 
+const decodeCommandValue = (value: string): string =>
+  value
+    .replaceAll("%0A", "\n")
+    .replaceAll("%0D", "\r")
+    .replaceAll("%2C", ",")
+    .replaceAll("%3A", ":")
+    .replaceAll("%25", "%");
+
+const pooledFailureRecords = (
+  rawLines: readonly string[],
+): { name: string; cause: string }[] =>
+  rawLines.flatMap((raw) => {
+    const text = logLine(raw).text;
+    const match = /^::error title=([^,]*?)::(.*)$/u.exec(text);
+    if (match === null) {
+      return [];
+    }
+    const title = decodeCommandValue(match[1] ?? "");
+    const prefix = "FAILED check: ";
+    return title.startsWith(prefix)
+      ? [
+          {
+            name: title.slice(prefix.length),
+            cause: decodeCommandValue(match[2] ?? ""),
+          },
+        ]
+      : [];
+  });
+
 // ---------------------------------------------------------------------------
 // Failure extraction
 
@@ -1056,7 +1085,7 @@ export const buildDigest = ({ jobs, logFor }: DigestOptions): FailureRecord[] =>
       failedSteps.length > 0
         ? failedSteps
         : [{ name: "(job)", number: 0, conclusion: "failure" }];
-    return steps.map((step): FailureRecord => {
+    return steps.flatMap((step): FailureRecord[] => {
       const segment =
         step.name === "(job)"
           ? (segments.findLast(({ failed }) => failed) ?? segments.at(-1))
@@ -1065,6 +1094,20 @@ export const buildDigest = ({ jobs, logFor }: DigestOptions): FailureRecord[] =>
       if (position !== -1) {
         unused.splice(position, 1);
       }
+      const pooled =
+        segment === undefined ? [] : pooledFailureRecords(segment.lines);
+      if (pooled.length > 0) {
+        return pooled.map(({ name, cause }) => {
+          const lines = [{ message: cause }];
+          return {
+            job: job.name,
+            step: name,
+            kind: classify(name, lines),
+            url: job.html_url ?? "",
+            lines,
+          };
+        });
+      }
       const found = segment === undefined ? [] : failureLines(segment.lines);
       const link = job.html_url ? ` See ${job.html_url}` : "";
       const missing =
@@ -1072,13 +1115,15 @@ export const buildDigest = ({ jobs, logFor }: DigestOptions): FailureRecord[] =>
           ? `Log of job "${job.name}" was unavailable to the digest.${link}`
           : `No log output found for this step.${link}`;
       const lines = found.length > 0 ? found : [{ message: missing }];
-      return {
-        job: job.name,
-        step: step.name,
-        kind: classify(step.name, lines),
-        url: job.html_url ?? "",
-        lines,
-      };
+      return [
+        {
+          job: job.name,
+          step: step.name,
+          kind: classify(step.name, lines),
+          url: job.html_url ?? "",
+          lines,
+        },
+      ];
     });
   });
 
