@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, spyOn, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 
 const { claimUnderPoint, paintClaimRanges, resolveHighlightApi } =
@@ -11,7 +13,7 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 /** Folio's painted page: body runs carrying the positions they draw. */
