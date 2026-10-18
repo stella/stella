@@ -217,6 +217,7 @@ test("nonexistent calendar dates cannot certify fast coverage", async () => {
 const conditionContext = (profile: string, event: string, depth: string) => {
   const values: Record<string, string | boolean | string[]> = {
     "github.event_name": event,
+    "github.event.action": "synchronize",
     "github.event.pull_request.draft": false,
     "github.event.pull_request.labels.*.name": [],
     "inputs.heavy_only": false,
@@ -297,6 +298,7 @@ test("off and unset preserve today's job plan across every event and depth", asy
           (job) => FOLDED_PARTS.get(job) ?? job,
         ),
         "postgres-service-suites",
+        "pr-heavy-gate",
       ]),
     ].toSorted(),
   ).toEqual(
