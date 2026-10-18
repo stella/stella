@@ -131,9 +131,12 @@ const collectKio = async ({
           detailHtml: names.includes(detailName)
             ? await text({ dir: adapterDir, name: detailName })
             : undefined,
-          documentHtml: names.includes(contentName)
-            ? await text({ dir: adapterDir, name: contentName })
-            : undefined,
+          document: names.includes(contentName)
+            ? {
+                type: "read",
+                html: await text({ dir: adapterDir, name: contentName }),
+              }
+            : { type: "unavailable" },
         }).decision,
       );
     }
@@ -148,9 +151,12 @@ const collectKio = async ({
       assemblePlKioDecision({
         item: { id },
         detailHtml: await text({ dir: adapterDir, name }),
-        documentHtml: names.includes(contentName)
-          ? await text({ dir: adapterDir, name: contentName })
-          : undefined,
+        document: names.includes(contentName)
+          ? {
+              type: "read",
+              html: await text({ dir: adapterDir, name: contentName }),
+            }
+          : { type: "unavailable" },
       }).decision,
     );
   }
