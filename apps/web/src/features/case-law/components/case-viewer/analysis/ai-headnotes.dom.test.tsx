@@ -136,3 +136,35 @@ test("holding cites sorted source paragraphs inline with numbered and position l
     view.container.querySelector('[data-anchor="p-4"]')?.dataset["highlight"],
   ).toBeUndefined();
 });
+
+test("a range listed twice around another range from the same start shows once", () => {
+  const interleaved = {
+    ...analysis,
+    holding: {
+      ...analysis.holding,
+      anchors: [
+        { startAnchorId: "p-2", endAnchorId: "p-3" },
+        { startAnchorId: "p-2", endAnchorId: "p-4" },
+        { startAnchorId: "p-2", endAnchorId: "p-3" },
+      ],
+    },
+  } satisfies DecisionAnalysis;
+  const view = render(
+    <IntlProvider locale="en" messages={english} timeZone="UTC">
+      <FormattingProvider locale="en" timeZone="UTC">
+        <WebReaderPresentationProvider>
+          <AiHeadnotes
+            analysis={interleaved}
+            blocks={blocks}
+            onAnchorClick={() => undefined}
+          />
+        </WebReaderPresentationProvider>
+      </FormattingProvider>
+    </IntlProvider>,
+  );
+
+  const holding = view.getByText("The agreement is invalid.").parentElement;
+  expect(holding?.textContent).toBe(
+    "The agreement is invalid. [9]-[12] [9]-[57]",
+  );
+});

@@ -61,7 +61,13 @@ export const AiHeadnotes = ({
             {[...holding.anchors]
               .map((anchor) => resolveParagraphReference(blocks, anchor))
               .filter((anchor) => anchor !== null)
-              .toSorted((left, right) => left.startIndex - right.startIndex)
+              // Both endpoints, so equal ranges sit side by side for the
+              // dedupe below however the analysis listed them.
+              .toSorted(
+                (left, right) =>
+                  left.startIndex - right.startIndex ||
+                  left.endIndex - right.endIndex,
+              )
               .filter(
                 (anchor, index, anchors) =>
                   index === 0 ||
