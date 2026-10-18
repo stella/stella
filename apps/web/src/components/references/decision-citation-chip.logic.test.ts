@@ -115,6 +115,21 @@ describe("citation text naming its case", () => {
     expect(citationTextNamesCase("Nos. 17\u20131618", "17-1618")).toBe(true);
   });
 
+  test("leaves a dash that opens a clause in the prose", () => {
+    for (const dash of ["\u2014", "-", "\u2013"]) {
+      expect(
+        inlineDecisionCitationPresentation(
+          `23 Cdo 651/2023${dash}the court held`,
+          "23 Cdo 651/2023",
+        ),
+      ).toEqual({
+        kind: "chip-replaces-text",
+        before: "",
+        after: `${dash}the court held`,
+      });
+    }
+  });
+
   test("reads every dash variant as a suffix separator", () => {
     for (const dash of ["\u2010", "\u2011", "\u2212", "\u2013"]) {
       const prose = `23 Cdo 651/2023${dash}123`;

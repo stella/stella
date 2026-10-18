@@ -16,11 +16,14 @@ const SPACING = /\s/u;
 // Every dash a docket may be typed with; the suffix patterns use the same set.
 const DASH = /[\u2010-\u2015\u2212]/u;
 const CASE_NUMBER_SUFFIX = /[-\u2010-\u2015\u2212]\s*[\p{L}\p{N}]+$/u;
-// A suffix in prose may follow a space ("23 Cdo 651/2023 -123"); spaced, it
-// must start with a digit, so a dash opening a clause ("... 651/2023 - the
-// court held") stays prose.
+// A registry suffix is numbered ("-7", " - 123"), with or without a space
+// before the dash; a dash followed by words ("651/2023—the court held") opens
+// a clause and stays prose.
 const LEADING_CASE_NUMBER_SUFFIX =
-  /^(?:[-\u2010-\u2015\u2212]\s*[\p{L}\p{N}]+|\s+[-\u2010-\u2015\u2212]\s*\p{N}[\p{L}\p{N}]*)/u;
+  /^\s*[-\u2010-\u2015\u2212]\s*\p{N}[\p{L}\p{N}]*/u;
+// Outside dated dockets a dash glued to the next word or number continues the
+// identifier ("A-123-B" is not "A-123").
+const JOINED_SEGMENT = /^[-\u2010-\u2015\u2212][\p{L}\p{N}]/u;
 
 /** The characters that identify a case, with each one's index in `value`. */
 const comparable = (value: string): { text: string; origin: number[] } => {
@@ -111,15 +114,14 @@ export const citationTextCaseMatch = (
       const last = prose.origin.at(at + needle.length - 1) ?? 0;
       // Only a dated docket carries a registry suffix; anywhere else a
       // following hyphenated segment makes it a longer, different identifier.
-      const trailing = text
-        .slice(last + 1)
-        .match(LEADING_CASE_NUMBER_SUFFIX)
-        ?.at(0);
+      const after = text.slice(last + 1);
       const dated = DATED_DOCKET.test(text.slice(first, last + 1));
-      if (!dated && trailing !== undefined) {
+      if (!dated && JOINED_SEGMENT.test(after)) {
         continue;
       }
-      const suffix = dated ? trailing : undefined;
+      const suffix = dated
+        ? after.match(LEADING_CASE_NUMBER_SUFFIX)?.at(0)
+        : undefined;
       const end = last + 1 + (suffix?.length ?? 0);
       if (
         !IDENTIFIER_CHARACTER.test(text.charAt(first - 1)) &&
