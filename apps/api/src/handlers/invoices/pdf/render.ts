@@ -25,6 +25,7 @@ import {
 } from "@stll/invoicing";
 import type {
   InvoiceDocumentType,
+  InvoicePartyId,
   InvoiceTotals,
   VatTreatment,
 } from "@stll/invoicing";
@@ -56,6 +57,7 @@ export type RenderInvoicePdfOptions = {
     notes: string | null;
     buyerName: string | null;
     buyerRegistrationId: string | null;
+    buyerTaxId: string | null;
     buyerVatId: string | null;
     buyerAddressLine1: string | null;
     buyerAddressLine2: string | null;
@@ -79,6 +81,7 @@ export type RenderInvoicePdfOptions = {
   seller: {
     legalName: string;
     registrationId: string | null;
+    taxId: string | null;
     vatId: string | null;
     addressLine1: string | null;
     addressLine2: string | null;
@@ -88,6 +91,8 @@ export type RenderInvoicePdfOptions = {
     iban: string | null;
     bic: string | null;
     accountNumber: string | null;
+    registerEntry: string | null;
+    barRegistration: string | null;
     footerNotes: string | null;
   } | null;
   totals: InvoiceTotals;
@@ -362,8 +367,8 @@ const writeProfileId = ({
   value,
 }: {
   field: (label: string, value: string | null) => void;
-  ids: readonly ("registration" | "vatId")[];
-  id: "registration" | "vatId";
+  ids: readonly InvoicePartyId[];
+  id: InvoicePartyId;
   label: string;
   value: string | null;
 }) => {
@@ -460,6 +465,13 @@ export const renderInvoicePdf = async (options: RenderInvoicePdfOptions) => {
     writeProfileId({
       field,
       ids: profile.partyIds.seller,
+      id: "taxId",
+      label: l.taxId,
+      value: seller.taxId,
+    });
+    writeProfileId({
+      field,
+      ids: profile.partyIds.seller,
       id: "vatId",
       label: l.vatId,
       value: seller.vatId,
@@ -490,6 +502,13 @@ export const renderInvoicePdf = async (options: RenderInvoicePdfOptions) => {
   writeProfileId({
     field,
     ids: profile.partyIds.buyer,
+    id: "taxId",
+    label: l.taxId,
+    value: invoice.buyerTaxId,
+  });
+  writeProfileId({
+    field,
+    ids: profile.partyIds.buyer,
     id: "vatId",
     label: l.vatId,
     value: invoice.buyerVatId,
@@ -516,6 +535,14 @@ export const renderInvoicePdf = async (options: RenderInvoicePdfOptions) => {
   field(l.total, money(totals.grossAmountMinor));
   for (const legalNote of invoiceLegalNotes(options)) {
     write(legalNote);
+  }
+  if (seller !== null) {
+    // Business register and bar registration lines print as entered.
+    for (const line of [seller.registerEntry, seller.barRegistration]) {
+      if (line) {
+        write(line);
+      }
+    }
   }
   for (const breakdown of totals.vatBreakdown) {
     write(

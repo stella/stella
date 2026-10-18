@@ -58,6 +58,8 @@ export const createContactBodySchema = t.Object({
   color: t.Optional(t.String({ maxLength: 32 })),
   registrationNumber: t.Optional(t.String({ maxLength: 64 })),
   taxId: t.Optional(t.String({ maxLength: 64 })),
+  vatId: t.Optional(t.String({ maxLength: 64 })),
+  vatPayer: t.Optional(t.Nullable(t.Boolean())),
   bankAccounts: t.Optional(t.Array(bankAccountSchema, { maxItems: 10 })),
   billingAddress: t.Optional(billingAddressSchema),
   defaultHourlyRate: t.Optional(tMinorUnitAmount(0)),
@@ -144,6 +146,8 @@ export const insertContactRow = async ({
       color: body.color,
       registrationNumber: body.registrationNumber,
       taxId: body.taxId,
+      vatId: body.vatId,
+      vatPayer: body.vatPayer,
       bankAccounts: body.bankAccounts,
       billingAddress: body.billingAddress,
       defaultHourlyRate:

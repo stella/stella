@@ -22,6 +22,7 @@ type GoldenLine = {
 const seller = {
   legalName: "Mgr. Ľubica Ďurišová, advokátka",
   registrationId: "50123456",
+  taxId: "2120123456",
   vatId: "SK2120123456",
   addressLine1: "Štúrova 7",
   addressLine2: null,
@@ -31,6 +32,8 @@ const seller = {
   iban: "SK3112000000198742637541",
   bic: "TATRSKBX",
   accountNumber: null,
+  registerEntry: null,
+  barRegistration: "Slovenská advokátska komora, č. 0000",
   footerNotes: null,
 } satisfies RenderInvoicePdfOptions["seller"];
 
@@ -57,6 +60,7 @@ const golden = ({
     notes: null,
     buyerName: "Šťastný a Ďuriš s. r. o.",
     buyerRegistrationId: "47123456",
+    buyerTaxId: buyerVatId?.startsWith("SK") ? "2020123456" : null,
     buyerVatId,
     buyerAddressLine1: "Hlavná 21",
     buyerAddressLine2: null,
@@ -146,7 +150,10 @@ describe("golden Slovak invoices (zákon 222/2004 Z. z. § 74 ods. 1)", () => {
     );
     expectCoreContent(text, 60_000);
     expect(text).toContain("IČ DPH");
+    expect(text).toContain("DIČ");
+    expect(text).toContain("2120123456");
     expect(text).toContain("SK2120123456");
+    expect(text).toContain("Slovenská advokátska komora, č. 0000");
     expect(text).toContain("SK2020123456");
     expect(text).toContain("23");
     expect(text).toContain(euro(13_800));

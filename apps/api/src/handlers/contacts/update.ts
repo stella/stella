@@ -61,6 +61,8 @@ const updateContactBodySchema = t.Object({
   color: t.Optional(t.Nullable(t.String({ maxLength: 32 }))),
   registrationNumber: t.Optional(t.Nullable(t.String({ maxLength: 64 }))),
   taxId: t.Optional(t.Nullable(t.String({ maxLength: 64 }))),
+  vatId: t.Optional(t.Nullable(t.String({ maxLength: 64 }))),
+  vatPayer: t.Optional(t.Nullable(t.Boolean())),
   bankAccounts: t.Optional(
     t.Nullable(t.Array(bankAccountSchema, { maxItems: 10 })),
   ),
@@ -262,6 +264,8 @@ export const updateContactHandler = async function* ({
           "tags",
           "registrationNumber",
           "taxId",
+          "vatId",
+          "vatPayer",
           "bankAccounts",
           "billingAddress",
           "currency",

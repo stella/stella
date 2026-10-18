@@ -7,6 +7,7 @@ import {
   invoiceCountryOf,
   legalNotesFor,
   type InvoiceDocumentType,
+  type InvoicePartyId,
   type VatTreatment,
 } from "@stll/invoicing";
 
@@ -122,9 +123,10 @@ const party = (
     city: string | null;
     country: string | null;
     registrationId: string | null;
+    taxId: string | null;
     vatId: string | null;
   },
-  printedIds: readonly ("registration" | "vatId")[],
+  printedIds: readonly InvoicePartyId[],
 ): Party => ({
   heading,
   name: value.name,
@@ -139,6 +141,7 @@ const party = (
       l.registration,
       printedIds.includes("registration") ? value.registrationId : null,
     ],
+    [l.taxId, printedIds.includes("taxId") ? value.taxId : null],
     [l.vatId, printedIds.includes("vatId") ? value.vatId : null],
   ]),
 });
@@ -219,6 +222,7 @@ export const buildInvoiceTemplateData = (options: RenderInvoicePdfOptions) => {
         city: invoice.buyerCity,
         country: invoice.buyerCountry,
         registrationId: invoice.buyerRegistrationId,
+        taxId: invoice.buyerTaxId,
         vatId: invoice.buyerVatId,
       },
       profile.partyIds.buyer,
@@ -280,7 +284,12 @@ export const buildInvoiceTemplateData = (options: RenderInvoicePdfOptions) => {
       ),
     }),
     notes: invoice.notes,
-    footerNotes: seller?.footerNotes ?? null,
+    footerNotes:
+      compact([
+        seller?.registerEntry,
+        seller?.barRegistration,
+        seller?.footerNotes,
+      ]).join("\n") || null,
   };
   return Result.ok(data);
 };

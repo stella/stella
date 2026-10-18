@@ -48,6 +48,7 @@ const updateInvoiceBodySchema = t.Object({
   sellerProfileId: t.Optional(t.Nullable(tSafeId("sellerProfile"))),
   buyerName: t.Optional(t.Nullable(t.String({ minLength: 1, maxLength: 512 }))),
   buyerRegistrationId: t.Optional(t.Nullable(t.String({ maxLength: 64 }))),
+  buyerTaxId: t.Optional(t.Nullable(t.String({ maxLength: 64 }))),
   buyerVatId: t.Optional(t.Nullable(t.String({ maxLength: 64 }))),
   buyerAddressLine1: t.Optional(t.Nullable(t.String({ maxLength: 512 }))),
   buyerAddressLine2: t.Optional(t.Nullable(t.String({ maxLength: 512 }))),
@@ -59,6 +60,7 @@ const updateInvoiceBodySchema = t.Object({
 const BUYER_FIELDS = [
   "buyerName",
   "buyerRegistrationId",
+  "buyerTaxId",
   "buyerVatId",
   "buyerAddressLine1",
   "buyerAddressLine2",

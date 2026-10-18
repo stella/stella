@@ -50,6 +50,8 @@ const UNPROJECTED_CONTACT_LIST_COLUMNS = [
   // summary; contacts.get returns them.
   "registrationNumber",
   "taxId",
+  "vatId",
+  "vatPayer",
   "bankAccounts",
   "billingAddress",
   "defaultHourlyRate",

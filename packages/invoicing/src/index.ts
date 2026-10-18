@@ -57,5 +57,6 @@ export {
   type InvoiceCountry,
   type InvoiceCountryProfile,
   type InvoiceLanguage,
+  type InvoicePartyId,
 } from "./profiles/country-profiles";
 export { INVOICE_PDF_LABELS } from "./profiles/pdf-labels";

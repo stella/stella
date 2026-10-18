@@ -181,6 +181,7 @@ type DecideInvoiceVatOptions = {
   /** Null when the invoice has no seller profile. */
   seller: { vatId: string | null; vatPayer: boolean } | null;
   buyerVatId: string | null;
+  buyerVatPayer: boolean | null;
   /** The country of the client's address, as written on the contact. */
   buyerCountry: string | null;
   /** The organization's highest VAT rate valid on the supply date. */
@@ -212,6 +213,7 @@ const domesticVat = (
 export const decideInvoiceVat = ({
   seller,
   buyerVatId,
+  buyerVatPayer,
   buyerCountry,
   standardRateBps,
 }: DecideInvoiceVatOptions): InvoiceVatDecision => {
@@ -254,6 +256,9 @@ export const decideInvoiceVat = ({
         }
       : domesticVat(standardRateBps, "client_vat_id_invalid");
   }
+  if (buyerVatPayer === false) {
+    return domesticVat(standardRateBps);
+  }
   // A business client in another member state accounts for the VAT itself
   // (Art. 44/196), shown by a VAT ID with that state's syntax.
   return isWellFormedEuVatId(buyerVatId)
@@ -268,6 +273,7 @@ export const decideInvoiceVat = ({
 export type InvoiceBuyerSnapshot = {
   buyerName: string | null;
   buyerRegistrationId: string | null;
+  buyerTaxId: string | null;
   buyerVatId: string | null;
   buyerAddressLine1: string | null;
   buyerAddressLine2: string | null;
@@ -279,6 +285,7 @@ export type InvoiceBuyerSnapshot = {
 export const EMPTY_BUYER_SNAPSHOT = {
   buyerName: null,
   buyerRegistrationId: null,
+  buyerTaxId: null,
   buyerVatId: null,
   buyerAddressLine1: null,
   buyerAddressLine2: null,
@@ -291,6 +298,8 @@ type BuyerContact = {
   displayName: string;
   registrationNumber: string | null;
   taxId: string | null;
+  vatId: string | null;
+  vatPayer: boolean | null;
   billingAddress: BillingAddress | null;
   addresses: readonly ContactAddress[] | null;
 };
@@ -318,7 +327,8 @@ export const buyerSnapshotFromContact = (
   return {
     buyerName: text(contact.displayName, 512),
     buyerRegistrationId: text(contact.registrationNumber, 64),
-    buyerVatId: text(contact.taxId, 64),
+    buyerTaxId: text(contact.taxId, 64),
+    buyerVatId: text(contact.vatId, 64),
     buyerAddressLine1: text(address?.line1, 512),
     buyerAddressLine2: text(address?.line2, 512),
     buyerCity: text(address?.city, 256),

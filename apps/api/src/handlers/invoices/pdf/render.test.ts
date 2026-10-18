@@ -32,6 +32,7 @@ const options = {
     notes: "Vyřízení záležitosti bez dalších průtahů.",
     buyerName: "Řehoř Žďárský",
     buyerRegistrationId: "01234567",
+    buyerTaxId: "2020123456",
     buyerVatId: "CZ01234567",
     buyerAddressLine1: "Příčná 12",
     buyerAddressLine2: null,
@@ -43,7 +44,8 @@ const options = {
   seller: {
     legalName: "Advokátní kancelář Černý",
     registrationId: "87654321",
-    vatId: null,
+    taxId: "2020876543",
+    vatId: "CZ87654321",
     addressLine1: "Široká 4",
     addressLine2: null,
     city: "Praha",
@@ -52,6 +54,8 @@ const options = {
     iban: "CZ33 0100 0000 0000 0297 0297",
     bic: "KOMBCZPP",
     accountNumber: "2970297/0100",
+    registerEntry: "Fictional register, entry 00000",
+    barRegistration: "Fictional bar, no. 0000",
     footerNotes: "Děkujeme za spolupráci.",
   },
   totals: {
@@ -97,6 +101,10 @@ describe("invoice PDF", () => {
         locale: "cs-CZ",
       }).replace(/[\u00a0\u202f]/gu, " "),
     );
+    expect(text).toContain("DIČ: 2020123456");
+    expect(text).toContain("DIČ: 2020876543");
+    expect(text).toContain("CZ01234567");
+    expect(text).toContain("CZ87654321");
   });
 
   test("prints each line's quantity, unit and unit price in the reader's number format", async () => {

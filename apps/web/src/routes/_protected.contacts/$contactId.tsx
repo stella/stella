@@ -319,6 +319,25 @@ function ContactDetailPage() {
                 value={contact.taxId}
               />
               <EditableRow
+                contact={contact}
+                field="vatId"
+                label={t("contacts.fields.vatId")}
+                value={contact.vatId}
+              />
+              <div className="flex justify-between gap-4 py-1">
+                <span className="text-muted-foreground">
+                  {t("contacts.fields.vatPayer")}
+                </span>
+                <span>
+                  {contact.vatPayer === null &&
+                    t("contacts.fields.vatPayerUnknown")}
+                  {contact.vatPayer === true &&
+                    t("contacts.fields.vatPayerYes")}
+                  {contact.vatPayer === false &&
+                    t("contacts.fields.vatPayerNo")}
+                </span>
+              </div>
+              <EditableRow
                 // A draft is typed in one currency's units; a currency change
                 // remounts the row; its commit guard discards the old draft.
                 key={`default-hourly-rate-${contact.currency ?? "none"}`}

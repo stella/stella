@@ -20,7 +20,7 @@ export type InvoiceLanguage = (typeof INVOICE_LANGUAGES)[number];
 
 export const INVOICE_COUNTRIES = ["SK", "CZ", "EU"] as const;
 export type InvoiceCountry = (typeof INVOICE_COUNTRIES)[number];
-export type InvoicePartyId = "registration" | "vatId";
+export type InvoicePartyId = "registration" | "taxId" | "vatId";
 
 type LegalNote = {
   mandated: string;
@@ -99,6 +99,13 @@ const commonPartyIds = {
   buyer: ["registration", "vatId"],
 } as const;
 
+// Slovak parties carry a tax ID (DIČ) separate from the VAT ID (IČ DPH);
+// § 74 ods. 1 písm. a) and b) require the IČ DPH, practice prints both.
+const slovakPartyIds = {
+  seller: ["registration", "taxId", "vatId"],
+  buyer: ["registration", "taxId", "vatId"],
+} as const;
+
 export const INVOICE_COUNTRY_PROFILES = {
   // Zákon č. 222/2004 Z. z. o dani z pridanej hodnoty, consolidation in force
   // from 2026-01-01 (slov-lex.sk), § 74 ods. 1.
@@ -106,7 +113,7 @@ export const INVOICE_COUNTRY_PROFILES = {
     // § 74 ods. 1 písm. i): "výšku dane spolu v eurách".
     vatCurrency: "EUR",
     supplyDateLabel: supplyDateLabels(),
-    partyIds: commonPartyIds,
+    partyIds: slovakPartyIds,
     legalNotes: {
       domestic_vat: null,
       // Not prescribed wording; states why no VAT is charged.

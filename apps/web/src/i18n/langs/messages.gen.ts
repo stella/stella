@@ -752,6 +752,7 @@ type Messages = {
     "sellerProfiles": {
       "add": "Add seller profile";
       "archiveConfirm": "Archive this seller profile? It will no longer be available for new invoices.";
+      "barRegistration": "Bar registration";
       "bic": "BIC / SWIFT code";
       "default": "Default seller";
       "defaultCurrency": "Default currency";
@@ -763,8 +764,10 @@ type Messages = {
       "invalidCurrency": "Enter a three-letter currency code.";
       "invalidIban": "Enter a valid IBAN.";
       "legalName": "Legal name";
+      "registerEntry": "Register entry";
       "registrationId": "Registration ID";
       "setDefault": "Make default";
+      "taxId": "Tax ID";
       "title": "Seller profiles";
       "vatId": "VAT ID";
       "vatPayer": "VAT payer";
@@ -2414,6 +2417,11 @@ type Messages = {
       "registrationNumber": "Registration number";
       "suffix": "Suffix";
       "taxId": "Tax ID";
+      "vatId": "VAT ID";
+      "vatPayer": "VAT-payer status";
+      "vatPayerNo": "Not a VAT payer";
+      "vatPayerUnknown": "Unknown";
+      "vatPayerYes": "VAT payer";
       "year": "Year of birth";
     };
     "filterOrganizations": "Organizations";

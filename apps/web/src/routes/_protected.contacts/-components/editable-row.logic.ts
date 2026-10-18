@@ -25,6 +25,7 @@ export const EDITABLE_FIELD_POLICY = {
   notes: { valueKind: "text", maxLength: null },
   registrationNumber: { valueKind: "text", maxLength: 64 },
   taxId: { valueKind: "text", maxLength: 64 },
+  vatId: { valueKind: "text", maxLength: 64 },
   defaultHourlyRate: { valueKind: "money" },
   currency: { valueKind: "text", maxLength: 3 },
   paymentTermDays: { valueKind: "nonNegativeInteger", maximum: 365 },
@@ -178,6 +179,8 @@ export const buildTextContactPayload = (
       return { suffix: value || null };
     case "taxId":
       return { taxId: value || null };
+    case "vatId":
+      return { vatId: value || null };
     default:
       field satisfies never;
       return panic(`Unhandled field: ${String(field)}`);

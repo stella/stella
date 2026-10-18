@@ -4,6 +4,7 @@ import { tCurrencyCode, tSafeId } from "@/api/lib/custom-schema";
 
 const name = t.String({ minLength: 1, maxLength: 512 });
 const registrationId = t.String({ maxLength: 64 });
+const taxId = t.String({ maxLength: 64 });
 const vatId = t.String({ maxLength: 64 });
 const vatPayer = t.Boolean({
   description:
@@ -20,6 +21,7 @@ const bic = t.String({
 });
 const accountNumber = t.String({ maxLength: 64 });
 const footerNotes = t.String({ maxLength: 10_000 });
+const registrationText = t.String({ maxLength: 10_000 });
 
 export const sellerProfileParams = t.Object({
   sellerProfileId: tSafeId("sellerProfile"),
@@ -28,7 +30,10 @@ export const sellerProfileParams = t.Object({
 export const createSellerProfileBody = t.Object({
   legalName: name,
   registrationId: t.Optional(registrationId),
+  taxId: t.Optional(taxId),
   vatId: t.Optional(vatId),
+  registerEntry: t.Optional(registrationText),
+  barRegistration: t.Optional(registrationText),
   vatPayer: t.Optional(vatPayer),
   addressLine1: t.Optional(addressLine),
   addressLine2: t.Optional(addressLine),
@@ -45,7 +50,10 @@ export const createSellerProfileBody = t.Object({
 export const updateSellerProfileBody = t.Object({
   legalName: t.Optional(name),
   registrationId: t.Optional(t.Nullable(registrationId)),
+  taxId: t.Optional(t.Nullable(taxId)),
   vatId: t.Optional(t.Nullable(vatId)),
+  registerEntry: t.Optional(t.Nullable(registrationText)),
+  barRegistration: t.Optional(t.Nullable(registrationText)),
   vatPayer: t.Optional(vatPayer),
   addressLine1: t.Optional(t.Nullable(addressLine)),
   addressLine2: t.Optional(t.Nullable(addressLine)),
@@ -62,7 +70,10 @@ export const updateSellerProfileBody = t.Object({
 export const SELLER_PROFILE_EDITABLE_FIELDS = [
   "legalName",
   "registrationId",
+  "taxId",
   "vatId",
+  "registerEntry",
+  "barRegistration",
   "vatPayer",
   "addressLine1",
   "addressLine2",

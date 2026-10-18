@@ -63,6 +63,8 @@ export const resolveInvoicePrefill = async (
       clientName: contacts.displayName,
       registrationNumber: contacts.registrationNumber,
       taxId: contacts.taxId,
+      vatId: contacts.vatId,
+      vatPayer: contacts.vatPayer,
       billingAddress: contacts.billingAddress,
       addresses: contacts.addresses,
       paymentTermDays: contacts.paymentTermDays,
@@ -129,6 +131,8 @@ export const resolveInvoicePrefill = async (
           displayName: matter.clientName,
           registrationNumber: matter.registrationNumber,
           taxId: matter.taxId,
+          vatId: matter.vatId,
+          vatPayer: matter.vatPayer,
           billingAddress: matter.billingAddress,
           addresses: matter.addresses,
         });
@@ -150,6 +154,7 @@ export const resolveInvoicePrefill = async (
     vat: decideInvoiceVat({
       seller: seller ?? null,
       buyerVatId: buyer.buyerVatId,
+      buyerVatPayer: matter?.vatPayer ?? null,
       buyerCountry: buyer.buyerCountry,
       standardRateBps: standardVatRateOn(vatRatePeriods, supplyDate),
     }),

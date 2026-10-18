@@ -32,6 +32,7 @@ export const invoiceFixture = (lineCount: number) =>
       notes: CEE_DIACRITICS,
       buyerName: "Řehoř Žďárský",
       buyerRegistrationId: "01234567",
+      buyerTaxId: null,
       buyerVatId: "CZ01234567",
       buyerAddressLine1: "Příčná 12",
       buyerAddressLine2: null,
@@ -43,6 +44,7 @@ export const invoiceFixture = (lineCount: number) =>
     seller: {
       legalName: "Advokátní kancelář Černý",
       registrationId: "87654321",
+      taxId: null,
       vatId: "CZ87654321",
       addressLine1: "Široká 4",
       addressLine2: null,
@@ -52,6 +54,8 @@ export const invoiceFixture = (lineCount: number) =>
       iban: "CZ33 0100 0000 0000 0297 0297",
       bic: "KOMBCZPP",
       accountNumber: "2970297/0100",
+      registerEntry: null,
+      barRegistration: null,
       footerNotes: "Zapsáno v seznamu advokátů ČAK pod č. 12345.",
     },
     totals: {

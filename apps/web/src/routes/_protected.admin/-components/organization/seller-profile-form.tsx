@@ -29,7 +29,10 @@ import {
 const FIELD_LABELS = {
   legalName: "billing.sellerProfiles.legalName",
   registrationId: "billing.sellerProfiles.registrationId",
+  taxId: "billing.sellerProfiles.taxId",
   vatId: "billing.sellerProfiles.vatId",
+  registerEntry: "billing.sellerProfiles.registerEntry",
+  barRegistration: "billing.sellerProfiles.barRegistration",
   addressLine1: "contacts.importStudio.fields.address_line_1",
   addressLine2: "contacts.importStudio.fields.address_line_2",
   city: "contacts.fields.billingAddressCity",
@@ -72,22 +75,7 @@ export const SellerProfileForm = ({
     schemaFormOptions({
       schema,
       submitValues: "schema-output",
-      defaultValues: {
-        legalName: profile?.legalName ?? "",
-        registrationId: profile?.registrationId ?? "",
-        vatId: profile?.vatId ?? "",
-        vatPayer: profile?.vatPayer ?? false,
-        addressLine1: profile?.addressLine1 ?? "",
-        addressLine2: profile?.addressLine2 ?? "",
-        city: profile?.city ?? "",
-        postalCode: profile?.postalCode ?? "",
-        country: profile?.country ?? "",
-        iban: profile?.iban ?? "",
-        bic: profile?.bic ?? "",
-        accountNumber: profile?.accountNumber ?? "",
-        defaultCurrency: profile?.defaultCurrency ?? DEFAULT_CURRENCY,
-        footerNotes: profile?.footerNotes ?? "",
-      },
+      defaultValues: sellerProfileDefaults(profile),
       onSubmit: async ({ value }) => {
         if (pending) {
           return;
@@ -213,3 +201,31 @@ export const SellerProfileForm = ({
     </Form>
   );
 };
+
+function sellerProfileDefaults(profile: SellerProfile | undefined) {
+  return {
+    ...sellerIdentityDefaults(profile),
+    legalName: profile?.legalName ?? "",
+    vatPayer: profile?.vatPayer ?? false,
+    addressLine1: profile?.addressLine1 ?? "",
+    addressLine2: profile?.addressLine2 ?? "",
+    city: profile?.city ?? "",
+    postalCode: profile?.postalCode ?? "",
+    country: profile?.country ?? "",
+    iban: profile?.iban ?? "",
+    bic: profile?.bic ?? "",
+    accountNumber: profile?.accountNumber ?? "",
+    defaultCurrency: profile?.defaultCurrency ?? DEFAULT_CURRENCY,
+    footerNotes: profile?.footerNotes ?? "",
+  };
+}
+
+function sellerIdentityDefaults(profile: SellerProfile | undefined) {
+  return {
+    registrationId: profile?.registrationId ?? "",
+    taxId: profile?.taxId ?? "",
+    vatId: profile?.vatId ?? "",
+    registerEntry: profile?.registerEntry ?? "",
+    barRegistration: profile?.barRegistration ?? "",
+  };
+}

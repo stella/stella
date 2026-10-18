@@ -81,6 +81,58 @@ const transitionInvoiceBodySchema = t.Object({
 
 const invoiceParamsSchema = workspaceParams({ invoiceId: tSafeId("invoice") });
 
+const validateReverseChargeBuyer = async (
+  tx: Transaction,
+  invoiceId: SafeId<"invoice">,
+  workspaceId: SafeId<"workspace">,
+) => {
+  const rows = await tx
+    .select({ id: invoiceLines.id, buyerVatId: invoices.buyerVatId })
+    .from(invoiceLines)
+    .innerJoin(invoices, eq(invoices.id, invoiceLines.invoiceId))
+    .where(
+      and(
+        eq(invoiceLines.invoiceId, invoiceId),
+        eq(invoiceLines.workspaceId, workspaceId),
+        eq(invoiceLines.vatTreatment, "reverse_charge"),
+      ),
+    )
+    .limit(1);
+  const reverseCharge = rows.at(0);
+  return reverseCharge !== undefined &&
+    (reverseCharge.buyerVatId ?? "").trim() === ""
+    ? new HandlerError({
+        status: 400,
+        message: "Reverse charge requires a buyer VAT ID",
+      })
+    : null;
+};
+
+const linkedCreditError = async (
+  tx: Transaction,
+  invoiceId: SafeId<"invoice">,
+  workspaceId: SafeId<"workspace">,
+) => {
+  const credit = await tx
+    .select({ id: invoices.id })
+    .from(invoices)
+    .where(
+      and(
+        eq(invoices.workspaceId, workspaceId),
+        eq(invoices.originalInvoiceId, invoiceId),
+        ne(invoices.status, INVOICE_STATUS.VOID),
+      ),
+    )
+    .limit(1);
+  return credit.at(0)
+    ? new HandlerError({
+        status: 409,
+        message:
+          "Void linked credit notes before changing their original invoice",
+      })
+    : null;
+};
+
 const buildVoidEvents = (params: {
   invoiceId: SafeId<"invoice">;
   previousStatus: InvoiceStatus;
@@ -325,25 +377,13 @@ const transitionInvoice = createSafeHandler(
           );
         }
         if (body.action === "void" || body.action === "revert_to_draft") {
-          const credit = await tx
-            .select({ id: invoices.id })
-            .from(invoices)
-            .where(
-              and(
-                eq(invoices.workspaceId, workspaceId),
-                eq(invoices.originalInvoiceId, existing.id),
-                ne(invoices.status, INVOICE_STATUS.VOID),
-              ),
-            )
-            .limit(1);
-          if (credit.at(0)) {
-            return Result.err(
-              new HandlerError({
-                status: 409,
-                message:
-                  "Void linked credit notes before changing their original invoice",
-              }),
-            );
+          const creditError = await linkedCreditError(
+            tx,
+            existing.id,
+            workspaceId,
+          );
+          if (creditError !== null) {
+            return Result.err(creditError);
           }
         }
         const set: Partial<typeof invoices.$inferInsert> = {
@@ -372,6 +412,14 @@ const transitionInvoice = createSafeHandler(
           );
           if (draft.isErr()) {
             return Result.err(draft.error);
+          }
+          const reverseChargeError = await validateReverseChargeBuyer(
+            tx,
+            existing.id,
+            workspaceId,
+          );
+          if (reverseChargeError !== null) {
+            return Result.err(reverseChargeError);
           }
           const totals = await recalculateInvoiceTotals(
             tx,

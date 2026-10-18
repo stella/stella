@@ -88,6 +88,9 @@ export const contacts = p.pgTable(
       length: 64,
     }),
     taxId: p.varchar("tax_id", { length: 64 }),
+    vatId: p.varchar("vat_id", { length: 64 }),
+    // Null means the payer status has not been established.
+    vatPayer: p.boolean("vat_payer"),
     bankAccounts: jsonb("bank_accounts").$type<BankAccount[]>(),
     billingAddress: jsonb("billing_address").$type<BillingAddress>(),
     defaultHourlyRate: centsColumn("default_hourly_rate"),
