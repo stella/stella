@@ -33,7 +33,7 @@ test("database filename suffixes classify empty-source integration and DB tests"
 
 test("PGlite marker substring behavior holds for arbitrary safe surroundings", () => {
   const safeSurroundingCharacters = fc.constantFrom(
-    ..."abcdfhjkmnoqrsuvwxyz0123456789/_-",
+    ...Array.from("abcdfhjkmnoqrsuvwxyz0123456789/_-"),
   );
   const safeSurroundingText = fc
     .array(safeSurroundingCharacters, { maxLength: 12 })
