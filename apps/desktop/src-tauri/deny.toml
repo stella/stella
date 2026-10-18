@@ -39,6 +39,13 @@ ignore = [
   "RUSTSEC-2026-0367",
   "RUSTSEC-2026-0368",
   "RUSTSEC-2026-0369",
+  # zbus_names, zvariant and zvariant_derive were folded into zbus 6. The graph
+  # still reaches zbus 5 through tauri-plugin-opener, single-instance,
+  # notify-rust and the keyring store, none of which accept zbus 6 yet.
+  # Review by 2026-11-16; remove once those owners move to zbus 6.
+  "RUSTSEC-2026-0370",
+  "RUSTSEC-2026-0371",
+  "RUSTSEC-2026-0372",
 ]
 
 [licenses]
