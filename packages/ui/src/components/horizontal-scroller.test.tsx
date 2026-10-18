@@ -23,7 +23,7 @@ globalThis.ResizeObserver = TestResizeObserver;
 
 const { act, cleanup, fireEvent, render, waitFor } =
   await import("@testing-library/react");
-const { HorizontalScroller, scrollState } =
+const { HorizontalScroller, scrollState, wheelDeltaPixels } =
   await import("./horizontal-scroller");
 
 afterEach(cleanup);
@@ -175,4 +175,34 @@ test("updates its controls when content changes at a fixed viewport size", async
     </HorizontalScroller>,
   );
   await waitFor(() => expect(view.queryByLabelText("Next")).toBeNull());
+});
+
+test("leaves ctrl+wheel to the page for pinch zoom", () => {
+  const scrollBy = mock(() => undefined);
+  const view = render(
+    <HorizontalScroller previousLabel="Previous" nextLabel="Next">
+      <button type="button">Item</button>
+    </HorizontalScroller>,
+  );
+  const viewport = view.getByText("Item").parentElement as HTMLDivElement;
+  Object.defineProperties(viewport, {
+    clientWidth: { value: 100 },
+    scrollWidth: { value: 300 },
+    scrollBy: { value: scrollBy },
+  });
+  const allowed = fireEvent.wheel(viewport, {
+    cancelable: true,
+    ctrlKey: true,
+    deltaX: 0,
+    deltaY: 24,
+  });
+  expect(allowed).toBe(true);
+  expect(scrollBy).not.toHaveBeenCalled();
+});
+
+test("converts line and page wheel deltas to pixels", () => {
+  const node = { clientWidth: 200 };
+  expect(wheelDeltaPixels({ deltaMode: 0, deltaY: 24 }, node)).toBe(24);
+  expect(wheelDeltaPixels({ deltaMode: 1, deltaY: 3 }, node)).toBe(48);
+  expect(wheelDeltaPixels({ deltaMode: 2, deltaY: 1 }, node)).toBe(200);
 });

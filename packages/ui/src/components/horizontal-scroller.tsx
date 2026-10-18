@@ -73,7 +73,9 @@ export const HorizontalScroller = ({
       // handlers as passive, where preventDefault is ignored and the page
       // would scroll as well, so this listener is native and not passive.
       const onWheel = (event: WheelEvent) => {
+        // Ctrl+wheel is pinch-to-zoom on trackpads: leave it to the page.
         if (
+          event.ctrlKey ||
           event.deltaX !== 0 ||
           event.deltaY === 0 ||
           node.scrollWidth <= node.clientWidth
@@ -84,7 +86,8 @@ export const HorizontalScroller = ({
         // Down means towards later items: inline end, which is negative
         // scrollLeft in a right-to-left row.
         const rtl = getComputedStyle(node).direction === "rtl";
-        node.scrollBy({ left: rtl ? -event.deltaY : event.deltaY });
+        const delta = wheelDeltaPixels(event, node);
+        node.scrollBy({ left: rtl ? -delta : delta });
       };
       node.addEventListener("wheel", onWheel, { passive: false });
       return () => {
@@ -174,4 +177,24 @@ export const scrollState = (
     canScrollStart: maximum > 1 && position > 1,
     canScrollEnd: maximum > 1 && position < maximum - 1,
   };
+};
+
+const LINE_HEIGHT_PX = 16;
+
+/** Wheel deltas arrive in pixels, lines or pages; scrollBy takes pixels. */
+export const wheelDeltaPixels = (
+  event: Pick<WheelEvent, "deltaMode" | "deltaY">,
+  node: Pick<HTMLElement, "clientWidth">,
+): number => {
+  switch (event.deltaMode) {
+    case WheelEvent.DOM_DELTA_LINE: {
+      return event.deltaY * LINE_HEIGHT_PX;
+    }
+    case WheelEvent.DOM_DELTA_PAGE: {
+      return event.deltaY * node.clientWidth;
+    }
+    default: {
+      return event.deltaY;
+    }
+  }
 };
