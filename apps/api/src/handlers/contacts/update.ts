@@ -3,7 +3,6 @@ import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
-import { INVOICE_LANGUAGES } from "@stll/api-contract";
 import { currencyMinorUnitDigits } from "@stll/money";
 
 import type { Transaction } from "@/api/db/root";
@@ -24,6 +23,7 @@ import {
   validatePersonDetails,
 } from "@/api/handlers/contacts/person-details";
 import { contactTypeSchema } from "@/api/handlers/contacts/schema";
+import { tInvoiceLanguage } from "@/api/handlers/invoices/invoice-language";
 import { captureError } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -73,7 +73,7 @@ const updateContactBodySchema = t.Object({
   paymentTermDays: t.Optional(
     t.Nullable(t.Integer({ minimum: 0, maximum: 365 })),
   ),
-  invoiceLanguage: t.Optional(t.Nullable(t.UnionEnum(INVOICE_LANGUAGES))),
+  invoiceLanguage: t.Optional(t.Nullable(tInvoiceLanguage)),
   originatingAttorneyId: t.Optional(t.Nullable(tUserId)),
   responsibleAttorneyId: t.Optional(t.Nullable(tUserId)),
 });

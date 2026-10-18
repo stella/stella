@@ -1,9 +1,37 @@
+import type { Static } from "elysia";
 import { t } from "elysia";
 
-import { INVOICE_LANGUAGES } from "@stll/api-contract";
-import type { InvoiceLanguage } from "@stll/api-contract";
+import type { INVOICE_LANGUAGES, InvoiceLanguage } from "@stll/api-contract";
 
-export const tInvoiceLanguage = t.UnionEnum(INVOICE_LANGUAGES);
+/**
+ * A literal union, not `t.UnionEnum`: UnionEnum stamps its first member as the
+ * schema default, so an omitted language would become Arabic before the
+ * client, organization and seller defaults are consulted.
+ */
+export const tInvoiceLanguage = t.Union([
+  t.Literal("ar"),
+  t.Literal("cs"),
+  t.Literal("de"),
+  t.Literal("en"),
+  t.Literal("es"),
+  t.Literal("et"),
+  t.Literal("fr"),
+  t.Literal("hu"),
+  t.Literal("lt"),
+  t.Literal("lv"),
+  t.Literal("pl"),
+  t.Literal("pt-BR"),
+  t.Literal("sk"),
+]);
+
+// Binds the literals to the contract list in both directions.
+true satisfies InvoiceLanguage extends Static<typeof tInvoiceLanguage>
+  ? true
+  : never;
+true satisfies Static<typeof tInvoiceLanguage> extends InvoiceLanguage
+  ? true
+  : never;
+true satisfies (typeof INVOICE_LANGUAGES)["length"] extends 13 ? true : never;
 
 const LANGUAGE_BY_COUNTRY: Readonly<
   Record<string, InvoiceLanguage | undefined>
