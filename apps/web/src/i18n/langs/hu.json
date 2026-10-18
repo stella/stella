@@ -1058,7 +1058,6 @@
       }
     },
     "sameCaseNumber": "{count, plural, one {# határozat viseli} other {# határozat viseli}} ezt az ügyszámot. Válasszon bíróságot.",
-    "searchAskPrompt": "{query} (joggyakorlat, {country})",
     "searchLabel": "Keresés a joggyakorlatban",
     "searchPlaceholder": "Ügyszám, ECLI vagy szavak, pl. 22 Cdo 2653/2012",
     "searchUnavailable": {
@@ -1405,7 +1404,12 @@
     "maxAttachmentsReached": "Üzenetenként legfeljebb {count} fájl",
     "mention": {
       "category": {
-        "entities": "Ebben az ügyben"
+        "entities": "Ebben az ügyben",
+        "sources": "Források"
+      },
+      "corpus": {
+        "caseLaw": "Joggyakorlat · {country}",
+        "legislation": "Jogszabályok · {country}"
       },
       "loadError": "Az elemek betöltése sikertelen"
     },
@@ -5143,7 +5147,6 @@
     "provisionTextUnavailable": "Ehhez a változathoz nem érhető el szöveg",
     "publisherWindowInconsistent": "Erre a napra nem állapítható meg hatályos szöveg: a kiadó adatai ellentmondásosak.",
     "resolvedAlias": "Felismerve: {label}",
-    "searchAskPrompt": "{query} ({country} jogszabályai)",
     "searchLabel": "Keresés a jogszabályok között",
     "searchPlaceholder": "Szám, rövid név vagy cím, pl. 89/2012 Sb.",
     "showCitedPartOnly": "Csak az idézett rész megjelenítése",

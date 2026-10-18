@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
+import { VISUAL_PREVIEW_TOOL_NAME } from "@stll/api-contract/visual-preview";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
@@ -33,6 +34,7 @@ import {
   WEB_SEARCH_TOOL_NAME,
 } from "@/api/handlers/chat/tools/web-search-tools";
 import type { ChatPart } from "@/api/handlers/chat/types";
+import { createVisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
 import { UNBOUND } from "@/api/lib/agent-skills/binding";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -44,6 +46,10 @@ import {
   createFeatureAccessSnapshot,
   decideFeatureAccess,
 } from "@/api/lib/feature-access/policy";
+import {
+  FEATURE_REGISTRY,
+  GENERATED_VIEWS_FEATURE_ID,
+} from "@/api/lib/feature-access/registry";
 import {
   authorizedMemberRole,
   roleForDisplay,
@@ -257,6 +263,50 @@ const toolNamesMissingFromValidation = (scenario: RunToolsProps) => {
     (name) => !validationNames.has(name),
   );
 };
+
+test("generated views follow general availability and explain deployment withholding in scripts", async () => {
+  const run =
+    buildRunScenarios().at(0) ?? expect.unreachable("No chat scenario");
+  for (const deploymentEnabled of [false, true]) {
+    const decision = decideFeatureAccess({
+      registry: FEATURE_REGISTRY,
+      grants: {},
+      featureId: GENERATED_VIEWS_FEATURE_ID,
+      organizationId,
+      userId,
+      user: { email: "member@example.test", emailVerified: true },
+      membership: true,
+      deploymentEnabled,
+    });
+    const tools = getChatTools({
+      ...run,
+      featureAccessSnapshot: createFeatureAccessSnapshot({
+        organizationId,
+        userId,
+        decisions: new Map([[GENERATED_VIEWS_FEATURE_ID, decision]]),
+      }),
+      visualTools: {
+        origin: createVisualResourceOrigin(),
+        store: async () => expect.unreachable("Visual storage is not invoked"),
+        preview: async () =>
+          expect.unreachable("Visual preview is not invoked"),
+      },
+    });
+    expect(registeredToolNames(tools).includes(VISUAL_PREVIEW_TOOL_NAME)).toBe(
+      deploymentEnabled,
+    );
+    if (deploymentEnabled) {
+      continue;
+    }
+    const execute =
+      tools["execute_typescript"]?.execute ??
+      expect.unreachable("Script tool is absent");
+    const output = await execute({ typescriptCode: "await show_visual({});" });
+    expect(JSON.stringify(output)).toContain(
+      "unavailable for this caller or deployment",
+    );
+  }
+});
 
 describe("chat validation tool set", () => {
   test("contains every tool any run of the same request can expose", () => {

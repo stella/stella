@@ -121,7 +121,10 @@ const context = (
 ) => ({
   github: {
     event_name: event,
-    event: { pull_request: { draft: false, labels: [] } },
+    event: {
+      action: "synchronize",
+      pull_request: { draft: false, labels: [] },
+    },
   },
   inputs: {
     heavy_only: heavyOnly,
