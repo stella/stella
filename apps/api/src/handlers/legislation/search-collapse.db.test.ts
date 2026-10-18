@@ -765,6 +765,20 @@ const oversizedDisplayFieldProperty = (provider: "pg-fts" | "corpus-index") =>
       .set({ title: text, fulltext })
       .where(eq(legislationDocuments.id, byteCapVersion.id));
     const corpusClient = getCorpusIndexClient("q09");
+    const engineScan =
+      provider === "corpus-index"
+        ? spyOn(corpusClient, "scoredSearch").mockImplementation(async () =>
+            Result.ok({
+              numHits: 1,
+              hits: [
+                {
+                  fields: { document_id: String(byteCapVersion.id) },
+                  score: 1,
+                },
+              ],
+            }),
+          )
+        : null;
     const engineSearch =
       provider === "corpus-index"
         ? spyOn(corpusClient, "search").mockImplementation(async () =>
@@ -829,6 +843,7 @@ const oversizedDisplayFieldProperty = (provider: "pg-fts" | "corpus-index") =>
         Buffer.byteLength(JSON.stringify(response), "utf-8"),
       ).toBeLessThanOrEqual(PUBLIC_LEGISLATION_SEARCH_RESPONSE_MAX_BYTES);
     } finally {
+      engineScan?.mockRestore();
       engineSearch?.mockRestore();
     }
   });
@@ -847,4 +862,66 @@ test("legislation corpus-index search bounds oversized Unicode display fields", 
     oversizedDisplayFieldProperty("corpus-index"),
     { numRuns: 12 },
   );
+});
+
+test("legislation corpus-index scan rounds read ids and scores, never stored statute text", async () => {
+  const corpusClient = getCorpusIndexClient("q09");
+  const scans: Parameters<typeof corpusClient.scoredSearch>[0][] = [];
+  const nativeScanQueries: string[] = [];
+  const engineScan = spyOn(corpusClient, "scoredSearch").mockImplementation(
+    async (options) => {
+      scans.push(options);
+      return Result.ok({
+        numHits: 1,
+        hits: [
+          { fields: { document_id: String(byteCapVersion.id) }, score: 1 },
+        ],
+      });
+    },
+  );
+  const engineSearch = spyOn(corpusClient, "search").mockImplementation(
+    async (options) => {
+      // Only the highlight round may use the native endpoint: it names the
+      // page's documents and asks for snippets, never for a scan window.
+      if (options.snippetFields === undefined) {
+        nativeScanQueries.push(options.query);
+      }
+      return Result.ok({
+        numHits: 1,
+        hits: [{ document_id: String(byteCapVersion.id) }],
+        snippets: [{ text: ["<b>bytecapfixture</b>"] }],
+      });
+    },
+  );
+  try {
+    const response = await searchLegislationHandler(
+      { query: "bytecapfixture", jurisdiction: "CZE", limit: 20 },
+      legislationDb,
+      "unobserved",
+      {
+        provider: "corpus-index",
+        loadSearchConfigs: async () => [],
+        readServingGeneration: async () =>
+          Result.ok({
+            family: "legislation",
+            generation: GENERATION,
+            cluster: "q09",
+          }),
+      },
+    );
+    if (!("items" in response)) {
+      panic("scan transport fixture search was refused");
+    }
+    expect(response.items.map(({ documentId }) => documentId)).toEqual([
+      String(byteCapVersion.id),
+    ]);
+    expect(scans.length).toBeGreaterThan(0);
+    for (const scan of scans) {
+      expect(scan.fields).not.toContain("text");
+    }
+    expect(nativeScanQueries).toEqual([]);
+  } finally {
+    engineScan.mockRestore();
+    engineSearch.mockRestore();
+  }
 });

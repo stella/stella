@@ -4195,6 +4195,63 @@ describe("OpenAI-compatible MCP tools", () => {
     });
   });
 
+  test("read_statute emits navigation once and reassembles every text window", async () => {
+    resolveStatuteExpressionMock.mockResolvedValue({
+      type: "expression",
+      id: STATUTE_ID,
+    });
+    readPublicLegislationHandlerMock.mockResolvedValue(
+      createStatuteReadResult(),
+    );
+    listStatuteVersionsHandlerMock.mockResolvedValue(
+      createStatuteVersionsPage(),
+    );
+
+    type StatuteTextPage = {
+      nextCursor: string | null;
+      statute: {
+        text: string | null;
+        outline?: unknown;
+        outlineTruncated?: unknown;
+        versions?: unknown;
+      };
+    };
+    const pages: StatuteTextPage[] = [];
+    let cursor: string | undefined;
+    do {
+      const payload = asTestRaw<StatuteTextPage>(
+        parseToolPayload(
+          await handleMcpToolCall({
+            args: {
+              eli: STATUTE_ELI,
+              ...(cursor === undefined ? {} : { cursor }),
+            },
+            context: createContext(),
+            toolName: "read_statute",
+          }),
+        ),
+      );
+      pages.push(payload);
+      cursor = payload.nextCursor ?? undefined;
+    } while (cursor !== undefined);
+
+    expect(pages.length).toBeGreaterThan(1);
+    expect(
+      pages
+        .slice(1)
+        .every(
+          ({ statute }) =>
+            !("outline" in statute) &&
+            !("outlineTruncated" in statute) &&
+            !("versions" in statute),
+        ),
+    ).toBe(true);
+    expect(pages.map(({ statute }) => statute.text ?? "").join("")).toBe(
+      `\u00a7 1729\n\n${LONG_PROVISION_BODY}`,
+    );
+    expect(listStatuteVersionsHandlerMock).toHaveBeenCalledTimes(1);
+  });
+
   test("read_statute tells an unknown act apart from a date the corpus does not cover", async () => {
     resolveStatuteExpressionMock.mockResolvedValue({ type: "unknown-work" });
     const unknown = await handleMcpToolCall({

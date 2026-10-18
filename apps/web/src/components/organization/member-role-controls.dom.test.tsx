@@ -14,7 +14,7 @@ import { inviteMemberSchema } from "@/lib/organization/role-assignment.logic";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({
-  url: "http://localhost:3000/settings/organization/members",
+  url: "http://localhost:3000/admin/members",
 });
 
 const originalFetch = globalThis.fetch;
@@ -45,7 +45,7 @@ const { IntlProvider } = await import("use-intl");
 const { roleOptions } = await import("@/lib/auth-queries");
 const { InviteMemberDialog } = await import("./invite-member-dialog");
 const { RoleCell } =
-  await import("@/routes/_protected.settings/-components/organization/member-role-cell");
+  await import("@/routes/_protected.admin/-components/organization/member-role-cell");
 
 const clients: InstanceType<typeof QueryClient>[] = [];
 afterEach(async () => {

@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
+import { checkPoolRegistryPath } from "./ci-check-pool-registry";
 import { GENERATORS } from "./generated-files";
 import {
   landingBuildRootInputs,
@@ -16,6 +17,7 @@ import {
   readStringLiterals,
   readTestInputs,
 } from "./test-input-readers";
+import { flattenWorkflowSteps } from "./workflow-steps";
 
 const ROOT = path.resolve(import.meta.dir, "..");
 const GLOBAL =
@@ -1068,7 +1070,10 @@ const markdownPolicyReaders = (root: string): readonly MarkdownReader[] => {
     );
   }
   const readers: MarkdownReader[] = [];
-  for (const step of job.steps) {
+  const steps = flattenWorkflowSteps(job.steps, (pool) =>
+    readFileSync(path.join(root, checkPoolRegistryPath(pool)), "utf-8"),
+  );
+  for (const step of steps) {
     const reader = markdownPolicyReader(step);
     if (reader !== undefined) {
       readers.push(reader);
