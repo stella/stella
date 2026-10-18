@@ -922,9 +922,9 @@ describe("walking a month", () => {
     const page = await plKioAdapter.fetchPage("2025-09:0+0", {});
     expect(Result.isOk(page)).toBe(true);
     if (Result.isOk(page)) {
-      expect(page.value.decisions.at(0)?.metadata["presiding"]).toBe(
-        "Ewa Sikorska",
-      );
+      expect(
+        page.value.decisions.at(0)?.metadata["presiding"] === "Ewa Sikorska",
+      ).toBe(true);
     }
   });
 

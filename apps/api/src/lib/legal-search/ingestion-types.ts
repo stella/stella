@@ -1763,9 +1763,14 @@ type SourceAdapterDefinition<TKey extends AdapterKey> = Omit<
 };
 
 /** Build an adapter from the source facts declared for its registry key. */
-export const defineSourceAdapter = <const TKey extends AdapterKey>(
-  adapter: SourceAdapterDefinition<TKey>,
-): SourceAdapter & { readonly key: TKey } => {
+export const defineSourceAdapter = <
+  const TAdapter extends SourceAdapterDefinition<AdapterKey>,
+>(
+  adapter: TAdapter,
+): SourceAdapter & {
+  readonly key: TAdapter["key"];
+  readonly reconciliation: TAdapter["reconciliation"];
+} => {
   const observeDocumentStage = async (
     options: Omit<DocumentStagePageOptions, "source">,
   ) => await withDocumentStageWindow({ ...options, source: adapter.key });
