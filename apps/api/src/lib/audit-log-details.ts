@@ -15,6 +15,7 @@ import type {
   FeatureAccessSnapshot,
 } from "@/api/lib/feature-access/policy";
 import {
+  AI_MEMORY_FEATURE_ID,
   LEGAL_LISTS_FEATURE_ID,
   LIST_VERIFICATION_FEATURE_ID,
 } from "@/api/lib/feature-access/registry";
@@ -217,7 +218,7 @@ export const AUDIT_DETAIL_POLICY = {
   [AUDIT_RESOURCE_TYPE.AGENT_SKILL_COMMENT]: UNGATED_AUDIT_DETAILS,
   [AUDIT_RESOURCE_TYPE.AGENT_SKILL_PROPOSAL]: UNGATED_AUDIT_DETAILS,
   [AUDIT_RESOURCE_TYPE.AI_MEMORY]: {
-    default: { type: "caller-feature", featureId: "ai-memory" },
+    default: { type: "caller-feature", featureId: AI_MEMORY_FEATURE_ID },
     operations: {},
   },
   [AUDIT_RESOURCE_TYPE.ANNOUNCEMENT]: UNGATED_AUDIT_DETAILS,

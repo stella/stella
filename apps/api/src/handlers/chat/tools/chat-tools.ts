@@ -839,7 +839,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
         userId: props.userId,
       },
       kind: "tools",
-      id: "remember",
+      id: REMEMBER_TOOL_NAME,
       featureId: AI_MEMORY_FEATURE_ID,
     }),
     safeDb,

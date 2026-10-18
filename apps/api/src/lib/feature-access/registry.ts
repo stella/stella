@@ -33,6 +33,7 @@ type FeatureDefinition = {
 export type FeatureRegistry = Readonly<Record<string, FeatureDefinition>>;
 
 export const AI_MEMORY_FEATURE_ID = "ai-memory";
+export const REMEMBER_TOOL_NAME = "remember";
 
 export const LEGAL_LISTS_FEATURE_ID = "legal-lists";
 
@@ -202,7 +203,7 @@ export const FEATURE_REGISTRY = defineFeatureRegistry({
 export type FeatureId = keyof typeof FEATURE_REGISTRY;
 
 export const CHAT_ONLY_FEATURE_TOOL_DEFINITIONS = [
-  { name: "remember", featureId: AI_MEMORY_FEATURE_ID },
+  { name: REMEMBER_TOOL_NAME, featureId: AI_MEMORY_FEATURE_ID },
   { name: VISUAL_PREVIEW_TOOL_NAME, featureId: GENERATED_VIEWS_FEATURE_ID },
 ] as const satisfies readonly { name: string; featureId: FeatureId }[];
 

@@ -11,7 +11,10 @@ import { resolveFeatureAccess } from "@/api/lib/auth/feature-access/context";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ChatDurableRefText } from "@/api/lib/chat/ref-registry";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
-import { AI_MEMORY_FEATURE_ID } from "@/api/lib/feature-access/registry";
+import {
+  AI_MEMORY_FEATURE_ID,
+  REMEMBER_TOOL_NAME,
+} from "@/api/lib/feature-access/registry";
 import { sanitizeMemoryContent } from "@/api/lib/memory/memory-content-safety";
 import {
   memoryWriteRefusalChatToolError,
@@ -21,7 +24,7 @@ import {
 import type { MemoryWriteScopeRequest } from "@/api/lib/memory/persist-explicit-memory";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 
-export const REMEMBER_TOOL_NAME = "remember";
+export { REMEMBER_TOOL_NAME } from "@/api/lib/feature-access/registry";
 
 const rememberToolInputSchema = v.strictObject({
   content: v.pipe(
