@@ -159,37 +159,38 @@ Prefetch `factory(...)` in the `loader` via `ensureRouteQueryData` or
 
 ## How Depth Is Measured
 
-`waterfallDepth` (`apps/web/e2e/helpers/network.ts`) counts the most
-consecutive **busy blocks** in any one observation sequence: a busy block is a
-maximal run of requests whose intervals overlap, and a launch gap over
-`REQUEST_SEQUENCE_GAP_MS` (500) starts a new sequence so an idle prefetch is
-not read as another route-load round. Two requests in flight at the same
-instant are never two levels, so the number is a lower bound on true causal
-depth: a dependent request hiding behind an unrelated slow one is invisible
-to it.
+The measurement navigation uses `round-barrier-v1`: `page.route` holds every
+API request selected by the network collector. The round controller releases
+all currently held requests together and assigns each the same round level.
+It releases the next round only after every released request has finished or
+failed and the page has been quiet for `NETWORK_ROUND_SETTLE_MS` (150 ms)
+after the last response, with no new tracked request during that window. The
+navigation also uses the route smoke spec's existing page-settle check.
+Requests arriving while a round is in flight wait for the next round.
+Long-lived event streams complete at response headers so an open channel
+cannot block the barrier.
 
-Reading launch times rather than the gap since the previous response _ended_ is
-what buys monotonicity, and it costs sensitivity: a dependent request whose
-parent ran longer than 500ms opens a new sequence instead of counting a level.
-The three properties are not simultaneously satisfiable, because separating a
-dependent request from an idle prefetch requires the parent's duration, and any
-rule reading response ends lets a response growing under load close a gap it
-used to exceed. Under-counting is the safer error for a guard compared only
-upward.
+Depth is the number of nonempty released rounds; `depthChain` lists the
+request keys in each round. Response completion order cannot put independent
+branches at different levels: children of slow and fast parents released in
+the same round wait at the same barrier. A request arriving after the route's
+existing settled point is idle prefetch and cannot open a new round. Depth
+comes from scheduled release levels, never inferred launch gaps or response
+timing. Measurement adds approximately one settle window plus the slowest
+server response per round; report measured shard wall time when changing it.
 
-The metric is **load-monotone**: neither a slower response nor a uniformly
-stretched timeline can raise it. Sequence boundaries read launch times only,
-so a longer response cannot move one; coverage is a running max that is never
-rewound at a boundary, so a split can only lower the count.
+The recorder writes `depthMethod: "round-barrier-v1"` in the baseline. When
+the selected recording has a missing or different method, compare requests,
+request counts, DB queries, and response sizes normally, but report depth
+only as a notice. Enforce depth again once main publishes a recording with
+the same method. Do not widen depth budgets to bridge measurement methods.
 
-One residual remains, and it is what the +1 `DEPTH_JITTER_ALLOWANCE` in
-`assertNetworkBaseline` covers: two requests issued from different ticks may
-overlap on one run and not the next, shifting a route by exactly one block. No
-launch-time metric can tell that apart from a real added round. The allowance
-is capped at one level and must stay there, because the metric can no longer
-carry a count across an observation boundary: a route reporting **two** extra
-levels has genuinely grown one, so investigate the request graph rather than
-re-running. Only `write`/`rewrite` when the route's behavior actually changed.
+Keep the round controller testable as a pure state machine over held
+requests, in-flight requests, events, and a clock. Tests cover independent
+branches with unequal response durations, genuine dependencies across
+rounds, and randomized request graphs and completion orders whose depth
+matches the graph's longest path. Replacing the barrier with timing-derived
+levels must fail those tests.
 
 ## Live Hotspot Burn-Down
 

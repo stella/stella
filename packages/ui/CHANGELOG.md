@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.47.0
+
+### Minor Changes
+
+- [#5914](https://github.com/stella/stella/pull/5914) [`55d62c9`](https://github.com/stella/stella/commit/55d62c989b81bf063cc4cef899aae4a3efe00077) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `StatusMark`, `SwapText` and `AnimatedCount`. `ListGroupCount` now takes its count through a `count` prop.
+
 ## 0.46.0
 
 ### Minor Changes
