@@ -249,6 +249,21 @@ describe.skipIf(!postgresTestsEnabled)(
         },
       });
 
+      // The other user's export is downloadable for them, so only the
+      // ownership filter can refuse it here.
+      await rootDb
+        .update(accountExports)
+        .set({
+          status: "ready",
+          expiresAt: READY_AT,
+          objectKey: `account-exports/${otherUserId}/${OTHER_EXPORT_ID}/archive.zip`,
+        })
+        .where(
+          and(
+            eq(accountExports.id, OTHER_EXPORT_ID),
+            eq(accountExports.userId, otherUserId),
+          ),
+        );
       const otherDownload = await invoke(
         context,
         "account-exports.download.get",
