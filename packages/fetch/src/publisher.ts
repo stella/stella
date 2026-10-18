@@ -593,7 +593,239 @@ const loadRobots = async ({
   };
 };
 
-// oxlint-disable-next-line eslint/max-lines-per-function -- one closure owns the shared robots cache, origin queues, and redirect policy
+type RobotsCacheOptions = Pick<
+  LoadRobotsOptions,
+  | "fetcher"
+  | "validateTarget"
+  | "robotsTtlMs"
+  | "robotsRetryMs"
+  | "robotsLoadTimeoutMs"
+> & { now: () => number };
+
+const createRobotsCache = (options: RobotsCacheOptions) => {
+  const settled = new Map<string, CachedRobots>();
+  const pending = new Map<string, Promise<CachedRobots>>();
+  return async (origin: string) => {
+    const cached = settled.get(origin);
+    if (cached && cached.expiresAt > options.now()) {
+      return cached.state;
+    }
+    const activeLoad = pending.get(origin);
+    if (activeLoad) {
+      return (await activeLoad).state;
+    }
+    const load = loadRobots({ ...options, origin });
+    pending.set(origin, load);
+    const loaded = await load;
+    pending.delete(origin);
+    settled.set(origin, loaded);
+    return loaded.state;
+  };
+};
+
+const createOriginScheduler = (clock: Clock) => {
+  const queues = new Map<string, Promise<void>>();
+  const nextAllowedAt = new Map<string, number>();
+  return async (origin: string, intervalMs: number, signal?: AbortSignal) => {
+    const previous = queues.get(origin) ?? Promise.resolve();
+    let release!: () => void;
+    const current = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    queues.set(
+      origin,
+      previous.then(async () => current),
+    );
+    await previous;
+    const delay = Math.max(
+      0,
+      (nextAllowedAt.get(origin) ?? clock.now()) - clock.now(),
+    );
+    try {
+      if (delay > 0) {
+        await clock.sleep(delay, signal);
+      }
+      nextAllowedAt.set(origin, clock.now() + intervalMs);
+      return delay;
+    } finally {
+      release();
+    }
+  };
+};
+
+type PublisherRuntime = {
+  fetcher: Fetcher;
+  validateTarget: PublisherFetcherOptions["validateTarget"];
+  robotsFor: (origin: string) => Promise<RobotsState>;
+  reserve: (
+    origin: string,
+    intervalMs: number,
+    signal?: AbortSignal,
+  ) => Promise<number>;
+  defaultMinimumIntervalMs: number;
+  onTelemetry: (event: PublisherTelemetry) => void;
+};
+
+type WalkState = {
+  url: URL;
+  requestInit: PublisherFetchOptions["init"];
+  decision: PublisherRobotsDecision;
+  delayAppliedMs: number;
+};
+
+const enforcePublisherPolicy = async (
+  state: WalkState,
+  options: PublisherFetchOptions,
+  runtime: PublisherRuntime,
+) => {
+  const robots = await runtime.robotsFor(state.url.origin);
+  if (
+    robots.type === "unavailable" &&
+    PublisherTargetRefusedError.is(robots.cause)
+  ) {
+    return Result.err(robots.cause);
+  }
+  const evaluated = publisherPolicyFor(
+    robots,
+    state.url,
+    runtime.defaultMinimumIntervalMs,
+  );
+  state.decision = evaluated.decision ?? state.decision;
+  if (
+    evaluated.refusal &&
+    options.policy?.type !== "licensed" &&
+    options.enforcement === "enforce"
+  ) {
+    return Result.err(evaluated.refusal);
+  }
+  if (evaluated.refusal) {
+    const policy = options.policy ?? { type: "obey" };
+    runtime.onTelemetry({
+      event: "publisher_fetch_policy_bypass",
+      url: state.url.href,
+      origin: state.url.origin,
+      refusal: evaluated.refusal,
+      enforcement: options.enforcement,
+      policy,
+      delayMs: evaluated.intervalMs,
+    });
+    state.decision =
+      policy.type === "licensed" ? "licensed_bypass" : "audit_bypass";
+  }
+  return Result.ok(evaluated.intervalMs);
+};
+
+const redirectLimitResult = (
+  state: WalkState,
+  response: Response,
+  options: PublisherFetchOptions,
+  runtime: PublisherRuntime,
+) => {
+  const refusal = new PublisherRedirectLimitError({
+    message: "publisher response exceeded the redirect limit",
+    url: state.url.href,
+    origin: state.url.origin,
+  });
+  const policy = options.policy ?? { type: "obey" };
+  if (policy.type === "obey" && options.enforcement === "enforce") {
+    return Result.err(refusal);
+  }
+  runtime.onTelemetry({
+    event: "publisher_fetch_policy_bypass",
+    url: state.url.href,
+    origin: state.url.origin,
+    refusal,
+    enforcement: options.enforcement,
+    policy,
+    delayMs: 0,
+  });
+  return Result.ok({
+    response,
+    robotsDecision:
+      policy.type === "licensed" ? "licensed_bypass" : "audit_bypass",
+    delayAppliedMs: state.delayAppliedMs,
+  } satisfies PublisherFetchResult);
+};
+
+const walkPublisherRedirects = async (
+  input: string | URL,
+  options: PublisherFetchOptions,
+  runtime: PublisherRuntime,
+): Promise<Result<PublisherFetchResult, PublisherPolicyError>> => {
+  const state: WalkState = {
+    url: new URL(input),
+    requestInit: options.init,
+    decision: "allowed",
+    delayAppliedMs: 0,
+  };
+  for (let redirects = 0; ; redirects += 1) {
+    const validated = await validatePublisherTarget(
+      state.url,
+      runtime.validateTarget,
+    );
+    if (Result.isError(validated)) {
+      return validated;
+    }
+    state.url = validated.value;
+    const interval = await enforcePublisherPolicy(state, options, runtime);
+    if (Result.isError(interval)) {
+      return interval;
+    }
+    if (options.enforcement === "enforce") {
+      const reserved = await Result.tryPromise(async () =>
+        runtime.reserve(
+          state.url.origin,
+          interval.value,
+          state.requestInit?.signal ?? undefined,
+        ),
+      );
+      if (Result.isError(reserved)) {
+        return Result.err(
+          new PublisherRequestAbortedError({
+            message: "Publisher request was aborted while waiting",
+            url: state.url.href,
+            origin: state.url.origin,
+            cause: reserved.error.cause,
+          }),
+        );
+      }
+      state.delayAppliedMs += reserved.value;
+    }
+    const headers = new Headers(state.requestInit?.headers);
+    headers.set("User-Agent", options.userAgent);
+    const response = await runtime.fetcher(state.url, {
+      ...state.requestInit,
+      headers,
+      redirect: "manual",
+    });
+    const location = response.headers.get("location");
+    if (!isRedirect(response) || !location) {
+      return Result.ok({
+        response,
+        robotsDecision: state.decision,
+        delayAppliedMs: state.delayAppliedMs,
+      });
+    }
+    if (redirects >= MAX_REDIRECTS) {
+      return redirectLimitResult(state, response, options, runtime);
+    }
+    await response.body?.cancel();
+    const nextUrl = new URL(location, state.url);
+    const redirected = redirectedRequestInit({
+      response,
+      currentUrl: state.url,
+      nextUrl,
+      requestInit: state.requestInit,
+      headers,
+    });
+    if (Result.isError(redirected)) {
+      return redirected;
+    }
+    state.requestInit = redirected.value;
+    state.url = nextUrl;
+  }
+};
+
 export const createPolitePublisherFetch = ({
   validateTarget,
   fetcher = globalThis.fetch,
@@ -613,193 +845,22 @@ export const createPolitePublisherFetch = ({
   defaultMinimumIntervalMs = DEFAULT_MINIMUM_INTERVAL_MS,
   onTelemetry = () => undefined,
 }: PublisherFetcherOptions) => {
-  const robotsCache = new Map<string, CachedRobots>();
-  const robotsLoads = new Map<string, Promise<CachedRobots>>();
-  const originQueues = new Map<string, Promise<void>>();
-  const nextAllowedAt = new Map<string, number>();
-
-  const robotsFor = async (origin: string) => {
-    const cached = robotsCache.get(origin);
-    if (cached && cached.expiresAt > clock.now()) {
-      return cached.state;
-    }
-    const activeLoad = robotsLoads.get(origin);
-    if (activeLoad) {
-      return (await activeLoad).state;
-    }
-    const pending = loadRobots({
+  const robotsFor = createRobotsCache({
+    fetcher,
+    validateTarget,
+    now: clock.now,
+    robotsTtlMs,
+    robotsRetryMs,
+    robotsLoadTimeoutMs,
+  });
+  const reserve = createOriginScheduler(clock);
+  return async (input: string | URL, options: PublisherFetchOptions) =>
+    await walkPublisherRedirects(input, options, {
       fetcher,
       validateTarget,
-      origin,
-      now: clock.now,
-      robotsTtlMs,
-      robotsRetryMs,
-      robotsLoadTimeoutMs,
+      robotsFor,
+      reserve,
+      defaultMinimumIntervalMs,
+      onTelemetry,
     });
-    robotsLoads.set(origin, pending);
-    const loaded = await pending;
-    robotsLoads.delete(origin);
-    robotsCache.set(origin, loaded);
-    return loaded.state;
-  };
-
-  const reserve = async (
-    origin: string,
-    intervalMs: number,
-    signal?: AbortSignal,
-  ) => {
-    const previous = originQueues.get(origin) ?? Promise.resolve();
-    let release!: () => void;
-    const current = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    originQueues.set(
-      origin,
-      previous.then(async () => current),
-    );
-    await previous;
-    const delay = Math.max(
-      0,
-      (nextAllowedAt.get(origin) ?? clock.now()) - clock.now(),
-    );
-    try {
-      if (delay > 0) {
-        await clock.sleep(delay, signal);
-      }
-      nextAllowedAt.set(origin, clock.now() + intervalMs);
-      return delay;
-    } finally {
-      release();
-    }
-  };
-
-  return async (
-    input: string | URL,
-    {
-      init,
-      userAgent,
-      policy = { type: "obey" },
-      enforcement,
-    }: PublisherFetchOptions,
-  ): Promise<Result<PublisherFetchResult, PublisherPolicyError>> => {
-    let url = new URL(input);
-    let requestInit = init;
-    let decision: PublisherRobotsDecision = "allowed";
-    let delayAppliedMs = 0;
-    for (let redirects = 0; ; redirects += 1) {
-      const validated = await validatePublisherTarget(url, validateTarget);
-      if (Result.isError(validated)) {
-        return validated;
-      }
-      url = validated.value;
-      const state = await robotsFor(url.origin);
-      if (
-        state.type === "unavailable" &&
-        PublisherTargetRefusedError.is(state.cause)
-      ) {
-        return Result.err(state.cause);
-      }
-      const {
-        refusal,
-        intervalMs,
-        decision: robotsDecision,
-      } = publisherPolicyFor(state, url, defaultMinimumIntervalMs);
-      decision = robotsDecision ?? decision;
-      if (refusal && policy.type === "obey" && enforcement === "enforce") {
-        return Result.err(refusal);
-      }
-      if (refusal) {
-        onTelemetry({
-          event: "publisher_fetch_policy_bypass",
-          url: url.href,
-          origin: url.origin,
-          refusal,
-          enforcement,
-          policy,
-          delayMs: intervalMs,
-        });
-        decision =
-          policy.type === "licensed" ? "licensed_bypass" : "audit_bypass";
-      }
-      if (enforcement === "enforce") {
-        const reservationOrigin = url.origin;
-        const reservationSignal = requestInit?.signal ?? undefined;
-        const reserved = await Result.tryPromise(async () =>
-          reserve(reservationOrigin, intervalMs, reservationSignal),
-        );
-        if (Result.isError(reserved)) {
-          return Result.err(
-            new PublisherRequestAbortedError({
-              message: "Publisher request was aborted while waiting",
-              url: url.href,
-              origin: url.origin,
-              cause: reserved.error.cause,
-            }),
-          );
-        }
-        delayAppliedMs += reserved.value;
-      }
-      const headers = new Headers(requestInit?.headers);
-      headers.set("User-Agent", userAgent);
-      const response = await fetcher(url, {
-        ...requestInit,
-        headers,
-        redirect: "manual",
-      });
-      if (!isRedirect(response)) {
-        return Result.ok({
-          response,
-          robotsDecision: decision,
-          delayAppliedMs,
-        });
-      }
-      const location = response.headers.get("location");
-      if (!location) {
-        return Result.ok({
-          response,
-          robotsDecision: decision,
-          delayAppliedMs,
-        });
-      }
-      if (redirects >= MAX_REDIRECTS) {
-        const redirectRefusal = new PublisherRedirectLimitError({
-          message: "publisher response exceeded the redirect limit",
-          url: url.href,
-          origin: url.origin,
-        });
-        if (policy.type === "obey" && enforcement === "enforce") {
-          return Result.err(redirectRefusal);
-        }
-        onTelemetry({
-          event: "publisher_fetch_policy_bypass",
-          url: url.href,
-          origin: url.origin,
-          refusal: redirectRefusal,
-          enforcement,
-          policy,
-          delayMs: 0,
-        });
-        return Result.ok({
-          response,
-          robotsDecision:
-            policy.type === "licensed" ? "licensed_bypass" : "audit_bypass",
-          delayAppliedMs,
-        });
-      }
-      await response.body?.cancel();
-      const nextUrl = new URL(location, url);
-      const redirected = redirectedRequestInit({
-        response,
-        currentUrl: url,
-        nextUrl,
-        requestInit,
-        headers,
-      });
-      if (Result.isError(redirected)) {
-        return redirected;
-      }
-      requestInit = redirected.value;
-      url = nextUrl;
-    }
-  };
 };

@@ -55,19 +55,23 @@ const auditedPublisherFetch = createPolitePublisherFetch({
   },
   fetcher: async (input, init) => {
     const { signal, timeout, timeoutMs, ...requestInit } = init ?? {};
-    const commonInit = { ...requestInit, signal: signal ?? undefined };
+    let timeoutOption:
+      | { timeout: Exclude<FetchWithTimeoutInit["timeout"], undefined> }
+      | { timeoutMs: number };
     if (timeout !== undefined) {
-      // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- canonical publisher boundary; callers validate the target before the policy owner invokes this transport
-      return await fetchWithTimeout(input, { ...commonInit, timeout });
-    }
-    if (timeoutMs !== undefined) {
-      // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- canonical publisher boundary; callers validate the target before the policy owner invokes this transport
-      return await fetchWithTimeout(input, { ...commonInit, timeoutMs });
+      timeoutOption = { timeout };
+    } else if (timeoutMs !== undefined) {
+      timeoutOption = { timeoutMs };
+    } else {
+      timeoutOption = {
+        timeout: { type: "headers", ms: ADAPTER_TIMEOUT.REQUEST },
+      };
     }
     // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- canonical publisher boundary; callers validate the target before the policy owner invokes this transport
     return await fetchWithTimeout(input, {
-      ...commonInit,
-      timeout: { type: "headers", ms: ADAPTER_TIMEOUT.REQUEST },
+      ...requestInit,
+      signal: signal ?? undefined,
+      ...timeoutOption,
     });
   },
   onTelemetry: ({ origin, refusal, enforcement, policy }) => {
