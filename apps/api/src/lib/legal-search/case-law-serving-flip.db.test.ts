@@ -22,6 +22,7 @@ import {
   corpusIndexJurisdictionServing,
   corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
+  publishedCaseLawDecisions,
 } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
@@ -256,8 +257,8 @@ const read = async (jurisdiction: string | undefined) => {
 const acceptedBy = async (generation: string) =>
   (
     await db
-      .select({ id: caseLawDecisions.id })
-      .from(caseLawDecisions)
+      .select({ id: publishedCaseLawDecisions.id })
+      .from(publishedCaseLawDecisions)
       .where(currentCaseLawCorpusProjection(generation))
   )
     .map(({ id }) => id)
@@ -637,8 +638,8 @@ test("the flip moves Czech readers and the acceptance to v9, and only the flip d
   ]);
   const acceptedRevision = await db
     .select({ revision: caseLawCorpusAppliedRevision("case_law_v8") })
-    .from(caseLawDecisions)
-    .where(eq(caseLawDecisions.id, CZE_DECISION_ID));
+    .from(publishedCaseLawDecisions)
+    .where(eq(publishedCaseLawDecisions.id, CZE_DECISION_ID));
   expect(acceptedRevision).toEqual([{ revision: V9_REVISION }]);
   expect(await acceptedBy("case_law_v8")).toEqual([CZE_DECISION_ID]);
   await db
@@ -903,7 +904,7 @@ test.each([
         rankCandidates: async (candidates, { selectAppliedCandidates }) => {
           const rows = await db
             .select({
-              id: caseLawDecisions.id,
+              id: publishedCaseLawDecisions.id,
               appliedRevision: caseLawCorpusAppliedRevision(
                 global.serving.generation,
               ),
@@ -911,11 +912,11 @@ test.each([
                 global.serving.generation,
               ),
             })
-            .from(caseLawDecisions)
+            .from(publishedCaseLawDecisions)
             .where(
               and(
                 inArray(
-                  caseLawDecisions.id,
+                  publishedCaseLawDecisions.id,
                   candidates.map(({ id }) => toSafeId<"caseLawDecision">(id)),
                 ),
                 currentCaseLawCorpusProjection(global.serving.generation),
