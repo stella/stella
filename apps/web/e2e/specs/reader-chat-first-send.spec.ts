@@ -10,6 +10,7 @@ import { dockedChatMessagePage } from "../helpers/docked-chat-history";
 import {
   DOCKED_CHAT_LEGAL_ROUTES,
   installDockedLegalFixtures,
+  navigatePublicLawFixture,
 } from "../helpers/docked-chat-legal-fixtures";
 import { EXPECTS_DEV_RUNTIME } from "../helpers/runtime-mode";
 import { expect, test } from "../helpers/test";
@@ -35,13 +36,7 @@ const openFreshReader = async (page: Page) => {
   await page.route("**/v1/chat/threads/*/suggested-prompts*", async (route) => {
     await route.fulfill({ json: { prompts: [] } });
   });
-  await page.goto("/law", { waitUntil: "domcontentloaded" });
-  await page.waitForFunction(
-    () => !history.pushState.toString().includes("[native code]"),
-  );
-  await page.evaluate((target) => {
-    history.pushState(null, "", target);
-  }, DOCKED_CHAT_LEGAL_ROUTES.decision.path);
+  await navigatePublicLawFixture(page, DOCKED_CHAT_LEGAL_ROUTES.decision.path);
   await expect(page.locator(".reader-scroll article")).toBeVisible();
   const composer = page.locator('[data-slot="docked-chat-composer"]');
   await expect(composer.getByRole("textbox")).toBeVisible();

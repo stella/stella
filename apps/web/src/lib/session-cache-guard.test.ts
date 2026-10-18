@@ -1,10 +1,12 @@
 import { QueryClient } from "@tanstack/react-query";
 import { isRedirect } from "@tanstack/react-router";
-import { afterAll, describe, expect, test } from "bun:test";
+import { afterAll, describe, expect } from "bun:test";
 import { readFileSync } from "node:fs";
 import nodePath from "node:path";
 
 import { sleep } from "@stll/concurrency/sleep";
+
+import { requestTest as test } from "@/testing/request-test";
 
 // The network these reads go to: the signed-in member (or nobody) answers.
 let signedIn: string | null = "member-a";

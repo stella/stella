@@ -19,6 +19,8 @@ import {
   takeBootPrefetch,
 } from "@/boot-prefetch";
 import { getTranslator, useI18nStore } from "@/i18n/i18n-store";
+import { ssrApiHeaders } from "@/lib/account/ssr-api-headers";
+import { externalApiOrigin } from "@/lib/api-origins";
 import { browserAuthBaseUrl } from "@/lib/api-url";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { getSignedOauthQueryFromHash } from "@/lib/oauth-provider";
@@ -108,6 +110,7 @@ const authClientPlugins = [
   organizationClient({ ac, roles }),
   inferAdditionalFields({
     user: {
+      locale: { type: "string" },
       preferredName: { type: "string", required: false },
       timezoneId: { type: "string" },
       wordEditShortcut: { type: "string", required: false },
@@ -129,6 +132,18 @@ const customFetchImpl = async (
   init?: RequestInit,
 ): Promise<Response> => {
   const method = resolveRequestMethod(input, init);
+  if (import.meta.env.SSR) {
+    const headers = new Headers(init?.headers);
+    for (const [name, value] of Object.entries(ssrApiHeaders())) {
+      headers.set(name, value);
+    }
+    return await fetchWithTimeout(input, {
+      ...init,
+      headers,
+      signal: init?.signal ?? undefined,
+      timeout: { type: "idle", ms: AUTH_REQUEST_TIMEOUT_MS },
+    });
+  }
   if (method === "GET") {
     // Serve the boot-time prefetch (see `boot-prefetch.ts`) for the
     // first session/role read so route entry does not wait for the main
@@ -147,14 +162,14 @@ const customFetchImpl = async (
   return await fetchWithTimeout(input, {
     ...init,
     signal: init?.signal ?? undefined,
-    timeoutMs: AUTH_REQUEST_TIMEOUT_MS,
+    timeout: { type: "idle", ms: AUTH_REQUEST_TIMEOUT_MS },
   });
 };
 
 const createStellaAuthClient = (redirectMode: "automatic" | "manual") =>
   createAuthClient({
     disableDefaultFetchPlugins: redirectMode === "manual",
-    baseURL: browserAuthBaseUrl(),
+    baseURL: import.meta.env.SSR ? externalApiOrigin() : browserAuthBaseUrl(),
     plugins: authClientPlugins,
     fetchOptions: {
       customFetchImpl,

@@ -13,6 +13,9 @@ import type { DecisionProvisionAnchor } from "@stll/decision-reader/reader-types
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
+import { defaultPresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
+import { PresentationPrefsProvider } from "@/lib/account/presentation-prefs/provider";
+import { createTestPresentationPrefsSync } from "@/lib/account/presentation-prefs/sync.test-fixtures";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
@@ -426,7 +429,12 @@ const renderReaders = async () => {
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
       <FormattingProvider locale="en" timeZone="UTC">
         <QueryClientProvider client={client}>
-          <RouterProvider router={router} />
+          <PresentationPrefsProvider
+            initialPrefs={defaultPresentationPrefs}
+            sync={createTestPresentationPrefsSync()}
+          >
+            <RouterProvider router={router} />
+          </PresentationPrefsProvider>
         </QueryClientProvider>
       </FormattingProvider>
     </IntlProvider>,

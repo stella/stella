@@ -24,7 +24,6 @@ export const CI_GENERATED_OUTPUTS = {
     "packages/cli/src/generated/tool-annotations.ts",
   ],
   webMessages: ["apps/web/src/i18n/langs/messages.gen.ts"],
-  prepaintLocale: ["apps/web/public/prepaint-init.js"],
   routeTree: ["apps/web/src/routeTree.gen.ts"],
   apiTypes: ["apps/web/src/generated/api-routes.gen.ts"],
   apiTypecheckProjects: [

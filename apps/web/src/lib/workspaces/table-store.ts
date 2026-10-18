@@ -10,6 +10,8 @@ import { persist } from "zustand/middleware";
 import type { PersistStorage } from "zustand/middleware";
 import { immer } from "zustand/middleware/immer";
 
+import type { TableContentMode } from "@stll/api-contract/public-law-table";
+
 import type {
   TableFindSelection,
   TableFindState,
@@ -28,15 +30,12 @@ import {
 } from "@/lib/workspaces/table-store.logic";
 import type {
   PersistedTableState,
-  TableContentMode,
   TableViewRecord,
   TableViewRef,
 } from "@/lib/workspaces/table-store.logic";
 
-export type {
-  TableContentMode,
-  TableViewRef,
-} from "@/lib/workspaces/table-store.logic";
+export type { TableContentMode } from "@stll/api-contract/public-law-table";
+export type { TableViewRef } from "@/lib/workspaces/table-store.logic";
 
 const getViewRecord = <T>(
   record: TableViewRecord<T>,

@@ -14,6 +14,13 @@ run left behind, or whether the internet is reachable.
 | No outbound network                             | preload `@stll/test-kit/forbid-network`, or `installNetworkGuard()`                 | relying on the CI network                                    |
 | Database timestamps compared with `now()`       | `dbClock.ago(ms)` / `dbClock.fromNow(ms)` from `@stll/test-kit/db`                  | `new Date(Date.now() - ms)` written into a column            |
 
+## Request scopes
+
+`runInRequest(scenario, request?)` from `@stll/test-kit/request` runs a scenario
+inside a TanStack Start request context. It rethrows the original scenario
+failure after the framework handler completes and asserts a successful HTTP
+status, so assertions cannot disappear into generated error responses.
+
 ## Clock
 
 `createTestClock()` starts at a fixed instant. `advance(ms)` wakes every due

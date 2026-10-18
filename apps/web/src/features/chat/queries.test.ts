@@ -5,7 +5,7 @@ import {
   replaceEqualDeep,
 } from "@tanstack/react-query";
 import { Result } from "better-result";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect } from "bun:test";
 
 import type { ReasoningEffort } from "@stll/ai-catalog";
 import {
@@ -57,6 +57,7 @@ import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
 import { APIError } from "@/lib/errors/api";
 import { toSafeId, type SafeId } from "@/lib/safe-id";
 import { workspaceActivityOptions } from "@/lib/workspaces/queries";
+import { requestTest as test } from "@/testing/request-test";
 
 const createMessage = (id = "message-A"): PersistedChatMessage => ({
   id,
@@ -269,13 +270,12 @@ describe("chat thread fetch failures", () => {
     });
   });
 
-  test.each([
+  for (const { allowMissingThread, status } of [
     { allowMissingThread: false, status: 404 },
     { allowMissingThread: false, status: 500 },
     { allowMissingThread: true, status: 500 },
-  ])(
-    "propagates status $status when allowMissingThread is $allowMissingThread",
-    async ({ allowMissingThread, status }) => {
+  ]) {
+    test(`propagates status ${status} when allowMissingThread is ${allowMissingThread}`, async () => {
       globalThis.fetch = createFetchMock(status, { message: "Request failed" });
       const result = await Result.tryPromise({
         try: async () => await queryClient().query(options(allowMissingThread)),
@@ -289,8 +289,8 @@ describe("chat thread fetch failures", () => {
           expect(result.error.status).toBe(status);
         }
       }
-    },
-  );
+    });
+  }
 });
 
 describe("thread-scoped chat keys", () => {

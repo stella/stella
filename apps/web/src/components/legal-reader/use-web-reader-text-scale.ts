@@ -1,10 +1,11 @@
 import { useReaderTextScale } from "@stll/decision-reader/use-reader-text-scale";
 
-import { useLocalStorage } from "@/hooks/use-local-storage";
-import { useAnalytics } from "@/lib/analytics/provider";
+import { usePresentationPrefs } from "@/lib/account/presentation-prefs/provider";
 
 export const useWebReaderTextScale = () => {
-  const storage = useLocalStorage();
-  const analytics = useAnalytics();
-  return useReaderTextScale({ storage, analytics });
+  const { prefs, setPrefs } = usePresentationPrefs();
+  return useReaderTextScale({
+    initialScale: prefs.readerTextScale,
+    onScaleChange: (readerTextScale) => setPrefs(() => ({ readerTextScale })),
+  });
 };

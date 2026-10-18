@@ -3,6 +3,7 @@ import type { Locator, Page } from "@playwright/test";
 import {
   DOCKED_CHAT_LEGAL_ROUTES,
   installDockedLegalFixtures,
+  navigatePublicLawFixture,
 } from "../helpers/docked-chat-legal-fixtures";
 import { expect, test } from "../helpers/test";
 
@@ -18,13 +19,7 @@ const NARROW_VIEWPORTS = [
 // so the read comes from the browser (as decision-paragraph-range does).
 const openDecision = async (page: Page) => {
   await installDockedLegalFixtures(page);
-  await page.goto("/law", { waitUntil: "domcontentloaded" });
-  await page.waitForFunction(
-    () => !history.pushState.toString().includes("[native code]"),
-  );
-  await page.evaluate((target) => {
-    history.pushState(null, "", target);
-  }, DOCKED_CHAT_LEGAL_ROUTES.decision.path);
+  await navigatePublicLawFixture(page, DOCKED_CHAT_LEGAL_ROUTES.decision.path);
   await expect(page.locator(".reader-scroll article")).toBeVisible();
 };
 

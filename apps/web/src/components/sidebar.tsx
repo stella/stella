@@ -34,7 +34,7 @@ const DEFAULT_SIDEBAR_OPEN = true;
 
 /**
  * App glue around `@stll/ui/sidebar`'s generic shell: wires the app's
- * persisted (localStorage-backed) open state in as a controlled value. The
+ * persisted (server-readable cookie) open state in as a controlled value. The
  * shell itself stays host-agnostic and does not persist anything on its own.
  */
 const SidebarProvider = ({
@@ -54,7 +54,7 @@ const SidebarProvider = ({
     setOpen: setPersistedOpen,
   } = usePersistedSidebarOpen({
     defaultOpen: defaultOpen ?? DEFAULT_SIDEBAR_OPEN,
-    hydrateFromStorage: defaultOpen === undefined && openProp === undefined,
+    usePreference: defaultOpen === undefined && openProp === undefined,
   });
 
   const open = openProp ?? persistedOpen;

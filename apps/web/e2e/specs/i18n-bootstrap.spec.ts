@@ -1,26 +1,27 @@
 import { expect, test } from "@playwright/test";
 
-import { getStorageKey } from "../../src/consts";
+import { PRESENTATION_PREFS_COOKIE } from "../../src/lib/account/presentation-prefs/preferences";
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
-test("malformed persisted i18n state cannot block app bootstrap", async ({
+test("malformed presentation cookie cannot block app bootstrap", async ({
+  baseURL,
   page,
 }) => {
-  const storageKey = getStorageKey("i18n");
-  await page.addInitScript(
-    ({ storageKey: key }) => {
-      localStorage.setItem(key, "{");
+  const webBaseURL = baseURL ?? "http://localhost:3000";
+  await page.context().addCookies([
+    {
+      name: PRESENTATION_PREFS_COOKIE,
+      value: encodeURIComponent("{"),
+      url: new URL("/", webBaseURL).href,
+      httpOnly: true,
+      sameSite: "Lax",
+      secure: new URL(webBaseURL).protocol === "https:",
     },
-    { storageKey },
-  );
+  ]);
 
   await page.goto("/", { waitUntil: "commit" });
 
   await expect(page).toHaveURL(/\/auth\/?$/u, { timeout: 30_000 });
-  await expect
-    .poll(async () =>
-      page.evaluate((key) => localStorage.getItem(key), storageKey),
-    )
-    .not.toBe("{");
+  await expect(page.locator("html")).toHaveAttribute("lang", "en");
 });

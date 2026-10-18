@@ -41,6 +41,7 @@ const sessionWithShortcuts = (userShortcuts: string | null) =>
       email: "member@example.test",
       emailVerified: true,
       id: "user_1",
+      locale: "en",
       name: "Member",
       timezoneId: "UTC",
       twoFactorEnabled: false,

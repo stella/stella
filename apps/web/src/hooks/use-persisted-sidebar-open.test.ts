@@ -1,24 +1,38 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
 
-import { parsePersistedSidebarOpen } from "./use-persisted-sidebar-open";
+import { defaultPresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
+import { PresentationPrefsProvider } from "@/lib/account/presentation-prefs/provider";
 
-describe("persisted sidebar state", () => {
-  test("maps persisted values without changing the deterministic default", () => {
-    expect(parsePersistedSidebarOpen(null)).toBeNull();
-    expect(parsePersistedSidebarOpen("expanded")).toBe(true);
-    expect(parsePersistedSidebarOpen("collapsed")).toBe(false);
+import { usePersistedSidebarOpen } from "./use-persisted-sidebar-open";
+
+const SidebarSnapshot = () => {
+  const { open } = usePersistedSidebarOpen({
+    defaultOpen: true,
+    usePreference: true,
   });
+  return createElement("aside", {
+    "data-state": open ? "expanded" : "collapsed",
+  });
+};
 
-  test("uses a deterministic server snapshot and reconciles the external store", () => {
-    const source = readFileSync(
-      new URL("use-persisted-sidebar-open.ts", import.meta.url),
-      "utf-8",
-    );
-
-    expect(source).toContain("useSyncExternalStore(");
-    expect(source).toContain("() => defaultOpen,");
-    expect(source).not.toContain("useMountEffect");
-    expect(source).not.toContain("useLayoutEffect");
+describe("persisted sidebar server snapshot", () => {
+  test("the server renders the cookie preference before any client code runs", () => {
+    for (const sidebarOpen of [true, false]) {
+      const html = renderToStaticMarkup(
+        createElement(
+          PresentationPrefsProvider,
+          {
+            initialPrefs: { ...defaultPresentationPrefs, sidebarOpen },
+          },
+          createElement(SidebarSnapshot),
+        ),
+      );
+      expect(html).toContain(
+        `data-state="${sidebarOpen ? "expanded" : "collapsed"}"`,
+      );
+    }
   });
 });

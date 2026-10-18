@@ -11,9 +11,9 @@ import {
 import { VISUAL_PREVIEW_TOOL_NAME } from "@stll/api-contract/visual-preview";
 import { VISUAL_SANDBOX_LIMITS } from "@stll/api-contract/visual-sandbox";
 
-import { PALETTE_STORAGE_KEY, THEME_STORAGE_KEY } from "../src/consts";
 import { installDockedChatHistory } from "./helpers/docked-chat-fixtures";
 import { dockedChatMessagePage } from "./helpers/docked-chat-history";
+import { setPresentationPrefs } from "./helpers/presentation-prefs";
 
 type VisualDesignCaptureContext = {
   page: Page;
@@ -78,15 +78,11 @@ const captureVisualDesign = async ({
       headers: { "cache-control": "private, no-store" },
     });
   });
-  await page.addInitScript(
-    ({ themeKey, paletteKey }) => {
-      if (window === window.top) {
-        localStorage.setItem(themeKey, "light");
-        localStorage.setItem(paletteKey, "neutral");
-      }
-    },
-    { themeKey: THEME_STORAGE_KEY, paletteKey: PALETTE_STORAGE_KEY },
-  );
+  await setPresentationPrefs({
+    context: page.context(),
+    url: webUrl,
+    patch: { theme: "light", palette: "neutral" },
+  });
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`${webUrl}/chat/${threadId}`, { waitUntil: "commit" });
   const selector = `iframe[title="${visual.title}"]`;
@@ -219,10 +215,15 @@ const captureVisualDesign = async ({
   // Change the preference in place: the existing chart must repaint without
   // replacing either sandbox document or resetting its selected court.
   const initialSrc = await outer.getAttribute("src");
-  await page.evaluate((key) => {
-    localStorage.setItem(key, "dark");
-    window.dispatchEvent(new Event("stella-theme-preference-change"));
-  }, THEME_STORAGE_KEY);
+  const accountMenu = page
+    .locator('[data-slot="sidebar-footer"] button[aria-haspopup="menu"]')
+    .last();
+  await accountMenu.click();
+  await page.getByRole("menuitem", { name: /appearance|vzhled/iu }).hover();
+  await page.getByRole("menuitemradio", { name: /dark|tmavý/iu }).click();
+  // Theme radio choices keep the menu open so further preferences can change.
+  await accountMenu.click();
+  await expect(accountMenu).toHaveAttribute("aria-expanded", "false");
   await expect(guest.locator("html")).toHaveCSS("color-scheme", "dark");
   await expect(outer).toHaveAttribute("src", initialSrc ?? "");
   await prepareCapture();
@@ -232,10 +233,11 @@ const captureVisualDesign = async ({
     .toBeGreaterThanOrEqual(0.25);
   await snap("visual-design-dark-desktop", { waitFor: selector });
 
-  await page.evaluate((key) => {
-    localStorage.setItem(key, "light");
-    window.dispatchEvent(new Event("stella-theme-preference-change"));
-  }, THEME_STORAGE_KEY);
+  await accountMenu.click();
+  await page.getByRole("menuitem", { name: /appearance|vzhled/iu }).hover();
+  await page.getByRole("menuitemradio", { name: /light|světlý/iu }).click();
+  await accountMenu.click();
+  await expect(accountMenu).toHaveAttribute("aria-expanded", "false");
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(guest.locator("html")).toHaveCSS("color-scheme", "light");
   await expect(

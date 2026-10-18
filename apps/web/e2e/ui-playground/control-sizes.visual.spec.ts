@@ -1,9 +1,10 @@
 import { expect, test } from "@playwright/test";
 
-const THEME_STORAGE_KEY = "stella-ui-theme";
+import { setPresentationPrefs } from "../helpers/presentation-prefs";
+
 const CONTROL_SIZES_SECTION = "control-sizes";
 
-test.beforeEach(async ({ page }, testInfo) => {
+test.beforeEach(async ({ page, baseURL }, testInfo) => {
   const { colorScheme } = testInfo.project.use;
   if (colorScheme !== "dark" && colorScheme !== "light") {
     throw new Error(
@@ -11,12 +12,14 @@ test.beforeEach(async ({ page }, testInfo) => {
     );
   }
 
-  await page.addInitScript(
-    ([storageKey, storedTheme]) => {
-      localStorage.setItem(storageKey, storedTheme);
-    },
-    [THEME_STORAGE_KEY, colorScheme] as const,
-  );
+  if (baseURL === undefined) {
+    throw new Error("UI playground requires a base URL");
+  }
+  await setPresentationPrefs({
+    context: page.context(),
+    url: baseURL,
+    patch: { theme: colorScheme },
+  });
   await page.goto("/dev?visual=control-sizes", {
     waitUntil: "domcontentloaded",
   });

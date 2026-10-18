@@ -10,7 +10,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./db": "./src/db-clock.ts",
-    "./forbid-network": "./src/forbid-network.ts"
+    "./forbid-network": "./src/forbid-network.ts",
+    "./request": "./src/request.ts"
   },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",
@@ -22,6 +23,7 @@
   },
   "dependencies": {
     "@stll/time": "workspace:*",
+    "@tanstack/react-start": "^1.168.60",
     "better-result": "catalog:",
     "drizzle-orm": "catalog:"
   },

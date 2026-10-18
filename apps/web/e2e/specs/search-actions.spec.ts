@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test";
 
 import { apiStatus } from "../helpers/api";
+import { createProfileTestSession } from "../helpers/profile-session";
 import { expect, test } from "../helpers/test";
 import {
   type TestWorkspace,
@@ -61,6 +62,21 @@ const assertActionsAboveFold = async (page: Page) => {
 for (const locale of ["en", "ar"] as const) {
   test.describe(`search actions (${locale})`, () => {
     test.use({ locale });
+    let profileSession:
+      | Awaited<ReturnType<typeof createProfileTestSession>>
+      | undefined;
+    test.beforeEach(async ({ page, baseURL }) => {
+      profileSession = await createProfileTestSession({
+        page,
+        label: "search-actions",
+        webUrl: baseURL ?? "http://localhost:3000",
+        locale,
+      });
+    });
+    test.afterEach(async () => {
+      await profileSession?.cleanup();
+      profileSession = undefined;
+    });
 
     test("empty search exposes actions without scrolling", async ({ page }) => {
       const input = await openSearch(page);
@@ -78,6 +94,21 @@ for (const locale of ["en", "ar"] as const) {
 for (const locale of ["en", "ar"] as const) {
   test.describe(`localized action keyboard selection (${locale})`, () => {
     test.use({ locale });
+    let profileSession:
+      | Awaited<ReturnType<typeof createProfileTestSession>>
+      | undefined;
+    test.beforeEach(async ({ page, baseURL }) => {
+      profileSession = await createProfileTestSession({
+        page,
+        label: "search-actions",
+        webUrl: baseURL ?? "http://localhost:3000",
+        locale,
+      });
+    });
+    test.afterEach(async () => {
+      await profileSession?.cleanup();
+      profileSession = undefined;
+    });
 
     test("remains selectable after filtering", async ({ page }) => {
       const input = await openSearch(page);
