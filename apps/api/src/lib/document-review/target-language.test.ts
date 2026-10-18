@@ -16,6 +16,7 @@ const document = (texts: readonly string[]): PreparedDocxFile => ({
   blocks: texts.map((text, index) => ({
     id: `p-${String(index)}`,
     kind: "paragraph",
+    statedNumbering: { kind: "inherit" },
     text,
   })),
 });

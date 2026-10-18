@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 2,
+  "reason": "One account export directive covers artifact-key reclamation, which clears derived storage references of an already audited request and has no account event. One account erasure directive covers file and export ledger deletion inside the account-deletion request transaction, which records the erasure. Export status changes go through the transition owner with their recorders."
+}

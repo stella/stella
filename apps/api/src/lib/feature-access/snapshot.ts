@@ -36,13 +36,26 @@ export const featureAccessReadPlan = ({
   const candidates = Object.keys(registry).filter(
     (id) =>
       isFeatureDeployed(registry, id) &&
-      [...featurePrerequisiteClosure(registry, id)].every((required) =>
-        enrolmentKind(required) === "self-serve"
-          ? enrolmentSource === "database"
-          : grants[required]?.some(
-              (grant) => grant.organizationId === organizationId,
-            ) === true,
-      ),
+      [...featurePrerequisiteClosure(registry, id)].every((required) => {
+        const enrolment = enrolmentKind(required);
+        switch (enrolment) {
+          case "general-availability":
+            return true;
+          case "self-serve":
+            return enrolmentSource === "database";
+          case "invitation":
+            return (
+              grants[required]?.some(
+                (grant) => grant.organizationId === organizationId,
+              ) === true
+            );
+          default:
+            enrolment satisfies never;
+            return panic(
+              "Feature read plan requires a supported enrolment kind",
+            );
+        }
+      }),
   );
   const enrolmentFeatureIds = [
     ...new Set(

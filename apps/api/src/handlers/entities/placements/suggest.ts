@@ -30,10 +30,10 @@ import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
-import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 import {
-  getTanStackTextModelInfoForRole,
-  requireTanStackAIAvailableForRole,
+  getTanStackTextModelInfoForTask,
+  requireTanStackAIAvailableForTask,
 } from "@/api/lib/tanstack-ai-models";
 import type { ManagedModelTier } from "@/api/lib/usage/managed-model-tier";
 
@@ -194,11 +194,11 @@ const organizeSuggestionsHandler = async function* ({
   body,
   userId,
 }: OrganizeSuggestionsHandlerProps) {
-  yield* requireTanStackAIAvailableForRole({
+  yield* requireTanStackAIAvailableForTask({
     dataClass: "customer",
     configStatus: orgAIConfigStatus,
     orgConfig: orgAIConfig,
-    role: "fast",
+    task: "short-text",
   });
 
   const contexts = yield* Result.await(
@@ -279,7 +279,7 @@ const organizeSuggestionsHandler = async function* ({
       workspaceId,
     },
     feature: "entities.placements.suggest",
-    modelRole: "fast",
+    modelTask: "short-text",
     orgAIConfig,
     modelTier: admission.modelTier,
     properties: {
@@ -295,9 +295,9 @@ const organizeSuggestionsHandler = async function* ({
 
   const result = await Result.tryPromise({
     try: async () =>
-      await generateTanStackObjectForRole({
+      await generateTanStackObjectForTask({
         dataClass: "customer",
-        role: "fast",
+        task: "short-text",
         serviceTier: "flex",
         orgAIConfig,
         managedAIResidency,
@@ -307,7 +307,7 @@ const organizeSuggestionsHandler = async function* ({
         analytics: aiAnalytics,
         caching: resolveCaching({
           promptCachingEnabled,
-          role: "fast",
+          task: "short-text",
           scopeKey: `${organizationId}:${workspaceId}:organize`,
         }),
         system: ORGANIZE_SYSTEM_PROMPT,
@@ -758,7 +758,7 @@ const generateMissingSummaries = async ({
       workspaceId,
     },
     feature: "entities.version-summary",
-    modelRole: "fast",
+    modelTask: "short-text",
     orgAIConfig,
     modelTier: admission.modelTier,
     properties: {
@@ -771,9 +771,9 @@ const generateMissingSummaries = async ({
 
   const result = await Result.tryPromise({
     try: async () =>
-      await generateTanStackObjectForRole({
+      await generateTanStackObjectForTask({
         dataClass: "customer",
-        role: "fast",
+        task: "short-text",
         serviceTier: "flex",
         orgAIConfig,
         managedAIResidency,
@@ -783,7 +783,7 @@ const generateMissingSummaries = async ({
         analytics: aiAnalytics,
         caching: resolveCaching({
           promptCachingEnabled,
-          role: "fast",
+          task: "short-text",
           scopeKey: `${organizationId}:${workspaceId}:summaries`,
         }),
         system: SUMMARY_SYSTEM_PROMPT,
@@ -1025,7 +1025,7 @@ const persistGeneratedSummaries = async ({
   modelTier,
   contexts,
 }: PersistGeneratedSummariesOptions) => {
-  const modelInfo = getTanStackTextModelInfoForRole("fast", orgAIConfig, {
+  const modelInfo = getTanStackTextModelInfoForTask("short-text", orgAIConfig, {
     dataClass: "customer",
     organizationId,
     modelTier,
@@ -1107,7 +1107,7 @@ const config = {
   requiresUsage: {
     actionType: "chat",
     serviceTier: "flex",
-    modelRole: "fast",
+    modelTask: "short-text",
   },
 } satisfies WorkspaceHandlerConfig;
 

@@ -1,7 +1,7 @@
 // Keep chat compaction generation on its shared request policy.
 //
 // A compaction summary replaces a durable source window and advances its
-// checkpoint. Calling generateTanStackTextForRole directly without spreading
+// checkpoint. Calling generateTanStackTextForTask directly without spreading
 // compactionGenerationRequest(prompt) can therefore persist an output-ceiling
 // prefix and permanently skip the missing suffix, or send a summary prompt
 // with no length bound under a ceiling it cannot meet. This rule inventories
@@ -28,7 +28,7 @@ import {
   unwrapExpression,
 } from "./utils.ts";
 
-const GENERATE_TEXT_EXPORT = "generateTanStackTextForRole";
+const GENERATE_TEXT_EXPORT = "generateTanStackTextForTask";
 const GENERATE_TEXT_MODULE = "@/api/lib/tanstack-ai-generate";
 const POLICY_EXPORT = "compactionGenerationRequest";
 const POLICY_MODULE = "@/api/lib/chat/compaction-tokens";
@@ -125,7 +125,7 @@ export default eslintCompatPlugin({
         type: "problem",
         messages: {
           missingPolicy:
-            "Spread compactionGenerationRequest(prompt) into every compaction generateTanStackTextForRole call; a truncated summary must not advance a durable checkpoint.",
+            "Spread compactionGenerationRequest(prompt) into every compaction generateTanStackTextForTask call; a truncated summary must not advance a durable checkpoint.",
           policyOverride:
             "Do not override compactionGenerationRequest(prompt) after spreading it; its completion policy, ceiling, reasoning effort and bounded prompt must remain effective for the compaction call.",
         },

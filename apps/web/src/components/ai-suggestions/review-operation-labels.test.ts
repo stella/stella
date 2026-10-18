@@ -109,7 +109,7 @@ const OPERATIONS: readonly FolioAIEditOperation[] = [
     id: "20",
     type: "setBlockParagraphProperties",
     blockId: BLOCK_ID,
-    properties: { listLevel: 1 },
+    properties: { numbering: { kind: "levelOnly", ilvl: 1 } },
   },
   {
     id: "21",

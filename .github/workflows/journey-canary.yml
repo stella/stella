@@ -37,11 +37,13 @@ jobs:
           sparse-checkout-cone-mode: false
 
       - name: Check public journeys
+        timeout-minutes: 3
         env:
           MCP_CANARY_TOKEN: ${{ secrets.MCP_CANARY_TOKEN }}
         run: bash scripts/check-journeys.sh
 
       - name: Check released CLI journeys
+        timeout-minutes: 3
         if: ${{ !cancelled() && (github.event_name == 'workflow_dispatch' || github.event.schedule == '41 */6 * * *') }}
         env:
           MCP_CANARY_TOKEN: ${{ secrets.MCP_CANARY_TOKEN }}

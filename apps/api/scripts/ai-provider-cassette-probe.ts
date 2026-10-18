@@ -2,8 +2,6 @@ import { panic } from "better-result";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { DEFAULT_MODELS } from "@stll/ai-catalog";
-
 import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
 
 import { createCassetteFetch } from "./ai-provider-cassette";
@@ -48,13 +46,14 @@ const run = async () => {
   globalThis.fetch = Object.assign(transport.fetch, {
     preconnect: () => panic("Preconnect is unavailable in cassette probes."),
   });
-  const { generateTanStackTextForRole } =
+  const { generateTanStackTextForTask } =
     await import("@/api/lib/tanstack-ai-generate");
+  // The cassette hashes this recorded model request; defaults may change independently.
   const selection = {
-    modelId: DEFAULT_MODELS.openrouter.fast,
+    modelId: "openai/gpt-6-luna",
     provider: "openrouter",
   } as const;
-  const output = await generateTanStackTextForRole({
+  const output = await generateTanStackTextForTask({
     dataClass: "public_corpus",
     abortSignal: AbortSignal.timeout(30_000),
     caching: { enabled: false, reason: "org-disabled" },
@@ -73,7 +72,7 @@ const run = async () => {
       decision: null,
     },
     prompt: "Reply with exactly OK.",
-    role: "fast",
+    task: "short-text",
     serviceTier: "standard",
     tenantWorkspaceIds: [],
   });

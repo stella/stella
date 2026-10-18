@@ -111,8 +111,16 @@ describe("clauseBodyToRichPatch", () => {
 
   test("prefixes bullet items with a bullet marker", () => {
     const body: ClauseBody = [
-      { text: "First", listKind: "bullet", listLevel: 0 },
-      { text: "Second", listKind: "bullet", listLevel: 0 },
+      {
+        text: "First",
+        listKind: "bullet",
+        numbering: { kind: "levelOnly", ilvl: 0 },
+      },
+      {
+        text: "Second",
+        listKind: "bullet",
+        numbering: { kind: "levelOnly", ilvl: 0 },
+      },
     ];
 
     expect(
@@ -134,9 +142,13 @@ describe("clauseBodyToRichPatch", () => {
         text: "First",
         runs: [{ text: "First", bold: true }],
         listKind: "ordered",
-        listLevel: 0,
+        numbering: { kind: "levelOnly", ilvl: 0 },
       },
-      { text: "Second", listKind: "ordered", listLevel: 0 },
+      {
+        text: "Second",
+        listKind: "ordered",
+        numbering: { kind: "levelOnly", ilvl: 0 },
+      },
     ];
 
     expect(
@@ -154,10 +166,26 @@ describe("clauseBodyToRichPatch", () => {
 
   test("nested ordered items indent and switch marker style by depth", () => {
     const body: ClauseBody = [
-      { text: "Top", listKind: "ordered", listLevel: 0 },
-      { text: "Sub", listKind: "ordered", listLevel: 1 },
-      { text: "SubSub", listKind: "ordered", listLevel: 2 },
-      { text: "Top2", listKind: "ordered", listLevel: 0 },
+      {
+        text: "Top",
+        listKind: "ordered",
+        numbering: { kind: "levelOnly", ilvl: 0 },
+      },
+      {
+        text: "Sub",
+        listKind: "ordered",
+        numbering: { kind: "levelOnly", ilvl: 1 },
+      },
+      {
+        text: "SubSub",
+        listKind: "ordered",
+        numbering: { kind: "levelOnly", ilvl: 2 },
+      },
+      {
+        text: "Top2",
+        listKind: "ordered",
+        numbering: { kind: "levelOnly", ilvl: 0 },
+      },
     ];
 
     expect(
@@ -177,9 +205,17 @@ describe("clauseBodyToRichPatch", () => {
 
   test("ordered numbering restarts after a non-list paragraph breaks the run", () => {
     const body: ClauseBody = [
-      { text: "One", listKind: "ordered", listLevel: 0 },
+      {
+        text: "One",
+        listKind: "ordered",
+        numbering: { kind: "levelOnly", ilvl: 0 },
+      },
       { text: "Break" },
-      { text: "Fresh one", listKind: "ordered", listLevel: 0 },
+      {
+        text: "Fresh one",
+        listKind: "ordered",
+        numbering: { kind: "levelOnly", ilvl: 0 },
+      },
     ];
 
     expect(

@@ -79,6 +79,7 @@ import { createEmbeddedReaderBridge } from "../decision-reader/embedded-bridge";
 import { ReaderView } from "../decision-reader/view";
 import type { createPresentationBridge } from "../shared/bridge";
 import { appLocale } from "../shared/locale";
+import { ToolNotes } from "../shared/tool-notes";
 import { filterDefaults, searchFilterInput, sortResultRows } from "./model";
 import type {
   CaseLawView,
@@ -91,7 +92,7 @@ export type CaseLawBridge = ReturnType<
   typeof createPresentationBridge<CaseLawView>
 >;
 type OpenReader = (
-  row: Pick<ResultRow, "decisionId" | "appUrl" | "type">,
+  row: Pick<ResultRow, "decisionId" | "url" | "type">,
   trigger: HTMLElement,
 ) => void;
 type SearchPage = Extract<CaseLawView, { type: "search" }>;
@@ -125,7 +126,7 @@ const ResultTableRow = ({
         return panic("Unknown headnote state", headnote satisfies never);
     }
   })();
-  const url = row.appUrl;
+  const url = row.url;
   const sourceUrl = row.source_url;
   const openWeb = () => {
     if (url !== null) {
@@ -658,26 +659,7 @@ const SearchResults = ({
           defaults={defaults}
         />
       )}
-      {[
-        ...new Map(
-          page.searches
-            .flatMap(({ warnings }) => warnings)
-            .map((warning) => [`${warning.message}-${warning.hint}`, warning]),
-        ).values(),
-      ].map((warning) => (
-        <p
-          role="status"
-          className="bg-muted/60 text-muted-foreground rounded-lg p-3 text-xs"
-          key={`${warning.message}-${warning.hint}`}
-        >
-          {warning.message} {warning.hint}
-        </p>
-      ))}
-      {page.nextStep !== undefined && (
-        <p role="status" className="text-muted-foreground text-xs">
-          {page.nextStep}
-        </p>
-      )}
+      <ToolNotes notes={page.searches.flatMap(({ warnings }) => warnings)} />
       <div className="bg-background overflow-hidden rounded-xl border shadow-xs">
         <div className="flex items-center justify-between gap-3 px-4 py-3">
           <p className="text-muted-foreground shrink-0 text-xs font-medium whitespace-nowrap">
@@ -861,7 +843,7 @@ const ResolveResults = ({
               <li key={candidate.decisionId}>
                 <Button
                   variant="link"
-                  disabled={candidate.appUrl === null}
+                  disabled={candidate.url === null}
                   onClick={(event) => onOpen(candidate, event.currentTarget)}
                 >
                   <bdi>{candidate.identifier}</bdi>
@@ -904,8 +886,8 @@ export const CaseLawApp = ({ bridge }: { bridge: CaseLawBridge }) => {
   } | null>(null);
   const onOpen: OpenReader = (row, trigger) => {
     if (row.type === "resolve" || !bridge.supportsTools()) {
-      if (row.appUrl !== null) {
-        bridge.detached(bridge.openLink(row.appUrl), "open case-law decision");
+      if (row.url !== null) {
+        bridge.detached(bridge.openLink(row.url), "open case-law decision");
       }
       return;
     }
@@ -914,10 +896,9 @@ export const CaseLawApp = ({ bridge }: { bridge: CaseLawBridge }) => {
       scrollX: window.scrollX,
       scrollY: window.scrollY,
     };
-    const appUrl =
-      row.appUrl === null ? null : parseLegalCitationHttpUrl(row.appUrl);
+    const url = row.url === null ? null : parseLegalCitationHttpUrl(row.url);
     const paragraphs =
-      appUrl === null ? null : parseDecisionParagraphFragment(appUrl.hash);
+      url === null ? null : parseDecisionParagraphFragment(url.hash);
     setScreen("reader");
     window.scrollTo(0, 0);
     embeddedReaderBridge.detached(

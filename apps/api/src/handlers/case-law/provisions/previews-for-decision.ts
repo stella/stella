@@ -169,7 +169,7 @@ type PreviewsForPageOptions<TRow extends CitationRow> = {
 /** A preview plus the key this page's items reference it by. */
 type KeyedProvisionPreview = ProvisionPreview & {
   key: string;
-  appUrl: string | null;
+  url: string | null;
 };
 
 type PreviewsForPage<TRow extends CitationRow> = Page<
@@ -246,7 +246,7 @@ export const attachDecisionProvisionPreviews = async <
 
       previewByKey.set(key, {
         key,
-        appUrl: buildLegislationDocumentAppUrl({
+        url: buildLegislationDocumentAppUrl({
           country: version.country,
           documentId: version.id,
           eli: version.eli,

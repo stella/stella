@@ -1,5 +1,31 @@
 # @stll/cli
 
+## 4.3.0
+
+### Minor Changes
+
+- [#5824](https://github.com/stella/stella/pull/5824) [`24c4b4d`](https://github.com/stella/stella/commit/24c4b4d2dbf3c0d4c3926e0cae07c983571b9e9a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add the lists.sample-case.create capability to load the AVT sample case in one server operation.
+
+- [#5785](https://github.com/stella/stella/pull/5785) [`031c581`](https://github.com/stella/stella/commit/031c5819cf2b5b98ae9a45a7afde80efc292addd) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Case-law search takes a `provision`, written as a lawyer cites it, and returns only decisions that cite that provision.
+
+- [#5811](https://github.com/stella/stella/pull/5811) [`4c822db`](https://github.com/stella/stella/commit/4c822db55284607ca26e96b009922c13cf067b62) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Citation reads report how a citing decision treats the cited one when a reviewed reading exists: it distinguishes or limits it, with a quoted passage, kept apart from the citing stance.
+
+- [#5710](https://github.com/stella/stella/pull/5710) [`05e8bd5`](https://github.com/stella/stella/commit/05e8bd574134ca4ed8d25880b1988e5713a0e432) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Prepare a matter's next invoice with `invoices prefill`, and create prefilled drafts that bill expenses and billed-time changes in one `invoices create` call. Seller profiles record whether the issuer is a VAT payer (`vatPayer`).
+
+- [#5774](https://github.com/stella/stella/pull/5774) [`6d2dbef`](https://github.com/stella/stella/commit/6d2dbefe1a099de62891cabfeaa1dc3618f216d1) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Set a matter's client with `clientId` on `matters update`, and choose whether matter titles show their number with `matterNumberingEnabled` in organization settings.
+
+- [#5860](https://github.com/stella/stella/pull/5860) [`1fe32b6`](https://github.com/stella/stella/commit/1fe32b6f5d201bcaaaa5363f36da4ae95f4041ca) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `skills create` and `skills update` accept `invocation` (`auto` or `manual`), and `skills get` and `skills list` report it: a `manual` skill runs only when the user invokes it.
+
+### Patch Changes
+
+- [#5680](https://github.com/stella/stella/pull/5680) [`eac3ba7`](https://github.com/stella/stella/commit/eac3ba744bf28f96adcec06a6ebc9edf6b60d1c1) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `AiLabel`, an inline mark for generated content that opens a short disclosure in a popover. Case-law analysis reads now return `aiDisclosure` with the analysis, the sentence to show beside it.
+
+- [#5941](https://github.com/stella/stella/pull/5941) [`c988ea0`](https://github.com/stella/stella/commit/c988ea0e59548dd11efbacfee20d6bb6138170f3) Thanks [@jan-kubica](https://github.com/jan-kubica)! - A case-law analysis that failed because the AI provider asked to wait reports when it can be tried again, and is not run again before then.
+
+- [#5908](https://github.com/stella/stella/pull/5908) [`657524a`](https://github.com/stella/stella/commit/657524ad8bd7885797ef00aad0054000b0b1a91c) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Report a sanctions list that was only partly screened as incomplete in counterparty check results.
+
+- [#5707](https://github.com/stella/stella/pull/5707) [`c9888bd`](https://github.com/stella/stella/commit/c9888bd758b61d81ac01e775256267d9270ba54e) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Split matter membership and organization settings commands into separate tools. Successful tool outputs no longer carry request IDs; errors retain them.
+
 ## 4.2.0
 
 ### Minor Changes

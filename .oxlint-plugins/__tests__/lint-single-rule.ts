@@ -188,6 +188,32 @@ export const sharedLines = (
 export const sharedRuns: { readonly code: string; readonly cases: number }[] =
   [];
 
+/**
+ * Every batch claimed for a configuration, accepted or not, so tests can prove
+ * that each case was linted exactly once whatever the grouping.
+ */
+export const claimedBatches: {
+  readonly code: string;
+  readonly cases: number;
+}[] = [];
+
+type PendingGate = {
+  readonly cases: number;
+  readonly ready: Promise<undefined>;
+  readonly resolve: (value: undefined) => void;
+};
+
+const pendingGates = new Map<string, PendingGate>();
+
+/** Hold one rule's next batch until this many cases have registered. */
+export const holdSharedRunUntilPendingForTest = (
+  code: string,
+  cases: number,
+) => {
+  const { promise, resolve } = Promise.withResolvers<undefined>();
+  pendingGates.set(code, { cases, ready: promise, resolve });
+};
+
 const lintTogether = async (
   requests: readonly SharedRequest[],
   code: string,
@@ -196,6 +222,7 @@ const lintTogether = async (
   if (first === undefined) {
     return [];
   }
+  claimedBatches.push({ code, cases: requests.length });
   if (requests.length > 1) {
     const sourceFiles = requests.map(({ lintCase }) => lintCase.sourceFile);
     const lines = sharedLines(
@@ -256,10 +283,22 @@ const lintShared = async (
     const pending = pendingByConfig.get(configKey);
     if (pending !== undefined) {
       pending.push({ lintCase, resolve, reject });
+      const gate = pendingGates.get(code);
+      if (gate !== undefined && pending.length >= gate.cases) {
+        gate.resolve(undefined);
+      }
       return;
     }
     pendingByConfig.set(configKey, [{ lintCase, resolve, reject }]);
     withOxlintSlot(async () => {
+      const gate = pendingGates.get(code);
+      if (gate !== undefined) {
+        if (gate.cases <= 1) {
+          gate.resolve(undefined);
+        }
+        await gate.ready;
+        pendingGates.delete(code);
+      }
       // Let tests that reach the same configuration this turn join the run.
       await nextTurn();
       const requests = pendingByConfig.get(configKey) ?? [];

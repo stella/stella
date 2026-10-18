@@ -1,7 +1,12 @@
 import { defineConfig } from "tsdown";
 
 export default defineConfig({
-  entry: ["src/index.ts", "src/benchmark-frontier.ts", "src/benchmarks.ts"],
+  entry: [
+    "src/index.ts",
+    "src/benchmark-frontier.ts",
+    "src/benchmarks.ts",
+    "src/model-defaults-ledger.ts",
+  ],
   format: ["esm"],
   platform: "neutral",
   dts: true,

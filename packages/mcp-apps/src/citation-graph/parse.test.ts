@@ -32,7 +32,6 @@ describe("citation page parsing", () => {
         {
           ...validCitation,
           decision: {
-            appUrl: "https://example.org/decision",
             url: "https://example.org/decision",
             caseNumber: "Synthetic docket",
             citationAuthority: 1,

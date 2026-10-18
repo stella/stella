@@ -18,6 +18,8 @@ import type {
 } from "./online-migration-connection";
 import {
   assertOnlineMigrationsApplied,
+  ONLINE_CONSTRAINT_VALIDATIONS,
+  ONLINE_INDEX_REPLACEMENTS,
   ONLINE_MIGRATION_INDEX_CUTOVERS,
   ONLINE_MIGRATION_INDEXES,
   ONLINE_MIGRATION_REPAIRS,
@@ -164,6 +166,29 @@ describe("online migrations", () => {
     },
   );
 
+  test("every validation a registered repair runs is declared, and each runs once", async () => {
+    const declared = ONLINE_CONSTRAINT_VALIDATIONS.map(
+      ({ tableName, constraintName }) =>
+        `ALTER TABLE public."${tableName}" VALIDATE CONSTRAINT "${constraintName}"`,
+    );
+    expect(new Set(declared).size).toBe(declared.length);
+    const harness = createHarness({
+      emptyRepairTables: true,
+      unvalidatedConstraints: ONLINE_CONSTRAINT_VALIDATIONS.map(
+        ({ constraintName }) => constraintName,
+      ),
+    });
+    expect(await runOnlineMigrations(harness.pool)).toEqual({
+      type: "complete",
+    });
+    await assertOnlineMigrationsApplied(harness.pool);
+    expect(
+      harness.statements
+        .filter((statement) => statement.includes("VALIDATE CONSTRAINT"))
+        .toSorted(),
+    ).toEqual(declared.toSorted());
+  });
+
   test("accepts an already valid index without rebuilding it", async () => {
     const harness = createHarness();
 
@@ -309,7 +334,7 @@ describe("online migrations", () => {
 
     expect(held).toEqual({
       type: "deferred",
-      index: REPORT_EXPORT_INDEX,
+      step: REPORT_EXPORT_INDEX,
       retryAfterMs: healthyIndexGate.config.retryMs,
     });
     expect(waits).toEqual([]);
@@ -375,7 +400,7 @@ describe("online migrations", () => {
           }),
         ).toEqual({
           type: "deferred",
-          index: staged.name,
+          step: staged.name,
           retryAfterMs: heldIndexGate.config.retryMs,
         });
         expect(waits).toEqual([]);
@@ -416,7 +441,7 @@ describe("online migrations", () => {
         await runOnlineMigrations(harness.pool, { indexGate }),
       ).toMatchObject({
         type: "deferred",
-        index: REPORT_EXPORT_INDEX,
+        step: REPORT_EXPORT_INDEX,
       });
     };
     const alerts = () =>
@@ -705,6 +730,134 @@ describe("online migrations", () => {
     );
   });
 
+  test("defers at a replaced index the gate holds, keeping it and skipping later steps", async () => {
+    const harness = createHarness();
+    const records: MigrationTimingRecord[] = [];
+    const firstLegacy = ONLINE_INDEX_REPLACEMENTS.at(0)?.legacyName;
+    if (firstLegacy === undefined) {
+      throw new TypeError("Expected a replaced index");
+    }
+
+    const outcome = await runOnlineMigrations(harness.pool, {
+      indexGate: heldIndexGate,
+      timing: {
+        clock: () => 0,
+        emit: (record) => {
+          records.push(record);
+        },
+      },
+    });
+
+    expect(outcome).toEqual({
+      type: "deferred",
+      step: firstLegacy,
+      retryAfterMs: heldIndexGate.config.retryMs,
+    });
+    expect(records.at(-1)).toEqual({
+      event: "migrate.online_step_duration",
+      kind: "replacement_drop",
+      name: firstLegacy,
+      durationMs: 0,
+      outcome: "deferred",
+    });
+    expect(indexOfStatement(harness.statements, DROP_INDEX_FRAGMENT)).toBe(-1);
+    expect(indexOfStatement(harness.statements, "VALIDATE CONSTRAINT")).toBe(
+      -1,
+    );
+    expect(harness.released()).toBe(true);
+  });
+
+  test("retired indexes cost only a catalog read, so a held gate never defers over them", async () => {
+    const harness = createHarness({
+      retiredIndexes: ONLINE_INDEX_REPLACEMENTS.map(
+        ({ legacyName }) => legacyName,
+      ),
+    });
+
+    expect(
+      await runOnlineMigrations(harness.pool, { indexGate: heldIndexGate }),
+    ).toEqual({ type: "complete" });
+    expect(indexOfStatement(harness.statements, DROP_INDEX_FRAGMENT)).toBe(-1);
+  });
+
+  test.each(SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS)(
+    "defers at validation $name while the gate holds it, then validates it on a healthy run",
+    async ({ name }) => {
+      const harness = createHarness({
+        unvalidatedConstraints: [name],
+        retiredIndexes: ONLINE_INDEX_REPLACEMENTS.map(
+          ({ legacyName }) => legacyName,
+        ),
+      });
+      const records: MigrationTimingRecord[] = [];
+
+      expect(
+        await runOnlineMigrations(harness.pool, {
+          indexGate: heldIndexGate,
+          timing: {
+            clock: () => 0,
+            emit: (record) => {
+              records.push(record);
+            },
+          },
+        }),
+      ).toEqual({
+        type: "deferred",
+        step: name,
+        retryAfterMs: heldIndexGate.config.retryMs,
+      });
+      expect(records.at(-1)).toEqual({
+        event: "migrate.online_step_duration",
+        kind: "repair",
+        name,
+        durationMs: 0,
+        outcome: "deferred",
+      });
+      expect(
+        indexOfStatement(harness.statements, `VALIDATE CONSTRAINT "${name}"`),
+      ).toBe(-1);
+      // Deferred, not deployable: startup still refuses the NOT VALID check.
+      expect(
+        String(await rejectionOf(assertOnlineMigrationsApplied(harness.pool))),
+      ).toContain(`constraint ${name} is not validated`);
+
+      expect(await runOnlineMigrations(harness.pool)).toEqual({
+        type: "complete",
+      });
+      await assertOnlineMigrationsApplied(harness.pool);
+      const validated = harness.statements.length;
+      // A validated constraint costs one catalog read, so a held gate never
+      // defers over it again.
+      expect(
+        await runOnlineMigrations(harness.pool, { indexGate: heldIndexGate }),
+      ).toEqual({ type: "complete" });
+      expect(
+        harness.statements
+          .slice(validated)
+          .filter((statement) => statement.includes("VALIDATE CONSTRAINT")),
+      ).toEqual([]);
+      expect(harness.released()).toBe(true);
+    },
+  );
+
+  test("a second run after every drop is a fixed point", async () => {
+    const harness = createHarness();
+
+    expect(await runOnlineMigrations(harness.pool)).toEqual({
+      type: "complete",
+    });
+    const afterFirstRun = harness.statements.length;
+    expect(
+      await runOnlineMigrations(harness.pool, { indexGate: heldIndexGate }),
+    ).toEqual({ type: "complete" });
+    expect(
+      indexOfStatement(
+        harness.statements.slice(afterFirstRun),
+        DROP_INDEX_FRAGMENT,
+      ),
+    ).toBe(-1);
+  });
+
   test("rejects a missing index required by a rewritten migration", async () => {
     const harness = createHarness({
       indexStates: { [CREDENTIAL_INDEX]: [undefined] },
@@ -965,7 +1118,7 @@ describe("online migrations", () => {
           type: "incomplete",
           reason: "unexpected read",
         },
-      repair: async () => undefined,
+      repair: async () => ({ type: "complete" }) as const,
     } satisfies OnlineRepair;
 
     const failure = await rejectionOf(
@@ -1211,6 +1364,8 @@ type HarnessOptions = {
   indexStates?: IndexStates;
   /** Missing until their CREATE statement completes, independent of reads. */
   missingIndexes?: readonly string[];
+  /** Replaced indexes already gone; the rest are present until dropped. */
+  retiredIndexes?: readonly string[];
 };
 
 const POSTGRES_IDENTIFIER_MAX_LENGTH = 63;
@@ -1225,8 +1380,13 @@ const createHarness = ({
   missingIndexes = [],
   emptyRepairTables = false,
   timeoutRepairBatch = false,
+  retiredIndexes = [],
 }: HarnessOptions = {}) => {
   const statements: string[] = [];
+  const legacyIndexes = new Set(
+    ONLINE_INDEX_REPLACEMENTS.map(({ legacyName }) => legacyName),
+  );
+  const droppedLegacyIndexes = new Set(retiredIndexes);
   const backfillStates = new Map<
     unknown,
     { cursor: unknown; batch: unknown }
@@ -1265,6 +1425,11 @@ const createHarness = ({
           if (!query.includes(DROP_INDEX_FRAGMENT)) {
             return;
           }
+          for (const name of legacyIndexes) {
+            if (query.includes(`"${name}"`)) {
+              droppedLegacyIndexes.add(name);
+            }
+          }
           for (const [name, values] of remainingArtifacts) {
             remainingArtifacts.set(
               name,
@@ -1296,6 +1461,11 @@ const createHarness = ({
           }
           if (query.startsWith("SELECT 1 FROM public.")) {
             return emptyRepairTables ? [] : [{ present: 1 }];
+          }
+          // The chat content repair's source and leftover reads: no chat
+          // rows, so it goes straight to its validations.
+          if (/^SELECT id FROM \w+ /u.test(query)) {
+            return [];
           }
           if (
             query.trim() ===
@@ -1393,6 +1563,19 @@ const createHarness = ({
           const indexName = params.at(1);
           if (typeof indexName !== "string") {
             throw new TypeError("Expected index name query parameter");
+          }
+          if (legacyIndexes.has(indexName)) {
+            return droppedLegacyIndexes.has(indexName)
+              ? []
+              : [
+                  {
+                    definition: `CREATE INDEX ${indexName} ON public.${String(params.at(2))} USING btree (id)`,
+                    isReady: true,
+                    isUnique: false,
+                    isValid: true,
+                    name: indexName,
+                  },
+                ];
           }
           const index = managedIndexes.find(({ name }) => name === indexName);
           if (!index) {

@@ -19,7 +19,9 @@ import { discoverGatedTestFiles } from "../apps/api/scripts/run-gated-tests";
 import { API_ALL_RULES } from "./api-test-impact";
 import {
   assertPostgresDiscovery,
+  plannerSourceFiles,
   planPostgresTests,
+  POSTGRES_NO_IMPACT_PATHS,
 } from "./ci-postgres-test-plan";
 
 const POSTGRES_GATE = "STELLA_RUN_POSTGRES_TESTS";
@@ -143,6 +145,52 @@ test("every API all-suite rule widens Postgres selection", async () => {
   });
 });
 
+const noImpactCases = {
+  changesets: [".changeset/quiet-cats.md"],
+  agentInstructions: [
+    ".agents/skills/example/SKILL.md",
+    ".claude/skills/example/SKILL.md",
+  ],
+  cloudReport: ["CLOUD_REPORT.md"],
+  repositoryTooling: ["scripts/unrelated-tool.test.ts"],
+  documentation: ["docs/unread.md"],
+} satisfies Record<keyof typeof POSTGRES_NO_IMPACT_PATHS, readonly string[]>;
+
+test("named non-runtime paths select no Postgres suites alone or preserve source selection", async () => {
+  expect(Object.keys(noImpactCases).toSorted()).toEqual(
+    Object.keys(POSTGRES_NO_IMPACT_PATHS).toSorted(),
+  );
+  await withRepository(async (root, write) => {
+    write("apps/api/src/feature/db.test.ts", gateSource('import "./entry";'));
+    write("apps/api/src/feature/entry.ts", "export const value = true;");
+    for (const name of Object.keys(POSTGRES_NO_IMPACT_PATHS)) {
+      const files: readonly string[] = Reflect.get(noImpactCases, name);
+      const policy = Reflect.get(POSTGRES_NO_IMPACT_PATHS, name);
+      for (const file of files) {
+        expect(policy.pattern.test(file), policy.reason).toBe(true);
+        expect(
+          await planPostgresTests({
+            event: "pull_request",
+            scopeUnknown: false,
+            changed: [file],
+            root,
+          }),
+          policy.reason,
+        ).toEqual({ mode: "none" });
+        expect(
+          await planPostgresTests({
+            event: "pull_request",
+            scopeUnknown: false,
+            changed: [file, "apps/api/src/feature/entry.ts"],
+            root,
+          }),
+          policy.reason,
+        ).toEqual({ mode: "selected", files: ["src/feature/db.test.ts"] });
+      }
+    }
+  });
+});
+
 test("Postgres selection shares the narrowed GitHub reader boundary", async () => {
   await withRepository(async (root, write) => {
     write("apps/api/src/feature/db.test.ts", gateSource(""));
@@ -175,6 +223,48 @@ test("Postgres selection shares the narrowed GitHub reader boundary", async () =
         file,
       ).toEqual({ mode: "none" });
     }
+  });
+});
+
+test("changes to the planner's own sources widen to all", async () => {
+  const plannerFiles = plannerSourceFiles();
+  // A helper reached only through the planner, and one reached through a
+  // workspace package import.
+  for (const file of [
+    "scripts/ci-package-scope.ts",
+    "packages/scripts/src/child-exit-status.ts",
+  ]) {
+    expect(plannerFiles.has(file), file).toBe(true);
+  }
+  await withRepository(async (root, write) => {
+    write("apps/api/src/feature/db.test.ts", gateSource('import "./entry";'));
+    write("apps/api/src/feature/entry.ts", "export const value = true;");
+    expect(
+      await planPostgresTests({
+        event: "pull_request",
+        scopeUnknown: false,
+        changed: ["scripts/ci-package-scope.ts"],
+        root,
+      }),
+    ).toEqual({ mode: "all" });
+  });
+});
+
+test("unread documentation is ignored but documentation declared as an input widens", async () => {
+  await withRepository(async (root, write) => {
+    write("apps/api/src/feature/db.test.ts", gateSource(""));
+    write(
+      "scripts/docs-reader.test.ts",
+      'import { readFileSync } from "node:fs"; readFileSync("docs/read.md");',
+    );
+    expect(
+      await planPostgresTests({
+        event: "pull_request",
+        scopeUnknown: false,
+        changed: ["docs/read.md"],
+        root,
+      }),
+    ).toEqual({ mode: "all" });
   });
 });
 
@@ -450,3 +540,43 @@ test("verification suites participate in general Postgres discovery and changed-
     );
   }
 }, 30_000);
+
+test("a change to any online lock-taking declaration selects the contention suite", async () => {
+  const suite = "src/db/online-ddl-contention.postgres.test.ts";
+  const runner = packageJson.ciGateTestRunners["test:postgres"];
+  expect(await discoverGatedTestFiles({ apiRoot, ...runner })).toContain(suite);
+  // The registries, the owner and every repair live in the database modules,
+  // whose rule widens to the whole suite.
+  for (const file of [
+    "apps/api/src/db/online-migrations.ts",
+    "apps/api/src/db/online-ddl.ts",
+    "apps/api/src/db/sanctions-monitoring-constraint-validation.ts",
+  ]) {
+    expect(API_ALL_RULES.database.test(file), file).toBe(true);
+  }
+  // Declarations outside them reach the suite through its import graph, each
+  // on its own.
+  const declarations = [
+    "apps/api/src/lib/case-law/coverage-index.ts",
+    "apps/api/src/lib/case-law/published-decisions-sql.ts",
+    "apps/api/src/lib/legal-search/sk-document-outstanding-index.ts",
+    "apps/api/src/lib/db/migration-history.ts",
+  ];
+  for (const file of declarations) {
+    expect(
+      Object.values(API_ALL_RULES).some((rule) => rule.test(file)),
+      file,
+    ).toBe(false);
+  }
+  for (const file of declarations) {
+    const selection = await planPostgresTests({
+      event: "pull_request",
+      scopeUnknown: false,
+      changed: [file],
+    });
+    expect(selection.mode, file).toBe("selected");
+    if (selection.mode === "selected") {
+      expect(selection.files, file).toContain(suite);
+    }
+  }
+}, 60_000);
