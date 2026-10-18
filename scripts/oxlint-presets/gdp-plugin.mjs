@@ -37,7 +37,7 @@ const GUARDED_PROOF_TYPES = [
 ];
 const isMatterProofType = (
   node,
-  { guarded, namespaces, filename, rawTypes },
+  { guarded, namespaces, filename, rawTypes, callbackProofBindings },
 ) => {
   const hasMatterKind = (value) => {
     if (!value || typeof value !== "object") {
@@ -64,6 +64,9 @@ const isMatterProofType = (
   }
   // `typeof context.proof` names a received proof's exact type.
   if (node?.type === "TSTypeQuery") {
+    if (node.exprName?.type === "Identifier") {
+      return callbackProofBindings.has(node.exprName);
+    }
     return (
       node.exprName?.type === "TSQualifiedName" &&
       node.exprName.right.name === "proof"
@@ -103,6 +106,10 @@ const noMatterProofForgery = {
     const rawTypes = new Set();
     const aliases = [];
     const pending = [];
+    const pendingExports = [];
+    const accessBindings = new Set();
+    const accessNamespaces = new Set();
+    const callbackProofParameters = [];
     const message =
       "Only matter-access-proof.ts may cast or construct MatterReadable/MatterWritable.";
     const containsMatterProof = (node) => {
@@ -110,7 +117,13 @@ const noMatterProofForgery = {
         return false;
       }
       if (
-        isMatterProofType(node, { guarded, namespaces, filename, rawTypes })
+        isMatterProofType(node, {
+          guarded,
+          namespaces,
+          filename,
+          rawTypes,
+          callbackProofBindings,
+        })
       ) {
         return true;
       }
@@ -127,6 +140,25 @@ const noMatterProofForgery = {
         context.report({ node, message });
       }
     };
+    const callbackProofBindings = new WeakSet();
+    const variableFor = (identifier) => {
+      let scope = context.sourceCode.getScope(identifier);
+      while (scope) {
+        const variable = scope.set.get(identifier.name);
+        if (variable) {
+          return variable;
+        }
+        scope = scope.upper;
+      }
+      return undefined;
+    };
+    const isAccessCall = (callee) =>
+      (callee.type === "Identifier" && accessBindings.has(callee.name)) ||
+      (callee.type === "MemberExpression" &&
+        callee.object.type === "Identifier" &&
+        accessNamespaces.has(callee.object.name) &&
+        !callee.computed &&
+        callee.property.name === "withMatterAccess");
     return {
       ImportDeclaration(node) {
         const source = resolvedModule(node.source.value, filename);
@@ -147,12 +179,23 @@ const noMatterProofForgery = {
           for (const specifier of node.specifiers) {
             if (specifier.type === "ImportNamespaceSpecifier") {
               namespaces.add(specifier.local.name);
+              if (node.importKind !== "type") {
+                accessNamespaces.add(specifier.local.name);
+              }
             }
             if (
               specifier.type === "ImportSpecifier" &&
               GUARDED_PROOF_TYPES.includes(specifier.imported.name)
             ) {
               guarded.add(specifier.local.name);
+            }
+            if (
+              specifier.type === "ImportSpecifier" &&
+              specifier.imported.name === "withMatterAccess" &&
+              specifier.importKind !== "type" &&
+              node.importKind !== "type"
+            ) {
+              accessBindings.add(specifier.local.name);
             }
           }
         }
@@ -168,6 +211,10 @@ const noMatterProofForgery = {
           )
         ) {
           context.report({ node, message });
+          return;
+        }
+        if (!node.source) {
+          pendingExports.push(node);
         }
       },
       ExportAllDeclaration(node) {
@@ -188,6 +235,25 @@ const noMatterProofForgery = {
       // argument it is given, so naming a matter proof there constructs one.
       CallExpression(node) {
         pending.push(node.typeArguments ?? node.typeParameters);
+        if (!isAccessCall(node.callee)) {
+          return;
+        }
+        const callback = node.arguments.at(1);
+        const parameter = callback?.params?.at(0);
+        if (parameter?.type !== "ObjectPattern") {
+          return;
+        }
+        for (const property of parameter.properties) {
+          if (
+            property.type === "Property" &&
+            !property.computed &&
+            property.key.type === "Identifier" &&
+            property.key.name === "proof" &&
+            property.value.type === "Identifier"
+          ) {
+            callbackProofParameters.push(property.value);
+          }
+        }
       },
       NewExpression(node) {
         pending.push(node.typeArguments ?? node.typeParameters);
@@ -214,6 +280,12 @@ const noMatterProofForgery = {
         aliases.push(node);
       },
       "Program:exit"() {
+        for (const identifier of callbackProofParameters) {
+          const variable = variableFor(identifier);
+          for (const reference of variable?.references ?? []) {
+            callbackProofBindings.add(reference.identifier);
+          }
+        }
         // Resolve forward references and alias chains before checking construction.
         let previousSize;
         do {
@@ -224,6 +296,19 @@ const noMatterProofForgery = {
             }
           }
         } while (previousSize !== guarded.size);
+        for (const node of pendingExports) {
+          const exportsGuardedAlias = node.specifiers.some(
+            (specifier) =>
+              specifier.local.type === "Identifier" &&
+              guarded.has(specifier.local.name),
+          );
+          const exportsGuardedDeclaration =
+            node.declaration?.type === "TSTypeAliasDeclaration" &&
+            guarded.has(node.declaration.id.name);
+          if (exportsGuardedAlias || exportsGuardedDeclaration) {
+            context.report({ node, message });
+          }
+        }
         for (const node of pending) {
           checkType(node);
         }

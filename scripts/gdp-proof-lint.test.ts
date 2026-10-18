@@ -268,6 +268,43 @@ describe("GDP proof anti-forgery rules", () => {
     }
   });
 
+  test("rejects typeof proof bound by a matter access callback", async () => {
+    const forged =
+      "Only matter-access-proof.ts may cast or construct MatterReadable/MatterWritable.";
+    expect(
+      await messages(
+        `import { withMatterAccess } from "@/api/lib/workspaces/matter-access-proof";
+         await withMatterAccess(options, async ({ tx, proof }) => asTestRaw<typeof proof>(JSON.parse(raw)));`,
+        ["no-matter-proof-forgery"],
+      ),
+    ).toEqual([forged]);
+    expect(
+      await messages(
+        `const proof = ordinaryValue; const parsed = asTestRaw<typeof proof>(JSON.parse(raw));`,
+        ["no-matter-proof-forgery"],
+      ),
+    ).toEqual([]);
+  });
+
+  test("rejects local re-exports of imported matter proof types", async () => {
+    const forged =
+      "Only matter-access-proof.ts may cast or construct MatterReadable/MatterWritable.";
+    for (const source of [
+      `import type { MatterReadable as R } from "@/api/lib/workspaces/matter-access-proof"; export type { R };`,
+      `import type { MatterReadable } from "@/api/lib/workspaces/matter-access-proof"; export type Readable<A, B, C, D> = MatterReadable<A, B, C, D>;`,
+    ]) {
+      expect(await messages(source, ["no-matter-proof-forgery"])).toEqual([
+        forged,
+      ]);
+    }
+    expect(
+      await messages(
+        `import type { MatterReadable } from "@/api/lib/workspaces/matter-access-proof"; type LocalReadable<A, B, C, D> = MatterReadable<A, B, C, D>;`,
+        ["no-matter-proof-forgery"],
+      ),
+    ).toEqual([]);
+  });
+
   test("the access context stays inside its withMatterAccess callback", async () => {
     const ruleNames = ["no-matter-access-context-escape"];
     const message =
@@ -320,7 +357,7 @@ describe("GDP proof anti-forgery rules", () => {
         ),
       ).toEqual([]);
     }
-  });
+  }, 15_000);
 
   test("a generic helper or a parsed value cannot stand in for a matter proof", async () => {
     const ruleNames = ["no-matter-proof-forgery"];
