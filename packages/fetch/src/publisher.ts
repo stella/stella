@@ -10,6 +10,9 @@ const MAX_CRAWL_DELAY_MS = 60_000;
 const ROBOTS_LOAD_TIMEOUT_MS = 10_000;
 const MAX_REDIRECTS = 5;
 const PRODUCT_TOKEN = "Stella";
+// Robots rules are evaluated for PRODUCT_TOKEN, so every request carries
+// this agent and callers cannot send one the rules were not checked for.
+const PUBLISHER_USER_AGENT = `${PRODUCT_TOKEN}/1.0 (+https://stll.app)`;
 
 export type PublisherPolicy =
   | { type: "obey" }
@@ -92,7 +95,6 @@ type PublisherFetcherOptions = {
 };
 type PublisherFetchOptions = {
   init?: Omit<TransportRequestInit, "redirect">;
-  userAgent: string;
   policy?: PublisherPolicy;
 };
 
@@ -596,7 +598,7 @@ const loadRobots = async ({
     }
     const fetched = await Result.tryPromise(async () =>
       fetcher(validated.value, {
-        headers: { "User-Agent": PRODUCT_TOKEN },
+        headers: { "User-Agent": PUBLISHER_USER_AGENT },
         redirect: "manual",
         signal: deadline,
       }),
@@ -816,6 +818,8 @@ type PublisherRuntime = {
 };
 
 type WalkState = {
+  // A licensed policy authorizes only the origin the caller requested.
+  requestedOrigin: string;
   url: URL;
   requestInit: PublisherFetchOptions["init"];
   decision: PublisherRobotsDecision;
@@ -840,11 +844,12 @@ const enforcePublisherPolicy = async (
     runtime.defaultMinimumIntervalMs,
   );
   state.decision = evaluated.decision ?? state.decision;
-  if (evaluated.refusal && options.policy?.type !== "licensed") {
+  const policy =
+    state.url.origin === state.requestedOrigin ? options.policy : undefined;
+  if (evaluated.refusal && policy?.type !== "licensed") {
     return Result.err(evaluated.refusal);
   }
   if (evaluated.refusal) {
-    const policy = options.policy ?? { type: "obey" };
     runtime.onTelemetry({
       event: "publisher_fetch_policy_bypass",
       url: state.url.href,
@@ -872,8 +877,10 @@ const walkPublisherRedirects = async (
   options: PublisherFetchOptions,
   runtime: PublisherRuntime,
 ): Promise<Result<PublisherFetchResult, PublisherPolicyError>> => {
+  const url = new URL(input);
   const state: WalkState = {
-    url: new URL(input),
+    requestedOrigin: url.origin,
+    url,
     requestInit: options.init,
     decision: "allowed",
     delayAppliedMs: 0,
@@ -910,7 +917,7 @@ const walkPublisherRedirects = async (
     }
     state.delayAppliedMs += reserved.value;
     const headers = new Headers(state.requestInit?.headers);
-    headers.set("User-Agent", options.userAgent);
+    headers.set("User-Agent", PUBLISHER_USER_AGENT);
     const response = await runtime.fetcher(state.url, {
       ...state.requestInit,
       headers,
@@ -972,7 +979,7 @@ export const createPolitePublisherFetch = ({
     robotsLoadTimeoutMs,
   });
   const reserve = createOriginScheduler(clock);
-  return async (input: string | URL, options: PublisherFetchOptions) =>
+  return async (input: string | URL, options: PublisherFetchOptions = {}) =>
     await walkPublisherRedirects(input, options, {
       fetcher,
       validateTarget,

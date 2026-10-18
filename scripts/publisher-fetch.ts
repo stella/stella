@@ -46,9 +46,7 @@ const run = async () => {
     });
   }
   const requestedAt = new Date().toISOString();
-  const outcome = await politePublisherFetch(url, {
-    userAgent: "Stella/1.0 (+https://stella.law)",
-  });
+  const outcome = await politePublisherFetch(url);
   if (Result.isError(outcome)) {
     process.stderr.write(`${outcome.error._tag}: ${outcome.error.message}\n`);
     process.exitCode = 2;
