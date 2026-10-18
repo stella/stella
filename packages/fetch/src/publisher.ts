@@ -935,10 +935,24 @@ const walkPublisherRedirects = async (
     delayAppliedMs: 0,
   };
   for (let redirects = 0; ; redirects += 1) {
-    const validated = await validatePublisherTarget(
-      state.url,
-      runtime.validateTarget,
+    const signal = state.requestInit?.signal ?? undefined;
+    const checked = await Result.tryPromise(async () =>
+      Promise.race([
+        validatePublisherTarget(state.url, runtime.validateTarget),
+        ...(signal ? [abortPromise(signal)] : []),
+      ]),
     );
+    if (Result.isError(checked)) {
+      return Result.err(
+        new PublisherRequestAbortedError({
+          message: "Publisher request was aborted while validating its target",
+          url: state.url.href,
+          origin: state.url.origin,
+          cause: checked.error.cause,
+        }),
+      );
+    }
+    const validated = checked.value;
     if (Result.isError(validated)) {
       return validated;
     }

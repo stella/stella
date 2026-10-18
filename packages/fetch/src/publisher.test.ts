@@ -662,7 +662,10 @@ describe("publisher scheduler", () => {
 
   test("a robots validator that never settles expires as unavailable", async () => {
     const request = createPolitePublisherFetch({
-      validateTarget: async () => await new Promise<never>(() => {}),
+      validateTarget: async (url) =>
+        url.pathname === "/robots.txt"
+          ? await new Promise<never>(() => {})
+          : Result.ok(url),
       robotsLoadTimeoutMs: 5,
       fetcher: async () => new Response("unexpected request"),
     });
