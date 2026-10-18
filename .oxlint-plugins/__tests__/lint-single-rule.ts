@@ -60,6 +60,17 @@ type LintSingleRuleOptions = {
   sourcePath?: string;
   /** Resolve source paths relative to the scratch checkout. */
   cwd?: "repository" | "scratch";
+  /** Test-only scheduler control for awaits before a shared request is ready. */
+  delayBeforeSharedAwaitForTest?: (
+    point:
+      | "mkdtemp"
+      | "realpath"
+      | "config-write"
+      | "source-write"
+      | "shared-ready",
+  ) => Promise<void>;
+  /** Test-only notification after the request cohort is atomically taken. */
+  onSharedBatchTakenForTest?: () => void;
 };
 
 type OxlintRun = { stdout: string; stderr: string; exitCode: number };
@@ -134,7 +145,8 @@ type SharedOutcome =
   | { readonly alone: AloneRun };
 
 type SharedRequest = {
-  readonly lintCase: LintCase;
+  readonly lintCase: Promise<LintCase>;
+  readonly onBatchTakenForTest: (() => void) | undefined;
   readonly resolve: (outcome: SharedOutcome) => void;
   readonly reject: (reason: unknown) => void;
 };
@@ -201,6 +213,7 @@ type PendingGate = {
   readonly cases: number;
   readonly ready: Promise<undefined>;
   readonly resolve: (value: undefined) => void;
+  configKey?: string;
 };
 
 const pendingGates = new Map<string, PendingGate>();
@@ -218,16 +231,19 @@ const lintTogether = async (
   requests: readonly SharedRequest[],
   code: string,
 ): Promise<SharedOutcome[]> => {
-  const [first] = requests;
+  const lintCases = await Promise.all(
+    requests.map(async ({ lintCase }) => await lintCase),
+  );
+  const [first] = lintCases;
   if (first === undefined) {
     return [];
   }
   claimedBatches.push({ code, cases: requests.length });
   if (requests.length > 1) {
-    const sourceFiles = requests.map(({ lintCase }) => lintCase.sourceFile);
+    const sourceFiles = lintCases.map(({ sourceFile }) => sourceFile);
     const lines = sharedLines(
       await spawnOxlint(
-        ["-c", first.lintCase.configPath, "-f", "json", ...sourceFiles],
+        ["-c", first.configPath, "-f", "json", ...sourceFiles],
         REPOSITORY_ROOT,
       ),
       sourceFiles,
@@ -235,7 +251,7 @@ const lintTogether = async (
     );
     if (lines !== null) {
       sharedRuns.push({ code, cases: requests.length });
-      return requests.map(({ lintCase }, index) => ({
+      return lintCases.map((lintCase, index) => ({
         shared: {
           lines: lines[index] ?? [],
           source: readFileSync(lintCase.sourceFile, "utf-8"),
@@ -244,18 +260,13 @@ const lintTogether = async (
     }
   }
   const outcomes: SharedOutcome[] = [];
-  for (const { lintCase } of requests) {
+  for (const lintCase of lintCases) {
     outcomes.push({ alone: await lintAlone(lintCase) });
   }
   return outcomes;
 };
 
 const pendingByConfig = new Map<string, SharedRequest[]>();
-
-const nextTurn = async () =>
-  new Promise<void>((resolve) => {
-    setImmediate(resolve);
-  });
 
 /**
  * Whether a case must lint in a run of its own. Scratch-relative paths and
@@ -274,52 +285,75 @@ export const lintsAlone = ({
  * configuration. Each case keeps its own scratch root and file name, so a
  * shared run sees the same paths and source as the lone runs it replaces.
  */
-const lintShared = async (
+const lintShared = (
   configKey: string,
   code: string,
-  lintCase: LintCase,
-): Promise<SharedOutcome> =>
-  new Promise((resolve, reject) => {
+  onBatchTakenForTest?: () => void,
+): {
+  readonly outcome: Promise<SharedOutcome>;
+  readonly setLintCase: (lintCase: LintCase) => void;
+  readonly rejectLintCase: (reason: unknown) => void;
+} => {
+  const lintCase = Promise.withResolvers<LintCase>();
+  const outcome = new Promise<SharedOutcome>((resolve, reject) => {
+    const request = {
+      lintCase: lintCase.promise,
+      onBatchTakenForTest,
+      resolve,
+      reject,
+    };
+    const gate = pendingGates.get(code);
+    if (gate !== undefined && gate.configKey === undefined) {
+      gate.configKey = configKey;
+    }
     const pending = pendingByConfig.get(configKey);
     if (pending !== undefined) {
-      pending.push({ lintCase, resolve, reject });
-      const gate = pendingGates.get(code);
-      if (gate !== undefined && pending.length >= gate.cases) {
+      pending.push(request);
+      if (
+        gate !== undefined &&
+        gate.configKey === configKey &&
+        pending.length >= gate.cases
+      ) {
         gate.resolve(undefined);
       }
       return;
     }
-    pendingByConfig.set(configKey, [{ lintCase, resolve, reject }]);
+    pendingByConfig.set(configKey, [request]);
     withOxlintSlot(async () => {
-      const gate = pendingGates.get(code);
-      if (gate !== undefined) {
-        if (gate.cases <= 1) {
-          gate.resolve(undefined);
+      const activeGate = pendingGates.get(code);
+      if (activeGate?.configKey === configKey) {
+        if (activeGate.cases <= 1) {
+          activeGate.resolve(undefined);
         }
-        await gate.ready;
+        await activeGate.ready;
         pendingGates.delete(code);
       }
-      // Let tests that reach the same configuration this turn join the run.
-      await nextTurn();
       const requests = pendingByConfig.get(configKey) ?? [];
       pendingByConfig.delete(configKey);
+      requests.at(0)?.onBatchTakenForTest?.();
       const outcomes = await Result.tryPromise(async () =>
         lintTogether(requests, code),
       );
-      for (const [index, request] of requests.entries()) {
+      for (const [index, queuedRequest] of requests.entries()) {
         if (Result.isError(outcomes)) {
-          request.reject(outcomes.error);
+          queuedRequest.reject(outcomes.error);
         } else {
-          const outcome = outcomes.value[index];
-          if (outcome === undefined) {
-            request.reject(new Error("Missing shared oxlint outcome"));
+          const requestOutcome = outcomes.value[index];
+          if (requestOutcome === undefined) {
+            queuedRequest.reject(new Error("Missing shared oxlint outcome"));
           } else {
-            request.resolve(outcome);
+            queuedRequest.resolve(requestOutcome);
           }
         }
       }
     }).catch(reject);
   });
+  return {
+    outcome,
+    setLintCase: lintCase.resolve,
+    rejectLintCase: lintCase.reject,
+  };
+};
 
 const recordCoverage = (ruleId: string, lines: readonly number[]) => {
   const { OXLINT_RULE_COVERAGE_PATH: coveragePath } = process.env;
@@ -350,15 +384,13 @@ export const runSingleRule = async (
     ruleOptionsForRoot,
     sourcePath = "source.ts",
     cwd = "repository",
+    delayBeforeSharedAwaitForTest,
+    onSharedBatchTakenForTest,
   }: LintSingleRuleOptions = {},
 ) => {
-  // Override globs must use the real cwd when the temporary root is a symlink.
-  const directory = await realpath(
-    await mkdtemp(path.join(tmpdir(), `stella-${ruleName}-`)),
-  );
-  const options = ruleOptionsForRoot?.(directory) ?? ruleOptions;
-  const lintResult = await Result.tryPromise(async () => {
-    const config = `${JSON.stringify({
+  const code = `${plugin}(${ruleName})`;
+  const makeConfig = (options: unknown) =>
+    `${JSON.stringify({
       categories: { correctness: "off" },
       settings,
       overrides,
@@ -375,9 +407,42 @@ export const runSingleRule = async (
           options === undefined ? "error" : ["error", options],
       },
     })}\n`;
+  const alone = lintsAlone({ cwd, overrides, fix });
+  const fixedConfig =
+    ruleOptionsForRoot === undefined ? makeConfig(ruleOptions) : undefined;
+  // Register before any filesystem await. The slot takes one atomic snapshot
+  // of these requests; readiness affects execution, never batch membership.
+  const sharedRequest =
+    !alone && fixedConfig !== undefined
+      ? lintShared(fixedConfig, code, onSharedBatchTakenForTest)
+      : undefined;
+  const delay = async (
+    point:
+      | "mkdtemp"
+      | "realpath"
+      | "config-write"
+      | "source-write"
+      | "shared-ready",
+  ) => {
+    if (!alone) {
+      await delayBeforeSharedAwaitForTest?.(point);
+    }
+  };
+  // Override globs must use the real cwd when the temporary root is a symlink.
+  await delay("mkdtemp");
+  const temporaryDirectory = await mkdtemp(
+    path.join(tmpdir(), `stella-${ruleName}-`),
+  );
+  await delay("realpath");
+  const directory = await realpath(temporaryDirectory);
+  const options = ruleOptionsForRoot?.(directory) ?? ruleOptions;
+  const lintResult = await Result.tryPromise(async () => {
+    const config = fixedConfig ?? makeConfig(options);
     const configPath = path.join(directory, "oxlint.json");
+    await delay("config-write");
     await Bun.write(configPath, config);
     const sourceFile = path.join(directory, sourcePath);
+    await delay("source-write");
     await Bun.write(sourceFile, source);
     const lintCase: LintCase = {
       configPath,
@@ -386,10 +451,21 @@ export const runSingleRule = async (
       directory: cwd === "scratch" ? directory : undefined,
       sourcePath,
     };
-    return lintsAlone({ cwd, overrides, fix })
-      ? { alone: await withOxlintSlot(async () => lintAlone(lintCase)) }
-      : await lintShared(config, `${plugin}(${ruleName})`, lintCase);
+    await delay("shared-ready");
+    if (alone) {
+      return { alone: await withOxlintSlot(async () => lintAlone(lintCase)) };
+    }
+    if (sharedRequest !== undefined) {
+      sharedRequest.setLintCase(lintCase);
+      return await sharedRequest.outcome;
+    }
+    const lateRequest = lintShared(config, code, onSharedBatchTakenForTest);
+    lateRequest.setLintCase(lintCase);
+    return await lateRequest.outcome;
   });
+  if (Result.isError(lintResult)) {
+    sharedRequest?.rejectLintCase(lintResult.error);
+  }
   await rm(directory, { force: true, recursive: true });
   if (Result.isError(lintResult)) {
     return panic(`oxlint run failed: ${lintResult.error.message}`);

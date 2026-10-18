@@ -13,6 +13,18 @@ import {
 
 const CODE = "plugin(rule)";
 const FILES = ["/scratch/a/source.ts", "/scratch/b/source.ts"];
+const SHARED_AWAIT_POINTS = [
+  "mkdtemp",
+  "realpath",
+  "config-write",
+  "source-write",
+  "shared-ready",
+] as const;
+
+const nextTurn = async () =>
+  new Promise<void>((resolve) => {
+    setImmediate(resolve);
+  });
 
 const sharedReport = (lines: readonly [string, number][]) =>
   JSON.stringify({
@@ -94,45 +106,111 @@ test("concurrent fix cases each return their isolated result", async () => {
   expect(results).toEqual([isolated, isolated, isolated]);
 });
 
-test("concurrent cases of one configuration share a run and keep their own lines", async () => {
-  // Only this test in the file lints no-raw-sha256, so its shared runs are
-  // exactly the ones recorded while it awaits.
+test("a held cohort stays one batch across every pre-shared await interleaving", async () => {
   const code = "no-raw-sha256(no-raw-sha256)";
-  const before = sharedRuns.filter((run) => run.code === code).length;
-  holdSharedRunUntilPendingForTest(code, 3);
   const hash = 'new Bun.CryptoHasher("sha256");';
-  const results = await Promise.all(
-    [
-      'const clean = "sha256";',
-      [hash, "const other = 1;", hash].join("\n"),
-      ["const first = 1;", hash].join("\n"),
-    ].map(async (source) => await lintSingleRule("no-raw-sha256", source)),
-  );
-  expect(results).toEqual([[], [1, 3], [2]]);
-  expect(sharedRuns.filter((run) => run.code === code).slice(before)).toEqual([
-    { code, cases: 3 },
-  ]);
-});
+  const sources = [
+    'const clean = "sha256";',
+    [hash, "const other = 1;", hash].join("\n"),
+    ["const first = 1;", hash].join("\n"),
+  ];
 
-test("concurrent cases keep their own lines across any run grouping", async () => {
+  for (const point of SHARED_AWAIT_POINTS) {
+    const releases = sources.map(() => Promise.withResolvers<undefined>());
+    const decoysReady = Promise.withResolvers<undefined>();
+    const targetTaken = Promise.withResolvers<undefined>();
+    let readyDecoys = 0;
+    const before = sharedRuns.filter((run) => run.code === code).length;
+    holdSharedRunUntilPendingForTest(code, sources.length);
+    const target = sources.map(async (source, index) =>
+      lintSingleRule("no-raw-sha256", source, {
+        settings: { batchingCohort: `target-${point}` },
+        delayBeforeSharedAwaitForTest: async (current) => {
+          if (current === point) {
+            await releases[index]?.promise;
+          }
+        },
+        ...(index === 0
+          ? { onSharedBatchTakenForTest: () => targetTaken.resolve(undefined) }
+          : {}),
+      }),
+    );
+    const decoys = sources.map(async (source) =>
+      lintSingleRule("no-raw-sha256", source, {
+        settings: { batchingCohort: `decoy-${point}` },
+        delayBeforeSharedAwaitForTest: async (current) => {
+          if (current === "shared-ready") {
+            readyDecoys += 1;
+            if (readyDecoys === sources.length) {
+              decoysReady.resolve(undefined);
+            }
+          }
+        },
+      }),
+    );
+
+    await decoysReady.promise;
+    await nextTurn();
+    releases[0]?.resolve(undefined);
+    await targetTaken.promise;
+    releases[1]?.resolve(undefined);
+    releases[2]?.resolve(undefined);
+
+    const [targetLines] = await Promise.all([
+      Promise.all(target),
+      Promise.all(decoys),
+    ]);
+    expect(targetLines).toEqual([[], [1, 3], [2]]);
+    expect(sharedRuns.filter((run) => run.code === code).slice(before)).toEqual(
+      [
+        { code, cases: 3 },
+        { code, cases: 3 },
+      ],
+    );
+  }
+}, 20_000);
+
+test("seeded delay orders preserve lines in one held batch", async () => {
   const code = "no-raw-browser-storage(no-raw-browser-storage)";
-  const before = sharedRuns.filter((run) => run.code === code).length;
   const storage = "localStorage.getItem('key');";
-  const results = await Promise.all(
-    [
-      'const clean = "storage";',
-      [storage, "const other = 1;", storage].join("\n"),
-      ["const first = 1;", storage].join("\n"),
-    ].map(
-      async (source) => await lintSingleRule("no-raw-browser-storage", source),
-    ),
-  );
-  expect(results).toEqual([[], [1, 3], [2]]);
-  const batches = claimedBatches
-    .filter((batch) => batch.code === code)
-    .slice(before);
-  expect(batches.reduce((cases, batch) => cases + batch.cases, 0)).toBe(3);
-});
+  const sources = [
+    'const clean = "storage";',
+    [storage, "const other = 1;", storage].join("\n"),
+    ["const first = 1;", storage].join("\n"),
+  ];
+  let random = 0x5e_ed_12_34;
+  const randomDelay = () => {
+    random = (Math.imul(random, 1_664_525) + 1_013_904_223) % 0x1_00_00_00_00;
+    if (random < 0) {
+      random += 0x1_00_00_00_00;
+    }
+    return random % 4;
+  };
+
+  for (let seed = 0; seed < 8; seed += 1) {
+    const delays = sources.map(() =>
+      Object.fromEntries(
+        SHARED_AWAIT_POINTS.map((point) => [point, randomDelay()]),
+      ),
+    );
+    const before = sharedRuns.filter((run) => run.code === code).length;
+    holdSharedRunUntilPendingForTest(code, sources.length);
+    const results = await Promise.all(
+      sources.map(async (source, index) =>
+        lintSingleRule("no-raw-browser-storage", source, {
+          settings: { batchingSeed: seed },
+          delayBeforeSharedAwaitForTest: async (point) => {
+            await Bun.sleep(delays[index]?.[point] ?? 0);
+          },
+        }),
+      ),
+    );
+    expect(results).toEqual([[], [1, 3], [2]]);
+    expect(sharedRuns.filter((run) => run.code === code).slice(before)).toEqual(
+      [{ code, cases: 3 }],
+    );
+  }
+}, 20_000);
 
 test("a rejected shared run falls back to lone runs and is not counted as shared", async () => {
   const code = "no-raw-date-parsing(no-raw-date-parsing)";
