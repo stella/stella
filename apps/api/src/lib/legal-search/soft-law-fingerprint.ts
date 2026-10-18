@@ -54,6 +54,35 @@ const compareCanonicalKeys = (left: string, right: string) => {
   return left < right ? -1 : 1;
 };
 
+const softLawExpressionIdentityParts = (
+  authority: SoftLawAuthority,
+  metadata: SoftLawMetadata,
+) => {
+  const expression = metadata.expression;
+  if (expression?.type !== "identified") {
+    return null;
+  }
+  let revisionKey =
+    expression.revision.state === "stated"
+      ? normalizeReference(expression.revision.value)
+      : null;
+  if (
+    SOFT_LAW_AUTHORITY_POLICIES[authority].referenceStyle === "wp_number" &&
+    revisionKey !== null
+  ) {
+    revisionKey = normalizeRevisionKey(revisionKey.replace(/\s+/gu, ""));
+  }
+  return [
+    metadata.kind,
+    expression.language.toLowerCase(),
+    revisionKey,
+  ] as const;
+};
+export const softLawExpressionIdentityKey = (
+  authority: SoftLawAuthority,
+  metadata: SoftLawMetadata,
+) => JSON.stringify(softLawExpressionIdentityParts(authority, metadata));
+
 /** The locator never supplies identity; numbered references normalize compatibility characters. */
 export const softLawIdentityKey = (
   authority: SoftLawAuthority,
@@ -104,19 +133,20 @@ export const softLawIdentityKey = (
         }),
       );
     }
-    let revisionKey =
-      expression.revision.state === "stated"
-        ? normalizeReference(expression.revision.value)
-        : null;
-    if (wpNumber && revisionKey !== null) {
-      revisionKey = normalizeRevisionKey(revisionKey.replace(/\s+/gu, ""));
-    }
-    expressionKey.push(
-      "expression",
-      metadata.kind,
-      expression.language.toLowerCase(),
-      revisionKey,
+    const expressionIdentity = softLawExpressionIdentityParts(
+      authority,
+      metadata,
     );
+    if (!expressionIdentity) {
+      return Result.err(
+        new SoftLawItemError({
+          message: "Expression identity is missing",
+          tag: "invalid_document",
+        }),
+      );
+    }
+    const [, language, revisionKey] = expressionIdentity;
+    expressionKey.push("expression", metadata.kind, language, revisionKey);
   }
   if (metadata.statedReference.state === "stated") {
     if (!metadata.statedReference.value.trim()) {

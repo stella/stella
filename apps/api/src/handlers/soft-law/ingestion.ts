@@ -14,6 +14,7 @@ import { SOFT_LAW_AUTHORITY_POLICIES } from "@/api/lib/legal-search/soft-law-aut
 import {
   softLawIdentityKey,
   softLawContentHash,
+  softLawExpressionIdentityKey,
 } from "@/api/lib/legal-search/soft-law-fingerprint";
 import { createSoftLawIngestionStore } from "@/api/lib/legal-search/soft-law-ingestion-store";
 import type {
@@ -122,6 +123,17 @@ type SoftLawIdentityOwner =
       documentId: SafeId<"softLawDocument">;
     }
   | { kind: "new" };
+type StoredSoftLawMatch = Awaited<
+  ReturnType<ReturnType<typeof createSoftLawIngestionStore>["loadMatches"]>
+>[number];
+type ExtractionPlaceholderMatch = StoredSoftLawMatch & {
+  version: NonNullable<StoredSoftLawMatch["version"]>;
+};
+const isUnnumberedExtractionPlaceholder = (
+  row: StoredSoftLawMatch,
+): row is ExtractionPlaceholderMatch =>
+  row.document.statedReferenceState === "not_stated" &&
+  row.version?.extractionQuality === "extraction_failed";
 type FetchSoftLawItemOptions = Pick<
   PrepareSoftLawPageOptions,
   "adapter" | "signal" | "fetch"
@@ -353,13 +365,19 @@ const prepareSoftLawPage = async (options: PrepareSoftLawPageOptions) => {
       (row) => row.document.identityKey === identityKey,
     );
     const locator = known.find((row) => row.locator?.url === entry.url);
-    const repairsFailedExtraction =
-      locator?.version?.extractionQuality === "extraction_failed" &&
-      input.extractionQuality !== "extraction_failed";
+    const repairsExtractionPlaceholder =
+      locator !== undefined &&
+      isUnnumberedExtractionPlaceholder(locator) &&
+      input.extractionQuality !== "extraction_failed" &&
+      softLawExpressionIdentityKey(
+        options.adapter.authority,
+        locator.version.metadata,
+      ) ===
+        softLawExpressionIdentityKey(options.adapter.authority, input.metadata);
     if (
       locator &&
       locator.document.identityKey !== identityKey &&
-      !repairsFailedExtraction
+      !repairsExtractionPlaceholder
     ) {
       attempts.push({
         entry,
@@ -420,7 +438,7 @@ const prepareSoftLawPage = async (options: PrepareSoftLawPageOptions) => {
         case "persisted":
         case "accepted":
           if (
-            repairsFailedExtraction &&
+            repairsExtractionPlaceholder &&
             locator.document.id !== owner.documentId
           ) {
             return {
