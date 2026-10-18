@@ -5,9 +5,10 @@ defaults:
   run:
     shell: bash
 
-# Dispatched from main's workflow definition. The selected tree is checked
-# out only for capture; this job has read permission and uses anonymous pulls.
-# Publication validates its artifact as data in a separate workflow.
+# Dispatched on the captured branch's own ref, never on main: the branch's
+# code runs only in that branch's Actions cache scope, so it can never write
+# a cache that main reads. This job has read permission and uses anonymous
+# pulls; publication validates its artifact as data in a separate workflow.
 on:
   workflow_dispatch:
     inputs:
@@ -33,7 +34,7 @@ permissions: {}
 
 jobs:
   capture:
-    if: github.ref == 'refs/heads/main'
+    if: inputs.branch != 'main' && github.ref == format('refs/heads/{0}', inputs.branch)
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
@@ -42,9 +43,15 @@ jobs:
       - name: Validate the requested commit
         env:
           SHA: ${{ inputs.sha }}
+          RUN_SHA: ${{ github.sha }}
         run: |
           if [[ ! "$SHA" =~ ^[0-9a-f]{40}$ ]]; then
             echo "::error::Capture commit must be a full SHA"
+            exit 1
+          fi
+          # The run's own commit is the branch tip it was dispatched on.
+          if [[ "$SHA" != "$RUN_SHA" ]]; then
+            echo "::error::Capture commit is not the dispatched branch tip"
             exit 1
           fi
 

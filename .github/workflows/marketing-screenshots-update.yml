@@ -138,7 +138,8 @@ jobs:
               owner, repo, ref: `refs/heads/${branch}`, sha: process.env.CAPTURE_HEAD,
             });
 
-  # Dispatch the trusted capture definition and wait for its returned run id.
+  # Dispatch the capture on the captured branch's own ref (never main, so its
+  # code cannot reach main's cache scope) and wait for its returned run id.
   capture:
     needs: [select, prepare]
     if: >-
@@ -169,14 +170,10 @@ jobs:
               throw new Error('Capture needs a release branch and a full commit SHA');
             const request = `${context.runId}-${process.env.GITHUB_RUN_ATTEMPT}`;
             const title = `Capture marketing screenshots ${head} ${request}`;
-            const { data: main } = await github.rest.git.getRef({ owner, repo, ref: 'heads/main' });
-            const workflowHead = main.object.sha;
-            if (!/^[0-9a-f]{40}$/u.test(workflowHead))
-              throw new Error('Main workflow commit must be a full SHA');
             const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
             const deadline = Date.now() + 40 * 60 * 1000;
             const dispatched = await github.rest.actions.createWorkflowDispatch({
-              owner, repo, workflow_id: workflow, ref: 'main',
+              owner, repo, workflow_id: workflow, ref: branch,
               inputs: { branch, sha: head, request }, return_run_details: true,
             });
             const id = dispatched.data?.workflow_run_id;
@@ -189,10 +186,11 @@ jobs:
               if (Date.now() > deadline) throw new Error(`Capture run ${run.html_url} did not finish in time`);
               await sleep(30000);
             }
-            // The run commit identifies the workflow; its title binds the capture input.
-            if (run.id !== id || run.head_sha !== workflowHead || run.display_title !== title
+            // The run must be on the branch at the selected commit; its title
+            // binds the capture input.
+            if (run.id !== id || run.head_sha !== head || run.display_title !== title
               || run.path !== `.github/workflows/${workflow}` || run.event !== 'workflow_dispatch'
-              || run.head_branch !== 'main'
+              || run.head_branch !== branch
               || run.head_repository?.full_name !== `${owner}/${repo}`)
               throw new Error(`Run ${id} is not this capture on ${branch}`);
             if (run.conclusion !== 'success')

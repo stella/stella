@@ -217,7 +217,7 @@ describe("pre-release screenshot workflow", () => {
     }
   });
 
-  test("branch code runs only in a capture dispatched from main", () => {
+  test("branch code runs only in a capture on its own branch, never on main", () => {
     const triggers = v.parse(
       v.looseObject({ on: v.record(v.string(), v.unknown()) }),
       captureWorkflow,
@@ -233,7 +233,10 @@ describe("pre-release screenshot workflow", () => {
       v.looseObject({ if: v.string(), permissions: v.unknown() }),
       jobs["capture"],
     );
-    expect(capture.if).toBe("github.ref == 'refs/heads/main'");
+    // Main's cache scope is never handed to branch code.
+    expect(capture.if).toBe(
+      "inputs.branch != 'main' && github.ref == format('refs/heads/{0}', inputs.branch)",
+    );
     for (const [name, job] of Object.entries(jobs)) {
       expect(JSON.stringify(job), name).not.toContain("secrets.");
     }
@@ -458,10 +461,9 @@ describe("capture checkout validation", () => {
   });
 });
 
-describe("capture dispatch from main", () => {
+describe("capture dispatch on the release branch", () => {
   const dispatch = executable("capture", "Capture on the release branch");
   const BRANCH = "changeset-release/main";
-  const WORKFLOW_HEAD = "c".repeat(40);
   const scenario = () => ({
     branch: BRANCH,
     head: HEAD,
@@ -472,8 +474,8 @@ describe("capture dispatch from main", () => {
       conclusion: "success",
       path: ".github/workflows/marketing-screenshots-capture.yml",
       event: "workflow_dispatch",
-      head_branch: "main",
-      head_sha: WORKFLOW_HEAD,
+      head_branch: BRANCH,
+      head_sha: HEAD,
       display_title: `Capture marketing screenshots ${HEAD} 7-1`,
       head_repository: { full_name: "stella/stella" },
       html_url: "https://github.com/stella/stella/actions/runs/42",
@@ -508,17 +510,6 @@ describe("capture dispatch from main", () => {
       },
       github: {
         rest: {
-          git: {
-            getRef: async (params: unknown) => {
-              expect(params).toEqual({
-                owner: "stella",
-                repo: "stella",
-                ref: "heads/main",
-              });
-              expect(dispatches).toEqual([]);
-              return { data: { object: { sha: WORKFLOW_HEAD } } };
-            },
-          },
           actions: {
             createWorkflowDispatch: async (params: unknown) => {
               dispatches.push(params);
@@ -534,9 +525,8 @@ describe("capture dispatch from main", () => {
     return { outputs, dispatches };
   };
 
-  test("dispatches main with the selected branch as input and returns its run", async () => {
+  test("dispatches on the selected branch and returns its run", async () => {
     const input = scenario();
-    expect(input.run.head_sha).not.toBe(input.head);
     expect(await dispatchFor(input)).toEqual({
       outputs: { "run-id": "42" },
       dispatches: [
@@ -544,7 +534,7 @@ describe("capture dispatch from main", () => {
           owner: "stella",
           repo: "stella",
           workflow_id: "marketing-screenshots-capture.yml",
-          ref: "main",
+          ref: BRANCH,
           inputs: { branch: BRANCH, sha: HEAD, request: "7-1" },
           return_run_details: true,
         },
@@ -579,9 +569,9 @@ describe("capture dispatch from main", () => {
       "full commit SHA",
     ],
     [
-      "a run on another branch",
+      "a run on main",
       (input: ReturnType<typeof scenario>) => {
-        input.run.head_branch = BRANCH;
+        input.run.head_branch = "main";
       },
       "is not this capture",
     ],
@@ -600,7 +590,7 @@ describe("capture dispatch from main", () => {
       "is not this capture",
     ],
     [
-      "a different workflow head",
+      "a run at another commit of the branch",
       (input: ReturnType<typeof scenario>) => {
         input.run.head_sha = PUBLISHED;
       },
