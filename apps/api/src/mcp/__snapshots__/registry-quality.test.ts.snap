@@ -529,7 +529,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "openWorldHint": "Read case-law citations is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read one page of citations with their citing passages. \`cited_by\` reads decisions citing this one, \`cites\` what it cites. \`polarity\` is a stance: 'unclassified' means none was read, 'mixed' that mentions disagreed. \`doctrine\` is 'distinguishes' or 'limits' only where a reviewed reading found the court doing so in its own words; 'not_stated' does not mean followed; 'unread' means none was read; null when \`doctrineAvailability\` is 'unavailable'. \`passage.evidenceQuote\` is the verbatim evidence when text is available. \`passage.text\` is at most 1200 characters, cut when \`passage.truncated\`; \`passage.mention\` is 'sole', 'classified_section' (the mention polarity came from) or 'latest_of_several' (it may not be). Pass nextCursor as cursor. Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Read citations with citing passages. \`cited_by\` reads citers; \`cites\` reads citations. Filters \`doctrine\` and \`polarity\` combine with AND. \`polarity\`: 'unclassified' means unread; 'mixed' means mentions disagreed. \`doctrine\` is reviewed 'distinguishes' or 'limits'; rejected when unavailable. 'not_stated' does not mean followed; 'unread' means none was read; null when \`doctrineAvailability\` is 'unavailable'. \`passage.evidenceQuote\` is the verbatim evidence when text is available. \`passage.text\` is at most 1200 characters, cut when \`passage.truncated\`; \`passage.mention\` is 'sole', 'classified_section' (the mention polarity came from) or 'latest_of_several' (it may not be). Pass nextCursor as cursor. Use \`url\` for the reader and \`source_url\` for the publisher.",
     "annotations": {
       "title": "Read case-law citations",
       "destructiveHint": false,
@@ -556,6 +556,26 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           ],
           "type": "string",
           "description": "Which side of the citation graph to read: 'cites' for the decisions this decision cites, 'cited_by' for the decisions that cite it. Citing is not agreeing: both sides carry negative treatments."
+        },
+        "doctrine": {
+          "enum": [
+            "distinguishes",
+            "limits"
+          ],
+          "type": "string",
+          "description": "Only citations with this reviewed doctrinal finding."
+        },
+        "polarity": {
+          "enum": [
+            "negative",
+            "neutral",
+            "positive",
+            "supportive",
+            "mixed",
+            "unclassified"
+          ],
+          "type": "string",
+          "description": "Only citations with this polarity reading."
         },
         "limit": {
           "type": "integer",
@@ -7108,7 +7128,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "openWorldHint": "Read case-law citations is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read one page of citations with their citing passages. \`cited_by\` reads decisions citing this one, \`cites\` what it cites. \`polarity\` is a stance: 'unclassified' means none was read, 'mixed' that mentions disagreed. \`doctrine\` is 'distinguishes' or 'limits' only where a reviewed reading found the court doing so in its own words; 'not_stated' does not mean followed; 'unread' means none was read; null when \`doctrineAvailability\` is 'unavailable'. \`passage.evidenceQuote\` is the verbatim evidence when text is available. \`passage.text\` is at most 1200 characters, cut when \`passage.truncated\`; \`passage.mention\` is 'sole', 'classified_section' (the mention polarity came from) or 'latest_of_several' (it may not be). Pass nextCursor as cursor. Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Read citations with citing passages. \`cited_by\` reads citers; \`cites\` reads citations. Filters \`doctrine\` and \`polarity\` combine with AND. \`polarity\`: 'unclassified' means unread; 'mixed' means mentions disagreed. \`doctrine\` is reviewed 'distinguishes' or 'limits'; rejected when unavailable. 'not_stated' does not mean followed; 'unread' means none was read; null when \`doctrineAvailability\` is 'unavailable'. \`passage.evidenceQuote\` is the verbatim evidence when text is available. \`passage.text\` is at most 1200 characters, cut when \`passage.truncated\`; \`passage.mention\` is 'sole', 'classified_section' (the mention polarity came from) or 'latest_of_several' (it may not be). Pass nextCursor as cursor. Use \`url\` for the reader and \`source_url\` for the publisher.",
     "annotations": {
       "title": "Read case-law citations",
       "destructiveHint": false,
@@ -7135,6 +7155,26 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           ],
           "type": "string",
           "description": "Which side of the citation graph to read: 'cites' for the decisions this decision cites, 'cited_by' for the decisions that cite it. Citing is not agreeing: both sides carry negative treatments."
+        },
+        "doctrine": {
+          "enum": [
+            "distinguishes",
+            "limits"
+          ],
+          "type": "string",
+          "description": "Only citations with this reviewed doctrinal finding."
+        },
+        "polarity": {
+          "enum": [
+            "negative",
+            "neutral",
+            "positive",
+            "supportive",
+            "mixed",
+            "unclassified"
+          ],
+          "type": "string",
+          "description": "Only citations with this polarity reading."
         },
         "limit": {
           "type": "integer",
@@ -14469,7 +14509,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "openWorldHint": "Read case-law citations is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read one page of citations with their citing passages. \`cited_by\` reads decisions citing this one, \`cites\` what it cites. \`polarity\` is a stance: 'unclassified' means none was read, 'mixed' that mentions disagreed. \`doctrine\` is 'distinguishes' or 'limits' only where a reviewed reading found the court doing so in its own words; 'not_stated' does not mean followed; 'unread' means none was read; null when \`doctrineAvailability\` is 'unavailable'. \`passage.evidenceQuote\` is the verbatim evidence when text is available. \`passage.text\` is at most 1200 characters, cut when \`passage.truncated\`; \`passage.mention\` is 'sole', 'classified_section' (the mention polarity came from) or 'latest_of_several' (it may not be). Pass nextCursor as cursor. Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Read citations with citing passages. \`cited_by\` reads citers; \`cites\` reads citations. Filters \`doctrine\` and \`polarity\` combine with AND. \`polarity\`: 'unclassified' means unread; 'mixed' means mentions disagreed. \`doctrine\` is reviewed 'distinguishes' or 'limits'; rejected when unavailable. 'not_stated' does not mean followed; 'unread' means none was read; null when \`doctrineAvailability\` is 'unavailable'. \`passage.evidenceQuote\` is the verbatim evidence when text is available. \`passage.text\` is at most 1200 characters, cut when \`passage.truncated\`; \`passage.mention\` is 'sole', 'classified_section' (the mention polarity came from) or 'latest_of_several' (it may not be). Pass nextCursor as cursor. Use \`url\` for the reader and \`source_url\` for the publisher.",
     "annotations": {
       "title": "Read case-law citations",
       "destructiveHint": false,
@@ -14496,6 +14536,26 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
           ],
           "type": "string",
           "description": "Which side of the citation graph to read: 'cites' for the decisions this decision cites, 'cited_by' for the decisions that cite it. Citing is not agreeing: both sides carry negative treatments."
+        },
+        "doctrine": {
+          "enum": [
+            "distinguishes",
+            "limits"
+          ],
+          "type": "string",
+          "description": "Only citations with this reviewed doctrinal finding."
+        },
+        "polarity": {
+          "enum": [
+            "negative",
+            "neutral",
+            "positive",
+            "supportive",
+            "mixed",
+            "unclassified"
+          ],
+          "type": "string",
+          "description": "Only citations with this polarity reading."
         },
         "limit": {
           "type": "integer",
@@ -16426,7 +16486,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
       "openWorldHint": "Read case-law citations is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read one page of citations with their citing passages. \`cited_by\` reads decisions citing this one, \`cites\` what it cites. \`polarity\` is a stance: 'unclassified' means none was read, 'mixed' that mentions disagreed. \`doctrine\` is 'distinguishes' or 'limits' only where a reviewed reading found the court doing so in its own words; 'not_stated' does not mean followed; 'unread' means none was read; null when \`doctrineAvailability\` is 'unavailable'. \`passage.evidenceQuote\` is the verbatim evidence when text is available. \`passage.text\` is at most 1200 characters, cut when \`passage.truncated\`; \`passage.mention\` is 'sole', 'classified_section' (the mention polarity came from) or 'latest_of_several' (it may not be). Pass nextCursor as cursor. Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Read citations with citing passages. \`cited_by\` reads citers; \`cites\` reads citations. Filters \`doctrine\` and \`polarity\` combine with AND. \`polarity\`: 'unclassified' means unread; 'mixed' means mentions disagreed. \`doctrine\` is reviewed 'distinguishes' or 'limits'; rejected when unavailable. 'not_stated' does not mean followed; 'unread' means none was read; null when \`doctrineAvailability\` is 'unavailable'. \`passage.evidenceQuote\` is the verbatim evidence when text is available. \`passage.text\` is at most 1200 characters, cut when \`passage.truncated\`; \`passage.mention\` is 'sole', 'classified_section' (the mention polarity came from) or 'latest_of_several' (it may not be). Pass nextCursor as cursor. Use \`url\` for the reader and \`source_url\` for the publisher.",
     "annotations": {
       "title": "Read case-law citations",
       "destructiveHint": false,
@@ -16453,6 +16513,26 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
           ],
           "type": "string",
           "description": "Which side of the citation graph to read: 'cites' for the decisions this decision cites, 'cited_by' for the decisions that cite it. Citing is not agreeing: both sides carry negative treatments."
+        },
+        "doctrine": {
+          "enum": [
+            "distinguishes",
+            "limits"
+          ],
+          "type": "string",
+          "description": "Only citations with this reviewed doctrinal finding."
+        },
+        "polarity": {
+          "enum": [
+            "negative",
+            "neutral",
+            "positive",
+            "supportive",
+            "mixed",
+            "unclassified"
+          ],
+          "type": "string",
+          "description": "Only citations with this polarity reading."
         },
         "limit": {
           "type": "integer",

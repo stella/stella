@@ -15,6 +15,7 @@
  */
 import { panic, Result } from "better-result";
 import { eq, inArray } from "drizzle-orm";
+import { ElysiaCustomStatusResponse } from "elysia";
 
 import type { DecisionTextWithheldReason } from "@stll/api-contract/case-law-text-field";
 import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
@@ -32,9 +33,13 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
-import type { CitationReadDirection } from "@/api/lib/case-law/citation-vocabulary";
+import type {
+  CitationReadDirection,
+  CitationTreatment,
+} from "@/api/lib/case-law/citation-vocabulary";
 import { GRAPH_DIRECTION } from "@/api/lib/case-law/citation-vocabulary";
 import { readDecisionAnalysisAst } from "@/api/lib/case-law/decision-analysis";
+import type { DoctrineTreatment } from "@/api/lib/case-law/doctrine";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import { errorTag } from "@/api/lib/errors/utils";
 import { readCorpusTombstones } from "@/api/lib/legal-search/corpus-reads";
@@ -77,7 +82,8 @@ export type DecisionCitationsPage = {
 /** An invalid cursor, told apart from "no such public decision" (null). */
 export type DecisionCitationsRead =
   | { type: "page"; page: DecisionCitationsPage }
-  | { type: "invalid_cursor" };
+  | { type: "invalid_cursor" }
+  | { type: "doctrine_unavailable" };
 
 /**
  * How much of the citing paragraph travels with a citation. A decision's
@@ -333,10 +339,15 @@ export type ReadDecisionCitationsOptions = {
   cursor: string | undefined;
   decisionId: SafeId<"caseLawDecision">;
   direction: CitationReadDirection;
+  doctrine?: Exclude<DoctrineTreatment, "not_stated">;
+  polarity?: CitationTreatment;
   limit: number;
   /** The surface the read serves; its country list decides publication. */
   surface: PublicCountrySurface;
 };
+
+const statusCodeOf = (result: { code: number | string }): number =>
+  typeof result.code === "number" ? result.code : 500;
 
 /**
  * One page of a decision's citations, each with the paragraph that made it.
@@ -349,6 +360,8 @@ export const readGatedDecisionCitations = async ({
   cursor,
   decisionId,
   direction,
+  doctrine,
+  polarity,
   limit,
   surface,
 }: ReadDecisionCitationsOptions): Promise<DecisionCitationsRead | null> => {
@@ -361,12 +374,21 @@ export const readGatedDecisionCitations = async ({
         limit,
         query: {
           direction: GRAPH_DIRECTION[direction],
+          ...(doctrine === undefined ? {} : { doctrine }),
+          ...(polarity === undefined ? {} : { polarity }),
           ...(cursor === undefined ? {} : { cursor }),
         },
         subject,
       });
-      if (!("items" in page)) {
-        return { type: "invalid_cursor" } as const;
+      if (page instanceof ElysiaCustomStatusResponse) {
+        const statusCode = statusCodeOf(page);
+        if (statusCode === 422) {
+          return { type: "doctrine_unavailable" as const };
+        }
+        if (statusCode === 400) {
+          return { type: "invalid_cursor" as const };
+        }
+        return panic(`Unexpected citation list status ${String(statusCode)}`);
       }
       // Whose text holds the citing block: this decision for its own outgoing
       // citations, the citing decision for every incoming one.
@@ -392,7 +414,10 @@ export const readGatedDecisionCitations = async ({
   if (gated === null) {
     return null;
   }
-  if (gated.type === "invalid_cursor") {
+  if (
+    gated.type === "invalid_cursor" ||
+    gated.type === "doctrine_unavailable"
+  ) {
     return gated;
   }
 

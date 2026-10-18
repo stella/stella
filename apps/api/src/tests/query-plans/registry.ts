@@ -394,6 +394,24 @@ export const QUERY_PLAN_REGISTRY = [
     contract: planContracts["case-law.citation-page-incoming"],
   },
   {
+    id: "case-law.citation-page-incoming-doctrine",
+    class: "page",
+    role: "root",
+    build: (tx) =>
+      decisionCitationPageQuery({
+        doctrineAvailable: true,
+        cursorId: undefined,
+        decisionId: QUERY_PLAN_SAMPLE.caseLaw.decisionId,
+        direction: "incoming",
+        doctrine: "limits",
+        limit: citationPageSize,
+        countries: CASE_LAW_SURFACE_COUNTRIES.search,
+        tx,
+      }),
+    seed: "case-law",
+    contract: planContracts["case-law.citation-page-incoming-doctrine"],
+  },
+  {
     id: "case-law.citation-page-outgoing",
     class: "page",
     role: "public-law-reader",

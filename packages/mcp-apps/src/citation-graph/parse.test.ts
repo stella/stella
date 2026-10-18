@@ -25,6 +25,16 @@ const validPage = {
 } satisfies CitationPage;
 
 describe("citation page parsing", () => {
+  test("preserves the applied doctrine and polarity filters", () => {
+    const payload = {
+      ...validPage,
+      doctrine: "limits",
+      polarity: "negative",
+    } satisfies CitationPage;
+
+    expect(parseCitationPage(payload)).toEqual(payload);
+  });
+
   test("accepts resolved docket decisions with the default identifier type omitted", () => {
     const payload = {
       ...validPage,
