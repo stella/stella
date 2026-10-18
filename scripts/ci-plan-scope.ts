@@ -33,7 +33,7 @@ export type ChangedFileScopeInput = {
   root?: string;
 };
 
-export type ChangedFileScope = Record<string, string>;
+export type ChangedFileScope = Record<ScopeOutput, string>;
 
 const bool = String;
 const shellPattern = (pattern: string) =>
@@ -124,7 +124,7 @@ const desktopRustRequired = (files: readonly string[]) =>
     "packages/api-contract/src/desktop-rpc.gen.ts",
   ]);
 
-const wideScope = (input: ChangedFileScopeInput): ChangedFileScope => {
+const wideScope = (input: ChangedFileScopeInput): Record<string, string> => {
   const full = input.suiteDepth === "full";
   const releaseTypecheck =
     input.heavyOnly &&
@@ -181,70 +181,74 @@ const wideScope = (input: ChangedFileScopeInput): ChangedFileScope => {
   };
 };
 
-// oxlint-disable-next-line eslint/max-lines-per-function, eslint/complexity -- Keeping the complete changed-file output contract in one auditable owner avoids rule drift.
-export const computeChangedFileScope = (
-  input: ChangedFileScopeInput,
-): ChangedFileScope => {
+const deriveScopeFacts = (input: ChangedFileScopeInput) => {
   if (
     input.eventName === "workflow_dispatch" ||
     input.scopeUnknown ||
     input.heavyOnly
   ) {
-    return wideScope(input);
+    return { type: "override", outputs: wideScope(input) } as const;
   }
   const files = input.changedFiles;
-  const prefix = {
-    api_scope_unknown: FALSE,
-    changed_files: JSON.stringify(files),
-    comparison_base: input.comparisonBase,
-  };
   if (files.length === 0) {
     const api = bool(input.suiteDepth === "full");
     return {
-      ...prefix,
-      agent_sandbox_docker_required: FALSE,
-      api_image_deps_required: FALSE,
-      docker_checks_required: FALSE,
-      docker_checks_pr_required: FALSE,
-      api_image_platforms: "[]",
-      api_image_smoke_required: FALSE,
-      postgres_suites_required: api,
-      corpus_suites_required: api,
-      valkey_suites_required: api,
-      collaboration_suite_required: FALSE,
-      service_suites_pr_required: FALSE,
-      collab_redis_required: FALSE,
-      desktop_rust_checks_required: FALSE,
-      desktop_browser_required: FALSE,
-      ci_browser_scope_required: FALSE,
-      e2e_core_required: FALSE,
-      e2e_production_required: FALSE,
-      e2e_landing_required: FALSE,
-      fix_tests_on_base_required: FALSE,
-      landing_build_required: FALSE,
-      legal_atlas_image_required: FALSE,
-      legal_atlas_image_pr_required: FALSE,
-      dependency_malware_required: FALSE,
-      lockfile_ages_required: FALSE,
-      migration_rehearsal_required: FALSE,
-      mobile_build_required: FALSE,
-      model_catalog_drift_required: FALSE,
-      package_checks_required: TRUE,
-      docs_checks_required: FALSE,
-      docs_changed_files: "[]",
-      published_exports_required: FALSE,
-      release_typecheck_required: FALSE,
-      route_smoke_required: FALSE,
-      route_tree_required: FALSE,
-      scan_engine_wasm_required: FALSE,
-      stack_redaction_browsers_required: FALSE,
-      web_api_types_required: FALSE,
-      web_build_required: FALSE,
-      web_image_smoke_required: FALSE,
-      windows_scripts_required: FALSE,
-      desktop_windows_dry_run_required: FALSE,
-    };
+      type: "override",
+      outputs: {
+        api_scope_unknown: FALSE,
+        changed_files: JSON.stringify(files),
+        comparison_base: input.comparisonBase,
+        agent_sandbox_docker_required: FALSE,
+        api_image_deps_required: FALSE,
+        docker_checks_required: FALSE,
+        docker_checks_pr_required: FALSE,
+        api_image_platforms: "[]",
+        api_image_smoke_required: FALSE,
+        postgres_suites_required: api,
+        corpus_suites_required: api,
+        valkey_suites_required: api,
+        collaboration_suite_required: FALSE,
+        service_suites_pr_required: FALSE,
+        collab_redis_required: FALSE,
+        desktop_rust_checks_required: FALSE,
+        desktop_browser_required: FALSE,
+        ci_browser_scope_required: FALSE,
+        e2e_core_required: FALSE,
+        e2e_production_required: FALSE,
+        e2e_landing_required: FALSE,
+        fix_tests_on_base_required: FALSE,
+        landing_build_required: FALSE,
+        legal_atlas_image_required: FALSE,
+        legal_atlas_image_pr_required: FALSE,
+        dependency_malware_required: FALSE,
+        lockfile_ages_required: FALSE,
+        migration_rehearsal_required: FALSE,
+        mobile_build_required: FALSE,
+        model_catalog_drift_required: FALSE,
+        package_checks_required: TRUE,
+        docs_checks_required: FALSE,
+        docs_changed_files: "[]",
+        published_exports_required: FALSE,
+        release_typecheck_required: FALSE,
+        route_smoke_required: FALSE,
+        route_tree_required: FALSE,
+        scan_engine_wasm_required: FALSE,
+        stack_redaction_browsers_required: FALSE,
+        web_api_types_required: FALSE,
+        web_build_required: FALSE,
+        web_image_smoke_required: FALSE,
+        windows_scripts_required: FALSE,
+        desktop_windows_dry_run_required: FALSE,
+      },
+    } as const;
   }
+  return deriveNormalScopeFacts(input, files);
+};
+
+const deriveNormalScopeFacts = (
+  input: ChangedFileScopeInput,
+  files: readonly string[],
+) => {
   const root = input.root;
   const resolved = input.dependencyScope;
   const scopeFiles =
@@ -403,266 +407,477 @@ export const computeChangedFileScope = (
       "apps/api/scripts/*.test.ts",
       "apps/api/scripts/*.test.tsx",
     ]);
-  const out: ChangedFileScope = {
-    ...prefix,
-    agent_sandbox_docker_required: bool(sandbox),
-    api_image_deps_required: bool(apiDeps),
-    docker_checks_required: bool(sandbox || apiDeps),
-    docker_checks_pr_required: bool((sandbox || apiDeps) && imageInputs),
-    api_image_platforms: full || version ? BOTH_PLATFORMS : ARM_PLATFORM,
-    api_image_smoke_required: bool(
-      p([
-        "VERSION",
-        "apps/api/*",
-        "apps/collab/*",
-        "apps/legal-atlas-runner/*",
-        "packages/*",
-        "patches/*",
-        "apps/*/package.json",
-        "apps/landing/public/fonts/CabinetGrotesk-Regular.otf",
-        "docker/postgres/*.sql",
-        "docker/postgres/*.conf",
-        "scripts/configure-test-postgres.sh",
-        ".gitmodules",
-        "bun.lock",
-        "bunfig.toml",
-        "package.json",
-        ".npmrc",
-        "turbo.json",
-        "scripts/ci-install*",
-        "scripts/smoke-api-image.sh",
-        "scripts/pull-base-images.sh",
-        "scripts/ci-service-images.ts",
-        "scripts/ci-service-images.json",
-        "scripts/retry.sh",
-        ".dockerignore",
-        ".github/workflows/ci.yml",
-        ".github/workflows/release.yml",
-      ]),
+  return {
+    type: "normal",
+    input,
+    files,
+    scopeFiles,
+    packageChecks,
+    docs,
+    services,
+    desktopBrowser,
+    full,
+    version,
+    imageInputs,
+    p,
+    e2eCore,
+    collab,
+    e2eLanding,
+    routeSmoke,
+    webBuild,
+    landing,
+    apiDeps,
+    sandbox,
+    legal,
+    postgres,
+    corpus,
+    valkey,
+    collaboration,
+    servicePr,
+    fixTest,
+  } as const;
+};
+
+const OUTPUT_ORDER = [
+  "api_scope_unknown",
+  "changed_files",
+  "comparison_base",
+  "agent_sandbox_docker_required",
+  "api_image_deps_required",
+  "docker_checks_required",
+  "docker_checks_pr_required",
+  "api_image_platforms",
+  "api_image_smoke_required",
+  "postgres_suites_required",
+  "corpus_suites_required",
+  "valkey_suites_required",
+  "collaboration_suite_required",
+  "service_suites_pr_required",
+  "collab_redis_required",
+  "desktop_rust_checks_required",
+  "desktop_browser_required",
+  "ci_browser_scope_required",
+  "e2e_core_required",
+  "e2e_production_required",
+  "e2e_landing_required",
+  "fix_tests_on_base_required",
+  "landing_build_required",
+  "legal_atlas_image_required",
+  "legal_atlas_image_pr_required",
+  "dependency_malware_required",
+  "lockfile_ages_required",
+  "migration_rehearsal_required",
+  "mobile_build_required",
+  "model_catalog_drift_required",
+  "package_checks_required",
+  "docs_checks_required",
+  "docs_changed_files",
+  "published_exports_required",
+  "release_typecheck_required",
+  "route_smoke_required",
+  "route_tree_required",
+  "scan_engine_wasm_required",
+  "stack_redaction_browsers_required",
+  "web_api_types_required",
+  "web_build_required",
+  "web_image_smoke_required",
+  "windows_scripts_required",
+  "desktop_windows_dry_run_required",
+] as const;
+
+export type ScopeOutput = (typeof OUTPUT_ORDER)[number];
+type ScopeFacts = ReturnType<typeof deriveScopeFacts>;
+type NormalScopeFacts = Extract<ScopeFacts, { type: "normal" }>;
+
+const scopeRule = (
+  facts: ScopeFacts,
+  output: ScopeOutput,
+  evaluate: (facts: NormalScopeFacts) => string,
+) =>
+  facts.type === "override" ? (facts.outputs[output] ?? "") : evaluate(facts);
+
+export const OUTPUT_RULES = {
+  api_scope_unknown: (facts) =>
+    scopeRule(facts, "api_scope_unknown", () => FALSE),
+  changed_files: (facts) =>
+    scopeRule(facts, "changed_files", ({ files }) => JSON.stringify(files)),
+  comparison_base: (facts) =>
+    scopeRule(facts, "comparison_base", ({ input }) => input.comparisonBase),
+  agent_sandbox_docker_required: (facts) =>
+    scopeRule(facts, "agent_sandbox_docker_required", ({ sandbox }) =>
+      bool(sandbox),
     ),
-    postgres_suites_required: bool(postgres),
-    corpus_suites_required: bool(corpus),
-    valkey_suites_required: bool(valkey),
-    collaboration_suite_required: bool(collaboration),
-    service_suites_pr_required: bool(servicePr),
-    collab_redis_required: bool(collab),
-    desktop_rust_checks_required: bool(desktopRustRequired(files)),
-    desktop_browser_required: bool(desktopBrowser),
-    ci_browser_scope_required: bool(
-      ciBrowserScopePredicate({ root })(scopeFiles),
+  api_image_deps_required: (facts) =>
+    scopeRule(facts, "api_image_deps_required", ({ apiDeps }) => bool(apiDeps)),
+  docker_checks_required: (facts) =>
+    scopeRule(facts, "docker_checks_required", ({ apiDeps, sandbox }) =>
+      bool(sandbox || apiDeps),
     ),
-    e2e_core_required: bool(e2eCore),
-    e2e_production_required: bool(
-      full
-        ? e2eCore
-        : input.eventName === "pull_request" && e2eRequired("pr-core", files),
+  docker_checks_pr_required: (facts) =>
+    scopeRule(
+      facts,
+      "docker_checks_pr_required",
+      ({ imageInputs, apiDeps, sandbox }) =>
+        bool((sandbox || apiDeps) && imageInputs),
     ),
-    e2e_landing_required: bool(e2eLanding),
-    fix_tests_on_base_required: bool(fixTest),
-    landing_build_required: bool(landing),
-    legal_atlas_image_required: bool(legal),
-    legal_atlas_image_pr_required: bool(legal && imageInputs),
-    dependency_malware_required: bool(requiresMalwareScan(files)),
-    lockfile_ages_required: bool(
-      p([
-        "bun.lock",
-        "*/bun.lock",
-        "scripts/check-lockfile-release-ages.ts",
-        "scripts/check-lockfile-release-ages.test.ts",
-        "scripts/check-stll-quarantine-excludes.ts",
-        "scripts/bun-lock-text.ts",
-      ]),
+  api_image_platforms: (facts) =>
+    scopeRule(facts, "api_image_platforms", ({ full, version }) =>
+      full || version ? BOTH_PLATFORMS : ARM_PLATFORM,
     ),
-    migration_rehearsal_required: bool(
-      p([
-        "VERSION",
-        "apps/api/drizzle/*",
-        "apps/api/src/db/*",
-        "apps/api/src/lib/db/*",
-        "apps/api/src/lib/decision-date-bounds-sql.ts",
-        "apps/api/src/handlers/case-law/citation-resolution.ts",
-        "apps/api/src/scripts/*",
-        "scripts/rehearse-migration-upgrade.sh",
-        "scripts/resolve-promoted-release.ts",
-        "scripts/migration-rehearsal-db.ts",
-        ".github/workflows/ci.yml",
-      ]),
-    ),
-    mobile_build_required: bool(
-      p([
-        "apps/mobile/*",
-        "packages/*",
-        "patches/*",
-        "bun.lock",
-        "bunfig.toml",
-        "package.json",
-        ".npmrc",
-        ".github/workflows/ci.yml",
-      ]),
-    ),
-    model_catalog_drift_required: bool(
-      p([
-        ".github/workflows/ci.yml",
-        "packages/ai-catalog/package.json",
-        "packages/ai-catalog/src/capabilities-overrides.ts",
-        "packages/ai-catalog/src/capabilities.gen.ts",
-        "packages/ai-catalog/src/document-input-overrides.ts",
-        "packages/ai-catalog/src/index.ts",
-        "packages/ai-catalog/src/model-rate-policy.ts",
-        "packages/ai-catalog/src/model-rate.ts",
-        "packages/ai-catalog/src/model-rates.gen.ts",
-        "packages/scripts/src/model-catalog-capabilities-gen.ts",
-        "packages/scripts/src/model-catalog-capabilities.ts",
-        "packages/scripts/src/model-catalog-rates-gen.ts",
-      ]),
-    ),
-    package_checks_required: bool(packageChecks),
-    docs_checks_required: bool(docs.length > 0),
-    docs_changed_files: JSON.stringify(docs),
-    published_exports_required: bool(
-      full ||
+  api_image_smoke_required: (facts) =>
+    scopeRule(facts, "api_image_smoke_required", ({ p }) =>
+      bool(
         p([
-          "packages/*",
-          "patches/*",
-          "scripts/check-published-exports.ts",
-          "scripts/prepare-publish.ts",
-          "scripts/publish-manifest.ts",
-          "scripts/published-export-guards.ts",
-          "bun.lock",
-          "bunfig.toml",
-          "package.json",
-          ".npmrc",
-          ".github/workflows/ci.yml",
-        ]),
-    ),
-    release_typecheck_required: bool(version),
-    route_smoke_required: bool(routeSmoke),
-    route_tree_required: bool(
-      full ||
-        p([
-          "apps/web/src/routes/*",
-          "apps/web/vite.config.ts",
-          "apps/web/route-tree.config.ts",
-          "apps/web/scripts/generate-route-tree.ts",
-          "apps/web/package.json",
-          "apps/web/src/routeTree.gen.ts",
-          "packages/scripts/src/prepared-generated-sources.ts",
-          "packages/scripts/src/generated-input-identity.ts",
-          "packages/scripts/src/generated-files.ts",
-          "scripts/generated-files.ts",
-          "bun.lock",
-        ]),
-    ),
-    scan_engine_wasm_required: bool(
-      p(["packages/scan-engine/*", "bun.lock", ".github/workflows/ci.yml"]),
-    ),
-    stack_redaction_browsers_required: bool(
-      p([
-        "apps/web/src/lib/analytics/posthog.ts",
-        "apps/web/src/lib/analytics/stack-redaction.ts",
-        "apps/web/src/lib/analytics/error-diagnostics.ts",
-        "apps/web/e2e/stack-redaction/*",
-        "apps/web/e2e/playwright.stack-redaction.config.ts",
-        "apps/web/e2e/tsconfig.json",
-        "apps/web/tsconfig.json",
-        "apps/web/package.json",
-        "scripts/retry.sh",
-        ".github/actions/setup-playwright/*",
-        "bunfig.toml",
-        "package.json",
-        "bun.lock",
-        ".npmrc",
-        ".github/workflows/ci.yml",
-      ]),
-    ),
-    web_api_types_required: bool(
-      full ||
-        p([
+          "VERSION",
           "apps/api/*",
-          "apps/web/src/*",
-          "apps/web/package.json",
-          "apps/web/tsconfig*.json",
+          "apps/collab/*",
+          "apps/legal-atlas-runner/*",
           "packages/*",
-          "scripts/generated-files.ts",
           "patches/*",
-          "types/*",
-          "tsconfig*.json",
+          "apps/*/package.json",
+          "apps/landing/public/fonts/CabinetGrotesk-Regular.otf",
+          "docker/postgres/*.sql",
+          "docker/postgres/*.conf",
+          "scripts/configure-test-postgres.sh",
+          ".gitmodules",
           "bun.lock",
           "bunfig.toml",
           "package.json",
           ".npmrc",
           "turbo.json",
+          "scripts/ci-install*",
+          "scripts/smoke-api-image.sh",
+          "scripts/pull-base-images.sh",
+          "scripts/ci-service-images.ts",
+          "scripts/ci-service-images.json",
+          "scripts/retry.sh",
+          ".dockerignore",
+          ".github/workflows/ci.yml",
+          ".github/workflows/release.yml",
+        ]),
+      ),
+    ),
+  postgres_suites_required: (facts) =>
+    scopeRule(facts, "postgres_suites_required", ({ postgres }) =>
+      bool(postgres),
+    ),
+  corpus_suites_required: (facts) =>
+    scopeRule(facts, "corpus_suites_required", ({ corpus }) => bool(corpus)),
+  valkey_suites_required: (facts) =>
+    scopeRule(facts, "valkey_suites_required", ({ valkey }) => bool(valkey)),
+  collaboration_suite_required: (facts) =>
+    scopeRule(facts, "collaboration_suite_required", ({ collaboration }) =>
+      bool(collaboration),
+    ),
+  service_suites_pr_required: (facts) =>
+    scopeRule(facts, "service_suites_pr_required", ({ servicePr }) =>
+      bool(servicePr),
+    ),
+  collab_redis_required: (facts) =>
+    scopeRule(facts, "collab_redis_required", ({ collab }) => bool(collab)),
+  desktop_rust_checks_required: (facts) =>
+    scopeRule(facts, "desktop_rust_checks_required", ({ files }) =>
+      bool(desktopRustRequired(files)),
+    ),
+  desktop_browser_required: (facts) =>
+    scopeRule(facts, "desktop_browser_required", ({ desktopBrowser }) =>
+      bool(desktopBrowser),
+    ),
+  ci_browser_scope_required: (facts) =>
+    scopeRule(facts, "ci_browser_scope_required", ({ root, scopeFiles }) =>
+      bool(ciBrowserScopePredicate({ root })(scopeFiles)),
+    ),
+  e2e_core_required: (facts) =>
+    scopeRule(facts, "e2e_core_required", ({ e2eCore }) => bool(e2eCore)),
+  e2e_production_required: (facts) =>
+    scopeRule(
+      facts,
+      "e2e_production_required",
+      ({ input, files, full, e2eCore }) =>
+        bool(
+          full
+            ? e2eCore
+            : input.eventName === "pull_request" &&
+                e2eRequired("pr-core", files),
+        ),
+    ),
+  e2e_landing_required: (facts) =>
+    scopeRule(facts, "e2e_landing_required", ({ e2eLanding }) =>
+      bool(e2eLanding),
+    ),
+  fix_tests_on_base_required: (facts) =>
+    scopeRule(facts, "fix_tests_on_base_required", ({ fixTest }) =>
+      bool(fixTest),
+    ),
+  landing_build_required: (facts) =>
+    scopeRule(facts, "landing_build_required", ({ landing }) => bool(landing)),
+  legal_atlas_image_required: (facts) =>
+    scopeRule(facts, "legal_atlas_image_required", ({ legal }) => bool(legal)),
+  legal_atlas_image_pr_required: (facts) =>
+    scopeRule(
+      facts,
+      "legal_atlas_image_pr_required",
+      ({ imageInputs, legal }) => bool(legal && imageInputs),
+    ),
+  dependency_malware_required: (facts) =>
+    scopeRule(facts, "dependency_malware_required", ({ files }) =>
+      bool(requiresMalwareScan(files)),
+    ),
+  lockfile_ages_required: (facts) =>
+    scopeRule(facts, "lockfile_ages_required", ({ p }) =>
+      bool(
+        p([
+          "bun.lock",
+          "*/bun.lock",
+          "scripts/check-lockfile-release-ages.ts",
+          "scripts/check-lockfile-release-ages.test.ts",
+          "scripts/check-stll-quarantine-excludes.ts",
+          "scripts/bun-lock-text.ts",
+        ]),
+      ),
+    ),
+  migration_rehearsal_required: (facts) =>
+    scopeRule(facts, "migration_rehearsal_required", ({ p }) =>
+      bool(
+        p([
+          "VERSION",
+          "apps/api/drizzle/*",
+          "apps/api/src/db/*",
+          "apps/api/src/lib/db/*",
+          "apps/api/src/lib/decision-date-bounds-sql.ts",
+          "apps/api/src/handlers/case-law/citation-resolution.ts",
+          "apps/api/src/scripts/*",
+          "scripts/rehearse-migration-upgrade.sh",
+          "scripts/resolve-promoted-release.ts",
+          "scripts/migration-rehearsal-db.ts",
           ".github/workflows/ci.yml",
         ]),
+      ),
     ),
-    web_build_required: bool(webBuild),
-    web_image_smoke_required: bool(
-      p([
-        "VERSION",
-        "apps/web/Dockerfile",
-        "apps/web/src/runtime.ts",
-        "apps/web/vite.config.ts",
-        "packages/start-runtime/**",
-        "packages/*/package.json",
-        "scripts/stage-web-runtime.ts",
-        "scripts/publish-manifest.ts",
-        "scripts/web-runtime-closure.ts",
-        "scripts/pull-base-images.sh",
-        "scripts/ci-service-images.ts",
-        "scripts/ci-service-images.json",
-        "scripts/retry.sh",
-        "bun.lock",
-        ".dockerignore",
-        ".github/workflows/ci.yml",
-      ]),
+  mobile_build_required: (facts) =>
+    scopeRule(facts, "mobile_build_required", ({ p }) =>
+      bool(
+        p([
+          "apps/mobile/*",
+          "packages/*",
+          "patches/*",
+          "bun.lock",
+          "bunfig.toml",
+          "package.json",
+          ".npmrc",
+          ".github/workflows/ci.yml",
+        ]),
+      ),
     ),
-    windows_scripts_required: bool(
-      p([
-        "packages/scripts/*",
-        "scripts/ci-install*.ts",
-        "package.json",
-        "bun.lock",
-        ".github/workflows/ci.yml",
-      ]),
+  model_catalog_drift_required: (facts) =>
+    scopeRule(facts, "model_catalog_drift_required", ({ p }) =>
+      bool(
+        p([
+          ".github/workflows/ci.yml",
+          "packages/ai-catalog/package.json",
+          "packages/ai-catalog/src/capabilities-overrides.ts",
+          "packages/ai-catalog/src/capabilities.gen.ts",
+          "packages/ai-catalog/src/document-input-overrides.ts",
+          "packages/ai-catalog/src/index.ts",
+          "packages/ai-catalog/src/model-rate-policy.ts",
+          "packages/ai-catalog/src/model-rate.ts",
+          "packages/ai-catalog/src/model-rates.gen.ts",
+          "packages/scripts/src/model-catalog-capabilities-gen.ts",
+          "packages/scripts/src/model-catalog-capabilities.ts",
+          "packages/scripts/src/model-catalog-rates-gen.ts",
+        ]),
+      ),
     ),
-    desktop_windows_dry_run_required: bool(
-      files.some(
-        (file) =>
-          !/\.mdx?$/u.test(file) &&
-          matches(file, [
-            "apps/desktop/*",
-            "scripts/desktop-*",
-            "scripts/*tauri*",
-            "scripts/detect-desktop-*",
-            "scripts/check-desktop-*",
-            "scripts/ci-windows-dry-run-*",
-            "scripts/wasm-*",
-            "scripts/test-wasm-offline.sh",
-            "scripts/run-oxfmt.ts",
-            "scripts/check-format-environment.ts",
-            "scripts/ci-install*",
-            "scripts/build-updater-manifest.sh",
-            "scripts/promote-desktop-release.sh",
-            "scripts/release-channel.sh",
-            "scripts/rename-desktop-artifacts.sh",
-            "scripts/check-api-deployment.ts",
-            "scripts/gh-retry.sh",
-            "scripts/retry.sh",
-            "scripts/build-desktop-dmg.sh",
-            ".github/actions/desktop-windows-build/*",
-            ".github/workflows/release-desktop.yml",
-            ".github/workflows/ci.yml",
+  package_checks_required: (facts) =>
+    scopeRule(facts, "package_checks_required", ({ packageChecks }) =>
+      bool(packageChecks),
+    ),
+  docs_checks_required: (facts) =>
+    scopeRule(facts, "docs_checks_required", ({ docs }) =>
+      bool(docs.length > 0),
+    ),
+  docs_changed_files: (facts) =>
+    scopeRule(facts, "docs_changed_files", ({ docs }) => JSON.stringify(docs)),
+  published_exports_required: (facts) =>
+    scopeRule(facts, "published_exports_required", ({ full, p }) =>
+      bool(
+        full ||
+          p([
+            "packages/*",
+            "patches/*",
+            "scripts/check-published-exports.ts",
+            "scripts/prepare-publish.ts",
+            "scripts/publish-manifest.ts",
+            "scripts/published-export-guards.ts",
+            "bun.lock",
+            "bunfig.toml",
             "package.json",
+            ".npmrc",
+            ".github/workflows/ci.yml",
+          ]),
+      ),
+    ),
+  release_typecheck_required: (facts) =>
+    scopeRule(facts, "release_typecheck_required", ({ version }) =>
+      bool(version),
+    ),
+  route_smoke_required: (facts) =>
+    scopeRule(facts, "route_smoke_required", ({ routeSmoke }) =>
+      bool(routeSmoke),
+    ),
+  route_tree_required: (facts) =>
+    scopeRule(facts, "route_tree_required", ({ full, p }) =>
+      bool(
+        full ||
+          p([
+            "apps/web/src/routes/*",
+            "apps/web/vite.config.ts",
+            "apps/web/route-tree.config.ts",
+            "apps/web/scripts/generate-route-tree.ts",
+            "apps/web/package.json",
+            "apps/web/src/routeTree.gen.ts",
+            "packages/scripts/src/prepared-generated-sources.ts",
+            "packages/scripts/src/generated-input-identity.ts",
+            "packages/scripts/src/generated-files.ts",
+            "scripts/generated-files.ts",
             "bun.lock",
           ]),
       ),
     ),
-  };
-  return out;
+  scan_engine_wasm_required: (facts) =>
+    scopeRule(facts, "scan_engine_wasm_required", ({ p }) =>
+      bool(
+        p(["packages/scan-engine/*", "bun.lock", ".github/workflows/ci.yml"]),
+      ),
+    ),
+  stack_redaction_browsers_required: (facts) =>
+    scopeRule(facts, "stack_redaction_browsers_required", ({ p }) =>
+      bool(
+        p([
+          "apps/web/src/lib/analytics/posthog.ts",
+          "apps/web/src/lib/analytics/stack-redaction.ts",
+          "apps/web/src/lib/analytics/error-diagnostics.ts",
+          "apps/web/e2e/stack-redaction/*",
+          "apps/web/e2e/playwright.stack-redaction.config.ts",
+          "apps/web/e2e/tsconfig.json",
+          "apps/web/tsconfig.json",
+          "apps/web/package.json",
+          "scripts/retry.sh",
+          ".github/actions/setup-playwright/*",
+          "bunfig.toml",
+          "package.json",
+          "bun.lock",
+          ".npmrc",
+          ".github/workflows/ci.yml",
+        ]),
+      ),
+    ),
+  web_api_types_required: (facts) =>
+    scopeRule(facts, "web_api_types_required", ({ full, p }) =>
+      bool(
+        full ||
+          p([
+            "apps/api/*",
+            "apps/web/src/*",
+            "apps/web/package.json",
+            "apps/web/tsconfig*.json",
+            "packages/*",
+            "scripts/generated-files.ts",
+            "patches/*",
+            "types/*",
+            "tsconfig*.json",
+            "bun.lock",
+            "bunfig.toml",
+            "package.json",
+            ".npmrc",
+            "turbo.json",
+            ".github/workflows/ci.yml",
+          ]),
+      ),
+    ),
+  web_build_required: (facts) =>
+    scopeRule(facts, "web_build_required", ({ webBuild }) => bool(webBuild)),
+  web_image_smoke_required: (facts) =>
+    scopeRule(facts, "web_image_smoke_required", ({ p }) =>
+      bool(
+        p([
+          "VERSION",
+          "apps/web/Dockerfile",
+          "apps/web/src/runtime.ts",
+          "apps/web/vite.config.ts",
+          "packages/start-runtime/**",
+          "packages/*/package.json",
+          "scripts/stage-web-runtime.ts",
+          "scripts/publish-manifest.ts",
+          "scripts/web-runtime-closure.ts",
+          "scripts/pull-base-images.sh",
+          "scripts/ci-service-images.ts",
+          "scripts/ci-service-images.json",
+          "scripts/retry.sh",
+          "bun.lock",
+          ".dockerignore",
+          ".github/workflows/ci.yml",
+        ]),
+      ),
+    ),
+  windows_scripts_required: (facts) =>
+    scopeRule(facts, "windows_scripts_required", ({ p }) =>
+      bool(
+        p([
+          "packages/scripts/*",
+          "scripts/ci-install*.ts",
+          "package.json",
+          "bun.lock",
+          ".github/workflows/ci.yml",
+        ]),
+      ),
+    ),
+  desktop_windows_dry_run_required: (facts) =>
+    scopeRule(facts, "desktop_windows_dry_run_required", ({ files }) =>
+      bool(
+        files.some(
+          (file) =>
+            !/\.mdx?$/u.test(file) &&
+            matches(file, [
+              "apps/desktop/*",
+              "scripts/desktop-*",
+              "scripts/*tauri*",
+              "scripts/detect-desktop-*",
+              "scripts/check-desktop-*",
+              "scripts/ci-windows-dry-run-*",
+              "scripts/wasm-*",
+              "scripts/test-wasm-offline.sh",
+              "scripts/run-oxfmt.ts",
+              "scripts/check-format-environment.ts",
+              "scripts/ci-install*",
+              "scripts/build-updater-manifest.sh",
+              "scripts/promote-desktop-release.sh",
+              "scripts/release-channel.sh",
+              "scripts/rename-desktop-artifacts.sh",
+              "scripts/check-api-deployment.ts",
+              "scripts/gh-retry.sh",
+              "scripts/retry.sh",
+              "scripts/build-desktop-dmg.sh",
+              ".github/actions/desktop-windows-build/*",
+              ".github/workflows/release-desktop.yml",
+              ".github/workflows/ci.yml",
+              "package.json",
+              "bun.lock",
+            ]),
+        ),
+      ),
+    ),
+} as const satisfies Record<ScopeOutput, (facts: ScopeFacts) => string>;
+
+export const computeChangedFileScope = (input: ChangedFileScopeInput) => {
+  const facts = deriveScopeFacts(input);
+  return Object.fromEntries(
+    OUTPUT_ORDER.map((output) => [output, OUTPUT_RULES[output](facts)]),
+  ) as Record<ScopeOutput, string>;
 };
 
 export const scopeOutputLines = (scope: ChangedFileScope) =>
-  Object.entries(scope).map(([name, value]) => `${name}=${value}`);
+  OUTPUT_ORDER.map((name) => `${name}=${scope[name]}`);
 
 const git = (args: readonly string[]) => {
   const result = Bun.spawnSync(["git", ...args], {
