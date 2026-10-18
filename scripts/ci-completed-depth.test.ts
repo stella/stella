@@ -1829,7 +1829,7 @@ test("a batched group skips the queue-only suites only when every entry carries 
     { pr: 123, patch_id: patchId },
     { pr: 124, patch_id: earlierPatch },
   ];
-  const group = (options: LookupOptions) =>
+  const group = async (options: LookupOptions) =>
     decide({
       event: "merge_group",
       queueDepth: "thin",
