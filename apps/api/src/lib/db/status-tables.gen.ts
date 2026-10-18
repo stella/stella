@@ -197,6 +197,7 @@ export const WRITABLE_STATUS_COLUMNS = {
     "configuredAccessStatus",
     "sourceEntitlementStatus",
   ],
+  organizationDataExports: ["status"],
   organizationFileObjects: ["status"],
   pdfSigningSessions: ["status"],
   pendingUploads: ["status"],
