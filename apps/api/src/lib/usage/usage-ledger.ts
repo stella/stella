@@ -31,6 +31,7 @@ import { panic } from "better-result";
 import { and, eq, gt, lte, sql } from "drizzle-orm";
 import * as v from "valibot";
 
+import type { ModelTask } from "@stll/ai-catalog";
 import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
@@ -337,7 +338,7 @@ type RecordUsageEventInput = {
   workspaceId: SafeId<"workspace"> | null;
   userId: string;
   actionType: UsageActionType;
-  modelRole: string;
+  modelTask: ModelTask | "decision";
   unitsConsumed: number;
   serviceTier: UsageServiceTier;
   isByok: boolean;
@@ -370,7 +371,7 @@ export const recordUsageEvent = async ({
   workspaceId,
   userId,
   actionType,
-  modelRole,
+  modelTask,
   unitsConsumed,
   serviceTier,
   isByok,
@@ -412,7 +413,7 @@ export const recordUsageEvent = async ({
     periodStart: periodResolved.start,
     periodEnd: periodResolved.end,
     actionType,
-    modelRole,
+    modelRole: modelTask,
     unitsConsumed,
     serviceTier,
     isByok,

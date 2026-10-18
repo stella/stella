@@ -126,6 +126,7 @@ jobs:
           esac
 
       - name: Send failure alert
+        timeout-minutes: 2
         if: github.event_name == 'workflow_dispatch' || steps.outage.outputs.send == 'true'
         env:
           WEBHOOK_URL: ${{ secrets.SCHEDULED_ALERTS_WEBHOOK_URL }}

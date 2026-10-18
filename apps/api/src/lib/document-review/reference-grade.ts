@@ -66,14 +66,14 @@ import { buildGroundedReviewFix } from "@/api/lib/grounded-review-fix";
 import type { GroundedReviewFix } from "@/api/lib/grounded-review-fix";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { brandPersistedFieldId } from "@/api/lib/safe-id-boundaries";
-import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 import type { PreparedDocxFile } from "@/api/lib/workflow/generate-batch";
 import type { PositionTermKind } from "@/api/lib/workflow/playbook-positions";
 import type { VerdictTier } from "@/api/lib/workflow/verdict-tiers";
 
 const REFERENCE_GRADE_TIMEOUT_MS = 120_000;
-/** The role every grading call dispatches on, and the one a run records. */
-export const REFERENCE_GRADE_ROLE = "pdf" as const;
+/** The task every grading call dispatches on, and the one a run records. */
+export const REFERENCE_GRADE_TASK = "pdf";
 const MAX_VERIFIED_CITATIONS_PER_FINDING = 8;
 /** Positions per model call. The target document dominates the prompt and is
  *  cached, so several term-level positions per call amortise it without
@@ -720,7 +720,7 @@ export type GradeReferencePositionsArgs = {
   usageMetering: AIUsageMetering;
   abortSignal: AbortSignal;
   /** External model-dispatch boundary; supplied by focused integration tests. */
-  generateObjectForRole?: typeof generateTanStackObjectForRole | undefined;
+  generateObjectForTask?: typeof generateTanStackObjectForTask | undefined;
 };
 
 /** Grade one batch of reference-standard positions. Keyed by `sourceId`; a
@@ -742,13 +742,13 @@ export const gradeReferencePositions = async ({
   serviceTier,
   usageMetering,
   abortSignal,
-  generateObjectForRole = generateTanStackObjectForRole,
+  generateObjectForTask = generateTanStackObjectForTask,
 }: GradeReferencePositionsArgs): Promise<
   Result<Map<string, ReferenceGrading>, WorkflowIntegrationError>
 > => {
   const caching = resolveCaching({
     promptCachingEnabled,
-    role: REFERENCE_GRADE_ROLE,
+    task: REFERENCE_GRADE_TASK,
     scopeKey: reviewDocumentsScopeKey(
       targetEntityVersionId,
       referenceEntityVersionIds,
@@ -757,7 +757,7 @@ export const gradeReferencePositions = async ({
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     dataClass: "customer",
     feature: "document-review.references",
-    modelRole: REFERENCE_GRADE_ROLE,
+    modelTask: REFERENCE_GRADE_TASK,
     orgAIConfig,
     modelTier: admission.modelTier,
     properties: {
@@ -780,9 +780,9 @@ export const gradeReferencePositions = async ({
     ],
   };
   const generate = async (messages: ModelMessage[]) =>
-    await generateObjectForRole({
+    await generateObjectForTask({
       dataClass: "customer",
-      role: REFERENCE_GRADE_ROLE,
+      task: REFERENCE_GRADE_TASK,
       orgAIConfig,
       managedAIResidency,
       organizationId,

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -22,7 +23,6 @@ import {
 
 import { AIConfigModelRow } from "@/components/ai-config-model-row";
 import {
-  getDefaultModelSelection,
   getModelOptionsForRole,
   getRolePickerRows,
   isProviderRoleSupported,
@@ -36,6 +36,7 @@ import type {
   RoleModelSelections,
   RoleValue,
   RoleModelOverrides,
+  ProviderDefaultRoleModels,
 } from "@/components/ai-config-role-models.logic";
 
 type AIConfigRoleModelPickerProps = {
@@ -44,7 +45,8 @@ type AIConfigRoleModelPickerProps = {
   disabled?: boolean;
   onModelChange: (role: RoleValue, selection: ModelSelection | null) => void;
   providers: readonly ProviderValue[];
-  roleModels: RoleModelSelections;
+  roleModels: RoleModelSelections | null;
+  providerDefaultModels: ProviderDefaultRoleModels;
   customization?: {
     overrides: RoleModelOverrides;
     onReset: (role: RoleValue) => void;
@@ -59,12 +61,14 @@ export const AIConfigRoleModelPicker = ({
   onModelChange,
   providers,
   roleModels,
+  providerDefaultModels,
   customization,
   children,
 }: AIConfigRoleModelPickerProps) => {
   const t = useTranslations("organization");
   const translate = useTranslations();
-  const rows = getRolePickerRows({ providers, roleModels });
+  const rows =
+    roleModels === null ? [] : getRolePickerRows({ providers, roleModels });
 
   return (
     <Field className={className}>
@@ -87,7 +91,7 @@ export const AIConfigRoleModelPicker = ({
               DEFAULT_MODELS_BY_PROVIDER[provider][row.role].kind ===
               "unsupported",
           );
-          const selectedProvider = selection?.provider ?? providerOptions.at(0);
+          const selectedProvider = selection?.provider;
           const defaultEntry = selectedProvider
             ? DEFAULT_MODELS_BY_PROVIDER[selectedProvider][row.role]
             : undefined;
@@ -122,9 +126,17 @@ export const AIConfigRoleModelPicker = ({
                       if (!isProvider(value, providerOptions)) {
                         return;
                       }
+                      const providerDefaults = providerDefaultModels.find(
+                        ({ provider }) => provider === value,
+                      );
+                      if (providerDefaults === undefined) {
+                        panic(
+                          "AI defaults response omitted an offered provider",
+                        );
+                      }
                       onModelChange(
                         row.role,
-                        getDefaultModelSelection(value, row.role),
+                        providerDefaults.defaultModels[row.role],
                       );
                     }}
                     value={selectedProvider}
