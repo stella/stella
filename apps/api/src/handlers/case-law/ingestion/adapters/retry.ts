@@ -274,6 +274,10 @@ const fetchPublisherRequest = async (
           new Headers(requestOptions.headers).get("User-Agent") ??
           INGESTION_USER_AGENT,
         enforcement: "audit",
+        inspectResponse: (response) =>
+          Result.ok(
+            _isRateLimitRedirect?.(response) === true ? "return" : "follow",
+          ),
         beforeHop: async (hopUrl) =>
           await Result.gen(async function* () {
             yield* publisherTarget(adapterKey, hopUrl);

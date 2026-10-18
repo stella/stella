@@ -103,6 +103,12 @@ type PublisherFetchOptions = {
   policy?: PublisherPolicy;
   enforcement: PublisherEnforcement;
   beforeHop?: (url: URL, hopIndex: number) => Promise<Result<void, unknown>>;
+  inspectResponse?: (
+    response: Response,
+    hopIndex: number,
+  ) =>
+    | Result<"follow" | "return", unknown>
+    | Promise<Result<"follow" | "return", unknown>>;
 };
 
 type CompiledPattern = {
@@ -540,6 +546,7 @@ type LoadRobotsOptions = {
   robotsTtlMs: number;
   robotsRetryMs: number;
   robotsLoadTimeoutMs: number;
+  beforeRequest: (url: URL) => Promise<Result<void, PublisherHopRefusedError>>;
 };
 
 const loadRobots = async ({
@@ -550,6 +557,7 @@ const loadRobots = async ({
   robotsTtlMs,
   robotsRetryMs,
   robotsLoadTimeoutMs,
+  beforeRequest,
 }: LoadRobotsOptions): Promise<CachedRobots> => {
   const deadline = AbortSignal.timeout(robotsLoadTimeoutMs);
   let target = new URL("/robots.txt", origin);
@@ -563,6 +571,11 @@ const loadRobots = async ({
     );
     if (Result.isError(validated)) {
       failure = validated.error;
+      break;
+    }
+    const admitted = await beforeRequest(validated.value);
+    if (Result.isError(admitted)) {
+      failure = admitted.error;
       break;
     }
     const fetched = await Result.tryPromise(async () =>
@@ -659,7 +672,10 @@ type RobotsCacheOptions = Pick<
 const createRobotsCache = (options: RobotsCacheOptions) => {
   const settled = new Map<string, CachedRobots>();
   const pending = new Map<string, Promise<CachedRobots>>();
-  return async (origin: string) => {
+  return async (
+    origin: string,
+    beforeRequest: LoadRobotsOptions["beforeRequest"],
+  ) => {
     const cached = settled.get(origin);
     if (cached && cached.expiresAt > options.now()) {
       return cached.state;
@@ -668,7 +684,7 @@ const createRobotsCache = (options: RobotsCacheOptions) => {
     if (activeLoad) {
       return (await activeLoad).state;
     }
-    const load = loadRobots({ ...options, origin });
+    const load = loadRobots({ ...options, origin, beforeRequest });
     pending.set(origin, load);
     const loaded = await load;
     pending.delete(origin);
@@ -721,7 +737,10 @@ const createOriginScheduler = (clock: Clock) => {
 type PublisherRuntime = {
   fetcher: Fetcher;
   validateTarget: PublisherFetcherOptions["validateTarget"];
-  robotsFor: (origin: string) => Promise<RobotsState>;
+  robotsFor: (
+    origin: string,
+    beforeRequest: LoadRobotsOptions["beforeRequest"],
+  ) => Promise<RobotsState>;
   reserve: (
     origin: string,
     intervalMs: number,
@@ -742,11 +761,13 @@ const enforcePublisherPolicy = async (
   state: WalkState,
   options: PublisherFetchOptions,
   runtime: PublisherRuntime,
+  beforeRequest: LoadRobotsOptions["beforeRequest"],
 ) => {
-  const robots = await runtime.robotsFor(state.url.origin);
+  const robots = await runtime.robotsFor(state.url.origin, beforeRequest);
   if (
     robots.type === "unavailable" &&
-    PublisherTargetRefusedError.is(robots.cause)
+    (PublisherTargetRefusedError.is(robots.cause) ||
+      PublisherHopRefusedError.is(robots.cause))
   ) {
     return Result.err(robots.cause);
   }
@@ -823,6 +844,23 @@ const walkPublisherRedirects = async (
     decision: "allowed",
     delayAppliedMs: 0,
   };
+  let hopIndex = 0;
+  const admit = async (url: URL) => {
+    const currentHop = hopIndex;
+    hopIndex += 1;
+    const admitted = await options.beforeHop?.(url, currentHop);
+    return admitted && Result.isError(admitted)
+      ? Result.err(
+          new PublisherHopRefusedError({
+            message: "Publisher request hop was refused",
+            url: url.href,
+            origin: url.origin,
+            hopIndex: currentHop,
+            cause: admitted.error,
+          }),
+        )
+      : Result.ok(undefined);
+  };
   for (let redirects = 0; ; redirects += 1) {
     const validated = await validatePublisherTarget(
       state.url,
@@ -832,21 +870,18 @@ const walkPublisherRedirects = async (
       return validated;
     }
     state.url = validated.value;
-    const interval = await enforcePublisherPolicy(state, options, runtime);
+    const interval = await enforcePublisherPolicy(
+      state,
+      options,
+      runtime,
+      admit,
+    );
     if (Result.isError(interval)) {
       return interval;
     }
-    const admitted = await options.beforeHop?.(state.url, redirects);
-    if (admitted && Result.isError(admitted)) {
-      return Result.err(
-        new PublisherHopRefusedError({
-          message: "Publisher request hop was refused",
-          url: state.url.href,
-          origin: state.url.origin,
-          hopIndex: redirects,
-          cause: admitted.error,
-        }),
-      );
+    const admitted = await admit(state.url);
+    if (Result.isError(admitted)) {
+      return admitted;
     }
     if (options.enforcement === "enforce") {
       const reserved = await Result.tryPromise(async () =>
@@ -877,6 +912,25 @@ const walkPublisherRedirects = async (
     });
     const location = response.headers.get("location");
     if (!isRedirect(response) || !location) {
+      return Result.ok({
+        response,
+        robotsDecision: state.decision,
+        delayAppliedMs: state.delayAppliedMs,
+      });
+    }
+    const inspected = await options.inspectResponse?.(response, hopIndex - 1);
+    if (inspected && Result.isError(inspected)) {
+      return Result.err(
+        new PublisherHopRefusedError({
+          message: "Publisher response hop was refused",
+          url: state.url.href,
+          origin: state.url.origin,
+          hopIndex: hopIndex - 1,
+          cause: inspected.error,
+        }),
+      );
+    }
+    if (inspected?.value === "return") {
       return Result.ok({
         response,
         robotsDecision: state.decision,

@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { afterEach, describe, expect, mock, test } from "bun:test";
 
+import { createPolitePublisherFetch } from "@stll/fetch/publisher";
+
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
@@ -290,15 +292,20 @@ describe("completion request boundary", () => {
   test("publisher-backoff preserves refusal redirects before the redirect can be followed", async () => {
     const state = fixture();
     const visited: string[] = [];
-    globalThis.fetch = asFetchMock(
-      mock(async (input) => {
-        visited.push(String(input));
+    const publisherFetch = createPolitePublisherFetch({
+      validateTarget: async (url) => Result.ok(url),
+      fetcher: async (input) => {
+        const url = new URL(input instanceof Request ? input.url : input);
+        if (url.pathname === "/robots.txt") {
+          return new Response(null, { status: 404 });
+        }
+        visited.push(url.href);
         return new Response(null, {
           status: 302,
           headers: { Location: `${target}/final`, "Retry-After": "60" },
         });
-      }),
-    );
+      },
+    });
     const result = await Result.tryPromise({
       try: async () =>
         await withPublisherRequestRateLimit({
@@ -313,6 +320,7 @@ describe("completion request boundary", () => {
               timeoutMs: 1000,
               retryPolicy: "publisher-backoff",
               isRateLimitRedirect: (response) => response.status === 302,
+              publisherFetch,
             }),
         }),
       catch: (error) => error,
@@ -322,7 +330,7 @@ describe("completion request boundary", () => {
       expect(result.error).toBeInstanceOf(PublisherRateLimitRefusalError);
     }
     expect(visited).toEqual([target]);
-    expect(state.charges()).toBe(1);
+    expect(state.charges()).toBe(2);
     expect(state.refused()).toBeGreaterThanOrEqual(60_000);
   });
   test("redirects consume separate paced and persisted requests", async () => {

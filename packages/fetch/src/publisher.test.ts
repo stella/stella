@@ -292,13 +292,53 @@ describe("publisher scheduler", () => {
       enforcement: "audit",
       beforeHop: async (url, hopIndex) => {
         admitted.push(`${hopIndex}:${url.pathname}`);
-        return hopIndex === 0
+        return hopIndex < 2
           ? Result.ok(undefined)
           : Result.err(new Error("authorization expired"));
       },
     });
     expect(outcome.isErr() && outcome.error._tag).toBe("publisher_hop_refused");
-    expect(admitted).toEqual(["0:/start", "1:/final"]);
+    expect(admitted).toEqual(["0:/robots.txt", "1:/start", "2:/final"]);
+    expect(requested).toEqual(["/start"]);
+  });
+
+  test("a cold robots cache honors admission before any transport request", async () => {
+    const requested: string[] = [];
+    const request = createPolitePublisherFetch({
+      validateTarget: allowTarget,
+      fetcher: async (input) => {
+        requested.push(input instanceof Request ? input.url : input.toString());
+        return new Response("unexpected request");
+      },
+    });
+    const outcome = await request("https://publisher.example/case", {
+      userAgent: "Stella/1.0",
+      enforcement: "audit",
+      beforeHop: async () => Result.err(new Error("gate refused")),
+    });
+    expect(outcome.isErr() && outcome.error._tag).toBe("publisher_hop_refused");
+    expect(requested).toEqual([]);
+  });
+
+  test("returns an inspected redirect without contacting its target", async () => {
+    const requested: string[] = [];
+    const request = createPolitePublisherFetch({
+      validateTarget: allowTarget,
+      fetcher: async (input) => {
+        const url = new URL(input instanceof Request ? input.url : input);
+        if (url.pathname === "/robots.txt") {
+          return new Response(null, { status: 404 });
+        }
+        requested.push(url.pathname);
+        return Response.redirect("https://publisher.example/limited", 302);
+      },
+    });
+    const outcome = await request("https://publisher.example/start", {
+      userAgent: "Stella/1.0",
+      enforcement: "audit",
+      inspectResponse: async () => Result.ok("return"),
+    });
+    expect(outcome.isOk() && outcome.value.response.status).toBe(302);
     expect(requested).toEqual(["/start"]);
   });
 
