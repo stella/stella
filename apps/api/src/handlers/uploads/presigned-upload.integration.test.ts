@@ -32,6 +32,7 @@ import { legacyTmpUploadKey } from "@/api/lib/uploads/runtime";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { largeDocx } from "@/api/tests/helpers/large-ooxml";
+import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -338,105 +339,142 @@ describe("presigned upload mutation flow", () => {
   });
 
   test("does not claim an upload while it waits for finalize admission", async () => {
-    const bytes = await makeAttachedTemplateDocx();
-    const presignResult = await presignUpload.handler(
-      asTestRaw<PresignCtx>(
-        createContext({
-          body: {
-            purpose: "entity_version",
-            entityId: ids.entityA1,
-            name: "admission-wait.docx",
-            mimeType: DOCX_MIME,
-            size: bytes.byteLength,
-            sha256Hex: hashSha256Hex(bytes),
-          },
-          workspaceId: ids.wsA1,
-          organizationId: ids.orgA,
-          userId: ids.userA1,
-        }),
-      ),
-    );
-    const uploadId = getUploadId(presignResult);
-    seededUploadIds.push(uploadId);
-    const grant = readPresignedUpload(presignResult);
-    const staged = await fetch(grant.url, {
-      method: "PUT",
-      body: bytes,
-      headers: grant.headers,
-    });
-    expect(staged.status).toBe(200);
-
-    // Fill the whole budget so the finalization below has to wait.
-    const holdBudget = await UPLOAD_FINALIZE_ADMISSION.acquire(
-      LIMITS.uploadFinalizeInFlightBytes,
-      0,
-    );
-    if (holdBudget === null) {
-      throw new Error("Expected the idle admission budget to admit the hold.");
-    }
-    let finalizeSettled = false;
-    const finalizing = finalizeUpload
-      .handler(
-        asTestRaw<FinalizeCtx>(
+    const recording = installRecordingLogger();
+    try {
+      const bytes = await makeAttachedTemplateDocx();
+      const presignResult = await presignUpload.handler(
+        asTestRaw<PresignCtx>(
           createContext({
-            params: { workspaceId: ids.wsA1, uploadId },
+            body: {
+              purpose: "entity_version",
+              entityId: ids.entityA1,
+              name: "admission-wait.docx",
+              mimeType: DOCX_MIME,
+              size: bytes.byteLength,
+              sha256Hex: hashSha256Hex(bytes),
+            },
             workspaceId: ids.wsA1,
             organizationId: ids.orgA,
             userId: ids.userA1,
           }),
         ),
-      )
-      .finally(() => {
-        finalizeSettled = true;
+      );
+      const uploadId = getUploadId(presignResult);
+      seededUploadIds.push(uploadId);
+      const grant = readPresignedUpload(presignResult);
+      const staged = await fetch(grant.url, {
+        method: "PUT",
+        body: bytes,
+        headers: grant.headers,
       });
+      expect(staged.status).toBe(200);
 
-    try {
-      await Bun.sleep(200);
-      expect(finalizeSettled).toBe(false);
+      // Fill the whole budget so the finalization below has to wait.
+      const holdBudget = await UPLOAD_FINALIZE_ADMISSION.acquire(
+        LIMITS.uploadFinalizeInFlightBytes,
+        0,
+      );
+      if (holdBudget === null) {
+        throw new Error(
+          "Expected the idle admission budget to admit the hold.",
+        );
+      }
+      let finalizeSettled = false;
+      const finalizing = finalizeUpload
+        .handler(
+          asTestRaw<FinalizeCtx>(
+            createContext({
+              params: { workspaceId: ids.wsA1, uploadId },
+              workspaceId: ids.wsA1,
+              organizationId: ids.orgA,
+              userId: ids.userA1,
+            }),
+          ),
+        )
+        .finally(() => {
+          finalizeSettled = true;
+        });
+
+      try {
+        await Bun.sleep(200);
+        expect(finalizeSettled).toBe(false);
+        expect(
+          recording.records.filter(
+            ({ message }) => message === "uploads.finalize_admitted",
+          ),
+        ).toEqual([]);
+        expect(
+          await testDb.query.pendingUploads.findFirst({
+            where: { id: { eq: uploadId } },
+            columns: {
+              claimedAt: true,
+              claimedByRequestId: true,
+              status: true,
+            },
+          }),
+        ).toEqual({
+          claimedAt: null,
+          claimedByRequestId: null,
+          status: "pending",
+        });
+      } finally {
+        holdBudget();
+      }
+
+      const finalized = await finalizing;
+      expect(finalized).toMatchObject({ code: 422 });
+      expect(UPLOAD_FINALIZE_ADMISSION.inUseBytes()).toBe(0);
       expect(
-        await testDb.query.pendingUploads.findFirst({
-          where: { id: { eq: uploadId } },
-          columns: { claimedAt: true, claimedByRequestId: true, status: true },
-        }),
-      ).toEqual({
-        claimedAt: null,
-        claimedByRequestId: null,
-        status: "pending",
-      });
-    } finally {
-      holdBudget();
-    }
-
-    const finalized = await finalizing;
-    expect(finalized).toMatchObject({ code: 422 });
-    expect(UPLOAD_FINALIZE_ADMISSION.inUseBytes()).toBe(0);
-
-    // The stored result replays at once even while the budget is full.
-    const holdAgain = await UPLOAD_FINALIZE_ADMISSION.acquire(
-      LIMITS.uploadFinalizeInFlightBytes,
-      0,
-    );
-    if (holdAgain === null) {
-      throw new Error("Expected the idle admission budget to admit the hold.");
-    }
-    try {
-      const startedAt = performance.now();
-      const replayed = await finalizeUpload.handler(
-        asTestRaw<FinalizeCtx>(
-          createContext({
-            params: { workspaceId: ids.wsA1, uploadId },
-            workspaceId: ids.wsA1,
-            organizationId: ids.orgA,
-            userId: ids.userA1,
-          }),
+        recording.records.filter(
+          ({ message }) => message === "uploads.finalize_admitted",
         ),
+      ).toEqual([
+        {
+          severityText: "INFO",
+          message: "uploads.finalize_admitted",
+          attributes: {
+            declaredBytes: bytes.byteLength,
+            inFlightBytes: bytes.byteLength,
+          },
+        },
+      ]);
+
+      // The stored result replays at once even while the budget is full.
+      const holdAgain = await UPLOAD_FINALIZE_ADMISSION.acquire(
+        LIMITS.uploadFinalizeInFlightBytes,
+        0,
       );
-      expect(replayed).toEqual(finalized);
-      expect(performance.now() - startedAt).toBeLessThan(
-        LIMITS.uploadFinalizeAdmissionWaitMs,
-      );
+      if (holdAgain === null) {
+        throw new Error(
+          "Expected the idle admission budget to admit the hold.",
+        );
+      }
+      try {
+        const startedAt = performance.now();
+        const replayed = await finalizeUpload.handler(
+          asTestRaw<FinalizeCtx>(
+            createContext({
+              params: { workspaceId: ids.wsA1, uploadId },
+              workspaceId: ids.wsA1,
+              organizationId: ids.orgA,
+              userId: ids.userA1,
+            }),
+          ),
+        );
+        expect(replayed).toEqual(finalized);
+        expect(
+          recording.records.filter(
+            ({ message }) => message === "uploads.finalize_admitted",
+          ),
+        ).toHaveLength(1);
+        expect(performance.now() - startedAt).toBeLessThan(
+          LIMITS.uploadFinalizeAdmissionWaitMs,
+        );
+      } finally {
+        holdAgain();
+      }
     } finally {
-      holdAgain();
+      recording.restore();
     }
   });
 
