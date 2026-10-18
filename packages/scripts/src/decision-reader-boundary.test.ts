@@ -10,6 +10,9 @@ import { canonicalModuleId } from "../../../.oxlint-plugins/module-id";
 const packageRoot = path.resolve(import.meta.dirname, "../../decision-reader");
 const productionDependencyRoots = new Set([
   "@fontsource-variable/source-serif-4",
+  // In-memory text matching for query prefixes: data computation, no I/O.
+  "@stll/aho-corasick",
+  "@stll/aho-corasick-wasm",
   "react",
   "react-dom",
   "better-result",
@@ -96,10 +99,20 @@ const lifecycleViolations = (source: string) => {
   return violations;
 };
 
+type ImportTarget = string | { readonly [condition: string]: ImportTarget };
+
 const manifest: {
   dependencies?: Record<string, string>;
   peerDependencies?: Record<string, string>;
+  imports?: Record<string, ImportTarget>;
 } = JSON.parse(readFileSync(path.join(packageRoot, "package.json"), "utf-8"));
+
+// Every condition target of a package `#` import, so an alias cannot hide a
+// dependency from the boundary (browser and default targets both count).
+const importTargets = (target: ImportTarget): string[] =>
+  typeof target === "string"
+    ? [target]
+    : Object.values(target).flatMap((nested) => importTargets(nested));
 const declaredDependencies = new Set([
   ...Object.keys(manifest.dependencies ?? {}),
   ...Object.keys(manifest.peerDependencies ?? {}),
@@ -166,8 +179,26 @@ const moduleSpecifiers = (source: string) => {
   return specifiers;
 };
 
+const isOutsideBoundary = (specifier: string): boolean => {
+  const root = dependencyRoot(specifier);
+  return (
+    root === undefined ||
+    !productionDependencyRoots.has(root) ||
+    !declaredDependencies.has(root)
+  );
+};
+
 const boundaryViolations = (file: string, source: string) =>
   moduleSpecifiers(source).filter((specifier) => {
+    if (specifier.startsWith("#")) {
+      const mapped = manifest.imports?.[specifier];
+      return (
+        mapped === undefined ||
+        importTargets(mapped).some((target) =>
+          target.startsWith(".") ? false : isOutsideBoundary(target),
+        )
+      );
+    }
     if (specifier.startsWith(".")) {
       const destination = path.resolve(path.dirname(file), specifier);
       return (
@@ -175,12 +206,7 @@ const boundaryViolations = (file: string, source: string) =>
         !destination.startsWith(`${packageRoot}${path.sep}`)
       );
     }
-    const root = dependencyRoot(specifier);
-    return (
-      root === undefined ||
-      !productionDependencyRoots.has(root) ||
-      !declaredDependencies.has(root)
-    );
+    return isOutsideBoundary(specifier);
   });
 
 test("reader production dependencies contain only rendering and data contracts", () => {
