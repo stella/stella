@@ -2688,6 +2688,7 @@
       "aiConfigModelInvalid": "إعداد نموذج الذكاء الاصطناعي غير صالح. تحقق من النماذج المحددة.",
       "aiConfigProviderInvalid": "إعداد مزود الذكاء الاصطناعي غير صالح. تحقق من إعدادات المزود.",
       "aiConfigProviderValidationFailed": "رفض مزود الذكاء الاصطناعي الإعداد. تحقق من مفتاح API والنموذج.",
+      "aiOutputInvalid": "كانت إجابة الذكاء الاصطناعي بتنسيق غير متوقع. حاول مرة أخرى.",
       "clauseDirectivesInvalid": "يحتوي بند مرتبط على توجيهات غير صالحة. صحّح البند قبل تعبئة القالب.",
       "clauseDirectivesInvalidDetails": "يحتوي البند {clauseName} في الحقل {slotName} على توجيهات غير صالحة. افتح محرر البنود، وصحح الفقرات المحددة، ثم املأ القالب مرة أخرى.",
       "clauseDirectivesOverrideInvalidDetails": "يحتوي النص البديل للبند {clauseName} في الحقل {slotName} على توجيهات غير صالحة. صحّح النص البديل لهذا التعبئة قبل المحاولة مرة أخرى.",

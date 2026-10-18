@@ -2688,6 +2688,7 @@
       "aiConfigModelInvalid": "Konfiguracja modelu AI jest nieprawidłowa. Sprawdź wybrane modele.",
       "aiConfigProviderInvalid": "Konfiguracja dostawcy AI jest nieprawidłowa. Sprawdź ustawienia dostawcy.",
       "aiConfigProviderValidationFailed": "Dostawca AI odrzucił konfigurację. Sprawdź klucz API i model.",
+      "aiOutputInvalid": "Odpowiedź AI miała nieoczekiwany format. Spróbuj ponownie.",
       "clauseDirectivesInvalid": "Powiązana klauzula zawiera nieprawidłowe dyrektywy. Popraw klauzulę przed wypełnieniem szablonu.",
       "clauseDirectivesInvalidDetails": "Klauzula {clauseName} w polu {slotName} zawiera nieprawidłowe dyrektywy. Otwórz edytor klauzul, popraw wskazane akapity i ponownie wypełnij szablon.",
       "clauseDirectivesOverrideInvalidDetails": "Zastąpiona treść klauzuli {clauseName} w polu {slotName} zawiera nieprawidłowe dyrektywy. Popraw treść dla tego wypełnienia przed ponowną próbą.",

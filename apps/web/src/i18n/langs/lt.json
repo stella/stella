@@ -2688,6 +2688,7 @@
       "aiConfigModelInvalid": "DI modelio konfigūracija netinkama. Patikrinkite pasirinktus modelius.",
       "aiConfigProviderInvalid": "DI teikėjo konfigūracija netinkama. Patikrinkite teikėjo nustatymus.",
       "aiConfigProviderValidationFailed": "DI teikėjas atmetė konfigūraciją. Patikrinkite API raktą ir modelį.",
+      "aiOutputInvalid": "DI atsakymas buvo netikėto formato. Bandykite dar kartą.",
       "clauseDirectivesInvalid": "Susietoje sąlygoje yra netinkamų direktyvų. Prieš pildydami šabloną, pataisykite sąlygą.",
       "clauseDirectivesInvalidDetails": "Sąlygoje {clauseName}, esančioje lauke {slotName}, yra netinkamų direktyvų. Atidarykite sąlygų redaktorių, pataisykite nurodytas pastraipas ir dar kartą užpildykite šabloną.",
       "clauseDirectivesOverrideInvalidDetails": "Sąlygos {clauseName} pakeistas tekstas lauke {slotName} turi netinkamų direktyvų. Pataisykite šio pildymo pakeistą tekstą ir bandykite dar kartą.",

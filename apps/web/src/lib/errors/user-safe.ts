@@ -15,13 +15,13 @@ export const userErrorMessage = (
   fallback: string,
 ): string => {
   const apiError = toAPIError(error);
-  if (isActionAdmissionCode(apiError.code)) {
+  if (isActionAdmissionCode(apiError.code) || isDisplayableAPIError(apiError)) {
     return apiError.message;
   }
   if (error.status >= SERVER_ERROR_THRESHOLD) {
     return fallback;
   }
-  return isDisplayableAPIError(apiError) ? apiError.message : fallback;
+  return fallback;
 };
 
 export const userErrorFromThrown = (
@@ -32,13 +32,13 @@ export const userErrorFromThrown = (
     return error.message;
   }
   if (APIError.is(error)) {
-    if (isActionAdmissionCode(error.code)) {
+    if (isActionAdmissionCode(error.code) || isDisplayableAPIError(error)) {
       return error.message;
     }
     if (error.status >= SERVER_ERROR_THRESHOLD) {
       return fallback;
     }
-    return isDisplayableAPIError(error) ? error.message : fallback;
+    return fallback;
   }
   return fallback;
 };

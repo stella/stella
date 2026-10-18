@@ -2688,6 +2688,7 @@
       "aiConfigModelInvalid": "La configuración del modelo de IA no es válida. Revisa los modelos seleccionados.",
       "aiConfigProviderInvalid": "La configuración del proveedor de IA no es válida. Revisa los ajustes del proveedor.",
       "aiConfigProviderValidationFailed": "El proveedor de IA rechazó la configuración. Revisa la clave de API y el modelo.",
+      "aiOutputInvalid": "La respuesta de IA tenía un formato inesperado. Inténtalo de nuevo.",
       "clauseDirectivesInvalid": "Una cláusula vinculada contiene directivas no válidas. Corrija la cláusula antes de rellenar la plantilla.",
       "clauseDirectivesInvalidDetails": "La cláusula {clauseName} en el campo {slotName} contiene directivas no válidas. Abra el editor de cláusulas, corrija los párrafos indicados y vuelva a rellenar la plantilla.",
       "clauseDirectivesOverrideInvalidDetails": "La sustitución de la cláusula {clauseName} en el campo {slotName} contiene directivas no válidas. Corrija la sustitución de este formulario antes de volver a rellenarlo.",

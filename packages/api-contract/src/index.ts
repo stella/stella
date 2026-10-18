@@ -22,8 +22,8 @@ export {
   SKILL_RESOURCE_PATH_PATTERN,
 } from "./agent-skills";
 export type { ChatSkillContextNeed, ChatSkillDocument } from "./agent-skills";
-export { AI_ERROR_KINDS } from "./ai-errors";
-export type { AIErrorKind } from "./ai-errors";
+export { AI_ERROR_KINDS, AI_FAILURE_CODES } from "./ai-errors";
+export type { AIErrorKind, AIFailureCode } from "./ai-errors";
 export {
   CASE_LAW_ANALYSIS_FAILURE_CODES,
   CASE_LAW_ANALYSIS_KEY_SOURCES,

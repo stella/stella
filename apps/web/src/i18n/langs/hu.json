@@ -2688,6 +2688,7 @@
       "aiConfigModelInvalid": "Az AI-modell beállítása érvénytelen. Ellenőrizze a kiválasztott modelleket.",
       "aiConfigProviderInvalid": "Az AI-szolgáltató beállítása érvénytelen. Ellenőrizze a szolgáltató beállításait.",
       "aiConfigProviderValidationFailed": "Az AI-szolgáltató elutasította a beállítást. Ellenőrizze az API-kulcsot és a modellt.",
+      "aiOutputInvalid": "Az MI válasza váratlan formátumú volt. Próbálja újra.",
       "clauseDirectivesInvalid": "Egy kapcsolt záradék érvénytelen direktívákat tartalmaz. Javítsa a záradékot a sablon kitöltése előtt.",
       "clauseDirectivesInvalidDetails": "A(z) {slotName} mezőben lévő {clauseName} záradék érvénytelen direktívákat tartalmaz. Nyissa meg a záradékszerkesztőt, javítsa ki a megadott bekezdéseket, és töltse ki újra a sablont.",
       "clauseDirectivesOverrideInvalidDetails": "A(z) {clauseName} záradék felülírt szövege a(z) {slotName} mezőben érvénytelen direktívákat tartalmaz. Javítsa ki a szöveget ehhez a kitöltéshez, majd próbálja újra.",
