@@ -139,7 +139,7 @@ const screeningGrades = {
   closed: { reason: "closed", grade: "anticipated" },
   admission: { reason: "admission", grade: "anticipated" },
   deadline: { reason: "deadline", grade: "anticipated" },
-  "work-limit": { reason: "work-limit", grade: "defect" },
+  "work-limit": { reason: "work-limit", grade: "anticipated" },
   "worker-create": { reason: "worker-create", grade: "defect" },
   "worker-error": { reason: "worker-error", grade: "defect" },
   "worker-exit": { reason: "worker-exit", grade: "defect" },

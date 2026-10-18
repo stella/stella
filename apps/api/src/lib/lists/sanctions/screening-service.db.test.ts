@@ -1986,13 +1986,13 @@ test.each(Object.values(boundaryFaults))(
       await new Promise<void>((resolve) => {
         setImmediate(resolve);
       });
-      const anticipated = ["deadline", "closed", "admission"].some(
-        (failureCause) => failureCause === fault,
-      );
-      let expectedCaptures = anticipated ? 0 : 1;
-      if (fault === "work-limit") {
-        expectedCaptures = sanctionsSourceIds().length;
-      }
+      const anticipated = [
+        "deadline",
+        "closed",
+        "admission",
+        "work-limit",
+      ].some((failureCause) => failureCause === fault);
+      const expectedCaptures = anticipated ? 0 : 1;
       expect(analytics.exceptions()).toHaveLength(expectedCaptures);
       expect(logs.at("ERROR")).toHaveLength(expectedCaptures);
       const boundary = logs.records.filter(
