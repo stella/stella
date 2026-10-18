@@ -47,7 +47,7 @@ export const analysisSentinel = (
  */
 export type StoredAnalysisState =
   | { kind: "done"; analysis: DecisionAnalysis }
-  | { kind: "generating" }
+  | { kind: "generating"; partialTree: DecisionAnalysis["tree"] }
   | { kind: "none" };
 
 export const storedAnalysisState = ({
@@ -81,7 +81,7 @@ export const storedAnalysisState = ({
     startedAt.isOk() &&
     now.getTime() - startedAt.value.epochMilliseconds < SENTINEL_STALE_MS
   ) {
-    return { kind: "generating" };
+    return { kind: "generating", partialTree: analysis.partialTree ?? [] };
   }
   reportCaseLawIncompleteAnswer({
     surface: "analysis",

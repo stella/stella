@@ -106,8 +106,26 @@ const memoryAnalysisStore: AnalysisStore = {
     }
     return await Promise.resolve(wrote);
   },
+  savePartial: async ({ decisionId, partialTree, sentinel }) => {
+    const held = parsePersistedDecisionAnalysis(memoryAnalyses.get(decisionId));
+    const wrote =
+      held !== null &&
+      "status" in held &&
+      held.startedAt === sentinel.startedAt &&
+      held.inputFingerprint === sentinel.inputFingerprint;
+    if (wrote) {
+      memoryAnalyses.set(decisionId, { ...sentinel, partialTree });
+    }
+    return await Promise.resolve(wrote);
+  },
   clear: async ({ decisionId, sentinel }) => {
-    if (memoryAnalyses.get(decisionId) === sentinel) {
+    const held = parsePersistedDecisionAnalysis(memoryAnalyses.get(decisionId));
+    if (
+      held !== null &&
+      "status" in held &&
+      held.startedAt === sentinel.startedAt &&
+      held.inputFingerprint === sentinel.inputFingerprint
+    ) {
       memoryAnalyses.delete(decisionId);
     }
     await Promise.resolve();
@@ -115,7 +133,13 @@ const memoryAnalysisStore: AnalysisStore = {
   fail: async ({ decisionId, failure, keyTag, sentinel }) => {
     // Only the run that still holds the row files its failure; a superseded
     // run writes nothing (as the row store's single statement does).
-    if (memoryAnalyses.get(decisionId) === sentinel) {
+    const held = parsePersistedDecisionAnalysis(memoryAnalyses.get(decisionId));
+    if (
+      held !== null &&
+      "status" in held &&
+      held.startedAt === sentinel.startedAt &&
+      held.inputFingerprint === sentinel.inputFingerprint
+    ) {
       memoryFailures.set(memoryFailureKey(decisionId, keyTag), failure);
       memoryAnalyses.delete(decisionId);
     }

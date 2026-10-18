@@ -510,8 +510,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   const hasAnalysis =
     analysisState.status === "done" ||
     (analysisState.status === "generating" && analysisState.tree.length > 0);
-  const isAnalyzing =
-    analysisState.status === "generating" && analysisState.tree.length === 0;
+  const isAnalyzing = analysisState.status === "generating";
   const analysisTree = (() => {
     if (analysisState.status === "done") {
       return analysisState.analysis.tree;

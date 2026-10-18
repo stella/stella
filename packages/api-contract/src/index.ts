@@ -32,6 +32,7 @@ export {
 export type {
   CaseLawAnalysisFailureCode,
   CaseLawAnalysisKeySource,
+  CaseLawAnalysisProgressResponse,
   CaseLawAnalysisUnavailableCode,
 } from "./case-law-analysis";
 export {

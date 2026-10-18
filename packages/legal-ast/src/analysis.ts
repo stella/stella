@@ -147,6 +147,8 @@ export type AnalysisGenerating = {
   status: "generating";
   startedAt: string;
   inputFingerprint: AnalysisInputFingerprint;
+  /** Complete top-level sections emitted by the in-flight model run. */
+  partialTree?: DecisionAnalysis["tree"] | undefined;
 };
 
 export type PersistedDecisionAnalysis = DecisionAnalysis | AnalysisGenerating;
@@ -298,6 +300,7 @@ const analysisGeneratingSchema: v.GenericSchema<AnalysisGenerating> =
     status: v.literal("generating"),
     startedAt: v.string(),
     inputFingerprint: inputFingerprintSchema,
+    partialTree: v.optional(v.array(analysisHeadingSchema)),
   });
 
 const persistedDecisionAnalysisSchema: v.GenericSchema<PersistedDecisionAnalysis> =

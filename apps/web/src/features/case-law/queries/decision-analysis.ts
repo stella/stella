@@ -5,6 +5,7 @@ import * as v from "valibot";
 import {
   CASE_LAW_ANALYSIS_FAILURE_CODES,
   CASE_LAW_ANALYSIS_UNAVAILABLE_CODES,
+  type CaseLawAnalysisProgressResponse,
   type CaseLawAnalysisFailureCode as AnalysisFailureCode,
   type CaseLawAnalysisUnavailableCode,
 } from "@stll/api-contract";
@@ -47,7 +48,7 @@ export type AnalysisError =
 
 type AnalysisResponse =
   | { status: "done"; analysis: DecisionAnalysis }
-  | { status: "generating"; tree: DecisionAnalysis["tree"] }
+  | (CaseLawAnalysisProgressResponse & { tree: DecisionAnalysis["tree"] })
   | { status: "error"; error: AnalysisError };
 
 export type AnalysisQueryResult =
@@ -146,8 +147,19 @@ export const parseAnalysisResponse = (
   }
 
   if (status === "generating") {
-    // The run holds only a sentinel on the row; the tree arrives whole.
-    return { status: "generating", tree: [] };
+    const parsed = parsePersistedDecisionAnalysis({
+      version: 3,
+      status: "generating",
+      startedAt: "1970-01-01T00:00:00.000Z",
+      inputFingerprint: "response",
+      partialTree: value["partialTree"],
+    });
+    if (parsed === null || !("status" in parsed)) {
+      return value["partialTree"] === undefined
+        ? { status: "generating", tree: [] }
+        : null;
+    }
+    return { status: "generating", tree: parsed.partialTree ?? [] };
   }
 
   if (status === "error") {

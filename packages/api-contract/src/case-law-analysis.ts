@@ -1,3 +1,5 @@
+import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
+
 /**
  * Why the decision analysis read answers `error` without a failed run behind
  * it: the server will not make an analysis of this decision at all.
@@ -38,3 +40,8 @@ export const CASE_LAW_ANALYSIS_KEY_SOURCES = [
 
 export type CaseLawAnalysisKeySource =
   (typeof CASE_LAW_ANALYSIS_KEY_SOURCES)[number];
+
+export type CaseLawAnalysisProgressResponse = {
+  status: "generating";
+  partialTree?: DecisionAnalysis["tree"] | undefined;
+};

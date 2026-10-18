@@ -99,6 +99,10 @@ type AnalysisRelease = {
   sentinel: AnalysisGenerating;
 };
 
+type AnalysisPartialSave = AnalysisRelease & {
+  partialTree: DecisionAnalysis["tree"];
+};
+
 type AnalysisFailureKey = {
   decisionId: SafeId<"caseLawDecision">;
   /** The reader key the failure is filed under (`analysisFailureKeyTag`). */
@@ -145,6 +149,8 @@ export type AnalysisStore = {
    * moved between the claim and the save is a silent no-op otherwise.
    */
   save: (save: AnalysisSave) => Promise<boolean>;
+  /** Publishes complete streamed sections while this run still owns the row. */
+  savePartial: (save: AnalysisPartialSave) => Promise<boolean>;
   /**
    * Releases this run's sentinel, and only this run's: the exact value
    * `claim` wrote. A replacement run that took over this one's stale
@@ -199,7 +205,9 @@ const releaseRun = async (
         and(
           eq(caseLawDecisions.id, decisionId),
           // `::text::jsonb`, never a bare `::jsonb` (see `claimableAnalysisRow`).
-          sql`${caseLawDecisions.analysis} = ${JSON.stringify(sentinel)}::text::jsonb`,
+          sql`${caseLawDecisions.analysis}->>'status' = 'generating'`,
+          sql`${caseLawDecisions.analysis}->>'startedAt' = ${sentinel.startedAt}`,
+          sql`${storedAnalysisFingerprintFor(caseLawDecisions)} = ${sentinel.inputFingerprint}`,
         ),
       );
     return;
@@ -211,7 +219,9 @@ const releaseRun = async (
     WITH released AS (
       UPDATE "case_law_decisions" SET "analysis" = NULL
       WHERE "id" = ${decisionId}::uuid
-        AND "analysis" = ${JSON.stringify(sentinel)}::text::jsonb
+        AND "analysis"->>'status' = 'generating'
+        AND "analysis"->>'startedAt' = ${sentinel.startedAt}
+        AND "analysis"->>'inputFingerprint' = ${sentinel.inputFingerprint}
       RETURNING "id"
     )
     INSERT INTO "case_law_analysis_failures"
@@ -374,6 +384,23 @@ export const createDbAnalysisStore = (
               [
                 sql`${caseLawDecisions.analysis} = ${JSON.stringify(expected)}::text::jsonb`,
               ]),
+        ),
+      )
+      .returning({ id: caseLawDecisions.id });
+    return written.length > 0;
+  },
+  savePartial: async ({ decisionId, partialTree, sentinel }) => {
+    // audit: skip - ephemeral analysis generation progress
+    const next = { ...sentinel, partialTree };
+    const written = await db
+      .update(caseLawDecisions)
+      .set({ analysis: next })
+      .where(
+        and(
+          eq(caseLawDecisions.id, decisionId),
+          sql`${caseLawDecisions.analysis}->>'status' = 'generating'`,
+          sql`${caseLawDecisions.analysis}->>'startedAt' = ${sentinel.startedAt}`,
+          sql`${storedAnalysisFingerprintFor(caseLawDecisions)} = ${sentinel.inputFingerprint}`,
         ),
       )
       .returning({ id: caseLawDecisions.id });

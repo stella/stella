@@ -9,9 +9,11 @@
 
 import { panic, Result } from "better-result";
 import { t } from "elysia";
+import * as v from "valibot";
 
 import type {
   CaseLawAnalysisFailureCode as AnalysisFailureCode,
+  CaseLawAnalysisProgressResponse,
   CaseLawAnalysisUnavailableCode,
 } from "@stll/api-contract";
 import { aiDisclosure } from "@stll/api-contract/ai-disclosure";
@@ -21,6 +23,8 @@ import type {
   AnalysisGenerating,
   DecisionAnalysis,
 } from "@stll/legal-ast/analysis";
+import { analysisHeadingInputSchema } from "@stll/legal-ast/analysis";
+import { Temporal } from "@stll/time";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -72,7 +76,11 @@ import {
   type ModelActionAdmitter,
 } from "@/api/lib/rate-limit/model-action-admission";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
-import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
+import {
+  generateTanStackObjectForTask,
+  streamTanStackObjectForTask,
+  withGenerationDeadline,
+} from "@/api/lib/tanstack-ai-generate";
 import {
   getTanStackTextModelInfoForTask,
   requireTanStackAIAvailableForTask,
@@ -81,7 +89,12 @@ import {
 import { isRecord } from "@/api/lib/type-guards";
 
 import { resolveAnalysisInput } from "./analysis-input";
-import { analysisOutputSchema, buildDecisionAnalysis } from "./analysis-output";
+import {
+  analysisOutputSchema,
+  buildDecisionAnalysis,
+  buildPartialAnalysisTree,
+  type AnalysisOutput,
+} from "./analysis-output";
 import { persistGeneratedAnalysis } from "./analysis-persistence";
 import { allowsDerivedAiAnalysis } from "./analysis-update";
 import { refreshSignificance } from "./significance-run";
@@ -172,7 +185,7 @@ export type GenerateAnalysisResponse =
        */
       aiDisclosure: AiDisclosure;
     }
-  | { status: "generating" }
+  | CaseLawAnalysisProgressResponse
   | { status: "error"; code: AnalysisUnavailableCode; error: string }
   | {
       status: "error";
@@ -243,7 +256,9 @@ const unavailable = (
 /**
  * The key a reader's run would call the provider with: the organization's
  * own fast-role provider when it configured one, the platform's otherwise.
- * The same rule `getTanStackTextModelInfoForTask` dispatches by.
+ * The same rule `getTanStackTextModelInfoForTask` dispatches by. Intended
+ * policy: the first reader's key pays for the analysis that every
+ * organization then reads.
  */
 const readerKeyOf = ({
   orgAIConfig,
@@ -345,7 +360,7 @@ const runGeneration = async ({
         modelTier: admission.modelTier,
       },
     );
-    const result = await generateTanStackObjectForTask({
+    const generationOptions = {
       dataClass: "public_corpus",
       task: "short-text",
       serviceTier: "standard",
@@ -366,7 +381,77 @@ const runGeneration = async ({
       outputTokenBudget: ANALYSIS_OUTPUT_TOKEN_BUDGET,
       deadlineMs,
       ...(resolveTextModel === undefined ? {} : { resolveTextModel }),
-    });
+    } as const;
+
+    let result: AnalysisOutput | undefined;
+    let processedCount = 0;
+    const partialTree: DecisionAnalysis["tree"] = [];
+    let lastPublishedAt = Number.NEGATIVE_INFINITY;
+    try {
+      result = await withGenerationDeadline(
+        generationOptions,
+        async (abortSignal) => {
+          for await (const event of streamTanStackObjectForTask({
+            ...generationOptions,
+            abortSignal,
+          })) {
+            if (event.type === "complete") {
+              return event.object;
+            }
+            if (event.type !== "partial") {
+              continue;
+            }
+            const headings = event.partial.headings;
+            if (!Array.isArray(headings)) {
+              continue;
+            }
+            // The last array member is still being written. A following member
+            // proves every member before it is complete.
+            const completeCount = Math.max(0, headings.length - 1);
+            if (completeCount <= processedCount) {
+              continue;
+            }
+            for (const heading of headings.slice(
+              processedCount,
+              completeCount,
+            )) {
+              const parsed = v.safeParse(analysisHeadingInputSchema, heading);
+              if (parsed.success) {
+                partialTree.push(
+                  ...buildPartialAnalysisTree({
+                    headings: [parsed.output],
+                    language: input.language,
+                  }),
+                );
+              }
+            }
+            processedCount = completeCount;
+            if (
+              Temporal.Now.instant().epochMilliseconds - lastPublishedAt <
+              1000
+            ) {
+              continue;
+            }
+            if (
+              await store.savePartial({ decisionId, partialTree, sentinel })
+            ) {
+              lastPublishedAt = Temporal.Now.instant().epochMilliseconds;
+            }
+          }
+          return undefined;
+        },
+      );
+    } catch (streamError) {
+      // Preserve the existing strict repair and fallback ladder. The streamed
+      // sections remain on the sentinel while that ladder settles.
+      if (classifyAIError(streamError) !== "output_invalid") {
+        throw streamError;
+      }
+      result = await generateTanStackObjectForTask(generationOptions);
+    }
+    if (result === undefined) {
+      return panic("Structured analysis stream ended without a result");
+    }
 
     analysis = buildDecisionAnalysis({
       anchorIds,
@@ -539,6 +624,13 @@ type GenerateAnalysisOptions = {
   beforeClaim?: (() => Promise<void>) | undefined;
 };
 
+const generatingResponse = (
+  partialTree: DecisionAnalysis["tree"],
+): CaseLawAnalysisProgressResponse => ({
+  status: "generating",
+  ...(partialTree.length === 0 ? {} : { partialTree }),
+});
+
 export const generateAnalysis = async ({
   admitModelAction,
   startModelAction,
@@ -617,7 +709,7 @@ export const generateAnalysis = async ({
         aiDisclosure: aiDisclosure("caseLaw"),
       });
     case "generating":
-      return Result.ok({ status: "generating" });
+      return Result.ok(generatingResponse(stored.partialTree));
     case "none":
       break;
     default: {

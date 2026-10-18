@@ -24,6 +24,7 @@ export const WEB_ANALYTICS_EVENTS = {
   feedbackDialogOpened: "feedback_dialog_opened",
   feedbackReportSubmitted: "feedback_report_submitted",
   provisionPlacementGaps: "provision_placement_gaps",
+  caseLawAnalysisTiming: "case_law_analysis_timing",
   inspectorRestoreRecovered: "inspector_restore_recovered",
 } as const;
 
@@ -55,6 +56,9 @@ export type Analytics = {
   ) => void;
   captureProvisionPlacementGaps: (
     properties: ProvisionPlacementGapsProperties,
+  ) => void;
+  captureCaseLawAnalysisTiming: (
+    properties: CaseLawAnalysisTimingProperties,
   ) => void;
   captureInspectorRestoreRecovered: (
     properties: InspectorRestoreRecoveredProperties,
@@ -118,6 +122,13 @@ type ProvisionPlacementGapsProperties = {
   kind: ProvisionPlacementFailureKind;
   reason: ProvisionPlacementFailureReason;
   count: number;
+};
+
+type CaseLawAnalysisTimingProperties = {
+  ms_to_first_section: number | null;
+  ms_to_done: number | null;
+  outcome: "done" | "error" | "left";
+  from_store: boolean;
 };
 
 type AnalyticsResetOptions = {

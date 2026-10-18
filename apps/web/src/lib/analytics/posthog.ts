@@ -793,6 +793,7 @@ export const createPostHogAnalytics = ({
         case WEB_ANALYTICS_EVENTS.feedbackDialogOpened:
         case WEB_ANALYTICS_EVENTS.feedbackReportSubmitted:
         case WEB_ANALYTICS_EVENTS.provisionPlacementGaps:
+        case WEB_ANALYTICS_EVENTS.caseLawAnalysisTiming:
         case WEB_ANALYTICS_EVENTS.inspectorRestoreRecovered:
           return sanitizeSdkUrlContext(event, routeTemplateHistory, "resolved");
         default: {
@@ -906,6 +907,9 @@ export const createPostHogAnalytics = ({
     },
     captureProvisionPlacementGaps: (properties) => {
       posthog.capture(WEB_ANALYTICS_EVENTS.provisionPlacementGaps, properties);
+    },
+    captureCaseLawAnalysisTiming: (properties) => {
+      posthog.capture(WEB_ANALYTICS_EVENTS.caseLawAnalysisTiming, properties);
     },
     captureInspectorRestoreRecovered: (properties) => {
       posthog.capture(
