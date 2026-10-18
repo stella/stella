@@ -7,6 +7,7 @@ import {
   lintSingleRule,
   lintsAlone,
   runSingleRule,
+  setLintRunnerForTest,
   sharedLines,
   sharedRuns,
 } from "./lint-single-rule.ts";
@@ -25,6 +26,41 @@ const nextTurn = async () =>
   new Promise<void>((resolve) => {
     setImmediate(resolve);
   });
+
+const fakeRunnerFor =
+  (code: string, reportedText: string) => async (args: readonly string[]) => {
+    const formatIndex = args.indexOf("json");
+    const sourceFiles = args
+      .slice(formatIndex + 1)
+      .filter((argument) => argument !== "--fix");
+    const diagnostics = (
+      await Promise.all(
+        sourceFiles.map(async (filename) => {
+          const source = await Bun.file(filename).text();
+          return source.split("\n").flatMap((line, index) =>
+            line.includes(reportedText)
+              ? [
+                  {
+                    code,
+                    filename,
+                    labels: [{ span: { line: index + 1 } }],
+                  },
+                ]
+              : [],
+          );
+        }),
+      )
+    ).flat();
+    return {
+      stdout: JSON.stringify({
+        diagnostics,
+        number_of_files: sourceFiles.length,
+        number_of_rules: 1,
+      }),
+      stderr: "",
+      exitCode: diagnostics.length === 0 ? 0 : 1,
+    };
+  };
 
 const sharedReport = (lines: readonly [string, number][]) =>
   JSON.stringify({
@@ -107,77 +143,101 @@ test("concurrent fix cases each return their isolated result", async () => {
 });
 
 test("a held cohort stays one batch across every pre-shared await interleaving", async () => {
-  const code = "no-raw-sha256(no-raw-sha256)";
+  const plugin = "batching-sha256";
+  const code = `${plugin}(no-raw-sha256)`;
   const hash = 'new Bun.CryptoHasher("sha256");';
   const sources = [
     'const clean = "sha256";',
     [hash, "const other = 1;", hash].join("\n"),
     ["const first = 1;", hash].join("\n"),
-  ];
+  ] as const;
+  const restoreRunner = setLintRunnerForTest(
+    code,
+    fakeRunnerFor(code, 'Bun.CryptoHasher("sha256")'),
+  );
 
-  for (const point of SHARED_AWAIT_POINTS) {
-    const releases = sources.map(() => Promise.withResolvers<undefined>());
-    const decoysReady = Promise.withResolvers<undefined>();
-    const targetTaken = Promise.withResolvers<undefined>();
-    let readyDecoys = 0;
-    const before = sharedRuns.filter((run) => run.code === code).length;
-    holdSharedRunUntilPendingForTest(code, sources.length);
-    const target = sources.map(async (source, index) =>
-      lintSingleRule("no-raw-sha256", source, {
-        settings: { batchingCohort: `target-${point}` },
-        delayBeforeSharedAwaitForTest: async (current) => {
-          if (current === point) {
-            await releases[index]?.promise;
-          }
-        },
-        ...(index === 0
-          ? { onSharedBatchTakenForTest: () => targetTaken.resolve(undefined) }
-          : {}),
-      }),
-    );
-    const decoys = sources.map(async (source) =>
-      lintSingleRule("no-raw-sha256", source, {
-        settings: { batchingCohort: `decoy-${point}` },
-        delayBeforeSharedAwaitForTest: async (current) => {
-          if (current === "shared-ready") {
-            readyDecoys += 1;
-            if (readyDecoys === sources.length) {
-              decoysReady.resolve(undefined);
+  try {
+    for (const point of SHARED_AWAIT_POINTS) {
+      const releases = sources.map(() => Promise.withResolvers<undefined>());
+      const decoysReady = Promise.withResolvers<undefined>();
+      const targetTaken = Promise.withResolvers<undefined>();
+      let readyDecoys = 0;
+      const before = sharedRuns.filter((run) => run.code === code).length;
+      holdSharedRunUntilPendingForTest(code, sources.length);
+      const makeTarget = async (source: string, index: number) =>
+        await lintSingleRule("no-raw-sha256", source, {
+          plugin,
+          settings: { batchingCohort: `target-${point}` },
+          delayBeforeSharedAwaitForTest: async (current) => {
+            if (current === point) {
+              await releases[index]?.promise;
             }
-          }
-        },
-      }),
-    );
+          },
+          ...(index === 0
+            ? {
+                onSharedBatchTakenForTest: () => {
+                  targetTaken.resolve(undefined);
+                },
+              }
+            : {}),
+        });
+      const target = [makeTarget(sources[0], 0)];
+      const decoys = sources.map(async (source) =>
+        lintSingleRule("no-raw-sha256", source, {
+          plugin,
+          settings: { batchingCohort: `decoy-${point}` },
+          delayBeforeSharedAwaitForTest: async (current) => {
+            if (current === "shared-ready") {
+              readyDecoys += 1;
+              if (readyDecoys === sources.length) {
+                decoysReady.resolve(undefined);
+              }
+            }
+          },
+        }),
+      );
 
-    await decoysReady.promise;
-    await nextTurn();
-    releases[0]?.resolve(undefined);
-    await targetTaken.promise;
-    releases[1]?.resolve(undefined);
-    releases[2]?.resolve(undefined);
+      await decoysReady.promise;
+      for (const [index, source] of sources.entries()) {
+        if (index > 0) {
+          target.push(makeTarget(source, index));
+        }
+      }
+      releases[0]?.resolve(undefined);
+      await targetTaken.promise;
+      releases[1]?.resolve(undefined);
+      releases[2]?.resolve(undefined);
 
-    const [targetLines] = await Promise.all([
-      Promise.all(target),
-      Promise.all(decoys),
-    ]);
-    expect(targetLines).toEqual([[], [1, 3], [2]]);
-    expect(sharedRuns.filter((run) => run.code === code).slice(before)).toEqual(
-      [
+      const [targetLines] = await Promise.all([
+        Promise.all(target),
+        Promise.all(decoys),
+      ]);
+      expect(targetLines).toEqual([[], [1, 3], [2]]);
+      expect(
+        sharedRuns.filter((run) => run.code === code).slice(before),
+      ).toEqual([
         { code, cases: 3 },
         { code, cases: 3 },
-      ],
-    );
+      ]);
+    }
+  } finally {
+    restoreRunner();
   }
-}, 20_000);
+});
 
 test("seeded delay orders preserve lines in one held batch", async () => {
-  const code = "no-raw-browser-storage(no-raw-browser-storage)";
+  const plugin = "batching-browser-storage";
+  const code = `${plugin}(no-raw-browser-storage)`;
   const storage = "localStorage.getItem('key');";
   const sources = [
     'const clean = "storage";',
     [storage, "const other = 1;", storage].join("\n"),
     ["const first = 1;", storage].join("\n"),
   ];
+  const restoreRunner = setLintRunnerForTest(
+    code,
+    fakeRunnerFor(code, "localStorage.getItem"),
+  );
   let random = 0x5e_ed_12_34;
   const randomDelay = () => {
     random = (Math.imul(random, 1_664_525) + 1_013_904_223) % 0x1_00_00_00_00;
@@ -187,30 +247,38 @@ test("seeded delay orders preserve lines in one held batch", async () => {
     return random % 4;
   };
 
-  for (let seed = 0; seed < 8; seed += 1) {
-    const delays = sources.map(() =>
-      Object.fromEntries(
-        SHARED_AWAIT_POINTS.map((point) => [point, randomDelay()]),
-      ),
-    );
-    const before = sharedRuns.filter((run) => run.code === code).length;
-    holdSharedRunUntilPendingForTest(code, sources.length);
-    const results = await Promise.all(
-      sources.map(async (source, index) =>
-        lintSingleRule("no-raw-browser-storage", source, {
-          settings: { batchingSeed: seed },
-          delayBeforeSharedAwaitForTest: async (point) => {
-            await Bun.sleep(delays[index]?.[point] ?? 0);
-          },
-        }),
-      ),
-    );
-    expect(results).toEqual([[], [1, 3], [2]]);
-    expect(sharedRuns.filter((run) => run.code === code).slice(before)).toEqual(
-      [{ code, cases: 3 }],
-    );
+  try {
+    for (let seed = 0; seed < 8; seed += 1) {
+      const delays = sources.map(() =>
+        Object.fromEntries(
+          SHARED_AWAIT_POINTS.map((point) => [point, randomDelay()]),
+        ),
+      );
+      const before = sharedRuns.filter((run) => run.code === code).length;
+      holdSharedRunUntilPendingForTest(code, sources.length);
+      const results = await Promise.all(
+        sources.map(async (source, index) =>
+          lintSingleRule("no-raw-browser-storage", source, {
+            plugin,
+            settings: { batchingSeed: seed },
+            delayBeforeSharedAwaitForTest: async (point) => {
+              const turns = delays[index]?.[point] ?? 0;
+              for (let turn = 0; turn < turns; turn += 1) {
+                await nextTurn();
+              }
+            },
+          }),
+        ),
+      );
+      expect(results).toEqual([[], [1, 3], [2]]);
+      expect(
+        sharedRuns.filter((run) => run.code === code).slice(before),
+      ).toEqual([{ code, cases: 3 }]);
+    }
+  } finally {
+    restoreRunner();
   }
-}, 20_000);
+});
 
 test("a rejected shared run falls back to lone runs and is not counted as shared", async () => {
   const code = "no-raw-date-parsing(no-raw-date-parsing)";

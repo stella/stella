@@ -75,6 +75,8 @@ type LintSingleRuleOptions = {
 
 type OxlintRun = { stdout: string; stderr: string; exitCode: number };
 
+type LintRunner = (args: readonly string[], cwd: string) => Promise<OxlintRun>;
+
 const spawnOxlint = async (
   args: readonly string[],
   cwd: string,
@@ -96,6 +98,24 @@ const spawnOxlint = async (
   return { stdout, stderr, exitCode };
 };
 
+const lintRunnersForTest = new Map<string, LintRunner>();
+
+/** Replace one rule's process runner for a test, then restore it afterward. */
+export const setLintRunnerForTest = (code: string, runner: LintRunner) => {
+  const previous = lintRunnersForTest.get(code);
+  lintRunnersForTest.set(code, runner);
+  return () => {
+    if (previous === undefined) {
+      lintRunnersForTest.delete(code);
+    } else {
+      lintRunnersForTest.set(code, previous);
+    }
+  };
+};
+
+const lintRunner = (code: string): LintRunner =>
+  lintRunnersForTest.get(code) ?? spawnOxlint;
+
 // A test process owns at most one oxlint subprocess at a time; concurrent
 // tests queue here, and cases that share a configuration join one run.
 let oxlintSlot: Promise<unknown> = Promise.resolve();
@@ -104,6 +124,23 @@ const withOxlintSlot = async <T>(run: () => Promise<T>): Promise<T> => {
   const next = oxlintSlot.then(run);
   oxlintSlot = next.catch(() => undefined);
   return next;
+};
+
+const testRunnerSlots = new Map<string, Promise<unknown>>();
+
+const withLintSlot = async <T>(
+  code: string,
+  run: () => Promise<T>,
+): Promise<T> => {
+  if (!lintRunnersForTest.has(code)) {
+    return await withOxlintSlot(run);
+  }
+  const next = (testRunnerSlots.get(code) ?? Promise.resolve()).then(run);
+  testRunnerSlots.set(
+    code,
+    next.catch(() => undefined),
+  );
+  return await next;
 };
 
 /** One case's files, written to its own scratch root as for a lone run. */
@@ -119,14 +156,11 @@ type LintCase = {
 type AloneRun = OxlintRun & { source: string };
 
 /** Lint one case in a run of its own, exactly as a lone rule test always did. */
-const lintAlone = async ({
-  configPath,
-  sourceFile,
-  fix,
-  directory,
-  sourcePath,
-}: LintCase): Promise<AloneRun> => {
-  const run = await spawnOxlint(
+const lintAlone = async (
+  { configPath, sourceFile, fix, directory, sourcePath }: LintCase,
+  code: string,
+): Promise<AloneRun> => {
+  const run = await lintRunner(code)(
     [
       "-c",
       configPath,
@@ -242,7 +276,7 @@ const lintTogether = async (
   if (requests.length > 1) {
     const sourceFiles = lintCases.map(({ sourceFile }) => sourceFile);
     const lines = sharedLines(
-      await spawnOxlint(
+      await lintRunner(code)(
         ["-c", first.configPath, "-f", "json", ...sourceFiles],
         REPOSITORY_ROOT,
       ),
@@ -261,7 +295,7 @@ const lintTogether = async (
   }
   const outcomes: SharedOutcome[] = [];
   for (const lintCase of lintCases) {
-    outcomes.push({ alone: await lintAlone(lintCase) });
+    outcomes.push({ alone: await lintAlone(lintCase, code) });
   }
   return outcomes;
 };
@@ -315,7 +349,7 @@ const lintShared = (
       return;
     }
     pendingByConfig.set(configKey, [request]);
-    withOxlintSlot(async () => {
+    withLintSlot(code, async () => {
       const activeGate = pendingGates.get(code);
       if (activeGate?.configKey === configKey) {
         if (activeGate.cases <= 1) {
@@ -449,7 +483,9 @@ export const runSingleRule = async (
     };
     await delay("shared-ready");
     if (alone) {
-      return { alone: await withOxlintSlot(async () => lintAlone(lintCase)) };
+      return {
+        alone: await withLintSlot(code, async () => lintAlone(lintCase, code)),
+      };
     }
     if (sharedRequest !== undefined) {
       sharedRequest.setLintCase(lintCase);
