@@ -602,6 +602,11 @@ type RunMigrationsOptions = {
   reserveSchemaObserver?: () => Promise<OnlineMigrationConnection>;
 };
 
+const migrationSessionCanUnlock = (
+  laneHeld: boolean,
+  sessionState: "open" | "terminated",
+) => laneHeld && sessionState === "open";
+
 export const runMigrations = async ({
   connection,
   databaseUrl,
@@ -618,7 +623,6 @@ export const runMigrations = async ({
     await openOnlineIndexObserver(databaseUrl),
 }: RunMigrationsOptions) => {
   let laneHeld = false;
-  // The phase in flight, so a failure reports the duration of the right one.
   const clock: MigrationPhaseClock = {
     phase: "schema",
     startedAt: timing.clock(),
@@ -627,8 +631,6 @@ export const runMigrations = async ({
   };
   const elapsedMs = () =>
     Math.max(0, Math.round(timing.clock() - clock.startedAt));
-  // A terminated session already dropped its advisory locks; unlocking on the
-  // closed connection would replace the monitoring error with a close error.
   const session: { state: "open" | "terminated" } = { state: "open" };
   let schemaObserver: OnlineMigrationConnection | undefined;
   const schemaRetriesAtStart = lockTelemetry.retriesSpent;
@@ -686,7 +688,6 @@ export const runMigrations = async ({
       return preflight;
     }
 
-    // rc.4's pending selector reads names only; its row type requires a string timestamp.
     const predicted = getMigrationsToRun({
       localMigrations: migrations,
       dbMigrations: preflight.rows.map(({ id, hash, created_at, name }) => ({
@@ -703,8 +704,6 @@ export const runMigrations = async ({
         ORDER BY id
       `);
     const preflightFingerprint = ledgerFingerprint(preflight.rows);
-    // Attempts share this connection, which holds the lane until the finally
-    // below, so corpus writers stay drained between them.
     await applyPendingRetryingLockWaits({
       // bun-sql's migrator calls this same function after reading files; passing
       // the preflight array keeps validation and execution on identical bytes.
@@ -735,10 +734,6 @@ export const runMigrations = async ({
       migrationsSchema,
       migrationsTable,
     });
-    // The schema SQL is done. The online phase takes no ACCESS EXCLUSIVE lock
-    // (concurrent index builds, validations, batched repairs), and an index
-    // build on a corpus-sized table runs for many minutes: holding the lane
-    // through it would stop every corpus writer for that long.
     await connection.unsafe(CORPUS_SCHEMA_LANE_UNLOCK_SQL);
     laneHeld = false;
     timing.emit({
@@ -808,7 +803,7 @@ export const runMigrations = async ({
     throw error;
   } finally {
     try {
-      if (laneHeld && session.state === "open") {
+      if (migrationSessionCanUnlock(laneHeld, session.state)) {
         await connection.unsafe(CORPUS_SCHEMA_LANE_UNLOCK_SQL);
       }
     } finally {

@@ -198,3 +198,40 @@ test("observer failure cancels pending work and emits one failed attempt", async
   expect(records).toHaveLength(1);
   expect(records.at(0)).toMatchObject({ outcome: "failed", retriesSpent: 0 });
 });
+
+test("observer failure after completed work does not cancel the committed session", async () => {
+  const { records, telemetry } = recordingTelemetry();
+  const query = Promise.withResolvers<readonly unknown[]>();
+  const workCompleted = Promise.withResolvers<undefined>();
+  const failure = new Error("late observation failure");
+  let cancellations = 0;
+  const observer: OnlineMigrationConnection = {
+    execute: async () => undefined,
+    query: async () => await query.promise,
+    release: () => undefined,
+  };
+  const observation = observeMigrationLockAttempt({
+    observer,
+    pid: 11,
+    phase: "schema",
+    step: "schema.pending",
+    table: null,
+    telemetry,
+    work: async () => {
+      workCompleted.resolve(undefined);
+      return true;
+    },
+    outcome: () => "done",
+    cancelWork: async () => {
+      cancellations += 1;
+    },
+  });
+
+  await workCompleted.promise;
+  query.reject(failure);
+
+  expect(await rejectionOf(observation)).toMatchObject({ cause: failure });
+  expect(cancellations).toBe(0);
+  expect(records).toHaveLength(1);
+  expect(records.at(0)).toMatchObject({ outcome: "failed" });
+});

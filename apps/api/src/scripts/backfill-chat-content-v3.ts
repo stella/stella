@@ -11,15 +11,12 @@ import {
   openOnlineIndexObserver,
   openOnlineRepairConnection,
 } from "../db/online-index-observer";
-import {
-  acquireOnlineMigrationLock,
-  releaseOnlineMigrationLock,
-} from "../db/online-migrations";
 import { envDbLoadGate } from "../env-db-load-gate";
 import {
   requireEbsConfiguration,
   resolveEbsConfiguration,
 } from "../lib/db/ebs-signal-reader";
+import { withChatContentV3MigrationLock } from "./backfill-chat-content-v3-lock";
 
 const run = async (): Promise<void> => {
   const args = process.argv.slice(2);
@@ -52,8 +49,7 @@ const run = async (): Promise<void> => {
       }
     } else {
       // Serialize with deploy's online repair, including checkpoint reset.
-      await acquireOnlineMigrationLock(connection);
-      try {
+      await withChatContentV3MigrationLock(connection, async () => {
         if (args.includes("--retry-failed")) {
           await resetChatContentV3Checkpoints(connection);
         }
@@ -78,9 +74,7 @@ const run = async (): Promise<void> => {
             ? "Chat content v3 backfill complete\n"
             : `Chat content v3 backfill deferred at ${outcome.step}; rerun after ${String(outcome.retryAfterMs)} ms\n`,
         );
-      } finally {
-        await releaseOnlineMigrationLock(connection);
-      }
+      });
     }
   } finally {
     await connection.release();

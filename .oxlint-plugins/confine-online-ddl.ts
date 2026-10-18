@@ -183,6 +183,9 @@ export default eslintCompatPlugin({
             if (name === DECLARED_BUILD) {
               context.report({ node, messageId: "declaredBuildRead" });
             }
+            if (name !== null && GATE_OPENERS.has(name)) {
+              context.report({ node, messageId: "gateOpener" });
+            }
           },
           Property(node) {
             if (
@@ -198,6 +201,15 @@ export default eslintCompatPlugin({
                 ? node.imported.name
                 : node.imported.value;
             if (GATE_OPENERS.has(imported)) {
+              context.report({ node, messageId: "gateOpener" });
+            }
+          },
+          ExportSpecifier(node) {
+            const local =
+              node.local.type === "Identifier"
+                ? node.local.name
+                : node.local.value;
+            if (GATE_OPENERS.has(local)) {
               context.report({ node, messageId: "gateOpener" });
             }
           },

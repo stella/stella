@@ -144,7 +144,9 @@ export type MigrationLockTelemetry = {
 export const createMigrationLockTelemetry = (): MigrationLockTelemetry => ({
   attempts: new Map(),
   retriesSpent: 0,
-  emit: (event) => process.stdout.write(`${JSON.stringify(event)}\n`),
+  emit: (event) => {
+    process.stdout.write(`${JSON.stringify(event)}\n`);
+  },
 });
 
 // Raw activity text stays inside this boundary; only its fingerprint leaves it.
@@ -194,6 +196,7 @@ export const observeMigrationLockAttempt = async <T>({
     telemetry.retriesSpent += 1;
   }
   const completed = new AbortController();
+  const workIsPending = () => !completed.signal.aborted;
   const blockers = new Map<number, MigrationBlocker>();
   let waitMs = 0;
   const waits = new Map<string, MigrationLockWait>();
@@ -211,6 +214,7 @@ export const observeMigrationLockAttempt = async <T>({
   let statementClass = "none";
   let observedTable = table;
   let waitingSince: number | null = null;
+  const currentWaitingSince = () => waitingSince;
   const startedAt = performance.now();
   const sampling = Result.tryPromise(async () => {
     while (!completed.signal.aborted) {
@@ -282,7 +286,9 @@ export const observeMigrationLockAttempt = async <T>({
     try: async () => {
       const sampled = await sampling;
       if (sampled.isErr()) {
-        await cancelWork?.();
+        if (workIsPending()) {
+          await cancelWork?.();
+        }
         throw sampled.error;
       }
     },
@@ -295,8 +301,9 @@ export const observeMigrationLockAttempt = async <T>({
   completed.abort();
   const observed = await monitoring;
   accrueWaits(performance.now());
-  if (waitingSince !== null) {
-    waitMs += performance.now() - waitingSince;
+  const finalWaitingSince = currentWaitingSince();
+  if (finalWaitingSince !== null) {
+    waitMs += performance.now() - finalWaitingSince;
   }
   const terminalOutcome =
     result.isErr() || observed.isErr() ? "failed" : outcome(result.value);

@@ -90,6 +90,19 @@ describe(RULE, () => {
     ]);
   });
 
+  test("namespace, re-export and dynamic imports cannot bypass gate ownership", async () => {
+    expect(
+      await lint(
+        [
+          'import * as gate from "./online-index-gate";',
+          "gate.createOnlineIndexGate(options);",
+          'export { createOnlineIndexGate } from "./online-index-gate";',
+          '(await import("./online-index-gate")).createOnlineIndexGate(options);',
+        ].join("\n"),
+      ),
+    ).toEqual([2, 3, 4]);
+  });
+
   test("the owner, tests, fixtures and the schema phase are out of scope", async () => {
     const source = [
       'import { createOnlineIndexGate } from "./online-index-gate";',
