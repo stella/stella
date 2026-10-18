@@ -11,20 +11,11 @@ import { Button } from "@stll/ui/button";
 import {
   ChevronDownIcon,
   BrainIcon,
-  BanknoteIcon,
-  ClockIcon,
   FlaskConicalIcon,
-  GaugeIcon,
-  HashIcon,
   KeyboardIcon,
   MonitorIcon,
   PlugIcon,
-  ScrollTextIcon,
-  ShieldIcon,
-  SparklesIcon,
-  TagsIcon,
   UserIcon,
-  UsersIcon,
 } from "@stll/ui/icons";
 import type { LucideIcon } from "@stll/ui/icons";
 import {
@@ -40,16 +31,13 @@ import { cn } from "@stll/ui/utils";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { env } from "@/env";
-import { useTimeBillingPreviewEnabled } from "@/hooks/use-time-billing-preview";
 import type { TranslationKey } from "@/i18n/types";
 import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
 import { betaFeaturesAvailable } from "@/lib/beta-features";
 import { useKeyboardShortcutsDialogStore } from "@/lib/keyboard-shortcuts-dialog-store";
-import { hasOrganizationManagementAccess } from "@/lib/organization/role-assignment.logic";
 import { pageTitle } from "@/lib/page-title";
 import { useQueryView } from "@/lib/use-query-view";
-import { isBillingSettingsAccessible } from "@/routes/_protected.settings/-components/organization/billing-settings.logic";
 
 export const Route = createFileRoute("/_protected/settings")({
   head: () => ({
@@ -63,18 +51,7 @@ type NavTo =
   | "/settings/account/desktop"
   | "/settings/account/connections"
   | "/settings/account/memory"
-  | "/settings/account/beta"
-  | "/settings/organization/members"
-  | "/settings/organization/matter-numbering"
-  | "/settings/organization/number-series"
-  | "/settings/organization/vat-rates"
-  | "/settings/organization/billing"
-  | "/settings/organization/time-policy"
-  | "/settings/organization/document-types"
-  | "/settings/organization/ai"
-  | "/settings/organization/anonymization"
-  | "/settings/organization/usage"
-  | "/settings/organization/audit-logs";
+  | "/settings/account/beta";
 
 type NavItem = {
   readonly to: NavTo;
@@ -83,7 +60,7 @@ type NavItem = {
 };
 
 type Section = {
-  readonly id: "account" | "organization";
+  readonly id: "account";
   readonly labelKey: TranslationKey;
   readonly items: readonly NavItem[];
 };
@@ -126,68 +103,6 @@ const ACCOUNT_SECTION = {
   ],
 } as const satisfies Section;
 
-const ORGANIZATION_SECTION = {
-  id: "organization",
-  labelKey: "common.organization",
-  items: [
-    {
-      to: "/settings/organization/members",
-      labelKey: "common.members",
-      icon: UsersIcon,
-    },
-    {
-      to: "/settings/organization/number-series",
-      labelKey: "billing.numberSeries.title",
-      icon: HashIcon,
-    },
-    {
-      to: "/settings/organization/vat-rates",
-      labelKey: "billing.vatRates.title",
-      icon: BanknoteIcon,
-    },
-    {
-      to: "/settings/organization/billing",
-      labelKey: "billing.settingsTitle",
-      icon: BanknoteIcon,
-    },
-    {
-      to: "/settings/organization/matter-numbering",
-      labelKey: "settings.organization.matterNumbering",
-      icon: HashIcon,
-    },
-    {
-      to: "/settings/organization/time-policy",
-      labelKey: "settings.organization.timePolicy.title",
-      icon: ClockIcon,
-    },
-    {
-      to: "/settings/organization/document-types",
-      labelKey: "settings.organization.documentTypes.title",
-      icon: TagsIcon,
-    },
-    {
-      to: "/settings/organization/ai",
-      labelKey: "settings.organization.ai",
-      icon: SparklesIcon,
-    },
-    {
-      to: "/settings/organization/anonymization",
-      labelKey: "settings.organization.anonymization.title",
-      icon: ShieldIcon,
-    },
-    {
-      to: "/settings/organization/usage",
-      labelKey: "settings.organization.usage",
-      icon: GaugeIcon,
-    },
-    {
-      to: "/settings/organization/audit-logs",
-      labelKey: "settings.organization.auditLogs",
-      icon: ScrollTextIcon,
-    },
-  ],
-} as const satisfies Section;
-
 const NAV_ITEM_CLASS = cn(
   "hover:bg-sidebar-accent/60 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-hidden",
   "focus-visible:ring-ring focus-visible:ring-2",
@@ -201,7 +116,6 @@ function SettingsLayout() {
     roleView.type === "items" && roleView.refetchError === undefined
       ? roleView.items
       : undefined;
-  const showOrganization = hasOrganizationManagementAccess(role);
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
@@ -226,26 +140,7 @@ function SettingsLayout() {
         items: [...accountItems, BETA_NAV_ITEM],
       } as const)
     : ({ ...ACCOUNT_SECTION, items: accountItems } as const);
-  const timeBillingPreviewEnabled = useTimeBillingPreviewEnabled();
-  const billingAccessible = isBillingSettingsAccessible({
-    previewEnabled: timeBillingPreviewEnabled,
-    role,
-  });
-  const organizationSection = {
-    ...ORGANIZATION_SECTION,
-    items: ORGANIZATION_SECTION.items.filter(
-      (item) =>
-        (item.to !== "/settings/organization/number-series" ||
-          billingAccessible) &&
-        (item.to !== "/settings/organization/vat-rates" || billingAccessible) &&
-        (item.to !== "/settings/organization/billing" || billingAccessible) &&
-        (item.to !== "/settings/organization/time-policy" ||
-          timeBillingPreviewEnabled),
-    ),
-  };
-  const sections = showOrganization
-    ? [accountSection, organizationSection]
-    : [accountSection];
+  const sections = [accountSection];
 
   const activeItem = sections
     .map(({ items }) =>
@@ -292,12 +187,10 @@ function SettingsLayout() {
                     </MenuItem>
                   );
                 })}
-                {section.id === "account" && (
-                  <MenuItem onClick={openShortcuts}>
-                    <KeyboardIcon className="size-4" />
-                    {t("navigation.shortcutsDialog.title")}
-                  </MenuItem>
-                )}
+                <MenuItem onClick={openShortcuts}>
+                  <KeyboardIcon className="size-4" />
+                  {t("navigation.shortcutsDialog.title")}
+                </MenuItem>
               </MenuGroup>
             ))}
           </MenuPopup>
@@ -332,16 +225,14 @@ function SettingsLayout() {
                     </Link>
                   );
                 })}
-                {section.id === "account" ? (
-                  <button
-                    className={NAV_ITEM_CLASS}
-                    onClick={openShortcuts}
-                    type="button"
-                  >
-                    <KeyboardIcon className="size-4" />
-                    <span>{t("navigation.shortcutsDialog.title")}</span>
-                  </button>
-                ) : null}
+                <button
+                  className={NAV_ITEM_CLASS}
+                  onClick={openShortcuts}
+                  type="button"
+                >
+                  <KeyboardIcon className="size-4" />
+                  <span>{t("navigation.shortcutsDialog.title")}</span>
+                </button>
               </div>
             ))}
           </nav>
