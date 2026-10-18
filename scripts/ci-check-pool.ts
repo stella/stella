@@ -449,9 +449,17 @@ const errorOfTest = (lines: readonly string[], failureIndex: number) => {
   return window.find((line) => /^error/iu.test(line.trimStart()))?.trim();
 };
 
-/** The single workflow annotation emitted for one failed pooled check. */
-export const failedCheckAnnotation = (
-  result: Pick<CheckResult, "name" | "detail">,
+// The runner renders `::error` commands as `##[error]<message>` in downloaded
+// logs and drops the title, so the digest reads this plain record instead.
+export const FAILED_CHECK_RECORD = "FAILED check: ";
+
+/** The plain log record of one failed pooled check: name and first cause. */
+export const failedCheckRecord = (name: string, cause: string) =>
+  `${FAILED_CHECK_RECORD}${name} -- ${cause.replaceAll(/\r?\n/gu, " ")}`;
+
+/** The first actionable cause of one failed pooled check. */
+export const failedCheckCause = (
+  result: Pick<CheckResult, "detail">,
   output: string,
 ) => {
   const lines = output.split(/\r?\n/u);
@@ -463,13 +471,19 @@ export const failedCheckAnnotation = (
   const testError =
     failureIndex === -1 ? undefined : errorOfTest(lines, failureIndex);
   const firstError = lines.find((line) => /error/iu.test(line))?.trim();
-  const cause = (
+  return (
     failure !== undefined && testError !== undefined
       ? `${failure} -- ${testError}`
       : (firstError ?? result.detail)
   ).slice(0, FAILURE_CAUSE_LIMIT);
-  return `::error title=${escapeProperty(`FAILED check: ${result.name}`)}::${escapeData(cause)}`;
 };
+
+/** The single workflow annotation emitted for one failed pooled check. */
+export const failedCheckAnnotation = (
+  result: Pick<CheckResult, "name" | "detail">,
+  output: string,
+) =>
+  `::error title=${escapeProperty(`${FAILED_CHECK_RECORD}${result.name}`)}::${escapeData(failedCheckCause(result, output))}`;
 
 const seconds = (value: number) => `${value.toFixed(1)} s`;
 const mebibytes = (bytes: number | undefined) =>
@@ -609,6 +623,7 @@ const main = async () => {
       print("::endgroup::");
       if (result.outcome === "failure") {
         print(failedCheckAnnotation(result, output));
+        print(failedCheckRecord(result.name, failedCheckCause(result, output)));
       }
     },
   });

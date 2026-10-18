@@ -168,33 +168,29 @@ const logLines = (rawLines: readonly string[]): LogLine[] =>
     }));
   });
 
-const decodeCommandValue = (value: string): string =>
-  value
-    .replaceAll("%0A", "\n")
-    .replaceAll("%0D", "\r")
-    .replaceAll("%2C", ",")
-    .replaceAll("%3A", ":")
-    .replaceAll("%25", "%");
+// The pool's plain record of a failed check (FAILED_CHECK_RECORD in
+// ci-check-pool.ts; a test binds the two). Runner-rendered logs keep it, while
+// they reduce the pool's `::error` annotation to its message.
+export const POOLED_FAILURE_PREFIX = "FAILED check: ";
 
 const pooledFailureRecords = (
   rawLines: readonly string[],
 ): { name: string; cause: string }[] =>
   rawLines.flatMap((raw) => {
     const text = logLine(raw).text;
-    const match = /^::error title=([^,]*?)::(.*)$/u.exec(text);
-    if (match === null) {
+    if (!text.startsWith(POOLED_FAILURE_PREFIX)) {
       return [];
     }
-    const title = decodeCommandValue(match[1] ?? "");
-    const prefix = "FAILED check: ";
-    return title.startsWith(prefix)
-      ? [
+    const record = text.slice(POOLED_FAILURE_PREFIX.length);
+    const separator = record.indexOf(" -- ");
+    return separator === -1
+      ? []
+      : [
           {
-            name: title.slice(prefix.length),
-            cause: decodeCommandValue(match[2] ?? ""),
+            name: record.slice(0, separator),
+            cause: record.slice(separator + " -- ".length),
           },
-        ]
-      : [];
+        ];
   });
 
 // ---------------------------------------------------------------------------

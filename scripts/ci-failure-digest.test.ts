@@ -9,6 +9,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { FAILED_CHECK_RECORD, failedCheckRecord } from "./ci-check-pool";
 import {
   annotations,
   buildDigest,
@@ -26,6 +27,7 @@ import {
   MAX_SCAN_WIDTH,
   parseJobs,
   playwrightEntry,
+  POOLED_FAILURE_PREFIX,
   renderTail,
   segmentForStep,
   splitSteps,
@@ -915,10 +917,18 @@ test("each log segment explains at most one failed step", () => {
   expect(messages.join(",")).toContain("boom two");
 });
 
-test("pooled check annotations become named digest failures", () => {
+test("pooled check records become named digest failures in runner-rendered logs", () => {
+  expect(POOLED_FAILURE_PREFIX).toBe(FAILED_CHECK_RECORD);
+  // The runner renders each `::error` annotation as `##[error]<message>`,
+  // dropping its title; the pool's plain record keeps the check name.
   const log = runStep(4, "bun scripts/ci-check-pool.ts run ci-checks-policy", [
-    "::error title=FAILED check%3A Bun tests::(fail) parser > rejects -- error: expected value",
-    "::error title=FAILED check%3A Policy%2C guard::error: policy failed%25",
+    "##[error](fail) parser > rejects -- error: expected value",
+    failedCheckRecord(
+      "Bun tests",
+      "(fail) parser > rejects -- error: expected value",
+    ),
+    "##[error]error: policy failed%",
+    failedCheckRecord("Policy, guard", "error: policy failed%"),
     "2 check(s) failed: Bun tests; Policy, guard",
     "##[error]Process completed with exit code 1.",
   ]).join("\n");
