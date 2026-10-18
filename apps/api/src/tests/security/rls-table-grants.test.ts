@@ -181,6 +181,9 @@ const POST_BOOTSTRAP_SCOPED_HANDOFF_TABLES = new Set([
 // deliberately grant stella nothing, so the grant requirement does not
 // apply. Their migration must REVOKE ALL from stella instead.
 const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
+  // Work-identifier aliases are served through the public-law reader; the
+  // request role has no direct access to this ingestion-owned relation.
+  "legislation_work_identifiers",
   // Guidance ingestion is owner-only until a read capability is introduced.
   "soft_law_sources",
   "soft_law_ingestion_attempts",

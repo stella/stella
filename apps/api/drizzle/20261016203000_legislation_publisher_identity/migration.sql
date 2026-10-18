@@ -89,9 +89,9 @@ CREATE POLICY "case_law_ingestion_access" ON "legislation_work_identifiers" AS P
 -- stella-migration-safety: reviewed drop-object - Recreates only this migration's policy on retry.
 DROP POLICY IF EXISTS "public_law_reader_access" ON "legislation_work_identifiers";--> statement-breakpoint
 CREATE POLICY "public_law_reader_access" ON "legislation_work_identifiers" AS PERMISSIVE FOR SELECT TO stella_public_law_reader USING (true);--> statement-breakpoint
-REVOKE ALL ON "legislation_work_identifiers" FROM stella;--> statement-breakpoint
-GRANT SELECT,INSERT,UPDATE,DELETE ON "legislation_work_identifiers" TO stella_ingestion;--> statement-breakpoint
-GRANT SELECT (source_id,identifier,eli) ON "legislation_work_identifiers" TO stella_public_law_reader;--> statement-breakpoint
+REVOKE ALL PRIVILEGES ON TABLE "legislation_work_identifiers" FROM stella;--> statement-breakpoint
+GRANT SELECT,INSERT,UPDATE,DELETE ON TABLE "legislation_work_identifiers" TO stella_ingestion;--> statement-breakpoint
+GRANT SELECT (source_id,identifier,eli) ON TABLE "legislation_work_identifiers" TO stella_public_law_reader;--> statement-breakpoint
 
 -- Release additive DDL locks before online index scans. Every preceding
 -- operation tolerates replay, including replacement of this migration's policies.
