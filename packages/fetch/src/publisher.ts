@@ -39,11 +39,19 @@ export class RobotsUnavailableError extends TaggedError("robots_unavailable")<
 export class PublisherRedirectLimitError extends TaggedError(
   "publisher_redirect_limit",
 )<RefusalFields> {}
+export class PublisherTargetRefusedError extends TaggedError(
+  "publisher_target_refused",
+)<RefusalFields & { cause: unknown }> {}
+export class PublisherBodyNotReplayableError extends TaggedError(
+  "publisher_body_not_replayable",
+)<RefusalFields> {}
 export type PublisherPolicyError =
   | RobotsDisallowedError
   | AgentExcludedError
   | RobotsUnavailableError
-  | PublisherRedirectLimitError;
+  | PublisherRedirectLimitError
+  | PublisherTargetRefusedError
+  | PublisherBodyNotReplayableError;
 
 export type PublisherFetchResult = {
   response: Response;
@@ -65,6 +73,7 @@ type Clock = {
   sleep: (ms: number, signal?: AbortSignal) => Promise<void>;
 };
 type PublisherFetcherOptions = {
+  validateTarget: (url: URL) => Promise<Result<URL, unknown>>;
   fetcher?: Fetcher;
   clock?: Clock;
   robotsTtlMs?: number;
@@ -86,6 +95,57 @@ type RobotsState =
   | { type: "allow-all" }
   | { type: "unavailable"; cause?: unknown };
 type CachedRobots = { expiresAt: number; state: RobotsState };
+
+const publisherPolicyFor = (
+  state: RobotsState,
+  url: URL,
+  defaultMinimumIntervalMs: number,
+): {
+  decision?: PublisherRobotsDecision;
+  intervalMs: number;
+  refusal?: PublisherPolicyError;
+} => {
+  if (state.type === "unavailable") {
+    return {
+      intervalMs: defaultMinimumIntervalMs,
+      refusal: new RobotsUnavailableError({
+        message: "robots.txt is unavailable",
+        url: url.href,
+        origin: url.origin,
+        cause: state.cause,
+      }),
+    };
+  }
+  if (state.type === "allow-all") {
+    return {
+      decision: "allow_all_4xx",
+      intervalMs: defaultMinimumIntervalMs,
+    };
+  }
+  const evaluated = evaluatePublisherRobots(
+    state.groups,
+    PRODUCT_TOKEN,
+    `${url.pathname}${url.search}`,
+  );
+  let refusal: AgentExcludedError | RobotsDisallowedError | undefined;
+  if (!evaluated.allowed) {
+    refusal = evaluated.agentExcluded
+      ? new AgentExcludedError({
+          message: "robots.txt excludes the stella agent",
+          url: url.href,
+          origin: url.origin,
+        })
+      : new RobotsDisallowedError({
+          message: "robots.txt disallows this URL",
+          url: url.href,
+          origin: url.origin,
+        });
+  }
+  return {
+    intervalMs: Math.max(defaultMinimumIntervalMs, evaluated.crawlDelayMs),
+    ...(refusal ? { refusal } : {}),
+  };
+};
 
 const normalizeOctets = (value: string) =>
   value.replaceAll(/%[\da-f]{2}/giu, (encoded) => {
@@ -256,8 +316,82 @@ const readBoundedText = async (response: Response) => {
 const isRedirect = (response: Response) =>
   response.status >= 300 && response.status < 400;
 
+const validatePublisherTarget = async (
+  url: URL,
+  validateTarget: PublisherFetcherOptions["validateTarget"],
+) => {
+  const validated = await validateTarget(url);
+  return Result.isError(validated)
+    ? Result.err(
+        new PublisherTargetRefusedError({
+          message: "Publisher target was refused",
+          url: url.href,
+          origin: url.origin,
+          cause: validated.error,
+        }),
+      )
+    : validated;
+};
+
+type RedirectedRequestInitOptions = {
+  response: Response;
+  currentUrl: URL;
+  nextUrl: URL;
+  requestInit: Omit<RequestInit, "redirect"> | undefined;
+  headers: Headers;
+};
+
+const redirectedRequestInit = ({
+  response,
+  currentUrl,
+  nextUrl,
+  requestInit,
+  headers,
+}: RedirectedRequestInitOptions) => {
+  const method = requestInit?.method?.toUpperCase() ?? "GET";
+  const dropBody =
+    (response.status === 303 && method !== "HEAD") ||
+    ((response.status === 301 || response.status === 302) && method === "POST");
+  if (
+    !dropBody &&
+    (response.status === 307 || response.status === 308) &&
+    requestInit?.body instanceof ReadableStream
+  ) {
+    return Result.err(
+      new PublisherBodyNotReplayableError({
+        message: "Publisher redirect requires a replayable request body",
+        url: currentUrl.href,
+        origin: currentUrl.origin,
+      }),
+    );
+  }
+  const redirectedHeaders = new Headers(headers);
+  if (nextUrl.origin !== currentUrl.origin) {
+    for (const name of ["Authorization", "Cookie", "Proxy-Authorization"]) {
+      redirectedHeaders.delete(name);
+    }
+  }
+  if (dropBody) {
+    for (const name of [
+      "Content-Type",
+      "Content-Length",
+      "Content-Encoding",
+      "Content-Language",
+      "Content-Location",
+    ]) {
+      redirectedHeaders.delete(name);
+    }
+  }
+  return Result.ok({
+    ...requestInit,
+    ...(dropBody ? { body: null, method: "GET" } : {}),
+    headers: redirectedHeaders,
+  });
+};
+
 type LoadRobotsOptions = {
   fetcher: Fetcher;
+  validateTarget: PublisherFetcherOptions["validateTarget"];
   origin: string;
   now: () => number;
   robotsTtlMs: number;
@@ -266,6 +400,7 @@ type LoadRobotsOptions = {
 
 const loadRobots = async ({
   fetcher,
+  validateTarget,
   origin,
   now,
   robotsTtlMs,
@@ -276,8 +411,16 @@ const loadRobots = async ({
   let failure: unknown;
   for (let redirects = 0; ; redirects += 1) {
     const requestTarget = target;
+    const validated = await validatePublisherTarget(
+      requestTarget,
+      validateTarget,
+    );
+    if (Result.isError(validated)) {
+      failure = validated.error;
+      break;
+    }
     const fetched = await Result.tryPromise(async () =>
-      fetcher(requestTarget, {
+      fetcher(validated.value, {
         headers: { "User-Agent": PRODUCT_TOKEN },
         redirect: "manual",
       }),
@@ -358,6 +501,7 @@ const loadRobots = async ({
 };
 
 export const createPolitePublisherFetch = ({
+  validateTarget,
   fetcher = globalThis.fetch,
   clock = {
     now: () => performance.now(),
@@ -371,7 +515,7 @@ export const createPolitePublisherFetch = ({
   robotsRetryMs = ROBOTS_RETRY_MS,
   defaultMinimumIntervalMs = DEFAULT_MINIMUM_INTERVAL_MS,
   onTelemetry = () => undefined,
-}: PublisherFetcherOptions = {}) => {
+}: PublisherFetcherOptions) => {
   const robotsCache = new Map<string, CachedRobots>();
   const robotsLoads = new Map<string, Promise<CachedRobots>>();
   const originQueues = new Map<string, Promise<void>>();
@@ -388,6 +532,7 @@ export const createPolitePublisherFetch = ({
     }
     const pending = loadRobots({
       fetcher,
+      validateTarget,
       origin,
       now: clock.now,
       robotsTtlMs,
@@ -440,42 +585,28 @@ export const createPolitePublisherFetch = ({
     }: PublisherFetchOptions,
   ): Promise<Result<PublisherFetchResult, PublisherPolicyError>> => {
     let url = new URL(input);
+    let requestInit = init;
     let decision: PublisherRobotsDecision = "allowed";
     let delayAppliedMs = 0;
     for (let redirects = 0; ; redirects += 1) {
-      const state = await robotsFor(url.origin);
-      let refusal: PublisherPolicyError | undefined;
-      let intervalMs = defaultMinimumIntervalMs;
-      if (state.type === "unavailable") {
-        refusal = new RobotsUnavailableError({
-          message: "robots.txt is unavailable",
-          url: url.href,
-          origin: url.origin,
-          cause: state.cause,
-        });
-      } else if (state.type === "allow-all") {
-        decision = "allow_all_4xx";
-      } else {
-        const evaluated = evaluatePublisherRobots(
-          state.groups,
-          PRODUCT_TOKEN,
-          `${url.pathname}${url.search}`,
-        );
-        intervalMs = Math.max(intervalMs, evaluated.crawlDelayMs);
-        if (!evaluated.allowed) {
-          refusal = evaluated.agentExcluded
-            ? new AgentExcludedError({
-                message: "robots.txt excludes the stella agent",
-                url: url.href,
-                origin: url.origin,
-              })
-            : new RobotsDisallowedError({
-                message: "robots.txt disallows this URL",
-                url: url.href,
-                origin: url.origin,
-              });
-        }
+      const validated = await validatePublisherTarget(url, validateTarget);
+      if (Result.isError(validated)) {
+        return validated;
       }
+      url = validated.value;
+      const state = await robotsFor(url.origin);
+      if (
+        state.type === "unavailable" &&
+        PublisherTargetRefusedError.is(state.cause)
+      ) {
+        return Result.err(state.cause);
+      }
+      const {
+        refusal,
+        intervalMs,
+        decision: robotsDecision,
+      } = publisherPolicyFor(state, url, defaultMinimumIntervalMs);
+      decision = robotsDecision ?? decision;
       if (refusal && policy.type === "obey" && enforcement === "enforce") {
         return Result.err(refusal);
       }
@@ -494,12 +625,12 @@ export const createPolitePublisherFetch = ({
       delayAppliedMs += await reserve(
         url.origin,
         intervalMs,
-        init?.signal ?? undefined,
+        requestInit?.signal ?? undefined,
       );
-      const headers = new Headers(init?.headers);
+      const headers = new Headers(requestInit?.headers);
       headers.set("User-Agent", userAgent);
       const response = await fetcher(url, {
-        ...init,
+        ...requestInit,
         headers,
         redirect: "manual",
       });
@@ -543,9 +674,19 @@ export const createPolitePublisherFetch = ({
         });
       }
       await response.body?.cancel();
-      url = new URL(location, url);
+      const nextUrl = new URL(location, url);
+      const redirected = redirectedRequestInit({
+        response,
+        currentUrl: url,
+        nextUrl,
+        requestInit,
+        headers,
+      });
+      if (Result.isError(redirected)) {
+        return redirected;
+      }
+      requestInit = redirected.value;
+      url = nextUrl;
     }
   };
 };
-
-export const politePublisherFetch = createPolitePublisherFetch();

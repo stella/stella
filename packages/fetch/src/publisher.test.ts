@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
@@ -109,11 +110,13 @@ describe("RFC 9309 matching", () => {
 });
 
 describe("publisher scheduler", () => {
+  const allowTarget = async (url: URL) => Result.ok(url);
   test("serializes concurrent callers and waits for Crawl-delay", async () => {
     let now = 0;
     const sleeps: number[] = [];
     const requestedAt: number[] = [];
     const request = createPolitePublisherFetch({
+      validateTarget: allowTarget,
       clock: {
         now: () => now,
         sleep: async (ms) => {
@@ -148,6 +151,7 @@ describe("publisher scheduler", () => {
   test("follows robots redirects before evaluating the original origin", async () => {
     const requested: string[] = [];
     const request = createPolitePublisherFetch({
+      validateTarget: allowTarget,
       fetcher: async (input) => {
         const url = new URL(input instanceof Request ? input.url : input);
         requested.push(url.href);
@@ -181,6 +185,7 @@ describe("publisher scheduler", () => {
   test("refuses a same-origin redirect to a disallowed path", async () => {
     const fetchedResources: string[] = [];
     const request = createPolitePublisherFetch({
+      validateTarget: allowTarget,
       fetcher: async (input, init) => {
         const url = new URL(input instanceof Request ? input.url : input);
         if (url.pathname === "/robots.txt") {
@@ -212,6 +217,7 @@ describe("publisher scheduler", () => {
     let now = 0;
     const resourceRequests: { host: string; time: number }[] = [];
     const request = createPolitePublisherFetch({
+      validateTarget: allowTarget,
       clock: {
         now: () => now,
         sleep: async (ms) => {
@@ -251,8 +257,187 @@ describe("publisher scheduler", () => {
     ]);
   });
 
+  test.each(["127.0.0.1", "10.0.0.1", "169.254.169.254"])(
+    "refuses a redirect to private target %s before any request reaches it",
+    async (privateHost) => {
+      const requested: string[] = [];
+      const request = createPolitePublisherFetch({
+        validateTarget: async (url) =>
+          url.hostname === privateHost
+            ? Result.err(new Error("private target"))
+            : Result.ok(url),
+        fetcher: async (input) => {
+          const url = new URL(input instanceof Request ? input.url : input);
+          requested.push(url.href);
+          if (url.pathname === "/robots.txt") {
+            return new Response(null, { status: 404 });
+          }
+          return Response.redirect(`http://${privateHost}/secret`, 302);
+        },
+        defaultMinimumIntervalMs: 0,
+      });
+
+      const outcome = await request("https://public.example/start", {
+        userAgent: "Stella/1.0 (+https://stella.law)",
+        enforcement: "enforce",
+      });
+
+      expect(outcome.isErr()).toBe(true);
+      if (outcome.isErr()) {
+        expect(outcome.error._tag).toBe("publisher_target_refused");
+      }
+      expect(requested.every((url) => !url.includes(privateHost))).toBe(true);
+    },
+  );
+
+  test("refuses a private robots redirect before requesting it", async () => {
+    const requested: string[] = [];
+    const request = createPolitePublisherFetch({
+      validateTarget: async (url) =>
+        url.hostname === "127.0.0.1"
+          ? Result.err(new Error("private target"))
+          : Result.ok(url),
+      fetcher: async (input) => {
+        const url = new URL(input instanceof Request ? input.url : input);
+        requested.push(url.href);
+        return Response.redirect("http://127.0.0.1/robots.txt", 302);
+      },
+      defaultMinimumIntervalMs: 0,
+    });
+
+    const outcome = await request("https://public.example/start", {
+      userAgent: "Stella/1.0 (+https://stella.law)",
+      enforcement: "audit",
+    });
+
+    expect(outcome.isErr()).toBe(true);
+    expect(requested).toEqual(["https://public.example/robots.txt"]);
+  });
+
+  test("strips credentials across origins and retains them on same-origin hops", async () => {
+    const seen = new Map<string, Headers>();
+    const request = createPolitePublisherFetch({
+      validateTarget: allowTarget,
+      fetcher: async (input, init) => {
+        const url = new URL(input instanceof Request ? input.url : input);
+        if (url.pathname === "/robots.txt") {
+          return new Response(null, { status: 404 });
+        }
+        seen.set(url.href, new Headers(init?.headers));
+        if (url.pathname === "/start") {
+          return Response.redirect("https://source.example/next", 302);
+        }
+        if (url.hostname === "source.example") {
+          return Response.redirect("https://destination.example/end", 302);
+        }
+        return new Response("ok");
+      },
+      defaultMinimumIntervalMs: 0,
+    });
+
+    await request("https://source.example/start", {
+      init: {
+        headers: {
+          Authorization: "Bearer secret",
+          Cookie: "session=secret",
+          "Proxy-Authorization": "Basic secret",
+        },
+      },
+      userAgent: "Stella/1.0 (+https://stella.law)",
+      enforcement: "enforce",
+    });
+
+    expect(seen.get("https://source.example/next")?.get("authorization")).toBe(
+      "Bearer secret",
+    );
+    const destination = seen.get("https://destination.example/end");
+    expect(destination?.has("authorization")).toBe(false);
+    expect(destination?.has("cookie")).toBe(false);
+    expect(destination?.has("proxy-authorization")).toBe(false);
+  });
+
+  test.each([
+    { status: 303, expectedMethod: "GET", expectedBody: null },
+    { status: 307, expectedMethod: "POST", expectedBody: "payload" },
+  ])(
+    "applies fetch body semantics for POST + $status",
+    async ({ status, expectedMethod, expectedBody }) => {
+      let destination:
+        | {
+            body: BodyInit | null | undefined;
+            headers: Headers;
+            method: string;
+          }
+        | undefined;
+      const request = createPolitePublisherFetch({
+        validateTarget: allowTarget,
+        fetcher: async (input, init) => {
+          const url = new URL(input instanceof Request ? input.url : input);
+          if (url.pathname === "/robots.txt") {
+            return new Response(null, { status: 404 });
+          }
+          if (url.pathname === "/start") {
+            return Response.redirect("https://publisher.example/end", status);
+          }
+          destination = {
+            body: init?.body,
+            headers: new Headers(init?.headers),
+            method: init?.method ?? "GET",
+          };
+          return new Response("ok");
+        },
+        defaultMinimumIntervalMs: 0,
+      });
+
+      const outcome = await request("https://publisher.example/start", {
+        init: {
+          body: "payload",
+          headers: {
+            "Content-Encoding": "identity",
+            "Content-Type": "text/plain",
+          },
+          method: "POST",
+        },
+        userAgent: "Stella/1.0 (+https://stella.law)",
+        enforcement: "enforce",
+      });
+
+      expect(outcome.isOk()).toBe(true);
+      expect(destination?.body).toBe(expectedBody);
+      expect(destination?.method).toBe(expectedMethod);
+      expect(destination?.headers.has("content-type")).toBe(status === 307);
+      expect(destination?.headers.has("content-encoding")).toBe(status === 307);
+    },
+  );
+
+  test("refuses a 307 redirect when the request body cannot be replayed", async () => {
+    const request = createPolitePublisherFetch({
+      validateTarget: allowTarget,
+      fetcher: async (input) =>
+        new URL(input instanceof Request ? input.url : input).pathname ===
+        "/robots.txt"
+          ? new Response(null, { status: 404 })
+          : Response.redirect("https://publisher.example/end", 307),
+      defaultMinimumIntervalMs: 0,
+    });
+    const outcome = await request("https://publisher.example/start", {
+      init: {
+        body: new ReadableStream(),
+        method: "POST",
+      },
+      userAgent: "Stella/1.0 (+https://stella.law)",
+      enforcement: "enforce",
+    });
+
+    expect(outcome.isErr()).toBe(true);
+    if (outcome.isErr()) {
+      expect(outcome.error._tag).toBe("publisher_body_not_replayable");
+    }
+  });
+
   test("returns a typed refusal when redirects exceed the bound", async () => {
     const request = createPolitePublisherFetch({
+      validateTarget: allowTarget,
       fetcher: async (input) => {
         const url = new URL(input instanceof Request ? input.url : input);
         if (url.pathname === "/robots.txt") {
@@ -284,6 +469,7 @@ describe("publisher scheduler", () => {
     let now = 0;
     let robotsRequests = 0;
     const request = createPolitePublisherFetch({
+      validateTarget: allowTarget,
       clock: { now: () => now, sleep: async () => undefined },
       fetcher: async (input) => {
         const url = new URL(input instanceof Request ? input.url : input);
@@ -325,6 +511,7 @@ describe("publisher scheduler", () => {
       [503, false],
     ] as const) {
       const request = createPolitePublisherFetch({
+        validateTarget: allowTarget,
         fetcher: async (input) =>
           new URL(input instanceof Request ? input.url : input).pathname ===
           "/robots.txt"

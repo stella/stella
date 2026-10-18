@@ -35,6 +35,10 @@ import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { observePublisherDocumentFetch } from "@/api/lib/legal-search/document-stage-observation";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
 import { logger } from "@/api/lib/observability/logger";
+import {
+  OUTBOUND_PROTOCOL_POLICY,
+  validateOutboundFetchTarget,
+} from "@/api/lib/safe-outbound-fetch";
 
 import { abortableSleep } from "./publisher-request-gate";
 import { publisherTarget } from "./publisher-target";
@@ -42,6 +46,13 @@ import { INGESTION_USER_AGENT, isTimeoutError } from "./utils";
 
 const MAX_DATE_EPOCH_MS = 8_640_000_000_000_000;
 const auditedPublisherFetch = createPolitePublisherFetch({
+  validateTarget: async (url) => {
+    const target = await validateOutboundFetchTarget(url, {
+      protocolPolicy: OUTBOUND_PROTOCOL_POLICY.HTTP_AND_HTTPS,
+      timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+    });
+    return target.map(({ url: validatedUrl }) => validatedUrl);
+  },
   fetcher: async (input, init) => {
     const { signal, ...requestInit } = init ?? {};
     // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- canonical publisher boundary; callers validate the target before the policy owner invokes this transport

@@ -3,13 +3,26 @@ import { Result, TaggedError } from "better-result";
 import { appendFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 
-import { politePublisherFetch } from "@stll/fetch/publisher";
+import { createPolitePublisherFetch } from "@stll/fetch/publisher";
 import { sha256Hex } from "@stll/sha256/bun";
+
+import {
+  OUTBOUND_PROTOCOL_POLICY,
+  validateOutboundFetchTarget,
+} from "@/api/lib/safe-outbound-fetch";
 
 const usage = "Usage: bun scripts/publisher-fetch.ts <url> --archive <dir>";
 class PublisherFetchCliError extends TaggedError("PublisherFetchCliError")<{
   message: string;
 }> {}
+const politePublisherFetch = createPolitePublisherFetch({
+  validateTarget: async (url) => {
+    const target = await validateOutboundFetchTarget(url, {
+      protocolPolicy: OUTBOUND_PROTOCOL_POLICY.HTTP_AND_HTTPS,
+    });
+    return target.map(({ url: validatedUrl }) => validatedUrl);
+  },
+});
 
 const run = async () => {
   const [rawUrl, archiveFlag, archiveDir, ...rest] = Bun.argv.slice(2);

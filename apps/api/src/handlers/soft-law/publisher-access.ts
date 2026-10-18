@@ -21,6 +21,10 @@ import {
 import type { SoftLawAccessPolicy } from "@/api/lib/legal-search/soft-law-types";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
+import {
+  OUTBOUND_PROTOCOL_POLICY,
+  validateOutboundFetchTarget,
+} from "@/api/lib/safe-outbound-fetch";
 
 const SOFT_LAW_RESPONSE_MAX_BYTES = 32 * 1024 * 1024;
 const REQUEST_TIMEOUT_MS = 30_000;
@@ -156,6 +160,14 @@ export const createSoftLawFetch = ({
   beforeRequest,
 }: CreateSoftLawFetchOptions): SoftLawFetch => {
   const auditedPublisherFetch = createPolitePublisherFetch({
+    validateTarget: async (url) => {
+      const target = await validateOutboundFetchTarget(url, {
+        protocolPolicy: OUTBOUND_PROTOCOL_POLICY.HTTP_AND_HTTPS,
+        signal,
+        timeoutMs: REQUEST_TIMEOUT_MS,
+      });
+      return target.map(({ url: validatedUrl }) => validatedUrl);
+    },
     fetcher: async (input, init) => {
       const { signal: requestSignal, ...requestInit } = init ?? {};
       return await request(input, {
