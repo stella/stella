@@ -1,0 +1,152 @@
+import { useState } from "react";
+
+import { useForm, useSelector } from "@tanstack/react-form";
+import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import { useTranslations } from "use-intl";
+import * as v from "valibot";
+
+import { Button } from "@stll/ui/button";
+import { DestructiveConfirmDialog } from "@stll/ui/destructive-confirm-dialog";
+import type { DestructiveConfirmOutcome } from "@stll/ui/destructive-confirm-dialog";
+import { Field, FieldError, FieldLabel } from "@stll/ui/field";
+import { Form } from "@stll/ui/form";
+import { Frame, FramePanel } from "@stll/ui/frame";
+import { Input } from "@stll/ui/input";
+import { stellaToast } from "@stll/ui/toast";
+
+import { useAnalytics } from "@/lib/analytics/provider";
+import { authClient } from "@/lib/auth-client";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { detached } from "@/lib/detached";
+import { toAuthClientError } from "@/lib/errors/auth";
+import { notifyUserError } from "@/lib/errors/user-toast";
+import {
+  organizationKeys,
+  organizationOptions,
+} from "@/lib/organization/queries";
+import { getOrganizationSchema } from "@/lib/organization/utils";
+import { schemaFormOptions, toFormErrors } from "@/lib/schema";
+
+const getNameOnlySchema = () => v.pick(getOrganizationSchema(), ["name"]);
+
+export const OrganizationProfileCard = () => {
+  const t = useTranslations();
+  const analytics = useAnalytics();
+  const queryClient = useQueryClient();
+  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
+  const { data } = useSuspenseQuery(organizationOptions(activeOrganizationId));
+  const [pendingName, setPendingName] = useState<string | null>(null);
+
+  const form = useForm(
+    schemaFormOptions({
+      schema: getNameOnlySchema(),
+      defaultValues: {
+        name: data.name,
+      },
+      submitValues: "schema-output",
+      onSubmit: ({ value }) => {
+        // Defer the mutation to the type-to-confirm dialog so renames
+        // can't fire from a stray click.
+        setPendingName(value.name);
+      },
+    }),
+  );
+
+  const formErrors = useSelector(form.store, (s) => toFormErrors(s.fieldMeta));
+
+  const performRename = async () => {
+    if (!pendingName) {
+      return undefined;
+    }
+    const result = await authClient.organization.update({
+      data: { name: pendingName },
+    });
+
+    if (result.error) {
+      analytics.captureError(toAuthClientError(result.error));
+      notifyUserError(
+        toAuthClientError(result.error),
+        t("errors.actionFailed"),
+      );
+      // Keep the confirm dialog open so the rename can be retried.
+      return "keep-open" satisfies DestructiveConfirmOutcome;
+    }
+
+    await queryClient.invalidateQueries({ queryKey: organizationKeys.root });
+    form.reset({ name: pendingName });
+    stellaToast.add({
+      title: t("success.organizationUpdated"),
+      type: "success",
+    });
+    setPendingName(null);
+    return undefined;
+  };
+
+  return (
+    <>
+      <Frame>
+        <FramePanel>
+          <Form
+            className="gap-4 p-1"
+            errors={formErrors}
+            onSubmit={(e) => {
+              e.preventDefault();
+              detached(form.handleSubmit(), "profile-card.submit");
+            }}
+          >
+            <form.Field name="name">
+              {(field) => (
+                <Field name={field.name}>
+                  <FieldLabel>{t("common.organizationName")}</FieldLabel>
+                  <Input
+                    onBlur={field.handleBlur}
+                    onChange={(e) => field.handleChange(e.target.value)}
+                    placeholder={t("auth.organizationNamePlaceholder")}
+                    required
+                    value={field.state.value}
+                  />
+                  <FieldError />
+                </Field>
+              )}
+            </form.Field>
+            <form.Subscribe
+              selector={(s) => ({
+                isSubmitting: s.isSubmitting,
+                isDirty: s.isDirty,
+                canSubmit: s.canSubmit,
+              })}
+            >
+              {({ isSubmitting, isDirty, canSubmit }) => (
+                <Button
+                  className="self-start"
+                  disabled={!isDirty || !canSubmit}
+                  loading={isSubmitting}
+                  type="submit"
+                >
+                  {t("common.saveChanges")}
+                </Button>
+              )}
+            </form.Subscribe>
+          </Form>
+        </FramePanel>
+      </Frame>
+      <DestructiveConfirmDialog
+        cancelLabel={t("common.cancel")}
+        confirmation={pendingName ?? ""}
+        confirmLabel={t("common.rename")}
+        description={t("settings.organization.renameDescription")}
+        inputLabel={t("settings.organization.renameTypeToConfirm", {
+          name: pendingName ?? "",
+        })}
+        onConfirm={performRename}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingName(null);
+          }
+        }}
+        open={pendingName !== null}
+        title={t("settings.organization.renameTitle")}
+      />
+    </>
+  );
+};
