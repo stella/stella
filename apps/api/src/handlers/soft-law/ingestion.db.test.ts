@@ -1166,6 +1166,15 @@ if (!databaseUrl || !enabled) {
         if (!documentId) {
           panic("Numbered WP29 document was not stored");
         }
+        const originalVersion = (
+          await db
+            .select()
+            .from(softLawDocumentVersions)
+            .where(eq(softLawDocumentVersions.documentId, documentId))
+        ).at(0);
+        if (!originalVersion) {
+          panic("Numbered WP29 version was not stored");
+        }
         repaired = true;
         expect(await run(sourceAdapter)).toEqual({ status: "complete" });
 
@@ -1180,10 +1189,11 @@ if (!databaseUrl || !enabled) {
           .from(softLawDocumentVersions)
           .where(eq(softLawDocumentVersions.documentId, documentId))
           .orderBy(softLawDocumentVersions.sequence);
-        expect(versions.map(({ extractedText }) => extractedText)).toEqual([
-          null,
+        expect(versions).toHaveLength(1);
+        expect(versions.at(0)?.id).toBe(originalVersion.id);
+        expect(versions.at(0)?.extractedText).toBe(
           "Successfully extracted WP 259",
-        ]);
+        );
       }));
 
     test("a repaired WP29 placeholder merges into the document that owns its recovered identity", async () =>
@@ -1438,6 +1448,15 @@ if (!databaseUrl || !enabled) {
         if (!placeholderId) {
           panic("WP29 placeholder was not stored");
         }
+        const placeholderVersion = (
+          await db
+            .select()
+            .from(softLawDocumentVersions)
+            .where(eq(softLawDocumentVersions.documentId, placeholderId))
+        ).at(0);
+        if (!placeholderVersion) {
+          panic("WP29 placeholder version was not stored");
+        }
 
         repaired = true;
         expect(await run(sourceAdapter([numbered, placeholder]))).toEqual({
@@ -1465,11 +1484,50 @@ if (!databaseUrl || !enabled) {
         const versions = await db
           .select()
           .from(softLawDocumentVersions)
-          .where(eq(softLawDocumentVersions.documentId, ownerId));
-        expect(versions).toHaveLength(2);
+          .where(eq(softLawDocumentVersions.documentId, ownerId))
+          .orderBy(softLawDocumentVersions.sequence);
         expect(
-          versions.map(({ extractionQuality }) => extractionQuality),
-        ).toEqual(expect.arrayContaining(["extraction_failed", "text_layer"]));
+          versions.map(
+            ({
+              id,
+              sequence,
+              metadata,
+              extractionQuality,
+              observedFrom,
+              observedTo,
+            }) => ({
+              id,
+              sequence,
+              metadata,
+              extractionQuality,
+              observedFrom,
+              observedTo,
+            }),
+          ),
+        ).toEqual([
+          {
+            id: placeholderVersion.id,
+            sequence: 1,
+            metadata: unnumberedMetadata,
+            extractionQuality: "extraction_failed",
+            observedFrom: placeholderVersion.observedFrom,
+            observedTo: expect.any(Date),
+          },
+          {
+            id: expect.any(String),
+            sequence: 2,
+            metadata: numberedMetadata,
+            extractionQuality: "text_layer",
+            observedFrom: expect.any(Date),
+            observedTo: null,
+          },
+        ]);
+        expect(versions.at(0)?.contentHash).toBe(
+          placeholderVersion.contentHash,
+        );
+        expect(versions.at(1)?.contentHash).not.toBe(
+          placeholderVersion.contentHash,
+        );
 
         expect(await run(sourceAdapter([numbered, placeholder]))).toEqual({
           status: "complete",

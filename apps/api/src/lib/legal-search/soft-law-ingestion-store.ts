@@ -467,6 +467,18 @@ const persistSoftLawVersions = async (
       ),
     );
   const byDocument = new Map(latest.map((row) => [row.documentId, row]));
+  const maximumSequences = new Map(
+    (
+      await tx
+        .select({
+          documentId: softLawDocumentVersions.documentId,
+          sequence: sql<number>`max(${softLawDocumentVersions.sequence})::integer`,
+        })
+        .from(softLawDocumentVersions)
+        .where(inArray(softLawDocumentVersions.documentId, ids))
+        .groupBy(softLawDocumentVersions.documentId)
+    ).map((row) => [row.documentId, row.sequence]),
+  );
   const changes = [
     ...new Map(items.map((item) => [item.documentId, item])).values(),
   ].filter(
@@ -495,7 +507,7 @@ const persistSoftLawVersions = async (
             byDocument.get(item.documentId)?.contentHash === item.contentHash
               ? (byDocument.get(item.documentId)?.sequence ??
                 panic("Unchanged expression has no version"))
-              : (byDocument.get(item.documentId)?.sequence ?? 0) + 1,
+              : (maximumSequences.get(item.documentId) ?? 0) + 1,
           contentHash: item.contentHash,
           metadata: item.input.metadata,
           rawObjects: item.rawObjects,
