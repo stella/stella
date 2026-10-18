@@ -779,25 +779,25 @@ describe.serial("checked operation ownership", () => {
         `export { ${member} } from "${specifier}";`,
         `const { ${member} } = await import("${specifier}");`,
       ].join("\n");
-      for (const sourcePath of [
+      const sourcePaths = [
         "apps/api/src/handlers/example/unchecked.ts",
         "apps/api/src/mcp/unchecked.ts",
         "apps/api/src/lib/scheduler/tasks/unchecked.ts",
-      ]) {
-        expect(
-          await lintSingleRule("confine-owner", source, {
+        ...entry.owner,
+      ];
+      const linesBySource = await Promise.all(
+        sourcePaths.map((sourcePath) =>
+          lintSingleRule("confine-owner", source, {
             sourcePath,
             ruleOptions: { entries: [entry] },
           }),
-        ).toEqual([1, 2, 3, 4]);
+        ),
+      );
+      for (const lines of linesBySource.slice(0, 3)) {
+        expect(lines).toEqual([1, 2, 3, 4]);
       }
-      for (const sourcePath of entry.owner) {
-        expect(
-          await lintSingleRule("confine-owner", source, {
-            sourcePath,
-            ruleOptions: { entries: [entry] },
-          }),
-        ).toEqual([]);
+      for (const lines of linesBySource.slice(3)) {
+        expect(lines).toEqual([]);
       }
     });
   }
