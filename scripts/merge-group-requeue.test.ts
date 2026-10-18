@@ -219,7 +219,22 @@ describe("step names match the CI workflow", () => {
   });
 });
 
-const entryNode = (overrides: Record<string, unknown> = {}) => ({
+type EntryNode = {
+  state: string;
+  headCommit: { oid: string } | null;
+  pullRequest: {
+    id: string;
+    number: number;
+    headRefOid: string;
+    commits: {
+      nodes: {
+        commit: { oid: string; status: null | { context: { state: string } } };
+      }[];
+    };
+  };
+};
+
+const entryNode = (overrides: Partial<EntryNode> = {}): EntryNode => ({
   state: "UNMERGEABLE",
   headCommit: { oid: "group-sha" },
   pullRequest: {
@@ -245,11 +260,11 @@ describe("parseEntries", () => {
         oid: "head-sha",
         status: { context: { state: "SUCCESS" } },
       },
-    } as never;
-    expect(parseEntries(queueData([attempted, entryNode()]))).toEqual([
-      { ...entry(), attemptState: "SUCCESS" },
-      entry(),
-    ]);
+    };
+    expect(parseEntries(queueData([attempted, entryNode()]))).toEqual({
+      entries: [{ ...entry(), attemptState: "SUCCESS" }, entry()],
+      failure: null,
+    });
   });
 
   test("drops an entry whose last commit is not the head", () => {
@@ -257,20 +272,24 @@ describe("parseEntries", () => {
     moved.pullRequest.commits.nodes[0] = {
       commit: { oid: "other", status: null },
     };
-    expect(parseEntries(queueData([moved]))).toEqual([]);
+    expect(parseEntries(queueData([moved]))).toEqual({
+      entries: [],
+      failure: null,
+    });
   });
 
   test("an entry with no merge group yet has no head commit", () => {
     expect(
-      parseEntries(queueData([entryNode({ headCommit: null })]))[0]
+      parseEntries(queueData([entryNode({ headCommit: null })])).entries[0]
         ?.headCommitOid,
     ).toBeNull();
   });
 
-  test("an unreadable queue fails instead of reading as empty", () => {
-    expect(() => parseEntries({ repository: null })).toThrow(
-      "Merge queue entries are unavailable",
-    );
+  test("an unreadable queue reports a failure instead of reading as empty", () => {
+    expect(parseEntries({ repository: null })).toEqual({
+      entries: [],
+      failure: "Merge queue entries are unavailable",
+    });
   });
 });
 
@@ -349,7 +368,11 @@ describe("planRequeues", () => {
       ],
       jobs: externallyCancelled,
     });
-    const plans = await planRequeues({ github: fake.github, repo });
+    const { plans, failure } = await planRequeues({
+      github: fake.github,
+      repo,
+    });
+    expect(failure).toBeNull();
     expect(plans).toHaveLength(1);
     expect(plans[0]).toMatchObject({
       action: "requeue",
@@ -364,12 +387,13 @@ describe("planRequeues", () => {
 
   test("a merge group with no run is left alone", async () => {
     const fake = fakeGithub({ nodes: [entryNode()] });
-    expect(await planRequeues({ github: fake.github, repo })).toEqual([
-      expect.objectContaining({ action: "skip", runId: null }),
-    ]);
+    expect(await planRequeues({ github: fake.github, repo })).toEqual({
+      plans: [expect.objectContaining({ action: "skip", runId: null })],
+      failure: null,
+    });
     const noGroup = fakeGithub({ nodes: [entryNode({ headCommit: null })] });
     expect(
-      (await planRequeues({ github: noGroup.github, repo }))[0]?.action,
+      (await planRequeues({ github: noGroup.github, repo })).plans[0]?.action,
     ).toBe("skip");
     expect(noGroup.calls).toEqual([`entries:${REQUEUE_CONTEXT}`]);
   });
@@ -486,6 +510,10 @@ describe("applyRequeues", () => {
 });
 
 describe("workflow", () => {
+  const moduleSource = readFileSync(
+    path.join(root, "scripts/merge-group-requeue.mjs"),
+    "utf-8",
+  );
   const source = readFileSync(
     path.join(root, ".github/workflows/requeue-cancelled-merge-groups.yml"),
     "utf-8",
@@ -497,6 +525,22 @@ describe("workflow", () => {
     );
     expect(source).toContain(`ref: \${{ github.workflow_sha }}`);
     expect(source).toContain(".requeue/scripts/merge-group-requeue.mjs");
+  });
+
+  test("the sparse-checked-out module imports only Node builtins", () => {
+    const moduleSpecifiers = [
+      ...moduleSource.matchAll(
+        /(?:\bfrom\s+|\bimport\s*(?:\(\s*)?|\brequire\s*\(\s*)["']([^"']+)["']/gu,
+      ),
+    ].map((match) => match[1]);
+
+    expect(
+      moduleSpecifiers.filter((specifier) => !specifier?.startsWith("node:")),
+    ).toEqual([]);
+  });
+
+  test("reports an unavailable queue through the github-script boundary", () => {
+    expect(source).toContain("if (failure !== null) core.setFailed(failure);");
   });
 
   test("enqueues only with the App token and only outside a merge hold", () => {

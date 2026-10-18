@@ -72,12 +72,15 @@ export const decideRequeue = ({ entry, run, jobs }) => {
     return { action: "skip", reason: "no CI Checks run for the merge group" };
   }
   if (run.status !== "completed") {
-    return { action: "skip", reason: `run ${run.id} is ${run.status}` };
+    return {
+      action: "skip",
+      reason: `run ${run.id} is ${String(run.status)}`,
+    };
   }
   if (run.conclusion !== "cancelled") {
     return {
       action: "skip",
-      reason: `run ${run.id} concluded ${run.conclusion}`,
+      reason: `run ${run.id} concluded ${String(run.conclusion)}`,
     };
   }
   const failures = realFailedSteps(jobs);
@@ -138,7 +141,7 @@ const field = (value, key) => (isRecord(value) ? value[key] : undefined);
  * Reads queue entries, dropping any whose shape is not understood: an entry
  * that cannot be read is left alone.
  * @param {unknown} data GraphQL response for ENTRIES_QUERY.
- * @returns {QueueEntry[]} Readable entries.
+ * @returns {{ entries: QueueEntry[], failure: string | null }} Readable entries or a failure for the workflow boundary to report.
  */
 export const parseEntries = (data) => {
   const nodes = field(
@@ -146,9 +149,9 @@ export const parseEntries = (data) => {
     "nodes",
   );
   if (!Array.isArray(nodes)) {
-    throw new TypeError("Merge queue entries are unavailable");
+    return { entries: [], failure: "Merge queue entries are unavailable" };
   }
-  return nodes.flatMap((node) => {
+  const entries = nodes.flatMap((node) => {
     const state = field(node, "state");
     const pull = field(node, "pullRequest");
     const id = field(pull, "id");
@@ -184,17 +187,21 @@ export const parseEntries = (data) => {
       },
     ];
   });
+  return { entries, failure: null };
 };
 
 /**
  * Decides every unmergeable entry of the main merge queue. Read-only.
  * @param {{ github: Client, repo: Repository }} options GITHUB_TOKEN client and repository.
- * @returns {Promise<Array<QueueEntry & Decision & { runId: number | null }>>} One decision per unmergeable entry.
+ * @returns {Promise<{ plans: Array<QueueEntry & Decision & { runId: number | null }>, failure: string | null }>} Decisions and any queue-read failure for the workflow boundary.
  */
 export const planRequeues = async ({ github, repo }) => {
-  const entries = parseEntries(
+  const { entries, failure } = parseEntries(
     await github.graphql(ENTRIES_QUERY, { ...repo, context: REQUEUE_CONTEXT }),
   );
+  if (failure !== null) {
+    return { plans: [], failure };
+  }
   const plans = [];
   for (const entry of entries) {
     if (entry.state !== "UNMERGEABLE") {
@@ -228,7 +235,7 @@ export const planRequeues = async ({ github, repo }) => {
       runId: run?.id ?? null,
     });
   }
-  return plans;
+  return { plans, failure: null };
 };
 
 const DEQUEUE = `mutation($id: ID!) {
@@ -246,7 +253,7 @@ const ENQUEUE = `mutation($id: ID!, $head: GitObjectID!) {
  *   github: Client,
  *   queue: QueueClient | null,
  *   repo: Repository,
- *   plans: Awaited<ReturnType<typeof planRequeues>>,
+ *   plans: Awaited<ReturnType<typeof planRequeues>>["plans"],
  *   runUrl: (runId: number | null) => string,
  *   log: { info: (message: string) => void, warning: (message: string) => void, error: (message: string) => void },
  * }} options Clients, plans and logging.
@@ -265,8 +272,8 @@ export const applyRequeues = async ({
     const status = async (
       /** @type {string} */ state,
       /** @type {string} */ description,
-    ) =>
-      github.rest.repos.createCommitStatus({
+    ) => {
+      await github.rest.repos.createCommitStatus({
         ...repo,
         sha: plan.headRefOid,
         state,
@@ -274,6 +281,7 @@ export const applyRequeues = async ({
         description,
         target_url: runUrl(plan.runId),
       });
+    };
     if (plan.action === "skip") {
       log.info(`#${plan.number}: left alone, ${plan.reason}.`);
       continue;

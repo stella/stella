@@ -62,7 +62,8 @@ jobs:
             const { resolve } = require('node:path');
             const { planRequeues } = await import(pathToFileURL(
               resolve('.requeue/scripts/merge-group-requeue.mjs')).href);
-            const plans = await planRequeues({ github, repo: context.repo });
+            const { plans, failure } = await planRequeues({ github, repo: context.repo });
+            if (failure !== null) core.setFailed(failure);
             core.setOutput('plans', JSON.stringify(plans));
             core.setOutput('requeue', String(plans.some(({ action }) => action === 'requeue')));
             core.setOutput('act', String(plans.some(({ action }) => action !== 'skip')));
