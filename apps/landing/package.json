@@ -24,6 +24,8 @@
     "@astrojs/sitemap": "^3.7.4",
     "@astrojs/starlight": "^0.42.6",
     "@resvg/resvg-js": "^2.6.2",
+    "@stll/aho-corasick": "catalog:",
+    "@stll/aho-corasick-wasm": "catalog:",
     "@stll/anonymize-chat": "workspace:*",
     "@stll/anonymize-data": "catalog:",
     "@stll/anonymize-wasm": "catalog:",

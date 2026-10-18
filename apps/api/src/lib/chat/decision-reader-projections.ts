@@ -21,7 +21,7 @@ const readerMetadataSchema = v.strictObject({
   country: v.string(),
   date: v.nullable(v.string()),
   ecli: v.nullable(v.string()),
-  appUrl: v.nullable(v.string()),
+  url: v.nullable(v.string()),
 });
 const withheldReasonSchema = v.strictObject({
   code: v.literal("source_licence"),
@@ -61,10 +61,10 @@ const citationAnchorSchema = v.strictObject({
   end: v.number(),
   citationId: v.string(),
   decisionId: v.string(),
-  appUrl: v.nullable(v.string()),
+  url: v.nullable(v.string()),
 });
 const provisionAnchorSchema = v.strictObject({
-  appUrl: v.nullable(v.string()),
+  url: v.nullable(v.string()),
   pieceId: v.string(),
   start: v.number(),
   end: v.number(),
@@ -121,7 +121,7 @@ const previewHeading = v.strictObject({
   text: v.string(),
 });
 export const provisionPreviewOutput = v.strictObject({
-  appUrl: v.nullable(v.string()),
+  url: v.nullable(v.string()),
   documentId: v.string(),
   language: v.string(),
   anchorId: v.string(),
