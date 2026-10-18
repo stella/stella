@@ -8,6 +8,8 @@ const ON_DISK: Readonly<Record<string, PathKind>> = {
   "./src/lib/format.test.ts": "file",
   "src/components/editor.dom.test.tsx": "file",
   "e2e/unit/network-metrics.test.ts": "file",
+  "e2e/helpers/network-rounds.test.ts": "file",
+  "e2e/helpers": "directory",
   "src/features/avt": "directory",
   scripts: "directory",
   "/repo/apps/web/e2e/unit/deferred-cleanup.test.ts": "file",
@@ -19,6 +21,7 @@ const DIRECTORY_FILES: Readonly<Record<string, readonly string[]>> = {
     "src/features/avt/verdict.test.ts",
     "src/features/avt/claim-review.logic.test.ts",
   ],
+  "e2e/helpers": ["e2e/helpers/network-rounds.test.ts"],
 };
 
 const planWithMissing = (argv: readonly string[]) =>
@@ -35,6 +38,11 @@ describe("planTestRuns", () => {
     const runs = plan(["--", "--bail", "-t", "renders"]);
 
     expect(runs.map((run) => run.label)).toEqual(["unit", "dom", "e2e-unit"]);
+    expect(runs.at(2)?.args.slice(0, 3)).toEqual([
+      "--parallel=2",
+      "e2e/unit",
+      "e2e/helpers",
+    ]);
     for (const run of runs) {
       expect(run.args.slice(-3)).toEqual(["--bail", "-t", "renders"]);
     }
@@ -51,6 +59,7 @@ describe("planTestRuns", () => {
       "./src/lib/format.test.ts",
       "src/components/editor.dom.test.tsx",
       "e2e/unit/network-metrics.test.ts",
+      "e2e/helpers/network-rounds.test.ts",
       "-t",
       "formats",
     ]);
@@ -71,6 +80,7 @@ describe("planTestRuns", () => {
         args: [
           "--parallel=2",
           "./e2e/unit/network-metrics.test.ts",
+          "./e2e/helpers/network-rounds.test.ts",
           "-t",
           "formats",
         ],
@@ -86,6 +96,21 @@ describe("planTestRuns", () => {
           "./src/features/avt/verdict.test.ts",
           "./src/features/avt/claim-review.logic.test.ts",
         ],
+      },
+    ]);
+  });
+
+  test("classifies helper tests with the e2e unit runner", () => {
+    expect(plan(["e2e/helpers/network-rounds.test.ts"])).toEqual([
+      {
+        label: "e2e-unit",
+        args: ["--parallel=2", "./e2e/helpers/network-rounds.test.ts"],
+      },
+    ]);
+    expect(plan(["e2e/helpers"])).toEqual([
+      {
+        label: "e2e-unit",
+        args: ["--parallel=2", "./e2e/helpers/network-rounds.test.ts"],
       },
     ]);
   });

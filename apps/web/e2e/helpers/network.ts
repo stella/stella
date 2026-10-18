@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import type { Page, Request, Response } from "@playwright/test";
+import { TaggedError } from "better-result";
 import {
   existsSync,
   readFileSync,
@@ -155,11 +156,6 @@ export const countsTowardsWaterfall = ({
 }: WaterfallRequest): boolean =>
   resourceType !== "eventsource" && !BACKGROUND_POLL_PATHS.has(pathname);
 
-const requestDetails = (request: Request): WaterfallRequest => ({
-  pathname: new URL(request.url()).pathname,
-  resourceType: request.resourceType(),
-});
-
 const isTrackedApiRequest = (request: Request, apiOrigin: string): boolean => {
   if (!TRACKED_RESOURCE_TYPES.has(request.resourceType())) {
     return false;
@@ -188,6 +184,11 @@ const readResponseBytes = async (
   }
 };
 
+class NetworkInterceptionError extends TaggedError("NetworkInterceptionError")<{
+  message: string;
+  cause: unknown;
+}> {}
+
 export const createNetworkCollector = (
   collectorOptions: NetworkCollectorOptions = {},
 ): NetworkCollector => {
@@ -199,8 +200,9 @@ export const createNetworkCollector = (
   // so capture() awaits these before reading responseBytes off the records.
   const pendingBodyReads: Promise<void>[] = [];
   let lastActivityAt = Date.now();
-  const rounds = createNetworkRoundController<Request>();
-  const released = new Set<Request>();
+  const rounds = createNetworkRoundController<string>();
+  const inFlight = new Set<Request>();
+  let interceptionFailure: NetworkInterceptionError | undefined;
 
   const markActivity = () => {
     lastActivityAt = Date.now();
@@ -208,49 +210,108 @@ export const createNetworkCollector = (
 
   return {
     measureRounds: async (page) => {
-      await page.route(
-        (url) => url.origin === apiOrigin,
-        async (route) => {
-          const request = route.request();
-          if (
-            !isTrackedApiRequest(request, apiOrigin) ||
-            !countsTowardsWaterfall(requestDetails(request)) ||
-            rounds.loaded
-          ) {
-            await route.continue();
-            return;
-          }
-          rounds.arrive({
-            token: request,
-            key: requestKey({
-              method: request.method(),
-              pathname: new URL(request.url()).pathname,
-            }),
-            now: Date.now(),
-          });
-          // finishRounds can mark the controller loaded while this handler
-          // awaits, so read it fresh on every iteration.
-          const loaded = () => rounds.loaded;
-          while (!released.delete(request) && !loaded()) {
-            for (const token of rounds.release(Date.now())) {
-              released.add(token);
-            }
-            if (released.has(request)) {
-              continue;
-            }
-            // The page abandoned the request while it was held: it never
-            // reaches the network, so stop waiting and do not continue it.
-            if (!rounds.holds(request)) {
+      // Hold native responses at headers without buffering streams or following
+      // redirects outside the browser's request lifecycle.
+      const session = await page.context().newCDPSession(page);
+      const networkTokens = new Map<string, string>();
+      const aborted = new Set<string>();
+      session.on("Network.loadingFailed", ({ requestId }) => {
+        const token = networkTokens.get(requestId);
+        if (token !== undefined) {
+          aborted.add(token);
+          rounds.abort(token);
+          networkTokens.delete(requestId);
+        }
+      });
+      session.on("Fetch.requestPaused", (event) => {
+        const handlePaused = async () => {
+          try {
+            const { requestId, request, resourceType, networkId } = event;
+            const responseStage =
+              event.responseStatusCode !== undefined ||
+              event.responseErrorReason !== undefined;
+            if (!responseStage) {
+              const details = {
+                pathname: new URL(request.url).pathname,
+                resourceType: resourceType.toLowerCase(),
+              };
+              const tracked =
+                TRACKED_RESOURCE_TYPES.has(details.resourceType) &&
+                countsTowardsWaterfall(details) &&
+                !rounds.loaded;
+              if (tracked) {
+                rounds.arrive({
+                  token: requestId,
+                  key: requestKey({
+                    method: request.method,
+                    pathname: details.pathname,
+                  }),
+                  now: Date.now(),
+                });
+                if (networkId !== undefined) {
+                  networkTokens.set(networkId, requestId);
+                }
+              }
+              await session.send("Fetch.continueRequest", {
+                requestId,
+                interceptResponse: tracked,
+              });
               return;
             }
-            await ownerSleep(NETWORK_ROUND_POLL_MS);
+            if (event.responseErrorReason !== undefined) {
+              rounds.abort(requestId);
+              if (networkId !== undefined) {
+                networkTokens.delete(networkId);
+              }
+              await session.send("Fetch.continueRequest", { requestId });
+              return;
+            }
+            rounds.complete(requestId);
+            const loaded = () => rounds.loaded;
+            while (rounds.holds(requestId) && !loaded()) {
+              rounds.release(Date.now());
+              if (!rounds.holds(requestId)) {
+                break;
+              }
+              await ownerSleep(NETWORK_ROUND_POLL_MS);
+            }
+            if (networkId !== undefined) {
+              networkTokens.delete(networkId);
+            }
+            if (aborted.delete(requestId)) {
+              return;
+            }
+            await session.send("Fetch.continueResponse", { requestId });
+          } catch (error) {
+            if (aborted.delete(event.requestId)) {
+              return;
+            }
+            // Propagate asynchronous event failures through the measurement boundary.
+            interceptionFailure = new NetworkInterceptionError({
+              message: "Network response interception failed",
+              cause: error,
+            });
           }
-          await route.continue();
-        },
-      );
+        };
+        void handlePaused();
+      });
+      await session.send("Network.enable");
+      // page.route disabled the HTTP cache for measurement navigations too.
+      await session.send("Network.setCacheDisabled", { cacheDisabled: true });
+      await session.send("Fetch.enable", {
+        patterns: [{ urlPattern: `${apiOrigin}/*`, requestStage: "Request" }],
+      });
     },
     finishRounds: () => {
       rounds.finish();
+      if (interceptionFailure !== undefined) {
+        throw interceptionFailure;
+      }
+      if (inFlight.size > 0) {
+        throw new Error(
+          `Network rounds did not drain before the measurement ended: ${String(inFlight.size)} request(s) still in flight`,
+        );
+      }
     },
     trackPage: (page) => {
       const onRequest = (request: Request) => {
@@ -267,13 +328,20 @@ export const createNetworkCollector = (
         };
         records.push(record);
         byRequest.set(request, record);
+        if (
+          !rounds.loaded &&
+          countsTowardsWaterfall({
+            pathname: record.pathname,
+            resourceType: request.resourceType(),
+          })
+        ) {
+          inFlight.add(request);
+        }
         markActivity();
       };
 
       const onSettled = (request: Request) => {
-        if (countsTowardsWaterfall(requestDetails(request))) {
-          rounds.complete(request, Date.now());
-        }
+        inFlight.delete(request);
         const record = byRequest.get(request);
         if (record) {
           markActivity();
@@ -294,10 +362,7 @@ export const createNetworkCollector = (
         }
 
         if (isStreamedResponse(response)) {
-          // Streams never finish; headers establish that the channel opened.
-          if (countsTowardsWaterfall(requestDetails(response.request()))) {
-            rounds.complete(response.request(), Date.now());
-          }
+          inFlight.delete(response.request());
           return;
         }
         pendingBodyReads.push(readResponseBytes(response, record));
@@ -310,7 +375,6 @@ export const createNetworkCollector = (
 
       return () => {
         rounds.finish();
-        released.clear();
         page.off("request", onRequest);
         page.off("response", onResponse);
         page.off("requestfinished", onSettled);
@@ -321,7 +385,8 @@ export const createNetworkCollector = (
     waitForQuiet: async (quietOptions) =>
       waitForQuietPeriod({
         ...quietOptions,
-        getLastActivityAt: () => (rounds.pending ? Date.now() : lastActivityAt),
+        getLastActivityAt: () =>
+          rounds.pending || inFlight.size > 0 ? Date.now() : lastActivityAt,
       }),
 
     capture: async () => {
@@ -394,7 +459,7 @@ export type RouteNetworkMetrics = {
   missingResponseSizeCounts: Record<string, number>;
 };
 
-export const NETWORK_DEPTH_METHOD = "round-barrier-v1";
+export const NETWORK_DEPTH_METHOD = "response-barrier-v2";
 
 export type NetworkBaselineEntry = {
   depth: number;

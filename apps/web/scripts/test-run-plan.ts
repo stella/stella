@@ -31,6 +31,7 @@ type TestRunPlanInput = {
 
 const DOM_TEST_SUFFIX = ".dom.test.tsx";
 const E2E_UNIT_DIRECTORY = "e2e/unit";
+const E2E_HELPERS_DIRECTORY = "e2e/helpers";
 const E2E_DIRECTORY_PATTERN = "e2e/**";
 
 const DEFAULT_RUNS: readonly TestRun[] = [
@@ -42,7 +43,10 @@ const DEFAULT_RUNS: readonly TestRun[] = [
     ],
   },
   { label: "dom", args: ["--isolate", ".dom.test"] },
-  { label: "e2e-unit", args: ["--parallel=2", E2E_UNIT_DIRECTORY] },
+  {
+    label: "e2e-unit",
+    args: ["--parallel=2", E2E_UNIT_DIRECTORY, E2E_HELPERS_DIRECTORY],
+  },
 ];
 
 const normalize = (filePath: string): string =>
@@ -65,7 +69,9 @@ const isE2eUnitTest = (filePath: string): boolean => {
   const normalized = normalize(filePath);
   return (
     normalized.startsWith(`${E2E_UNIT_DIRECTORY}/`) ||
-    normalized.includes(`/${E2E_UNIT_DIRECTORY}/`)
+    normalized.includes(`/${E2E_UNIT_DIRECTORY}/`) ||
+    normalized.startsWith(`${E2E_HELPERS_DIRECTORY}/`) ||
+    normalized.includes(`/${E2E_HELPERS_DIRECTORY}/`)
   );
 };
 

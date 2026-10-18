@@ -1,73 +1,62 @@
-// Allows response-driven query updates and rendering to enqueue the next round.
-export const NETWORK_ROUND_SETTLE_MS = 150;
+// Must exceed response-driven render latency so late siblings join the same round.
+export const NETWORK_ROUND_SETTLE_MS = 500;
 
 type RoundArrival<Token> = { token: Token; key: string; now: number };
 
 export const createNetworkRoundController = <Token>() => {
-  const held = new Map<Token, string>();
-  const inFlight = new Set<Token>();
+  const requests = new Map<
+    Token,
+    { key: string; status: "in-flight" | "held" }
+  >();
   const rounds: string[][] = [];
-  let lastActivityAt = 0;
+  let lastArrivalAt = 0;
   let status: "measuring" | "loaded" = "measuring";
 
   return {
     arrive: ({ token, key, now }: RoundArrival<Token>) => {
-      lastActivityAt = now;
       if (status === "loaded") {
         return;
       }
-      held.set(token, key);
+      lastArrivalAt = now;
+      requests.set(token, { key, status: "in-flight" });
     },
-    complete: (token: Token, now: number) => {
-      // A request aborted while still held never reaches the network: drop it
-      // so it neither counts as a round nor waits for a completion that has
-      // already happened.
-      if (held.delete(token)) {
-        lastActivityAt = now;
-        return;
+    complete: (token: Token) => {
+      const request = requests.get(token);
+      if (request) {
+        requests.set(token, { key: request.key, status: "held" });
       }
-      if (!inFlight.delete(token)) {
-        return;
-      }
-      lastActivityAt = now;
+    },
+    abort: (token: Token) => {
+      requests.delete(token);
     },
     release: (now: number): Token[] => {
       if (
         status === "loaded" ||
-        inFlight.size > 0 ||
-        held.size === 0 ||
-        now - lastActivityAt < NETWORK_ROUND_SETTLE_MS
+        requests.size === 0 ||
+        now - lastArrivalAt < NETWORK_ROUND_SETTLE_MS ||
+        [...requests.values()].some((request) => request.status === "in-flight")
       ) {
         return [];
       }
-      const tokens = [...held.keys()];
-      rounds.push([...held.values()]);
-      for (const token of tokens) {
-        inFlight.add(token);
-      }
-      held.clear();
+      const tokens = [...requests.keys()];
+      rounds.push([...requests.values()].map(({ key }) => key));
+      requests.clear();
       return tokens;
     },
-    /**
-     * Ends measurement. Held requests are let through either way, but a round
-     * still held or in flight means the depth is incomplete, so finishing then
-     * throws instead of accepting a short measurement.
-     */
+    /** Reject incomplete measurements, while allowing held responses to drain. */
     finish: () => {
-      const undrained = held.size + inFlight.size;
+      const undrained = requests.size;
       status = "loaded";
-      held.clear();
-      inFlight.clear();
+      requests.clear();
       if (undrained > 0) {
         throw new Error(
           `Network rounds did not drain before the measurement ended: ${String(undrained)} request(s) still held or in flight`,
         );
       }
     },
-    /** Whether the token still waits for release (false once released or dropped). */
-    holds: (token: Token) => held.has(token),
+    holds: (token: Token) => requests.has(token),
     get pending() {
-      return held.size > 0 || inFlight.size > 0;
+      return requests.size > 0;
     },
     get loaded() {
       return status === "loaded";

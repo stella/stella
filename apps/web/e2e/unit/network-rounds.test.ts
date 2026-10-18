@@ -13,54 +13,45 @@ import {
 type Node = { parents: number[]; duration: number };
 const simulate = (nodes: Node[]) => {
   const controller = createNetworkRoundController<number>();
-  const completed = new Set<number>();
+  const released = new Set<number>();
   const arrived = new Set<number>();
-  const finishing = new Map<number, number>();
+  const completing = new Map<number, number>();
   let now = 0;
   const arriveReady = () => {
+    let didArrive = false;
     for (const [id, node] of nodes.entries()) {
       if (
         arrived.has(id) ||
-        !node.parents.every((parent) => completed.has(parent))
+        !node.parents.every((parent) => released.has(parent))
       ) {
         continue;
       }
       arrived.add(id);
       controller.arrive({ token: id, key: String(id), now });
+      completing.set(id, now + node.duration);
+      didArrive = true;
     }
+    return didArrive;
   };
   arriveReady();
-  while (completed.size < nodes.length) {
-    // Probe at every completion, including while a slower peer remains.
-    for (const id of controller.release(now)) {
-      finishing.set(
-        id,
-        now +
-          (nodes.at(id) ?? panic("released request must belong to the graph"))
-            .duration,
-      );
-    }
-    if (finishing.size === 0) {
-      now += NETWORK_ROUND_SETTLE_MS;
-      for (const id of controller.release(now)) {
-        finishing.set(
-          id,
-          now +
-            (nodes.at(id) ?? panic("released request must belong to the graph"))
-              .duration,
-        );
-      }
-    }
-    now = Math.min(...finishing.values());
-    for (const [id, end] of finishing) {
-      if (end !== now) {
+  while (released.size < nodes.length) {
+    const nextCompletion = Math.min(...completing.values());
+    const nextRelease = now + NETWORK_ROUND_SETTLE_MS;
+    now = Math.min(nextCompletion, nextRelease);
+    for (const [id, end] of completing) {
+      if (end > now) {
         continue;
       }
-      finishing.delete(id);
-      completed.add(id);
-      controller.complete(id, now);
+      completing.delete(id);
+      controller.complete(id);
     }
-    arriveReady();
+    const tokens = controller.release(now);
+    for (const id of tokens) {
+      released.add(id);
+    }
+    if (tokens.length > 0) {
+      arriveReady();
+    }
   }
   return controller.rounds;
 };
@@ -163,23 +154,24 @@ test("arrivals restart settle and unfinished peers prevent release", () => {
   const controller = createNetworkRoundController<string>();
   controller.arrive({ token: "a", key: "a", now: 0 });
   controller.arrive({ token: "b", key: "b", now: 100 });
+  controller.complete("a");
   expect(controller.release(150)).toEqual([]);
-  expect(controller.release(250)).toEqual(["a", "b"]);
-  controller.arrive({ token: "child", key: "child", now: 260 });
-  controller.complete("a", 270);
-  expect(controller.release(1000)).toEqual([]);
-  // requestfailed uses the same completion event as requestfinished.
-  controller.complete("b", 1000);
-  expect(controller.release(1149)).toEqual([]);
-  expect(controller.release(1150)).toEqual(["child"]);
+  controller.complete("b");
+  expect(controller.release(599)).toEqual([]);
+  expect(controller.release(600)).toEqual(["a", "b"]);
+  controller.arrive({ token: "child", key: "child", now: 610 });
+  controller.complete("child");
+  expect(controller.release(1109)).toEqual([]);
+  expect(controller.release(1110)).toEqual(["child"]);
 });
 
 test("loaded routes never open rounds for idle prefetch", () => {
   const controller = createNetworkRoundController<string>();
   expect(controller.rounds).toEqual([]);
   controller.arrive({ token: "a", key: "a", now: 0 });
-  expect(controller.release(150)).toEqual(["a"]);
-  controller.complete("a", 200);
+  controller.complete("a");
+  expect(controller.release(499)).toEqual([]);
+  expect(controller.release(500)).toEqual(["a"]);
   controller.finish();
   controller.arrive({ token: "prefetch", key: "prefetch", now: 1000 });
   expect(controller.release(2000)).toEqual([]);
@@ -191,13 +183,12 @@ test("a request aborted while held adds no round and blocks none", () => {
   controller.arrive({ token: "aborted", key: "GET /aborted", now: 0 });
   // The page abandons the request before the barrier releases it.
   expect(controller.holds("aborted")).toBe(true);
-  controller.complete("aborted", 10);
-  // The route handler stops waiting once the controller no longer holds it.
+  controller.abort("aborted");
   expect(controller.holds("aborted")).toBe(false);
   controller.arrive({ token: "kept", key: "GET /kept", now: 20 });
+  controller.complete("kept");
   const released = controller.release(20 + NETWORK_ROUND_SETTLE_MS);
   expect(released).toEqual(["kept"]);
-  controller.complete("kept", 400);
   expect(controller.pending).toBe(false);
   expect(controller.rounds).toEqual([["GET /kept"]]);
 });
@@ -212,8 +203,9 @@ test("a background poll before release never joins a round", () => {
 
   arrive("route", "/v1/matters", 0);
   arrive("poll", "/health", 100);
-  expect(controller.release(150)).toEqual(["route"]);
-  controller.complete("route", 200);
+  controller.complete("route");
+  expect(controller.release(499)).toEqual([]);
+  expect(controller.release(500)).toEqual(["route"]);
   expect(controller.rounds).toEqual([["GET /v1/matters"]]);
 });
 
@@ -226,9 +218,9 @@ test("a background poll while a round is in flight never adds depth", () => {
   };
 
   arrive("route", "/v1/matters", 0);
-  expect(controller.release(150)).toEqual(["route"]);
-  arrive("poll", "/health", 200);
-  controller.complete("route", 300);
+  controller.complete("route");
+  expect(controller.release(500)).toEqual(["route"]);
+  arrive("poll", "/health", 600);
   expect(controller.release(1000)).toEqual([]);
   expect(controller.rounds).toEqual([["GET /v1/matters"]]);
 });
@@ -236,9 +228,10 @@ test("a background poll while a round is in flight never adds depth", () => {
 test("finishing while a round is held or in flight rejects the measurement", () => {
   const controller = createNetworkRoundController<string>();
   controller.arrive({ token: "slow", key: "slow", now: 0 });
-  expect(controller.release(150)).toEqual(["slow"]);
-  // The quiet wait expired with one request in flight and its dependent held.
-  controller.arrive({ token: "dependent", key: "dependent", now: 200 });
+  controller.complete("slow");
+  expect(controller.release(500)).toEqual(["slow"]);
+  // A dependent arrives while held behind the active request.
+  controller.arrive({ token: "dependent", key: "dependent", now: 510 });
   expect(() => {
     controller.finish();
   }).toThrow("did not drain");
@@ -251,8 +244,8 @@ test("finishing while a round is held or in flight rejects the measurement", () 
 test("finishing after every round completed accepts the measurement", () => {
   const controller = createNetworkRoundController<string>();
   controller.arrive({ token: "a", key: "a", now: 0 });
-  expect(controller.release(150)).toEqual(["a"]);
-  controller.complete("a", 200);
+  controller.complete("a");
+  expect(controller.release(500)).toEqual(["a"]);
   expect(() => {
     controller.finish();
   }).not.toThrow();

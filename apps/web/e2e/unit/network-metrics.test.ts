@@ -144,7 +144,7 @@ describe("diffNetworkBaseline", () => {
     expect(notices).toEqual([]);
   });
 
-  test.each([undefined, "timing-v1"])(
+  test.each([undefined, "timing-v1", "round-barrier-v1"])(
     "a different depth method reports depth only and retains every other budget (%s)",
     (depthMethod) => {
       const entry = {
@@ -538,7 +538,7 @@ describe("mergeNetworkBaseline", () => {
     });
   });
 
-  test.each([undefined, "timing-v1"])(
+  test.each([undefined, "timing-v1", "round-barrier-v1"])(
     "recording replaces incompatible depth and retains other budgets (%s)",
     (depthMethod) => {
       const previous = {

@@ -159,38 +159,31 @@ Prefetch `factory(...)` in the `loader` via `ensureRouteQueryData` or
 
 ## How Depth Is Measured
 
-The measurement navigation uses `round-barrier-v1`: `page.route` holds every
-API request selected by the network collector. The round controller releases
-all currently held requests together and assigns each the same round level.
-It releases the next round only after every released request has finished or
-failed and the page has been quiet for `NETWORK_ROUND_SETTLE_MS` (150 ms)
-after the last response, with no new tracked request during that window. The
-navigation also uses the route smoke spec's existing page-settle check.
-Requests arriving while a round is in flight wait for the next round.
-Long-lived event streams complete at response headers so an open channel
-cannot block the barrier.
+The measurement navigation uses `response-barrier-v2`. Chromium Fetch
+interception launches each selected API request immediately and holds its
+response at headers. The controller releases all ready responses together
+only when every pending response has arrived and no tracked request arrived
+for `NETWORK_ROUND_SETTLE_MS` (500 ms). Completion does not restart this
+window. The window must exceed response-driven render latency: a late sibling
+then joins its peers before any of their responses can trigger a child.
+Aborted requests are removed; streams release at headers.
 
-Depth is the number of nonempty released rounds; `depthChain` lists the
-request keys in each round. Response completion order cannot put independent
-branches at different levels: children of slow and fast parents released in
-the same round wait at the same barrier. A request arriving after the route's
-existing settled point is idle prefetch and cannot open a new round. Depth
-comes from scheduled release levels, never inferred launch gaps or response
-timing. Measurement adds approximately one settle window plus the slowest
-server response per round; report measured shard wall time when changing it.
+Depth is the number of nonempty response release rounds; `depthChain` lists
+the request keys in each round. Background polls and eventsource requests
+remain covered as requests but do not affect depth. Measurement ends at the
+existing page-settle point and rejects undrained requests. Report measured
+shard wall time when changing the controller or settle window.
 
-The recorder writes `depthMethod: "round-barrier-v1"` in the baseline. When
-the selected recording has a missing or different method, compare requests,
-request counts, DB queries, and response sizes normally, but report depth
-only as a notice. Enforce depth again once main publishes a recording with
-the same method. Do not widen depth budgets to bridge measurement methods.
+The recorder writes `depthMethod: "response-barrier-v2"`. A missing or
+different baseline method makes depth informational until main records the
+new method; all other budgets remain enforced. Never widen depth budgets to
+bridge measurement methods.
 
-Keep the round controller testable as a pure state machine over held
-requests, in-flight requests, events, and a clock. Tests cover independent
-branches with unequal response durations, genuine dependencies across
-rounds, and randomized request graphs and completion orders whose depth
-matches the graph's longest path. Replacing the barrier with timing-derived
-levels must fail those tests.
+Keep the controller testable as a pure state machine with an explicit clock.
+Cover response release times, late siblings within the settle window, true
+chains, aborts, undrained measurements, and generated request graphs whose
+depth matches the longest path. A request barrier must fail the late-sibling
+tests.
 
 ## Live Hotspot Burn-Down
 
