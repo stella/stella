@@ -41,6 +41,22 @@ describe(RULE, () => {
     ).toEqual([3, 5]);
   });
 
+  test("allows a temporary path resolved after a checkout one", async () => {
+    expect(
+      await lint(
+        'import { writeFile } from "node:fs/promises";\nimport { tmpdir } from "node:os";\nimport path from "node:path";\nawait writeFile(path.resolve(import.meta.dir, tmpdir(), "fixture.json"), "data");',
+      ),
+    ).toEqual([]);
+  });
+
+  test("checks the destination of synchronous copies", async () => {
+    expect(
+      await lint(
+        'import { copyFileSync, cpSync, mkdtempSync } from "node:fs";\nimport { tmpdir } from "node:os";\nimport path from "node:path";\ncopyFileSync("source.json", new URL("baseline.json", import.meta.url));\ncpSync("source", path.join(import.meta.dir, "fixtures"), { recursive: true });\nconst scratch = mkdtempSync(path.join(tmpdir(), "rule-"));\ncopyFileSync(new URL("baseline.json", import.meta.url), path.join(scratch, "copy.json"));',
+      ),
+    ).toEqual([4, 5]);
+  });
+
   test("allows temporary and unrelated relative paths", async () => {
     expect(
       await lint(
