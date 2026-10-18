@@ -47,6 +47,10 @@ import {
   orderGenerators,
 } from "./generated-files";
 
+// Computed reads here are plans, manifests and git blobs copied into
+// temporary trees; none is repository Markdown.
+export const CI_MARKDOWN_READER_INPUTS: readonly string[] = [];
+
 class GeneratedConflictsError extends Error {
   override name = "GeneratedConflictsError";
   readonly _tag = "GeneratedConflictsError";
@@ -297,7 +301,9 @@ export const ignoredInTree = (
 ): boolean => {
   const scratch = mkdtempSync(path.join(tmpdir(), "generated-ignore-"));
   try {
-    const initialized = Bun.spawnSync(["git", "init", "-q"], {
+    // An empty template: no info/exclude from the Git installation, so only
+    // the tree's own .gitignore files decide.
+    const initialized = Bun.spawnSync(["git", "init", "-q", "--template="], {
       cwd: scratch,
       stdout: "pipe",
       stderr: "pipe",
