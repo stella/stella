@@ -34,7 +34,7 @@ export type ResultRow = Pick<
   | "decisionDate"
   | "caseNumber"
   | "ecli"
-  | "appUrl"
+  | "url"
   | "source_url"
 > &
   RowContent;
@@ -48,7 +48,7 @@ const resultRow = <Content extends RowContent>(
   decisionDate: row.decisionDate,
   caseNumber: row.caseNumber,
   ecli: row.ecli,
-  appUrl: parseLegalCitationHttpUrl(row.appUrl)?.href ?? null,
+  url: parseLegalCitationHttpUrl(row.url)?.href ?? null,
   source_url:
     parseLegalCitationHttpUrl(row.source_url ?? null)?.href ?? undefined,
   ...details,
@@ -142,7 +142,7 @@ export const resolveView = (data: ResolveResults) => {
                   court: document.court,
                   courtAbbreviation: null,
                   decisionDate: document.decisionDate,
-                  appUrl: document.readerUrl,
+                  url: document.readerUrl,
                 },
                 { type: "resolve", snippet: null },
               ),
@@ -165,7 +165,7 @@ export const resolveView = (data: ResolveResults) => {
             decisionId,
             identifier,
             label,
-            appUrl: parseLegalCitationHttpUrl(readerUrl)?.href ?? null,
+            url: parseLegalCitationHttpUrl(readerUrl)?.href ?? null,
           }),
         ),
       } as const;
