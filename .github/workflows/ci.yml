@@ -63,9 +63,8 @@ on:
 
 # Code-changing PR runs supersede their predecessors. Metadata events use the
 # immutable head SHA so they cannot cancel the code run they are inspecting.
-# Arming (auto-merge or the merge-armed label) starts the armed heavy proof,
-# so it joins the code group: the label supersedes like prove-fix, while
-# auto-merge waits behind the running code run instead of cancelling it.
+# Arming joins the code group: the merge-armed label supersedes like
+# prove-fix; auto-merge waits behind the running code run.
 # Manual runs supersede only older manual runs on the same branch; merge-group
 # runs remain isolated. Main calls coalesce under a child group distinct from
 # the caller's group.
@@ -133,9 +132,8 @@ jobs:
       # Pull requests run lightweight guards, lint and type checks.
       # Test shards retain PR coverage and certify affected merge groups.
       # Builds, images, browsers and services certify the merge group.
-      # An armed run whose head already has green normal evidence runs only
-      # the queue-only suites (armed_delta): every normal job skips here,
-      # while planning still runs (steps read the step-level value).
+      # An armed run on a head with green normal evidence runs only the
+      # queue-only suites (armed_delta).
       run_required: ${{ steps.suites.outputs.run_required }}
       armed_delta: ${{ steps.suites.outputs.armed_delta }}
       normal_source_run_id: ${{ steps.completed-depth.outputs.normal_source_run_id }}
@@ -501,10 +499,8 @@ jobs:
               core.setOutput("queue_validation", "true");
               return;
             }
-            // Arming a pull request for merge (auto-merge, or this label that
-            // the merge bar adds before it arms) moves the queue-only suites
-            // into the pull request run; a merge group skips them only for a
-            // head that carries this armed evidence.
+            // Arming (auto-merge or the merge bar's label) moves the queue-only
+            // suites into the pull request run.
             const ARMED_LABEL = "merge-armed";
             const mergeGroup = context.eventName === "merge_group";
             const scopeLabel = ["labeled", "unlabeled"].includes(context.payload.action)
@@ -572,10 +568,7 @@ jobs:
               && /^[a-f0-9]{40}$/.test(mergeParent) && mergeParent !== pr.head.sha;
             if (!mergeGroup && !heavyReuse && !["labeled", "unlabeled", "ready_for_review", "reopened", "auto_merge_enabled", "enqueued"].includes(context.payload.action)) return;
             const testedSha = heavyReuse ? mergeParent : pr.head.sha;
-            // Completed evidence for one head: the named artifact from a
-            // successful pull request run whose recorded contents show that
-            // it planned its suites for that head and patch and that every
-            // planned job succeeded. Any lookup failure finds nothing.
+            // Completed evidence for one head and patch; any lookup failure finds nothing.
             const completedEvidence = async ({ sha, heavy, patchId, pull = pr }) => {
               const wanted = markerFor(sha, heavy, pull);
               try {
@@ -605,11 +598,8 @@ jobs:
                     || sourceRun.path !== ".github/workflows/ci.yml"
                     || sourceRun.status !== "completed"
                     || sourceRun.conclusion !== "success") return null;
-                // Armed proof lets a merge group skip suites, so its artifact
-                // must come from ci-result itself: every other job of that run
-                // had finished before it was uploaded, and only ci-result runs
-                // after all of them. A job running pull request code cannot
-                // backdate an upload past its own end.
+                // Armed proof must come from ci-result: uploaded after every other
+                // job ended, which pull request code cannot backdate.
                 if (heavy) {
                   const runJobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
                     ...context.repo, run_id: sourceId, filter: "latest", per_page: 100,
@@ -623,10 +613,8 @@ jobs:
                       || !runJobs.every((job) => job.name === "ci-result"
                         || (job.status === "completed" && Date.parse(job.completed_at) <= uploaded))) return null;
                 }
-                // The name alone proves nothing: a superseded run once published
-                // it. Reuse only evidence whose contents show that the producing
-                // run planned its suites for this exact head and that every
-                // planned job succeeded with no job cancelled or failed.
+                // The name alone proves nothing: the contents must show every
+                // planned job of this exact head succeeded.
                 if (!Number.isSafeInteger(completed.id) || completed.id <= 0
                     || !Number.isSafeInteger(completed.size_in_bytes)
                     || completed.size_in_bytes <= 0
@@ -730,9 +718,7 @@ jobs:
               core.setOutput("armed_proof_source_run_id", String(proofs[0].sourceId));
               return;
             }
-            // A moved base never forces a re-test of an identical change: the
-            // patch id matches, and the merge group validates the queued tree
-            // on the current base.
+            // A moved base never re-tests an identical change (same patch id).
             const found = await completedEvidence({ sha: testedSha, heavy: armed, patchId: process.env.PATCH_ID });
             if (found && heavyReuse) {
               core.setOutput("pr_heavy_suites", "reused");
@@ -8585,12 +8571,8 @@ jobs:
           ARMED_DELTA: ${{ needs.ci-plan.outputs.armed_delta }}
           NORMAL_SOURCE_RUN_ID: ${{ needs.ci-plan.outputs.normal_source_run_id }}
           ARMED_PROOF_SOURCE_RUN_ID: ${{ needs.ci-plan.outputs.armed_proof_source_run_id }}
-          # The queue-only suites gated by ci-plan's heavy_proof output. An
-          # armed pull request run must see each planned one succeed (at its
-          # JOB_SCOPES scope); a merge group whose queued head carries that
-          # armed proof skips all but MERGE_GROUP_HEAVY_KEEP, the suites a
-          # combination of proven pull requests can still break.
-          # scripts/ci-plan.test.ts derives both lists from the job gates.
+          # Queue-only suites (heavy_proof gate); a proven merge group skips all but
+          # MERGE_GROUP_HEAVY_KEEP. scripts/ci-plan.test.ts derives both lists.
           HEAVY_PROOF_JOBS: >-
             ["docker-checks", "migration-upgrade-rehearsal", "release-typecheck", "web-image-smoke", "mobile-build", "landing-build", "route-smoke", "stack-redaction-browsers", "e2e-vite-canary", "e2e-landing", "marketing-screenshots", "api-image-smoke", "legal-atlas-image", "desktop-windows-dry-run", "windows-scripts", "desktop-rust-tests"]
           MERGE_GROUP_HEAVY_KEEP: >-
