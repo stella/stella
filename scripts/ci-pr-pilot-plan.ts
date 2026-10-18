@@ -7,6 +7,7 @@ export const PILOT_FAST_ROOTS = [
   "ci-checks-policy",
   "ci-checks-rest",
   "ci-tests",
+  "pr-heavy-gate",
   "code-quality-api",
   "code-quality-web-rest",
   "query-perf",
