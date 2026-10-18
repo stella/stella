@@ -28,7 +28,7 @@ type SuggestedFollowupChipsProps = {
 };
 
 /**
- * Suggested follow-up prompts, shown as a single horizontally scrolling row
+ * Suggested follow-up prompts, shown in a compact wrapping row
  * after the shared availability policy supplies prompts. Placement is the
  * caller's choice: `surface="overlay"` (default) for a row floating above the
  * composer on a veiled docked column, `surface="floating"` where no veil sits
@@ -56,7 +56,7 @@ export const SuggestedFollowupChips = ({
         actions={prompts.map((prompt) => ({ id: prompt, label: prompt }))}
         label={t("chat.suggestedFollowupsLabel")}
         onSelect={onSelect}
-        orientation="horizontal"
+        orientation="wrap"
         surface={surface ?? "overlay"}
       />
     </div>

@@ -6,6 +6,7 @@ import { Tabs as TabsPrimitive } from "@base-ui/react/tabs";
 
 import { hasTabOrderChanged } from "../lib/tab-order";
 import { cn, composeRefs } from "../lib/utils";
+import { HorizontalScroller } from "./horizontal-scroller";
 
 type TabsVariant = "default" | "underline";
 
@@ -52,50 +53,36 @@ const TabsList = ({
   });
 
   return (
-    <TabsPrimitive.List
-      className={cn(
-        "text-muted-foreground relative z-0 flex w-fit max-w-full items-center justify-center-safe gap-x-0.5",
-        // A list narrower than its tabs used to clip them with no way to reach
-        // them, so the list scrolls itself. `w-fit` alone cannot deliver that:
-        // the tabs are `shrink-0 whitespace-nowrap`, so the list's min-content
-        // width equals its max-content width and `fit-content` never shrinks,
-        // leaving the strip overflowing its parent rather than scrolling.
-        // `max-w-full` caps it at the available width, which is what turns that
-        // overflow into scrollable overflow; `w-fit` still hugs a strip that
-        // fits. The scroll container has to be this element: Base UI drives it
-        // as the composite root, so it scrolls the active tab into view on
-        // mount and the focused one during arrow navigation (honouring
-        // `scroll-margin` on the tab), and it measures the indicator against
-        // this element's scroll origin. `safe center` falls back to start
-        // alignment once the strip overflows, because plain centring puts the
-        // leading tabs at a negative offset, outside the scrollable area.
-        // Scrolling one axis computes the other to `auto` anyway, hence both,
-        // but containment stays per axis so a wheel over a horizontal strip
-        // still scrolls the page. The bar itself stays hidden: it would take
-        // block size from the strip on appearing and paint over the indicator
-        // anchored to the strip's edge.
-        "scrollbar-none overflow-auto data-[orientation=horizontal]:overscroll-x-contain data-[orientation=vertical]:overscroll-y-contain [&::-webkit-scrollbar]:hidden",
-        "data-[orientation=vertical]:flex-col",
-        variant === "default"
-          ? "bg-muted text-foreground-label rounded-lg p-0.5"
-          : "*:data-[slot=tabs-tab]:hover:bg-accent data-[orientation=horizontal]:py-1 data-[orientation=vertical]:px-1",
-        className,
-      )}
-      data-slot="tabs-list"
-      ref={composeRefs(listRef, ref)}
-      {...props}
+    <HorizontalScroller
+      nextLabel="Next tabs"
+      previousLabel="Previous tabs"
+      viewportClassName="max-w-full"
     >
-      {children}
-      <TabsPrimitive.Indicator
+      <TabsPrimitive.List
         className={cn(
-          "absolute bottom-0 left-0 h-(--active-tab-height) w-(--active-tab-width) translate-x-(--active-tab-left) -translate-y-(--active-tab-bottom) transition-[width,translate] duration-200 ease-in-out",
-          variant === "underline"
-            ? "bg-primary z-10 data-[orientation=horizontal]:h-0.5 data-[orientation=vertical]:w-0.5 data-[orientation=vertical]:-translate-x-px"
-            : "bg-background dark:bg-input -z-1 rounded-md shadow-sm/5",
+          "text-muted-foreground relative z-0 flex w-max min-w-full items-center justify-center-safe gap-x-0.5",
+          "data-[orientation=vertical]:flex-col",
+          variant === "default"
+            ? "bg-muted text-foreground-label rounded-lg p-0.5"
+            : "*:data-[slot=tabs-tab]:hover:bg-accent data-[orientation=horizontal]:py-1 data-[orientation=vertical]:px-1",
+          className,
         )}
-        data-slot="tab-indicator"
-      />
-    </TabsPrimitive.List>
+        data-slot="tabs-list"
+        ref={composeRefs(listRef, ref)}
+        {...props}
+      >
+        {children}
+        <TabsPrimitive.Indicator
+          className={cn(
+            "absolute bottom-0 left-0 h-(--active-tab-height) w-(--active-tab-width) translate-x-(--active-tab-left) -translate-y-(--active-tab-bottom) transition-[width,translate] duration-200 ease-in-out",
+            variant === "underline"
+              ? "bg-primary z-10 data-[orientation=horizontal]:h-0.5 data-[orientation=vertical]:w-0.5 data-[orientation=vertical]:-translate-x-px"
+              : "bg-background dark:bg-input -z-1 rounded-md shadow-sm/5",
+          )}
+          data-slot="tab-indicator"
+        />
+      </TabsPrimitive.List>
+    </HorizontalScroller>
   );
 };
 
