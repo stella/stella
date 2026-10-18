@@ -28,7 +28,7 @@ const expectCloudSetupPins = ({
   script: string;
   tools: Record<string, string>;
 }) => {
-  const bunVersion = packageManager.match(/^bun@(.+)$/u)?.at(1);
+  const bunVersion = /^bun@(.+)$/u.exec(packageManager)?.at(1);
   expect(
     script,
     `package.json packageManager must match .agents/cloud-setup.sh BUN_VERSION; change package.json or run ${regeneration}`,
@@ -39,7 +39,7 @@ const expectCloudSetupPins = ({
   ).toContain(`NODE_VERSION='${nodeVersion.trim()}'`);
 
   const installTools =
-    script.match(/install_tools\(\) \{(?<body>[\s\S]*?)\n\}/u)?.groups?.[
+    /install_tools\(\) \{(?<body>[\s\S]*?)\n\}/u.exec(script)?.groups?.[
       "body"
     ] ?? "";
   const installed = [
@@ -50,9 +50,10 @@ const expectCloudSetupPins = ({
     `stll-toolchain.json cloud.tools must exactly match tools installed by .agents/cloud-setup.sh; change stll-toolchain.json or run ${regeneration}`,
   ).toEqual(Object.keys(tools).toSorted());
   for (const [tool, version] of Object.entries(tools)) {
-    const block = script.match(
-      new RegExp(`install_${tool}\\(\\) \\(\\n(?<body>[\\s\\S]*?)\\n\\)`, "u"),
-    )?.groups?.["body"];
+    const block = new RegExp(
+      `install_${tool}\\(\\) \\(\\n(?<body>[\\s\\S]*?)\\n\\)`,
+      "u",
+    ).exec(script)?.groups?.["body"];
     expect(
       block,
       `stll-toolchain.json cloud.tools.${tool} must use its exact version in .agents/cloud-setup.sh; change stll-toolchain.json or run ${regeneration}`,
