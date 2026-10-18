@@ -670,6 +670,41 @@ test("doctrine filters report unavailable instead of an empty finding", async ()
   expect(page.response.message).toBe("Doctrine filtering is unavailable");
 });
 
+test("doctrine citation reads distinguish invalid cursors from unavailable doctrine", async () => {
+  const read = async (cursor: string | undefined) =>
+    await readGatedDecisionCitations({
+      caseLawDb,
+      cursor,
+      decisionId: subjectId,
+      direction: "cited_by",
+      doctrine: "distinguishes",
+      limit: 1,
+      surface: "search",
+    });
+
+  expect(await read("not-a-cursor")).toEqual({ type: "invalid_cursor" });
+
+  const differentFilterPage = await withSubject(
+    subjectId,
+    async (subject) =>
+      await listDecisionCitationsHandler({
+        subject,
+        query: { direction: "incoming", polarity: "negative" },
+        limit: 1,
+      }),
+  );
+  if (
+    !("items" in differentFilterPage) ||
+    differentFilterPage.nextCursor === null
+  ) {
+    throw new Error("Expected a cursor issued for a different filter");
+  }
+  expect(await read(differentFilterPage.nextCursor)).toEqual({
+    type: "invalid_cursor",
+  });
+  expect(await read(undefined)).toEqual({ type: "doctrine_unavailable" });
+});
+
 test("incoming citations roll up by the citing decision's year within the bounded span", async () => {
   const summary = await withSubject(
     subjectId,
