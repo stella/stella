@@ -2531,8 +2531,11 @@ export const countDroppedIdentityCandidates = ({
 const decodeCaseLawCorpusCursor = (
   cursor: string,
 ): CorpusSearchCursor | null => {
-  const parsed = decodeCorpusSearchCursor(cursor);
-  return parsed !== null && isUuid(parsed.id) ? parsed : null;
+  const parsedCursor = decodeCorpusSearchCursor(cursor);
+  if (parsedCursor === null || !isUuid(parsedCursor.id)) {
+    return null;
+  }
+  return parsedCursor;
 };
 
 const TERM_COVERAGE_FAILURE_SINK = failureSink({
