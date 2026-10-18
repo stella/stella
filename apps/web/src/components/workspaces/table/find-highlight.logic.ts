@@ -1,3 +1,5 @@
+import { findSearchMatchKeyRanges } from "@stll/text-normalize/search-match-key";
+
 /**
  * Splitting rendered text on a find term, without React.
  */
@@ -36,24 +38,20 @@ export const splitByMatch = (text: string, term: string): TextSegment[] => {
 
   const segments: TextSegment[] = [];
   let cursor = 0;
-  for (
-    let at = haystack.indexOf(needle);
-    at !== -1;
-    at = haystack.indexOf(needle, cursor)
-  ) {
-    if (at > cursor) {
+  for (const { start, end } of findSearchMatchKeyRanges(haystack, needle)) {
+    if (start > cursor) {
       segments.push({
         matched: false,
         start: cursor,
-        text: text.slice(cursor, at),
+        text: text.slice(cursor, start),
       });
     }
     segments.push({
       matched: true,
-      start: at,
-      text: text.slice(at, at + needle.length),
+      start,
+      text: text.slice(start, end),
     });
-    cursor = at + needle.length;
+    cursor = end;
   }
   if (cursor < text.length) {
     segments.push({ matched: false, start: cursor, text: text.slice(cursor) });

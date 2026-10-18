@@ -4,6 +4,7 @@ import { and, desc, eq, ne } from "drizzle-orm";
 import { t } from "elysia";
 
 import { aiMemories } from "@/api/db/schema";
+import { toMemoryResponse } from "@/api/handlers/memories/response";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tPaginationCursor, tSafeId } from "@/api/lib/custom-schema";
@@ -58,20 +59,7 @@ const config = {
   }),
 } satisfies HandlerConfig;
 
-type MemoryListItem = {
-  id: string;
-  scope: "organization" | "user" | "workspace";
-  kind: "preference" | "instruction" | "fact" | "decision" | "relationship";
-  content: string;
-  language: string | null;
-  status: "suggested" | "active" | "stale" | "archived";
-  pinned: boolean;
-  source: "user" | "tool" | "extracted";
-  workspaceId: string | null;
-  sourceDataWorkspaceIds: string[];
-  createdAt: string;
-  updatedAt: string;
-};
+type MemoryListItem = ReturnType<typeof toMemoryResponse>;
 
 const memoryCursor = createTimestampIdCursorCodec({
   column: aiMemories.createdAt,
@@ -176,20 +164,7 @@ const listMemories = createSafeRootHandler(
         ? memoryCursor.encode(lastItem.createdAtCursor, lastItem.id)
         : null;
 
-    const items: MemoryListItem[] = pageRows.map((row) => ({
-      id: row.id,
-      scope: row.scope,
-      kind: row.kind,
-      content: row.content,
-      language: row.language,
-      status: row.status,
-      pinned: row.pinned,
-      source: row.source,
-      workspaceId: row.workspaceId,
-      sourceDataWorkspaceIds: row.sourceDataWorkspaceIds,
-      createdAt: row.createdAt.toISOString(),
-      updatedAt: row.updatedAt.toISOString(),
-    }));
+    const items = pageRows.map(toMemoryResponse);
 
     return Result.ok({
       items,

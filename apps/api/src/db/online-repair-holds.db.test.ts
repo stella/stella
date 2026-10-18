@@ -1,4 +1,3 @@
-import { panic } from "better-result";
 import type { ReservedSQL, SQL } from "bun";
 import { describe, expect, test } from "bun:test";
 import { getTableName } from "drizzle-orm";
@@ -69,6 +68,9 @@ const repairConnection = (
     return await connection.unsafe(statement, [...parameters]);
   },
   release: () => connection.release(),
+  terminate: async () => {
+    await terminateReserved(connection);
+  },
 });
 
 const withScratch = async (
@@ -365,7 +367,7 @@ describe.skipIf(!enabled)(
             );
             expect(outcome).toEqual({
               type: "deferred",
-              index: staged.name,
+              step: staged.name,
               retryAfterMs: config.retryMs,
             });
             expect(await readFinal()).toEqual(before);
@@ -397,7 +399,7 @@ describe.skipIf(!enabled)(
 
     for (const kind of ["date", "receipt"] as const) {
       test(`${kind} repair deploys pending and resumes its committed batch exactly once`, async () => {
-        await withScratch(async (client) => {
+        await withScratch(async (client, openClient) => {
           const fixture = await createFixture(client, kind);
           let now = Date.parse("2026-10-01T12:00:00Z");
           let readings = 0;
@@ -441,10 +443,26 @@ describe.skipIf(!enabled)(
           };
           const runnerOptions = {
             repairs: [repair],
-            indexGate: { ebs: { type: "disabled" } },
-            // The adapter reports every index ready, so no build observes.
-            reserveObserver: () =>
-              panic("Repair holds never build an online index"),
+            // The adapter reports every index ready, so only the repair's
+            // constraint validation opens the gate, on a session of its own.
+            indexGate: {
+              ebs: { type: "disabled" },
+              config: {
+                ...readOnlineIndexConfig({}),
+                health: { ...defaultConfig, busyWindows: [] },
+              },
+            },
+            reserveObserver: async () => {
+              const observer = await openClient().reserve();
+              return {
+                execute: async (statement, parameters = []) => {
+                  await observer.unsafe(statement, [...parameters]);
+                },
+                query: async (statement, parameters = []) =>
+                  await observer.unsafe(statement, [...parameters]),
+                release: () => observer.release(),
+              };
+            },
             log: (record: unknown) => {
               events.push(record);
             },
