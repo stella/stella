@@ -7306,7 +7306,10 @@ test("a planted desktop path plans the PR desktop browser leg while unrelated pa
     root,
     nodePath.join(directory, "planted.unclassified"),
   );
-  writeFileSync(nodePath.join(root, planted), "new desktop input");
+  writeFileSync(
+    nodePath.join(directory, "planted.unclassified"),
+    "new desktop input",
+  );
   try {
     for (const [file, expected] of [
       [planted, "true"],
