@@ -18,6 +18,7 @@ import { Result, panic } from "better-result";
 // parser-output-unchanged: retry delays use the shared arithmetic owner; parsed content is unchanged.
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import { fetchWithTimeout, type FetchWithTimeoutInit } from "@stll/fetch";
+import { createPolitePublisherFetch } from "@stll/fetch/publisher";
 import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 import { Temporal } from "@stll/time";
@@ -40,6 +41,26 @@ import { publisherTarget } from "./publisher-target";
 import { INGESTION_USER_AGENT, isTimeoutError } from "./utils";
 
 const MAX_DATE_EPOCH_MS = 8_640_000_000_000_000;
+const auditedPublisherFetch = createPolitePublisherFetch({
+  fetcher: async (input, init) => {
+    const { signal, ...requestInit } = init ?? {};
+    // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- canonical publisher boundary; callers validate the target before the policy owner invokes this transport
+    return await fetchWithTimeout(input, {
+      ...requestInit,
+      signal: signal ?? undefined,
+      timeout: { type: "headers", ms: ADAPTER_TIMEOUT.REQUEST },
+    });
+  },
+  onTelemetry: ({ origin, refusal, enforcement, policy }) => {
+    logger.warn("case_law.ingestion.publisher_robots_bypass", {
+      origin,
+      refusal: refusal._tag,
+      enforcement,
+      policy: policy.type,
+      ...(policy.type === "licensed" ? { licenseBasis: policy.basis } : {}),
+    });
+  },
+});
 
 /**
  * Which answers end the cycle instead of returning the response: none, only
@@ -217,9 +238,21 @@ const fetchPublisherRequest = async (
     requestOptions: FetchWithTimeoutInit,
   ) => {
     // Each request, including a redirect or backoff attempt, is observed.
-    const sendRequest = async () =>
-      // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- canonical publisher boundary; callers validate the target
-      await fetchWithTimeout(target, requestOptions);
+    const sendRequest = async () => {
+      const outcome = await auditedPublisherFetch(target, {
+        init: { ...requestOptions, signal: requestOptions.signal ?? null },
+        userAgent:
+          new Headers(requestOptions.headers).get("User-Agent") ??
+          INGESTION_USER_AGENT,
+        enforcement: "audit",
+      });
+      if (Result.isError(outcome)) {
+        return panic(
+          "Audit-mode publisher policy unexpectedly refused a request",
+        );
+      }
+      return outcome.value.response;
+    };
     if (fetchStage === "listing") {
       return await sendRequest();
     }

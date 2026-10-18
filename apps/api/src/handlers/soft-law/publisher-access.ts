@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 
 import { fetchWithTimeout } from "@stll/fetch";
+import { createPolitePublisherFetch } from "@stll/fetch/publisher";
 
 import {
   PUBLISHER_GATES,
@@ -18,6 +19,7 @@ import {
   SoftLawContentTypeMismatchError,
 } from "@/api/lib/legal-search/soft-law-access-types";
 import type { SoftLawAccessPolicy } from "@/api/lib/legal-search/soft-law-types";
+import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 
 const SOFT_LAW_RESPONSE_MAX_BYTES = 32 * 1024 * 1024;
@@ -153,6 +155,27 @@ export const createSoftLawFetch = ({
   reserve = reservePublisherGateSlot,
   beforeRequest,
 }: CreateSoftLawFetchOptions): SoftLawFetch => {
+  const auditedPublisherFetch = createPolitePublisherFetch({
+    fetcher: async (input, init) => {
+      const { signal: requestSignal, ...requestInit } = init ?? {};
+      return await request(input, {
+        ...requestInit,
+        signal: requestSignal ?? undefined,
+        timeoutMs: REQUEST_TIMEOUT_MS,
+      });
+    },
+    onTelemetry: ({ origin, refusal, enforcement, policy: robotsPolicy }) => {
+      logger.warn("soft_law.publisher_robots_bypass", {
+        origin,
+        refusal: refusal._tag,
+        enforcement,
+        policy: robotsPolicy.type,
+        ...(robotsPolicy.type === "licensed"
+          ? { licenseBasis: robotsPolicy.basis }
+          : {}),
+      });
+    },
+  });
   let blocked: SoftLawBlockReason | null = null;
   let windowState: "open" | "deferred_window" = "open";
   let leaseState: "active" | "lost" = "active";
@@ -242,12 +265,23 @@ export const createSoftLawFetch = ({
     if (renewedBlock) {
       return stop(renewedBlock);
     }
-    const response = await request(url, {
-      signal,
-      timeoutMs: REQUEST_TIMEOUT_MS,
-      redirect: "manual",
-      headers: { "User-Agent": policy.userAgent },
+    const publisherOutcome = await auditedPublisherFetch(url, {
+      init: {
+        signal,
+        redirect: "manual",
+      },
+      userAgent: policy.userAgent,
+      enforcement: "audit",
     });
+    if (Result.isError(publisherOutcome)) {
+      return Result.err(
+        new SoftLawAccessError({
+          message: "Publisher robots policy could not be evaluated",
+          cause: publisherOutcome.error,
+        }),
+      );
+    }
+    const response = publisherOutcome.value.response;
     const statusBlock = detectSoftLawBlock(response.status, "");
     if (statusBlock) {
       blocked = statusBlock;
