@@ -1,7 +1,6 @@
 import { panic, Result } from "better-result";
 
 import { fetchWithTimeout } from "@stll/fetch";
-import { createPolitePublisherFetch } from "@stll/fetch/publisher";
 
 import {
   PUBLISHER_GATES,
@@ -19,12 +18,7 @@ import {
   SoftLawContentTypeMismatchError,
 } from "@/api/lib/legal-search/soft-law-access-types";
 import type { SoftLawAccessPolicy } from "@/api/lib/legal-search/soft-law-types";
-import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
-import {
-  OUTBOUND_PROTOCOL_POLICY,
-  validateOutboundFetchTarget,
-} from "@/api/lib/safe-outbound-fetch";
 
 const SOFT_LAW_RESPONSE_MAX_BYTES = 32 * 1024 * 1024;
 const REQUEST_TIMEOUT_MS = 30_000;
@@ -148,7 +142,6 @@ type CreateSoftLawFetchOptions = {
   request?: typeof fetchWithTimeout;
   reserve?: typeof reservePublisherGateSlot;
   beforeRequest?: () => Promise<void | Result<void, unknown>>;
-  validateTarget?: typeof validateOutboundFetchTarget;
 };
 
 /** Every response is inspected before the adapter receives it; no retries. */
@@ -159,67 +152,8 @@ export const createSoftLawFetch = ({
   request = fetchWithTimeout,
   reserve = reservePublisherGateSlot,
   beforeRequest,
-  validateTarget = validateOutboundFetchTarget,
 }: CreateSoftLawFetchOptions): SoftLawFetch => {
   let blocked: SoftLawBlockReason | null = null;
-  const gate = PUBLISHER_GATES[policy.publisherGate];
-  const auditedPublisherFetch = createPolitePublisherFetch({
-    validateTarget: async (url) => {
-      const restricted = restrictOutboundUrl({
-        rawUrl: url.href,
-        hostPolicy: {
-          type: "exact-origin",
-          origins: gate.hosts.map((host) => `https://${host}`),
-        },
-      });
-      if (!restricted) {
-        return Result.err(
-          new SoftLawAccessError({
-            message: "URL is outside the publisher policy",
-          }),
-        );
-      }
-      if (/challenge|captcha|cdn-cgi|access-denied/iu.test(restricted.href)) {
-        blocked = "challenge";
-        return Result.err(
-          new SoftLawBlockedError({
-            message: "Publisher redirected to a challenge",
-            reason: "challenge",
-          }),
-        );
-      }
-      const target = await validateTarget(restricted, {
-        protocolPolicy: OUTBOUND_PROTOCOL_POLICY.HTTP_AND_HTTPS,
-        signal,
-        timeoutMs: REQUEST_TIMEOUT_MS,
-      });
-      return target.map(({ url: validatedUrl }) => validatedUrl);
-    },
-    fetcher: async (input, init) => {
-      const {
-        signal: requestSignal,
-        timeout: _timeout,
-        timeoutMs: _timeoutMs,
-        ...requestInit
-      } = init ?? {};
-      return await request(input, {
-        ...requestInit,
-        signal: requestSignal ?? undefined,
-        timeoutMs: REQUEST_TIMEOUT_MS,
-      });
-    },
-    onTelemetry: ({ origin, refusal, enforcement, policy: robotsPolicy }) => {
-      logger.warn("soft_law.publisher_robots_bypass", {
-        origin,
-        refusal: refusal._tag,
-        enforcement,
-        policy: robotsPolicy.type,
-        ...(robotsPolicy.type === "licensed"
-          ? { licenseBasis: robotsPolicy.basis }
-          : {}),
-      });
-    },
-  });
   let windowState: "open" | "deferred_window" = "open";
   let leaseState: "active" | "lost" = "active";
   const getLeaseState = () => leaseState;
@@ -246,6 +180,7 @@ export const createSoftLawFetch = ({
     if (initialBlock) {
       return stop(initialBlock);
     }
+    const gate = PUBLISHER_GATES[policy.publisherGate];
     if (
       gate.intervalMs < 1000 ||
       !/^Stella\/[^\s]+ \(\+https:\/\/[^\s)]+\)$/u.test(policy.userAgent)
@@ -270,75 +205,49 @@ export const createSoftLawFetch = ({
         }),
       );
     }
-    const publisherOutcome = await auditedPublisherFetch(url, {
-      init: {
-        signal,
-      },
-      userAgent: policy.userAgent,
-      enforcement: "audit",
-      inspectResponse: (response) => {
-        const location = response.headers.get("location");
-        if (
-          location &&
-          /challenge|captcha|cdn-cgi|access-denied/iu.test(location)
-        ) {
-          blocked = "challenge";
-          return Result.ok("return");
-        }
-        return Result.ok("follow");
-      },
-      beforeHop: async () => {
-        await reserve(policy.publisherGate, signal);
-        if (!softLawAccessWindowOpen(policy, now())) {
-          windowState = "deferred_window";
-          return Result.err(
-            new SoftLawAccessError({
-              message: "Publisher access window is closed",
-            }),
-          );
-        }
-        signal.throwIfAborted();
-        const reservedBlock = getBlockReason();
-        if (reservedBlock) {
-          return stop(reservedBlock);
-        }
-        const lease = await Result.tryPromise(
-          async () => await beforeRequest?.(),
-        );
-        if (
-          Result.isError(lease) ||
-          (lease.value !== undefined && Result.isError(lease.value))
-        ) {
-          leaseState = "lost";
-          return Result.err(
-            new SoftLawAccessError({
-              message: "Ingestion lease was lost",
-              cause: Result.isError(lease) ? lease.error.cause : lease.value,
-            }),
-          );
-        }
-        signal.throwIfAborted();
-        if (getLeaseState() === "lost") {
-          return Result.err(
-            new SoftLawAccessError({ message: "Ingestion lease was lost" }),
-          );
-        }
-        const renewedBlock = getBlockReason();
-        return renewedBlock ? stop(renewedBlock) : Result.ok(undefined);
-      },
-    });
-    if (Result.isError(publisherOutcome)) {
-      if (blocked) {
-        return stop(blocked);
-      }
+    await reserve(policy.publisherGate, signal);
+    if (!softLawAccessWindowOpen(policy, now())) {
+      windowState = "deferred_window";
       return Result.err(
         new SoftLawAccessError({
-          message: "Publisher robots policy could not be evaluated",
-          cause: publisherOutcome.error,
+          message: "Publisher access window is closed",
         }),
       );
     }
-    const response = publisherOutcome.value.response;
+    signal.throwIfAborted();
+    const reservedBlock = getBlockReason();
+    if (reservedBlock) {
+      return stop(reservedBlock);
+    }
+    const lease = await Result.tryPromise(async () => await beforeRequest?.());
+    if (
+      Result.isError(lease) ||
+      (lease.value !== undefined && Result.isError(lease.value))
+    ) {
+      leaseState = "lost";
+      return Result.err(
+        new SoftLawAccessError({
+          message: "Ingestion lease was lost",
+          cause: Result.isError(lease) ? lease.error.cause : lease.value,
+        }),
+      );
+    }
+    signal.throwIfAborted();
+    if (getLeaseState() === "lost") {
+      return Result.err(
+        new SoftLawAccessError({ message: "Ingestion lease was lost" }),
+      );
+    }
+    const renewedBlock = getBlockReason();
+    if (renewedBlock) {
+      return stop(renewedBlock);
+    }
+    const response = await request(url, {
+      signal,
+      timeoutMs: REQUEST_TIMEOUT_MS,
+      redirect: "manual",
+      headers: { "User-Agent": policy.userAgent },
+    });
     const statusBlock = detectSoftLawBlock(response.status, "");
     if (statusBlock) {
       blocked = statusBlock;

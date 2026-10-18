@@ -56,17 +56,13 @@ test("blocked responses are never retried or exposed to parsers", async () => {
     [200, '<form id="challenge-form">'],
     [503, "<title>Just a moment...</title>"],
   ] as const) {
-    const requested: string[] = [];
+    let calls = 0;
     const fetch = createSoftLawFetch({
       policy,
       signal: new AbortController().signal,
       reserve: async () => {},
-      request: async (input) => {
-        const url = new URL(input instanceof Request ? input.url : input);
-        requested.push(url.pathname);
-        if (url.pathname === "/robots.txt") {
-          return new Response(null, { status: 404 });
-        }
+      request: async () => {
+        calls++;
         return new Response(body, {
           status,
           headers: { "content-type": "text/html" },
@@ -76,7 +72,7 @@ test("blocked responses are never retried or exposed to parsers", async () => {
     expect(
       fetchError(await fetch("https://uoou.gov.cz/document")),
     ).toBeInstanceOf(SoftLawBlockedError);
-    expect(requested).toEqual(["/robots.txt", "/document"]);
+    expect(calls).toBe(1);
   }
 });
 
@@ -103,17 +99,13 @@ test("blocked status and redirects latch before failing body cleanup", async () 
     [429, "rate_limited"],
     [302, "challenge"],
   ] as const) {
-    const requested: string[] = [];
+    let calls = 0;
     const fetch = createSoftLawFetch({
       policy,
       signal: new AbortController().signal,
       reserve: async () => {},
-      request: async (input) => {
-        const url = new URL(input instanceof Request ? input.url : input);
-        requested.push(url.pathname);
-        if (url.pathname === "/robots.txt") {
-          return new Response(null, { status: 404 });
-        }
+      request: async () => {
+        calls++;
         return new Response(
           new ReadableStream({
             cancel: async () => {
@@ -131,7 +123,7 @@ test("blocked status and redirects latch before failing body cleanup", async () 
     expect(fetchError(await fetch("https://uoou.gov.cz/other"))).toMatchObject({
       reason,
     });
-    expect(requested).toEqual(["/robots.txt", "/document"]);
+    expect(calls).toBe(1);
   }
 });
 
@@ -152,11 +144,11 @@ test("publisher fetch applies the contact user agent, rejects redirects and fore
       (await fetch("https://uoou.gov.cz/document")).unwrap().bytes,
     ),
   ).toBe("document");
-  expect(seen).toEqual(["Stella", policy.userAgent]);
+  expect(seen).toEqual([policy.userAgent]);
   expect(
     fetchError(await fetch("https://example.test/document")),
   ).toBeInstanceOf(SoftLawAccessError);
-  expect(seen).toHaveLength(2);
+  expect(seen).toHaveLength(1);
   const redirect = createSoftLawFetch({
     policy,
     signal: new AbortController().signal,
@@ -170,87 +162,6 @@ test("publisher fetch applies the contact user agent, rejects redirects and fore
   expect(
     fetchError(await redirect("https://uoou.gov.cz/document")),
   ).toBeInstanceOf(SoftLawAccessError);
-});
-
-test("same-origin redirects reserve and renew authorization before every hop", async () => {
-  const events: string[] = [];
-  let resourceRequests = 0;
-  const fetch = createSoftLawFetch({
-    policy,
-    signal: new AbortController().signal,
-    reserve: async () => {
-      events.push("reserve");
-    },
-    beforeRequest: async () => {
-      events.push("authorize");
-      return Result.ok(undefined);
-    },
-    validateTarget: async (url) =>
-      Result.ok({ addresses: [], url: new URL(url) }),
-    request: async (input) => {
-      const url = new URL(input instanceof Request ? input.url : input);
-      if (url.pathname === "/robots.txt") {
-        return new Response(null, { status: 404 });
-      }
-      resourceRequests++;
-      events.push(`request:${url.pathname}`);
-      return resourceRequests === 1
-        ? new Response(null, {
-            status: 302,
-            headers: { location: "/final" },
-          })
-        : new Response("document");
-    },
-  });
-  expect(
-    new TextDecoder().decode(
-      (await fetch("https://uoou.gov.cz/start")).unwrap().bytes,
-    ),
-  ).toBe("document");
-  expect(events).toEqual([
-    "reserve",
-    "authorize",
-    "reserve",
-    "authorize",
-    "request:/start",
-    "reserve",
-    "authorize",
-    "request:/final",
-  ]);
-});
-
-test("a redirect hop with refused authorization never reaches transport", async () => {
-  let authorizations = 0;
-  const requested: string[] = [];
-  const fetch = createSoftLawFetch({
-    policy,
-    signal: new AbortController().signal,
-    reserve: async () => {},
-    beforeRequest: async () => {
-      authorizations++;
-      return authorizations < 3
-        ? Result.ok(undefined)
-        : Result.err(new SoftLawAccessError({ message: "Lease lost" }));
-    },
-    validateTarget: async (url) =>
-      Result.ok({ addresses: [], url: new URL(url) }),
-    request: async (input) => {
-      const url = new URL(input instanceof Request ? input.url : input);
-      if (url.pathname === "/robots.txt") {
-        return new Response(null, { status: 404 });
-      }
-      requested.push(url.pathname);
-      return new Response(null, {
-        status: 302,
-        headers: { location: "/final" },
-      });
-    },
-  });
-  expect(fetchError(await fetch("https://uoou.gov.cz/start"))).toBeInstanceOf(
-    SoftLawAccessError,
-  );
-  expect(requested).toEqual(["/start"]);
-  expect(fetch.getLeaseState()).toBe("lost");
 });
 
 test("off-peak windows use the declared zone across midnight", () => {
@@ -426,7 +337,7 @@ test("a block arriving during another request's lease check prevents that reques
     entered = resolve;
   });
   let leases = 0;
-  const requested: string[] = [];
+  let requests = 0;
   const fetch = createSoftLawFetch({
     policy,
     signal: new AbortController().signal,
@@ -439,10 +350,8 @@ test("a block arriving during another request's lease check prevents that reques
       }
       return Result.ok(undefined);
     },
-    request: async (input) => {
-      requested.push(
-        new URL(input instanceof Request ? input.url : input).pathname,
-      );
+    request: async () => {
+      requests++;
       return new Response("blocked", { status: 429 });
     },
   });
@@ -456,7 +365,7 @@ test("a block arriving during another request's lease check prevents that reques
     release();
   }
   expect(Result.isError(await slow)).toBe(true);
-  expect(requested).toEqual(["/robots.txt", "/fast"]);
+  expect(requests).toBe(1);
 });
 
 test("a challenge redirect latches and all later requests are refused", async () => {

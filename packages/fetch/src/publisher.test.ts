@@ -228,7 +228,6 @@ describe("publisher scheduler", () => {
     });
     const options = {
       userAgent: "Stella/1.0 (+https://stella.law)",
-      enforcement: "enforce" as const,
     };
     const outcomes = await Promise.all([
       request("https://publisher.example/one", options),
@@ -239,137 +238,6 @@ describe("publisher scheduler", () => {
     expect(requestedAt).toHaveLength(3);
     expect(requestedAt.at(0)).toBe(0);
     expect(sleeps).toEqual([2000, 2000]);
-  });
-
-  test("audit mode records an unsupported delay without waiting", async () => {
-    const sleeps: number[] = [];
-    const requested: string[] = [];
-    const telemetry: number[] = [];
-    const request = createPolitePublisherFetch({
-      validateTarget: allowTarget,
-      clock: {
-        now: () => 0,
-        sleep: async (ms) => {
-          sleeps.push(ms);
-        },
-      },
-      onTelemetry: ({ delayMs }) => {
-        telemetry.push(delayMs);
-      },
-      fetcher: async (input) => {
-        const url = new URL(input instanceof Request ? input.url : input);
-        if (url.pathname === "/robots.txt") {
-          return new Response("User-agent: *\nCrawl-delay: 3600\nAllow: /");
-        }
-        requested.push(url.pathname);
-        return new Response("ok");
-      },
-    });
-    const options = { userAgent: "Stella/1.0", enforcement: "audit" as const };
-    await request("https://publisher.example/one", options);
-    await request("https://publisher.example/two", options);
-    expect(requested).toEqual(["/one", "/two"]);
-    expect(sleeps).toEqual([]);
-    expect(telemetry).toEqual([3_600_000, 3_600_000]);
-  });
-
-  test("runs admission before every redirect hop and returns a typed refusal", async () => {
-    const admitted: string[] = [];
-    const requested: string[] = [];
-    const request = createPolitePublisherFetch({
-      validateTarget: allowTarget,
-      fetcher: async (input) => {
-        const url = new URL(input instanceof Request ? input.url : input);
-        if (url.pathname === "/robots.txt") {
-          return new Response(null, { status: 404 });
-        }
-        requested.push(url.pathname);
-        return Response.redirect("https://publisher.example/final", 302);
-      },
-    });
-    const outcome = await request("https://publisher.example/start", {
-      userAgent: "Stella/1.0",
-      enforcement: "audit",
-      beforeHop: async (url, hopIndex) => {
-        admitted.push(`${hopIndex}:${url.pathname}`);
-        return hopIndex < 2
-          ? Result.ok(undefined)
-          : Result.err(new Error("authorization expired"));
-      },
-    });
-    expect(outcome.isErr() && outcome.error._tag).toBe("publisher_hop_refused");
-    expect(admitted).toEqual(["0:/robots.txt", "1:/start", "2:/final"]);
-    expect(requested).toEqual(["/start"]);
-  });
-
-  test("a cold robots cache honors admission before any transport request", async () => {
-    const requested: string[] = [];
-    const request = createPolitePublisherFetch({
-      validateTarget: allowTarget,
-      fetcher: async (input) => {
-        requested.push(input instanceof Request ? input.url : input.toString());
-        return new Response("unexpected request");
-      },
-    });
-    const outcome = await request("https://publisher.example/case", {
-      userAgent: "Stella/1.0",
-      enforcement: "audit",
-      beforeHop: async () => Result.err(new Error("gate refused")),
-    });
-    expect(outcome.isErr() && outcome.error._tag).toBe("publisher_hop_refused");
-    expect(requested).toEqual([]);
-  });
-
-  test("a cold-cache admission refusal is not reused by the next caller", async () => {
-    const requested: string[] = [];
-    const request = createPolitePublisherFetch({
-      validateTarget: allowTarget,
-      fetcher: async (input) => {
-        const url = new URL(input instanceof Request ? input.url : input);
-        requested.push(url.pathname);
-        return url.pathname === "/robots.txt"
-          ? new Response(null, { status: 404 })
-          : new Response("document");
-      },
-    });
-    const refused = await request("https://publisher.example/case", {
-      userAgent: "Stella/1.0",
-      enforcement: "audit",
-      beforeHop: async () => Result.err(new Error("gate refused")),
-    });
-    const admitted = await request("https://publisher.example/case", {
-      userAgent: "Stella/1.0",
-      enforcement: "audit",
-      beforeHop: async () => Result.ok(undefined),
-    });
-
-    expect(refused.isErr() && refused.error._tag).toBe("publisher_hop_refused");
-    expect(admitted.isOk() && (await admitted.value.response.text())).toBe(
-      "document",
-    );
-    expect(requested).toEqual(["/robots.txt", "/case"]);
-  });
-
-  test("returns an inspected redirect without contacting its target", async () => {
-    const requested: string[] = [];
-    const request = createPolitePublisherFetch({
-      validateTarget: allowTarget,
-      fetcher: async (input) => {
-        const url = new URL(input instanceof Request ? input.url : input);
-        if (url.pathname === "/robots.txt") {
-          return new Response(null, { status: 404 });
-        }
-        requested.push(url.pathname);
-        return Response.redirect("https://publisher.example/limited", 302);
-      },
-    });
-    const outcome = await request("https://publisher.example/start", {
-      userAgent: "Stella/1.0",
-      enforcement: "audit",
-      inspectResponse: async () => Result.ok("return"),
-    });
-    expect(outcome.isOk() && outcome.value.response.status).toBe(302);
-    expect(requested).toEqual(["/start"]);
   });
 
   test("preserves a caller-provided transport timeout", async () => {
@@ -389,12 +257,11 @@ describe("publisher scheduler", () => {
     await request("https://publisher.example/case", {
       init: { timeout: { type: "idle", ms: 321 } },
       userAgent: "Stella/1.0",
-      enforcement: "audit",
     });
     expect(seen).toEqual([{ type: "idle", ms: 321 }]);
   });
 
-  test("enforce mode refuses crawl delays above the maximum", async () => {
+  test("refuses crawl delays above the maximum", async () => {
     let resources = 0;
     const request = createPolitePublisherFetch({
       validateTarget: allowTarget,
@@ -409,7 +276,6 @@ describe("publisher scheduler", () => {
     });
     const outcome = await request("https://publisher.example/case", {
       userAgent: "Stella/1.0",
-      enforcement: "enforce",
     });
     expect(outcome.isErr() && outcome.error._tag).toBe(
       "crawl_delay_unsupported",
@@ -417,7 +283,47 @@ describe("publisher scheduler", () => {
     expect(resources).toBe(0);
   });
 
-  test("aborting an enforced wait returns a typed refusal promptly", async () => {
+  test("licensed sources record their basis and cap unsupported delays", async () => {
+    let now = 0;
+    const sleeps: number[] = [];
+    const policies: unknown[] = [];
+    const request = createPolitePublisherFetch({
+      validateTarget: allowTarget,
+      clock: {
+        now: () => now,
+        sleep: async (ms) => {
+          sleeps.push(ms);
+          now += ms;
+        },
+      },
+      onTelemetry: ({ policy }) => {
+        policies.push(policy);
+      },
+      fetcher: async (input) =>
+        new URL(input instanceof Request ? input.url : input).pathname ===
+        "/robots.txt"
+          ? new Response("User-agent: *\nCrawl-delay: 3600\nDisallow: /")
+          : new Response("licensed document"),
+    });
+    const options = {
+      userAgent: "Stella/1.0",
+      policy: {
+        type: "licensed" as const,
+        basis: "publisher agreement",
+        evidenceUrl: "https://publisher.example/license",
+      },
+    };
+
+    const first = await request("https://publisher.example/one", options);
+    const second = await request("https://publisher.example/two", options);
+
+    expect(first.isOk() && first.value.robotsDecision).toBe("licensed_bypass");
+    expect(second.isOk() && second.value.delayAppliedMs).toBe(60_000);
+    expect(sleeps).toEqual([60_000]);
+    expect(policies).toEqual([options.policy, options.policy]);
+  });
+
+  test("aborting a scheduled wait returns a typed refusal promptly", async () => {
     let now = 0;
     const controller = new AbortController();
     let markSleepStarted!: () => void;
@@ -447,7 +353,6 @@ describe("publisher scheduler", () => {
     });
     const options = {
       userAgent: "Stella/1.0",
-      enforcement: "enforce" as const,
     };
     await request("https://publisher.example/one", options);
     now = 1;
@@ -507,7 +412,6 @@ describe("publisher scheduler", () => {
     });
     const options = {
       userAgent: "Stella/1.0",
-      enforcement: "enforce" as const,
     };
     await request("https://publisher.example/one", options);
     const second = request("https://publisher.example/two", options);
@@ -547,7 +451,6 @@ describe("publisher scheduler", () => {
     });
     const outcome = await request("https://publisher.example/case", {
       userAgent: "Stella/1.0",
-      enforcement: "enforce",
     });
     expect(outcome.isErr() && outcome.error._tag).toBe("robots_unavailable");
   });
@@ -573,7 +476,6 @@ describe("publisher scheduler", () => {
 
     const outcome = await request("https://publisher.example/private/case", {
       userAgent: "Stella/1.0 (+https://stella.law)",
-      enforcement: "enforce",
     });
 
     expect(outcome.isErr()).toBe(true);
@@ -610,7 +512,6 @@ describe("publisher scheduler", () => {
 
     const outcome = await request("https://publisher.example/public", {
       userAgent: "Stella/1.0 (+https://stella.law)",
-      enforcement: "enforce",
     });
 
     expect(outcome.isErr()).toBe(true);
@@ -646,7 +547,6 @@ describe("publisher scheduler", () => {
     });
     const options = {
       userAgent: "Stella/1.0 (+https://stella.law)",
-      enforcement: "enforce" as const,
     };
 
     const redirected = await request("https://source.example/start", options);
@@ -683,7 +583,6 @@ describe("publisher scheduler", () => {
 
       const outcome = await request("https://public.example/start", {
         userAgent: "Stella/1.0 (+https://stella.law)",
-        enforcement: "enforce",
       });
 
       expect(outcome.isErr()).toBe(true);
@@ -711,7 +610,6 @@ describe("publisher scheduler", () => {
 
     const outcome = await request("https://public.example/start", {
       userAgent: "Stella/1.0 (+https://stella.law)",
-      enforcement: "audit",
     });
 
     expect(outcome.isErr()).toBe(true);
@@ -748,7 +646,6 @@ describe("publisher scheduler", () => {
         },
       },
       userAgent: "Stella/1.0 (+https://stella.law)",
-      enforcement: "enforce",
     });
 
     expect(seen.get("https://source.example/next")?.get("authorization")).toBe(
@@ -803,7 +700,6 @@ describe("publisher scheduler", () => {
           method: "POST",
         },
         userAgent: "Stella/1.0 (+https://stella.law)",
-        enforcement: "enforce",
       });
 
       expect(outcome.isOk()).toBe(true);
@@ -830,7 +726,6 @@ describe("publisher scheduler", () => {
         method: "POST",
       },
       userAgent: "Stella/1.0 (+https://stella.law)",
-      enforcement: "enforce",
     });
 
     expect(outcome.isErr()).toBe(true);
@@ -860,7 +755,6 @@ describe("publisher scheduler", () => {
 
     const outcome = await request("https://publisher.example/loop/0", {
       userAgent: "Stella/1.0 (+https://stella.law)",
-      enforcement: "enforce",
     });
 
     expect(outcome.isErr()).toBe(true);
@@ -897,7 +791,6 @@ describe("publisher scheduler", () => {
     });
     const options = {
       userAgent: "Stella/1.0 (+https://stella.law)",
-      enforcement: "enforce" as const,
     };
 
     const failed = await request("https://publisher.example/case", options);
@@ -925,7 +818,6 @@ describe("publisher scheduler", () => {
       });
       const outcome = await request("https://publisher.example/case", {
         userAgent: "Stella/1.0 (+https://stella.law)",
-        enforcement: "enforce",
       });
       expect(outcome.isOk()).toBe(allowed);
       if (!allowed && outcome.isErr()) {

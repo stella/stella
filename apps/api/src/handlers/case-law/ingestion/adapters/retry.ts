@@ -18,10 +18,6 @@ import { Result, panic } from "better-result";
 // parser-output-unchanged: retry delays use the shared arithmetic owner; parsed content is unchanged.
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import { fetchWithTimeout, type FetchWithTimeoutInit } from "@stll/fetch";
-import {
-  createPolitePublisherFetch,
-  PublisherHopRefusedError,
-} from "@stll/fetch/publisher";
 import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 import { Temporal } from "@stll/time";
@@ -38,55 +34,12 @@ import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { observePublisherDocumentFetch } from "@/api/lib/legal-search/document-stage-observation";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
 import { logger } from "@/api/lib/observability/logger";
-import {
-  OUTBOUND_PROTOCOL_POLICY,
-  validateOutboundFetchTarget,
-} from "@/api/lib/safe-outbound-fetch";
 
 import { abortableSleep } from "./publisher-request-gate";
 import { publisherTarget } from "./publisher-target";
 import { INGESTION_USER_AGENT, isTimeoutError } from "./utils";
 
 const MAX_DATE_EPOCH_MS = 8_640_000_000_000_000;
-const auditedPublisherFetch = createPolitePublisherFetch({
-  validateTarget: async (url) => {
-    const target = await validateOutboundFetchTarget(url, {
-      protocolPolicy: OUTBOUND_PROTOCOL_POLICY.HTTP_AND_HTTPS,
-      timeoutMs: ADAPTER_TIMEOUT.REQUEST,
-    });
-    return target.map(({ url: validatedUrl }) => validatedUrl);
-  },
-  fetcher: async (input, init) => {
-    const { signal, timeout, timeoutMs, ...requestInit } = init ?? {};
-    let timeoutOption:
-      | { timeout: Exclude<FetchWithTimeoutInit["timeout"], undefined> }
-      | { timeoutMs: number };
-    if (timeout !== undefined) {
-      timeoutOption = { timeout };
-    } else if (timeoutMs !== undefined) {
-      timeoutOption = { timeoutMs };
-    } else {
-      timeoutOption = {
-        timeout: { type: "headers", ms: ADAPTER_TIMEOUT.REQUEST },
-      };
-    }
-    // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- canonical publisher boundary; callers validate the target before the policy owner invokes this transport
-    return await fetchWithTimeout(input, {
-      ...requestInit,
-      signal: signal ?? undefined,
-      ...timeoutOption,
-    });
-  },
-  onTelemetry: ({ origin, refusal, enforcement, policy }) => {
-    logger.warn("case_law.ingestion.publisher_robots_bypass", {
-      origin,
-      refusal: refusal._tag,
-      enforcement,
-      policy: policy.type,
-      ...(policy.type === "licensed" ? { licenseBasis: policy.basis } : {}),
-    });
-  },
-});
 
 /**
  * Which answers end the cycle instead of returning the response: none, only
@@ -120,8 +73,6 @@ export type PublisherFetchInit = FetchWithTimeoutInit & {
   refusalMode?: PublisherRefusalMode | undefined;
   /** Publisher-defined redirect target; use manual redirects to inspect it. */
   isRateLimitRedirect?: (response: Response) => boolean;
-  /** Policy transport override for deterministic boundary tests. */
-  publisherFetch?: typeof auditedPublisherFetch;
 };
 
 /**
@@ -257,7 +208,6 @@ const fetchPublisherRequest = async (
     fetchStage,
     expectedContentType,
     isRateLimitRedirect: _isRateLimitRedirect,
-    publisherFetch = auditedPublisherFetch,
     ...requestInit
   } = init;
   const gateId = publisherGate ?? ADAPTER_PUBLISHER_GATES[adapterKey];
@@ -267,50 +217,9 @@ const fetchPublisherRequest = async (
     requestOptions: FetchWithTimeoutInit,
   ) => {
     // Each request, including a redirect or backoff attempt, is observed.
-    const sendRequest = async () => {
-      const outcome = await publisherFetch(target, {
-        init: { ...requestOptions, signal: requestOptions.signal ?? null },
-        userAgent:
-          new Headers(requestOptions.headers).get("User-Agent") ??
-          INGESTION_USER_AGENT,
-        enforcement: "audit",
-        inspectResponse: (response) =>
-          Result.ok(
-            _isRateLimitRedirect?.(response) === true ? "return" : "follow",
-          ),
-        beforeHop: async (hopUrl) =>
-          await Result.gen(async function* () {
-            yield* publisherTarget(adapterKey, hopUrl);
-            if (controls !== undefined) {
-              yield* Result.await(controls.check());
-              yield* Result.await(controls.chargeRequest());
-            }
-            yield* Result.await(
-              Result.tryPromise({
-                try: async () =>
-                  await reservePublisherGateSlot(gateId, requestOptions.signal),
-                catch: (error) => error,
-              }),
-            );
-            if (controls !== undefined) {
-              yield* controls.checkBeforeSend();
-            }
-            return Result.ok(undefined);
-          }),
-      });
-      if (Result.isError(outcome)) {
-        if (PublisherHopRefusedError.is(outcome.error)) {
-          throw outcome.error.cause;
-        }
-        throw new AdapterFetchError({
-          message: "Publisher request failed",
-          adapterKey,
-          cursor: null,
-          cause: outcome.error,
-        });
-      }
-      return outcome.value.response;
-    };
+    const sendRequest = async () =>
+      // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- canonical publisher boundary; callers validate the target
+      await fetchWithTimeout(target, requestOptions);
     if (fetchStage === "listing") {
       return await sendRequest();
     }
@@ -321,6 +230,7 @@ const fetchPublisherRequest = async (
     });
   };
   if (controls === undefined) {
+    await reservePublisherGateSlot(gateId, requestInit.signal);
     return await request(url, requestInit);
   }
   const fetchTarget = async (
@@ -328,7 +238,17 @@ const fetchPublisherRequest = async (
     redirects: number,
   ): Promise<Result<Response, unknown>> =>
     await Result.gen(async function* () {
+      yield* Result.await(controls.check());
       const target = yield* publisherTarget(adapterKey, requestedTarget);
+      yield* Result.await(controls.chargeRequest());
+      yield* Result.await(
+        Result.tryPromise({
+          try: async () =>
+            await reservePublisherGateSlot(gateId, requestInit.signal),
+          catch: (error) => error,
+        }),
+      );
+      yield* controls.checkBeforeSend();
       const fetched = await Result.tryPromise({
         try: async () =>
           await request(target, { ...requestInit, redirect: "manual" }),
