@@ -137,6 +137,10 @@ const createPathResolver = (context: ScopeContext) => {
     ) {
       return true;
     }
+    // A mkdtemp directory is unique to its test, even inside the checkout.
+    if (isTemporaryRoot(node, new Set(seen))) {
+      return false;
+    }
     if (isIdentifierReference(node)) {
       const variable = variableOf(node);
       if (variable === null || seen.has(variable)) {

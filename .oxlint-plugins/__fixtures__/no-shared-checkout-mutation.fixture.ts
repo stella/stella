@@ -24,3 +24,8 @@ await writeFile(path.join(scratch, "fixture"), "changed");
 // Clean: copies a checkout input into a temporary destination.
 // expect-clean: no-shared-checkout-mutation/no-shared-checkout-mutation
 await copyFile(path.join(checkout, "package.json"), path.join(scratch, "copy"));
+
+// Clean: a unique temporary directory inside the checkout.
+const local = await mkdtemp(path.join(checkout, ".cache", "rule-fixture-"));
+// expect-clean: no-shared-checkout-mutation/no-shared-checkout-mutation
+await writeFile(path.join(local, "fixture"), "changed");
