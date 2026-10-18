@@ -5,6 +5,7 @@ import type { ParsedList, SanctionsEntry } from "./entry";
 import {
   buildScreeningIndex,
   buildScreeningIndexCooperatively,
+  cloneScreeningIndexWithoutCache,
   screen,
 } from "./screening";
 import type { ScreeningQuery } from "./screening";
@@ -252,20 +253,20 @@ test("cached absent spellings replay uncached results at every work-budget bound
   let lowestFailure = 1;
   let lowestSuccess = highestBudget;
   expect(
-    screen(buildScreeningIndex(lists), query, {
+    screen(cloneScreeningIndexWithoutCache(compact), query, {
       cutoff: 0.65,
       maxWork: lowestFailure,
     }).isErr(),
   ).toBe(true);
   expect(
-    screen(buildScreeningIndex(lists), query, {
+    screen(cloneScreeningIndexWithoutCache(compact), query, {
       cutoff: 0.65,
       maxWork: lowestSuccess,
     }).isOk(),
   ).toBe(true);
   while (lowestFailure + 1 < lowestSuccess) {
     const maxWork = Math.floor((lowestFailure + lowestSuccess) / 2);
-    const outcome = screen(buildScreeningIndex(lists), query, {
+    const outcome = screen(cloneScreeningIndexWithoutCache(compact), query, {
       cutoff: 0.65,
       maxWork,
     });
@@ -295,7 +296,11 @@ test("cached absent spellings replay uncached results at every work-budget bound
   const outcomes: ("failure" | "success")[] = [];
   for (const maxWork of budgets) {
     const options = { cutoff: 0.65, maxWork };
-    const expected = screen(buildScreeningIndex(lists), query, options);
+    const expected = screen(
+      cloneScreeningIndexWithoutCache(compact),
+      query,
+      options,
+    );
     const actual = screen(compact, query, options);
     expect(legacyScreenOutcome(actual)).toEqual(legacyScreenOutcome(expected));
     if (expected.isErr()) {
