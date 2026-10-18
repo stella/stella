@@ -67,6 +67,7 @@ const commit = ({
 } = {}) => ({ sha, author: user, committer });
 type CompareCommit = ReturnType<typeof commit> & {
   parents?: { sha: string }[];
+  commit?: { message: string };
 };
 const signature = (id = author.id) => ({
   name: "original-name",
@@ -87,11 +88,15 @@ class FixtureApiError extends TaggedError("FixtureApiError")<{
   status: number;
 }> {}
 
-type QueuePage = {
-  baseCommit: { oid: string } | null;
-  headCommit: { oid: string } | null;
-  pullRequest: { number: number };
-}[];
+// One queue entry: GitHub squashes the pull request into one commit (head) on
+// its predecessor (base) and ends its subject with "(#<number>)".
+type QueueEntry = {
+  number: number;
+  head: string;
+  base: string;
+  subject?: string;
+};
+const groupSchema = v.object({ base_sha: v.string(), head_sha: v.string() });
 type FixtureOptions = {
   event?: string;
   payload?: Record<string, unknown>;
@@ -119,9 +124,10 @@ type FixtureOptions = {
   apiError?: { route: string; status: number };
   apiFailures?: { route: string; errors: unknown[] }[];
   commitPageFailures?: unknown[];
-  queuePages?: QueuePage[];
-  // Served to every queue read after the first: the group was rebuilt.
-  rebuiltQueuePages?: QueuePage[];
+  // The merge group's entries from its base to its head.
+  queueEntries?: QueueEntry[];
+  // Replaces the commits the group's base...head comparison returns.
+  groupCompare?: CompareCommit[];
 };
 const fixture = ({
   event = "pull_request_target",
@@ -143,25 +149,12 @@ const fixture = ({
   apiError,
   apiFailures = [],
   commitPageFailures = [],
-  queuePages = [
-    [
-      {
-        headCommit: { oid: SQUASH },
-        baseCommit: { oid: PREDECESSOR },
-        pullRequest: { number: 17 },
-      },
-    ],
-    [
-      {
-        headCommit: { oid: PREDECESSOR },
-        baseCommit: { oid: BASE },
-        pullRequest: { number: 18 },
-      },
-    ],
+  queueEntries = [
+    { number: 18, head: PREDECESSOR, base: BASE },
+    { number: 17, head: SQUASH, base: PREDECESSOR },
   ],
-  rebuiltQueuePages,
+  groupCompare,
 }: FixtureOptions = {}) => {
-  let queueReads = 0;
   const requests: {
     route: string;
     params: Record<string, unknown>;
@@ -332,39 +325,48 @@ const fixture = ({
           (candidate) =>
             `${candidate.base.sha}...${candidate.head.sha}` === basehead,
         );
-        // An entry may first appear in a re-read snapshot.
-        const entry = [...queuePages, ...(rebuiltQueuePages ?? [])]
-          .flat()
-          .find(
-            (candidate) =>
-              candidate.baseCommit !== null &&
-              candidate.headCommit !== null &&
-              basehead ===
-                `${candidate.baseCommit.oid}...${candidate.headCommit.oid}`,
-          );
+        const mergeGroup = payload["merge_group"];
+        const groupRange = v.is(groupSchema, mergeGroup)
+          ? `${mergeGroup.base_sha}...${mergeGroup.head_sha}`
+          : undefined;
+        const squashOf = (queued: QueueEntry): CompareCommit => ({
+          ...commit({
+            user:
+              pulls.find((candidate) => candidate.number === queued.number)
+                ?.user ?? author,
+            sha: queued.head,
+          }),
+          parents: [{ sha: queued.base }],
+          commit: {
+            message:
+              queued.subject ??
+              `change ${String(queued.number)} (#${String(queued.number)})\n\nDetails.`,
+          },
+        });
+        const entry = queueEntries.find(
+          ({ base, head }) => basehead === `${base}...${head}`,
+        );
         const groupPull = entry
-          ? pulls.find(
-              (candidate) => candidate.number === entry.pullRequest.number,
-            )
+          ? pulls.find((candidate) => candidate.number === entry.number)
           : undefined;
         const squash: CompareCommit[] =
-          entry?.headCommit && entry.baseCommit && groupPull
-            ? [
-                {
-                  ...commit({
-                    user: groupPull.user,
-                    sha: entry.headCommit.oid,
-                  }),
-                  parents: [{ sha: entry.baseCommit.oid }],
-                },
+          entry && groupPull ? [squashOf(entry)] : [];
+        const compared = (): CompareCommit[] => {
+          if (selected) {
+            return (
+              comparedCommits ??
+              commitsByPull?.[selected.number] ?? [
+                commit({ user: selected.user, sha: selected.head.sha }),
               ]
-            : [];
-        const commits: CompareCommit[] = selected
-          ? (comparedCommits ??
-            commitsByPull?.[selected.number] ?? [
-              commit({ user: selected.user, sha: selected.head.sha }),
-            ])
-          : (groupedCommits ?? squash);
+            );
+          }
+          // The group's own base...head read lists every entry's squash.
+          if (basehead === groupRange) {
+            return groupCompare ?? queueEntries.map(squashOf);
+          }
+          return groupedCommits ?? squash;
+        };
+        const commits = compared();
         return {
           data: {
             commits:
@@ -417,83 +419,62 @@ const fixture = ({
     async graphql(query: string, params: Record<string, unknown>) {
       expect(this.token).toBe("base-fixture");
       requests.push({ route: "GRAPHQL", params, token: this.token });
-      injectFailure(
-        query.includes("authors(") ? "GRAPHQL authors" : "GRAPHQL queue",
-      );
-      if (query.includes("authors(")) {
-        if (authorPreflightError && !query.includes("totalCount")) {
-          throw new FixtureApiError({
-            status: 503,
-            message: "Commit author preflight unavailable",
-          });
-        }
-        expect(params["owner"]).toBe("stella");
-        expect(params["repo"]).toBe("stella");
-        const oid = v.parse(v.string(), params["oid"]);
-        const restCommit = pulls
-          .flatMap(
-            (candidate) =>
-              commitsByPull?.[candidate.number] ?? [
-                commit({ user: candidate.user, sha: candidate.head.sha }),
-              ],
-          )
-          .find((candidate) => candidate.sha === oid);
-        if (!restCommit) {
-          throw new FixtureApiError({
-            status: 404,
-            message: "Commit author snapshot unavailable",
-          });
-        }
-        const snapshot = authorsByCommit[oid];
-        const users = snapshot?.users ?? [restCommit.author];
-        const offset =
-          params["cursor"] === null || params["cursor"] === undefined
-            ? 0
-            : Number(params["cursor"]);
-        const page = users.slice(offset, offset + 100);
-        return {
-          repository: {
-            object: {
-              oid: snapshot?.oid ?? oid,
-              authors: {
-                totalCount: snapshot?.totalCount ?? users.length,
-                nodes: page.map((user) => ({
-                  user:
-                    user === null
-                      ? null
-                      : {
-                          databaseId: user.id,
-                          login: user.login,
-                          __typename: "User",
-                        },
-                })),
-                pageInfo: {
-                  hasNextPage: offset + page.length < users.length,
-                  endCursor: String(offset + page.length),
-                },
-              },
-            },
-          },
-        };
+      injectFailure("GRAPHQL authors");
+      if (!query.includes("authors(")) {
+        throw new FixtureApiError({
+          status: 500,
+          message: "Unhandled fixture GraphQL query",
+        });
       }
-      expect(query).toContain(
-        "baseCommit { oid } headCommit { oid } pullRequest { number }",
-      );
-      expect(params["branch"]).toBe("main");
-      const page = params["cursor"] === null ? 0 : Number(params["cursor"]);
-      if (page === 0) {
-        queueReads++;
+      if (authorPreflightError && !query.includes("totalCount")) {
+        throw new FixtureApiError({
+          status: 503,
+          message: "Commit author preflight unavailable",
+        });
       }
-      const served =
-        queueReads > 1 ? (rebuiltQueuePages ?? queuePages) : queuePages;
+      expect(params["owner"]).toBe("stella");
+      expect(params["repo"]).toBe("stella");
+      const oid = v.parse(v.string(), params["oid"]);
+      const restCommit = pulls
+        .flatMap(
+          (candidate) =>
+            commitsByPull?.[candidate.number] ?? [
+              commit({ user: candidate.user, sha: candidate.head.sha }),
+            ],
+        )
+        .find((candidate) => candidate.sha === oid);
+      if (!restCommit) {
+        throw new FixtureApiError({
+          status: 404,
+          message: "Commit author snapshot unavailable",
+        });
+      }
+      const snapshot = authorsByCommit[oid];
+      const users = snapshot?.users ?? [restCommit.author];
+      const offset =
+        params["cursor"] === null || params["cursor"] === undefined
+          ? 0
+          : Number(params["cursor"]);
+      const page = users.slice(offset, offset + 100);
       return {
         repository: {
-          mergeQueue: {
-            entries: {
-              nodes: served.at(page) ?? [],
+          object: {
+            oid: snapshot?.oid ?? oid,
+            authors: {
+              totalCount: snapshot?.totalCount ?? users.length,
+              nodes: page.map((user) => ({
+                user:
+                  user === null
+                    ? null
+                    : {
+                        databaseId: user.id,
+                        login: user.login,
+                        __typename: "User",
+                      },
+              })),
               pageInfo: {
-                hasNextPage: page + 1 < served.length,
-                endCursor: String(page + 1),
+                hasNextPage: offset + page.length < users.length,
+                endCursor: String(offset + page.length),
               },
             },
           },
@@ -903,7 +884,7 @@ describe("contributor signature workflow", () => {
     expect(lastOutput(run).conclusion).toBe("failure");
   });
 
-  test("merge queue GraphQL reads recover from a gateway timeout", async () => {
+  test("the merge group's commit read recovers from a gateway timeout", async () => {
     const run = fixture({
       event: "merge_group",
       payload: {
@@ -911,12 +892,17 @@ describe("contributor signature workflow", () => {
           head_sha: SQUASH,
           base_sha: BASE,
           base_ref: "refs/heads/main",
-          head_ref: `refs/heads/gh-readonly-queue/main/pr-17-${HEAD}`,
+          head_ref: `refs/heads/gh-readonly-queue/main/pr-17-${PREDECESSOR}`,
         },
       },
       pulls: [pull(), pull(18)],
       signatures: [signature()],
-      apiFailures: [{ route: "GRAPHQL queue", errors: [{ status: 504 }] }],
+      apiFailures: [
+        {
+          route: "GET /repos/{owner}/{repo}/compare/{basehead}",
+          errors: [{ status: 504 }],
+        },
+      ],
     });
     await run.execute();
     expect(run.errors).toEqual([]);
@@ -968,24 +954,24 @@ describe("contributor signature workflow", () => {
   test.each([
     ["commits", "GET /repos/{owner}/{repo}/pulls/{pull_number}/commits"],
     ["comments", "GET /repos/{owner}/{repo}/issues/{issue_number}/comments"],
-    ["queue", "GRAPHQL queue"],
+    ["group", "GET /repos/{owner}/{repo}/compare/{basehead}"],
     ["store-put", "PUT /repos/{owner}/{repo}/contents/{path}"],
   ])(
     "every API failure keeps active CLA checks unsuccessful at %s",
     async (boundary, route) => {
       const options =
-        boundary === "queue"
+        boundary === "group"
           ? {
               event: "merge_group",
               payload: {
                 merge_group: {
-                  head_sha: HEAD,
+                  head_sha: SQUASH,
                   base_sha: BASE,
                   base_ref: "refs/heads/main",
-                  head_ref: `refs/heads/gh-readonly-queue/main/pr-17-${HEAD}`,
+                  head_ref: `refs/heads/gh-readonly-queue/main/pr-17-${PREDECESSOR}`,
                 },
               },
-              apiError: { route: "GRAPHQL queue", status: 500 },
+              apiError: { route, status: 500 },
             }
           : {
               ...(boundary === "store-put" ? { comments: [comment()] } : {}),
@@ -1034,15 +1020,7 @@ describe("contributor signature workflow", () => {
                 head_ref: `refs/heads/gh-readonly-queue/main/pr-17-${BASE}`,
               },
             },
-            queuePages: [
-              [
-                {
-                  headCommit: { oid: SQUASH },
-                  baseCommit: { oid: BASE },
-                  pullRequest: { number: 17 },
-                },
-              ],
-            ],
+            queueEntries: [{ number: 17, head: SQUASH, base: BASE }],
           }
         : { event };
     test.each(["unsigned", "signed", "member", "unlinked"])(
@@ -1533,15 +1511,7 @@ describe("contributor signature workflow", () => {
       },
       pulls: [pull(4694, author, prHead)],
       signatures: [signature()],
-      queuePages: [
-        [
-          {
-            baseCommit: { oid: groupBase },
-            headCommit: { oid: groupHead },
-            pullRequest: { number: 4694 },
-          },
-        ],
-      ],
+      queueEntries: [{ number: 4694, head: groupHead, base: groupBase }],
     });
     await run.execute();
     expect(run.errors).toEqual([]);
@@ -1553,160 +1523,197 @@ describe("contributor signature workflow", () => {
     ).toBe(false);
   });
 
-  test("a group rebuilt during verification ends neutral; a group still queued fails", async () => {
-    const groupHead = "f".repeat(40);
-    const predecessor = "1".repeat(40);
-    const group = [
-      {
-        baseCommit: { oid: predecessor },
-        headCommit: { oid: groupHead },
-        pullRequest: { number: 17 },
+  test("a merge group of 1 to 6 entries verifies exactly the pull requests its commits name", async () => {
+    for (let size = 1; size <= 6; size++) {
+      // Entries 101.. sit below the queued pull request #17 at the group head.
+      const numbers = [
+        ...Array.from({ length: size - 1 }, (_, index) => 101 + index),
+        17,
+      ];
+      const heads = numbers.map((_, index) =>
+        (index + 1).toString(16).padStart(40, "0"),
+      );
+      const queueEntries = numbers.map((number, index) => ({
+        number,
+        head: heads[index] ?? "",
+        base: index === 0 ? BASE : (heads[index - 1] ?? ""),
+      }));
+      const groupHead = heads.at(-1) ?? "";
+      const run = fixture({
+        event: "merge_group",
+        payload: {
+          merge_group: {
+            head_sha: groupHead,
+            base_sha: BASE,
+            base_ref: "refs/heads/main",
+            head_ref: `refs/heads/gh-readonly-queue/main/pr-17-${queueEntries.at(-1)?.base ?? ""}`,
+          },
+        },
+        pulls: numbers.map((number) =>
+          pull(number, author, number.toString(16).padStart(40, "e")),
+        ),
+        queueEntries,
+        signatures: [signature()],
+      });
+      await run.execute();
+      expect(run.errors, String(size)).toEqual([]);
+      expect(lastOutput(run).conclusion, String(size)).toBe("success");
+      const read = run.requests
+        .filter(
+          ({ route }) =>
+            route.endsWith("/pulls/{pull_number}") && route.startsWith("GET"),
+        )
+        .map(({ params }) => params["pull_number"]);
+      expect(new Set(read), String(size)).toEqual(new Set(numbers));
+      // No merge queue snapshot is read.
+      expect(
+        run.requests.filter(({ route }) => route === "GRAPHQL"),
+        String(size),
+      ).toEqual(
+        run.requests.filter(
+          ({ route, params }) => route === "GRAPHQL" && "oid" in params,
+        ),
+      );
+    }
+  });
+
+  test("a rebuilt merge group verifies its own commits; a member that changes mid-verification fails", async () => {
+    // #18 left the queue: GitHub rebuilt #17 alone on the base.
+    const rebuiltHead = "2".repeat(40);
+    const rebuilt = fixture({
+      event: "merge_group",
+      payload: {
+        merge_group: {
+          head_sha: rebuiltHead,
+          base_sha: BASE,
+          base_ref: "refs/heads/main",
+          head_ref: `refs/heads/gh-readonly-queue/main/pr-17-${BASE}`,
+        },
       },
-      {
-        baseCommit: { oid: BASE },
-        headCommit: { oid: predecessor },
-        pullRequest: { number: 18 },
-      },
-    ];
+      pulls: [pull()],
+      queueEntries: [{ number: 17, head: rebuiltHead, base: BASE }],
+      signatures: [signature()],
+    });
+    await rebuilt.execute();
+    expect(rebuilt.errors).toEqual([]);
+    expect(lastOutput(rebuilt).conclusion).toBe("success");
+    // The superseded group's own run fails on its head, which can never merge.
     const options = {
       event: "merge_group",
       payload: {
         merge_group: {
-          head_sha: groupHead,
+          head_sha: SQUASH,
           base_sha: BASE,
           base_ref: "refs/heads/main",
-          head_ref: "refs/heads/gh-readonly-queue/main/pr-17-deadbeef",
+          head_ref: `refs/heads/gh-readonly-queue/main/pr-17-${PREDECESSOR}`,
         },
       },
       pulls: [pull(), pull(18, author, OTHER_HEAD)],
       signatures: [signature()],
-      queuePages: [group],
-      // #18 left the queue; GitHub rebuilt #17 alone on the base.
-      rebuiltQueuePages: [
-        [
-          {
-            baseCommit: { oid: BASE },
-            headCommit: { oid: "2".repeat(40) },
-            pullRequest: { number: 17 },
-          },
-        ],
-      ],
     } satisfies FixtureOptions;
-    for (const changes of [
-      { changedPull: pull(17, author, "3".repeat(40)) },
-      { pulls: [pull(), { ...pull(18, author, OTHER_HEAD), state: "closed" }] },
-    ]) {
-      const rebuilt = fixture({ ...options, ...changes });
-      await rebuilt.execute();
-      expect(rebuilt.errors, JSON.stringify(changes)).toEqual([]);
-      expect(lastOutput(rebuilt).conclusion).toBe("neutral");
-      expect(lastOutput(rebuilt).output.title).toBe("CLA_GROUP_SUPERSEDED");
-      const queued = fixture({
-        ...options,
-        ...changes,
-        rebuiltQueuePages: [group],
-      });
-      await queued.execute();
-      expect(queued.errors).toHaveLength(1);
-      expect(lastOutput(queued).conclusion).toBe("failure");
-    }
-    // A head the first snapshot never held (a lagging view or an unbuilt
-    // entry) proves no transition, so it fails even when a re-read misses it.
-    const unseen = fixture({
+    const moved = fixture({
       ...options,
-      queuePages: [
-        [
-          {
-            baseCommit: { oid: BASE },
-            headCommit: { oid: predecessor },
-            pullRequest: { number: 18 },
-          },
-        ],
-      ],
-      rebuiltQueuePages: [[]],
+      changedPull: pull(18, author, "3".repeat(40)),
     });
-    await unseen.execute();
-    expect(unseen.errors).toEqual(["CLA_INCOMPLETE_MERGE_GROUP"]);
-    expect(lastOutput(unseen).conclusion).toBe("failure");
-    // Entries with only one commit (an unmergeable entry keeps its base but
-    // loses its head; a queued one has neither) never link the chain.
-    const partial = [
-      {
-        baseCommit: { oid: predecessor },
-        headCommit: null,
-        pullRequest: { number: 19 },
-      },
-      {
-        baseCommit: null,
-        headCommit: { oid: "4".repeat(40) },
-        pullRequest: { number: 20 },
-      },
-      { baseCommit: null, headCommit: null, pullRequest: { number: 21 } },
-    ];
-    const withPartial = fixture({
+    await moved.execute();
+    expect(moved.errors).toEqual(["CLA_PULL_CHANGED"]);
+    expect(lastOutput(moved).conclusion).toBe("failure");
+    const closed = fixture({
       ...options,
-      queuePages: [[...group, ...partial]],
+      pulls: [pull(), { ...pull(18, author, OTHER_HEAD), state: "closed" }],
     });
-    await withPartial.execute();
-    expect(withPartial.errors).toEqual([]);
-    expect(lastOutput(withPartial).conclusion).toBe("success");
-    // The group's own predecessor losing its head leaves the chain incomplete.
-    const groupHeadEntry = {
-      baseCommit: { oid: predecessor },
-      headCommit: { oid: groupHead },
-      pullRequest: { number: 17 },
-    };
-    const brokenChain = fixture({
-      ...options,
-      queuePages: [
-        [
-          groupHeadEntry,
-          {
-            baseCommit: { oid: BASE },
-            headCommit: null,
-            pullRequest: { number: 18 },
-          },
-          ...partial,
-        ],
-      ],
-      rebuiltQueuePages: [[groupHeadEntry]],
-    });
-    await brokenChain.execute();
-    expect(brokenChain.errors).toEqual(["CLA_INCOMPLETE_MERGE_GROUP"]);
-    expect(lastOutput(brokenChain).conclusion).toBe("failure");
-    // It fails only after the bounded settle window: five 15 s re-reads.
-    expect(brokenChain.delays).toEqual([
-      15_000, 15_000, 15_000, 15_000, 15_000,
-    ]);
-    // A snapshot read while GitHub still builds the predecessor's group verifies
-    // once a re-read links the chain.
-    const settled = fixture({
-      ...options,
-      queuePages: [
-        [
-          groupHeadEntry,
-          { baseCommit: null, headCommit: null, pullRequest: { number: 18 } },
-        ],
-      ],
-      rebuiltQueuePages: [group],
-    });
-    await settled.execute();
-    expect(settled.errors).toEqual([]);
-    expect(lastOutput(settled).conclusion).toBe("success");
-    expect(settled.delays).toEqual([15_000]);
-    // An unexpected commit shape is not a membership change, even in a rebuilt group.
-    const reshaped = fixture({
-      ...options,
-      groupedCommits: [commit({ sha: groupHead })],
-    });
-    await reshaped.execute();
-    expect(reshaped.errors).toEqual(["CLA_UNEXPECTED_GROUP_COMMIT"]);
-    expect(lastOutput(reshaped).conclusion).toBe("failure");
-    // Only membership changes end neutral: an unsigned author in a rebuilt
-    // group still fails.
+    await closed.execute();
+    expect(closed.errors).toEqual(["CLA_GROUP_PULL_CHANGED"]);
+    // An unsigned author in a rebuilt group still fails.
     const unsigned = fixture({ ...options, signatures: [] });
     await unsigned.execute();
     expect(lastOutput(unsigned).conclusion).toBe("failure");
+  });
+
+  test("a merge group whose commits do not name one entry each fails closed", async () => {
+    const options = {
+      event: "merge_group",
+      payload: {
+        merge_group: {
+          head_sha: SQUASH,
+          base_sha: BASE,
+          base_ref: "refs/heads/main",
+          head_ref: `refs/heads/gh-readonly-queue/main/pr-17-${PREDECESSOR}`,
+        },
+      },
+      pulls: [pull(), pull(18, author, OTHER_HEAD)],
+      signatures: [signature()],
+    } satisfies FixtureOptions;
+    const squashed = (
+      sha: string,
+      parents: string[],
+      message: string,
+    ): CompareCommit => ({
+      ...commit({ sha }),
+      parents: parents.map((parent) => ({ sha: parent })),
+      commit: { message },
+    });
+    const first = squashed(PREDECESSOR, [BASE], "first (#18)");
+    const second = squashed(SQUASH, [PREDECESSOR], "second (#17)");
+    // GitHub's own suffix wins over a title that ends with another number.
+    const titled = fixture({
+      ...options,
+      groupCompare: [
+        first,
+        squashed(SQUASH, [PREDECESSOR], "fix: see (#18) (#17)"),
+      ],
+    });
+    await titled.execute();
+    expect(titled.errors).toEqual([]);
+    expect(lastOutput(titled).conclusion).toBe("success");
+    for (const [groupCompare, code] of [
+      [[], "CLA_UNEXPECTED_GROUP_COMMIT"],
+      [
+        [first, squashed(SQUASH, [PREDECESSOR], "no number")],
+        "CLA_UNEXPECTED_GROUP_COMMIT",
+      ],
+      [
+        [first, squashed(SQUASH, [PREDECESSOR], "body names it\n\n(#17)")],
+        "CLA_UNEXPECTED_GROUP_COMMIT",
+      ],
+      [
+        [first, squashed(SQUASH, [BASE], "second (#17)")],
+        "CLA_UNEXPECTED_GROUP_COMMIT",
+      ],
+      [
+        [first, squashed(SQUASH, [PREDECESSOR, HEAD], "second (#17)")],
+        "CLA_UNEXPECTED_GROUP_COMMIT",
+      ],
+      [[first], "CLA_UNEXPECTED_GROUP_COMMIT"],
+      [
+        [squashed(PREDECESSOR, [BASE], "first (#17)"), second],
+        "CLA_AMBIGUOUS_GROUP_CHAIN",
+      ],
+      [
+        [
+          squashed(PREDECESSOR, [BASE], "first (#17)"),
+          squashed(SQUASH, [PREDECESSOR], "second (#18)"),
+        ],
+        "CLA_INVALID_QUEUE_REF",
+      ],
+    ] as const) {
+      const run = fixture({ ...options, groupCompare: [...groupCompare] });
+      await run.execute();
+      expect(run.errors, JSON.stringify(groupCompare)).toEqual([code]);
+      expect(lastOutput(run).conclusion).toBe("failure");
+    }
+    // The queue ref must name the group head's own entry base.
+    const misnamed = fixture({
+      ...options,
+      payload: {
+        merge_group: {
+          ...options.payload.merge_group,
+          head_ref: `refs/heads/gh-readonly-queue/main/pr-17-${BASE}`,
+        },
+      },
+    });
+    await misnamed.execute();
+    expect(misnamed.errors).toEqual(["CLA_INVALID_QUEUE_REF"]);
   });
 
   test("a 250 commit PR squashed into one queue commit verifies with one group comparison", async () => {
@@ -1723,21 +1730,13 @@ describe("contributor signature workflow", () => {
           head_sha: groupHead,
           base_sha: BASE,
           base_ref: "refs/heads/main",
-          head_ref: "refs/heads/gh-readonly-queue/main/pr-17-deadbeef",
+          head_ref: `refs/heads/gh-readonly-queue/main/pr-17-${BASE}`,
         },
       },
       pulls: [{ ...pull(), commits: 250 }],
       signatures: [signature()],
       commitsByPull: { 17: commits },
-      queuePages: [
-        [
-          {
-            baseCommit: { oid: BASE },
-            headCommit: { oid: groupHead },
-            pullRequest: { number: 17 },
-          },
-        ],
-      ],
+      queueEntries: [{ number: 17, head: groupHead, base: BASE }],
     });
     await run.execute();
     expect(run.errors).toEqual([]);
@@ -1749,7 +1748,8 @@ describe("contributor signature workflow", () => {
           params["basehead"] === `${BASE}...${groupHead}`,
       )
       .map(({ params }) => params["page"]);
-    expect(pages).toEqual([undefined]);
+    // The group read and the entry check compare the one squash commit unpaged.
+    expect(pages).toEqual([undefined, undefined]);
   });
 
   test("more than 250 commits and incomplete commit lists fail closed", async () => {
@@ -1938,13 +1938,13 @@ describe("contributor signature workflow", () => {
     expect(invalid.created).toEqual([]);
   });
 
-  test("merge-group success requires every PR in the complete paginated queue chain", async () => {
+  test("merge-group success requires every PR the group's commits name", async () => {
     const payload = {
       merge_group: {
         head_sha: SQUASH,
         base_sha: BASE,
         base_ref: "refs/heads/main",
-        head_ref: `refs/heads/gh-readonly-queue/main/pr-17-${BASE}`,
+        head_ref: `refs/heads/gh-readonly-queue/main/pr-17-${PREDECESSOR}`,
       },
     };
     for (const signedSecond of [false, true]) {
@@ -1969,43 +1969,6 @@ describe("contributor signature workflow", () => {
         expect(lastOutput(run).output.summary).toContain("#18");
       }
     }
-    const missing = fixture({
-      event: "merge_group",
-      payload,
-      queuePages: [
-        [
-          {
-            headCommit: { oid: SQUASH },
-            baseCommit: { oid: OTHER_HEAD },
-            pullRequest: { number: 17 },
-          },
-        ],
-      ],
-      memberships: { [author.login]: { state: "active", role: "member" } },
-    });
-    await missing.execute();
-    expect(missing.errors).toContain("CLA_INCOMPLETE_MERGE_GROUP");
-    expect(lastOutput(missing).conclusion).toBe("failure");
-    const ambiguous = fixture({
-      event: "merge_group",
-      payload,
-      queuePages: [
-        [
-          {
-            headCommit: { oid: SQUASH },
-            baseCommit: { oid: OTHER_HEAD },
-            pullRequest: { number: 17 },
-          },
-          {
-            headCommit: { oid: SQUASH },
-            baseCommit: { oid: BASE },
-            pullRequest: { number: 18 },
-          },
-        ],
-      ],
-    });
-    await ambiguous.execute();
-    expect(ambiguous.errors).toContain("CLA_AMBIGUOUS_GROUP_CHAIN");
   });
 
   test("privileged steps are pinned API actions with no executable PR-head data", () => {
