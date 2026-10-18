@@ -65,6 +65,9 @@
     "runSelectedRows": "Spustit pro {count, plural, one {# vybraný řádek} few {# vybrané řádky} many {# vybraného řádku} other {# vybraných řádků}}",
     "selectedRun": "Spustit AI sloupce pro {count, plural, one {# řádek} few {# řádky} many {# řádku} other {# řádků}}"
   },
+  "aiDisclosure": {
+    "caseLaw": "AI shrnutí, poznámky a analýzy soudních rozhodnutí vytváří stella. Soudy je neschvalují a nejde o vlastní úvahy soudů; slouží jako pomůcka pro právníky a rozhodujícím zdrojem zůstává text rozhodnutí."
+  },
   "appearance": {
     "calendar": "Kalendář",
     "calendarGregorian": "Gregoriánský",
@@ -1055,7 +1058,6 @@
       }
     },
     "sameCaseNumber": "{count, plural, one {# rozhodnutí nese} few {# rozhodnutí nesou} other {# rozhodnutí nese}} tuto spisovou značku. Vyberte soud.",
-    "searchAskPrompt": "{query} (judikatura, {country})",
     "searchLabel": "Hledat v judikatuře",
     "searchPlaceholder": "Spisová značka, ECLI nebo slova, např. 22 Cdo 2653/2012",
     "searchUnavailable": {
@@ -1212,6 +1214,11 @@
       "requesting": "Příprava úprav…",
       "stale": "Odpověď se změnila. Vyberte text znovu.",
       "submit": "Požádat o úpravu"
+    },
+    "answerQuote": {
+      "showInDecision": "Zobrazit v rozhodnutí",
+      "verified": "Ověřená citace",
+      "verifiedHint": "Doslovně v {source}"
     },
     "applyMode": {
       "description": "Word ukládá, kdo provedl každou změnu. Vaši volbu si zapamatujeme.",
@@ -1397,7 +1404,12 @@
     "maxAttachmentsReached": "Maximálně {count} souborů na zprávu",
     "mention": {
       "category": {
-        "entities": "V tomto spisu"
+        "entities": "V tomto spisu",
+        "sources": "Zdroje"
+      },
+      "corpus": {
+        "caseLaw": "Judikatura · {country}",
+        "legislation": "Právní předpisy · {country}"
       },
       "loadError": "Nepodařilo se načíst položky"
     },
@@ -1451,6 +1463,12 @@
       "title": "Vložený text"
     },
     "placeholder": "Zde napište svůj dotaz, / pro dovednosti, @ pro přidání kontextu",
+    "processSummary": {
+      "analyses": "{count, plural, one {# analýza} few {# analýzy} other {# analýz}}",
+      "changesSaved": "{count, plural, one {# uložená změna} few {# uložené změny} other {# uložených změn}}",
+      "documentEdits": "{count, plural, one {# úprava dokumentu} few {# úpravy dokumentu} other {# úprav dokumentu}}",
+      "sourcesChecked": "{count, plural, one {# prověřený zdroj} few {# prověřené zdroje} other {# prověřených zdrojů}}"
+    },
     "promptImprovementStrategies": {
       "decompose": {
         "description": "Rozdělí složitý úkol na seřazené dílčí kroky.",
@@ -1696,6 +1714,7 @@
       "interrupted": "Přerušeno před dokončením",
       "output": "Výstup",
       "sourceCode": "Zdrojový kód",
+      "statusWaiting": "Čeká",
       "toggleDetails": "Přepnout detaily",
       "unrestoredFields": "{count, plural, one {# pole se nepodařilo} few {# pole se nepodařilo} many {# pole se nepodařilo} other {# polí se nepodařilo}} v anonymizovaném režimu vyplnit skutečnými hodnotami. Zkontrolujte: {fields}"
     },
@@ -5124,7 +5143,6 @@
     "provisionTextUnavailable": "Text není pro toto znění k dispozici",
     "publisherWindowInconsistent": "K tomuto dni nelze určit účinné znění: údaje vydavatele si odporují.",
     "resolvedAlias": "Rozpoznáno jako {label}",
-    "searchAskPrompt": "{query} (právní předpisy: {country})",
     "searchLabel": "Hledat v právních předpisech",
     "searchPlaceholder": "Číslo, zkratka nebo název, např. 89/2012 Sb.",
     "showCitedPartOnly": "Zobrazit jen citovanou část",

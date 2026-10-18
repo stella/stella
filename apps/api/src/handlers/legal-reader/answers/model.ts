@@ -8,7 +8,7 @@ import type {
   ReaderAnswerUsage,
 } from "@stll/api-contract/reader-answers";
 
-import { getTemperatureForRole, resolveCaching } from "@/api/lib/ai-config";
+import { getTemperatureForTask, resolveCaching } from "@/api/lib/ai-config";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { ServerAnalytics } from "@/api/lib/analytics/server-analytics";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
@@ -93,7 +93,7 @@ export const runReaderAnswerModel = async (
 ): Promise<Result<ReaderAnswerModelResult, unknown>> => {
   const caching = resolveCaching({
     promptCachingEnabled: false,
-    role: "chat",
+    task: "chat",
     scopeKey: null,
   });
   const analytics = createTanStackAIAnalyticsCallbacks({
@@ -102,7 +102,7 @@ export const runReaderAnswerModel = async (
       : { analytics: analyticsTransport }),
     dataClass: "customer",
     feature: "case-law.reader-answer",
-    modelRole: "chat",
+    modelTask: "chat",
     modelTier: input.admission.modelTier,
     selectedModelId: input.modelId,
     orgAIConfig: input.orgAIConfig,
@@ -116,7 +116,7 @@ export const runReaderAnswerModel = async (
         admission: input.admission,
         dataClass: "customer",
         managedAIResidency: input.managedAIResidency,
-        role: "chat",
+        task: "chat",
         orgAIConfig: input.orgAIConfig,
         organizationId: input.metering.organizationId,
         modelId: input.modelId,
@@ -204,7 +204,7 @@ export const runReaderAnswerModel = async (
           }),
           maxOutputTokens: READER_ANSWER_OUTPUT_TOKENS,
           serviceTier: input.metering.serviceTier,
-          temperature: getTemperatureForRole("chat"),
+          temperature: getTemperatureForTask("chat"),
           system: redactModelSystemPrompt({
             system: input.system,
             workspaceIds: [],

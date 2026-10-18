@@ -128,6 +128,7 @@ import {
   chatMessageExistsForThread,
   resolveTruncationTarget,
 } from "@/api/handlers/chat/history-window";
+import { corpusScopesOfLatestUserMessage } from "@/api/handlers/chat/latest-corpus-scopes";
 import { isExternalMcpToolPart } from "@/api/handlers/chat/mcp-tool-parts";
 import { loadClientMessages } from "@/api/handlers/chat/message-page";
 import type { MessagePersistencePlan } from "@/api/handlers/chat/persist-message";
@@ -289,7 +290,7 @@ import { brandPersistedChatMessageId } from "@/api/lib/safe-id-boundaries";
 import { extractFileTextResult } from "@/api/lib/search/extract-content";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 import {
-  requireTanStackAIAvailableForRole,
+  requireTanStackAIAvailableForTask,
   validateTanStackDevModelOverride,
 } from "@/api/lib/tanstack-ai-models";
 import type { UsageLaneDecision } from "@/api/lib/usage/lane-routing";
@@ -2219,11 +2220,11 @@ export const createSendMessage = (
         );
       }
 
-      yield* requireTanStackAIAvailableForRole({
+      yield* requireTanStackAIAvailableForTask({
         dataClass: "customer",
         configStatus: orgAIConfigStatus,
         orgConfig: orgAIConfig,
-        role: "chat",
+        task: "chat",
       });
 
       const hasEnvelopeCorrelationMismatch = (): boolean =>
@@ -2970,6 +2971,12 @@ export const createSendMessage = (
         // mounts no watcher to resolve them.
         const chatTools = getChatTools({
           ...chatToolContext,
+          // Corpus chips on the latest user message pin this turn's
+          // public-corpus reads. Read from history (which holds the incoming
+          // message once accepted) so an approval continuation stays scoped.
+          corpusScopes: corpusScopesOfLatestUserMessage(
+            latestMessagePlan.messages,
+          ),
           modelAdmission,
           externalTools: externalMcpTools?.tools ?? {},
           organizationAIInstructions: chatContext.organizationAIInstructions,

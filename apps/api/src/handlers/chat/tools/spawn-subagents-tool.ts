@@ -38,8 +38,8 @@ import {
   type ModelDispatchAdmission,
 } from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
-  getTanStackTextModelInfoForRole,
-  isAllowedBYOKModelForRole,
+  getTanStackTextModelInfoForTask,
+  isAllowedBYOKModelForTask,
   resolveEffectiveServiceTierForProvider,
 } from "@/api/lib/tanstack-ai-models";
 import { computeUsageUnitCost } from "@/api/lib/usage/action-weights";
@@ -173,7 +173,7 @@ const buildSubagentUserMessage = ({
   ],
 });
 
-type SubagentModelInfo = ReturnType<typeof getTanStackTextModelInfoForRole>;
+type SubagentModelInfo = ReturnType<typeof getTanStackTextModelInfoForTask>;
 
 type ResolveValidatedSubagentModelIdArgs = {
   subModel: string | undefined;
@@ -203,10 +203,10 @@ export const resolveValidatedSubagentModelId = ({
     return undefined;
   }
   if (modelInfo.keySource === "byok") {
-    return isAllowedBYOKModelForRole({
+    return isAllowedBYOKModelForTask({
       provider: modelInfo.provider,
       modelId: subModel,
-      role: "fast",
+      task: "short-text",
     })
       ? subModel
       : undefined;
@@ -380,7 +380,7 @@ export const runCheckedSubagentBatch = async <N>({
         organizationId: props.organizationId,
         orgAIConfig: props.orgAIConfig,
         managedAIResidency: props.managedAIResidency,
-        role: "fast",
+        task: "short-text",
         modelId: resolveValidatedSubagentModelId({
           subModel: sub.model,
           modelInfo: fastModelInfo,
@@ -470,8 +470,8 @@ export const createSpawnSubagentsTool = (
       async ({ subagents }, ctx) => {
         // Resolve the fast role's model info once for the whole batch; each
         // per-subagent `model` override is validated against it.
-        const fastModelInfo = getTanStackTextModelInfoForRole(
-          "fast",
+        const fastModelInfo = getTanStackTextModelInfoForTask(
+          "short-text",
           props.orgAIConfig,
           {
             organizationId: props.organizationId,

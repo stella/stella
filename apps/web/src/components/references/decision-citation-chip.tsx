@@ -13,6 +13,7 @@ import { ExternalLinkIcon, LandmarkIcon } from "@stll/ui/icons";
 import { Popover, PopoverPanel, PopoverTrigger } from "@stll/ui/popover";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
+import { cn } from "@stll/ui/utils";
 
 import { isPlainPrimaryClick } from "@/components/inspector/case-decision-view";
 import { DECISION_CITATION_PRESENTATION } from "@/components/references/decision-citation-presentation.logic";
@@ -38,6 +39,12 @@ type DecisionCitationChipProps = {
   /** The court's own number on the cited block; null when it printed none. */
   paragraphNumber?: number | null | undefined;
   onOpen?: (() => void) | undefined;
+  /**
+   * Prose that already names the decision ("III. ÚS 2429/24"). It becomes
+   * the trigger itself, quietly underlined, instead of being followed by a
+   * badge that repeats the court the text just named.
+   */
+  label?: ReactNode;
 };
 
 const DecisionCitationLabel = ({
@@ -99,6 +106,7 @@ export const DecisionCitationChip = ({
   presentation = DECISION_CITATION_PRESENTATION.compact,
   paragraphNumber = null,
   onOpen,
+  label,
 }: DecisionCitationChipProps) => {
   const t = useTranslations();
   const format = useFormatter();
@@ -126,7 +134,7 @@ export const DecisionCitationChip = ({
           paragraph,
         });
   const links = resolveLegalCitationLinks({
-    appUrl: decision.readerUrl,
+    url: decision.readerUrl,
     sourceUrl: decision.originalUrl,
     appOrigins: new Set([
       new URL(env.VITE_PUBLIC_APP_URL).origin,
@@ -167,18 +175,34 @@ export const DecisionCitationChip = ({
         })}
         render={
           <a
-            className="focus-visible:ring-ring inline-flex rounded align-baseline focus-visible:ring-2 focus-visible:outline-none"
+            className={cn(
+              "focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none",
+              label === undefined
+                ? "inline-flex rounded align-baseline"
+                : "decoration-foreground-placeholder hover:decoration-foreground-muted data-[popup-open]:decoration-foreground-muted rounded-xs underline decoration-dotted underline-offset-2 transition-[text-decoration-color] duration-150",
+            )}
             href={sanitizeHref(readerHref)}
             ref={triggerRef}
           />
         }
         tooltip={false}
       >
-        <DecisionCitationLabel
-          decision={decision}
-          presentation={presentation}
-          paragraphNumber={paragraph}
-        />
+        {label === undefined ? (
+          <DecisionCitationLabel
+            decision={decision}
+            presentation={presentation}
+            paragraphNumber={paragraph}
+          />
+        ) : (
+          <>
+            {label}
+            {paragraph !== null && (
+              <span className="ms-1 whitespace-nowrap">
+                {t("caseLaw.citation.paragraphMark", { paragraph })}
+              </span>
+            )}
+          </>
+        )}
       </PopoverTrigger>
       <PopoverPanel
         align="start"

@@ -326,6 +326,10 @@ files must be formatted locally. Fork pull requests get no autofix: run
 `bun run autofix` (the same generators, lint fixes and formatting, against the
 canonical repository's main) before pushing.
 
+Network fetches in CI go through `scripts/retry.sh` (`scripts/gh-retry.sh` for
+the GitHub API) or a cache-first action, in a step with its own
+`timeout-minutes`; `scripts/check-ci-network-steps.ts` enforces both.
+
 `bun run verify` runs the local package checks from `ci-checks` in
 `.github/workflows/ci.yml`; use it before pushing code changes instead of
 hand-picking individual checks. For changes confined to documentation or skill

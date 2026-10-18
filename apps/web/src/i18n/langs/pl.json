@@ -65,6 +65,9 @@
     "runSelectedRows": "Uruchom dla {count, plural, one {# wybranego wiersza} few {# wybranych wierszy} many {# wybranych wierszy} other {# wybranego wiersza}}",
     "selectedRun": "Uruchom kolumny AI dla {count, plural, one {# wiersza} few {# wierszy} many {# wierszy} other {# wiersza}}"
   },
+  "aiDisclosure": {
+    "caseLaw": "Podsumowania, notatki i analizy orzeczeń sądowych przygotowane przez AI generuje stella; nie są one zatwierdzone przez sądy i nie odzwierciedlają własnego rozumowania sądów. Stanowią pomoc dla prawników, a rozstrzygającym źródłem pozostaje tekst orzeczenia."
+  },
   "appearance": {
     "calendar": "Kalendarz",
     "calendarGregorian": "Gregoriański",
@@ -1055,7 +1058,6 @@
       }
     },
     "sameCaseNumber": "{count, plural, one {# orzeczenie ma} few {# orzeczenia mają} many {# orzeczeń ma} other {# orzeczenia ma}} tę sygnaturę. Wybierz sąd.",
-    "searchAskPrompt": "{query} (orzecznictwo, {country})",
     "searchLabel": "Szukaj w orzecznictwie",
     "searchPlaceholder": "Sygnatura, ECLI lub słowa, np. II CSK 123/19",
     "searchUnavailable": {
@@ -1212,6 +1214,11 @@
       "requesting": "Przygotowywanie zmian…",
       "stale": "Ta odpowiedź się zmieniła. Zaznacz tekst ponownie.",
       "submit": "Poproś o zmianę"
+    },
+    "answerQuote": {
+      "showInDecision": "Pokaż w orzeczeniu",
+      "verified": "Zweryfikowany cytat",
+      "verifiedHint": "Dosłownie w {source}"
     },
     "applyMode": {
       "description": "Word zapisuje, kto wprowadził każdą zmianę. Zapamiętamy Twój wybór.",
@@ -1397,7 +1404,12 @@
     "maxAttachmentsReached": "Maksymalnie {count} plików na wiadomość",
     "mention": {
       "category": {
-        "entities": "W tej sprawie"
+        "entities": "W tej sprawie",
+        "sources": "Źródła"
+      },
+      "corpus": {
+        "caseLaw": "Orzecznictwo · {country}",
+        "legislation": "Ustawodawstwo · {country}"
       },
       "loadError": "Nie udało się załadować elementów"
     },
@@ -1451,6 +1463,12 @@
       "title": "Wklejony tekst"
     },
     "placeholder": "Wpisz pytanie tutaj, / dla umiejętności, @ aby dodać kontekst",
+    "processSummary": {
+      "analyses": "{count, plural, one {# analiza} few {# analizy} many {# analiz} other {# analizy}}",
+      "changesSaved": "{count, plural, one {# zapisana zmiana} few {# zapisane zmiany} many {# zapisanych zmian} other {# zapisanej zmiany}}",
+      "documentEdits": "{count, plural, one {# edycja dokumentu} few {# edycje dokumentu} many {# edycji dokumentu} other {# edycji dokumentu}}",
+      "sourcesChecked": "{count, plural, one {# sprawdzone źródło} few {# sprawdzone źródła} many {# sprawdzonych źródeł} other {# sprawdzonego źródła}}"
+    },
     "promptImprovementStrategies": {
       "decompose": {
         "description": "Dzieli złożone zadanie na uporządkowane podzadania.",
@@ -1696,6 +1714,7 @@
       "interrupted": "Przerwano przed ukończeniem",
       "output": "Wynik",
       "sourceCode": "Kod źródłowy",
+      "statusWaiting": "Oczekuje",
       "toggleDetails": "Przełącz szczegóły",
       "unrestoredFields": "W trybie anonimizacji nie udało się wypełnić prawdziwymi wartościami {count, plural, one {# pola} few {# pól} many {# pól} other {# pola}}. Sprawdź: {fields}"
     },
@@ -5124,7 +5143,6 @@
     "provisionTextUnavailable": "Tekst niedostępny dla tej wersji",
     "publisherWindowInconsistent": "Nie można ustalić tekstu obowiązującego w tym dniu: dane wydawcy są sprzeczne.",
     "resolvedAlias": "Rozpoznano jako {label}",
-    "searchAskPrompt": "{query} (ustawodawstwo: {country})",
     "searchLabel": "Szukaj w aktach prawnych",
     "searchPlaceholder": "Numer, skrót lub tytuł, np. 89/2012 Sb.",
     "showCitedPartOnly": "Pokaż tylko cytowaną część",
