@@ -498,7 +498,20 @@ export type MigrationLockAllowance = {
 };
 // New ACCESS EXCLUSIVE work without an existing safety acknowledgement needs a
 // statement-form decision here (for example, an additive expand/contract step).
-export const MIGRATION_LOCK_ALLOWANCES: readonly MigrationLockAllowance[] = [];
+export const MIGRATION_LOCK_ALLOWANCES: readonly MigrationLockAllowance[] = [
+  {
+    migration: "20261015060000_folio_collab_saved_snapshot_cut",
+    form: "add-column",
+    reason:
+      "Nullable, default-free columns are a catalog-only change under a 1s lock_timeout.",
+  },
+  {
+    migration: "20261015060000_folio_collab_saved_snapshot_cut",
+    form: "add-constraint",
+    reason:
+      "CHECK constraints are added NOT VALID under a 1s lock_timeout; 20261015060010 validates them without ACCESS EXCLUSIVE.",
+  },
+];
 export type LockBaselineEntry = {
   migration: string;
   form: DdlForm;

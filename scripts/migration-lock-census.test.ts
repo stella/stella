@@ -5,6 +5,7 @@ import { MIGRATION_LOCK_BASELINE } from "./migration-lock-baseline";
 import {
   censusSql,
   checkMigrationLocks,
+  MIGRATION_LOCK_ALLOWANCES,
   migrationLockPairs,
 } from "./migration-lock-census";
 
@@ -25,6 +26,17 @@ describe("migration lock census", () => {
     expect(
       [...result.counts.values()].reduce((sum, count) => sum + count, 0),
     ).toBeGreaterThan(4000);
+  });
+
+  test("every lock allowance names a committed migration form it still covers", () => {
+    const committed = new Set(
+      migrationLockPairs(readMigrationLockSources()).map(
+        ({ migration, form }) => `${migration}/${form}`,
+      ),
+    );
+    for (const { migration, form } of MIGRATION_LOCK_ALLOWANCES) {
+      expect(committed).toContain(`${migration}/${form}`);
+    }
   });
 
   test("the generated baseline has no missing or extra historical pairs", () => {
