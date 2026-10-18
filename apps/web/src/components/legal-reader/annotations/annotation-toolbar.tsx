@@ -204,7 +204,6 @@ export const AnnotationToolbar = ({
     const ownerDoc = root.ownerDocument;
     setDoc(ownerDoc);
     let frame = 0;
-    let selectionPointer: { x: number; y: number } | undefined;
     let readerDragActive = false;
     let restoringReaderSelection = false;
     let readerSelectionSnapshot: ReaderSelectionSnapshot | null = null;
@@ -271,15 +270,25 @@ export const AnnotationToolbar = ({
         }
       }
     };
-    const readSelection = (pointer?: { x: number; y: number }) => {
+    // The bar appears once a pointer drag ends. Painting it mid-drag puts a
+    // fixed element, portalled after the reader, under the pointer: crossing
+    // it extends the selection to the end of the page for a frame. It also
+    // anchors to the selection's end in every phase, so it does not move
+    // between the drag, the release and a later scroll.
+    const readSelection = () => {
       const currentSelection = ownerDoc.getSelection();
       if (currentSelection !== null) {
         containReaderSelection(currentSelection);
       }
       cancelAnimationFrame(frame);
+      if (readerDragActive) {
+        setSelected(null);
+        return;
+      }
       frame = requestAnimationFrame(() => {
         const selection = ownerDoc.getSelection();
         if (
+          readerDragActive ||
           selection === null ||
           selection.isCollapsed ||
           selection.rangeCount === 0 ||
@@ -297,11 +306,7 @@ export const AnnotationToolbar = ({
         // A fresh selection must not inherit the previous one's open menu.
         setCopyOpen(false);
         const range = selection.getRangeAt(0);
-        const geometry = selectionToolbarAnchor({
-          range,
-          root,
-          ...(pointer === undefined ? {} : { pointer }),
-        });
+        const geometry = selectionToolbarAnchor({ range, root });
         if (geometry === null) {
           setSelected(null);
           return;
@@ -319,7 +324,6 @@ export const AnnotationToolbar = ({
       });
     };
     const onKeyDown = (event: KeyboardEvent) => {
-      selectionPointer = undefined;
       if (event.key === "Escape") {
         clearActive();
         ownerDoc.getSelection()?.removeAllRanges();
@@ -340,7 +344,6 @@ export const AnnotationToolbar = ({
       }
     };
     const onPointerDown = (event: PointerEvent) => {
-      selectionPointer = undefined;
       const pressed = event.target;
       readerDragActive =
         event.button === 0 && pressed instanceof Node && root.contains(pressed);
@@ -378,7 +381,6 @@ export const AnnotationToolbar = ({
       }
     };
     const onPointerCancel = () => {
-      selectionPointer = undefined;
       readerDragActive = false;
       readerSelectionSnapshot = null;
     };
@@ -390,14 +392,10 @@ export const AnnotationToolbar = ({
       ) {
         return;
       }
-      selectionPointer = { x: event.clientX, y: event.clientY };
-      readSelection(selectionPointer);
-    };
-    const onSelectionChange = () => readSelection(selectionPointer);
-    const onViewportChange = () => {
-      selectionPointer = undefined;
       readSelection();
     };
+    const onSelectionChange = () => readSelection();
+    const onViewportChange = () => readSelection();
     // Dragging selected words carries the passage with the document it came
     // from, so a drop on the chat composer lands as chips where the corpus
     // offers a reference for it.
