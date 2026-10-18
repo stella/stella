@@ -372,7 +372,7 @@
   "apps/api/src/handlers/chat/messages/revisions/revisions.postgres.test.ts": {
     "count": 9,
     "owner": "api",
-    "reason": "compares against the Postgres clock"
+    "reason": "pre-kit census; migrate to @stll/test-kit, except the turn lease, which compares against the Postgres clock"
   },
   "apps/api/src/handlers/chat/send-message-refs.integration.test.ts": {
     "count": 1,
