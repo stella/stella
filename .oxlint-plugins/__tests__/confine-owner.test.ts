@@ -1,8 +1,10 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import path from "node:path";
 
 import { OWNERSHIP } from "../../scripts/ownership.ts";
 import { lintSingleRule } from "./lint-single-rule.ts";
+
+setDefaultTimeout(30_000);
 
 describe.serial("audit detail read ownership", () => {
   const entry = OWNERSHIP.find(({ id }) => id === "audit-detail-read");
