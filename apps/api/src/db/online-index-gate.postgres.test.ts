@@ -3,6 +3,7 @@ import type { ReservedSQL } from "bun";
 import { describe, expect, test } from "bun:test";
 
 import { defaultConfig, type Signal } from "@stll/db-load-gate/health";
+import { waitFor } from "@stll/test-kit";
 
 import type { OnlineIndexConfig } from "../env-online-index";
 import { getPgErrorCode, PG_ERROR } from "../lib/pg-error";
@@ -336,7 +337,7 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
       // re-read its ledger before the retry.
       expect(await run()).toEqual({
         type: "deferred",
-        index: fixture.name,
+        step: fixture.name,
         retryAfterMs: fixture.gate.config.retryMs,
       });
       expect(await indexState(fixture)).toMatchObject({ valid: false });
@@ -856,18 +857,15 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
         expect(await indexState(fixture)).toMatchObject({ valid: false });
         child.kill("SIGKILL");
         expect(await child.exited).not.toBe(0);
-        for (let attempt = 0; attempt < 400; attempt++) {
-          const rows = await fixture.observer<
-            { alive: boolean }[]
-          >`SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE pid = ${pid}) AS alive`;
-          if (!rows.at(0)?.alive) {
-            break;
-          }
-          if (attempt === 399) {
-            throw new TypeError("Killed runner backend did not exit");
-          }
-          await Bun.sleep(5);
-        }
+        await waitFor(
+          async () => {
+            const rows = await fixture.observer<
+              { alive: boolean }[]
+            >`SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE pid = ${pid}) AS alive`;
+            return rows.at(0)?.alive === false ? true : undefined;
+          },
+          { description: "the killed runner backend to exit" },
+        );
         expect(await indexState(fixture)).toMatchObject({ valid: false });
         await fixture.blocker`ROLLBACK`;
         await repair(fixture);
@@ -1012,7 +1010,7 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
         }),
       ).toEqual({
         type: "deferred",
-        index: fixture.name,
+        step: fixture.name,
         retryAfterMs: fixture.gate.config.retryMs,
       });
       expect(

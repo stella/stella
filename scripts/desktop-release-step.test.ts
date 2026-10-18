@@ -314,19 +314,36 @@ test("configure-windows dry-run disables signing and updater artifacts", () => {
   expect(result.bundle.createUpdaterArtifacts).toBe(false);
 });
 
-test("the CI dry-run selector covers every script referenced by the release workflow", () => {
+test("the CI dry-run selector covers every script the release build runs", () => {
+  const windowsBuild = readFileSync(
+    new URL(
+      "../.github/actions/desktop-windows-build/action.yml",
+      import.meta.url,
+    ),
+    "utf-8",
+  );
   const references = [
-    ...releaseWorkflow.matchAll(/(?:bash|bun)\s+(scripts\/[\w./-]+)/gu),
-  ].map((match) => match[1]);
+    ...`${releaseWorkflow}\n${windowsBuild}`.matchAll(
+      /\b(scripts\/[\w-]+(?:\.[\w-]+)*\.(?:sh|ts))\b/gu,
+    ),
+  ].flatMap((match) => (match[1] === undefined ? [] : [match[1]]));
   expect(references.length).toBeGreaterThan(0);
-  expect(
-    references.every((reference) => reference?.startsWith("scripts/")),
-  ).toBe(true);
   const ciWorkflow = readFileSync(
     new URL("../.github/workflows/ci.yml", import.meta.url),
     "utf-8",
   );
-  expect(ciWorkflow).toContain("apps/desktop/*|scripts/*|");
+  const selector = ciWorkflow
+    .split("\n")
+    .find((line) => line.trim().startsWith("apps/desktop/*|scripts/"));
+  expect(selector).toBeDefined();
+  const patterns = (selector ?? "").trim().replace(/\)$/u, "").split("|");
+  expect(patterns).not.toContain("scripts/*");
+  for (const reference of new Set(references)) {
+    expect(
+      patterns.some((pattern) => new Bun.Glob(pattern).match(reference)),
+      reference,
+    ).toBe(true);
+  }
 });
 
 test("artifact discovery is recursive, stable, and rejects unrelated files", () => {

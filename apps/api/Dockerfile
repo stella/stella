@@ -343,7 +343,7 @@ RUN mkdir -p /app/runtime-workers && \
       /app/runtime-workers/xlsx_parser_bg.wasm && \
     cp node_modules/@silurus/ooxml/dist/pptx_parser_bg.wasm \
       /app/runtime-workers/pptx_parser_bg.wasm && \
-    cp node_modules/@hyzyla/pdfium/dist/pdfium.wasm \
+    cp node_modules/@embedpdf/pdfium/dist/pdfium.wasm \
       /app/runtime-workers/pdfium.wasm && \
     cp apps/api/src/lib/ocr-local/latin-v5-dict.txt \
       /app/runtime-workers/latin-v5-dict.txt
