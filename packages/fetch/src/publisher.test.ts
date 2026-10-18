@@ -41,7 +41,7 @@ describe("RFC 9309 matching", () => {
       return match(0, 0);
     };
     assertProperty(
-      "wildcard-reference",
+      "linear wildcard matching agrees with a dynamic-programming reference",
       fc.property(
         fc.stringMatching(/^[ab*]{0,12}\$?$/u),
         fc.stringMatching(/^[ab]{0,12}$/u),
@@ -89,7 +89,7 @@ describe("RFC 9309 matching", () => {
 
   test("the most specific, case-insensitive product-token group wins over wildcard", () => {
     assertProperty(
-      "named-group-selection",
+      "the most specific, case-insensitive product-token group wins over wildcard",
       fc.property(
         fc.array(fc.constantFrom("Stella", "STELLA", "stella"), {
           minLength: 1,
@@ -115,7 +115,7 @@ describe("RFC 9309 matching", () => {
 
   test("longest matching rule wins and Allow wins equal specificity", () => {
     assertProperty(
-      "longest-rule-match",
+      "longest matching rule wins and Allow wins equal specificity",
       fc.property(fc.stringMatching(/^[a-z]{1,12}$/u), (suffix) => {
         const result = evaluatePublisherRobots(
           [
@@ -137,7 +137,7 @@ describe("RFC 9309 matching", () => {
 
   test("wildcards and end anchors apply to the path plus query", () => {
     assertProperty(
-      "wildcard-anchor-match",
+      "wildcards and end anchors apply to the path plus query",
       fc.property(fc.stringMatching(/^[a-z]{1,12}$/u), (value) => {
         const groups = [
           {
@@ -164,7 +164,7 @@ describe("RFC 9309 matching", () => {
 
   test("percent-encoded unreserved octets compare as their decoded form", () => {
     assertProperty(
-      "percent-encoding-match",
+      "percent-encoded unreserved octets compare as their decoded form",
       fc.property(
         fc.constantFrom("41", "42", "43", "61", "62", "63"),
         (hex) => {
@@ -240,18 +240,25 @@ describe("publisher scheduler", () => {
   });
 
   test("the default transport enforces a caller timeout on a stalled request", async () => {
+    const originalFetch = globalThis.fetch;
     const stalled = spyOn(globalThis, "fetch").mockImplementation(
-      async (input, init) => {
-        const url = new URL(input instanceof Request ? input.url : input);
-        if (url.pathname === "/robots.txt") {
-          return new Response(null, { status: 404 });
-        }
-        return await new Promise<never>((_resolve, reject) => {
-          init?.signal?.addEventListener("abort", () =>
-            reject(new Error("aborted", { cause: init.signal?.reason })),
-          );
-        });
-      },
+      Object.assign(
+        async (
+          input: Parameters<typeof fetch>[0],
+          init: Parameters<typeof fetch>[1],
+        ) => {
+          const url = new URL(input instanceof Request ? input.url : input);
+          if (url.pathname === "/robots.txt") {
+            return new Response(null, { status: 404 });
+          }
+          return await new Promise<never>((_resolve, reject) => {
+            init?.signal?.addEventListener("abort", () =>
+              reject(new Error("aborted", { cause: init.signal?.reason })),
+            );
+          });
+        },
+        { preconnect: originalFetch.preconnect },
+      ),
     );
     const request = createPolitePublisherFetch({
       validateTarget: allowTarget,
