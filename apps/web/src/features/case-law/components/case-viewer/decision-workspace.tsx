@@ -759,6 +759,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                 the published block-end inset as the composer grows. */}
             {showAiNotes && hasAnalysis && analysisTree.length > 0 && (
               <OutlineRail
+                ariaLabel={t("statutes.outline")}
                 items={analysisOutline.items}
                 onJump={(id, container) => {
                   const anchorId = analysisOutline.anchorById.get(id);
