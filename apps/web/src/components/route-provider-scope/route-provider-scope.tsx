@@ -31,11 +31,7 @@ export const RouteProviderScopeBoundary = ({ children }: PropsWithChildren) => {
       routeId: matches.at(-1)?.routeId ?? "__root__",
       scopes: [
         ...new Set(
-          matches.flatMap(({ staticData }) =>
-            staticData.providerScopes === undefined
-              ? []
-              : staticData.providerScopes,
-          ),
+          matches.flatMap(({ staticData }) => staticData.providerScopes ?? []),
         ),
       ],
     }),

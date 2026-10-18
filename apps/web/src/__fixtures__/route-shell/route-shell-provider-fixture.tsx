@@ -1,8 +1,10 @@
+import type { ComponentType, LazyExoticComponent } from "react";
+
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import type { AnyRoute } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { plugin } from "bun";
 import { afterAll, expect, mock, test } from "bun:test";
+import * as v from "valibot";
 
 import { parseTimeZoneId } from "@stll/time";
 
@@ -37,6 +39,32 @@ type RouteShellProviderFixtureOptions = {
 const FIXTURE_AUDIENCE = { anonymous: "anonymous", member: "member" } as const;
 type FixtureAudience = (typeof FIXTURE_AUDIENCE)[keyof typeof FIXTURE_AUDIENCE];
 const LAW_SCENARIO = { ...FIXTURE_AUDIENCE, undeclared: "undeclared" } as const;
+const fixtureRouteSchema = v.object({
+  id: v.string(),
+  fullPath: v.string(),
+  parentRoute: v.optional(v.object({ id: v.string() })),
+  options: v.looseObject({
+    component: v.optional(
+      v.custom<ComponentType | LazyExoticComponent<ComponentType>>(
+        (value) =>
+          typeof value === "function" ||
+          (typeof value === "object" && value !== null),
+      ),
+    ),
+    loader: v.optional(v.unknown()),
+    staticData: v.optional(
+      v.looseObject({
+        appFrame: v.optional(
+          v.picklist(["none", "member", "admin", "knowledge"]),
+        ),
+      }),
+    ),
+  }),
+  update: v.custom<(options: Record<string, unknown>) => void>(
+    (value) => typeof value === "function",
+  ),
+});
+type FixtureRoute = v.InferOutput<typeof fixtureRouteSchema>;
 const setupFixtureEnvironment = (
   mode: RouteShellProviderFixtureOptions["mode"],
 ) => {
@@ -181,6 +209,12 @@ const eventListener = (
   return wrapped;
 };
 
+const settleFixtureRequest = async () => {
+  await new Promise<void>((resolve) => {
+    queueMicrotask(resolve);
+  });
+};
+
 const installFixtureNetwork = () => {
   const originalFetch = globalThis.fetch;
   const originalWindowClose = window.close;
@@ -251,199 +285,178 @@ const installFixtureNetwork = () => {
   >;
   globalThis.fetch = Object.assign(
     async (input: RequestInfo | URL) => {
+      await settleFixtureRequest();
       const url = input instanceof Request ? input.url : String(input);
       const pathname = new URL(url, window.location.origin).pathname;
       requests.push(pathname);
       if (pathname === "/api/auth/get-session") {
-        return Promise.resolve(
-          Response.json(state.audience === "member" ? { session, user } : null),
+        return Response.json(
+          state.audience === "member" ? { session, user } : null,
         );
       }
       if (pathname === "/api/auth/organization/get-active-member-role") {
-        return Promise.resolve(Response.json({ role: "owner" }));
+        return Response.json({ role: "owner" });
       }
       if (pathname === "/v1/me/professional-use") {
-        return Promise.resolve(
-          Response.json({
-            status: "accepted",
-            statementVersion: "2026-10",
-            termsVersion: "2026-10",
-            acceptedAt: "2026-10-01T00:00:00.000Z",
-          }),
-        );
+        return Response.json({
+          status: "accepted",
+          statementVersion: "2026-10",
+          termsVersion: "2026-10",
+          acceptedAt: "2026-10-01T00:00:00.000Z",
+        });
       }
       if (pathname === "/v1/organization-settings") {
-        return Promise.resolve(Response.json(organizationSettings));
+        return Response.json(organizationSettings);
       }
       if (pathname === "/v1/organization-settings/ai-availability") {
-        return Promise.resolve(
-          Response.json({
-            available: true,
-            instanceProvisioned: false,
-            orgConfigured: true,
-            deferredServiceTierAvailable: false,
-            mockAnswers: false,
-          } satisfies NonNullable<
-            Awaited<
-              ReturnType<
-                (typeof api)["organization-settings"]["ai-availability"]["get"]
-              >
-            >["data"]
-          >),
-        );
+        return Response.json({
+          available: true,
+          instanceProvisioned: false,
+          orgConfigured: true,
+          deferredServiceTierAvailable: false,
+          mockAnswers: false,
+        } satisfies NonNullable<
+          Awaited<
+            ReturnType<
+              (typeof api)["organization-settings"]["ai-availability"]["get"]
+            >
+          >["data"]
+        >);
       }
       if (pathname === "/v1/workspaces/navigation") {
-        return Promise.resolve(
-          Response.json({
-            items: [],
-            workspaces: [],
-            nextCursor: null,
-            limit: 25,
-            features: { timeBilling: true },
-          } satisfies NonNullable<
-            Awaited<ReturnType<typeof api.workspaces.navigation.get>>["data"]
-          >),
-        );
+        return Response.json({
+          items: [],
+          workspaces: [],
+          nextCursor: null,
+          limit: 25,
+          features: { timeBilling: true },
+        } satisfies NonNullable<
+          Awaited<ReturnType<typeof api.workspaces.navigation.get>>["data"]
+        >);
       }
       if (/^\/v1\/chat\/threads\/[0-9a-f-]{36}\/messages$/u.test(pathname)) {
-        return Promise.resolve(
-          Response.json({ message: "Not found" }, { status: 404 }),
-        );
+        return Response.json({ message: "Not found" }, { status: 404 });
       }
       if (pathname === "/v1/chat/threads") {
-        return Promise.resolve(
-          Response.json({
-            global: [],
-            workspaces: [],
-            nextCursor: null,
-          } satisfies NonNullable<
-            Awaited<ReturnType<typeof api.chat.threads.get>>["data"]
-          >),
-        );
+        return Response.json({
+          global: [],
+          workspaces: [],
+          nextCursor: null,
+        } satisfies NonNullable<
+          Awaited<ReturnType<typeof api.chat.threads.get>>["data"]
+        >);
       }
       if (pathname === `/v1/workspaces/${workspace.id}`) {
-        return Promise.resolve(Response.json(workspace));
+        return Response.json(workspace);
       }
       if (pathname === `/v1/workspaces/${workspace.id}/overview`) {
-        return Promise.resolve(
-          Response.json({
-            entityCount: 0,
-            documentCount: 0,
-            taskCount: 0,
-            recentEntities: [],
-            upcomingAgenda: [],
-          } satisfies NonNullable<
-            Awaited<
-              ReturnType<ReturnType<typeof api.workspaces>["overview"]["get"]>
-            >["data"]
-          >),
-        );
+        return Response.json({
+          entityCount: 0,
+          documentCount: 0,
+          taskCount: 0,
+          recentEntities: [],
+          upcomingAgenda: [],
+        } satisfies NonNullable<
+          Awaited<
+            ReturnType<ReturnType<typeof api.workspaces>["overview"]["get"]>
+          >["data"]
+        >);
       }
       if (pathname === `/v1/workspaces/${workspace.id}/workflow`) {
-        return Promise.resolve(
-          Response.json({ running: false, run: null } satisfies NonNullable<
-            Awaited<
-              ReturnType<ReturnType<typeof api.workspaces>["workflow"]["get"]>
-            >["data"]
-          >),
-        );
+        return Response.json({
+          running: false,
+          run: null,
+        } satisfies NonNullable<
+          Awaited<
+            ReturnType<ReturnType<typeof api.workspaces>["workflow"]["get"]>
+          >["data"]
+        >);
       }
       if (pathname === `/v1/views/${workspace.id}`) {
-        return Promise.resolve(
-          Response.json([
-            {
-              id: "00000000-0000-4000-8000-000000000002",
-              name: "Fixture calendar",
+        return Response.json([
+          {
+            id: "00000000-0000-4000-8000-000000000002",
+            name: "Fixture calendar",
+            version: 1,
+            position: 0,
+            createdAt: "2026-10-01T00:00:00.000Z",
+            layout: {
+              type: "calendar",
               version: 1,
-              position: 0,
-              createdAt: "2026-10-01T00:00:00.000Z",
-              layout: {
-                type: "calendar",
-                version: 1,
-                filters: [],
-                sorts: [],
-                hiddenProperties: [],
-                calculations: [],
-                datePropertyId: "fixture-date",
-                mode: "month",
-              },
+              filters: [],
+              sorts: [],
+              hiddenProperties: [],
+              calculations: [],
+              datePropertyId: "fixture-date",
+              mode: "month",
             },
-          ] satisfies NonNullable<
-            Awaited<ReturnType<ReturnType<typeof api.views>["get"]>>["data"]
-          >),
-        );
+          },
+        ] satisfies NonNullable<
+          Awaited<ReturnType<ReturnType<typeof api.views>["get"]>>["data"]
+        >);
       }
       if (pathname === `/v1/properties/${workspace.id}`) {
-        return Promise.resolve(
-          Response.json(
-            [] satisfies NonNullable<
-              Awaited<
-                ReturnType<ReturnType<typeof api.properties>["get"]>
-              >["data"]
-            >,
-          ),
+        return Response.json(
+          [] satisfies NonNullable<
+            Awaited<
+              ReturnType<ReturnType<typeof api.properties>["get"]>
+            >["data"]
+          >,
         );
       }
       if (pathname === "/v1/case/decisions/latest") {
-        return Promise.resolve(
-          Response.json({ country: "CZE", courts: [] } satisfies NonNullable<
-            Awaited<ReturnType<typeof api.case.decisions.latest.get>>["data"]
-          >),
-        );
+        return Response.json({
+          country: "CZE",
+          courts: [],
+        } satisfies NonNullable<
+          Awaited<ReturnType<typeof api.case.decisions.latest.get>>["data"]
+        >);
       }
       if (pathname === "/v1/case/decisions/status") {
-        return Promise.resolve(
-          Response.json({
-            decisions: 0,
-            updatedAt: null,
-            courts: [],
-          } satisfies NonNullable<
-            Awaited<ReturnType<typeof api.case.decisions.status.get>>["data"]
-          >),
-        );
+        return Response.json({
+          decisions: 0,
+          updatedAt: null,
+          courts: [],
+        } satisfies NonNullable<
+          Awaited<ReturnType<typeof api.case.decisions.status.get>>["data"]
+        >);
       }
       if (pathname === "/v1/law/statutes/shelf") {
-        return Promise.resolve(
-          Response.json({
-            country: "cze",
-            recentlyInForce: [],
-            enteringIntoForce: [],
-          } satisfies NonNullable<
-            Awaited<ReturnType<typeof api.law.statutes.shelf.get>>["data"]
-          >),
-        );
+        return Response.json({
+          country: "cze",
+          recentlyInForce: [],
+          enteringIntoForce: [],
+        } satisfies NonNullable<
+          Awaited<ReturnType<typeof api.law.statutes.shelf.get>>["data"]
+        >);
       }
       if (pathname === "/v1/search-history") {
-        return Promise.resolve(
-          Response.json({
-            items: [],
-            nextCursor: null,
-            limit: 20,
-            scope: {
-              userId: toSafeId<"user">(user.id),
-              organizationId: session.activeOrganizationId,
-            },
-          } satisfies NonNullable<
-            Awaited<ReturnType<(typeof api)["search-history"]["get"]>>["data"]
-          >),
-        );
+        return Response.json({
+          items: [],
+          nextCursor: null,
+          limit: 20,
+          scope: {
+            userId: toSafeId<"user">(user.id),
+            organizationId: session.activeOrganizationId,
+          },
+        } satisfies NonNullable<
+          Awaited<ReturnType<(typeof api)["search-history"]["get"]>>["data"]
+        >);
       }
       if (pathname === "/health") {
-        return Promise.resolve(
-          Response.json({ status: "ok", version: "test" }),
-        );
+        return Response.json({ status: "ok", version: "test" });
       }
       const authResponse = authFixtureResponse(pathname);
       if (authResponse !== undefined) {
-        return Promise.resolve(authResponse);
+        return authResponse;
       }
       const knowledgeResponse = knowledgeFixtureResponse(pathname);
       if (knowledgeResponse !== undefined) {
-        return Promise.resolve(knowledgeResponse);
+        return knowledgeResponse;
       }
       const publicResponse = publicFixtureResponse(pathname);
       if (publicResponse !== undefined) {
-        return Promise.resolve(publicResponse);
+        return publicResponse;
       }
       unexpectedRequests.push(url);
       return panic(`Unrecorded shell fixture request: ${url}`);
@@ -538,22 +551,30 @@ const loadFixtureRuntime = async (
     return { router, queryClient, routeErrorLifecycle, caughtErrors };
   };
   const census = createFixtureRouter("/");
-  const registeredRoutes = Object.values(census.router.routesById);
-  const ancestors = (route: AnyRoute): AnyRoute[] => {
-    const matches: AnyRoute[] = [];
+  const registeredRoutes = v.parse(
+    v.array(fixtureRouteSchema),
+    Object.values(census.router.routesById),
+  );
+  const routesById = new Map(
+    registeredRoutes.map((route) => [route.id, route]),
+  );
+  const ancestors = (route: FixtureRoute) => {
+    const matches: FixtureRoute[] = [];
     for (
-      let current: AnyRoute | undefined = route;
+      let current: FixtureRoute | undefined = route;
       current;
-      current = current.parentRoute
+      current = routesById.get(current.parentRoute?.id ?? "")
     ) {
       matches.unshift(current);
     }
     return matches;
   };
-  const isLegacyTool = (route: AnyRoute) =>
+  const isLegacyTool = (route: FixtureRoute) =>
     ancestors(route).some(({ id }) => id === "/tools");
+  const hasChildren = (route: FixtureRoute) =>
+    registeredRoutes.some(({ parentRoute }) => parentRoute?.id === route.id);
   const uiLeaves = registeredRoutes.filter(
-    (route) => !route.children?.length && route.options.component !== undefined,
+    (route) => !hasChildren(route) && route.options.component !== undefined,
   );
   const selectedLeaves =
     suite === "law-hosts"
@@ -589,9 +610,11 @@ const loadFixtureRuntime = async (
     month: "10",
     bucket: "a",
   };
-  const hasUi = (route: AnyRoute): boolean =>
+  const hasUi = (route: FixtureRoute): boolean =>
     route.options.component !== undefined ||
-    (route.children?.some(hasUi) ?? false);
+    registeredRoutes.some(
+      (candidate) => candidate.parentRoute?.id === route.id && hasUi(candidate),
+    );
   return {
     mode,
     suite,
@@ -638,7 +661,7 @@ const fixtureSearch = (routeId: string, email: string) => {
     case "/law/cases/":
       return { country: "cze" };
     case "/dev":
-      return { visual: "shell-pending" };
+      return { visual: "chat-long-paste" };
     default:
       return {};
   }
@@ -648,14 +671,24 @@ const fixtureLocation = (
   params: Record<string, string>,
   search: Record<string, string>,
 ) => {
-  const pathname = fullPath.replace(/\$([A-Za-z][A-Za-z0-9]*)/gu, (_, key) => {
-    const value = params[key];
-    return value === undefined
-      ? panic(`Missing route fixture param: ${key}`)
-      : value;
-  });
+  const pathname = fullPath.replace(
+    /\$([A-Za-z][A-Za-z0-9]*)/gu,
+    (_, key: string) => {
+      const value = params[key];
+      return value ?? panic(`Missing route fixture param: ${key}`);
+    },
+  );
   const query = new URLSearchParams(search).toString();
   return query.length === 0 ? pathname : `${pathname}?${query}`;
+};
+const compareRouteIds = (left: string, right: string) => {
+  if (left < right) {
+    return -1;
+  }
+  if (left > right) {
+    return 1;
+  }
+  return 0;
 };
 const declareCensus = (fixture: FixtureRuntime) => {
   const {
@@ -680,8 +713,10 @@ const declareCensus = (fixture: FixtureRuntime) => {
       const publicLeaves = uiLeaves.filter((route) => !isLegacyTool(route));
       const legacyLeaves = uiLeaves.filter(isLegacyTool);
       expect(
-        [...publicLeaves, ...legacyLeaves].map(({ id }) => id).toSorted(),
-      ).toEqual(uiLeaves.map(({ id }) => id).toSorted());
+        [...publicLeaves, ...legacyLeaves]
+          .map(({ id }) => id)
+          .toSorted(compareRouteIds),
+      ).toEqual(uiLeaves.map(({ id }) => id).toSorted(compareRouteIds));
       expect(selectedLeaves.length).toBeGreaterThan(0);
       expect(
         Object.keys(publicRouteExceptions).filter(
@@ -761,9 +796,12 @@ const declareLeafCases = (fixture: FixtureRuntime) => {
         const search = fixtureSearch(route.id, user.email);
         const path = fixtureLocation(route.fullPath, params, search);
         const scope = matchedAppFrameScope(
-          ancestors(route).map(({ options }) => ({
-            staticData: options.staticData ?? {},
-          })),
+          ancestors(route).map(({ options }) => {
+            const appFrame = options.staticData?.appFrame;
+            return appFrame === undefined
+              ? { staticData: {} }
+              : { staticData: { appFrame } };
+          }),
         );
         state.audience = caseAudience;
         unexpectedRequests.length = 0;
@@ -845,10 +883,11 @@ const declareLeafCases = (fixture: FixtureRuntime) => {
             await router.load();
             render(<RouterProvider router={router} />, {
               container: document,
-              onCaughtError: (error) =>
+              onCaughtError: (error) => {
                 caughtErrors.push(
                   error instanceof Error ? error : panic(String(error)),
-                ),
+                );
+              },
             });
           });
           await waitFor(() => {
@@ -862,7 +901,10 @@ const declareLeafCases = (fixture: FixtureRuntime) => {
           )?.textContent;
           expect(result).toContain(JSON.stringify(route.id));
           expect(result).toContain('"number":"1,234"');
-          if (scope !== "none" && caseAudience === "member") {
+          if (
+            (scope === "member" || scope === "knowledge") &&
+            caseAudience === "member"
+          ) {
             await waitFor(() =>
               expect(
                 document.querySelector('[data-testid="member-probe"]')
@@ -1031,10 +1073,11 @@ const declareLawCases = async (fixture: FixtureRuntime) => {
             await router.load();
             render(<RouterProvider router={router} />, {
               container: document,
-              onCaughtError: (error) =>
+              onCaughtError: (error) => {
                 caughtErrors.push(
                   error instanceof Error ? error : panic(String(error)),
-                ),
+                );
+              },
             });
           });
           if (scenario === "undeclared") {

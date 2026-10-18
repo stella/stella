@@ -10,10 +10,7 @@ import { pageTitle } from "@/lib/page-title";
 import { ensureRouteQueryData, prefetchRouteQuery } from "@/lib/react-query";
 import { optionalSearchStringSchema } from "@/lib/schema";
 import { organizationSettingsOptions } from "@/queries/organization-settings";
-import {
-  APP_FRAME_SCOPE,
-  MEMBER_PROVIDER_SCOPES,
-} from "@/routes/-app-frame-scope";
+import { APP_FRAME_SCOPE, PROVIDER_SCOPE } from "@/routes/-app-frame-scope";
 
 const searchSchema = v.strictObject({
   q: optionalSearchStringSchema(),
@@ -22,7 +19,7 @@ const searchSchema = v.strictObject({
 export const Route = createFileRoute("/_protected/admin")({
   staticData: {
     appFrame: APP_FRAME_SCOPE.admin,
-    providerScopes: MEMBER_PROVIDER_SCOPES,
+    providerScopes: [PROVIDER_SCOPE.auth],
   },
   validateSearch: searchSchema,
   beforeLoad: async ({ context, location, matches }) => {
