@@ -2,4 +2,4 @@
 auto = "disable"
 
 [test]
-preload = ["../../scripts/test-git-environment.ts", "./src/test-setup.ts"]
+preload = ["./src/test-setup.ts"]

@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$script_dir/git-test-env.sh"
 subject="$script_dir/prepare-release-tag.sh"
 workflow="$script_dir/../.github/workflows/release-tag.yml"
 fixture=$(mktemp -d)

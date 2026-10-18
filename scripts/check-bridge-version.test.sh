@@ -11,7 +11,6 @@
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-source "$SCRIPT_DIR/git-test-env.sh"
 SCRIPT="$SCRIPT_DIR/check-bridge-version.sh"
 PASS=0
 FAIL=0

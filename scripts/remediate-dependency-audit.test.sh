@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$script_dir/git-test-env.sh"
 subject="$script_dir/remediate-dependency-audit.sh"
 fixture=$(mktemp -d)
 trap 'rm -rf "$fixture"' EXIT

@@ -2,7 +2,6 @@
 set -euo pipefail
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-source "$script_dir/git-test-env.sh"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 

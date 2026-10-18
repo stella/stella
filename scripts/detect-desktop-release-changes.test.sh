@@ -35,7 +35,6 @@
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-source "$SCRIPT_DIR/git-test-env.sh"
 SCRIPT="$SCRIPT_DIR/detect-desktop-release-changes.sh"
 
 WORK="$(mktemp -d)"

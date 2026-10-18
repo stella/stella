@@ -1,0 +1,77 @@
+import { expect, test } from "bun:test";
+import { readdir } from "node:fs/promises";
+import path from "node:path";
+
+const WORKFLOW_DIRECTORY = path.join(import.meta.dir, "../.github/workflows");
+
+const REQUIRED_GIT_ENV = {
+  GIT_CONFIG_COUNT: "3",
+  GIT_CONFIG_KEY_0: "maintenance.auto",
+  GIT_CONFIG_VALUE_0: "false",
+  GIT_CONFIG_KEY_1: "gc.auto",
+  GIT_CONFIG_VALUE_1: "0",
+  GIT_CONFIG_KEY_2: "gc.autoDetach",
+  GIT_CONFIG_VALUE_2: "false",
+} as const;
+
+const TEST_COMMAND_PATTERNS = [
+  /\bbun\s+(?:(?:run\s+)?test|--filter\s+\S+\s+test|--cwd(?:=|\s+)\S+\s+(?:run\s+)?test|run\s+--cwd(?:=|\s+)\S+\s+test)(?:\b|:)/u,
+  /\bturbo\s+(?:run\s+)?test(?:\b|:)/u,
+  /(?:^|[\s/])[^\s/]+\.test\.sh(?:\s|$)/u,
+] as const;
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const workflowRunsTests = (workflow: Record<string, unknown>): boolean => {
+  const jobs = workflow["jobs"];
+  if (!isRecord(jobs)) {
+    return false;
+  }
+
+  return Object.values(jobs).some((job) => {
+    if (!isRecord(job) || !Array.isArray(job["steps"])) {
+      return false;
+    }
+
+    return job["steps"].some(
+      (step) =>
+        isRecord(step) &&
+        typeof step["run"] === "string" &&
+        TEST_COMMAND_PATTERNS.some((pattern) =>
+          pattern.test(step["run"] as string),
+        ),
+    );
+  });
+};
+
+test("workflows that run tests disable Git background maintenance", async () => {
+  const workflowFiles = (await readdir(WORKFLOW_DIRECTORY))
+    .filter((file) => file.endsWith(".yml") || file.endsWith(".yaml"))
+    .toSorted();
+  const violations: string[] = [];
+
+  for (const file of workflowFiles) {
+    const workflowPath = path.join(WORKFLOW_DIRECTORY, file);
+    const parsed: unknown = Bun.YAML.parse(await Bun.file(workflowPath).text());
+    if (!isRecord(parsed) || !workflowRunsTests(parsed)) {
+      continue;
+    }
+
+    const env = parsed["env"];
+    if (!isRecord(env)) {
+      violations.push(`${file}: missing top-level env`);
+      continue;
+    }
+
+    for (const [key, expected] of Object.entries(REQUIRED_GIT_ENV)) {
+      if (env[key] !== expected) {
+        violations.push(
+          `${file}: expected top-level env ${key}=${JSON.stringify(expected)}, received ${JSON.stringify(env[key])}`,
+        );
+      }
+    }
+  }
+
+  expect(violations).toEqual([]);
+});
