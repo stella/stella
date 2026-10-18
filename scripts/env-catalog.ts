@@ -1646,6 +1646,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "TEST_API_ERROR",
   "TEST_LATER",
   "CI_GENERATED_SOURCES_MANIFEST",
+  // Generator families another job of the same CI run checks on this commit.
+  "GENERATED_CHECKS_IN_OTHER_JOBS",
   // Queue proof outcomes and resolved hosted-runner image for static receipts.
   "CHECK_OUTCOMES",
   "ImageOS",
