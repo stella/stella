@@ -120,6 +120,15 @@ describe("WP29 official source shapes", () => {
     expect(entry?.metadata.statedReference).toEqual({ state: "not_stated" });
   });
 
+  test("a row offering several language renditions is refused, not merged", () => {
+    const html = `<div class="contentsection block"><h2>2018</h2><ul><li><a class="link-ico" href="/justice/article-29/documentation/opinion-recommendation/files/2018/example_en.pdf"><span>WP29 opinion</span></a> <a class="link-ico" href="/justice/article-29/documentation/opinion-recommendation/files/2018/example_fr.pdf"><span>WP29 opinion</span></a></li></ul></div>`;
+    const parsed = parseWp29Archive(html);
+    expect(parsed.status).toBe("error");
+    if (parsed.status === "error") {
+      expect(parsed.error.message).toContain("several language renditions");
+    }
+  });
+
   test("a real WP number after the body acronym is retained", () => {
     const html = `<div class="contentsection block"><h2>2018</h2><ul><li><a class="link-ico" href="/justice/article-29/documentation/opinion-recommendation/files/2018/example_en.pdf"><span>WP29 opinion WP 123</span></a></li></ul></div>`;
     const entry = parseWp29Archive(html).unwrap().at(0);

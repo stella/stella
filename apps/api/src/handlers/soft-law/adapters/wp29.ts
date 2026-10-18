@@ -37,6 +37,12 @@ const PDF_TYPES = ["application/pdf"] as const;
 const normalize = (value: string) => value.replace(/\s+/gu, " ").trim();
 const invalid = (message: string) =>
   new SoftLawItemError({ message, tag: "invalid_document" });
+// Archive files name their rendition with a suffix such as `_en.pdf`.
+const assetLanguage = (path: string) =>
+  /_([a-z]{2})(?:_[a-z]+)?\.(?:pdf|doc)(?:$|\?)/iu
+    .exec(path)
+    ?.at(1)
+    ?.toLowerCase();
 
 const publisherUrl = (href: string, base: string) => {
   const parsed = Result.try(() => new URL(href, base));
@@ -159,6 +165,18 @@ export const parseWp29Archive = (html: string) => {
         }
         continue;
       }
+      // Row assets are fetched and joined as one expression, so a row offering
+      // several language renditions would merge them under one language.
+      const statedLanguages = new Set(
+        links
+          .toArray()
+          .flatMap((node) => assetLanguage($(node).attr("href") ?? "") ?? []),
+      );
+      if (statedLanguages.size > 1) {
+        return Result.err(
+          invalid("WP29 archive row offers several language renditions"),
+        );
+      }
       const primary = links
         .filter(
           (_, node) =>
@@ -197,10 +215,7 @@ export const parseWp29Archive = (html: string) => {
           return resolved;
         }
         const language =
-          /_([a-z]{2})(?:_[a-z]+)?\.(?:pdf|doc)$/iu
-            .exec(new URL(resolved.value).pathname)
-            ?.at(1)
-            ?.toLowerCase() ?? "und";
+          assetLanguage(new URL(resolved.value).pathname) ?? "und";
         if (seen.has(resolved.value)) {
           continue;
         }
