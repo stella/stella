@@ -168,10 +168,11 @@ export const resolveLocalMetadataPath = ({
     }
     paths.add(relocation.path);
   }
-  if (paths.size !== 1) {
+  const [checkoutPath] = paths;
+  if (paths.size !== 1 || checkoutPath === undefined) {
     throw new AdmissionError({
       message: "ambiguous local metadata checkout path",
     });
   }
-  return relocations[0].path;
+  return checkoutPath;
 };
