@@ -45,9 +45,8 @@
     "apps/api": {
       "entry": [
         "src/server.ts!",
-        // Ignored runtime aggregates import every committed capability shard.
-        "src/mcp/generated/capability-dispatch.ts!",
-        "src/mcp/generated/capability-catalog.ts!",
+        // Generated entrypoints and shards remain visible after hydration.
+        "src/mcp/generated/**/*.ts!",
         // Read by scripts/generate-web-api-types.ts through the compiler.
         "src/eden-contract.ts",
         // Callable receiver boundary for authenticated mail transport hosts.
@@ -132,8 +131,33 @@
         "astro.config.*",
         "e2e/**/*.ts"
       ],
-      // Tailwind scans workspace-ui through the CSS @source directive.
-      "ignoreDependencies": ["@tailwindcss/postcss", "@stll/workspace-ui"]
+      "ignoreDependencies": [
+        // Tailwind scans workspace-ui through the CSS @source directive.
+        "@tailwindcss/postcss",
+        "@stll/workspace-ui",
+        // Folio requires host-owned peers loaded by its editor implementation.
+        "prosemirror-commands",
+        "prosemirror-dropcursor",
+        "prosemirror-gapcursor",
+        "prosemirror-inputrules",
+        "prosemirror-keymap",
+        "prosemirror-transform",
+        "y-prosemirror",
+        "y-protocols"
+      ]
+    },
+    "apps/playground": {
+      // Folio requires host-owned peers loaded by its editor implementation.
+      "ignoreDependencies": [
+        "prosemirror-commands",
+        "prosemirror-dropcursor",
+        "prosemirror-gapcursor",
+        "prosemirror-inputrules",
+        "prosemirror-keymap",
+        "prosemirror-transform",
+        "y-prosemirror",
+        "y-protocols"
+      ]
     },
     "apps/legal-atlas-runner": {
       "entry": ["src/index.ts", "src/**/*.test.ts"],
@@ -214,7 +238,10 @@
         "src/dev-postgres.ts",
         // Test fixture processes are spawned by path from the tests.
         "src/test-fixtures/*.ts"
-      ]
+      ],
+      // generated-artifact-format.ts runs the oxfmt binary as a process, which
+      // knip cannot see; filtered installs need it declared here.
+      "ignoreDependencies": ["oxfmt"]
     },
     // The three `exports` entry points are derived from package.json, so
     // listing them here only earns a redundancy hint. These are the entries
@@ -273,5 +300,15 @@
   },
   "exclude": ["exports", "types"],
   "ignoreBinaries": ["docker", "oxfmt", "tsc", "bun", "tail"],
-  "ignoreDependencies": ["@stll/typescript-config"]
+  "ignoreDependencies": [
+    "@stll/typescript-config",
+    // Declared ahead of the text-search engine migration so its PRs share one
+    // dependency set. Each migration PR imports these in its workspace; the
+    // last one removes these entries (knip then flags any unused declaration).
+    "@stll/aho-corasick",
+    "@stll/aho-corasick-wasm",
+    "@stll/fuzzy-search",
+    "@stll/regex-set",
+    "@stll/regex-set-wasm"
+  ]
 }

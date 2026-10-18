@@ -1,11 +1,12 @@
 import { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
-import { PgDialect } from "drizzle-orm/pg-core";
+import { alias, PgDialect } from "drizzle-orm/pg-core";
 
+import { caseLawDecisions } from "@/api/db/schema";
 import {
-  publicRowHoldsDocument,
-  rowHoldsDocument,
+  publicRowHoldsDocumentFor,
+  rowHoldsDocumentFor,
 } from "@/api/lib/case-law/stored-payload";
 import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-storage";
 
@@ -68,8 +69,9 @@ const fixtures = [
 
 for (const { name, row, expected } of fixtures) {
   test(`public and full document predicates agree for ${name}`, async () => {
+    const table = alias(caseLawDecisions, "case_law_decisions");
     const query = new PgDialect().sqlToQuery(sql`
-      select ${rowHoldsDocument} as "full", ${publicRowHoldsDocument} as "public"
+      select ${rowHoldsDocumentFor(table)} as "full", ${publicRowHoldsDocumentFor(table)} as "public"
       from (values (
         ${row.text}::text, ${row.ast}::text::jsonb, ${row.sections}::text::jsonb, ${row.hash}::text,
         ${row.textKey}::text, ${row.normalizedKey}::text, ${row.astKey}::text

@@ -642,7 +642,7 @@ export const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
 // schema validity. Every other structured-output caller falls through to
 // `synthesizeJsonSchemaObject`, which walks the JSON schema TanStack hands the
 // adapter (already converted from the caller's Valibot schema, see
-// `generateTanStackObjectForRole` in tanstack-ai-generate.ts) and builds the
+// `generateTanStackObjectForTask` in tanstack-ai-generate.ts) and builds the
 // minimal value that satisfies it. Returning `{}` here previously passed
 // schema validation to the caller's `v.parse`, which throws on any missing
 // required field — every new structured-output feature was born broken

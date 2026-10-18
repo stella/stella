@@ -157,6 +157,7 @@ test("statute resolver bounds serialized Unicode matches and echoes", () => {
             unresolvedReason: "pending_public",
             availability: {
               code: "public_country_unavailable",
+              domain: "legislation",
               status: "unavailable",
               country: "SVK",
               reason: "pending_public",

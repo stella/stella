@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { caseLawSources, publishedCaseLawDecisions } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { readDecisionAnalysis } from "@/api/lib/case-law/decision-analysis";
@@ -11,26 +12,34 @@ const DECISION_ID = toSafeId<"caseLawDecision">(
 
 describe("readDecisionAnalysis", () => {
   test("loads the source's reuse terms alongside its adapter key", async () => {
-    let args: { with?: { source?: { columns?: Record<string, boolean> } } } =
-      {};
+    let selection: unknown;
+    let relation: unknown;
     const tx = asTestRaw<CaseLawPublicReadTransaction>({
-      query: {
-        caseLawDecisions: {
-          findFirst: async (received: typeof args) => {
-            args = received;
-            return null;
+      select: (received: unknown) => {
+        selection = received;
+        return {
+          from: (receivedRelation: unknown) => {
+            relation = receivedRelation;
+            return {
+              leftJoin: () => ({
+                where: () => ({ limit: async () => [] }),
+              }),
+            };
           },
-        },
+        };
       },
     });
 
     await readDecisionAnalysis(tx, DECISION_ID);
 
-    // The analysis path feeds decision text to a model, so it has to be able
-    // to read the licence bit that decides whether it may.
-    expect(args.with?.source?.columns).toEqual({
-      adapterKey: true,
-      descriptor: true,
-    });
+    expect(relation).toBe(publishedCaseLawDecisions);
+    expect(selection).toEqual(
+      expect.objectContaining({
+        source: {
+          adapterKey: caseLawSources.adapterKey,
+          descriptor: caseLawSources.descriptor,
+        },
+      }),
+    );
   });
 });

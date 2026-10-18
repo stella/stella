@@ -30,6 +30,22 @@ ignore = [
   # Cargo cannot select the remediated quick-xml 0.41 line yet.
   "RUSTSEC-2026-0194",
   "RUSTSEC-2026-0195",
+  # zip 4 reaches the graph only through tauri-plugin-updater, whose 2.x and
+  # 3.0 pre-releases still require it; these advisories are fixed in zip 9,
+  # which the app's own dependency already uses. The updater verifies an
+  # update's signature against the configured public key before extracting
+  # it, and extracts zip archives only when installing on Windows.
+  # Review by 2026-11-16; remove once an updater release accepts zip >= 9.
+  "RUSTSEC-2026-0367",
+  "RUSTSEC-2026-0368",
+  "RUSTSEC-2026-0369",
+  # zbus_names, zvariant and zvariant_derive were folded into zbus 6. The graph
+  # still reaches zbus 5 through tauri-plugin-opener, single-instance,
+  # notify-rust and the keyring store, none of which accept zbus 6 yet.
+  # Review by 2026-11-16; remove once those owners move to zbus 6.
+  "RUSTSEC-2026-0370",
+  "RUSTSEC-2026-0371",
+  "RUSTSEC-2026-0372",
 ]
 
 [licenses]

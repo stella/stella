@@ -8,7 +8,7 @@
     "#text-shaper.wasm": "@stll/folio-core/text-shaping/wasm"
   },
   "scripts": {
-    "build": "bun run generate:capability-runtime && bun run generate:mcp-app-contracts && bun --cwd=../../packages/mcp-apps run build && bun run build:visual-sandbox",
+    "build": "bun run generate:capability-runtime && bun run build:visual-sandbox",
     "build:visual-sandbox": "bun scripts/build-visual-sandbox.ts",
     "gen:chat-saved-state": "bun scripts/gen-chat-saved-state.ts",
     "gen:chat-transcripts": "bun scripts/gen-chat-transcripts.ts",
@@ -48,6 +48,7 @@
     "eval:playbook-authoring": "NODE_ENV=development STELLA_LOCAL_DEV=1 bun --env-file=.env evals/playbook-authoring.ts",
     "eval:extraction": "NODE_ENV=development STELLA_LOCAL_DEV=1 bun --env-file=.env evals/extraction.ts",
     "eval:reader-explain": "bun evals/reader-explain-local.ts",
+    "eval:generated-views": "NODE_ENV=development STELLA_LOCAL_DEV=1 bun --env-file=.env.example evals/generated-views-local.ts",
     "eval:agent-orientation": "bun --cwd=../../packages/cli run codegen:runtime && bun run generate:capability-runtime && NODE_ENV=development STELLA_LOCAL_DEV=1 bun --env-file=.env evals/agent-orientation.ts",
     "db:migrate": "bun run src/db/migrate.ts",
     "db:backfill-chat-content-v3": "bun run --env-file=.env src/scripts/backfill-chat-content-v3.ts",
@@ -74,7 +75,8 @@
     "corpus:generation": "bun run --env-file=.env src/scripts/corpus-generation.ts",
     "document-processing-worker": "bun src/scripts/document-processing-worker.ts",
     "dev:errors": "tail -F .dev-logs/errors.jsonl",
-    "generate:capability-runtime": "bun scripts/generate-capability-runtime.ts",
+    "generate:capability-runtime": "bun scripts/generate-capability-runtime.ts && bun ../../scripts/prepare-mcp-apps.ts",
+    "generate:case-law-decision-view-grants": "bun scripts/generate-case-law-decision-view-grants.ts",
     "generate:mcp-app-contracts": "bun scripts/generate-mcp-app-contracts.ts",
     "generate:typecheck-declarations": "bun ../../packages/scripts/src/api-typecheck-declarations.ts tsconfig.declarations.json",
     "typecheck:src": "bun ../../packages/scripts/src/api-typecheck-config.ts tsconfig.src.json && bun check --no-pretty --all --project=tsconfig.src.json",
@@ -116,6 +118,7 @@
     "@smithy/fetch-http-handler": "^5.8.0",
     "@stll/agent-engine": "workspace:*",
     "@stll/agent-input": "workspace:*",
+    "@stll/aho-corasick": "catalog:",
     "@stll/ai-catalog": "workspace:*",
     "@stll/analytics-config": "workspace:*",
     "@stll/anonymize": "catalog:",
@@ -141,6 +144,7 @@
     "@stll/fetch": "workspace:*",
     "@stll/folio-agents": "catalog:",
     "@stll/folio-core": "catalog:",
+    "@stll/fuzzy-search": "catalog:",
     "@stll/infosoud": "workspace:*",
     "@stll/invoicing": "workspace:*",
     "@stll/legal-ast": "workspace:*",
@@ -152,6 +156,7 @@
     "@stll/permissions": "workspace:*",
     "@stll/portable-path": "workspace:*",
     "@stll/redis-config": "workspace:*",
+    "@stll/regex-set": "catalog:",
     "@stll/runtime-mode": "workspace:*",
     "@stll/sanctions": "workspace:*",
     "@stll/scripts": "workspace:*",
@@ -205,6 +210,17 @@
     "pkijs": "3.4.1",
     "postal-mime": "4.0.4",
     "posthog-node": "^5.55.0",
+    "prosemirror-commands": "catalog:",
+    "prosemirror-dropcursor": "catalog:",
+    "prosemirror-gapcursor": "catalog:",
+    "prosemirror-history": "catalog:",
+    "prosemirror-inputrules": "catalog:",
+    "prosemirror-keymap": "catalog:",
+    "prosemirror-model": "catalog:",
+    "prosemirror-state": "catalog:",
+    "prosemirror-tables": "catalog:",
+    "prosemirror-transform": "catalog:",
+    "prosemirror-view": "catalog:",
     "quickjs-emscripten-core": "^0.32.0",
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
@@ -212,19 +228,22 @@
     "ssf": "catalog:",
     "tldts": "7.4.18",
     "uqr": "^0.1.3",
-    "valibot": "catalog:"
+    "valibot": "catalog:",
+    "y-prosemirror": "catalog:",
+    "y-protocols": "catalog:",
+    "yjs": "catalog:"
   },
   "devDependencies": {
     "@anthropic-ai/sdk": "0.97.1",
     "@aws-sdk/client-bedrock-runtime": "^3.1147.0",
     "@electric-sql/pglite": "^0.5.8",
-    "@mistralai/mistralai": "2.7.0",
     "@modelcontextprotocol/client": "2.3.1",
     "@modelcontextprotocol/ext-apps": "^2.0.3",
     "@myriaddreamin/typst-ts-renderer": "0.7.0",
     "@myriaddreamin/typst-ts-web-compiler": "0.7.0",
     "@playwright/test": "^1.63.0",
     "@standard-schema/spec": "^1.1.0",
+    "@stll/playwright-tools": "workspace:*",
     "@stll/property-testing": "workspace:*",
     "@stll/test-kit": "workspace:*",
     "@stll/typescript-config": "workspace:*",
@@ -235,8 +254,7 @@
     "drizzle-kit": "catalog:",
     "fast-check": "catalog:",
     "openai": "6.49.0",
-    "pdfjs-dist": "^6.4.299",
-    "yjs": "^13.6.33"
+    "pdfjs-dist": "^6.4.299"
   },
   "ciGateTestRunners": {
     "test:corpus": {
@@ -249,7 +267,7 @@
       "gate": "STELLA_RUN_POSTGRES_TESTS",
       "gateValue": "true",
       "runner": "scripts/run-postgres-tests.ts",
-      "testFileGlob": "{src,scripts}/**/*.test.{ts,tsx}"
+      "testFileGlob": "{src,evals,scripts}/**/*.test.{ts,tsx}"
     },
     "test:valkey": {
       "gate": "STELLA_RUN_VALKEY_TESTS",
