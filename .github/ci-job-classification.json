@@ -68,10 +68,6 @@
       "node": "n0032"
     },
     {
-      "path": ".github/workflows/cleanup-queued-pr-runs.yml",
-      "node": "n0033"
-    },
-    {
       "path": ".github/workflows/codeql.yml",
       "node": "n0034"
     },
@@ -118,10 +114,6 @@
     {
       "path": ".github/workflows/fetch-public-documents.yml",
       "node": "n0045"
-    },
-    {
-      "path": ".github/workflows/flake-gate.yml",
-      "node": "source-fbfdb6ea1c3d739e1e1f9ccf3952ff049eaa92f7545926f1ac4e07fb665afb42"
     },
     {
       "path": ".github/workflows/generated-conflicts-publish.yml",
@@ -769,7 +761,7 @@
         "type": "checkout"
       },
       "path": ".github/workflows/autofix.yml",
-      "digest": "5ee3f043265b85e8f98f77d177c71479519d906149f444a211d580dc001a0fe9",
+      "digest": "d80f78ef9ecbe546c18ccd33b18081a30d55955726f4948b01906c90100bb7d1",
       "references": [],
       "jobs": [
         {
@@ -788,18 +780,17 @@
           "id": "regenerate-scope",
           "kind": "ordinary",
           "qualifier": "Plans pull-request autofix scope using settled-run evidence; no release publication, tag creation, or deployment.",
-          "digest": "07c526eea1c675633304d7b2fdeede7a32baac72c6e37ca8470eb9d86513d824"
+          "digest": "d3dd0e203386248532558822f8292f726498d5cf09c3c9944defbc516f930edb"
         },
         {
           "id": "regenerate-derived-files",
           "kind": "ordinary",
           "qualifier": "Regenerates and pushes scoped pull-request autofix commits; no release publication, tag creation, or deployment.",
-          "digest": "e746a3ddf1eee8dd3732b65722164fdee0b9297945066c014c4bf3a4514a7a5c"
+          "digest": "ef53c9839e9e8bb257372b1da7c5149dbc74a84e829e3b3c756a603ebb8568c3"
         }
       ],
       "edges": {
         "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
-        "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3": "n0123",
         "autofix-ci/action@c5b2d67aa2274e7b5a18224e8171550871fc7e4a": "n0115",
         "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0104",
         "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0097"
@@ -940,14 +931,26 @@
         "type": "checkout"
       },
       "path": ".github/workflows/ci.yml",
-      "digest": "9caeac976c4b57396149632b963f7ed57914fcf5f80fdc5f1fd937d551cff2ec",
+      "digest": "9492f84427b376b2e8eb927c53a76b73825c139117922388ce7a2a6ae06a6db4",
       "references": ["./.github/workflows/ci.yml"],
       "jobs": [
         {
           "id": "ci-plan",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "73ccc280acd003d9113c2f1ed6bac8c677576cdaec1588ec1789979a53268c51"
+          "digest": "1d9ef70cd01e8a1d7b90312a35b2bc78fa3574fc04a05d51e8ca8d2e34bc80f8"
+        },
+        {
+          "id": "generated-sources",
+          "kind": "support",
+          "qualifier": "Produces generated-source artifacts required by merge-gating package checks.",
+          "digest": "8e9119157b740494f1fbdfc2f0495c526562c262341645c72c15584e95fb0900"
+        },
+        {
+          "id": "pr-heavy-gate",
+          "kind": "support",
+          "qualifier": "Gates merge-required heavy suites on successful pull-request quick checks.",
+          "digest": "531a7360af98bd035d87fba9ff69aa3f8104da15d3e0947e4a5e9524197062dd"
         },
         {
           "id": "docker-checks",
@@ -959,25 +962,25 @@
           "id": "ci-checks-generated",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "8f83718e10733e295d439c0ef157048eb8458f47332bda318cbe6b24e7a4ec4b"
+          "digest": "9348c03a843b2ec15cb1366362db597747ee416e54a8c273864c23013e50d74e"
         },
         {
           "id": "ci-checks-policy",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "4b62a55a12ba33eb45797e0ac36a484e218325d7804b0065561cc7baa441d2fc"
+          "digest": "5597bb09ea9c222d35f353be71f4fce5fd75a193a9bcafafc468d1172c6c8978"
         },
         {
           "id": "ci-checks-rest",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "f437f2c0fcfdd54c9b601cdd6e03de91c66256d17c06683b1971460679fdfd5e"
+          "digest": "203a07e265a367b3db45b90a835f2653c25f402a7ed87d2f86fe36331a671bdb"
         },
         {
           "id": "ci-tests",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "7d2aa19485887699b50074983670032025d34fb32170feafe78c78fe8960d901"
+          "digest": "999d54a15d16fc6e3080ff33e3a065f533778d287e68656570773b01081ab70c"
         },
         {
           "id": "api-test-durations",
@@ -989,19 +992,19 @@
           "id": "ci-browser",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "97d12da0e210320b34b83b42ef8ac9cfbb4e5e889df4cbbd842b7597e29616cf"
+          "digest": "9c615801b4ad780a6a1da074781e1a3c6e5f09e71aa4e488db578c1f3510e13f"
         },
         {
           "id": "code-quality-api",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "943f6604cd8d4c1392b0264ed3046b3f09e79c199836c87797313cf8972aa24a"
+          "digest": "680eaded9ee312d98542613e82cc23e8255bf849fe3b348e20ab2936f98e7dfb"
         },
         {
           "id": "code-quality-web-rest",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "f5fd42570b193f8ee824c3456f3530e037d32112d3b0efc703191f3991aa6d6a"
+          "digest": "79a5a6bf0be1c8345937abba5fba0fbe47e388779b0d52201cd9b17282eb6fc1"
         },
         {
           "id": "query-perf",
@@ -1013,13 +1016,13 @@
           "id": "postgres-service-suites",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "52a49df01c96c0d4808c14e4bb23d3b518f7dbe3f0b9eb9980de0e6eea891bb8"
+          "digest": "53ca9253c8758930a168c61d16700bde29f53d068bfaabb3c59abe2a17dd618c"
         },
         {
           "id": "service-suites",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "aaa6e65c4c808b034ed86f60f2ebe9f18c864f4c89529654dcc15324e62c5dfd"
+          "digest": "8929dfd8c94221cd7fa2ae9138a23430d6e5f228c162f3d130b9f729e871ee32"
         },
         {
           "id": "migration-upgrade-rehearsal",
@@ -1043,7 +1046,7 @@
           "id": "web-build",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "7421c8293eb87b9e8a7d91dd8415699f6bb5015c76ace28e4eb378febaa2e5fd"
+          "digest": "7d955ff2c7bfb3b0e8288eb4aa24dc376ca9b2cd0df5236b2b2634e5fa14027a"
         },
         {
           "id": "web-image-smoke",
@@ -1073,13 +1076,13 @@
           "id": "route-smoke",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "dce82d6dcfb71bed625d5f1f41607853f9c147beea6305f6f354f40a9649f1b6"
+          "digest": "28b5861e393f07afb7dc486199dbaff936074b5630dadbba1b3807fbe43e090e"
         },
         {
           "id": "e2e-production-shard",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "dcb52a8bea977a7d437fc85131f8cca36028441d34c117f6e5ac19b63b653e9d"
+          "digest": "fb7a2d08c0ac0cb20ffa06b7b3222b133b234bc608c4bdb22fc5400cb46dd93c"
         },
         {
           "id": "stack-redaction-browsers",
@@ -1169,13 +1172,13 @@
           "id": "ci-quick-checks",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "8aa5e1c18d10c5f43a7d719e64659700bdb376509ea41fcdc69f4684741c3604"
+          "digest": "75eea2e2374c0a5c57a956c38ce6b30c751571f79062b2c071865263d319cc42"
         },
         {
           "id": "ci-result",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "28d5960481e89069bb3d7152123d87a3b17be8bac2f745e7a376c863680c60b7"
+          "digest": "ce0eccbc361a345c81fcc0259cbc31cb723f1f2ad929ba6ac3d03838669955a6"
         }
       ],
       "edges": {
@@ -1252,28 +1255,6 @@
     },
     {
       "type": "metadata",
-      "id": "n0033",
-      "repository": "candidate",
-      "origin": {
-        "type": "checkout"
-      },
-      "path": ".github/workflows/cleanup-queued-pr-runs.yml",
-      "digest": "d602c36a3c46edc57216b0302bf2158814c653fd729b9b77c4f1b81d3338968f",
-      "references": [],
-      "jobs": [
-        {
-          "id": "cleanup",
-          "kind": "ordinary",
-          "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "0c664c0d12030265baa17fdf1ac21df5c45f016c2cb2f95dd368c778c7a10cac"
-        }
-      ],
-      "edges": {
-        "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3": "n0123"
-      }
-    },
-    {
-      "type": "metadata",
       "id": "n0034",
       "repository": "candidate",
       "origin": {
@@ -1311,14 +1292,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/dated-waiver-healing.yml",
-      "digest": "94d0a8dd06e4b3b22763a97b85ca1566d7e5c2229567afc287998eb0ce50e434",
+      "digest": "febc92351309fbb0aebbd2179ff5d126f461afc7ed0201aded8e2d9e3733e964",
       "references": [],
       "jobs": [
         {
           "id": "heal",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "e55045f1fd8c7aa0ef473f58214b02cc2b713ae5d3c2476ece1e98f73524c271"
+          "digest": "d7af231cc139d5787c5b7b223c01ad64574f6c591c0d7243383d667dd775a592"
         }
       ],
       "edges": {
@@ -1335,14 +1316,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/db-migrations.yml",
-      "digest": "39e4626ff117b4ef62a1e9830dc9154024698df2ad9345ffd9aba9fc95759c76",
+      "digest": "40a9039dcf110f28b9c95e02436ad3a3f471f4f9533d843d20efd32d7a760aa4",
       "references": [],
       "jobs": [
         {
           "id": "scope",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "21fed89e88a7fec9f6fb0fcaf0e307e7423665a27494d5310c3741707ff18456"
+          "digest": "ad9fee8b5742689d2885d02aa698a2627131de9be7ccc845e5fa0dc587c95201"
         },
         {
           "id": "check",
@@ -1359,7 +1340,6 @@
       ],
       "edges": {
         "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
-        "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3": "n0123",
         "docker/login-action@dbcb813823bdd20940b903addbd779551569679f": "n0129",
         "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0104",
         "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0097"
@@ -1719,7 +1699,7 @@
         "type": "checkout"
       },
       "path": ".github/workflows/main-heavy.yml",
-      "digest": "a1dd6c5e4b2decd82c2221c9df7300016248c2aeb5b05694be340d4165ea229f",
+      "digest": "144c11b7fc317b88e39019ef56ab172ec046778df68be49448872b4facc95c57",
       "references": [],
       "jobs": [
         {
@@ -1732,7 +1712,7 @@
           "id": "suites",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "0fe44aeddce694d72cea496328b7c68f978ad20698de8ad3216f7f08ff6c0ae7"
+          "digest": "245a058456f4e4b60c8ed523a8d1223cc4a93995a9aa213031eb76a213dfd6ee"
         },
         {
           "id": "status",
@@ -1756,7 +1736,7 @@
         "type": "checkout"
       },
       "path": ".github/workflows/main-pr-depth.yml",
-      "digest": "a6d854f993e2f351293f02497a1402c4065179b8fb81fc8682ba8b5a227518ae",
+      "digest": "e8102bdd3c99410d86a352aa0fa1c4eb157cc8c37ed92b0b52b5af930bce266e",
       "references": [],
       "jobs": [
         {
@@ -1769,7 +1749,7 @@
           "id": "suites",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "95f5a2197da63349fa554d7845dcf794494bf1ddfed4ea3a8f33a4ff293ac8fd"
+          "digest": "52c153966b06e89fb6494ba0c6d0463f4ed1262b9a5dfa853336f8abd93a6a03"
         },
         {
           "id": "status",
@@ -2720,14 +2700,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/scheduled-run-alerts.yml",
-      "digest": "0453ce566b91c1cf40f965b5c28b1801ff477ee75f93552dcfa22e63cbad31a6",
+      "digest": "52dde695036c7d37306ed75024b851d4ced1ba8e5c9fc827eb0f60c69cd27017",
       "references": [],
       "jobs": [
         {
           "id": "notify",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "5b100b571945b6fd9dd054c9199fabdcb918c10eae1ec607d43f605695e8b449"
+          "digest": "baf551bcb2d78e1454311a28203091f3acf0baa7382362c4700765044392697a"
         }
       ],
       "edges": {
@@ -3400,30 +3380,6 @@
       "references": ["$/.github/actions/ci-store-save"],
       "jobs": [],
       "edges": {}
-    },
-    {
-      "type": "metadata",
-      "id": "source-fbfdb6ea1c3d739e1e1f9ccf3952ff049eaa92f7545926f1ac4e07fb665afb42",
-      "repository": "candidate",
-      "origin": {
-        "type": "checkout"
-      },
-      "path": ".github/workflows/flake-gate.yml",
-      "digest": "b02fe0b2937298c9e5d5a02c9a605f26e99f9cc938dd4e90dbc2fa7108eb4a37",
-      "references": [],
-      "jobs": [
-        {
-          "id": "report",
-          "kind": "ordinary",
-          "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "fea560dd5dc37ea51963f21b610573e336175982fd5165443f1a64f4f2f38cf0"
-        }
-      ],
-      "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
-        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0128",
-        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0097"
-      }
     },
     {
       "type": "supplier",

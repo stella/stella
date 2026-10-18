@@ -95,6 +95,14 @@
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions."
   },
+  "candidate:.github/workflows/ci.yml/generated-sources": {
+    "kind": "support",
+    "qualifier": "Produces generated-source artifacts required by merge-gating package checks."
+  },
+  "candidate:.github/workflows/ci.yml/pr-heavy-gate": {
+    "kind": "support",
+    "qualifier": "Gates merge-required heavy suites on successful pull-request quick checks."
+  },
   "candidate:.github/workflows/ci.yml/docker-checks": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions."
@@ -255,10 +263,6 @@
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment."
   },
-  "candidate:.github/workflows/cleanup-queued-pr-runs.yml/cleanup": {
-    "kind": "ordinary",
-    "qualifier": "Checks; no publication, tag creation, or deployment."
-  },
   "candidate:.github/workflows/codeql.yml/scope": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment."
@@ -352,10 +356,6 @@
     "qualifier": "Checks; no publication, tag creation, or deployment."
   },
   "candidate:.github/workflows/fetch-public-documents.yml/fetch": {
-    "kind": "ordinary",
-    "qualifier": "Checks; no publication, tag creation, or deployment."
-  },
-  "candidate:.github/workflows/flake-gate.yml/report": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment."
   },
