@@ -1,5 +1,33 @@
 // parser-output-unchanged: Unicode owner migration retains native normalization forms, mark classes and operation order; no folding is added.
 // parser-output-unchanged: Identifier checks are named for schema publication; accepted values are identical.
+// parser-output-unchanged: [cz-ns] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: [cz-nss] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: [cz-us] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: [cz-regional] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: [sk-courts] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: [sk-us] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: [pl-courts] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: [pl-sn] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: [pl-kio] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: [pl-tk] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: [pl-nsa] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: [pl-ncourt] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: [at-courts] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: [at-vfgh] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: [at-vwgh] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: [at-bvwg] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: [at-lvwg] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: [at-asylgh] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: [at-ubas] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: [at-uvs] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: [at-verg] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: [at-umse] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: [at-bks] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: [at-findok] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: [eu-ecj] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: [hu-bhgy] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: [pl-kis] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
+// parser-output-unchanged: [pl-uodo] adding the Commission identifier variant does not change this adapter’s emitted identifiers.
 import { panic } from "better-result";
 import * as v from "valibot";
 

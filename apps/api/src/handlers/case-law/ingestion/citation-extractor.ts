@@ -766,6 +766,35 @@ const COMMISSION_CASE_NUMBER_PATTERN =
 const COMMISSION_SHORT_CASE_NUMBER_RE = /^(?:C|N|NN)\s/iu;
 const NATIONAL_DOCKET_ROMAN_DIVISION_RE = /\b[IVXLCDM]{1,8}\s*$/u;
 
+const isCommissionCaseNumberMatch = ({
+  pattern,
+  caseNumber,
+  text,
+  matchIndex,
+}: {
+  pattern: RegExp;
+  caseNumber: string | undefined;
+  text: string;
+  matchIndex: number;
+}): boolean => {
+  if (pattern !== COMMISSION_CASE_NUMBER_PATTERN) {
+    return false;
+  }
+  if (
+    caseNumber !== undefined &&
+    COMMISSION_SHORT_CASE_NUMBER_RE.test(caseNumber) &&
+    NATIONAL_DOCKET_ROMAN_DIVISION_RE.test(text.slice(0, matchIndex))
+  ) {
+    return false;
+  }
+  return COMMISSION_CASE_CUE_RE.test(
+    text.slice(
+      Math.max(0, matchIndex - COMMISSION_CASE_CUE_WINDOW),
+      matchIndex,
+    ),
+  );
+};
+
 /** What marks a nearby authority file number as the data protection authority's. */
 const PL_AUTHORITY_FILE_NUMBER_CUE_RE =
   /znak\p{L}*\s+sprawy|\bUODO\b|Ochrony\s+Danych\s+Osobowych/iu;
@@ -2003,31 +2032,21 @@ export const extractCitations = (
         ) {
           continue;
         }
+        const isCommissionCaseNumber = isCommissionCaseNumberMatch({
+          pattern,
+          caseNumber,
+          text: section.text,
+          matchIndex: match.index,
+        });
         if (
           pattern === COMMISSION_CASE_NUMBER_PATTERN &&
-          caseNumber !== undefined &&
-          COMMISSION_SHORT_CASE_NUMBER_RE.test(caseNumber) &&
-          NATIONAL_DOCKET_ROMAN_DIVISION_RE.test(
-            section.text.slice(0, match.index),
-          )
+          !isCommissionCaseNumber
         ) {
           continue;
         }
-        if (
-          pattern === COMMISSION_CASE_NUMBER_PATTERN &&
-          !COMMISSION_CASE_CUE_RE.test(
-            section.text.slice(
-              Math.max(0, match.index - COMMISSION_CASE_CUE_WINDOW),
-              match.index,
-            ),
-          )
-        ) {
-          continue;
-        }
-        const identifierType =
-          pattern === COMMISSION_CASE_NUMBER_PATTERN
-            ? DECISION_IDENTIFIER_TYPES.COMMISSION_CASE_NUMBER
-            : decisionIdentifierTypeOfCitation(citationText);
+        const identifierType = isCommissionCaseNumber
+          ? DECISION_IDENTIFIER_TYPES.COMMISSION_CASE_NUMBER
+          : decisionIdentifierTypeOfCitation(citationText);
         // For patterns with a capture group (e.g. the Polish prefixed
         // pattern), use the bare case number as the canonical dedup key
         // so both "sygn. akt II CSK 123/20" and "II CSK 123/20" resolve
