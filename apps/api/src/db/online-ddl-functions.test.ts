@@ -2,7 +2,10 @@ import { Glob } from "bun";
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
 
+import type { DdlFunctionDeclaration } from "./online-ddl-functions";
 import { DDL_FUNCTION_NAMES, DDL_FUNCTIONS } from "./online-ddl-functions";
+
+const isOffline = ({ online }: DdlFunctionDeclaration): boolean => !online;
 
 const API_ROOT = path.resolve(import.meta.dir, "../..");
 
@@ -90,11 +93,11 @@ describe("database functions that run table-locking DDL", () => {
 
   test("no database module calls a function the online phase may not call", async () => {
     const offline = Object.entries(DDL_FUNCTIONS)
-      .filter(([, declaration]) => !declaration.online)
+      .filter(([, declaration]) => isOffline(declaration))
       .map(([name]) => name);
     const calls: string[] = [];
     for await (const file of new Glob("src/db/**/*.ts").scan(API_ROOT)) {
-      if (/\.test\.ts$/u.test(file) || file.includes("__fixtures__")) {
+      if (file.endsWith(".test.ts") || file.includes("__fixtures__")) {
         continue;
       }
       const text = await Bun.file(path.join(API_ROOT, file)).text();

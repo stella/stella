@@ -230,16 +230,19 @@ const installFixtureSchema = async (main: SQL, owner: ReservedSQL) => {
   for (const [, functionName] of texts.matchAll(
     /\b([a-z_][a-z0-9_]*)\s*\(/gu,
   )) {
+    const matchedName =
+      functionName ??
+      panic("installFixtureSchema: missing matched function name");
     for (const row of rowsOf(
       await main.unsafe(
         `SELECT pg_get_functiondef(p.oid) AS definition
          FROM pg_catalog.pg_proc p
          JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
          WHERE n.nspname = 'public' AND p.proname = $1`,
-        [functionName],
+        [matchedName],
       ),
     )) {
-      once(`function:${functionName}`, stringField(row, "definition"));
+      once(`function:${matchedName}`, stringField(row, "definition"));
     }
   }
   for (const statement of [...statements, ...tableStatements]) {
@@ -304,6 +307,7 @@ const withScratch = async (work: (scratch: Scratch) => Promise<void>) => {
               }),
               clock: () => Date.now() + offset,
             });
+            return undefined;
           } finally {
             await blocker`ROLLBACK`;
             owner.release();
@@ -318,6 +322,7 @@ const withScratch = async (work: (scratch: Scratch) => Promise<void>) => {
       await main.unsafe(`DROP DATABASE ${quoted(name)}`);
     }
   });
+  return undefined;
 };
 
 const healthyEbs = (clock: () => number): OnlineIndexGateOptions["ebs"] => ({

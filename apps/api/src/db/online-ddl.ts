@@ -311,14 +311,16 @@ export const callDeclaredFunction = ({
 }): LockTakingStatement => {
   const declaration = readDdlFunctionDeclaration(name);
   if (!declaration.online) {
-    return panic(`Function ${name} is not callable from the online phase`);
+    return panic(
+      `Function ${String(name)} is not callable from the online phase`,
+    );
   }
   const { locks } = declaration;
   switch (locks.type) {
     case "table":
       if (locks.tableName !== tableName) {
         return panic(
-          `Function ${name} locks ${locks.tableName}, not ${tableName}`,
+          `Function ${String(name)} locks ${locks.tableName}, not ${tableName}`,
         );
       }
       return accessExclusive(tableName, [
@@ -331,7 +333,7 @@ export const callDeclaredFunction = ({
       ]);
     default:
       locks satisfies never;
-      return panic(`Function ${name}: unexpected lock declaration`);
+      return panic(`Function ${String(name)}: unexpected lock declaration`);
   }
 };
 
@@ -388,7 +390,7 @@ const sessionOn = (
     switch (statement.lockQueue) {
       case "beside_writers":
         await connection.execute(statement[LOCK_TAKING]);
-        return;
+        return undefined;
       case "blocks_writers": {
         const outcome = await runLockRetryLadder({
           config: lockRetry?.config ?? DEFAULT_LOCK_RETRY_CONFIG,
@@ -414,7 +416,7 @@ const sessionOn = (
             cause: outcome.cause,
           });
         }
-        return;
+        return undefined;
       }
       default:
         statement.lockQueue satisfies never;

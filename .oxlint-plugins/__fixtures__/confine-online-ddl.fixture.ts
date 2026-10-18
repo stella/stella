@@ -3,8 +3,8 @@ declare const connection: {
   query: (statement: string) => unknown;
 };
 
-// oxlint-disable-next-line confine-online-ddl/confine-online-ddl -- planted table-locking SQL must be rejected
 connection.execute(
+  // oxlint-disable-next-line confine-online-ddl/confine-online-ddl -- planted table-locking SQL must be rejected
   "ALTER TABLE public.example VALIDATE CONSTRAINT example_check",
 );
 

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, expectTypeOf, test } from "bun:test";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
@@ -68,15 +68,12 @@ const sqlOf = async (statement: LockTakingStatement): Promise<string> => {
 };
 
 describe("online lock-taking statements", () => {
-  test("a raw execute rejects a lock-taking statement at compile time", async () => {
-    const { connection, statements } = recordingConnection();
+  test("a raw execute rejects a lock-taking statement at compile time", () => {
+    const { connection } = recordingConnection();
     const statement = dropIndexConcurrently(INDEX, { ifExists: true });
-    // The statement is not a string, so the phase's short-budget session has
-    // no way to run it outside the gate.
-    // @ts-expect-error A LockTakingStatement is not SQL text for a raw session.
-    await connection.execute(statement);
-    // At run time the object reaches the driver as no SQL text at all.
-    expect(statements).toEqual([statement]);
+    expectTypeOf(statement).not.toExtend<
+      Parameters<typeof connection.execute>[0]
+    >();
   });
 
   test("each builder names its table and renders one statement", async () => {
@@ -233,7 +230,7 @@ describe("validateOnlineConstraints", () => {
   });
 });
 
-const POLICY: PolicyDefinition = {
+const POLICY = {
   tableName: "probe",
   name: "probe_policy",
   as: "restrictive",
@@ -241,27 +238,27 @@ const POLICY: PolicyDefinition = {
   role: "stella",
   using: "probe.gate = 'open'",
   withCheck: "probe.gate = 'open'",
-};
+} as const satisfies PolicyDefinition;
 
 describe("online ACCESS EXCLUSIVE statements", () => {
   test("each runs atomically and declares its writer-blocking lock class", async () => {
     const created =
       'CREATE POLICY "probe_policy" ON "public"."probe" AS RESTRICTIVE FOR ALL TO "stella" USING (probe.gate = \'open\') WITH CHECK (probe.gate = \'open\')';
+    const { withCheck: _withCheck, ...usingPolicy } = POLICY;
     const cases: [LockTakingStatement, string[]][] = [
       [createPolicy(POLICY), [created]],
       [
         createPolicy({
-          ...POLICY,
+          ...usingPolicy,
           as: "permissive",
           for: "select",
-          withCheck: undefined,
         }),
         [
           'CREATE POLICY "probe_policy" ON "public"."probe" AS PERMISSIVE FOR SELECT TO "stella" USING (probe.gate = \'open\')',
         ],
       ],
       [
-        alterPolicy({ ...POLICY, withCheck: undefined }),
+        alterPolicy(usingPolicy),
         [
           'ALTER POLICY "probe_policy" ON "public"."probe" USING (probe.gate = \'open\')',
         ],
@@ -294,7 +291,9 @@ describe("online ACCESS EXCLUSIVE statements", () => {
     const statements: string[] = [];
     let failures = 2;
     let now = 0;
-    const lockFailure = { code: "55P03", message: "lock unavailable" };
+    const lockFailure = Object.assign(new Error("lock unavailable"), {
+      code: "55P03",
+    });
     const connection = {
       execute: async (text: string) => {
         statements.push(text);
@@ -344,7 +343,9 @@ describe("online ACCESS EXCLUSIVE statements", () => {
   });
 
   test("exhausted writer-blocking work leaves subsequent statements for a later run", async () => {
-    const lockFailure = { code: "55P03", message: "lock unavailable" };
+    const lockFailure = Object.assign(new Error("lock unavailable"), {
+      code: "55P03",
+    });
     const statements: string[] = [];
     const gate = createUngatedTableGateForTests(
       {
@@ -392,15 +393,20 @@ describe("online ACCESS EXCLUSIVE statements", () => {
   });
 
   test("spliced text is one expression: a second statement never reaches SQL", () => {
+    const {
+      using: _using,
+      withCheck: _withCheck,
+      ...withoutExpressions
+    } = POLICY;
     expect(() =>
       createPolicy({ ...POLICY, using: "true); DROP TABLE x; --" }),
     ).toThrow("must be a single statement or expression");
     expect(() =>
       replacePolicy({ ...POLICY, withCheck: "$online_ddl$ x" }),
     ).toThrow("must be a single statement or expression");
-    expect(() =>
-      alterPolicy({ ...POLICY, using: undefined, withCheck: undefined }),
-    ).toThrow("changes no expression");
+    expect(() => alterPolicy(withoutExpressions)).toThrow(
+      "changes no expression",
+    );
   });
 
   test("only a function declared online is callable, on the table it locks", () => {

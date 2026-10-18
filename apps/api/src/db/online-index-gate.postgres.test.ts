@@ -266,8 +266,8 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
       });
       let reader: Promise<number> | undefined;
       let samples = 0;
+      const isDone = () => done;
       try {
-        const isDone = () => done;
         while (!isDone()) {
           const waits = await fixture.observer<
             { waitMs: number; active: boolean }[]
@@ -292,7 +292,7 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
           await Bun.sleep(5);
         }
       } finally {
-        if (!done) {
+        if (!isDone()) {
           await fixture.blocker`ROLLBACK`;
         }
         await work;

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import config from "../../oxlint.config.ts";
 import { lintSingleRule } from "./lint-single-rule.ts";
 
 const RULE = "confine-online-ddl";
@@ -117,7 +118,7 @@ describe(RULE, () => {
     ]);
   });
 
-  test("the owner, tests, fixtures and the schema phase are out of scope", async () => {
+  test("the owner, tests and the schema phase are out of scope", async () => {
     const source = [
       'import { createOnlineIndexGate } from "./online-index-gate";',
       'await connection.execute("DROP INDEX CONCURRENTLY public.x");',
@@ -126,7 +127,6 @@ describe(RULE, () => {
     for (const sourcePath of [
       "apps/api/src/db/online-ddl.ts",
       "apps/api/src/db/online-migrations.test.ts",
-      "apps/api/src/db/__fixtures__/example.ts",
       "apps/api/src/tests/helpers/example.ts",
     ]) {
       expect(await lint(source, sourcePath), sourcePath).toEqual([]);
@@ -135,6 +135,33 @@ describe(RULE, () => {
     expect(await lint(source, "apps/api/src/db/migration-runner.ts")).toEqual([
       1, 3,
     ]);
+  });
+
+  test("configuration scopes production fixtures out and the planted fixture in", async () => {
+    const rule = `${RULE}/${RULE}`;
+    const overrides = config.overrides.filter(
+      (override) => override.rules !== undefined && rule in override.rules,
+    );
+    for (const [sourcePath, lines] of [
+      ["apps/api/src/db/__fixtures__/example.ts", []],
+      [".oxlint-plugins/__fixtures__/confine-online-ddl.fixture.ts", [1]],
+      ["apps/api/src/db/example.ts", [1]],
+    ] as const) {
+      expect(
+        await lintSingleRule(
+          RULE,
+          'connection.execute("ALTER TABLE public.example VALIDATE CONSTRAINT example_check");',
+          {
+            sourcePath,
+            cwd: "scratch",
+            overrides: [
+              { files: ["**/*"], rules: { [rule]: "off" } },
+              ...overrides,
+            ],
+          },
+        ),
+      ).toEqual([...lines]);
+    }
   });
 
   test("SQL text outside the database modules is another owner's concern", async () => {

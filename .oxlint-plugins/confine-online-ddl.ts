@@ -147,7 +147,13 @@ export default eslintCompatPlugin({
           gateOpener:
             "Only apps/api/src/db/online-ddl.ts opens the online index gate, and only tests run table work ungated; use runGatedTableWork or the OnlineTableGate a repair receives.",
         },
-        schema: [],
+        schema: [
+          {
+            type: "object",
+            properties: { sqlScope: { enum: ["database", "all"] } },
+            additionalProperties: false,
+          },
+        ],
       },
       createOnce(context) {
         let checksSql = false;
@@ -165,13 +171,17 @@ export default eslintCompatPlugin({
             const filename = repoRelativeFilename(context);
             if (
               isTestFile(filename) ||
-              filename.includes("/__fixtures__/") ||
               canonicalModuleId(filename, filename) === OWNER
             ) {
               return false;
             }
+            const options = context.options.at(0);
             checksSql =
-              filename.startsWith(DATABASE_MODULES) &&
+              ((typeof options === "object" &&
+                options !== null &&
+                "sqlScope" in options &&
+                options.sqlScope === "all") ||
+                filename.startsWith(DATABASE_MODULES)) &&
               canonicalModuleId(filename, filename) !== SCHEMA_PHASE;
             return true;
           },

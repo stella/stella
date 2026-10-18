@@ -1703,11 +1703,18 @@ const config = defineConfig({
       },
     },
     {
-      // Tests, fixtures and the owner are skipped inside the rule; SQL
-      // migration files are not JavaScript, so oxlint never reads them.
+      // Tests and the owner are skipped inside the rule; SQL migration files
+      // are not JavaScript, so oxlint never reads them.
       files: ["apps/api/src/**/*.{ts,tsx,js,mjs}"],
+      excludeFiles: ["apps/api/src/**/__fixtures__/**"],
       rules: {
         "confine-online-ddl/confine-online-ddl": "error",
+      },
+    },
+    {
+      files: [".oxlint-plugins/__fixtures__/confine-online-ddl.fixture.ts"],
+      rules: {
+        "confine-online-ddl/confine-online-ddl": ["error", { sqlScope: "all" }],
       },
     },
     {
