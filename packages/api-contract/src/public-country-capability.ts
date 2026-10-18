@@ -70,6 +70,7 @@ export type PublicCountry = keyof typeof PUBLIC_COUNTRY_CAPABILITIES;
 export const isPublicCountry = (country: string): country is PublicCountry =>
   Object.hasOwn(PUBLIC_COUNTRY_CAPABILITIES, country);
 
+// parser-output-unchanged: Extracting country uppercasing preserves admission normalization and parsed decision records.
 /** Canonical spelling used at public-law jurisdiction boundaries. */
 export const canonicalizePublicCountry = (country: string): string =>
   country.toUpperCase();
