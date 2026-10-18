@@ -1058,7 +1058,6 @@
       }
     },
     "sameCaseNumber": "{count, plural, one {# orzeczenie ma} few {# orzeczenia mają} many {# orzeczeń ma} other {# orzeczenia ma}} tę sygnaturę. Wybierz sąd.",
-    "searchAskPrompt": "{query} (orzecznictwo, {country})",
     "searchLabel": "Szukaj w orzecznictwie",
     "searchPlaceholder": "Sygnatura, ECLI lub słowa, np. II CSK 123/19",
     "searchUnavailable": {
@@ -1405,7 +1404,12 @@
     "maxAttachmentsReached": "Maksymalnie {count} plików na wiadomość",
     "mention": {
       "category": {
-        "entities": "W tej sprawie"
+        "entities": "W tej sprawie",
+        "sources": "Źródła"
+      },
+      "corpus": {
+        "caseLaw": "Orzecznictwo · {country}",
+        "legislation": "Ustawodawstwo · {country}"
       },
       "loadError": "Nie udało się załadować elementów"
     },
@@ -5135,7 +5139,6 @@
     "provisionTextUnavailable": "Tekst niedostępny dla tej wersji",
     "publisherWindowInconsistent": "Nie można ustalić tekstu obowiązującego w tym dniu: dane wydawcy są sprzeczne.",
     "resolvedAlias": "Rozpoznano jako {label}",
-    "searchAskPrompt": "{query} (ustawodawstwo: {country})",
     "searchLabel": "Szukaj w aktach prawnych",
     "searchPlaceholder": "Numer, skrót lub tytuł, np. 89/2012 Sb.",
     "showCitedPartOnly": "Pokaż tylko cytowaną część",

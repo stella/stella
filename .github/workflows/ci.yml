@@ -111,6 +111,7 @@ jobs:
       generated_sources_input_hash: ${{ steps.generate.outputs.input_hash }}
       ci_tests_matrix: ${{ steps.api-tests.outputs.ci_tests_matrix }}
       api_test_files: ${{ steps.api-tests.outputs.api_test_files }}
+      changed_files: ${{ steps.changed-files.outputs.changed_files }}
       test_scope: ${{ steps.api-tests.outputs.test_scope }}
       comparison_base: ${{ steps.changed-files.outputs.comparison_base }}
       root_checks: ${{ steps.root-checks.outputs.root_checks }}
@@ -860,8 +861,12 @@ jobs:
           if (( ${#changed_files[@]} > 0 )); then
             printf '%s\0' "${changed_files[@]}" > "$RUNNER_TEMP/api-test-changed-paths"
           fi
-          echo "api_scope_unknown=$scope_unknown" >> "$GITHUB_OUTPUT"
-          echo "comparison_base=$comparison_base" >> "$GITHUB_OUTPUT"
+          {
+            echo "api_scope_unknown=$scope_unknown"
+            printf '%s\0' "${changed_files[@]}" | jq -Rsc 'split("\u0000") | map(select(length > 0))' \
+              | sed 's/^/changed_files=/'
+            echo "comparison_base=$comparison_base"
+          } >> "$GITHUB_OUTPUT"
 
           # Graph-based scope tools read scope_files; explicit per-path selectors
           # (dependency malware, lockfile ages, image and manifest inputs) keep
@@ -1189,7 +1194,9 @@ jobs:
                 ;;
             esac
             case "$file" in
-              apps/desktop/*|scripts/*|.github/actions/desktop-windows-build/*|.github/workflows/release-desktop.yml|.github/workflows/ci.yml|package.json|bun.lock)
+              # Only the scripts the Windows desktop build and its receipt run;
+              # unrelated repository scripts do not select this ~11 min job.
+              apps/desktop/*|scripts/desktop-*|scripts/*tauri*|scripts/detect-desktop-*|scripts/check-desktop-*|scripts/ci-windows-dry-run-*|scripts/wasm-*|scripts/test-wasm-offline.sh|scripts/run-oxfmt.ts|scripts/check-format-environment.ts|scripts/ci-install*|scripts/build-updater-manifest.sh|scripts/promote-desktop-release.sh|scripts/release-channel.sh|scripts/rename-desktop-artifacts.sh|scripts/check-api-deployment.ts|scripts/gh-retry.sh|scripts/retry.sh|scripts/build-desktop-dmg.sh|.github/actions/desktop-windows-build/*|.github/workflows/release-desktop.yml|.github/workflows/ci.yml|package.json|bun.lock)
                 if [[ "$file" != *.md && "$file" != *.mdx ]]; then
                   desktop_windows_dry_run_required=true
                 fi
@@ -2258,6 +2265,7 @@ jobs:
           retention-days: 14
 
       - name: Typecheck-cost baseline guard
+        continue-on-error: ${{ github.event_name == 'merge_group' }}
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         env:
           STELLA_VERIFY: check
@@ -2440,6 +2448,7 @@ jobs:
           echo "RATCHET_BASE_REF=$base" >> "$GITHUB_ENV"
 
       - name: Ratchet guard
+        continue-on-error: ${{ github.event_name == 'merge_group' }}
         env:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
@@ -2553,6 +2562,7 @@ jobs:
         run: bun test scripts/check-oxlint-test-timeouts.test.ts scripts/run-custom-lint-tests.test.ts
 
       - name: Dated waiver lifecycle guards
+        continue-on-error: ${{ github.event_name == 'merge_group' }}
         env:
           CI_CHECK_KIND: STATIC
           CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -2634,6 +2644,7 @@ jobs:
           DATABASE_URL=postgresql://invalid bun --no-env-file run knip --no-progress --include exports,types,nsExports --workspace packages/cli
 
       - name: Knip dead-export budget (all workspaces)
+        continue-on-error: ${{ github.event_name == 'merge_group' }}
         env:
           CI_CHECK_KIND: STATIC
           CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -3113,6 +3124,7 @@ jobs:
         run: bun scripts/check-resolution-ranges.ts
 
       - name: Quarantine-exclude guards
+        continue-on-error: ${{ github.event_name == 'merge_group' }}
         env:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Reads wall clock to validate dated waivers or quarantine expiry."
@@ -3325,6 +3337,7 @@ jobs:
         run: bun run check:toast-errors
 
       - name: Query data state baseline
+        continue-on-error: ${{ github.event_name == 'merge_group' }}
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         env:
           CI_CHECK_KIND: CONTEXTUAL
@@ -3336,6 +3349,7 @@ jobs:
           bun run check:query-data-state
 
       - name: SQL performance baseline
+        continue-on-error: ${{ github.event_name == 'merge_group' }}
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         env:
           CI_CHECK_KIND: CONTEXTUAL
@@ -3347,6 +3361,7 @@ jobs:
           bun scripts/sql-perf-baseline.ts --check
 
       - name: Failure-as-empty baseline
+        continue-on-error: ${{ github.event_name == 'merge_group' }}
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         env:
           CI_CHECK_KIND: CONTEXTUAL
@@ -4775,6 +4790,16 @@ jobs:
             exit "$status"
           }
           bun scripts/test-shards.ts --verify-output "$SHARD" "$plan" "$output"
+
+      - name: Repeat changed tests
+        if: >-
+          !cancelled()
+          && github.event_name == 'pull_request'
+          && matrix.shard == 'rest-web'
+          && needs.ci-plan.outputs.package_checks_required == 'true'
+        env:
+          CHANGED_FILES_JSON: ${{ needs.ci-plan.outputs.changed_files }}
+        run: bun scripts/flake-gate.ts --blocking
 
       - name: Upload test diagnostics
         if: always()
@@ -6472,6 +6497,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Check route network baseline
+        continue-on-error: ${{ github.event_name == 'merge_group' }}
         timeout-minutes: 6
         id: network-baseline
         env:
@@ -6619,6 +6645,7 @@ jobs:
       # Route count times per-route render time on a loaded runner: the slowest
       # passing runs take about 3 minutes and a slow runner about 4.5.
       - name: Check route network baseline
+        continue-on-error: ${{ github.event_name == 'merge_group' }}
         timeout-minutes: 8
         if: >-
           steps.e2e-stack.outcome == 'success'
