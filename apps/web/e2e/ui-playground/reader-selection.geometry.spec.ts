@@ -110,6 +110,8 @@ test("a fast drag across paragraphs never selects past the reader", async ({
   await page.mouse.up();
   const samples = await stopSelectionFrames(page);
   expect(samples.length).toBeGreaterThan(10);
+  // The drag must have selected text, or containment proves nothing.
+  expect(samples.some((sample) => sample.length > 0)).toBe(true);
   const escaped = samples.filter(
     (sample) =>
       !sample.anchorInsideReader ||
