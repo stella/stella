@@ -18,7 +18,7 @@ import { panic } from "better-result";
 import * as bunTest from "bun:test";
 import { mock } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { appendFileSync, mkdirSync } from "node:fs";
+import { appendFileSync, mkdirSync, realpathSync } from "node:fs";
 import path from "node:path";
 import { inspect, stripVTControlCharacters } from "node:util";
 
@@ -94,7 +94,9 @@ const install = (reportDir: string): void => {
     process.env[QUARANTINE_REGISTRY_ENV] ??
     path.join(REPOSITORY_ROOT, REGISTRY_FILE);
   // The registry sits in <root>/scripts/, and ids are relative to <root>.
-  const root = path.resolve(path.dirname(registryPath), "..");
+  // Bun.main is a real path, so the root is too (a symlinked checkout or
+  // temporary directory would otherwise match no test file).
+  const root = realpathSync(path.resolve(path.dirname(registryPath), ".."));
   const quarantined = new Set(
     readRegistry(registryPath).entries.map(({ id }) => id),
   );
