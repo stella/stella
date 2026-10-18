@@ -34,8 +34,8 @@ BEGIN
 END;
 $$;--> statement-breakpoint
 -- stella-migration-safety: reviewed drop-object - Recreates only this migration's guard on retry.
-DROP TRIGGER IF EXISTS "legislation_documents_identity_mode_guard" ON "legislation_documents";--> statement-breakpoint
-CREATE TRIGGER "legislation_documents_identity_mode_guard" BEFORE INSERT OR UPDATE OF "source_id", "identity_mode", "publisher_expression_id" ON "legislation_documents"
+DROP TRIGGER IF EXISTS "legislation_documents_derive_identity_mode" ON "legislation_documents";--> statement-breakpoint
+CREATE TRIGGER "legislation_documents_derive_identity_mode" BEFORE INSERT OR UPDATE OF "source_id", "identity_mode", "publisher_expression_id" ON "legislation_documents"
 FOR EACH ROW EXECUTE FUNCTION "derive_legislation_document_identity_mode"();--> statement-breakpoint
 
 CREATE OR REPLACE FUNCTION "guard_legislation_publisher_writer"()
