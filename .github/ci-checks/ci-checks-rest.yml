@@ -1050,6 +1050,7 @@ checks:
       bash scripts/release-pull-requests.test.sh
       bash scripts/release-pending.test.sh
       bash scripts/check-main-merge-hold.test.sh
+      bash scripts/check-merge-group-ancestors.test.sh
       bash scripts/create-release-manifest.test.sh
       bash scripts/promote-desktop-release.test.sh
 

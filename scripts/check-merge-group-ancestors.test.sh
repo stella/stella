@@ -195,4 +195,18 @@ grep -q '            scripts/check-merge-group-ancestors.sh' <<<"$verdict_job"
 evaluation_line=$(grep -n 'name: Evaluate CI outcome' <<<"$verdict_job" | cut -d: -f1)
 ancestor_line=$(grep -n 'name: Queued groups ahead passed' <<<"$verdict_job" | cut -d: -f1)
 [[ "$ancestor_line" -gt "$evaluation_line" ]]
+
+# The wait covers the longest job a group ahead may run, and the step's own
+# timeout leaves the wait room to expire and name the group.
+ancestor_step=$(sed -n '/name: Queued groups ahead passed/,/check-merge-group-ancestors.sh$/p' <<<"$verdict_job")
+step_minutes=$(sed -n 's/^ *timeout-minutes: \([0-9][0-9]*\)$/\1/p' <<<"$ancestor_step")
+wait_setting=$(sed -n 's/^ *ANCESTOR_WAIT_SECONDS: "\([0-9][0-9]*\)"$/\1/p' <<<"$ancestor_step")
+longest_job=$(sed '/name: Queued groups ahead passed/,/check-merge-group-ancestors.sh$/d' "$workflow" |
+  sed -n 's/^ *timeout-minutes: \([0-9][0-9]*\)$/\1/p' | sort -n | tail -n 1)
+[[ -n "$step_minutes" && -n "$wait_setting" && -n "$longest_job" ]] ||
+  { echo 'FAIL the ancestor step names its wait and timeout' >&2; exit 1; }
+((wait_setting >= longest_job * 60)) ||
+  { echo "FAIL ancestor wait ${wait_setting}s is shorter than the longest job (${longest_job} min)" >&2; exit 1; }
+((step_minutes * 60 > wait_setting)) ||
+  { echo "FAIL ancestor step timeout ${step_minutes} min does not exceed its wait" >&2; exit 1; }
 echo 'check-merge-group-ancestors.test.sh: ok'

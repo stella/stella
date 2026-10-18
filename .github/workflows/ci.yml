@@ -7176,10 +7176,13 @@ jobs:
       # GitHub merges every queued group ahead of a passing one, and each group
       # plans its suites from its own changes, so this group passes only after
       # every group ahead has passed. The wait holds only this final job.
+      # The wait covers the longest job a group ahead may still be running;
+      # scripts/check-merge-group-ancestors.test.sh keeps the two in step.
       - name: Queued groups ahead passed
         if: github.event_name == 'merge_group'
-        timeout-minutes: 65
+        timeout-minutes: 125
         env:
+          ANCESTOR_WAIT_SECONDS: "7200"
           EVENT_NAME: ${{ github.event_name }}
           GH_TOKEN: ${{ github.token }}
           MERGE_GROUP_BASE_REF: ${{ github.event.merge_group.base_ref }}
