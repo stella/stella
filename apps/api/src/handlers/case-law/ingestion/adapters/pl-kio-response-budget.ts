@@ -9,7 +9,7 @@ import { hasPlKioAttributeBudget } from "./pl-kio-attribute-budget";
 export const PL_KIO_RESPONSE_BYTE_CAP = {
   listing: 16 * 1024 * 1024,
   detail: 16 * 1024 * 1024,
-  document: 32 * 1024 * 1024,
+  document: 8 * 1024 * 1024,
 } as const;
 
 export type PlKioResponseKind = keyof typeof PL_KIO_RESPONSE_BYTE_CAP;

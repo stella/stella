@@ -66,7 +66,7 @@ const runMemoryChild = async (targetBytes: number, workload = "accepted") => {
     !("fulltextChars" in receipt) ||
     typeof receipt.fulltextChars !== "number" ||
     !("astBlocks" in receipt) ||
-    typeof receipt.astBlocks !== "number" ||
+    (typeof receipt.astBlocks !== "number" && receipt.astBlocks !== null) ||
     !("rawEnvelopeBytes" in receipt) ||
     typeof receipt.rawEnvelopeBytes !== "number" ||
     !("rawContainsDocument" in receipt) ||
@@ -145,7 +145,7 @@ test.each(["svg", "attributes", "plaintext"])(
     );
     expect(receipt.budgetType).toBe("markup-budget-exceeded");
     expect(receipt.fulltextChars).toBe(0);
-    expect(receipt.astBlocks).toBe(0);
+    expect(receipt.astBlocks).toBeNull();
     expect(receipt.rawContainsDocument).toBe(true);
     expect(peakBytes).toBeGreaterThan(0);
     expect(peakBytes).toBeLessThan(MEMORY_BUDGET_BYTES);

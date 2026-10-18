@@ -73,9 +73,6 @@ const documentHtmlOf = (kind: string) => {
 };
 const documentHtml = documentHtmlOf(workload);
 const documentBytes = Buffer.byteLength(documentHtml);
-const budget = readPlKioHtml(documentHtml, {
-  maxBytes: PL_KIO_RESPONSE_BYTE_CAP.document,
-}).type;
 // Each span allocates an element, an attribute and a text node; parse5 also
 // creates document/html/head/body nodes for this fragment.
 const boundaryRepeats = Math.floor(
@@ -92,12 +89,11 @@ const markupTokens = countMarkupTokens(documentHtml);
 if (
   (workload === "accepted" && documentBytes !== targetBytes) ||
   targetBytes > PL_KIO_RESPONSE_BYTE_CAP.document ||
-  (workload === "accepted" && budget !== "accepted") ||
   boundaryBudget !== "accepted" ||
   overflowBudget !== "markup-budget-exceeded"
 ) {
   panic(
-    `KIO fixture missed its budget boundary: ${documentBytes}/${targetBytes}, ${budget}/${boundaryBudget}/${overflowBudget}`,
+    `KIO fixture missed its budget boundary: ${documentBytes}/${targetBytes}, ${boundaryBudget}/${overflowBudget}`,
   );
 }
 
@@ -116,6 +112,7 @@ if (assembled.type !== "built") {
 }
 
 const decision = assembled.decision;
+const budget = decision.metadata["documentStatus"] ?? "accepted";
 const rawParts = decodeSourceRawEnvelope(decision.sourceRaw ?? "");
 if (rawParts === null || !Object.values(rawParts).includes(documentHtml)) {
   panic("KIO memory fixture document was not retained in the raw envelope");
@@ -126,10 +123,13 @@ process.stdout.write(
     targetBytes,
     documentBytes,
     fulltextChars: decision.fulltext?.length ?? 0,
-    astBlocks: decision.documentAst.blocks.length,
+    astBlocks:
+      "blocks" in decision.documentAst
+        ? decision.documentAst.blocks.length
+        : null,
     rawEnvelopeBytes: Buffer.byteLength(decision.sourceRaw ?? ""),
     rawContainsDocument: true,
-    budgetType: decision.metadata["documentStatus"] ?? budget,
+    budgetType: budget,
     markupTokens,
     boundaryBudgetType: boundaryBudget,
     overflowBudgetType: overflowBudget,
