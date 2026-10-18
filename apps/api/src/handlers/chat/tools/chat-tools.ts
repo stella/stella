@@ -412,6 +412,7 @@ type BuiltInChatToolPolicyName =
   | CurrentSkillEditToolName;
 
 export type GetChatToolsProps = {
+  organizationAIInstructions?: string | undefined;
   /** Only the owning chat turn can issue and store displayed visual resources. */
   visualTools?: Parameters<typeof createShowVisualTools>[0] | undefined;
   featureAccessSnapshot?: FeatureAccessSnapshot | undefined;
@@ -1275,6 +1276,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
               projectToolMapForSubagent(tools, proposalSink),
           }),
         organizationId,
+        organizationAIInstructions: props.organizationAIInstructions,
         modelAdmission,
         orgAIConfig,
         managedAIResidency,

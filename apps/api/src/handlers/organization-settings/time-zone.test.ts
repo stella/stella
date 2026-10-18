@@ -25,6 +25,7 @@ import { isMcpEgressPlan } from "@/api/mcp/tool-types";
 import { serializeToolResult } from "@/api/mcp/tool-utils";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
+import { settingsSelectFixture } from "./settings-select.fixture";
 import updateOrganizationSettings, {
   updateOrganizationSettingsHandler,
 } from "./update";
@@ -49,14 +50,9 @@ const capturingDb = (stored: StoredSettings): Capture => {
   const writes: Record<string, unknown>[] = [];
   const rows = [stored];
   const tx = asTestRaw<Transaction>({
-    select: () => ({
-      from: () => ({
-        where: () => ({
-          // Awaiting the array yields the rows; `.for("update")` locks them.
-          limit: () => Object.assign([...rows], { for: async () => rows }),
-        }),
-      }),
-    }),
+    select: settingsSelectFixture(() =>
+      rows.map((row) => ({ organizationId, ...row })),
+    ),
     insert: () => ({
       values: () => ({
         onConflictDoNothing: async () => {},
@@ -329,6 +325,7 @@ describe("reading the organization time zone", () => {
         matterNumberingEnabled: false,
         practiceJurisdictions,
         promptCachingEnabled: true,
+        aiInstructions: "",
         managedAIResidency: "eu",
         memoryExtractionEnabled: false,
         timeMinimumUnitMinutes: 6,

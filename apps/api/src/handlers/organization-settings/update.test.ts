@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
+import { ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH } from "@/api/db/organization-settings-constants";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -15,6 +16,7 @@ import {
 } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
+import { settingsSelectFixture } from "./settings-select.fixture";
 import updateOrganizationSettings, {
   updateOrganizationSettingsHandler,
 } from "./update";
@@ -22,6 +24,89 @@ import updateOrganizationSettings, {
 const organizationId = toSafeId<"organization">("org_test");
 
 describe("updateOrganizationSettingsHandler", () => {
+  test("bounds organization instructions while allowing clearing and Unicode", () => {
+    for (const aiInstructions of [
+      "",
+      "أجب بالعربية",
+      "§".repeat(ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH),
+      "𐐀".repeat(ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH / 2),
+    ]) {
+      expect(
+        Value.Check(updateOrganizationSettings.config.body, { aiInstructions }),
+      ).toBe(true);
+    }
+    expect(
+      Value.Check(updateOrganizationSettings.config.body, {
+        aiInstructions: "a".repeat(ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH + 1),
+      }),
+    ).toBe(false);
+    expect(
+      Value.Check(updateOrganizationSettings.config.body, {
+        aiInstructions: null,
+      }),
+    ).toBe(false);
+  });
+
+  test("saving or clearing instructions preserves either caching preference and audits without prompt content", async () => {
+    for (const promptCachingEnabled of [true, false]) {
+      for (const aiInstructions of ["Use Czech legal terminology.", ""]) {
+        const prior = "Prefer English.";
+        let updateSet: Record<string, unknown> | undefined;
+        let auditEvent: Parameters<AuditRecorder>[1] | undefined;
+        const tx = asTestRaw<Transaction>({
+          select: settingsSelectFixture(() =>
+            [{ aiInstructions: prior, promptCachingEnabled }].map((row) => ({
+              organizationId,
+              ...row,
+            })),
+          ),
+          insert: () => ({
+            values: () => ({
+              onConflictDoNothing: async () => {},
+              onConflictDoUpdate: async ({
+                set,
+              }: {
+                set: Record<string, unknown>;
+              }) => {
+                updateSet = set;
+              },
+            }),
+          }),
+        });
+        const safeDb: SafeDb = async (operation) =>
+          Result.ok(await operation(tx));
+        const result = await Result.gen(() =>
+          updateOrganizationSettingsHandler({
+            body: { aiInstructions },
+            organizationId,
+            safeDb,
+            recordAuditEvent: async (auditTx, event) => {
+              expect(auditTx).toBe(tx);
+              auditEvent = event;
+            },
+          }),
+        );
+        expect(result).toEqual(Result.ok({ aiInstructions }));
+        expect(updateSet).toMatchObject({ aiInstructions });
+        expect(updateSet).not.toHaveProperty("promptCachingEnabled");
+        expect(updateSet).not.toHaveProperty("managedAIResidency");
+        expect(auditEvent).toMatchObject({
+          resourceId: organizationId,
+          changes: {
+            aiInstructions: {
+              old: { characterCount: Array.from(prior).length },
+              new: { characterCount: Array.from(aiInstructions).length },
+            },
+          },
+        });
+        expect(JSON.stringify(auditEvent)).not.toContain(prior);
+        if (aiInstructions !== "") {
+          expect(JSON.stringify(auditEvent)).not.toContain(aiInstructions);
+        }
+      }
+    }
+  });
+
   test("accepts the supported residency settings for organization administrators", () => {
     for (const managedAIResidency of MANAGED_AI_RESIDENCIES) {
       expect(
@@ -58,15 +143,12 @@ describe("updateOrganizationSettingsHandler", () => {
     let updateSet: Record<string, unknown> | undefined;
     let auditEvent: Parameters<AuditRecorder>[1] | undefined;
     const tx = asTestRaw<Transaction>({
-      select: () => ({
-        from: () => ({
-          where: () => ({
-            limit: () => ({
-              for: async () => [{ managedAIResidency: "eu" }],
-            }),
-          }),
-        }),
-      }),
+      select: settingsSelectFixture(() =>
+        [{ managedAIResidency: "eu" }].map((row) => ({
+          organizationId,
+          ...row,
+        })),
+      ),
       insert: () => ({
         values: () => {
           insertCount += 1;
@@ -147,22 +229,16 @@ describe("updateOrganizationSettingsHandler", () => {
     let updateSet: Record<string, unknown> | undefined;
     let auditEvent: Parameters<AuditRecorder>[1] | undefined;
     const tx = asTestRaw<Transaction>({
-      select: () => ({
-        from: () => ({
-          where: () => ({
-            limit: () => ({
-              for: async () => [
-                {
-                  timeMinimumUnitMinutes: 6,
-                  timeEditWindowDays: 90,
-                  timeLockedThroughMonth: "2025-12-31",
-                  timeNarrativeRequired: true,
-                },
-              ],
-            }),
-          }),
-        }),
-      }),
+      select: settingsSelectFixture(() =>
+        [
+          {
+            timeMinimumUnitMinutes: 6,
+            timeEditWindowDays: 90,
+            timeLockedThroughMonth: "2025-12-31",
+            timeNarrativeRequired: true,
+          },
+        ].map((row) => ({ organizationId, ...row })),
+      ),
       insert: () => ({
         values: () => {
           insertCount += 1;
@@ -227,22 +303,18 @@ describe("updateOrganizationSettingsHandler", () => {
     let settingsReadWasLocked = false;
     let updateSet: unknown;
     const tx = asTestRaw<Transaction>({
-      select: () => ({
-        from: () => ({
-          where: () => ({
-            limit: () => ({
-              for: async (lock: string) => {
-                settingsReadWasLocked = lock === "update";
-                return [
-                  {
-                    documentProcessingMode: "off" as const,
-                    promptCachingEnabled: true,
-                  },
-                ];
-              },
-            }),
-          }),
-        }),
+      select: settingsSelectFixture((statement) => {
+        settingsReadWasLocked = new PgDialect()
+          .sqlToQuery(statement)
+          .sql.toUpperCase()
+          .includes("FOR UPDATE");
+        return [
+          {
+            organizationId,
+            documentProcessingMode: "off",
+            promptCachingEnabled: true,
+          },
+        ];
       }),
       insert: () => ({
         values: () => {
@@ -291,27 +363,20 @@ describe("updateOrganizationSettingsHandler", () => {
   test("does not acknowledge OCR opt-out while automatic work is running", async () => {
     let selectCount = 0;
     let runningCondition: SQL | undefined;
-    const lockedSettings = {
-      for: async () => [
-        {
-          documentProcessingMode: "searchable-text" as const,
-          promptCachingEnabled: true,
-        },
-      ],
-    };
     const tx = asTestRaw<Transaction>({
-      select: () => ({
-        from: () => ({
-          where: (condition: SQL) => ({
-            limit: () => {
-              selectCount += 1;
-              if (selectCount === 2) {
-                runningCondition = condition;
-              }
-              return selectCount === 1 ? lockedSettings : [{ id: "run_test" }];
-            },
-          }),
-        }),
+      select: settingsSelectFixture((statement) => {
+        selectCount += 1;
+        if (selectCount === 2) {
+          runningCondition = statement;
+          return [{ id: "run_test" }];
+        }
+        return [
+          {
+            organizationId,
+            documentProcessingMode: "searchable-text",
+            promptCachingEnabled: true,
+          },
+        ];
       }),
       insert: () => ({
         values: () => ({
@@ -349,20 +414,14 @@ describe("updateOrganizationSettingsHandler", () => {
     let insertCount = 0;
     let updateSet: Record<string, unknown> | undefined;
     const tx = asTestRaw<Transaction>({
-      select: () => ({
-        from: () => ({
-          where: () => ({
-            limit: () => ({
-              for: async () => [
-                {
-                  documentProcessingMode: "searchable-text" as const,
-                  promptCachingEnabled: true,
-                },
-              ],
-            }),
-          }),
-        }),
-      }),
+      select: settingsSelectFixture(() =>
+        [
+          {
+            documentProcessingMode: "searchable-text" as const,
+            promptCachingEnabled: true,
+          },
+        ].map((row) => ({ organizationId, ...row })),
+      ),
       insert: () => ({
         values: () => {
           insertCount += 1;

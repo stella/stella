@@ -82,8 +82,10 @@ export type MarkdownHybridEditorProps = {
   /** The markdown to edit. Read once per mount; the editor owns its state after
    * that (the host keys the component per file to force a reload on switch). */
   markdown: string;
-  /** Fired (debounced) with the current markdown on every edit. */
+  /** Fired with the current markdown on every edit; debounced by default. */
   onMarkdownChange: (markdown: string) => void;
+  /** Manual-save hosts need immediate changes for unsaved-work guards. */
+  changeEmission?: "debounced" | "immediate";
   /**
    * Decided at mount, like `markdown`: the engine builds image elements
    * directly from source urls with no per-render hook, so this is enforced by
@@ -128,6 +130,7 @@ export const MarkdownHybridEditor = ({
   ref,
   markdown,
   onMarkdownChange,
+  changeEmission = "debounced",
   imagePolicy,
   readOnly = false,
   baseline,
@@ -157,6 +160,19 @@ export const MarkdownHybridEditor = ({
   // echoed back.
   const pushedCommentIds = useRef<ReadonlySet<string>>(new Set());
   const emit = useDebouncedCallback(onMarkdownChange, EMIT_DELAY_MS);
+  const publishChange = useLatestCallback((text: string) => {
+    switch (changeEmission) {
+      case "debounced":
+        emit(text);
+        return;
+      case "immediate":
+        onMarkdownChange(text);
+        return;
+      default:
+        changeEmission satisfies never;
+        panic("Unhandled markdown change emission mode");
+    }
+  });
   useImperativeHandle(ref, () => ({
     captureForSave: () => {
       hostReadOnly.set(true, undefined);
@@ -258,7 +274,7 @@ export const MarkdownHybridEditor = ({
       const text = model.sourceText.read(reader).value;
       if (text !== lastEmitted) {
         lastEmitted = text;
-        emit(text);
+        publishChange(text);
       }
     });
     const commentsSubscription = createEffect((reader) => {

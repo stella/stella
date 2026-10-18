@@ -5,6 +5,7 @@ import { AUDIT_CHANGES_STATUS } from "@stll/api-contract/audit-log";
 import { BOE_SEARCH_PAGE_LIMITS, RELATION_TYPES } from "@stll/boe";
 import { parsePlainDate } from "@stll/time";
 
+import { ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH } from "@/api/db/organization-settings-constants";
 import { DOCUMENT_PROCESSING_MODES } from "@/api/db/schema";
 import {
   type AuditLogFilter,
@@ -750,6 +751,15 @@ const updateOrganizationSettingsArgsSchema = nullAsAbsent(
           ),
         ),
       ),
+      ai_instructions: v.optional(
+        v.pipe(
+          v.string(),
+          v.maxLength(ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH),
+          v.description(
+            `Org-wide AI instructions (${ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH} chars); empty clears. Next message onward; override personal preferences.`,
+          ),
+        ),
+      ),
       prompt_caching_enabled: v.optional(
         v.pipe(v.boolean(), v.description("Toggle AI prompt caching")),
       ),
@@ -1026,6 +1036,9 @@ const handleUpdateOrganizationSettingsTool: TypedMcpToolHandler<
         ...(input.matter_numbering_enabled === undefined
           ? {}
           : { matterNumberingEnabled: input.matter_numbering_enabled }),
+        ...(input.ai_instructions === undefined
+          ? {}
+          : { aiInstructions: input.ai_instructions }),
         ...(input.prompt_caching_enabled === undefined
           ? {}
           : { promptCachingEnabled: input.prompt_caching_enabled }),

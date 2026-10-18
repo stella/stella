@@ -59,6 +59,7 @@ export const AGGREGATE_LOCKS = {
   scoutCensus: { rank: 60, kind: "row" },
   desktopMembership: { rank: 70, kind: "row" },
   desktopCredential: { rank: 80, kind: "row" },
+  organizationSettings: { rank: 90, kind: "row" },
   desktopBatch: { rank: 90, kind: "advisory" },
   workspace: { rank: 100, kind: "row" },
   memberCleanup: { rank: 110, kind: "row" },
@@ -152,6 +153,7 @@ export const AGGREGATE_CHAINS = {
   accountExport: ["account", "accountExport"],
   professionalUseAcceptance: ["professionalUseAcceptance"],
   desktopRenewal: ["desktopMembership", "desktopCredential"],
+  organizationSettings: ["organization", "organizationSettings"],
   desktopBatch: ["desktopBatch", "workspace"],
   documentSource: [
     "workspace",
@@ -218,6 +220,7 @@ type AggregateIdentities = {
   accountExport: { id: string; userId: SafeId<"user"> };
   sampleCase: { workspaceId: SafeId<"workspace"> };
   organization: SafeId<"organization">;
+  organizationSettings: SafeId<"organization">;
   professionalUseAcceptance: { userId: SafeId<"user"> };
   desktopMembership: {
     organizationId: SafeId<"organization">;
@@ -763,6 +766,18 @@ const byIdWithin = (
   scopeColumns: [scopeColumn],
   scopeValues: [scopeValue],
 });
+// A root row found by its own key, with no owning scope to check.
+const byUnscopedKey = (
+  table: string,
+  column: string,
+  value: string | number,
+): RowResource => ({
+  table,
+  columns: [column],
+  values: [value],
+  scopeColumns: [],
+  scopeValues: [],
+});
 const memberCleanupRowResource = (
   id: AggregateIdentities["memberCleanup"],
 ): RowResource => {
@@ -785,13 +800,17 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
   switch (options.aggregate) {
     case "account":
     case "organization":
-      return {
-        table: options.aggregate === "account" ? "user" : "organization",
-        columns: ["id"],
-        values: [options.id],
-        scopeColumns: [],
-        scopeValues: [],
-      };
+      return byUnscopedKey(
+        options.aggregate === "account" ? "user" : "organization",
+        "id",
+        options.id,
+      );
+    case "organizationSettings":
+      return byUnscopedKey(
+        "organization_settings",
+        "organization_id",
+        options.id,
+      );
     case "accountExport":
       return byIdWithin(
         "account_exports",
@@ -896,13 +915,7 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
         options.id.organizationId,
       );
     case "schedulerClaim":
-      return {
-        table: "scheduler_jobs",
-        columns: ["id"],
-        values: [options.id.id],
-        scopeColumns: [],
-        scopeValues: [],
-      };
+      return byUnscopedKey("scheduler_jobs", "id", options.id.id);
     case "definition":
       return byIdWithin(
         "flow_definitions",

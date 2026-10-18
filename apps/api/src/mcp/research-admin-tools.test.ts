@@ -3,6 +3,7 @@ import { describe, expect, mock, test } from "bun:test";
 
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
+import { ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH } from "@/api/db/organization-settings-constants";
 import { env } from "@/api/env";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -299,6 +300,7 @@ describe("matter membership and organization settings", () => {
       ).toContain("user_id");
       for (const extra of [
         { prompt_caching_enabled: true },
+        { ai_instructions: "Use concise language." },
         { action: "add_member" },
       ]) {
         expect(
@@ -342,6 +344,37 @@ describe("matter membership and organization settings", () => {
       definitions.find((tool) => tool.name === "remove_matter_member")
         ?.destructiveBehavior,
     ).toEqual({ type: "always" });
+  });
+
+  test("rejects organization AI instructions exceeding the shared limit", async () => {
+    for (const aiInstructions of [
+      "x".repeat(ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH + 1),
+      "😀".repeat(ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH / 2 + 1),
+    ]) {
+      expect(
+        errorText(
+          await RESEARCH_ADMIN_TOOL_HANDLERS.update_organization_settings({
+            args: { ai_instructions: aiInstructions },
+            context: createContext(),
+          }),
+        ),
+      ).toContain("ai_instructions");
+    }
+  });
+
+  test("allows setting and clearing AI instructions through the organization authority gate", async () => {
+    for (const aiInstructions of [
+      "Use concise language.",
+      "",
+      "😀".repeat(ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH / 2),
+    ]) {
+      const result =
+        await RESEARCH_ADMIN_TOOL_HANDLERS.update_organization_settings({
+          args: { ai_instructions: aiInstructions },
+          context: createContext("member"),
+        });
+      expect(errorMessage(result)).toBe("Forbidden");
+    }
   });
 
   test("settings reject empty updates, unpaired numbering, and member fields", async () => {

@@ -10,6 +10,7 @@ import type { Transaction } from "@/api/db/root";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { BILLING_STATUS } from "@/api/db/schema";
 import type { PracticeJurisdiction } from "@/api/db/schema";
+import { settingsSelectFixture } from "@/api/handlers/organization-settings/settings-select.fixture";
 import { updateOrganizationSettingsHandler } from "@/api/handlers/organization-settings/update";
 import { exportLedesHandler } from "@/api/handlers/time-entries/ledes/export";
 import { exportPdfHandler } from "@/api/handlers/time-entries/pdf/export";
@@ -135,14 +136,9 @@ type SettingsRow = {
 };
 
 /** A transaction whose settings reads return `row`; writes are accepted. */
-const settingsTx = (row: SettingsRow) => {
-  const rows = [row];
-  // Awaiting the array yields the rows; `.for("update")` is the locked read.
-  const limited = Object.assign([...rows], { for: async () => rows });
-  return asTestRaw<Transaction>({
-    select: () => ({
-      from: () => ({ where: () => ({ limit: () => limited }) }),
-    }),
+const settingsTx = (row: SettingsRow) =>
+  asTestRaw<Transaction>({
+    select: settingsSelectFixture(() => [{ organizationId, ...row }]),
     insert: () => ({
       values: () => ({
         onConflictDoNothing: async () => {},
@@ -150,7 +146,6 @@ const settingsTx = (row: SettingsRow) => {
       }),
     }),
   });
-};
 
 const settingsDb =
   (row: SettingsRow): SafeDb =>

@@ -52,6 +52,7 @@ export type EnsureFreshCredentialInput = {
   readonly credential: StoredCredential;
   readonly metadata: AuthorizationServerMetadata;
   readonly now?: number;
+  readonly persistCredential?: typeof writeCredentialFile;
 };
 
 /**
@@ -229,7 +230,7 @@ export const ensureFreshCredential = async (
   // let the caller decide how to surface the warning.
   const persisted = await Result.tryPromise(
     async () =>
-      await writeCredentialFile(
+      await (input.persistCredential ?? writeCredentialFile)(
         input.configDir,
         upsertCredential(check.latestCredentialFile, updated),
       ),
