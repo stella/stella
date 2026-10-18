@@ -118,6 +118,22 @@ export const settleMarketingAgentThread = async (
     .getByRole("log")
     .locator('[data-slot="scroll-area-viewport"]');
   await expect(transcript).toBeVisible();
+  // A complete three-turn conversation is required, even though the final
+  // capture anchors the last turn. An empty or truncated thread cannot pass
+  // merely because it contains a table and a generated view.
+  const messages = transcript.locator("[data-chat-message-id]");
+  await expect(messages).toHaveCount(6);
+  await expect(messages.nth(0)).toContainText(MARKETING_AGENT_FIRST_QUESTION);
+  await expect(messages.nth(2)).toContainText(
+    "What does the Helios loan agreement say, and when does it expire?",
+  );
+  await expect(messages.nth(4)).toContainText(MARKETING_AGENT_LAST_QUESTION);
+  for (const answerIndex of [1, 3, 5]) {
+    await expect(messages.nth(answerIndex)).not.toHaveText(/^\s*$/u);
+  }
+  await expect(
+    page.getByText("What would you like to work on?", { exact: true }),
+  ).toHaveCount(0);
   // First answer: a header and one row per counterparty. Its row count comes
   // from the seeded data room, which the generated view's matrix must match.
   const answerTable = transcript.locator("table").first();

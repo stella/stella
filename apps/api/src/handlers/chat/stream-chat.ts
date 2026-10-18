@@ -24,7 +24,7 @@ import {
 } from "@stll/agent-engine";
 import {
   getModelImageInputCapability,
-  type ModelRole,
+  type ModelTask,
   type ReasoningEffort,
 } from "@stll/ai-catalog";
 import {
@@ -611,7 +611,7 @@ export const streamChat = async ({
     orgAIConfig,
     managedAIResidency,
     reasoningEffort: turnModelSelection.reasoningEffort,
-    role: "chat",
+    task: "chat",
   });
   run.attributeProvider(primaryModel.provider);
 
@@ -1258,7 +1258,7 @@ const resolveFallbackTextModel = async ({
       admission: modelAdmission,
       orgAIConfig,
       managedAIResidency,
-      role: "reasoning",
+      task: "reasoning",
     });
     if (
       fallbackModel.provider === primaryModel.provider &&
@@ -1278,7 +1278,7 @@ const resolveFallbackTextModel = async ({
 
 type CreateChatAttemptAnalyticsProps = {
   feature: string;
-  modelRole: ModelRole;
+  modelTask: ModelTask;
   modelTier: ManagedModelTier;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
@@ -1295,7 +1295,7 @@ type CreateChatAttemptAnalyticsProps = {
 
 const createChatAttemptAnalytics = ({
   feature,
-  modelRole,
+  modelTask,
   modelTier,
   organizationId,
   orgAIConfig,
@@ -1320,7 +1320,7 @@ const createChatAttemptAnalytics = ({
       workspaceId,
     },
     feature,
-    modelRole,
+    modelTask,
     orgAIConfig,
     modelTier,
     properties: {
@@ -1332,7 +1332,7 @@ const createChatAttemptAnalytics = ({
     traceId: Bun.randomUUIDv7(),
   });
 
-type ChatAttemptRole = Extract<ModelRole, "chat" | "reasoning">;
+type ChatAttemptTask = Extract<ModelTask, "chat" | "reasoning">;
 
 /**
  * Every surface this request hands to the provider, each one minted by the
@@ -1445,7 +1445,7 @@ const runChatAttempts = async function* ({
     runId,
     parentRunId,
     resume,
-    role: "chat",
+    task: "chat",
     safeDb,
     sandboxRun,
     usageLane,
@@ -1498,7 +1498,7 @@ const runChatAttempts = async function* ({
     managedAIResidency,
     promptCacheKey,
     promptCachingEnabled,
-    role: "reasoning",
+    task: "reasoning",
     safeDb,
     // The provider-fallback attempt serves the same user turn, so it
     // settles against the same budget lane.
@@ -1539,7 +1539,7 @@ type RunChatAttemptProps = {
   runId?: string | undefined;
   parentRunId?: string | undefined;
   resume?: RunAgentResumeItem[] | undefined;
-  role: ChatAttemptRole;
+  task: ChatAttemptTask;
   safeDb: SafeDb;
   /**
    * When set, this attempt runs inside an agent sandbox: the
@@ -1576,7 +1576,7 @@ const runChatAttempt = async function* ({
   runId,
   parentRunId,
   resume,
-  role,
+  task,
   safeDb,
   sandboxRun,
   usageLane,
@@ -1599,11 +1599,11 @@ const runChatAttempt = async function* ({
   } = surfaces;
   const caching = resolveCaching({
     promptCachingEnabled,
-    role,
+    task,
     scopeKey: promptCacheKey,
   });
   // Sandbox turns dispatch on the harness's own model, not the thread's
-  // selection, so their consumption must rate against the role default
+  // selection, so their consumption must rate against the task default
   // rather than a model that never served them.
   const servedModelId = sandboxRun ? undefined : modelId;
   // Sandbox turns are machine work: they settle against the pool
@@ -1611,7 +1611,7 @@ const runChatAttempt = async function* ({
   const servedLane = sandboxRun ? "pool" : usageLane;
   const analytics = createChatAttemptAnalytics({
     feature,
-    modelRole: role,
+    modelTask: task,
     modelTier: modelAdmission.modelTier,
     organizationId,
     orgAIConfig,
@@ -1626,7 +1626,7 @@ const runChatAttempt = async function* ({
   });
   const compactionAnalytics = createChatAttemptAnalytics({
     feature: compactionFeature,
-    modelRole: role,
+    modelTask: task,
     modelTier: modelAdmission.modelTier,
     organizationId,
     orgAIConfig,
@@ -1683,7 +1683,7 @@ const runChatAttempt = async function* ({
           modelAdmission,
           orgAIConfig,
           managedAIResidency,
-          role,
+          task,
           state,
           systemLayers,
           tenantWorkspaceIds,
@@ -1700,7 +1700,7 @@ const runChatAttempt = async function* ({
       caching,
       model,
       modelTools,
-      role,
+      task,
       system: baseSystem,
       systemLayers,
       toolCallIds,
@@ -1741,7 +1741,7 @@ const runChatAttempt = async function* ({
         modelAdmission,
         orgAIConfig,
         managedAIResidency,
-        role,
+        task,
         state,
         systemLayers,
         tenantWorkspaceIds,
@@ -1827,7 +1827,7 @@ type ChatRuntimeMiddlewareProps = {
   modelAdmission: ModelDispatchAdmission;
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
-  role: ChatAttemptRole;
+  task: ChatAttemptTask;
   state: ChatAttemptState;
   systemLayers: ChatSafePromptLayers;
   tenantWorkspaceIds: readonly SafeId<"workspace">[];
@@ -1847,7 +1847,7 @@ const createChatRuntimeMiddleware = ({
   modelAdmission,
   orgAIConfig,
   managedAIResidency,
-  role,
+  task,
   state,
   systemLayers,
   tenantWorkspaceIds,
@@ -1921,7 +1921,7 @@ const createChatRuntimeMiddleware = ({
         admission: modelAdmission,
         orgAIConfig,
         managedAIResidency,
-        role,
+        task,
         tenantWorkspaceIds,
         onSummaryError: (error) => {
           captureError(error, {

@@ -15,6 +15,9 @@
    of reading an unhandled one as "stop". Remove when upstream exposes the
    raw reason.
 
+5. Re-export the adapter's SDK finish-reason declaration for exhaustive
+   service policy tables, without a second direct SDK dependency.
+
 
 diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
 index 0ff9bc8751c8a07900ff09b09a3f76a2aace203d..a6a9fc9bef57039f77daa911035b8570bcd9c2c2 100644
@@ -139,3 +142,28 @@ index 0ff9bc8751c8a07900ff09b09a3f76a2aace203d..a6a9fc9bef57039f77daa911035b8570
  						throw e;
  					}
  					if (parsed && typeof parsed === "object" && "error" in parsed && !("choices" in parsed)) {
+diff --git a/dist/esm/index.d.ts b/dist/esm/index.d.ts
+index a674408..a69e6b1 100644
+--- a/dist/esm/index.d.ts
++++ b/dist/esm/index.d.ts
+@@ -4,6 +4,7 @@
+  * Mistral provider adapter for TanStack AI.
+  * Provides tree-shakeable adapters for Mistral's Chat Completions API.
+  */
++export type { CompletionResponseStreamChoiceFinishReason } from '@mistralai/mistralai/models/components';
+ export { MistralTextAdapter, createMistralText, mistralText, type MistralTextConfig, type MistralTextProviderOptions, } from './adapters/text.js';
+ export { MistralEmbeddingAdapter, createMistralEmbedding, mistralEmbedding, type MistralEmbeddingConfig, } from './adapters/embedding.js';
+ export type { MistralEmbeddingProviderOptions, MistralEmbedProviderOptions, CodestralEmbedProviderOptions, } from './embedding/embedding-provider-options.js';
+diff --git a/src/index.ts b/src/index.ts
+index 1b993a1..d9a2672 100644
+--- a/src/index.ts
++++ b/src/index.ts
+@@ -5,6 +5,8 @@
+  * Provides tree-shakeable adapters for Mistral's Chat Completions API.
+  */
+ 
++export type { CompletionResponseStreamChoiceFinishReason } from '@mistralai/mistralai/models/components'
++
+ // Text (Chat) adapter
+ export {
+   MistralTextAdapter,

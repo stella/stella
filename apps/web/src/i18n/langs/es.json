@@ -1058,7 +1058,6 @@
       }
     },
     "sameCaseNumber": "{count, plural, one {# resolución lleva} other {# resoluciones llevan}} este número de asunto. Elija el tribunal.",
-    "searchAskPrompt": "{query} (jurisprudencia de {country})",
     "searchLabel": "Buscar jurisprudencia",
     "searchPlaceholder": "Número de asunto, ECLI o palabras, p. ej. 22 Cdo 2653/2012",
     "searchUnavailable": {
@@ -1215,6 +1214,11 @@
       "requesting": "Preparando cambios…",
       "stale": "Esta respuesta ha cambiado. Vuelva a seleccionar el texto.",
       "submit": "Solicitar cambio"
+    },
+    "answerQuote": {
+      "showInDecision": "Ver en la resolución",
+      "verified": "Cita verificada",
+      "verifiedHint": "Palabra por palabra en {source}"
     },
     "applyMode": {
       "description": "Word registra quién hizo cada cambio. Recordaremos tu elección.",
@@ -1400,7 +1404,12 @@
     "maxAttachmentsReached": "Máximo {count} archivos por mensaje",
     "mention": {
       "category": {
-        "entities": "En este asunto"
+        "entities": "En este asunto",
+        "sources": "Fuentes"
+      },
+      "corpus": {
+        "caseLaw": "Jurisprudencia · {country}",
+        "legislation": "Legislación · {country}"
       },
       "loadError": "Error al cargar elementos"
     },
@@ -1454,6 +1463,12 @@
       "title": "Texto pegado"
     },
     "placeholder": "Escriba su pregunta aquí, / para habilidades, @ para añadir contexto",
+    "processSummary": {
+      "analyses": "{count, plural, one {# análisis} other {# análisis}}",
+      "changesSaved": "{count, plural, one {# cambio guardado} other {# cambios guardados}}",
+      "documentEdits": "{count, plural, one {# edición del documento} other {# ediciones del documento}}",
+      "sourcesChecked": "{count, plural, one {# fuente consultada} other {# fuentes consultadas}}"
+    },
     "promptImprovementStrategies": {
       "decompose": {
         "description": "Convierte el trabajo complejo en subtareas ordenadas.",
@@ -1699,6 +1714,7 @@
       "interrupted": "Interrumpido antes de finalizar",
       "output": "Salida",
       "sourceCode": "Código fuente",
+      "statusWaiting": "En espera",
       "toggleDetails": "Mostrar detalles",
       "unrestoredFields": "{count, plural, one {# campo no se pudo} other {# campos no se pudieron}} rellenar con valores reales en el modo anonimizado. Revise: {fields}"
     },
@@ -5121,7 +5137,6 @@
     "provisionTextUnavailable": "Texto no disponible para esta versión",
     "publisherWindowInconsistent": "No se puede determinar la versión vigente en esta fecha: los datos del editor son incoherentes.",
     "resolvedAlias": "Reconocido como {label}",
-    "searchAskPrompt": "{query} (legislación de {country})",
     "searchLabel": "Buscar en la legislación",
     "searchPlaceholder": "Número, nombre o título, p. ej. 89/2012 Sb.",
     "showCitedPartOnly": "Mostrar solo la parte citada",

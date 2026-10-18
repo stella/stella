@@ -9,14 +9,14 @@ unsupported selections before a provider request.
 
 ```ts
 import {
-  DEFAULT_MODELS,
-  resolveWorkingBYOKModelForRole,
+  resolveDefaultModel,
+  resolveWorkingBYOKModelForTask,
 } from "@stll/ai-catalog";
 
-const modelId = resolveWorkingBYOKModelForRole({
+const modelId = resolveWorkingBYOKModelForTask({
   provider: "openai",
-  modelId: DEFAULT_MODELS.openai.fast,
-  role: "fast",
+  modelId: "gpt-6-luna",
+  task: "short-text",
 });
 ```
 
