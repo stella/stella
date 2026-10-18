@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { CASE_LAW_BROWSER_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
+import {
+  CASE_LAW_BROWSER_COUNTRIES,
+  type CaseLawBrowserCountry,
+} from "@stll/api-contract/case-law-launch-readiness";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import {
@@ -8,6 +11,20 @@ import {
   formatDecisionQuotation,
 } from "@/features/case-law/citation-format";
 import type { CitationInput } from "@/features/case-law/citation-format";
+import type { StatuteCountry } from "@/lib/statutes/statute-route";
+
+const EXPECTED_QUOTATIONS = {
+  CZE: "„text“",
+  EU: "“text”",
+  HUN: "„text”",
+  POL: "„text”",
+  SVK: "„text“",
+} as const satisfies Record<CaseLawBrowserCountry, string>;
+
+const EXPECTED_STATUTE_QUOTATIONS = {
+  cze: EXPECTED_QUOTATIONS.CZE,
+  svk: EXPECTED_QUOTATIONS.SVK,
+} as const satisfies Record<StatuteCountry, string>;
 
 describe("decision citation jurisdiction", () => {
   test("route and corpus country forms select the same style", () => {
@@ -174,10 +191,21 @@ describe("Hungarian citation typography", () => {
 
   test("quotation typography is invariant to route or corpus country form", () => {
     for (const country of CASE_LAW_BROWSER_COUNTRIES) {
-      expect(formatDecisionQuotation("szöveg", country.toLowerCase())).toBe(
-        formatDecisionQuotation("szöveg", country),
+      expect(formatDecisionQuotation("text", country)).toBe(
+        EXPECTED_QUOTATIONS[country],
+      );
+      expect(formatDecisionQuotation("text", country.toLowerCase())).toBe(
+        EXPECTED_QUOTATIONS[country],
       );
     }
     expect(formatDecisionQuotation("teljesítés", "HUN")).toBe("„teljesítés”");
+  });
+
+  test("every statute country uses its jurisdiction marks", () => {
+    for (const [country, expected] of Object.entries(
+      EXPECTED_STATUTE_QUOTATIONS,
+    )) {
+      expect(formatDecisionQuotation("text", country)).toBe(expected);
+    }
   });
 });

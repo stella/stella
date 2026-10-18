@@ -58,10 +58,91 @@ for (const { decisionDate, caseNumber, inlineCitation, citation } of [
         `%s formats the passage with locator ${locator ?? "none"}`,
         (mode) => {
           const text = copyTextFor({ mode, selected, target });
-          expect(text).toBe(expected[mode]);
-          expect(text).not.toContain("..");
+          expect(text.plain).toBe(expected[mode]);
+          expect(text.plain).not.toContain("..");
+          if (mode === "citationOnly") {
+            expect(text.html).not.toContain("<em>");
+          } else {
+            expect(text.html).toContain("<em>");
+          }
         },
       );
     }
   });
 }
+
+describe("rich reader copy", () => {
+  const statute = {
+    type: "statute",
+    id: "00000000-0000-4000-8000-000000000892",
+    country: "cze",
+    eli: "eli/cz/sb/2012/89",
+    provisionByAnchorId: new Map<string, string>(),
+    title: "Občanský zákoník",
+    versionValidFrom: null,
+  } satisfies ReaderAnnotationTarget;
+  const selected = {
+    cleanText: `<tag> & "double" and 'single'`,
+    locator: "§ 1",
+  };
+
+  test.each(READER_COPY_MODES)(
+    "%s derives matching plain and HTML forms",
+    (mode) => {
+      const text = copyTextFor({ mode, selected, target: statute });
+      expect(text.plain).not.toContain("&lt;");
+      expect(text.html).not.toContain("<tag>");
+      if (mode !== "citationOnly") {
+        expect(text.html).toContain(
+          "&lt;tag&gt; &amp; &quot;double&quot; and &#39;single&#39;",
+        );
+        expect(text.html).toContain("<em>");
+      }
+      if (mode === "blockQuoteWithCitation") {
+        expect(text.html).toStartWith("<blockquote><em>");
+        expect(text.html).toContain("</em></blockquote><p>");
+      }
+    },
+  );
+
+  test("uses Czech marks for alpha-2 decisions and statutes", () => {
+    const statuteText = copyTextFor({
+      mode: "textOnly",
+      selected: { cleanText: "ustanovení", locator: null },
+      target: statute,
+    });
+    const decisionText = copyTextFor({
+      mode: "textOnly",
+      selected: { cleanText: "ustanovení", locator: null },
+      target: {
+        type: "decision",
+        id: "00000000-0000-4000-8000-000000000893",
+        country: "CZ",
+        court: "Ústavní soud",
+        caseNumber: "I. ÚS 1/26",
+        caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+        decisionDate: null,
+        decisionType: null,
+        ecli: null,
+        name: null,
+      },
+    });
+    expect(statuteText.plain).toBe("ustanovení");
+    expect(statuteText.html).toBe("<em>ustanovení</em>");
+    expect(decisionText.html).toBe("<em>ustanovení</em>");
+    expect(
+      copyTextFor({
+        mode: "quoteWithCitation",
+        selected: { cleanText: "ustanovení", locator: null },
+        target: statute,
+      }).plain,
+    ).toStartWith("„ustanovení“");
+    expect(
+      copyTextFor({
+        mode: "quoteWithCitation",
+        selected: { cleanText: "provision", locator: null },
+        target: { ...statute, country: "unknown" },
+      }).plain,
+    ).toStartWith("“provision”");
+  });
+});

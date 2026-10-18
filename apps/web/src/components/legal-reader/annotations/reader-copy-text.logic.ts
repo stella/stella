@@ -5,7 +5,7 @@ import type { ReaderCopyMode } from "@stll/api-contract/legal-reader-annotations
 import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotations/reader-annotation-target";
 import {
   formatDecisionCitation,
-  formatDecisionQuotation,
+  formatJurisdictionQuotation,
 } from "@/features/case-law/citation-format";
 import { formatStatuteCitation } from "@/lib/statutes/statute-format";
 
@@ -69,35 +69,107 @@ export const copyTextFor = ({
   mode,
   selected,
   target,
-}: CopyTextOptions): string => {
+}: CopyTextOptions): ReaderCopyText => {
   const quote = selected.cleanText;
   const citation = readerTargetCitation({
     locator: selected.locator,
     target,
   });
-  const quoted =
-    target.type === "decision"
-      ? formatDecisionQuotation(quote, target.country)
-      : `“${quote}”`;
+  const quoted = formatJurisdictionQuotation(quote, target.country);
+  let segments: ReaderCopySegment[];
+  let blockQuote = false;
   switch (mode) {
     case "quoteWithCitation": {
-      return `${quoted} ${citation.sentence}`;
+      segments = [
+        { text: quoted, emphasis: true },
+        { text: ` ${citation.sentence}`, emphasis: false },
+      ];
+      break;
     }
     case "citationWithQuote": {
-      return `${citation.inline} (${quoted}).`;
+      segments = [
+        { text: `${citation.inline} (`, emphasis: false },
+        { text: quoted, emphasis: true },
+        { text: ").", emphasis: false },
+      ];
+      break;
     }
     case "blockQuoteWithCitation": {
-      return `${quote}\n\n${citation.sentence}`;
+      segments = [
+        { text: quote, emphasis: true },
+        { text: `\n\n${citation.sentence}`, emphasis: false },
+      ];
+      blockQuote = true;
+      break;
     }
     case "textOnly": {
-      return quote;
+      segments = [{ text: quote, emphasis: true }];
+      break;
     }
     case "citationOnly": {
-      return citation.sentence;
+      segments = [{ text: citation.sentence, emphasis: false }];
+      break;
     }
     default: {
       mode satisfies never;
       return panic(`Unhandled mode: ${String(mode)}`);
     }
   }
+  return copyTextFromSegments(segments, blockQuote);
+};
+
+export type ReaderCopySegment = { text: string; emphasis: boolean };
+
+export type ReaderCopyText = {
+  html: string;
+  plain: string;
+  segments: readonly ReaderCopySegment[];
+};
+
+const escapeHtml = (text: string): string =>
+  text.replaceAll(/[&<>"']/gu, (character) => {
+    switch (character) {
+      case "&":
+        return "&amp;";
+      case "<":
+        return "&lt;";
+      case ">":
+        return "&gt;";
+      case '"':
+        return "&quot;";
+      case "'":
+        return "&#39;";
+      default:
+        return panic(`Unhandled HTML character: ${character}`);
+    }
+  });
+
+const copyTextFromSegments = (
+  segments: ReaderCopySegment[],
+  blockQuote: boolean,
+): ReaderCopyText => {
+  const plain = segments.map(({ text }) => text).join("");
+  if (blockQuote) {
+    const quote = segments[0]?.text ?? "";
+    const citation = segments
+      .slice(1)
+      .map(({ text }) => text)
+      .join("")
+      .trim();
+    return {
+      html: `<blockquote><em>${escapeHtml(quote)}</em></blockquote><p>${escapeHtml(citation)}</p>`,
+      plain,
+      segments,
+    };
+  }
+  return {
+    html: segments
+      .map(({ emphasis, text }) => {
+        const escaped = escapeHtml(text);
+        return emphasis ? `<em>${escaped}</em>` : escaped;
+      })
+      .join(""),
+    plain,
+    segments,
+  };
 };

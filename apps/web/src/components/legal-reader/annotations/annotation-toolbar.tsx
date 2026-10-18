@@ -6,7 +6,7 @@ import { useTranslations } from "use-intl";
 
 import { READER_COPY_MODES } from "@stll/api-contract/legal-reader-annotations";
 import type { ReaderCopyMode } from "@stll/api-contract/legal-reader-annotations";
-import { copyToClipboard } from "@stll/clipboard";
+import { copyRichToClipboard } from "@stll/clipboard";
 import { Button } from "@stll/ui/button";
 import {
   Building2Icon,
@@ -42,6 +42,8 @@ import {
 } from "@/components/legal-reader/annotations/reader-annotation-target";
 import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotations/reader-annotation-target";
 import type { ReaderAnnotation } from "@/components/legal-reader/annotations/reader-annotations-query";
+import { readerCopyMenuBox } from "@/components/legal-reader/annotations/reader-copy-menu.logic";
+import type { ReaderCopyMenuBox } from "@/components/legal-reader/annotations/reader-copy-menu.logic";
 import {
   copyTextFor,
   readerTargetCitation,
@@ -176,7 +178,9 @@ export const AnnotationToolbar = ({
   // The dropdown is hand-rolled (a portal menu would collapse the text
   // selection), so it does its own collision handling: open upward when
   // the space below the trigger cannot fit the menu.
-  const [copyOpensUp, setCopyOpensUp] = useState(false);
+  const [copyMenuBox, setCopyMenuBox] = useState<ReaderCopyMenuBox | null>(
+    null,
+  );
   // A new highlight is private; sharing is a deliberate second step on the mark.
   const visibility: AnnotationVisibility = "private";
 
@@ -689,12 +693,20 @@ export const AnnotationToolbar = ({
           <Button
             onClick={(event) => {
               const MENU_ESTIMATED_HEIGHT_PX = 200;
-              const triggerRect = event.currentTarget.getBoundingClientRect();
-              const viewportHeight =
-                event.currentTarget.ownerDocument.defaultView?.innerHeight ?? 0;
-              setCopyOpensUp(
-                triggerRect.bottom + MENU_ESTIMATED_HEIGHT_PX > viewportHeight,
-              );
+              const barRect = barRef.current?.getBoundingClientRect();
+              const view = event.currentTarget.ownerDocument.defaultView;
+              if (barRect !== undefined && view !== null) {
+                setCopyMenuBox(
+                  readerCopyMenuBox({
+                    bar: barRect,
+                    menuHeight: MENU_ESTIMATED_HEIGHT_PX,
+                    viewport: {
+                      height: view.innerHeight,
+                      width: view.innerWidth,
+                    },
+                  }),
+                );
+              }
               setCopyPreviewMode(null);
               setCopyOpen((open) => !open);
             }}
@@ -708,16 +720,14 @@ export const AnnotationToolbar = ({
           </Button>
           {copyOpen && (
             <div
-              className={cn(
-                "bg-popover text-popover-foreground absolute start-0 z-10 rounded-md border p-1 shadow-md",
-                copyOpensUp ? "bottom-full mb-1" : "top-full mt-1",
-              )}
+              className="bg-popover text-popover-foreground fixed z-10 rounded-md border p-1 shadow-md"
+              style={copyMenuBox ?? undefined}
             >
               <MenuPreviewLayout
                 preview={
                   // The submenu paints over the pane rather than in it, so its
                   // floor is the viewport's, not the pane's.
-                  <PreviewPane className="w-[min(18rem,calc(100vw-9rem))]">
+                  <PreviewPane className="min-w-0 flex-1">
                     {copyPreviewMode !== null && (
                       <p className="text-foreground text-2xs leading-snug whitespace-pre-wrap">
                         {copyTextFor({
@@ -730,7 +740,17 @@ export const AnnotationToolbar = ({
                             locator: selected.locator,
                           },
                           target,
-                        })}
+                        }).segments.map((segment) =>
+                          segment.emphasis ? (
+                            <em key={`emphasis:${segment.text}`}>
+                              {segment.text}
+                            </em>
+                          ) : (
+                            <span key={`plain:${segment.text}`}>
+                              {segment.text}
+                            </span>
+                          ),
+                        )}
                       </p>
                     )}
                   </PreviewPane>
@@ -748,7 +768,7 @@ export const AnnotationToolbar = ({
                       });
                       detached(
                         (async () => {
-                          const copied = await copyToClipboard(text);
+                          const copied = await copyRichToClipboard(text);
                           if (Result.isError(copied)) {
                             notifyUserError(
                               copied.error,
