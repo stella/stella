@@ -5,8 +5,8 @@
 // conflict carries no human decision: merge main, start each conflicted
 // output from main's side, and let the owning generators rewrite it from the
 // merged inputs. Any other conflicted path (source, lockfiles, baselines,
-// files with hand-written regions, delete/modify) leaves the pull request to
-// people.
+// files with hand-written regions, or unsafe delete/modify conflicts) leaves
+// the pull request to people.
 //
 // Three runs keep pull request code away from the push key and from caches
 // other runs restore (see the three generated-conflicts workflows):
@@ -62,7 +62,13 @@ export type ConflictKind = "both-modified" | "both-added" | "delete-modify";
 export type Conflict = { path: string; kind: ConflictKind };
 
 export type Classification =
-  | { eligible: true; conflicts: Conflict[]; ids: string[]; allowed: string[] }
+  | {
+      eligible: true;
+      conflicts: Conflict[];
+      ids: string[];
+      allowed: string[];
+      deletions: string[];
+    }
   | { eligible: false; conflicts: Conflict[]; reasons: string[] };
 
 const LOCKFILE =
@@ -84,16 +90,24 @@ const ownersOf = (
 const conflictReason = (
   conflict: Conflict,
   generators: readonly Generator[],
+  derivedDeletions: ReadonlySet<string>,
 ): string | null => {
   const { path: file, kind } = conflict;
-  if (kind === "delete-modify") {
-    return `${file}: one side deleted it`;
-  }
   if (LOCKFILE.test(file)) {
     return `${file}: lockfiles are resolved by people`;
   }
   if (isAutofixProtectedPath(file) || file.startsWith(".github/")) {
     return `${file}: a protected path`;
+  }
+  if (kind === "delete-modify") {
+    const derivedOwner = generators.some(
+      (generator) =>
+        generator.outputKind === "derived" &&
+        generator.outputs.some((output) => matchesGeneratedGlob(output, file)),
+    );
+    return derivedDeletions.has(file) && derivedOwner
+      ? null
+      : `${file}: one side deleted it`;
   }
   const owners = ownersOf(file, generators);
   if (owners.length === 0) {
@@ -115,6 +129,7 @@ const conflictReason = (
 export const classifyConflicts = (
   conflicts: readonly Conflict[],
   generators: readonly Generator[] = GENERATORS,
+  derivedDeletions: ReadonlySet<string> = new Set(),
 ): Classification => {
   const sorted = conflicts.toSorted(
     // Byte order: paths are identifiers, not prose.
@@ -124,19 +139,26 @@ export const classifyConflicts = (
     return { eligible: false, conflicts: sorted, reasons: ["no conflicts"] };
   }
   const reasons = sorted.flatMap((conflict) => {
-    const reason = conflictReason(conflict, generators);
+    const reason = conflictReason(conflict, generators, derivedDeletions);
     return reason === null ? [] : [reason];
   });
   if (reasons.length > 0) {
     return { eligible: false, conflicts: sorted, reasons };
   }
   const selected = orderGenerators(
-    generatorsForFiles(sorted.map(({ path: file }) => file)),
+    generatorsForFiles(
+      sorted.flatMap(({ path: file, kind }) =>
+        kind === "delete-modify" ? [] : [file],
+      ),
+    ),
   );
   return {
     eligible: true,
     conflicts: sorted,
     ids: selected.map(({ id }) => id),
+    deletions: sorted.flatMap(({ path: file, kind }) =>
+      kind === "delete-modify" ? [file] : [],
+    ),
     allowed: allowedOutputs(selected).filter(
       (output) => !isAutofixProtectedPath(output),
     ),
@@ -271,6 +293,64 @@ const neutralizeAttributes = (gitDir: string) => {
   }
 };
 
+/** Check ignore rules from `tree` without trusting or checking out its code. */
+const ignoredInTree = (gitDir: string, tree: string, file: string) => {
+  const workTree = mkdtempSync(
+    path.join(tmpdir(), "generated-conflicts-ignore-"),
+  );
+  try {
+    const records = git(gitDir, ["ls-tree", "-r", "-z", tree]).stdout.split(
+      "\0",
+    );
+    for (const record of records) {
+      const match =
+        /^100(?:644|755) blob ([0-9a-f]{40})\t(.+\/)?\.gitignore$/u.exec(
+          record,
+        );
+      if (!match?.[1]) {
+        continue;
+      }
+      const ignoreFile = path.join(workTree, match[2] ?? "", ".gitignore");
+      mkdirSync(path.dirname(ignoreFile), { recursive: true });
+      writeFileSync(
+        ignoreFile,
+        git(gitDir, ["cat-file", "blob", match[1]]).stdout,
+      );
+    }
+    mkdirSync(path.dirname(path.join(workTree, file)), { recursive: true });
+    const result = Bun.spawnSync(
+      [
+        "git",
+        `--git-dir=${gitDir}`,
+        `--work-tree=${workTree}`,
+        "-c",
+        "core.excludesFile=/dev/null",
+        "check-ignore",
+        "--quiet",
+        "--no-index",
+        "--",
+        file,
+      ],
+      {
+        stdout: "pipe",
+        stderr: "pipe",
+        env: {
+          PATH: process.env["PATH"] ?? "/usr/bin:/bin",
+          HOME: tmpdir(),
+          GIT_CONFIG_GLOBAL: "/dev/null",
+          GIT_CONFIG_NOSYSTEM: "1",
+        },
+      },
+    );
+    if (result.exitCode !== 0 && result.exitCode !== 1) {
+      fail(`git check-ignore failed: ${result.stderr.toString().trim()}`);
+    }
+    return result.exitCode === 0;
+  } finally {
+    rmSync(workTree, { recursive: true, force: true });
+  }
+};
+
 /** Build a tree from `base` with `edit` applied to a private index. */
 const editTree = (
   gitDir: string,
@@ -315,13 +395,34 @@ export const plan = (gitDir: string, head: string, main: string): Plan => {
   }
   const end = rest.indexOf("");
   const entries = parseStageEntries(end === -1 ? rest : rest.slice(0, end));
-  const classification = classifyConflicts(conflictsOf(entries));
+  const conflicts = conflictsOf(entries);
+  const derivedDeletions = new Set(
+    conflicts.flatMap(({ path: file, kind }) => {
+      if (kind !== "delete-modify") {
+        return [];
+      }
+      const stages = entries.filter((entry) => entry.path === file);
+      const headDeleted = !stages.some((entry) => entry.stage === "2");
+      return headDeleted && ignoredInTree(gitDir, head, file) ? [file] : [];
+    }),
+  );
+  const classification = classifyConflicts(
+    conflicts,
+    GENERATORS,
+    derivedDeletions,
+  );
   if (!classification.eligible) {
     return { ...classification, head, main, baseline: null };
   }
   const theirs = entries.filter((entry) => entry.stage === "3");
   const baseline = editTree(gitDir, mergedTree, (index) => {
+    for (const file of classification.deletions) {
+      git(gitDir, ["update-index", "--force-remove", "--", file], { index });
+    }
     for (const entry of theirs) {
+      if (derivedDeletions.has(entry.path)) {
+        continue;
+      }
       git(
         gitDir,
         [
@@ -429,18 +530,21 @@ const readPlan = (file: string): Plan => {
     typeof parsed === "object" && parsed !== null
       ? Reflect.get(parsed, key)
       : undefined;
-  const [head, main, baseline, listed] = [
+  const [head, main, baseline, listed, deletions] = [
     read("head"),
     read("main"),
     read("baseline"),
     read("conflicts"),
+    read("deletions"),
   ];
   if (
     typeof head !== "string" ||
     typeof main !== "string" ||
     typeof baseline !== "string" ||
     !SHA.test(baseline) ||
-    !Array.isArray(listed)
+    !Array.isArray(listed) ||
+    !Array.isArray(deletions) ||
+    !deletions.every((deleted) => typeof deleted === "string")
   ) {
     return fail(`${file} is not an eligible plan`);
   }
@@ -456,13 +560,20 @@ const readPlan = (file: string): Plan => {
         : undefined;
     if (
       typeof conflictPath !== "string" ||
-      (kind !== "both-modified" && kind !== "both-added")
+      (kind !== "both-modified" &&
+        kind !== "both-added" &&
+        kind !== "delete-modify")
     ) {
       return fail("Malformed conflict entry");
     }
     return { path: conflictPath, kind };
   });
-  return { ...classifyConflicts(conflicts), head, main, baseline };
+  return {
+    ...classifyConflicts(conflicts, GENERATORS, new Set(deletions)),
+    head,
+    main,
+    baseline,
+  };
 };
 
 /** Resolve run: package what the generators wrote on top of the baseline. */

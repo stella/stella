@@ -194,6 +194,7 @@ describe("resolution across runs", () => {
     run(cwd, ["bun", SCRIPT, ...args]);
 
   const NOTES = "apps/api/notes.txt";
+  const DERIVED = "apps/api/src/mcp/generated/capability-dispatch.ts";
   const lines = (edit: (rows: string[]) => void) => {
     const rows = Array.from(
       { length: 20 },
@@ -251,6 +252,87 @@ describe("resolution across runs", () => {
     const main = git(origin, "rev-parse", "HEAD");
     return { origin, head, main };
   };
+
+  const deleteModifyFixture = ({
+    file,
+    ignore = true,
+    deletingSide = "feature",
+  }: {
+    file: string;
+    ignore?: boolean;
+    deletingSide?: "feature" | "main";
+  }) => {
+    root = mkdtempSync(path.join(tmpdir(), "generated-conflicts-delete-"));
+    const origin = path.join(root, "origin");
+    mkdirSync(origin);
+    git(origin, "init", "-q", "-b", "main");
+    write(origin, file, "base\n");
+    git(origin, "add", ".");
+    git(origin, "commit", "-qm", "base");
+    git(origin, "switch", "-qc", "feature");
+    if (ignore) {
+      write(origin, ".gitignore", `/${file}\n`);
+    }
+    if (deletingSide === "feature") {
+      rmSync(path.join(origin, file));
+    } else {
+      write(origin, file, "feature\n");
+    }
+    git(origin, "add", "-A");
+    git(origin, "commit", "-qm", "feature");
+    const head = git(origin, "rev-parse", "HEAD");
+    git(origin, "switch", "-q", "main");
+    if (deletingSide === "main") {
+      rmSync(path.join(origin, file));
+    } else {
+      write(origin, file, "main\n");
+    }
+    git(origin, "add", "-A");
+    git(origin, "commit", "-qm", "main");
+    const main = git(origin, "rev-parse", "HEAD");
+    const planned = cli(
+      origin,
+      "plan",
+      "--git-dir",
+      ".git",
+      "--head",
+      head,
+      "--main",
+      main,
+    );
+    expect(planned.exitCode, planned.stderr).toBe(0);
+    return { origin, result: JSON.parse(planned.stdout) };
+  };
+
+  test("keeps a PR deletion of a now-derived ignored output", () => {
+    const { origin, result } = deleteModifyFixture({ file: DERIVED });
+    expect(result.eligible).toBe(true);
+    expect(result.deletions).toEqual([DERIVED]);
+    expect(
+      git(origin, "ls-tree", "-r", "--name-only", result.baseline),
+    ).not.toContain(DERIVED);
+  });
+
+  test("leaves a deleted committed output to people", () => {
+    const { result } = deleteModifyFixture({ file: MESSAGES });
+    expect(result.eligible).toBe(false);
+    expect(result.reasons).toEqual([`${MESSAGES}: one side deleted it`]);
+  });
+
+  test("leaves a non-ignored derived output deletion to people", () => {
+    const { result } = deleteModifyFixture({ file: DERIVED, ignore: false });
+    expect(result.eligible).toBe(false);
+    expect(result.reasons).toEqual([`${DERIVED}: one side deleted it`]);
+  });
+
+  test("leaves a main deletion of a PR-modified derived output to people", () => {
+    const { result } = deleteModifyFixture({
+      file: DERIVED,
+      deletingSide: "main",
+    });
+    expect(result.eligible).toBe(false);
+    expect(result.reasons).toEqual([`${DERIVED}: one side deleted it`]);
+  });
 
   /** The untrusted resolve run, with a stand-in generator. */
   const resolve = (
