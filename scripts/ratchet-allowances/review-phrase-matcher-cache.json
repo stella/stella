@@ -1,0 +1,5 @@
+{
+  "metric": "module-level-mutable-collections",
+  "delta": 1,
+  "reason": "review-key-terms keeps compiled phrase matchers in a module cache bounded by PHRASE_MATCHER_CACHE_CAPACITY with oldest-first eviction, so repeated review builds reuse matchers without the unbounded growth this metric guards against."
+}
