@@ -45,7 +45,6 @@
   },
   "dependencies": {
     "@stll/agent-input": "workspace:^",
-    "@stll/fuzzy-search": "catalog:",
     "better-result": "catalog:"
   },
   "devDependencies": {
