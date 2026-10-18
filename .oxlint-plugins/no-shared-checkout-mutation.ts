@@ -129,6 +129,21 @@ const calleeName = (callee: unknown): string | null => {
     : null;
 };
 
+// path.resolve discards every segment before a static absolute one, so only
+// the segments after the last such literal can decide the destination.
+const afterLastAbsolute = (parts: readonly unknown[]): unknown[] => {
+  const last = parts.findLastIndex((input) => {
+    const node = unwrapExpression(input);
+    return (
+      isAstNode(node) &&
+      node.type === "Literal" &&
+      typeof node.value === "string" &&
+      node.value.startsWith("/")
+    );
+  });
+  return parts.slice(last + 1);
+};
+
 const createPathResolver = (context: ScopeContext) => {
   const variableOf = (node: unknown) =>
     isIdentifierReference(node) ? resolveVariable(context, node) : null;
@@ -171,12 +186,13 @@ const createPathResolver = (context: ScopeContext) => {
     const operation = calleeName(node.callee);
     // path.resolve: the last absolute segment decides, as for checkout paths.
     if (operation === "resolve") {
-      for (let index = parts.length - 1; index >= 0; index -= 1) {
-        if (isCheckoutPath(parts[index], new Set(seen))) {
+      const scan = afterLastAbsolute(parts);
+      for (let index = scan.length - 1; index >= 0; index -= 1) {
+        if (isCheckoutPath(scan[index], new Set(seen))) {
           return false;
         }
-        if (isTemporaryRoot(parts[index], new Set(seen))) {
-          return staysInside(parts.slice(index + 1));
+        if (isTemporaryRoot(scan[index], new Set(seen))) {
+          return staysInside(scan.slice(index + 1));
         }
       }
       return false;
@@ -240,12 +256,13 @@ const createPathResolver = (context: ScopeContext) => {
     const parts: unknown[] = node.arguments;
     // path.resolve: the last absolute segment decides the destination.
     if (operation === "resolve") {
-      for (let index = parts.length - 1; index >= 0; index -= 1) {
-        const inside = exempt && staysInside(parts.slice(index + 1));
-        if (inside && isTemporaryRoot(parts[index], new Set(seen))) {
+      const scan = afterLastAbsolute(parts);
+      for (let index = scan.length - 1; index >= 0; index -= 1) {
+        const inside = exempt && staysInside(scan.slice(index + 1));
+        if (inside && isTemporaryRoot(scan[index], new Set(seen))) {
           return false;
         }
-        if (isCheckoutPath(parts[index], new Set(seen), inside)) {
+        if (isCheckoutPath(scan[index], new Set(seen), inside)) {
           return true;
         }
       }
@@ -264,9 +281,7 @@ const createPathResolver = (context: ScopeContext) => {
     }
     // Conversions between a path and a URL keep the location.
     if (operation !== null && LOCATION_PRESERVING.has(operation)) {
-      return (
-        parts.length > 0 && isCheckoutPath(parts[0], new Set(seen), exempt)
-      );
+      return isCheckoutPath(parts[0], new Set(seen), exempt);
     }
     // Any other call (dirname, normalize, ...) may climb out of a temporary
     // directory, so its arguments are judged by where they were created.

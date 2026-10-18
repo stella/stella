@@ -58,6 +58,15 @@ describe(RULE, () => {
     ).toEqual([5, 6]);
   });
 
+  // path.resolve discards every segment before an absolute one.
+  test("allows an absolute literal resolved after a checkout path", async () => {
+    expect(
+      await lint(
+        'import { writeFileSync } from "node:fs";\nimport path from "node:path";\nwriteFileSync(path.resolve(import.meta.dir, "/tmp/fixture.json"), "data");\nwriteFileSync(path.resolve("/tmp", import.meta.dir, "baseline.json"), "data");',
+      ),
+    ).toEqual([4]);
+  });
+
   test("rejects checkout paths chosen by conditional and logical expressions", async () => {
     expect(
       await lint(
