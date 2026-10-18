@@ -7799,6 +7799,7 @@ test("an armed delta skips every normal job but still runs the queue-only suites
     normalReused: string,
     runRequired: string,
     routeSmoke = "false",
+    suiteDepth = "fast",
   ) => {
     const directory = mkdtempSync(nodePath.join(tmpdir(), "ci-suites-"));
     try {
@@ -7811,6 +7812,7 @@ test("an armed delta skips every normal job but still runs the queue-only suites
           RUN_REQUIRED: runRequired,
           ROUTE_SMOKE_REQUIRED: routeSmoke,
           MARKETING_REQUIRED: "false",
+          SUITE_DEPTH: suiteDepth,
         },
       });
       expect(child.exitCode, child.stderr.toString()).toBe(0);
@@ -7826,6 +7828,10 @@ test("an armed delta skips every normal job but still runs the queue-only suites
   );
   expect(resolve("", "true")).toBe("run_required=true\narmed_delta=false");
   expect(resolve("", "false")).toBe("run_required=false\narmed_delta=false");
+  // ci-result accepts an armed delta only at fast depth, so full depth runs all.
+  expect(resolve("true", "true", "false", "full")).toBe(
+    "run_required=true\narmed_delta=false",
+  );
   expect(plan.outputs["armed_delta"]).toBe(
     `\${{ steps.suites.outputs.armed_delta }}`,
   );

@@ -1735,11 +1735,12 @@ jobs:
         env:
           RUN_REQUIRED: ${{ steps.completed-depth.outputs.run_required }}
           NORMAL_REUSED: ${{ steps.completed-depth.outputs.normal_reused }}
+          SUITE_DEPTH: ${{ steps.depth.outputs.suite_depth }}
           ROUTE_SMOKE_REQUIRED: ${{ steps.changed-files.outputs.route_smoke_required }}
           MARKETING_REQUIRED: ${{ steps.marketing-release.outputs.required }}
         run: |
           armed_delta=false
-          if [[ "${NORMAL_REUSED:-}" == true && "${ROUTE_SMOKE_REQUIRED:-}" != true && "${MARKETING_REQUIRED:-}" != true ]]; then
+          if [[ "${NORMAL_REUSED:-}" == true && "${SUITE_DEPTH:-}" == fast && "${ROUTE_SMOKE_REQUIRED:-}" != true && "${MARKETING_REQUIRED:-}" != true ]]; then
             armed_delta=true
             RUN_REQUIRED=false
           fi
