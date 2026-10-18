@@ -1908,6 +1908,17 @@ test("the required-jobs record names every workflow job once and carries the ver
       },
     },
     {
+      // A verified supersession accepts a cancelled job; the verdict still
+      // evaluated it, so the record names it with its conclusion.
+      label: "pull-request-fast-superseded-cancel",
+      options: {
+        event: EVENT.pullRequest,
+        results: { "e2e-landing": "cancelled" },
+        suiteDepth: SUITE_DEPTH.fast,
+        cancellationEvidence: "superseded",
+      },
+    },
+    {
       label: "pull-request-reused",
       options: {
         event: EVENT.pullRequest,
@@ -1985,6 +1996,15 @@ test("the required-jobs record names every workflow job once and carries the ver
     conclusion: "failure",
   });
   expect(outside.record.not_required).not.toContain("e2e-landing");
+
+  const superseded = take("pull-request-fast-superseded-cancel");
+  expect(superseded.record.required).toContainEqual({
+    job: "e2e-landing",
+    conclusion: "cancelled",
+  });
+  expect(superseded.record.not_required).not.toContain("e2e-landing");
+  expect(superseded.exitCode).toBe(0);
+  expect(superseded.record.verdict).toBe("success");
 
   const reused = take("pull-request-reused");
   expect(reused.exitCode).toBe(0);

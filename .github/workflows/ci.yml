@@ -8616,12 +8616,12 @@ jobs:
               def nonempty: if . == "" then null else . end;
               def count: if test("^[1-9][0-9]*$") then tonumber else null end;
               . as $needs
-              # A failing verdict also counted every job that failed, timed out
-              # or was cancelled, whichever branch decided it.
-              | ($required + (if $status == "0" then [] else
-                  [to_entries[] | select(.key != "ci-plan")
-                    | select(.value.result == "failure" or .value.result == "timed_out" or .value.result == "cancelled")
-                    | .key] end) | unique) as $counted
+              # The verdict also evaluates every job that failed, timed out or
+              # was cancelled (a verified supersession may accept a cancelled
+              # one), whichever branch decided it and whatever it decided.
+              | ($required + [to_entries[] | select(.key != "ci-plan")
+                  | select(.value.result == "failure" or .value.result == "timed_out" or .value.result == "cancelled")
+                  | .key] | unique) as $counted
               | {version: 1, event: $event,
                 head_sha: ($head | nonempty), base_sha: ($base | nonempty),
                 run_id: ($run | count), run_attempt: ($attempt | count),
