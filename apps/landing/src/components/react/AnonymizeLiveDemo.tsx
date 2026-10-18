@@ -251,23 +251,18 @@ let matcherLoad: Promise<Matcher> | undefined;
 /**
  * The matcher loads with the engine, never with this module: in the browser
  * it is wasm, and a failed download must surface as an engine error instead
- * of stopping the demo from hydrating at all. A failed load is retried.
+ * of stopping the demo from hydrating at all. The browser keeps a module
+ * that failed to load, so only a page reload can load it again.
  */
-const loadMatcher = (): Promise<Matcher> => {
-  matcherLoad ??= import("#aho-corasick").then(
-    (module) => module.AhoCorasick,
-    (error: unknown) => {
-      matcherLoad = undefined;
-      throw error;
-    },
-  );
+const loadMatcher = async (): Promise<Matcher> => {
+  matcherLoad ??= import("#aho-corasick").then((module) => module.AhoCorasick);
   return matcherLoad;
 };
 
 type EngineState =
   | { status: "warming" }
   | { status: "ready"; pairs: readonly HighlightPair[]; Matcher: Matcher }
-  | { status: "error" };
+  | { status: "error"; recovery: "retry" | "reload" };
 
 /** Starts one engine run: the anonymization pass and the matcher together. */
 export const startEngine = async (
@@ -277,15 +272,17 @@ export const startEngine = async (
     loadMatcher: () => Promise<Matcher>;
   },
 ): Promise<EngineState> => {
-  try {
-    const [result, Matcher] = await Promise.all([
-      dependencies.run(value),
-      dependencies.loadMatcher(),
-    ]);
-    return { status: "ready", pairs: result.pairs, Matcher };
-  } catch {
-    return { status: "error" };
+  const [run, matcher] = await Promise.allSettled([
+    dependencies.run(value),
+    dependencies.loadMatcher(),
+  ]);
+  if (matcher.status === "rejected") {
+    return { status: "error", recovery: "reload" };
   }
+  if (run.status === "rejected") {
+    return { status: "error", recovery: "retry" };
+  }
+  return { status: "ready", pairs: run.value.pairs, Matcher: matcher.value };
 };
 
 /**
@@ -337,7 +334,7 @@ export const AnonymizeLiveDemo = () => {
         if (requestId !== latestRequestRef.current) {
           return;
         }
-        setEngine({ status: "error" });
+        setEngine({ status: "error", recovery: "retry" });
       });
   };
 
@@ -367,6 +364,10 @@ export const AnonymizeLiveDemo = () => {
   }, [highlights.pairs]);
 
   const retry = () => {
+    if (engine.status === "error" && engine.recovery === "reload") {
+      window.location.reload();
+      return;
+    }
     setEngine({ status: "warming" });
     run(text);
   };

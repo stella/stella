@@ -192,15 +192,21 @@ describe("anonymization demo first paint and engine start", () => {
     });
   });
 
-  test("a matcher that fails to load is an engine error", async () => {
+  // The browser keeps a module that failed to load, so only a reload helps.
+  test("a matcher that fails to load is an engine error recovered by reload", async () => {
     expect(await startEngine("Čapek", { run, loadMatcher: failed })).toEqual({
       status: "error",
+      recovery: "reload",
     });
+    expect(
+      await startEngine("Čapek", { run: failed, loadMatcher: failed }),
+    ).toEqual({ status: "error", recovery: "reload" });
   });
 
-  test("a failed run is an engine error", async () => {
+  test("a failed run is an engine error recovered by retry", async () => {
     expect(await startEngine("Čapek", { run: failed, loadMatcher })).toEqual({
       status: "error",
+      recovery: "retry",
     });
   });
 
