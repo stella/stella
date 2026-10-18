@@ -1782,30 +1782,30 @@ test("the patch-id step names the parent only of a merge of the base, with the p
 });
 
 test("armed proof counts only when ci-result uploaded it after every other job", async () => {
-  const group = async (jobs: unknown[]) =>
+  const group = async (groupJobs: unknown[]) =>
     decide({
       event: "merge_group",
       queueDepth: "thin",
       artifacts: [armedArtifact],
       evidence: armedEvidence,
-      jobs,
+      jobs: groupJobs,
     });
   expect((await group(sourceJobs)).outputs.get("armed_proof")).toBe("complete");
-  const [tests, result] = sourceJobs;
-  for (const jobs of [
+  const [tests, ciResult] = sourceJobs;
+  for (const candidate of [
     // A pull request job still running when the artifact appeared.
-    [{ ...tests, status: "in_progress", completed_at: null }, result],
+    [{ ...tests, status: "in_progress", completed_at: null }, ciResult],
     // A job that finished after the upload uploaded nothing ci-result vouches for.
-    [{ ...tests, completed_at: "2026-10-17T10:40:00Z" }, result],
+    [{ ...tests, completed_at: "2026-10-17T10:40:00Z" }, ciResult],
     // Uploaded before ci-result started.
-    [tests, { ...result, started_at: "2026-10-17T10:35:00Z" }],
+    [tests, { ...ciResult, started_at: "2026-10-17T10:35:00Z" }],
     // No successful ci-result.
-    [tests, { ...result, conclusion: "failure" }],
+    [tests, { ...ciResult, conclusion: "failure" }],
     [tests],
   ]) {
     expect(
-      (await group(jobs)).outputs.get("armed_proof"),
-      JSON.stringify(jobs),
+      (await group(candidate)).outputs.get("armed_proof"),
+      JSON.stringify(candidate),
     ).toBeUndefined();
   }
 });
