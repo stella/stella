@@ -1376,13 +1376,16 @@ const patchIdStep = planner.steps.find((step) => step.id === "patch-id")?.run;
 // Completed evidence names the planning configuration, so every repository
 // variable the planner reads must be part of the fingerprint.
 test("the planning fingerprint covers every repository variable the planner reads", () => {
+  // Variable names, not language text: plain code-unit order.
+  const byName = (left: string, right: string) =>
+    Number(left > right) - Number(left < right);
   const read = [
     ...new Set(
-      [...JSON.stringify(planner).matchAll(/\bvars\.([A-Z0-9_]+)/gu)].map(
-        ([, name]) => name,
+      [...JSON.stringify(planner).matchAll(/\bvars\.([A-Z0-9_]+)/gu)].flatMap(
+        ([, name]) => (name === undefined ? [] : [name]),
       ),
     ),
-  ].toSorted();
+  ].toSorted(byName);
   expect(read.length).toBeGreaterThan(0);
   const step = planner.steps.find(({ id }) => id === "patch-id");
   const fingerprinted = Object.entries(step?.env ?? {})
@@ -1391,7 +1394,7 @@ test("the planning fingerprint covers every repository variable the planner read
       expect(value).toBe(`\${{ vars.${name.slice("PLAN_".length)} }}`);
       return name.slice("PLAN_".length);
     })
-    .toSorted();
+    .toSorted(byName);
   expect(fingerprinted).toEqual(read);
 });
 const runPatchIdStep = ({
