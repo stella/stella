@@ -31,13 +31,12 @@ import { ConcurrentModificationError } from "@/api/lib/errors/tagged-errors";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { listingIdentityKey } from "@/api/lib/legal-search/ingestion-types";
 import type { SourceReconciliation } from "@/api/lib/legal-search/ingestion-types";
-import {
-  RECONCILIATION_TERMINAL_ATTEMPTS,
-  resolveReconciliationItem,
-} from "@/api/lib/legal-search/reconciliation-store";
+import { resolveReconciliationItem } from "@/api/lib/legal-search/reconciliation-store";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+const LEGACY_TERMINAL_ATTEMPTS = 6;
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const oldPayload = (id: string) => ({
@@ -161,8 +160,7 @@ const withFixture = async (
             identityKey: key(id),
             payload,
             status,
-            attempts:
-              status === "terminal" ? RECONCILIATION_TERMINAL_ATTEMPTS : 2,
+            attempts: status === "terminal" ? LEGACY_TERMINAL_ATTEMPTS : 2,
             nextAttemptAt:
               status === "terminal"
                 ? null
@@ -423,8 +421,7 @@ describe.skipIf(!enabled)(
           expect(tracked?.payload).toEqual(correctedPayload(id));
           expect(tracked?.status).toBe(RECONCILIATION_ITEM_STATUS.PARKED);
           expect(tracked).toMatchObject({
-            attempts:
-              status === "terminal" ? RECONCILIATION_TERMINAL_ATTEMPTS : 2,
+            attempts: status === "terminal" ? LEGACY_TERMINAL_ATTEMPTS : 2,
             revivalCount: status === "terminal" ? 1 : 0,
             lastAttemptAt: null,
             lastError: null,
@@ -433,13 +430,9 @@ describe.skipIf(!enabled)(
           expect(attempted).toEqual([]);
           await fixture.walk(reconciliation);
           expect(await fixture.row(id)).toMatchObject({
-            status:
-              status === "terminal"
-                ? RECONCILIATION_ITEM_STATUS.TERMINAL
-                : RECONCILIATION_ITEM_STATUS.PARKED,
+            status: RECONCILIATION_ITEM_STATUS.PARKED,
             attempts:
-              (status === "terminal" ? RECONCILIATION_TERMINAL_ATTEMPTS : 2) +
-              1,
+              (status === "terminal" ? LEGACY_TERMINAL_ATTEMPTS : 2) + 1,
             revivalCount: status === "terminal" ? 1 : 0,
           });
           expect(attempted).toContainEqual(correctedPayload(id));
@@ -502,7 +495,7 @@ describe.skipIf(!enabled)(
           expect(tracked?.payload).toEqual(correctedPayload(id));
           expect(tracked?.status).toBe(RECONCILIATION_ITEM_STATUS.PARKED);
           expect(tracked).toMatchObject({
-            attempts: RECONCILIATION_TERMINAL_ATTEMPTS,
+            attempts: LEGACY_TERMINAL_ATTEMPTS,
             revivalCount: 1,
             lastAttemptAt: null,
             lastError: null,
@@ -514,14 +507,14 @@ describe.skipIf(!enabled)(
         const rows = await Promise.all(ids.map(fixture.row));
         for (const row of rows) {
           expect(row).toMatchObject({
-            status: RECONCILIATION_ITEM_STATUS.TERMINAL,
-            attempts: RECONCILIATION_TERMINAL_ATTEMPTS + 1,
+            status: RECONCILIATION_ITEM_STATUS.PARKED,
+            attempts: LEGACY_TERMINAL_ATTEMPTS + 1,
           });
         }
         expect(attempted).toHaveLength(2);
       });
     }, 60_000);
-    test("oscillating publisher corrections exhaust two revivals without replenishing attempts", async () => {
+    test("transient failures after a correction stay retryable without consuming terminal revivals", async () => {
       await withFixture(async (fixture) => {
         const id = "JFT_20260901_26R00006";
         await fixture.seed(id, "terminal");
@@ -537,12 +530,17 @@ describe.skipIf(!enabled)(
           await fixture.walk(reconciliation);
           await fixture.walk(reconciliation);
           expect(await fixture.row(id)).toMatchObject({
-            status: RECONCILIATION_ITEM_STATUS.TERMINAL,
-            attempts: RECONCILIATION_TERMINAL_ATTEMPTS + Math.min(index + 1, 2),
-            revivalCount: Math.min(index + 1, 2),
+            status: RECONCILIATION_ITEM_STATUS.PARKED,
+            attempts: LEGACY_TERMINAL_ATTEMPTS + index + 1,
+            revivalCount: 1,
           });
         }
-        expect(attempted).toEqual([correctedPayload(id), oldPayload(id)]);
+        expect(attempted).toEqual([
+          correctedPayload(id),
+          oldPayload(id),
+          correctedPayload(id),
+          oldPayload(id),
+        ]);
       });
     }, 60_000);
     test("a lease lost between the engine renewal and store transaction prevents a retry write", async () => {

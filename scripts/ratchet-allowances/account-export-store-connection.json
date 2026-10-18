@@ -1,0 +1,6 @@
+{
+  "metric": "direct-root-connection-imports",
+  "file": "apps/api/src/lib/account-export/store.ts",
+  "delta": 1,
+  "reason": "The declared account export lifecycle door lazily resolves its database handle only for authenticated account reads and requests, under the account's row-level scope. Worker operations receive their database explicitly; no database handle is exported."
+}

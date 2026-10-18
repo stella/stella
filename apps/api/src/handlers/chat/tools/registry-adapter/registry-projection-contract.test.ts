@@ -1815,6 +1815,8 @@ const CONTRACT_CORPUS = {
             documentType: "act",
             status: "in_force",
             effectiveDate: "2014-01-01",
+            versionValidFrom: "2014-01-01",
+            versionValidTo: null,
             // GUID-bearing publisher URL; see the statute fixture above.
             sourceUrl: `https://example.test/89-2012/${uid(95)}`,
             headline: "<mark>náhrada škody</mark>",
