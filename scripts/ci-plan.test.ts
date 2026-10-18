@@ -777,6 +777,34 @@ const releaseJobs = workflowJobs(
     "utf-8",
   ),
 );
+// Every check waits for the plan, so it stays install-light: one planner
+// install, and generation runs in its own job for its consumers only.
+test("the plan installs dependencies once and never generates sources", () => {
+  const steps = v.parse(
+    v.object({
+      steps: v.array(
+        v.looseObject({
+          name: v.optional(v.string()),
+          uses: v.optional(v.string()),
+          run: v.optional(v.string()),
+        }),
+      ),
+    }),
+    ciJobs["ci-plan"],
+  ).steps;
+  const installs = steps.filter(
+    ({ uses, run }) =>
+      uses === "$/.github/actions/ci-install" ||
+      /\bbun (?:ci|install)\b/u.test(run ?? ""),
+  );
+  expect(installs.map(({ name }) => name)).toEqual([
+    "Install planner dependencies",
+  ]);
+  expect(
+    steps.filter(({ run }) => run?.includes("ci-generated-sources.ts")),
+  ).toEqual([]);
+});
+
 // An undeclared output becomes an empty string, overriding even an environment
 // value established by an earlier step.
 test("CI planner output references name declared outputs", () => {
@@ -6591,7 +6619,7 @@ test("API planning only loads dependencies after installation and emits install-
     (step) => step.name === "Select affected API test files",
   );
   expect(select?.if).toBe(
-    "steps.completed-depth.outputs.run_required != 'false' && (github.event_name == 'pull_request' || github.event_name == 'merge_group') && steps.api-test-deps.outcome == 'success'",
+    "steps.completed-depth.outputs.run_required != 'false' && (github.event_name == 'pull_request' || github.event_name == 'merge_group') && steps.planner-deps.outcome == 'success' && steps.api-test-deps.outcome == 'success'",
   );
   const plan = steps.find(
     (step) => step.name === "Plan API test files and shards",
@@ -6684,6 +6712,7 @@ test("Postgres plans are visible on PRs while execution requires explicit opt-in
           "github.event_name": event,
           "vars.CI_POSTGRES_PR_SELECTION": prSwitch,
           "steps.completed-depth.outputs.run_required": "true",
+          "steps.planner-deps.outcome": "success",
           "steps.api-test-deps.outcome": "success",
           "needs.ci-plan.outputs.run_required": "true",
           "needs.ci-plan.outputs.queue_depth": "full",
@@ -7041,6 +7070,7 @@ test("Legal Atlas scope deadlines conservatively select the image after timeout 
       evaluate(condition, {
         values: {
           "steps.completed-depth.outputs.run_required": runRequired,
+          "steps.planner-deps.outcome": "success",
           "steps.api-test-deps.outcome": "success",
           "steps.changed-files.outputs.legal_atlas_image_required": "true",
         },

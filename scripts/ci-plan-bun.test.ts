@@ -66,10 +66,6 @@ const assertBunSetupContract = (candidate: typeof plan, context: Context) => {
     if (step.id) {
       values[`steps.${step.id}.outcome`] = runs ? "success" : "skipped";
     }
-    // The generated-source gate step only echoes required=true when it runs.
-    if (step.id === "generated-plan") {
-      values["steps.generated-plan.outputs.required"] = runs ? "true" : "";
-    }
   }
   expect(setups, "Bun setup count at job completion").toBe(
     consumers > 0 ? 1 : 0,
@@ -111,9 +107,6 @@ const axes = [
   ["github.token", ["", "fixture-token"]],
   ["steps.pilot.outputs.coverage_profile", ["normal-v1", "pilot-fast-v1"]],
   ["steps.changed-files.outputs.package_checks_required", ["false", "true"]],
-  // Read by the generated-source gate step.
-  ["steps.completed-depth.outputs.pr_depth_reused", ["", "true"]],
-  ["steps.pilot-plan.outputs.fast_jobs", ["", '["ci-checks-generated"]']],
   ["steps.changed-files.outputs.api_scope_unknown", ["false", "true"]],
   ["steps.changed-files.outputs.legal_atlas_image_required", ["true"]],
 ] as const satisfies readonly (readonly [
