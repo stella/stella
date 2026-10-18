@@ -413,21 +413,39 @@ jobs:
               merge_parent="$first_parent"
             fi
           fi
-          # A batched group's patch spans every entry; armed proof belongs to
-          # the queued pull request alone, so it compares that entry's own
-          # change: from the tree it was queued onto to the group head.
-          entry_patch_id=""
-          if [[ "$EVENT_NAME" == merge_group && "$GROUP_HEAD_REF" =~ /pr-[0-9]+-([0-9a-f]{40})$ ]]; then
-            entry_base="${BASH_REMATCH[1]}"
-            if git merge-base --is-ancestor "$entry_base" "$head" && ! git diff --quiet "$entry_base..$head"; then
-              entry_patch_id=$(git diff --binary "$entry_base..$head" | git patch-id --stable | awk 'NR == 1 { print $1 }')
-            fi
+          # A batched group's patch spans every entry from the group base, and
+          # armed proof belongs to each queued pull request alone. Each queue
+          # ref names the tree its entry was queued onto, the previous entry's
+          # head, so walking the refs down to the group base yields every
+          # entry's own change. A chain that does not reach the base is null.
+          entry_chain=null
+          if [[ "$EVENT_NAME" == merge_group ]]; then
+            queue_refs=$(git ls-remote origin 'refs/heads/gh-readonly-queue/*') || queue_refs=""
+            chain='[]'
+            ref="$GROUP_HEAD_REF"
+            entry_head="$head"
+            for _ in {1..20}; do
+              [[ "$ref" =~ /pr-([0-9]+)-([0-9a-f]{40})$ ]] || break
+              number="${BASH_REMATCH[1]}"
+              entry_base="${BASH_REMATCH[2]}"
+              git merge-base --is-ancestor "$entry_base" "$entry_head" || break
+              ! git diff --quiet "$entry_base..$entry_head" || break
+              entry_patch=$(git diff --binary "$entry_base..$entry_head" | git patch-id --stable | awk 'NR == 1 { print $1 }')
+              [[ "$entry_patch" =~ ^[0-9a-f]{40}$ ]] || break
+              chain=$(jq -c --argjson pr "$number" --arg patch "$entry_patch" '. + [{pr: $pr, patch_id: $patch}]' <<< "$chain")
+              if [[ "$entry_base" == "$base" ]]; then
+                entry_chain="$chain"
+                break
+              fi
+              ref=$(awk -v sha="$entry_base" '$1 == sha { print $2; exit }' <<< "$queue_refs")
+              entry_head="$entry_base"
+            done
           fi
           {
             echo "patch_id=$patch_id"
             echo "workflow_version=$workflow_version"
             echo "merge_parent=$merge_parent"
-            echo "entry_patch_id=$entry_patch_id"
+            echo "entry_chain=$entry_chain"
           } >> "$GITHUB_OUTPUT"
 
       - name: Derive PR-depth jobs
@@ -484,7 +502,7 @@ jobs:
           PATCH_ID: ${{ steps.patch-id.outputs.patch_id }}
           WORKFLOW_VERSION: ${{ steps.patch-id.outputs.workflow_version }}
           MERGE_PARENT: ${{ steps.patch-id.outputs.merge_parent }}
-          ENTRY_PATCH_ID: ${{ steps.patch-id.outputs.entry_patch_id }}
+          ENTRY_CHAIN: ${{ steps.patch-id.outputs.entry_chain }}
           PR_DEPTH_JOBS: ${{ steps.pr-depth-plan.outputs.pr_depth_jobs }}
         with:
           retries: 0
@@ -530,16 +548,17 @@ jobs:
                 return;
               }
             }
-            if ((!mergeGroup && context.eventName !== "pull_request") || !pr
+            const wellFormed = (pull) => pull != null
+                && typeof pull.title === "string"
+                && (pull.body == null || typeof pull.body === "string")
+                && Array.isArray(pull.labels)
+                && Number.isSafeInteger(pull.number)
+                && Number.isSafeInteger(pull.head?.repo?.id)
+                && /^[a-f0-9]{40}$/.test(pull.head?.sha || "")
+                && /^[a-f0-9]{40}$/.test(pull.base?.sha || "");
+            if ((!mergeGroup && context.eventName !== "pull_request")
                 || !["fast", "full"].includes(depth)
-                || typeof pr.title !== "string"
-                || (pr.body != null && typeof pr.body !== "string")
-                || !Array.isArray(pr.labels)
-                || !Number.isSafeInteger(pr.number)
-                || !Number.isSafeInteger(pr.head?.repo?.id)
-                || !/^[a-f0-9]{40}$/.test(pr.head?.sha || "")
-                || !/^[a-f0-9]{40}$/.test(pr.base?.sha || "")) return;
-            const proof = pr.labels.some((label) => label.name === "prove-fix");
+                || !wellFormed(pr)) return;
             const armed = !mergeGroup
               && (pr.auto_merge != null || pr.labels.some((label) => label.name === ARMED_LABEL));
             if (!mergeGroup) core.setOutput("armed", String(armed));
@@ -548,11 +567,12 @@ jobs:
             if (metadataAction) {
               core.setOutput("run_required", "false");
             }
-            const scope = require("node:crypto").createHash("sha256")
-              .update(JSON.stringify([pr.title, pr.body || "", proof])).digest("hex");
+            const scopeOf = (pull) => require("node:crypto").createHash("sha256")
+              .update(JSON.stringify([pull.title, pull.body || "",
+                pull.labels.some((label) => label.name === "prove-fix")])).digest("hex");
             const profile = mergeGroup ? "normal-v1" : process.env.COVERAGE_PROFILE || "normal-v1";
-            const markerFor = (sha, heavy) =>
-              `ci-completed-v6-${profile}-${pr.number}-${pr.head.repo.id}-${sha}-${depth}${heavy ? "-armed" : ""}-${scope}`;
+            const markerFor = (sha, heavy, pull = pr) =>
+              `ci-completed-v6-${profile}-${pull.number}-${pull.head.repo.id}-${sha}-${depth}${heavy ? "-armed" : ""}-${scopeOf(pull)}`;
             const marker = markerFor(pr.head.sha, armed);
             if (!mergeGroup) core.setOutput("marker", marker);
             // A push that only merges the base into a head whose run passed
@@ -569,8 +589,8 @@ jobs:
             // successful pull request run whose recorded contents show that
             // it planned its suites for that head and patch and that every
             // planned job succeeded. Any lookup failure finds nothing.
-            const completedEvidence = async ({ sha, heavy, patchId }) => {
-              const wanted = markerFor(sha, heavy);
+            const completedEvidence = async ({ sha, heavy, patchId, pull = pr }) => {
+              const wanted = markerFor(sha, heavy, pull);
               try {
                 const { data } = await github.rest.actions.listArtifactsForRepo({
                   ...context.repo, name: wanted, per_page: 100,
@@ -583,7 +603,7 @@ jobs:
                   && artifact.expired === false
                   && Date.parse(artifact.expires_at) > Date.now()
                   && artifact.workflow_run?.head_sha === sha
-                  && artifact.workflow_run?.head_repository_id === pr.head.repo.id
+                  && artifact.workflow_run?.head_repository_id === pull.head.repo.id
                   && Number.isSafeInteger(artifact.workflow_run?.id)
                   && artifact.workflow_run.id > 0
                   && artifact.workflow_run.id !== context.runId);
@@ -659,8 +679,8 @@ jobs:
                     || evidence.workflow_version !== process.env.WORKFLOW_VERSION
                     || !Number.isSafeInteger(evidence.run_attempt)
                     || evidence.run_attempt < 1
-                    || evidence.pr_number !== pr.number
-                    || evidence.head_repo_id !== pr.head.repo.id
+                    || evidence.pr_number !== pull.number
+                    || evidence.head_repo_id !== pull.head.repo.id
                     || evidence.head_sha !== sha
                     || evidence.suite_depth !== depth
                     || evidence.coverage_profile !== profile
@@ -703,14 +723,35 @@ jobs:
                 core.setOutput("pr_depth_source_run_id", String(fast.sourceId));
                 if (queue) core.setOutput("normal_completion", "complete");
               }
-              // The armed pull request run proved the queue-only suites for
-              // this pull request's own patch (a batched group's patch spans
-              // every entry); without that evidence the group runs them.
-              const heavy = await completedEvidence({ sha: pr.head.sha, heavy: true, patchId: process.env.ENTRY_PATCH_ID });
-              if (heavy) {
-                core.setOutput("armed_proof", "complete");
-                core.setOutput("armed_proof_source_run_id", String(heavy.sourceId));
+              // A batched group merges every entry from its base, so it skips
+              // the queue-only suites only when each entry's armed pull request
+              // run proved them for that entry's own patch; otherwise it runs
+              // them. The chain lists the queued pull request first.
+              const chain = JSON.parse(process.env.ENTRY_CHAIN || "null");
+              if (!Array.isArray(chain) || chain.length === 0 || chain.at(0)?.pr !== pr.number
+                  || new Set(chain.map((entry) => entry?.pr)).size !== chain.length
+                  || !chain.every((entry) => Number.isSafeInteger(entry?.pr) && entry.pr > 0
+                    && /^[0-9a-f]{40}$/.test(entry.patch_id || ""))) return;
+              let anchorProof = null;
+              for (const entry of chain) {
+                let pull = pr;
+                if (entry.pr !== pr.number) {
+                  try {
+                    ({ data: pull } = await github.rest.pulls.get({
+                      ...context.repo, pull_number: entry.pr, request: { timeout: 10000 },
+                    }));
+                  } catch {
+                    core.info(`Queued PR #${entry.pr} unavailable; running queue-only suites.`);
+                    return;
+                  }
+                  if (!wellFormed(pull) || pull.number !== entry.pr) return;
+                }
+                const heavy = await completedEvidence({ pull, sha: pull.head.sha, heavy: true, patchId: entry.patch_id });
+                if (!heavy) return;
+                anchorProof ??= heavy;
               }
+              core.setOutput("armed_proof", "complete");
+              core.setOutput("armed_proof_source_run_id", String(anchorProof.sourceId));
               return;
             }
             // A moved base never forces a re-test of an identical change: the

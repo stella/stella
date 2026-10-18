@@ -207,6 +207,14 @@ type LookupOptions = {
   /** The earlier head a merge of the base sits on, as the patch-id step names it. */
   mergeParent?: string;
   jobs?: unknown[];
+  /** The patch-id step's queue chain; defaults to the queued pull request alone. */
+  entryChain?: unknown;
+  /** Pull requests a chain names, by number; others resolve to `pull`. */
+  queuedPulls?: Record<number, unknown>;
+  /** Evidence archives by artifact id; others download `archive`. */
+  archives?: Record<number, Buffer>;
+  /** Source runs by id; others resolve to `sourceRun`. */
+  sourceRuns?: Record<number, unknown>;
 };
 const decide = async ({
   depth = "full",
@@ -234,6 +242,10 @@ const decide = async ({
   jobs: runJobs = sourceJobs,
   currentPatchId = patchId,
   mergeParent = "",
+  entryChain = [{ pr: pull.number, patch_id: currentPatchId }],
+  queuedPulls = {},
+  archives = {},
+  sourceRuns = {},
 }: LookupOptions = {}) => {
   const outputs = new Map<string, string>();
   const requests: unknown[] = [];
@@ -260,7 +272,8 @@ const decide = async ({
         QUEUE_DEPTH: queueDepth,
         GITHUB_RUN_ATTEMPT: "1",
         PATCH_ID: currentPatchId,
-        ENTRY_PATCH_ID: currentPatchId,
+        ENTRY_CHAIN:
+          event === "merge_group" ? JSON.stringify(entryChain) : "null",
         MERGE_PARENT: mergeParent,
         WORKFLOW_VERSION: pr.head.sha,
         PR_DEPTH_JOBS: JSON.stringify(prDepth),
@@ -288,12 +301,12 @@ const decide = async ({
       ) => (await method(request)).data,
       rest: {
         pulls: {
-          get: async (request: unknown) => {
+          get: async (request: { pull_number: number }) => {
             requests.push(request);
             if (failure) {
               throw new Error("Queued PR unavailable");
             }
-            return { data: pull };
+            return { data: queuedPulls[request.pull_number] ?? pull };
           },
         },
         repos: {
@@ -306,15 +319,16 @@ const decide = async ({
           },
         },
         actions: {
-          downloadArtifact: async (request: unknown) => {
+          downloadArtifact: async (request: { artifact_id: number }) => {
             requests.push(request);
             if (downloadFailure) {
               throw new Error("Evidence archive unavailable");
             }
+            const served = archives[request.artifact_id] ?? archive;
             return {
-              data: archive.buffer.slice(
-                archive.byteOffset,
-                archive.byteOffset + archive.byteLength,
+              data: served.buffer.slice(
+                served.byteOffset,
+                served.byteOffset + served.byteLength,
               ),
             };
           },
@@ -322,12 +336,12 @@ const decide = async ({
             requests.push(request);
             return { data: runJobs };
           },
-          getWorkflowRun: async (request: unknown) => {
+          getWorkflowRun: async (request: { run_id: number }) => {
             requests.push(request);
             if (runFailure) {
               throw new Error("Source run unavailable");
             }
-            return { data: sourceRun };
+            return { data: sourceRuns[request.run_id] ?? sourceRun };
           },
           listArtifactsForRepo: async (request: {
             name: string;
@@ -1638,6 +1652,7 @@ type PatchIdStepOptions = {
   event?: string;
   base: string;
   head: string;
+  groupRef?: string;
 };
 const patchIdStep = planner.steps.find((step) => step.id === "patch-id")?.run;
 const runPatchIdStep = ({
@@ -1645,6 +1660,7 @@ const runPatchIdStep = ({
   event = "pull_request",
   base,
   head,
+  groupRef = "",
 }: PatchIdStepOptions) => {
   const output = nodePath.join(repository, ".git", "step-output");
   writeFileSync(output, "");
@@ -1659,6 +1675,7 @@ const runPatchIdStep = ({
         PR_HEAD_SHA: head,
         GROUP_BASE_SHA: base,
         GROUP_HEAD_SHA: head,
+        GROUP_HEAD_REF: groupRef,
         WORKFLOW_SHA: head,
         GITHUB_OUTPUT: output,
       },
@@ -1776,6 +1793,152 @@ test("the patch-id step names the parent only of a merge of the base, with the p
         "merge_parent"
       ],
     ).toBe("");
+  } finally {
+    rmSync(repository, { recursive: true, force: true });
+  }
+});
+
+test("a batched group skips the queue-only suites only when every entry carries armed proof", async () => {
+  // #124 was queued before #123; the group merges both.
+  const earlier = {
+    ...pr,
+    number: 124,
+    head: { sha: "e".repeat(40), repo: { id: 456 } },
+  };
+  const earlierPatch = "f".repeat(40);
+  const earlierMarker = `ci-completed-v6-normal-v1-124-456-${earlier.head.sha}-fast-armed-${scope}`;
+  const earlierArtifact = {
+    ...armedArtifact,
+    id: 8,
+    name: earlierMarker,
+    workflow_run: {
+      id: 98,
+      head_sha: earlier.head.sha,
+      head_repository_id: 456,
+    },
+  };
+  const earlierEvidence = {
+    ...armedEvidence,
+    marker: earlierMarker,
+    run_id: 98,
+    pr_number: 124,
+    head_sha: earlier.head.sha,
+    patch_id: earlierPatch,
+  };
+  const chain = [
+    { pr: 123, patch_id: patchId },
+    { pr: 124, patch_id: earlierPatch },
+  ];
+  const group = (options: LookupOptions) =>
+    decide({
+      event: "merge_group",
+      queueDepth: "thin",
+      evidence: armedEvidence,
+      entryChain: chain,
+      queuedPulls: { 124: earlier },
+      archives: { 8: zipEvidence(JSON.stringify(earlierEvidence)) },
+      sourceRuns: {
+        98: { ...successfulRun, id: 98, head_sha: earlier.head.sha },
+      },
+      ...options,
+    });
+  // The queued pull request is proven; the earlier entry is not.
+  const partial = await group({ artifacts: [armedArtifact] });
+  expect(partial.outputs.get("armed_proof")).toBeUndefined();
+  const proven = await group({ artifacts: [armedArtifact, earlierArtifact] });
+  expect(proven.outputs.get("armed_proof")).toBe("complete");
+  expect(proven.outputs.get("armed_proof_source_run_id")).toBe("99");
+  // Proof for another patch of the earlier pull request is not proof.
+  const otherPatch = await group({
+    artifacts: [armedArtifact, earlierArtifact],
+    entryChain: [chain[0], { pr: 124, patch_id: "0".repeat(40) }],
+  });
+  expect(otherPatch.outputs.get("armed_proof")).toBeUndefined();
+  // An unresolved chain, or one not led by the queued pull request, proves nothing.
+  for (const entryChain of [null, [], chain.toReversed()]) {
+    const { outputs } = await group({
+      artifacts: [armedArtifact, earlierArtifact],
+      entryChain,
+    });
+    expect(
+      outputs.get("armed_proof"),
+      JSON.stringify(entryChain),
+    ).toBeUndefined();
+  }
+});
+
+test("the patch-id step lists every queue entry's own patch down to the group base", () => {
+  const repository = mkdtempSync(nodePath.join(tmpdir(), "ci-entry-chain-"));
+  const git = (...args: string[]) => {
+    const command = Bun.spawnSync(["git", ...args], {
+      cwd: repository,
+      env: {
+        PATH: process.env["PATH"] ?? "",
+        GIT_AUTHOR_NAME: "CI",
+        GIT_AUTHOR_EMAIL: "ci@example.test",
+        GIT_COMMITTER_NAME: "CI",
+        GIT_COMMITTER_EMAIL: "ci@example.test",
+      },
+    });
+    expect(command.exitCode, command.stderr.toString()).toBe(0);
+    return command.stdout.toString().trim();
+  };
+  const commit = (file: string, message: string) => {
+    writeFileSync(nodePath.join(repository, file), `${message}\n`);
+    git("add", "--all");
+    git("commit", "--quiet", "--message", message);
+    return git("rev-parse", "HEAD");
+  };
+  const patchOf = (from: string, to: string) =>
+    Bun.spawnSync(
+      [
+        "bash",
+        "-c",
+        `git diff --binary ${from}..${to} | git patch-id --stable | awk 'NR == 1 { print $1 }'`,
+      ],
+      {
+        cwd: repository,
+      },
+    )
+      .stdout.toString()
+      .trim();
+  try {
+    git("init", "--quiet", "--template=", "--initial-branch=main");
+    // The repository is its own origin, so ls-remote reads its queue refs.
+    git("remote", "add", "origin", repository);
+    // The step identifies the workflow version from the head's own ci.yml.
+    mkdirSync(nodePath.join(repository, ".github", "workflows"), {
+      recursive: true,
+    });
+    const base = commit(".github/workflows/ci.yml", "workflow");
+    const first = commit("first.txt", "first entry");
+    const second = commit("second.txt", "second entry");
+    const firstRef = `refs/heads/gh-readonly-queue/main/pr-11-${base}`;
+    const secondRef = `refs/heads/gh-readonly-queue/main/pr-12-${first}`;
+    git("update-ref", firstRef, first);
+    git("update-ref", secondRef, second);
+    const chain = (head: string, groupRef: string) =>
+      runPatchIdStep({
+        repository,
+        event: "merge_group",
+        base,
+        head,
+        groupRef,
+      })["entry_chain"];
+    expect(JSON.parse(chain(second, secondRef) ?? "")).toEqual([
+      { pr: 12, patch_id: patchOf(first, second) },
+      { pr: 11, patch_id: patchOf(base, first) },
+    ]);
+    expect(JSON.parse(chain(first, firstRef) ?? "")).toEqual([
+      { pr: 11, patch_id: patchOf(base, first) },
+    ]);
+    // An entry whose queue ref is gone breaks the chain: nothing is proven.
+    git("update-ref", "-d", firstRef);
+    expect(chain(second, secondRef)).toBe("null");
+    // A pull request run has no chain.
+    expect(
+      runPatchIdStep({ repository, base, head: second })["entry_chain"],
+    ).toBe("null");
   } finally {
     rmSync(repository, { recursive: true, force: true });
   }
