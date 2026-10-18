@@ -1,5 +1,5 @@
-import { useChatEditor } from "@/components/chat-editor-provider";
-import { getLiveEditor } from "@/components/live-editor";
+import { useChatEditor } from "apps/web/src/components/chat-editor-provider";
+import { getLiveEditor } from "apps/web/src/components/live-editor";
 
 export const Composer = () => {
   const controller = useChatEditor({});
