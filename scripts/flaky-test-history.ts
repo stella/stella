@@ -1259,7 +1259,13 @@ if (import.meta.main) {
   const [command = "", ...args] = process.argv.slice(2);
   switch (command) {
     case "job-summary":
-      await runJobSummary(args);
+      // Reporting only: a truncated record or an unreadable history becomes a
+      // warning, never a failure of the job that ran the tests.
+      await runJobSummary(args).catch((error: unknown) => {
+        console.log(
+          `::warning title=Quarantine report unavailable::${annotationData(error instanceof Error ? error.message : String(error))}`,
+        );
+      });
       break;
     case "scan":
       await runScan(args);

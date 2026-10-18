@@ -741,3 +741,30 @@ describe("CODEOWNERS proposals", () => {
     expect(serialized).toBe(serializeRegistry(proposal.registry));
   });
 });
+
+test("the job summary reports an unreadable record as a warning and never fails the job", () => {
+  const reports = mkdtempSync(path.join(tmpdir(), "flaky-test-report-"));
+  try {
+    // A test process killed mid-write leaves a truncated line.
+    writeFileSync(
+      path.join(reports, "1-killed.jsonl"),
+      '{"type":"failed","id":',
+    );
+    const run = Bun.spawnSync(
+      [
+        process.execPath,
+        "scripts/flaky-test-history.ts",
+        "job-summary",
+        "--reports",
+        reports,
+      ],
+      { cwd: path.join(import.meta.dir, ".."), stdout: "pipe", stderr: "pipe" },
+    );
+    expect(run.exitCode, run.stderr.toString()).toBe(0);
+    expect(run.stdout.toString()).toContain(
+      "::warning title=Quarantine report unavailable::",
+    );
+  } finally {
+    rmSync(reports, { recursive: true, force: true });
+  }
+});
