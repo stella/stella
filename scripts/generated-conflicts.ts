@@ -47,6 +47,10 @@ import {
   orderGenerators,
 } from "./generated-files";
 
+// Computed reads here are plans, manifests and git blobs copied into
+// temporary trees; none is repository Markdown.
+export const CI_MARKDOWN_READER_INPUTS: readonly string[] = [];
+
 class GeneratedConflictsError extends Error {
   override name = "GeneratedConflictsError";
   readonly _tag = "GeneratedConflictsError";
@@ -73,29 +77,23 @@ const SHA = /^[0-9a-f]{40}$/u;
 const ownersOf = (
   file: string,
   generators: readonly Generator[],
+  outputKinds: readonly Generator["outputKind"][] = ["committed"],
 ): Generator[] =>
   generators.filter(
     (generator) =>
-      generator.outputKind === "committed" &&
+      outputKinds.includes(generator.outputKind) &&
       generator.outputs.some((output) => matchesGeneratedGlob(output, file)),
   );
 
-/** Why `conflict` needs a person, or null when its owner can regenerate it. */
-const conflictReason = (
-  conflict: Conflict,
-  generators: readonly Generator[],
+/**
+ * Why the owners of `file` cannot take it over automatically, or null when
+ * every owner writes the whole file and is autofix-eligible. Shared by the
+ * regenerate and keep-deletion paths so both apply the same safeguards.
+ */
+const ownerReason = (
+  file: string,
+  owners: readonly Generator[],
 ): string | null => {
-  const { path: file, kind } = conflict;
-  if (kind === "delete-modify") {
-    return `${file}: one side deleted it`;
-  }
-  if (LOCKFILE.test(file)) {
-    return `${file}: lockfiles are resolved by people`;
-  }
-  if (isAutofixProtectedPath(file) || file.startsWith(".github/")) {
-    return `${file}: a protected path`;
-  }
-  const owners = ownersOf(file, generators);
   if (owners.length === 0) {
     return `${file}: not a generated output`;
   }
@@ -111,10 +109,30 @@ const conflictReason = (
   return null;
 };
 
+/** Why `conflict` needs a person, or null when its owner can regenerate it. */
+const conflictReason = (
+  conflict: Conflict,
+  generators: readonly Generator[],
+  deletions: ReadonlySet<string>,
+): string | null => {
+  const { path: file, kind } = conflict;
+  if (LOCKFILE.test(file)) {
+    return `${file}: lockfiles are resolved by people`;
+  }
+  if (isAutofixProtectedPath(file) || file.startsWith(".github/")) {
+    return `${file}: a protected path`;
+  }
+  if (kind === "delete-modify") {
+    return deletions.has(file) ? null : `${file}: one side deleted it`;
+  }
+  return ownerReason(file, ownersOf(file, generators));
+};
+
 /** Pure: decide whether every conflict is a regenerable output. */
 export const classifyConflicts = (
   conflicts: readonly Conflict[],
   generators: readonly Generator[] = GENERATORS,
+  deletions: ReadonlySet<string> = new Set(),
 ): Classification => {
   const sorted = conflicts.toSorted(
     // Byte order: paths are identifiers, not prose.
@@ -124,15 +142,27 @@ export const classifyConflicts = (
     return { eligible: false, conflicts: sorted, reasons: ["no conflicts"] };
   }
   const reasons = sorted.flatMap((conflict) => {
-    const reason = conflictReason(conflict, generators);
+    const reason = conflictReason(conflict, generators, deletions);
     return reason === null ? [] : [reason];
   });
   if (reasons.length > 0) {
     return { eligible: false, conflicts: sorted, reasons };
   }
-  const selected = orderGenerators(
-    generatorsForFiles(sorted.map(({ path: file }) => file)),
+  const generatedFiles = sorted.flatMap(({ path: file, kind }) =>
+    kind === "delete-modify" ? [] : [file],
   );
+  const selected =
+    generators === GENERATORS
+      ? orderGenerators(generatorsForFiles(generatedFiles))
+      : orderGenerators(
+          generators.filter(
+            (generator) =>
+              generator.autofix &&
+              [...generator.inputs, ...generator.outputs].some((glob) =>
+                generatedFiles.some((file) => matchesGeneratedGlob(glob, file)),
+              ),
+          ),
+        );
   return {
     eligible: true,
     conflicts: sorted,
@@ -271,6 +301,104 @@ const neutralizeAttributes = (gitDir: string) => {
   }
 };
 
+const pathInTree = (gitDir: string, tree: string, file: string) =>
+  git(gitDir, ["ls-tree", "-z", tree, "--", file]).stdout !== "";
+
+/** Ask Git whether the ignore files stored in `tree` ignore `file`. */
+export const ignoredInTree = (
+  gitDir: string,
+  tree: string,
+  file: string,
+): boolean => {
+  const scratch = mkdtempSync(path.join(tmpdir(), "generated-ignore-"));
+  try {
+    // An empty template: no info/exclude from the Git installation, so only
+    // the tree's own .gitignore files decide.
+    const initialized = Bun.spawnSync(["git", "init", "-q", "--template="], {
+      cwd: scratch,
+      stdout: "pipe",
+      stderr: "pipe",
+      env: {
+        PATH: process.env["PATH"] ?? "/usr/bin:/bin",
+        HOME: tmpdir(),
+        GIT_CONFIG_GLOBAL: "/dev/null",
+        GIT_CONFIG_NOSYSTEM: "1",
+      },
+    });
+    if (initialized.exitCode !== 0) {
+      fail(`git init failed: ${initialized.stderr.toString().trim()}`);
+    }
+    const records = git(gitDir, ["ls-tree", "-r", "-z", tree]).stdout.split(
+      "\0",
+    );
+    for (const record of records) {
+      const match = /^(100644|100755) blob ([0-9a-f]{40})\t(.+)$/su.exec(
+        record,
+      );
+      if (!match?.[2] || match[3] === undefined) {
+        continue;
+      }
+      if (path.basename(match[3]) !== ".gitignore") {
+        continue;
+      }
+      const target = path.join(scratch, match[3]);
+      mkdirSync(path.dirname(target), { recursive: true });
+      writeFileSync(target, git(gitDir, ["cat-file", "blob", match[2]]).stdout);
+    }
+    const target = path.join(scratch, file);
+    mkdirSync(path.dirname(target), { recursive: true });
+    writeFileSync(target, "");
+    return (
+      Bun.spawnSync(["git", "check-ignore", "--no-index", "-q", "--", file], {
+        cwd: scratch,
+        stdout: "pipe",
+        stderr: "pipe",
+        env: {
+          PATH: process.env["PATH"] ?? "/usr/bin:/bin",
+          HOME: tmpdir(),
+          GIT_CONFIG_GLOBAL: "/dev/null",
+          GIT_CONFIG_NOSYSTEM: "1",
+        },
+      }).exitCode === 0
+    );
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+};
+
+type DeletionsForOptions = {
+  gitDir: string;
+  head: string;
+  main: string;
+  conflicts: readonly Conflict[];
+  generators: readonly Generator[];
+};
+
+const deletionsFor = ({
+  gitDir,
+  head,
+  main,
+  conflicts,
+  generators,
+}: DeletionsForOptions) =>
+  conflicts
+    .filter(
+      ({ path: file, kind }) =>
+        kind === "delete-modify" &&
+        !LOCKFILE.test(file) &&
+        !isAutofixProtectedPath(file) &&
+        !file.startsWith(".github/") &&
+        !pathInTree(gitDir, head, file) &&
+        pathInTree(gitDir, main, file) &&
+        ignoredInTree(gitDir, head, file) &&
+        ownerReason(
+          file,
+          ownersOf(file, generators, ["committed", "derived"]),
+        ) === null,
+    )
+    .map(({ path: file }) => file)
+    .toSorted();
+
 /** Build a tree from `base` with `edit` applied to a private index. */
 const editTree = (
   gitDir: string,
@@ -288,15 +416,29 @@ const editTree = (
   }
 };
 
+const removeFromIndex = (gitDir: string, index: string, file: string) => {
+  git(gitDir, ["update-index", "-z", "--index-info"], {
+    index,
+    input: Buffer.from(`0 ${"0".repeat(40)}\t${file}\0`),
+  });
+};
+
 export type Plan = Classification & {
   head: string;
   main: string;
   /** The merged tree with main's side of each conflicted output. */
   baseline: string | null;
+  /** Conflicted generated outputs whose head-side deletion is preserved. */
+  deletions: string[];
 };
 
 /** Merge `main` into `head` in memory and classify the conflicts. */
-export const plan = (gitDir: string, head: string, main: string): Plan => {
+export const plan = (
+  gitDir: string,
+  head: string,
+  main: string,
+  generators: readonly Generator[] = GENERATORS,
+): Plan => {
   if (!SHA.test(head) || !SHA.test(main)) {
     fail("head and main must be full commit SHAs");
   }
@@ -315,9 +457,21 @@ export const plan = (gitDir: string, head: string, main: string): Plan => {
   }
   const end = rest.indexOf("");
   const entries = parseStageEntries(end === -1 ? rest : rest.slice(0, end));
-  const classification = classifyConflicts(conflictsOf(entries));
+  const conflicts = conflictsOf(entries);
+  const deletions = deletionsFor({
+    gitDir,
+    head,
+    main,
+    conflicts,
+    generators,
+  });
+  const classification = classifyConflicts(
+    conflicts,
+    generators,
+    new Set(deletions),
+  );
   if (!classification.eligible) {
-    return { ...classification, head, main, baseline: null };
+    return { ...classification, head, main, baseline: null, deletions };
   }
   const theirs = entries.filter((entry) => entry.stage === "3");
   const baseline = editTree(gitDir, mergedTree, (index) => {
@@ -333,8 +487,11 @@ export const plan = (gitDir: string, head: string, main: string): Plan => {
         { index },
       );
     }
+    for (const file of deletions) {
+      removeFromIndex(gitDir, index, file);
+    }
   });
-  return { ...classification, head, main, baseline };
+  return { ...classification, head, main, baseline, deletions };
 };
 
 type ManifestFile = { path: string; deleted: boolean; mode: string };
@@ -344,6 +501,7 @@ type Manifest = {
   main: string;
   baseline: string;
   tree: string;
+  deletions: string[];
   files: ManifestFile[];
 };
 
@@ -352,11 +510,14 @@ const isManifest = (value: unknown): value is Manifest => {
     return false;
   }
   const files: unknown = Reflect.get(value, "files");
+  const deletions: unknown = Reflect.get(value, "deletions");
   return (
     ["head", "main", "baseline", "tree"].every((key) =>
       SHA.test(String(Reflect.get(value, key))),
     ) &&
     Array.isArray(files) &&
+    Array.isArray(deletions) &&
+    deletions.every((file: unknown) => typeof file === "string") &&
     files.every(
       (file: unknown) =>
         typeof file === "object" &&
@@ -423,24 +584,30 @@ export const pathShapeProblem = (
   return null;
 };
 
-const readPlan = (file: string): Plan => {
+const readPlan = (
+  file: string,
+  generators: readonly Generator[] = GENERATORS,
+): Plan => {
   const parsed: unknown = JSON.parse(readFileSync(file, "utf-8"));
   const read = (key: string): unknown =>
     typeof parsed === "object" && parsed !== null
       ? Reflect.get(parsed, key)
       : undefined;
-  const [head, main, baseline, listed] = [
+  const [head, main, baseline, listed, storedDeletions] = [
     read("head"),
     read("main"),
     read("baseline"),
     read("conflicts"),
+    read("deletions"),
   ];
   if (
     typeof head !== "string" ||
     typeof main !== "string" ||
     typeof baseline !== "string" ||
     !SHA.test(baseline) ||
-    !Array.isArray(listed)
+    !Array.isArray(listed) ||
+    !Array.isArray(storedDeletions) ||
+    !storedDeletions.every((item: unknown) => typeof item === "string")
   ) {
     return fail(`${file} is not an eligible plan`);
   }
@@ -456,26 +623,37 @@ const readPlan = (file: string): Plan => {
         : undefined;
     if (
       typeof conflictPath !== "string" ||
-      (kind !== "both-modified" && kind !== "both-added")
+      (kind !== "both-modified" &&
+        kind !== "both-added" &&
+        kind !== "delete-modify")
     ) {
       return fail("Malformed conflict entry");
     }
     return { path: conflictPath, kind };
   });
-  return { ...classifyConflicts(conflicts), head, main, baseline };
+  const deletions = storedDeletions.toSorted();
+  return {
+    ...classifyConflicts(conflicts, generators, new Set(deletions)),
+    head,
+    main,
+    baseline,
+    deletions,
+  };
 };
 
 /** Resolve run: package what the generators wrote on top of the baseline. */
-const collect = ({
+export const collect = ({
   repo,
   planFile,
   out,
+  generators = GENERATORS,
 }: {
   repo: string;
   planFile: string;
   out: string;
+  generators?: readonly Generator[];
 }) => {
-  const planned = readPlan(planFile);
+  const planned = readPlan(planFile, generators);
   if (!planned.eligible || planned.baseline === null) {
     fail("collect needs an eligible plan");
   }
@@ -536,6 +714,7 @@ const collect = ({
     main: planned.main,
     baseline: planned.baseline,
     tree,
+    deletions: planned.deletions,
     files,
   };
   writeFileSync(
@@ -566,6 +745,7 @@ export type ApplyOptions = {
   mainTip: string;
   collected: string;
   out: string;
+  generators?: readonly Generator[];
 };
 
 /**
@@ -579,6 +759,7 @@ export const apply = ({
   mainTip,
   collected,
   out,
+  generators = GENERATORS,
 }: ApplyOptions) => {
   assertPlainTree(collected);
   const parsed: unknown = JSON.parse(
@@ -597,7 +778,7 @@ export const apply = ({
   ) {
     fail("The collected resolution merges a commit that is not on main");
   }
-  const planned = plan(gitDir, head, parsed.main);
+  const planned = plan(gitDir, head, parsed.main, generators);
   if (!planned.eligible || planned.baseline === null) {
     fail(
       `The merge is not generated-only:\n${planned.eligible ? "" : planned.reasons.join("\n")}`,
@@ -605,6 +786,9 @@ export const apply = ({
   }
   if (planned.baseline !== parsed.baseline) {
     fail("The collected resolution started from a different merge");
+  }
+  if (planned.deletions.join("\0") !== parsed.deletions.toSorted().join("\0")) {
+    fail("The collected resolution lists different deletions");
   }
   const headTree = git(gitDir, ["rev-parse", `${head}^{tree}`]).stdout.trim();
   const shapes = [
@@ -635,9 +819,7 @@ export const apply = ({
   const tree = editTree(gitDir, planned.baseline, (index) => {
     for (const file of parsed.files) {
       if (file.deleted) {
-        git(gitDir, ["update-index", "--force-remove", "--", file.path], {
-          index,
-        });
+        removeFromIndex(gitDir, index, file.path);
         continue;
       }
       const source = path.join(collected, "files", file.path);

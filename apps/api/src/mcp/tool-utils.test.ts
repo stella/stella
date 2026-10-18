@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import fc from "fast-check";
 import * as v from "valibot";
 
+import { assertProperty } from "@stll/property-testing";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import { env } from "@/api/env";
@@ -16,6 +18,8 @@ import {
   legalCitationLinkFields,
   buildCaseLawDecisionUrl,
   closestToolNames,
+  toolNameDistance,
+  toolNameKey,
   didYouMean,
   ensureActiveWorkspace,
   ensureWorkspaceAccess,
@@ -732,6 +736,56 @@ describe("notFoundResult", () => {
   });
 });
 
+const legacyAsciiDistance = (left: string, right: string): number => {
+  let previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+  for (let row = 1; row <= left.length; row += 1) {
+    const current = [row];
+    for (let column = 1; column <= right.length; column += 1) {
+      current.push(
+        Math.min(
+          (previous[column] ?? 0) + 1,
+          (current[column - 1] ?? 0) + 1,
+          (previous[column - 1] ?? 0) +
+            (left[row - 1] === right[column - 1] ? 0 : 1),
+        ),
+      );
+    }
+    previous = current;
+  }
+  return previous[right.length] ?? 0;
+};
+
+test("ASCII tool distances retain the legacy minimum across name variants", () => {
+  const spelling = fc.stringMatching(/^[a-zA-Z._-]{0,14}$/u);
+  assertProperty(
+    "ASCII tool distances retain the legacy minimum across name variants",
+    fc.property(spelling, spelling, (target, name) => {
+      const sortWords = (value: string) =>
+        value.split(/[._-]/u).toSorted().join(" ");
+      expect(toolNameDistance(target, name)).toBe(
+        Math.min(
+          legacyAsciiDistance(target, name),
+          legacyAsciiDistance(sortWords(target), sortWords(name)),
+          legacyAsciiDistance(toolNameKey(target), toolNameKey(name)),
+        ),
+      );
+    }),
+  );
+});
+
+test("tool suggestions retain Czech diacritics and inflected names", () => {
+  expect(toolNameDistance("kůň", "kun")).toBe(2);
+  expect(toolNameDistance("Novákem", "Novák")).toBe(2);
+  expect(closestToolNames("kůň", ["kun", "kům"])).toEqual(["kům", "kun"]);
+});
+
+test("tool suggestions count astral Unicode characters as single edits", () => {
+  expect(toolNameDistance("😀", "x")).toBe(1);
+  expect(toolNameDistance("a😀😀", "abc")).toBe(2);
+  expect(closestToolNames("😀", ["x"])).toEqual(["x"]);
+  expect(closestToolNames("a😀😀", ["abc"])).toEqual(["abc"]);
+});
+
 describe("closestToolNames", () => {
   const candidates = [
     "list_matters",
@@ -758,6 +812,12 @@ describe("closestToolNames", () => {
 
   test("returns nothing for an unrelated miss", () => {
     expect(closestToolNames("zzzzzzzzzzzz", candidates)).toEqual([]);
+  });
+
+  test("keeps ASCII tie order and empty candidate behavior", () => {
+    expect(closestToolNames("x", ["b", "a"])).toEqual(["a", "b"]);
+    expect(closestToolNames("x", [])).toEqual([]);
+    expect(closestToolNames("", ["a", "ab"])).toEqual(["a"]);
   });
 
   test("caps the suggestions at the requested limit", () => {
