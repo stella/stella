@@ -280,7 +280,9 @@ const compilePattern = (pattern: string): CompiledPattern => {
   return {
     anchored,
     segments,
-    specificity: body.replaceAll("*", "").length,
+    // RFC 9309 ranks rules by octets; a normalized %XX escape is one octet.
+    specificity: body.replaceAll("*", "").replaceAll(/%[\dA-F]{2}/gu, "%")
+      .length,
   };
 };
 

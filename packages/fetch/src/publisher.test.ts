@@ -228,6 +228,25 @@ describe("RFC 9309 matching", () => {
       evaluatePublisherRobots(groups, "Stella", "/caf%C3%A9").allowed,
     ).toBe(false);
   });
+
+  test.each(["/é*", "/%C3%A9*"])(
+    "rule specificity counts an encoded octet once (Allow %s)",
+    (allow) => {
+      // "/é" is three octets, so the five-octet Disallow is more specific.
+      const groups = [
+        {
+          agents: ["stella"],
+          rules: [
+            { type: "allow" as const, pattern: allow },
+            { type: "disallow" as const, pattern: "/*abcd" },
+          ],
+        },
+      ];
+      expect(evaluatePublisherRobots(groups, "Stella", "/éabcd").allowed).toBe(
+        false,
+      );
+    },
+  );
 });
 
 describe("publisher scheduler", () => {
