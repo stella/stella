@@ -48,7 +48,6 @@ export const READ_STATUTE_PROVISIONS_PROJECTION = v.strictObject({
       projectionBranch(
         v.strictObject({
           ...provisionEntrySubject,
-          appUrl: v.nullable(v.string()),
           url: v.nullable(publicUrl()),
           source_url: v.optional(publicUrl()),
           documentId: passthroughId(),
@@ -65,7 +64,6 @@ export const READ_STATUTE_PROVISIONS_PROJECTION = v.strictObject({
         projectionBranch(
           v.strictObject({
             ...provisionEntrySubject,
-            appUrl: v.optional(v.nullable(v.string())),
             url: v.optional(v.nullable(publicUrl())),
             source_url: v.optional(publicUrl()),
             message: v.string(),
@@ -91,7 +89,6 @@ export const READ_STATUTE_PROVISIONS_PROJECTION = v.strictObject({
 });
 
 const statuteProvisionVersion = {
-  appUrl: v.nullable(v.string()),
   url: v.nullable(publicUrl()),
   source_url: v.optional(publicUrl()),
   documentId: passthroughId(),

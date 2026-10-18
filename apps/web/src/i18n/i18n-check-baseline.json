@@ -366,6 +366,9 @@
     "chat.landing.skills": [
       "de"
     ],
+    "chat.mention.category.sources": [
+      "fr"
+    ],
     "chat.pastedText.fromPromptFallback": [
       "de"
     ],
