@@ -10,7 +10,12 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import type { SafeId } from "@/api/lib/branded-types";
-import { ChatToolError, HandlerError } from "@/api/lib/errors/tagged-errors";
+import { abortTransaction } from "@/api/lib/db/transaction-abort";
+import {
+  ChatToolError,
+  HandlerError,
+  ConcurrentModificationError,
+} from "@/api/lib/errors/tagged-errors";
 import { createMemoryDedupIdentity } from "@/api/lib/memory/memory-dedup";
 import type { MemoryDedupScope } from "@/api/lib/memory/memory-dedup";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
@@ -272,6 +277,90 @@ export type PersistExplicitMemoryResult = {
   type: "created" | "existing" | "reactivated";
 };
 
+const MEMORY_DEDUP_MAX_ATTEMPTS = 3;
+
+type InsertOrLockMemoryOptions = {
+  tx: Transaction;
+  values: typeof aiMemories.$inferInsert;
+  attempt?: number;
+  recordAuditEvent: AuditRecorder;
+};
+
+type InsertOrLockMemoryResult =
+  | { type: "inserted"; id: SafeId<"aiMemory"> }
+  | {
+      type: "existing";
+      memory: Pick<
+        typeof aiMemories.$inferSelect,
+        "id" | "language" | "pinned" | "status"
+      >;
+    };
+
+const insertOrLockMemory = async ({
+  tx,
+  values,
+  recordAuditEvent,
+  attempt = 1,
+}: InsertOrLockMemoryOptions): Promise<InsertOrLockMemoryResult> => {
+  const [inserted] = await tx
+    .insert(aiMemories)
+    .values(values)
+    .onConflictDoNothing({
+      target: [aiMemories.organizationId, aiMemories.dedupKey],
+    })
+    .returning({ id: aiMemories.id });
+
+  if (inserted) {
+    await recordAuditEvent(tx, {
+      action: AUDIT_ACTION.CREATE,
+      resourceType: AUDIT_RESOURCE_TYPE.AI_MEMORY,
+      resourceId: inserted.id,
+      workspaceId: values.workspaceId ?? null,
+      changes: {
+        created: {
+          old: null,
+          new: { scope: values.scope, kind: values.kind },
+        },
+      },
+    });
+    return { type: "inserted", id: inserted.id };
+  }
+  const [existing] = await tx
+    .select({
+      id: aiMemories.id,
+      language: aiMemories.language,
+      pinned: aiMemories.pinned,
+      status: aiMemories.status,
+    })
+    .from(aiMemories)
+    .where(
+      and(
+        eq(aiMemories.organizationId, values.organizationId),
+        eq(aiMemories.dedupKey, values.dedupKey),
+      ),
+    )
+    .limit(1)
+    .for("update");
+
+  if (existing) {
+    return { type: "existing", memory: existing };
+  }
+  if (attempt >= MEMORY_DEDUP_MAX_ATTEMPTS) {
+    return abortTransaction(
+      new ConcurrentModificationError({
+        message: "Memory changed repeatedly while saving; retry the request",
+      }),
+    );
+  }
+  // A confirmed deletion can remove the conflict between INSERT and SELECT.
+  return await insertOrLockMemory({
+    tx,
+    values,
+    recordAuditEvent,
+    attempt: attempt + 1,
+  });
+};
+
 /**
  * Insert an explicit user/tool memory under the database's exact-dedup
  * constraint. Active duplicates are idempotent. An explicit duplicate of an
@@ -305,49 +394,11 @@ export const persistExplicitMemory = async ({
     pinned: memory.pinned,
     createdBy: target.createdBy,
   } satisfies typeof aiMemories.$inferInsert;
-  const [inserted] = await tx
-    .insert(aiMemories)
-    .values(values)
-    .onConflictDoNothing({
-      target: [aiMemories.organizationId, aiMemories.dedupKey],
-    })
-    .returning({ id: aiMemories.id });
-
-  if (inserted) {
-    await recordAuditEvent(tx, {
-      action: AUDIT_ACTION.CREATE,
-      resourceType: AUDIT_RESOURCE_TYPE.AI_MEMORY,
-      resourceId: inserted.id,
-      workspaceId: values.workspaceId ?? null,
-      changes: {
-        created: {
-          old: null,
-          new: { scope: values.scope, kind: values.kind },
-        },
-      },
-    });
-    return { id: inserted.id, type: "created" };
+  const locked = await insertOrLockMemory({ tx, values, recordAuditEvent });
+  if (locked.type === "inserted") {
+    return { id: locked.id, type: "created" };
   }
-
-  const [existing] = await tx
-    .select({
-      id: aiMemories.id,
-      language: aiMemories.language,
-      pinned: aiMemories.pinned,
-      status: aiMemories.status,
-    })
-    .from(aiMemories)
-    .where(
-      and(
-        eq(aiMemories.organizationId, values.organizationId),
-        eq(aiMemories.dedupKey, values.dedupKey),
-      ),
-    )
-    .limit(1)
-    .for("update");
-  if (!existing) {
-    panic("Memory dedup conflict row disappeared");
-  }
+  const existing = locked.memory;
   const nextLanguage =
     metadataOnConflict?.language !== undefined &&
     metadataOnConflict.language !== existing.language
