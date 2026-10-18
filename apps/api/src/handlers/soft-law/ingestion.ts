@@ -106,6 +106,16 @@ type FetchedSoftLawItem = {
   count: number;
   rawByteLength: number;
 };
+type SoftLawIdentityResolution =
+  | {
+      kind: "create" | "attach";
+      documentId: SafeId<"softLawDocument">;
+    }
+  | {
+      kind: "merge_repaired_placeholder";
+      documentId: SafeId<"softLawDocument">;
+      placeholderDocumentId: SafeId<"softLawDocument">;
+    };
 type FetchSoftLawItemOptions = Pick<
   PrepareSoftLawPageOptions,
   "adapter" | "signal" | "fetch"
@@ -387,11 +397,48 @@ const prepareSoftLawPage = async (options: PrepareSoftLawPageOptions) => {
       continue;
     }
     const existing = matches.at(0);
-    const documentId =
-      locator?.document.id ??
-      existing?.document.id ??
-      accepted?.documentId ??
-      createSafeId<"softLawDocument">();
+    const resolution: SoftLawIdentityResolution = (() => {
+      if (
+        repairsFailedExtraction &&
+        existing &&
+        locator.document.id !== existing.document.id
+      ) {
+        return {
+          kind: "merge_repaired_placeholder",
+          documentId: existing.document.id,
+          placeholderDocumentId: locator.document.id,
+        };
+      }
+      if (locator) {
+        return { kind: "attach", documentId: locator.document.id };
+      }
+      if (existing) {
+        return { kind: "attach", documentId: existing.document.id };
+      }
+      if (accepted) {
+        return { kind: "attach", documentId: accepted.documentId };
+      }
+      return {
+        kind: "create",
+        documentId: createSafeId<"softLawDocument">(),
+      };
+    })();
+    let identityResolution: SoftLawObservation["identityResolution"];
+    switch (resolution.kind) {
+      case "create":
+      case "attach":
+        identityResolution = { kind: resolution.kind };
+        break;
+      case "merge_repaired_placeholder":
+        identityResolution = {
+          kind: resolution.kind,
+          placeholderDocumentId: resolution.placeholderDocumentId,
+        };
+        break;
+      default:
+        resolution satisfies never;
+        return panic("Unknown soft-law identity resolution");
+    }
     const written = await Result.tryPromise(async () => {
       const rawObjects: SoftLawObservation["rawObjects"] = [];
       for (const part of input.raw) {
@@ -409,7 +456,15 @@ const prepareSoftLawPage = async (options: PrepareSoftLawPageOptions) => {
           ...(part.purpose ? { purpose: part.purpose } : {}),
         });
       }
-      return { entry, input, documentId, identityKey, contentHash, rawObjects };
+      return {
+        entry,
+        input,
+        documentId: resolution.documentId,
+        identityKey,
+        contentHash,
+        rawObjects,
+        identityResolution,
+      };
     });
     if (written.status === "error") {
       attempts.push(rejectedAttempt(entry, written.error.cause, count));

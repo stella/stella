@@ -999,6 +999,157 @@ if (!databaseUrl || !enabled) {
         ).toEqual(["extraction_failed", "text_layer"]);
       }));
 
+    test("a repaired WP29 placeholder merges into the document that owns its recovered identity", async () =>
+      await withSource(databaseUrl, async ({ db, sourceId, run }) => {
+        const metadata = {
+          title: "Transparency opinion",
+          kind: "opinion",
+          sourceKind: "Transparency opinion",
+          statedReference: { state: "not_stated" },
+          issuedOn: { state: "not_stated" },
+          expression: {
+            type: "identified",
+            language: "en",
+            revision: { state: "not_stated" },
+          },
+          stage: { state: "not_stated" },
+          relations: [],
+          validity: {
+            state: "not_stated",
+            basis: "archived_source_stated",
+          },
+        } as const;
+        const archive = {
+          type: "document",
+          url: "https://ec.europa.eu/justice/article-29/archive.doc",
+          metadata,
+          sourceDates: {},
+        } as const satisfies SoftLawEntry;
+        const newsroom = {
+          ...archive,
+          url: "https://ec.europa.eu/newsroom/article-29/newsroom.doc",
+          metadata: {
+            ...metadata,
+            statedReference: { state: "stated", value: "WP 260" },
+          },
+        } as const satisfies SoftLawEntry;
+        let archiveRepaired = false;
+        const sourceAdapter = (items: readonly SoftLawEntry[]) =>
+          ({
+            ...adapter(items),
+            authority: "eu-wp29",
+            fetchDocument: async (item: SoftLawEntry) => {
+              if (item.url === archive.url && !archiveRepaired) {
+                return Result.ok({
+                  metadata,
+                  raw: [
+                    {
+                      role: "document-word",
+                      purpose: "document",
+                      bytes: new TextEncoder().encode("failed archive bytes"),
+                      contentType: "application/msword",
+                    },
+                  ],
+                  text: null,
+                  extractionQuality: "extraction_failed",
+                  extractionFailure: "Binary Word extraction failed",
+                  sourceDates: {},
+                });
+              }
+              return Result.ok({
+                metadata: newsroom.metadata,
+                raw: [
+                  {
+                    role: "document-word",
+                    purpose: "document",
+                    bytes: new TextEncoder().encode(item.url),
+                    contentType: "application/msword",
+                  },
+                ],
+                text: `WP 260 ${item.url}`,
+                extractionQuality: "text_layer",
+                sourceDates: {},
+              });
+            },
+          }) satisfies SoftLawSourceAdapter;
+
+        expect(await run(sourceAdapter([archive]))).toEqual({
+          status: "complete",
+        });
+        const placeholderId = (
+          await db
+            .select({ id: softLawDocuments.id })
+            .from(softLawDocuments)
+            .where(eq(softLawDocuments.sourceId, sourceId))
+        ).at(0)?.id;
+        if (!placeholderId) {
+          panic("WP29 placeholder was not stored");
+        }
+        expect(await run(sourceAdapter([newsroom]))).toEqual({
+          status: "complete",
+        });
+        archiveRepaired = true;
+        expect(await run(sourceAdapter([archive]))).toEqual({
+          status: "complete",
+        });
+
+        const documents = await db
+          .select()
+          .from(softLawDocuments)
+          .where(eq(softLawDocuments.sourceId, sourceId));
+        expect(documents).toHaveLength(1);
+        expect(documents.at(0)?.identityKey).toContain("wp260");
+        expect(documents.at(0)?.id).not.toBe(placeholderId);
+        const ownerId = documents.at(0)?.id;
+        if (!ownerId) {
+          panic("Merged WP29 document was not stored");
+        }
+        const locators = await db
+          .select()
+          .from(softLawDocumentLocators)
+          .where(eq(softLawDocumentLocators.documentId, ownerId));
+        expect(locators.map(({ url }) => url).toSorted()).toEqual(
+          [archive.url, newsroom.url].toSorted(),
+        );
+        const versions = await db
+          .select()
+          .from(softLawDocumentVersions)
+          .where(eq(softLawDocumentVersions.documentId, ownerId))
+          .orderBy(softLawDocumentVersions.sequence);
+        expect(
+          versions.map(({ extractionQuality }) => extractionQuality),
+        ).toEqual(["text_layer", "extraction_failed", "text_layer"]);
+        const failedRawKey = rawSourcePayloadKey({
+          owner: { family: "soft-law", sourceId },
+          data: new TextEncoder().encode("failed archive bytes"),
+        });
+        expect(
+          versions.some(({ rawObjects }) =>
+            rawObjects.some(({ key }) => key === failedRawKey),
+          ),
+        ).toBe(true);
+        expect(
+          (
+            await db
+              .select()
+              .from(softLawIngestionAttempts)
+              .where(eq(softLawIngestionAttempts.sourceId, sourceId))
+          ).some(({ rawObjects }) =>
+            rawObjects.some(({ key }) => key === failedRawKey),
+          ),
+        ).toBe(true);
+
+        expect(await run(sourceAdapter([archive]))).toEqual({
+          status: "complete",
+        });
+        expect(
+          await db
+            .select()
+            .from(softLawDocumentVersions)
+            .where(eq(softLawDocumentVersions.documentId, ownerId)),
+        ).toHaveLength(3);
+      }));
+
     test("page capacity durably defers valid items without consuming their failure budget", async () =>
       await withSource(databaseUrl, async ({ db, sourceId, run }) => {
         const entries = ["first", "second", "third"].map((slug) =>
