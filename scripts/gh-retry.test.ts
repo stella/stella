@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import {
   mkdtemp,
   chmod,
@@ -261,7 +261,7 @@ test("404, absent or successful HTTP status on errors and exhausted delay budget
   }
 });
 
-test("HTTP writes and GraphQL mutations stay single-shot", async () => {
+describe("HTTP writes and GraphQL mutations stay single-shot", () => {
   const operations = [
     ...["POST", "PATCH", "PUT", "DELETE"].map((method) => [
       "api",
@@ -286,12 +286,12 @@ test("HTTP writes and GraphQL mutations stay single-shot", async () => {
     ["release", "upload", "v1", "asset.txt"],
     ["release", "upload", "v1", "--", "asset.txt", "--clobber"],
   ];
-  for (const args of operations) {
+  test.each(operations.map((args) => ({ args })))("%j", async ({ args }) => {
     const result = await scenario({ args, responses: [unavailable, success] });
     expect(result.exit).toBe(1);
     expect(result.calls).toHaveLength(1);
     expect(result.sleeps).toEqual([]);
-  }
+  });
 });
 
 test("GraphQL reads and clobber uploads admit transient recovery", async () => {
