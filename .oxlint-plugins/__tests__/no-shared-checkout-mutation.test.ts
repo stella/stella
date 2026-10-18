@@ -45,9 +45,17 @@ describe(RULE, () => {
   test("rejects removing the parent of a temporary directory inside the checkout", async () => {
     expect(
       await lint(
-        'import { mkdtemp, rm } from "node:fs/promises";\nimport path from "node:path";\nconst scratch = await mkdtemp(path.join(import.meta.dir, "scratch-"));\nawait rm(path.dirname(scratch), { recursive: true, force: true });\nawait rm(path.normalize(scratch), { recursive: true, force: true });',
+        'import { mkdtemp, rm } from "node:fs/promises";\nimport path from "node:path";\nconst scratch = await mkdtemp(path.join(import.meta.dir, "scratch-"));\nawait rm(path.dirname(scratch), { recursive: true, force: true });',
       ),
-    ).toEqual([4, 5]);
+    ).toEqual([4]);
+  });
+
+  test("rejects URL traversal out of a temporary directory inside the checkout", async () => {
+    expect(
+      await lint(
+        `import { mkdtempSync, writeFileSync } from "node:fs";\nimport path from "node:path";\nimport { pathToFileURL } from "node:url";\nconst scratch = mkdtempSync(path.join(import.meta.dir, "scratch-"));\nwriteFileSync(new URL("../baseline.json", pathToFileURL(scratch + "/")), "changed");\nwriteFileSync(new URL("../baseline.json", \`file://\${scratch}/\`), "changed");\nwriteFileSync(new URL("fixture.json", pathToFileURL(scratch + "/")), "changed");`,
+      ),
+    ).toEqual([5, 6]);
   });
 
   test("rejects checkout paths chosen by conditional and logical expressions", async () => {

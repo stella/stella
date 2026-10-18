@@ -38,6 +38,13 @@ const MUTATORS = new Set([
   "copyFile",
   "copyFileSync",
 ]);
+// Calls whose result names the same location as their first argument.
+const LOCATION_PRESERVING = new Set([
+  "pathToFileURL",
+  "fileURLToPath",
+  "String",
+]);
+
 // Copies mutate their second argument; every other mutator its first.
 const COPIES = new Set(["cp", "cpSync", "copyFile", "copyFileSync"]);
 
@@ -109,22 +116,22 @@ const alternatives = (node: AstNode): unknown[] => {
   return [];
 };
 
+// `path.resolve` / `resolve` -> "resolve"; anything else -> its name or null.
+const calleeName = (callee: unknown): string | null => {
+  if (!isAstNode(callee)) {
+    return null;
+  }
+  if (callee.type === "MemberExpression") {
+    return memberPropertyName(callee);
+  }
+  return callee.type === "Identifier" && typeof callee.name === "string"
+    ? callee.name
+    : null;
+};
+
 const createPathResolver = (context: ScopeContext) => {
   const variableOf = (node: unknown) =>
     isIdentifierReference(node) ? resolveVariable(context, node) : null;
-
-  // `path.resolve` / `resolve` -> "resolve"; anything else -> its name or null.
-  const calleeName = (callee: unknown): string | null => {
-    if (!isAstNode(callee)) {
-      return null;
-    }
-    if (callee.type === "MemberExpression") {
-      return memberPropertyName(callee);
-    }
-    return callee.type === "Identifier" && typeof callee.name === "string"
-      ? callee.name
-      : null;
-  };
 
   // A temporary directory: tmpdir(), a mkdtemp result, or a value built on one.
   const isTemporaryRoot = (
@@ -255,6 +262,12 @@ const createPathResolver = (context: ScopeContext) => {
         )
       );
     }
+    // Conversions between a path and a URL keep the location.
+    if (operation !== null && LOCATION_PRESERVING.has(operation)) {
+      return (
+        parts.length > 0 && isCheckoutPath(parts[0], new Set(seen), exempt)
+      );
+    }
     // Any other call (dirname, normalize, ...) may climb out of a temporary
     // directory, so its arguments are judged by where they were created.
     return parts.some((argument) =>
@@ -304,12 +317,20 @@ const createPathResolver = (context: ScopeContext) => {
       node.type === "NewExpression" &&
       Array.isArray(node.arguments)
     ) {
+      if (!isIdentifierReference(node.callee) || node.callee.name !== "URL") {
+        return false;
+      }
+      // new URL(relative, base): the base keeps a temporary directory's
+      // exemption only when the relative part cannot climb out of it.
+      const [relative, base] = node.arguments;
       return (
-        isIdentifierReference(node.callee) &&
-        node.callee.name === "URL" &&
-        node.arguments.some((argument) =>
-          isCheckoutPath(argument, new Set(seen)),
-        )
+        isCheckoutPath(relative, new Set(seen), exempt) ||
+        (base !== undefined &&
+          isCheckoutPath(
+            base,
+            new Set(seen),
+            exempt && staysInside([relative]),
+          ))
       );
     }
     if (isAstNode(node) && node.type === "MemberExpression") {
