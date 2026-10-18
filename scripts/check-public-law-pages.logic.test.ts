@@ -402,6 +402,29 @@ describe("public law fetch failures", () => {
     expect(requested).toContain(`${baseUrl}/law/svk/bad`);
   });
 
+  test("reports a malformed sitemap location while checking the valid page", async () => {
+    const goodUrl = "https://canonical.test/law/svk/good";
+    const result = await run(async (url) => {
+      if (url.endsWith("/sitemaps/law.xml")) {
+        return response(indexXml);
+      }
+      if (url === shardUrl) {
+        return response(
+          `<urlset><loc>not a url</loc><loc>${goodUrl}</loc></urlset>`,
+        );
+      }
+      return response(page({ robots: "noindex" }), 200, "text/html");
+    }, 2);
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value.report.checked).toBe(1);
+      expect(result.value.report.fetchErrors).toEqual([
+        "sitemap location is not a URL: not a url",
+      ]);
+      expect(result.value.sampledUrls).toEqual([`${baseUrl}/law/svk/good`]);
+    }
+  });
+
   test("returns a passing report for successful fetches", async () => {
     const pageUrl = "https://canonical.test/law/svk/good";
     const result = await run(async (url) => {

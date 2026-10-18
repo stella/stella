@@ -374,6 +374,7 @@ export const runPublicLawCheck = async ({
   }
 
   const pool = new Map<string, boolean>();
+  const fetchErrors: string[] = [];
   for (const shard of shards.slice(0, MAX_SHARDS)) {
     const path = new URL(shard).pathname;
     const target = `${baseUrl}${path}`;
@@ -387,6 +388,11 @@ export const runPublicLawCheck = async ({
       return contents;
     }
     for (const url of parseSitemapLocs(contents.value)) {
+      // Rejected here so every later step can parse pool keys.
+      if (!URL.canParse(url)) {
+        fetchErrors.push(`sitemap location is not a URL: ${url}`);
+        continue;
+      }
       pool.set(url, !isUndatedShardUrl(path));
     }
     if (pool.size >= sampleSize * POOL_FACTOR) {
@@ -396,7 +402,6 @@ export const runPublicLawCheck = async ({
 
   const picked = shuffled([...pool.keys()], random).slice(0, sampleSize);
   const results: PageResult[] = [];
-  const fetchErrors: string[] = [];
   for (const url of picked) {
     const target = `${baseUrl}${new URL(url).pathname}`;
     const response = await Result.tryPromise({
