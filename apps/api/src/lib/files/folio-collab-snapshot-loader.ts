@@ -4,7 +4,57 @@ import { FOLIO_COLLAB_SNAPSHOT_LOAD_OUTCOME } from "@stll/api-contract/folio-col
 import type { FolioYjsSnapshotMigrationError } from "@stll/folio-core/server";
 import { migrateFolioYjsSnapshot } from "@stll/folio-core/server";
 
+import type { SafeId } from "@/api/lib/branded-types";
+import type { FolioCollabSavedSnapshotCut } from "@/api/lib/folio-collab-room-contract";
+
 export { FOLIO_COLLAB_SNAPSHOT_LOAD_OUTCOME } from "@stll/api-contract/folio-collab";
+
+type FolioSnapshotRecoveryStateOptions = {
+  savedSnapshotCut: FolioCollabSavedSnapshotCut | null;
+  savedVersionId: SafeId<"entityVersion">;
+  snapshotSha256Hex: string;
+  snapshotUpdatedAt: Date | null;
+  savedVersionCreatedAt: Date | null;
+  seededAt: Date | null;
+  historicalBaseline: "initial-seed" | "publication";
+};
+
+/**
+ * Exact hashes bound to the current saved version take precedence over
+ * timestamps; a cut bound to another version is unknown. A historical
+ * publication has no known snapshot cut: its checkpoint may predate edits
+ * stored before the version was published. Otherwise only a snapshot strictly
+ * older than the initial baseline is clean; ties, newer state and missing
+ * timestamps conservatively report discarded changes.
+ */
+export const decideFolioSnapshotRecoveryState = ({
+  savedSnapshotCut,
+  savedVersionId,
+  snapshotSha256Hex,
+  snapshotUpdatedAt,
+  savedVersionCreatedAt,
+  seededAt,
+  historicalBaseline,
+}: FolioSnapshotRecoveryStateOptions): "saved" | "unsaved" => {
+  if (savedSnapshotCut !== null) {
+    return savedSnapshotCut.versionId === savedVersionId &&
+      savedSnapshotCut.sha256Hex === snapshotSha256Hex
+      ? "saved"
+      : "unsaved";
+  }
+  if (
+    historicalBaseline === "publication" ||
+    snapshotUpdatedAt === null ||
+    (savedVersionCreatedAt === null && seededAt === null)
+  ) {
+    return "unsaved";
+  }
+  const baseline = Math.max(
+    savedVersionCreatedAt?.getTime() ?? -Infinity,
+    seededAt?.getTime() ?? -Infinity,
+  );
+  return snapshotUpdatedAt.getTime() < baseline ? "saved" : "unsaved";
+};
 
 type SnapshotRecoveryResult =
   | { status: "reset"; generation: number; resetGeneration: number }

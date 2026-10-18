@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { deferred } from "@stll/test-kit";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
@@ -172,6 +173,7 @@ const produceUntilCut = ({
   ownerDb = safeDb,
   ownership = new ChatTurnOwnership(),
   persist,
+  onDeliveryStalled,
   threadId,
 }: {
   chunks?: AsyncIterable<StreamChunk>;
@@ -183,6 +185,7 @@ const produceUntilCut = ({
   ownership?: ChatTurnOwnership;
   /** Stores the cut; the turn's own settlement by default. */
   persist?: () => Promise<ChatTurnStoredSettlement>;
+  onDeliveryStalled?: () => void;
   threadId: SafeId<"chatThread">;
 }) => {
   const run = new ChatTurnRun({
@@ -191,6 +194,7 @@ const produceUntilCut = ({
     mode: "raw",
     heartbeat,
     ownership,
+    onDeliveryStalled,
     owner: {
       indexThread: async () => await Promise.resolve(),
       execution,
@@ -398,6 +402,7 @@ describe("a producing run", () => {
   test("fails a stalled HTTP reader while preserving the completed turn", async () => {
     const { execution, threadId } = await seedRunningTurn();
     const clientConnected = Promise.withResolvers<undefined>();
+    const deliveryStalled = deferred();
     const snapshot = buildWireSnapshot([
       {
         id: "stalled-http-history",
@@ -420,6 +425,7 @@ describe("a producing run", () => {
       execution,
       threadId,
       heartbeat: { intervalMs: 5000, renewEvery: 4 },
+      onDeliveryStalled: deliveryStalled.resolve,
     });
     const server = Bun.serve({
       hostname: "127.0.0.1",
@@ -456,9 +462,7 @@ describe("a producing run", () => {
     try {
       await firstBytes.promise;
       clientConnected.resolve(undefined);
-      // Settlement can precede delivery; keep the socket paused beyond the
-      // delivery stall deadline before allowing network reads to resume.
-      await Bun.sleep(6000);
+      await deliveryStalled.promise;
       expect(await run.settled).toBe("stored");
       socket.resume();
       // Bun can leave a failed chunked socket open until client cancellation.
