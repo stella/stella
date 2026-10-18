@@ -7,6 +7,7 @@ import { assertProperty } from "@stll/property-testing";
 import {
   createPolitePublisherFetch,
   evaluatePublisherRobots,
+  readBoundedBody,
 } from "./publisher";
 
 describe("RFC 9309 matching", () => {
@@ -281,6 +282,39 @@ describe("publisher scheduler", () => {
       "crawl_delay_unsupported",
     );
     expect(resources).toBe(0);
+  });
+
+  test("bounded body reads refuse oversized bodies and cancel the stream", async () => {
+    let cancelled = false;
+    const response = new Response(
+      new ReadableStream<Uint8Array>({
+        pull: (controller) => {
+          controller.enqueue(new Uint8Array(1024));
+        },
+        cancel: () => {
+          cancelled = true;
+        },
+      }),
+    );
+    const read = await readBoundedBody(response, {
+      maxBytes: 4096,
+      signal: AbortSignal.timeout(5000),
+    });
+    expect(Result.isError(read) && read.error._tag).toBe(
+      "publisher_body_limit",
+    );
+    expect(cancelled).toBe(true);
+  });
+
+  test("bounded body reads reject a stalled body at the deadline", async () => {
+    const response = new Response(new ReadableStream<Uint8Array>());
+    const read = await Result.tryPromise(async () =>
+      readBoundedBody(response, {
+        maxBytes: 4096,
+        signal: AbortSignal.timeout(20),
+      }),
+    );
+    expect(Result.isError(read)).toBe(true);
   });
 
   test("a group holding only Crawl-delay ends before the next User-agent", async () => {
@@ -757,6 +791,8 @@ describe("publisher scheduler", () => {
   });
 
   test("returns a typed refusal when redirects exceed the bound", async () => {
+    let issued = 0;
+    let cancelled = 0;
     const request = createPolitePublisherFetch({
       validateTarget: allowTarget,
       fetcher: async (input) => {
@@ -764,12 +800,18 @@ describe("publisher scheduler", () => {
         if (url.pathname === "/robots.txt") {
           return new Response(null, { status: 404 });
         }
-        return Response.redirect(
-          new URL(
-            `/loop/${Number(url.pathname.split("/").at(-1) ?? 0) + 1}`,
-            url,
-          ),
-          302,
+        issued += 1;
+        const next = new URL(
+          `/loop/${Number(url.pathname.split("/").at(-1) ?? 0) + 1}`,
+          url,
+        );
+        return new Response(
+          new ReadableStream<Uint8Array>({
+            cancel: () => {
+              cancelled += 1;
+            },
+          }),
+          { status: 302, headers: { location: next.href } },
         );
       },
       defaultMinimumIntervalMs: 0,
@@ -779,6 +821,7 @@ describe("publisher scheduler", () => {
       userAgent: "Stella/1.0 (+https://stella.law)",
     });
 
+    expect(cancelled).toBe(issued);
     expect(outcome.isErr()).toBe(true);
     if (outcome.isErr()) {
       expect(outcome.error._tag).toBe("publisher_redirect_limit");

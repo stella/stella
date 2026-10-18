@@ -401,9 +401,21 @@ const abortPromise = async (signal: AbortSignal) =>
     });
   });
 
-const readBoundedText = async (response: Response, signal: AbortSignal) => {
+export class PublisherBodyLimitError extends TaggedError(
+  "publisher_body_limit",
+)<{ message: string; url: string; maxBytes: number }> {}
+
+type ReadBoundedBodyOptions = { maxBytes: number; signal: AbortSignal };
+
+// Rejects when the signal aborts or the stream errors; the reader is
+// cancelled on every exit so an oversized or stalled body releases its
+// connection.
+export const readBoundedBody = async (
+  response: Response,
+  { maxBytes, signal }: ReadBoundedBodyOptions,
+): Promise<Result<Uint8Array, PublisherBodyLimitError>> => {
   if (!response.body) {
-    return Result.ok("");
+    return Result.ok(new Uint8Array());
   }
   const chunks: Uint8Array[] = [];
   let size = 0;
@@ -417,7 +429,7 @@ const readBoundedText = async (response: Response, signal: AbortSignal) => {
         break;
       }
       size += next.value.byteLength;
-      if (size > ROBOTS_MAX_BYTES) {
+      if (size > maxBytes) {
         exceeded = true;
         break;
       }
@@ -432,10 +444,10 @@ const readBoundedText = async (response: Response, signal: AbortSignal) => {
   }
   if (exceeded) {
     return Result.err(
-      new RobotsUnavailableError({
-        message: "robots.txt exceeds the byte limit",
-        url: response.url || "robots.txt",
-        origin: response.url ? new URL(response.url).origin : "unknown",
+      new PublisherBodyLimitError({
+        message: "response body exceeds the byte limit",
+        url: response.url,
+        maxBytes,
       }),
     );
   }
@@ -445,7 +457,23 @@ const readBoundedText = async (response: Response, signal: AbortSignal) => {
     bytes.set(chunk, offset);
     offset += chunk.byteLength;
   }
-  return Result.ok(new TextDecoder().decode(bytes));
+  return Result.ok(bytes);
+};
+
+const readRobotsText = async (response: Response, signal: AbortSignal) => {
+  const bytes = await readBoundedBody(response, {
+    maxBytes: ROBOTS_MAX_BYTES,
+    signal,
+  });
+  return Result.isError(bytes)
+    ? Result.err(
+        new RobotsUnavailableError({
+          message: "robots.txt exceeds the byte limit",
+          url: response.url || "robots.txt",
+          origin: response.url ? new URL(response.url).origin : "unknown",
+        }),
+      )
+    : Result.ok(new TextDecoder().decode(bytes.value));
 };
 
 const isRedirect = (response: Response) =>
@@ -653,7 +681,7 @@ const loadRobots = async ({
     };
   }
   const body = await Result.tryPromise(async () =>
-    readBoundedText(finalResponse, deadline),
+    readRobotsText(finalResponse, deadline),
   );
   if (Result.isError(body)) {
     return {
@@ -896,10 +924,10 @@ const walkPublisherRedirects = async (
         delayAppliedMs: state.delayAppliedMs,
       });
     }
+    await response.body?.cancel();
     if (redirects >= MAX_REDIRECTS) {
       return redirectLimitResult(state);
     }
-    await response.body?.cancel();
     const nextUrl = new URL(location, state.url);
     const redirected = redirectedRequestInit({
       response,

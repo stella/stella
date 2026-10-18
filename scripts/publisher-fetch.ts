@@ -3,7 +3,10 @@ import { Result, TaggedError } from "better-result";
 import { appendFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 
-import { createPolitePublisherFetch } from "@stll/fetch/publisher";
+import {
+  createPolitePublisherFetch,
+  readBoundedBody,
+} from "@stll/fetch/publisher";
 import { sha256Hex } from "@stll/sha256/bun";
 
 import {
@@ -12,6 +15,8 @@ import {
 } from "@/api/lib/safe-outbound-fetch";
 
 const usage = "Usage: bun scripts/publisher-fetch.ts <url> --archive <dir>";
+const ARCHIVE_MAX_BYTES = 256 * 1024 * 1024;
+const BODY_TIMEOUT_MS = 5 * 60_000;
 class PublisherFetchCliError extends TaggedError("PublisherFetchCliError")<{
   message: string;
 }> {}
@@ -49,7 +54,25 @@ const run = async () => {
     process.exitCode = 2;
     return;
   }
-  const bytes = new Uint8Array(await outcome.value.response.arrayBuffer());
+  const body = await Result.tryPromise(async () =>
+    readBoundedBody(outcome.value.response, {
+      maxBytes: ARCHIVE_MAX_BYTES,
+      signal: AbortSignal.timeout(BODY_TIMEOUT_MS),
+    }),
+  );
+  if (Result.isError(body)) {
+    process.stderr.write(`body_unreadable: ${String(body.error.cause)}\n`);
+    process.exitCode = 2;
+    return;
+  }
+  if (Result.isError(body.value)) {
+    process.stderr.write(
+      `${body.value.error._tag}: ${body.value.error.message}\n`,
+    );
+    process.exitCode = 2;
+    return;
+  }
+  const bytes = body.value.value;
   const hash = sha256Hex(bytes);
   const leaf = path.basename(url.pathname) || "index";
   const bodyFile = `${hash}-${leaf.replaceAll(/[^a-zA-Z0-9._-]/gu, "_")}`;
