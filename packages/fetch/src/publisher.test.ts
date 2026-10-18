@@ -56,13 +56,32 @@ describe("RFC 9309 matching", () => {
     );
   });
 
-  test("pathological wildcard patterns complete without backtracking", () => {
-    const pattern = `/${"*a".repeat(100_000)}*b`;
+  test.each([
+    ["*a", "ab", true],
+    ["/*a", "/abc", true],
+    ["/*a$", "/abc", false],
+    ["/*a$", "/cba", true],
+    ["/**a", "/abc", true],
+    ["/a**b$", "/ab", true],
+  ] as const)(
+    "matches %s against %s with RFC prefix semantics",
+    (pattern, path, matches) => {
+      const result = evaluatePublisherRobots(
+        [{ agents: ["*"], rules: [{ type: "disallow", pattern }] }],
+        "Stella",
+        path,
+      );
+      expect(result.allowed, `${pattern} against ${path}`).toBe(!matches);
+    },
+  );
+
+  test("long literal suffixes are matched without rescanning", () => {
+    const pattern = `/*${"a".repeat(100_000)}b$`;
     expect(
       evaluatePublisherRobots(
         [{ agents: ["*"], rules: [{ type: "disallow", pattern }] }],
         "Stella",
-        `/${"a".repeat(100_000)}c`,
+        `/${"a".repeat(200_000)}`,
       ).allowed,
     ).toBe(true);
   });
@@ -163,6 +182,21 @@ describe("RFC 9309 matching", () => {
         },
       ),
     );
+  });
+
+  test("literal Unicode and encoded UTF-8 paths compare as the same octets", () => {
+    const groups = [
+      {
+        agents: ["stella"],
+        rules: [{ type: "disallow" as const, pattern: "/café" }],
+      },
+    ];
+    expect(evaluatePublisherRobots(groups, "Stella", "/café").allowed).toBe(
+      false,
+    );
+    expect(
+      evaluatePublisherRobots(groups, "Stella", "/caf%C3%A9").allowed,
+    ).toBe(false);
   });
 });
 
@@ -328,6 +362,82 @@ describe("publisher scheduler", () => {
     expect(outcome.isErr() && outcome.error._tag).toBe(
       "publisher_request_aborted",
     );
+  });
+
+  test("an aborted queued caller does not wait or consume a schedule slot", async () => {
+    let now = 0;
+    const sleeps: { ms: number; finish: () => void }[] = [];
+    let markFirstSleep!: () => void;
+    let markSecondSleep!: () => void;
+    const firstSleep = new Promise<void>((resolve) => {
+      markFirstSleep = resolve;
+    });
+    const secondSleep = new Promise<void>((resolve) => {
+      markSecondSleep = resolve;
+    });
+    const requestedAt: { path: string; at: number }[] = [];
+    const request = createPolitePublisherFetch({
+      validateTarget: allowTarget,
+      clock: {
+        now: () => now,
+        sleep: async (ms) => {
+          await new Promise<void>((resolve) => {
+            sleeps.push({
+              ms,
+              finish: () => {
+                now += ms;
+                resolve();
+              },
+            });
+            if (sleeps.length === 1) {
+              markFirstSleep();
+            } else {
+              markSecondSleep();
+            }
+          });
+        },
+      },
+      fetcher: async (input) => {
+        const url = new URL(input instanceof Request ? input.url : input);
+        if (url.pathname === "/robots.txt") {
+          return new Response("User-agent: *\nCrawl-delay: 1\nAllow: /");
+        }
+        requestedAt.push({ path: url.pathname, at: now });
+        return new Response("ok");
+      },
+    });
+    const options = {
+      userAgent: "Stella/1.0",
+      enforcement: "enforce" as const,
+    };
+    await request("https://publisher.example/one", options);
+    const second = request("https://publisher.example/two", options);
+    await firstSleep;
+    const controller = new AbortController();
+    const third = request("https://publisher.example/three", {
+      ...options,
+      init: { signal: controller.signal },
+    });
+    const fourth = request("https://publisher.example/four", options);
+    controller.abort();
+
+    const aborted = await third;
+    expect(aborted.isErr() && aborted.error._tag).toBe(
+      "publisher_request_aborted",
+    );
+    expect(requestedAt.map(({ path }) => path)).toEqual(["/one"]);
+
+    sleeps[0]!.finish();
+    await second;
+    await secondSleep;
+    expect(sleeps.map(({ ms }) => ms)).toEqual([1000, 1000]);
+    sleeps[1]!.finish();
+    await fourth;
+    expect(requestedAt).toEqual([
+      { path: "/one", at: 0 },
+      { path: "/two", at: 1000 },
+      { path: "/four", at: 2000 },
+    ]);
   });
 
   test("a robots body that never ends expires as unavailable", async () => {

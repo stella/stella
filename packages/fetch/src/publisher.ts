@@ -102,7 +102,7 @@ type PublisherFetchOptions = {
 
 type CompiledPattern = {
   anchored: boolean;
-  pattern: string;
+  segments: { literal: string; prefix: number[] }[];
   specificity: number;
 };
 type Rule = {
@@ -180,14 +180,26 @@ const publisherPolicyFor = (
   };
 };
 
-const normalizeOctets = (value: string) =>
-  value.replaceAll(/%[\da-f]{2}/giu, (encoded) => {
+const normalizeOctets = (value: string) => {
+  const percentNormalized = value.replaceAll(/%[\da-f]{2}/giu, (encoded) => {
     const octet = Number.parseInt(encoded.slice(1), 16);
     const character = String.fromCodePoint(octet);
     return /^[A-Za-z0-9._~-]$/u.test(character)
       ? character
       : `%${encoded.slice(1).toUpperCase()}`;
   });
+  let normalized = "";
+  for (const character of percentNormalized) {
+    if ((character.codePointAt(0) ?? Number.POSITIVE_INFINITY) <= 0x7f) {
+      normalized += character;
+      continue;
+    }
+    for (const octet of new TextEncoder().encode(character)) {
+      normalized += `%${octet.toString(16).toUpperCase().padStart(2, "0")}`;
+    }
+  }
+  return normalized;
+};
 
 const parseRobots = (body: string): Group[] => {
   const groups: Group[] = [];
@@ -257,44 +269,81 @@ const compilePattern = (pattern: string): CompiledPattern => {
   const normalized = normalizeOctets(pattern);
   const anchored = normalized.endsWith("$");
   const body = anchored ? normalized.slice(0, -1) : normalized;
+  const segments = body.split("*").map((literal) => {
+    const prefix = Array.from({ length: literal.length }, () => 0);
+    for (let index = 1, matched = 0; index < literal.length; index += 1) {
+      while (matched > 0 && literal[index] !== literal[matched]) {
+        matched = prefix.at(matched - 1) ?? 0;
+      }
+      if (literal[index] === literal[matched]) {
+        matched += 1;
+      }
+      prefix[index] = matched;
+    }
+    return { literal, prefix };
+  });
   return {
     anchored,
-    pattern: body,
+    segments,
     specificity: body.replaceAll("*", "").length,
   };
 };
 
+const findSegment = (
+  value: string,
+  start: number,
+  segment: CompiledPattern["segments"][number],
+) => {
+  if (segment.literal.length === 0) {
+    return start;
+  }
+  for (let index = start, matched = 0; index < value.length; index += 1) {
+    while (matched > 0 && value[index] !== segment.literal[matched]) {
+      matched = segment.prefix.at(matched - 1) ?? 0;
+    }
+    if (value[index] === segment.literal[matched]) {
+      matched += 1;
+    }
+    if (matched === segment.literal.length) {
+      return index - matched + 1;
+    }
+  }
+  return -1;
+};
+
 const wildcardMatches = (compiled: CompiledPattern, value: string) => {
-  let patternIndex = 0;
-  let valueIndex = 0;
-  let starIndex = -1;
-  let starValueIndex = -1;
-  while (valueIndex < value.length) {
-    if (
-      patternIndex < compiled.pattern.length &&
-      compiled.pattern[patternIndex] === value[valueIndex]
-    ) {
-      patternIndex += 1;
-      valueIndex += 1;
-      continue;
-    }
-    if (compiled.pattern[patternIndex] === "*") {
-      starIndex = patternIndex;
-      starValueIndex = valueIndex;
-      patternIndex += 1;
-      continue;
-    }
-    if (starIndex === -1) {
-      return !compiled.anchored && patternIndex === compiled.pattern.length;
-    }
-    patternIndex = starIndex + 1;
-    starValueIndex += 1;
-    valueIndex = starValueIndex;
+  const first = compiled.segments.at(0);
+  if (!first) {
+    return false;
   }
-  while (compiled.pattern[patternIndex] === "*") {
-    patternIndex += 1;
+  if (!value.startsWith(first.literal)) {
+    return false;
   }
-  return patternIndex === compiled.pattern.length;
+  let position = first.literal.length;
+  const lastIndex = compiled.segments.length - 1;
+  for (let index = 1; index < lastIndex; index += 1) {
+    const segment = compiled.segments.at(index);
+    if (!segment) {
+      return false;
+    }
+    const found = findSegment(value, position, segment);
+    if (found === -1) {
+      return false;
+    }
+    position = found + segment.literal.length;
+  }
+  if (lastIndex === 0) {
+    return !compiled.anchored || position === value.length;
+  }
+  const last = compiled.segments.at(lastIndex);
+  if (!last) {
+    return false;
+  }
+  if (compiled.anchored) {
+    const start = value.length - last.literal.length;
+    return start >= position && value.endsWith(last.literal);
+  }
+  return findSegment(value, position, last) !== -1;
 };
 
 export const evaluatePublisherRobots = (
@@ -636,7 +685,18 @@ const createOriginScheduler = (clock: Clock) => {
       origin,
       previous.then(async () => current),
     );
-    await previous;
+    const acquired = await Result.tryPromise(async () =>
+      signal ? Promise.race([previous, abortPromise(signal)]) : previous,
+    );
+    if (Result.isError(acquired)) {
+      release();
+      const cause = acquired.error.cause;
+      return await Promise.reject(
+        cause instanceof Error
+          ? cause
+          : new DOMException("The operation was aborted", "AbortError"),
+      );
+    }
     const delay = Math.max(
       0,
       (nextAllowedAt.get(origin) ?? clock.now()) - clock.now(),
