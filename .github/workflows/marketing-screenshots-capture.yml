@@ -44,14 +44,19 @@ jobs:
         env:
           SHA: ${{ inputs.sha }}
           RUN_SHA: ${{ github.sha }}
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
         run: |
           if [[ ! "$SHA" =~ ^[0-9a-f]{40}$ ]]; then
             echo "::error::Capture commit must be a full SHA"
             exit 1
           fi
-          # The run's own commit is the branch tip it was dispatched on.
-          if [[ "$SHA" != "$RUN_SHA" ]]; then
-            echo "::error::Capture commit is not the dispatched branch tip"
+          # The commit must be on the dispatched branch: its tip, or an
+          # ancestor of it (a publication branch carries baseline commits on
+          # top of the captured main commit).
+          status=$(gh api "repos/$REPOSITORY/compare/$SHA...$RUN_SHA" --jq .status)
+          if [[ "$status" != identical && "$status" != ahead ]]; then
+            echo "::error::Capture commit is not on the dispatched branch"
             exit 1
           fi
 

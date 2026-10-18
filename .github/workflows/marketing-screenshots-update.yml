@@ -170,6 +170,11 @@ jobs:
               throw new Error('Capture needs a release branch and a full commit SHA');
             const request = `${context.runId}-${process.env.GITHUB_RUN_ATTEMPT}`;
             const title = `Capture marketing screenshots ${head} ${request}`;
+            // The run starts at the branch tip: the selected commit itself, or
+            // a publication branch whose baseline commits sit on top of it.
+            const { data: tipRef } = await github.rest.git.getRef({ owner, repo, ref: `heads/${branch}` });
+            const tip = tipRef.object.sha;
+            if (!/^[0-9a-f]{40}$/u.test(tip)) throw new Error('Branch tip must be a full SHA');
             const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
             const deadline = Date.now() + 40 * 60 * 1000;
             const dispatched = await github.rest.actions.createWorkflowDispatch({
@@ -188,7 +193,7 @@ jobs:
             }
             // The run must be on the branch at the selected commit; its title
             // binds the capture input.
-            if (run.id !== id || run.head_sha !== head || run.display_title !== title
+            if (run.id !== id || run.head_sha !== tip || run.display_title !== title
               || run.path !== `.github/workflows/${workflow}` || run.event !== 'workflow_dispatch'
               || run.head_branch !== branch
               || run.head_repository?.full_name !== `${owner}/${repo}`)

@@ -467,6 +467,8 @@ describe("capture dispatch on the release branch", () => {
   const scenario = () => ({
     branch: BRANCH,
     head: HEAD,
+    // The branch tip read before dispatch.
+    tip: HEAD,
     runId: 42 as number | undefined,
     run: {
       id: 42,
@@ -510,6 +512,17 @@ describe("capture dispatch on the release branch", () => {
       },
       github: {
         rest: {
+          git: {
+            getRef: async (params: unknown) => {
+              expect(params).toEqual({
+                owner: "stella",
+                repo: "stella",
+                ref: `heads/${input.branch}`,
+              });
+              expect(dispatches).toEqual([]);
+              return { data: { object: { sha: input.tip } } };
+            },
+          },
           actions: {
             createWorkflowDispatch: async (params: unknown) => {
               dispatches.push(params);
@@ -540,6 +553,15 @@ describe("capture dispatch on the release branch", () => {
         },
       ],
     });
+  });
+
+  // A repeat request for a main commit finds its publication branch with
+  // baseline commits on top: the run starts at that tip, capturing the commit.
+  test("a publication branch tip above the selected commit still captures it", async () => {
+    const input = scenario();
+    input.tip = PUBLISHED;
+    input.run.head_sha = PUBLISHED;
+    expect((await dispatchFor(input)).outputs).toEqual({ "run-id": "42" });
   });
 
   test("rejects a missing dispatched run id without searching by title", async () => {
