@@ -1,11 +1,18 @@
 import { panic } from "better-result";
 
-type Event =
-  | "merge_group"
-  | "pull_request"
-  | "push"
-  | "schedule"
-  | "workflow_dispatch";
+const MODELLED_EVENTS = [
+  "merge_group",
+  "pull_request",
+  "push",
+  "schedule",
+  "workflow_dispatch",
+] as const;
+export type Event = (typeof MODELLED_EVENTS)[number];
+
+/** A modelled event name, or a loud failure for an event the model lacks. */
+export const modelledEvent = (value: string): Event =>
+  MODELLED_EVENTS.find((event) => event === value) ??
+  panic(`No modelled context for event ${value}`);
 
 type RunContextOptions = {
   event?: Event;
@@ -23,7 +30,7 @@ type ModelledStep = {
   outcome?: string;
 };
 
-type ModelledRunContext = {
+export type ModelledRunContext = {
   github: {
     event_name: Event;
     ref: string;
@@ -273,7 +280,7 @@ export const ciExpressionContext = ({
   return {
     github: {
       event_name: event,
-      ref: REF_BY_EVENT[event] ?? panic(`No modelled ref for event ${event}`),
+      ref: REF_BY_EVENT[event],
       sha: "",
       workflow_sha: "",
       event: {

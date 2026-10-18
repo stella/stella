@@ -12,7 +12,7 @@ import path from "node:path";
 import { Script } from "node:vm";
 import * as v from "valibot";
 
-import { ciExpressionContext } from "./ci-expression-context";
+import { ciExpressionContext, modelledEvent } from "./ci-expression-context";
 import {
   contextFromNested,
   contextWithPlanOutputs,
@@ -178,12 +178,7 @@ const context = ({
   queueBrowserSuites = "",
 }: ContextOptions) => {
   const value = ciExpressionContext({
-    event: event as
-      | "merge_group"
-      | "pull_request"
-      | "push"
-      | "schedule"
-      | "workflow_dispatch",
+    event: modelledEvent(event),
     plan: {
       ...plan,
       queue_depth: queueDepth,
@@ -213,14 +208,34 @@ const context = ({
   };
   return value;
 };
+// Some cases pass partial contexts; read nested fields without assuming shape.
+const field = (source: unknown, key: string): unknown =>
+  typeof source === "object" && source !== null
+    ? Reflect.get(source, key)
+    : undefined;
+// ci-plan's run_required comes from the completed-depth lookup; cases set it
+// on the plan outputs, so the lookup reports the same value.
+const syncLookup = (value: object) => {
+  const outputs = field(
+    field(field(value, "steps"), "completed-depth"),
+    "outputs",
+  );
+  if (typeof outputs !== "object" || outputs === null) {
+    return;
+  }
+  const runRequired = field(
+    field(field(field(value, "needs"), "ci-plan"), "outputs"),
+    "run_required",
+  );
+  Reflect.set(
+    outputs,
+    "run_required",
+    typeof runRequired === "string" ? runRequired : "true",
+  );
+};
 const selected = (condition: string | undefined, value: object) => {
   const expression = condition ?? "true";
-  const nested = value as ReturnType<typeof context>;
-  const lookup = nested.steps?.["completed-depth"];
-  if (lookup !== undefined) {
-    lookup.outputs["run_required"] =
-      nested.needs?.["ci-plan"]?.outputs["run_required"] ?? "true";
-  }
+  syncLookup(value);
   const result = evaluateExpression(
     expression,
     contextWithPlanOutputs({

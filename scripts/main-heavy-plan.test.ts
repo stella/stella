@@ -7,7 +7,7 @@ import * as v from "valibot";
 
 import eventPolicies from "../.github/ci-event-policy.json" with { type: "json" };
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
-import { ciExpressionContext } from "./ci-expression-context";
+import { ciExpressionContext, modelledEvent } from "./ci-expression-context";
 import serviceImages from "./ci-service-images.json" with { type: "json" };
 import {
   contextFromNested,
@@ -121,12 +121,7 @@ const context = (
   plan: Record<string, string>,
 ) => {
   const value = ciExpressionContext({
-    event: event as
-      | "merge_group"
-      | "pull_request"
-      | "push"
-      | "schedule"
-      | "workflow_dispatch",
+    event: modelledEvent(event),
     heavyOnly,
     plan,
     needsResults: Object.fromEntries(
