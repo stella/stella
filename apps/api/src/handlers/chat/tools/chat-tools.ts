@@ -3,6 +3,7 @@ import { panic, Result } from "better-result";
 import {
   BUILT_IN_CHAT_TOOL_POLICY_KINDS,
   type BrowserClientCapability,
+  type ChatCorpusScope,
 } from "@stll/api-contract";
 import { DOCX_SUGGESTION_SURFACE } from "@stll/api-contract/chat-docx-suggestions";
 import type { DocxSuggestionSurface } from "@stll/api-contract/chat-docx-suggestions";
@@ -26,6 +27,11 @@ import { createBrowserControlTool } from "@/api/handlers/chat/tools/browser-cont
 import { createBusinessRegistryTools } from "@/api/handlers/chat/tools/business-registry-tools";
 import { createChatHistoryTools } from "@/api/handlers/chat/tools/chat-history-tools";
 import { auditChatToolExecutions } from "@/api/handlers/chat/tools/chat-tool-execution-audit";
+import {
+  corpusScopeDroppedTools,
+  corpusScopeUnavailableReason,
+  restrictChatToolsToCorpusScope,
+} from "@/api/handlers/chat/tools/corpus-scope";
 import { createCounterpartyCheckTools } from "@/api/handlers/chat/tools/counterparty-check-tools";
 import {
   CREATE_DOCUMENT_TOOL_NAME,
@@ -113,7 +119,11 @@ import type {
   NewDocumentVersionOperation,
 } from "@/api/lib/entities/authorize-document-write";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
-import { CHAT_ONLY_FEATURE_TOOL_DEFINITIONS } from "@/api/lib/feature-access/registry";
+import {
+  CHAT_ONLY_FEATURE_TOOL_DEFINITIONS,
+  FEATURE_REGISTRY,
+  type FeatureRegistry,
+} from "@/api/lib/feature-access/registry";
 import { FIELD_VALUE_WRITE_PERMISSIONS } from "@/api/lib/fields/write-field";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
@@ -545,6 +555,13 @@ export type GetChatToolsProps = {
    * live execution path.
    */
   disabledNativeToolSlugs?: readonly string[] | undefined;
+  /**
+   * The corpus chips on the turn's latest user message. Script reads are held
+   * to them and direct tools over other public corpora are dropped; subagents
+   * inherit them through the props re-spread. Only the run set passes them:
+   * the validation set must keep every tool an earlier turn could have used.
+   */
+  corpusScopes?: readonly ChatCorpusScope[] | undefined;
   registryDispatch: Record<BusinessRegistrySlug, RegistryHandler>;
   skillMetadata?: ModelOfferedSkills<SkillMetadata> | undefined;
   activeSkillContext?: ActiveChatSkillContext | null | undefined;
@@ -812,7 +829,7 @@ const createSecretToolsForTurn = ({
   return createSecretTools({ safeDb, organizationId, userId, threadId });
 };
 
-export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
+const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
   const {
     featureAccessSnapshot,
     testDependencies,
@@ -846,6 +863,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     webSearchProviders,
     externalTools = {},
     disabledNativeToolSlugs,
+    corpusScopes = [],
     registryDispatch,
     skillMetadata,
     activeSkillContext,
@@ -919,6 +937,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     unavailableReasons: new Map(),
   };
   const executionTools = buildChatCodeModeTools({
+    corpusScopes,
     featureAccessSnapshot,
     testDependencies,
     documentedReads: skillDeclarations.documentedChatReads,
@@ -1302,8 +1321,15 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     },
   });
   const projected = props.projectToolSet?.(registered) ?? registered;
+  const featureRegistry: FeatureRegistry = FEATURE_REGISTRY;
+  const toolFeatureId = (name: string) =>
+    CHAT_ONLY_FEATURE_TOOL_DEFINITIONS.find(
+      (definition) => definition.name === name,
+    )?.featureId ?? getStaticMcpToolDefinition(name)?.featureId;
   const tools = Object.fromEntries(
-    Object.entries(projected).filter(([name]) =>
+    Object.entries(
+      restrictChatToolsToCorpusScope(projected, corpusScopes),
+    ).filter(([name]) =>
       isMcpDescriptorFeatureEnabled({
         context: {
           featureAccessSnapshot,
@@ -1313,10 +1339,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
         },
         kind: "tools",
         id: name,
-        featureId:
-          CHAT_ONLY_FEATURE_TOOL_DEFINITIONS.find(
-            (definition) => definition.name === name,
-          )?.featureId ?? getStaticMcpToolDefinition(name)?.featureId,
+        featureId: toolFeatureId(name),
       }),
     ),
   );
@@ -1333,18 +1356,49 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
         : [WEB_SEARCH_TOOL_NAME, FETCH_URL_TOOL_NAME].map(
             (name) => [name, "web research is off for this chat"] as const,
           )),
+      // Only a generally available feature may be named when withheld;
+      // invitation and self-serve tools stay invisible to unenrolled callers.
+      ...Object.keys(projected)
+        .filter((name) => {
+          const featureId = toolFeatureId(name);
+          return (
+            !(name in tools) &&
+            featureId !== undefined &&
+            Object.hasOwn(featureRegistry, featureId) &&
+            featureRegistry[featureId]?.enrolment === "general-availability"
+          );
+        })
+        .map(
+          (name) =>
+            [name, "unavailable for this caller or deployment"] as const,
+        ),
       ...Object.keys(registered)
         .filter((name) => !(name in projected))
         .map((name) => [name, "subagents cannot call it"] as const),
+      ...corpusScopeDroppedTools(corpusScopes).map(
+        (name) => [name, corpusScopeUnavailableReason(corpusScopes)] as const,
+      ),
     ]),
   };
+  return tools;
+};
+
+export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
+  const tools = buildChatTools(props);
   // A run's approval-gated tools record each execution; validation sets never
   // execute.
-  if (forValidation || recordAuditEvent === undefined) {
+  if (
+    props.purpose === CHAT_TOOL_SET_PURPOSE.validation ||
+    props.recordAuditEvent === undefined
+  ) {
     return tools;
   }
   return auditChatToolExecutions({
-    audit: { recordAuditEvent, safeDb, threadId },
+    audit: {
+      recordAuditEvent: props.recordAuditEvent,
+      safeDb: props.safeDb,
+      threadId: props.threadId,
+    },
     tools,
   });
 };

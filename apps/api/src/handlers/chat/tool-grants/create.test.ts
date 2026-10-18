@@ -4,6 +4,7 @@ import { expect, test } from "bun:test";
 import createChatToolGrant from "@/api/handlers/chat/tool-grants/create";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { aggregateExecutionRows } from "@/api/tests/fixtures/aggregate-lock-order";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const threadId = "00000000-0000-4000-8000-000000000010";
@@ -30,6 +31,8 @@ const setup = ({ body, reads }: { body: Body; reads: unknown[][] }) => {
   };
   const where = () => ({ limit: async () => nextRead() });
   const chain = {
+    execute: async (statement: Parameters<typeof aggregateExecutionRows>[0]) =>
+      aggregateExecutionRows(statement),
     select: () => chain,
     from: () => chain,
     innerJoin: () => chain,
