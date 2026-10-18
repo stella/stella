@@ -102,4 +102,4 @@ packages/mcp-apps/src/*/generated/*
 packages/mcp-apps/src/generated/
 
 # Per-run build directories of the rule catalog test.
-scripts/.oxlint-rule-ids-*/
+/.oxlint-rule-ids-*/

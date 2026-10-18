@@ -125,10 +125,11 @@ describe.serial("suppression IDs follow their configured spelling", () => {
   });
 
   test("the installed rule catalog resolves identically under Node and Bun", async () => {
-    // A directory of its own: concurrent runs share this checkout. It stays
-    // under scripts/ so the built module resolves the repository's packages.
+    // A directory of its own: concurrent runs share this checkout. Like
+    // scripts/, it sits one level below the root, so the module's
+    // `../node_modules` still names the repository's packages.
     const directory = mkdtempSync(
-      path.join(import.meta.dirname, "../../scripts/.oxlint-rule-ids-"),
+      path.join(import.meta.dirname, "../../.oxlint-rule-ids-"),
     );
     const output = path.join(directory, "node.mjs");
     const build = await Bun.build({

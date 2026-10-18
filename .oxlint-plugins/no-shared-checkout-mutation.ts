@@ -99,8 +99,7 @@ const staysInside = (segments: readonly unknown[]) =>
           ? quasiTexts(segment.quasis)
           : null;
     return (
-      texts !== null &&
-      texts.every((text) => !/^[/\\]/u.test(text) && descends(text))
+      texts?.every((text) => !/^[/\\]/u.test(text) && descends(text)) ?? false
     );
   });
 
@@ -154,8 +153,7 @@ const operationName = (
   callee: unknown,
 ): string | null => {
   const binding = resolveImport(context, callee);
-  return binding !== null &&
-    (binding.moduleId === "node:path" || binding.moduleId === "path")
+  return binding?.moduleId === "node:path" || binding?.moduleId === "path"
     ? binding.imported
     : calleeName(callee);
 };
@@ -253,8 +251,7 @@ const createPathResolver = (context: ScopeContext) => {
     const inside =
       exempt &&
       node.expressions.length === 1 &&
-      texts !== null &&
-      texts.every(descends);
+      (texts?.every(descends) ?? false);
     return node.expressions.some((expression) =>
       isCheckoutPath(expression, new Set(seen), inside),
     );
