@@ -14,6 +14,8 @@ const SCAN_GLOBS = [
   "packages/*/package.json",
   ".github/workflows/*.yml",
   ".github/workflows/*.yaml",
+  ".github/ci-checks/*.yml",
+  ".github/actions/**/action.yml",
   "scripts/**/*.{ts,tsx,js,jsx,mts,mjs,cts,cjs}",
   "apps/*/scripts/**/*.{ts,tsx,js,jsx,mts,mjs,cts,cjs}",
   "packages/*/scripts/**/*.{ts,tsx,js,jsx,mts,mjs,cts,cjs}",
@@ -125,6 +127,33 @@ describe("bundling-site scanner", () => {
             build: "clean && bun build src/index.ts --outfile dist/app.js",
           },
         }),
+      },
+      command: "bun build src/index.ts --outfile dist/app.js",
+    },
+    {
+      name: "an inline workflow list step",
+      file: {
+        path: ".github/workflows/example.yml",
+        contents:
+          "jobs:\n  build:\n    steps:\n      - run: bun build src/index.ts --outfile dist/app.js\n",
+      },
+      command: "bun build src/index.ts --outfile dist/app.js",
+    },
+    {
+      name: "a block workflow list step",
+      file: {
+        path: ".github/workflows/example.yml",
+        contents:
+          "jobs:\n  build:\n    steps:\n      - name: Build\n        run: |\n          set -e\n          bun build src/index.ts --compile --outfile app\n",
+      },
+      command: "bun build src/index.ts --compile --outfile app",
+    },
+    {
+      name: "a composite action step",
+      file: {
+        path: ".github/actions/example/action.yml",
+        contents:
+          "runs:\n  using: composite\n  steps:\n    - shell: bash\n      run: bun build src/index.ts --outfile dist/app.js\n",
       },
       command: "bun build src/index.ts --outfile dist/app.js",
     },

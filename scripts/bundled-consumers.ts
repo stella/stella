@@ -46,8 +46,10 @@ const isDockerfile = (path: string): boolean =>
 const isWorkspacePackage = (path: string): boolean =>
   /^(?:apps|packages)\/[^/]+\/package\.json$/u.test(path);
 
+// Workflows, their shared check fragments and composite actions all run steps.
 const isWorkflow = (path: string): boolean =>
-  /^\.github\/workflows\/[^/]+\.ya?ml$/u.test(path);
+  /^\.github\/(?:workflows|ci-checks)\/[^/]+\.ya?ml$/u.test(path) ||
+  /^\.github\/actions\/.+\/action\.ya?ml$/u.test(path);
 
 const isBuildScript = (path: string): boolean =>
   !/\.(?:test|spec)\.[cm]?[jt]sx?$/u.test(path) &&
@@ -74,36 +76,23 @@ const packageCommands = (contents: string): string[] => {
   );
 };
 
-const workflowCommands = (contents: string): string[] => {
-  const lines = contents.split(/\r?\n/u);
-  const scripts: string[] = [];
-  for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index] ?? "";
-    const match = /^(\s*)run:\s*(.*)$/u.exec(line);
-    if (match === null) {
-      continue;
-    }
-    const indentation = match[1]?.length ?? 0;
-    const value = match[2] ?? "";
-    if (value !== "|" && value !== ">" && value !== "|-" && value !== ">-") {
-      scripts.push(value);
-      continue;
-    }
-
-    const block: string[] = [];
-    while (index + 1 < lines.length) {
-      const next = lines[index + 1] ?? "";
-      const nextIndentation = /^\s*/u.exec(next)?.[0].length ?? 0;
-      if (next.trim() !== "" && nextIndentation <= indentation) {
-        break;
-      }
-      block.push(next);
-      index += 1;
-    }
-    scripts.push(block.join("\n"));
+// Every `run` script in a workflow or action, whatever its YAML layout
+// (`run:` keys, `- run:` list items, block scalars): read from the parsed
+// document, never from line shapes.
+const runScripts = (node: unknown): string[] => {
+  if (Array.isArray(node)) {
+    return node.flatMap(runScripts);
   }
-  return scripts.flatMap(shellBuildCommands);
+  if (typeof node !== "object" || node === null) {
+    return [];
+  }
+  return Object.entries(node).flatMap(([key, value]) =>
+    key === "run" && typeof value === "string" ? [value] : runScripts(value),
+  );
 };
+
+const workflowCommands = (contents: string): string[] =>
+  runScripts(Bun.YAML.parse(contents)).flatMap(shellBuildCommands);
 
 export const scanBundledConsumers = (
   files: readonly RepositoryFile[],
