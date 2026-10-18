@@ -1004,7 +1004,7 @@ const walkPublisherRedirects = async (
     if (redirects >= MAX_REDIRECTS) {
       return redirectLimitResult(state);
     }
-    if (!URL.canParse(location, state.url)) {
+    if (!URL.canParse(location, state.url.href)) {
       return Result.err(
         new PublisherTargetRefusedError({
           message: "publisher redirect location is invalid",
