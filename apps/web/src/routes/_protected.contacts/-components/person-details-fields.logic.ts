@@ -1,4 +1,5 @@
 import { normalizeUnicode, ARABIC_DIGIT_FOLDS } from "@stll/text-normalize";
+import { containsSearchMatchKey } from "@stll/text-normalize/search-match-key";
 
 import type { PersonDateOfBirth } from "@/lib/contacts/mutations";
 
@@ -64,4 +65,27 @@ export const parseBirthDateDraft = (
     return null;
   }
   return { precision: "day", year, month, day };
+};
+
+type FilterNationalityOptionsArgs<T> = {
+  countries: readonly T[];
+  query: string;
+  locale: string;
+};
+
+/** Locale-aware nationality filtering; accents and field boundaries stay significant. */
+export const filterNationalityOptions = <
+  T extends { name: string; code: string },
+>({
+  countries,
+  query,
+  locale,
+}: FilterNationalityOptionsArgs<T>): T[] => {
+  const normalizedQuery = query.trim().toLocaleLowerCase(locale);
+  return countries.filter(
+    ({ name, code }) =>
+      !normalizedQuery ||
+      containsSearchMatchKey(name.toLocaleLowerCase(locale), normalizedQuery) ||
+      containsSearchMatchKey(code.toLocaleLowerCase(locale), normalizedQuery),
+  );
 };
