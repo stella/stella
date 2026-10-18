@@ -336,8 +336,7 @@ jobs:
             scripts/retry.sh
           sparse-checkout-cone-mode: false
 
-      - &preserve_gh_retry
-        name: Preserve GitHub API tooling across source checkouts
+      - name: Preserve GitHub API tooling across source checkouts
         run: |
           cp "$GITHUB_WORKSPACE/.workflow-tooling/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
           echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
@@ -830,8 +829,7 @@ jobs:
         env:
           NPM_TOKEN: ""
 
-      - &upload_bun_install_logs
-        name: Upload failed Bun install logs
+      - name: Upload failed Bun install logs
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -2099,7 +2097,14 @@ jobs:
           )
           echo ::endgroup::
 
-      - *upload_bun_install_logs
+      - name: Upload failed Bun install logs
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: bun-install-${{ github.job }}
+          path: ${{ runner.temp }}/bun-install/*.log
+          retention-days: 7
+          if-no-files-found: ignore
 
       - *merge_group_cancel
 
@@ -2476,8 +2481,7 @@ jobs:
           # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
 
-      - &checks_prepare_environment
-        name: Prepare environment
+      - name: Prepare environment
         env:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
@@ -2504,8 +2508,7 @@ jobs:
         with:
           name: generated-sources-${{ needs.ci-plan.outputs.generated_sources_input_hash }}
           path: ${{ runner.temp }}/generated-sources
-      - &checks_restore_generated
-        name: Restore generated sources
+      - name: Restore generated sources
         env:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
@@ -3039,7 +3042,12 @@ jobs:
           NPM_TOKEN: ""
 
       - *checks_download_generated
-      - *checks_restore_generated
+      - name: Restore generated sources
+        env:
+          CI_CHECK_KIND: CONTEXTUAL
+          CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun scripts/ci-generated-sources.ts restore "$RUNNER_TEMP/generated-sources"
 
       - name: Prepare route network manifest
         env:
@@ -3075,7 +3083,22 @@ jobs:
           git checkout -- apps/web/e2e/network-baseline.json
           rm -f apps/web/e2e/.network-baseline-*
 
-      - *checks_prepare_environment
+      - name: Prepare environment
+        env:
+          CI_CHECK_KIND: CONTEXTUAL
+          CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        # `cp`, not `mv`: renaming the tracked .env.example dirties the
+        # working tree in apps/api and apps/web, and `turbo --affected`
+        # counts working-tree changes — so every PR (even web-only ones)
+        # ran the api AND web test suites concurrently and could OOM the
+        # runner (exit 137). The copy leaves the tree clean; .env is
+        # gitignored and invisible to affected-detection.
+        run: |
+          cd ./apps/api
+          cp .env.example .env
+          cd ../web
+          cp .env.example .env
 
       - name: Content delivery declarations
         env:
@@ -6020,7 +6043,10 @@ jobs:
             scripts/retry.sh
           sparse-checkout-cone-mode: false
 
-      - *preserve_gh_retry
+      - name: Preserve GitHub API tooling across source checkouts
+        run: |
+          cp "$GITHUB_WORKSPACE/.workflow-tooling/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
 
       - *full_checkout_input_sha
 
@@ -6170,7 +6196,14 @@ jobs:
             exit 1
           fi
 
-      - *upload_bun_install_logs
+      - name: Upload failed Bun install logs
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: bun-install-${{ github.job }}
+          path: ${{ runner.temp }}/bun-install/*.log
+          retention-days: 7
+          if-no-files-found: ignore
 
       - *merge_group_cancel
 
@@ -7568,7 +7601,14 @@ jobs:
           BUN_INSTALL_GLOBAL_STORE: "0"
           NPM_TOKEN: ""
 
-      - *upload_bun_install_logs
+      - name: Upload failed Bun install logs
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: bun-install-${{ github.job }}
+          path: ${{ runner.temp }}/bun-install/*.log
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
@@ -7687,7 +7727,14 @@ jobs:
           BUN_INSTALL_GLOBAL_STORE: "0"
           NPM_TOKEN: ""
 
-      - *upload_bun_install_logs
+      - name: Upload failed Bun install logs
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: bun-install-${{ github.job }}
+          path: ${{ runner.temp }}/bun-install/*.log
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Test dev runner and process tree cleanup
         shell: pwsh
@@ -7723,7 +7770,14 @@ jobs:
         env:
           NPM_TOKEN: ""
 
-      - *upload_bun_install_logs
+      - name: Upload failed Bun install logs
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: bun-install-${{ github.job }}
+          path: ${{ runner.temp }}/bun-install/*.log
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
@@ -8500,7 +8554,10 @@ jobs:
             /package.json
           sparse-checkout-cone-mode: false
 
-      - *preserve_gh_retry
+      - name: Preserve GitHub API tooling across source checkouts
+        run: |
+          cp "$GITHUB_WORKSPACE/.workflow-tooling/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
 
       - name: Evaluate CI outcome
         id: outcome
