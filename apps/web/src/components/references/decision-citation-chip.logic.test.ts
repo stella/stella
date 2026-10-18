@@ -107,4 +107,29 @@ describe("citation text naming its case", () => {
       ),
     ).toEqual({ kind: "chip-replaces-text", before: "", after: " follows" });
   });
+
+  test("consumes a registry suffix written after a space", () => {
+    expect(
+      inlineDecisionCitationPresentation(
+        "23 Cdo 651/2023 -123",
+        "23 Cdo 651/2023-7",
+      ),
+    ).toEqual({ kind: "prose-trigger", label: "23 Cdo 651/2023 -123" });
+    expect(
+      inlineDecisionCitationPresentation(
+        "23 Cdo 651/2023 \u2013 123 follows",
+        "23 Cdo 651/2023",
+      ),
+    ).toEqual({ kind: "chip-replaces-text", before: "", after: " follows" });
+    expect(
+      inlineDecisionCitationPresentation(
+        "23 Cdo 651/2023 - the court held",
+        "23 Cdo 651/2023-7",
+      ),
+    ).toEqual({
+      kind: "chip-replaces-text",
+      before: "",
+      after: " - the court held",
+    });
+  });
 });

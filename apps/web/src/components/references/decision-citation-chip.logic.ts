@@ -13,7 +13,11 @@ type DecisionCitationCourtInput = CourtAbbreviationInput & {
 // do not.
 const IDENTIFIER_CHARACTER = /[\p{L}\p{N}]/u;
 const CASE_NUMBER_SUFFIX = /[-\u2013\u2014]\s*[\p{L}\p{N}]+$/u;
-const LEADING_CASE_NUMBER_SUFFIX = /^[-\u2013\u2014]\s*[\p{L}\p{N}]+/u;
+// A suffix in prose may follow a space ("23 Cdo 651/2023 -123"); spaced, it
+// must start with a digit, so a dash opening a clause ("... 651/2023 - the
+// court held") stays prose.
+const LEADING_CASE_NUMBER_SUFFIX =
+  /^(?:[-\u2013\u2014]\s*[\p{L}\p{N}]+|\s+[-\u2013\u2014]\s*\p{N}[\p{L}\p{N}]*)/u;
 
 /** The characters that identify a case, with each one's index in `value`. */
 const comparable = (value: string): { text: string; origin: number[] } => {
