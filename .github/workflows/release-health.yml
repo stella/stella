@@ -136,6 +136,7 @@ jobs:
       - name: Evaluate the release
         id: evaluate
         env:
+          PREVIOUS_REF: ${{ steps.release.outputs.previous }}
           QUERY_OUTCOME: ${{ steps.query.outcome }}
         run: |
           set -euo pipefail
@@ -145,6 +146,7 @@ jobs:
           fi
           bun scripts/release-health.ts evaluate \
             --release "$RELEASE_REF" \
+            --previous "$PREVIOUS_REF" \
             "${result_args[@]}" \
             --now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             --verdict "$RUNNER_TEMP/release-health.json" \

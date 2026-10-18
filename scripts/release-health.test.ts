@@ -15,6 +15,7 @@ import {
 
 const FIXTURES = path.join(import.meta.dir, "__fixtures__/release-health");
 const RELEASE = "v1.4.1";
+const PREVIOUS_RELEASE = "v1.4.0";
 const CHECKED_AT = "2026-10-17T13:00:00Z";
 
 const recorded = (name: string): unknown =>
@@ -23,6 +24,7 @@ const recorded = (name: string): unknown =>
 const evaluateFixture = (name: string) =>
   evaluateRelease({
     release: RELEASE,
+    baselineRelease: PREVIOUS_RELEASE,
     response: recorded(name),
     checkedAt: CHECKED_AT,
   });
@@ -50,37 +52,54 @@ describe("post-release regression check", () => {
     ]);
   });
 
-  test("a release without baseline fingerprints does not report new fingerprints", () => {
+  const currentOnlyResponse = {
+    columns: [
+      "release",
+      "kind",
+      "handler",
+      "error_class",
+      "error_code",
+      "failure_reason",
+      "occurrences",
+    ],
+    hasMore: false,
+    results: [
+      [
+        "1.4.1",
+        "fingerprint",
+        "/v1/summaries",
+        "SummaryGenerationError",
+        "model_output_incomplete",
+        "model_output_incomplete",
+        10,
+      ],
+    ],
+  };
+
+  test("the first release has no baseline, so no fingerprint is new", () => {
     const evaluation = evaluateRelease({
       release: RELEASE,
-      response: {
-        columns: [
-          "release",
-          "kind",
-          "handler",
-          "error_class",
-          "error_code",
-          "failure_reason",
-          "occurrences",
-        ],
-        hasMore: false,
-        results: [
-          [
-            "1.4.1",
-            "fingerprint",
-            "/v1/summaries",
-            "SummaryGenerationError",
-            "model_output_incomplete",
-            "model_output_incomplete",
-            10,
-          ],
-        ],
-      },
+      baselineRelease: null,
+      response: currentOnlyResponse,
       checkedAt: CHECKED_AT,
     });
 
     expect(evaluation.findings).toEqual([]);
     expect(evaluation.verdict.verdict).toBe("healthy");
+  });
+
+  test("a previous release without failures makes every fingerprint new", () => {
+    const evaluation = evaluateRelease({
+      release: RELEASE,
+      baselineRelease: PREVIOUS_RELEASE,
+      response: currentOnlyResponse,
+      checkedAt: CHECKED_AT,
+    });
+
+    expect(evaluation.findings.map(({ type }) => type)).toEqual([
+      "new_fingerprint",
+    ]);
+    expect(evaluation.verdict.verdict).toBe("unhealthy");
   });
 
   test("known fingerprints and new ones below the threshold do not fire", () => {
@@ -143,8 +162,12 @@ describe("post-release regression check", () => {
     ] as const;
     for (const { response, cause } of cases) {
       expect(
-        evaluateRelease({ release: RELEASE, response, checkedAt: CHECKED_AT })
-          .verdict,
+        evaluateRelease({
+          release: RELEASE,
+          baselineRelease: PREVIOUS_RELEASE,
+          response,
+          checkedAt: CHECKED_AT,
+        }).verdict,
       ).toEqual({
         verdict: "inconclusive",
         release: RELEASE,

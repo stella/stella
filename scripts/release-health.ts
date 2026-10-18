@@ -335,6 +335,8 @@ const fingerprintKey = ({ handler, errorClass, errorCode }: Fingerprint) =>
 type FindingsInput = {
   readonly rows: readonly FailureRow[];
   readonly release: string;
+  /** The previous stable release, or null when this is the first one. */
+  readonly baselineRelease: string | null;
 };
 
 /**
@@ -342,15 +344,19 @@ type FindingsInput = {
  * failure at all, a fingerprint the previous release never produced at or
  * above the threshold, and failures that found the window's fingerprint
  * budget spent at or above the threshold. Rows of neither release are
- * ignored.
+ * ignored. Without a previous release there is no baseline, so no
+ * fingerprint is new; a previous release without failures is a baseline in
+ * which every fingerprint is new.
  */
 const findRegressions = ({
   rows,
   release,
+  baselineRelease,
 }: FindingsInput): ReleaseFinding[] => {
   const version = releaseVersion(release);
+  const previousVersion =
+    baselineRelease === null ? null : releaseVersion(baselineRelease);
   const previous = new Set<string>();
-  let hasPreviousFingerprintRows = false;
   const current = new Map<
     string,
     { fingerprint: Fingerprint; occurrences: number }
@@ -364,8 +370,9 @@ const findRegressions = ({
     }
     const key = fingerprintKey(row.fingerprint);
     if (row.release !== version) {
-      hasPreviousFingerprintRows = true;
-      previous.add(key);
+      if (row.release === previousVersion) {
+        previous.add(key);
+      }
       continue;
     }
     if (row.reason === UNCLASSIFIED_REASON && row.occurrences > 0) {
@@ -383,7 +390,7 @@ const findRegressions = ({
   }
   for (const [key, { fingerprint, occurrences }] of current) {
     if (
-      hasPreviousFingerprintRows &&
+      previousVersion !== null &&
       !previous.has(key) &&
       occurrences >= NEW_FINGERPRINT_MIN_OCCURRENCES
     ) {
@@ -427,6 +434,8 @@ type ReleaseHealthVerdict =
 
 type EvaluateOptions = {
   readonly release: string;
+  /** The release the query compared against, or null when there is none. */
+  readonly baselineRelease: string | null;
   /** The HogQL response, or null when the query itself failed. */
   readonly response: unknown;
   readonly checkedAt: string;
@@ -439,6 +448,7 @@ type Evaluation = {
 
 export const evaluateRelease = ({
   release,
+  baselineRelease,
   response,
   checkedAt,
 }: EvaluateOptions): Evaluation => {
@@ -466,7 +476,11 @@ export const evaluateRelease = ({
         findings: [],
       };
     case "rows": {
-      const findings = findRegressions({ rows: parsed.rows, release });
+      const findings = findRegressions({
+        rows: parsed.rows,
+        release,
+        baselineRelease,
+      });
       return {
         verdict:
           findings.length === 0
@@ -746,6 +760,7 @@ const run = (argv: readonly string[]): number => {
     case "evaluate": {
       const evaluation = evaluateRelease({
         release: requireStableRef(required(values.release, "release")),
+        baselineRelease: optionalRef(values.previous),
         response: readOptionalJsonFile(values.result),
         checkedAt: required(values.now, "now"),
       });
