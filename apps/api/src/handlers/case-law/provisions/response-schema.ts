@@ -5,6 +5,7 @@ import { t } from "elysia";
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { STATED_DATE_RELATIONS } from "@stll/api-contract/provision-applied-version";
 import { PROVISION_CITING_SNAPSHOT_LIMIT } from "@stll/api-contract/provision-citing-decisions";
+import type { ProvisionLinkCapability } from "@stll/api-contract/provision-link-capability";
 import { PROVISION_LINK_STATUS_TYPES } from "@stll/api-contract/provision-link-status";
 
 import { caseLawProvisionCitations } from "@/api/db/schema";
@@ -152,6 +153,33 @@ const provisionPreviewSchema = t.Object({
   truncated: t.Boolean(),
 });
 
+type ProvisionCapabilitySchemas = {
+  readonly [Kind in ProvisionLinkCapability["type"]]: TSchema & {
+    static: Extract<ProvisionLinkCapability, { type: Kind }>;
+  };
+};
+
+const provisionCapabilitySchemas = {
+  supported: t.Object({
+    type: t.Literal("supported"),
+    languages: t.Array(boundedString(32), { minItems: 1, maxItems: 64 }),
+  }),
+  notSupportedYet: t.Object({
+    type: t.Literal("notSupportedYet"),
+    reason: t.UnionEnum([
+      "no_profile",
+      "no_multilingual_profile",
+      "language_not_supported",
+      "unknown_jurisdiction",
+    ]),
+  }),
+} as const satisfies ProvisionCapabilitySchemas;
+
+const provisionCapabilitySchema = t.Union([
+  provisionCapabilitySchemas.supported,
+  provisionCapabilitySchemas.notSupportedYet,
+]);
+
 export const decisionProvisionsSuccessResponseSchema = t.Object({
   items: t.Array(t.Object(citationFields), {
     maxItems: LIMITS.caseLawSearchPageSizeMax,
@@ -159,6 +187,8 @@ export const decisionProvisionsSuccessResponseSchema = t.Object({
   limit: t.Number(),
   nextCursor: cursor,
   status: t.Object({ type: t.UnionEnum(PROVISION_LINK_STATUS_TYPES) }),
+  capability: provisionCapabilitySchema,
+  pendingSince: nullableBoundedString(128),
   generation: boundedString(128),
   publishedProjectionDigest: nullableBoundedString(128),
   previews: t.Array(provisionPreviewSchema, {

@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import type { Context } from "elysia";
 
 import {
@@ -23,6 +24,11 @@ export const CORS_EXPOSED_HEADERS = [
 
 export const CACHE_CONTROL_HEADER = "Cache-Control";
 export const PRIVATE_CACHE_CONTROL = "private, no-store";
+export const DISCOVERY_METADATA_CACHE_POLICY = {
+  kind: "public",
+  maxAge: 300,
+  swr: 3600,
+} as const satisfies CachePolicy;
 
 /**
  * Headers every frame document the web app embeds must send. The web app
@@ -41,6 +47,7 @@ export const NO_STORE_DIRECTIVE = "no-store";
 
 export type CachePolicy =
   | { kind: "none" }
+  | { kind: "private"; maxAge: number }
   | { kind: "public"; maxAge: number; swr?: number };
 
 export const publicCacheControl = (
@@ -87,14 +94,28 @@ export const applyResponseCachePolicy = ({
             (Array.isArray(value) ? value.length > 0 : Boolean(value)),
         )) ||
     Object.keys(set.cookie ?? {}).length > 0;
-  const cacheControl =
-    cache.kind === "public" &&
+  let cacheControl = PRIVATE_CACHE_CONTROL;
+  if (
     !setsCookie &&
     !privateResponses.has(set) &&
     status >= 200 &&
     status < 300
-      ? publicCacheControl(cache)
-      : PRIVATE_CACHE_CONTROL;
+  ) {
+    switch (cache.kind) {
+      case "public":
+        cacheControl = publicCacheControl(cache);
+        break;
+      case "private":
+        cacheControl = `private, max-age=${cache.maxAge}`;
+        break;
+      case "none":
+        break;
+      default: {
+        cache satisfies never;
+        return panic("Unhandled response cache policy");
+      }
+    }
+  }
   const value = isEventStream ? SSE_CACHE_CONTROL : cacheControl;
 
   // Record initializers append differently-cased names, unlike Headers.set().

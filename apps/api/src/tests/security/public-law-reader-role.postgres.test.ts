@@ -2,13 +2,23 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { sql, TransactionRollbackError } from "drizzle-orm";
 
-import { stellaPublicLawReader } from "@/api/db/rls";
+import { rejectionOf } from "@stll/property-testing/rejection";
+
+import {
+  stella,
+  stellaCaseLawReader,
+  stellaPublicLawReader,
+} from "@/api/db/rls";
 import type { Transaction } from "@/api/db/root";
 import { readCitationGraphFacts } from "@/api/handlers/case-law/analysis/significance";
 import { readDecisionHandler } from "@/api/handlers/case-law/decisions/get";
-import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import type {
+  CaseLawPublicReadDb,
+  CaseLawPublicReadTransaction,
+} from "@/api/lib/case-law-public-read-db";
 import { resetPublicCaseLawConfigForTesting } from "@/api/lib/case-law/public-case-law-config";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
+import { readPendingContractSources } from "@/api/lib/db/pending-contract-migrations/registry";
 import {
   publicLawDatabaseRolePermissionsSql,
   type PublicLawDatabaseRolePermissions,
@@ -47,6 +57,16 @@ const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
 const READER_ROLE = stellaPublicLawReader.name;
 
+const errorAndCauseMessages = (error: unknown): string => {
+  if (!(error instanceof Error)) {
+    return String(error);
+  }
+  const cause = error.cause;
+  return cause === undefined
+    ? error.message
+    : `${error.message} ${errorAndCauseMessages(cause)}`;
+};
+
 /** A one-connection client, closed once `fn` settles. */
 const withClient = async <T>(
   url: string,
@@ -61,16 +81,22 @@ const withClient = async <T>(
  * Run `fn` as the reader role in a transaction that always rolls back.
  * `setup` runs first, as the owner.
  */
-const asReader = async (
+const asRole = async (
   url: string,
+  role: string,
   fn: (tx: Transaction) => Promise<void>,
   setup: (tx: Transaction) => Promise<void> = async () => {},
 ): Promise<void> =>
   await withClient(url, async (database) => {
     try {
       await database.transaction(async (tx) => {
+        // PostgreSQL 16+ gives a role creator ADMIN membership without SET.
+        // Roll this fixture membership back with the rest of the transaction.
+        await tx.execute(
+          sql`GRANT ${sql.identifier(role)} TO CURRENT_USER WITH INHERIT FALSE, SET TRUE`,
+        );
         await setup(tx);
-        await tx.execute(sql.raw(`SET LOCAL ROLE "${READER_ROLE}"`));
+        await tx.execute(sql`SET LOCAL ROLE ${sql.identifier(role)}`);
         await fn(tx);
         tx.rollback();
       });
@@ -80,6 +106,23 @@ const asReader = async (
       }
     }
   });
+
+const asReader = async (
+  url: string,
+  fn: (tx: Transaction) => Promise<void>,
+  setup: (tx: Transaction) => Promise<void> = async () => {},
+): Promise<void> => await asRole(url, READER_ROLE, fn, setup);
+
+/** Apply every pending contract step inside the (rolled back) transaction. */
+const applyPendingContractSteps = async (tx: Transaction): Promise<void> => {
+  for (const source of readPendingContractSources()) {
+    for (const statement of source.split("--> statement-breakpoint")) {
+      if (statement.trim().length > 0) {
+        await tx.execute(sql.raw(statement));
+      }
+    }
+  }
+};
 
 /** Seed the search census, run `fn`, and remove the census again. */
 const withSearchCensus = async (
@@ -180,6 +223,111 @@ if (!databaseUrl || !runPostgresTests) {
       });
     });
 
+    test("reads the decision views", async () => {
+      await asReader(databaseUrl, async (tx) => {
+        await tx.execute(
+          sql.raw('SELECT "id" FROM "case_law_published_decisions" LIMIT 0'),
+        );
+        await tx.execute(
+          sql.raw('SELECT "id" FROM "case_law_unredacted_decisions" LIMIT 0'),
+        );
+      });
+    });
+
+    // Migrations run before the new API starts, so the previous API version
+    // keeps reading the base table through both reader roles until its tasks
+    // are gone. The migrated database must still serve those reads.
+    test("previous-version base-table reads still work after the migrations", async () => {
+      await asReader(databaseUrl, async (tx) => {
+        await tx.execute(
+          sql.raw(
+            'SELECT "id", "case_number", "fulltext", "metadata", "redacted_at" FROM "case_law_decisions" LIMIT 0',
+          ),
+        );
+      });
+      await asRole(databaseUrl, stellaCaseLawReader.name, async (tx) => {
+        await tx.execute(sql.raw('SELECT * FROM "case_law_decisions" LIMIT 0'));
+      });
+    });
+
+    test("previous-version base-table reads return rows the policies admit", async () => {
+      await withSearchCensus(databaseUrl, async ({ decisionId }) => {
+        const idsSeenBy = async (role: string): Promise<string[]> => {
+          const seen: string[] = [];
+          await asRole(databaseUrl, role, async (tx) => {
+            const result = await tx.execute<{ id: string }>(
+              sql.raw(
+                `SELECT "id" FROM "case_law_decisions" WHERE "id" = '${decisionId}'`,
+              ),
+            );
+            seen.push(...result.map(({ id }) => id));
+          });
+          return seen;
+        };
+        expect(await idsSeenBy(READER_ROLE)).toEqual([decisionId]);
+        expect(await idsSeenBy(stellaCaseLawReader.name)).toEqual([decisionId]);
+      });
+    });
+
+    // The pending contract step is what closes the base table to the readers;
+    // it is held to doing exactly that, with the views left readable.
+    test("the pending contract step closes the base relation and keeps the views", async () => {
+      for (const role of [READER_ROLE, stellaCaseLawReader.name]) {
+        const failure = await rejectionOf(
+          asRole(
+            databaseUrl,
+            role,
+            async (tx) => {
+              await tx.execute(
+                sql.raw('SELECT "id" FROM "case_law_decisions" LIMIT 0'),
+              );
+            },
+            applyPendingContractSteps,
+          ),
+        );
+        expect(failure).toBeInstanceOf(Error);
+        expect(errorAndCauseMessages(failure)).toContain("permission denied");
+        expect(errorAndCauseMessages(failure)).toContain("case_law_decisions");
+      }
+      await asReader(
+        databaseUrl,
+        async (tx) => {
+          await tx.execute(
+            sql.raw('SELECT "id" FROM "case_law_published_decisions" LIMIT 0'),
+          );
+          await tx.execute(
+            sql.raw('SELECT "id" FROM "case_law_unredacted_decisions" LIMIT 0'),
+          );
+        },
+        applyPendingContractSteps,
+      );
+    });
+
+    test("the request role resolves a published decision through its subject view", async () => {
+      await withSearchCensus(databaseUrl, async ({ decisionId }) => {
+        await withClient(databaseUrl, async (database) => {
+          const requestDb = asTestRaw<CaseLawPublicReadDb>(
+            async <T>(
+              fn: (tx: CaseLawPublicReadTransaction) => Promise<T>,
+            ): Promise<T> =>
+              await database.transaction(async (tx) => {
+                await tx.execute(
+                  sql`SET LOCAL ROLE ${sql.identifier(stella.name)}`,
+                );
+                return await fn(tx);
+              }),
+          );
+          const resolvedId = await withRedistributableSubject(
+            requestDb,
+            "pages",
+            { kind: "id", id: decisionId },
+            async ({ id }) => id,
+          );
+          expect(resolvedId).toBe(decisionId);
+        });
+      });
+    });
+
     test("the search and configuration reads return the seeded rows", async () => {
       await withSearchCensus(databaseUrl, async (ids) => {
         expect(await observeSearchCensus(databaseUrl)).toEqual(
@@ -232,6 +380,7 @@ if (!databaseUrl || !runPostgresTests) {
             resetPublicCaseLawConfigForTesting(readerDb);
             const decision = await withRedistributableSubject(
               readerDb,
+              "pages",
               { kind: "id", id: decisionId },
               async (subject) => await readDecisionHandler({ subject }),
             );

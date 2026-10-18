@@ -361,7 +361,7 @@ const searchDecisions = async ({
     }
     for (const hit of result.hits) {
       const links = legalCitationLinkFields({
-        appUrl: buildCaseLawDecisionAppUrl({
+        url: buildCaseLawDecisionAppUrl({
           caseNumber: hit.caseNumber,
           country: hit.country,
           court: hit.court,
@@ -479,7 +479,7 @@ const searchStatutes = async ({
       // publisher's own is then the one address there is, and a hit with
       // neither is dropped rather than answered with an empty url.
       const links = legalCitationLinkFields({
-        appUrl: buildLegislationDocumentAppUrl({
+        url: buildLegislationDocumentAppUrl({
           country: hit.country,
           documentId: hit.documentId,
           eli: hit.eli,
@@ -610,13 +610,14 @@ export const readCompatDecision = async ({
     // counts as demand for the publisher document.
     caller: "attributed",
     documentHydration: documentHydrationFor(context.thirdPartyOutboundPermit),
+    surface: "search",
   });
   if (decision === null || !isReadCaseLawDecisionSuccess(decision)) {
     return { type: "not_found" };
   }
 
   const links = legalCitationLinkFields({
-    appUrl: buildCaseLawDecisionAppUrl({
+    url: buildCaseLawDecisionAppUrl({
       caseNumber: decision.caseNumber,
       country: decision.country,
       court: decision.court,
@@ -669,7 +670,7 @@ export const readCompatStatute = async ({
   const resolved = await (
     context.testDependencies?.resolveStatuteExpression ??
     defaultResolveStatuteExpression
-  )({ eli }, legislationPublicReadDb);
+  )({ eli }, legislationPublicReadDb, "search");
   if (resolved.type !== "expression") {
     return { type: "not_found" };
   }
@@ -677,13 +678,13 @@ export const readCompatStatute = async ({
   const document = await (
     context.testDependencies?.readPublicLegislationHandler ??
     defaultReadPublicLegislationHandler
-  )(resolved.id, legislationPublicReadDb);
+  )(resolved.id, legislationPublicReadDb, "search");
   if (!isStatuteDocument(document)) {
     return { type: "not_found" };
   }
 
   const links = legalCitationLinkFields({
-    appUrl: buildLegislationDocumentAppUrl({
+    url: buildLegislationDocumentAppUrl({
       country: document.country,
       documentId: document.id,
       eli: document.eli,

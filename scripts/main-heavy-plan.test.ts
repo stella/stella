@@ -121,7 +121,10 @@ const context = (
 ) => ({
   github: {
     event_name: event,
-    event: { pull_request: { draft: false, labels: [] } },
+    event: {
+      action: "synchronize",
+      pull_request: { draft: false, labels: [] },
+    },
   },
   inputs: {
     heavy_only: heavyOnly,
@@ -576,7 +579,7 @@ test("completed-depth reuse skips every nonstructural main heavy job", () => {
       if (
         job === "ci-plan" ||
         job === "ci-result" ||
-        job === "dated-waiver-expiry"
+        job === "ci-quick-checks"
       ) {
         continue;
       }

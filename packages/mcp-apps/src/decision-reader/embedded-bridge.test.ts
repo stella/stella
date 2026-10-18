@@ -18,7 +18,7 @@ const metadata = {
   country: "CZ",
   date: null,
   ecli: null,
-  appUrl: "https://stella.example/decisions/1",
+  url: "https://stella.example/decisions/1",
 } satisfies ReaderPage["metadata"];
 const opened = {
   status: "available",
@@ -43,6 +43,7 @@ const page = {
     blockFragments: [],
     citationAnchors: [],
     provisionAnchors: [],
+    provisionStatus: null,
     nextCursor: null,
     limit: 60_000,
   },
@@ -169,7 +170,7 @@ describe("embedded MCP decision reader session", () => {
   });
   test("host operation failures stay local and stale host failures after reset are ignored", async () => {
     const host = fixture();
-    await host.session.openLink(metadata.appUrl);
+    await host.session.openLink(metadata.url);
     host.hostError();
     expect(host.session.getSnapshot().result.status).toBe("error");
     expect(host.parent.getSnapshot().result).toBe(host.originalSearch);

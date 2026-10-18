@@ -279,99 +279,102 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
     expect(completed?.properties).toMatchObject({ jurisdiction: "CZE" });
   });
 
-  test("records usage through TanStack deferred side effects", async () => {
-    const { createTanStackAIAnalyticsCallbacks } =
-      await loadTanStackAIAnalytics();
-    const periodStart = new Date("2026-06-01T00:00:00.000Z");
-    const periodEnd = new Date("2026-07-01T00:00:00.000Z");
-    const insertedRows: unknown[] = [];
-    const tx = {
-      select: () => ({
-        from: () => ({
-          where: () => ({
-            limit: async () => [
-              {
-                currentPeriodEnd: periodEnd,
-                currentPeriodStart: periodStart,
-                status: "active",
-              },
-            ],
-            for: async () => [{ id: workspaceId }],
+  test.each(["chat", "short-text"] as const)(
+    "records %s usage through TanStack deferred side effects",
+    async (modelTask) => {
+      const { createTanStackAIAnalyticsCallbacks } =
+        await loadTanStackAIAnalytics();
+      const periodStart = new Date("2026-06-01T00:00:00.000Z");
+      const periodEnd = new Date("2026-07-01T00:00:00.000Z");
+      const insertedRows: unknown[] = [];
+      const tx = {
+        select: () => ({
+          from: () => ({
+            where: () => ({
+              limit: async () => [
+                {
+                  currentPeriodEnd: periodEnd,
+                  currentPeriodStart: periodStart,
+                  status: "active",
+                },
+              ],
+              for: async () => [{ id: workspaceId }],
+            }),
           }),
         }),
-      }),
-      insert: () => ({
-        values: (values: unknown) => {
-          insertedRows.push(values);
-          return {
-            onConflictDoNothing: () => ({
-              returning: async () => [{ id: "usage_event_1" }],
-            }),
-          };
+        insert: () => ({
+          values: (values: unknown) => {
+            insertedRows.push(values);
+            return {
+              onConflictDoNothing: () => ({
+                returning: async () => [{ id: "usage_event_1" }],
+              }),
+            };
+          },
+        }),
+      };
+      const { safeDb } = createScopedDbMock(tx);
+      const analytics: ServerAnalytics = {
+        capture: () => undefined,
+        flush: async () => undefined,
+        identifyOrganizationGroup: () => undefined,
+      };
+      const callbacks = createTanStackAIAnalyticsCallbacks({
+        modelTier: MANAGED_MODEL_TIER.standard,
+        dataClass: "public_corpus",
+        analytics,
+        feature: "chat.stream",
+        modelTask,
+        traceId: "trace_usage",
+        usageMetering: {
+          actionType: "chat",
+          organizationId: orgId,
+          safeDb,
+          serviceTier: "standard",
+          userId,
+          workspaceId,
         },
-      }),
-    };
-    const { safeDb } = createScopedDbMock(tx);
-    const analytics: ServerAnalytics = {
-      capture: () => undefined,
-      flush: async () => undefined,
-      identifyOrganizationGroup: () => undefined,
-    };
-    const callbacks = createTanStackAIAnalyticsCallbacks({
-      modelTier: MANAGED_MODEL_TIER.standard,
-      dataClass: "public_corpus",
-      analytics,
-      feature: "chat.stream",
-      modelRole: "chat",
-      traceId: "trace_usage",
-      usageMetering: {
+      });
+      const deferred: Promise<unknown>[] = [];
+
+      await callbacks.middleware.onUsage?.(
+        createMiddlewareContext({ deferred }),
+        usage,
+      );
+      await callbacks.middleware.onUsage?.(
+        createMiddlewareContext({ deferred, iteration: 1 }),
+        usage,
+      );
+      await callbacks.middleware.onUsage?.(
+        createMiddlewareContext({ deferred, runId: "run_2" }),
+        usage,
+      );
+      await Promise.all(deferred);
+
+      expect(insertedRows).toHaveLength(3);
+      expect(insertedRows[0]).toMatchObject({
         actionType: "chat",
+        isByok: false,
+        idempotencyKey: "trace_usage:run_1:0",
+        modelRole: modelTask,
         organizationId: orgId,
-        safeDb,
+        periodEnd,
+        periodStart,
         serviceTier: "standard",
+        traceId: "trace_usage",
         userId,
         workspaceId,
-      },
-    });
-    const deferred: Promise<unknown>[] = [];
-
-    await callbacks.middleware.onUsage?.(
-      createMiddlewareContext({ deferred }),
-      usage,
-    );
-    await callbacks.middleware.onUsage?.(
-      createMiddlewareContext({ deferred, iteration: 1 }),
-      usage,
-    );
-    await callbacks.middleware.onUsage?.(
-      createMiddlewareContext({ deferred, runId: "run_2" }),
-      usage,
-    );
-    await Promise.all(deferred);
-
-    expect(insertedRows).toHaveLength(3);
-    expect(insertedRows[0]).toMatchObject({
-      actionType: "chat",
-      isByok: false,
-      idempotencyKey: "trace_usage:run_1:0",
-      modelRole: "chat",
-      organizationId: orgId,
-      periodEnd,
-      periodStart,
-      serviceTier: "standard",
-      traceId: "trace_usage",
-      userId,
-      workspaceId,
-    });
-    expect(insertedRows[1]).toMatchObject({
-      idempotencyKey: "trace_usage:run_1:1",
-      traceId: "trace_usage",
-    });
-    expect(insertedRows[2]).toMatchObject({
-      idempotencyKey: "trace_usage:run_2:0",
-      traceId: "trace_usage",
-    });
-  });
+      });
+      expect(insertedRows[1]).toMatchObject({
+        idempotencyKey: "trace_usage:run_1:1",
+        traceId: "trace_usage",
+      });
+      expect(insertedRows[2]).toMatchObject({
+        idempotencyKey: "trace_usage:run_2:0",
+        traceId: "trace_usage",
+      });
+    },
+  );
 
   test("meters an Anthropic warm cache where cached reads exceed input tokens", async () => {
     const { createTanStackAIAnalyticsCallbacks } =
@@ -413,7 +416,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
         identifyOrganizationGroup: () => undefined,
       },
       feature: "chat.stream",
-      modelRole: "chat",
+      modelTask: "chat",
       orgAIConfig: createAnthropicOrgAIConfig(),
       traceId: "trace_anthropic_warm_cache",
       usageMetering: {
@@ -476,7 +479,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
         identifyOrganizationGroup: () => undefined,
       },
       feature: "chat.stream",
-      modelRole: "chat",
+      modelTask: "chat",
       orgAIConfig: createOpenAIOrgAIConfig(),
       traceId: "trace_poisoned_usage",
       usageMetering: {
@@ -559,7 +562,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       dataClass: "public_corpus",
       analytics,
       feature: "chat.stream",
-      modelRole: "chat",
+      modelTask: "chat",
       orgAIConfig: createOpenAIOrgAIConfig(),
       selectedModelId: "openai::gpt-5.6",
       traceId: "trace_selected_model",
@@ -654,7 +657,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       dataClass: "public_corpus",
       analytics,
       feature: "chat.stream",
-      modelRole: "chat",
+      modelTask: "chat",
       traceId: "trace_fallback_usage",
       usageMetering: {
         actionType: "chat",
@@ -726,11 +729,49 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       event: SERVER_ANALYTICS_EVENTS.aiGenerationFailed,
       properties: {
         failure_reason: "provider",
+        failure_kind: "unknown",
         feature: "chat.stream",
         model: "gpt-5.4-mini",
         provider: "openai",
       },
     });
+    // No status was carried, so none is invented.
+    expect(failedEvent?.properties).not.toHaveProperty("provider_status");
+  });
+
+  test("names a provider refusal by kind and status, not by its message", async () => {
+    const { createTanStackAIAnalyticsCallbacks } =
+      await loadTanStackAIAnalytics();
+    const events: Parameters<ServerAnalytics["capture"]>[0][] = [];
+    const callbacks = createTanStackAIAnalyticsCallbacks({
+      modelTier: MANAGED_MODEL_TIER.standard,
+      dataClass: "public_corpus",
+      analytics: {
+        capture: (event) => {
+          events.push(event);
+        },
+        flush: async () => undefined,
+        identifyOrganizationGroup: () => undefined,
+      },
+      feature: "case-law.analysis",
+      orgAIConfig: createOpenAIOrgAIConfig(),
+      traceId: "trace_refused",
+    });
+    const SENTINEL = "SENTINEL_PROVIDER_TEXT";
+    const error = new Error("stream failed", {
+      cause: { statusCode: 401, message: `${SENTINEL} key rejected` },
+    });
+
+    callbacks.captureError(error);
+
+    const failedEvent = events.find(
+      (event) => event.event === SERVER_ANALYTICS_EVENTS.aiGenerationFailed,
+    );
+    expect(failedEvent?.properties).toMatchObject({
+      failure_kind: "provider_credentials_rejected",
+      provider_status: "401",
+    });
+    expect(JSON.stringify(events)).not.toContain(SENTINEL);
   });
 
   test("keeps model metadata lookup best-effort", async () => {

@@ -36,6 +36,7 @@ const propertyId = (value: string) => toSafeId<"property">(value);
 const block = (id: string, text: string): FolioAIBlock => ({
   id,
   kind: "paragraph",
+  statedNumbering: { kind: "inherit" },
   text,
 });
 

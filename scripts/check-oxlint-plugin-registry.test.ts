@@ -9,6 +9,7 @@ import oxlintConfig from "../oxlint.config.ts";
 import {
   approvedAdapterPathErrors,
   approvedAdapterPaths,
+  NON_PLUGIN_MODULES,
   redeclaredSharedHelpers,
   ruleNamesFromSource,
   newGuardRolloutErrors,
@@ -83,6 +84,12 @@ test("a new rule must ship a registered repair or dated changed-lines scope", ()
 });
 
 describe("plugin rule census", () => {
+  test("keeps shared rule data modules out of the plugin census", () => {
+    expect(
+      NON_PLUGIN_MODULES.has("public-law-decision-surface-modules.ts"),
+    ).toBe(true);
+  });
+
   test("derives literal and computed rule names independently of formatting or factory nesting", () => {
     for (const indentation of ["", "  ", "    ", "      ", "\t"]) {
       const rules = `rules: {\n${indentation}"literal-rule": {},\n${indentation}[RULE_NAME]: {}\n}`;

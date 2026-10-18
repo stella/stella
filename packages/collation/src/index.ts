@@ -5,4 +5,4 @@ export {
   compareCodeUnit,
   getCollator,
   LOCALE_CACHE_LIMIT,
-} from "./collation";
+} from "./collation.ts";

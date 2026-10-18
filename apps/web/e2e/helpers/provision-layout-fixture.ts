@@ -300,6 +300,16 @@ export const openProvisionLayoutInspector = async (
     .getByRole("link", { name: "§ 2895" })
     .first();
   await citation.waitFor({ state: "visible", timeout: 30_000 });
+  // The public reader remains visible while the authenticated workspace loads;
+  // its preview is replaced on that handoff. The editable composer belongs to
+  // the authenticated workspace, so open the preview only after it mounts.
+  await page
+    .locator('[data-file-viewer-root="true"]')
+    .filter({ has: page.locator(".reader-case-law") })
+    .locator(
+      '[data-slot="docked-chat-composer"] [role="textbox"][contenteditable="true"]',
+    )
+    .waitFor({ state: "visible", timeout: 30_000 });
   await citation.click();
   // Enter the preview before moving to its edge-aligned header action;
   // a direct pointer jump from the citation leaves the hover corridor.

@@ -1,0 +1,5 @@
+{
+  "metric": "lint-suppression-directives",
+  "delta": 3,
+  "reason": "The citations cassette replays one recorded answer verbatim; its three resource links are the model output the citation renderer is developed against, so they stay raw in the fixture."
+}

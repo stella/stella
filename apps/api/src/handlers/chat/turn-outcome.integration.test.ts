@@ -17,11 +17,8 @@ import {
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
-import { toChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
-import {
-  CHAT_TURN_INTERACTION_TYPES,
-  CHAT_TURN_STATUSES,
-} from "@/api/handlers/chat/chat-turn-state";
+import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
+import { CHAT_TURN_INTERACTION_TYPES } from "@/api/handlers/chat/chat-turn-state";
 import { generateThreadTitle } from "@/api/handlers/chat/generate-thread-title";
 import getSuggestedPrompts from "@/api/handlers/chat/get-suggested-prompts";
 import { runSubagent } from "@/api/handlers/chat/subagent-runner";
@@ -37,6 +34,7 @@ import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { runChatThreadCompaction } from "@/api/lib/chat/thread-compaction";
+import { CHAT_TURN_STATUSES } from "@/api/lib/chat/turn-status";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { insertTestSkill } from "@/api/tests/helpers/agent-skill-db";
@@ -658,9 +656,8 @@ const seedThread = async (): Promise<SafeId<"chatThread">> => {
   });
   await testDb.insert(chatMessages).values(
     TRANSCRIPT.map((text, index) => ({
-      content: toChatMessageContent({
+      content: toPersistedChatMessageContentV3({
         data: [{ content: text, type: "text" }],
-        version: 2,
       }),
       createdAt: new Date(Date.parse("2026-08-03T12:00:00.000Z") + index),
       id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
@@ -781,7 +778,7 @@ const SURFACE_SHOWS = {
       admission: testModelAdmission(ids.orgA),
       orgAIConfig,
       managedAIResidency: "eu" as const,
-      role: "fast",
+      task: "short-text",
       systemSafe: "Answer briefly.",
       systemUntrusted: "Return the clause text.",
       tenantWorkspaceIds: [],

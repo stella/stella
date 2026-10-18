@@ -11,11 +11,10 @@ import type { PublicCorpusClass } from "@/api/public-corpus-policy";
  * Per-request latency, split by request class, emitted as a CloudWatch
  * Embedded Metric Format (EMF) line on stdout.
  *
- * Why EMF on stdout rather than the structured `logger`: the OTel logs
- * pipeline has no exporter wired (see `otel.ts`), so `logger.info`
- * records never leave the process. EMF instead rides the container's
- * stdout into the awslogs driver, where CloudWatch auto-extracts the
- * embedded metric — no agent, no metric filter, no log exporter needed.
+ * Direct stdout preserves the nested `_aws` object CloudWatch extracts.
+ * Structured logging serializes nested attributes, while EMF needs the
+ * directive as an object. The container's awslogs driver delivers these
+ * records without a metric filter or log exporter.
  *
  * The `class` dimension is the whole point: it lets the p95 latency
  * alarm watch `class=crud` in isolation, so an inherently multi-second
@@ -140,16 +139,39 @@ export const emitAdmissionStorePolicyMetric = (refused: boolean): void => {
   });
 };
 
+const SANCTIONS_SCREENING_WORK_METRIC = "SanctionsScreeningWorkUsage";
+
+/**
+ * Share of its deterministic work budget one completed sanctions screening
+ * spent. Dimensioned by list so a growing list shows before it starts
+ * refusing common names.
+ */
+export const emitSanctionsScreeningWorkMetric = ({
+  source,
+  percent,
+}: {
+  source: string;
+  percent: number;
+}): void => {
+  writeMetricLine({
+    _aws: {
+      Timestamp: Temporal.Now.instant().epochMilliseconds,
+      CloudWatchMetrics: [
+        {
+          Namespace: METRIC_NAMESPACE,
+          Dimensions: [["source"]],
+          Metrics: [{ Name: SANCTIONS_SCREENING_WORK_METRIC, Unit: "Percent" }],
+        },
+      ],
+    },
+    source,
+    [SANCTIONS_SCREENING_WORK_METRIC]: percent,
+  });
+};
+
 const EVENT_LOOP_DELAY_METRIC = {
   max: "EventLoopDelayMax",
   p99: "EventLoopDelayP99",
-} as const;
-
-const PROCESS_MEMORY_METRIC = {
-  rss: "ProcessRssBytes",
-  heapUsed: "ProcessHeapUsedBytes",
-  arrayBuffers: "ProcessArrayBuffersBytes",
-  uploadFinalizeInFlight: "UploadFinalizeInFlightBytes",
 } as const;
 
 /**
@@ -164,6 +186,15 @@ export type ProcessMemoryReport = {
   uploadFinalizeInFlightBytes: number;
 };
 
+/** Log-only: memory diagnostics must not create billable custom metrics. */
+export const emitProcessMemoryLog = (memory: ProcessMemoryReport): void => {
+  writeMetricLine({
+    severity: "INFO",
+    message: "runtime.process_memory",
+    ...memory,
+  });
+};
+
 /**
  * One reporting window of the process's event-loop delay. Undimensioned: the
  * process is the unit, and a task or route id would only multiply series.
@@ -172,12 +203,10 @@ export const emitEventLoopDelayMetric = ({
   maxMs,
   p99Ms,
   rootPool,
-  memory,
 }: {
   maxMs: number;
   p99Ms: number;
   rootPool?: RootPoolReport;
-  memory?: ProcessMemoryReport;
 }): void => {
   writeMetricLine({
     _aws: {
@@ -189,12 +218,6 @@ export const emitEventLoopDelayMetric = ({
           Metrics: [
             { Name: EVENT_LOOP_DELAY_METRIC.max, Unit: "Milliseconds" },
             { Name: EVENT_LOOP_DELAY_METRIC.p99, Unit: "Milliseconds" },
-            ...(memory === undefined
-              ? []
-              : Object.values(PROCESS_MEMORY_METRIC).map((Name) => ({
-                  Name,
-                  Unit: "Bytes",
-                }))),
           ],
         },
       ],
@@ -203,15 +226,6 @@ export const emitEventLoopDelayMetric = ({
     ...(rootPool === undefined ? {} : { rootPool }),
     [EVENT_LOOP_DELAY_METRIC.max]: maxMs,
     [EVENT_LOOP_DELAY_METRIC.p99]: p99Ms,
-    ...(memory === undefined
-      ? {}
-      : {
-          [PROCESS_MEMORY_METRIC.rss]: memory.rssBytes,
-          [PROCESS_MEMORY_METRIC.heapUsed]: memory.heapUsedBytes,
-          [PROCESS_MEMORY_METRIC.arrayBuffers]: memory.arrayBuffersBytes,
-          [PROCESS_MEMORY_METRIC.uploadFinalizeInFlight]:
-            memory.uploadFinalizeInFlightBytes,
-        }),
   });
 };
 

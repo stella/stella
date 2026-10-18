@@ -96,14 +96,8 @@ export const prDepthJobs = (workflow: unknown) => {
   ) {
     panic("Expected FAST_REQUIRED job names");
   }
-  // Docs-only checks certify ordinary PRs and merge groups. Heavy dispatches
-  // select package checks instead, so the scheduled main run cannot prove them.
   return fastRequired.filter(
-    (job) =>
-      job !== "ci-checks-docs" &&
-      (job === "ci-generated-sources" ||
-        job.startsWith("ci-checks-") ||
-        job.startsWith("code-quality-")),
+    (job) => job.startsWith("ci-checks-") || job.startsWith("code-quality-"),
   );
 };
 
@@ -114,6 +108,8 @@ export const MERGE_GROUP_EXCEPTIONS = {
     "Negative proof against the pull request base, rather than the queued tree.",
   "heavy-web-build":
     "Heavy-dispatch artifact producer; web-build produces the merge-group artifact.",
+  "pr-heavy-gate":
+    "Pull request ordering gate; a merge group starts its suites after the plan.",
 } as const;
 
 export const queueAdmittedJobs = (workflow: unknown) => {

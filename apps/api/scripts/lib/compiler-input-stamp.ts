@@ -5,12 +5,13 @@
 // from it is still current. Replaying costs some thousands of stat calls and
 // file hashes instead of a full parse and type check.
 import { Result } from "better-result";
-import { type Stats, readFileSync, statSync } from "node:fs";
+import { type Stats, readFileSync, realpathSync, statSync } from "node:fs";
 import { readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import ts from "typescript";
 import * as v from "valibot";
 
+import { repoRelativePath } from "@stll/portable-path";
 import { createSha256, sha256Hex } from "@stll/sha256/bun";
 
 const pathListSchema = v.array(v.string());
@@ -98,6 +99,199 @@ export type CompilerInputRecorder = {
   /** Records a file the caller reads outside the compiler. */
   readFile: (fileName: string) => string | undefined;
   stamp: (context: string) => CompilerInputStamp;
+  /**
+   * The same answers for another checkout or machine: installed files are
+   * compared by content (another install writes them with other times) and
+   * paths under `root` are stored relative to it (see toPortableStamp).
+   */
+  portableStamp: (context: string, root: string) => CompilerInputStamp;
+};
+
+// Stands for the checkout root, or its real path, in a portable stamp. Real
+// paths leave the root's spelling when it is reached through a symbolic link
+// (macOS /var and /tmp are), so they move with the real root instead. Tokens
+// deliberately omit directory depth: the same repository tree can be restored
+// into a checkout nested under a different number of parent directories.
+const ROOT_TOKEN_PATTERN = /<(?:real-)?root>/gu;
+const ROOT_TOKEN = "<root>";
+const REAL_ROOT_TOKEN = "<real-root>";
+
+// Module resolution walks up from the root: each ancestor's node_modules and
+// package.json scope. Those probes follow the checkout to its new parents;
+// any other path outside the root names the same file everywhere.
+const isAncestorWalkProbe = (fromAncestor: string) =>
+  fromAncestor === "" ||
+  fromAncestor === "package.json" ||
+  fromAncestor === "node_modules" ||
+  fromAncestor.startsWith("node_modules/");
+
+const toPortablePath = (value: string, base: string, token: string) => {
+  // Directory child names and readDirectory globs are relative answers, not
+  // paths to resolve against the generator's current working directory.
+  if (!path.isAbsolute(value)) {
+    return value;
+  }
+  const relative = repoRelativePath(base, value);
+  if (relative === "") {
+    return token;
+  }
+  if (relative !== ".." && !relative.startsWith("../")) {
+    return `${token}/${relative}`;
+  }
+  const fromAncestor = relative.replace(/^(?:\.\.(?:\/|$))+/u, "");
+  return isAncestorWalkProbe(fromAncestor) ? `${token}/${relative}` : value;
+};
+
+const toLocalPath = (value: string, token: string, base: string) => {
+  if (value === token) {
+    return base;
+  }
+  return value.startsWith(`${token}/`)
+    ? path.join(base, value.slice(token.length + 1))
+    : value;
+};
+
+/** Rewrites every path in a stamp with `move`. */
+const relocateStamp = (
+  stamp: CompilerInputStamp,
+  move: (value: string) => string,
+): CompilerInputStamp => {
+  const moveList = (values: readonly string[]) => values.map(move);
+  const moveKeys = <Value>(
+    record: Record<string, Value>,
+    moveValue: (value: Value) => Value,
+  ) =>
+    Object.fromEntries(
+      Object.entries(record).map(([key, value]) => [
+        move(key),
+        moveValue(value),
+      ]),
+    );
+  const keep = <Value>(value: Value) => value;
+  return {
+    context: stamp.context,
+    contents: moveKeys(stamp.contents, keep),
+    installed: moveKeys(stamp.installed, keep),
+    files: {
+      present: moveList(stamp.files.present),
+      absent: moveList(stamp.files.absent),
+    },
+    directories: {
+      present: moveList(stamp.directories.present),
+      absent: moveList(stamp.directories.absent),
+    },
+    realpaths: moveKeys(stamp.realpaths, move),
+    subdirectories: moveKeys(stamp.subdirectories, moveList),
+    listings: stamp.listings.map(
+      ([[directory, extensions, excludes, includes, depth], found]) => [
+        [
+          move(directory),
+          extensions,
+          excludes === null ? null : moveList(excludes),
+          includes === null ? null : moveList(includes),
+          depth,
+        ],
+        moveList(found),
+      ],
+    ),
+  };
+};
+
+/**
+ * Stores the paths under a checkout `root`, and the probes module resolution
+ * makes in its ancestors, relative to it.
+ */
+const toPortableStamp = (stamp: CompilerInputStamp, root: string) => {
+  const realRoot = realpathSync(root);
+  return relocateStamp(stamp, (value) => {
+    const portable = toPortablePath(value, root, ROOT_TOKEN);
+    return portable === value
+      ? toPortablePath(value, realRoot, REAL_ROOT_TOKEN)
+      : portable;
+  });
+};
+
+/**
+ * Places a portable stamp's repository-relative paths under checkout `root`.
+ * Absolute paths remain untouched, so a machine-specific path outside the
+ * repository never matches another checkout.
+ */
+const localizeStampOrThrow = (stamp: CompilerInputStamp, root: string) => {
+  const realRoot = realpathSync(root);
+  const tokens = JSON.stringify(stamp).match(ROOT_TOKEN_PATTERN) ?? [];
+  if (
+    tokens.some((found) => found !== ROOT_TOKEN && found !== REAL_ROOT_TOKEN)
+  ) {
+    return undefined;
+  }
+  const localized = relocateStamp(stamp, (value) =>
+    toLocalPath(
+      toLocalPath(value, REAL_ROOT_TOKEN, realRoot),
+      ROOT_TOKEN,
+      root,
+    ),
+  );
+  if (tokens.length === 0) {
+    return localized;
+  }
+
+  const recorded = new Set<string>();
+  const record = (value: string) => {
+    if (path.isAbsolute(value)) {
+      recorded.add(path.resolve(value));
+    }
+  };
+  for (const value of [
+    ...Object.keys(localized.contents),
+    ...Object.keys(localized.installed),
+    ...localized.files.present,
+    ...localized.files.absent,
+    ...localized.directories.present,
+    ...localized.directories.absent,
+    ...Object.keys(localized.realpaths),
+    ...Object.keys(localized.subdirectories),
+    ...localized.listings.map(([[directory]]) => directory),
+  ]) {
+    record(value);
+  }
+
+  // A stamp made elsewhere cannot describe destination-only ancestors. An
+  // unrecorded package scope or dependency directory there could turn a
+  // formerly unresolved import into a different program. TypeScript probes
+  // the checkout's literal path as well as its resolved one, so a checkout
+  // reached through a symlink has two ancestor chains.
+  for (const start of new Set([path.resolve(root), realRoot])) {
+    for (
+      let ancestor = path.dirname(start);
+      ;
+      ancestor = path.dirname(ancestor)
+    ) {
+      for (const candidate of [
+        path.join(ancestor, "node_modules"),
+        path.join(ancestor, "package.json"),
+      ]) {
+        if (
+          !recorded.has(candidate) &&
+          statSync(candidate, { throwIfNoEntry: false }) !== undefined
+        ) {
+          return undefined;
+        }
+      }
+      if (path.dirname(ancestor) === ancestor) {
+        break;
+      }
+    }
+  }
+  return localized;
+};
+
+/**
+ * {@link localizeStampOrThrow}, treating an unreadable checkout or ancestor as
+ * a stamp that cannot be reused, so the caller generates instead of failing.
+ */
+export const localizeStamp = (stamp: CompilerInputStamp, root: string) => {
+  const localized = Result.try(() => localizeStampOrThrow(stamp, root));
+  return localized.isOk() ? localized.value : undefined;
 };
 
 // Paths and keys, not text: a stable code-unit order on every machine.
@@ -121,6 +315,7 @@ const existence = (answers: Map<string, boolean>) => {
 export const createCompilerInputRecorder = (): CompilerInputRecorder => {
   const contents = new Map<string, string | null>();
   const installed = new Map<string, string | null>();
+  const installedContents = new Map<string, string | null>();
   const files = new Map<string, boolean>();
   const directories = new Map<string, boolean>();
   const realpaths = new Map<string, string>();
@@ -137,6 +332,7 @@ export const createCompilerInputRecorder = (): CompilerInputRecorder => {
           ? null
           : installedFingerprint(statSync(fileName, { throwIfNoEntry: false })),
       );
+      installedContents.set(fileName, contentHash(bytes));
     } else {
       contents.set(fileName, contentHash(bytes));
     }
@@ -198,21 +394,31 @@ export const createCompilerInputRecorder = (): CompilerInputRecorder => {
     record(host);
     return host;
   };
+  const stamp = (
+    context: string,
+    contentsOf: Map<string, string | null>,
+    installedOf: Map<string, string | null>,
+  ): CompilerInputStamp => ({
+    context,
+    contents: sortedRecord(contentsOf),
+    installed: sortedRecord(installedOf),
+    files: existence(files),
+    directories: existence(directories),
+    realpaths: sortedRecord(realpaths),
+    subdirectories: sortedRecord(subdirectories),
+    listings: [...listings]
+      .toSorted(([left], [right]) => compareKeys(left, right))
+      .map(([, listing]) => listing),
+  });
   return {
     wrap,
     readFile: recordRead,
-    stamp: (context) => ({
-      context,
-      contents: sortedRecord(contents),
-      installed: sortedRecord(installed),
-      files: existence(files),
-      directories: existence(directories),
-      realpaths: sortedRecord(realpaths),
-      subdirectories: sortedRecord(subdirectories),
-      listings: [...listings]
-        .toSorted(([left], [right]) => compareKeys(left, right))
-        .map(([, listing]) => listing),
-    }),
+    stamp: (context) => stamp(context, contents, installed),
+    portableStamp: (context, root) =>
+      toPortableStamp(
+        stamp(context, new Map([...contents, ...installedContents]), new Map()),
+        root,
+      ),
   };
 };
 
@@ -320,7 +526,11 @@ export const isCompilerInputStampCurrent = async (
 /** Hashes the relative and workspace import closure of a script. */
 export const scriptSourceHash = (entry: string): string => {
   const hash = createSha256();
-  const pending = [entry];
+  // Names relative to the entry: checkouts at other paths hash alike. Real
+  // paths, since resolution returns them for the imports.
+  const realEntry = realpathSync(entry);
+  const base = path.dirname(realEntry);
+  const pending = [realEntry];
   const seen = new Set<string>();
   while (pending.length > 0) {
     const file = pending.pop();
@@ -329,7 +539,9 @@ export const scriptSourceHash = (entry: string): string => {
     }
     seen.add(file);
     const source = readFileSync(file, "utf-8");
-    hash.update(JSON.stringify([file, sha256Hex(source)]));
+    hash.update(
+      JSON.stringify([repoRelativePath(base, file), sha256Hex(source)]),
+    );
     for (const { fileName } of ts.preProcessFile(source, true, true)
       .importedFiles) {
       if (fileName.startsWith(".") || fileName.startsWith("@stll/")) {

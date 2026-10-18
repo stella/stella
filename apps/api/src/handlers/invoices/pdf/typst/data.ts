@@ -151,6 +151,7 @@ export const buildInvoiceTemplateData = (options: RenderInvoicePdfOptions) => {
     domestic_vat: l.vat,
     reverse_charge: l.reverse,
     exempt: l.exempt,
+    outside_scope: l.outsideScope,
     not_vat_payer: l.nonPayer,
   } satisfies Record<VatTreatment, string>;
 

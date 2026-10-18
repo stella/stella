@@ -1,4 +1,4 @@
-import { and, desc, eq, notExists, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
@@ -11,7 +11,7 @@ import {
 } from "@stll/api-contract/case-law-launch-readiness";
 import { isUuid } from "@stll/uuid-codec";
 
-import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import { publishedCaseLawDecisions, caseLawSources } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
   CaseLawPublicReadDb,
@@ -31,10 +31,6 @@ import { readDecisionHeadnote } from "@/api/lib/case-law/decision-text";
 import { decisionTypeFilterSql } from "@/api/lib/case-law/decision-type-filter-sql";
 import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
 import { loadPublicCourtWeights } from "@/api/lib/case-law/public-case-law-config";
-import {
-  publishedCaseLawDecision,
-  publishedCaseLawDecisionFor,
-} from "@/api/lib/case-law/published-decisions";
 import {
   redistributableCaseLawSource,
   redistributableCaseLawSourceFor,
@@ -121,11 +117,11 @@ const decisionDateKeysetAfter = ({
   decisionDate,
   id,
 }: DecisionDateCursor): SQL =>
-  sql`(${decisionDateSortKeySql(caseLawDecisions.decisionDate)}, ${caseLawDecisions.id})
+  sql`(${decisionDateSortKeySql(publishedCaseLawDecisions.decisionDate)}, ${publishedCaseLawDecisions.id})
     < (coalesce(${decisionDate}::date, '-infinity'::date), ${id}::uuid)`;
 
 /** The language versions of a decision, so the sibling rule can be applied to them. */
-const sibling = alias(caseLawDecisions, "sibling");
+const sibling = alias(publishedCaseLawDecisions, "sibling");
 const siblingSource = alias(caseLawSources, "sibling_source");
 
 /** The table or its alias: the alias carries its own table name in the types. */
@@ -195,49 +191,52 @@ export const listDecisionsPageQuery = ({
 }: ListDecisionsPageQueryOptions) => {
   const conditions: SQL[] = [
     redistributableCaseLawSource,
-    publishedCaseLawDecision,
-    ...decisionFilterConditions(query, caseLawDecisions),
+    ...decisionFilterConditions(query, publishedCaseLawDecisions),
   ];
   if (cursor !== undefined) {
     conditions.push(decisionDateKeysetAfter(cursor));
   }
 
+  // Keep the representative lookup correlated and bounded: flattening it
+  // into an anti-join makes the browse walk sort the whole country's corpus.
+  const earlierSibling = tx
+    .select({ id: sibling.id })
+    .from(sibling)
+    .innerJoin(siblingSource, eq(siblingSource.id, sibling.sourceId))
+    .where(
+      and(
+        eq(
+          sibling.languageGroupKey,
+          publishedCaseLawDecisions.languageGroupKey,
+        ),
+        // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- column against column inside one statement, nothing round-trips through a JS Date
+        sql`(${sibling.createdAt}, ${sibling.id}) < (${publishedCaseLawDecisions.createdAt}, ${publishedCaseLawDecisions.id})`,
+        redistributableCaseLawSourceFor(siblingSource.descriptor),
+        ...decisionFilterConditions(query, sibling),
+      ),
+    )
+    .limit(1)
+    .as("earlier_sibling");
+
   return tx
     .select(publicDecisionRowColumns())
-    .from(caseLawDecisions)
-    .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
+    .from(publishedCaseLawDecisions)
+    .innerJoin(
+      caseLawSources,
+      eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
+    )
+    .leftJoinLateral(earlierSibling, sql`true`)
     .where(
       and(
         ...conditions,
-        // A multilingual decision is listed once, by its oldest listable
-        // version. Rows only ever arrive with newer timestamps, so no later
-        // ingested translation can displace the representative between two
-        // pages of one walk, and the keyset cursor stays valid. Siblings are
-        // held to the same filters and the same redistribution gate as the
-        // row itself.
-        // Equality against a null group key matches no sibling, so the
-        // anti-join also keeps ungrouped decisions without a separate OR arm.
-        notExists(
-          tx
-            .select({ one: sql`1` })
-            .from(sibling)
-            .innerJoin(siblingSource, eq(siblingSource.id, sibling.sourceId))
-            .where(
-              and(
-                eq(sibling.languageGroupKey, caseLawDecisions.languageGroupKey),
-                // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- column against column inside one statement, nothing round-trips through a JS Date
-                sql`(${sibling.createdAt}, ${sibling.id}) < (${caseLawDecisions.createdAt}, ${caseLawDecisions.id})`,
-                redistributableCaseLawSourceFor(siblingSource.descriptor),
-                publishedCaseLawDecisionFor(sibling.metadata),
-                ...decisionFilterConditions(query, sibling),
-              ),
-            ),
-        ),
+        // Only an older version eligible for this request hides a row.
+        // A null group key matches no sibling, so ungrouped rows remain.
+        isNull(earlierSibling.id),
       ),
     )
     .orderBy(
-      desc(decisionDateSortKeySql(caseLawDecisions.decisionDate)),
-      desc(caseLawDecisions.id),
+      desc(decisionDateSortKeySql(publishedCaseLawDecisions.decisionDate)),
+      desc(publishedCaseLawDecisions.id),
     )
     .limit(limit + 1)
     .offset(offset);
@@ -254,7 +253,9 @@ export const listDecisionsHandler = async (
   readCourtWeights: () => Promise<CourtWeightMap> = loadPublicCourtWeights,
 ) => {
   const countryRead = readPublicLawCountry(query.country, {
+    domain: "caseLaw",
     admitted: PUBLIC_CASE_LAW_COUNTRIES,
+    surface: "search",
   });
   if (countryRead.kind === "unavailable") {
     return countryRead.answer;
