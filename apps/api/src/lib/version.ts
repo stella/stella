@@ -1,3 +1,4 @@
+// parser-output-unchanged: Release attribution adds a service.version attribute to telemetry records; parsed ingestion records are unchanged.
 // Build stamps reported by `/health` and tagged onto PostHog events.
 // ECS/prod release builds pass explicit `STELLA_VERSION` and
 // `STELLA_COMMIT_SHA` Docker build args. Railway's source-based builds do
