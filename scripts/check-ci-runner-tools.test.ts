@@ -17,6 +17,7 @@ import {
   TOOL_PACKAGES,
   RunnerToolInvariantError,
 } from "./check-ci-runner-tools";
+import { workflowJobSteps } from "./workflow-steps";
 
 type FixtureOptions = { jobs: unknown; files?: Record<string, string> };
 const withFixture = (
@@ -808,22 +809,26 @@ test("conditional cd scans both possible script locations", () => {
 });
 
 test("the CI owner runs the portable guard without depending on a dependency install", () => {
-  const workflow = readFileSync(
-    new URL("../.github/workflows/ci.yml", import.meta.url),
-    "utf-8",
+  // Pooled checks are steps of their job; see scripts/workflow-steps.ts.
+  const step = workflowJobSteps(
+    Bun.YAML.parse(
+      readFileSync(
+        new URL("../.github/workflows/ci.yml", import.meta.url),
+        "utf-8",
+      ),
+    ),
+    "ci-checks-rest",
+  ).find(
+    (candidate) => candidate["name"] === "Verify runner tool availability",
   );
-  const step =
-    / {6}- name: Verify runner tool availability\n([\s\S]*?)(?=\n {6}- name:)/u.exec(
-      workflow,
-    )?.[1];
   expect(step).toBeDefined();
-  expect(step).toContain(
-    "bun scripts/check-ci-runner-tools.ts . stella/stella",
-  );
-  expect(step).toContain("bun test scripts/check-ci-runner-tools.test.ts");
-  expect(step).toContain("steps.checkout.outcome == 'success'");
-  expect(step).not.toContain("package_checks_required");
-  expect(step).not.toContain("continue-on-error");
+  const run = String(step?.["run"]);
+  const condition = String(step?.["if"]);
+  expect(run).toContain("bun scripts/check-ci-runner-tools.ts . stella/stella");
+  expect(run).toContain("bun test scripts/check-ci-runner-tools.test.ts");
+  expect(condition).toContain("steps.checkout.outcome == 'success'");
+  expect(condition).not.toContain("package_checks_required");
+  expect(step).not.toHaveProperty("continue-on-error");
 });
 
 test("shell option operands and own-checkout workspace aliases do not hide script calls", () => {

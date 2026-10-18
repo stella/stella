@@ -61,6 +61,11 @@ export default {
           "Queue transport: worker owns its dedicated blocking connection.",
       },
       {
+        path: "apps/api/src/lib/account-export/queue.ts",
+        reason:
+          "Queue transport: the worker uses a dedicated connection; PostgreSQL requests and cursor recovery reconstruct work after an outage.",
+      },
+      {
         path: "apps/api/src/lib/style-set-package-cleanup-queue.ts",
         reason:
           "Queue transport: worker owns its dedicated blocking connection.",
