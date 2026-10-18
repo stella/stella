@@ -12,7 +12,7 @@ afterEach(() => {
   cleanup();
   jest.useRealTimers();
 });
-afterAll(() => GlobalRegistrator.unregister());
+afterAll(async () => GlobalRegistrator.unregister());
 
 const copy = async () => await Promise.resolve(true);
 
