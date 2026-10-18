@@ -40,8 +40,7 @@ export const READ_CASE_LAW_CITATIONS_PROJECTION = v.strictObject({
       // Null for a citation the corpus holds no decision for.
       decision: v.nullable(
         v.strictObject({
-          // Nullable for the same reason as search_case_law's `appUrl`.
-          appUrl: v.nullable(v.string()),
+          // Nullable for the same reason as search_case_law's `url`.
           url: v.nullable(publicUrl()),
           source_url: v.optional(publicUrl()),
           caseNumber: v.string(),

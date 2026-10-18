@@ -1,7 +1,10 @@
 import { useMutation } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
-import { PublicLawSearch } from "@/components/public-law-search";
+import {
+  PublicLawSearch,
+  publicLawAskScope,
+} from "@/components/public-law-search";
 import {
   caseLawCountryRegion,
   fromCaseLawCountryParam,
@@ -73,12 +76,13 @@ export const CaseLawSearch = ({
 
   return (
     <PublicLawSearch
-      askPrompt={(entry) =>
-        t("caseLaw.searchAskPrompt", {
+      askScope={publicLawAskScope(
+        "case_law",
+        fromCaseLawCountryParam(country),
+        t("chat.mention.corpus.caseLaw", {
           country: caseLawCountryName(format, fromCaseLawCountryParam(country)),
-          query: entry,
-        })
-      }
+        }),
+      )}
       maxLength={maxLength}
       onQueryChange={onQueryChange}
       onSubmit={onSubmit}
