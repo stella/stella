@@ -350,6 +350,7 @@ const findRegressions = ({
 }: FindingsInput): ReleaseFinding[] => {
   const version = releaseVersion(release);
   const previous = new Set<string>();
+  let hasPreviousFingerprintRows = false;
   const current = new Map<
     string,
     { fingerprint: Fingerprint; occurrences: number }
@@ -363,6 +364,7 @@ const findRegressions = ({
     }
     const key = fingerprintKey(row.fingerprint);
     if (row.release !== version) {
+      hasPreviousFingerprintRows = true;
       previous.add(key);
       continue;
     }
@@ -380,7 +382,11 @@ const findRegressions = ({
     });
   }
   for (const [key, { fingerprint, occurrences }] of current) {
-    if (!previous.has(key) && occurrences >= NEW_FINGERPRINT_MIN_OCCURRENCES) {
+    if (
+      hasPreviousFingerprintRows &&
+      !previous.has(key) &&
+      occurrences >= NEW_FINGERPRINT_MIN_OCCURRENCES
+    ) {
       findings.push({ type: "new_fingerprint", fingerprint, occurrences });
     }
   }

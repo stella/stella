@@ -50,6 +50,39 @@ describe("post-release regression check", () => {
     ]);
   });
 
+  test("a release without baseline fingerprints does not report new fingerprints", () => {
+    const evaluation = evaluateRelease({
+      release: RELEASE,
+      response: {
+        columns: [
+          "release",
+          "kind",
+          "handler",
+          "error_class",
+          "error_code",
+          "failure_reason",
+          "occurrences",
+        ],
+        hasMore: false,
+        results: [
+          [
+            "1.4.1",
+            "fingerprint",
+            "/v1/summaries",
+            "SummaryGenerationError",
+            "model_output_incomplete",
+            "model_output_incomplete",
+            10,
+          ],
+        ],
+      },
+      checkedAt: CHECKED_AT,
+    });
+
+    expect(evaluation.findings).toEqual([]);
+    expect(evaluation.verdict.verdict).toBe("healthy");
+  });
+
   test("known fingerprints and new ones below the threshold do not fire", () => {
     const evaluation = evaluateFixture("known-fingerprint");
 
