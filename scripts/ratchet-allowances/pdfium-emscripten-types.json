@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "apps/api replaces @hyzyla/pdfium with @embedpdf/pdfium (net zero) and adds @types/emscripten as a devDependency: the package declarations reference the Emscripten types (/// <reference types=\"emscripten\" />), without which its WASM heap views are untyped."
+}

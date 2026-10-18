@@ -337,7 +337,7 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
       // re-read its ledger before the retry.
       expect(await run()).toEqual({
         type: "deferred",
-        index: fixture.name,
+        step: fixture.name,
         retryAfterMs: fixture.gate.config.retryMs,
       });
       expect(await indexState(fixture)).toMatchObject({ valid: false });
@@ -1010,7 +1010,7 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
         }),
       ).toEqual({
         type: "deferred",
-        index: fixture.name,
+        step: fixture.name,
         retryAfterMs: fixture.gate.config.retryMs,
       });
       expect(

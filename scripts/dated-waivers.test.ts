@@ -172,6 +172,46 @@ test("an elapsed test quarantine and other elapsed waivers still fail the check"
     false,
   );
 });
+test("an expired waiver fails a change only when the change touches its source", () => {
+  const quarantine = readTestQuarantines({
+    "packages/example/src/a.test.ts":
+      'import { test } from "bun:test";\n// test-quarantine-expires: 2026-10-05T00:00:00.000Z\ntest.skip("a case", () => {});',
+  });
+  const entries = [...inventory(), ...quarantine];
+  const later = new Date("2026-10-07T00:00:00.000Z");
+  const all = expiredWaiverFailures(entries, later);
+  expect(all.length).toBeGreaterThan(1);
+  // An unrelated change never fails on time alone.
+  expect(
+    expiredWaiverFailures(
+      entries,
+      later,
+      new Set(["apps/web/src/unrelated.ts"]),
+    ),
+  ).toEqual([]);
+  expect(expiredWaiverFailures(entries, later, new Set())).toEqual([]);
+  // Touching the declaring file (renewing, editing, or the quarantined test
+  // itself) fails exactly that waiver's expiry.
+  expect(
+    expiredWaiverFailures(
+      entries,
+      later,
+      new Set(["packages/example/src/a.test.ts"]),
+    ),
+  ).toEqual(["packages/example/src/a.test.ts:3 dated waiver expired: a case"]);
+  const suppression = expiredWaiverFailures(
+    entries,
+    later,
+    new Set(["scripts/suppression-waivers.json"]),
+  );
+  expect(suppression.length).toBeGreaterThan(0);
+  expect(
+    suppression.every((failure) =>
+      failure.startsWith("scripts/suppression-waivers.json:"),
+    ),
+  ).toBe(true);
+});
+
 test("impossible dates, missing anchors and new expiry-bearing owners fail closed", () => {
   for (const value of ["2026-02-30", "2026-02-30T00:00:00.000Z", "tomorrow"]) {
     expect(() => expiryInstant(value)).toThrow("Invalid dated waiver expiry");

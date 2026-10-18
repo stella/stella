@@ -6,16 +6,17 @@ import {
   CONTINUE_ON_ERROR,
   CORRECTNESS_GUARDS,
 } from "./ci-gate-classes";
+import { flattenWorkflowSteps } from "./workflow-steps";
 
 const Step = v.object({
   name: v.optional(v.string()),
   "continue-on-error": v.optional(v.union([v.boolean(), v.string()])),
 });
 const Workflow = v.object({
-  jobs: v.record(v.string(), v.object({ steps: v.optional(v.array(Step)) })),
+  jobs: v.record(v.string(), v.object({ steps: v.optional(v.unknown()) })),
 });
 
-const workflow = v.parse(
+const parsed = v.parse(
   Workflow,
   Bun.YAML.parse(
     await Bun.file(
@@ -23,6 +24,23 @@ const workflow = v.parse(
     ).text(),
   ),
 );
+// Checks a pool step runs (.github/ci-checks/<job>.yml) count as its job's
+// steps: they carry their own continue-on-error.
+const workflow = {
+  jobs: Object.fromEntries(
+    Object.entries(parsed.jobs).map(([job, spec]) => [
+      job,
+      {
+        steps:
+          spec.steps === undefined
+            ? undefined
+            : flattenWorkflowSteps(spec.steps).map((step) =>
+                v.parse(Step, step),
+              ),
+      },
+    ]),
+  ),
+};
 
 test("every CI Checks job has a gate class and every classed job exists", () => {
   const jobs = Object.keys(workflow.jobs).toSorted();
