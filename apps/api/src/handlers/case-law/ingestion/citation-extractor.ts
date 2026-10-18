@@ -791,7 +791,7 @@ const followsNationalDocketDivision = (
   while (
     start >= 0 &&
     end - start < MAX_ROMAN_DIVISION_LENGTH &&
-    ROMAN_NUMERALS.has(text.charAt(start))
+    ROMAN_NUMERALS.has(text.charAt(start).toUpperCase())
   ) {
     start -= 1;
   }
