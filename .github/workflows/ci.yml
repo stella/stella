@@ -336,7 +336,8 @@ jobs:
             scripts/retry.sh
           sparse-checkout-cone-mode: false
 
-      - name: Preserve GitHub API tooling across source checkouts
+      - &preserve_gh_retry
+        name: Preserve GitHub API tooling across source checkouts
         run: |
           cp "$GITHUB_WORKSPACE/.workflow-tooling/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
           echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
@@ -829,7 +830,8 @@ jobs:
         env:
           NPM_TOKEN: ""
 
-      - name: Upload failed Bun install logs
+      - &upload_bun_install_logs
+        name: Upload failed Bun install logs
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -1897,13 +1899,15 @@ jobs:
       agent-sandbox-docker: ${{ steps.install.outcome == 'success' && steps.protocol.outcome == 'success' && steps.pull.outcome == 'success' && steps.image.outcome == 'success' && steps.network.outcome == 'success' && steps.canary.outcome == 'success' && steps.isolation.outcome == 'success' && steps.assert-cleanup.outcome == 'success' && steps.cleanup.outcome == 'success' && 'success' || 'failure' }}
       api-image-deps: ${{ steps.api-deps.outcome }}
     steps:
-      - name: Checkout
+      - &checkout_input_sha
+        name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
-      - name: Setup Bun
+      - &setup_bun_from_manifest
+        name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: "package.json"
@@ -1939,7 +1943,8 @@ jobs:
             scripts/retry.sh
           sparse-checkout-cone-mode: false
 
-      - name: Log in to the CI image mirror
+      - &ci_image_mirror_login
+        name: Log in to the CI image mirror
         continue-on-error: true
         if: github.event.pull_request.head.repo.fork != true && github.token != ''
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
@@ -2094,14 +2099,7 @@ jobs:
           )
           echo ::endgroup::
 
-      - name: Upload failed Bun install logs
-        if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: bun-install-${{ github.job }}
-          path: ${{ runner.temp }}/bun-install/*.log
-          retention-days: 7
-          if-no-files-found: ignore
+      - *upload_bun_install_logs
 
       - *merge_group_cancel
 
@@ -2422,7 +2420,8 @@ jobs:
       CI_CANCELLATION_CONTEXT: Queue failure cancellation depends on workflow outcomes.
       CI_GENERATED_SOURCES_MANIFEST: ${{ github.workspace }}/.cache/ci-generated-sources/manifest.json
     steps:
-      - name: Checkout
+      - &checks_checkout
+        name: Checkout
         env:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
@@ -2434,7 +2433,8 @@ jobs:
           persist-credentials: false
           submodules: true
 
-      - name: Setup Bun
+      - &checks_setup_bun
+        name: Setup Bun
         env:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
@@ -2450,7 +2450,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: bun scripts/ci-static-checks.ts resolve ci-checks-policy
 
-      - name: Turbo remote cache
+      - &checks_turbo_cache
+        name: Turbo remote cache
         env:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
@@ -2475,7 +2476,8 @@ jobs:
           # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
 
-      - name: Prepare environment
+      - &checks_prepare_environment
+        name: Prepare environment
         env:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
@@ -2492,7 +2494,8 @@ jobs:
           cd ../web
           cp .env.example .env
 
-      - name: Download generated sources
+      - &checks_download_generated
+        name: Download generated sources
         env:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
@@ -2501,7 +2504,8 @@ jobs:
         with:
           name: generated-sources-${{ needs.ci-plan.outputs.generated_sources_input_hash }}
           path: ${{ runner.temp }}/generated-sources
-      - name: Restore generated sources
+      - &checks_restore_generated
+        name: Restore generated sources
         env:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
@@ -2836,26 +2840,9 @@ jobs:
       CI_CANCELLATION_CONTEXT: Queue failure cancellation depends on workflow outcomes.
       CI_GENERATED_SOURCES_MANIFEST: ${{ github.workspace }}/.cache/ci-generated-sources/manifest.json
     steps:
-      - name: Checkout
-        env:
-          CI_CHECK_KIND: CONTEXTUAL
-          CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
-        id: checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          filter: blob:none
-          persist-credentials: false
-          submodules: true
+      - *checks_checkout
 
-      - name: Setup Bun
-        env:
-          CI_CHECK_KIND: CONTEXTUAL
-          CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version-file: "package.json"
+      - *checks_setup_bun
 
       - name: Resolve static check receipts
         id: static_receipts
@@ -3036,17 +3023,7 @@ jobs:
           bun test scripts/check-lockfile-release-ages.test.ts
           bun scripts/check-lockfile-release-ages.ts --base "$BASE_SHA"
 
-      - name: Turbo remote cache
-        env:
-          CI_CHECK_KIND: CONTEXTUAL
-          CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
-        with:
-          server-port: "0"
-          provider: github
-          cache-prefix: task-results-v1_
-          use-relative-cache-path: "true"
+      - *checks_turbo_cache
 
       - name: Install dependencies
         id: install
@@ -3061,21 +3038,8 @@ jobs:
           # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
 
-      - name: Download generated sources
-        env:
-          CI_CHECK_KIND: CONTEXTUAL
-          CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: generated-sources-${{ needs.ci-plan.outputs.generated_sources_input_hash }}
-          path: ${{ runner.temp }}/generated-sources
-      - name: Restore generated sources
-        env:
-          CI_CHECK_KIND: CONTEXTUAL
-          CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        run: bun scripts/ci-generated-sources.ts restore "$RUNNER_TEMP/generated-sources"
+      - *checks_download_generated
+      - *checks_restore_generated
 
       - name: Prepare route network manifest
         env:
@@ -3111,22 +3075,7 @@ jobs:
           git checkout -- apps/web/e2e/network-baseline.json
           rm -f apps/web/e2e/.network-baseline-*
 
-      - name: Prepare environment
-        env:
-          CI_CHECK_KIND: CONTEXTUAL
-          CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        # `cp`, not `mv`: renaming the tracked .env.example dirties the
-        # working tree in apps/api and apps/web, and `turbo --affected`
-        # counts working-tree changes — so every PR (even web-only ones)
-        # ran the api AND web test suites concurrently and could OOM the
-        # runner (exit 137). The copy leaves the tree clean; .env is
-        # gitignored and invisible to affected-detection.
-        run: |
-          cd ./apps/api
-          cp .env.example .env
-          cd ../web
-          cp .env.example .env
+      - *checks_prepare_environment
 
       - name: Content delivery declarations
         env:
@@ -4761,10 +4710,7 @@ jobs:
             [[ "$actual_hash" == "$EXPECTED_HASH" ]] || { echo "API test duration plan hash mismatch" >&2; exit 1; }
           fi
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version-file: "package.json"
+      - *setup_bun_from_manifest
 
       - name: Turbo remote cache
         if: needs.ci-plan.outputs.package_checks_required == 'true'
@@ -4963,10 +4909,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version-file: "package.json"
+      - *setup_bun_from_manifest
 
       - name: Install API script dependencies
         uses: $/.github/actions/ci-install
@@ -5068,7 +5011,8 @@ jobs:
       packages: read
       actions: write
     steps:
-      - name: Checkout
+      - &full_checkout_input_sha
+        name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
@@ -5289,7 +5233,8 @@ jobs:
     env:
       CI_GENERATED_SOURCES_MANIFEST: ${{ github.workspace }}/.cache/ci-generated-sources/manifest.json
     steps:
-      - name: Checkout
+      - &full_checkout_with_submodules
+        name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
@@ -5302,7 +5247,8 @@ jobs:
         with:
           bun-version-file: package.json
 
-      - name: Turbo remote cache
+      - &code_quality_turbo_cache
+        name: Turbo remote cache
         # code-quality runs cacheable workspace and root checks. Restore the
         # same artifact store as ci-checks instead of rebuilding on every
         # ephemeral runner; the job is restricted to trusted code above.
@@ -5313,7 +5259,8 @@ jobs:
           cache-prefix: task-results-v1_
           use-relative-cache-path: "true"
 
-      - name: Install dependencies
+      - &commented_frozen_install
+        name: Install dependencies
         uses: $/.github/actions/ci-install
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
@@ -5322,7 +5269,8 @@ jobs:
           # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
 
-      - name: Download generated sources
+      - &download_generated
+        name: Download generated sources
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: generated-sources-${{ needs.ci-plan.outputs.generated_sources_input_hash }}
@@ -5433,44 +5381,18 @@ jobs:
     env:
       CI_GENERATED_SOURCES_MANIFEST: ${{ github.workspace }}/.cache/ci-generated-sources/manifest.json
     steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          filter: blob:none
-          persist-credentials: false
-          submodules: true
+      - *full_checkout_with_submodules
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: package.json
 
-      - name: Turbo remote cache
-        # code-quality runs cacheable workspace and root checks. Restore the
-        # same artifact store as ci-checks instead of rebuilding on every
-        # ephemeral runner; the job is restricted to trusted code above.
-        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
-        with:
-          server-port: "0"
-          provider: github
-          cache-prefix: task-results-v1_
-          use-relative-cache-path: "true"
+      - *code_quality_turbo_cache
 
-      - name: Install dependencies
-        uses: $/.github/actions/ci-install
-        with:
-          flags: '["--frozen-lockfile","--ignore-scripts"]'
-        env:
-          # .npmrc references NPM_TOKEN, but PR installs must not expose
-          # the real npm token to dependency lifecycle scripts.
-          NPM_TOKEN: ""
+      - *commented_frozen_install
 
-      - name: Download generated sources
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: generated-sources-${{ needs.ci-plan.outputs.generated_sources_input_hash }}
-          path: ${{ runner.temp }}/generated-sources
+      - *download_generated
       - name: Restore generated sources
         run: bun scripts/ci-generated-sources.ts restore "$RUNNER_TEMP/generated-sources"
 
@@ -5645,11 +5567,7 @@ jobs:
           --health-retries 10
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
+      - *checkout_input_sha
 
       - name: Download planned Postgres test durations
         if: needs.ci-plan.outputs.postgres_test_durations_hash != 'missing'
@@ -5816,11 +5734,7 @@ jobs:
           --health-retries 10
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
+      - *checkout_input_sha
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
@@ -5965,25 +5879,14 @@ jobs:
           --health-retries 10
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
+      - *checkout_input_sha
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: package.json
 
-      - name: Install dependencies
-        uses: $/.github/actions/ci-install
-        with:
-          flags: '["--frozen-lockfile","--ignore-scripts"]'
-        env:
-          # .npmrc references NPM_TOKEN, but PR installs must not expose
-          # the real npm token to dependency lifecycle scripts.
-          NPM_TOKEN: ""
+      - *commented_frozen_install
 
       - name: Configure test Postgres parity
         run: |
@@ -6057,18 +5960,15 @@ jobs:
       contents: read
       actions: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
+      - *checkout_input_sha
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: package.json
 
-      - name: Install dependencies
+      - &frozen_install
+        name: Install dependencies
         uses: $/.github/actions/ci-install
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
@@ -6120,31 +6020,16 @@ jobs:
             scripts/retry.sh
           sparse-checkout-cone-mode: false
 
-      - name: Preserve GitHub API tooling across source checkouts
-        run: |
-          cp "$GITHUB_WORKSPACE/.workflow-tooling/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
-          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+      - *preserve_gh_retry
 
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          filter: blob:none
-          persist-credentials: false
-          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
-          submodules: true
+      - *full_checkout_input_sha
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: package.json
 
-      - name: Install dependencies
-        uses: $/.github/actions/ci-install
-        with:
-          flags: '["--frozen-lockfile","--ignore-scripts"]'
-        env:
-          NPM_TOKEN: ""
+      - *frozen_install
 
       - name: Prepare environment
         run: cp apps/api/.env.example apps/api/.env
@@ -6285,14 +6170,7 @@ jobs:
             exit 1
           fi
 
-      - name: Upload failed Bun install logs
-        if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: bun-install-${{ github.job }}
-          path: ${{ runner.temp }}/bun-install/*.log
-          retention-days: 7
-          if-no-files-found: ignore
+      - *upload_bun_install_logs
 
       - *merge_group_cancel
 
@@ -6325,27 +6203,18 @@ jobs:
       packages: read
       actions: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
+      - *checkout_input_sha
 
-      - name: Log in to the CI image mirror
-        continue-on-error: true
-        if: github.event.pull_request.head.repo.fork != true && github.token != ''
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ github.token }}
-      - name: Setup Bun
+      - *ci_image_mirror_login
+      - &setup_bun_cached
+        name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           bun-version-file: package.json
           save: ${{ github.ref == 'refs/heads/main' }}
 
-      - name: Checkout workflow tooling
+      - &checkout_workflow_tooling
+        name: Checkout workflow tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.workflow_sha }}
@@ -6429,23 +6298,14 @@ jobs:
       contents: read
       actions: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
+      - *checkout_input_sha
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: package.json
 
-      - name: Install dependencies
-        uses: $/.github/actions/ci-install
-        with:
-          flags: '["--frozen-lockfile","--ignore-scripts"]'
-        env:
-          NPM_TOKEN: ""
+      - *frozen_install
 
       - name: Validate Expo dependency graph
         run: bun --filter @stll/mobile doctor
@@ -6481,11 +6341,7 @@ jobs:
       contents: read
       actions: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
+      - *checkout_input_sha
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
@@ -6532,22 +6388,13 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
+      - *checkout_input_sha
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: package.json
 
-      - name: Install dependencies
-        uses: $/.github/actions/ci-install
-        with:
-          flags: '["--frozen-lockfile","--ignore-scripts"]'
-        env:
-          NPM_TOKEN: ""
+      - *frozen_install
       - name: Prepare environment
         run: cp apps/web/.env.example apps/web/.env
       - name: Build web
@@ -6599,12 +6446,7 @@ jobs:
         with:
           bun-version-file: package.json
 
-      - name: Install dependencies
-        uses: $/.github/actions/ci-install
-        with:
-          flags: '["--frozen-lockfile","--ignore-scripts"]'
-        env:
-          NPM_TOKEN: ""
+      - *frozen_install
 
       # The recorder uses this exact setup, build artifact, seed and browser.
       - name: Setup production browser stack
@@ -6622,7 +6464,8 @@ jobs:
           base-sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
           token: ${{ github.token }}
 
-      - name: Login to GitHub Container Registry for browser images
+      - &ghcr_browser_image_login
+        name: Login to GitHub Container Registry for browser images
         timeout-minutes: 2
         if: github.event.pull_request.head.repo.fork != true && github.token != ''
         continue-on-error: true
@@ -6768,15 +6611,7 @@ jobs:
           base-sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
           token: ${{ github.token }}
 
-      - name: Login to GitHub Container Registry for browser images
-        timeout-minutes: 2
-        if: github.event.pull_request.head.repo.fork != true && github.token != ''
-        continue-on-error: true
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+      - *ghcr_browser_image_login
 
       # Route count times per-route render time on a loaded runner: the slowest
       # passing runs take about 3 minutes and a slow runner about 4.5.
@@ -6959,33 +6794,16 @@ jobs:
     env:
       CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
+      - *checkout_input_sha
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: package.json
 
-      - name: Install dependencies
-        uses: $/.github/actions/ci-install
-        with:
-          flags: '["--frozen-lockfile","--ignore-scripts"]'
-        env:
-          NPM_TOKEN: ""
+      - *frozen_install
 
-      - name: Login to GitHub Container Registry for browser images
-        timeout-minutes: 2
-        if: github.event.pull_request.head.repo.fork != true && github.token != ''
-        continue-on-error: true
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+      - *ghcr_browser_image_login
 
       - name: Verify Firefox and WebKit in the pinned image
         timeout-minutes: 4
@@ -7034,23 +6852,14 @@ jobs:
     env:
       CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
+      - *checkout_input_sha
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: package.json
 
-      - name: Install dependencies
-        uses: $/.github/actions/ci-install
-        with:
-          flags: '["--frozen-lockfile","--ignore-scripts"]'
-        env:
-          NPM_TOKEN: ""
+      - *frozen_install
 
       - name: Prepare environment
         run: |
@@ -7116,15 +6925,7 @@ jobs:
           tail -200 /tmp/collab.log || true
           exit 1
 
-      - name: Login to GitHub Container Registry for browser images
-        timeout-minutes: 2
-        if: github.event.pull_request.head.repo.fork != true && github.token != ''
-        continue-on-error: true
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+      - *ghcr_browser_image_login
 
       - name: Install Playwright browsers
         timeout-minutes: 3
@@ -7253,11 +7054,7 @@ jobs:
     env:
       CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
+      - *checkout_input_sha
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
@@ -7295,15 +7092,7 @@ jobs:
           tail -200 /tmp/landing.log || true
           exit 1
 
-      - name: Login to GitHub Container Registry for browser images
-        timeout-minutes: 2
-        if: github.event.pull_request.head.repo.fork != true && github.token != ''
-        continue-on-error: true
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+      - *ghcr_browser_image_login
 
       - name: Install Playwright browsers
         timeout-minutes: 4
@@ -7471,11 +7260,7 @@ jobs:
       contents: read
       actions: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
+      - *checkout_input_sha
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
@@ -7547,19 +7332,8 @@ jobs:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
           submodules: true
 
-      - name: Log in to the CI image mirror
-        continue-on-error: true
-        if: github.event.pull_request.head.repo.fork != true && github.token != ''
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ github.token }}
-      - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
-        with:
-          bun-version-file: package.json
-          save: ${{ github.ref == 'refs/heads/main' }}
+      - *ci_image_mirror_login
+      - *setup_bun_cached
 
       - name: Checkout workflow tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -7715,42 +7489,15 @@ jobs:
       packages: read
       actions: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
+      - *checkout_input_sha
 
-      - name: Log in to the CI image mirror
-        continue-on-error: true
-        if: github.event.pull_request.head.repo.fork != true && github.token != ''
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ github.token }}
+      - *ci_image_mirror_login
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
-      - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
-        with:
-          bun-version-file: package.json
-          save: ${{ github.ref == 'refs/heads/main' }}
+      - *setup_bun_cached
 
-      - name: Checkout workflow tooling
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.workflow_sha }}
-          path: .workflow-tooling
-          persist-credentials: false
-          sparse-checkout: |
-            scripts/ci-service-images.ts
-            scripts/ci-service-images.json
-            packages/scripts/src/child-exit-status.ts
-            packages/portable-path/src/index.ts
-            scripts/retry.sh
-          sparse-checkout-cone-mode: false
+      - *checkout_workflow_tooling
 
       - name: Resolve legal-atlas-runner base images
         id: base-contexts
@@ -7821,14 +7568,7 @@ jobs:
           BUN_INSTALL_GLOBAL_STORE: "0"
           NPM_TOKEN: ""
 
-      - name: Upload failed Bun install logs
-        if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: bun-install-${{ github.job }}
-          path: ${{ runner.temp }}/bun-install/*.log
-          retention-days: 7
-          if-no-files-found: ignore
+      - *upload_bun_install_logs
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
@@ -7928,11 +7668,7 @@ jobs:
       contents: read
       actions: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
+      - *checkout_input_sha
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
@@ -7951,14 +7687,7 @@ jobs:
           BUN_INSTALL_GLOBAL_STORE: "0"
           NPM_TOKEN: ""
 
-      - name: Upload failed Bun install logs
-        if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: bun-install-${{ github.job }}
-          path: ${{ runner.temp }}/bun-install/*.log
-          retention-days: 7
-          if-no-files-found: ignore
+      - *upload_bun_install_logs
 
       - name: Test dev runner and process tree cleanup
         shell: pwsh
@@ -7981,16 +7710,9 @@ jobs:
       contents: read
       actions: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
+      - *checkout_input_sha
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version-file: "package.json"
+      - *setup_bun_from_manifest
 
       - name: Install dependencies
         uses: $/.github/actions/ci-install
@@ -8001,14 +7723,7 @@ jobs:
         env:
           NPM_TOKEN: ""
 
-      - name: Upload failed Bun install logs
-        if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: bun-install-${{ github.job }}
-          path: ${{ runner.temp }}/bun-install/*.log
-          retention-days: 7
-          if-no-files-found: ignore
+      - *upload_bun_install_logs
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
@@ -8314,6 +8029,7 @@ jobs:
           bun-version-file: "package.json"
 
       - name: Install dependencies
+        timeout-minutes: 2
         run: bash scripts/retry.sh bun ci --frozen-lockfile --ignore-scripts --filter stella
         env:
           NPM_TOKEN: ""
@@ -8584,11 +8300,7 @@ jobs:
       contents: read
       actions: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
+      - *checkout_input_sha
       # No dependency cache: Safe Chain must inspect every registry download.
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
@@ -8788,10 +8500,7 @@ jobs:
             /package.json
           sparse-checkout-cone-mode: false
 
-      - name: Preserve GitHub API tooling across source checkouts
-        run: |
-          cp "$GITHUB_WORKSPACE/.workflow-tooling/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
-          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+      - *preserve_gh_retry
 
       - name: Evaluate CI outcome
         id: outcome
