@@ -5,6 +5,9 @@
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    "paths": {
+      "@/api/*": ["./src/*"]
+    },
     "types": ["bun-types"],
     "tsBuildInfoFile": "${configDir}/.cache/tsbuildinfo.visual-sandbox.json"
   },
