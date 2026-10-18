@@ -121,6 +121,21 @@ test("EU authority and document kind participate in expression identity", () => 
   ).not.toBe(original);
 });
 
+test("EDPB opinion series participate in numbered identity", () => {
+  const opinion = { ...metadata, kind: "opinion" } as const;
+  expect(
+    softLawIdentityKey("eu-edpb", {
+      ...opinion,
+      sourceKind: "Legislative opinion",
+    }).unwrap(),
+  ).not.toBe(
+    softLawIdentityKey("eu-edpb", {
+      ...opinion,
+      sourceKind: "Opinion of the Board (Art. 64)",
+    }).unwrap(),
+  );
+});
+
 test("a lifecycle transition revises content without changing expression identity", () => {
   const consultation = {
     ...metadata,

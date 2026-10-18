@@ -449,9 +449,9 @@ const persistSoftLawVersions = async (
           softLawDocumentVersions.sequence,
         ],
         set: {
-          extractedText: sql`excluded.extracted_text`,
-          extractionQuality: sql`excluded.extraction_quality`,
-          extractionFailure: sql`excluded.extraction_failure`,
+          extractedText: sql`CASE WHEN excluded.extraction_quality = 'extraction_failed' THEN ${softLawDocumentVersions.extractedText} ELSE excluded.extracted_text END`,
+          extractionQuality: sql`CASE WHEN excluded.extraction_quality = 'extraction_failed' THEN ${softLawDocumentVersions.extractionQuality} ELSE excluded.extraction_quality END`,
+          extractionFailure: sql`CASE WHEN excluded.extraction_quality = 'extraction_failed' THEN ${softLawDocumentVersions.extractionFailure} ELSE excluded.extraction_failure END`,
         },
       });
   }

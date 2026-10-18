@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -24,6 +24,56 @@ const parseTransparency = (html: string) =>
   parseWp29NewsroomDocument({ html, url: TRANSPARENCY, indexUrl: GUIDELINES });
 
 describe("WP29 official source shapes", () => {
+  test("the body acronym is not mistaken for an instrument reference", () => {
+    const html = `<div class="contentsection block"><h2>2018</h2><ul><li><a class="link-ico" href="/justice/article-29/documentation/opinion-recommendation/files/2018/example_en.pdf"><span>WP29 transparency opinion</span></a></li></ul></div>`;
+    const entry = parseWp29Archive(html).unwrap().at(0);
+    expect(entry?.metadata.statedReference).toEqual({ state: "not_stated" });
+  });
+
+  test("a real WP number after the body acronym is retained", () => {
+    const html = `<div class="contentsection block"><h2>2018</h2><ul><li><a class="link-ico" href="/justice/article-29/documentation/opinion-recommendation/files/2018/example_en.pdf"><span>WP29 opinion WP 123</span></a></li></ul></div>`;
+    const entry = parseWp29Archive(html).unwrap().at(0);
+    expect(entry?.metadata.statedReference).toEqual({
+      state: "stated",
+      value: "WP 123",
+    });
+  });
+
+  test("failed extraction preserves metadata with an unstated reference", async () => {
+    const html = `<div class="contentsection block"><h2>2018</h2><ul><li><a class="link-ico" href="/justice/article-29/documentation/opinion-recommendation/files/2018/example_en.doc"><span>WP29 transparency opinion</span></a></li></ul></div>`;
+    const entry = parseWp29Archive(html).unwrap().at(0);
+    if (!entry) {
+      panic("WP29 test entry was not parsed");
+    }
+    const bytes = new Uint8Array([0xd0, 0xcf, 0x11, 0xe0]);
+    const read = Object.assign(
+      async () =>
+        Result.ok({ bytes, contentType: "application/msword" as const }),
+      {
+        getBlockReason: () => null,
+        getWindowState: () => "open" as const,
+        getLeaseState: () => "active" as const,
+      },
+    );
+    const result = await wp29Adapter.fetchDocument(
+      {
+        ...entry,
+        sourceRaw: [
+          {
+            role: "source-page-0",
+            contentBase64: Buffer.from(html).toString("base64"),
+            contentType: "text/html",
+          },
+        ],
+      },
+      { signal: new AbortController().signal, fetch: read },
+    );
+    expect(result.unwrap()).toMatchObject({
+      metadata: { statedReference: { state: "not_stated" } },
+      text: null,
+      extractionQuality: "extraction_failed",
+    });
+  });
   test("archive revisions retain their source identities and excluded annual reports stay outside the collection", async () => {
     const result = parseWp29Archive(await fixture("wp29-archive.html.gz"));
     expect(result.status).toBe("ok");

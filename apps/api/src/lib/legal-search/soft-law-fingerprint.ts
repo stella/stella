@@ -141,7 +141,13 @@ export const softLawIdentityKey = (
       }
     }
     return Result.ok(
-      JSON.stringify([authority, "reference", reference, ...expressionKey]),
+      JSON.stringify([
+        authority,
+        "reference",
+        normalizeReference(metadata.sourceKind ?? metadata.kind),
+        reference,
+        ...expressionKey,
+      ]),
     );
   }
   if (metadata.sourceDocumentId?.trim()) {

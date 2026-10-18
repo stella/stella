@@ -237,6 +237,49 @@ test("EDPB discovery snapshots survive a retry without refetching mutable metada
   expect(failure.error).toBeInstanceOf(SoftLawAccessError);
 });
 
+test("EDPB discovery records a malformed detail and advances its cursor", async () => {
+  const listing = await fixture("listing");
+  const indexUrl = `${ORIGIN}/documents_en?page=1`;
+  const detailUrl = parseEdpbListing(listing, indexUrl)
+    .unwrap()
+    .documents.at(0);
+  if (!detailUrl) {
+    panic("Official EDPB listing fixture has no admitted documents");
+  }
+  const malformed = (await fixture("final")).replace(/_en\.pdf/u, "_xxx.pdf");
+  const discovered = (
+    await adapter.discover({
+      cursor: "index=0&page=1&item=0",
+      signal: signal(),
+      fetch: fakeFetch(
+        new Map([
+          [indexUrl, { bytes: Buffer.from(listing), contentType: "text/html" }],
+          [
+            detailUrl,
+            { bytes: Buffer.from(malformed), contentType: "text/html" },
+          ],
+        ]),
+        [],
+      ),
+    })
+  ).unwrap();
+  expect(discovered.nextCursor).not.toBeNull();
+  expect(discovered.entries).toHaveLength(1);
+  expect(discovered.entries.at(0)?.discoveryRejection).toEqual({
+    tag: "invalid_document",
+    reason: "EDPB document language is not stated",
+  });
+});
+
+test("EDPB references come only from the instrument's own title phrase", async () => {
+  const html = (await fixture("final")).replaceAll(
+    "Guidelines 3/2025",
+    "Opinion on Regulation 12/2024",
+  );
+  const entry = parseEdpbDocument({ html, url: FINAL }).unwrap().at(0);
+  expect(entry?.metadata.statedReference).toEqual({ state: "not_stated" });
+});
+
 test("EDPB rejects unknown taxonomy labels and off-publisher document locators", async () => {
   const taxonomy = parseEdpbListing(
     '<div class="view-documents-overview-documents"><div class="document-card"><div class="document-card__document-type">New source category</div></div></div>',

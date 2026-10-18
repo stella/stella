@@ -235,6 +235,19 @@ if (!databaseUrl || !enabled) {
               extractionFailure: null,
             });
           }
+          expect(
+            await run([draft, ...others], {
+              state: "failed",
+              message: "Transient extraction failure",
+            }),
+          ).toEqual({ status: "complete" });
+          for (const version of await versions()) {
+            expect(version).toMatchObject({
+              extractionQuality: "html",
+              extractedText: "Unchanged publisher bytes",
+              extractionFailure: null,
+            });
+          }
           const initial = await documents();
           expect(initial).toHaveLength(3);
           expect(new Set(initial.map((row) => row.identityKey)).size).toBe(3);

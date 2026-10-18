@@ -122,6 +122,11 @@ export type SoftLawMetadata = {
 };
 export type SoftLawEntry = {
   url: string;
+  /** A detail page that was listed but could not be admitted as a document. */
+  discoveryRejection?: {
+    tag: Exclude<(typeof SOFT_LAW_ITEM_TAGS)[number], "identity_collision">;
+    reason: string;
+  };
   /** Publisher index/detail responses retained alongside the document bytes. */
   sourcePages?: readonly string[];
   /** Exact discovery responses survive a durable retry; base64 preserves their bytes in JSONB. */

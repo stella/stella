@@ -125,6 +125,8 @@ const EDPB_KIND_DISPOSITIONS = {
 const compact = (text: string) => text.replace(/\s+/gu, " ").trim();
 const invalidSource = (message: string) =>
   Result.err(new SoftLawIngestionError({ message }));
+const invalidItem = (message: string) =>
+  Result.err(new SoftLawItemError({ message, tag: "invalid_document" }));
 const sourceUrl = (value: string, base = ORIGIN) =>
   Result.gen(function* () {
     const parsed = Result.try(() => new URL(value, base));
@@ -262,7 +264,7 @@ const readEdpbFiles = ($: CheerioAPI, url: string) =>
       });
       for (const asset of assets) {
         if (!/^[a-z]{2}(?:-[A-Za-z0-9]+)*$/u.test(asset.language)) {
-          return yield* invalidSource("EDPB document language is not stated");
+          return yield* invalidItem("EDPB document language is not stated");
         }
         const assetUrl = yield* sourceUrl(asset.href, url);
         files.push({ url: assetUrl, language: asset.language, revision });
@@ -399,7 +401,10 @@ export const parseEdpbDocument = ({
         evidence: { url, quote: version, locator: ".document-full__version" },
       };
     }
-    const reference = /\b\d{1,3}\/\d{4}\b/u.exec(title)?.at(0) ?? "";
+    const reference =
+      /\b(?:Opinions?|Guidelines?|Recommendations?|Statements?)\s+(\d{1,3}\/\d{4})\b/iu
+        .exec(title)
+        ?.at(1) ?? "";
     const sourceDates = {
       ...(issued ? { documentDate: issued } : {}),
       ...(start ? { consultationStart: start } : {}),
@@ -641,18 +646,55 @@ export const edpbAdapter = {
           contentType: detailResult.value.contentType,
         },
       ];
-      const parsed = yield* parseEdpbDocument({
+      const parsed = parseEdpbDocument({
         html: new TextDecoder().decode(detailResult.value.bytes),
         url: detailUrl,
         sourcePages: [indexUrl, detailUrl],
       });
-      const entries = parsed.map((entry) => ({
+      if (parsed.isErr()) {
+        if (!SoftLawItemError.is(parsed.error)) {
+          return yield* Result.err(parsed.error);
+        }
+        const rejection: SoftLawEntry = {
+          url: detailUrl,
+          discoveryRejection: {
+            tag: parsed.error.tag,
+            reason: parsed.error.message,
+          },
+          sourceRaw: captured,
+          metadata: {
+            title: detailUrl,
+            kind: "other",
+            sourceKind: "Rejected EDPB detail",
+            statedReference: { state: "not_stated" },
+            issuedOn: { state: "not_stated" },
+            expression: { type: "unspecified" },
+            stage: { state: "not_stated" },
+            relations: [],
+            validity: { state: "not_stated", basis: "source_stated" },
+          },
+          sourceDates: {},
+        };
+        return Result.ok({
+          entries: [rejection],
+          nextCursor,
+        });
+      }
+      const entries = parsed.value.map((entry) => ({
         ...entry,
         sourceRaw: captured,
       }));
       return Result.ok({ entries, nextCursor });
     }),
   fetchDocument: async (entry, { fetch: read }) => {
+    if (entry.discoveryRejection) {
+      return Result.err(
+        new SoftLawItemError({
+          message: entry.discoveryRejection.reason,
+          tag: entry.discoveryRejection.tag,
+        }),
+      );
+    }
     const captured = entry.sourceRaw;
     if (
       !captured ||

@@ -59,7 +59,7 @@ const publisherUrl = (href: string, base: string) => {
 };
 
 const sourceReference = (value: string) =>
-  /\bwp\s*\d+(?:[a-z](?![a-z]))?(?:\s*rev\.?\s*\d+|\s*update)?/iu
+  /\b(?:wp\s+\d+|wp(?!29\b)\d+)(?:[a-z](?![a-z]))?(?:\s*rev\.?\s*\d+|\s*update)?/iu
     .exec(value)
     ?.at(0);
 const referenceRevision = (reference: string) => {
@@ -821,7 +821,9 @@ export const wp29Adapter = {
       }
     }
     const text = texts.length ? texts.join("\n\n") : null;
-    const recoveredMetadata = recoverWp29Reference(entry.metadata, text);
+    const recoveredMetadata = text
+      ? recoverWp29Reference(entry.metadata, text)
+      : Result.ok(entry.metadata);
     if (recoveredMetadata.status === "error") {
       return recoveredMetadata;
     }
