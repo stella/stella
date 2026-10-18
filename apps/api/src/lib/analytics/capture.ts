@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 
 import { createDetached, sanitizeErrorForOutput } from "@stll/errors";
+import type { FailureGrade, FailureReason } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
 import { getServerAnalytics } from "@/api/lib/analytics/client";
@@ -12,7 +13,10 @@ import {
   safeErrorTelemetryFields,
 } from "@/api/lib/errors/utils";
 import type { FailureGrading } from "@/api/lib/observability/failure";
-import { identityFields } from "@/api/lib/observability/failure";
+import {
+  identityFields,
+  requestErrorStatusFields,
+} from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
 import {
   observeShadow,
@@ -122,6 +126,63 @@ const ERROR_IDENTITY_COMPONENTS = [
   "error.cause.pg_code",
 ] as const;
 
+declare const exceptionClassBrand: unique symbol;
+type ExceptionClass = string & { readonly [exceptionClassBrand]: true };
+declare const exceptionCodeBrand: unique symbol;
+type ExceptionCode = string & { readonly [exceptionCodeBrand]: true };
+declare const exceptionFrameBrand: unique symbol;
+type ExceptionFrame = string & { readonly [exceptionFrameBrand]: true };
+
+type ExceptionValueFields = {
+  className: ExceptionClass;
+  code?: ExceptionCode;
+  status?: number;
+  reason?: FailureReason;
+  grade?: FailureGrade;
+  frame?: ExceptionFrame;
+};
+
+/** Renders only structural fields that have already crossed their allowlist. */
+export const exceptionValue = ({
+  className,
+  code,
+  status,
+  reason,
+  grade,
+  frame,
+}: ExceptionValueFields): string => {
+  const distinctReason =
+    reason !== undefined && reason !== code ? reason : undefined;
+  return `${className}${code === undefined ? "" : `[${code}]`}${
+    status === undefined ? "" : ` ${status}`
+  }${distinctReason === undefined ? "" : ` ${distinctReason}`}${
+    grade === undefined ? "" : ` ${grade}`
+  }${frame === undefined ? "" : ` at ${frame}`}`;
+};
+
+const CLASS_TOKEN = /^[A-Za-z_$][A-Za-z0-9_$]{0,127}$/u;
+const CODE_TOKEN = /^[A-Za-z0-9_.:-]{1,64}$/u;
+const REPOSITORY_FRAME = /^(?:apps|packages)\/[A-Za-z0-9_./-]+:\d+(?::\d+)?$/u;
+
+const exceptionClass = (value: string): ExceptionClass =>
+  // `errorTag` normally supplies a class token; keep a fixed fallback if a
+  // foreign Error overrides its name with free text.
+  (CLASS_TOKEN.test(value) ? value : "UnknownError") as ExceptionClass;
+
+const exceptionCode = (value: string | undefined): ExceptionCode | undefined =>
+  value !== undefined && CODE_TOKEN.test(value)
+    ? // SAFETY: the structural error code has passed the token allowlist.
+      (value as ExceptionCode)
+    : undefined;
+
+const exceptionFrame = (
+  value: string | undefined,
+): ExceptionFrame | undefined =>
+  value !== undefined && REPOSITORY_FRAME.test(value)
+    ? // SAFETY: failure evidence emits a repository-relative code location.
+      (value as ExceptionFrame)
+    : undefined;
+
 /**
  * The grouping fingerprint and the suppression key are the same identity read
  * from two different places, so both derive from `ERROR_IDENTITY_COMPONENTS`
@@ -216,7 +277,8 @@ const captureErrorWithOptions = (
   options: CaptureErrorOptions,
 ) => {
   const tag = errorTag(error);
-  const fingerprint = identityFields(readEvidence(error));
+  const evidence = readEvidence(error);
+  const fingerprint = identityFields(evidence);
   const grading =
     options.observed === undefined
       ? observeShadow({
@@ -253,9 +315,21 @@ const captureErrorWithOptions = (
         )
       : undefined;
   const { context, rejected } = acceptCaptureContext(safeContext);
+  const status = requestErrorStatusFields(evidence)["error.status_code"];
+  const code = exceptionCode(fingerprint["error.code"]);
+  const frame = exceptionFrame(fingerprint["error.frame"]);
+  const value = exceptionValue({
+    className: exceptionClass(tag),
+    ...(code === undefined ? {} : { code }),
+    ...(status === undefined ? {} : { status }),
+    ...(grading === undefined
+      ? {}
+      : { reason: grading.reason, grade: grading.grade }),
+    ...(frame === undefined ? {} : { frame }),
+  });
   // PostHog ingestion drops `$exception` events that lack `$exception_list`,
-  // so the entry is required even though we deliberately keep it empty —
-  // the redaction contract above forbids shipping the message or stack.
+  // so the entry is required. Its value is built only from typed structural
+  // fields; the redaction contract above forbids the message and stack.
   // The caller's context goes first: every key after it is owned here.
   const properties: ExceptionProperties = {
     ...context,
@@ -275,7 +349,7 @@ const captureErrorWithOptions = (
       {
         mechanism: { handled: true, synthetic: false, type: "generic" },
         type: tag,
-        value: "",
+        value,
       },
     ],
     $exception_type: tag,

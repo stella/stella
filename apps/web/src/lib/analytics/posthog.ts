@@ -227,6 +227,47 @@ export const isNoiseException = (event: {
 // no dynamic string can ride along.
 const TELEMETRY_AREA = /^[a-z][a-z0-9-]{0,39}$/u;
 
+declare const exceptionTypeBrand: unique symbol;
+type ExceptionType = string & { readonly [exceptionTypeBrand]: true };
+declare const exceptionCodeBrand: unique symbol;
+type ExceptionCode = string & { readonly [exceptionCodeBrand]: true };
+declare const telemetryAreaBrand: unique symbol;
+type TelemetryArea = string & { readonly [telemetryAreaBrand]: true };
+
+type ExceptionValueFields = {
+  type: ExceptionType;
+  code?: ExceptionCode;
+  status?: number;
+  area?: TelemetryArea;
+};
+
+/** Renders only structural fields that have already crossed their allowlist. */
+export const exceptionValue = ({
+  type,
+  code,
+  status,
+  area,
+}: ExceptionValueFields): string =>
+  `${type}${code === undefined ? "" : `[${code}]`}${
+    status === undefined ? "" : ` ${status}`
+  }${area === undefined ? "" : ` area=${area}`}`;
+
+const exceptionType = (value: string): ExceptionType =>
+  // SAFETY: normalization emits a class token, never the original message.
+  normalizeTelemetryErrorTypeName(value) as ExceptionType;
+
+const exceptionCode = (value: string | undefined): ExceptionCode | undefined =>
+  value !== undefined && API_ERROR_CODE.test(value)
+    ? // SAFETY: the stable API code has passed the telemetry token allowlist.
+      (value as ExceptionCode)
+    : undefined;
+
+const telemetryArea = (value: unknown): TelemetryArea | undefined =>
+  typeof value === "string" && TELEMETRY_AREA.test(value)
+    ? // SAFETY: the fixed subsystem slug has passed the telemetry allowlist.
+      (value as TelemetryArea)
+    : undefined;
+
 const telemetryAreaProperty = (
   error: unknown,
 ): Record<string, string> | undefined => {
@@ -370,7 +411,10 @@ export const sanitizeFrame = (frame: unknown): SanitizedFrame => {
   };
 };
 
-const sanitizeExceptionEntry = (entry: unknown) => {
+const sanitizeExceptionEntry = (
+  entry: unknown,
+  fields: Omit<ExceptionValueFields, "type">,
+) => {
   const type = domExceptionClass(
     normalizeTelemetryErrorTypeName(readStringField(entry, "type")),
     readStringField(entry, "value"),
@@ -379,7 +423,7 @@ const sanitizeExceptionEntry = (entry: unknown) => {
   const frames = isRecord(stacktrace) ? stacktrace["frames"] : undefined;
   return {
     type,
-    value: "",
+    value: exceptionValue({ type: exceptionType(type), ...fields }),
     ...(Array.isArray(frames)
       ? { stacktrace: { type: "raw", frames: frames.map(sanitizeFrame) } }
       : {}),
@@ -421,14 +465,23 @@ const sanitizeExceptionEvent = (
   const errorReference = properties["error_reference"];
   const exceptionList = properties["$exception_list"];
   const entries: unknown[] = Array.isArray(exceptionList) ? exceptionList : [];
+  const safeArea = telemetryArea(area);
+  const http = apiErrorIdentity(properties);
+  const safeCode = exceptionCode(http?.code);
+  const valueFields = {
+    ...(safeArea === undefined ? {} : { area: safeArea }),
+    ...(http === undefined
+      ? {}
+      : {
+          status: http.status,
+          ...(safeCode === undefined ? {} : { code: safeCode }),
+        }),
+  };
   const sanitizedList =
     entries.length > 0
-      ? entries.map(sanitizeExceptionEntry)
-      : [sanitizeExceptionEntry(undefined)];
+      ? entries.map((entry) => sanitizeExceptionEntry(entry, valueFields))
+      : [sanitizeExceptionEntry(undefined, valueFields)];
   const type = sanitizedList.at(0)?.type ?? normalizeTelemetryErrorTypeName("");
-  const safeArea =
-    typeof area === "string" && TELEMETRY_AREA.test(area) ? area : undefined;
-  const http = apiErrorIdentity(properties);
   // Session and window ids join an exception to the page views and actions
   // around it; they are random SDK ids that carry no user content.
   const sessionId = properties["$session_id"];

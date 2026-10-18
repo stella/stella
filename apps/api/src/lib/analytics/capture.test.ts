@@ -1,4 +1,7 @@
 import { beforeEach, describe, expect, setSystemTime, test } from "bun:test";
+import fc from "fast-check";
+
+import { assertProperty } from "@stll/property-testing";
 
 import {
   captureError,
@@ -9,6 +12,7 @@ import { setAnalyticsForTesting } from "@/api/lib/analytics/client";
 import {
   extractionWorkerErrorCode,
   ExtractionWorkerError,
+  HandlerError,
   type ExtractionWorkerTermination,
   SUBPROCESS_TERMINATION_REASON,
 } from "@/api/lib/errors/tagged-errors";
@@ -23,6 +27,19 @@ const captured: {
   groups?: Record<string, string>;
   properties: Record<string, unknown>;
 }[] = [];
+
+const firstExceptionValue = (): string | undefined => {
+  const list = captured.at(0)?.properties["$exception_list"];
+  if (!Array.isArray(list)) {
+    return undefined;
+  }
+  const entry: unknown = list.at(0);
+  if (typeof entry !== "object" || entry === null) {
+    return undefined;
+  }
+  const value = Reflect.get(entry, "value");
+  return typeof value === "string" ? value : undefined;
+};
 
 // The seam, not a module mock: a mock of `analytics/client` is process-wide
 // and would swallow `setAnalyticsForTesting` for every test file batched
@@ -195,6 +212,44 @@ describe("captureError issue grouping", () => {
     const fingerprint = captured.at(0)?.properties["$exception_fingerprint"];
     expect(typeof fingerprint).toBe("string");
     expect(fingerprint).not.toContain("Privileged");
+  });
+
+  test("renders an actionable value from typed failure fields", () => {
+    captureError(
+      new HandlerError({
+        code: "upstream_unavailable",
+        message: "Alex Doe <alex@example.test> privileged document text",
+        status: 502,
+      }),
+    );
+
+    expect(firstExceptionValue()).toMatch(
+      /^HandlerError\[upstream_unavailable\] 502 transient$/u,
+    );
+  });
+
+  test("captured properties never carry arbitrary message text", () => {
+    assertProperty(
+      "captured properties never carry arbitrary message text",
+      fc.property(fc.string(), (message) => {
+        captured.length = 0;
+        resetCaptureWindows();
+        const privateMessage = `Alex Doe <alex@example.test> document ${JSON.stringify(message)}`;
+        captureError(
+          Object.assign(
+            new HandlerError({
+              code: "upstream_unavailable",
+              message: privateMessage,
+              status: 502,
+            }),
+            { unknownField: privateMessage },
+          ),
+        );
+
+        const properties = captured.at(0)?.properties;
+        expect(JSON.stringify(properties)).not.toContain(privateMessage);
+      }),
+    );
   });
 });
 
