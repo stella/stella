@@ -414,8 +414,13 @@ const readCompletion = async (
     : { type: "complete" };
 };
 
-export const BETTER_AUTH_OAUTH_RESOURCE_REPAIR: OnlineRepair = {
+// Row work in one transaction under its own LOCAL budgets: no table lock to
+// gate, so it never defers.
+export const BETTER_AUTH_OAUTH_RESOURCE_REPAIR = {
   name: REPAIR_NAME,
   readCompletion,
-  repair,
-};
+  repair: async (connection: OnlineMigrationConnection) => {
+    await repair(connection);
+    return { type: "complete" } as const;
+  },
+} satisfies OnlineRepair;

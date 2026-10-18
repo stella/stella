@@ -1,4 +1,3 @@
-import { PDFiumLibrary } from "@hyzyla/pdfium";
 /**
  * Isolated local OCR worker.
  *
@@ -30,6 +29,7 @@ import {
   type DocumentOcrPage,
 } from "@/api/lib/document-processing-contract";
 import { buildOcrPage } from "@/api/lib/document-processing-ocr-result";
+import { openPdfiumDocument } from "@/api/lib/files/pdfium";
 import {
   buildCtcDecodeTable,
   compareReadingOrder,
@@ -248,33 +248,46 @@ const recognize = async (
 
 try {
   const pdfBytes = new Uint8Array(await Bun.stdin.arrayBuffer());
-  const library = await PDFiumLibrary.init();
-  const document = await library.loadDocument(Buffer.from(pdfBytes));
-  const pageCount = document.getPageCount();
+  const opened = await openPdfiumDocument(pdfBytes);
+  const document = opened.isErr()
+    ? die(`pdfium ${opened.error.operation} failed (code ${opened.error.code})`)
+    : opened.value;
+  const { pageCount } = document;
   if (pageCount < 1 || pageCount > OCR_MAX_PAGES) {
     die(`page count ${pageCount} is outside the supported range`);
   }
 
   const processPage = async (index: number): Promise<DocumentOcrPage> => {
-    const page = document.getPage(index);
-    const { originalHeight: pointHeight, originalWidth: pointWidth } =
-      page.getOriginalSize();
+    const size = document.pageSize(index);
+    if (size.isErr()) {
+      return die(
+        `pdfium ${size.error.operation} failed (code ${size.error.code})`,
+      );
+    }
+    const { pointHeight, pointWidth } = size.value;
     const scale = Math.min(
       RENDER_TARGET_SCALE,
       RENDER_MAX_SIDE_PIXELS / Math.max(pointWidth, pointHeight),
     );
-    const render = await page.render({ scale });
-    const rgb = rgbaToRgb({
-      data: render.data,
-      width: render.width,
-      height: render.height,
+    // Whole points first, as the previous renderer sized its bitmaps, so
+    // the same page keeps the same bitmap under processor version 3.
+    const render = document.renderPage({
+      index,
+      width: Math.floor(Math.floor(pointWidth) * scale),
+      height: Math.floor(Math.floor(pointHeight) * scale),
     });
+    if (render.isErr()) {
+      return die(
+        `pdfium ${render.error.operation} failed (code ${render.error.code})`,
+      );
+    }
+    const { rgba, width, height } = render.value;
     const rendered: RenderedPage = {
-      data: rgb,
-      width: render.width,
-      height: render.height,
-      scaleX: render.width / pointWidth,
-      scaleY: render.height / pointHeight,
+      data: rgbaToRgb({ data: rgba, width, height }),
+      width,
+      height,
+      scaleX: width / pointWidth,
+      scaleY: height / pointHeight,
       pointWidth,
       pointHeight,
     };
@@ -292,8 +305,7 @@ try {
     await processPages(index + 1);
   };
   await processPages(0);
-  document.destroy();
-  library.destroy();
+  document.close();
 
   process.stdout.write(JSON.stringify({ pages }));
   process.exit(0);

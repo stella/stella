@@ -26,11 +26,44 @@ const READ_CONSTRAINT_STATE_SQL = `
     AND constraint_state.conname = $3
 `;
 
-type ConstraintCompletionOptions = {
-  connection: OnlineMigrationConnection;
+type ConstraintStateOptions = {
+  connection: Pick<OnlineMigrationConnection, "query">;
   constraintName: string;
-  repairName: string;
   tableName: string;
+  /** Who reads the state, for the panic that names a broken deploy. */
+  reader: string;
+};
+
+/**
+ * Whether the catalog reports the constraint validated. The schema migration
+ * that adds it runs before the online phase, so a constraint that is not there
+ * at all is a broken deploy, not work owed.
+ */
+export const readConstraintValidated = async ({
+  connection,
+  constraintName,
+  tableName,
+  reader,
+}: ConstraintStateOptions): Promise<boolean> => {
+  const row = (
+    await connection.query(READ_CONSTRAINT_STATE_SQL, [
+      "public",
+      tableName,
+      constraintName,
+    ])
+  ).at(0);
+  if (row === undefined) {
+    return panic(`${reader}: constraint ${constraintName} is missing`);
+  }
+  if (!isRecord(row) || typeof row["isValidated"] !== "boolean") {
+    return panic(`${reader}: constraint state has an invalid shape`);
+  }
+  return row["isValidated"];
+};
+
+type ConstraintCompletionOptions = Omit<ConstraintStateOptions, "reader"> & {
+  connection: OnlineMigrationConnection;
+  repairName: string;
   backfillName?: string;
 };
 
@@ -41,24 +74,14 @@ export const readConstraintCompletion = async ({
   tableName,
   backfillName,
 }: ConstraintCompletionOptions): Promise<OnlineRepairCompletion> => {
-  const row = (
-    await connection.query(READ_CONSTRAINT_STATE_SQL, [
-      "public",
-      tableName,
+  if (
+    await readConstraintValidated({
+      connection,
       constraintName,
-    ])
-  ).at(0);
-  // The schema migration that adds the constraint runs before this phase, so a
-  // constraint that is not there at all is a broken deploy, not work owed.
-  if (row === undefined) {
-    panic(
-      `Online repair ${repairName}: constraint ${constraintName} is missing`,
-    );
-  }
-  if (!isRecord(row) || typeof row["isValidated"] !== "boolean") {
-    panic(`Online repair ${repairName}: constraint state has an invalid shape`);
-  }
-  if (row["isValidated"]) {
+      tableName,
+      reader: `Online repair ${repairName}`,
+    })
+  ) {
     return { type: "complete" };
   }
   const reason = `constraint ${constraintName} is not validated`;
