@@ -120,6 +120,7 @@ import {
   loadPlKioHtml,
   PlKioHtmlBudgetError,
   PL_KIO_DOCUMENT_REJECTION,
+  PL_KIO_HTML_BUDGET,
   PL_KIO_RESPONSE_BYTE_CAP,
   type PlKioResponseKind,
 } from "./pl-kio-response-budget";
@@ -871,6 +872,11 @@ const loadPlKioHtmlForParser = (html: string) => {
   return loaded.value;
 };
 
+const PL_KIO_PARSER_BOUNDS = {
+  loadHtml: loadPlKioHtmlForParser,
+  htmlExpansionBudget: PL_KIO_HTML_BUDGET,
+} as const;
+
 const plKioDocumentOf = (
   document: AssemblePlKioDecisionOptions["document"],
 ): PlKioDocumentReadState => {
@@ -995,7 +1001,6 @@ export const assemblePlKioDecision = ({
     id === undefined || detailHtml === undefined
       ? null
       : readPlKioDetail(detailHtml);
-
   const dockets = [
     ...new Set(
       detail !== null && detail.cases.length > 0
@@ -1078,7 +1083,7 @@ export const assemblePlKioDecision = ({
               documentUrl:
                 id === undefined ? undefined : documentUrlOf(id, kind),
               content,
-              loadHtml: loadPlKioHtmlForParser,
+              ...PL_KIO_PARSER_BOUNDS,
               keywords: itemsOf(
                 detail,
                 "Zagadnienia merytoryczne w odwołaniu z Indeksu tematycznego",

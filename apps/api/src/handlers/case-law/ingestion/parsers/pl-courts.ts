@@ -50,6 +50,10 @@ type ParsePlDecisionInput = {
   documentUrl: string | undefined;
   content: string;
   loadHtml?: (html: string) => cheerio.CheerioAPI;
+  htmlExpansionBudget?: {
+    maxDomAllocations: number;
+    reject: (message: string) => never;
+  };
   keywords: string[];
   statutes: string[];
   documentId: string;
@@ -497,6 +501,28 @@ const parsePlainText = (state: ParserState, content: string): void => {
   }
 };
 
+const enforcePlainTextExpansionBudget = (
+  content: string,
+  budget: NonNullable<ParsePlDecisionInput["htmlExpansionBudget"]> | undefined,
+): void => {
+  if (budget === undefined) {
+    return;
+  }
+
+  // Every line break, CRLF included, can become a line string in
+  // normalization and a paragraph after the split, so lines bound both.
+  let lines = 0;
+  for (let index = 0; index < content.length; index += 1) {
+    if (content.codePointAt(index) !== 10) {
+      continue;
+    }
+    lines += 1;
+    if (lines > budget.maxDomAllocations) {
+      budget.reject("KIO plaintext exceeds DOM allocation budget");
+    }
+  }
+};
+
 export const parsePlDecisionContent = (
   input: ParsePlDecisionInput,
 ): ParsePlDecisionOutput => {
@@ -524,6 +550,7 @@ export const parsePlDecisionContent = (
       { sourceDocument: $ },
     );
   } else {
+    enforcePlainTextExpansionBudget(input.content, input.htmlExpansionBudget);
     const normalizedContent = normalizeLegacyPlainText(
       stripHtml(input.content),
     );

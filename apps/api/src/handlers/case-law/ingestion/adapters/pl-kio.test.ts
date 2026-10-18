@@ -410,6 +410,29 @@ describe("building a ruling from its three pages", () => {
     },
   );
 
+  test("near-cap plaintext expansion is rejected as oversized parser input", async () => {
+    const documentHtml = "x\n\n".repeat(
+      Math.floor((PL_KIO_RESPONSE_BYTE_CAP.document - 1) / 3),
+    );
+    expect(Buffer.byteLength(documentHtml)).toBeLessThan(
+      PL_KIO_RESPONSE_BYTE_CAP.document,
+    );
+
+    const decision = built(
+      assemblePlKioDecision({
+        item: { id: "30308", signature: "KIO 2845/25" },
+        detailHtml: await fixtureText("pl-kio-detail-30308.html"),
+        document: { type: "read", html: documentHtml },
+      }),
+    );
+
+    expect(decision.fulltext).toBeUndefined();
+    expect(
+      decision.metadata["documentStatus"] ===
+        PL_KIO_DOCUMENT_REJECTION.MARKUP_BUDGET_EXCEEDED,
+    ).toBe(true);
+  });
+
   test("listing and detail readers reject excessive markup before building their DOM", async () => {
     const markup = "<span></span>".repeat(PL_KIO_HTML_BUDGET.maxDomAllocations);
     const listing = await fixtureText("pl-kio-listing-2025-09-01-p1.html");

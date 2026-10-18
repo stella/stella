@@ -6,13 +6,6 @@ import { adapter } from "parse5-htmlparser2-tree-adapter";
 
 import { hasPlKioAttributeBudget } from "./pl-kio-attribute-budget";
 
-export const PL_KIO_HTML_BUDGET = {
-  maxDomAllocations: 20_000,
-  maxAttributesPerTag: 512,
-  maxAttributesTotal: 20_000,
-  maxScanStepsPerCharacter: 8,
-} as const;
-
 export const PL_KIO_RESPONSE_BYTE_CAP = {
   listing: 16 * 1024 * 1024,
   detail: 16 * 1024 * 1024,
@@ -30,6 +23,22 @@ export class PlKioHtmlBudgetError extends TaggedError("PlKioHtmlBudgetError")<{
   message: string;
   reason: (typeof PL_KIO_DOCUMENT_REJECTION)[keyof typeof PL_KIO_DOCUMENT_REJECTION];
 }> {}
+
+const rejectPlKioHtmlBudget = (message: string): never => {
+  // oxlint-disable-next-line result-boundary/no-throw-outside-boundary -- parser callbacks cannot return a Result; assemblePlKioDecision converts this typed refusal to Result.err
+  throw new PlKioHtmlBudgetError({
+    message,
+    reason: PL_KIO_DOCUMENT_REJECTION.MARKUP_BUDGET_EXCEEDED,
+  });
+};
+
+export const PL_KIO_HTML_BUDGET = {
+  maxDomAllocations: 20_000,
+  maxAttributesPerTag: 512,
+  maxAttributesTotal: 20_000,
+  maxScanStepsPerCharacter: 8,
+  reject: rejectPlKioHtmlBudget,
+} as const;
 
 /** Bound allocations in the same parse5 tree builder that Cheerio consumes. */
 type LoadPlKioHtmlOptions = { maxBytes: number };
@@ -56,11 +65,7 @@ export const loadPlKioHtml = (
   const charge = (count: number) => {
     allocations += count;
     if (allocations > PL_KIO_HTML_BUDGET.maxDomAllocations) {
-      // oxlint-disable-next-line result-boundary/no-throw-outside-boundary -- parse5 tree-adapter callbacks cannot return a Result; this aborts the synchronous parser and the enclosing Result.try converts it to Result.err
-      throw new PlKioHtmlBudgetError({
-        message: "KIO HTML exceeds DOM allocation budget",
-        reason: PL_KIO_DOCUMENT_REJECTION.MARKUP_BUDGET_EXCEEDED,
-      });
+      PL_KIO_HTML_BUDGET.reject("KIO HTML exceeds DOM allocation budget");
     }
   };
   const treeAdapter = {
