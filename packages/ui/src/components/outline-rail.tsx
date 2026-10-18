@@ -767,7 +767,15 @@ export const OutlineRail = ({
           // open, and typing in it moves the pointer nowhere: hold the panel
           // open for as long as focus is inside it, or `inert` would take the
           // focused control away mid-keystroke.
-          onBlurCapture={scheduleClose}
+          onBlurCapture={(event) => {
+            // Focus leaving the rail from inside the panel closes it the same
+            // way leaving from a tick does; moving within the rail keeps it.
+            if (!railRef.current?.contains(event.relatedTarget)) {
+              closePanel();
+              return;
+            }
+            scheduleClose();
+          }}
           onFocusCapture={openPanel}
           onKeyDown={(event) => {
             // Escape hands focus back to the tick the reader came from.

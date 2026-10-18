@@ -144,3 +144,26 @@ test("rail presentation remains a host-owned tick strip", async () => {
     await cleanup(rendered.root, rendered.container, rendered.scrollContainer);
   }
 });
+
+test("leaving the rail from inside the panel closes the popover", async () => {
+  const rendered = await renderOutline();
+  const outside = document.createElement("button");
+  document.body.append(outside);
+  try {
+    const ticks = rendered.container.querySelector<HTMLElement>(
+      "[data-outline-ticks]",
+    );
+    const tick = ticks?.querySelector<HTMLButtonElement>("button");
+    const panelButton = rendered.container
+      .querySelector<HTMLElement>("nav")
+      ?.querySelector<HTMLButtonElement>("button");
+    await act(async () => tick?.focus());
+    await act(async () => panelButton?.focus());
+    expect(ticks?.getAttribute("aria-expanded")).toBe("true");
+    await act(async () => outside.focus());
+    expect(ticks?.getAttribute("aria-expanded")).toBe("false");
+  } finally {
+    outside.remove();
+    await cleanup(rendered.root, rendered.container, rendered.scrollContainer);
+  }
+});
