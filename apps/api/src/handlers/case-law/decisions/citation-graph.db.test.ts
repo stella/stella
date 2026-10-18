@@ -525,6 +525,83 @@ test("citation pages reject malformed cursors", async () => {
   expect("items" in page).toBe(false);
 });
 
+test("citation pages filter doctrine and polarity and bind cursors to filters", async () => {
+  const limitsId = citationId(0);
+  const distinguishesId = citationId(1);
+  await db
+    .update(caseLawCitations)
+    .set({ doctrinalTreatment: "limits", polarity: POLARITY.NEGATIVE })
+    .where(eq(caseLawCitations.id, limitsId));
+  await db
+    .update(caseLawCitations)
+    .set({ doctrinalTreatment: "distinguishes", polarity: POLARITY.NEGATIVE })
+    .where(eq(caseLawCitations.id, distinguishesId));
+  await db.execute(
+    sql`GRANT SELECT (citation_key, doctrinal_treatment) ON case_law_citations TO stella_public_law_reader`,
+  );
+  await db.execute(
+    sql`GRANT SELECT (citing_decision_id, citation_key, doctrinal_treatment, evidence_quote) ON case_law_citation_doctrine_reviews TO stella_public_law_reader`,
+  );
+
+  const read = async (
+    query: Parameters<typeof listDecisionCitationsHandler>[0]["query"],
+    limit = 50,
+  ) =>
+    await withSubject(
+      subjectId,
+      async (subject) =>
+        await listDecisionCitationsHandler({ subject, query, limit }),
+    );
+  const limits = await read({ direction: "incoming", doctrine: "limits" });
+  const negative = await read({ direction: "incoming", polarity: "negative" });
+  const combined = await read({
+    direction: "incoming",
+    doctrine: "limits",
+    polarity: "negative",
+  });
+  const empty = await read({
+    direction: "incoming",
+    doctrine: "limits",
+    polarity: "supportive",
+  });
+  if (
+    !("items" in limits) ||
+    !("items" in negative) ||
+    !("items" in combined) ||
+    !("items" in empty)
+  ) {
+    throw new Error("Expected filtered citation pages");
+  }
+  expect(limits.items.map(({ id }) => id)).toEqual([limitsId]);
+  expect(negative.items.some(({ id }) => id === limitsId)).toBe(true);
+  expect(combined.items.map(({ id }) => id)).toEqual([limitsId]);
+  expect(empty.items).toEqual([]);
+
+  const first = await read({ direction: "incoming", polarity: "negative" }, 1);
+  if (!("items" in first) || first.nextCursor === null) {
+    throw new Error("Expected a filtered cursor");
+  }
+  expect(
+    "items" in
+      (await read({
+        cursor: first.nextCursor,
+        direction: "incoming",
+        polarity: "positive",
+      })),
+  ).toBe(false);
+
+  await db.execute(
+    sql`REVOKE SELECT (citation_key, doctrinal_treatment) ON case_law_citations FROM stella_public_law_reader`,
+  );
+  await db.execute(
+    sql`REVOKE SELECT (citing_decision_id, citation_key, doctrinal_treatment, evidence_quote) ON case_law_citation_doctrine_reviews FROM stella_public_law_reader`,
+  );
+  await db
+    .update(caseLawCitations)
+    .set({ doctrinalTreatment: null })
+    .where(inArray(caseLawCitations.id, [limitsId, distinguishesId]));
+});
+
 test("incoming citations roll up by the citing decision's year within the bounded span", async () => {
   const summary = await withSubject(
     subjectId,

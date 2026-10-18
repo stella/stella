@@ -32,9 +32,13 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
-import type { CitationReadDirection } from "@/api/lib/case-law/citation-vocabulary";
+import type {
+  CitationReadDirection,
+  CitationTreatment,
+} from "@/api/lib/case-law/citation-vocabulary";
 import { GRAPH_DIRECTION } from "@/api/lib/case-law/citation-vocabulary";
 import { readDecisionAnalysisAst } from "@/api/lib/case-law/decision-analysis";
+import type { DoctrineTreatment } from "@/api/lib/case-law/doctrine";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import { errorTag } from "@/api/lib/errors/utils";
 import { readCorpusTombstones } from "@/api/lib/legal-search/corpus-reads";
@@ -333,6 +337,8 @@ export type ReadDecisionCitationsOptions = {
   cursor: string | undefined;
   decisionId: SafeId<"caseLawDecision">;
   direction: CitationReadDirection;
+  doctrine?: Exclude<DoctrineTreatment, "not_stated">;
+  polarity?: CitationTreatment;
   limit: number;
   /** The surface the read serves; its country list decides publication. */
   surface: PublicCountrySurface;
@@ -349,6 +355,8 @@ export const readGatedDecisionCitations = async ({
   cursor,
   decisionId,
   direction,
+  doctrine,
+  polarity,
   limit,
   surface,
 }: ReadDecisionCitationsOptions): Promise<DecisionCitationsRead | null> => {
@@ -361,6 +369,8 @@ export const readGatedDecisionCitations = async ({
         limit,
         query: {
           direction: GRAPH_DIRECTION[direction],
+          ...(doctrine === undefined ? {} : { doctrine }),
+          ...(polarity === undefined ? {} : { polarity }),
           ...(cursor === undefined ? {} : { cursor }),
         },
         subject,
