@@ -236,6 +236,7 @@ const parseRobots = (body: string): Group[] => {
     if (field === "crawl-delay") {
       const seconds = Number(value);
       if (Number.isFinite(seconds) && seconds >= 0) {
+        sawRule = true;
         current.crawlDelayMs = seconds * 1000;
       }
     }
@@ -523,6 +524,12 @@ const redirectedRequestInit = ({
   });
 };
 
+// Unread response bodies hold their connection open until cancelled.
+const discardBody = async (response: Response, deadline: AbortSignal) =>
+  Result.tryPromise(async () =>
+    Promise.race([response.body?.cancel(), abortPromise(deadline)]),
+  );
+
 type LoadRobotsOptions = {
   fetcher: Fetcher;
   validateTarget: PublisherFetcherOptions["validateTarget"];
@@ -574,6 +581,11 @@ const loadRobots = async ({
       finalResponse = fetched.value;
       break;
     }
+    const cancelled = await discardBody(fetched.value, deadline);
+    if (Result.isError(cancelled)) {
+      failure = cancelled.error.cause;
+      break;
+    }
     const location = fetched.value.headers.get("location");
     if (!location || redirects >= MAX_REDIRECTS) {
       failure = new RobotsUnavailableError({
@@ -593,13 +605,6 @@ const loadRobots = async ({
       });
       break;
     }
-    const cancelled = await Result.tryPromise(async () =>
-      Promise.race([fetched.value.body?.cancel(), abortPromise(deadline)]),
-    );
-    if (Result.isError(cancelled)) {
-      failure = cancelled.error.cause;
-      break;
-    }
     target = new URL(location, requestTarget);
   }
   if (!finalResponse) {
@@ -616,6 +621,18 @@ const loadRobots = async ({
         expiresAt: now() + robotsRetryMs,
       },
     };
+  }
+  if (finalResponse.status >= 400) {
+    const discarded = await discardBody(finalResponse, deadline);
+    if (Result.isError(discarded)) {
+      return {
+        type: "cacheable",
+        robots: {
+          state: { type: "unavailable", cause: discarded.error.cause },
+          expiresAt: now() + robotsRetryMs,
+        },
+      };
+    }
   }
   if (finalResponse.status >= 400 && finalResponse.status < 500) {
     return {

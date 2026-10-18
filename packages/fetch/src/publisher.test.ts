@@ -283,6 +283,28 @@ describe("publisher scheduler", () => {
     expect(resources).toBe(0);
   });
 
+  test("a group holding only Crawl-delay ends before the next User-agent", async () => {
+    let resources = 0;
+    const request = createPolitePublisherFetch({
+      validateTarget: allowTarget,
+      fetcher: async (input) => {
+        const url = new URL(input instanceof Request ? input.url : input);
+        if (url.pathname === "/robots.txt") {
+          return new Response(
+            "User-agent: *\nCrawl-delay: 61\nUser-agent: stella\nAllow: /",
+          );
+        }
+        resources += 1;
+        return new Response("ok");
+      },
+    });
+    const outcome = await request("https://publisher.example/case", {
+      userAgent: "Stella/1.0",
+    });
+    expect(outcome.isOk()).toBe(true);
+    expect(resources).toBe(1);
+  });
+
   test("licensed sources record their basis and cap unsupported delays", async () => {
     let now = 0;
     const sleeps: number[] = [];
@@ -807,12 +829,18 @@ describe("publisher scheduler", () => {
       [404, true],
       [503, false],
     ] as const) {
+      let cancelled = false;
+      const errorBody = new ReadableStream<Uint8Array>({
+        cancel: () => {
+          cancelled = true;
+        },
+      });
       const request = createPolitePublisherFetch({
         validateTarget: allowTarget,
         fetcher: async (input) =>
           new URL(input instanceof Request ? input.url : input).pathname ===
           "/robots.txt"
-            ? new Response(null, { status })
+            ? new Response(errorBody, { status })
             : new Response("ok"),
         defaultMinimumIntervalMs: 0,
       });
@@ -820,6 +848,7 @@ describe("publisher scheduler", () => {
         userAgent: "Stella/1.0 (+https://stella.law)",
       });
       expect(outcome.isOk()).toBe(allowed);
+      expect(cancelled).toBe(true);
       if (!allowed && outcome.isErr()) {
         expect(outcome.error._tag).toBe("robots_unavailable");
       }
