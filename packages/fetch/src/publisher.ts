@@ -384,20 +384,33 @@ export const evaluatePublisherRobots = (
   };
 };
 
-const abortPromise = async (signal: AbortSignal) =>
-  await new Promise<never>((_resolve, reject) => {
-    const reason = () =>
-      signal.reason instanceof Error
-        ? signal.reason
-        : new DOMException("The operation was aborted", "AbortError");
-    if (signal.aborted) {
-      reject(reason());
-      return;
-    }
-    signal.addEventListener("abort", () => reject(reason()), {
-      once: true,
-    });
-  });
+const abortReason = (signal: AbortSignal) =>
+  signal.reason instanceof Error
+    ? signal.reason
+    : new DOMException("The operation was aborted", "AbortError");
+
+// Detaches its listener once either side settles, so a long-lived caller
+// signal does not retain a listener (and its race result) per request.
+const raceAbort = async <T>(
+  work: Promise<T>,
+  signal: AbortSignal | undefined,
+): Promise<T> => {
+  if (!signal) {
+    return await work;
+  }
+  const { promise: aborted, reject } = Promise.withResolvers<never>();
+  const onAbort = () => reject(abortReason(signal));
+  if (signal.aborted) {
+    onAbort();
+  } else {
+    signal.addEventListener("abort", onAbort, { once: true });
+  }
+  try {
+    return await Promise.race([work, aborted]);
+  } finally {
+    signal.removeEventListener("abort", onAbort);
+  }
+};
 
 export class PublisherBodyLimitError extends TaggedError(
   "publisher_body_limit",
@@ -420,12 +433,9 @@ export const readBoundedBody = async (
   let exceeded = false;
   // oxlint-disable-next-line require-stream-reader-disposal/require-stream-reader-disposal -- the finally block below cancels with the same overall deadline before releasing
   const reader = response.body.getReader();
-  // One abort listener for the whole read: a race per chunk would leave a
-  // listener attached for every chunk until the deadline.
-  const aborted = abortPromise(signal);
   try {
     while (true) {
-      const next = await Promise.race([reader.read(), aborted]);
+      const next = await raceAbort(reader.read(), signal);
       if (next.done) {
         break;
       }
@@ -438,7 +448,7 @@ export const readBoundedBody = async (
     }
   } finally {
     try {
-      await Promise.race([reader.cancel(), aborted]);
+      await raceAbort(reader.cancel(), signal);
     } finally {
       reader.releaseLock();
     }
@@ -562,10 +572,7 @@ const discardBody = async (
   signal: AbortSignal | undefined,
 ) =>
   Result.tryPromise(async () =>
-    Promise.race([
-      response.body?.cancel(),
-      ...(signal ? [abortPromise(signal)] : []),
-    ]),
+    raceAbort(response.body?.cancel() ?? Promise.resolve(), signal),
   );
 
 type LoadRobotsOptions = {
@@ -599,10 +606,10 @@ const loadRobots = async ({
     // Raced as well as signalled: a validator or transport that ignores the
     // signal must not hold the shared load past its deadline.
     const checked = await Result.tryPromise(async () =>
-      Promise.race([
+      raceAbort(
         validatePublisherTarget(requestTarget, validateTarget),
-        abortPromise(deadline),
-      ]),
+        deadline,
+      ),
     );
     if (Result.isError(checked)) {
       failure = checked.error.cause;
@@ -614,14 +621,14 @@ const loadRobots = async ({
       break;
     }
     const fetched = await Result.tryPromise(async () =>
-      Promise.race([
+      raceAbort(
         fetcher(validated.value, {
           headers: { "User-Agent": PUBLISHER_USER_AGENT },
           redirect: "manual",
           signal: deadline,
         }),
-        abortPromise(deadline),
-      ]),
+        deadline,
+      ),
     );
     if (Result.isError(fetched)) {
       failure = fetched.error.cause;
@@ -790,7 +797,7 @@ const createOriginScheduler = (clock: Clock) => {
       previous.then(async () => current),
     );
     const acquired = await Result.tryPromise(async () =>
-      signal ? Promise.race([previous, abortPromise(signal)]) : previous,
+      raceAbort(previous, signal),
     );
     if (Result.isError(acquired)) {
       release();
@@ -848,10 +855,7 @@ const enforcePublisherPolicy = async (
   // without cancelling it for the others.
   const signal = state.requestInit?.signal ?? undefined;
   const loaded = await Result.tryPromise(async () =>
-    Promise.race([
-      runtime.robotsFor(state.url.origin),
-      ...(signal ? [abortPromise(signal)] : []),
-    ]),
+    raceAbort(runtime.robotsFor(state.url.origin), signal),
   );
   if (Result.isError(loaded)) {
     return Result.err(
@@ -922,10 +926,10 @@ const walkPublisherRedirects = async (
   for (let redirects = 0; ; redirects += 1) {
     const signal = state.requestInit?.signal ?? undefined;
     const checked = await Result.tryPromise(async () =>
-      Promise.race([
+      raceAbort(
         validatePublisherTarget(state.url, runtime.validateTarget),
-        ...(signal ? [abortPromise(signal)] : []),
-      ]),
+        signal,
+      ),
     );
     if (Result.isError(checked)) {
       return Result.err(
@@ -1049,9 +1053,7 @@ export const createPolitePublisherFetch = ({
     now: () => performance.now(),
     sleep: async (ms, signal) => {
       signal?.throwIfAborted();
-      await (signal
-        ? Promise.race([Bun.sleep(ms), abortPromise(signal)])
-        : Bun.sleep(ms));
+      await raceAbort(Bun.sleep(ms), signal);
       signal?.throwIfAborted();
     },
   },

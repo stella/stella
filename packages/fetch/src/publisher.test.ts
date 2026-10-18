@@ -437,17 +437,24 @@ describe("publisher scheduler", () => {
     expect(cancelled).toBe(true);
   });
 
-  test("bounded body reads attach one abort listener however many chunks arrive", async () => {
-    const controller = new AbortController();
-    let listeners = 0;
-    const { signal } = controller;
-    const addEventListener = signal.addEventListener.bind(signal);
-    signal.addEventListener = (
-      ...args: Parameters<typeof addEventListener>
-    ) => {
-      listeners += 1;
-      addEventListener(...args);
+  const trackLiveListeners = (signal: AbortSignal) => {
+    const live = { count: 0 };
+    const add = signal.addEventListener.bind(signal);
+    const remove = signal.removeEventListener.bind(signal);
+    signal.addEventListener = (...args: Parameters<typeof add>) => {
+      live.count += 1;
+      add(...args);
     };
+    signal.removeEventListener = (...args: Parameters<typeof remove>) => {
+      live.count -= 1;
+      remove(...args);
+    };
+    return live;
+  };
+
+  test("bounded body reads retain no abort listener however many chunks arrive", async () => {
+    const { signal } = new AbortController();
+    const live = trackLiveListeners(signal);
     let chunks = 0;
     const response = new Response(
       new ReadableStream<Uint8Array>({
@@ -465,7 +472,31 @@ describe("publisher scheduler", () => {
     const read = await readBoundedBody(response, { maxBytes: 4096, signal });
 
     expect(Result.isOk(read) && read.value.byteLength).toBe(1000);
-    expect(listeners).toBe(1);
+    expect(live.count).toBe(0);
+  });
+
+  test("successful requests sharing one caller signal retain no abort listener", async () => {
+    const { signal } = new AbortController();
+    const live = trackLiveListeners(signal);
+    const request = createPolitePublisherFetch({
+      validateTarget: allowTarget,
+      fetcher: async (input) => {
+        const url = new URL(input instanceof Request ? input.url : input);
+        return url.pathname === "/robots.txt"
+          ? new Response(null, { status: 404 })
+          : new Response("ok");
+      },
+      defaultMinimumIntervalMs: 0,
+    });
+
+    for (const path of ["/a", "/b", "/c"]) {
+      const outcome = await request(`https://publisher.example${path}`, {
+        signal,
+      });
+      expect(Result.isOk(outcome)).toBe(true);
+    }
+
+    expect(live.count).toBe(0);
   });
 
   test.each([300, 304])(
