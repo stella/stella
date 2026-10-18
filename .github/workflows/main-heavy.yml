@@ -231,9 +231,6 @@ jobs:
       checks: read
       pull-requests: read
       packages: read
-      # Declared by ci-plan's merge-queue yield, which runs only on
-      # pull_request events and never here.
-      statuses: write
     with:
       depth: full
       heavy_only: true
