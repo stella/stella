@@ -29,3 +29,24 @@ await copyFile(path.join(checkout, "package.json"), path.join(scratch, "copy"));
 const local = await mkdtemp(path.join(checkout, ".cache", "rule-fixture-"));
 // expect-clean: no-shared-checkout-mutation/no-shared-checkout-mutation
 await writeFile(path.join(local, "fixture"), "changed");
+
+// MUST flag: `..` climbs out of the temporary directory into the checkout.
+// oxlint-disable-next-line no-shared-checkout-mutation/no-shared-checkout-mutation -- fixture: joined traversal
+await writeFile(path.join(local, "..", "baseline.json"), "changed");
+
+// MUST flag: the same traversal through path.resolve.
+// oxlint-disable-next-line no-shared-checkout-mutation/no-shared-checkout-mutation -- fixture: resolved traversal
+await writeFile(path.resolve(local, "../baseline.json"), "changed");
+
+// MUST flag: traversal from a directory built under the temporary one.
+const nested = path.join(local, "nested");
+// oxlint-disable-next-line no-shared-checkout-mutation/no-shared-checkout-mutation -- fixture: nested traversal
+await writeFile(path.join(nested, "../..", "baseline.json"), "changed");
+
+// MUST flag: traversal in a template literal.
+// oxlint-disable-next-line no-shared-checkout-mutation/no-shared-checkout-mutation -- fixture: template traversal
+await writeFile(`${local}/../baseline.json`, "changed");
+
+// Clean: `..` out of a system temporary directory stays outside the checkout.
+// expect-clean: no-shared-checkout-mutation/no-shared-checkout-mutation
+await writeFile(path.join(scratch, "..", "sibling"), "changed");

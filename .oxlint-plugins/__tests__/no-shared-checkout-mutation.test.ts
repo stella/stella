@@ -25,6 +25,31 @@ describe(RULE, () => {
     ).toEqual([4]);
   });
 
+  // A unique directory is safe inside the checkout until `..` leaves it.
+  test("allows a temporary directory inside the checkout", async () => {
+    expect(
+      await lint(
+        `import { mkdtempSync, rmSync, writeFileSync } from "node:fs";\nimport path from "node:path";\nconst directory = mkdtempSync(path.join(import.meta.dir, "../.cache", "rule-"));\nconst file = path.join(directory, "producer.ts");\nwriteFileSync(file, "changed");\nwriteFileSync(\`\${directory}/consumer.ts\`, "changed");\nrmSync(directory, { force: true, recursive: true });`,
+      ),
+    ).toEqual([]);
+  });
+
+  test("rejects traversal out of a temporary directory inside the checkout", async () => {
+    expect(
+      await lint(
+        `import { mkdtemp, writeFile } from "node:fs/promises";\nimport path from "node:path";\nconst scratch = await mkdtemp(path.join(import.meta.dir, "scratch-"));\nawait writeFile(path.join(scratch, "..", "baseline.json"), "changed");\nawait writeFile(path.resolve(scratch, "../baseline.json"), "changed");\nconst nested = path.join(scratch, "nested");\nawait writeFile(path.join(nested, "../..", "baseline.json"), "changed");\nawait writeFile(\`\${scratch}/../baseline.json\`, "changed");\nawait writeFile(scratch + "/../baseline.json", "changed");\nawait writeFile(path.join(scratch, process.argv[2] ?? ""), "changed");`,
+      ),
+    ).toEqual([4, 5, 7, 8, 9, 10]);
+  });
+
+  test("allows traversal out of a system temporary directory", async () => {
+    expect(
+      await lint(
+        'import { mkdtemp, writeFile } from "node:fs/promises";\nimport { tmpdir } from "node:os";\nimport path from "node:path";\nconst scratch = await mkdtemp(path.join(tmpdir(), "rule-"));\nawait writeFile(path.join(scratch, "..", "sibling"), "changed");',
+      ),
+    ).toEqual([]);
+  });
+
   test("rejects checkout paths built with template literals", async () => {
     expect(
       await lint(

@@ -8,6 +8,7 @@ import {
   resolveVariable,
   stableInitializer,
   unwrapExpression,
+  type AstNode,
   type ScopeContext,
 } from "./utils.ts";
 
@@ -50,6 +51,48 @@ const isImportMetaProperty = (input: unknown, names: ReadonlySet<string>) => {
     node.object.type === "MetaProperty"
   );
 };
+
+// The text of each static quasi; null for an interpolated or unknown one.
+const quasiTexts = (quasis: unknown): string[] | null => {
+  if (!Array.isArray(quasis)) {
+    return null;
+  }
+  const texts = quasis.map((quasi: unknown) => {
+    const value: unknown = isAstNode(quasi) ? quasi.value : null;
+    return typeof value === "object" &&
+      value !== null &&
+      "cooked" in value &&
+      typeof value.cooked === "string"
+      ? value.cooked
+      : null;
+  });
+  return texts.every((text): text is string => text !== null) ? texts : null;
+};
+
+// Text that cannot climb out of the directory it is appended to.
+const descends = (text: string) => !text.split(/[/\\]/u).includes("..");
+
+// A static relative segment without `..` cannot leave the directory it is
+// joined under; anything else may.
+const staysInside = (segments: readonly unknown[]) =>
+  segments.every((input) => {
+    const segment = unwrapExpression(input);
+    if (!isAstNode(segment)) {
+      return false;
+    }
+    const texts =
+      segment.type === "Literal" && typeof segment.value === "string"
+        ? [segment.value]
+        : segment.type === "TemplateLiteral" &&
+            Array.isArray(segment.expressions) &&
+            segment.expressions.length === 0
+          ? quasiTexts(segment.quasis)
+          : null;
+    return (
+      texts !== null &&
+      texts.every((text) => !/^[/\\]/u.test(text) && descends(text))
+    );
+  });
 
 const createPathResolver = (context: ScopeContext) => {
   const variableOf = (node: unknown) =>
@@ -106,12 +149,12 @@ const createPathResolver = (context: ScopeContext) => {
     const operation = calleeName(node.callee);
     // path.resolve: the last absolute segment decides, as for checkout paths.
     if (operation === "resolve") {
-      for (const part of parts.toReversed()) {
-        if (isCheckoutPath(part, new Set(seen))) {
+      for (let index = parts.length - 1; index >= 0; index -= 1) {
+        if (isCheckoutPath(parts[index], new Set(seen))) {
           return false;
         }
-        if (isTemporaryRoot(part, new Set(seen))) {
-          return true;
+        if (isTemporaryRoot(parts[index], new Set(seen))) {
+          return staysInside(parts.slice(index + 1));
         }
       }
       return false;
@@ -120,13 +163,92 @@ const createPathResolver = (context: ScopeContext) => {
     return (
       operation === "join" &&
       parts.length > 0 &&
-      isTemporaryRoot(parts[0], new Set(seen))
+      isTemporaryRoot(parts[0], new Set(seen)) &&
+      staysInside(parts.slice(1))
     );
   };
 
+  // `a + "/x"` and `${a}/x`: the base keeps its exemption only when the
+  // appended static text descends.
+  const concatenationIsCheckoutPath = (
+    node: AstNode,
+    seen: Set<Variable>,
+    exempt: boolean,
+  ): boolean => {
+    if (node.type === "BinaryExpression") {
+      if (node.operator !== "+") {
+        return false;
+      }
+      const right = unwrapExpression(node.right);
+      const inside =
+        exempt &&
+        isAstNode(right) &&
+        right.type === "Literal" &&
+        typeof right.value === "string" &&
+        descends(right.value);
+      return (
+        isCheckoutPath(node.left, new Set(seen), inside) ||
+        isCheckoutPath(node.right, new Set(seen), exempt)
+      );
+    }
+    if (!Array.isArray(node.expressions)) {
+      return false;
+    }
+    // One interpolated base followed by static text that only descends.
+    const texts = quasiTexts(node.quasis);
+    const inside =
+      exempt &&
+      node.expressions.length === 1 &&
+      texts !== null &&
+      texts.every(descends);
+    return node.expressions.some((expression) =>
+      isCheckoutPath(expression, new Set(seen), inside),
+    );
+  };
+
+  const callIsCheckoutPath = (
+    node: AstNode,
+    seen: Set<Variable>,
+    exempt: boolean,
+  ): boolean => {
+    if (!Array.isArray(node.arguments)) {
+      return false;
+    }
+    const operation = calleeName(node.callee);
+    const parts: unknown[] = node.arguments;
+    // path.resolve: the last absolute segment decides the destination.
+    if (operation === "resolve") {
+      for (let index = parts.length - 1; index >= 0; index -= 1) {
+        const inside = exempt && staysInside(parts.slice(index + 1));
+        if (inside && isTemporaryRoot(parts[index], new Set(seen))) {
+          return false;
+        }
+        if (isCheckoutPath(parts[index], new Set(seen), inside)) {
+          return true;
+        }
+      }
+      return false;
+    }
+    // path.join: the first segment is the base the rest is joined under.
+    if (operation === "join") {
+      return (
+        parts.length > 0 &&
+        isCheckoutPath(
+          parts[0],
+          new Set(seen),
+          exempt && staysInside(parts.slice(1)),
+        )
+      );
+    }
+    return parts.some((argument) => isCheckoutPath(argument, new Set(seen)));
+  };
+
+  // `exempt: false` once a later segment may climb out of a temporary
+  // directory: its location is then judged by where it was created.
   const isCheckoutPath = (
     input: unknown,
     seen = new Set<Variable>(),
+    exempt = true,
   ): boolean => {
     const node = unwrapExpression(input);
     if (
@@ -138,7 +260,7 @@ const createPathResolver = (context: ScopeContext) => {
       return true;
     }
     // A mkdtemp directory is unique to its test, even inside the checkout.
-    if (isTemporaryRoot(node, new Set(seen))) {
+    if (exempt && isTemporaryRoot(node, new Set(seen))) {
       return false;
     }
     if (isIdentifierReference(node)) {
@@ -147,26 +269,16 @@ const createPathResolver = (context: ScopeContext) => {
         return false;
       }
       seen.add(variable);
-      return isCheckoutPath(stableInitializer(variable), seen);
+      return isCheckoutPath(stableInitializer(variable), seen, exempt);
     }
     if (
       isAstNode(node) &&
-      node.type === "BinaryExpression" &&
-      node.operator === "+"
+      (node.type === "BinaryExpression" || node.type === "TemplateLiteral")
     ) {
-      return (
-        isCheckoutPath(node.left, new Set(seen)) ||
-        isCheckoutPath(node.right, new Set(seen))
-      );
+      return concatenationIsCheckoutPath(node, seen, exempt);
     }
-    if (
-      isAstNode(node) &&
-      node.type === "TemplateLiteral" &&
-      Array.isArray(node.expressions)
-    ) {
-      return node.expressions.some((expression) =>
-        isCheckoutPath(expression, new Set(seen)),
-      );
+    if (isAstNode(node) && node.type === "CallExpression") {
+      return callIsCheckoutPath(node, seen, exempt);
     }
     if (
       isAstNode(node) &&
@@ -181,33 +293,11 @@ const createPathResolver = (context: ScopeContext) => {
         )
       );
     }
-    if (
-      isAstNode(node) &&
-      node.type === "CallExpression" &&
-      Array.isArray(node.arguments)
-    ) {
-      const operation = calleeName(node.callee);
-      const parts: unknown[] = node.arguments;
-      // path.resolve: the last absolute segment decides the destination.
-      if (operation === "resolve") {
-        for (const part of parts.toReversed()) {
-          if (isTemporaryRoot(part, new Set(seen))) {
-            return false;
-          }
-          if (isCheckoutPath(part, new Set(seen))) {
-            return true;
-          }
-        }
-        return false;
-      }
-      // path.join: the first segment is the base the rest is joined under.
-      if (operation === "join") {
-        return parts.length > 0 && isCheckoutPath(parts[0], new Set(seen));
-      }
-      return parts.some((argument) => isCheckoutPath(argument, new Set(seen)));
-    }
     if (isAstNode(node) && node.type === "MemberExpression") {
-      return isCheckoutPath(node.object, seen);
+      return isCheckoutPath(node.object, seen, exempt);
+    }
+    if (isAstNode(node) && node.type === "AwaitExpression") {
+      return isCheckoutPath(node.argument, seen, exempt);
     }
     return false;
   };
