@@ -80,4 +80,31 @@ describe("citation text naming its case", () => {
       true,
     );
   });
+
+  test("treats registry suffixes as part of the complete identifier", () => {
+    expect(
+      inlineDecisionCitationPresentation(
+        "23 Cdo 651/2023-123",
+        "23 Cdo 651/2023-7",
+      ),
+    ).toEqual({ kind: "prose-trigger", label: "23 Cdo 651/2023-123" });
+    expect(
+      inlineDecisionCitationPresentation(
+        "23 Cdo 651/2023-123 follows",
+        "23 Cdo 651/2023",
+      ),
+    ).toEqual({ kind: "chip-replaces-text", before: "", after: " follows" });
+    expect(
+      inlineDecisionCitationPresentation(
+        "23 Cdo 651/2023 follows",
+        "23 Cdo 651/2023-7",
+      ),
+    ).toEqual({ kind: "chip-replaces-text", before: "", after: " follows" });
+    expect(
+      inlineDecisionCitationPresentation(
+        "23 Cdo 651/2023-7 follows",
+        "23 Cdo 651/2023-7",
+      ),
+    ).toEqual({ kind: "chip-replaces-text", before: "", after: " follows" });
+  });
 });

@@ -139,6 +139,35 @@ test("two decisions from one court render each case number once as the accessibl
   }
 });
 
+test("different registry suffixes preserve the prose identifier without combining numbers", async () => {
+  const decision = { ...first, caseNumber: "23 Cdo 651/2023-7" };
+  const client = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false, staleTime: Number.POSITIVE_INFINITY },
+    },
+  });
+  clients.push(client);
+  client.setQueryData(decisionOptions(decision.id).queryKey, decision);
+  const proseCaseNumber = "23 Cdo 651/2023-123";
+  const screen = mount(
+    client,
+    <ChatDecisionCitation
+      decisionId={decision.id}
+      passage={proseCaseNumber}
+      interactive
+    />,
+  );
+  await waitFor(() =>
+    expect(
+      screen.container.querySelector("[data-decision-citation]")?.textContent,
+    ).toBe(proseCaseNumber),
+  );
+  expect(screen.container.textContent).not.toContain("-7-123");
+  expect(screen.container.textContent?.split("23 Cdo 651/2023")).toHaveLength(
+    2,
+  );
+});
+
 test("a real slug cache read contributes its resolved canonical decision to answer disambiguation", async () => {
   const client = clientWithDecisions();
   const params = createCaseLawDecisionRouteParams({

@@ -13,6 +13,7 @@ type DecisionCitationCourtInput = CourtAbbreviationInput & {
 // do not.
 const IDENTIFIER_CHARACTER = /[\p{L}\p{N}]/u;
 const CASE_NUMBER_SUFFIX = /[-\u2013\u2014]\s*[\p{L}\p{N}]+$/u;
+const LEADING_CASE_NUMBER_SUFFIX = /^[-\u2013\u2014]\s*[\p{L}\p{N}]+/u;
 
 /** The characters that identify a case, with each one's index in `value`. */
 const comparable = (value: string): { text: string; origin: number[] } => {
@@ -60,7 +61,7 @@ const caseNumberCandidates = (caseNumber: string): string[] => {
     firstDigit >= 0 && /\p{L}/u.test(withoutSuffix.slice(firstDigit + 1))
       ? withoutSuffix.slice(firstDigit)
       : "";
-  return [...new Set([caseNumber, withoutSuffix, withoutCourtPrefix])]
+  return [...new Set([withoutSuffix, withoutCourtPrefix])]
     .map(normalizeDecisionCaseNumber)
     .filter((candidate) => candidate.length > 0)
     .toSorted((left, right) => right.length - left.length);
@@ -72,6 +73,7 @@ export const citationTextCaseMatch = (
   caseNumber: string,
 ): CitationTextMatch | null => {
   const prose = comparable(text);
+  const storedSuffix = caseNumber.match(CASE_NUMBER_SUFFIX)?.at(0);
   for (const needle of caseNumberCandidates(caseNumber)) {
     for (
       let at = prose.text.indexOf(needle);
@@ -80,11 +82,22 @@ export const citationTextCaseMatch = (
     ) {
       const first = prose.origin.at(at) ?? 0;
       const last = prose.origin.at(at + needle.length - 1) ?? 0;
+      const suffix = text
+        .slice(last + 1)
+        .match(LEADING_CASE_NUMBER_SUFFIX)
+        ?.at(0);
+      const end = last + 1 + (suffix?.length ?? 0);
       if (
         !IDENTIFIER_CHARACTER.test(text.charAt(first - 1)) &&
-        !IDENTIFIER_CHARACTER.test(text.charAt(last + 1))
+        !IDENTIFIER_CHARACTER.test(text.charAt(end)) &&
+        !(
+          suffix !== undefined &&
+          storedSuffix !== undefined &&
+          normalizeDecisionCaseNumber(suffix) !==
+            normalizeDecisionCaseNumber(storedSuffix)
+        )
       ) {
-        return { start: first, end: last + 1 };
+        return { start: first, end };
       }
     }
   }
