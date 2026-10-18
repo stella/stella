@@ -304,7 +304,13 @@ test("a team skill is authored, used in chat, read by members, and removed", asy
         exact: true,
       });
       await expect(privateName).toBeEditable({ timeout: 30_000 });
-      await expect(memberPage.getByText("Only me")).toBeVisible();
+      // The visibility badge and the availability summary both say "Only me"
+      // for a private, unbound skill; assert the summary itself.
+      await expect(
+        memberPage
+          .getByText("Available in", { exact: true })
+          .locator("xpath=following-sibling::div[1]"),
+      ).toContainText("Only me");
       await commitSkillField({
         field: privateName,
         page: memberPage,
