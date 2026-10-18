@@ -33,6 +33,14 @@ describe(RULE, () => {
     ).toEqual([3, 5]);
   });
 
+  test("rejects checkout paths built by string concatenation", async () => {
+    expect(
+      await lint(
+        'import { rm, writeFile } from "node:fs/promises";\nimport path from "node:path";\nawait writeFile(import.meta.dir + "/baseline.json", "changed");\nconst checkout = path.join(import.meta.dir, "../..");\nawait rm(checkout + "/fixture.json");',
+      ),
+    ).toEqual([3, 5]);
+  });
+
   test("allows temporary and unrelated relative paths", async () => {
     expect(
       await lint(

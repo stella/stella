@@ -65,6 +65,16 @@ const createPathResolver = (context: ScopeContext) => {
     }
     if (
       isAstNode(node) &&
+      node.type === "BinaryExpression" &&
+      node.operator === "+"
+    ) {
+      return (
+        isCheckoutPath(node.left, new Set(seen)) ||
+        isCheckoutPath(node.right, new Set(seen))
+      );
+    }
+    if (
+      isAstNode(node) &&
       node.type === "TemplateLiteral" &&
       Array.isArray(node.expressions)
     ) {
