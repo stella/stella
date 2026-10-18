@@ -59,15 +59,23 @@ export const createMcpDiscoveryPreflightHeaders = () => {
 };
 
 // User-facing identifiers (auth.md PRM) shown to a person during the agent
-// claim ceremony. The logo is served from the web app's public assets.
+// claim ceremony and by MCP hosts listing the connector. The logo is a raster
+// PNG served from the web app's public assets: several hosts do not render SVG
+// icons, so every advertised logo points at this one file.
 const RESOURCE_NAME = "stella";
-const getResourceLogoUri = () =>
-  new URL("favicon.svg", `${env.FRONTEND_URL.replace(/\/$/u, "")}/`).toString();
+export const MCP_LOGO_PATH = "stella-logo-512.png";
+export const getMcpLogoUri = () =>
+  new URL(MCP_LOGO_PATH, `${env.FRONTEND_URL.replace(/\/$/u, "")}/`).toString();
+
+/** MCP `Implementation.icons` entry for `serverInfo`, same file as the PRM logo. */
+export const getMcpServerIcons = () => [
+  { src: getMcpLogoUri(), mimeType: "image/png", sizes: ["512x512"] },
+];
 
 export const getMcpProtectedResourceMetadata = (mode: McpMode = "default") => ({
   resource: getMcpResourceUrl(mode),
   resource_name: RESOURCE_NAME,
-  resource_logo_uri: getResourceLogoUri(),
+  resource_logo_uri: getMcpLogoUri(),
   authorization_servers: [getAuthIssuerUrl()],
   scopes_supported: [...getMcpResourceScopes(mode)],
   bearer_methods_supported: ["header"],

@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 
 import { env } from "@/api/env";
 import { getAuthIssuerUrl } from "@/api/lib/auth/auth-paths";
@@ -20,7 +22,10 @@ import {
   createMcpDiscoveryPreflightHeaders,
   createMcpMetadataHeaders,
   createMcpPreflightHeaders,
+  getMcpLogoUri,
   getMcpProtectedResourceMetadata,
+  getMcpServerIcons,
+  MCP_LOGO_PATH,
   getMcpWwwAuthenticateHeader,
 } from "@/api/mcp/metadata";
 
@@ -32,7 +37,7 @@ describe("MCP protected resource metadata", () => {
       resource: getMcpResourceUrl(),
       resource_name: "stella",
       resource_logo_uri: new URL(
-        "favicon.svg",
+        "stella-logo-512.png",
         `${env.FRONTEND_URL.replace(/\/$/u, "")}/`,
       ).toString(),
       scopes_supported: [...MCP_DEFAULT_RESOURCE_SCOPES],
@@ -85,7 +90,7 @@ describe("MCP protected resource metadata", () => {
       resource: getMcpResourceUrl("anonymized"),
       resource_name: "stella",
       resource_logo_uri: new URL(
-        "favicon.svg",
+        "stella-logo-512.png",
         `${env.FRONTEND_URL.replace(/\/$/u, "")}/`,
       ).toString(),
       scopes_supported: [...MCP_ANONYMIZED_RESOURCE_SCOPES],
@@ -111,7 +116,7 @@ describe("MCP protected resource metadata", () => {
       resource: getMcpResourceUrl("law"),
       resource_name: "stella",
       resource_logo_uri: new URL(
-        "favicon.svg",
+        "stella-logo-512.png",
         `${env.FRONTEND_URL.replace(/\/$/u, "")}/`,
       ).toString(),
       scopes_supported: MCP_LAW_RESOURCE_SCOPES,
@@ -226,5 +231,40 @@ describe("MCP protected resource metadata", () => {
     expect(getMcpWwwAuthenticateHeader({ error: "none" })).not.toContain(
       "error=",
     );
+  });
+});
+
+describe("MCP logo", () => {
+  // Hosts that list the connector do not all render SVG, so the advertised
+  // logo must be a PNG the web app actually serves at its advertised size.
+  test("is a 512x512 PNG served from the web app's public assets", () => {
+    const bytes = readFileSync(
+      path.resolve(import.meta.dir, "../../../web/public", MCP_LOGO_PATH),
+    );
+    expect([...bytes.subarray(0, 8)]).toEqual([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+    ]);
+    expect(bytes.subarray(12, 16).toString("ascii")).toBe("IHDR");
+    expect(bytes.readUInt32BE(16)).toBe(512);
+    expect(bytes.readUInt32BE(20)).toBe(512);
+  });
+
+  test("PRM and serverInfo icons advertise the same PNG", () => {
+    const logoUri = getMcpLogoUri();
+    expect(new URL(logoUri).pathname).toBe(`/${MCP_LOGO_PATH}`);
+    for (const mode of [
+      "default",
+      "advanced",
+      "documents",
+      "anonymized",
+      "law",
+    ] as const) {
+      expect(getMcpProtectedResourceMetadata(mode).resource_logo_uri).toBe(
+        logoUri,
+      );
+    }
+    expect(getMcpServerIcons()).toEqual([
+      { mimeType: "image/png", sizes: ["512x512"], src: logoUri },
+    ]);
   });
 });
