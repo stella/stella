@@ -42,6 +42,8 @@ const reportedLine = (diagnostic: unknown, code: string): number | null => {
 };
 
 type LintSingleRuleOptions = {
+  /** Test-only work that may delay a case before its scratch files are ready. */
+  beforeCaseReadyForTest?: () => Promise<void>;
   /** Test-only wrapper for a plugin factory; production config is unchanged. */
   pluginPath?: string;
   /** Repository overrides projected onto the rule being exercised. */
@@ -88,10 +90,17 @@ const spawnOxlint = async (
 // A test process owns at most one oxlint subprocess at a time; concurrent
 // tests queue here, and cases that share a configuration join one run.
 let oxlintSlot: Promise<unknown> = Promise.resolve();
+let testLintSlot: Promise<unknown> = Promise.resolve();
 
 const withOxlintSlot = async <T>(run: () => Promise<T>): Promise<T> => {
   const next = oxlintSlot.then(run);
   oxlintSlot = next.catch(() => undefined);
+  return next;
+};
+
+const withTestLintSlot = async <T>(run: () => Promise<T>): Promise<T> => {
+  const next = testLintSlot.then(run);
+  testLintSlot = next.catch(() => undefined);
   return next;
 };
 
@@ -134,7 +143,7 @@ type SharedOutcome =
   | { readonly alone: AloneRun };
 
 type SharedRequest = {
-  readonly lintCase: LintCase;
+  readonly lintCase: Promise<LintCase>;
   readonly resolve: (outcome: SharedOutcome) => void;
   readonly reject: (reason: unknown) => void;
 };
@@ -218,16 +227,19 @@ const lintTogether = async (
   requests: readonly SharedRequest[],
   code: string,
 ): Promise<SharedOutcome[]> => {
-  const [first] = requests;
+  const [firstRequest] = requests;
+  const first = await firstRequest?.lintCase;
   if (first === undefined) {
     return [];
   }
-  claimedBatches.push({ code, cases: requests.length });
   if (requests.length > 1) {
-    const sourceFiles = requests.map(({ lintCase }) => lintCase.sourceFile);
+    const lintCases = await Promise.all(
+      requests.map(async ({ lintCase }) => await lintCase),
+    );
+    const sourceFiles = lintCases.map(({ sourceFile }) => sourceFile);
     const lines = sharedLines(
       await spawnOxlint(
-        ["-c", first.lintCase.configPath, "-f", "json", ...sourceFiles],
+        ["-c", first.configPath, "-f", "json", ...sourceFiles],
         REPOSITORY_ROOT,
       ),
       sourceFiles,
@@ -235,7 +247,7 @@ const lintTogether = async (
     );
     if (lines !== null) {
       sharedRuns.push({ code, cases: requests.length });
-      return requests.map(({ lintCase }, index) => ({
+      return lintCases.map((lintCase, index) => ({
         shared: {
           lines: lines[index] ?? [],
           source: readFileSync(lintCase.sourceFile, "utf-8"),
@@ -244,10 +256,30 @@ const lintTogether = async (
     }
   }
   const outcomes: SharedOutcome[] = [];
-  for (const { lintCase } of requests) {
-    outcomes.push({ alone: await lintAlone(lintCase) });
+  for (const request of requests) {
+    outcomes.push({ alone: await lintAlone(await request.lintCase) });
   }
   return outcomes;
+};
+
+type LintRunner = (
+  requests: readonly SharedRequest[],
+  code: string,
+) => Promise<SharedOutcome[]>;
+
+const lintRunnersForTest = new Map<string, LintRunner>();
+
+/** Replace oxlint execution while retaining the real batching scheduler. */
+export const setLintRunnerForTest = (code: string, runner: LintRunner) => {
+  const previous = lintRunnersForTest.get(code);
+  lintRunnersForTest.set(code, runner);
+  return () => {
+    if (previous === undefined) {
+      lintRunnersForTest.delete(code);
+    } else {
+      lintRunnersForTest.set(code, previous);
+    }
+  };
 };
 
 const pendingByConfig = new Map<string, SharedRequest[]>();
@@ -277,7 +309,7 @@ export const lintsAlone = ({
 const lintShared = async (
   configKey: string,
   code: string,
-  lintCase: LintCase,
+  lintCase: Promise<LintCase>,
 ): Promise<SharedOutcome> =>
   new Promise((resolve, reject) => {
     const pending = pendingByConfig.get(configKey);
@@ -290,7 +322,7 @@ const lintShared = async (
       return;
     }
     pendingByConfig.set(configKey, [{ lintCase, resolve, reject }]);
-    withOxlintSlot(async () => {
+    const runBatch = async () => {
       const gate = pendingGates.get(code);
       if (gate !== undefined) {
         if (gate.cases <= 1) {
@@ -303,8 +335,9 @@ const lintShared = async (
       await nextTurn();
       const requests = pendingByConfig.get(configKey) ?? [];
       pendingByConfig.delete(configKey);
+      claimedBatches.push({ code, cases: requests.length });
       const outcomes = await Result.tryPromise(async () =>
-        lintTogether(requests, code),
+        (lintRunnersForTest.get(code) ?? lintTogether)(requests, code),
       );
       for (const [index, request] of requests.entries()) {
         if (Result.isError(outcomes)) {
@@ -318,7 +351,11 @@ const lintShared = async (
           }
         }
       }
-    }).catch(reject);
+    };
+    const scheduled = lintRunnersForTest.has(code)
+      ? withTestLintSlot(runBatch)
+      : withOxlintSlot(runBatch);
+    scheduled.catch(reject);
   });
 
 const recordCoverage = (ruleId: string, lines: readonly number[]) => {
@@ -348,17 +385,13 @@ export const runSingleRule = async (
     fix = false,
     ruleOptions,
     ruleOptionsForRoot,
+    beforeCaseReadyForTest,
     sourcePath = "source.ts",
     cwd = "repository",
   }: LintSingleRuleOptions = {},
 ) => {
-  // Override globs must use the real cwd when the temporary root is a symlink.
-  const directory = await realpath(
-    await mkdtemp(path.join(tmpdir(), `stella-${ruleName}-`)),
-  );
-  const options = ruleOptionsForRoot?.(directory) ?? ruleOptions;
-  const lintResult = await Result.tryPromise(async () => {
-    const config = `${JSON.stringify({
+  const makeConfig = (options: unknown) =>
+    `${JSON.stringify({
       categories: { correctness: "off" },
       settings,
       overrides,
@@ -375,22 +408,49 @@ export const runSingleRule = async (
           options === undefined ? "error" : ["error", options],
       },
     })}\n`;
+  let directory: string | undefined;
+  const prepareLintCase = async () => {
+    await beforeCaseReadyForTest?.();
+    // Override globs must use the real cwd when the temporary root is a symlink.
+    directory = await realpath(
+      await mkdtemp(path.join(tmpdir(), `stella-${ruleName}-`)),
+    );
+    const config = makeConfig(ruleOptionsForRoot?.(directory) ?? ruleOptions);
     const configPath = path.join(directory, "oxlint.json");
     await Bun.write(configPath, config);
     const sourceFile = path.join(directory, sourcePath);
     await Bun.write(sourceFile, source);
-    const lintCase: LintCase = {
+    return {
       configPath,
       sourceFile,
       fix,
       directory: cwd === "scratch" ? directory : undefined,
       sourcePath,
-    };
-    return lintsAlone({ cwd, overrides, fix })
-      ? { alone: await withOxlintSlot(async () => lintAlone(lintCase)) }
-      : await lintShared(config, `${plugin}(${ruleName})`, lintCase);
-  });
-  await rm(directory, { force: true, recursive: true });
+    } satisfies LintCase;
+  };
+  const code = `${plugin}(${ruleName})`;
+  const runsAlone =
+    lintsAlone({ cwd, overrides, fix }) || ruleOptionsForRoot !== undefined;
+  const lintCase = prepareLintCase();
+  // Registration is deliberately synchronous: no scratch-file await may let
+  // a later case overtake this case and split one concurrent cohort.
+  const scheduled = runsAlone
+    ? withOxlintSlot(async () => {
+        const outcomes = await (lintRunnersForTest.get(code) ?? lintTogether)(
+          [{ lintCase, resolve: () => undefined, reject: () => undefined }],
+          code,
+        );
+        const outcome = outcomes.at(0);
+        if (outcome === undefined) {
+          return panic("Missing lone oxlint outcome");
+        }
+        return outcome;
+      })
+    : lintShared(makeConfig(ruleOptions), code, lintCase);
+  const lintResult = await Result.tryPromise(async () => await scheduled);
+  if (directory !== undefined) {
+    await rm(directory, { force: true, recursive: true });
+  }
   if (Result.isError(lintResult)) {
     return panic(`oxlint run failed: ${lintResult.error.message}`);
   }

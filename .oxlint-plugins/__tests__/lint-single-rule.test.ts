@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 
 import {
   claimedBatches,
@@ -7,9 +8,38 @@ import {
   lintSingleRule,
   lintsAlone,
   runSingleRule,
+  setLintRunnerForTest,
   sharedLines,
   sharedRuns,
 } from "./lint-single-rule.ts";
+
+const nextImmediate = async () =>
+  new Promise<void>((resolve) => {
+    setImmediate(resolve);
+  });
+
+const waitTurns = async (turns: readonly ("micro" | "macro")[]) => {
+  for (const turn of turns) {
+    await (turn === "micro" ? Promise.resolve() : nextImmediate());
+  }
+};
+
+const fakePatternRunner = (code: string, pattern: string, batches: number[]) =>
+  setLintRunnerForTest(code, async (requests) => {
+    batches.push(requests.length);
+    return await Promise.all(
+      requests.map(async ({ lintCase }) => {
+        const { sourceFile } = await lintCase;
+        const source = readFileSync(sourceFile, "utf-8");
+        const lines = source
+          .split("\n")
+          .flatMap((line, index) =>
+            line.includes(pattern) ? [index + 1] : [],
+          );
+        return { shared: { lines, source } };
+      }),
+    );
+  });
 
 const CODE = "plugin(rule)";
 const FILES = ["/scratch/a/source.ts", "/scratch/b/source.ts"];
@@ -112,6 +142,119 @@ test("concurrent cases of one configuration share a run and keep their own lines
   expect(sharedRuns.filter((run) => run.code === code).slice(before)).toEqual([
     { code, cases: 3 },
   ]);
+});
+
+test("a held cohort stays one batch across every pre-shared await interleaving", async () => {
+  const pattern = "batch-marker";
+  const code = "batch-interleaving(batch-interleaving)";
+  const blockerCode = "batch-blocker(batch-blocker)";
+  const batches: number[] = [];
+  const restore = fakePatternRunner(code, pattern, batches);
+  const orders = [
+    [0, 1, 2],
+    [0, 2, 1],
+    [1, 0, 2],
+    [1, 2, 0],
+    [2, 0, 1],
+    [2, 1, 0],
+  ];
+  const sources = [
+    'const clean = "batch";',
+    [pattern, "const middle = 1;", pattern].join("\n"),
+    ["const first = 1;", pattern].join("\n"),
+  ];
+  try {
+    for (const order of orders) {
+      const started = Promise.withResolvers<undefined>();
+      const release = Promise.withResolvers<undefined>();
+      const restoreBlocker = setLintRunnerForTest(
+        blockerCode,
+        async (requests) => {
+          started.resolve(undefined);
+          await release.promise;
+          return await Promise.all(
+            requests.map(async ({ lintCase }) => {
+              const { sourceFile } = await lintCase;
+              return {
+                shared: {
+                  lines: [],
+                  source: readFileSync(sourceFile, "utf-8"),
+                },
+              };
+            }),
+          );
+        },
+      );
+      const blocker = lintSingleRule("batch-blocker", "const blocker = 1;");
+      await started.promise;
+      const pending = Promise.all(
+        sources.map(
+          async (source, index) =>
+            await lintSingleRule("batch-interleaving", source, {
+              beforeCaseReadyForTest: async () => {
+                const rank = order.indexOf(index);
+                await waitTurns(
+                  Array.from({ length: rank }, (_, turn) =>
+                    turn % 2 === 0 ? "micro" : "macro",
+                  ),
+                );
+              },
+            }),
+        ),
+      );
+      release.resolve(undefined);
+      const results = await pending;
+      await blocker;
+      restoreBlocker();
+      expect(results).toEqual([[], [1, 3], [2]]);
+    }
+  } finally {
+    restore();
+  }
+  expect(batches).toEqual(orders.map(() => sources.length));
+});
+
+test("seeded delay orders preserve lines in one held batch", async () => {
+  const pattern = "seed-marker";
+  const code = "seeded-batching(seeded-batching)";
+  const batches: number[] = [];
+  const restore = fakePatternRunner(code, pattern, batches);
+  const sources = [
+    [pattern, "const second = 2;"].join("\n"),
+    'const clean = "seed";',
+    ["const first = 1;", pattern, pattern].join("\n"),
+  ];
+  try {
+    for (let seed = 1; seed <= 12; seed += 1) {
+      let state = seed;
+      const order = [0, 1, 2];
+      for (let index = order.length - 1; index > 0; index -= 1) {
+        state = (state * 16_807) % 2_147_483_647;
+        const swap = state % (index + 1);
+        [order[index], order[swap]] = [order[swap] ?? 0, order[index] ?? 0];
+      }
+      holdSharedRunUntilPendingForTest(code, sources.length);
+      const results = await Promise.all(
+        sources.map(
+          async (source, index) =>
+            await lintSingleRule("seeded-batching", source, {
+              beforeCaseReadyForTest: async () => {
+                const rank = order.indexOf(index);
+                await waitTurns(
+                  Array.from({ length: rank + 1 }, (_, turn) =>
+                    (seed + turn) % 2 === 0 ? "macro" : "micro",
+                  ),
+                );
+              },
+            }),
+        ),
+      );
+      expect(results).toEqual([[1], [], [2, 3]]);
+    }
+  } finally {
+    restore();
+  }
+  expect(batches).toEqual(Array.from({ length: 12 }, () => sources.length));
 });
 
 test("concurrent cases keep their own lines across any run grouping", async () => {
