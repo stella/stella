@@ -1,7 +1,5 @@
-import { panic } from "better-result";
 import { expect, test } from "bun:test";
 
-import type { ParsedList, SanctionsEntry } from "./entry";
 import {
   buildScreeningIndex,
   buildScreeningIndexCooperatively,
@@ -10,157 +8,22 @@ import {
 import type { ScreeningQuery } from "./screening";
 import { compactLists } from "./test-fixtures/compact-lists";
 import {
+  assertLegacyEquivalence,
+  equivalenceLists,
+  expectAliasHit,
+  legacyScreenOutcome,
+  legacyOutcomes,
+  successfulQueries,
+} from "./test-fixtures/legacy-equivalence";
+import {
   buildScreeningIndex as buildLegacyScreeningIndex,
   screen as legacyScreen,
 } from "./test-fixtures/legacy-screening";
 
-type SeededEntryOptions = {
-  base: SanctionsEntry;
-  sourceId: string;
-  names: SanctionsEntry["names"];
-};
-
-const seededEntry = ({
-  base,
-  sourceId,
-  names,
-}: SeededEntryOptions): SanctionsEntry => ({
-  ...base,
-  sourceId,
-  names,
-  entityType: "person",
-});
-
-const equivalenceLists = (counts = [20_000, 420, 380]): ParsedList[] => {
-  const lists = compactLists(counts);
-  const ofac = lists.at(0);
-  const base = ofac?.entries.at(0);
-  if (ofac === undefined || base === undefined) {
-    throw new Error("compact list fixture has no OFAC entry");
-  }
-  ofac.entries.push(
-    seededEntry({
-      base,
-      sourceId: "transliterations",
-      names: [
-        { name: "Zerovan Velnakov", quality: "strong" },
-        { name: "Velnakov, Zerovan", quality: "strong" },
-        { name: "Зерован Велнаков", quality: "strong" },
-        { name: "Zerowan Welnakow", quality: "weak" },
-      ],
-    }),
-    seededEntry({
-      base,
-      sourceId: "joined-name",
-      names: [
-        { name: "Nelori VELNO-RAK", quality: "strong" },
-        { name: "Talunor Velmoraki", quality: "strong" },
-      ],
-    }),
-    seededEntry({
-      base,
-      sourceId: "duplicate-alias-quality",
-      names: [
-        { name: "Kelori Al-Velnar", quality: "weak" },
-        { name: "Kelori Al-Velnar", quality: "strong" },
-        { name: "Kelori Velnar", quality: "weak" },
-      ],
-    }),
-  );
-  return lists;
-};
-
-const successfulQueries = (lists: readonly ParsedList[]): ScreeningQuery[] => {
-  const queries: ScreeningQuery[] = [];
-  for (const list of lists) {
-    for (const entry of list.entries.slice(0, 3)) {
-      const primary = entry.names.at(0);
-      const alias = entry.names.at(-1);
-      if (primary === undefined || alias === undefined) {
-        throw new Error("compact list fixture has a nameless entry");
-      }
-      queries.push(
-        { name: primary.name, entityType: entry.entityType },
-        { name: alias.name, entityType: entry.entityType },
-      );
-    }
-  }
-  queries.push(
-    { name: "Zerovan Velnakov", entityType: "person" },
-    { name: "Velnakov, Zerovan", entityType: "person" },
-    { name: "Зерован Велнаков", entityType: "person" },
-    { name: "Zerowan Welnakow", entityType: "person" },
-    { name: "Nelori Velnorak", entityType: "person" },
-    { name: "Talunor Vel Moraki", entityType: "person" },
-    { name: "Kelori Al-Velnar", entityType: "person" },
-    { name: "Kelori Velnar", entityType: "person" },
-    { name: "unlisted unfamiliar name", entityType: "person" },
-    { name: "Zerovn Velnakov", entityType: "person" },
-  );
-  return queries;
-};
-
-type LegacyEquivalenceOptions = {
-  index: ReturnType<typeof buildScreeningIndex>;
-  expected: readonly LegacyScreenOutcome[];
-  queries: readonly ScreeningQuery[];
-};
-
-const legacyScreenOutcome = (result: ReturnType<typeof legacyScreen>) =>
-  result.isErr() ? { error: result.error } : { value: result.value };
-
-type LegacyScreenOutcome = ReturnType<typeof legacyScreenOutcome>;
-
-const assertLegacyEquivalence = ({
-  index,
-  expected,
-  queries,
-}: LegacyEquivalenceOptions) => {
-  for (const [queryIndex, query] of queries.entries()) {
-    const options = { cutoff: 0.65, limit: 25 };
-    const legacyResult =
-      expected.at(queryIndex) ?? panic("Missing legacy screening result");
-    const actual = screen(index, query, options);
-    expect(legacyScreenOutcome(actual)).toEqual(legacyResult);
-  }
-};
-
-type AliasHitOptions = {
-  index: ReturnType<typeof buildScreeningIndex>;
-  name: string;
-  expectedName: string;
-  sourceId?: string;
-};
-
-const expectAliasHit = ({
-  index,
-  name,
-  expectedName,
-  sourceId = "transliterations",
-}: AliasHitOptions) => {
-  const matches = screen(
-    index,
-    { name, entityType: "person" },
-    { cutoff: 0.65 },
-  ).unwrap().possibleMatches;
-  expect(matches.map(({ entry }) => entry.sourceId)).toContain(sourceId);
-  expect(
-    matches.find(({ entry }) => entry.sourceId === sourceId)?.evidence
-      .matchedName,
-  ).toBe(expectedName);
-};
-
 test("compact and cooperative screening preserve legacy results and full entries", async () => {
-  const lists = equivalenceLists();
+  const lists = equivalenceLists([3, 3, 3]);
   const queries = successfulQueries(lists);
-  const expected = (() => {
-    const legacy = buildLegacyScreeningIndex(lists);
-    return queries.map((query) =>
-      legacyScreenOutcome(
-        legacyScreen(legacy, query, { cutoff: 0.65, limit: 25 }),
-      ),
-    );
-  })();
+  const expected = legacyOutcomes(lists, queries);
   Bun.gc(true);
   {
     const current = buildScreeningIndex(lists);
@@ -205,7 +68,7 @@ test("compact and cooperative screening preserve legacy results and full entries
     lists.reduce((count, list) => count + list.entries.length, 0),
   );
   assertLegacyEquivalence({ index: cooperative, expected, queries });
-}, 120_000);
+});
 
 test("compact screening preserves legacy work-limit and query errors", () => {
   Bun.gc(true);
