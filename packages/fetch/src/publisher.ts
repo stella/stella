@@ -424,9 +424,12 @@ export const readBoundedBody = async (
   let exceeded = false;
   // oxlint-disable-next-line require-stream-reader-disposal/require-stream-reader-disposal -- the finally block below cancels with the same overall deadline before releasing
   const reader = response.body.getReader();
+  // One abort listener for the whole read: a race per chunk would leave a
+  // listener attached for every chunk until the deadline.
+  const aborted = abortPromise(signal);
   try {
     while (true) {
-      const next = await Promise.race([reader.read(), abortPromise(signal)]);
+      const next = await Promise.race([reader.read(), aborted]);
       if (next.done) {
         break;
       }
@@ -439,7 +442,7 @@ export const readBoundedBody = async (
     }
   } finally {
     try {
-      await Promise.race([reader.cancel(), abortPromise(signal)]);
+      await Promise.race([reader.cancel(), aborted]);
     } finally {
       reader.releaseLock();
     }
@@ -478,8 +481,12 @@ const readRobotsText = async (response: Response, signal: AbortSignal) => {
     : Result.ok(new TextDecoder().decode(bytes.value));
 };
 
+// The Fetch standard's redirect statuses; 300 and 304 are returned as is.
+const REDIRECT_STATUSES: ReadonlySet<number> = new Set([
+  301, 302, 303, 307, 308,
+]);
 const isRedirect = (response: Response) =>
-  response.status >= 300 && response.status < 400;
+  REDIRECT_STATUSES.has(response.status);
 
 const validatePublisherTarget = async (
   url: URL,

@@ -372,6 +372,69 @@ describe("publisher scheduler", () => {
     expect(cancelled).toBe(true);
   });
 
+  test("bounded body reads attach one abort listener however many chunks arrive", async () => {
+    const controller = new AbortController();
+    let listeners = 0;
+    const { signal } = controller;
+    const addEventListener = signal.addEventListener.bind(signal);
+    signal.addEventListener = (
+      ...args: Parameters<typeof addEventListener>
+    ) => {
+      listeners += 1;
+      addEventListener(...args);
+    };
+    let chunks = 0;
+    const response = new Response(
+      new ReadableStream<Uint8Array>({
+        pull: (stream) => {
+          if (chunks === 1000) {
+            stream.close();
+            return;
+          }
+          chunks += 1;
+          stream.enqueue(new Uint8Array(1));
+        },
+      }),
+    );
+
+    const read = await readBoundedBody(response, { maxBytes: 4096, signal });
+
+    expect(Result.isOk(read) && read.value.byteLength).toBe(1000);
+    expect(listeners).toBe(1);
+  });
+
+  test.each([300, 304])(
+    "returns a %d response carrying Location without following it",
+    async (status) => {
+      const requested: string[] = [];
+      const request = createPolitePublisherFetch({
+        validateTarget: allowTarget,
+        fetcher: async (input) => {
+          const url = new URL(input instanceof Request ? input.url : input);
+          requested.push(url.href);
+          if (url.pathname === "/robots.txt") {
+            return new Response(null, { status: 404 });
+          }
+          return new Response(null, {
+            status,
+            headers: { location: "https://publisher.example/elsewhere" },
+          });
+        },
+        defaultMinimumIntervalMs: 0,
+      });
+
+      const outcome = await request("https://publisher.example/case");
+
+      expect(Result.isOk(outcome) && outcome.value.response.status).toBe(
+        status,
+      );
+      expect(requested).toEqual([
+        "https://publisher.example/robots.txt",
+        "https://publisher.example/case",
+      ]);
+    },
+  );
+
   test("bounded body reads reject a stalled body at the deadline", async () => {
     const response = new Response(new ReadableStream<Uint8Array>());
     const read = await Result.tryPromise(async () =>
