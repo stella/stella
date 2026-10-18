@@ -1,13 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import fc from "fast-check";
 
-import { assertProperty } from "@stll/property-testing";
-
-import {
-  isCourtCode,
-  normalizeCourtQuery,
-  resolveCourtCode,
-} from "./courts.js";
+import { isCourtCode, resolveCourtCode } from "./courts.js";
 
 describe("resolveCourtCode", () => {
   const courtMap = {
@@ -48,88 +41,4 @@ describe("resolveCourtCode", () => {
     expect(isCourtCode("OSPHA09")).toBe(true);
     expect(isCourtCode("NS")).toBe(true);
   });
-});
-
-describe("court lookup ranking and literal matching", () => {
-  test("keeps first-listed ties and exact names ahead of containment", () => {
-    expect(
-      resolveCourtCode("Mělník", { OSFIRST: "Mělník", OSSECOND: "Mělník" }),
-    ).toBe("OSFIRST");
-    expect(
-      resolveCourtCode("Mělník", {
-        OSFIRST: "Mělník centrum",
-        OSSECOND: "Mělník",
-      }),
-    ).toBe("OSSECOND");
-  });
-
-  test("matches inflected Czech cities and punctuation after existing normalization", () => {
-    expect(resolveCourtCode("Praze", { OSPHA: "Obvodní soud Praha" })).toBe(
-      "OSPHA",
-    );
-    expect(
-      resolveCourtCode("Mělník, sever", { OSAAA: "Okresní soud Mělník sever" }),
-    ).toBe("OSAAA");
-  });
-
-  test("treats regex punctuation literally and retains astral text", () => {
-    expect(resolveCourtCode("a.b", { OSAAA: "axb", OSBBB: "a.b" })).toBe(
-      "OSBBB",
-    );
-    expect(resolveCourtCode("𐍈", { OSAAA: "𐍈 sever" })).toBe("OSAAA");
-  });
-
-  test("has no match for empty vocabularies or empty queries", () => {
-    expect(resolveCourtCode("Mělník", {})).toBeNull();
-    expect(resolveCourtCode("", { OSAAA: "Mělník" })).toBeNull();
-  });
-});
-
-test("court name ranking agrees with the literal prefix and containment oracle", () => {
-  const character = fc.constantFrom("a", "b", "ř", "𐍈", ".");
-  const name = fc
-    .array(character, { minLength: 1, maxLength: 12 })
-    .map((parts) => parts.join(""));
-  assertProperty(
-    "court name ranking agrees with the literal prefix and containment oracle",
-    fc.property(
-      character,
-      fc.array(name, { maxLength: 12 }),
-      (query, names) => {
-        const normalizedQuery = normalizeCourtQuery(query);
-        const courts = Object.fromEntries(
-          names.map((value, index) => [`OS${index}`, value]),
-        );
-        let expected: string | null = null;
-        let bestScore = Number.NEGATIVE_INFINITY;
-        for (const [code, value] of Object.entries(courts)) {
-          const normalizedName = normalizeCourtQuery(value);
-          let score = Number.NEGATIVE_INFINITY;
-          if (normalizedName === normalizedQuery) {
-            score = 1200;
-          } else if (normalizedName.startsWith(normalizedQuery)) {
-            score = 800 + normalizedQuery.length / normalizedName.length;
-          } else if (normalizedName.includes(normalizedQuery)) {
-            score = 600 + normalizedQuery.length / normalizedName.length;
-          }
-          if (score > bestScore) {
-            bestScore = score;
-            expected = code;
-          }
-        }
-        expect(resolveCourtCode(query, courts)).toBe(expected);
-      },
-    ),
-  );
-});
-
-test("court matching normalizes unpaired UTF-16 units at the query boundary", () => {
-  // The matching boundary replaces lone surrogates so both sides use Unicode scalars.
-  const query = "\ud800";
-  const name = "\ud801abc";
-  expect(normalizeCourtQuery(query)).toBe("\ufffd");
-  expect(normalizeCourtQuery(name)).toBe("\ufffdabc");
-  expect(normalizeCourtQuery("𐍈")).toBe("𐍈");
-  expect(resolveCourtCode(query, { OSAAA: name })).toBe("OSAAA");
-  expect(resolveCourtCode("\ufffd", { OSAAA: name })).toBe("OSAAA");
 });

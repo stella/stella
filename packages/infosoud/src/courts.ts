@@ -1,4 +1,3 @@
-import { AhoCorasick } from "@stll/aho-corasick";
 import { stripDiacritics } from "@stll/text-normalize";
 
 import {
@@ -60,9 +59,7 @@ export const buildCourtMapFromEntries = (
 };
 
 export const normalizeCourtQuery = (value: string): string => {
-  let normalized = stripDiacritics(
-    value.toWellFormed().trim().toLocaleLowerCase("cs-CZ"),
-  )
+  let normalized = stripDiacritics(value.trim().toLocaleLowerCase("cs-CZ"))
     .replaceAll(/(?<letter>[a-z])(?<digit>\d)/gu, "$<letter> $<digit>")
     .replaceAll(/(?<digit>\d)(?<letter>[a-z])/gu, "$<digit> $<letter>")
     .replaceAll(/[-–—,/]+/gu, " ")
@@ -84,9 +81,7 @@ export const normalizeCourtQuery = (value: string): string => {
 };
 
 const detectCourtTypeHint = (value: string): CourtType | null => {
-  const normalized = stripDiacritics(
-    value.toWellFormed().trim().toLocaleLowerCase("cs-CZ"),
-  )
+  const normalized = stripDiacritics(value.trim().toLocaleLowerCase("cs-CZ"))
     .replaceAll(/[-–—,/]+/gu, " ")
     .replaceAll(/\s+/gu, " ");
   const tokens = normalized.split(" ");
@@ -142,15 +137,6 @@ const isTokenSubset = (
   return queryTokens.every((token) => candidateSet.has(token));
 };
 
-let cachedNameMatcher: { query: string; matcher: AhoCorasick } | undefined;
-
-const courtNameMatcher = (query: string) => {
-  if (cachedNameMatcher?.query !== query) {
-    cachedNameMatcher = { query, matcher: new AhoCorasick([query]) };
-  }
-  return cachedNameMatcher.matcher;
-};
-
 export const resolveCourtCode = (
   query: string,
   courtMap: CourtMap,
@@ -164,7 +150,6 @@ export const resolveCourtCode = (
   const queryCourtType = detectCourtTypeHint(query);
   const queryTokens = tokenizeCourtValue(query);
   const canFuzzyMatch = queryTokens.length > 0;
-  const nameMatcher = courtNameMatcher(normalizedQuery);
   let bestCode: string | null = null;
   let bestScore = Number.NEGATIVE_INFINITY;
 
@@ -177,9 +162,6 @@ export const resolveCourtCode = (
     const nameCompact = compactCourtValue(normalizedName);
     const nameTokens = tokenizeCourtValue(fullName);
 
-    const nameMatch = canFuzzyMatch
-      ? nameMatcher.findIter(normalizedName).at(0)
-      : undefined;
     let score = Number.NEGATIVE_INFINITY;
 
     if (
@@ -196,9 +178,9 @@ export const resolveCourtCode = (
       score =
         1000 +
         queryTokens.length / Math.max(nameTokens.length, queryTokens.length);
-    } else if (nameMatch?.start === 0) {
+    } else if (canFuzzyMatch && normalizedName.startsWith(normalizedQuery)) {
       score = 800 + normalizedQuery.length / normalizedName.length;
-    } else if (nameMatch !== undefined) {
+    } else if (canFuzzyMatch && normalizedName.includes(normalizedQuery)) {
       score = 600 + normalizedQuery.length / normalizedName.length;
     }
 
