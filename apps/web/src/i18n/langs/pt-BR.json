@@ -1602,6 +1602,15 @@
         "team": "Habilidades de IA da equipe"
       }
     },
+    "sourceChips": {
+      "alsoConsulted": "Também consultadas ({count})",
+      "courtTiers": {
+        "constitutional": "Tribunais constitucionais",
+        "other": "Demais tribunais",
+        "regional": "Tribunais regionais e de justiça",
+        "supreme": "Tribunais superiores"
+      }
+    },
     "sourcePlaceholder": "Conversar sobre {title}",
     "sourcePlaceholderAction": "Conversar sobre",
     "sources": "Fontes:",

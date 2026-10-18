@@ -1602,6 +1602,15 @@
         "team": "Tímové AI zručnosti"
       }
     },
+    "sourceChips": {
+      "alsoConsulted": "Tiež konzultované ({count})",
+      "courtTiers": {
+        "constitutional": "Ústavné súdy",
+        "other": "Ostatné súdy",
+        "regional": "Krajské súdy",
+        "supreme": "Najvyššie súdy"
+      }
+    },
     "sourcePlaceholder": "Chatovať o {title}",
     "sourcePlaceholderAction": "Chatovať o",
     "sources": "Zdroje:",

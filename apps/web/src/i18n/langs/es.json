@@ -1602,6 +1602,15 @@
         "team": "Habilidades del equipo"
       }
     },
+    "sourceChips": {
+      "alsoConsulted": "También consultadas ({count})",
+      "courtTiers": {
+        "constitutional": "Tribunales constitucionales",
+        "other": "Otros tribunales",
+        "regional": "Audiencias y tribunales regionales",
+        "supreme": "Tribunales supremos"
+      }
+    },
     "sourcePlaceholder": "Chat sobre {title}",
     "sourcePlaceholderAction": "Chat sobre",
     "sources": "Fuentes:",

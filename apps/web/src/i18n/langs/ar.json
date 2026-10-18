@@ -1602,6 +1602,15 @@
         "team": "مهارات الفريق"
       }
     },
+    "sourceChips": {
+      "alsoConsulted": "تمت مراجعتها أيضًا ({count})",
+      "courtTiers": {
+        "constitutional": "المحاكم الدستورية",
+        "other": "المحاكم الأخرى",
+        "regional": "محاكم الاستئناف والمحاكم الإقليمية",
+        "supreme": "المحاكم العليا"
+      }
+    },
     "sourcePlaceholder": "تحدّث عن {title}",
     "sourcePlaceholderAction": "تحدّث عن",
     "sources": "المصادر:",

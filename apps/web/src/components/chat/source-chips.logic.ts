@@ -1,4 +1,6 @@
 import { isBusinessRegistrySlug } from "@stll/api-contract";
+import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
+import type { CourtTierLabel } from "@stll/api-contract/case-law-court-tiers";
 import {
   isCaseLawDecisionId,
   parseCaseLawDecisionPath,
@@ -6,7 +8,14 @@ import {
 import { parseStatutePath } from "@stll/api-contract/statute-route";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 
-import type { ChatToolCallPart } from "@/components/chat/chat-ui-tools";
+import {
+  chatAnswerDecisionTargets,
+  chatAnswerMarkdownDocuments,
+} from "@/components/chat/chat-decision-citations.logic";
+import type {
+  ChatToolCallPart,
+  ChatUIMessage,
+} from "@/components/chat/chat-ui-tools";
 import type {
   BusinessRegistrySourceReference,
   CaseLawDecisionSourceReference,
@@ -20,7 +29,58 @@ export type SourceDocumentEntry = {
   id?: string | undefined;
 };
 
-export type ExternalSourceEntry = ExternalSourceReference;
+export type CaseLawSourceMetadata = {
+  caseNumber: string;
+  court: string;
+  courtShortCode: string;
+  decisionDate?: string | null | undefined;
+  decisionId?: string | undefined;
+  holding?: string | undefined;
+  tier: CourtTierLabel;
+};
+
+export type ExternalSourceEntry = ExternalSourceReference & {
+  caseLaw?: CaseLawSourceMetadata | undefined;
+};
+
+export type SourceChipEntry =
+  | {
+      relation: "cited" | "consulted";
+      type: "document";
+      source: SourceDocumentEntry;
+    }
+  | {
+      relation: "cited" | "consulted";
+      type: "external";
+      source: ExternalSourceEntry;
+    }
+  | {
+      relation: "cited" | "consulted";
+      type: "case-law";
+      source: ExternalSourceEntry;
+      caseLaw: CaseLawSourceMetadata;
+    };
+
+const CZECH_COURT_TIER_BY_SHORT_CODE = {
+  ÚS: "constitutional",
+  NS: "supreme",
+  NSS: "supreme",
+  VS: "regional",
+  KS: "regional",
+  MS: "other",
+  OS: "other",
+} as const satisfies Readonly<Record<string, CourtTierLabel>>;
+
+export const courtTierForSource = (courtShortCode: string): CourtTierLabel =>
+  CZECH_COURT_TIER_BY_SHORT_CODE[
+    courtShortCode as keyof typeof CZECH_COURT_TIER_BY_SHORT_CODE
+  ] ?? "other";
+
+export const sortCourtTiers = (tiers: readonly CourtTierLabel[]) =>
+  tiers.toSorted(
+    (left, right) =>
+      COURT_TIER_LABELS.indexOf(left) - COURT_TIER_LABELS.indexOf(right),
+  );
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
@@ -50,6 +110,9 @@ const parseJsonLikeString = (
 
   return undefined;
 };
+
+const citationUrlKey = (url: string) =>
+  URL.canParse(url) ? new URL(url).href : url;
 
 const isHttpUrl = (value: unknown): value is string => {
   if (typeof value !== "string") {
@@ -310,7 +373,40 @@ export const collectExternalSources = (
   if (isHttpUrl(url)) {
     const safeUrl = sanitizeHref(url);
     if (safeUrl) {
+      const caseNumber = getStringField(value, ["caseNumber"]);
+      const court = getStringField(value, ["court"]);
+      const courtShortCode =
+        getStringField(value, ["courtAbbreviation", "courtCode"]) ??
+        (court === undefined
+          ? undefined
+          : decisionCitationCourtLabel({
+              court,
+              country: getStringField(value, ["country"]) ?? "",
+              courtAbbreviation: undefined,
+              ecli: getStringField(value, ["ecli"]) ?? null,
+            }));
+      const holding = getTextField(value, [
+        "headnote",
+        "legalSentence",
+        "summary",
+        "abstract",
+      ]);
       sources.push({
+        ...(caseNumber !== undefined &&
+        court !== undefined &&
+        courtShortCode !== undefined
+          ? {
+              caseLaw: {
+                caseNumber,
+                court,
+                courtShortCode,
+                decisionDate: getStringField(value, ["decisionDate", "date"]),
+                decisionId: getStringField(value, ["decisionId"]),
+                holding,
+                tier: courtTierForSource(courtShortCode),
+              },
+            }
+          : {}),
         sourceUrl:
           publisherUrl !== undefined && isHttpUrl(publisherUrl)
             ? sanitizeHref(publisherUrl)
@@ -353,6 +449,16 @@ export const dedupeExternalSources = (
   const sourcesByUrl = new Map<string, ExternalSourceEntry>();
   for (const source of sources) {
     const existing = sourcesByUrl.get(source.url);
+    let caseLaw = source.caseLaw;
+    if (caseLaw === undefined) {
+      caseLaw = existing?.caseLaw;
+    } else if (existing?.caseLaw !== undefined) {
+      caseLaw = {
+        ...existing.caseLaw,
+        ...caseLaw,
+        holding: caseLaw.holding ?? existing.caseLaw.holding,
+      };
+    }
     sourcesByUrl.set(
       source.url,
       existing
@@ -361,6 +467,7 @@ export const dedupeExternalSources = (
             businessRegistry:
               source.businessRegistry ?? existing.businessRegistry,
             caseLawDecision: source.caseLawDecision ?? existing.caseLawDecision,
+            caseLaw,
             connectorSlug: source.connectorSlug ?? existing.connectorSlug,
             iconHref: source.iconHref ?? existing.iconHref,
             provider: source.provider ?? existing.provider,
@@ -410,11 +517,14 @@ export const collectSourceChipEntries = ({
   parts: ChatMessage["parts"];
   sourceDocuments?: readonly ChatSourceDocument[] | undefined;
 }): {
+  entries: SourceChipEntry[];
+  droppedCaseLawSources: number;
   uniqueExternalSources: ExternalSourceEntry[];
   uniqueSources: SourceDocumentEntry[];
 } => {
   const sources: SourceDocumentEntry[] = [];
   const externalSources: ExternalSourceEntry[] = [];
+  let droppedCaseLawSources = 0;
   for (const sourceDocument of sourceDocuments) {
     sources.push({ data: sourceDocument });
   }
@@ -423,13 +533,20 @@ export const collectSourceChipEntries = ({
     if (part.type !== "tool-call") {
       continue;
     }
-
     const toolOutput = getToolOutput(part);
     collectSourceDocuments(toolOutput, sources);
     const mcpToolInfo = getMcpToolInfo(part);
     const toolExternalSources: ExternalSourceEntry[] = [];
     collectExternalSources(toolOutput, toolExternalSources);
     for (const source of toolExternalSources) {
+      const looksLikeCaseLaw =
+        source.caseLaw !== undefined ||
+        source.caseLawDecision !== undefined ||
+        /\/cases\//u.test(source.url);
+      if (looksLikeCaseLaw && source.caseLaw === undefined) {
+        droppedCaseLawSources += 1;
+        continue;
+      }
       externalSources.push({
         ...source,
         caseLawDecision: mcpToolInfo ? undefined : source.caseLawDecision,
@@ -449,8 +566,64 @@ export const collectSourceChipEntries = ({
     seen.add(key);
     return true;
   });
+  const uniqueExternalSources = dedupeExternalSources(externalSources);
+  const message = { parts } as ChatUIMessage;
+  const markdownDocuments = chatAnswerMarkdownDocuments(message);
+  const hrefs = new Set(
+    markdownDocuments.flatMap((markdown) => {
+      const matches = markdown.matchAll(
+        /\[[^\]]*\]\(([^ )]+)(?:\s+"[^"]*")?\)/gu,
+      );
+      return [...matches]
+        .map((match) => match[1])
+        .filter((href): href is string => href !== undefined);
+    }),
+  );
+  const decisionIds = new Set(
+    chatAnswerDecisionTargets({
+      markdownDocuments,
+      sources: uniqueExternalSources,
+      appOrigins: new Set(),
+    }).flatMap((target) => (target.type === "id" ? [target.decisionId] : [])),
+  );
+  const isLinked = (urls: readonly (string | undefined)[]) =>
+    urls.some(
+      (url) =>
+        url !== undefined &&
+        [...hrefs].some((href) => citationUrlKey(url) === citationUrlKey(href)),
+    );
+  const entries: SourceChipEntry[] = [];
+  for (const source of uniqueSources) {
+    entries.push({
+      relation: isLinked([source.data.entityRef, source.data.mention])
+        ? "cited"
+        : "consulted",
+      type: "document",
+      source,
+    });
+  }
+  for (const source of uniqueExternalSources) {
+    const relation =
+      isLinked([source.url, source.sourceUrl]) ||
+      (source.caseLaw?.decisionId !== undefined &&
+        decisionIds.has(source.caseLaw.decisionId))
+        ? "cited"
+        : "consulted";
+    if (source.caseLaw !== undefined) {
+      entries.push({
+        relation,
+        type: "case-law",
+        source,
+        caseLaw: source.caseLaw,
+      });
+    } else {
+      entries.push({ relation, type: "external", source });
+    }
+  }
   return {
-    uniqueExternalSources: dedupeExternalSources(externalSources),
+    entries,
+    droppedCaseLawSources,
+    uniqueExternalSources,
     uniqueSources,
   };
 };

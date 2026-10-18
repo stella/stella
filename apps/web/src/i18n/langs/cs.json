@@ -1602,6 +1602,15 @@
         "team": "Týmové dovednosti"
       }
     },
+    "sourceChips": {
+      "alsoConsulted": "Také konzultováno ({count})",
+      "courtTiers": {
+        "constitutional": "Ústavní soudy",
+        "other": "Ostatní soudy",
+        "regional": "Krajské a vrchní soudy",
+        "supreme": "Nejvyšší soudy"
+      }
+    },
     "sourcePlaceholder": "Chatovat o {title}",
     "sourcePlaceholderAction": "Chatovat o",
     "sources": "Zdroje:",

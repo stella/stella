@@ -9,7 +9,10 @@ import {
 } from "@/components/chat/__fixtures__/external-mcp";
 import {
   collectExternalSources,
+  collectSourceChipEntries,
+  courtTierForSource,
   dedupeExternalSources,
+  sortCourtTiers,
 } from "@/components/chat/source-chips.logic";
 import type { ExternalSourceEntry } from "@/components/chat/source-chips.logic";
 
@@ -327,5 +330,86 @@ describe("external source extraction from tool output", () => {
 
     expect(sources).toHaveLength(1);
     expect(sources.at(0)?.businessRegistry).toBeUndefined();
+  });
+});
+
+const decisionPart = (output: unknown) => ({
+  type: "tool-call" as const,
+  id: "search",
+  name: "case-law-search",
+  state: "complete" as const,
+  arguments: "{}",
+  output,
+});
+
+describe("answer source classification", () => {
+  test("splits cited and consulted decisions and merges duplicate hits", () => {
+    const citedUrl = "https://example.test/cases/cited";
+    const result = collectSourceChipEntries({
+      parts: [
+        decisionPart({
+          results: [
+            {
+              url: citedUrl,
+              caseNumber: "I. ÚS 1/26",
+              court: "Ústavní soud",
+              courtAbbreviation: "ÚS",
+              decisionDate: "2026-01-01",
+              summary: "A holding.",
+            },
+            {
+              url: citedUrl,
+              caseNumber: "I. ÚS 1/26",
+              court: "Ústavní soud",
+              courtAbbreviation: "ÚS",
+              decisionDate: "2026-01-01",
+            },
+            {
+              url: "https://example.test/cases/consulted",
+              caseNumber: "2 Cdo 2/26",
+              court: "Nejvyšší soud",
+              courtAbbreviation: "NS",
+            },
+          ],
+        }),
+        { type: "text", content: `[cited](${citedUrl})` },
+      ],
+    });
+    expect(result.entries).toHaveLength(2);
+    expect(result.entries.map(({ relation }) => relation)).toEqual([
+      "cited",
+      "consulted",
+    ]);
+    expect(result.entries.at(0)).toMatchObject({
+      type: "case-law",
+      caseLaw: { caseNumber: "I. ÚS 1/26", holding: "A holding." },
+    });
+  });
+
+  test("drops and counts a case-law hit without a case number", () => {
+    const result = collectSourceChipEntries({
+      parts: [
+        decisionPart({
+          url: "https://example.test/cases/missing",
+          court: "Ústavní soud",
+          courtAbbreviation: "ÚS",
+        }),
+      ],
+    });
+    expect(result.entries).toEqual([]);
+    expect(result.droppedCaseLawSources).toBe(1);
+  });
+
+  test("orders Czech court tiers from apex to first instance", () => {
+    const codes = ["OS", "MS", "KS", "VS", "NSS", "NS", "ÚS"];
+    expect(sortCourtTiers(codes.map(courtTierForSource))).toEqual([
+      "constitutional",
+      "supreme",
+      "supreme",
+      "regional",
+      "regional",
+      "other",
+      "other",
+    ]);
   });
 });

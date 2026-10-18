@@ -1602,6 +1602,15 @@
         "team": "Compétences de l’équipe"
       }
     },
+    "sourceChips": {
+      "alsoConsulted": "Également consultés ({count})",
+      "courtTiers": {
+        "constitutional": "Juridictions constitutionnelles",
+        "other": "Autres juridictions",
+        "regional": "Cours d'appel et tribunaux régionaux",
+        "supreme": "Juridictions suprêmes"
+      }
+    },
     "sourcePlaceholder": "Discuter de {title}",
     "sourcePlaceholderAction": "Discuter de",
     "sources": "Sources :",

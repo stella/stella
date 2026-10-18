@@ -36,6 +36,7 @@ type LegalCitationLinkProps = {
   workspaceId?: string | null | undefined;
   anchorId?: string | undefined;
   fallback?: ReactElement;
+  fullTrayLabel?: boolean | undefined;
 };
 
 type LegalCitationLabelProps = Pick<
@@ -171,6 +172,18 @@ export const LegalCitationLink = (props: LegalCitationLinkProps) => {
     sourceUrl: props.source.sourceUrl ?? props.source.url,
     appOrigins,
   });
+  if (props.appearance === "tray" && props.fullTrayLabel === true) {
+    const href = citation.type === "external" ? props.source.url : citation.url;
+    return (
+      <ProxyChatLink
+        appearance="tray"
+        href={href}
+        newTabLabel={t("common.openInNewTab")}
+      >
+        {props.children}
+      </ProxyChatLink>
+    );
+  }
   const passage =
     props.appearance === "inline"
       ? props.children

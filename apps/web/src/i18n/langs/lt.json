@@ -1602,6 +1602,15 @@
         "team": "Komandos įgūdžiai"
       }
     },
+    "sourceChips": {
+      "alsoConsulted": "Taip pat peržiūrėta ({count})",
+      "courtTiers": {
+        "constitutional": "Konstituciniai teismai",
+        "other": "Kiti teismai",
+        "regional": "Apeliaciniai ir apygardų teismai",
+        "supreme": "Aukščiausieji teismai"
+      }
+    },
     "sourcePlaceholder": "Kalbėtis apie {title}",
     "sourcePlaceholderAction": "Kalbėtis apie",
     "sources": "Šaltiniai:",

@@ -1605,6 +1605,15 @@ type Messages = {
         "team": "Team skills";
       };
     };
+    "sourceChips": {
+      "alsoConsulted": "Also consulted ({count})";
+      "courtTiers": {
+        "constitutional": "Constitutional courts";
+        "other": "Other courts";
+        "regional": "High and regional courts";
+        "supreme": "Supreme courts";
+      };
+    };
     "sourcePlaceholder": "Chat about {title}";
     "sourcePlaceholderAction": "Chat about";
     "sources": "Sources:";

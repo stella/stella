@@ -1602,6 +1602,15 @@
         "team": "A csapat készségei"
       }
     },
+    "sourceChips": {
+      "alsoConsulted": "Szintén áttekintve ({count})",
+      "courtTiers": {
+        "constitutional": "Alkotmánybíróságok",
+        "other": "Egyéb bíróságok",
+        "regional": "Ítélőtáblák és törvényszékek",
+        "supreme": "Legfelsőbb bíróságok"
+      }
+    },
     "sourcePlaceholder": "Csevegés erről: {title}",
     "sourcePlaceholderAction": "Csevegés erről:",
     "sources": "Források:",
