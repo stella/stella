@@ -171,7 +171,7 @@ export const listOutgoingDecisionCitationRoutes = async (
     read.rows.map(({ target, item, scanId, visible }) => ({
       item: {
         ...item,
-        appUrl:
+        url:
           visible && target !== null
             ? buildCaseLawDecisionAppUrl({
                 ...target,
