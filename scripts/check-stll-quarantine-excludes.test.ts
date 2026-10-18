@@ -47,15 +47,31 @@ describe("quarantine exclude guard", () => {
     expect(result.errors).toEqual([]);
   });
 
-  test("accepts the repository bunfig", () => {
+  test("rejects every spelling of the same package", () => {
+    const result = checkQuarantineExcludes({
+      bunfig: createBunfig(
+        '"@stll/\\u006eative", # quarantine-excluded-since: 2026-08-08T00:22:40.000Z',
+      ),
+      lockfile,
+    });
+
+    expect(result.errors).toContain(
+      'bunfig.toml minimumReleaseAgeExcludes lists duplicate package "@stll/native" on lines 5, 6',
+    );
+  });
+
+  // Dates in the live file are checked against the real clock by the check
+  // itself; this test owns only the duplicate rule, which no date affects.
+  test("the repository bunfig lists each package once", () => {
     const repositoryRoot = path.resolve(import.meta.dir, "..");
     const result = checkQuarantineExcludes({
       bunfig: readFileSync(path.join(repositoryRoot, "bunfig.toml"), "utf-8"),
       lockfile: readFileSync(path.join(repositoryRoot, "bun.lock"), "utf-8"),
-      now: new Date("2026-10-18T00:00:00.000Z"),
     });
 
-    expect(result.errors).toEqual([]);
+    expect(
+      result.errors.filter((error) => error.includes("duplicate package")),
+    ).toEqual([]);
   });
 
   test("rejects every undated third-party exclusion", () => {
