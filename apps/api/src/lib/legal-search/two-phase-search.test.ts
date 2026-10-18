@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { SEARCH_PAGINATION_COMPLETE } from "@stll/api-contract/search";
 
+import type { SearchCursor } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
   decodeCorpusSearchCursor,
   encodeCorpusSearchCursor,
@@ -23,7 +24,10 @@ const hit = (id: string, coverage: number, score: number): Hit => ({
   coverage,
   score,
 });
-const page = (hits: readonly Hit[], nextCursor = null) => ({
+const page = (
+  hits: readonly Hit[],
+  nextCursor: SearchCursor | null = null,
+) => ({
   hits,
   nextCursor,
   paginationOutcome: SEARCH_PAGINATION_COMPLETE,
@@ -35,12 +39,14 @@ const run = async ({
   strictOnly = false,
   cursor = null,
   atStart = true,
+  sort = "relevance",
 }: {
   strict: ReturnType<typeof page>;
   relaxed: ReturnType<typeof page>;
   strictOnly?: boolean;
   cursor?: ReturnType<typeof decodeCorpusSearchCursor>;
   atStart?: boolean;
+  sort?: "relevance" | "newest";
 }) => {
   const phases: string[] = [];
   const result = await runTwoPhaseSearch({
@@ -49,6 +55,7 @@ const run = async ({
     fingerprint,
     generation,
     limit: 3,
+    sort,
     strictOnly,
     read: async (phase) => {
       phases.push(phase.type);
@@ -104,6 +111,16 @@ describe("two-phase corpus search", () => {
     expect(phases).toEqual(["strict"]);
     expect(result.hits.map(({ id }) => id)).toEqual(["d"]);
     expect(result.relaxedShown).toBe(false);
+  });
+
+  test("a date-ordered search never tops up with any-word matches", async () => {
+    const { phases, result } = await run({
+      strict: page([hit("a", 3, 1)]),
+      relaxed: page([hit("b", 1, 9)]),
+      sort: "newest",
+    });
+    expect(phases).toEqual(["strict"]);
+    expect(result.hits.map(({ id }) => id)).toEqual(["a"]);
   });
 
   test("the first relaxed page and its continuation keep one order", async () => {

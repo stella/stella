@@ -1231,6 +1231,7 @@ const corpusIndexSearch = async ({
   const result = await runTwoPhaseSearch({
     // The chain pager pages by cursor only: a read without one starts the list.
     atStart: true,
+    sort: DEFAULT_SEARCH_SORT,
     cursor: parsedCursor,
     fingerprint,
     generation,

@@ -5,7 +5,10 @@ import type {
   CorpusSearchCursor,
   CorpusSearchPhase,
 } from "@/api/lib/legal-search/corpus-search-cursor";
-import { DEFAULT_SEARCH_SORT } from "@/api/lib/legal-search/corpus-search-order";
+import {
+  DEFAULT_SEARCH_SORT,
+  type SearchSort,
+} from "@/api/lib/legal-search/corpus-search-order";
 
 const RELAXED_START_ID = "00000000-0000-0000-0000-000000000000";
 
@@ -26,6 +29,12 @@ type TwoPhaseSearchOptions<Page extends TwoPhaseSearchPage<Hit>, Hit> = {
   fingerprint: string;
   generation: string;
   limit: number;
+  /**
+   * The order the reader asked for. Any-word matches are ranked by relevance
+   * only: mixed into a date order they would interleave partial matches with
+   * exact ones by date, so another order never tops up.
+   */
+  sort: SearchSort;
   strictOnly: boolean;
   read: (
     phase: CorpusSearchPhase,
@@ -60,6 +69,7 @@ export const runTwoPhaseSearch = async <
   fingerprint,
   generation,
   limit,
+  sort,
   strictOnly,
   read,
   encodeCursor,
@@ -84,6 +94,7 @@ export const runTwoPhaseSearch = async <
     phase.type === "relaxed" ||
     strictOnly ||
     !atStart ||
+    sort !== DEFAULT_SEARCH_SORT ||
     cursor !== null ||
     hits.length >= limit ||
     page.nextCursor !== null ||

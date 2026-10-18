@@ -2812,6 +2812,7 @@ export const searchCorpusIndexDecisions = async ({
   };
   const pageRead = runTwoPhaseSearch({
     atStart: isFirstPage,
+    sort,
     cursor: parsedCursor,
     fingerprint,
     generation,

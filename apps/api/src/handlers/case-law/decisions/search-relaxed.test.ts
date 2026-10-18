@@ -20,6 +20,7 @@ test("a short case-law page appends relaxed hits and emits relaxed_match", async
   const relaxedHit = { id: "relaxed" };
   const result = await runTwoPhaseSearch({
     atStart: true,
+    sort: "relevance",
     cursor: null,
     fingerprint: "a".repeat(64),
     generation: "case_law_v7",
