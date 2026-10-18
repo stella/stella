@@ -1,5 +1,10 @@
 import { planAutofix } from "./autofix-push-scope";
-import { GENERATORS, allowedOutputs, orderGenerators } from "./generated-files";
+import {
+  GENERATORS,
+  allowedOutputs,
+  orderGenerators,
+  runGenerators,
+} from "./generated-files";
 
 // The explicit type lets calls narrow the values they reject.
 const fail: (message: string) => never = (message) => {
@@ -55,24 +60,14 @@ switch (mode) {
   }
   case "run": {
     const selected = selectedFromIds(args.at(0) ?? "");
-    for (const generator of selected) {
-      if (generator.check) {
-        const checked = Bun.spawnSync([...generator.check], {
-          stdout: "inherit",
-          stderr: "inherit",
-        });
-        if (checked.exitCode === 0) {
-          continue;
-        }
-      }
-      console.log(`Regenerating ${generator.id}`);
-      const result = Bun.spawnSync([...generator.write], {
-        stdout: "inherit",
-        stderr: "inherit",
-      });
-      if (result.exitCode !== 0) {
-        fail(`Generator ${generator.id} failed`);
-      }
+    const failed = runGenerators(
+      selected,
+      (command) =>
+        Bun.spawnSync([...command], { stdout: "inherit", stderr: "inherit" })
+          .exitCode,
+    );
+    if (failed !== null) {
+      fail(`Generator ${failed.id} failed`);
     }
     break;
   }

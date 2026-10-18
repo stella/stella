@@ -152,6 +152,26 @@ const GENERATOR_DECLARATIONS = [
     after: [],
   },
   {
+    id: "account-export-tables",
+    outputKind: "committed",
+    outputs: ["apps/api/src/lib/account-export/user-owned-tables.gen.ts"],
+    inputs: [
+      "apps/api/src/db/schema/**",
+      "apps/api/src/db/auth-schema.ts",
+      "apps/api/src/db/agent-auth-schema.ts",
+      "apps/api/src/lib/account-export/schema-census.ts",
+      "apps/api/scripts/generate-account-export-tables.ts",
+    ],
+    write: [
+      "bun",
+      "apps/api/scripts/generate-account-export-tables.ts",
+      "--write",
+    ],
+    check: ["bun", "apps/api/scripts/generate-account-export-tables.ts"],
+    autofix: true,
+    after: [],
+  },
+  {
     id: "schema-index",
     outputKind: "committed",
     outputs: ["apps/api/src/db/schema-index/*.md"],
@@ -1122,7 +1142,67 @@ export const generatorsForFiles = (files: readonly string[]) => {
       }
     }
   }
+  // A derived output is never committed, so a clean checkout lacks it: every
+  // derived generator a selected one declares in `after` must run first, and
+  // so must its own derived prerequisites.
+  const pending = [...selected];
+  while (pending.length > 0) {
+    const id = pending.pop();
+    const generator = GENERATORS.find((candidate) => candidate.id === id);
+    if (generator === undefined) {
+      continue;
+    }
+    for (const upstream of derivedPrerequisites(generator)) {
+      if (!selected.has(upstream.id)) {
+        selected.add(upstream.id);
+        pending.push(upstream.id);
+      }
+    }
+  }
   return GENERATORS.filter((generator) => selected.has(generator.id));
+};
+
+/**
+ * Derived generators whose outputs `generator` needs present to run: the
+ * derived ones it declares in `after`. (Input globs are too broad to infer
+ * this from; a generator that reads a derived output declares it.)
+ */
+export const derivedPrerequisites = (generator: Generator) =>
+  GENERATORS.filter(
+    (upstream) =>
+      upstream.outputKind === "derived" &&
+      generator.after.includes(upstream.id),
+  );
+
+/**
+ * The check that proves `generator`'s outputs are current, so a run may skip
+ * `write`. A derived output is never committed, so a passing check (it guards
+ * tracking, not presence) says nothing about whether a clean checkout has it:
+ * derived generators always write.
+ */
+const upToDateCheck = (generator: Generator) =>
+  generator.outputKind === "committed" ? generator.check : null;
+
+/**
+ * Run `write` for every generator whose outputs are not proven current, in
+ * the given order. Returns the first generator that failed, or null.
+ */
+export const runGenerators = (
+  generators: readonly Generator[],
+  spawn: (command: readonly string[]) => number,
+  log: (line: string) => void = console.log,
+): Generator | null => {
+  for (const generator of generators) {
+    const check = upToDateCheck(generator);
+    if (check && spawn(check) === 0) {
+      continue;
+    }
+    log(`Regenerating ${generator.id}`);
+    if (spawn(generator.write) !== 0) {
+      return generator;
+    }
+  }
+  return null;
 };
 
 export const allowedOutputs = (generators: readonly Generator[]) => [

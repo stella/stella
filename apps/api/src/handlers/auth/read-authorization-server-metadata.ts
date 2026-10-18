@@ -5,13 +5,13 @@ import {
   ACCOUNT_ACCESS,
   createSafePublicHandler,
 } from "@/api/lib/api-handlers";
-import { DISCOVERY_DOCUMENT_CACHE } from "@/api/lib/auth/auth-paths";
 import { dropOriginBoundCors } from "@/api/lib/public-cors";
+import { DISCOVERY_METADATA_CACHE_POLICY } from "@/api/lib/security-headers";
 
 const readAuthorizationServerMetadata = createSafePublicHandler(
   {
     contract: "patch",
-    cache: DISCOVERY_DOCUMENT_CACHE,
+    cache: DISCOVERY_METADATA_CACHE_POLICY,
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "auth_plumbing" },
   },
