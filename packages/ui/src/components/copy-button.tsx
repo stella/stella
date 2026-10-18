@@ -88,6 +88,14 @@ export const useCopiedFeedback = () => {
     }, COPIED_RESET_MS);
   }, []);
 
+  const reset = useCallback(() => {
+    if (resetTimerRef.current !== null) {
+      clearTimeout(resetTimerRef.current);
+      resetTimerRef.current = null;
+    }
+    setCopied(false);
+  }, []);
+
   useEffect(
     () => () => {
       if (resetTimerRef.current !== null) {
@@ -97,7 +105,7 @@ export const useCopiedFeedback = () => {
     [],
   );
 
-  return { copied, confirm };
+  return { copied, confirm, reset };
 };
 
 type CopyFeedbackProps = {

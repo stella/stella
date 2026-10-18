@@ -176,7 +176,11 @@ export const AnnotationToolbar = ({
   // selection), so it does its own collision handling: open upward when
   // the space below the trigger cannot fit the menu.
   const [copyOpensUp, setCopyOpensUp] = useState(false);
-  const { copied, confirm: confirmCopied } = useCopiedFeedback();
+  const {
+    copied,
+    confirm: confirmCopied,
+    reset: resetCopied,
+  } = useCopiedFeedback();
   // Counts selection changes, so a clipboard write that settles after the
   // reader moved on to other words never confirms a copy of those words.
   const selectionGenerationRef = useRef(0);
@@ -398,6 +402,8 @@ export const AnnotationToolbar = ({
     };
     const onSelectionChange = () => {
       selectionGenerationRef.current += 1;
+      // A confirmation belongs to the words that were copied.
+      resetCopied();
       readSelection(selectionPointer);
     };
     const onCopy = () => {

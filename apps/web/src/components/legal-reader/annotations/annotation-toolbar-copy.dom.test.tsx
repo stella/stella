@@ -210,3 +210,18 @@ test("a copy that settles after the selection changed does not confirm", async (
   expect(view.queryByRole("button", { name: "Copied" })).toBeNull();
   expect(view.getByRole("button", { name: "Copy" })).toBeTruthy();
 });
+
+test("a new selection clears the previous copy's confirmation", async () => {
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: { writeText: async () => undefined },
+  });
+  const view = await mountToolbar();
+
+  fireEvent.click(view.getByRole("button", { name: "Copy" }));
+  fireEvent.click(view.getByRole("button", { name: "Text only" }));
+  await view.findByRole("button", { name: "Copied" });
+  await act(async () => document.dispatchEvent(new Event("selectionchange")));
+
+  expect(view.queryByRole("button", { name: "Copied" })).toBeNull();
+});
