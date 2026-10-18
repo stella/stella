@@ -604,20 +604,32 @@ const loadRobots = async ({
   let failure: unknown;
   for (let redirects = 0; ; redirects += 1) {
     const requestTarget = target;
-    const validated = await validatePublisherTarget(
-      requestTarget,
-      validateTarget,
+    // Raced as well as signalled: a validator or transport that ignores the
+    // signal must not hold the shared load past its deadline.
+    const checked = await Result.tryPromise(async () =>
+      Promise.race([
+        validatePublisherTarget(requestTarget, validateTarget),
+        abortPromise(deadline),
+      ]),
     );
+    if (Result.isError(checked)) {
+      failure = checked.error.cause;
+      break;
+    }
+    const validated = checked.value;
     if (Result.isError(validated)) {
       failure = validated.error;
       break;
     }
     const fetched = await Result.tryPromise(async () =>
-      fetcher(validated.value, {
-        headers: { "User-Agent": PUBLISHER_USER_AGENT },
-        redirect: "manual",
-        signal: deadline,
-      }),
+      Promise.race([
+        fetcher(validated.value, {
+          headers: { "User-Agent": PUBLISHER_USER_AGENT },
+          redirect: "manual",
+          signal: deadline,
+        }),
+        abortPromise(deadline),
+      ]),
     );
     if (Result.isError(fetched)) {
       failure = fetched.error.cause;

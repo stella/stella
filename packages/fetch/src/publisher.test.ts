@@ -660,6 +660,26 @@ describe("publisher scheduler", () => {
     expect(outcome.isErr() && outcome.error._tag).toBe("robots_unavailable");
   });
 
+  test("a robots validator that never settles expires as unavailable", async () => {
+    const request = createPolitePublisherFetch({
+      validateTarget: async () => await new Promise<never>(() => {}),
+      robotsLoadTimeoutMs: 5,
+      fetcher: async () => new Response("unexpected request"),
+    });
+    const outcome = await request("https://publisher.example/case");
+    expect(outcome.isErr() && outcome.error._tag).toBe("robots_unavailable");
+  });
+
+  test("a robots transport that ignores its signal expires as unavailable", async () => {
+    const request = createPolitePublisherFetch({
+      validateTarget: allowTarget,
+      robotsLoadTimeoutMs: 5,
+      fetcher: async () => await new Promise<never>(() => {}),
+    });
+    const outcome = await request("https://publisher.example/case");
+    expect(outcome.isErr() && outcome.error._tag).toBe("robots_unavailable");
+  });
+
   test("follows robots redirects before evaluating the original origin", async () => {
     const requested: string[] = [];
     const request = createPolitePublisherFetch({
