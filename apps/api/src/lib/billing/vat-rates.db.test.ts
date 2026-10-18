@@ -8,6 +8,8 @@ import {
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
+import { VAT_RATE_PRESETS } from "@stll/invoicing";
+
 import type { Transaction } from "@/api/db/root";
 import { vatRates } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
@@ -106,8 +108,8 @@ describe("VAT rate validity", () => {
     });
     const first = await applyVatRatePreset.handler(context);
     const second = await applyVatRatePreset.handler(context);
-    expect(first).toEqual({ added: 5, skipped: 1 });
-    expect(second).toEqual({ added: 0, skipped: 6 });
+    expect(first).toEqual({ added: 6, skipped: 1 });
+    expect(second).toEqual({ added: 0, skipped: 7 });
     const rows = await testDb
       .select()
       .from(vatRates)
@@ -116,7 +118,7 @@ describe("VAT rate validity", () => {
     createdIds.push(
       ...presetRows.filter(({ id }) => id !== existingId).map(({ id }) => id),
     );
-    expect(presetRows).toHaveLength(6);
+    expect(presetRows).toHaveLength(VAT_RATE_PRESETS.SK.length);
   });
 
   test("resolves inclusive starts, exclusive ends, gaps and an open-ended period", async () => {

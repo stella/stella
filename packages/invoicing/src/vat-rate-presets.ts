@@ -113,3 +113,24 @@ export const VAT_RATE_PRESETS = {
     },
   ],
 } as const satisfies Record<VatRatePresetCountry, readonly VatRatePreset[]>;
+
+const PRESET_CODE_PREFIXES = VAT_RATE_PRESET_COUNTRIES.map(
+  (country) => `${country.toLowerCase()}-`,
+);
+
+/**
+ * The rates that apply to a seller in `country`: rates entered by hand, plus
+ * the presets of that country only. Another country's preset rates never
+ * become a seller's standard rate.
+ */
+export const vatRatePeriodsForCountry = <Period extends { code: string }>(
+  periods: readonly Period[],
+  country: string,
+): Period[] => {
+  const own = `${country.toLowerCase()}-`;
+  return periods.filter(
+    ({ code }) =>
+      code.startsWith(own) ||
+      !PRESET_CODE_PREFIXES.some((prefix) => code.startsWith(prefix)),
+  );
+};

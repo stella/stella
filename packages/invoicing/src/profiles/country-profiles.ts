@@ -81,14 +81,10 @@ const noLegalNotes = {
   exempt: null,
 } satisfies Record<VatTreatment, null>;
 
+// Each identifier prints when the party has it. Slovak parties carry a tax ID
+// (DIČ) separate from the VAT ID (IČ DPH); zákon 222/2004 Z. z. § 74 ods. 1
+// písm. a) and b) require the IČ DPH, practice prints both.
 const commonPartyIds = {
-  seller: ["registration", "vatId"],
-  buyer: ["registration", "vatId"],
-} as const;
-
-// Slovak parties carry a tax ID (DIČ) separate from the VAT ID (IČ DPH);
-// § 74 ods. 1 písm. a) and b) require the IČ DPH, practice prints both.
-const slovakPartyIds = {
   seller: ["registration", "taxId", "vatId"],
   buyer: ["registration", "taxId", "vatId"],
 } as const;
@@ -100,7 +96,7 @@ export const INVOICE_COUNTRY_PROFILES = {
     // § 74 ods. 1 písm. i): "výšku dane spolu v eurách".
     vatCurrency: "EUR",
     supplyDateLabel: supplyDateLabels(),
-    partyIds: slovakPartyIds,
+    partyIds: commonPartyIds,
     legalNotes: {
       domestic_vat: null,
       // Not prescribed wording; states why no VAT is charged.

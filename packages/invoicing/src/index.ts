@@ -20,6 +20,7 @@ export { standardVatRateOn, type VatRatePeriod } from "./vat-rate-period";
 export {
   VAT_RATE_PRESET_COUNTRIES,
   VAT_RATE_PRESETS,
+  vatRatePeriodsForCountry,
   type VatRatePreset,
   type VatRatePresetCountry,
 } from "./vat-rate-presets";

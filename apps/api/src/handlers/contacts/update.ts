@@ -333,6 +333,8 @@ export const updateContactHandler = async function* ({
           tags: updates.tags,
           registrationNumber: updates.registrationNumber,
           taxId: updates.taxId,
+          vatId: updates.vatId,
+          vatPayer: updates.vatPayer,
           bankAccounts: updates.bankAccounts,
           billingAddress: updates.billingAddress,
           currency: updates.currency,

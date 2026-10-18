@@ -291,6 +291,20 @@ describe("invoice QR payment", () => {
 });
 
 describe("country invoice wording", () => {
+  test("prints a Czech party's tax ID when it has no VAT ID", async () => {
+    const { text } = await textOf({
+      ...options,
+      seller: { ...options.seller, taxId: "CZ8765432101", vatId: null },
+      invoice: {
+        ...options.invoice,
+        buyerTaxId: "CZ0123456789",
+        buyerVatId: null,
+      },
+    });
+    expect(text).toContain("CZ8765432101");
+    expect(text).toContain("CZ0123456789");
+  });
+
   test.each(["sk", "en"] as const)(
     "prints mandated Slovak reverse-charge wording in %s",
     async (lang) => {

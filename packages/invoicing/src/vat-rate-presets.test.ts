@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { standardVatRateOn } from "./vat-rate-period";
-import { VAT_RATE_PRESETS } from "./vat-rate-presets";
+import { VAT_RATE_PRESETS, vatRatePeriodsForCountry } from "./vat-rate-presets";
 
 describe("VAT rate presets", () => {
   test("periods for each code do not overlap", () => {
@@ -31,5 +31,43 @@ describe("VAT rate presets", () => {
   test("resolves the Czech standard rate after the 2024 change (zákon 235/2004 Sb. § 47 odst. 1)", () => {
     expect(standardVatRateOn(VAT_RATE_PRESETS.CZ, "2023-12-31")).toBe(2100);
     expect(standardVatRateOn(VAT_RATE_PRESETS.CZ, "2024-01-01")).toBe(2100);
+  });
+});
+
+describe("VAT rates for a seller's country", () => {
+  const bothPresets = [...VAT_RATE_PRESETS.SK, ...VAT_RATE_PRESETS.CZ];
+  const custom = {
+    code: "office-standard",
+    name: "Own 18 %",
+    rateBps: 1800,
+    validFrom: "2020-01-01",
+    validTo: null,
+  };
+
+  test("a Czech seller resolves 21 % although Slovak presets are installed too", () => {
+    expect(
+      standardVatRateOn(
+        vatRatePeriodsForCountry(bothPresets, "CZ"),
+        "2026-10-19",
+      ),
+    ).toBe(2100);
+  });
+
+  test("a Slovak seller resolves 23 % although Czech presets are installed too", () => {
+    expect(
+      standardVatRateOn(
+        vatRatePeriodsForCountry(bothPresets, "SK"),
+        "2026-10-19",
+      ),
+    ).toBe(2300);
+  });
+
+  test("hand-entered rates apply to every country; presets only to their own", () => {
+    const periods = [...bothPresets, custom];
+    expect(vatRatePeriodsForCountry(periods, "EU")).toEqual([custom]);
+    expect(vatRatePeriodsForCountry(periods, "CZ")).toEqual([
+      ...VAT_RATE_PRESETS.CZ,
+      custom,
+    ]);
   });
 });
