@@ -26,7 +26,10 @@ import {
   runOnlineMigrations as runOnlineMigrationsWithGate,
   type OnlineRepairOptions,
 } from "./online-migrations";
-import { ORGANIZATION_AI_INSTRUCTIONS_CONSTRAINT_VALIDATIONS } from "./organization-ai-instructions-constraint-validation";
+import {
+  ORGANIZATION_AI_INSTRUCTIONS_CONSTRAINT_VALIDATIONS,
+  ORGANIZATION_AI_INSTRUCTIONS_CONSTRAINTS,
+} from "./organization-ai-instructions-constraint-validation";
 import { SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS } from "./sanctions-monitoring-constraint-validation";
 
 const testClock = () => Date.parse("2026-10-01T12:00:00.000Z");
@@ -171,7 +174,7 @@ describe("online migrations", () => {
   );
 
   test("an interrupted organization instructions validation retries to completion", async () => {
-    const [{ name }] = ORGANIZATION_AI_INSTRUCTIONS_CONSTRAINT_VALIDATIONS;
+    const name = ORGANIZATION_AI_INSTRUCTIONS_CONSTRAINTS[0].constraintName;
     const harness = createHarness({ unvalidatedConstraints: [name] });
     let validationStatus: "interrupt" | "resume" = "interrupt";
     const pool = {

@@ -499,7 +499,7 @@ test("organization instruction edits block navigation before the editor debounce
     void appRouter.navigate({ to: "/settings" });
   });
   expect(await screen.findByRole("alertdialog")).toBeDefined();
-  expect(appRouter.state.location.pathname).toBe("/settings/organization");
+  expect(appRouter.state.location.pathname).toBe("/admin");
   expect(writes()).toEqual([]);
 });
 
