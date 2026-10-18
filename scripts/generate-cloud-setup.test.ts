@@ -54,10 +54,16 @@ const expectCloudSetupPins = ({
       `install_${tool}\\(\\) \\(\\n(?<body>[\\s\\S]*?)\\n\\)`,
       "u",
     ).exec(script)?.groups?.["body"];
+    // Complete install-path segments, so 8.30.10 never satisfies an 8.30.1 pin.
+    const versions = [
+      ...(block ?? "").matchAll(
+        new RegExp(`/tools/${tool}/(?<version>[^/'"\\s]+)/`, "gu"),
+      ),
+    ].map((match) => match.groups?.["version"]);
     expect(
-      block,
-      `stll-toolchain.json cloud.tools.${tool} must use its exact version in .agents/cloud-setup.sh; change stll-toolchain.json or run ${regeneration}`,
-    ).toContain(version);
+      versions.length > 0 && versions.every((found) => found === version),
+      `stll-toolchain.json cloud.tools.${tool} must use its exact version in .agents/cloud-setup.sh (found ${JSON.stringify(versions)}); change stll-toolchain.json or run ${regeneration}`,
+    ).toBe(true);
   }
 };
 
@@ -88,6 +94,30 @@ test("rejects a packageManager pin that differs from BUN_VERSION", async () => {
       tools: { gitleaks: "8.30.1" },
     }),
   ).toThrow("package.json packageManager");
+});
+
+test("rejects a tool pin that is only a prefix of the installed version", async () => {
+  const script = await readFile(
+    path.join(root, ".agents/cloud-setup.sh"),
+    "utf-8",
+  );
+  const manifest = await Bun.file(path.join(root, "package.json")).json();
+  const nodeVersion = await readFile(path.join(root, ".node-version"), "utf-8");
+  const toolchain = await Bun.file(
+    path.join(root, "stll-toolchain.json"),
+  ).json();
+  const pinned: string = toolchain.cloud.tools.gitleaks;
+  expect(() =>
+    expectCloudSetupPins({
+      packageManager: manifest.packageManager,
+      nodeVersion,
+      script: script.replaceAll(
+        `/tools/gitleaks/${pinned}/`,
+        () => `/tools/gitleaks/${pinned}0/`,
+      ),
+      tools: { gitleaks: pinned },
+    }),
+  ).toThrow("cloud.tools.gitleaks");
 });
 
 test("cloud setup bytes come from the shared generator and bind the Node selector", async () => {
