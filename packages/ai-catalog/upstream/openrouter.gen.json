@@ -931,6 +931,12 @@
       }
     },
     {
+      "id": "reflection/beam-1.0-501b-a23b",
+      "reasoning": {
+        "default_effort": "max"
+      }
+    },
+    {
       "id": "sakana/fugu-max",
       "reasoning": {
         "default_effort": "high"
