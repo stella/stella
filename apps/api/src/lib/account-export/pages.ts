@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 
 import { READER_ANSWER_MAX_MESSAGES } from "@stll/api-contract/reader-answers";
@@ -391,7 +391,10 @@ const readLegalReaderAnnotationsPage = async ({
         and(
           eq(legalReaderAnnotations.organizationId, organizationId),
           eq(legalReaderAnnotations.userId, userId),
-          eq(legalReaderAnnotations.visibility, "private"),
+          or(
+            eq(legalReaderAnnotations.visibility, "private"),
+            eq(legalReaderAnnotations.targetType, "verification-claim"),
+          ),
           stillMember(organizationId, userId),
           after(legalReaderAnnotations.id, cursor),
         ),
