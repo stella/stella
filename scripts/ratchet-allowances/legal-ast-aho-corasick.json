@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "@stll/legal-ast declares the catalogued @stll/aho-corasick engine for its holding matcher; the foundation allowance funded only the workspaces it declared."
+}
