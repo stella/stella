@@ -153,7 +153,7 @@ export const expectAliasHit = ({
     index,
     { name, entityType: "person" },
     { cutoff: 0.65 },
-  ).unwrap().possibleMatches;
+  ).unwrap("Alias fixture screening must succeed").possibleMatches;
   expect(matches.map(({ entry }) => entry.sourceId)).toContain(sourceId);
   expect(
     matches.find(({ entry }) => entry.sourceId === sourceId)?.evidence
