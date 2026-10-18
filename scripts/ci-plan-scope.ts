@@ -35,6 +35,33 @@ export type ChangedFileScopeInput = {
 
 export type ChangedFileScope = Record<ScopeOutput, string>;
 
+export type ChangedFileScopeDetectors = {
+  packageChecks: (
+    options: Parameters<typeof requiresPackageChecks>[0],
+  ) => unknown;
+  landingBuild: (
+    options: Parameters<typeof requiresLandingBuild>[0],
+  ) => unknown;
+  desktopBrowser: (
+    options: Parameters<typeof requiresDesktopBrowser>[0],
+  ) => unknown;
+};
+
+const DEFAULT_DETECTORS = {
+  packageChecks: requiresPackageChecks,
+  landingBuild: requiresLandingBuild,
+  desktopBrowser: requiresDesktopBrowser,
+} satisfies ChangedFileScopeDetectors;
+
+const failClosedDetector = (detect: () => unknown) => {
+  try {
+    const result = detect();
+    return typeof result === "boolean" ? result : true;
+  } catch {
+    return true;
+  }
+};
+
 const bool = String;
 const compiledShellPatterns = new Map<string, RegExp>();
 const shellPattern = (pattern: string) => {
@@ -190,7 +217,10 @@ const wideScope = (input: ChangedFileScopeInput): Record<string, string> => {
   };
 };
 
-const deriveScopeFacts = (input: ChangedFileScopeInput) => {
+const deriveScopeFacts = (
+  input: ChangedFileScopeInput,
+  detectors: ChangedFileScopeDetectors,
+) => {
   if (
     input.eventName === "workflow_dispatch" ||
     input.scopeUnknown ||
@@ -251,12 +281,13 @@ const deriveScopeFacts = (input: ChangedFileScopeInput) => {
       },
     } as const;
   }
-  return deriveNormalScopeFacts(input, files);
+  return deriveNormalScopeFacts(input, files, detectors);
 };
 
 const deriveNormalScopeFacts = (
   input: ChangedFileScopeInput,
   files: readonly string[],
+  detectors: ChangedFileScopeDetectors,
 ) => {
   const root = input.root;
   const resolved = input.dependencyScope;
@@ -270,13 +301,17 @@ const deriveNormalScopeFacts = (
     dependencyClass !== "dev-tooling" &&
     ["pull_request", "merge_group"].includes(input.eventName)
   ) {
-    packageChecks = requiresPackageChecks({ changed: scopeFiles, root });
+    packageChecks = failClosedDetector(() =>
+      detectors.packageChecks({ changed: scopeFiles, root }),
+    );
   }
   const docs = packageChecks
     ? []
     : files.filter((file) => /\.mdx?$/u.test(file));
   const services = planServiceSuites(scopeFiles, root);
-  let desktopBrowser = requiresDesktopBrowser({ changed: scopeFiles, root });
+  let desktopBrowser = failClosedDetector(() =>
+    detectors.desktopBrowser({ changed: scopeFiles, root }),
+  );
   if (!packageChecks) {
     desktopBrowser = false;
   }
@@ -338,7 +373,9 @@ const deriveNormalScopeFacts = (
   }
   let landing =
     input.eventName === "pull_request"
-      ? requiresLandingBuild({ changed: scopeFiles, root })
+      ? failClosedDetector(() =>
+          detectors.landingBuild({ changed: scopeFiles, root }),
+        )
       : p([
           "apps/landing/*",
           "docs/changelog/*",
@@ -878,8 +915,11 @@ export const OUTPUT_RULES = {
     ),
 } as const satisfies Record<ScopeOutput, (facts: ScopeFacts) => string>;
 
-export const computeChangedFileScope = (input: ChangedFileScopeInput) => {
-  const facts = deriveScopeFacts(input);
+export const computeChangedFileScope = (
+  input: ChangedFileScopeInput,
+  detectors = DEFAULT_DETECTORS,
+) => {
+  const facts = deriveScopeFacts(input, detectors);
   return Object.fromEntries(
     OUTPUT_ORDER.map((output) => [output, OUTPUT_RULES[output](facts)]),
   ) as Record<ScopeOutput, string>;

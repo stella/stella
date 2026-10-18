@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 import {
+  chmodSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -15,7 +16,12 @@ import * as v from "valibot";
 import { drawPropertySamples } from "@stll/property-testing";
 
 import { markdownReaders } from "./ci-package-scope";
-import { computeChangedFileScope, type ScopeOutput } from "./ci-plan-scope";
+import {
+  computeChangedFileScope,
+  type ChangedFileScopeDetectors,
+  type ChangedFileScopeInput,
+  type ScopeOutput,
+} from "./ci-plan-scope";
 import { GENERATORS } from "./generated-files";
 
 markdownReaders();
@@ -51,6 +57,83 @@ const runSelector = (
   event = "pull_request",
   title = "",
 ) => planSelector([{ files, outputs, suiteDepth, event, title }])[0]!.plan;
+
+const detectorInput = (eventName: string): ChangedFileScopeInput => ({
+  changedFiles: ["apps/api/src/server.ts"],
+  comparisonBase: "base",
+  scopeUnknown: false,
+  eventName,
+  suiteDepth: "fast",
+  heavyOnly: false,
+  prTitle: "",
+});
+
+const detectors = (
+  overrides: Partial<ChangedFileScopeDetectors> = {},
+): ChangedFileScopeDetectors => ({
+  packageChecks: () => true,
+  landingBuild: () => false,
+  desktopBrowser: () => false,
+  ...overrides,
+});
+
+test("pull requests and merge groups fail closed when package detection is unavailable or malformed", () => {
+  for (const eventName of ["pull_request", "merge_group"]) {
+    for (const { packageChecks, expected } of [
+      { packageChecks: () => false, expected: "false" },
+      { packageChecks: () => true, expected: "true" },
+      {
+        packageChecks: () => {
+          throw new Error("package detector unavailable");
+        },
+        expected: "true",
+      },
+      { packageChecks: () => "invalid", expected: "true" },
+    ]) {
+      const scope = computeChangedFileScope(
+        detectorInput(eventName),
+        detectors({ packageChecks }),
+      );
+      expect(scope.package_checks_required).toBe(expected);
+    }
+  }
+});
+
+test("documentation and landing detector failures widen their workflow scopes", () => {
+  for (const failure of [
+    () => {
+      throw new Error("detector unavailable");
+    },
+    () => "invalid",
+  ]) {
+    const documentation = computeChangedFileScope(
+      { ...detectorInput("pull_request"), changedFiles: ["docs/guide.md"] },
+      detectors({ packageChecks: failure }),
+    );
+    expect(documentation.package_checks_required).toBe("true");
+
+    const landing = computeChangedFileScope(
+      { ...detectorInput("pull_request"), changedFiles: ["docs/guide.md"] },
+      detectors({ landingBuild: failure }),
+    );
+    expect(landing.landing_build_required).toBe("true");
+  }
+});
+
+test("desktop browser detector failures and malformed results cannot skip the PR leg", () => {
+  for (const failure of [
+    () => {
+      throw new Error("desktop browser detector unavailable");
+    },
+    () => "invalid",
+  ]) {
+    const scope = computeChangedFileScope(
+      detectorInput("pull_request"),
+      detectors({ desktopBrowser: failure }),
+    );
+    expect(scope.desktop_browser_required).toBe("true");
+  }
+});
 
 const IMAGE_SMOKE_OUTPUTS = [
   "api_image_smoke_required",
@@ -448,9 +531,10 @@ test("changed-file scope handles former shell edge cases in process", () => {
   });
   expect(unknown["dependency_malware_required"]).toBe("true");
   expect(unknown["e2e_core_required"]).toBe("true");
+  expect(unknown["service_suites_pr_required"]).toBe("true");
 });
 
-test("the real changed-file step runs end to end in a fixture repository", () => {
+test("the real changed-file step preserves paths and fails closed on git failures", () => {
   const directory = mkdtempSync(nodePath.join(tmpdir(), "ci-plan-scope-"));
   const repository = nodePath.join(directory, "repository");
   const output = nodePath.join(directory, "output");
@@ -479,28 +563,79 @@ test("the real changed-file step runs end to end in a fixture repository", () =>
     const base = git("rev-parse", "HEAD").stdout.toString().trim();
     git("update-ref", "refs/remotes/origin/main", base);
     git("switch", "--quiet", "-c", "feature");
+    const runScope = (baseRef = "main", path = process.env["PATH"] ?? "") => {
+      const run = Bun.spawnSync(["bun", "scripts/ci-plan-scope.ts"], {
+        cwd: repository,
+        env: {
+          ...process.env,
+          BASE_REF: baseRef,
+          EVENT_NAME: "pull_request",
+          GITHUB_OUTPUT: output,
+          RUNNER_TEMP: directory,
+          SUITE_DEPTH: "fast",
+          PR_TITLE: "",
+          PATH: path,
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      expect(run.exitCode, run.stderr.toString()).toBe(0);
+      return readFileSync(output, "utf-8");
+    };
+    const expectScans = (lines: string, expected: boolean) => {
+      for (const outputName of [
+        "dependency_malware_required",
+        "e2e_core_required",
+        "service_suites_pr_required",
+      ]) {
+        expect(lines).toContain(`${outputName}=${String(expected)}`);
+      }
+    };
+
+    expectScans(runScope(), false);
     writeFileSync(nodePath.join(repository, "documentation"), "fixture\n");
     git("add", "documentation");
-    git("commit", "--quiet", "-m", "change");
-    const run = Bun.spawnSync(["bun", "scripts/ci-plan-scope.ts"], {
-      cwd: repository,
-      env: {
-        ...process.env,
-        BASE_REF: "main",
-        EVENT_NAME: "pull_request",
-        GITHUB_OUTPUT: output,
-        RUNNER_TEMP: directory,
-        SUITE_DEPTH: "fast",
-        PR_TITLE: "",
-      },
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    expect(run.exitCode, run.stderr.toString()).toBe(0);
-    const lines = readFileSync(output, "utf-8");
-    expect(lines).toContain("dependency_malware_required=false");
-    expect(lines).toContain("e2e_core_required=false");
-    expect(lines).toContain("service_suites_pr_required=false");
+    git("commit", "--quiet", "-m", "unrelated change");
+    expectScans(runScope(), false);
+
+    const unusual = 'quote"back\\slash\ttab\nnewline';
+    const changedPaths = [
+      nodePath.join("fixtures", unusual, "bun.lock"),
+      nodePath.join("fixtures", unusual, "package.json"),
+      nodePath.join("apps", "web", "e2e", `${unusual}.spec.ts`),
+    ];
+    for (const changedPath of changedPaths) {
+      mkdirSync(nodePath.dirname(nodePath.join(repository, changedPath)), {
+        recursive: true,
+      });
+      writeFileSync(nodePath.join(repository, changedPath), "fixture\n");
+    }
+    git("add", "--", ...changedPaths);
+    git("commit", "--quiet", "-m", "unusual paths");
+    const unusualOutput = runScope();
+    expect(unusualOutput).toContain("dependency_malware_required=true");
+    expect(unusualOutput).toContain("e2e_core_required=true");
+    expect(
+      readFileSync(nodePath.join(directory, "api-test-changed-paths"), "utf-8")
+        .split("\0")
+        .filter(Boolean)
+        .toSorted(),
+    ).toEqual(["documentation", ...changedPaths].toSorted());
+
+    expectScans(runScope("missing-base"), true);
+    const shimDirectory = nodePath.join(directory, "shim");
+    mkdirSync(shimDirectory);
+    const gitShim = nodePath.join(shimDirectory, "git");
+    const systemGit = Bun.spawnSync(["which", "git"]).stdout.toString().trim();
+    writeFileSync(
+      gitShim,
+      `#!/bin/bash\nif [[ "$1" == diff ]]; then exit 1; fi\nexec "${systemGit}" "$@"\n`,
+    );
+    chmodSync(gitShim, 0o755);
+    expectScans(
+      runScope("main", `${shimDirectory}:${process.env["PATH"] ?? ""}`),
+      true,
+    );
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
