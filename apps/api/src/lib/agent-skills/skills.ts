@@ -827,7 +827,8 @@ export const loadReadableChatSkillBindings = async ({
 }: ChatSkillCaller & {
   skillIds: readonly SafeId<"agentSkill">[];
 }): Promise<Result<Map<string, ReadableChatSkillBinding>, SafeDbError>> => {
-  if (skillIds.length === 0) {
+  const uniqueSkillIds = [...new Set(skillIds)];
+  if (uniqueSkillIds.length === 0) {
     return Result.ok(new Map());
   }
   const rows = await safeDb(async (tx) => {
@@ -843,11 +844,11 @@ export const loadReadableChatSkillBindings = async ({
         .where(
           and(
             eq(agentSkills.organizationId, organizationId),
-            inArray(agentSkills.id, [...skillIds]),
+            inArray(agentSkills.id, uniqueSkillIds),
             or(eq(agentSkills.scope, "team"), eq(agentSkills.userId, userId)),
           ),
         ),
-      LIMITS.agentSkillsPerUser,
+      uniqueSkillIds.length,
     );
     if (read.type === "overflow") {
       return panic("Readable chat skill bindings exceeded their bounded read", {

@@ -5,6 +5,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
 import { buildChatSystemPromptParts } from "@/api/handlers/chat/chat-prompt";
 import {
+  enforceLoadedSkillHistoryBindings,
   projectLoadedSkillHistory,
   SKILL_HISTORY_PROJECTION_BY_TOOL,
   SKILL_HISTORY_UNAVAILABLE,
@@ -222,19 +223,87 @@ const scopeFor = async (
 };
 
 describe("loaded skill bodies in chat history", () => {
-  test("refuses an overflowing binding lookup instead of truncating it", async () => {
-    let requestedLimit: number | undefined;
-    const rows = Array.from(
-      { length: LIMITS.agentSkillsPerUser + 1 },
-      (_, index) => ({
-        boundClientId: null,
-        boundWorkspaceId: null,
-        contentHash: `${index}`,
-        id: toSafeId<"agentSkill">(
-          `00000000-0000-4000-8000-${index.toString().padStart(12, "0")}`,
-        ),
-      }),
+  test("builds history with more distinct skills than the per-user creation limit", async () => {
+    const skillCount = LIMITS.agentSkillsPerUser + 1;
+    const skillIds = Array.from({ length: skillCount }, (_, index) =>
+      toSafeId<"agentSkill">(
+        `00000000-0000-4000-8000-${index.toString().padStart(12, "0")}`,
+      ),
     );
+    const messages = skillIds.map((skillId, index): ChatMessage => ({
+      ...loadedSkillMessage(),
+      id: toSafeId<"chatMessage">(
+        `00000000-0000-4000-9000-${index.toString().padStart(12, "0")}`,
+      ),
+      parts: loadedSkillMessage().parts.map((part) => {
+        if (part.type === "tool-call") {
+          return {
+            ...part,
+            id: `load-${index}`,
+            output: { ...part.output, skillId },
+          };
+        }
+        return part.type === "tool-result"
+          ? { ...part, toolCallId: `load-${index}` }
+          : part;
+      }),
+    }));
+    const readableRows = skillIds.slice(0, -1).map((id) => ({
+      boundClientId: null,
+      boundWorkspaceId: MATTER_A,
+      contentHash: CONTENT_HASH,
+      id,
+    }));
+    let requestedLimit: number | undefined;
+
+    const result = await enforceLoadedSkillHistoryBindings({
+      messages,
+      organizationId: toSafeId<"organization">(
+        "00000000-0000-4000-8000-0000000000ef",
+      ),
+      safeDb: asTestRaw<SafeDb>(
+        async (run: (tx: unknown) => Promise<unknown>) =>
+          Result.ok(
+            await run({
+              select: () => ({
+                from: () => ({
+                  where: () => ({
+                    limit: async (limit: number) => {
+                      requestedLimit = limit;
+                      return readableRows.slice(0, limit);
+                    },
+                  }),
+                }),
+              }),
+            }),
+          ),
+      ),
+      scope: await scopeFor([{ clientId: CLIENT_A, id: MATTER_A }], []),
+      userId: toSafeId<"user">("00000000-0000-4000-8000-0000000000f0"),
+    });
+
+    expect(requestedLimit).toBe(skillCount + 1);
+    expect(Result.isError(result)).toBe(false);
+    if (Result.isOk(result)) {
+      expect(
+        result.value.filter((message) =>
+          JSON.stringify(message).includes("PRIVATE MATTER METHOD"),
+        ),
+      ).toHaveLength(skillCount - 1);
+      expect(JSON.stringify(result.value.at(-1))).toContain(
+        SKILL_HISTORY_UNAVAILABLE.status,
+      );
+    }
+  });
+
+  test("refuses rows beyond the distinct requested identities", async () => {
+    let requestedLimit: number | undefined;
+    const rows = [SKILL_ID, OTHER_SKILL_ID].map((id, index) => ({
+      boundClientId: null,
+      boundWorkspaceId: null,
+      contentHash: `${index}`,
+      id,
+    }));
     const result = await loadReadableChatSkillBindings({
       organizationId: toSafeId<"organization">(
         "00000000-0000-4000-8000-0000000000ef",
@@ -257,11 +326,11 @@ describe("loaded skill bodies in chat history", () => {
               }),
           ),
       ),
-      skillIds: [SKILL_ID],
+      skillIds: [SKILL_ID, SKILL_ID],
       userId: toSafeId<"user">("00000000-0000-4000-8000-0000000000f0"),
     });
 
-    expect(requestedLimit).toBe(LIMITS.agentSkillsPerUser + 1);
+    expect(requestedLimit).toBe(2);
     expect(Result.isError(result)).toBe(true);
   });
 
