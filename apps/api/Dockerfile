@@ -49,7 +49,14 @@ FROM deps AS builder
 ARG TARGETARCH
 ENV NODE_ENV=production
 COPY --from=pruner /app/out/full/ .
+# Generator inputs outside the pruned API workspace graph.
+COPY --from=install-inputs /app/apps/web/src/fonts.css /app/apps/web/src/fonts.css
+COPY --from=install-inputs /app/apps/web/src/i18n/langs/ /app/apps/web/src/i18n/langs/
+COPY --from=install-inputs /app/apps/web/public/fonts/ /app/apps/web/public/fonts/
+COPY --from=install-inputs /app/scripts/generated-artifacts.ts /app/scripts/generated-artifacts.ts
+COPY --from=install-inputs /app/.oxfmtrc.json /app/.oxfmtrc.json
 RUN bun apps/api/scripts/generate-capability-runtime.ts
+RUN bun apps/api/scripts/generate-mcp-app-contracts.ts && bun packages/mcp-apps/scripts/build-mcp-apps.ts
 # Build the server unminified: `bun build --minify` can break Elysia's AOT
 # handler codegen (minified variable renames vs Sucrose). See elysiajs/elysia#1711.
 RUN bun build \
@@ -336,7 +343,7 @@ RUN mkdir -p /app/runtime-workers && \
       /app/runtime-workers/xlsx_parser_bg.wasm && \
     cp node_modules/@silurus/ooxml/dist/pptx_parser_bg.wasm \
       /app/runtime-workers/pptx_parser_bg.wasm && \
-    cp node_modules/@hyzyla/pdfium/dist/pdfium.wasm \
+    cp node_modules/@embedpdf/pdfium/dist/pdfium.wasm \
       /app/runtime-workers/pdfium.wasm && \
     cp apps/api/src/lib/ocr-local/latin-v5-dict.txt \
       /app/runtime-workers/latin-v5-dict.txt

@@ -98,8 +98,8 @@ const actor = {
 };
 
 const reportDataSpy = spyOn(reportData, "buildReportData");
-const textModelSpy = spyOn(modelTransport, "generateTanStackTextForRole");
-const objectModelSpy = spyOn(modelTransport, "generateTanStackObjectForRole");
+const textModelSpy = spyOn(modelTransport, "generateTanStackTextForTask");
+const objectModelSpy = spyOn(modelTransport, "generateTanStackObjectForTask");
 const chatObjectSpy = spyOn(chatRuntime, "generateChatObject");
 // Every model run resolves its model here, and every AI condition decides here.
 const resolveModelSpy = spyOn(modelTransport, "resolveTanStackTextModel");

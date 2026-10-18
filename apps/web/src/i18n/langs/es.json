@@ -12,6 +12,31 @@
       "unknownDevice": "Dispositivo desconocido"
     }
   },
+  "admin": {
+    "ai": "IA",
+    "backToApp": "Volver a la aplicación",
+    "billingAndUsage": "Facturación y uso",
+    "billingProfiles": "Perfiles de facturación",
+    "deleteDescription": "Elimina permanentemente esta organización y sus datos. Esta acción no se puede deshacer.",
+    "deleteOrganization": "Eliminar organización",
+    "deleteRefusedSubscription": "Esta organización tiene una suscripción que se renueva. Cancélala primero en Plan y uso y, después, elimina la organización.",
+    "deleteTypeToConfirm": "Escribe {name} para confirmar.",
+    "firmSetup": "Configuración del despacho",
+    "general": "Configuración general",
+    "leaveDescription": "Perderás el acceso a los asuntos y datos de esta organización.",
+    "leaveOrganization": "Salir de la organización",
+    "leaveRefusedOnlyOwner": "Eres el único propietario. Haz propietario a otro miembro antes de salir.",
+    "modelsAndProviders": "Modelos y proveedores",
+    "noPlan": "Sin plan activo",
+    "organizationDeleted": "La organización se ha eliminado.",
+    "organizationId": "ID de la organización",
+    "organizationLeft": "Has salido de la organización.",
+    "overviewDescription": "Gestiona tu organización, las personas y las herramientas.",
+    "people": "Personas",
+    "planAndUsage": "Plan y uso",
+    "title": "Administración de la organización",
+    "toolsDescription": "Activa o desactiva las herramientas integradas para todas las personas de esta organización."
+  },
   "agentClaim": {
     "access": "Acceso que obtendrá",
     "accessReadSearch": "Acceso de lectura y búsqueda",
@@ -64,6 +89,9 @@
     "runRemainingPage": "Ejecutar lo restante (esta página)",
     "runSelectedRows": "Ejecutar para {count, plural, one {# fila seleccionada} other {# filas seleccionadas}}",
     "selectedRun": "Ejecutar columnas de IA para {count, plural, one {# fila} other {# filas}}"
+  },
+  "aiDisclosure": {
+    "caseLaw": "Los resúmenes, notas y análisis de resoluciones judiciales elaborados con IA los genera stella; no están avalados por los tribunales ni reflejan su propio razonamiento. Son herramientas de apoyo para profesionales del derecho, y solo el texto de la resolución tiene valor fehaciente."
   },
   "appearance": {
     "calendar": "Calendario",
@@ -529,6 +557,70 @@
     },
     "hourlyRateMustBeNonNegative": "La tarifa por hora no puede ser negativa",
     "hours": "Horas",
+    "invoiceComposer": {
+      "addSellerProfile": "Añada un perfil de vendedor en la configuración de facturación",
+      "billedHours": "Horas facturadas",
+      "buyer": "Cliente (comprador)",
+      "continueToDetails": "Continuar con los datos",
+      "continueToIssue": "Continuar con la emisión",
+      "datesAndPayment": "Fechas y pago",
+      "days": "{days, plural, one {# día} other {# días}}",
+      "draftSavedTitle": "Borrador de factura guardado",
+      "dueIn": "Vence en",
+      "dueOn": "vence el {date}",
+      "flatFee": "Este asunto tiene honorarios fijos: la factura cobra los {amount} acordados y el tiempo de abajo queda cubierto por ellos.",
+      "flatFeeLine": "Honorarios fijos acordados",
+      "include": "Incluir en esta factura",
+      "issueFailed": "El borrador se guardó, pero no se pudo emitir la factura.",
+      "issueInvoice": "Emitir factura",
+      "issuedTitle": "Factura {number} emitida",
+      "lines": "Líneas de la factura",
+      "loggedHours": "{hours} h registradas",
+      "noCharge": "Sin cargo",
+      "noClient": "Este asunto no tiene cliente, por lo que la factura aún no tiene comprador.",
+      "noExpenses": "No hay gastos aprobados sin facturar en este asunto.",
+      "noTime": "No hay tiempo aprobado sin facturar en este asunto.",
+      "noVat": "Sin IVA",
+      "nothingToBill": "Aún no hay nada que facturar. Apruebe registros de tiempo o gastos de este asunto para facturarlos.",
+      "openInvoice": "Abrir factura",
+      "otherCurrency": "{count, plural, one {# concepto está registrado} other {# conceptos están registrados}} en una moneda distinta de {currency} y quedan pendientes para otra factura.",
+      "outsideScope": "Fuera del ámbito del IVA, 0 %",
+      "rate": "Tarifa",
+      "readyDescription": "Al emitirla, la factura recibe el siguiente número de su serie y queda bloqueada. Un borrador se puede seguir editando.",
+      "readyTitle": "Lista para emitir",
+      "reverseCharge": "Inversión del sujeto pasivo, 0 %",
+      "saveDraft": "Guardar como borrador",
+      "seller": "Vendedor",
+      "sources": {
+        "client": "Copiado del cliente del asunto",
+        "clientTerm": "Plazo de pago del cliente",
+        "defaultSeller": "Su perfil de vendedor predeterminado",
+        "defaultTerm": "Plazo de pago habitual",
+        "lastWorkDay": "Último día del trabajo incluido"
+      },
+      "steps": {
+        "issue": "Revisar y emitir",
+        "items": "Tiempo y gastos"
+      },
+      "tax": "Impuestos y moneda",
+      "taxableSupplyDate": "Fecha de devengo",
+      "timeEntries": "Registros de tiempo",
+      "timeSummary": "{count, plural, one {# registro} other {# registros}} · {hours} h",
+      "title": "Nueva factura",
+      "totalsSummary": "Base {net} · IVA {vat} · Total {total}",
+      "vat": "Tratamiento del IVA",
+      "vatRate": "IVA {rate} %",
+      "vatReasons": {
+        "clientCountryUnconfirmed": "No se pudo confirmar el país del cliente: su número de IVA y su dirección no indican el mismo país, así que se aplica el tipo general",
+        "clientVatIdInvalid": "El NIF-IVA del cliente no tiene el formato de su país, por lo que se aplica el tipo general",
+        "domesticRate": "Su tipo de IVA más alto vigente en la fecha de devengo",
+        "noSellerProfile": "No hay perfil de vendedor, así que no se cobra IVA hasta que lo indique en la factura",
+        "noVatRate": "No hay ningún tipo de IVA configurado en la facturación",
+        "outsideScope": "El NIF-IVA del cliente está registrado fuera de la UE, por lo que el lugar de prestación está en el extranjero",
+        "reverseCharge": "El número de IVA del cliente está registrado en otro país",
+        "sellerNotVatPayer": "El vendedor no es sujeto pasivo de IVA"
+      }
+    },
     "invoiceNarrative": "Descripción de factura",
     "invoiceNarrativePlaceholder": "Descripción para el cliente (opcional)",
     "invoices": {
@@ -671,7 +763,10 @@
       "registrationId": "Número de registro",
       "setDefault": "Establecer como predeterminado",
       "title": "Perfiles de vendedor",
-      "vatId": "Número de IVA"
+      "vatId": "Número de IVA",
+      "vatPayer": "Sujeto pasivo de IVA",
+      "vatPayerHelp": "Las facturas de este vendedor cobran IVA. Desactívelo para una persona registrada que tiene número de IVA pero no es sujeto pasivo.",
+      "vatPayerRequiresVatId": "Indique el número de IVA para emitir facturas como sujeto pasivo de IVA."
     },
     "settingsTitle": "Facturación",
     "split": {
@@ -988,7 +1083,6 @@
       }
     },
     "sameCaseNumber": "{count, plural, one {# resolución lleva} other {# resoluciones llevan}} este número de asunto. Elija el tribunal.",
-    "searchAskPrompt": "{query} (jurisprudencia de {country})",
     "searchLabel": "Buscar jurisprudencia",
     "searchPlaceholder": "Número de asunto, ECLI o palabras, p. ej. 22 Cdo 2653/2012",
     "searchUnavailable": {
@@ -1046,6 +1140,13 @@
       "provisionMentions": "{count, number}×",
       "provisionMentionsLabel": "{count, plural, one {# mención} other {# menciones}}",
       "provisionsCited": "Disposiciones citadas",
+      "provisionsFailed": "El procesamiento de citas ha fallado",
+      "provisionsNoneFound": "No se encontraron disposiciones citadas",
+      "provisionsProcessing": "Las citas se están procesando",
+      "provisionsUnavailable": "Las citas no están disponibles",
+      "provisionsUnplaceable": "Las citas no pueden ubicarse en el texto de la resolución",
+      "provisionsUnsupported": "El procesamiento de citas no está disponible para esta resolución",
+      "provisionsWithheld": "Las citas no se divulgan",
       "sourceFields": {
         "decisionCategory": "Categoría de la decisión",
         "publishedOnWeb": "Publicado en la web"
@@ -1129,15 +1230,37 @@
     },
     "answerEdit": {
       "acceptFailed": "No se pudo guardar el cambio. Inténtelo de nuevo.",
+      "aiKind": "Edición solicitada",
       "ask": "Solicitar cambios",
+      "authorUnknown": "Autor desconocido",
+      "autolinkLabel": "Este texto se convierte automáticamente en un enlace. Cambia la etiqueta antes de quitar el enlace.",
+      "change": "Cambio {revision}",
+      "editedLabel": "Respuesta editada",
       "failed": "No se pudo preparar el cambio. Inténtelo de nuevo.",
+      "formatKind": "Formato",
+      "heading": "Encabezado {level}",
+      "history": "Historial de la respuesta",
+      "historyEmpty": "No hay versiones anteriores.",
       "instruction": "Describa el cambio",
       "instructionRequired": "Describa cómo cambiar el texto seleccionado.",
       "invalidSelection": "Esta selección no se puede editar. Seleccione un fragmento continuo.",
+      "invalidUrl": "Introduzca una dirección HTTP o HTTPS válida.",
+      "linkAddress": "Dirección del enlace",
+      "orderedList": "Lista numerada",
       "proposal": "Cambio propuesto",
       "requesting": "Preparando cambios…",
+      "restoreRefreshFailed": "La respuesta se restauró, pero no se pudo actualizar. Actualízala para cargar la respuesta restaurada.",
+      "revertKind": "Versión restaurada",
       "stale": "Esta respuesta ha cambiado. Vuelva a seleccionar el texto.",
-      "submit": "Solicitar cambio"
+      "submit": "Solicitar cambio",
+      "textStyle": "Estilo de texto",
+      "unorderedList": "Lista con viñetas",
+      "wholeBlockRequired": "Seleccione un párrafo o una lista completos para cambiar su estilo."
+    },
+    "answerQuote": {
+      "showInDecision": "Ver en la resolución",
+      "verified": "Cita verificada",
+      "verifiedHint": "Palabra por palabra en {source}"
     },
     "applyMode": {
       "description": "Word registra quién hizo cada cambio. Recordaremos tu elección.",
@@ -1323,7 +1446,12 @@
     "maxAttachmentsReached": "Máximo {count} archivos por mensaje",
     "mention": {
       "category": {
-        "entities": "En este asunto"
+        "entities": "En este asunto",
+        "sources": "Fuentes"
+      },
+      "corpus": {
+        "caseLaw": "Jurisprudencia · {country}",
+        "legislation": "Legislación · {country}"
       },
       "loadError": "Error al cargar elementos"
     },
@@ -1377,6 +1505,12 @@
       "title": "Texto pegado"
     },
     "placeholder": "Escriba su pregunta aquí, / para habilidades, @ para añadir contexto",
+    "processSummary": {
+      "analyses": "{count, plural, one {# análisis} other {# análisis}}",
+      "changesSaved": "{count, plural, one {# cambio guardado} other {# cambios guardados}}",
+      "documentEdits": "{count, plural, one {# edición del documento} other {# ediciones del documento}}",
+      "sourcesChecked": "{count, plural, one {# fuente consultada} other {# fuentes consultadas}}"
+    },
     "promptImprovementStrategies": {
       "decompose": {
         "description": "Convierte el trabajo complejo en subtareas ordenadas.",
@@ -1488,6 +1622,18 @@
       "rejected": "Rechazado"
     },
     "tabToAsk": "→ para preguntar: \"{prompt}\"",
+    "tableChart": {
+      "bar": "Barras",
+      "kind": "Tipo de gráfico",
+      "line": "Líneas",
+      "loading": "Seleccionando un gráfico…",
+      "pie": "Circular",
+      "scatter": "Dispersión",
+      "showChart": "Mostrar como gráfico",
+      "summary": "Valores mostrados: {n, number}.",
+      "unavailable": "No se pudo seleccionar un gráfico. Se muestra la tabla.",
+      "values": "{label}: {value, number}"
+    },
     "thinking": "Trabajando con contexto",
     "threadFiles": {
       "title": "Archivos de este chat"
@@ -1610,6 +1756,7 @@
       "interrupted": "Interrumpido antes de finalizar",
       "output": "Salida",
       "sourceCode": "Código fuente",
+      "statusWaiting": "En espera",
       "toggleDetails": "Mostrar detalles",
       "unrestoredFields": "{count, plural, one {# campo no se pudo} other {# campos no se pudieron}} rellenar con valores reales en el modo anonimizado. Revise: {fields}"
     },
@@ -1635,7 +1782,8 @@
       "toggleLabel": "Búsqueda web",
       "toggleOff": "Desactivar búsqueda web",
       "toggleOn": "Activar búsqueda web"
-    }
+    },
+    "workedFor": "Tiempo de trabajo: {duration}"
   },
   "clauses": {
     "addVariant": "Añadir variante",
@@ -2513,11 +2661,14 @@
     "actionFailed": "Acción fallida",
     "api": {
       "badRequest": "No se pudo completar la solicitud.",
+      "caseLawCountryUnavailable": "La jurisprudencia de este país no está disponible. Elige otro país.",
+      "caseLawSearchUnavailable": "La búsqueda de jurisprudencia de este país no está disponible. Puedes seguir consultando sus resoluciones públicas.",
       "conflict": "La solicitud entra en conflicto con el estado actual.",
       "forbidden": "No tienes permiso para hacer esto.",
+      "legislationCountryUnavailable": "La legislación de este país no está disponible. Elige otro país.",
+      "legislationSearchUnavailable": "La búsqueda de legislación de este país no está disponible. Puedes seguir consultando su legislación pública.",
       "notFound": "No pudimos encontrar lo solicitado.",
       "payloadTooLarge": "La solicitud es demasiado grande.",
-      "publicCountryUnavailable": "La legislación y la jurisprudencia de este país no están disponibles. Elige otro país.",
       "rateLimited": "Demasiadas solicitudes. Inténtalo de nuevo más tarde.",
       "server": "Algo salió mal. Inténtalo de nuevo.",
       "serviceUnavailable": "El servicio no está disponible temporalmente. Inténtalo de nuevo.",
@@ -4670,9 +4821,19 @@
       "deleteAccountWarningExplanation": "Enviaremos un código de verificación a su dirección de correo electrónico para confirmar esta solicitud. El historial completado del espacio de trabajo seguirá atribuido a su cuenta eliminada.",
       "desktop": "Escritorio",
       "desktopAppDescription": "Recupera todo lo que copies y abre documentos de stella en las aplicaciones de escritorio que ya utilizas.",
+      "desktopCardApproveDetail": "Aprueba para vincular este equipo a <bdi>{identity}</bdi> en {host}.",
+      "desktopCardApproveTitle": "stella desktop pide conectarse",
+      "desktopCardConnectedDetail": "Vinculado a <bdi>{identity}</bdi> en {host} · versión {version}",
+      "desktopCardConnectedDetailNoVersion": "Vinculado a <bdi>{identity}</bdi> en {host}",
+      "desktopCardConnectedTitle": "stella desktop está vinculado",
+      "desktopCardMissingDetail": "Instálalo, o conéctalo si ya está instalado en este equipo.",
+      "desktopCardMissingTitle": "stella desktop aún no está vinculado",
+      "desktopCardOutdatedDetail": "La versión {version} está vinculada a <bdi>{identity}</bdi>. Instala la última versión para que los documentos y la actividad sigan funcionando.",
+      "desktopCardOutdatedTitle": "stella desktop necesita una actualización",
       "desktopClipboardDescription": "Abre, busca, organiza y reutiliza texto copiado desde cualquier aplicación.",
       "desktopClipboardTitle": "Historial del portapapeles con búsqueda",
       "desktopConnectFailed": "No se pudo conectar con stella desktop.",
+      "desktopConnectInstalled": "Ya está instalado, conectar",
       "desktopConnectedAs": "Conectado como <bdi>{email}</bdi>",
       "desktopDescription": "Historial del portapapeles y herramientas de documentos en tu ordenador",
       "desktopDocumentsDescription": "Abre archivos de stella en aplicaciones de escritorio; las revisiones vuelven al asunto correcto.",
@@ -5018,7 +5179,6 @@
     "provisionTextUnavailable": "Texto no disponible para esta versión",
     "publisherWindowInconsistent": "No se puede determinar la versión vigente en esta fecha: los datos del editor son incoherentes.",
     "resolvedAlias": "Reconocido como {label}",
-    "searchAskPrompt": "{query} (legislación de {country})",
     "searchLabel": "Buscar en la legislación",
     "searchPlaceholder": "Número, nombre o título, p. ej. 89/2012 Sb.",
     "showCitedPartOnly": "Mostrar solo la parte citada",
@@ -6147,7 +6307,6 @@
         }
       },
       "atAGlance": "De un vistazo",
-      "edited": "editó",
       "getStarted": "Empiece subiendo documentos o creando su primera carpeta.",
       "matterDetails": "Detalles del asunto",
       "membersCount": "{count, plural, one {# miembro} other {# miembros}}",

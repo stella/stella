@@ -582,6 +582,67 @@ describe("changed-file autofix boundary", () => {
     );
   });
 
+  test("scopes a later push to what changed since the settled commit", async () => {
+    const job = jobOf(await Bun.file(WORKFLOW_URL).text());
+    const settledStep = job.indexOf("- name: Find settled autofix commit");
+    const planStep = job.indexOf("- name: Match generator inputs");
+    const derivedJob = job.indexOf("  regenerate-derived-files:");
+    const changedStep = job.indexOf("- name: Record changed paths");
+    const tauriStep = job.indexOf("- name: Align Tauri counterparts");
+    const fixStep = job.indexOf("- name: Fix changed files");
+    const pruneStep = job.indexOf("- name: Prune stale baseline entries");
+    const restrictionStep = job.indexOf("- name: Restrict autofix changes");
+    const pushStep = job.indexOf("- name: Push autofixes");
+
+    expect(settledStep).toBeGreaterThan(0);
+    expect(planStep).toBeGreaterThan(settledStep);
+    expect(job.slice(0, derivedJob)).toContain("checks: read");
+    expect(job.slice(0, settledStep)).toContain("fetch-depth: 21");
+    expect(job.slice(settledStep, planStep)).toContain(
+      "github.event.action == 'synchronize'",
+    );
+    expect(job.slice(settledStep, planStep)).toContain(
+      "scripts/autofix-push-scope.ts settled",
+    );
+    expect(job.slice(planStep, derivedJob)).toContain(
+      'scripts/autofix-plan.ts plan --since "$RUNNER_TEMP/push-paths"',
+    );
+    // An older planner prints no `needed` or `prune`; empty means run.
+    expect(job.slice(derivedJob, changedStep)).toContain(
+      "needs.regenerate-scope.outputs.needed != 'false'",
+    );
+    expect(job.slice(pruneStep, restrictionStep)).toContain(
+      "if: needs.regenerate-scope.outputs.prune != 'false'",
+    );
+    // Fixers read the push scope; the rewrite boundary stays the whole PR.
+    const changed = job.slice(changedStep, tauriStep);
+    expect(changed).toContain(
+      'git diff --name-only -z --no-renames "$SINCE_SHA" "$HEAD_SHA"',
+    );
+    expect(changed).toContain(
+      'cp "$RUNNER_TEMP/autofix-changed-paths" "$RUNNER_TEMP/autofix-fix-paths"',
+    );
+    // A changed fixer input drops the push scope for the fixers.
+    expect(changed).toContain(
+      `SINCE_SHA: \${{ needs.regenerate-scope.outputs.refix != 'true' && needs.regenerate-scope.outputs.since || '' }}`,
+    );
+    expect(job.slice(0, derivedJob)).toContain(
+      `refix: \${{ steps.scope.outputs.refix }}`,
+    );
+    expect(job.slice(tauriStep, fixStep)).toContain(
+      'done < "$RUNNER_TEMP/autofix-fix-paths"',
+    );
+    expect(job.slice(fixStep, pruneStep)).toContain(
+      'done < "$RUNNER_TEMP/autofix-fix-paths"',
+    );
+    expect(job.slice(fixStep, pruneStep)).not.toContain(
+      "autofix-changed-paths",
+    );
+    expect(job.slice(restrictionStep, pushStep)).toContain(
+      'done < "$RUNNER_TEMP/autofix-changed-paths"',
+    );
+  });
+
   test("skips an old head without the planner but detects a broken sparse checkout", async () => {
     const job = jobOf(await Bun.file(WORKFLOW_URL).text());
     const availability = job.indexOf("- name: Check planner availability");
@@ -605,21 +666,27 @@ describe("changed-file autofix boundary", () => {
 });
 
 test("type-aware autofix fixtures require a successful dependency install", async () => {
-  const ci = await Bun.file(
-    new URL("../.github/workflows/ci.yml", import.meta.url),
-  ).text();
-  const start = ci.indexOf("      - name: Test type-aware autofix\n");
-  expect(start).toBeGreaterThanOrEqual(0);
-  const step = ci.slice(start, ci.indexOf("\n      - name:", start + 1));
-  expect(step).toContain("steps.install.outcome == 'success'");
-  expect(step).toContain(
+  // Pooled checks are steps of their job; see scripts/workflow-steps.ts.
+  const steps = workflowJobSteps(
+    Bun.YAML.parse(
+      await Bun.file(
+        new URL("../.github/workflows/ci.yml", import.meta.url),
+      ).text(),
+    ),
+    "ci-checks-rest",
+  );
+  const named = (name: string) => {
+    const step = steps.find((candidate) => candidate["name"] === name);
+    expect(step, name).toBeDefined();
+    return { condition: String(step?.["if"]), run: String(step?.["run"]) };
+  };
+  const step = named("Test type-aware autofix");
+  expect(step.condition).toContain("steps.install.outcome == 'success'");
+  expect(step.condition).toContain(
     "needs.ci-plan.outputs.package_checks_required == 'true'",
   );
-  expect(step).toContain("bun test scripts/autofix-type-aware.test.ts");
-  const invariants = ci.slice(
-    ci.indexOf("      - name: Test CI workflow invariants\n"),
-    start,
-  );
+  expect(step.run).toContain("bun test scripts/autofix-type-aware.test.ts");
+  const invariants = named("Test CI workflow invariants").run;
   expect(invariants).not.toContain("scripts/autofix-type-aware.test.ts");
   expect(invariants).not.toContain(
     "apps/api/scripts/refresh-test-durations.test.ts",

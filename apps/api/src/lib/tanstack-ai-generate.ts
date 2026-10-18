@@ -24,7 +24,7 @@ import {
   getOutputTokenLimit,
 } from "@stll/ai-catalog";
 import type {
-  ModelRole,
+  ModelTask,
   ReasoningEffort,
   TanStackAIProvider,
 } from "@stll/ai-catalog";
@@ -126,10 +126,11 @@ import {
 } from "@/api/lib/tanstack-ai-caching";
 import type { LayeredSystemPrompt } from "@/api/lib/tanstack-ai-caching";
 import {
+  getStructuredOutputFallbackModelId,
   getTanStackTextModelById,
-  getTanStackTextModelForRole,
+  getTanStackTextModelForTask,
   getTanStackTextModelInfoById,
-  getTanStackTextModelInfoForRole,
+  getTanStackTextModelInfoForTask,
   isMockTextAdapter,
   mockAnswersForOrganization,
 } from "@/api/lib/tanstack-ai-models";
@@ -173,7 +174,7 @@ type GenerateTanStackBaseOptions = {
     | undefined;
   orgAIConfig: OrgAIConfig | null | undefined;
   reasoningEffort?: ReasoningEffort | undefined;
-  role: ModelRole;
+  task: ModelTask;
   serviceTier: AIRequestServiceTier;
   system?: string | undefined;
   systemPromptOrigin?: SystemPromptOrigin | undefined;
@@ -188,7 +189,7 @@ type GenerateTanStackBaseOptions = {
 } & AIRequestPolicy &
   ModelDispatchScope;
 
-type TanStackTextForRoleOptions = GenerateTanStackBaseOptions &
+type TanStackTextForTaskOptions = GenerateTanStackBaseOptions &
   GenerateTanStackInputOptions;
 
 /**
@@ -213,7 +214,7 @@ type GenerationDeadlineOption = {
   deadlineMs?: number | undefined;
 };
 
-type GenerateTanStackTextForRoleOptions = TanStackTextForRoleOptions &
+type GenerateTanStackTextForTaskOptions = TanStackTextForTaskOptions &
   GenerationDeadlineOption & {
     finishPolicy: TanStackTextFinishPolicy;
   };
@@ -229,8 +230,8 @@ type OutputTokenBudgetOption =
   | { outputTokenBudget?: never }
   | { maxOutputTokens?: never; outputTokenBudget: number };
 
-type GenerateTanStackObjectForRoleOptions<TSchema extends v.GenericSchema> =
-  TanStackTextForRoleOptions &
+type GenerateTanStackObjectForTaskOptions<TSchema extends v.GenericSchema> =
+  TanStackTextForTaskOptions &
     OutputTokenBudgetOption &
     Pick<StreamChatChunksOptions, "tools" | "agentLoopStrategy"> & {
       /** Explicit exception for a generative fallback or provider-path probe. */
@@ -261,10 +262,11 @@ export type TanStackStructuredOutputEvent<TOutput> =
     };
 
 type ResolveTextModelOptions = {
+  abortSignal?: AbortSignal | undefined;
   modelId?: string | undefined;
   orgAIConfig: OrgAIConfig | null | undefined;
   reasoningEffort?: ReasoningEffort | undefined;
-  role: ModelRole;
+  task: ModelTask;
 } & AIRequestPolicy &
   ModelDispatchScope;
 
@@ -299,7 +301,11 @@ export const withGenerationDeadline = async <T>(
     abortSignal,
     deadlineMs,
   }: GenerationDeadlineOption & { abortSignal?: AbortSignal | undefined },
-  run: (abortSignal: AbortSignal | undefined) => Promise<T>,
+  run: (
+    abortSignal: AbortSignal | undefined,
+    /** When the deadline falls, on the `performance.now()` clock. */
+    deadlineAt?: number,
+  ) => Promise<T>,
 ): Promise<T> => {
   if (deadlineMs === undefined) {
     return await run(abortSignal);
@@ -307,6 +313,7 @@ export const withGenerationDeadline = async <T>(
   if (!Number.isInteger(deadlineMs) || deadlineMs <= 0) {
     return panic("A generation deadline must be a positive integer of ms");
   }
+  const deadlineAt = performance.now() + deadlineMs;
   const settled = await Result.tryPromise({
     try: async () =>
       await withTimeout(
@@ -315,6 +322,7 @@ export const withGenerationDeadline = async <T>(
             abortSignal === undefined
               ? deadlineSignal
               : AbortSignal.any([abortSignal, deadlineSignal]),
+            deadlineAt,
           ),
         { label: GENERATION_DEADLINE_LABEL, timeoutMs: deadlineMs },
       ),
@@ -445,12 +453,15 @@ const rateLimitRetryDelayMs = (error: unknown): number | undefined => {
  * for a rate limit whose stated delay fits `PROVIDER_RETRY_WAIT_CAP_MS` runs
  * again after that delay; a longer delay, no stated delay, any other failure
  * and a second refusal all reach the caller unchanged, the delay still on the
- * error so the caller can say when to retry. The wait honours the deadline
- * signal, so it never outlives the call's own budget.
+ * error so the caller can say when to retry. A wait the call's deadline
+ * cannot cover is not started: the refusal reaches the caller with its delay
+ * rather than ending as a timeout that forgot it. The wait also honours the
+ * abort signal.
  */
 export const withProviderRetryWait = async <T>(
   abortSignal: AbortSignal | undefined,
   run: () => Promise<T>,
+  deadlineAt?: number,
 ): Promise<T> => {
   const first = await Result.tryPromise({
     try: run,
@@ -460,7 +471,11 @@ export const withProviderRetryWait = async <T>(
     return first.value;
   }
   const delay = rateLimitRetryDelayMs(first.error);
-  if (delay === undefined || delay > PROVIDER_RETRY_WAIT_CAP_MS) {
+  if (
+    delay === undefined ||
+    delay > PROVIDER_RETRY_WAIT_CAP_MS ||
+    (deadlineAt !== undefined && performance.now() + delay >= deadlineAt)
+  ) {
     throw first.error;
   }
   const waited = await Result.tryPromise({
@@ -482,21 +497,22 @@ export const withProviderRetryWait = async <T>(
   return await run();
 };
 
-export const generateTanStackTextForRole = async (
-  options: GenerateTanStackTextForRoleOptions,
+export const generateTanStackTextForTask = async (
+  options: GenerateTanStackTextForTaskOptions,
 ): Promise<string> =>
   await withGenerationDeadline(
     options,
-    async (abortSignal) =>
+    async (abortSignal, deadlineAt) =>
       await withProviderRetryWait(
         abortSignal,
         async () =>
           await generateTanStackTextWithin({ ...options, abortSignal }),
+        deadlineAt,
       ),
   );
 
 const generateTanStackTextWithin = async (
-  options: GenerateTanStackTextForRoleOptions,
+  options: GenerateTanStackTextForTaskOptions,
 ): Promise<string> => {
   // Checked before the model resolves: a dispatch on a settled proof panics.
   const abortSignal = admittedDispatchSignal(options);
@@ -554,8 +570,8 @@ const generateTanStackTextWithin = async (
   return output;
 };
 
-export const streamTanStackTextForRole = async function* (
-  options: TanStackTextForRoleOptions,
+export const streamTanStackTextForTask = async function* (
+  options: TanStackTextForTaskOptions,
 ): AsyncIterable<string> {
   // Checked before the model resolves: a dispatch on a settled proof panics.
   const abortSignal = admittedDispatchSignal(options);
@@ -624,7 +640,7 @@ export type TanStackTextRun = {
  * output ceiling — for a drafted document field that difference is the
  * difference between a value and a sentence ending mid-word.
  *
- * Unlike `generateTanStackTextForRole` this takes the assembled chat options,
+ * Unlike `generateTanStackTextForTask` this takes the assembled chat options,
  * so a run carrying tools (the skill loop) can be graded the same way. The
  * caller owns the model resolution and must dispatch through
  * {@link textAdapterWithNormalizedStops}.
@@ -736,6 +752,7 @@ const streamTanStackTextDeltas = async function* ({
   temperature: number | undefined;
   onFinish?: ((finish: TextRunFinish) => void) | undefined;
 }): AsyncIterable<string> {
+  const modelAnalytics = analytics?.forModel(model);
   yield* iterateWithStandardServiceTierFallback({
     abortSignal: abortController?.signal,
     model,
@@ -752,7 +769,7 @@ const streamTanStackTextDeltas = async function* ({
           serviceTier: requestedServiceTier,
           temperature,
         }),
-        ...(analytics ? { middleware: [analytics.middleware] } : {}),
+        ...(modelAnalytics ? { middleware: [modelAnalytics.middleware] } : {}),
         ...(abortController ? { abortController } : {}),
       }),
     onChunk: (chunk) => {
@@ -1279,14 +1296,26 @@ const structuredOutputRepairMessages = <TMessage>({
 const STRUCTURED_OUTPUT_RUNG = {
   NATIVE: "native",
   MODEL_REPAIR: "model_repair",
+  FALLBACK_MODEL: "fallback_model",
+  FALLBACK_SKIPPED: "fallback_skipped",
 } as const;
 
 type StructuredOutputRung =
   (typeof STRUCTURED_OUTPUT_RUNG)[keyof typeof STRUCTURED_OUTPUT_RUNG];
 
 type StructuredOutputOutcome =
-  | { type: "ok"; rung: StructuredOutputRung }
-  | { type: "failed"; kind: "output_invalid" | "repair_failed" };
+  | {
+      type: "ok";
+      rung: Exclude<
+        StructuredOutputRung,
+        "fallback_model" | "fallback_skipped"
+      >;
+    }
+  | {
+      type: "failed";
+      rung: "output_invalid" | "repair_failed" | "fallback_skipped";
+    }
+  | { type: "ok" | "failed"; rung: "fallback_model"; fallbackModelId: string };
 
 /**
  * One line per structured run that needed or tried a repair, so the repair
@@ -1311,8 +1340,10 @@ const reportStructuredOutputOutcome = ({
   }
   logger.info("ai.structured_output.outcome", {
     "ai.structured_output.result": outcome.type,
-    "ai.structured_output.rung":
-      outcome.type === "ok" ? outcome.rung : outcome.kind,
+    "ai.structured_output.rung": outcome.rung,
+    ...(outcome.rung === STRUCTURED_OUTPUT_RUNG.FALLBACK_MODEL
+      ? { "ai.structured_output.fallback_model_id": outcome.fallbackModelId }
+      : {}),
     "ai.structured_output.issue_count": issues.length,
     "ai.structured_output.issue_types": [
       ...new Set(issues.map(({ type }) => type)),
@@ -1350,18 +1381,28 @@ type StructuredOutputRepairTurn = {
 /**
  * Validates a structured answer and, when it does not match, asks the same
  * model once to fix exactly the reported issues (`structuredOutputRepairMessages`).
- * The repaired answer passes the full schema or the run fails as
- * `ModelOutputInvalidError`: nothing is converted, filled in or dropped. The
- * repair runs inside the caller's deadline and abort signal.
+ * After a failed repair, a role caller can select one approved model for a
+ * fresh request. Every answer passes the full schema or fails; nothing is
+ * converted, filled in or dropped. All rungs share the deadline and signal.
  */
 const settleStructuredOutput = async <TSchema extends v.GenericSchema>({
   model,
   outputSchema,
   output,
   repair,
+  fallback,
   role,
 }: ParseModelOutputOptions<TSchema> & {
   repair: (turn: StructuredOutputRepairTurn) => Promise<unknown>;
+  fallback?:
+    | (() => {
+        modelId: string;
+        run: () => Promise<{
+          model: ResolvedTanStackTextModel;
+          output: unknown;
+        }>;
+      } | null)
+    | undefined;
   role: string;
 }): Promise<v.InferOutput<TSchema>> => {
   const first = v.safeParse(outputSchema, output);
@@ -1383,20 +1424,53 @@ const settleStructuredOutput = async <TSchema extends v.GenericSchema>({
     try: async () => await repair({ invalidOutput: output, issues }),
     catch: (error: unknown) => error,
   });
-  if (Result.isError(repaired)) {
-    report({ type: "failed", kind: "repair_failed" });
+  if (
+    Result.isError(repaired) &&
+    !(repaired.error instanceof ModelOutputInvalidError)
+  ) {
+    report({ type: "failed", rung: "repair_failed" });
     throw repaired.error;
   }
-  const second = v.safeParse(outputSchema, repaired.value);
-  report(
-    second.success
-      ? { type: "ok", rung: STRUCTURED_OUTPUT_RUNG.MODEL_REPAIR }
-      : { type: "failed", kind: "output_invalid" },
-  );
-  if (!second.success) {
+  if (Result.isOk(repaired)) {
+    const second = v.safeParse(outputSchema, repaired.value);
+    if (second.success) {
+      report({ type: "ok", rung: STRUCTURED_OUTPUT_RUNG.MODEL_REPAIR });
+      return second.output;
+    }
+  }
+  // Callers that own their adapter (chat-object) have no organization/role
+  // resolution context. Only the role entry can choose an approved fallback.
+  if (fallback === undefined) {
+    report({ type: "failed", rung: "output_invalid" });
     throw new ModelOutputInvalidError({ model });
   }
-  return second.output;
+  const candidate = fallback();
+  if (candidate === null) {
+    report({ type: "failed", rung: STRUCTURED_OUTPUT_RUNG.FALLBACK_SKIPPED });
+    throw new ModelOutputInvalidError({ model });
+  }
+  const attempted = await Result.tryPromise({
+    try: candidate.run,
+    catch: (error: unknown) => error,
+  });
+  if (Result.isError(attempted)) {
+    report({
+      type: "failed",
+      rung: STRUCTURED_OUTPUT_RUNG.FALLBACK_MODEL,
+      fallbackModelId: candidate.modelId,
+    });
+    throw attempted.error;
+  }
+  const final = v.safeParse(outputSchema, attempted.value.output);
+  report({
+    type: final.success ? "ok" : "failed",
+    rung: STRUCTURED_OUTPUT_RUNG.FALLBACK_MODEL,
+    fallbackModelId: candidate.modelId,
+  });
+  if (!final.success) {
+    throw new ModelOutputInvalidError({ model: attempted.value.model });
+  }
+  return final.output;
 };
 
 /**
@@ -1427,29 +1501,29 @@ const requestedOutputTokens = (
     ? options.maxOutputTokens
     : outputTokensWithinModelLimit(model, options.outputTokenBudget);
 
-export const generateTanStackObjectForRole = async <
+export const generateTanStackObjectForTask = async <
   TSchema extends v.GenericSchema,
 >(
-  options: GenerateTanStackObjectForRoleOptions<TSchema> &
+  options: GenerateTanStackObjectForTaskOptions<TSchema> &
     GenerationDeadlineOption,
 ): Promise<v.InferOutput<TSchema>> =>
   await withGenerationDeadline(
     options,
-    async (abortSignal) =>
-      await withProviderRetryWait(
-        abortSignal,
-        async () =>
-          await generateTanStackObjectWithin({ ...options, abortSignal }),
+    async (abortSignal, deadlineAt) =>
+      await generateTanStackObjectWithin(
+        { ...options, abortSignal },
+        deadlineAt,
       ),
   );
 
-const generateTanStackObjectWithin = async <TSchema extends v.GenericSchema>({
-  outputMode: _outputMode,
-  outputSchema,
-  ...options
-}: GenerateTanStackObjectForRoleOptions<TSchema>): Promise<
-  v.InferOutput<TSchema>
-> => {
+const generateTanStackObjectWithin = async <TSchema extends v.GenericSchema>(
+  {
+    outputMode: _outputMode,
+    outputSchema,
+    ...options
+  }: GenerateTanStackObjectForTaskOptions<TSchema>,
+  deadlineAt: number | undefined,
+): Promise<v.InferOutput<TSchema>> => {
   // Checked before the model resolves: a dispatch on a settled proof panics.
   const abortSignal = admittedDispatchSignal(options);
   const model = await (options.resolveTextModel ?? resolveTanStackTextModel)(
@@ -1459,52 +1533,56 @@ const generateTanStackObjectWithin = async <TSchema extends v.GenericSchema>({
   const abortController = abortSignal
     ? abortControllerFromSignal(abortSignal)
     : undefined;
-  guardStructuredOutputBudget({ model, outputSchema });
-  const tanStackOutputSchema = ownerValidatedSchema(
-    toTanStackValibotSchema(
-      outputSchema,
-      structuredOutputProjectionOptions({
-        mock: isMockTextAdapter(model.adapter),
-        provider: model.provider,
-      }),
-    ),
-  );
-  const maxOutputTokens = requestedOutputTokens(options, model);
-
   const run = async (
     messages: GuardedModelMessages<ModelMessage[]>,
+    requestModel: ResolvedTanStackTextModel,
   ): Promise<unknown> => {
+    const analytics = options.analytics?.forModel(requestModel);
+    guardStructuredOutputBudget({ model: requestModel, outputSchema });
+    const tanStackOutputSchema = ownerValidatedSchema(
+      toTanStackValibotSchema(
+        outputSchema,
+        structuredOutputProjectionOptions({
+          mock: isMockTextAdapter(requestModel.adapter),
+          provider: requestModel.provider,
+        }),
+      ),
+    );
+    const maxOutputTokens = requestedOutputTokens(options, requestModel);
     const generated = await Result.tryPromise({
       try: async () =>
-        await withStandardServiceTierFallback({
-          abortSignal: abortController?.signal,
-          model,
-          serviceTier: options.serviceTier,
-          run: async (serviceTier) =>
-            await generateChatObject({
-              adapter: model.adapter,
-              messages,
-              outputSchema: tanStackOutputSchema,
-              tools: options.tools,
-              agentLoopStrategy: options.agentLoopStrategy,
-              ...systemPromptsPatch({
-                caching: options.caching,
-                model,
-                system: guardedSystemPrompt(options),
-              }),
-              modelOptions: mergeGenerationOptions({
-                caching: options.caching,
-                model,
-                maxOutputTokens,
-                serviceTier,
-                temperature: options.temperature,
-              }),
-              ...(options.analytics
-                ? { middleware: [options.analytics.middleware] }
-                : {}),
-              ...(abortController ? { abortController } : {}),
+        await withProviderRetryWait(
+          abortSignal,
+          async () =>
+            await withStandardServiceTierFallback({
+              abortSignal: abortController?.signal,
+              model: requestModel,
+              serviceTier: options.serviceTier,
+              run: async (serviceTier) =>
+                await generateChatObject({
+                  adapter: requestModel.adapter,
+                  messages,
+                  outputSchema: tanStackOutputSchema,
+                  tools: options.tools,
+                  agentLoopStrategy: options.agentLoopStrategy,
+                  ...systemPromptsPatch({
+                    caching: options.caching,
+                    model: requestModel,
+                    system: guardedSystemPrompt(options),
+                  }),
+                  modelOptions: mergeGenerationOptions({
+                    caching: options.caching,
+                    model: requestModel,
+                    maxOutputTokens,
+                    serviceTier,
+                    temperature: options.temperature,
+                  }),
+                  ...(analytics ? { middleware: [analytics.middleware] } : {}),
+                  ...(abortController ? { abortController } : {}),
+                }),
             }),
-        }),
+          deadlineAt,
+        ),
       catch: (error: unknown) => error,
     });
     if (Result.isError(generated)) {
@@ -1522,7 +1600,7 @@ const generateTanStackObjectWithin = async <TSchema extends v.GenericSchema>({
   return await settleStructuredOutput({
     model,
     outputSchema,
-    output: await run(requestMessages),
+    output: await run(requestMessages, model),
     // The repair turn carries model output, so the whole list is guarded
     // again rather than appended to the already guarded one.
     repair: async (turn) =>
@@ -1534,18 +1612,54 @@ const generateTanStackObjectWithin = async <TSchema extends v.GenericSchema>({
           }),
           workspaceIds: options.tenantWorkspaceIds,
         }),
+        model,
       ),
-    role: options.role,
+    fallback: () => {
+      const modelId = getStructuredOutputFallbackModelId({
+        ...options,
+        failedModelId: model.modelId,
+        modelTier: options.admission.modelTier,
+      });
+      if (modelId === null) {
+        return null;
+      }
+      return {
+        modelId,
+        run: async () => {
+          // Reuse the same admission and policy, with a fresh request carrying
+          // only the original guarded conversation to the other model.
+          admittedDispatchSignal(options);
+          const fallbackModel = await (
+            options.resolveTextModel ?? resolveTanStackTextModel
+          )({
+            ...options,
+            modelId,
+          });
+          // Custom resolvers may pin an adapter instead of honoring overrides.
+          // Prove the selected identity before sending the conversation again.
+          if (
+            `${fallbackModel.provider}::${fallbackModel.modelId}` !== modelId
+          ) {
+            throw new ModelOutputInvalidError({ model: fallbackModel });
+          }
+          return {
+            model: fallbackModel,
+            output: await run(requestMessages, fallbackModel),
+          };
+        },
+      };
+    },
+    role: options.task,
   });
 };
 
-export const streamTanStackObjectForRole = async function* <
+export const streamTanStackObjectForTask = async function* <
   TSchema extends v.GenericSchema,
 >({
   outputMode: _outputMode,
   outputSchema,
   ...options
-}: GenerateTanStackObjectForRoleOptions<TSchema>): AsyncIterable<
+}: GenerateTanStackObjectForTaskOptions<TSchema>): AsyncIterable<
   TanStackStructuredOutputEvent<v.InferOutput<TSchema>>
 > {
   // Checked before the model resolves: a dispatch on a settled proof panics.
@@ -1781,7 +1895,7 @@ export const resolveTanStackTextModel = async (
     organizationId,
     orgAIConfig,
     reasoningEffort,
-    role,
+    task,
     ...policy
   } = options;
   // Every inference path (chat, subagents, field generators, workflow
@@ -1794,11 +1908,11 @@ export const resolveTanStackTextModel = async (
   let managedOpenRouterCredential: ManagedOpenRouterCredential | undefined;
   if (!orgAIConfig && !mockAnswersForOrganization(orgAIConfig)) {
     const info = modelId
-      ? getTanStackTextModelInfoById(modelId, orgAIConfig, role, {
+      ? getTanStackTextModelInfoById(modelId, orgAIConfig, task, {
           dataClass: policy.dataClass,
           modelTier,
         })
-      : getTanStackTextModelInfoForRole(role, orgAIConfig, {
+      : getTanStackTextModelInfoForTask(task, orgAIConfig, {
           organizationId,
           modelTier,
           ...policy,
@@ -1832,14 +1946,14 @@ export const resolveTanStackTextModel = async (
 
   return modelId
     ? getTanStackTextModelById(modelId, orgAIConfig, {
-        role,
+        task,
         organizationId,
         modelTier,
         reasoningEffort,
         managedOpenRouterCredential,
         ...policy,
       })
-    : getTanStackTextModelForRole(role, orgAIConfig, {
+    : getTanStackTextModelForTask(task, orgAIConfig, {
         organizationId,
         modelTier,
         managedOpenRouterCredential,
@@ -1862,7 +1976,7 @@ const messagesFromInput = (
  * provider with unredacted tenant ids in its messages or system prompt.
  */
 const guardedMessagesFromInput = (
-  options: TanStackTextForRoleOptions,
+  options: TanStackTextForTaskOptions,
 ): GuardedModelMessages<ModelMessage[]> =>
   guardModelMessages({
     messages: messagesFromInput(options),
@@ -2149,11 +2263,11 @@ export const mergeGenerationOptions = ({
     caching,
     model,
   });
-  // Caller temperature overrides only apply where the role builder
+  // Caller temperature overrides only apply where the task builder
   // itself emitted a temperature. Builder omission is always
   // deliberate — the model rejects, deprecates, or ignores sampling
   // overrides (`MODEL_TEMPERATURE_POLICIES`), the id is uncatalogued, or the
-  // role runs a thinking/reasoning mode that is incompatible with
+  // task runs a thinking/reasoning mode that is incompatible with
   // temperature (Anthropic extended thinking rejects it even on
   // models that accept temperature otherwise). The suppression is
   // logged so a caller's explicit setting never disappears without a

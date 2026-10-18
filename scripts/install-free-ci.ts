@@ -10,7 +10,7 @@
  *
  * Install detection is exact rather than by step name:
  * - An install is a `bun install` / `bun i` / `bun ci` / `bun add` command
- *   (directly or through `bash scripts/retry.sh`) that is not global. It
+ *   (directly or through `bash <path>/retry.sh`) that is not global. It
  *   covers the commands that run in its directory or below it.
  * - Inside a step, the commands after the install are covered. A later step
  *   is covered when its `if:` implies the install step's `if:`: every
@@ -37,9 +37,11 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+import { checkPoolRegistryPath } from "./ci-check-pool-registry";
 import {
   mergeWorkflowParallelProofs,
   synchronizeWorkflowBackgroundSteps,
+  withPooledChecks,
 } from "./workflow-steps";
 
 export type Classification =
@@ -726,6 +728,15 @@ const changeDirectory = ({ from, to }: ChangeDirectoryOptions): string => {
 
 const TIMEOUT_DURATION = /^(?:\d+(?:\.\d*)?|\.\d+)[smhd]?$/u;
 
+/**
+ * The repository retry helper, wherever the step finds it: `scripts/retry.sh`
+ * from the root, or a copy kept elsewhere such as a release tooling checkout.
+ * It runs the rest of its words as the command, so it is unwrapped like
+ * `timeout`.
+ */
+const isRetryHelper = (word: string | undefined): boolean =>
+  word === "retry.sh" || word?.endsWith("/retry.sh") === true;
+
 /** The program and its arguments, past keywords, assignments and wrappers. */
 export const programWords = (words: readonly string[]): readonly string[] => {
   let rest = words;
@@ -781,7 +792,7 @@ export const programWords = (words: readonly string[]): readonly string[] => {
         return words;
       }
       rest = rest.slice(1); // Duration precedes the wrapped command.
-    } else if (first === "bash" && rest.at(1) === "scripts/retry.sh") {
+    } else if (first === "bash" && isRetryHelper(rest.at(1))) {
       rest = rest.slice(2);
     } else {
       return rest;
@@ -1915,7 +1926,12 @@ export const installFreeInvocations = ({
       initial: [],
       job: id,
       prefix: "",
-      steps: Array.isArray(job["steps"]) ? job["steps"] : [],
+      // Pooled checks run as steps of their job (scripts/workflow-steps.ts).
+      steps: Array.isArray(job["steps"])
+        ? withPooledChecks(job["steps"], (pool) =>
+            readFileSync(path.join(root, checkPoolRegistryPath(pool)), "utf-8"),
+          )
+        : [],
     }).invocations;
   });
 };

@@ -34,6 +34,7 @@ import {
   isChatFileMimeType,
 } from "@stll/api-contract/chat-file-types";
 import { CHAT_CONTEXT_FILE_MAX_BYTES } from "@stll/chat-limits";
+import { ChatComposerLinks } from "@stll/chat/link-editor";
 import { openFilePicker as openBrowserFilePicker } from "@stll/ui/file-picker";
 import { stellaToast } from "@stll/ui/toast";
 
@@ -251,7 +252,8 @@ export type ChatEditorController = {
   /**
    * Read-only TipTap handle. TipTap nulls `commandManager` on destroy, so
    * any `editor.commands.*` access after teardown throws. Always narrow
-   * with `editor.isDestroyed`, or prefer the controller's mutation
+   * with `getLiveEditor(editor)` at the point of use, or prefer the
+   * controller's mutation
    * helpers (`blur`, `setEditable`, `setContent`, ...) which already
    * guard against the destroyed state.
    */
@@ -979,6 +981,7 @@ export const useChatEditor = ({
     Paragraph,
     Text,
     Bold,
+    ChatComposerLinks,
     // Shift+Enter inserts a hard break (newline) instead of
     // splitting the paragraph; matches expected chat-input
     // behaviour everywhere — Slack, Discord, ChatGPT, etc.

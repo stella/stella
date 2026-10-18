@@ -366,6 +366,9 @@
     "chat.landing.skills": [
       "de"
     ],
+    "chat.mention.category.sources": [
+      "fr"
+    ],
     "chat.pastedText.fromPromptFallback": [
       "de"
     ],
@@ -1192,7 +1195,6 @@
     "workspaces.overview.activity.details.channel",
     "workspaces.overview.activity.loadEarlier",
     "workspaces.overview.atAGlance",
-    "workspaces.overview.edited",
     "workspaces.overview.getStarted",
     "workspaces.overview.openTasks",
     "workspaces.overview.uploaded",
@@ -1255,7 +1257,6 @@
     "workspaces.views.fields",
     "workspaces.views.reportExport.action",
     "workspaces.views.timeline.noDates",
-    "workspaces.views.timeline.showTable",
     "workspaces.workflow.allManualInputsDescription",
     "workspaces.workflow.allManualInputsTitle",
     "workspaces.workflow.generate",

@@ -11,9 +11,10 @@ import { panic, Result } from "better-result";
  *
  * The hunt has to end. An item the publisher lists but never serves would
  * otherwise keep its slice short forever and be re-fetched on every visit, so
- * a repeatedly failing item is parked on a widening schedule and finally
- * retired; a retired item counts as accounted for, which is what lets a slice
- * settle and stay settled.
+ * an unavailable item is parked on a widening schedule with capped backoff.
+ * Only an explicit unkeyable outcome retires an item; repeated failure never
+ * proves a listed document permanently absent. A retired item counts as
+ * accounted for, which is what lets a slice settle and stay settled.
  *
  * Everything here runs under the source's ingestion lease, because it writes
  * through the same `processDecision` a crawl feeds and must not interleave
@@ -87,7 +88,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/slice-listing";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decisionAbsorptionSql } from "@/api/lib/case-law/decision-absorption";
-import { rowHoldsDocument } from "@/api/lib/case-law/stored-payload";
+import { rowHoldsDocumentFor } from "@/api/lib/case-law/stored-payload";
 import {
   errorFingerprint,
   errorSystemFields,
@@ -116,7 +117,7 @@ import {
 import {
   countTerminalReconciliationItemsBySlice,
   parkReconciliationItem,
-  pruneUnlistedTerminalItems,
+  pruneUnlistedReconciliationItems,
   resolveReconciliationItem,
   resolveReconciliationItems,
   retireReconciliationItem,
@@ -167,7 +168,7 @@ const LIST_DELAY_MS = 200;
  * avoid.
  */
 const LIST_TIMEOUT_MS = 5 * 60_000;
-/** Terminal rows examined when pruning a walked slice. */
+/** Tracked rows removed when pruning a completed listing walk. */
 const PRUNE_ROW_LIMIT = 1000;
 /**
  * One item's build; nothing in it should take longer. Sized like
@@ -621,7 +622,7 @@ const selectHeldDocumentIds = async (
         sourceDocumentId: caseLawDecisions.sourceDocumentId,
         hasDetail:
           detail === undefined ? sql<boolean>`true` : sql<boolean>`${detail}`,
-        hasStoredDocument: rowHoldsDocument,
+        hasStoredDocument: rowHoldsDocumentFor(caseLawDecisions),
         hasStoredDetail: sql<boolean>`${storedObservationHasDetail(caseLawDecisions.metadata)}`,
         // Taken out of the corpus by absorption or by a takedown: either
         // way settled, and nothing a listing walk could place again.
@@ -1290,7 +1291,7 @@ const ingestListedItem = async ({
           slice,
           identityKey: item.identityKey,
           payload: item.payload,
-          errorTag: "unkeyable",
+          errorTag: built.type,
           now,
         });
         if (retired.outcome === "recorded") {
@@ -1583,24 +1584,33 @@ const walkSlice = async ({
     });
   }
 
-  // This walk saw every page, so it is authoritative about what the slice
-  // lists. Retired rows naming anything else no longer describe this slice and
-  // must stop vouching for its shortfall: settledness weighs the terminal count
-  // against `reported`/`collected`, and those two describe the listing as it is
-  // now. Only reachable on a complete walk — a listing that failed part way
-  // through throws above and never gets here.
-  await lease.beforeDatabaseMark();
-  const prune = await pruneUnlistedTerminalItems(scopedDb, {
-    sourceId,
-    leaseToken: lease.leaseToken,
-    slice,
-    listedIdentityKeys: items.map(({ identityKey }) => identityKey),
-    limit: PRUNE_ROW_LIMIT,
-  });
-  if (prune.outcome === "superseded") {
-    return summary;
+  // Only a completed listing is authoritative about withdrawals. Remove
+  // unlisted parked rows before they can retry a withdrawn payload, and
+  // unlisted terminal rows before they can vouch for this slice's shortfall.
+  // A partial or failed listing never reaches this boundary. Each prune is a
+  // bounded batch; keep pruning until a batch comes back short, so no
+  // withdrawn row survives to a later retry and coverage is recorded only
+  // once the slice holds no unlisted row.
+  const listedIdentityKeys = items.map(({ identityKey }) => identityKey);
+  let pruned = 0;
+  let batchRemoved = PRUNE_ROW_LIMIT;
+  while (batchRemoved === PRUNE_ROW_LIMIT) {
+    await lease.beforeDatabaseMark();
+    // db-await-in-loop: bounded delete batches under the lease, until the slice holds no unlisted row
+    const prune = await pruneUnlistedReconciliationItems(scopedDb, {
+      sourceId,
+      leaseToken: lease.leaseToken,
+      slice,
+      listedIdentityKeys,
+      limit: PRUNE_ROW_LIMIT,
+    });
+    if (prune.outcome === "superseded") {
+      return summary;
+    }
+    batchRemoved = prune.removed;
+    pruned += batchRemoved;
   }
-  summary.pruned = prune.removed;
+  summary.pruned = pruned;
 
   await recordSliceCoverage(scopedDb, {
     sourceId,

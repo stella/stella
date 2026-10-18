@@ -15,6 +15,7 @@ import { isRecord } from "@/api/lib/type-guards";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 import { createDecisionDateCeilingRepair } from "./decision-date-ceiling-repair";
+import { createUngatedTableGateForTests } from "./online-ddl";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
 
 const DECISION_DATE_CEILING_REPAIR = createDecisionDateCeilingRepair({
@@ -33,6 +34,13 @@ const DECISION_DATE_CEILING_REPAIR = createDecisionDateCeilingRepair({
     ],
   }),
 });
+
+// PGlite has one session and no health source, so its validation runs ungated.
+const repairOn = async (connection: OnlineMigrationConnection) =>
+  await DECISION_DATE_CEILING_REPAIR.repair(
+    connection,
+    createUngatedTableGateForTests(connection),
+  );
 
 /**
  * The ceiling migration and its online repair against a table still carrying
@@ -282,7 +290,7 @@ test("the migration swaps the CHECK untouched, the repair clears and reopens, bo
     type: "incomplete",
   });
 
-  await DECISION_DATE_CEILING_REPAIR.repair(connection);
+  expect(await repairOn(connection)).toEqual({ type: "complete" });
   expect(await DECISION_DATE_CEILING_REPAIR.readCompletion(connection)).toEqual(
     { type: "complete" },
   );
@@ -341,14 +349,14 @@ test("the migration swaps the CHECK untouched, the repair clears and reopens, bo
   ]);
 
   // Fixed point: another run finds nothing and validates a validated CHECK.
-  await DECISION_DATE_CEILING_REPAIR.repair(connection);
+  expect(await repairOn(connection)).toEqual({ type: "complete" });
   expect(await snapshot(db)).toEqual(repaired);
   expect((await constraintState(db))?.isValidated).toBe(true);
 
   // The migration is re-runnable as a pair, and the repair validates again.
   await applyMigration(db);
   expect((await constraintState(db))?.isValidated).toBe(false);
-  await DECISION_DATE_CEILING_REPAIR.repair(connection);
+  expect(await repairOn(connection)).toEqual({ type: "complete" });
   expect(await snapshot(db)).toEqual(repaired);
   expect((await constraintState(db))?.isValidated).toBe(true);
   await client.close();
@@ -383,9 +391,7 @@ test("an interrupted repair keeps its committed batches and resumes by running a
   const dropped = connectionOver(client, {
     failOn: (statement, count) => statement === "COMMIT" && count === 2,
   });
-  const rejection: unknown = await DECISION_DATE_CEILING_REPAIR.repair(
-    dropped,
-  ).then(
+  const rejection: unknown = await repairOn(dropped).then(
     () => null,
     (error: unknown) => error,
   );
@@ -403,7 +409,9 @@ test("an interrupted repair keeps its committed batches and resumes by running a
     holdUntil: null,
   });
 
-  await DECISION_DATE_CEILING_REPAIR.repair(connectionOver(client));
+  expect(await repairOn(connectionOver(client))).toEqual({
+    type: "complete",
+  });
   expect(await corruptCount(db)).toBe(0);
   expect((await constraintState(db))?.isValidated).toBe(true);
   const cleared = await db

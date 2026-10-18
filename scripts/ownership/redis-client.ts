@@ -16,6 +16,11 @@ export default {
     specifiers: ["@/api/lib/redis-client"],
     allowed: [
       {
+        path: "apps/api/src/handlers/chat/link-icons/cache.ts",
+        reason:
+          "Bounded favicon cache and miss admission; outages return no icon without an origin lease.",
+      },
+      {
         path: "apps/api/src/lib/admission-redis.ts",
         reason:
           "Admission clients check and periodically refresh the non-eviction policy before issuing coordination commands.",
@@ -54,6 +59,11 @@ export default {
         path: "apps/api/src/lib/account-deletion-cleanup-queue.ts",
         reason:
           "Queue transport: worker owns its dedicated blocking connection.",
+      },
+      {
+        path: "apps/api/src/lib/account-export/queue.ts",
+        reason:
+          "Queue transport: the worker uses a dedicated connection; PostgreSQL requests and cursor recovery reconstruct work after an outage.",
       },
       {
         path: "apps/api/src/lib/style-set-package-cleanup-queue.ts",

@@ -1,12 +1,14 @@
 import { readFileSync } from "node:fs";
 
 export const PILOT_FAST_ROOTS = [
+  "generated-sources",
   "desktop-rust-lint",
   "scan-engine-wasm-drift",
   "ci-checks-generated",
   "ci-checks-policy",
   "ci-checks-rest",
   "ci-tests",
+  "pr-heavy-gate",
   "code-quality-api",
   "code-quality-web-rest",
   "query-perf",

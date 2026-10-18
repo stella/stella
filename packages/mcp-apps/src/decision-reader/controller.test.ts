@@ -23,7 +23,7 @@ const metadata = {
   country: "CZ",
   date: null,
   ecli: null,
-  appUrl: "https://stella.example/decisions/1",
+  url: "https://stella.example/decisions/1",
 } satisfies ReaderPage["metadata"];
 const paragraph = (number: number) =>
   ({
@@ -58,6 +58,7 @@ const page = (
     blockFragments: [],
     citationAnchors: [],
     provisionAnchors: [],
+    provisionStatus: null,
     nextCursor,
     limit: 60_000,
   },
@@ -181,7 +182,7 @@ describe("MCP decision reader controller", () => {
     const host = fixture();
     host.emit({
       status: "ready",
-      view: open({ ...metadata, appUrl: `${metadata.appUrl}#par=48-49` }),
+      view: open({ ...metadata, url: `${metadata.url}#par=48-49` }),
     });
     host.nextCall().resolve(response(page(47, "page-2")));
     await settle();
@@ -244,7 +245,7 @@ describe("MCP decision reader controller", () => {
     const host = fixture();
     host.emit({
       status: "ready",
-      view: open({ ...metadata, appUrl: `${metadata.appUrl}#par=48-49` }),
+      view: open({ ...metadata, url: `${metadata.url}#par=48-49` }),
     });
     host.nextCall().resolve(response(page(48, "old-page-2")));
     await settle();
@@ -293,7 +294,7 @@ describe("MCP decision reader controller", () => {
     expect(host.controller.range()).toEqual({ from: 48, to: 49 });
     previewCall.resolve(
       response({
-        appUrl: null,
+        url: null,
         documentId: metadata.decisionId,
         language: "cs",
         anchorId: "par-1",
@@ -424,7 +425,7 @@ describe("MCP decision reader controller", () => {
     host.nextCall().resolve(response(page(48, "page-2")));
     await settle();
     const preview = {
-      appUrl: null,
+      url: null,
       documentId: metadata.decisionId,
       language: "cs",
       anchorId: "par-1",
@@ -488,7 +489,7 @@ describe("MCP decision reader controller", () => {
     });
     call.resolve(
       response({
-        appUrl: null,
+        url: null,
         documentId: metadata.decisionId,
         language: "cs",
         anchorId: "par-1",
@@ -556,7 +557,7 @@ describe("MCP decision reader controller", () => {
     expect(host.controller.getSnapshot().previewStatus).toBe("loading");
     previewCall.resolve(
       response({
-        appUrl: null,
+        url: null,
         documentId: metadata.decisionId,
         language: "cs",
         anchorId: "par-1",
@@ -594,7 +595,7 @@ describe("MCP decision reader controller", () => {
     });
     const secondCall = host.nextCall();
     const preview = {
-      appUrl: "https://stella.example/legislation/1#par-2",
+      url: "https://stella.example/legislation/1#par-2",
       documentId: metadata.decisionId,
       language: "cs",
       anchorId: "par-2",

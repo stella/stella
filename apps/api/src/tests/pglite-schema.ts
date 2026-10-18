@@ -98,6 +98,11 @@ const PROVISION_SCOPE_TRANSITION_KEYSET_MIGRATION_PATH = nodePath.join(
   "20260929180100_case_law_provision_scope_transition_keyset",
   "migration.sql",
 );
+const PROVISION_PENDING_SINCE_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261010110000_case_law_provision_pending_since",
+  "migration.sql",
+);
 const CASE_LAW_OBSERVATION_FENCE_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
   "20260731190000_case_law_observation_legacy_fence",
@@ -644,6 +649,15 @@ export const installPgliteStatuteCitationCounts = async (
   ).filter((candidate) => !executableSql(candidate).startsWith("SET "))) {
     await db.execute(sql.raw(statement));
   }
+  for (const statement of readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261010212100_case_law_publication_filter",
+      "migration.sql",
+    ),
+  ).filter((candidate) => !executableSql(candidate).startsWith("SET "))) {
+    await db.execute(sql.raw(statement));
+  }
 };
 
 const PROVISION_EXTRACTION_STATE_STATEMENT_PREFIXES = [
@@ -667,6 +681,7 @@ export const installPgliteProvisionExtractionState = async (
     PROVISION_READ_STATUS_MIGRATION_PATH,
     PROVISION_READER_GRANTS_MIGRATION_PATH,
     PROVISION_SCOPE_TRANSITION_KEYSET_MIGRATION_PATH,
+    PROVISION_PENDING_SINCE_MIGRATION_PATH,
   ]) {
     const statements = readMigrationStatements(migrationPath).filter(
       (statement) =>

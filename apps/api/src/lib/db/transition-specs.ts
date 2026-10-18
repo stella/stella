@@ -1,6 +1,7 @@
 import { DESKTOP_TIME_ENTRY_BATCH_STATUSES } from "@stll/api-contract/desktop-time-entries";
 
 import {
+  accountExports,
   caseLawDecisionCitationStatsState,
   desktopEditSessions,
   folioCollabRooms,
@@ -22,7 +23,7 @@ import {
 import { FOLIO_COLLAB_TRANSITION_IDENTITIES } from "@/api/lib/db/folio-collab-transition-identities";
 import { READER_ANSWER_TRANSITION_IDENTITIES } from "@/api/lib/db/reader-answer-transition-identities";
 import type {
-  STATUS_COLUMNS,
+  WRITABLE_STATUS_COLUMNS,
   StatusTable,
 } from "@/api/lib/db/status-tables.gen";
 import {
@@ -79,6 +80,19 @@ const UNMANAGED_REASONS = {
   coordinatedTimers:
     "Timer state and its entry projection are coordinated by the timer transaction owner pending migration.",
 } as const;
+
+// A failed attempt retries until its budget is spent; a ready archive expires.
+const ACCOUNT_EXPORT_TRANSITIONS = defineTransitions(
+  accountExports,
+  {
+    requested: ["processing", "failed"],
+    processing: ["ready", "requested", "failed"],
+    ready: ["expired"],
+    failed: [],
+    expired: [],
+  },
+  { terminal: ["failed", "expired"] },
+);
 
 export const FOLIO_COLLAB_SEED_TRANSITIONS = defineScopedTransitions({
   ...FOLIO_COLLAB_TRANSITION_IDENTITIES.FOLIO_COLLAB_SEED_TRANSITIONS,
@@ -249,7 +263,7 @@ const EU_COMPLETION_APPROVAL_PROOF = defineFixedLifecycle({
 });
 
 type StatusColumns<TTable extends StatusTable> =
-  (typeof STATUS_COLUMNS)[TTable];
+  (typeof WRITABLE_STATUS_COLUMNS)[TTable];
 
 // Each table's decision covers exactly its inventoried lifecycle columns.
 type TransitionDecision<TTable extends StatusTable> =
@@ -275,6 +289,7 @@ export const TRANSITIONS = {
   agentRegistration: { unmanaged: UNMANAGED_REASONS.authCeremony },
   accountDeletionEffectChunks: { unmanaged: UNMANAGED_REASONS.cleanup },
   accountDeletionRequests: { unmanaged: UNMANAGED_REASONS.cleanup },
+  accountExports: ACCOUNT_EXPORT_TRANSITIONS,
   agentSkillProposals: { unmanaged: UNMANAGED_REASONS.userDecision },
   aiMemories: { unmanaged: UNMANAGED_REASONS.userDecision },
   auditLogs: { unmanaged: UNMANAGED_REASONS.userDecision },

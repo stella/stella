@@ -148,6 +148,7 @@ import type { DocxComments } from "@/components/docx/app-docx-editor";
 import type { DocxEditModeResult } from "@/components/docx/docx-browser-editor.logic";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { getLiveEditor } from "@/components/live-editor";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import { SuggestedFollowupChips } from "@/features/chat/components/suggested-followup-chips";
 import { useChatSession } from "@/features/chat/hooks/use-chat-session";
@@ -1388,7 +1389,7 @@ const FileChatOverlayInner = ({
         entityId: reviewEntityId,
         prepared,
         snapshotBlocks: lastSnapshot
-          ? lastSnapshot.blocks
+          ? withBlockTextHashes(lastSnapshot)
           : EMPTY_SNAPSHOT_BLOCKS,
         snapshot: lastSnapshot,
       });
@@ -2194,8 +2195,8 @@ const FileChatOverlayInner = ({
     await commitNewThread(newThreadRef.threadId, pendingReview);
   };
   const readComposerHtml = (): string => {
-    const { editor } = editorController;
-    return editor === null || editor.isDestroyed ? "" : editor.getHTML();
+    const editor = getLiveEditor(editorController.editor);
+    return editor === null ? "" : editor.getHTML();
   };
   const requestNewThreadRotation = useLatestCallback(async () => {
     if (isDraftChatFrozen() || newThreadCommitRef.current) {

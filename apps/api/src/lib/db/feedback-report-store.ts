@@ -14,7 +14,7 @@
  */
 
 import { panic } from "better-result";
-import { and, eq, gte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
 
 import type {
   FeedbackDelivery,
@@ -50,6 +50,47 @@ export type FeedbackReportRow = {
   organizationId: SafeId<"organization"> | null;
   redactions: number;
   fingerprint: string;
+};
+
+const FEEDBACK_REPORT_ACCOUNT_PAGE_SIZE = 100;
+
+type FeedbackReportId = (typeof feedbackReports.$inferSelect)["id"];
+type ReadOwnFeedbackReportPageOptions = {
+  database: Pick<typeof rootDb, "select">;
+  userId: SafeId<"user">;
+  after?: FeedbackReportId;
+};
+
+/** Reads only the caller's reports and omits maintainer-only fields. */
+export const readOwnFeedbackReportPage = async ({
+  database,
+  userId,
+  after,
+}: ReadOwnFeedbackReportPageOptions) => {
+  const rows = await database
+    .select({
+      id: feedbackReports.id,
+      receipt: feedbackReports.receipt,
+      kind: feedbackReports.kind,
+      area: feedbackReports.area,
+      title: feedbackReports.title,
+      whatHappened: feedbackReports.whatHappened,
+      expected: feedbackReports.expected,
+      steps: feedbackReports.steps,
+      evidence: feedbackReports.evidence,
+      via: feedbackReports.via,
+      createdAt: feedbackReports.createdAt,
+    })
+    .from(feedbackReports)
+    .where(
+      and(
+        eq(feedbackReports.userId, userId),
+        after === undefined ? undefined : lt(feedbackReports.id, after),
+      ),
+    )
+    .orderBy(desc(feedbackReports.id))
+    .limit(FEEDBACK_REPORT_ACCOUNT_PAGE_SIZE);
+  return rows;
 };
 
 type StoredFeedbackReport = { id: SafeId<"feedbackReport"> };
