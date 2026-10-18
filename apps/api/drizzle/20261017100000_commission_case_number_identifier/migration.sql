@@ -47,5 +47,7 @@ ALTER TABLE "case_law_decision_identifiers"
   VALIDATE CONSTRAINT "case_law_decision_identifiers_type_values";--> statement-breakpoint
 ALTER TABLE "case_law_citations"
   VALIDATE CONSTRAINT "citations_identifier_type_values";--> statement-breakpoint
+SET statement_timeout = '5s';--> statement-breakpoint
+SET lock_timeout = '1s';--> statement-breakpoint
 -- squawk-ignore transaction-nesting
 COMMIT;

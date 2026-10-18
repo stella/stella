@@ -762,9 +762,13 @@ const COMMISSION_CASE_CUE_RE = new RegExp(
 const COMMISSION_CASE_CUE_WINDOW = 40;
 
 const COMMISSION_CASE_NUMBER_PATTERN =
-  /(?<![\p{L}\d])(?<caseNumber>(?:AT\s*\.\s*\d{4,6}|COMP\s*\/\s*\d{2}\s*\.\s*\d{3}|M\s*\.\s*\d{1,6}|SA\s*\.\s*\d{3,6}|(?<!\d\s*)(?:C|N|NN)\s+\d{1,3}\s*\/\s*\d{4}))(?![\p{L}\d/])/giu;
+  /(?<![\p{L}\d])(?<caseNumber>(?:AT\s*\.\s*\d{4,6}|COMP\s*\/\s*\d{2}\s*\.\s*\d{3}|M\s*\.\s*\d{1,6}|SA\s*\.\s*\d{3,6}|(?<!\d\s{0,3})(?:C|N|NN)\s+\d{1,3}\s*\/\s*\d{4}))(?![\p{L}\d/])/giu;
 const COMMISSION_SHORT_CASE_NUMBER_RE = /^(?:C|N|NN)\s/iu;
-const NATIONAL_DOCKET_ROMAN_DIVISION_RE = /\b[IVXLCDM]{1,8}\s*$/u;
+/** A Roman court division (`IV C 123/2020`) owns the docket; at most 8 numerals and 3 spaces. */
+const NATIONAL_DOCKET_ROMAN_DIVISION_RE =
+  /(?<![\p{L}\d])[IVXLCDM]{1,8}\s{1,3}$/u;
+/** Numerals, spaces and one boundary character: the regex never scans the whole section. */
+const NATIONAL_DOCKET_ROMAN_DIVISION_WINDOW = 12;
 
 const isCommissionCaseNumberMatch = ({
   pattern,
@@ -783,7 +787,12 @@ const isCommissionCaseNumberMatch = ({
   if (
     caseNumber !== undefined &&
     COMMISSION_SHORT_CASE_NUMBER_RE.test(caseNumber) &&
-    NATIONAL_DOCKET_ROMAN_DIVISION_RE.test(text.slice(0, matchIndex))
+    NATIONAL_DOCKET_ROMAN_DIVISION_RE.test(
+      text.slice(
+        Math.max(0, matchIndex - NATIONAL_DOCKET_ROMAN_DIVISION_WINDOW),
+        matchIndex,
+      ),
+    )
   ) {
     return false;
   }
