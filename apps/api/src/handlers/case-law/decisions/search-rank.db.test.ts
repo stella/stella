@@ -24,6 +24,7 @@ import {
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
+  NATIVE_SCAN_TRANSPORT,
   readCorpusIndexSearchPage,
   type SearchCursor,
 } from "@/api/lib/legal-search/corpus-index-pagination";
@@ -365,6 +366,7 @@ test.each(
     let windowMoved = false;
     const readPage = async (parsedCursor: SearchCursor | null) =>
       await readCorpusIndexSearchPage({
+        scanTransport: NATIVE_SCAN_TRANSPORT,
         observer: "unobserved",
         cluster: "q09",
         indexId: corpusIndexId(GENERATION, "CZE"),

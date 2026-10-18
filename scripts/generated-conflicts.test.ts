@@ -12,14 +12,17 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
+  apply,
   classifyConflicts,
+  collect,
   conflictsOf,
   isAllowedResolution,
   parseStageEntries,
   pathShapeProblem,
+  plan,
   push,
 } from "./generated-conflicts";
-import { GENERATORS } from "./generated-files";
+import { GENERATORS, type Generator } from "./generated-files";
 
 const MESSAGES = "apps/web/src/i18n/langs/messages.gen.ts";
 
@@ -194,6 +197,7 @@ describe("resolution across runs", () => {
     run(cwd, ["bun", SCRIPT, ...args]);
 
   const NOTES = "apps/api/notes.txt";
+  const DERIVED = "generated/result.txt";
   const lines = (edit: (rows: string[]) => void) => {
     const rows = Array.from(
       { length: 20 },
@@ -248,6 +252,43 @@ describe("resolution across runs", () => {
     mainEdits?.(origin);
     git(origin, "add", "-A");
     git(origin, "commit", "-qm", "main");
+    const main = git(origin, "rev-parse", "HEAD");
+    return { origin, head, main };
+  };
+
+  const deletionGenerator = (
+    outputKind: Generator["outputKind"],
+  ): Generator => ({
+    id: `fixture-${outputKind}`,
+    outputKind,
+    outputs: [DERIVED],
+    inputs: [],
+    write: ["true"],
+    check: ["true"],
+    autofix: true,
+    after: [],
+  });
+
+  const deletionFixture = ({ ignored = true, file = DERIVED } = {}) => {
+    root = mkdtempSync(path.join(tmpdir(), "generated-conflicts-delete-"));
+    const origin = path.join(root, "origin");
+    mkdirSync(origin);
+    git(origin, "init", "-q", "-b", "main");
+    write(origin, file, "base\n");
+    git(origin, "add", ".");
+    git(origin, "commit", "-qm", "base");
+    git(origin, "switch", "-qc", "feature");
+    rmSync(path.join(origin, file));
+    if (ignored) {
+      write(origin, ".gitignore", `/${file}\n`);
+    }
+    git(origin, "add", "-A");
+    git(origin, "commit", "-qm", "derive output");
+    const head = git(origin, "rev-parse", "HEAD");
+    git(origin, "switch", "-q", "main");
+    write(origin, file, "changed on main\n");
+    git(origin, "add", "-A");
+    git(origin, "commit", "-qm", "update output");
     const main = git(origin, "rev-parse", "HEAD");
     return { origin, head, main };
   };
@@ -372,6 +413,119 @@ describe("resolution across runs", () => {
     expect(Buffer.from(blob.content, "base64").toString()).toBe(regenerated);
   });
 
+  test("the trusted run independently accepts a derived output deletion", () => {
+    const { origin, head, main } = deletionFixture();
+    const repo = path.join(root, "resolve");
+    git(root, "clone", "-q", origin, repo);
+    git(repo, "checkout", "-q", "--detach", head);
+    const planned = plan(path.join(repo, ".git"), head, main, [
+      deletionGenerator("derived"),
+    ]);
+    expect(planned.eligible).toBe(true);
+    expect(planned.deletions).toEqual([DERIVED]);
+    if (!planned.eligible || planned.baseline === null) {
+      return;
+    }
+    const planFile = path.join(root, "plan.json");
+    writeFileSync(planFile, JSON.stringify(planned));
+    git(repo, "read-tree", "-m", "-u", "HEAD", planned.baseline);
+    const collected = path.join(root, "resolution");
+    collect({
+      repo,
+      planFile,
+      out: collected,
+      generators: [deletionGenerator("derived")],
+    });
+
+    const bare = path.join(root, "publish.git");
+    git(root, "init", "-q", "--bare", bare);
+    git(bare, "fetch", "-q", origin, "+refs/heads/*:refs/heads/*");
+    const requests = path.join(root, "requests");
+    apply({
+      gitDir: bare,
+      head,
+      mainTip: main,
+      collected,
+      out: requests,
+      generators: [deletionGenerator("committed")],
+    });
+    const request: { tree: string } = JSON.parse(
+      readFileSync(path.join(requests, "commit.json"), "utf-8"),
+    );
+    expect(git(bare, "ls-tree", request.tree, "--", DERIVED)).toBe("");
+  });
+
+  const forgedDeletionRejections = [
+    {
+      name: "the head tree does not ignore the deletion",
+      fixture: () => deletionFixture({ ignored: false }),
+      generators: [deletionGenerator("committed")],
+    },
+    {
+      name: "main has no registered generator owner",
+      fixture: () => deletionFixture(),
+      generators: [] as Generator[],
+    },
+    {
+      name: "the stored deletion is a source file",
+      fixture: () => deletionFixture({ file: "src/source.ts" }),
+      generators: [deletionGenerator("committed")],
+    },
+    // The same owner safeguards as a regenerated conflict: a generator that
+    // writes only marked regions does not own the prose around them.
+    {
+      name: "its owner writes only regions of the file",
+      fixture: () => deletionFixture(),
+      generators: [
+        {
+          ...deletionGenerator("committed"),
+          blocks: [
+            { path: DERIVED, begin: "<!-- begin -->", end: "<!-- end -->" },
+          ],
+        },
+      ],
+    },
+    {
+      name: "its owner is not autofix-eligible",
+      fixture: () => deletionFixture(),
+      generators: [{ ...deletionGenerator("committed"), autofix: false }],
+    },
+  ];
+  test.each(forgedDeletionRejections)(
+    "the trusted run rejects a forged deletion when $name",
+    (rejection) => {
+      const { origin, head, main } = rejection.fixture();
+      const bare = path.join(root, "publish.git");
+      git(root, "init", "-q", "--bare", bare);
+      git(bare, "fetch", "-q", origin, "+refs/heads/*:refs/heads/*");
+      const collected = path.join(root, "forged");
+      mkdirSync(path.join(collected, "files"), { recursive: true });
+      writeFileSync(
+        path.join(collected, "manifest.json"),
+        JSON.stringify({
+          head,
+          main,
+          baseline: "0".repeat(40),
+          tree: "0".repeat(40),
+          deletions: [
+            rejection.name.includes("source") ? "src/source.ts" : DERIVED,
+          ],
+          files: [],
+        }),
+      );
+      expect(() =>
+        apply({
+          gitDir: bare,
+          head,
+          mainTip: main,
+          collected,
+          out: path.join(root, "requests"),
+          generators: rejection.generators,
+        }),
+      ).toThrow("The merge is not generated-only");
+    },
+  );
+
   test("repository attributes cannot change how the merge resolves", () => {
     // A union driver would merge both versions silently, hiding the
     // conflict, and would differ between a checkout and a bare repository.
@@ -393,10 +547,12 @@ describe("resolution across runs", () => {
     ]);
     expect(merged.exitCode, merged.stderr).toBe(0);
     const { out } = resolve(origin, head, main);
-    const plan = JSON.parse(
+    const storedPlan = JSON.parse(
       readFileSync(path.join(root, "plan.json"), "utf-8"),
     );
-    expect(plan.conflicts).toEqual([{ path: MESSAGES, kind: "both-modified" }]);
+    expect(storedPlan.conflicts).toEqual([
+      { path: MESSAGES, kind: "both-modified" },
+    ]);
     const published = publish(origin, head, out);
     expect(published.exitCode, published.stderr).toBe(0);
   });
@@ -553,6 +709,7 @@ describe("resolution across runs", () => {
         main,
         baseline: "0".repeat(40),
         tree: "0".repeat(40),
+        deletions: [],
         files: [],
       }),
     );
