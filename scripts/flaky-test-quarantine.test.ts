@@ -74,6 +74,8 @@ describe("registry schema", () => {
     ["an owner written as a mention", entry({ owner: "@octocat" }), "owner"],
     ["an empty reason", entry({ reason: "" }), "reason"],
     ["an impossible date", entry({ expires: "2026-02-30" }), "expires"],
+    ["an out-of-range month", entry({ expires: "2026-13-01" }), "expires"],
+    ["an out-of-range day", entry({ created: "2026-10-99" }), "created"],
     ["a Playwright spec", entry({ id: "apps/web/e2e/a.spec.ts::case" }), "id"],
     ["a Rust test", entry({ id: "apps/desktop/src/lib.rs::case" }), "id"],
     ["an absolute path", entry({ id: "/repo/a.test.ts::case" }), "id"],

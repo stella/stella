@@ -37,9 +37,17 @@ const GITHUB_OWNER = new RegExp(
   "u",
 );
 
-const isCalendarDate = (value: string): boolean =>
-  ISO_DATE.test(value) &&
-  new Date(`${value}T00:00:00.000Z`).toISOString().slice(0, 10) === value;
+// An out-of-range day or month passes the pattern but is an Invalid Date, which
+// toISOString would throw on; it is an invalid value, not a crash.
+const isCalendarDate = (value: string): boolean => {
+  if (!ISO_DATE.test(value)) {
+    return false;
+  }
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return (
+    !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value
+  );
+};
 
 export type TestIdentity = { readonly file: string; readonly name: string };
 
