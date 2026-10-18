@@ -5,7 +5,10 @@ import { Window } from "happy-dom";
 
 import { assertProperty } from "@stll/property-testing";
 
-import { renderDiagram } from "@/components/ai-elements/mermaid-diagram";
+import {
+  mermaidDiagram,
+  renderDiagram,
+} from "@/components/ai-elements/mermaid-diagram";
 import { DIAGRAM_FIXTURES } from "@/components/ai-elements/mermaid-diagram.fixtures";
 
 const FONTS = { fontFamily: "sans-serif", fontFamilyMono: "monospace" };
@@ -75,6 +78,38 @@ describe("mermaid diagrams", () => {
       expect(svgViolations(svg)).toEqual([]);
     },
   );
+
+  test("the plugin entry streamdown calls inline and in fullscreen returns the checked svg", async () => {
+    // Streamdown renders the chart again for its fullscreen view through the
+    // same plugin `render` and injects the returned markup as is in both
+    // views, so this entry point is the one whose output must be clean.
+    const window = new Window();
+    const restore = {
+      document: Reflect.get(globalThis, "document"),
+      getComputedStyle: Reflect.get(globalThis, "getComputedStyle"),
+    };
+    Object.defineProperty(window.document, "fonts", {
+      configurable: true,
+      value: { ready: Promise.resolve() },
+    });
+    Reflect.set(globalThis, "document", window.document);
+    Reflect.set(globalThis, "getComputedStyle", () => ({
+      fontFamily: "sans-serif",
+      getPropertyValue: () => "monospace",
+    }));
+    try {
+      const source =
+        'flowchart TD\n  A["<img src=x onerror=alert(1)>"] --> B\n  click A href "javascript:alert(1)"';
+      const plugin = mermaidDiagram.getMermaid();
+      const inline = await plugin.render("inline", source);
+      const fullscreen = await plugin.render("inline", source);
+      expect(svgViolations(inline.svg)).toEqual([]);
+      expect(fullscreen.svg).toBe(inline.svg);
+    } finally {
+      Reflect.set(globalThis, "document", restore.document);
+      Reflect.set(globalThis, "getComputedStyle", restore.getComputedStyle);
+    }
+  });
 
   test("hands diagram types pele cannot detect to the fallback renderer", async () => {
     const calls: [string, string][] = [];

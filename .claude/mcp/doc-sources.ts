@@ -403,6 +403,14 @@ export const DOC_SOURCE_EXCLUSIONS = [
       reason: "no-llms-txt",
     },
     {
+      checkedAt: "2026-10-19T00:00:00.000Z",
+      dependency: "pele",
+      explanation:
+        "https://pele.run/llms.txt and https://raw.githubusercontent.com/obsidianmd/pele/main/llms.txt return 404. Use the documentation at https://pele.run and the README at https://github.com/obsidianmd/pele#readme directly.",
+      expiresAt: "2026-11-18T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
       checkedAt: "2026-10-11T00:00:00.000Z",
       dependency: "shell-quote",
       explanation:
