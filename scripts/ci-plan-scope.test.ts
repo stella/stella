@@ -569,6 +569,10 @@ test("the real changed-file step preserves paths and fails closed on git failure
         cwd: repository,
         env: {
           ...process.env,
+          // The planner prefers BASE_SHA and skips the diff on heavy runs;
+          // pin both so the job's own values cannot change what is exercised.
+          BASE_SHA: "",
+          HEAVY_ONLY: "false",
           BASE_REF: baseRef,
           EVENT_NAME: "pull_request",
           GITHUB_OUTPUT: output,

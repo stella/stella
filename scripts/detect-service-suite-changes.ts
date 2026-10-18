@@ -30,6 +30,23 @@ type ServiceSuite = keyof typeof SUITES;
 
 // A planning process observes one immutable checkout. Own repository reads and
 // parsing here so the four suite projections share the same source inventory.
+// Any other root (a test fixture) may change between calls, so it is read fresh.
+const cachedForRepository = <Value>(
+  cache: Map<string, Value>,
+  { root, key }: { root: string; key: string },
+  compute: () => Value,
+) => {
+  if (root !== repositoryRoot) {
+    return compute();
+  }
+  const cached = cache.get(key);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const value = compute();
+  cache.set(key, value);
+  return value;
+};
 const repositorySources = new Map<string, string>();
 const repositoryImports = new Map<
   string,
@@ -39,42 +56,26 @@ const repositoryGlobs = new Map<string, readonly string[]>();
 const tsTranspiler = new Bun.Transpiler({ loader: "ts" });
 const tsxTranspiler = new Bun.Transpiler({ loader: "tsx" });
 
-const sourceText = (root: string, file: string) => {
-  const key = `${root}\0${file}`;
-  const cached = repositorySources.get(key);
-  if (cached !== undefined) {
-    return cached;
-  }
-  const source = readFileSync(path.join(root, file), "utf-8");
-  repositorySources.set(key, source);
-  return source;
-};
-
-const sourceImports = (root: string, file: string) => {
-  const key = `${root}\0${file}`;
-  const cached = repositoryImports.get(key);
-  if (cached !== undefined) {
-    return cached;
-  }
-  const transpiler =
-    file.endsWith("tsx") || file.endsWith("jsx") ? tsxTranspiler : tsTranspiler;
-  const imports = transpiler.scanImports(
-    sourceText(root, file).replace(/^#![^\n]*/u, ""),
+const sourceText = (root: string, file: string) =>
+  cachedForRepository(repositorySources, { root, key: file }, () =>
+    readFileSync(path.join(root, file), "utf-8"),
   );
-  repositoryImports.set(key, imports);
-  return imports;
-};
 
-const globFiles = (root: string, pattern: string) => {
-  const key = `${root}\0${pattern}`;
-  const cached = repositoryGlobs.get(key);
-  if (cached !== undefined) {
-    return cached;
-  }
-  const files = [...new Bun.Glob(pattern).scanSync({ cwd: root })];
-  repositoryGlobs.set(key, files);
-  return files;
-};
+const sourceImports = (root: string, file: string) =>
+  cachedForRepository(repositoryImports, { root, key: file }, () => {
+    const transpiler =
+      file.endsWith("tsx") || file.endsWith("jsx")
+        ? tsxTranspiler
+        : tsTranspiler;
+    return transpiler.scanImports(
+      sourceText(root, file).replace(/^#![^\n]*/u, ""),
+    );
+  });
+
+const globFiles = (root: string, pattern: string) =>
+  cachedForRepository(repositoryGlobs, { root, key: pattern }, () => [
+    ...new Bun.Glob(pattern).scanSync({ cwd: root }),
+  ]);
 
 const CORPUS_ENGINE_TEST_ALLOWLIST = new Map([
   [
@@ -427,15 +428,10 @@ const suiteGraphs = new Map<
 >();
 const suiteConfigurations = new Map<string, ReturnType<typeof loadSuites>>();
 
-const suiteConfiguration = (root: string) => {
-  const cached = suiteConfigurations.get(root);
-  if (cached !== undefined) {
-    return cached;
-  }
-  const configuration = loadSuites(root);
-  suiteConfigurations.set(root, configuration);
-  return configuration;
-};
+const suiteConfiguration = (root: string) =>
+  cachedForRepository(suiteConfigurations, { root, key: root }, () =>
+    loadSuites(root),
+  );
 
 export const planServiceSuites = (
   files: readonly string[],
@@ -456,12 +452,9 @@ export const planServiceSuites = (
     if (!files.some(canEnterServiceGraph)) {
       return false;
     }
-    const graphKey = `${root}\0${suite}`;
-    let graph = suiteGraphs.get(graphKey);
-    if (graph === undefined) {
-      graph = serviceSuiteDependencies(root, suite);
-      suiteGraphs.set(graphKey, graph);
-    }
+    const graph = cachedForRepository(suiteGraphs, { root, key: suite }, () =>
+      serviceSuiteDependencies(root, suite),
+    );
     let selected: boolean;
     switch (graph.status) {
       case "unresolved":

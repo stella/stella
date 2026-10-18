@@ -9,12 +9,11 @@ const CONFIG_PATH = path.resolve(
 );
 const SOURCE_EXTENSION = /\.[cm]?[jt]sx?$/u;
 
-// ci-plan runs with Node before dependency installation; report configuration
-// failures through the CLI's stderr/exit contract without importing packages.
+// ci-plan imports this before dependency installation, so configuration
+// failures throw without importing packages; the CLI entry reports and exits.
 /** @type {(message: string) => never} */
 const fail = (message) => {
-  process.stderr.write(`${message}\n`);
-  process.exit(1);
+  throw new Error(message);
 };
 
 // Read inputs without executing Playwright or installing dependencies: ci-plan
@@ -118,5 +117,10 @@ if (
   process.argv[1] !== undefined &&
   import.meta.filename === path.resolve(process.argv[1])
 ) {
-  console.log(productionE2eChanged(process.argv.slice(2)));
+  try {
+    console.log(productionE2eChanged(process.argv.slice(2)));
+  } catch (error) {
+    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+    process.exit(1);
+  }
 }

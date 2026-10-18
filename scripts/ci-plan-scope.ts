@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 
+import { Result } from "better-result";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
@@ -54,13 +55,33 @@ const DEFAULT_DETECTORS = {
   desktopBrowser: requiresDesktopBrowser,
 } satisfies ChangedFileScopeDetectors;
 
-const failClosedDetector = (detect: () => unknown) => {
-  try {
-    const result = detect();
-    return typeof result === "boolean" ? result : true;
-  } catch {
-    return true;
+// A detector that throws or answers a non-boolean cannot prove a scope
+// unaffected, so its checks run and the run says why.
+const failClosedDetector = (name: string, detect: () => unknown) => {
+  const result = Result.try(detect);
+  if (result.isOk() && typeof result.value === "boolean") {
+    return result.value;
   }
+  const cause = result.isErr() ? String(result.error) : "a non-boolean answer";
+  console.log(
+    `::warning title=Changed-file scope::${name} detector failed (${cause}); running its checks`,
+  );
+  return true;
+};
+
+// A service-suite detector failure cannot prove any suite unaffected.
+const failClosedServiceSuites = (
+  files: readonly string[],
+  root: string | undefined,
+) => {
+  const planned = Result.try(() => planServiceSuites(files, root));
+  if (planned.isOk()) {
+    return planned.value;
+  }
+  console.log(
+    `::warning title=Changed-file scope::service suite detector failed (${String(planned.error)}); running every service suite`,
+  );
+  return { postgres: true, corpus: true, valkey: true, collab: true };
 };
 
 const bool = String;
@@ -292,15 +313,15 @@ const deriveNormalScopeFacts = (
     dependencyClass !== "dev-tooling" &&
     ["pull_request", "merge_group"].includes(input.eventName)
   ) {
-    packageChecks = failClosedDetector(() =>
+    packageChecks = failClosedDetector("package checks", () =>
       detectors.packageChecks({ changed: scopeFiles, root }),
     );
   }
   const docs = packageChecks
     ? []
     : files.filter((file) => /\.mdx?$/u.test(file));
-  const services = planServiceSuites(scopeFiles, root);
-  let desktopBrowser = failClosedDetector(() =>
+  const services = failClosedServiceSuites(scopeFiles, root);
+  let desktopBrowser = failClosedDetector("desktop browser", () =>
     detectors.desktopBrowser({ changed: scopeFiles, root }),
   );
   if (!packageChecks) {
@@ -364,7 +385,7 @@ const deriveNormalScopeFacts = (
   }
   let landing =
     input.eventName === "pull_request"
-      ? failClosedDetector(() =>
+      ? failClosedDetector("landing build", () =>
           detectors.landingBuild({ changed: scopeFiles, root }),
         )
       : p([
@@ -634,7 +655,10 @@ export const OUTPUT_RULES = {
         bool(
           full
             ? e2eCore
-            : input.eventName === "pull_request" && productionE2eChanged(files),
+            : input.eventName === "pull_request" &&
+                failClosedDetector("production e2e", () =>
+                  productionE2eChanged(files),
+                ),
         ),
     ),
   e2e_landing_required: (facts) =>
@@ -907,12 +931,14 @@ export const OUTPUT_RULES = {
 
 export const computeChangedFileScope = (
   input: ChangedFileScopeInput,
-  detectors = DEFAULT_DETECTORS,
-) => {
+  detectors: ChangedFileScopeDetectors = DEFAULT_DETECTORS,
+): ChangedFileScope => {
   const facts = deriveScopeFacts(input, detectors);
+  // SAFETY: ScopeOutput is the element type of OUTPUT_ORDER, so mapping every
+  // entry of OUTPUT_ORDER yields a key for every ScopeOutput and no other.
   return Object.fromEntries(
     OUTPUT_ORDER.map((output) => [output, OUTPUT_RULES[output](facts)]),
-  ) as Record<ScopeOutput, string>;
+  ) as ChangedFileScope;
 };
 
 export const scopeOutputLines = (scope: ChangedFileScope) =>
