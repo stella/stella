@@ -161,6 +161,7 @@ type EuProvisionLabel = { example: string; pattern: string };
 export const EU_PROVISION_ARTICLE_LABELS = [
   { example: "Article", pattern: "Article" },
   { example: "Art.", pattern: String.raw`Art\.?` },
+  { example: "článek", pattern: "člán(?:ek|ok|ku|kem|kom)" },
   { example: "čl.", pattern: String.raw`čl\.?` },
   { example: "cikk", pattern: "cikk" },
   { example: "Artikel", pattern: "Artikel" },

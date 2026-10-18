@@ -25,6 +25,19 @@ const fixtures = [
 ] as const;
 
 describe("EU provision citations", () => {
+  test.each([
+    "článek 6 GDPR",
+    "článku 6 GDPR",
+    "článkem 6 GDPR",
+    "článok 6 GDPR",
+    "článkom 6 GDPR",
+    "článek 6 odst. 1 nařízení (EU) 2016/679",
+  ])("reads the full Czech and Slovak article word in %s", (text) => {
+    const citation = locateEuProvisionCitations(text).at(0);
+    expect(citation?.act.celex).toBe("32016R0679");
+    expect(citation?.reference).toMatchObject({ unit: "article", section: 6 });
+  });
+
   test("does not read an article marker from the end of a word", () => {
     expect(locateEuProvisionCitations("Part 6 GDPR")).toEqual([]);
   });
