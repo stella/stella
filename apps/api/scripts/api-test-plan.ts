@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import {
@@ -175,6 +175,10 @@ export type ApiTestSourceIndex = Readonly<{
   tests: Readonly<Record<string, Readonly<ApiTestSourceFacts>>>;
 }>;
 
+type ReadApiTestSourceIndexOptions = {
+  discovery?: "all" | "additional-only";
+};
+
 const indexTestSource = (
   testPath: string,
   source: string,
@@ -224,10 +228,14 @@ const indexTestSource = (
 export const readApiTestSourceIndex = async (
   apiRoot: string,
   additionalTestPaths: readonly string[] = [],
+  { discovery = "all" }: ReadApiTestSourceIndexOptions = {},
 ): Promise<ApiTestSourceIndex> => {
   const moduleMockHelpers = readModuleMockHelpers(apiRoot);
   const testPaths = [
-    ...new Set([...listApiTestPaths(apiRoot), ...additionalTestPaths]),
+    ...new Set([
+      ...(discovery === "all" ? listApiTestPaths(apiRoot) : []),
+      ...additionalTestPaths,
+    ]),
   ].toSorted();
   const entries = await Promise.all(
     testPaths.map(
@@ -409,7 +417,13 @@ export const planApiTestBatches = async (
     propertyOnly: options.propertyOnly,
     sourceIndex: await readApiTestSourceIndex(
       options.apiRoot,
-      options.testPaths,
+      [
+        ...options.testPaths,
+        ...Object.keys(measuredTestRssTable().files).filter((file) =>
+          existsSync(path.join(options.apiRoot, file)),
+        ),
+      ],
+      { discovery: "additional-only" },
     ),
     testPaths: options.testPaths,
   });
