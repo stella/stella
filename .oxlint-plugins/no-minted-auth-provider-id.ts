@@ -32,6 +32,8 @@
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
+import { AhoCorasick } from "@stll/aho-corasick";
+
 import { everyNode, isAstNode } from "./utils.ts";
 
 const AUTH_PROVIDER_ID_TYPES = new Set(["user", "organization"]);
@@ -50,6 +52,7 @@ const UUID_MINTER_PREFIX = "randomUUID";
 // Every reported call names one of these, so a file that spells none of them
 // skips the whole-file binding walk.
 const BRANDING_NAMES = [BRANDING_CALLEE, ...AUTH_PROVIDER_BRAND_CALLEES.keys()];
+const BRANDING_NAME_MATCHER = new AhoCorasick(BRANDING_NAMES);
 
 const identifierName = (node: unknown): string | null =>
   isAstNode(node) && node.type === "Identifier" && typeof node.name === "string"
@@ -149,8 +152,7 @@ export default eslintCompatPlugin({
 
         return {
           before() {
-            const text = context.sourceCode.text;
-            return BRANDING_NAMES.some((name) => text.includes(name));
+            return BRANDING_NAME_MATCHER.isMatch(context.sourceCode.text);
           },
           Program(program) {
             minterNames = new Set<string>();
