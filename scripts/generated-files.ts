@@ -52,7 +52,7 @@ const GENERATOR_DECLARATIONS = [
   {
     id: "cloud-setup",
     outputKind: "committed",
-    outputs: [".agents/cloud-setup.sh"],
+    outputs: [".agents/cloud-setup.sh", ".claude/settings.json"],
     inputs: [
       "stll-toolchain.json",
       ".node-version",
