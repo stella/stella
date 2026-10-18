@@ -11,11 +11,59 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { withGeneratedOutputCache } from "./generated-output-cache";
 import { withGenerationLock } from "./generation-lock";
+
+test("a fresh generated-output run keeps status messages off stdout", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "generated-cache-output-"));
+  const runner = path.join(root, "run.ts");
+  const cacheModule = pathToFileURL(
+    path.join(import.meta.dirname, "generated-output-cache.ts"),
+  ).href;
+  await writeFile(path.join(root, "input.txt"), "value");
+  await writeFile(
+    runner,
+    `import { mkdir, readFile, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { withGeneratedOutputCache } from ${JSON.stringify(cacheModule)};
+
+const root = ${JSON.stringify(root)};
+const output = path.join(root, "generated/value.txt");
+await withGeneratedOutputCache({
+  root,
+  name: "fixture",
+  environment: "test",
+  inputs: ["input.txt"],
+  outputs: ["generated/*.txt"],
+  generate: async () => {
+    await mkdir(path.dirname(output), { recursive: true });
+    await writeFile(output, await readFile(path.join(root, "input.txt")));
+  },
+});
+`,
+  );
+
+  try {
+    const child = Bun.spawn([process.execPath, runner], {
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+      child.exited,
+    ]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toBe("");
+    expect(stderr).toMatch(/^fixture: generated in \d+ ms\n$/u);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
 
 test("generation restores exact outputs and invalidates on source changes", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "generated-cache-"));
