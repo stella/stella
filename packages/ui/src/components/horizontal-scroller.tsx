@@ -82,10 +82,20 @@ export const HorizontalScroller = ({
         ) {
           return;
         }
-        event.preventDefault();
         // Down means towards later items: inline end, which is negative
-        // scrollLeft in a right-to-left row.
+        // scrollLeft in a right-to-left row. At the edge the wheel is asked
+        // to move past, the gesture belongs to the page again.
         const rtl = getComputedStyle(node).direction === "rtl";
+        const { canScrollEnd, canScrollStart } = scrollState(
+          node.scrollLeft,
+          node.scrollWidth,
+          node.clientWidth,
+          rtl ? "rtl" : "ltr",
+        );
+        if (event.deltaY > 0 ? !canScrollEnd : !canScrollStart) {
+          return;
+        }
+        event.preventDefault();
         const delta = wheelDeltaPixels(event, node);
         node.scrollBy({ left: rtl ? -delta : delta });
       };

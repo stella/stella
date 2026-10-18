@@ -206,3 +206,35 @@ test("converts line and page wheel deltas to pixels", () => {
   expect(wheelDeltaPixels({ deltaMode: 1, deltaY: 3 }, node)).toBe(48);
   expect(wheelDeltaPixels({ deltaMode: 2, deltaY: 1 }, node)).toBe(200);
 });
+
+test("hands the wheel back to the page at the edge it would move past", () => {
+  const scrollBy = mock(() => undefined);
+  const view = render(
+    <HorizontalScroller previousLabel="Previous" nextLabel="Next">
+      <button type="button">Item</button>
+    </HorizontalScroller>,
+  );
+  const viewport = view.getByText("Item").parentElement as HTMLDivElement;
+  let scrollLeft = 0;
+  Object.defineProperties(viewport, {
+    clientWidth: { value: 100 },
+    scrollWidth: { value: 300 },
+    scrollLeft: { get: () => scrollLeft },
+    scrollBy: { value: scrollBy },
+  });
+  const wheel = (deltaY: number) =>
+    fireEvent.wheel(viewport, { cancelable: true, deltaX: 0, deltaY });
+
+  expect(wheel(-24)).toBe(true);
+  scrollLeft = 200;
+  expect(wheel(24)).toBe(true);
+  expect(scrollBy).not.toHaveBeenCalled();
+  expect(wheel(-24)).toBe(false);
+
+  viewport.style.direction = "rtl";
+  scrollLeft = 0;
+  expect(wheel(-24)).toBe(true);
+  scrollLeft = -200;
+  expect(wheel(24)).toBe(true);
+  expect(wheel(-24)).toBe(false);
+});

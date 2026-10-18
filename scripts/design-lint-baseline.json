@@ -384,6 +384,7 @@
     "packages/ui/src/components/select.tsx": 1,
     "packages/ui/src/components/sidebar.tsx": 1,
     "packages/ui/src/components/table.tsx": 1,
+    "packages/ui/src/components/tabs.tsx": 1,
     "packages/ui/src/components/view-toolbar.tsx": 1,
     "packages/ui/src/components/workspace-shell.tsx": 2,
     "packages/ui/src/inspector/chrome.tsx": 2,
