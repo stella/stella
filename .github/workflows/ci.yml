@@ -6741,6 +6741,7 @@ jobs:
             scripts/retry.sh
             scripts/ci-failure-digest.ts
             scripts/fetch-failed-job-logs.sh
+            scripts/check-merge-group-ancestors.sh
             /package.json
           sparse-checkout-cone-mode: false
 
@@ -7171,6 +7172,20 @@ jobs:
           path: ${{ runner.temp }}/ci-failures/ci-failures.json
           retention-days: 7
           if-no-files-found: ignore
+
+      # GitHub merges every queued group ahead of a passing one, and each group
+      # plans its suites from its own changes, so this group passes only after
+      # every group ahead has passed. The wait holds only this final job.
+      - name: Queued groups ahead passed
+        if: github.event_name == 'merge_group'
+        timeout-minutes: 65
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          GH_TOKEN: ${{ github.token }}
+          MERGE_GROUP_BASE_REF: ${{ github.event.merge_group.base_ref }}
+          MERGE_GROUP_BASE_SHA: ${{ github.event.merge_group.base_sha }}
+          REPOSITORY: ${{ github.repository }}
+        run: bash .workflow-tooling/scripts/check-merge-group-ancestors.sh
 
       # Evaluate the variable when this final job starts, after the suites.
       - name: Check out the merge hold rule
