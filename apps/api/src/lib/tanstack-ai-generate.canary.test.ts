@@ -1,12 +1,12 @@
 import { EventType, normalizeStreamChunk } from "@tanstack/ai";
-import type { AnyTextAdapter, StreamChunk } from "@tanstack/ai";
+import type { AnyTextAdapter, ChatMiddleware, StreamChunk } from "@tanstack/ai";
 import { createAnthropicChatWithClient } from "@tanstack/ai-anthropic";
 import type { AnthropicMessagesClient } from "@tanstack/ai-anthropic";
-import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import type { CachingDecision } from "@/api/lib/ai-config";
+import type { TanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
   generateTanStackTextForTask,
@@ -144,20 +144,27 @@ const generateAtOutputCeiling = async ({
 }: {
   finishPolicy: TanStackTextFinishPolicy;
   terminalEvents: string[];
-}) =>
-  await generateTanStackTextForTask({
+}) => {
+  const boundModelIds: string[] = [];
+  const middleware = {
+    onError: () => {
+      terminalEvents.push("error");
+    },
+    onFinish: (_context, { finishReason }) => {
+      terminalEvents.push(`finish:${finishReason ?? "unknown"}`);
+    },
+  } satisfies ChatMiddleware;
+  const forModel: TanStackAIAnalyticsCallbacks["forModel"] = (model) => {
+    boundModelIds.push(model.modelId);
+    return { captureError: () => undefined, forModel, middleware };
+  };
+
+  return await generateTanStackTextForTask({
     dataClass: "public_corpus",
     analytics: {
       captureError: () => undefined,
-      forModel: () => panic("Text-only canary must not bind a fallback model"),
-      middleware: {
-        onError: () => {
-          terminalEvents.push("error");
-        },
-        onFinish: (_context, { finishReason }) => {
-          terminalEvents.push(`finish:${finishReason ?? "unknown"}`);
-        },
-      },
+      forModel,
+      middleware,
     },
     caching: noCaching,
     finishPolicy,
@@ -170,7 +177,10 @@ const generateAtOutputCeiling = async ({
     task: "chat",
     serviceTier: "standard",
     tenantWorkspaceIds: [],
+  }).finally(() => {
+    expect(boundModelIds).toEqual([outputCeilingModel.modelId]);
   });
+};
 
 const generateWithCancellation = async (cancelAt: CancellationPoint) => {
   const controller = new AbortController();
