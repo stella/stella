@@ -10,6 +10,7 @@ import os from "node:os";
 import path from "node:path";
 
 import {
+  NETWORK_DEPTH_METHOD,
   diffNetworkBaseline,
   mergeNetworkBaseline,
 } from "../apps/web/e2e/helpers/network";
@@ -51,6 +52,7 @@ test("successive write recordings retain declarations and timing-conditional pea
         reason: "Additional endpoint",
         budget: {
           depth: 4,
+          depthMethod: NETWORK_DEPTH_METHOD,
           requests,
           requestCounts: { "GET /conditional": 3, "GET /observed": 2 },
           dbQueries: { "GET /conditional": 8, "GET /observed": 4 },
@@ -192,11 +194,17 @@ test("mutation proof: scoped-route growth still fails its budget assertion", () 
     );
     const file = path.join(directory, "network.ts");
     // The relocated module must retain the shared coverage owner's import.
-    const relocated = mutant.replace('"./smoke-route-coverage"', () =>
-      JSON.stringify(
-        path.join(root, "apps/web/e2e/helpers/smoke-route-coverage.ts"),
-      ),
-    );
+    const relocated = mutant
+      .replace('"./smoke-route-coverage"', () =>
+        JSON.stringify(
+          path.join(root, "apps/web/e2e/helpers/smoke-route-coverage.ts"),
+        ),
+      )
+      .replace('"./network-rounds"', () =>
+        JSON.stringify(
+          path.join(root, "apps/web/e2e/helpers/network-rounds.ts"),
+        ),
+      );
     writeFileSync(file, relocated);
     const result = Bun.spawnSync([
       "bun",
