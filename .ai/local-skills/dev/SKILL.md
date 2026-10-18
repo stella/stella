@@ -28,7 +28,7 @@ and a retry joins a runner that is still starting. The runner is
   matters, contacts and documents; the same data every time. It also
   loads public case law, including synthetic Czech decisions that fill
   several result pages (`/law/cases?country=cze&q=fiktivní`); a seeded
-  stack searches it with the Postgres provider, whatever `apps/api/.env`
+  stack searches it with the Postgres provider, whatever `apps/api/.env.example`
   names.
 - A machine API key for that owner is minted through `/v1/api-keys`.
 - State lives in `.stella-dev/` (gitignored): `runtime.json`,
