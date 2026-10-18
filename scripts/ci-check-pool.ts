@@ -55,10 +55,23 @@ const json = (source: string | undefined, label: string): Value => {
   return toValue(parsed);
 };
 
+/**
+ * The workflow contexts a pooled expression may read. The pool step hands
+ * each one over (CI_CHECK_POOL_<ROOT>); any other root is unknown, and a
+ * census test keeps every pooled expression within these.
+ */
+export const POOL_CONTEXT_ROOTS = [
+  "github",
+  "needs",
+  "steps",
+  "inputs",
+] as const;
 type PoolContextOptions = {
   github: Record<string, Value>;
   needs: Value;
   steps: Value;
+  /** `null` outside workflow_dispatch and workflow_call, as GitHub renders it. */
+  inputs: Value;
 };
 /**
  * GitHub's context for a step in this job. A missing property reads as null,
@@ -69,11 +82,13 @@ export const poolContext = ({
   github,
   needs,
   steps,
+  inputs,
 }: PoolContextOptions): Context => {
   const roots = new Map<string, Value>([
     ["github", github],
     ["needs", needs],
     ["steps", steps],
+    ["inputs", inputs],
   ]);
   return {
     values: {},
@@ -335,6 +350,7 @@ export const runChecks = async ({
 const POOL_ENV = [
   "CI_CHECK_POOL_NEEDS",
   "CI_CHECK_POOL_STEPS",
+  "CI_CHECK_POOL_INPUTS",
   "CI_CHECK_POOL_TOKEN",
 ];
 const active = new Set<number>();
@@ -499,6 +515,7 @@ const main = async () => {
     github,
     needs: json(process.env["CI_CHECK_POOL_NEEDS"], "needs context"),
     steps: json(process.env["CI_CHECK_POOL_STEPS"], "steps context"),
+    inputs: json(process.env["CI_CHECK_POOL_INPUTS"], "inputs context"),
   });
   const planned = planChecks(readCheckPool(job), context);
   const override = process.env["CI_CHECK_POOL_CONCURRENCY"];

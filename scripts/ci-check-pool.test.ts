@@ -10,6 +10,7 @@ import {
   blockingFailures,
   continueOnErrorHolds,
   planChecks,
+  POOL_CONTEXT_ROOTS,
   poolContext,
   processLauncher,
   resolveEnv,
@@ -28,6 +29,7 @@ import {
   type PoolCheck,
 } from "./ci-check-pool-registry";
 import { ROOT_CHECK_INPUTS } from "./ci-root-checks";
+import { evaluate, type Value } from "./github-expression";
 import { flattenWorkflowSteps, workflowJobSteps } from "./workflow-steps";
 
 const root = path.resolve(import.meta.dir, "..");
@@ -103,7 +105,16 @@ test("the registry rejects fields the pool cannot honour", () => {
   });
 });
 
-const context = (event: string, rootChecks: string, steps = {}) =>
+type ContextExtra = {
+  inputs?: Value;
+  outputs?: Record<string, string>;
+};
+const context = (
+  event: string,
+  rootChecks: string,
+  steps = {},
+  { inputs = null, outputs = {} }: ContextExtra = {},
+) =>
   poolContext({
     github: {
       event_name: event,
@@ -120,6 +131,7 @@ const context = (event: string, rootChecks: string, steps = {}) =>
         outputs: {
           package_checks_required: "true",
           root_checks: rootChecks,
+          ...outputs,
         },
       },
     },
@@ -129,6 +141,7 @@ const context = (event: string, rootChecks: string, steps = {}) =>
       affected: { outcome: "success", outputs: { flag: "--affected" } },
       ...steps,
     },
+    inputs,
   });
 
 test("pooled conditions keep change selection, receipt reuse and event gates", () => {
@@ -143,8 +156,10 @@ test("pooled conditions keep change selection, receipt reuse and event gates", (
   const pr = selected(planChecks(rest, context("pull_request", narrow)));
   expect(pr).toContain("Test oxlint plugins");
   expect(pr).not.toContain("Content delivery declarations");
-  // Unscoped ("**") checks have no selection gate and always run.
-  expect(pr).toContain("Workflow YAML");
+  // A scoped check runs only when root_checks names it (or is empty).
+  expect(pr).not.toContain("Workflow YAML");
+  // Unscoped checks have no selection gate and always run.
+  expect(pr).toContain("Queue authority");
   const queue = selected(planChecks(rest, context("merge_group", "")));
   expect(queue).toContain("Content delivery declarations");
   expect(queue).not.toContain("Bridge-version guard");
@@ -404,4 +419,69 @@ test("every real pooled continue-on-error is decidable in both events", () => {
       ).toBe(false);
     }
   }
+});
+
+test("every pooled expression reads only contexts the pool provides", () => {
+  const roots = new Set<string>();
+  const recording = {
+    values: {},
+    status: { cancelled: false },
+    fallback: (reference: string) => {
+      roots.add(reference.split(".")[0] ?? reference);
+      return null;
+    },
+  };
+  for (const job of CHECK_POOL_JOBS) {
+    for (const pooled of readCheckPool(job)) {
+      const expressions = [
+        pooled.condition,
+        ...Object.values(pooled.env).filter((value) => value.includes("${{")),
+        ...(typeof pooled.continueOnError === "string"
+          ? [pooled.continueOnError]
+          : []),
+      ];
+      for (const expression of expressions) {
+        roots.clear();
+        evaluate(expression, recording);
+        for (const read of roots) {
+          expect(
+            POOL_CONTEXT_ROOTS.some((known) => known === read),
+            `${job}/${pooled.name} reads \`${read}\`, which the pool does not hand over`,
+          ).toBe(true);
+        }
+      }
+    }
+  }
+});
+
+test("the generated manifest guard defers the scan engine only outside PR depth runs", () => {
+  const guard = readCheckPool("ci-checks-rest").find(
+    ({ name }) => name === "Generated files manifest guard",
+  );
+  expect(guard).toBeDefined();
+  if (guard === undefined) {
+    return;
+  }
+  const deferred = (inputs: Value) => {
+    const [planned] = planChecks(
+      [guard],
+      context(
+        "merge_group",
+        "",
+        {},
+        {
+          inputs,
+          outputs: { scan_engine_wasm_required: "true" },
+        },
+      ),
+    );
+    expect(planned?.status).toBe("selected");
+    return planned?.status === "selected"
+      ? planned.env["GENERATED_CHECKS_IN_OTHER_JOBS"]
+      : undefined;
+  };
+  expect(deferred({ pr_depth_only: true })).toBe("[]");
+  expect(deferred({ pr_depth_only: false })).toBe('["scan-engine-wasm"]');
+  // Push and merge-group runs have no inputs: GitHub renders them as null.
+  expect(deferred(null)).toBe('["scan-engine-wasm"]');
 });

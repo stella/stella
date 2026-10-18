@@ -2529,6 +2529,7 @@ jobs:
           CI_CHECK_CONTEXT: "Runs the checks declared in .github/ci-checks/ci-checks-policy.yml; each check keeps its own condition and classification."
           CI_CHECK_POOL_NEEDS: ${{ toJSON(needs) }}
           CI_CHECK_POOL_STEPS: ${{ toJSON(steps) }}
+          CI_CHECK_POOL_INPUTS: ${{ toJSON(inputs) }}
           CI_CHECK_POOL_TOKEN: ${{ github.token }}
         run: bun scripts/ci-check-pool.ts run ci-checks-policy
 
@@ -2877,6 +2878,7 @@ jobs:
           CI_CHECK_CONTEXT: "Runs the checks declared in .github/ci-checks/ci-checks-rest.yml; each check keeps its own condition and classification."
           CI_CHECK_POOL_NEEDS: ${{ toJSON(needs) }}
           CI_CHECK_POOL_STEPS: ${{ toJSON(steps) }}
+          CI_CHECK_POOL_INPUTS: ${{ toJSON(inputs) }}
           CI_CHECK_POOL_TOKEN: ${{ github.token }}
         run: bun scripts/ci-check-pool.ts run ci-checks-rest
 

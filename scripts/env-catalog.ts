@@ -1650,6 +1650,7 @@ export const TOOLING_ENV_KEYS = new Set([
   // concurrency override; the pool strips the context before running checks.
   "CI_CHECK_POOL_NEEDS",
   "CI_CHECK_POOL_STEPS",
+  "CI_CHECK_POOL_INPUTS",
   "CI_CHECK_POOL_TOKEN",
   "CI_CHECK_POOL_CONCURRENCY",
   // Generator families another job of the same CI run checks on this commit.
