@@ -4385,8 +4385,11 @@ const runChangedFilesStep = ({
           `${unusualDirectory}.ts`,
         );
         break;
-      default:
+      case "bun.lock":
+      case "documentation":
+      case "package.json":
         changedFile = nodePath.join("fixtures", unusualDirectory, changedPath);
+        break;
     }
     const paths = changedFile === undefined ? [] : [changedFile];
     for (const [index, file] of paths.entries()) {
