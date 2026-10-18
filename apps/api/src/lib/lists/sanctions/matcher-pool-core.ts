@@ -278,6 +278,7 @@ const matchSanctionsRequest = async ({
     query: request.query,
     cutoff: request.cutoff,
     limit: request.limit,
+    ...(request.maxWork === undefined ? {} : { maxWork: request.maxWork }),
   });
 };
 

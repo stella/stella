@@ -14,6 +14,7 @@ export type SanctionsMatcherRequest = {
   query: ScreeningQuery;
   cutoff: number;
   limit: number;
+  maxWork?: number;
 };
 
 /** One edition to index ahead of screening: its entries, then its version. */
@@ -45,6 +46,7 @@ export type SanctionsMatcherMessage =
       query: ScreeningQuery;
       cutoff: number;
       limit: number;
+      maxWork?: number;
     };
 
 // Plain data only: Result and tagged-error prototypes do not cross threads.
