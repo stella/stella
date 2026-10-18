@@ -23,6 +23,7 @@ import {
   runLockRetryLadder,
 } from "./lock-retry-ladder";
 import type { LockRetryConfig, LockRetryRuntime } from "./lock-retry-ladder";
+import { setDedicatedLockTimeout } from "./long-running-connection";
 import { readConstraintValidated } from "./online-constraint-completion";
 import { readDdlFunctionDeclaration } from "./online-ddl-functions";
 import type { OnlineDdlFunctionName } from "./online-ddl-functions";
@@ -347,7 +348,7 @@ export type GatedTableSession = {
 };
 
 /** Where gated work runs, and what the gate reports a deferral as. */
-export type GatedTableTarget = {
+type GatedTableTarget = {
   tableName: string;
   /** The index or constraint a deferral names. */
   name: string;
@@ -399,11 +400,11 @@ const sessionOn = (
           random:
             lockRetry?.runtime.random ?? DEFAULT_LOCK_RETRY_RUNTIME.random,
           attempt: async (lockTimeoutMs) => {
-            await connection.execute(`SET lock_timeout = '${lockTimeoutMs}ms'`);
+            await setDedicatedLockTimeout(connection, lockTimeoutMs);
             try {
               await connection.execute(statement[LOCK_TAKING]);
             } finally {
-              await connection.execute("SET lock_timeout = '0'");
+              await setDedicatedLockTimeout(connection, 0);
             }
           },
         });

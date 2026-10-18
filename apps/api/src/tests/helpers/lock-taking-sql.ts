@@ -10,7 +10,7 @@ import type {
 } from "../../db/online-ddl";
 
 /** What a statement executes, read the only way a caller can: by running it. */
-export const lockTakingSqlOf = async (
+const lockTakingSqlOf = async (
   statement: LockTakingStatement,
 ): Promise<string> => {
   const statements: string[] = [];
@@ -27,10 +27,7 @@ export const lockTakingSqlOf = async (
       await session.run(statement);
     },
   });
-  return (
-    statements.find((text) => !text.startsWith("SET lock_timeout")) ??
-    panic("Gated statement emitted no SQL")
-  );
+  return statements.at(1) ?? panic("Gated statement emitted no SQL");
 };
 
 const BLOCK = /^DO \$online_ddl\$ BEGIN (.*) END \$online_ddl\$$/u;

@@ -44,6 +44,20 @@ const positiveMilliseconds = (value: number, name: string): number => {
   return value;
 };
 
+export const setDedicatedLockTimeout = async (
+  connection: { execute: (query: string) => Promise<void> },
+  lockTimeoutMs: number,
+): Promise<void> => {
+  if (!Number.isSafeInteger(lockTimeoutMs) || lockTimeoutMs < 0) {
+    return panic("lockTimeoutMs must be a safe non-negative integer");
+  }
+  await connection.execute(
+    lockTimeoutMs === 0
+      ? "SET lock_timeout = '0'"
+      : `SET lock_timeout = '${lockTimeoutMs}ms'`,
+  );
+};
+
 type ReservableSession = {
   unsafe: (query: string, params?: unknown[]) => PromiseLike<unknown>;
   release: () => void;
