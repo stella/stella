@@ -10,7 +10,11 @@ import {
   createBackgroundAuditRecorder,
 } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import { isFeatureDeployed } from "@/api/lib/feature-access/deployment";
+import {
+  AI_MEMORY_FEATURE_ID,
+  FEATURE_REGISTRY,
+} from "@/api/lib/feature-access/registry";
 import { drainMemoryLifecyclePhase } from "@/api/lib/memory/drain-lifecycle-phase";
 import type { SchedulerDb, SchedulerTask } from "@/api/lib/scheduler/types";
 import { TENANT_SYSTEM_ACTOR } from "@/api/lib/system-audit/actors";
@@ -46,7 +50,7 @@ export const curateAiMemories: SchedulerTask = async ({
   logger,
   signal,
 }) => {
-  if (!isDeploymentFeatureEnabled("FEATURE_AI_MEMORY")) {
+  if (!isFeatureDeployed(FEATURE_REGISTRY, AI_MEMORY_FEATURE_ID)) {
     return;
   }
 

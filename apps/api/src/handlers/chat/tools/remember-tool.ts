@@ -7,9 +7,11 @@ import { AI_MEMORY_KINDS } from "@/api/db/schema";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
+import { resolveFeatureAccess } from "@/api/lib/auth/feature-access/context";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ChatDurableRefText } from "@/api/lib/chat/ref-registry";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
+import { AI_MEMORY_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { sanitizeMemoryContent } from "@/api/lib/memory/memory-content-safety";
 import {
   memoryWriteRefusalChatToolError,
@@ -178,6 +180,32 @@ export const createRememberTool = ({
       );
       if (Result.isError(sanitizedContentResult)) {
         return Result.err(sanitizedContentResult.error);
+      }
+
+      const decision = await safeDb((tx) =>
+        resolveFeatureAccess({
+          tx,
+          organizationId,
+          userId,
+          featureId: AI_MEMORY_FEATURE_ID,
+        }),
+      );
+      if (Result.isError(decision)) {
+        return Result.err(
+          new ChatToolError({
+            kind: "server-defect",
+            message: "Failed to check memory access.",
+            cause: decision.error,
+          }),
+        );
+      }
+      if (decision.value.status !== "enabled") {
+        return Result.err(
+          new ChatToolError({
+            kind: "unavailable",
+            message: "Memory is unavailable for this account.",
+          }),
+        );
       }
 
       const sourceDataWorkspaceIds = resolveSourceDataWorkspaceIds();

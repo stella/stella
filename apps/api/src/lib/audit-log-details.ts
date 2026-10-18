@@ -217,7 +217,7 @@ export const AUDIT_DETAIL_POLICY = {
   [AUDIT_RESOURCE_TYPE.AGENT_SKILL_COMMENT]: UNGATED_AUDIT_DETAILS,
   [AUDIT_RESOURCE_TYPE.AGENT_SKILL_PROPOSAL]: UNGATED_AUDIT_DETAILS,
   [AUDIT_RESOURCE_TYPE.AI_MEMORY]: {
-    default: { type: "deployment-feature", feature: "FEATURE_AI_MEMORY" },
+    default: { type: "caller-feature", featureId: "ai-memory" },
     operations: {},
   },
   [AUDIT_RESOURCE_TYPE.ANNOUNCEMENT]: UNGATED_AUDIT_DETAILS,

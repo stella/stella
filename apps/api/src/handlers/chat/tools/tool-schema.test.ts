@@ -89,6 +89,14 @@ import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
+import {
+  createFeatureAccessSnapshot,
+  decideFeatureAccess,
+} from "@/api/lib/feature-access/policy";
+import {
+  AI_MEMORY_FEATURE_ID,
+  FEATURE_REGISTRY,
+} from "@/api/lib/feature-access/registry";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
   PROVIDER_SAFE_JSON_SCHEMA_KEYWORDS,
@@ -156,6 +164,29 @@ const getChatTools = (
   return getChatToolsWithPin({
     ...rest,
     memoryEnabled: props.memoryEnabled ?? true,
+    featureAccessSnapshot: createFeatureAccessSnapshot({
+      organizationId: props.organizationId,
+      userId: props.userId,
+      decisions: new Map([
+        ...(props.featureAccessSnapshot?.decisions ?? []),
+        [
+          AI_MEMORY_FEATURE_ID,
+          decideFeatureAccess({
+            registry: FEATURE_REGISTRY,
+            featureId: AI_MEMORY_FEATURE_ID,
+            organizationId: props.organizationId,
+            userId: props.userId,
+            membership: true,
+            user: { email: "member@example.test", emailVerified: true },
+            grants: {
+              [AI_MEMORY_FEATURE_ID]: [
+                { type: "organization", organizationId: props.organizationId },
+              ],
+            },
+          }),
+        ],
+      ]),
+    }),
     pinServerValidatedWorkspaceId: () => true,
     registryDispatch,
   });
@@ -945,6 +976,40 @@ describe("chat tool schemas", () => {
       memoryEnabled: false,
     };
 
+    for (const invited of [false, true]) {
+      const featureAccessSnapshot = createFeatureAccessSnapshot({
+        organizationId,
+        userId,
+        decisions: new Map([
+          [
+            AI_MEMORY_FEATURE_ID,
+            decideFeatureAccess({
+              registry: FEATURE_REGISTRY,
+              featureId: AI_MEMORY_FEATURE_ID,
+              organizationId,
+              userId,
+              membership: true,
+              user: { email: "member@example.test", emailVerified: true },
+              grants: invited
+                ? {
+                    [AI_MEMORY_FEATURE_ID]: [
+                      { type: "organization", organizationId },
+                    ],
+                  }
+                : {},
+            }),
+          ],
+        ]),
+      });
+      const tools = getChatToolsWithPin({
+        ...baseArgs,
+        memoryEnabled: undefined,
+        featureAccessSnapshot,
+        pinServerValidatedWorkspaceId: () => true,
+        registryDispatch: BUSINESS_REGISTRY_DISPATCH,
+      });
+      expect(REMEMBER_TOOL_NAME in tools).toBe(invited);
+    }
     expect(getChatTools(baseArgs)).not.toHaveProperty(REMEMBER_TOOL_NAME);
     expect(
       getChatTools({

@@ -17,7 +17,7 @@ import {
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
-import { member } from "@/api/db/auth-schema";
+import { member, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import {
   aiMemories,
@@ -41,6 +41,7 @@ import { createMemoryExtractorTask } from "@/api/lib/scheduler/tasks/memory-extr
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
 import * as tanstackGenerate from "@/api/lib/tanstack-ai-generate";
 import { seedActiveChatCompaction } from "@/api/tests/helpers/chat-compaction-checkpoint";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -95,7 +96,15 @@ const generateSpy = spyOn(tanstackGenerate, "generateTanStackObjectForTask");
 const transcriptSpy = spyOn(compactionTranscript, "loadCompactionTranscript");
 const warnSpy = spyOn(logger, "warn");
 const dedupSpy = spyOn(memoryDedup, "createMemoryDedupIdentity");
-const originalFeature = env.FEATURE_AI_MEMORY;
+const state = createTestState({ file: import.meta.path, config: env });
+const originalGrants = env.API_FEATURE_ACCESS_GRANTS;
+const originalUser =
+  (
+    await testDb
+      .select({ emailVerified: user.emailVerified })
+      .from(user)
+      .where(eq(user.id, ids.userA1))
+  ).at(0) ?? panic("Memory fixture user missing");
 
 /** The model's reply, after `beforeReply` runs while the call is in flight. */
 const fakeExtraction = (beforeReply?: () => Promise<void>) =>
@@ -190,7 +199,15 @@ const accessLossWarnings = () =>
   );
 
 beforeEach(async () => {
-  env.FEATURE_AI_MEMORY = true;
+  state.setConfig("FEATURE_AI_MEMORY", true);
+  state.setConfig("API_FEATURE_ACCESS_GRANTS", {
+    ...originalGrants,
+    "ai-memory": [{ type: "organization", organizationId: ids.orgA }],
+  });
+  await testDb
+    .update(user)
+    .set({ emailVerified: true })
+    .where(eq(user.id, ids.userA1));
   settingsSpy.mockReset();
   generateSpy.mockReset();
   transcriptSpy.mockClear();
@@ -242,7 +259,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  env.FEATURE_AI_MEMORY = originalFeature;
+  await testDb.update(user).set(originalUser).where(eq(user.id, ids.userA1));
   await testDb
     .delete(aiMemories)
     .where(inArray(aiMemories.sourceMessageId, messageIds));
@@ -279,6 +296,15 @@ afterAll(async () => {
 });
 
 describe("memory extraction for a compaction's owner", () => {
+  test("queued extraction requires current invitation admission", async () => {
+    state.setConfig("API_FEATURE_ACCESS_GRANTS", {
+      ...originalGrants,
+      "ai-memory": [],
+    });
+    await runExtractor();
+    expect(generateSpy).not.toHaveBeenCalled();
+    expect(await readSuggestions()).toEqual([]);
+  });
   test("suggests user and matter memories while the owner keeps access", async () => {
     await runExtractor();
 

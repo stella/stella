@@ -4,6 +4,7 @@ import { t } from "elysia";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { AI_MEMORY_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { sanitizePersonMemoryContent } from "@/api/lib/memory/memory-content-safety";
 import {
   memoryWriteRefusalHandlerError,
@@ -12,6 +13,7 @@ import {
 } from "@/api/lib/memory/persist-explicit-memory";
 
 const config = {
+  featureAccess: { type: "required", featureId: AI_MEMORY_FEATURE_ID },
   contract: "patch",
   // Firm-wide memory is governance-gated: only roles granted
   // `firmMemory.create` (admin, owner) may write it. Everyone reads it.

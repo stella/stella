@@ -9,6 +9,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tPaginationCursor, tSafeId } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { AI_MEMORY_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import type { Page } from "@/api/lib/pagination";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedAiMemoryId } from "@/api/lib/safe-id-boundaries";
@@ -16,6 +17,7 @@ import { brandPersistedAiMemoryId } from "@/api/lib/safe-id-boundaries";
 const DEFAULT_LIMIT = 50;
 
 const config = {
+  featureAccess: { type: "required", featureId: AI_MEMORY_FEATURE_ID },
   contract: "patch",
   // Memory is an AI-assistant capability; gate reads on chat access.
   // Row visibility (firm / own / accessible matters) is enforced by RLS,

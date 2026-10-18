@@ -16,6 +16,9 @@ import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { aiMemories } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isFeatureEnabled } from "@/api/lib/feature-access/policy";
+import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
+import { AI_MEMORY_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { logger } from "@/api/lib/observability/logger";
 import { stripPromptUnsafeChars } from "@/api/lib/prompt-safety";
 
@@ -41,6 +44,7 @@ type MemoryRow = {
 };
 
 type BuildMemoryPromptPartsProps = {
+  featureAccessSnapshot?: FeatureAccessSnapshot | undefined;
   /** Turns a memory's canonical links into this thread's chat refs. */
   hydrateRefs: (text: string) => string;
   organizationId: SafeId<"organization">;
@@ -51,6 +55,7 @@ type BuildMemoryPromptPartsProps = {
 };
 
 export const buildMemoryPromptParts = async ({
+  featureAccessSnapshot,
   hydrateRefs,
   organizationId,
   userId,
@@ -59,6 +64,15 @@ export const buildMemoryPromptParts = async ({
   safeDb,
 }: BuildMemoryPromptPartsProps): Promise<Result<string, SafeDbError>> =>
   await Result.gen(async function* () {
+    if (
+      featureAccessSnapshot === undefined ||
+      !isFeatureEnabled(featureAccessSnapshot, AI_MEMORY_FEATURE_ID, {
+        organizationId,
+        userId,
+      })
+    ) {
+      return Result.ok("");
+    }
     const effectiveMatterIds = Array.from(
       new Set<SafeId<"workspace">>([
         ...(workspaceId === null ? [] : [workspaceId]),

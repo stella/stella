@@ -37,6 +37,13 @@ const unenrolledSettingsDatabase = (email: string) =>
   );
 
 describe("projectOrganizationSettingsRow", () => {
+  test("new organizations keep memory extraction off", () => {
+    expect(
+      projectOrganizationSettingsRow(undefined, emptySnapshot)
+        .memoryExtractionEnabled,
+    ).toBe(false);
+  });
+
   test("returns the active org's practiceJurisdictions verbatim", () => {
     const result = projectOrganizationSettingsRow(
       {

@@ -4,6 +4,7 @@ import { createMemoryBodySchema } from "@/api/handlers/memories/create-schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { AI_MEMORY_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { sanitizePersonMemoryContent } from "@/api/lib/memory/memory-content-safety";
 import {
   memoryWriteRefusalHandlerError,
@@ -12,6 +13,7 @@ import {
 } from "@/api/lib/memory/persist-explicit-memory";
 
 const config = {
+  featureAccess: { type: "required", featureId: AI_MEMORY_FEATURE_ID },
   contract: "patch",
   // Memory is part of the AI assistant; gate on the chat capability.
   // Firm-scoped writes go through the separate, permission-gated route.
