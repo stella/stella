@@ -272,9 +272,39 @@ const typeOnlyExport = (node: ts.ExportDeclaration) => {
   );
 };
 
+type RuntimeModuleSyntax =
+  | "esm-import"
+  | "dynamic-import"
+  | "require"
+  | "import-equals-require";
+
 type RuntimeModuleReference =
-  | { readonly type: "literal"; readonly specifier: string }
-  | { readonly type: "dynamic"; readonly reason?: string };
+  | {
+      readonly type: "literal";
+      readonly specifier: string;
+      readonly syntax: RuntimeModuleSyntax;
+    }
+  | {
+      readonly type: "dynamic";
+      readonly syntax: RuntimeModuleSyntax;
+      readonly reason?: string;
+    };
+
+const resolutionModeFor = (
+  syntax: RuntimeModuleSyntax,
+): Exclude<ts.ResolutionMode, undefined> => {
+  switch (syntax) {
+    case "require":
+    case "import-equals-require":
+      return ts.ModuleKind.CommonJS;
+    case "esm-import":
+    case "dynamic-import":
+      return ts.ModuleKind.ESNext;
+    default:
+      syntax satisfies never;
+      return panic("Unhandled runtime module syntax");
+  }
+};
 
 type RuntimeModuleReferencesOptions = { file: string; text: string };
 
@@ -329,12 +359,15 @@ export const runtimeModuleReferences = ({
     (ts.isElementAccessExpression(node) &&
       ts.isStringLiteralLike(node.argumentExpression) &&
       node.argumentExpression.text === "createRequire");
-  const record = (expression: ts.Expression | undefined) => {
+  const record = (
+    expression: ts.Expression | undefined,
+    syntax: RuntimeModuleSyntax,
+  ) => {
     if (expression !== undefined && ts.isStringLiteralLike(expression)) {
-      references.push({ type: "literal", specifier: expression.text });
+      references.push({ type: "literal", specifier: expression.text, syntax });
       return;
     }
-    references.push({ type: "dynamic" });
+    references.push({ type: "dynamic", syntax });
   };
   const visit = (node: ts.Node): void => {
     if (ts.isTypeNode(node)) {
@@ -346,7 +379,7 @@ export const runtimeModuleReferences = ({
     ) {
       const onlyTypes = typeOnlyImport(node.importClause);
       if (!onlyTypes) {
-        record(node.moduleSpecifier);
+        record(node.moduleSpecifier, "esm-import");
       }
       return;
     }
@@ -358,7 +391,7 @@ export const runtimeModuleReferences = ({
         node.moduleSpecifier !== undefined &&
         ts.isStringLiteral(node.moduleSpecifier)
       ) {
-        record(node.moduleSpecifier);
+        record(node.moduleSpecifier, "esm-import");
         return;
       }
     }
@@ -367,7 +400,7 @@ export const runtimeModuleReferences = ({
         !node.isTypeOnly &&
         ts.isExternalModuleReference(node.moduleReference)
       ) {
-        record(node.moduleReference.expression);
+        record(node.moduleReference.expression, "import-equals-require");
       }
       return;
     }
@@ -385,6 +418,9 @@ export const runtimeModuleReferences = ({
             node.arguments.length === 1
             ? node.arguments.at(0)
             : undefined,
+          node.expression.kind === ts.SyntaxKind.ImportKeyword
+            ? "dynamic-import"
+            : "require",
         );
         for (const argument of node.arguments) {
           visit(argument);
@@ -400,6 +436,7 @@ export const runtimeModuleReferences = ({
     if (isLoader(node) || isFactory(node)) {
       references.push({
         type: "dynamic",
+        syntax: "require",
         reason: "Indirect CommonJS loader use",
       });
       return;
@@ -903,10 +940,15 @@ const createLocalSnapshotResolver = (snapshot: LocalRuntimeSnapshotOptions) => {
     | { type: "resolved"; file: string }
     | { type: "unresolved" }
   ) & { inputs?: readonly string[] };
-  type LocalImportOptions = { specifier: string; importer: string };
+  type LocalImportOptions = {
+    specifier: string;
+    importer: string;
+    resolutionMode: Exclude<ts.ResolutionMode, undefined>;
+  };
   const resolveImport = ({
     specifier,
     importer,
+    resolutionMode,
   }: LocalImportOptions): LocalImportResolution => {
     if (
       isBuiltin(specifier) ||
@@ -942,7 +984,7 @@ const createLocalSnapshotResolver = (snapshot: LocalRuntimeSnapshotOptions) => {
     if (!local) {
       return { type: "external", specifier };
     }
-    const key = `${importer}\0${specifier}`;
+    const key = `${importer}\0${specifier}\0${resolutionMode}`;
     const cached = resolutions.get(key);
     if (cached) {
       return cached;
@@ -968,6 +1010,9 @@ const createLocalSnapshotResolver = (snapshot: LocalRuntimeSnapshotOptions) => {
       importer,
       options,
       host,
+      undefined,
+      undefined,
+      resolutionMode,
     ).resolvedModule;
     const file =
       resolved === undefined ? undefined : canonical(resolved.resolvedFileName);
@@ -1129,7 +1174,11 @@ export const createLocalRuntimeClosureReader = (
             break;
           case "literal": {
             const specifier = reference.specifier;
-            const resolution = resolveImport({ specifier, importer: file });
+            const resolution = resolveImport({
+              specifier,
+              importer: file,
+              resolutionMode: resolutionModeFor(reference.syntax),
+            });
             for (const input of resolution.inputs ?? []) {
               pending.push({
                 file: path.resolve(repositoryRoot, input),
@@ -1143,6 +1192,7 @@ export const createLocalRuntimeClosureReader = (
                   references.push({
                     type: "literal",
                     specifier: resolution.specifier,
+                    syntax: reference.syntax,
                   });
                 }
                 break;

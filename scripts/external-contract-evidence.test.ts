@@ -9,7 +9,9 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { hasChangedLocalRuntimeClosure } from "./check-external-contracts";
 import {
+  createLocalRuntimeClosureReader,
   readFixtureEvidence,
   runtimeModuleReferences,
 } from "./external-contract-evidence";
@@ -337,36 +339,39 @@ test("optional foreign packages with workspace-like names do not become local ru
 });
 
 test.each([
-  'import sdk from "@example/sdk";',
-  'export { client } from "@example/sdk";',
-  'import sdk = require("@example/sdk");',
-  'const sdk = require("@example/sdk");',
-  "const sdk = require(`@example/sdk`);",
-  'const sdk = await import("@example/sdk");',
-  "const sdk = await import(`@example/sdk`);",
-])("runtime module references share literal syntax coverage: %s", (text) => {
-  expect(runtimeModuleReferences({ file: "client.ts", text })).toEqual([
-    { type: "literal", specifier: "@example/sdk" },
-  ]);
-  withProject({
-    files: { ...sdkFiles, "replay.ts": text },
-    run: (root) => {
-      const evidence = readFixtureEvidence({
-        root,
-        replayFiles: ["replay.ts"],
-        sdkNames: ["@example/sdk"],
-      });
-      expect([...evidence.sdks]).toEqual(["@example/sdk"]);
-      expect(evidence.problems).toEqual([]);
-    },
-  });
-});
+  ['import sdk from "@example/sdk";', "esm-import"],
+  ['export { client } from "@example/sdk";', "esm-import"],
+  ['import sdk = require("@example/sdk");', "import-equals-require"],
+  ['const sdk = require("@example/sdk");', "require"],
+  ["const sdk = require(`@example/sdk`);", "require"],
+  ['const sdk = await import("@example/sdk");', "dynamic-import"],
+  ["const sdk = await import(`@example/sdk`);", "dynamic-import"],
+] as const)(
+  "runtime module references retain literal syntax: %s",
+  (text, syntax) => {
+    expect(runtimeModuleReferences({ file: "client.ts", text })).toEqual([
+      { type: "literal", specifier: "@example/sdk", syntax },
+    ]);
+    withProject({
+      files: { ...sdkFiles, "replay.ts": text },
+      run: (root) => {
+        const evidence = readFixtureEvidence({
+          root,
+          replayFiles: ["replay.ts"],
+          sdkNames: ["@example/sdk"],
+        });
+        expect([...evidence.sdks]).toEqual(["@example/sdk"]);
+        expect(evidence.problems).toEqual([]);
+      },
+    });
+  },
+);
 test("non-literal runtime module references remain explicit unresolved evidence", () => {
   const text =
     'import(moduleName); require(moduleName); type Client = typeof import("@example/sdk");';
   expect(runtimeModuleReferences({ file: "client.ts", text })).toEqual([
-    { type: "dynamic" },
-    { type: "dynamic" },
+    { type: "dynamic", syntax: "dynamic-import" },
+    { type: "dynamic", syntax: "require" },
   ]);
   withProject({
     files: { "replay.ts": text },
@@ -384,3 +389,73 @@ test("non-literal runtime module references remain explicit unresolved evidence"
     },
   });
 });
+
+test.each([
+  {
+    syntax: "CommonJS require",
+    owner: 'import sdk from "vendor"; require("@stll/helper"); sdk.send();',
+    selected: "packages/helper/src/require.ts",
+    ignored: "packages/helper/src/import.ts",
+  },
+  {
+    syntax: "ESM import",
+    owner: 'import sdk from "vendor"; import "@stll/helper"; sdk.send();',
+    selected: "packages/helper/src/import.ts",
+    ignored: "packages/helper/src/require.ts",
+  },
+] as const)(
+  "$syntax resolves only its conditional export target",
+  ({ owner, selected, ignored }) => {
+    const sources = new Map([
+      ["owner.ts", owner],
+      [
+        "packages/helper/package.json",
+        JSON.stringify({
+          name: "@stll/helper",
+          exports: {
+            ".": {
+              import: "./src/import.ts",
+              require: "./src/require.ts",
+            },
+          },
+        }),
+      ],
+      ["packages/helper/src/import.ts", 'export const target = "import";'],
+      ["packages/helper/src/require.ts", 'export const target = "require";'],
+    ]);
+    const reader = (target?: string) =>
+      Object.assign(
+        (file: string) =>
+          file === target
+            ? 'export const target = "changed";'
+            : sources.get(file),
+        {
+          blobId: (file: string) =>
+            sources.has(file)
+              ? `fixture:${file}:${target ?? "baseline"}`
+              : undefined,
+        },
+      );
+    const baseline = reader();
+    const changed = (target: string) => reader(target);
+    const closure = createLocalRuntimeClosureReader({
+      root: "/fixture",
+      read: baseline,
+    })(["owner.ts"]);
+    const compare = (current: (file: string) => string | undefined) =>
+      hasChangedLocalRuntimeClosure({
+        root: "/fixture",
+        owners: ["owner.ts"],
+        sdks: ["vendor"],
+        scope: "sdk-reachable",
+        baseline,
+        current,
+      });
+
+    expect(closure.problems).toEqual([]);
+    expect(closure.files.has(selected)).toBe(true);
+    expect(closure.files.has(ignored)).toBe(false);
+    expect(compare(changed(selected))).toBe(true);
+    expect(compare(changed(ignored))).toBe(false);
+  },
+);
