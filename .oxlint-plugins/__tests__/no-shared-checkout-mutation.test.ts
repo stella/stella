@@ -50,6 +50,14 @@ describe(RULE, () => {
     ).toEqual([4, 5]);
   });
 
+  test("rejects checkout paths chosen by conditional and logical expressions", async () => {
+    expect(
+      await lint(
+        'import { writeFile } from "node:fs/promises";\nimport { tmpdir } from "node:os";\nimport path from "node:path";\nconst temporaryFile = path.join(tmpdir(), "fixture.json");\nconst file = process.argv.length > 2 ? new URL("baseline.json", import.meta.url) : temporaryFile;\nawait writeFile(file, "changed");\nawait writeFile(process.argv[2] ?? path.join(import.meta.dir, "baseline.json"), "changed");\nawait writeFile(process.argv[2] || temporaryFile, "changed");\nawait writeFile(process.argv.length > 2 ? temporaryFile : path.join(tmpdir(), "other.json"), "changed");',
+      ),
+    ).toEqual([6, 7]);
+  });
+
   test("allows traversal out of a system temporary directory", async () => {
     expect(
       await lint(

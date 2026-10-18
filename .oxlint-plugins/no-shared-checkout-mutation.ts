@@ -94,6 +94,21 @@ const staysInside = (segments: readonly unknown[]) =>
     );
   });
 
+// Every value an expression may evaluate to: both branches of `a ? b : c`,
+// both operands of `a ?? b` / `a || b` / `a && b`, the last item of `(a, b)`.
+const alternatives = (node: AstNode): unknown[] => {
+  if (node.type === "ConditionalExpression") {
+    return [node.consequent, node.alternate];
+  }
+  if (node.type === "LogicalExpression") {
+    return [node.left, node.right];
+  }
+  if (node.type === "SequenceExpression" && Array.isArray(node.expressions)) {
+    return node.expressions.slice(-1);
+  }
+  return [];
+};
+
 const createPathResolver = (context: ScopeContext) => {
   const variableOf = (node: unknown) =>
     isIdentifierReference(node) ? resolveVariable(context, node) : null;
@@ -302,6 +317,11 @@ const createPathResolver = (context: ScopeContext) => {
     }
     if (isAstNode(node) && node.type === "AwaitExpression") {
       return isCheckoutPath(node.argument, seen, exempt);
+    }
+    if (isAstNode(node)) {
+      return alternatives(node).some((candidate) =>
+        isCheckoutPath(candidate, new Set(seen), exempt),
+      );
     }
     return false;
   };
