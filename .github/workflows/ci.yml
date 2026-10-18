@@ -8339,10 +8339,35 @@ jobs:
         if: ${{ !cancelled() }}
         run: git ls-files -z > "$RUNNER_TEMP/dated-waiver-tracked-files"
 
+      # An expired waiver fails a pull request or merge group only when the
+      # change touches the file declaring it; the scheduled healing run checks
+      # every waiver on the default branch and alerts its owner.
+      # Runs like every expiry step; only a pull request or merge group has a
+      # change to scope to, so other events keep the full check.
+      - name: "dated-waiver-expiry: List files the change touches"
+        if: ${{ !cancelled() }}
+        env:
+          TARGET_REF: ${{ github.event.pull_request.base.ref || github.event.merge_group.base_ref }}
+        run: |
+          case "$GITHUB_EVENT_NAME" in
+            pull_request | merge_group) ;;
+            *) exit 0 ;;
+          esac
+          target="origin/${TARGET_REF#refs/heads/}"
+          base=$(git merge-base "$target" HEAD)
+          git diff --name-only -z "$base" HEAD > "$RUNNER_TEMP/dated-waiver-changed-files"
+          echo "DATED_WAIVER_CHANGED_FILES=$RUNNER_TEMP/dated-waiver-changed-files" >> "$GITHUB_ENV"
+
       - name: "dated-waiver-expiry: Check dated waiver expiry on the current tree"
         if: ${{ !cancelled() }}
         continue-on-error: false
-        run: bun --preload ./scripts/offline-network-preload.ts scripts/dated-waivers.ts --check --tracked-files "$RUNNER_TEMP/dated-waiver-tracked-files"
+        # DATED_WAIVER_CHANGED_FILES is set only for pull requests and merge groups.
+        run: |
+          scope=()
+          if [[ -n "${DATED_WAIVER_CHANGED_FILES:-}" ]]; then
+            scope=(--changed-files "$DATED_WAIVER_CHANGED_FILES")
+          fi
+          bun --preload ./scripts/offline-network-preload.ts scripts/dated-waivers.ts --check --tracked-files "$RUNNER_TEMP/dated-waiver-tracked-files" "${scope[@]}"
 
       - *merge_group_cancel
 
