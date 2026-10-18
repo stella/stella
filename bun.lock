@@ -10,7 +10,6 @@
         "@gdp-ts/core": "0.1.0",
         "@oxlint/plugins": "catalog:",
         "@shadcn/lint": "catalog:",
-        "@stll/aho-corasick": "catalog:",
         "@stll/collation": "workspace:*",
         "@stll/oxlint-config": "1.4.0",
         "@stll/portable-path": "workspace:*",
@@ -80,7 +79,6 @@
         "@smithy/fetch-http-handler": "^5.8.0",
         "@stll/agent-engine": "workspace:*",
         "@stll/agent-input": "workspace:*",
-        "@stll/aho-corasick": "catalog:",
         "@stll/ai-catalog": "workspace:*",
         "@stll/analytics-config": "workspace:*",
         "@stll/anonymize": "catalog:",
@@ -106,7 +104,6 @@
         "@stll/fetch": "workspace:*",
         "@stll/folio-agents": "catalog:",
         "@stll/folio-core": "catalog:",
-        "@stll/fuzzy-search": "catalog:",
         "@stll/infosoud": "workspace:*",
         "@stll/invoicing": "workspace:*",
         "@stll/legal-ast": "workspace:*",
@@ -354,7 +351,6 @@
       "name": "@stll/legal-atlas-runner",
       "version": "0.0.0",
       "dependencies": {
-        "@stll/aho-corasick": "catalog:",
         "@stll/api": "workspace:*",
         "@stll/concurrency": "workspace:*",
         "@stll/legal-ast": "workspace:*",
@@ -1012,7 +1008,6 @@
         "infosoud": "./dist/cli.js",
       },
       "dependencies": {
-        "@stll/aho-corasick": "catalog:",
         "@stll/text-normalize": "workspace:*",
         "better-result": "catalog:",
         "temporal-polyfill": "catalog:",
@@ -1135,7 +1130,6 @@
       "version": "0.2.1",
       "dependencies": {
         "@stll/agent-input": "workspace:^",
-        "@stll/fuzzy-search": "catalog:",
         "better-result": "catalog:",
       },
       "devDependencies": {
