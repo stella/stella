@@ -598,8 +598,76 @@ test("citation pages filter doctrine and polarity and bind cursors to filters", 
   );
   await db
     .update(caseLawCitations)
-    .set({ doctrinalTreatment: null })
+    .set({ doctrinalTreatment: null, polarity: null })
     .where(inArray(caseLawCitations.id, [limitsId, distinguishesId]));
+});
+
+test("unclassified polarity returns only unread stances across stable pages", async () => {
+  const read = async (cursor?: string) =>
+    await withSubject(
+      subjectId,
+      async (subject) =>
+        await listDecisionCitationsHandler({
+          subject,
+          query: {
+            direction: "incoming",
+            polarity: "unclassified",
+            ...(cursor === undefined ? {} : { cursor }),
+          },
+          limit: 5,
+        }),
+    );
+
+  const first = await read();
+  const repeatedFirst = await read();
+  if (
+    !("items" in first) ||
+    !("items" in repeatedFirst) ||
+    first.nextCursor === null
+  ) {
+    throw new Error("Expected a first unclassified citation page");
+  }
+  expect(repeatedFirst.nextCursor).toBe(first.nextCursor);
+
+  const items = [...first.items];
+  let cursor: string | null = first.nextCursor;
+  while (cursor !== null) {
+    const page = await read(cursor);
+    if (!("items" in page)) {
+      throw new Error("Expected a subsequent unclassified citation page");
+    }
+    items.push(...page.items);
+    cursor = page.nextCursor;
+  }
+
+  expect(items).toHaveLength(2 * INCOMING_PER_POLARITY);
+  expect(new Set(items.map(({ id }) => id)).size).toBe(items.length);
+  expect(items.every(({ treatment }) => treatment === "unclassified")).toBe(
+    true,
+  );
+  expect(items.map(({ id }) => id)).toEqual(
+    Array.from({ length: 2 * INCOMING_PER_POLARITY }, (_, index) =>
+      citationId(index),
+    ),
+  );
+});
+
+test("doctrine filters report unavailable instead of an empty finding", async () => {
+  const page = await withSubject(
+    subjectId,
+    async (subject) =>
+      await listDecisionCitationsHandler({
+        subject,
+        query: { direction: "incoming", doctrine: "distinguishes" },
+      }),
+  );
+
+  expect("items" in page).toBe(false);
+  if ("items" in page) {
+    throw new Error("Expected a doctrine availability refusal");
+  }
+  expect(page.code).toBe(422);
+  expect(page.response.message).toBe("Doctrine filtering is unavailable");
 });
 
 test("incoming citations roll up by the citing decision's year within the bounded span", async () => {

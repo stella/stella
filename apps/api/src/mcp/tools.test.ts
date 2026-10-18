@@ -3725,7 +3725,11 @@ describe("OpenAI-compatible MCP tools", () => {
   test("read_case_law_citations defaults the page size and passes the cursor through", async () => {
     readGatedDecisionCitationsMock.mockResolvedValue({
       type: "page",
-      page: { items: [], nextCursor: null, doctrineAvailability: "available" },
+      page: {
+        items: [],
+        nextCursor: null,
+        doctrineAvailability: "available",
+      },
     });
 
     await handleMcpToolCall({
@@ -3746,6 +3750,35 @@ describe("OpenAI-compatible MCP tools", () => {
       limit: LIMITS.caseLawAgentCitationPageSizeDefault,
       surface: "search",
     });
+  });
+
+  test("read_case_law_citations refuses doctrine filters when doctrine is unavailable", async () => {
+    readGatedDecisionCitationsMock.mockResolvedValue({
+      type: "doctrine_unavailable",
+    });
+
+    const result = await handleMcpToolCall({
+      args: {
+        decision_id: DECISION_ID,
+        direction: "cited_by",
+        doctrine: "distinguishes",
+      },
+      context: createContext(),
+      toolName: "read_case_law_citations",
+    });
+
+    const error = validationEnvelope(result);
+    expect(error["code"]).toBe("validation_error");
+    expect(error["message"]).toBe("Doctrine filtering is unavailable");
+    expect(error["hint"]).toBe(
+      "Call read_case_law_citations again without doctrine; the response's doctrineAvailability will report whether doctrine can be read.",
+    );
+    expect(error["issues"]).toEqual([
+      {
+        path: "doctrine",
+        message: "Doctrine is unavailable on this case-law surface.",
+      },
+    ]);
   });
 
   test("read_case_law_citations answers not found for a subject the gate denies", async () => {

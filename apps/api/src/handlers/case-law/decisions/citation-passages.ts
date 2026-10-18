@@ -81,7 +81,8 @@ export type DecisionCitationsPage = {
 /** An invalid cursor, told apart from "no such public decision" (null). */
 export type DecisionCitationsRead =
   | { type: "page"; page: DecisionCitationsPage }
-  | { type: "invalid_cursor" };
+  | { type: "invalid_cursor" }
+  | { type: "doctrine_unavailable" };
 
 /**
  * How much of the citing paragraph travels with a citation. A decision's
@@ -376,7 +377,10 @@ export const readGatedDecisionCitations = async ({
         subject,
       });
       if (!("items" in page)) {
-        return { type: "invalid_cursor" } as const;
+        if (doctrine !== undefined) {
+          return { type: "doctrine_unavailable" as const };
+        }
+        return { type: "invalid_cursor" as const };
       }
       // Whose text holds the citing block: this decision for its own outgoing
       // citations, the citing decision for every incoming one.
@@ -402,7 +406,10 @@ export const readGatedDecisionCitations = async ({
   if (gated === null) {
     return null;
   }
-  if (gated.type === "invalid_cursor") {
+  if (
+    gated.type === "invalid_cursor" ||
+    gated.type === "doctrine_unavailable"
+  ) {
     return gated;
   }
 

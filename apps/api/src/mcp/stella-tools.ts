@@ -1231,6 +1231,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       "'unclassified' means unread; 'mixed' means mentions disagreed. " +
       "`doctrine` is 'distinguishes' or 'limits' only " +
       "where a reviewed reading found the court doing so in its own words; " +
+      "the call refuses a `doctrine` filter when doctrine is unavailable. " +
       "'not_stated' does not mean followed; 'unread' means none " +
       "was read; null when `doctrineAvailability` is 'unavailable'. " +
       "`passage.evidenceQuote` is the verbatim evidence when text is " +
@@ -3634,6 +3635,19 @@ const handleReadCaseLawCitationsTool: TypedMcpToolHandler<
     return invalidCursorResult({
       cursor: cursor ?? "",
       tool: "read_case_law_citations",
+    });
+  }
+  if (read.type === "doctrine_unavailable") {
+    return structuredErrorResult({
+      code: "validation_error",
+      message: "Doctrine filtering is unavailable",
+      issues: [
+        {
+          path: "doctrine",
+          message: "Doctrine is unavailable on this case-law surface.",
+        },
+      ],
+      hint: "Call read_case_law_citations again without doctrine; the response's doctrineAvailability will report whether doctrine can be read.",
     });
   }
 

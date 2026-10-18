@@ -441,6 +441,9 @@ export const listDecisionCitationsHandler = async ({
     Math.min(limit, LIMITS.caseLawDecisionCitationPageSize),
   );
   const doctrineAvailable = await canReadCitationDoctrine(tx);
+  if (query.doctrine !== undefined && !doctrineAvailable) {
+    return status(422, { message: "Doctrine filtering is unavailable" });
+  }
   const rows = await decisionCitationPageQuery({
     doctrineAvailable,
     cursorId,
