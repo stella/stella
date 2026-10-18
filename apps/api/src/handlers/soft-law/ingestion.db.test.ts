@@ -968,6 +968,10 @@ if (!databaseUrl || !enabled) {
               metadata: {
                 ...item.metadata,
                 statedReference: { state: "stated", value: "WP 260" },
+                expression: {
+                  ...item.metadata.expression,
+                  revision: { state: "stated", value: "rev.01" },
+                },
               },
               raw,
               text: "WP 260 Transparency opinion",
@@ -986,6 +990,7 @@ if (!databaseUrl || !enabled) {
         expect(stored).toHaveLength(1);
         expect(stored.at(0)?.statedReference).toBe("WP 260");
         expect(stored.at(0)?.identityKey).toContain("wp260");
+        expect(stored.at(0)?.identityKey).toContain("rev1");
         const documentId = stored.at(0)?.id;
         if (!documentId) {
           panic("Repaired WP29 document was not stored");
@@ -998,6 +1003,131 @@ if (!databaseUrl || !enabled) {
           versions.map(({ extractionQuality }) => extractionQuality),
         ).toEqual(["extraction_failed", "text_layer"]);
       }));
+
+    test.each([
+      {
+        name: "stated revision changes",
+        storedExpression: {
+          type: "identified",
+          language: "en",
+          revision: { state: "stated", value: "rev.01" },
+        },
+        recoveredExpression: {
+          type: "identified",
+          language: "en",
+          revision: { state: "stated", value: "rev.02" },
+        },
+      },
+      {
+        name: "language changes",
+        storedExpression: {
+          type: "identified",
+          language: "en",
+          revision: { state: "not_stated" },
+        },
+        recoveredExpression: {
+          type: "identified",
+          language: "de",
+          revision: { state: "stated", value: "rev.01" },
+        },
+      },
+    ] as const)(
+      "a WP29 extraction placeholder stays ambiguous when its $name",
+      async ({ storedExpression, recoveredExpression }) =>
+        await withSource(databaseUrl, async ({ db, sourceId, run }) => {
+          const item = {
+            type: "document",
+            url: "https://ec.europa.eu/justice/article-29/expression.doc",
+            metadata: {
+              title: "Expression-sensitive opinion",
+              kind: "opinion",
+              sourceKind: "Expression-sensitive opinion",
+              statedReference: { state: "not_stated" },
+              issuedOn: { state: "not_stated" },
+              expression: storedExpression,
+              stage: { state: "not_stated" },
+              relations: [],
+              validity: {
+                state: "not_stated",
+                basis: "archived_source_stated",
+              },
+            },
+            sourceDates: {},
+          } as const satisfies SoftLawEntry;
+          let repaired = false;
+          const sourceAdapter = {
+            ...adapter([item]),
+            authority: "eu-wp29",
+            fetchDocument: async () => {
+              const common = {
+                raw: [
+                  {
+                    role: "document-word",
+                    purpose: "document" as const,
+                    bytes: new TextEncoder().encode("WP 260"),
+                    contentType: "application/msword",
+                  },
+                ],
+                sourceDates: {},
+              };
+              if (!repaired) {
+                repaired = true;
+                return Result.ok({
+                  ...common,
+                  metadata: item.metadata,
+                  text: null,
+                  extractionQuality: "extraction_failed",
+                  extractionFailure: "Binary Word extraction failed",
+                });
+              }
+              return Result.ok({
+                ...common,
+                metadata: {
+                  ...item.metadata,
+                  statedReference: { state: "stated", value: "WP 260" },
+                  expression: recoveredExpression,
+                },
+                text: "WP 260 extracted",
+                extractionQuality: "text_layer",
+              });
+            },
+          } satisfies SoftLawSourceAdapter;
+
+          expect(await run(sourceAdapter)).toEqual({ status: "complete" });
+          const before = (
+            await db
+              .select()
+              .from(softLawDocuments)
+              .where(eq(softLawDocuments.sourceId, sourceId))
+          ).at(0);
+          if (!before) {
+            panic("WP29 expression placeholder was not stored");
+          }
+
+          expect(await run(sourceAdapter)).toEqual({ status: "complete" });
+          const after = await db
+            .select()
+            .from(softLawDocuments)
+            .where(eq(softLawDocuments.sourceId, sourceId));
+          expect(after).toHaveLength(1);
+          expect(after.at(0)?.id).toBe(before.id);
+          expect(after.at(0)?.identityKey).toBe(before.identityKey);
+          expect(
+            await db
+              .select()
+              .from(softLawDocumentVersions)
+              .where(eq(softLawDocumentVersions.documentId, before.id)),
+          ).toHaveLength(1);
+          expect(
+            (
+              await db
+                .select()
+                .from(softLawIngestionAttempts)
+                .where(eq(softLawIngestionAttempts.sourceId, sourceId))
+            ).some(({ tag }) => tag === "ambiguous_locator"),
+          ).toBe(true);
+        }),
+    );
 
     test("a numbered WP29 extraction failure cannot be repaired as another document", async () =>
       await withSource(databaseUrl, async ({ db, sourceId, run }) => {

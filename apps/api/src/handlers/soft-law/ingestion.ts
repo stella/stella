@@ -14,7 +14,6 @@ import { SOFT_LAW_AUTHORITY_POLICIES } from "@/api/lib/legal-search/soft-law-aut
 import {
   softLawIdentityKey,
   softLawContentHash,
-  softLawExpressionIdentityKey,
 } from "@/api/lib/legal-search/soft-law-fingerprint";
 import { createSoftLawIngestionStore } from "@/api/lib/legal-search/soft-law-ingestion-store";
 import type {
@@ -32,6 +31,7 @@ import type {
   SoftLawEntry,
   SoftLawDiscoveryEntry,
   SoftLawDocumentInput,
+  SoftLawMetadata,
 } from "@/api/lib/legal-search/soft-law-types";
 
 import { createSoftLawFetch } from "./publisher-access";
@@ -134,6 +134,26 @@ const isUnnumberedExtractionPlaceholder = (
 ): row is ExtractionPlaceholderMatch =>
   row.document.statedReferenceState === "not_stated" &&
   row.version?.extractionQuality === "extraction_failed";
+const hasCompatibleRecoveredExpression = (
+  stored: SoftLawMetadata,
+  incoming: SoftLawMetadata,
+) => {
+  if (
+    stored.kind !== incoming.kind ||
+    stored.expression?.type !== "identified" ||
+    incoming.expression?.type !== "identified" ||
+    stored.expression.language !== incoming.expression.language
+  ) {
+    return false;
+  }
+  if (stored.expression.revision.state === "not_stated") {
+    return true;
+  }
+  return (
+    incoming.expression.revision.state === "stated" &&
+    stored.expression.revision.value === incoming.expression.revision.value
+  );
+};
 type FetchSoftLawItemOptions = Pick<
   PrepareSoftLawPageOptions,
   "adapter" | "signal" | "fetch"
@@ -369,11 +389,10 @@ const prepareSoftLawPage = async (options: PrepareSoftLawPageOptions) => {
       locator !== undefined &&
       isUnnumberedExtractionPlaceholder(locator) &&
       input.extractionQuality !== "extraction_failed" &&
-      softLawExpressionIdentityKey(
-        options.adapter.authority,
+      hasCompatibleRecoveredExpression(
         locator.version.metadata,
-      ) ===
-        softLawExpressionIdentityKey(options.adapter.authority, input.metadata);
+        input.metadata,
+      );
     if (
       locator &&
       locator.document.identityKey !== identityKey &&
