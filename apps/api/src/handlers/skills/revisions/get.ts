@@ -4,6 +4,7 @@ import { t } from "elysia";
 
 import { abortableTx } from "@/api/db/safe-db";
 import { agentSkillRevisions } from "@/api/db/schema";
+import { toAgentSkillRevisionResponse } from "@/api/handlers/skills/response";
 import { loadVisibleSkill } from "@/api/lib/agent-skills/access";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -78,7 +79,7 @@ const getSkillRevision = createSafeRootHandler(
       }),
     );
 
-    return Result.ok(revision);
+    return Result.ok(toAgentSkillRevisionResponse(revision));
   },
 );
 
