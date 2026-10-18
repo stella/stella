@@ -171,6 +171,7 @@ const DEFAULT_STEP_OUTPUTS: Record<string, Record<string, string>> = {
     web_image_smoke_required: "false",
     windows_scripts_required: "false",
   },
+  cached: { input_hash: "" },
   check: { trusted: "true" },
   "completed-depth": {
     completed_run_id: "",
