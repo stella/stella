@@ -11,6 +11,7 @@ import {
 } from "@stll/property-testing";
 
 import {
+  CUE_GATED_CITATION_PATTERNS,
   extractCitations,
   extractDecisionCitations,
   normalizeDecisionIdentifier,
@@ -219,3 +220,37 @@ test(
   },
   propertyTestTimeout(15_000),
 );
+
+const cueGateExamples = {
+  "pl-tk": { number: "K 2/19", cue: "TK" },
+  "pl-uodo": { number: "DKN.5131.6.2024", cue: "UODO" },
+  "pl-uokik": { number: "DOK-1/2020", cue: "UOKiK" },
+  "cz-uohs": { number: "ÚOHS-S123/2024/VZ", cue: "ÚOHS" },
+  "cz-uoou": { number: "UOOU-12345/17-12", cue: "ÚOOÚ" },
+} as const satisfies Record<
+  (typeof CUE_GATED_CITATION_PATTERNS)[number]["id"],
+  { number: string; cue: string }
+>;
+
+test("every cue-gated pattern rejects uncued numbers and accepts cues on enabled sides", () => {
+  for (const gate of CUE_GATED_CITATION_PATTERNS) {
+    const example = cueGateExamples[gate.id];
+    expect(extractCitations([{ index: 0, text: example.number }])).toHaveLength(
+      0,
+    );
+    if (gate.windowBefore > 0) {
+      expect(
+        extractCitations([
+          { index: 0, text: `${example.cue} ${example.number}` },
+        ]).some(({ citationText }) => citationText === example.number),
+      ).toBe(true);
+    }
+    if (gate.windowAfter > 0) {
+      expect(
+        extractCitations([
+          { index: 0, text: `${example.number} ${example.cue}` },
+        ]).some(({ citationText }) => citationText === example.number),
+      ).toBe(true);
+    }
+  }
+});

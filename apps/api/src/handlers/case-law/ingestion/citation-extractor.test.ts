@@ -34,6 +34,38 @@ import { CITATION_STORAGE_WIDTHS } from "@/api/lib/case-law/citation-storage-bou
 import { storeDecisionIdentifiersInMetadata } from "@/api/lib/legal-search/decision-identifier-metadata";
 
 describe("extractCitations", () => {
+  test.each([
+    ["ÚOHS ÚOHS-S123/2024/VZ", "ÚOHS-S123/2024/VZ"],
+    ["OHS ÚOHS-R456/2025/VZ", "ÚOHS-R456/2025/VZ"],
+    [
+      "Úřad pro ochranu hospodářské soutěže ÚOHS-12345/2024/500",
+      "ÚOHS-12345/2024/500",
+    ],
+    ["rozhodnutí předsedy ÚOHS-54321/2025/500/ABC", "ÚOHS-54321/2025/500/ABC"],
+    ["ÚOOÚ UOOU-12345/17-12", "UOOU-12345/17-12"],
+    ["Úřad pro ochranu osobních údajů UOOU-123417-12", "UOOU-123417-12"],
+  ])("extracts Czech authority decision shape %s", (text, number) => {
+    const citations = extractCitations([{ index: 0, text }]);
+    expect(citations).toContainEqual(
+      expect.objectContaining({
+        citationText: number,
+        identifierType: DECISION_IDENTIFIER_TYPES.AUTHORITY_DECISION_NUMBER,
+      }),
+    );
+  });
+
+  test("rejects Czech authority numbers without their own cue", () => {
+    expect(
+      extractCitations([{ index: 0, text: "ÚOHS-S123/2024/VZ" }]),
+    ).toHaveLength(0);
+    expect(
+      extractCitations([{ index: 0, text: "ÚOOÚ ÚOHS-S123/2024/VZ" }]),
+    ).toHaveLength(0);
+    expect(
+      extractCitations([{ index: 0, text: "ÚOHS UOOU-12345/17-12" }]),
+    ).toHaveLength(0);
+  });
+
   test("deduplicates sp. zn. and č. j. for the same case number", () => {
     const text = "Viz sp. zn. 21 Cdo 1234/2020 a také č. j. 21 Cdo 1234/2020";
     const citations = extractCitations([{ index: 0, text }]);
