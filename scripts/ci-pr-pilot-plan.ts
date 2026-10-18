@@ -12,6 +12,8 @@ export const PILOT_FAST_ROOTS = [
   "code-quality-api",
   "code-quality-web-rest",
   "query-perf",
+  "migration-check",
+  "migration-apply-fresh",
 ] as const;
 /** Jobs every profile runs: wall-clock checks no plan scope can skip. */
 export const PILOT_ALWAYS = ["ci-quick-checks"] as const;

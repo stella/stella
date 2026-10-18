@@ -1515,17 +1515,17 @@ test("a full-depth run fails every planned job that did not succeed", () => {
   }
 });
 
-test("apply-fresh failure is required exactly when migration checks are planned", () => {
+test("migration-apply-fresh failure is required exactly when migration checks are planned", () => {
   expect(
     evaluateResult({
       event: EVENT.pullRequest,
-      results: { "apply-fresh": "failure" },
+      results: { "migration-apply-fresh": "failure" },
     }),
   ).toBe(1);
   expect(
     evaluateResult({
       event: EVENT.pullRequest,
-      results: { "apply-fresh": "skipped" },
+      results: { "migration-apply-fresh": "skipped" },
       unplannedScopes: ["migration_checks_required"],
     }),
   ).toBe(0);

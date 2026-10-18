@@ -136,6 +136,8 @@ export const CI_GATES: Readonly<Record<string, JobGate>> = {
   "query-perf": { class: "correctness" },
   "postgres-service-suites": { class: "correctness" },
   "service-suites": { class: "correctness" },
+  "migration-check": { class: "correctness" },
+  "migration-apply-fresh": { class: "correctness" },
   "migration-upgrade-rehearsal": { class: "correctness" },
   "release-typecheck": { class: "correctness" },
   "fix-tests-on-base": {

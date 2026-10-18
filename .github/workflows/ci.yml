@@ -22,8 +22,6 @@ on:
   # checks must include merge_group and validate the tree that will land.
   merge_group:
     types: [checks_requested]
-  push:
-    branches: [main]
   workflow_call:
     inputs:
       depth:
@@ -6685,7 +6683,7 @@ jobs:
 
       - *merge_group_cancel
 
-  check:
+  migration-check:
     needs: ci-plan
     if: >-
       always()
@@ -6729,7 +6727,7 @@ jobs:
 
       - *merge_group_cancel
 
-  apply-fresh:
+  migration-apply-fresh:
     # Validates that the shipped migrate entrypoint can apply every migration
     # end-to-end against an empty Postgres. Catches: ordering bugs, syntax
     # errors, and any migration that would crash on a real DB.
@@ -6968,8 +6966,8 @@ jobs:
     needs:
       [
         ci-plan,
-        check,
-        apply-fresh,
+        migration-check,
+        migration-apply-fresh,
         generated-sources,
 
         pr-heavy-gate,
@@ -7083,8 +7081,8 @@ jobs:
           JOB_SCOPES: >-
             {
             "ci-quick-checks": null,
-            "check": "migration_checks_required",
-            "apply-fresh": "migration_checks_required",
+            "migration-check": "migration_checks_required",
+            "migration-apply-fresh": "migration_checks_required",
             "generated-sources": "package_checks_required",
 
             "pr-heavy-gate": "pr_heavy_gate_required",
@@ -7127,9 +7125,9 @@ jobs:
           # Jobs a fast-depth run must also see succeed once their scope is
           # planned; any other job may skip there.
           FAST_JOB_SCOPES: >-
-            {"check": "migration_checks_required", "apply-fresh": "migration_checks_required", "postgres-service-suites": "postgres_service_suites_required", "service-suites": "service_suites_pr_required", "docker-checks": "docker_checks_pr_required", "legal-atlas-image": "legal_atlas_image_pr_required", "web-build": "browser_spec_selection_required"}
+            {"migration-check": "migration_checks_required", "migration-apply-fresh": "migration_checks_required", "postgres-service-suites": "postgres_service_suites_required", "service-suites": "service_suites_pr_required", "docker-checks": "docker_checks_pr_required", "legal-atlas-image": "legal_atlas_image_pr_required", "web-build": "browser_spec_selection_required"}
           FAST_REQUIRED: >-
-            ["check", "apply-fresh", "ci-quick-checks", "generated-sources", "pr-heavy-gate", "desktop-rust-lint", "ci-browser", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "code-quality-api", "code-quality-web-rest", "dependency-malware", "ci-tests", "e2e-production-shard", "web-build", "scan-engine-wasm-drift", "query-perf"]
+            ["migration-check", "migration-apply-fresh", "ci-quick-checks", "generated-sources", "pr-heavy-gate", "desktop-rust-lint", "ci-browser", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "code-quality-api", "code-quality-web-rest", "dependency-malware", "ci-tests", "e2e-production-shard", "web-build", "scan-engine-wasm-drift", "query-perf"]
         run: |
           if [[ "$QUEUE_DEPTH" == thin ]]; then
             THIN_JOBS=$(jq -cn --argjson thin "$THIN_JOBS" --argjson required "$QUEUE_REQUIRED_JOBS" '$thin + $required | unique') || exit 1
