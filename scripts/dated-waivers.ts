@@ -254,37 +254,60 @@ export const waiverWarnings = (
       `::warning file=${escapeCommand(entry.source).replaceAll(",", "%2C").replaceAll(":", "%3A")},line=${entry.line}::${escapeCommand(`${entry.id} (${entry.kind}) expires at ${entry.expiresAt}; ${RECHECK_INSTRUCTIONS[entry.kind]}`)}`,
   );
 
-// An elapsed release-age exclusion is the owner's cleanup (dated-waiver-healing
-// opens it), not a defect of whichever change is under review, so the
-// per-change gate annotates it instead of failing every pull request and merge
-// group. Every other elapsed waiver, including a dated test quarantine that
-// still skips its test, keeps failing the gate.
+// Which elapsed waivers fail the check. An expiry is a clock event, not a
+// defect of the change under review: a change fails only on elapsed waivers in
+// files it touches, while the whole tree (main and schedules, where
+// dated-waiver-healing opens the cleanup) fails on every one.
+export type ExpiryScope =
+  | { type: "tree" }
+  | { type: "change"; files: ReadonlySet<string> };
+
+const inScope = (entry: DatedWaiver, scope: ExpiryScope): boolean => {
+  switch (scope.type) {
+    case "tree":
+      return true;
+    case "change":
+      return scope.files.has(entry.source);
+    default:
+      scope satisfies never;
+      return panic(`Unknown expiry scope: ${JSON.stringify(scope)}`);
+  }
+};
+
 const isExpired = (entry: DatedWaiver, now: Date): boolean =>
   Date.parse(expiryInstant(entry.expiresAt)) <= now.getTime();
 
-export const expiredWaiverAnnotations = (
-  entries: readonly DatedWaiver[],
-  now: Date,
-): string[] =>
+// An elapsed release-age exclusion is the owner's cleanup, so it only ever
+// annotates. Every other elapsed waiver in scope, including a dated test
+// quarantine that still skips its test, fails the gate.
+const fails = (entry: DatedWaiver, scope: ExpiryScope): boolean =>
+  entry.kind !== "release-age-exclusion" && inScope(entry, scope);
+
+type ExpiredWaiverOptions = {
+  entries: readonly DatedWaiver[];
+  now: Date;
+  scope: ExpiryScope;
+};
+
+export const expiredWaiverAnnotations = ({
+  entries,
+  now,
+  scope,
+}: ExpiredWaiverOptions): string[] =>
   entries
-    .filter(
-      (entry) =>
-        entry.kind === "release-age-exclusion" && isExpired(entry, now),
-    )
+    .filter((entry) => isExpired(entry, now) && !fails(entry, scope))
     .map(
       (entry) =>
         `::warning file=${escapeCommand(entry.source).replaceAll(",", "%2C").replaceAll(":", "%3A")},line=${entry.line}::${escapeCommand(`${entry.id} (${entry.kind}) expired at ${entry.expiresAt}; ${RECHECK_INSTRUCTIONS[entry.kind]}`)}`,
     );
 
-export const expiredWaiverFailures = (
-  entries: readonly DatedWaiver[],
-  now: Date,
-): string[] =>
+export const expiredWaiverFailures = ({
+  entries,
+  now,
+  scope,
+}: ExpiredWaiverOptions): string[] =>
   entries
-    .filter(
-      (entry) =>
-        entry.kind !== "release-age-exclusion" && isExpired(entry, now),
-    )
+    .filter((entry) => isExpired(entry, now) && fails(entry, scope))
     .map(
       (entry) =>
         `${entry.source}:${entry.line} dated waiver expired: ${entry.id}`,
@@ -524,11 +547,26 @@ if (import.meta.main) {
   }
   const entries = loadWaivers(readTrackedPolicyFiles(trackedFilesPath));
   if (check) {
-    const now = new Date();
-    for (const annotation of expiredWaiverAnnotations(entries, now)) {
+    // --changed-files names the change under review; without it the whole
+    // tree is in scope.
+    const changedFilesFlag = process.argv.indexOf("--changed-files");
+    const changedFilesPath =
+      changedFilesFlag === -1
+        ? undefined
+        : (process.argv.at(changedFilesFlag + 1) ??
+          panic("--changed-files requires a path"));
+    const scope: ExpiryScope =
+      changedFilesPath === undefined
+        ? { type: "tree" }
+        : {
+            type: "change",
+            files: new Set(readTrackedPolicyFiles(changedFilesPath)),
+          };
+    const options = { entries, now: new Date(), scope };
+    for (const annotation of expiredWaiverAnnotations(options)) {
       console.log(annotation);
     }
-    const failures = expiredWaiverFailures(entries, now);
+    const failures = expiredWaiverFailures(options);
     if (failures.length > 0) {
       console.error(failures.join("\n"));
       process.exitCode = 1;

@@ -110,6 +110,9 @@ jobs:
       ci_tests_matrix: ${{ steps.api-tests.outputs.ci_tests_matrix }}
       api_test_files: ${{ steps.api-tests.outputs.api_test_files }}
       changed_files: ${{ steps.changed-files.outputs.changed_files }}
+      # changed_files is the complete change set: the scope step ran and read
+      # its diff. An empty changed_files proves nothing without it.
+      changed_files_known: ${{ steps.changed-files.outcome == 'success' && steps.changed-files.outputs.api_scope_unknown == 'false' }}
       test_scope: ${{ steps.api-tests.outputs.test_scope }}
       comparison_base: ${{ steps.changed-files.outputs.comparison_base }}
       root_checks: ${{ steps.root-checks.outputs.root_checks }}
@@ -8256,7 +8259,10 @@ jobs:
   # candidate, which is why the job runs whenever the plan was not cancelled,
   # including after a failed plan, completed-depth reuse and PR-depth runs.
   # An enqueued head is the exception: its merge group runs the job on the
-  # queued tree.
+  # queued tree. An expiry is a clock event, not a defect of the change: a pull
+  # request or merge group with a known change set fails only on elapsed
+  # waivers in files it changes and annotates the rest; main, schedules and an
+  # unknown change set fail on every elapsed waiver.
   ci-quick-checks:
     needs: ci-plan
     if: ${{ !cancelled() && inputs.heavy_only != true && (github.event_name != 'pull_request' || (github.event.pull_request.draft != true && github.event.action != 'enqueued')) }}
@@ -8337,12 +8343,28 @@ jobs:
       # The job condition is this part's condition, so it always runs here.
       - name: "dated-waiver-expiry: List tracked files for dated waiver guard"
         if: ${{ !cancelled() }}
-        run: git ls-files -z > "$RUNNER_TEMP/dated-waiver-tracked-files"
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PLAN_RESULT: ${{ needs.ci-plan.result }}
+          CHANGED_FILES_KNOWN: ${{ needs.ci-plan.outputs.changed_files_known }}
+          CHANGED_FILES_JSON: ${{ needs.ci-plan.outputs.changed_files }}
+        run: |
+          git ls-files -z > "$RUNNER_TEMP/dated-waiver-tracked-files"
+          : > "$RUNNER_TEMP/dated-waiver-changed-files"
+          if [[ ("$EVENT_NAME" == pull_request || "$EVENT_NAME" == merge_group) && "$PLAN_RESULT" == success && "$CHANGED_FILES_KNOWN" == true ]]; then
+            jq -j '.[] + "\u0000"' <<< "$CHANGED_FILES_JSON" > "$RUNNER_TEMP/dated-waiver-changed-files"
+          fi
 
       - name: "dated-waiver-expiry: Check dated waiver expiry on the current tree"
         if: ${{ !cancelled() }}
         continue-on-error: false
-        run: bun --preload ./scripts/offline-network-preload.ts scripts/dated-waivers.ts --check --tracked-files "$RUNNER_TEMP/dated-waiver-tracked-files"
+        run: |
+          # An empty change set keeps the whole tree in scope.
+          scope=()
+          if [[ -s "$RUNNER_TEMP/dated-waiver-changed-files" ]]; then
+            scope=(--changed-files "$RUNNER_TEMP/dated-waiver-changed-files")
+          fi
+          bun --preload ./scripts/offline-network-preload.ts scripts/dated-waivers.ts --check --tracked-files "$RUNNER_TEMP/dated-waiver-tracked-files" "${scope[@]}"
 
       - *merge_group_cancel
 

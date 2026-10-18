@@ -20,6 +20,7 @@ import {
   uncoveredExpirySources,
 } from "./dated-waivers";
 
+const TREE = { type: "tree" } as const;
 const doc = {
   dependency: "doc-package",
   reason: "no-llms-txt",
@@ -121,12 +122,17 @@ test("an elapsed waiver annotates the change instead of failing it", () => {
   )?.line;
   expect(exclusionLine).toBeNumber();
   expect(
-    expiredWaiverAnnotations(entries, new Date("2026-10-02T01:02:02.999Z")),
+    expiredWaiverAnnotations({
+      entries,
+      now: new Date("2026-10-02T01:02:02.999Z"),
+      scope: TREE,
+    }),
   ).toEqual([]);
-  const annotations = expiredWaiverAnnotations(
+  const annotations = expiredWaiverAnnotations({
     entries,
-    new Date("2026-10-02T01:02:03.000Z"),
-  );
+    now: new Date("2026-10-02T01:02:03.000Z"),
+    scope: TREE,
+  });
   expect(annotations).toHaveLength(1);
   expect(annotations[0]).toStartWith(
     `::warning file=bunfig.toml,line=${String(exclusionLine)}::`,
@@ -135,12 +141,20 @@ test("an elapsed waiver annotates the change instead of failing it", () => {
     "new-package (release-age-exclusion) expired at 2026-10-02T01:02:03.000Z",
   );
   expect(
-    expiredWaiverAnnotations(entries, new Date("2026-10-07T00:00:00.000Z")),
+    expiredWaiverAnnotations({
+      entries,
+      now: new Date("2026-10-07T00:00:00.000Z"),
+      scope: TREE,
+    }),
   ).toHaveLength(
     entries.filter(({ kind }) => kind === "release-age-exclusion").length,
   );
   expect(
-    expiredWaiverFailures(entries, new Date("2026-10-02T01:02:03.000Z")),
+    expiredWaiverFailures({
+      entries,
+      now: new Date("2026-10-02T01:02:03.000Z"),
+      scope: TREE,
+    }),
   ).toEqual([]);
 });
 test("an elapsed test quarantine and other elapsed waivers still fail the check", () => {
@@ -150,27 +164,76 @@ test("an elapsed test quarantine and other elapsed waivers still fail the check"
   });
   const entries = [...inventory(), ...quarantine];
   expect(
-    expiredWaiverFailures(entries, new Date("2026-10-04T23:59:59.999Z")).some(
-      (failure) => failure.endsWith("dated waiver expired: a case"),
-    ),
+    expiredWaiverFailures({
+      entries,
+      now: new Date("2026-10-04T23:59:59.999Z"),
+      scope: TREE,
+    }).some((failure) => failure.endsWith("dated waiver expired: a case")),
   ).toBe(false);
-  const failures = expiredWaiverFailures(
+  const failures = expiredWaiverFailures({
     entries,
-    new Date("2026-10-05T00:00:00.000Z"),
-  );
+    now: new Date("2026-10-05T00:00:00.000Z"),
+    scope: TREE,
+  });
   expect(failures).toContain(
     "packages/example/src/a.test.ts:3 dated waiver expired: a case",
   );
-  const allElapsed = expiredWaiverFailures(
+  const allElapsed = expiredWaiverFailures({
     entries,
-    new Date("2026-10-07T00:00:00.000Z"),
-  );
+    now: new Date("2026-10-07T00:00:00.000Z"),
+    scope: TREE,
+  });
   expect(allElapsed).toHaveLength(
     entries.filter(({ kind }) => kind !== "release-age-exclusion").length,
   );
   expect(allElapsed.some((failure) => failure.includes("new-package"))).toBe(
     false,
   );
+});
+test("a change fails only on elapsed waivers in files it touches; the rest annotate", () => {
+  const entries = [
+    ...inventory(),
+    ...readTestQuarantines({
+      "packages/example/src/a.test.ts":
+        'import { test } from "bun:test";\n// test-quarantine-expires: 2026-10-05T00:00:00.000Z\ntest.skip("a case", () => {});',
+    }),
+  ];
+  const now = new Date("2026-10-07T00:00:00.000Z");
+  const tree = expiredWaiverFailures({ entries, now, scope: TREE });
+  const elapsed =
+    tree.length +
+    expiredWaiverAnnotations({ entries, now, scope: TREE }).length;
+  const waiverFiles = [...new Set(entries.map(({ source }) => source))];
+  assertProperty(
+    "dated-waiver-change-scope-partition",
+    fc.property(fc.subarray(waiverFiles), (touched) => {
+      const scope = { type: "change", files: new Set(touched) } as const;
+      const failures = expiredWaiverFailures({ entries, now, scope });
+      // A change fails exactly on the tree failures from files it touches.
+      expect(failures).toEqual(
+        tree.filter((failure) =>
+          touched.some((file) => failure.startsWith(`${file}:`)),
+        ),
+      );
+      // Every elapsed waiver still surfaces: as a failure or an annotation.
+      expect(
+        failures.length +
+          expiredWaiverAnnotations({ entries, now, scope }).length,
+      ).toBe(elapsed);
+    }),
+    { seed: 261_018, numRuns: 60 },
+  );
+  // An untouched quarantine annotates the change instead of failing it.
+  const untouched = { type: "change", files: new Set(["README.md"]) } as const;
+  expect(expiredWaiverFailures({ entries, now, scope: untouched })).toEqual([]);
+  expect(
+    expiredWaiverAnnotations({ entries, now, scope: untouched }).some(
+      (annotation) =>
+        annotation.startsWith(
+          "::warning file=packages/example/src/a.test.ts,line=3::",
+        ),
+    ),
+  ).toBe(true);
 });
 test("impossible dates, missing anchors and new expiry-bearing owners fail closed", () => {
   for (const value of ["2026-02-30", "2026-02-30T00:00:00.000Z", "tomorrow"]) {
