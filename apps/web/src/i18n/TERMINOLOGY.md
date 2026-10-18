@@ -267,7 +267,7 @@ Typegen does **not** run as part of `bun run typecheck`. Run it
 manually after editing `en.json`, or rely on the validation gate:
 
 ```bash
-bun run i18n:check   # typegen --check (drift) + locale structure check
+bun run i18n:check   # locale structure, glossary, and terminology checks
 bun run i18n:sync    # fill missing keys from en + sort + regenerate types
 ```
 

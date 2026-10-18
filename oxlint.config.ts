@@ -4122,9 +4122,6 @@ const config = defineConfig({
         "apps/web/src/**/template-preview.tsx",
         "apps/web/src/**/template-preview-view.tsx",
         "apps/web/src/**/page-citation.tsx",
-        // Generated message types: UI copy may legitimately contain words
-        // like "right-click"; these strings are never class names.
-        "apps/web/src/i18n/langs/messages.gen.ts",
       ],
       rules: { "no-physical-properties/no-physical-properties": "off" },
     },
