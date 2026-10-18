@@ -284,7 +284,13 @@ const loadSoftLawMatches = async (
           softLawDocumentLocators,
           and(
             eq(softLawDocumentLocators.documentId, softLawDocuments.id),
-            eq(softLawDocumentLocators.state, "current"),
+            or(
+              eq(softLawDocumentLocators.state, "current"),
+              inArray(
+                softLawDocumentLocators.url,
+                entries.map((entry) => entry.url),
+              ),
+            ),
           ),
         )
         .where(
