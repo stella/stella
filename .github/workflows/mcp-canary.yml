@@ -60,6 +60,7 @@ jobs:
       # the target reports on /health, never from main: a route merged but not
       # yet released would otherwise fail every probe against production.
       - name: Resolve the deployed commit
+        timeout-minutes: 3
         id: deployed
         env:
           BASE_URL: ${{ steps.target.outputs.base_url }}
@@ -85,6 +86,7 @@ jobs:
           bun-version-file: "package.json"
 
       - name: Install dependencies
+        timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""

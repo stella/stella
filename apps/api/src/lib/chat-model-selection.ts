@@ -1,10 +1,10 @@
 import { panic } from "better-result";
 
 /**
- * Per-thread chat-role model selection: encode/decode the
+ * Per-thread chat-task model selection: encode/decode the
  * `"<provider>::<modelId>"` string stored in `chatThreads.chatModel`, and
  * validate a decoded selection against the org's currently configured
- * chat-role catalog.
+ * chat-task catalog.
  *
  * Mirrors `encodeModelSelection`/`decodeModelSelection` in
  * `apps/web/src/components/ai-config-role-models.logic.ts` (the org AI
@@ -12,10 +12,10 @@ import { panic } from "better-result";
  * frontend code — `decodeChatModelSelection` is the API-side source of
  * truth for this encoding.
  *
- * The "chat" role never restricts by input modality (that only applies to
+ * The "chat" task never restricts by input modality (that only applies to
  * "pdf"; see `isBYOKModelRoleSupported` in `@stll/ai-catalog`), so every
  * offered `BYOK_MODEL_OPTIONS` entry for a configured provider is a valid
- * chat-role selection.
+ * chat-task selection.
  */
 import {
   BYOK_MODEL_OPTIONS,
@@ -26,7 +26,7 @@ import {
 } from "@stll/ai-catalog";
 import type {
   BYOKProvider,
-  ModelRole,
+  ModelTask,
   ReasoningEffort,
 } from "@stll/ai-catalog";
 import { classifyBenchmarkModelOptions } from "@stll/ai-catalog/benchmark-frontier";
@@ -42,18 +42,18 @@ import {
 } from "@stll/ai-catalog/benchmarks";
 import type { ModelUnratedReason } from "@stll/ai-catalog/benchmarks";
 
-import { resolveOrgAIModelForRole } from "@/api/lib/ai-config";
+import { resolveOrgAIModelForTask } from "@/api/lib/ai-config";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   getActiveProvider,
-  getTanStackTextModelInfoForRole,
+  getTanStackTextModelInfoForTask,
   hasTanStackInstanceProvider,
-  isAllowedBYOKModelForRole,
+  isAllowedBYOKModelForTask,
 } from "@/api/lib/tanstack-ai-models";
 import type { ManagedModelTier } from "@/api/lib/usage/managed-model-tier";
 
-const CHAT_MODEL_ROLE: ModelRole = "chat";
+const CHAT_MODEL_TASK = "chat";
 
 export type BYOKChatModelSelection = {
   provider: BYOKProvider;
@@ -101,7 +101,7 @@ export const decodeChatModelSelection = (
 };
 
 /**
- * Whether a decoded selection is currently usable for the chat role: the
+ * Whether a decoded selection is currently usable for the chat task: the
  * model must still be offered in the catalog, and the provider must be
  * configured for this org (or, absent an org BYOK config, be the
  * deployment's single active instance provider).
@@ -112,7 +112,7 @@ export const isChatModelSelectionAvailable = ({
   orgAIConfig,
 }: BYOKChatModelSelection & { orgAIConfig: OrgAIConfig | null }): boolean => {
   if (
-    !isAllowedBYOKModelForRole({ provider, modelId, role: CHAT_MODEL_ROLE })
+    !isAllowedBYOKModelForTask({ provider, modelId, task: CHAT_MODEL_TASK })
   ) {
     return false;
   }
@@ -199,18 +199,18 @@ const configuredChatProviders = (
   return isBYOKProviderValue(activeProvider) ? [activeProvider] : [];
 };
 
-const hasResolvableModelForRole = ({
+const hasResolvableModelForTask = ({
   orgAIConfig,
-  role,
+  task,
 }: {
   orgAIConfig: OrgAIConfig | null;
-  role: ModelRole;
+  task: ModelTask;
 }): boolean => {
   if (!orgAIConfig) {
     return hasTanStackInstanceProvider();
   }
 
-  const selection = resolveOrgAIModelForRole(orgAIConfig, role);
+  const selection = resolveOrgAIModelForTask(orgAIConfig, task);
   if (selection === null) {
     return false;
   }
@@ -219,16 +219,16 @@ const hasResolvableModelForRole = ({
     orgAIConfig.providers.some(
       (providerConfig) => providerConfig.provider === selection.provider,
     ) &&
-    isAllowedBYOKModelForRole({
+    isAllowedBYOKModelForTask({
       provider: selection.provider,
       modelId: selection.modelId,
-      role,
+      task,
     })
   );
 };
 
 /**
- * Chat-role model options across every provider currently configured for
+ * Chat-task model options across every provider currently configured for
  * the org (or the single instance provider when no org BYOK config
  * exists). Member-readable: only model identifiers, never key material.
  */
@@ -285,7 +285,7 @@ export const getChatModelBenchmarkOptions = (
 
 /**
  * The encoded selection a send would use absent a thread override, or
- * `null` when the chat role has no usable configured provider or model.
+ * `null` when the chat task has no usable configured provider or model.
  * Unexpected resolver failures propagate to the handler boundary.
  */
 export const getDefaultChatModelValue = ({
@@ -297,11 +297,11 @@ export const getDefaultChatModelValue = ({
   organizationId: SafeId<"organization"> | null;
   modelTier: ManagedModelTier;
 }): string | null => {
-  if (!hasResolvableModelForRole({ orgAIConfig, role: CHAT_MODEL_ROLE })) {
+  if (!hasResolvableModelForTask({ orgAIConfig, task: CHAT_MODEL_TASK })) {
     return null;
   }
 
-  const info = getTanStackTextModelInfoForRole(CHAT_MODEL_ROLE, orgAIConfig, {
+  const info = getTanStackTextModelInfoForTask(CHAT_MODEL_TASK, orgAIConfig, {
     dataClass: "customer",
     organizationId,
     modelTier,
@@ -317,7 +317,7 @@ export const getDefaultChatModelValue = ({
  * override (local-only, already validated by
  * `validateTanStackDevModelOverride`) always wins; otherwise a valid
  * thread-level override is used; otherwise `undefined` so callers fall
- * through to the org's chat-role default. A stale thread override
+ * through to the org's chat-task default. A stale thread override
  * (provider key removed, model dropped from the catalog) is silently
  * dropped here rather than failing the send.
  */

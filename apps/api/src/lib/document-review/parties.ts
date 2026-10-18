@@ -32,10 +32,10 @@ import {
 } from "@/api/lib/document-review/review-document-messages";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
-import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 import type { PreparedDocxFile } from "@/api/lib/workflow/generate-batch";
 
-const ROLE = "pdf" as const;
+const MODEL_TASK = "pdf";
 const TIMEOUT_MS = 60_000;
 
 // Bumped whenever `SYSTEM_PROMPT` or `proposedPartySchema` changes shape, so
@@ -117,13 +117,13 @@ export const detectReviewParties = async ({
 > => {
   const caching = resolveCaching({
     promptCachingEnabled,
-    role: ROLE,
+    task: MODEL_TASK,
     scopeKey: reviewDocumentsScopeKey(targetEntityVersionId, []),
   });
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     dataClass: "customer",
     feature: "document-review.parties",
-    modelRole: ROLE,
+    modelTask: MODEL_TASK,
     orgAIConfig,
     modelTier: admission.modelTier,
     properties: {
@@ -137,9 +137,9 @@ export const detectReviewParties = async ({
 
   return await Result.tryPromise({
     try: async () => {
-      const output = await generateTanStackObjectForRole({
+      const output = await generateTanStackObjectForTask({
         dataClass: "customer",
-        role: ROLE,
+        task: MODEL_TASK,
         orgAIConfig,
         managedAIResidency,
         organizationId,

@@ -29,6 +29,7 @@ jobs:
           persist-credentials: false
 
       - name: Verify GitHub latest is a complete desktop release
+        timeout-minutes: 4
         env:
           GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

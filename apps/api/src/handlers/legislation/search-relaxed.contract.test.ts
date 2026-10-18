@@ -897,7 +897,7 @@ describe.skipIf(!runEngineTests)(
           code: PUBLIC_COUNTRY_UNAVAILABLE_CODE,
           domain: "legislation",
           country: "SVK",
-          reason: "pending_public",
+          reason: "pages_public",
         },
       });
       expect(searchCalls.length).toBe(callStart);

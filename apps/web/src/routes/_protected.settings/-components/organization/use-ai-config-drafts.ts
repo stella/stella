@@ -66,6 +66,12 @@ export const useAIConfigDrafts = ({
   const clearFeedback = () => setFeedback({ status: "idle" });
   const changeProviders = (next: ProviderCredentialDraft[]) => {
     setProviders(next);
+    setRoleModels((current) =>
+      retainRoleOverridesForProviders({
+        providers: getProviderValues(next),
+        overrides: current,
+      }),
+    );
     clearFeedback();
   };
   const removeProvider = (draft: ProviderCredentialDraft) => {

@@ -33,6 +33,10 @@ import { checkDemoAccountAccess } from "@/api/lib/auth/demo-account-policy";
 import { toSafeId } from "@/api/lib/branded-types";
 import { runWithRequestId } from "@/api/lib/observability/request-context";
 import {
+  resetMetricLineSinkForTesting,
+  setMetricLineSinkForTesting,
+} from "@/api/lib/observability/request-metrics";
+import {
   ActionAdmissionError,
   withActionAdmission,
 } from "@/api/lib/rate-limit/action-admission";
@@ -226,6 +230,176 @@ describe("handleMcpHttpRequest", () => {
     readMcpResourceMock.mockImplementation(() => ({ contents: [] }));
     resolveMcpSessionContextMock.mockReset();
     resetAnalyticsForTesting();
+    resetMetricLineSinkForTesting();
+  });
+
+  test("a real MCP transport request emits exactly one phase record", async () => {
+    const toolProjectionDelayMs = 100;
+    const lines: string[] = [];
+    setMetricLineSinkForTesting((line) => {
+      lines.push(line);
+    });
+    authenticateMcpRequestMock.mockImplementation(async () => {
+      await Bun.sleep(5);
+      return Result.ok({
+        organizationId: "org_1",
+        scopes: ["stella:read"],
+        userId: "user_1",
+      });
+    });
+    resolveMcpSessionContextMock.mockResolvedValue({
+      organizationId: "org_1",
+      userId: "user_1",
+    });
+    listMcpToolsMock.mockImplementation(async () => {
+      await Bun.sleep(toolProjectionDelayMs);
+      return [];
+    });
+
+    const response = await handleMcpHttpRequest(
+      createModernMcpRequest({ id: 1, method: "tools/list" }),
+    );
+
+    expect(response.status).toBe(200);
+    const records = lines
+      .map((line) => JSON.parse(line))
+      .filter((record) => record.event === "mcp.request.phases");
+    expect(records).toHaveLength(1);
+    const record = records.at(0);
+    expect(record).toMatchObject({
+      event: "mcp.request.phases",
+      method: "tools/list",
+      mode: "default",
+      overlap: false,
+      path: "modern",
+    });
+    const phaseTotal = [
+      record.auth,
+      record.context,
+      record.server_build,
+      record.tool_projection,
+      record.dispatch,
+    ].reduce((total, duration) => total + duration, 0);
+    expect(record.auth).toBeGreaterThan(0);
+    expect(record.tool_projection).toBeGreaterThanOrEqual(
+      toolProjectionDelayMs,
+    );
+    expect(record.tool_projection).toBeGreaterThan(0);
+    expect(record.server_build).toBeLessThan(record.tool_projection);
+    expect(phaseTotal).toBeLessThanOrEqual(record.total);
+  });
+
+  test("modern method metrics preserve the parsed method when a method header is present", async () => {
+    authenticateMcpRequestMock.mockResolvedValue(
+      Result.ok({
+        organizationId: "org_1",
+        scopes: ["stella:read"],
+        userId: "user_1",
+      }),
+    );
+    resolveMcpSessionContextMock.mockResolvedValue({
+      organizationId: "org_1",
+      userId: "user_1",
+    });
+
+    const lines: string[] = [];
+    setMetricLineSinkForTesting((line) => {
+      lines.push(line);
+    });
+
+    const response = await handleMcpHttpRequest(
+      createModernMcpRequest({ id: 1, method: "tools/list" }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(
+      lines
+        .map((line) => JSON.parse(line))
+        .find((record) => record.event === "mcp.request.phases"),
+    ).toMatchObject({ method: "tools/list", path: "modern" });
+  });
+
+  test.each([
+    ["list_matters", "list_matters"],
+    ["mcp__tenant_connector__lookup", "external_mcp"],
+    ["skill__tenant_research", "skill"],
+  ])(
+    "phase metrics classify the resolved %s tool as %s",
+    async (toolName, metricToolName) => {
+      const staticDefinition = listStaticMcpToolDefinitions("default").find(
+        ({ name }) => name === "list_matters",
+      );
+      if (staticDefinition === undefined) {
+        panic("Canonical list_matters tool definition is missing");
+      }
+      authenticateMcpRequestMock.mockResolvedValue(
+        Result.ok({
+          organizationId: "org_1",
+          scopes: ["stella:read", "stella:skills"],
+          userId: "user_1",
+        }),
+      );
+      resolveMcpSessionContextMock.mockResolvedValue({ type: "mcp-context" });
+      getMcpToolDefinitionMock.mockResolvedValue({
+        ...staticDefinition,
+        name: toolName,
+      });
+      handleMcpToolCallMock.mockResolvedValue({
+        content: [{ type: "text", text: "ok" }],
+      });
+      const lines: string[] = [];
+      setMetricLineSinkForTesting((line) => {
+        lines.push(line);
+      });
+
+      const response = await handleMcpHttpRequest(
+        createModernMcpRequest({
+          id: 1,
+          method: "tools/call",
+          params: { arguments: {}, name: toolName },
+        }),
+      );
+
+      expect(response.status).toBe(200);
+      const phaseRecord = lines
+        .map((line) => JSON.parse(line))
+        .find((record) => record.event === "mcp.request.phases");
+      expect(phaseRecord).toMatchObject({
+        method: "tools/call",
+        toolName: metricToolName,
+      });
+      if (toolName !== metricToolName) {
+        expect(JSON.stringify(phaseRecord)).not.toContain(toolName);
+      }
+    },
+  );
+
+  test("method metrics do not clone or reparse a large request body", async () => {
+    authenticateMcpRequestMock.mockResolvedValue(
+      Result.ok({
+        organizationId: "org_1",
+        scopes: ["stella:read"],
+        userId: "user_1",
+      }),
+    );
+    resolveMcpSessionContextMock.mockResolvedValue({
+      organizationId: "org_1",
+      userId: "user_1",
+    });
+    const request = createModernMcpRequest({
+      id: 1,
+      method: "tools/list",
+      params: { padding: "x".repeat(100_000) },
+    });
+    const clone = mock(() => {
+      throw new Error("request body was cloned");
+    });
+    Object.defineProperty(request, "clone", { value: clone });
+
+    const response = await handleMcpHttpRequest(request);
+
+    expect(response.status).toBe(200);
+    expect(clone).not.toHaveBeenCalled();
   });
 
   test("native admission refusals keep their code and capture only infrastructure failure", async () => {
@@ -900,6 +1074,13 @@ describe("handleMcpHttpRequest", () => {
         "resolve_case_law_decision",
         "resolve_law_citation",
       ]);
+      expect(
+        listed.tools.find(({ name }) => name === "read_case_law_citations")
+          ?._meta?.["ui"],
+      ).toMatchObject({
+        resourceUri: "ui://stella/citation-graph",
+        visibility: ["model", "app"],
+      });
       expect(authenticateMcpRequestMock).toHaveBeenCalledWith("token", {
         mode: "law",
       });

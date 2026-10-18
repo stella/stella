@@ -1,11 +1,13 @@
 import { expect, test } from "@playwright/test";
 import type { APIRequestContext, Page } from "@playwright/test";
+import * as v from "valibot";
 
 import { isPublicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 import {
   PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD,
   PROFESSIONAL_USE_STATEMENT_VERSION,
 } from "@stll/api-contract/professional-use";
+import marketingCaseLaw from "@stll/playwright-tools/marketing-case-law.json" with { type: "json" };
 
 import { setFixedBrowserTime } from "../helpers/clock";
 import {
@@ -15,6 +17,7 @@ import {
   settleMarketingAgentThread,
 } from "./agent-thread";
 import { CAPTURE_DPR } from "./captures";
+import { getMarketingDecisionPaths } from "./case-law-reader";
 import {
   assertNoActiveEditBadge,
   releaseSupplierAgreementEditLock,
@@ -90,34 +93,17 @@ const captures = [
     prepare: "open-table",
     readyText: "Export Review - Project Atlas Data Room",
   },
-  // Three different national decisions (CZE, POL, SVK), each rendering with
-  // the structured reader (structure/AI margin populated) so the chapter can
-  // cross-fade between jurisdictions. Keep in sync with
-  // HomeProductStory.astro's data chapter.
-  {
-    name: "story-public-data-1",
-    prepare: "open-decision",
-    country: "CZE",
-    decisionText: "IV.ÚS 1394/24",
-    readyText: "Case Law",
-    clip: { x: 0, y: 0, width: 1440, height: 760 },
-  },
-  {
-    name: "story-public-data-2",
-    prepare: "open-decision",
-    country: "POL",
-    decisionText: "IV C 1273/16",
-    readyText: "Case Law",
-    clip: { x: 0, y: 0, width: 1440, height: 760 },
-  },
-  {
-    name: "story-public-data-3",
-    prepare: "open-decision",
-    country: "SVK",
-    decisionText: "25Cbr/166/2024",
-    readyText: "Case Law",
-    clip: { x: 0, y: 0, width: 1440, height: 760 },
-  },
+  ...marketingCaseLaw.map(
+    (scenario, index) =>
+      ({
+        name: `story-public-data-${String(index + 1)}`,
+        prepare: "open-decision",
+        country: scenario.country,
+        decisionText: scenario.caseNumber,
+        readyText: "Case Law",
+        clip: { x: 0, y: 0, width: 1440, height: 760 },
+      }) as const,
+  ),
   {
     name: "editor",
     path: SUPPLIER_AGREEMENT_EDITOR_PATH,
@@ -141,13 +127,6 @@ const captures = [
     // and recap are awaited in the "open-agent-thread" prepare block below so
     // the shot never ships mid-render.
     readyText: MARKETING_AGENT_FIRST_QUESTION,
-  },
-  {
-    name: "public-data",
-    prepare: "open-decision",
-    country: "CZE",
-    decisionText: "IV.ÚS 1394/24",
-    readyText: "Case Law",
   },
   { name: "templates", path: "/knowledge/templates", readyText: "Templates" },
   {
@@ -244,6 +223,11 @@ test("capture landing product screenshots", async ({
       ? await resolveAgentThreadPath(page.request)
       : undefined;
 
+  const decisionPaths =
+    !requestedCapture || requestedCapture.startsWith("story-public-data-")
+      ? await resolveDecisionPaths(page.request)
+      : new Map<string, string>();
+
   // Whether the shared page still carries a pinned clock from a previous
   // capture; see the anchor block in the capture loop.
   let clockPinned = false;
@@ -265,19 +249,19 @@ test("capture landing product screenshots", async ({
       if (requestedCapture && capture.name !== requestedCapture) {
         continue;
       }
-      if ("country" in capture && !isPublicCaseLawCountry(capture.country)) {
-        continue;
+      if ("country" in capture) {
+        expect(
+          isPublicCaseLawCountry(capture.country),
+          `${capture.name}: the filmed jurisdiction is publicly supported`,
+        ).toBe(true);
       }
-      // A decision capture scopes the search to its country so only a
-      // matching decision is deterministically on screen.
-      const searchedPath =
+      const decisionPath =
         "decisionText" in capture
-          ? `/law/cases?country=${capture.country.toLowerCase()}&q=${encodeURIComponent(
-              capture.decisionText,
-            )}`
+          ? decisionPaths.get(capture.decisionText)
           : undefined;
       const declaredPath = "path" in capture ? capture.path : agentThreadPath;
-      const capturePath = searchedPath ?? declaredPath;
+      const capturePath =
+        "decisionText" in capture ? decisionPath : declaredPath;
       if (!capturePath) {
         throw new Error(`${capture.name}: no path resolved for this capture`);
       }
@@ -301,7 +285,13 @@ test("capture landing product screenshots", async ({
         await page.clock.setSystemTime(Date.now());
         clockPinned = false;
       }
-      await page.goto(capturePath, { waitUntil: "domcontentloaded" });
+      // The navigation policy reads `waitUntil` as a literal, so the two
+      // lifecycles are separate calls.
+      if ("decisionText" in capture) {
+        await page.goto(capturePath, { waitUntil: "commit" });
+      } else {
+        await page.goto(capturePath, { waitUntil: "domcontentloaded" });
+      }
       await expect(page).not.toHaveURL(/\/sign-in(?:\/|\?|$)/u);
       // Each capture is the first visit to its route, so its chunk compiles on
       // demand here too; the config's 15s expect timeout is not enough for that
@@ -315,30 +305,8 @@ test("capture landing product screenshots", async ({
         });
       }
       if ("prepare" in capture && capture.prepare === "open-decision") {
-        // Film a specific national decision deterministically, rather than
-        // whatever happens to be newest in the seeded corpus.
-        const decisionLink = page
-          .locator('main a[href*="/cases/"]')
-          .filter({ hasText: capture.decisionText });
-        await expect(decisionLink).toBeVisible({
-          timeout: COLD_COMPILE_TIMEOUT,
-        });
-        // A plain click on a results row opens that decision in the inspector
-        // beside the results; this capture wants the full reader page, which
-        // is what the row's own href names. Take the href rather than a
-        // rebuilt path, so the shot follows the product's link even if the
-        // decision route's shape changes.
-        const decisionPath = await decisionLink.getAttribute("href");
-        if (decisionPath === null) {
-          throw new Error(
-            `${capture.name}: the "${capture.decisionText}" result row has no href to the decision`,
-          );
-        }
-        // The reader carries its own inspector, which must start from the same
-        // clean state as every other capture rather than inheriting whatever
-        // the results page persisted.
-        await clearPersistedInspectorState(page);
-        await page.goto(decisionPath, { waitUntil: "commit" });
+        // Open the reader directly from its seeded conversation metadata.
+        // Search-page SSR is independent of the completed reader state.
         await expect(page).toHaveURL(/\/law\/[a-z-]+\/cases\//u);
         // The case detail is its own code-split chunk, so this is the first
         // load of another route: same cold-compile allowance as the
@@ -366,29 +334,124 @@ test("capture landing product screenshots", async ({
         await inspectorDock
           .getByRole("button", { exact: true, name: "Show pane" })
           .click();
-        // The inspector chat loads its saved-skill prompts independently of
-        // the decision and analysis queries. The empty state paints the logo
-        // first, so waiting only for the reader can record a blank inspector.
-        // Scope readiness to the visible inspector: other route shells may
-        // remain mounted and must not satisfy the capture gate.
+        const scenario = marketingCaseLaw.find(
+          (item) => item.caseNumber === capture.decisionText,
+        );
+        if (scenario === undefined) {
+          throw new Error(`${capture.name}: no rich reader scenario`);
+        }
         const inspectorChat = page.locator(
           '[data-slot="inspector-chat-panel"]:visible',
         );
         await expect(inspectorChat).toHaveCount(1, {
           timeout: COLD_COMPILE_TIMEOUT,
         });
-        // This component only exists when at least one prompt card rendered.
+        const messages = inspectorChat.locator("[data-chat-message-id]");
+        await expect(messages).toHaveCount(4, {
+          timeout: COLD_COMPILE_TIMEOUT,
+        });
+        for (const [index, text] of [
+          scenario.question,
+          scenario.answer,
+          scenario.followUp,
+          scenario.followUpAnswer,
+        ].entries()) {
+          await expect(messages.nth(index)).toContainText(text);
+        }
         await expect(
           inspectorChat.locator('[data-slot="prompt-suggestions"]'),
-        ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT });
-        // The first margin annotation may sit below a long headnote (e.g. a
-        // Constitutional Court "legal sentence" summary); scroll it into view
-        // so the capture shows the structure margin, not just headnote text.
-        await page.locator("aside button").first().scrollIntoViewIfNeeded();
-        // `scrollIntoViewIfNeeded` positions the nested reader correctly, but
-        // can also move the document viewport. Restore only the outer viewport
-        // so the breadcrumb remains in frame without undoing the reader scroll.
+        ).toHaveCount(0);
+        const citations = inspectorChat.locator("[data-decision-citation]");
+        await expect(citations).toHaveCount(2);
+        // Compact inline cards show the court's short form; the full case
+        // number is their accessible name.
+        await expect(citations.first()).toHaveAttribute(
+          "aria-label",
+          expect.stringContaining(scenario.caseNumber),
+        );
+        await inspectorChat
+          .locator('[data-slot="scroll-area-viewport"]')
+          .evaluate((element) => {
+            element.scrollTop = 0;
+          });
+
+        // Align the earlier marked paragraph with the reader's top, rather
+        // than centering it against the taller browser viewport.
+        const clip = "clip" in capture ? capture.clip : DEFAULT_CLIP;
+        const readerAnchors = page.locator(
+          `article [data-anchor="${scenario.highlightAnchor}"], article [data-anchor="${scenario.underlineAnchor}"]`,
+        );
+        await expect(readerAnchors).toHaveCount(2);
+        await readerAnchors.evaluateAll((elements, clipTop) => {
+          const first = elements.at(0);
+          const scroller = first?.closest(".reader-scroll");
+          if (scroller === undefined || scroller === null) {
+            throw new Error("The case-law reader has no scroll container");
+          }
+          const anchorTop = Math.min(
+            ...elements.map((element) => element.getBoundingClientRect().top),
+          );
+          const frameTop = Math.max(
+            clipTop,
+            scroller.getBoundingClientRect().top,
+          );
+          scroller.scrollTop += anchorTop - frameTop - 16;
+        }, clip.y);
         await page.evaluate(() => window.scrollTo({ left: 0, top: 0 }));
+        const requiredElements = [
+          page.locator("aside").getByText(scenario.aiNote, { exact: true }),
+          page.locator("aside").getByText(scenario.comment, { exact: true }),
+        ];
+        for (const [anchor, variant, paragraphNumber] of [
+          [
+            scenario.highlightAnchor,
+            "text-foreground",
+            scenario.highlightNumber,
+          ],
+          [scenario.underlineAnchor, "underline", scenario.underlineNumber],
+        ] as const) {
+          requiredElements.push(
+            page
+              .locator(
+                `article [data-anchor="${anchor}"] mark[data-annotation-id].${variant}:not(.decoration-dotted)`,
+              )
+              .first(),
+          );
+          // A published paragraph number stays visible independently of
+          // how long the paragraph below it is.
+          const number = page.locator(
+            `article [data-anchor="${anchor}"] > span.reader-chrome.absolute`,
+          );
+          await expect(number).toHaveCount(1);
+          await expect(number).toHaveText(String(paragraphNumber));
+          requiredElements.push(number);
+        }
+        requiredElements.push(
+          ...(await messages.all()),
+          ...(await citations.all()),
+        );
+        for (const element of requiredElements) {
+          await expect(element).toBeVisible();
+          await expect(element).toBeInViewport({ ratio: 1 });
+          await expect
+            .poll(
+              async () => {
+                const box = await element.boundingBox();
+                return (
+                  box !== null &&
+                  box.x >= clip.x &&
+                  box.y >= clip.y &&
+                  box.x + box.width <= clip.x + clip.width &&
+                  box.y + box.height <= clip.y + clip.height
+                );
+              },
+              {
+                message: `${capture.name}: required reader content fits the screenshot clip`,
+              },
+            )
+            .toBe(true);
+        }
+        await expectNoMarginNoteCut(page, clip.y);
       }
       if ("prepare" in capture && capture.prepare === "open-files") {
         await page.getByRole("tab", { name: "Files" }).click();
@@ -509,6 +572,67 @@ const clearPersistedInspectorState = async (page: Page) => {
   }, INSPECTOR_STORAGE_PREFIXES);
 };
 
+// No margin note is half hidden at the top of the margin, under the sticky
+// section header or the frame's top edge. One running off the bottom edge
+// is fine: it reads as the page continuing.
+const expectNoMarginNoteCut = async (page: Page, clipTop: number) => {
+  await expect
+    .poll(
+      async () =>
+        await page.evaluate(
+          (band) => {
+            const scroller = document
+              .querySelector('[data-slot="reader-document-column"]')
+              ?.closest(".reader-scroll");
+            if (!(scroller instanceof HTMLElement)) {
+              return ["the reader's scroller is missing"];
+            }
+            const frame = scroller.getBoundingClientRect();
+            // A note under the margin's sticky section header is as cut as
+            // one under the frame's edge: the header's contents bound it.
+            const aside = scroller
+              .querySelector('[data-slot="reader-document-column"]')
+              ?.parentElement?.querySelector("aside");
+            const stuckBottoms = aside
+              ? [...aside.querySelectorAll<HTMLElement>("*")]
+                  .filter(
+                    (element) =>
+                      getComputedStyle(element).position === "sticky" &&
+                      element.getBoundingClientRect().top <= frame.top + 1,
+                  )
+                  .map((element) =>
+                    Math.max(
+                      element.getBoundingClientRect().bottom,
+                      ...[...element.querySelectorAll("*")].map(
+                        (child) => child.getBoundingClientRect().bottom,
+                      ),
+                    ),
+                  )
+              : [];
+            const top = Math.max(frame.top, band.top, ...stuckBottoms);
+            const cut: string[] = [];
+            for (const note of document.querySelectorAll(
+              "[data-margin-note] > *",
+            )) {
+              const box = note.getBoundingClientRect();
+              if (box.top < top && box.bottom > top) {
+                const kind = note.parentElement?.dataset["marginNote"] ?? "?";
+                cut.push(
+                  `${kind} note "${note.textContent.slice(0, 40)}" spans ${String(Math.round(box.top))}-${String(Math.round(box.bottom))}`,
+                );
+              }
+            }
+            return cut;
+          },
+          { top: clipTop },
+        ),
+      {
+        message: "No margin note may be half hidden at the top of the margin",
+      },
+    )
+    .toEqual([]);
+};
+
 // Resolves the seeded agent thread's route by title via the chat threads
 // API (the same lookup record-product-story.ts's resolveMarketingViewRoutes
 // uses), instead of a fixed thread id that would need updating whenever the
@@ -525,6 +649,42 @@ const resolveAgentThreadPath = async (request: APIRequestContext) => {
     );
   }
   return `/chat/workspaces/${EXPORT_REVIEW_WORKSPACE_ID}/${threadId}`;
+};
+
+const DECISION_THREAD_PAGE_LIMIT = 100;
+const threadPageSchema = v.object({
+  global: v.array(v.unknown()),
+  nextCursor: v.nullable(v.string()),
+});
+
+// The threads endpoint lists newest first, so the seeded readers can sit
+// beyond the first page on a busy dev account: follow its cursor to the end.
+const resolveDecisionPaths = async (request: APIRequestContext) => {
+  const global: unknown[] = [];
+  let cursor: string | null = null;
+  for (let page = 0; page < DECISION_THREAD_PAGE_LIMIT; page++) {
+    const query: string =
+      cursor === null
+        ? "limit=50"
+        : `limit=50&cursor=${encodeURIComponent(cursor)}`;
+    const response = await request.get(
+      `${MARKETING_URLS.apiUrl}/v1/chat/threads?${query}`,
+    );
+    expect(response.ok(), await response.text()).toBe(true);
+    const payload: unknown = await response.json();
+    const parsed = v.safeParse(threadPageSchema, payload);
+    if (!parsed.success) {
+      throw new Error("Chat thread list response is malformed");
+    }
+    global.push(...parsed.output.global);
+    if (parsed.output.nextCursor === null) {
+      return getMarketingDecisionPaths({ global });
+    }
+    cursor = parsed.output.nextCursor;
+  }
+  throw new Error(
+    `Chat thread list exceeded ${String(DECISION_THREAD_PAGE_LIMIT)} pages`,
+  );
 };
 
 // Reads the timestamp the inspector's version caption formats, from the same

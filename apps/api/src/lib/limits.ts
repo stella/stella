@@ -6,6 +6,7 @@ import {
   CASE_LAW_RESEARCH_COLUMNS_PER_ORGANIZATION_MAX,
   CASE_LAW_RESEARCH_RUN_DECISIONS_MAX,
   CHAT_RICH_PART_LIMITS,
+  CLAUSE_NUMBERING_LEVEL_LIMITS,
   ENTITIES_PER_WORKSPACE_MAX,
   ENTITY_NAME_MAX_LENGTH,
   FLOW_RUN_INPUT_ENTITIES_MAX,
@@ -310,6 +311,9 @@ export const LIMITS = {
   sseHeartbeatMs: 15_000,
   clauseVariantsPerClause: 10,
   clauseVersionsPerClause: 50,
+  /** OOXML numbering levels are zero-based and bounded to nine levels. */
+  clauseNumberingLevelMin: CLAUSE_NUMBERING_LEVEL_LIMITS.min,
+  clauseNumberingLevelMax: CLAUSE_NUMBERING_LEVEL_LIMITS.max,
   clauseExpectedBodyTextChars: 10 * 1024 * 1024,
   clauseExpectedBodyParagraphs: 100_000,
   templateClausesPerTemplate: 50,

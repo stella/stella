@@ -65,3 +65,5 @@ export const parseFolioCollabRoomName = (roomName: string) => {
     FOLIO_COLLAB_ROOM_NAME_PATTERN.exec(roomName)?.groups?.["roomId"];
   return roomId === undefined ? null : toSafeId<"folioCollabRoom">(roomId);
 };
+
+export const FOLIO_COLLAB_SEED_PREPARING_CODE = "folio_collab_seed_preparing";

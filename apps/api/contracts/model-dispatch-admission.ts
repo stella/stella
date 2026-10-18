@@ -6,7 +6,7 @@ import {
   type ModelDispatchScope,
 } from "@/api/lib/rate-limit/model-dispatch-admission";
 import type { resolveTanStackTextModel } from "@/api/lib/tanstack-ai-generate";
-import type { getTanStackTextModelInfoForRole } from "@/api/lib/tanstack-ai-models";
+import type { getTanStackTextModelInfoForTask } from "@/api/lib/tanstack-ai-models";
 
 declare const org: SafeId<"organization">;
 declare const proof: ModelDispatchAdmission;
@@ -34,7 +34,7 @@ const request = {
   dataClass: "customer",
   managedAIResidency: "eu",
   orgAIConfig: null,
-  role: "fast",
+  task: "short-text",
 } as const;
 
 ({
@@ -57,12 +57,12 @@ const forgedTier = { ...forged, modelTier: "fast" } as const;
 // @ts-expect-error a proof with a chosen tier is still not minted by admission
 ({ organizationId: org, admission: forgedTier }) satisfies ModelDispatchScope;
 
-// Every resolution of a role's model states the tier it resolves at.
-type InfoOptions = Parameters<typeof getTanStackTextModelInfoForRole>[2];
+// Every resolution of a task's model states the tier it resolves at.
+type InfoOptions = Parameters<typeof getTanStackTextModelInfoForTask>[2];
 ({
   dataClass: "customer",
   organizationId: org,
   modelTier: proof.modelTier,
 }) satisfies InfoOptions;
-// @ts-expect-error a role's managed model cannot be resolved without a tier
+// @ts-expect-error a task's managed model cannot be resolved without a tier
 ({ dataClass: "customer", organizationId: org }) satisfies InfoOptions;

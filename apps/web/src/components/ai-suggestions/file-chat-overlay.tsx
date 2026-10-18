@@ -1388,7 +1388,7 @@ const FileChatOverlayInner = ({
         entityId: reviewEntityId,
         prepared,
         snapshotBlocks: lastSnapshot
-          ? lastSnapshot.blocks
+          ? withBlockTextHashes(lastSnapshot)
           : EMPTY_SNAPSHOT_BLOCKS,
         snapshot: lastSnapshot,
       });

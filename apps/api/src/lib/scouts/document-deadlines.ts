@@ -44,7 +44,7 @@ import {
 } from "@/api/lib/scouts/document-deadlines.logic";
 import type { NewSignal } from "@/api/lib/signals/emit";
 import { runScout } from "@/api/lib/signals/scout";
-import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 import type { ManagedModelTier } from "@/api/lib/usage/managed-model-tier";
 
 const DEADLINE_GENERATION_TIMEOUT_MS = 60_000;
@@ -188,9 +188,9 @@ const extractDeadlines = async ({
     ...(admit === undefined ? {} : { admit }),
   })(
     async ({ admission }) =>
-      await generateTanStackObjectForRole({
+      await generateTanStackObjectForTask({
         dataClass: "customer",
-        role: "chat",
+        task: "chat",
         organizationId: run.organizationId,
         admission,
         tenantWorkspaceIds: [run.workspaceId],
@@ -202,7 +202,7 @@ const extractDeadlines = async ({
         maxOutputTokens: DEADLINE_MAX_OUTPUT_TOKENS,
         caching: resolveCaching({
           promptCachingEnabled: false,
-          role: "chat",
+          task: "chat",
           scopeKey: run.organizationId,
         }),
         serviceTier: "flex",
@@ -477,7 +477,7 @@ export const runDocumentDeadlineScout = async ({
                 createTanStackAIAnalyticsCallbacks({
                   dataClass: "customer",
                   feature: "inbox.deadline-scout",
-                  modelRole: "chat",
+                  modelTask: "chat",
                   orgAIConfig,
                   modelTier,
                   properties: {

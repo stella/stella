@@ -820,17 +820,15 @@ describe("primary legal citation links", () => {
   ]) {
     test(`held ${path} keeps its publisher as a secondary source`, () => {
       const sourceUrl = `https://publisher.example/${DECISION_ID}`;
-      const appUrl = `${BASE}${path}`;
-      expect(legalCitationLinkFields({ appUrl, sourceUrl })).toEqual({
-        appUrl,
-        url: appUrl,
+      const url = `${BASE}${path}`;
+      expect(legalCitationLinkFields({ url, sourceUrl })).toEqual({
+        url,
         source_url: sourceUrl,
       });
     });
     test(`unserved ${path} falls back to the publisher`, () => {
       const sourceUrl = `https://publisher.example/${DECISION_ID}`;
-      expect(legalCitationLinkFields({ appUrl: null, sourceUrl })).toEqual({
-        appUrl: null,
+      expect(legalCitationLinkFields({ url: null, sourceUrl })).toEqual({
         url: sourceUrl,
       });
     });

@@ -40,7 +40,7 @@ jobs:
       # Neither package installation nor probe commands receive a write token.
       - name: Install dependencies
         timeout-minutes: 20
-        run: bun ci --ignore-scripts
+        run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
 

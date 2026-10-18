@@ -1061,7 +1061,6 @@ type Messages = {
       };
     };
     "sameCaseNumber": "{count, plural, one {# decision shares} other {# decisions share}} this case number. Pick the court.";
-    "searchAskPrompt": "{query} (case law of {country})";
     "searchLabel": "Search case law";
     "searchPlaceholder": "Case number, ECLI or words, e.g. 22 Cdo 2653/2012";
     "searchUnavailable": {
@@ -1209,15 +1208,37 @@ type Messages = {
     };
     "answerEdit": {
       "acceptFailed": "The change could not be saved. Try again.";
+      "aiKind": "Requested edit";
       "ask": "Request edits";
+      "authorUnknown": "Unknown author";
+      "autolinkLabel": "This text becomes a link automatically. Change the label before removing the link.";
+      "change": "Change {revision}";
+      "editedLabel": "Edited answer";
       "failed": "The change could not be prepared. Try again.";
+      "formatKind": "Formatting";
+      "heading": "Heading {level}";
+      "history": "Answer history";
+      "historyEmpty": "No earlier versions.";
       "instruction": "Describe the change";
       "instructionRequired": "Describe how to change the selected text.";
       "invalidSelection": "This selection cannot be edited. Select continuous text.";
+      "invalidUrl": "Enter a valid HTTP or HTTPS address.";
+      "linkAddress": "Link address";
+      "orderedList": "Numbered list";
       "proposal": "Suggested change";
       "requesting": "Preparing changes…";
+      "restoreRefreshFailed": "The answer was restored, but could not be refreshed. Refresh to load the restored answer.";
+      "revertKind": "Restored version";
       "stale": "This answer changed. Select the text again.";
       "submit": "Request change";
+      "textStyle": "Text style";
+      "unorderedList": "Bulleted list";
+      "wholeBlockRequired": "Select a whole paragraph or list to change its style.";
+    };
+    "answerQuote": {
+      "showInDecision": "Show in decision";
+      "verified": "Verified citation";
+      "verifiedHint": "Word for word in {source}";
     };
     "applyMode": {
       "description": "Word stores who made each change. We'll remember your choice.";
@@ -1404,6 +1425,11 @@ type Messages = {
     "mention": {
       "category": {
         "entities": "In this matter";
+        "sources": "Sources";
+      };
+      "corpus": {
+        "caseLaw": "Case law · {country}";
+        "legislation": "Legislation · {country}";
       };
       "loadError": "Failed to load items";
     };
@@ -1457,6 +1483,12 @@ type Messages = {
       "title": "Pasted text";
     };
     "placeholder": "Type your question here, / for skills, @ to add context";
+    "processSummary": {
+      "analyses": "{count, plural, one {# analysis} other {# analyses}}";
+      "changesSaved": "{count, plural, one {# change saved} other {# changes saved}}";
+      "documentEdits": "{count, plural, one {# document edit} other {# document edits}}";
+      "sourcesChecked": "{count, plural, one {# source checked} other {# sources checked}}";
+    };
     "promptImprovementStrategies": {
       "decompose": {
         "description": "Turn complex work into ordered sub-tasks.";
@@ -1702,6 +1734,7 @@ type Messages = {
       "interrupted": "Interrupted before finishing";
       "output": "Output";
       "sourceCode": "Source code";
+      "statusWaiting": "Waiting";
       "toggleDetails": "Toggle details";
       "unrestoredFields": "{count, plural, one {# field} other {# fields}} could not be filled with real values in anonymized mode. Review: {fields}";
     };
@@ -5124,7 +5157,6 @@ type Messages = {
     "provisionTextUnavailable": "Text not available for this version";
     "publisherWindowInconsistent": "No in-force reading for this date: the publisher's data is inconsistent.";
     "resolvedAlias": "Recognized as {label}";
-    "searchAskPrompt": "{query} (legislation of {country})";
     "searchLabel": "Search statutes";
     "searchPlaceholder": "Number, name or title, e.g. 89/2012 Sb.";
     "showCitedPartOnly": "Show cited part only";
@@ -6253,7 +6285,6 @@ type Messages = {
         };
       };
       "atAGlance": "At a glance";
-      "edited": "edited";
       "getStarted": "Get started by uploading documents or creating your first folder.";
       "matterDetails": "Matter details";
       "membersCount": "{count, plural, one {# member} other {# members}}";

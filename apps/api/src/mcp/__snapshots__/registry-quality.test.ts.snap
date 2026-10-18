@@ -927,7 +927,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "openWorldHint": "Open case-law decision is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Open one decision when the user asks to read or open it. Returns metadata, outline and a small target window. paragraphs names the court's printed numbers (48 or 48-53); appUrl opens the web reader at that range. At most once per answer.",
+    "description": "Open one decision when the user asks to read or open it. Returns metadata, outline and a small target window. paragraphs names the court's printed numbers (48 or 48-53); url opens the web reader at that range. At most once per answer.",
     "annotations": {
       "readOnlyHint": true,
       "destructiveHint": false,
@@ -4322,7 +4322,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "destructiveHint": "Save clause can overwrite, delete, cancel, revoke, or otherwise irreversibly change existing state.",
       "openWorldHint": "Save clause is confined to the private workspace or a bounded computation."
     },
-    "description": "Create or update a clause in the organization's clause library. Omit clause_id to create (title and body required); pass clause_id to update. body is an ordered array of paragraphs, each with text and optional style, level, runs, list_kind, list_level, is_directive, directive_kind, and directive_expression. Use balanced {% ... %} tags. Keep num(), ref(), clause() and ai(adapt=true) in the template body. category_id, language, description, usage_notes, and metadata accept null to clear them on update. Set snapshot_version true on an update to also append a version snapshot of the body. Returns the clause id.",
+    "description": "Create or update a library clause. Omit clause_id to create (title and body required); include it to update. body contains ordered paragraphs. Use balanced {% ... %} tags; keep num(), ref(), clause() and ai(adapt=true) in the template body. Clear category_id, language, description, usage_notes or metadata with null. Set snapshot_version true to append a body version on update. Returns the clause id.",
     "annotations": {
       "title": "Save clause",
       "destructiveHint": true,
@@ -4396,9 +4396,29 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
                 "type": "string",
                 "description": "List item kind when the paragraph is a list item"
               },
-              "list_level": {
-                "type": "integer",
-                "description": "0-based list nesting depth for a list item"
+              "numbering": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "levelOnly"
+                    ],
+                    "description": "Set only the paragraph's list nesting depth",
+                    "type": "string"
+                  },
+                  "ilvl": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 8,
+                    "description": "0-based list nesting depth for a list item"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "ilvl"
+                ],
+                "additionalProperties": false,
+                "description": "List nesting depth for the paragraph"
               },
               "is_directive": {
                 "type": "boolean",
@@ -7476,7 +7496,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "openWorldHint": "Open case-law decision is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Open one decision when the user asks to read or open it. Returns metadata, outline and a small target window. paragraphs names the court's printed numbers (48 or 48-53); appUrl opens the web reader at that range. At most once per answer.",
+    "description": "Open one decision when the user asks to read or open it. Returns metadata, outline and a small target window. paragraphs names the court's printed numbers (48 or 48-53); url opens the web reader at that range. At most once per answer.",
     "annotations": {
       "readOnlyHint": true,
       "destructiveHint": false,
@@ -10871,7 +10891,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "destructiveHint": "Save clause can overwrite, delete, cancel, revoke, or otherwise irreversibly change existing state.",
       "openWorldHint": "Save clause is confined to the private workspace or a bounded computation."
     },
-    "description": "Create or update a clause in the organization's clause library. Omit clause_id to create (title and body required); pass clause_id to update. body is an ordered array of paragraphs, each with text and optional style, level, runs, list_kind, list_level, is_directive, directive_kind, and directive_expression. Use balanced {% ... %} tags. Keep num(), ref(), clause() and ai(adapt=true) in the template body. category_id, language, description, usage_notes, and metadata accept null to clear them on update. Set snapshot_version true on an update to also append a version snapshot of the body. Returns the clause id.",
+    "description": "Create or update a library clause. Omit clause_id to create (title and body required); include it to update. body contains ordered paragraphs. Use balanced {% ... %} tags; keep num(), ref(), clause() and ai(adapt=true) in the template body. Clear category_id, language, description, usage_notes or metadata with null. Set snapshot_version true to append a body version on update. Returns the clause id.",
     "annotations": {
       "title": "Save clause",
       "destructiveHint": true,
@@ -10945,9 +10965,29 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                 "type": "string",
                 "description": "List item kind when the paragraph is a list item"
               },
-              "list_level": {
-                "type": "integer",
-                "description": "0-based list nesting depth for a list item"
+              "numbering": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "levelOnly"
+                    ],
+                    "description": "Set only the paragraph's list nesting depth",
+                    "type": "string"
+                  },
+                  "ilvl": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 8,
+                    "description": "0-based list nesting depth for a list item"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "ilvl"
+                ],
+                "additionalProperties": false,
+                "description": "List nesting depth for the paragraph"
               },
               "is_directive": {
                 "type": "boolean",
@@ -14497,7 +14537,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "openWorldHint": "Open case-law decision is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Open one decision when the user asks to read or open it. Returns metadata, outline and a small target window. paragraphs names the court's printed numbers (48 or 48-53); appUrl opens the web reader at that range. At most once per answer.",
+    "description": "Open one decision when the user asks to read or open it. Returns metadata, outline and a small target window. paragraphs names the court's printed numbers (48 or 48-53); url opens the web reader at that range. At most once per answer.",
     "annotations": {
       "readOnlyHint": true,
       "destructiveHint": false,
@@ -16413,7 +16453,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
       "openWorldHint": "Open case-law decision is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Open one decision when the user asks to read or open it. Returns metadata, outline and a small target window. paragraphs names the court's printed numbers (48 or 48-53); appUrl opens the web reader at that range. At most once per answer.",
+    "description": "Open one decision when the user asks to read or open it. Returns metadata, outline and a small target window. paragraphs names the court's printed numbers (48 or 48-53); url opens the web reader at that range. At most once per answer.",
     "annotations": {
       "readOnlyHint": true,
       "destructiveHint": false,

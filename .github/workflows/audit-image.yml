@@ -36,6 +36,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Pull base images
+        timeout-minutes: 2
         run: bash scripts/pull-base-images.sh docker/audit/Dockerfile
       - name: Build audit image
         run: docker build --progress=plain --file docker/audit/Dockerfile --tag audit-image:test .

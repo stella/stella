@@ -1058,7 +1058,6 @@
       }
     },
     "sameCaseNumber": "{count, plural, one {# Entscheidung trägt} other {# Entscheidungen tragen}} dieses Aktenzeichen. Wählen Sie das Gericht.",
-    "searchAskPrompt": "{query} (Rechtsprechung, {country})",
     "searchLabel": "Rechtsprechung durchsuchen",
     "searchPlaceholder": "Aktenzeichen, ECLI oder Stichwörter, z. B. 22 Cdo 2653/2012",
     "searchUnavailable": {
@@ -1206,15 +1205,37 @@
     },
     "answerEdit": {
       "acceptFailed": "Die Änderung konnte nicht gespeichert werden. Versuchen Sie es erneut.",
+      "aiKind": "Angeforderte Bearbeitung",
       "ask": "Änderungen anfordern",
+      "authorUnknown": "Unbekannter Autor",
+      "autolinkLabel": "Dieser Text wird automatisch zu einem Link. Ändern Sie die Beschriftung, bevor Sie den Link entfernen.",
+      "change": "Änderung {revision}",
+      "editedLabel": "Bearbeitete Antwort",
       "failed": "Die Änderung konnte nicht vorbereitet werden. Versuchen Sie es erneut.",
+      "formatKind": "Formatierung",
+      "heading": "Überschrift {level}",
+      "history": "Antwortverlauf",
+      "historyEmpty": "Keine früheren Versionen.",
       "instruction": "Beschreiben Sie die Änderung",
       "instructionRequired": "Beschreiben Sie, wie der ausgewählte Text geändert werden soll.",
       "invalidSelection": "Diese Auswahl kann nicht bearbeitet werden. Wählen Sie zusammenhängenden Text aus.",
+      "invalidUrl": "Geben Sie eine gültige HTTP- oder HTTPS-Adresse ein.",
+      "linkAddress": "Linkadresse",
+      "orderedList": "Nummerierte Liste",
       "proposal": "Vorgeschlagene Änderung",
       "requesting": "Änderungen werden vorbereitet…",
+      "restoreRefreshFailed": "Die Antwort wurde wiederhergestellt, konnte aber nicht aktualisiert werden. Aktualisieren Sie, um die wiederhergestellte Antwort zu laden.",
+      "revertKind": "Wiederhergestellte Version",
       "stale": "Diese Antwort wurde geändert. Wählen Sie den Text erneut aus.",
-      "submit": "Änderung anfordern"
+      "submit": "Änderung anfordern",
+      "textStyle": "Textstil",
+      "unorderedList": "Aufzählung",
+      "wholeBlockRequired": "Wählen Sie einen ganzen Absatz oder eine ganze Liste aus, um den Stil zu ändern."
+    },
+    "answerQuote": {
+      "showInDecision": "In der Entscheidung zeigen",
+      "verified": "Verifiziertes Zitat",
+      "verifiedHint": "Wörtlich in {source}"
     },
     "applyMode": {
       "description": "Word speichert, wer welche Änderung vorgenommen hat. Wir merken uns Ihre Auswahl.",
@@ -1400,7 +1421,12 @@
     "maxAttachmentsReached": "Maximal {count} Dateien pro Nachricht",
     "mention": {
       "category": {
-        "entities": "In dieser Akte"
+        "entities": "In dieser Akte",
+        "sources": "Quellen"
+      },
+      "corpus": {
+        "caseLaw": "Rechtsprechung · {country}",
+        "legislation": "Rechtsvorschriften · {country}"
       },
       "loadError": "Einträge konnten nicht geladen werden"
     },
@@ -1454,6 +1480,12 @@
       "title": "Eingefügter Text"
     },
     "placeholder": "Geben Sie hier Ihre Frage ein, / für Skills, @ für Kontext",
+    "processSummary": {
+      "analyses": "{count, plural, one {# Analyse} other {# Analysen}}",
+      "changesSaved": "{count, plural, one {# Änderung gespeichert} other {# Änderungen gespeichert}}",
+      "documentEdits": "{count, plural, one {# Dokumentänderung} other {# Dokumentänderungen}}",
+      "sourcesChecked": "{count, plural, one {# Quelle geprüft} other {# Quellen geprüft}}"
+    },
     "promptImprovementStrategies": {
       "decompose": {
         "description": "Teilt komplexe Aufgaben in geordnete Teilaufgaben auf.",
@@ -1699,6 +1731,7 @@
       "interrupted": "Vor Abschluss unterbrochen",
       "output": "Ausgabe",
       "sourceCode": "Quellcode",
+      "statusWaiting": "Wartet",
       "toggleDetails": "Details ein-/ausblenden",
       "unrestoredFields": "{count, plural, one {# Feld konnte} other {# Felder konnten}} im anonymisierten Modus nicht mit echten Werten gefüllt werden. Bitte prüfen: {fields}"
     },
@@ -5121,7 +5154,6 @@
     "provisionTextUnavailable": "Für diese Fassung ist kein Text verfügbar",
     "publisherWindowInconsistent": "Für dieses Datum lässt sich keine geltende Fassung bestimmen: Die Angaben des Herausgebers sind widersprüchlich.",
     "resolvedAlias": "Erkannt als {label}",
-    "searchAskPrompt": "{query} (Rechtsvorschriften: {country})",
     "searchLabel": "Rechtsvorschriften durchsuchen",
     "searchPlaceholder": "Nummer, Kurzname oder Titel, z. B. 89/2012 Sb.",
     "showCitedPartOnly": "Nur zitierten Teil anzeigen",
@@ -6250,7 +6282,6 @@
         }
       },
       "atAGlance": "Auf einen Blick",
-      "edited": "bearbeitet",
       "getStarted": "Laden Sie Dokumente hoch oder erstellen Sie Ihren ersten Ordner.",
       "matterDetails": "Aktendetails",
       "membersCount": "{count, plural, one {# Mitglied} other {# Mitglieder}}",

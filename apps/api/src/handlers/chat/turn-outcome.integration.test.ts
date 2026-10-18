@@ -778,7 +778,7 @@ const SURFACE_SHOWS = {
       admission: testModelAdmission(ids.orgA),
       orgAIConfig,
       managedAIResidency: "eu" as const,
-      role: "fast",
+      task: "short-text",
       systemSafe: "Answer briefly.",
       systemUntrusted: "Return the clause text.",
       tenantWorkspaceIds: [],

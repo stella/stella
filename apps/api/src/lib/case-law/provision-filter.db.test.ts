@@ -177,7 +177,7 @@ test("the Postgres search narrows to decisions citing the provision, level by le
   await client.close();
 }, 60_000);
 
-test("the provision scope is the whole citing set while it fits, else its exact size", async () => {
+test("the provision scope includes only published redistributable decisions in its set and exact size", async () => {
   const client = await createTestPglite();
   const db = drizzle({ client });
   const sourceId = createSafeId<"caseLawSource">();
@@ -192,6 +192,19 @@ test("the provision scope is the whole citing set while it fits, else its exact 
     decisionDate: "2020-01-01",
   }));
   await db.insert(caseLawDecisions).values(decisions);
+  const restrictedSourceId = createSafeId<"caseLawSource">();
+  await db.insert(caseLawSources).values(
+    caseLawSourceRow({
+      id: restrictedSourceId,
+      adapterKey: "restricted-provision",
+      descriptor: {
+        allowsDerivedAi: false,
+        allowsRedistribution: false,
+        attribution: null,
+        license: "restricted",
+      },
+    }),
+  );
   // Two links in one decision count it once; the third decision cites
   // another subsection.
   const link = (
@@ -219,6 +232,32 @@ test("the provision scope is the whole citing set while it fits, else its exact 
   if (first === undefined || second === undefined || third === undefined) {
     throw new Error("expected three decisions");
   }
+  const excludedDecisions = [
+    {
+      ...first,
+      id: createSafeId<"caseLawDecision">(),
+      caseNumber: "listing-only",
+      metadata: {
+        _stellaPartialObservation: {
+          caseNumberIsPlaceholder: false,
+          isListingOnly: true,
+        },
+      },
+    },
+    {
+      ...first,
+      id: createSafeId<"caseLawDecision">(),
+      caseNumber: "redacted",
+      redactedAt: new Date("2026-01-01T00:00:00.000Z"),
+    },
+    {
+      ...first,
+      id: createSafeId<"caseLawDecision">(),
+      caseNumber: "restricted-source",
+      sourceId: restrictedSourceId,
+    },
+  ];
+  await db.insert(caseLawDecisions).values(excludedDecisions);
   await db
     .insert(caseLawProvisionCitations)
     .values([
@@ -226,7 +265,14 @@ test("the provision scope is the whole citing set while it fits, else its exact 
       link(first.id, "2", 40),
       link(second.id, "2", 10),
       link(third.id, "1", 10),
+      ...excludedDecisions.map(({ id }) => link(id, "2", 10)),
     ]);
+  const [storedScope] = await db
+    .select({
+      count: sql<number>`count(DISTINCT ${caseLawProvisionCitations.decisionId})::int`,
+    })
+    .from(caseLawProvisionCitations);
+  expect(storedScope?.count).toBe(6);
   const read = async (provision: CaseLawProvisionFilter, idSetMax?: number) =>
     await withPublicLawReaderRole(db, async (roleTx) => {
       // SAFETY: the role transaction supplies the select surface the read uses.

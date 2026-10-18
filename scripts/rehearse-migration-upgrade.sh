@@ -95,7 +95,7 @@ bun "$repo_root/scripts/migration-rehearsal-db.ts" assert-empty
 
 log "Applying the base schema from ${base_image}"
 if ! docker image inspect "$base_image" >/dev/null 2>&1; then
-  docker pull --quiet "$base_image" >/dev/null
+  bash "$repo_root/scripts/retry.sh" docker pull --quiet "$base_image"
 fi
 docker run --rm --network host \
   --env "DATABASE_URL=${base_database_url}" \
