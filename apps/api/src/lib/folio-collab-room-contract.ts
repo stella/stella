@@ -1,4 +1,10 @@
+import type { SafeId } from "@/api/lib/branded-types";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
+
+export type FolioCollabSavedSnapshotCut = {
+  versionId: SafeId<"entityVersion">;
+  sha256Hex: string;
+};
 
 export const FOLIO_COLLAB_ROOM_SEED_STATES = [
   "empty",
@@ -13,6 +19,9 @@ export const FOLIO_COLLAB_ROOM_UNSEEDED_STATES = [
   "empty",
   "claimed",
 ] satisfies readonly FolioCollabRoomSeedState[];
+
+export const FOLIO_COLLAB_ROOM_SNAPSHOT_STATES =
+  FOLIO_COLLAB_ROOM_SEED_STATES.filter((state) => state !== "empty");
 
 /** Room tokens are renewable credentials; expiry never deletes room state. */
 export const FOLIO_COLLAB_TOKEN_TTL_MS = 60 * 60 * 1000;

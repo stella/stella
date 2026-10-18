@@ -108,6 +108,8 @@ export const MERGE_GROUP_EXCEPTIONS = {
     "Negative proof against the pull request base, rather than the queued tree.",
   "heavy-web-build":
     "Heavy-dispatch artifact producer; web-build produces the merge-group artifact.",
+  "pr-heavy-gate":
+    "Pull request ordering gate; a merge group starts its suites after the plan.",
 } as const;
 
 export const queueAdmittedJobs = (workflow: unknown) => {
