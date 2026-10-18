@@ -12,6 +12,31 @@
       "unknownDevice": "Dispositivo desconhecido"
     }
   },
+  "admin": {
+    "ai": "IA",
+    "backToApp": "Voltar ao aplicativo",
+    "billingAndUsage": "Faturamento e uso",
+    "billingProfiles": "Perfis de faturamento",
+    "deleteDescription": "Exclua permanentemente esta organização e seus dados. Esta ação não pode ser desfeita.",
+    "deleteOrganization": "Excluir organização",
+    "deleteRefusedSubscription": "Esta organização tem uma assinatura que é renovada. Cancele-a primeiro em Plano e uso e depois exclua a organização.",
+    "deleteTypeToConfirm": "Digite {name} para confirmar.",
+    "firmSetup": "Configuração do escritório",
+    "general": "Geral",
+    "leaveDescription": "Você perderá o acesso aos casos e dados desta organização.",
+    "leaveOrganization": "Sair da organização",
+    "leaveRefusedOnlyOwner": "Você é o único proprietário. Torne outro membro proprietário antes de sair.",
+    "modelsAndProviders": "Modelos e provedores",
+    "noPlan": "Nenhum plano ativo",
+    "organizationDeleted": "A organização foi excluída.",
+    "organizationId": "ID da organização",
+    "organizationLeft": "Você saiu da organização.",
+    "overviewDescription": "Gerencie sua organização, as pessoas e as ferramentas.",
+    "people": "Pessoas",
+    "planAndUsage": "Plano e uso",
+    "title": "Administração da organização",
+    "toolsDescription": "Ative ou desative as ferramentas integradas para todas as pessoas desta organização."
+  },
   "agentClaim": {
     "access": "Acesso que ele terá",
     "accessReadSearch": "Acesso de leitura e pesquisa",
@@ -1058,7 +1083,6 @@
       }
     },
     "sameCaseNumber": "{count, plural, one {# decisão tem} other {# decisões têm}} este número de processo. Escolha o tribunal.",
-    "searchAskPrompt": "{query} (jurisprudência de {country})",
     "searchLabel": "Pesquisar jurisprudência",
     "searchPlaceholder": "Número do processo, ECLI ou palavras, p. ex. 22 Cdo 2653/2012",
     "searchUnavailable": {
@@ -1206,15 +1230,32 @@
     },
     "answerEdit": {
       "acceptFailed": "Não foi possível salvar a alteração. Tente novamente.",
+      "aiKind": "Edição solicitada",
       "ask": "Solicitar alterações",
+      "authorUnknown": "Autor desconhecido",
+      "autolinkLabel": "Este texto se torna um link automaticamente. Altere o rótulo antes de remover o link.",
+      "change": "Alteração {revision}",
+      "editedLabel": "Resposta editada",
       "failed": "Não foi possível preparar a alteração. Tente novamente.",
+      "formatKind": "Formatação",
+      "heading": "Título {level}",
+      "history": "Histórico da resposta",
+      "historyEmpty": "Nenhuma versão anterior.",
       "instruction": "Descreva a alteração",
       "instructionRequired": "Descreva como alterar o texto selecionado.",
       "invalidSelection": "Esta seleção não pode ser editada. Selecione um trecho contínuo.",
+      "invalidUrl": "Insira um endereço HTTP ou HTTPS válido.",
+      "linkAddress": "Endereço do link",
+      "orderedList": "Lista numerada",
       "proposal": "Alteração sugerida",
       "requesting": "Preparando alterações…",
+      "restoreRefreshFailed": "A resposta foi restaurada, mas não foi possível atualizá-la. Atualize para carregar a resposta restaurada.",
+      "revertKind": "Versão restaurada",
       "stale": "Esta resposta mudou. Selecione o texto novamente.",
-      "submit": "Solicitar alteração"
+      "submit": "Solicitar alteração",
+      "textStyle": "Estilo de texto",
+      "unorderedList": "Lista com marcadores",
+      "wholeBlockRequired": "Selecione um parágrafo ou uma lista inteira para alterar seu estilo."
     },
     "answerQuote": {
       "showInDecision": "Ver na decisão",
@@ -1405,7 +1446,12 @@
     "maxAttachmentsReached": "Máximo de arquivos {count} por mensagem",
     "mention": {
       "category": {
-        "entities": "Neste caso"
+        "entities": "Neste caso",
+        "sources": "Fontes"
+      },
+      "corpus": {
+        "caseLaw": "Jurisprudência · {country}",
+        "legislation": "Legislação · {country}"
       },
       "loadError": "Falha ao carregar itens"
     },
@@ -5133,7 +5179,6 @@
     "provisionTextUnavailable": "Texto indisponível para esta versão",
     "publisherWindowInconsistent": "Não é possível determinar a versão em vigor nesta data: os dados do editor são inconsistentes.",
     "resolvedAlias": "Reconhecido como {label}",
-    "searchAskPrompt": "{query} (legislação: {country})",
     "searchLabel": "Buscar na legislação",
     "searchPlaceholder": "Número, nome ou título, ex.: 89/2012 Sb.",
     "showCitedPartOnly": "Mostrar apenas a parte citada",
@@ -6262,7 +6307,6 @@
         }
       },
       "atAGlance": "De relance",
-      "edited": "editado",
       "getStarted": "Comece enviando documentos ou criando sua primeira pasta.",
       "matterDetails": "Detalhes do caso",
       "membersCount": "{count, plural, one {# membro} many {# membros} other {# membros}}",

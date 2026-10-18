@@ -38,8 +38,7 @@ const citation = (citationId: string, decisionId = "synthetic-target") =>
     polarity: "unclassified",
     doctrine: null,
     decision: {
-      appUrl: `https://stll.app/case-law/${decisionId}`,
-      url: `https://example.org/cases/${decisionId}`,
+      url: `https://stll.app/case-law/${decisionId}`,
       caseNumber: `Synthetic ${decisionId}`,
       citationAuthority: 1,
       court: "Synthetic Court",
@@ -64,12 +63,12 @@ const toolResult = (
     structuredContent,
   }) satisfies BridgeToolResult;
 
-const openedDecision = (decisionId: string, appUrl: string | null) =>
+const openedDecision = (decisionId: string, url: string | null) =>
   ({
     status: "unavailable",
     metadata: {
       decisionId,
-      appUrl,
+      url,
       caseNumber: "Synthetic case",
       caseNumberType: "case-number",
       courtAbbreviation: null,

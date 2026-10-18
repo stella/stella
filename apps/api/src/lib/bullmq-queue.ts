@@ -80,6 +80,7 @@ export class BullMqWorker<
  */
 export const BULLMQ_QUEUE_HOSTS = {
   "account-deletion-cleanup": "api",
+  "account-exports": "api",
   "bilingual-translation-runs": "api",
   "document-deadline-scouts": "api",
   "document-processing": "document-processing-worker",

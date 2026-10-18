@@ -1,20 +1,10 @@
-import { PDFiumLibrary } from "@hyzyla/pdfium";
 import { PDF } from "@libpdf/core";
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 import { readImageHeader } from "@/api/lib/files/image-header";
 import { imageToPdf } from "@/api/lib/files/image-pdf";
+import { openPdfiumDocument } from "@/api/lib/files/pdfium";
 import { splitJpeg, splitPng } from "@/api/tests/helpers/image-fixtures";
-
-let pdfium: PDFiumLibrary;
-
-beforeAll(async () => {
-  pdfium = await PDFiumLibrary.init();
-});
-
-afterAll(() => {
-  pdfium.destroy();
-});
 
 type Rendered = {
   pageWidth: number;
@@ -24,23 +14,28 @@ type Rendered = {
 
 /** Render the only page and sample colours at fractional positions (top-left origin). */
 const renderOnlyPage = async (pdfBytes: Uint8Array): Promise<Rendered> => {
-  const document = await pdfium.loadDocument(Buffer.from(pdfBytes));
-  expect(document.getPageCount()).toBe(1);
-  const page = document.getPage(0);
-  const { originalWidth, originalHeight } = page.getOriginalSize();
-  const render = await page.render({ scale: 1, render: "bitmap" });
-  document.destroy();
+  const document = (await openPdfiumDocument(pdfBytes)).unwrap();
+  expect(document.pageCount).toBe(1);
+  const { pointWidth, pointHeight } = document.pageSize(0).unwrap();
+  const render = document
+    .renderPage({
+      index: 0,
+      width: Math.floor(pointWidth),
+      height: Math.floor(pointHeight),
+    })
+    .unwrap();
+  document.close();
   return {
-    pageWidth: originalWidth,
-    pageHeight: originalHeight,
+    pageWidth: pointWidth,
+    pageHeight: pointHeight,
     colorAt: (fx, fy) => {
       const x = Math.floor(render.width * fx);
       const y = Math.floor(render.height * fy);
       const index = (y * render.width + x) * 4;
       return [
-        render.data[index] ?? 0,
-        render.data[index + 1] ?? 0,
-        render.data[index + 2] ?? 0,
+        render.rgba[index] ?? 0,
+        render.rgba[index + 1] ?? 0,
+        render.rgba[index + 2] ?? 0,
       ];
     },
   };
