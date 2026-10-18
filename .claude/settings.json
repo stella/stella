@@ -17,5 +17,18 @@
         ".playwright/storage-state.json"
       ]
     }
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [ \"${CLAUDE_CODE_REMOTE:-}\" = \"true\" ]; then\n  cloud_setup_incomplete() {\n    printf '%s\\n' 'Cloud setup could not establish a verified session environment. From the repository root, run bash .agents/cloud-setup.sh install and then bash .agents/cloud-setup.sh start. Do not assume pinned tools or services are ready until start succeeds.'\n    printf '%s\\n' \"cloud-setup: $1\" >&2\n    exit 0\n  }\n  bash \"$CLAUDE_PROJECT_DIR/.agents/cloud-setup.sh\" start >&2 || cloud_setup_incomplete 'startup failed; run install'\n  if [ -n \"${CLAUDE_ENV_FILE:-}\" ]; then\n    if [ ! -s /etc/profile.d/stll-cloud.sh ]; then\n      cloud_setup_incomplete 'cloud shell profile is unavailable; run install'\n    fi\n    cloud_shell_exports=\"$(cat /etc/profile.d/stll-cloud.sh)\" || cloud_setup_incomplete 'cloud shell profile could not be read; run install'\n    [ -n \"$cloud_shell_exports\" ] || cloud_setup_incomplete 'cloud shell profile is unavailable; run install'\n    printf '\\n%s\\n' \"$cloud_shell_exports\" >> \"$CLAUDE_ENV_FILE\" || cloud_setup_incomplete 'session environment could not be persisted; check its write access and rerun start'\n  fi\nfi"
+          }
+        ]
+      }
+    ]
   }
 }

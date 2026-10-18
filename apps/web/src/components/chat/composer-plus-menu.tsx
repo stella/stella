@@ -65,6 +65,7 @@ import {
   getMentionViewScope,
   insertChatMention,
 } from "@/components/chat-mention-helpers";
+import { chatMentionOptionId } from "@/components/chat-mention-node-attrs";
 import { insertPastedTextChip } from "@/components/chat-pasted-text-extension";
 import {
   ComposerEditModeSubmenu,
@@ -1201,7 +1202,7 @@ const ComposerContextResults = ({
       .map((option) => (
         <ComposerMentionItem
           editor={editor}
-          key={option.resource.id}
+          key={chatMentionOptionId(option)}
           option={option}
         />
       ));
@@ -1371,7 +1372,7 @@ const ComposerContextMatterSub = ({
     return fileOptions.map((option) => (
       <ComposerMentionItem
         editor={editor}
-        key={option.resource.id}
+        key={chatMentionOptionId(option)}
         option={option}
       />
     ));
