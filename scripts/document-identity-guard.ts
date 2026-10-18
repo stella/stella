@@ -3,6 +3,14 @@ import path from "node:path";
 import ts from "typescript";
 
 const BADGE_OWNER = "packages/ui/src/components/document-identity-badge.tsx";
+export const REQUIRED_DOCUMENT_IDENTITY_SURFACES = [
+  "apps/web/src/features/statutes/statute-inspector-registration.tsx#StatuteRailIcon",
+  "apps/web/src/features/statutes/components/statute-search-results.tsx#StatuteSearchResults",
+  "apps/web/src/components/search-dialog-results.tsx#SearchHitIcon",
+  "apps/web/src/components/search-dialog-results.tsx#RecentFileIcon",
+  "apps/web/src/features/case-law/components/decision-cells.tsx#CaseNumberCell",
+  "packages/mcp-apps/src/case-law-results/view.tsx#ResultTableRow",
+] as const;
 const DOCUMENT_ROW_DATA =
   /\b(?:StatuteListItem|StatuteSearchHit|DecisionCitation|LeadingCitation|StatuteViewPayload|ProvisionViewPayload|CaseDecisionViewPayload|statuteTitle|courtAbbreviation|caseNumber|documentIdentity)\b|\bstatute\.title\b|["'](?:statute|decision|case-law)["']/u;
 const ROW_TAG =
@@ -738,16 +746,34 @@ export const readDocumentIdentitySources = (root: string) => {
   return sources;
 };
 
+type DocumentIdentityResult = {
+  surfaces: readonly string[];
+};
+
+export const missingRequiredSurfaces = (
+  result: DocumentIdentityResult,
+  required: readonly string[],
+) => required.filter((surface) => !result.surfaces.includes(surface));
+
 if (import.meta.main) {
   const result = checkDocumentIdentitySources(
     readDocumentIdentitySources(process.cwd()),
+  );
+  const missing = missingRequiredSurfaces(
+    result,
+    REQUIRED_DOCUMENT_IDENTITY_SURFACES,
   );
   for (const violation of result.violations) {
     console.error(
       `Document row or rail must render DocumentIdentityBadge: ${violation}`,
     );
   }
-  if (result.violations.length > 0) {
+  for (const surface of missing) {
+    console.error(
+      `Required document identity surface was not discovered: ${surface}`,
+    );
+  }
+  if (result.violations.length > 0 || missing.length > 0) {
     process.exitCode = 1;
   } else {
     console.log(
