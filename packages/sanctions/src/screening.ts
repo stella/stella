@@ -21,6 +21,7 @@ import type {
   NameMatch,
   NameMatches,
   ScreeningWorkBudget,
+  IndexBuildSteps,
 } from "./name-match";
 import {
   nameReading,
@@ -82,7 +83,7 @@ const identifierKey = (value: string): string =>
 
 function* screeningIndexSteps(
   lists: readonly ParsedList[],
-): Generator<void, ScreeningIndex, void> {
+): IndexBuildSteps<ScreeningIndex> {
   const sourceEntries = new ObjectColumn<SanctionsEntry>();
   const entries = new ScreeningEntries();
   const identifierEntries = new IdentifierPostings();
@@ -135,6 +136,11 @@ export const buildScreeningIndexCooperatively = async (
     const step = steps.next();
     if (step.done === true) {
       return step.value;
+    }
+    if (step.value !== undefined) {
+      step.value.complete(
+        await step.value.builder.finishAsync(step.value.weights),
+      );
     }
     await pause();
   }

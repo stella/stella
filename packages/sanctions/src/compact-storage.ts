@@ -195,7 +195,7 @@ export class SpellingColumn {
 
 export function* spellingColumnSteps(
   strings: ObjectColumn<string>,
-): Generator<void, SpellingColumn, void> {
+): Generator<undefined, SpellingColumn, void> {
   const packed = new SpellingColumn();
   for (const text of strings) {
     packed.push(text);
@@ -267,7 +267,7 @@ class StringIds {
 
 export function* stringIdsSteps(
   strings: IndexedStrings,
-): Generator<void, StringIds, void> {
+): Generator<undefined, StringIds, void> {
   const capacity = lookupCapacity(strings.length);
   const slots = new NumberColumn();
   for (let position = 0; position < capacity; position += 1) {

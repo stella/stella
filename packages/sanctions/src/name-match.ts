@@ -262,12 +262,22 @@ type EntityIndexBuildOptions = {
   raw: BuildingVocabulary;
   weights: NumberColumn;
 };
+export type IndexBuildSteps<T> = Generator<
+  | {
+      builder: EntityIndexBuilder;
+      weights: Float64Array[];
+      complete: (index: EntityIndex) => void;
+    }
+  | undefined,
+  T,
+  void
+>;
 function* entityIndexSteps({
   aliases,
   folded,
   raw,
   weights,
-}: EntityIndexBuildOptions): Generator<void, EntityIndex, void> {
+}: EntityIndexBuildOptions): IndexBuildSteps<EntityIndex> {
   const builder = new EntityIndexBuilder({
     forms: 2,
     budget: { byLength: [0, 0, 0, 0, 1, 1, 2], basis: "shorter" },
@@ -325,7 +335,17 @@ function* entityIndexSteps({
     { length: folded.strings.length },
     (_, id) => weights.get(id),
   );
-  return yield* builder.finishSteps([foldedWeights, rawWeights]);
+  // Native construction units can prepare an entire vocabulary or finalize
+  // all postings; the cooperative driver must run that work off-thread.
+  let entities: EntityIndex | undefined;
+  yield {
+    builder,
+    weights: [foldedWeights, rawWeights],
+    complete: (index) => {
+      entities = index;
+    },
+  };
+  return entities ?? panic("Entity index construction did not return an index");
 }
 
 export function* nameIndexSteps(
@@ -333,7 +353,7 @@ export function* nameIndexSteps(
     readonly length: number;
     entries: () => Iterable<[number, SanctionsEntry]>;
   },
-): Generator<void, NameIndex, void> {
+): IndexBuildSteps<NameIndex> {
   let share = true;
   for (const entry of entries) {
     if (
@@ -448,11 +468,14 @@ export function* nameIndexSteps(
     entities,
   };
 }
-export const runSteps = <T>(steps: Generator<void, T, void>): T => {
+export const runSteps = <T>(steps: IndexBuildSteps<T>): T => {
   for (;;) {
     const step = steps.next();
     if (step.done === true) {
       return step.value;
+    }
+    if (step.value !== undefined) {
+      step.value.complete(step.value.builder.finish(step.value.weights));
     }
   }
 };

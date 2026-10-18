@@ -21,7 +21,7 @@ export type ScreeningWorkStats = {
 
 function* vocabularyStats(
   vocabulary: NameIndex["folded"],
-): Generator<void, VocabularyWorkStats, void> {
+): Generator<undefined, VocabularyWorkStats, void> {
   let maxLength = 0;
   for (let id = 0; id < vocabulary.strings.length; id += 1) {
     maxLength = Math.max(maxLength, vocabulary.strings.get(id).length);
@@ -35,7 +35,7 @@ function* vocabularyStats(
 export function* screeningWorkStatsSteps(
   names: NameIndex,
   entries: { length: number; get: (id: number) => ScreeningEntry },
-): Generator<void, ScreeningWorkStats, void> {
+): Generator<undefined, ScreeningWorkStats, void> {
   const folded = yield* vocabularyStats(names.folded);
   const raw =
     names.raw === names.folded ? folded : yield* vocabularyStats(names.raw);
