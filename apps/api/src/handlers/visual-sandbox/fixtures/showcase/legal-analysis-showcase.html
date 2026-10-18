@@ -1,0 +1,161 @@
+<main id="page" style="width: 100%; line-height: 1.5; overflow-wrap: anywhere">
+  <header style="margin-block: 0 24px">
+    <p id="eyebrow" class="stella-muted" style="font-size: 12px"></p>
+    <h1
+      id="title"
+      style="font-size: 28px; line-height: 1.2; margin-block: 8px"
+    ></h1>
+    <p id="scope" class="stella-muted"></p>
+  </header>
+  <dl
+    id="summary"
+    style="display: flex; flex-wrap: wrap; gap: 16px; margin-block: 24px"
+  ></dl>
+  <section aria-labelledby="test-title" style="margin-block: 28px">
+    <h2 id="test-title" style="font-size: 18px"></h2>
+    <ol id="checklist" style="padding-inline: 24px"></ol>
+  </section>
+  <section aria-labelledby="cases-title" style="margin-block: 28px">
+    <h2 id="cases-title" style="font-size: 18px"></h2>
+    <div id="cases" style="display: grid; gap: 12px"></div>
+  </section>
+  <section aria-labelledby="timeline-title" style="margin-block: 28px">
+    <h2 id="timeline-title" style="font-size: 18px"></h2>
+    <ol id="timeline" style="padding-inline: 24px"></ol>
+  </section>
+  <section aria-labelledby="table-title" style="margin-block: 28px">
+    <h2 id="table-title" style="font-size: 18px"></h2>
+    <table style="width: 100%; border-collapse: collapse">
+      <caption id="table-empty" class="stella-muted"></caption>
+      <thead>
+        <tr id="table-head"></tr>
+      </thead>
+      <tbody id="table-body"></tbody>
+    </table>
+  </section>
+</main>
+<script>
+  (() => {
+    const {
+      labels,
+      summary,
+      checklist,
+      cases,
+      timeline,
+      comparison,
+      formattingLocale,
+      direction,
+    } = stella.data;
+    document.documentElement.lang = formattingLocale;
+    document.getElementById("page").setAttribute("dir", direction);
+    for (const id of [
+      "eyebrow",
+      "title",
+      "scope",
+      "test-title",
+      "cases-title",
+      "timeline-title",
+      "table-title",
+    ]) {
+      document.getElementById(id).textContent = labels[id];
+    }
+    const node = (tag, value, className) => {
+      const element = document.createElement(tag);
+      element.textContent = value;
+      element.setAttribute("dir", "auto");
+      if (className) element.className = className;
+      return element;
+    };
+    for (const item of summary) {
+      const card = document.createElement("div");
+      card.className = "stella-card";
+      card.style.cssText =
+        "flex:1 1 260px;min-width:0;padding:20px;background-color:var(--muted);border-radius:var(--radius)";
+      const value = node("dd", item.value);
+      value.style.cssText =
+        "margin:8px 0;font-size:20px;font-weight:600;line-height:1.3";
+      const detail = node("dd", item.detail, "stella-muted");
+      detail.style.cssText = "margin:0;font-size:14px";
+      card.append(node("dt", item.label, "stella-muted"), value, detail);
+      document.getElementById("summary").append(card);
+    }
+    for (const item of checklist) {
+      const row = document.createElement("li");
+      row.style.cssText = "padding-block:8px";
+      row.append(
+        node("strong", item.question),
+        node("p", item.status),
+        node("p", item.reason, "stella-muted"),
+      );
+      document.getElementById("checklist").append(row);
+    }
+    for (const item of cases) {
+      const card = document.createElement("article");
+      card.className = "stella-card";
+      card.style.cssText =
+        "padding:16px;border:1px solid var(--border);border-radius:var(--radius)";
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "stella-button stella-button-ghost";
+      button.style.cssText =
+        "text-align:start;white-space:normal;max-inline-size:100%;overflow-wrap:anywhere";
+      button.append(node("bdi", item.citation));
+      button.addEventListener("click", () => stella.openDecision(item.linkId));
+      card.append(
+        button,
+        node("p", item.proposition),
+        node("p", item.relevance, "stella-muted"),
+      );
+      document.getElementById("cases").append(card);
+    }
+    for (const item of timeline) {
+      const row = document.createElement("li");
+      row.style.cssText = "padding-block:8px";
+      const date = node(
+        item.date === null ? "span" : "time",
+        item.dateLabel,
+        "stella-muted",
+      );
+      if (item.date !== null) date.setAttribute("datetime", item.date);
+      row.append(
+        date,
+        node("p", item.title),
+        node("p", item.detail, "stella-muted"),
+      );
+      document.getElementById("timeline").append(row);
+    }
+    for (const label of labels.columns) {
+      const cell = node("th", label);
+      cell.setAttribute("scope", "col");
+      cell.style.cssText =
+        "width:33.333%;padding:8px;text-align:start;border-block-end:1px solid var(--border)";
+      document.getElementById("table-head").append(cell);
+    }
+    for (const item of comparison) {
+      const row = document.createElement("tr");
+      for (const value of [item.issue, item.evidence, item.nextStep]) {
+        const cell = node("td", value);
+        cell.style.cssText =
+          "width:33.333%;padding:8px;vertical-align:top;border-block-end:1px solid var(--border)";
+        row.append(cell);
+      }
+      document.getElementById("table-body").append(row);
+    }
+    for (const [id, items] of [
+      ["summary", summary],
+      ["checklist", checklist],
+      ["cases", cases],
+      ["timeline", timeline],
+    ]) {
+      if (items.length === 0) {
+        const tag = id === "summary" ? "dd" : id === "cases" ? "p" : "li";
+        document
+          .getElementById(id)
+          .append(node(tag, labels.empty, "stella-muted"));
+      }
+    }
+    if (comparison.length === 0)
+      document.getElementById("table-empty").textContent = labels.empty;
+    stella.ready();
+  })();
+</script>

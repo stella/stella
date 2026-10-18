@@ -25,44 +25,81 @@ const manifestSchema = v.object({
   optionalDependencies: v.optional(dependencyFields, {}),
   peerDependencies: v.optional(dependencyFields, {}),
 });
-const dependencies = new Map(
-  [...graph.packages].map(([name, { directory }]) => [
-    name,
-    Object.values(
-      v.parse(
-        manifestSchema,
-        JSON.parse(
-          readFileSync(path.join(root, directory, "package.json"), "utf-8"),
-        ),
+const lockEntrySchema = v.looseObject({
+  dependencies: v.optional(dependencyFields, {}),
+  optionalDependencies: v.optional(dependencyFields, {}),
+  peerDependencies: v.optional(dependencyFields, {}),
+});
+const lockSchema = v.object({
+  packages: v.record(v.string(), v.array(v.unknown())),
+});
+// Published packages can depend on a workspace package, which the install
+// links to the local copy (an app -> npm package -> workspace package path).
+const externalDependencies = new Map(
+  Object.entries(
+    v.parse(
+      lockSchema,
+      Bun.JSONC.parse(readFileSync(path.join(root, "bun.lock"), "utf-8")),
+    ).packages,
+  ).map(([key, entry]) => {
+    const fields = entry.find((item) => v.is(lockEntrySchema, item));
+    if (fields === undefined) {
+      return [key, []];
+    }
+    const { dependencies, optionalDependencies, peerDependencies } = v.parse(
+      lockEntrySchema,
+      fields,
+    );
+    return [
+      key,
+      [dependencies, optionalDependencies, peerDependencies].flatMap((field) =>
+        Object.keys(field),
       ),
-    ).flatMap(Object.keys),
-  ]),
+    ];
+  }),
 );
-type ReachesOptions = {
-  consumer: string;
-  dependency: string;
-  visited?: Set<string>;
-};
-const reaches = ({
-  consumer,
-  dependency,
-  visited = new Set(),
-}: ReachesOptions): boolean => {
-  if (consumer === dependency) {
-    return true;
+const dependencies = new Map([
+  ...externalDependencies,
+  ...[...graph.packages].map(
+    ([name, { directory }]) =>
+      [
+        name,
+        Object.values(
+          v.parse(
+            manifestSchema,
+            JSON.parse(
+              readFileSync(path.join(root, directory, "package.json"), "utf-8"),
+            ),
+          ),
+        ).flatMap((field) => Object.keys(field)),
+      ] as const,
+  ),
+]);
+const closures = new Map<string, ReadonlySet<string>>();
+const closureOf = (consumer: string) => {
+  const cached = closures.get(consumer);
+  if (cached !== undefined) {
+    return cached;
   }
-  if (visited.has(consumer)) {
-    return false;
+  const visited = new Set<string>();
+  const queue = [consumer];
+  for (let next = queue.pop(); next !== undefined; next = queue.pop()) {
+    if (visited.has(next)) {
+      continue;
+    }
+    visited.add(next);
+    queue.push(...(dependencies.get(next) ?? []));
   }
-  visited.add(consumer);
-  return (dependencies.get(consumer) ?? []).some((next) =>
-    reaches({ consumer: next, dependency, visited }),
-  );
+  closures.set(consumer, visited);
+  return visited;
 };
+type ReachesOptions = { consumer: string; dependency: string };
+const reaches = ({ consumer, dependency }: ReachesOptions) =>
+  closureOf(consumer).has(dependency);
 
 // Forward oracle: source owners produced by derived generators, then the
 // actual manifest dependency closures of each check's consuming package.
-const seedsForFile = (file: string) => {
+const derivedFiles = (file: string) => {
   const files = new Set([file]);
   for (let previous = -1; previous !== files.size;) {
     previous = files.size;
@@ -81,17 +118,20 @@ const seedsForFile = (file: string) => {
       }
     }
   }
-  return [...graph.packages]
+  return [...files];
+};
+const seedsForFiles = (files: readonly string[]) =>
+  [...graph.packages]
     .filter(([, { directory }]) =>
-      [...files].some((changed) => changed.startsWith(`${directory}/`)),
+      files.some((changed) => changed.startsWith(`${directory}/`)),
     )
     .map(([name]) => name);
-};
 
 const assertEnumeration = (table = inputs) => {
   for (const [name, { directory }] of graph.packages) {
     const file = `${directory}/src/probe.ts`;
-    const seeds = seedsForFile(file);
+    const files = derivedFiles(file);
+    const seeds = seedsForFiles(files);
     const selected = new Set(
       selectRootChecks({
         changed: [file],
@@ -108,7 +148,7 @@ const assertEnumeration = (table = inputs) => {
             ? seeds.some((dependency) =>
                 reaches({ consumer: input, dependency }),
               )
-            : new Bun.Glob(input).match(file)),
+            : files.some((derived) => new Bun.Glob(input).match(derived))),
       );
       expect(selected.has(check), `${name} -> ${check}`).toBe(expected);
     }
@@ -149,6 +189,25 @@ test("all root workflow commands have declarations and narrow gates use the same
   expect(() => validateRootCheckCensus(source, broken)).toThrow(
     "Root check input census differs",
   );
+});
+
+test("steps whose success or outputs later steps consume cannot be deselected", () => {
+  const source = readFileSync(
+    path.join(root, ".github/workflows/ci.yml"),
+    "utf-8",
+  );
+  const job = "ci-checks-rest";
+  const name = "Standalone lockfile guard";
+  const id = "id: standalone_lockfiles\n        if: ${{ !cancelled()";
+  expect(source).toContain(id);
+  const broken = structuredClone(ROOT_CHECK_INPUTS);
+  broken[job][name] = ["**/bun.lock"];
+  expect(() =>
+    validateRootCheckCensus(
+      source.replace(id, () => `${id} && ${rootCheckGate({ job, name })}`),
+      broken,
+    ),
+  ).toThrow(`Root check gate skips a consumed step: ${job}/${name}`);
 });
 
 test("global configuration and structural path changes retain full root scope", () => {
