@@ -18,6 +18,7 @@ export {
   useTestTmpDir,
   withTestTmpDir,
 } from "./tmp.ts";
+export { writeRegeneratedFile } from "./regenerate.ts";
 export {
   DEFAULT_WAIT_TIMEOUT_MS,
   type Deferred,

@@ -1630,6 +1630,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-direct-dom-unregister.ts",
     "./.oxlint-plugins/no-internal-module-mock.ts",
     "./.oxlint-plugins/no-direct-test-state.ts",
+    "./.oxlint-plugins/no-shared-checkout-mutation.ts",
     "./.oxlint-plugins/no-centered-scroll-column.ts",
     "./.oxlint-plugins/no-raw-overflow-scroll.ts",
     "./.oxlint-plugins/no-imported-class-constant.ts",
@@ -4267,6 +4268,7 @@ const config = defineConfig({
               // The test network guard refuses to install while the process
               // routes fetch through a remote proxy from the environment.
               "packages/test-kit/src/network.ts",
+              "packages/test-kit/src/regenerate.ts",
               // The web server entrypoint reads its listen address from Bun's
               // environment before any app module loads; the web app's env
               // contract is the Vite build, not this process.
@@ -5282,6 +5284,7 @@ const config = defineConfig({
       ],
       rules: {
         "no-direct-test-state/no-direct-test-state": "error",
+        "no-shared-checkout-mutation/no-shared-checkout-mutation": "error",
       },
     },
     {

@@ -6,6 +6,7 @@ import type { SQLWrapper } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { compareCodeUnit } from "@stll/collation";
+import { writeRegeneratedFile } from "@stll/test-kit";
 
 import { databaseRelations } from "@/api/db/database-relations";
 import type { Transaction } from "@/api/db/root";
@@ -115,7 +116,7 @@ afterAll(async () => {
     if (Object.keys(observedContracts).length !== QUERY_PLAN_REGISTRY.length) {
       panic("Plan contract update did not observe every registry entry");
     }
-    await Bun.write(
+    await writeRegeneratedFile(
       new URL("contracts.json", import.meta.url),
       `${JSON.stringify(observedContracts, null, 2)}\n`,
     );
@@ -488,7 +489,7 @@ test("recognizes the workspace RLS subplan in its real role", async () => {
   );
   expect(withoutAuthorizationSubplans(scan)).not.toContain("SubPlan");
   if (UPDATE_PLAN_CONTRACTS) {
-    await Bun.write(
+    await writeRegeneratedFile(
       new URL("workspace-rls-plan.fixture.json", import.meta.url),
       `${JSON.stringify(plan, null, 2)}\n`,
     );

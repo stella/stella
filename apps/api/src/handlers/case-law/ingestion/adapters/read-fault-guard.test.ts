@@ -22,7 +22,7 @@
 // does not state typed. New rows fail; rows that no longer
 // occur must be removed. scripts/failure-as-empty-baseline.ts rejects added
 // rows against the base revision. Regenerate (drops fixed rows only):
-//   READ_FAULT_BASELINE=write bun run test <this file>
+//   STELLA_UPDATE_PLAN_CONTRACTS=1 bun run test <this file>
 import { panic } from "better-result";
 import {
   afterAll,
@@ -33,7 +33,8 @@ import {
   spyOn,
   test,
 } from "bun:test";
-import { writeFileSync } from "node:fs";
+
+import { writeRegeneratedFile } from "@stll/test-kit";
 
 import { listAdapters } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import baseline from "@/api/handlers/case-law/ingestion/adapters/read-fault-guard-baseline.json";
@@ -132,7 +133,7 @@ const BASELINE_FILE = new URL(
   import.meta.url,
 );
 const recorded: Readonly<Record<string, string>> = baseline.rows;
-const writing = process.env["READ_FAULT_BASELINE"] === "write";
+const writing = process.env["STELLA_UPDATE_PLAN_CONTRACTS"] === "1";
 const observedRows = new Map<string, string>();
 
 const originalFetch = globalThis.fetch;
@@ -145,7 +146,7 @@ beforeAll(() => {
 afterEach(() => {
   globalThis.fetch = originalFetch;
 });
-afterAll(() => {
+afterAll(async () => {
   mock.restore();
   if (writing) {
     const rows = Object.fromEntries(
@@ -153,7 +154,7 @@ afterAll(() => {
         .toSorted()
         .map((key) => [key, recorded[key] ?? observedRows.get(key)]),
     );
-    writeFileSync(
+    await writeRegeneratedFile(
       BASELINE_FILE,
       `${JSON.stringify({ comment: baseline.comment, rows }, null, 2)}\n`,
     );
