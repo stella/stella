@@ -708,7 +708,14 @@ export const useFolioCollaborationRoom = ({
               return;
             }
             reportedFailure = true;
-            getAnalytics().captureError(error);
+            getAnalytics().captureError(error, {
+              fingerprintKey:
+                "useFolioCollaborationRoom.acknowledgeSeed:failure",
+              scope: {
+                type: "handler",
+                handlerId: "useFolioCollaborationRoom.acknowledgeSeed:failure",
+              },
+            });
             notifyUserError(error, getEditOpenFailedMessage());
           };
           detached(
