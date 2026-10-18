@@ -1034,19 +1034,23 @@ if (!databaseUrl || !enabled) {
           },
         } as const satisfies SoftLawEntry;
         let archiveRepaired = false;
+        let failedArchiveFetches = 0;
         const sourceAdapter = (items: readonly SoftLawEntry[]) =>
           ({
             ...adapter(items),
             authority: "eu-wp29",
             fetchDocument: async (item: SoftLawEntry) => {
               if (item.url === archive.url && !archiveRepaired) {
+                failedArchiveFetches++;
                 return Result.ok({
                   metadata,
                   raw: [
                     {
                       role: "document-word",
                       purpose: "document",
-                      bytes: new TextEncoder().encode("failed archive bytes"),
+                      bytes: new TextEncoder().encode(
+                        `failed archive bytes ${failedArchiveFetches}`,
+                      ),
                       contentType: "application/msword",
                     },
                   ],
@@ -1062,17 +1066,20 @@ if (!databaseUrl || !enabled) {
                   {
                     role: "document-word",
                     purpose: "document",
-                    bytes: new TextEncoder().encode(item.url),
+                    bytes: new TextEncoder().encode(newsroom.url),
                     contentType: "application/msword",
                   },
                 ],
-                text: `WP 260 ${item.url}`,
+                text: `WP 260 ${newsroom.url}`,
                 extractionQuality: "text_layer",
                 sourceDates: {},
               });
             },
           }) satisfies SoftLawSourceAdapter;
 
+        expect(await run(sourceAdapter([archive]))).toEqual({
+          status: "complete",
+        });
         expect(await run(sourceAdapter([archive]))).toEqual({
           status: "complete",
         });
@@ -1117,11 +1124,18 @@ if (!databaseUrl || !enabled) {
           .where(eq(softLawDocumentVersions.documentId, ownerId))
           .orderBy(softLawDocumentVersions.sequence);
         expect(
-          versions.map(({ extractionQuality }) => extractionQuality),
-        ).toEqual(["text_layer", "extraction_failed", "text_layer"]);
+          versions.map(({ sequence, extractionQuality }) => ({
+            sequence,
+            extractionQuality,
+          })),
+        ).toEqual([
+          { sequence: 1, extractionQuality: "text_layer" },
+          { sequence: 2, extractionQuality: "extraction_failed" },
+          { sequence: 3, extractionQuality: "extraction_failed" },
+        ]);
         const failedRawKey = rawSourcePayloadKey({
           owner: { family: "soft-law", sourceId },
-          data: new TextEncoder().encode("failed archive bytes"),
+          data: new TextEncoder().encode("failed archive bytes 1"),
         });
         expect(
           versions.some(({ rawObjects }) =>

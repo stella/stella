@@ -347,12 +347,9 @@ const persistSoftLawRows = async (
         await tx
           .update(softLawDocumentVersions)
           .set({
+            documentId: item.documentId,
             sequence: sql`${softLawDocumentVersions.sequence} + ${maximumSequence}`,
           })
-          .where(eq(softLawDocumentVersions.documentId, placeholderDocumentId));
-        await tx
-          .update(softLawDocumentVersions)
-          .set({ documentId: item.documentId })
           .where(eq(softLawDocumentVersions.documentId, placeholderDocumentId));
         await tx
           .update(softLawDocumentLocators)
