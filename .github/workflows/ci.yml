@@ -8466,6 +8466,10 @@ jobs:
         desktop-rust-tests,
         desktop-rust-lint,
       ]
+    outputs:
+      # This run's own record of which jobs it required; the
+      # `ci-required-summary` artifact holds the same record.
+      required_summary: ${{ steps.outcome.outputs.required_summary }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -8509,8 +8513,10 @@ jobs:
           RUN_REQUIRED: ${{ needs.ci-plan.outputs.run_required }}
           COMPLETED_RUN_ID: ${{ needs.ci-plan.outputs.completed_run_id }}
           COMPLETION_MARKER: ${{ needs.ci-plan.outputs.completion_marker }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          # The commit this run tested and, for a pull request or merge group,
+          # its base. Completion evidence is recorded for pull requests only.
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || inputs.sha || github.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
           HEAD_REPO_ID: ${{ github.event.pull_request.head.repo.id }}
           PATCH_ID: ${{ needs.ci-plan.outputs.patch_id }}
           WORKFLOW_VERSION: ${{ needs.ci-plan.outputs.pr_depth_workflow_version }}
@@ -8585,6 +8591,42 @@ jobs:
           FAST_REQUIRED: >-
             ["ci-quick-checks", "pr-heavy-gate", "desktop-rust-lint", "ci-browser", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "code-quality-api", "code-quality-web-rest", "dependency-malware", "ci-tests", "e2e-production-shard", "web-build", "scan-engine-wasm-drift", "query-perf"]
         run: |
+          # The run's own record of which jobs it required. Every job this
+          # step waits on except ci-plan is either required, with its
+          # conclusion, or not required. `required_jobs` is the set each
+          # verdict branch below evaluates; it stays empty when the step
+          # decides before any branch requires a job. The record is written on
+          # every exit, so its verdict is this step's exit status.
+          RECORDED_NEEDS="$NEEDS"
+          required_jobs='[]'
+          reused_from_run_id=""
+          record_required_jobs() {
+            local status=$1 depth=${SUITE_DEPTH:-} record
+            if [[ "${PR_DEPTH_ONLY:-false}" == true ]]; then
+              depth=pr-depth
+            elif [[ "${HEAVY_ONLY:-false}" == true ]]; then
+              depth=heavy
+            elif [[ "${QUEUE_DEPTH:-full}" == thin ]]; then
+              depth=thin
+            fi
+            record=$(jq -ce --argjson required "$required_jobs" --arg status "$status" \
+              --arg event "${EVENT:-}" --arg head "${HEAD_SHA:-}" --arg base "${BASE_SHA:-}" \
+              --arg run "${GITHUB_RUN_ID:-}" --arg attempt "${GITHUB_RUN_ATTEMPT:-}" \
+              --arg depth "$depth" --arg profile "${COVERAGE_PROFILE:-}" --arg reused "$reused_from_run_id" '
+              def nonempty: if . == "" then null else . end;
+              def count: if test("^[1-9][0-9]*$") then tonumber else null end;
+              . as $needs
+              | {version: 1, event: $event,
+                head_sha: ($head | nonempty), base_sha: ($base | nonempty),
+                run_id: ($run | count), run_attempt: ($attempt | count),
+                depth: ($depth | nonempty), coverage_profile: ($profile | nonempty),
+                reused_from_run_id: ($reused | count),
+                required: [$required[] | {job: ., conclusion: ($needs[.].result // "missing")}],
+                not_required: ([keys[] | select(. != "ci-plan")] - $required),
+                verdict: (if $status == "0" then "success" else "failure" end)}' <<< "$RECORDED_NEEDS") || return 1
+            echo "required_summary=$record" >> "${GITHUB_OUTPUT:-}"
+          }
+          trap 'record_required_jobs "$?" || echo "::error::The required-jobs record could not be written."' EXIT
           if [[ "$QUEUE_DEPTH" == thin ]]; then
             THIN_JOBS=$(jq -cn --argjson thin "$THIN_JOBS" --argjson required "$QUEUE_REQUIRED_JOBS" '$thin + $required | unique') || exit 1
           fi
@@ -8734,7 +8776,8 @@ jobs:
           fi
 
           if [[ "${PR_DEPTH_ONLY:-false}" == true ]]; then
-            violations=$(jq -r --argjson required "$PR_DEPTH_JOBS" '[to_entries[] | select(.key as $job | $required | index($job)) | select(.value.result != "success") | "\(.key) (\(.value.result))"] | join(", ")' <<< "$NEEDS")
+            required_jobs=$(jq -c --argjson required "$PR_DEPTH_JOBS" '[keys[] | select(. as $job | $required | index($job))]' <<< "$NEEDS") || exit 1
+            violations=$(jq -r --argjson required "$required_jobs" '[to_entries[] | select(.key as $job | $required | index($job)) | select(.value.result != "success") | "\(.key) (\(.value.result))"] | join(", ")' <<< "$NEEDS")
             if [[ -n "$violations" || $(jq 'length' <<< "$PR_DEPTH_JOBS") -eq 0 ]]; then
               echo "::error::Main PR-depth checks did not succeed: $violations"
               exit 1
@@ -8760,6 +8803,7 @@ jobs:
               echo "::error::Invalid completed-depth reuse or unexpected dependency outcome."
               exit 1
             fi
+            reused_from_run_id="$COMPLETED_RUN_ID"
             reuse_reason="Not re-tested: run $COMPLETED_RUN_ID already passed this head at this depth; the merge queue validates it on the current base."
             echo "$reuse_reason"
             printf '%s\n' "$reuse_reason" >> "$GITHUB_STEP_SUMMARY"
@@ -8776,13 +8820,16 @@ jobs:
             full)
               # Planned checks must succeed. The derived queue list includes
               # every code gate; only reasoned non-code exceptions may skip.
-              violations=$(jq -r --argjson plan "$PLAN" --argjson scopes "$JOB_SCOPES" --arg queue "${QUEUE_DEPTH:-full}" --argjson thin "${THIN_JOBS:-[]}" '
+              # A thin queue requires only its derived jobs; others may skip.
+              required_jobs=$(jq -c --argjson plan "$PLAN" --argjson scopes "$JOB_SCOPES" --arg queue "${QUEUE_DEPTH:-full}" --argjson thin "${THIN_JOBS:-[]}" '
+                [keys[] | select(. != "ci-plan") | . as $job
+                  | select(($queue != "thin" or ($thin | index($job))) and ($scopes | has($job))
+                    and ($scopes[$job] == null or $plan[$scopes[$job]] == "true"))]' <<< "$NEEDS") || exit 1
+              violations=$(jq -r --argjson required "$required_jobs" --argjson scopes "$JOB_SCOPES" --arg queue "${QUEUE_DEPTH:-full}" --argjson thin "${THIN_JOBS:-[]}" '
                 [to_entries[] | select(.key != "ci-plan") | .key as $job | .value.result as $result
-                  | if $queue == "thin" and ($thin | index($job) | not) then
-                      (if $result == "success" or $result == "skipped" then empty else "\($job) (\($result))" end)
-                    elif ($scopes | has($job) | not) then "\($job) (no entry in JOB_SCOPES)"
-                    elif ($scopes[$job] == null or $plan[$scopes[$job]] == "true") then
+                  | if ($required | index($job)) then
                       (if $result == "success" then empty else "\($job) (planned, \($result))" end)
+                    elif ($queue != "thin" or ($thin | index($job))) and ($scopes | has($job) | not) then "\($job) (no entry in JOB_SCOPES)"
                     elif $result == "success" or $result == "skipped" then empty
                     else "\($job) (\($result))"
                     end]
@@ -8804,6 +8851,11 @@ jobs:
               # Only an unlabelled pull request or a manual run plans `fast`:
               # its heavy suites skip by design. A cancelled dependency can
               # also mean a timeout; verify a newer run and reject timeout annotations.
+              # Fast-required jobs must run when their scope is planned;
+              # scope-less jobs are always planned.
+              required_jobs=$(jq -c --argjson plan "$PLAN" --argjson scopes "$(jq -cn --argjson full "$JOB_SCOPES" --argjson fast "$FAST_JOB_SCOPES" '$full + $fast')" --argjson required "$FAST_REQUIRED" '
+                [keys[] | . as $job | select($required | index($job))
+                  | select($scopes[$job] == null or $plan[$scopes[$job]] == "true")]' <<< "$NEEDS") || exit 1
               if [[ "$EVENT" == "merge_group" ]]; then
                 echo "::error::$EVENT run planned suite depth 'fast'; the heavy suites must run."
                 exit 1
@@ -8816,11 +8868,9 @@ jobs:
                 echo "CI checks failed: $failed"
                 exit 1
               fi
-              # Fast-required jobs must run when their scope is planned;
-              # scope-less jobs are always planned.
-              skipped=$(jq -r --argjson plan "$PLAN" --argjson scopes "$(jq -cn --argjson full "$JOB_SCOPES" --argjson fast "$FAST_JOB_SCOPES" '$full + $fast')" --argjson required "$FAST_REQUIRED" '
+              skipped=$(jq -r --argjson required "$required_jobs" '
                 [to_entries[] | .key as $job | select($required | index($job))
-                  | select(($scopes[$job] == null or $plan[$scopes[$job]] == "true") and .value.result == "skipped")
+                  | select(.value.result == "skipped")
                   | "\($job) (planned, skipped)"]
                 | join(", ")' <<< "$NEEDS")
               if [[ -n "$skipped" ]]; then
@@ -8876,6 +8926,30 @@ jobs:
               echo "Not every planned CI job succeeded in this run; recording no completion evidence."
             fi
           fi
+
+      # The required-jobs record as a run artifact, whatever the verdict.
+      - name: Write required-jobs record
+        if: always() && steps.outcome.outcome != 'skipped'
+        env:
+          REQUIRED_SUMMARY: ${{ steps.outcome.outputs.required_summary }}
+          RECORD_PATH: ${{ runner.temp }}/ci-required-summary/ci-required-summary.json
+        run: |
+          if [[ -z "$REQUIRED_SUMMARY" ]]; then
+            echo "::error::Evaluate CI outcome wrote no required-jobs record."
+            exit 1
+          fi
+          mkdir -p "$(dirname "$RECORD_PATH")"
+          printf '%s\n' "$REQUIRED_SUMMARY" > "$RECORD_PATH"
+
+      - name: Upload required-jobs record
+        if: always() && steps.outcome.outcome != 'skipped'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ci-required-summary
+          overwrite: true
+          path: ${{ runner.temp }}/ci-required-summary/ci-required-summary.json
+          retention-days: 5
+          if-no-files-found: error
 
       # Failure digest: one record per failed step (job, step, kind, first
       # error lines with file:line) as annotations on this check run, a job

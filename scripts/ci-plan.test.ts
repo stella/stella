@@ -1510,7 +1510,7 @@ test("a full-depth run passes jobs whose scope was not planned only when skipped
     }
   }
   expectResultGates(gates);
-});
+}, 30_000);
 
 // A pull request always plans `fast`; a manual run plans the depth it was
 // dispatched with. Both can be superseded by a newer run.
@@ -1797,6 +1797,185 @@ test("a run that passes as superseded records no completion evidence", () => {
   }
 });
 
+// The run's own record of which jobs it required, as ci-result writes it.
+const requiredRecordSchema = v.strictObject({
+  version: v.literal(1),
+  event: v.string(),
+  head_sha: v.nullable(v.string()),
+  base_sha: v.nullable(v.string()),
+  run_id: v.nullable(v.number()),
+  run_attempt: v.nullable(v.number()),
+  depth: v.nullable(v.string()),
+  coverage_profile: v.nullable(v.string()),
+  reused_from_run_id: v.nullable(v.number()),
+  required: v.array(
+    v.strictObject({ job: v.string(), conclusion: v.string() }),
+  ),
+  not_required: v.array(v.string()),
+  verdict: v.picklist(["success", "failure"]),
+});
+type RequiredRecordCase = {
+  label: string;
+  options: EvaluateResultOptions;
+  env?: Record<string, string>;
+};
+const recordRequiredJobs = (cases: readonly RequiredRecordCase[]) => {
+  const directory = mkdtempSync(nodePath.join(tmpdir(), "ci-required-record-"));
+  try {
+    return runBashBatch(cases, (entry) => {
+      const base = resultGateCase(entry.options);
+      return {
+        ...base,
+        env: {
+          ...base.env,
+          ...entry.env,
+          GITHUB_OUTPUT: nodePath.join(directory, entry.label),
+        },
+      };
+    }).map(({ item, exitCode, stdout }) => {
+      const output = nodePath.join(directory, item.label);
+      const records = (existsSync(output) ? readFileSync(output, "utf-8") : "")
+        .split("\n")
+        .filter((line) => line.startsWith("required_summary="));
+      expect(records.length, `${item.label}: ${stdout}`).toBe(1);
+      return {
+        label: item.label,
+        exitCode,
+        record: v.parse(
+          requiredRecordSchema,
+          JSON.parse(records[0]?.slice("required_summary=".length) ?? ""),
+        ),
+      };
+    });
+  } finally {
+    rmSync(directory, { force: true, recursive: true });
+  }
+};
+// Jobs ci-result does not wait on, and ci-plan, which it reads as the plan.
+const structuralJobs = Object.keys(ciJobs).filter(
+  (job) => job === "ci-plan" || !resultJob.needs.includes(job),
+);
+
+test("the required-jobs record names every workflow job once and carries the verdict", () => {
+  expect(new Set(structuralJobs)).toEqual(
+    new Set([
+      "ci-plan",
+      "ci-result",
+      CANCEL_REUSABLE_JOB,
+      ...MAIN_ONLY_JOBS,
+      ...reportOnlyJobs,
+      ...diagnosticJobs,
+    ]),
+  );
+  const skippedSuites = Object.fromEntries(
+    gatedJobs.map((job) => [job, "skipped"]),
+  );
+  const outcomes = recordRequiredJobs([
+    {
+      label: "merge-group-success",
+      options: {
+        event: EVENT.mergeGroup,
+        results: {},
+        suiteDepth: SUITE_DEPTH.full,
+      },
+      env: { HEAD_SHA: "a".repeat(40), BASE_SHA: "b".repeat(40) },
+    },
+    {
+      label: "merge-group-failure",
+      options: {
+        event: EVENT.mergeGroup,
+        results: { "ci-tests": "failure" },
+        suiteDepth: SUITE_DEPTH.full,
+        cancellationEvidence: "missing",
+      },
+    },
+    {
+      label: "pull-request-fast",
+      options: {
+        event: EVENT.pullRequest,
+        results: {},
+        suiteDepth: SUITE_DEPTH.fast,
+      },
+      env: { HEAD_SHA: "c".repeat(40), BASE_SHA: "d".repeat(40) },
+    },
+    {
+      label: "pull-request-reused",
+      options: {
+        event: EVENT.pullRequest,
+        results: skippedSuites,
+        suiteDepth: SUITE_DEPTH.fast,
+      },
+      env: {
+        RUN_REQUIRED: "false",
+        COMPLETED_RUN_ID: "99",
+        METADATA_ONLY: "false",
+      },
+    },
+  ]);
+  const byLabel = new Map(outcomes.map((outcome) => [outcome.label, outcome]));
+  const take = (label: string) =>
+    byLabel.get(label) ?? panic(`Missing record case ${label}`);
+
+  for (const { label, exitCode, record } of outcomes) {
+    const required = record.required.map(({ job }) => job);
+    const named = [...required, ...record.not_required, ...structuralJobs];
+    expect(named.toSorted(compareCodeUnit), label).toEqual(
+      Object.keys(ciJobs).toSorted(compareCodeUnit),
+    );
+    expect(record.verdict, label).toBe(exitCode === 0 ? "success" : "failure");
+    expect(record.run_id, label).toBe(123);
+    expect(record.run_attempt, label).toBe(1);
+    expect(record.coverage_profile, label).toBe("normal-v1");
+  }
+
+  const success = take("merge-group-success");
+  expect(success.exitCode).toBe(0);
+  expect(success.record).toMatchObject({
+    event: "merge_group",
+    head_sha: "a".repeat(40),
+    base_sha: "b".repeat(40),
+    depth: "full",
+    reused_from_run_id: null,
+    verdict: "success",
+  });
+  expect(success.record.required.map(({ job }) => job)).toContain("ci-tests");
+  for (const { job, conclusion } of success.record.required) {
+    expect(conclusion, job).toBe("success");
+  }
+
+  const failure = take("merge-group-failure");
+  expect(failure.exitCode).toBe(1);
+  expect(failure.record.verdict).toBe("failure");
+  expect(failure.record.base_sha).toBeNull();
+  expect(failure.record.required).toContainEqual({
+    job: "ci-tests",
+    conclusion: "failure",
+  });
+
+  const fast = take("pull-request-fast");
+  expect(fast.exitCode).toBe(0);
+  expect(fast.record).toMatchObject({
+    event: "pull_request",
+    head_sha: "c".repeat(40),
+    base_sha: "d".repeat(40),
+    depth: "fast",
+    verdict: "success",
+  });
+  const fastRequired = fast.record.required.map(({ job }) => job);
+  expect(fastRequired).toContain("ci-quick-checks");
+  // A fast run leaves its heavy suites to the queue.
+  expect(fast.record.not_required).toContain("e2e-landing");
+  expect(fastRequired.length).toBeLessThan(success.record.required.length);
+
+  const reused = take("pull-request-reused");
+  expect(reused.exitCode).toBe(0);
+  expect(reused.record).toMatchObject({
+    reused_from_run_id: 99,
+    required: [],
+    verdict: "success",
+  });
+});
+
 test("cancelled jobs retain failed-step evidence and cannot pass verified supersession", () => {
   const cases = [...FAST_DEPTH_EVENTS, EVENT.mergeGroup].flatMap((event) =>
     resultJob.needs.map((job) => ({ event, job })),
@@ -1831,8 +2010,14 @@ test("cancelled jobs retain failed-step evidence and cannot pass verified supers
 test("ci-result summary opens with the failed job and step before its cancelled verdict", () => {
   const outcomeScript = `
 GITHUB_STEP_SUMMARY=$(mktemp)
-trap 'printf "\\nRECORDED_SUMMARY\\n"; cat "$GITHUB_STEP_SUMMARY"; rm "$GITHUB_STEP_SUMMARY"' EXIT
-${resultStep.run}`;
+set +e
+(
+set -e
+${resultStep.run}
+)
+status=$?
+printf "\\nRECORDED_SUMMARY\\n"; cat "$GITHUB_STEP_SUMMARY"; rm "$GITHUB_STEP_SUMMARY"
+exit "$status"`;
   const result = onlyOutcome(
     evaluateResults([EVENT.mergeGroup], (event) => ({
       event,
