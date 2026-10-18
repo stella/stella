@@ -1058,7 +1058,6 @@
       }
     },
     "sameCaseNumber": "{count, plural, one {# rozhodnutí nese} few {# rozhodnutí nesou} other {# rozhodnutí nese}} tuto spisovou značku. Vyberte soud.",
-    "searchAskPrompt": "{query} (judikatura, {country})",
     "searchLabel": "Hledat v judikatuře",
     "searchPlaceholder": "Spisová značka, ECLI nebo slova, např. 22 Cdo 2653/2012",
     "searchUnavailable": {
@@ -1405,7 +1404,12 @@
     "maxAttachmentsReached": "Maximálně {count} souborů na zprávu",
     "mention": {
       "category": {
-        "entities": "V tomto spisu"
+        "entities": "V tomto spisu",
+        "sources": "Zdroje"
+      },
+      "corpus": {
+        "caseLaw": "Judikatura · {country}",
+        "legislation": "Právní předpisy · {country}"
       },
       "loadError": "Nepodařilo se načíst položky"
     },
@@ -5161,7 +5165,6 @@
     "provisionTextUnavailable": "Text není pro toto znění k dispozici",
     "publisherWindowInconsistent": "K tomuto dni nelze určit účinné znění: údaje vydavatele si odporují.",
     "resolvedAlias": "Rozpoznáno jako {label}",
-    "searchAskPrompt": "{query} (právní předpisy: {country})",
     "searchLabel": "Hledat v právních předpisech",
     "searchPlaceholder": "Číslo, zkratka nebo název, např. 89/2012 Sb.",
     "showCitedPartOnly": "Zobrazit jen citovanou část",

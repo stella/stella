@@ -2089,12 +2089,6 @@
   },
   {
     "file": "apps/api/src/lib/account-deletion-steps.ts",
-    "fingerprint": "2b5d4410f01cb0866c0f6f0ee0202f17cf3f4c191fb5678f6d67ae6823b812bc",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/account-deletion-steps.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/account-deletion-steps.ts",
     "fingerprint": "3c93e860f4bde32e4912b7188e4c0a4098f11a260780a5c5906036415c848daa",
     "count": 1,
     "reason": "builder-for in apps/api/src/lib/account-deletion-steps.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
@@ -2766,12 +2760,6 @@
     "reason": "builder-for in apps/api/src/lib/entity-versions/insert-entity-version.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
-    "file": "apps/api/src/lib/entity-versions/publish-folio-collab-checkpoint.ts",
-    "fingerprint": "b87643ed7b53cb1bf7c9ef00d4557560a9d60d8b6b3acede149feb369654c7fe",
-    "count": 1,
-    "reason": "Relocate the existing room publication lock to its library owner without changing the acquisition or count."
-  },
-  {
     "file": "apps/api/src/lib/entity-versions/write-file-version.ts",
     "fingerprint": "483facc9c019184b4653ee9db13bd414c2c8925c569fbd27b30b0a45f5e9be73",
     "count": 1,
@@ -2923,12 +2911,6 @@
   },
   {
     "file": "apps/api/src/lib/folio-collab-rooms.ts",
-    "fingerprint": "295fdce639e310a9f995f3909ad781026c32198d02b24b96955634f625ec06a2",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/folio-collab-rooms.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/folio-collab-rooms.ts",
     "fingerprint": "d53a5c64637fa37ff3d4e55a897c12382cbe89c79b63bb0a2897797d33313c43",
     "count": 1,
     "reason": "builder-for in apps/api/src/lib/folio-collab-rooms.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
@@ -2936,7 +2918,7 @@
   {
     "file": "apps/api/src/lib/folio-collab-rooms.ts",
     "fingerprint": "eefb098f7e2a73554a61c5d1881fdb2b05a37160be0410cd1c1659fe77db08a6",
-    "count": 2,
+    "count": 1,
     "reason": "builder-for in apps/api/src/lib/folio-collab-rooms.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
