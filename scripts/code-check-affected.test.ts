@@ -31,6 +31,7 @@ import {
   lintAllTrace,
   matchedLintAllInputs,
   cgroupMemoryLimitFiles,
+  cgroupMounts,
   memoryLimitBytes,
   separateApiLintFromTypecheck,
   executeCheckCommands,
@@ -1302,9 +1303,43 @@ describe("parallel code-quality legs", () => {
     expect(cgroupMemoryLimitFiles("4:cpu,memory:/docker/abc\n")).toEqual([
       "/sys/fs/cgroup/memory/docker/abc/memory.limit_in_bytes",
       "/sys/fs/cgroup/memory/docker/memory.limit_in_bytes",
-      "/sys/fs/cgroup/memory.max",
       "/sys/fs/cgroup/memory/memory.limit_in_bytes",
+      "/sys/fs/cgroup/memory.max",
     ]);
+  });
+
+  // A v1 memory controller can be mounted anywhere, combined with others,
+  // and a container sees its own cgroup as the mount root.
+  test("a cgroup v1 limit is found through the actual memory mount", () => {
+    const GiB = 1024 ** 3;
+    const mountinfo = [
+      "30 25 0:26 / /sys/fs/cgroup/cpu,cpuacct rw - cgroup cgroup rw,cpu,cpuacct",
+      "31 25 0:27 /docker/abc /mnt/cg/cpu,memory rw,nosuid - cgroup cgroup rw,cpu,memory",
+    ].join("\n");
+    expect(cgroupMounts(mountinfo)).toEqual([
+      { version: 1, root: "/docker/abc", mountpoint: "/mnt/cg/cpu,memory" },
+    ]);
+    const files: Record<string, string> = {
+      "/proc/self/cgroup": "4:cpu,memory:/docker/abc/job\n",
+      "/proc/self/mountinfo": mountinfo,
+      "/mnt/cg/cpu,memory/job/memory.limit_in_bytes": "9223372036854771712\n",
+      "/mnt/cg/cpu,memory/memory.limit_in_bytes": `${10 * GiB}\n`,
+    };
+    expect(
+      memoryLimitBytes({
+        total: 64 * GiB,
+        read: (file) => files[file],
+        requested: "",
+      }),
+    ).toBe(10 * GiB);
+    // The conventional path alone would have missed it.
+    expect(
+      memoryLimitBytes({
+        total: 64 * GiB,
+        read: (file) => (file === "/proc/self/mountinfo" ? "" : files[file]),
+        requested: "",
+      }),
+    ).toBe(64 * GiB);
   });
 
   test("an explicit memory size replaces detection", () => {

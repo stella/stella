@@ -891,12 +891,66 @@ const parseAffectedWorkspacePaths = (output: string): string[] => {
 const THREE_TASK_MEMORY_BYTES = 12 * 1024 ** 3;
 const CGROUP_ROOT = "/sys/fs/cgroup";
 
+type CgroupMount = { version: 1 | 2; root: string; mountpoint: string };
+
+/**
+ * cgroup mounts from /proc/self/mountinfo: v2, and v1 hierarchies carrying
+ * the memory controller (alone or combined, wherever they are mounted).
+ */
+export const cgroupMounts = (mountinfo: string): CgroupMount[] =>
+  mountinfo.split("\n").flatMap((line) => {
+    const [mounted, filesystem] = line.split(" - ");
+    const fields = mounted?.split(" ") ?? [];
+    const [type, , options] = filesystem?.split(" ") ?? [];
+    const root = fields[3];
+    const mountpoint = fields[4];
+    if (root === undefined || mountpoint === undefined) {
+      return [];
+    }
+    if (type === "cgroup2") {
+      return [{ version: 2 as const, root, mountpoint }];
+    }
+    if (type === "cgroup" && options?.split(",").includes("memory")) {
+      return [{ version: 1 as const, root, mountpoint }];
+    }
+    return [];
+  });
+
 /**
  * Memory-limit files for this process's cgroup and every ancestor, v2 then
- * v1. A nested cgroup can be limited while the mount root reports `max`.
+ * v1. A nested cgroup can be limited while the mount root reports `max`. A
+ * cgroup path maps through its mount (its root and mount point), so a v1
+ * memory controller mounted elsewhere or combined with others still counts.
  */
-export const cgroupMemoryLimitFiles = (procSelfCgroup: string): string[] => {
+export const cgroupMemoryLimitFiles = (
+  procSelfCgroup: string,
+  mountinfo = "",
+): string[] => {
   const files: string[] = [];
+  const mounts = cgroupMounts(mountinfo);
+  const mountsFor = (version: 1 | 2): CgroupMount[] => {
+    const found = mounts.filter((mount) => mount.version === version);
+    if (found.length > 0) {
+      return found;
+    }
+    // Without mount information, assume the conventional layout.
+    return [
+      {
+        version,
+        root: "/",
+        mountpoint: version === 2 ? CGROUP_ROOT : `${CGROUP_ROOT}/memory`,
+      },
+    ];
+  };
+  const within = (cgroupPath: string, root: string) => {
+    if (root === "/") {
+      return cgroupPath;
+    }
+    if (cgroupPath === root || cgroupPath.startsWith(`${root}/`)) {
+      return cgroupPath.slice(root.length);
+    }
+    return undefined;
+  };
   const ancestry = (cgroupPath: string) => {
     const parts = cgroupPath.split("/").filter((part) => part !== "");
     return parts.map(
@@ -908,19 +962,24 @@ export const cgroupMemoryLimitFiles = (procSelfCgroup: string): string[] => {
     if (controllers === undefined || cgroupPath === undefined) {
       continue;
     }
-    if (controllers === "") {
+    const memoryV1 = controllers.split(",").includes("memory");
+    if (controllers !== "" && !memoryV1) {
+      continue;
+    }
+    const version = controllers === "" ? 2 : 1;
+    const file = version === 2 ? "memory.max" : "memory.limit_in_bytes";
+    for (const mount of mountsFor(version)) {
+      const inside = within(cgroupPath, mount.root);
+      if (inside === undefined) {
+        continue;
+      }
       files.push(
-        ...ancestry(cgroupPath).map((dir) => `${CGROUP_ROOT}${dir}/memory.max`),
-      );
-    } else if (controllers.split(",").includes("memory")) {
-      files.push(
-        ...ancestry(cgroupPath).map(
-          (dir) => `${CGROUP_ROOT}/memory${dir}/memory.limit_in_bytes`,
-        ),
+        ...ancestry(inside).map((dir) => `${mount.mountpoint}${dir}/${file}`),
+        // The mount root: a namespaced container sees its own cgroup there.
+        `${mount.mountpoint}/${file}`,
       );
     }
   }
-  // The mount roots: a namespaced container sees its own cgroup there.
   files.push(
     `${CGROUP_ROOT}/memory.max`,
     `${CGROUP_ROOT}/memory/memory.limit_in_bytes`,
@@ -955,7 +1014,9 @@ export const memoryLimitBytes = ({
   let limit = total;
   const selfCgroup =
     Result.try(() => read("/proc/self/cgroup")).unwrapOr(undefined) ?? "";
-  for (const file of cgroupMemoryLimitFiles(selfCgroup)) {
+  const mountinfo =
+    Result.try(() => read("/proc/self/mountinfo")).unwrapOr(undefined) ?? "";
+  for (const file of cgroupMemoryLimitFiles(selfCgroup, mountinfo)) {
     const value = Number(
       Result.try(() => read(file))
         .unwrapOr(undefined)
