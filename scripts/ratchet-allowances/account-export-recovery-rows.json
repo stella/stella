@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/account-export/queue.ts",
+  "delta": 1,
+  "reason": "The export recovery sweep walks pages through the shared cursor iterator and recovers each row on its own: a row's state transition, storage cleanup, and failure capture stay isolated, and the tick deadline is checked between rows. A tick reads a bounded number of pages."
+}

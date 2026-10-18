@@ -168,8 +168,8 @@ const startMockServer = (
     requests,
     discoveries,
     url: server.url.origin,
-    stop: () => {
-      void server.stop(true);
+    stop: async () => {
+      await server.stop(true);
     },
   };
 };
@@ -289,7 +289,7 @@ describe("--server (every command)", () => {
       serverUrlEnv: "http://127.0.0.1:1",
       token: READ,
     });
-    server.stop();
+    await server.stop();
 
     expect(result.exitCode).toBe(0);
     expect(result.stderr).not.toContain("--server");
@@ -304,7 +304,7 @@ describe("--server (every command)", () => {
       token: READ,
       signedIn: false,
     });
-    server.stop();
+    await server.stop();
 
     // The mock has no compatibility contract, so the check fails — but on the
     // resolved origin, not on stricli's "expected input for flag" usage error.
@@ -377,7 +377,7 @@ describe("one-command document upload", () => {
       url: server.url,
       token: DOCUMENT_UPLOAD,
     });
-    server.stop();
+    await server.stop();
 
     expect(result.exitCode).toBe(0);
     // The finalize envelope's outcome alone, shaped like every other save.
@@ -416,7 +416,7 @@ describe("one-command document upload", () => {
       url: server.url,
       token: DOCUMENT_UPLOAD,
     });
-    server.stop();
+    await server.stop();
 
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("--file");
@@ -463,7 +463,7 @@ describe("one-command document upload", () => {
       url: server.url,
       token: DOCUMENT_UPLOAD,
     });
-    server.stop();
+    await server.stop();
 
     expect(result.stderr).toContain(
       "stella capability uploads update --matter-id workspace-1 --upload-id upload-1",
@@ -497,7 +497,7 @@ describe("contact discovery", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
 
     expect(result.exitCode).toBe(0);
     expect(JSON.parse(result.stdout).items.at(0)?.id).toBe("contact-1");
@@ -514,7 +514,7 @@ describe("auth and scope gating (S4)", () => {
       token: READ,
       signedIn: false,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(3);
     expect(result.stderr).toContain("Not signed in");
     expect(server.requests).toHaveLength(0);
@@ -527,7 +527,7 @@ describe("auth and scope gating (S4)", () => {
       url: server.url,
       token: makeToken(["read"]), // lacks matters_write
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(3);
     expect(result.stderr).toContain("stella:matters_write");
     expect(server.requests).toHaveLength(0);
@@ -544,7 +544,7 @@ describe("auth and scope gating (S4)", () => {
       // (see `resolveAccessToken`'s "Expired and unrefreshable" branch).
       expiresAt: Date.now() - 1000,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(3);
     expect(result.stderr).toContain("Not signed in");
     // The specific reason (the stored token expired and has no refresh
@@ -567,7 +567,7 @@ describe("generated capability flags", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(server.requests).toHaveLength(1);
     expect(server.requests.at(0)?.params.name).toBe("read_capability");
@@ -595,7 +595,7 @@ describe("generated capability flags", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(server.requests).toHaveLength(1);
     expect(server.requests.at(0)?.params.arguments).toEqual({
@@ -611,7 +611,7 @@ describe("generated capability flags", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(server.requests.at(0)?.params.name).toBe("read_capability");
     expect(server.requests.at(0)?.params.arguments).toEqual({
@@ -636,7 +636,7 @@ describe("list rendering and pagination (S4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("m1");
     expect(result.stdout).toContain("Acme");
@@ -653,7 +653,7 @@ describe("list rendering and pagination (S4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(JSON.parse(result.stdout)).toEqual({
       matters: [{ id: "m1" }],
@@ -672,7 +672,7 @@ describe("list rendering and pagination (S4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(JSON.parse(result.stdout).matters).toEqual([
       { id: "m1" },
@@ -691,7 +691,7 @@ describe("list rendering and pagination (S4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(result.stderr).toContain("--all truncated");
     expect(server.requests).toHaveLength(50);
@@ -711,7 +711,7 @@ describe("list rendering and pagination (S4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(JSON.parse(result.stdout).matter).toEqual({
       id: "m1",
@@ -733,7 +733,7 @@ describe("windowed text (S4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(result.stdout.trim()).toBe("THE FULL BODY");
   });
@@ -757,7 +757,7 @@ describe("windowed text (S4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(result.stdout.trim()).toBe("THE STATUTE BODY");
     expect(server.requests).toHaveLength(1);
@@ -779,7 +779,7 @@ describe("windowed text (S4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(result.stdout.trim()).toBe("FIRST SECOND");
     expect(server.requests).toHaveLength(2);
@@ -834,7 +834,7 @@ describe("windowed text (S4)", () => {
             cursor: "w2",
           });
         } finally {
-          server.stop();
+          await server.stop();
         }
       });
     }
@@ -855,7 +855,7 @@ describe("windowed text (S4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(EXIT_CODES.ok);
     expect(JSON.parse(result.stdout)).toEqual({
       text: null,
@@ -889,7 +889,7 @@ describe("windowed text (S4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(EXIT_CODES.unexpected);
     expect(JSON.parse(result.stdout)).toEqual({
       text: null,
@@ -918,7 +918,7 @@ describe("windowed text (S4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(EXIT_CODES.ok);
     expect(server.requests).toHaveLength(1);
     expect(JSON.parse(result.stdout)).toMatchObject({
@@ -964,7 +964,7 @@ describe("windowed text (S4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     const printed = JSON.parse(result.stdout);
     expect(
@@ -1008,7 +1008,7 @@ describe("windowed text (S4)", () => {
         arguments: { items },
       });
     } finally {
-      server.stop();
+      await server.stop();
     }
   });
 
@@ -1059,7 +1059,7 @@ describe("windowed text (S4)", () => {
         expect(server.requests).toHaveLength(1);
         expect(server.requests.at(0)?.params.name).toBe(toolName);
       } finally {
-        server.stop();
+        await server.stop();
       }
     });
   }
@@ -1084,7 +1084,7 @@ describe("windowed text (S4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(2);
     expect(server.requests).toHaveLength(0);
     expect(help.stdout).toContain("--page");
@@ -1101,7 +1101,7 @@ describe("value flags and validation (S3)", () => {
       url: server.url,
       token: WRITE,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(2);
     expect(server.requests).toHaveLength(0);
   });
@@ -1125,7 +1125,7 @@ describe("value flags and validation (S3)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(2);
     expect(server.requests.at(0)?.params.arguments).toEqual({
       query: "Acme",
@@ -1150,7 +1150,7 @@ describe("value flags and validation (S3)", () => {
       url: server.url,
       token: WRITE,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(server.requests.at(0)?.params.arguments).toEqual({
       contact_id: "c1",
@@ -1167,7 +1167,7 @@ describe("--input escape hatch (S3)", () => {
       url: server.url,
       token: WRITE,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(server.requests.at(0)?.params.arguments).toEqual({
       name: "New Matter",
@@ -1182,7 +1182,7 @@ describe("--input escape hatch (S3)", () => {
       token: WRITE,
       stdin: '{"name":"From Stdin"}',
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(server.requests.at(0)?.params.arguments).toEqual({
       name: "From Stdin",
@@ -1201,7 +1201,7 @@ describe("--input escape hatch (S3)", () => {
       url: server.url,
       token: WRITE,
     });
-    server.stop();
+    await server.stop();
     await rm(path.dirname(file), { recursive: true, force: true });
     expect(result.exitCode).toBe(0);
     expect(server.requests.at(0)?.params.arguments).toEqual({
@@ -1224,7 +1224,7 @@ describe("--input escape hatch (S3)", () => {
       url: server.url,
       token: WRITE,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     // The flag overrides the JSON's `name`; both are threaded to the server.
     expect(server.requests.at(0)?.params.arguments).toEqual({
@@ -1244,7 +1244,7 @@ describe("--input escape hatch (S3)", () => {
       url: server.url,
       token: WRITE,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(2);
     expect(result.stderr).toContain("Invalid status");
     expect(server.requests.at(0)?.params.arguments).toEqual({
@@ -1261,7 +1261,7 @@ describe("destructive confirmation (S4)", () => {
       url: server.url,
       token: WRITE,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(server.requests).toHaveLength(1);
   });
@@ -1273,7 +1273,7 @@ describe("destructive confirmation (S4)", () => {
       url: server.url,
       token: WRITE,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(7);
     expect(result.stderr).toContain("refusing destructive op");
     expect(server.requests).toHaveLength(0);
@@ -1288,7 +1288,7 @@ describe("error tiers -> exit codes (S4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(4);
   });
 
@@ -1299,7 +1299,7 @@ describe("error tiers -> exit codes (S4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(6);
   });
 
@@ -1310,7 +1310,7 @@ describe("error tiers -> exit codes (S4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(3);
   });
 
@@ -1321,7 +1321,7 @@ describe("error tiers -> exit codes (S4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(8);
   });
   test("HTTP 409 -> exit 10", async () => {
@@ -1331,7 +1331,7 @@ describe("error tiers -> exit codes (S4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(10);
   });
 
@@ -1344,7 +1344,7 @@ describe("error tiers -> exit codes (S4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(2);
   });
 
@@ -1358,7 +1358,7 @@ describe("error tiers -> exit codes (S4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(4);
     expect(result.stderr).toContain("Insufficient permissions");
   });
@@ -1382,7 +1382,7 @@ describe("error tiers -> exit codes (S4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(2);
     expect(result.stderr).toContain("error: Invalid input");
     // A field issue renders as `  <flag>: <message>`; a root issue (empty path)
@@ -1400,7 +1400,7 @@ describe("help surfaces --input for inputOnly tools", () => {
       url: server.url,
       token: makeToken(["templates"]),
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("values.<key>  any JSON value  required");
     expect(result.stdout).toContain("--completion-mode");
@@ -1418,7 +1418,7 @@ describe("help surfaces --input for inputOnly tools", () => {
       url: server.url,
       token: WRITE,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain('purpose = "entity_create"');
     expect(result.stdout).toContain('purpose = "entity_version"');
@@ -1434,7 +1434,7 @@ describe("help surfaces --input for inputOnly tools", () => {
       url: server.url,
       token: makeToken(["templates"]),
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("--input");
     expect(result.stdout).toContain("fields");
@@ -1447,7 +1447,7 @@ describe("help surfaces --input for inputOnly tools", () => {
       url: server.url,
       token: makeToken(["documents_write"]),
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain('"action":"create_version"');
     expect(result.stdout).not.toContain('"action":"create_document"');
@@ -1460,7 +1460,7 @@ describe("help surfaces --input for inputOnly tools", () => {
       url: server.url,
       token: makeToken(["knowledge_write"]),
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("--input");
     expect(result.stdout).toContain("body");
@@ -1499,7 +1499,7 @@ describe("template fill strictness policies", () => {
       url: server.url,
       token: makeToken(["templates"]),
     });
-    server.stop();
+    await server.stop();
 
     expect(result.exitCode).toBe(2);
     expect(result.stdout).toBe("");
@@ -1526,7 +1526,7 @@ describe("template fill strictness policies", () => {
       url: server.url,
       token: makeToken(["templates"]),
     });
-    server.stop();
+    await server.stop();
 
     expect(result.exitCode).toBe(0);
     expect(JSON.parse(result.stdout)).toEqual(fillPayload);
@@ -1558,7 +1558,7 @@ describe("template fill strictness policies", () => {
       url: server.url,
       token: makeToken(["templates"]),
     });
-    server.stop();
+    await server.stop();
 
     expect(result.exitCode).toBe(0);
     expect(server.requests.at(0)?.params.arguments).toEqual({
@@ -1597,7 +1597,7 @@ describe("template persistence discriminator split", () => {
       url: server.url,
       token: makeToken(["documents_write"]),
     });
-    server.stop();
+    await server.stop();
 
     expect(result.exitCode).toBe(EXIT_CODES.auth);
     expect(result.stderr).toContain("Missing scope stella:templates");
@@ -1634,7 +1634,7 @@ describe("template persistence discriminator split", () => {
       url: server.url,
       token: makeToken(["documents_write", "templates"]),
     });
-    server.stop();
+    await server.stop();
 
     expect(result.exitCode).toBe(0);
     expect(server.requests.at(0)?.params.name).toBe("save_filled_template");
@@ -1657,7 +1657,7 @@ describe("matter membership commands", () => {
       url: server.url,
       token: makeToken(["admin_write"]),
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(server.requests.at(0)?.params.name).toBe("add_matter_member");
     expect(server.requests.at(0)?.params.arguments).toEqual({
@@ -1673,7 +1673,7 @@ describe("matter membership commands", () => {
       url: server.url,
       token: makeToken(["admin_write"]),
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(7);
     expect(server.requests).toHaveLength(0);
   });
@@ -1692,7 +1692,7 @@ describe("matter membership commands", () => {
       url: server.url,
       token: makeToken(["admin_write"]),
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(server.requests.at(0)?.params.arguments).toEqual({
       matter_number_pattern: "{year}-{number}",
@@ -1712,7 +1712,7 @@ describe("matter membership commands", () => {
       url: server.url,
       token: makeToken(["admin_write"]),
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(server.requests.at(0)?.params.arguments).toEqual({
       document_processing_mode: "searchable-text",
@@ -1733,7 +1733,7 @@ describe("BOE legislation multi-shape rendering (Phase 4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("l1");
     expect(result.stdout).toContain("Act 1");
@@ -1750,7 +1750,7 @@ describe("BOE legislation multi-shape rendering (Phase 4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("law_id");
     expect(result.stdout).toContain("Section text");
@@ -1770,7 +1770,7 @@ describe("audit-log Page envelope (Phase 4)", () => {
       url: server.url,
       token: makeToken(["admin_read"]),
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("matter.create");
     expect(result.stderr).toContain("more: --cursor next");
@@ -1789,7 +1789,7 @@ describe("feature-disabled exit class (S4/Phase 4)", () => {
         url: server.url,
         token: READ,
       });
-      server.stop();
+      await server.stop();
       expect(server.discoveries).toHaveLength(1);
       expect(result.exitCode).toBe(
         deploymentEvidence === "available"
@@ -1818,7 +1818,7 @@ describe("feature-disabled exit class (S4/Phase 4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(server.discoveries).toHaveLength(1);
     expect(server.requests).toHaveLength(1);
     expect(server.requests.at(0)).toMatchObject({
@@ -1839,7 +1839,7 @@ describe("feature-disabled exit class (S4/Phase 4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(server.discoveries).toHaveLength(1);
     expect(server.requests).toHaveLength(1);
     expect(server.requests.at(0)).toMatchObject({
@@ -1871,7 +1871,7 @@ describe("structured error envelope -> exit codes (S4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(server.discoveries).toHaveLength(1);
     expect(server.requests).toHaveLength(1);
     expect(server.requests.at(0)).toMatchObject({
@@ -1894,7 +1894,7 @@ describe("structured error envelope -> exit codes (S4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(6);
     expect(result.stderr).toContain("error: Something went wrong: not_found");
   });
@@ -1906,7 +1906,7 @@ describe("structured error envelope -> exit codes (S4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(3);
   });
 
@@ -1919,7 +1919,7 @@ describe("structured error envelope -> exit codes (S4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(7);
   });
 
@@ -1930,7 +1930,7 @@ describe("structured error envelope -> exit codes (S4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(2);
     // stderr stays human-readable; the error is never dumped to stdout.
     expect(result.stderr).toContain(
@@ -1948,7 +1948,7 @@ describe("destructive confirm injection (S4)", () => {
       url: server.url,
       token: WRITE,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(server.requests.at(0)?.params.name).toBe("delete_matter");
     expect(server.requests.at(0)?.params.arguments).toEqual({
@@ -1975,7 +1975,7 @@ describe("destructive confirm injection (S4)", () => {
       url: server.url,
       token: makeToken(["admin_write"]),
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(server.requests.at(0)?.params.name).toBe("remove_matter_member");
     expect(server.requests.at(0)?.params.arguments).toEqual({
@@ -2001,7 +2001,7 @@ describe("destructive confirm injection (S4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(server.requests.at(0)?.params.name).toBe("write_capability");
     expect(server.requests.at(0)?.params.arguments).toEqual({
@@ -2030,7 +2030,7 @@ describe("destructive confirm injection (S4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(7);
     // No prompt and no retry off a TTY: exactly one server call, without confirm.
     expect(server.requests).toHaveLength(1);
@@ -2074,7 +2074,7 @@ describe("feedback (S4)", () => {
       url: server.url,
       token: makeToken(["feedback"]),
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(server.requests.at(0)?.params.name).toBe("prepare_feedback");
     expect(server.requests.at(0)?.params.arguments).toEqual(report);
@@ -2103,7 +2103,7 @@ describe("feedback (S4)", () => {
       url: server.url,
       token: makeToken(["feedback"]),
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(server.requests.at(0)?.params.name).toBe("submit_feedback");
     expect(server.requests.at(0)?.params.arguments).toEqual({
@@ -2134,7 +2134,7 @@ describe("reference resources (S5.4/Phase 4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(server.requests.at(0)?.method).toBe("resources/list");
     expect(result.stdout).toContain("template-markers");
@@ -2158,7 +2158,7 @@ describe("reference resources (S5.4/Phase 4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(server.requests.at(0)?.method).toBe("resources/read");
     expect(server.requests.at(0)?.params).toMatchObject({
@@ -2176,7 +2176,7 @@ describe("reference resources (S5.4/Phase 4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(6);
     expect(result.stderr).toContain("Unknown resource");
   });
@@ -2188,7 +2188,7 @@ describe("reference resources (S5.4/Phase 4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(8);
   });
 });

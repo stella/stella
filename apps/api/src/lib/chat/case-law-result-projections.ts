@@ -91,11 +91,7 @@ export const caseNumberTypeProjection = v.optional(
 );
 
 const caseLawSearchIdentityFields = {
-  // `buildCaseLawDecisionAppUrl` returns null while the public-law surface
-  // is disabled (`FEATURE_PUBLIC_LAW`), so the projected shape is
-  // nullable; a non-nullable declaration would fail the strict parse and
-  // take the tool off the chat surface on any deployment with the flag off.
-  appUrl: v.nullable(v.string()),
+  // The primary link can be absent when neither reader nor publisher is available.
   url: v.nullable(publicUrl()),
   source_url: v.optional(publicUrl()),
   caseNumber: v.string(),

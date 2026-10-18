@@ -16,6 +16,7 @@ export const SHARED_LEDGER_PATHS = [
   "scripts/dead-columns.allowlist.json",
   "scripts/fill-diagnostics-ledger.json",
   "scripts/internal-module-mock-ledger.json",
+  "scripts/model-defaults-exceptions.json",
   "scripts/offline-check-exceptions.json",
   "scripts/parser-validator-call-ledger.json",
   "scripts/projection-totality.allowlist.json",

@@ -148,7 +148,7 @@ const runScriptedSubagent = async (
       admission: overrides.admission ?? testModelAdmission(ids.orgA),
       orgAIConfig,
       managedAIResidency: "eu" as const,
-      role: "fast",
+      task: "short-text",
       systemSafe: overrides.systemSafe ?? "Answer briefly.",
       systemUntrusted: overrides.systemUntrusted ?? "",
       tenantWorkspaceIds: [ids.wsA1],

@@ -31,10 +31,10 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { resolveEffectiveChatModelSelection } from "@/api/lib/chat-model-selection";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 import {
   getTanStackTextModelInfoById,
-  getTanStackTextModelInfoForRole,
+  getTanStackTextModelInfoForTask,
 } from "@/api/lib/tanstack-ai-models";
 
 const SPAN_EDIT_TIMEOUT_MS = 45_000;
@@ -48,7 +48,7 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: { type: "internal", reason: "chat_thread_ui" },
-  requiresUsage: { actionType: "chat", modelRole: "chat" },
+  requiresUsage: { actionType: "chat", modelTask: "chat" },
   params: revisionParams,
   body: t.Object({
     baseRevision: revisionNumber,
@@ -67,12 +67,12 @@ const config = {
 } satisfies HandlerConfig;
 
 type SpanGenerationOptions = Extract<
-  Parameters<typeof generateTanStackObjectForRole<typeof outputSchema>>[0],
+  Parameters<typeof generateTanStackObjectForTask<typeof outputSchema>>[0],
   { dataClass: "customer" }
 >;
 
 export const createProposeMessageSpanEdit = ({
-  generateObject = generateTanStackObjectForRole,
+  generateObject = generateTanStackObjectForTask,
 }: {
   /** Provider boundary: tests supply an offline structured-output generator. */
   generateObject?: (
@@ -128,7 +128,7 @@ export const createProposeMessageSpanEdit = ({
       const admission = configuredModelAdmission({ modelAdmission });
       const modelInfo =
         selection.modelId === undefined
-          ? getTanStackTextModelInfoForRole("chat", orgAIConfig, {
+          ? getTanStackTextModelInfoForTask("chat", orgAIConfig, {
               dataClass: "customer",
               organizationId,
               modelTier: admission.modelTier,
@@ -150,7 +150,7 @@ export const createProposeMessageSpanEdit = ({
           workspaceId: loaded.thread.workspaceId,
         },
         feature: "chat.span_edit",
-        modelRole: "chat",
+        modelTask: "chat",
         selectedModelId: selection.modelId,
         orgAIConfig,
         modelTier: admission.modelTier,
@@ -163,7 +163,7 @@ export const createProposeMessageSpanEdit = ({
             await generateObject({
               dataClass: "customer",
               admission,
-              role: "chat",
+              task: "chat",
               orgAIConfig,
               managedAIResidency,
               organizationId,
@@ -180,7 +180,7 @@ export const createProposeMessageSpanEdit = ({
               analytics,
               caching: resolveCaching({
                 promptCachingEnabled,
-                role: "chat",
+                task: "chat",
                 scopeKey: threadId,
               }),
               system:

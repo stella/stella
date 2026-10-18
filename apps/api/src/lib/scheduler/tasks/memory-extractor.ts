@@ -62,7 +62,7 @@ import type {
   SchedulerTaskContext,
 } from "@/api/lib/scheduler/types";
 import { TENANT_SYSTEM_ACTOR } from "@/api/lib/system-audit/actors";
-import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 
 export const MEMORY_EXTRACTOR_TASK = "memory.extractor" as const;
 
@@ -584,7 +584,7 @@ const extractCandidates = async ({
           analytics = createTanStackAIAnalyticsCallbacks({
             dataClass: "customer",
             feature: "memory.extractor",
-            modelRole: "fast",
+            modelTask: "short-text",
             orgAIConfig,
             modelTier: admission.modelTier,
             traceId: Bun.randomUUIDv7(),
@@ -598,9 +598,9 @@ const extractCandidates = async ({
             },
           });
 
-          return await generateTanStackObjectForRole({
+          return await generateTanStackObjectForTask({
             dataClass: "customer",
-            role: "fast",
+            task: "short-text",
             serviceTier: "batch",
             organizationId: compaction.threadOrganizationId,
             admission,
@@ -610,7 +610,7 @@ const extractCandidates = async ({
             analytics,
             caching: resolveCaching({
               promptCachingEnabled,
-              role: "fast",
+              task: "short-text",
               scopeKey: compaction.compactionId,
             }),
             system: EXTRACTION_SYSTEM_PROMPT,

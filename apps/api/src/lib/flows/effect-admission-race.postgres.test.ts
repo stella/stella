@@ -490,7 +490,7 @@ if (!databaseUrl || !enabled) {
             async () =>
               await executeFlowStep(job, new AbortController().signal, {
                 ...dependencies,
-                generateTextForRole: async () => {
+                generateTextForTask: async () => {
                   modelCalls += 1;
                   entered.resolve(undefined);
                   await release.promise;
@@ -579,7 +579,7 @@ if (!databaseUrl || !enabled) {
           const recovered = async () =>
             await executeFlowStep(recoveredJob, new AbortController().signal, {
               ...dependencies,
-              generateTextForRole: async () => {
+              generateTextForTask: async () => {
                 modelCalls += 1;
                 return "Recovered output";
               },
@@ -654,7 +654,7 @@ if (!databaseUrl || !enabled) {
           onClaim: async (token: TimestampCasToken) => {
             await persistFlowStepClaim(firstJob, token);
           },
-          generateTextForRole: async () => {
+          generateTextForTask: async () => {
             modelCalls += 1;
             expect(savedData.claimedStartedAt).toBeDefined();
             throw new FlowStepError({ message: "Provider unavailable" });
@@ -920,7 +920,7 @@ if (!databaseUrl || !enabled) {
           loadAIConfig: async () => Result.ok(null),
           enqueueStep: async () => panic("Unexpected step advancement"),
           broadcastUpdate: () => {},
-          generateTextForRole: async () => {
+          generateTextForTask: async () => {
             modelCalls += 1;
             return "Recovered output";
           },
@@ -1061,7 +1061,7 @@ if (!databaseUrl || !enabled) {
           loadAIConfig: async () => Result.ok(null),
           enqueueStep: async () => panic("Unexpected step advancement"),
           broadcastUpdate: () => {},
-          generateTextForRole: async () => {
+          generateTextForTask: async () => {
             modelCalls += 1;
             return "Recovered output";
           },

@@ -3,6 +3,7 @@
 export const STATUS_COLUMNS = {
   accountDeletionEffectChunks: ["status"],
   accountDeletionRequests: ["status"],
+  accountExports: ["status"],
   agentRegistration: ["status"],
   agentSkillProposals: ["status"],
   aiMemories: ["status"],
@@ -123,6 +124,7 @@ export const STATUS_COLUMNS = {
 export const WRITABLE_STATUS_COLUMNS = {
   accountDeletionEffectChunks: ["status"],
   accountDeletionRequests: ["status"],
+  accountExports: ["status"],
   agentRegistration: ["status"],
   agentSkillProposals: ["status"],
   aiMemories: ["status"],
@@ -173,7 +175,8 @@ export const WRITABLE_STATUS_COLUMNS = {
   extractionRuns: ["status"],
   fileComparisonUploads: ["status"],
   flowRunSteps: ["status"],
-  flowRuns: ["status"],
+  flowRuns: ["recoveryState", "status"],
+  flowUploadTriggerIntents: ["status"],
   folioCollabRooms: ["seedState"],
   invitation: ["status"],
   invoices: ["status"],
@@ -198,6 +201,7 @@ export const WRITABLE_STATUS_COLUMNS = {
   ],
   organizationFileObjects: ["status"],
   pdfSigningSessions: ["status"],
+  pendingScoutEmissions: ["status"],
   pendingUploads: ["status"],
   playbookDefinitions: ["status"],
   properties: ["status"],

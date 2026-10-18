@@ -17,7 +17,7 @@ import {
 } from "@/api/lib/errors/provider-call-error";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { logger } from "@/api/lib/observability/logger";
-import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
+import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
 import type { TanStackTextFinishPolicy } from "@/api/lib/tanstack-ai-generate";
 import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
@@ -179,7 +179,7 @@ const generate = async (
   sent.length = 0;
   const result = await Result.tryPromise(
     async () =>
-      await generateTanStackTextForRole({
+      await generateTanStackTextForTask({
         admission: testModelAdmission(organizationId),
         caching: { enabled: false, reason: "org-disabled" },
         dataClass: "customer",
@@ -189,7 +189,7 @@ const generate = async (
         orgAIConfig: KEY_SOURCES[keySource].orgAIConfig,
         organizationId,
         prompt: "Summarize the lease negotiation so far.",
-        role: "chat",
+        task: "chat",
         serviceTier: "standard",
         tenantWorkspaceIds: [],
       }),

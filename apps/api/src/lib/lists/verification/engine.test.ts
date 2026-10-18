@@ -34,7 +34,7 @@ import {
 } from "@/api/lib/lists/verification/model-call";
 import type { VerificationModelDeps } from "@/api/lib/lists/verification/model-call";
 import { ListVerificationRunCapError } from "@/api/lib/lists/verification/run-caps";
-import type { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import type { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -90,8 +90,8 @@ const deps: VerificationModelDeps = {
     workspaceId,
   } satisfies AIUsageMetering,
   abortSignal: AbortSignal.timeout(1000),
-  generateObjectForRole:
-    asTestRaw<typeof generateTanStackObjectForRole>(generateMock),
+  generateObjectForTask:
+    asTestRaw<typeof generateTanStackObjectForTask>(generateMock),
 };
 
 const BLOCKS: VerificationBlock[] = [
@@ -582,7 +582,7 @@ test("access removal after extraction blocks the later grading batch", async () 
   const currentDeps: VerificationModelDeps = {
     ...deps,
     refreshAccessProof: async () => currentProof,
-    generateObjectForRole: asTestRaw<typeof generateTanStackObjectForRole>(
+    generateObjectForTask: asTestRaw<typeof generateTanStackObjectForTask>(
       async () => {
         dispatched.push("extraction");
         currentProof = null;

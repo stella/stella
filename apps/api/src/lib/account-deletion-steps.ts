@@ -11,6 +11,9 @@ import {
 } from "drizzle-orm";
 import type { AnyPgColumn, PgTable } from "drizzle-orm/pg-core";
 
+import { compareCodeUnit } from "@stll/collation";
+import { Temporal } from "@stll/time";
+
 import { agentDelegation, agentRegistration } from "@/api/db/agent-auth-schema";
 import {
   account,
@@ -25,10 +28,14 @@ import {
   session,
   twoFactor,
 } from "@/api/db/auth-schema";
+import { WORKSPACE_ACCESS_MODE } from "@/api/db/rls";
 import type { Transaction } from "@/api/db/root";
 import {
+  BUFFER_OBJECT_CLEANUP_INTENT_STATUS,
+  bufferObjectCleanupIntents,
   accountDeletionEffectChunks,
   accountDeletionRequests,
+  accountExports,
   agentSkills,
   aiMemories,
   chatThreads,
@@ -64,11 +71,13 @@ import {
   workspaceViewTemplates,
   workspaces,
 } from "@/api/db/schema";
+import { runScopedWorkInTransaction } from "@/api/db/scoped";
 import {
   ACTIVE_TASK_REASSIGNMENT_STATUSES,
   buildAccountDeletionTaskReassignmentTargets,
   validateAccountDeletionTaskReassignmentTargets,
 } from "@/api/lib/account-deletion-reassignment";
+import { ACCOUNT_EXPORT_LIMITS } from "@/api/lib/account-export/constants";
 import { arrayOrEmpty } from "@/api/lib/array";
 import {
   AUDIT_ACTION,
@@ -83,7 +92,14 @@ import {
   revokeAllUserSessions,
 } from "@/api/lib/auth-artifacts";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
-import { preserveBufferObjectCleanupIntents } from "@/api/lib/buffer-intent-reconciliation";
+import {
+  BUFFER_INTENT_STALE_MS,
+  preserveBufferObjectCleanupIntents,
+} from "@/api/lib/buffer-intent-reconciliation";
+import {
+  withAggregateLock,
+  withAggregateParentBatch,
+} from "@/api/lib/db/aggregate-lock";
 import { desktopEditMimeTypeForFileType } from "@/api/lib/desktop-edit-file-types";
 import {
   DESTRUCTIVE_EFFECT_CHUNK_INSERT_BATCH_SIZE,
@@ -95,7 +111,9 @@ import {
   eraseCorrespondenceActorDisplays,
 } from "@/api/lib/email/correspondence/offboarding";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { retireFolioCollabSnapshot } from "@/api/lib/files/folio-collab-snapshot-retirement";
 import { createFileKey, createUserFileKey } from "@/api/lib/files/utils";
+import { FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE } from "@/api/lib/folio-collab-mime";
 import { LIMITS } from "@/api/lib/limits";
 import {
   clearMemberAssignments,
@@ -774,29 +792,62 @@ export const RESET_FOLIO_COLLAB_USER_STATE_TABLES = [
 
 /**
  * Revoke this user's room tokens and release only their in-flight seed claims.
- * The room and every durable snapshot remain workspace-owned; the generation
- * bump fences an upload already in flight when account deletion started.
+ * Completed rooms remain workspace-owned; pending seed snapshots are retired
+ * with their claim. The generation bump fences uploads already in flight.
  */
 export const resetFolioCollabUserState = async (
   tx: Transaction,
   currentUserId: string,
 ): Promise<void> => {
-  const claims = await tx
-    .select({
-      generation: folioCollabRooms.generation,
-      id: folioCollabRooms.id,
-      organizationId: workspaces.organizationId,
-      workspaceId: folioCollabRooms.workspaceId,
-    })
-    .from(folioCollabRooms)
-    .innerJoin(workspaces, eq(workspaces.id, folioCollabRooms.workspaceId))
-    .where(
-      and(
-        eq(folioCollabRooms.seedClaimedBy, currentUserId),
-        eq(folioCollabRooms.seedState, "claimed"),
-      ),
-    )
-    .for("update");
+  const readClaims = async (candidateIds?: SafeId<"folioCollabRoom">[]) =>
+    (
+      await tx
+        .select({
+          generation: folioCollabRooms.generation,
+          id: folioCollabRooms.id,
+          organizationId: workspaces.organizationId,
+          workspaceId: folioCollabRooms.workspaceId,
+          snapshotFileId: folioCollabRooms.yjsSnapshotFileId,
+          snapshotUpdatedAt: folioCollabRooms.yjsSnapshotUpdatedAt,
+        })
+        .from(folioCollabRooms)
+        .innerJoin(workspaces, eq(workspaces.id, folioCollabRooms.workspaceId))
+        .where(
+          and(
+            eq(folioCollabRooms.seedClaimedBy, currentUserId),
+            eq(folioCollabRooms.seedState, "claimed"),
+            ...(candidateIds === undefined
+              ? []
+              : [inArray(folioCollabRooms.id, candidateIds)]),
+          ),
+        )
+    ).map((claim) => ({
+      ...claim,
+      organizationId: brandPersistedOrganizationId(claim.organizationId),
+      workspaceId: brandPersistedWorkspaceId(claim.workspaceId),
+    }));
+  const candidates = await readClaims();
+  await withAggregateParentBatch({
+    tx,
+    organizationIds: [],
+    workspaceIds: candidates.map((claim) => claim.workspaceId),
+    mode: "update",
+  });
+  for (const claim of candidates.toSorted((left, right) =>
+    compareCodeUnit(left.id, right.id),
+  )) {
+    // db-await-in-loop: registered room locks acquire in global primary-key order.
+    await withAggregateLock({
+      aggregate: "folioCollabRoom",
+      id: { id: claim.id, workspaceId: claim.workspaceId },
+      mode: "update",
+      tx,
+    });
+  }
+  const claims =
+    candidates.length === 0
+      ? []
+      : await readClaims(candidates.map(({ id }) => id));
 
   await tx
     .delete(folioCollabRoomTokens)
@@ -805,49 +856,132 @@ export const resetFolioCollabUserState = async (
     return;
   }
 
-  await tx
-    .update(folioCollabRooms)
-    .set({
-      generation: sql`${folioCollabRooms.generation} + 1`,
-      seedClaimedAt: null,
-      seedClaimedBy: null,
-      seedState: "empty",
-      seededAt: null,
-      yjsSnapshotSizeBytes: null,
-      yjsSnapshotUpdatedAt: null,
-    })
-    .where(
-      and(
-        inArray(
-          folioCollabRooms.id,
-          claims.map(({ id }) => id),
-        ),
-        eq(folioCollabRooms.seedClaimedBy, currentUserId),
-        eq(folioCollabRooms.seedState, "claimed"),
-      ),
-    );
-
-  await recordAccountDeletionAuditEvents(
-    tx,
-    brandPersistedUserId(currentUserId),
-    claims.map((claim) => ({
-      organizationId: brandPersistedOrganizationId(claim.organizationId),
-      event: {
-        action: AUDIT_ACTION.UPDATE,
-        changes: {
-          generation: {
-            old: claim.generation,
-            new: claim.generation + 1,
-          },
-          seedState: { old: "claimed", new: "empty" },
-        },
-        metadata: { reason: "seed_claim_released_on_account_deletion" },
-        resourceId: claim.id,
-        resourceType: AUDIT_RESOURCE_TYPE.FOLIO_COLLAB_ROOM,
-        workspaceId: claim.workspaceId,
+  const claimsByOrganization = new Map<
+    SafeId<"organization">,
+    (typeof claims)[number][]
+  >();
+  for (const claim of claims) {
+    const { organizationId } = claim;
+    const group = claimsByOrganization.get(organizationId);
+    if (group) {
+      group.push(claim);
+    } else {
+      claimsByOrganization.set(organizationId, [claim]);
+    }
+  }
+  for (const [organizationId, organizationClaims] of claimsByOrganization) {
+    // db-await-in-loop: each organization has a separate application-role tenant scope.
+    await runScopedWorkInTransaction({
+      tx,
+      organizationId,
+      userId: brandPersistedUserId(currentUserId),
+      workspaceScope: {
+        type: WORKSPACE_ACCESS_MODE.explicit,
+        workspaceIds: organizationClaims.map((claim) => claim.workspaceId),
       },
-    })),
-  );
+      fn: async (scopedTx) => {
+        await consumeInBatches({
+          items: organizationClaims,
+          batchSize: DESTRUCTIVE_EFFECT_CHUNK_INSERT_BATCH_SIZE,
+          consume: async (claimBatch) => {
+            await scopedTx
+              .update(folioCollabRooms)
+              .set({
+                generation: sql`${folioCollabRooms.generation} + 1`,
+                seedClaimedAt: null,
+                seedClaimedBy: null,
+                seedState: "empty",
+                seededAt: null,
+                ...retireFolioCollabSnapshot({
+                  state: "pending-seed",
+                  now: new Date(),
+                  snapshotFileId: sqlCaseFragment({
+                    branches: claimBatch.map(
+                      ({ id }) =>
+                        sql`WHEN ${eq(folioCollabRooms.id, id)} THEN ${createSafeId<"userFile">()}::uuid`,
+                    ),
+                    fallback: sql`${folioCollabRooms.yjsSnapshotFileId}`,
+                  }),
+                }),
+              })
+              .where(
+                and(
+                  inArray(
+                    folioCollabRooms.id,
+                    claimBatch.map(({ id }) => id),
+                  ),
+                  inArray(
+                    folioCollabRooms.workspaceId,
+                    claimBatch.map((claim) => claim.workspaceId),
+                  ),
+                  eq(folioCollabRooms.seedClaimedBy, currentUserId),
+                  eq(folioCollabRooms.seedState, "claimed"),
+                ),
+              );
+            const retiredSnapshots = claimBatch.flatMap((claim) =>
+              claim.snapshotUpdatedAt === null
+                ? []
+                : [
+                    {
+                      id: createSafeId<"pendingUpload">(),
+                      organizationId,
+                      workspaceId: claim.workspaceId,
+                      objectKey: createFileKey({
+                        fileId: claim.snapshotFileId,
+                        mimeType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
+                        organizationId,
+                        workspaceId: claim.workspaceId,
+                      }),
+                      status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.ORPHANED,
+                      nextAttemptAt: new Date(
+                        Temporal.Now.instant().epochMilliseconds +
+                          BUFFER_INTENT_STALE_MS,
+                      ),
+                    },
+                  ],
+            );
+            if (retiredSnapshots.length > 0) {
+              await scopedTx
+                .insert(bufferObjectCleanupIntents)
+                .values(retiredSnapshots);
+            }
+            const recordAuditEvent = createBackgroundAuditRecorder({
+              organizationId,
+              workspaceId: null,
+              userId: brandPersistedUserId(currentUserId),
+              execution: {
+                performer: {
+                  id: "account-deletion",
+                  name: "Account deletion",
+                  type: "service",
+                },
+                trigger: { source: "account-deletion", type: "system" },
+              },
+            });
+            await recordAuditEvent(
+              scopedTx,
+              claimBatch.map((claim) => ({
+                action: AUDIT_ACTION.UPDATE,
+                changes: {
+                  generation: {
+                    old: claim.generation,
+                    new: claim.generation + 1,
+                  },
+                  seedState: { old: "claimed", new: "empty" },
+                },
+                metadata: {
+                  reason: "seed_claim_released_on_account_deletion",
+                },
+                resourceId: claim.id,
+                resourceType: AUDIT_RESOURCE_TYPE.FOLIO_COLLAB_ROOM,
+                workspaceId: claim.workspaceId,
+              })),
+            );
+          },
+        });
+      },
+    });
+  }
 };
 
 export type DeleteDesktopEditSessionsParams = {
@@ -1038,12 +1172,13 @@ export const deleteFileComparisonUploads = async ({
 
 export type DeleteUserFilesParams = {
   tx: Transaction;
-  currentUserId: string;
+  currentUserId: SafeId<"user">;
   s3KeysToDelete: string[];
 };
 
 export const DELETE_USER_FILES_TABLES = [
   userFiles,
+  accountExports,
 ] as const satisfies readonly PgTable[];
 
 /**
@@ -1055,7 +1190,35 @@ export const deleteUserFiles = async ({
   tx,
   currentUserId,
   s3KeysToDelete,
-}: DeleteUserFilesParams): Promise<void> => {
+}: DeleteUserFilesParams): Promise<Date | null> => {
+  // audit: skip - The enclosing account-deletion request records file and export erasure in this transaction.
+  // The account lock held by erasure fences claims and completion. Reclaimed
+  // ledger rows hold no object keys and leave without a result set.
+  await tx
+    .delete(accountExports)
+    .where(
+      and(
+        eq(accountExports.userId, currentUserId),
+        sql`jsonb_array_length(${accountExports.attemptObjectKeys}) = 0`,
+      ),
+    );
+  // Rows that still name attempted objects are bounded by the request budget
+  // over one reclamation window; their keys join the durable cleanup request.
+  // Claims cannot outlive their absolute lease, so reclamation waits until
+  // every possible publication has stopped, storage cancellation included.
+  const exportObjects = await tx
+    .delete(accountExports)
+    .where(eq(accountExports.userId, currentUserId))
+    .returning({
+      keys: accountExports.attemptObjectKeys,
+      notBefore:
+        sql`clock_timestamp() + (${ACCOUNT_EXPORT_LIMITS.leaseMs + ACCOUNT_EXPORT_LIMITS.publicationCancellationMarginMs} * INTERVAL '1 millisecond')`.mapWith(
+          accountExports.createdAt,
+        ),
+    });
+  for (const { keys } of exportObjects) {
+    s3KeysToDelete.push(...keys);
+  }
   const files = await tx
     .select({
       id: userFiles.id,
@@ -1084,6 +1247,7 @@ export const deleteUserFiles = async ({
   }
 
   await tx.delete(userFiles).where(eq(userFiles.userId, currentUserId));
+  return exportObjects.at(0)?.notBefore ?? null;
 };
 
 export const DELETE_CHAT_THREADS_TABLES = [
@@ -1248,6 +1412,7 @@ export type RecordAccountDeletionRequestParams = {
   workspaceIds: SafeId<"workspace">[];
   taskReassignmentCount: number;
   s3KeysToDelete: string[];
+  storageCleanupNotBefore?: Date | null;
 };
 
 /**
@@ -1263,6 +1428,7 @@ export const recordAccountDeletionRequest = async ({
   workspaceIds,
   taskReassignmentCount,
   s3KeysToDelete,
+  storageCleanupNotBefore,
 }: RecordAccountDeletionRequestParams): Promise<void> => {
   const effectChunks = createS3DeletionEffectChunks(s3KeysToDelete);
   await tx.insert(accountDeletionRequests).values({
@@ -1272,7 +1438,13 @@ export const recordAccountDeletionRequest = async ({
     workspaceIds,
     taskReassignmentCount,
     status: s3KeysToDelete.length > 0 ? "pending" : "completed",
-    storageCleanup: { s3Keys: s3KeysToDelete },
+    storageCleanup: {
+      s3Keys: s3KeysToDelete,
+      ...(storageCleanupNotBefore === undefined ||
+      storageCleanupNotBefore === null
+        ? {}
+        : { notBefore: storageCleanupNotBefore.toISOString() }),
+    },
     completedAt: s3KeysToDelete.length > 0 ? null : new Date(),
   });
 

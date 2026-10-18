@@ -24,6 +24,7 @@ import type { SearchCursor } from "@/api/lib/legal-search/corpus-index-paginatio
 import {
   corpusIndexLexicalScore,
   CORPUS_INDEX_OFFSET_PAGE_MAX_ROUNDS,
+  NATIVE_SCAN_TRANSPORT,
   readCorpusIndexSearchPage,
 } from "@/api/lib/legal-search/corpus-index-pagination";
 import { corpusSearchGroupToken } from "@/api/lib/legal-search/corpus-search-cursor";
@@ -194,6 +195,7 @@ const readPage = async (
   order: CorpusSearchOrder = RELEVANCE_ORDER,
 ) =>
   await readCorpusIndexSearchPage({
+    scanTransport: NATIVE_SCAN_TRANSPORT,
     observer: "unobserved",
     cluster: "q09",
     indexId: "case_law_v5_cs_sk",
@@ -373,6 +375,7 @@ describe("a page settles within one scan round", () => {
     parsedCursor: SearchCursor | null = null,
   ) =>
     await readCorpusIndexSearchPage({
+      scanTransport: NATIVE_SCAN_TRANSPORT,
       observer: "unobserved",
       cluster: "q09",
       indexId: "case_law_v5_cs_sk",
@@ -502,6 +505,7 @@ describe("the scan is bounded by engine round trips", () => {
     parsedCursor: SearchCursor | null = null,
   ) =>
     await readCorpusIndexSearchPage({
+      scanTransport: NATIVE_SCAN_TRANSPORT,
       observer: "unobserved",
       cluster: "q09",
       indexId: "case_law_v5_cs_sk",
@@ -667,6 +671,7 @@ describe("a passage flood does not strand the reader", () => {
     parsedCursor: SearchCursor | null = null,
   ) =>
     await readCorpusIndexSearchPage({
+      scanTransport: NATIVE_SCAN_TRANSPORT,
       observer: "unobserved",
       cluster: "q09",
       indexId: "case_law_v5_cs_sk",
@@ -771,6 +776,7 @@ describe("residual filters preserve progress past empty scan windows", () => {
     order: CorpusSearchOrder,
   ) =>
     await readCorpusIndexSearchPage({
+      scanTransport: NATIVE_SCAN_TRANSPORT,
       observer: "unobserved",
       cluster: "q09",
       indexId: "case_law_v5_cs_sk",
@@ -903,6 +909,7 @@ describe("split legislation stays one hit across cursor pages", () => {
 
     const readLegislationPage = async (parsedCursor: SearchCursor | null) =>
       await readCorpusIndexSearchPage({
+        scanTransport: NATIVE_SCAN_TRANSPORT,
         observer: "unobserved",
         cluster: "q09",
         indexId: "legislation_v2",
@@ -968,6 +975,7 @@ describe("ranker-folded candidates stay folded across pages", () => {
     parsedCursor: SearchCursor | null,
   ) =>
     await readCorpusIndexSearchPage({
+      scanTransport: NATIVE_SCAN_TRANSPORT,
       observer: "unobserved",
       cluster: "q09",
       indexId: "case_law_v5_eu",
@@ -1751,6 +1759,7 @@ describe("folded acts stay folded across capped windows", () => {
     parsedCursor: SearchCursor | null,
   ) =>
     await readCorpusIndexSearchPage({
+      scanTransport: NATIVE_SCAN_TRANSPORT,
       observer: "unobserved",
       cluster: "q09",
       indexId: "legislation_v2_cze",
@@ -1958,6 +1967,7 @@ describe("a page addressed by offset", () => {
     skip,
   }: ReadOffsetPageOptions) =>
     await readCorpusIndexSearchPage({
+      scanTransport: NATIVE_SCAN_TRANSPORT,
       observer: "unobserved",
       cluster: "q09",
       indexId: "case_law_v5_cs_sk",

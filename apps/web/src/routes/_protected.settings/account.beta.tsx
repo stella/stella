@@ -6,6 +6,7 @@ import { Checkbox } from "@stll/ui/checkbox";
 import { Field, FieldLabel } from "@stll/ui/field";
 import { Frame, FramePanel } from "@stll/ui/frame";
 
+import { SettingsPageHeader } from "@/components/settings-page-header";
 import { betaFeaturesAvailable } from "@/lib/beta-features";
 import { detached } from "@/lib/detached";
 import { useDevStore } from "@/lib/dev-store";
@@ -13,7 +14,6 @@ import {
   useFeatureEnrolment,
   useTimeBillingEnrolment,
 } from "@/queries/feature-enrolments";
-import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
 
 export const Route = createFileRoute("/_protected/settings/account/beta")({
   beforeLoad: () => {

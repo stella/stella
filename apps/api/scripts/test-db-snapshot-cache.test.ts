@@ -14,6 +14,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { repoRelativePath } from "@stll/portable-path";
+import { deferred } from "@stll/test-kit";
 
 import {
   acquireCachedSnapshot,
@@ -207,30 +208,33 @@ test("a changed key while waiting does not accept the old snapshot", async () =>
   );
   writeFileSync(path.join(cacheDir, `${oldKey}.tar`), "old");
   let currentKey = oldKey;
-  const change = setTimeout(() => {
-    currentKey = newKey;
-    rmSync(lockDir, { recursive: true, force: true });
-  }, 20);
+  const waiting = deferred();
+  const release = deferred();
   let builds = 0;
-  try {
-    const result = await acquireCurrentSnapshot({
-      cacheDir,
-      key: () => currentKey,
-      build: async (filePath) => {
-        builds += 1;
-        writeFileSync(filePath, "new");
-      },
-      validate: async () => true,
-    });
-    expect(result.status).toBe("hit");
-    if (result.status === "hit") {
-      expect(result.snapshot.path).toBe(path.join(cacheDir, `${newKey}.tar`));
-      result.snapshot.release();
-    }
-    expect(builds).toBe(1);
-  } finally {
-    clearTimeout(change);
+  const acquisition = acquireCurrentSnapshot({
+    cacheDir,
+    key: () => currentKey,
+    build: async (filePath) => {
+      builds += 1;
+      writeFileSync(filePath, "new");
+    },
+    validate: async () => true,
+    waitForLock: async () => {
+      waiting.resolve();
+      await release.promise;
+    },
+  });
+  await waiting.promise;
+  currentKey = newKey;
+  rmSync(lockDir, { recursive: true, force: true });
+  release.resolve();
+  const result = await acquisition;
+  expect(result.status).toBe("hit");
+  if (result.status === "hit") {
+    expect(result.snapshot.path).toBe(path.join(cacheDir, `${newKey}.tar`));
+    result.snapshot.release();
   }
+  expect(builds).toBe(1);
 });
 
 test("abort stops a cache-lock wait promptly", async () => {

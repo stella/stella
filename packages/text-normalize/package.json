@@ -30,7 +30,8 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./search-match-key": "./src/search-match-key.ts"
   },
   "publishConfig": {
     "access": "public"

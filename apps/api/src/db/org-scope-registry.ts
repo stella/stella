@@ -31,6 +31,7 @@ import {
   accountAuditLogs,
   accountDeletionEffectChunks,
   accountDeletionRequests,
+  accountExports,
   actionCostCalls,
   actionCostRecords,
   agentSkillComments,
@@ -2391,6 +2392,12 @@ export const GLOBAL_SCOPE_TABLES = {
     table: systemAuditRuns,
     ownership: "system",
     reason: "Deployment maintenance or system audit state.",
+  },
+  accountExports: {
+    table: accountExports,
+    ownership: "account",
+    reason:
+      "Account-owned exports are isolated by user identity rather than organization membership.",
   },
   accountDeletionRequests: {
     table: accountDeletionRequests,

@@ -205,6 +205,8 @@ describe.skipIf(!runEngineTests)(
     let fixtureIndexCreated = false;
     const searchCalls: Parameters<typeof corpusClient.search>[0][] = [];
     const highlightedIdsByCall: string[][] = [];
+    /** Native reads without snippet fields: a scan round fetching whole statutes. */
+    const nativeScanQueries: string[] = [];
 
     beforeAll(async () => {
       expect(
@@ -370,6 +372,9 @@ describe.skipIf(!runEngineTests)(
       const searchSpy = spyOn(corpusClient, "search").mockImplementation(
         async (options) => {
           searchCalls.push(options);
+          if (options.snippetFields === undefined) {
+            nativeScanQueries.push(options.query);
+          }
           const result = await originalSearch({
             ...options,
             indexId: INDEX_ID,
@@ -390,7 +395,24 @@ describe.skipIf(!runEngineTests)(
           return result;
         },
       );
-      restoreSearch = () => searchSpy.mockRestore();
+      const originalScoredSearch = corpusClient.scoredSearch.bind(corpusClient);
+      const scoredSearchSpy = spyOn(
+        corpusClient,
+        "scoredSearch",
+      ).mockImplementation(async (options) => {
+        searchCalls.push({
+          observer: options.observer,
+          indexId: options.indexId,
+          query: options.query,
+          maxHits: options.size,
+          startOffset: options.from,
+        });
+        return await originalScoredSearch({ ...options, indexId: INDEX_ID });
+      });
+      restoreSearch = () => {
+        searchSpy.mockRestore();
+        scoredSearchSpy.mockRestore();
+      };
     }, ENGINE_TIMEOUT_MS);
 
     afterAll(async () => {
@@ -550,6 +572,19 @@ describe.skipIf(!runEngineTests)(
           call.query.startsWith('("závazek" AND "pohledávka")'),
         ),
       ).toBe(true);
+    });
+
+    test("strict and relaxed scan rounds never fetch whole statutes through the native endpoint", async () => {
+      const nativeStart = nativeScanQueries.length;
+      const callStart = searchCalls.length;
+      await search({
+        query: "závazek pohledávka",
+        jurisdiction: "CZE",
+        limit: 3,
+      });
+      await search({ query: QUERY, jurisdiction: "CZE", limit: 3 });
+      expect(searchCalls.length).toBeGreaterThan(callStart);
+      expect(nativeScanQueries.slice(nativeStart)).toEqual([]);
     });
 
     test("a full strict page never invokes the relaxed pass", async () => {

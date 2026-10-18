@@ -16,8 +16,9 @@ import {
 import type { FeatureAccessDecision } from "@/api/lib/feature-access/policy";
 import {
   FEATURE_REGISTRY,
-  type FeatureRegistry,
+  GENERATED_VIEWS_FEATURE_ID,
 } from "@/api/lib/feature-access/registry";
+import type { FeatureRegistry } from "@/api/lib/feature-access/registry";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { createTestState } from "@/api/tests/helpers/test-state";
 
@@ -36,6 +37,52 @@ const organizationGrant = {
   type: "organization",
   organizationId: "org-a",
 } as const satisfies FeatureGrant;
+
+test("generated views are generally available behind the deployment switch for verified current members", () => {
+  expect(FEATURE_REGISTRY[GENERATED_VIEWS_FEATURE_ID].enrolment).toBe(
+    "general-availability",
+  );
+  for (const deploymentEnabled of [false, true]) {
+    for (const membership of [false, true]) {
+      for (const userId of ["user-a", "user-b", null]) {
+        for (const user of [
+          null,
+          { email: "member@example.test", emailVerified: false },
+          { email: "colleague@example.test", emailVerified: true },
+        ]) {
+          for (const organizationId of ["org-a", "org-b"]) {
+            const decision = decideFeatureAccess({
+              registry: FEATURE_REGISTRY,
+              grants: {},
+              enrolments: [],
+              featureId: GENERATED_VIEWS_FEATURE_ID,
+              organizationId,
+              userId,
+              user,
+              membership,
+              deploymentEnabled,
+            });
+            expect(decision.status).toBe(
+              deploymentEnabled &&
+                membership &&
+                userId !== null &&
+                user?.emailVerified === true
+                ? "enabled"
+                : "hidden",
+            );
+            if (decision.status === "enabled") {
+              expect(decision.proof).toMatchObject({
+                featureId: GENERATED_VIEWS_FEATURE_ID,
+                organizationId,
+                userId,
+              });
+            }
+          }
+        }
+      }
+    }
+  }
+});
 
 test("invitation access requires matching grants, a verified identity, and current membership", () => {
   for (const grant of [null, memberGrant, organizationGrant]) {

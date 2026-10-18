@@ -10,7 +10,8 @@ import { defineFeatureRegistry } from "@/api/lib/feature-access/prerequisites";
 type OperationalFeatureEffect = "record-recovery" | "cleanup";
 
 type FeatureDefinition = {
-  enrolment: "invitation" | "self-serve";
+  // parser-output-unchanged: enrolment kinds gate access only, never parsed decision output
+  enrolment: "invitation" | "self-serve" | "general-availability";
   deploymentFeature?: DeploymentFeatureFlag;
   prerequisites?: readonly string[];
   ownership?: {
@@ -73,7 +74,7 @@ export const FEATURE_REGISTRY = defineFeatureRegistry({
     enrolment: "invitation",
   },
   [GENERATED_VIEWS_FEATURE_ID]: {
-    enrolment: "invitation",
+    enrolment: "general-availability",
     deploymentFeature: "FEATURE_GENERATED_VIEWS",
     ownership: {
       handlerDirectories: [],

@@ -65,8 +65,8 @@ const redirectDestination = (routePath: string) => {
   if (routePath.startsWith("/_protected/workspaces/")) {
     return "/workspaces/$workspaceId";
   }
-  if (routePath.startsWith("/_protected/settings/organization/")) {
-    return "/settings/organization/members";
+  if (routePath.startsWith("/_protected/admin/")) {
+    return "/admin/members";
   }
   return "/workspaces";
 };
@@ -211,7 +211,7 @@ describe("organization settings admission request wave", () => {
           organizationSettingsAdmission: "time-billing",
         });
         const { beforeLoad } = await readRouteAdmission(
-          "@/routes/_protected.settings/organization.route",
+          "@/routes/_protected.admin/route",
         );
         const queryClient = new QueryClient({
           defaultOptions: { queries: { retry: false } },
@@ -317,7 +317,7 @@ describe("organization settings admission request wave", () => {
   }
   test("unrelated organization settings leave navigation to deferred chrome", async () => {
     const { beforeLoad } = await readRouteAdmission(
-      "@/routes/_protected.settings/organization.route",
+      "@/routes/_protected.admin/route",
     );
     const queryClient = new QueryClient();
     queryClient.setQueryData(roleOptions.queryKey, "owner");
@@ -330,7 +330,7 @@ describe("organization settings admission request wave", () => {
             activeOrganizationId: CALLER.organizationId,
           },
         },
-        location: { pathname: "/settings/organization/members" },
+        location: { pathname: "/admin/members" },
         matches: [{ staticData: {} }],
       });
       expect(

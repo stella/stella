@@ -4,6 +4,7 @@ import authorizeFolioCollabRoomHandler from "@/api/handlers/folio-collab/authori
 import heartbeatFolioCollabRoom from "@/api/handlers/folio-collab/heartbeat";
 import refreshFolioCollabToken from "@/api/handlers/folio-collab/refresh-token";
 import loadFolioCollabSnapshotHandler from "@/api/handlers/folio-collab/snapshot-load";
+import acknowledgeFolioCollabSeed from "@/api/handlers/folio-collab/snapshot-seed";
 import storeFolioCollabSnapshotHandler from "@/api/handlers/folio-collab/snapshot-store";
 
 export const folioCollabRoute = new Elysia({
@@ -20,6 +21,9 @@ export const folioCollabRoute = new Elysia({
   })
   .post("/snapshot/load", loadFolioCollabSnapshotHandler.handler, {
     body: loadFolioCollabSnapshotHandler.config.body,
+  })
+  .post("/snapshot/seed", acknowledgeFolioCollabSeed.handler, {
+    body: acknowledgeFolioCollabSeed.config.body,
   })
   .post("/snapshot/store", storeFolioCollabSnapshotHandler.handler, {
     body: storeFolioCollabSnapshotHandler.config.body,

@@ -706,7 +706,7 @@ describe.skipIf(!enabled)(
                             enqueueStep: async () => {
                               enqueues += 1;
                             },
-                            generateTextForRole: async () => {
+                            generateTextForTask: async () => {
                               modelCalls += 1;
                               return "Fixture output";
                             },

@@ -71,6 +71,17 @@ const decideSingleFeatureAccess = ({
     return { status: "hidden" };
   }
   switch (definition.enrolment) {
+    case "general-availability": {
+      return {
+        status: "enabled",
+        proof: {
+          [featureAccessProof]: true,
+          featureId,
+          organizationId,
+          userId,
+        },
+      };
+    }
     case "self-serve": {
       if (
         !enrolments.some(
