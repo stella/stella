@@ -3,6 +3,7 @@ import { panic, Result } from "better-result";
 import { legalReaderAnnotations } from "@/api/db/schema";
 import { AUDIT_ACTION } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { wholeAnnotationSql } from "@/api/lib/legal-search/reader-annotations/group";
 import {
@@ -70,6 +71,11 @@ export const updateReaderAnnotationHandler = async function* ({
 }: UpdateReaderAnnotationProps) {
   const rows = yield* Result.await(
     safeDb(async (tx) => {
+      await withAggregateLock({
+        aggregate: "readerAnnotation",
+        id: { id: annotationId, organizationId, userId },
+        tx,
+      });
       const mutatedRows = await tx
         .update(legalReaderAnnotations)
         .set({ ...changesFor(body), updatedAt: new Date() })

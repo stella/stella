@@ -5,6 +5,7 @@ import { and, eq } from "drizzle-orm";
 import { legalReaderAnnotations } from "@/api/db/schema";
 import { AUDIT_ACTION } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { storedAnnotationMatchesRequest } from "@/api/lib/legal-search/reader-annotations/create.logic";
 import {
@@ -69,13 +70,25 @@ export const createReaderAnnotationHandler = async function* ({
   const groupId =
     body.spans.length > 1 ? (body.requestId ?? randomUUIDv7()) : null;
   const visibility = annotationVisibility(body);
+  const annotationIds = body.spans.map((_, index) =>
+    index === 0 && body.requestId !== undefined
+      ? body.requestId
+      : createSafeId<"legalReaderAnnotation">(),
+  );
   const mutation = yield* Result.await(
     safeDb(async (tx) => {
+      const firstAnnotationId =
+        annotationIds.at(0) ??
+        panic("A validated annotation request has no spans");
+      await withAggregateLock({
+        aggregate: "readerAnnotation",
+        id: { id: firstAnnotationId, organizationId, userId },
+        tx,
+      });
       const values = body.spans.map((span, index) => ({
         id:
-          index === 0 && body.requestId !== undefined
-            ? body.requestId
-            : createSafeId<"legalReaderAnnotation">(),
+          annotationIds.at(index) ??
+          panic("An annotation span is missing its generated ID"),
         organizationId,
         userId,
         targetType,

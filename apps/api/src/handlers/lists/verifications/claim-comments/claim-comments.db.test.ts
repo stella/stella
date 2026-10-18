@@ -465,6 +465,61 @@ describe.skipIf(!enabled)("comments on verification claims", () => {
       ).toEqual([]);
     }));
 
+  test("concurrent updates of one comment serialize", async () =>
+    await withTenants(async ({ db, tenant }) => {
+      const id = createdId(await create(db, tenant));
+      let markFirstUpdateLocked = () => {};
+      const firstUpdateLocked = new Promise<void>((resolve) => {
+        markFirstUpdateLocked = resolve;
+      });
+      let releaseFirstUpdate = () => {};
+      const firstUpdateReleased = new Promise<void>((resolve) => {
+        releaseFirstUpdate = resolve;
+      });
+      const firstContext = contextFor(db, tenant);
+      const firstUpdate = updateComment.handler(
+        createTestHandlerContext<Parameters<typeof updateComment.handler>[0]>({
+          ...firstContext,
+          params: { workspaceId: tenant.workspaceId, annotationId: id },
+          body: { change: "body", body: "First update." },
+          audit: async (...args) => {
+            await firstContext.audit(...args);
+            markFirstUpdateLocked();
+            await firstUpdateReleased;
+          },
+        }),
+      );
+      await firstUpdateLocked;
+
+      const secondUpdate = updateComment.handler(
+        createTestHandlerContext<Parameters<typeof updateComment.handler>[0]>({
+          ...contextFor(db, tenant),
+          params: { workspaceId: tenant.workspaceId, annotationId: id },
+          body: { change: "body", body: "Second update." },
+        }),
+      );
+      for (let attempt = 0; ; attempt += 1) {
+        const waiting = await db.execute<{ waiting: number }>(
+          sql`SELECT count(*)::int AS waiting FROM pg_catalog.pg_stat_activity
+            WHERE datname = current_database() AND wait_event_type = 'Lock'`,
+        );
+        if ((waiting.at(0)?.waiting ?? 0) > 0) {
+          break;
+        }
+        if (attempt > 200) {
+          throw new TypeError("The second comment update never waited");
+        }
+        await Bun.sleep(10);
+      }
+
+      releaseFirstUpdate();
+      expect(await firstUpdate).toEqual({ ok: true });
+      expect(await secondUpdate).toEqual({ ok: true });
+      expect((await storedComments(db, tenant)).at(0)?.body).toBe(
+        "Second update.",
+      );
+    }));
+
   test("a comment written while its claim is being deleted does not outlive the claim", async () =>
     await withTenants(async ({ db, tenant }) => {
       let markDeleted = () => {};

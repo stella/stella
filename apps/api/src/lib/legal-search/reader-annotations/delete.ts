@@ -3,6 +3,7 @@ import { Result } from "better-result";
 import { legalReaderAnnotations } from "@/api/db/schema";
 import { AUDIT_ACTION } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { wholeAnnotationSql } from "@/api/lib/legal-search/reader-annotations/group";
 import { requireAnnotationTargetType } from "@/api/lib/legal-search/reader-annotations/schema";
@@ -28,6 +29,11 @@ export const deleteReaderAnnotationHandler = async function* ({
 }: DeleteReaderAnnotationProps) {
   const rows = yield* Result.await(
     safeDb(async (tx) => {
+      await withAggregateLock({
+        aggregate: "readerAnnotation",
+        id: { id: annotationId, organizationId, userId },
+        tx,
+      });
       const mutatedRows = await tx
         .delete(legalReaderAnnotations)
         .where(

@@ -3,9 +3,13 @@
  * Reaches only claim comments of this matter; anyone else's is not found.
  */
 
+import { Result } from "better-result";
+
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { deleteReaderAnnotationHandler } from "@/api/lib/legal-search/reader-annotations/delete";
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
@@ -38,6 +42,20 @@ const deleteClaimComment = createSafeHandler(
     user,
     workspaceId,
   }) {
+    yield* Result.await(
+      safeDb(
+        async (tx) =>
+          await withAggregateLock({
+            aggregate: "readerAnnotation",
+            id: {
+              id: params.annotationId,
+              organizationId: session.activeOrganizationId,
+              userId: user.id,
+            },
+            tx,
+          }),
+      ),
+    );
     return yield* deleteReaderAnnotationHandler({
       annotationId: params.annotationId,
       organizationId: session.activeOrganizationId,
@@ -48,5 +66,10 @@ const deleteClaimComment = createSafeHandler(
     });
   },
 );
+
+declareAggregateMutation(deleteClaimComment.handler, {
+  type: "aggregate",
+  aggregates: ["readerAnnotation"],
+});
 
 export default deleteClaimComment;

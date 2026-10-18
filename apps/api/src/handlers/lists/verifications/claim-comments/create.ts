@@ -15,6 +15,8 @@ import {
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { createReaderAnnotationHandler } from "@/api/lib/legal-search/reader-annotations/create";
@@ -69,6 +71,20 @@ const createClaimComment = createSafeHandler(
     workspaceId,
   }) {
     const { claimId, runId } = body;
+    yield* Result.await(
+      safeDb(
+        async (tx) =>
+          await withAggregateLock({
+            aggregate: "workspace",
+            id: {
+              id: workspaceId,
+              organizationId: session.activeOrganizationId,
+            },
+            mode: "key share",
+            tx,
+          }),
+      ),
+    );
     const claim = yield* Result.await(
       safeDb(
         async (tx) =>
@@ -99,5 +115,10 @@ const createClaimComment = createSafeHandler(
     });
   },
 );
+
+declareAggregateMutation(createClaimComment.handler, {
+  type: "aggregate",
+  aggregates: ["workspace"],
+});
 
 export default createClaimComment;

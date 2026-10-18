@@ -101,6 +101,14 @@ export const aggregateFences = () => {
       id: { id: answerId, organizationId, userId },
       mode: "update",
     },
+    readerAnnotation: {
+      aggregate: "readerAnnotation",
+      id: {
+        id: createSafeId<"legalReaderAnnotation">(),
+        organizationId,
+        userId,
+      },
+    },
     readerAnswerMessage: {
       aggregate: "readerAnswerMessage",
       id: { id: createSafeId<"legalReaderAnswerMessage">(), answerId },

@@ -4,11 +4,14 @@
  * caller's own.
  */
 
+import { Result } from "better-result";
 import { t } from "elysia";
 
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import {
   annotationCommentTextSchema,
@@ -61,6 +64,20 @@ const updateClaimComment = createSafeHandler(
     user,
     workspaceId,
   }) {
+    yield* Result.await(
+      safeDb(
+        async (tx) =>
+          await withAggregateLock({
+            aggregate: "readerAnnotation",
+            id: {
+              id: params.annotationId,
+              organizationId: session.activeOrganizationId,
+              userId: user.id,
+            },
+            tx,
+          }),
+      ),
+    );
     return yield* updateReaderAnnotationHandler({
       annotationId: params.annotationId,
       change: body,
@@ -72,5 +89,10 @@ const updateClaimComment = createSafeHandler(
     });
   },
 );
+
+declareAggregateMutation(updateClaimComment.handler, {
+  type: "aggregate",
+  aggregates: ["readerAnnotation"],
+});
 
 export default updateClaimComment;
