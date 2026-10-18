@@ -1,4 +1,10 @@
-import type { MouseEventHandler, ReactElement, ReactNode } from "react";
+import { useState } from "react";
+import type {
+  KeyboardEvent,
+  MouseEventHandler,
+  ReactElement,
+  ReactNode,
+} from "react";
 
 import { panic } from "better-result";
 
@@ -112,7 +118,10 @@ export const ProvisionCardHeader = ({
       <Button
         aria-label={messages["statutes.openProvision"]}
         className="shrink-0"
-        onClick={() => openProvision(provision)}
+        onClick={(event) => {
+          event.stopPropagation();
+          openProvision(provision);
+        }}
         size="icon-xs"
         tooltip={messages["statutes.openProvision"]}
         variant="ghost"
@@ -326,6 +335,7 @@ type CitedProvisionExpansionProps = {
   /** Whether the reader requested the whole provision rather than the cited parts. */
   showsFull: boolean;
   wordings: readonly CitedWording[];
+  placement?: "gutter" | "inline";
 };
 
 /**
@@ -341,7 +351,9 @@ export const CitedProvisionExpansion = ({
   onToggleFull,
   showsFull,
   wordings,
+  placement = "inline",
 }: CitedProvisionExpansionProps) => {
+  const [expanded, setExpanded] = useState(false);
   const messages = useReaderMessages();
   const first = citations.at(0) ?? panic("A provision card without citations");
   const passage = provisionCardPassage(wordings);
@@ -353,43 +365,72 @@ export const CitedProvisionExpansion = ({
     provisionCardScope(citations) === PROVISION_CARD_SCOPE.parts &&
     passage.type === "passage" &&
     passage.blocks.length > 0;
+  const toggleExpanded = () => setExpanded((current) => !current);
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+    event.preventDefault();
+    toggleExpanded();
+  };
 
   return (
     <ReaderInsetBox
-      className="my-2 flex flex-col gap-1.5"
+      aria-expanded={expanded}
+      className={cn(
+        "flex cursor-pointer flex-col gap-1.5",
+        placement === "inline" ? "my-2" : "w-full",
+      )}
       data-reader-chrome=""
+      data-placement={placement}
       data-slot="provision-card"
       density="compact"
+      onClick={toggleExpanded}
+      onKeyDown={onKeyDown}
+      role="button"
+      tabIndex={0}
     >
       <ProvisionCardHeader label={label} provision={first.payload} />
-      <ProvisionTrailLine
-        language={firstWording?.language}
-        trail={provisionTrail({ label, passage, wording: firstWording })}
-      />
-      {foldable && showsFull ? (
-        <FullProvisionWording
-          outcome={outcome}
-          passage={passage}
-          wordings={wordings}
+      <span
+        className={cn(
+          "contents",
+          !expanded && placement === "inline" && "hidden",
+        )}
+      >
+        <ProvisionTrailLine
+          language={firstWording?.language}
+          trail={provisionTrail({ label, passage, wording: firstWording })}
         />
-      ) : (
-        <PassageBody passage={passage} />
-      )}
-      {foldable && (
-        <span className="reader-chrome self-start">
-          <Button
-            aria-expanded={displaysFullText}
-            disabled={showsFull && outcome.type === "pending"}
-            onClick={onToggleFull}
-            size="xs"
-            variant="link"
-          >
-            {displaysFullText
-              ? messages["statutes.showCitedPartOnly"]
-              : messages["statutes.showFullProvision"]}
-          </Button>
+        <span className={cn(!expanded && "line-clamp-3")}>
+          {foldable && showsFull ? (
+            <FullProvisionWording
+              outcome={outcome}
+              passage={passage}
+              wordings={wordings}
+            />
+          ) : (
+            <PassageBody passage={passage} />
+          )}
         </span>
-      )}
+        {foldable && (
+          <span className="reader-chrome self-start">
+            <Button
+              aria-expanded={displaysFullText}
+              disabled={showsFull && outcome.type === "pending"}
+              onClick={(event) => {
+                event.stopPropagation();
+                onToggleFull(event);
+              }}
+              size="xs"
+              variant="link"
+            >
+              {displaysFullText
+                ? messages["statutes.showCitedPartOnly"]
+                : messages["statutes.showFullProvision"]}
+            </Button>
+          </span>
+        )}
+      </span>
     </ReaderInsetBox>
   );
 };

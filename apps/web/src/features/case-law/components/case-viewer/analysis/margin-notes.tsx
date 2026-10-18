@@ -12,12 +12,14 @@ import type { RefObject } from "react";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import type { CitedProvisionTarget } from "@stll/decision-reader/reader-types";
 import { Button } from "@stll/ui/button";
 import { Building2Icon, Trash2Icon } from "@stll/ui/icons";
 import { Textarea } from "@stll/ui/textarea";
 import { containedHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
+import { CitedProvisionExpansion } from "@/components/legal-reader/cited-provision-link";
 import Tooltip from "@/components/tooltip";
 import { UserIdentity } from "@/components/user-avatar";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -88,11 +90,19 @@ export type AnswerMarginItem = ReaderAnswerCardProps & {
   startAnchorId: string;
 };
 
+export type ProvisionMarginItem = {
+  kind: "provision";
+  id: string;
+  startAnchorId: string;
+  citations: readonly CitedProvisionTarget[];
+};
+
 export type MarginItem =
   | AnalysisMarginItem
   | CommentMarginItem
   | ComposerMarginItem
-  | AnswerMarginItem;
+  | AnswerMarginItem
+  | ProvisionMarginItem;
 
 type MarginNotesProps =
   | {
@@ -338,7 +348,9 @@ const GutterNotes = ({
           return null;
         }
         const color =
-          item.kind === "comment" || item.kind === "answer"
+          item.kind === "comment" ||
+          item.kind === "answer" ||
+          item.kind === "provision"
             ? "var(--option-sky)"
             : `var(${getCategoryVar(item.category)})`;
         return (
@@ -404,6 +416,21 @@ const MarginNoteBody = ({
   presence = "normal",
 }: MarginNoteProps) => {
   switch (item.kind) {
+    case "provision": {
+      const position = notePlacementPresentation(placement);
+      return (
+        <div
+          className={position.className}
+          style={position.style}
+          ref={(el) => measureRef?.(el, item.id)}
+        >
+          <CitedProvisionExpansion
+            citations={item.citations}
+            placement={placement.type}
+          />
+        </div>
+      );
+    }
     case "answer": {
       const position = notePlacementPresentation(placement);
       return (
