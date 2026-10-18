@@ -1,6 +1,9 @@
 import { useTranslations } from "use-intl";
 
-import { PublicLawSearch } from "@/components/public-law-search";
+import {
+  PublicLawSearch,
+  publicLawAskScope,
+} from "@/components/public-law-search";
 import { useFormatter } from "@/i18n/formatting-context";
 import { statuteCountryName } from "@/lib/statutes/statute-route";
 
@@ -32,12 +35,13 @@ export const StatuteSearch = ({
 
   return (
     <PublicLawSearch
-      askPrompt={(entry) =>
-        t("statutes.searchAskPrompt", {
+      askScope={publicLawAskScope(
+        "legislation",
+        country,
+        t("chat.mention.corpus.legislation", {
           country: statuteCountryName(format, country),
-          query: entry,
-        })
-      }
+        }),
+      )}
       maxLength={maxLength}
       onQueryChange={onQueryChange}
       onSubmit={onSubmit}

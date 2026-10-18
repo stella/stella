@@ -1214,21 +1214,20 @@ export const buildMatterUrl = (workspaceId: string) =>
 
 export { buildDocumentUrl } from "@/api/lib/mcp-connectors/app-urls";
 
-/** Keep the legacy app URL beside the shared primary/source link contract. */
+/** Return the primary reader or publisher link with its distinct source. */
 export const legalCitationLinkFields = ({
-  appUrl,
+  url,
   sourceUrl,
 }: {
-  appUrl: string | null;
+  url: string | null;
   sourceUrl: string | null;
 }) => {
   const links = resolveLegalCitationLinks({
-    appUrl,
+    url,
     sourceUrl,
     appOrigins: new Set([new URL(getAppBaseUrl()).origin]),
   });
   return {
-    appUrl,
     url: links.url,
     ...(links.type === "external" || links.source_url === undefined
       ? {}
