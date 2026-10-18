@@ -751,16 +751,24 @@ export const legislationIndexJobs = p.pgTable(
 export const legislationAmendmentSnapshots = p.pgTable(
   "legislation_amendment_snapshots",
   {
-    sourceId: safeUuid<"legislationSource">("source_id")
-      .notNull()
-      .references(() => legislationSources.id, { onDelete: "cascade" }),
+    sourceId: safeUuid<"legislationSource">("source_id").notNull(),
     targetEli: p.varchar("target_eli", { length: 512 }).notNull(),
     language: p.varchar({ length: 16 }).notNull(),
     observedAt: timestamptz("observed_at").notNull(),
     coverage: jsonb().$type<LegislationAmendmentCoverage>().notNull(),
   },
   (t) => [
-    p.primaryKey({ columns: [t.sourceId, t.targetEli, t.language] }),
+    p.primaryKey({
+      name: "legislation_amendment_snapshots_pk",
+      columns: [t.sourceId, t.targetEli, t.language],
+    }),
+    p
+      .foreignKey({
+        name: "legislation_amendment_snapshots_source_fk",
+        columns: [t.sourceId],
+        foreignColumns: [legislationSources.id],
+      })
+      .onDelete("cascade"),
     ...globalCaseLawPolicies(),
     ...publicLawReaderPolicies(),
   ],
@@ -792,6 +800,7 @@ export const legislationAmendments = p.pgTable(
   },
   (t) => [
     p.primaryKey({
+      name: "legislation_amendments_pk",
       columns: [t.sourceId, t.targetEli, t.language, t.publisherId],
     }),
     p

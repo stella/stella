@@ -3,6 +3,9 @@ import { panic } from "better-result";
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+const isUnknownArray = (value: unknown): value is unknown[] =>
+  Array.isArray(value);
+
 const schemaPropertyAtPath = (
   schema: unknown,
   [key, ...rest]: readonly string[],
@@ -11,7 +14,7 @@ const schemaPropertyAtPath = (
     return schema;
   }
   const alternatives = schema["anyOf"];
-  if (Array.isArray(alternatives)) {
+  if (isUnknownArray(alternatives)) {
     const branch = alternatives.find(
       (candidate) =>
         isRecord(candidate) &&

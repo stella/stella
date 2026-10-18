@@ -200,7 +200,6 @@ export const syncLegislationAmendmentsTx = async (
     start < snapshot.relations.length;
     start += AMENDMENT_INSERT_BATCH_SIZE
   ) {
-    // db-await-in-loop: bounded chunks stay below the PostgreSQL parameter ceiling in one atomic snapshot
     // audit: skip — publisher corpus snapshot, committed with its observed document
     await tx.insert(legislationAmendments).values(
       snapshot.relations

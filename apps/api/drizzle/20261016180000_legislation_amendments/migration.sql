@@ -2,13 +2,15 @@ SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
 
 CREATE TABLE "legislation_amendment_snapshots" (
-  "source_id" uuid NOT NULL REFERENCES "legislation_sources"("id") ON DELETE CASCADE,
+  "source_id" uuid NOT NULL,
   "target_eli" varchar(512) NOT NULL,
   "language" varchar(16) NOT NULL,
   "observed_at" timestamptz NOT NULL,
   "coverage" jsonb NOT NULL,
-  PRIMARY KEY ("source_id", "target_eli", "language")
+  CONSTRAINT "legislation_amendment_snapshots_pk" PRIMARY KEY ("source_id", "target_eli", "language")
 );--> statement-breakpoint
+ALTER TABLE "legislation_amendment_snapshots" ADD CONSTRAINT "legislation_amendment_snapshots_source_fk" FOREIGN KEY ("source_id") REFERENCES "legislation_sources"("id") ON DELETE CASCADE NOT VALID;--> statement-breakpoint
+ALTER TABLE "legislation_amendment_snapshots" VALIDATE CONSTRAINT "legislation_amendment_snapshots_source_fk";--> statement-breakpoint
 CREATE TABLE "legislation_amendments" (
   "source_id" uuid NOT NULL REFERENCES "legislation_sources"("id") ON DELETE CASCADE,
   "target_eli" varchar(512) NOT NULL,
@@ -23,7 +25,7 @@ CREATE TABLE "legislation_amendments" (
   "effective_date" date,
   "effective_text" text,
   "publisher_instruction" text,
-  PRIMARY KEY ("source_id", "target_eli", "language", "publisher_id"),
+  CONSTRAINT "legislation_amendments_pk" PRIMARY KEY ("source_id", "target_eli", "language", "publisher_id"),
   CONSTRAINT "legislation_amendments_kind" CHECK ("change_kind" IN ('changed', 'inserted', 'repealed')),
   CONSTRAINT "legislation_amendments_effective" CHECK (
     ("effective_type" = 'date' AND "effective_date" IS NOT NULL AND "effective_text" IS NULL)
@@ -48,4 +50,7 @@ CREATE POLICY "public_law_reader_access" ON "legislation_amendments" FOR SELECT 
 GRANT SELECT, INSERT, UPDATE, DELETE ON "legislation_amendment_snapshots", "legislation_amendments" TO stella_ingestion;--> statement-breakpoint
 GRANT SELECT ON "legislation_amendment_snapshots", "legislation_amendments" TO stella;--> statement-breakpoint
 GRANT SELECT (source_id, target_eli, language, observed_at, coverage) ON TABLE "legislation_amendment_snapshots" TO stella_public_law_reader;--> statement-breakpoint
-GRANT SELECT (source_id, target_eli, language, publisher_id, amending_eli, amending_title, amending_anchor, affected_anchor, change_kind, effective_type, effective_date, effective_text, publisher_instruction) ON TABLE "legislation_amendments" TO stella_public_law_reader;
+GRANT SELECT (source_id, target_eli, language, publisher_id, amending_eli, amending_title, amending_anchor, affected_anchor, change_kind, effective_type, effective_date, effective_text, publisher_instruction) ON TABLE "legislation_amendments" TO stella_public_law_reader;--> statement-breakpoint
+
+RESET lock_timeout;--> statement-breakpoint
+RESET statement_timeout;
