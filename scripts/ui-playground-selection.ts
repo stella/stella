@@ -264,11 +264,25 @@ export const staticImportClosure = (
     if (file.endsWith(".css")) {
       const source = readFileSync(absolute, "utf-8");
       const imports = [
-        ...source.matchAll(/@import\s+(?:url\(\s*)?["']([^"']+)["']\s*\)?/gu),
+        ...source.matchAll(
+          /@import\s+(?:url\(\s*["']?([^"')\s]+)["']?\s*\)|["']([^"']+)["'])/gu,
+        ),
       ]
-        .map((match) => match[1])
+        .map((match) => match[1] ?? match[2])
         .filter((imported): imported is string => imported !== undefined);
       for (const imported of imports) {
+        // CSS resolves a bare path against the stylesheet first; only a path
+        // with no such file is a package (`@import "tailwindcss"`).
+        const relative = /^(?:[./@]|[a-z][a-z0-9+.-]*:)/iu.test(imported)
+          ? undefined
+          : sourceCandidate(
+              root,
+              path.posix.join(path.posix.dirname(file), imported),
+            );
+        if (relative !== undefined) {
+          pending.push(relative);
+          continue;
+        }
         const resolved = resolveImport(imported, file, root);
         pending.push(...resolved.files);
         complete &&= resolved.complete;

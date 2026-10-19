@@ -257,6 +257,30 @@ test("an exported stylesheet outside src selects the importing spec", () => {
   }
 });
 
+test("bare and unquoted CSS imports resolve against the stylesheet", () => {
+  const { root, spec, write } = createSelectionFixture();
+  try {
+    write("apps/web/src/routes/dev/fixture.ts", 'import "./a.css";\n');
+    write(
+      "apps/web/src/routes/dev/a.css",
+      '@import "tailwindcss";\n@import "tokens.css";\n@import url(layout.css);\n',
+    );
+    write("apps/web/src/routes/dev/tokens.css", ":root {}\n");
+    write("apps/web/src/routes/dev/layout.css", ".page {}\n");
+    for (const file of [
+      "apps/web/src/routes/dev/tokens.css",
+      "apps/web/src/routes/dev/layout.css",
+    ]) {
+      expect(selectGeometrySpecs([file], root), file).toEqual([spec]);
+    }
+    expect(selectGeometrySpecs(["apps/web/src/unrelated.ts"], root)).toEqual(
+      [],
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("a transitive CSS import change selects the importing spec", () => {
   const { root, spec, write } = createSelectionFixture();
   try {
