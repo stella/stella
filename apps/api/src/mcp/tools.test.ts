@@ -78,7 +78,10 @@ import type {
   SanctionsCheckResult,
 } from "@/api/lib/business-registries/sanctions-check";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
-import { CITATION_READ_DIRECTIONS } from "@/api/lib/case-law/citation-vocabulary";
+import {
+  CITATION_READ_DIRECTIONS,
+  CITATION_TREATMENTS,
+} from "@/api/lib/case-law/citation-vocabulary";
 import { readDecisionTextMetadata } from "@/api/lib/case-law/decision-text";
 import type { CaseLawSearchGuidanceMode } from "@/api/lib/case-law/search-guidance-mode";
 import { functionWordsWarning } from "@/api/lib/case-law/search-warnings";
@@ -1502,6 +1505,16 @@ describe("OpenAI-compatible MCP tools", () => {
           enum: [...CITATION_READ_DIRECTIONS],
           description:
             "Which side of the citation graph to read: 'cites' for the decisions this decision cites, 'cited_by' for the decisions that cite it. Citing is not agreeing: both sides carry negative treatments.",
+        },
+        doctrine: {
+          type: "string",
+          enum: ["distinguishes", "limits"],
+          description: "Only citations with this reviewed doctrinal finding.",
+        },
+        polarity: {
+          type: "string",
+          enum: [...CITATION_TREATMENTS],
+          description: "Only citations with this polarity reading.",
         },
         limit: withKind(
           {
@@ -3650,6 +3663,8 @@ describe("OpenAI-compatible MCP tools", () => {
       args: {
         decision_id: DECISION_ID,
         direction: "cited_by",
+        doctrine: "limits",
+        polarity: "negative",
         limit: 5,
       },
       context: createContext(),
@@ -3661,6 +3676,8 @@ describe("OpenAI-compatible MCP tools", () => {
       cursor: undefined,
       decisionId: DECISION_ID,
       direction: "cited_by",
+      doctrine: "limits",
+      polarity: "negative",
       limit: 5,
       surface: "search",
     });
@@ -3668,6 +3685,8 @@ describe("OpenAI-compatible MCP tools", () => {
       decisionId: DECISION_ID,
       direction: "cited_by",
       doctrineAvailability: "available",
+      doctrine: "limits",
+      polarity: "negative",
       nextCursor: "Y2l0YXRpb25fY3Vyc29yXzI",
       citations: [
         {
@@ -3709,7 +3728,11 @@ describe("OpenAI-compatible MCP tools", () => {
   test("read_case_law_citations defaults the page size and passes the cursor through", async () => {
     readGatedDecisionCitationsMock.mockResolvedValue({
       type: "page",
-      page: { items: [], nextCursor: null, doctrineAvailability: "available" },
+      page: {
+        items: [],
+        nextCursor: null,
+        doctrineAvailability: "available",
+      },
     });
 
     await handleMcpToolCall({
@@ -3730,6 +3753,35 @@ describe("OpenAI-compatible MCP tools", () => {
       limit: LIMITS.caseLawAgentCitationPageSizeDefault,
       surface: "search",
     });
+  });
+
+  test("read_case_law_citations refuses doctrine filters when doctrine is unavailable", async () => {
+    readGatedDecisionCitationsMock.mockResolvedValue({
+      type: "doctrine_unavailable",
+    });
+
+    const result = await handleMcpToolCall({
+      args: {
+        decision_id: DECISION_ID,
+        direction: "cited_by",
+        doctrine: "distinguishes",
+      },
+      context: createContext(),
+      toolName: "read_case_law_citations",
+    });
+
+    const error = validationEnvelope(result);
+    expect(error["code"]).toBe("validation_error");
+    expect(error["message"]).toBe("Doctrine filtering is unavailable");
+    expect(error["hint"]).toBe(
+      "Call read_case_law_citations again without doctrine; the response's doctrineAvailability will report whether doctrine can be read.",
+    );
+    expect(error["issues"]).toEqual([
+      {
+        path: "doctrine",
+        message: "Doctrine is unavailable on this case-law surface.",
+      },
+    ]);
   });
 
   test("read_case_law_citations answers not found for a subject the gate denies", async () => {
@@ -3807,6 +3859,7 @@ describe("OpenAI-compatible MCP tools", () => {
       "language",
       "date_from",
       "date_to",
+      "as_of",
       "limit",
       "cursor",
     ]);
@@ -3837,9 +3890,11 @@ describe("OpenAI-compatible MCP tools", () => {
       ),
     );
     expect(schema?.["additionalProperties"]).toBe(false);
-    // The corpus search has no as-of filter, so it must not advertise one:
-    // a point-in-time question is answered by read_statute.
-    expect(schema?.properties?.["as_of"]).toBeUndefined();
+    expect(schema?.properties?.["as_of"]).toMatchObject({
+      type: "string",
+      format: "date",
+      maxLength: 10,
+    });
     expect(searchTool?.description).toContain("No facets are returned");
   });
 
@@ -3968,6 +4023,8 @@ describe("OpenAI-compatible MCP tools", () => {
           {
             documentId: STATUTE_ID,
             effectiveDate: "2014-01-01",
+            versionValidFrom: "2014-01-01",
+            versionValidTo: null,
             eli: STATUTE_ELI,
             country: "CZE",
             documentType: "act",
@@ -3989,12 +4046,17 @@ describe("OpenAI-compatible MCP tools", () => {
       const result = await handleMcpToolCall({
         // Lower case on the wire: the country is folded by the contract, so a
         // model writing `cze` reaches the same jurisdiction.
-        args: { country: "cze", query: "nahrada skody" },
+        args: {
+          as_of: "2027-01-01",
+          country: "cze",
+          query: "nahrada skody",
+        },
         context: createContext(),
         toolName: "search_legislation",
       });
 
       expect(searchLegislationHandlerMock.mock.calls.at(0)?.at(0)).toEqual({
+        asOf: "2027-01-01",
         jurisdiction: "CZE",
         limit: 10,
         query: "nahrada skody",
@@ -4010,6 +4072,8 @@ describe("OpenAI-compatible MCP tools", () => {
             documentId: STATUTE_ID,
             documentType: "act",
             effectiveDate: "2014-01-01",
+            versionValidFrom: "2014-01-01",
+            versionValidTo: null,
             eli: STATUTE_ELI,
             language: "cs",
             match: { type: matchType },
