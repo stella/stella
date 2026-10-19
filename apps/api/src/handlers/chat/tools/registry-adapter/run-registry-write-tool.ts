@@ -13,20 +13,14 @@ import {
   isMcpFeatureInputEnabled,
 } from "@/api/mcp/feature-access";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/gateway/list-tools";
-import {
-  agentInputValidationError,
-  normalizeObjectInputAtBoundary,
-} from "@/api/mcp/input-normalization";
+import { agentInputValidationError } from "@/api/mcp/input-normalization";
 import { matterRequiredResult } from "@/api/mcp/matter-requirement";
 import {
   getStaticMcpToolDefinition,
   invokeStaticMcpTool,
 } from "@/api/mcp/static-tool-definitions";
-import {
-  ACCOUNT_ACCESS_UNAVAILABLE_MESSAGE,
-  type AccountOperationCheck,
-  isAccountAuthorizedForMcpTool,
-} from "@/api/mcp/tool-authority";
+import type { AccountOperationCheck } from "@/api/mcp/tool-authority";
+import { structuredErrorResult } from "@/api/mcp/tool-utils";
 
 import type {
   ChatProjectableToolName,
@@ -116,21 +110,6 @@ export const runRegistryWriteTool = async (
   const staticDefinition =
     getStaticMcpToolDefinition(toolName) ??
     panic(`Write tool ${toolName} is missing from the static registry`);
-  // The tool's declared account access, as its REST counterpart declares it.
-  if (
-    !isAccountAuthorizedForMcpTool(
-      context.userEmail,
-      staticDefinition,
-      dependencies.checkAccountOperation,
-    )
-  ) {
-    return Result.err(
-      new ChatToolError({
-        kind: "unavailable",
-        message: ACCOUNT_ACCESS_UNAVAILABLE_MESSAGE,
-      }),
-    );
-  }
   const entry = WRITE_TOOL_REF_FIELD_MAP[toolName];
 
   if ("unavailableInputParams" in entry) {
@@ -179,89 +158,108 @@ export const runRegistryWriteTool = async (
     return Result.err(dehydrated.error);
   }
 
-  const normalized = normalizeObjectInputAtBoundary({
-    access: "write",
-    exactProperties: ["confirm", "validate_only"],
-    schema: staticDefinition.inputSchema,
-    value: dehydrated.value.args,
+  let preflightError: ChatToolError | undefined;
+  const invocation = await invokeStaticMcpTool({
+    args: applyChatApprovalConfirmation({
+      args: dehydrated.value.args,
+      toolName,
+    }),
+    beforeInvoke: async (normalizedArgs) => {
+      if (
+        !isMcpFeatureInputEnabled({
+          context,
+          definition: staticDefinition,
+          args: normalizedArgs,
+        })
+      ) {
+        preflightError = new ChatToolError({
+          kind: "not-found",
+          message: "Not found",
+        });
+        return structuredErrorResult({
+          code: "not_found",
+          message: "Not found",
+        });
+      }
+
+      const visible = await Result.tryPromise(
+        async () =>
+          await resourcesAreVisible({
+            inputs: [
+              {
+                schema:
+                  "inputSchemaSource" in staticDefinition
+                    ? staticDefinition.inputSchemaSource
+                    : staticDefinition.inputSchema,
+                value: normalizedArgs,
+              },
+            ],
+            scopedDb: context.scopedDb,
+          }),
+      );
+      if (visible.isErr()) {
+        observeFailure(visible.error, {
+          sink: CHAT_RESOURCE_ADMISSION_FAILURE,
+          ctx: { source: "chat", tool: toolName },
+        });
+        preflightError = new ChatToolError({
+          kind: "server-defect",
+          message: "Tool execution failed",
+          cause: visible.error,
+        });
+        return structuredErrorResult({
+          code: "internal_error",
+          message: "Tool execution failed",
+        });
+      }
+      if (!visible.value) {
+        preflightError = new ChatToolError({
+          kind: "not-found",
+          message: "Not found",
+        });
+        return structuredErrorResult({
+          code: "not_found",
+          message: "Not found",
+        });
+      }
+
+      const needsMatter = matterRequiredResult({
+        args: normalizedArgs,
+        context,
+        // Chat carries no OAuth scopes, and save_matter is always projected.
+        saveMatterCallable:
+          WRITE_TOOL_REF_FIELD_MAP.save_matter.chatProjectable,
+        toolName,
+      });
+      if (needsMatter !== null) {
+        preflightError = toRegistryChatToolError(needsMatter.error);
+        return needsMatter;
+      }
+      return null;
+    },
+    ...(dependencies.checkAccountOperation === undefined
+      ? {}
+      : { checkAccountOperation: dependencies.checkAccountOperation }),
+    context,
+    definition: staticDefinition,
   });
-  if (!normalized.ok) {
+  if (preflightError !== undefined) {
+    return Result.err(preflightError);
+  }
+  if (invocation.status === "validation-error") {
     return Result.err(
       toRegistryChatToolError(
         agentInputValidationError({
-          failure: normalized,
+          failure: invocation.failure,
           subject: `${toolName} arguments`,
         }).error,
       ),
     );
   }
-
   if (
-    !isMcpFeatureInputEnabled({
-      context,
-      definition: staticDefinition,
-      args: normalized.value,
-    })
+    invocation.status === "authority-refused" ||
+    invocation.status === "input-authority-refused"
   ) {
-    return Result.err(
-      new ChatToolError({ kind: "not-found", message: "Not found" }),
-    );
-  }
-
-  const visible = await Result.tryPromise(
-    async () =>
-      await resourcesAreVisible({
-        inputs: [
-          {
-            schema:
-              "inputSchemaSource" in staticDefinition
-                ? staticDefinition.inputSchemaSource
-                : staticDefinition.inputSchema,
-            value: normalized.value,
-          },
-        ],
-        scopedDb: context.scopedDb,
-      }),
-  );
-  if (visible.isErr()) {
-    observeFailure(visible.error, {
-      sink: CHAT_RESOURCE_ADMISSION_FAILURE,
-      ctx: { source: "chat", tool: toolName },
-    });
-    return Result.err(
-      new ChatToolError({
-        kind: "server-defect",
-        message: "Tool execution failed",
-        cause: visible.error,
-      }),
-    );
-  }
-  if (!visible.value) {
-    return Result.err(
-      new ChatToolError({ kind: "not-found", message: "Not found" }),
-    );
-  }
-
-  const needsMatter = matterRequiredResult({
-    args: normalized.value,
-    context,
-    // Chat carries no OAuth scopes, and save_matter is always projected.
-    saveMatterCallable: WRITE_TOOL_REF_FIELD_MAP.save_matter.chatProjectable,
-    toolName,
-  });
-  if (needsMatter !== null) {
-    return Result.err(toRegistryChatToolError(needsMatter.error));
-  }
-
-  const invocation = await invokeStaticMcpTool({
-    args: applyChatApprovalConfirmation({
-      args: normalized.value,
-      toolName,
-    }),
-    context,
-    definition: staticDefinition,
-  });
-  if (invocation.status === "refused") {
     return Result.err(
       new ChatToolError({
         kind: "unavailable",

@@ -10,10 +10,7 @@ import type { McpRequestContext } from "@/api/mcp/context";
 import { finalizeToolEgress } from "@/api/mcp/egress";
 import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/gateway/list-tools";
-import {
-  agentInputValidationError,
-  normalizeObjectInputAtBoundary,
-} from "@/api/mcp/input-normalization";
+import { agentInputValidationError } from "@/api/mcp/input-normalization";
 import {
   DEFAULT_MCP_TOOL_DEFINITIONS,
   getStaticMcpToolDefinition,
@@ -195,53 +192,57 @@ export const runRegistryReadTool = async ({
     return Result.err(dehydrated.error);
   }
 
-  const normalized = normalizeObjectInputAtBoundary({
-    access: staticDefinition.access,
-    schema: staticDefinition.inputSchema,
-    value: dehydrated.value.args,
+  // Ref dehydration only resolves chat references; the invocation seam still
+  // owns argument normalization and validation.
+  let scopedError: ChatToolError | undefined;
+  const invocation = await invokeStaticMcpTool({
+    args: dehydrated.value.args,
+    beforeInvoke: async (normalizedArgs) => {
+      const scoped =
+        scopeArgs === undefined
+          ? Result.ok(normalizedArgs)
+          : await scopeArgs(normalizedArgs);
+      if (Result.isError(scoped)) {
+        scopedError = scoped.error;
+        return validationErrorResult([], scoped.error.message);
+      }
+      return handler === undefined
+        ? null
+        : await runInjectedHandler({
+            args: scoped.value,
+            context,
+            toolName,
+            handler,
+          });
+    },
+    context,
+    definition: staticDefinition,
   });
-  if (!normalized.ok) {
+  if (scopedError !== undefined) {
+    return Result.err(scopedError);
+  }
+  if (invocation.status === "validation-error") {
     return Result.err(
       toRegistryChatToolError(
         agentInputValidationError({
-          failure: normalized,
+          failure: invocation.failure,
           subject: `${toolName} arguments`,
         }).error,
       ),
     );
   }
-  const scoped =
-    scopeArgs === undefined
-      ? Result.ok(normalized.value)
-      : await scopeArgs(normalized.value);
-  if (Result.isError(scoped)) {
-    return Result.err(scoped.error);
+  if (
+    invocation.status === "authority-refused" ||
+    invocation.status === "input-authority-refused"
+  ) {
+    return Result.err(
+      new ChatToolError({
+        kind: "unavailable",
+        message: `Your member role does not permit ${toolName}.`,
+      }),
+    );
   }
-
-  let response: McpToolResponse;
-  if (handler !== undefined) {
-    response = await runInjectedHandler({
-      args: scoped.value,
-      context,
-      toolName,
-      handler,
-    });
-  } else {
-    const invocation = await invokeStaticMcpTool({
-      args: scoped.value,
-      context,
-      definition: staticDefinition,
-    });
-    if (invocation.status === "refused") {
-      return Result.err(
-        new ChatToolError({
-          kind: "unavailable",
-          message: `Your member role does not permit ${toolName}.`,
-        }),
-      );
-    }
-    response = invocation.response;
-  }
+  const response = invocation.response;
   const finished = await finalizeToolEgress({
     context,
     mode: "default",
@@ -266,5 +267,5 @@ export const runRegistryReadTool = async ({
   });
   return Result.isError(projected)
     ? projected
-    : Result.ok(withChatInputNotes(projected.value, normalized.notes));
+    : Result.ok(withChatInputNotes(projected.value, invocation.inputNotes));
 };

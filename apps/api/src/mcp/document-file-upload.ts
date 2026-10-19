@@ -122,12 +122,26 @@ const invokeCapability = async ({
     context,
     definition,
   });
-  if (invocation.status === "refused") {
+  if (
+    invocation.status === "authority-refused" ||
+    invocation.status === "input-authority-refused"
+  ) {
     return {
       status: "error",
       result: structuredErrorResult({
         code: "permission_denied",
         message: "Your member role does not permit this operation",
+      }),
+    };
+  }
+  if (invocation.status === "validation-error") {
+    return {
+      status: "error",
+      result: structuredErrorResult({
+        code: "validation_error",
+        message: "Capability arguments need clarification",
+        issues: [...invocation.failure.issues],
+        hint: invocation.failure.hint,
       }),
     };
   }

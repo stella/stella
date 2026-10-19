@@ -18,6 +18,11 @@ import {
 import { DECISION_READER_TOOL_SET } from "@/api/mcp/decision-reader-tools";
 import { DOCUMENT_TOOL_SET } from "@/api/mcp/document-tools";
 import { FEEDBACK_TOOL_SET } from "@/api/mcp/feedback-tools";
+import {
+  findUndeclaredArguments,
+  normalizeObjectInputAtBoundary,
+  type BoundaryNormalizationFailure,
+} from "@/api/mcp/input-normalization";
 import { KNOWLEDGE_TOOL_SET } from "@/api/mcp/knowledge-tools";
 import { LEGAL_RESOLVE_TOOL_SET } from "@/api/mcp/legal-resolve-tools";
 import { LEGISLATION_TOOL_SET } from "@/api/mcp/legislation-tools";
@@ -28,6 +33,8 @@ import { STELLA_TOOL_SET } from "@/api/mcp/stella-tools";
 import { TEMPLATE_TOOL_SET } from "@/api/mcp/template-tools";
 import {
   isAccountAuthorizedForMcpTool,
+  type AccountOperationCheck,
+  mcpToolAuthorityDenial,
   mcpToolInputAuthorityDenial,
 } from "@/api/mcp/tool-authority";
 import {
@@ -503,8 +510,20 @@ export const getStaticMcpToolHandler = (
   MCP_TOOL_HANDLERS.default.get(toolName);
 
 export type StaticMcpToolInvocation =
-  | { status: "refused"; denial: "member-role" | "credential" | null }
-  | { status: "invoked"; response: Awaited<ReturnType<McpToolHandler>> };
+  | {
+      status: "authority-refused";
+      denial: "member-role" | "credential" | null;
+    }
+  | { status: "validation-error"; failure: BoundaryNormalizationFailure }
+  | {
+      status: "input-authority-refused";
+      denial: "member-role" | "credential";
+    }
+  | {
+      status: "invoked";
+      response: Awaited<ReturnType<McpToolHandler>>;
+      inputNotes: readonly string[];
+    };
 
 /** The sole execution seam for a registered static tool. */
 export const invokeStaticMcpTool = async ({
@@ -513,45 +532,103 @@ export const invokeStaticMcpTool = async ({
   context,
   definition,
   mode = "default",
+  checkAccountOperation,
 }: {
   args: Record<string, unknown>;
-  beforeInvoke?: (() => Promise<McpToolResponse | null>) | undefined;
+  beforeInvoke?:
+    | ((args: Record<string, unknown>) => Promise<McpToolResponse | null>)
+    | undefined;
   context: McpRequestContext;
   definition: McpToolDefinition;
   mode?: McpMode;
+  checkAccountOperation?: AccountOperationCheck;
 }): Promise<StaticMcpToolInvocation> => {
-  const denial = mcpToolInputAuthorityDenial(context, definition, args);
+  const denial = mcpToolAuthorityDenial(context, definition);
   if (denial !== null) {
-    return { status: "refused", denial };
+    return { status: "authority-refused", denial };
   }
-  if (!isAccountAuthorizedForMcpTool(context.userEmail, definition)) {
-    return { status: "refused", denial: null };
+  if (
+    !isAccountAuthorizedForMcpTool(
+      context.userEmail,
+      definition,
+      checkAccountOperation,
+    )
+  ) {
+    return { status: "authority-refused", denial: null };
   }
 
-  const earlyResponse = await beforeInvoke?.();
+  const unknownArgs = findUndeclaredArguments({
+    args,
+    inputSchema: definition.inputSchema,
+  });
+  if (unknownArgs !== undefined) {
+    return {
+      status: "validation-error",
+      failure: {
+        ok: false,
+        issues: unknownArgs.undeclared.map(({ key, suggestion }) => ({
+          path: key,
+          message:
+            suggestion === undefined
+              ? `Unknown parameter: ${key}`
+              : `Unknown parameter: ${key} (did you mean ${suggestion}?)`,
+        })),
+        hint: `Remove ${unknownArgs.undeclared.map(({ key }) => `'${key}'`).join(", ")}. ${definition.name} accepts only: ${unknownArgs.declared.join(", ")}.`,
+      },
+    };
+  }
+  const normalized = normalizeObjectInputAtBoundary({
+    access: definition.access,
+    exactProperties: ["confirm", "validate_only"],
+    schema: definition.inputSchema,
+    value: args,
+  });
+  if (!normalized.ok) {
+    return { status: "validation-error", failure: normalized };
+  }
+
+  const inputDenial = mcpToolInputAuthorityDenial(
+    context,
+    definition,
+    normalized.value,
+  );
+  if (inputDenial !== null) {
+    return { status: "input-authority-refused", denial: inputDenial };
+  }
+
+  const earlyResponse = await beforeInvoke?.(normalized.value);
   if (earlyResponse !== undefined && earlyResponse !== null) {
-    return { status: "invoked", response: earlyResponse };
+    return {
+      status: "invoked",
+      response: earlyResponse,
+      inputNotes: normalized.notes,
+    };
   }
 
   if (PUBLIC_MCP_TOOL_DEFINITION in definition) {
     const publicContext = createPublicMcpHandlerContext(context);
     if (publicContext.isErr()) {
-      return { status: "refused", denial: null };
+      return { status: "authority-refused", denial: null };
     }
     return {
       status: "invoked",
       response: await definition[PUBLIC_MCP_TOOL_HANDLER]({
-        args,
+        args: normalized.value,
         context: publicContext.value,
       }),
+      inputNotes: normalized.notes,
     };
   }
 
   const handler = getStaticMcpToolHandler(definition.name, mode);
   if (handler === undefined) {
-    return { status: "refused", denial: null };
+    return { status: "authority-refused", denial: null };
   }
-  return { status: "invoked", response: await handler({ args, context }) };
+  return {
+    status: "invoked",
+    response: await handler({ args: normalized.value, context }),
+    inputNotes: normalized.notes,
+  };
 };
 
 export const listStaticMcpToolDefinitions = (

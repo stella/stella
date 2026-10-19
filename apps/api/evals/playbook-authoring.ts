@@ -1049,12 +1049,26 @@ const chatMatterTools = ({
       context,
       definition: listPlaybooksDefinition,
     });
-    return invocation.status === "refused"
-      ? structuredErrorResult({
+    switch (invocation.status) {
+      case "authority-refused":
+      case "input-authority-refused":
+        return structuredErrorResult({
           code: "permission_denied",
           message: `${LIST_PLAYBOOKS} is unavailable.`,
-        })
-      : invocation.response;
+        });
+      case "validation-error":
+        return structuredErrorResult({
+          code: "validation_error",
+          message: `${LIST_PLAYBOOKS} arguments need clarification.`,
+          issues: [...invocation.failure.issues],
+          hint: invocation.failure.hint,
+        });
+      case "invoked":
+        return invocation.response;
+      default:
+        invocation satisfies never;
+        return panic("Unhandled static tool invocation");
+    }
   };
   const runReadTool: ChatCodeModeReadRunner = async (toolName, args) => {
     // The handler's view of the call: refs already resolved to ids, so the

@@ -2405,18 +2405,17 @@ describe("capability executor credential permission set", () => {
     // The budget bounds work that runs. Charging it before the authority check
     // would let a caller who may not perform the capability spend their window
     // on refusals.
-    await handleCapabilityCall({
+    const result = await handleCapabilityCall({
       args: {
         capability: "clauses.categories.create",
         input: { body: { name: "X" } },
       },
       context: createContext({ memberRole: "intern" }),
     });
+    expect(errorEnvelope(result).code).toBe("permission_denied");
     expect(consumeRateLimitMock).not.toHaveBeenCalled();
   });
 });
-
-// --- fix-2: route-level admin gate moved into the handler config -------------
 
 describe("case-law ingestion status admin gate (fix-2)", () => {
   test("a non-admin member -> permission_denied (gate now in the handler)", async () => {

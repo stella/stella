@@ -261,7 +261,7 @@ type McpToolAuthorityDenial = "member-role" | "credential";
  * `null` when the tool is authorized. The two need different recoveries (a
  * role change versus a credential that carries the grant).
  */
-const mcpToolAuthorityDenial = (
+export const mcpToolAuthorityDenial = (
   authority: McpEffectiveAuthority,
   definition: McpToolAuthorityDeclaration,
 ): McpToolAuthorityDenial | null => {

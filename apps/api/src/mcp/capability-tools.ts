@@ -1621,7 +1621,7 @@ const invokeCapabilityWithAuthority = async <T>({
   context: McpRequestContext;
   id: string;
   permissions: readonly PermissionInput[];
-  invoke: () => Promise<T>;
+  invoke: () => Promise<T> | T;
   map: (result: T) => McpToolResponse;
 }): Promise<McpToolResponse> => {
   if (
@@ -2020,6 +2020,17 @@ const executeInvoke = async ({
   }
   const endpoint = loaded.endpoint;
 
+  const declaredPermissions = endpoint.config.permissions;
+  if (
+    declaredPermissions !== undefined &&
+    !hasEffectiveAuthority(context, declaredPermissions)
+  ) {
+    return structuredErrorResult({
+      code: "permission_denied",
+      message: `Your member role does not permit capability "${id}"`,
+    });
+  }
+
   const isWorkspace = entry.handlerKind === "workspace";
   const validated = validateInvokeInput({
     config: endpoint.config,
@@ -2140,9 +2151,7 @@ const executeInvoke = async ({
     });
   }
 
-  const permissions = endpoint.config.permissions;
   const requiredPermissions = [
-    ...(permissions === undefined ? [] : [permissions]),
     ...(purposeRequirement === null ? [] : [purposeRequirement.permission]),
   ];
 
@@ -2151,7 +2160,7 @@ const executeInvoke = async ({
       context,
       id,
       permissions: requiredPermissions,
-      invoke: async () => ({ valid: true, capability: id }),
+      invoke: () => ({ valid: true, capability: id }),
       map: (payload) =>
         untypedStructuredEgressPlan({ payload, textFields: [] }),
     });

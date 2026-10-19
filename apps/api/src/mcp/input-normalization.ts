@@ -9,7 +9,10 @@ import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { MCP_AGENT_INPUT_READERS } from "@/api/mcp/agent-input-readers";
 import type { McpValidationIssue } from "@/api/mcp/error-codes";
 import { MCP_NOTE_AUDIENCE } from "@/api/mcp/tool-note-audience";
-import type { InternalToolErrorResult } from "@/api/mcp/tool-types";
+import type {
+  InternalToolErrorResult,
+  McpToolInputSchema,
+} from "@/api/mcp/tool-types";
 import { structuredErrorResult } from "@/api/mcp/tool-utils";
 
 type BoundaryNormalizationResult<TValue> =
@@ -22,6 +25,39 @@ export type BoundaryNormalizationFailure = Extract<
   BoundaryNormalizationResult<unknown>,
   { ok: false }
 >;
+
+export type UndeclaredArgument = {
+  key: string;
+  suggestion: string | undefined;
+};
+
+const argumentNameToken = (name: string): string =>
+  name.toLowerCase().replaceAll("_", "");
+
+export const findUndeclaredArguments = ({
+  args,
+  inputSchema,
+}: {
+  args: Record<string, unknown>;
+  inputSchema: McpToolInputSchema;
+}):
+  | { declared: readonly string[]; undeclared: readonly UndeclaredArgument[] }
+  | undefined => {
+  if (inputSchema["additionalProperties"] === true) {
+    return undefined;
+  }
+  const { properties } = inputSchema;
+  const declared = properties === undefined ? [] : Object.keys(properties);
+  const undeclared = Object.keys(args)
+    .filter((candidate) => !declared.includes(candidate))
+    .map((key) => ({
+      key,
+      suggestion: declared.find(
+        (name) => argumentNameToken(name) === argumentNameToken(key),
+      ),
+    }));
+  return undeclared.length === 0 ? undefined : { declared, undeclared };
+};
 
 const toBoundaryNormalizationFailure = (
   issues: readonly {

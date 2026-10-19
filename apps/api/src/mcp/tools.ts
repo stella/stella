@@ -40,7 +40,6 @@ import { modeAllowsGatewayTools } from "@/api/mcp/gateway/mode-policy";
 import { hasGrantedScope } from "@/api/mcp/gateway/static-tool-visibility";
 import {
   agentInputValidationError,
-  normalizeObjectInputAtBoundary,
   withInputNotes,
 } from "@/api/mcp/input-normalization";
 import { matterRequiredResult } from "@/api/mcp/matter-requirement";
@@ -56,7 +55,6 @@ import type {
   InternalToolResult,
   McpToolDefinition,
   McpToolResponse,
-  McpToolInputSchema,
   PublicMcpToolHandler,
   RuntimeMcpToolOutputContract,
   ToolScope,
@@ -73,6 +71,9 @@ import {
   serializeToolResult,
   structuredErrorResult,
 } from "@/api/mcp/tool-utils";
+
+export { findUndeclaredArguments } from "@/api/mcp/input-normalization";
+export type { UndeclaredArgument } from "@/api/mcp/input-normalization";
 
 const DOCUMENTS_MCP_CAPABILITY_IDS: ReadonlySet<string> = new Set(
   DOCUMENT_VERSION_UPLOAD_CAPABILITY_IDS,
@@ -116,41 +117,6 @@ const staticInvocationRefusal = (
  * the owning schema's business, and a schema that opts into `additionalProperties:
  * true` keeps its open contract.
  */
-export type UndeclaredArgument = {
-  key: string;
-  /** A declared key that differs only by case or underscores, if any. */
-  suggestion: string | undefined;
-};
-
-/** `matterId` and `matter_id` collapse to the same token; so do `validateOnly` and `validate_only`. */
-const argumentNameToken = (name: string): string =>
-  name.toLowerCase().replaceAll("_", "");
-
-export const findUndeclaredArguments = ({
-  args,
-  inputSchema,
-}: {
-  args: Record<string, unknown>;
-  inputSchema: McpToolInputSchema;
-}):
-  | { declared: readonly string[]; undeclared: readonly UndeclaredArgument[] }
-  | undefined => {
-  if (inputSchema["additionalProperties"] === true) {
-    return undefined;
-  }
-  const { properties } = inputSchema;
-  const declared = properties === undefined ? [] : Object.keys(properties);
-  const undeclared = Object.keys(args)
-    .filter((candidate) => !declared.includes(candidate))
-    .map((key) => ({
-      key,
-      suggestion: declared.find(
-        (name) => argumentNameToken(name) === argumentNameToken(key),
-      ),
-    }));
-  return undeclared.length === 0 ? undefined : { declared, undeclared };
-};
-
 /**
  * Whether this call needs `confirm: true`, and what to tell a model that
  * omitted it. One switch, not two: the decision and the refusal it produces
@@ -207,11 +173,6 @@ const transportConfirmation = (
       return panic("Unhandled MCP confirmation behavior");
   }
 };
-
-const undeclaredArgumentMessage = ({ key, suggestion }: UndeclaredArgument) =>
-  suggestion === undefined
-    ? `Unknown parameter: ${key}`
-    : `Unknown parameter: ${key} (did you mean ${suggestion}?)`;
 
 export const isDocumentsMcpCapabilityAllowed = (
   args: Record<string, unknown>,
@@ -544,41 +505,6 @@ const dispatchMcpToolCall = async ({
     );
   }
 
-  const unknownArgs = findUndeclaredArguments({
-    args,
-    inputSchema: staticTool.inputSchema,
-  });
-  if (unknownArgs) {
-    const keys = unknownArgs.undeclared.map((entry) => entry.key);
-    return serializeForSurface(
-      structuredErrorResult({
-        code: "validation_error",
-        message: `Unknown parameter${keys.length === 1 ? "" : "s"}: ${keys.join(", ")}`,
-        issues: unknownArgs.undeclared.map((entry) => ({
-          path: entry.key,
-          message: undeclaredArgumentMessage(entry),
-        })),
-        hint: `Remove ${keys.map((key) => `'${key}'`).join(", ")}. ${toolName} accepts only: ${unknownArgs.declared.join(", ")}.`,
-      }),
-    );
-  }
-
-  const normalized = normalizeObjectInputAtBoundary({
-    access: staticTool.access,
-    exactProperties: ["confirm", "validate_only"],
-    schema: staticTool.inputSchema,
-    value: args,
-  });
-  if (!normalized.ok) {
-    return serializeForSurface(
-      agentInputValidationError({
-        failure: normalized,
-        subject: `${toolName} arguments`,
-      }),
-    );
-  }
-  const normalizedArgs = normalized.value;
-  const inputNotes = normalized.notes;
   const handler = getStaticMcpToolHandler(toolName, mode);
   if (!handler && !(PUBLIC_MCP_TOOL_DEFINITION in staticTool)) {
     return serializeForSurface(unknownToolResult(toolName));
@@ -594,7 +520,7 @@ const dispatchMcpToolCall = async ({
       // Resolve confirmation from the registry's canonical behavior.
       // Capability-catalog and upstream tools defer the final decision to their
       // owning dispatch boundary because the selected target determines risk.
-      const confirmation = transportConfirmation(staticTool, normalizedArgs);
+      const confirmation = transportConfirmation(staticTool, args);
       const requiresConfirmation = confirmation.required;
       const unconfirmable = confirmation.required
         ? confirmationUnavailableResult({
@@ -605,7 +531,7 @@ const dispatchMcpToolCall = async ({
       if (unconfirmable !== null) {
         return serializeForSurface(unconfirmable);
       }
-      if (confirmation.required && normalizedArgs["confirm"] !== true) {
+      if (confirmation.required && args["confirm"] !== true) {
         return serializeForSurface(
           structuredErrorResult({
             code: "confirmation_required",
@@ -619,8 +545,8 @@ const dispatchMcpToolCall = async ({
         ? bindApprovedMcpAuditContext(context)
         : context;
       const invocation = await invokeStaticMcpTool({
-        args: normalizedArgs,
-        beforeInvoke: async () =>
+        args,
+        beforeInvoke: async (normalizedArgs) =>
           await staticToolReferenceRefusal({
             context,
             definition: staticTool,
@@ -632,7 +558,30 @@ const dispatchMcpToolCall = async ({
         definition: staticTool,
         mode,
       });
-      if (invocation.status === "refused") {
+      if (invocation.status === "validation-error") {
+        return serializeForSurface(
+          agentInputValidationError({
+            failure: invocation.failure,
+            subject: `${toolName} arguments`,
+          }),
+        );
+      }
+      if (invocation.status === "authority-refused") {
+        if (invocation.denial === null) {
+          return serializeForSurface(
+            structuredErrorResult({
+              code: "permission_denied",
+              message: "This operation is unavailable for this account.",
+            }),
+          );
+        }
+        return serializeForSurface(
+          structuredErrorResult(
+            mcpToolAuthorityDenialRefusal(toolName, invocation.denial),
+          ),
+        );
+      }
+      if (invocation.status === "input-authority-refused") {
         return serializeForSurface(
           staticInvocationRefusal(toolName, invocation.denial),
         );
@@ -657,7 +606,7 @@ const dispatchMcpToolCall = async ({
       );
       return withInputNotes(
         serializeForSurface(finalized, outputContract, toolName),
-        inputNotes,
+        invocation.inputNotes,
       );
     },
     catch: (error) => error,
