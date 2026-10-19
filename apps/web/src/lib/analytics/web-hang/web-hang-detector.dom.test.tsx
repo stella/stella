@@ -89,7 +89,8 @@ type SetupOptions = {
   now?: () => number;
   browser?: Window & Partial<Pick<typeof globalThis, "PerformanceObserver">>;
   attachment?: "immediate" | "deferred";
-  locks?: HangLocks;
+  /** `null` runs the detector without a Locks API. */
+  locks?: HangLocks | null;
 };
 
 const setup = ({
@@ -132,7 +133,7 @@ const setup = ({
 
 const setupRetirementScenario = (
   clock: { value: number },
-  locks: HangLocks | undefined = createFakeLocks().locks,
+  locks: HangLocks | null = createFakeLocks().locks,
 ) => {
   const intervalDescriptor = Object.getOwnPropertyDescriptor(
     window,
@@ -439,7 +440,7 @@ test("a hung document keeps its boot evidence while a healthy neighbour becomes 
 test("without the Locks API a healthy replacement never retires boot evidence", async () => {
   const clock = { value: 100 };
   seed("boot", { started: 1, heartbeat: 90 });
-  const replacement = setupRetirementScenario(clock, undefined);
+  const replacement = setupRetirementScenario(clock, null);
   try {
     clock.value += 2 * HANG_HEARTBEAT_MS;
     await replacement.retire();

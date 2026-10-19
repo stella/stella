@@ -103,9 +103,10 @@ export type HangDetectorOptions = {
   random?: () => number;
   /**
    * Document liveness: the browser releases a document's lock when the
-   * document is destroyed, while a hung document keeps holding it.
+   * document is destroyed, while a hung document keeps holding it. `null`
+   * means the browser has no Locks API.
    */
-  locks?: HangLocks;
+  locks?: HangLocks | null;
 };
 
 type LockNames = readonly { name?: string }[];
@@ -232,7 +233,7 @@ export const createWebHangDetector = ({
   build,
   now = () => Temporal.Now.instant().epochMilliseconds,
   random = Math.random,
-  locks = "locks" in browser.navigator ? browser.navigator.locks : undefined,
+  locks = "locks" in browser.navigator ? browser.navigator.locks : null,
 }: HangDetectorOptions) => {
   const local = browserStorage("local");
   // sessionStorage is copied by duplicate/opener tabs: identity belongs to
@@ -432,7 +433,7 @@ const detachedLockRequest = createDetached(() => undefined);
  * releases it with the marker: a page holding a Web Lock is not eligible for
  * the back/forward cache, and a hung page cannot run pagehide anyway.
  */
-const createLivenessLock = (locks: HangLocks | undefined, key: string) => {
+const createLivenessLock = (locks: HangLocks | null, key: string) => {
   let releaseHeld: (() => void) | undefined;
   return {
     acquire: () => {
@@ -457,7 +458,7 @@ const createLivenessLock = (locks: HangLocks | undefined, key: string) => {
 type BootCandidate = { key: string; heartbeat: number };
 type RetireBootCandidatesOptions = {
   storage: Storage | null;
-  locks: HangLocks | undefined;
+  locks: HangLocks | null;
   candidates: BootCandidate[];
   started: number;
   stopped: () => boolean;
