@@ -164,7 +164,9 @@ import { errorTag } from "@/api/lib/errors/utils";
 import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import { blendedRankSql } from "@/api/lib/legal-search/authority-sql";
 import {
+  caseLawAppliedProjections,
   caseLawCorpusAppliedRevision,
+  caseLawCorpusServingGeneration,
   caseLawCorpusDocumentCanRecur,
   currentCaseLawCorpusProjection,
 } from "@/api/lib/legal-search/case-law-corpus-projection";
@@ -192,6 +194,7 @@ import { requireCorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-
 import type {
   CorpusIndexScanReport,
   CorpusIndexScanTransport,
+  CorpusCandidateRankingInput,
 } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
   emptyCorpusIndexScan,
@@ -1602,6 +1605,8 @@ export const candidateDecisionRowsStatement = (
       // The copy a page's snippet and anchor are read from.
       appliedRevision:
         caseLawCorpusAppliedRevision(generation).as("applied_revision"),
+      appliedGeneration:
+        caseLawCorpusServingGeneration(generation).as("applied_generation"),
       canRecur:
         sql<boolean>`CASE WHEN ${caseLawCorpusDocumentCanRecur(generation)}
         THEN true ELSE EXISTS (
@@ -1772,9 +1777,8 @@ export const readCaseLawPageDecisionRows = async ({
   return new Map(read.rows.map((row) => [String(row.id), row]));
 };
 
-type RehydrateCaseLawCandidatesOptions = {
+type RehydrateCaseLawCandidatesOptions = CorpusCandidateRankingInput & {
   body: SearchDecisionsBody;
-  candidates: readonly ScoredCandidate[];
   caseLawDb: CaseLawPublicReadDb;
   /**
    * The court rank registry, read once for the request. Every court a
@@ -1882,6 +1886,7 @@ const rankCaseLawCandidates = ({
 export const rehydrateCaseLawCandidates = async ({
   body,
   candidates,
+  selectAppliedCandidates,
   caseLawDb,
   courtWeights,
   generation,
@@ -1916,13 +1921,19 @@ export const rehydrateCaseLawCandidates = async ({
   }
 
   const byId = new Map<string, CandidateDecisionRow>();
-  const revisionById = new Map<string, CorpusProjectionRevision>();
   for (const [id, row] of hydrated) {
     if (row !== null && row.appliedRevision !== null) {
       byId.set(id, row);
-      revisionById.set(id, row.appliedRevision);
     }
   }
+  const appliedById = caseLawAppliedProjections(byId.values());
+  const revisionById = new Map(
+    [...appliedById].map(([id, { revision }]) => [id, revision]),
+  );
+  const appliedCandidates =
+    selectAppliedCandidates === undefined
+      ? candidates
+      : selectAppliedCandidates(appliedById);
   const authorityById = new Map<string, number>();
   // The court a decision comes from is known the day it is published, which
   // is what citation authority cannot say about a judgment nothing cites yet.
@@ -1942,7 +1953,7 @@ export const rehydrateCaseLawCandidates = async ({
   // emitted page, so the representative is the same on every rescan.
   const ranked = rankCaseLawCandidates({
     authorityById,
-    candidates: candidates.filter((candidate) => byId.has(candidate.id)),
+    candidates: appliedCandidates.filter((candidate) => byId.has(candidate.id)),
     courtTierById,
     sort: body.sort ?? DEFAULT_SEARCH_SORT,
   });
@@ -1957,7 +1968,7 @@ export const rehydrateCaseLawCandidates = async ({
   return {
     context: null,
     revisionById,
-    rehydratedCandidateCount: candidates.filter((candidate) =>
+    rehydratedCandidateCount: appliedCandidates.filter((candidate) =>
       byId.has(candidate.id),
     ).length,
     ranked: representatives.filter((hit) => {
@@ -2262,6 +2273,7 @@ type ReadCaseLawSearchFacetsOptions = {
   /** The generation's document-id field, already asserted aggregatable. */
   decisionCountField: string;
   indexId: string;
+  aggregationFilter: string | undefined;
   /** Null when the request has no query the facets could be counted under. */
   queryFor: CorpusFacetQuery | null;
   readSourceRegistry: typeof readCaseLawSourceRegistry;
@@ -2294,6 +2306,7 @@ const readCaseLawSearchFacets = async ({
   courtWeights,
   decisionCountField,
   indexId,
+  aggregationFilter,
   queryFor,
   readSourceRegistry,
   recordCacheOutcome,
@@ -2331,7 +2344,7 @@ const readCaseLawSearchFacets = async ({
   }
 
   const aggregates = caseLawFacetAggregateCache.reader({
-    target: { ...serving, indexId },
+    target: { ...serving, indexId, aggregationFilter },
     scope: {
       type: "public_corpus",
       excludedSourceIds: registry.value.excludedSourceIds,
@@ -2340,6 +2353,7 @@ const readCaseLawSearchFacets = async ({
       await getCorpusIndexClient(serving.cluster).aggregate({
         indexId,
         ...input,
+        filter: aggregationFilter,
         observer,
       }),
   });
@@ -2911,11 +2925,15 @@ export const searchCorpusIndexDecisions = async ({
       unseenScoreUpperBound: caseLawUnseenScoreUpperBound(sort),
       // The scan names the groups to leave out: a page addressed by offset
       // walks windows the request's own cursor never named.
-      rankCandidates: async (candidates, { excludedGroups }) => {
+      rankCandidates: async (
+        candidates,
+        { excludedGroups, selectAppliedCandidates },
+      ) => {
         const ranking = await rehydrateCaseLawCandidates({
           hitDispositions,
           body,
           candidates,
+          selectAppliedCandidates,
           caseLawDb,
           courtWeights,
           generation,
@@ -2950,6 +2968,7 @@ export const searchCorpusIndexDecisions = async ({
         courtWeights,
         decisionCountField,
         indexId,
+        aggregationFilter: route.aggregationFilter,
         queryFor: facetQueries(),
         readSourceRegistry,
         recordCacheOutcome: (outcome) => {
