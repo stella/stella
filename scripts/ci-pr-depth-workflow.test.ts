@@ -140,6 +140,8 @@ const ORCHESTRATION_JOBS = new Set([
   "ci-result",
   "ci-quick-checks",
   "marketing-screenshots-cancel",
+  "code-quality-api-cancel",
+  "code-quality-web-rest-cancel",
 ]);
 
 type SkipViolationsOptions = {

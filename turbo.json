@@ -5,12 +5,22 @@
   // Runner identity separates native toolchains and platform-specific checks.
   "globalEnv": [
     "CI",
+    // CI test steps that run the flaky-test quarantine preload set this to the
+    // quarantine's digest, so a pass recorded under one registry never
+    // replays under another or without the preload.
+    "FLAKY_TEST_QUARANTINE_DIGEST",
     "PROPERTY_TEST_NUM_RUNS_FACTOR",
     "PROPERTY_TEST_SEED",
     "RUNNER_OS",
     "RUNNER_ARCH"
   ],
-  "globalPassThroughEnv": ["CI_GENERATED_SOURCES_MANIFEST"],
+  // BUN_OPTIONS carries the quarantine preload into each package's Bun test
+  // process; the report directory only locates its output.
+  "globalPassThroughEnv": [
+    "BUN_OPTIONS",
+    "CI_GENERATED_SOURCES_MANIFEST",
+    "FLAKY_TEST_QUARANTINE_REPORT_DIR"
+  ],
   // A patched dependency changes installed code for every task that resolves
   // it, but editing a patch file moves neither bun.lock (which records the
   // patch path, not its contents) nor package.json, so nothing Turbo hashes by
@@ -1460,6 +1470,7 @@
         "$TURBO_ROOT$/apps/web/src/features/chat/chat-runtime.ts",
         "$TURBO_ROOT$/apps/web/src/fonts.css",
         "$TURBO_ROOT$/apps/web/public/fonts/**",
+        "$TURBO_ROOT$/apps/web/public/stella-logo-512.png",
         "$TURBO_ROOT$/packages/mcp-apps/src/**",
         "$TURBO_ROOT$/packages/skills/blueprints/**",
         "$TURBO_ROOT$/packages/skills/skills/**",

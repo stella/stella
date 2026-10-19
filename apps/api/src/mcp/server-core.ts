@@ -87,6 +87,7 @@ import { getMcpInstructions } from "@/api/mcp/instructions";
 import {
   createMcpCorsHeaders,
   createMcpPreflightHeaders,
+  getMcpServerIcons,
   getMcpWwwAuthenticateHeader,
   type McpChallengeError,
 } from "@/api/mcp/metadata";
@@ -1018,7 +1019,11 @@ export const createMcpHttpRequestHandler = ({
     // MCP surface independent from the chat tool generics used elsewhere.
     // oxlint-disable-next-line typescript/no-deprecated -- low-level Server is the intended "advanced use case" API per the SDK; McpServer would couple us to chat tool generics
     const server = new Server(
-      { name: getMcpServerName(mode), version: MCP_SERVER_VERSION },
+      {
+        icons: getMcpServerIcons(),
+        name: getMcpServerName(mode),
+        version: MCP_SERVER_VERSION,
+      },
       {
         capabilities: { prompts: {}, resources: {}, tools: {} },
         instructions: getMcpInstructions(mode, context),

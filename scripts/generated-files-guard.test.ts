@@ -238,6 +238,11 @@ test("rejects delegated checks that no other CI step runs", () => {
   expect(delegatedGeneratorIds('["scan-engine-wasm"]')).toEqual(
     new Set(["scan-engine-wasm"]),
   );
+  // Entries whose condition did not hold are empty and name nothing.
+  expect(delegatedGeneratorIds('["",""]')).toEqual(new Set());
+  expect(delegatedGeneratorIds('["","api-typecheck-projects"]')).toEqual(
+    new Set(["api-typecheck-projects"]),
+  );
   for (const value of [
     "",
     "scan-engine-wasm",
@@ -256,7 +261,11 @@ test("rejects delegated checks that no other CI step runs", () => {
   }
 });
 
-test("Guard B delegates the WebAssembly check exactly in runs whose drift job builds it", () => {
+// Every family Guard B may hand to another job, each exactly in the runs whose
+// owning job runs its `checkedBy` step.
+const DELEGABLE = ["scan-engine-wasm", "api-typecheck-projects"] as const;
+
+test("Guard B delegates each check exactly in runs whose owning job runs it", () => {
   const step = namedJobStep(GUARD_JOB, "Generated files manifest guard");
   const env = step?.["env"];
   const delegation = isRecord(env) ? env[DELEGATED_CHECKS_ENV] : undefined;
@@ -286,9 +295,13 @@ test("Guard B delegates the WebAssembly check exactly in runs whose drift job bu
     expect(Array.isArray(gated) && gated.includes(owner), owner).toBe(true);
     return owner;
   };
-  const wasmOwner = ownerOf("scan-engine-wasm");
+  const owners = new Map(DELEGABLE.map((id) => [id, ownerOf(id)]));
   const guardCondition = jobCondition(GUARD_JOB);
-  const sources = [guardCondition, delegation, jobCondition(wasmOwner)];
+  const sources = [
+    guardCondition,
+    delegation,
+    ...[...owners.values()].map(jobCondition),
+  ];
   const outcomes = new Set<string>();
   for (const context of contexts(sources)) {
     if (evaluate(guardCondition, context) !== true) {
@@ -303,11 +316,19 @@ test("Guard B delegates the WebAssembly check exactly in runs whose drift job bu
       // Sound: a skipped family is built by its owner in this same run.
       expect(evaluate(jobCondition(ownerOf(id)), context), id).toBe(true);
     }
-    // Complete: no run builds the WebAssembly in both jobs.
-    expect(delegated.has("scan-engine-wasm")).toBe(
-      evaluate(jobCondition(wasmOwner), context) === true,
-    );
-    outcomes.add(value);
+    // Complete: no run performs a delegable check in both jobs.
+    for (const [id, owner] of owners) {
+      expect(delegated.has(id), id).toBe(
+        evaluate(jobCondition(owner), context) === true,
+      );
+    }
+    outcomes.add([...delegated].toSorted().join(","));
   }
-  expect([...outcomes].toSorted()).toEqual(['["scan-engine-wasm"]', "[]"]);
+  // Each entry delegates in some run, so none is dead text.
+  for (const id of DELEGABLE) {
+    expect(
+      [...outcomes].some((outcome) => outcome.includes(id)),
+      id,
+    ).toBe(true);
+  }
 });
