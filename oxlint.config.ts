@@ -1155,7 +1155,10 @@ const config = defineConfig({
     // get/set pairs are essentially absent — so the rule fires on
     // nothing while taking ~10% of lint time.
     "eslint/grouped-accessor-pairs": "off",
-    "no-restricted-imports": ["error", { paths: [noZodImport, noClassicTypeScriptImport] }],
+    "no-restricted-imports": [
+      "error",
+      { paths: [noZodImport, noClassicTypeScriptImport] },
+    ],
     "no-bare-error/no-bare-error": "error",
     "no-raw-eden-telemetry/no-raw-eden-telemetry": "error",
     "no-minted-auth-provider-id/no-minted-auth-provider-id": "error",
@@ -3534,7 +3537,11 @@ const config = defineConfig({
         "no-restricted-imports": [
           "error",
           {
-            paths: [noZodImport, noClassicTypeScriptImport, uiPragmaticDragAdapterImport],
+            paths: [
+              noZodImport,
+              noClassicTypeScriptImport,
+              uiPragmaticDragAdapterImport,
+            ],
             patterns: [
               ...uiStandaloneImports,
               pragmaticDragAdapterDeepImportBan,
@@ -3675,7 +3682,8 @@ const config = defineConfig({
           "error",
           {
             paths: [
-              noZodImport, noClassicTypeScriptImport,
+              noZodImport,
+              noClassicTypeScriptImport,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
             ],
@@ -3709,7 +3717,11 @@ const config = defineConfig({
         "no-restricted-imports": [
           "error",
           {
-            paths: [noZodImport, noClassicTypeScriptImport, ...webFolioAllLocalesImports],
+            paths: [
+              noZodImport,
+              noClassicTypeScriptImport,
+              ...webFolioAllLocalesImports,
+            ],
             patterns: [
               {
                 group: webLocalApiImportGroup,
@@ -3924,7 +3936,8 @@ const config = defineConfig({
           "error",
           {
             paths: [
-              noZodImport, noClassicTypeScriptImport,
+              noZodImport,
+              noClassicTypeScriptImport,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
             ],
@@ -3950,7 +3963,8 @@ const config = defineConfig({
           "error",
           {
             paths: [
-              noZodImport, noClassicTypeScriptImport,
+              noZodImport,
+              noClassicTypeScriptImport,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               {
@@ -3984,7 +3998,8 @@ const config = defineConfig({
           "error",
           {
             paths: [
-              noZodImport, noClassicTypeScriptImport,
+              noZodImport,
+              noClassicTypeScriptImport,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
             ],
@@ -4029,7 +4044,8 @@ const config = defineConfig({
           "error",
           {
             paths: [
-              noZodImport, noClassicTypeScriptImport,
+              noZodImport,
+              noClassicTypeScriptImport,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               {
@@ -4072,7 +4088,8 @@ const config = defineConfig({
           "error",
           {
             paths: [
-              noZodImport, noClassicTypeScriptImport,
+              noZodImport,
+              noClassicTypeScriptImport,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               {
@@ -4841,7 +4858,8 @@ const config = defineConfig({
           "error",
           {
             paths: [
-              noZodImport, noClassicTypeScriptImport,
+              noZodImport,
+              noClassicTypeScriptImport,
               apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
@@ -4868,7 +4886,8 @@ const config = defineConfig({
           "error",
           {
             paths: [
-              noZodImport, noClassicTypeScriptImport,
+              noZodImport,
+              noClassicTypeScriptImport,
               {
                 name: "@/api/db/root",
                 message:
@@ -4899,7 +4918,8 @@ const config = defineConfig({
           "error",
           {
             paths: [
-              noZodImport, noClassicTypeScriptImport,
+              noZodImport,
+              noClassicTypeScriptImport,
               apiValibotJsonSchemaImport,
               apiPortableSafeIdBrandingImport,
               ...apiProviderAdapterImports,
@@ -4917,7 +4937,8 @@ const config = defineConfig({
           "error",
           {
             paths: [
-              noZodImport, noClassicTypeScriptImport,
+              noZodImport,
+              noClassicTypeScriptImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
               ...apiProviderAdapterImports,
@@ -4938,7 +4959,8 @@ const config = defineConfig({
           "error",
           {
             paths: [
-              noZodImport, noClassicTypeScriptImport,
+              noZodImport,
+              noClassicTypeScriptImport,
               apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
@@ -5403,7 +5425,8 @@ const config = defineConfig({
           "error",
           {
             paths: [
-              noZodImport, noClassicTypeScriptImport,
+              noZodImport,
+              noClassicTypeScriptImport,
               apiValibotJsonSchemaImport,
               {
                 name: "@/api/lib/branded-types",
@@ -5454,7 +5477,13 @@ const config = defineConfig({
       rules: {
         "no-restricted-imports": [
           "error",
-          { paths: [noZodImport, noClassicTypeScriptImport, apiValibotJsonSchemaImport] },
+          {
+            paths: [
+              noZodImport,
+              noClassicTypeScriptImport,
+              apiValibotJsonSchemaImport,
+            ],
+          },
         ],
       },
     },
@@ -5522,7 +5551,8 @@ const config = defineConfig({
           "error",
           {
             paths: [
-              noZodImport, noClassicTypeScriptImport,
+              noZodImport,
+              noClassicTypeScriptImport,
               apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
