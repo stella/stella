@@ -902,7 +902,9 @@ test("only dedicated helpers end a failed code quality pull request run", () => 
     new Set(
       helpers.map(
         ([id]) =>
-          v.parse(cancellationJobSchema, ciJobs[id]).steps?.at(0)?.with?.script,
+          v.parse(cancellationJobSchema, ciJobs[id]).steps?.at(0)?.with?.[
+            "script"
+          ],
       ),
     ).size,
   ).toBe(1);

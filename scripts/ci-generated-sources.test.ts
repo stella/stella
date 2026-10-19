@@ -3,6 +3,7 @@ import { expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import * as v from "valibot";
 
+import { PR_CODE_QUALITY_CANCEL_JOBS } from "./ci-cancellation-contract";
 import { CI_GENERATION_COMMANDS } from "./generated-files";
 
 const stepSchema = v.looseObject({
@@ -52,12 +53,17 @@ const workflow = v.parse(workflowSchema, {
   ),
 });
 type Workflow = v.InferOutput<typeof workflowSchema>;
+// The cancellation helpers only end a failed run; they check no sources.
+const cancellationHelpers = new Set<string>(
+  Object.keys(PR_CODE_QUALITY_CANCEL_JOBS),
+);
 const consumerIds = (source: Workflow) =>
   Object.keys(source.jobs).filter(
     (id) =>
-      id.startsWith("ci-checks-") ||
-      id.startsWith("code-quality-") ||
-      id === "typecheck-baseline",
+      !cancellationHelpers.has(id) &&
+      (id.startsWith("ci-checks-") ||
+        id.startsWith("code-quality-") ||
+        id === "typecheck-baseline"),
   );
 const manifest = `\${{ github.workspace }}/.cache/ci-generated-sources/manifest.json`;
 const artifact = `generated-sources-\${{ needs.generated-sources.outputs.input_hash }}`;
