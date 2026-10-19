@@ -1,12 +1,12 @@
 import { DESKTOP_TIME_ENTRY_BATCH_STATUSES } from "@stll/api-contract/desktop-time-entries";
 
 import {
-  accountExports,
   caseLawDecisionCitationStatsState,
   desktopEditSessions,
   desktopTimeEntryBatches,
   workObligations,
 } from "@/api/db/schema";
+import { ACCOUNT_EXPORT_TRANSITIONS } from "@/api/lib/account-export/store";
 import {
   EU_COMPLETION_APPROVAL_PROOF,
   EU_COMPLETION_CONTROL_LIFECYCLE,
@@ -79,19 +79,6 @@ const UNMANAGED_REASONS = {
   coordinatedTimers:
     "Timer state and its entry projection are coordinated by the timer transaction owner pending migration.",
 } as const;
-
-// A failed attempt retries until its budget is spent; a ready archive expires.
-const ACCOUNT_EXPORT_TRANSITIONS = defineTransitions(
-  accountExports,
-  {
-    requested: ["processing", "failed"],
-    processing: ["ready", "requested", "failed"],
-    ready: ["expired"],
-    failed: [],
-    expired: [],
-  },
-  { terminal: ["failed", "expired"] },
-);
 
 // Refresh atomically publishes a complete recount; later recounts remain exact.
 const DECISION_CITATION_STATS_TRANSITIONS = defineKeyedTransitions({
