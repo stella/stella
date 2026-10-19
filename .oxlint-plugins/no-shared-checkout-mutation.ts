@@ -423,8 +423,7 @@ export default eslintCompatPlugin({
             ) {
               const receiver = resolveImport(context, node.callee.object);
               if (
-                receiver !== null &&
-                receiver.imported === "default" &&
+                receiver?.imported === "default" &&
                 NODE_FS_MODULES.has(receiver.moduleId)
               ) {
                 mutator = memberPropertyName(node.callee);
