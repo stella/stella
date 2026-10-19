@@ -210,27 +210,26 @@ const domesticVat = (
  * the standard rate is the organization's highest rate valid on the supply
  * date. Without a seller profile nothing is known, so lines keep 0 %.
  */
-export const decideInvoiceVat = ({
+const OUTSIDE_SCOPE: InvoiceVatDecision = {
+  vatTreatment: "outside_scope",
+  vatRateBps: 0,
+  reason: "outside_scope",
+};
+
+/**
+ * The VAT treatment a client's VAT ID implies for a seller with an EU VAT ID:
+ * reverse charge for a business in another member state, outside the scope
+ * for a business outside the EU, otherwise the domestic rate with the reason.
+ */
+const crossBorderVat = ({
   seller,
   buyerVatId,
   buyerVatPayer,
   buyerCountry,
   standardRateBps,
-}: DecideInvoiceVatOptions): InvoiceVatDecision => {
-  if (seller === null) {
-    return {
-      vatTreatment: "domestic_vat",
-      vatRateBps: 0,
-      reason: "no_seller_profile",
-    };
-  }
-  if (!seller.vatPayer) {
-    return {
-      vatTreatment: "not_vat_payer",
-      vatRateBps: 0,
-      reason: "seller_not_vat_payer",
-    };
-  }
+}: DecideInvoiceVatOptions & {
+  seller: NonNullable<DecideInvoiceVatOptions["seller"]>;
+}): InvoiceVatDecision => {
   const sellerState = euVatPrefix(seller.vatId);
   const buyerPrefix = vatIdCountry(buyerVatId);
   if (sellerState === null || buyerPrefix === null) {
@@ -249,11 +248,7 @@ export const decideInvoiceVat = ({
     // supply is abroad and the service is outside the scope of VAT, shown by
     // a well-formed business tax ID.
     return isWellFormedNonEuTaxId(buyerVatId)
-      ? {
-          vatTreatment: "outside_scope",
-          vatRateBps: 0,
-          reason: "outside_scope",
-        }
+      ? OUTSIDE_SCOPE
       : domesticVat(standardRateBps, "client_vat_id_invalid");
   }
   if (buyerVatPayer === false) {
@@ -268,6 +263,42 @@ export const decideInvoiceVat = ({
         reason: "reverse_charge",
       }
     : domesticVat(standardRateBps, "client_vat_id_invalid");
+};
+
+export const decideInvoiceVat = (
+  options: DecideInvoiceVatOptions,
+): InvoiceVatDecision => {
+  const { seller, buyerCountry } = options;
+  if (seller === null) {
+    return {
+      vatTreatment: "domestic_vat",
+      vatRateBps: 0,
+      reason: "no_seller_profile",
+    };
+  }
+  // Legal services to a client established outside the EU are supplied where
+  // the client is, whether a business (Art. 44) or a private person
+  // (Art. 59(c)); SK zákon 222/2004 Z. z. § 15 ods. 1 and § 16 ods. 15 and
+  // 16 písm. c). The address alone decides; no tax ID is needed.
+  const clientCountry = addressCountry(buyerCountry);
+  if (clientCountry !== null && !EU_MEMBER_STATES.has(clientCountry)) {
+    return OUTSIDE_SCOPE;
+  }
+  const crossBorder = crossBorderVat({ ...options, seller });
+  // A business client in another member state pays the VAT even when the
+  // seller is not a VAT payer: the invoice carries the reverse-charge wording
+  // (SK § 72 ods. 2 and § 74 ods. 1 písm. k); CZ § 29 odst. 2 písm. c).
+  if (crossBorder.vatTreatment === "reverse_charge") {
+    return crossBorder;
+  }
+  if (!seller.vatPayer) {
+    return {
+      vatTreatment: "not_vat_payer",
+      vatRateBps: 0,
+      reason: "seller_not_vat_payer",
+    };
+  }
+  return crossBorder;
 };
 
 export type InvoiceBuyerSnapshot = {

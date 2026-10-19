@@ -25,6 +25,38 @@ type VatCase = {
 
 const VAT_CASES: VatCase[] = [
   {
+    name: "a private client outside the EU is outside the scope (zákon 222/2004 Z. z. § 16 ods. 15, 16 písm. c)",
+    seller: { vatId: "SK2120123456", vatPayer: true },
+    buyerVatId: null,
+    buyerVatPayer: null,
+    buyerCountry: "US",
+    expected: ["outside_scope", 0, "outside_scope"],
+  },
+  {
+    name: "a non-payer outside the EU client is outside the scope too",
+    seller: { vatId: null, vatPayer: false },
+    buyerVatId: null,
+    buyerVatPayer: null,
+    buyerCountry: "CH",
+    expected: ["outside_scope", 0, "outside_scope"],
+  },
+  {
+    name: "a non-payer with a VAT ID billing an EU business is reverse charged (§ 72 ods. 2, § 74 ods. 1 písm. k)",
+    seller: { vatId: "SK2120123456", vatPayer: false },
+    buyerVatId: "DE298765432",
+    buyerVatPayer: null,
+    buyerCountry: "DE",
+    expected: ["reverse_charge", 0, "reverse_charge"],
+  },
+  {
+    name: "a non-payer billing a domestic client charges none",
+    seller: { vatId: "SK2120123456", vatPayer: false },
+    buyerVatId: "SK2020123456",
+    buyerVatPayer: null,
+    buyerCountry: "SK",
+    expected: ["not_vat_payer", 0, "seller_not_vat_payer"],
+  },
+  {
     name: "no seller profile keeps lines at 0 %",
     seller: null,
     buyerVatId: "CZ87654321",
@@ -105,12 +137,12 @@ const VAT_CASES: VatCase[] = [
     expected: ["domestic_vat", 2100, "client_vat_id_invalid"],
   },
   {
-    name: "a prefixed tax ID without a business tax ID's syntax outside the EU keeps the standard rate",
+    name: "a client outside the EU is outside the scope whatever its tax ID (Art. 44, 59(c))",
     seller: { vatId: "CZ12345678", vatPayer: true },
     buyerVatId: "GBAB",
     buyerVatPayer: null,
     buyerCountry: "GB",
-    expected: ["domestic_vat", 2100, "client_vat_id_invalid"],
+    expected: ["outside_scope", 0, "outside_scope"],
   },
   {
     name: "a Swiss business tax ID is outside the scope of VAT",
@@ -121,12 +153,12 @@ const VAT_CASES: VatCase[] = [
     expected: ["outside_scope", 0, "outside_scope"],
   },
   {
-    name: "a short arbitrary tax ID from another country outside the EU keeps the standard rate",
+    name: "a short arbitrary tax ID of a client outside the EU is outside the scope",
     seller: { vatId: "CZ12345678", vatPayer: true },
     buyerVatId: "USAB12",
     buyerVatPayer: null,
     buyerCountry: "US",
-    expected: ["domestic_vat", 2100, "client_vat_id_invalid"],
+    expected: ["outside_scope", 0, "outside_scope"],
   },
   {
     name: "a German VAT ID one digit short keeps the standard rate",
