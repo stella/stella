@@ -137,6 +137,32 @@ test("holding cites sorted source paragraphs inline with numbered and position l
   ).toBeUndefined();
 });
 
+test("paragraph references use the configured numbering system", () => {
+  const view = render(
+    <IntlProvider locale="en" messages={english} timeZone="UTC">
+      <FormattingProvider locale="ar-u-nu-arab" timeZone="UTC">
+        <WebReaderPresentationProvider>
+          <AiHeadnotes
+            analysis={analysis}
+            blocks={blocks}
+            onAnchorClick={() => undefined}
+          />
+        </WebReaderPresentationProvider>
+      </FormattingProvider>
+    </IntlProvider>,
+  );
+
+  expect(view.getByRole("button", { name: "Paragraph ٥٧" }).textContent).toBe(
+    "[٥٧]",
+  );
+  expect(view.getByRole("button", { name: "Paragraph ٩–١٢" }).textContent).toBe(
+    "[٩]-[١٢]",
+  );
+  expect(view.getByRole("button", { name: "Paragraph ¶١" }).textContent).toBe(
+    "[¶١]",
+  );
+});
+
 test("a range listed twice around another range from the same start shows once", () => {
   const interleaved = {
     ...analysis,

@@ -7,6 +7,8 @@ import { analysisLayersOf } from "@stll/legal-ast/analysis";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { BidiText } from "@stll/ui/bidi-text";
 
+import { useFormatter } from "@/i18n/formatting-context";
+
 import {
   ParagraphReference,
   resolveParagraphReference,
@@ -44,6 +46,7 @@ export const AiHeadnotes = ({
   onAnchorClick,
 }: AiHeadnotesProps) => {
   const t = useTranslations();
+  const format = useFormatter();
   const { abstract, holding } = analysisLayersOf(analysis);
 
   return (
@@ -59,7 +62,13 @@ export const AiHeadnotes = ({
               {holding.text}
             </BidiText>{" "}
             {[...holding.anchors]
-              .map((anchor) => resolveParagraphReference(blocks, anchor))
+              .map((range) =>
+                resolveParagraphReference({
+                  blocks,
+                  formatNumber: format.number,
+                  range,
+                }),
+              )
               .filter((anchor) => anchor !== null)
               // Both endpoints, so equal ranges sit side by side for the
               // dedupe below however the analysis listed them.

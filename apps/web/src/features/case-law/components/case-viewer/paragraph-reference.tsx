@@ -3,6 +3,8 @@ import { useTranslations } from "use-intl";
 import type { AnalysisAnchorRange } from "@stll/legal-ast/analysis";
 import type { Block } from "@stll/legal-ast/document-ast";
 
+import { useFormatter } from "@/i18n/formatting-context";
+
 type ParagraphReferenceProps = AnalysisAnchorRange & {
   blocks: Block[];
   onAnchorClick: (startAnchorId: string, endAnchorId: string) => void;
@@ -14,15 +16,29 @@ type ResolvedParagraphReference = AnalysisAnchorRange & {
   startIndex: number;
 };
 
-const paragraphNumber = (block: Block, index: number): string =>
-  block.type === "paragraph" && block.number !== undefined
-    ? String(block.number)
-    : `¶${index + 1}`;
+type FormatNumber = (value: number) => string;
 
-export const resolveParagraphReference = (
-  blocks: Block[],
-  { startAnchorId, endAnchorId }: AnalysisAnchorRange,
-): ResolvedParagraphReference | null => {
+const paragraphNumber = (
+  block: Block,
+  index: number,
+  formatNumber: FormatNumber,
+): string =>
+  block.type === "paragraph" && block.number !== undefined
+    ? formatNumber(block.number)
+    : `¶${formatNumber(index + 1)}`;
+
+type ResolveParagraphReferenceOptions = {
+  blocks: Block[];
+  formatNumber: FormatNumber;
+  range: AnalysisAnchorRange;
+};
+
+export const resolveParagraphReference = ({
+  blocks,
+  formatNumber,
+  range,
+}: ResolveParagraphReferenceOptions): ResolvedParagraphReference | null => {
+  const { startAnchorId, endAnchorId } = range;
   const startIndex = blocks.findIndex(
     (block) => block.anchorId === startAnchorId,
   );
@@ -31,8 +47,12 @@ export const resolveParagraphReference = (
     return null;
   }
 
-  const startNumber = paragraphNumber(blocks[startIndex], startIndex);
-  const endNumber = paragraphNumber(blocks[endIndex], endIndex);
+  const startNumber = paragraphNumber(
+    blocks[startIndex],
+    startIndex,
+    formatNumber,
+  );
+  const endNumber = paragraphNumber(blocks[endIndex], endIndex, formatNumber);
   return {
     startAnchorId,
     endAnchorId,
@@ -52,9 +72,11 @@ export const ParagraphReference = ({
   onAnchorClick,
 }: ParagraphReferenceProps) => {
   const t = useTranslations();
-  const reference = resolveParagraphReference(blocks, {
-    startAnchorId,
-    endAnchorId,
+  const format = useFormatter();
+  const reference = resolveParagraphReference({
+    blocks,
+    formatNumber: format.number,
+    range: { startAnchorId, endAnchorId },
   });
   if (reference === null) {
     return null;
