@@ -22,7 +22,7 @@ const createApp = () => {
     .use(
       capabilityRequestGuard({
         mountedRoutes: (): readonly MountedRoute[] => app.routes,
-        loadEndpoints: () => Promise.resolve([createThing, updateThing]),
+        loadEndpoints: async () => Promise.resolve([createThing, updateThing]),
       }),
     )
     .post("/things", createThing.handler)
