@@ -72,7 +72,7 @@ import {
   resolveVisitorOffer,
 } from "@/features/case-law/components/case-viewer/decision-workspace.logic";
 import type { NotesFilter } from "@/features/case-law/components/case-viewer/decision-workspace.logic";
-import { resolveParagraphReference } from "@/features/case-law/components/case-viewer/paragraph-reference";
+import { paragraphRangeIndices } from "@/features/case-law/components/case-viewer/paragraph-reference";
 import { useDecisionAnnotationSurface } from "@/features/case-law/components/case-viewer/use-decision-annotation-surface";
 import { useDecisionCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-citation-anchors";
 import { useDecisionProvisionAnchors } from "@/features/case-law/components/case-viewer/use-decision-provision-anchors";
@@ -573,7 +573,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
       behavior: "instant",
     });
     const range = ast
-      ? resolveParagraphReference(ast.blocks, {
+      ? paragraphRangeIndices(ast.blocks, {
           startAnchorId: anchorId,
           endAnchorId,
         })

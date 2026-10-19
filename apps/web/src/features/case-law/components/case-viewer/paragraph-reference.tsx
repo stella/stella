@@ -33,19 +33,35 @@ type ResolveParagraphReferenceOptions = {
   range: AnalysisAnchorRange;
 };
 
+/**
+ * Where a cited range sits among the blocks: its first and last block index,
+ * or null when either anchor is missing or the range runs backwards. The one
+ * place a range is located, for drawing a reference and for highlighting it.
+ */
+export const paragraphRangeIndices = (
+  blocks: readonly Block[],
+  { startAnchorId, endAnchorId }: AnalysisAnchorRange,
+): { startIndex: number; endIndex: number } | null => {
+  const startIndex = blocks.findIndex(
+    (block) => block.anchorId === startAnchorId,
+  );
+  const endIndex = blocks.findIndex((block) => block.anchorId === endAnchorId);
+  return startIndex === -1 || endIndex < startIndex
+    ? null
+    : { startIndex, endIndex };
+};
+
 export const resolveParagraphReference = ({
   blocks,
   formatNumber,
   range,
 }: ResolveParagraphReferenceOptions): ResolvedParagraphReference | null => {
-  const { startAnchorId, endAnchorId } = range;
-  const startIndex = blocks.findIndex(
-    (block) => block.anchorId === startAnchorId,
-  );
-  const endIndex = blocks.findIndex((block) => block.anchorId === endAnchorId);
-  if (startIndex === -1 || endIndex < startIndex) {
+  const indices = paragraphRangeIndices(blocks, range);
+  if (indices === null) {
     return null;
   }
+  const { startAnchorId, endAnchorId } = range;
+  const { startIndex, endIndex } = indices;
 
   const startNumber = paragraphNumber(
     blocks[startIndex],
