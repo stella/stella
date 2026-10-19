@@ -55,6 +55,11 @@ export type TwoPhaseSearchResult<Page extends TwoPhaseSearchPage<unknown>> = {
   nextCursor: string | null;
   paginationOutcome: SearchPaginationOutcome;
   relaxedHitCount: number;
+  /**
+   * The ids of the hits the relaxed phase supplied. A caller that drops hits
+   * after this point (hydration) counts what remains from these ids.
+   */
+  relaxedHitIds: ReadonlySet<string>;
   relaxedShown: boolean;
 };
 
@@ -88,6 +93,7 @@ export const runTwoPhaseSearch = async <
       nextCursor: null,
       paginationOutcome: { type: "complete" },
       relaxedHitCount: 0,
+      relaxedHitIds: new Set<string>(),
       relaxedShown: false,
     };
   }
@@ -108,6 +114,7 @@ export const runTwoPhaseSearch = async <
       nextCursor: encodeCursor(page, phase),
       paginationOutcome: page.paginationOutcome,
       relaxedHitCount: phase.type === "relaxed" ? hits.length : 0,
+      relaxedHitIds: new Set(phase.type === "relaxed" ? hits.map(hitId) : []),
       relaxedShown: phase.type === "relaxed" && hits.length > 0,
     };
   }
@@ -132,6 +139,7 @@ export const runTwoPhaseSearch = async <
       nextCursor: null,
       paginationOutcome: page.paginationOutcome,
       relaxedHitCount: 0,
+      relaxedHitIds: new Set<string>(),
       relaxedShown: false,
     };
   }
@@ -145,6 +153,7 @@ export const runTwoPhaseSearch = async <
     nextCursor: encodeCursor(extra, relaxed),
     paginationOutcome: extra.paginationOutcome,
     relaxedHitCount: relaxedHits.length,
+    relaxedHitIds: new Set(relaxedHits.map(hitId)),
     relaxedShown: relaxedHits.length > 0,
   };
 };

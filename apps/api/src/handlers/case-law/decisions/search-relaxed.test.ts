@@ -72,7 +72,7 @@ test("the handler response keeps strict metadata beside appended relaxed hits", 
       total: { type: SEARCH_TOTAL_TYPE.EXACT, count: 0 },
       facets: strictFacets,
     },
-    relaxedHitCount: 2,
+    relaxedHitIds: new Set(["relaxed-1", "relaxed-2"]),
     paginationOutcome: SEARCH_PAGINATION_COMPLETE,
     pageReach: SEARCH_PAGE_REACH.REACHED,
     answer: { queryUsed: "possible intoxication dismissal", warnings: [] },
@@ -84,4 +84,22 @@ test("the handler response keeps strict metadata beside appended relaxed hits", 
     relaxedHitCount: 2,
     facets: strictFacets,
   });
+});
+
+test("a relaxed decision dropped before serving is not counted", () => {
+  // The relaxed phase supplied two decisions; hydration served one of them,
+  // beside a strict match. Only the served relaxed decision counts.
+  const response = assembleTwoPhaseSearchResponse({
+    page: {
+      hits: [{ decisionId: "strict-1" }, { decisionId: "relaxed-1" }],
+      total: { type: SEARCH_TOTAL_TYPE.EXACT, count: 1 },
+      facets: null,
+    },
+    relaxedHitIds: new Set(["relaxed-1", "relaxed-scrubbed"]),
+    paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+    pageReach: SEARCH_PAGE_REACH.REACHED,
+    answer: { queryUsed: "possible intoxication dismissal", warnings: [] },
+  });
+
+  expect(response.relaxedHitCount).toBe(1);
 });

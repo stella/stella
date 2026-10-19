@@ -2430,29 +2430,40 @@ export const countDroppedIdentityCandidates = ({
 };
 
 type AssembleTwoPhaseSearchResponseOptions<
-  Page extends object,
+  Page extends { hits: readonly { decisionId: string }[] },
   Answer extends object,
 > = {
   answer: Answer;
   page: Page;
   pageReach: SearchPageReach;
   paginationOutcome: SearchPaginationOutcome;
-  relaxedHitCount: number;
+  /** The ids the relaxed phase supplied, before hydration dropped any. */
+  relaxedHitIds: ReadonlySet<string>;
 };
+
+/**
+ * How many of the hits the page finally serves came from the relaxed phase.
+ * Counted after hydration: a decision scrubbed meanwhile is neither served nor
+ * counted.
+ */
+export const servedRelaxedHitCount = (
+  hits: readonly { decisionId: string }[],
+  relaxedHitIds: ReadonlySet<string>,
+): number => hits.filter((hit) => relaxedHitIds.has(hit.decisionId)).length;
 
 /** Joins the strict result-set metadata to any hits appended by relaxation. */
 export const assembleTwoPhaseSearchResponse = <
-  Page extends object,
+  Page extends { hits: readonly { decisionId: string }[] },
   Answer extends object,
 >({
   answer,
   page,
   pageReach,
   paginationOutcome,
-  relaxedHitCount,
+  relaxedHitIds,
 }: AssembleTwoPhaseSearchResponseOptions<Page, Answer>) => ({
   ...page,
-  relaxedHitCount,
+  relaxedHitCount: servedRelaxedHitCount(page.hits, relaxedHitIds),
   paginationOutcome,
   pageReach,
   ...answer,
@@ -3009,14 +3020,15 @@ export const searchCorpusIndexDecisions = async ({
   return projectCaseLawSearchResponse(
     assembleTwoPhaseSearchResponse({
       page,
-      relaxedHitCount: twoPhase.relaxedHitCount,
+      relaxedHitIds: twoPhase.relaxedHitIds,
       paginationOutcome: searchPage.paginationOutcome,
       pageReach: searchPage.reach,
       answer: searchAnswer({
         body,
         interpretation,
         hitCount: page.hits.length,
-        relaxedMatch: twoPhase.relaxedShown,
+        relaxedMatch:
+          servedRelaxedHitCount(page.hits, twoPhase.relaxedHitIds) > 0,
         countsResultSet:
           isFirstPage && searchPageEnd(searchPage) === SEARCH_PAGE_END.COMPLETE,
       }),
