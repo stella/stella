@@ -155,6 +155,7 @@ const seedFixture = async (db: GatedTestDb) => {
       checkpointFileId,
       checkpointScanWarnings: null,
       checkpointSha256Hex: sha256Hex,
+      checkpointSnapshotSha256Hex: null,
       checkpointSizeBytes: 10,
       checkpointUpdatedAt,
       entityId,

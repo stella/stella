@@ -1109,22 +1109,34 @@ export const chatDraftMetaOptions = ({
 
 type ChatThreadTitleOptionsArgs = {
   activeOrganizationId: string;
-  enabled: boolean;
   key: ChatThreadTitleKey;
+  /**
+   * The server's read of this thread (`chatThreadOptions`), undefined until it
+   * resolves. The title is read only once that read reports the row exists: a
+   * thread whose first message is still being sent has no row yet, so its
+   * GET /title answers 404 and the error would stay on screen after the turn
+   * lands. Local message state is never that evidence, which is why this takes
+   * the whole server read rather than a flag.
+   */
+  persistedThread: ChatThreadFetched | undefined;
+  /** False when the caller already holds the title (the grouped list). */
+  needed?: boolean;
 };
 
-// By-id title read for shared chrome (the chat breadcrumb). The grouped-threads
-// list only holds the first loaded pages, so opening an older thread that has
-// scrolled out of that window would otherwise leave the crumb without a title.
-// The breadcrumb reads the grouped cache first and only enables this query on a
-// miss, so a thread already in the list never triggers a redundant fetch.
+// By-id title read for shared chrome (the chat breadcrumb, the floating thread
+// card). The grouped-threads list only holds the first loaded pages, so opening
+// an older thread that has scrolled out of that window would otherwise leave
+// the crumb without a title. The breadcrumb reads the grouped cache first and
+// only needs this query on a miss, so a thread already in the list never
+// triggers a redundant fetch.
 export const chatThreadTitleOptions = ({
   activeOrganizationId,
-  enabled,
   key,
+  persistedThread,
+  needed = true,
 }: ChatThreadTitleOptionsArgs) =>
   queryOptions({
-    enabled,
+    enabled: needed && persistedThread?.threadExists === true,
     staleTime: STALE_TIME.FIVETEEN.MINUTES,
     gcTime: STALE_TIME.FIVETEEN.MINUTES,
     queryKey: chatKeys.threadTitle(activeOrganizationId, key),
