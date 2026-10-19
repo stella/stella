@@ -65,6 +65,7 @@ import type { AstNode } from "./utils.ts";
 //
 // Allowed — Drizzle comparison calls:
 //   lt(runs.claimedAt, new Date(Date.now() - STALE_MS))  // fresh clock read
+//   lt(runs.claimedAt, new Date(testClock.now() - STALE_MS))
 //   lt(runs.claimedAt, new Date(Temporal.Now.instant().epochMilliseconds - STALE_MS))
 //   lte(jobs.nextRunAt, now)          // `const now = new Date()` in this file
 //   lte(sources.leaseExpiresAt, sql`now()`)              // compared in-DB
@@ -454,7 +455,8 @@ export default eslintCompatPlugin({
             "timestampCasToken / timestampMatchesCasToken, resolve the " +
             "boundary in-database by id, or cast the operand `::timestamptz`. " +
             "A cutoff read straight from the clock (new Date(), Date.now(), " +
-            "or imported Temporal.Now.instant().epochMilliseconds) " +
+            "a createTestClock instance's now(), or imported " +
+            "Temporal.Now.instant().epochMilliseconds) " +
             "is exempt; anything else that is sound needs a disable comment " +
             "saying why.",
         },
@@ -508,6 +510,67 @@ export default eslintCompatPlugin({
           });
         };
 
+        const isImportedCreateTestClock = (node: unknown): boolean => {
+          if (!isAstNode(node) || node.type !== "Identifier") {
+            return false;
+          }
+          const variable = resolveInScope(node);
+          if (variable === null) {
+            return false;
+          }
+          return variable.defs.some(
+            (definition) =>
+              definition.type === "ImportBinding" &&
+              isAstNode(definition.node) &&
+              definition.node.type === "ImportSpecifier" &&
+              isAstNode(definition.node.imported) &&
+              ((definition.node.imported.type === "Identifier" &&
+                definition.node.imported.name === "createTestClock") ||
+                (definition.node.imported.type === "Literal" &&
+                  definition.node.imported.value === "createTestClock")) &&
+              isAstNode(definition.parent) &&
+              definition.parent.type === "ImportDeclaration" &&
+              isAstNode(definition.parent.source) &&
+              definition.parent.source.value === "@stll/test-kit",
+          );
+        };
+
+        const isTestClockBinding = (node: unknown): boolean => {
+          if (!isAstNode(node) || node.type !== "Identifier") {
+            return false;
+          }
+          const variable = resolveInScope(node);
+          if (variable === null) {
+            return false;
+          }
+          return variable.defs.some((definition) => {
+            if (
+              definition.type !== "Variable" ||
+              !isAstNode(definition.node) ||
+              definition.node.type !== "VariableDeclarator" ||
+              !isAstNode(definition.parent) ||
+              definition.parent.type !== "VariableDeclaration" ||
+              definition.parent.kind !== "const" ||
+              !isAstNode(definition.node.init) ||
+              definition.node.init.type !== "CallExpression"
+            ) {
+              return false;
+            }
+            return isImportedCreateTestClock(definition.node.init.callee);
+          });
+        };
+
+        const isTestClockNowCall = (node: unknown): boolean =>
+          isAstNode(node) &&
+          node.type === "CallExpression" &&
+          Array.isArray(node.arguments) &&
+          node.arguments.length === 0 &&
+          isAstNode(node.callee) &&
+          node.callee.type === "MemberExpression" &&
+          node.callee.computed !== true &&
+          isIdentifierNamed(node.callee.property, "now") &&
+          isTestClockBinding(node.callee.object);
+
         const isNamedMember = (node: unknown, name: string): boolean =>
           isAstNode(node) &&
           node.type === "MemberExpression" &&
@@ -538,7 +601,9 @@ export default eslintCompatPlugin({
         };
 
         const isRecognizedClockRead = (node: unknown): boolean =>
-          isDateNowCall(node) || isTemporalNowEpochMilliseconds(node);
+          isDateNowCall(node) ||
+          isTestClockNowCall(node) ||
+          isTemporalNowEpochMilliseconds(node);
 
         const isFreshClockOperand = (node: unknown): boolean =>
           isFreshClockRead(node, isRecognizedClockRead);

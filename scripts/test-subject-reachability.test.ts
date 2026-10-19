@@ -51,6 +51,42 @@ const git = (root: string, ...args: string[]) => {
 };
 
 describe("test subject reachability", () => {
+  test("excludes lint specimens from explicit and tracked executable test inputs", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "subject-reachability-"));
+    roots.push(root);
+    const lintFixture = ".oxlint-plugins/__fixtures__/timer.fixture.test.ts";
+    const realTest = ".oxlint-plugins/__tests__/timer.test.ts";
+    mkdirSync(path.join(root, ".oxlint-plugins/__fixtures__"), {
+      recursive: true,
+    });
+    mkdirSync(path.join(root, ".oxlint-plugins/__tests__"), {
+      recursive: true,
+    });
+    writeFileSync(path.join(root, lintFixture), "setTimeout(() => {}, 1);\n");
+    writeFileSync(
+      path.join(root, realTest),
+      "test('unclassified', () => {});\n",
+    );
+    git(root, "init", "-q");
+    git(root, "add", ".");
+    const expected = [
+      {
+        file: realTest,
+        kind: "no-classified-reachability" as const,
+        attempted: REACHABILITY_CATEGORIES,
+      },
+    ];
+    expect(
+      analyzeTestSubjectReachability({
+        repoRoot: root,
+        files: [realTest, lintFixture],
+      }),
+    ).toEqual(expected);
+    expect(analyzeTestSubjectReachability({ repoRoot: root })).toEqual(
+      expected,
+    );
+  });
+
   test("the compiler source index and independent sibling parses give identical findings", () => {
     const input = fixture("");
     const sibling = path.join(input.root, "apps/example/src/widget.ts");

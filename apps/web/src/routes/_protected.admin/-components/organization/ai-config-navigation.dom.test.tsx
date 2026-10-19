@@ -7,7 +7,6 @@ import {
   DECISION_MODEL_CATALOG,
   DECISION_MODEL_PROVIDERS,
 } from "@stll/ai-catalog";
-import { sleep } from "@stll/concurrency/sleep";
 
 import { getModelOptionsForRole } from "@/components/ai-config-role-models.logic";
 import messages from "@/i18n/langs/en.json";
@@ -276,7 +275,7 @@ afterEach(() => {
 afterAll(async () => {
   globalThis.fetch = originalFetch;
   cleanup();
-  await act(async () => await sleep(50));
+  await act(async () => await Promise.resolve());
   await unregisterDomEnvironment();
 });
 
