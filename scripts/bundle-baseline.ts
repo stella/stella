@@ -698,7 +698,11 @@ const runSelfTest = (): number => {
   ) {
     failures.push("checkDuplicates did not fail on a repeated block");
   }
-  if (checkDuplicates([], (line) => flagged.push(line)) !== 0) {
+  if (
+    checkDuplicates([], (line) => {
+      flagged.push(line);
+    }) !== 0
+  ) {
     failures.push("checkDuplicates failed without a repeated block");
   }
 
