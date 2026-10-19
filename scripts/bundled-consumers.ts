@@ -178,6 +178,30 @@ export const scanBundledConsumers = (
       return 0;
     });
 
+// Sites compared as multisets: an identical site found twice (the same
+// call building two artifacts) needs two registrations, each with its own
+// boot-check decision.
+export const compareSiteCounts = (
+  found: readonly string[],
+  registered: readonly string[],
+): { missing: string[]; stale: string[] } => {
+  const surplus = (from: readonly string[], against: readonly string[]) => {
+    const remaining = new Map<string, number>();
+    for (const site of against) {
+      remaining.set(site, (remaining.get(site) ?? 0) + 1);
+    }
+    return from.filter((site) => {
+      const left = remaining.get(site) ?? 0;
+      remaining.set(site, left - 1);
+      return left <= 0;
+    });
+  };
+  return {
+    missing: surplus(found, registered),
+    stale: surplus(registered, found),
+  };
+};
+
 // This census intentionally lives beside its scanner. Adding a bundling site
 // therefore requires an explicit decision about how the packaged output boots.
 export const BUNDLED_CONSUMERS = [

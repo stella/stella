@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   BUNDLED_CONSUMERS,
+  compareSiteCounts,
   scanBundledConsumers,
   type BundledConsumerSite,
   type RepositoryFile,
@@ -54,20 +55,10 @@ describe("bundled consumer census", () => {
   test("matches every repository bundling site in both directions", async () => {
     const found = scanBundledConsumers(await repositoryFiles()).map(siteName);
     const registered = BUNDLED_CONSUMERS.map(siteName);
-    const duplicateRegistrations = registered.filter(
-      (site, index) => registered.indexOf(site) !== index,
-    );
-    const missing = found.filter((site) => !registered.includes(site));
-    const stale = registered.filter((site) => !found.includes(site));
 
-    expect({
-      duplicateRegistrations,
-      missingRegistryEntries: missing,
-      staleRegistryEntries: stale,
-    }).toEqual({
-      duplicateRegistrations: [],
-      missingRegistryEntries: [],
-      staleRegistryEntries: [],
+    expect(compareSiteCounts(found, registered)).toEqual({
+      missing: [],
+      stale: [],
     });
   });
 
@@ -205,6 +196,28 @@ describe("bundling-site scanner", () => {
       { file: file.path, command: 'Bun.build(entrypoints: ["src/server.ts"])' },
       { file: file.path, command: "Bun.build(options)" },
     ]);
+  });
+
+  test("needs one registration per occurrence of an identical site", () => {
+    const file = {
+      path: "scripts/build-twice.ts",
+      contents: [
+        'await Bun.build({ entrypoints: ["src/app.ts"], outdir: "dist/a" });',
+        'await Bun.build({ entrypoints: ["src/app.ts"], outdir: "dist/b" });',
+        "",
+      ].join("\n"),
+    };
+    const found = scanBundledConsumers([file]).map(siteName);
+    expect(found).toHaveLength(2);
+    expect(compareSiteCounts(found, found.slice(0, 1))).toEqual({
+      missing: [found[0]],
+      stale: [],
+    });
+    expect(compareSiteCounts(found.slice(0, 1), found)).toEqual({
+      missing: [],
+      stale: [found[0]],
+    });
+    expect(compareSiteCounts(found, found)).toEqual({ missing: [], stale: [] });
   });
 
   test("ignores Bun build mentions that are not calls", () => {
