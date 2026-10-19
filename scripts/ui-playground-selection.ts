@@ -404,6 +404,19 @@ export const selectGeometrySpecs = (
   ) {
     return [];
   }
+  // Only source and stylesheet imports are traced. Any other file a page can
+  // reach (an image, a font, an asset a stylesheet references with url())
+  // is not, so changing one selects every spec.
+  if (
+    [...changed].some(
+      (file) =>
+        (file.startsWith(`${WEB_SOURCE}/`) ||
+          /^packages\/[^/]+\/src\//u.test(file)) &&
+        !SOURCE_EXTENSIONS.some((extension) => file.endsWith(extension)),
+    )
+  ) {
+    return inventory.specs;
+  }
   const shell = appShellClosure(root);
   if (!shell.complete || [...changed].some((file) => shell.files.has(file))) {
     return inventory.specs;

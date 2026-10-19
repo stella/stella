@@ -326,3 +326,31 @@ test("the web and root manifests select every spec", () => {
     rmSync(fixture.root, { force: true, recursive: true });
   }
 });
+
+test("an untraced asset change selects every spec", () => {
+  const fixture = createSelectionFixture();
+  try {
+    fixture.write(
+      "apps/web/src/routes/dev/fixture.tsx",
+      'import "./fixture.css";\nexport {};\n',
+    );
+    fixture.write(
+      "apps/web/src/routes/dev/fixture.css",
+      ".page { background-image: url('./background.svg'); }\n",
+    );
+    fixture.write("apps/web/src/routes/dev/background.svg", "<svg />\n");
+    for (const file of [
+      "apps/web/src/routes/dev/background.svg",
+      "packages/ui/src/fonts/inter.woff2",
+    ]) {
+      expect(selectGeometrySpecs([file], fixture.root), file).toEqual([
+        fixture.spec,
+      ]);
+    }
+    expect(
+      selectGeometrySpecs(["apps/web/src/unrelated.ts"], fixture.root),
+    ).toEqual([]);
+  } finally {
+    rmSync(fixture.root, { force: true, recursive: true });
+  }
+});
