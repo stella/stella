@@ -633,7 +633,7 @@ export const createMcpOAuthCallbackHandler = (
                 connectorId: row.connectorId,
                 verdict,
               }),
-            exchange: () =>
+            exchange: async () =>
               exchangeAuthorizationCode({
                 metadata: authorization.metadata,
                 permit,
