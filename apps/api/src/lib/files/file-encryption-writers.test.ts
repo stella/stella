@@ -1,3 +1,4 @@
+import ts from "@typescript/typescript6";
 // Every writer of a file's `encrypted` attribute takes it from the detector.
 //
 // The writers below take a `FileEncryption`, which only
@@ -12,7 +13,6 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
 
 import type { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import type { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-entity-version-from-buffer";

@@ -102,7 +102,7 @@ schema_file_has_migration_relevant_diff() {
   bun -e '
     const { spawnSync } = require("node:child_process");
     const fs = require("node:fs");
-    const ts = require("typescript");
+    const ts = require("@typescript/typescript6");
 
     const baseRef = process.argv.at(1);
     const changedFile = process.argv.at(2);

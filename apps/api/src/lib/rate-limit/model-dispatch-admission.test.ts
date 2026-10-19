@@ -1,5 +1,5 @@
+import ts from "@typescript/typescript6";
 import { describe, expect, mock, test } from "bun:test";
-import ts from "typescript";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 

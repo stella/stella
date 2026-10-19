@@ -20,10 +20,10 @@
 //   bun scripts/codemod-icons.ts           rewrite in place
 //   bun scripts/codemod-icons.ts --check   exit 1 when a rewrite is pending
 
+import ts from "@typescript/typescript6";
 import { panic } from "better-result";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
 
 import { repoRelativePath } from "@stll/portable-path";
 

@@ -1,7 +1,7 @@
+import ts from "@typescript/typescript6";
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
 import * as v from "valibot";
 
 import { DEDICATED_CONNECTIONS_PER_PROCESS } from "@/api/db/dedicated-connection-slots";

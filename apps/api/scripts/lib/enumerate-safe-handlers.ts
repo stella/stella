@@ -1,5 +1,5 @@
+import ts from "@typescript/typescript6";
 import path from "node:path";
-import ts from "typescript";
 
 import { compareCodeUnit } from "@stll/collation";
 import { loadLocalModule } from "@stll/start-runtime/local-module-loader";

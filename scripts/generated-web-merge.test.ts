@@ -1,3 +1,4 @@
+import ts from "@typescript/typescript6";
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import {
@@ -11,7 +12,6 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import ts from "typescript";
 
 const repository = path.resolve(import.meta.dir, "..");
 const generators = ["apps/api/scripts/generate-web-api-types.ts"];

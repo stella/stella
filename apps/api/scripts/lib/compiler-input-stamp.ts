@@ -1,3 +1,4 @@
+import ts from "@typescript/typescript6";
 // Records every file-system question a TypeScript program asks while it is
 // built (file reads, existence probes, real paths, directory listings) and
 // replays them later. When every answer is unchanged, the program would load
@@ -8,7 +9,6 @@ import { Result } from "better-result";
 import { type Stats, readFileSync, realpathSync, statSync } from "node:fs";
 import { readFile, realpath } from "node:fs/promises";
 import path from "node:path";
-import ts from "typescript";
 import * as v from "valibot";
 
 import { repoRelativePath } from "@stll/portable-path";

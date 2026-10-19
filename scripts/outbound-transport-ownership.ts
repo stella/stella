@@ -1,6 +1,6 @@
+import ts from "@typescript/typescript6";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
 
 import { canonicalModuleId } from "../.oxlint-plugins/module-id.ts";
 import {

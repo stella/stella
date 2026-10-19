@@ -50,9 +50,9 @@
 //   // SAFETY: writes are capped at LIMITS.fooPerOrg, so this cannot grow unbounded.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
+import ts from "@typescript/typescript6";
 import { panic } from "better-result";
 import { readFileSync } from "node:fs";
-import ts from "typescript";
 
 import {
   getPropertyName,

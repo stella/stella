@@ -1,6 +1,6 @@
+import ts from "@typescript/typescript6";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
 
 import oxlintConfig from "../oxlint.config.ts";
 import { readScopes } from "./oxlint-config-scopes.ts";

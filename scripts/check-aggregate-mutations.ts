@@ -1,9 +1,9 @@
+import ts from "@typescript/typescript6";
 import { panic } from "better-result";
 import { spawnSync } from "node:child_process";
 /** Enumerates mutation route registrations without importing the API stack. */
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
 import * as v from "valibot";
 
 import { compareCodeUnit } from "@stll/collation";

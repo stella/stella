@@ -7,10 +7,10 @@
  * fixture repository the test creates is allowed with a stated reason.
  */
 
+import ts from "@typescript/typescript6";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 // Every test convention a CI runner picks up, script and shell tests included.

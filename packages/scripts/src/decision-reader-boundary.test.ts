@@ -1,7 +1,7 @@
+import ts from "@typescript/typescript6";
 import { expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
 
 import { repoRelativePath } from "@stll/portable-path";
 

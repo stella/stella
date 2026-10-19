@@ -1,7 +1,7 @@
+import ts from "@typescript/typescript6";
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
 
 const apiRoot = path.resolve(import.meta.dir, "../../../apps/api");
 const fields = new Set([

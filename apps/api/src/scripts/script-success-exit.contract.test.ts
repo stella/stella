@@ -1,6 +1,6 @@
+import ts from "@typescript/typescript6";
 import { expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
-import ts from "typescript";
 
 const successPhase = (source: string): string => {
   const parsed = ts.createSourceFile(

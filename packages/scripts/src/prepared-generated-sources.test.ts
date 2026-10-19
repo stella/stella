@@ -39,7 +39,11 @@ const fixture = () => {
     writeFileSync(destination, bytes);
   };
   write(
-    "node_modules/typescript/package.json",
+    "node_modules/@typescript/typescript6/package.json",
+    JSON.stringify({ version: "test-wrapper" }),
+  );
+  write(
+    "node_modules/@typescript/old/package.json",
     JSON.stringify({ version: "test-compiler" }),
   );
   write("input.ts", "export const input = 1;\n");

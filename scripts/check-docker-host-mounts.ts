@@ -1,6 +1,6 @@
+import ts from "@typescript/typescript6";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
 
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
 

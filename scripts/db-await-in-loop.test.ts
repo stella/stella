@@ -1,3 +1,4 @@
+import ts from "@typescript/typescript6";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import {
   mkdirSync,
@@ -7,7 +8,6 @@ import {
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
 
 import {
   type DbAwaitInLoopReport,

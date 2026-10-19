@@ -1,7 +1,7 @@
+import ts from "@typescript/typescript6";
 import { panic } from "better-result";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
 import * as v from "valibot";
 
 import { withoutTsgoOnlyOptionDiagnostics } from "./tsgo-compiler-options";

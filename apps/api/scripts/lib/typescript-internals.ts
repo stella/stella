@@ -3,8 +3,8 @@
 // on and panics when a compiler upgrade moves it, so the printer fails loudly
 // instead of silently dropping a readonly modifier or a symbol key.
 
+import ts from "@typescript/typescript6";
 import { panic } from "better-result";
-import ts from "typescript";
 
 const SUPPORTED_MAJOR = "6.";
 // `CheckFlags.Readonly` in src/compiler/types.ts.

@@ -1,10 +1,10 @@
+import ts from "@typescript/typescript6";
 // Add each new dated exception at its owner, then register its adapter here.
 // The census covers policy/config expiry keys; prose-only review promises need
 // an explicit adapter (see docs/maintenance/dated-waivers.md).
 import { panic } from "better-result";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
 
 import { compareCodeUnit } from "@stll/collation";
 

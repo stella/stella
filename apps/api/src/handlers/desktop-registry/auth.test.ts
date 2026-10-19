@@ -1,4 +1,5 @@
 import { apiKey } from "@better-auth/api-key";
+import ts from "@typescript/typescript6";
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { bearer } from "better-auth/plugins";
@@ -6,7 +7,6 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import ts from "typescript";
 import * as v from "valibot";
 
 import { env } from "@/api/env";

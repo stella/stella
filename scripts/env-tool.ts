@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import ts from "@typescript/typescript6";
 import { panic, Result } from "better-result";
 import {
   existsSync,
@@ -10,7 +11,6 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { parseEnv } from "node:util";
-import ts from "typescript";
 import * as v from "valibot";
 
 import { repoRelativePath } from "@stll/portable-path";

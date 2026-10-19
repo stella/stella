@@ -31,9 +31,9 @@
     "@stll/skills": "workspace:*",
     "@stll/text-normalize": "workspace:*",
     "@stll/time": "workspace:*",
+    "@typescript/typescript6": "catalog:",
     "better-result": "catalog:",
-    "oxfmt": "catalog:",
-    "typescript": "catalog:"
+    "oxfmt": "catalog:"
   },
   "devDependencies": {
     "@stll/property-testing": "workspace:*",

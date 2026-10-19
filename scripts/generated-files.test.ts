@@ -1,3 +1,4 @@
+import ts from "@typescript/typescript6";
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
@@ -12,7 +13,6 @@ import {
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
 import { pathToFileURL } from "node:url";
-import ts from "typescript";
 import * as v from "valibot";
 
 import { generateCapabilityRuntime } from "../apps/api/scripts/generate-capability-runtime";

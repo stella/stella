@@ -1,6 +1,6 @@
+import ts from "@typescript/typescript6";
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
-import ts from "typescript";
 
 const root = path.resolve(import.meta.dir, "../../../../..");
 const writeHelpers = new Set([

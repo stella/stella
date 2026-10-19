@@ -75,7 +75,8 @@
     "@types/react": "catalog:react19",
     "@types/react-dom": "catalog:react19",
     "bun-types": "catalog:",
-    "fast-check": "catalog:"
+    "fast-check": "catalog:",
+    "typescript": "catalog:ts6"
   },
   "crawlPosture": "public"
 }

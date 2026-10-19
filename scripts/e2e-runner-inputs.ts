@@ -1,6 +1,6 @@
+import ts from "@typescript/typescript6";
 import { lstatSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
 
 import { repoRelativePath } from "@stll/portable-path";
 

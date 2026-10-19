@@ -16,6 +16,7 @@
 //   bun scripts/typecheck-coverage.ts --self-test
 //   bun scripts/typecheck-coverage.ts --autofix <changed-source>...
 
+import ts from "@typescript/typescript6";
 import { panic } from "better-result";
 import {
   type Dirent,
@@ -25,7 +26,6 @@ import {
   statSync,
 } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
 
 import { isPathInside, repoRelativePath } from "@stll/portable-path";
 

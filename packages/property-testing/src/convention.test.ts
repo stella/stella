@@ -1,8 +1,8 @@
+import ts from "@typescript/typescript6";
 import { describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import ts from "typescript";
 
 // Repo root, four levels up from this file (packages/property-testing/src).
 const REPO_ROOT = path.resolve(import.meta.dir, "../../..");

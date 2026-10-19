@@ -1,3 +1,4 @@
+import ts from "@typescript/typescript6";
 import { expect, test } from "bun:test";
 import {
   existsSync,
@@ -11,7 +12,6 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import ts from "typescript";
 
 import { repoRelativePath } from "@stll/portable-path";
 import { rejectionOf } from "@stll/property-testing/rejection";

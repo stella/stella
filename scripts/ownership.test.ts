@@ -1,3 +1,4 @@
+import ts from "@typescript/typescript6";
 import { describe, expect, test } from "bun:test";
 import {
   copyFileSync,
@@ -13,7 +14,6 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import ts from "typescript";
 
 import { lintSingleRule } from "../.oxlint-plugins/__tests__/lint-single-rule.ts";
 import {

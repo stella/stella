@@ -7,9 +7,9 @@
  * that is not listed below with a reason.
  */
 
+import ts from "@typescript/typescript6";
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
-import ts from "typescript";
 
 const API_ROOT = path.resolve(import.meta.dir, "../..");
 /** The one module allowed to resolve the client address. */

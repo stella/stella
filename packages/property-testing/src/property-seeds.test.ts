@@ -1,7 +1,7 @@
+import ts from "@typescript/typescript6";
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
 
 import { PropertyTestConfigError } from "./index";
 import { REPO_ROOT, parsePinnedSeeds, readPinnedSeeds } from "./pinned-seeds";

@@ -1,3 +1,4 @@
+import ts from "@typescript/typescript6";
 import { panic } from "better-result";
 import {
   existsSync,
@@ -10,7 +11,6 @@ import {
 } from "node:fs";
 import { builtinModules } from "node:module";
 import path from "node:path";
-import ts from "typescript";
 import * as v from "valibot";
 
 import { GENERATORS, type Generator } from "./generated-files";

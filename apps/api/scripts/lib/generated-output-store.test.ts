@@ -1,3 +1,4 @@
+import ts from "@typescript/typescript6";
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import {
   cpSync,
@@ -12,7 +13,6 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import ts from "typescript";
 
 import {
   type CompilerInputStamp,

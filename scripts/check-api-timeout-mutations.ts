@@ -1,8 +1,8 @@
 /** Keep timeout changes on shared pools behind their budget-owning setter. */
 
+import ts from "@typescript/typescript6";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
 
 import { compareCodeUnit } from "@stll/collation";
 

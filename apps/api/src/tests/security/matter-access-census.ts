@@ -1,5 +1,5 @@
+import ts from "@typescript/typescript6";
 import path from "node:path";
-import ts from "typescript";
 
 /**
  * Census of the modules that decide matter (workspace) access outside the

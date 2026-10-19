@@ -43,10 +43,10 @@
 //   bun scripts/queue-authority.ts --write
 //   bun scripts/queue-authority.ts --self-test
 
+import ts from "@typescript/typescript6";
 import { panic } from "better-result";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
 import * as v from "valibot";
 
 import { compareCodeUnit } from "@stll/collation";

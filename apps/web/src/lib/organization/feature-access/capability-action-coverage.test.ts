@@ -1,6 +1,6 @@
+import ts from "@typescript/typescript6";
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import ts from "typescript";
 
 const SOURCE_INVENTORY_TIMEOUT_MS = 30_000;
 

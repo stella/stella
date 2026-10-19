@@ -327,7 +327,7 @@ export const DOC_SOURCE_EXCLUSIONS = [
   "@types/chrome",
   "@types/hast",
   "@types/node",
-  "@typescript/native",
+  "@typescript/typescript6",
   "@vscode/markdown-editor",
   "@vscode/observables",
   "astro",

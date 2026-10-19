@@ -18,6 +18,7 @@
 // add self-test fixtures proving their counts. New counters scan both trees.
 // Suppression rules retain independent budgets and the security waiver ledger.
 
+import ts from "@typescript/typescript6";
 import { panic, Result } from "better-result";
 import {
   existsSync,
@@ -32,7 +33,6 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { analyse } from "scslre";
-import ts from "typescript";
 
 import { compareCodeUnit } from "@stll/collation";
 

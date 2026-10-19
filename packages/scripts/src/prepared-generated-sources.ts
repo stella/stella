@@ -1,5 +1,6 @@
 import { Result, panic } from "better-result";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 import * as v from "valibot";
 
@@ -28,7 +29,12 @@ export const generatedInputIdentity = (root: string) => {
     v.object({ version: v.string() }),
     JSON.parse(
       readFileSync(
-        path.join(root, "node_modules/typescript/package.json"),
+        // The generators run on the TypeScript 6 compiler API, which
+        // @typescript/typescript6 re-exports from its @typescript/old
+        // dependency; the wrapper's own version does not name that compiler.
+        createRequire(
+          path.join(root, "node_modules/@typescript/typescript6/package.json"),
+        ).resolve("@typescript/old/package.json"),
         "utf-8",
       ),
     ),
