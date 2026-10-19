@@ -1,7 +1,7 @@
 import { desktopEditFileTypeForMimeType } from "@stll/api-contract";
 
 /** MIME types accepted by Gotenberg's LibreOffice conversion route. */
-export const CONVERTIBLE_MIME_TYPES = {
+const CONVERTIBLE_MIME_TYPES = {
   "application/msword": null,
   "application/vnd.openxmlformats-officedocument.presentationml.presentation":
     null,

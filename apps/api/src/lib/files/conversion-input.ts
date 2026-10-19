@@ -4,7 +4,7 @@ import { loadDocxArchive } from "@/api/lib/docx-archive";
 import { DOCUMENT_METADATA_ENTRY_MAX_BYTES } from "@/api/lib/files/document-properties";
 import type { ConvertibleMime } from "@/api/lib/files/pdf-derivative-policy";
 
-export type ConversionInputResult =
+type ConversionInputResult =
   | { kind: "convert" }
   | {
       kind: "refuse";
@@ -212,10 +212,11 @@ const htmlHasExternalReference = (bytes: Uint8Array): boolean => {
     }
     const srcset = attributeValue(tag, "srcset");
     if (
-      srcset !== null &&
       srcset
-        .split(",")
-        .some((part) => !isLocalReference(part.trim().split(/\s/u)[0] ?? ""))
+        ?.split(",")
+        .some(
+          (part) => !isLocalReference(part.trim().split(/\s/u)[0] ?? ""),
+        ) === true
     ) {
       return true;
     }
