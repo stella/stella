@@ -240,7 +240,7 @@ checks:
     env:
       CI_CHECK_KIND: CONTEXTUAL
       CI_CHECK_CONTEXT: "Reads base history and current GitHub release state."
-      BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+      BASE_SHA: ${{ github.event.pull_request.base.sha || needs.ci-plan.outputs.target_base_sha }}
       GH_TOKEN: ${{ github.token }}
     run: |
       if git diff --quiet "$BASE_SHA"...HEAD -- VERSION; then
@@ -312,7 +312,7 @@ checks:
     env:
       CI_CHECK_KIND: CONTEXTUAL
       CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
-      BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+      BASE_SHA: ${{ github.event.pull_request.base.sha || needs.ci-plan.outputs.target_base_sha }}
     run: bun scripts/sql-perf-suppressions.ts
 
   - name: Release marketing provenance warning
@@ -386,7 +386,7 @@ checks:
       CI_CHECK_KIND: CONTEXTUAL
       CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
       STELLA_VERIFY: check
-      BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
+      BASE_SHA: ${{ github.event.pull_request.base.sha || needs.ci-plan.outputs.target_base_sha || '' }}
     run: |
       bun test scripts/query-data-state-baseline.test.ts
       bun run check:query-data-state
@@ -398,7 +398,7 @@ checks:
       CI_CHECK_KIND: CONTEXTUAL
       CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
       STELLA_VERIFY: check
-      BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
+      BASE_SHA: ${{ github.event.pull_request.base.sha || needs.ci-plan.outputs.target_base_sha || '' }}
     run: |
       bun test scripts/sql-perf-detector.test.ts scripts/sql-perf-baseline.test.ts
       bun scripts/sql-perf-baseline.ts --check
@@ -410,7 +410,7 @@ checks:
       CI_CHECK_KIND: CONTEXTUAL
       CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
       STELLA_VERIFY: check
-      BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
+      BASE_SHA: ${{ github.event.pull_request.base.sha || needs.ci-plan.outputs.target_base_sha || '' }}
     run: |
       bun test scripts/failure-as-empty-baseline.test.ts
       bun run check:failure-as-empty
@@ -678,7 +678,7 @@ checks:
     env:
       CI_CHECK_KIND: CONTEXTUAL
       CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
-      BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
+      BASE_SHA: ${{ github.event.pull_request.base.sha || needs.ci-plan.outputs.target_base_sha || '' }}
     run: |
       bun scripts/queue-authority.ts --self-test
       bun scripts/queue-authority.ts --check
