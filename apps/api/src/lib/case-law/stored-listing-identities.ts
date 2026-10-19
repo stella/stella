@@ -39,6 +39,14 @@ export const readStoredListingIdentities = async ({
     caseNumber: identity.type === "case-number" ? identity.caseNumber : null,
     language: identity.type === "case-number" ? identity.language : null,
   }));
+  // A case-number listing entry may name a decision whose detail later stored a
+  // publisher document id, so it matches regardless of that id; a row this
+  // listing already claims by document id cannot also answer for a case number.
+  const listedDocumentIds = JSON.stringify(
+    incoming.flatMap(({ documentId }) =>
+      documentId === null ? [] : [documentId],
+    ),
+  );
   return await tx
     .select({
       key: sql<string>`incoming.key`,
@@ -63,7 +71,7 @@ export const readStoredListingIdentities = async ({
             caseLawDecisions.id,
             canonicalDecisionIdSql(caseLawDecisionSourceIdentities.decisionId),
           ),
-          sql`(${caseLawDecisions.sourceDocumentId} = incoming."documentId" OR (${caseLawDecisions.sourceDocumentId} IS NULL AND ${caseLawDecisions.caseNumber} = incoming."caseNumber" AND ${caseLawDecisions.language} = incoming.language))`,
+          sql`(${caseLawDecisions.sourceDocumentId} = incoming."documentId" OR (${caseLawDecisions.caseNumber} = incoming."caseNumber" AND ${caseLawDecisions.language} = incoming.language AND (${caseLawDecisions.sourceDocumentId} IS NULL OR NOT jsonb_exists(${listedDocumentIds}::text::jsonb, ${caseLawDecisions.sourceDocumentId}))))`,
         ),
       ),
     )

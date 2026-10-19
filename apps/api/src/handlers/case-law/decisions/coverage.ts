@@ -57,7 +57,6 @@ import {
 import { loadPublicCourtWeights } from "@/api/lib/case-law/public-case-law-config";
 import { readPendingTextCountsBySource } from "@/api/lib/case-law/public-subject";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
-import { servedCaseLawSearchDocumentFor } from "@/api/lib/case-law/search-sql";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import {
@@ -65,10 +64,7 @@ import {
   CASE_LAW_SOURCE_ROWS_BOUND,
 } from "@/api/lib/legal-search/ingestion-constants";
 import { createUnrecognizedSourceReporter } from "@/api/lib/legal-search/source-registry-membership";
-import type {
-  LegalBrowseFacets,
-  LegalSearchEngine,
-} from "@/api/lib/legal-search/types";
+import type { LegalBrowseFacets } from "@/api/lib/legal-search/types";
 import { LIMITS } from "@/api/lib/limits";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
@@ -121,7 +117,7 @@ type CaseLawCoverageSource = {
   health: CaseLawCoverageHealth;
   /** ISO 8601; null before the first run. */
   lastSyncAt: string | null;
-  /** Exact searchable decision-year bounds for this source. */
+  /** Exact stored, published and unredacted decision-year bounds for this source. */
   decisionYearFrom: number | null;
   decisionYearTo: number | null;
   /** Publisher-listed decisions whose text has not arrived. */
@@ -171,7 +167,7 @@ type CaseLawCoverageCountry =
       availability: typeof CASE_LAW_COVERAGE_AVAILABILITY.SEARCHABLE;
       /** What a public search can find: the serving index's country bucket. */
       searchable: number;
-      /** Earliest and latest decision year the index holds; null when empty. */
+      /** Stored, published and unredacted decision-year bounds; null when undated or empty. */
       decisionYearFrom: number | null;
       decisionYearTo: number | null;
       /**
@@ -271,14 +267,9 @@ export const readCaseLawCoverageSourcesQuery = definePublicLawSharedQuery(
   PUBLIC_LAW_SHARED_QUERY.caseLawCoverageSources,
   async (
     tx: CaseLawPublicReadTransaction,
-    engine: LegalSearchEngine = envBase.LEGAL_SEARCH_PROVIDER,
   ): Promise<CaseLawCoverageSourceRow[]> => {
-    const eligibility = servedCaseLawSearchDocumentFor(
-      "coverage_decisions",
-      engine,
-    );
-    // The external serving index cannot prove SQL membership: no endpoints means unknown.
-    const served = eligibility ?? sql`FALSE`;
+    // Dates describe the held corpus: external serving membership cannot be
+    // inferred in SQL, and must not erase dates already known to the corpus.
     const sources = await tx
       .select({
         id: caseLawSources.id,
@@ -294,7 +285,6 @@ export const readCaseLawCoverageSourcesQuery = definePublicLawSharedQuery(
           SELECT extract(year FROM coverage_decisions.decision_date)::integer
           FROM ${publishedCaseLawDecisions} AS coverage_decisions
           WHERE coverage_decisions.source_id = case_law_sources.id
-            AND ${served}
             AND coverage_decisions.decision_date IS NOT NULL
           ORDER BY coverage_decisions.decision_date ASC
           LIMIT 1
@@ -303,7 +293,6 @@ export const readCaseLawCoverageSourcesQuery = definePublicLawSharedQuery(
           SELECT extract(year FROM coverage_decisions.decision_date)::integer
           FROM ${publishedCaseLawDecisions} AS coverage_decisions
           WHERE coverage_decisions.source_id = case_law_sources.id
-            AND ${served}
             AND coverage_decisions.decision_date IS NOT NULL
           ORDER BY coverage_decisions.decision_date DESC
           LIMIT 1
@@ -577,23 +566,23 @@ export const loadCaseLawCoverage = async ({
     const bucket = facets.value.country.find(({ value }) => value === country);
     const searchable = bucket?.count ?? 0;
     searchableTotal += searchable;
-    const searchableSources = entry.sources.filter(
+    const datedSources = entry.sources.filter(
       ({ decisionYearFrom, decisionYearTo }) =>
         decisionYearFrom !== null && decisionYearTo !== null,
     );
     const from =
-      searchableSources.length === 0
+      datedSources.length === 0
         ? null
         : Math.min(
-            ...searchableSources.map(
+            ...datedSources.map(
               ({ decisionYearFrom }) => decisionYearFrom ?? Infinity,
             ),
           );
     const to =
-      searchableSources.length === 0
+      datedSources.length === 0
         ? null
         : Math.max(
-            ...searchableSources.map(
+            ...datedSources.map(
               ({ decisionYearTo }) => decisionYearTo ?? -Infinity,
             ),
           );

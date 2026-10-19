@@ -12,6 +12,7 @@ import {
 import { createSafeId } from "@/api/lib/branded-types";
 import { readCompletenessCensusQuery } from "@/api/lib/case-law/completeness-census";
 import { recordCompletenessCensus } from "@/api/lib/case-law/completeness-census-writer";
+import type { ListingIdentity } from "@/api/lib/legal-search/ingestion-types";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -181,6 +182,87 @@ describe.skipIf(!enabled)("retained publisher identities (postgres)", () => {
         await db
           .delete(caseLawSources)
           .where(eq(caseLawSources.id, otherSourceId));
+      }
+    });
+  }, 120_000);
+
+  test("a case-number listing entry counts a stored decision whose detail supplied a document id, once per stored row", async () => {
+    const databaseUrl =
+      process.env["DATABASE_URL"] ??
+      panic("Postgres census test requires DATABASE_URL");
+    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      const { db } = openClient({ max: 1 });
+      const sourceId = createSafeId<"caseLawSource">();
+      const leaseToken = createSafeId<"caseLawSourceIngestionLease">();
+      const scope = { first: "2026", last: "2026", expectedSlices: 1 };
+      const scopedDb: ScopedDb = async (callback) =>
+        await db.transaction(callback);
+      await db.insert(caseLawSources).values({
+        id: sourceId,
+        adapterKey: `census-case-number-${sourceId}`,
+        name: "Case-number listing fixture",
+        ingestionLeaseToken: leaseToken,
+        ingestionLeaseExpiresAt: new Date(Date.now() + 3_600_000),
+      });
+      try {
+        await db.insert(caseLawDecisions).values({
+          id: createSafeId<"caseLawDecision">(),
+          sourceId,
+          sourceDocumentId: "detail-only-id",
+          caseNumber: "12 C 3/2026",
+          country: "CZE",
+          court: "Fixture",
+          language: "cs",
+          fulltext: "Decision text stored from the detail page",
+        });
+        const record = async (
+          offset: number,
+          identities: readonly ListingIdentity[],
+        ) => {
+          await recordCompletenessCensus(scopedDb, {
+            sourceId,
+            leaseToken,
+            adapterKey: "cz-ns",
+            slice: "2026",
+            scope,
+            identities,
+            listed: identities.length,
+            publisherCount: identities.length,
+            observedAt: new Date(Date.UTC(2026, 9, 19, 12, 0, 0, offset)),
+          });
+          const rows = await readCompletenessCensusQuery(db, [
+            { id: sourceId, scope },
+          ]);
+          return (
+            rows.get(String(sourceId)) ?? panic("Case-number census is absent")
+          );
+        };
+        const caseNumber = {
+          type: "case-number" as const,
+          caseNumber: "12 C 3/2026",
+          language: "cs",
+        };
+        expect(await record(0, [caseNumber])).toMatchObject({
+          verdict: "complete",
+          publisher: 1,
+          stored: 1,
+          withText: 1,
+        });
+        // The same listing also names that row by its document id: the
+        // case-number entry is then a second decision, and it is missing.
+        expect(
+          await record(1, [
+            { type: "document" as const, sourceDocumentId: "detail-only-id" },
+            caseNumber,
+          ]),
+        ).toMatchObject({
+          verdict: "incomplete",
+          publisher: 2,
+          stored: 1,
+          withText: 1,
+        });
+      } finally {
+        await db.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
       }
     });
   }, 120_000);
