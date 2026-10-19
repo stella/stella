@@ -358,7 +358,7 @@ const generateRefinedSearchQuery = async ({
         }),
         outputSchema: refineSearchOutputSchema,
         maxOutputTokens: 180,
-        abortSignal: AbortSignal.timeout(20_000),
+        deadlineMs: 20_000,
       }),
     catch: (error: unknown) => error,
   });
@@ -560,7 +560,7 @@ export const summarizeSearchResults = async ({
         }),
         outputSchema: searchSummaryOutputSchema,
         maxOutputTokens: 700,
-        abortSignal: AbortSignal.timeout(30_000),
+        deadlineMs: 30_000,
       }),
     catch: (error: unknown) => error,
   });
