@@ -93,7 +93,7 @@ jobs:
     if: >-
       github.event_name == 'workflow_dispatch'
       || github.event.pull_request.draft != true
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Bound install attempts and planner execution below this job budget.
     timeout-minutes: 30
     permissions:
@@ -875,7 +875,7 @@ jobs:
               echo "api_image_deps_required=true"
               echo "docker_checks_required=true"
               echo "docker_checks_pr_required=true"
-              echo 'api_image_platforms=[{"runner":"ubuntu-24.04-arm","platform":"linux/arm64"},{"runner":"ubuntu-latest","platform":"linux/amd64"}]'
+              echo 'api_image_platforms=[{"runner":"ubuntu-24.04-arm","platform":"linux/arm64"},{"runner":"ubuntu-24.04","platform":"linux/amd64"}]'
               echo "api_image_smoke_required=true"
               echo "postgres_suites_required=true"
               echo "corpus_suites_required=true"
@@ -1219,7 +1219,7 @@ jobs:
           # architecture release.yml publishes.
           api_image_platforms='[{"runner":"ubuntu-24.04-arm","platform":"linux/arm64"}]'
           if [[ "$SUITE_DEPTH" == "full" || "$version_changed" == "true" ]]; then
-            api_image_platforms='[{"runner":"ubuntu-24.04-arm","platform":"linux/arm64"},{"runner":"ubuntu-latest","platform":"linux/amd64"}]'
+            api_image_platforms='[{"runner":"ubuntu-24.04-arm","platform":"linux/arm64"},{"runner":"ubuntu-24.04","platform":"linux/amd64"}]'
           fi
 
           # Full depth (the merge queue, a manual full run) runs the
@@ -1731,7 +1731,7 @@ jobs:
       )
       && needs.ci-plan.outputs.package_checks_required == 'true'
       )
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
       contents: read
@@ -1833,7 +1833,7 @@ jobs:
   pr-heavy-gate:
     needs: ci-plan
     if: inputs.heavy_only != true && inputs.pr_depth_only != true && needs.ci-plan.outputs.pr_heavy_gate_required == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # ci-quick-checks' own 15-minute budget plus its wait for a runner.
     timeout-minutes: 40
     permissions:
@@ -2118,7 +2118,7 @@ jobs:
       )
       && needs.ci-plan.outputs.package_checks_required == 'true'
       )
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Include uncached API generation and its two-pass determinism check.
     timeout-minutes: 105
     permissions:
@@ -2404,7 +2404,7 @@ jobs:
       )
       && needs.ci-plan.outputs.package_checks_required == 'true'
       )
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # 25m, matching code-quality.
     timeout-minutes: 25
     permissions:
@@ -2612,7 +2612,7 @@ jobs:
       )
       && needs.ci-plan.outputs.package_checks_required == 'true'
       )
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Retain the repository-check budget after moving optional compiler proofs.
     timeout-minutes: 40
     permissions:
@@ -2966,7 +2966,7 @@ jobs:
       )
       && needs.ci-plan.outputs.package_checks_required == 'true'
       )
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Three API shards each run a third of the suite. Derived from the merged
     # shard pair measurements (p95 18.6, p99 27.4, worst 30.9 min) scaled by
     # 2/3, one shard is about p95 12.4, p99 18.3, worst 20.6 min; 25 min keeps
@@ -3238,7 +3238,7 @@ jobs:
       && needs.ci-tests.result == 'success'
       && (needs.postgres-service-suites.result == 'success' || needs.postgres-service-suites.result == 'skipped')
       && needs.ci-plan.outputs.api_test_shards != '0'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       actions: write
@@ -3339,7 +3339,7 @@ jobs:
       &&
       (needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1' || contains(fromJSON(needs.ci-plan.outputs.pilot_fast_jobs || '[]'), 'ci-browser'))
       && needs.ci-plan.outputs.ci_browser_required == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 35
     strategy:
       fail-fast: false
@@ -3567,7 +3567,7 @@ jobs:
         || github.event_name == 'workflow_dispatch')
       )
       )
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     permissions:
       contents: read
@@ -3652,7 +3652,7 @@ jobs:
   code-quality-api-cancel:
     needs: code-quality-api
     if: failure() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 1
     permissions:
       actions: write
@@ -3717,7 +3717,7 @@ jobs:
         || github.event_name == 'workflow_dispatch')
       )
       )
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 50
     permissions:
       contents: read
@@ -3884,7 +3884,7 @@ jobs:
   code-quality-web-rest-cancel:
     needs: code-quality-web-rest
     if: failure() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 1
     permissions:
       actions: write
@@ -3922,7 +3922,7 @@ jobs:
       && needs.ci-plan.outputs.postgres_service_suites_required == 'true'
       && (needs.ci-plan.outputs.trusted == 'true'
           || github.event_name == 'workflow_dispatch')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     strategy:
       fail-fast: false
@@ -4076,7 +4076,7 @@ jobs:
                   || (needs.ci-plan.outputs.suite_depth == 'fast'
                       && needs.ci-plan.outputs.service_suites_pr_required == 'true')))
       )
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: read
@@ -4246,7 +4246,7 @@ jobs:
       )
       )
       )
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 12
     permissions:
       contents: read
@@ -4355,7 +4355,7 @@ jobs:
       && needs.ci-plan.outputs.trusted == 'true'
       )
       )
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 40
     permissions:
       contents: read
@@ -4403,7 +4403,7 @@ jobs:
       && needs.ci-plan.outputs.trusted == 'true'
       )
       )
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
       contents: read
@@ -4496,7 +4496,7 @@ jobs:
       || (github.event_name == 'pull_request'
       && needs.ci-plan.outputs.coverage_profile == 'normal-v1'
       && needs.ci-plan.outputs.browser_spec_selection_required == 'true'))
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: read
@@ -4622,7 +4622,7 @@ jobs:
       )
       )
       )
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 8
     permissions:
       contents: read
@@ -4727,7 +4727,7 @@ jobs:
       )
       )
       )
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read
@@ -4779,7 +4779,7 @@ jobs:
       )
       )
       )
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read
@@ -4831,7 +4831,7 @@ jobs:
       )
       )
       )
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: read
@@ -4882,7 +4882,7 @@ jobs:
       )
       )
       )
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 12
     permissions:
       contents: read
@@ -5001,7 +5001,7 @@ jobs:
       && (needs.web-build.result == 'success' || needs.heavy-web-build.result == 'success')
       )
       )
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Longest leg: 16m setup (incl. 1m budget resolution) + 21m tests + 4m uploads
     # + 2m cancellation/post hooks. Playwright uses measured p95/max plus the
     # task registry margin.
@@ -5254,7 +5254,7 @@ jobs:
       )
       )
       )
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 35
     permissions:
       contents: read
@@ -5329,7 +5329,7 @@ jobs:
       )
       )
       )
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 35
     permissions:
       contents: read
@@ -5552,7 +5552,7 @@ jobs:
       && needs.ci-plan.outputs.e2e_landing_required == 'true'
       && needs.ci-plan.outputs.coverage_profile == 'normal-v1'
       )
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 35
     permissions:
       contents: read
@@ -5704,7 +5704,7 @@ jobs:
   marketing-screenshots-cancel:
     needs: marketing-screenshots
     if: failure() && github.event_name == 'merge_group'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 1
     permissions:
       actions: write
@@ -5773,7 +5773,7 @@ jobs:
           || needs.e2e-vite-canary.result == 'failure')
       )
       )
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read
@@ -6016,7 +6016,7 @@ jobs:
       )
       )
       )
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: read
@@ -6607,7 +6607,7 @@ jobs:
       (needs.ci-plan.outputs.trusted == 'true' && needs.ci-plan.outputs.dependency_malware_required == 'true')
       )
       )
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
       contents: read
@@ -6658,7 +6658,7 @@ jobs:
   ci-quick-checks:
     needs: ci-plan
     if: ${{ !cancelled() && inputs.heavy_only != true && (github.event_name != 'pull_request' || (github.event.pull_request.draft != true && github.event.action != 'enqueued')) }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: read
@@ -6823,7 +6823,7 @@ jobs:
       # This run's own record of which jobs it required; the
       # `ci-required-summary` artifact holds the same record.
       required_summary: ${{ steps.outcome.outputs.required_summary }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       actions: write
