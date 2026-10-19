@@ -242,3 +242,15 @@ async fn probe_39() {
   // guard: tokio::fs::copy
   let _ = tokio::fs::copy("unused", "unused").await;
 }
+
+#[cfg(unix)]
+fn probe_rename(directory: &std::fs::File) {
+  // guard: rustix::fs::renameat_with
+  let _ = rustix::fs::renameat_with(
+    directory,
+    "unused",
+    directory,
+    "unused",
+    rustix::fs::RenameFlags::NOREPLACE,
+  );
+}

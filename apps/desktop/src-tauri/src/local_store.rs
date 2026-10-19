@@ -254,6 +254,14 @@ pub fn rename_private(source: &Path, destination: &Path) -> std::io::Result<()> 
   platform::Parent::at(source)?.rename_to(&platform::Parent::at(destination)?)
 }
 
+pub fn remove_private(path: &Path) -> std::io::Result<()> {
+  platform::Parent::at(path)?.remove()
+}
+
+pub fn move_private(source: &Path, destination: &Path) -> std::io::Result<()> {
+  platform::Parent::at(source)?.move_to(&platform::Parent::at(destination)?)
+}
+
 pub fn link_private(source: &Path, destination: &Path) -> std::io::Result<()> {
   platform::Parent::at(source)?.link_to(&platform::Parent::at(destination)?)
 }

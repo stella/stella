@@ -246,6 +246,23 @@ impl Parent {
     Ok(())
   }
 
+  pub(super) fn move_to(&self, destination: &Self) -> io::Result<()> {
+    let source = self.open(OpenMode::Read)?;
+    fs::fchmod(&source, FILE_MODE)?;
+    fs::fsync(&source)?;
+    destination.check_entry()?;
+    fs::renameat_with(
+      &self.directory,
+      &self.name,
+      &destination.directory,
+      &destination.name,
+      fs::RenameFlags::NOREPLACE,
+    )?;
+    fs::fsync(&destination.directory)?;
+    fs::fsync(&self.directory)?;
+    Ok(())
+  }
+
   pub(super) fn link_to(&self, destination: &Self) -> io::Result<()> {
     let source = self.open(OpenMode::Read)?;
     fs::fchmod(&source, FILE_MODE)?;

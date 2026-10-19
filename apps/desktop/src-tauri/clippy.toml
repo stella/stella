@@ -16,6 +16,7 @@ disallowed-methods = [
   { path = "rustix::fs::open", reason = "create private desktop files through local_store" },
   { path = "rustix::fs::openat", reason = "create private desktop files through local_store" },
   { path = "rustix::fs::mkdirat", reason = "create private desktop files through local_store" },
+  { path = "rustix::fs::renameat_with", reason = "create private desktop files through local_store" },
   { path = "rustix::fs::renameat", reason = "create private desktop files through local_store" },
   { path = "rustix::fs::linkat", reason = "create private desktop files through local_store" },
   { path = "rustix::fs::fchmod", reason = "create private desktop files through local_store" },

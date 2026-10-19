@@ -14,6 +14,10 @@ const fn default_persisted_file_type() -> DesktopEditFileType {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PersistedDesktopSession {
+  #[serde(default)]
+  pub account_owner: Option<crate::document_sessions::AccountOwner>,
+  #[serde(default)]
+  pub download_sha: Option<String>,
   pub api_base_url: String,
   pub base_version_number: i64,
   pub entity_id: String,
@@ -39,6 +43,8 @@ pub struct PersistedDesktopSession {
 #[serde(rename_all = "camelCase")]
 pub struct SessionStorePayload {
   #[serde(default)]
+  pub retired_sessions: Vec<crate::document_sessions::RetiredSession>,
+  #[serde(default)]
   pub cleanup_paths: Vec<String>,
   pub linked_account: Option<LinkedAccountSnapshot>,
   #[serde(default)]
@@ -58,6 +64,7 @@ pub enum StoreLoadIssue {
 }
 
 pub struct LoadedSessionStore {
+  pub retired_sessions: Vec<crate::document_sessions::RetiredSession>,
   pub cleanup_paths: Vec<String>,
   pub linked_account: Option<LinkedAccountSnapshot>,
   pub linked_account_web_origin: Option<String>,
@@ -70,6 +77,7 @@ pub struct LoadedSessionStore {
 
 pub async fn load_session_store(store_path: &Path) -> LoadedSessionStore {
   let empty = LoadedSessionStore {
+    retired_sessions: Vec::new(),
     cleanup_paths: Vec::new(),
     linked_account: None,
     linked_account_web_origin: None,
@@ -93,6 +101,7 @@ pub async fn load_session_store(store_path: &Path) -> LoadedSessionStore {
 
   match serde_json::from_str::<SessionStorePayload>(&raw) {
     Ok(payload) => LoadedSessionStore {
+      retired_sessions: payload.retired_sessions,
       cleanup_paths: payload.cleanup_paths,
       linked_account: payload.linked_account,
       linked_account_web_origin: payload.linked_account_web_origin,
@@ -175,6 +184,8 @@ mod tests {
 
   fn make_session() -> PersistedDesktopSession {
     PersistedDesktopSession {
+      account_owner: None,
+      download_sha: None,
       api_base_url: "https://api.example.com".into(),
       base_version_number: 1,
       entity_id: "ent-1".into(),
@@ -197,6 +208,7 @@ mod tests {
 
   fn make_payload() -> SessionStorePayload {
     SessionStorePayload {
+      retired_sessions: Vec::new(),
       cleanup_paths: vec!["/tmp/old.docx".into()],
       linked_account: Some(LinkedAccountSnapshot {
         email: "user@example.com".into(),
@@ -315,6 +327,7 @@ mod tests {
     persist_session_store(
       &path,
       &SessionStorePayload {
+        retired_sessions: Vec::new(),
         cleanup_paths: vec!["/tmp/cleanup.docx".into()],
         linked_account: linked,
         linked_account_web_origin: Some("https://selfhost.example".into()),

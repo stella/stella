@@ -24,6 +24,7 @@ mod desktop_crash_native;
 mod desktop_telemetry;
 mod device_proof;
 mod diagnostics;
+mod document_sessions;
 #[cfg(test)]
 mod e2e;
 mod feature_access;
@@ -255,7 +256,18 @@ pub fn run() {
             }
           };
           mgr.set_app_handle(handle.clone());
-          mgr.initialize().await;
+          let account = handle.state::<account::AccountState>();
+          let owner = match account::current(&account).await {
+            Ok(account) => account.as_ref().map(document_sessions::AccountOwner::for_account),
+            Err(error) => {
+              tracing::warn!(error = %error, "document account is unavailable during restore");
+              return;
+            }
+          };
+          if let Err(error) = mgr.initialize(owner).await {
+            tracing::warn!(error = %error, "document session restore remains pending");
+            return;
+          }
           let session_ids = mgr.session_ids_needing_watchers();
           drop(mgr);
 
