@@ -5,6 +5,11 @@
 //! JSON envelopes written atomically with owner-only permissions, and a key
 //! that is never re-minted while encrypted data still depends on it.
 
+#![allow(
+  clippy::disallowed_methods,
+  reason = "local_store owns local file creation"
+)]
+
 use aes_gcm::{
   Aes256Gcm, Nonce,
   aead::{Aead, Generate, KeyInit, Payload},
@@ -177,7 +182,7 @@ impl EncryptedJsonFile {
   pub fn persist<T: Serialize>(&self, value: &T) -> Result<(), String> {
     let label = self.label;
     if let Some(parent) = self.path.parent() {
-      create_dirs_with_private_mode(parent)
+      create_private_dir(parent)
         .map_err(|error| format!("{label} store directory failed: {error}"))?;
     }
     let plaintext = serde_json::to_vec(value)
@@ -205,7 +210,15 @@ impl EncryptedJsonFile {
   }
 }
 
-fn create_dirs_with_private_mode(directory: &Path) -> std::io::Result<()> {
+/// Creates `directory` and missing parents using the local file contract.
+pub fn create_private_dir(directory: &Path) -> std::io::Result<()> {
+  if !directory.exists()
+    && let Some(parent) = directory.parent()
+    && !parent.as_os_str().is_empty()
+    && !parent.exists()
+  {
+    create_private_dir(parent)?;
+  }
   let mut builder = fs::DirBuilder::new();
   builder.recursive(true);
   #[cfg(unix)]
@@ -213,18 +226,80 @@ fn create_dirs_with_private_mode(directory: &Path) -> std::io::Result<()> {
     use std::os::unix::fs::DirBuilderExt;
     builder.mode(0o700);
   }
-  builder.create(directory)
-}
-
-/// Creates `directory` (and its parents) readable by the owner only.
-pub fn create_private_dir(directory: &Path) -> std::io::Result<()> {
-  create_dirs_with_private_mode(directory)?;
+  builder.create(directory)?;
   #[cfg(unix)]
   {
     use std::os::unix::fs::PermissionsExt;
     fs::set_permissions(directory, fs::Permissions::from_mode(0o700))?;
   }
   Ok(())
+}
+
+pub fn open_private(
+  options: &mut fs::OpenOptions,
+  path: &Path,
+) -> std::io::Result<fs::File> {
+  #[cfg(unix)]
+  {
+    open_private_with(options, path, restrict_private_file)
+  }
+  #[cfg(not(unix))]
+  {
+    open_with_private_mode(options, path)
+  }
+}
+
+#[cfg(unix)]
+fn open_private_with(
+  options: &mut fs::OpenOptions,
+  path: &Path,
+  restrict: impl FnOnce(&fs::File) -> std::io::Result<()>,
+) -> std::io::Result<fs::File> {
+  let file = open_with_private_mode(options, path)?;
+  restrict(&file)?;
+  Ok(file)
+}
+
+fn open_with_private_mode(
+  options: &mut fs::OpenOptions,
+  path: &Path,
+) -> std::io::Result<fs::File> {
+  #[cfg(unix)]
+  {
+    use std::os::unix::fs::OpenOptionsExt;
+    options.mode(0o600);
+  }
+  options.open(path)
+}
+
+#[cfg(unix)]
+fn restrict_private_file(file: &fs::File) -> std::io::Result<()> {
+  use std::os::unix::fs::PermissionsExt;
+  file.set_permissions(fs::Permissions::from_mode(0o600))
+}
+
+#[cfg(all(test, unix))]
+pub(crate) fn local_file_creation_child(test_name: &str) -> bool {
+  if std::env::var_os("STELLA_LOCAL_FILE_CHILD").is_some() {
+    return false;
+  }
+  let result = std::process::Command::new("python3")
+    .args([
+      "-c",
+      "import os, subprocess, sys
+old = os.umask(0)
+try:
+ sys.exit(subprocess.call(sys.argv[1:]))
+finally:
+ os.umask(old)",
+    ])
+    .arg(std::env::current_exe().unwrap())
+    .args(["--exact", test_name, "--nocapture"])
+    .env("STELLA_LOCAL_FILE_CHILD", "1")
+    .status()
+    .unwrap();
+  assert!(result.success(), "local file child failed: {result}");
+  true
 }
 
 /// Replaces `path` with `bytes` through a uniquely named sibling, so a reader
@@ -238,15 +313,11 @@ pub fn write_private_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
   ));
   let mut options = fs::OpenOptions::new();
   options.write(true).create_new(true);
-  #[cfg(unix)]
-  {
-    use std::os::unix::fs::OpenOptionsExt;
-    options.mode(0o600);
-  }
-  let mut temporary = options
-    .open(&temp_path)
+  let mut temporary = open_with_private_mode(&mut options, &temp_path)
     .map_err(|error| error.to_string())?;
-  let written = temporary.write_all(bytes);
+  let written = temporary
+    .write_all(bytes)
+    .and_then(|()| temporary.sync_all());
   drop(temporary);
   if let Err(error) = written {
     return match fs::remove_file(&temp_path) {
@@ -341,6 +412,65 @@ pub fn debug_build_is_memory_only(_env: &str) -> bool {
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[cfg(unix)]
+  #[test]
+  fn local_file_creation_uses_one_contract() {
+    use std::os::unix::fs::PermissionsExt;
+    if local_file_creation_child(
+      "local_store::tests::local_file_creation_uses_one_contract",
+    ) {
+      return;
+    }
+    let path = unique_path();
+    create_private_dir(path.parent().unwrap()).unwrap();
+    let file = open_private_with(
+      fs::OpenOptions::new().write(true).create_new(true),
+      &path,
+      |file| {
+        assert_eq!(file.metadata()?.permissions().mode() & 0o777, 0o600);
+        restrict_private_file(file)
+      },
+    )
+    .unwrap();
+    drop(file);
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o666)).unwrap();
+    let reopened = open_private(fs::OpenOptions::new().write(true), &path).unwrap();
+    assert_eq!(
+      reopened.metadata().unwrap().permissions().mode() & 0o777,
+      0o600
+    );
+    let error = open_private_with(fs::OpenOptions::new().write(true), &path, |_| {
+      Err(std::io::Error::from(std::io::ErrorKind::PermissionDenied))
+    })
+    .unwrap_err();
+    assert_eq!(error.kind(), std::io::ErrorKind::PermissionDenied);
+    fs::set_permissions(path.parent().unwrap(), fs::Permissions::from_mode(0o777))
+      .unwrap();
+    create_private_dir(path.parent().unwrap()).unwrap();
+    assert_eq!(
+      fs::metadata(path.parent().unwrap())
+        .unwrap()
+        .permissions()
+        .mode()
+        & 0o777,
+      0o700
+    );
+    write_private_atomic(&path, b"first").unwrap();
+    write_private_atomic(&path, b"second").unwrap();
+    assert_eq!(fs::read(&path).unwrap(), b"second");
+    assert_eq!(fs::read_dir(path.parent().unwrap()).unwrap().count(), 1);
+    let directory_target = path.parent().unwrap().join("directory");
+    create_private_dir(&directory_target).unwrap();
+    assert!(
+      write_private_atomic(&directory_target, b"value")
+        .unwrap_err()
+        .contains("replace failed")
+    );
+    assert!(directory_target.is_dir());
+    assert_eq!(fs::read_dir(path.parent().unwrap()).unwrap().count(), 2);
+    fs::remove_dir_all(path.parent().unwrap()).unwrap();
+  }
 
   /// A store path in its own fresh directory, so `persist` restricts that
   /// directory rather than the shared temp directory.

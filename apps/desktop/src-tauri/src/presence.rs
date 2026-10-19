@@ -117,13 +117,13 @@ fn load_desktop_id_with(
     return Ok(id);
   }
   let parent = path.parent().expect("desktop presence data directory");
-  std::fs::create_dir_all(parent)?;
+  crate::local_store::create_private_dir(parent)?;
   let id = Uuid::new_v4();
   let staged = parent.join(format!(".desktop-presence-id-{id}.tmp"));
-  let mut file = std::fs::OpenOptions::new()
-    .write(true)
-    .create_new(true)
-    .open(&staged)?;
+  let mut file = crate::local_store::open_private(
+    std::fs::OpenOptions::new().write(true).create_new(true),
+    &staged,
+  )?;
   let result = (|| {
     file.write_all(id.to_string().as_bytes())?;
     file.sync_all()?;
@@ -135,11 +135,13 @@ fn load_desktop_id_with(
       Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
         // Lock a stable sibling, not the inode replaced by the repair's rename.
         // Never remove the lock file: all concurrent repairs must lock the same inode.
-        let repair_lock = std::fs::OpenOptions::new()
-          .write(true)
-          .create(true)
-          .truncate(false)
-          .open(path.with_extension("lock"))?;
+        let repair_lock = crate::local_store::open_private(
+          std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(false),
+          &path.with_extension("lock"),
+        )?;
         repair_lock.lock()?;
         if let Some(winner) = read_desktop_id(path)? {
           return Ok(winner);
@@ -235,6 +237,10 @@ async fn report(handle: &AppHandle) {
 }
 
 #[cfg(test)]
+#[allow(
+  clippy::disallowed_methods,
+  reason = "tests construct local file fixtures"
+)]
 mod tests {
   use super::*;
 
