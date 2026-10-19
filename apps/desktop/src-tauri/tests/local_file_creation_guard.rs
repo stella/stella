@@ -1,6 +1,9 @@
 #[cfg(unix)]
 mod unix {
-  use std::{collections::BTreeSet, process::Command};
+  use std::{
+    collections::{BTreeMap, BTreeSet},
+    process::Command,
+  };
 
   const PROBES: &str = include_str!("../examples/local_file_creation_guard.rs");
 
@@ -34,11 +37,14 @@ mod unix {
         "--features",
         "local-file-guard-probe",
         "--message-format=json",
+        "--",
+        "-D",
+        "warnings",
       ])
       .output()
       .expect("Clippy must run the writer probes");
     assert!(!output.status.success(), "writer probes must be rejected");
-    let mut rejected = BTreeSet::new();
+    let mut rejected = BTreeMap::<String, usize>::new();
     let mut unexpected = Vec::new();
     for line in String::from_utf8(output.stdout).unwrap().lines() {
       let Ok(record) = serde_json::from_str::<serde_json::Value>(line) else {
@@ -72,19 +78,22 @@ mod unix {
         .filter_map(|line| line.trim().strip_prefix("// guard: "))
         .last()
         .unwrap();
-      rejected.insert(path.to_string());
+      *rejected.entry(path.to_string()).or_default() += 1;
     }
     assert!(
       unexpected.is_empty(),
       "unexpected compile errors: {unexpected:?}\n{}",
       String::from_utf8_lossy(&output.stderr)
     );
-    let expected: BTreeSet<_> =
-      configured.into_iter().filter(|path| active(path)).collect();
+    let expected: BTreeMap<_, _> = configured
+      .into_iter()
+      .filter(|path| active(path))
+      .map(|path| (path, 1))
+      .collect();
     assert_eq!(
       rejected,
       expected,
-      "Clippy must reject each writer at its call site\n{}",
+      "each writer must produce exactly its configured lint at its call site\n{}",
       String::from_utf8_lossy(&output.stderr)
     );
   }
