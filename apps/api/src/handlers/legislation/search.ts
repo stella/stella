@@ -182,7 +182,7 @@ type SearchLegislationDependencies = {
 
 type ObserveLegislationStage = <T>(
   stage: Extract<RequestStage, "candidate_hydration" | "work_collapse_ranking">,
-  operation: () => T | Promise<T>,
+  operation: () => Promise<T>,
   counts: (value: T) => { candidateCount?: number; resultCount?: number },
 ) => Promise<T>;
 
