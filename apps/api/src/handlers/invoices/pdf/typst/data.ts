@@ -11,8 +11,11 @@ import {
   type VatTreatment,
 } from "@stll/invoicing";
 
-import { buildInvoicePaymentPayload, createInvoiceFormatters } from "../render";
-import type { RenderInvoicePdfOptions } from "../render";
+import {
+  buildInvoicePaymentPayload,
+  createInvoiceFormatters,
+} from "../render-helpers";
+import type { RenderInvoicePdfOptions } from "../render-helpers";
 
 type Labels = (typeof INVOICE_PDF_LABELS)[keyof typeof INVOICE_PDF_LABELS];
 

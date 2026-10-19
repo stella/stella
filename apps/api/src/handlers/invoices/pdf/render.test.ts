@@ -1,11 +1,18 @@
 import { PDF } from "@libpdf/core";
-import { describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 
 import { buildPayBySquarePayload } from "@stll/invoicing";
 import { cents, formatMoneyCents } from "@stll/money";
 
-import { buildInvoicePaymentPayload, renderInvoicePdf } from "./render";
-import type { RenderInvoicePdfOptions } from "./render";
+import { buildInvoicePaymentPayload } from "./render-helpers";
+import type { RenderInvoicePdfOptions } from "./render-helpers";
+import { renderInvoiceWithTypst } from "./typst/render-typst";
+import { openTypstSession } from "./typst/session";
+
+const session = openTypstSession();
+afterAll(async () => {
+  await session.close();
+});
 
 const sampleLine = {
   description: "Příprava právního stanoviska",
@@ -69,13 +76,24 @@ const options = {
 } satisfies RenderInvoicePdfOptions;
 
 const textOf = async (value: RenderInvoicePdfOptions) => {
-  const pdf = await PDF.load((await renderInvoicePdf(value)).unwrap());
+  const outcome = (
+    await renderInvoiceWithTypst({
+      invoice: value,
+      session,
+      createdAt: new Date("2026-09-30T08:00:00Z"),
+    })
+  ).unwrap();
+  if (outcome.status !== "rendered") {
+    throw new Error(outcome.diagnostics.join("\n"));
+  }
+  const pdf = await PDF.load(outcome.pdf);
   return {
     pdf,
     text: pdf
       .extractText()
       .map(({ text }) => text)
-      .join("\n"),
+      .join("\n")
+      .replace(/[  ]/gu, " "),
   };
 };
 
@@ -246,18 +264,20 @@ describe("invoice QR payment", () => {
     if (payment?.status !== "payable") {
       throw new Error("Slovak EUR fixture must be payable");
     }
-    expect(payment).toEqual(
-      buildPayBySquarePayload({
-        amount: 555.55,
-        currency: "EUR",
-        dueDate: "2026-10-14",
-        variableSymbol: "0987654321",
-        paymentNote: "2026-001",
-        iban: "SK27 1100 0000 1234 5678 9012",
-        bic: "FIKTSKBA",
-        beneficiaryName: "Fiktívna právna kancelária",
-      }).unwrap(),
-    );
+    const expected = buildPayBySquarePayload({
+      amount: 555.55,
+      currency: "EUR",
+      dueDate: "2026-10-14",
+      variableSymbol: "0987654321",
+      paymentNote: "2026-001",
+      iban: "SK27 1100 0000 1234 5678 9012",
+      bic: "FIKTSKBA",
+      beneficiaryName: "Fiktívna právna kancelária",
+    }).unwrap();
+    if (expected.status !== "payable") {
+      throw new Error("Expected PAY by square payload must be payable");
+    }
+    expect(payment).toEqual(expected);
     expect(buildInvoicePaymentPayload(options)?.unwrap()).toEqual({
       status: "payable",
       payload:

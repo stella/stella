@@ -1,11 +1,17 @@
 import { PDF } from "@libpdf/core";
-import { describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 
 import type { VatTreatment } from "@stll/invoicing";
 import { cents, formatMoneyCents } from "@stll/money";
 
-import { renderInvoicePdf } from "./render";
-import type { RenderInvoicePdfOptions } from "./render";
+import type { RenderInvoicePdfOptions } from "./render-helpers";
+import { renderInvoiceWithTypst } from "./typst/render-typst";
+import { openTypstSession } from "./typst/session";
+
+const session = openTypstSession();
+afterAll(async () => {
+  await session.close();
+});
 
 // Golden Slovak invoices, one per VAT case. Each asserts the content that
 // zákon č. 222/2004 Z. z. o dani z pridanej hodnoty (consolidation in force
@@ -102,7 +108,17 @@ const golden = ({
 });
 
 const textOf = async (value: RenderInvoicePdfOptions) => {
-  const pdf = await PDF.load((await renderInvoicePdf(value)).unwrap());
+  const outcome = (
+    await renderInvoiceWithTypst({
+      invoice: value,
+      session,
+      createdAt: new Date("2026-10-19T08:00:00Z"),
+    })
+  ).unwrap();
+  if (outcome.status !== "rendered") {
+    throw new Error(outcome.diagnostics.join("\n"));
+  }
+  const pdf = await PDF.load(outcome.pdf);
   return pdf
     .extractText()
     .map(({ text }) => text)

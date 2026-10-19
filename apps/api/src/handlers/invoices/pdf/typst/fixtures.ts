@@ -1,6 +1,6 @@
 import { cents } from "@stll/money";
 
-import type { RenderInvoicePdfOptions } from "../render";
+import type { RenderInvoicePdfOptions } from "../render-helpers";
 
 /** Every diacritic the Central European profiles need, in one string. */
 export const CEE_DIACRITICS = "ěščřžýáíéůú ĚŠČŘŽ ľĺŕô ąćęłńóśźż őűŐŰ äöüß";

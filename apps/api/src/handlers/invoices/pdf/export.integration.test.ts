@@ -27,6 +27,7 @@ import {
   releaseRlsFixture,
 } from "@/api/tests/security/rls-fixture";
 
+// Selected by the STELLA_RUN_POSTGRES_TESTS gate because the fixture exercises RLS.
 let fixture: Awaited<ReturnType<typeof getRlsFixture>>;
 const invoiceId = createSafeId<"invoice">();
 beforeAll(async () => {
@@ -207,6 +208,9 @@ describe("invoice document export", () => {
       .where(eq(invoices.id, invoiceId));
     let pdf: Uint8Array | null = null;
     const handler = createInvoicePdfExport(async (object) => {
+      if (typeof object.data === "string") {
+        throw new TypeError("invoice export must store PDF bytes");
+      }
       pdf = object.data;
       return S3_OBJECT_WRITE_CERTAINTY.CONFIRMED;
     });

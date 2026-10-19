@@ -2,7 +2,7 @@ import { PDF, PdfArray, PdfDict, PdfName, PdfStream } from "@libpdf/core";
 import { afterAll, describe, expect, test } from "bun:test";
 import { encode } from "uqr";
 
-import { buildInvoicePaymentPayload } from "../render";
+import { buildInvoicePaymentPayload } from "../render-helpers";
 import { buildInvoiceTemplateData, qrSvg } from "./data";
 import { CEE_DIACRITICS, DUMMY_ISDOC, invoiceFixture } from "./fixtures";
 import { PDFA_PRODUCER } from "./pdfa";
