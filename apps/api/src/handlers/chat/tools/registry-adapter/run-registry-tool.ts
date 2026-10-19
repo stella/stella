@@ -1,51 +1,26 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
-import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
-
 import { projectForChat } from "@/api/lib/chat/projection-schema";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { containsRawUuid } from "@/api/lib/chat/uuid-mask";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { isRecord } from "@/api/lib/type-guards";
-import { BILLING_TOOL_HANDLERS } from "@/api/mcp/billing-tools";
-import { CAPABILITY_TOOL_HANDLERS } from "@/api/mcp/capability-tools";
-import { COMPAT_TOOL_HANDLERS } from "@/api/mcp/compat-tools";
 import type { McpRequestContext } from "@/api/mcp/context";
-import { DECISION_READER_TOOL_HANDLERS } from "@/api/mcp/decision-reader-tools";
-import { DOCUMENT_TOOL_HANDLERS } from "@/api/mcp/document-tools";
 import { finalizeToolEgress } from "@/api/mcp/egress";
 import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
-import { FEEDBACK_TOOL_HANDLERS } from "@/api/mcp/feedback-tools";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/gateway/list-tools";
 import {
   agentInputValidationError,
   normalizeObjectInputAtBoundary,
 } from "@/api/mcp/input-normalization";
-import { KNOWLEDGE_TOOL_HANDLERS } from "@/api/mcp/knowledge-tools";
-import { LEGAL_RESOLVE_TOOL_HANDLERS } from "@/api/mcp/legal-resolve-tools";
-import { LEGISLATION_TOOL_HANDLERS } from "@/api/mcp/legislation-tools";
-import { MATTER_TOOL_HANDLERS } from "@/api/mcp/matter-tools";
-import { READER_ANNOTATION_TOOL_HANDLERS } from "@/api/mcp/reader-annotation-tools";
-import { RESEARCH_ADMIN_TOOL_HANDLERS } from "@/api/mcp/research-admin-tools";
 import {
   DEFAULT_MCP_TOOL_DEFINITIONS,
   getStaticMcpToolDefinition,
   invokeStaticMcpTool,
 } from "@/api/mcp/static-tool-definitions";
-import { STELLA_TOOL_HANDLERS } from "@/api/mcp/stella-tools";
-import { TEMPLATE_TOOL_HANDLERS } from "@/api/mcp/template-tools";
-import type { RequiresThirdPartyOutbound } from "@/api/mcp/third-party-outbound";
 import { hasMcpToolAuthority } from "@/api/mcp/tool-authority";
-import type {
-  AllHandlerOutputsTyped,
-  AssertTrue,
-  HandlerOutputsMatchByName,
-  McpToolHandler,
-  McpToolResponse,
-  PublicMcpToolHandler,
-  TypedHandlerDataByName,
-} from "@/api/mcp/tool-types";
+import type { McpToolHandler, McpToolResponse } from "@/api/mcp/tool-types";
 import { validationErrorResult } from "@/api/mcp/tool-utils";
 
 import type {
@@ -57,101 +32,12 @@ import { READ_TOOL_REF_FIELD_MAP } from "./ref-field-map";
 import { dehydrateInputRefs } from "./ref-mediation";
 import { toRegistryChatToolError } from "./registry-tool-error";
 
-/**
- * The read-only registry handlers chat may drive, gathered from the per-domain
- * exports and keyed by `RegistryReadToolName` via `satisfies`. Exhaustive by
- * construction (a second class-guard beside the ref-field map): a read tool with
- * no handler wired here cannot compile.
- */
-const REGISTRY_READ_TOOL_HANDLERS = {
-  fetch: COMPAT_TOOL_HANDLERS.fetch,
-  search: COMPAT_TOOL_HANDLERS.search,
-  list_matters: STELLA_TOOL_HANDLERS.list_matters,
-  list_contacts: MATTER_TOOL_HANDLERS.list_contacts,
-  resolve_case_law_decision:
-    LEGAL_RESOLVE_TOOL_HANDLERS.resolve_case_law_decision,
-  resolve_law_citation: LEGAL_RESOLVE_TOOL_HANDLERS.resolve_law_citation,
-  case_law_coverage: STELLA_TOOL_HANDLERS.case_law_coverage,
-  read_case_law_citations: STELLA_TOOL_HANDLERS.read_case_law_citations,
-  read_case_law_decision: STELLA_TOOL_HANDLERS.read_case_law_decision,
-  read_contact: STELLA_TOOL_HANDLERS.read_contact,
-  read_content_across_matters: STELLA_TOOL_HANDLERS.read_content_across_matters,
-  search_case_law: STELLA_TOOL_HANDLERS.search_case_law,
-  search_across_matters: STELLA_TOOL_HANDLERS.search_across_matters,
-  list_templates: TEMPLATE_TOOL_HANDLERS.list_templates,
-  // Non-projectable (`chatProjectable: false`): chat fills templates through
-  // its own hand-written tool, which reports the same decisions in its result.
-  preview_template_conditions:
-    TEMPLATE_TOOL_HANDLERS.preview_template_conditions,
-  list_documents: DOCUMENT_TOOL_HANDLERS.list_documents,
-  read_document: DOCUMENT_TOOL_HANDLERS.read_document,
-  list_properties: DOCUMENT_TOOL_HANDLERS.list_properties,
-  list_tasks: MATTER_TOOL_HANDLERS.list_tasks,
-  lookup_business_registry: MATTER_TOOL_HANDLERS.lookup_business_registry,
-  // Non-projectable: chat uses its hand-written counterparty check tool.
-  check_counterparty: MATTER_TOOL_HANDLERS.check_counterparty,
-  list_clauses: KNOWLEDGE_TOOL_HANDLERS.list_clauses,
-  list_playbooks: KNOWLEDGE_TOOL_HANDLERS.list_playbooks,
-  list_reader_annotations:
-    READER_ANNOTATION_TOOL_HANDLERS.list_reader_annotations,
-  list_time_entries: BILLING_TOOL_HANDLERS.list_time_entries,
-  resolve_rate: BILLING_TOOL_HANDLERS.resolve_rate,
-  list_invoices: BILLING_TOOL_HANDLERS.list_invoices,
-  get_usage: BILLING_TOOL_HANDLERS.get_usage,
-  search_legislation: LEGISLATION_TOOL_HANDLERS.search_legislation,
-  read_statute: LEGISLATION_TOOL_HANDLERS.read_statute,
-  read_statute_provisions: LEGISLATION_TOOL_HANDLERS.read_statute_provisions,
-  read_provision_history: LEGISLATION_TOOL_HANDLERS.read_provision_history,
-  search_boe_legislation: RESEARCH_ADMIN_TOOL_HANDLERS.search_boe_legislation,
-  list_audit_log: RESEARCH_ADMIN_TOOL_HANDLERS.list_audit_log,
-  // Non-projectable: this only prepares sanitized issue content for MCP/CLI.
-  prepare_feedback: FEEDBACK_TOOL_HANDLERS.prepare_feedback,
-  // Non-projectable (`chatProjectable: false`): the capability meta-tools are
-  // reached over MCP/CLI, never from chat, and the orchestrator refuses them
-  // before dispatch. Wired only to keep this map exhaustive over every read
-  // tool.
-  list_capabilities: CAPABILITY_TOOL_HANDLERS.list_capabilities,
-  describe_capability: CAPABILITY_TOOL_HANDLERS.describe_capability,
-  [MCP_CAPABILITY_EXECUTORS.read]:
-    CAPABILITY_TOOL_HANDLERS[MCP_CAPABILITY_EXECUTORS.read],
-  // Non-projectable: MCP host reader navigation and widget data. Wired only
-  // to keep this map exhaustive over every read tool.
-  open_case_law_decision: DECISION_READER_TOOL_HANDLERS.open_case_law_decision,
-  read_case_law_decision_blocks:
-    DECISION_READER_TOOL_HANDLERS.read_case_law_decision_blocks,
-  preview_cited_provision:
-    DECISION_READER_TOOL_HANDLERS.preview_cited_provision,
-} satisfies Record<RegistryReadToolName, McpToolHandler | PublicMcpToolHandler>;
+export type ThirdPartyOutboundReadToolName =
+  | "search_boe_legislation"
+  | "lookup_business_registry";
 
 type ProjectableRegistryReadToolName = ChatProjectableToolName<
   typeof READ_TOOL_REF_FIELD_MAP
->;
-
-/**
- * The reads whose handler reaches a third-party service: those declared with
- * `withThirdPartyOutbound`. Derived from the handler types, so the chat read
- * script policy cannot offer one to scripts.
- */
-export type ThirdPartyOutboundReadToolName = {
-  [
-    TName in RegistryReadToolName
-  ]: (typeof REGISTRY_READ_TOOL_HANDLERS)[TName] extends RequiresThirdPartyOutbound
-    ? TName
-    : never;
-}[RegistryReadToolName];
-
-/** Compile-time guard: the derivation sees the reads that need a permit. */
-export type ThirdPartyOutboundReadsDeclared = AssertTrue<
-  "search_boe_legislation" extends ThirdPartyOutboundReadToolName
-    ? "lookup_business_registry" extends ThirdPartyOutboundReadToolName
-      ? true
-      : false
-    : false
->;
-
-export type RegistryReadToolDataByName = TypedHandlerDataByName<
-  typeof REGISTRY_READ_TOOL_HANDLERS,
-  ProjectableRegistryReadToolName
 >;
 
 const isProjectableRegistryReadToolName = (
@@ -159,24 +45,11 @@ const isProjectableRegistryReadToolName = (
 ): toolName is ProjectableRegistryReadToolName =>
   READ_TOOL_REF_FIELD_MAP[toolName].chatProjectable;
 
-type RegistryReadProjectionDataByName = ProjectionDataByName<
+export type RegistryReadToolDataByName = ProjectionDataByName<
   typeof READ_TOOL_REF_FIELD_MAP,
   ProjectableRegistryReadToolName
 >;
 
-/** Compile-time guard: every chat-projected handler declares typed output. */
-export type RegistryReadToolOutputContract = AssertTrue<
-  AllHandlerOutputsTyped<
-    typeof REGISTRY_READ_TOOL_HANDLERS,
-    ProjectableRegistryReadToolName
-  > extends true
-    ? HandlerOutputsMatchByName<
-        typeof REGISTRY_READ_TOOL_HANDLERS,
-        RegistryReadProjectionDataByName,
-        ProjectableRegistryReadToolName
-      >
-    : false
->;
 export type RunRegistryReadToolProps = {
   toolName: RegistryReadToolName;
   args: Record<string, unknown>;

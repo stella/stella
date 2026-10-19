@@ -1611,32 +1611,6 @@ type InvokeCapabilityOptions = {
   access: keyof typeof MCP_CAPABILITY_EXECUTORS;
 };
 
-const invokeCapabilityWithAuthority = async <T>({
-  context,
-  id,
-  permissions,
-  invoke,
-  map,
-}: {
-  context: McpRequestContext;
-  id: string;
-  permissions: readonly PermissionInput[];
-  invoke: () => Promise<T>;
-  map: (result: T) => McpToolResponse;
-}): Promise<McpToolResponse> => {
-  if (
-    permissions.some(
-      (permission) => !hasEffectiveAuthority(context, permission),
-    )
-  ) {
-    return structuredErrorResult({
-      code: "permission_denied",
-      message: `Your member role does not permit capability "${id}"`,
-    });
-  }
-  return map(await invoke());
-};
-
 const invokeCapabilityHandler = async ({
   args,
   context,
@@ -2214,13 +2188,8 @@ const executeInvoke = async ({
     workspaceId,
   });
 
-  return await invokeCapabilityWithAuthority({
-    context,
-    id,
-    permissions: requiredPermissions,
-    invoke: async () => await endpoint.handler(ctx),
-    map: (result) => mapHandlerResult({ id, result }),
-  });
+  const result = await endpoint.handler(ctx);
+  return mapHandlerResult({ id, result });
 };
 
 /**

@@ -92,11 +92,17 @@ import type { Position } from "@/api/lib/workflow/playbook-positions";
 import { DOCUMENT_TOOL_DEFINITIONS } from "@/api/mcp/document-tools";
 import { mcpMemberAuthority } from "@/api/mcp/effective-authority";
 import { KNOWLEDGE_TOOL_DEFINITIONS } from "@/api/mcp/knowledge-tools";
-import { getStaticMcpToolHandler } from "@/api/mcp/static-tool-definitions";
+import {
+  getStaticMcpToolDefinition,
+  invokeStaticMcpTool,
+} from "@/api/mcp/static-tool-definitions";
 import { STELLA_TOOL_DEFINITIONS } from "@/api/mcp/stella-tools";
 import { TEMPLATE_TOOL_SET } from "@/api/mcp/template-tools";
 import type { McpToolHandler } from "@/api/mcp/tool-types";
-import { serializeToolResult } from "@/api/mcp/tool-utils";
+import {
+  serializeToolResult,
+  structuredErrorResult,
+} from "@/api/mcp/tool-utils";
 import { handleMcpToolCall } from "@/api/mcp/tools";
 
 import { runEvalModelTurn } from "./lib/model-turn";
@@ -1034,9 +1040,22 @@ const chatMatterTools = ({
   /** Takes each script's input and output, as a stored tool call keeps them. */
   written: (value: unknown) => void;
 }): AnyServerTool[] => {
-  const listPlaybooks =
-    getStaticMcpToolHandler(LIST_PLAYBOOKS) ??
-    panic(`The static tool registry has no ${LIST_PLAYBOOKS} handler`);
+  const listPlaybooksDefinition =
+    getStaticMcpToolDefinition(LIST_PLAYBOOKS) ??
+    panic(`The static tool registry has no ${LIST_PLAYBOOKS} definition`);
+  const listPlaybooks: McpToolHandler = async ({ args, context }) => {
+    const invocation = await invokeStaticMcpTool({
+      args,
+      context,
+      definition: listPlaybooksDefinition,
+    });
+    return invocation.status === "refused"
+      ? structuredErrorResult({
+          code: "permission_denied",
+          message: `${LIST_PLAYBOOKS} is unavailable.`,
+        })
+      : invocation.response;
+  };
   const runReadTool: ChatCodeModeReadRunner = async (toolName, args) => {
     // The handler's view of the call: refs already resolved to ids, so the
     // scenario checks read the same input on both surfaces. A call refused
@@ -1261,9 +1280,6 @@ const createBehaviorTools = ({
         args,
         context: store.context,
         refRegistry: requestRefRegistry(),
-        handler:
-          getStaticMcpToolHandler(LIST_PLAYBOOKS) ??
-          panic(`The static tool registry has no ${LIST_PLAYBOOKS} handler`),
       });
       if (Result.isError(read)) {
         return refused(name, input, read.error);

@@ -15,7 +15,6 @@ import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { putPresignedUpload } from "@/api/lib/s3-presign";
 import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 import { isRecord } from "@/api/lib/type-guards";
-import { CAPABILITY_TOOL_HANDLERS } from "@/api/mcp/capability-tools";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { isMcpEgressPlan } from "@/api/mcp/tool-types";
 import type {
@@ -106,12 +105,33 @@ const invokeCapability = async ({
   args: Record<string, unknown>;
   context: McpRequestContext;
 }): Promise<CapabilityResult> => {
-  const response = await CAPABILITY_TOOL_HANDLERS[
-    MCP_CAPABILITY_EXECUTORS.write
-  ]({
+  const { getStaticMcpToolDefinition, invokeStaticMcpTool } =
+    await import("@/api/mcp/static-tool-definitions");
+  const toolName = MCP_CAPABILITY_EXECUTORS.write;
+  const definition = getStaticMcpToolDefinition(toolName);
+  if (definition === undefined) {
+    return {
+      status: "error",
+      result: internalFailureResult(
+        new Error("Upload capability tool is unavailable"),
+      ),
+    };
+  }
+  const invocation = await invokeStaticMcpTool({
     args,
     context,
+    definition,
   });
+  if (invocation.status === "refused") {
+    return {
+      status: "error",
+      result: structuredErrorResult({
+        code: "permission_denied",
+        message: "Your member role does not permit this operation",
+      }),
+    };
+  }
+  const response = invocation.response;
   if (!isMcpEgressPlan(response)) {
     return response.status === "error"
       ? { status: "error", result: response }

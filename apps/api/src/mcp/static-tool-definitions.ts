@@ -60,6 +60,22 @@ type DefaultMcpToolSets = readonly [
   typeof CAPABILITY_TOOL_SET,
 ];
 
+type StaticMcpToolSet = DefaultMcpToolSets[number];
+
+type HandlerForName<TSet, TName extends string> = TSet extends {
+  handlers: infer THandlers;
+}
+  ? TName extends keyof THandlers
+    ? THandlers[TName]
+    : never
+  : never;
+
+/** Handler contract exposed without making the registered handler value callable. */
+export type StaticMcpToolHandlerForName<TName extends string> = HandlerForName<
+  StaticMcpToolSet,
+  TName
+>;
+
 export const DEFAULT_MCP_TOOL_SETS: DefaultMcpToolSets = [
   COMPAT_TOOL_SET,
   STELLA_TOOL_SET,
