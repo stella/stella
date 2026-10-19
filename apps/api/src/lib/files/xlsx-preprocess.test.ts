@@ -98,6 +98,14 @@ describe("patchSheetXml", () => {
     );
   });
 
+  it("refuses an incomplete sheet property element", () => {
+    const result = patchSheetXml(
+      "<worksheet><sheetPr><sheetData/></worksheet>",
+    );
+
+    expect(result.isErr()).toBe(true);
+  });
+
   it("updates existing pageSetUpPr fitToPage attribute", () => {
     const xml = [
       '<?xml version="1.0"?>',

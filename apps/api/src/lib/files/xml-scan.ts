@@ -14,6 +14,11 @@ export type XmlElementMatch = {
 
 export type XmlElementSelector = string | { prefix: string };
 
+export type FirstXmlElementResult =
+  | { kind: "found"; match: XmlElementMatch }
+  | { kind: "absent" }
+  | { kind: "incomplete" };
+
 export class XmlScanError extends TaggedError("XmlScanError")<{
   message: string;
 }> {}
@@ -139,19 +144,24 @@ export const xmlElements = function* (
 export const firstXmlElement = (
   xml: string,
   selector: XmlElementSelector,
-): XmlElementMatch | null => {
+): FirstXmlElementResult => {
   const result = xmlElements(xml, selector).next();
   if (result.done === true) {
-    return null;
+    return result.value.status === "complete"
+      ? { kind: "absent" }
+      : { kind: "incomplete" };
   }
-  return result.value;
+  return { kind: "found", match: result.value };
 };
 
 export const xmlElementText = (xml: string, name: string): string | null => {
-  const match = firstXmlElement(xml, name);
-  return match === null || match.selfClosing
+  const result = firstXmlElement(xml, name);
+  if (result.kind === "absent" || result.kind === "incomplete") {
+    return null;
+  }
+  return result.match.selfClosing
     ? null
-    : xml.slice(match.contentStart, match.contentEnd);
+    : xml.slice(result.match.contentStart, result.match.contentEnd);
 };
 
 export const replaceXmlElements = (

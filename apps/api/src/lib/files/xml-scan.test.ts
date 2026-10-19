@@ -19,7 +19,9 @@ test("reads and transforms qualified elements in document order", () => {
   const first = firstXmlElement(xml, "dc:title");
 
   expect(
-    first === null ? null : xml.slice(first.contentStart, first.contentEnd),
+    first.kind === "found"
+      ? xml.slice(first.match.contentStart, first.match.contentEnd)
+      : null,
   ).toBe("One");
   expect(xmlElementText(xml, "dc:title")).toBe("One");
   expect(clearXmlElements(xml, ["dc:title"]).unwrap()).toBe(
@@ -99,6 +101,17 @@ test("reads an open tag containing a closing bracket in an attribute", () => {
   const xml = '<item value=">">content</item>';
   const match = firstXmlElement(xml, "item");
 
-  expect(match?.openTag).toBe('<item value=">">');
+  expect(match.kind === "found" ? match.match.openTag : null).toBe(
+    '<item value=">">',
+  );
   expect(xmlElementText(xml, "item")).toBe("content");
+});
+
+test("distinguishes incomplete and absent elements", () => {
+  expect(firstXmlElement("<root><item>", "item")).toEqual({
+    kind: "incomplete",
+  });
+  expect(firstXmlElement("<root></root>", "item")).toEqual({
+    kind: "absent",
+  });
 });

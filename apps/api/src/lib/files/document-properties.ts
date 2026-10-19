@@ -39,8 +39,8 @@ import {
   firstXmlElement,
   removeXmlElements,
   replaceXmlElementContent,
+  XmlScanError,
   xmlElementText,
-  type XmlScanError,
 } from "@/api/lib/files/xml-scan";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -1094,15 +1094,26 @@ const XML_1_FORBIDDEN_CONTROL_RE = /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/u;
  */
 const setElement = (xml: string, name: string, value: string, root: string) => {
   const text = escapeXmlText(value);
-  if (firstXmlElement(xml, name) !== null) {
+  const element = firstXmlElement(xml, name);
+  if (element.kind === "incomplete") {
+    return Result.err(
+      new XmlScanError({ message: "Incomplete matching XML element" }),
+    );
+  }
+  if (element.kind === "found") {
     return replaceXmlElementContent(xml, name, text);
   }
   const rootElement = firstXmlElement(xml, root);
-  if (rootElement === null || rootElement.selfClosing) {
+  if (rootElement.kind === "incomplete") {
+    return Result.err(
+      new XmlScanError({ message: "Incomplete matching XML element" }),
+    );
+  }
+  if (rootElement.kind === "absent" || rootElement.match.selfClosing) {
     return Result.ok(xml);
   }
   return Result.ok(
-    `${xml.slice(0, rootElement.contentEnd)}<${name}>${text}</${name}>${xml.slice(rootElement.contentEnd)}`,
+    `${xml.slice(0, rootElement.match.contentEnd)}<${name}>${text}</${name}>${xml.slice(rootElement.match.contentEnd)}`,
   );
 };
 

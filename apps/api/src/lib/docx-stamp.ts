@@ -1388,12 +1388,12 @@ const extractBookmarkText = (
   }
   const remaining = xml.slice(start.end);
   const end = firstXmlElement(remaining, "w:bookmarkEnd");
-  if (end === null) {
+  if (end.kind === "absent" || end.kind === "incomplete") {
     return null;
   }
 
   const fullText = collectRunText(
-    xml.slice(start.start, start.end + end.end),
+    xml.slice(start.start, start.end + end.match.end),
   ).trim();
   if (!fullText) {
     return null;

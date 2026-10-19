@@ -6,7 +6,7 @@ import { loadDocxArchive } from "@/api/lib/docx-archive";
 import {
   firstXmlElement,
   replaceXmlElements,
-  type XmlScanError,
+  XmlScanError,
 } from "@/api/lib/files/xml-scan";
 
 const REGEX_HAS_PAGE_SET_UP_PR = /<pageSetUpPr[\s/>]/u;
@@ -54,7 +54,12 @@ export const patchSheetXml = (xml: string): Result<string, XmlScanError> => {
   } else {
     const sheetPr = firstXmlElement(out, "sheetPr");
 
-    if (sheetPr !== null && !sheetPr.selfClosing) {
+    if (sheetPr.kind === "incomplete") {
+      return Result.err(
+        new XmlScanError({ message: "Incomplete matching XML element" }),
+      );
+    }
+    if (sheetPr.kind === "found" && !sheetPr.match.selfClosing) {
       const replaced = replaceXmlElements(
         out,
         "sheetPr",
