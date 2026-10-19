@@ -114,6 +114,7 @@ import type { McpRequestContext } from "@/api/mcp/context";
 import { resolveMcpToolOutputContract } from "@/api/mcp/gateway/list-tools";
 import { deriveContactDisplayName } from "@/api/mcp/matter-tools";
 import { windowProvisionText } from "@/api/mcp/provision-text-window";
+import type { ReadCaseLawDecisionSuccess } from "@/api/mcp/public-law-handlers";
 import { getMcpResourceModeConfig } from "@/api/mcp/resource-policy-contract";
 import { DEFAULT_MCP_CLI_ANNOTATIONS } from "@/api/mcp/static-cli-metadata";
 import {
@@ -1406,7 +1407,7 @@ describe("OpenAI-compatible MCP tools", () => {
           minLength: 1,
           maxLength: 256,
           description:
-            'Only decisions citing this provision, as a lawyer writes it: "§ 316 odst. 2 ZP", "§ 52 písm. g) zákoníku práce", "čl. 10 Listiny". A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, exact total.',
+            'Only decisions citing this provision, as a lawyer writes it: "§ 316 odst. 2 ZP", "§ 52 písm. g) zákoníku práce", "čl. 10 Listiny", "Article 6(1)(a) GDPR". EU provisions work for every decision country. A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, exact total.',
         },
         has_legal_sentence: {
           type: "boolean",
@@ -5324,6 +5325,17 @@ describe("OpenAI-compatible MCP tools", () => {
         { work: "262/2006 Sb.", unit: "section", section: 52, letter: "g" },
       ],
       ["čl. 10 Listiny", { unit: "article", section: 10 }],
+      [
+        "Article 6(1)(a) GDPR",
+        {
+          jurisdiction: "EU",
+          work: "32016R0679",
+          unit: "article",
+          section: 6,
+          subsection: "1",
+          letter: "a",
+        },
+      ],
     ])(
       "reads the provision %s onto every phrasing's search",
       async (provision, expected) => {
@@ -5355,6 +5367,9 @@ describe("OpenAI-compatible MCP tools", () => {
       ["§ 10 Listiny", "is not divided into the units"],
       ["§ 316 odst. 2 a 3 ZP", "several provisions or a range"],
       ["§ 316–318 ZP", "several provisions or a range"],
+      ["Article 5 and Article 6 GDPR", "several provisions"],
+      ["Article 6 GDPR and 7", "several provisions"],
+      ["Article 6 GDPR and Article 7 GDPR", "several provisions"],
     ])(
       "refuses the provision %s before any search, naming the fix",
       async (provision, message) => {
@@ -6051,7 +6066,7 @@ describe("OpenAI-compatible MCP tools", () => {
       caller: "attributed",
       citationsCursor: null,
       documentHydration: STORED_ONLY_DOCUMENT_HYDRATION,
-      surface: "search",
+      surface: "identity",
     });
     expect(readGatedDecisionCitationDigestMock).toHaveBeenCalledWith({
       caseLawDb: caseLawPublicReadDb,
@@ -6176,6 +6191,70 @@ describe("OpenAI-compatible MCP tools", () => {
         context: createContext(),
         toolName: "read_case_law_decision",
       });
+
+    test.each([null, createCitationDigest()])(
+      "identity-only countries report unavailable citations on MCP and CLI (%#)",
+      async (digest) => {
+        const base = createReadDecisionResult();
+        readGatedDecisionMock.mockResolvedValue({
+          ...base,
+          id: toSafeId<"caseLawDecision">(DECISION_ID),
+          country: "EU",
+          decisionDate: "2024-02-01",
+          documentAst: null,
+          fulltext: "Synthetic EU decision.",
+          identifiers: [
+            {
+              type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+              value: base.caseNumber,
+            },
+          ],
+          documentPending: false,
+          hasDocument: true,
+          documentReadFailed: false,
+          documentUnavailable: false,
+          courtId: null,
+          courtTier: "other",
+          languageGroupKey: null,
+          projectionDigest: null,
+          documentAstSource: null,
+          sections: null,
+          headnote: base.textFields.headnote,
+          createdAt: new Date("2024-02-01T00:00:00.000Z"),
+          updatedAt: new Date("2024-02-01T00:00:00.000Z"),
+          source: { ...base.source, id: toSafeId<"caseLawSource">("src_1") },
+          judges: [],
+          languageAlternates: [],
+          citationsFrom: [],
+          citationsTo: [],
+        } satisfies ReadCaseLawDecisionSuccess);
+        readGatedDecisionCitationDigestMock.mockResolvedValue(digest);
+        const result = await handleMcpToolCall({
+          args: { decision_ids: [DECISION_ID], include: ["citations"] },
+          context: createContext(),
+          toolName: "read_case_law_decision",
+        });
+        const mcp = parseToolPayload(result);
+        expect(mcp).toMatchObject({
+          items: [
+            {
+              status: "found",
+              decision: {
+                citations: {
+                  status: "unavailable",
+                  reason: "country_not_search_admitted",
+                  country: "EU",
+                },
+              },
+            },
+          ],
+        });
+        const cli = renderThroughCli(result, undefined);
+        expect(cli.printed).toEqual(mcp);
+        expect(cli.exitCode).toBe(0);
+        expect(readGatedDecisionCitationDigestMock).not.toHaveBeenCalled();
+      },
+    );
 
     test("query passage identity and enclosing headings survive the MCP to CLI contract", async () => {
       const base = createReadDecisionResult();

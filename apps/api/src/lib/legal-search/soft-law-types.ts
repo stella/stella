@@ -1,4 +1,4 @@
-import { TaggedError } from "better-result";
+import { panic, TaggedError } from "better-result";
 import type { Result } from "better-result";
 
 import type {
@@ -22,6 +22,7 @@ export const SOFT_LAW_KINDS = [
   "faq",
   "guideline",
   "position",
+  "statement",
   "inspection_report",
   "annual_report",
   "other",
@@ -46,6 +47,23 @@ export const SOFT_LAW_EXTRACTION_QUALITIES = [
   "scanned_ocr",
   "extraction_failed",
 ] as const;
+export type SoftLawExtractionQuality =
+  (typeof SOFT_LAW_EXTRACTION_QUALITIES)[number];
+/** Higher ranks represent more useful extracted content and may replace lower ranks. */
+export const SOFT_LAW_EXTRACTION_QUALITY_RANK = {
+  extraction_failed: 0,
+  needs_ocr: 1,
+  scanned_ocr: 2,
+  text_layer: 3,
+  html: 4,
+} as const satisfies Record<SoftLawExtractionQuality, number>;
+export const isTextlessExtraction = (
+  text: string | null,
+  extractionQuality: SoftLawExtractionQuality,
+) =>
+  text === null &&
+  SOFT_LAW_EXTRACTION_QUALITY_RANK[extractionQuality] <
+    SOFT_LAW_EXTRACTION_QUALITY_RANK.text_layer;
 export const SOFT_LAW_STATED_STATES = ["stated", "not_stated"] as const;
 export const SOFT_LAW_RUN_STATES = [
   "idle",
@@ -74,33 +92,142 @@ export const SOFT_LAW_ATTEMPT_STATES = [
 ] as const;
 export const SOFT_LAW_AUTHORITIES = {
   "cz-uoou": { jurisdiction: "CZE", name: "Úřad pro ochranu osobních údajů" },
+  "eu-edpb": { jurisdiction: "EU", name: "European Data Protection Board" },
+  "eu-wp29": { jurisdiction: "EU", name: "Article 29 Working Party" },
 } as const;
 export type SoftLawAuthority = keyof typeof SOFT_LAW_AUTHORITIES;
 export type SoftLawStated<T> =
   | { state: "stated"; value: T }
   | { state: "not_stated" };
+export type SoftLawEvidence = {
+  url: string;
+  quote: string;
+  locator: string;
+};
+export type SoftLawExpression =
+  | { type: "unspecified" }
+  | {
+      type: "identified";
+      language: string;
+      revision: SoftLawStated<string>;
+    };
+export type SoftLawStage =
+  | { state: "not_stated" }
+  | { state: "consultation" | "adopted"; evidence: SoftLawEvidence };
+export type SoftLawRelation = {
+  type: "supersedes" | "superseded_by" | "endorses";
+  reference: string;
+  evidence: SoftLawEvidence;
+};
 export type SoftLawMetadata = {
   title: string;
   kind: (typeof SOFT_LAW_KINDS)[number];
+  /** Publisher's original type label; absent only in historical CZ records. */
+  sourceKind?: string;
+  /** Stable publisher record id, distinct from a human citation or mutable locator. */
+  sourceDocumentId?: string;
   statedReference: SoftLawStated<string>;
   issuedOn: SoftLawStated<string>;
+  /** Historical CZ rows and retry receipts predate these publisher fields. EU adapters must provide all three. */
+  expression?: SoftLawExpression;
+  stage?: SoftLawStage;
+  relations?: readonly SoftLawRelation[];
   validity: {
     state: (typeof SOFT_LAW_VALIDITY_STATES)[number];
     basis: (typeof SOFT_LAW_VALIDITY_BASES)[number];
   };
 };
 export type SoftLawEntry = {
+  type: "document";
   url: string;
+  /** Publisher index/detail responses retained alongside the document bytes. */
+  sourcePages?: readonly string[];
+  /** Exact discovery responses survive a durable retry; base64 preserves their bytes in JSONB. */
+  sourceRaw?: readonly {
+    role: string;
+    contentBase64: string;
+    contentType: string;
+  }[];
   metadata: SoftLawMetadata;
   sourceDates: Readonly<Record<string, string>>;
+};
+export type SoftLawRejectedEntry = {
+  type: "rejected";
+  url: string;
+  /** Exact discovery responses retained so the rejection can be audited. */
+  sourceRaw?: readonly {
+    role: string;
+    contentBase64: string;
+    contentType: string;
+  }[];
+  rejection: {
+    tag: Exclude<(typeof SOFT_LAW_ITEM_TAGS)[number], "identity_collision">;
+    reason: string;
+  };
+};
+export type SoftLawDiscoveryEntry = SoftLawEntry | SoftLawRejectedEntry;
+
+/**
+ * A retry receipt as stored. Workers released before the entry discriminator
+ * wrote document entries without `type`, and one may still do so while a
+ * deployment rolls out after the receipt migration ran. Remove this branch and
+ * `storedSoftLawDiscoveryEntry` in the release after the one carrying it, once
+ * no such worker can run.
+ */
+export type StoredSoftLawDiscoveryEntry =
+  | SoftLawDiscoveryEntry
+  | (Omit<SoftLawEntry, "type"> & { type?: undefined });
+
+export const storedSoftLawDiscoveryEntry = (
+  entry: StoredSoftLawDiscoveryEntry,
+): SoftLawDiscoveryEntry => {
+  switch (entry.type) {
+    case "document":
+    case "rejected":
+      return entry;
+    case undefined:
+      return {
+        type: "document",
+        url: entry.url,
+        ...(entry.sourcePages === undefined
+          ? {}
+          : { sourcePages: entry.sourcePages }),
+        ...(entry.sourceRaw === undefined
+          ? {}
+          : { sourceRaw: entry.sourceRaw }),
+        metadata: entry.metadata,
+        sourceDates: entry.sourceDates,
+      };
+    default:
+      entry satisfies never;
+      return panic("Unhandled stored soft-law entry type");
+  }
 };
 export type SoftLawDocumentInput = {
   metadata: SoftLawMetadata;
-  raw: readonly { role: string; bytes: Uint8Array; contentType: string }[];
-  text: string | null;
-  extractionQuality: (typeof SOFT_LAW_EXTRACTION_QUALITIES)[number];
+  raw: readonly {
+    role: string;
+    bytes: Uint8Array;
+    contentType: string;
+    /** Historical CZ envelopes predate this distinction. */
+    purpose?: "document" | "discovery";
+  }[];
   sourceDates: Readonly<Record<string, string>>;
-};
+} & (
+  | {
+      extractionQuality: "extraction_failed";
+      text: null;
+      extractionFailure: string;
+    }
+  | {
+      extractionQuality: Exclude<
+        (typeof SOFT_LAW_EXTRACTION_QUALITIES)[number],
+        "extraction_failed"
+      >;
+      text: string | null;
+      extractionFailure?: never;
+    }
+);
 export type SoftLawAccessPolicy = {
   publisherGate: PublisherGateId;
   userAgent: `Stella/${string} (+https://${string})`;
@@ -113,6 +240,12 @@ export type SoftLawAccessPolicy = {
         endHour: number;
       };
 };
+export type SoftLawRawObject = Omit<
+  SoftLawDocumentInput["raw"][number],
+  "bytes"
+> & {
+  key: string;
+};
 export type SoftLawSourceAdapter = {
   key: string;
   authority: SoftLawAuthority;
@@ -121,10 +254,15 @@ export type SoftLawSourceAdapter = {
     cursor: string | null;
     signal: AbortSignal;
     fetch: SoftLawFetch;
-  }) => Promise<{
-    entries: readonly SoftLawEntry[];
-    nextCursor: string | null;
-  }>;
+  }) => Promise<
+    Result<
+      {
+        entries: readonly SoftLawDiscoveryEntry[];
+        nextCursor: string | null;
+      },
+      SoftLawIngestionError | SoftLawItemError | SoftLawFetchError
+    >
+  >;
   fetchDocument: (
     entry: SoftLawEntry,
     context: { signal: AbortSignal; fetch: SoftLawFetch },
@@ -150,6 +288,24 @@ export class SoftLawItemError extends TaggedError("SoftLawItemError")<{
   message: string;
   tag: Exclude<(typeof SOFT_LAW_ITEM_TAGS)[number], "identity_collision">;
 }> {}
+type SoftLawItemErrorRejectionOptions = {
+  error: unknown;
+  url: string;
+  sourceRaw: NonNullable<SoftLawRejectedEntry["sourceRaw"]>;
+};
+export const softLawItemErrorRejection = ({
+  error,
+  url,
+  sourceRaw,
+}: SoftLawItemErrorRejectionOptions): SoftLawRejectedEntry | null =>
+  SoftLawItemError.is(error)
+    ? {
+        type: "rejected",
+        url,
+        rejection: { tag: error.tag, reason: error.message },
+        sourceRaw,
+      }
+    : null;
 export class SoftLawListingIncompleteError extends TaggedError(
   "SoftLawListingIncompleteError",
 )<{ message: string }> {}
