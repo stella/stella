@@ -5363,6 +5363,14 @@ jobs:
           cd ../web
           cp .env.example .env
 
+      # The dev server imports every generated module the registry owns; the
+      # Vite plugins write only some of them, and only after startup. This job
+      # also runs in heavy-only runs, where no generated-sources job exists.
+      - name: Prepare generated sources
+        env:
+          STELLA_VERIFY: prepare
+        run: bun scripts/ci-generated-sources.ts prepare
+
       - name: Start docker stack and API server
         id: e2e-stack
         # Secrets stay scoped to the action's credential check and login

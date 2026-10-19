@@ -850,3 +850,87 @@ test("API boot entry points prepare capability runtime sources before starting",
     "bun ../../scripts/prepare-mcp-apps.ts",
   );
 });
+
+// A web app served from source imports every generated module the registry
+// owns. A built app does not need this: its build runs the generators.
+const STARTS_WEB_FROM_SOURCE =
+  /\b(?:bun\s+--bun\s+vite|bunx\s+vite|vite\s+dev)\b/u;
+const REGISTRY_PREPARE = "bun scripts/ci-generated-sources.ts prepare";
+const looseWorkflow = v.object({
+  jobs: v.optional(
+    v.record(
+      v.string(),
+      v.looseObject({
+        steps: v.optional(
+          v.array(
+            v.looseObject({
+              name: v.optional(v.string()),
+              run: v.optional(v.string()),
+            }),
+          ),
+        ),
+      }),
+    ),
+  ),
+});
+type LooseWorkflow = v.InferOutput<typeof looseWorkflow>;
+
+const unpreparedSourceStarts = (file: string, source: LooseWorkflow) =>
+  Object.entries(source.jobs ?? {}).flatMap(([id, job]) => {
+    const steps = job.steps ?? [];
+    const start = steps.findIndex(({ run }) =>
+      STARTS_WEB_FROM_SOURCE.test(run ?? ""),
+    );
+    if (start === -1) {
+      return [];
+    }
+    const prepared = steps
+      .slice(0, start)
+      .some(
+        ({ name, run }) =>
+          (run ?? "").includes(REGISTRY_PREPARE) ||
+          name === "Restore generated sources",
+      );
+    return prepared ? [] : [`${file}/${id}/${steps[start]?.name ?? start}`];
+  });
+
+test("every job that serves the web app from source runs the generated-source registry first", () => {
+  const directory = new URL("../.github/workflows/", import.meta.url);
+  const workflows = [...new Bun.Glob("*.yml").scanSync(directory.pathname)]
+    .toSorted()
+    .map((file) => ({
+      file,
+      source: v.parse(
+        looseWorkflow,
+        Bun.YAML.parse(readFileSync(new URL(file, directory), "utf-8")),
+      ),
+    }));
+  const starters = workflows.flatMap(({ file, source }) =>
+    Object.entries(source.jobs ?? {})
+      .filter(([, job]) =>
+        (job.steps ?? []).some(({ run }) =>
+          STARTS_WEB_FROM_SOURCE.test(run ?? ""),
+        ),
+      )
+      .map(([id]) => `${file}/${id}`),
+  );
+  expect(starters).toContain("ci.yml/e2e-vite-canary");
+  expect(
+    workflows.flatMap(({ file, source }) =>
+      unpreparedSourceStarts(file, source),
+    ),
+  ).toEqual([]);
+
+  // Dropping the registry step leaves the dev server without its modules.
+  const mutated = structuredClone(
+    workflows.find(({ file }) => file === "ci.yml")?.source ??
+      panic("Missing ci.yml"),
+  );
+  const canary = mutated.jobs?.["e2e-vite-canary"] ?? panic("Missing canary");
+  canary.steps = (canary.steps ?? []).filter(
+    ({ run }) => !(run ?? "").includes(REGISTRY_PREPARE),
+  );
+  expect(unpreparedSourceStarts("ci.yml", mutated)).toEqual([
+    "ci.yml/e2e-vite-canary/Start web dev server",
+  ]);
+});

@@ -939,7 +939,7 @@
         "type": "checkout"
       },
       "path": ".github/workflows/ci.yml",
-      "digest": "defa10315087338dd9704a4be27a3ceda578c59372b71488ea95cd92b3f93ab7",
+      "digest": "40ec25a2889f9c43c6c7fa48f8da374df9ae0c89903aa0890a78df4bb061cf5f",
       "references": ["./.github/workflows/ci.yml"],
       "jobs": [
         {
@@ -1114,7 +1114,7 @@
           "id": "e2e-vite-canary",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "ba3fa413a3e26dc1cbde19344e50a299be3fb1a0e59ca50004f82517fd3153a9"
+          "digest": "4ad1f19ff28fc81f2be52919e576bbf19bab5be7f29dba17d7ecd126cd3ba075"
         },
         {
           "id": "e2e-landing",
