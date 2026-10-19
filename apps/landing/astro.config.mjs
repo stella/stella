@@ -4,6 +4,7 @@ import starlight from "@astrojs/starlight";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "astro/config";
 
+import stllAhoCorasickWasm from "@stll/aho-corasick-wasm/vite";
 import stllAnonymizeWasm from "@stll/anonymize-wasm/vite";
 import { UI_LOCALES } from "@stll/locales";
 
@@ -159,7 +160,11 @@ export default defineConfig({
     // loadDefaultPipeline(), so no bundled prepared package is needed —
     // "none" skips emitting the ~20MB+ default/per-language .stlanonpkg
     // assets that the plugin's default ("all") would otherwise bundle.
-    plugins: [stllAnonymizeWasm({ packages: "none" }), tailwindcss()],
+    plugins: [
+      stllAhoCorasickWasm(),
+      stllAnonymizeWasm({ packages: "none" }),
+      tailwindcss(),
+    ],
     worker: {
       // Vite bundles Worker entries (AnonymizeLiveDemo's
       // anonymize-demo-worker.ts) through a separate nested build that does

@@ -3,6 +3,8 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { DAY_IN_MS } from "@stll/time";
+
 import { authRelationsPart } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -17,12 +19,11 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { listingIdentityKey } from "@/api/lib/legal-search/ingestion-types";
 import {
   RECONCILIATION_RETRY_DELAYS_MS,
-  RECONCILIATION_TERMINAL_ATTEMPTS,
   countReconciliationItems,
   countTerminalReconciliationItemsBySlice,
   listReconciliationItems,
   parkReconciliationItem,
-  pruneUnlistedTerminalItems,
+  pruneUnlistedReconciliationItems,
   refreshTrackedReconciliationItems,
   resetTerminalReconciliationItems,
   resolveReconciliationItem,
@@ -34,12 +35,8 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import { fingerprintReconciliationPayload } from "./reconciliation-payload";
 
-// What is asserted here is the store's own arithmetic against real columns:
-// that repeated parks advance one row rather than accumulating rows, that the
-// schedule widens and then retires exactly where the constant says, that a
-// written decision leaves nothing behind, and that a retry that is not yet due
-// is not handed out. Every one of those is invisible in the type system and
-// each, wrong, produces a loop that never ends.
+// Real columns verify durable capped retries, identity convergence, explicit
+// terminal dispositions, lease fencing and listing-revision compare-and-set.
 
 const connect = (client: Awaited<ReturnType<typeof createTestPglite>>) =>
   drizzle({ client, relations: { ...relations, ...authRelationsPart } });
@@ -138,7 +135,7 @@ test("lost source ownership supersedes every reconciliation mutation without cha
       identityKey: DOCUMENT_KEY,
       slice: SLICE,
       payload: PAYLOAD,
-      errorTag: "publisher-miss",
+      errorTag: "unkeyable",
       now,
     }),
   ).toEqual({ outcome: "superseded" });
@@ -166,7 +163,7 @@ test("lost source ownership supersedes every reconciliation mutation without cha
     }),
   ).toEqual({ outcome: "superseded" });
   expect(
-    await pruneUnlistedTerminalItems(scopedDb, {
+    await pruneUnlistedReconciliationItems(scopedDb, {
       sourceId,
       leaseToken: LEASE_TOKEN,
       slice: SLICE,
@@ -201,6 +198,88 @@ const readRow = async (
       .limit(1)
   ).at(0);
 
+test.each(Object.values(RECONCILIATION_ITEM_STATUS))(
+  "authoritative pruning removes unlisted %s items before the limit and preserves other scopes",
+  async (status) => {
+    const sourceId = await seedSource();
+    const otherSourceId = await seedSource();
+    const now = new Date("2026-08-11T09:00:00.000Z");
+    const common = {
+      payload: PAYLOAD,
+      status,
+      attempts: 6,
+      nextAttemptAt: status === RECONCILIATION_ITEM_STATUS.PARKED ? now : null,
+    };
+    await db.insert(caseLawReconciliationItems).values([
+      {
+        ...common,
+        id: createSafeId<"caseLawReconciliationItem">(),
+        sourceId,
+        slice: SLICE,
+        identityKey: "document:listed",
+      },
+      {
+        ...common,
+        id: createSafeId<"caseLawReconciliationItem">(),
+        sourceId,
+        slice: SLICE,
+        identityKey: "document:withdrawn-1",
+      },
+      {
+        ...common,
+        id: createSafeId<"caseLawReconciliationItem">(),
+        sourceId,
+        slice: SLICE,
+        identityKey: "document:withdrawn-2",
+      },
+      {
+        ...common,
+        id: createSafeId<"caseLawReconciliationItem">(),
+        sourceId,
+        slice: "2026-08-05",
+        identityKey: "document:other-slice",
+      },
+      {
+        ...common,
+        id: createSafeId<"caseLawReconciliationItem">(),
+        sourceId: otherSourceId,
+        slice: SLICE,
+        identityKey: "document:withdrawn-1",
+      },
+    ]);
+    const retained = await readRow(sourceId, "document:listed");
+    const otherSlice = await readRow(sourceId, "document:other-slice");
+    const otherSource = await readRow(otherSourceId, "document:withdrawn-1");
+    const input = {
+      sourceId,
+      leaseToken: LEASE_TOKEN,
+      slice: SLICE,
+      listedIdentityKeys: ["document:listed"],
+      limit: 1,
+    };
+    for (const removed of [1, 1, 0]) {
+      expect(await pruneUnlistedReconciliationItems(scopedDb, input)).toEqual({
+        outcome: "pruned",
+        removed,
+      });
+    }
+    expect(await readRow(sourceId, "document:withdrawn-1")).toBeUndefined();
+    expect(await readRow(sourceId, "document:withdrawn-2")).toBeUndefined();
+    expect(await readRow(sourceId, "document:listed")).toEqual(retained);
+    expect(await readRow(sourceId, "document:other-slice")).toEqual(otherSlice);
+    expect(await readRow(otherSourceId, "document:withdrawn-1")).toEqual(
+      otherSource,
+    );
+    expect(
+      await pruneUnlistedReconciliationItems(scopedDb, {
+        ...input,
+        listedIdentityKeys: [],
+      }),
+    ).toEqual({ outcome: "pruned", removed: 1 });
+    expect(await readRow(sourceId, "document:listed")).toBeUndefined();
+  },
+);
+
 test("repeated parks advance one row along the widening schedule", async () => {
   const sourceId = await seedSource();
   const now = new Date("2026-08-11T09:00:00.000Z");
@@ -234,12 +313,14 @@ test("repeated parks advance one row along the widening schedule", async () => {
   });
 });
 
-test("the attempt past the schedule retires the item and stops scheduling it", async () => {
+test("repeated unavailable documents stay parked past every retry boundary and recover", async () => {
   const sourceId = await seedSource();
-  const now = new Date("2026-08-11T09:00:00.000Z");
-
-  let attempts = 0;
-  while (attempts < RECONCILIATION_TERMINAL_ATTEMPTS) {
+  let now = new Date("2026-08-11T09:00:00.000Z");
+  const lastDelay =
+    RECONCILIATION_RETRY_DELAYS_MS.at(-1) ??
+    panic("The retry schedule needs a capped delay");
+  const attempts = RECONCILIATION_RETRY_DELAYS_MS.length * 4;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
     const parked = await parkReconciliationItem(scopedDb, {
       revisionOf: (payload) => payload,
       leaseToken: LEASE_TOKEN,
@@ -247,37 +328,92 @@ test("the attempt past the schedule retires the item and stops scheduling it", a
       slice: SLICE,
       identityKey: DOCUMENT_KEY,
       payload: PAYLOAD,
-      errorTag: "detail-unavailable",
+      errorTag: attempt % 2 === 0 ? "AdapterFetchError" : "detail-unavailable",
       now,
     });
-    expect(parked.outcome).toBe("recorded");
-    if (parked.outcome === "recorded") {
-      attempts = parked.attempts;
+    expect(parked).toEqual({
+      outcome: "recorded",
+      status: RECONCILIATION_ITEM_STATUS.PARKED,
+      attempts: attempt,
+    });
+    const row = await readRow(sourceId, DOCUMENT_KEY);
+    expect(row?.lastAttemptAt).toEqual(now);
+    const due =
+      row?.nextAttemptAt ?? panic("Unavailable documents need a durable retry");
+    expect(due.getTime()).toBeGreaterThan(now.getTime());
+    expect(due.getTime() - now.getTime()).toBeLessThanOrEqual(lastDelay);
+    if (attempt >= RECONCILIATION_RETRY_DELAYS_MS.length) {
+      expect(due.getTime() - now.getTime()).toBe(lastDelay);
     }
+    expect(
+      await selectDueReconciliationItems(scopedDb, {
+        sourceId,
+        now,
+        limit: 10,
+      }),
+    ).toEqual([]);
+    now = due;
+    expect(
+      (
+        await selectDueReconciliationItems(scopedDb, {
+          sourceId,
+          now,
+          limit: 10,
+        })
+      ).map(({ identityKey }) => identityKey),
+    ).toEqual([DOCUMENT_KEY]);
   }
-
-  const row = await readRow(sourceId, DOCUMENT_KEY);
-  expect(row?.status).toBe(RECONCILIATION_ITEM_STATUS.TERMINAL);
-  expect(row?.attempts).toBe(RECONCILIATION_TERMINAL_ATTEMPTS);
-  // A retired item carries no due time, so nothing can hand it out again.
-  expect(row?.nextAttemptAt).toBeNull();
-
-  const later = new Date("2027-01-01T00:00:00.000Z");
-  expect(
-    await selectDueReconciliationItems(scopedDb, {
-      sourceId,
-      now: later,
-      limit: 10,
-    }),
-  ).toEqual([]);
-
-  // …and it is counted as accounted for, which is what settles its slice.
+  expect(await countReconciliationItems(scopedDb, sourceId)).toEqual({
+    parked: 1,
+    terminal: 0,
+  });
   expect(
     await countTerminalReconciliationItemsBySlice(scopedDb, {
       sourceId,
       slices: [SLICE],
     }),
-  ).toEqual(new Map([[SLICE, 1]]));
+  ).toEqual(new Map());
+  for (let replay = 0; replay < 2; replay += 1) {
+    await resolveReconciliationItem(scopedDb, {
+      sourceId,
+      leaseToken: LEASE_TOKEN,
+      identityKey: DOCUMENT_KEY,
+      payload: PAYLOAD,
+    });
+    expect(await countReconciliationItems(scopedDb, sourceId)).toEqual({
+      parked: 0,
+      terminal: 0,
+    });
+  }
+});
+
+test("a historical terminal row is unchanged by an incidental transient failure", async () => {
+  const sourceId = await seedSource();
+  const now = new Date("2026-08-11T09:00:00.000Z");
+  const options = {
+    revisionOf: (payload: unknown) => payload,
+    leaseToken: LEASE_TOKEN,
+    sourceId,
+    slice: SLICE,
+    identityKey: DOCUMENT_KEY,
+    payload: PAYLOAD,
+    now,
+  };
+  await retireReconciliationItem(scopedDb, {
+    ...options,
+    errorTag: "unkeyable",
+  });
+  await db
+    .update(caseLawReconciliationItems)
+    .set({ attempts: 6, lastError: "AdapterFetchError" })
+    .where(eq(caseLawReconciliationItems.sourceId, sourceId));
+  const before = await readRow(sourceId, DOCUMENT_KEY);
+  await parkReconciliationItem(scopedDb, {
+    ...options,
+    errorTag: "AdapterFetchError",
+    now: new Date(now.getTime() + DAY_IN_MS),
+  });
+  expect(await readRow(sourceId, DOCUMENT_KEY)).toEqual(before);
 });
 
 test("an item a retry can never key is retired without serving the schedule", async () => {
@@ -295,7 +431,18 @@ test("an item a retry can never key is retired without serving the schedule", as
 
   const row = await readRow(sourceId, DOCKET_KEY);
   expect(row?.status).toBe(RECONCILIATION_ITEM_STATUS.TERMINAL);
-  expect(row?.attempts).toBe(RECONCILIATION_TERMINAL_ATTEMPTS);
+  expect(row?.attempts).toBe(1);
+  await retireReconciliationItem(scopedDb, {
+    revisionOf: (payload) => payload,
+    leaseToken: LEASE_TOKEN,
+    sourceId,
+    slice: SLICE,
+    identityKey: DOCKET_KEY,
+    payload: PAYLOAD,
+    errorTag: "unkeyable",
+    now: new Date("2026-08-12T09:00:00.000Z"),
+  });
+  expect(await readRow(sourceId, DOCKET_KEY)).toEqual(row);
 });
 
 test("the due read hands out only what has come due, oldest first", async () => {
@@ -638,7 +785,7 @@ test("position-only listing movement keeps retry state and unchanged visits do n
     payload,
     revisionOf: contentRevision,
     now,
-    errorTag: "unavailable",
+    errorTag: "unkeyable" as const,
   };
   await retireReconciliationItem(scopedDb, options);
   const before =
@@ -697,7 +844,7 @@ test("park and retire reject stale projections using the persisted hash, includi
       payload: { content: "current", position: 1 },
       revisionOf: contentRevision,
       now,
-      errorTag: "unavailable",
+      errorTag: "unkeyable" as const,
     };
     await parkReconciliationItem(scopedDb, options);
     await db
@@ -731,7 +878,7 @@ test("terminal corrections preserve attempts and stop reviving after two failed 
     payload: { content: "a" },
     revisionOf: contentRevision,
     now,
-    errorTag: "unavailable",
+    errorTag: "unkeyable" as const,
   };
   await retireReconciliationItem(scopedDb, options);
   for (let correction = 1; correction <= 6; correction += 1) {
@@ -751,18 +898,13 @@ test("terminal corrections preserve attempts and stop reviving after two failed 
     }
     const row = await readRow(sourceId, DOCUMENT_KEY);
     expect(row?.revivalCount).toBe(Math.min(correction, 2));
-    expect(row?.attempts).toBe(
-      RECONCILIATION_TERMINAL_ATTEMPTS + Math.min(correction - 1, 2),
-    );
+    expect(row?.attempts).toBe(1 + Math.min(correction - 1, 2));
     if (correction <= 2) {
-      const missed = await parkReconciliationItem(scopedDb, {
+      const retired = await retireReconciliationItem(scopedDb, {
         ...options,
         payload,
       });
-      expect(missed).toMatchObject({
-        outcome: "recorded",
-        status: RECONCILIATION_ITEM_STATUS.TERMINAL,
-      });
+      expect(retired).toEqual({ outcome: "recorded" });
     } else {
       expect(row?.status).toBe(RECONCILIATION_ITEM_STATUS.TERMINAL);
     }

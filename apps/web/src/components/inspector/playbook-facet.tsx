@@ -195,6 +195,7 @@ import type {
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import type { FileFacet } from "@/components/inspector/inspector-store-types";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { filterPlaybooksByName } from "@/components/inspector/playbook-facet.logic";
 import {
   buildReviewResultItems,
   buildRunHistoryBasisSentence,
@@ -2061,13 +2062,7 @@ const PlaybookPicker = ({
 }: PlaybookPickerProps) => {
   const t = useTranslations();
   const [filter, setFilter] = useState("");
-  const normalizedFilter = filter.trim().toLocaleLowerCase();
-  const visiblePlaybooks =
-    normalizedFilter.length === 0
-      ? playbooks
-      : playbooks.filter((playbook) =>
-          playbook.name.toLocaleLowerCase().includes(normalizedFilter),
-        );
+  const visiblePlaybooks = filterPlaybooksByName(playbooks, filter);
 
   return (
     <section className="space-y-2">

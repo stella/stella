@@ -1503,6 +1503,9 @@ export const TOOLING_ENV_KEYS = new Set([
   "FLAKE_CHILD_RECORD",
   "FLAKE_GATE_FIXTURE_PRELOADED",
   "FLAKE_GATE_TRIAL",
+  // Quarantine preload: report directory for its JSON lines; registry path override for fixture trees.
+  "FLAKY_TEST_QUARANTINE_REGISTRY",
+  "FLAKY_TEST_QUARANTINE_REPORT_DIR",
   "GH_READ_TOKEN",
   "HEAD_SHA",
   // Scheduled journey checks: endpoint overrides and bounded request/retry timing.
@@ -1646,6 +1649,13 @@ export const TOOLING_ENV_KEYS = new Set([
   "TEST_API_ERROR",
   "TEST_LATER",
   "CI_GENERATED_SOURCES_MANIFEST",
+  // Check pool: the job context its step hands over and an optional
+  // concurrency override; the pool strips the context before running checks.
+  "CI_CHECK_POOL_NEEDS",
+  "CI_CHECK_POOL_STEPS",
+  "CI_CHECK_POOL_INPUTS",
+  "CI_CHECK_POOL_TOKEN",
+  "CI_CHECK_POOL_CONCURRENCY",
   // Generator families another job of the same CI run checks on this commit.
   "GENERATED_CHECKS_IN_OTHER_JOBS",
   // Queue proof outcomes and resolved hosted-runner image for static receipts.
