@@ -5796,6 +5796,7 @@
         "capability": {
           "type": "string",
           "minLength": 1,
+          "maxLength": 128,
           "description": "Capability id to describe, as returned by list_capabilities (e.g. \"time-entries.create\")."
         }
       }
@@ -5822,6 +5823,7 @@
         "capability": {
           "type": "string",
           "minLength": 1,
+          "maxLength": 128,
           "description": "Capability id to invoke. Use an id list_capabilities returned."
         },
         "input": {
@@ -5876,6 +5878,7 @@
         "capability": {
           "type": "string",
           "minLength": 1,
+          "maxLength": 128,
           "description": "Capability id to invoke. Use an id list_capabilities returned."
         },
         "input": {
