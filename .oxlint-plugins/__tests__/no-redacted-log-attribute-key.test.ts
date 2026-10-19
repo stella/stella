@@ -39,11 +39,11 @@ describe("no-redacted-log-attribute-key", () => {
       ),
     ).toEqual([1]);
   });
-  test("accepts reviewed correlation and token counts", async () => {
+  test("accepts reviewed correlation, count, and tool identifier keys", async () => {
     expect(
       await lintSingleRule(
         "no-redacted-log-attribute-key",
-        'logger.info("queued", { queue: "jobs", promptTokens: 4 });\nobserveFailure(error, { sink: "queue", ctx: { jobId, queue: "jobs" } });',
+        'logger.info("queued", { queue: "jobs", promptTokens: 4, queryCount: 2, query_count: 2, toolName: "search", tool_name: "search" });\nobserveFailure(error, { sink: "queue", ctx: { jobId, queue: "jobs" } });',
       ),
     ).toEqual([]);
   });

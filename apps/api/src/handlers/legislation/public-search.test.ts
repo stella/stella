@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
+import { drizzle } from "drizzle-orm/pg-proxy";
 import Elysia from "elysia";
 
 import { PUBLIC_COUNTRY_UNAVAILABLE_STATUS } from "@stll/api-contract/public-country-capability";
@@ -10,15 +11,20 @@ import {
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { createPublicStatuteSearch } from "@/api/handlers/legislation/public-search";
+import type { readLegislationCandidateRows } from "@/api/handlers/legislation/search";
 import { searchLegislationHandler } from "@/api/handlers/legislation/search";
 import { isSafePublicHandler } from "@/api/lib/api-handlers";
+import { toSafeId } from "@/api/lib/branded-types";
 import {
   decodeCorpusSearchCursor,
   encodeCorpusSearchCursor,
 } from "@/api/lib/legal-search/corpus-search-cursor";
 import { NO_EXPANSION_DICTIONARY_IDENTITY } from "@/api/lib/legal-search/morphology/dictionary";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
-import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
+import type {
+  LegislationReadDb,
+  LegislationReadTransaction,
+} from "@/api/lib/legislation-public-read-db";
 
 const result = {
   items: [],
@@ -50,6 +56,14 @@ const timingCandidateIds = [
   "7c2e3f45-69bb-4e2d-8a1b-3c4d5e6f7081",
   "8d3f4056-7acc-4f3e-9b2c-4d5e6f708192",
 ] as const;
+
+const timingSourceId = toSafeId<"legislationSource">(
+  "b1a2d3e4-5678-4789-a123-456789abcdef",
+);
+
+const timingTransaction = drizzle(async () => ({
+  rows: [],
+})) satisfies LegislationReadTransaction;
 
 type TimedSearchFailure = "none" | "hydration" | "index";
 
@@ -138,10 +152,10 @@ const runTimedSearch = async (
           reach: "reached",
         };
       },
-      readCandidateRows: async (_tx, { ids }) => ({
+      readCandidateRows: (async (_tx, { ids }) => ({
         rows: ids.map((id) => ({
           id,
-          sourceId: "b1a2d3e4-5678-4789-a123-456789abcdef",
+          sourceId: timingSourceId,
           eli: timingHit.eli,
           slug: timingHit.slug,
           title: timingHit.title,
@@ -158,7 +172,7 @@ const runTimedSearch = async (
           appliedRevision: null,
         })),
         dispositions: [],
-      }),
+      })) satisfies typeof readLegislationCandidateRows,
       readNamedWorks: async () => [],
     },
     projectHit: (hit) => {
@@ -169,18 +183,13 @@ const runTimedSearch = async (
   const db: LegislationReadDb = async (read) => {
     databaseReads += 1;
     if (databaseReads <= 2) {
-      return await read(Object.create(null));
+      return await read(timingTransaction);
     }
     clock += databaseReads === 3 ? 11 : 3;
     if (failure === "hydration" && databaseReads === 4) {
       throw new Error("hydration failed");
     }
-    return await read({
-      execute: async () => [],
-      select: () => {
-        throw new Error("Unexpected database select");
-      },
-    });
+    return await read(timingTransaction);
   };
   const operation = searchLegislationHandler(
     { query: "timing", limit: 1 },

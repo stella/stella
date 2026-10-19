@@ -1497,22 +1497,20 @@ const createSearchStageAccumulator = (
     counts,
   ) => {
     const startedAt = now();
-    return await operation().then(
-      (value) => {
-        const count = counts(value);
-        const accumulated = valueFor(stage);
-        accumulated.durationMs += now() - startedAt;
-        accumulated.rounds += 1;
-        accumulated.candidateCount += count.candidateCount ?? 0;
-        accumulated.resultCount += count.resultCount ?? 0;
-        stages.set(stage, accumulated);
-        return value;
-      },
-      (error) => {
-        failedStages.add(stage);
-        throw error;
-      },
+    const pending = operation();
+    await pending.then(
+      () => undefined,
+      (_error: unknown) => failedStages.add(stage),
     );
+    const value = await pending;
+    const count = counts(value);
+    const accumulated = valueFor(stage);
+    accumulated.durationMs += now() - startedAt;
+    accumulated.rounds += 1;
+    accumulated.candidateCount += count.candidateCount ?? 0;
+    accumulated.resultCount += count.resultCount ?? 0;
+    stages.set(stage, accumulated);
+    return value;
   };
   const recordIndexScan = (scan: IndexScanTiming) => {
     const stage = "index_scan";

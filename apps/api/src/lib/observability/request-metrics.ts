@@ -34,7 +34,7 @@ const METRIC_NAMESPACE = "Stella/Api";
 const METRIC_NAME = "RequestDuration";
 const FAILURE_METRIC_NAME = "RequestTransientFailures";
 
-export const REQUEST_STAGE_FAMILIES = {
+const REQUEST_STAGE_FAMILIES = {
   legislation_search: [
     "index_scan",
     "candidate_hydration",
@@ -57,11 +57,7 @@ const REQUEST_STAGE_FAMILY = {
   stream_finish: "chat_turn",
 } as const satisfies Record<RequestStage, keyof typeof REQUEST_STAGE_FAMILIES>;
 
-export type RequestStageOutcome =
-  | "completed"
-  | "failed"
-  | "refused"
-  | "cancelled";
+type RequestStageOutcome = "completed" | "failed" | "refused" | "cancelled";
 
 type RequestStageRecordInput = {
   route: string;
