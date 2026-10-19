@@ -45,6 +45,7 @@ describe("OCR text export", () => {
     };
 
     const response = await readOcrExport({
+      readSessionAuthority: async () => null,
       fieldId,
       format: "text",
       userId,
@@ -80,6 +81,7 @@ describe("OCR text export", () => {
     const scopedDb = asTestRaw<ScopedDb>(async () => []);
 
     const response = await readOcrExport({
+      readSessionAuthority: async () => null,
       fieldId,
       format: "text",
       userId,

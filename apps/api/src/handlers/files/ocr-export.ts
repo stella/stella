@@ -17,6 +17,7 @@ import { createOcrSearchablePdfKey } from "@/api/lib/file-key";
 import { getS3 } from "@/api/lib/s3";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import { secureDocumentResponse } from "@/api/lib/secure-document-response";
+import type { SyntheticSessionAuthorityReader } from "@/api/lib/synthetic-principal/session-authority";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 const OCR_EXPORT_STORAGE_READ_TIMEOUT_MS = 30 * 1000;
@@ -30,6 +31,7 @@ type ReadOcrExportOptions = {
   format: OcrExportFormat;
   organizationId: SafeId<"organization">;
   recordAuditEvent: AuditRecorder;
+  readSessionAuthority: SyntheticSessionAuthorityReader;
   scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
 };
@@ -46,6 +48,7 @@ export const readOcrExport = async ({
   userId,
   organizationId,
   recordAuditEvent,
+  readSessionAuthority,
   scopedDb,
   workspaceId,
 }: ReadOcrExportOptions) => {
@@ -115,6 +118,7 @@ export const readOcrExport = async ({
     const url = await scopedDb(
       async (tx) =>
         await auditedPresignDownload({
+          readSessionAuthority,
           tx,
           recordAuditEvent,
           resourceType: AUDIT_RESOURCE_TYPE.ENTITY,

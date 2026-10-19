@@ -28,10 +28,8 @@ import type {
 } from "@/api/lib/db/service-client-operator";
 import { createSanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
 import { createRootPoolWindow } from "@/api/lib/observability/root-pool-window";
-import type {
-  readSyntheticSessionAuthority,
-  SyntheticSessionAuthorityReader,
-} from "@/api/lib/synthetic-principal/session-authority";
+import { readSyntheticSessionAuthority } from "@/api/lib/synthetic-principal/session-authority";
+import type { SyntheticSessionAuthorityReader } from "@/api/lib/synthetic-principal/session-authority";
 import type { createSyntheticSessionStore } from "@/api/lib/synthetic-principal/store";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
@@ -169,6 +167,10 @@ export const bindOwnerSyntheticSessionAuthorityReader =
   ): SyntheticSessionAuthorityReader =>
   async (options) =>
     await readAuthority(rootDb, options);
+
+/** Request handlers receive the bounded reader, never the owner database. */
+export const ownerSyntheticSessionAuthorityReader =
+  bindOwnerSyntheticSessionAuthorityReader(readSyntheticSessionAuthority);
 
 export type RootDatabase = typeof rootDb;
 export type Transaction = TransactionOf<RootDatabase>;

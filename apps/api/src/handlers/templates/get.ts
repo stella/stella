@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
+import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -69,6 +70,7 @@ const getTemplate = createSafeRootHandler(
         }
 
         const presignedUrl = await auditedPresignDownload({
+          readSessionAuthority: ownerSyntheticSessionAuthorityReader,
           tx,
           recordAuditEvent,
           resourceType: AUDIT_RESOURCE_TYPE.TEMPLATE,

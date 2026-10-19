@@ -54,11 +54,6 @@ export const readSyntheticSessionAuthority = async (
   return row ?? null;
 };
 
-export const bindSyntheticSessionAuthorityReader =
-  (db: Pick<RootDatabase, "select">): SyntheticSessionAuthorityReader =>
-  async (options) =>
-    await readSyntheticSessionAuthority(db, options);
-
 export const authorizeSyntheticSession = async (
   db: Pick<RootDatabase, "select">,
   current: { id: string; userId: string },

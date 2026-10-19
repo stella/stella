@@ -53,7 +53,10 @@ import {
   checkSyntheticPrincipalAccess,
   syntheticPrincipalAuthConfig,
 } from "./policy";
-import { authorizeSyntheticSession } from "./session-authority";
+import {
+  authorizeSyntheticSession,
+  readSyntheticSessionAuthority,
+} from "./session-authority";
 import { createSyntheticSessionStore } from "./store";
 
 let fixture: Awaited<ReturnType<typeof getRlsFixture>>;
@@ -146,7 +149,8 @@ const setup = async () => {
     async (tx) =>
       await issueFolioCollabToken({
         sourceSessionId: source.id,
-        authorityDb: asTestRaw(tx),
+        readSessionAuthority: async (options) =>
+          await readSyntheticSessionAuthority(testDb, options),
         generation: 0,
         permissions: { canEdit: true },
         roomId,
@@ -161,6 +165,8 @@ const setup = async () => {
       roomId,
       token: issued.token,
       db: asTestRaw(testDb),
+      readSessionAuthority: async (options) =>
+        await readSyntheticSessionAuthority(testDb, options),
     });
   const authorized = await authorizeRoom();
   expect(authorized.status).toBe("authorized");

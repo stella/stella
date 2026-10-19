@@ -68,6 +68,7 @@ import {
   SYNTHETIC_PRINCIPAL,
   SYNTHETIC_SESSION_CONTROL_ID,
 } from "@/api/lib/synthetic-principal/constants";
+import { readSyntheticSessionAuthority } from "@/api/lib/synthetic-principal/session-authority";
 import { createSyntheticSessionStore } from "@/api/lib/synthetic-principal/store";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -83,6 +84,7 @@ import type {
 } from "@/api/tests/security/test-utils";
 
 import joinFolioCollabRoom, {
+  createJoinFolioCollabRoom,
   decideFolioCollabSeedClaim,
   decideFolioCollabSnapshotRecovery,
   folioCollabSeedClaimPredicate,
@@ -305,12 +307,19 @@ test("a dedicated principal joins only while its dedicated session is live", asy
     Parameters<typeof loadFolioCollabSnapshot>[0]["scopedDb"]
   >(
     async <T>(run: (tx: TestDatabaseTransaction) => Promise<T>) =>
-      await testDb.transaction(run),
+      await scopedQuery([workspaceId], organizationId, run, userId),
   );
   const noAudit = async () => undefined;
-  const join = async () =>
-    await joinFolioCollabRoom.handler(
-      asTestRaw<Parameters<typeof joinFolioCollabRoom.handler>[0]>({
+  const join = async () => {
+    const authority = await readSyntheticSessionAuthority(testDb, {
+      sessionId: sourceSession.id,
+      userId,
+    });
+    const dedicatedJoinHandler = createJoinFolioCollabRoom(
+      async () => authority,
+    );
+    return await dedicatedJoinHandler.handler(
+      asTestRaw<Parameters<typeof dedicatedJoinHandler.handler>[0]>({
         body: { entityId, propertyId },
         safeDb: safeDbFromScoped(scopedDb),
         session: { id: sourceSession.id, activeOrganizationId: organizationId },
@@ -323,6 +332,7 @@ test("a dedicated principal joins only while its dedicated session is live", asy
         createAuditRecorder: () => noAudit,
       }),
     );
+  };
   const fake = startFakeS3();
   try {
     fake.put(
@@ -833,6 +843,8 @@ describe("folio collaboration room seed generation CAS", () => {
           throw new Error("Recovered room did not return a successful join");
         }
         const authorization = await authorizeFolioCollabRoom({
+          readSessionAuthority: async (options) =>
+            await readSyntheticSessionAuthority(testDb, options),
           roomId,
           token: joined.token,
           db: asTestRaw<
@@ -1346,7 +1358,7 @@ test("issued collaboration tokens store the legacy createHash digest", async () 
   const { token } = await testDb.transaction(async (tx) =>
     issueFolioCollabToken({
       sourceSessionId: "ordinary-session",
-      authorityDb: asTestRaw(tx),
+      readSessionAuthority: async () => null,
       generation: 0,
       permissions: { canEdit: true },
       roomId,

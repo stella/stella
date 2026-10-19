@@ -3,6 +3,7 @@ import { t } from "elysia";
 
 import { Temporal } from "@stll/time";
 
+import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
 import {
   buildInvoiceExportFile,
   INVOICE_EXPORT_FORMATS,
@@ -134,6 +135,7 @@ export const createInvoicesExport = (writeObject = writeS3ObjectWithRetry) =>
         safeDb(
           async (tx) =>
             await auditedPresignDownload({
+              readSessionAuthority: ownerSyntheticSessionAuthorityReader,
               tx,
               recordAuditEvent,
               resourceType: single

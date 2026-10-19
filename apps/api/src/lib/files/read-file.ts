@@ -10,6 +10,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { isStampableDocx } from "@/api/lib/docx-stamp";
 import { isNativelyRenderableMimeType } from "@/api/lib/files/gotenberg";
 import { createFileKey } from "@/api/lib/files/utils";
+import type { SyntheticSessionAuthorityReader } from "@/api/lib/synthetic-principal/session-authority";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 export const FILE_READ_URL_EXPIRY_SECONDS = 15 * 60;
@@ -24,6 +25,7 @@ type ReadFileHandlerProps = {
   workspaceId: SafeId<"workspace">;
   purpose: FilePurpose;
   recordAuditEvent: AuditRecorder;
+  readSessionAuthority: SyntheticSessionAuthorityReader;
 };
 
 export const fileFieldQuery = async (
@@ -66,6 +68,7 @@ export const readFileHandler = async ({
   workspaceId,
   purpose,
   recordAuditEvent,
+  readSessionAuthority,
 }: ReadFileHandlerProps) => {
   const rows = await fileFieldQuery(scopedDb, fieldId, workspaceId);
   const row = rows.at(0);
@@ -102,6 +105,7 @@ export const readFileHandler = async ({
     await scopedDb(
       async (tx) =>
         await auditedPresignDownload({
+          readSessionAuthority,
           tx,
           recordAuditEvent,
           resourceType: AUDIT_RESOURCE_TYPE.ENTITY,

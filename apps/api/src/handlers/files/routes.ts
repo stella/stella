@@ -3,6 +3,7 @@ import Elysia, { t } from "elysia";
 
 import type { AUTHORED_DOCUMENT_PROPERTY_KEYS } from "@stll/api-contract";
 
+import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
 import { readDocumentProperties } from "@/api/handlers/files/document-properties";
 import emailAttachmentEndpoint from "@/api/handlers/files/email-attachment";
 import saveEmailAttachmentEndpoint from "@/api/handlers/files/email-attachment/create";
@@ -64,6 +65,7 @@ export const readFileEndpoint = createSafeHandler(
             purpose,
             scopedDb,
             recordAuditEvent,
+            readSessionAuthority: ownerSyntheticSessionAuthorityReader,
           }),
       ),
     );
@@ -356,6 +358,7 @@ export const ocrExportEndpoint = createSafeHandler(
       Result.tryPromise(
         async () =>
           await readOcrExport({
+            readSessionAuthority: ownerSyntheticSessionAuthorityReader,
             fieldId,
             format,
             userId: user.id,

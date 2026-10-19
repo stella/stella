@@ -1,6 +1,0 @@
-{
-  "metric": "root-connection-type-imports",
-  "file": "apps/api/src/lib/synthetic-principal/session-authority.ts",
-  "delta": 1,
-  "reason": "The shared authority reader accepts an explicit select-only database dependency and returns the exact monitoring session expiry only when its owner-only control row is enabled. It exports no connection and performs no writes."
-}

@@ -79,7 +79,7 @@ import type { S3ObjectWriteCertainty } from "@/api/lib/s3";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { isSyntheticPrincipal } from "@/api/lib/synthetic-principal/constants";
 import { requireSessionCredentialAuthority } from "@/api/lib/synthetic-principal/credential-policy";
-import { readSyntheticSessionAuthority } from "@/api/lib/synthetic-principal/session-authority";
+import type { SyntheticSessionAuthorityReader } from "@/api/lib/synthetic-principal/session-authority";
 import { TENANT_SYSTEM_ACTOR } from "@/api/lib/system-audit/actors";
 import { memberReachesMatterSql } from "@/api/lib/workspaces/authorized-workspace-ids";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
@@ -172,7 +172,7 @@ type FolioCollabTokenIssueDb = {
 
 type IssueFolioCollabTokenOptions = {
   sourceSessionId: string | null;
-  authorityDb: Pick<typeof rootDb, "select">;
+  readSessionAuthority: SyntheticSessionAuthorityReader;
   generation: number;
   permissions: FolioCollabTokenPermissions;
   roomId: SafeId<"folioCollabRoom">;
@@ -207,7 +207,7 @@ export const cleanupExpiredFolioCollabRoomTokens = async ({
 
 export const issueFolioCollabToken = async ({
   sourceSessionId,
-  authorityDb,
+  readSessionAuthority,
   generation,
   permissions,
   roomId,
@@ -219,7 +219,7 @@ export const issueFolioCollabToken = async ({
   const now = new Date();
   const authority = isSyntheticPrincipal({ userId })
     ? requireSessionCredentialAuthority(
-        await readSyntheticSessionAuthority(authorityDb, {
+        await readSessionAuthority({
           sessionId: sourceSessionId,
           userId,
           now,
@@ -424,9 +424,11 @@ export const authorizeFolioCollabRoom = async ({
   token,
   db = rootDb,
   createScopedDb = createRootScopedDb,
+  readSessionAuthority,
 }: {
   db?: Pick<typeof rootDb, "select">;
   createScopedDb?: typeof createRootScopedDb;
+  readSessionAuthority: SyntheticSessionAuthorityReader;
   roomId: SafeId<"folioCollabRoom">;
   token: string;
 }): Promise<FolioCollabRoomAuthorizationResult> => {
@@ -492,7 +494,7 @@ export const authorizeFolioCollabRoom = async ({
 
   const synthetic = isSyntheticPrincipal({ userId: row.userId });
   const authority = synthetic
-    ? await readSyntheticSessionAuthority(db, {
+    ? await readSessionAuthority({
         sessionId: row.sourceSessionId,
         userId: row.userId,
       })

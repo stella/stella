@@ -9,6 +9,7 @@ import type {
 } from "@stll/folio-core";
 import { Temporal } from "@stll/time";
 
+import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { documentVersionRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
@@ -851,6 +852,7 @@ export const createDocumentCompareGenerator = (
         bytes: new Uint8Array(compared.buffer),
         fileName,
         organizationId: session.activeOrganizationId,
+        readSessionAuthority: ownerSyntheticSessionAuthorityReader,
         scopedDb,
         signal: comparisonSignal,
         userId: user.id,
@@ -1092,6 +1094,7 @@ export const createDocumentCompareGenerator = (
           await dependencies.withTimeout(
             async () =>
               await dependencies.readFileHandler({
+                readSessionAuthority: ownerSyntheticSessionAuthorityReader,
                 scopedDb,
                 fieldId: saved.fieldId,
                 userId: user.id,

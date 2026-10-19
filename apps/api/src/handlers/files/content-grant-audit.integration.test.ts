@@ -218,6 +218,7 @@ const readUrl = async (
   recordAuditEvent: AuditRecorder = recorderA(),
 ) =>
   await readFileHandler({
+    readSessionAuthority: async () => null,
     scopedDb: scopedDbA(),
     fieldId,
     userId: ids.userA1,

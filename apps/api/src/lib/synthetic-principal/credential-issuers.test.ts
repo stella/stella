@@ -49,7 +49,7 @@ test("classifies signed downloads as session-bound with a short lifetime", () =>
   );
 });
 
-test("revoking a monitoring session refuses new signed downloads", async () => {
+test("revoking a dedicated session refuses new signed downloads", async () => {
   const { testDb } = fixture;
   const store = createSyntheticSessionStore(asTestRaw(testDb));
   await store.revokeSyntheticSessions();

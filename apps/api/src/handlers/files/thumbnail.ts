@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { status } from "elysia";
 import type { ElysiaCustomStatusResponse } from "elysia/error";
 
+import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type {
   SafeHandlerGenerator,
@@ -74,6 +75,7 @@ export default createSafeHandler(
           await scopedDb(
             async (tx) =>
               await auditedPresignDownload({
+                readSessionAuthority: ownerSyntheticSessionAuthorityReader,
                 tx,
                 recordAuditEvent,
                 resourceType: AUDIT_RESOURCE_TYPE.ENTITY,

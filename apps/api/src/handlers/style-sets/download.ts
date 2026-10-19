@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { and, eq, isNull } from "drizzle-orm";
 import { t } from "elysia";
 
+import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
 import { styleSets } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -57,6 +58,7 @@ export default createSafeRootHandler(
         }
 
         const presignedUrl = await auditedPresignDownload({
+          readSessionAuthority: ownerSyntheticSessionAuthorityReader,
           tx,
           recordAuditEvent,
           resourceType: AUDIT_RESOURCE_TYPE.STYLE_SET,

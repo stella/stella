@@ -5,6 +5,7 @@ import type { Static } from "elysia";
 
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 
+import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
@@ -274,7 +275,7 @@ const buildExistingOpenDesktopEditSessionResponse = async ({
     return {
       baseVersionNumber: baseVersion.versionNumber,
       downloadUrl: await presignDesktopEditDownloadFromFileId({
-        authorityDb: tx,
+        readSessionAuthority: ownerSyntheticSessionAuthorityReader,
         userId,
         fileId: existingSession.checkpointFileId,
         fileName: existingSession.fileName,
@@ -312,7 +313,7 @@ const buildExistingOpenDesktopEditSessionResponse = async ({
   return {
     baseVersionNumber: baseVersion.versionNumber,
     downloadUrl: await presignDesktopEditFileDownload({
-      authorityDb: tx,
+      readSessionAuthority: ownerSyntheticSessionAuthorityReader,
       userId,
       fileTarget: baseVersionTarget,
       organizationId,
@@ -539,7 +540,7 @@ export const openDesktopEditSessionHandler = async function* ({
         value: {
           baseVersionNumber: currentTarget.baseVersionNumber,
           downloadUrl: await presignDesktopEditFileDownload({
-            authorityDb: tx,
+            readSessionAuthority: ownerSyntheticSessionAuthorityReader,
             userId,
             fileTarget: currentTarget,
             organizationId,

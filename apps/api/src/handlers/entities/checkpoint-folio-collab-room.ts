@@ -5,6 +5,7 @@ import { t } from "elysia";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
+import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   BUFFER_OBJECT_CLEANUP_INTENT_STATUS,
@@ -524,9 +525,9 @@ const checkpointFolioCollabRoom = createSafeHandler(
 
     const downloadUrl = yield* Result.await(
       safeDb(
-        async (tx) =>
+        async () =>
           await presignDocxDownloadFromFileId({
-            authorityDb: tx,
+            readSessionAuthority: ownerSyntheticSessionAuthorityReader,
             userId: user.id,
             fileId: nextFileId,
             fileName: target.room.fileName,

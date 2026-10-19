@@ -3,6 +3,7 @@ import { and, desc, eq, lt } from "drizzle-orm";
 import { status } from "elysia";
 
 import { member, user } from "@/api/db/auth-schema";
+import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { templateVersions } from "@/api/db/schema";
@@ -195,6 +196,7 @@ export const getTemplateVersionHandler = async ({
     }
 
     const downloadUrl = await auditedPresignDownload({
+      readSessionAuthority: ownerSyntheticSessionAuthorityReader,
       tx,
       recordAuditEvent,
       resourceType: AUDIT_RESOURCE_TYPE.TEMPLATE,
