@@ -34,6 +34,10 @@ import {
   isResultConventionExcludedFile,
   isResultConventionSourceFile,
 } from "./result-boundary-globs";
+import {
+  isRootScriptLintPath,
+  rootTypeAwareLintCommand,
+} from "./root-script-lint";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const DEFAULT_BASE = "origin/main";
@@ -161,6 +165,8 @@ export const ROOT_SCRIPT_LINT_INPUTS = [
   ...SHARED_COMPILER_CACHE_INPUTS,
   ...OXLINT_CONFIGURATION_CACHE_INPUTS,
   "$TURBO_ROOT$/scripts/lint-root-scripts.sh",
+  "$TURBO_ROOT$/scripts/lint-root-scripts.ts",
+  "$TURBO_ROOT$/scripts/root-script-lint.ts",
   "$TURBO_ROOT$/scripts/tsconfig.json",
   "$TURBO_ROOT$/tsconfig.scripts.json",
 ] as const;
@@ -357,7 +363,9 @@ export const planCheck = ({
         presentChangedPaths.filter(
           (changedPath) =>
             workspaceForPath(changedPath) === null &&
-            isChangedLintPath(changedPath) &&
+            (changedPath.startsWith("scripts/")
+              ? isRootScriptLintPath(changedPath)
+              : isChangedLintPath(changedPath)) &&
             !(rootScriptLintRuns && changedPath.startsWith("scripts/")) &&
             !(pluginFixturesRun && changedPath.startsWith(".oxlint-plugins/")),
         ),
@@ -1077,17 +1085,7 @@ export const scopedCommands = (
     if (!rootChecks.has(ROOT_CHECKS.rootScriptLint)) {
       commands.push(["bun", "scripts/ci-generated-sources.ts", "prepare"]);
     }
-    commands.push([
-      "bun",
-      "--bun",
-      "oxlint",
-      "-c",
-      "oxlint.config.ts",
-      "--report-unused-disable-directives-severity=error",
-      "--type-aware",
-      "--type-check",
-      ...plan.rootLintPaths,
-    ]);
+    commands.push(rootTypeAwareLintCommand(plan.rootLintPaths));
   }
   const lintRuns = hasTargets(plan.lint);
   const typecheckRuns = hasTargets(plan.typecheck);

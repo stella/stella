@@ -20,6 +20,12 @@ export const aggregateFences = () => {
   const userId = mintAuthProviderId<"user">();
   const answerId = createSafeId<"legalReaderAnswer">();
   return {
+    account: { aggregate: "account", id: userId, mode: "no key update" },
+    accountExport: {
+      aggregate: "accountExport",
+      id: { id: Bun.randomUUIDv7(), userId },
+      mode: "share",
+    },
     folioCollabRoom: {
       aggregate: "folioCollabRoom",
       id: { id: createSafeId<"folioCollabRoom">(), workspaceId },
