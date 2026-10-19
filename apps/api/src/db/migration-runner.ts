@@ -1,5 +1,5 @@
 import { panic, Result, TaggedError } from "better-result";
-import type { ReservedSQL } from "bun";
+import type { MaybePromise, ReservedSQL } from "bun";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/bun-sql";
 import { readMigrationFiles } from "drizzle-orm/migrator";
@@ -427,6 +427,10 @@ const ledgerFingerprint = (rows: readonly LedgerRow[]) =>
     )
     .join(",");
 
+type OnlineMigrationRunner = (
+  ...args: Parameters<typeof runOnlineMigrations>
+) => MaybePromise<Awaited<ReturnType<typeof runOnlineMigrations>>>;
+
 type MigrationPhaseClock = {
   phase: "schema" | "online" | "done";
   startedAt: number;
@@ -467,6 +471,8 @@ const emitFailedPhase = (
 };
 
 type RunMigrationsOptions = {
+  /** Local test templates replay existing cluster roles without changing source hashes. */
+  readMigrations?: typeof readMigrationFiles;
   connection: ReservedSQL;
   /** The database `connection` belongs to; index builds observe it apart. */
   databaseUrl: string;
@@ -475,7 +481,7 @@ type RunMigrationsOptions = {
   ebs: ConfiguredEbsConfiguration;
   migrationsSchema?: string;
   migrationsTable?: string;
-  runOnline?: typeof runOnlineMigrations;
+  runOnline?: OnlineMigrationRunner;
   onlineIndexHold?: OnlineIndexHoldRef;
   /** Test seam: the pauses between lock-wait attempts and how to wait them. */
   lockWaitRetry?: LockWaitRetry;
@@ -484,6 +490,7 @@ type RunMigrationsOptions = {
 };
 
 export const runMigrations = async ({
+  readMigrations = readMigrationFiles,
   connection,
   databaseUrl,
   migrationsFolder,
@@ -517,7 +524,7 @@ export const runMigrations = async ({
     clock.laneWaitMs = elapsedMs();
     await connection.unsafe(restoreTimeout);
 
-    const migrations = readMigrationFiles({ migrationsFolder });
+    const migrations = readMigrations({ migrationsFolder });
     const database = drizzle({ client: connection });
     const preflight = await preflightAndAdopt({
       database,
@@ -576,7 +583,7 @@ export const runMigrations = async ({
     // below, so corpus writers stay drained between them.
     await applyPendingRetryingLockWaits({
       // bun-sql's migrator calls this same function after reading files; passing
-      // the preflight array keeps validation and execution on identical bytes.
+      // the prepared preflight array keeps validation and execution on the same statements.
       apply: async () => {
         await pgCoreMigrate(migrations, database, {
           migrationsFolder,
