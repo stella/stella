@@ -73,6 +73,8 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   "legislation_documents",
   "legislation_search_documents",
   "legislation_index_jobs",
+  "legislation_amendment_snapshots",
+  "legislation_amendments",
   // Crawl bookkeeping: the app role reads coverage for reporting, only
   // ingestion writes it.
   "case_law_coverage_slices",
@@ -129,6 +131,9 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   // A group's contract binding and readiness: ingestion binds and attests,
   // request code only asks whether a group may be read.
   "corpus_index_group_enrollments",
+  // Per-jurisdiction serving pointers: request code resolves which generation
+  // serves a jurisdiction; only the gated flip and promotion write them.
+  "corpus_index_jurisdiction_serving",
   // Withdrawal history is read by requests and appended only by ingestion.
   "corpus_index_group_withdrawals",
   // Mutation revisions are appended and pruned only by ingestion triggers;
