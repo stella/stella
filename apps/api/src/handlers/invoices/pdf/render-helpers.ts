@@ -8,8 +8,10 @@ import {
   variableSymbolOf,
 } from "@stll/invoicing";
 import type {
+  CzechQrPaymentResult,
   InvoiceDocumentType,
   InvoiceTotals,
+  InvoicingResult,
   VatTreatment,
 } from "@stll/invoicing";
 import { formatMoneyCents, toMajorUnits } from "@stll/money";
@@ -75,7 +77,7 @@ export const buildInvoicePaymentPayload = ({
   invoice,
   seller,
   totals,
-}: RenderInvoicePdfOptions) => {
+}: RenderInvoicePdfOptions): InvoicingResult<CzechQrPaymentResult> | null => {
   if (
     invoice.documentType === "credit_note" ||
     totals.grossAmountMinor <= 0 ||

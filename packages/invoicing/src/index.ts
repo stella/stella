@@ -1,4 +1,4 @@
-export { InvoicingInputError } from "./errors";
+export { InvoicingInputError, type InvoicingResult } from "./errors";
 export { normalizeIban, parseIban } from "./iban";
 export {
   calculateDocumentTotals,
