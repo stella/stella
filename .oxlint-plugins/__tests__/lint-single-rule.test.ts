@@ -116,7 +116,7 @@ test("concurrent cases of one configuration share a run and keep their own lines
 
 test("concurrent cases keep their own lines across any run grouping", async () => {
   const code = "no-raw-browser-storage(no-raw-browser-storage)";
-  const before = sharedRuns.filter((run) => run.code === code).length;
+  const before = claimedBatches.filter((batch) => batch.code === code).length;
   const storage = "localStorage.getItem('key');";
   const results = await Promise.all(
     [
