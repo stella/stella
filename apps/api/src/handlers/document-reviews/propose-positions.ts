@@ -88,7 +88,7 @@ export const createProposePositions = ({
           userId: user.id,
           workspaceId,
         },
-        abortSignal: AbortSignal.timeout(TIMEOUT_MS),
+        deadlineMs: TIMEOUT_MS,
       });
       if (Result.isError(proposal)) {
         // `WorkflowIntegrationError.cause` carries the provider's own failure —

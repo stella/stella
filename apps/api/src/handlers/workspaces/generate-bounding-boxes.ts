@@ -86,7 +86,7 @@ const generateBoundingBoxes = createSafeHandler(
 
     for (const pageNumber of preparedData.pageNumbers) {
       const pageBoxesResult = await generateFn({
-        abortSignal: AbortSignal.timeout(60_000),
+        deadlineMs: 60_000,
         admission: configuredModelAdmission({ modelAdmission }),
         justificationId,
         organizationId,

@@ -343,6 +343,7 @@ export type GradeTierMatchArgs = {
   askValue: string;
   tiers: ResolvedTiers;
   abortSignal: AbortSignal;
+  deadlineMs?: number | undefined;
   organizationId: SafeId<"organization">;
   admission: ModelDispatchAdmission;
   workspaceId: SafeId<"workspace">;
@@ -359,6 +360,7 @@ export const gradeTierMatch = async ({
   askValue,
   tiers,
   abortSignal,
+  deadlineMs,
   organizationId,
   admission,
   workspaceId,
@@ -420,6 +422,7 @@ export const gradeTierMatch = async ({
         system: TIER_MATCH_SYSTEM_PROMPT,
         prompt: buildTierMatchUserMessage({ tiers, askValue }),
         abortSignal,
+        deadlineMs,
         outputSchema: tierMatchSchema,
       });
 
@@ -633,6 +636,7 @@ export type VerdictBatchOutput = {
 
 export type ComputeVerdictBatchArgs = {
   abortSignal: AbortSignal;
+  deadlineMs?: number | undefined;
   organizationId: SafeId<"organization">;
   admission: ModelDispatchAdmission;
   workspaceId: SafeId<"workspace">;
@@ -666,6 +670,7 @@ export const POSITION_MATCH_CONCURRENCY = 4;
  */
 export const computeVerdictBatch = async ({
   abortSignal,
+  deadlineMs,
   organizationId,
   admission,
   workspaceId,
@@ -779,6 +784,7 @@ export const computeVerdictBatch = async ({
           askValue,
           tiers: resolveVerdictTiers(property.tool),
           abortSignal,
+          deadlineMs,
           organizationId,
           admission,
           workspaceId,

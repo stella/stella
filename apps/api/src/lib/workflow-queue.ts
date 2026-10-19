@@ -1847,10 +1847,8 @@ const processOneBatch = async ({
       signal.throwIfAborted();
       const verdictOutput = await computeVerdictBatch({
         admission,
-        abortSignal: AbortSignal.any([
-          AbortSignal.timeout(getWorkflowBatchAITimeoutMs(serviceTier)),
-          signal,
-        ]),
+        abortSignal: signal,
+        deadlineMs: getWorkflowBatchAITimeoutMs(serviceTier),
         organizationId,
         workspaceId,
         scopedDb: actor.inputDb,
