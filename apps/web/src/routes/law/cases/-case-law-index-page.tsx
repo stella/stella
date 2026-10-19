@@ -914,12 +914,17 @@ const useCaseLawRewriteFlow = ({
     },
   });
   const searchOriginalWords = () => {
-    if (search.rewrittenFrom === undefined) {
+    const original = search.rewrittenFrom;
+    if (original === undefined) {
       return;
     }
-    setQuery(search.rewrittenFrom);
+    setQuery(original);
+    // A pending query write drops `rewrittenFrom`; restore the words this
+    // click saw so the original search still wins.
     detached(
-      searchNavigation((previous) => withOriginalWords(previous)),
+      searchNavigation((previous) =>
+        withOriginalWords({ ...previous, rewrittenFrom: original }),
+      ),
       "cases.original-words-navigate",
     );
   };
