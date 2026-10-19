@@ -68,7 +68,7 @@ jobs:
       && github.event.workflow_run.head_repository.full_name == github.repository
       && github.event.workflow_run.path == '.github/workflows/release.yml'
       && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event))
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       actions: read # read upstream workflow_run artifacts
@@ -519,7 +519,7 @@ jobs:
     # release workflow's promotion check and desktop publication.
     needs: [resolve, build]
     if: ${{ needs.resolve.outputs.should_build == 'true' && needs.resolve.outputs.channel == 'prod' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read
@@ -557,7 +557,7 @@ jobs:
     # that promises an installer that doesn't exist.
     needs: [resolve, build, verify-production]
     if: ${{ always() && needs.resolve.outputs.should_build == 'true' && needs.build.result == 'success' && (needs.resolve.outputs.channel != 'prod' || needs.verify-production.result == 'success') }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: write # upload latest.json to GitHub Release
@@ -646,7 +646,7 @@ jobs:
     # publication so a failed manifest job cannot advertise a partial release.
     needs: [resolve, manifest]
     if: ${{ always() && needs.resolve.outputs.should_build == 'true' && needs.resolve.outputs.channel == 'prod' && needs.manifest.result == 'success' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: write # mark the fully assembled desktop release as latest
@@ -687,7 +687,7 @@ jobs:
     # a skipped prerelease needs no carry-forward (today's behaviour).
     needs: resolve
     if: ${{ needs.resolve.outputs.should_build == 'false' && needs.resolve.outputs.channel == 'prod' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: write # download from / upload to / edit GitHub Releases
