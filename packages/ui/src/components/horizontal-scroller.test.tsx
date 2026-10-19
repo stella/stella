@@ -42,7 +42,7 @@ const { HorizontalScroller, scrollState, wheelDeltaPixels } =
   await import("./horizontal-scroller");
 
 afterEach(cleanup);
-afterAll(() => GlobalRegistrator.unregister());
+afterAll(async () => GlobalRegistrator.unregister());
 
 test("reports logical start, middle, end, no overflow, and RTL", () => {
   expect(scrollState(0, 300, 100, "ltr")).toEqual({
