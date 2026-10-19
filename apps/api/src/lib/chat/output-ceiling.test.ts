@@ -188,6 +188,7 @@ const generate = async (
         maxOutputTokens,
         orgAIConfig: KEY_SOURCES[keySource].orgAIConfig,
         organizationId,
+        userId: null,
         prompt: "Summarize the lease negotiation so far.",
         task: "chat",
         serviceTier: "standard",
@@ -370,6 +371,7 @@ const compactThread = async (keySource: keyof typeof KEY_SOURCES) => {
     },
     orgAIConfig: KEY_SOURCES[keySource].orgAIConfig,
     organizationId,
+    userId: null,
     tenantWorkspaceIds: [],
   });
   if (Result.isError(result)) {

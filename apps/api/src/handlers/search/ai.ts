@@ -338,6 +338,7 @@ const generateRefinedSearchQuery = async ({
   await Result.tryPromise({
     try: async () =>
       await generateTanStackObjectForTask({
+        userId: admission.userId,
         dataClass: "customer",
         task: "short-text",
         serviceTier: "standard",
@@ -537,6 +538,7 @@ export const summarizeSearchResults = async ({
   const result = await Result.tryPromise({
     try: async () =>
       await generateTanStackObjectForTask({
+        userId: admission.userId,
         dataClass: "customer",
         task: "short-text",
         serviceTier: "standard",

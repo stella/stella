@@ -604,6 +604,7 @@ export const streamChat = async ({
       Result.isOk(validateTanStackDevModelOverride(modelId, orgAIConfig)),
   });
   const primaryModel = await resolveTanStackTextModel({
+    userId: modelAdmission.userId,
     dataClass: "customer",
     modelId: turnModelSelection.modelId,
     organizationId,
@@ -1253,6 +1254,7 @@ const resolveFallbackTextModel = async ({
 }: ResolveFallbackTextModelProps): Promise<ResolvedTanStackTextModel | null> => {
   try {
     const fallbackModel = await resolveTanStackTextModel({
+      userId: modelAdmission.userId,
       dataClass: "customer",
       organizationId,
       admission: modelAdmission,

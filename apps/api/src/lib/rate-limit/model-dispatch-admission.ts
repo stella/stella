@@ -32,6 +32,7 @@ class ModelDispatchAdmissionSettledError extends TaggedError(
  */
 export type ModelDispatchAdmission = {
   readonly type: "organization";
+  readonly userId: SafeId<"user"> | null;
   readonly organizationId: SafeId<"organization">;
   readonly actionKind: ActionKind;
   readonly modelTier: ManagedModelTier;
@@ -55,6 +56,7 @@ export type NoOrganizationModelDispatch = {
 };
 
 type AdmitModelDispatchOptions<T> = {
+  userId: SafeId<"user"> | null;
   organizationId: SafeId<"organization">;
   actionKind: ActionKind;
   /** The admitted organization's scope, read for its managed model tier. */
@@ -75,6 +77,7 @@ type AdmitModelDispatchOptions<T> = {
  * callback) cannot reach a model.
  */
 export const admitModelDispatch = async <T>({
+  userId,
   organizationId,
   actionKind,
   organizationStateDb,
@@ -90,6 +93,7 @@ export const admitModelDispatch = async <T>({
   try {
     return await run({
       type: "organization",
+      userId,
       organizationId,
       actionKind,
       modelTier,
@@ -113,15 +117,18 @@ export const admitModelDispatch = async <T>({
  * (`fixture-model-dispatch-admission`). Its signal never aborts.
  */
 export const admitFixtureModelDispatch = ({
+  userId,
   organizationId,
   actionKind,
   modelTier,
 }: {
+  userId: SafeId<"user"> | null;
   organizationId: SafeId<"organization">;
   actionKind: ActionKind;
   modelTier: ManagedModelTier;
 }): ModelDispatchAdmission => ({
   type: "organization",
+  userId,
   organizationId,
   actionKind,
   modelTier,
@@ -147,7 +154,7 @@ export const requireChatToolModelAdmission = (
 
 /** Who a dispatch serves, and the proof that its work was admitted. */
 export type ModelDispatchScope = {
-  userId?: SafeId<"user"> | undefined;
+  userId: SafeId<"user"> | null;
 } & (
   | {
       organizationId: SafeId<"organization">;
@@ -167,7 +174,7 @@ export const assertModelDispatchScope = ({
 }: ModelDispatchScope): void => {
   if (
     isSyntheticPrincipal({
-      userId,
+      userId: userId ?? undefined,
       organizationId: organizationId ?? undefined,
     })
   ) {

@@ -406,6 +406,7 @@ const answerDecision = async (
 
   const tier = await answerWithSystemOne({
     generation: (prompt, questionCount) => ({
+      userId: input.admission.userId,
       dataClass: "customer",
       task: "short-text",
       serviceTier: "standard",
@@ -472,6 +473,7 @@ const answerDecision = async (
         },
       );
       const output = await generateTanStackObjectForTask({
+        userId: input.admission.userId,
         dataClass: "customer",
         task: "short-text",
         serviceTier: "standard",

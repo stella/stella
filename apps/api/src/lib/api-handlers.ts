@@ -1154,6 +1154,7 @@ const runAdmittedFiniteHandler = async function* <
         }
         const outcome = await admitModelDispatch({
           organizationId: ctx.session.activeOrganizationId,
+          userId: ctx.user.id,
           actionKind,
           organizationStateDb: ctx.scopedDb,
           signal,

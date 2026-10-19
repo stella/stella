@@ -254,6 +254,7 @@ export const decideDispositions = async (
         const output = await (
           context.generateObjectForTask ?? generateTanStackObjectForTask
         )({
+          userId: context.admission.userId,
           dataClass: "customer",
           task: DISPOSITION_TASK,
           orgAIConfig: context.orgAIConfig,
@@ -369,6 +370,7 @@ export const proposeGlossary = async (
   const output = await (
     context.generateObjectForTask ?? generateTanStackObjectForTask
   )({
+    userId: context.admission.userId,
     dataClass: "customer",
     task: GLOSSARY_TASK,
     orgAIConfig: context.orgAIConfig,
@@ -493,6 +495,7 @@ export const translateBatch = async (
   const output = await (
     context.generateObjectForTask ?? generateTanStackObjectForTask
   )({
+    userId: context.admission.userId,
     dataClass: "customer",
     task: TRANSLATION_TASK,
     orgAIConfig: context.orgAIConfig,
@@ -650,6 +653,7 @@ export const translateFormattedBatch = async (
     const output = await (
       context.generateObjectForTask ?? generateTanStackObjectForTask
     )({
+      userId: context.admission.userId,
       dataClass: "customer",
       task: TRANSLATION_TASK,
       orgAIConfig: context.orgAIConfig,

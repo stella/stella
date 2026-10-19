@@ -682,6 +682,7 @@ const createModelSummarizer =
   (options: RunChatThreadCompactionOptions): ChatCompactionSummarize =>
   async (prompt) =>
     await generateTanStackTextForTask({
+      userId: options.admission.userId,
       dataClass: "customer",
       abortSignal: options.abortSignal,
       analytics: options.analytics,

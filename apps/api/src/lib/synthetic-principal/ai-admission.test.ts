@@ -29,6 +29,7 @@ import { SYNTHETIC_PRINCIPAL } from "./constants";
 const state = createTestState({ file: import.meta.path, config: env });
 const organizationId = brandPersistedOrganizationId(SYNTHETIC_PRINCIPAL.org.id);
 const options = {
+  userId: null,
   organizationId,
   admission: testModelAdmission(organizationId),
   task: "chat",
@@ -72,7 +73,11 @@ describe("monitoring model admission", () => {
         state.setConfig("FEATURE_ORG_ACCESS_STATE", feature);
         state.setConfig("REQUIRE_PERSONAL_AI_KEY", personalKey);
         const scopes = [
-          { organizationId, admission: testModelAdmission(organizationId) },
+          {
+            userId: null,
+            organizationId,
+            admission: testModelAdmission(organizationId),
+          },
           {
             userId: brandPersistedUserId(SYNTHETIC_PRINCIPAL.user.id),
             organizationId: null,
@@ -90,6 +95,7 @@ describe("monitoring model admission", () => {
         const ordinaryOrg = mintAuthProviderId<"organization">();
         expect(() =>
           assertModelDispatchScope({
+            userId: mintAuthProviderId<"user">(),
             organizationId: ordinaryOrg,
             admission: testModelAdmission(ordinaryOrg),
           }),

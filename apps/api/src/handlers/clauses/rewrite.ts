@@ -162,6 +162,7 @@ const rewriteClause = createSafeRootHandler(
       Result.tryPromise({
         try: async () =>
           await generateTanStackObjectForTask({
+            userId: user.id,
             dataClass: "customer",
             admission: configuredModelAdmission({ modelAdmission }),
             task: "short-text",

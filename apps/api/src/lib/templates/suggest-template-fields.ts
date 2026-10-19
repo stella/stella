@@ -122,6 +122,7 @@ export const suggestTemplateFields = async ({
   const { suggestions } = await (
     generateObjectForTask ?? generateTanStackObjectForTask
   )({
+    userId: admission.userId,
     dataClass: "customer",
     task: "short-text",
     orgAIConfig,

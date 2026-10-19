@@ -281,6 +281,7 @@ describe("buildAiFieldGenerator admitted action", () => {
     const model = blockingModel(reached);
     const generation = admitModelDispatch({
       organizationId,
+      userId: null,
       actionKind: "report-export.background",
       organizationStateDb: testOrganizationStateDb,
       signal: lease.signal,

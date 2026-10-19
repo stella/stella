@@ -72,6 +72,7 @@ export const translateTaggedSegments = async ({
     managedAIResidency: context.managedAIResidency,
     organizationId: context.organizationId,
     admission: context.admission,
+    userId: context.admission.userId,
     analytics,
     caching: resolveCaching({
       promptCachingEnabled: context.promptCachingEnabled,

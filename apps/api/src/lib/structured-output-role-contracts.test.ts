@@ -238,6 +238,7 @@ const resolvedModel = ({
     modelOptions: tanStackModelOptionsForTask({
       modelId,
       organizationId: null,
+      userId: null,
       provider,
       task: "short-text",
     }),
@@ -255,6 +256,7 @@ const objectOptions = (
     dataClass: "customer",
     managedAIResidency: "eu",
     organizationId: null,
+    userId: null,
     orgAIConfig: null,
     outputSchema: fixture.schema,
     prompt: "Answer from the attached material.",

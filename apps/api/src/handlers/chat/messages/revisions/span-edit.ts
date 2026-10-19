@@ -161,6 +161,7 @@ export const createProposeMessageSpanEdit = ({
         Result.tryPromise({
           try: async () =>
             await generateObject({
+              userId: admission.userId,
               dataClass: "customer",
               admission,
               task: "chat",

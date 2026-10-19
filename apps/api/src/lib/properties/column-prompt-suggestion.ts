@@ -380,6 +380,7 @@ export const suggestColumnPrompt = async ({
         orgAIConfig,
         managedAIResidency,
         organizationId,
+        userId,
         admission,
         tenantWorkspaceIds: scope.tenantWorkspaceIds,
         analytics: aiAnalytics,

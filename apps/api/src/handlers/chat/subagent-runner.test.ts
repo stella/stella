@@ -145,6 +145,7 @@ const runScriptedSubagent = async (
         workspaceId: ids.wsA1,
       },
       organizationId: ids.orgA,
+      userId: ids.userA1,
       admission: overrides.admission ?? testModelAdmission(ids.orgA),
       orgAIConfig,
       managedAIResidency: "eu" as const,
@@ -381,6 +382,7 @@ describe("a subagent run on its parent's admitted action", () => {
     const reached = Promise.withResolvers<AbortSignal>();
     const run = admitModelDispatch({
       organizationId: ids.orgA,
+      userId: ids.userA1,
       actionKind: "chat.send",
       organizationStateDb: testOrganizationStateDb,
       signal: lease.signal,

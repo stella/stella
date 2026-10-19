@@ -214,6 +214,7 @@ export const createSuggestThreadTitle = ({
                   Result.tryPromise({
                     try: async () =>
                       await checked.generateTextForTask({
+                        userId: modelAdmission.userId,
                         dataClass: "customer",
                         abortSignal: AbortSignal.any([
                           actionSignal,
