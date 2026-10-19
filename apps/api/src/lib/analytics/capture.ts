@@ -323,8 +323,10 @@ const captureErrorWithOptions = (
   const { context, rejected } = acceptCaptureContext(safeContext);
   const status = requestErrorStatusFields(evidence)["error.status_code"];
   const className = exceptionClass(tag);
-  const candidateCode = exceptionCode(fingerprint["error.code"]);
-  const code = candidateCode === className ? undefined : candidateCode;
+  // The identity fills a missing code with the class tag; that echo is no
+  // code. Compared before branding: the two brands never overlap.
+  const rawCode = fingerprint["error.code"];
+  const code = rawCode === tag ? undefined : exceptionCode(rawCode);
   const frame = exceptionFrame(fingerprint["error.frame"]);
   const value = exceptionValue({
     className,
