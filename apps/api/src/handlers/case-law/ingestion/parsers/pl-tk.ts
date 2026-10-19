@@ -1,4 +1,4 @@
-// parser-output-unchanged: The ruling fragment is parsed once inside the same body wrapper used by validation; its AST, diagnostics, and stored output are unchanged.
+// parser-output-unchanged: The unmodified ruling fragment is parsed once inside the same body wrapper used by validation; its AST, diagnostics, and stored output are unchanged.
 /**
  * Polish Constitutional Tribunal (ipo.trybunal.gov.pl) page reader.
  *

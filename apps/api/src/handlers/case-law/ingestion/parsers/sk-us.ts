@@ -1,4 +1,4 @@
-// parser-output-unchanged: AST validation reuses the parsed document after the same hidden-run normalization, leaving diagnostics and stored output unchanged.
+// parser-output-unchanged: Validation reparses the original XHTML before hidden-run normalization; stored parser output remains unchanged.
 /**
  * Slovak Constitutional Court document parser (the markup rendering).
  *
@@ -553,7 +553,6 @@ export const parseSkUsDocumentXhtml = ({
     },
     xhtml,
     blocks,
-    { document: $ },
   );
 
   const fulltext = blocks

@@ -1,4 +1,4 @@
-// parser-output-unchanged: AST validation reuses the parsed document while Unicode normalization and stored parser output remain unchanged.
+// parser-output-unchanged: AST validation reuses the unmodified parsed document; diagnostics and stored parser output remain unchanged.
 /**
  * Czech Supreme Administrative Court (NSS) HTML parser.
  *

@@ -1,4 +1,4 @@
-// parser-output-unchanged: HTML validation reuses the parsed source while legacy plain text retains its synthetic document, leaving stored output unchanged.
+// parser-output-unchanged: HTML validation reuses the unmodified parsed source while legacy plain text retains its synthetic document; diagnostics and stored output remain unchanged.
 /**
  * Polish Courts (SAOS) parser.
  *
