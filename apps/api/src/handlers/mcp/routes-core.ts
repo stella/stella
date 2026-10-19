@@ -34,7 +34,7 @@ import {
 type HandleMcpHttpRequest = (
   request: Request,
   options?: { clientIp?: string | null | undefined; mode?: McpMode },
-) => Promise<Response>;
+) => Response | Promise<Response>;
 
 type RouteSet = {
   headers: Record<string, string | number | boolean | undefined>;
@@ -292,7 +292,7 @@ export const createMcpRoute = ({
 };
 
 const mcpRouteRegistry = createMcpRoute({
-  handleMcpHttpRequest: async () => new Response(null),
+  handleMcpHttpRequest: () => new Response(null),
 });
 
 export const isMcpTransportRequest = createRequestRouteClassifier({
