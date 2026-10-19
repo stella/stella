@@ -1,5 +1,17 @@
 # @stll/text-normalize
 
+## 0.3.0
+
+### Minor Changes
+
+- [#6049](https://github.com/stella/stella/pull/6049) [`df74ff6`](https://github.com/stella/stella/commit/df74ff6f4cd3947f948a5d2b227ecb852ae4f24a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose literal substring matching and bounded UTF-16 match ranges for caller-prepared search keys.
+
+  Replace lone surrogates with U+FFFD on both sides before match-key searches, retaining UTF-16 offsets.
+
+### Patch Changes
+
+- [#5099](https://github.com/stella/stella/pull/5099) [`3e92069`](https://github.com/stella/stella/commit/3e92069e5fb6a491f432adc849aef76e993805e7) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `stripDiacritics`, `foldToAscii`, and `foldSearchMatchText` keep non-Latin spacing marks such as `ー` and `·` instead of deleting them.
+
 ## 0.2.0
 
 ### Minor Changes
