@@ -521,6 +521,59 @@ test("silent task hangs warn then kill exactly once at the stall threshold", () 
   expect(watchdog.wasStalled()).toBe(true);
 });
 
+test("continuous progress cannot outlast the deadline, which fires exactly once", () => {
+  let now = 0;
+  const events: string[] = [];
+  const deadlined = createTaskProgressWatchdog({
+    budgetMs: 90,
+    stallMs: 120,
+    now: () => now,
+    warn: () => {
+      events.push("warning");
+    },
+    kill: () => {
+      events.push("stall");
+    },
+    deadline: {
+      ms: 180,
+      overrun: () => {
+        events.push("overrun");
+      },
+    },
+  });
+  // A spinning leftover: CPU time advances on every probe, so it never stalls.
+  for (now = 50; now <= 175; now += 25) {
+    deadlined.progress();
+    deadlined.tick();
+  }
+  expect(events).toEqual(["warning"]);
+  for (now = 180; now <= 400; now += 20) {
+    deadlined.progress();
+    deadlined.tick();
+  }
+  expect(events).toEqual(["warning", "overrun"]);
+  expect(deadlined.wasStalled()).toBe(true);
+
+  // Without a deadline the same progress runs on (diagnostics have none).
+  const unbounded: string[] = [];
+  const open = createTaskProgressWatchdog({
+    budgetMs: 90,
+    stallMs: 120,
+    now: () => now,
+    warn: () => {
+      unbounded.push("warning");
+    },
+    kill: () => {
+      unbounded.push("stall");
+    },
+  });
+  for (now = 400; now <= 2000; now += 50) {
+    open.progress();
+    open.tick();
+  }
+  expect(unbounded).toEqual(["warning"]);
+});
+
 test.each([0, 7])(
   "progressing tasks preserve exit %i after their warning budget",
   async (exitCode) => {
@@ -533,7 +586,8 @@ test.each([0, 7])(
           `const timer = setInterval(() => console.log('progress'), 10); setTimeout(() => { clearInterval(timer); process.exit(${exitCode}); }, 100);`,
         ],
         cwd,
-        10,
+        // Past the warning budget, inside the deadline of twice that budget.
+        60,
         1000,
       );
       const result = await check.result;
@@ -560,7 +614,9 @@ test.skipIf(process.platform === "win32")(
           `const fs = require("node:fs"); const end = Date.now() + 6000; while (Date.now() < end) {} const cpu = process.cpuUsage(); fs.writeFileSync("cpu-ms", String((cpu.user + cpu.system) / 1000));`,
         ],
         cwd,
-        timeoutMs: 20,
+        // The 6 s compile outlasts both the warning budget and the stall
+        // window, and ends inside the deadline of twice the budget.
+        timeoutMs: 4000,
         stallMs: 4000,
         graceMs: 200,
         summary: "none",
@@ -579,6 +635,36 @@ test.skipIf(process.platform === "win32")(
       expect(
         Number(await readFile(path.join(cwd, "cpu-ms"), "utf-8")),
       ).toBeGreaterThan(1000);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  },
+  15_000,
+);
+
+test.skipIf(process.platform === "win32")(
+  "a silent process spinning past twice its budget fails closed",
+  async () => {
+    const cwd = await scratch();
+    try {
+      const started = Date.now();
+      const result = await runBudgetedCheck({
+        command: [process.execPath, "-e", "while (true) {}"],
+        cwd,
+        timeoutMs: 500,
+        stallMs: 4000,
+        graceMs: 200,
+        summary: "none",
+        writeStdout: () => {},
+        writeStderr: () => {},
+        writeSummary: () => {},
+      });
+      expect(result.exitCode, result.output).toBe(124);
+      expect(result.outcome).toBe("stalled");
+      expect(result.output).toContain("class=task-overrun");
+      expect(result.output).not.toContain("class=task-stall");
+      // Killed at the deadline, well before the stall window could end it.
+      expect(Date.now() - started).toBeLessThan(4000);
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }
