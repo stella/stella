@@ -22,6 +22,8 @@ const BOTH_PLATFORMS =
   '[{"runner":"ubuntu-24.04-arm","platform":"linux/arm64"},{"runner":"ubuntu-24.04","platform":"linux/amd64"}]';
 const ARM_PLATFORM = '[{"runner":"ubuntu-24.04-arm","platform":"linux/arm64"}]';
 
+export const PERIODIC_RELEASE_TYPECHECK_EVENTS = ["schedule"] as const;
+
 export type ChangedFileScopeInput = {
   changedFiles: readonly string[];
   comparisonBase: string;
@@ -121,7 +123,7 @@ const matches = (file: string, patterns: readonly string[]) =>
 const anyMatches = (files: readonly string[], patterns: readonly string[]) =>
   files.some((file) => matches(file, patterns));
 
-const LEGAL_ATLAS_IMAGE_INPUTS = [
+export const LEGAL_ATLAS_IMAGE_INPUTS = [
   "apps/legal-atlas-runner/*",
   "apps/api/*",
   "apps/*/package.json",
@@ -143,6 +145,80 @@ const LEGAL_ATLAS_IMAGE_INPUTS = [
   "scripts/install-free-ci*",
   ".dockerignore",
   ".github/workflows/ci.yml",
+] as const;
+
+export const MODEL_CATALOG_DRIFT_INPUTS = [
+  ".github/workflows/ci.yml",
+  "packages/ai-catalog/package.json",
+  "packages/ai-catalog/src/capabilities-overrides.ts",
+  "packages/ai-catalog/src/capabilities.gen.ts",
+  "packages/ai-catalog/src/document-input-overrides.ts",
+  "packages/ai-catalog/src/index.ts",
+  "packages/ai-catalog/src/model-rate-policy.ts",
+  "packages/ai-catalog/src/model-rate.ts",
+  "packages/ai-catalog/src/model-rates.gen.ts",
+  "packages/scripts/src/model-catalog-capabilities-gen.ts",
+  "packages/scripts/src/model-catalog-capabilities.ts",
+  "packages/scripts/src/model-catalog-rates-gen.ts",
+] as const;
+
+export const ROUTE_TREE_INPUTS = [
+  "apps/web/src/routes/*",
+  "apps/web/vite.config.ts",
+  "apps/web/route-tree.config.ts",
+  "apps/web/scripts/generate-route-tree.ts",
+  "apps/web/package.json",
+  "apps/web/src/routeTree.gen.ts",
+  "packages/scripts/src/prepared-generated-sources.ts",
+  "packages/scripts/src/generated-input-identity.ts",
+  "packages/scripts/src/generated-files.ts",
+  "scripts/generated-files.ts",
+  "bun.lock",
+] as const;
+
+export const STACK_REDACTION_BROWSER_INPUTS = [
+  "apps/web/src/lib/analytics/posthog.ts",
+  "apps/web/src/lib/analytics/stack-redaction.ts",
+  "apps/web/src/lib/analytics/error-diagnostics.ts",
+  "apps/web/e2e/stack-redaction/*",
+  "apps/web/e2e/playwright.stack-redaction.config.ts",
+  "apps/web/e2e/tsconfig.json",
+  "apps/web/tsconfig.json",
+  "apps/web/package.json",
+  "scripts/retry.sh",
+  ".github/actions/setup-playwright/*",
+  "bunfig.toml",
+  "package.json",
+  "bun.lock",
+  ".npmrc",
+  ".github/workflows/ci.yml",
+] as const;
+
+export const DESKTOP_WINDOWS_DRY_RUN_INPUTS = [
+  "apps/desktop/*",
+  "scripts/desktop-*",
+  "scripts/*tauri*",
+  "scripts/detect-desktop-*",
+  "scripts/check-desktop-*",
+  "scripts/ci-windows-dry-run-*",
+  "scripts/wasm-*",
+  "scripts/test-wasm-offline.sh",
+  "scripts/run-oxfmt.ts",
+  "scripts/check-format-environment.ts",
+  "scripts/ci-install*",
+  "scripts/build-updater-manifest.sh",
+  "scripts/promote-desktop-release.sh",
+  "scripts/release-channel.sh",
+  "scripts/rename-desktop-artifacts.sh",
+  "scripts/check-api-deployment.ts",
+  "scripts/gh-retry.sh",
+  "scripts/retry.sh",
+  "scripts/build-desktop-dmg.sh",
+  ".github/actions/desktop-windows-build/*",
+  ".github/workflows/release-desktop.yml",
+  ".github/workflows/ci.yml",
+  "package.json",
+  "bun.lock",
 ] as const;
 
 /** The coarse legal-atlas image scope; pull requests narrow it by closure. */
@@ -218,7 +294,10 @@ const wideScope = (input: ChangedFileScopeInput): Record<string, string> => {
   const full = input.suiteDepth === "full";
   const releaseTypecheck =
     input.heavyOnly &&
-    (input.eventName === "schedule" || input.versionChangedInHead === true);
+    (PERIODIC_RELEASE_TYPECHECK_EVENTS.some(
+      (event) => event === input.eventName,
+    ) ||
+      input.versionChangedInHead === true);
   return {
     api_scope_unknown: bool(input.scopeUnknown),
     changed_files: JSON.stringify(input.changedFiles),
@@ -768,22 +847,7 @@ export const OUTPUT_RULES = {
     ),
   model_catalog_drift_required: (facts) =>
     scopeRule(facts, "model_catalog_drift_required", ({ p }) =>
-      bool(
-        p([
-          ".github/workflows/ci.yml",
-          "packages/ai-catalog/package.json",
-          "packages/ai-catalog/src/capabilities-overrides.ts",
-          "packages/ai-catalog/src/capabilities.gen.ts",
-          "packages/ai-catalog/src/document-input-overrides.ts",
-          "packages/ai-catalog/src/index.ts",
-          "packages/ai-catalog/src/model-rate-policy.ts",
-          "packages/ai-catalog/src/model-rate.ts",
-          "packages/ai-catalog/src/model-rates.gen.ts",
-          "packages/scripts/src/model-catalog-capabilities-gen.ts",
-          "packages/scripts/src/model-catalog-capabilities.ts",
-          "packages/scripts/src/model-catalog-rates-gen.ts",
-        ]),
-      ),
+      bool(p(MODEL_CATALOG_DRIFT_INPUTS)),
     ),
   package_checks_required: (facts) =>
     scopeRule(facts, "package_checks_required", ({ packageChecks }) =>
@@ -824,22 +888,7 @@ export const OUTPUT_RULES = {
     ),
   route_tree_required: (facts) =>
     scopeRule(facts, "route_tree_required", ({ full, p }) =>
-      bool(
-        full ||
-          p([
-            "apps/web/src/routes/*",
-            "apps/web/vite.config.ts",
-            "apps/web/route-tree.config.ts",
-            "apps/web/scripts/generate-route-tree.ts",
-            "apps/web/package.json",
-            "apps/web/src/routeTree.gen.ts",
-            "packages/scripts/src/prepared-generated-sources.ts",
-            "packages/scripts/src/generated-input-identity.ts",
-            "packages/scripts/src/generated-files.ts",
-            "scripts/generated-files.ts",
-            "bun.lock",
-          ]),
-      ),
+      bool(full || p(ROUTE_TREE_INPUTS)),
     ),
   scan_engine_wasm_required: (facts) =>
     scopeRule(facts, "scan_engine_wasm_required", ({ p }) =>
@@ -849,25 +898,7 @@ export const OUTPUT_RULES = {
     ),
   stack_redaction_browsers_required: (facts) =>
     scopeRule(facts, "stack_redaction_browsers_required", ({ p }) =>
-      bool(
-        p([
-          "apps/web/src/lib/analytics/posthog.ts",
-          "apps/web/src/lib/analytics/stack-redaction.ts",
-          "apps/web/src/lib/analytics/error-diagnostics.ts",
-          "apps/web/e2e/stack-redaction/*",
-          "apps/web/e2e/playwright.stack-redaction.config.ts",
-          "apps/web/e2e/tsconfig.json",
-          "apps/web/tsconfig.json",
-          "apps/web/package.json",
-          "scripts/retry.sh",
-          ".github/actions/setup-playwright/*",
-          "bunfig.toml",
-          "package.json",
-          "bun.lock",
-          ".npmrc",
-          ".github/workflows/ci.yml",
-        ]),
-      ),
+      bool(p(STACK_REDACTION_BROWSER_INPUTS)),
     ),
   web_api_types_required: (facts) =>
     scopeRule(facts, "web_api_types_required", ({ full, p }) =>
@@ -935,32 +966,7 @@ export const OUTPUT_RULES = {
         files.some(
           (file) =>
             !/\.mdx?$/u.test(file) &&
-            matches(file, [
-              "apps/desktop/*",
-              "scripts/desktop-*",
-              "scripts/*tauri*",
-              "scripts/detect-desktop-*",
-              "scripts/check-desktop-*",
-              "scripts/ci-windows-dry-run-*",
-              "scripts/wasm-*",
-              "scripts/test-wasm-offline.sh",
-              "scripts/run-oxfmt.ts",
-              "scripts/check-format-environment.ts",
-              "scripts/ci-install*",
-              "scripts/build-updater-manifest.sh",
-              "scripts/promote-desktop-release.sh",
-              "scripts/release-channel.sh",
-              "scripts/rename-desktop-artifacts.sh",
-              "scripts/check-api-deployment.ts",
-              "scripts/gh-retry.sh",
-              "scripts/retry.sh",
-              "scripts/build-desktop-dmg.sh",
-              ".github/actions/desktop-windows-build/*",
-              ".github/workflows/release-desktop.yml",
-              ".github/workflows/ci.yml",
-              "package.json",
-              "bun.lock",
-            ]),
+            matches(file, DESKTOP_WINDOWS_DRY_RUN_INPUTS),
         ),
       ),
     ),
