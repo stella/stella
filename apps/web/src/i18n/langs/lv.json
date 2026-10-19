@@ -1009,6 +1009,9 @@
       "saved": "{count, plural, zero {Saglabāti # nolēmumu} one {Saglabāts # nolēmums} other {Saglabāti # nolēmumi}} lietā {matter}"
     },
     "newestDecisions": "Jaunākie nolēmumi",
+    "noResults": {
+      "hint": "Izmēģiniet citus vārdus, uzlabojiet vaicājumu ar AI vai uzdodiet jautājumu tērzēšanā."
+    },
     "notesFilter": {
       "ai": "AI",
       "human": "Cilvēku"
@@ -1081,6 +1084,10 @@
         "medium": "Vidējs",
         "short": "Īss"
       }
+    },
+    "rewritten": {
+      "line": "Nav precīzu atbilstību vaicājumam <bdi>{original}</bdi>; rādīti rezultāti vaicājumam <bdi>{query}</bdi>",
+      "searchOriginal": "Meklēt manus sākotnējos vārdus"
     },
     "sameCaseNumber": "{count, plural, zero {# nolēmumu ir} one {# nolēmumam ir} other {# nolēmumiem ir}} šis lietas numurs. Izvēlieties tiesu.",
     "searchLabel": "Meklēt judikatūrā",
