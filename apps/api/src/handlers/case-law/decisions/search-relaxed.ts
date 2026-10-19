@@ -4,6 +4,7 @@ import { SEARCH_PAGE_END } from "@stll/api-contract/search";
 import type { SearchPageEnd } from "@stll/api-contract/search";
 import type { RegistryRequestObservation } from "@stll/business-registries/shared/request-observer";
 import { mapWithConcurrency } from "@stll/concurrency";
+import { classifyFailure } from "@stll/errors";
 
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { CorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
@@ -137,6 +138,7 @@ export const readTermCoverage = async ({
       if (Result.isError(answer)) {
         return Result.err(
           new HandlerError({
+            code: "upstream_unavailable",
             status: 503,
             message: "Search term coverage is temporarily unavailable",
             cause: answer.error,
@@ -151,13 +153,16 @@ export const readTermCoverage = async ({
         buckets["doc_count_error_upper_bound"] !== 0
       ) {
         return Result.err(
-          new HandlerError({
-            status: 502,
-            message: "Search term coverage is incomplete",
-            cause: new CorpusIndexError({
-              message: "Expected exact candidate term buckets",
+          classifyFailure(
+            new HandlerError({
+              status: 502,
+              message: "Search term coverage is incomplete",
+              cause: new CorpusIndexError({
+                message: "Expected exact candidate term buckets",
+              }),
             }),
-          }),
+            "response_invalid",
+          ),
         );
       }
       const seen = new Set<string>();
@@ -171,13 +176,16 @@ export const readTermCoverage = async ({
           Number(bucket["doc_count"]) <= 0
         ) {
           return Result.err(
-            new HandlerError({
-              status: 502,
-              message: "Search term coverage is invalid",
-              cause: new CorpusIndexError({
-                message: "Unexpected candidate term bucket",
+            classifyFailure(
+              new HandlerError({
+                status: 502,
+                message: "Search term coverage is invalid",
+                cause: new CorpusIndexError({
+                  message: "Unexpected candidate term bucket",
+                }),
               }),
-            }),
+              "response_invalid",
+            ),
           );
         }
         const id = bucket["key"];

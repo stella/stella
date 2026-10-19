@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { SEARCH_PAGE_END } from "@stll/api-contract/search";
+import { readFailureBrand } from "@stll/errors";
 
 import { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
 import type { RankedHit } from "@/api/lib/legal-search/rerank";
@@ -165,6 +166,10 @@ test.each([
     expect(result.error).toMatchObject({
       message: "Search term coverage is incomplete",
     });
+    expect(readFailureBrand(result.error)).toEqual({
+      reason: "response_invalid",
+      source: "instance",
+    });
   },
 );
 
@@ -191,6 +196,7 @@ test("an unavailable coverage read returns its tagged failure", async () => {
   expect(result.error).toMatchObject({
     _tag: "HandlerError",
     status: 503,
+    code: "upstream_unavailable",
     message: "Search term coverage is temporarily unavailable",
     cause,
   });
@@ -230,5 +236,9 @@ test.each([
     _tag: "HandlerError",
     status: 502,
     message: "Search term coverage is invalid",
+  });
+  expect(readFailureBrand(result.error)).toEqual({
+    reason: "response_invalid",
+    source: "instance",
   });
 });
