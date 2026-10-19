@@ -190,6 +190,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-raw-eden-telemetry.fixture.ts", [
     "no-raw-eden-telemetry/no-raw-eden-telemetry",
   ]),
+  fixtureRuleOverride("capability-request.fixture.ts", [
+    "capability-request/capability-request",
+  ]),
   fixtureRuleOverride("no-unsafe-controller-editor-access.fixture.ts", [
     "no-unsafe-controller-editor-access/no-unsafe-controller-editor-access",
   ]),
@@ -1158,6 +1161,7 @@ const config = defineConfig({
     "no-restricted-imports": ["error", { paths: [noZodImport] }],
     "no-bare-error/no-bare-error": "error",
     "no-raw-eden-telemetry/no-raw-eden-telemetry": "error",
+    "capability-request/capability-request": "error",
     "no-minted-auth-provider-id/no-minted-auth-provider-id": "error",
     "ai-output-strict-schema/ai-output-strict-schema": "error",
     "decision-shaped-output-schema/decision-shaped-output-schema": "error",
@@ -1585,6 +1589,7 @@ const config = defineConfig({
     "./.oxlint-plugins/sql-perf.ts",
     "./.oxlint-plugins/no-bare-error.ts",
     "./.oxlint-plugins/no-raw-eden-telemetry.ts",
+    "./.oxlint-plugins/capability-request.ts",
     "./.oxlint-plugins/no-unsafe-controller-editor-access.ts",
     "./.oxlint-plugins/no-minted-auth-provider-id.ts",
     "./.oxlint-plugins/ai-output-strict-schema.ts",
