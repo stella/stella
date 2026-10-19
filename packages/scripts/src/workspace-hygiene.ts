@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { Result } from "better-result";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -236,10 +237,10 @@ const validateDeniedCargoDependencies = (rootDir: string): WorkspaceIssue[] =>
     rootDir,
     (filePath) => path.basename(filePath) === "Cargo.toml",
   ).flatMap((manifestPath) => {
-    let manifest: unknown;
-    try {
-      manifest = Bun.TOML.parse(readFileSync(manifestPath, "utf-8"));
-    } catch {
+    const parsed = Result.try((): unknown =>
+      Bun.TOML.parse(readFileSync(manifestPath, "utf-8")),
+    );
+    if (Result.isError(parsed)) {
       return [
         {
           message: "Cargo.toml must contain valid TOML for dependency policy",
@@ -247,6 +248,7 @@ const validateDeniedCargoDependencies = (rootDir: string): WorkspaceIssue[] =>
         },
       ];
     }
+    const manifest = parsed.value;
     if (!isRecord(manifest)) {
       return [];
     }
