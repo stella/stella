@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { and, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { status, t } from "elysia";
@@ -185,27 +186,23 @@ export const listStatuteVersionsHandler = async ({
             limit: LEGISLATION_AMENDMENT_PAGE_MAX,
             effectiveDates: [...amendmentOwnerByOpeningDate.keys()],
           });
+    // Total over the returned versions: every owner is one of them, so a
+    // missing entry is a bug, not an empty list.
     const amendmentsByOwner = new Map<
       SafeId<"legislationDocument">,
-      typeof amendments.items
-    >();
+      (typeof amendments.items)[number][]
+    >(page.map((row) => [row.id, []]));
+    const amendmentsFor = (id: SafeId<"legislationDocument">) =>
+      amendmentsByOwner.get(id) ??
+      panic("Statute version has no amendment slot");
     for (const relation of amendments.items) {
       if (relation.effectiveDate !== null) {
         const owner = amendmentOwnerByOpeningDate.get(relation.effectiveDate);
         if (owner !== undefined) {
-          const owned = amendmentsByOwner.get(owner.id);
-          if (owned === undefined) {
-            amendmentsByOwner.set(owner.id, [relation]);
-          } else {
-            owned.push(relation);
-          }
+          amendmentsFor(owner.id).push(relation);
         }
       }
     }
-    const amendmentsFor = (id: SafeId<"legislationDocument">) => {
-      const owned = amendmentsByOwner.get(id);
-      return owned === undefined ? [] : owned;
-    };
     return {
       type: "found",
       rows: page.map((row) =>
