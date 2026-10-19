@@ -1,8 +1,6 @@
 import { panic } from "better-result";
 
-import { RegexSet } from "@stll/regex-set";
 import {
-  escapeRegExp,
   applyArabicFolds,
   applyArabicFoldsWithOffsets,
   foldToAscii,
@@ -251,84 +249,44 @@ const getSearchLexemes = (text: string): SearchLexeme[] =>
     value: match[0],
   }));
 
-const LEXEME_SEPARATOR = "/";
-let lastPrefixMatcher: { key: string; matcher: RegexSet } | undefined;
-
 const findCandidatePrefix = (
   sourceLexemes: readonly SearchLexeme[],
-  candidates: readonly string[],
+  candidate: string,
 ): CandidatePrefixMatch | null => {
-  const separator = escapeRegExp(LEXEME_SEPARATOR);
-  const configurations = candidates.flatMap((candidate) => {
-    const lexemes = Array.from(
-      candidate.matchAll(SEARCH_LEXEME),
-      (match) => match[0],
+  const candidateLexemes = Array.from(
+    candidate.matchAll(SEARCH_LEXEME),
+    (match) => match[0],
+  );
+  if (candidateLexemes.length === 0) {
+    return null;
+  }
+  const lastStartIndex = sourceLexemes.length - candidateLexemes.length;
+  for (let startIndex = 0; startIndex <= lastStartIndex; startIndex += 1) {
+    const matches = candidateLexemes.every((lexeme, offset) =>
+      sourceLexemes.at(startIndex + offset)?.value.startsWith(lexeme),
     );
-    const last = lexemes.at(-1);
-    return last === undefined
-      ? []
-      : [
-          {
-            pattern: `(?:^|${separator})${lexemes.map(escapeRegExp).join(`[^${separator}]*${separator}`)}`,
-            lexemeCount: lexemes.length,
-            lastPrefixLength: last.length,
-          },
-        ];
-  });
-  if (configurations.length === 0 || sourceLexemes.length === 0) {
-    return null;
+    if (!matches) {
+      continue;
+    }
+    const first = sourceLexemes.at(startIndex);
+    const last = sourceLexemes.at(startIndex + candidateLexemes.length - 1);
+    const lastCandidate = candidateLexemes.at(-1);
+    if (!first || !last || !lastCandidate) {
+      return null;
+    }
+    return {
+      length: last.start + lastCandidate.length - first.start,
+      start: first.start,
+    };
   }
-  const lexemeIndices = new Map<number, number>();
-  let serializedOffset = 0;
-  for (const [index, lexeme] of sourceLexemes.entries()) {
-    lexemeIndices.set(serializedOffset, index);
-    serializedOffset += lexeme.value.length + LEXEME_SEPARATOR.length;
-  }
-  // Lexemes contain only letters and numbers, so this separator cannot be
-  // confused with source text or a candidate prefix.
-  const serialized = sourceLexemes
-    .map(({ value }) => value)
-    .join(LEXEME_SEPARATOR);
-  const patterns = configurations.map(({ pattern }) => pattern);
-  const matcherKey = JSON.stringify(patterns);
-  const matcher =
-    lastPrefixMatcher?.key === matcherKey
-      ? lastPrefixMatcher.matcher
-      : new RegexSet(patterns);
-  lastPrefixMatcher = { key: matcherKey, matcher };
-  const match = matcher.findIter(serialized).at(0);
-  if (match === undefined) {
-    return null;
-  }
-  const start =
-    match.start +
-    (serialized.charAt(match.start) === LEXEME_SEPARATOR
-      ? LEXEME_SEPARATOR.length
-      : 0);
-  const firstIndex =
-    lexemeIndices.get(start) ??
-    panic("A lexical prefix starts outside its lexeme");
-  const configuration =
-    configurations.at(match.pattern) ??
-    panic("A lexical prefix has no configuration");
-  const first =
-    sourceLexemes.at(firstIndex) ??
-    panic("A lexical prefix has no first lexeme");
-  const last =
-    sourceLexemes.at(firstIndex + configuration.lexemeCount - 1) ??
-    panic("A lexical prefix has no last lexeme");
-  return {
-    length: last.start + configuration.lastPrefixLength - first.start,
-    start: first.start,
-  };
+  return null;
 };
 
 export const truncateSearchPreviewAroundCandidates = ({
   candidates,
   maxLength,
-  source: rawSource,
+  source,
 }: TruncateSearchPreviewAroundCandidatesOptions): string => {
-  const source = rawSource.toWellFormed();
   const boundedLength = Math.max(0, Math.floor(maxLength));
   if (boundedLength === 0) {
     return "";
@@ -340,14 +298,21 @@ export const truncateSearchPreviewAroundCandidates = ({
   const normalizedSource = normalizeSourceWithMappings(source, true);
   const foldedSource = applyArabicFoldsWithOffsets(normalizedSource.text);
   const sourceLexemes = getSearchLexemes(foldedSource.text);
-  const normalizedCandidates = candidates.map((candidate) =>
-    applyArabicFolds(
-      normalizePreviewUnit(candidate.toWellFormed().trim(), true),
-    ),
-  );
-  const match = findCandidatePrefix(sourceLexemes, normalizedCandidates);
-  const foldedMatchStart = match?.start ?? Number.POSITIVE_INFINITY;
-  const foldedMatchLength = match?.length ?? 0;
+  let foldedMatchStart = Number.POSITIVE_INFINITY;
+  let foldedMatchLength = 0;
+  for (const candidate of candidates) {
+    const normalizedCandidate = applyArabicFolds(
+      normalizePreviewUnit(candidate.trim(), true),
+    );
+    if (!normalizedCandidate) {
+      continue;
+    }
+    const match = findCandidatePrefix(sourceLexemes, normalizedCandidate);
+    if (match && match.start < foldedMatchStart) {
+      foldedMatchStart = match.start;
+      foldedMatchLength = match.length;
+    }
+  }
 
   if (!Number.isFinite(foldedMatchStart)) {
     return sliceWithoutSplitSurrogate(source, 0, boundedLength);
@@ -694,14 +659,24 @@ const parseHeadlineFragment = (fragment: string): ParsedHeadlineFragment => {
 const restoreFragment = ({
   fragment,
   normalizedSource,
-  normalizedStart,
+  searchFrom,
   source,
 }: {
   fragment: ParsedHeadlineFragment;
   normalizedSource: NormalizedSource;
-  normalizedStart: number;
+  searchFrom: number;
   source: string;
 }): { nextSearchFrom: number; text: string } | null => {
+  if (!fragment.text) {
+    return null;
+  }
+  const normalizedStart = normalizedSource.text.indexOf(
+    fragment.text,
+    searchFrom,
+  );
+  if (normalizedStart === -1) {
+    return null;
+  }
   const normalizedEnd = normalizedStart + fragment.text.length;
   const firstSpan = sourceSpanAt(normalizedSource, normalizedStart);
   const lastSpan = sourceSpanAt(normalizedSource, normalizedEnd - 1);
@@ -798,10 +773,10 @@ const truncateHighlightAware = (text: string, maxLength: number): string => {
 };
 
 export const restoreOriginalSearchPreview = ({
-  headline: rawHeadline,
+  headline,
   maxLength,
-  normalizedSource: rawNormalizedSource,
-  source: rawSource,
+  normalizedSource,
+  source,
   useUnaccent,
 }: {
   headline: string;
@@ -810,34 +785,22 @@ export const restoreOriginalSearchPreview = ({
   source: string;
   useUnaccent: boolean;
 }): string => {
-  const headline = rawHeadline.toWellFormed();
-  const source = rawSource.toWellFormed();
-  const normalizedSource = rawNormalizedSource.toWellFormed();
   const alignedSource = alignDatabaseNormalizedSource({
     normalized: normalizedSource,
     source,
     useUnaccent,
   });
-  const fragments = headline
-    .split(SEARCH_PREVIEW_FRAGMENT_DELIMITER)
-    .map(parseHeadlineFragment)
-    .filter(({ text }) => text.length > 0);
   const restored: string[] = [];
   let searchFrom = 0;
-  for (const parsedFragment of fragments) {
-    // Each fragment needs only its first occurrence after the previous one;
-    // collecting all overlapping matches makes repetitive sources unbounded.
-    const normalizedStart = alignedSource.text.indexOf(
-      parsedFragment.text,
-      searchFrom,
-    );
-    if (normalizedStart === -1) {
-      break;
+  for (const rawFragment of headline.split(SEARCH_PREVIEW_FRAGMENT_DELIMITER)) {
+    const parsedFragment = parseHeadlineFragment(rawFragment);
+    if (!parsedFragment.text) {
+      continue;
     }
     const fragment = restoreFragment({
       fragment: parsedFragment,
       normalizedSource: alignedSource,
-      normalizedStart,
+      searchFrom,
       source,
     });
     if (!fragment) {
