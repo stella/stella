@@ -191,16 +191,16 @@ const AI_FAILURE_ERROR_KEYS = {
   [AI_FAILURE_CODES.provider_stream_incomplete]:
     "chat.sendErrorStreamIncomplete",
   [AI_FAILURE_CODES.output_incomplete]: "chat.sendErrorStreamIncomplete",
-  [AI_FAILURE_CODES.output_moderated]: "chat.sendError",
+  [AI_FAILURE_CODES.output_moderated]: "errors.apiCodes.aiOutputModerated",
   [AI_FAILURE_CODES.output_invalid]: "errors.apiCodes.aiOutputInvalid",
   [AI_FAILURE_CODES.deadline_exceeded]: "chat.sendErrorTimedOut",
   [AI_FAILURE_CODES.loop_detected]: "chat.sendErrorLoopDetected",
   [AI_FAILURE_CODES.empty_completion]: "chat.sendErrorEmptyCompletion",
-  [AI_FAILURE_CODES.unknown]: "chat.sendError",
+  [AI_FAILURE_CODES.unknown]: "errors.apiCodes.aiUnknown",
   [AI_FAILURE_CODES.role_not_configured]: "capabilityActions.aiMissing",
   [AI_FAILURE_CODES.own_key_required]: "capabilityActions.aiMissing",
   [AI_FAILURE_CODES.provider_task_unsupported]:
-    "chat.sendErrorModelUnavailable",
+    "errors.apiCodes.aiProviderTaskUnsupported",
   [AI_FAILURE_CODES.managed_provider_unavailable]:
     "capabilityActions.aiMissing",
 } as const satisfies Record<AIFailureCode, TranslationKey>;

@@ -39,4 +39,27 @@ describe("AI API failures", () => {
       messages.chat.sendErrorStreamIncomplete,
     );
   });
+
+  test.each([
+    [
+      AI_FAILURE_CODES.output_moderated,
+      messages.errors.apiCodes.aiOutputModerated,
+    ],
+    [AI_FAILURE_CODES.unknown, messages.errors.apiCodes.aiUnknown],
+    [
+      AI_FAILURE_CODES.provider_task_unsupported,
+      messages.errors.apiCodes.aiProviderTaskUnsupported,
+    ],
+    [
+      AI_FAILURE_CODES.model_unavailable,
+      messages.chat.sendErrorModelUnavailable,
+    ],
+  ])("shows the specific message for %s", (code, message) => {
+    const error = toAPIError({
+      status: 502,
+      value: { code, message: "Private provider detail" },
+    });
+
+    expect(error.message).toBe(message);
+  });
 });

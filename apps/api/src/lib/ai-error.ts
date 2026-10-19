@@ -657,7 +657,7 @@ export const aiHandlerError = (
       ? new ProviderCallError({
           model: { provider: error.provider, keySource: error.keySource },
           status: mapped.status,
-          code: AI_FAILURE_CODES[kind],
+          code: error.code ?? AI_FAILURE_CODES[kind],
           kind: error.kind,
           requestId: error.requestId,
           providerDiagnostic: error.providerDiagnostic,
