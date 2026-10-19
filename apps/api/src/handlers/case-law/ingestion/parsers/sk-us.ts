@@ -1,4 +1,4 @@
-// parser-output-unchanged: the script/style check now calls the shared exclusion helper, which excludes the same two tags.
+// parser-output-unchanged: AST validation reuses the parsed document after the same hidden-run normalization, leaving diagnostics and stored output unchanged.
 /**
  * Slovak Constitutional Court document parser (the markup rendering).
  *
@@ -553,6 +553,7 @@ export const parseSkUsDocumentXhtml = ({
     },
     xhtml,
     blocks,
+    { document: $ },
   );
 
   const fulltext = blocks

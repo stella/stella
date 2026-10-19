@@ -1,7 +1,42 @@
 import { expect, test } from "bun:test";
+import * as cheerio from "cheerio";
 
 import { validateAst } from "./validate-ast";
 import baseline from "./validate-ast-defaults.baseline.json";
+
+test("a reused parsed document retains fresh-parse diagnostics", () => {
+  const html = "<p>Alpha BRAVO Charlie</p>";
+  const blocks = [
+    {
+      type: "paragraph" as const,
+      anchorId: "p-1",
+      inlines: [{ type: "text" as const, text: "Alpha Charlie" }],
+      plainText: "Alpha Charlie",
+    },
+  ];
+
+  expect(validateAst(html, blocks, { document: cheerio.load(html) })).toEqual(
+    validateAst(html, blocks),
+  );
+});
+
+test("validation reads an explicitly supplied parsed document", () => {
+  const blocks = [
+    {
+      type: "paragraph" as const,
+      anchorId: "p-1",
+      inlines: [{ type: "text" as const, text: "Parsed document words" }],
+      plainText: "Parsed document words",
+    },
+  ];
+
+  const result = validateAst("<p>different source words</p>", blocks, {
+    document: cheerio.load("<p>Parsed document words</p>"),
+  });
+
+  expect(result.stats.missingWords).toEqual([]);
+  expect(result.stats.originalLength).toBe("Parsed document words".length);
+});
 
 // Captured by executing the validator and residue modules from 53dbd13e0a
 // against invented inputs, before CourtListener-specific policies were added.

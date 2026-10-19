@@ -1,4 +1,4 @@
-// parser-output-unchanged: Unicode owner migration retains native normalization forms, mark classes and operation order; no folding is added.
+// parser-output-unchanged: AST validation reuses the parsed document while Unicode normalization and stored parser output remain unchanged.
 /**
  * Czech Supreme Administrative Court (NSS) HTML parser.
  *
@@ -85,6 +85,7 @@ export const parseNssDecisionHtml = (
     { parser: "cz-nss", caseNumber: input.caseNumber, url: input.sourceUrl },
     input.html,
     blocks,
+    { document: $ },
   );
 
   const fulltext = blocks

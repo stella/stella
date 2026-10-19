@@ -1,4 +1,4 @@
-// parser-output-unchanged: Parser-local type exports removed; parsing and document output are unchanged.
+// parser-output-unchanged: The ruling fragment is parsed once inside the same body wrapper used by validation; its AST, diagnostics, and stored output are unchanged.
 /**
  * Polish Constitutional Tribunal (ipo.trybunal.gov.pl) page reader.
  *
@@ -830,8 +830,7 @@ type EmitOptions = Context & { number?: number | undefined };
  * text; the number is kept as the paragraph's `number`, which is what a
  * citation of the ruling points at.
  */
-const buildBlocks = (textHtml: string): Block[] => {
-  const $ = cheerio.load(textHtml, null, false);
+const buildBlocks = ($: cheerio.CheerioAPI): Block[] => {
   const builder = createBuilder();
   let sawTitle = false;
   // The first heading of the reasons and of each dissent opens a top-level
@@ -981,18 +980,21 @@ export const validatePlTkBlocks = (
   caseNumber: string,
   textHtml: string,
   blocks: Block[],
+  document?: cheerio.CheerioAPI,
 ): ValidationResult =>
   validateAndLog(
     { parser: "pl-tk", caseNumber },
     `<body>${textHtml}</body>`,
     blocks,
+    document === undefined ? undefined : { document },
   );
 
 export const parsePlTkText = (
   input: ParsePlTkTextInput,
 ): { documentAst: DocumentAst; fulltext: string } => {
-  const blocks = buildBlocks(input.textHtml);
-  validatePlTkBlocks(input.caseNumber, input.textHtml, blocks);
+  const $ = cheerio.load(`<body>${input.textHtml}</body>`);
+  const blocks = buildBlocks($);
+  validatePlTkBlocks(input.caseNumber, input.textHtml, blocks, $);
   return {
     documentAst: {
       version: 1,

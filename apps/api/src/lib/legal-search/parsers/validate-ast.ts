@@ -1,6 +1,6 @@
 // parser-output-unchanged: Non-CourtListener callers omit sourcePolicy; their original default expressions and detectors are retained, with baseline fixture diagnostics locked by validate-ast-defaults.test.ts.
 // parser-output-unchanged: Validation work counters are diagnostics only; parsed records are unchanged.
-// parser-output-unchanged: the reference text is read from the same elements in the same order; validation diagnostics and stored parser output are unchanged.
+// parser-output-unchanged: Reusing a caller's parsed document and normalizing its source words once preserves the same reference text, diagnostics, and stored parser output.
 /**
  * AST sanity checker.
  *
@@ -157,13 +157,13 @@ const isMeaningfulWord = (clean: string): boolean =>
 
 const extractWords = (text: string): Set<string> => {
   const words = new Set<string>();
-  for (const w of separateSkipMarkers(text).split(/\s+/u)) {
+  for (const w of separateSkipMarkers(text).toLowerCase().split(/\s+/u)) {
     // Strip brackets first (anonymization markers like
     // "[o]rganizace" or "[OBRÁZEK]"), then trim remaining
     // non-letter chars from edges.
     const noBrackets = w.replace(/[[\]]/gu, "");
-    const clean = trimNonLetters(noBrackets.toLowerCase());
-    if (isMeaningfulWord(clean) && !/^\[\d+\]$/u.test(w.toLowerCase())) {
+    const clean = trimNonLetters(noBrackets);
+    if (isMeaningfulWord(clean) && !/^\[\d+\]$/u.test(w)) {
       words.add(clean);
     }
   }
@@ -284,6 +284,8 @@ export const validateAst = (
     /** Source words with explicit inline breaks; never used for retention. */
     wordComparisonText?: string;
     sourcePolicy?: ValidationSourcePolicy;
+    /** Already-parsed source document; subtree sources must omit this. */
+    document?: cheerio.CheerioAPI;
   },
 ): ValidationResult => {
   const { minRetainedPct = 90, maxMissingWords = 15 } = options ?? {};
@@ -292,7 +294,7 @@ export const validateAst = (
 
   // ── 1. Content completeness ────────────────────────────
 
-  const $ = cheerio.load(html);
+  const $ = options?.document ?? cheerio.load(html);
   $("div[style*='-aw-headerfooter-type']").remove();
   // <br> is a word boundary in the rendered document, but cheerio's
   // .text() drops it outright, gluing adjacent words ("wraz<br/>z" →
