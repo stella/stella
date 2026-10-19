@@ -137,7 +137,10 @@ const openCombobox = (
       organizationId: ORGANIZATION_ID,
       userId: USER_ID,
     }).queryKey,
-    { workspaces, features: { timeBilling: false } },
+    {
+      workspaces,
+      features: { timeBilling: false, signals: false, flows: false },
+    },
   );
   const history = groupedChatThreadsOptions({
     activeOrganizationId: ORGANIZATION_ID,

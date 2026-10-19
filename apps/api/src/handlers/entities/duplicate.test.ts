@@ -50,6 +50,10 @@ import type {
 import { copyFileObject, resolveEntityName } from "./copy-utils";
 import { createDuplicateEntity } from "./duplicate";
 
+// Flow-task admission reads the caller identity; these entities are not
+// flow-linked, so no enrolment is needed.
+const CALLER_IDENTITY = { email: "member@example.test", emailVerified: true };
+
 const requestNativeExtractionRunsMock = mock(
   async ({ requests }: { requests: readonly unknown[] }) =>
     requests.map((_, index) =>
@@ -232,9 +236,12 @@ const sourceEntities = [
 const createContext = ({
   body = { entityId: rootFolderId },
   safeDb,
+  scopedDb,
 }: {
   body?: Parameters<typeof duplicateEntity.handler>[0]["body"];
   safeDb: Parameters<typeof duplicateEntity.handler>[0]["safeDb"];
+  // Feature admission reads persisted flow links through the scoped database.
+  scopedDb: Parameters<typeof duplicateEntity.handler>[0]["scopedDb"];
 }): Parameters<typeof duplicateEntity.handler>[0] => {
   const recorderBindings = {
     organizationId,
@@ -253,6 +260,7 @@ const createContext = ({
     request: recorderBindings.request,
     route: "/v1/entities/:workspaceId/duplicate",
     safeDb,
+    scopedDb,
     recordAuditEvent: createAuditRecorder(recorderBindings),
     createAuditRecorder: () => createAuditRecorder(recorderBindings),
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test fixture only provides fields touched by the handler
@@ -642,7 +650,9 @@ describe("duplicate entity", () => {
               return entityLookupCount === 1 ? sourceDocument : undefined;
             },
           },
-          workspaces: { findFirst: async () => ({ reference: null }) },
+          workspaces: {
+            findFirst: async () => ({ reference: null, organizationId }),
+          },
         },
         $count: async () => 1,
         select: () => ({
@@ -669,7 +679,13 @@ describe("duplicate entity", () => {
         }),
         update: () => ({ set: () => ({ where: async () => {} }) }),
       };
-      const { safeDb } = createScopedDbMock(tx, {
+      const { safeDb, scopedDb } = createScopedDbMock(tx, {
+        featureAccess: { identity: CALLER_IDENTITY },
+        entityTransferEligibility: [
+          rootFolderId,
+          documentId,
+          nestedFolderId,
+        ].map((entityId) => ({ entityId, eligible: true })),
         visibleResources: { entity: [rootFolderId, documentId] },
       });
 
@@ -681,6 +697,7 @@ describe("duplicate entity", () => {
             targetEntityId: requestedDuplicateId,
           },
           safeDb,
+          scopedDb,
         }),
       );
 
@@ -731,7 +748,9 @@ describe("duplicate entity", () => {
             };
           },
         },
-        workspaces: { findFirst: async () => ({ reference: null }) },
+        workspaces: {
+          findFirst: async () => ({ reference: null, organizationId }),
+        },
       },
       $count: async () => 1,
       select: () => ({
@@ -756,7 +775,11 @@ describe("duplicate entity", () => {
       }),
       update: () => ({ set: () => ({ where: async () => {} }) }),
     };
-    const { safeDb } = createScopedDbMock(tx, {
+    const { safeDb, scopedDb } = createScopedDbMock(tx, {
+      featureAccess: { identity: CALLER_IDENTITY },
+      entityTransferEligibility: [rootFolderId, documentId, nestedFolderId].map(
+        (entityId) => ({ entityId, eligible: true }),
+      ),
       visibleResources: { entity: [rootFolderId, documentId] },
     });
 
@@ -768,6 +791,7 @@ describe("duplicate entity", () => {
           targetEntityId: requestedDuplicateId,
         },
         safeDb,
+        scopedDb,
       }),
     );
 
@@ -820,7 +844,9 @@ describe("duplicate entity", () => {
             };
           },
         },
-        workspaces: { findFirst: async () => ({ reference: null }) },
+        workspaces: {
+          findFirst: async () => ({ reference: null, organizationId }),
+        },
       },
       $count: async () => 1,
       select: () => ({
@@ -845,7 +871,11 @@ describe("duplicate entity", () => {
       }),
       update: () => ({ set: () => ({ where: async () => {} }) }),
     };
-    const { safeDb: committedSafeDb } = createScopedDbMock(tx, {
+    const { safeDb: committedSafeDb, scopedDb } = createScopedDbMock(tx, {
+      featureAccess: { identity: CALLER_IDENTITY },
+      entityTransferEligibility: [rootFolderId, documentId, nestedFolderId].map(
+        (entityId) => ({ entityId, eligible: true }),
+      ),
       visibleResources: { entity: [rootFolderId, documentId] },
     });
     const safeDb: SafeDb = async (callback, retry) => {
@@ -867,6 +897,7 @@ describe("duplicate entity", () => {
           targetEntityId: requestedDuplicateId,
         },
         safeDb,
+        scopedDb,
       }),
     );
 
@@ -930,7 +961,7 @@ describe("duplicate entity", () => {
           findMany: async () => sources,
         },
         workspaces: {
-          findFirst: async () => ({ reference: null }),
+          findFirst: async () => ({ reference: null, organizationId }),
         },
       },
       $count: async () => sources.length,
@@ -987,10 +1018,16 @@ describe("duplicate entity", () => {
       }),
     };
 
-    const { safeDb } = createScopedDbMock(tx, {
+    const { safeDb, scopedDb } = createScopedDbMock(tx, {
+      featureAccess: { identity: CALLER_IDENTITY },
+      entityTransferEligibility: [rootFolderId, documentId, nestedFolderId].map(
+        (entityId) => ({ entityId, eligible: true }),
+      ),
       visibleResources: { entity: [rootFolderId, documentId] },
     });
-    const result = await duplicateEntity.handler(createContext({ safeDb }));
+    const result = await duplicateEntity.handler(
+      createContext({ safeDb, scopedDb }),
+    );
 
     expect(result).toEqual({
       entityId: expect.any(String),
@@ -1103,7 +1140,9 @@ describe("duplicate entity", () => {
           findFirst: async () => brokenSubtree.at(0),
           findMany: async () => brokenSubtree,
         },
-        workspaces: { findFirst: async () => ({ reference: null }) },
+        workspaces: {
+          findFirst: async () => ({ reference: null, organizationId }),
+        },
       },
       $count: async () => brokenSubtree.length,
       select: () => ({
@@ -1129,10 +1168,16 @@ describe("duplicate entity", () => {
       update: () => ({ set: () => ({ where: async () => {} }) }),
     };
 
-    const { safeDb } = createScopedDbMock(tx, {
+    const { safeDb, scopedDb } = createScopedDbMock(tx, {
+      featureAccess: { identity: CALLER_IDENTITY },
+      entityTransferEligibility: [rootFolderId, documentId, nestedFolderId].map(
+        (entityId) => ({ entityId, eligible: true }),
+      ),
       visibleResources: { entity: [rootFolderId, documentId] },
     });
-    const result = await duplicateEntity.handler(createContext({ safeDb }));
+    const result = await duplicateEntity.handler(
+      createContext({ safeDb, scopedDb }),
+    );
 
     // The abort travels as the same rejection the caller always answered.
     expect(result).toMatchObject({

@@ -1,9 +1,23 @@
+import { and, eq, sql } from "drizzle-orm";
+
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 
+import { proveOrgScope, withOrgScope } from "@/api/db/org-scope";
 import type { rootDb } from "@/api/db/root";
+import { flowRuns, workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  withAggregateRowQuery,
+  withAggregateTransaction,
+} from "@/api/lib/db/aggregate-lock";
+import { recordDeferredNoticeState } from "@/api/lib/db/recovery-bookkeeping/notices";
+import { isBackgroundFeatureEnabled } from "@/api/lib/feature-access/background";
+import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
 import type { FlowTriggerSource } from "@/api/lib/flows/flow-types";
-import { fanOutNotifications } from "@/api/lib/notifications";
+import {
+  createNotificationsInTransaction,
+  pingNotificationRecipients,
+} from "@/api/lib/notifications";
 import type {
   NewNotification,
   NotificationFanOutDb,
@@ -20,19 +34,27 @@ type FlowRunActorSource = {
  * manual run carries the launcher's id; an automated run falls back to the
  * definition author. Returns `null` for an automated run whose author was
  * deleted mid-flight — the trigger already refuses to start such a run, so this
- * only happens if the author is removed after the run begins; callers fail the
- * run cleanly rather than panicking.
+ * only happens if the author is removed after the run begins; callers retain
+ * the run without admitting another feature effect.
  */
+type ResolveActorUserIdOptions = {
+  database: Pick<typeof rootDb, "query">;
+  organizationId: SafeId<"organization">;
+};
+
 export const resolveActorUserId = async (
   run: FlowRunActorSource,
-  database: Pick<typeof rootDb, "query">,
+  { database, organizationId }: ResolveActorUserIdOptions,
 ): Promise<SafeId<"user"> | null> => {
   if (run.triggerSource.type === "manual") {
     return brandPersistedUserId(run.triggerSource.userId);
   }
   if (run.definitionId) {
     const definition = await database.query.flowDefinitions.findFirst({
-      where: { id: { eq: run.definitionId } },
+      where: {
+        id: { eq: run.definitionId },
+        organizationId: { eq: organizationId },
+      },
       columns: { createdByUserId: true },
     });
     if (definition?.createdByUserId) {
@@ -40,6 +62,21 @@ export const resolveActorUserId = async (
     }
   }
   return null;
+};
+
+/** An unavailable actor is distinct from a live actor without a feature grant. */
+export const flowRunActorExists = async (
+  actorUserId: SafeId<"user"> | null,
+  database: Pick<typeof rootDb, "query">,
+): Promise<boolean> => {
+  if (actorUserId === null) {
+    return false;
+  }
+  const actor = await database.query.user.findFirst({
+    where: { id: { eq: actorUserId }, deletedAt: { isNull: true } },
+    columns: { id: true },
+  });
+  return actor !== undefined;
 };
 
 type FlowRunCompletedNotificationArgs = {
@@ -82,20 +119,106 @@ export type FlowRunCompletionNotice = Omit<
 };
 
 /**
- * Resolve the run's actor and file their completion pointer, both on
- * `database`. Filing for somebody else is a cross-user write, so the caller
- * chooses the connection deliberately (see `flow-run-completion-notice.ts`).
+ * Resolve the live actor and file their pointer under the grant writer's lock.
+ * Refused notices remain recoverable from the completed run. Filing for somebody
+ * else is a cross-user write, so the caller chooses the connection deliberately
+ * (see `flow-run-completion-notice.ts`).
  */
 export const fileFlowRunCompletionNotice = async (
-  { run, ...notice }: FlowRunCompletionNotice,
-  database: Pick<typeof rootDb, "query"> & NotificationFanOutDb,
+  { run: _run, ...notice }: FlowRunCompletionNotice,
+  database: NotificationFanOutDb,
 ): Promise<void> => {
-  const actorUserId = await resolveActorUserId(run, database);
-  if (actorUserId === null) {
-    return;
-  }
-  await fanOutNotifications(
-    [flowRunCompletedNotification({ ...notice, actorUserId })],
-    database,
-  );
+  const pings = await withAggregateTransaction(database, async (tx) => {
+    await lockFeatureRecoveryAdmission({
+      tx,
+      organizationId: notice.organizationId,
+      featureId: "flows",
+    });
+    const locked = await withAggregateRowQuery({
+      aggregate: "run",
+      id: { id: notice.runId, workspaceId: notice.workspaceId },
+      mode: "update",
+      lockConfig: { of: flowRuns },
+      tx,
+      select: (queryTx) =>
+        queryTx
+          .select({
+            id: flowRuns.id,
+            workspaceId: flowRuns.workspaceId,
+            status: flowRuns.status,
+            definitionId: flowRuns.definitionId,
+            triggerSource: flowRuns.triggerSource,
+          })
+          .from(flowRuns)
+          .innerJoin(
+            workspaces,
+            and(
+              eq(workspaces.id, flowRuns.workspaceId),
+              eq(workspaces.organizationId, notice.organizationId),
+            ),
+          ),
+    });
+    const current = locked.rows.at(0);
+    if (current?.status !== "completed") {
+      return [];
+    }
+    const scope = await proveOrgScope(tx, {
+      table: "flowRuns",
+      where: sql`${and(eq(flowRuns.id, current.id), eq(flowRuns.workspaceId, current.workspaceId))}`,
+    });
+    const proven = scope.unwrapOr(null);
+    if (proven === null) {
+      return [];
+    }
+    return await withOrgScope({
+      tx,
+      scope: proven,
+      actor: { type: "system" },
+      fn: async (scopedTx) => {
+        const actorUserId = await resolveActorUserId(current, {
+          database: scopedTx,
+          organizationId: notice.organizationId,
+        });
+        if (!(await flowRunActorExists(actorUserId, scopedTx))) {
+          await recordDeferredNoticeState(scopedTx, {
+            type: "actor-removed",
+            table: flowRuns,
+            runId: notice.runId,
+            workspaceId: notice.workspaceId,
+          });
+          return [];
+        }
+        if (
+          actorUserId === null ||
+          !(await isBackgroundFeatureEnabled({
+            tx: scopedTx,
+            organizationId: notice.organizationId,
+            userId: actorUserId,
+            featureId: "flows",
+          }))
+        ) {
+          // The completed source records only notices whose filing was deferred.
+          await recordDeferredNoticeState(scopedTx, {
+            type: "completion-notice-pending",
+            table: flowRuns,
+            runId: notice.runId,
+            workspaceId: notice.workspaceId,
+          });
+          return [];
+        }
+        const notificationPings = await createNotificationsInTransaction(
+          [flowRunCompletedNotification({ ...notice, actorUserId })],
+          scopedTx,
+        );
+        await recordDeferredNoticeState(scopedTx, {
+          type: "clear",
+          table: flowRuns,
+          runId: notice.runId,
+          workspaceId: notice.workspaceId,
+        });
+        return notificationPings;
+      },
+    });
+  });
+  pingNotificationRecipients(pings);
 };

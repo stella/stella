@@ -52,7 +52,10 @@ import {
   NO_DB,
   createTestHandlerContext,
 } from "@/api/tests/helpers/handler-context";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const capabilityCatalog = parseCatalog(readCapabilityCatalog());
 
@@ -129,14 +132,14 @@ const withTimeBilling = async <T>(
   run: () => Promise<T>,
 ): Promise<T> => {
   const previous = env[FLAG];
-  env[FLAG] = enabled;
+  testState.setConfig(FLAG, enabled);
   const restoreRuntimeMode = setRuntimeModeForTesting({
     mode: RUNTIME_MODE.strict,
   });
   try {
     return await run();
   } finally {
-    env[FLAG] = previous;
+    testState.setConfig(FLAG, previous);
     restoreRuntimeMode();
   }
 };
@@ -158,7 +161,7 @@ const describeResponse = async (response: Response) => ({
 /** What another flagged route group answers while its own flag is off. */
 const disabledFlagResponse = async () => {
   const previous = env.FEATURE_LEGAL_LISTS;
-  env.FEATURE_LEGAL_LISTS = false;
+  testState.setConfig("FEATURE_LEGAL_LISTS", false);
   const restoreRuntimeMode = setRuntimeModeForTesting({
     mode: RUNTIME_MODE.strict,
   });
@@ -167,7 +170,7 @@ const disabledFlagResponse = async () => {
       await listsRoute.handle(new Request(`http://localhost/lists/${PATH_ID}`)),
     );
   } finally {
-    env.FEATURE_LEGAL_LISTS = previous;
+    testState.setConfig("FEATURE_LEGAL_LISTS", previous);
     restoreRuntimeMode();
   }
 };

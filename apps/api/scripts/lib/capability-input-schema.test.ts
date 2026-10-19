@@ -1,4 +1,4 @@
-import { KindGuard, Type } from "@sinclair/typebox";
+import { Type } from "@sinclair/typebox";
 import { expect, test } from "bun:test";
 
 import { expandSchemaDefs } from "../../../../packages/cli/src/expand-schema-defs";
@@ -13,8 +13,7 @@ const body = Type.Object({
   layout: Type.Union([tableLayout, verificationLayout]),
 });
 
-test("static conditional schemas project canonical inputs before public naming and compaction", () => {
-  let projections = 0;
+test("static conditional schemas retain all inputs before public naming and compaction", () => {
   const inputSchema = buildInputSchema({
     body,
     params: Type.Object({ workspaceId: Type.String() }),
@@ -24,30 +23,16 @@ test("static conditional schemas project canonical inputs before public naming a
     featureAccess: {
       type: "conditional",
       featureId: "list-verification",
-      projectInputSchema: (schemas: AdvertisedSchemas) => {
-        projections += 1;
-        expect(schemas.body).toBe(body);
-        if (schemas.body === undefined || !KindGuard.IsObject(schemas.body)) {
-          throw new Error("Expected canonical TypeBox body");
-        }
-        expect(schemas.body.properties["workspaceId"]).toBeDefined();
-        return {
-          body: Type.Object({
-            ...schemas.body.properties,
-            layout: tableLayout,
-          }),
-          params: schemas.params,
-          query: schemas.query,
-        };
+      projectInputSchema: () => {
+        throw new Error("Static export requires the full conditional input");
       },
     },
   });
-  expect(projections).toBe(1);
   const serialized = JSON.stringify(inputSchema);
   expect(serialized).toContain('"matterId"');
   expect(serialized).not.toContain('"workspaceId"');
   expect(serialized).toContain('"table"');
-  expect(serialized).not.toContain('"avt"');
+  expect(serialized).toContain('"avt"');
   expect(serialized).toContain('"pageSize"');
   expect(serialized).not.toContain('"numeric"');
   expect(JSON.stringify(body)).toContain('"avt"');

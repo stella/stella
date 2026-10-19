@@ -24,7 +24,6 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeId } from "@/api/lib/branded-types";
-import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { AGENDA_ITEM_KIND } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -42,6 +41,7 @@ import { createTaskEntityHandler } from "@/api/lib/tasks/create-task-entity";
 import { deployedTaskFeatures } from "@/api/lib/tasks/deployment-features";
 
 const config = {
+  featureAccess: { featureId: "signals", type: "required" },
   contract: "patch",
   description:
     "Accept an inbox signal by taking one of its suggestions. Task and " +
@@ -148,8 +148,6 @@ export const createAcceptSignal = (
 
           const created = yield* Result.await(
             abortableTx(safeDb, async (transaction) => {
-              // Task creation reuses this strongest matter fence after the signal.
-              await lockWorkspacesForEntityCap(transaction, [workspaceId]);
               const outcome = await withVisibleSignal(
                 {
                   tx: transaction,
@@ -157,6 +155,7 @@ export const createAcceptSignal = (
                   actorUserId: user.id,
                   memberRole,
                   signalId: params.signalId,
+                  entityCreationWorkspaceId: workspaceId,
                   expectedUpdatedAt: existing.updatedAt,
                 },
                 async ({

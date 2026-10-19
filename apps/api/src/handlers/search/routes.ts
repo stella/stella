@@ -60,7 +60,7 @@ const searchFacetsEndpoint = createSafeRootHandler(
     mcp: { type: "internal", reason: "search_ui" },
     body: searchFacetsBodySchema,
   } satisfies HandlerConfig,
-  async function* ({ body, getActiveWorkspaceIds, scopedDb, session }) {
+  async function* ({ body, getActiveWorkspaceIds, scopedDb, session, user }) {
     const activeWorkspaceIds = yield* Result.await(
       Result.tryPromise(async () => await getActiveWorkspaceIds()),
     );
@@ -69,6 +69,7 @@ const searchFacetsEndpoint = createSafeRootHandler(
         async () =>
           await searchFacetsHandler({
             organizationId: session.activeOrganizationId,
+            userId: user.id,
             accessibleWorkspaceIds: activeWorkspaceIds,
             body,
             scopedDb,

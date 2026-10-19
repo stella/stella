@@ -21,6 +21,7 @@ export default {
     "The owner closes transaction histories, links savepoint levels, merges reservations and held locks on release, " +
     "and discards them on rollback. The confinement rule and exact-site inventory " +
     "reject raw acquisitions and transaction boundaries outside the owner; " +
+    "Ownership sources use nonblocking row and key pins without adding wait chains. " +
     "existing sites remain in a reasoned shrinking baseline. Nonblocking skip-locked batches " +
     "own a fresh bounded transaction and prohibit later aggregate acquisitions. Mutation route " +
     "enumeration requires a declaration or a legacy entry.",

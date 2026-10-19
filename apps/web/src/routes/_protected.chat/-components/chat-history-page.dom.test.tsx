@@ -265,7 +265,10 @@ const createClient = () => {
       organizationId: user.activeOrganizationId,
       userId: user.id,
     }).queryKey,
-    { workspaces: [MATTER_A, MATTER_B], features: { timeBilling: false } },
+    {
+      workspaces: [MATTER_A, MATTER_B],
+      features: { timeBilling: false, signals: false, flows: false },
+    },
   );
   return client;
 };

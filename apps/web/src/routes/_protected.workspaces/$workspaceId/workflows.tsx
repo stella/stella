@@ -28,8 +28,13 @@ export const Route = createFileRoute(
   "/_protected/workspaces/$workspaceId/workflows",
 )({
   validateSearch: workflowsSearchSchema,
-  beforeLoad: ({ params }) => {
-    if (!workflowsRouteAvailable()) {
+  beforeLoad: async ({ params, context }) => {
+    if (
+      !(await workflowsRouteAvailable(context.queryClient, {
+        userId: context.user.id,
+        organizationId: context.user.activeOrganizationId,
+      }))
+    ) {
       throw redirect({
         to: "/workspaces/$workspaceId",
         params: { workspaceId: params.workspaceId },

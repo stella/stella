@@ -5,6 +5,7 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 import { setTimeout as sleep } from "node:timers/promises";
 
 import type { WebApiRoutes } from "@/lib/eden-client";
+import { DISABLED_NAVIGATION_FEATURES } from "@/lib/workspaces/queries.test-fixtures";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
@@ -253,7 +254,7 @@ const createClient = () => {
       organizationId: user.activeOrganizationId,
       userId: user.id,
     }).queryKey,
-    { workspaces: [], features: { timeBilling: false } },
+    { workspaces: [], features: DISABLED_NAVIGATION_FEATURES },
   );
   return client;
 };

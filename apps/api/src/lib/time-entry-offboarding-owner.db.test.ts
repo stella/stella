@@ -11,10 +11,8 @@ import {
 } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
-import {
-  REVIEW_RESET_CLEARED_TABLES,
-  sweepReviewOrganization,
-} from "@/api/lib/review-organization/reset-scope";
+import { REVIEW_RESET_CLEARED_TABLES } from "@/api/lib/review-organization/reset-census";
+import { sweepReviewOrganization } from "@/api/lib/review-organization/reset-scope";
 import { closeRemovedMemberActiveTimer } from "@/api/lib/time-entry-offboarding";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
@@ -45,7 +43,12 @@ describe.skipIf(!enabled)(
           GRANT USAGE, CREATE ON SCHEMA ${schema} TO ${ownerRole};
           GRANT USAGE ON SCHEMA ${schema} TO stella;
           SET search_path TO ${schema}, public`);
-          for (const table of ["time_entries", "time_timers", "audit_logs"]) {
+          for (const table of [
+            "time_entries",
+            "time_timers",
+            "audit_logs",
+            "system_audit_runs",
+          ]) {
             await client.unsafe(`CREATE TABLE ${table} (LIKE public.${table} INCLUDING ALL);
             ALTER TABLE ${table} OWNER TO ${ownerRole};
             GRANT SELECT, INSERT, UPDATE, DELETE ON ${table} TO stella`);
@@ -194,7 +197,7 @@ describe.skipIf(!enabled)(
             )
               .map(
                 (name) =>
-                  `CREATE TABLE ${schema}.${name} (id uuid, organization_id text); ALTER TABLE ${schema}.${name} OWNER TO ${ownerRole}`,
+                  `CREATE TABLE ${schema}.${name} (id uuid, organization_id text${name === "signal_events" ? ", signal_id uuid" : ""}); ALTER TABLE ${schema}.${name} OWNER TO ${ownerRole}`,
               )
               .join("; "),
           );
@@ -205,15 +208,21 @@ describe.skipIf(!enabled)(
             await tx.execute(
               sql`SELECT set_config('role', ${ownerRole}, true)`,
             );
-            const swept = await sweepReviewOrganization(
+            const swept = await sweepReviewOrganization({
               tx,
               organizationId,
               userId,
-            );
+              subject: createSafeId<"schedulerJobRun">(),
+            });
             expect(swept.get("time_timers")).toBe(1);
             expect(swept.get("billing_arrangements")).toBe(2);
           });
           const census = openClient().sql;
+          expect(
+            await census.unsafe<{ id: string }[]>(
+              `SELECT id FROM ${schema}.system_audit_runs`,
+            ),
+          ).toEqual([]);
           const remaining = await census.unsafe<{ count: number }[]>(
             `SELECT count(*)::int AS count FROM ${schema}.billing_arrangements`,
           );

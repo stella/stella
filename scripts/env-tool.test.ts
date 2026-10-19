@@ -1116,16 +1116,16 @@ describe("web container build arguments", () => {
 
   test("report a schema key the build command never exports", () => {
     const gaps = findWebBuildArgGaps({
-      clientKeys: ["VITE_API_URL", "VITE_WORKFLOWS_ENABLED"],
+      clientKeys: ["VITE_API_URL", "VITE_EXAMPLE_FLAG"],
       dockerfile: builderStage({
         declarations: ["PUBLIC_API_URL"],
         exports: [["VITE_API_URL", reference("PUBLIC_API_URL")]],
       }),
     });
 
-    expect(gaps).toEqual([{ name: "VITE_WORKFLOWS_ENABLED", type: "missing" }]);
+    expect(gaps).toEqual([{ name: "VITE_EXAMPLE_FLAG", type: "missing" }]);
     expect(gaps.map(formatWebBuildArgGap).join("\n")).toContain(
-      "VITE_WORKFLOWS_ENABLED",
+      "VITE_EXAMPLE_FLAG",
     );
   });
 
@@ -1176,19 +1176,19 @@ describe("web container build arguments", () => {
   test("reject an export backed only by ENV", () => {
     expect(
       findWebBuildArgGaps({
-        clientKeys: ["VITE_WORKFLOWS_ENABLED"],
+        clientKeys: ["VITE_EXAMPLE_FLAG"],
         dockerfile: [
           "FROM oven/bun AS builder",
-          "ENV VITE_WORKFLOWS_ENABLED=false",
+          "ENV VITE_EXAMPLE_FLAG=false",
           "RUN \\",
-          `    VITE_WORKFLOWS_ENABLED="${reference("VITE_WORKFLOWS_ENABLED")}" \\`,
+          `    VITE_EXAMPLE_FLAG="${reference("VITE_EXAMPLE_FLAG")}" \\`,
           "    bun --filter @stll/web build",
         ].join("\n"),
       }),
     ).toEqual([
       {
-        name: "VITE_WORKFLOWS_ENABLED",
-        reference: "VITE_WORKFLOWS_ENABLED",
+        name: "VITE_EXAMPLE_FLAG",
+        reference: "VITE_EXAMPLE_FLAG",
         type: "undeclared",
       },
     ]);

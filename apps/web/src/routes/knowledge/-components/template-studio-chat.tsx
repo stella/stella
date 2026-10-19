@@ -30,16 +30,16 @@ import type {
   FolioAgentToolOptions,
 } from "@stll/folio-agents";
 import type { FolioToolCallResultFor } from "@stll/folio-agents/tool-contract";
-import {
-  getFolioDocumentOperationIssues,
-  getFolioDocumentOperationReceipts,
-} from "@stll/folio-core";
 import type {
   FolioAIEditSkipReason,
   FolioAIEditSkippedOperation,
   FolioDocumentOperationBatch,
   FolioDocumentOperationResult,
 } from "@stll/folio-core";
+import {
+  getFolioDocumentOperationIssues,
+  getFolioDocumentOperationReceipts,
+} from "@stll/folio-core/document-operations";
 import {
   applySuggestions,
   resolveSuggestionAnchor,

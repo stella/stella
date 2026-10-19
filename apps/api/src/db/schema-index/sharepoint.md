@@ -4,37 +4,37 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## sharepoint_connections · `sharepointConnections` · sharepoint.ts:32 · rls
+## sharepoint_connections · `sharepointConnections` · sharepoint.ts:34 · rls
 
 Per user+org delegated Graph connection.
 
 ```text
-sharepoint_connections.id                       pUuid               pk,not null       sharepoint.ts:35
-sharepoint_connections.organization_id          safeOrganizationId  fk,not null       sharepoint.ts:36
-sharepoint_connections.user_id                  text                fk,not null       sharepoint.ts:39
-sharepoint_connections.access_token_encrypted   bytea               not null          sharepoint.ts:43
-sharepoint_connections.access_token_iv          bytea               not null          sharepoint.ts:44
-sharepoint_connections.refresh_token_encrypted  bytea               null              sharepoint.ts:45
-sharepoint_connections.refresh_token_iv         bytea               null              sharepoint.ts:46
-sharepoint_connections.token_type               varchar             null              sharepoint.ts:47
-sharepoint_connections.scope                    text                null              sharepoint.ts:49  Space-delimited scopes Microsoft actually granted.
-sharepoint_connections.account_label            text                null              sharepoint.ts:51  Display-only Microsoft account identifier (userPrincipalName).
-sharepoint_connections.expires_at               timestamptz         null              sharepoint.ts:52
-sharepoint_connections.status                   text                not null          sharepoint.ts:53
-sharepoint_connections.last_used_at             timestamptz         null              sharepoint.ts:57
-sharepoint_connections.created_at               timestamptz         default,not null  sharepoint.ts:58
-sharepoint_connections.updated_at               timestamptz         default,not null  sharepoint.ts:59
+sharepoint_connections.id                       pUuid               pk,not null       sharepoint.ts:37
+sharepoint_connections.organization_id          safeOrganizationId  fk,not null       sharepoint.ts:38
+sharepoint_connections.user_id                  text                fk,not null       sharepoint.ts:41
+sharepoint_connections.access_token_encrypted   bytea               not null          sharepoint.ts:45
+sharepoint_connections.access_token_iv          bytea               not null          sharepoint.ts:46
+sharepoint_connections.refresh_token_encrypted  bytea               null              sharepoint.ts:47
+sharepoint_connections.refresh_token_iv         bytea               null              sharepoint.ts:48
+sharepoint_connections.token_type               varchar             null              sharepoint.ts:49
+sharepoint_connections.scope                    text                null              sharepoint.ts:51  Space-delimited scopes Microsoft actually granted.
+sharepoint_connections.account_label            text                null              sharepoint.ts:53  Display-only Microsoft account identifier (userPrincipalName).
+sharepoint_connections.expires_at               timestamptz         null              sharepoint.ts:54
+sharepoint_connections.status                   text                not null          sharepoint.ts:55
+sharepoint_connections.last_used_at             timestamptz         null              sharepoint.ts:59
+sharepoint_connections.created_at               timestamptz         default,not null  sharepoint.ts:60
+sharepoint_connections.updated_at               timestamptz         default,not null  sharepoint.ts:61
 ```
 
-## sharepoint_oauth_state · `sharepointOAuthState` · sharepoint.ts:78 · rls
+## sharepoint_oauth_state · `sharepointOAuthState` · sharepoint.ts:81 · rls
 
 Short-lived per-request OAuth state consumed by the callback.
 
 ```text
-sharepoint_oauth_state.state            varchar             pk,not null       sharepoint.ts:81
-sharepoint_oauth_state.organization_id  safeOrganizationId  fk,not null       sharepoint.ts:82
-sharepoint_oauth_state.user_id          text                fk,not null       sharepoint.ts:85
-sharepoint_oauth_state.code_verifier    text                not null          sharepoint.ts:89
-sharepoint_oauth_state.redirect_uri     text                not null          sharepoint.ts:90
-sharepoint_oauth_state.created_at       timestamptz         default,not null  sharepoint.ts:91
+sharepoint_oauth_state.state            varchar             pk,not null       sharepoint.ts:84
+sharepoint_oauth_state.organization_id  safeOrganizationId  fk,not null       sharepoint.ts:85
+sharepoint_oauth_state.user_id          text                fk,not null       sharepoint.ts:88
+sharepoint_oauth_state.code_verifier    text                not null          sharepoint.ts:92
+sharepoint_oauth_state.redirect_uri     text                not null          sharepoint.ts:93
+sharepoint_oauth_state.created_at       timestamptz         default,not null  sharepoint.ts:94
 ```

@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 
 import { timestamptz } from "@/api/db/columns";
 import { entityFeaturePolicies } from "@/api/db/entity-feature-policies";
+import { systemScopePolicies } from "@/api/db/system-scope-policies";
 import { DOCUMENT_NATIVE_EXTRACTION_PROCESSOR_VERSION } from "@/api/lib/document-processing-contract";
 
 import {
@@ -45,6 +46,7 @@ export type DocumentProcessingStatus =
 export const DOCUMENT_DEADLINE_SCOUT_STATUSES = [
   "not_requested",
   "pending",
+  "awaiting_grant",
   "running",
   "succeeded",
   "failed",
@@ -55,6 +57,11 @@ export type DocumentDeadlineScoutStatus =
 const DOCUMENT_DEADLINE_SCOUT_CLEAR_CLAIM_STATUSES = [
   "succeeded",
   "cancelled",
+] as const satisfies readonly DocumentDeadlineScoutStatus[];
+
+const DOCUMENT_DEADLINE_SCOUT_BACKOFF_STATUSES = [
+  "pending",
+  "awaiting_grant",
 ] as const satisfies readonly DocumentDeadlineScoutStatus[];
 
 /** Why a processing request exists; distinct sources can have distinct policy. */
@@ -78,6 +85,11 @@ const DOCUMENT_DEADLINE_SCOUT_STATUS_SQL_VALUES =
   DOCUMENT_DEADLINE_SCOUT_STATUSES.map((status) => sql.raw(`'${status}'`));
 const DOCUMENT_DEADLINE_SCOUT_CLEAR_CLAIM_STATUS_SQL_VALUES =
   DOCUMENT_DEADLINE_SCOUT_CLEAR_CLAIM_STATUSES.map((status) =>
+    sql.raw(`'${status}'`),
+  );
+
+const DOCUMENT_DEADLINE_SCOUT_BACKOFF_STATUS_SQL_VALUES =
+  DOCUMENT_DEADLINE_SCOUT_BACKOFF_STATUSES.map((status) =>
     sql.raw(`'${status}'`),
   );
 
@@ -283,6 +295,7 @@ export const documentProcessingRuns = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    ...systemScopePolicies(table),
     ...entityFeatureGateChecks(table),
     ...entityFeaturePolicies(
       table,
@@ -332,6 +345,10 @@ export const documentProcessingRuns = p.pgTable(
       .index("document_processing_runs_deadline_scout_pending_idx")
       .on(table.updatedAt, table.id)
       .where(sql`${table.deadlineScoutStatus} = 'pending'`),
+    p
+      .index("document_processing_runs_deadline_scout_awaiting_grant_idx")
+      .on(table.organizationId, table.workspaceId, table.id)
+      .where(sql`${table.deadlineScoutStatus} = 'awaiting_grant'`),
     p
       .index("document_processing_runs_deadline_scout_running_idx")
       .on(table.deadlineScoutClaimedAt, table.id)
@@ -425,6 +442,10 @@ export const documentProcessingRuns = p.pgTable(
           AND ${table.deadlineScoutErrorCode} IS NULL)
         OR (${table.deadlineScoutStatus} = 'pending'
           AND ${table.deadlineScoutClaimedAt} IS NULL)
+        OR (${table.deadlineScoutStatus} = 'awaiting_grant'
+          AND ${table.deadlineScoutClaimedAt} IS NULL
+          AND ${table.deadlineScoutErrorCode} IS NOT NULL
+          AND ${table.deadlineScoutErrorCode} = 'feature_not_granted')
         OR (${table.deadlineScoutStatus} = 'running'
           AND ${table.deadlineScoutClaimedAt} IS NOT NULL
           AND ${table.deadlineScoutErrorCode} IS NULL)
@@ -438,7 +459,7 @@ export const documentProcessingRuns = p.pgTable(
     p.check(
       "document_processing_runs_deadline_scout_skip_check",
       sql`${table.deadlineScoutSkippedUntil} IS NULL
-        OR (${table.deadlineScoutStatus} = 'pending'
+        OR (${table.deadlineScoutStatus} IN (${sql.join(DOCUMENT_DEADLINE_SCOUT_BACKOFF_STATUS_SQL_VALUES, sql`, `)})
           AND ${table.deadlineScoutErrorCode} IS NOT NULL)`,
     ),
     p.check(

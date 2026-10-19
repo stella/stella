@@ -24,6 +24,7 @@ import {
   knowledgeKeys,
 } from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
+import { loadAuthContext } from "@/routes/-auth-context";
 import { FlowEditor } from "@/routes/knowledge/-components/flow-editor";
 import type { FlowExampleKey } from "@/routes/knowledge/-components/flow-examples";
 import { FlowList } from "@/routes/knowledge/-components/flow-list";
@@ -39,8 +40,22 @@ type View =
   | { kind: "editor"; flowId: string | null; example?: FlowExampleKey };
 
 export const Route = createFileRoute("/knowledge/workflows")({
-  beforeLoad: () => {
-    if (!workflowsRouteAvailable()) {
+  beforeLoad: async ({ context }) => {
+    const auth =
+      context.user === undefined
+        ? await loadAuthContext(context.queryClient)
+        : null;
+    const userId = context.user?.id ?? auth?.session?.userId;
+    const organizationId =
+      context.user?.activeOrganizationId ?? auth?.session?.activeOrganizationId;
+    if (
+      !userId ||
+      !organizationId ||
+      !(await workflowsRouteAvailable(context.queryClient, {
+        userId,
+        organizationId,
+      }))
+    ) {
       throw redirect({ to: "/knowledge" });
     }
   },

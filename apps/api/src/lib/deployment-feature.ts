@@ -35,6 +35,7 @@ const LOCAL_DEV_ACCESS_BY_FLAG = {
   FEATURE_AGENT_ID_JAG: LOCAL_DEV_ACCESS.followsFlag,
   FEATURE_AI_MEMORY: LOCAL_DEV_ACCESS.followsFlag,
   FEATURE_CONFIGURED_ACCESS: LOCAL_DEV_ACCESS.followsFlag,
+  FEATURE_FLOWS: LOCAL_DEV_ACCESS.open,
   FEATURE_FILE_USAGE_LIMITS: LOCAL_DEV_ACCESS.followsFlag,
   FEATURE_FREE_TIER: LOCAL_DEV_ACCESS.followsFlag,
   FEATURE_GOVERNED_WORKFLOW: LOCAL_DEV_ACCESS.open,
@@ -48,6 +49,7 @@ const LOCAL_DEV_ACCESS_BY_FLAG = {
   FEATURE_PUBLIC_KNOWLEDGE: LOCAL_DEV_ACCESS.followsFlag,
   FEATURE_PUBLIC_LAW: LOCAL_DEV_ACCESS.open,
   FEATURE_PUBLIC_TOOLS: LOCAL_DEV_ACCESS.followsFlag,
+  FEATURE_SIGNALS: LOCAL_DEV_ACCESS.open,
   FEATURE_SHAREPOINT: LOCAL_DEV_ACCESS.followsFlag,
   FEATURE_TEMPLATE_PACKS: LOCAL_DEV_ACCESS.followsFlag,
   FEATURE_TIME_BILLING: LOCAL_DEV_ACCESS.open,
@@ -77,3 +79,9 @@ export const isDeploymentFeatureEnabled = (
       return panic(`Unknown local development access for ${flag}`);
   }
 };
+
+/** Narrow a generated catalog flag before consulting the deployment owner. */
+export const isDeploymentFeatureFlag = (
+  flag: string,
+): flag is DeploymentFeatureFlag =>
+  Object.hasOwn(LOCAL_DEV_ACCESS_BY_FLAG, flag);

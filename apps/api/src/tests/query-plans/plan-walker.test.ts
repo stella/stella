@@ -545,3 +545,51 @@ test("excludes only the real workspace authorization subplan", () => {
   };
   expect(withoutAuthorizationSubplans(otherSubplan)).toContain(otherName);
 });
+
+test("recognizes only hashed workspace authorization subplans with numeric aliases", () => {
+  const authorizationScan = (alias: string, filter = "(hashed SubPlan 9)") => {
+    const scan = scanOccurrences({
+      "Node Type": "Seq Scan",
+      "Relation Name": "search_documents",
+      Alias: "sd",
+      Filter: filter,
+      Plans: [
+        {
+          "Node Type": "Subquery Scan",
+          "Parent Relationship": "SubPlan",
+          "Subplan Name": "SubPlan 9",
+          Alias: alias,
+          Plans: [
+            {
+              "Node Type": "Seq Scan",
+              "Relation Name": "workspace_members",
+              Alias: "workspace_members",
+            },
+            {
+              "Node Type": "Seq Scan",
+              "Relation Name": "workspaces",
+              Alias: "workspaces",
+            },
+          ],
+        },
+      ],
+    }).at(0);
+    if (scan === undefined) {
+      panic("Search documents plan has no scan");
+    }
+    return scan;
+  };
+
+  for (const alias of ["aw", "aw_8", "aw_123"]) {
+    expect(
+      withoutAuthorizationSubplans(authorizationScan(alias)),
+      alias,
+    ).not.toContain("SubPlan 9");
+  }
+  expect(withoutAuthorizationSubplans(authorizationScan("aw_8x"))).toContain(
+    "SubPlan 9",
+  );
+  expect(
+    withoutAuthorizationSubplans(authorizationScan("aw_8", "(SubPlan 9)")),
+  ).toContain("SubPlan 9");
+});

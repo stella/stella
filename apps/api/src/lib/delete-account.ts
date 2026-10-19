@@ -43,7 +43,7 @@ import {
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { LIMITS } from "@/api/lib/limits";
-import { tryLockAccountMemberCleanup } from "@/api/lib/member-assignment-offboarding";
+import { tryLockAccountMemberCleanup } from "@/api/lib/member-offboarding/member-assignment-offboarding";
 import { logger } from "@/api/lib/observability/logger";
 
 export { ACCOUNT_DELETION_ERROR_CODE };

@@ -3,13 +3,14 @@ import {
   afterAll,
   afterEach,
   beforeEach,
-  beforeAll,
   describe,
   expect,
   setDefaultTimeout,
   test,
 } from "bun:test";
 import { and, count, eq, inArray, isNotNull, sql } from "drizzle-orm";
+
+import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
@@ -22,6 +23,7 @@ import {
 } from "@/api/db/schema";
 import type { FieldContent, PropertyContent } from "@/api/db/schema-validators";
 import { createScopedDb } from "@/api/db/scoped";
+import { env } from "@/api/env";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { TASK_ASSIGNEE_ROLE } from "@/api/lib/entity-constants";
@@ -30,6 +32,8 @@ import {
   buildFindConditions,
 } from "@/api/lib/entity-filters";
 import { isRecord } from "@/api/lib/type-guards";
+import { setRuntimeModeForTesting } from "@/api/runtime-mode";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -46,9 +50,11 @@ setDefaultTimeout(120_000);
 let testDb: TestDatabase;
 let ids: TestIds;
 let safeDb: SafeDb;
+const testState = createTestState({ file: import.meta.path, config: env });
+
 const sessionIds: SafeId<"desktopEditSession">[] = [];
 
-beforeAll(async () => {
+testState.beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
   ids = fixture.ids;
@@ -139,6 +145,33 @@ const readActiveEditor = async () => {
 };
 
 describe("entity active edit indicators", () => {
+  test("ordinary entity windows remain available with signal deployment disabled", async () => {
+    testState.setConfig("FEATURE_SIGNALS", false);
+    const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
+    try {
+      const result = await queryEntities({
+        safeDb,
+        scope: { type: "matter", workspaceId: ids.wsA1 },
+        currentUserId: ids.userA1,
+        currentOrganizationId: ids.orgA,
+        filters: [],
+        sorts: [],
+        limit: 10,
+        fieldMode: "visible",
+        fieldIds: [],
+      });
+      expect(result.isOk()).toBe(true);
+      if (result.isOk()) {
+        expect(
+          result.value.entities.some(
+            (entity) => entity.entityId === ids.entityA1,
+          ),
+        ).toBe(true);
+      }
+    } finally {
+      restore();
+    }
+  });
   test("shows the oldest live session when an entity has concurrent editors", async () => {
     await insertLiveSession({
       id: toSafeId<"desktopEditSession">(Bun.randomUUIDv7()),
@@ -545,7 +578,7 @@ describe("find in table", () => {
     }
   };
 
-  beforeAll(async () => {
+  testState.beforeAll(async () => {
     const tool = { version: 1 as const, type: "manual-input" as const };
     const definitions: {
       content: PropertyContent;

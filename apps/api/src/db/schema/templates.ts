@@ -7,6 +7,7 @@ import type {
 } from "@stll/api-contract/ai-decision-provider";
 import type { TemplatePackAuthor } from "@stll/template-packs/schema";
 
+import { systemScopePolicies } from "@/api/db/system-scope-policies";
 import type { ClauseDirectiveWarning } from "@/api/lib/clauses/clause-directives";
 import type { AiFieldError } from "@/api/lib/docx/resolve-ai-fields";
 import { LOOKUP_REGISTRIES } from "@/api/lib/docx/types";
@@ -831,6 +832,7 @@ export const searchProjectionRepairQueue = p.pgTable(
     nextAttemptAt: timestamptz("next_attempt_at").notNull().defaultNow(),
   },
   (table) => [
+    ...systemScopePolicies(table),
     p.primaryKey({
       columns: [table.kind, table.sourceId],
       name: "search_projection_repair_queue_pk",

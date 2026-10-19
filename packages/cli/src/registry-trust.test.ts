@@ -116,6 +116,46 @@ describe("validateFetchedToolsList: rule 2 (meta-schema)", () => {
     }
   });
 
+  test("conditional capability inputs use the registry schema trust boundary", () => {
+    const conditionalInputs = {
+      "fixture.rows.list": {
+        body: {
+          type: "object",
+          properties: { mode: { type: "string", enum: ["ordinary"] } },
+        },
+      },
+    };
+    const response = (inputs: unknown) =>
+      JSON.stringify({
+        tools: [validTool()],
+        _meta: {
+          featureAccess: {
+            capabilities: [],
+            tools: [],
+            conditionalInputs: inputs,
+          },
+        },
+      });
+    const trusted = validateFetchedToolsList(response(conditionalInputs));
+    expect(trusted.ok).toBe(true);
+    if (trusted.ok) {
+      expect(trusted.featureAccess?.conditionalInputs).toEqual(
+        conditionalInputs,
+      );
+    }
+    expect(
+      validateFetchedToolsList(
+        response({
+          "fixture.rows.list": { body: { type: "object", $ref: "remote" } },
+        }),
+      ),
+    ).toEqual({
+      ok: false,
+      violation:
+        "capability fixture.rows.list: $ref schema constraints are unsupported",
+    });
+  });
+
   for (const name of invalidNames) {
     test(`invalid feature access tool ${name} rejects the whole fetched listing`, () => {
       expect(

@@ -280,6 +280,230 @@ export const ${name} = { run: { featureId: "fixture", ${target} } };`;
       ),
     ).toHaveLength(1);
   });
+  test("dispatch feature ids that share a conditional table name remain required metadata", () => {
+    const sources = new Map([
+      ...baseSources,
+      [
+        "apps/api/src/db/schema/conditional.ts",
+        'export const fixture = p.pgTable("fixture", {});',
+      ],
+      [
+        "apps/api/src/dispatch/registry.ts",
+        'export const CAPABILITY_DISPATCH = { run: { featureId: "fixture", load: () => import("../routes/feature/run") } };',
+      ],
+    ]);
+    const ownership = {
+      ...registry.fixture.ownership,
+      conditionalTableSchemas: {
+        "apps/api/src/db/schema/conditional.ts": ["fixture"],
+      },
+    };
+    const options = {
+      registry: { fixture: { ...registry.fixture, ownership } },
+      sources,
+      endpoints: [],
+    };
+    expect(validateFeatureAccessDeclarations(options)).toEqual([]);
+    sources.set(
+      "apps/api/src/routes/ordinary.ts",
+      "export const read = () => sql`select * from fixture`;",
+    );
+    expect(
+      validateFeatureAccessDeclarations({
+        ...options,
+        endpoints: [{ file: "apps/api/src/routes/ordinary.ts", config: {} }],
+      }),
+    ).toContainEqual({
+      file: "apps/api/src/routes/ordinary.ts",
+      message: "source ownership requires featureAccess fixture",
+    });
+  });
+  test("registered feature-id constants that collide with table names remain metadata", () => {
+    const file = "apps/api/src/routes/ordinary.ts";
+    const registryFile = "apps/api/src/lib/feature-access/registry.ts";
+    const collisionRegistry = {
+      signals: {
+        enrolment: "invitation",
+        ownership: {
+          handlerDirectories: [],
+          tableSchemaFiles: [],
+          conditionalTableSchemas: {
+            "apps/api/src/db/schema/signals.ts": ["signals"],
+          },
+          coreModules: ["apps/api/src/feature/core.ts"],
+          conditionalModules: ["apps/api/src/feature/layout.ts"],
+        },
+      },
+    } as const;
+    const sources = new Map([
+      ...baseSources,
+      [
+        "apps/api/src/db/schema/signals.ts",
+        'export const signals = p.pgTable("signals", {});',
+      ],
+      [
+        registryFile,
+        `const SIGNALS_FEATURE_ID = "signals";
+const defineFeatureRegistry = <T>(entries: T) => entries;
+export const FEATURE_REGISTRY = defineFeatureRegistry({
+  [SIGNALS_FEATURE_ID]: {
+    ownership: {
+      handlerDirectories: ["apps/api/src/handlers/signals"],
+      conditionalTableSchemas: {
+        "apps/api/src/db/schema/signals.ts": ["signals"],
+      },
+    },
+  },
+});`,
+      ],
+      [
+        file,
+        'import { FEATURE_REGISTRY } from "../lib/feature-access/registry"; export const read = () => FEATURE_REGISTRY;',
+      ],
+    ]);
+    const validate = () =>
+      validateFeatureAccessDeclarations({
+        registry: collisionRegistry,
+        endpoints: [{ file, config: {} }],
+        sources,
+      });
+    expect(validate()).toEqual([]);
+    const registryMetadataSource =
+      'const defineFeatureRegistry = <T>(entries: T) => entries; export const FEATURE_REGISTRY = defineFeatureRegistry({ "signals": { ownership: { conditionalTableSchemas: { "apps/api/src/db/schema/signals.ts": ["signals"] } } } });';
+    sources.set(registryFile, registryMetadataSource);
+    expect(validate()).toEqual([]);
+
+    const standInFile = "apps/api/src/feature/registry.ts";
+    sources.set(standInFile, registryMetadataSource);
+    sources.set(
+      file,
+      'import { FEATURE_REGISTRY } from "../feature/registry"; export const read = () => FEATURE_REGISTRY;',
+    );
+    expect(validate()).toContainEqual({
+      file,
+      message: "source ownership requires featureAccess signals",
+    });
+    sources.delete(standInFile);
+    sources.set(
+      file,
+      'import { FEATURE_REGISTRY } from "../lib/feature-access/registry"; export const read = () => FEATURE_REGISTRY;',
+    );
+
+    sources.set(
+      registryFile,
+      `const SIGNALS_FEATURE_ID = "signals";
+const UNBOUND_SIGNAL_TABLE_NAME = "signals";
+const defineFeatureRegistry = <T>(entries: T) => entries;
+export const FEATURE_REGISTRY = defineFeatureRegistry({
+  [SIGNALS_FEATURE_ID]: {
+    ownership: {
+      handlerDirectories: ["apps/api/src/handlers/signals"],
+      conditionalTableSchemas: {
+        "apps/api/src/db/schema/signals.ts": ["signals"],
+      },
+    },
+  },
+});`,
+    );
+    expect(validate()).toContainEqual({
+      file,
+      message: "source ownership requires featureAccess signals",
+    });
+
+    sources.set(
+      registryFile,
+      `const SIGNALS_FEATURE_ID = "signals";
+const defineFeatureRegistry = <T>(entries: T) => entries;
+export const FEATURE_REGISTRY = defineFeatureRegistry({
+  [SIGNALS_FEATURE_ID]: {
+    ownership: {
+      handlerDirectories: ["apps/api/src/handlers/signals"],
+      conditionalTableSchemas: {
+        "apps/api/src/db/schema/signals.ts": ["signals"],
+      },
+      runtime: [lookup("signals"), () => "signals", sql\`select * from signals\`],
+    },
+  },
+});`,
+    );
+    sources.set(
+      file,
+      'import { FEATURE_REGISTRY } from "../lib/feature-access/registry"; export const read = () => FEATURE_REGISTRY;',
+    );
+    expect(validate()).toContainEqual({
+      file,
+      message: "source ownership requires featureAccess signals",
+    });
+
+    sources.set(
+      registryFile,
+      `const SIGNALS_FEATURE_ID = "signals";
+const defineFeatureRegistry = <T>(entries: T) => entries;
+export const FEATURE_REGISTRY = defineFeatureRegistry({
+  [SIGNALS_FEATURE_ID]: {
+    ownership: {
+      handlerDirectories: ["apps/api/src/handlers/signals"],
+      conditionalTableSchemas: {
+        "apps/api/src/db/schema/signals.ts": ["signals"],
+      },
+    },
+  },
+});`,
+    );
+    sources.set(
+      file,
+      'import { FEATURE_REGISTRY } from "../lib/feature-access/registry"; export const read = () => [FEATURE_REGISTRY, sql`select * from signals`];',
+    );
+    expect(validate()).toContainEqual({
+      file,
+      message: "source ownership requires featureAccess signals",
+    });
+  });
+  test("generated capability feature bindings remain metadata when feature and table names coincide", () => {
+    const file = "apps/api/src/routes/ordinary.ts";
+    const bindings =
+      "apps/api/src/mcp/generated/capability-feature-bindings.ts";
+    const bindingSource =
+      'export const CAPABILITY_FEATURE_BINDINGS = new Map<string, string>([["fixture.read", "fixture"]]);';
+    const sources = new Map([
+      ...baseSources,
+      [
+        "apps/api/src/db/schema/conditional.ts",
+        'export const fixture = p.pgTable("fixture", {});',
+      ],
+      [bindings, bindingSource],
+      [
+        file,
+        'import { CAPABILITY_FEATURE_BINDINGS } from "../mcp/generated/capability-feature-bindings"; export const discover = () => CAPABILITY_FEATURE_BINDINGS;',
+      ],
+    ]);
+    const conditionalRegistry = {
+      fixture: {
+        ...registry.fixture,
+        ownership: {
+          ...registry.fixture.ownership,
+          conditionalTableSchemas: {
+            "apps/api/src/db/schema/conditional.ts": ["fixture"],
+          },
+        },
+      },
+    };
+    const validate = () =>
+      validateFeatureAccessDeclarations({
+        registry: conditionalRegistry,
+        endpoints: [{ file, config: {} }],
+        sources,
+      });
+    expect(validate()).toEqual([]);
+    sources.set(
+      bindings,
+      `${bindingSource} export const read = () => sql.raw("select * from fixture");`,
+    );
+    expect(validate()).toContainEqual({
+      file,
+      message: "source ownership requires featureAccess fixture",
+    });
+  });
   test("named schema barrel imports require only the selected table owner", () => {
     expect(check('import { ordinaryRows } from "@/api/db/schema";')).toEqual(
       [],
@@ -362,6 +586,95 @@ export const ${name} = { run: { featureId: "fixture", ${target} } };`;
           "apps/api/src/helpers/db.ts",
           `${registration} export const read = () => schema.featureRows;`,
         ],
+      ]),
+    ).toHaveLength(1);
+  });
+  test("generic aggregate locking attributes table ownership to the selected resource", () => {
+    const engine = "apps/api/src/lib/db/aggregate-lock.ts";
+    const source = `
+      const ordinaryResource = function (options) {
+        return { table: "ordinary_rows" };
+      };
+      const featureResource = (options) => finalResource(options);
+      const finalResource = (options) => {
+        if (options.depth > 0) return featureResource({ depth: 0 });
+        return { table: "fixture_rows" };
+      };
+      const rowResource = (options) => {
+        switch (options.aggregate) {
+          case "ordinary": return ordinaryResource(options);
+          case "feature": return featureResource(options);
+        }
+      };
+      export const lock = (options) => rowResource(options);
+      export const transaction = (work) => work();
+    `;
+    const imports =
+      'import { lock, transaction } from "@/api/lib/db/aggregate-lock";';
+    expect(
+      check(
+        `${imports} transaction(() => lock({ aggregate: "ordinary" }));`,
+        {},
+        [[engine, source]],
+      ),
+    ).toEqual([]);
+    expect(
+      check(`${imports} lock({ aggregate: "feature" });`, {}, [
+        [engine, source],
+      ]),
+    ).toHaveLength(1);
+    expect(
+      check('import { read } from "./helper"; read();', {}, [
+        [engine, source],
+        [
+          "apps/api/src/routes/helper.ts",
+          `${imports} export const read = () => lock({ aggregate: "feature" });`,
+        ],
+      ]),
+    ).toHaveLength(1);
+    expect(
+      check(`${imports} transaction(() => true);`, {}, [
+        [
+          engine,
+          `${source} export const read = () => sql\`select * from fixture_rows\`;`,
+        ],
+      ]),
+    ).toHaveLength(1);
+  });
+  test("a resource helper taking the table as a parameter selects its caller's literal", () => {
+    const engine = "apps/api/src/lib/db/aggregate-lock.ts";
+    const source = `
+      const byIdWithin = (table, id, scopeColumn, scopeValue) => ({
+        table,
+        columns: ["id"],
+        values: [id],
+        scopeColumns: [scopeColumn],
+        scopeValues: [scopeValue],
+      });
+      const rowResource = (options) => {
+        switch (options.aggregate) {
+          case "ordinary":
+            return byIdWithin("ordinary_rows", options.id, "org", options.org);
+          case "feature":
+            return byIdWithin("fixture_rows", options.id, "org", options.org);
+        }
+      };
+      export const lock = (options) => rowResource(options);
+      export const transaction = (work) => work();
+    `;
+    const imports =
+      'import { lock, transaction } from "@/api/lib/db/aggregate-lock";';
+    // Every caller reaches the engine; only the feature selection owns a table.
+    expect(
+      check(
+        `${imports} transaction(() => lock({ aggregate: "ordinary" }));`,
+        {},
+        [[engine, source]],
+      ),
+    ).toEqual([]);
+    expect(
+      check(`${imports} lock({ aggregate: "feature" });`, {}, [
+        [engine, source],
       ]),
     ).toHaveLength(1);
   });
@@ -553,6 +866,55 @@ export const ${name} = { run: { featureId: "fixture", ${target} } };`;
           ),
       ),
     ).toBe(true);
+
+    const isolatedConsumers = [
+      "apps/api/src/lib/files/pdf-signing/sessions.ts",
+      "apps/api/src/lib/lists/sanctions/monitoring-backfill.ts",
+      "apps/api/src/lib/lists/sanctions/monitoring-fanout.ts",
+    ];
+    const flowRegistry = {
+      flows: {
+        enrolment: "self-serve",
+        ownership: {
+          handlerDirectories: [],
+          tableSchemaFiles: [],
+          conditionalTableSchemas: {
+            "apps/api/src/db/schema/flows.ts": ["flowRuns", "flowRunSteps"],
+          },
+          coreModules: ["apps/api/src/lib/db/flow-run-transition-spec.ts"],
+        },
+      },
+    } as const;
+    const isolatedEndpoints = isolatedConsumers.map((file) => ({
+      file,
+      config: {},
+    }));
+    expect(
+      validateFeatureAccessDeclarations({
+        registry: flowRegistry,
+        endpoints: isolatedEndpoints,
+        sources,
+      }).filter((violation) => isolatedConsumers.includes(violation.file)),
+    ).toEqual([]);
+    for (const file of isolatedConsumers) {
+      const source = sources.get(file);
+      const owner = file.includes("/pdf-signing/")
+        ? "@/api/lib/files/pdf-signing/transition-spec"
+        : "@/api/lib/lists/sanctions/monitoring-transition-specs";
+      expect(source).toContain(owner);
+      const contaminated = new Map(sources);
+      contaminated.set(
+        file,
+        `${source ?? ""}\nimport { TRANSITIONS } from "@/api/lib/db/transition-specs"; export const candidate = TRANSITIONS.flowRuns;`,
+      );
+      expect(
+        validateFeatureAccessDeclarations({
+          registry: flowRegistry,
+          endpoints: isolatedEndpoints,
+          sources: contaminated,
+        }).some((violation) => violation.file === file),
+      ).toBe(true);
+    }
   });
 
   test("every endpoint reaching a shared module receives its feature uses", () => {
@@ -647,6 +1009,187 @@ export const ${name} = { run: { featureId: "fixture", ${target} } };`;
     };
     const perEndpoint = (registryReads(9) - registryReads(1)) / 8;
     expect(perEndpoint).toBeLessThan(moduleCount);
+  });
+});
+
+describe("operational dispatch ownership", () => {
+  const facade = "apps/api/src/dispatch/receipt.ts";
+  const owner = "apps/api/src/feature/receipt-owner.ts";
+  const endpoint = "apps/api/src/routes/upload.ts";
+  const source =
+    'import { record } from "../feature/receipt-owner"; export const upload = async (): Promise<void> => { await record(); };';
+  const ownerSource =
+    'import { featureRows } from "../db/schema/feature"; export const record = async (): Promise<void> => { await db.insert(featureRows); }; export const read = () => featureRows;';
+  const boundary = {
+    type: "operational",
+    module: facade,
+    effects: ["record-recovery"],
+    owners: [{ effect: "record-recovery", module: owner, exports: ["record"] }],
+    reason: "Persist replay receipts before feature admission.",
+  } as const;
+  const validate = (
+    facadeSource = source,
+    ownerBody = ownerSource,
+    extra: readonly (readonly [string, string])[] = [],
+  ) =>
+    validateFeatureAccessDeclarations({
+      registry: {
+        fixture: {
+          ...registry.fixture,
+          ownership: {
+            ...registry.fixture.ownership,
+            dispatchModules: [boundary],
+          },
+        },
+      },
+      endpoints: [{ file: endpoint, config: {} }],
+      sources: new Map([
+        ...baseSources,
+        [facade, facadeSource],
+        [owner, ownerBody],
+        [
+          endpoint,
+          'import { upload } from "../dispatch/receipt"; export const run = () => upload();',
+        ],
+        ...extra,
+      ]),
+    });
+  const invalid = {
+    file: facade,
+    message: "feature fixture has an invalid operational dispatch boundary",
+  };
+
+  test("a named void receipt owner does not require upload admission", () => {
+    expect(validate()).toEqual([]);
+    expect(
+      validate(
+        source
+          .replace("record }", "record as persist }")
+          .replace("await record()", "await persist()"),
+      ),
+    ).toEqual([]);
+  });
+  test.each([
+    'import { record, read } from "../feature/receipt-owner"; export const upload = async (): Promise<void> => { await record(); read(); };',
+    'import * as receipts from "../feature/receipt-owner"; export const upload = async (): Promise<void> => { await receipts.record(); };',
+    'import receipt from "../feature/receipt-owner"; export const upload = async (): Promise<void> => { await receipt(); };',
+    'export { record } from "../feature/receipt-owner";',
+    'export * from "../feature/receipt-owner";',
+    'export const upload = async (): Promise<void> => { const receipt = await import("../feature/receipt-owner"); await receipt.record(); };',
+    'import { record } from "../feature/receipt-owner"; export const upload = async (): Promise<void> => { return record(); };',
+    'import { record } from "../feature/receipt-owner"; export const upload = async () => { await record(); };',
+    'import { record } from "../feature/receipt-owner"; export const upload = async (): Promise<void> => { const call = record; await call(); };',
+    'import { record } from "../feature/receipt-owner"; import { featureRows } from "../db/schema/feature"; export const upload = async (): Promise<void> => { await record(); db.select(featureRows); };',
+  ])("rejects an indirect or non-void operational export: %s", (candidate) => {
+    expect(validate(candidate)).toContainEqual(invalid);
+  });
+  test("an unlisted wrapper cannot hide direct feature access", () => {
+    const candidate = `${source} import { wrapper } from "./wrapper"; wrapper();`;
+    expect(
+      validate(candidate, ownerSource, [
+        [
+          "apps/api/src/dispatch/wrapper.ts",
+          'import { run } from "../feature/core"; export const wrapper = () => run();',
+        ],
+      ]),
+    ).toContainEqual(invalid);
+  });
+  test.each([
+    'import { featureRows } from "../db/schema/feature"; export const record = async (): Promise<void> => { return featureRows; };',
+    'import { featureRows } from "../db/schema/feature"; export const record = async () => { await db.insert(featureRows); };',
+    'import { featureRows } from "../db/schema/feature"; export const different = async (): Promise<void> => { await db.insert(featureRows); };',
+  ])("rejects missing or escaping owner exports: %s", (candidate) => {
+    expect(validate(source, candidate)).toContainEqual(invalid);
+  });
+  test("a generic handler still needs its own direct table declaration", () => {
+    expect(
+      validate(source, ownerSource, [
+        [
+          endpoint,
+          'import { featureRows } from "../db/schema/feature"; export const run = () => db.select(featureRows);',
+        ],
+      ]),
+    ).toContainEqual({
+      file: endpoint,
+      message: "source ownership requires featureAccess fixture",
+    });
+  });
+  test.each([
+    { ...boundary, reason: " " },
+    { ...boundary, effects: [] },
+    { ...boundary, effects: ["record-recovery", "record-recovery"] },
+    { ...boundary, owners: [] },
+    { ...boundary, owners: [...boundary.owners, ...boundary.owners] },
+    {
+      ...boundary,
+      owners: [{ effect: "cleanup", module: owner, exports: ["record"] }],
+    },
+    {
+      ...boundary,
+      owners: [{ effect: "record-recovery", module: owner, exports: [] }],
+    },
+  ] as const)("rejects incomplete effect ownership %j", (candidate) => {
+    expect(
+      validateFeatureAccessDeclarations({
+        registry: {
+          fixture: {
+            ...registry.fixture,
+            ownership: {
+              ...registry.fixture.ownership,
+              dispatchModules: [candidate],
+            },
+          },
+        },
+        endpoints: [],
+        sources: new Map([
+          ...baseSources,
+          [facade, source],
+          [owner, ownerSource],
+        ]),
+      }),
+    ).toContainEqual(invalid);
+  });
+});
+
+describe("module paths and SQL table ownership", () => {
+  const endpoint = "apps/api/src/routes/ordinary.ts";
+  const path = "apps/api/src/lib/fixture_rows/helper.ts";
+  const validate = (source: string) =>
+    validateFeatureAccessDeclarations({
+      registry,
+      endpoints: [{ file: endpoint, config: {} }],
+      sources: new Map([
+        ...baseSources,
+        [path, "export const ordinary = () => 1;"],
+        [endpoint, source],
+      ]),
+    });
+  test.each([
+    'import { ordinary } from "../lib/fixture_rows/helper"; export const run = () => ordinary();',
+    'export { ordinary } from "../lib/fixture_rows/helper";',
+    'export const run = async () => await import("../lib/fixture_rows/helper");',
+  ])("module addresses alone do not declare feature access: %s", (source) => {
+    expect(validate(source)).toEqual([]);
+  });
+  test("real raw SQL table reads still declare feature access", () => {
+    expect(
+      validate(
+        'import { ordinary } from "../lib/fixture_rows/helper"; export const run = (tx) => tx.execute("select * from fixture_rows");',
+      ),
+    ).toContainEqual({
+      file: endpoint,
+      message: "source ownership requires featureAccess fixture",
+    });
+  });
+  test("dynamic module expressions still expose their own feature reads", () => {
+    expect(
+      validate(
+        'export const run = (tx) => import(tx.execute("select * from fixture_rows"));',
+      ),
+    ).toContainEqual({
+      file: endpoint,
+      message: "source ownership requires featureAccess fixture",
+    });
   });
 });
 

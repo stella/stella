@@ -16,6 +16,7 @@ import { assertProperty } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { timestamptz } from "@/api/db/columns";
+import { FLOW_RUN_SCOPED_TRANSITIONS } from "@/api/lib/db/flow-run-transition-spec";
 import { FOLIO_COLLAB_TRANSITION_IDENTITIES } from "@/api/lib/db/folio-collab-transition-identities";
 import { READER_ANSWER_TRANSITION_IDENTITIES } from "@/api/lib/db/reader-answer-transition-identities";
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
@@ -30,6 +31,8 @@ import {
   permitsTransition,
   transition,
   defineScopedTransitions,
+  defineNullableScopedTransitions,
+  transitionNullableScopedCount,
   transitionScopedBatch,
   transitionScopedCount,
   transitionUpsertBatch,
@@ -87,6 +90,26 @@ test("state-column ownership covers every scoped runtime transition", () => {
   expect(registered.toSorted(order)).toEqual(
     [
       ...Object.values(SANCTIONS_MONITORING_TRANSITION_IDENTITIES),
+      ...Object.values(FLOW_RUN_SCOPED_TRANSITIONS).map(
+        ({ key, scope, stateColumn }) => ({
+          tableName: "flowRuns",
+          key,
+          scope,
+          stateColumn,
+        }),
+      ),
+      {
+        tableName: "flowUploadTriggerIntents",
+        key: "entityId",
+        scope: ["definitionId"],
+        stateColumn: "status",
+      },
+      {
+        tableName: "pendingScoutEmissions",
+        key: "sourceId",
+        scope: ["organizationId", "sourceKind"],
+        stateColumn: "status",
+      },
       desktopBatchReceipt,
       ...Object.values(READER_ANSWER_TRANSITION_IDENTITIES),
       ...Object.values(FOLIO_COLLAB_TRANSITION_IDENTITIES),
@@ -961,6 +984,90 @@ const lifecycle = defineLifecycle({
     status: { edges: graph, terminal: ["completed", "failed"] },
     lease: { edges: { idle: ["held"], held: ["idle"] }, terminal: [] },
   },
+});
+
+describe("nullable scoped lifecycles", () => {
+  const table = pgTable("nullable_transition_test", {
+    id: text().primaryKey(),
+    state: text({ enum: ["pending", "abandoned"] }),
+  });
+  const nullableSpec = defineNullableScopedTransitions({
+    table,
+    key: "id",
+    scope: [],
+    stateColumn: "state",
+    edges: { pending: ["abandoned"], abandoned: [] },
+    initial: [],
+    nullTransitions: { fromNull: ["pending"], toNull: ["pending"] },
+  });
+
+  test("each target binds only its declared nullable and non-null predecessors", async () => {
+    for (const to of [null, "pending", "abandoned"] as const) {
+      const queries: ReturnType<PgDialect["sqlToQuery"]>[] = [];
+      let audited = 0;
+      const count = await transitionNullableScopedCount({
+        tx: {
+          execute: createTestRawExecute(
+            async (query: Parameters<PgDialect["sqlToQuery"]>[0]) => {
+              queries.push(dialect.sqlToQuery(query));
+              return [{ count: 1 }];
+            },
+          ),
+          rollback,
+        },
+        spec: nullableSpec,
+        where: sql`${table.id} = ${"row"}`,
+        to,
+        recordTransitionAuditEvent: async (_tx, changed) => {
+          audited += changed;
+        },
+      });
+      const query = queries.at(0);
+      expect(count).toBe(1);
+      expect(audited).toBe(1);
+      expect(
+        query?.sql.includes('"nullable_transition_test"."state" IS NULL'),
+      ).toBe(to !== "abandoned");
+      expect(query?.params).toEqual(
+        to === "abandoned"
+          ? ["abandoned", "row", "pending", "abandoned"]
+          : [to, "row", "pending"],
+      );
+    }
+  });
+
+  test("a stale nullable transition records no audit", async () => {
+    let audited = false;
+    expect(
+      await transitionNullableScopedCount({
+        tx: {
+          execute: createTestRawExecute(async () => [{ count: 0 }]),
+          rollback,
+        },
+        spec: nullableSpec,
+        where: sql`false`,
+        to: null,
+        recordTransitionAuditEvent: async () => {
+          audited = true;
+        },
+      }),
+    ).toBe(0);
+    expect(audited).toBe(false);
+  });
+
+  test("non-null columns reject nullable lifecycle declarations", () => {
+    expect(() =>
+      defineNullableScopedTransitions({
+        table: leasedJobs,
+        key: "id",
+        scope: [],
+        stateColumn: "lease",
+        edges: { idle: ["held"], held: ["idle"] },
+        initial: [],
+        nullTransitions: { fromNull: ["idle"], toNull: ["held"] },
+      }),
+    ).toThrow("A nullable transition requires a nullable state column");
+  });
 });
 
 describe("multi-column lifecycles", () => {

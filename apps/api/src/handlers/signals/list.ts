@@ -8,6 +8,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { canTriageSignals, listSignalsHandler } from "@/api/lib/signals/read";
 
 const config = {
+  featureAccess: { featureId: "signals", type: "required" },
   contract: "patch",
   description:
     "List inbox signals visible to the caller: open by default, or snoozed " +

@@ -163,7 +163,6 @@ if (!databaseUrl || !runPostgresTests) {
           createDocumentProcessingReconciliationPhases({
             database: asTestRaw<typeof rootDb>(db),
             broadcastWorkspaceResourceUpdated: () => undefined,
-            enqueueDocumentDeadlineScout: async () => undefined,
             enqueueDocumentProcessingRun: async () => undefined,
             indexEntity: async () => undefined,
             now: () => now.getTime(),
@@ -253,7 +252,6 @@ if (!databaseUrl || !runPostgresTests) {
             createDocumentProcessingReconciliationPhases({
               database,
               broadcastWorkspaceResourceUpdated: () => undefined,
-              enqueueDocumentDeadlineScout: async () => undefined,
               enqueueDocumentProcessingRun: async () => undefined,
               indexEntity: async () => undefined,
               now: () => now.getTime(),

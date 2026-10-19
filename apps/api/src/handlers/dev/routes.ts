@@ -14,14 +14,16 @@ import {
   workspaceContacts,
   workspaces,
 } from "@/api/db/schema";
-import { authMacro } from "@/api/lib/auth";
+import { authMacro, type ValidateAuthValue } from "@/api/lib/auth";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { readDevOtp } from "@/api/lib/dev-otp-store";
 import {
   mintDevSeedSession,
   resolveMemberDevOrganization,
 } from "@/api/lib/dev-seed-session-store";
+import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 import { rebuildSupplementalSearchIndex } from "@/api/lib/search/index-global";
-import { getSearchMaintenance } from "@/api/lib/search/provider";
+import { getSearchMaintenance } from "@/api/lib/search/pg-fts-maintenance";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
 import {
@@ -295,11 +297,26 @@ export const devRoute = new Elysia({ prefix: "/dev" })
 
     return { ok: true };
   })
-  .post("/rebuild-search", async (ctx) => {
-    await getSearchMaintenance().rebuildIndex(ctx.session.activeOrganizationId);
-    await rebuildSupplementalSearchIndex(ctx.session.activeOrganizationId);
-    return { ok: true };
-  })
+  .post(
+    "/rebuild-search",
+    declareAggregateMutation(
+      async ({ scopedDb, session }: ValidateAuthValue) => {
+        await scopedDb(
+          async (tx) =>
+            await getSearchMaintenance(tx, upsertSearchDocument).rebuildIndex(
+              session.activeOrganizationId,
+            ),
+        );
+        await rebuildSupplementalSearchIndex(session.activeOrganizationId);
+        return { ok: true };
+      },
+      {
+        type: "independent",
+        reason:
+          "Rebuilds derived search indexes from authorized current records without changing source aggregates.",
+      },
+    ),
+  )
   .post("/clear-cache", () => {
     rmSync(VITE_CACHE_DIR, { recursive: true, force: true });
     return { ok: true };

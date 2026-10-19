@@ -53,7 +53,9 @@ import { getInspectorView } from "@/components/inspector/view-registry";
 import { RenderStormRegion } from "@/components/render-storm-canary";
 import { MatterMetadataPanel } from "@/components/workspaces/matter-metadata-sheet";
 import { TaskDetailPanel } from "@/components/workspaces/tasks/task-detail-panel";
+import { INBOX_SIGNAL_VIEW } from "@/features/inbox/signal-inspector.logic";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useNavigationFeatureEnabled } from "@/hooks/use-navigation-feature";
 import { usePermissions } from "@/hooks/use-permissions";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -63,6 +65,7 @@ import { getCachedAnonymization } from "@/lib/pdf/anonymization-cache";
 import { workspaceOptions } from "@/lib/workspaces/queries";
 import { entityOptions } from "@/lib/workspaces/queries/entities";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
+import { useFeatureEnrolment } from "@/queries/feature-enrolments";
 
 type InspectorPanelProps = {
   /**
@@ -103,12 +106,45 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
   const t = useTranslations();
   const canUpdateEntity = usePermissions({ entity: ["update"] });
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
-  const { tabs, activeId } = useInspectorTabsStore(
+  const signalsEnabled = useNavigationFeatureEnabled("signals");
+  const { tabs: storedTabs, activeId } = useInspectorTabsStore(
     useShallow((s) => ({
       tabs: s.tabs,
       activeId: s.activeId,
     })),
   );
+  const hasSignalTab = storedTabs.some(
+    (tab) => tab.type === "view" && tab.viewType === INBOX_SIGNAL_VIEW,
+  );
+  const { feature: signalsFeature, view: signalsEnrolmentView } =
+    useFeatureEnrolment("signals", {
+      enabled: signalsEnabled && hasSignalTab,
+    });
+  const signalsAvailable = signalsEnabled && signalsFeature?.enrolled === true;
+  const tabs = useMemo(
+    () =>
+      storedTabs.filter(
+        (tab) =>
+          signalsAvailable ||
+          tab.type !== "view" ||
+          tab.viewType !== INBOX_SIGNAL_VIEW,
+      ),
+    [storedTabs, signalsAvailable],
+  );
+  useExternalSyncEffect(() => {
+    if (
+      signalsFeature?.enrolled === true ||
+      signalsEnrolmentView.type === "pending"
+    ) {
+      return;
+    }
+    const store = useInspectorTabsStore.getState();
+    for (const tab of store.tabs) {
+      if (tab.type === "view" && tab.viewType === INBOX_SIGNAL_VIEW) {
+        store.closeTab(tab.id);
+      }
+    }
+  }, [signalsFeature?.enrolled, signalsEnrolmentView.type, storedTabs]);
   const setActive = useInspectorTabsStore((s) => s.setActive);
   const closeTab = useInspectorTabsStore((s) => s.closeTab);
   const closeAll = useInspectorTabsStore((s) => s.closeAll);

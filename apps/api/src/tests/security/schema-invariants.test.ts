@@ -1,12 +1,21 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { is } from "drizzle-orm";
+import { is, sql as ormSql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { PgDialect, PgTable, getTableConfig } from "drizzle-orm/pg-core";
 import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
+import ts from "typescript";
+
+import { repoRelativePath } from "@stll/portable-path";
 
 import * as agentAuthSchema from "@/api/db/agent-auth-schema";
 import * as authSchema from "@/api/db/auth-schema";
+import {
+  GLOBAL_SCOPE_TABLES,
+  ORG_SCOPE_TABLES,
+} from "@/api/db/org-scope-registry";
+import * as rlsSchema from "@/api/db/rls";
 import * as schema from "@/api/db/schema";
 import { SCOPED_NATIVE_EXTRACTION_ENQUEUE } from "@/api/db/schema";
 import {
@@ -18,6 +27,8 @@ import {
 } from "@/api/handlers/case-law/polarity/consts";
 import { DOCTRINAL_TREATMENTS } from "@/api/lib/case-law/doctrine";
 import { DOCUMENT_NATIVE_EXTRACTION_PROCESSOR_VERSION } from "@/api/lib/document-processing-contract";
+
+import drizzleConfig from "../../../drizzle.config";
 
 const {
   CASE_LAW_CORPUS_MIRROR_STATUS,
@@ -214,6 +225,166 @@ type DeclaredName = {
 // drizzle stamps on table instances), so this narrows `unknown` to `PgTable`
 // without an unsafe type assertion.
 const isPgTable = (value: unknown): value is PgTable => is(value, PgTable);
+
+test("organization scope classification contains only schema metadata calls", () => {
+  const registryFile = path.resolve(
+    import.meta.dir,
+    "../../db/org-scope-registry.ts",
+  );
+  const source = ts.createSourceFile(
+    registryFile,
+    readFileSync(registryFile, "utf-8"),
+    ts.ScriptTarget.Latest,
+    true,
+  );
+  const constructors = new Set<string>();
+  for (const statement of source.statements) {
+    if (
+      ts.isImportDeclaration(statement) &&
+      ts.isStringLiteral(statement.moduleSpecifier)
+    ) {
+      expect(
+        /^(?:drizzle-orm(?:\/pg-core)?|@\/api\/db\/(?:schema|auth-schema|agent-auth-schema))$/u.test(
+          statement.moduleSpecifier.text,
+        ),
+      ).toBe(true);
+    }
+    if (!ts.isVariableStatement(statement)) {
+      continue;
+    }
+    for (const declaration of statement.declarationList.declarations) {
+      const initializer = declaration.initializer;
+      if (
+        !ts.isIdentifier(declaration.name) ||
+        initializer === undefined ||
+        !ts.isArrowFunction(initializer)
+      ) {
+        continue;
+      }
+      expect(ts.isTaggedTemplateExpression(initializer.body)).toBe(true);
+      if (!ts.isTaggedTemplateExpression(initializer.body)) {
+        panic("Scope metadata constructors require SQL descriptions");
+      }
+      expect(initializer.body.tag.getText(source)).toBe("sql");
+      constructors.add(declaration.name.text);
+    }
+  }
+  const inspect = (node: ts.Node): void => {
+    if (ts.isCallExpression(node)) {
+      expect(
+        ts.isIdentifier(node.expression) &&
+          constructors.has(node.expression.text),
+      ).toBe(true);
+    }
+    ts.forEachChild(node, inspect);
+  };
+  inspect(source);
+});
+
+test("every migration RLS table has one explicit scope classification and resolver metadata", () => {
+  const migrationSchema =
+    drizzleConfig.schema ?? panic("Migration schema configuration is empty");
+  const entries =
+    typeof migrationSchema === "string" ? [migrationSchema] : migrationSchema;
+  const apiRoot = path.resolve(import.meta.dir, "../../..");
+  const files = new Set<string>();
+  for (const entry of entries) {
+    const matches = [
+      ...new Bun.Glob(entry).scanSync({ cwd: apiRoot, onlyFiles: true }),
+    ];
+    expect(matches.length).toBeGreaterThan(0);
+    for (const file of matches) {
+      files.add(path.join(apiRoot, file));
+    }
+  }
+  const schemaModules = {
+    "src/db/schema.ts": schema,
+    "src/db/auth-schema.ts": authSchema,
+    "src/db/agent-auth-schema.ts": agentAuthSchema,
+    "src/db/rls.ts": rlsSchema,
+  };
+  expect(
+    [...files].map((file) => repoRelativePath(apiRoot, file)).toSorted(),
+  ).toEqual(Object.keys(schemaModules).toSorted());
+  const tables = new Set<string>();
+  for (const module of Object.values(schemaModules)) {
+    for (const value of Object.values(module)) {
+      if (!isPgTable(value)) {
+        continue;
+      }
+      const config = getTableConfig(value);
+      if (config.enableRLS || config.policies.length > 0) {
+        tables.add(config.name);
+      }
+    }
+  }
+  expect(tables.size).toBeGreaterThan(0);
+  const orgEntries = Object.values(ORG_SCOPE_TABLES);
+  const globalEntries = Object.values(GLOBAL_SCOPE_TABLES);
+  const orgNames = orgEntries.map(({ table }) => getTableConfig(table).name);
+  const globalNames = globalEntries.map(
+    ({ table }) => getTableConfig(table).name,
+  );
+  const classified = [...orgNames, ...globalNames];
+  expect(new Set(classified).size).toBe(classified.length);
+  expect(classified.toSorted()).toEqual([...tables].toSorted());
+  const dialect = new PgDialect();
+  for (const descriptor of orgEntries) {
+    const config = getTableConfig(descriptor.table);
+    const rowIdSql = dialect.sqlToQuery(descriptor.rowId).sql;
+    const primaryColumns = [
+      ...config.columns.filter((column) => column.primary),
+      ...config.primaryKeys.flatMap((key) => key.columns),
+    ];
+    let keyColumns = primaryColumns;
+    switch (descriptor.identityKind) {
+      case "primary-key":
+        expect(primaryColumns.length).toBeGreaterThan(0);
+        break;
+      case "unique-index": {
+        expect(primaryColumns).toHaveLength(0);
+        const index =
+          config.indexes.find(
+            ({ config: indexConfig }) =>
+              indexConfig.name === descriptor.identityIndexName,
+          ) ?? panic("Declared identity index is missing");
+        expect(index.config.unique).toBe(true);
+        expect(index.config.where).toBeUndefined();
+        keyColumns = index.config.columns.map((column) => {
+          if (!("name" in column) || typeof column.name !== "string") {
+            return panic("Identity indexes require ordinary columns");
+          }
+          return (
+            config.columns.find(
+              (candidate) => candidate.name === column.name,
+            ) ?? panic("Identity index column is missing")
+          );
+        });
+        expect(keyColumns.length).toBeGreaterThan(0);
+        for (const column of keyColumns) {
+          expect(column.notNull).toBe(true);
+        }
+        break;
+      }
+      default:
+        descriptor satisfies never;
+        panic("Unknown organization identity kind");
+    }
+    for (const column of keyColumns) {
+      expect(rowIdSql).toContain(dialect.sqlToQuery(ormSql`${column}`).sql);
+    }
+    for (const resolver of [
+      descriptor.organizationId,
+      descriptor.workspaceId,
+      descriptor.rowId,
+    ]) {
+      expect(dialect.sqlToQuery(resolver).sql.trim().length).toBeGreaterThan(0);
+    }
+  }
+  for (const descriptor of globalEntries) {
+    expect(descriptor.reason.trim().length).toBeGreaterThan(0);
+  }
+});
 
 // Spread into one annotated record rather than walking each namespace: the
 // annotation collapses the exports to `unknown` immediately, so neither the

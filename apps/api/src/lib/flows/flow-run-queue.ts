@@ -1,4 +1,7 @@
+import type { Queue, JobsOptions } from "bullmq";
+
 import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
+import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 
 // ── Queue name + payload ────────────────────────────────
 
@@ -14,6 +17,8 @@ export const FLOW_RUN_QUEUE_NAME = "flow-run";
 export type FlowStepJobData = {
   runId: string;
   stepIndex: number;
+  /** Retained across queue retries; stale claims never settle a replacement. */
+  claimedStartedAt?: TimestampCasToken;
 };
 
 // ── Retry / self-heal levers ────────────────────────────
@@ -28,14 +33,18 @@ const FLOW_STEP_JOB_BACKOFF_MS = 5000;
 
 // ── Lazy singletons ─────────────────────────────────────
 
+export const FLOW_STEP_JOB_OPTIONS = {
+  // Paused admission completes the queue attempt; the durable run must be re-enqueueable on regrant.
+  removeOnComplete: true,
+  // SQL owns recovery; a failed queue row must not block its deterministic replacement.
+  removeOnFail: true,
+  attempts: FLOW_STEP_JOB_ATTEMPTS,
+  backoff: { type: "exponential", delay: FLOW_STEP_JOB_BACKOFF_MS },
+} as const satisfies JobsOptions;
+
 const getQueue = createLazyBullMqQueue<FlowStepJobData>({
   name: FLOW_RUN_QUEUE_NAME,
-  defaultJobOptions: {
-    removeOnComplete: 100,
-    removeOnFail: 500,
-    attempts: FLOW_STEP_JOB_ATTEMPTS,
-    backoff: { type: "exponential", delay: FLOW_STEP_JOB_BACKOFF_MS },
-  },
+  defaultJobOptions: FLOW_STEP_JOB_OPTIONS,
 });
 
 // Deterministic per-(run, step) job id. Prevents the same step being enqueued
@@ -43,6 +52,17 @@ const getQueue = createLazyBullMqQueue<FlowStepJobData>({
 // the boot reconciler re-add a step idempotently.
 const flowStepJobId = (runId: string, stepIndex: number): string =>
   `flow-run-${runId}-${stepIndex}`;
+
+/** Save the original SQL claim in queue data before external work can fail. */
+export const persistFlowStepClaim = async (
+  job: {
+    data: FlowStepJobData;
+    updateData: (data: FlowStepJobData) => Promise<void>;
+  },
+  claimedStartedAt: TimestampCasToken,
+): Promise<void> => {
+  await job.updateData({ ...job.data, claimedStartedAt });
+};
 
 /**
  * Enqueue one step of a run. Called by `startFlowRun` (step 0), by the
@@ -53,12 +73,16 @@ const flowStepJobId = (runId: string, stepIndex: number): string =>
  */
 export type EnqueueFlowStepOptions = FlowStepJobData & { delayMs?: number };
 
-export const enqueueFlowStep = async ({
-  runId,
-  stepIndex,
-  delayMs,
-}: EnqueueFlowStepOptions): Promise<void> => {
-  await getQueue().add(
+type EnqueueFlowStepDependencies = {
+  queue: Pick<Queue<FlowStepJobData>, "add">;
+};
+
+export const enqueueFlowStep = async (
+  { runId, stepIndex, delayMs }: EnqueueFlowStepOptions,
+  dependencies?: EnqueueFlowStepDependencies,
+): Promise<void> => {
+  const queue = dependencies?.queue ?? getQueue();
+  await queue.add(
     "flow-step",
     { runId, stepIndex },
     {

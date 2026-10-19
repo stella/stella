@@ -118,7 +118,6 @@
       "readGlobalSearch.matterWorkspaceFacetFilter": 1,
       "readGlobalSearch.matterWorkspaceFilter": 1,
       "rebuildSupplementalSearchIndex#rootDb": 1,
-      "syncWorkspaceSearchActivity#rootDb": 1,
       "writeWorkspaceProjections": 2
     }
   },

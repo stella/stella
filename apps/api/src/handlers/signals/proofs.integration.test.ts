@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import {
   SCOUT_KEY,
@@ -14,7 +14,7 @@ import type { PermissionInput } from "@stll/permissions";
 import type { Transaction } from "@/api/db/root";
 import { resultTx } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
-import { SIGNAL_EVENT_TYPE, signals } from "@/api/db/schema";
+import { featureEnrolments, SIGNAL_EVENT_TYPE, signals } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import { emitSignalRequest } from "@/api/handlers/signals/requests/write";
 import { transitionSignal } from "@/api/handlers/signals/transition";
@@ -37,17 +37,41 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 let testDb: TestDatabase;
 let ids: TestIds;
 const seeded: SafeId<"signal">[] = [];
+let ownsGrant = false;
 const safeDbA1 = () =>
   asTestRaw<SafeDb>(createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1));
 beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
   ids = fixture.ids;
+  ownsGrant =
+    (
+      await testDb
+        .insert(featureEnrolments)
+        .values({
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+          featureId: "signals",
+        })
+        .onConflictDoNothing()
+        .returning({ userId: featureEnrolments.userId })
+    ).length !== 0;
 });
 afterAll(async () => {
   try {
     if (seeded.length) {
       await testDb.delete(signals).where(inArray(signals.id, seeded));
+    }
+    if (ownsGrant) {
+      await testDb
+        .delete(featureEnrolments)
+        .where(
+          and(
+            eq(featureEnrolments.organizationId, ids.orgA),
+            eq(featureEnrolments.userId, ids.userA1),
+            eq(featureEnrolments.featureId, "signals"),
+          ),
+        );
     }
   } finally {
     await releaseRlsFixture();

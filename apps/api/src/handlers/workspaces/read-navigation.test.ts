@@ -67,13 +67,14 @@ const timeBillingSnapshot = ({
   userId,
   enrolled,
   deploymentEnabled = true,
+  featureId = "time-billing",
 }: {
   organizationId: string;
   userId: string;
   enrolled: boolean;
   deploymentEnabled?: boolean;
+  featureId?: "time-billing" | "signals" | "flows";
 }) => {
-  const featureId = "time-billing";
   const decision = decideFeatureAccess({
     registry: FEATURE_REGISTRY,
     grants: {},
@@ -153,7 +154,7 @@ describe("workspace navigation pagination", () => {
       expect.objectContaining({ defaultViewId: expect.anything() }),
     );
     expect(result).toEqual({
-      features: { timeBilling: false },
+      features: { timeBilling: false, signals: false, flows: false },
       items: [
         expect.objectContaining({
           defaultViewId: "019c0c90-0000-7000-8000-000000000103",
@@ -218,12 +219,42 @@ describe("workspace navigation pagination", () => {
       const result = await readWorkspaceNavigation.handler(context);
 
       expect(result).toEqual(
-        expect.objectContaining({ features: { timeBilling } }),
+        expect.objectContaining({
+          features: { timeBilling, signals: false, flows: false },
+        }),
       );
       expect(select).toHaveBeenCalledTimes(1);
       expect(limit).toHaveBeenCalledTimes(1);
     },
   );
+
+  for (const featureId of ["signals", "flows"] as const) {
+    for (const enrolled of [false, true]) {
+      for (const deploymentEnabled of [false, true]) {
+        test(`${featureId} navigation admission: enrolled=${enrolled}, deployment=${deploymentEnabled}`, async () => {
+          const { context, select } = createContext({
+            query: {},
+            featureAccessSnapshot: timeBillingSnapshot({
+              featureId,
+              organizationId: "organization_test123",
+              userId: "user_test123",
+              enrolled,
+              deploymentEnabled,
+            }),
+          });
+          const result = await readWorkspaceNavigation.handler(context);
+          expect(result).toEqual(
+            expect.objectContaining({
+              features: expect.objectContaining({
+                [featureId]: enrolled && deploymentEnabled,
+              }),
+            }),
+          );
+          expect(select).toHaveBeenCalledTimes(1);
+        });
+      }
+    }
+  }
 
   test("rejects malformed cursors before querying", async () => {
     const { context, limit } = createContext({

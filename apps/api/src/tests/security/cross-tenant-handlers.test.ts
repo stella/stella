@@ -2800,6 +2800,7 @@ testState.beforeAll(async () => {
     accumulatedSeconds: 300,
   });
   await testDb.insert(notifications).values({
+    featureOwner: "shared",
     id: notificationB,
     userId: ids.userB1,
     organizationId: ids.orgB,

@@ -45,6 +45,11 @@ export type TransitionSpec = {
 };
 
 type ScopedStateTable = PgTable;
+
+/** The declared state column of a transition table; a missing column is a programming error. */
+const declaredStateColumn = (table: PgTable, column: string) =>
+  getColumns(table)[column] ??
+  panic("Declared transition state column is missing");
 type ColumnKey<TTable extends PgTable> = keyof TTable["_"]["columns"] & string;
 type StateValue<
   TTable extends ScopedStateTable,
@@ -535,6 +540,138 @@ export const transitionScopedCount = async <
           options.from.map((from) => sql`${sql.param(from, state)}`),
           sql`, `,
         )})
+      RETURNING 1
+    )
+    SELECT count(*)::double precision AS count FROM changed
+  `);
+  const count = returnedTransitionRows(rows).at(0)?.["count"];
+  if (typeof count !== "number" || !Number.isSafeInteger(count) || count < 0) {
+    panic("Transition count returned an invalid aggregate");
+  }
+  if (count > 0) {
+    await recordTransitionAuditEvent(tx, count);
+  }
+  return count;
+};
+
+type DefineNullableScopedTransitionsOptions<
+  TTable extends ScopedStateTable,
+  TKey extends ColumnKey<TTable>,
+  TScope extends readonly ColumnKey<TTable>[],
+  TState extends ColumnKey<TTable>,
+  TEdges extends Readonly<
+    Record<StateValue<TTable, TState>, readonly StateValue<TTable, TState>[]>
+  >,
+> = {
+  table: TTable;
+  key: TKey;
+  scope: TScope;
+  stateColumn: TState;
+  edges: TEdges;
+  initial: readonly StateValue<TTable, TState>[];
+  nullTransitions: {
+    fromNull: readonly StateValue<TTable, TState>[];
+    toNull: readonly StateValue<TTable, TState>[];
+  };
+};
+
+/** Nullable lifecycle columns declare clearing and initialization explicitly. */
+export const defineNullableScopedTransitions = <
+  TTable extends ScopedStateTable,
+  const TKey extends ColumnKey<TTable>,
+  const TScope extends readonly ColumnKey<TTable>[],
+  const TState extends ColumnKey<TTable>,
+  const TEdges extends Readonly<
+    Record<StateValue<TTable, TState>, readonly StateValue<TTable, TState>[]>
+  >,
+>(
+  options: DefineNullableScopedTransitionsOptions<
+    TTable,
+    TKey,
+    TScope,
+    TState,
+    TEdges
+  >,
+) => {
+  const spec = defineScopedTransitions(options);
+  const state = declaredStateColumn(options.table, options.stateColumn);
+  if (state.notNull) {
+    panic("A nullable transition requires a nullable state column");
+  }
+  for (const value of [
+    ...options.nullTransitions.fromNull,
+    ...options.nullTransitions.toNull,
+  ]) {
+    if (!isScopedStateValue(options.table, options.stateColumn, value)) {
+      panic("Unknown nullable transition state");
+    }
+  }
+  return Object.freeze({
+    ...spec,
+    nullTransitions: Object.freeze({
+      fromNull: Object.freeze([...options.nullTransitions.fromNull]),
+      toNull: Object.freeze([...options.nullTransitions.toNull]),
+    }),
+  });
+};
+
+/** A conditional nullable move preserves the caller's scope and records changed rows. */
+export const transitionNullableScopedCount = async <
+  TTx extends TransitionTransaction,
+  TTable extends ScopedStateTable,
+  TState extends ColumnKey<TTable>,
+>({
+  tx,
+  spec,
+  where,
+  to,
+  recordTransitionAuditEvent,
+}: {
+  tx: TTx;
+  spec: ScopedTransitionSpec<
+    TTable,
+    ColumnKey<TTable>,
+    readonly ColumnKey<TTable>[],
+    TState,
+    Readonly<
+      Record<StateValue<TTable, TState>, readonly StateValue<TTable, TState>[]>
+    >
+  > & {
+    nullTransitions: {
+      fromNull: readonly StateValue<TTable, TState>[];
+      toNull: readonly StateValue<TTable, TState>[];
+    };
+  };
+  where: SQL;
+  to: StateValue<NoInfer<TTable>, NoInfer<TState>> | null;
+  recordTransitionAuditEvent: (tx: TTx, count: number) => void | Promise<void>;
+}) => {
+  const state = declaredStateColumn(spec.table, spec.stateColumn);
+  if (to !== null && !isScopedStateValue(spec.table, spec.stateColumn, to)) {
+    panic("Unknown nullable transition target");
+  }
+  const edges: ScopedTransitionDeclaration["edges"] = spec.edges;
+  const sources =
+    to === null
+      ? spec.nullTransitions.toNull
+      : Object.keys(edges).filter(
+          (from) => from === to || edges[from]?.includes(to) === true,
+        );
+  const permitsNull = to === null || spec.nullTransitions.fromNull.includes(to);
+  const predicates = sources.map(
+    (from) => sql`${state} = ${sql.param(from, state)}`,
+  );
+  if (permitsNull) {
+    predicates.push(sql`${state} IS NULL`);
+  }
+  if (predicates.length === 0) {
+    panic("Illegal nullable transition");
+  }
+  const rows = await tx.execute(sql`
+    WITH changed AS (
+      UPDATE ${spec.table}
+      SET ${sql.identifier(state.name)} = ${sql.param(to, state)}
+      WHERE ${where} AND (${sql.join(predicates, sql` OR `)})
       RETURNING 1
     )
     SELECT count(*)::double precision AS count FROM changed

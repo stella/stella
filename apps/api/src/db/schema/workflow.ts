@@ -5,6 +5,7 @@ import {
 import type { WorkObligationStatus } from "@stll/api-contract/workflow-status";
 
 import { entityFeaturePolicies } from "@/api/db/entity-feature-policies";
+import { systemScopePolicies } from "@/api/db/system-scope-policies";
 
 import {
   entityFeatureGateChecks,
@@ -207,6 +208,7 @@ export const workObligations = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    ...systemScopePolicies(table),
     ...entityFeatureGateChecks(table),
     p
       .unique("work_obligations_entity_ws_unq")
@@ -300,6 +302,7 @@ export const workObligationEvents = p.pgTable(
     occurredAt: timestamptz("occurred_at").notNull().defaultNow(),
   },
   (table) => [
+    ...systemScopePolicies(table),
     ...entityFeatureGateChecks(table),
     p
       .foreignKey({

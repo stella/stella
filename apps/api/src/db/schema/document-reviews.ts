@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 
+import { systemScopePolicies } from "@/api/db/system-scope-policies";
 import { REVIEW_SKIPPED_MAX } from "@/api/lib/document-review/contract";
 import type {
   ReviewParty,
@@ -141,6 +142,7 @@ export const documentReviewRuns = p.pgTable(
     finishedAt: timestamptz("finished_at"),
   },
   (table) => [
+    ...systemScopePolicies(table),
     // History read: newest runs for one document, keyset-paginated.
     p
       .index("document_review_runs_document_created_idx")
@@ -311,6 +313,7 @@ export const documentReviewFindings = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    ...systemScopePolicies(table, "read"),
     p
       .uniqueIndex("document_review_findings_run_position_uidx")
       .on(table.runId, table.positionId),

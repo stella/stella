@@ -19,7 +19,12 @@ import getFeatureEnrolments from "@/api/handlers/organization-settings/feature-e
 import unenrolFeature from "@/api/handlers/organization-settings/feature-enrolments/unenrol";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
-import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import {
+  FEATURE_REGISTRY,
+  SELF_SERVE_FEATURE_IDS,
+  LEGAL_LISTS_FEATURE_ID,
+} from "@/api/lib/feature-access/registry";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
@@ -36,6 +41,10 @@ const testState = createTestState({ file: import.meta.path, config: env });
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
+const offeredFeatures = () =>
+  SELF_SERVE_FEATURE_IDS.filter((featureId) =>
+    isDeploymentFeatureEnabled(FEATURE_REGISTRY[featureId].deploymentFeature),
+  );
 
 describe.skipIf(!runPostgresTests)(
   "feature enrolment ownership (postgres)",
@@ -229,7 +238,10 @@ describe.skipIf(!runPostgresTests)(
                   }),
                 ),
               ).toEqual({
-                features: [{ featureId: "time-billing", enrolled: owns }],
+                features: offeredFeatures().map((featureId) => ({
+                  featureId,
+                  enrolled: featureId === "time-billing" && owns,
+                })),
               });
               await client.begin(async (tx) => {
                 await tx`SELECT set_config('role', 'stella', true), set_config(${SETTING_ORGANIZATION_ID}, ${orgId}, true), set_config(${SETTING_USER_ID}, ${userId}, true)`;
@@ -329,7 +341,10 @@ describe.skipIf(!runPostgresTests)(
               >(callerContext),
             ),
           ).toEqual({
-            features: [{ featureId: "time-billing", enrolled: false }],
+            features: offeredFeatures().map((featureId) => ({
+              featureId,
+              enrolled: false,
+            })),
           });
           testState.setConfig("FEATURE_TIME_BILLING", false);
           expect(
@@ -338,7 +353,12 @@ describe.skipIf(!runPostgresTests)(
                 Parameters<typeof getFeatureEnrolments.handler>[0]
               >(callerContext),
             ),
-          ).toEqual({ features: [] });
+          ).toEqual({
+            features: offeredFeatures().map((featureId) => ({
+              featureId,
+              enrolled: false,
+            })),
+          });
           expect(
             await enrolFeature.handler(
               createTestHandlerContext<

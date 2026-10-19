@@ -167,6 +167,24 @@ export type ResolvedCommandTree = {
   drift?: RegistryDelta;
 };
 
+/** Conditional commands derive their input contract from this invocation. */
+const projectConditionalCatalog = (
+  entries: readonly CapabilityCatalogEntry[],
+  callerAccess: CallerFeatureAccess | undefined,
+) => {
+  const admittedCapabilities = new Set(callerAccess?.capabilities);
+  return entries.flatMap((entry) => {
+    if (
+      entry.featureAccess !== "conditional" ||
+      admittedCapabilities.has(entry.id)
+    ) {
+      return [entry];
+    }
+    const inputSchema = callerAccess?.conditionalInputs?.[entry.id];
+    return inputSchema === undefined ? [] : [{ ...entry, inputSchema }];
+  });
+};
+
 /**
  * Resolve this invocation without network. A current same-origin response can
  * rebuild and prune the tree by caller scope; disk supplies deployment metadata
@@ -213,9 +231,16 @@ export const resolveCommandTree = async ({
     !isCacheStale(cached, now)
       ? cached
       : undefined);
-  const project = (tree: RouteNode) =>
+  const fallbackAccess =
+    currentAccess === undefined
+      ? undefined
+      : {
+          capabilities: currentAccess.capabilities,
+          tools: currentAccess.tools,
+        };
+  const project = (tree: RouteNode, callerAccess = fallbackAccess) =>
     projectDeploymentCommands({
-      tree: projectFeatureCommands({ tree, featureAccess: currentAccess }),
+      tree: projectFeatureCommands({ tree, featureAccess: callerAccess }),
       featureOmittedTools: deployment?.featureOmittedTools,
       featureOmittedCapabilities: deployment?.featureOmittedCapabilities,
     });
@@ -246,7 +271,12 @@ export const resolveCommandTree = async ({
     removed: file.delta.removed.filter((name) => !hiddenTools.has(name)),
     changed: file.delta.changed.filter((name) => !hiddenTools.has(name)),
   };
-  if (isDeltaEmpty(file.delta) && !prunedByScope && !featureListings) {
+  if (
+    isDeltaEmpty(file.delta) &&
+    !prunedByScope &&
+    !featureListings &&
+    currentAccess?.conditionalInputs === undefined
+  ) {
     return { tree: project(bakedTree) };
   }
   // Rebuild through the SAME shared builder codegen uses (curated tools from
@@ -257,6 +287,7 @@ export const resolveCommandTree = async ({
   if (entries === null) {
     return { tree: project(bakedTree) };
   }
+  const callerEntries = projectConditionalCatalog(entries, currentAccess);
   const listings = retainAttestedScopeListings({
     fetched: file.listings,
     baked: await loadBakedListings(),
@@ -267,16 +298,16 @@ export const resolveCommandTree = async ({
       buildCliRouteTree({
         listings,
         annotations,
-        entries,
+        entries: callerEntries,
       }).tree,
   );
   if (Result.isError(built)) {
     return { tree: project(bakedTree) };
   }
   return isDeltaEmpty(delta)
-    ? { tree: project(built.value) }
+    ? { tree: project(built.value, currentAccess) }
     : {
-        tree: project(built.value),
+        tree: project(built.value, currentAccess),
         drift: delta,
       };
 };

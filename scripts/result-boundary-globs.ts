@@ -108,6 +108,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/lib/machine-api-keys/**/*.ts",
   "apps/api/src/lib/markdown/**/*.ts",
   "apps/api/src/lib/mcp-connectors/**/*.ts",
+  "apps/api/src/lib/member-offboarding/**/*.ts",
   "apps/api/src/lib/memory/**/*.ts",
   "apps/api/src/lib/observability/**/*.ts",
   "apps/api/src/lib/proofs/**/*.ts",

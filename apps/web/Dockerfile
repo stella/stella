@@ -86,10 +86,8 @@ ARG VITE_POSTHOG_LOCAL_DEBUG
 ARG VITE_BETA_FEATURES_ENABLED=true
 ARG VITE_FEATURE_AI_MEMORY=false
 ARG VITE_FEATURE_GOVERNED_WORKFLOW=false
-ARG VITE_FEATURE_INBOX=false
 ARG VITE_SELFHOST=true
 ARG VITE_TERMS_URL
-ARG VITE_WORKFLOWS_ENABLED
 # Source-map publication is an explicit build argument, not a side effect of
 # the `posthog_cli_api_key` secret: secrets are outside the layer cache key,
 # so only a plain argument keeps a cached no-publish layer from standing in
@@ -128,10 +126,8 @@ RUN VITE_API_URL="${PUBLIC_API_URL}" \
     VITE_BETA_FEATURES_ENABLED="${VITE_BETA_FEATURES_ENABLED}" \
     VITE_FEATURE_AI_MEMORY="${VITE_FEATURE_AI_MEMORY}" \
     VITE_FEATURE_GOVERNED_WORKFLOW="${VITE_FEATURE_GOVERNED_WORKFLOW}" \
-    VITE_FEATURE_INBOX="${VITE_FEATURE_INBOX}" \
     VITE_SELFHOST="${VITE_SELFHOST}" \
     VITE_TERMS_URL="${VITE_TERMS_URL}" \
-    VITE_WORKFLOWS_ENABLED="${VITE_WORKFLOWS_ENABLED}" \
     bun --filter @stll/web build
 # Publish the hidden client source maps to the error tracker when the build
 # opts in (the chunks are injected with ids the tracker matches at capture

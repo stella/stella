@@ -103,10 +103,12 @@ describe("SSE Redis payload parsing", () => {
     ).toBeNull();
     expect(
       parseRedisPayload(
-        redisPayload("workspace", {
-          type: REALTIME_EVENT_TYPE.RESOURCE_DELETED,
-          resource: { type: RESOURCE_TYPE.ENTITY, id: "" },
-        }),
+        redisPayload(
+          "workspace",
+          JSON.parse(
+            '{"type":"resource.deleted","resource":{"type":"entity","id":""}}',
+          ),
+        ),
       ),
     ).toBeNull();
     expect(

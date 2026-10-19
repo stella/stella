@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -9,6 +10,8 @@ import {
   findStaleRootOperations,
   ROOT_CONNECTION_SHAPE,
   ROOT_OPERATION_RESULTS,
+  findUnscopedOrgWrites,
+  orgScopeTableExportNames,
 } from "./root-connection-shapes";
 import type { RootConnectionShape } from "./root-connection-shapes";
 
@@ -16,6 +19,140 @@ const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const ROOT_IMPORT = 'import { rootDb } from "@/api/db/root";';
 const FIXTURE_FILE = "apps/api/src/lib/fixture.ts";
 const AUTH_FILE = ROOT_OPERATION_RESULTS.resolveMemberAuthorization.file;
+
+const orgWritesOf = (...lines: string[]) =>
+  findUnscopedOrgWrites({
+    file: FIXTURE_FILE,
+    content: lines.join("\n"),
+    orgTables: new Set(["flowRuns", "signals"]),
+  }).map(({ line, table, operation }) => ({ line, table, operation }));
+
+describe("owner writes use an organization-scoped transaction", () => {
+  test("statement identities ignore layout while preserving the write predicate", () => {
+    const fingerprint = (statement: string) =>
+      findUnscopedOrgWrites({
+        file: FIXTURE_FILE,
+        content: `import { flowRuns } from "@/api/db/schema";\n${statement}`,
+        orgTables: new Set(["flowRuns"]),
+      }).at(0)?.fingerprint ?? panic("Statement fixture write is missing");
+    const original = fingerprint(
+      'tx.update(flowRuns).where(eq(flowRuns.id, "a"));',
+    );
+    expect(
+      fingerprint(
+        "tx\n .update(flowRuns)\n .where(eq(flowRuns.id, 'a')); // comment",
+      ),
+    ).toBe(original);
+    expect(
+      fingerprint('tx.update(flowRuns).where(eq(flowRuns.id, "b"));'),
+    ).not.toBe(original);
+  });
+  test.each(["insert", "update", "delete"])(
+    "classifies a direct %s by its schema export",
+    (operation) => {
+      const hits = orgWritesOf(
+        'import { flowRuns as runs } from "@/api/db/schema";',
+        `ownerTx.${operation}(runs);`,
+      );
+      expect(hits).toEqual([{ line: 2, table: "flowRuns", operation }]);
+    },
+  );
+
+  test("the named callback admits only its own transaction and immutable aliases", () => {
+    expect(
+      orgWritesOf(
+        'import { flowRuns } from "@/api/db/schema";',
+        'import { withOrgScope as scopeOwner } from "@/api/db/org-scope";',
+        'scopeOwner({ tx: ownerTx, scope, actor: { type: "system" }, fn: async (scopedTx) => {',
+        "  const writer = scopedTx;",
+        '  await writer.update(flowRuns).set({ status: "running" });',
+        "  await ownerTx.delete(flowRuns);",
+        "} });",
+      ),
+    ).toEqual([{ line: 6, table: "flowRuns", operation: "delete" }]);
+  });
+
+  test("namespace imports and computed method names retain table identity", () => {
+    expect(
+      orgWritesOf(
+        'import * as schema from "@/api/db/schema/flows";',
+        'import * as orgScope from "@/api/db/org-scope";',
+        'const runs = schema["flowRuns"];',
+        'orgScope.withOrgScope({ tx: ownerTx, scope, actor: { type: "system" }, fn: (scopedTx) => scopedTx["insert"](runs) });',
+        'ownerTx["update"](runs);',
+      ),
+    ).toEqual([{ line: 5, table: "flowRuns", operation: "update" }]);
+  });
+
+  test("shadowed wrappers and mutable transaction aliases remain direct writes", () => {
+    const hits = orgWritesOf(
+      'import { flowRuns } from "@/api/db/schema";',
+      'import { withOrgScope } from "@/api/db/org-scope";',
+      "const local = (withOrgScope) => withOrgScope({ fn: (scopedTx) => scopedTx.update(flowRuns) });",
+      'withOrgScope({ tx: ownerTx, scope, actor: { type: "system" }, fn: (scopedTx) => {',
+      "  let writer = scopedTx;",
+      "  writer.delete(flowRuns);",
+      "} });",
+    );
+    expect(hits).toEqual([
+      { line: 3, table: "flowRuns", operation: "update" },
+      { line: 6, table: "flowRuns", operation: "delete" },
+    ]);
+  });
+
+  test("global classifications do not enter organization write counts", () => {
+    expect(
+      orgWritesOf(
+        'import { caseLawDecisions, flowRuns } from "@/api/db/schema";',
+        "ownerTx.update(caseLawDecisions);",
+        "const local = (flowRuns) => ownerTx.delete(flowRuns);",
+      ),
+    ).toEqual([]);
+  });
+
+  test("explicit SQL mutations use the same scoped receiver while read locks remain reads", () => {
+    expect(
+      orgWritesOf(
+        'import { withOrgScope } from "@/api/db/org-scope";',
+        "ownerTx.execute(sql`SELECT id FROM jobs FOR UPDATE`);",
+        String.raw`ownerTx.execute(sql${"`"}UPDATE jobs SET status = ${"$"}{status}${"`"});`,
+        String.raw`withOrgScope({ tx: ownerTx, scope, actor: { type: "system" }, fn: (scopedTx) => scopedTx.execute(sql${"`"}DELETE FROM jobs WHERE id = ${"$"}{id}${"`"}) });`,
+      ),
+    ).toEqual([{ line: 3, table: "<raw-sql>", operation: "execute" }]);
+  });
+
+  test("table classifications retain explicit registry export keys", () => {
+    expect(
+      orgScopeTableExportNames(
+        "export const ORG_SCOPE_TABLES = { flowRuns: runScope, signals: signalScope } as const satisfies Registry;",
+        FIXTURE_FILE,
+      ),
+    ).toEqual(["flowRuns", "signals"]);
+    expect(() =>
+      orgScopeTableExportNames(
+        "export const ORG_SCOPE_TABLES = makeRegistry();",
+        FIXTURE_FILE,
+      ),
+    ).toThrow("ORG scope table registry requires explicit export keys");
+    expect(() => orgScopeTableExportNames("", FIXTURE_FILE)).toThrow(
+      "ORG scope table registry is missing",
+    );
+  });
+
+  test("dynamic schema imports preserve renamed and namespace table bindings", () => {
+    expect(
+      orgWritesOf(
+        'const { flowRuns: runs } = await import("@/api/db/schema");',
+        'const schema = await import("@/api/db/schema");',
+        "ownerTx.update(runs);",
+        "ownerTx.delete(schema.signals);",
+      ),
+    ).toEqual([
+      { line: 3, table: "flowRuns", operation: "update" },
+      { line: 4, table: "signals", operation: "delete" },
+    ]);
+  });
+});
 
 const shapesIn = (
   file: string,

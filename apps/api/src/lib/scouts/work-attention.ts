@@ -1,17 +1,26 @@
-import { panic } from "better-result";
-import { and, asc, eq, gt, inArray, lte, max, or } from "drizzle-orm";
+import { panic, Result } from "better-result";
+import { and, asc, eq, gt, inArray, isNull, lte, max, or } from "drizzle-orm";
 
 import { SCOUT_KEY } from "@stll/api-contract/signals";
 import type { OpenWorkObligationStatus } from "@stll/api-contract/signals";
 import { WORK_OBLIGATION_STATUS } from "@stll/api-contract/workflow-status";
 import type { WorkObligationStatus } from "@stll/api-contract/workflow-status";
+import { mapWithConcurrency } from "@stll/concurrency";
 import { DAY_IN_MS, parseTimeZoneId } from "@stll/time";
 import type { TimeZoneId } from "@stll/time";
 
-import { member as organizationMembers } from "@/api/db/auth-schema";
+import { member as organizationMembers, user } from "@/api/db/auth-schema";
+import {
+  assertCallerOrg,
+  combineOrgScopes,
+  proveOrgScope,
+  withOrgScope,
+} from "@/api/db/org-scope";
 import type { rootDb, Transaction } from "@/api/db/root";
+import { abortTransaction } from "@/api/db/safe-db";
 import {
   entities,
+  featureEnrolments,
   organizationSettings,
   WORK_OBLIGATION_EVENT_TYPE,
   workObligationEvents,
@@ -21,17 +30,21 @@ import {
 import type { PracticeJurisdiction } from "@/api/db/schema";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import {
+  isBackgroundFeatureEnabled,
+  loadBackgroundFeatureActors,
+} from "@/api/lib/feature-access/background";
+import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
 import { LIMITS } from "@/api/lib/limits";
+import { logger } from "@/api/lib/observability/logger";
 import {
   effectiveOrganizationTimeZone,
   organizationTimeZoneColumns,
   readOrganizationTimeZone,
 } from "@/api/lib/organization-time-zone";
 import type { createRootScopedDb } from "@/api/lib/root-scoped-db";
-import {
-  brandPersistedOrganizationId,
-  brandPersistedUserId,
-} from "@/api/lib/safe-id-boundaries";
+import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import {
   WORK_ATTENTION_DEADLINE_DAYS,
   workAttentionSignals,
@@ -174,6 +187,32 @@ const loadObligationPage = async (
     .from(workObligations)
     .innerJoin(entities, obligationEntityJoin)
     .innerJoin(workspaces, eq(workspaces.id, workObligations.workspaceId))
+    .innerJoin(
+      organizationMembers,
+      and(
+        eq(organizationMembers.userId, workObligations.ownerUserId),
+        eq(organizationMembers.organizationId, workspaces.organizationId),
+      ),
+    )
+    .innerJoin(
+      user,
+      and(
+        eq(user.id, organizationMembers.userId),
+        eq(user.emailVerified, true),
+        isNull(user.deletedAt),
+      ),
+    )
+    .innerJoin(
+      featureEnrolments,
+      and(
+        eq(featureEnrolments.userId, organizationMembers.userId),
+        eq(
+          featureEnrolments.organizationId,
+          organizationMembers.organizationId,
+        ),
+        eq(featureEnrolments.featureId, "signals"),
+      ),
+    )
     .leftJoin(
       organizationSettings,
       eq(organizationSettings.organizationId, workspaces.organizationId),
@@ -241,41 +280,6 @@ const loadAssignedAt = async (
   );
 };
 
-/**
- * One organization member per organization, as the RLS session identity the
- * emitting transaction runs under. The scout has no human actor: signal
- * visibility is decided by the organization and the workspace the row carries,
- * never by this identity, and the emitted rows are left unassigned and without
- * a creator so no member is shown as having raised them.
- */
-const loadScoutActors = async (
-  db: typeof rootDb,
-  organizationIds: readonly SafeId<"organization">[],
-): Promise<Map<SafeId<"organization">, SafeId<"user">>> => {
-  if (organizationIds.length === 0) {
-    return new Map();
-  }
-  const actors = await db
-    .selectDistinctOn([organizationMembers.organizationId], {
-      organizationId: organizationMembers.organizationId,
-      userId: organizationMembers.userId,
-    })
-    .from(organizationMembers)
-    .where(inArray(organizationMembers.organizationId, [...organizationIds]))
-    .orderBy(
-      asc(organizationMembers.organizationId),
-      asc(organizationMembers.createdAt),
-      asc(organizationMembers.id),
-    )
-    .limit(organizationIds.length);
-  return new Map(
-    actors.map((actor) => [
-      brandPersistedOrganizationId(actor.organizationId),
-      brandPersistedUserId(actor.userId),
-    ]),
-  );
-};
-
 const toObligation = (
   row: ObligationFacts,
   assignedAt: Map<SafeId<"entity">, Date>,
@@ -295,6 +299,7 @@ const toObligation = (
 
 type OrganizationBatch = {
   organizationId: SafeId<"organization">;
+  recipientUserId: SafeId<"user">;
   /** The organization's zone: every obligation in it is judged on its day. */
   zone: TimeZoneId;
   workspaceIds: SafeId<"workspace">[];
@@ -304,18 +309,22 @@ type OrganizationBatch = {
 };
 
 /**
- * One batch per organization the page touched, including the organizations
- * whose scanned obligations warrant nothing: the census records that they were
+ * One batch per recipient the page touched, including recipients
+ * whose scanned obligations warrant nothing: their scoped census records that they were
  * scanned, which is what keeps "ran, found nothing" apart from "never ran".
  */
-const groupByOrganization = (
+const groupByRecipient = (
   rows: readonly ObligationRow[],
   assignedAt: Map<SafeId<"entity">, Date>,
   now: Date,
 ): OrganizationBatch[] => {
-  const batches = new Map<SafeId<"organization">, OrganizationBatch>();
+  const batches = new Map<string, OrganizationBatch>();
   for (const row of rows) {
-    const batch = batches.get(row.organizationId);
+    const recipientUserId = brandPersistedUserId(
+      row.ownerUserId ?? panic("Open work has no owner"),
+    );
+    const batchKey = `${row.organizationId}:${recipientUserId}`;
+    const batch = batches.get(batchKey);
     const zone =
       batch?.zone ??
       effectiveOrganizationTimeZone({
@@ -328,8 +337,9 @@ const groupByOrganization = (
       zone,
     );
     if (!batch) {
-      batches.set(row.organizationId, {
+      batches.set(batchKey, {
         organizationId: row.organizationId,
+        recipientUserId,
         zone,
         workspaceIds: [row.workspaceId],
         obligationEntityIds: [row.entityId],
@@ -367,6 +377,33 @@ const stillWarrantedSignals = async (
     .select(obligationFactsColumns)
     .from(workObligations)
     .innerJoin(entities, obligationEntityJoin)
+    .innerJoin(workspaces, eq(workspaces.id, workObligations.workspaceId))
+    .innerJoin(
+      organizationMembers,
+      and(
+        eq(organizationMembers.userId, workObligations.ownerUserId),
+        eq(organizationMembers.organizationId, workspaces.organizationId),
+      ),
+    )
+    .innerJoin(
+      user,
+      and(
+        eq(user.id, organizationMembers.userId),
+        eq(user.emailVerified, true),
+        isNull(user.deletedAt),
+      ),
+    )
+    .innerJoin(
+      featureEnrolments,
+      and(
+        eq(featureEnrolments.userId, organizationMembers.userId),
+        eq(
+          featureEnrolments.organizationId,
+          organizationMembers.organizationId,
+        ),
+        eq(featureEnrolments.featureId, "signals"),
+      ),
+    )
     .where(
       and(
         inArray(workObligations.entityId, batch.obligationEntityIds),
@@ -395,6 +432,19 @@ export const runWorkAttentionScout = async ({
   dependencies,
 }: RunWorkAttentionScoutArgs): Promise<RunWorkAttentionScoutResult> => {
   const { db, createScopedDb } = dependencies;
+  if (!isDeploymentFeatureEnabled("FEATURE_SIGNALS")) {
+    logger.info("scout.work_attention.skipped", {
+      reason: "deployment_disabled",
+    });
+    return {
+      scanned: 0,
+      emitted: 0,
+      inserted: 0,
+      organizations: 0,
+      organizationsWithoutMember: 0,
+      nextCursor: cursor,
+    };
+  }
   const rows = await loadObligationPage(db, cursor, now);
   const lastRow = rows.at(-1);
   if (!lastRow) {
@@ -409,34 +459,99 @@ export const runWorkAttentionScout = async ({
   }
 
   const assignedAt = await loadAssignedAt(db, rows);
-  const batches = groupByOrganization(rows, assignedAt, now);
-  const actors = await loadScoutActors(
-    db,
-    batches.map((batch) => batch.organizationId),
-  );
+  const batches = groupByRecipient(rows, assignedAt, now);
+  const admitted = await loadBackgroundFeatureActors({
+    tx: db,
+    featureId: "signals",
+    principals: batches.map((batch) => ({
+      organizationId: batch.organizationId,
+      userId: batch.recipientUserId,
+    })),
+  });
 
   let emitted = 0;
   let inserted = 0;
-  let organizations = 0;
+  const organizations = new Set<SafeId<"organization">>();
   let organizationsWithoutMember = 0;
   for (const batch of batches) {
-    const userId = actors.get(batch.organizationId);
-    if (!userId) {
+    const userId = batch.recipientUserId;
+    if (!admitted.get(batch.organizationId)?.has(userId)) {
+      logger.info("scout.work_attention.skipped", {
+        organizationId: batch.organizationId,
+        reason: "recipient_not_granted",
+      });
       organizationsWithoutMember += 1;
       continue;
     }
-    const scopedDb = createScopedDb({
+    const actorDb = createScopedDb({
       organizationId: batch.organizationId,
       userId,
       workspaceIds: batch.workspaceIds,
     });
-    // db-await-in-loop: per-organization scoped connection; one run row and emit transaction per tenant
+    const scopedDb = async <T>(
+      fn: (tx: Transaction) => Promise<T>,
+    ): Promise<T> =>
+      await actorDb(async (tx) => {
+        await lockFeatureRecoveryAdmission({
+          tx,
+          organizationId: batch.organizationId,
+          featureId: "signals",
+        });
+        const proofs = await mapWithConcurrency({
+          items: batch.workspaceIds,
+          limit: 1,
+          operation: async (workspaceId: SafeId<"workspace">) => {
+            const proof = await proveOrgScope(tx, {
+              table: "workspaces",
+              where: eq(workspaces.id, workspaceId),
+            });
+            if (Result.isError(proof)) {
+              abortTransaction(proof.error);
+            }
+            const agreement = assertCallerOrg(
+              proof.value,
+              batch.organizationId,
+            );
+            if (Result.isError(agreement)) {
+              abortTransaction(agreement.error);
+            }
+            return proof.value;
+          },
+        });
+        let scope =
+          proofs.at(0) ?? panic("Attention batch requires a source matter");
+        for (const proof of proofs.slice(1)) {
+          const combined = combineOrgScopes(scope, proof);
+          if (Result.isError(combined)) {
+            abortTransaction(combined.error);
+          }
+          scope = combined.value;
+        }
+        return await withOrgScope({
+          tx,
+          scope,
+          actor: { type: "actor", userId },
+          fn,
+        });
+      });
+    // db-await-in-loop: per-recipient RLS connection; atomic census and emission for one enrolled owner
     const result = await runScout({
       db: scopedDb,
       organizationId: batch.organizationId,
+      userId,
       scoutKey: SCOUT_KEY.WORK_ATTENTION,
       observe: () => batch.signals,
       screen: async (tx, proposed) => {
+        if (
+          !(await isBackgroundFeatureEnabled({
+            tx,
+            organizationId: batch.organizationId,
+            userId,
+            featureId: "signals",
+          }))
+        ) {
+          return [];
+        }
         const proposedKeys = new Set(
           proposed.map(({ dedupeKey }) => dedupeKey),
         );
@@ -446,14 +561,14 @@ export const runWorkAttentionScout = async ({
     });
     emitted += result.emittedCount;
     inserted += result.insertedIds.length;
-    organizations += 1;
+    organizations.add(batch.organizationId);
   }
 
   return {
     scanned: rows.length,
     emitted,
     inserted,
-    organizations,
+    organizations: organizations.size,
     organizationsWithoutMember,
     nextCursor: lastRow.entityId,
   };

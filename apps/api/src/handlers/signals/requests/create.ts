@@ -29,6 +29,7 @@ import {
 import { lockOrgUserIdsForAssignment } from "@/api/lib/validated-org-user-id";
 
 const config = {
+  featureAccess: { featureId: "signals", type: "required" },
   contract: "patch",
   description:
     "Post a manual request into the inbox: a piece of work for the legal " +

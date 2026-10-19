@@ -22,6 +22,11 @@ const MATTER_ACCESS_RULE_FUNCTION_MIGRATION_PATH = nodePath.join(
   "20261015090000_matter_access_rule_function",
   "migration.sql",
 );
+const SYSTEM_MATTER_ACCESS_FUNCTIONS_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261016133000_system_matter_access_functions",
+  "migration.sql",
+);
 const CHAT_THREAD_TURN_WORKSPACE_CASCADE_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
   "20260803120000_chat_thread_turn_workspace_cascade",
@@ -280,6 +285,7 @@ export const installPgliteWorkspaceAccessObjects = async (
   const migrationPaths = [
     WORKSPACE_AUTHORIZATION_MIGRATION_PATH,
     MATTER_ACCESS_RULE_FUNCTION_MIGRATION_PATH,
+    SYSTEM_MATTER_ACCESS_FUNCTIONS_MIGRATION_PATH,
     CHAT_THREAD_TURN_WORKSPACE_CASCADE_MIGRATION_PATH,
   ];
   for (const migrationPath of migrationPaths) {

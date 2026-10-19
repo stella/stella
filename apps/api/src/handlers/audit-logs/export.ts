@@ -52,6 +52,7 @@ const exportAuditLogs = createSafeRootHandler(
 
     const conditions = toAuditLogConditions({
       organizationId: session.activeOrganizationId,
+      userId: actor.id,
       filter: query,
     });
 

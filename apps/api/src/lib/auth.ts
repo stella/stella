@@ -209,13 +209,14 @@ import {
   buildFeatureAccessSnapshot,
   featureAccessReadPlan,
 } from "@/api/lib/feature-access/snapshot";
+import { authorizeFlowWorkspaceEvent } from "@/api/lib/flows/workspace-event-authorizer";
 import {
   AUTH_RATE_LIMITS,
   EMAIL_OTP_MIN_RESPONSE_DURATION_MS,
   LIMITS,
 } from "@/api/lib/limits";
 import { extractLangFromRequest } from "@/api/lib/locale";
-import { removeOrganizationMemberInTransaction } from "@/api/lib/member-assignment-offboarding";
+import { removeOrganizationMemberInTransaction } from "@/api/lib/member-offboarding/member-assignment-offboarding";
 import { isMemberRole } from "@/api/lib/member-roles";
 import {
   mapMembershipInvariantError,
@@ -2805,7 +2806,7 @@ export const resolveWorkspaceRealtimeAudience = async (
 };
 
 /**
- * The event stream's connection authorizers, both on the owner connection for
+ * The event stream's authorizers use the owner connection for
  * the reasons given on each resolver.
  */
 export const realtimeAuthorizers = {
@@ -2814,6 +2815,7 @@ export const realtimeAuthorizers = {
   ) => await resolveUserRealtimeAuthorization(lookup, rootDb),
   workspace: async (lookup: WorkspaceRealtimeAudienceLookup) =>
     await resolveWorkspaceRealtimeAudience(lookup, rootDb),
+  workspaceEvent: authorizeFlowWorkspaceEvent,
 };
 
 /**

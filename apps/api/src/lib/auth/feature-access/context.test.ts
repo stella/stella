@@ -96,12 +96,18 @@ test("feature snapshots batch current identity across every registered feature",
 });
 
 test("missing requesters and an empty registry do not query identity or grant access", async () => {
-  let queries = 0;
-  const database = createScopedDbMock({
-    select: () => {
-      queries += 1;
+  let identityReads = 0;
+  const database = createScopedDbMock(
+    {},
+    {
+      featureAccess: {
+        get identity() {
+          identityReads += 1;
+          return null;
+        },
+      },
     },
-  });
+  );
   const missing = await database.scopedDb(
     async (tx) =>
       await resolveFeatureAccessSnapshot({
@@ -126,7 +132,7 @@ test("missing requesters and an empty registry do not query identity or grant ac
       }),
   );
   expect(empty.decisions.size).toBe(0);
-  expect(queries).toBe(0);
+  expect(identityReads).toBe(0);
 });
 
 test("departed membership and unknown runtime feature ids resolve hidden", async () => {

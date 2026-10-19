@@ -1,0 +1,7 @@
+# Authorizing flow workspace event recipients
+
+Generated from `scripts/ownership/flow-workspace-event-authorization.ts`. See [Module ownership](../module-ownership.md).
+
+| Capability                                                                         | Owner                                                  | Enforcement                                                               | Summary                                                                                                                                                                                                                        |
+| ---------------------------------------------------------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `flow-workspace-event-authorization` — Authorizing flow workspace event recipients | `apps/api/src/lib/flows/workspace-event-authorizer.ts` | import `@/api/lib/flows/workspace-event-authorizer` (plus 1 allowed file) | Binds event delivery to the owner connection before any request-scoped transaction exists. The delivery operation checks current matter access and feature admission; callers receive neither a connection nor recipient data. |

@@ -10,7 +10,7 @@ import type { Transaction } from "@/api/db/root";
 import { desktopPresence } from "@/api/db/schema";
 import readEndpoint from "@/api/handlers/desktop-presence/read";
 import { reportDesktopPresence } from "@/api/handlers/desktop-presence/service";
-import { removeOrganizationMemberInTransaction } from "@/api/lib/member-assignment-offboarding";
+import { removeOrganizationMemberInTransaction } from "@/api/lib/member-offboarding/member-assignment-offboarding";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import {
   NO_AUDIT,

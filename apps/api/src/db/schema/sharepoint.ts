@@ -1,3 +1,5 @@
+import { systemScopePolicies } from "@/api/db/system-scope-policies";
+
 import {
   bytea,
   organization,
@@ -62,6 +64,7 @@ export const sharepointConnections = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    ...systemScopePolicies(table),
     p
       .uniqueIndex("sharepoint_connections_org_user_uidx")
       .on(table.organizationId, table.userId),
@@ -91,6 +94,7 @@ export const sharepointOAuthState = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    ...systemScopePolicies(table),
     p.index("sharepoint_oauth_state_created_idx").on(table.createdAt),
     p
       .index("sharepoint_oauth_state_org_user_idx")

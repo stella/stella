@@ -19,6 +19,10 @@ import {
   authUserPolicies,
   denyStellaAccessPolicies,
 } from "@/api/db/rls";
+import {
+  systemScopePolicies,
+  systemUserReadPolicies,
+} from "@/api/db/system-scope-policies";
 
 export const user = pgTable(
   "user",
@@ -58,6 +62,7 @@ export const user = pgTable(
     // orders by (created_at, id); without this the read is a table scan.
     index("user_createdAt_idx").on(table.createdAt, table.id),
     ...authUserPolicies(),
+    ...systemUserReadPolicies(),
   ],
 );
 
@@ -243,6 +248,7 @@ export const organization = pgTable(
     metadata: text("metadata"),
   },
   (table) => [
+    ...systemScopePolicies(table, "read"),
     uniqueIndex("organization_slug_uidx").on(table.slug),
     ...authOrganizationPolicies(),
   ],
@@ -263,6 +269,7 @@ export const member = pgTable(
     createdAt: timestamptz("created_at").notNull(),
   },
   (table) => [
+    ...systemScopePolicies(table, "read"),
     index("member_organizationId_idx").on(table.organizationId),
     check(
       "member_single_product_role",
@@ -301,6 +308,7 @@ export const invitation = pgTable(
       .references(() => user.id, { onDelete: "cascade" }),
   },
   (table) => [
+    ...systemScopePolicies(table),
     index("invitation_organizationId_idx").on(table.organizationId),
     check(
       "invitation_single_product_role",

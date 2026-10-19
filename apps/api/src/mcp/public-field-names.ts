@@ -1,3 +1,7 @@
+import { panic } from "better-result";
+
+import { isRecord } from "@/api/lib/type-guards";
+
 /**
  * The one table naming the client-engagement container on the agent surface.
  *
@@ -61,3 +65,110 @@ export const declaresInternalField = (schemaNode: unknown): boolean => {
 
 const isPlainRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
+
+/** Schema keywords whose value is itself a schema node. */
+const SCHEMA_NODE_KEYWORDS = ["items", "additionalProperties", "not"] as const;
+/** Schema keywords whose value is a list of schema nodes. */
+const SCHEMA_NODE_LIST_KEYWORDS = ["anyOf", "oneOf", "allOf"] as const;
+/** Schema keywords whose value maps names to schema nodes. */
+const SCHEMA_NODE_MAP_KEYWORDS = [
+  "properties",
+  "$defs",
+  "definitions",
+] as const;
+
+/**
+ * Rename internal input fields to their public spelling on the way out, at
+ * every depth.
+ *
+ * The container is a `workspaceId` in the DB, the handler config and the REST
+ * route; it is a `matterId` to every agent. This is the outbound half of that
+ * split: `describe_capability` and the CLI's generated `--matter-id` flag both
+ * read this schema. The inbound half is `withInternalFieldNames`
+ * (apps/api/src/mcp/capability-tools.ts), which renames the field back before
+ * the handler's own schema validates it, so the two names never both reach a
+ * handler. Both halves derive from `PUBLIC_FIELD_NAME`'s one table.
+ *
+ * The walk covers every place a schema node can hide (`properties`, `items`,
+ * `additionalProperties`, `anyOf`/`oneOf`/`allOf`, `$defs`), because the
+ * container is not always top level: `flows.create` carries it inside a union
+ * branch of `body.trigger`, `playbooks.create` inside an array of passages,
+ * `signals.acceptances.create` inside `body.result`. Renaming only the top
+ * level would advertise `--matter-id` on one capability and
+ * `--body-trigger-workspace-id` on the next.
+ *
+ * The exemption is evaluated per NODE, not per part: a node that already owns
+ * the public name (`expenses.create` body declares its own `matterId`) has no
+ * internal name to rename, so the two cannot meet.
+ */
+export const withPublicFieldNames = (node: unknown): unknown => {
+  if (Array.isArray(node)) {
+    return node.map((entry) => withPublicFieldNames(entry));
+  }
+  if (!isRecord(node)) {
+    return node;
+  }
+  const rename = (name: string): string => {
+    if (!Object.hasOwn(PUBLIC_FIELD_NAME, name)) {
+      return name;
+    }
+    return (
+      PUBLIC_FIELD_NAME[name] ??
+      panic("Public field name is absent from its registry")
+    );
+  };
+  const projected = new Map(Object.entries(node));
+
+  for (const keyword of SCHEMA_NODE_KEYWORDS) {
+    if (keyword in node) {
+      projected.set(keyword, withPublicFieldNames(node[keyword]));
+    }
+  }
+  for (const keyword of SCHEMA_NODE_LIST_KEYWORDS) {
+    const branches = node[keyword];
+    if (Array.isArray(branches)) {
+      projected.set(
+        keyword,
+        branches.map((branch) => withPublicFieldNames(branch)),
+      );
+    }
+  }
+  for (const keyword of SCHEMA_NODE_MAP_KEYWORDS) {
+    const members = node[keyword];
+    if (!isRecord(members)) {
+      continue;
+    }
+    // `$defs`/`definitions` name reusable schemas, not input fields, so only
+    // `properties` keys are renamed; every value is still descended into.
+    const renameKeys = keyword === "properties";
+    if (renameKeys) {
+      for (const [internal, publicName] of Object.entries(PUBLIC_FIELD_NAME)) {
+        if (internal in members && publicName in members) {
+          panic(
+            `capability input declares both ${internal} and ${publicName}; the public rename would drop one`,
+          );
+        }
+      }
+    }
+    projected.set(
+      keyword,
+      Object.fromEntries(
+        Object.entries(members).map(([name, member]) => [
+          renameKeys ? rename(name) : name,
+          withPublicFieldNames(member),
+        ]),
+      ),
+    );
+  }
+
+  const required = node["required"];
+  if (Array.isArray(required)) {
+    projected.set(
+      "required",
+      required.map((name: unknown) =>
+        typeof name === "string" ? rename(name) : name,
+      ),
+    );
+  }
+  return Object.fromEntries(projected);
+};

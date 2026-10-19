@@ -29,7 +29,9 @@ import { carryOverDecisions } from "@/api/lib/document-review/decision-carry-ove
 import { stageReviewFixSuggestions } from "@/api/lib/document-review/review-suggestion-staging";
 import { DOCUMENT_REVIEW_RUN_EXECUTOR } from "@/api/lib/document-review/run-contract";
 import type { DocumentReviewRunExecutor } from "@/api/lib/document-review/run-contract";
-import { maybeEmitDocumentReviewSignal } from "@/api/lib/scouts/document-review";
+import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
+import { SIGNALS_FEATURE_ID } from "@/api/lib/feature-access/registry";
+import { maybeEmitDocumentReviewSignal } from "@/api/lib/scouts/document-review-recovery";
 
 export type FinalizeReviewRunArgs = {
   tx: Transaction;
@@ -65,6 +67,25 @@ export const finalizeReviewRun = async ({
   executor,
   expectedFindingCount,
 }: FinalizeReviewRunArgs): Promise<FinalizeReviewRunResult> => {
+  const source = (
+    await tx
+      .select({ organizationId: documentReviewRuns.organizationId })
+      .from(documentReviewRuns)
+      .where(
+        and(
+          eq(documentReviewRuns.id, runId),
+          eq(documentReviewRuns.workspaceId, workspaceId),
+        ),
+      )
+      .limit(1)
+  ).at(0);
+  if (source) {
+    await lockFeatureRecoveryAdmission({
+      tx,
+      organizationId: source.organizationId,
+      featureId: SIGNALS_FEATURE_ID,
+    });
+  }
   const counted = await tx
     .select({ value: count() })
     .from(documentReviewFindings)

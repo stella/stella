@@ -5,6 +5,7 @@ import type {
   OrganizationRealtimeEvent,
   UserRealtimeEvent,
   WorkspaceRealtimeEvent,
+  BuiltRealtimeEvent,
 } from "@stll/api-contract";
 import { SSE_HEARTBEAT_FRAME } from "@stll/api-contract/sse-heartbeat";
 
@@ -54,6 +55,17 @@ type WorkspaceConnectionAuthorizer = (
   lookup: WorkspaceConnectionAuthorizationLookup,
 ) => Promise<ReadonlySet<SafeId<"user">>>;
 
+type WorkspaceEventDeliveryAuthorizer = (lookup: {
+  organizationId: SafeId<"organization">;
+  workspaceId: SafeId<"workspace">;
+  userIds: readonly SafeId<"user">[];
+  event: WorkspaceRealtimeEvent;
+  deliver: (
+    userIds: ReadonlySet<SafeId<"user">>,
+    event: WorkspaceRealtimeEvent,
+  ) => void;
+}) => Promise<void>;
+
 /**
  * Whether one user still holds an active membership in the organization their
  * user-channel connection was opened for. The user channel is its own routing
@@ -69,6 +81,8 @@ type UserConnectionAuthorizer = (lookup: {
 const connections = new Map<SafeId<"workspace">, Set<SSEConnection>>();
 const workspaceDeliveryTails = new Map<SafeId<"workspace">, Promise<void>>();
 let authorizeWorkspaceConnections: WorkspaceConnectionAuthorizer | null = null;
+let authorizeWorkspaceEventDelivery: WorkspaceEventDeliveryAuthorizer | null =
+  null;
 
 /**
  * One user-channel stream. It carries the organization it was opened for so a
@@ -491,8 +505,7 @@ const broadcastLocal = async (
   }
   const authorizedUserIds = reauthorized.value;
 
-  const chunk = formatSSE(event);
-
+  const recipients = new Map<SafeId<"organization">, Set<SafeId<"user">>>();
   for (const conn of targets) {
     if (!set.has(conn)) {
       continue;
@@ -501,8 +514,40 @@ const broadcastLocal = async (
       closeConnection(set, conn);
       continue;
     }
-    enqueueOrDrop({ chunk, connection: conn, set });
+    const users = recipients.get(conn.organizationId);
+    if (users) {
+      users.add(conn.userId);
+    } else {
+      recipients.set(conn.organizationId, new Set([conn.userId]));
+    }
   }
+
+  const deliveryAuthorizer =
+    authorizeWorkspaceEventDelivery ??
+    panic("Workspace SSE event authorizer is missing");
+  await Promise.all(
+    [...recipients].map(
+      async ([organizationId, users]) =>
+        await deliveryAuthorizer({
+          organizationId,
+          workspaceId,
+          userIds: [...users],
+          event,
+          deliver: (admittedUserIds, authorizedEvent) => {
+            const chunk = formatSSE(authorizedEvent);
+            for (const conn of targets) {
+              if (
+                set.has(conn) &&
+                conn.organizationId === organizationId &&
+                admittedUserIds.has(conn.userId)
+              ) {
+                enqueueOrDrop({ chunk, connection: conn, set });
+              }
+            }
+          },
+        }),
+    ),
+  );
 
   if (set.size === 0 && connections.get(workspaceId) === set) {
     connections.delete(workspaceId);
@@ -844,13 +889,14 @@ export const broadcastToUser = (
  */
 export const broadcast = (
   workspaceId: SafeId<"workspace">,
-  event: WorkspaceRealtimeEvent,
+  builtEvent: BuiltRealtimeEvent,
   {
     publishWorkspace: publishWorkspaceOverride,
   }: {
     publishWorkspace?: typeof publishWorkspaceEvent | undefined;
   } = {},
 ): void => {
+  const event = builtEvent.toJSON();
   // When this instance has no attached subscriber it never receives its
   // own published message back through the Redis loopback, so deliver
   // locally inline. This must not depend on the publisher's health: the
@@ -874,7 +920,7 @@ export const broadcast = (
     publishWorkspaceOverride ??
     activeLifecycle?.publishWorkspace ??
     publishWorkspaceEvent;
-  publishWorkspace(workspaceId, event, {
+  publishWorkspace(workspaceId, builtEvent, {
     originInstanceId: INSTANCE_ID,
     deliveredInline: deliveredLocally,
   }).catch((error: unknown) => {
@@ -1029,6 +1075,7 @@ type CreateSseRedisClient = () => SseRedisClient;
 export type SseConnectionAuthorizers = {
   user: UserConnectionAuthorizer;
   workspace: WorkspaceConnectionAuthorizer;
+  workspaceEvent: WorkspaceEventDeliveryAuthorizer;
 };
 
 type StartSseDependencies = {
@@ -1311,6 +1358,7 @@ export const startSse = (
   dependencies: StartSseDependencies = {},
 ): void => {
   authorizeWorkspaceConnections = authorizers.workspace;
+  authorizeWorkspaceEventDelivery = authorizers.workspaceEvent;
   authorizeUserConnection = authorizers.user;
   if (activeLifecycle) {
     return;
