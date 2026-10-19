@@ -199,6 +199,7 @@ const DEFAULT_STEP_OUTPUTS: Record<string, Record<string, string>> = {
   images: { playwright: "", postgres: "", quickwit: "", redis: "", valkey: "" },
   "legal-atlas-scope": { api_source_required: "false" },
   "marketing-release": { required: "false" },
+  outcome: { required_summary: "" },
   "patch-id": { patch_id: "", workflow_version: "" },
   "pilot-plan": { fast_jobs: "[]" },
   "pilot-queue-plan": { queue_jobs: "[]" },
