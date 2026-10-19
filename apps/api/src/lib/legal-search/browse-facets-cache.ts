@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import { Temporal } from "@stll/time";
 
@@ -8,16 +8,7 @@ import type {
   LegalBrowseFacetsQuery,
 } from "@/api/lib/legal-search/types";
 
-/**
- * In-process TTL cache for whole-corpus reads (browse facets, the newest
- * decisions per court). Such answers move only as the corpus is ingested, so
- * a window of minutes is indistinguishable from live to a reader, and it is
- * what keeps the browse page off the provider on all but the first request of
- * each window.
- *
- * No new infrastructure on purpose: per-process is enough because every
- * process converges on the same answer, and a cold process pays one call.
- */
+/** Bounded TTL storage for aggregate reads and decision candidates. */
 
 type TtlResultCacheOptions<TQuery, TValue, TError> = {
   load: (query: TQuery) => Promise<Result<TValue, TError>>;
@@ -53,7 +44,7 @@ type CacheEntry<TValue, TError> = {
   pending: Promise<Result<TValue, TError>>;
 };
 
-export const createTtlResultCache = <TQuery, TValue, TError>({
+const createCachedResultReader = <TQuery, TValue, TError>({
   load,
   key: keyOf,
   ttlMs,
@@ -105,6 +96,55 @@ export const createTtlResultCache = <TQuery, TValue, TError>({
   };
 };
 
+type PublicationPolicy<TQuery, TValue, TError> =
+  | {
+      kind: "readmit";
+      admit: (value: TValue, query: TQuery) => Promise<Result<TValue, TError>>;
+    }
+  | { kind: "public-static"; reason: string };
+
+type PublishedTtlResultCacheOptions<TQuery, TValue, TError> =
+  TtlResultCacheOptions<TQuery, TValue, TError> & {
+    publication: PublicationPolicy<TQuery, TValue, TError>;
+  };
+
+/** Every cache declares how its responses resolve publication. */
+export const createTtlResultCache = <TQuery, TValue, TError>({
+  publication,
+  ...options
+}: PublishedTtlResultCacheOptions<TQuery, TValue, TError>) => {
+  const read = createCachedResultReader(options);
+  return async (query: TQuery): Promise<Result<TValue, TError>> => {
+    const result = await read(query);
+    if (Result.isError(result)) {
+      return result;
+    }
+    switch (publication.kind) {
+      case "readmit":
+        return await publication.admit(result.value, query);
+      case "public-static":
+        return result;
+      default:
+        return panic(
+          "Unknown cache publication policy",
+          publication satisfies never,
+        );
+    }
+  };
+};
+
+type AggregateTtlResultCacheOptions<TQuery, TValue, TError> =
+  TtlResultCacheOptions<TQuery, TValue, TError> & {
+    publication: Extract<
+      PublicationPolicy<TQuery, TValue, TError>,
+      { kind: "public-static" }
+    >;
+  };
+
+export const createAggregateTtlResultCache = <TQuery, TValue, TError>(
+  options: AggregateTtlResultCacheOptions<TQuery, TValue, TError>,
+) => createTtlResultCache(options);
+
 type BrowseFacetsCacheOptions = {
   load: (
     query: LegalBrowseFacetsQuery,
@@ -126,4 +166,11 @@ const browseFacetsCacheKey = ({
   `${documentFamily ?? ""}:${jurisdiction ?? ""}:${limit}:${excludedSourceIds.toSorted().join(",")}`;
 
 export const createBrowseFacetsCache = (options: BrowseFacetsCacheOptions) =>
-  createTtlResultCache({ ...options, key: browseFacetsCacheKey });
+  createAggregateTtlResultCache({
+    ...options,
+    key: browseFacetsCacheKey,
+    publication: {
+      kind: "public-static",
+      reason: "Browse facets contain aggregate buckets only.",
+    },
+  });

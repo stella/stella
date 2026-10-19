@@ -4,7 +4,7 @@ import { expect, test } from "bun:test";
 import { LegalBrowseFacetsError } from "@/api/lib/legal-search/browse-facets";
 import {
   createBrowseFacetsCache,
-  createTtlResultCache,
+  createAggregateTtlResultCache,
 } from "@/api/lib/legal-search/browse-facets-cache";
 import type {
   LegalBrowseFacets,
@@ -185,7 +185,8 @@ test("expires an entry once its window closes", async () => {
  */
 const failingCacheOf = (failureTtlMs: number) => {
   let calls = 0;
-  const read = createTtlResultCache({
+  const read = createAggregateTtlResultCache({
+    publication: { kind: "public-static", reason: "Aggregate cache fixture." },
     load: async (query: string) => {
       calls += 1;
       return Result.err(
@@ -220,7 +221,8 @@ test("retries once the failure window closes", async () => {
 
 test("a slow failure is held from the moment it settles", async () => {
   let calls = 0;
-  const read = createTtlResultCache({
+  const read = createAggregateTtlResultCache({
+    publication: { kind: "public-static", reason: "Aggregate cache fixture." },
     load: async (query: string) => {
       calls += 1;
       // Longer than the hold: a hold counted from the start would have

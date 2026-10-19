@@ -1,5 +1,5 @@
 import { Result, TaggedError } from "better-result";
-import { sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
@@ -9,6 +9,7 @@ import {
 } from "@stll/api-contract/case-law-launch-readiness";
 import type { DecisionHeadnotePreview } from "@stll/api-contract/case-law-text-field";
 
+import { publishedCaseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { readBrowseFacets } from "@/api/handlers/case-law/decisions/facets";
 import { decisionDateSortKeySql } from "@/api/handlers/case-law/decisions/list";
 import {
@@ -28,7 +29,10 @@ import {
   publisherHeadnoteMetadataSql,
   publisherKeywordsMetadataSql,
 } from "@/api/lib/case-law/publisher-summary";
-import { redistributableCaseLawSourceSqlFor } from "@/api/lib/case-law/redistribution";
+import {
+  redistributableCaseLawSource,
+  redistributableCaseLawSourceSqlFor,
+} from "@/api/lib/case-law/redistribution";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { errorTag } from "@/api/lib/errors/utils";
 import { createTtlResultCache } from "@/api/lib/legal-search/browse-facets-cache";
@@ -277,15 +281,83 @@ const loadLatestDecisions = async ({
       }),
   });
 
-const latestDecisions = createTtlResultCache({
-  load: loadLatestDecisions,
-  // Source policy is an input to the answer, so a revocation changes the key
-  // instead of waiting out the window; sorted because the set has no order.
-  key: ({ country, excludedSourceIds }: LatestDecisionsLoad) =>
-    `${country}:${excludedSourceIds.toSorted().join(",")}`,
-  ttlMs: LATEST_CACHE_TTL_MS,
-  maxEntries: LATEST_CACHE_MAX_ENTRIES,
-});
+/** Recheck the bounded candidate set through the shared publication view. */
+const admitLatestDecisions = async (
+  value: LatestDecisions,
+  { caseLawDb }: Pick<LatestDecisionsLoad, "caseLawDb">,
+): Promise<Result<LatestDecisions, LatestDecisionsError>> =>
+  await Result.tryPromise({
+    try: async () => {
+      const ids = [
+        ...new Set(
+          value.courts.flatMap(({ decisions }) =>
+            decisions.flatMap(({ id, languageAlternates }) => [
+              id,
+              ...languageAlternates.map((alternate) =>
+                brandPersistedCaseLawDecisionId(alternate.id),
+              ),
+            ]),
+          ),
+        ),
+      ];
+      if (ids.length === 0) {
+        return value;
+      }
+      const rows = await caseLawDb(
+        async (tx) =>
+          await tx
+            .select({ id: publishedCaseLawDecisions.id })
+            .from(publishedCaseLawDecisions)
+            .innerJoin(
+              caseLawSources,
+              eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
+            )
+            .where(
+              and(
+                inArray(publishedCaseLawDecisions.id, ids),
+                redistributableCaseLawSource,
+              ),
+            )
+            .limit(ids.length),
+      );
+      const admitted = new Set<string>(rows.map(({ id }) => id));
+      return {
+        country: value.country,
+        courts: value.courts.flatMap(({ court, tierLabel, decisions }) => {
+          const current = decisions
+            .filter(({ id }) => admitted.has(id))
+            .map((decision) => ({
+              ...decision,
+              languageAlternates: decision.languageAlternates.filter(({ id }) =>
+                admitted.has(id),
+              ),
+            }));
+          return current.length === 0
+            ? []
+            : [{ court, tierLabel, decisions: current }];
+        }),
+      };
+    },
+    catch: (cause) =>
+      new LatestDecisionsError({
+        message: "Newest decisions publication check failed",
+        cause,
+      }),
+  });
+
+export const createLatestDecisionsCache = (load = loadLatestDecisions) =>
+  createTtlResultCache({
+    load,
+    publication: { kind: "readmit", admit: admitLatestDecisions },
+    // Source policy is an input to the answer, so a revocation changes the key
+    // instead of waiting out the window; sorted because the set has no order.
+    key: ({ country, excludedSourceIds }: LatestDecisionsLoad) =>
+      `${country}:${excludedSourceIds.toSorted().join(",")}`,
+    ttlMs: LATEST_CACHE_TTL_MS,
+    maxEntries: LATEST_CACHE_MAX_ENTRIES,
+  });
+
+const latestDecisions = createLatestDecisionsCache();
 
 export const listLatestDecisionsHandler = async (
   { country }: ListLatestDecisionsQuery,

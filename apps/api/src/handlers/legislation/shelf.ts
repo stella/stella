@@ -174,6 +174,11 @@ const loadLegislationShelf = async ({
   });
 
 const legislationShelf = createTtlResultCache({
+  publication: {
+    kind: "public-static",
+    reason:
+      "Legislation shelf publication follows the country and source policy cache key.",
+  },
   load: loadLegislationShelf,
   // Source policy is an input to the answer, so a revocation changes the key
   // instead of waiting out the window; sorted because the set has no order.
