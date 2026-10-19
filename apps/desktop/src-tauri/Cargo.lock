@@ -3369,6 +3369,8 @@ version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9df9128cbbfef73cda168416ccf7f837b62737d748333bfe9ab71c245d76613e"
 dependencies = [
+ "bitflags 2.13.1",
+ "block2",
  "objc2",
  "objc2-foundation",
 ]
@@ -4818,6 +4820,7 @@ dependencies = [
  "uuid",
  "windows-icons",
  "windows-native-keyring-store",
+ "windows-registry",
  "winsafe",
  "zbus-secret-service-keyring-store",
  "zeroize",
@@ -4828,10 +4831,13 @@ dependencies = [
 name = "stella-desktop-macos"
 version = "0.0.1"
 dependencies = [
+ "block2",
  "core-foundation 0.10.1",
  "objc2",
  "objc2-app-kit",
  "objc2-foundation",
+ "objc2-service-management",
+ "objc2-user-notifications",
  "objc2-web-kit",
  "tauri",
  "windows-sys 0.61.2",
