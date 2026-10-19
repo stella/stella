@@ -73,7 +73,7 @@ export const CI_GATES: Readonly<Record<string, JobGate>> = {
         class: "advisory",
         owner: "ci",
       },
-      "Install API test planner dependencies": {
+      "Install planner dependencies": {
         class: "advisory",
         owner: "ci",
       },
@@ -119,6 +119,12 @@ export const CI_GATES: Readonly<Record<string, JobGate>> = {
       },
       "SQL performance baseline": { class: "budget", owner: "api-performance" },
       "Failure-as-empty baseline": { class: "budget", owner: "code-health" },
+    },
+  },
+  "generated-sources": {
+    class: "correctness",
+    steps: {
+      "Save generated sources": { class: "advisory", owner: "ci" },
     },
   },
   "pr-heavy-gate": { class: "correctness" },

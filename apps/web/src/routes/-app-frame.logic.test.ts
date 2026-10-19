@@ -12,6 +12,23 @@ const KNOWLEDGE = ["__root__", "/knowledge", "/knowledge/templates"];
 const PUBLIC_LAW = ["__root__", "/law", "/law/"];
 
 describe("selectAppFrame", () => {
+  test("admin routes use their own frame after authentication", () => {
+    const routeIds = [
+      "__root__",
+      "/_protected",
+      "/_protected/admin",
+      "/_protected/admin/general",
+    ];
+    expect(
+      selectAppFrame({ routeIds, hasRouteUser: true, publicKnowledge: true }),
+    ).toBe("admin");
+    expect(
+      selectAppFrame({ routeIds, hasRouteUser: false, publicKnowledge: true }),
+    ).toBe("checking");
+    expect(
+      frameVisitor("admin", { userId: "user-a", organizationId: "org-a" }),
+    ).toBe("member:user-a:org-a");
+  });
   test("signed-in routes get the member frame once their guard has a user", () => {
     expect(
       selectAppFrame({
