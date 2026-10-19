@@ -4,16 +4,15 @@ import tls from "node:tls";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
-import { createTestState } from "../../../apps/api/src/tests/helpers/test-state.ts";
+import { setProcessEnvironment } from "../tests/environment.ts";
 import {
   NetworkAccessError,
   installNetworkGuard,
   isLoopbackHost,
 } from "./network.ts";
 
-const testState = createTestState({ config: {}, file: import.meta.path });
-
 let uninstall: (() => void) | undefined;
+let restoreProcessEnvironment: (() => void) | undefined;
 
 // What a fake fetch was asked for, whichever input form it received.
 const requestedUrl = (input: unknown): string => {
@@ -28,6 +27,8 @@ const requestedUrl = (input: unknown): string => {
 afterEach(() => {
   uninstall?.();
   uninstall = undefined;
+  restoreProcessEnvironment?.();
+  restoreProcessEnvironment = undefined;
 });
 
 describe("loopback hosts", () => {
@@ -382,7 +383,9 @@ describe("network guard", () => {
   });
 
   test("process proxy variables are hidden with a separate environment", () => {
-    testState.setEnv("HTTP_PROXY", "http://proxy.example:3128");
+    restoreProcessEnvironment = setProcessEnvironment({
+      HTTP_PROXY: "http://proxy.example:3128",
+    });
     uninstall = installNetworkGuard({ environment: {} });
     expect(process.env["HTTP_PROXY"]).toBeUndefined();
 
