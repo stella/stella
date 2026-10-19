@@ -445,6 +445,40 @@ describe("answer source classification", () => {
     expect(result.uniqueExternalSources).toHaveLength(1);
   });
 
+  test("cites a source through a paragraph fragment of its URL", () => {
+    const result = collectSourceChipEntries({
+      appOrigins: APP_ORIGINS,
+      parts: [
+        decisionPart({
+          url: "https://example.test/cases/cited",
+          title: "Cited decision",
+        }),
+        {
+          type: "text",
+          content: "[bod 10](https://example.test/cases/cited#paragraph-10)",
+        },
+      ],
+    });
+    expect(result.entries.map(({ relation }) => relation)).toEqual(["cited"]);
+  });
+
+  test("cites an absolute app source through its root-relative route", () => {
+    const result = collectSourceChipEntries({
+      appOrigins: APP_ORIGINS,
+      parts: [
+        decisionPart({
+          url: "https://app.test/law/cze/cases/ustavni-soud/i-us-1-26",
+          title: "Decision by its app route",
+        }),
+        {
+          type: "text",
+          content: "[nález](/law/cze/cases/ustavni-soud/i-us-1-26#paragraph-3)",
+        },
+      ],
+    });
+    expect(result.entries.map(({ relation }) => relation)).toEqual(["cited"]);
+  });
+
   test("cites an incomplete decision source by its canonical decision route", () => {
     const decisionId = "a5a95801-7a7c-4c8b-98b3-7d17c8b8d7f9";
     const route = createCaseLawDecisionPath(

@@ -50,8 +50,27 @@ export const chatAnswerCitationHrefs = (markdown: string) => {
   return hrefs;
 };
 
-const citationUrlKey = (url: string) =>
-  URL.canParse(url) ? new URL(url).href : url;
+/**
+ * One key per cited destination. Relative links resolve against the app
+ * origin, and a fragment (a paragraph anchor) names the same document. A
+ * fragment-only reference (`#stella-entity=...`) is the resource itself, so
+ * it keeps its fragment.
+ */
+export const citationUrlKey = (
+  url: string,
+  appOrigins: ReadonlySet<string>,
+): string => {
+  if (url.startsWith("#")) {
+    return url;
+  }
+  const base = appOrigins.values().next().value;
+  if (!URL.canParse(url, base)) {
+    return url;
+  }
+  const parsed = new URL(url, base);
+  parsed.hash = "";
+  return parsed.href;
+};
 
 type ChatAnswerDecisionTargetsOptions = {
   markdownDocuments: readonly string[];
@@ -81,7 +100,9 @@ export const chatAnswerDecisionTargets = ({
       const source = sources.find((entry) =>
         [entry.url, entry.sourceUrl].some(
           (url) =>
-            url !== undefined && citationUrlKey(url) === citationUrlKey(href),
+            url !== undefined &&
+            citationUrlKey(url, appOrigins) ===
+              citationUrlKey(href, appOrigins),
         ),
       );
       if (source?.caseLawDecision !== undefined) {

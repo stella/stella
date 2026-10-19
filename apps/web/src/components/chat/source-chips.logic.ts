@@ -13,6 +13,7 @@ import { Temporal } from "@stll/time";
 
 import {
   chatAnswerCitationHrefs,
+  citationUrlKey,
   chatAnswerDecisionTargets,
   chatAnswerMarkdownDocuments,
 } from "@/components/chat/chat-decision-citations.logic";
@@ -118,9 +119,6 @@ const parseJsonLikeString = (
 
   return undefined;
 };
-
-const citationUrlKey = (url: string) =>
-  URL.canParse(url) ? new URL(url).href : url;
 
 const isHttpUrl = (value: unknown): value is string => {
   if (typeof value !== "string") {
@@ -604,7 +602,11 @@ export const collectSourceChipEntries = ({
     urls.some(
       (url) =>
         url !== undefined &&
-        [...hrefs].some((href) => citationUrlKey(url) === citationUrlKey(href)),
+        [...hrefs].some(
+          (href) =>
+            citationUrlKey(url, appOrigins) ===
+            citationUrlKey(href, appOrigins),
+        ),
     );
   const entries: SourceChipEntry[] = [];
   for (const source of uniqueSources) {
