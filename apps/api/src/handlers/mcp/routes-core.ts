@@ -10,6 +10,7 @@ import {
 import type { createMcpAuthenticationFailureLimiter } from "@/api/handlers/mcp/transport-rate-limit";
 import { resolveRateLimitClientAddress } from "@/api/lib/client-ip";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
+import { createRequestRouteClassifier } from "@/api/lib/rate-limit/tenant-action-boundary";
 import {
   MCP_ADVANCED_DISCOVERY_PATH,
   MCP_ADVANCED_HTTP_PATH,
@@ -289,3 +290,15 @@ export const createMcpRoute = ({
       { parse: "none" },
     );
 };
+
+const mcpRouteRegistry = createMcpRoute({
+  handleMcpHttpRequest: async () => new Response(null),
+});
+
+export const isMcpTransportRequest = createRequestRouteClassifier({
+  routes: mcpRouteRegistry.routes,
+  staticRoutes: mcpRouteRegistry.router.static,
+  strictPath: mcpRouteRegistry.config.strictPath,
+  aot: mcpRouteRegistry.config.aot,
+  classifyRoute: (route) => route.method === "ALL",
+});
