@@ -12,7 +12,7 @@ import { parseUsDecisionHtml, usDocumentLinesOf } from "./cz-us";
 
 const FIXTURES = new URL("__fixtures__/", import.meta.url);
 const SNAPSHOT = new URL(
-  "__fixtures__/cz-us-parser-output.snapshot.json.gz",
+  "__snapshots__/cz-us-parser-output.snapshot.json.gz",
   import.meta.url,
 );
 
