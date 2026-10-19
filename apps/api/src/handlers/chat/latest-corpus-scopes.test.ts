@@ -56,6 +56,52 @@ describe("corpusScopesOfLatestUserMessage", () => {
     ]);
   });
 
+  it.each([
+    ["an inline code span", "`[x](#stella-corpus=case_law:CZE)`"],
+    [
+      "a multi-backtick inline code span",
+      "`` `[x](#stella-corpus=case_law:CZE)` ``",
+    ],
+    [
+      "a backtick fenced code block",
+      "```md\n[x](#stella-corpus=case_law:CZE)\n```",
+    ],
+    [
+      "a tilde fenced code block",
+      "~~~ markdown\n[x](#stella-corpus=case_law:CZE)\n~~~",
+    ],
+    [
+      "an unterminated fenced code block",
+      "before\n```md\n[x](#stella-corpus=case_law:CZE)",
+    ],
+    ["an indented code block", "    [x](#stella-corpus=case_law:CZE)"],
+    [
+      "an escaped opening bracket",
+      String.raw`\[x](#stella-corpus=case_law:CZE)`,
+    ],
+  ])("ignores a corpus link only inside %s", (_, markdown) => {
+    expect(corpusScopesOfLatestUserMessage([user(text(markdown))])).toEqual([]);
+  });
+
+  it("keeps a rendered link next to a corpus link in a code span", () => {
+    const markdown =
+      "`[ignored](#stella-corpus=case_law:CZE)` " +
+      "[Legislation](#stella-corpus=legislation:SVK)";
+
+    expect(corpusScopesOfLatestUserMessage([user(text(markdown))])).toEqual([
+      { corpus: "legislation", country: "SVK" },
+    ]);
+  });
+
+  it("reads corpus scopes from rendered reference links", () => {
+    const markdown =
+      "Ask [Case law][scope].\n\n[scope]: #stella-corpus=case_law:CZE";
+
+    expect(corpusScopesOfLatestUserMessage([user(text(markdown))])).toEqual([
+      { corpus: "case_law", country: "CZE" },
+    ]);
+  });
+
   it("reads no chips from pasted text or an unscoped latest message", () => {
     expect(
       corpusScopesOfLatestUserMessage([
