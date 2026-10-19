@@ -99,8 +99,8 @@ describe("rich reader copy", () => {
         expect(text.html).toContain("<em>");
       }
       if (mode === "blockQuoteWithCitation") {
-        expect(text.html).toStartWith("<blockquote><em>");
-        expect(text.html).toContain("</em></blockquote><p>");
+        expect(text.html).toStartWith("<blockquote><p><em>");
+        expect(text.html).toContain("</em></p></blockquote><p>");
       }
     },
   );
@@ -145,4 +145,34 @@ describe("rich reader copy", () => {
       }).plain,
     ).toStartWith("“provision”");
   });
+
+  test.each([
+    "quoteWithCitation",
+    "citationWithQuote",
+    "blockQuoteWithCitation",
+    "textOnly",
+  ] satisfies ReaderCopyMode[])(
+    "%s preserves paragraph and line boundaries in rich passages",
+    (mode) => {
+      const text = copyTextFor({
+        mode,
+        selected: {
+          cleanText: "first line\nsecond line\n\nthird line",
+          locator: "§ 1",
+        },
+        target: statute,
+      });
+
+      expect(text.plain).toContain("first line\nsecond line\n\nthird line");
+      expect(text.html).not.toContain("\n");
+      expect(text.html).toContain("<em>");
+      expect(text.html.match(/<em>/gu)).toHaveLength(2);
+      expect(text.html.match(/<\/em>/gu)).toHaveLength(2);
+      expect(text.html).toContain("first line<br>second line");
+      expect(text.html).toContain("third line");
+      expect(text.html.match(/<p>/gu)).toHaveLength(
+        mode === "blockQuoteWithCitation" ? 3 : 2,
+      );
+    },
+  );
 });

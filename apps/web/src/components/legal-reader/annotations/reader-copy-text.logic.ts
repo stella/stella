@@ -144,31 +144,56 @@ const escapeHtml = (text: string): string =>
     }
   });
 
+const renderLineBreaks = (text: string): string =>
+  escapeHtml(text).replaceAll("\n", "<br>");
+
+const renderParagraphs = (segments: readonly ReaderCopySegment[]): string[] => {
+  const paragraphs = [""];
+  for (const { emphasis, text } of segments) {
+    const parts = text.split("\n\n");
+    for (const [index, part] of parts.entries()) {
+      if (index > 0) {
+        paragraphs.push("");
+      }
+      const rendered = renderLineBreaks(part);
+      paragraphs[paragraphs.length - 1] += emphasis
+        ? `<em>${rendered}</em>`
+        : rendered;
+    }
+  }
+  return paragraphs;
+};
+
 const copyTextFromSegments = (
   segments: ReaderCopySegment[],
   blockQuote: boolean,
 ): ReaderCopyText => {
   const plain = segments.map(({ text }) => text).join("");
   if (blockQuote) {
-    const quote = segments[0]?.text ?? "";
+    const quote = segments[0];
     const citation = segments
       .slice(1)
       .map(({ text }) => text)
       .join("")
       .trim();
     return {
-      html: `<blockquote><em>${escapeHtml(quote)}</em></blockquote><p>${escapeHtml(citation)}</p>`,
+      html: `<blockquote>${renderParagraphs(quote === undefined ? [] : [quote])
+        .map((paragraph) => `<p>${paragraph}</p>`)
+        .join("")}</blockquote><p>${renderLineBreaks(citation)}</p>`,
+      plain,
+      segments,
+    };
+  }
+  const paragraphs = renderParagraphs(segments);
+  if (paragraphs.length > 1) {
+    return {
+      html: paragraphs.map((paragraph) => `<p>${paragraph}</p>`).join(""),
       plain,
       segments,
     };
   }
   return {
-    html: segments
-      .map(({ emphasis, text }) => {
-        const escaped = escapeHtml(text);
-        return emphasis ? `<em>${escaped}</em>` : escaped;
-      })
-      .join(""),
+    html: paragraphs[0] ?? "",
     plain,
     segments,
   };

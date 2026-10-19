@@ -26,8 +26,8 @@ export const copyRichToClipboard = async ({
   plain,
 }: RichClipboardContent) => {
   if (
-    !Object.hasOwn(globalThis, "ClipboardItem") ||
-    !Object.hasOwn(navigator.clipboard, "write")
+    typeof globalThis.ClipboardItem !== "function" ||
+    typeof navigator.clipboard?.write !== "function"
   ) {
     return await copyToClipboard(plain);
   }

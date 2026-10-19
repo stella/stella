@@ -98,12 +98,19 @@ test("a missing clipboard API is an error Result, not a throw", async () => {
 test("rich copy writes both HTML and plain text", async () => {
   const written: ClipboardItem[][] = [];
   stubClipboardItem();
-  stubClipboard({
-    write: async (items: ClipboardItem[]) => written.push(items),
-    writeText: async () => {
+  class FakeClipboard {
+    async write(items: ClipboardItem[]) {
+      written.push(items);
+    }
+
+    async writeText() {
       throw new Error("plain fallback must not run");
-    },
-  });
+    }
+  }
+  const clipboard = new FakeClipboard();
+  stubClipboard(clipboard);
+
+  expect(Object.hasOwn(clipboard, "write")).toBe(false);
 
   const result = await copyRichToClipboard({
     html: "<em>quoted</em>",
