@@ -283,6 +283,7 @@ const createContact = createSafeRootHandler(
       "an attorney id is not a member of the organization.",
     permissions: { contact: ["create"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
     mcp: { type: "tool", name: "save_contact" },
     body: createContactBodySchema,
   },

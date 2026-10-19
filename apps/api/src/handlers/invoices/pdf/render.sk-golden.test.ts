@@ -170,7 +170,7 @@ describe("golden Slovak invoices (zákon 222/2004 Z. z. § 74 ods. 1)", () => {
     expect(text).toContain("SK2120123456");
     expect(text).toContain("Slovenská advokátska komora, č. 0000");
     expect(text).toContain("SK2020123456");
-    expect(text).toContain("23");
+    expect(text).toContain("23 %");
     expect(text).toContain(euro(13_800));
     expect(text).not.toContain("Prenesenie daňovej povinnosti");
   });

@@ -2419,9 +2419,9 @@
       "taxId": "NIP",
       "vatId": "VAT ID",
       "vatPayer": "VAT-payer status",
-      "vatPayerNo": "Not a VAT payer",
-      "vatPayerUnknown": "Unknown",
-      "vatPayerYes": "VAT payer",
+      "vatPayerNo": "Nie jest płatnikiem VAT",
+      "vatPayerUnknown": "Nieznany",
+      "vatPayerYes": "Płatnik VAT",
       "year": "Rok"
     },
     "filterOrganizations": "Organizacje",

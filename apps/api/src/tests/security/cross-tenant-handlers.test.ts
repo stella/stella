@@ -1252,8 +1252,8 @@ const isolationCases: IsolationCase[] = [
       await runHandler(applyVatRatePreset, workspaceB, {
         body: { country: "CZ" },
       }),
-    expectDenied: (result) => expectRecordFieldEquals(result, "added", 5),
-    expectPositive: (result) => expectRecordFieldEquals(result, "added", 5),
+    expectDenied: (result) => expect(recordField(result, "added")).toBe(5),
+    expectPositive: (result) => expect(recordField(result, "added")).toBe(5),
   },
   {
     name: "time entry read by id",

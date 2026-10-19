@@ -2419,9 +2419,9 @@
       "taxId": "CPF/CNPJ",
       "vatId": "VAT ID",
       "vatPayer": "VAT-payer status",
-      "vatPayerNo": "Not a VAT payer",
-      "vatPayerUnknown": "Unknown",
-      "vatPayerYes": "VAT payer",
+      "vatPayerNo": "Não contribuinte de IVA",
+      "vatPayerUnknown": "Desconhecido",
+      "vatPayerYes": "Contribuinte de IVA",
       "year": "Ano"
     },
     "filterOrganizations": "Organizações",

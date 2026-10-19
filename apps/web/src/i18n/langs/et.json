@@ -2419,9 +2419,9 @@
       "taxId": "KMKR number",
       "vatId": "VAT ID",
       "vatPayer": "VAT-payer status",
-      "vatPayerNo": "Not a VAT payer",
-      "vatPayerUnknown": "Unknown",
-      "vatPayerYes": "VAT payer",
+      "vatPayerNo": "Ei ole käibemaksukohustuslane",
+      "vatPayerUnknown": "Teadmata",
+      "vatPayerYes": "Käibemaksukohustuslane",
       "year": "Aasta"
     },
     "filterOrganizations": "Organisatsioonid",

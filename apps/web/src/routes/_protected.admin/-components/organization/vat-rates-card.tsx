@@ -47,6 +47,7 @@ import {
   VatRateRefusal,
 } from "@/routes/_protected.admin/-components/organization/vat-rate-display";
 import { VatRateForm } from "@/routes/_protected.admin/-components/organization/vat-rate-form";
+import { presetResultWhenCommandStarts } from "@/routes/_protected.admin/-components/organization/vat-rates-card.logic";
 import { useSettingsMutation } from "@/routes/_protected.admin/-hooks/use-settings-mutation";
 
 type RateDialog =
@@ -102,6 +103,9 @@ const VatRatesCardBody = ({ organizationId }: { organizationId: string }) => {
     if (mutation.isPending) {
       return;
     }
+    setPresetResult((current) =>
+      presetResultWhenCommandStarts(command, current),
+    );
     const result = await Result.tryPromise(async () =>
       mutation.mutateAsync(command),
     );

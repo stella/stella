@@ -37,7 +37,10 @@ const invoiceRenderError = (cause: unknown) => {
 
 // permissions-exempt: rendering a temporary copy needs the same matter read
 // permission as the invoice; it does not modify the invoice.
-export const createInvoicePdfExport = (writeObject = writeS3ObjectWithRetry) =>
+export const createInvoicePdfExport = (
+  writeObject = writeS3ObjectWithRetry,
+  renderInvoice = renderInvoiceWithTypst,
+) =>
   createSafeHandler(
     {
       contract: "patch",
@@ -135,7 +138,7 @@ export const createInvoicePdfExport = (writeObject = writeS3ObjectWithRetry) =>
       const rendered = yield* Result.await(
         Result.tryPromise({
           try: async () => {
-            const outcome = await renderInvoiceWithTypst({
+            const outcome = await renderInvoice({
               session: invoiceTypstSession,
               createdAt: new Date(),
               invoice: {
@@ -161,12 +164,21 @@ export const createInvoicePdfExport = (writeObject = writeS3ObjectWithRetry) =>
               throw outcome.error;
             }
             if (outcome.value.status === "rejected") {
+              const infrastructureFailure = [
+                "timeout",
+                "crashed",
+                "memory",
+              ].includes(outcome.value.reason);
               throw new HandlerError({
-                status: 409,
-                message:
-                  outcome.value.diagnostics.join("\n") ||
-                  `Invoice rendering was rejected: ${outcome.value.reason}`,
-                hint: "Check the seller payment details and invoice dates before exporting.",
+                status: infrastructureFailure ? 503 : 409,
+                message: infrastructureFailure
+                  ? "The invoice PDF renderer is temporarily unavailable."
+                  : outcome.value.diagnostics.join("\n") ||
+                    `Invoice rendering was rejected: ${outcome.value.reason}`,
+                hint: infrastructureFailure
+                  ? "Try exporting the invoice again later."
+                  : "Check the seller payment details and invoice dates before exporting.",
+                retryable: infrastructureFailure,
               });
             }
             return outcome.value.pdf;

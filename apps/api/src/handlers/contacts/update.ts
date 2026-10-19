@@ -405,6 +405,7 @@ const updateContactById = createSafeRootHandler(
       "and an unknown contact is a 404.",
     permissions: { contact: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
     mcp: { type: "covered", by: "save_contact" },
     params: updateContactParamsSchema,
     body: updateContactBodySchema,

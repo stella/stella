@@ -17,6 +17,11 @@ import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
 import type { SystemAuditCounts } from "@/api/lib/system-audit/actors";
 import { recordSystemAudit } from "@/api/lib/system-audit/record";
 
+export const featureAccess = {
+  featureId: "time-billing",
+  type: "required",
+} as const;
+
 export const RESET_REVIEW_ORGANIZATION_TASK =
   "reviewOrganization.reset" as const;
 

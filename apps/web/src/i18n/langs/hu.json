@@ -2419,9 +2419,9 @@
       "taxId": "Adószám",
       "vatId": "VAT ID",
       "vatPayer": "VAT-payer status",
-      "vatPayerNo": "Not a VAT payer",
-      "vatPayerUnknown": "Unknown",
-      "vatPayerYes": "VAT payer",
+      "vatPayerNo": "Nem áfafizető",
+      "vatPayerUnknown": "Ismeretlen",
+      "vatPayerYes": "Áfafizető",
       "year": "Év"
     },
     "filterOrganizations": "Szervezetek",

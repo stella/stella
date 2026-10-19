@@ -1,4 +1,5 @@
 import { PDF } from "@libpdf/core";
+import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
@@ -230,6 +231,40 @@ describe("invoice document export", () => {
     expect(text).toContain("Quantity: 2.5 h");
     expect(text).toContain("Unit price:");
   });
+  test.each(["timeout", "crashed", "memory"] as const)(
+    "maps renderer %s failures to a retryable service response",
+    async (reason) => {
+      let writes = 0;
+      const handler = createInvoicePdfExport(
+        async () => {
+          writes += 1;
+          return S3_OBJECT_WRITE_CERTAINTY.CONFIRMED;
+        },
+        async () =>
+          Result.ok({
+            status: "rejected" as const,
+            reason,
+            diagnostics: ["internal renderer detail"],
+          }),
+      );
+
+      const response = await handler.handler(context("own", []));
+
+      expect(response).toMatchObject({
+        code: 503,
+        response: {
+          message: "The invoice PDF renderer is temporarily unavailable.",
+          hint: "Try exporting the invoice again later.",
+          retryable: true,
+        },
+      });
+      expect(JSON.stringify(response)).not.toContain(
+        "internal renderer detail",
+      );
+      expect(writes).toBe(0);
+    },
+  );
+
   test("refuses delivery without a download audit when storage fails", async () => {
     const events: AuditEvent[] = [];
     const handler = createInvoicePdfExport(async () => {

@@ -121,6 +121,7 @@ const readInvoices = createSafeHandler(
         invoiceDate: row.invoiceDate,
         dueDate: row.dueDate,
         currency: row.currency,
+        language: row.language,
         totalAmount: row.totalAmount,
         billingMode: row.billingMode,
         flatFeeAmount: row.flatFeeAmount,

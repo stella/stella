@@ -82,35 +82,35 @@ organization_settings.memory_extraction_scheduled_at  timestamptz         null  
 organization_settings.updated_at                      timestamptz         default,not null    workspace-admin.ts:342
 ```
 
-## anonymization_allowlist_entries · `anonymizationAllowlistEntries` · workspace-admin.ts:410 · rls
+## anonymization_allowlist_entries · `anonymizationAllowlistEntries` · workspace-admin.ts:417 · rls
 
 Anonymization allowlist — entries that the detection pipeline should NOT mask.
 
 ```text
-anonymization_allowlist_entries.{...entityFeatureGateColumns()}           spread                                workspace-admin.ts:413
-anonymization_allowlist_entries.{...entityFeatureWorkspaceGateColumns()}  spread                                workspace-admin.ts:414
-anonymization_allowlist_entries.id                                        pUuid               pk,not null       workspace-admin.ts:415
-anonymization_allowlist_entries.organization_id                           safeOrganizationId  not null          workspace-admin.ts:416
-anonymization_allowlist_entries.workspace_id                              safeWorkspaceId     fk,null           workspace-admin.ts:417
-anonymization_allowlist_entries.entity_id                                 safeUuid            fk,null           workspace-admin.ts:421
-anonymization_allowlist_entries.label                                     varchar             not null          workspace-admin.ts:424
-anonymization_allowlist_entries.canonical                                 varchar             not null          workspace-admin.ts:425
-anonymization_allowlist_entries.created_by                                text                fk,null           workspace-admin.ts:426
-anonymization_allowlist_entries.created_at                                timestamptz         default,not null  workspace-admin.ts:429
+anonymization_allowlist_entries.{...entityFeatureGateColumns()}           spread                                workspace-admin.ts:420
+anonymization_allowlist_entries.{...entityFeatureWorkspaceGateColumns()}  spread                                workspace-admin.ts:421
+anonymization_allowlist_entries.id                                        pUuid               pk,not null       workspace-admin.ts:422
+anonymization_allowlist_entries.organization_id                           safeOrganizationId  not null          workspace-admin.ts:423
+anonymization_allowlist_entries.workspace_id                              safeWorkspaceId     fk,null           workspace-admin.ts:424
+anonymization_allowlist_entries.entity_id                                 safeUuid            fk,null           workspace-admin.ts:428
+anonymization_allowlist_entries.label                                     varchar             not null          workspace-admin.ts:431
+anonymization_allowlist_entries.canonical                                 varchar             not null          workspace-admin.ts:432
+anonymization_allowlist_entries.created_by                                text                fk,null           workspace-admin.ts:433
+anonymization_allowlist_entries.created_at                                timestamptz         default,not null  workspace-admin.ts:436
 ```
 
-## anonymization_blacklist_entries · `anonymizationBlacklistEntries` · workspace-admin.ts:485 · rls
+## anonymization_blacklist_entries · `anonymizationBlacklistEntries` · workspace-admin.ts:492 · rls
 
 ```text
-anonymization_blacklist_entries.id               pUuid               pk,not null       workspace-admin.ts:488
-anonymization_blacklist_entries.organization_id  safeOrganizationId  not null          workspace-admin.ts:489
-anonymization_blacklist_entries.workspace_id     safeWorkspaceId     fk,null           workspace-admin.ts:496  When set, the entry is scoped to a single workspace and is only consulted by detection runs for that workspace.
-anonymization_blacklist_entries.label            varchar             not null          workspace-admin.ts:500
-anonymization_blacklist_entries.canonical        varchar             not null          workspace-admin.ts:501
-anonymization_blacklist_entries.variants         jsonb               default,not null  workspace-admin.ts:502
-anonymization_blacklist_entries.enabled          boolean             default,not null  workspace-admin.ts:503
-anonymization_blacklist_entries.created_by       text                fk,null           workspace-admin.ts:504
-anonymization_blacklist_entries.updated_by       text                fk,null           workspace-admin.ts:507
-anonymization_blacklist_entries.created_at       timestamptz         default,not null  workspace-admin.ts:510
-anonymization_blacklist_entries.updated_at       timestamptz         default,not null  workspace-admin.ts:511
+anonymization_blacklist_entries.id               pUuid               pk,not null       workspace-admin.ts:495
+anonymization_blacklist_entries.organization_id  safeOrganizationId  not null          workspace-admin.ts:496
+anonymization_blacklist_entries.workspace_id     safeWorkspaceId     fk,null           workspace-admin.ts:503  When set, the entry is scoped to a single workspace and is only consulted by detection runs for that workspace.
+anonymization_blacklist_entries.label            varchar             not null          workspace-admin.ts:507
+anonymization_blacklist_entries.canonical        varchar             not null          workspace-admin.ts:508
+anonymization_blacklist_entries.variants         jsonb               default,not null  workspace-admin.ts:509
+anonymization_blacklist_entries.enabled          boolean             default,not null  workspace-admin.ts:510
+anonymization_blacklist_entries.created_by       text                fk,null           workspace-admin.ts:511
+anonymization_blacklist_entries.updated_by       text                fk,null           workspace-admin.ts:514
+anonymization_blacklist_entries.created_at       timestamptz         default,not null  workspace-admin.ts:517
+anonymization_blacklist_entries.updated_at       timestamptz         default,not null  workspace-admin.ts:518
 ```

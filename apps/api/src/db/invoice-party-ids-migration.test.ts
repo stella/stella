@@ -25,6 +25,7 @@ describe("party tax/VAT ID backfill (20261019010000)", () => {
   test.each([
     "SK2020123456",
     "CZ12345678",
+    "CZ1234567890",
     "DE123456789",
     "ATU12345678",
     "FRXX123456789",
@@ -37,6 +38,8 @@ describe("party tax/VAT ID backfill (20261019010000)", () => {
 
   test.each([
     "HRB123456",
+    "SK12",
+    "CZ1234567",
     "2020123456",
     "12345678",
     "HRA 98765",

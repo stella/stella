@@ -2419,9 +2419,9 @@
       "taxId": "Steuer-ID",
       "vatId": "VAT ID",
       "vatPayer": "VAT-payer status",
-      "vatPayerNo": "Not a VAT payer",
-      "vatPayerUnknown": "Unknown",
-      "vatPayerYes": "VAT payer",
+      "vatPayerNo": "Kein Umsatzsteuerzahler",
+      "vatPayerUnknown": "Unbekannt",
+      "vatPayerYes": "Umsatzsteuerzahler",
       "year": "Jahr"
     },
     "filterOrganizations": "Organisationen",

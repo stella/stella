@@ -2419,9 +2419,9 @@
       "taxId": "الرقم الضريبي",
       "vatId": "VAT ID",
       "vatPayer": "VAT-payer status",
-      "vatPayerNo": "Not a VAT payer",
-      "vatPayerUnknown": "Unknown",
-      "vatPayerYes": "VAT payer",
+      "vatPayerNo": "غير خاضع لضريبة القيمة المضافة",
+      "vatPayerUnknown": "غير معروف",
+      "vatPayerYes": "خاضع لضريبة القيمة المضافة",
       "year": "السنة"
     },
     "filterOrganizations": "المؤسسات",

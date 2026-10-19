@@ -40,6 +40,16 @@ type ResolveInvoicePrefillOptions = {
 // the wrong rate, so exceeding this is a defect, not a page boundary.
 const VAT_RATE_PERIOD_LIMIT = 200;
 
+export const invoiceLanguageForSeller = (
+  seller: {
+    country: string | null;
+    vatId: string | null;
+  } | null,
+) =>
+  invoiceLanguageForCountry(
+    invoiceCountryOf(seller ?? { country: null, vatId: null }),
+  );
+
 const SELLER_COLUMNS = {
   id: sellerProfiles.id,
   legalName: sellerProfiles.legalName,
@@ -186,7 +196,7 @@ export const resolveInvoicePrefill = async (
     language:
       matter?.clientInvoiceLanguage ??
       matter?.organizationInvoiceLanguage ??
-      invoiceLanguageForCountry(seller?.country ?? null),
+      invoiceLanguageForSeller(seller ?? null),
     vat: decideInvoiceVat({
       seller: seller ?? null,
       buyerVatId: buyer.buyerVatId,

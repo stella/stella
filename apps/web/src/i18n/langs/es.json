@@ -2419,9 +2419,9 @@
       "taxId": "NIF/CIF",
       "vatId": "VAT ID",
       "vatPayer": "VAT-payer status",
-      "vatPayerNo": "Not a VAT payer",
-      "vatPayerUnknown": "Unknown",
-      "vatPayerYes": "VAT payer",
+      "vatPayerNo": "No sujeto al IVA",
+      "vatPayerUnknown": "Desconocido",
+      "vatPayerYes": "Sujeto al IVA",
       "year": "Año"
     },
     "filterOrganizations": "Organizaciones",
