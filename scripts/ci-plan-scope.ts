@@ -1,6 +1,5 @@
 #!/usr/bin/env bun
 
-import { Result } from "better-result";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
@@ -60,17 +59,27 @@ export const DEFAULT_DETECTORS = {
   desktopBrowser: requiresDesktopBrowser,
 } satisfies ChangedFileScopeDetectors;
 
+const widenScope = (message: string) => {
+  console.log(`::warning title=Changed-file scope::${message}`);
+};
+
 // A detector that throws or answers a non-boolean cannot prove a scope
-// unaffected, so its checks run and the run says why.
+// unaffected, so its checks run and the run says why. The planner runs before
+// the dependency install, so this boundary catches without better-result.
 const failClosedDetector = (name: string, detect: () => unknown) => {
-  const result = Result.try(detect);
-  if (result.isOk() && typeof result.value === "boolean") {
-    return result.value;
+  try {
+    const answer = detect();
+    if (typeof answer === "boolean") {
+      return answer;
+    }
+    widenScope(
+      `${name} detector failed (a non-boolean answer); running its checks`,
+    );
+  } catch (error) {
+    widenScope(
+      `${name} detector failed (${String(error)}); running its checks`,
+    );
   }
-  const cause = result.isErr() ? String(result.error) : "a non-boolean answer";
-  console.log(
-    `::warning title=Changed-file scope::${name} detector failed (${cause}); running its checks`,
-  );
   return true;
 };
 
@@ -79,14 +88,14 @@ const failClosedServiceSuites = (
   files: readonly string[],
   root: string | undefined,
 ) => {
-  const planned = Result.try(() => planServiceSuites(files, root));
-  if (planned.isOk()) {
-    return planned.value;
+  try {
+    return planServiceSuites(files, root);
+  } catch (error) {
+    widenScope(
+      `service suite detector failed (${String(error)}); running every service suite`,
+    );
+    return { postgres: true, corpus: true, valkey: true, collab: true };
   }
-  console.log(
-    `::warning title=Changed-file scope::service suite detector failed (${String(planned.error)}); running every service suite`,
-  );
-  return { postgres: true, corpus: true, valkey: true, collab: true };
 };
 
 const bool = String;
