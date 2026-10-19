@@ -13,7 +13,12 @@
  * it as unmapped.
  */
 
-import { replaceXmlElements } from "@/api/lib/files/xml-scan";
+import { Result } from "better-result";
+
+import {
+  replaceXmlElements,
+  type XmlScanError,
+} from "@/api/lib/files/xml-scan";
 
 import type { FieldMeta, InputType } from "./types";
 
@@ -42,10 +47,10 @@ const replaceInTextNodes = (
   xml: string,
   literal: string,
   replacement: string,
-): string => {
+): Result<string, XmlScanError> => {
   const escapedLiteral = escapeXml(literal);
   if (escapedLiteral.length === 0) {
-    return xml;
+    return Result.ok(xml);
   }
   return replaceXmlElements(xml, "w:t", (match, content) =>
     match.selfClosing
@@ -66,7 +71,7 @@ export type ApplyFieldSuggestionsResult = {
 export const applyFieldSuggestions = (
   docXml: string,
   suggestions: readonly FieldSuggestion[],
-): ApplyFieldSuggestionsResult => {
+): Result<ApplyFieldSuggestionsResult, XmlScanError> => {
   let xml = docXml;
 
   // Replace longest literals first so a shorter literal cannot match inside a
@@ -80,11 +85,15 @@ export const applyFieldSuggestions = (
       continue;
     }
     const before = xml;
-    xml = replaceInTextNodes(
+    const replaced = replaceInTextNodes(
       xml,
       suggestion.literalText,
       `{{${suggestion.fieldPath}}}`,
     );
+    if (replaced.isErr()) {
+      return replaced;
+    }
+    xml = replaced.value;
     if (xml !== before) {
       applied.add(suggestion);
     }
@@ -117,5 +126,5 @@ export const applyFieldSuggestions = (
     }
   }
 
-  return { xml, fields, unapplied };
+  return Result.ok({ xml, fields, unapplied });
 };

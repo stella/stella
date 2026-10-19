@@ -82,7 +82,7 @@ export const prepareTemplateFromDocument = async ({
       continue;
     }
     const partXml = await entry.async("text");
-    const result = applyFieldSuggestions(partXml, suggestions);
+    const result = applyFieldSuggestions(partXml, suggestions).unwrap();
     if (result.xml !== partXml) {
       writeZipEntry(zip, partName, result.xml);
     }

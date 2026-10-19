@@ -1,9 +1,13 @@
 import { Result } from "better-result";
 
-import { DOCX_MAX_ENTRY_BYTES, writeZipEntry } from "@stll/docx-utils";
+import { writeZipEntry } from "@stll/docx-utils";
 
 import { loadDocxArchive } from "@/api/lib/docx-archive";
-import { firstXmlElement, replaceXmlElements } from "@/api/lib/files/xml-scan";
+import {
+  firstXmlElement,
+  replaceXmlElements,
+  type XmlScanError,
+} from "@/api/lib/files/xml-scan";
 
 const REGEX_HAS_PAGE_SET_UP_PR = /<pageSetUpPr[\s/>]/u;
 const REGEX_EXTRACT_PAGE_SET_UP_PR = /<pageSetUpPr(?<attrs>[^/]*?)\/>/gu;
@@ -32,7 +36,7 @@ const REGEX_SHEET_FILENAME = /^xl\/worksheets\/sheet\d+\.xml$/u;
  *   any `scale` attribute removed. If absent it is appended
  *   before `</worksheet>`.
  */
-export const patchSheetXml = (xml: string): string => {
+export const patchSheetXml = (xml: string): Result<string, XmlScanError> => {
   const sheetData = xml.indexOf("<sheetData");
   const suffix = sheetData === -1 ? "" : xml.slice(sheetData);
   let out = sheetData === -1 ? xml : xml.slice(0, sheetData);
@@ -51,12 +55,16 @@ export const patchSheetXml = (xml: string): string => {
     const sheetPr = firstXmlElement(out, "sheetPr");
 
     if (sheetPr !== null && !sheetPr.selfClosing) {
-      out = replaceXmlElements(
+      const replaced = replaceXmlElements(
         out,
         "sheetPr",
         (match, inner) =>
           `${match.openTag}${inner}<pageSetUpPr fitToPage="1"/>${match.closeTag}`,
       );
+      if (replaced.isErr()) {
+        return replaced;
+      }
+      out = replaced.value;
     } else if (REGEX_HAS_SELF_CLOSING_SHEET_PR.test(out)) {
       // Handle self-closing <sheetPr ... />
       out = out.replace(
@@ -105,7 +113,7 @@ export const patchSheetXml = (xml: string): string => {
     );
   }
 
-  return out;
+  return Result.ok(out);
 };
 
 /**
@@ -148,7 +156,7 @@ export const applyFitToPage = async (
       await Promise.all(
         sheetPaths.map(async (path) => ({
           path,
-          xml: await archive.readEntryString(path, DOCX_MAX_ENTRY_BYTES),
+          xml: await archive.readEntryString(path),
         })),
       ),
   );
@@ -160,7 +168,11 @@ export const applyFitToPage = async (
     if (xml === null) {
       continue;
     }
-    writeZipEntry(zip, path, patchSheetXml(xml));
+    const patched = patchSheetXml(xml);
+    if (patched.isErr()) {
+      return buffer;
+    }
+    writeZipEntry(zip, path, patched.value);
   }
 
   return await zip.generateAsync({ type: "arraybuffer" });

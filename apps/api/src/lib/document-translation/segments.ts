@@ -431,13 +431,16 @@ const patchTextNodes = (
     }
     return `${match.openTag}${escapeXml(replacement)}${match.closeTag}`;
   });
+  if (patched.isErr()) {
+    return fail("malformed-xml", "DOCX translation XML is incomplete");
+  }
   if ([...replacements.keys()].some((key) => !applied.has(key))) {
     return fail(
       "malformed-xml",
       "DOCX translation markers did not map to the original w:t nodes",
     );
   }
-  return Result.ok(patched);
+  return Result.ok(patched.value);
 };
 
 /** Apply a complete, ordered set of model responses to the original DOCX. */

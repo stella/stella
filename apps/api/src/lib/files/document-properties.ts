@@ -25,7 +25,7 @@ import type {
   DocumentPropertyKey,
   DocumentPropertyValue,
 } from "@stll/api-contract";
-import { DOCX_MAX_ENTRY_BYTES, writeZipEntry } from "@stll/docx-utils";
+import { writeZipEntry } from "@stll/docx-utils";
 import {
   isOfficeCollaborationPart,
   officeIdentityFields,
@@ -40,6 +40,7 @@ import {
   removeXmlElements,
   replaceXmlElementContent,
   xmlElementText,
+  type XmlScanError,
 } from "@/api/lib/files/xml-scan";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -527,8 +528,10 @@ const ODF_META_CLEARED = [
 ] as const satisfies readonly XmlElement[];
 
 /** Empty every occurrence while leaving each element in place. */
-const clearElements = (xml: string, names: readonly string[]): string =>
-  clearXmlElements(xml, names);
+const clearElements = (
+  xml: string,
+  names: readonly string[],
+): Result<string, XmlScanError> => clearXmlElements(xml, names);
 
 const XML_NAMESPACE_DECLARATION_RE =
   /\bxmlns(?::(?<prefix>[A-Za-z_][\w.-]*))?\s*=\s*(?<quote>["'])(?<namespace>[^"']*)\k<quote>/gu;
@@ -546,7 +549,7 @@ const qualifiedNames = (xml: string, element: XmlElement): string[] =>
 const clearNamespacedElements = (
   xml: string,
   elements: readonly XmlElement[],
-): string =>
+): Result<string, XmlScanError> =>
   clearElements(
     xml,
     elements.flatMap((element) => qualifiedNames(xml, element)),
@@ -560,25 +563,32 @@ const hasNamespacedElement = (xml: string, element: XmlElement): boolean =>
 const transformQualifiedElements = (
   xml: string,
   element: XmlElement,
-  transform: (current: string, name: string) => string,
-): string => {
+  transform: (current: string, name: string) => Result<string, XmlScanError>,
+): Result<string, XmlScanError> => {
   let result = xml;
   for (const name of qualifiedNames(xml, element)) {
-    result = transform(result, name);
+    const transformed = transform(result, name);
+    if (transformed.isErr()) {
+      return transformed;
+    }
+    result = transformed.value;
   }
-  return result;
+  return Result.ok(result);
 };
 
 const removeNamespacedElements = (
   xml: string,
   element: XmlElement,
   keep?: (openTag: string) => boolean,
-): string =>
+): Result<string, XmlScanError> =>
   transformQualifiedElements(xml, element, (result, name) =>
     removeXmlElements(result, name, keep),
   );
 
-const zeroNamespacedElement = (xml: string, element: XmlElement): string =>
+const zeroNamespacedElement = (
+  xml: string,
+  element: XmlElement,
+): Result<string, XmlScanError> =>
   transformQualifiedElements(xml, element, (result, name) =>
     replaceXmlElementContent(result, name, "0"),
   );
@@ -600,7 +610,9 @@ const isSignedZipArchive = (
 
 type ZipPart = {
   path: string;
-  clear: (xml: string) => string | Result<string, DocumentPropertiesParseError>;
+  clear: (
+    xml: string,
+  ) => string | Result<string, DocumentPropertiesParseError | XmlScanError>;
   propertyEntry?: boolean;
   required?: boolean;
 };
@@ -623,7 +635,7 @@ const scrubZipArchive = async (
       part,
       xml: part.propertyEntry
         ? await readPropertyEntry(archive, part.path)
-        : await archive.readEntryString(part.path, DOCX_MAX_ENTRY_BYTES),
+        : await archive.readEntryString(part.path),
     })),
   );
   for (const { part, xml } of read) {
@@ -656,7 +668,7 @@ const scrubZipArchive = async (
 const STELLA_CUSTOM_PROPERTY_NAMES = new Set(["stella-ref", "stella-code"]);
 const CUSTOM_PROPERTY_NAME_RE = /\bname\s*=\s*["'](?<name>[^"']*)["']/u;
 
-const scrubCustomProperties = (xml: string): string =>
+const scrubCustomProperties = (xml: string): Result<string, XmlScanError> =>
   removeNamespacedElements(
     xml,
     { namespace: OOXML_CUSTOM_NS, localName: "property" },
@@ -752,11 +764,19 @@ const scrubOoxml = async (
             message: "Invalid OOXML core properties root",
           });
         }
-        let scrubbed = clearNamespacedElements(xml, OOXML_CORE_TEXT_CLEARED);
-        for (const element of OOXML_CORE_REMOVED) {
-          scrubbed = removeNamespacedElements(scrubbed, element);
+        const cleared = clearNamespacedElements(xml, OOXML_CORE_TEXT_CLEARED);
+        if (cleared.isErr()) {
+          return cleared;
         }
-        return scrubbed;
+        let scrubbed = cleared.value;
+        for (const element of OOXML_CORE_REMOVED) {
+          const removed = removeNamespacedElements(scrubbed, element);
+          if (removed.isErr()) {
+            return removed;
+          }
+          scrubbed = removed.value;
+        }
+        return Result.ok(scrubbed);
       },
       propertyEntry: true,
       required: true,
@@ -774,9 +794,12 @@ const scrubOoxml = async (
             message: "Invalid OOXML extended properties root",
           });
         }
-        return zeroNamespacedElement(
-          clearNamespacedElements(xml, OOXML_APP_CLEARED),
-          { namespace: OOXML_APP_NS, localName: "TotalTime" },
+        const cleared = clearNamespacedElements(xml, OOXML_APP_CLEARED);
+        return cleared.andThen((value) =>
+          zeroNamespacedElement(value, {
+            namespace: OOXML_APP_NS,
+            localName: "TotalTime",
+          }),
         );
       },
       propertyEntry: true,
@@ -791,15 +814,19 @@ const scrubOoxml = async (
   ]);
 };
 
-const removeOdfStatisticsAndUserProperties = (xml: string): string => {
+const removeOdfStatisticsAndUserProperties = (
+  xml: string,
+): Result<string, XmlScanError> => {
   const withoutStatistics = removeNamespacedElements(xml, {
     namespace: ODF_META_NS,
     localName: "document-statistic",
   });
-  return removeNamespacedElements(withoutStatistics, {
-    namespace: ODF_META_NS,
-    localName: "user-defined",
-  });
+  return withoutStatistics.andThen((value) =>
+    removeNamespacedElements(value, {
+      namespace: ODF_META_NS,
+      localName: "user-defined",
+    }),
+  );
 };
 
 const scrubOdf = async (
@@ -818,8 +845,8 @@ const scrubOdf = async (
       {
         path: "meta.xml",
         clear: (xml) =>
-          removeOdfStatisticsAndUserProperties(
-            clearNamespacedElements(xml, ODF_META_CLEARED),
+          clearNamespacedElements(xml, ODF_META_CLEARED).andThen(
+            removeOdfStatisticsAndUserProperties,
           ),
         propertyEntry: true,
         required: true,
@@ -1003,8 +1030,8 @@ const declareOoxmlParts = async (
   parts: readonly OoxmlPart[],
 ): Promise<boolean> => {
   const [contentTypes, rels] = await Promise.all([
-    archive.readEntryString(CONTENT_TYPES_PATH, PROPERTY_ENTRY_MAX_BYTES),
-    archive.readEntryString(PACKAGE_RELS_PATH, PROPERTY_ENTRY_MAX_BYTES),
+    archive.readEntryString(CONTENT_TYPES_PATH),
+    archive.readEntryString(PACKAGE_RELS_PATH),
   ]);
   if (contentTypes === null || rels === null) {
     return false;
@@ -1072,9 +1099,11 @@ const setElement = (xml: string, name: string, value: string, root: string) => {
   }
   const rootElement = firstXmlElement(xml, root);
   if (rootElement === null || rootElement.selfClosing) {
-    return xml;
+    return Result.ok(xml);
   }
-  return `${xml.slice(0, rootElement.contentEnd)}<${name}>${text}</${name}>${xml.slice(rootElement.contentEnd)}`;
+  return Result.ok(
+    `${xml.slice(0, rootElement.contentEnd)}<${name}>${text}</${name}>${xml.slice(rootElement.contentEnd)}`,
+  );
 };
 
 export type WriteDocumentPropertiesOptions = {
@@ -1159,12 +1188,16 @@ export const writeDocumentProperties = async ({
       }
       for (const edit of edits) {
         if (edit.part === part) {
-          updated = setElement(
+          const set = setElement(
             updated,
             edit.element,
             edit.value,
             OOXML_PART_ROOT[part],
           );
+          if (set.isErr()) {
+            return { status: "unreadable" };
+          }
+          updated = set.value;
         }
       }
       writeZipEntry(archive.zip, OOXML_PART_PATH[part], updated);
