@@ -113,9 +113,6 @@ const analyticsFor = (
     usageMetering: context.usageMetering,
   });
 
-const callSignal = (context: BilingualAIContext): AbortSignal =>
-  AbortSignal.any([context.abortSignal, AbortSignal.timeout(CALL_TIMEOUT_MS)]);
-
 const preview = (text: string): string =>
   text.length > PREVIEW_CHARS ? `${text.slice(0, PREVIEW_CHARS)}…` : text;
 
@@ -267,7 +264,8 @@ export const decideDispositions = async (
           system: DISPOSITION_SYSTEM,
           systemPromptOrigin: "embeds-untrusted",
           messages: request.messages,
-          abortSignal: callSignal(context),
+          abortSignal: context.abortSignal,
+          deadlineMs: CALL_TIMEOUT_MS,
           outputMode: "generative",
           outputSchema: dispositionSchema,
         });
@@ -382,7 +380,8 @@ export const proposeGlossary = async (
     system: GLOSSARY_SYSTEM,
     systemPromptOrigin: "embeds-untrusted",
     messages: request.messages,
-    abortSignal: callSignal(context),
+    abortSignal: context.abortSignal,
+    deadlineMs: CALL_TIMEOUT_MS,
     outputSchema: glossarySchema,
   });
 
@@ -506,7 +505,8 @@ export const translateBatch = async (
     system: TRANSLATION_SYSTEM,
     systemPromptOrigin: "embeds-untrusted",
     messages: request.messages,
-    abortSignal: callSignal(context),
+    abortSignal: context.abortSignal,
+    deadlineMs: CALL_TIMEOUT_MS,
     outputSchema: translationSchema,
   });
 
@@ -663,7 +663,8 @@ export const translateFormattedBatch = async (
       system: FORMATTED_TRANSLATION_SYSTEM,
       systemPromptOrigin: "embeds-untrusted",
       messages: request.messages,
-      abortSignal: callSignal(context),
+      abortSignal: context.abortSignal,
+      deadlineMs: CALL_TIMEOUT_MS,
       outputSchema: formattedTranslationSchema,
     });
     const rejected = collectFormattedTranslations(remaining, output, result);
