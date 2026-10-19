@@ -37,6 +37,8 @@ import { planCiApiTests } from "./ci-api-test-plan";
 import { ciBrowserScopePredicate } from "./ci-browser-scope";
 import {
   CANONICAL_CANCEL_STEP,
+  PR_CODE_QUALITY_CANCEL_IF,
+  PR_CODE_QUALITY_CANCEL_JOBS,
   PR_CODE_QUALITY_CANCEL_STEP,
   PR_CODE_QUALITY_JOBS,
 } from "./ci-cancellation-contract";
@@ -842,6 +844,7 @@ const CANCELLATION_EXCEPTIONS = new Set([
   "heavy-web-build",
   "marketing-screenshots",
   CANCEL_REUSABLE_JOB,
+  ...Object.keys(PR_CODE_QUALITY_CANCEL_JOBS),
   ...MAIN_ONLY_JOBS,
 ]);
 const cancellationJobSchema = v.looseObject({
@@ -864,23 +867,47 @@ const cancellationJobSchema = v.looseObject({
 const regularCancellationJobs = () =>
   Object.entries(ciJobs).filter(([id]) => !CANCELLATION_EXCEPTIONS.has(id));
 
-test("only the code quality jobs end a failed pull request run, just before the merge-group cancellation", () => {
-  const owners: string[] = [];
-  for (const [id, value] of Object.entries(ciJobs)) {
-    const steps = v.parse(cancellationJobSchema, value).steps ?? [];
-    const index = steps.findIndex(
-      ({ name }) => name === PR_CODE_QUALITY_CANCEL_STEP.name,
+test("only dedicated helpers end a failed code quality pull request run", () => {
+  const helpers = Object.entries(PR_CODE_QUALITY_CANCEL_JOBS);
+  for (const [id, dependency] of helpers) {
+    const helper = v.parse(
+      v.looseObject({
+        needs: v.string(),
+        if: v.string(),
+        "timeout-minutes": v.number(),
+        permissions: v.record(v.string(), v.string()),
+        steps: v.array(v.unknown()),
+      }),
+      ciJobs[id],
     );
-    if (index === -1) {
-      continue;
-    }
-    owners.push(id);
-    expect(steps.at(index), id).toEqual(PR_CODE_QUALITY_CANCEL_STEP);
-    expect(index, id).toBe(steps.length - 2);
+    expect(helper.needs, id).toBe(dependency);
+    expect(helper.if, id).toBe(PR_CODE_QUALITY_CANCEL_IF);
+    expect(helper["timeout-minutes"], id).toBe(1);
+    expect(helper.permissions, id).toEqual({ actions: "write" });
+    expect(helper.steps, id).toEqual([PR_CODE_QUALITY_CANCEL_STEP]);
+  }
+  for (const id of PR_CODE_QUALITY_JOBS) {
+    const steps = v.parse(cancellationJobSchema, ciJobs[id]).steps ?? [];
+    expect(
+      steps.some(({ name }) => name === PR_CODE_QUALITY_CANCEL_STEP.name),
+      id,
+    ).toBe(false);
     expect(steps.at(-1)?.name, id).toBe(CANONICAL_CANCEL_STEP.name);
   }
-  expect(owners.toSorted()).toEqual([...PR_CODE_QUALITY_JOBS]);
+  expect(helpers.map(([id]) => id).toSorted()).toEqual(
+    Object.keys(PR_CODE_QUALITY_CANCEL_JOBS).toSorted(),
+  );
   expect(PR_CODE_QUALITY_CANCEL_STEP.with.script).not.toContain("merge group");
+  expect(
+    new Set(
+      helpers.map(
+        ([id]) =>
+          v.parse(cancellationJobSchema, ciJobs[id]).steps?.at(0)?.with?.[
+            "script"
+          ],
+      ),
+    ).size,
+  ).toBe(1);
 });
 
 test("every eligible CI job cancels a failed merge group in its final step with job-scoped permission", () => {
@@ -893,7 +920,10 @@ test("every eligible CI job cancels a failed merge group in its final step with 
   for (const [id, value] of Object.entries(ciJobs)) {
     const body = v.parse(cancellationJobSchema, value);
     expect(body.permissions?.["actions"] === "write", id).toBe(
-      eligible.has(id) || id === CANCEL_REUSABLE_JOB || MAIN_ONLY_JOBS.has(id),
+      eligible.has(id) ||
+        id === CANCEL_REUSABLE_JOB ||
+        Object.hasOwn(PR_CODE_QUALITY_CANCEL_JOBS, id) ||
+        MAIN_ONLY_JOBS.has(id),
     );
     const cancellations =
       body.steps?.filter(({ name }) => name === CANONICAL_CANCEL_STEP.name) ??
@@ -1404,8 +1434,9 @@ const reportOnlyJobs = Object.entries(ciJobs).flatMap(([job, body]) =>
 // Jobs that only collect diagnostics after a gated job failed. ci-result does
 // not wait for them: the failure they report already fails the run.
 const diagnosticJobs = Object.entries(ciJobs).flatMap(([job, body]) =>
-  jobIf(body).includes("needs.") &&
-  /needs\.[\w-]+\.result == 'failure'/u.test(jobIf(body))
+  Object.hasOwn(PR_CODE_QUALITY_CANCEL_JOBS, job) ||
+  (jobIf(body).includes("needs.") &&
+    /needs\.[\w-]+\.result == 'failure'/u.test(jobIf(body)))
     ? [job]
     : [],
 );
@@ -1432,9 +1463,16 @@ test("the result gate evaluates every job in the workflow", () => {
     ),
   );
   for (const job of diagnosticJobs) {
-    const failedOn = [
-      ...jobIf(ciJobs[job]).matchAll(/needs\.([\w-]+)\.result == 'failure'/gu),
-    ].map((match) => match[1] ?? "");
+    const helperDependency = Object.entries(PR_CODE_QUALITY_CANCEL_JOBS).find(
+      ([helper]) => helper === job,
+    )?.[1];
+    const failedOn = helperDependency
+      ? [helperDependency]
+      : [
+          ...jobIf(ciJobs[job]).matchAll(
+            /needs\.([\w-]+)\.result == 'failure'/gu,
+          ),
+        ].map((match) => match[1] ?? "");
     expect(failedOn.length, job).toBeGreaterThan(0);
     for (const gated of failedOn) {
       expect(resultJob.needs, `${job} runs on ${gated}`).toContain(gated);
