@@ -41,8 +41,13 @@ test("document search builders keep tenant, current-version and flow visibility 
     expect(rendered.sql).toContain("sd.organization_id =");
     expect(rendered.sql).toContain("sd.updated_at >= ev.created_at");
     expect(rendered.sql).toContain("sd.tsv @@");
-    expect(rendered.sql).toContain('"flow_run_steps"');
-    expect(rendered.sql).toContain('"review_task_entity_id" = sd.entity_id');
+    expect(rendered.sql).toContain(
+      'FROM "entities" AS "flow_visibility_entity"',
+    );
+    expect(rendered.sql).toContain('"flow_visibility_entity"."feature_owner"');
+    expect(rendered.sql).toContain(
+      '"flow_visibility_entity"."id" = sd.entity_id',
+    );
     expect(rendered.sql).toContain('"workspace_id" = sd.workspace_id');
     expect(rendered.params).toContain(organizationId);
   }

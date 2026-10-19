@@ -173,7 +173,7 @@ export const flowOwnedEntityVisibilitySql = ({
 }: FlowOwnedEntityVisibilitySqlOptions) => {
   const flowVisibilityEntity = alias(entities, "flow_visibility_entity");
   return sql`EXISTS (
-    SELECT 1 FROM ${flowVisibilityEntity}
+    SELECT 1 FROM ${entities} AS ${flowVisibilityEntity}
     WHERE ${flowVisibilityEntity.workspaceId} = ${workspaceId}
       AND ${flowVisibilityEntity.id} = ${entityId}
       AND (${activityFeatureOwnerVisibilitySql({
