@@ -623,6 +623,37 @@ describe("publisher scheduler", () => {
     expect(requested).toEqual(["https://publisher.example/robots.txt"]);
   });
 
+  test("a licensed bypass whose recording fails is refused before the resource is fetched", async () => {
+    const requested: string[] = [];
+    const request = createPolitePublisherFetch({
+      validateTarget: allowTarget,
+      onTelemetry: async () => {
+        await Promise.resolve();
+        throw new Error("audit store unavailable");
+      },
+      fetcher: async (input) => {
+        requested.push(input.url.href);
+        return input.url.pathname === "/robots.txt"
+          ? new Response("User-agent: *\nDisallow: /")
+          : new Response("licensed document");
+      },
+      defaultMinimumIntervalMs: 0,
+    });
+
+    const outcome = await request("https://publisher.example/one", {
+      policy: {
+        type: "licensed",
+        basis: "publisher agreement",
+        evidenceUrl: "https://publisher.example/license",
+      },
+    });
+
+    expect(Result.isError(outcome) && outcome.error._tag).toBe(
+      "publisher_bypass_unaudited",
+    );
+    expect(requested).toEqual(["https://publisher.example/robots.txt"]);
+  });
+
   test("licensed sources record their basis and cap unsupported delays", async () => {
     let now = 0;
     const sleeps: number[] = [];

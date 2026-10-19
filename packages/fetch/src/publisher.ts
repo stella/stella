@@ -101,8 +101,11 @@ type PublisherFetcherOptions<Target extends PublisherTarget> = {
   robotsRetryMs?: number;
   defaultMinimumIntervalMs?: number;
   robotsLoadTimeoutMs?: number;
-  /** Audit sink for licensed bypasses; without it a licensed bypass is refused. */
-  onTelemetry?: (event: PublisherTelemetry) => void;
+  /**
+   * Audit sink for licensed bypasses, awaited before the bypass proceeds;
+   * without it, or when it throws or rejects, the bypass is refused.
+   */
+  onTelemetry?: (event: PublisherTelemetry) => void | Promise<void>;
 };
 type PublisherFetchOptions = {
   init?: Omit<TransportRequestInit, "redirect">;
@@ -844,7 +847,9 @@ type PublisherRuntime<Target extends PublisherTarget> = {
     signal?: AbortSignal,
   ) => Promise<number>;
   defaultMinimumIntervalMs: number;
-  onTelemetry: ((event: PublisherTelemetry) => void) | undefined;
+  onTelemetry:
+    | ((event: PublisherTelemetry) => void | Promise<void>)
+    | undefined;
 };
 
 type WalkState = {
@@ -910,14 +915,29 @@ const enforcePublisherPolicy = async <Target extends PublisherTarget>(
       }),
     );
   }
-  runtime.onTelemetry({
-    event: "publisher_fetch_policy_bypass",
-    url: state.url.href,
-    origin: state.url.origin,
-    refusal: evaluated.refusal,
-    policy,
-    delayMs: intervalMs,
+  const sink = runtime.onTelemetry;
+  // The bypass proceeds only once its evidence is recorded; a failed or
+  // rejected recording refuses it.
+  const recorded = await Result.tryPromise(async () => {
+    await sink({
+      event: "publisher_fetch_policy_bypass",
+      url: state.url.href,
+      origin: state.url.origin,
+      refusal: evaluated.refusal,
+      policy,
+      delayMs: intervalMs,
+    });
   });
+  if (Result.isError(recorded)) {
+    return Result.err(
+      new PublisherBypassUnauditedError({
+        message: "Recording the licensed bypass failed",
+        url: state.url.href,
+        origin: state.url.origin,
+        cause: recorded.error.cause,
+      }),
+    );
+  }
   state.decision = "licensed_bypass";
   return Result.ok(intervalMs);
 };
