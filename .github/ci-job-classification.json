@@ -939,7 +939,7 @@
         "type": "checkout"
       },
       "path": ".github/workflows/ci.yml",
-      "digest": "defa10315087338dd9704a4be27a3ceda578c59372b71488ea95cd92b3f93ab7",
+      "digest": "c2a05571153d9bfdba14858c383d9443b9b46692b31d0a4f4214302c05e7b53f",
       "references": ["./.github/workflows/ci.yml"],
       "jobs": [
         {
@@ -1036,7 +1036,7 @@
           "id": "postgres-service-suites",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "53ca9253c8758930a168c61d16700bde29f53d068bfaabb3c59abe2a17dd618c"
+          "digest": "28957a1d4ddd7994652344df7252247cb762dc134445aea3877fe6cddaae11f3"
         },
         {
           "id": "service-suites",
