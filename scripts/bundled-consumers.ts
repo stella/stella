@@ -60,7 +60,7 @@ const isBuildScript = (path: string): boolean =>
 
 const dockerCommands = (contents: string): string[] => {
   const instructions =
-    contents.replace(/\\\r?\n/gu, " ").match(/^\s*RUN\b.*$/gimu) ?? [];
+    contents.replace(/\\\r?\n/gu, " ").match(/^[ \t]*RUN\b.*$/gimu) ?? [];
   return instructions.flatMap(shellBuildCommands);
 };
 
