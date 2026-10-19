@@ -210,3 +210,55 @@ describe("locatePassages", () => {
     );
   });
 });
+
+describe("annotation literal matching policy", () => {
+  test("retains overlapping ambiguity and literal punctuation", () => {
+    expect(
+      locatePassages([paragraph("p", "aaa")], [{ quote: "aa" }]),
+    ).toMatchObject({
+      status: "rejected",
+      issues: [{ code: ANNOTATION_LOCATE_ISSUE.quoteAmbiguous }],
+    });
+    expect(
+      locatePassages([paragraph("p", "x a.b y axb")], [{ quote: "a.b" }]),
+    ).toMatchObject({
+      status: "located",
+      spans: [{ startOffset: 2, endOffset: 5, quote: "a.b" }],
+    });
+  });
+  test("keeps Czech inflections, case and diacritics exact", () => {
+    const blocks = [paragraph("p", "😀 JUDr. Nováková, návrh Novákové.")];
+    expect(locatePassages(blocks, [{ quote: "Novákové" }])).toMatchObject({
+      status: "located",
+      spans: [{ startOffset: 25, endOffset: 33 }],
+    });
+    for (const quote of ["Novakove", "novákové", "Novákoví", " "]) {
+      expect(locatePassages(blocks, [{ quote }])).toMatchObject({
+        status: "rejected",
+        issues: [{ code: ANNOTATION_LOCATE_ISSUE.quoteNotFound }],
+      });
+    }
+    expect(locatePassages([], [{ quote: "Nováková" }])).toMatchObject({
+      status: "rejected",
+    });
+    expect(locatePassages(blocks, [])).toEqual({
+      status: "located",
+      spans: [],
+    });
+  });
+});
+
+test("annotation quotes use scalar matching after isolated-surrogate replacement", () => {
+  expect(
+    locatePassages([paragraph("p", "😀")], [{ quote: "\ud83d" }]),
+  ).toMatchObject({
+    status: "rejected",
+    issues: [{ code: ANNOTATION_LOCATE_ISSUE.quoteNotFound }],
+  });
+  expect(
+    locatePassages([paragraph("p", "x\ud801y")], [{ quote: "\ud800" }]),
+  ).toEqual({
+    status: "located",
+    spans: [{ blockAnchorId: "p", startOffset: 1, endOffset: 2, quote: "�" }],
+  });
+});

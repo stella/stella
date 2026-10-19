@@ -1458,6 +1458,7 @@ const config = defineConfig({
     stellaLowercasePluginSpecifier,
     "./.oxlint-plugins/no-raw-cache-control.ts",
     "./.oxlint-plugins/confine-sql-close.ts",
+    "./.oxlint-plugins/confine-online-ddl.ts",
     "./.oxlint-plugins/raw-hash-from-source-fingerprint.ts",
     "./.oxlint-plugins/no-raw-sha256.ts",
     "./.oxlint-plugins/no-hand-rolled-concurrency.ts",
@@ -1711,6 +1712,17 @@ const config = defineConfig({
       },
     },
     {
+      // Tests, fixtures and the owner are skipped inside the rule; SQL
+      // migration files are not JavaScript, so oxlint never reads them.
+      files: [
+        "apps/api/src/**/*.{ts,tsx,js,mjs}",
+        ".oxlint-plugins/__fixtures__/confine-online-ddl.fixture.ts",
+      ],
+      rules: {
+        "confine-online-ddl/confine-online-ddl": "error",
+      },
+    },
+    {
       files: [
         "packages/scripts/src/dev-*.ts",
         "packages/scripts/src/agent-session.ts",
@@ -1740,7 +1752,18 @@ const config = defineConfig({
       files: ["apps/api/src/**/*.ts"],
       rules: {
         "gdp-ts/no-define-proof": "error",
-        "gdp-ts/no-proof-assertion": "error",
+        "gdp-ts/no-proof-assertion": [
+          "error",
+          {
+            proofImports: [
+              "(^|/)proofs(/|$)",
+              "(^|/)workspaces/matter-access-proof(?:\\.ts)?$",
+            ],
+          },
+        ],
+        "gdp-ts/no-matter-proof-forgery": "error",
+        "gdp-ts/no-matter-proof-kind-outside-owner": "error",
+        "gdp-ts/no-matter-access-context-escape": "error",
       },
     },
     {
@@ -4110,9 +4133,6 @@ const config = defineConfig({
         "apps/web/src/**/template-preview.tsx",
         "apps/web/src/**/template-preview-view.tsx",
         "apps/web/src/**/page-citation.tsx",
-        // Generated message types: UI copy may legitimately contain words
-        // like "right-click"; these strings are never class names.
-        "apps/web/src/i18n/langs/messages.gen.ts",
       ],
       rules: { "no-physical-properties/no-physical-properties": "off" },
     },
