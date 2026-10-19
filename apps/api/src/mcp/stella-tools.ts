@@ -35,6 +35,7 @@ import { mapWithConcurrency } from "@stll/concurrency";
 import { COUNTRY_CODES } from "@stll/country-codes";
 import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import { locateEuProvisionCitations } from "@stll/legal-atlas/eu-provision-citations";
 import { provisionCitationProfileFor } from "@stll/legal-atlas/provision-citation-profiles";
 import { resolveProvisionCitation } from "@stll/legal-atlas/provision-citation-resolve";
 import {
@@ -74,8 +75,12 @@ import type { readWorkspaceMembersHandler } from "@/api/handlers/workspaces/work
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
-import { CITATION_READ_DIRECTIONS } from "@/api/lib/case-law/citation-vocabulary";
+import {
+  CITATION_READ_DIRECTIONS,
+  CITATION_TREATMENTS,
+} from "@/api/lib/case-law/citation-vocabulary";
 import { DECISION_READ_STATUS } from "@/api/lib/case-law/decision-read-vocabulary";
+import { DOCTRINAL_TREATMENTS } from "@/api/lib/case-law/doctrine";
 import {
   type CaseLawProvisionFilter,
   type CaseLawProvisionScope,
@@ -782,7 +787,7 @@ const searchCaseLawArgsSchema = nullAsAbsent(
         v.nonEmpty(),
         v.maxLength(LIMITS.caseLawProvisionFilterMaxLength),
         v.description(
-          'Only decisions citing this provision, as a lawyer writes it: "§ 316 odst. 2 ZP", "§ 52 písm. g) zákoníku práce", "čl. 10 Listiny". A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, exact total.',
+          'Only decisions citing this provision, as a lawyer writes it: "§ 316 odst. 2 ZP", "§ 52 písm. g) zákoníku práce", "čl. 10 Listiny", "Article 6(1)(a) GDPR". EU provisions work for every decision country. A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, exact total.',
         ),
       ),
     ),
@@ -950,6 +955,20 @@ const readCaseLawCitationsArgsSchema = nullAsAbsent(
       v.picklist(CITATION_READ_DIRECTIONS),
       v.description(
         "Which side of the citation graph to read: 'cites' for the decisions this decision cites, 'cited_by' for the decisions that cite it. Citing is not agreeing: both sides carry negative treatments.",
+      ),
+    ),
+    doctrine: v.optional(
+      v.pipe(
+        v.picklist(
+          DOCTRINAL_TREATMENTS.filter((value) => value !== "not_stated"),
+        ),
+        v.description("Only citations with this reviewed doctrinal finding."),
+      ),
+    ),
+    polarity: v.optional(
+      v.pipe(
+        v.picklist(CITATION_TREATMENTS),
+        v.description("Only citations with this polarity reading."),
       ),
     ),
     limit: v.optional(
@@ -1208,11 +1227,10 @@ export const STELLA_TOOL_DEFINITIONS = [
     // polarity vocabulary and the two readings a model would otherwise guess
     // at, the passage's bounds, and the next call spelled out.
     description:
-      "Read one page of citations with their citing passages. `cited_by` " +
-      "reads decisions citing this one, `cites` what it cites. `polarity` " +
-      "is a stance: 'unclassified' means none was read, 'mixed' that " +
-      "mentions disagreed. `doctrine` is 'distinguishes' or 'limits' only " +
-      "where a reviewed reading found the court doing so in its own words; " +
+      "Read citations with citing passages. `cited_by` reads citers; `cites` reads citations. " +
+      "Filters `doctrine` and `polarity` combine with AND. `polarity`: " +
+      "'unclassified' means unread; 'mixed' means mentions disagreed. " +
+      "`doctrine` is reviewed 'distinguishes' or 'limits'; rejected when unavailable. " +
       "'not_stated' does not mean followed; 'unread' means none " +
       "was read; null when `doctrineAvailability` is 'unavailable'. " +
       "`passage.evidenceQuote` is the verbatim evidence when text is " +
@@ -2188,6 +2206,43 @@ const resolveSearchProvision = (
   text: string,
   country: string,
 ): SearchProvisionRead => {
+  const citedOn = Temporal.Now.plainDateISO("UTC").toString();
+  const euCitations = locateEuProvisionCitations(text, { citedOn });
+  if (euCitations.length > 1) {
+    return provisionRefusal(
+      "The provision names several provisions or a range",
+      'Pass one EU provision per search, for example "Article 6(1)(a) GDPR".',
+    );
+  }
+  const euCitation = euCitations.at(0);
+  if (euCitation !== undefined) {
+    const before = text.slice(0, euCitation.start).trim();
+    const after = text.slice(euCitation.end).trim();
+    if (before.length > 0 || (after.length > 0 && after !== ".")) {
+      return provisionRefusal(
+        "The provision names several provisions or contains unsupported text",
+        'Pass one complete EU provision per search, for example "Article 6(1)(a) GDPR"; search enumerated provisions separately.',
+      );
+    }
+    const reference = euCitation.reference;
+    return {
+      type: "resolved",
+      provision: {
+        jurisdiction: "EU",
+        work: euCitation.act.celex,
+        unit: reference.unit,
+        section: reference.section,
+        ...(reference.sectionSuffix === null
+          ? {}
+          : { sectionSuffix: reference.sectionSuffix }),
+        ...(reference.subsection === null
+          ? {}
+          : { subsection: reference.subsection }),
+        ...(reference.letter === null ? {} : { letter: reference.letter }),
+        ...(reference.point === null ? {} : { point: reference.point }),
+      },
+    };
+  }
   const profile = provisionCitationProfileFor(country);
   if (profile === null) {
     return provisionRefusal(
@@ -2198,7 +2253,7 @@ const resolveSearchProvision = (
   const read = resolveProvisionCitation({
     text,
     profile,
-    citedOn: Temporal.Now.plainDateISO("UTC").toString(),
+    citedOn,
   });
   switch (read.status) {
     case "resolved":
@@ -3579,7 +3634,13 @@ const handleReadCaseLawCitationsTool: TypedMcpToolHandler<
   if (!parsed.success) {
     return validationErrorResult(parsed.issues);
   }
-  const { cursor, decision_id: decisionId, direction } = parsed.output;
+  const {
+    cursor,
+    decision_id: decisionId,
+    direction,
+    doctrine,
+    polarity,
+  } = parsed.output;
   const limit = normalizePage(
     parsed.output.limit ?? LIMITS.caseLawAgentCitationPageSizeDefault,
   );
@@ -3595,6 +3656,8 @@ const handleReadCaseLawCitationsTool: TypedMcpToolHandler<
     cursor,
     decisionId: brandPersistedCaseLawDecisionId(decisionId),
     direction,
+    ...(doctrine === undefined ? {} : { doctrine }),
+    ...(polarity === undefined ? {} : { polarity }),
     limit,
     surface: "search",
   });
@@ -3610,10 +3673,25 @@ const handleReadCaseLawCitationsTool: TypedMcpToolHandler<
       tool: "read_case_law_citations",
     });
   }
+  if (read.type === "doctrine_unavailable") {
+    return structuredErrorResult({
+      code: "validation_error",
+      message: "Doctrine filtering is unavailable",
+      issues: [
+        {
+          path: "doctrine",
+          message: "Doctrine is unavailable on this case-law surface.",
+        },
+      ],
+      hint: "Call read_case_law_citations again without doctrine; the response's doctrineAvailability will report whether doctrine can be read.",
+    });
+  }
 
   return toolDataResult(
     projectionPayload(READ_CASE_LAW_CITATIONS_PROJECTION, {
       doctrineAvailability: read.page.doctrineAvailability,
+      ...(doctrine === undefined ? {} : { doctrine }),
+      ...(polarity === undefined ? {} : { polarity }),
       decisionId,
       direction,
       nextCursor: read.page.nextCursor,
