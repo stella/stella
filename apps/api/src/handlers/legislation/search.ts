@@ -158,6 +158,12 @@ type LegislationHit = Static<
 
 type RawRow = Record<string, unknown>;
 
+type CorpusLegislationReadDependencies = {
+  readPage: typeof readCorpusIndexSearchPage;
+  readCandidateRows: typeof readLegislationCandidateRows;
+  readNamedWorks: typeof readNamedLegislationWorks;
+};
+
 type SearchLegislationDependencies = {
   provider?: typeof envBase.LEGAL_SEARCH_PROVIDER;
   loadSearchConfigs: () => Promise<readonly FtsSearchConfig[]>;
@@ -170,6 +176,7 @@ type SearchLegislationDependencies = {
   emitStage?: typeof emitRequestStage;
   stageToolName?: string;
   corpusSearch?: typeof corpusIndexSearch;
+  corpusReads?: CorpusLegislationReadDependencies;
   projectHit?: typeof projectLegislationSearchHit;
 };
 
@@ -279,6 +286,7 @@ type RehydrateLegislationCandidatesOptions = CorpusCandidateRankingInput & {
   excludedWorkTokens?: readonly string[] | undefined;
   ranking?: "authority" | "lexical" | undefined;
   hitDispositions?: CorpusHitDispositionCounter | undefined;
+  readCandidateRows?: typeof readLegislationCandidateRows | undefined;
 };
 
 /** Undated search keeps historical wording discoverable; an explicit date
@@ -565,6 +573,7 @@ export const rehydrateLegislationCandidates = async ({
   excludedWorkTokens,
   ranking = "authority",
   hitDispositions = createCorpusHitDispositionCounter(),
+  readCandidateRows = readLegislationCandidateRows,
   observeStage = async (_stage, operation) => await operation(),
 }: RehydrateLegislationCandidatesOptions) => {
   const ids = candidates.map((candidate) =>
@@ -581,7 +590,7 @@ export const rehydrateLegislationCandidates = async ({
         const candidateRead =
           ids.length === 0
             ? { rows: [], dispositions: [] }
-            : await readLegislationCandidateRows(tx, {
+            : await readCandidateRows(tx, {
                 ids,
                 generation,
                 body,
@@ -1149,6 +1158,7 @@ type CorpusLegislationSearchOptions = {
   observeStage: ObserveLegislationStage;
   now: () => number;
   emitIndexScan: (durationMs: number, candidateCount: number) => void;
+  reads: CorpusLegislationReadDependencies;
 };
 
 const createIndexRecorder = ({
@@ -1179,6 +1189,7 @@ const corpusIndexSearch = async ({
   observeStage,
   now,
   emitIndexScan,
+  reads,
 }: CorpusLegislationSearchOptions): Promise<{
   hits: LegislationHit[];
   nextCursor: string | null;
@@ -1202,7 +1213,7 @@ const corpusIndexSearch = async ({
       ? []
       : await legislationDb(
           async (tx) =>
-            await readNamedLegislationWorks(tx, {
+            await reads.readNamedWorks(tx, {
               query: body.query,
               country: body.jurisdiction,
             }),
@@ -1227,7 +1238,7 @@ const corpusIndexSearch = async ({
       }
     }
     const recordIndex = createIndexRecorder({ now, emit: emitIndexScan });
-    const page = await readCorpusIndexSearchPage({
+    const page = await reads.readPage({
       hitDispositions,
       observer,
       cluster,
@@ -1267,6 +1278,7 @@ const corpusIndexSearch = async ({
           excludedWorkTokens: [...excludedWorkTokens],
           ranking: active.type === "strict" ? "authority" : "lexical",
           observeStage,
+          readCandidateRows: reads.readCandidateRows,
         });
       },
     });
@@ -1376,6 +1388,17 @@ const runCorpusIndexSearch = async (
   options: CorpusLegislationSearchOptions,
   dependencies: SearchLegislationDependencies,
 ) => await (dependencies.corpusSearch ?? corpusIndexSearch)(options);
+
+const defaultCorpusLegislationReads: CorpusLegislationReadDependencies = {
+  readPage: readCorpusIndexSearchPage,
+  readCandidateRows: readLegislationCandidateRows,
+  readNamedWorks: readNamedLegislationWorks,
+};
+
+const corpusLegislationReadsOf = (
+  dependencies: SearchLegislationDependencies,
+): CorpusLegislationReadDependencies =>
+  dependencies.corpusReads ?? defaultCorpusLegislationReads;
 
 const projectSearchHits = (
   hits: LegislationHit[],
@@ -1570,6 +1593,7 @@ export const searchLegislationHandler = async (
                 { candidateCount },
                 durationMs,
               ),
+            reads: corpusLegislationReadsOf(dependencies),
           },
           dependencies,
         )

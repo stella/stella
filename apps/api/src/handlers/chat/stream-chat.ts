@@ -485,6 +485,53 @@ export type StreamChatOutcome =
   | { type: "streaming"; response: Response }
   | { type: "refused"; response: ChatTurnFailureResponse };
 
+type ObserveChatOutputStagesOptions = {
+  source: AsyncIterable<StreamChunk>;
+  startedAt: number;
+  isSettled: () => boolean;
+  now?: () => number;
+  emitStage?: typeof emitRequestStage;
+};
+
+export const observeChatOutputStages = async function* ({
+  source,
+  startedAt,
+  isSettled,
+  now = () => performance.now(),
+  emitStage = emitRequestStage,
+}: ObserveChatOutputStagesOptions) {
+  let firstTokenAt: number | undefined;
+  let finish:
+    | { type: "cancelled" }
+    | { type: "completed" }
+    | { type: "failed" } = { type: "cancelled" };
+  try {
+    for await (const chunk of source) {
+      if (firstTokenAt === undefined && chunkCarriesAnswer(chunk)) {
+        firstTokenAt = now();
+        emitStage({
+          route: "/v1/chat/:threadId/messages",
+          stage: "provider_first_token",
+          durationMs: firstTokenAt - startedAt,
+          outcome: "completed",
+        });
+      }
+      yield chunk;
+    }
+    finish = isSettled() ? { type: "completed" } : { type: "failed" };
+  } catch (error) {
+    finish = { type: "failed" };
+    throw error;
+  } finally {
+    emitStage({
+      route: "/v1/chat/:threadId/messages",
+      stage: "stream_finish",
+      durationMs: now() - startedAt,
+      outcome: finish.type,
+    });
+  }
+};
+
 export const streamChat = async ({
   visualOrigin,
   devModelId,
@@ -1001,37 +1048,11 @@ export const streamChat = async ({
     outcome: "completed",
   });
   const providerWaitStartedAt = performance.now();
-  const observedOutput = (async function* () {
-    let firstTokenAt: number | undefined;
-    try {
-      for await (const chunk of output) {
-        if (firstTokenAt === undefined && chunkCarriesAnswer(chunk)) {
-          firstTokenAt = performance.now();
-          emitRequestStage({
-            route: "/v1/chat/:threadId/messages",
-            stage: "provider_first_token",
-            durationMs: firstTokenAt - providerWaitStartedAt,
-            outcome: "completed",
-          });
-        }
-        yield chunk;
-      }
-      emitRequestStage({
-        route: "/v1/chat/:threadId/messages",
-        stage: "stream_finish",
-        durationMs: performance.now() - providerWaitStartedAt,
-        outcome: settlement.event === undefined ? "failed" : "completed",
-      });
-    } catch (error) {
-      emitRequestStage({
-        route: "/v1/chat/:threadId/messages",
-        stage: "stream_finish",
-        durationMs: performance.now() - providerWaitStartedAt,
-        outcome: "failed",
-      });
-      throw error;
-    }
-  })();
+  const observedOutput = observeChatOutputStages({
+    source: output,
+    startedAt: providerWaitStartedAt,
+    isSettled: () => settlement.event !== undefined,
+  });
   return {
     type: "streaming",
     response: run.produce(

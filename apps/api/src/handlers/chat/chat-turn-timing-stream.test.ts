@@ -17,6 +17,7 @@ import {
   createChatTurnTimingDurability,
   withChatTurnTiming,
 } from "@/api/handlers/chat/chat-turn-timing-stream";
+import { observeChatOutputStages } from "@/api/handlers/chat/stream-chat";
 import type { ChatTurnTiming } from "@/api/handlers/chat/types";
 import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
 import { readPresent, readUnavailable } from "@/api/lib/errors/read-outcome";
@@ -75,6 +76,58 @@ const starts = [
     timestamp: 0,
   },
 ] as const satisfies readonly StreamChunk[];
+
+test("records a cancelled stream when its consumer returns after one chunk", async () => {
+  let clock = 10;
+  const records: { stage: string; outcome: string }[] = [];
+  const iterator = observeChatOutputStages({
+    source: chunksOf([starts[0], runEnd]),
+    startedAt: 0,
+    isSettled: () => false,
+    now: () => clock,
+    emitStage: ({ stage, outcome }) => records.push({ stage, outcome }),
+  })[Symbol.asyncIterator]();
+
+  expect((await iterator.next()).value).toEqual(starts[0]);
+  clock = 25;
+  await iterator.return();
+
+  expect(records).toEqual([{ stage: "stream_finish", outcome: "cancelled" }]);
+});
+
+test("records a completed stream once", async () => {
+  const records: { stage: string; outcome: string }[] = [];
+  await Array.fromAsync(
+    observeChatOutputStages({
+      source: chunksOf([starts[0], runEnd]),
+      startedAt: 0,
+      isSettled: () => true,
+      now: () => 20,
+      emitStage: ({ stage, outcome }) => records.push({ stage, outcome }),
+    }),
+  );
+  expect(records).toEqual([{ stage: "stream_finish", outcome: "completed" }]);
+});
+
+test("records a failed stream once and preserves the source error", async () => {
+  const failure = new HandlerError({ status: 500, message: "stream failed" });
+  const source = async function* () {
+    yield starts[0];
+    throw failure;
+  };
+  const records: { stage: string; outcome: string }[] = [];
+  const iterator = observeChatOutputStages({
+    source: source(),
+    startedAt: 0,
+    isSettled: () => false,
+    now: () => 30,
+    emitStage: ({ stage, outcome }) => records.push({ stage, outcome }),
+  })[Symbol.asyncIterator]();
+  await iterator.next();
+
+  expect(await rejectionOf(iterator.next())).toBe(failure);
+  expect(records).toEqual([{ stage: "stream_finish", outcome: "failed" }]);
+});
 
 describe("active timing through the real SDK message processor", () => {
   for (const start of starts) {

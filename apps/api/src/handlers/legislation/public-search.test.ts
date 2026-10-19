@@ -45,11 +45,18 @@ const timingHit = {
   score: 1,
 } as const;
 
+const timingCandidateIds = [
+  timingHit.documentId,
+  "7c2e3f45-69bb-4e2d-8a1b-3c4d5e6f7081",
+  "8d3f4056-7acc-4f3e-9b2c-4d5e6f708192",
+] as const;
+
 const runTimedSearch = async (
   stageToolName?: string,
   failHydration = false,
 ) => {
   let clock = 0;
+  let databaseReads = 0;
   const records: Parameters<
     NonNullable<Parameters<typeof searchLegislationHandler>[3]>["emitStage"]
   >[0][] = [];
@@ -59,48 +66,100 @@ const runTimedSearch = async (
     readServingGeneration: async () =>
       Result.ok({
         family: "legislation",
-        generation: "legislation_test",
+        generation: "legislation_v2",
         cluster: "q09",
       }),
     now: () => clock,
     emitStage: (record) => records.push(record),
     ...(stageToolName === undefined ? {} : { stageToolName }),
-    corpusSearch: async ({ emitIndexScan, observeStage }) => {
-      clock += 7;
-      emitIndexScan(7, 3);
-      await observeStage(
-        "candidate_hydration",
-        () => {
-          clock += 11;
-          if (failHydration) {
-            throw new Error("hydration failed");
-          }
-          return { count: 3 };
-        },
-        ({ count }) => ({ candidateCount: count }),
-      );
-      await observeStage(
-        "work_collapse_ranking",
-        () => {
-          clock += 13;
-          return { count: 1 };
-        },
-        ({ count }) => ({ resultCount: count }),
-      );
-      return {
-        hits: [timingHit],
-        nextCursor: null,
-        paginationOutcome: SEARCH_PAGINATION_COMPLETE,
-      };
+    corpusReads: {
+      readPage: async (options) => {
+        clock += 7;
+        const ranked = await options.rankCandidates(
+          timingCandidateIds.map((id, index) => ({
+            id,
+            score: 1 - index / 10,
+          })),
+          {
+            excludedGroups: new Set(),
+            selectAppliedCandidates: () => {
+              clock += 13;
+              return timingCandidateIds.map((id, index) => ({
+                id,
+                score: 1 - index / 10,
+              }));
+            },
+          },
+        );
+        return {
+          pageRanked: [...ranked.ranked],
+          context: ranked.context,
+          snippetById: new Map(),
+          anchorIdById: new Map(),
+          passageCountById: new Map(),
+          revisionById: ranked.revisionById,
+          passageClauseById: new Map(),
+          stop: { type: "exhausted" },
+          scan: {
+            rounds: 1,
+            passagesScanned: 1,
+            indexMs: 7,
+            earlyStopped: false,
+            roundCapHit: false,
+            highlightRounds: 0,
+          },
+          lexicalScores: null,
+          nextCursor: null,
+          paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+          reach: "reached",
+        };
+      },
+      readCandidateRows: async (_tx, { ids }) => ({
+        rows: ids.map((id) => ({
+          id,
+          sourceId: "b1a2d3e4-5678-4789-a123-456789abcdef",
+          eli: timingHit.eli,
+          slug: timingHit.slug,
+          title: timingHit.title,
+          country: timingHit.country,
+          language: timingHit.language,
+          documentType: timingHit.documentType,
+          statusValue: timingHit.status,
+          effectiveDate: timingHit.effectiveDate,
+          versionValidFrom: timingHit.versionValidFrom,
+          versionValidTo: timingHit.versionValidTo,
+          sourceUrl: timingHit.sourceUrl,
+          citationAuthority: 0,
+          canRecur: false,
+          appliedRevision: null,
+        })),
+        dispositions: [],
+      }),
+      readNamedWorks: async () => [],
     },
     projectHit: (hit) => {
       clock += 17;
       return hit;
     },
   } satisfies NonNullable<Parameters<typeof searchLegislationHandler>[3]>;
-  const db: LegislationReadDb = async (read) => await read(Object.create(null));
+  const db: LegislationReadDb = async (read) => {
+    databaseReads += 1;
+    if (databaseReads <= 2) {
+      return await read(Object.create(null));
+    }
+    clock += 11;
+    if (failHydration) {
+      throw new Error("hydration failed");
+    }
+    return await read({
+      execute: async () => [],
+      select: () => {
+        throw new Error("Unexpected database select");
+      },
+    });
+  };
   const operation = searchLegislationHandler(
-    { query: "timing" },
+    { query: "timing", limit: 1 },
     db,
     "unobserved",
     dependencies,

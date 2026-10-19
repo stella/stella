@@ -57,7 +57,11 @@ const REQUEST_STAGE_FAMILY = {
   stream_finish: "chat_turn",
 } as const satisfies Record<RequestStage, keyof typeof REQUEST_STAGE_FAMILIES>;
 
-export type RequestStageOutcome = "completed" | "failed" | "refused";
+export type RequestStageOutcome =
+  | "completed"
+  | "failed"
+  | "refused"
+  | "cancelled";
 
 type RequestStageRecordInput = {
   route: string;
