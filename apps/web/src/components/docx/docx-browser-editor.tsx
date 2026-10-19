@@ -74,9 +74,13 @@ import { useDocxComments } from "./use-docx-comments";
 import { useDocxCompatibility } from "./use-docx-compatibility";
 import { useDocxEditOpening } from "./use-docx-edit-opening";
 import { useDocxEditorMode } from "./use-docx-editor-mode";
-import { DOCX_TIMING_SURFACE, useDocxEditorView } from "./use-docx-editor-view";
-import { useDocxEditorViewport } from "./use-docx-editor-viewport";
+import { useDocxEditorView } from "./use-docx-editor-view";
+import {
+  DOCX_TIMING_SURFACE,
+  useDocxEditorViewport,
+} from "./use-docx-editor-viewport";
 import type { DocxEditorSurface } from "./use-docx-editor-viewport";
+import { useDocxOpenTiming } from "./use-docx-open-timing";
 import { useDocxPreviewFile } from "./use-docx-preview-file";
 import {
   useDocxEditSession,
@@ -192,11 +196,11 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
     surface,
   } = props;
   const editorRef = useRef<DocxEditorRef>(null);
+  const attachEditor = useDocxOpenTiming({ editorRef, fieldId, surface });
   const containerRef = useRef<HTMLDivElement>(null);
   const { editorView, editorProps: editorViewProps } = useDocxEditorView({
     entityId,
     fieldId,
-    surface,
     workspaceId,
   });
   const pendingEditRequestRef = useRef(false);
@@ -463,7 +467,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
         >
           <DocxEditor
             key={`docx-${previewIdentity}-${collaborationSession?.roomId ?? "local"}`}
-            ref={editorRef}
+            ref={attachEditor}
             autoOpenReviewSidebar={false}
             // Docked, the pane has a find bar of its own and no Folio binding
             // may answer beside it. Full view keeps Folio's bindings for a

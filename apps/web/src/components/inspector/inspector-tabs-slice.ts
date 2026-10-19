@@ -387,7 +387,11 @@ export const createInspectorTabsSlice = (
     }),
 
   openFile: (tab) => {
-    documentOpenTiming.requested(tab.id, "inspector");
+    // Only a new tab mounts a new editor; activating an existing one may
+    // reuse a mounted viewer whose layout never reports again.
+    if (!get().tabs.some((existing) => existing.id === tab.id)) {
+      documentOpenTiming.requested(tab.id, "inspector");
+    }
     openTabs(set, {
       targets: [{ type: "pdf", ...tab }],
       activeId: tab.id,
