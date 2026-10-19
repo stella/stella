@@ -634,7 +634,7 @@
     },
     "packages/agent-input": {
       "name": "@stll/agent-input",
-      "version": "0.1.5",
+      "version": "0.1.6",
       "dependencies": {
         "@stll/country-codes": "workspace:^",
         "@stll/fuzzy-search": "catalog:",
@@ -680,7 +680,7 @@
     },
     "packages/anonymize-chat": {
       "name": "@stll/anonymize-chat",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "dependencies": {
         "@stll/anonymize-wasm": "catalog:",
         "@stll/text-normalize": "workspace:*",
@@ -752,7 +752,7 @@
     },
     "packages/business-registries": {
       "name": "@stll/business-registries",
-      "version": "0.13.0",
+      "version": "0.13.1",
       "dependencies": {
         "@stll/country-codes": "workspace:*",
         "@stll/stdnum": "^2.3.2",
@@ -850,7 +850,7 @@
     },
     "packages/cli": {
       "name": "@stll/cli",
-      "version": "4.3.0",
+      "version": "5.0.0",
       "bin": {
         "stella": "./dist/cli.js",
       },
@@ -1130,7 +1130,7 @@
     },
     "packages/mcp-kit": {
       "name": "@stll/mcp-kit",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "dependencies": {
         "@stll/agent-input": "workspace:^",
         "@stll/fuzzy-search": "catalog:",
@@ -1415,7 +1415,7 @@
     },
     "packages/text-normalize": {
       "name": "@stll/text-normalize",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "devDependencies": {
         "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:*",
@@ -1462,7 +1462,7 @@
     },
     "packages/ui": {
       "name": "@stll/ui",
-      "version": "0.47.0",
+      "version": "0.47.1",
       "dependencies": {
         "better-result": "catalog:",
         "class-variance-authority": "^0.7.1",
@@ -1541,7 +1541,7 @@
     },
     "packages/workspace-ui": {
       "name": "@stll/workspace-ui",
-      "version": "0.12.3",
+      "version": "0.12.4",
       "dependencies": {
         "@stll/calculations": "workspace:^",
         "@stll/conditions": "workspace:^",
