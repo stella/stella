@@ -374,7 +374,7 @@ async fn align_managed_copy_file_name(
     );
   }
 
-  tokio::fs::rename(path, &aligned_path).await.map_err(|e| {
+  crate::local_store::rename_private(path, &aligned_path).map_err(|e| {
     format!("stella desktop could not rename the managed Office file: {e}")
   })?;
 
@@ -471,7 +471,7 @@ async fn has_temporary_lock_file(dir: &Path, file_name: &str) -> bool {
 
 fn append_probe_reports_locked(file_path: &Path) -> bool {
   match crate::local_store::open_private(
-    std::fs::OpenOptions::new().append(true),
+    crate::local_store::OpenMode::AppendExisting,
     file_path,
   ) {
     Ok(_) => false,

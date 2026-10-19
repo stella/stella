@@ -190,10 +190,7 @@ pub async fn run_check(handle: &AppHandle, active_edit_sessions: bool) -> CheckO
     &format!("Installing v{version}…"),
   );
 
-  if let Err(err) = update
-    .download_and_install(|_chunk, _total| {}, || {})
-    .await
-  {
+  if let Err(err) = crate::local_store::install_update(&update).await {
     #[cfg(windows)]
     crate::desktop_crash::resume_after_failed_update(handle);
     let msg = err.to_string();
