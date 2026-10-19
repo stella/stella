@@ -7,6 +7,7 @@ import type {
   CorpusIndexError,
 } from "@/api/lib/legal-search/corpus-index-client";
 import type { ServingCorpusIndexGeneration } from "@/api/lib/legal-search/corpus-index-generation-store";
+import type { CorpusIndexRoute } from "@/api/lib/legal-search/corpus-index-manifest";
 import type { CorpusAggregate } from "@/api/lib/legal-search/corpus-index-search-facets";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -30,9 +31,10 @@ import { isRecord } from "@/api/lib/type-guards";
  */
 
 /** The index an aggregation reads: the serving generation and its route. */
-type CorpusAggregateTarget = ServingCorpusIndexGeneration & {
-  indexId: string;
-};
+type CorpusAggregateTarget = ServingCorpusIndexGeneration &
+  Pick<CorpusIndexRoute, "aggregationFilter"> & {
+    indexId: string;
+  };
 
 /**
  * What the caller may see. Every caller of the public search counts the same

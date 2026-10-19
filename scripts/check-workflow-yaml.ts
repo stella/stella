@@ -10,8 +10,9 @@ import { flattenWorkflowSteps } from "./workflow-steps";
 const WORKFLOW_DIRECTORY = ".github/workflows";
 const ACTION_DIRECTORY = ".github/actions";
 // GitHub rejects a workflow file over 512,000 bytes and then runs none of
-// its jobs. Fail well before that, while there is still room to shrink it.
-export const WORKFLOW_SIZE_LIMIT_BYTES = 480_000;
+// its jobs. Fail at 80 % of that, while there is still room to shrink it.
+export const GITHUB_WORKFLOW_LIMIT_BYTES = 512_000;
+export const WORKFLOW_SIZE_LIMIT_BYTES = GITHUB_WORKFLOW_LIMIT_BYTES * 0.8;
 
 class WorkflowYamlError extends TaggedError("WorkflowYamlError")<{
   message: string;
@@ -52,7 +53,7 @@ export const parseWorkflowYaml = async (file: string): Promise<unknown> => {
 export const validateWorkflowSize = (bytes: number, file: string): void => {
   if (bytes > WORKFLOW_SIZE_LIMIT_BYTES) {
     throw new WorkflowYamlError({
-      message: `${file}: ${bytes} bytes exceeds the ${WORKFLOW_SIZE_LIMIT_BYTES}-byte workflow size limit; share repeated steps through YAML anchors or a local action`,
+      message: `${file}: ${bytes} bytes exceeds the ${WORKFLOW_SIZE_LIMIT_BYTES}-byte workflow size limit (80 % of GitHub's ${GITHUB_WORKFLOW_LIMIT_BYTES}-byte limit); move long step bodies into scripts checked out at github.workflow_sha, or share repeated steps through YAML anchors or a local action`,
       file,
     });
   }
