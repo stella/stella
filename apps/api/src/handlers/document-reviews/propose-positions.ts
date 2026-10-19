@@ -14,8 +14,6 @@ import {
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { pinProposedPositions } from "@/api/lib/document-review/reference-passages";
 
-const TIMEOUT_MS = 120_000;
-
 const config = {
   contract: "patch",
   actionAdmission: {
@@ -52,6 +50,7 @@ export const createProposePositions = ({
       managedAIResidency,
       orgAIConfigStatus,
       promptCachingEnabled,
+      request,
       user,
     }) {
       const organizationId = session.activeOrganizationId;
@@ -88,7 +87,7 @@ export const createProposePositions = ({
           userId: user.id,
           workspaceId,
         },
-        deadlineMs: TIMEOUT_MS,
+        abortSignal: request.signal,
       });
       if (Result.isError(proposal)) {
         // `WorkflowIntegrationError.cause` carries the provider's own failure —

@@ -77,7 +77,10 @@ export default eslintCompatPlugin({
               return;
             }
             const options = unwrapExpression(node.arguments.at(0));
-            if (options?.type !== "ObjectExpression") {
+            if (
+              options?.type !== "ObjectExpression" ||
+              !Array.isArray(options.properties)
+            ) {
               return;
             }
             for (const property of options.properties) {
