@@ -25,9 +25,15 @@ export const copyRichToClipboard = async ({
   html,
   plain,
 }: RichClipboardContent) => {
+  // An insecure context leaves `navigator.clipboard` undefined although the DOM
+  // types declare it, so it is read as unknown and narrowed.
+  const clipboard: unknown = Reflect.get(navigator, "clipboard");
   if (
     typeof globalThis.ClipboardItem !== "function" ||
-    typeof navigator.clipboard?.write !== "function"
+    typeof clipboard !== "object" ||
+    clipboard === null ||
+    !("write" in clipboard) ||
+    typeof clipboard.write !== "function"
   ) {
     return await copyToClipboard(plain);
   }
