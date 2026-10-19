@@ -14,10 +14,10 @@ Only the following dependency-owned writes are delegated, through named
 `local_store` entry points. They manage application registration and release
 assets.
 
-| Owner entry point | Dependency | Files managed by the dependency |
-| --- | --- | --- |
+| Owner entry point                       | Dependency               | Files managed by the dependency                                                            |
+| --------------------------------------- | ------------------------ | ------------------------------------------------------------------------------------------ |
 | `enable_autostart`, `disable_autostart` | `tauri-plugin-autostart` | Platform login registration (LaunchAgents, Linux autostart entries, Windows registration). |
-| `install_update` | `tauri-plugin-updater` | Download staging, archive extraction, bundle replacement and the platform installer. |
+| `install_update`                        | `tauri-plugin-updater`   | Download staging, archive extraction, bundle replacement and the platform installer.       |
 
 The application serializes its macOS launch-agent amendment to memory and
 publishes it through `write_private_atomic`. The plugin's registration and
