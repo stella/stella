@@ -975,7 +975,7 @@ describe("session freshness", () => {
       enabled: true,
       maxAge: SESSION_COOKIE_CACHE_MAX_AGE_SECONDS,
     });
-    expect(typeof getAuth().options.session.cookieCache.version).toBe("string");
+    expect(getAuth().options.session.cookieCache.version).toBeFunction();
     expect(SESSION_COOKIE_CACHE_MAX_AGE_SECONDS).toBe(60);
   });
 });
@@ -1005,11 +1005,7 @@ describe("OAuth resource provisioning", () => {
     const oauthPlugin = getAuth().options.plugins.find(
       (plugin) => plugin.id === "oauth-provider",
     );
-    if (
-      !oauthPlugin ||
-      !("rateLimit" in oauthPlugin) ||
-      !oauthPlugin.rateLimit
-    ) {
+    if (!oauthPlugin || !("rateLimit" in oauthPlugin)) {
       throw new Error("OAuth provider plugin declares no rate-limit rules");
     }
 
@@ -1058,7 +1054,6 @@ describe("organization lifecycle hook wiring", () => {
     const hooks = orgPlugin.options.organizationHooks;
     if (
       typeof hooks !== "object" ||
-      hooks === null ||
       !("afterCreateOrganization" in hooks) ||
       typeof hooks.afterCreateOrganization !== "function" ||
       !("afterUpdateOrganization" in hooks) ||

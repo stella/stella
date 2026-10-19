@@ -39,6 +39,6 @@ test("session minting is unavailable when the counter service is unavailable", a
     const reserve = createSyntheticSessionBudget({ context });
     expect(await reserve()).toBe(false);
   } finally {
-    await context.kill();
+    context.kill();
   }
 });

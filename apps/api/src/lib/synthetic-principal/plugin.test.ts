@@ -235,14 +235,18 @@ const createSyntheticAuth = async ({
     databaseHooks: {
       account: {
         create: {
-          before: async (account) =>
-            await Promise.resolve(hooks.accountCreateBefore(account)),
+          before: async (account) => {
+            hooks.accountCreateBefore(account);
+            await Promise.resolve();
+          },
         },
       },
       user: {
         create: {
-          before: async (user) =>
-            await Promise.resolve(hooks.userCreateBefore(user)),
+          before: async (user) => {
+            hooks.userCreateBefore(user);
+            await Promise.resolve();
+          },
         },
       },
     },
@@ -427,9 +431,12 @@ test("refuses OAuth authorization from a monitoring session", async () => {
     code_challenge_method: "S256",
   });
   const response = await auth.handler(
-    new Request(`http://localhost:3001/api/auth/oauth2/authorize?${query}`, {
-      headers: { cookie: cookie ?? "" },
-    }),
+    new Request(
+      `http://localhost:3001/api/auth/oauth2/authorize?${query.toString()}`,
+      {
+        headers: { cookie: cookie ?? "" },
+      },
+    ),
   );
   expect(response.status).toBe(403);
   expect(await response.json()).toMatchObject({

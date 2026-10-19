@@ -1065,6 +1065,9 @@ describe("TanStack AI structured output generation", () => {
               }),
               provider,
             } satisfies ResolvedTanStackTextModel;
+          default:
+            provider satisfies never;
+            throw new Panic({ message: "Unsupported TanStack AI provider" });
         }
       })();
       const options: object = mergeGenerationOptions({

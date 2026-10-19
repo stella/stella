@@ -4,7 +4,6 @@ ALTER TABLE "session" ADD CONSTRAINT "session_monitoring_principal_check" CHECK 
   (id NOT LIKE 'synthetic-session-%' OR user_id = 'synthetic-prod-user')
   AND (id NOT LIKE 'smoke-session-%' OR user_id IN ('smoke-user-stella', 'smoke-ai-user-stella'))
 ) NOT VALID;--> statement-breakpoint
-CREATE INDEX "session_monitoring_id_idx" ON "session" (id) WHERE id LIKE 'synthetic-session-%';--> statement-breakpoint
 ALTER TABLE "organization" ADD CONSTRAINT "organization_monitoring_slug_check" CHECK (
   slug <> 'stella:monitoring:synthetic-prod-org' OR id = 'synthetic-prod-org'
 ) NOT VALID;--> statement-breakpoint

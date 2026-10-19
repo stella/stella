@@ -48,7 +48,7 @@ type IssuerProbe = (
   principal: typeof syntheticCredentialPrincipal,
 ) => Promise<void>;
 
-const expectRefusal = async (operation: () => unknown | Promise<unknown>) => {
+const expectRefusal = async (operation: () => unknown) => {
   const rejection = await Promise.resolve()
     .then(operation)
     .then(
@@ -76,7 +76,7 @@ const expectResultRefusal = <T>(result: Result<T, Error>) => {
 const withSignerSentinel = async (operation: () => Promise<unknown>) => {
   let signerCalled = false;
   setScopedSigningEnabledForTesting(() => true);
-  setScopedS3ClientFactoryForTesting(async () => {
+  setScopedS3ClientFactoryForTesting(() => {
     signerCalled = true;
     panic("The signing client was not expected to run");
   });
@@ -201,10 +201,10 @@ export const refusedCredentialIssuerProbes = {
           email: SYNTHETIC_PRINCIPAL.user.email,
           code: "000000",
         },
-        beforeConsume: async () => {
+        beforeConsume: () => {
           panic("The confirmation transaction was not expected to run");
         },
-        afterConsume: async () => {
+        afterConsume: () => {
           panic("The confirmation transaction was not expected to run");
         },
       }),

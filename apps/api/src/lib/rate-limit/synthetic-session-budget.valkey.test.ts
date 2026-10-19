@@ -41,8 +41,10 @@ describe.skipIf(!enabled)("monitoring mint counters", () => {
         expect(await reserve()).toBe(false);
         await context.reset(`${prefix}:synthetic-session:hour`);
         for (
-          let count = SYNTHETIC_SESSION_MINT_BUDGETS.hour.max;
-          count < SYNTHETIC_SESSION_MINT_BUDGETS.day.max;
+          let count = 0;
+          count <
+          SYNTHETIC_SESSION_MINT_BUDGETS.day.max -
+            SYNTHETIC_SESSION_MINT_BUDGETS.hour.max;
           count++
         ) {
           await context.increment(

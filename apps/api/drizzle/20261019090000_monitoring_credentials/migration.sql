@@ -3,4 +3,3 @@ SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '10s';--> statement-breakpoint
 ALTER TABLE "folio_collab_room_tokens" ADD COLUMN "source_session_id" text;--> statement-breakpoint
 ALTER TABLE "folio_collab_room_tokens" ADD CONSTRAINT "folio_collab_room_tokens_source_session_id_session_id_fk" FOREIGN KEY ("source_session_id") REFERENCES "session" ("id") ON DELETE CASCADE NOT VALID;--> statement-breakpoint
-CREATE INDEX "folio_collab_room_tokens_source_session_idx" ON "folio_collab_room_tokens" ("source_session_id") WHERE "source_session_id" IS NOT NULL;

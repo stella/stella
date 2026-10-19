@@ -238,7 +238,6 @@ const resolvedModel = ({
     modelOptions: tanStackModelOptionsForTask({
       modelId,
       organizationId: null,
-      userId: null,
       provider,
       task: "short-text",
     }),

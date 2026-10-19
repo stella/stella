@@ -46,8 +46,9 @@ export type CredentialPrincipal = {
   email?: string | undefined;
 };
 
+// The issuer type accepts only registry entries classified as refused.
 export const checkSessionCredentialIssuer = (
-  issuer: RefusedCredentialIssuer,
+  _issuer: RefusedCredentialIssuer,
   { userId, organizationId, email }: CredentialPrincipal,
 ): Result<void, HandlerError> => {
   if (
@@ -59,16 +60,13 @@ export const checkSessionCredentialIssuer = (
   ) {
     return Result.ok();
   }
-  switch (USER_SESSION_CREDENTIAL_ISSUERS[issuer].disposition) {
-    case "refused":
-      return Result.err(
-        new HandlerError({
-          status: 403,
-          code: "account_access_unavailable",
-          message: REVIEW_ACCOUNT_REFUSAL_MESSAGE,
-        }),
-      );
-  }
+  return Result.err(
+    new HandlerError({
+      status: 403,
+      code: "account_access_unavailable",
+      message: REVIEW_ACCOUNT_REFUSAL_MESSAGE,
+    }),
+  );
 };
 
 /** Credential SDKs consume refusals through their rejection contract. */

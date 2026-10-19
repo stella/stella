@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 
 import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
+import { MONITORING_SESSION_INDEXES } from "@/api/lib/synthetic-principal/indexes";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -36,6 +37,24 @@ describe.skipIf(!enabled)("monitoring credential migration", () => {
           if (statement.trim()) {
             await client.unsafe(statement);
           }
+        }
+        for (const index of MONITORING_SESSION_INDEXES) {
+          await client.unsafe(
+            index.createSql.replaceAll("public.", () => `${schema}.`),
+          );
+          const rows = await client`
+            SELECT pg_get_indexdef(index_relation.oid) AS definition, index_state.indisvalid AS valid
+            FROM pg_catalog.pg_class index_relation
+            JOIN pg_catalog.pg_namespace namespace ON namespace.oid = index_relation.relnamespace
+            JOIN pg_catalog.pg_index index_state ON index_state.indexrelid = index_relation.oid
+            WHERE namespace.nspname = ${schema} AND index_relation.relname = ${index.name}
+          `;
+          expect(rows).toEqual([
+            expect.objectContaining({
+              definition: `CREATE INDEX ${index.name} ${index.definitionBody.replaceAll("public.", () => `${schema}.`)}`,
+              valid: true,
+            }),
+          ]);
         }
         const constraint =
           await client`SELECT convalidated FROM pg_constraint WHERE conrelid = 'folio_collab_room_tokens'::regclass AND conname = 'folio_collab_room_tokens_source_session_id_session_id_fk'`;
