@@ -17,7 +17,7 @@ export class DiagramRenderFailure extends TaggedError("DiagramRenderFailure")<{
   reason: DiagramRenderFailureReason;
   message: string;
   cause?: unknown;
-}>() {}
+}> {}
 
 export type RenderedDiagram = { svg: string };
 
