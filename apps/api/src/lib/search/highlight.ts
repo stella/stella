@@ -1,8 +1,6 @@
 import { panic } from "better-result";
 
-import { RegexSet } from "@stll/regex-set";
 import {
-  escapeRegExp,
   applyArabicFolds,
   applyArabicFoldsWithOffsets,
   foldToAscii,
@@ -251,76 +249,39 @@ const getSearchLexemes = (text: string): SearchLexeme[] =>
     value: match[0],
   }));
 
-const LEXEME_SEPARATOR = "/";
-let lastPrefixMatcher: { key: string; matcher: RegexSet } | undefined;
-
+// Each candidate lexeme prefixes the source lexeme at the same position. The
+// earliest-starting candidate wins, and an earlier candidate wins a tie.
 const findCandidatePrefix = (
   sourceLexemes: readonly SearchLexeme[],
   candidates: readonly string[],
 ): CandidatePrefixMatch | null => {
-  const separator = escapeRegExp(LEXEME_SEPARATOR);
-  const configurations = candidates.flatMap((candidate) => {
-    const lexemes = Array.from(
-      candidate.matchAll(SEARCH_LEXEME),
-      (match) => match[0],
-    );
-    const last = lexemes.at(-1);
-    return last === undefined
-      ? []
-      : [
-          {
-            pattern: `(?:^|${separator})${lexemes.map(escapeRegExp).join(`[^${separator}]*${separator}`)}`,
-            lexemeCount: lexemes.length,
-            lastPrefixLength: last.length,
-          },
-        ];
-  });
-  if (configurations.length === 0 || sourceLexemes.length === 0) {
-    return null;
+  const candidateLexemes = candidates
+    .map((candidate) =>
+      Array.from(candidate.matchAll(SEARCH_LEXEME), (match) => match[0]),
+    )
+    .filter((lexemes) => lexemes.length > 0);
+  for (const [startIndex, first] of sourceLexemes.entries()) {
+    for (const lexemes of candidateLexemes) {
+      const matches = lexemes.every(
+        (lexeme, offset) =>
+          sourceLexemes.at(startIndex + offset)?.value.startsWith(lexeme) ===
+          true,
+      );
+      if (!matches) {
+        continue;
+      }
+      const last =
+        sourceLexemes.at(startIndex + lexemes.length - 1) ??
+        panic("A lexical prefix has no last lexeme");
+      const lastPrefix =
+        lexemes.at(-1) ?? panic("A lexical prefix has no last candidate");
+      return {
+        length: last.start + lastPrefix.length - first.start,
+        start: first.start,
+      };
+    }
   }
-  const lexemeIndices = new Map<number, number>();
-  let serializedOffset = 0;
-  for (const [index, lexeme] of sourceLexemes.entries()) {
-    lexemeIndices.set(serializedOffset, index);
-    serializedOffset += lexeme.value.length + LEXEME_SEPARATOR.length;
-  }
-  // Lexemes contain only letters and numbers, so this separator cannot be
-  // confused with source text or a candidate prefix.
-  const serialized = sourceLexemes
-    .map(({ value }) => value)
-    .join(LEXEME_SEPARATOR);
-  const patterns = configurations.map(({ pattern }) => pattern);
-  const matcherKey = JSON.stringify(patterns);
-  const matcher =
-    lastPrefixMatcher?.key === matcherKey
-      ? lastPrefixMatcher.matcher
-      : new RegexSet(patterns);
-  lastPrefixMatcher = { key: matcherKey, matcher };
-  const match = matcher.findIter(serialized).at(0);
-  if (match === undefined) {
-    return null;
-  }
-  const start =
-    match.start +
-    (serialized.charAt(match.start) === LEXEME_SEPARATOR
-      ? LEXEME_SEPARATOR.length
-      : 0);
-  const firstIndex =
-    lexemeIndices.get(start) ??
-    panic("A lexical prefix starts outside its lexeme");
-  const configuration =
-    configurations.at(match.pattern) ??
-    panic("A lexical prefix has no configuration");
-  const first =
-    sourceLexemes.at(firstIndex) ??
-    panic("A lexical prefix has no first lexeme");
-  const last =
-    sourceLexemes.at(firstIndex + configuration.lexemeCount - 1) ??
-    panic("A lexical prefix has no last lexeme");
-  return {
-    length: last.start + configuration.lastPrefixLength - first.start,
-    start: first.start,
-  };
+  return null;
 };
 
 export const truncateSearchPreviewAroundCandidates = ({
