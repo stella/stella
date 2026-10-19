@@ -8,7 +8,7 @@ import { panic, Result } from "better-result";
  * The wire values live in @stll/api-contract so producers and consumers are
  * checked against one source.
  */
-import { AI_FAILURE_CODES } from "@stll/api-contract";
+import { AI_FAILURE_CODES, isAIFailureCode } from "@stll/api-contract";
 import type { AIErrorKind, AIFailureCode } from "@stll/api-contract";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import { classifyFailure } from "@stll/errors";
@@ -702,7 +702,11 @@ export const aiErrorStatusBody = (
   return {
     status: handlerError.status,
     body: {
-      code: AI_FAILURE_CODES[classifyAIError(error)],
+      // A code the handler error already carries (a configuration refusal such
+      // as the managed-provider one) is more precise than the classified kind.
+      code: isAIFailureCode(handlerError.code)
+        ? handlerError.code
+        : AI_FAILURE_CODES[classifyAIError(error)],
       message: handlerError.message,
       ...(handlerError instanceof ProviderCallError &&
       handlerError.providerDiagnostic !== undefined

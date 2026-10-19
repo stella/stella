@@ -45,3 +45,11 @@ type AIFailureConfigurationKind =
 
 export type AIFailureCode =
   (typeof AI_FAILURE_CODES)[keyof typeof AI_FAILURE_CODES];
+
+const AI_FAILURE_CODE_SET: ReadonlySet<string> = new Set(
+  Object.values(AI_FAILURE_CODES),
+);
+
+/** Whether a handler's code is one of the AI failure codes. */
+export const isAIFailureCode = (value: unknown): value is AIFailureCode =>
+  typeof value === "string" && AI_FAILURE_CODE_SET.has(value);
