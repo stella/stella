@@ -40,7 +40,13 @@ type ManifestGenerationByFamily = {
 };
 
 const CORPUS_GENERATIONS = {
-  case_law: ["case_law_v5", "case_law_v6", "case_law_v7", "case_law_v8"],
+  case_law: [
+    "case_law_v5",
+    "case_law_v6",
+    "case_law_v7",
+    "case_law_v8",
+    "case_law_v9",
+  ],
   legislation: ["legislation_v2", "legislation_v3"],
 } as const satisfies {
   [Family in CorpusFamily]: readonly ManifestGenerationByFamily[Family][];

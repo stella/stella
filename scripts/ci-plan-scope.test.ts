@@ -19,6 +19,7 @@ import { drawPropertySamples } from "@stll/property-testing";
 import { markdownReaders } from "./ci-package-scope";
 import {
   computeChangedFileScope,
+  DEFAULT_DETECTORS,
   type ChangedFileScopeDetectors,
   type ChangedFileScopeInput,
   type ScopeOutput,
@@ -31,20 +32,28 @@ type SelectorCase = {
   files: readonly string[];
   outputs: readonly ScopeOutput[];
   suiteDepth?: string;
+  // What the landing deploy scope answers; it reads git, so tests pin it.
+  e2eLandingRequired?: string;
   event?: string;
   title?: string;
 };
 const planSelector = <C extends SelectorCase>(cases: readonly C[]) =>
   cases.map((item) => {
-    const scope = computeChangedFileScope({
-      changedFiles: item.files,
-      comparisonBase: "",
-      scopeUnknown: false,
-      eventName: item.event ?? "pull_request",
-      suiteDepth: item.suiteDepth ?? "fast",
-      heavyOnly: false,
-      prTitle: item.title ?? "",
-    });
+    const scope = computeChangedFileScope(
+      {
+        changedFiles: item.files,
+        comparisonBase: "",
+        scopeUnknown: false,
+        eventName: item.event ?? "pull_request",
+        suiteDepth: item.suiteDepth ?? "fast",
+        heavyOnly: false,
+        prTitle: item.title ?? "",
+      },
+      {
+        ...DEFAULT_DETECTORS,
+        landingDeploy: () => item.e2eLandingRequired === "true",
+      },
+    );
     return {
       item,
       plan: item.outputs.map((output) => scope[output] ?? ""),
@@ -54,10 +63,13 @@ const runSelector = (
   files: readonly string[],
   outputs: readonly ScopeOutput[],
   suiteDepth = "fast",
-  _e2eLandingRequired = "false",
+  e2eLandingRequired = "false",
   event = "pull_request",
   title = "",
-) => planSelector([{ files, outputs, suiteDepth, event, title }])[0]!.plan;
+) =>
+  planSelector([
+    { files, outputs, suiteDepth, e2eLandingRequired, event, title },
+  ])[0]!.plan;
 
 const detectorInput = (eventName: string): ChangedFileScopeInput => ({
   changedFiles: ["apps/api/src/server.ts"],
@@ -74,6 +86,7 @@ const detectors = (
 ): ChangedFileScopeDetectors => ({
   packageChecks: () => true,
   landingBuild: () => false,
+  landingDeploy: () => false,
   desktopBrowser: () => false,
   ...overrides,
 });
@@ -118,7 +131,33 @@ test("documentation and landing detector failures widen their workflow scopes", 
       detectors({ landingBuild: failure }),
     );
     expect(landing.landing_build_required).toBe("true");
+
+    const deploy = computeChangedFileScope(
+      { ...detectorInput("pull_request"), changedFiles: ["docs/guide.md"] },
+      detectors({ landingBuild: () => true, landingDeploy: failure }),
+    );
+    expect(deploy.e2e_landing_required).toBe("true");
+    expect(deploy.landing_build_required).toBe("false");
   }
+});
+
+// The path list covers the landing's own tree; the deploy scope adds every
+// workspace it depends on, transitively, and the packages they resolve to.
+test("e2e-landing follows the landing's whole dependency graph", () => {
+  const ranges: unknown[] = [];
+  const scope = computeChangedFileScope(
+    { ...detectorInput("pull_request"), changedFiles: ["docs/guide.md"] },
+    detectors({
+      landingBuild: () => true,
+      landingDeploy: (range) => {
+        ranges.push(range);
+        return true;
+      },
+    }),
+  );
+  expect(ranges).toEqual([{ base: "base", head: "HEAD" }]);
+  expect(scope.e2e_landing_required).toBe("true");
+  expect(scope.landing_build_required).toBe("false");
 });
 
 test("desktop browser detector failures and malformed results cannot skip the PR leg", () => {

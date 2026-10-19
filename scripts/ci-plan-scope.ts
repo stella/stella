@@ -14,6 +14,7 @@ import {
 } from "./ci-package-scope";
 import { routeSmokeAffected } from "./detect-route-smoke-changes";
 import { planServiceSuites } from "./detect-service-suite-changes";
+import { landingDeployAffected } from "./landing-deploy-scope";
 import { productionE2eChanged } from "./production-e2e-inputs.mjs";
 
 const TRUE = "true";
@@ -44,14 +45,18 @@ export type ChangedFileScopeDetectors = {
   landingBuild: (
     options: Parameters<typeof requiresLandingBuild>[0],
   ) => unknown;
+  landingDeploy: (
+    options: Parameters<typeof landingDeployAffected>[0],
+  ) => unknown;
   desktopBrowser: (
     options: Parameters<typeof requiresDesktopBrowser>[0],
   ) => unknown;
 };
 
-const DEFAULT_DETECTORS = {
+export const DEFAULT_DETECTORS = {
   packageChecks: requiresPackageChecks,
   landingBuild: requiresLandingBuild,
+  landingDeploy: landingDeployAffected,
   desktopBrowser: requiresDesktopBrowser,
 } satisfies ChangedFileScopeDetectors;
 
@@ -205,7 +210,9 @@ const wideScope = (input: ChangedFileScopeInput): Record<string, string> => {
     e2e_production_required: bool(full),
     e2e_landing_required: TRUE,
     fix_tests_on_base_required: FALSE,
-    landing_build_required: bool(!full),
+    // e2e-landing is planned here at every depth and builds the landing site
+    // itself, so a separate landing build only repeats it.
+    landing_build_required: FALSE,
     legal_atlas_image_required: TRUE,
     legal_atlas_image_pr_required: TRUE,
     dependency_malware_required: TRUE,
@@ -296,6 +303,20 @@ const deriveScopeFacts = (
   return deriveNormalScopeFacts(input, files, detectors);
 };
 
+type LandingE2eOptions = {
+  input: ChangedFileScopeInput;
+  files: readonly string[];
+  detectors: ChangedFileScopeDetectors;
+};
+
+// The site also reads every workspace it depends on, transitively, and the
+// external packages they resolve to; the deploy scope owns that graph.
+const landingE2eRequired = ({ input, files, detectors }: LandingE2eOptions) =>
+  e2eRequired("landing", files) ||
+  failClosedDetector("landing deploy", () =>
+    detectors.landingDeploy({ base: input.comparisonBase, head: "HEAD" }),
+  );
+
 const deriveNormalScopeFacts = (
   input: ChangedFileScopeInput,
   files: readonly string[],
@@ -363,7 +384,7 @@ const deriveNormalScopeFacts = (
   if (collab) {
     e2eCore = true;
   }
-  const e2eLanding = e2eRequired("landing", files);
+  const e2eLanding = landingE2eRequired({ input, files, detectors });
   const routeSmoke =
     ["pull_request", "merge_group"].includes(input.eventName) &&
     routeSmokeAffected(scopeFiles, root);
@@ -398,7 +419,8 @@ const deriveNormalScopeFacts = (
           "package.json",
           ".github/workflows/ci.yml",
         ]);
-  if (full && e2eLanding) {
+  // e2e-landing runs the same landing build before it tests the preview.
+  if (e2eLanding) {
     landing = false;
   }
   const apiDeps = p([
