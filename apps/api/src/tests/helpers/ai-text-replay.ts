@@ -259,7 +259,7 @@ type SeamExportRole =
  * A new export fails typecheck here until it names the census that owns its
  * callers.
  */
-export const GENERATION_SEAM_EXPORTS = {
+const GENERATION_SEAM_EXPORTS = {
   generateTanStackTextForTask: "text",
   collectTanStackTextRun: "text",
   streamTanStackTextForTask: "text",
