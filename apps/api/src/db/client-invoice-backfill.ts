@@ -36,7 +36,7 @@ export const CLIENT_INVOICE_BACKFILL = {
           [CLIENT_BACKFILL_BATCH_SIZE],
         );
         if (rows.length === 0) {
-          return;
+          return { type: "complete" } as const;
         }
         if (
           rows.some((row) => !isRecord(row) || typeof row["id"] !== "string")
@@ -47,7 +47,6 @@ export const CLIENT_INVOICE_BACKFILL = {
     } finally {
       await connection.execute("SET statement_timeout = 0");
     }
-    return { type: "complete" };
   },
 } satisfies OnlineRepair;
 
