@@ -253,7 +253,7 @@ if (!databaseUrl || !enabled) {
           expect(csv).not.toContain(taskId);
           const suggestions = async () => {
             const loaded = await Result.gen(async function* () {
-              return yield* loadTimeSuggestions({
+              const loadedSuggestions = yield* loadTimeSuggestions({
                 safeDb: fixture.safeDb(db),
                 organizationId: fixture.organizationId,
                 workspaceId: fixture.workspaceId,
@@ -262,6 +262,7 @@ if (!databaseUrl || !enabled) {
                 date: new Date().toISOString().slice(0, 10),
                 timezoneId: "UTC",
               });
+              return Result.ok(loadedSuggestions);
             });
             return loaded.unwrap().pending.flatMap(({ evidence }) => evidence);
           };
