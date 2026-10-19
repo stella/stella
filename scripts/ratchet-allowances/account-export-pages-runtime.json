@@ -1,0 +1,6 @@
+{
+  "metric": "direct-root-connection-imports",
+  "file": "apps/api/src/lib/account-export/pages.ts",
+  "delta": 1,
+  "reason": "The declared account export page owner lazily resolves its database handle, then reads each personal subset under the requesting account's row-level scope with an empty matter scope. Account profile and membership reads stay with their existing owners; no database handle is exported."
+}

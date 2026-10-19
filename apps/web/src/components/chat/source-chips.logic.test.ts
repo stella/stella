@@ -125,7 +125,7 @@ describe("external source extraction from tool output", () => {
       {
         results: [
           {
-            appUrl: null,
+            url: null,
             caseNumber: "23 Cdo 5068/2014",
             decisionId,
             sourceUrl: "https://example.org/decisions/23-cdo-5068-2014",

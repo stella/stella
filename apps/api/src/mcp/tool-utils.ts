@@ -946,7 +946,10 @@ export const didYouMean = (labels: readonly string[]): string => {
     : `Did you mean one of ${labels.join(", ")}?`;
 };
 
-const levenshtein = (a: string, b: string): number => {
+const levenshtein = (left: string, right: string): number => {
+  // Over Unicode scalar values, so an astral character is one edit.
+  const a = Array.from(left);
+  const b = Array.from(right);
   // Rolling single-row DP. `previous` always holds `b.length + 1` entries and
   // every read below is in range by construction; `panic` documents that as a
   // hard invariant instead of masking an out-of-range read with a default.
@@ -1237,21 +1240,20 @@ export const buildMatterUrl = (workspaceId: string) =>
 
 export { buildDocumentUrl } from "@/api/lib/mcp-connectors/app-urls";
 
-/** Keep the legacy app URL beside the shared primary/source link contract. */
+/** Return the primary reader or publisher link with its distinct source. */
 export const legalCitationLinkFields = ({
-  appUrl,
+  url,
   sourceUrl,
 }: {
-  appUrl: string | null;
+  url: string | null;
   sourceUrl: string | null;
 }) => {
   const links = resolveLegalCitationLinks({
-    appUrl,
+    url,
     sourceUrl,
     appOrigins: new Set([new URL(getAppBaseUrl()).origin]),
   });
   return {
-    appUrl,
     url: links.url,
     ...(links.type === "external" || links.source_url === undefined
       ? {}

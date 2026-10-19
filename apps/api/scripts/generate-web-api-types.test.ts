@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import path from "node:path";
 import ts from "typescript";
 
-import { printContract } from "./generate-web-api-types";
+import { printContract, verifyDeterminism } from "./generate-web-api-types";
 import { nameAliases } from "./lib/web-api-alias-names";
 
 // Alias names in apps/web/src/generated/api-routes.gen.ts must not move when
@@ -14,6 +14,68 @@ import { nameAliases } from "./lib/web-api-alias-names";
 // Resolve package imports from the API's dependency tree, as the real contract
 // does. Absolute declaration paths can create a second library symbol identity.
 const CONTRACT_FILE = path.resolve(import.meta.dir, "__printer-contract__.ts");
+
+describe("web API type determinism", () => {
+  test("accepts matching prepared bytes without regenerating", () => {
+    let regenerations = 0;
+    const reference = verifyDeterminism({
+      output: "generated output",
+      prepared: Buffer.from("generated output"),
+      regenerate: () => {
+        regenerations += 1;
+        return "generated output";
+      },
+    });
+
+    expect(reference).toBe("prepared printout");
+    expect(regenerations).toBe(0);
+  });
+
+  test("rejects different prepared bytes without regenerating", () => {
+    let regenerations = 0;
+    expect(() =>
+      verifyDeterminism({
+        output: "this run",
+        prepared: Buffer.from("prepared output"),
+        regenerate: () => {
+          regenerations += 1;
+          return "this run";
+        },
+      }),
+    ).toThrow("prepared printout differs from this run");
+    expect(regenerations).toBe(0);
+  });
+
+  test("accepts one matching regeneration when prepared bytes are unavailable", () => {
+    let regenerations = 0;
+    expect(
+      verifyDeterminism({
+        output: "generated output",
+        prepared: undefined,
+        regenerate: () => {
+          regenerations += 1;
+          return "generated output";
+        },
+      }),
+    ).toBe("two generations");
+    expect(regenerations).toBe(1);
+  });
+
+  test("rejects one different regeneration when prepared bytes are unavailable", () => {
+    let regenerations = 0;
+    expect(() =>
+      verifyDeterminism({
+        output: "different output",
+        prepared: undefined,
+        regenerate: () => {
+          regenerations += 1;
+          return "generated output";
+        },
+      }),
+    ).toThrow("output is not deterministic across two generations");
+    expect(regenerations).toBe(1);
+  });
+});
 
 const programOf = (source: string) => {
   const options: ts.CompilerOptions = {
