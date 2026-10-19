@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { XMLParser } from "fast-xml-parser";
+import { XMLValidator } from "fast-xml-parser";
 import JSZip from "jszip";
 
 import { writeZipEntry } from "@stll/docx-utils";
@@ -25,7 +25,6 @@ const W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 const R_NS =
   "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
 const DOCX_CONFIG = DESKTOP_EDIT_FILE_TYPE_CONFIG.docx;
-const XML_PARSER = new XMLParser({ ignoreAttributes: false });
 
 const CONTENT_TYPES_XML = [
   '<?xml version="1.0" encoding="UTF-8"?>',
@@ -261,7 +260,8 @@ describe("injectStamp", () => {
     const stamped = await injectStamp(docx, stamp, code, baseUrl);
     const footer = await readZipFile(stamped, "word/footer1.xml");
 
-    expect(XML_PARSER.parse(footer ?? "")).toBeDefined();
+    expect(XMLValidator.validate(footer ?? "")).toBe(true);
+    expect(XMLValidator.validate(`${footer ?? ""}</w:p>`)).not.toBe(true);
     expect(footer).not.toContain("old stamp");
     expect(footer).toContain(stamp);
   });
@@ -291,7 +291,8 @@ describe("injectStamp", () => {
     const stamped = await injectStamp(docx, stamp, code, baseUrl);
     const footer = await readZipFile(stamped, "word/footer1.xml");
 
-    expect(XML_PARSER.parse(footer ?? "")).toBeDefined();
+    expect(XMLValidator.validate(footer ?? "")).toBe(true);
+    expect(XMLValidator.validate(`${footer ?? ""}</w:p>`)).not.toBe(true);
     expect(footer).not.toContain('w:rsidR="outer"');
     expect(footer).not.toContain("old stamp");
     expect(footer).toContain(stamp);
