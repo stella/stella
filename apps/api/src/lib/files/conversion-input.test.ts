@@ -158,6 +158,37 @@ describe("document conversion input", () => {
     });
   });
 
+  test("refuses OOXML instructions joined around a nested field", async () => {
+    const input = await zip(
+      "word/document.xml",
+      '<w:document><w:fldChar w:fldCharType="begin"/><w:instrText>INCLUDE</w:instrText><w:fldChar w:fldCharType="begin"/><w:instrText>PAGE</w:instrText><w:fldChar w:fldCharType="separate"/><w:t>1</w:t><w:fldChar w:fldCharType="end"/><w:instrText>PICTURE "http://x.invalid/a.png"</w:instrText><w:fldChar w:fldCharType="separate"/><w:fldChar w:fldCharType="end"/></w:document>',
+    );
+    expect(
+      await checkConversionInput(
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        input,
+      ),
+    ).toEqual({
+      kind: "refuse",
+      reason: "external_reference",
+      format:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    });
+  });
+
+  test("converts ordinary nested OOXML fields", async () => {
+    const input = await zip(
+      "word/document.xml",
+      '<w:document><w:fldChar w:fldCharType="begin"/><w:instrText>IF </w:instrText><w:fldChar w:fldCharType="begin"/><w:instrText>PAGE</w:instrText><w:fldChar w:fldCharType="separate"/><w:t>1</w:t><w:fldChar w:fldCharType="end"/><w:instrText> = 1 "first" "later"</w:instrText><w:fldChar w:fldCharType="separate"/><w:t>first</w:t><w:fldChar w:fldCharType="end"/></w:document>',
+    );
+    expect(
+      await checkConversionInput(
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        input,
+      ),
+    ).toEqual({ kind: "convert" });
+  });
+
   test("refuses RTF field instructions without a destination marker", async () => {
     const input = encode(
       '{\\field{\\fldinst INCLUDEPICTURE "http://x.invalid/a.png"}}',
@@ -178,6 +209,18 @@ describe("document conversion input", () => {
       reason: "external_reference",
       format: "application/rtf",
     });
+  });
+
+  test("scans long RTF escape runs within the time budget", async () => {
+    const input = encode(
+      `{\\fldinst HYPERLINK "local" ${"\\".repeat(1024 * 1024)}}`,
+    );
+    const startedAt = performance.now();
+    const result = await checkConversionInput("application/rtf", input);
+    const elapsed = performance.now() - startedAt;
+
+    expect(result).toEqual({ kind: "convert" });
+    expect(elapsed).toBeLessThan(200);
   });
 
   test("covers every document format outcome", () => {

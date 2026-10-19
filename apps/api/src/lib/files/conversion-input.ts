@@ -272,7 +272,7 @@ const ooxmlFieldHasExternalReference = (source: string): boolean => {
       return true;
     }
   }
-  const instructions: string[] = [];
+  const instructions: { instruction: string; closed: boolean }[] = [];
   const lower = source.toLowerCase();
   let cursor = 0;
   while ((cursor = lower.indexOf("<", cursor)) !== -1) {
@@ -285,15 +285,21 @@ const ooxmlFieldHasExternalReference = (source: string): boolean => {
     if (lowerTag.startsWith("<w:fldchar")) {
       const type = attributeValue(tag, "w:fldchartype")?.toLowerCase();
       if (type === "begin") {
-        instructions.push("");
-      } else if (
-        (type === "separate" || type === "end") &&
-        instructions.length > 0
-      ) {
-        const instruction = instructions.pop();
+        instructions.push({ instruction: "", closed: false });
+      } else if (type === "separate") {
+        const field = instructions.at(-1);
+        if (field !== undefined && !field.closed) {
+          if (firstTokenMatches(field.instruction, OOXML_FIELD_KEYWORDS)) {
+            return true;
+          }
+          field.closed = true;
+        }
+      } else if (type === "end") {
+        const field = instructions.pop();
         if (
-          instruction !== undefined &&
-          firstTokenMatches(instruction, OOXML_FIELD_KEYWORDS)
+          field !== undefined &&
+          !field.closed &&
+          firstTokenMatches(field.instruction, OOXML_FIELD_KEYWORDS)
         ) {
           return true;
         }
@@ -311,7 +317,10 @@ const ooxmlFieldHasExternalReference = (source: string): boolean => {
       );
       const fieldIndex = instructions.length - 1;
       if (fieldIndex >= 0) {
-        instructions[fieldIndex] = `${instructions[fieldIndex] ?? ""}${value}`;
+        const field = instructions[fieldIndex];
+        if (field !== undefined && !field.closed) {
+          field.instruction += value;
+        }
       } else if (firstTokenMatches(value, OOXML_FIELD_KEYWORDS)) {
         return true;
       }
@@ -470,16 +479,16 @@ const rtfHasExternalReference = (bytes: Uint8Array): boolean => {
     }
     let end = cursor + marker.length;
     let depth = 1;
+    let escaped = false;
     while (end < source.length && depth > 0) {
-      let slashCount = 0;
-      for (let at = end - 1; at >= 0 && source[at] === "\\"; at--) {
-        slashCount++;
-      }
-      const escaped = slashCount % 2 === 1;
-      if (source[end] === "{" && !escaped) {
+      const character = source[end];
+      if (escaped) {
+        escaped = false;
+      } else if (character === "\\") {
+        escaped = true;
+      } else if (character === "{") {
         depth++;
-      }
-      if (source[end] === "}" && !escaped) {
+      } else if (character === "}") {
         depth--;
       }
       end++;
