@@ -31,22 +31,22 @@ const forged = {
 
 // @ts-expect-error an organization's dispatch needs its admission proof
 ({ userId: null, organizationId: org }) satisfies ModelDispatchScope;
-// @ts-expect-error tenant work cannot pass as work with no organization
 ({
   userId: null,
   organizationId: org,
+  // @ts-expect-error tenant work cannot pass as work with no organization
   admission: NONE,
 }) satisfies ModelDispatchScope;
-// @ts-expect-error work with no organization carries no tenant's proof
 ({
   userId: null,
   organizationId: null,
+  // @ts-expect-error work with no organization carries no tenant's proof
   admission: proof,
 }) satisfies ModelDispatchScope;
-// @ts-expect-error a proof is minted by admission, never written out
 ({
   userId: null,
   organizationId: org,
+  // @ts-expect-error a proof is minted by admission, never written out
   admission: forged,
 }) satisfies ModelDispatchScope;
 
@@ -80,10 +80,10 @@ void admitModelAction(async ({ admission }) => {
 // The managed model tier rides on the proof: admission reads it when minting,
 // and the dispatching code never chooses it.
 const forgedTier = { ...forged, modelTier: "fast" } as const;
-// @ts-expect-error a proof with a chosen tier is still not minted by admission
 ({
   userId: null,
   organizationId: org,
+  // @ts-expect-error a proof with a chosen tier is still not minted by admission
   admission: forgedTier,
 }) satisfies ModelDispatchScope;
 
