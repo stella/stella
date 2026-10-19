@@ -631,7 +631,6 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "WebSocket URL for collaborative editing. Unset keeps the single-user editing path.",
   VITE_BETA_FEATURES_ENABLED:
     "Expose Settings → Beta features without enabling any preview by default.",
-  VITE_FEATURE_AI_MEMORY: "Show tenant-scoped AI memory settings.",
   VITE_FEATURE_GOVERNED_WORKFLOW:
     "Show governed work-obligation fields on a task (owner, acknowledgement, hard deadline).",
   VITE_FEATURE_INBOX:
@@ -982,7 +981,6 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   VITE_COLLAB_URL: ENV_CREDENTIAL_KIND.notCredential,
   VITE_DESKTOP_BRIDGE_PORT: ENV_CREDENTIAL_KIND.notCredential,
   VITE_DESKTOP_RELEASES_BASE_URL: ENV_CREDENTIAL_KIND.notCredential,
-  VITE_FEATURE_AI_MEMORY: ENV_CREDENTIAL_KIND.notCredential,
   VITE_FEATURE_FOLIO_COLLAB: ENV_CREDENTIAL_KIND.notCredential,
   VITE_FEATURE_GOVERNED_WORKFLOW: ENV_CREDENTIAL_KIND.notCredential,
   VITE_FEATURE_INBOX: ENV_CREDENTIAL_KIND.notCredential,
@@ -1503,6 +1501,9 @@ export const TOOLING_ENV_KEYS = new Set([
   "FLAKE_CHILD_RECORD",
   "FLAKE_GATE_FIXTURE_PRELOADED",
   "FLAKE_GATE_TRIAL",
+  // Quarantine preload: report directory for its JSON lines; registry path override for fixture trees.
+  "FLAKY_TEST_QUARANTINE_REGISTRY",
+  "FLAKY_TEST_QUARANTINE_REPORT_DIR",
   "GH_READ_TOKEN",
   "HEAD_SHA",
   // Scheduled journey checks: endpoint overrides and bounded request/retry timing.

@@ -454,11 +454,6 @@
     "owner": "guards",
     "reason": "Existing environment setup and restoration; migrate through createTestState."
   },
-  "apps/api/src/lib/scheduler/tasks/memory-extractor.integration.test.ts": {
-    "count": 2,
-    "owner": "guards",
-    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
-  },
   "apps/api/src/lib/search/index-entity.test.ts": {
     "count": 4,
     "owner": "guards",
