@@ -71,7 +71,7 @@ export const registeredVisualNames = (source: string): ReadonlySet<string> => {
     return new Set();
   }
   return new Set(
-    [...body.matchAll(/^\s*(?:"([^"]+)"|([A-Za-z_$][\w$]*))\s*:/gmu)].map(
+    [...body.matchAll(/^[ \t]*(?:"([^"]+)"|([A-Za-z_$][\w$]*))[ \t]*:/gmu)].map(
       (match) => match[1] ?? match[2] ?? "",
     ),
   );
@@ -157,6 +157,49 @@ const sourceCandidate = (
   );
 };
 
+type WorkspaceManifest = { directory: string; manifest: unknown };
+
+const WORKSPACE_MANIFESTS = new Map<
+  string,
+  ReadonlyMap<string, WorkspaceManifest> | undefined
+>();
+
+/** Workspace packages by name, read once per root: every `@stll/*` import
+ *  resolves through this index. */
+const workspaceManifests = (
+  root: string,
+): ReadonlyMap<string, WorkspaceManifest> | undefined => {
+  if (WORKSPACE_MANIFESTS.has(root)) {
+    return WORKSPACE_MANIFESTS.get(root);
+  }
+  const packagesDirectory = path.join(root, "packages");
+  let manifests: Map<string, WorkspaceManifest> | undefined;
+  if (existsSync(packagesDirectory)) {
+    manifests = new Map();
+    for (const entry of readdirSync(packagesDirectory, {
+      withFileTypes: true,
+    })) {
+      const directory = `packages/${entry.name}`;
+      const manifestFile = path.join(root, directory, "package.json");
+      if (!entry.isDirectory() || !existsSync(manifestFile)) {
+        continue;
+      }
+      const manifest: unknown = JSON.parse(readFileSync(manifestFile, "utf-8"));
+      if (
+        typeof manifest === "object" &&
+        manifest !== null &&
+        "name" in manifest &&
+        typeof manifest.name === "string" &&
+        !manifests.has(manifest.name)
+      ) {
+        manifests.set(manifest.name, { directory, manifest });
+      }
+    }
+  }
+  WORKSPACE_MANIFESTS.set(root, manifests);
+  return manifests;
+};
+
 const resolveImport = (
   imported: string,
   importer: string,
@@ -171,31 +214,12 @@ const resolveImport = (
   } else {
     const workspace = /^@stll\/([^/]+)(?:\/(.*))?$/u.exec(importPath);
     if (workspace !== null) {
-      const packagesDirectory = path.join(root, "packages");
-      if (!existsSync(packagesDirectory)) {
+      const manifests = workspaceManifests(root);
+      if (manifests === undefined) {
         return { files: [], internal: true, complete: false };
       }
-      const packageRoot = readdirSync(packagesDirectory, {
-        withFileTypes: true,
-      })
-        .filter((entry) => entry.isDirectory())
-        .map((entry) => `packages/${entry.name}`)
-        .find((directory) => {
-          const manifestFile = path.join(root, directory, "package.json");
-          if (!existsSync(manifestFile)) {
-            return false;
-          }
-          const manifest: unknown = JSON.parse(
-            readFileSync(manifestFile, "utf-8"),
-          );
-          return (
-            typeof manifest === "object" &&
-            manifest !== null &&
-            "name" in manifest &&
-            manifest.name === `@stll/${workspace[1] ?? ""}`
-          );
-        });
-      if (packageRoot === undefined) {
+      const workspacePackage = manifests.get(`@stll/${workspace[1] ?? ""}`);
+      if (workspacePackage === undefined) {
         const installedManifest = path.join(
           root,
           "node_modules",
@@ -208,28 +232,23 @@ const resolveImport = (
         }
         return { files: [], internal: true, complete: false };
       }
-      const packageJson = path.join(root, packageRoot, "package.json");
-      if (existsSync(packageJson)) {
-        const manifest: unknown = JSON.parse(
-          readFileSync(packageJson, "utf-8"),
-        );
-        const subpath = workspace[2] === undefined ? "." : `./${workspace[2]}`;
-        if (
-          typeof manifest === "object" &&
-          manifest !== null &&
-          "exports" in manifest &&
-          typeof manifest.exports === "object" &&
-          manifest.exports !== null
-        ) {
-          const exported = Object.entries(manifest.exports).find(
-            ([key]) => key === subpath,
-          )?.[1];
-          const targets = importExportTargets(exported);
-          if (targets === undefined) {
-            return { files: [], internal: true, complete: false };
-          }
-          candidates = targets.map((target) => `${packageRoot}/${target}`);
+      const { directory: packageRoot, manifest } = workspacePackage;
+      const subpath = workspace[2] === undefined ? "." : `./${workspace[2]}`;
+      if (
+        typeof manifest === "object" &&
+        manifest !== null &&
+        "exports" in manifest &&
+        typeof manifest.exports === "object" &&
+        manifest.exports !== null
+      ) {
+        const exported = Object.entries(manifest.exports).find(
+          ([key]) => key === subpath,
+        )?.[1];
+        const targets = importExportTargets(exported);
+        if (targets === undefined) {
+          return { files: [], internal: true, complete: false };
         }
+        candidates = targets.map((target) => `${packageRoot}/${target}`);
       }
       candidates ??= [
         `${packageRoot}/src${workspace[2] === undefined ? "/index" : `/${workspace[2]}`}`,
