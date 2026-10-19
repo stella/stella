@@ -39,9 +39,10 @@ const renderSources = () =>
             {
               type: "tool-call",
               id: "search",
-              name: "search",
+              name: "infosoud_lookup_case",
               state: "complete",
               arguments: "{}",
+              input: {},
               output: {
                 results: [
                   hit(
