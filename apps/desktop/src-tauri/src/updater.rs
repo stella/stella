@@ -207,9 +207,8 @@ pub async fn run_check(handle: &AppHandle, active_edit_sessions: bool) -> CheckO
   if let Err(err) = crate::local_store::install_update(&update).await {
     #[cfg(windows)]
     crate::desktop_crash::resume_after_failed_update(handle);
-    let msg = err.to_string();
-    notify(handle, "Stella update failed", &msg);
-    return CheckOutcome::Failed(msg);
+    notify(handle, "Stella update failed", &err);
+    return CheckOutcome::Failed(err);
   }
 
   // On Windows the plugin has already handed off to the installer and

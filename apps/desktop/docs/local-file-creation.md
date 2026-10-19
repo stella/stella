@@ -6,7 +6,9 @@ platform backends implement the native filesystem operations.
 The approved roots are Stella's platform data, local-data, cache and state
 directories, plus its macOS log directory. The macOS LaunchAgents directory
 is a shared per-user registration directory. Root handles are cached; a
-test-only temporary anchor supports isolated fixtures.
+test-only temporary anchor supports isolated fixtures. The test-only
+`write_generated_rpc_bindings` entry point writes the fixed repository source
+artifact with ordinary source-file permissions, outside application data.
 
 ## Dependency-managed write allow-list
 
