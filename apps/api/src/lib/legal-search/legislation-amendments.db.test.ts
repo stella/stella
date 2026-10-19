@@ -155,6 +155,23 @@ const rejectedSnapshots = (): {
     },
   },
   {
+    // Incompressible on purpose: TOAST compression cannot shrink it under the
+    // index entry limit, which is what made an unbounded identity unsafe.
+    reason: "publisher_id_too_long",
+    snapshot: {
+      observedAt: "2026-10-18T10:00:00Z",
+      relations: [
+        {
+          ...relation,
+          publisherId: Array.from({ length: 3000 }, (_, index) =>
+            String.fromCodePoint(0x4e_00 + ((index * 7919) % 20_000)),
+          ).join(""),
+        },
+      ],
+      coverage: { type: "complete" },
+    },
+  },
+  {
     reason: "amending_eli_too_long",
     snapshot: {
       observedAt: "2026-10-18T10:00:00Z",

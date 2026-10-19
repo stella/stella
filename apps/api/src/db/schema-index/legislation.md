@@ -169,7 +169,7 @@ Publisher-stated provision effects, independent of consolidation windows.
 legislation_amendments.source_id              safeUuid  fk,not null  legislation.ts:781
 legislation_amendments.target_eli             varchar   not null     legislation.ts:784
 legislation_amendments.language               varchar   not null     legislation.ts:785
-legislation_amendments.publisher_id           text      not null     legislation.ts:786
+legislation_amendments.publisher_id           varchar   not null     legislation.ts:786
 legislation_amendments.amending_eli           varchar   not null     legislation.ts:787
 legislation_amendments.amending_title         text      null         legislation.ts:788
 legislation_amendments.amending_anchor        text      null         legislation.ts:789

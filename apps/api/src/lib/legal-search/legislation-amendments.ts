@@ -32,11 +32,19 @@ import { isRecord } from "@/api/lib/type-guards";
 export const LEGISLATION_AMENDMENT_PAGE_MAX = 500;
 export const LEGISLATION_AMENDMENT_SNAPSHOT_MAX = 50_000;
 const AMENDMENT_INSERT_BATCH_SIZE = 1000;
-// The column's own bound: an accepted observation that cannot be stored would
-// roll back the statute it arrived with.
-const AMENDING_ELI_MAX_CHARS =
-  legislationAmendments.amendingEli.length ??
-  panic("legislation_amendments.amending_eli must declare its length");
+// An accepted observation that cannot be stored would roll back the statute it
+// arrived with. The identities are bounded in UTF-8 bytes by their columns'
+// declared lengths: bytes never undercount characters, and the indexes that
+// hold them together stay under PostgreSQL's B-tree entry limit.
+const columnLength = (column: { length: number | undefined; name: string }) =>
+  column.length ??
+  panic(`legislation_amendments.${column.name} needs a length`);
+const AMENDMENT_IDENTITY_MAX_BYTES = {
+  publisherId: columnLength(legislationAmendments.publisherId),
+  amendingEli: columnLength(legislationAmendments.amendingEli),
+} as const;
+const exceedsBytes = (text: string, maxBytes: number) =>
+  Buffer.byteLength(text, "utf-8") > maxBytes;
 
 export type SanitizedLegislationAmendmentSnapshot =
   LegislationAmendmentSnapshot & Brand<"SanitizedLegislationAmendmentSnapshot">;
@@ -51,6 +59,7 @@ export type LegislationAmendmentObservationErrorReason =
   | "invalid_effective_date"
   | "invalid_observed_at"
   | "invalid_partial_unlocated_relations"
+  | "publisher_id_too_long"
   | "relation_limit_exceeded"
   | "unstated_coverage_with_relations";
 
@@ -124,8 +133,13 @@ export const sanitizeLegislationAmendments = (
         "Legislation amendment has an empty amending ELI",
       );
     }
-    // varchar length counts characters, not UTF-16 code units.
-    if ([...amendingEli].length > AMENDING_ELI_MAX_CHARS) {
+    if (exceedsBytes(publisherId, AMENDMENT_IDENTITY_MAX_BYTES.publisherId)) {
+      return rejected(
+        "publisher_id_too_long",
+        "Legislation amendment has a publisher identity longer than can be stored",
+      );
+    }
+    if (exceedsBytes(amendingEli, AMENDMENT_IDENTITY_MAX_BYTES.amendingEli)) {
       return rejected(
         "amending_eli_too_long",
         "Legislation amendment has an amending ELI longer than can be stored",

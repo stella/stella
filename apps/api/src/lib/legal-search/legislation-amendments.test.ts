@@ -131,6 +131,13 @@ test("publisher amendment faults return every typed rejection reason", () => {
       },
     },
     {
+      reason: "publisher_id_too_long",
+      input: {
+        ...snapshot,
+        relations: [{ ...relation, publisherId: "p".repeat(513) }],
+      },
+    },
+    {
       reason: "amending_eli_too_long",
       input: {
         ...snapshot,
@@ -192,17 +199,28 @@ test("publisher amendment faults return every typed rejection reason", () => {
   }
 });
 
-test("an amending ELI at the column's character bound is accepted", () => {
+test("amendment identities are bounded in UTF-8 bytes, not characters", () => {
   const relation = snapshot.relations.at(0);
   if (relation === undefined) {
     throw new Error("expected the amendment fixture to carry a relation");
   }
-  // Two UTF-16 code units per character: the bound counts characters.
-  const amendingEli = `eli/cz/sb/${"😀".repeat(502)}`;
-  expect([...amendingEli]).toHaveLength(512);
-  const result = sanitizeLegislationAmendments({
-    ...snapshot,
-    relations: [{ ...relation, amendingEli }],
-  });
-  expect(result.isOk()).toBe(true);
+  // "č" is two UTF-8 bytes: 512 bytes fit, one more byte does not, although
+  // either string is far shorter than 512 characters.
+  const atBound = `eli/cz/sb/${"č".repeat(251)}`;
+  expect(Buffer.byteLength(atBound, "utf-8")).toBe(512);
+  const sanitize = (overrides: Partial<typeof relation>) =>
+    sanitizeLegislationAmendments({
+      ...snapshot,
+      relations: [{ ...relation, ...overrides }],
+    });
+  expect(sanitize({ amendingEli: atBound }).isOk()).toBe(true);
+  expect(sanitize({ publisherId: atBound }).isOk()).toBe(true);
+  const amendingEli = sanitize({ amendingEli: `${atBound}x` });
+  const publisherId = sanitize({ publisherId: `${atBound}x` });
+  expect(amendingEli.isErr() && amendingEli.error.reason).toBe(
+    "amending_eli_too_long",
+  );
+  expect(publisherId.isErr() && publisherId.error.reason).toBe(
+    "publisher_id_too_long",
+  );
 });

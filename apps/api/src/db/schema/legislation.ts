@@ -783,7 +783,7 @@ export const legislationAmendments = p.pgTable(
       .references(() => legislationSources.id, { onDelete: "cascade" }),
     targetEli: p.varchar("target_eli", { length: 512 }).notNull(),
     language: p.varchar({ length: 16 }).notNull(),
-    publisherId: p.text("publisher_id").notNull(),
+    publisherId: p.varchar("publisher_id", { length: 512 }).notNull(),
     amendingEli: p.varchar("amending_eli", { length: 512 }).notNull(),
     amendingTitle: p.text("amending_title"),
     amendingAnchor: p.text("amending_anchor"),

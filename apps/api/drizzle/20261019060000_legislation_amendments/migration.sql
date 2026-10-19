@@ -14,7 +14,7 @@ CREATE TABLE "legislation_amendments" (
   "source_id" uuid NOT NULL REFERENCES "legislation_sources"("id") ON DELETE CASCADE,
   "target_eli" varchar(512) NOT NULL,
   "language" varchar(16) NOT NULL,
-  "publisher_id" text NOT NULL,
+  "publisher_id" varchar(512) NOT NULL,
   "amending_eli" varchar(512) NOT NULL,
   "amending_title" text,
   "amending_anchor" text,
