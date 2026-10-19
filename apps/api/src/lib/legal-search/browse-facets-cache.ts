@@ -1,4 +1,4 @@
-import { panic, Result } from "better-result";
+import { Result } from "better-result";
 
 import { Temporal } from "@stll/time";
 
@@ -96,54 +96,37 @@ const createCachedResultReader = <TQuery, TValue, TError>({
   };
 };
 
-type PublicationPolicy<TQuery, TValue, TError> =
-  | {
+type DecisionTtlResultCacheOptions<TQuery, TValue, TError> =
+  TtlResultCacheOptions<TQuery, TValue, TError> & {
+    publication: {
       kind: "readmit";
       admit: (value: TValue, query: TQuery) => Promise<Result<TValue, TError>>;
-    }
-  | { kind: "public-static"; reason: string };
-
-type PublishedTtlResultCacheOptions<TQuery, TValue, TError> =
-  TtlResultCacheOptions<TQuery, TValue, TError> & {
-    publication: PublicationPolicy<TQuery, TValue, TError>;
+    };
   };
 
-/** Every cache declares how its responses resolve publication. */
+/** Decision candidates require current admission on every response. */
 export const createTtlResultCache = <TQuery, TValue, TError>({
   publication,
   ...options
-}: PublishedTtlResultCacheOptions<TQuery, TValue, TError>) => {
+}: DecisionTtlResultCacheOptions<TQuery, TValue, TError>) => {
   const read = createCachedResultReader(options);
   return async (query: TQuery): Promise<Result<TValue, TError>> => {
     const result = await read(query);
     if (Result.isError(result)) {
       return result;
     }
-    switch (publication.kind) {
-      case "readmit":
-        return await publication.admit(result.value, query);
-      case "public-static":
-        return result;
-      default:
-        return panic(
-          "Unknown cache publication policy",
-          publication satisfies never,
-        );
-    }
+    return await publication.admit(result.value, query);
   };
 };
 
-type AggregateTtlResultCacheOptions<TQuery, TValue, TError> =
+type PublicStaticTtlResultCacheOptions<TQuery, TValue, TError> =
   TtlResultCacheOptions<TQuery, TValue, TError> & {
-    publication: Extract<
-      PublicationPolicy<TQuery, TValue, TError>,
-      { kind: "public-static" }
-    >;
+    publication: { kind: "public-static"; reason: string };
   };
 
-export const createAggregateTtlResultCache = <TQuery, TValue, TError>(
-  options: AggregateTtlResultCacheOptions<TQuery, TValue, TError>,
-) => createTtlResultCache(options);
+export const createPublicStaticTtlResultCache = <TQuery, TValue, TError>(
+  options: PublicStaticTtlResultCacheOptions<TQuery, TValue, TError>,
+) => createCachedResultReader(options);
 
 type BrowseFacetsCacheOptions = {
   load: (
@@ -166,7 +149,7 @@ const browseFacetsCacheKey = ({
   `${documentFamily ?? ""}:${jurisdiction ?? ""}:${limit}:${excludedSourceIds.toSorted().join(",")}`;
 
 export const createBrowseFacetsCache = (options: BrowseFacetsCacheOptions) =>
-  createAggregateTtlResultCache({
+  createPublicStaticTtlResultCache({
     ...options,
     key: browseFacetsCacheKey,
     publication: {

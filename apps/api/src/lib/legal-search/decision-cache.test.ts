@@ -19,6 +19,18 @@ test("decision caches require an admission step", () => {
     ttlMs: 60_000,
     maxEntries: 1,
   });
+  const publication = {
+    kind: "public-static",
+    reason: "Static fixture.",
+  } as const;
+  createTtlResultCache({
+    load: async () => Result.ok(["decision"]),
+    // @ts-expect-error Decision caches require readmit publication.
+    publication,
+    key: () => "decisions",
+    ttlMs: 60_000,
+    maxEntries: 1,
+  });
 });
 
 test("concurrent responses admit independently while sharing candidates", async () => {

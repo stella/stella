@@ -26,7 +26,7 @@ import type {
 import { readNonRedistributableCaseLawSourceIds } from "@/api/lib/case-law/non-redistributable-sources";
 import { loadPublicCourtWeights } from "@/api/lib/case-law/public-case-law-config";
 import { errorTag } from "@/api/lib/errors/utils";
-import { createAggregateTtlResultCache } from "@/api/lib/legal-search/browse-facets-cache";
+import { createPublicStaticTtlResultCache } from "@/api/lib/legal-search/browse-facets-cache";
 import {
   readPublicLawCountry,
   tPublicLawCountry,
@@ -227,7 +227,7 @@ const STATUS_CACHE_MAX_ENTRIES = 16;
  */
 const STATUS_CACHE_FAILURE_TTL_MS = 30 * 1000;
 
-const corpusStatus = createAggregateTtlResultCache({
+const corpusStatus = createPublicStaticTtlResultCache({
   publication: {
     kind: "public-static",
     reason: "Corpus status contains aggregate counts only.",

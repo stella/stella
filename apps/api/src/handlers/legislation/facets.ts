@@ -17,7 +17,7 @@ import {
 } from "@/api/handlers/legislation/catalog-response";
 import { readNonRedistributableLegislationSourceIdsQuery } from "@/api/handlers/legislation/non-redistributable-sources";
 import { errorTag } from "@/api/lib/errors/utils";
-import { createAggregateTtlResultCache } from "@/api/lib/legal-search/browse-facets-cache";
+import { createPublicStaticTtlResultCache } from "@/api/lib/legal-search/browse-facets-cache";
 import { LEGISLATION_FACET_REFRESH_INTERVAL_MS } from "@/api/lib/legal-search/legislation-facet-refresh-interval";
 import { isLatestOpenedVersionOfWorkAt } from "@/api/lib/legal-search/legislation-listed-version";
 import {
@@ -181,7 +181,7 @@ type LiveFacetsLoad = {
  * process for a few minutes. Source policy is part of the key, so a
  * revocation changes the key instead of waiting out the window.
  */
-const liveLegislationFacets = createAggregateTtlResultCache({
+const liveLegislationFacets = createPublicStaticTtlResultCache({
   publication: {
     kind: "public-static",
     reason: "Legislation facets contain aggregate buckets only.",

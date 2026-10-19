@@ -10,7 +10,7 @@ import type { legislationShelfSuccessResponseSchema } from "@/api/handlers/legis
 import { projectLegislationShelf } from "@/api/handlers/legislation/catalog-response";
 import { readNonRedistributableLegislationSourceIds } from "@/api/handlers/legislation/non-redistributable-sources";
 import { errorTag } from "@/api/lib/errors/utils";
-import { createTtlResultCache } from "@/api/lib/legal-search/browse-facets-cache";
+import { createPublicStaticTtlResultCache } from "@/api/lib/legal-search/browse-facets-cache";
 import { isCorpusIndexJurisdiction } from "@/api/lib/legal-search/index-naming";
 import { isCurrentVersionOfWork } from "@/api/lib/legal-search/legislation-current-version";
 import { publishedLegislationDocumentFor } from "@/api/lib/legal-search/legislation-redistribution";
@@ -173,7 +173,7 @@ const loadLegislationShelf = async ({
       }),
   });
 
-const legislationShelf = createTtlResultCache({
+const legislationShelf = createPublicStaticTtlResultCache({
   publication: {
     kind: "public-static",
     reason:

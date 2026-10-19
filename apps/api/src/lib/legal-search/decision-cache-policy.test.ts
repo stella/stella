@@ -3,6 +3,11 @@ import { expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
 
+const CONSTRUCTOR_POLICIES = {
+  createTtlResultCache: "readmit",
+  createPublicStaticTtlResultCache: "public-static",
+} as const;
+
 const POLICIES = {
   "handlers/case-law/decisions/latest.ts": "readmit",
   "handlers/case-law/decisions/status.ts": "public-static",
@@ -31,7 +36,7 @@ test("shared cache callers declare their publication policy", async () => {
       ts.ScriptTarget.Latest,
       true,
     );
-    const constructors = new Set<string>();
+    const constructors = new Map<string, string>();
     for (const statement of source.statements) {
       if (
         !ts.isImportDeclaration(statement) ||
@@ -48,9 +53,9 @@ test("shared cache callers declare their publication policy", async () => {
         const name = (binding.propertyName ?? binding.name).text;
         if (
           name === "createTtlResultCache" ||
-          name === "createAggregateTtlResultCache"
+          name === "createPublicStaticTtlResultCache"
         ) {
-          constructors.add(binding.name.text);
+          constructors.set(binding.name.text, CONSTRUCTOR_POLICIES[name]);
         }
       }
     }
@@ -93,6 +98,7 @@ test("shared cache callers declare their publication policy", async () => {
           .find(([path]) => path === file)
           ?.at(1);
         expect(kind.initializer.text).toBe(expected);
+        expect(constructors.get(node.expression.text)).toBe(expected);
         if (kind.initializer.text === "public-static") {
           const reason = policy.initializer.properties.find(
             (property) =>
