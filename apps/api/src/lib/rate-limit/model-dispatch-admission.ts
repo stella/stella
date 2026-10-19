@@ -1,8 +1,10 @@
 import { panic, TaggedError } from "better-result";
 
 import type { ScopedDb } from "@/api/db/safe-db";
+import { ownAIKeyRequiredError } from "@/api/lib/ai-config-response";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ActionKind } from "@/api/lib/rate-limit/action-kinds";
+import { isSyntheticPrincipal } from "@/api/lib/synthetic-principal/constants";
 import {
   MANAGED_MODEL_TIER,
   type ManagedModelTier,
@@ -159,6 +161,9 @@ export const assertModelDispatchScope = ({
   organizationId,
   admission,
 }: ModelDispatchScope): void => {
+  if (organizationId !== null && isSyntheticPrincipal({ organizationId })) {
+    throw ownAIKeyRequiredError();
+  }
   switch (admission.type) {
     case "organization":
       if (admission.organizationId !== organizationId) {

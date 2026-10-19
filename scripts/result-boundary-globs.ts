@@ -243,6 +243,8 @@ export const RESULT_BOUNDARY_GLOBS = [
   "apps/api/src/lib/style-set-package-cleanup-queue.ts",
   "apps/api/src/lib/email/inbound/upload-queue.ts",
   "apps/api/src/lib/tanstack-ai-generate.ts",
+  // All model engines consume this dispatch proof through a signal or rejection.
+  "apps/api/src/lib/rate-limit/model-dispatch-admission.ts",
   // TanStack consumes this adapter through its Promise rejection contract;
   // structuredOutput cannot return a Result to the SDK.
   "apps/api/src/lib/stella-openrouter-text-adapter.ts",

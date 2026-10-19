@@ -54,7 +54,12 @@ export const isLoopbackHost = (host: string): boolean => {
 const LOCAL_URL_SCHEMES = new Set(["blob:", "data:", "file:"]);
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 const MAX_REDIRECTS = 20;
-const CREDENTIAL_HEADERS = ["authorization", "cookie", "proxy-authorization"];
+const CREDENTIAL_HEADERS = [
+  "authorization",
+  "cookie",
+  "proxy-authorization",
+  "x-stella-synthetic-key",
+];
 // The Fetch standard's request-body headers, dropped with the body.
 const REQUEST_BODY_HEADERS = [
   "content-encoding",

@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 1,
+  "reason": "The session-deletion helper runs only inside the monitoring control transaction, which records one system audit event with control and deleted-session counts before commit. A helper-level event would duplicate that transaction event."
+}

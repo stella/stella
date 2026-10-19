@@ -19,6 +19,10 @@ import {
   authUserPolicies,
   denyStellaAccessPolicies,
 } from "@/api/db/rls";
+import {
+  SYNTHETIC_PRINCIPAL,
+  SYNTHETIC_SESSION_PREFIX,
+} from "@/api/lib/synthetic-principal/constants";
 
 export const user = pgTable(
   "user",
@@ -124,6 +128,15 @@ export const session = pgTable(
       "session_refreshMode_check",
       inArray(table.refreshMode, SESSION_REFRESH_MODES),
     ),
+    check(
+      "session_monitoring_principal_check",
+      sql`(${table.id} NOT LIKE 'synthetic-session-%' OR ${table.userId} = ${sql.raw(`'${SYNTHETIC_PRINCIPAL.user.id}'`)}) AND (${table.id} NOT LIKE 'smoke-session-%' OR ${table.userId} IN ('smoke-user-stella', 'smoke-ai-user-stella'))`,
+    ),
+    index("session_monitoring_id_idx")
+      .on(table.id)
+      .where(
+        sql`${table.id} LIKE ${sql.raw(`'${SYNTHETIC_SESSION_PREFIX}%'`)}`,
+      ),
     index("session_userId_activeOrgId_idx").on(
       table.userId,
       table.activeOrganizationId,

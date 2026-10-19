@@ -29,6 +29,7 @@ import { DESKTOP_REGISTRY_KEY_CONFIG } from "@/api/lib/business-registries/deskt
 import { desktopRegistryKeyOrganizationScope } from "@/api/lib/business-registries/desktop/scope";
 import { MACHINE_API_KEY_CONFIG_ID } from "@/api/lib/machine-api-key-config";
 import { machineApiKeyOrganizationScope } from "@/api/lib/machine-api-key-scope";
+import { SYNTHETIC_SESSION_PREFIX } from "@/api/lib/synthetic-principal/constants";
 
 /** A statement that is awaited for its effect; no caller here reads the rows. */
 type ExecutableWhereStep = {
@@ -468,4 +469,18 @@ export const revokeAllUserOAuthTokens = async (
   await tx
     .delete(oauthRefreshToken)
     .where(eq(oauthRefreshToken.userId, userId));
+};
+
+/** Ends the fixed monitoring sessions as part of the control transaction. */
+export const revokeMonitoringSessions = async (
+  tx: Pick<Transaction, "delete">,
+) => {
+  // audit: skip - The enclosing revoke transaction records control and deleted-session counts.
+  const removed = await tx
+    .delete(sessionTable)
+    .where(
+      sql`${sessionTable.id} LIKE ${sql.raw(`'${SYNTHETIC_SESSION_PREFIX}%'`)}`,
+    )
+    .returning({ id: sessionTable.id });
+  return removed.length;
 };

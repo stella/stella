@@ -36,6 +36,7 @@ import {
   getAuthIssuerUrl,
 } from "@/api/lib/auth/auth-paths";
 import { reserveRegistration } from "@/api/lib/auth/registration-budget";
+import { createSignedSessionCookieValue } from "@/api/lib/auth/signed-session-cookie";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { readAccountEmail } from "@/api/lib/db/account-row";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -587,11 +588,10 @@ export const mintInternalSessionCookieHeader = async ({
     userAgent: "stella-agent-auth/id-jag",
   });
 
-  const signature = new Bun.CryptoHasher("sha256", env.BETTER_AUTH_SECRET)
-    .update(token)
-    .digest("base64");
-
-  return `${getSessionCookieName()}=${token}.${signature}`;
+  return `${getSessionCookieName()}=${createSignedSessionCookieValue(
+    token,
+    env.BETTER_AUTH_SECRET,
+  )}`;
 };
 
 /**

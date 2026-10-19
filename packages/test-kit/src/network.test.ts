@@ -203,6 +203,29 @@ describe("network guard", () => {
           ? new Response(null, { headers: { location: "/next" }, status })
           : new Response("done");
 
+      test("credential headers are removed when a redirect changes origin", async () => {
+        await withFake(
+          (_call, index) =>
+            index === 0
+              ? new Response(null, {
+                  headers: { location: "http://localhost/next" },
+                  status: 307,
+                })
+              : new Response("done"),
+          async (calls) => {
+            await fetch("http://127.0.0.1:8443/start", {
+              headers: {
+                authorization: "Bearer value",
+                cookie: "session=value",
+                "x-stella-synthetic-key": "stl_syn_43-example",
+              },
+            });
+            const redirected = new Headers(calls[1]?.init?.headers);
+            expect([...redirected.keys()]).toEqual([]);
+          },
+        );
+      });
+
       test("every hop keeps the caller's transport options", async () => {
         await withFake(redirectOnce(307), async (calls) => {
           const tlsOptions = { rejectUnauthorized: false };

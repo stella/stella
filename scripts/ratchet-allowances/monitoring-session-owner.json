@@ -1,0 +1,6 @@
+{
+  "metric": "direct-root-connection-imports",
+  "file": "apps/api/src/lib/synthetic-principal/store.ts",
+  "delta": 1,
+  "reason": "The dedicated monitoring-session owner provisions fixed identities and writes auth sessions, audit rows, and a deny-by-default control table in one transaction. Mint and revoke serialize on the same control row; no connection is exported."
+}

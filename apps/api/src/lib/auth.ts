@@ -276,6 +276,11 @@ import {
   isDisposableEmailAddress,
 } from "@/api/lib/signup-abuse";
 import { revokeUserSseAccess } from "@/api/lib/sse";
+import { createSyntheticPrincipalAuthHooks } from "@/api/lib/synthetic-principal/auth-hooks";
+import {
+  checkSyntheticPrincipalAccess,
+  syntheticPrincipalAuthConfig,
+} from "@/api/lib/synthetic-principal/policy";
 import { includes, isRecord } from "@/api/lib/type-guards";
 import {
   checkMemberAdmission,
@@ -1080,6 +1085,7 @@ export const createAuth = (
       capEnabled: env.SESSION_LIFETIME_CAP_ENABLED,
     }),
   });
+  const syntheticAuthHooks = createSyntheticPrincipalAuthHooks();
   const demoConfig = getDemoAccountConfig();
   const reviewConfig = getReviewAccountConfig();
   const resolveSessionAccount = async (userId: SafeId<"user">) =>
@@ -1113,6 +1119,11 @@ export const createAuth = (
   });
   const reviewSessionPolicy = createDemoSessionPolicy({
     config: reviewConfig,
+    resolveUser: resolveSessionAccount,
+    hasMembership: hasSessionMembership,
+  });
+  const syntheticSessionPolicy = createDemoSessionPolicy({
+    config: syntheticPrincipalAuthConfig,
     resolveUser: resolveSessionAccount,
     hasMembership: hasSessionMembership,
   });
@@ -1775,7 +1786,12 @@ export const createAuth = (
     }),
     databaseHooks: {
       account: {
-        create: { before: reviewDatabaseHooks.accountCreateBefore },
+        create: {
+          before: async (account, ctx) => {
+            syntheticAuthHooks.accountCreateBefore(account);
+            return await reviewDatabaseHooks.accountCreateBefore(account, ctx);
+          },
+        },
       },
       member: {
         create: { before: reviewDatabaseHooks.memberCreateBefore },
@@ -1787,7 +1803,8 @@ export const createAuth = (
         create: {
           before: async (session) =>
             (await demoSessionPolicy(session)) ??
-            (await reviewSessionPolicy(session)),
+            (await reviewSessionPolicy(session)) ??
+            (await syntheticSessionPolicy(session)),
         },
       },
       user: {
@@ -1796,6 +1813,7 @@ export const createAuth = (
             // Refuses a creation path that has not decided whether it shows
             // the professional-use statement, before the row is written.
             requireUserCreationOrigin(ctx?.path);
+            syntheticAuthHooks.userCreateBefore(user);
             await reviewDatabaseHooks.userCreateBefore(user, ctx);
             const data = Result.gen(function* () {
               yield* checkNewAccountEmailAllowedForCreation({
@@ -1877,6 +1895,12 @@ export const createAuth = (
       sessionLifetime.plugin,
       createAgentUserPlugin(),
       createReviewAccountUserPlugin(reviewConfig),
+      createReviewAccountPlugin({
+        id: "restricted-monitoring-account",
+        config: syntheticPrincipalAuthConfig,
+        localPasswordEnabled: true,
+        checkAccess: checkSyntheticPrincipalAccess,
+      }),
       createSessionBearer(),
       createDemoSessionFilter(demoConfig),
       createOtpAccountLimitPlugin({
