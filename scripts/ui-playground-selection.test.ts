@@ -500,3 +500,30 @@ test("a file the transpiler cannot parse leaves the closure incomplete", () => {
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("a JSX transform warning keeps the closure exact", () => {
+  const fixture = createSelectionFixture();
+  try {
+    fixture.write(
+      "apps/web/src/routes/dev/fixture.tsx",
+      [
+        'import { Cell } from "./cell";',
+        "const props = { title: 'a' };",
+        'export const View = () => <Cell {...props} key="a" />;',
+        "",
+      ].join("\n"),
+    );
+    fixture.write(
+      "apps/web/src/routes/dev/cell.tsx",
+      "export const Cell = () => null;\n",
+    );
+    expect(
+      staticImportClosure("apps/web/src/routes/dev/fixture.tsx", fixture.root),
+    ).toMatchObject({ complete: true });
+    expect(
+      selectGeometrySpecs(["apps/web/src/routes/dev/cell.tsx"], fixture.root),
+    ).toEqual([fixture.spec]);
+  } finally {
+    rmSync(fixture.root, { force: true, recursive: true });
+  }
+});

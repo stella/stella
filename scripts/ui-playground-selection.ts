@@ -36,6 +36,8 @@ export type PlaygroundInventory = {
   complete: boolean;
 };
 
+const EMITTED_SCANNER = new Bun.Transpiler({ loader: "js" });
+
 const normalize = (file: string) =>
   file.replaceAll("\\", "/").replace(/^\.\//u, "");
 
@@ -46,10 +48,11 @@ const importExportTargets = (value: unknown): readonly string[] | undefined => {
   if (typeof value !== "object" || value === null) {
     return undefined;
   }
+  const conditions = new Map<string, unknown>(Object.entries(value));
   const targets: string[] = [];
   for (const condition of ["browser", "import", "default"] as const) {
-    if (condition in value) {
-      const conditionalTargets = importExportTargets(value[condition]);
+    if (conditions.has(condition)) {
+      const conditionalTargets = importExportTargets(conditions.get(condition));
       if (conditionalTargets === undefined) {
         return undefined;
       }
@@ -325,13 +328,15 @@ export const staticImportClosure = (
     let imports: readonly string[];
     try {
       const transpiler = new Bun.Transpiler({ loader, logLevel: "error" });
-      imports = transpiler
-        .scanImports(source)
-        .map(({ path: imported }) => imported);
+      // `scanImports` on JSX throws on warnings the transform only logs (a
+      // `key` after a spread), so the imports come from the emitted code.
+      const emitted = transpiler.transformSync(source);
+      imports = EMITTED_SCANNER.scanImports(emitted).map(
+        ({ path: imported }) => imported,
+      );
       // A computed `import(...)` names no module the scan can follow. The
       // emitted code has no comments or type-only imports, so any call beyond
       // the literal ones leaves the closure unknown.
-      const emitted = transpiler.transformSync(source);
       const dynamicCalls = emitted.match(/\bimport\s*\(/gu)?.length ?? 0;
       const literalCalls =
         emitted.match(/\bimport\s*\(\s*(["'])[^"'`]+\1\s*[,)]/gu)?.length ?? 0;
