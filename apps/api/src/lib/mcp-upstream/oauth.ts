@@ -518,8 +518,6 @@ export type AuthorizationResponseBinding =
       issSupportedAdvertised: false;
     };
 
-export const AUTHORIZATION_RESPONSE_BINDING_MODE = "observe" as const;
-
 export const createAuthorizationResponseBinding = ({
   authorizationServer,
   registrationMode,
@@ -625,14 +623,8 @@ export const observeAuthorizationResponseBinding = async <T>({
     logger.warn("mcp.oauth.binding_observation_failed");
   }
 
-  switch (AUTHORIZATION_RESPONSE_BINDING_MODE) {
-    case "observe":
-      return exchange();
-    default: {
-      AUTHORIZATION_RESPONSE_BINDING_MODE satisfies never;
-      return panic("Unhandled authorization response binding mode");
-    }
-  }
+  // This phase is observe-only: every verdict continues to the token exchange.
+  return exchange();
 };
 
 // Client ID Metadata Documents are the MCP spec's preferred registration

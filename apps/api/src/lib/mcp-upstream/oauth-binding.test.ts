@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  AUTHORIZATION_RESPONSE_BINDING_MODE,
   createAuthorizationResponseBinding,
   evaluateAuthorizationResponseBinding,
   observeAuthorizationResponseBinding,
@@ -31,8 +30,6 @@ const responseIssuer = ({
 
 describe("authorization response binding census", () => {
   test("classifies every observed response and preserves the exchange", async () => {
-    expect(AUTHORIZATION_RESPONSE_BINDING_MODE).toBe("observe");
-
     for (const registrationMode of registrationModes) {
       for (const issSupportedAdvertised of booleans) {
         for (const issPresent of booleans) {
