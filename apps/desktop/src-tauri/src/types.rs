@@ -283,7 +283,7 @@ pub struct TrustedSelfHostConnection {
 /// Monotonic bridge contract revision. Increment whenever the bridge
 /// surface changes so the web app can require a minimum revision without
 /// coupling to the desktop's literal app version.
-pub const BRIDGE_VERSION: u32 = 21;
+pub const BRIDGE_VERSION: u32 = 22;
 
 /// Versioned contracts advertised to the web app. A client requires the
 /// capability it uses; breaking semantics receive a new capability id.
@@ -293,7 +293,52 @@ pub const BRIDGE_CAPABILITIES: &[&str] =
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
+pub enum RecoveryStatus {
+  Pending,
+  Available,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub struct RecoveryEdit {
+  pub id: String,
+  pub file_name: String,
+  pub status: RecoveryStatus,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub enum RecoveryAccess {
+  #[default]
+  Available,
+  SignInRequired,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub struct DocumentRecoverySnapshot {
+  pub edits: Vec<RecoveryEdit>,
+  pub unassigned: bool,
+  pub pending: bool,
+  pub access: RecoveryAccess,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub enum RecoveryTarget {
+  Account,
+  Unassigned,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
 pub struct AppSnapshot {
+  pub document_recovery: DocumentRecoverySnapshot,
   pub bridge_port: u16,
   /// See [`BRIDGE_VERSION`].
   pub bridge_version: u32,
@@ -524,6 +569,7 @@ mod tests {
   #[test]
   fn test_app_snapshot_roundtrip() {
     let snapshot = AppSnapshot {
+      document_recovery: crate::types::DocumentRecoverySnapshot::default(),
       bridge_port: 45_901,
       bridge_version: BRIDGE_VERSION,
       capabilities: BRIDGE_CAPABILITIES
@@ -685,6 +731,7 @@ mod rpc_codegen_tests {
     LinkAccountRequest,
     OpenFileRequest,
     OpenFileResponse,
+    RecoveryTarget,
   );
 
   struct DeclarationVisitor<'a> {

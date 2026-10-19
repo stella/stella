@@ -229,15 +229,10 @@ pub async fn get_token_with_timeout(
 
 /// Delete a session token from the OS keychain.
 /// Silently succeeds if the entry does not exist.
-pub fn delete_token(session_id: &str) {
-  if let Ok(e) = entry(session_id) {
-    match e.delete_credential() {
-      Ok(()) => {}
-      Err(Error::NoEntry) => {}
-      Err(e) => {
-        tracing::warn!(session_id, error = %e, "keychain delete failed");
-      }
-    }
+pub fn delete_token(session_id: &str) -> Result<(), String> {
+  match entry(session_id)?.delete_credential() {
+    Ok(()) | Err(Error::NoEntry) => Ok(()),
+    Err(error) => Err(format!("keychain delete failed: {error}")),
   }
 }
 
