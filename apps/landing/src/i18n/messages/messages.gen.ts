@@ -99,6 +99,19 @@ type Messages = {
     "changelog": "Changelog";
     "chooseLanguage": "Choose a language";
     "docxEditor": "Standalone DOCX editor";
+    "featurePreviews": {
+      "matters": {
+        "open": "Open";
+        "inProgress": "In progress";
+        "done": "Done";
+      };
+      "documents": {
+        "comments": "Comments";
+      };
+      "research": {
+        "caseLaw": "Case law";
+      };
+    };
     "github": "stella on GitHub";
     "openMenu": "Open navigation";
     "pillars": {

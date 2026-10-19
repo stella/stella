@@ -46,14 +46,14 @@ app renders (kanban card shell, comment cards, tracked-change marks, court
 badges, matter icons, task status glyphs, money formatting), so they follow
 the product as it changes.
 
-| Component             | Shows                                              | `labels`                                              |
-| --------------------- | -------------------------------------------------- | ----------------------------------------------------- |
-| `MattersPreview`      | A matter's task board                              | `open`, `inProgress`, `done`                          |
-| `DocumentsPreview`    | A Word document with a tracked change and comments | `comments`                                            |
-| `ResearchPreview`     | Case-law search results with matched passages      | `caseLaw`                                             |
+| Component             | Shows                                              | `labels`                                                      |
+| --------------------- | -------------------------------------------------- | ------------------------------------------------------------- |
+| `MattersPreview`      | A matter's task board                              | `open`, `inProgress`, `done`                                  |
+| `DocumentsPreview`    | A Word document with a tracked change and comments | `comments`                                                    |
+| `ResearchPreview`     | Case-law search results with matched passages      | `caseLaw`                                                     |
 | `BillingPreview`      | An invoice's time entries and total                | `date`, `description`, `billedTime`, `rate`, `fee`, `summary` |
-| `ContactsPreview`     | A company contact filled from a business registry  | `businessRegistry`, `matters`                         |
-| `TimeTrackingPreview` | A running timer above the day's entries            | `time`, `summary`                                    |
+| `ContactsPreview`     | A company contact filled from a business registry  | `businessRegistry`, `matters`                                 |
+| `TimeTrackingPreview` | A running timer above the day's entries            | `time`, `summary`                                             |
 
 Every scene takes the same props:
 
