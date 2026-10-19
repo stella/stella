@@ -483,11 +483,13 @@ const retireAbandonedBootCandidates = async ({
   if (Result.isError(snapshot) || stopped()) {
     return;
   }
-  const live = new Set(
-    [...(snapshot.value.held ?? []), ...(snapshot.value.pending ?? [])].map(
-      (lock) => lock.name,
-    ),
-  );
+  // A snapshot without both lists cannot prove a document is gone, so
+  // nothing is retired on it.
+  const { held, pending } = snapshot.value;
+  if (!held || !pending) {
+    return;
+  }
+  const live = new Set([...held, ...pending].map((lock) => lock.name));
   const records = new Map(
     readHangMarkers(storage).map((record) => [record.key, record.marker]),
   );

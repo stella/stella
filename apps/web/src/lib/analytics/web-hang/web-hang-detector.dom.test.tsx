@@ -449,6 +449,28 @@ test("without the Locks API a healthy replacement never retires boot evidence", 
     replacement.restore();
   }
 });
+test.each([
+  ["held", { pending: [] }],
+  ["pending", { held: [] }],
+] as const)(
+  "a lock snapshot without its %s list never retires boot evidence",
+  async (_missing, partial) => {
+    const clock = { value: 100 };
+    const fake = createFakeLocks();
+    seed("boot", { started: 1, heartbeat: 90 });
+    const replacement = setupRetirementScenario(clock, {
+      request: fake.locks.request,
+      query: async () => partial,
+    });
+    try {
+      clock.value += 2 * HANG_HEARTBEAT_MS;
+      await replacement.retire();
+      expect(local.getItem(key)).toContain('"heartbeat":90');
+    } finally {
+      replacement.restore();
+    }
+  },
+);
 test("a healthy replacement keeps a visible boot whose heartbeat advances", async () => {
   const clock = { value: 100 };
   seed("boot", { started: 1, heartbeat: 90 });
