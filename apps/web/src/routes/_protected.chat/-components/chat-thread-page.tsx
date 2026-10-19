@@ -296,6 +296,7 @@ export const ChatThreadPage = ({
   // Suggested follow-up prompts for Tab-to-ask (editor) and chips display.
   const {
     handleAskUserEditingChange,
+    lastMessageId,
     suggestedFollowupPrompt,
     suggestedPrompts: suggestedFollowupPrompts,
   } = useSuggestedFollowupPrompts({
@@ -352,6 +353,7 @@ export const ChatThreadPage = ({
     }
   };
   const controller = useChatEditor({
+    followupAnalytics: { surface: "chat-thread", threadId: threadRef.threadId },
     sentMessageHistoryHtml,
     suggestedFollowupPrompt,
     threadRef,
@@ -764,6 +766,7 @@ export const ChatThreadPage = ({
                   the composer box's leading edge; `pb-0` because the tray
                   padding alone separates the chips from the box here. */}
                 <SuggestedFollowupChips
+                  analyticsSurface="chat-thread"
                   className="px-2 pb-0"
                   onSelect={(prompt) => {
                     controller.setContent(composerStoredMarkdown(prompt));
@@ -778,7 +781,9 @@ export const ChatThreadPage = ({
                     );
                   }}
                   prompts={suggestedFollowupPrompts}
+                  messageId={lastMessageId}
                   surface="floating"
+                  threadId={threadRef.threadId}
                 />
                 {env.VITE_FEATURE_USAGE && <UsageFallbackNotice />}
                 {/* Glass tray behind the composer + status row: the shared

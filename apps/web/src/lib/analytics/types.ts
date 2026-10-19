@@ -5,6 +5,7 @@ import type {
 } from "@stll/api-contract/provision-placement";
 
 import type { ErrorReference } from "@/lib/analytics/error-reference";
+import type { ChatThreadId } from "@/lib/chat-thread-ref";
 
 export const WEB_ANALYTICS_EVENTS = {
   exception: "$exception",
@@ -25,6 +26,8 @@ export const WEB_ANALYTICS_EVENTS = {
   feedbackReportSubmitted: "feedback_report_submitted",
   provisionPlacementGaps: "provision_placement_gaps",
   inspectorRestoreRecovered: "inspector_restore_recovered",
+  followupShown: "followup_shown",
+  followupSelected: "followup_selected",
 } as const;
 
 export type WebAnalyticsEvent =
@@ -59,11 +62,33 @@ export type Analytics = {
   captureInspectorRestoreRecovered: (
     properties: InspectorRestoreRecoveredProperties,
   ) => void;
+  captureFollowupShown: (properties: FollowupShownProperties) => void;
+  captureFollowupSelected: (properties: FollowupSelectedProperties) => void;
   captureRouteErrorLifecycle: (
     properties: RouteErrorLifecycleProperties,
   ) => Promise<void>;
   identifyUser: (user: AnalyticsUserIdentity) => void;
   reset: (options?: AnalyticsResetOptions) => void;
+};
+
+export type FollowupSurface =
+  | "chat-thread"
+  | "document-chat"
+  | "inspector-chat";
+
+type FollowupProperties = {
+  source: "generated";
+  surface: FollowupSurface;
+  threadId: ChatThreadId;
+};
+
+type FollowupShownProperties = FollowupProperties & {
+  count: number;
+};
+
+type FollowupSelectedProperties = FollowupProperties & {
+  index: number;
+  via: "chip" | "ghost-tab";
 };
 
 // Why a guide step could not be shown against the live app surface. Emitted so
