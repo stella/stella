@@ -8,6 +8,21 @@ import {
 
 export type StorageArea = "local" | "session";
 
+/** Read-once browser entries superseded by server-rendered preferences. */
+export const LEGACY_STORAGE_FAMILIES = [
+  { area: "local", prefix: "stella-i18n" },
+  { area: "local", prefix: "stella-ui-theme" },
+  { area: "local", prefix: "stella-ui-palette" },
+  { area: "local", prefix: "sidebar_state" },
+  { area: "local", prefix: "reader_provision_mode" },
+  { area: "local", prefix: "reader_text_scale" },
+  { area: "local", prefix: "stella.templates.density" },
+  { area: "local", prefix: "stella:inspector-pane-width:v1:" },
+  { area: "local", prefix: "stella:inspector-pane-width:v2" },
+  { area: "local", prefix: "case_law_hidden_columns" },
+  { area: "local", prefix: "statute_table_layout" },
+] as const satisfies readonly { area: StorageArea; prefix: string }[];
+
 /** How to tell whose entry a key is. */
 type OwnerReading =
   /** Keyed by this module: `<base>:u:<userId>` or `<base>:visitor`. */

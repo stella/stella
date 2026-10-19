@@ -33,11 +33,6 @@ export const I18nProvider = ({ children }: PropsWithChildren) => {
   const { prefs } = usePresentationPrefs();
   const locale = useI18nStore((s) => s.loadedLang);
   const messages = useI18nStore((s) => s.messages);
-  const region = useI18nStore((s) => s.region);
-  const regionalFormat = useI18nStore((s) => s.regionalFormat);
-  const calendar = useI18nStore((s) => s.calendar);
-  const numberingSystem = useI18nStore((s) => s.numberingSystem);
-  const weekStart = useI18nStore((s) => s.weekStart);
   const timeZone = useHydrationSafeTimeZone(synchronizeFormatterTimeZone);
 
   useExternalSyncEffect(
@@ -60,11 +55,11 @@ export const I18nProvider = ({ children }: PropsWithChildren) => {
 
   const formattingLocale = buildFormattingLocale({
     lang: locale,
-    region,
-    regionalFormat,
-    calendar,
-    numberingSystem,
-    weekStart,
+    region: prefs.region,
+    regionalFormat: prefs.regionalFormat,
+    calendar: prefs.calendar,
+    numberingSystem: prefs.numberingSystem,
+    weekStart: prefs.weekStart,
   });
 
   return (

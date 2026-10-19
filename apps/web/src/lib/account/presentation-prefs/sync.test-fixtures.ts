@@ -22,8 +22,12 @@ export const createTestPresentationPrefsSync = (
 
 export const createPrefsBroadcastHub = () => {
   const peers = new Set<(message: unknown) => void>();
+  let deliveryEnabled = true;
   return {
     connected: () => peers.size,
+    setDeliveryEnabled: (enabled: boolean) => {
+      deliveryEnabled = enabled;
+    },
     open: () => {
       const listeners = new Set<(event: MessageEvent<unknown>) => void>();
       const receive = (data: unknown) => {
@@ -34,6 +38,9 @@ export const createPrefsBroadcastHub = () => {
       peers.add(receive);
       return {
         postMessage: (message: unknown) => {
+          if (!deliveryEnabled) {
+            return;
+          }
           for (const peer of peers) {
             if (peer !== receive) {
               peer(message);

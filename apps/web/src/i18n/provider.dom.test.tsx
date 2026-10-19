@@ -105,7 +105,7 @@ test.each(["ar-SA", "ar-AE"])(
     }),
 );
 
-test("formatting preferences propagate between mounted providers", async () => {
+test("formatting preferences propagate only through the peer channel", async () => {
   const hub = createPrefsBroadcastHub();
   const withLock = createPrefsWriteLock();
   let saved = defaultPresentationPrefs;
@@ -152,6 +152,15 @@ test("formatting preferences propagate between mounted providers", async () => {
     </>,
   );
   try {
+    hub.setDeliveryEnabled(false);
+    await act(async () => {
+      view.getByRole("button", { name: "A Arabic numerals" }).click();
+    });
+    expect(view.getByLabelText("A locale").textContent).toContain("nu-arab");
+    expect(view.getByLabelText("B locale").textContent).not.toContain(
+      "nu-arab",
+    );
+    hub.setDeliveryEnabled(true);
     await act(async () => {
       view.getByRole("button", { name: "A Arabic numerals" }).click();
     });
