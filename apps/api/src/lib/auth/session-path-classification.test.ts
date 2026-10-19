@@ -4,24 +4,49 @@ import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import { createSocialProvider, getAuth } from "@/api/lib/auth";
-import { classifyAuthSessionPath } from "@/api/lib/auth/session-path-classification";
+import {
+  classifyAuthSessionPath,
+  isSessionCreatingAuthPath,
+} from "@/api/lib/auth/session-path-classification";
 
 const BASE_URL = "http://localhost:3001";
 
+const getEnabledAuthEndpointPaths = () => {
+  const auth = getAuth();
+  const disabledPaths = new Set(auth.options.disabledPaths);
+  return Object.values(auth.api)
+    .map((endpoint) => endpoint.path)
+    .filter((path): path is string => typeof path === "string")
+    .filter((path) => !disabledPaths.has(path));
+};
+
 describe("auth session paths", () => {
   test("classifies every auth endpoint", () => {
-    const auth = getAuth();
-    const disabledPaths = new Set(auth.options.disabledPaths);
-    const unclassified = Object.values(auth.api)
-      .map((endpoint) => endpoint.path)
-      .filter((path): path is string => typeof path === "string")
-      .filter(
-        (path) =>
-          !disabledPaths.has(path) &&
-          classifyAuthSessionPath(path) === undefined,
-      );
+    const unclassified = getEnabledAuthEndpointPaths().filter(
+      (path) => classifyAuthSessionPath(path) === undefined,
+    );
 
     expect(unclassified).toEqual([]);
+  });
+
+  test("identifies only configured session-establishing endpoints", () => {
+    const expectedSessionCreatingPaths = new Set([
+      "/callback/:id",
+      "/email-otp/verify-email",
+      "/sign-in/email",
+      "/sign-in/email-otp",
+      "/sign-in/social",
+    ]);
+
+    const enabledPaths = getEnabledAuthEndpointPaths();
+    for (const path of enabledPaths) {
+      expect(isSessionCreatingAuthPath(path), path).toBe(
+        expectedSessionCreatingPaths.has(path),
+      );
+    }
+    expect(enabledPaths.filter(isSessionCreatingAuthPath).toSorted()).toEqual(
+      [...expectedSessionCreatingPaths].toSorted(),
+    );
   });
 
   test("configures every social provider for authorization redirects", () => {

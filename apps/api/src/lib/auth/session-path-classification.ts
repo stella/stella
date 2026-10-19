@@ -1,12 +1,14 @@
 const AUTH_SESSION_PATH_DISPOSITION = {
   secondFactor: "second_factor",
   noSecondFactor: "no_second_factor",
+  existingSession: "existing_session",
   noSession: "no_session",
 } as const;
 
 type AuthSessionPathClassification =
   | { disposition: "second_factor" }
   | { disposition: "no_second_factor"; reason: string }
+  | { disposition: "existing_session"; reason: string }
   | { disposition: "no_session"; reason: string };
 
 const SECOND_FACTOR = {
@@ -15,6 +17,11 @@ const SECOND_FACTOR = {
 
 const noSecondFactor = (reason: string): AuthSessionPathClassification => ({
   disposition: AUTH_SESSION_PATH_DISPOSITION.noSecondFactor,
+  reason,
+});
+
+const existingSession = (reason: string): AuthSessionPathClassification => ({
+  disposition: AUTH_SESSION_PATH_DISPOSITION.existingSession,
   reason,
 });
 
@@ -28,35 +35,35 @@ const EXACT_AUTH_SESSION_PATHS = new Map<string, AuthSessionPathClassification>(
     ["/sign-in/email-otp", SECOND_FACTOR],
     ["/sign-in/social", SECOND_FACTOR],
     ["/sign-in/email", noSecondFactor("self-hosted password sign-in")],
-    ["/sign-up/email", noSecondFactor("self-hosted password registration")],
     ["/email-otp/verify-email", noSecondFactor("first email verification")],
-    ["/verify-email", noSecondFactor("email verification")],
-    ["/get-session", noSecondFactor("authenticated session refresh")],
-    ["/update-session", noSecondFactor("authenticated session update")],
-    ["/update-user", noSecondFactor("authenticated user update")],
-    ["/change-email", noSecondFactor("authenticated email change")],
-    ["/email-otp/change-email", noSecondFactor("authenticated email change")],
-    ["/two-factor/enable", noSecondFactor("second-factor enrollment")],
-    ["/two-factor/disable", noSecondFactor("second-factor removal")],
+    ["/sign-up/email", noSession("self-hosted password registration")],
+    ["/verify-email", noSession("email verification")],
+    ["/get-session", existingSession("authenticated session refresh")],
+    ["/update-session", existingSession("authenticated session update")],
+    ["/update-user", existingSession("authenticated user update")],
+    ["/change-email", existingSession("authenticated email change")],
+    ["/email-otp/change-email", existingSession("authenticated email change")],
+    ["/two-factor/enable", existingSession("second-factor enrollment")],
+    ["/two-factor/disable", existingSession("second-factor removal")],
     [
       "/two-factor/verify-backup-code",
-      noSecondFactor("second-factor challenge completion"),
+      existingSession("second-factor challenge completion"),
     ],
     [
       "/two-factor/verify-otp",
-      noSecondFactor("second-factor challenge completion"),
+      existingSession("second-factor challenge completion"),
     ],
     [
       "/two-factor/verify-totp",
-      noSecondFactor("second-factor challenge completion"),
+      existingSession("second-factor challenge completion"),
     ],
     [
       "/organization/set-active",
-      noSecondFactor("authenticated organization selection"),
+      existingSession("authenticated organization selection"),
     ],
     [
       "/organization/accept-invitation",
-      noSecondFactor("authenticated organization invitation acceptance"),
+      existingSession("authenticated organization invitation acceptance"),
     ],
     ["/account-info", noSession("OAuth account information")],
     ["/agent-identity/create-user", noSession("agent account provisioning")],
@@ -64,6 +71,17 @@ const EXACT_AUTH_SESSION_PATHS = new Map<string, AuthSessionPathClassification>(
     ["/delete-user", noSession("authenticated account removal")],
     ["/delete-user/callback", noSession("account removal callback")],
     ["/error", noSession("authentication error response")],
+    [
+      "/email-otp/send-verification-otp",
+      noSession("verification message request"),
+    ],
+    ["/email-otp/check-verification-otp", noSession("verification code check")],
+    ["/email-otp/request-password-reset", noSession("password reset request")],
+    ["/email-otp/reset-password", noSession("password reset")],
+    [
+      "/email-otp/request-email-change",
+      noSession("email change message request"),
+    ],
     ["/forget-password/email-otp", noSession("password reset request")],
     ["/get-access-token", noSession("access-token exchange")],
     ["/jwks", noSession("public key metadata")],
@@ -84,8 +102,36 @@ const EXACT_AUTH_SESSION_PATHS = new Map<string, AuthSessionPathClassification>(
     ["/sign-out", noSession("session removal")],
     ["/social-link-hint", noSession("social account lookup")],
     ["/token", noSession("token exchange")],
+    ["/two-factor/get-totp-uri", noSession("enrollment code request")],
+    ["/two-factor/send-otp", noSession("challenge message request")],
+    [
+      "/two-factor/generate-backup-codes",
+      noSession("recovery code generation"),
+    ],
     ["/unlink-account", noSession("authenticated account unlinking")],
     ["/verify-password", noSession("authenticated credential verification")],
+    ["/organization/create", noSession("organization management")],
+    ["/organization/update", noSession("organization management")],
+    ["/organization/delete", noSession("organization management")],
+    ["/organization/get-organization", noSession("organization lookup")],
+    ["/organization/get-full-organization", noSession("organization lookup")],
+    ["/organization/list", noSession("organization listing")],
+    ["/organization/invite-member", noSession("membership management")],
+    ["/organization/cancel-invitation", noSession("membership management")],
+    ["/organization/get-invitation", noSession("invitation lookup")],
+    ["/organization/reject-invitation", noSession("invitation response")],
+    ["/organization/list-invitations", noSession("invitation listing")],
+    ["/organization/get-active-member", noSession("active membership lookup")],
+    ["/organization/check-slug", noSession("organization slug check")],
+    ["/organization/remove-member", noSession("membership management")],
+    ["/organization/update-member-role", noSession("membership management")],
+    ["/organization/list-user-invitations", noSession("invitation listing")],
+    ["/organization/list-members", noSession("membership listing")],
+    [
+      "/organization/get-active-member-role",
+      noSession("active membership lookup"),
+    ],
+    ["/organization/has-permission", noSession("membership permission check")],
   ],
 );
 
@@ -107,20 +153,8 @@ const AUTH_SESSION_PATH_PREFIXES: readonly {
     classification: noSession("API key management"),
   },
   {
-    prefix: "/email-otp/",
-    classification: noSession("email verification message or code handling"),
-  },
-  {
     prefix: "/oauth2/",
     classification: noSession("OAuth authorization-server endpoint"),
-  },
-  {
-    prefix: "/organization/",
-    classification: noSession("organization management"),
-  },
-  {
-    prefix: "/two-factor/",
-    classification: noSession("second-factor management"),
   },
 ];
 
