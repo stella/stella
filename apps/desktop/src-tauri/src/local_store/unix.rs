@@ -14,7 +14,6 @@ use super::OpenMode;
 
 const DIRECTORY_FLAGS: OFlags = OFlags::RDONLY
   .union(OFlags::DIRECTORY)
-  .union(OFlags::NOFOLLOW)
   .union(OFlags::CLOEXEC);
 const DIRECTORY_MODE: Mode = Mode::from_raw_mode(0o700);
 const FILE_MODE: Mode = Mode::from_raw_mode(0o600);
