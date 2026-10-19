@@ -36,10 +36,15 @@ export type ModelledRunContext = {
     ref: string;
     sha: string;
     workflow_sha: string;
+    repository: string;
     event: {
       action: string;
       head_commit: { message: string };
-      pull_request: { draft: boolean; labels: { name: string }[] };
+      pull_request: {
+        draft: boolean;
+        labels: { name: string }[];
+        head: { repo: { full_name: string } };
+      };
     };
   };
   inputs: Record<string, string | boolean> & {
@@ -63,6 +68,7 @@ export type ModelledRunContext = {
   format: (template: string, value: string) => string;
 };
 
+const REPOSITORY = "stella/stella";
 const REF_BY_EVENT: Record<Event, string> = {
   merge_group: "refs/heads/gh-readonly-queue/main/pr-1-0000000",
   pull_request: "refs/pull/1/merge",
@@ -288,8 +294,14 @@ export const ciExpressionContext = ({
       event: {
         action,
         head_commit: { message: "ordinary" },
-        pull_request: { draft: false, labels: [] },
+        // A same-repository pull request: fork-only paths stay unmodelled.
+        pull_request: {
+          draft: false,
+          labels: [],
+          head: { repo: { full_name: REPOSITORY } },
+        },
       },
+      repository: REPOSITORY,
     },
     inputs: {
       heavy_only: heavyOnly,

@@ -8,6 +8,7 @@ import { assertProperty } from "@stll/property-testing";
 
 import {
   blockingFailures,
+  checkLogText,
   continueOnErrorHolds,
   failedCheckAnnotation,
   planChecks,
@@ -544,4 +545,29 @@ test("the generated manifest guard defers the scan engine outside PR depth runs 
   expect(
     deferred(null, { package_checks_required: "true", trusted: "true" }),
   ).toBe('["scan-engine-wasm","api-typecheck-projects"]');
+});
+
+test("only a failed check's own error commands reach the job log", () => {
+  const output = [
+    "::error::Release history includes a fixture pull request",
+    "::error file=a.ts,line=1::Expected refusal",
+    "  ::error::already indented",
+    "::warning::advisory note",
+    "::group::nested",
+    "ok",
+  ].join("\n");
+  const neutralized = [
+    " ::error::Release history includes a fixture pull request",
+    " ::error file=a.ts,line=1::Expected refusal",
+    "  ::error::already indented",
+    "::warning::advisory note",
+    " ::group::nested",
+    "ok",
+  ].join("\n");
+  for (const outcome of ["success", "skipped"] as const) {
+    expect(checkLogText(output, outcome)).toBe(neutralized);
+  }
+  expect(checkLogText(output, "failure")).toBe(
+    output.replace("::group::nested", " ::group::nested"),
+  );
 });

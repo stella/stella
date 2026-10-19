@@ -184,6 +184,7 @@ export const createTestIds = () => ({
   // boundary alone, independent of matter access.
   aiMemoryFirmA: id<"aiMemory">(),
   aiMemoryFirmB: id<"aiMemory">(),
+  aiMemoryDeleteB: id<"aiMemory">(),
   // Additional properties for dependencies
   propertyA1dep: id<"property">(),
   propertyB1dep: id<"property">(),
@@ -1211,6 +1212,18 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       kind: "preference" as const,
       content: "Firm B cites Bluebook",
       dedupKey: hashSha256Hex(ids.aiMemoryFirmB),
+      source: "user" as const,
+      status: "active" as const,
+      createdBy: ids.userB1,
+    },
+    {
+      id: ids.aiMemoryDeleteB,
+      organizationId: ids.orgB,
+      scope: "user" as const,
+      userId: ids.userB1,
+      kind: "preference" as const,
+      content: "Firm B cites Bluebook",
+      dedupKey: hashSha256Hex(ids.aiMemoryDeleteB),
       source: "user" as const,
       status: "active" as const,
       createdBy: ids.userB1,
