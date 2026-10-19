@@ -471,14 +471,21 @@ test("held decision tray and answer share a compact annotation without moving th
   const sources = view.getByRole("region", { name: "Sources" });
   const answer = view.getByRole("region", { name: "Answer" });
   await waitFor(() => {
-    for (const surface of [sources, answer]) {
+    // The tray lists the source by its court; in the answer the quotation
+    // stays as text and the chip after it shows the verified number too.
+    for (const [surface, label] of [
+      [sources, "NS"],
+      [answer, `NS${fullDecision.caseNumber}`],
+    ] as const) {
       const chip = surface.querySelector("[data-decision-citation]");
-      expect(chip?.textContent).toBe("NS");
+      expect(chip?.textContent).toBe(label);
       expect(chip?.getAttribute("aria-label")).toBe(decisionReference);
       expect(chip?.textContent).not.toContain(quotedPassage);
     }
   });
-  expect(answer.textContent).toBe(`${quotedPassage}NS`);
+  expect(answer.textContent).toBe(
+    `${quotedPassage} NS${fullDecision.caseNumber}`,
+  );
   expect(sources.textContent).not.toContain(quotedPassage);
   expect(view.container.querySelector("a a, a button")).toBeNull();
 });
@@ -649,8 +656,7 @@ for (const anchorId of [null, "p-12"]) {
     expect(primary.getAttribute("href")).toBe(
       `${reader.pathname}${reader.search}${reader.hash}`,
     );
-    expect(primary.textContent).toBe("NS");
-    expect(primary.textContent).not.toContain(target.caseNumber);
+    expect(primary.textContent).toBe(`NS${target.caseNumber}`);
     fireEvent.focus(primary);
     const source = await screen.findByRole("link", {
       name: messages.inspector.external.openOriginal,
@@ -698,8 +704,10 @@ for (const interactive of [false, true]) {
       return;
     }
     const primary = view.getByRole("button", { name: decisionReference });
-    expect(primary.textContent).toBe("NS");
-    expect(view.container.textContent).toBe(`${quotedPassage}NS`);
+    expect(primary.textContent).toBe(`NS${fullDecision.caseNumber}`);
+    expect(view.container.textContent).toBe(
+      `${quotedPassage} NS${fullDecision.caseNumber}`,
+    );
     fireEvent.focus(primary);
     const source = await screen.findByRole("link", {
       name: messages.inspector.external.openOriginal,
@@ -804,8 +812,10 @@ test("a publisher alias with a canonical decision keeps the passage before the s
     fullDecision,
   );
   const primary = view.getByRole("button", { name: decisionReference });
-  expect(primary.textContent).toBe("NS");
-  expect(view.container.textContent).toBe(`${quotedPassage}NS`);
+  expect(primary.textContent).toBe(`NS${fullDecision.caseNumber}`);
+  expect(view.container.textContent).toBe(
+    `${quotedPassage} NS${fullDecision.caseNumber}`,
+  );
   fireEvent.focus(primary);
   const original = await screen.findByRole("link", {
     name: messages.inspector.external.openOriginal,

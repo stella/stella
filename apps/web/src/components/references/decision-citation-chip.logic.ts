@@ -50,11 +50,11 @@ const comparable = (value: string): { text: string; origin: number[] } => {
 };
 
 /** Locale-neutral form used only to compare decision identifiers. */
-export const normalizeDecisionCaseNumber = (value: string): string =>
+const normalizeDecisionCaseNumber = (value: string): string =>
   comparable(value).text;
 
 /** Text content of Markdown link children, including inline formatting. */
-export const citationNodeText = (node: ReactNode): string => {
+const citationNodeText = (node: ReactNode): string => {
   if (typeof node === "string" || typeof node === "number") {
     return String(node);
   }
@@ -98,7 +98,7 @@ const caseNumberCandidates = (caseNumber: string): string[] => {
 };
 
 /** Locates the registry case number in prose after normalising punctuation and spacing. */
-export const citationTextCaseMatch = (
+const citationTextCaseMatch = (
   text: string,
   caseNumber: string,
 ): CitationTextMatch | null => {
@@ -143,7 +143,7 @@ export const citationTextCaseMatch = (
   return null;
 };
 
-export type InlineDecisionCitationPresentation =
+type InlineDecisionCitationPresentation =
   | { kind: "chip-replaces-text"; before: string; after: string }
   // The prose does not name the case: it stays, and the chip after it shows
   // the verified identity, so a link label can never stand in for it.

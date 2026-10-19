@@ -3,10 +3,8 @@ import { createElement } from "react";
 import { describe, expect, test } from "bun:test";
 
 import {
-  citationNodeText,
   citationTextNamesCase,
   inlineDecisionCitationPresentation,
-  normalizeDecisionCaseNumber,
   presentationBesideCitationText,
 } from "@/components/references/decision-citation-chip.logic";
 import { DECISION_CITATION_PRESENTATION } from "@/components/references/decision-citation-presentation.logic";
@@ -28,9 +26,9 @@ describe("citation text naming its case", () => {
   });
 
   test("normalises international punctuation, whitespace and registry decoration", () => {
-    expect(normalizeDecisionCaseNumber("III.\u00a0ÚS 2429/24")).toBe(
-      normalizeDecisionCaseNumber("III.ÚS 2429/24"),
-    );
+    expect(
+      citationTextNamesCase("III.\u00a0ÚS 2429/24", "III.ÚS 2429/24"),
+    ).toBe(true);
     for (const [prose, stored] of [
       ["23 Cdo 651/2023", "NS 23 Cdo 651/2023-123"],
       ["3 Cdo 12/2020", "NS SR 3 Cdo 12/2020"],
@@ -50,7 +48,6 @@ describe("citation text naming its case", () => {
       createElement("code", null, " 651/2023"),
       " ze dne",
     );
-    expect(citationNodeText(rich)).toBe("rozsudek 23\u00a0Cdo 651/2023 ze dne");
     expect(
       inlineDecisionCitationPresentation(rich, "NS 23 Cdo 651/2023-7"),
     ).toEqual({
