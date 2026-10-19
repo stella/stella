@@ -206,12 +206,19 @@ export const toolNameKey = (name: string): string =>
     .replace(/^external/u, "");
 
 /** The closest plain, word-order-insensitive or comparison-key distance. */
-export const toolNameDistance = (target: string, name: string): number =>
-  Math.min(
+export const toolNameDistance = (target: string, name: string): number => {
+  if (
+    target.length > MAX_TOOL_NAME_CHARS ||
+    name.length > MAX_TOOL_NAME_CHARS
+  ) {
+    return Number.POSITIVE_INFINITY;
+  }
+  return Math.min(
     editDistance(target, name),
     editDistance(sortedNameWords(target), sortedNameWords(name)),
     editDistance(toolNameKey(target), toolNameKey(name)),
   );
+};
 
 /** Up to three known names close to `name`, closest first. */
 export const closestNames = (
