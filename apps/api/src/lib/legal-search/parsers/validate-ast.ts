@@ -80,8 +80,7 @@ const normalize = (text: string): string =>
   text
     .replace(/\s+/gu, " ")
     .replace(/\u00a0/gu, " ")
-    .trim()
-    .toLowerCase();
+    .trim();
 
 const SKIP_WORDS = new Set([
   "[obrázek]",
@@ -155,14 +154,15 @@ const separateSkipMarkers = (text: string): string => {
 const isMeaningfulWord = (clean: string): boolean =>
   clean.length >= 3 && !/^\d+$/u.test(clean) && !SKIP_WORDS.has(clean);
 
-const extractWords = (text: string): Set<string> => {
+export const extractWords = (text: string): Set<string> => {
   const words = new Set<string>();
-  for (const w of separateSkipMarkers(text).toLowerCase().split(/\s+/u)) {
-    // Strip brackets first (anonymization markers like
-    // "[o]rganizace" or "[OBRÁZEK]"), then trim remaining
-    // non-letter chars from edges.
-    const noBrackets = w.replace(/[[\]]/gu, "");
-    const clean = trimNonLetters(noBrackets);
+  const normalized = separateSkipMarkers(text)
+    // Lowercasing is context-sensitive (for example, Greek final sigma), so
+    // anonymization brackets must not interrupt the word before this pass.
+    .replace(/[[\]]/gu, "")
+    .toLowerCase();
+  for (const w of normalized.split(/\s+/u)) {
+    const clean = trimNonLetters(w);
     if (isMeaningfulWord(clean) && !/^\[\d+\]$/u.test(w)) {
       words.add(clean);
     }
@@ -413,8 +413,8 @@ export const validateAst = (
   const wordComparisonText = options?.wordComparisonText;
   const comparisonWords =
     wordComparisonText === undefined ||
-    normalize(wordComparisonText).replace(/\s+/gu, "") !==
-      originalText.replace(/\s+/gu, "")
+    normalize(wordComparisonText).replace(/\s+/gu, "").toLowerCase() !==
+      originalText.replace(/\s+/gu, "").toLowerCase()
       ? originalWords
       : extractWords(normalize(wordComparisonText));
   const missingWords = missingFrom(comparisonWords);
