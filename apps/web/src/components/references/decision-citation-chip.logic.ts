@@ -4,6 +4,9 @@ import type { ReactNode } from "react";
 import { courtAbbreviation } from "@stll/api-contract/case-law-court-abbreviations";
 import type { CourtAbbreviationInput } from "@stll/api-contract/case-law-court-abbreviations";
 
+import { DECISION_CITATION_PRESENTATION } from "@/components/references/decision-citation-presentation.logic";
+import type { DecisionCitationPresentation } from "@/components/references/decision-citation-presentation.logic";
+
 type DecisionCitationCourtInput = CourtAbbreviationInput & {
   courtAbbreviation?: string | null | undefined;
 };
@@ -180,3 +183,22 @@ export const decisionCitationCourtLabel = ({
   ...court
 }: DecisionCitationCourtInput): string =>
   registeredCode ?? courtAbbreviation(court) ?? court.court;
+
+/**
+ * How a citation drawn beside the text it was found in presents itself. The
+ * expanded chip repeats the case number so two decisions of one court read
+ * apart; text that already prints that number has told them apart, so its
+ * chip keeps only the court.
+ */
+export const presentationBesideCitationText = ({
+  caseNumber,
+  citationText,
+  presentation,
+}: {
+  caseNumber: string;
+  citationText: string;
+  presentation: DecisionCitationPresentation;
+}): DecisionCitationPresentation =>
+  citationTextNamesCase(citationText, caseNumber)
+    ? DECISION_CITATION_PRESENTATION.compact
+    : presentation;
