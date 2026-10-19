@@ -18,11 +18,145 @@ type ConversionInputResult =
 
 export type ConversionInputRefusal =
   | { kind: "external_reference" }
+  | {
+      kind: "unsupported_reference";
+      format: ConvertibleMime;
+      element: string;
+      attribute: string;
+    }
   | { kind: "unsupported_field"; fieldType: string }
   | { kind: "legacy_format"; replacementExtension: ".xlsx" | ".pptx" }
   | { kind: "inspection_failed" };
 
 type Detector = (bytes: Uint8Array) => Promise<boolean> | boolean;
+
+type ReferenceRefusal = Extract<
+  ConversionInputRefusal,
+  { kind: "unsupported_reference" }
+>;
+
+type InspectedMarkupFormat = "html" | "xhtml" | "ooxml" | "odf";
+
+const REFERENCE_ALLOWLIST = [
+  {
+    format: "xhtml",
+    element: "*",
+    attribute: "{http://www.w3.org/2000/xmlns/}*",
+    reason: "namespace declaration",
+  },
+  {
+    format: "ooxml",
+    element: "*",
+    attribute: "{http://www.w3.org/2000/xmlns/}*",
+    reason: "namespace declaration",
+  },
+  {
+    format: "odf",
+    element: "*",
+    attribute: "{http://www.w3.org/2000/xmlns/}*",
+    reason: "namespace declaration",
+  },
+  { format: "html", element: "a", attribute: "href", reason: "navigation" },
+  {
+    format: "html",
+    element: "area",
+    attribute: "href",
+    reason: "navigation",
+  },
+  {
+    format: "xhtml",
+    element: "{http://www.w3.org/1999/xhtml}a",
+    attribute: "href",
+    reason: "navigation",
+  },
+  {
+    format: "xhtml",
+    element: "{http://www.w3.org/1999/xhtml}area",
+    attribute: "href",
+    reason: "navigation",
+  },
+  {
+    format: "xhtml",
+    element: "a",
+    attribute: "href",
+    reason: "navigation",
+  },
+  {
+    format: "xhtml",
+    element: "area",
+    attribute: "href",
+    reason: "navigation",
+  },
+  {
+    format: "ooxml",
+    element:
+      "{http://schemas.openxmlformats.org/package/2006/relationships}Relationship",
+    attribute: "Target",
+    reason: "navigation hyperlink target",
+  },
+  {
+    format: "ooxml",
+    element: "{http://purl.oclc.org/ooxml/package/relationships}Relationship",
+    attribute: "Target",
+    reason: "navigation hyperlink target",
+  },
+  {
+    format: "ooxml",
+    element: "Relationship",
+    attribute: "Target",
+    reason: "navigation hyperlink target",
+  },
+  {
+    format: "ooxml",
+    element:
+      "{http://schemas.openxmlformats.org/package/2006/relationships}Relationship",
+    attribute: "Type",
+    reason: "schema identifier",
+  },
+  {
+    format: "ooxml",
+    element: "{http://purl.oclc.org/ooxml/package/relationships}Relationship",
+    attribute: "Type",
+    reason: "schema identifier",
+  },
+  {
+    format: "ooxml",
+    element: "Relationship",
+    attribute: "Type",
+    reason: "schema identifier",
+  },
+  {
+    format: "odf",
+    element: "{urn:oasis:names:tc:opendocument:xmlns:text:1.0}a",
+    attribute: "{http://www.w3.org/1999/xlink}href",
+    reason: "navigation",
+  },
+  {
+    format: "ooxml",
+    element: "*",
+    attribute: "uri",
+    reason: "extension schema identifier",
+  },
+  {
+    format: "ooxml",
+    element:
+      "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}hyperlink",
+    attribute:
+      "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id",
+    reason: "navigation",
+  },
+  {
+    format: "ooxml",
+    element: "{http://purl.oclc.org/ooxml/wordprocessingml/main}hyperlink",
+    attribute: "{http://purl.oclc.org/ooxml/officeDocument/relationships}id",
+    reason: "navigation",
+  },
+] as const satisfies readonly {
+  format: InspectedMarkupFormat;
+  element: string;
+  attribute: string;
+  reason: string;
+}[];
 
 const text = (bytes: Uint8Array): string => new TextDecoder().decode(bytes);
 const latin1 = (bytes: Uint8Array): string =>
@@ -228,15 +362,24 @@ const htmlHasExternalReference = (bytes: Uint8Array): boolean => {
       const isForeignContentLoader =
         node.namespace !== "http://www.w3.org/1999/xhtml" &&
         ["image", "use", "feimage", "script"].includes(name);
+      const isHtmlContentLoader =
+        (key === "src" &&
+          [
+            "audio",
+            "embed",
+            "frame",
+            "iframe",
+            "img",
+            "input",
+            "script",
+            "source",
+            "track",
+            "video",
+          ].includes(name)) ||
+        (key === "data" && name === "object");
       const reference =
-        [
-          "src",
-          "poster",
-          "data",
-          "background",
-          "action",
-          "formaction",
-        ].includes(key) ||
+        ["poster", "background", "action", "formaction"].includes(key) ||
+        isHtmlContentLoader ||
         (key === "href" && name !== "a" && name !== "area") ||
         ((key === "href" || key === ["xlink", "href"].join(":")) &&
           isForeignContentLoader);
@@ -307,6 +450,114 @@ const xmlAttribute = (
   for (const attribute of element.attributes) {
     if (xmlNameMatches(attribute, namespaces, localName)) {
       return attribute.value;
+    }
+  }
+  return null;
+};
+
+const xmlQualifiedName = (node: slimdom.Element | slimdom.Attr): string =>
+  node.namespaceURI === null
+    ? node.localName
+    : `{${node.namespaceURI}}${node.localName}`;
+
+const allowlistMatches = (
+  format: InspectedMarkupFormat,
+  element: string,
+  attribute: string,
+): boolean =>
+  REFERENCE_ALLOWLIST.some(
+    (entry) =>
+      entry.format === format &&
+      (entry.element === "*" || entry.element === element) &&
+      (entry.attribute === attribute ||
+        (entry.attribute.endsWith("}*") &&
+          attribute.startsWith(entry.attribute.slice(0, -1)))),
+  );
+
+const valueHasExternalReference = (value: string): boolean =>
+  !isLocalReference(value) || cssHasExternalReference(value);
+
+const xmlCatchAllRefusal = (
+  source: string,
+  mime: ConvertibleMime,
+  format: Exclude<InspectedMarkupFormat, "html">,
+): ReferenceRefusal | null => {
+  const document = slimdom.parseXmlDocument(source);
+  for (const element of xmlElements(document.documentElement)) {
+    const elementName = xmlQualifiedName(element);
+    for (const attribute of element.attributes) {
+      const attributeName = xmlQualifiedName(attribute);
+      if (!valueHasExternalReference(attribute.value)) {
+        continue;
+      }
+      if (
+        allowlistMatches(format, elementName, attributeName) &&
+        (format !== "ooxml" ||
+          attribute.localName.toLowerCase() !== "target" ||
+          HYPERLINK_RELATIONSHIP_TYPES.has(
+            xmlAttribute(element, XML_NAMESPACES.none, "type")?.trim() ?? "",
+          ))
+      ) {
+        continue;
+      }
+      return {
+        kind: "unsupported_reference",
+        format: mime,
+        element: elementName,
+        attribute: attributeName,
+      };
+    }
+  }
+  return null;
+};
+
+const htmlCatchAllRefusal = (
+  bytes: Uint8Array,
+  mime: ConvertibleMime,
+): ReferenceRefusal | null => {
+  const $ = load(text(bytes));
+  for (const node of $("*").toArray()) {
+    if (!isTag(node)) {
+      continue;
+    }
+    const element = node.name.toLowerCase();
+    for (const [attribute, value] of Object.entries(node.attribs)) {
+      const name = attribute.toLowerCase();
+      if (
+        valueHasExternalReference(value) &&
+        !allowlistMatches("html", element, name)
+      ) {
+        return {
+          kind: "unsupported_reference",
+          format: mime,
+          element,
+          attribute: name,
+        };
+      }
+    }
+  }
+  return null;
+};
+
+const htmlStyleAttributeRefusal = (
+  bytes: Uint8Array,
+  mime: ConvertibleMime,
+): ReferenceRefusal | null => {
+  const $ = load(text(bytes));
+  for (const node of $("*").toArray()) {
+    if (!isTag(node)) {
+      continue;
+    }
+    const style = Object.entries(node.attribs).find(
+      ([attribute]) => attribute.toLowerCase() === "style",
+    );
+    if (style !== undefined && cssHasExternalReference(style[1])) {
+      return {
+        kind: "unsupported_reference",
+        format: mime,
+        element: node.name.toLowerCase(),
+        attribute: "style",
+      };
     }
   }
   return null;
@@ -486,9 +737,18 @@ const unsupportedFieldType = (value: string): string | null => {
     tokens.shift();
   }
   const keyword = tokens.at(0)?.toUpperCase();
-  return keyword === undefined || !SAFE_FIELD_KEYWORDS.has(keyword)
-    ? (keyword ?? "UNKNOWN")
-    : null;
+  if (keyword === undefined || !SAFE_FIELD_KEYWORDS.has(keyword)) {
+    return keyword ?? "UNKNOWN";
+  }
+  if (
+    keyword !== "HYPERLINK" &&
+    tokens.some((token) =>
+      valueHasExternalReference(token.replace(/^["']|["',)]$/gu, "")),
+    )
+  ) {
+    return keyword;
+  }
+  return null;
 };
 
 const fieldInstructionIsRefused = (value: string): boolean =>
@@ -564,18 +824,10 @@ const isOoxmlInspectedPath = (path: string): boolean => {
   if (path.endsWith(".rels")) {
     return true;
   }
-  return (
-    (path.startsWith("word/") ||
-      path.startsWith("ppt/") ||
-      path.startsWith("xl/")) &&
-    path.endsWith(".xml")
-  );
+  return path.endsWith(".xml");
 };
 
-const isOdfInspectedPath = (path: string): boolean =>
-  path === "content.xml" ||
-  path === "styles.xml" ||
-  (path.endsWith("/content.xml") && path.includes("/"));
+const isOdfInspectedPath = (path: string): boolean => path.endsWith(".xml");
 
 type PartSize = "body" | "metadata";
 
@@ -647,6 +899,32 @@ const archiveHas = async (
     }
   }
   return false;
+};
+
+const archiveCatchAllRefusal = async (
+  bytes: Uint8Array,
+  mime: ConvertibleMime,
+  format: "ooxml" | "odf",
+): Promise<ReferenceRefusal | null> => {
+  const archive = await loadDocxArchive(bytes);
+  const selectedPaths = Object.keys(archive.zip.files).filter((path) =>
+    format === "ooxml" ? isOoxmlInspectedPath(path) : isOdfInspectedPath(path),
+  );
+  for (const path of selectedPaths) {
+    const part = await readInspectedPart(
+      archive,
+      path,
+      path.endsWith(".rels") || path === "styles.xml" ? "metadata" : "body",
+    );
+    if (part.kind !== "source") {
+      continue;
+    }
+    const refusal = xmlCatchAllRefusal(part.value, mime, format);
+    if (refusal !== null) {
+      return refusal;
+    }
+  }
+  return null;
 };
 
 const ooxmlHasExternalReference = async (bytes: Uint8Array): Promise<boolean> =>
@@ -1148,11 +1426,40 @@ export const checkConversionInput = async (
       };
     }
   }
-  return (await DETECTORS[mime](bytes))
-    ? {
-        kind: "refuse",
-        reason: { kind: "external_reference" },
-        format: mime,
-      }
-    : { kind: "convert" };
+  if (mime === "text/html") {
+    const styleRefusal = htmlStyleAttributeRefusal(bytes, mime);
+    if (styleRefusal !== null) {
+      return { kind: "refuse", format: mime, reason: styleRefusal };
+    }
+  }
+  if (await DETECTORS[mime](bytes)) {
+    return {
+      kind: "refuse",
+      reason: { kind: "external_reference" },
+      format: mime,
+    };
+  }
+  let catchAllRefusal: ReferenceRefusal | null = null;
+  if (mime === "text/html") {
+    catchAllRefusal = htmlCatchAllRefusal(bytes, mime);
+  } else if (mime === "application/xhtml+xml") {
+    catchAllRefusal = xmlCatchAllRefusal(text(bytes), mime, "xhtml");
+  } else if (
+    mime ===
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+    mime ===
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation" ||
+    mime === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  ) {
+    catchAllRefusal = await archiveCatchAllRefusal(bytes, mime, "ooxml");
+  } else if (
+    mime === "application/vnd.oasis.opendocument.presentation" ||
+    mime === "application/vnd.oasis.opendocument.spreadsheet" ||
+    mime === "application/vnd.oasis.opendocument.text"
+  ) {
+    catchAllRefusal = await archiveCatchAllRefusal(bytes, mime, "odf");
+  }
+  return catchAllRefusal === null
+    ? { kind: "convert" }
+    : { kind: "refuse", format: mime, reason: catchAllRefusal };
 };

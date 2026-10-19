@@ -82,6 +82,74 @@ const fixtures = {
 } as const satisfies Record<string, Fixture>;
 
 describe("document conversion input", () => {
+  test("refuses an unrecognized OOXML reference attribute", async () => {
+    const input = await zip(
+      "word/document.xml",
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><w:unknown r:link="https://x.test/a.png"/></w:document>',
+    );
+    expect(
+      await checkConversionInput(
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        input,
+      ),
+    ).toEqual({
+      kind: "refuse",
+      format:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      reason: {
+        kind: "unsupported_reference",
+        format:
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        element:
+          "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}unknown",
+        attribute:
+          "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}link",
+      },
+    });
+  });
+
+  test.each([
+    ['<x-thing src="//x.test/a"></x-thing>', "x-thing", "src"],
+    [
+      '<section data-note="background:url(https://x.test/a)"></section>',
+      "section",
+      "data-note",
+    ],
+  ])(
+    "refuses an unrecognized HTML reference",
+    async (source, element, attribute) => {
+      expect(await checkConversionInput("text/html", encode(source))).toEqual({
+        kind: "refuse",
+        format: "text/html",
+        reason: {
+          kind: "unsupported_reference",
+          format: "text/html",
+          element,
+          attribute,
+        },
+      });
+    },
+  );
+
+  test("refuses an unrecognized ODF reference attribute", async () => {
+    const input = await zip(
+      "content.xml",
+      '<office:document xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" office:unknown="https://x.test/a"/>',
+    );
+    expect(
+      await checkConversionInput(
+        "application/vnd.oasis.opendocument.text",
+        input,
+      ),
+    ).toMatchObject({
+      kind: "refuse",
+      reason: {
+        kind: "unsupported_reference",
+        attribute: "{urn:oasis:names:tc:opendocument:xmlns:office:1.0}unknown",
+      },
+    });
+  });
+
   test("legacy Word reads compressed and wide text pieces", async () => {
     const first = "\u0013PAGE\u0015";
     const second = "\u0013HYPERLINK https://example.test\u0015";
@@ -94,6 +162,24 @@ describe("document conversion input", () => {
         ),
       ),
     ).toEqual({ kind: "convert" });
+  });
+
+  test("legacy Word refuses a non-navigation field reference", async () => {
+    expect(
+      await checkConversionInput(
+        "application/msword",
+        legacyWordFile(["\u0013QUOTE https://x.test/value\u0015"]),
+      ),
+    ).toMatchObject({ kind: "refuse" });
+  });
+
+  test("RTF refuses a non-navigation field reference", async () => {
+    expect(
+      await checkConversionInput(
+        "application/rtf",
+        encode('{\\rtf1{\\field{\\*\\fldinst QUOTE "https://x.test/value"}}}'),
+      ),
+    ).toMatchObject({ kind: "refuse" });
   });
 
   test.each(["INCLUDEPICTURE", "INCLUDETEXT"])(
@@ -236,11 +322,8 @@ describe("document conversion input", () => {
     '<svg><use href="https://x.test/s#a"></use></svg>',
     '<link HREF="https://example.test/a.css">',
   ])("refuses references in parsed HTML attributes", async (source) => {
-    expect(await checkConversionInput("text/html", encode(source))).toEqual({
-      kind: "refuse",
-      reason: { kind: "external_reference" },
-      format: "text/html",
-    });
+    const result = await checkConversionInput("text/html", encode(source));
+    expect(result.kind).toBe("refuse");
   });
 
   test.each([

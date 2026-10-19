@@ -653,7 +653,7 @@ type FileFieldContent = Extract<FieldContent, { type: "file" }>;
 
 type DisplayableConversionRefusal = Extract<
   ConversionInputErrorReason,
-  { kind: "legacy_format" | "unsupported_field" }
+  { kind: "legacy_format" | "unsupported_field" | "unsupported_reference" }
 >;
 
 type DerivativeBuild<T> =
@@ -702,7 +702,8 @@ const buildPdfDerivative = async (
     if (conversion.error instanceof ConversionInputError) {
       const conversionRefusal =
         conversion.error.reason.kind === "unsupported_field" ||
-        conversion.error.reason.kind === "legacy_format"
+        conversion.error.reason.kind === "legacy_format" ||
+        conversion.error.reason.kind === "unsupported_reference"
           ? conversion.error.reason
           : undefined;
       return {

@@ -3505,7 +3505,8 @@
     },
     "conversionRefusal": {
       "legacyFormat": "Tai seno formato „{format}“ failas. Norėdami jį konvertuoti, iš naujo įrašykite kaip {replacementExtension}.",
-      "unsupportedField": "Šiame dokumente yra {fieldType} laukas, kurio konvertuoti negalima."
+      "unsupportedField": "Šiame dokumente yra {fieldType} laukas, kurio konvertuoti negalima.",
+      "unsupportedReference": "Šis dokumentas nurodo išorinį išteklių dalyje {element} {attribute}, todėl jo konvertuoti negalima."
     },
     "external": {
       "confirmDescription": "Ketinate apsilankyti išorinėje svetainėje.",

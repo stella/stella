@@ -3505,7 +3505,8 @@
     },
     "conversionRefusal": {
       "legacyFormat": "Este é um arquivo antigo do {format}. Salve-o novamente como {replacementExtension} para convertê-lo.",
-      "unsupportedField": "Este documento contém um campo {fieldType} que não pode ser convertido."
+      "unsupportedField": "Este documento contém um campo {fieldType} que não pode ser convertido.",
+      "unsupportedReference": "Este documento faz referência a um recurso externo em {element} {attribute}, portanto não pode ser convertido."
     },
     "external": {
       "confirmDescription": "Você está prestes a acessar um site externo.",

@@ -84,6 +84,12 @@ test("an upper-case code passes through unchanged", async () => {
 
 test.each([
   { kind: "unsupported_field", fieldType: "INCLUDEPICTURE" },
+  {
+    kind: "unsupported_reference",
+    format: "text/html",
+    element: "x-thing",
+    attribute: "src",
+  },
   { kind: "legacy_format", replacementExtension: ".xlsx" },
 ] as const)(
   "a conversion refusal is preserved in file state",

@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -30,15 +31,29 @@ export const ConversionRefusalFallback = ({
   refusal: ConversionRefusal;
 }) => {
   const t = useTranslations();
-  const message =
-    refusal.kind === "unsupported_field"
-      ? t("inspector.conversionRefusal.unsupportedField", {
-          fieldType: refusal.fieldType,
-        })
-      : t("inspector.conversionRefusal.legacyFormat", {
-          format: LEGACY_FORMAT[refusal.replacementExtension],
-          replacementExtension: refusal.replacementExtension,
-        });
+  let message: string;
+  switch (refusal.kind) {
+    case "unsupported_field":
+      message = t("inspector.conversionRefusal.unsupportedField", {
+        fieldType: refusal.fieldType,
+      });
+      break;
+    case "unsupported_reference":
+      message = t("inspector.conversionRefusal.unsupportedReference", {
+        element: refusal.element,
+        attribute: refusal.attribute,
+      });
+      break;
+    case "legacy_format":
+      message = t("inspector.conversionRefusal.legacyFormat", {
+        format: LEGACY_FORMAT[refusal.replacementExtension],
+        replacementExtension: refusal.replacementExtension,
+      });
+      break;
+    default:
+      refusal satisfies never;
+      return panic("Unexpected conversion refusal");
+  }
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col items-center justify-center gap-3 p-6 text-center">

@@ -3505,7 +3505,8 @@
     },
     "conversionRefusal": {
       "legacyFormat": "هذا ملف {format} قديم. أعد حفظه بصيغة {replacementExtension} لتحويله.",
-      "unsupportedField": "يحتوي هذا المستند على حقل {fieldType} لا يمكن تحويله."
+      "unsupportedField": "يحتوي هذا المستند على حقل {fieldType} لا يمكن تحويله.",
+      "unsupportedReference": "يشير هذا المستند إلى مورد خارجي في {element} {attribute}، لذا لا يمكن تحويله."
     },
     "external": {
       "confirmDescription": "أنت على وشك زيارة موقع إلكتروني خارجي.",

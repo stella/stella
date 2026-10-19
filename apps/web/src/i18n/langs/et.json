@@ -3505,7 +3505,8 @@
     },
     "conversionRefusal": {
       "legacyFormat": "See on pärandvormingus {format}-fail. Teisendamiseks salvesta see uuesti vormingus {replacementExtension}.",
-      "unsupportedField": "See dokument sisaldab välja {fieldType}, mida ei saa teisendada."
+      "unsupportedField": "See dokument sisaldab välja {fieldType}, mida ei saa teisendada.",
+      "unsupportedReference": "See dokument viitab välisele ressursile asukohas {element} {attribute}, mistõttu ei saa seda teisendada."
     },
     "external": {
       "confirmDescription": "Oled avamas välist veebisaiti.",

@@ -3505,7 +3505,8 @@
     },
     "conversionRefusal": {
       "legacyFormat": "Ez egy régi formátumú {format}-fájl. A konvertáláshoz mentse újra {replacementExtension} formátumban.",
-      "unsupportedField": "Ez a dokumentum egy nem konvertálható {fieldType} mezőt tartalmaz."
+      "unsupportedField": "Ez a dokumentum egy nem konvertálható {fieldType} mezőt tartalmaz.",
+      "unsupportedReference": "Ez a dokumentum külső erőforrásra hivatkozik a(z) {element} {attribute} helyen, ezért nem konvertálható."
     },
     "external": {
       "confirmDescription": "Külső webhelyet készül megnyitni.",

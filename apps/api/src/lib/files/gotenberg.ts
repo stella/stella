@@ -85,6 +85,8 @@ const conversionInputRefusalMessage = (
   switch (reason.kind) {
     case "external_reference":
       return "The document contains a reference that cannot be converted.";
+    case "unsupported_reference":
+      return `This document refers to an external resource in ${reason.element} ${reason.attribute}, so it can't be converted.`;
     case "unsupported_field":
       return `The document field ${reason.fieldType} cannot be converted.`;
     case "legacy_format":

@@ -16,6 +16,12 @@ afterAll(unregisterDomEnvironment);
 const mount = (
   refusal:
     | { kind: "unsupported_field"; fieldType: string }
+    | {
+        kind: "unsupported_reference";
+        format: "text/html";
+        element: string;
+        attribute: string;
+      }
     | { kind: "legacy_format"; replacementExtension: ".xlsx" | ".pptx" },
 ) => {
   render(
@@ -41,6 +47,21 @@ test("shows the legacy format and replacement extension", () => {
   expect(
     screen.getByText(
       "This is a legacy Excel file. Re-save it as .xlsx to convert it.",
+    ),
+  ).toBeTruthy();
+});
+
+test("shows the document reference conversion refusal", () => {
+  mount({
+    kind: "unsupported_reference",
+    format: "text/html",
+    element: "x-thing",
+    attribute: "src",
+  });
+
+  expect(
+    screen.getByText(
+      "This document refers to an external resource in x-thing src, so it can't be converted.",
     ),
   ).toBeTruthy();
 });
