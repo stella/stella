@@ -50,9 +50,7 @@ describe("auth session paths", () => {
   });
 
   test("configures every social provider for authorization redirects", () => {
-    const socialProviders = Object.values(
-      getAuth().options.socialProviders ?? {},
-    );
+    const socialProviders = Object.values(getAuth().options.socialProviders);
 
     for (const provider of socialProviders) {
       expect(provider.disableIdTokenSignIn).toBe(true);
