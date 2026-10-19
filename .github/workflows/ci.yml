@@ -2158,6 +2158,7 @@ jobs:
           filter: blob:none
           persist-credentials: false
           submodules: true
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
@@ -2449,6 +2450,7 @@ jobs:
           filter: blob:none
           persist-credentials: false
           submodules: true
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
         env:
@@ -2657,6 +2659,7 @@ jobs:
           filter: blob:none
           persist-credentials: false
           submodules: true
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
         env:
@@ -3603,6 +3606,7 @@ jobs:
           filter: blob:none
           persist-credentials: false
           submodules: true
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
@@ -3756,6 +3760,7 @@ jobs:
           filter: blob:none
           persist-credentials: false
           submodules: true
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
