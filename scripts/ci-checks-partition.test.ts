@@ -357,8 +357,11 @@ const baseCancellation = v.parse(
     `data:text/javascript;base64,${Buffer.from(baseCancellationSource).toString("base64")}`
   ),
 ).CANONICAL_CANCEL_STEP;
-const baseCancellationSchema = cancellationJobSchema(baseCancellation, (pool) =>
-  git(["show", `${mergeBase}:${checkPoolRegistryPath(pool)}`]),
+const readBaseCheckPool: ReadCheckPool = (pool) =>
+  git(["show", `${mergeBase}:${checkPoolRegistryPath(pool)}`]);
+const baseCancellationSchema = cancellationJobSchema(
+  baseCancellation,
+  readBaseCheckPool,
 );
 const baseJobSchema = partitionJobSchema(baseCancellationSchema);
 const jobs = v.parse(
@@ -839,13 +842,18 @@ type ScopeOptions = {
 const expectScope = ({ current, base }: ScopeOptions) => {
   const { if: condition, ...scope } = current;
   const { if: originalCondition, ...originalScope } = base;
-  // ci-plan produces the generated sources. A merge base that still ran the
-  // producer as a job of its own names it beside the plan in `needs`.
+  // The generated-source producer is a job of its own, so its consumers
+  // name both. A merge base may name the plan alone, the current producer, or
+  // the retired producer that ran after the plan.
+  if (isDeepStrictEqual(scope["needs"], ["ci-plan", "generated-sources"])) {
+    scope["needs"] = "ci-plan";
+  }
   if (
     isDeepStrictEqual(originalScope["needs"], [
       "ci-plan",
       "ci-generated-sources",
-    ])
+    ]) ||
+    isDeepStrictEqual(originalScope["needs"], ["ci-plan", "generated-sources"])
   ) {
     originalScope["needs"] = "ci-plan";
   }
@@ -2623,13 +2631,15 @@ test("documentation policy widens only its package gate and retains successful i
 const expectCancellationNormalization = (
   schema: ReturnType<typeof cancellationJobSchema>,
   candidateJobs: Record<string, unknown>,
+  // Pooled checks come from the same tree as the jobs under test.
+  readPool: ReadCheckPool,
 ) => {
   for (const id of partitionIds) {
     const original = v.parse(
       v.looseObject({ steps: v.unknown() }),
       candidateJobs[id],
     );
-    const leaves = flattenWorkflowSteps(original.steps).filter(
+    const leaves = flattenWorkflowSteps(original.steps, readPool).filter(
       (step) => !isWorkflowBarrier(step),
     );
     const normalized = v.parse(schema, original);
@@ -2640,7 +2650,7 @@ const expectCancellationNormalization = (
       panic("Workflow cancellation tail unavailable");
     }
     const mutated = structuredClone(original);
-    const changedTail = flattenWorkflowSteps(mutated.steps).findLast(
+    const changedTail = flattenWorkflowSteps(mutated.steps, readPool).findLast(
       (step) => !isWorkflowBarrier(step),
     );
     if (!changedTail) {
@@ -2655,11 +2665,19 @@ const expectCancellationNormalization = (
 };
 
 test("baseline cancellation normalization uses its own owner and rejects changed tails", () => {
-  expectCancellationNormalization(baseCancellationSchema, baseJobs);
+  expectCancellationNormalization(
+    baseCancellationSchema,
+    baseJobs,
+    readBaseCheckPool,
+  );
 });
 
 test("head cancellation normalization is valid as the next base and rejects changed tails", () => {
-  expectCancellationNormalization(headCancellationSchema, jobs);
+  expectCancellationNormalization(
+    headCancellationSchema,
+    jobs,
+    readWorkingTreeCheckPool,
+  );
 });
 
 test("already hydrated merge-base jobs retain their generated manifest environment", () => {

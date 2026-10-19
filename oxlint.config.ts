@@ -532,6 +532,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("require-complete-compaction-generation.fixture.ts", [
     "require-complete-compaction-generation/require-complete-compaction-generation",
   ]),
+  fixtureRuleOverride("no-model-timeout-abort-signal.fixture.ts", [
+    "no-model-timeout-abort-signal/no-model-timeout-abort-signal",
+  ]),
   fixtureRuleOverride("require-safe-route-handlers.fixture.ts", [
     "require-safe-route-handlers/no-direct-handler-config",
     "require-safe-route-handlers/require-safe-route-handlers",
@@ -1157,6 +1160,7 @@ const config = defineConfig({
     "decision-shaped-output-schema/decision-shaped-output-schema": "error",
     "require-complete-compaction-generation/require-complete-compaction-generation":
       "error",
+    "no-model-timeout-abort-signal/no-model-timeout-abort-signal": "error",
     "no-coerced-optional-union-enum/no-coerced-optional-union-enum": "error",
     "tagged-error-requires-message/tagged-error-requires-message": "error",
     "provider-call-error-message/provider-call-error-message": "error",
@@ -1458,6 +1462,7 @@ const config = defineConfig({
     stellaLowercasePluginSpecifier,
     "./.oxlint-plugins/no-raw-cache-control.ts",
     "./.oxlint-plugins/confine-sql-close.ts",
+    "./.oxlint-plugins/confine-online-ddl.ts",
     "./.oxlint-plugins/raw-hash-from-source-fingerprint.ts",
     "./.oxlint-plugins/no-raw-sha256.ts",
     "./.oxlint-plugins/no-hand-rolled-concurrency.ts",
@@ -1581,6 +1586,7 @@ const config = defineConfig({
     "./.oxlint-plugins/ai-output-strict-schema.ts",
     "./.oxlint-plugins/decision-shaped-output-schema.ts",
     "./.oxlint-plugins/require-complete-compaction-generation.ts",
+    "./.oxlint-plugins/no-model-timeout-abort-signal.ts",
     "./.oxlint-plugins/require-audit-on-mutation.ts",
     "./.oxlint-plugins/require-running-entry-guard.ts",
     "./.oxlint-plugins/require-worker-database-login-posture.ts",
@@ -1711,6 +1717,17 @@ const config = defineConfig({
       },
     },
     {
+      // Tests, fixtures and the owner are skipped inside the rule; SQL
+      // migration files are not JavaScript, so oxlint never reads them.
+      files: [
+        "apps/api/src/**/*.{ts,tsx,js,mjs}",
+        ".oxlint-plugins/__fixtures__/confine-online-ddl.fixture.ts",
+      ],
+      rules: {
+        "confine-online-ddl/confine-online-ddl": "error",
+      },
+    },
+    {
       files: [
         "packages/scripts/src/dev-*.ts",
         "packages/scripts/src/agent-session.ts",
@@ -1740,7 +1757,18 @@ const config = defineConfig({
       files: ["apps/api/src/**/*.ts"],
       rules: {
         "gdp-ts/no-define-proof": "error",
-        "gdp-ts/no-proof-assertion": "error",
+        "gdp-ts/no-proof-assertion": [
+          "error",
+          {
+            proofImports: [
+              "(^|/)proofs(/|$)",
+              "(^|/)workspaces/matter-access-proof(?:\\.ts)?$",
+            ],
+          },
+        ],
+        "gdp-ts/no-matter-proof-forgery": "error",
+        "gdp-ts/no-matter-proof-kind-outside-owner": "error",
+        "gdp-ts/no-matter-access-context-escape": "error",
       },
     },
     {
@@ -4110,9 +4138,6 @@ const config = defineConfig({
         "apps/web/src/**/template-preview.tsx",
         "apps/web/src/**/template-preview-view.tsx",
         "apps/web/src/**/page-citation.tsx",
-        // Generated message types: UI copy may legitimately contain words
-        // like "right-click"; these strings are never class names.
-        "apps/web/src/i18n/langs/messages.gen.ts",
       ],
       rules: { "no-physical-properties/no-physical-properties": "off" },
     },
