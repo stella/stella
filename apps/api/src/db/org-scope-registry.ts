@@ -134,6 +134,7 @@ import {
   corpusIndexGenerations,
   corpusIndexGroupEnrollments,
   corpusIndexGroupWithdrawals,
+  corpusIndexJurisdictionServing,
   corpusIndexProjectionIntents,
   corpusIndexProjectionRevisions,
   corpusIndexProjectionStates,
@@ -2270,6 +2271,11 @@ export const GLOBAL_SCOPE_TABLES = {
   },
   corpusIndexGroupWithdrawals: {
     table: corpusIndexGroupWithdrawals,
+    ownership: "public-corpus",
+    reason: "Public corpus rows admitted by the declared corpus policy.",
+  },
+  corpusIndexJurisdictionServing: {
+    table: corpusIndexJurisdictionServing,
     ownership: "public-corpus",
     reason: "Public corpus rows admitted by the declared corpus policy.",
   },
