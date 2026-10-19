@@ -629,13 +629,8 @@ describe("public case-law route boundary", () => {
           }
         }
 
-        const roundTrips = [
-          decodeDecisionDateCursor(
-            encodeDecisionDateCursor({
-              decisionDate: "2026-01-01",
-              id: TEST_DECISION_ID,
-            }),
-          ),
+        // A citation page cursor decodes to the citation id alone.
+        expect(
           decodeCitationCursor(
             encodeCitationPageCursor({
               id: TEST_CITATION_ID,
@@ -643,8 +638,35 @@ describe("public case-law route boundary", () => {
             }),
             CITATION_QUERY,
           ),
-          decodeDecisionCitationCursor(
-            encodeDecisionCitationCursor({
+        ).toBe(TEST_CITATION_ID);
+
+        const roundTrips = [
+          {
+            decoded: decodeDecisionDateCursor(
+              encodeDecisionDateCursor({
+                decisionDate: "2026-01-01",
+                id: TEST_DECISION_ID,
+              }),
+            ),
+            expected: {
+              decisionDate: "2026-01-01",
+              id: TEST_DECISION_ID,
+            },
+          },
+          {
+            decoded: decodeDecisionCitationCursor(
+              encodeDecisionCitationCursor({
+                from: {
+                  after: encodeCitationCursor(TEST_CITATION_ID),
+                  status: "continue",
+                },
+                to: {
+                  after: encodeCitationCursor(TEST_CITATION_ID),
+                  status: "continue",
+                },
+              }),
+            ),
+            expected: {
               from: {
                 after: encodeCitationCursor(TEST_CITATION_ID),
                 status: "continue",
@@ -653,60 +675,112 @@ describe("public case-law route boundary", () => {
                 after: encodeCitationCursor(TEST_CITATION_ID),
                 status: "continue",
               },
-            }),
-          ),
-          decodeProvisionCursor(
-            encodeProvisionCursor({
+            },
+          },
+          {
+            decoded: decodeProvisionCursor(
+              encodeProvisionCursor({
+                generation: "1",
+                spanStart: 0,
+                anchor: "p-1",
+              }),
+            ),
+            expected: {
               generation: "1",
               spanStart: 0,
               anchor: "p-1",
-            }),
-          ),
-          decodeCitingDecisionsCursor(
-            encodeCitingDecisionsCursor({
+            },
+          },
+          {
+            decoded: decodeCitingDecisionsCursor(
+              encodeCitingDecisionsCursor({
+                context: TEST_CONTEXT,
+                decisionDate: "2026-01-01",
+                decisionId: TEST_DECISION_ID,
+              }),
+            ),
+            expected: {
               context: TEST_CONTEXT,
               decisionDate: "2026-01-01",
               decisionId: TEST_DECISION_ID,
-            }),
-          ),
-          decodeListCursor(
-            encodeListCursor({
+            },
+          },
+          {
+            decoded: decodeListCursor(
+              encodeListCursor({
+                type: "recent-v1",
+                validFrom: "2026-01-01",
+                id: TEST_DOCUMENT_ID,
+              }),
+            ),
+            expected: {
               type: "recent-v1",
               validFrom: "2026-01-01",
               id: TEST_DOCUMENT_ID,
-            }),
-          ),
-          decodeVersionCursor(
-            encodeVersionCursor({
+            },
+          },
+          {
+            decoded: decodeVersionCursor(
+              encodeVersionCursor({
+                validFrom: "2026-01-01",
+                id: TEST_DOCUMENT_ID,
+              }),
+            ),
+            expected: {
               validFrom: "2026-01-01",
               id: TEST_DOCUMENT_ID,
-            }),
-          ),
-          decodeProvisionHistoryCursor(
-            encodeProvisionHistoryCursor({
+            },
+          },
+          {
+            decoded: decodeProvisionHistoryCursor(
+              encodeProvisionHistoryCursor({
+                validFrom: "2026-01-01",
+                id: TEST_DOCUMENT_ID,
+              }),
+            ),
+            expected: {
               validFrom: "2026-01-01",
               id: TEST_DOCUMENT_ID,
-            }),
-          ),
-          decodeDecisionSearchCursor(
-            encodeDecisionSearchCursor({
+            },
+          },
+          {
+            decoded: decodeDecisionSearchCursor(
+              encodeDecisionSearchCursor({
+                id: TEST_DECISION_ID,
+                sort: "relevance",
+                sortKey: 1,
+              }),
+            ),
+            expected: {
               id: TEST_DECISION_ID,
               sort: "relevance",
               sortKey: 1,
-            }),
-          ),
-          decodeCorpusSearchCursor(
-            encodeCorpusSearchCursor({
+            },
+          },
+          {
+            decoded: decodeCorpusSearchCursor(
+              encodeCorpusSearchCursor({
+                dictionary: NO_EXPANSION_DICTIONARY_IDENTITY,
+                id: TEST_DECISION_ID,
+                score: 1,
+                sort: "relevance",
+                target: null,
+                windowStart: 0,
+              }),
+            ),
+            expected: {
               dictionary: NO_EXPANSION_DICTIONARY_IDENTITY,
               id: TEST_DECISION_ID,
               score: 1,
               sort: "relevance",
               target: null,
               windowStart: 0,
-            }),
-          ),
+            },
+          },
         ];
-        expect(roundTrips.every((cursor) => cursor !== null)).toBe(true);
+        for (const { decoded, expected } of roundTrips) {
+          expect(decoded).toMatchObject(expected);
+        }
       }),
       { numRuns: 40 },
     );
