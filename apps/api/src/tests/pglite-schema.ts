@@ -818,7 +818,7 @@ export const installPgliteLegislationExpressionIdentity = async (
       readMigrationStatements(
         nodePath.join(
           DRIZZLE_DIR,
-          "20261016203000_legislation_publisher_identity",
+          "20261019091000_legislation_publisher_identity",
           "migration.sql",
         ),
       ),
