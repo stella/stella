@@ -1,0 +1,12 @@
+{
+  "fixtureSet": "apps/api/src/handlers/case-law/judges/__fixtures__",
+  "provenance": {
+    "type": "sidecars",
+    "format": "fixture-provenance"
+  },
+  "characterisedAt": {},
+  "coveredOwners": [
+    "apps/api/src/handlers/case-law/judges/import-cz-us-roster.ts"
+  ],
+  "coveredSdks": []
+}

@@ -39,6 +39,7 @@ export const probeSourceFingerprint = (
 
 // Registry age and advisory/URL state can change without a repository edit.
 export const RESOLUTION_POLICY = {
+  "external-contract-pin": "repository",
   "no-llms-txt": "external",
   "release-age-exclusion": "external",
   "release-age-exception": "external",

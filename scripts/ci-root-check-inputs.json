@@ -249,6 +249,7 @@
       "scripts/**",
       ".oxfmtrc.json"
     ],
+    "External service contracts": ["**"],
     "Outbound transport ownership": [
       "apps/api/**",
       "apps/collab/src/**",

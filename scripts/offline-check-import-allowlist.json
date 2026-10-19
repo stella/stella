@@ -1,5 +1,10 @@
 [
   {
+    "capability": "Bun.spawnSync",
+    "file": "scripts/offline-git-read.ts",
+    "reason": "The baseline read owner captures a private subprocess primitive before the preload denies general subprocess access; it only runs fixed git merge-base, ls-tree, and show object reads with validated refs, commits and exact paths, lazy fetching disabled, all protocols denied and terminal prompts disabled. No caller-supplied command or network transport is exposed."
+  },
+  {
     "capability": "fetch",
     "file": "packages/fetch/src/index.ts",
     "reason": "The shared fetch implementation is imported by the model snapshot owner; check mode does not call it and the preload denies its runtime transport."

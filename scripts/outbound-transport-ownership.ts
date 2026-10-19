@@ -56,6 +56,9 @@ const NETWORK_MODULES = new Set([
   "ws",
   "nodemailer",
   "posthog-node",
+  "posthog-js",
+  "@hocuspocus/provider",
+  "@hocuspocus/extension-redis",
   "bullmq",
   "mailauth",
   "@smithy/fetch-http-handler",
@@ -91,6 +94,15 @@ const NETWORK_PACKAGE_PREFIXES = [
   "openai",
   "jose",
 ];
+/** Shared by the owner census and the external contract SDK census. */
+export const isOutboundTransportModule = (module: string): boolean =>
+  NETWORK_MODULES.has(module) ||
+  NETWORK_PACKAGE_PREFIXES.some((prefix) => {
+    const packagePrefix =
+      prefix.endsWith("-") || prefix.endsWith("/") ? prefix : `${prefix}/`;
+    return module === prefix || module.startsWith(packagePrefix);
+  });
+
 const PERMIT_MODULE = "apps/api/src/lib/auth/third-party-outbound-permit";
 const PERMIT_GRANT = "grantThirdPartyOutboundPermit";
 const CLASSES = new Set<string>(OUTBOUND_TRANSPORT_CLASSES);
@@ -520,13 +532,7 @@ const registerModule = ({
   ) {
     return;
   }
-  const isNetworkModule = NETWORK_MODULES.has(module);
-  const isNetworkPackage = NETWORK_PACKAGE_PREFIXES.some((prefix) => {
-    const packagePrefix =
-      prefix.endsWith("-") || prefix.endsWith("/") ? prefix : `${prefix}/`;
-    return module === prefix || module.startsWith(packagePrefix);
-  });
-  if (isNetworkModule || isNetworkPackage) {
+  if (isOutboundTransportModule(module)) {
     capabilities.add(`module:${module}`);
   }
 };
