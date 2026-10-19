@@ -1023,6 +1023,7 @@
       "name": "@stll/invoicing",
       "version": "0.1.0",
       "dependencies": {
+        "@stll/api-contract": "workspace:*",
         "@stll/money": "workspace:*",
         "@stll/text-normalize": "workspace:*",
         "better-result": "catalog:",
