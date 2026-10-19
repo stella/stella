@@ -81,7 +81,8 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useUnsavedWork } from "@/hooks/use-unsaved-work";
 import type { TranslationKey } from "@/i18n/types";
-import { getAnalytics } from "@/lib/analytics/provider";
+import { getAnalytics, useAnalytics } from "@/lib/analytics/provider";
+import type { FollowupSurface } from "@/lib/analytics/types";
 import {
   areDraftDocsEqual,
   createChatDraftState,
@@ -632,12 +633,14 @@ export const useChatComposerWiring = ({
 };
 
 export const useChatEditor = ({
+  followupAnalytics,
   onDraftStart,
   placeholder,
   sentMessageHistoryHtml,
   threadRef,
   suggestedFollowupPrompt,
 }: {
+  followupAnalytics?: { surface: FollowupSurface } | undefined;
   onDraftStart?: (() => void) | undefined;
   placeholder?: string | undefined;
   sentMessageHistoryHtml?: readonly string[] | undefined;
@@ -645,6 +648,7 @@ export const useChatEditor = ({
   suggestedFollowupPrompt?: string | undefined;
 }): ChatEditorController => {
   const t = useTranslations();
+  const analytics = useAnalytics();
   const queryClient = useQueryClient();
   const defaultPlaceholder = t("chat.placeholder");
   const tabToAskText = suggestedFollowupPrompt
@@ -657,6 +661,19 @@ export const useChatEditor = ({
   const suggestedFollowupPromptRef = useRef(suggestedFollowupPrompt);
   // oxlint-disable-next-line react/refs -- latest-ref mirror: consumed by out-of-render editor handlers, must reflect this render's prop
   suggestedFollowupPromptRef.current = suggestedFollowupPrompt;
+  // The editor's key handler is installed once; this reads the current
+  // surface when Tab accepts the suggestion.
+  const reportGhostAccepted = useLatestCallback(() => {
+    if (followupAnalytics === undefined) {
+      return;
+    }
+    analytics.captureFollowupSelected({
+      index: 0,
+      source: "generated",
+      surface: followupAnalytics.surface,
+      via: "ghost-tab",
+    });
+  });
   const submitHandlerRef = useRef<(() => Promise<void>) | null>(null);
   const confirmedCredentialSendRef = useRef(false);
   const fileIdCounterRef = useRef(0);
@@ -1109,6 +1126,7 @@ export const useChatEditor = ({
         const targetEditor = editorRef.current;
         if (suggestion && targetEditor?.isEmpty) {
           event.preventDefault();
+          reportGhostAccepted();
           targetEditor.commands.setContent(
             createChatComposerDocument(suggestion),
           );
