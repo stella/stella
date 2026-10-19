@@ -134,7 +134,7 @@ describe("desktop account request proofs", () => {
       }
       const last = alphabet.indexOf(segment.at(-1) ?? panic("Empty segment"));
       const flipped = last % 2 === 0 ? last + 1 : last - 1;
-      const sibling = `${segment.slice(0, -1)}${alphabet[flipped]}`;
+      const sibling = `${segment.slice(0, -1)}${alphabet.charAt(flipped)}`;
       expect(Buffer.from(sibling, "base64url")).toEqual(
         Buffer.from(segment, "base64url"),
       );
