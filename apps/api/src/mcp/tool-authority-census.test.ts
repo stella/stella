@@ -38,6 +38,7 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const PROBE_ARGUMENT = "authority_census_probe";
 const SKILL_NAME = "skill__authority_fixture";
+const WORKSPACE_ID = "00000000-0000-4000-8000-000000000001";
 
 const connectorTool = {
   exposedName: "mcp__fixture__read",
@@ -89,29 +90,62 @@ const skillRows = [
   },
 ];
 
+const transactionWithRows = (
+  rowsForSelection: (selection: Record<string, unknown>) => readonly unknown[],
+) =>
+  asTestRaw<Transaction>({
+    select: (selection: Record<string, unknown>) => {
+      const rows = rowsForSelection(selection);
+      const builder = {
+        from: () => builder,
+        innerJoin: () => builder,
+        leftJoin: () => builder,
+        where: () => builder,
+        orderBy: () => builder,
+        offset: () => builder,
+        limit: async () => rows,
+      };
+      return builder;
+    },
+  });
+
+const fixtureTransaction = transactionWithRows((selection) =>
+  "cachedTools" in selection ? connectorRows : skillRows,
+);
+const emptyTransaction = transactionWithRows(() => []);
+
 const safeDb: McpRequestContext["safeDb"] = async (callback) =>
-  Result.ok(
-    await callback(
-      asTestRaw<Transaction>({
-        select: (selection: Record<string, unknown>) => {
-          const rows = "cachedTools" in selection ? connectorRows : skillRows;
-          const builder = {
-            from: () => builder,
-            innerJoin: () => builder,
-            where: () => builder,
-            orderBy: () => builder,
-            limit: async () => rows,
-          };
-          return builder;
-        },
-      }),
-    ),
-  );
+  Result.ok(await callback(fixtureTransaction));
+
+type DataDependencyCalls = { safeDb: number; scopedDb: number };
+
+const trackingSafeDb =
+  (calls: DataDependencyCalls): McpRequestContext["safeDb"] =>
+  async (callback) => {
+    calls.safeDb += 1;
+    return Result.ok(await callback(emptyTransaction));
+  };
+
+const trackingScopedDb =
+  (calls?: DataDependencyCalls): McpRequestContext["scopedDb"] =>
+  async (callback) => {
+    if (calls !== undefined) {
+      calls.scopedDb += 1;
+    }
+    return await callback(emptyTransaction);
+  };
 
 const contextFor = (
   credentialPermissions: McpRequestContext["credentialPermissions"],
+  dataDependencyCalls?: DataDependencyCalls,
 ): McpRequestContext =>
   asTestRaw<McpRequestContext>({
+    accessibleWorkspaceIds: [toSafeId<"workspace">(WORKSPACE_ID)],
+    accessibleWorkspaceIdSet: new Set([toSafeId<"workspace">(WORKSPACE_ID)]),
+    accessibleWorkspaceStatusById: new Map([
+      [toSafeId<"workspace">(WORKSPACE_ID), "active"],
+    ]),
+    accessibleWorkspaces: [],
     credentialPermissions,
     featureAccessSnapshot: createFeatureAccessSnapshot({
       userId: "user_fixture",
@@ -155,7 +189,11 @@ const contextFor = (
     memberRole: "owner",
     organizationId: toSafeId<"organization">("org_fixture"),
     recordAuditEvent: async () => undefined,
-    safeDb,
+    safeDb:
+      dataDependencyCalls === undefined
+        ? safeDb
+        : trackingSafeDb(dataDependencyCalls),
+    scopedDb: trackingScopedDb(dataDependencyCalls),
     thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
     userEmail: "member@example.test",
     userId: toSafeId<"user">("user_fixture"),
@@ -225,7 +263,10 @@ const listedNames = async (entry: CensusEntry, context: McpRequestContext) =>
 
 const errorCodeOf = (result: CallToolResult): string | null => {
   const item = result.content.at(0);
-  const payload: unknown = item?.type === "text" ? JSON.parse(item.text) : null;
+  if (item?.type !== "text" || !item.text.startsWith("{")) {
+    return null;
+  }
+  const payload: unknown = JSON.parse(item.text);
   const parsed = v.safeParse(
     v.object({ error: v.object({ code: v.string() }) }),
     payload,
@@ -260,6 +301,34 @@ const tenantResourceAuthorities = {
   list_time_entries: { workspace: ["read"], timeEntry: ["read"] },
   resolve_rate: { workspace: ["read"], rate: ["read"] },
 } as const;
+
+const validTenantCalls = [
+  {
+    name: "list_time_entries",
+    args: { matter_id: WORKSPACE_ID },
+    dependency: "scopedDb",
+  },
+  {
+    name: "resolve_rate",
+    args: {
+      matter_id: WORKSPACE_ID,
+      user_id: "user_fixture",
+      date: "2026-10-19",
+    },
+    dependency: "safeDb",
+  },
+  {
+    name: "list_invoices",
+    args: { matter_id: WORKSPACE_ID },
+    dependency: "scopedDb",
+  },
+  { name: "get_usage", args: {}, dependency: "safeDb" },
+  { name: "list_audit_log", args: {}, dependency: "safeDb" },
+] as const satisfies readonly {
+  name: string;
+  args: Record<string, unknown>;
+  dependency: keyof DataDependencyCalls;
+}[];
 
 describe("MCP tool authority census", () => {
   test("covers every mode and dynamic family", () => {
@@ -306,6 +375,35 @@ describe("MCP tool authority census", () => {
           JSON.stringify({ kind: "tenant", permissions }),
         );
       }
+    }
+  });
+
+  test("declared tenant permissions reach handlers with valid input", async () => {
+    const definitions = listStaticMcpToolDefinitions("advanced");
+
+    for (const validCall of validTenantCalls) {
+      const definition = definitions.find(
+        ({ name }) => name === validCall.name,
+      );
+      expect(definition?.access).toBe("read");
+      if (
+        definition?.access !== "read" ||
+        definition.authority.kind !== "tenant"
+      ) {
+        continue;
+      }
+
+      const calls: DataDependencyCalls = { safeDb: 0, scopedDb: 0 };
+      const result = await handleMcpToolCall({
+        args: validCall.args,
+        context: contextFor(definition.authority.permissions, calls),
+        dependencies: dispatchDependencies,
+        mode: "advanced",
+        toolName: definition.name,
+      });
+
+      expect(calls[validCall.dependency], validCall.name).toBeGreaterThan(0);
+      expect(errorCodeOf(result), validCall.name).not.toBe("permission_denied");
     }
   });
 
