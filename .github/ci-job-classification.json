@@ -939,14 +939,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/ci.yml",
-      "digest": "c4289bdf25fcf4063b5a9d6f12d80886a164d418d3c788fa6aa3f4fdaf67f45d",
+      "digest": "f677764de12178eb6a6af7c641608a5eebfbd1cdcb05cce4752b69518f8d477f",
       "references": ["./.github/workflows/ci.yml"],
       "jobs": [
         {
           "id": "ci-plan",
           "kind": "support",
           "qualifier": "Plans trust, scopes and prerequisites for merge-required checks.",
-          "digest": "651da608e904531b817b9c784ba5368577008285a773114c4513ab529cef9f1c"
+          "digest": "3aee3ed3074032c13d070cee5a0b2ff9f699ca03fd5a9bbba10c937bff1a7f6e"
         },
         {
           "id": "generated-sources",
@@ -1000,7 +1000,7 @@
           "id": "ci-browser",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "7478227f13409b322a17454cbd247834dd72d046828c5971bdf9e3c85b8071f2"
+          "digest": "12072e211005b3b74d238635dc8434c13c5e9adfb9c99185628a6b7f1b53f7bd"
         },
         {
           "id": "code-quality-api",
