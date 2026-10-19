@@ -38,13 +38,21 @@ const fixture = () => {
     mkdirSync(path.dirname(destination), { recursive: true });
     writeFileSync(destination, bytes);
   };
+  // The isolated linker's layout: the wrapper and the compiler it re-exports
+  // live side by side in the store, and only the wrapper is linked at the root.
+  const store = "node_modules/.bun/@typescript+typescript6/node_modules";
   write(
-    "node_modules/@typescript/typescript6/package.json",
+    `${store}/@typescript/typescript6/package.json`,
     JSON.stringify({ version: "test-wrapper" }),
   );
   write(
-    "node_modules/@typescript/old/package.json",
+    `${store}/@typescript/old/package.json`,
     JSON.stringify({ version: "test-compiler" }),
+  );
+  mkdirSync(path.join(root, "node_modules/@typescript"), { recursive: true });
+  symlinkSync(
+    path.join(root, store, "@typescript/typescript6"),
+    path.join(root, "node_modules/@typescript/typescript6"),
   );
   write("input.ts", "export const input = 1;\n");
   write("packages/cli/capabilities/fixture.read.json", '{"id":"fixture.read"}');
@@ -86,6 +94,15 @@ const fixture = () => {
   };
   return { root, write, manifest };
 };
+
+test("the identity names the compiler the TypeScript 6 wrapper re-exports", () => {
+  const { root, manifest } = fixture();
+  try {
+    expect(manifest.compilerVersion).toBe("test-compiler");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 test("every prepared output has required identity and byte coverage", () => {
   const { root, manifest, write } = fixture();
