@@ -164,7 +164,9 @@ export const createSessionLifetime = ({
             ? "startup"
             : "activity",
       })
-      .then((session) => authorizeObservedSession(session, authorizeSession));
+      .then(async (session) =>
+        authorizeObservedSession(session, authorizeSession),
+      );
     memo?.set(token, result);
     return await result;
   };

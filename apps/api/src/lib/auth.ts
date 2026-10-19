@@ -1792,7 +1792,7 @@ export const createAuth = (
         create: {
           before: async (account, ctx) => {
             syntheticAuthHooks.accountCreateBefore(account);
-            return await reviewDatabaseHooks.accountCreateBefore(account, ctx);
+            await reviewDatabaseHooks.accountCreateBefore(account, ctx);
           },
         },
       },

@@ -67,7 +67,7 @@ describe.skipIf(!enabled)("monitoring credential migration", () => {
 
         await client`INSERT INTO folio_collab_room_tokens (id, source_session_id) VALUES ('new-unbound', NULL), ('bound', 'parent-session'), ('other-bound', 'other-session')`;
         const missingParent = await Result.tryPromise(
-          () =>
+          async () =>
             client`INSERT INTO folio_collab_room_tokens (id, source_session_id) VALUES ('missing-parent', 'absent-session')`,
         );
         expect(missingParent.isErr()).toBe(true);

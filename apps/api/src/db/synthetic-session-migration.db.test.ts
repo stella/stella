@@ -57,7 +57,7 @@ describe.skipIf(!enabled)("monitoring session database invariants", () => {
           }
         }
         const reservedSlug = await Result.tryPromise(
-          () =>
+          async () =>
             client`INSERT INTO organization (id, name, slug, created_at) VALUES ('other-org', 'Other Organization', ${SYNTHETIC_PRINCIPAL.org.slug}, now())`,
         );
         expect(reservedSlug.isErr()).toBe(true);
@@ -80,7 +80,7 @@ describe.skipIf(!enabled)("monitoring session database invariants", () => {
         ]);
         await client`INSERT INTO session (id, user_id) VALUES ('synthetic-session-valid', ${SYNTHETIC_PRINCIPAL.user.id})`;
         const invalidSession = await Result.tryPromise(
-          () =>
+          async () =>
             client`INSERT INTO session (id, user_id) VALUES ('synthetic-session-other', 'ordinary-user')`,
         );
         expect(invalidSession.isErr()).toBe(true);
@@ -94,7 +94,7 @@ describe.skipIf(!enabled)("monitoring session database invariants", () => {
           ).toBe(true);
         }
         const smokeSession = await Result.tryPromise(
-          () =>
+          async () =>
             client`INSERT INTO session (id, user_id) VALUES ('smoke-session-other', 'ordinary-user')`,
         );
         expect(smokeSession.isErr()).toBe(true);
@@ -109,7 +109,7 @@ describe.skipIf(!enabled)("monitoring session database invariants", () => {
         }
         await client`INSERT INTO member (id, user_id, organization_id) VALUES (${SYNTHETIC_PRINCIPAL.memberId}, ${SYNTHETIC_PRINCIPAL.user.id}, ${SYNTHETIC_PRINCIPAL.org.id})`;
         const invalidMembership = await Result.tryPromise(
-          () =>
+          async () =>
             client`INSERT INTO member (id, user_id, organization_id) VALUES ('other-membership', ${SYNTHETIC_PRINCIPAL.user.id}, 'other-org')`,
         );
         expect(invalidMembership.isErr()).toBe(true);
@@ -123,7 +123,7 @@ describe.skipIf(!enabled)("monitoring session database invariants", () => {
           ).toBe(true);
         }
         const changedMembership = await Result.tryPromise(
-          () =>
+          async () =>
             client`UPDATE member SET organization_id = 'other-org' WHERE id = ${SYNTHETIC_PRINCIPAL.memberId}`,
         );
         expect(changedMembership.isErr()).toBe(true);

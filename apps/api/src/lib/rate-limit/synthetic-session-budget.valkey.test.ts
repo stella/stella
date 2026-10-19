@@ -16,14 +16,14 @@ describe.skipIf(!enabled)("monitoring mint counters", () => {
       const context = new RedisRateLimitContext({
         failurePolicy: "fail_closed",
         createRedis: () => ({
-          send: (command, args) => client.send(command, args),
+          send: async (command, args) => client.send(command, args),
         }),
       });
       const prefix = Bun.randomUUIDv7();
       const keys = new Set<string>();
       const reserve = createSyntheticSessionBudget({
         context: {
-          increment: (key, duration) => {
+          increment: async (key, duration) => {
             const scopedKey = `${prefix}:${key}`;
             keys.add(scopedKey);
             return context.increment(scopedKey, duration);
