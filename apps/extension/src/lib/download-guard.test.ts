@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { sleep } from "@stll/concurrency/sleep";
 
@@ -10,6 +10,7 @@ import {
   judgeDownload,
   recordDownloadNotice,
   loadDownloadScope,
+  resetDownloadScopeForTests,
   takeDownloadNotices,
 } from "./download-guard";
 
@@ -98,6 +99,11 @@ describe("download action", () => {
 });
 
 const originalChrome = Object.getOwnPropertyDescriptor(globalThis, "chrome");
+
+// Other test files may publish owners into the same module instance.
+beforeEach(() => {
+  resetDownloadScopeForTests();
+});
 
 afterEach(() => {
   if (originalChrome) {

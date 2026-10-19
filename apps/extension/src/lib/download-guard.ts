@@ -251,6 +251,11 @@ export const setDownloadScope = (owners: TabOwners): void => {
   scopeNow = owners;
 };
 
+/** Forgets the owners held in memory, as a newly started worker would. */
+export const resetDownloadScopeForTests = (): void => {
+  scopeNow = null;
+};
+
 /**
  * Reads the stored owners when the worker starts. A change published while
  * the read ran is newer and wins.
