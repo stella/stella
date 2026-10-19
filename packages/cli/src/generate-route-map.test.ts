@@ -153,7 +153,7 @@ describe("generateRouteMap: structure", () => {
   test("destructive tools hide the boolean `confirm` gate from generated flags", () => {
     // The reserved --yes flow owns confirmation; the executor injects
     // `confirm: true`, so no redundant --confirm flag is generated.
-    const del = findLeaf(tree, ["matter", "delete"]);
+    const del = findLeaf(tree, ["task", "delete"]);
     expect(del?.destructive).toBe(true);
     expect(flagFor(del ?? errorSpec(), "--confirm")).toBeUndefined();
     // `confirm` still lives in the input schema (reachable via --input, and it

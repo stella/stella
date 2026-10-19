@@ -47,6 +47,12 @@ import {
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { advertisedSchemas } from "@/api/mcp/advertised-schema";
+import {
+  AGENT_CALL_SURFACE,
+  decideAgentCall,
+  describeAgentAccess,
+} from "@/api/mcp/agent-access";
+import type { AgentCallDecision } from "@/api/mcp/agent-access";
 import { synthesizeCapabilityContext } from "@/api/mcp/capability-context";
 import type { SynthesizedCapabilityContext } from "@/api/mcp/capability-context";
 import { isCapabilityFeatureEnabled } from "@/api/mcp/capability-feature";
@@ -82,7 +88,6 @@ import {
   INTERNAL_FIELD_NAME,
   PUBLIC_FIELD_NAME,
 } from "@/api/mcp/public-field-names";
-import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import type {
   InternalToolErrorResult,
@@ -93,7 +98,6 @@ import type {
 } from "@/api/mcp/tool-types";
 import {
   closestToolNames,
-  confirmationUnavailableResult,
   cursorInput,
   DEFAULT_LIST_LIMIT,
   didYouMean,
@@ -955,15 +959,10 @@ const listCapabilitiesHandler: McpToolHandler<
   // Feature-gated entries whose flag is off are not advertised, matching how
   // the static tools/list hides gated-off tools (describe/invoke also refuse
   // them, closing the guess-the-id bypass).
-  // A session that cannot confirm is not offered destructive capabilities;
-  // invoke refuses them for it as well.
-  const confirmable =
-    context.toolConfirmation !== TOOL_CONFIRMATION.unavailable;
   const filtered = (await getCatalog()).filter(
     (entry) =>
       contextFeatureEnabled(entry.feature, context) &&
       capabilityFeatureEnabled(entry, context) &&
-      (confirmable || !entry.destructive) &&
       (domain === undefined || capabilityDomain(entry.id) === domain) &&
       (access === "all" || entry.access === access) &&
       (afterId === undefined || entry.id > afterId),
@@ -986,10 +985,7 @@ const listCapabilitiesHandler: McpToolHandler<
       items: page.map((entry) => ({
         id: entry.id,
         summary: scopeMcpDescriptorProse(summarizeEntry(entry), hiddenIds),
-        description:
-          entry.description === undefined
-            ? null
-            : scopeMcpDescriptorProse(entry.description, hiddenIds),
+        description: describeCapability({ entry, context, hiddenIds }),
         access: entry.access,
         destructive: entry.destructive,
         handlerKind: entry.handlerKind,
@@ -1002,6 +998,33 @@ const listCapabilitiesHandler: McpToolHandler<
     }),
     textFields: [],
   });
+};
+
+/**
+ * A capability's description as agents read it, followed by the agent-access
+ * sentence when agents cannot run it unchanged.
+ */
+const describeCapability = ({
+  entry,
+  context,
+  hiddenIds,
+}: {
+  entry: CatalogEntry;
+  context: McpRequestContext;
+  hiddenIds: ReturnType<typeof hiddenMcpDescriptorIds>;
+}): string | null => {
+  const description =
+    entry.description === undefined
+      ? null
+      : scopeMcpDescriptorProse(entry.description, hiddenIds);
+  const { note } = describeAgentAccess({
+    target: { type: "capability", id: entry.id },
+    context,
+  });
+  if (note === null) {
+    return description;
+  }
+  return description === null ? note : `${description} ${note}`;
 };
 
 const accessLabel = (entry: CatalogEntry): string =>
@@ -1173,10 +1196,7 @@ const describeCapabilityHandler: McpToolHandler<
   return structuredEgressPlan({
     payload: projectionPayload(DESCRIBE_CAPABILITY_OUTPUT_SCHEMA, {
       id: entry.id,
-      description:
-        entry.description === undefined
-          ? null
-          : scopeMcpDescriptorProse(entry.description, hiddenIds),
+      description: describeCapability({ entry, context, hiddenIds }),
       domain: capabilityDomain(entry.id),
       access: entry.access,
       destructive: entry.destructive,
@@ -1708,14 +1728,21 @@ const invokeCapabilityHandler = async ({
     });
   }
 
-  const unconfirmable = entry.destructive
-    ? confirmationUnavailableResult({
-        toolConfirmation: context.toolConfirmation,
-        subject: `Capability "${id}"`,
-      })
-    : null;
-  if (unconfirmable !== null) {
-    return unconfirmable;
+  // 5. Agent access. A missing confirmation is reported only after the
+  // target resolves (`capabilityReferenceRefusal`), so it never answers for a
+  // resource the caller cannot see; every other refusal is final here.
+  const decision = decideAgentCall({
+    target: { type: "capability", id },
+    context,
+    surface: AGENT_CALL_SURFACE.mcp,
+    subject: `Capability "${id}"`,
+    confirmed: confirm,
+  });
+  if (
+    decision.type === "refuse" &&
+    decision.refusal.code !== "confirmation_required"
+  ) {
+    return structuredErrorResult(decision.refusal);
   }
   const input: InvokeInput = {
     body: rawInput?.body,
@@ -1735,14 +1762,15 @@ const invokeCapabilityHandler = async ({
 
   try {
     return await executeInvoke({
-      context: entry.destructive
-        ? bindApprovedMcpAuditContext(context)
-        : context,
+      context:
+        decision.type === "allow" && decision.approval === "confirmed"
+          ? bindApprovedMcpAuditContext(context)
+          : context,
       entry,
       id,
       input,
       validateOnly,
-      confirm,
+      decision,
     });
   } catch (error) {
     captureError(error, {
@@ -1777,8 +1805,8 @@ const invokeCapabilityHandler = async ({
  * - Scope recheck (server-core missing_scope): the transport already gates the
  *   executor tool itself; gate 4 rechecks the per-capability catalog
  *   scope against the session's grants.
- * - Destructive confirm (tools.ts destructiveHint): gate 5, from the catalog's
- *   per-capability `destructive` flag.
+ * - Agent access (tools.ts `decideAgentCall`): gate 5, the capability's own
+ *   agent access through the same resolver.
  * - Workspace access (per-tool `ensureActiveWorkspace` bridging): gate 7
  *   mirrors `validateWorkspaceAccess`(-IncludingArchived per fix-4 flag).
  * - Member permissions + usage preflight: run inside the safe-handler wrapper
@@ -1934,16 +1962,14 @@ const capabilityReferenceRefusal = async ({
   body,
   params,
   query,
-  entry,
-  confirm,
+  decision,
 }: {
   context: McpRequestContext;
   config: EndpointConfig;
   body: unknown;
   params: unknown;
   query: unknown;
-  entry: Pick<CatalogEntry, "id" | "destructive">;
-  confirm: boolean | undefined;
+  decision: AgentCallDecision;
 }) => {
   if (
     !(await resourcesAreVisible({
@@ -1958,13 +1984,9 @@ const capabilityReferenceRefusal = async ({
     return notFoundResult("Not found");
   }
 
-  // 5. Destructive confirm gate.
-  if (entry.destructive && confirm !== true) {
-    return structuredErrorResult({
-      code: "confirmation_required",
-      message: `Capability "${entry.id}" is an irreversible operation and was called without confirmation`,
-      hint: "This operation is irreversible. Confirm with the human user, then retry with confirm: true.",
-    });
+  // 5. The deferred confirmation refusal from the agent-access decision.
+  if (decision.type === "refuse") {
+    return structuredErrorResult(decision.refusal);
   }
 
   return null;
@@ -1976,14 +1998,14 @@ const executeInvoke = async ({
   id,
   input: publicInput,
   validateOnly,
-  confirm,
+  decision,
 }: {
   context: McpRequestContext;
   entry: CatalogEntry;
   id: string;
   input: InvokeInput;
   validateOnly: boolean;
-  confirm: boolean | undefined;
+  decision: AgentCallDecision;
 }): Promise<McpToolResponse> => {
   const loaded = await loadEndpointGuarded(
     id,
@@ -2016,8 +2038,7 @@ const executeInvoke = async ({
     body: validatedBody,
     params: validatedParams,
     query: validatedQuery,
-    entry,
-    confirm,
+    decision,
   });
   if (referenceRefusal !== null) {
     return referenceRefusal;
@@ -2338,7 +2359,6 @@ const CAPABILITY_TOOL_DEFINITIONS = [
         "The selected capability's endpoint permissions and purpose requirements are checked before its dispatch.",
     },
     anonymized: { exposure: "excluded", reason: "write" },
-    destructiveBehavior: { type: "capability-catalog" },
     scope: "stella:read",
     description:
       "Write one capability by id. Take a write id from list_capabilities or " +
@@ -2346,7 +2366,8 @@ const CAPABILITY_TOOL_DEFINITIONS = [
       "matter-scoped capabilities take input.params.matterId. " +
       "Required scopes and member permissions are checked per capability. " +
       "Set validate_only: true to check input without running it; " +
-      "destructive capabilities require confirm: true after human approval. " +
+      "destructive capabilities require confirm: true after human approval, " +
+      "and a capability whose description says it needs a person is refused. " +
       "Read capabilities must use read_capability.",
     inputSchema: writeCapabilityArgsSchema,
   }),

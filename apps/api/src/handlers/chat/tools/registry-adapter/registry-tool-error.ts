@@ -13,6 +13,8 @@ const MCP_CODE_TO_CHAT_KIND = {
   feature_disabled: "unavailable",
   not_found: "not-found",
   confirmation_required: "invalid-input",
+  person_approval_required: "unavailable",
+  person_only: "unavailable",
   permission_denied: "unavailable",
   usage_limited: "limit",
   [ACTION_ADMISSION_CODES.periodExhausted]: "limit",

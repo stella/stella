@@ -3001,10 +3001,6 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "type": "string",
           "format": "uuid",
           "description": "Delete only this version instead of the whole document"
-        },
-        "confirm": {
-          "type": "boolean",
-          "description": "Must be true to run this irreversible operation. Set it only after a human user has explicitly approved the deletion."
         }
       }
     }
@@ -3332,10 +3328,6 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "type": "string",
           "format": "uuid",
           "description": "Matter ID to delete"
-        },
-        "confirm": {
-          "type": "boolean",
-          "description": "Must be true to run this irreversible operation. Set it only after a human user has explicitly approved the deletion."
         }
       }
     }
@@ -5999,7 +5991,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "destructiveHint": "Remove matter member can overwrite, delete, cancel, revoke, or otherwise irreversibly change existing state.",
       "openWorldHint": "Remove matter member is confined to the private workspace or a bounded computation."
     },
-    "description": "Revoke matter access; cancel desktop editing sessions. Reassign work or unassign it. Requires human approval (confirm: true).",
+    "description": "Revoke matter access; cancel desktop editing sessions. Reassign work or unassign it.",
     "annotations": {
       "title": "Remove matter member",
       "readOnlyHint": false,
@@ -6029,10 +6021,6 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "type": "string",
           "minLength": 1,
           "description": "Reassign work to this member; omit to unassign"
-        },
-        "confirm": {
-          "type": "boolean",
-          "description": "True after human approval"
         }
       }
     }
@@ -9600,10 +9588,6 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "type": "string",
           "format": "uuid",
           "description": "Delete only this version instead of the whole document"
-        },
-        "confirm": {
-          "type": "boolean",
-          "description": "Must be true to run this irreversible operation. Set it only after a human user has explicitly approved the deletion."
         }
       }
     }
@@ -9931,10 +9915,6 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "type": "string",
           "format": "uuid",
           "description": "Matter ID to delete"
-        },
-        "confirm": {
-          "type": "boolean",
-          "description": "Must be true to run this irreversible operation. Set it only after a human user has explicitly approved the deletion."
         }
       }
     }
@@ -12598,7 +12578,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "destructiveHint": "Remove matter member can overwrite, delete, cancel, revoke, or otherwise irreversibly change existing state.",
       "openWorldHint": "Remove matter member is confined to the private workspace or a bounded computation."
     },
-    "description": "Revoke matter access; cancel desktop editing sessions. Reassign work or unassign it. Requires human approval (confirm: true).",
+    "description": "Revoke matter access; cancel desktop editing sessions. Reassign work or unassign it.",
     "annotations": {
       "title": "Remove matter member",
       "readOnlyHint": false,
@@ -12628,10 +12608,6 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "type": "string",
           "minLength": 1,
           "description": "Reassign work to this member; omit to unassign"
-        },
-        "confirm": {
-          "type": "boolean",
-          "description": "True after human approval"
         }
       }
     }
@@ -13678,10 +13654,6 @@ exports[`MCP registry quality (documents surface) tool surface snapshot (name, s
           "type": "string",
           "format": "uuid",
           "description": "Delete only this version instead of the whole document"
-        },
-        "confirm": {
-          "type": "boolean",
-          "description": "Must be true to run this irreversible operation. Set it only after a human user has explicitly approved the deletion."
         }
       }
     }

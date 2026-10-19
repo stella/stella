@@ -15,8 +15,6 @@
 // development process, which is what the registry projects (every feature
 // gate open).
 import "../src/tests/setup-env";
-import { panic } from "better-result";
-
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 import {
@@ -28,6 +26,7 @@ import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-
 import { WRITE_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { ACCOUNT_ACCESS } from "@/api/lib/api-handlers";
 import { pickDefined } from "@/api/lib/pick-defined";
+import { AGENT_ACCESS_KIND, describeAgentAccess } from "@/api/mcp/agent-access";
 import {
   MCP_ADVANCED_DISCOVERY_PATH,
   MCP_ADVANCED_HTTP_PATH,
@@ -40,6 +39,7 @@ import { hasGrantedScope } from "@/api/mcp/gateway/static-tool-visibility";
 import { listMcpResources } from "@/api/mcp/resources";
 import { DEFAULT_MCP_CLI_ANNOTATIONS } from "@/api/mcp/static-cli-metadata";
 import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
+import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
 import {
   MCP_CLI_TOOL_SCOPES,
   type McpCliToolAnnotation,
@@ -56,49 +56,19 @@ const deriveCliAnnotation = (
     ...declared,
     ...pickDefined(tool, ["feature", "featureId"]),
   };
-  const behavior =
-    "destructiveBehavior" in tool ? tool.destructiveBehavior : undefined;
-  if (behavior === undefined || behavior.type === "always") {
-    return annotation;
-  }
-
-  if (behavior.type === "capability-catalog" || behavior.type === "outbound") {
-    // The leaf prompts before it runs, and `--yes` pre-approves: a catalog
-    // target decides its own risk at dispatch, and an outbound call is refused
-    // by the same server-side gate a destructive one is.
-    return { ...annotation, confirmPassthrough: true };
-  }
-
-  if (behavior.type === "upstream") {
-    return panic(
-      `${tool.name} static CLI metadata cannot use upstream behavior`,
-    );
-  }
-
-  const discriminator = annotation.discriminator;
-  if (discriminator === undefined || discriminator.prop !== behavior.property) {
-    return panic(
-      `${tool.name} CLI metadata must discriminate on ${behavior.property}`,
-    );
-  }
-
-  return {
-    ...annotation,
-    discriminator: {
-      ...discriminator,
-      subcommands: Object.fromEntries(
-        Object.entries(discriminator.subcommands).map(([value, subcommand]) => [
-          value,
-          {
-            ...subcommand,
-            destructive: behavior.destructiveValues.some(
-              (destructiveValue) => destructiveValue === value,
-            ),
-          },
-        ]),
-      ),
-    },
-  };
+  // The CLI runs as the person it acts for, so it relays their confirmation.
+  const { access } = describeAgentAccess({
+    target: { type: "tool", name: tool.name, access: tool.access },
+    context: { toolConfirmation: TOOL_CONFIRMATION.caller },
+  });
+  // The leaf prompts before it runs, and `--yes` pre-approves: a catalog
+  // target decides its own access at dispatch, and an outbound send is
+  // refused without confirmation exactly as a delete is.
+  return access.kind === "per-capability" ||
+    (access.kind === AGENT_ACCESS_KIND.callerConfirms &&
+      access.reason === "outbound")
+    ? { ...annotation, confirmPassthrough: true }
+    : annotation;
 };
 
 // The tools/list wire fields plus build-time CLI metadata.

@@ -2703,10 +2703,6 @@
           "type": "string",
           "format": "uuid",
           "description": "Delete only this version instead of the whole document"
-        },
-        "confirm": {
-          "type": "boolean",
-          "description": "Must be true to run this irreversible operation. Set it only after a human user has explicitly approved the deletion."
         }
       }
     },
@@ -2987,10 +2983,6 @@
           "type": "string",
           "format": "uuid",
           "description": "Matter ID to delete"
-        },
-        "confirm": {
-          "type": "boolean",
-          "description": "Must be true to run this irreversible operation. Set it only after a human user has explicitly approved the deletion."
         }
       }
     },
@@ -5389,7 +5381,7 @@
       "scope": "admin_write"
     },
     "name": "remove_matter_member",
-    "description": "Revoke matter access; cancel desktop editing sessions. Reassign work or unassign it. Requires human approval (confirm: true).",
+    "description": "Revoke matter access; cancel desktop editing sessions. Reassign work or unassign it.",
     "inputSchema": {
       "type": "object",
       "required": ["matter_id", "user_id"],
@@ -5409,10 +5401,6 @@
           "type": "string",
           "minLength": 1,
           "description": "Reassign work to this member; omit to unassign"
-        },
-        "confirm": {
-          "type": "boolean",
-          "description": "True after human approval"
         }
       }
     },

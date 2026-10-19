@@ -1257,7 +1257,7 @@ describe("destructive confirmation (S4)", () => {
   test("--yes skips the prompt and proceeds", async () => {
     const server = startMockServer(() => ({ toolPayload: { deleted: true } }));
     const result = await runCli({
-      args: ["matter", "delete", "--matter-id", "m1", "--yes"],
+      args: ["task", "delete", "--task-id", "t1", "--yes"],
       url: server.url,
       token: WRITE,
     });
@@ -1269,7 +1269,7 @@ describe("destructive confirmation (S4)", () => {
   test("non-TTY without --yes aborts with exit 7 and no server call", async () => {
     const server = startMockServer(() => ({ toolPayload: { deleted: true } }));
     const result = await runCli({
-      args: ["matter", "delete", "--matter-id", "m1"],
+      args: ["task", "delete", "--task-id", "t1"],
       url: server.url,
       token: WRITE,
     });
@@ -1944,23 +1944,23 @@ describe("destructive confirm injection (S4)", () => {
   test("a confirmed delete injects confirm: true into the tool args", async () => {
     const server = startMockServer(() => ({ toolPayload: { deleted: true } }));
     const result = await runCli({
-      args: ["matter", "delete", "--matter-id", "m1", "--yes"],
+      args: ["task", "delete", "--task-id", "t1", "--yes"],
       url: server.url,
       token: WRITE,
     });
     await server.stop();
     expect(result.exitCode).toBe(0);
-    expect(server.requests.at(0)?.params.name).toBe("delete_matter");
+    expect(server.requests.at(0)?.params.name).toBe("delete_task");
     expect(server.requests.at(0)?.params.arguments).toEqual({
-      matter_id: "m1",
+      task_id: "t1",
       confirm: true,
     });
   });
 
-  test("a confirmed remove-member injects confirm: true alongside the action", async () => {
-    // remove_member is destructive via the CLI annotation AND the tool schema
-    // now declares the `confirm` gate, so --yes both skips the prompt and
-    // injects confirm: true to satisfy the server's action-level gate.
+  test("a confirmed remove-member sends no confirm: a person approves it in stella", async () => {
+    // remove_member is destructive via the CLI annotation, so --yes skips the
+    // prompt; its schema has no `confirm` gate, because the server refuses it
+    // from any client until a person approves it in stella.
     const server = startMockServer(() => ({ toolPayload: { removed: true } }));
     const result = await runCli({
       args: [
@@ -1981,7 +1981,6 @@ describe("destructive confirm injection (S4)", () => {
     expect(server.requests.at(0)?.params.arguments).toEqual({
       matter_id: "w1",
       user_id: "u1",
-      confirm: true,
     });
   });
 
