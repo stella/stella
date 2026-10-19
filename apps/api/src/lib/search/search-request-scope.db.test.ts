@@ -362,6 +362,7 @@ describe("search reads follow the request scope", () => {
               id,
               workspaceId: openMatter,
               kind: "task",
+              featureOwner: id === ordinary ? "shared" : "flows",
               name:
                 id === ordinary
                   ? "Flowboundary ordinary"
