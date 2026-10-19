@@ -23,6 +23,14 @@ describe(RULE, () => {
     ).toEqual([3]);
   });
 
+  test("rejects a checkout path joined after a leading root or empty segment", async () => {
+    expect(
+      await lint(
+        'import { writeFileSync } from "node:fs";\nimport path from "node:path";\nwriteFileSync(path.join("/", import.meta.dir, "baseline.json"), "changed");\nwriteFileSync(path.join("", import.meta.dir, "baseline.json"), "changed");\nwriteFileSync(path.join("/tmp", import.meta.dir, "out.json"), "changed");',
+      ),
+    ).toEqual([3, 4]);
+  });
+
   test("rejects a write stream opened on a checkout path", async () => {
     expect(
       await lint(

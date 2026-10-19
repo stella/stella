@@ -148,6 +148,18 @@ const afterLastAbsolute = (parts: readonly unknown[]): unknown[] => {
   return parts.slice(last + 1);
 };
 
+// A static "" or root-only segment: joining an absolute path after it keeps
+// that path's location.
+const isRootOrEmptyLiteral = (input: unknown): boolean => {
+  const node = unwrapExpression(input);
+  return (
+    isAstNode(node) &&
+    node.type === "Literal" &&
+    typeof node.value === "string" &&
+    /^[/\\]*$/u.test(node.value)
+  );
+};
+
 // A path operation by what it is, not how it is spelled: `join as joinPath`
 // from node:path is still join.
 const operationName = (
@@ -284,13 +296,16 @@ const createPathResolver = (context: ScopeContext) => {
       return false;
     }
     // path.join: the first segment is the base the rest is joined under.
+    // Leading "" and "/" add nothing to an absolute base, so the first other
+    // segment decides.
     if (operation === "join") {
+      const base = parts.findIndex((part) => !isRootOrEmptyLiteral(part));
       return (
-        parts.length > 0 &&
+        base !== -1 &&
         isCheckoutPath(
-          parts[0],
+          parts[base],
           new Set(seen),
-          exempt && staysInside(parts.slice(1)),
+          exempt && staysInside(parts.slice(base + 1)),
         )
       );
     }
