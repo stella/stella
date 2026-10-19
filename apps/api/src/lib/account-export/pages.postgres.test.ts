@@ -19,7 +19,7 @@ import {
   workspaceViewTemplates,
   workspaces,
 } from "@/api/db/schema";
-import { markRlsDatabase } from "@/api/db/scoped";
+import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { prepareSearchHistoryRows } from "@/api/handlers/search-history/entries";
 import {
   buildAccountExportArchive,
@@ -168,19 +168,32 @@ describe.skipIf(!enabled)("account export personal data", () => {
           status: "completed",
           entityFeatureGate: "open",
         });
-        await db.insert(legalListClaims).values({
-          id: verificationClaimId,
-          workspaceId,
-          runId: verificationRunId,
-          position: 1,
-          type: "fact",
-          state: "supported",
-          score: 100,
-          text: "Claim",
-          anchor: { type: "docx-block", blockId: "claim", start: 0, end: 5 },
-          refs: [{ factEntityId: entityId, rel: "supports" }],
-          entityFeatureGate: "open",
-        });
+        await createScopedDb(
+          scopedDatabase,
+          [workspaceId],
+          organizationId,
+          exportingUserId,
+        )(
+          async (tx) =>
+            await tx.insert(legalListClaims).values({
+              id: verificationClaimId,
+              workspaceId,
+              runId: verificationRunId,
+              position: 1,
+              type: "fact",
+              state: "supported",
+              score: 100,
+              text: "Claim",
+              anchor: {
+                type: "docx-block",
+                blockId: "claim",
+                start: 0,
+                end: 5,
+              },
+              refs: [{ factEntityId: entityId, rel: "supports" }],
+              entityFeatureGate: "open",
+            }),
+        );
         const annotation = (
           userId: SafeId<"user">,
           comment: (typeof ownComments)[number],
@@ -203,14 +216,36 @@ describe.skipIf(!enabled)("account export personal data", () => {
           createdAt,
           updatedAt,
         });
-        await db
-          .insert(legalReaderAnnotations)
-          .values([
-            ...ownComments.map((comment) =>
-              annotation(exportingUserId, comment),
-            ),
-            ...otherComments.map((comment) => annotation(otherUserId, comment)),
-          ]);
+        await createScopedDb(
+          scopedDatabase,
+          [workspaceId],
+          organizationId,
+          exportingUserId,
+        )(
+          async (tx) =>
+            await tx
+              .insert(legalReaderAnnotations)
+              .values(
+                ownComments.map((comment) =>
+                  annotation(exportingUserId, comment),
+                ),
+              ),
+        );
+        await createScopedDb(
+          scopedDatabase,
+          [workspaceId],
+          organizationId,
+          otherUserId,
+        )(
+          async (tx) =>
+            await tx
+              .insert(legalReaderAnnotations)
+              .values(
+                otherComments.map((comment) =>
+                  annotation(otherUserId, comment),
+                ),
+              ),
+        );
 
         const exported = await Array.fromAsync(
           exportAccountRows({
