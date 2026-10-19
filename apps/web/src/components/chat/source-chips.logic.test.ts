@@ -420,6 +420,30 @@ describe("answer source classification", () => {
     });
   });
 
+  test("keeps the date and id of an earlier hit for the same decision", () => {
+    const url = "https://example.test/cases/repeated";
+    const first = {
+      url,
+      caseNumber: "3 Cdo 3/26",
+      court: "Nejvyšší soud",
+      courtAbbreviation: "NS",
+      decisionDate: "2026-01-02",
+      decisionId: "a5a95801-7a7c-4c8b-98b3-7d17c8b8d7f9",
+    };
+    const later = {
+      url,
+      caseNumber: "3 Cdo 3/26",
+      court: "Nejvyšší soud",
+      courtAbbreviation: "NS",
+    };
+    const sources: ExternalSourceEntry[] = [];
+    collectExternalSources({ results: [first, later] }, sources);
+    expect(dedupeExternalSources(sources).at(0)?.caseLaw).toMatchObject({
+      decisionDate: "2026-01-02",
+      decisionId: first.decisionId,
+    });
+  });
+
   test("keeps a decision without court metadata as a generic source", () => {
     const decisionId = "a5a95801-7a7c-4c8b-98b3-7d17c8b8d7f9";
     const result = collectSourceChipEntries({

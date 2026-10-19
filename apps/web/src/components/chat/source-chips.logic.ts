@@ -480,9 +480,13 @@ export const dedupeExternalSources = (
     if (caseLaw === undefined) {
       caseLaw = existing?.caseLaw;
     } else if (existing?.caseLaw !== undefined) {
+      // A later hit for the same decision may omit what an earlier one
+      // carried; every optional field keeps the value it already had.
       caseLaw = {
         ...existing.caseLaw,
         ...caseLaw,
+        decisionDate: caseLaw.decisionDate ?? existing.caseLaw.decisionDate,
+        decisionId: caseLaw.decisionId ?? existing.caseLaw.decisionId,
         holding: caseLaw.holding ?? existing.caseLaw.holding,
       };
     }
