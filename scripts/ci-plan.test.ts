@@ -4864,7 +4864,7 @@ test("every browser suite belongs to exactly one required matrix leg", () => {
           "needs.ci-plan.outputs.ui_playground_specs": specs,
         },
       }),
-    ).toEqual(expected);
+    ).toEqual([...expected]);
   }
   const suites = browser.steps.filter(
     ({ run }) => run?.includes("test:browser") || run?.includes("test:e2e"),
@@ -7231,6 +7231,7 @@ type BrowserPlanOptions = {
   queueDepth?: string;
   packageChecksRequired?: string;
   browserScopeRequired?: string;
+  uiPlaygroundSpecs?: string;
 };
 type HeavyGatePlanOptions = {
   event: Event;
@@ -7273,6 +7274,7 @@ const browserPlanOutput = ({
   queueDepth = "full",
   packageChecksRequired = "true",
   browserScopeRequired = "true",
+  uiPlaygroundSpecs = "[]",
 }: BrowserPlanOptions) => {
   const { outputs } = v.parse(
     v.object({ outputs: v.record(v.string(), v.string()) }),
@@ -7292,10 +7294,32 @@ const browserPlanOutput = ({
           packageChecksRequired,
         "steps.depth.outputs.suite_depth": depth,
         "steps.depth.outputs.queue_depth": queueDepth,
+        "steps.ui-playground-plan.outputs.specs": uiPlaygroundSpecs,
       },
     }),
   );
 };
+
+test("a PR that selects UI playground specs requires the browser job", () => {
+  // ci-result requires every job whose scope output is true, so a planned
+  // UI leg that is skipped or cancelled fails the run; an unplanned one does
+  // not make the job required.
+  const plan = (desktopRequired: "true" | "false", uiPlaygroundSpecs: string) =>
+    browserPlanOutput({
+      event: "pull_request",
+      depth: "fast",
+      desktopRequired,
+      uiPlaygroundSpecs,
+    });
+  expect(
+    plan(
+      "false",
+      '["apps/web/e2e/ui-playground/reader-selection.geometry.spec.ts"]',
+    ),
+  ).toBe("true");
+  expect(plan("false", "[]")).toBe("false");
+  expect(plan("true", "[]")).toBe("true");
+});
 
 test("Playwright image-only changes admit browser suites in merge groups", () => {
   for (const file of [

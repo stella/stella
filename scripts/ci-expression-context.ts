@@ -213,6 +213,7 @@ const DEFAULT_STEP_OUTPUTS: Record<string, Record<string, string>> = {
   "pr-heavy-plan": { pr_heavy_jobs: "[]" },
   "query-perf-scope": { query_perf_required: "false" },
   "root-checks": { root_checks: "[]" },
+  "ui-playground-plan": { specs: "[]" },
 };
 
 const NEEDS = [

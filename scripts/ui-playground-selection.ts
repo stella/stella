@@ -201,7 +201,8 @@ const resolveImport = (
   if (candidate === undefined) {
     return { internal: false };
   }
-  return { file: sourceCandidate(root, candidate), internal: true };
+  const file = sourceCandidate(root, candidate);
+  return file === undefined ? { internal: true } : { file, internal: true };
 };
 
 export const staticImportClosure = (
