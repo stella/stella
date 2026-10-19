@@ -357,6 +357,13 @@ export const organizationSettings = p.pgTable(
       )})`,
     ),
     p.check(
+      "organization_settings_invoice_language_check",
+      sql`${table.invoiceLanguage} IS NULL OR ${table.invoiceLanguage} IN (${sql.join(
+        INVOICE_LANGUAGES.map((value) => sql`${value}`),
+        sql`, `,
+      )})`,
+    ),
+    p.check(
       "organization_settings_time_minimum_unit_check",
       sql`${table.timeMinimumUnitMinutes} > 0 AND 60 % ${table.timeMinimumUnitMinutes} = 0`,
     ),
