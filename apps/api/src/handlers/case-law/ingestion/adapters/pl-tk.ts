@@ -102,6 +102,7 @@ import {
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import {
   listPlTkPageFields,
+  parsePlTkPage,
   parsePlTkText,
   parsePolishDate,
   PL_TK_ORIGIN,
@@ -109,6 +110,7 @@ import {
   readPlTkRuling,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-tk";
 import type {
+  ParsedPlTkPage,
   PlTkCaseRecord,
   PlTkRuling,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-tk";
@@ -1014,6 +1016,8 @@ export type AssemblePlTkDecisionOptions = {
   row: PlTkListingRow;
   /** The case page, where one was read. */
   casePage: string | undefined;
+  /** The already parsed case page when the caller owns one. */
+  parsedPage?: ParsedPlTkPage | undefined;
   rawParts: SourceRawParts;
 };
 
@@ -1026,6 +1030,7 @@ export type AssemblePlTkDecisionOptions = {
  */
 export const assemblePlTkDecision = ({
   casePage,
+  parsedPage: suppliedPage,
   rawParts,
   row,
 }: AssemblePlTkDecisionOptions): PlTkBuildResult => {
@@ -1033,8 +1038,12 @@ export const assemblePlTkDecision = ({
   if (!isPersistableSourceDocumentId(id)) {
     return { type: "unkeyable" };
   }
-  const page = casePage === undefined ? null : readPlTkCasePage(casePage);
-  const ruling = casePage === undefined ? null : readPlTkRuling(casePage, id);
+  const parsedPage =
+    suppliedPage ??
+    (casePage === undefined ? undefined : parsePlTkPage(casePage));
+  const page = parsedPage === undefined ? null : readPlTkCasePage(parsedPage);
+  const ruling =
+    parsedPage === undefined ? null : readPlTkRuling(parsedPage, id);
   const statedCaseNumber = page?.record.caseNumber ?? row.caseNumber;
   // A row that states no docket still has to be stored under one; the audit
   // id stands in and is flagged as a placeholder.
@@ -1069,6 +1078,9 @@ export const assemblePlTkDecision = ({
       : Result.try({
           try: () =>
             parsePlTkText({
+              page:
+                parsedPage ??
+                panic("a ruling cannot exist without its parsed page"),
               caseNumber,
               court,
               decisionDate,
@@ -1185,7 +1197,7 @@ const buildPlTkDecision = async ({
 }: {
   cursor: string;
   /** Case pages already read in this call, by case page path. */
-  pageCache: Map<string, string>;
+  pageCache: Map<string, { html: string; parsed: ParsedPlTkPage }>;
   row: PlTkListingRow;
   session: Session;
   signal: AbortSignal | undefined;
@@ -1207,8 +1219,10 @@ const buildPlTkDecision = async ({
     return listingOnly();
   }
   const path = casePagePath(row);
-  let casePage =
+  const cached =
     row.caseId === undefined ? undefined : pageCache.get(row.caseId);
+  let casePage = cached?.html;
+  let parsedPage = cached?.parsed;
   if (casePage === undefined) {
     const first = await requestTk({
       cursor,
@@ -1262,7 +1276,8 @@ const buildPlTkDecision = async ({
         ),
       );
     }
-    if (readPlTkCasePage(response.body) === null) {
+    parsedPage = parsePlTkPage(response.body);
+    if (readPlTkCasePage(parsedPage) === null) {
       // A 200 that is not a case page is the portal's shell for a session
       // it no longer holds: the ruling was not refused, it was not served.
       return Result.err(
@@ -1271,13 +1286,14 @@ const buildPlTkDecision = async ({
     }
     casePage = response.body;
     if (row.caseId !== undefined) {
-      pageCache.set(row.caseId, casePage);
+      pageCache.set(row.caseId, { html: casePage, parsed: parsedPage });
     }
   }
   return Result.ok(
     assemblePlTkDecision({
       row,
       casePage,
+      parsedPage,
       rawParts: plTkRawPartsOf(row, casePage),
     }),
   );
@@ -1412,7 +1428,7 @@ const PL_TK_SOURCE_FIELDS = {
 
 const listPlTkSourceFields = (parts: SourceRawParts): readonly string[] => {
   const page = parts[PL_TK_RAW_PART.CASE_PAGE];
-  return page === undefined ? [] : listPlTkPageFields(page);
+  return page === undefined ? [] : listPlTkPageFields(parsePlTkPage(page));
 };
 
 /**
@@ -1561,7 +1577,7 @@ const plTkFetchPage = async (
   }
   const decisions: IngestionResult[] = [];
   let itemBuildFailures = 0;
-  const pageCache = new Map<string, string>();
+  const pageCache = new Map<string, { html: string; parsed: ParsedPlTkPage }>();
   let consumed = 0;
   for (let offset = window.from; offset >= window.to; offset -= 1) {
     if (signal?.aborted) {

@@ -1,4 +1,4 @@
-// parser-output-unchanged: Parser-local type exports removed; parsing and document output are unchanged.
+// parser-output-unchanged: The case DOM is shared for one assembly and cleanup happens on one owned clone; stored fields, HTML and AST output are unchanged.
 /**
  * Polish Constitutional Tribunal (ipo.trybunal.gov.pl) page reader.
  *
@@ -14,6 +14,7 @@
  * names, and {@link listPlTkPageFields} reads them back for the inventory.
  */
 
+import { panic } from "better-result";
 import * as cheerio from "cheerio";
 import { type AnyNode, isTag, isText } from "domhandler";
 
@@ -28,8 +29,8 @@ import type {
 } from "@stll/legal-ast/document-ast";
 
 import {
+  EXCLUDED_HTML_SELECTOR,
   inlinesToPlainText,
-  isExcludedHtmlTag,
   ownTableRows,
   visibleHtmlText,
   walkInlines,
@@ -191,6 +192,14 @@ export type PlTkCasePage = {
 
 type Root = cheerio.CheerioAPI;
 
+/** One case page's owned DOM and the indexes derived while parsing it once. */
+export type ParsedPlTkPage = {
+  $: Root;
+  fields: string[];
+  propsByContainer: Map<AnyNode, Map<string, cheerio.Cheerio<AnyNode>>>;
+  cleanedTextByDocumentId: Map<string, cheerio.Cheerio<AnyNode>>;
+};
+
 /** Ids JSF writes with colons; an attribute selector needs no escaping. */
 const byId = ($: Root, id: string): cheerio.Cheerio<AnyNode> =>
   $(`[id="${id}"]`);
@@ -206,18 +215,13 @@ const propName = (prop: cheerio.Cheerio<AnyNode>): string | undefined => {
  * first occurrence of a label is read, which is the tab's own.
  */
 const propsOf = (
-  $: Root,
+  page: ParsedPlTkPage,
   container: cheerio.Cheerio<AnyNode>,
 ): Map<string, cheerio.Cheerio<AnyNode>> => {
-  const props = new Map<string, cheerio.Cheerio<AnyNode>>();
-  container.find(".prop").each((_, element) => {
-    const prop = $(element);
-    const name = propName(prop);
-    if (name !== undefined && !props.has(name)) {
-      props.set(name, prop.children(".value").first());
-    }
-  });
-  return props;
+  const node = container.get(0);
+  return node === undefined
+    ? new Map()
+    : (page.propsByContainer.get(node) ?? new Map());
 };
 
 const valueText = (
@@ -314,14 +318,65 @@ const RULING_TAB_PREFIX = "sprawaForm:tabView:dok_";
 
 const RULING_TAB_ID = /^sprawaForm:tabView:dok_(?<id>\d+)$/u;
 
-/** The case record, or `null` for a page that is not a case page. */
-export const readPlTkCasePage = (html: string): PlTkCasePage | null => {
+/** Parse and index one case page. The returned value belongs to that assembly. */
+export const parsePlTkPage = (html: string): ParsedPlTkPage => {
   const $ = cheerio.load(html);
+  const scope = $('[id="sprawaForm:tabView"]');
+  const containers = [
+    ...byId($, METRYKA_ID).toArray().filter(isTag),
+    ...$(`[id^="${RULING_TAB_PREFIX}"]`)
+      .toArray()
+      .filter(isTag)
+      .filter((element) => {
+        const id = element.attribs["id"];
+        return id !== undefined && RULING_TAB_ID.test(id);
+      }),
+  ];
+  const propsByContainer = new Map<
+    AnyNode,
+    Map<string, cheerio.Cheerio<AnyNode>>
+  >(containers.map((container) => [container, new Map()]));
+  const names = new Set<string>();
+  scope.find(".prop").each((_, element) => {
+    const prop = $(element);
+    const name = propName(prop);
+    if (name === undefined) {
+      return;
+    }
+    names.add(name);
+    const container = containers.find((candidate) =>
+      $(element).parents().toArray().includes(candidate),
+    );
+    const props =
+      container === undefined ? undefined : propsByContainer.get(container);
+    if (props !== undefined && !props.has(name)) {
+      props.set(name, prop.children(".value").first());
+    }
+  });
+  scope
+    .find(".ui-panel-title, .ui-datatable-header, .ui-datalist-header")
+    .each((_, element) => {
+      const name = collapse(visibleHtmlText($(element)));
+      if (name.length > 0) {
+        names.add(name);
+      }
+    });
+  return {
+    $,
+    fields: [...names],
+    propsByContainer,
+    cleanedTextByDocumentId: new Map(),
+  };
+};
+
+/** The case record, or `null` for a page that is not a case page. */
+export const readPlTkCasePage = (page: ParsedPlTkPage): PlTkCasePage | null => {
+  const { $ } = page;
   const metryka = byId($, METRYKA_ID);
   if (metryka.length === 0) {
     return null;
   }
-  const props = propsOf($, metryka);
+  const props = propsOf(page, metryka);
   const documents = byId($, CASE_DOCUMENTS_ID);
   const rulingIds = $(`[id^="${RULING_TAB_PREFIX}"]`)
     .toArray()
@@ -370,26 +425,8 @@ export const readPlTkCasePage = (html: string): PlTkCasePage | null => {
  * Every label the page states: record labels, panel titles and table
  * headers, across the case record and every ruling tab.
  */
-export const listPlTkPageFields = (html: string): string[] => {
-  const $ = cheerio.load(html);
-  const scope = $('[id="sprawaForm:tabView"]');
-  const names = new Set<string>();
-  scope.find(".prop").each((_, element) => {
-    const name = propName($(element));
-    if (name !== undefined) {
-      names.add(name);
-    }
-  });
-  scope
-    .find(".ui-panel-title, .ui-datatable-header, .ui-datalist-header")
-    .each((_, element) => {
-      const name = collapse(visibleHtmlText($(element)));
-      if (name.length > 0) {
-        names.add(name);
-      }
-    });
-  return [...names];
-};
+export const listPlTkPageFields = (page: ParsedPlTkPage): string[] =>
+  page.fields;
 
 // ── One ruling ───────────────────────────────────────────
 
@@ -534,22 +571,16 @@ const footnotesOf = ($: Root, text: cheerio.Cheerio<AnyNode>): string[] =>
  * scripts.
  */
 const cleanTextHtml = (
-  $: Root,
   text: cheerio.Cheerio<AnyNode>,
-): string | undefined => {
+): { fragment: cheerio.Cheerio<AnyNode>; html: string } | undefined => {
   const copy = text.clone();
-  copy
-    .find("*")
-    .filter(
-      (_, node) => isTag(node) && isExcludedHtmlTag(node.tagName.toLowerCase()),
-    )
-    .remove();
+  copy.find(EXCLUDED_HTML_SELECTOR).remove();
   copy.find(".ui-tooltip").remove();
   copy.find('a[id*="tooltip"]').remove();
   const html = copy.html();
-  return html === null || collapse(visibleHtmlText($(copy))).length === 0
+  return html === null || collapse(visibleHtmlText(copy)).length === 0
     ? undefined
-    : html;
+    : { fragment: copy, html };
 };
 
 /** How a bench is introduced: an ordinary panel, or the full court. */
@@ -587,18 +618,20 @@ const courtOf = (
   $: Root,
   text: cheerio.Cheerio<AnyNode>,
 ): string | undefined => {
-  const front = text.clone();
-  front.find(AFTER_BENCH).remove();
+  const isBeforeBench = (element: AnyNode): boolean =>
+    $(element).closest(AFTER_BENCH).length === 0;
   const candidates = [
-    ...front
+    ...text
       .find(".wyrok_sklad")
       .first()
       .find("p, td, div")
       .toArray()
+      .filter(isBeforeBench)
       .map((element) => collapse(visibleHtmlText($(element)))),
-    ...front
+    ...text
       .find("p, td, div")
       .toArray()
+      .filter(isBeforeBench)
       .map((element) => collapse(visibleHtmlText($(element)))),
   ];
   for (const line of candidates) {
@@ -612,15 +645,15 @@ const courtOf = (
 
 /** One ruling's tab, or `null` where the page holds no tab for the id. */
 export const readPlTkRuling = (
-  html: string,
+  page: ParsedPlTkPage,
   documentId: string,
 ): PlTkRuling | null => {
-  const $ = cheerio.load(html);
+  const { $ } = page;
   const tab = byId($, `${RULING_TAB_PREFIX}${documentId}`);
   if (tab.length === 0) {
     return null;
   }
-  const props = propsOf($, tab);
+  const props = propsOf(page, tab);
   const panel = panelOf($, tab, documentId);
   const text = byId($, `tekst_${documentId}`);
   const note = collapse(
@@ -630,6 +663,10 @@ export const readPlTkRuling = (
     byId($, `sprawaForm:tabView:pobierzDoc${documentId}`).attr("href"),
   );
 
+  const cleanedText = text.length === 0 ? undefined : cleanTextHtml(text);
+  if (cleanedText !== undefined) {
+    page.cleanedTextByDocumentId.set(documentId, cleanedText.fragment);
+  }
   return {
     documentId,
     decisionForm: valueText(props.get("Rodzaj orzeczenia")),
@@ -642,7 +679,7 @@ export const readPlTkRuling = (
     footnotes: text.length === 0 ? [] : footnotesOf($, text),
     dissents: text.length === 0 ? [] : dissentsOf($, text, panel),
     courtAsPrinted: text.length === 0 ? undefined : courtOf($, text),
-    textHtml: text.length === 0 ? undefined : cleanTextHtml($, text),
+    textHtml: cleanedText?.html,
   };
 };
 
@@ -830,8 +867,7 @@ type EmitOptions = Context & { number?: number | undefined };
  * text; the number is kept as the paragraph's `number`, which is what a
  * citation of the ruling points at.
  */
-const buildBlocks = (textHtml: string): Block[] => {
-  const $ = cheerio.load(textHtml, null, false);
+const buildBlocks = ($: Root, text: cheerio.Cheerio<AnyNode>): Block[] => {
   const builder = createBuilder();
   let sawTitle = false;
   // The first heading of the reasons and of each dissent opens a top-level
@@ -953,7 +989,7 @@ const buildBlocks = (textHtml: string): Block[] => {
     flush();
   };
 
-  visit($.root().contents().toArray(), {
+  visit(text.contents().toArray(), {
     region: "front",
     regionRoot: undefined,
     heading: false,
@@ -962,6 +998,7 @@ const buildBlocks = (textHtml: string): Block[] => {
 };
 
 type ParsePlTkTextInput = {
+  page: ParsedPlTkPage;
   caseNumber: string;
   court: string;
   decisionDate: string | undefined;
@@ -991,7 +1028,10 @@ export const validatePlTkBlocks = (
 export const parsePlTkText = (
   input: ParsePlTkTextInput,
 ): { documentAst: DocumentAst; fulltext: string } => {
-  const blocks = buildBlocks(input.textHtml);
+  const fragment =
+    input.page.cleanedTextByDocumentId.get(input.documentId) ??
+    panic(`Ruling ${input.documentId} was not read from its parsed page`);
+  const blocks = buildBlocks(input.page.$, fragment);
   validatePlTkBlocks(input.caseNumber, input.textHtml, blocks);
   return {
     documentAst: {

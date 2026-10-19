@@ -48,6 +48,9 @@ import { stripInlinePrefix } from "@stll/legal-ast/inline-line";
 
 const EXCLUDED_HTML_TAGS = ["script", "style"];
 
+/** Selector for removing the same non-content elements before a DOM walk. */
+export const EXCLUDED_HTML_SELECTOR = "script, style";
+
 /** Content outside the decision text axis. */
 export const isExcludedHtmlTag = (tag: string): boolean =>
   EXCLUDED_HTML_TAGS.includes(tag);
