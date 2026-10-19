@@ -113,18 +113,37 @@ const isBunBuildCallee = (callee: ts.Expression): boolean => {
   );
 };
 
-const callsBunBuild = (path: string, contents: string): boolean => {
+// One site per call, named by what it builds (its `entrypoints`, else its
+// whole argument), so a second build in a registered script is a new site.
+const bunBuildCalls = (path: string, contents: string): string[] => {
   const source = ts.createSourceFile(
     path,
     contents,
     ts.ScriptTarget.Latest,
-    false,
+    true,
   );
-  const visit = (node: ts.Node): boolean =>
-    (ts.isCallExpression(node) && isBunBuildCallee(node.expression)) ||
-    (ts.forEachChild(node, (child) => (visit(child) ? true : undefined)) ??
-      false);
-  return visit(source);
+  const calls: string[] = [];
+  const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node) && isBunBuildCallee(node.expression)) {
+      const [options] = node.arguments;
+      const entrypoints =
+        options !== undefined && ts.isObjectLiteralExpression(options)
+          ? options.properties.find(
+              (property): property is ts.PropertyAssignment =>
+                ts.isPropertyAssignment(property) &&
+                property.name.getText(source) === "entrypoints",
+            )
+          : undefined;
+      const built =
+        entrypoints === undefined
+          ? (options?.getText(source) ?? "")
+          : `entrypoints: ${entrypoints.initializer.getText(source)}`;
+      calls.push(`${BUN_BUILD_CALL}${normalizeCommand(built)})`);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return calls;
 };
 
 const workflowCommands = (contents: string): string[] =>
@@ -142,8 +161,8 @@ export const scanBundledConsumers = (
         commands = packageCommands(contents);
       } else if (isWorkflow(path)) {
         commands = workflowCommands(contents);
-      } else if (isBuildScript(path) && callsBunBuild(path, contents)) {
-        commands = [BUN_BUILD_CALL];
+      } else if (isBuildScript(path) && contents.includes("Bun")) {
+        commands = bunBuildCalls(path, contents);
       }
       return commands.map((command) => ({ file: path, command }));
     })
@@ -492,7 +511,8 @@ export const BUNDLED_CONSUMERS = [
   },
   {
     file: "apps/api/scripts/build-mcp-country-filter-fixture.ts",
-    command: "Bun.build(",
+    command:
+      'Bun.build(entrypoints: [ path.resolve( import.meta.dirname, "../../../packages/mcp-apps/src/case-law-results/app.html", ), ])',
     bootCheck: {
       type: "none",
       reason:
@@ -501,7 +521,7 @@ export const BUNDLED_CONSUMERS = [
   },
   {
     file: "apps/api/scripts/build-visual-sandbox.ts",
-    command: "Bun.build(",
+    command: 'Bun.build(entrypoints: [path.join(root, "browser/runtime.ts")])',
     bootCheck: {
       type: "none",
       reason:
@@ -510,7 +530,8 @@ export const BUNDLED_CONSUMERS = [
   },
   {
     file: "apps/api/scripts/generate-mcp-app-contracts.ts",
-    command: "Bun.build(",
+    command:
+      'Bun.build(entrypoints: [ path.resolve(import.meta.dirname, "../src/mcp/app-browser-contracts.ts"), ])',
     bootCheck: {
       type: "none",
       reason:
@@ -575,12 +596,13 @@ export const BUNDLED_CONSUMERS = [
   },
   {
     file: "packages/agent-engine/scripts/e2e-mcp-canary.ts",
-    command: "Bun.build(",
+    command:
+      'Bun.build(entrypoints: [path.join(import.meta.dir, "mcp-canary-server.ts")])',
     bootCheck: { type: "ci-job", jobId: "docker-checks" },
   },
   {
     file: "packages/mcp-apps/scripts/build-mcp-apps.ts",
-    command: "Bun.build(",
+    command: "Bun.build(entrypoints: [path.join(appRoot, input)])",
     bootCheck: {
       type: "none",
       reason:

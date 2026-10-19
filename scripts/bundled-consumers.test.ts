@@ -166,7 +166,7 @@ describe("bundling-site scanner", () => {
         contents:
           "export const build = () => Bun.build({ entrypoints: ['src/index.ts'] });\n",
       },
-      command: "Bun.build(",
+      command: "Bun.build(entrypoints: ['src/index.ts'])",
     },
     {
       name: "a Bun build API call after a string on its line",
@@ -175,7 +175,7 @@ describe("bundling-site scanner", () => {
         contents:
           'const mode = "production"; await Bun.build({ entrypoints: [] });\n',
       },
-      command: "Bun.build(",
+      command: "Bun.build(entrypoints: [])",
     },
     {
       name: "a Bun build API call by element access",
@@ -183,11 +183,27 @@ describe("bundling-site scanner", () => {
         path: "packages/example/scripts/build.mts",
         contents: 'await Bun["build"]({ entrypoints: [] });\n',
       },
-      command: "Bun.build(",
+      command: "Bun.build(entrypoints: [])",
     },
   ])("reports $name", ({ file, command }) => {
     expect(scanBundledConsumers([file])).toEqual([
       { file: file.path, command },
+    ]);
+  });
+
+  test("reports each Bun build call in a file as its own site", () => {
+    const file = {
+      path: "scripts/build-two.ts",
+      contents: [
+        'await Bun.build({ entrypoints: ["src/server.ts"], outdir: "dist" });',
+        "const options = { entrypoints: [] };",
+        "await Bun.build(options);",
+        "",
+      ].join("\n"),
+    };
+    expect(scanBundledConsumers([file])).toEqual([
+      { file: file.path, command: 'Bun.build(entrypoints: ["src/server.ts"])' },
+      { file: file.path, command: "Bun.build(options)" },
     ]);
   });
 
