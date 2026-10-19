@@ -95,6 +95,42 @@ test("records a cancelled stream when its consumer returns after one chunk", asy
   expect(records).toEqual([{ stage: "stream_finish", outcome: "cancelled" }]);
 });
 
+test("records the first answer-bearing chunk once, at its own time", async () => {
+  let clock = 5;
+  const answerAt = async function* () {
+    yield starts[0];
+    clock = 12;
+    yield {
+      type: EventType.TEXT_MESSAGE_CONTENT,
+      messageId: "answer",
+      delta: "Hello",
+      timestamp: 12,
+    } satisfies StreamChunk;
+    clock = 40;
+    yield {
+      type: EventType.TEXT_MESSAGE_CONTENT,
+      messageId: "answer",
+      delta: " world",
+      timestamp: 40,
+    } satisfies StreamChunk;
+  };
+  const records: { stage: string; durationMs: number }[] = [];
+  await Array.fromAsync(
+    observeChatOutputStages({
+      source: answerAt(),
+      startedAt: 5,
+      isSettled: () => true,
+      now: () => clock,
+      emitStage: ({ stage, durationMs }) => records.push({ stage, durationMs }),
+    }),
+  );
+
+  expect(records).toEqual([
+    { stage: "provider_first_token", durationMs: 7 },
+    { stage: "stream_finish", durationMs: 35 },
+  ]);
+});
+
 test("records a completed stream once", async () => {
   const records: { stage: string; outcome: string }[] = [];
   await Array.fromAsync(
