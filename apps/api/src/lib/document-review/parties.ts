@@ -159,10 +159,8 @@ export const detectReviewParties = async ({
             }),
           },
         ],
-        abortSignal: AbortSignal.any([
-          abortSignal,
-          AbortSignal.timeout(TIMEOUT_MS),
-        ]),
+        abortSignal,
+        deadlineMs: TIMEOUT_MS,
         outputSchema: proposedPartiesSchema,
       });
       return normalizeParties(output.parties);

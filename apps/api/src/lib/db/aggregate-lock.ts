@@ -57,6 +57,8 @@ export const AGGREGATE_LOCKS = {
   schedulerClaim: { rank: 20, kind: "row" },
   definitionCap: { rank: 30, kind: "advisory" },
   definition: { rank: 40, kind: "row" },
+  // Public-corpus work fence is taken before its legacy projection/expression locks.
+  legislationAmendmentWork: { rank: 50, kind: "advisory" },
   scoutCensus: { rank: 60, kind: "row" },
   desktopMembership: { rank: 70, kind: "row" },
   desktopCredential: { rank: 80, kind: "row" },
@@ -141,6 +143,7 @@ export const AGGREGATE_CHAINS = {
     "processingClaim",
   ],
   scoutRun: ["orgFeatureAdmission", "scoutCensus"],
+  legislationAmendments: ["legislationAmendmentWork"],
   chatSecret: ["chatThread", "chatTurn", "chatSecret"],
   memberPrefix: [
     "workspace",
@@ -215,6 +218,11 @@ const modeCovers = (
 };
 
 type AggregateIdentities = {
+  legislationAmendmentWork: {
+    sourceId: SafeId<"legislationSource">;
+    eli: string;
+    language: string;
+  };
   account: SafeId<"user">;
   accountExport: { id: string; userId: SafeId<"user"> };
   sampleCase: { workspaceId: SafeId<"workspace"> };
@@ -1213,6 +1221,17 @@ const rowStatement = (
 };
 const advisoryResource = (options: AdvisoryIdentityOptions) => {
   switch (options.aggregate) {
+    case "legislationAmendmentWork":
+      return {
+        first: sql`${0x0f_10_cc_ad}::integer`,
+        second: sql`hashtext(${JSON.stringify([options.id.sourceId, options.id.eli, options.id.language])})`,
+        order: [
+          options.aggregate,
+          options.id.sourceId,
+          options.id.eli,
+          options.id.language,
+        ],
+      };
     case "desktopBatch":
       return {
         first: sql`${0x0f_10_cc_ac}::integer`,
