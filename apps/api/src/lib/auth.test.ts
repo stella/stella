@@ -530,10 +530,10 @@ describe("isSessionCreatingAuthPath", () => {
     expect(isSessionCreatingAuthPath("/callback/microsoft")).toBe(true);
     expect(isSessionCreatingAuthPath("/sign-in/email")).toBe(true);
     expect(isSessionCreatingAuthPath("/email-otp/verify-email")).toBe(true);
-    expect(isSessionCreatingAuthPath("/get-session")).toBe(true);
   });
 
   test("ignores paths that establish no session", () => {
+    expect(isSessionCreatingAuthPath("/get-session")).toBe(false);
     expect(isSessionCreatingAuthPath("/email-otp/send-verification-otp")).toBe(
       false,
     );
