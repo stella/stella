@@ -8,8 +8,6 @@ const historicalCatalogConsumers = new Set([
   "scripts/check-cli-release-coupling.ts",
   "scripts/check-cli-release-coupling.test.ts",
   "scripts/cli-runtime-pack.test.ts",
-  // This archived plan describes the original catalog layout.
-  ".agents/plans/049-capability-catalog-full-surface-cli.md",
 ]);
 const runtimeAggregateOwners = new Set([
   // The bundled API imports generated aggregates produced from the shards.
