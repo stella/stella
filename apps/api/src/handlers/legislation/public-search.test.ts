@@ -75,6 +75,23 @@ const runTimedSearch = async (
     corpusReads: {
       readPage: async (options) => {
         clock += 7;
+        await options.rankCandidates(
+          timingCandidateIds.map((id, index) => ({
+            id,
+            score: 1 - index / 10,
+          })),
+          {
+            excludedGroups: new Set(),
+            selectAppliedCandidates: () => {
+              clock += 13;
+              return timingCandidateIds.map((id, index) => ({
+                id,
+                score: 1 - index / 10,
+              }));
+            },
+          },
+        );
+        clock += 5;
         const ranked = await options.rankCandidates(
           timingCandidateIds.map((id, index) => ({
             id,
@@ -101,7 +118,7 @@ const runTimedSearch = async (
           passageClauseById: new Map(),
           stop: { type: "exhausted" },
           scan: {
-            rounds: 1,
+            rounds: 2,
             passagesScanned: 1,
             indexMs: 7,
             earlyStopped: false,
@@ -147,8 +164,8 @@ const runTimedSearch = async (
     if (databaseReads <= 2) {
       return await read(Object.create(null));
     }
-    clock += 11;
-    if (failHydration) {
+    clock += databaseReads === 3 ? 11 : 3;
+    if (failHydration && databaseReads === 4) {
       throw new Error("hydration failed");
     }
     return await read({
@@ -178,18 +195,21 @@ test.each([
     expect(records).toEqual([
       expect.objectContaining({
         stage: "index_scan",
-        durationMs: 7,
-        candidateCount: 3,
+        durationMs: 12,
+        rounds: 2,
+        candidateCount: 6,
       }),
       expect.objectContaining({
         stage: "candidate_hydration",
-        durationMs: 11,
-        candidateCount: 3,
+        durationMs: 14,
+        rounds: 2,
+        candidateCount: 6,
       }),
       expect.objectContaining({
         stage: "work_collapse_ranking",
-        durationMs: 13,
-        resultCount: 1,
+        durationMs: 26,
+        rounds: 2,
+        resultCount: 2,
       }),
       expect.objectContaining({
         stage: "response_serialization",
@@ -203,12 +223,19 @@ test.each([
   },
 );
 
-test("a failed hydration reports only the completed index scan", async () => {
+test("a failed second-round hydration reports the accumulated index scan only", async () => {
   const { operation, records } = await runTimedSearch(undefined, true);
   expect(await rejectionOf(operation)).toEqual(
     expect.objectContaining({ message: "hydration failed" }),
   );
-  expect(records.map(({ stage }) => stage)).toEqual(["index_scan"]);
+  expect(records).toEqual([
+    expect.objectContaining({
+      stage: "index_scan",
+      durationMs: 12,
+      rounds: 2,
+      candidateCount: 6,
+    }),
+  ]);
 });
 
 const testSearchRoute = (search: typeof searchLegislationHandler) => {

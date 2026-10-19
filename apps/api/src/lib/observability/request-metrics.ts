@@ -68,6 +68,7 @@ type RequestStageRecordInput = {
   toolName?: string;
   stage: RequestStage;
   durationMs: number;
+  rounds?: number;
   candidateCount?: number;
   resultCount?: number;
   outcome: RequestStageOutcome;
@@ -79,6 +80,7 @@ export const buildRequestStageRecord = ({
   toolName,
   stage,
   durationMs,
+  rounds,
   candidateCount,
   resultCount,
   outcome,
@@ -89,6 +91,7 @@ export const buildRequestStageRecord = ({
   ...(toolName === undefined ? {} : { toolName }),
   stage,
   durationMs: Math.max(0, Math.round(durationMs)),
+  ...(rounds === undefined ? {} : { rounds }),
   ...(candidateCount === undefined ? {} : { candidateCount }),
   ...(resultCount === undefined ? {} : { resultCount }),
   outcome,
