@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import * as v from "valibot";
 
+import { AGENT_INPUT_NORMALIZATION_KIND } from "@stll/agent-input";
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 import {
   LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT,
@@ -43,10 +44,12 @@ import {
   ACTION_COST_CALL_KIND,
   actionRequestObserver,
 } from "@/api/lib/usage/action-costs/context";
+import type { McpRequestContext } from "@/api/mcp/context";
 import {
   isProvisionTextCursor,
   windowProvisionText,
 } from "@/api/mcp/provision-text-window";
+import type { StatuteDocument } from "@/api/mcp/public-law-handlers";
 import {
   isLegislationSearchSuccess,
   isStatuteDocument,
@@ -137,7 +140,7 @@ const PICK_AN_ANCHOR_HINT =
 
 /** One sentence for the one reason wording is withheld, in both tools. */
 const WITHHELD_WORDING_MESSAGE =
-  "The source licence does not permit AI use of this wording. Read it at the statute's appUrl instead.";
+  "The source licence does not permit AI use of this wording. Read it at the statute's url instead.";
 
 const eliInputSchema = v.pipe(
   v.string(),
@@ -233,6 +236,14 @@ const searchLegislationArgsSchema = nullAsAbsent(
         v.maxLength(10),
         v.description(
           "Filter statutes effective up to this ISO date (YYYY-MM-DD)",
+        ),
+      ),
+    ),
+    as_of: v.optional(
+      v.pipe(
+        asOfInputSchema,
+        v.description(
+          "Search text in force on this ISO date (YYYY-MM-DD); omit it to include historical wording.",
         ),
       ),
     ),
@@ -367,7 +378,8 @@ const LEGISLATION_TOOL_DEFINITIONS = [
       "statutes, each with its ELI, title, language, document type, " +
       "publication status, effective date and a matched snippet. Filters: " +
       "document type, status, language, and an effective-date range (ISO " +
-      "YYYY-MM-DD). No facets are returned and `total` is not counted, so " +
+      "YYYY-MM-DD). `as_of` searches text in force on that date; omit it to include historical wording. " +
+      "No facets are returned and `total` is not counted, so " +
       "page with the returned nextCursor instead of reasoning about a result " +
       "count. A hit is metadata only: pass its `eli` to read_statute for the " +
       "text, the outline of anchors and the consolidated versions. " +
@@ -382,6 +394,7 @@ const LEGISLATION_TOOL_DEFINITIONS = [
       document_type: FILTER_NORMALIZATION,
       status: FILTER_NORMALIZATION,
       language: FILTER_NORMALIZATION,
+      as_of: { kind: AGENT_INPUT_NORMALIZATION_KIND.date, bound: "start" },
     },
     access: "read",
     readClass: "public",
@@ -404,9 +417,11 @@ const LEGISLATION_TOOL_DEFINITIONS = [
       "Read one statute by ELI as it stood on a date: `as_of` picks the " +
       "consolidation in force that day, and omitting it reads the text in " +
       "force today. Returns that consolidation's metadata and validity " +
-      "window, `versions` (the newest page of the work's consolidations), " +
+      "window, `pendingChanges` (publisher-stated future or undated effects), " +
+      "`versions` (the newest page of the work's consolidations, with `amendedBy` effects), " +
       "`outline` (its heading anchors, the input read_statute_provisions " +
-      "takes) and its plain text. Long text comes back in windows; pass the " +
+      "takes) on page 1, plus its plain text. Later pages omit outline and " +
+      "versions; pass the " +
       "returned nextCursor back as cursor to read more. A source that bars " +
       "AI use of its wording still answers with metadata, versions and " +
       "outline, and `textWithheldReason` in place of the text. " +
@@ -555,6 +570,7 @@ const handleSearchLegislationTool: TypedMcpToolHandler<
   }
   const {
     country,
+    as_of: asOf,
     cursor,
     date_from: dateFrom,
     date_to: dateTo,
@@ -600,6 +616,7 @@ const handleSearchLegislationTool: TypedMcpToolHandler<
       ...(language === undefined ? {} : { language }),
       ...(dateFrom === undefined ? {} : { dateFrom }),
       ...(dateTo === undefined ? {} : { dateTo }),
+      ...(asOf === undefined ? {} : { asOf }),
     },
     legislationPublicReadDb,
     observer,
@@ -620,7 +637,7 @@ const handleSearchLegislationTool: TypedMcpToolHandler<
       paginationOutcome: result.paginationOutcome,
       results: result.items.map((hit) => ({
         ...legalCitationLinkFields({
-          appUrl: buildLegislationDocumentAppUrl({
+          url: buildLegislationDocumentAppUrl({
             country: hit.country,
             documentId: hit.documentId,
             eli: hit.eli,
@@ -632,6 +649,8 @@ const handleSearchLegislationTool: TypedMcpToolHandler<
         documentId: hit.documentId,
         documentType: hit.documentType,
         effectiveDate: hit.effectiveDate,
+        versionValidFrom: hit.versionValidFrom,
+        versionValidTo: hit.versionValidTo,
         eli: hit.eli,
         language: hit.language,
         match: hit.match,
@@ -683,6 +702,56 @@ const buildStatuteOutline = (blocks: readonly Block[]) => {
   };
 };
 
+type ReadStatutePageContextOptions = {
+  cursor: string | undefined;
+  document: StatuteDocument;
+  context: McpRequestContext;
+};
+
+// Versions and navigation describe the whole consolidation; only its first
+// text page reads and emits them.
+const readStatutePageContext = async ({
+  cursor,
+  document,
+  context,
+}: ReadStatutePageContextOptions) => {
+  if (cursor !== undefined) {
+    return {};
+  }
+  const versionsPage = await (
+    context.testDependencies?.listStatuteVersionsHandler ??
+    defaultListStatuteVersionsHandler
+  )({
+    documentId: document.id,
+    query: {
+      limit: normalizeTenantPageLimit(
+        LIMITS.legislationVersionsPageSizeDefault,
+      ),
+    },
+    legislationDb: legislationPublicReadDb,
+    surface: "search",
+  });
+  if (!isStatuteVersionsPage(versionsPage)) {
+    return notFoundResult("Legislation not found", FIND_THE_ELI_HINT);
+  }
+  const navigation = hasUsableAst(document.documentAst)
+    ? buildStatuteOutline(document.documentAst.blocks)
+    : { outline: [], outlineTruncated: false };
+  return {
+    ...navigation,
+    versions: versionsPage.items.map((version) => ({
+      amendedBy: version.amendedBy ?? null,
+      documentId: version.id,
+      resourceName: legislationResourceName(version.id),
+      versionValidFrom: version.versionValidFrom,
+      versionValidTo: version.versionValidTo,
+      expressionKind: version.expressionKind,
+      windowDisposition: version.windowDisposition,
+      windowDispositionBasis: version.windowDispositionBasis,
+    })),
+  };
+};
+
 const handleReadStatuteTool: TypedMcpToolHandler<
   v.InferInput<typeof READ_STATUTE_PROJECTION>
 > = async ({ args, context }) => {
@@ -720,28 +789,14 @@ const handleReadStatuteTool: TypedMcpToolHandler<
     return notFoundResult("Legislation not found", FIND_THE_ELI_HINT);
   }
 
-  // What makes the version endpoint covered: the read that answers for one
-  // consolidation also says which other consolidations of the work exist.
-  const versionsPage = await (
-    context.testDependencies?.listStatuteVersionsHandler ??
-    defaultListStatuteVersionsHandler
-  )({
-    documentId: resolved.id,
-    query: {
-      limit: normalizeTenantPageLimit(
-        LIMITS.legislationVersionsPageSizeDefault,
-      ),
-    },
-    legislationDb: legislationPublicReadDb,
-    surface: "search",
+  const pageContext = await readStatutePageContext({
+    cursor,
+    document,
+    context,
   });
-  if (!isStatuteVersionsPage(versionsPage)) {
-    return notFoundResult("Legislation not found", FIND_THE_ELI_HINT);
+  if (isToolErrorResult(pageContext)) {
+    return pageContext;
   }
-
-  const { outline, outlineTruncated } = hasUsableAst(document.documentAst)
-    ? buildStatuteOutline(document.documentAst.blocks)
-    : { outline: [], outlineTruncated: false };
   const ast = hasUsableAst(document.documentAst) ? document.documentAst : null;
 
   // Displaying the wording and feeding it to a model are separate
@@ -770,7 +825,7 @@ const handleReadStatuteTool: TypedMcpToolHandler<
       nextCursor: window?.nextCursor ?? null,
       statute: {
         ...legalCitationLinkFields({
-          appUrl: buildLegislationDocumentAppUrl({
+          url: buildLegislationDocumentAppUrl({
             country: document.country,
             documentId: document.id,
             eli: document.eli,
@@ -786,8 +841,7 @@ const handleReadStatuteTool: TypedMcpToolHandler<
         effectiveDate: document.effectiveDate,
         eli: document.eli,
         language: document.language,
-        outline,
-        outlineTruncated,
+        ...pageContext,
         resourceName: legislationResourceName(document.id),
         sourceUrl: document.sourceUrl,
         status: document.status,
@@ -799,15 +853,7 @@ const handleReadStatuteTool: TypedMcpToolHandler<
         expressionKind: document.expressionKind,
         windowDisposition: document.windowDisposition,
         windowDispositionBasis: document.windowDispositionBasis,
-        versions: versionsPage.items.map((version) => ({
-          documentId: version.id,
-          resourceName: legislationResourceName(version.id),
-          versionValidFrom: version.versionValidFrom,
-          versionValidTo: version.versionValidTo,
-          expressionKind: version.expressionKind,
-          windowDisposition: version.windowDisposition,
-          windowDispositionBasis: version.windowDispositionBasis,
-        })),
+        pendingChanges: document.pendingChanges,
         ...(document.allowsDerivedAi
           ? {}
           : {
@@ -903,7 +949,7 @@ const provisionItemResult = ({
         };
       }
       const links = legalCitationLinkFields({
-        appUrl: buildLegislationDocumentAppUrl({
+        url: buildLegislationDocumentAppUrl({
           country: version.country,
           documentId: version.id,
           eli: item.eli,
@@ -1255,7 +1301,7 @@ const handleReadProvisionHistoryTool: TypedMcpToolHandler<
   const items = page.items.map((item) => {
     const version = {
       ...legalCitationLinkFields({
-        appUrl: buildLegislationDocumentAppUrl({
+        url: buildLegislationDocumentAppUrl({
           country: item.country,
           documentId: item.documentId,
           eli,

@@ -89,10 +89,8 @@ ${preceding.map((segment) => `${segment.id}: ${segment.taggedText}`).join("\n") 
 
 Segments to translate:
 ${segments.map((segment) => `${segment.id}: ${segment.taggedText}`).join("\n")}`,
-    abortSignal: AbortSignal.any([
-      context.abortSignal,
-      AbortSignal.timeout(CALL_TIMEOUT_MS),
-    ]),
+    abortSignal: context.abortSignal,
+    deadlineMs: CALL_TIMEOUT_MS,
     outputSchema: translationSchema,
   });
 

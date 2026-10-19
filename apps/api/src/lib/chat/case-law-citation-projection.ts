@@ -19,6 +19,10 @@ import { contentText, passthroughId, publicUrl } from "./projection-fields";
  */
 export const READ_CASE_LAW_CITATIONS_PROJECTION = v.strictObject({
   doctrineAvailability: v.picklist(["available", "unavailable"]),
+  doctrine: v.optional(
+    v.picklist(DOCTRINAL_TREATMENTS.filter((value) => value !== "not_stated")),
+  ),
+  polarity: v.optional(v.picklist(CITATION_TREATMENTS)),
   // The decision the citations were read from, echoed so a paged reply still
   // says what it is about.
   decisionId: passthroughId(),
@@ -40,8 +44,7 @@ export const READ_CASE_LAW_CITATIONS_PROJECTION = v.strictObject({
       // Null for a citation the corpus holds no decision for.
       decision: v.nullable(
         v.strictObject({
-          // Nullable for the same reason as search_case_law's `appUrl`.
-          appUrl: v.nullable(v.string()),
+          // Nullable for the same reason as search_case_law's `url`.
           url: v.nullable(publicUrl()),
           source_url: v.optional(publicUrl()),
           caseNumber: v.string(),

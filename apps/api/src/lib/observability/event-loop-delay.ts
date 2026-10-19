@@ -43,6 +43,8 @@ export type EventLoopDelayReport = {
 
 type StartEventLoopDelayMonitorOptions = {
   onReport: (report: EventLoopDelayReport) => void;
+  /** Runs every reporting interval, including windows without delay samples. */
+  onReportInterval: () => void;
   onStall: (stallMs: number) => void;
   reportIntervalMs?: number;
   probeIntervalMs?: number;
@@ -54,6 +56,7 @@ const toMilliseconds = (nanoseconds: number): number =>
 
 export const startEventLoopDelayMonitor = ({
   onReport,
+  onReportInterval,
   onStall,
   probeIntervalMs = DEFAULT_PROBE_INTERVAL_MS,
   reportIntervalMs = DEFAULT_REPORT_INTERVAL_MS,
@@ -65,6 +68,7 @@ export const startEventLoopDelayMonitor = ({
   histogram.enable();
 
   const reportTimer = setInterval(() => {
+    onReportInterval();
     // A window with no samples has nothing to say; its zeros would read as
     // a perfectly idle loop.
     if (histogram.count > 0) {

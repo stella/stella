@@ -16,7 +16,7 @@ const identityFields = [
   "decisionDate",
   "caseNumber",
   "ecli",
-  "appUrl",
+  "url",
   "source_url",
 ] as const;
 export const APP_SEARCH_SCHEMA = v.union([

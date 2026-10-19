@@ -133,7 +133,7 @@ export const classifyChatHttpLink = (
   appOrigins: ReadonlySet<string>,
 ): ChatHttpLink => {
   const resolved = resolveLegalCitationLinks({
-    appUrl: url.href,
+    url: url.href,
     sourceUrl: url.href,
     appOrigins,
   });

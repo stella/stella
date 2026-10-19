@@ -22,6 +22,7 @@ import {
   DECISION_PRIMARY_REFERENCE_TYPES,
 } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifierType } from "@stll/legal-ast/decision-identifier";
+import { EU_PRIMARY_WORKS } from "@stll/legal-atlas/eu-provision-citations";
 
 import { CITATION_AUTHORITY_SWEEP_SCOPES } from "@/api/handlers/case-law/citation-authority-sweep-scope";
 import { CITATION_DECISION_TYPE_HINTS } from "@/api/handlers/case-law/citation-decision-type-hint";
@@ -311,6 +312,10 @@ export const STATUTE_CITATION_COUNT_STATUS = {
 } as const;
 
 export const STATUTE_CITATION_COUNT_STATE_KEY = "global";
+
+const EU_PRIMARY_WORK_CELEX_SQL_VALUES = Object.values(EU_PRIMARY_WORKS).map(
+  ({ celex }) => sql.raw(`'${celex}'`),
+);
 
 const PROVISION_UNIT_SQL_VALUES = PROVISION_UNITS.map((unit) =>
   sql.raw(`'${unit}'`),
@@ -1694,21 +1699,21 @@ export const caseLawCoverageSlices = p.pgTable(
 );
 
 /**
- * Where a listed decision sits once it has repeatedly refused to be ingested.
+ * Durable retries and deliberate terminal dispositions for listed decisions.
  *
- * The reconciliation loop hunts the difference between what a publisher lists
- * for a slice and what is held. Without this, an item the publisher lists but
- * never serves is re-fetched on every visit and the slice never settles: the
- * hunt has no fixed point. A row here is that item's memory — how often it has
- * been tried, when it may be tried again, and, once the schedule is exhausted,
- * that it is `terminal` and counts as accounted for rather than missing.
+ * A parked row remembers when an unavailable document may be tried again.
+ * Repetition cannot establish permanent absence: only an explicit unkeyable
+ * outcome retires a listing and counts it as accounted for. Existing terminal
+ * rows, including historical retry exhaustion, need a reset or listing revision.
+ * Parked rows stay missing in coverage while the rest of a slice progresses.
+ * Source-scoped identity prevents duplicate retries of the same listing.
  */
 export const RECONCILIATION_ITEM_STATUSES = ["parked", "terminal"] as const;
 
 export const RECONCILIATION_ITEM_STATUS = {
   /** Awaiting its next attempt; `next_attempt_at` says when. */
   PARKED: RECONCILIATION_ITEM_STATUSES[0],
-  /** The retry schedule is exhausted; nothing re-attempts this on its own. */
+  /** Deliberately retired; nothing re-attempts this on its own. */
   TERMINAL: RECONCILIATION_ITEM_STATUSES[1],
 } as const;
 
@@ -1732,7 +1737,7 @@ export const caseLawReconciliationItems = p.pgTable(
     payload: jsonb().$type<unknown>().notNull(),
     /** Lazy listing revision fingerprint; null is a row written before revision tracking. */
     payloadHash: p.varchar("payload_hash", { length: 64 }),
-    /** Lifetime terminal revivals; failed revived attempts preserve the retry budget. */
+    /** Lifetime terminal revivals; ordinary retry failures do not consume revivals. */
     revivalCount: p.integer("revival_count").default(0).notNull(),
     status: p
       .varchar({ length: 16, enum: RECONCILIATION_ITEM_STATUSES })
@@ -2024,8 +2029,13 @@ export const caseLawProvisionCitations = p.pgTable(
     decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
     jurisdiction: p.varchar("jurisdiction", { length: 3 }).notNull(),
     workIdentifier: p.text("work_identifier").notNull(),
-    workNumber: p.integer("work_number").notNull(),
-    workYear: p.smallint("work_year").notNull(),
+    /** Legacy rollout slots stay non-null until all deployed readers use EU identity columns. */
+    workNumber: p.integer("work_number").default(0).notNull(),
+    workYear: p.smallint("work_year").default(0).notNull(),
+    /** EU act number; null for treaty and Charter work identities. */
+    euWorkNumber: p.integer("eu_work_number"),
+    /** EU act year; null for treaty and Charter work identities. */
+    euWorkYear: p.smallint("eu_work_year"),
     workCollection: p.text("work_collection").notNull(),
     workEli: p.text("work_eli"),
     unit: p.text("unit", { enum: PROVISION_UNITS }).notNull(),
@@ -2152,6 +2162,20 @@ export const caseLawProvisionCitations = p.pgTable(
         t.spanStart.desc(),
       )
       .where(isNotNull(t.workEli)),
+    p.check(
+      "provision_citations_work_number_shape",
+      sql`CASE WHEN ${t.jurisdiction} = 'EU' AND ${t.workIdentifier} IN (${sql.join(EU_PRIMARY_WORK_CELEX_SQL_VALUES, sql.raw(","))})
+        THEN ${t.euWorkNumber} IS NULL AND ${t.euWorkYear} IS NULL
+        WHEN ${t.jurisdiction} = 'EU' THEN ${t.euWorkNumber} IS NOT NULL AND ${t.euWorkYear} IS NOT NULL
+        ELSE ${t.euWorkNumber} IS NULL AND ${t.euWorkYear} IS NULL AND ${t.workNumber} > 0 AND ${t.workYear} > 0 END`,
+    ),
+    p.check(
+      "provision_citations_eu_work_identity",
+      sql`${t.jurisdiction} <> 'EU' OR (
+        ${t.workCollection} = 'EUR-Lex' AND ${t.workEli} IS NOT NULL
+        AND (${t.workIdentifier} IN (${sql.join(EU_PRIMARY_WORK_CELEX_SQL_VALUES, sql.raw(","))})
+          OR ${t.workIdentifier} ~ '^3[0-9]{4}[LR][0-9]{4}$'))`,
+    ),
     p.check(
       "provision_citations_unit_values",
       sql`${t.unit} IN (${sql.join(PROVISION_UNIT_SQL_VALUES, sql.raw(","))})`,

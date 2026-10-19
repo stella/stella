@@ -9,6 +9,7 @@ import {
   type DocumentTranslationTargetLanguageCode,
 } from "@stll/api-contract/document-translation";
 import { foldToAscii } from "@stll/text-normalize";
+import { containsSearchMatchKey } from "@stll/text-normalize/search-match-key";
 
 const DEFAULT_TARGET_LANG: DocumentTranslationTargetLanguageCode = "EN-GB";
 const FALLBACK_SOURCE_LANG: DocumentTranslationTargetLanguageCode = "CS";
@@ -93,7 +94,7 @@ export const matchesLanguageQuery = (
     return true;
   }
   return (
-    languageMatchKey(label).includes(needle) ||
-    languageMatchKey(code).includes(needle)
+    containsSearchMatchKey(languageMatchKey(label), needle) ||
+    containsSearchMatchKey(languageMatchKey(code), needle)
   );
 };
