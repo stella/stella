@@ -1025,21 +1025,48 @@ describe("TanStack AI structured output generation", () => {
       provider: "google" | "openai" | "openrouter",
       modelId: string,
     ) => {
-      // SAFETY: mergeGenerationOptions only reads provider/modelOptions/modelId.
-      const model = {
-        adapter: {},
+      const common = {
+        adapter: providerAdapter,
         keySource: "byok",
         modelId,
-        modelOptions: tanStackModelOptionsForTask({
-          modelId,
-          organizationId: null,
-          userId: null,
-          provider,
-          task: "short-text",
-        }),
-        provider,
-        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
-      } as ResolvedTanStackTextModel;
+      } as const;
+      const model = (() => {
+        switch (provider) {
+          case "google":
+            return {
+              ...common,
+              modelOptions: tanStackModelOptionsForTask({
+                modelId,
+                organizationId: null,
+                provider,
+                task: "short-text",
+              }),
+              provider,
+            } satisfies ResolvedTanStackTextModel;
+          case "openai":
+            return {
+              ...common,
+              modelOptions: tanStackModelOptionsForTask({
+                modelId,
+                organizationId: null,
+                provider,
+                task: "short-text",
+              }),
+              provider,
+            } satisfies ResolvedTanStackTextModel;
+          case "openrouter":
+            return {
+              ...common,
+              modelOptions: tanStackModelOptionsForTask({
+                modelId,
+                organizationId: null,
+                provider,
+                task: "short-text",
+              }),
+              provider,
+            } satisfies ResolvedTanStackTextModel;
+        }
+      })();
       const options: object = mergeGenerationOptions({
         caching: noCaching,
         maxOutputTokens: SHORT_REPLY,
@@ -1075,21 +1102,18 @@ describe("TanStack AI structured output generation", () => {
     test("the reservation never lifts a request past the model's limit", () => {
       const limit = getOutputTokenLimit("gemini-3.8-flash") ?? 0;
       expect(limit).toBeGreaterThan(0);
-      // SAFETY: mergeGenerationOptions only reads provider/modelOptions/modelId.
       const model = {
-        adapter: {},
+        adapter: providerAdapter,
         keySource: "byok",
         modelId: "gemini-3.8-flash",
         modelOptions: tanStackModelOptionsForTask({
           modelId: "gemini-3.8-flash",
           organizationId: null,
-          userId: null,
           provider: "google",
           task: "short-text",
         }),
         provider: "google",
-        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
-      } as ResolvedTanStackTextModel;
+      } satisfies ResolvedTanStackTextModel;
       expect(
         mergeGenerationOptions({
           caching: noCaching,
@@ -2216,22 +2240,17 @@ describe("Anthropic extended-thinking budgets", () => {
           const modelOptions = tanStackModelOptionsForTask({
             modelId,
             organizationId: null,
-            userId: null,
             provider: "anthropic",
             reasoningEffort,
             task,
           });
-          // SAFETY: mergeGenerationOptions only reads
-          // provider/modelOptions/modelId. The adapter is irrelevant for this
-          // pure option-merge invariant.
           const model = {
-            adapter: {},
+            adapter: providerAdapter,
             keySource: "byok",
             modelId,
             modelOptions,
             provider: "anthropic",
-            // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
-          } as ResolvedTanStackTextModel;
+          } satisfies ResolvedTanStackTextModel;
 
           const merged: Record<string, unknown> = {
             ...mergeGenerationOptions({
@@ -2266,22 +2285,19 @@ describe("Anthropic extended-thinking budgets", () => {
     for (const modelId of BYOK_MODEL_OPTIONS.anthropic) {
       for (const task of MODEL_TASKS) {
         for (const reasoningEffort of [undefined, ...REASONING_EFFORTS]) {
-          // SAFETY: the helpers read only provider/modelOptions/modelId.
           const model = {
-            adapter: {},
+            adapter: providerAdapter,
             keySource: "byok",
             modelId,
             modelOptions: tanStackModelOptionsForTask({
               modelId,
               organizationId: null,
-              userId: null,
               provider: "anthropic",
               reasoningEffort,
               task,
             }),
             provider: "anthropic",
-            // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
-          } as ResolvedTanStackTextModel;
+          } satisfies ResolvedTanStackTextModel;
 
           const merged: Record<string, unknown> = {
             ...mergeGenerationOptions({
@@ -2661,6 +2677,7 @@ describe("a chat run a caller consumes itself", () => {
     const caught = await (async () => {
       for await (const chunk of streamTanStackChatRun({
         admission: NO_ORGANIZATION_MODEL_DISPATCH,
+        userId: null,
         model: testModel,
         adapter: testModel.adapter,
         messages: [{ role: "user", content: "Hello" }],

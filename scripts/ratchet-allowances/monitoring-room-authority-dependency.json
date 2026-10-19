@@ -1,0 +1,6 @@
+{
+  "metric": "implicit-root-connection-shapes",
+  "file": "apps/api/src/lib/folio-collab-rooms.ts",
+  "delta": 1,
+  "reason": "The existing room credential owner checks the original monitoring session and owner-only control row at issuance. Its optional select-only authority dependency permits the real transactional test database; ordinary principals do not query this dependency and room writes retain the caller transaction."
+}

@@ -108,15 +108,15 @@ export const refusedCredentialIssuerProbes = {
     expectResultRefusal(result);
   },
   desktopEdit: async ({ userId, organizationId }) =>
-    await expectRefusal(async () =>
+    await expectRefusal(() =>
       createDesktopEditSessionToken({ userId, organizationId }),
     ),
   desktopHandoff: async ({ userId, organizationId }) =>
-    await expectRefusal(async () =>
+    await expectRefusal(() =>
       createDesktopEditHandoffToken({ userId, organizationId }),
     ),
   pdfSigning: async ({ userId, organizationId }) =>
-    await expectRefusal(async () =>
+    await expectRefusal(() =>
       createPdfSigningToken({ userId, organizationId }),
     ),
   signedDownload: async ({ userId, organizationId }) =>

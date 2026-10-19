@@ -233,8 +233,18 @@ const createSyntheticAuth = async ({
       },
     },
     databaseHooks: {
-      account: { create: { before: hooks.accountCreateBefore } },
-      user: { create: { before: hooks.userCreateBefore } },
+      account: {
+        create: {
+          before: async (account) =>
+            await Promise.resolve(hooks.accountCreateBefore(account)),
+        },
+      },
+      user: {
+        create: {
+          before: async (user) =>
+            await Promise.resolve(hooks.userCreateBefore(user)),
+        },
+      },
     },
     plugins: [
       createReviewAccountPlugin({
@@ -340,7 +350,10 @@ test("resolves only its own session and refuses another organization", async () 
     headers: { cookie: cookie ?? "" },
   });
   expect(ownSession?.user.id).toBe(SYNTHETIC_PRINCIPAL.user.id);
-  expect(ownSession?.session["activeOrganizationId"]).toBe(
+  if (!ownSession || !("activeOrganizationId" in ownSession.session)) {
+    throw new Error("Synthetic session has no active organization");
+  }
+  expect(ownSession.session.activeOrganizationId).toBe(
     SYNTHETIC_PRINCIPAL.org.id,
   );
 

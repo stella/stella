@@ -904,6 +904,7 @@ describe("buildAiConditionDecider decision tier", () => {
         skillContext: { organizationId, userId, safeDb: skillDb },
         generation: {
           dataClass: "customer",
+          userId,
           task: "classify",
           serviceTier: "standard",
           orgAIConfig,

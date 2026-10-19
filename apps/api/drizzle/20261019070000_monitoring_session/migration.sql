@@ -9,8 +9,8 @@ ALTER TABLE "organization" ADD CONSTRAINT "organization_monitoring_slug_check" C
   slug <> 'stella:monitoring:synthetic-prod-org' OR id = 'synthetic-prod-org'
 ) NOT VALID;--> statement-breakpoint
 INSERT INTO "organization" (id, name, slug, created_at) VALUES (
-  'synthetic-prod-org', 'Product Monitoring', 'stella:monitoring:synthetic-prod-org', now()
-) ON CONFLICT (id) DO NOTHING;--> statement-breakpoint
+  'synthetic-prod-org', 'Product Monitoring', 'stella:monitoring:synthetic-prod-org', '2026-10-19T07:00:00Z'::timestamptz
+) ON CONFLICT ON CONSTRAINT organization_pkey DO NOTHING;--> statement-breakpoint
 CREATE FUNCTION enforce_synthetic_membership() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   IF NEW.user_id = 'synthetic-prod-user' AND NEW.organization_id <> 'synthetic-prod-org' THEN

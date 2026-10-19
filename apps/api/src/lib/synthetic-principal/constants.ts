@@ -13,9 +13,9 @@ export const SYNTHETIC_PRINCIPAL = {
 } as const;
 
 type SyntheticPrincipalIdentity = {
-  userId?: string;
-  organizationId?: string;
-  email?: string;
+  userId?: string | null | undefined;
+  organizationId?: string | null | undefined;
+  email?: string | undefined;
 };
 
 export const isSyntheticPrincipal = ({

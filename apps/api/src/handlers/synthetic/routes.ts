@@ -18,15 +18,18 @@ type SyntheticRouteOptions = {
 
 const authorizedKeyLabel = (
   header: string | null,
-  { keys, nowMs }: Pick<SyntheticRouteOptions, "keys" | "nowMs">,
+  {
+    keys,
+    nowMs,
+  }: { keys: NonNullable<SyntheticRouteOptions["keys"]>; nowMs: () => number },
 ): string | undefined => {
   if (header === null || !/^stl_syn_[A-Za-z0-9_-]{43}$/u.test(header)) {
     return undefined;
   }
   const digest = sha256Bytes(header);
   let label: string | undefined;
-  const now = (nowMs ?? (() => Temporal.Now.instant().epochMilliseconds))();
-  for (const key of keys ?? []) {
+  const now = nowMs();
+  for (const key of keys) {
     const matches = timingSafeEqual(digest, Buffer.from(key.sha256, "hex"));
     if (
       matches &&
@@ -42,7 +45,7 @@ export const createSyntheticRoute = ({
   keys,
   mintSession,
   reserveBudget = reserveSyntheticSessionBudget,
-  nowMs,
+  nowMs = () => Temporal.Now.instant().epochMilliseconds,
 }: SyntheticRouteOptions) => {
   const route = new Elysia({ name: "synthetic-session", prefix: "/synthetic" });
   if (keys === undefined) {

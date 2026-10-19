@@ -31,8 +31,7 @@ export const USER_SESSION_CREDENTIAL_ISSUERS = {
   { disposition: "refused" | "session-bound"; owner: string }
 >;
 
-export type UserSessionCredentialIssuer =
-  keyof typeof USER_SESSION_CREDENTIAL_ISSUERS;
+type UserSessionCredentialIssuer = keyof typeof USER_SESSION_CREDENTIAL_ISSUERS;
 type RefusedCredentialIssuer = {
   [
     Issuer in UserSessionCredentialIssuer
@@ -43,8 +42,8 @@ type RefusedCredentialIssuer = {
 
 export type CredentialPrincipal = {
   userId: string | null;
-  organizationId?: string | null;
-  email?: string;
+  organizationId?: string | null | undefined;
+  email?: string | undefined;
 };
 
 export const checkSessionCredentialIssuer = (
@@ -54,8 +53,8 @@ export const checkSessionCredentialIssuer = (
   if (
     !isSyntheticPrincipal({
       email,
-      userId: userId ?? undefined,
-      organizationId: organizationId ?? undefined,
+      userId,
+      organizationId,
     })
   ) {
     return Result.ok();

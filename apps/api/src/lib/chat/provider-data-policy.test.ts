@@ -299,7 +299,6 @@ describe("provider request policy", () => {
           const available = isManagedProviderAvailable(provider, dataClass);
           const info = getTanStackTextModelInfoForTask("chat", null, {
             organizationId: null,
-            userId: null,
             dataClass,
             modelTier: MANAGED_MODEL_TIER.standard,
           });
@@ -322,7 +321,6 @@ describe("provider request policy", () => {
                 : { dataClass };
             const options = {
               organizationId: null,
-              userId: null,
               modelTier: MANAGED_MODEL_TIER.standard,
               ...policy,
             };
@@ -581,7 +579,6 @@ describe("provider request policy", () => {
         }
         const model = getTanStackTextModelById(selection, null, {
           organizationId: null,
-          userId: null,
           task: "chat",
           modelTier: MANAGED_MODEL_TIER.standard,
           ...policy,
@@ -673,7 +670,6 @@ describe("provider request policy", () => {
               try: () =>
                 getTanStackTextModelById(`openrouter::${modelId}`, null, {
                   organizationId: null,
-                  userId: null,
                   task: "chat",
                   ...policy,
                   modelTier: MANAGED_MODEL_TIER.standard,

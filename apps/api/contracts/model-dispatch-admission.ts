@@ -31,24 +31,27 @@ const forged = {
 
 // @ts-expect-error an organization's dispatch needs its admission proof
 ({ userId: null, organizationId: org }) satisfies ModelDispatchScope;
-({
+const noTenantAdmission = {
   userId: null,
   organizationId: org,
-  // @ts-expect-error tenant work cannot pass as work with no organization
   admission: NONE,
-}) satisfies ModelDispatchScope;
-({
+};
+// @ts-expect-error tenant work cannot pass as work with no organization
+noTenantAdmission satisfies ModelDispatchScope;
+const tenantAdmissionWithoutOrganization = {
   userId: null,
   organizationId: null,
-  // @ts-expect-error work with no organization carries no tenant's proof
   admission: proof,
-}) satisfies ModelDispatchScope;
-({
+};
+// @ts-expect-error work with no organization carries no tenant's proof
+tenantAdmissionWithoutOrganization satisfies ModelDispatchScope;
+const unmintedAdmission = {
   userId: null,
   organizationId: org,
-  // @ts-expect-error a proof is minted by admission, never written out
   admission: forged,
-}) satisfies ModelDispatchScope;
+};
+// @ts-expect-error a proof is minted by admission, never written out
+unmintedAdmission satisfies ModelDispatchScope;
 
 type ResolveOptions = Parameters<typeof resolveTanStackTextModel>[0];
 const request = {
@@ -80,12 +83,13 @@ void admitModelAction(async ({ admission }) => {
 // The managed model tier rides on the proof: admission reads it when minting,
 // and the dispatching code never chooses it.
 const forgedTier = { ...forged, modelTier: "fast" } as const;
-({
+const unmintedTierAdmission = {
   userId: null,
   organizationId: org,
-  // @ts-expect-error a proof with a chosen tier is still not minted by admission
   admission: forgedTier,
-}) satisfies ModelDispatchScope;
+};
+// @ts-expect-error a proof with a chosen tier is still not minted by admission
+unmintedTierAdmission satisfies ModelDispatchScope;
 
 // Every resolution of a task's model states the tier it resolves at.
 type InfoOptions = Parameters<typeof getTanStackTextModelInfoForTask>[2];

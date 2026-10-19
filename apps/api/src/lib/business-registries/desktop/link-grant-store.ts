@@ -75,7 +75,7 @@ export const createDesktopLinkGrant = async ({
     organizationId,
   });
   if (Result.isError(access)) {
-    return access;
+    return Result.err(access.error);
   }
   return await Result.tryPromise({
     try: async () => {

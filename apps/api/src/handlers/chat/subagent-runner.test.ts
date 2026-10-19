@@ -145,7 +145,6 @@ const runScriptedSubagent = async (
         workspaceId: ids.wsA1,
       },
       organizationId: ids.orgA,
-      userId: ids.userA1,
       admission: overrides.admission ?? testModelAdmission(ids.orgA),
       orgAIConfig,
       managedAIResidency: "eu" as const,

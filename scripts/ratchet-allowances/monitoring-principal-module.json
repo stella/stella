@@ -1,0 +1,5 @@
+{
+  "metric": "api-lib-top-level-entries",
+  "delta": 1,
+  "reason": "The monitoring principal has one requested feature owner for its fixed identity, exhaustive account and credential policy, provisioning, session authority, and control state. These operations do not belong to ordinary account or smoke-session ownership."
+}

@@ -644,7 +644,10 @@ describe("folio collaboration room seed generation CAS", () => {
             asTestRaw<Parameters<typeof joinFolioCollabRoom.handler>[0]>({
               body: { entityId: ids.entityA1, propertyId: ids.filePropertyA1 },
               safeDb: safeDbFromScoped(scopedDb),
-              session: { activeOrganizationId: ids.orgA },
+              session: {
+                id: "fixture-session",
+                activeOrganizationId: ids.orgA,
+              },
               user: { id: ids.userA1, email: "editor@example.test" },
               workspaceId: ids.wsA1,
               memberRole: sessionMemberRole("owner"),
@@ -824,6 +827,7 @@ test("edits in the first durable snapshot remain unsaved after the pristine seed
     propertyId: ids.filePropertyA1,
     roomId,
     scopedDb,
+    sourceSessionExpiresAt: null,
     tokenExpiresAt: new Date(Date.now() + 60_000),
     tokenId: createSafeId<"folioCollabRoomToken">(),
     userId: ids.userA1,
@@ -1050,7 +1054,10 @@ describe("stale pending seed recovery notices", () => {
             asTestRaw<Parameters<typeof joinFolioCollabRoom.handler>[0]>({
               body: { entityId: ids.entityA1, propertyId: ids.filePropertyA1 },
               safeDb: safeDbFromScoped(scopedDb),
-              session: { activeOrganizationId: ids.orgA },
+              session: {
+                id: "fixture-session",
+                activeOrganizationId: ids.orgA,
+              },
               user: { id: ids.userA1, email: "editor@example.test" },
               workspaceId: ids.wsA1,
               memberRole: sessionMemberRole("owner"),
@@ -1272,7 +1279,7 @@ test("deleting a claimant before seed acknowledgement warns the next member abou
       asTestRaw<Parameters<typeof joinFolioCollabRoom.handler>[0]>({
         body: { entityId: ids.entityA1, propertyId: ids.filePropertyA1 },
         safeDb: safeDbFromScoped(nextMemberDb),
-        session: { activeOrganizationId: ids.orgA },
+        session: { id: "fixture-session", activeOrganizationId: ids.orgA },
         user: { id: ids.userA2, email: "member@example.test" },
         workspaceId: ids.wsA1,
         memberRole: sessionMemberRole("member"),

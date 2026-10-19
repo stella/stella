@@ -8,7 +8,6 @@ import {
   createAuthEndpoint,
   sensitiveSessionMiddleware,
 } from "better-auth/api";
-import { decodeCookieCache, getChunkedCookie } from "better-auth/cookies";
 import { parseSessionOutput, parseUserOutput } from "better-auth/db";
 import * as v from "valibot";
 
@@ -102,28 +101,37 @@ const authorizeObservedSession = async (
     ? session
     : null;
 
-const createSessionLifetimeRequestHook = (
-  decorate: (auth: AuthContext) => void,
+const sessionCookieCacheVersion = (session: Pick<Session, "userId">) => {
+  if (checkSessionCredentialIssuer("cookieCache", session).isErr()) {
+    // A single-use version sends every monitoring read to the session store.
+    return Bun.randomUUIDv7();
+  }
+  return cookieCacheVersion;
+};
+
+const createRevokeSessionByIdEndpoint = (
+  store: SessionLifetimeStore,
+  forgetObservations: () => void,
 ) =>
-  createAuthMiddleware(async (ctx) => {
-    // Plugin initialization rebuilds the adapter; decorate its final instance.
-    decorate(ctx.context);
-    const encoded = getChunkedCookie(
-      ctx,
-      ctx.context.authCookies.sessionData.name,
-    );
-    if (encoded) {
-      const cached = await decodeCookieCache(ctx, encoded);
-      if (
-        cached &&
-        checkSessionCredentialIssuer("cookieCache", {
-          userId: cached.session.session.userId,
-        }).isErr()
-      ) {
-        ctx.query = { ...ctx.query, disableCookieCache: true };
-      }
-    }
-  });
+  createAuthEndpoint(
+    "/revoke-session-by-id",
+    {
+      method: "POST",
+      body: v.strictObject({
+        sessionId: v.pipe(v.string(), v.minLength(1)),
+      }),
+      use: [sensitiveSessionMiddleware],
+      requireHeaders: true,
+    },
+    async (ctx) => {
+      await store.revokeById({
+        sessionId: ctx.body.sessionId,
+        userId: brandPersistedUserId(ctx.context.session.user.id),
+      });
+      forgetObservations();
+      return ctx.json({ status: true });
+    },
+  );
 
 export const createSessionLifetime = ({
   store,
@@ -298,35 +306,28 @@ export const createSessionLifetime = ({
   const plugin = {
     id: "session-lifetime",
     endpoints: {
-      revokeSessionById: createAuthEndpoint(
-        "/revoke-session-by-id",
-        {
-          method: "POST",
-          body: v.strictObject({
-            sessionId: v.pipe(v.string(), v.minLength(1)),
-          }),
-          use: [sensitiveSessionMiddleware],
-          requireHeaders: true,
-        },
-        async (ctx) => {
-          await store.revokeById({
-            sessionId: ctx.body.sessionId,
-            userId: brandPersistedUserId(ctx.context.session.user.id),
-          });
-          forgetObservations();
-          return ctx.json({ status: true });
-        },
+      revokeSessionById: createRevokeSessionByIdEndpoint(
+        store,
+        forgetObservations,
       ),
     },
     hooks: {
       before: [
         {
           matcher: () => true,
-          handler: createSessionLifetimeRequestHook(decorate),
+          handler: createAuthMiddleware(async (ctx) => {
+            // Plugin initialization rebuilds the adapter; decorate its final instance.
+            decorate(ctx.context);
+            await Promise.resolve();
+          }),
         },
       ],
     },
   } satisfies BetterAuthPlugin;
 
-  return { plugin, cookieCacheVersion, prepare: decorate };
+  return {
+    plugin,
+    cookieCacheVersion: sessionCookieCacheVersion,
+    prepare: decorate,
+  };
 };

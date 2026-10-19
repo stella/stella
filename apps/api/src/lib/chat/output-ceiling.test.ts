@@ -371,7 +371,6 @@ const compactThread = async (keySource: keyof typeof KEY_SOURCES) => {
     },
     orgAIConfig: KEY_SOURCES[keySource].orgAIConfig,
     organizationId,
-    userId: null,
     tenantWorkspaceIds: [],
   });
   if (Result.isError(result)) {
