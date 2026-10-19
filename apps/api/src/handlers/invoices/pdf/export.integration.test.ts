@@ -207,12 +207,12 @@ describe("invoice document export", () => {
       .update(invoices)
       .set({ language: "en" })
       .where(eq(invoices.id, invoiceId));
-    let pdf: Uint8Array | null = null;
+    const stored: Uint8Array[] = [];
     const handler = createInvoicePdfExport(async (object) => {
       if (typeof object.data === "string") {
         throw new TypeError("invoice export must store PDF bytes");
       }
-      pdf = object.data;
+      stored.push(object.data);
       return S3_OBJECT_WRITE_CERTAINTY.CONFIRMED;
     });
     const requestContext = context("own", []);
@@ -221,7 +221,8 @@ describe("invoice document export", () => {
       headers: { "Accept-Language": "sk" },
     });
     await handler.handler(requestContext);
-    if (pdf === null) {
+    const pdf = stored.at(0);
+    if (pdf === undefined) {
       throw new Error("the export stored no PDF bytes");
     }
     const text = (await PDF.load(pdf))
