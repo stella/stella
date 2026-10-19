@@ -164,6 +164,10 @@ import {
 } from "@/api/lib/auth/session-lifetime";
 import { createDatabaseSessionLifetimeStore } from "@/api/lib/auth/session-lifetime-store";
 import {
+  isSecondFactorAuthSessionPath,
+  isSessionCreatingAuthPath,
+} from "@/api/lib/auth/session-path-classification";
+import {
   createMicrosoftProfileMapper,
   createSocialIdentityValidation,
   SOCIAL_ACCOUNT_LINKING_OPTIONS,
@@ -303,7 +307,6 @@ const REFRESH_TOKEN_EXPIRES_IN = 30 * 24 * 60 * 60;
 // A lost rotation response can be replayed idempotently within this window.
 const REFRESH_TOKEN_REUSE_INTERVAL = 30;
 
-const VERIFY_EMAIL_PATH = "/email-otp/verify-email";
 const SEND_VERIFICATION_OTP_PATH = "/email-otp/send-verification-otp";
 const SIGN_IN_EMAIL_PATH = "/sign-in/email";
 const PREFERRED_NAME_MAX_LENGTH = 120;
@@ -311,6 +314,11 @@ const WORD_EDIT_SHORTCUT_MAX_LENGTH = 16;
 
 /** Passwordless email-OTP sign-in path (not a better-auth credential path). */
 const SIGN_IN_EMAIL_OTP_PATH = "/sign-in/email-otp";
+
+export const createSocialProvider = <T extends object>(provider: T) => ({
+  ...provider,
+  disableIdTokenSignIn: true,
+});
 
 type SignInEmailOtpBody = {
   email: string;
@@ -462,30 +470,13 @@ export const getNewAccountEmailOtpAction = async (
   }
 };
 
-/**
- * Better Auth handles every social provider (`/callback/google`,
- * `/callback/microsoft`, ...) through the `/callback/:id` endpoint. The MCP
- * OAuth provider plugin uses `/oauth2/*` paths instead, so this prefix
- * matches only social sign-in callbacks.
- */
 const isSocialSignInCallbackPath = (path: string | undefined): boolean =>
   path?.startsWith("/callback/") ?? false;
 
 const isStellaTwoFactorSignInGatePath = (path: string | undefined): boolean =>
-  path === SIGN_IN_EMAIL_OTP_PATH || isSocialSignInCallbackPath(path);
+  isSecondFactorAuthSessionPath(path);
 
-/**
- * Every better-auth path whose response can establish a new session: the two
- * surfaces the second-factor gate already covers (passwordless email-OTP
- * sign-in and the shared social callback), plus first-verification and the
- * self-host credential path, which carry no second factor. Derived from the
- * gate so a sign-in surface added there also raises the new-device notice
- * instead of silently skipping it.
- */
-export const isSessionCreatingAuthPath = (path: string | undefined): boolean =>
-  path === VERIFY_EMAIL_PATH ||
-  path === SIGN_IN_EMAIL_PATH ||
-  isStellaTwoFactorSignInGatePath(path);
+export { isSessionCreatingAuthPath };
 
 /**
  * Frontend route that presents the second-factor challenge (mirrors the path
@@ -1851,24 +1842,24 @@ export const createAuth = (
     socialProviders: {
       ...(env.GOOGLE_AUTH_CLIENT_ID && env.GOOGLE_AUTH_CLIENT_SECRET
         ? {
-            google: {
+            google: createSocialProvider({
               clientId: env.GOOGLE_AUTH_CLIENT_ID,
               clientSecret: env.GOOGLE_AUTH_CLIENT_SECRET,
-            },
+            }),
           }
         : {}),
       ...(env.MICROSOFT_AUTH_CLIENT_ID &&
       env.MICROSOFT_AUTH_CLIENT_SECRET &&
       env.MICROSOFT_AUTH_TENANT_ID
         ? {
-            microsoft: {
+            microsoft: createSocialProvider({
               clientId: env.MICROSOFT_AUTH_CLIENT_ID,
               clientSecret: env.MICROSOFT_AUTH_CLIENT_SECRET,
               tenantId: env.MICROSOFT_AUTH_TENANT_ID,
               mapProfileToUser: createMicrosoftProfileMapper(
                 env.MICROSOFT_AUTH_TENANT_ID,
               ),
-            },
+            }),
           }
         : {}),
     },
