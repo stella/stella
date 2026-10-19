@@ -216,37 +216,9 @@ fn write_language_file(path: &Path, locale: &str) -> Result<(), String> {
   let parent = path
     .parent()
     .ok_or_else(|| "saved language path is invalid".to_string())?;
-  fs::create_dir_all(parent)
+  crate::local_store::create_private_dir(parent)
     .map_err(|error| format!("saved language directory failed: {error}"))?;
-
-  // Written beside the target and renamed into place, as the clipboard store
-  // does: the rename replaces whatever sits at the path in one step instead
-  // of following a link planted there after the check above.
-  let temp_path = path.with_extension(format!(
-    "{}.{}.tmp",
-    std::process::id(),
-    uuid::Uuid::new_v4()
-  ));
-  if let Err(error) = fs::write(&temp_path, locale) {
-    let _ = fs::remove_file(&temp_path);
-    return Err(format!("saved language write failed: {error}"));
-  }
-  #[cfg(unix)]
-  {
-    use std::os::unix::fs::PermissionsExt;
-
-    if let Err(error) =
-      fs::set_permissions(&temp_path, fs::Permissions::from_mode(0o600))
-    {
-      let _ = fs::remove_file(&temp_path);
-      return Err(format!("saved language permissions failed: {error}"));
-    }
-  }
-  if let Err(error) = fs::rename(&temp_path, path) {
-    let _ = fs::remove_file(&temp_path);
-    return Err(format!("saved language replace failed: {error}"));
-  }
-  Ok(())
+  crate::local_store::write_private_atomic(path, locale.as_bytes())
 }
 
 /// Saves `locale` so the next launch renders native strings in it before any
@@ -573,6 +545,10 @@ fn extract_plural_branch(icu: &str, form: &str) -> Option<String> {
 }
 
 #[cfg(test)]
+#[allow(
+  clippy::disallowed_methods,
+  reason = "tests construct local file fixtures"
+)]
 mod tests {
   use super::*;
   use std::collections::BTreeSet;
@@ -676,7 +652,9 @@ mod tests {
   // -- startup resolution --
 
   fn unique_path() -> PathBuf {
-    std::env::temp_dir().join(format!("stella-language-{}", uuid::Uuid::new_v4()))
+    std::env::temp_dir()
+      .join(format!("stella-language-{}", uuid::Uuid::new_v4()))
+      .join("value")
   }
 
   #[test]
@@ -697,6 +675,7 @@ mod tests {
   #[test]
   fn a_saved_language_round_trips() {
     let path = unique_path();
+    crate::local_store::create_private_dir(path.parent().unwrap()).unwrap();
     assert_eq!(read_language_file(&path), None);
 
     write_language_file(&path, "pt-BR").unwrap();
@@ -711,6 +690,7 @@ mod tests {
   #[test]
   fn a_directory_is_never_a_saved_language() {
     let path = unique_path();
+    crate::local_store::create_private_dir(path.parent().unwrap()).unwrap();
     fs::create_dir(&path).unwrap();
 
     assert_eq!(read_language_file(&path), None);
@@ -722,6 +702,7 @@ mod tests {
   #[test]
   fn an_unrecognised_saved_language_is_ignored() {
     let path = unique_path();
+    crate::local_store::create_private_dir(path.parent().unwrap()).unwrap();
     write_language_file(&path, "kl-GL").unwrap();
 
     let saved = read_language_file(&path).and_then(|tag| resolve_locale(&tag));

@@ -5,6 +5,27 @@
 # are banned everywhere else so a second "which screen" rule cannot appear;
 # the owner carries the only `allow`.
 disallowed-methods = [
+  { path = "tokio::fs::DirBuilder::create", reason = "create private desktop files through local_store" },
+  { path = "std::fs::write", reason = "create private desktop files through local_store" },
+  { path = "std::fs::File::create", reason = "create private desktop files through local_store" },
+  { path = "std::fs::File::create_new", reason = "create private desktop files through local_store" },
+  { path = "std::fs::create_dir_all", reason = "create private desktop files through local_store" },
+  { path = "std::fs::create_dir", reason = "create private desktop files through local_store" },
+  { path = "std::fs::DirBuilder::create", reason = "create private desktop files through local_store" },
+  { path = "std::fs::OpenOptions::open", reason = "create private desktop files through local_store" },
+  { path = "std::fs::set_permissions", reason = "create private desktop files through local_store" },
+  { path = "std::fs::File::set_permissions", reason = "create private desktop files through local_store" },
+  { path = "std::fs::copy", reason = "create private desktop files through local_store" },
+  { path = "tokio::fs::write", reason = "create private desktop files through local_store" },
+  { path = "tokio::fs::File::create", reason = "create private desktop files through local_store" },
+  { path = "tokio::fs::File::create_new", reason = "create private desktop files through local_store" },
+  { path = "tokio::fs::create_dir_all", reason = "create private desktop files through local_store" },
+  { path = "tokio::fs::create_dir", reason = "create private desktop files through local_store" },
+  { path = "tokio::fs::OpenOptions::open", reason = "create private desktop files through local_store" },
+  { path = "tokio::fs::set_permissions", reason = "create private desktop files through local_store" },
+  { path = "tokio::fs::File::set_permissions", reason = "create private desktop files through local_store" },
+  { path = "tokio::fs::copy", reason = "create private desktop files through local_store" },
+
   { path = "tauri::webview::WebviewWindowBuilder::new", reason = "use app_window::builder so every window stays on the app origin" },
   { path = "tauri::webview::WebviewWindowBuilder::from_config", reason = "use app_window::builder so every window stays on the app origin" },
   { path = "tauri::webview::WebviewBuilder::new", reason = "use app_window::builder so every window stays on the app origin" },

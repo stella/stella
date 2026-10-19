@@ -120,8 +120,13 @@ fn record_check(now: u64) {
     tracing::warn!("updater timestamp has no data directory");
     return;
   };
-  let result = std::fs::create_dir_all(path.parent().expect("updater data directory"))
-    .and_then(|()| std::fs::write(path, now.to_string()));
+  let result = crate::local_store::create_private_dir(
+    path.parent().expect("updater data directory"),
+  )
+  .map_err(|error| error.to_string())
+  .and_then(|()| {
+    crate::local_store::write_private_atomic(&path, now.to_string().as_bytes())
+  });
   if let Err(error) = result {
     tracing::warn!(%error, "updater timestamp could not be saved");
   }

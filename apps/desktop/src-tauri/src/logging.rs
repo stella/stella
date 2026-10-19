@@ -207,7 +207,7 @@ struct RollingLog {
 
 impl RollingLog {
   fn open(dir: &Path, files: LogFiles) -> io::Result<Self> {
-    fs::create_dir_all(dir)?;
+    crate::local_store::create_private_dir(dir)?;
     let path = dir.join(files.name);
     let file = open_append(&path)?;
     let written = file.metadata()?.len();
@@ -277,12 +277,7 @@ impl Write for RollingLog {
 fn open_append(path: &Path) -> io::Result<File> {
   let mut options = OpenOptions::new();
   options.create(true).append(true);
-  #[cfg(unix)]
-  {
-    use std::os::unix::fs::OpenOptionsExt;
-    options.mode(0o600);
-  }
-  options.open(path)
+  crate::local_store::open_private(&mut options, path)
 }
 
 #[cfg(test)]
