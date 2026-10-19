@@ -23,6 +23,7 @@ import {
   isMemberAuthorizedForMcpTool,
   type McpToolAuthorityDeclaration,
 } from "@/api/mcp/tool-authority";
+import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
 import type { McpToolDefinition } from "@/api/mcp/tool-types";
 import { handleMcpToolCall } from "@/api/mcp/tools";
 import { callMcpToolOverHttp } from "@/api/tests/helpers/mcp-http-tool-call";
@@ -292,6 +293,44 @@ describe("write tool permissions", () => {
       });
     },
   );
+
+  test("authority is resolved before confirmation", async () => {
+    const unauthorized = await handleMcpToolCall({
+      args: { matter_id: "00000000-0000-4000-8000-000000000001" },
+      context: mcpContextFor("external"),
+      toolName: "delete_matter",
+    });
+    const unavailable = await handleMcpToolCall({
+      args: { matter_id: "00000000-0000-4000-8000-000000000001" },
+      context: {
+        ...mcpContextFor("external"),
+        toolConfirmation: TOOL_CONFIRMATION.unavailable,
+      },
+      toolName: "delete_matter",
+    });
+    const authorized = await handleMcpToolCall({
+      args: { matter_id: "00000000-0000-4000-8000-000000000001" },
+      context: mcpContextFor("owner"),
+      toolName: "delete_matter",
+    });
+    const code = (result: Awaited<ReturnType<typeof handleMcpToolCall>>) => {
+      const item = result.content.at(0);
+      const envelope: unknown =
+        item?.type === "text" ? JSON.parse(item.text) : null;
+      return typeof envelope === "object" &&
+        envelope !== null &&
+        "error" in envelope &&
+        typeof envelope.error === "object" &&
+        envelope.error !== null &&
+        "code" in envelope.error
+        ? envelope.error.code
+        : null;
+    };
+
+    expect(code(unauthorized)).toBe("permission_denied");
+    expect(code(unavailable)).toBe("permission_denied");
+    expect(code(authorized)).toBe("confirmation_required");
+  });
 
   test.each(TRANSPORT_NAMES)(
     "a call by name over %s names the credential when only its permissions refuse the tool",

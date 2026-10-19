@@ -529,6 +529,7 @@ export type StaticMcpToolInvocation =
 export const invokeStaticMcpTool = async ({
   args,
   beforeInvoke,
+  scopeArgs,
   context,
   definition,
   mode = "default",
@@ -537,6 +538,12 @@ export const invokeStaticMcpTool = async ({
   args: Record<string, unknown>;
   beforeInvoke?:
     | ((args: Record<string, unknown>) => Promise<McpToolResponse | null>)
+    | undefined;
+  scopeArgs?:
+    | ((args: Record<string, unknown>) => Promise<{
+        args: Record<string, unknown>;
+        response?: McpToolResponse;
+      }>)
     | undefined;
   context: McpRequestContext;
   definition: McpToolDefinition;
@@ -587,16 +594,28 @@ export const invokeStaticMcpTool = async ({
     return { status: "validation-error", failure: normalized };
   }
 
+  const scoped =
+    scopeArgs === undefined
+      ? { args: normalized.value }
+      : await scopeArgs(normalized.value);
+  if (scoped.response !== undefined) {
+    return {
+      status: "invoked",
+      response: scoped.response,
+      inputNotes: normalized.notes,
+    };
+  }
+
   const inputDenial = mcpToolInputAuthorityDenial(
     context,
     definition,
-    normalized.value,
+    scoped.args,
   );
   if (inputDenial !== null) {
     return { status: "input-authority-refused", denial: inputDenial };
   }
 
-  const earlyResponse = await beforeInvoke?.(normalized.value);
+  const earlyResponse = await beforeInvoke?.(scoped.args);
   if (earlyResponse !== undefined && earlyResponse !== null) {
     return {
       status: "invoked",
@@ -613,7 +632,7 @@ export const invokeStaticMcpTool = async ({
     return {
       status: "invoked",
       response: await definition[PUBLIC_MCP_TOOL_HANDLER]({
-        args: normalized.value,
+        args: scoped.args,
         context: publicContext.value,
       }),
       inputNotes: normalized.notes,
@@ -626,7 +645,7 @@ export const invokeStaticMcpTool = async ({
   }
   return {
     status: "invoked",
-    response: await handler({ args: normalized.value, context }),
+    response: await handler({ args: scoped.args, context }),
     inputNotes: normalized.notes,
   };
 };

@@ -197,24 +197,30 @@ export const runRegistryReadTool = async ({
   let scopedError: ChatToolError | undefined;
   const invocation = await invokeStaticMcpTool({
     args: dehydrated.value.args,
-    beforeInvoke: async (normalizedArgs) => {
+    scopeArgs: async (normalizedArgs) => {
       const scoped =
         scopeArgs === undefined
           ? Result.ok(normalizedArgs)
           : await scopeArgs(normalizedArgs);
       if (Result.isError(scoped)) {
         scopedError = scoped.error;
-        return validationErrorResult([], scoped.error.message);
+        return {
+          args: normalizedArgs,
+          response: validationErrorResult([], scoped.error.message),
+        };
       }
-      return handler === undefined
-        ? null
-        : await runInjectedHandler({
-            args: scoped.value,
-            context,
-            toolName,
-            handler,
-          });
+      return { args: scoped.value };
     },
+    beforeInvoke:
+      handler === undefined
+        ? undefined
+        : async (scopedArgs) =>
+            await runInjectedHandler({
+              args: scopedArgs,
+              context,
+              toolName,
+              handler,
+            }),
     context,
     definition: staticDefinition,
   });

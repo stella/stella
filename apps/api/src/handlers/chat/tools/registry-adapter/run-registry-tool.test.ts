@@ -136,6 +136,36 @@ describe("runRegistryReadTool", () => {
     expect(containsRawUuid(payload)).toBe(false);
   });
 
+  test("applies the narrowed arguments to the registered handler", async () => {
+    const limits: unknown[] = [];
+    const scopedDb = asTestRaw<ScopedDb>(
+      async (run: (tx: unknown) => unknown) => {
+        const builder = {
+          select: () => builder,
+          from: () => builder,
+          where: () => builder,
+          orderBy: () => builder,
+          limit: async (limit: unknown) => {
+            limits.push(limit);
+            return [ONE_MATTER_ROW];
+          },
+        };
+        return await run(builder);
+      },
+    );
+
+    const result = await runRegistryReadTool({
+      args: { limit: 10 },
+      context: buildContext({ scopedDb }),
+      refRegistry: createChatRefRegistry(),
+      scopeArgs: async (args) => Result.ok({ ...args, limit: 1 }),
+      toolName: "list_matters",
+    });
+
+    expect(Result.isError(result)).toBe(false);
+    expect(limits).toEqual([2]);
+  });
+
   test("adds no note when every input was already canonical", async () => {
     const result = await runRegistryReadTool({
       args: { limit: 10 },

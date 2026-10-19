@@ -521,39 +521,36 @@ const dispatchMcpToolCall = async ({
       // Capability-catalog and upstream tools defer the final decision to their
       // owning dispatch boundary because the selected target determines risk.
       const confirmation = transportConfirmation(staticTool, args);
-      const requiresConfirmation = confirmation.required;
-      const unconfirmable = confirmation.required
-        ? confirmationUnavailableResult({
-            toolConfirmation: context.toolConfirmation,
-            subject: toolName,
-          })
-        : null;
-      if (unconfirmable !== null) {
-        return serializeForSurface(unconfirmable);
-      }
-      if (confirmation.required && args["confirm"] !== true) {
-        return serializeForSurface(
-          structuredErrorResult({
-            code: "confirmation_required",
-            message: confirmation.message,
-            hint: confirmation.hint,
-          }),
-        );
-      }
-
-      const executionContext = requiresConfirmation
+      const executionContext = confirmation.required
         ? bindApprovedMcpAuditContext(context)
         : context;
       const invocation = await invokeStaticMcpTool({
         args,
-        beforeInvoke: async (normalizedArgs) =>
-          await staticToolReferenceRefusal({
+        beforeInvoke: async (normalizedArgs) => {
+          if (confirmation.required) {
+            const unconfirmable = confirmationUnavailableResult({
+              toolConfirmation: context.toolConfirmation,
+              subject: toolName,
+            });
+            if (unconfirmable !== null) {
+              return unconfirmable;
+            }
+            if (normalizedArgs["confirm"] !== true) {
+              return structuredErrorResult({
+                code: "confirmation_required",
+                message: confirmation.message,
+                hint: confirmation.hint,
+              });
+            }
+          }
+          return await staticToolReferenceRefusal({
             context,
             definition: staticTool,
             args: normalizedArgs,
             mode,
             toolName,
-          }),
+          });
+        },
         context: executionContext,
         definition: staticTool,
         mode,
