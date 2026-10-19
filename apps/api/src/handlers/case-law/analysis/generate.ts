@@ -24,7 +24,6 @@ import type {
   DecisionAnalysis,
 } from "@stll/legal-ast/analysis";
 import { analysisHeadingInputSchema } from "@stll/legal-ast/analysis";
-import { Temporal } from "@stll/time";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -79,6 +78,7 @@ import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch
 import {
   generateTanStackObjectForTask,
   streamTanStackObjectForTask,
+  type TanStackStructuredOutputEvent,
   withGenerationDeadline,
 } from "@/api/lib/tanstack-ai-generate";
 import {
@@ -310,6 +310,10 @@ type RunGenerationOptions = {
   reader: AnalysisReaderKey;
   store: AnalysisStore;
   resolveTextModel: AnalysisModelResolver | undefined;
+  resolveModelInfo: AnalysisModelInfoResolver | undefined;
+  streamAnalysis: AnalysisStreamer | undefined;
+  generateAnalysisObject: AnalysisGenerator | undefined;
+  nowMs: () => number;
   deadlineMs: number;
 };
 
@@ -318,7 +322,18 @@ type AnalysisModelResolver = () =>
   | ResolvedTanStackTextModel
   | Promise<ResolvedTanStackTextModel>;
 
-const runGeneration = async ({
+type AnalysisModelInfoResolver = () => { modelId: string };
+
+/** Focused seams for driving the streaming state machine without a provider. */
+type AnalysisStreamer = (options: {
+  abortSignal: AbortSignal | undefined;
+}) => AsyncIterable<TanStackStructuredOutputEvent<AnalysisOutput>>;
+
+type AnalysisGenerator = (options: {
+  deadlineMs: number;
+}) => Promise<AnalysisOutput>;
+
+export const runGeneration = async ({
   admission,
   anchorIds,
   contentHash,
@@ -331,6 +346,10 @@ const runGeneration = async ({
   promptCachingEnabled,
   reader,
   resolveTextModel,
+  resolveModelInfo,
+  streamAnalysis,
+  generateAnalysisObject,
+  nowMs,
   sentinel,
   store,
 }: RunGenerationOptions) => {
@@ -354,15 +373,13 @@ const runGeneration = async ({
 
   let analysis: DecisionAnalysis;
   try {
-    const { modelId } = getTanStackTextModelInfoForTask(
-      "short-text",
-      orgAIConfig,
-      {
+    const { modelId } =
+      resolveModelInfo?.() ??
+      getTanStackTextModelInfoForTask("short-text", orgAIConfig, {
         dataClass: "public_corpus",
         organizationId,
         modelTier: admission.modelTier,
-      },
-    );
+      });
     const generationOptions = {
       dataClass: "public_corpus",
       task: "short-text",
@@ -394,7 +411,7 @@ const runGeneration = async ({
     // the throttle window waits for the next event past it, not for the end.
     let unpublished = false;
     const publishIfDue = async () => {
-      const now = Temporal.Now.instant().epochMilliseconds;
+      const now = nowMs();
       if (!unpublished || now - lastPublishedAt < PARTIAL_PUBLISH_INTERVAL_MS) {
         return;
       }
@@ -407,15 +424,19 @@ const runGeneration = async ({
     };
     // One deadline for the whole run: a fallback after an invalid stream gets
     // what is left of it, never a fresh one.
-    const runStartedAt = performance.now();
+    const runStartedAt = nowMs();
     try {
       result = await withGenerationDeadline(
         generationOptions,
         async (abortSignal) => {
-          for await (const event of streamTanStackObjectForTask({
-            ...generationOptions,
-            abortSignal,
-          })) {
+          const events =
+            streamAnalysis === undefined
+              ? streamTanStackObjectForTask({
+                  ...generationOptions,
+                  abortSignal,
+                })
+              : streamAnalysis({ abortSignal });
+          for await (const event of events) {
             if (event.type === "complete") {
               return event.object;
             }
@@ -456,13 +477,17 @@ const runGeneration = async ({
       if (classifyAIError(streamError) !== "output_invalid") {
         throw streamError;
       }
-      result = await generateTanStackObjectForTask({
-        ...generationOptions,
-        deadlineMs: Math.max(
-          1,
-          Math.floor(deadlineMs - (performance.now() - runStartedAt)),
-        ),
-      });
+      const remainingDeadlineMs = Math.max(
+        1,
+        Math.floor(deadlineMs - (nowMs() - runStartedAt)),
+      );
+      result =
+        generateAnalysisObject === undefined
+          ? await generateTanStackObjectForTask({
+              ...generationOptions,
+              deadlineMs: remainingDeadlineMs,
+            })
+          : await generateAnalysisObject({ deadlineMs: remainingDeadlineMs });
     }
     if (result === undefined) {
       return panic("Structured analysis stream ended without a result");
@@ -849,6 +874,10 @@ export const generateAnalysis = async ({
         promptCachingEnabled,
         reader,
         resolveTextModel,
+        resolveModelInfo: undefined,
+        streamAnalysis: undefined,
+        generateAnalysisObject: undefined,
+        nowMs: () => performance.now(),
         sentinel,
         store,
       });

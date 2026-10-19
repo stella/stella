@@ -1,166 +1,245 @@
 import { describe, expect, test } from "bun:test";
 
-import type {
-  AnalysisHeading,
-  DecisionAnalysis,
-} from "@stll/legal-ast/analysis";
+import type { AnalysisHeadingInput } from "@stll/legal-ast/analysis";
 
 import { toSafeId } from "@/api/lib/branded-types";
-import { analysisFailureRecord } from "@/api/lib/case-law/analysis-failure";
+import type { AnalysisStore } from "@/api/lib/case-law/analysis-store";
 import { createMemoryAnalysisStore } from "@/api/lib/case-law/analysis-store";
-import { storedAnalysisState } from "@/api/lib/case-law/stored-analysis";
+import { ModelOutputInvalidError } from "@/api/lib/errors/provider-call-error";
+import { admitFixtureModelDispatch } from "@/api/lib/rate-limit/model-dispatch-admission";
+import type { TanStackStructuredOutputEvent } from "@/api/lib/tanstack-ai-generate";
 
-const DECISION_ID = toSafeId<"caseLawDecision">(
+import type { AnalysisOutput } from "./analysis-output";
+import { runGeneration } from "./generate";
+
+const decisionId = toSafeId<"caseLawDecision">(
   "00000000-0000-0000-0000-0000000000a1",
 );
-const FINGERPRINT = "f".repeat(64);
-const FIRST_STARTED_AT = new Date("2026-10-18T12:00:00.000Z");
-const SECOND_STARTED_AT = new Date("2026-10-18T12:00:01.000Z");
-
-const section = {
-  id: "h1",
-  label: "Reasoning",
+const organizationId = toSafeId<"organization">(
+  "00000000-0000-0000-0000-0000000000b1",
+);
+const fingerprint = "f".repeat(64);
+const heading = (label: string, anchor: string): AnalysisHeadingInput => ({
+  id: "model-id",
+  label,
   category: "reasoning",
-  startAnchorId: "b1",
-  endAnchorId: "b2",
+  startAnchorId: anchor,
+  endAnchorId: anchor,
   annotations: [],
-  children: [],
-} satisfies AnalysisHeading;
+});
+const first = heading("First", "b1");
+const second = heading("Second", "b2");
+const draft = heading("Draft", "b3");
+const invalid = { label: "Invalid" };
+const output = (): AnalysisOutput => ({
+  headings: [first, second],
+  holding: { text: "A legal rule.", anchors: [] },
+  abstract: "A useful summary of the decision.",
+  topics: ["procedure"],
+});
+const partial = (
+  headings: (AnalysisHeadingInput | typeof invalid)[],
+): TanStackStructuredOutputEvent<AnalysisOutput> => ({
+  type: "partial",
+  delta: "",
+  raw: "",
+  partial: { headings },
+});
+const complete = (): TanStackStructuredOutputEvent<AnalysisOutput> => ({
+  type: "complete",
+  object: output(),
+  raw: "",
+});
 
-const finishedAnalysis = {
-  version: 3,
-  generatedAt: "2026-10-18T12:00:02.000Z",
-  model: "test/model",
-  inputFingerprint: FINGERPRINT,
-  tree: [section],
-  holding: { text: "The appeal was dismissed.", language: "en", anchors: [] },
-  abstract: { text: "The court dismissed the appeal.", language: "en" },
-  topics: ["appeal"],
-} satisfies DecisionAnalysis;
-
-const progress = (stored: unknown) => {
-  const state = storedAnalysisState({
-    stored,
-    fingerprint: FINGERPRINT,
-    now: SECOND_STARTED_AT,
-  });
-  if (state.kind !== "generating") {
-    return state;
-  }
-  return {
-    status: "generating" as const,
-    ...(state.partialTree.length === 0
-      ? {}
-      : { partialTree: state.partialTree }),
-  };
-};
-
-const claim = async (
-  store: ReturnType<typeof createMemoryAnalysisStore>,
-  observed: unknown,
-) => {
+const setup = async () => {
+  const store = createMemoryAnalysisStore(
+    () => new Date("2026-10-18T12:00:00.000Z"),
+  );
   const sentinel = await store.claim({
-    decisionId: DECISION_ID,
-    fingerprint: FINGERPRINT,
-    observed,
+    decisionId,
+    fingerprint,
+    observed: null,
   });
-  expect(sentinel).not.toBeNull();
   if (sentinel === null) {
-    throw new Error("expected the analysis run to claim the decision");
+    throw new Error("expected the run to claim the decision");
   }
-  return sentinel;
+  return { sentinel, store };
 };
-
-describe("streamed case-law analysis", () => {
-  test("GET progress includes a section published by the active run", async () => {
-    const store = createMemoryAnalysisStore(() => FIRST_STARTED_AT);
-    const sentinel = await claim(store, null);
-
-    expect(
-      await store.savePartial({
-        decisionId: DECISION_ID,
-        partialTree: [section],
-        sentinel,
-      }),
-    ).toBe(true);
-    expect(progress(store.peek(DECISION_ID))).toEqual({
-      status: "generating",
-      partialTree: [section],
-    });
+type Overrides = Partial<
+  Pick<
+    Parameters<typeof runGeneration>[0],
+    "generateAnalysisObject" | "nowMs" | "streamAnalysis"
+  >
+>;
+const run = async (
+  store: AnalysisStore,
+  sentinel: NonNullable<Awaited<ReturnType<AnalysisStore["claim"]>>>,
+  overrides: Overrides,
+) =>
+  await runGeneration({
+    admission: admitFixtureModelDispatch({
+      organizationId,
+      actionKind: "case_law_analysis",
+      modelTier: "standard",
+    }),
+    anchorIds: ["b1", "b2", "b3"],
+    contentHash: null,
+    country: "CZ",
+    deadlineMs: 10_000,
+    decisionId,
+    input: {
+      language: "en",
+      systemPrompt: "Analyze.",
+      userMessage: "Decision",
+      fingerprint,
+    },
+    orgAIConfig: null,
+    organizationId,
+    promptCachingEnabled: false,
+    reader: { source: "platform" },
+    resolveTextModel: undefined,
+    streamAnalysis: undefined,
+    generateAnalysisObject: undefined,
+    resolveModelInfo: () => ({ modelId: "test-model" }),
+    nowMs: () => 0,
+    sentinel,
+    store,
+    ...overrides,
   });
 
-  test("a replaced run cannot publish or clear its successor's progress", async () => {
-    const startedAt = [FIRST_STARTED_AT, SECOND_STARTED_AT];
-    const store = createMemoryAnalysisStore(() => {
-      const next = startedAt.shift();
-      if (next === undefined) {
-        throw new Error("unexpected third claim");
-      }
-      return next;
-    });
-    const original = await claim(store, null);
-    const replacement = await claim(store, store.peek(DECISION_ID));
-    expect(replacement.startedAt).not.toBe(original.startedAt);
-    expect(
-      await store.savePartial({
-        decisionId: DECISION_ID,
-        partialTree: [section],
-        sentinel: replacement,
-      }),
-    ).toBe(true);
-    const replacementProgress = store.peek(DECISION_ID);
+const recordingStore = (
+  store: AnalysisStore,
+  writes: string[][],
+): AnalysisStore => ({
+  ...store,
+  savePartial: async (options) => {
+    writes.push(options.partialTree.map(({ label }) => label));
+    return await store.savePartial(options);
+  },
+});
 
-    expect(
-      await store.savePartial({
-        decisionId: DECISION_ID,
-        partialTree: [],
-        sentinel: original,
-      }),
-    ).toBe(false);
-    await store.fail({
-      decisionId: DECISION_ID,
-      failure: analysisFailureRecord({
-        code: "failed",
-        fingerprint: FINGERPRINT,
-        now: SECOND_STARTED_AT,
-        reader: { source: "platform" },
-      }),
-      keyTag: "platform",
-      sentinel: original,
+describe("streamed case-law analysis generation", () => {
+  test("publishes valid sections in order while skipping an invalid heading", async () => {
+    const { sentinel, store } = await setup();
+    const writes: string[][] = [];
+    let now = 0;
+    await run(recordingStore(store, writes), sentinel, {
+      nowMs: () => now,
+      async *streamAnalysis() {
+        yield partial([first, draft]);
+        now = 1000;
+        yield partial([first, invalid, draft]);
+        now = 2000;
+        yield partial([first, invalid, second, draft]);
+        yield complete();
+      },
     });
-
-    expect(store.peek(DECISION_ID)).toBe(replacementProgress);
-    expect(progress(store.peek(DECISION_ID))).toEqual({
-      status: "generating",
-      partialTree: [section],
-    });
+    expect(writes).toEqual([["First"], ["First", "Second"]]);
   });
 
-  test("a successful final save replaces progress with a done analysis", async () => {
-    const store = createMemoryAnalysisStore(() => FIRST_STARTED_AT);
-    const sentinel = await claim(store, null);
-    expect(
-      await store.savePartial({
-        decisionId: DECISION_ID,
-        partialTree: [section],
-        sentinel,
-      }),
-    ).toBe(true);
+  test("publishes sections completed inside the interval on the next event past it", async () => {
+    const { sentinel, store } = await setup();
+    const operations: string[] = [];
+    const observed: AnalysisStore = {
+      ...store,
+      savePartial: async (options) => {
+        operations.push(
+          `partial:${options.partialTree.map(({ label }) => label).join(",")}`,
+        );
+        return await store.savePartial(options);
+      },
+      save: async (options) => {
+        operations.push("final");
+        return await store.save(options);
+      },
+    };
+    let now = 0;
+    await run(observed, sentinel, {
+      nowMs: () => now,
+      async *streamAnalysis() {
+        yield partial([first, draft]);
+        now = 100;
+        yield partial([first, second, draft]);
+        now = 1000;
+        yield partial([first, second, draft]);
+        yield complete();
+      },
+    });
+    expect(operations).toEqual([
+      "partial:First",
+      "partial:First,Second",
+      "final",
+    ]);
+  });
 
+  test("paces refused writes from a superseded run", async () => {
+    const { sentinel, store } = await setup();
     expect(
-      await store.save({
-        analysis: finishedAnalysis,
-        contentHash: null,
-        decisionId: DECISION_ID,
+      await store.claim({
+        decisionId,
+        fingerprint,
+        observed: store.peek(decisionId),
       }),
-    ).toBe(true);
-    expect(
-      storedAnalysisState({
-        stored: store.peek(DECISION_ID),
-        fingerprint: FINGERPRINT,
-        now: SECOND_STARTED_AT,
-      }),
-    ).toEqual({ kind: "done", analysis: finishedAnalysis });
-    expect(store.peek(DECISION_ID)).not.toHaveProperty("partialTree");
+    ).not.toBeNull();
+    const attempts: number[] = [];
+    let now = 0;
+    const observed: AnalysisStore = {
+      ...store,
+      savePartial: async (options) => {
+        attempts.push(now);
+        return await store.savePartial(options);
+      },
+    };
+    await run(observed, sentinel, {
+      nowMs: () => now,
+      async *streamAnalysis() {
+        yield partial([first, draft]);
+        now = 100;
+        yield partial([first, second, draft]);
+        now = 999;
+        yield partial([first, second, draft]);
+        now = 1000;
+        yield partial([first, second, draft]);
+        yield complete();
+      },
+    });
+    expect(attempts).toEqual([0, 1000]);
+  });
+
+  test("replaces the partial tree with the final done analysis", async () => {
+    const { sentinel, store } = await setup();
+    await run(store, sentinel, {
+      async *streamAnalysis() {
+        yield partial([first, draft]);
+        yield complete();
+      },
+    });
+    expect(store.peek(decisionId)).toMatchObject({
+      version: 3,
+      inputFingerprint: fingerprint,
+      tree: [{ label: "First" }, { label: "Second" }],
+    });
+    expect(store.peek(decisionId)).not.toHaveProperty("partialTree");
+    expect(store.peek(decisionId)).not.toHaveProperty("status");
+  });
+
+  test("gives an invalid-stream fallback only the remaining deadline", async () => {
+    const { sentinel, store } = await setup();
+    let now = 2000;
+    const deadlines: number[] = [];
+    await run(store, sentinel, {
+      nowMs: () => now,
+      async *streamAnalysis() {
+        now = 3250;
+        throw new ModelOutputInvalidError({
+          model: { provider: "openai", keySource: "platform" },
+        });
+      },
+      generateAnalysisObject: async ({ deadlineMs }) => {
+        deadlines.push(deadlineMs);
+        return output();
+      },
+    });
+    expect(deadlines).toEqual([8750]);
   });
 });
