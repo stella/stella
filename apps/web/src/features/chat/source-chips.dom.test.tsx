@@ -1,11 +1,11 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, expect, mock, test } from "bun:test";
+import { afterAll, afterEach, expect, test } from "bun:test";
 
 import englishMessages from "@/i18n/langs/en.json";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
-const { fireEvent, render, screen, cleanup, waitFor } =
+const { fireEvent, render, screen, cleanup } =
   await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
 const { QueryClient, QueryClientProvider } =
@@ -132,74 +132,82 @@ test("renders a case-law source without an invalid decision date", () => {
   expect(screen.queryByText(/not-a-date/u)).toBeNull();
 });
 
-test("a decision row opens the decision instead of navigating", async () => {
+test("a decision row opens in the app on a plain click, links otherwise", () => {
   const decisionId = "a5a95801-7a7c-4c8b-98b3-7d17c8b8d7f9";
-  // Opening resolves the decision through the API; the request names it.
-  const realFetch = globalThis.fetch;
-  const fetchSpy = mock(
-    async (_input: RequestInfo | URL) =>
-      await Promise.resolve(new Response("{}", { status: 404 })),
-  );
-  globalThis.fetch = Object.assign(fetchSpy, {
-    preconnect: realFetch.preconnect,
-  });
-  try {
-    render(
-      <QueryClientProvider client={new QueryClient()}>
-        <IntlProvider locale="en" messages={englishMessages} timeZone="UTC">
-          <SourceChips
-            messageId="decision-row-answer"
-            parts={[
-              {
-                type: "tool-call",
-                id: "search",
-                name: "infosoud_lookup_case",
-                state: "complete",
-                arguments: "{}",
-                input: {},
-                output: {
-                  results: [
-                    {
-                      ...hit(
-                        "https://example.test/cases/with-id",
-                        "4 Cdo 4/26",
-                        "Nejvyšší soud",
-                        "NS",
-                      ),
-                      decisionId,
-                    },
-                    hit(
-                      "https://example.test/cases/without-id",
-                      "5 Cdo 5/26",
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <IntlProvider locale="en" messages={englishMessages} timeZone="UTC">
+        <SourceChips
+          messageId="decision-row-answer"
+          parts={[
+            {
+              type: "tool-call",
+              id: "search",
+              name: "infosoud_lookup_case",
+              state: "complete",
+              arguments: "{}",
+              input: {},
+              output: {
+                results: [
+                  {
+                    ...hit(
+                      "https://example.test/cases/with-id",
+                      "4 Cdo 4/26",
                       "Nejvyšší soud",
                       "NS",
                     ),
-                  ],
-                },
+                    decisionId,
+                  },
+                  hit(
+                    "https://example.test/cases/without-id",
+                    "5 Cdo 5/26",
+                    "Nejvyšší soud",
+                    "NS",
+                  ),
+                ],
               },
-              {
-                type: "text",
-                content:
-                  "[a](https://example.test/cases/with-id) [b](https://example.test/cases/without-id)",
-              },
-            ]}
-          />
-        </IntlProvider>
-      </QueryClientProvider>,
-    );
-    const rowFor = (caseNumber: RegExp) =>
-      screen.getByText(caseNumber, { selector: ".font-medium" }).closest("a");
-    const withId = new MouseEvent("click", { bubbles: true, cancelable: true });
-    rowFor(/4 Cdo 4\/26/u)?.dispatchEvent(withId);
-    expect(withId.defaultPrevented).toBe(true);
-    await waitFor(() => {
-      expect(
-        fetchSpy.mock.calls.some(([input]) =>
-          String(input).includes(decisionId),
-        ),
-      ).toBe(true);
-    });
-  } finally {
-    globalThis.fetch = realFetch;
-  }
+            },
+            {
+              type: "text",
+              content:
+                "[a](https://example.test/cases/with-id) [b](https://example.test/cases/without-id)",
+            },
+          ]}
+        />
+      </IntlProvider>
+    </QueryClientProvider>,
+  );
+  // Records whether the row handled the click, then stops the test browser
+  // from following a link it left alone.
+  const click = (caseNumber: RegExp, init: MouseEventInit = {}) => {
+    let handledByRow = false;
+    const settle = (event: Event) => {
+      handledByRow = event.defaultPrevented;
+      event.preventDefault();
+    };
+    document.addEventListener("click", settle);
+    try {
+      screen
+        .getByText(caseNumber, { selector: ".font-medium" })
+        .closest("a")
+        ?.dispatchEvent(
+          new MouseEvent("click", {
+            bubbles: true,
+            button: 0,
+            cancelable: true,
+            ...init,
+          }),
+        );
+    } finally {
+      document.removeEventListener("click", settle);
+    }
+    return handledByRow;
+  };
+
+  // The decision opens beside the chat instead of leaving for the source.
+  expect(click(/4 Cdo 4\/26/u)).toBe(true);
+  // A modifier click keeps the browser's own new-tab behavior.
+  expect(click(/4 Cdo 4\/26/u, { metaKey: true })).toBe(false);
+  // Without a decision id the row is a plain link.
+  expect(click(/5 Cdo 5\/26/u)).toBe(false);
 });
