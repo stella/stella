@@ -488,15 +488,28 @@ export type StreamChatOutcome =
 type ObserveChatOutputStagesOptions = {
   source: AsyncIterable<StreamChunk>;
   startedAt: number;
-  isSettled: () => boolean;
+  getSettlementOutcome: () =>
+    | StreamChatFinishEvent["outcome"]["type"]
+    | undefined;
   now?: () => number;
   emitStage?: typeof emitRequestStage;
 };
 
+type SettlementOutcomeKind = StreamChatFinishEvent["outcome"]["type"];
+type RequestStageOutcome = Parameters<typeof emitRequestStage>[0]["outcome"];
+
+const SETTLEMENT_STAGE_OUTCOME = {
+  "awaiting-user": "completed",
+  completed: "completed",
+  cancelled: "cancelled",
+  failed: "failed",
+  interrupted: "cancelled",
+} as const satisfies Record<SettlementOutcomeKind, RequestStageOutcome>;
+
 export const observeChatOutputStages = async function* ({
   source,
   startedAt,
-  isSettled,
+  getSettlementOutcome,
   now = () => performance.now(),
   emitStage = emitRequestStage,
 }: ObserveChatOutputStagesOptions) {
@@ -518,7 +531,13 @@ export const observeChatOutputStages = async function* ({
       }
       yield chunk;
     }
-    finish = isSettled() ? { type: "completed" } : { type: "failed" };
+    const settlementOutcome = getSettlementOutcome();
+    finish = {
+      type:
+        settlementOutcome === undefined
+          ? "failed"
+          : SETTLEMENT_STAGE_OUTCOME[settlementOutcome],
+    };
   } catch (error) {
     finish = { type: "failed" };
     throw error;
@@ -1051,7 +1070,7 @@ export const streamChat = async ({
   const observedOutput = observeChatOutputStages({
     source: output,
     startedAt: providerWaitStartedAt,
-    isSettled: () => settlement.event !== undefined,
+    getSettlementOutcome: () => settlement.event?.outcome.type,
   });
   return {
     type: "streaming",

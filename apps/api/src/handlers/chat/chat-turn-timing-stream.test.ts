@@ -83,7 +83,7 @@ test("records a cancelled stream when its consumer returns after one chunk", asy
   const iterator = observeChatOutputStages({
     source: chunksOf([starts[0], runEnd]),
     startedAt: 0,
-    isSettled: () => false,
+    getSettlementOutcome: () => undefined,
     now: () => clock,
     emitStage: ({ stage, outcome }) => records.push({ stage, outcome }),
   })[Symbol.asyncIterator]();
@@ -119,7 +119,7 @@ test("records the first answer-bearing chunk once, at its own time", async () =>
     observeChatOutputStages({
       source: answerAt(),
       startedAt: 5,
-      isSettled: () => true,
+      getSettlementOutcome: () => "completed",
       now: () => clock,
       emitStage: ({ stage, durationMs }) => records.push({ stage, durationMs }),
     }),
@@ -131,18 +131,37 @@ test("records the first answer-bearing chunk once, at its own time", async () =>
   ]);
 });
 
-test("records a completed stream once", async () => {
+test("records a successfully settled stream as completed", async () => {
   const records: { stage: string; outcome: string }[] = [];
   await Array.fromAsync(
     observeChatOutputStages({
       source: chunksOf([starts[0], runEnd]),
       startedAt: 0,
-      isSettled: () => true,
+      getSettlementOutcome: () => "completed",
       now: () => 20,
       emitStage: ({ stage, outcome }) => records.push({ stage, outcome }),
     }),
   );
   expect(records).toEqual([{ stage: "stream_finish", outcome: "completed" }]);
+});
+
+test("records a normally exhausted error settlement as failed", async () => {
+  const runError = {
+    type: EventType.RUN_ERROR,
+    message: "The provider stream ended with an error.",
+    code: "incomplete-stream",
+  } as const satisfies StreamChunk;
+  const records: { stage: string; outcome: string }[] = [];
+  await Array.fromAsync(
+    observeChatOutputStages({
+      source: chunksOf([starts[0], runError]),
+      startedAt: 0,
+      getSettlementOutcome: () => "failed",
+      now: () => 20,
+      emitStage: ({ stage, outcome }) => records.push({ stage, outcome }),
+    }),
+  );
+  expect(records).toEqual([{ stage: "stream_finish", outcome: "failed" }]);
 });
 
 test("records a failed stream once and preserves the source error", async () => {
@@ -155,7 +174,7 @@ test("records a failed stream once and preserves the source error", async () => 
   const iterator = observeChatOutputStages({
     source: source(),
     startedAt: 0,
-    isSettled: () => false,
+    getSettlementOutcome: () => undefined,
     now: () => 30,
     emitStage: ({ stage, outcome }) => records.push({ stage, outcome }),
   })[Symbol.asyncIterator]();
