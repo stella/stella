@@ -939,14 +939,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/ci.yml",
-      "digest": "defa10315087338dd9704a4be27a3ceda578c59372b71488ea95cd92b3f93ab7",
+      "digest": "4924055795853df42a91872c206dc336dc29d5b5b1bcf594b346a6b878f73033",
       "references": ["./.github/workflows/ci.yml"],
       "jobs": [
         {
           "id": "ci-plan",
           "kind": "support",
           "qualifier": "Plans trust, scopes and prerequisites for merge-required checks.",
-          "digest": "f49088725732515bd37e0785e0408582d5ecc5449f7460b2d6c673f323ac5787"
+          "digest": "76608302966065fd3ae4ebed0f9a59c7bbd1d6c9090f5cf5d5eff283b6b40a66"
         },
         {
           "id": "generated-sources",
@@ -976,13 +976,13 @@
           "id": "ci-checks-policy",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "5597bb09ea9c222d35f353be71f4fce5fd75a193a9bcafafc468d1172c6c8978"
+          "digest": "1bcad1a89edc3b01b37dc3377aeda5e85c958d6f2292fe360786fe974d6060e6"
         },
         {
           "id": "ci-checks-rest",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "203a07e265a367b3db45b90a835f2653c25f402a7ed87d2f86fe36331a671bdb"
+          "digest": "e99c2716f056fc40743715afe0507c8d660e75879b4b02f1ce83c14c455ac4d7"
         },
         {
           "id": "ci-tests",
@@ -1042,7 +1042,7 @@
           "id": "service-suites",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "8929dfd8c94221cd7fa2ae9138a23430d6e5f228c162f3d130b9f729e871ee32"
+          "digest": "243b4137df2e5a10451520e6a39b8ef1d1ee7ee0f96ecc8f409192ad601e10d7"
         },
         {
           "id": "migration-upgrade-rehearsal",
@@ -1096,13 +1096,13 @@
           "id": "route-smoke",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "28b5861e393f07afb7dc486199dbaff936074b5630dadbba1b3807fbe43e090e"
+          "digest": "7d4e0328902d07ba725eb03d506685c6e61154f223d7174b86445166d625085d"
         },
         {
           "id": "e2e-production-shard",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "fb7a2d08c0ac0cb20ffa06b7b3222b133b234bc608c4bdb22fc5400cb46dd93c"
+          "digest": "45a27fd3258a0c1d4c11ae986cdc9590a45474ba594a4851cbbcf51fd280427c"
         },
         {
           "id": "stack-redaction-browsers",
@@ -1192,13 +1192,13 @@
           "id": "ci-quick-checks",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "75eea2e2374c0a5c57a956c38ce6b30c751571f79062b2c071865263d319cc42"
+          "digest": "4add1f54135d940ddbc8c3667bad66d55295e024b13f651ae40b1b4db9090552"
         },
         {
           "id": "ci-result",
           "kind": "support",
           "qualifier": "Aggregates planned check outcomes into the required merge verdict and records its evaluated jobs.",
-          "digest": "3a893c216435a837d32adae7c25c918862e5b9e2aafc408e3c52b5ea58024a03"
+          "digest": "b2265dcffa71b2492f259f400de6ae09a1ff59dd8b67fcdddbaeda89eaf7b78f"
         }
       ],
       "edges": {
@@ -1444,14 +1444,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/dependency-review.yml",
-      "digest": "b69bb10a74b0affb327da47d596497ad5d63bf4d58f8c4b8f0d6eb3103a0a8bc",
+      "digest": "298123560817811151ff13caaa5e7bf4aa03efb55e2523fefb6742d7f9e1ad89",
       "references": [],
       "jobs": [
         {
           "id": "dependency-review",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "f2afac4c948f5fffdb43cb17ba9bd54dba4c18ba511bfba89464528b7f9450ce"
+          "digest": "6182f312edf6391241ab33eaeb23751a1874cd511091f7399a49f47f708822f5"
         }
       ],
       "edges": {
@@ -2420,17 +2420,18 @@
         "type": "checkout"
       },
       "path": ".github/workflows/query-perf.yml",
-      "digest": "044a14108af65befde3d3987b3ff8fc7bd0ea9024007b2d4c525990f234caac8",
+      "digest": "f6f1a18e5eb4ad51329207d0bfe7f15cac947701f46ff4710c08ff87fd9fc03d",
       "references": ["./.github/workflows/query-perf.yml"],
       "jobs": [
         {
           "id": "query-perf",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "ab378ad5c8216c39091c48d8005570ad601a3c5c2a923d70f3fa1ee9af7869dc"
+          "digest": "2edfb912283fea4283ae4a0c630a57a6d345131dd02511f40e5d9ee9c5b8a3b2"
         }
       ],
       "edges": {
+        "./.github/actions/merge-target-base": "source-1646e6e5e60d055395f2bd499cb4ddd6f0c710b02094093a0e4b59a82cabef56",
         "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
         "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0128",
         "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0097"
@@ -2901,17 +2902,18 @@
         "type": "checkout"
       },
       "path": ".github/workflows/visual-preview.yml",
-      "digest": "37601da18874395cedfe3df13541759074eb27dff3b95297eef41427ebc5b7fb",
+      "digest": "6795a232f072838255db42aca5e5643e05d41bf33ae838d0df2d993c6ceb884b",
       "references": [],
       "jobs": [
         {
           "id": "preview",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "f67d68f63e803811a2f7aaacc9c18a4ae3b806a2eb1d3c9fa9876ce242671de2"
+          "digest": "37f7ce6eda8f0b72d81d81e78d365adca01075b72dfb9534b4fc4a1e079eeda6"
         }
       ],
       "edges": {
+        "./.github/actions/merge-target-base": "source-1646e6e5e60d055395f2bd499cb4ddd6f0c710b02094093a0e4b59a82cabef56",
         "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
         "docker/login-action@dbcb813823bdd20940b903addbd779551569679f": "n0129",
         "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0097"
@@ -3410,6 +3412,19 @@
       "path": ".github/actions/ci-store-save/action.yml",
       "digest": "2ad87bf7b877d0ea8ab9936b75a1aac7d090bdec7ea7b751d5265997db71e53e",
       "references": ["$/.github/actions/ci-store-save"],
+      "jobs": [],
+      "edges": {}
+    },
+    {
+      "type": "metadata",
+      "id": "source-1646e6e5e60d055395f2bd499cb4ddd6f0c710b02094093a0e4b59a82cabef56",
+      "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
+      "path": ".github/actions/merge-target-base/action.yml",
+      "digest": "e7b0d686574acffff6bff6b71b595fa15b8a31974b6e4429f6f3f32eb40b0014",
+      "references": ["./.github/actions/merge-target-base"],
       "jobs": [],
       "edges": {}
     },
