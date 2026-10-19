@@ -7,8 +7,8 @@
 // Selected checks run concurrently, one fewer than the runner CPUs; each log is
 // printed whole, in registry order, and every failure is annotated. Any failed
 // check fails the step after all selected checks have finished, unless its
-// `continue-on-error` holds: then, as for a step, the failure is reported as a
-// warning and its conclusion is success.
+// `continue-on-error` holds: then its conclusion is success. Every failed check
+// still emits an error annotation so the failure digest can report its cause.
 //
 // The pool runs even when dependency installation failed (install-free checks
 // still run), so it imports no packages.
@@ -426,6 +426,73 @@ const escapeProperty = (value: string) =>
 const escapeData = (value: string) =>
   value.replaceAll("%", "%25").replaceAll("\r", "%0D").replaceAll("\n", "%0A");
 
+const FAILURE_CAUSE_LIMIT = 500;
+
+const isResultMarker = (line: string) =>
+  /^\((?:pass|fail|skip|todo)\) /u.test(line.trimStart());
+
+// Bun prints a test's diagnostics before its `(fail)` line, so the test's own
+// error lies between the previous result marker and its marker; output after
+// the marker belongs to the next test, even a passing one that logs errors.
+const errorOfTest = (lines: readonly string[], failureIndex: number) => {
+  let start = failureIndex;
+  while (start > 0 && !isResultMarker(lines.at(start - 1) ?? "")) {
+    start -= 1;
+  }
+  return lines
+    .slice(start, failureIndex)
+    .find((line) => /^error/iu.test(line.trimStart()))
+    ?.trim();
+};
+
+// The runner renders `::error` commands as `##[error]<message>` in downloaded
+// logs and drops the title, so the digest reads this plain record instead.
+export const FAILED_CHECK_RECORD = "FAILED check: ";
+
+export const FAILED_CHECK_SEPARATOR = " -- ";
+
+/**
+ * The plain log record of one failed pooled check: name and first cause, one
+ * line. The name is escaped so it can hold neither the separator nor a line
+ * break; ci-failure-digest.ts decodes it.
+ */
+export const failedCheckRecord = (name: string, cause: string) =>
+  `${FAILED_CHECK_RECORD}${escapeData(name).replaceAll("--", "%2D%2D")}${FAILED_CHECK_SEPARATOR}${cause.replaceAll(/\r?\n/gu, " ")}`;
+
+/** The first actionable cause of one failed pooled check. */
+export const failedCheckCause = (
+  result: Pick<CheckResult, "detail">,
+  output: string,
+) => {
+  const lines = output.split(/\r?\n/u);
+  const failureIndex = lines.findIndex((line) =>
+    line.trimStart().startsWith("(fail) "),
+  );
+  const failure =
+    failureIndex === -1 ? undefined : lines.at(failureIndex)?.trim();
+  const testError =
+    failureIndex === -1 ? undefined : errorOfTest(lines, failureIndex);
+  // A later line's error may belong to another test, so a failed test without
+  // its own diagnostic is named alone.
+  if (failure !== undefined) {
+    return (
+      testError === undefined
+        ? failure
+        : `${failure}${FAILED_CHECK_SEPARATOR}${testError}`
+    ).slice(0, FAILURE_CAUSE_LIMIT);
+  }
+  return (
+    lines.find((line) => /error/iu.test(line))?.trim() ?? result.detail
+  ).slice(0, FAILURE_CAUSE_LIMIT);
+};
+
+/** The single workflow annotation emitted for one failed pooled check. */
+export const failedCheckAnnotation = (
+  result: Pick<CheckResult, "name" | "detail">,
+  output: string,
+) =>
+  `::error title=${escapeProperty(`${FAILED_CHECK_RECORD}${result.name}`)}::${escapeData(failedCheckCause(result, output))}`;
+
 const seconds = (value: number) => `${value.toFixed(1)} s`;
 const mebibytes = (bytes: number | undefined) =>
   bytes === undefined ? "" : String(Math.round(bytes / 1_048_576));
@@ -553,18 +620,18 @@ const main = async () => {
           : "FAILED";
       }
       print(`::group::${result.name}: ${label} in ${seconds(result.seconds)}`);
+      const output =
+        planned[index]?.status === "selected"
+          ? readFileSync(logPath(directory, index), "utf-8")
+          : "";
       if (planned[index]?.status === "selected") {
-        const output = readFileSync(logPath(directory, index), "utf-8");
         const text = output.replace(NESTED_GROUP, " $1");
         writeOut(text === "" || text.endsWith("\n") ? text : `${text}\n`);
       }
       print("::endgroup::");
       if (result.outcome === "failure") {
-        const level = result.continuedOnError ? "warning" : "error";
-        const suffix = result.continuedOnError ? " (continue-on-error)" : "";
-        print(
-          `::${level} title=${escapeProperty(result.name)}::${escapeData(`${result.name} failed${suffix}: ${result.detail}`)}`,
-        );
+        print(failedCheckAnnotation(result, output));
+        print(failedCheckRecord(result.name, failedCheckCause(result, output)));
       }
     },
   });

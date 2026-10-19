@@ -1,5 +1,19 @@
 # @stll/cli
 
+## 5.0.0
+
+### Major Changes
+
+- [#5865](https://github.com/stella/stella/pull/5865) [`0b164f3`](https://github.com/stella/stella/commit/0b164f3f3bcf91d53d10f9f46f725ad2e581c18b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Replace clause list depth fields with named numbering variants in the generated contracts.
+
+### Patch Changes
+
+- [#5554](https://github.com/stella/stella/pull/5554) [`20316a1`](https://github.com/stella/stella/commit/20316a1133c7d433112551c4b843362d4dff1aac) Thanks [@jan-kubica](https://github.com/jan-kubica)! - List retained answer versions with the text before and after each change and the name of the member who made it.
+
+- [#6046](https://github.com/stella/stella/pull/6046) [`b83289b`](https://github.com/stella/stella/commit/b83289b9a22c5e21999eb033498dac37b6efb1ea) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Use `url` for legal reader links and retain distinct publisher links in `source_url`.
+
+- [#5985](https://github.com/stella/stella/pull/5985) [`b65b24a`](https://github.com/stella/stella/commit/b65b24a5445be69c1f26b54f72d86640f3ad9258) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Document that statute reads include outline and versions on the first text page only.
+
 ## 4.3.0
 
 ### Minor Changes

@@ -720,6 +720,113 @@ const PL_UOKIK_DECISION_CUE_WINDOW = 160;
  */
 const PL_UOKIK_DECISION_TRAILING_CUE_WINDOW = 60;
 
+/** The official-language words that introduce a Commission competition case. */
+export const COMMISSION_CASE_CUES = [
+  { language: "Bulgarian", cue: "дело" },
+  { language: "Croatian", cue: "predmet" },
+  { language: "Czech", cue: "věc" },
+  { language: "Danish", cue: "sag" },
+  { language: "Dutch", cue: "zaak" },
+  { language: "English", cue: "case" },
+  { language: "Estonian", cue: "kohtuasi" },
+  { language: "Finnish", cue: "asia" },
+  { language: "French", cue: "affaire" },
+  { language: "German", cue: "Rechtssache" },
+  { language: "German", cue: "Sache" },
+  { language: "Greek", cue: "υπόθεση" },
+  { language: "Hungarian", cue: "ügy" },
+  { language: "Irish", cue: "cás" },
+  { language: "Italian", cue: "causa" },
+  { language: "Latvian", cue: "lieta" },
+  { language: "Lithuanian", cue: "byla" },
+  { language: "Maltese", cue: "kawża" },
+  { language: "Polish", cue: "sprawa" },
+  { language: "Portuguese", cue: "processo" },
+  { language: "Romanian", cue: "cauza" },
+  { language: "Slovak", cue: "vec" },
+  { language: "Slovenian", cue: "zadeva" },
+  { language: "Spanish", cue: "asunto" },
+  { language: "Spanish/Italian/Portuguese", cue: "caso" },
+  { language: "Swedish", cue: "mål" },
+] as const;
+
+const COMMISSION_CASE_CUE_SOURCE = COMMISSION_CASE_CUES.map(
+  ({ cue }) => cue,
+).join("|");
+const COMMISSION_CASE_CUE_RE = new RegExp(
+  String.raw`(?<!\p{L})(?:${COMMISSION_CASE_CUE_SOURCE})(?!\p{L})`,
+  "iu",
+);
+
+/** A cue cannot license a number elsewhere in the sentence or paragraph. */
+const COMMISSION_CASE_CUE_WINDOW = 40;
+
+const COMMISSION_CASE_NUMBER_PATTERN =
+  /(?<![\p{L}\d])(?<caseNumber>(?:AT\s*\.\s*\d{4,6}|COMP\s*\/\s*\d{2}\s*\.\s*\d{3}|M\s*\.\s*\d{1,6}|SA\s*\.\s*\d{3,6}|(?:C|N|NN)\s+\d{1,3}\s*\/\s*\d{4}))(?![\p{L}\d/])/giu;
+const COMMISSION_SHORT_CASE_NUMBER_RE = /^(?:C|N|NN)\s/iu;
+const ROMAN_NUMERALS = new Set(["I", "V", "X", "L", "C", "D", "M"]);
+const MAX_ROMAN_DIVISION_LENGTH = 8;
+
+/**
+ * Whether a short `C|N|NN 123/2020` form is the tail of a national docket:
+ * a senate number (`21 C 123/2020`) or a Roman court division
+ * (`IV C 123/2020`) precedes it across any amount of whitespace. A linear
+ * backwards scan, so neither whitespace runs nor long sections cost more.
+ */
+const followsNationalDocketDivision = (
+  text: string,
+  matchIndex: number,
+): boolean => {
+  let end = matchIndex - 1;
+  while (end >= 0 && /\s/u.test(text.charAt(end))) {
+    end -= 1;
+  }
+  if (end < 0 || end === matchIndex - 1) {
+    return false;
+  }
+  if (/\d/u.test(text.charAt(end))) {
+    return true;
+  }
+  let start = end;
+  while (
+    start >= 0 &&
+    end - start < MAX_ROMAN_DIVISION_LENGTH &&
+    ROMAN_NUMERALS.has(text.charAt(start).toUpperCase())
+  ) {
+    start -= 1;
+  }
+  return start < end && (start < 0 || !/[\p{L}\d]/u.test(text.charAt(start)));
+};
+
+const isCommissionCaseNumberMatch = ({
+  pattern,
+  caseNumber,
+  text,
+  matchIndex,
+}: {
+  pattern: RegExp;
+  caseNumber: string | undefined;
+  text: string;
+  matchIndex: number;
+}): boolean => {
+  if (pattern !== COMMISSION_CASE_NUMBER_PATTERN) {
+    return false;
+  }
+  if (
+    caseNumber !== undefined &&
+    COMMISSION_SHORT_CASE_NUMBER_RE.test(caseNumber) &&
+    followsNationalDocketDivision(text, matchIndex)
+  ) {
+    return false;
+  }
+  return COMMISSION_CASE_CUE_RE.test(
+    text.slice(
+      Math.max(0, matchIndex - COMMISSION_CASE_CUE_WINDOW),
+      matchIndex,
+    ),
+  );
+};
+
 /** What marks a nearby authority file number as the data protection authority's. */
 const PL_AUTHORITY_FILE_NUMBER_CUE_RE =
   /znak\p{L}*\s+sprawy|\bUODO\b|Ochrony\s+Danych\s+Osobowych/iu;
@@ -994,6 +1101,7 @@ const CITATION_PATTERNS: RegExp[] = [
   PL_TK_CUED_PATTERN,
   PL_AUTHORITY_FILE_NUMBER_PATTERN,
   PL_UOKIK_DECISION_PATTERN,
+  COMMISSION_CASE_NUMBER_PATTERN,
   PL_KIO_PATTERN,
   PL_BARE_SYMBOL_PATTERN,
   PL_NSA_WSA_PATTERN,
@@ -1583,6 +1691,7 @@ export const normalizeDecisionIdentifier = (
   switch (identifier.type) {
     case DECISION_IDENTIFIER_TYPES.CASE_NUMBER:
       return bareCitationKey(identifier.value);
+    case DECISION_IDENTIFIER_TYPES.COMMISSION_CASE_NUMBER:
     case DECISION_IDENTIFIER_TYPES.ECLI:
     case DECISION_IDENTIFIER_TYPES.NEUTRAL_CITATION:
       return normalizeStructuredDecisionIdentifier(identifier);
@@ -1607,6 +1716,8 @@ export const normalizeDecisionIdentifierValue = (
 ): string => {
   switch (type) {
     case DECISION_IDENTIFIER_TYPES.CASE_NUMBER:
+      return normalizeDecisionIdentifier({ type, value });
+    case DECISION_IDENTIFIER_TYPES.COMMISSION_CASE_NUMBER:
       return normalizeDecisionIdentifier({ type, value });
     case DECISION_IDENTIFIER_TYPES.ECLI:
       return normalizeDecisionIdentifier({ type, value });
@@ -1953,7 +2064,21 @@ export const extractCitations = (
         ) {
           continue;
         }
-        const identifierType = decisionIdentifierTypeOfCitation(citationText);
+        const isCommissionCaseNumber = isCommissionCaseNumberMatch({
+          pattern,
+          caseNumber,
+          text: section.text,
+          matchIndex: match.index,
+        });
+        if (
+          pattern === COMMISSION_CASE_NUMBER_PATTERN &&
+          !isCommissionCaseNumber
+        ) {
+          continue;
+        }
+        const identifierType = isCommissionCaseNumber
+          ? DECISION_IDENTIFIER_TYPES.COMMISSION_CASE_NUMBER
+          : decisionIdentifierTypeOfCitation(citationText);
         // For patterns with a capture group (e.g. the Polish prefixed
         // pattern), use the bare case number as the canonical dedup key
         // so both "sygn. akt II CSK 123/20" and "II CSK 123/20" resolve

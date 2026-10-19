@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.47.1
+
+### Patch Changes
+
+- [#5740](https://github.com/stella/stella/pull/5740) [`39eac6e`](https://github.com/stella/stella/commit/39eac6e360d0e4bbe23f61c6970ade7852f3927d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - A destructive confirm dialog stays open when its confirm settles to `"keep-open"`, and a host-responsive workspace frame may omit its end dock.
+
 ## 0.47.0
 
 ### Minor Changes

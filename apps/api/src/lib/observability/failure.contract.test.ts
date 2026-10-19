@@ -75,6 +75,7 @@ import {
   setMetricLineSinkForTesting,
 } from "@/api/lib/observability/request-metrics";
 import { pgErrorFields } from "@/api/lib/pg-error";
+import { APP_VERSION } from "@/api/lib/version";
 import * as legacy from "@/api/tests/helpers/legacy-error-fields";
 import {
   modelStepFailure,
@@ -1308,7 +1309,7 @@ describe("observeFailure channels", () => {
     expect(analytics.exceptions()).toEqual([]);
   });
 
-  test("the transient metric carries only the sink and the reason", () => {
+  test("the transient metric carries only the sink, the reason and the release", () => {
     observeFailure(codedError("ECONNRESET"), {
       sink: SINK,
       request: scopedRequest(),
@@ -1327,12 +1328,14 @@ describe("observeFailure channels", () => {
       },
       sink: "contract.sink",
       reason: "network_reset",
+      "service.version": APP_VERSION,
       RequestTransientFailures: 1,
     });
     expect(Object.keys(JSON.parse(line ?? "{}")).toSorted()).toEqual([
       "RequestTransientFailures",
       "_aws",
       "reason",
+      "service.version",
       "sink",
     ]);
   });
