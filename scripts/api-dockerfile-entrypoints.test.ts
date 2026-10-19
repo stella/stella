@@ -216,39 +216,39 @@ test("the native-loader guard covers the server and the case-law runner", () => 
   expect(entrypoints).toContain("apps/legal-atlas-runner/src/index.ts");
 });
 
-test.each(entrypoints)(
-  "%s bundles no package that loads its native binding by a relative path",
-  async (entry) => {
-    const result = await Bun.build({
-      entrypoints: [nodePath.join(REPOSITORY_ROOT, entry)],
-      target: "bun",
-      metafile: true,
-      plugins: [UNINSTALLED_THIRD_PARTY_EXTERNAL],
-    });
-    expect(result.success).toBe(true);
-    const inputs = Object.entries(result.metafile?.inputs ?? {});
-    const relativeLoaders = new Set(
-      inputs
-        .map(([file]) => file)
-        .filter(
-          (file) =>
-            file.includes("node_modules/") &&
-            RELATIVE_NATIVE_LOADER.test(
-              readFileSync(nodePath.resolve(file), "utf-8"),
-            ),
-        ),
-    );
-    const offenders = inputs.flatMap(([file, input]) =>
-      file.includes("node_modules/")
-        ? []
-        : input.imports
-            .filter((imported) => relativeLoaders.has(imported.path))
-            .map(
-              (imported) =>
-                `${file} -> ${imported.path.replace(/^.*node_modules\//u, "")}`,
-            ),
-    );
-    expect(offenders).toEqual([]);
-  },
-  120_000,
-);
+// One build over every entrypoint resolves the shared graph once: per-entry
+// builds repeat it dozens of times and starve the checks that share the pool.
+test("no bundled entrypoint reaches a package that loads its native binding by a relative path", async () => {
+  const result = await Bun.build({
+    entrypoints: entrypoints.map((entry) =>
+      nodePath.join(REPOSITORY_ROOT, entry),
+    ),
+    target: "bun",
+    metafile: true,
+    plugins: [UNINSTALLED_THIRD_PARTY_EXTERNAL],
+  });
+  expect(result.success).toBe(true);
+  const inputs = Object.entries(result.metafile?.inputs ?? {});
+  const relativeLoaders = new Set(
+    inputs
+      .map(([file]) => file)
+      .filter(
+        (file) =>
+          file.includes("node_modules/") &&
+          RELATIVE_NATIVE_LOADER.test(
+            readFileSync(nodePath.resolve(file), "utf-8"),
+          ),
+      ),
+  );
+  const offenders = inputs.flatMap(([file, input]) =>
+    file.includes("node_modules/")
+      ? []
+      : input.imports
+          .filter((imported) => relativeLoaders.has(imported.path))
+          .map(
+            (imported) =>
+              `${file} -> ${imported.path.replace(/^.*node_modules\//u, "")}`,
+          ),
+  );
+  expect(offenders).toEqual([]);
+}, 120_000);
