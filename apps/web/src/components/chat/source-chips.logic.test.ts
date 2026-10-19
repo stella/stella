@@ -386,18 +386,65 @@ describe("answer source classification", () => {
     });
   });
 
-  test("drops and counts a case-law hit without a case number", () => {
+  test("keeps a decision without court metadata as a generic source", () => {
+    const decisionId = "a5a95801-7a7c-4c8b-98b3-7d17c8b8d7f9";
     const result = collectSourceChipEntries({
       parts: [
         decisionPart({
           url: "https://example.test/cases/missing",
-          court: "Ústavní soud",
-          courtAbbreviation: "ÚS",
+          title: "Decision without citation metadata",
+          decisionId,
+          caseNumber: "I. ÚS 2/26",
         }),
       ],
     });
-    expect(result.entries).toEqual([]);
-    expect(result.droppedCaseLawSources).toBe(1);
+    expect(result.entries).toEqual([
+      expect.objectContaining({
+        type: "external",
+        source: expect.objectContaining({
+          caseLawDecision: { caseNumber: "I. ÚS 2/26", decisionId },
+          title: "Decision without citation metadata",
+        }),
+      }),
+    ]);
+    expect(result.uniqueExternalSources).toHaveLength(1);
+  });
+
+  test("keeps a non-legal external URL whose path contains cases", () => {
+    const url = "https://example.test/cases/customer-story";
+    const result = collectSourceChipEntries({
+      parts: [decisionPart({ url, title: "Customer story" })],
+    });
+
+    expect(result.entries).toEqual([
+      expect.objectContaining({
+        relation: "consulted",
+        type: "external",
+        source: expect.objectContaining({ title: "Customer story", url }),
+      }),
+    ]);
+    expect(result.uniqueExternalSources).toHaveLength(1);
+  });
+
+  test.each([
+    ["inline", "[authority](https://example.test/cases/cited)"],
+    [
+      "reference-style",
+      "[authority][decision]\n\n[decision]: https://example.test/cases/cited",
+    ],
+    ["autolink", "<https://example.test/cases/cited>"],
+  ])("classifies %s Markdown destinations as cited", (_kind, markdown) => {
+    const url = "https://example.test/cases/cited";
+    const result = collectSourceChipEntries({
+      parts: [
+        decisionPart({ url, title: "Cited source" }),
+        { type: "text", content: markdown },
+      ],
+    });
+
+    expect(result.entries).toEqual([
+      expect.objectContaining({ relation: "cited", type: "external" }),
+    ]);
   });
 
   test("orders Czech court tiers from apex to first instance", () => {

@@ -9,6 +9,7 @@ import { parseStatutePath } from "@stll/api-contract/statute-route";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 
 import {
+  chatAnswerCitationHrefs,
   chatAnswerDecisionTargets,
   chatAnswerMarkdownDocuments,
 } from "@/components/chat/chat-decision-citations.logic";
@@ -518,13 +519,11 @@ export const collectSourceChipEntries = ({
   sourceDocuments?: readonly ChatSourceDocument[] | undefined;
 }): {
   entries: SourceChipEntry[];
-  droppedCaseLawSources: number;
   uniqueExternalSources: ExternalSourceEntry[];
   uniqueSources: SourceDocumentEntry[];
 } => {
   const sources: SourceDocumentEntry[] = [];
   const externalSources: ExternalSourceEntry[] = [];
-  let droppedCaseLawSources = 0;
   for (const sourceDocument of sourceDocuments) {
     sources.push({ data: sourceDocument });
   }
@@ -539,14 +538,6 @@ export const collectSourceChipEntries = ({
     const toolExternalSources: ExternalSourceEntry[] = [];
     collectExternalSources(toolOutput, toolExternalSources);
     for (const source of toolExternalSources) {
-      const looksLikeCaseLaw =
-        source.caseLaw !== undefined ||
-        source.caseLawDecision !== undefined ||
-        /\/cases\//u.test(source.url);
-      if (looksLikeCaseLaw && source.caseLaw === undefined) {
-        droppedCaseLawSources += 1;
-        continue;
-      }
       externalSources.push({
         ...source,
         caseLawDecision: mcpToolInfo ? undefined : source.caseLawDecision,
@@ -569,16 +560,7 @@ export const collectSourceChipEntries = ({
   const uniqueExternalSources = dedupeExternalSources(externalSources);
   const message = { parts } as ChatUIMessage;
   const markdownDocuments = chatAnswerMarkdownDocuments(message);
-  const hrefs = new Set(
-    markdownDocuments.flatMap((markdown) => {
-      const matches = markdown.matchAll(
-        /\[[^\]]*\]\(([^ )]+)(?:\s+"[^"]*")?\)/gu,
-      );
-      return [...matches]
-        .map((match) => match[1])
-        .filter((href): href is string => href !== undefined);
-    }),
-  );
+  const hrefs = new Set(markdownDocuments.flatMap(chatAnswerCitationHrefs));
   const decisionIds = new Set(
     chatAnswerDecisionTargets({
       markdownDocuments,
@@ -622,7 +604,6 @@ export const collectSourceChipEntries = ({
   }
   return {
     entries,
-    droppedCaseLawSources,
     uniqueExternalSources,
     uniqueSources,
   };
