@@ -1,6 +1,14 @@
 import type { MentionNodeAttrs } from "@tiptap/extension-mention";
 
+import { formatChatCorpusId } from "@stll/api-contract";
+
 import type { ChatMentionOption } from "@/components/chat-mention-extension";
+
+/** The id a mention's chip carries: its row, or a corpus scope's own id. */
+export const chatMentionOptionId = (mention: ChatMentionOption): string =>
+  mention.category === "corpus"
+    ? formatChatCorpusId(mention.scope)
+    : mention.resource.id;
 
 export const toChatMentionNodeAttrs = (
   mention: ChatMentionOption,
@@ -11,7 +19,7 @@ export const toChatMentionNodeAttrs = (
   matterId: string | undefined;
   sourceWorkspaceId: string | undefined;
 } => ({
-  id: mention.resource.id,
+  id: chatMentionOptionId(mention),
   label: mention.label,
   category: mention.category,
   kind: mention.kind,

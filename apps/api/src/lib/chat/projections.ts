@@ -52,6 +52,7 @@ import {
   DOCUMENT_PROCESSING_REQUIRED_STATUS,
 } from "@/api/lib/document-processing-contract";
 import { TEMPLATE_WARNING_CODES } from "@/api/lib/docx/template-warnings";
+import { LEGISLATION_AMENDMENT_CHANGE_KINDS } from "@/api/lib/legal-search/legislation-ingestion-types";
 import {
   SANCTIONS_CLASSIFICATIONS,
   SANCTIONS_ENTITY_TYPES,
@@ -1607,7 +1608,18 @@ const caseLawDecisionProjection = v.strictObject({
   source_url: v.optional(publicUrl()),
   caseNumber: v.string(),
   caseNumberType: caseNumberTypeProjection,
-  citations: v.optional(caseLawCitationSummaryProjection),
+  citations: v.optional(
+    v.union([
+      projectionBranch(caseLawCitationSummaryProjection),
+      projectionBranch(
+        v.strictObject({
+          status: v.literal("unavailable"),
+          reason: v.literal("country_not_search_admitted"),
+          country: v.string(),
+        }),
+      ),
+    ]),
+  ),
   country: v.optional(v.string()),
   court: v.optional(v.string()),
   // The court's short form as a lawyer writes it (ÚS, NS, NSS, SN, CJEU),
@@ -1754,7 +1766,42 @@ export { READ_CASE_LAW_CITATIONS_PROJECTION } from "./case-law-citation-projecti
  * Newest validity window first, bounded by the versions page size: enough to
  * see which consolidations exist, not the whole amendment history.
  */
+const STATUTE_AMENDMENT_PAGE_PROJECTION = v.nullable(
+  v.strictObject({
+    items: v.array(
+      v.strictObject({
+        publisherId: v.string(),
+        amendingEli: v.string(),
+        amendingTitle: v.nullable(v.string()),
+        affectedAnchor: v.string(),
+        changeKind: v.picklist(LEGISLATION_AMENDMENT_CHANGE_KINDS),
+        effectiveDate: v.nullable(v.string()),
+        effectiveText: v.nullable(v.string()),
+      }),
+    ),
+    observedAt: v.string(),
+    coverage: v.variant("type", [
+      projectionBranch(v.strictObject({ type: v.literal("complete") })),
+      projectionBranch(
+        v.strictObject({
+          type: v.literal("partial"),
+          unlocatedRelations: v.number(),
+          reason: v.string(),
+        }),
+      ),
+      projectionBranch(
+        v.strictObject({
+          type: v.literal("not-stated"),
+          reason: v.string(),
+        }),
+      ),
+    ]),
+    truncated: v.boolean(),
+  }),
+);
+
 const STATUTE_VERSION_PROJECTION = v.strictObject({
+  amendedBy: STATUTE_AMENDMENT_PAGE_PROJECTION,
   documentId: passthroughId(),
   resourceName: passthroughId(),
   versionValidFrom: v.nullable(v.string()),
@@ -1776,15 +1823,15 @@ export const SEARCH_LEGISLATION_PROJECTION = v.union([
       paginationOutcome: v.optional(SEARCH_PAGINATION_OUTCOME_SCHEMA),
       results: v.array(
         v.strictObject({
-          // Null while the public-law surface is off (`FEATURE_PUBLIC_LAW`);
-          // without a stored slug the canonical route uses the document id.
-          appUrl: v.nullable(v.string()),
+          // The reader is primary when served; otherwise use the publisher.
           url: v.nullable(publicUrl()),
           source_url: v.optional(publicUrl()),
           country: v.string(),
           documentId: passthroughId(),
           documentType: v.nullable(v.string()),
           effectiveDate: v.nullable(v.string()),
+          versionValidFrom: v.nullable(v.string()),
+          versionValidTo: v.nullable(v.string()),
           eli: v.string(),
           language: v.string(),
           match: v.strictObject({
@@ -1817,8 +1864,7 @@ export const READ_STATUTE_PROJECTION = v.strictObject({
   // whole consolidation and do not continue, so only the text pages.
   nextCursor: v.nullable(passthroughId()),
   statute: v.strictObject({
-    // Nullable for the same reasons as search_legislation's `appUrl`.
-    appUrl: v.nullable(v.string()),
+    // Nullable for the same reasons as search_legislation's `url`.
     url: v.nullable(publicUrl()),
     source_url: v.optional(publicUrl()),
     charCount: v.nullable(v.number()),
@@ -1831,14 +1877,16 @@ export const READ_STATUTE_PROJECTION = v.strictObject({
     // The consolidation's heading blocks in document order. Each `anchorId`
     // is what read_statute_provisions and read_provision_history take as
     // `anchor`, in the publisher's own scheme.
-    outline: v.array(
-      v.strictObject({
-        anchorId: passthroughId(),
-        level: v.number(),
-        text: contentText(),
-      }),
+    outline: v.optional(
+      v.array(
+        v.strictObject({
+          anchorId: passthroughId(),
+          level: v.number(),
+          text: contentText(),
+        }),
+      ),
     ),
-    outlineTruncated: v.boolean(),
+    outlineTruncated: v.optional(v.boolean()),
     resourceName: passthroughId(),
     // The publisher's own document URL, which may embed the publisher's own
     // UUID — never a Stella tenant id, so it is forwarded unchanged.
@@ -1853,7 +1901,8 @@ export const READ_STATUTE_PROJECTION = v.strictObject({
     versionValidFrom: v.nullable(v.string()),
     versionValidTo: v.nullable(v.string()),
     ...statuteExpressionLabel,
-    versions: v.array(STATUTE_VERSION_PROJECTION),
+    pendingChanges: STATUTE_AMENDMENT_PAGE_PROJECTION,
+    versions: v.optional(v.array(STATUTE_VERSION_PROJECTION)),
   }),
 });
 

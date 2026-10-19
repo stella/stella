@@ -12,6 +12,31 @@
       "unknownDevice": "Nieznane urządzenie"
     }
   },
+  "admin": {
+    "ai": "AI",
+    "backToApp": "Powrót do aplikacji",
+    "billingAndUsage": "Rozliczenia i wykorzystanie",
+    "billingProfiles": "Profile rozliczeniowe",
+    "deleteDescription": "Trwale usuniesz tę organizację i jej dane. Tej operacji nie można cofnąć.",
+    "deleteOrganization": "Usuń organizację",
+    "deleteRefusedSubscription": "Ta organizacja ma subskrypcję, która się odnawia. Najpierw anuluj ją w sekcji Plan i wykorzystanie, a następnie usuń organizację.",
+    "deleteTypeToConfirm": "Wpisz {name}, aby potwierdzić.",
+    "firmSetup": "Ustawienia kancelarii",
+    "general": "Ogólne",
+    "leaveDescription": "Utracisz dostęp do spraw i danych tej organizacji.",
+    "leaveOrganization": "Opuść organizację",
+    "leaveRefusedOnlyOwner": "Jesteś jedynym właścicielem. Zanim odejdziesz, nadaj rolę właściciela innemu członkowi.",
+    "modelsAndProviders": "Modele i dostawcy",
+    "noPlan": "Brak aktywnego planu",
+    "organizationDeleted": "Organizacja została usunięta.",
+    "organizationId": "ID organizacji",
+    "organizationLeft": "Opuszczono organizację.",
+    "overviewDescription": "Zarządzaj organizacją, osobami i narzędziami.",
+    "people": "Osoby",
+    "planAndUsage": "Plan i wykorzystanie",
+    "title": "Administracja organizacji",
+    "toolsDescription": "Włącz lub wyłącz wbudowane narzędzia dla wszystkich osób w tej organizacji."
+  },
   "agentClaim": {
     "access": "Uzyskany dostęp",
     "accessReadSearch": "Dostęp do odczytu i wyszukiwania",
@@ -1058,7 +1083,6 @@
       }
     },
     "sameCaseNumber": "{count, plural, one {# orzeczenie ma} few {# orzeczenia mają} many {# orzeczeń ma} other {# orzeczenia ma}} tę sygnaturę. Wybierz sąd.",
-    "searchAskPrompt": "{query} (orzecznictwo, {country})",
     "searchLabel": "Szukaj w orzecznictwie",
     "searchPlaceholder": "Sygnatura, ECLI lub słowa, np. II CSK 123/19",
     "searchUnavailable": {
@@ -1206,15 +1230,32 @@
     },
     "answerEdit": {
       "acceptFailed": "Nie udało się zapisać zmiany. Spróbuj ponownie.",
+      "aiKind": "Zlecona edycja",
       "ask": "Poproś o zmiany",
+      "authorUnknown": "Nieznany autor",
+      "autolinkLabel": "Ten tekst automatycznie stanie się linkiem. Zmień etykietę przed usunięciem linku.",
+      "change": "Zmiana {revision}",
+      "editedLabel": "Edytowana odpowiedź",
       "failed": "Nie udało się przygotować zmiany. Spróbuj ponownie.",
+      "formatKind": "Formatowanie",
+      "heading": "Nagłówek {level}",
+      "history": "Historia odpowiedzi",
+      "historyEmpty": "Brak wcześniejszych wersji.",
       "instruction": "Opisz zmianę",
       "instructionRequired": "Opisz, jak zmienić zaznaczony tekst.",
       "invalidSelection": "Nie można edytować tego zaznaczenia. Zaznacz ciągły fragment tekstu.",
+      "invalidUrl": "Wprowadź prawidłowy adres HTTP lub HTTPS.",
+      "linkAddress": "Adres linku",
+      "orderedList": "Lista numerowana",
       "proposal": "Proponowana zmiana",
       "requesting": "Przygotowywanie zmian…",
+      "restoreRefreshFailed": "Odpowiedź została przywrócona, ale nie udało się jej odświeżyć. Odśwież, aby wczytać przywróconą odpowiedź.",
+      "revertKind": "Przywrócona wersja",
       "stale": "Ta odpowiedź się zmieniła. Zaznacz tekst ponownie.",
-      "submit": "Poproś o zmianę"
+      "submit": "Poproś o zmianę",
+      "textStyle": "Styl tekstu",
+      "unorderedList": "Lista punktowana",
+      "wholeBlockRequired": "Aby zmienić styl, zaznacz cały akapit lub listę."
     },
     "answerQuote": {
       "showInDecision": "Pokaż w orzeczeniu",
@@ -1405,7 +1446,12 @@
     "maxAttachmentsReached": "Maksymalnie {count} plików na wiadomość",
     "mention": {
       "category": {
-        "entities": "W tej sprawie"
+        "entities": "W tej sprawie",
+        "sources": "Źródła"
+      },
+      "corpus": {
+        "caseLaw": "Orzecznictwo · {country}",
+        "legislation": "Ustawodawstwo · {country}"
       },
       "loadError": "Nie udało się załadować elementów"
     },
@@ -2616,10 +2662,12 @@
     "api": {
       "badRequest": "Nie udało się wykonać żądania.",
       "caseLawCountryUnavailable": "Orzecznictwo tego kraju nie jest dostępne. Wybierz inny kraj.",
+      "caseLawIdentityOnly": "Dla tego kraju dostępne są tylko dokładne wyszukiwanie i odczytywanie orzeczeń.",
       "caseLawSearchUnavailable": "Wyszukiwanie orzecznictwa tego kraju nie jest dostępne. Nadal możesz czytać jego publiczne orzeczenia.",
       "conflict": "Żądanie jest sprzeczne z bieżącym stanem.",
       "forbidden": "Nie masz uprawnień do wykonania tej czynności.",
       "legislationCountryUnavailable": "Przepisy tego kraju nie są dostępne. Wybierz inny kraj.",
+      "legislationIdentityOnly": "Dla tego kraju dostępne są tylko dokładne wyszukiwanie i odczytywanie przepisów.",
       "legislationSearchUnavailable": "Wyszukiwanie przepisów tego kraju nie jest dostępne. Nadal możesz czytać jego publiczne przepisy.",
       "notFound": "Nie udało się znaleźć żądanego elementu.",
       "payloadTooLarge": "Żądanie jest zbyt duże.",
@@ -2642,6 +2690,10 @@
       "aiConfigModelInvalid": "Konfiguracja modelu AI jest nieprawidłowa. Sprawdź wybrane modele.",
       "aiConfigProviderInvalid": "Konfiguracja dostawcy AI jest nieprawidłowa. Sprawdź ustawienia dostawcy.",
       "aiConfigProviderValidationFailed": "Dostawca AI odrzucił konfigurację. Sprawdź klucz API i model.",
+      "aiOutputInvalid": "Odpowiedź AI miała nieoczekiwany format. Spróbuj ponownie.",
+      "aiOutputModerated": "Dostawca AI objął odpowiedź moderacją. Przeformułuj żądanie lub wybierz inny model.",
+      "aiProviderTaskUnsupported": "Skonfigurowany dostawca AI nie może wykonać tego zadania. Wybierz dostawcę, który może.",
+      "aiUnknown": "Żądanie AI nie powiodło się. Spróbuj ponownie.",
       "clauseDirectivesInvalid": "Powiązana klauzula zawiera nieprawidłowe dyrektywy. Popraw klauzulę przed wypełnieniem szablonu.",
       "clauseDirectivesInvalidDetails": "Klauzula {clauseName} w polu {slotName} zawiera nieprawidłowe dyrektywy. Otwórz edytor klauzul, popraw wskazane akapity i ponownie wypełnij szablon.",
       "clauseDirectivesOverrideInvalidDetails": "Zastąpiona treść klauzuli {clauseName} w polu {slotName} zawiera nieprawidłowe dyrektywy. Popraw treść dla tego wypełnienia przed ponowną próbą.",
@@ -5116,6 +5168,8 @@
     "outline": "Spis treści",
     "outlineJumpLabel": "Przejdź do przepisu",
     "outlineJumpPlaceholder": "§ 10 lub tytuł",
+    "pendingChanges": "Nadchodzące nowelizacje",
+    "pendingChangesIncomplete": "Dane wydawcy mogą nie obejmować wszystkich nadchodzących nowelizacji.",
     "provisionAskContextPrompt": "\n\nFragmenty stosujące przepis w najbardziej miarodajnych orzeczeniach:\n{passages}\n\nSkorzystaj z narzędzi orzecznictwa, aby przeczytać w całości którekolwiek z tych orzeczeń lub znaleźć kolejne orzeczenia powołujące ten przepis.",
     "provisionAskPlaceholder": "Zapytaj o ten przepis",
     "provisionAskQuestionPrompt": "W sprawie {subject}: {question}",
@@ -5133,7 +5187,6 @@
     "provisionTextUnavailable": "Tekst niedostępny dla tej wersji",
     "publisherWindowInconsistent": "Nie można ustalić tekstu obowiązującego w tym dniu: dane wydawcy są sprzeczne.",
     "resolvedAlias": "Rozpoznano jako {label}",
-    "searchAskPrompt": "{query} (ustawodawstwo: {country})",
     "searchLabel": "Szukaj w aktach prawnych",
     "searchPlaceholder": "Numer, skrót lub tytuł, np. 89/2012 Sb.",
     "showCitedPartOnly": "Pokaż tylko cytowaną część",
@@ -6262,7 +6315,6 @@
         }
       },
       "atAGlance": "W skrócie",
-      "edited": "edytował(a)",
       "getStarted": "Zacznij od przesłania dokumentów lub utworzenia pierwszego folderu.",
       "matterDetails": "Szczegóły sprawy",
       "membersCount": "{count, plural, one {# członek} few {# członkowie} many {# członków} other {# członków}}",

@@ -11,7 +11,7 @@ import { setTimeout as sleepWithSignal } from "node:timers/promises";
 
 import type { Verdict } from "@stll/db-load-gate/health";
 import {
-  PROVISION_EXTRACTION_ADMISSION,
+  PROVISION_EXTRACTION_ADMISSION_SCOPES,
   PROVISION_EXTRACTION_ADMISSION_REVISION,
 } from "@stll/legal-atlas/provision-extraction-admission";
 
@@ -56,7 +56,7 @@ beforeEach(async () => {
     [PROVISION_EXTRACTION_ADMISSION_REVISION],
   );
   for (const { jurisdiction, language } of Object.values(
-    PROVISION_EXTRACTION_ADMISSION,
+    PROVISION_EXTRACTION_ADMISSION_SCOPES,
   )) {
     await client.query(
       "INSERT INTO case_law_provision_extraction_scopes AS scope (country, language, status, generation) VALUES ($1, $2, 'active', 1) ON CONFLICT (country, language) DO UPDATE SET status = 'active', generation = scope.generation + 1 WHERE scope.status <> 'active'",
