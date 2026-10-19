@@ -186,7 +186,7 @@ const withSource = async (
 test("legacy retry receipts have a replayable document-entry migration", async () => {
   const migration = await Bun.file(
     new URL(
-      "../../../drizzle/20261018120000_soft_law_legacy_receipt_entry_type/migration.sql",
+      "../../../drizzle/20261019090100_soft_law_legacy_receipt_entry_type/migration.sql",
       import.meta.url,
     ),
   ).text();
@@ -988,7 +988,7 @@ if (!databaseUrl || !enabled) {
         );
         const migration = await Bun.file(
           new URL(
-            "../../../drizzle/20261018120000_soft_law_legacy_receipt_entry_type/migration.sql",
+            "../../../drizzle/20261019090100_soft_law_legacy_receipt_entry_type/migration.sql",
             import.meta.url,
           ),
         ).text();
