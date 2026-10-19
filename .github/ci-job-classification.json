@@ -116,6 +116,10 @@
       "node": "n0045"
     },
     {
+      "path": ".github/workflows/flaky-test-quarantine.yml",
+      "node": "source-e7768e657f41a46aa54ce20f2a2c4e8537f15a565f5a5a9a81cd91ddd4b98b91"
+    },
+    {
       "path": ".github/workflows/generated-conflicts-publish.yml",
       "node": "n0002"
     },
@@ -238,6 +242,10 @@
     {
       "path": ".github/workflows/release-desktop.yml",
       "node": "n0074"
+    },
+    {
+      "path": ".github/workflows/release-health.yml",
+      "node": "source-f13879ca2c13022f0a023ac7a16b25a9a715bdc9dafb55913f124f800fbb76b5"
     },
     {
       "path": ".github/workflows/release-pr.yml",
@@ -761,7 +769,7 @@
         "type": "checkout"
       },
       "path": ".github/workflows/autofix.yml",
-      "digest": "d80f78ef9ecbe546c18ccd33b18081a30d55955726f4948b01906c90100bb7d1",
+      "digest": "22c6982b1b5abbc1c1b37ef13c7bf236b54fc2159da9bece8001a6e4965a10d7",
       "references": [],
       "jobs": [
         {
@@ -786,7 +794,7 @@
           "id": "regenerate-derived-files",
           "kind": "ordinary",
           "qualifier": "Regenerates and pushes scoped pull-request autofix commits; no release publication, tag creation, or deployment.",
-          "digest": "ef53c9839e9e8bb257372b1da7c5149dbc74a84e829e3b3c756a603ebb8568c3"
+          "digest": "8f4a0d4641c39f7d9849fb9d4e11e47c48cf80b001d382e6c96382aefdabf039"
         }
       ],
       "edges": {
@@ -931,14 +939,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/ci.yml",
-      "digest": "9492f84427b376b2e8eb927c53a76b73825c139117922388ce7a2a6ae06a6db4",
+      "digest": "defa10315087338dd9704a4be27a3ceda578c59372b71488ea95cd92b3f93ab7",
       "references": ["./.github/workflows/ci.yml"],
       "jobs": [
         {
           "id": "ci-plan",
           "kind": "support",
-          "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "1d9ef70cd01e8a1d7b90312a35b2bc78fa3574fc04a05d51e8ca8d2e34bc80f8"
+          "qualifier": "Plans trust, scopes and prerequisites for merge-required checks.",
+          "digest": "f49088725732515bd37e0785e0408582d5ecc5449f7460b2d6c673f323ac5787"
         },
         {
           "id": "generated-sources",
@@ -979,8 +987,8 @@
         {
           "id": "ci-tests",
           "kind": "support",
-          "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "999d54a15d16fc6e3080ff33e3a065f533778d287e68656570773b01081ab70c"
+          "qualifier": "Runs scoped package tests and reports quarantined outcomes for the merge verdict.",
+          "digest": "7577f48628ada5ba51808b8eb8e6a222e42e2609e1cdf4cb6ff4a7601621f686"
         },
         {
           "id": "api-test-durations",
@@ -997,14 +1005,26 @@
         {
           "id": "code-quality-api",
           "kind": "support",
-          "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "680eaded9ee312d98542613e82cc23e8255bf849fe3b348e20ab2936f98e7dfb"
+          "qualifier": "Runs API code-quality checks required by the merge verdict.",
+          "digest": "cafe50be32c301ffd73efbe5e4ce6406a5a85bca953637765736d6360ebd7667"
+        },
+        {
+          "id": "code-quality-api-cancel",
+          "kind": "ordinary",
+          "qualifier": "Cancels same-repository pull-request runs after API code-quality failure; no publication or deployment.",
+          "digest": "581ffba30c3cc1ca10edd39a9bacd7c4820fad27088854e6cc54a2740f73c1f4"
         },
         {
           "id": "code-quality-web-rest",
           "kind": "support",
-          "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "79a5a6bf0be1c8345937abba5fba0fbe47e388779b0d52201cd9b17282eb6fc1"
+          "qualifier": "Runs web and remaining code-quality checks required by the merge verdict.",
+          "digest": "f8c187fb74ac976e3771882ba038784251986f85b7b263d184b89b316072ad5a"
+        },
+        {
+          "id": "code-quality-web-rest-cancel",
+          "kind": "ordinary",
+          "qualifier": "Cancels same-repository pull-request runs after web or remaining code-quality failure; no publication or deployment.",
+          "digest": "e5cfd2ebc6d7aa8218882cf0d5af139c17cccf13aafa99e539fc6e1a004d409e"
         },
         {
           "id": "query-perf",
@@ -1099,8 +1119,8 @@
         {
           "id": "e2e-landing",
           "kind": "support",
-          "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "6ec9433489f28f18da56e6ab58605244cf062f602ff019ee9bfdf269441f33ef"
+          "qualifier": "Builds and tests affected landing pages at every CI depth, subject to trust and the pull-request heavy gate.",
+          "digest": "14fb4b7c919efcdbd1eb52f9e3d2c609596d6ceec006b0070bcd96622ef29218"
         },
         {
           "id": "marketing-screenshots",
@@ -1177,8 +1197,8 @@
         {
           "id": "ci-result",
           "kind": "support",
-          "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "ce0eccbc361a345c81fcc0259cbc31cb723f1f2ad929ba6ac3d03838669955a6"
+          "qualifier": "Aggregates planned check outcomes into the required merge verdict and records its evaluated jobs.",
+          "digest": "3a893c216435a837d32adae7c25c918862e5b9e2aafc408e3c52b5ea58024a03"
         }
       ],
       "edges": {
@@ -2608,50 +2628,62 @@
         "type": "checkout"
       },
       "path": ".github/workflows/release.yml",
-      "digest": "aefddc059f0eb6b70a6aa31b955ec9f6ec6ed29c86d7ef50216e10087ac31f1f",
+      "digest": "1395c9fad9aa9ffca9806ca8e43c82a993a03249316b190fdc59753ff006dc2f",
       "references": [],
       "jobs": [
         {
           "id": "resolve",
           "kind": "support",
-          "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "a518ce0c106c11164b9c7ef218bec97cfdb5760fe01da93c2b51df092bb3d303"
+          "qualifier": "Resolves and verifies the requested release source and emits a trusted receipt for release jobs.",
+          "digest": "be44df3480ee993fe435b68a9544428ac9530b372de17e406662b60c57755d6d"
         },
         {
           "id": "smoke",
           "kind": "support",
-          "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "2ea49445f040c4492170f898ec97bdf43d9b9305a37fa5583c59cff23d3eb8af"
+          "qualifier": "Smoke-tests the built API image by digest before release publication and promotion.",
+          "digest": "354e2bf2682381ef6724d4c94f88492a6ae912d5ca6ec7a8221a9e8bfd6e5fa1"
         },
         {
           "id": "build",
           "kind": "priority",
-          "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-          "digest": "34f45e189219ad9a23a35bb884c0aa6d9b1c996a117303c1b682a5cba317aad6"
+          "qualifier": "Builds, pushes and attests API image digests for the resolved release.",
+          "digest": "1e86d436793ae4326df8de0c9d3404e59aaa587bda3b5e4ae27f2a2bd3a887ee"
         },
         {
           "id": "prepare-web-image",
           "kind": "priority",
-          "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-          "digest": "88f208700fd163eeb01165672e3b6308313578676f548f46e6babf2617326b9d"
+          "qualifier": "Reuses a verified web receipt or builds, publishes and attests the resolved release web image.",
+          "digest": "52c8b26a5553f0558d8e6bc7759d998630966b78ecf5a2b306cd950af10c2c06"
         },
         {
           "id": "manifest",
           "kind": "priority",
-          "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-          "digest": "9dbfea5e3c1839e163e2b1654101206cdddbca707cf3420562dae0c99278a596"
+          "qualifier": "Publishes immutable release image tags and creates the draft GitHub release with its artifacts.",
+          "digest": "f85752fd52edab12df69cbf9b41da47d4735c811e758a0b28f0e3a65f9b45f9f"
+        },
+        {
+          "id": "release-health-gate",
+          "kind": "support",
+          "qualifier": "Requires healthy previous-release evidence or explicit manual acknowledgement before stable production promotion.",
+          "digest": "ff52472fcf015096db130b84f3313d76ce8a7ac84b7feac187726c826c42df6b"
         },
         {
           "id": "promote",
           "kind": "priority",
-          "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-          "digest": "b95d87740efc89d9b08a4d1b513ba4653df455d709a84dfa48ae40cbc3b4ca66"
+          "qualifier": "Deploys stable releases to production, verifies the served commit, publishes the release and advances stable image tags.",
+          "digest": "2d595864ffe3d30331e635ec180a0dc131b8fb67f5eba3939e031e69bddfddd5"
+        },
+        {
+          "id": "dispatch-release-health",
+          "kind": "support",
+          "qualifier": "Dispatches health evaluation after successful stable production promotion to supply evidence for the next release gate.",
+          "digest": "f9dc39657230d4d7ceac9c8616de0ca635ed9acaa856128f25fadfc31b7bab0a"
         },
         {
           "id": "promote-staging",
           "kind": "priority",
-          "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-          "digest": "02a390fbe9a00ce5b9ec88693caaad8fa41726d4ea4a270aa22f61d73ab46bf6"
+          "qualifier": "Deploys release-candidate tags to staging and publishes the GitHub prerelease.",
+          "digest": "5c8fa4c8ff456407eb659e806d5c5aec08057a4c8948dc9c97c76b5fe0014144"
         }
       ],
       "edges": {
@@ -2700,14 +2732,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/scheduled-run-alerts.yml",
-      "digest": "52dde695036c7d37306ed75024b851d4ced1ba8e5c9fc827eb0f60c69cd27017",
+      "digest": "8714b63232f168bcc82ce01bf14213f9d27a7203361b96e45a5ad0d0ed271e66",
       "references": [],
       "jobs": [
         {
           "id": "notify",
           "kind": "ordinary",
-          "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "baf551bcb2d78e1454311a28203091f3acf0baa7382362c4700765044392697a"
+          "qualifier": "Notifies failures of watched workflows, including release health and quarantine maintenance; no release publication or deployment.",
+          "digest": "11771ace683a5dfdcf5709c8ee2b0818f4ae79221704ae2c9461098f52ff6940"
         }
       ],
       "edges": {
@@ -3380,6 +3412,61 @@
       "references": ["$/.github/actions/ci-store-save"],
       "jobs": [],
       "edges": {}
+    },
+    {
+      "type": "metadata",
+      "id": "source-e7768e657f41a46aa54ce20f2a2c4e8537f15a565f5a5a9a81cd91ddd4b98b91",
+      "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
+      "path": ".github/workflows/flaky-test-quarantine.yml",
+      "digest": "472cac86aa427eeb341ae00b2d516aeff82928339ee45ddd723189d645594ede",
+      "references": [],
+      "jobs": [
+        {
+          "id": "expiry",
+          "kind": "ordinary",
+          "qualifier": "Checks quarantine expiry on scheduled or manual default-branch runs; no publication or deployment.",
+          "digest": "ba12b4192b2c1b589ffce6529547c666dd66d1471bd69c9d14a4997ef65c603e"
+        },
+        {
+          "id": "propose",
+          "kind": "ordinary",
+          "qualifier": "Scans flake history and opens or refreshes a review-required quarantine proposal; no release publication or deployment.",
+          "digest": "75bf42372985255a96e34d509733bd660b3c670c17b5679a362f03f523ea1dee"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0133",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0128",
+        "stella/.github/.github/actions/signed-commit@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0090",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0097"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "source-f13879ca2c13022f0a023ac7a16b25a9a715bdc9dafb55913f124f800fbb76b5",
+      "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
+      "path": ".github/workflows/release-health.yml",
+      "digest": "a34954eb9feefceba3b709359dc612375d2fd7ec19a952acc4795a824c31f186",
+      "references": [],
+      "jobs": [
+        {
+          "id": "window",
+          "kind": "support",
+          "qualifier": "Evaluates a dispatched stable release after its observation window and records health evidence for the next promotion gate.",
+          "digest": "a1ee58135e2dd2880bc93a5fceaa458b3af6b7790243c8f29ba36591090c18a3"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0104"
+      }
     },
     {
       "type": "supplier",
