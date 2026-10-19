@@ -218,7 +218,6 @@ const htmlHasExternalReference = (bytes: Uint8Array): boolean => {
           "poster",
           "data",
           "background",
-          "xlink:href",
           "action",
           "formaction",
         ].includes(key) ||
@@ -248,14 +247,49 @@ const xmlElements = function* (
   }
 };
 
+const XML_NAMESPACES = {
+  none: null,
+  relationships: "http://schemas.openxmlformats.org/package/2006/relationships",
+  svg: "http://www.w3.org/2000/svg",
+  text: "urn:oasis:names:tc:opendocument:xmlns:text:1.0",
+  wordprocessing:
+    "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
+  xhtml: "http://www.w3.org/1999/xhtml",
+  xlink: "http://www.w3.org/1999/xlink",
+} as const;
+
+const xmlNameMatches = (
+  node: slimdom.Element | slimdom.Attr,
+  namespace: string | null,
+  localName: string,
+): boolean =>
+  node.namespaceURI === namespace &&
+  node.localName.toLowerCase() === localName.toLowerCase();
+
+const xmlAttribute = (
+  element: slimdom.Element,
+  namespace: string | null,
+  localName: string,
+): string | null => {
+  for (const attribute of element.attributes) {
+    if (xmlNameMatches(attribute, namespace, localName)) {
+      return attribute.value;
+    }
+  }
+  return null;
+};
+
 const relationshipHasExternalReference = (source: string): boolean => {
   const document = slimdom.parseXmlDocument(source);
   for (const element of xmlElements(document.documentElement)) {
-    if (element.localName !== "Relationship") {
+    if (
+      !xmlNameMatches(element, XML_NAMESPACES.relationships, "relationship") &&
+      !xmlNameMatches(element, XML_NAMESPACES.none, "relationship")
+    ) {
       continue;
     }
-    const targetMode = xmlAttribute(element, "targetmode");
-    const target = xmlAttribute(element, "target");
+    const targetMode = xmlAttribute(element, XML_NAMESPACES.none, "targetmode");
+    const target = xmlAttribute(element, XML_NAMESPACES.none, "target");
     if (
       targetMode?.toLowerCase() === "external" ||
       (target !== null && !isLocalReference(target))
@@ -266,16 +300,75 @@ const relationshipHasExternalReference = (source: string): boolean => {
   return false;
 };
 
-const xmlAttribute = (
-  element: slimdom.Element,
-  name: string,
-): string | null => {
-  for (const attribute of element.attributes) {
-    if (attribute.name.toLowerCase() === name) {
-      return attribute.value;
+const xhtmlHasExternalReference = (bytes: Uint8Array): boolean => {
+  const document = slimdom.parseXmlDocument(text(bytes));
+  for (const element of xmlElements(document.documentElement)) {
+    const isXhtmlElement = (localName: string): boolean =>
+      xmlNameMatches(element, XML_NAMESPACES.xhtml, localName) ||
+      xmlNameMatches(element, XML_NAMESPACES.none, localName);
+    const isNavigation = isXhtmlElement("a") || isXhtmlElement("area");
+    if (
+      isXhtmlElement("base") ||
+      (isXhtmlElement("meta") &&
+        xmlAttribute(
+          element,
+          XML_NAMESPACES.none,
+          "http-equiv",
+        )?.toLowerCase() === "refresh")
+    ) {
+      return true;
+    }
+    for (const attribute of element.attributes) {
+      const isReference =
+        xmlNameMatches(attribute, XML_NAMESPACES.xlink, "href") ||
+        xmlNameMatches(attribute, XML_NAMESPACES.none, "src") ||
+        xmlNameMatches(attribute, XML_NAMESPACES.none, "poster") ||
+        xmlNameMatches(attribute, XML_NAMESPACES.none, "data") ||
+        xmlNameMatches(attribute, XML_NAMESPACES.none, "background") ||
+        xmlNameMatches(attribute, XML_NAMESPACES.none, "action") ||
+        xmlNameMatches(attribute, XML_NAMESPACES.none, "formaction") ||
+        (xmlNameMatches(attribute, XML_NAMESPACES.none, "href") &&
+          !isNavigation);
+      if (isReference && !isLocalReference(attribute.value)) {
+        return true;
+      }
+      if (
+        xmlNameMatches(attribute, XML_NAMESPACES.none, "srcset") &&
+        attribute.value
+          .split(",")
+          .some(
+            (candidate) =>
+              !isLocalReference(candidate.trim().split(/\s/u)[0] ?? ""),
+          )
+      ) {
+        return true;
+      }
+      if (
+        xmlNameMatches(attribute, XML_NAMESPACES.none, "style") &&
+        cssHasExternalReference(attribute.value)
+      ) {
+        return true;
+      }
+    }
+    if (
+      isXhtmlElement("style") &&
+      cssHasExternalReference(element.textContent ?? "")
+    ) {
+      return true;
+    }
+    if (
+      (xmlNameMatches(element, XML_NAMESPACES.svg, "use") ||
+        xmlNameMatches(element, XML_NAMESPACES.svg, "image")) &&
+      [...element.attributes].some(
+        (attribute) =>
+          xmlNameMatches(attribute, XML_NAMESPACES.none, "href") &&
+          !isLocalReference(attribute.value),
+      )
+    ) {
+      return true;
     }
   }
-  return null;
+  return false;
 };
 
 const SAFE_FIELD_KEYWORD_VALUES = [
@@ -352,47 +445,27 @@ const fieldInstructionIsRefused = (value: string): boolean => {
   return keyword === undefined || !SAFE_FIELD_KEYWORDS.has(keyword);
 };
 
-const WORDPROCESSINGML_NAMESPACE =
-  "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
-
-const isWordprocessingElement = (
-  element: slimdom.Element,
-  localName: string,
-): boolean =>
-  element.namespaceURI === WORDPROCESSINGML_NAMESPACE &&
-  element.localName.toLowerCase() === localName;
-
-const wordprocessingAttribute = (
-  element: slimdom.Element,
-  localName: string,
-): string | null => {
-  for (const attribute of element.attributes) {
-    if (
-      attribute.namespaceURI === WORDPROCESSINGML_NAMESPACE &&
-      attribute.localName.toLowerCase() === localName
-    ) {
-      return attribute.value;
-    }
-  }
-  return null;
-};
-
 const ooxmlFieldHasExternalReference = (source: string): boolean => {
   const document = slimdom.parseXmlDocument(source);
   for (const element of xmlElements(document.documentElement)) {
-    if (!isWordprocessingElement(element, "fldsimple")) {
+    if (!xmlNameMatches(element, XML_NAMESPACES.wordprocessing, "fldsimple")) {
       continue;
     }
-    const instruction = wordprocessingAttribute(element, "instr");
+    const instruction = xmlAttribute(
+      element,
+      XML_NAMESPACES.wordprocessing,
+      "instr",
+    );
     if (instruction === null || fieldInstructionIsRefused(instruction)) {
       return true;
     }
   }
   const instructions: { instruction: string; closed: boolean }[] = [];
   for (const element of xmlElements(document.documentElement)) {
-    if (isWordprocessingElement(element, "fldchar")) {
-      const type = wordprocessingAttribute(
+    if (xmlNameMatches(element, XML_NAMESPACES.wordprocessing, "fldchar")) {
+      const type = xmlAttribute(
         element,
+        XML_NAMESPACES.wordprocessing,
         "fldchartype",
       )?.toLowerCase();
       if (type === "begin") {
@@ -417,7 +490,7 @@ const ooxmlFieldHasExternalReference = (source: string): boolean => {
       }
       continue;
     }
-    if (isWordprocessingElement(element, "instrtext")) {
+    if (xmlNameMatches(element, XML_NAMESPACES.wordprocessing, "instrtext")) {
       const value = element.textContent ?? "";
       const fieldIndex = instructions.length - 1;
       if (fieldIndex >= 0) {
@@ -543,10 +616,10 @@ const odfHasExternalReference = async (bytes: Uint8Array): Promise<boolean> =>
     (_path, source) => {
       const document = slimdom.parseXmlDocument(source);
       for (const element of xmlElements(document.documentElement)) {
-        if (element.localName.toLowerCase() === "a") {
+        if (xmlNameMatches(element, XML_NAMESPACES.text, "a")) {
           continue;
         }
-        const href = xmlAttribute(element, "xlink:href");
+        const href = xmlAttribute(element, XML_NAMESPACES.xlink, "href");
         if (href !== null && !isLocalReference(href)) {
           return true;
         }
@@ -557,7 +630,7 @@ const odfHasExternalReference = async (bytes: Uint8Array): Promise<boolean> =>
 
 type RtfDecodeResult = { value: string; end: number } | null;
 
-const skipRtfDestination = (source: string, start: number): number | null => {
+const rtfGroupEnd = (source: string, start: number): number | null => {
   let cursor = start + 3;
   let depth = 1;
   while (cursor < source.length && depth > 0) {
@@ -592,7 +665,7 @@ const decodeRtfInstruction = (
     const character = source[cursor];
     if (character === "{") {
       if (source.startsWith("{\\*", cursor)) {
-        const destinationEnd = skipRtfDestination(source, cursor);
+        const destinationEnd = rtfGroupEnd(source, cursor);
         if (destinationEnd === null) {
           return null;
         }
@@ -694,6 +767,17 @@ const rtfHasExternalReference = (bytes: Uint8Array): boolean => {
     return true;
   }
   let cursor = 0;
+  while ((cursor = lower.indexOf("{\\field", cursor)) !== -1) {
+    const boundary = lower[cursor + 7];
+    if (
+      (boundary === undefined || !/[a-z]/u.test(boundary)) &&
+      rtfGroupEnd(source, cursor) === null
+    ) {
+      return true;
+    }
+    cursor += 2;
+  }
+  cursor = 0;
   while ((cursor = lower.indexOf("{\\", cursor)) !== -1) {
     let marker: string | null = null;
     if (lower.startsWith("{\\*\\fldinst", cursor)) {
@@ -709,7 +793,7 @@ const rtfHasExternalReference = (bytes: Uint8Array): boolean => {
     if (decoded === null || fieldInstructionIsRefused(decoded.value)) {
       return true;
     }
-    cursor = decoded.end;
+    cursor += marker.length;
   }
   return false;
 };
@@ -760,7 +844,7 @@ const DETECTORS = {
   "application/vnd.oasis.opendocument.text": odfHasExternalReference,
   "application/rtf": rtfHasExternalReference,
   "application/vnd.apple.pages": safe,
-  "application/xhtml+xml": htmlHasExternalReference,
+  "application/xhtml+xml": xhtmlHasExternalReference,
   "image/bmp": safe,
   "image/gif": safe,
   "image/jpeg": safe,

@@ -35,11 +35,11 @@ const fixtures = {
     mime: "application/vnd.oasis.opendocument.text",
     remote: await zip(
       "content.xml",
-      '<content xmlns:draw="urn:draw" xmlns:xlink="urn:xlink"><draw:image xlink:href="https://example.test/image.png"/></content>',
+      '<content xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0" xmlns:xlink="http://www.w3.org/1999/xlink"><draw:image xlink:href="https://example.test/image.png"/></content>',
     ),
     local: await zip(
       "content.xml",
-      '<content xmlns:text="urn:text" xmlns:draw="urn:draw" xmlns:xlink="urn:xlink"><text:a xlink:href="https://example.test/terms">Terms</text:a><draw:image xlink:href="Pictures/a.png"/></content>',
+      '<content xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0" xmlns:xlink="http://www.w3.org/1999/xlink"><text:a xlink:href="https://example.test/terms">Terms</text:a><draw:image xlink:href="Pictures/a.png"/></content>',
     ),
   },
   rtf: {
@@ -75,6 +75,20 @@ const fixtures = {
 } as const satisfies Record<string, Fixture>;
 
 describe("document conversion input", () => {
+  test("keeps qualified XML names centralized", async () => {
+    const source = await Bun.file(
+      new URL("conversion-input.ts", import.meta.url),
+    ).text();
+    const withoutNamespaceMap = source.replace(
+      /const XML_NAMESPACES = \{[\s\S]*?\} as const;/u,
+      "",
+    );
+
+    expect(withoutNamespaceMap).not.toMatch(
+      /["'`](?:xlink|w|r|draw|text|office|svg):|["'`]<[a-z][\w.-]*:[\w.-]+/iu,
+    );
+  });
+
   test.each(Object.entries(fixtures))(
     "%s refuses remote resources",
     async (_name, fixture) => {
@@ -168,6 +182,71 @@ describe("document conversion input", () => {
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     });
   });
+
+  test("refuses OOXML relationships by namespace", async () => {
+    const input = await zip(
+      "word/_rels/document.xml.rels",
+      '<p:Relationships xmlns:p="http://schemas.openxmlformats.org/package/2006/relationships"><p:Relationship Target="https://example.test/a"/></p:Relationships>',
+    );
+    expect(
+      await checkConversionInput(
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        input,
+      ),
+    ).toEqual({
+      kind: "refuse",
+      reason: "external_reference",
+      format:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    });
+  });
+
+  test.each([
+    '<root xmlns:d="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0" xmlns:r="http://www.w3.org/1999/xlink"><d:image r:href="https://example.test/a.png"/></root>',
+    '<root xmlns:d="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0" xmlns:r="http://www.w3.org/1999/xlink"><d:object r:href="https://example.test/a"/></root>',
+    '<root xmlns:d="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0" xmlns:xlink="http://www.w3.org/1999/xlink"><d:image xlink:href="https://example.test/a.png"/></root>',
+  ])("refuses ODF references by namespace", async (document) => {
+    const input = await zip("content.xml", document);
+    expect(
+      await checkConversionInput(
+        "application/vnd.oasis.opendocument.text",
+        input,
+      ),
+    ).toEqual({
+      kind: "refuse",
+      reason: "external_reference",
+      format: "application/vnd.oasis.opendocument.text",
+    });
+  });
+
+  test("converts a local ODF reference by namespace", async () => {
+    const input = await zip(
+      "content.xml",
+      '<root xmlns:d="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0" xmlns:r="http://www.w3.org/1999/xlink"><d:image r:href="Pictures/a.png"/></root>',
+    );
+    expect(
+      await checkConversionInput(
+        "application/vnd.oasis.opendocument.text",
+        input,
+      ),
+    ).toEqual({ kind: "convert" });
+  });
+
+  test.each(["use", "image"])(
+    "refuses SVG %s references by namespace",
+    async (element) => {
+      const input = encode(
+        `<h:html xmlns:h="http://www.w3.org/1999/xhtml" xmlns:s="http://www.w3.org/2000/svg" xmlns:r="http://www.w3.org/1999/xlink"><s:svg><s:${element} r:href="https://example.test/a.png"/></s:svg></h:html>`,
+      );
+      expect(
+        await checkConversionInput("application/xhtml+xml", input),
+      ).toEqual({
+        kind: "refuse",
+        reason: "external_reference",
+        format: "application/xhtml+xml",
+      });
+    },
+  );
 
   test("refuses OOXML field instructions for remote content", async () => {
     const input = await zip(
@@ -321,6 +400,42 @@ describe("document conversion input", () => {
       await checkConversionInput("application/rtf", encode(source)),
     ).toEqual({
       kind: "convert",
+    });
+  });
+
+  test.each([
+    String.raw`{\rtf1{\field{\*\fldinst IF 1 = 1 "yes" "no" {\field{\*\fldinst INCLUDEPICTURE "https://example.test/a.png"}}}}}`,
+    String.raw`{\rtf1{\field{\*\fldinst IF 1 = 1 "yes" "no"}{\fldrslt {\field{\*\fldinst INCLUDEPICTURE "https://example.test/a.png"}}}}}`,
+    String.raw`{\rtf1{\field{\*\fldinst IF 1 = 1 "yes" "no" {\field{\*\fldinst IF 1 = 1 "yes" "no" {\field{\*\fldinst INCLUDEPICTURE "https://example.test/a.png"}}}}}}}`,
+  ])("refuses nested unlisted RTF fields", async (source) => {
+    expect(
+      await checkConversionInput("application/rtf", encode(source)),
+    ).toEqual({
+      kind: "refuse",
+      reason: "external_reference",
+      format: "application/rtf",
+    });
+  });
+
+  test.each([
+    String.raw`{\rtf1{\field{\*\fldinst IF 1 = 1 "yes" "no" {\field{\*\fldinst PAGE}}}}}`,
+    String.raw`{\rtf1{\field{\*\fldinst IF 1 = 1 "yes" "no"}{\fldrslt {\field{\*\fldinst HYPERLINK "https://example.test/terms"}}}}}`,
+  ])("converts nested listed RTF fields", async (source) => {
+    expect(
+      await checkConversionInput("application/rtf", encode(source)),
+    ).toEqual({ kind: "convert" });
+  });
+
+  test.each([
+    String.raw`{\rtf1{\field{\*\fldinst PAGE}`,
+    String.raw`{\rtf1{\field{\*\fldinst IF 1 = 1 "yes" "no" {\field{\*\fldinst PAGE}}}`,
+  ])("refuses unfinished RTF field groups", async (source) => {
+    expect(
+      await checkConversionInput("application/rtf", encode(source)),
+    ).toEqual({
+      kind: "refuse",
+      reason: "external_reference",
+      format: "application/rtf",
     });
   });
 
