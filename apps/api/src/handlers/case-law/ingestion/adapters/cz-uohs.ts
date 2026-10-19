@@ -44,7 +44,7 @@ import { isRecord } from "@/api/lib/type-guards";
 const LISTING_URL = "https://uohs.gov.cz/opendata/rozhodnuti.jsonld";
 const ORIGIN = "https://uohs.gov.cz";
 const HOST_POLICY = { type: "exact-origin", origins: [ORIGIN] } as const;
-const raise = <T>(error: unknown): T => Result.err<T, unknown>(error).unwrap();
+const raise = <T>(error: unknown): T => Result.err<T>(error).unwrap();
 const PAGE_SIZE = 20;
 
 export const CZ_UOHS_COLLECTIONS = [

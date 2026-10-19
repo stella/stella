@@ -48,7 +48,7 @@ describe("extractCitations", () => {
         citation!.identifierType,
         citation!.citationText,
       ),
-    ).toBe(emitted[0]!.value);
+    ).toBe(emitted[0].value);
   });
   test.each([
     ["ÚOHS ÚOHS-S123/2024/VZ", "ÚOHS-S123/2024/VZ"],
