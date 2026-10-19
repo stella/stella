@@ -100,7 +100,10 @@ export const specVisualNames = (
   registered: ReadonlySet<string>,
 ): { names: ReadonlySet<string>; complete: boolean } => {
   const names = new Set<string>();
-  for (const match of source.matchAll(/\/dev\?visual=([a-z0-9-]+)["'`]/gu)) {
+  // Other query parameters may come before or after the visual name.
+  for (const match of source.matchAll(
+    /\/dev\?(?:[^"'`\s]*&)?visual=([a-z0-9-]+)(?=["'`&#])/gu,
+  )) {
     if (match[1] !== undefined) {
       names.add(match[1]);
     }
@@ -336,6 +339,9 @@ export const staticImportClosure = (
         complete = false;
       }
     } catch {
+      // A file the transpiler cannot parse is followed as far as the plain
+      // scan reaches, but its closure is not known to be complete.
+      complete = false;
       imports = [
         ...source.matchAll(/(?:from\s*|import\s*\()(["'])([^"']+)\1/gu),
       ]

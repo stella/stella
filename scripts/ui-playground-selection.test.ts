@@ -463,3 +463,40 @@ test("literal dynamic imports, comments and type imports keep the closure exact"
     rmSync(fixture.root, { force: true, recursive: true });
   }
 });
+
+test("a visual URL with other query parameters still names its visual", () => {
+  const { root, spec, write } = createSelectionFixture();
+  try {
+    write(
+      "apps/web/src/routes/dev/-visual-metadata.ts",
+      "export const visualRegistry = {\n  fixture: {},\n  other: {},\n} as const;\n",
+    );
+    write(
+      "apps/web/src/routes/dev/-visual-registry.tsx",
+      'export const visualRegistry = {\n  fixture: {\n    loader: () => import("./fixture"),\n  },\n  other: {\n    loader: () => import("./other"),\n  },\n} as const;\n',
+    );
+    write(
+      spec,
+      'const a = "/dev?visual=fixture";\nconst b = "/dev?theme=dark&visual=other&density=compact";\n',
+    );
+    write("apps/web/src/routes/dev/fixture.tsx", "export {};\n");
+    write("apps/web/src/routes/dev/other.tsx", "export {};\n");
+    expect(
+      selectGeometrySpecs(["apps/web/src/routes/dev/other.tsx"], root),
+    ).toEqual([spec]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a file the transpiler cannot parse leaves the closure incomplete", () => {
+  const { root, write } = createSelectionFixture();
+  try {
+    write("apps/web/src/routes/dev/fixture.ts", "const view = <div>;\n");
+    expect(
+      staticImportClosure("apps/web/src/routes/dev/fixture.ts", root).complete,
+    ).toBe(false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

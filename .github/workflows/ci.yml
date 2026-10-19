@@ -1323,11 +1323,17 @@ jobs:
         if: steps.completed-depth.outputs.run_required != 'false' && steps.changed-files.outcome == 'success'
         env:
           CHANGED_FILES: ${{ steps.changed-files.outputs.changed_files }}
+          SCOPE_UNKNOWN: ${{ steps.changed-files.outputs.api_scope_unknown }}
         run: |
           mapfile -t changed_files < <(jq -r '.[]' <<< "$CHANGED_FILES")
-          specs=$(bun scripts/ui-playground-selection.ts "${changed_files[@]}") || specs=""
+          if [[ "$SCOPE_UNKNOWN" == "true" ]]; then
+            echo "::warning::Changed files are unknown; running every geometry spec."
+            specs=""
+          else
+            specs=$(bun scripts/ui-playground-selection.ts "${changed_files[@]}") || specs=""
+          fi
           if ! jq -e 'type == "array" and all(.[]; type == "string")' <<< "$specs" >/dev/null; then
-            echo "::warning::UI playground selection failed; running every geometry spec."
+            [[ "$SCOPE_UNKNOWN" == "true" ]] || echo "::warning::UI playground selection failed; running every geometry spec."
             specs=$(find apps/web/e2e/ui-playground -maxdepth 1 -name '*.geometry.spec.ts' -print | sort | jq -Rsc 'split("\n") | map(select(length > 0))')
           fi
           echo "specs=$specs" >> "$GITHUB_OUTPUT"
