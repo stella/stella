@@ -6,54 +6,36 @@
 /// <reference lib="dom" />
 import { expect } from "@playwright/test";
 import type { Page } from "@playwright/test";
-import { readFileSync } from "node:fs";
-import * as v from "valibot";
 
-// Keep in sync with seed-marketing-agent-thread.ts (MARKETING_AGENT_THREAD_TITLE
-// and MARKETING_AGENT_QUESTIONS). A drift fails the waits below loudly.
-export const MARKETING_AGENT_THREAD_TITLE =
-  "Project Atlas · Change-of-control review";
-export const MARKETING_AGENT_FIRST_QUESTION =
-  "Which agreements in the Project Atlas data room carry change-of-control risk?";
-const MARKETING_AGENT_LAST_QUESTION =
-  "Turn this into a view I can take to the partner meeting.";
-// The recap the seed pins on the thread (no model call), shown under the last
-// answer once the reopened thread counts as a revisit.
-const MARKETING_AGENT_RECAP_PREFIX =
-  "You mapped change-of-control exposure across the Project Atlas data room";
+import { MARKETING_LOCALE_MARKERS } from "@stll/playwright-tools/marketing-locales";
+import type { MarketingLocale } from "@stll/playwright-tools/marketing-locales";
+
+import { uiText } from "./ui-text";
+
+// The seed writes the thread from the same markers
+// (apps/api/scripts/seed-marketing-agent-thread.ts); a drift fails the waits
+// below loudly.
 
 /**
  * The two inline citation chips in the final answer, which the video clicks.
  * `bodyMarker` is the cited file name, which the seeded review extract prints
  * in its body, so the inspector preview can be told apart per document.
  */
-export const MARKETING_AGENT_CITED_SOURCES = [
-  {
-    chipLabel: "Delta Logistics · Customer Contract 2019",
-    bodyMarker: "Delta_Logistics_Customer_Contract_2019",
-    label: "Delta_Logistics_Customer_Contract_2019.docx",
-  },
-  {
-    chipLabel: "Helios Energy · Loan Agreement 2023",
-    bodyMarker: "Helios_Energy_Loan_Agreement_2023",
-    label: "Helios_Energy_Loan_Agreement_2023.docx",
-  },
-] as const;
-
-// The seed stores this page; reading it here keeps the frame title in step
-// with what the chat renders.
-const exposureView = v.parse(
-  v.object({ title: v.string() }),
-  JSON.parse(
-    readFileSync(
-      new URL(
-        "../../../api/src/handlers/visual-sandbox/fixtures/showcase/change-of-control-exposure.json",
-        import.meta.url,
-      ),
-      "utf-8",
-    ),
-  ),
-);
+export const marketingAgentCitedSources = (locale: MarketingLocale) => {
+  const toSource = ({
+    chipLabel,
+    fileName,
+  }: {
+    chipLabel: string;
+    fileName: string;
+  }) => ({
+    chipLabel,
+    bodyMarker: fileName.replace(/\.docx$/u, ""),
+    label: fileName,
+  });
+  const [first, second] = MARKETING_LOCALE_MARKERS[locale].agent.citedSources;
+  return [toSource(first), toSource(second)] as const;
+};
 
 // `Array.isArray` narrows `unknown` to `any[]`; this keeps elements `unknown`.
 const isUnknownArray = (value: unknown): value is unknown[] =>
@@ -62,7 +44,9 @@ const isUnknownArray = (value: unknown): value is unknown[] =>
 /** The seeded thread's id in a `/v1/chat/threads` response, by title. */
 export const getMarketingAgentThreadId = (
   payload: unknown,
+  locale: MarketingLocale,
 ): string | undefined => {
+  const { threadTitle } = MARKETING_LOCALE_MARKERS[locale].agent;
   if (
     typeof payload !== "object" ||
     payload === null ||
@@ -88,7 +72,7 @@ export const getMarketingAgentThreadId = (
         "id" in thread &&
         typeof thread.id === "string" &&
         "title" in thread &&
-        thread.title === MARKETING_AGENT_THREAD_TITLE
+        thread.title === threadTitle
       ) {
         return thread.id;
       }
@@ -112,8 +96,10 @@ const THEME_TOKENS = ["--foreground", "--border", "--chart-1"];
  */
 export const settleMarketingAgentThread = async (
   page: Page,
-  { frameBottom }: { frameBottom?: number } = {},
+  { frameBottom, locale }: { frameBottom?: number; locale: MarketingLocale },
 ) => {
+  const markers = MARKETING_LOCALE_MARKERS[locale].agent;
+  const [firstQuestion, secondQuestion, lastQuestion] = markers.questions;
   const transcript = page
     .getByRole("log")
     .locator('[data-slot="scroll-area-viewport"]');
@@ -123,27 +109,25 @@ export const settleMarketingAgentThread = async (
   // merely because it contains a table and a generated view.
   const messages = transcript.locator("[data-chat-message-id]");
   await expect(messages).toHaveCount(6);
-  await expect(messages.nth(0)).toContainText(MARKETING_AGENT_FIRST_QUESTION);
-  await expect(messages.nth(2)).toContainText(
-    "What does the Helios loan agreement say, and when does it expire?",
-  );
-  await expect(messages.nth(4)).toContainText(MARKETING_AGENT_LAST_QUESTION);
+  await expect(messages.nth(0)).toContainText(firstQuestion);
+  await expect(messages.nth(2)).toContainText(secondQuestion);
+  await expect(messages.nth(4)).toContainText(lastQuestion);
   for (const answerIndex of [1, 3, 5]) {
     await expect(messages.nth(answerIndex)).not.toHaveText(/^\s*$/u);
   }
   await expect(
-    page.getByText("What would you like to work on?", { exact: true }),
+    page.getByText(uiText(locale, "chat.greeting"), { exact: true }),
   ).toHaveCount(0);
   // First answer: a header and one row per counterparty. Its row count comes
   // from the seeded data room, which the generated view's matrix must match.
   const answerTable = transcript.locator("table").first();
   await expect(answerTable.locator("tbody tr").first()).toBeVisible();
   const counterpartyCount = await answerTable.locator("tbody tr").count();
-  for (const { chipLabel } of MARKETING_AGENT_CITED_SOURCES) {
+  for (const { chipLabel } of markers.citedSources) {
     await expect(transcript.getByText(chipLabel).first()).toBeVisible();
   }
 
-  const selector = `iframe[title="${exposureView.title}"]`;
+  const selector = `iframe[title="${markers.viewTitle}"]`;
   const outer = page.locator(selector);
   await expect(outer).toBeVisible();
   const guest = page.frameLocator(selector).frameLocator("iframe");
@@ -192,10 +176,10 @@ export const settleMarketingAgentThread = async (
     )
     .toEqual(hostTokens);
   await expect(
-    page.getByText(MARKETING_AGENT_RECAP_PREFIX, { exact: false }).first(),
+    page.getByText(markers.recapPrefix, { exact: false }).first(),
   ).toBeVisible();
 
-  await anchorMarketingAgentFinalTurn(page);
+  await anchorMarketingAgentFinalTurn(page, locale);
   if (frameBottom !== undefined) {
     // The iframe's parent is the view's bordered frame; boundingBox reports
     // nested-frame elements in the host page's pixels, so the guest's last
@@ -232,13 +216,17 @@ export const settleMarketingAgentThread = async (
  * position holds once set. Call again after anything that reflows the chat
  * (an inspector closing).
  */
-export const anchorMarketingAgentFinalTurn = async (page: Page) => {
+export const anchorMarketingAgentFinalTurn = async (
+  page: Page,
+  locale: MarketingLocale,
+) => {
+  const markers = MARKETING_LOCALE_MARKERS[locale].agent;
   const transcript = page
     .getByRole("log")
     .locator('[data-slot="scroll-area-viewport"]');
   const finalQuestion = transcript
     .locator("[data-chat-message-id]")
-    .filter({ hasText: MARKETING_AGENT_LAST_QUESTION })
+    .filter({ hasText: markers.questions[2] })
     .last();
   await expect(finalQuestion).toBeVisible();
   const anchorGap = 8;
@@ -278,7 +266,7 @@ export const anchorMarketingAgentFinalTurn = async (page: Page) => {
       { message: "final turn anchored at the transcript top" },
     )
     .toBeLessThanOrEqual(1);
-  for (const { chipLabel } of MARKETING_AGENT_CITED_SOURCES) {
+  for (const { chipLabel } of markers.citedSources) {
     await expect(transcript.getByText(chipLabel).last()).toBeInViewport();
   }
 };

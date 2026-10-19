@@ -7,8 +7,9 @@
   "type": "module",
   "sideEffects": false,
   "exports": {
-    "./marketing-case-law.json": "./src/marketing-case-law.json",
-    "./marketing-config": "./src/marketing-config.ts"
+    "./marketing-case-law": "./src/marketing-case-law.ts",
+    "./marketing-config": "./src/marketing-config.ts",
+    "./marketing-locales": "./src/marketing-locales.ts"
   },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",

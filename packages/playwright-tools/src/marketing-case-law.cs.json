@@ -1,0 +1,47 @@
+[
+  {
+    "country": "CZE",
+    "caseNumber": "30 Cdo 535/2026",
+    "language": "cs",
+    "highlightAnchor": "p-13",
+    "underlineAnchor": "p-12",
+    "aiNote": "Dovolání bez vymezení důvodu a přípustnosti podle § 241a odst. 2 o. s. ř. trpí vadou. Neodstraní-li ji dovolatel ve lhůtě, nelze v dovolacím řízení pokračovat.",
+    "comment": "Před podáním: dovoláním napadat jen výroky, které klientovi způsobily újmu. Proti výrokům v jeho prospěch je dovolání subjektivně nepřípustné.",
+    "question": "Proč soud nepřezkoumal dovolání proti odškodnění za délku řízení?",
+    "answer": "Žalobce v této části nevymezil důvod ani přípustnost dovolání podle § 241a odst. 2 o. s. ř. a vadu v zákonné lhůtě neodstranil. Odvolací soud mu navíc přiznal celých požadovaných 100 000 Kč.",
+    "followUp": "Mohl žalobce napadnout i výroky, které vyzněly v jeho prospěch?",
+    "followUpAnswer": "Ne. Dovolání může podat jen účastník, jemuž rozhodnutí odvolacího soudu způsobilo újmu odstranitelnou jeho zrušením či změnou. Proti výrokům III a V bylo proto subjektivně nepřípustné.",
+    "highlightNumber": 6,
+    "underlineNumber": 5
+  },
+  {
+    "country": "CZE",
+    "caseNumber": "III.ÚS 2429/24",
+    "language": "cs",
+    "highlightAnchor": "p-34",
+    "underlineAnchor": "p-33",
+    "aiNote": "K dovolání je oprávněn účastník odvolacího řízení, do jehož právní sféry rozhodnutí odvolacího soudu zasáhlo. Stěžovatelka tuto podmínku splnila.",
+    "comment": "V dovolání oddělit legitimaci k žalobě pro zmatečnost od oprávnění podat dovolání. První je meritorní otázkou podle § 237 o. s. ř.",
+    "question": "Mohla stěžovatelka podat dovolání bez legitimace k žalobě pro zmatečnost?",
+    "answer": "Ano. Byla formálně účastnicí řízení o žalobě pro zmatečnost a rozhodnutí odvolacího soudu se bezprostředně dotklo její právní sféry. Subjektivní podmínky přípustnosti dovolání tak splnila.",
+    "followUp": "Proč nelze závěr o žalobě pro zmatečnost přenést na dovolání?",
+    "followUpAnswer": "Jde o dva odlišné mimořádné opravné prostředky s jiným účelem i okruhem oprávněných osob. Závěr o nedostatku aktivní legitimace k jednomu proto nelze mechanicky přenášet na druhý.",
+    "highlightNumber": 20,
+    "underlineNumber": 19
+  },
+  {
+    "country": "CZE",
+    "caseNumber": "22 As 35/2026",
+    "language": "cs",
+    "highlightAnchor": "p-20",
+    "underlineAnchor": "p-19",
+    "aiNote": "Přiznaný odkladný účinek dopadá na rozsudek krajského soudu i na rozhodnutí rady žalovaného, jehož účinky se pozastavují. Věc samou tím soud nepředjímá.",
+    "comment": "Do návrhu: vyčíslit dopad na splácení úvěru a provoz, doložit majetkové poměry a vypořádat se s veřejným zájmem na řádném čerpání podpory.",
+    "question": "Na co přesně dopadá odkladný účinek přiznaný kasační stížnosti?",
+    "answer": "Nejvyšší správní soud jej vztáhl nejen na napadený rozsudek, ale i na rozhodnutí rady žalovaného, jehož účinky se tím pozastavují. Rozhodnutí ve věci samé tím nepředjímá.",
+    "followUp": "Nebránil přiznání odkladného účinku veřejný zájem na podpoře obnovitelných zdrojů?",
+    "followUpAnswer": "Ne. Soud zájem na tom, aby podpora plynula jen oprávněným subjektům, zvážil, ale ten nepřevážil nad dopady do majetkové sféry stěžovatelky. Újma jiným osobám přitom nehrozila.",
+    "highlightNumber": 12,
+    "underlineNumber": 11
+  }
+]

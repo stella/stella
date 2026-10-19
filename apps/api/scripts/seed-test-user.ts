@@ -23,6 +23,10 @@ import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { printError } from "@stll/errors";
+import {
+  MARKETING_LOCALE_ACCOUNTS,
+  marketingLocaleForOrganization,
+} from "@stll/playwright-tools/marketing-locales";
 
 import { member, organization, session, user } from "@/api/db/auth-schema";
 import { featureEnrolments } from "@/api/db/schema";
@@ -46,6 +50,7 @@ import {
   getSeedColleagues,
   seedMemberId,
 } from "./seed-utils";
+import type { SeedColleague } from "./seed-utils";
 
 const db = openMaintenanceDb({ readOnly: false });
 
@@ -57,16 +62,16 @@ const db = openMaintenanceDb({ readOnly: false });
 // storage state, and the e2e sign-in all join on.
 const TEST_USER = {
   id: DEFAULT_USER_ID,
-  name: "Petra Harbrook",
-  email: "test@stella.dev",
+  name: MARKETING_LOCALE_ACCOUNTS.en.userName,
+  email: MARKETING_LOCALE_ACCOUNTS.en.email,
 } as const;
 
 const COLLEAGUES = getSeedColleagues(DEFAULT_TEST_USER_COLLEAGUE_COUNT);
 
 const TEST_ORG = {
   id: DEFAULT_ORG_ID,
-  name: "Harbrook & Partners",
-  slug: "harbrook-partners",
+  name: MARKETING_LOCALE_ACCOUNTS.en.organizationName,
+  slug: MARKETING_LOCALE_ACCOUNTS.en.organizationSlug,
 } as const;
 
 // Token that Playwright will send as a cookie.
@@ -84,9 +89,24 @@ const OWNER_MEMBER_ROLE = "owner" as const;
 
 const AUTH_COOKIE_NAME = sessionCookieName();
 
+/** The seed's own organizations: the English test firm and the per-locale marketing firms. */
+const seedOwnedOrganizationIdentity = (organizationId: string) => {
+  const locale = marketingLocaleForOrganization(organizationId);
+  if (locale === undefined) {
+    return undefined;
+  }
+  const account = MARKETING_LOCALE_ACCOUNTS[locale];
+  return {
+    id: account.organizationId,
+    name: account.organizationName,
+    slug: account.organizationSlug,
+  };
+};
+
 const getSeedOrganizationIdentity = (organizationId: string) => {
-  if (organizationId === TEST_ORG.id) {
-    return TEST_ORG;
+  const seedOwned = seedOwnedOrganizationIdentity(organizationId);
+  if (seedOwned !== undefined) {
+    return seedOwned;
   }
 
   return {
@@ -171,10 +191,10 @@ export const ensureOrganizationExists = async (organizationId: string) => {
     )
   ) {
     // Reconcile the display name in place so a re-seed renames an existing
-    // row (see ensureUserExists). Scoped to the seed's own deterministic org:
+    // row (see ensureUserExists). Scoped to the seed's own deterministic orgs:
     // an operator-supplied STELLA_SEED_ORG_ID points at a real organization
     // whose name and slug are not this script's to rewrite.
-    if (organizationId === TEST_ORG.id) {
+    if (seedOwnedOrganizationIdentity(organizationId) !== undefined) {
       await db.transaction(
         async (tx) =>
           await tx
@@ -269,12 +289,15 @@ export async function ensureSeedColleagueUsers({
 
 export async function ensureSeedColleaguesInOrganization({
   organizationId,
-  colleagueCount = 3,
+  colleagues,
 }: {
   organizationId: string;
-  colleagueCount?: number;
+  colleagues: readonly SeedColleague[];
 }) {
-  const userIds = await ensureSeedColleagueUsers({ colleagueCount });
+  const userIds: string[] = [];
+  for (const colleague of colleagues) {
+    userIds.push(await ensureUserExists(colleague));
+  }
 
   for (const userId of userIds) {
     await ensureMembershipExists({
@@ -324,6 +347,25 @@ export async function ensurePrimarySeedUserInOrganization({
  * Called by `seed-dev.ts` so "Clean + Seed" from the dev menu
  * never hits FK violations on `entities.created_by`.
  */
+/** Opt a seeded owner into the time and billing pages. */
+export const enrolInTimeBilling = async ({
+  organizationId,
+  userId,
+}: {
+  organizationId: string;
+  userId: string;
+}) =>
+  db.transaction(async (tx) => {
+    await tx
+      .insert(featureEnrolments)
+      .values({
+        organizationId: toSafeId<"organization">(organizationId),
+        userId: toSafeId<"user">(userId),
+        featureId: "time-billing",
+      })
+      .onConflictDoNothing();
+  });
+
 export async function ensureTestUsers(organizationId: string = TEST_ORG.id) {
   // Test fixtures must establish the same OAuth resource policy as API
   // startup before creating the first identity. This keeps fresh E2E databases
@@ -338,16 +380,7 @@ export async function ensureTestUsers(organizationId: string = TEST_ORG.id) {
     role: OWNER_MEMBER_ROLE,
   });
   // The owner fixture exercises billing pages; other principals retain opt-in access.
-  await db.transaction(async (tx) => {
-    await tx
-      .insert(featureEnrolments)
-      .values({
-        organizationId: toSafeId<"organization">(organizationId),
-        userId: toSafeId<"user">(testUserId),
-        featureId: "time-billing",
-      })
-      .onConflictDoNothing();
-  });
+  await enrolInTimeBilling({ organizationId, userId: testUserId });
   const colleagueUserIds = await ensureSeedColleagueUsers();
 
   for (const userId of colleagueUserIds) {
