@@ -84,32 +84,32 @@ type ScopeOptions = {
   changed: readonly string[];
   root?: string | undefined;
 };
-const browserPredicates = new Map<
-  string,
-  (changed: readonly string[]) => boolean
->();
-export const ciBrowserScopePredicate = ({
-  root = ROOT,
-}: { root?: string | undefined } = {}) => {
-  const cached = browserPredicates.get(root);
+// Parsing the workflow dominates; keyed by its text, an edited workflow is
+// parsed again while repeated plans over one revision parse it once.
+const parsedInputs = new Map<string, readonly string[]>();
+const workflowInputs = (source: string) => {
+  const cached = parsedInputs.get(source);
   if (cached !== undefined) {
     return cached;
   }
+  const inputs = browserSuiteInputs(source);
+  parsedInputs.set(source, inputs);
+  return inputs;
+};
+export const ciBrowserScopePredicate = ({
+  root = ROOT,
+}: { root?: string | undefined } = {}) => {
   try {
-    const inputs = browserSuiteInputs(
+    const inputs = workflowInputs(
       readFileSync(path.join(root, ".github/workflows/ci.yml"), "utf-8"),
     );
-    const predicate = (changed: readonly string[]): boolean =>
+    return (changed: readonly string[]): boolean =>
       changed.some((file) =>
         inputs.some((input) => file === input || file.startsWith(`${input}/`)),
       ) || requiresDesktopBrowser({ changed, root });
-    browserPredicates.set(root, predicate);
-    return predicate;
   } catch (error) {
     console.error("Browser scope unavailable; retaining browser suites", error);
-    const predicate = (_changed: readonly string[]): boolean => true;
-    browserPredicates.set(root, predicate);
-    return predicate;
+    return (_changed: readonly string[]): boolean => true;
   }
 };
 

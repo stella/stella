@@ -56,7 +56,7 @@ const planSelector = <C extends SelectorCase>(cases: readonly C[]) =>
     );
     return {
       item,
-      plan: item.outputs.map((output) => scope[output] ?? ""),
+      plan: item.outputs.map((output) => scope[output]),
     };
   });
 const runSelector = (
@@ -158,6 +158,27 @@ test("e2e-landing follows the landing's whole dependency graph", () => {
   expect(ranges).toEqual([{ base: "base", head: "HEAD" }]);
   expect(scope.e2e_landing_required).toBe("true");
   expect(scope.landing_build_required).toBe("false");
+});
+
+test("graph detectors read the dependency-classified file list", () => {
+  const changed: (readonly string[])[] = [];
+  computeChangedFileScope(
+    {
+      ...detectorInput("pull_request"),
+      changedFiles: ["bun.lock"],
+      dependencyScope: {
+        type: "runtime",
+        files: ["apps/desktop/src/mainview/app.ts"],
+      },
+    },
+    detectors({
+      desktopBrowser: (options) => {
+        changed.push(options.changed);
+        return false;
+      },
+    }),
+  );
+  expect(changed).toEqual([["apps/desktop/src/mainview/app.ts"]]);
 });
 
 test("desktop browser detector failures and malformed results cannot skip the PR leg", () => {

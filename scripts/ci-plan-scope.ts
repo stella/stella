@@ -121,6 +121,34 @@ const matches = (file: string, patterns: readonly string[]) =>
 const anyMatches = (files: readonly string[], patterns: readonly string[]) =>
   files.some((file) => matches(file, patterns));
 
+const LEGAL_ATLAS_IMAGE_INPUTS = [
+  "apps/legal-atlas-runner/*",
+  "apps/api/*",
+  "apps/*/package.json",
+  "packages/*",
+  "patches/*",
+  "bun.lock",
+  "bunfig.toml",
+  "package.json",
+  ".npmrc",
+  "turbo.json",
+  "scripts/pull-base-images.sh",
+  "scripts/ci-service-images.ts",
+  "scripts/ci-service-images.json",
+  "scripts/retry.sh",
+  "scripts/legal-atlas-image-scope*",
+  "scripts/docker-source-closure*",
+  "scripts/generated-imports*",
+  "scripts/generated-files*",
+  "scripts/install-free-ci*",
+  ".dockerignore",
+  ".github/workflows/ci.yml",
+] as const;
+
+/** The coarse legal-atlas image scope; pull requests narrow it by closure. */
+export const legalAtlasImageSelected = (files: readonly string[]) =>
+  anyMatches(files, LEGAL_ATLAS_IMAGE_INPUTS);
+
 const commonE2e = [
   ".github/actions/ci-install/*",
   "scripts/ci-install.ts",
@@ -456,29 +484,7 @@ const deriveNormalScopeFacts = (
     "scripts/ci-service-images.json",
     "scripts/retry.sh",
   ]);
-  const legal = p([
-    "apps/legal-atlas-runner/*",
-    "apps/api/*",
-    "apps/*/package.json",
-    "packages/*",
-    "patches/*",
-    "bun.lock",
-    "bunfig.toml",
-    "package.json",
-    ".npmrc",
-    "turbo.json",
-    "scripts/pull-base-images.sh",
-    "scripts/ci-service-images.ts",
-    "scripts/ci-service-images.json",
-    "scripts/retry.sh",
-    "scripts/legal-atlas-image-scope*",
-    "scripts/docker-source-closure*",
-    "scripts/generated-imports*",
-    "scripts/generated-files*",
-    "scripts/install-free-ci*",
-    ".dockerignore",
-    ".github/workflows/ci.yml",
-  ]);
+  const legal = legalAtlasImageSelected(files);
   const postgres = full ? packageChecks : services.postgres;
   const corpus = full ? packageChecks : services.corpus;
   const valkey = full ? packageChecks : services.valkey;
@@ -960,16 +966,32 @@ export const OUTPUT_RULES = {
     ),
 } as const satisfies Record<ScopeOutput, (facts: ScopeFacts) => string>;
 
+// Without the dependency install there is no better-result panic; this marks
+// the same impossible state.
+class ScopeOutputMissingError extends Error {
+  override name = "ScopeOutputMissingError";
+  readonly _tag = "ScopeOutputMissingError";
+}
+
+const isCompleteScope = (
+  scope: Readonly<Record<string, string | undefined>>,
+): scope is ChangedFileScope =>
+  OUTPUT_ORDER.every((output) => typeof scope[output] === "string");
+
 export const computeChangedFileScope = (
   input: ChangedFileScopeInput,
   detectors: ChangedFileScopeDetectors = DEFAULT_DETECTORS,
 ): ChangedFileScope => {
   const facts = deriveScopeFacts(input, detectors);
-  // SAFETY: ScopeOutput is the element type of OUTPUT_ORDER, so mapping every
-  // entry of OUTPUT_ORDER yields a key for every ScopeOutput and no other.
-  return Object.fromEntries(
+  const scope = Object.fromEntries(
     OUTPUT_ORDER.map((output) => [output, OUTPUT_RULES[output](facts)]),
-  ) as ChangedFileScope;
+  );
+  if (!isCompleteScope(scope)) {
+    throw new ScopeOutputMissingError(
+      "Changed-file scope is missing an output",
+    );
+  }
+  return scope;
 };
 
 export const scopeOutputLines = (scope: ChangedFileScope) =>

@@ -1437,25 +1437,23 @@ type ScopeOptions = {
   changed: readonly string[];
   root?: string | undefined;
 };
-const packageScopeInputs = new Map<
-  string,
-  { lock: ReturnType<typeof parseLockfile>; turbo: unknown }
->();
+// Parsing dominates; keyed by file text, an edited lockfile or turbo config
+// is parsed again while repeated plans over one revision parse it once.
+const parsedLocks = new Map<string, ReturnType<typeof parseLockfile>>();
+const parsedTurbo = new Map<string, unknown>();
 const readPackageScopeInputs = (root: string) => {
-  const cached = packageScopeInputs.get(root);
-  if (cached !== undefined) {
-    return cached;
+  const lockText = readFileSync(path.join(root, "bun.lock"), "utf-8");
+  const turboText = readFileSync(path.join(root, "turbo.json"), "utf-8");
+  if (!parsedLocks.has(lockText)) {
+    parsedLocks.set(lockText, parseLockfile(Bun.JSONC.parse(lockText)));
   }
-  const inputs = {
-    lock: parseLockfile(
-      Bun.JSONC.parse(readFileSync(path.join(root, "bun.lock"), "utf-8")),
-    ),
-    turbo: Bun.JSONC.parse(
-      readFileSync(path.join(root, "turbo.json"), "utf-8"),
-    ),
+  if (!parsedTurbo.has(turboText)) {
+    parsedTurbo.set(turboText, Bun.JSONC.parse(turboText));
+  }
+  return {
+    lock: parsedLocks.get(lockText),
+    turbo: parsedTurbo.get(turboText),
   };
-  packageScopeInputs.set(root, inputs);
-  return inputs;
 };
 export const requiresPackageChecks = ({
   changed,
