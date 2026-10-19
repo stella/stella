@@ -3,6 +3,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 const WORKFLOW_DIRECTORY = path.join(import.meta.dir, "../.github/workflows");
+const TURBO_CONFIG = path.join(import.meta.dir, "../turbo.json");
 
 const REQUIRED_GIT_ENV = {
   GIT_CONFIG_COUNT: "3",
@@ -74,4 +75,24 @@ test("workflows that run tests disable Git background maintenance", () => {
   }
 
   expect(violations).toEqual([]);
+});
+
+// `bun run test` dispatches package tests through Turbo, whose strict env mode
+// passes a workflow variable to a task only when the config declares it.
+test("Turbo passes the Git maintenance settings to package test tasks", () => {
+  const config: unknown = Bun.JSONC.parse(readFileSync(TURBO_CONFIG, "utf-8"));
+  const declared =
+    isRecord(config) && Array.isArray(config["globalPassThroughEnv"])
+      ? config["globalPassThroughEnv"].filter(
+          (name): name is string => typeof name === "string",
+        )
+      : [];
+  const passes = (key: string) =>
+    declared.some((name) =>
+      name.endsWith("*") ? key.startsWith(name.slice(0, -1)) : name === key,
+    );
+
+  expect(Object.keys(REQUIRED_GIT_ENV).filter((key) => !passes(key))).toEqual(
+    [],
+  );
 });
