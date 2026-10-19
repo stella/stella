@@ -30,7 +30,10 @@ const entry = (name: string, entityType: EntityType): SanctionsEntry => ({
   sourceUrl: "https://lists.example/eu",
 });
 
-test("dense common names screen normally within the warm work bound", () => {
+// A dense corpus: many entries share common given names, surnames and
+// company words. It is built once when the file loads, so the test's time
+// covers only the queries, which the screening work budget bounds.
+const buildDenseCommonNameIndex = () => {
   let seed = 42;
   const random = () => {
     seed =
@@ -119,7 +122,11 @@ test("dense common names screen normally within the warm work bound", () => {
     });
     return { ...entry(String(index), entityType), names };
   });
-  const index = buildScreeningIndex([{ version, entries }]);
+  return buildScreeningIndex([{ version, entries }]);
+};
+const DENSE_COMMON_NAME_INDEX = buildDenseCommonNameIndex();
+
+test("dense common names screen normally within the warm work bound", () => {
   const timings = [];
   for (const [name, entityType] of [
     ["Mohammed Ali", "person"],
@@ -131,12 +138,16 @@ test("dense common names screen normally within the warm work bound", () => {
     ["Bank", "organisation"],
     ["Global Trading Company Limited", "organisation"],
   ] as const) {
-    // Warm the JIT separately; index construction is outside the query budget.
-    screen(index, { name, entityType }, { cutoff: DEFAULT_CUTOFF });
+    // Warm the JIT separately.
+    screen(
+      DENSE_COMMON_NAME_INDEX,
+      { name, entityType },
+      { cutoff: DEFAULT_CUTOFF },
+    );
     for (const kind of [entityType, undefined]) {
       const started = performance.now();
       const result = screen(
-        index,
+        DENSE_COMMON_NAME_INDEX,
         kind === undefined ? { name } : { name, entityType: kind },
         { cutoff: DEFAULT_CUTOFF },
       );
