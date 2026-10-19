@@ -1765,9 +1765,12 @@ type SourceAdapterDefinition<TKey extends AdapterKey> = Omit<
 
 /** Build an adapter from the source facts declared for its registry key. */
 export const defineSourceAdapter = <
-  const TAdapter extends SourceAdapterDefinition<AdapterKey>,
+  const TKey extends AdapterKey,
+  const TAdapter extends SourceAdapterDefinition<TKey>,
 >(
-  adapter: TAdapter,
+  // `key` names TKey for inference; the constraint then binds documentStage to
+  // that key's manifest instead of the union of every manifest's stage.
+  adapter: TAdapter & { readonly key: TKey },
 ): SourceAdapter & {
   readonly key: TAdapter["key"];
   readonly reconciliation: TAdapter["reconciliation"];

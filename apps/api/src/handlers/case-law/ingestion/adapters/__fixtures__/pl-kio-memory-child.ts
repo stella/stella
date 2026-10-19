@@ -52,10 +52,17 @@ if (paddingBytes < 0) {
   panic("KIO memory fixture requires room for substantive document text");
 }
 const text = "Izba stwierdza okolicznosci. ";
-const padding = text
-  .repeat(Math.ceil(paddingBytes / text.length))
-  .slice(0, paddingBytes);
-const substantiveHtml = markup.replace("</span>", () => `${padding}</span>`);
+let paddingRemaining = paddingBytes;
+let spansRemaining = spanCount;
+const substantiveHtml = markup.replaceAll("</span>", () => {
+  const spanPaddingBytes = Math.ceil(paddingRemaining / spansRemaining);
+  const padding = text
+    .repeat(Math.ceil(spanPaddingBytes / text.length))
+    .slice(0, spanPaddingBytes);
+  paddingRemaining -= spanPaddingBytes;
+  spansRemaining -= 1;
+  return `${padding}</span>`;
+});
 const workload = process.argv.at(3) ?? "accepted";
 const documentHtmlOf = (kind: string) => {
   switch (kind) {
@@ -113,6 +120,9 @@ if (assembled.type !== "built") {
 
 const decision = assembled.decision;
 const budget = decision.metadata["documentStatus"] ?? "accepted";
+if (workload === "accepted" && budget !== "accepted") {
+  panic(`KIO fixture accepted workload was rejected: ${budget}`);
+}
 const rawParts = decodeSourceRawEnvelope(decision.sourceRaw ?? "");
 if (rawParts === null || !Object.values(rawParts).includes(documentHtml)) {
   panic("KIO memory fixture document was not retained in the raw envelope");
