@@ -21,6 +21,7 @@ use crate::diagnostics::{
   DiagnosticNotificationPreferences, DiagnosticSession, DiagnosticStoreLoadIssue,
   DiagnosticUpdate, DiagnosticsInput, render_diagnostics,
 };
+use crate::document_sessions::{self, AccountOwner, CopyRetirement, RetiredSession};
 use crate::http_client::DesktopHttpClient;
 use crate::session_store::{self, PersistedDesktopSession, StoreLoadIssue};
 use crate::types::*;
@@ -80,6 +81,8 @@ const GENERIC_OFFICE_DOWNLOAD_MIME_TYPES: &[&str] =
 
 // Internal session with runtime-only fields
 struct DesktopSession {
+  account_owner: AccountOwner,
+  download_sha: Option<String>,
   // Persisted fields
   api_base_url: String,
   base_version_number: i64,
@@ -125,6 +128,8 @@ struct SyncCheckpointInput {
 impl DesktopSession {
   fn to_persisted(&self) -> PersistedDesktopSession {
     PersistedDesktopSession {
+      account_owner: Some(self.account_owner.clone()),
+      download_sha: self.download_sha.clone(),
       api_base_url: self.api_base_url.clone(),
       base_version_number: self.base_version_number,
       entity_id: self.entity_id.clone(),
@@ -176,7 +181,22 @@ impl DesktopSession {
   }
 }
 
+pub struct OpenDocument<'a> {
+  pub account: &'a crate::account::LinkedAccount,
+  pub request: OpenFileRequest,
+  pub prefetched_buffer: Option<Vec<u8>>,
+}
+
+#[derive(PartialEq, Eq)]
+enum SessionStoreAccess {
+  Pending,
+  Ready,
+}
+
 pub struct SessionManager {
+  store_access: SessionStoreAccess,
+  account_owner: Option<AccountOwner>,
+  retired_sessions: Vec<RetiredSession>,
   sessions: HashMap<String, DesktopSession>,
   session_ids_by_key: HashMap<String, String>,
   unconfirmed_sessions: HashMap<String, PersistedDesktopSession>,
@@ -522,6 +542,9 @@ impl SessionManager {
     let bridge_port = config::resolve_bridge_port();
 
     Self {
+      store_access: SessionStoreAccess::Pending,
+      account_owner: None,
+      retired_sessions: Vec::new(),
       sessions: HashMap::new(),
       session_ids_by_key: HashMap::new(),
       unconfirmed_sessions: HashMap::new(),
@@ -548,7 +571,187 @@ impl SessionManager {
     self.app_handle = Some(handle);
   }
 
-  pub async fn initialize(&mut self) {
+  fn quarantine_root(&self) -> PathBuf {
+    self
+      .store_path
+      .parent()
+      .expect("session store has a data directory")
+      .join("document-recovery")
+  }
+
+  pub fn is_account_owner(&self, owner: Option<&AccountOwner>) -> bool {
+    self.account_owner.as_ref() == owner
+  }
+
+  pub async fn set_account_owner(
+    &mut self,
+    owner: Option<AccountOwner>,
+  ) -> Result<(), String> {
+    if self.store_access == SessionStoreAccess::Pending {
+      return self.initialize(owner).await;
+    }
+    if self.account_owner == owner {
+      return self.retry_retired_sessions().await;
+    }
+    let mut persisted: Vec<_> = self
+      .sessions
+      .values()
+      .map(DesktopSession::to_persisted)
+      .collect();
+    persisted.extend(
+      self
+        .unconfirmed_sessions
+        .values()
+        .filter(|session| !self.sessions.contains_key(&session.id))
+        .cloned(),
+    );
+    let quarantine = self.quarantine_root();
+    let plans = persisted
+      .into_iter()
+      .map(|session| RetiredSession::plan(session, &quarantine))
+      .collect::<Result<Vec<_>, _>>()?;
+    for session in self.sessions.values_mut() {
+      session.cancel_timers();
+    }
+    self.retired_sessions.extend(plans);
+    self.sessions.clear();
+    self.session_ids_by_key.clear();
+    self.unconfirmed_sessions.clear();
+    self.account_owner = owner;
+    self.persist_sessions_result().await?;
+    self.retry_retired_sessions().await?;
+    self.emit_state_change();
+    Ok(())
+  }
+
+  pub async fn retry_retired_sessions(&mut self) -> Result<(), String> {
+    if self.store_access != SessionStoreAccess::Ready {
+      return Err(crate::i18n::t("settings.errorReadState").into());
+    }
+    let indices: Vec<_> = self
+      .retired_sessions
+      .iter()
+      .enumerate()
+      .filter(|(_, record)| !record.finished())
+      .map(|(index, _)| index)
+      .collect();
+    if indices.is_empty() {
+      return Ok(());
+    }
+    // Cleanup starts only after its destination and credential state are durable.
+    self.persist_sessions_result().await?;
+    let mut changed = false;
+    let mut set_aside = false;
+    for index in indices {
+      let mut record = self.retired_sessions[index].clone();
+      let root = self.edit_root.clone();
+      let result = tokio::task::spawn_blocking(move || {
+        let result = document_sessions::retire_session(
+          &mut record,
+          &root,
+          &document_sessions::NativeRetirementIo,
+        );
+        (record, result)
+      })
+      .await
+      .map_err(|error| format!("document retirement task failed: {error}"))?;
+      let (record, result) = result;
+      if let Err(error) = result {
+        tracing::warn!(error = %error, "document retirement remains pending");
+      }
+      set_aside |= matches!(
+        self.retired_sessions[index].copy,
+        CopyRetirement::Pending { .. }
+      ) && matches!(record.copy, CopyRetirement::Quarantined { .. });
+      self.retired_sessions[index] = record;
+      changed = true;
+    }
+    self.retired_sessions.retain(|record| {
+      !(record.finished() && matches!(record.copy, CopyRetirement::Removed))
+    });
+    if changed {
+      self.persist_sessions_result().await?;
+    }
+    if set_aside {
+      self.show_notification(
+        NotifType::SyncIssues,
+        crate::i18n::t("notification.editsSetAsideTitle"),
+        Some(crate::i18n::t("notification.editsSetAsideBody")),
+      );
+    }
+    Ok(())
+  }
+
+  fn recovery_snapshot(&self) -> DocumentRecoverySnapshot {
+    let recoverable =
+      |record: &&RetiredSession| !matches!(record.copy, CopyRetirement::Removed);
+    let edits = self
+      .retired_sessions
+      .iter()
+      .filter(recoverable)
+      .filter(|record| {
+        record.account_owner.is_some() && record.account_owner == self.account_owner
+      })
+      .take(document_sessions::RECOVERY_LIST_LIMIT)
+      .map(|record| RecoveryEdit {
+        id: record.id.clone(),
+        file_name: record.file_name.clone(),
+        status: match record.copy {
+          CopyRetirement::Pending { .. } => RecoveryStatus::Pending,
+          CopyRetirement::Quarantined { .. } => RecoveryStatus::Available,
+          CopyRetirement::Removed => {
+            unreachable!("removed copies are not recovery entries")
+          }
+        },
+      })
+      .collect();
+    let unassigned = self
+      .retired_sessions
+      .iter()
+      .filter(recoverable)
+      .any(|record| record.account_owner.is_none());
+    let access = if self
+      .retired_sessions
+      .iter()
+      .filter(recoverable)
+      .any(|record| {
+        record.account_owner.is_some() && record.account_owner != self.account_owner
+      }) {
+      RecoveryAccess::SignInRequired
+    } else {
+      RecoveryAccess::Available
+    };
+    DocumentRecoverySnapshot {
+      edits,
+      unassigned,
+      pending: self
+        .retired_sessions
+        .iter()
+        .any(|record| !record.finished()),
+      access,
+    }
+  }
+
+  pub fn open_recovery_folder(&self, target: RecoveryTarget) -> Result<(), String> {
+    let namespace = match target {
+      RecoveryTarget::Account => self
+        .account_owner
+        .as_ref()
+        .ok_or("Connect your account to open document recovery")?
+        .as_str(),
+      RecoveryTarget::Unassigned => "unassigned",
+    };
+    let directory = self.quarantine_root().join(namespace);
+    crate::local_store::create_private_dir(&directory)
+      .map_err(|error| error.to_string())?;
+    open_path_native(directory.to_string_lossy().as_ref())
+  }
+
+  pub async fn initialize(
+    &mut self,
+    account_owner: Option<AccountOwner>,
+  ) -> Result<(), String> {
+    self.account_owner = account_owner;
     let store = session_store::load_session_store(&self.store_path).await;
 
     // Older stores record only the remembered web origin. Restore its pair
@@ -577,27 +780,41 @@ impl SessionManager {
     if self.store_load_issue.is_some() {
       self.show_notification(
         NotifType::SyncIssues,
-        crate::i18n::t("notification.recoveryResetTitle"),
-        Some(crate::i18n::t("notification.recoveryResetBody")),
+        crate::i18n::t("settings.stellaDesktop"),
+        Some(crate::i18n::t("settings.errorReadState")),
       );
+      return Err(crate::i18n::t("settings.errorReadState").into());
     }
 
+    self.retired_sessions = store.retired_sessions;
     for path in store.cleanup_paths {
       self.cleanup_paths.insert(path);
     }
 
     self.unconfirmed_sessions.clear();
 
-    let persisted_sessions: Vec<PersistedDesktopSession> = store
-      .sessions
-      .into_iter()
-      .filter(|persisted| Path::new(&persisted.file_path).exists())
-      .collect();
-    let restored_tokens = join_all(persisted_sessions.iter().map(|persisted| async {
+    let partition = document_sessions::partition_sessions(
+      store.sessions,
+      self.account_owner.as_ref(),
+    );
+    for retired in partition.retired {
+      self
+        .retired_sessions
+        .push(RetiredSession::plan(retired, &self.quarantine_root())?);
+    }
+    let persisted_sessions = partition.active;
+    for owned in &persisted_sessions {
+      let mut persisted = owned.session.clone();
+      persisted.account_owner = Some(owned.owner.clone());
+      self
+        .unconfirmed_sessions
+        .insert(persisted.id.clone(), persisted);
+    }
+    let restored_tokens = join_all(persisted_sessions.iter().map(|owned| async {
       (
-        persisted.id.clone(),
+        owned.session.id.clone(),
         crate::keychain::get_token_with_timeout(
-          &persisted.id,
+          &owned.session.id,
           KEYCHAIN_RESTORE_TIMEOUT,
         )
         .await,
@@ -606,35 +823,32 @@ impl SessionManager {
     .await;
     let mut token_restore_unavailable = false;
 
-    for (persisted, (_, restored_token)) in
+    for (owned, (_, restored_token)) in
       persisted_sessions.into_iter().zip(restored_tokens)
     {
+      let mut persisted = owned.session;
+      persisted.account_owner = Some(owned.owner.clone());
       // Token lives in OS keychain. A confirmed missing token prunes the
       // session, but an inconclusive keychain read must retain the persisted
       // metadata for a later retry.
       let session_token = match restored_token {
         Ok(Some(token)) => token,
         Ok(None) => {
-          tracing::warn!(
-              session_id = %persisted.id,
-              "session token missing from keychain, skipping restore"
-          );
+          self.unconfirmed_sessions.remove(&persisted.id);
+          self
+            .retired_sessions
+            .push(RetiredSession::plan(persisted, &self.quarantine_root())?);
           continue;
         }
         Err(crate::keychain::KeychainReadUnavailable) => {
           token_restore_unavailable = true;
-          tracing::warn!(
-              session_id = %persisted.id,
-              "session token could not be confirmed, retaining persisted session for retry"
-          );
-          self
-            .unconfirmed_sessions
-            .insert(persisted.id.clone(), persisted);
           continue;
         }
       };
 
       let session = DesktopSession {
+        account_owner: owned.owner,
+        download_sha: persisted.download_sha,
         api_base_url: persisted.api_base_url,
         base_version_number: persisted.base_version_number,
         entity_id: persisted.entity_id,
@@ -673,13 +887,13 @@ impl SessionManager {
     }
 
     if token_restore_unavailable {
-      tracing::warn!(
-        "session store persistence skipped because one or more keychain reads were inconclusive"
-      );
-      return;
+      tracing::warn!("document session credentials will be checked on a later restore");
     }
+    self.store_access = SessionStoreAccess::Ready;
+    self.persist_sessions_result().await?;
+    self.retry_retired_sessions().await?;
     self.retry_pending_cleanup().await;
-    self.persist_sessions().await;
+    self.persist_sessions_result().await
   }
 
   /// Returns session IDs that need watchers attached (called after initialize).
@@ -698,6 +912,7 @@ impl SessionManager {
     sessions.sort_by(|a, b| a.file_name.cmp(&b.file_name));
 
     AppSnapshot {
+      document_recovery: self.recovery_snapshot(),
       bridge_port: self.bridge_port,
       bridge_version: crate::types::BRIDGE_VERSION,
       capabilities: crate::types::BRIDGE_CAPABILITIES
@@ -743,9 +958,16 @@ impl SessionManager {
 
   pub async fn open_file(
     &mut self,
-    request: OpenFileRequest,
-    prefetched_buffer: Option<Vec<u8>>,
+    OpenDocument {
+      account,
+      request,
+      prefetched_buffer,
+    }: OpenDocument<'_>,
   ) -> Result<OpenFileResponse, String> {
+    self
+      .set_account_owner(Some(AccountOwner::for_account(account)))
+      .await?;
+    self.persist_sessions_result().await?;
     let key = session_key(
       &request.workspace_id,
       &request.entity_id,
@@ -861,11 +1083,20 @@ impl SessionManager {
 
     // Clean up existing session if any
     if let Some(eid) = existing_id {
-      self.cleanup_session_internal(&eid, false).await;
+      self.cleanup_session_internal(&eid).await?;
+    }
+
+    if self.retired_sessions.iter().any(|record| {
+      record.session_id == remote.session_id
+        && record.token == document_sessions::TokenRetirement::Pending
+    }) {
+      return Err(crate::i18n::t("settings.recoveryPending").into());
     }
 
     // Create new session
     let session = DesktopSession {
+      account_owner: AccountOwner::for_account(account),
+      download_sha: Some(local_sha.clone()),
       api_base_url: normalize_api_base_url(&request.api_base_url),
       base_version_number: remote.base_version_number,
       entity_id: request.entity_id,
@@ -918,7 +1149,9 @@ impl SessionManager {
 
     // Open in default app
     if let Err(e) = open_path_native(&file_path) {
-      self.cleanup_session_internal(&session_id, false).await;
+      if let Err(error) = self.cleanup_session_internal(&session_id).await {
+        tracing::warn!(error = %error, "document cleanup remains pending");
+      }
       return Err(e);
     }
 
@@ -1324,7 +1557,11 @@ impl SessionManager {
   }
 
   pub async fn open_edit_root(&self) -> bool {
-    let root = self.edit_root.clone();
+    let Some(owner) = &self.account_owner else {
+      return false;
+    };
+    let root = self.edit_root.join(owner.as_str());
+    let opened_root = root.clone();
     if !matches!(
       tokio::task::spawn_blocking(move || crate::local_store::create_private_dir(
         &root
@@ -1334,7 +1571,7 @@ impl SessionManager {
     ) {
       return false;
     }
-    open_path_native(self.edit_root.to_string_lossy().as_ref()).is_ok()
+    open_path_native(opened_root.to_string_lossy().as_ref()).is_ok()
   }
 
   pub fn reveal_support_root(&self) -> bool {
@@ -1678,8 +1915,13 @@ impl SessionManager {
             ],
           )),
         );
-        self.cleanup_session_internal(session_id, true).await;
-        true
+        match self.cleanup_session_internal(session_id).await {
+          Ok(()) => true,
+          Err(error) => {
+            tracing::warn!(error = %error, "document cleanup remains pending");
+            false
+          }
+        }
       }
       FinalizeResult::NoChanges => {
         if session.changed_during_remote_save {
@@ -1695,8 +1937,13 @@ impl SessionManager {
           return false;
         }
 
-        self.cleanup_session_internal(session_id, true).await;
-        true
+        match self.cleanup_session_internal(session_id).await {
+          Ok(()) => true,
+          Err(error) => {
+            tracing::warn!(error = %error, "document cleanup remains pending");
+            false
+          }
+        }
       }
       FinalizeResult::TakenOver(message) => {
         self.mark_session_taken_over(session_id, &message).await;
@@ -1796,6 +2043,9 @@ impl SessionManager {
   // --- Retry loop (called from spawned timer) ---
 
   pub async fn retry_pending_work(&mut self) {
+    if let Err(error) = self.retry_retired_sessions().await {
+      tracing::warn!(error = %error, "document recovery retry remains pending");
+    }
     self.retry_pending_cleanup().await;
 
     let session_ids: Vec<String> = self.sessions.keys().cloned().collect();
@@ -1961,41 +2211,36 @@ impl SessionManager {
 
       self.show_notification(NotifType::SyncIssues, message, Some(&body));
     }
-    self.cleanup_session_internal(session_id, false).await;
+    if let Err(error) = self.cleanup_session_internal(session_id).await {
+      tracing::warn!(error = %error, "document cleanup remains pending");
+    }
   }
 
-  async fn cleanup_session_internal(
-    &mut self,
-    session_id: &str,
-    remove_local_files: bool,
-  ) {
-    // Remove token from OS keychain
-    crate::keychain::delete_token(session_id);
-
-    if let Some(mut session) = self.sessions.remove(session_id) {
-      session.cancel_timers();
-      self.session_ids_by_key.remove(&session.key);
-
-      if remove_local_files && let Some(parent) = Path::new(&session.file_path).parent()
-      {
-        self
-          .schedule_cleanup_path(parent.to_string_lossy().to_string())
-          .await;
-      }
-    }
-
-    self.persist_sessions().await;
+  async fn cleanup_session_internal(&mut self, session_id: &str) -> Result<(), String> {
+    let Some(session) = self.sessions.get(session_id) else {
+      return Ok(());
+    };
+    let record = RetiredSession::plan(session.to_persisted(), &self.quarantine_root())?;
+    self.retired_sessions.push(record);
+    let mut session = self
+      .sessions
+      .remove(session_id)
+      .expect("session was present while retiring");
+    session.cancel_timers();
+    self.session_ids_by_key.remove(&session.key);
+    self.persist_sessions_result().await?;
+    self.retry_retired_sessions().await?;
     self.emit_state_change();
-  }
-
-  async fn schedule_cleanup_path(&mut self, path: String) {
-    if self.try_remove_cleanup_path(&path).await {
-      return;
-    }
-    self.cleanup_paths.insert(path);
+    Ok(())
   }
 
   async fn try_remove_cleanup_path(&mut self, path: &str) -> bool {
+    let Some(owner) = &self.account_owner else {
+      return false;
+    };
+    if !Path::new(path).starts_with(self.edit_root.join(owner.as_str())) {
+      return false;
+    }
     match tokio::fs::remove_dir_all(path).await {
       Ok(()) => {
         self.cleanup_paths.remove(path);
@@ -2107,7 +2352,11 @@ impl SessionManager {
     file_name: &str,
     buffer: &[u8],
   ) -> Result<String, String> {
-    let edit_root = self.edit_root.clone();
+    let owner = self
+      .account_owner
+      .as_ref()
+      .ok_or("Connect your account to edit documents")?;
+    let edit_root = self.edit_root.join(owner.as_str());
     let session_folder = edit_root.join(sanitize_path_segment(folder_name));
     let file_path = session_folder.join(file_name);
     let buffer = buffer.to_vec();
@@ -2124,6 +2373,10 @@ impl SessionManager {
   }
 
   async fn persist_sessions_result(&self) -> Result<(), String> {
+    if self.store_access != SessionStoreAccess::Ready || self.store_load_issue.is_some()
+    {
+      return Err(crate::i18n::t("settings.errorReadState").into());
+    }
     let mut persisted: Vec<PersistedDesktopSession> = self
       .unconfirmed_sessions
       .values()
@@ -2142,6 +2395,7 @@ impl SessionManager {
     session_store::persist_session_store(
       &self.store_path,
       &session_store::SessionStorePayload {
+        retired_sessions: self.retired_sessions.clone(),
         cleanup_paths: cleanup,
         linked_account: self.linked_account.clone(),
         linked_account_web_origin: self.linked_account_web_origin.clone(),
@@ -2575,6 +2829,13 @@ mod tests {
   use std::io::{Cursor, Write};
   use zip::write::SimpleFileOptions;
 
+  fn test_manager() -> SessionManager {
+    let mut manager = SessionManager::new();
+    manager.store_access = SessionStoreAccess::Ready;
+    manager.account_owner = Some(AccountOwner::fixture("account"));
+    manager
+  }
+
   #[cfg(unix)]
   #[tokio::test]
   async fn local_file_creation_keeps_edit_copies() {
@@ -2584,7 +2845,7 @@ mod tests {
     ) {
       return;
     }
-    let mut manager = SessionManager::new();
+    let mut manager = test_manager();
     manager.edit_root =
       std::env::temp_dir().join(format!("stella-edit-{}", uuid::Uuid::new_v4()));
     let path = PathBuf::from(
@@ -2609,6 +2870,8 @@ mod tests {
 
   fn persisted_session_for_test(id: &str) -> PersistedDesktopSession {
     PersistedDesktopSession {
+      account_owner: Some(AccountOwner::fixture("account")),
+      download_sha: None,
       api_base_url: "https://api.example.com".to_string(),
       base_version_number: 1,
       entity_id: format!("entity-{id}"),
@@ -2637,6 +2900,8 @@ mod tests {
     session_token: &str,
   ) -> DesktopSession {
     DesktopSession {
+      account_owner: persisted.account_owner.unwrap(),
+      download_sha: persisted.download_sha,
       api_base_url: persisted.api_base_url,
       base_version_number: persisted.base_version_number,
       entity_id: persisted.entity_id,
@@ -2666,6 +2931,133 @@ mod tests {
       open_poll_timer: None,
       sse_listener: None,
     }
+  }
+
+  #[tokio::test]
+  async fn account_profile_updates_keep_document_sessions() {
+    let sandbox =
+      std::env::temp_dir().join(format!("desktop-profile-{}", uuid::Uuid::new_v4()));
+    let mut manager = test_manager();
+    manager.store_path = sandbox.join("sessions.json");
+    let session = desktop_session_for_test(persisted_session_for_test("open"), "token");
+    manager.sessions.insert(session.id.clone(), session);
+    manager
+      .link_account(
+        LinkedAccountSnapshot {
+          email: "updated@example.test".into(),
+          name: Some("Updated".into()),
+          verified_at: "2026-01-01T00:00:00Z".into(),
+        },
+        None,
+      )
+      .await
+      .unwrap();
+    assert_eq!(manager.get_snapshot().sessions.len(), 1);
+    assert!(manager.retired_sessions.is_empty());
+    assert_eq!(
+      manager.account_owner,
+      Some(AccountOwner::fixture("account"))
+    );
+    std::fs::remove_dir_all(sandbox).unwrap();
+  }
+
+  #[tokio::test]
+  async fn account_recovery_keeps_an_unreadable_store_intact() {
+    let sandbox =
+      std::env::temp_dir().join(format!("desktop-journal-{}", uuid::Uuid::new_v4()));
+    crate::local_store::create_private_dir(&sandbox).unwrap();
+    let mut manager = test_manager();
+    manager.store_path = sandbox.join("sessions.json");
+    let bytes = b"{unreadable journal";
+    crate::local_store::write_private_atomic(&manager.store_path, bytes).unwrap();
+    assert!(
+      manager
+        .initialize(Some(AccountOwner::fixture("account")))
+        .await
+        .is_err()
+    );
+    assert!(manager.persist_sessions_result().await.is_err());
+    assert_eq!(std::fs::read(&manager.store_path).unwrap(), bytes);
+    std::fs::remove_dir_all(sandbox).unwrap();
+  }
+
+  #[tokio::test]
+  async fn account_recovery_follows_the_current_namespace() {
+    let sandbox =
+      std::env::temp_dir().join(format!("desktop-recovery-{}", uuid::Uuid::new_v4()));
+    let mut manager = test_manager();
+    manager.store_path = sandbox.join("sessions.json");
+    manager.edit_root = sandbox.join("editing");
+    let owner = AccountOwner::fixture("account");
+    let other = AccountOwner::fixture("other");
+    let mut stored = persisted_session_for_test("saved");
+    stored.file_path = manager
+      .edit_root
+      .join(owner.as_str())
+      .join("saved/file.docx")
+      .to_string_lossy()
+      .into_owned();
+    let mut record = RetiredSession::plan(stored, &manager.quarantine_root()).unwrap();
+    record.token = document_sessions::TokenRetirement::Deleted;
+    record.copy = CopyRetirement::Quarantined {
+      path: manager
+        .quarantine_root()
+        .join(owner.as_str())
+        .join("saved/file.docx"),
+    };
+    manager.retired_sessions.push(record);
+    assert_eq!(manager.get_snapshot().document_recovery.edits.len(), 1);
+    manager.set_account_owner(None).await.unwrap();
+    assert!(manager.get_snapshot().document_recovery.edits.is_empty());
+    manager.set_account_owner(Some(other)).await.unwrap();
+    assert!(manager.get_snapshot().document_recovery.edits.is_empty());
+    assert!(matches!(
+      manager.get_snapshot().document_recovery.access,
+      RecoveryAccess::SignInRequired
+    ));
+    manager.set_account_owner(Some(owner)).await.unwrap();
+    assert_eq!(
+      manager.get_snapshot().document_recovery.edits[0].file_name,
+      "saved.docx"
+    );
+    let loaded = session_store::load_session_store(&manager.store_path).await;
+    assert!(loaded.sessions.is_empty());
+    assert_eq!(loaded.retired_sessions.len(), 1);
+    std::fs::remove_dir_all(sandbox).unwrap();
+  }
+
+  #[tokio::test]
+  async fn account_transition_keeps_a_journal_before_cleanup() {
+    let sandbox =
+      std::env::temp_dir().join(format!("desktop-transition-{}", uuid::Uuid::new_v4()));
+    crate::local_store::create_private_dir(&sandbox).unwrap();
+    let blocked = sandbox.join("blocked");
+    crate::local_store::write_private_atomic(&blocked, b"directory unavailable")
+      .unwrap();
+    let mut manager = test_manager();
+    manager.store_path = blocked.join("sessions.json");
+    manager.edit_root = sandbox.join("editing");
+    let mut stored = persisted_session_for_test("editing");
+    stored.file_path = manager
+      .edit_root
+      .join("editing/file.docx")
+      .to_string_lossy()
+      .into_owned();
+    let file = PathBuf::from(&stored.file_path);
+    crate::local_store::create_private_dir(file.parent().unwrap()).unwrap();
+    crate::local_store::write_private_atomic(&file, b"unsaved").unwrap();
+    let runtime = desktop_session_for_test(stored, "token");
+    manager.sessions.insert(runtime.id.clone(), runtime);
+    assert!(manager.set_account_owner(None).await.is_err());
+    assert!(manager.retry_retired_sessions().await.is_err());
+    assert!(manager.get_snapshot().sessions.is_empty());
+    assert_eq!(manager.retired_sessions.len(), 1);
+    assert!(matches!(
+      manager.retired_sessions[0].copy,
+      CopyRetirement::Pending { .. }
+    ));
+    assert_eq!(std::fs::read(file).unwrap(), b"unsaved");
+    std::fs::remove_dir_all(sandbox).unwrap();
   }
 
   #[test]
@@ -2838,7 +3230,7 @@ mod tests {
         uuid::Uuid::new_v4()
       ))
       .join("sessions.json");
-    let mut manager = SessionManager::new();
+    let mut manager = test_manager();
     manager.store_path = path.clone();
     manager.unconfirmed_sessions.insert(
       "session-unconfirmed".to_string(),
@@ -2866,7 +3258,7 @@ mod tests {
         uuid::Uuid::new_v4()
       ))
       .join("sessions.json");
-    let mut manager = SessionManager::new();
+    let mut manager = test_manager();
     manager.store_path = path.clone();
     let account = LinkedAccountSnapshot {
       email: "user@example.com".to_string(),
@@ -2918,7 +3310,7 @@ mod tests {
         uuid::Uuid::new_v4()
       ))
       .join("sessions.json");
-    let mut manager = SessionManager::new();
+    let mut manager = test_manager();
     manager.store_path = path.clone();
     manager.trust_self_host_connection_for_test(
       "https://selfhost.example".into(),
@@ -2932,9 +3324,12 @@ mod tests {
     assert_eq!(selected.api_base_url, "https://api.selected.example");
     assert_eq!(selected.web_origin, "https://selfhost.example");
     manager.persist_sessions_result().await.unwrap();
-    let mut restored = SessionManager::new();
+    let mut restored = test_manager();
     restored.store_path = path.clone();
-    restored.initialize().await;
+    restored
+      .initialize(Some(AccountOwner::fixture("account")))
+      .await
+      .unwrap();
     let selected = restored.selected_self_host_connection().unwrap();
     assert_eq!(selected.api_base_url, "https://api.selected.example");
     assert_eq!(selected.web_origin, "https://selfhost.example");
@@ -2949,7 +3344,7 @@ mod tests {
         uuid::Uuid::new_v4()
       ))
       .join("sessions.json");
-    let mut manager = SessionManager::new();
+    let mut manager = test_manager();
     manager.store_path = path.clone();
     manager.trust_self_host_connection_for_test(
       "https://first.example".to_string(),
@@ -2987,7 +3382,7 @@ mod tests {
         uuid::Uuid::new_v4()
       ))
       .join("sessions.json");
-    let mut manager = SessionManager::new();
+    let mut manager = test_manager();
     manager.store_path = path.clone();
     let persisted = persisted_session_for_test("session-restored");
     manager
@@ -3071,7 +3466,7 @@ mod tests {
 
   #[test]
   fn diagnostics_export_redacts_private_session_and_account_data() {
-    let mut manager = SessionManager::new();
+    let mut manager = test_manager();
     manager.support_root = PathBuf::from("/Users/alice/Client Matter/support");
     manager.edit_root = PathBuf::from("/Users/alice/Client Matter/editing");
     manager.linked_account = Some(LinkedAccountSnapshot {
@@ -3159,7 +3554,7 @@ mod tests {
 
   #[test]
   fn trust_lookup_canonicalizes_api_base_url_like_approval() {
-    let mut manager = SessionManager::new();
+    let mut manager = test_manager();
     manager.trust_self_host_connection_for_test(
       "https://web.example".to_string(),
       "https://api.example".to_string(),

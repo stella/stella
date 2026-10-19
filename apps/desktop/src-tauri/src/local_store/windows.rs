@@ -67,6 +67,11 @@ impl Parent {
     fs::rename(&self.path, &destination.path)
   }
 
+  pub(super) fn move_to(&self, destination: &Self) -> io::Result<()> {
+    fs::hard_link(&self.path, &destination.path)?;
+    fs::remove_file(&self.path)
+  }
+
   pub(super) fn link_to(&self, destination: &Self) -> io::Result<()> {
     fs::hard_link(&self.path, &destination.path)
   }
