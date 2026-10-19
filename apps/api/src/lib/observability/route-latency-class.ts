@@ -33,6 +33,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "DELETE /v1/mcp/connections/:connectionId": "crud",
   "DELETE /v1/mcp/connectors/:slug": "crud",
   "DELETE /v1/me/oauth-connections/:consentId": "crud",
+  "DELETE /v1/memories/:memoryId": "crud",
   "DELETE /v1/organization-settings/ai-config": "crud",
   "DELETE /v1/organization-settings/business-registry-credentials": "crud",
   "DELETE /v1/organization-settings/correspondence/allowed-senders/:senderId":
