@@ -134,7 +134,7 @@ declare const exceptionFrameBrand: unique symbol;
 type ExceptionFrame = string & { readonly [exceptionFrameBrand]: true };
 
 type ExceptionValueFields = {
-  className: ExceptionClass;
+  className: ExceptionClass | "UnknownError";
   code?: ExceptionCode;
   status?: number;
   reason?: FailureReason;
@@ -164,29 +164,40 @@ const CLASS_TOKEN = /^[A-Za-z_$][A-Za-z0-9_$]{0,127}$/u;
 const CODE_TOKEN = /^[A-Za-z0-9_.:-]{1,64}$/u;
 const REPOSITORY_FRAME =
   /^(?:(?:\/workspace\/stella|\/app)\/)?((?:apps|packages)\/[A-Za-z0-9_./-]+:\d+(?::\d+)?)$/u;
+const REPOSITORY_FRAME_SUFFIX =
+  /^(?:apps|packages)\/[A-Za-z0-9_./-]+:\d+(?::\d+)?$/u;
 
-const exceptionClass = (value: string): ExceptionClass =>
+// The allowlists narrow by predicate, so a branded value only ever comes from
+// a string that passed its pattern.
+const isExceptionClass = (value: string): value is ExceptionClass =>
+  CLASS_TOKEN.test(value);
+
+const isExceptionCode = (value: string): value is ExceptionCode =>
+  CODE_TOKEN.test(value);
+
+const isExceptionFrame = (value: string): value is ExceptionFrame =>
+  REPOSITORY_FRAME_SUFFIX.test(value);
+
+const UNKNOWN_EXCEPTION_CLASS = "UnknownError";
+
+const exceptionClass = (
+  value: string,
+): ExceptionClass | typeof UNKNOWN_EXCEPTION_CLASS =>
   // `errorTag` normally supplies a class token; keep a fixed fallback if a
   // foreign Error overrides its name with free text.
-  (CLASS_TOKEN.test(value) ? value : "UnknownError") as ExceptionClass;
+  isExceptionClass(value) ? value : UNKNOWN_EXCEPTION_CLASS;
 
 const exceptionCode = (value: string | undefined): ExceptionCode | undefined =>
-  value !== undefined && CODE_TOKEN.test(value)
-    ? // SAFETY: the structural error code has passed the token allowlist.
-      (value as ExceptionCode)
-    : undefined;
+  value !== undefined && isExceptionCode(value) ? value : undefined;
 
 const exceptionFrame = (
   value: string | undefined,
 ): ExceptionFrame | undefined => {
-  if (value === undefined) {
-    return undefined;
-  }
-  const repositoryFrame = REPOSITORY_FRAME.exec(value)?.at(1);
-  return repositoryFrame === undefined
-    ? undefined
-    : // SAFETY: the captured suffix passed the repository-frame allowlist.
-      (repositoryFrame as ExceptionFrame);
+  const repositoryFrame =
+    value === undefined ? undefined : REPOSITORY_FRAME.exec(value)?.at(1);
+  return repositoryFrame !== undefined && isExceptionFrame(repositoryFrame)
+    ? repositoryFrame
+    : undefined;
 };
 
 /**

@@ -227,15 +227,14 @@ export const isNoiseException = (event: {
 // no dynamic string can ride along.
 const TELEMETRY_AREA = /^[a-z][a-z0-9-]{0,39}$/u;
 
-declare const exceptionTypeBrand: unique symbol;
-type ExceptionType = string & { readonly [exceptionTypeBrand]: true };
 declare const exceptionCodeBrand: unique symbol;
 type ExceptionCode = string & { readonly [exceptionCodeBrand]: true };
 declare const telemetryAreaBrand: unique symbol;
 type TelemetryArea = string & { readonly [telemetryAreaBrand]: true };
 
 type ExceptionValueFields = {
-  type: ExceptionType;
+  /** Already a class token: `normalizeTelemetryErrorTypeName` output. */
+  type: string;
   code?: ExceptionCode;
   status?: number;
   area?: TelemetryArea;
@@ -252,21 +251,19 @@ export const exceptionValue = ({
     status === undefined ? "" : ` ${status}`
   }${area === undefined ? "" : ` area=${area}`}`;
 
-const exceptionType = (value: string): ExceptionType =>
-  // SAFETY: normalization emits a class token, never the original message.
-  normalizeTelemetryErrorTypeName(value) as ExceptionType;
+// The allowlists narrow by predicate, so a branded value only ever comes from
+// a string that passed its pattern.
+const isExceptionCode = (value: string): value is ExceptionCode =>
+  API_ERROR_CODE.test(value);
+
+const isTelemetryArea = (value: string): value is TelemetryArea =>
+  TELEMETRY_AREA.test(value);
 
 const exceptionCode = (value: string | undefined): ExceptionCode | undefined =>
-  value !== undefined && API_ERROR_CODE.test(value)
-    ? // SAFETY: the stable API code has passed the telemetry token allowlist.
-      (value as ExceptionCode)
-    : undefined;
+  value !== undefined && isExceptionCode(value) ? value : undefined;
 
 const telemetryArea = (value: unknown): TelemetryArea | undefined =>
-  typeof value === "string" && TELEMETRY_AREA.test(value)
-    ? // SAFETY: the fixed subsystem slug has passed the telemetry allowlist.
-      (value as TelemetryArea)
-    : undefined;
+  typeof value === "string" && isTelemetryArea(value) ? value : undefined;
 
 const telemetryAreaProperty = (
   error: unknown,
@@ -423,7 +420,7 @@ const sanitizeExceptionEntry = (
   const frames = isRecord(stacktrace) ? stacktrace["frames"] : undefined;
   return {
     type,
-    value: exceptionValue({ type: exceptionType(type), ...fields }),
+    value: exceptionValue({ type, ...fields }),
     ...(Array.isArray(frames)
       ? { stacktrace: { type: "raw", frames: frames.map(sanitizeFrame) } }
       : {}),
