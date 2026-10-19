@@ -26,7 +26,10 @@ import { READER_ANNOTATION_TOOL_SET } from "@/api/mcp/reader-annotation-tools";
 import { RESEARCH_ADMIN_TOOL_SET } from "@/api/mcp/research-admin-tools";
 import { STELLA_TOOL_SET } from "@/api/mcp/stella-tools";
 import { TEMPLATE_TOOL_SET } from "@/api/mcp/template-tools";
-import { mcpToolInputAuthorityDenial } from "@/api/mcp/tool-authority";
+import {
+  isAccountAuthorizedForMcpTool,
+  mcpToolInputAuthorityDenial,
+} from "@/api/mcp/tool-authority";
 import {
   scopeProseToSurface,
   type ToolVocabulary,
@@ -34,6 +37,7 @@ import {
 import type {
   McpToolDefinition,
   McpToolHandler,
+  McpToolResponse,
   RuntimeMcpToolOutputContract,
   McpToolSet,
   ToolScope,
@@ -505,11 +509,13 @@ export type StaticMcpToolInvocation =
 /** The sole execution seam for a registered static tool. */
 export const invokeStaticMcpTool = async ({
   args,
+  beforeInvoke,
   context,
   definition,
   mode = "default",
 }: {
   args: Record<string, unknown>;
+  beforeInvoke?: (() => Promise<McpToolResponse | null>) | undefined;
   context: McpRequestContext;
   definition: McpToolDefinition;
   mode?: McpMode;
@@ -517,6 +523,14 @@ export const invokeStaticMcpTool = async ({
   const denial = mcpToolInputAuthorityDenial(context, definition, args);
   if (denial !== null) {
     return { status: "refused", denial };
+  }
+  if (!isAccountAuthorizedForMcpTool(context.userEmail, definition)) {
+    return { status: "refused", denial: null };
+  }
+
+  const earlyResponse = await beforeInvoke?.();
+  if (earlyResponse !== undefined && earlyResponse !== null) {
+    return { status: "invoked", response: earlyResponse };
   }
 
   if (PUBLIC_MCP_TOOL_DEFINITION in definition) {

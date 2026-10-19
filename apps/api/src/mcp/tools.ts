@@ -51,11 +51,7 @@ import {
   invokeStaticMcpTool,
 } from "@/api/mcp/static-tool-definitions";
 import { scopeToolResultToSurface } from "@/api/mcp/surface-tool-mentions";
-import {
-  mcpToolAuthorityDenialRefusal,
-  mcpToolAuthorityRefusal,
-  mcpToolInputAuthorityDenial,
-} from "@/api/mcp/tool-authority";
+import { mcpToolAuthorityDenialRefusal } from "@/api/mcp/tool-authority";
 import type {
   InternalToolResult,
   McpToolDefinition,
@@ -110,26 +106,6 @@ const staticInvocationRefusal = (
         }
       : mcpToolAuthorityDenialRefusal(`this ${toolName} operation`, denial)),
   });
-
-const staticInputAuthorityRefusal = ({
-  args,
-  context,
-  definition,
-}: {
-  args: Record<string, unknown>;
-  context: McpRequestContext;
-  definition: McpToolDefinition;
-}) => {
-  const denial = mcpToolInputAuthorityDenial(context, definition, args);
-  return denial === null
-    ? null
-    : structuredErrorResult(
-        mcpToolAuthorityDenialRefusal(
-          `this ${definition.name} operation`,
-          denial,
-        ),
-      );
-};
 
 /**
  * Central unknown-key backstop for static tools. Every curated tool derives its
@@ -513,17 +489,6 @@ const dispatchMcpToolCall = async ({
 }: McpToolCallArgs): Promise<CallToolResult> => {
   const serializeForSurface = createSurfaceSerializer({ context, mode });
   const staticTool = getStaticMcpToolDefinition(toolName, mode);
-  if (staticTool) {
-    const toolRefusal = mcpToolAuthorityRefusal({
-      authority: context,
-      definition: staticTool,
-      toolName,
-      userEmail: context.userEmail,
-    });
-    if (toolRefusal !== null) {
-      return serializeForSurface(structuredErrorResult(toolRefusal));
-    }
-  }
   const unavailableResult = featureUnavailableToolResult({
     args,
     context,
@@ -614,14 +579,6 @@ const dispatchMcpToolCall = async ({
   }
   const normalizedArgs = normalized.value;
   const inputNotes = normalized.notes;
-  const inputRefusal = staticInputAuthorityRefusal({
-    args: normalizedArgs,
-    context,
-    definition: staticTool,
-  });
-  if (inputRefusal !== null) {
-    return serializeForSurface(inputRefusal);
-  }
   const handler = getStaticMcpToolHandler(toolName, mode);
   if (!handler && !(PUBLIC_MCP_TOOL_DEFINITION in staticTool)) {
     return serializeForSurface(unknownToolResult(toolName));
@@ -634,17 +591,6 @@ const dispatchMcpToolCall = async ({
   // any handler failure.
   const finished = await Result.tryPromise({
     try: async () => {
-      const referenceRefusal = await staticToolReferenceRefusal({
-        context,
-        definition: staticTool,
-        args: normalizedArgs,
-        mode,
-        toolName,
-      });
-      if (referenceRefusal !== null) {
-        return serializeForSurface(referenceRefusal);
-      }
-
       // Resolve confirmation from the registry's canonical behavior.
       // Capability-catalog and upstream tools defer the final decision to their
       // owning dispatch boundary because the selected target determines risk.
@@ -674,6 +620,14 @@ const dispatchMcpToolCall = async ({
         : context;
       const invocation = await invokeStaticMcpTool({
         args: normalizedArgs,
+        beforeInvoke: async () =>
+          await staticToolReferenceRefusal({
+            context,
+            definition: staticTool,
+            args: normalizedArgs,
+            mode,
+            toolName,
+          }),
         context: executionContext,
         definition: staticTool,
         mode,

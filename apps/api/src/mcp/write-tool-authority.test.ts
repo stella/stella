@@ -98,12 +98,17 @@ const mcpOffered = (role: MemberRole): ReadonlySet<string> =>
 const noopScopedDb = asTestRaw<ScopedDb>(
   async (run: (tx: unknown) => unknown) => await run({}),
 );
+const fixtureWorkspace = { status: "active" } satisfies { status: "active" };
 
 const chatWriteTools = (
   role: MemberRole,
   currentRole: MemberRole | null = role,
-) =>
-  buildChatWriteTools({
+) => {
+  const refRegistry = createChatRefRegistry();
+  refRegistry.toMatterRef(
+    toSafeId<"workspace">("00000000-0000-4000-8000-000000000001"),
+  );
+  return buildChatWriteTools({
     featureAccessSnapshot: enrolledTimeBillingSnapshot({
       organizationId: "org_1",
       userId: "user_1",
@@ -111,20 +116,28 @@ const chatWriteTools = (
     memberRole: sessionMemberRole(role),
     organizationId: toSafeId<"organization">("org_1"),
     pinServerValidatedWorkspaceId: () => true,
-    refRegistry: createChatRefRegistry(),
+    refRegistry,
     resolveCurrentMembership: async () =>
       currentRole === null ? null : { role: currentRole },
     safeDb: toSafeDbMock(noopScopedDb),
     scopedDb: noopScopedDb,
     toolDefectMemo: createChatToolDefectMemo(),
     toolWorkspaceIds: resolveToolWorkspaceIds({
-      accessibleWorkspaceIds: [],
+      accessibleWorkspaceIds: [
+        toSafeId<"workspace">("00000000-0000-4000-8000-000000000001"),
+      ],
       pinnedIds: [],
     }),
     userEmail: "member@example.test",
     userId: toSafeId<"user">("user_1"),
-    workspaceStatusById: new Map(),
+    workspaceStatusById: new Map([
+      [
+        toSafeId<"workspace">("00000000-0000-4000-8000-000000000001"),
+        fixtureWorkspace.status,
+      ],
+    ]),
   });
+};
 
 /** Run a registered chat write tool and return the refusal it throws, if any. */
 const chatExecutionFailure = async ({
@@ -339,7 +352,7 @@ describe("write tool permissions", () => {
 
 describe("chat write tools re-read the member's role when they run", () => {
   const deleteMatter = {
-    args: { matter_id: "matter_1", confirm: true },
+    args: { matter_id: "mat_1", confirm: true },
     registeredRole: "owner",
     tool: "delete_matter",
   } as const;
@@ -352,7 +365,7 @@ describe("chat write tools re-read the member's role when they run", () => {
     expect(failure).toBeInstanceOf(ChatToolError);
     expect(failure).toMatchObject({
       kind: "unavailable",
-      message: "Your member role does not permit delete_matter.",
+      message: "Your member role does not permit this delete_matter operation.",
     });
   });
 
@@ -615,7 +628,8 @@ describe("write tools whose input selects the operation", () => {
     expect(failure).toBeInstanceOf(ChatToolError);
     expect(failure).toMatchObject({
       kind: "unavailable",
-      message: "Your member role does not permit update_organization_settings.",
+      message:
+        "Your member role does not permit this update_organization_settings operation.",
     });
   });
 });

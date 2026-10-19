@@ -1611,6 +1611,32 @@ type InvokeCapabilityOptions = {
   access: keyof typeof MCP_CAPABILITY_EXECUTORS;
 };
 
+const invokeCapabilityWithAuthority = async <T>({
+  context,
+  id,
+  permissions,
+  invoke,
+  map,
+}: {
+  context: McpRequestContext;
+  id: string;
+  permissions: readonly PermissionInput[];
+  invoke: () => Promise<T>;
+  map: (result: T) => McpToolResponse;
+}): Promise<McpToolResponse> => {
+  if (
+    permissions.some(
+      (permission) => !hasEffectiveAuthority(context, permission),
+    )
+  ) {
+    return structuredErrorResult({
+      code: "permission_denied",
+      message: `Your member role does not permit capability "${id}"`,
+    });
+  }
+  return map(await invoke());
+};
+
 const invokeCapabilityHandler = async ({
   args,
   context,
@@ -2114,35 +2140,20 @@ const executeInvoke = async ({
     });
   }
 
-  // 9. Authority. The safe wrapper checks the member role on its own, but only
-  // the role: a machine API key's permission set lives on the MCP session, so
-  // this is the one place the two can be ANDed. Every grant this call spends is
-  // checked here, the config's and the purpose's alike, because a handler that
-  // decides a grant from the request reads the role by itself. It runs on both
-  // paths and before the limiter below, so a caller who may not perform the
-  // capability is refused without consuming anyone else's budget. Configs
-  // without permissions (session-kind) skip the check, exactly as their wrapper
-  // does.
   const permissions = endpoint.config.permissions;
   const requiredPermissions = [
     ...(permissions === undefined ? [] : [permissions]),
     ...(purposeRequirement === null ? [] : [purposeRequirement.permission]),
   ];
-  if (
-    requiredPermissions.some(
-      (required) => !hasEffectiveAuthority(context, required),
-    )
-  ) {
-    return structuredErrorResult({
-      code: "permission_denied",
-      message: `Your member role does not permit capability "${id}"`,
-    });
-  }
 
   if (validateOnly) {
-    return untypedStructuredEgressPlan({
-      payload: { valid: true, capability: id },
-      textFields: [],
+    return await invokeCapabilityWithAuthority({
+      context,
+      id,
+      permissions: requiredPermissions,
+      invoke: async () => ({ valid: true, capability: id }),
+      map: (payload) =>
+        untypedStructuredEgressPlan({ payload, textFields: [] }),
     });
   }
 
@@ -2188,8 +2199,13 @@ const executeInvoke = async ({
     workspaceId,
   });
 
-  const result = await endpoint.handler(ctx);
-  return mapHandlerResult({ id, result });
+  return await invokeCapabilityWithAuthority({
+    context,
+    id,
+    permissions: requiredPermissions,
+    invoke: async () => await endpoint.handler(ctx),
+    map: (result) => mapHandlerResult({ id, result }),
+  });
 };
 
 /**

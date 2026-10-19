@@ -19,7 +19,6 @@ import {
   getStaticMcpToolDefinition,
   invokeStaticMcpTool,
 } from "@/api/mcp/static-tool-definitions";
-import { hasMcpToolAuthority } from "@/api/mcp/tool-authority";
 import type { McpToolHandler, McpToolResponse } from "@/api/mcp/tool-types";
 import { validationErrorResult } from "@/api/mcp/tool-utils";
 
@@ -187,15 +186,6 @@ export const runRegistryReadTool = async ({
       new ChatToolError({
         kind: "unavailable",
         message: "This feature is not enabled on this deployment.",
-      }),
-    );
-  }
-
-  if (!hasMcpToolAuthority(context, staticDefinition)) {
-    return Result.err(
-      new ChatToolError({
-        kind: "unavailable",
-        message: `Your member role does not permit ${toolName}.`,
       }),
     );
   }

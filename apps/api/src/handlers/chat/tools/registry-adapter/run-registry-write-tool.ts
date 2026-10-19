@@ -25,8 +25,6 @@ import {
 import {
   ACCOUNT_ACCESS_UNAVAILABLE_MESSAGE,
   type AccountOperationCheck,
-  hasMcpToolAuthority,
-  hasMcpToolInputAuthority,
   isAccountAuthorizedForMcpTool,
 } from "@/api/mcp/tool-authority";
 
@@ -84,10 +82,10 @@ export const applyChatApprovalConfirmation = ({
  *   `context.recordAuditEvent`. Chat threads its real audit recorder into
  *   `buildMcpContextFromChat`, so a projected write leaves the same audit trail
  *   an MCP or REST write would; there is no separate audit step here.
- * - The definition's declared write permissions are enforced here exactly as
- *   MCP dispatch enforces them; the handler keeps its input-specific role and
- *   workspace-status checks (`ensureActiveWorkspace`). This orchestrator also
- *   applies the feature-flag gate MCP dispatch applies.
+ * - The shared static-tool invocation enforces the definition's declared
+ *   write permissions. The handler keeps its workspace-status checks
+ *   (`ensureActiveWorkspace`). This orchestrator also applies the feature-flag
+ *   gate MCP dispatch applies.
  * - Approval is enforced upstream by the chat tool policy (`mutation` ->
  *   `needsApproval`), not here. Because the MCP handler re-validates existence
  *   and access against current state at execution time, a stale approval (the
@@ -134,15 +132,6 @@ export const runRegistryWriteTool = async (
     );
   }
   const entry = WRITE_TOOL_REF_FIELD_MAP[toolName];
-
-  if (!hasMcpToolAuthority(context, staticDefinition)) {
-    return Result.err(
-      new ChatToolError({
-        kind: "unavailable",
-        message: `Your member role does not permit ${toolName}.`,
-      }),
-    );
-  }
 
   if ("unavailableInputParams" in entry) {
     for (const param of entry.unavailableInputParams) {
@@ -216,15 +205,6 @@ export const runRegistryWriteTool = async (
   ) {
     return Result.err(
       new ChatToolError({ kind: "not-found", message: "Not found" }),
-    );
-  }
-
-  if (!hasMcpToolInputAuthority(context, staticDefinition, normalized.value)) {
-    return Result.err(
-      new ChatToolError({
-        kind: "unavailable",
-        message: `Your member role does not permit ${toolName}.`,
-      }),
     );
   }
 
