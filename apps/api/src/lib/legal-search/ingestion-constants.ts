@@ -75,7 +75,7 @@ export const PARSER_VERSIONS = {
   [ADAPTER_KEYS.AT_FINDOK]: 9,
   [ADAPTER_KEYS.EU_ECJ]: 15,
   [ADAPTER_KEYS.HU_BHGY]: 18,
-  [ADAPTER_KEYS.PL_KIS]: 8,
+  [ADAPTER_KEYS.PL_KIS]: 9,
   [ADAPTER_KEYS.PL_UODO]: 13,
   [ADAPTER_KEYS.PL_UOKIK]: 11,
 } as const satisfies Record<AdapterKey, number>;
