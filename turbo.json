@@ -1444,6 +1444,10 @@
     "@stll/api#test:property": {
       "dependsOn": ["@stll/cli#codegen:runtime", "generate:capability-runtime"],
       "passThroughEnv": ["API_TEST_TIMINGS_DIR", "API_TEST_DURATIONS_FILE"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/packages/mcp-kit/src/**"
+      ],
       "cache": false
     },
     "@stll/api#test": {
@@ -1472,6 +1476,7 @@
         "$TURBO_ROOT$/apps/web/public/fonts/**",
         "$TURBO_ROOT$/apps/web/public/stella-logo-512.png",
         "$TURBO_ROOT$/packages/mcp-apps/src/**",
+        "$TURBO_ROOT$/packages/mcp-kit/src/**",
         "$TURBO_ROOT$/packages/skills/blueprints/**",
         "$TURBO_ROOT$/packages/skills/skills/**",
         "$TURBO_ROOT$/oxlint.config.ts",

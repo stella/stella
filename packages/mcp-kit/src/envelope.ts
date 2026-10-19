@@ -254,7 +254,7 @@ export const closestNames = (
       const contains = lower.includes(lowered) || lowered.includes(lower);
       return {
         candidate,
-        distance: contains ? 0 : editDistance(lowered, lower),
+        distance: contains ? 0 : toolNameDistance(lowered, lower),
       };
     })
     .filter(
