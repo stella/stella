@@ -42,7 +42,7 @@ import {
   sanitizeUrl,
 } from "@/api/lib/sanitize-url";
 
-export const PL_TK_ORIGIN = "https://ipo.trybunal.gov.pl";
+const PL_TK_ORIGIN = "https://ipo.trybunal.gov.pl";
 
 const PL_TK_SOURCE_SYSTEM = "ipo.trybunal.gov.pl";
 
@@ -75,7 +75,7 @@ const POLISH_DATE = /(?<day>\d{1,2})\s+(?<month>\p{L}+)\s+(?<year>\d{4})/u;
  * portal writes the month in the genitive and sometimes pads the day with a
  * second space, which the pattern absorbs.
  */
-export const parsePolishDate = (text: string): string | undefined => {
+const parsePolishDate = (text: string): string | undefined => {
   const groups = POLISH_DATE.exec(text)?.groups;
   const month = groups?.["month"]?.toLocaleLowerCase("pl-PL");
   const day = groups?.["day"];
@@ -142,7 +142,7 @@ type PlTkDissent = {
 };
 
 /** What the case record states once for every ruling in the case. */
-export type PlTkCaseRecord = {
+type PlTkCaseRecord = {
   caseNumber: string | undefined;
   filedDate: string | undefined;
   filedStkDate: string | undefined;
