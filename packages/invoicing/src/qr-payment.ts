@@ -31,7 +31,8 @@ const PAY_BY_SQUARE_AMOUNT_SCALE = 10 ** 2;
 export type PayBySquareInput = {
   amount: number;
   currency: string;
-  dueDate: string;
+  /** Optional in PAY by square 1.2: an absent due date is omitted from the order. */
+  dueDate?: string;
   variableSymbol?: string;
   paymentNote: string;
   iban: string;
@@ -110,7 +111,8 @@ export const buildPayBySquarePayload = ({
   if (symbol.isErr()) {
     return Result.err(symbol.error);
   }
-  const date = formatDate(dueDate);
+  const date =
+    dueDate === undefined ? Result.ok(undefined) : formatDate(dueDate);
   if (date.isErr()) {
     return Result.err(date.error);
   }
@@ -139,7 +141,7 @@ export const buildPayBySquarePayload = ({
           type: PaymentOptions.PaymentOrder,
           amount: roundedAmount,
           currencyCode: normalizedCurrency,
-          paymentDueDate: date.value,
+          ...(date.value === undefined ? {} : { paymentDueDate: date.value }),
           ...(symbol.value === undefined
             ? {}
             : { variableSymbol: symbol.value }),

@@ -212,6 +212,23 @@ describe("PAY by square payload", () => {
     });
   });
 
+  test("omits the optional due date instead of withholding the code", () => {
+    const payment = buildPayBySquarePayload({
+      amount: 42,
+      currency: "EUR",
+      variableSymbol: "7",
+      paymentNote: "INV-7",
+      iban: slovakIban,
+      beneficiaryName: "Fiktívny príjemca",
+    }).unwrap();
+    if (payment.status !== "payable") {
+      throw new Error("Fixture must produce a payable document");
+    }
+    const decoded = decodePayBySquare(payment.payload).payments.at(0);
+    expect(decoded?.amount).toBe(42);
+    expect(decoded?.paymentDueDate).toBeUndefined();
+  });
+
   test("rounds half cents to two decimals", () => {
     const payment = buildPayBySquarePayload({
       amount: 1.005,

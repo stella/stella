@@ -106,17 +106,14 @@ export const buildInvoicePaymentPayload = ({
           ? {}
           : { message: invoice.invoiceNumber }),
       });
-    case "pay_by_square": {
-      if (invoice.dueDate === null) {
-        return null;
-      }
+    case "pay_by_square":
       return buildPayBySquarePayload({
         amount: toMajorUnits({
           amountCents: totals.grossAmountMinor,
           currency: invoice.currency,
         }),
         currency: invoice.currency,
-        dueDate: invoice.dueDate,
+        ...(invoice.dueDate === null ? {} : { dueDate: invoice.dueDate }),
         ...(variableSymbol === null ? {} : { variableSymbol }),
         paymentNote:
           invoice.status === "draft" || invoice.invoiceNumber === null
@@ -126,7 +123,6 @@ export const buildInvoicePaymentPayload = ({
         ...(seller.bic === null ? {} : { bic: seller.bic }),
         beneficiaryName: seller.legalName,
       });
-    }
     case null:
       return null;
     default: {
