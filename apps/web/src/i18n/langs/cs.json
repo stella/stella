@@ -2690,6 +2690,7 @@
       "aiConfigModelInvalid": "Konfigurace modelu AI je neplatná. Zkontrolujte vybrané modely.",
       "aiConfigProviderInvalid": "Konfigurace poskytovatele AI je neplatná. Zkontrolujte nastavení poskytovatele.",
       "aiConfigProviderValidationFailed": "Poskytovatel AI konfiguraci odmítl. Zkontrolujte klíč API a model.",
+      "aiDeadlineExceeded": "AI neodpověděla včas. Zkuste to za chvíli znovu.",
       "aiOutputInvalid": "Odpověď AI měla neočekávaný formát. Zkuste to znovu.",
       "aiOutputModerated": "Poskytovatel AI výstup zablokoval. Přeformulujte požadavek nebo zvolte jiný model.",
       "aiProviderTaskUnsupported": "Nastavený poskytovatel AI tuto úlohu nezvládá. Zvolte poskytovatele, který ji zvládá.",

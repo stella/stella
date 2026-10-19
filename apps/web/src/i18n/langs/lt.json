@@ -2690,6 +2690,7 @@
       "aiConfigModelInvalid": "DI modelio konfigūracija netinkama. Patikrinkite pasirinktus modelius.",
       "aiConfigProviderInvalid": "DI teikėjo konfigūracija netinkama. Patikrinkite teikėjo nustatymus.",
       "aiConfigProviderValidationFailed": "DI teikėjas atmetė konfigūraciją. Patikrinkite API raktą ir modelį.",
+      "aiDeadlineExceeded": "DI neatsakė laiku. Pabandykite po akimirkos dar kartą.",
       "aiOutputInvalid": "DI atsakymas buvo netikėto formato. Bandykite dar kartą.",
       "aiOutputModerated": "DI teikėjas moderavo išvestį. Performuluokite užklausą arba pasirinkite kitą modelį.",
       "aiProviderTaskUnsupported": "Sukonfigūruotas DI teikėjas negali atlikti šios užduoties. Pasirinkite teikėją, kuris gali.",

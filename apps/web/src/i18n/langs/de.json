@@ -2690,6 +2690,7 @@
       "aiConfigModelInvalid": "Die KI-Modellkonfiguration ist ungültig. Prüfen Sie die ausgewählten Modelle.",
       "aiConfigProviderInvalid": "Die Konfiguration des KI-Anbieters ist ungültig. Prüfen Sie die Anbietereinstellungen.",
       "aiConfigProviderValidationFailed": "Der KI-Anbieter hat die Konfiguration abgelehnt. Prüfen Sie API-Schlüssel und Modell.",
+      "aiDeadlineExceeded": "Die KI hat nicht rechtzeitig geantwortet. Bitte versuchen Sie es gleich noch einmal.",
       "aiOutputInvalid": "Die KI-Antwort hatte ein unerwartetes Format. Versuchen Sie es erneut.",
       "aiOutputModerated": "Der KI-Anbieter hat die Ausgabe moderiert. Formulieren Sie die Anfrage um oder wählen Sie ein anderes Modell.",
       "aiProviderTaskUnsupported": "Der konfigurierte KI-Anbieter kann diese Aufgabe nicht ausführen. Wählen Sie einen Anbieter, der sie unterstützt.",
