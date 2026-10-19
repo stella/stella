@@ -873,7 +873,7 @@ const enforcePublisherPolicy = async <Target extends PublisherTarget>(
   state: WalkState,
   options: PublisherFetchOptions,
   runtime: PublisherRuntime<Target>,
-) => {
+): Promise<Result<number, PublisherPolicyError>> => {
   // The robots load is shared; an aborting caller stops waiting for it
   // without cancelling it for the others.
   const signal = state.requestInit?.signal ?? undefined;
