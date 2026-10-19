@@ -12,8 +12,10 @@
  * the document: email HTML is untrusted input.
  */
 import { panic, Result, TaggedError } from "better-result";
-import { type Cheerio, load } from "cheerio";
+import { type Cheerio, type CheerioOptions, load } from "cheerio";
 import { type Element, isTag, isText } from "domhandler";
+import { serializeOuter } from "parse5";
+import { adapter as htmlparser2Adapter } from "parse5-htmlparser2-tree-adapter";
 import PostalMime, { type Address } from "postal-mime";
 
 import {
@@ -1003,14 +1005,26 @@ type EmailBodyToken =
 
 type CheerioApi = ReturnType<typeof load>;
 
+export const EMAIL_PREVIEW_DOM_OPTIONS: Readonly<CheerioOptions> =
+  Object.freeze({
+    scriptingEnabled: false,
+    treeAdapter: htmlparser2Adapter,
+  });
+
 const loadEmailDocument = (html: string): CheerioApi =>
-  load(html, { scriptingEnabled: false });
+  load(html, EMAIL_PREVIEW_DOM_OPTIONS);
+
+export const serializeEmailPreviewMarkup = ($: CheerioApi): string => {
+  const html = $("html").get(0);
+  return html ? serializeOuter(html, EMAIL_PREVIEW_DOM_OPTIONS) : "";
+};
 
 const serializeEmailDocument = ($: CheerioApi): string => {
+  $("noscript").remove();
   $("head").prepend(
     `<meta http-equiv="Content-Security-Policy" content="${EMAIL_PREVIEW_CSP}">`,
   );
-  return `<!DOCTYPE html>${$.html("html")}`;
+  return `<!DOCTYPE html>${serializeEmailPreviewMarkup($)}`;
 };
 
 const sanitizeDom = ($: CheerioApi): void => {
@@ -1466,7 +1480,11 @@ const stripLeadingRfc822Headers = (body: ReturnType<CheerioApi>): void => {
     return;
   }
 
-  const html = body.html();
+  const html = body
+    .contents()
+    .toArray()
+    .map((node) => serializeOuter(node, EMAIL_PREVIEW_DOM_OPTIONS))
+    .join("");
   if (!html) {
     return;
   }
@@ -1482,7 +1500,8 @@ const stripLeadingRfc822Headers = (body: ReturnType<CheerioApi>): void => {
     return;
   }
 
-  body.html(parts.slice(blankIndex + 1).join("<br>"));
+  const fragment = loadEmailDocument(parts.slice(blankIndex + 1).join("<br>"));
+  body.empty().append(fragment("body").contents());
 };
 
 const normalizeUrlAttribute = (value: string): string => {
