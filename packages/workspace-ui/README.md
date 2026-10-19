@@ -84,7 +84,9 @@ import { MattersPreview } from "@stll/workspace-ui/feature-previews";
 Styling: the scenes use Tailwind utilities against the `@stll/ui` theme
 tokens, so the host's Tailwind entry needs the theme and both packages'
 shipped sources (the CSS block under Development below). Light and dark follow
-the theme: put `dark` on an ancestor (`<html class="dark">`). The theme's
+the theme: put `dark` on the root element (`<html class="dark">`); the theme's
+derived tokens resolve there, so a `dark` class lower in the tree leaves them
+on their light values. The theme's
 `--font-sans` names DM Sans; load it (for example from Google Fonts) or the
 system sans serif stands in. The document page uses Tailwind's `font-serif`.
 

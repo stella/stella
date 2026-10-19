@@ -132,8 +132,8 @@ describe("feature previews", () => {
       <BillingPreview labels={BILLING_LABELS} locale="en-GB" />,
     );
 
-    // 474 billed minutes at EUR 220 an hour.
-    expect(markup).toContain("7.9");
-    expect(markup).toContain("€1,738.00");
+    // 594 billed minutes at EUR 220 an hour.
+    expect(markup).toContain("9.9");
+    expect(markup).toContain("€2,178.00");
   });
 });

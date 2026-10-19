@@ -133,4 +133,9 @@ const ENTRIES = [
     description: "Draft letter before action",
     minutes: 210,
   },
+  {
+    date: "2026-10-16",
+    description: "Research on carrier liability limits",
+    minutes: 120,
+  },
 ] as const;

@@ -27,22 +27,12 @@ export const ContactsPreview = ({
     title={COMPANY.name}
   >
     <div className="flex h-full min-h-0 flex-col gap-4 p-4">
-      <div className="flex min-w-0 items-center gap-3">
-        <span className="bg-muted flex size-10 shrink-0 items-center justify-center rounded-md">
-          <Building2Icon className="text-muted-foreground size-5" />
+      <div className="flex min-w-0 items-center gap-2 text-sm">
+        <span className="truncate">{COMPANY.legalForm}</span>
+        <span className="text-success flex shrink-0 items-center gap-1 font-medium">
+          <span className="size-1.5 rounded-full bg-current" />
+          {COMPANY.status}
         </span>
-        <div className="flex min-w-0 flex-col gap-0.5">
-          <span className="truncate text-base font-semibold">
-            {COMPANY.name}
-          </span>
-          <span className="text-muted-foreground flex min-w-0 items-center gap-1.5">
-            <span className="truncate">{COMPANY.legalForm}</span>
-            <span className="text-success flex shrink-0 items-center gap-1 font-medium">
-              <span className="size-1.5 rounded-full bg-current" />
-              {COMPANY.status}
-            </span>
-          </span>
-        </div>
       </div>
       <section className="flex min-w-0 flex-col gap-2">
         <h3 className="text-muted-foreground flex items-center gap-1.5 font-medium">
@@ -101,7 +91,6 @@ const COMPANY = {
       label: "SIC code",
       value: "52290 – Other transportation support activities",
     },
-    { label: "Directors", value: "Daniel Okafor, Priya Raman" },
   ],
 } as const;
 

@@ -83,7 +83,7 @@ export const TimeTrackingPreview = ({
             </li>
           ))}
         </ul>
-        <div className="mt-auto flex items-center justify-between border-t pt-2 text-sm font-semibold">
+        <div className="flex items-center justify-between border-t pt-2 text-sm font-semibold">
           <span>{labels.summary}</span>
           <span className="tabular-nums">
             {formatPreviewDuration(locale, totalMinutes)}
