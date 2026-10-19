@@ -55,7 +55,7 @@ test("repaints and accepts a follow-up suggestion that arrives after mount", asy
   const ui = render(renderComposer());
   const textbox = await ui.findByRole("textbox");
   const paragraph = textbox.querySelector("p");
-  expect(paragraph?.dataset.placeholder).toBe(messages.chat.placeholder);
+  expect(paragraph?.dataset["placeholder"]).toBe(messages.chat.placeholder);
 
   const prompt = "Which court decided the appeal?";
   ui.rerender(renderComposer(prompt));
@@ -64,7 +64,7 @@ test("repaints and accepts a follow-up suggestion that arrives after mount", asy
     () => `\u2068${prompt}\u2069`,
   );
   await waitFor(() =>
-    expect(paragraph?.dataset.placeholder).toBe(expectedPlaceholder),
+    expect(paragraph?.dataset["placeholder"]).toBe(expectedPlaceholder),
   );
 
   fireEvent.keyDown(textbox, { key: "Tab" });

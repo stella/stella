@@ -1,16 +1,20 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { sourceFileIndex } from "@stll/scripts/src/source-file-index";
+
 const SOURCE_ROOT = fileURLToPath(new URL("../../", import.meta.url));
-const sourceModules = [
-  ...new Bun.Glob("**/*.{ts,tsx}").scanSync({ cwd: SOURCE_ROOT }),
-]
-  .filter((file) => !/\.(?:test|spec|gen)\./u.test(file))
-  .toSorted();
-const sourceOf = (file: string) =>
-  readFileSync(path.join(SOURCE_ROOT, file), "utf-8");
+const sourceIndex = sourceFileIndex(SOURCE_ROOT);
+const sourceModules = sourceIndex
+  .map(({ relativePath }) => relativePath)
+  .filter((file) => !/\.(?:test|spec|gen)\./u.test(file));
+const sourceOf = (file: string) => {
+  const entry = sourceIndex.find(({ relativePath }) => relativePath === file);
+  if (entry === undefined) {
+    throw new Error(`Missing source module ${file}`);
+  }
+  return entry.sourceText;
+};
 
 const chatEditorModules = `components/ai-prompt-input/ai-prompt-input.tsx
 components/ai-suggestions/file-chat-overlay.tsx
