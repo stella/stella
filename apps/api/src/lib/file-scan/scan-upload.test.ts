@@ -159,7 +159,11 @@ describe("shared upload bytes", () => {
         if (!FileScanRejectedError.is(result.error)) {
           throw new TypeError("expected a rejecting verdict");
         }
-        expect(result.error.rejection).toEqual(fileSecurityRejection(expected));
+        const rejection = fileSecurityRejection(expected);
+        if (rejection === null) {
+          throw new TypeError("expected a rejecting finding");
+        }
+        expect(result.error.rejection).toEqual(rejection);
         return;
       }
       expect(flagged).toBe(false);
