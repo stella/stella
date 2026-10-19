@@ -144,8 +144,8 @@ export const parseBfdiDocument = ({
         "BfDI publication fields differ from the supported detail contract",
       );
     }
-    const date = compact(dates.find(".value").text()).match(
-      /^(\d{2})\.(\d{2})\.(\d{4})$/u,
+    const date = /^(\d{2})\.(\d{2})\.(\d{4})$/u.exec(
+      compact(dates.find(".value").text()),
     );
     const issuedOn = date ? `${date.at(3)}-${date.at(2)}-${date.at(1)}` : "";
     if (!parsePlainDate(issuedOn)) {
@@ -161,7 +161,7 @@ export const parseBfdiDocument = ({
     const asset = yield* publisherUrl(href ?? "", detailUrl);
     if (
       asset !== documentUrl ||
-      !/\.pdf$/u.test(new URL(asset).pathname) ||
+      !new URL(asset).pathname.endsWith(".pdf") ||
       new URL(asset).searchParams.get("__blob") !== "publicationFile"
     ) {
       return yield* invalid("BfDI document locator differs from its admission");
@@ -285,7 +285,7 @@ const createBfdiDocumentReader =
     policy,
     urls,
   }: CreateBfdiDocumentReaderOptions): SoftLawSourceAdapter["fetchDocument"] =>
-  (entry, { fetch: read }) =>
+  async (entry, { fetch: read }) =>
     Result.gen(async function* () {
       const admitted = policy.indexes
         .flatMap((index) => index.documents)
@@ -415,7 +415,7 @@ export const createBfdiAdapter = (input: unknown) =>
         userAgent: "Stella/1.0 (+https://github.com/stella/stella)",
         window: { type: "any_time" },
       },
-      discover: ({ cursor, fetch: read }) =>
+      discover: async ({ cursor, fetch: read }) =>
         Result.gen(async function* () {
           const parts = cursor?.split(":");
           const indexNumber = parts ? Number(parts.at(1)) : 0;
@@ -514,7 +514,9 @@ export const createBfdiAdapter = (input: unknown) =>
     return Result.ok(adapter);
   });
 
-export const loadBfdiAdapter = (configuration: SoftLawAdapterConfiguration) =>
+export const loadBfdiAdapter = async (
+  configuration: SoftLawAdapterConfiguration,
+) =>
   Result.gen(async function* () {
     if (configuration.type !== "admission-file") {
       return yield* invalid("BfDI source admission is not configured");
