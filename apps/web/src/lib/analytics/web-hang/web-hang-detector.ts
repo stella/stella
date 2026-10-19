@@ -383,7 +383,7 @@ export const createWebHangDetector = ({
         } else {
           persist();
         }
-        const retireBootCandidates = () =>
+        const retireBootCandidates = async () =>
           retireAbandonedBootCandidates({
             storage: local,
             locks,
@@ -444,7 +444,7 @@ const createLivenessLock = (locks: HangLocks | null, key: string) => {
         releaseHeld = resolve;
       });
       detachedLockRequest(
-        locks.request(key, () => held),
+        locks.request(key, async () => held),
         "web-hang.liveness",
       );
     },
@@ -479,7 +479,7 @@ const retireAbandonedBootCandidates = async ({
   if (!locks || stopped()) {
     return;
   }
-  const snapshot = await Result.tryPromise(() => locks.query());
+  const snapshot = await Result.tryPromise(async () => locks.query());
   if (Result.isError(snapshot) || stopped()) {
     return;
   }
