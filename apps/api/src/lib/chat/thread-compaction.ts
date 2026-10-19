@@ -176,7 +176,7 @@ export type ChatCompactionSummarize = (
 
 type ChatCompactionAnalytics = Pick<
   TanStackAIAnalyticsCallbacks,
-  "captureError" | "middleware"
+  "captureError" | "forModel" | "middleware"
 >;
 
 /**

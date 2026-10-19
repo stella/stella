@@ -11,6 +11,13 @@ import { assertProperty } from "@stll/property-testing";
 
 import { testProcessBudgets } from "../apps/api/scripts/test-process-supervisor";
 import { CANONICAL_CANCEL_STEP } from "./ci-cancellation-contract";
+import {
+  CHECK_POOL_STEP_NAMES,
+  checkPoolRegistryPath,
+  readCheckPool,
+  readWorkingTreeCheckPool,
+  type ReadCheckPool,
+} from "./ci-check-pool-registry";
 import { CI_GATES, CONTINUE_ON_ERROR } from "./ci-gate-classes";
 import { rootCheckGate } from "./ci-root-check-gate";
 import { STATIC_RECEIPT_STEP_NAMES } from "./ci-static-checks";
@@ -80,14 +87,18 @@ const withoutStaticReceipts = (steps: Record<string, unknown>[]) => {
   return normalized;
 };
 
-const cancellationJobSchema = (canonical: object) =>
+// Pooled checks are steps of their job, read from the audited tree's registry.
+const cancellationJobSchema = (
+  canonical: object,
+  readPool: ReadCheckPool = readWorkingTreeCheckPool,
+) =>
   v.pipe(
     v.looseObject({
       permissions: v.optional(v.record(v.string(), v.string())),
       steps: v.pipe(
         v.unknown(),
         v.transform((steps) =>
-          flattenWorkflowSteps(steps).filter(
+          flattenWorkflowSteps(steps, readPool).filter(
             (step) => !isWorkflowBarrier(step),
           ),
         ),
@@ -157,7 +168,7 @@ const processBudgetWorkflowSchema = v.looseObject({
       steps: v.optional(
         v.pipe(
           v.unknown(),
-          v.transform(flattenWorkflowSteps),
+          v.transform((steps) => flattenWorkflowSteps(steps)),
           v.array(v.looseObject({ env: processBudgetEnvSchema })),
         ),
       ),
@@ -346,13 +357,16 @@ const baseCancellation = v.parse(
     `data:text/javascript;base64,${Buffer.from(baseCancellationSource).toString("base64")}`
   ),
 ).CANONICAL_CANCEL_STEP;
-const baseCancellationSchema = cancellationJobSchema(baseCancellation);
-const baseJobSchema = partitionJobSchema(baseCancellationSchema);
-const parseJobs = (source: string) =>
-  v.parse(workflowSchema, Bun.YAML.parse(source)).jobs;
-const jobs = parseJobs(
-  readFileSync(new URL(`../${workflowPath}`, import.meta.url), "utf-8"),
+const baseCancellationSchema = cancellationJobSchema(baseCancellation, (pool) =>
+  git(["show", `${mergeBase}:${checkPoolRegistryPath(pool)}`]),
 );
+const baseJobSchema = partitionJobSchema(baseCancellationSchema);
+const jobs = v.parse(
+  workflowSchema,
+  Bun.YAML.parse(
+    readFileSync(new URL(`../${workflowPath}`, import.meta.url), "utf-8"),
+  ),
+).jobs;
 const baseWorkflow: unknown = Bun.YAML.parse(
   git(["show", `${mergeBase}:${workflowPath}`]),
 );
@@ -771,6 +785,15 @@ const withoutLocalVerification = (step: Step): Step => {
   return original;
 };
 
+// Checks that ran as background steps keep their ids in the check pool.
+const formerBackgroundIds: Record<string, string> = {
+  "Test capability shard merge and package parity": "capability_parity",
+  "Generated files manifest guard": "generated_manifest",
+  "Test api scripts": "api_scripts",
+  "Test CLI runtime package parity": "cli_runtime_parity",
+  "Test remaining repository scripts": "remaining_scripts",
+  "Playwright config scope": "playwright_scope",
+};
 const ownedSteps = (steps: readonly Step[]) =>
   steps
     .filter(({ name }) => !prerequisites.has(name))
@@ -789,7 +812,10 @@ const ownedSteps = (steps: readonly Step[]) =>
     )
     .map((step) => {
       const { background, ...check } = step;
-      if (background !== true) {
+      if (
+        background !== true &&
+        step["id"] !== formerBackgroundIds[step.name]
+      ) {
         return step;
       }
       const { id: _id, ...command } = check;
@@ -813,13 +839,18 @@ type ScopeOptions = {
 const expectScope = ({ current, base }: ScopeOptions) => {
   const { if: condition, ...scope } = current;
   const { if: originalCondition, ...originalScope } = base;
-  // ci-plan produces the generated sources. A merge base that still ran the
-  // producer as a job of its own names it beside the plan in `needs`.
+  // The generated-source producer is a job of its own, so its consumers
+  // name both. A merge base may name the plan alone, the current producer, or
+  // the retired producer that ran after the plan.
+  if (isDeepStrictEqual(scope["needs"], ["ci-plan", "generated-sources"])) {
+    scope["needs"] = "ci-plan";
+  }
   if (
     isDeepStrictEqual(originalScope["needs"], [
       "ci-plan",
       "ci-generated-sources",
-    ])
+    ]) ||
+    isDeepStrictEqual(originalScope["needs"], ["ci-plan", "generated-sources"])
   ) {
     originalScope["needs"] = "ci-plan";
   }
@@ -1170,10 +1201,12 @@ test("each CI check leg preserves merge-base setup, supply-chain protection and 
       });
     if (!baseJobs["ci-checks"]) {
       const baseNames = new Set(originalSteps.map(({ name }) => name));
+      // Pooled checks run concurrently; their registry order is not a schedule.
+      const leg = partitionIds.at(index);
       const reordered = new Set(
-        steps
-          .filter((step) => step["background"] === true)
-          .map(({ name }) => name),
+        leg === "ci-checks-policy" || leg === "ci-checks-rest"
+          ? readCheckPool(leg).map(({ name }) => name)
+          : [],
       );
       if (partitionIds.at(index) === "ci-checks-rest") {
         reordered.add("Prepare environment");
@@ -1743,63 +1776,44 @@ test("the check census preserves nested commands and their failure conditions", 
   ).not.toEqual(ownedSteps(serial.steps));
 });
 
-test("repository backgrounds are bounded and joined before failure cancellation", () => {
-  const raw = v.parse(v.object({ steps: v.unknown() }), jobs["ci-checks-rest"]);
-  const steps = flattenWorkflowSteps(raw.steps);
-  const firstBackground = steps.findIndex(
-    (step) => step["background"] === true,
-  );
-  expect(firstBackground).toBeGreaterThan(0);
-  for (const name of [
-    "Checkout",
-    "Setup Bun",
-    "Install dependencies",
-    "Download generated sources",
-    "Restore generated sources",
-    "Prepare route network manifest",
-    "Restore route network baseline",
-    "Prepare environment",
-    "Content delivery declarations",
-  ]) {
-    const index = steps.findIndex((step) => step["name"] === name);
-    expect(index, name).toBeGreaterThanOrEqual(0);
-    expect(index, name).toBeLessThan(firstBackground);
-    expect(steps.at(index)?.["background"], name).toBeUndefined();
-  }
-  const pending = new Set<string>();
-  let launched = 0;
-  for (const step of steps) {
-    if (step["background"] === true) {
-      const id = v.parse(v.string(), step["id"]);
-      expect(pending.has(id), id).toBe(false);
-      pending.add(id);
-      launched++;
-      // Keep at most two background checks running concurrently.
-      expect(pending.size).toBeLessThanOrEqual(2);
-      expect(step["continue-on-error"]).toBeUndefined();
-      continue;
+test("repository checks run in one pool after preparation and before receipts", () => {
+  for (const job of ["ci-checks-policy", "ci-checks-rest"] as const) {
+    const raw = v.parse(v.object({ steps: v.unknown() }), jobs[job]);
+    const steps = flattenWorkflowSteps(raw.steps);
+    // The pool bounds concurrency itself; no native background step remains.
+    expect(
+      steps.filter(
+        (step) => step["background"] === true || isWorkflowBarrier(step),
+      ),
+    ).toEqual([]);
+    const pool = steps.findIndex(
+      (step) => step["name"] === CHECK_POOL_STEP_NAMES[job],
+    );
+    expect(pool, job).toBeGreaterThan(0);
+    expect(steps[pool]?.["continue-on-error"]).toBeUndefined();
+    for (const name of [
+      "Checkout",
+      "Setup Bun",
+      "Resolve static check receipts",
+      "Install dependencies",
+      "Download generated sources",
+      "Restore generated sources",
+      "Prepare environment",
+    ]) {
+      const index = steps.findIndex((step) => step["name"] === name);
+      expect(index, name).toBeGreaterThanOrEqual(0);
+      expect(index, name).toBeLessThan(pool);
     }
-    if (isWorkflowBarrier(step)) {
-      expect(pending.size).toBeGreaterThan(0);
-      expect(step["if"]).toBeUndefined();
-      expect(step["continue-on-error"]).toBeUndefined();
-      if ("wait" in step) {
-        const ids = v.parse(v.array(v.string()), step["wait"]);
-        for (const id of ids) {
-          expect(pending.delete(id), id).toBe(true);
-        }
-      } else {
-        expect(Object.keys(step).toSorted()).toEqual(["name", "wait-all"]);
-        pending.clear();
-      }
-      continue;
-    }
-    if (step["name"] === CANONICAL_CANCEL_STEP.name) {
-      expect(pending.size).toBe(0);
+    for (const name of [
+      "Record static check receipts",
+      CANONICAL_CANCEL_STEP.name,
+    ]) {
+      expect(
+        steps.findIndex((step) => step["name"] === name),
+        name,
+      ).toBeGreaterThan(pool);
     }
   }
-  expect(launched).toBe(7);
-  expect(pending.size).toBe(0);
 });
 
 const CONTENDED_TEST_TIMEOUTS = {
@@ -1820,7 +1834,7 @@ const backgroundTimeoutSteps = (raw: unknown): Step[] =>
             ...child,
             background: true,
           }))
-        : [step],
+        : flattenWorkflowSteps([step]),
     ),
   );
 

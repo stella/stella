@@ -346,6 +346,7 @@ export type DestructiveEffectChunkStatus =
 
 export type AccountDeletionStorageCleanup = {
   s3Keys: string[];
+  notBefore?: string;
 };
 
 export const tsvector = customType<{ data: string }>({

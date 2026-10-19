@@ -19,7 +19,7 @@ export const CALLER_FEATURE = {
     undeclared: { type: "hidden" },
     routeImports: [
       "@/routes/_protected.settings/-queries/memories",
-      "@/routes/_protected.settings/-components/organization/memory/",
+      "@/routes/_protected.settings/-components/account/memory/",
     ],
   },
   verification: {
