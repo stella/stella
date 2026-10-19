@@ -129,6 +129,9 @@ esac
       0,
     );
     expect(readFileSync(outputPath, "utf-8")).toContain(`sha=${mainSha}`);
+    expect(readFileSync(outputPath, "utf-8")).toContain(
+      "task_cache_producer=validated-main",
+    );
     expect(
       runStep(verifyAncestry, releaseSha, fixture, outputPath).exitCode,
     ).toBe(0);
@@ -146,6 +149,7 @@ esac
     }
 
     const missingSha = "a".repeat(40);
+    writeFileSync(outputPath, "");
     expect(
       runStep(validateFormat, missingSha, fixture, outputPath).exitCode,
     ).toBe(0);
@@ -155,6 +159,7 @@ esac
     expect(
       runStep(verifyAncestry, siblingSha, fixture, outputPath).exitCode,
     ).not.toBe(0);
+    expect(readFileSync(outputPath, "utf-8")).toBe("");
   } finally {
     rmSync(fixture, { recursive: true, force: true });
   }

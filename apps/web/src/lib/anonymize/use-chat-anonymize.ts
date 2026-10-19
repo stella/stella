@@ -8,6 +8,7 @@ import type { ChatAnonPair } from "@stll/anonymize-chat";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { anonymizeChatTextInWorker } from "@/lib/anonymize/anonymize-chat-worker-client";
+import { readChatDraftText } from "@/lib/anonymize/use-chat-anonymize.logic";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 /**
@@ -24,7 +25,7 @@ export const useChatDraftText = (
   enabled = true,
 ): string => {
   const [text, setText] = useState(() =>
-    enabled && editor ? editor.getText() : "",
+    enabled && editor ? readChatDraftText(editor) : "",
   );
 
   useExternalSyncEffect(() => {
@@ -32,9 +33,9 @@ export const useChatDraftText = (
       setText("");
       return undefined;
     }
-    setText(editor.getText());
+    setText(readChatDraftText(editor));
     const onUpdate = () => {
-      setText(editor.getText());
+      setText(readChatDraftText(editor));
     };
     editor.on("update", onUpdate);
     return () => {

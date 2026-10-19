@@ -36,7 +36,6 @@ import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { DefaultPendingComponent } from "@/components/route-components";
 import { FieldValue } from "@/components/workspaces/field-value";
 import { ListItemSources } from "@/components/workspaces/list-item-sources";
-import { ListSourceAction } from "@/components/workspaces/list-source-action";
 import {
   isListItemType,
   isTaskPriority,
@@ -70,6 +69,7 @@ import {
   legalListsOptions,
 } from "@/lib/workspaces/queries/legal-lists";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
+import { ListSourceAction } from "@/routes/_protected.workspaces/$workspaceId/-components/list-source-action";
 import { useDefaultWorkspaceViewRedirect } from "@/routes/_protected.workspaces/$workspaceId/-default-view-redirect";
 
 const searchSchema = v.object({

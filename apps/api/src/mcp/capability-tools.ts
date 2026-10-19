@@ -30,7 +30,6 @@ import {
 } from "@/api/lib/capability-transport";
 import { resourcesAreVisible } from "@/api/lib/entities/resource-access";
 import { SEARCH_INDEX_UNAVAILABLE_CODE } from "@/api/lib/legal-search/search-index-unavailable";
-import { getCurrentRequestId } from "@/api/lib/observability/request-context";
 import {
   decodePaginationCursor,
   encodePaginationCursor,
@@ -87,7 +86,6 @@ import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import type {
   InternalToolErrorResult,
-  McpEgressPlan,
   McpReadClass,
   McpToolDefinition,
   McpToolHandler,
@@ -769,43 +767,6 @@ const mapStatusResponse = (
     }),
   );
 };
-
-/**
- * Attach the request receipt to a successful WRITE capability payload. The id
- * lands in a top-level `meta.requestId` sibling of the handler's own fields,
- * never mixed into the handler's data: it cannot collide with a domain field,
- * and the pagination fields (`items`/`nextCursor`) the CLI and `--all` read
- * stay at the top level. Reads deliberately carry NO receipt: a per-request
- * random id would make otherwise deterministic read payloads change on every
- * call, defeating agent-side caching/diffing (the `x-request-id` response
- * header still carries the id for every request; the error envelope carries it
- * unconditionally because errors are not cacheable results). A non-object
- * payload (or no active request) carries no receipt either.
- */
-const withRequestReceipt = (
-  payload: unknown,
-  access: "read" | "write",
-): unknown => {
-  if (access !== "write") {
-    return payload;
-  }
-  const requestId = getCurrentRequestId();
-  if (requestId === undefined || !isRecord(payload)) {
-    return payload;
-  }
-  const existingMeta = isRecord(payload["meta"]) ? payload["meta"] : {};
-  return { ...payload, meta: { ...existingMeta, requestId } };
-};
-
-/** Serialize a successful capability payload through the standard egress path. */
-const successEgress = (
-  payload: unknown,
-  access: "read" | "write",
-): McpEgressPlan =>
-  untypedStructuredEgressPlan({
-    payload: withRequestReceipt(payload, access),
-    textFields: [],
-  });
 
 const CAPABILITY_TRANSPORT_OUTPUT_SCHEMA = v.strictObject({
   type: v.picklist(["json", "file-input", "file-response", "file-both"]),
@@ -2228,7 +2189,7 @@ const executeInvoke = async ({
   });
 
   const result = await endpoint.handler(ctx);
-  return mapHandlerResult({ id, result, access: entry.access });
+  return mapHandlerResult({ id, result });
 };
 
 /**
@@ -2251,19 +2212,14 @@ const isBinaryPayload = (value: unknown): boolean =>
  *  - a `Response`/binary payload (see `isBinaryPayload`) -> `feature_disabled`
  *    (runtime backstop for fix-6: the catalog flag refuses file capabilities
  *    pre-execution, and this catches any that slip past);
- *  - anything else -> the structured success payload, with the request receipt
- *    attached under `meta.requestId` for a WRITE capability only (see
- *    `withRequestReceipt`).
+ *  - anything else -> the structured success payload.
  */
 export const mapHandlerResult = ({
   id,
   result,
-  access,
 }: {
   id: string;
   result: unknown;
-  /** The invoked capability's catalog access; receipts attach to writes only. */
-  access: "read" | "write";
 }): McpToolResponse => {
   if (result instanceof ElysiaCustomStatusResponse) {
     const statusCode = typeof result.code === "number" ? result.code : 500;
@@ -2276,7 +2232,7 @@ export const mapHandlerResult = ({
       hint: "Fetch the file through its REST route or the stella app; capability executors only return structured JSON.",
     });
   }
-  return successEgress(result, access);
+  return untypedStructuredEgressPlan({ payload: result, textFields: [] });
 };
 
 export const resolveCapabilityReadClass = async (args: unknown) => {

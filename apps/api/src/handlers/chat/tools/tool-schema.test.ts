@@ -89,6 +89,14 @@ import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
+import {
+  createFeatureAccessSnapshot,
+  decideFeatureAccess,
+} from "@/api/lib/feature-access/policy";
+import {
+  AI_MEMORY_FEATURE_ID,
+  FEATURE_REGISTRY,
+} from "@/api/lib/feature-access/registry";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
   PROVIDER_SAFE_JSON_SCHEMA_KEYWORDS,
@@ -99,6 +107,7 @@ import type { UrlFetcher, WebSearchProvider } from "@/api/lib/web-search/types";
 import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 import { TEMPLATE_FIELD_REFERENCE_URI } from "@/api/mcp/template-field-reference";
 import { TEMPLATE_MARKER_REFERENCE_URI } from "@/api/mcp/template-marker-reference";
+import { offeredSkillCatalog } from "@/api/tests/helpers/offered-skills";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 
@@ -155,6 +164,29 @@ const getChatTools = (
   return getChatToolsWithPin({
     ...rest,
     memoryEnabled: props.memoryEnabled ?? true,
+    featureAccessSnapshot: createFeatureAccessSnapshot({
+      organizationId: props.organizationId,
+      userId: props.userId,
+      decisions: new Map([
+        ...(props.featureAccessSnapshot?.decisions ?? []),
+        [
+          AI_MEMORY_FEATURE_ID,
+          decideFeatureAccess({
+            registry: FEATURE_REGISTRY,
+            featureId: AI_MEMORY_FEATURE_ID,
+            organizationId: props.organizationId,
+            userId: props.userId,
+            membership: true,
+            user: { email: "member@example.test", emailVerified: true },
+            grants: {
+              [AI_MEMORY_FEATURE_ID]: [
+                { type: "organization", organizationId: props.organizationId },
+              ],
+            },
+          }),
+        ],
+      ]),
+    }),
     pinServerValidatedWorkspaceId: () => true,
     registryDispatch,
   });
@@ -332,13 +364,13 @@ const buildFullCoverageChatTools = (
     recordAuditEvent: noopAuditRecorder,
     workspaceStatusById: new Map([[workspaceId, "active"]]),
     resolveMemorySourceWorkspaceIds: () => [],
-    skillMetadata: [
+    skillMetadata: offeredSkillCatalog([
       {
         description: editableActiveSkillContext.description,
         name: editableActiveSkillContext.toolName,
         version: editableActiveSkillContext.version,
       },
-    ],
+    ]),
   });
 };
 
@@ -801,13 +833,13 @@ describe("chat tool schemas", () => {
       createSkillTools({
         organizationId,
         safeDb: unusedSafeDb,
-        skills: [
+        skills: offeredSkillCatalog([
           {
             description: "Run a custom legal workflow.",
             name: "custom-legal-workflow",
             version: "1.0",
           },
-        ],
+        ]),
         userId,
       }),
     ).not.toThrow();
@@ -817,7 +849,7 @@ describe("chat tool schemas", () => {
     const tools = createSkillTools({
       organizationId,
       safeDb: unusedSafeDb,
-      skills: [],
+      skills: offeredSkillCatalog([]),
       userId,
     });
 
@@ -829,13 +861,13 @@ describe("chat tool schemas", () => {
     const tools = createSkillTools({
       organizationId,
       safeDb: unusedSafeDb,
-      skills: [
+      skills: offeredSkillCatalog([
         {
           description: "Private matter-specific workflow.",
           name: "acme-closing-strategy",
           version: "1.0",
         },
-      ],
+      ]),
       userId,
     });
 
@@ -944,6 +976,40 @@ describe("chat tool schemas", () => {
       memoryEnabled: false,
     };
 
+    for (const invited of [false, true]) {
+      const featureAccessSnapshot = createFeatureAccessSnapshot({
+        organizationId,
+        userId,
+        decisions: new Map([
+          [
+            AI_MEMORY_FEATURE_ID,
+            decideFeatureAccess({
+              registry: FEATURE_REGISTRY,
+              featureId: AI_MEMORY_FEATURE_ID,
+              organizationId,
+              userId,
+              membership: true,
+              user: { email: "member@example.test", emailVerified: true },
+              grants: invited
+                ? {
+                    [AI_MEMORY_FEATURE_ID]: [
+                      { type: "organization", organizationId },
+                    ],
+                  }
+                : {},
+            }),
+          ],
+        ]),
+      });
+      const tools = getChatToolsWithPin({
+        ...baseArgs,
+        memoryEnabled: undefined,
+        featureAccessSnapshot,
+        pinServerValidatedWorkspaceId: () => true,
+        registryDispatch: BUSINESS_REGISTRY_DISPATCH,
+      });
+      expect(REMEMBER_TOOL_NAME in tools).toBe(invited);
+    }
     expect(getChatTools(baseArgs)).not.toHaveProperty(REMEMBER_TOOL_NAME);
     expect(
       getChatTools({
@@ -1144,13 +1210,13 @@ describe("chat tool schemas", () => {
       activeSkillContext: editableActiveSkillContext,
       recordAuditEvent: noopAuditRecorder,
       resolveMemorySourceWorkspaceIds: () => [],
-      skillMetadata: [
+      skillMetadata: offeredSkillCatalog([
         {
           description: editableActiveSkillContext.description,
           name: editableActiveSkillContext.toolName,
           version: editableActiveSkillContext.version,
         },
-      ],
+      ]),
     });
 
     const createResource = tools["create-current-skill-resource"];
@@ -1207,13 +1273,13 @@ describe("chat tool schemas", () => {
       },
       recordAuditEvent: noopAuditRecorder,
       resolveMemorySourceWorkspaceIds: () => [],
-      skillMetadata: [
+      skillMetadata: offeredSkillCatalog([
         {
           description: editableActiveSkillContext.description,
           name: editableActiveSkillContext.toolName,
           version: editableActiveSkillContext.version,
         },
-      ],
+      ]),
     });
 
     expect(tools).toHaveProperty("create-current-skill-resource");

@@ -26,7 +26,7 @@ concurrency:
 
 jobs:
   prepare:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     outputs:
       matrix: ${{ steps.projects.outputs.matrix }}
@@ -48,6 +48,7 @@ jobs:
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
       - name: Install dependencies
+        timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
@@ -71,7 +72,7 @@ jobs:
 
   measure:
     needs: prepare
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -88,6 +89,7 @@ jobs:
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
       - name: Install dependencies
+        timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""

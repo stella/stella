@@ -14,6 +14,8 @@ import type {
   CaseLawAnalysisFailureCode as AnalysisFailureCode,
   CaseLawAnalysisUnavailableCode,
 } from "@stll/api-contract";
+import { aiDisclosure } from "@stll/api-contract/ai-disclosure";
+import type { AiDisclosure } from "@stll/api-contract/ai-disclosure";
 import type { CaseLawIncompleteReason } from "@stll/api-contract/case-law-answer-completeness";
 import type {
   AnalysisGenerating,
@@ -23,7 +25,7 @@ import type {
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   resolveCaching,
-  resolveOrgAIModelForRole,
+  resolveOrgAIModelForTask,
   type OrgAIConfig,
 } from "@/api/lib/ai-config";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
@@ -41,14 +43,16 @@ import {
   analysisFailureKeyTag,
   failureClaimGuard,
   analysisFailureRecord,
+  failureRetryPending,
   failureStillHolds,
   type AnalysisFailureRecord,
   type AnalysisReaderKey,
+  type AnalysisRequestKind,
 } from "@/api/lib/case-law/analysis-failure";
 import type { AnalysisInput } from "@/api/lib/case-law/analysis-prompt";
 import {
   analysisStore,
-  storesAnalyses,
+  writesDerivedAnalyses,
   type AnalysisStore,
 } from "@/api/lib/case-law/analysis-store";
 import { reportCaseLawIncompleteAnswer } from "@/api/lib/case-law/incomplete-answer-telemetry";
@@ -68,12 +72,13 @@ import {
   type ModelActionAdmitter,
 } from "@/api/lib/rate-limit/model-action-admission";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
-import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 import {
-  getTanStackTextModelInfoForRole,
-  requireTanStackAIAvailableForRole,
+  getTanStackTextModelInfoForTask,
+  requireTanStackAIAvailableForTask,
   type ResolvedTanStackTextModel,
 } from "@/api/lib/tanstack-ai-models";
+import { isRecord } from "@/api/lib/type-guards";
 
 import { resolveAnalysisInput } from "./analysis-input";
 import { analysisOutputSchema, buildDecisionAnalysis } from "./analysis-output";
@@ -108,6 +113,7 @@ export const ANALYSIS_OUTPUT_TOKEN_BUDGET = 16_384;
 export const ANALYSIS_FAILURE_CODE_BY_KIND = {
   output_incomplete: "answer_incomplete",
   output_invalid: "answer_incomplete",
+  output_moderated: "provider_refused",
   provider_stream_incomplete: "answer_incomplete",
   empty_completion: "answer_incomplete",
   loop_detected: "answer_incomplete",
@@ -124,6 +130,7 @@ export const ANALYSIS_FAILURE_CODE_BY_KIND = {
 const ANALYSIS_INCOMPLETE_REASON_BY_KIND = {
   output_incomplete: "incomplete_output",
   output_invalid: "invalid_output",
+  output_moderated: null,
   provider_stream_incomplete: "incomplete_output",
   empty_completion: "incomplete_output",
   loop_detected: "incomplete_output",
@@ -156,7 +163,15 @@ type AnalysisFailureKeyView =
   | { source: "platform" };
 
 export type GenerateAnalysisResponse =
-  | { status: "done"; analysis: DecisionAnalysis }
+  | {
+      status: "done";
+      analysis: DecisionAnalysis;
+      /**
+       * What the reader is told about the analysis, carried beside it: the
+       * same disclosure the reader's AI mark opens on the web.
+       */
+      aiDisclosure: AiDisclosure;
+    }
   | { status: "generating" }
   | { status: "error"; code: AnalysisUnavailableCode; error: string }
   | {
@@ -165,10 +180,16 @@ export type GenerateAnalysisResponse =
       error: string;
       key: AnalysisFailureKeyView;
       providerDiagnostic?: RedactedProviderDiagnostic | undefined;
+      /**
+       * ISO time before which no new run starts, poll or retry, when the
+       * provider named one that is still ahead.
+       */
+      retryAt?: string | undefined;
     };
 
 const failureResponse = (
   failure: AnalysisFailureRecord,
+  now: Date,
 ): GenerateAnalysisResponse => {
   const view: AnalysisFailureKeyView =
     failure.keySource === "organization" && failure.provider !== null
@@ -191,7 +212,27 @@ const failureResponse = (
           ),
         }
       : {}),
+    ...(failure.retryAfter !== undefined && failureRetryPending(failure, now)
+      ? { retryAt: failure.retryAfter.toISOString() }
+      : {}),
   };
+};
+
+/**
+ * The retry delay a provider named for the run's failure, from the first
+ * `ProviderCallError` along the error's `cause` chain.
+ */
+const providerRetryAfterMs = (error: unknown): number | undefined => {
+  const seen = new Set<unknown>();
+  let current = error;
+  while (isRecord(current) && !seen.has(current)) {
+    if (current instanceof ProviderCallError) {
+      return current.retryAfterMs;
+    }
+    seen.add(current);
+    current = current["cause"];
+  }
+  return undefined;
 };
 
 const unavailable = (
@@ -202,7 +243,7 @@ const unavailable = (
 /**
  * The key a reader's run would call the provider with: the organization's
  * own fast-role provider when it configured one, the platform's otherwise.
- * The same rule `getTanStackTextModelInfoForRole` dispatches by.
+ * The same rule `getTanStackTextModelInfoForTask` dispatches by.
  */
 const readerKeyOf = ({
   orgAIConfig,
@@ -214,7 +255,7 @@ const readerKeyOf = ({
   if (orgAIConfig === null) {
     return { source: "platform" };
   }
-  const selection = resolveOrgAIModelForRole(orgAIConfig, "fast");
+  const selection = resolveOrgAIModelForTask(orgAIConfig, "short-text");
   return selection === null
     ? null
     : {
@@ -279,7 +320,7 @@ const runGeneration = async ({
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     dataClass: "public_corpus",
     feature: "case-law.analysis",
-    modelRole: "fast",
+    modelTask: "short-text",
     organizationId,
     orgAIConfig,
     modelTier: admission.modelTier,
@@ -295,14 +336,18 @@ const runGeneration = async ({
 
   let analysis: DecisionAnalysis;
   try {
-    const { modelId } = getTanStackTextModelInfoForRole("fast", orgAIConfig, {
+    const { modelId } = getTanStackTextModelInfoForTask(
+      "short-text",
+      orgAIConfig,
+      {
+        dataClass: "public_corpus",
+        organizationId,
+        modelTier: admission.modelTier,
+      },
+    );
+    const result = await generateTanStackObjectForTask({
       dataClass: "public_corpus",
-      organizationId,
-      modelTier: admission.modelTier,
-    });
-    const result = await generateTanStackObjectForRole({
-      dataClass: "public_corpus",
-      role: "fast",
+      task: "short-text",
       serviceTier: "standard",
       orgAIConfig,
       organizationId,
@@ -312,7 +357,7 @@ const runGeneration = async ({
       analytics: aiAnalytics,
       caching: resolveCaching({
         promptCachingEnabled,
-        role: "fast",
+        task: "short-text",
         scopeKey: decisionId,
       }),
       system: input.systemPrompt,
@@ -403,6 +448,7 @@ const handleGenerationFailure = async ({
     fingerprint: sentinel.inputFingerprint,
     now: new Date(),
     reader,
+    retryAfterMs: providerRetryAfterMs(error),
     ...(reader.source === "organization" &&
     error instanceof ProviderCallError &&
     error.providerDiagnostic !== undefined
@@ -476,6 +522,12 @@ type GenerateAnalysisOptions = {
   retry: boolean;
   /** Where the analysis lives; the application's store unless a test says. */
   store?: AnalysisStore | undefined;
+  /**
+   * Whether a model may be asked for this decision's derived layers;
+   * `CASE_LAW_DERIVED_AI` unless a test says. Off, a stored analysis is
+   * served as it is and a missing one is reported unavailable.
+   */
+  derivedAi?: boolean | undefined;
   /** External model-resolution boundary; supplied by focused tests only. */
   resolveTextModel?: AnalysisModelResolver | undefined;
   /** The run's deadline; `ANALYSIS_GENERATION_DEADLINE_MS` unless a test says. */
@@ -498,6 +550,7 @@ export const generateAnalysis = async ({
   promptCachingEnabled,
   retry,
   store = analysisStore(),
+  derivedAi = writesDerivedAnalyses(),
   resolveTextModel,
   deadlineMs = ANALYSIS_GENERATION_DEADLINE_MS,
   beforeClaim,
@@ -542,12 +595,13 @@ export const generateAnalysis = async ({
       // on the citation graph and written in the background, so a reader
       // never waits for it and a decision whose neighbourhood has not
       // moved costs one indexed query.
-      if (storesAnalyses()) {
+      if (derivedAi) {
         detached(
           refreshSignificance({
             admitModelAction,
             analysis: stored.analysis,
             contentHash: decision.contentHash,
+            derivedAi,
             decisionId,
             orgAIConfig,
             orgAIConfigStatus,
@@ -557,7 +611,11 @@ export const generateAnalysis = async ({
           "analysis-generate.refresh-significance",
         );
       }
-      return Result.ok({ status: "done", analysis: stored.analysis });
+      return Result.ok({
+        status: "done",
+        analysis: stored.analysis,
+        aiDisclosure: aiDisclosure("caseLaw"),
+      });
     case "generating":
       return Result.ok({ status: "generating" });
     case "none":
@@ -568,11 +626,26 @@ export const generateAnalysis = async ({
     }
   }
 
+  // A deployment that may not ask a model for derived layers serves what is
+  // stored and generates nothing: a seeded or local stack never reaches a
+  // model by opening a decision. Decided before any recorded failure, so a
+  // reader is never offered a retry that this deployment cannot run.
+  if (!derivedAi) {
+    return Result.ok(
+      unavailable(
+        "analysis_unavailable",
+        "Analysis is unavailable for this decision",
+      ),
+    );
+  }
+
   // Before a run starts: when the run this reader's key made last failed,
-  // say so until the reader asks again. The record is filed under this
-  // reader's key alone, so another reader's run on the shared row neither
-  // replaces nor clears it, and this reader never re-runs unasked.
-  const applicableFailure = async (): Promise<AnalysisFailureRecord | null> => {
+  // say so until the reader asks again, and even then until the provider's
+  // retry time when it named one. The record is filed under this reader's
+  // key alone, so another reader's run on the shared row neither replaces
+  // nor clears it, and this reader never re-runs unasked.
+  const request: AnalysisRequestKind = retry ? "retry" : "poll";
+  const answerFailure = async (): Promise<GenerateAnalysisResponse | null> => {
     if (reader === null) {
       return null;
     }
@@ -580,30 +653,21 @@ export const generateAnalysis = async ({
       decisionId,
       keyTag: analysisFailureKeyTag(reader, decisionId),
     });
+    const now = new Date();
     return failure !== null &&
       failureStillHolds({
         failure,
         fingerprint: input.fingerprint,
-        now: new Date(),
+        now,
         reader,
+        request,
       })
-      ? failure
+      ? failureResponse(failure, now)
       : null;
   };
-  if (!retry) {
-    const failure = await applicableFailure();
-    if (failure !== null) {
-      return Result.ok(failureResponse(failure));
-    }
-  }
-
-  if (!storesAnalyses()) {
-    return Result.ok(
-      unavailable(
-        "analysis_unavailable",
-        "Analysis is unavailable for this decision",
-      ),
-    );
+  const heldFailure = await answerFailure();
+  if (heldFailure !== null) {
+    return Result.ok(heldFailure);
   }
 
   // Sources carry different reuse terms. One whose terms withhold derived AI
@@ -623,11 +687,11 @@ export const generateAnalysis = async ({
   // model: the stored and in-flight reads above must stay accessible when
   // the fast role is unavailable (a pre-existing bug ran this check before
   // them, locking finished analyses behind AI configuration).
-  const available = requireTanStackAIAvailableForRole({
+  const available = requireTanStackAIAvailableForTask({
     dataClass: "public_corpus",
     configStatus: orgAIConfigStatus,
     orgConfig: orgAIConfig,
-    role: "fast",
+    task: "short-text",
   });
   if (Result.isError(available)) {
     return Result.err(available.error);
@@ -642,30 +706,23 @@ export const generateAnalysis = async ({
   // background run settles, after this request has answered.
   const started = await startModelAction({
     label: "analysis-generate.run-generation",
-    // Another request won the race when the claim returns null. A plain
-    // read's claim also refuses, in its own transaction, while this reader's
-    // key has an applicable failure: one filed after the read above, by a
-    // run that started and failed meanwhile, still stops it. An explicit
-    // retry claims over that failure.
+    // Another request won the race when the claim returns null. The claim
+    // also refuses, in its own transaction, while this reader's key has an
+    // applicable failure: one filed after the read above, by a run that
+    // started and failed meanwhile, still stops it. An explicit retry claims
+    // over such a failure unless its provider's retry time is still ahead.
     start: async (): ReturnType<AnalysisStore["claimUnlessFailed"]> =>
-      retry
-        ? Result.ok(
-            await store.claim({
-              decisionId,
-              fingerprint: input.fingerprint,
-              observed,
-            }),
-          )
-        : await store.claimUnlessFailed({
-            decisionId,
-            fingerprint: input.fingerprint,
-            observed,
-            unlessFailed: failureClaimGuard({
-              decisionId,
-              now: new Date(),
-              reader,
-            }),
-          }),
+      await store.claimUnlessFailed({
+        decisionId,
+        fingerprint: input.fingerprint,
+        observed,
+        unlessFailed: failureClaimGuard({
+          decisionId,
+          now: new Date(),
+          reader,
+          request,
+        }),
+      }),
     // The proof aborts the generation's model call if the lease is lost.
     background: async ({ admission }, claimed) => {
       if (claimed.isErr() || claimed.value === null) {
@@ -710,10 +767,10 @@ export const generateAnalysis = async ({
 
   // A claim lost to a failure filed since the read answers that failure;
   // one lost to another run answers that run in flight.
-  if (claimed.value === null && !retry) {
-    const failure = await applicableFailure();
+  if (claimed.value === null) {
+    const failure = await answerFailure();
     if (failure !== null) {
-      return Result.ok(failureResponse(failure));
+      return Result.ok(failure);
     }
   }
   return Result.ok({ status: "generating" });
@@ -723,7 +780,9 @@ const config = {
   contract: "patch",
   description:
     "Read the structural analysis of one court decision, starting generation " +
-    "when there is none yet. Returns status done with the stored analysis, " +
+    "when there is none yet. The analysis is generated by stella, not by the " +
+    "court: show its aiDisclosure text to the user beside anything taken " +
+    "from it. Returns status done with the stored analysis and aiDisclosure, " +
     "generating while a run is in flight (poll until it is done), or error " +
     "with a code: decision_not_found, document_unparseable, " +
     "language_unsupported or analysis_unavailable when no analysis can be " +
@@ -732,7 +791,9 @@ const config = {
     "naming whose AI key it used (the organization's own, or the platform's). " +
     "A failed run answers callers using the same key for 15 minutes; within " +
     "that window a call passing retry=true starts a new run, and after it the " +
-    "next call starts one on its own. Generation runs in the background and a call made while one " +
+    "next call starts one on its own. When the provider named a later time " +
+    "to retry, the failure carries it as retryAt (ISO 8601) and answers every " +
+    "call, retry=true included, until then. Generation runs in the background and a call made while one " +
     "is already running does not start a second.",
   permissions: { workspace: ["read"], chat: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,

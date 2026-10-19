@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { MouseEvent, ReactNode } from "react";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
 
@@ -10,80 +10,159 @@ import {
   CitedProvisionExpansion as ProvisionExpansion,
   CitedProvisionLink as ProvisionLink,
 } from "@stll/decision-reader/cited-provision";
+import type { FullProvisionRead } from "@stll/decision-reader/cited-provision";
+import { fullProvisionOutcome } from "@stll/decision-reader/provision-card.logic";
+import type { CitedWording } from "@stll/decision-reader/provision-card.logic";
 import { useReaderAdapters } from "@stll/decision-reader/reader-adapters";
-import type { ProvisionWordingVersion } from "@stll/decision-reader/reader-adapters";
-import type {
-  CitedProvisionTarget,
-  ProvisionPreviewData,
-  ProvisionViewPayload,
-} from "@stll/decision-reader/reader-types";
+import type { CitedProvisionTarget } from "@stll/decision-reader/reader-types";
 import { cn } from "@stll/ui/utils";
 
 import {
   citedProvisionClick,
   CITED_PROVISION_CLICK,
 } from "@/components/legal-reader/cited-provision-link.logic";
+import {
+  keepReadingPosition,
+  readerScrollOwner,
+} from "@/components/legal-reader/reader-position";
 import { detached } from "@/lib/detached";
-import { provisionPreviewOptions } from "@/lib/statutes/provision-preview";
+import { queryView } from "@/lib/query-view.logic";
+import {
+  provisionInVersionOptions,
+  provisionPreviewOptions,
+} from "@/lib/statutes/provision-preview";
 import { createStatuteLinkTarget } from "@/lib/statutes/statute-route";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import {
+  useQueryView,
+  useQueryViewError,
+  useQueryViewErrors,
+} from "@/lib/use-query-view";
 
-type ProvisionWordingArgs = {
-  documentId: string;
+const citationPreviewOptions = ({ document, payload }: CitedProvisionTarget) =>
+  provisionPreviewOptions({
+    anchor: payload.anchorId,
+    citedAnchor: payload.highlightAnchorId,
+    documentId: document.id,
+  });
+
+type CitedWordingsArgs = {
+  citations: readonly CitedProvisionTarget[];
   /** False while nothing is showing the wording, so nothing is read for it. */
   enabled: boolean;
-  preview: ProvisionPreviewData | null;
-  provision: ProvisionViewPayload;
 };
 
 /**
- * The wording one citation points at. The preview and the paragraph card ask
- * under the same key, so unfolding a citation the reader has already hovered
- * costs no second read.
+ * The wording each citation points at: the one the decision's list carried,
+ * or a read of its own. The hover card and the paragraph card ask under the
+ * same key, so unfolding a citation the reader has already hovered costs no
+ * second read. A read that failed or found nothing answers null.
  */
-const useProvisionWording = ({
-  documentId,
+const useCitedWordings = ({
+  citations,
   enabled,
-  preview,
-  provision,
-}: ProvisionWordingArgs) => {
-  const dataQuery = useQuery({
-    ...provisionPreviewOptions({
-      anchor: provision.anchorId,
-      citedAnchor: provision.highlightAnchorId,
-      documentId,
-    }),
-    enabled: enabled && preview === null,
+}: CitedWordingsArgs): CitedWording[] => {
+  const reads = useQueries({
+    queries: citations.map((target) => ({
+      ...citationPreviewOptions(target),
+      enabled: enabled && target.preview === null,
+    })),
   });
-  const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
-  const { isPending } = dataQuery;
-  const data = dataView.type === "items" ? dataView.items : undefined;
-
-  return { isPending, wording: preview ?? data };
+  const views = reads.map((read) => queryView(read));
+  useQueryViewErrors(views);
+  return citations.map((target, index) => {
+    if (target.preview !== null) {
+      return { target, wording: target.preview };
+    }
+    const view = views.at(index) ?? panic("A citation without its read");
+    switch (view.type) {
+      case "items":
+        return { target, wording: view.items };
+      case "pending":
+        return { target, wording: undefined };
+      case "empty":
+      case "error":
+        return { target, wording: null };
+      default:
+        view satisfies never;
+        return panic("Unhandled provision wording read");
+    }
+  });
 };
 
-export const CitedProvisionExpansion = ({
-  label,
-  provision,
-  version,
-}: {
-  label: string;
-  provision: CitedProvisionTarget;
-  version: ProvisionWordingVersion;
-}) => {
-  const state = useProvisionWording({
-    documentId: provision.document.id,
-    enabled: true,
-    preview: provision.preview,
-    provision: provision.payload,
+type FullProvisionArgs = {
+  first: CitedProvisionTarget;
+  /** False until the reader asks for the whole provision. */
+  enabled: boolean;
+};
+
+/** The whole provision around the cited parts, read when the reader asks. */
+const useFullProvision = ({ enabled, first }: FullProvisionArgs) => {
+  const read = useQuery({
+    ...provisionInVersionOptions({
+      anchor: first.payload.anchorId,
+      documentId: first.document.id,
+    }),
+    enabled,
   });
+  const view = useQueryView(read);
+  useQueryViewError(view);
+  return {
+    full: {
+      isPending: read.isFetching || view.type === "pending",
+      whole: view.type === "items" ? view.items : null,
+    } satisfies FullProvisionRead,
+    refetch: read.refetch,
+  };
+};
+
+const FULL_PROVISION = { cited: "cited", full: "full" } as const;
+type FullProvisionState = keyof typeof FULL_PROVISION;
+
+/**
+ * One cited provision under the paragraph that cites it. Every citation of
+ * the provision in the paragraph shares the card.
+ */
+export const CitedProvisionExpansion = ({
+  citations,
+}: {
+  citations: readonly CitedProvisionTarget[];
+}) => {
+  const [shown, setShown] = useState<FullProvisionState>(FULL_PROVISION.cited);
+  const first = citations.at(0) ?? panic("A provision card without citations");
+  const wordings = useCitedWordings({ citations, enabled: true });
+  const { full, refetch } = useFullProvision({
+    enabled: shown === FULL_PROVISION.full,
+    first,
+  });
+
+  const onToggleFull = (event: MouseEvent<HTMLButtonElement>) => {
+    const toggle = event.currentTarget;
+    keepReadingPosition(
+      { anchor: toggle, scroller: readerScrollOwner(toggle) },
+      () => {
+        if (
+          shown === FULL_PROVISION.cited &&
+          fullProvisionOutcome(full).type === "unavailable"
+        ) {
+          // A successful miss stays fresh; enabling alone would reuse it.
+          detached(refetch(), "legal-reader.full-provision");
+        }
+        setShown((current) =>
+          current === FULL_PROVISION.full
+            ? FULL_PROVISION.cited
+            : FULL_PROVISION.full,
+        );
+      },
+    );
+  };
+
   return (
     <ProvisionExpansion
-      label={label}
-      provision={provision}
-      version={version}
-      {...state}
+      citations={citations}
+      full={full}
+      onToggleFull={onToggleFull}
+      showsFull={shown === FULL_PROVISION.full}
+      wordings={wordings}
     />
   );
 };
@@ -118,11 +197,9 @@ export const CitedProvisionLink = ({
       "legal-reader.provision-preview",
     );
   };
-  const state = useProvisionWording({
-    documentId: provision.document.id,
+  const wordings = useCitedWordings({
+    citations: [provision],
     enabled: previewOpen,
-    preview: provision.preview,
-    provision: provision.payload,
   });
   const onProvisionClick = (event: MouseEvent<HTMLAnchorElement>) => {
     const click = citedProvisionClick(event);
@@ -159,7 +236,7 @@ export const CitedProvisionLink = ({
       previewOpen={previewOpen}
       onPreviewOpenChange={onPreviewOpenChange}
       link={link}
-      {...state}
+      wordings={wordings}
     >
       {children}
     </ProvisionLink>

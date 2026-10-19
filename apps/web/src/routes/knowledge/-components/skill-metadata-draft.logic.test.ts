@@ -13,6 +13,7 @@ const previous = {
   description: "Reviews an agreement against the checklist.",
   enabled: false,
   id: SKILL_ID,
+  invocation: "auto" as const,
   name: "check-against-rules",
 };
 
@@ -23,19 +24,23 @@ const next = {
   description: "Checks clauses against the house rules.",
   enabled: true,
   id: SKILL_ID,
+  invocation: "manual" as const,
   name: "Clause review",
 };
 
-// Unsaved edits. Each text differs from both snapshots; a boolean edit can
+// Unsaved edits. Each text differs from both snapshots; a two-valued edit can
 // only match one of them.
 const edits: SkillMetadataDraft = {
   command: "my-review",
   description: "Typed but not yet saved.",
   enabled: true,
+  invocation: "manual",
   name: "Typed name",
 };
 
-const FIELDS = ["command", "description", "enabled", "name"] as const;
+const FIELDS = Object.keys(edits).filter(
+  (field): field is keyof SkillMetadataDraft => Object.hasOwn(edits, field),
+);
 
 // Every combination of edited fields.
 const editedFieldSets: (typeof FIELDS)[number][][] = [[]];

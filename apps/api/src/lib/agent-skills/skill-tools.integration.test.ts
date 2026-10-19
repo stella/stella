@@ -5,10 +5,15 @@ import { eq } from "drizzle-orm";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { agentSkillResources, agentSkills, auditLogs } from "@/api/db/schema";
+import {
+  offerSkillsToModel,
+  SKILL_INVOCATION,
+} from "@/api/lib/agent-skills/invocation";
 import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
+import { CHAT_TOOL_SET_PURPOSE } from "@/api/lib/chat/chat-tool-types";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -97,20 +102,94 @@ const expectNotFound = (result: Result<unknown, unknown>) => {
   }
 };
 
+/** A turn catalog holding one `auto` skill, as chat offers it. */
+const catalogOf = (slug: string) =>
+  offerSkillsToModel({
+    invokedSkillNames: new Set(),
+    skills: [
+      {
+        description: "Skill tools test skill",
+        invocation: SKILL_INVOCATION.auto,
+        name: slug,
+        version: null,
+      },
+    ],
+  });
+
 describe("skill catalog tools", () => {
+  test("refuse a manual skill the turn did not invoke, even by its exact slug", async () => {
+    const slug = `manual-${Bun.randomUUIDv7()}`;
+    const skillId = await insertSkill(slug);
+    await testDb
+      .update(agentSkills)
+      .set({ invocation: SKILL_INVOCATION.manual })
+      .where(eq(agentSkills.id, skillId));
+    const manualSkill = {
+      description: "Skill tools test skill",
+      invocation: SKILL_INVOCATION.manual,
+      name: slug,
+      version: null,
+    };
+
+    const uninvoked = createSkillTools({
+      organizationId: ids.orgA,
+      safeDb,
+      skills: offerSkillsToModel({
+        invokedSkillNames: new Set(),
+        skills: [manualSkill],
+      }),
+      userId: ids.userA2,
+    });
+    expect(uninvoked["load-skill"]).toBeUndefined();
+
+    // A validation set registers the tools whatever the catalog holds; the
+    // name check still refuses the manual skill when the tool runs.
+    const validation = createSkillTools({
+      organizationId: ids.orgA,
+      purpose: CHAT_TOOL_SET_PURPOSE.validation,
+      safeDb,
+      skills: offerSkillsToModel({
+        invokedSkillNames: new Set(),
+        skills: [manualSkill],
+      }),
+      userId: ids.userA2,
+    });
+    expectNotFound(
+      await executeTool({
+        input: { skillName: slug },
+        tool: validation["load-skill"],
+      }),
+    );
+    expectNotFound(
+      await executeTool({
+        input: { path: "references/checklist.md", skillName: slug },
+        tool: validation["read-skill-resource"],
+      }),
+    );
+
+    const invoked = createSkillTools({
+      organizationId: ids.orgA,
+      safeDb,
+      skills: offerSkillsToModel({
+        invokedSkillNames: new Set([slug]),
+        skills: [manualSkill],
+      }),
+      userId: ids.userA2,
+    });
+    const loaded = await executeTool({
+      input: { skillName: slug },
+      tool: invoked["load-skill"],
+    });
+    expect(Result.isOk(loaded)).toBe(true);
+  });
+
   test("answer not-found for a skill deleted after the catalog was built", async () => {
     const slug = `vanishing-${Bun.randomUUIDv7()}`;
     const skillId = await insertSkill(slug);
     const tools = createSkillTools({
       organizationId: ids.orgA,
       safeDb,
-      skills: [
-        {
-          description: "Skill tools test skill",
-          name: slug,
-          version: null,
-        },
-      ],
+      skills: catalogOf(slug),
       userId: ids.userA2,
     });
 
@@ -136,13 +215,7 @@ describe("skill catalog tools", () => {
     const tools = createSkillTools({
       organizationId: ids.orgA,
       safeDb,
-      skills: [
-        {
-          description: "Skill tools test skill",
-          name: slug,
-          version: null,
-        },
-      ],
+      skills: catalogOf(slug),
       userId: ids.userA2,
     });
 
@@ -172,9 +245,7 @@ describe("skill catalog tools", () => {
         workspaceId: null,
       }),
       safeDb,
-      skills: [
-        { description: "Skill tools test skill", name: slug, version: null },
-      ],
+      skills: catalogOf(slug),
       userId: ids.userA2,
     });
 

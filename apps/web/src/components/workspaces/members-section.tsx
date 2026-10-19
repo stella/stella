@@ -30,6 +30,7 @@ import {
 } from "@/components/workspaces/addable-member-select";
 import { MATTER_INFO_ICON_SLOT_CLASS } from "@/components/workspaces/matter-info-layout";
 import { usePermissions } from "@/hooks/use-permissions";
+import { useSingleFlight } from "@/hooks/use-single-flight";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
@@ -265,6 +266,7 @@ const AddMemberDialog = ({
   const t = useTranslations();
   const queryClient = useQueryClient();
   const addMember = useAddWorkspaceMember();
+  const submitOnce = useSingleFlight();
   const memberQuery = useAddableMembers(workspaceId);
   const [isOpen, setIsOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
@@ -274,14 +276,16 @@ const AddMemberDialog = ({
       ? memberQuery.view.items.find((item) => item.value === selectedUserId)
       : undefined;
 
-  const handleSubmit = () => {
+  const addSelectedMember = (settled: () => void) => {
     if (!selectedMember) {
+      settled();
       return;
     }
 
     addMember.mutate(
       { workspaceId, userId: selectedMember.value },
       {
+        onSettled: settled,
         onSuccess: () => {
           stellaToast.add({
             title: t("success.memberAdded"),
@@ -300,6 +304,12 @@ const AddMemberDialog = ({
           notifyUserError(error, t("errors.actionFailed"));
         },
       },
+    );
+  };
+  const handleSubmit = () => {
+    detached(
+      submitOnce.runSettled(addSelectedMember),
+      "members-section.submit",
     );
   };
 

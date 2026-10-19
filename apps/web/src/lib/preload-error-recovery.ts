@@ -21,12 +21,14 @@ const STORAGE_KEY = "stella:preload-reload-at";
 // Keep this aligned with TanStack Router's cross-browser dynamic-import
 // classifier. A rejected lazy import is cached inside lazyRouteComponent, so
 // resetting the route boundary can only throw the same error again; recovery
-// requires a new page module graph. PDF.js reports a worker script it cannot
-// load as a failed fake-worker setup.
+// requires a new page module graph. Vite's preload helper rejects with its
+// own message when a chunk's stylesheet is gone. PDF.js reports a worker
+// script it cannot load as a failed fake-worker setup.
 const STALE_DEPLOYMENT_ERROR_PREFIXES = Object.freeze([
   "Failed to fetch dynamically imported module",
   "error loading dynamically imported module",
   "Importing a module script failed",
+  "Unable to preload CSS for",
   "Setting up fake worker failed",
 ]);
 

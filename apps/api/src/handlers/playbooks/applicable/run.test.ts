@@ -152,7 +152,6 @@ describe("auto-run playbooks handler", () => {
       mapHandlerResult({
         id: "playbooks.applicable.run",
         result,
-        access: "write",
       }),
     ).toMatchObject({
       egress: "structured",
@@ -254,7 +253,6 @@ describe("auto-run playbooks handler", () => {
       mapHandlerResult({
         id: "playbooks.applicable.run",
         result,
-        access: "write",
       }),
     ).toMatchObject({ egress: "structured", payload: expected });
     expect(startWorkflowMock).toHaveBeenCalledTimes(1);

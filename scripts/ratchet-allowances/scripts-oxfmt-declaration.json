@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "packages/scripts formats generated artifacts with the oxfmt binary; filtered CI installs (api, cli) omit the root devDependency, so the package that runs the formatter declares it."
+}

@@ -21,6 +21,7 @@ describe("appendCustomSkillEntries", () => {
           description: "Review contracts.",
           enabled: true,
           id: "skill-team",
+          invocation: "auto",
           license: null,
           name: "Contract review",
           scope: "team",
@@ -51,6 +52,7 @@ describe("appendCustomSkillEntries", () => {
           description: "Team version.",
           enabled: true,
           id: "skill-team",
+          invocation: "auto",
           license: null,
           name: "Review",
           scope: "team",
@@ -60,6 +62,7 @@ describe("appendCustomSkillEntries", () => {
           description: "Private version.",
           enabled: false,
           id: "skill-private",
+          invocation: "manual",
           license: null,
           name: "Review",
           scope: "private",
@@ -72,6 +75,8 @@ describe("appendCustomSkillEntries", () => {
     expect(response[0]).toMatchObject({
       chatSkillId: "skill-private",
       installedSkillId: "skill-private",
+      // The shown row's own setting, not the shadowed team row's.
+      invocation: "manual",
       slug: "review",
     });
   });
@@ -90,6 +95,7 @@ describe("appendCustomSkillEntries", () => {
           description: "Unavailable team version.",
           enabled: false,
           id: "skill-team",
+          invocation: "auto",
           license: null,
           name: "Review",
           scope: "team",
@@ -115,6 +121,7 @@ describe("appendCustomSkillEntries", () => {
           description: "Manageable team version.",
           enabled: false,
           id: "skill-team",
+          invocation: "auto",
           license: null,
           name: "Review",
           scope: "team",

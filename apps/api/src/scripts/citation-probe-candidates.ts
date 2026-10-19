@@ -23,6 +23,11 @@ const BENIGN: readonly RegExp[] = [
   // KIO's own docket format ("KIO/2462/10", "KIO 2475 /10"): same
   // out-of-corpus tribunal, cited by case number rather than by name.
   /\bKIO\s{0,1}\/?\s{0,1}\d{1,5}\s{0,1}\/\s{0,1}\d{2,4}\b/u,
+  // The procurement office's earlier arbitration-panel files
+  // ("UZP/ZO/0-1234/05", also written with a letter O, and with a space
+  // or line break after the hyphen): same out-of-corpus quasi-judicial body
+  // under its pre-KIO file format.
+  /\bUZP\/ZO\/[0O]-\s{0,2}\d{1,5}\/\d{2,4}(?![\p{L}\d/-])/u,
   // A case-number prefix ("sp. zn.", "sen. zn.", "sygn.[ akt]", "č. j.")
   // with no digit anywhere in the captured tail is never a real citation:
   // every actual docket carries a number. Covers Polish anonymization

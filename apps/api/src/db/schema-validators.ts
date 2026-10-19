@@ -251,13 +251,16 @@ export type PropertyTool = Static<typeof propertyToolSchema>;
  * Why a derivative reached `failed`. `enqueue` means the job never entered the
  * queue, so nothing will ever pick the derivative up again and a reconciler
  * must retry it; `processing` means the worker ran and exhausted its attempts,
- * which is terminal. Absent on rows written before the distinction existed:
+ * which is terminal; `too-large` means admission refused the source (bytes or
+ * declared pixels over the derivative budget) before any conversion, which is
+ * also terminal: the stored file is unchanged, so a retry would refuse again. Absent on rows written before the distinction existed:
  * those are read as terminal, because resurrecting a genuine processing
  * failure is the more expensive mistake.
  */
 export const DERIVATIVE_FAILURE_REASON = {
   ENQUEUE: "enqueue",
   PROCESSING: "processing",
+  TOO_LARGE: "too-large",
 } as const;
 
 export type DerivativeFailureReason =
@@ -280,6 +283,7 @@ const derivativeStateSchema = t.Union([
       t.Union([
         t.Literal(DERIVATIVE_FAILURE_REASON.ENQUEUE),
         t.Literal(DERIVATIVE_FAILURE_REASON.PROCESSING),
+        t.Literal(DERIVATIVE_FAILURE_REASON.TOO_LARGE),
       ]),
     ),
   }),

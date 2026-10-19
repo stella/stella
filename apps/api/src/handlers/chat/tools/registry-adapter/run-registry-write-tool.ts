@@ -93,7 +93,10 @@ const REGISTRY_WRITE_TOOL_HANDLERS = {
     READER_ANNOTATION_TOOL_HANDLERS.update_reader_annotation,
   delete_reader_annotation:
     READER_ANNOTATION_TOOL_HANDLERS.delete_reader_annotation,
-  manage_organization: RESEARCH_ADMIN_TOOL_HANDLERS.manage_organization,
+  add_matter_member: RESEARCH_ADMIN_TOOL_HANDLERS.add_matter_member,
+  remove_matter_member: RESEARCH_ADMIN_TOOL_HANDLERS.remove_matter_member,
+  update_organization_settings:
+    RESEARCH_ADMIN_TOOL_HANDLERS.update_organization_settings,
   set_practice_jurisdictions: STELLA_TOOL_HANDLERS.set_practice_jurisdictions,
   fill_template: TEMPLATE_TOOL_HANDLERS.fill_template,
   save_filled_template: TEMPLATE_TOOL_HANDLERS.save_filled_template,
@@ -160,10 +163,7 @@ export const applyChatApprovalConfirmation = ({
   toolName: RegistryWriteToolName;
   args: Record<string, unknown>;
 }): Record<string, unknown> => {
-  if (
-    toolName === "manage_organization" &&
-    args["action"] === "remove_member"
-  ) {
+  if (toolName === "remove_matter_member") {
     return { ...args, confirm: true };
   }
   return args;

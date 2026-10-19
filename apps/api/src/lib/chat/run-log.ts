@@ -14,6 +14,7 @@ import {
   sql,
 } from "drizzle-orm";
 
+import type { ChatTurnTiming } from "@stll/api-contract/chat";
 import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
@@ -21,6 +22,7 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { chatRunLogEntries, chatRunLogs, chatTurns } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
+import { messageTurnTiming } from "@/api/lib/chat/turn-timing";
 import { emitChatRunLogMetric } from "@/api/lib/observability/request-metrics";
 import type { SchedulerDb } from "@/api/lib/scheduler/types";
 
@@ -92,48 +94,189 @@ type RunLogReaderOptions = Pick<
   "db" | "organizationId" | "runId"
 >;
 
+const hasRunningTiming = (metadata: Record<string, unknown> | undefined) => {
+  const timing = metadata?.["turnTiming"];
+  return (
+    typeof timing === "object" &&
+    timing !== null &&
+    "status" in timing &&
+    timing.status === "running"
+  );
+};
+
+const refreshRunningTiming = (
+  chunk: StreamChunk,
+  timing: ChatTurnTiming | null,
+): StreamChunk => {
+  if (chunk.type === EventType.MESSAGES_SNAPSHOT) {
+    return {
+      ...chunk,
+      messages: chunk.messages.map((message) =>
+        hasRunningTiming(message.metadata)
+          ? {
+              ...message,
+              metadata: { ...message.metadata, turnTiming: timing },
+            }
+          : message,
+      ),
+    };
+  }
+  if (
+    (chunk.type === EventType.TEXT_MESSAGE_START ||
+      chunk.type === EventType.TEXT_MESSAGE_END) &&
+    hasRunningTiming(chunk.metadata)
+  ) {
+    return { ...chunk, metadata: { ...chunk.metadata, turnTiming: timing } };
+  }
+  return chunk;
+};
+
+const hasRunningChunkTiming = (chunk: StreamChunk) =>
+  chunk.type === EventType.MESSAGES_SNAPSHOT
+    ? chunk.messages.some((message) => hasRunningTiming(message.metadata))
+    : (chunk.type === EventType.TEXT_MESSAGE_START ||
+        chunk.type === EventType.TEXT_MESSAGE_END) &&
+      hasRunningTiming(chunk.metadata);
+
+const readCurrentRunTiming = async ({
+  tx,
+  organizationId,
+  runId,
+}: Pick<RunLogReaderOptions, "organizationId" | "runId"> & {
+  tx: Transaction;
+}) => {
+  const [row] = await tx
+    .select({
+      timing: messageTurnTiming({
+        messageId: chatTurns.timingMessageId,
+        threadId: chatTurns.threadId,
+        fallbackTurnId: chatTurns.id,
+      }),
+    })
+    .from(chatRunLogs)
+    .innerJoin(
+      chatTurns,
+      and(
+        eq(chatTurns.id, chatRunLogs.turnId),
+        eq(chatTurns.organizationId, chatRunLogs.organizationId),
+      ),
+    )
+    .where(logKey(organizationId, runId))
+    .limit(1);
+  return row?.timing ?? null;
+};
+
 const createRunLogReader = ({
   db,
   organizationId,
   runId,
-}: RunLogReaderOptions): Pick<StreamDurability, "read" | "snapshot"> => {
-  const loadPage = async (after: bigint) =>
-    await db(async (tx) => {
-      const [log] = await tx
+  timingMode = "stored",
+}: RunLogReaderOptions & {
+  timingMode?: "stored" | "current";
+}): Pick<StreamDurability, "read" | "snapshot"> => {
+  const needsCurrentTiming = (chunks: readonly StreamChunk[]) =>
+    timingMode === "current" && chunks.some(hasRunningChunkTiming);
+  const loadHeader = async (tx: Transaction) =>
+    (
+      await tx
         .select({
           closedAt: chatRunLogs.closedAt,
           nextSeq: chatRunLogs.nextSeq,
+          tailChunk: chatRunLogEntries.chunk,
+          tailTimingSeq: sql<string | null>`(
+            select pending.seq::text from chat_run_log_entries pending
+            where pending.organization_id = ${chatRunLogs.organizationId}
+              and pending.run_id = ${chatRunLogs.runId}
+              and pending.seq = ${chatRunLogs.nextSeq} - 2
+              and pending.chunk->>'type' = ${EventType.TEXT_MESSAGE_END}
+              and pending.chunk->'metadata' ? 'turnTiming'
+          )`,
         })
         .from(chatRunLogs)
+        .leftJoin(
+          chatRunLogEntries,
+          and(
+            eq(chatRunLogEntries.organizationId, chatRunLogs.organizationId),
+            eq(chatRunLogEntries.runId, chatRunLogs.runId),
+            eq(chatRunLogEntries.seq, sql`${chatRunLogs.nextSeq} - 1`),
+          ),
+        )
         .where(logKey(organizationId, runId))
-        .limit(1);
+        .limit(1)
+    ).at(0);
+  type RunLogHeader = Awaited<ReturnType<typeof loadHeader>>;
+  const unsettledTailAfter = (log: RunLogHeader) => {
+    if (log?.closedAt !== null) {
+      return undefined;
+    }
+    if (
+      log.tailChunk?.type === EventType.TEXT_MESSAGE_END &&
+      log.tailChunk.metadata !== undefined &&
+      "turnTiming" in log.tailChunk.metadata
+    ) {
+      return log.nextSeq - 2n;
+    }
+    if (
+      log.tailChunk?.type !== EventType.RUN_FINISHED &&
+      log.tailChunk?.type !== EventType.RUN_ERROR
+    ) {
+      return undefined;
+    }
+    return log.tailTimingSeq === null
+      ? log.nextSeq - 2n
+      : BigInt(log.tailTimingSeq) - 1n;
+  };
+  const loadPage = async (after: bigint) =>
+    await db(async (tx) => {
+      const log = await loadHeader(tx);
+      if (log === undefined) {
+        return { entries: [], log };
+      }
       const entries = await tx
-        .select({ chunk: chatRunLogEntries.chunk, seq: chatRunLogEntries.seq })
+        .select({
+          chunk: chatRunLogEntries.chunk,
+          seq: chatRunLogEntries.seq,
+        })
         .from(chatRunLogEntries)
         .where(
           and(
             entryKey(organizationId, runId),
             gt(chatRunLogEntries.seq, after),
+            lt(chatRunLogEntries.seq, log.nextSeq),
           ),
         )
         .orderBy(asc(chatRunLogEntries.seq))
         .limit(READ_PAGE_SIZE);
-      return { entries, log };
+      if (!needsCurrentTiming(entries.map(({ chunk }) => chunk))) {
+        return { entries, log };
+      }
+      // Historical receipts cannot anchor a new browser runtime. Read once
+      // for this page, retaining durable offsets and all non-timing metadata.
+      const timing = await readCurrentRunTiming({ tx, organizationId, runId });
+      return {
+        entries: entries.map((entry) => ({
+          ...entry,
+          chunk: refreshRunningTiming(entry.chunk, timing),
+        })),
+        log,
+      };
     });
 
   return {
     async *read(offset, signal) {
-      let after: bigint | null;
-      if (offset === "-1") {
-        after = 0n;
-      } else if (offset === "now") {
+      let after: bigint | null = 0n;
+      if (offset === "now") {
         after = null;
-      } else {
+      } else if (offset !== "-1") {
         after = offsetSequence(offset);
       }
       if (after === null) {
         const { log } = await loadPage(0n);
-        after = log === undefined ? 0n : log.nextSeq - 1n;
+        // "Now" excludes published history; the unsettled suffix still
+        // belongs to the viewer because it has not passed the tail fence.
+        after =
+          unsettledTailAfter(log) ??
+          (log === undefined ? 0n : log.nextSeq - 1n);
       }
       const deadline =
         Temporal.Now.instant().epochMilliseconds + FIRST_ENTRY_WAIT_MS;
@@ -147,12 +290,8 @@ const createRunLogReader = ({
           // Final append precedes the transaction that stores the transcript
           // and closes the log. Hold an open tail terminal until that commit;
           // intermediate finishes release once the next iteration appends.
-          if (
-            log?.closedAt === null &&
-            entry.seq === log.nextSeq - 1n &&
-            (entry.chunk.type === EventType.RUN_FINISHED ||
-              entry.chunk.type === EventType.RUN_ERROR)
-          ) {
+          const heldAfter = unsettledTailAfter(log);
+          if (heldAfter !== undefined && entry.seq > heldAfter) {
             break;
           }
           after = entry.seq;
@@ -219,7 +358,18 @@ const createRunLogReader = ({
                 message: "Chat run log changed during snapshot",
               });
             }
-            return result;
+            if (!needsCurrentTiming(result.map(({ chunk }) => chunk))) {
+              return result;
+            }
+            const timing = await readCurrentRunTiming({
+              tx,
+              organizationId,
+              runId,
+            });
+            return result.map((entry) => ({
+              ...entry,
+              chunk: refreshRunningTiming(entry.chunk, timing),
+            }));
           }
         }
       }),
@@ -254,7 +404,12 @@ export const createChatRunLogReplay = async ({
         .limit(1)
     ).at(0),
   );
-  const reader = createRunLogReader({ db, organizationId, runId });
+  const reader = createRunLogReader({
+    db,
+    organizationId,
+    runId,
+    timingMode: "current",
+  });
   if (header === undefined) {
     return waitForStart
       ? {
@@ -329,6 +484,16 @@ export const createChatRunLogReplay = async ({
         final?.chunk.type === EventType.RUN_FINISHED ||
         final?.chunk.type === EventType.RUN_ERROR
       ) {
+        prefix.pop();
+      }
+      const timingEnd = prefix.at(-1)?.chunk;
+      if (
+        timingEnd?.type === EventType.TEXT_MESSAGE_END &&
+        timingEnd.metadata !== undefined &&
+        "turnTiming" in timingEnd.metadata
+      ) {
+        // The terminal append precedes settlement. Replay the final timing
+        // through the tail fence rather than compacting its placeholder.
         prefix.pop();
       }
       const last = prefix.at(-1);
@@ -567,6 +732,39 @@ export const closeChatRunLogOnTx = async ({
   if (runId === null) {
     return;
   }
+  // The final batch is appended under the running fence. Finalize its timing
+  // after settlement, in the same transaction that releases the log's tail.
+  const timing = sql`(
+    select ${messageTurnTiming({
+      messageId: chatTurns.timingMessageId,
+      threadId: chatTurns.threadId,
+      fallbackTurnId: chatTurns.id,
+    })}
+    from ${chatTurns}
+    where ${chatTurns.id} = ${turnId}
+      and ${chatTurns.organizationId} = ${organizationId}
+  )`;
+  // audit: skip — derived metadata in the ephemeral log; transcript settlement is audited by its caller
+  await tx
+    .update(chatRunLogEntries)
+    .set({
+      chunk: sql`jsonb_set(${chatRunLogEntries.chunk}, '{metadata,turnTiming}', coalesce(${timing}, 'null'::jsonb))`,
+    })
+    .where(
+      and(
+        entryKey(organizationId, runId),
+        eq(
+          chatRunLogEntries.batchId,
+          sql`(
+          select batch_id from chat_run_log_entries
+          where organization_id = ${organizationId} and run_id = ${runId}
+          order by seq desc limit 1
+        )`,
+        ),
+        sql`${chatRunLogEntries.chunk}->>'type' = ${EventType.TEXT_MESSAGE_END}`,
+        sql`${chatRunLogEntries.chunk}->'metadata' ? 'turnTiming'`,
+      ),
+    );
   await tx
     .update(chatRunLogs)
     .set({ closedAt: sql`now()` })

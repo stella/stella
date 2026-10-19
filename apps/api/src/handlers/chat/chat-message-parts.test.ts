@@ -4,7 +4,7 @@ import {
   StreamProcessor,
   uiMessagesToWire,
 } from "@tanstack/ai";
-import { Result } from "better-result";
+import { Panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
@@ -38,12 +38,9 @@ import {
   isChatPart,
   isProviderVisibleChatPart,
   isServerOwnedChatPart,
-  getChatAttachmentFilename,
-  legacyAiSdkFilePartToTanStack,
   mergeAnonRestorations,
   normalizePersistedChatMessageContent,
   restoreServerOwnedChatParts,
-  toChatMessageContent,
   toPersistedChatMessageContentV3,
   toPersistableChatMessage,
   getAwaitingUserInteraction,
@@ -59,7 +56,6 @@ import type {
 } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { CHAT_REF_ENCODING } from "@/api/lib/chat/ref-token";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
 import { richChatParts, unsafeScriptUrl } from "./__fixtures__/rich-chat-parts";
@@ -122,23 +118,6 @@ describe("persisted chat message parts", () => {
       ).toEqual(parts);
     },
   );
-
-  test("gives a legacy file part a sanitized display name", () => {
-    const attachment = (filename: string) =>
-      legacyAiSdkFilePartToTanStack({
-        filename,
-        mediaType: "application/pdf",
-        type: "file",
-        url: "https://files.example/brief.pdf",
-      });
-
-    expect(getChatAttachmentFilename(attachment("brief.pdf"))).toBe(
-      "brief.pdf",
-    );
-    expect(getChatAttachmentFilename(attachment("../brief:v2.pdf"))).toBe(
-      "___brief_v2.pdf",
-    );
-  });
 
   test("stores one canonical parsed tool-call representation", () => {
     const input = { query: "nda" };
@@ -315,55 +294,6 @@ describe("persisted chat message parts", () => {
     });
     expect(normalizePersistedChatMessageContent(persisted).parts).toEqual(
       parts,
-    );
-  });
-
-  test("parses old completed tool arguments once at the legacy read boundary", () => {
-    const legacy = toChatMessageContent({
-      data: [
-        {
-          arguments: '{"query":"contract"}',
-          id: "legacy-search",
-          name: "mcp__external__search",
-          state: "input-complete",
-          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
-          type: "tool-call",
-        },
-      ],
-      version: 2,
-    });
-
-    expect(normalizePersistedChatMessageContent(legacy).parts).toEqual([
-      {
-        arguments: '{"query":"contract"}',
-        id: "legacy-search",
-        input: { query: "contract" },
-        name: "mcp__external__search",
-        state: "input-complete",
-        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
-        type: "tool-call",
-      },
-    ]);
-  });
-
-  test("preserves malformed legacy arguments when no parsed input exists", () => {
-    const legacy = toChatMessageContent({
-      data: [
-        {
-          arguments: '{"query":',
-          id: "legacy-error",
-          name: "mcp__external__search",
-          output: { error: "Invalid arguments" },
-          state: "error",
-          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
-          type: "tool-call",
-        },
-      ],
-      version: 2,
-    });
-
-    expect(normalizePersistedChatMessageContent(legacy).parts).toEqual(
-      legacy.data,
     );
   });
 
@@ -639,7 +569,7 @@ describe("persisted chat message parts", () => {
     }
   });
 
-  test("legacy ownership is fixed across content versions and canonical rewrites", () => {
+  test("older v3 calls retain fixed ownership across canonical rewrites", () => {
     const definitions = [
       { name: "list_templates", executor: "server" },
       { name: "mcp__external__lookup", executor: "server" },
@@ -685,27 +615,27 @@ describe("persisted chat message parts", () => {
         continue;
       }
       const { metadata: _metadata, ...untagged } = stored;
+      const contentWithoutMetadata = {
+        ...current,
+        data: [untagged],
+      };
+      const contentWithProviderMetadata = {
+        ...current,
+        data: [{ ...untagged, metadata: call.metadata }],
+      };
       const contents = [
-        { ...current, data: [{ ...untagged, metadata: call.metadata }] },
-        toChatMessageContent({ version: 2, data: [call] }),
-        {
-          version: 1 as const,
-          data: [
-            {
-              ...call,
-              type: `tool-${name}`,
-              toolCallId: call.id,
-              state: "input-available",
-            },
-          ],
-        },
+        current,
+        contentWithProviderMetadata,
+        contentWithoutMetadata,
       ];
       for (const content of contents) {
         const parts = normalizePersistedChatMessageContent(content).parts;
-        expect(parts.at(0)).toMatchObject({
-          type: "tool-call",
-          metadata: { provider: "retained" },
-        });
+        expect(parts.at(0)).toMatchObject({ type: "tool-call" });
+        if (content !== contentWithoutMetadata) {
+          expect(parts.at(0)).toMatchObject({
+            metadata: { provider: "retained" },
+          });
+        }
         expect(chatToolExecutor(parts.at(0))).toBe(executor);
         expect(isServerChatToolCall(parts.at(0))).toBe(executor === "server");
         expect(
@@ -742,7 +672,7 @@ describe("persisted chat message parts", () => {
     }
   });
 
-  test("malformed legacy tool metadata produces a structured read error", () => {
+  test("malformed stored tool metadata is rejected as corrupted state", () => {
     const call = {
       type: "tool-call",
       name: "list_templates",
@@ -770,41 +700,24 @@ describe("persisted chat message parts", () => {
       [],
       { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "unknown" },
     ]) {
-      for (const content of [
-        { ...canonical, data: [{ ...untagged, metadata }] },
-        toChatMessageContent({ version: 2, data: [{ ...call, metadata }] }),
-        {
-          version: 1 as const,
-          data: [
-            {
-              ...call,
-              type: "tool-list_templates",
-              toolCallId: call.id,
-              state: "output-available",
-              metadata,
-            },
-          ],
-        },
-      ]) {
-        const result = Result.try({
-          try: () => normalizePersistedChatMessageContent(content),
-          catch: (error) => error,
-        });
-        expect(Result.isError(result)).toBe(true);
-        if (Result.isError(result)) {
-          expect(HandlerError.is(result.error)).toBe(true);
-          if (HandlerError.is(result.error)) {
-            expect(result.error.status).toBe(422);
-            expect(result.error.message).toContain(
-              "Stored tool call has invalid",
-            );
-          }
+      const content = { ...canonical, data: [{ ...untagged, metadata }] };
+      const result = Result.try({
+        try: () => normalizePersistedChatMessageContent(content),
+        catch: (error) => error,
+      });
+      expect(Result.isError(result)).toBe(true);
+      if (Result.isError(result)) {
+        expect(result.error).toBeInstanceOf(Panic);
+        if (result.error instanceof Panic) {
+          expect(result.error.message).toContain(
+            "Stored tool call has invalid",
+          );
         }
       }
     }
   });
 
-  test("completed legacy tool calls render and export without a tool catalog", () => {
+  test("completed stored tool calls render and export without a tool catalog", () => {
     const call = {
       type: "tool-call",
       id: "completed-server",
@@ -813,7 +726,10 @@ describe("persisted chat message parts", () => {
       input: {},
       state: "complete",
       output: { templates: [{ name: "Template" }] },
-      metadata: { provider: "legacy" },
+      metadata: {
+        provider: "legacy",
+        [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server",
+      },
     } as const;
     const result = {
       type: "tool-result",
@@ -823,11 +739,9 @@ describe("persisted chat message parts", () => {
     } as const;
     const markdown = "# Templates\n\nOne template is available.";
     const text = createChatTextPart(markdown);
-    const content = toChatMessageContent({
-      version: 2,
+    const content = toPersistedChatMessageContentV3({
       data: [call, result, text],
     });
-    expect(chatToolExecutor(call)).toBeNull();
     const page = clientMessageFromPageRow(
       {
         content,
@@ -1064,8 +978,7 @@ describe("persisted chat message parts", () => {
     const message = chatMessageFromPersisted({
       id: toSafeId<"chatMessage">("019eb9fa-c91f-7000-9b9c-9365977dda78"),
       role: "assistant",
-      content: toChatMessageContent({
-        version: 2,
+      content: toPersistedChatMessageContentV3({
         data: [{ type: "text", content: "Summary" }],
         metadata: {
           serverProvenance: { type: "search-summary", version: 1 },
@@ -1099,8 +1012,7 @@ describe("persisted chat message parts", () => {
     const message = chatMessageFromPersisted({
       id: toSafeId<"chatMessage">("019eb9fa-c91f-7000-9b9c-9365977dda80"),
       role: "assistant",
-      content: toChatMessageContent({
-        version: 2,
+      content: toPersistedChatMessageContentV3({
         data: [{ type: "text", content: "Summary" }],
         metadata: {
           refContext,
@@ -1119,8 +1031,7 @@ describe("persisted chat message parts", () => {
     const message = chatMessageFromPersisted({
       id: toSafeId<"chatMessage">("019eb9fa-c91f-7000-9b9c-9365977dda79"),
       role: "assistant",
-      content: toChatMessageContent({
-        version: 2,
+      content: toPersistedChatMessageContentV3({
         data: [{ type: "text", content: "Ahoj" }],
         metadata: {
           usage: {

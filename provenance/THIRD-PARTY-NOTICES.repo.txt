@@ -10,7 +10,7 @@ Project: root
 - @anthropic-ai/sdk 0.97.1 — MIT
 - @astrojs/react 7.0.1 — MIT
 - @astrojs/sitemap 3.7.4 — MIT
-- @astrojs/starlight 0.42.5 — MIT
+- @astrojs/starlight 0.42.6 — MIT
 - @atlaskit/pragmatic-drag-and-drop 4.0.0 — Apache-2.0
 - @atlaskit/pragmatic-drag-and-drop-auto-scroll 3.2.1 — Apache-2.0
 - @atlaskit/pragmatic-drag-and-drop-hitbox 3.0.0 — Apache-2.0
@@ -41,12 +41,11 @@ Project: root
 - @hocuspocus/server 4.7.0 — MIT
 - @hyzyla/pdfium 2.1.13 — MIT
 - @jitl/quickjs-wasmfile-release-asyncify 0.32.0 — MIT
-- @libpdf/core 0.4.2 — MIT
+- @libpdf/core 0.5.2 — MIT
 - @litko/yara-x 0.7.5 — MIT
 - @mistralai/mistralai 2.7.0 — Apache-2.0
 - @modelcontextprotocol/client 2.3.1 — Apache-2.0
 - @modelcontextprotocol/ext-apps 2.0.3 — MIT
-- @modelcontextprotocol/sdk 1.31.0 — MIT
 - @modelcontextprotocol/server 2.3.1 — Apache-2.0
 - @myriaddreamin/typst-ts-web-compiler 0.7.0 — Apache-2.0
 - @neftaly/editcontext-polyfill 0.1.1 — MIT
@@ -60,7 +59,7 @@ Project: root
 - @react-email/components 1.0.12 — MIT
 - @react-email/render 2.1.0 — MIT
 - @resvg/resvg-js 2.6.2 — MPL-2.0
-- @silurus/ooxml 0.87.0 — MIT
+- @silurus/ooxml 0.88.0 — MIT
 - @sinclair/typebox 0.34.52 — MIT
 - @smithy/fetch-http-handler 5.8.0 — Apache-2.0
 - @sparticuz/chromium-min 153.0.0 — MIT
@@ -84,7 +83,7 @@ Project: root
 - @tanstack/ai-openai 0.27.0 — MIT
 - @tanstack/ai-openrouter 0.21.1 — MIT
 - @tanstack/ai-sandbox 0.5.19 — MIT
-- @tanstack/charts 1.0.0 — MIT
+- @tanstack/charts 1.1.0 — MIT
 - @tanstack/react-devtools 0.10.13 — MIT
 - @tanstack/react-form 1.33.5 — MIT
 - @tanstack/react-hotkeys 0.13.0 — MIT
@@ -120,7 +119,7 @@ Project: root
 - @vscode/markdown-editor 0.0.2-113 — MIT
 - @vscode/observables 0.1.1-0 — MIT
 - asn1js 3.0.10 — BSD-3-Clause
-- astro 7.3.6 — MIT
+- astro 7.3.8 — MIT
 - better-auth 1.7.6 — MIT
 - better-result 3.0.1 — MIT
 - bullmq 6.3.11 — MIT
@@ -148,10 +147,11 @@ Project: root
 - immer 11.1.21 — MIT
 - input-otp 1.5.0 — MIT
 - ioredis 6.0.0 — MIT
-- isbot 5.2.1 — Unlicense
+- isbot 5.2.2 — Unlicense
 - jose 6.2.12 — MIT
 - jszip 3.10.2 — (MIT OR GPL-3.0-or-later)
 - katex 0.16.47 — MIT
+- linkify-it 6.1.0 — MIT
 - lucide-react 1.41.0 — ISC
 - mailauth 7.1.1 — MIT
 - mdast-util-from-markdown 2.1.0 — MIT
@@ -166,7 +166,7 @@ Project: root
 - pkijs 3.4.1 — BSD-3-Clause
 - playwright-core 1.63.0 — Apache-2.0
 - postal-mime 4.0.4 — MIT-0
-- postcss 8.5.28 — MIT
+- postcss 8.5.29 — MIT
 - posthog-js 1.438.2 — (Apache-2.0 AND MIT)
 - posthog-node 5.55.0 — MIT
 - prism-react-renderer 2.4.1 — MIT
@@ -178,23 +178,23 @@ Project: root
 - react-native-safe-area-context 5.10.1 — MIT
 - saxes 6.0.0 — ISC
 - scslre 0.3.0 — MIT
-- shell-quote 1.11.0 — MIT
+- shell-quote 1.12.0 — MIT
 - slimdom 4.3.5 — MIT
 - ssf 0.11.2 — Apache-2.0
 - streamdown 2.7.0 — Apache-2.0
 - tailwind-merge 3.7.0 — MIT
 - temporal-polyfill 1.0.5 — MIT
 - thinking-orbs 0.3.2 — MIT
-- tldts 7.4.16 — MIT
+- tldts 7.4.18 — MIT
 - typescript 6.0.3 — Apache-2.0
 - typescript 7.0.2 — Apache-2.0
 - unified 11.0.5 — MIT
 - uqr 0.1.3 — MIT
 - use-debounce 10.1.1 — MIT
-- use-intl 4.14.8 — MIT
-- uuid 14.0.2 — MIT
+- use-intl 4.14.9 — MIT
+- uuid 14.0.3 — MIT
 - valibot 1.5.0 — MIT
-- vite 8.3.1 — MIT
+- vite 8.3.4 — MIT
 - wxt 0.21.4 — MIT
 - y-prosemirror 1.3.7 — MIT
 - yjs 13.6.33 — MIT
@@ -604,7 +604,7 @@ Project: desktop-tauri
 - rustc-hash 2.1.3 — Apache-2.0 OR MIT
 - rustc_version 0.4.1 — Apache-2.0 OR MIT
 - rustix 1.1.4 — Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT
-- rustls 0.23.45 — Apache-2.0 OR ISC OR MIT
+- rustls 0.23.46 — Apache-2.0 OR ISC OR MIT
 - rustls-native-certs 0.8.4 — Apache-2.0 OR ISC OR MIT
 - rustls-pki-types 1.15.1 — Apache-2.0 OR MIT
 - rustls-platform-verifier 0.7.0 — Apache-2.0 OR MIT
@@ -677,7 +677,7 @@ Project: desktop-tauri
 - tao-macros 0.1.4 — Apache-2.0 OR MIT
 - tar 0.4.46 — Apache-2.0 OR MIT
 - target-lexicon 0.12.16 — Apache-2.0 WITH LLVM-exception
-- tauri 2.12.1 — Apache-2.0 OR MIT
+- tauri 2.12.2 — Apache-2.0 OR MIT
 - tauri-build 2.7.1 — Apache-2.0 OR MIT
 - tauri-codegen 2.7.1 — Apache-2.0 OR MIT
 - tauri-macros 2.7.1 — Apache-2.0 OR MIT
@@ -690,7 +690,7 @@ Project: desktop-tauri
 - tauri-plugin-opener 2.7.0 — Apache-2.0 OR MIT
 - tauri-plugin-process 2.4.0 — Apache-2.0 OR MIT
 - tauri-plugin-single-instance 2.5.2 — Apache-2.0 OR MIT
-- tauri-plugin-updater 2.13.1 — Apache-2.0 OR MIT
+- tauri-plugin-updater 2.13.2 — Apache-2.0 OR MIT
 - tauri-runtime 2.12.1 — Apache-2.0 OR MIT
 - tauri-runtime-wry 2.12.1 — Apache-2.0 OR MIT
 - tauri-utils 2.10.1 — Apache-2.0 OR MIT
@@ -752,7 +752,7 @@ Project: desktop-tauri
 - url 2.5.8 — Apache-2.0 OR MIT
 - urlpattern 0.6.0 — MIT
 - utf8_iter 1.0.4 — Apache-2.0 OR MIT
-- uuid 1.27.0 — Apache-2.0 OR MIT
+- uuid 1.28.0 — Apache-2.0 OR MIT
 - valuable 0.1.1 — MIT
 - version-compare 0.2.1 — MIT
 - version_check 0.9.5 — MIT/Apache-2.0
@@ -879,7 +879,7 @@ Project: desktop-tauri
 - zerovec 0.11.6 — Unicode-3.0
 - zerovec-derive 0.11.3 — Unicode-3.0
 - zip 4.6.1 — MIT
-- zip 8.6.0 — MIT
+- zip 9.0.0 — MIT
 - zmij 1.0.23 — MIT
 - zune-core 0.5.3 — Apache-2.0 OR MIT OR Zlib
 - zune-jpeg 0.5.15 — Apache-2.0 OR MIT OR Zlib

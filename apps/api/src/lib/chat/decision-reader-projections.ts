@@ -6,6 +6,7 @@ import {
   READER_PROVISION_ANCHOR_MIN_CHARS,
   READER_PROVISION_ANCHOR_MAX_CHARS,
 } from "@stll/api-contract/limits";
+import { PROVISION_LINK_STATUS_TYPES } from "@stll/api-contract/provision-link-status";
 import { DECISION_PRIMARY_REFERENCE_TYPES } from "@stll/legal-ast/decision-identifier";
 import { blockSchema } from "@stll/legal-ast/document-ast";
 
@@ -20,7 +21,7 @@ const readerMetadataSchema = v.strictObject({
   country: v.string(),
   date: v.nullable(v.string()),
   ecli: v.nullable(v.string()),
-  appUrl: v.nullable(v.string()),
+  url: v.nullable(v.string()),
 });
 const withheldReasonSchema = v.strictObject({
   code: v.literal("source_licence"),
@@ -60,10 +61,10 @@ const citationAnchorSchema = v.strictObject({
   end: v.number(),
   citationId: v.string(),
   decisionId: v.string(),
-  appUrl: v.nullable(v.string()),
+  url: v.nullable(v.string()),
 });
 const provisionAnchorSchema = v.strictObject({
-  appUrl: v.nullable(v.string()),
+  url: v.nullable(v.string()),
   pieceId: v.string(),
   start: v.number(),
   end: v.number(),
@@ -101,6 +102,9 @@ export const blocksDecisionOutput = v.strictObject({
       blockFragments: v.array(blockFragmentSchema),
       citationAnchors: v.array(citationAnchorSchema),
       provisionAnchors: v.array(provisionAnchorSchema),
+      provisionStatus: v.nullable(
+        v.strictObject({ type: v.picklist(PROVISION_LINK_STATUS_TYPES) }),
+      ),
       nextCursor: v.nullable(v.string()),
       limit: v.literal(READER_PAGE_MAX_CHARS),
     }),
@@ -117,7 +121,7 @@ const previewHeading = v.strictObject({
   text: v.string(),
 });
 export const provisionPreviewOutput = v.strictObject({
-  appUrl: v.nullable(v.string()),
+  url: v.nullable(v.string()),
   documentId: v.string(),
   language: v.string(),
   anchorId: v.string(),

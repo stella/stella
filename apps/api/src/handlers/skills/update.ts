@@ -7,9 +7,11 @@ import {
   AGENT_SKILL_COMMAND_PATTERN,
   RESERVED_AGENT_SKILL_COMMANDS,
   agentSkills,
+  type AgentSkillInvocation,
 } from "@/api/db/schema";
 import { skillRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { requireSkillManager } from "@/api/handlers/skills/managed-skill";
+import { tSkillInvocation } from "@/api/handlers/skills/skill-invocation-schema";
 import { uniqueSlug } from "@/api/handlers/skills/slug";
 import type { SkillSlug } from "@/api/handlers/skills/slug";
 import { auditedSkillBody } from "@/api/lib/agent-skills/audited-body";
@@ -31,6 +33,9 @@ const updateSkillParamsSchema = t.Object({
 
 const updateSkillBodySchema = t.Object({
   enabled: t.Optional(t.Boolean()),
+  // Like `enabled`, a setting of the installed skill rather than its content,
+  // so it may change on any origin.
+  invocation: t.Optional(tSkillInvocation()),
   name: t.Optional(t.String({ minLength: 1, maxLength: 64 })),
   description: t.Optional(
     t.String({ minLength: 1, maxLength: LIMITS.agentSkillDescriptionMaxChars }),
@@ -59,11 +64,13 @@ const config = {
     baselineId: "apps/api/src/handlers/skills/update.ts",
   },
   description:
-    "Change an agent skill: enable or disable it, or edit its name, " +
-    "description, instruction body, version, or slash command. Pass command " +
-    "as null to clear it; at least one field is required. Enabling and " +
-    "disabling works on any skill you may manage, but editing the content of " +
-    "a bundled skill is refused. A rename derives a new unique slug from the " +
+    "Change an agent skill: enable or disable it, set its invocation (`auto`: " +
+    "the assistant may use it on its own; `manual`: only when the user " +
+    "invokes it), or edit its name, description, instruction body, version, " +
+    "or slash command. Pass command as null to clear it; at least one field " +
+    "is required. Enabling, disabling and the invocation work on any skill " +
+    "you may manage, but editing the content of a bundled skill is refused. " +
+    "A rename derives a new unique slug from the " +
     "name; a command already taken in the organization is a 409.",
   permissions: { agentSkill: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
@@ -82,6 +89,7 @@ type SkillUpdateFields = {
   contentHash?: string;
   description?: string;
   enabled?: boolean;
+  invocation?: AgentSkillInvocation;
   name?: string;
   slug?: SkillSlug;
   version?: string | null;
@@ -94,6 +102,7 @@ type SkillUpdateChanges = {
   body?: SkillUpdateChange<AuditedSkillBody>;
   description?: SkillUpdateChange<string>;
   enabled?: SkillUpdateChange<boolean>;
+  invocation?: SkillUpdateChange<AgentSkillInvocation>;
   name?: SkillUpdateChange<string>;
   slug?: SkillUpdateChange<string>;
   version?: SkillUpdateChange<string | null>;
@@ -104,6 +113,7 @@ type SkillUpdateExisting = {
   body: string;
   description: string;
   enabled: boolean;
+  invocation: AgentSkillInvocation;
   name: string;
   slug: string;
   version: string | null;
@@ -112,6 +122,7 @@ type SkillUpdateExisting = {
 
 type SkillUpdateBody = {
   enabled?: boolean | undefined;
+  invocation?: AgentSkillInvocation | undefined;
   name?: string | undefined;
   description?: string | undefined;
   body?: string | undefined;
@@ -160,6 +171,13 @@ const buildSkillUpdateDiff = (
   if (body.enabled !== undefined && body.enabled !== existing.enabled) {
     updates.enabled = body.enabled;
     changes.enabled = { old: existing.enabled, new: body.enabled };
+  }
+  if (
+    body.invocation !== undefined &&
+    body.invocation !== existing.invocation
+  ) {
+    updates.invocation = body.invocation;
+    changes.invocation = { old: existing.invocation, new: body.invocation };
   }
   if (body.name !== undefined && body.name !== existing.name) {
     const slug = uniqueSlug(body.name);
@@ -214,7 +232,11 @@ const updateSkill = createSafeRootHandler(
       body.body !== undefined ||
       body.version !== undefined ||
       body.command !== undefined;
-    if (body.enabled === undefined && !hasMetadataEdit) {
+    if (
+      body.enabled === undefined &&
+      body.invocation === undefined &&
+      !hasMetadataEdit
+    ) {
       return Result.err(
         new HandlerError({
           status: 400,
@@ -238,6 +260,7 @@ const updateSkill = createSafeRootHandler(
             scope: agentSkills.scope,
             userId: agentSkills.userId,
             enabled: agentSkills.enabled,
+            invocation: agentSkills.invocation,
             slug: agentSkills.slug,
             name: agentSkills.name,
             description: agentSkills.description,

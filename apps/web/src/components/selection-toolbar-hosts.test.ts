@@ -70,27 +70,19 @@ const mountsOf = (target: string): ToolbarMount[] => {
         let owner = node.parent;
         let component = "";
         while (!ts.isSourceFile(owner)) {
+          // Local content components can sit behind an exported boundary.
+          // The mounting function owns the toolbar regardless of its exports.
           if (
-            ts.isVariableStatement(owner) &&
-            owner.modifiers?.some(
-              (modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword,
-            )
+            ts.isVariableDeclaration(owner) &&
+            ts.isIdentifier(owner.name) &&
+            owner.initializer !== undefined &&
+            (ts.isArrowFunction(owner.initializer) ||
+              ts.isFunctionExpression(owner.initializer))
           ) {
-            const declaration = owner.declarationList.declarations.at(0);
-            if (
-              declaration !== undefined &&
-              ts.isIdentifier(declaration.name)
-            ) {
-              component = declaration.name.text;
-            }
+            component = owner.name.text;
             break;
           }
-          if (
-            ts.isFunctionDeclaration(owner) &&
-            owner.modifiers?.some(
-              (modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword,
-            )
-          ) {
+          if (ts.isFunctionDeclaration(owner)) {
             component = owner.name?.text ?? "";
             break;
           }

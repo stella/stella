@@ -1,0 +1,5 @@
+{
+  "metric": "no-network-await-in-loop-suppressions",
+  "delta": 1,
+  "reason": "Reader-answer pages must be fetched sequentially because each next cursor comes from the preceding response. The query checks repeated cursors, forwards cancellation and accumulates pages without per-item requests."
+}

@@ -118,6 +118,20 @@ test("every real workflow job has an event policy and the fast gate follows it",
   expect(checkCiEventPolicies({ workflows, policy })).toEqual([]);
 });
 
+test("duplicate raw event-policy job keys fail before JSON key collapse", () => {
+  const source =
+    '{"jobs":{"fixture.yml/job":"pr-fast","fixture.yml/job":"main"}}';
+  const parsed: unknown = JSON.parse(source);
+  expect(parsed).toEqual({ jobs: { "fixture.yml/job": "main" } });
+  expect(
+    checkCiEventPolicies({
+      workflows: {},
+      policy: parsed,
+      policySource: source,
+    }),
+  ).toContain("CI event policy has duplicate job key: fixture.yml/job");
+});
+
 test("Postgres-only PR suites cannot lose their disabled-by-default switch", () => {
   const workflow = v.parse(
     workflowSchema,

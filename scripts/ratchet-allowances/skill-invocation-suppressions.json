@@ -1,0 +1,5 @@
+{
+  "metric": "lint-suppression-directives",
+  "delta": 1,
+  "reason": "The approved compile-only ModelOfferedSkills unique-symbol brand is minted once by assertion after the invocation filter. TypeScript cannot infer a property that deliberately has no runtime representation, so this sole cast requires its named no-unsafe-type-assertion directive."
+}

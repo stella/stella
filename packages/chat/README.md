@@ -1,7 +1,7 @@
 # `@stll/chat`
 
-Portable React chat primitives: a rich-editor composer shell, message stream,
-model selector, and observable streaming runtime.
+Portable React chat primitives: message streams, model selectors, composer
+action resolution, and observable streaming runtimes.
 
 The host owns authentication, endpoint selection, persistence, provider
 credentials, translations, and rich-message rendering. It supplies a typed
@@ -9,18 +9,9 @@ credentials, translations, and rich-message rendering. It supplies a typed
 selects a provider.
 
 ```tsx
-import { ChatComposer, ChatMessageStream, createChatRuntime } from "@stll/chat";
+import { ChatMessageStream, createChatRuntime } from "@stll/chat";
 
 const runtime = createChatRuntime({ transport });
-
-<ChatComposer
-  canSend={draft.length > 0}
-  isGenerating={runtime.getSnapshot().isStreaming}
-  labels={{ retry: "Retry", send: "Send", stop: "Stop" }}
-  onSend={sendDraft}
->
-  <RichEditor />
-</ChatComposer>;
 ```
 
 Validate every explicit provider/model selection with

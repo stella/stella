@@ -31,6 +31,7 @@ export {
   ScreeningWorkLimitError,
   buildScreeningIndex,
   buildScreeningIndexCooperatively,
+  cloneScreeningIndexWithoutCache,
   screen,
 } from "./screening";
 export type {
@@ -42,6 +43,7 @@ export type {
   ScreeningIndex,
   ScreeningQuery,
   ScreeningResult,
+  ScreeningWorkUsage,
 } from "./screening";
 export { parseUnList, readUnListVersion } from "./un";
 export { parseUkList, readUkListVersion } from "./uk";

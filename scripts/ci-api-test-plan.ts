@@ -101,6 +101,7 @@ export const planCiApiTests = ({
 if (import.meta.main) {
   const root = path.resolve(import.meta.dir, "..");
   let plan;
+  let testScope = "";
   try {
     const event = process.env["EVENT_NAME"] ?? "";
     const scopeUnknown = process.env["API_SCOPE_UNKNOWN"] === "true";
@@ -113,10 +114,41 @@ if (import.meta.main) {
     )
       .split("\0")
       .filter(Boolean);
-    const testJobs =
-      !scopeUnknown && ["pull_request", "merge_group"].includes(event)
-        ? selectedTestJobs(changed, root)
-        : FULL_TEST_JOB_SHARDS;
+    let testJobs = FULL_TEST_JOB_SHARDS;
+    if (!scopeUnknown && ["pull_request", "merge_group"].includes(event)) {
+      const comparisonBase =
+        process.env["COMPARISON_BASE"] ?? panic("Missing COMPARISON_BASE");
+      const scopeResult = Bun.spawnSync(
+        ["bun", "scripts/test-scope.ts", "--base", comparisonBase],
+        { cwd: root, stderr: "pipe", stdout: "pipe" },
+      );
+      if (scopeResult.exitCode !== 0) {
+        panic(`Test scope failed: ${scopeResult.stderr.toString()}`);
+      }
+      testScope = scopeResult.stdout.toString().trim();
+      const scopeArgs = testScope.split(/\s+/u).filter(Boolean);
+      const dryRun = Bun.spawnSync(
+        [
+          "bun",
+          "run",
+          "test",
+          "--",
+          "--concurrency=2",
+          ...scopeArgs,
+          "--dry=json",
+        ],
+        { cwd: root, stderr: "pipe", stdout: "pipe" },
+      );
+      if (dryRun.exitCode !== 0) {
+        panic(`Test plan failed: ${dryRun.stderr.toString()}`);
+      }
+      const output = dryRun.stdout.toString();
+      const jsonStart = output.indexOf("{");
+      if (jsonStart === -1) {
+        panic("Test plan did not contain JSON");
+      }
+      testJobs = selectedTestJobs(output.slice(jsonStart), root);
+    }
     plan = planCiApiTests({
       event,
       scopeUnknown,
@@ -134,6 +166,6 @@ if (import.meta.main) {
   }
   appendFileSync(
     process.env["GITHUB_OUTPUT"] ?? panic("Missing GITHUB_OUTPUT"),
-    `ci_tests_matrix=${JSON.stringify(plan.matrix)}\napi_test_shards=${plan.impact.shards}\napi_test_files<<API_TEST_FILES_END\n${plan.impact.files.join("\n")}\nAPI_TEST_FILES_END\n`,
+    `ci_tests_matrix=${JSON.stringify(plan.matrix)}\napi_test_shards=${plan.impact.shards}\ntest_scope=${testScope}\napi_test_files<<API_TEST_FILES_END\n${plan.impact.files.join("\n")}\nAPI_TEST_FILES_END\n`,
   );
 }

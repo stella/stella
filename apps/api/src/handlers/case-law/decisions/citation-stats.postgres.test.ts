@@ -16,7 +16,7 @@ import {
   caseLawSources,
 } from "@/api/db/schema";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
-import { publishedCaseLawDecisionSqlFor } from "@/api/lib/case-law/published-decisions";
+import { publishedCaseLawDecisionSqlFor } from "@/api/lib/case-law/published-decisions-sql";
 import { redistributableCaseLawSourceSqlFor } from "@/api/lib/case-law/redistribution-sql";
 import { boundedAll } from "@/api/lib/db/bounded-all";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
@@ -123,6 +123,8 @@ const compareFilteredSummary = async (client: SQL, ids: string[]) => {
           tx,
           decisionId: toSafeId<"caseLawDecision">(decisionId),
           currentYear,
+          // The oracle above reads the search list; so does this read.
+          countries: PUBLIC_CASE_LAW_COUNTRIES,
           limit,
         }),
     });

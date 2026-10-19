@@ -4,6 +4,65 @@ export const CLAUSE_VERSION_LIMIT_ERROR_CODE = "clause_version_limit_reached";
 
 export const API_VALIDATION_ERROR_CODE = "validation" as const;
 
+/**
+ * Why a request field failed its schema. The 422 a rejected request gets
+ * names each failing field this way, never with the rejected value, so a
+ * client can say which field to fix and by how much.
+ */
+export const API_VALIDATION_CONSTRAINTS = [
+  "required",
+  "maxLength",
+  "minLength",
+  "invalid",
+] as const;
+
+export type ApiValidationConstraint =
+  (typeof API_VALIDATION_CONSTRAINTS)[number];
+
+export type ApiValidationIssue = {
+  /** Dotted path inside the request part, e.g. `name` or `items.0.title`. */
+  field: string;
+  constraint: ApiValidationConstraint;
+  /** The bound a length constraint was checked against. */
+  limit?: number | undefined;
+};
+
+const isValidationConstraint = (
+  value: unknown,
+): value is ApiValidationConstraint =>
+  API_VALIDATION_CONSTRAINTS.some((constraint) => constraint === value);
+
+/** The issues a 422 carries in its error details; empty when it has none. */
+export const parseApiValidationIssues = (
+  details: Record<string, unknown> | undefined,
+): ApiValidationIssue[] => {
+  const issues = details?.["issues"];
+  if (!Array.isArray(issues)) {
+    return [];
+  }
+  return issues.flatMap((issue: unknown) => {
+    if (
+      typeof issue !== "object" ||
+      issue === null ||
+      !("field" in issue) ||
+      typeof issue.field !== "string" ||
+      !("constraint" in issue) ||
+      !isValidationConstraint(issue.constraint)
+    ) {
+      return [];
+    }
+    return [
+      {
+        field: issue.field,
+        constraint: issue.constraint,
+        ...("limit" in issue && typeof issue.limit === "number"
+          ? { limit: issue.limit }
+          : {}),
+      },
+    ];
+  });
+};
+
 /** A member removal met concurrent work on the same rows; retry shortly. */
 export const MEMBER_REMOVAL_BUSY_CODE = "member_removal_busy" as const;
 

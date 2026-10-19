@@ -3,6 +3,7 @@ import { useSyncExternalStore } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { Result, TaggedError } from "better-result";
 
+import { PROFESSIONAL_USE_STATEMENT_VERSION } from "@stll/api-contract/professional-use";
 import { Button } from "@stll/ui/button";
 import { stellaToast } from "@stll/ui/toast";
 
@@ -13,6 +14,8 @@ import { api } from "@/lib/api";
 import { authClient, isTwoFactorRedirect } from "@/lib/auth-client";
 import { detached } from "@/lib/detached";
 import { fetchDevOtp } from "@/lib/dev-otp";
+import { toAPIError } from "@/lib/errors/api";
+import type { ToAPIErrorProps } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
@@ -54,6 +57,7 @@ const DEV_QUICK_START_COPY = {
 } as const;
 
 const DEV_QUICK_START_ERROR = {
+  professionalUse: "professionalUse",
   matterImport: "matterImport",
   matterImportRunning: "matterImportRunning",
   otpUnavailable: "otpUnavailable",
@@ -63,6 +67,8 @@ type DevQuickStartErrorCode =
   (typeof DEV_QUICK_START_ERROR)[keyof typeof DEV_QUICK_START_ERROR];
 
 const ERROR_MESSAGES = {
+  [DEV_QUICK_START_ERROR.professionalUse]:
+    "The professional-use statement could not be accepted.",
   [DEV_QUICK_START_ERROR.matterImport]:
     "The Harvey LAB import could not start.",
   [DEV_QUICK_START_ERROR.matterImportRunning]:
@@ -75,6 +81,31 @@ class DevQuickStartError extends TaggedError("DevQuickStartError")<{
   code: DevQuickStartErrorCode;
   message: string;
 }> {}
+
+// A developer tool: name the server's refusal instead of a generic failure,
+// so a new gate in front of a step is visible at once.
+function refusedStep(
+  code: DevQuickStartErrorCode,
+  error: ToAPIErrorProps,
+): never {
+  throw new DevQuickStartError({
+    code,
+    message: `${ERROR_MESSAGES[code]} (${String(error.status)}: ${toAPIError(error).message})`,
+  });
+}
+
+// A new quick-start account has not seen the professional-use statement, and
+// the API refuses its signed-in requests until it is accepted. Record it the
+// way the professional-use page does; this also covers accounts created
+// before this step existed, two-factor sign-in and resumed attempts.
+const acceptProfessionalUse = async () => {
+  const accepted = await api.me["professional-use"].post({
+    statementVersion: PROFESSIONAL_USE_STATEMENT_VERSION,
+  });
+  if (accepted.error) {
+    refusedStep(DEV_QUICK_START_ERROR.professionalUse, accepted.error);
+  }
+};
 
 const AUTHENTICATION_OUTCOME = {
   authenticated: "authenticated",
@@ -149,6 +180,9 @@ const startMatterImport = async (
   { selectionSeed }: DevQuickStartIdentity,
   organizationId: string,
 ) => {
+  // Every path reaches here, including attempts resumed after the
+  // organization step; acceptance is idempotent.
+  await acceptProfessionalUse();
   const response = await api.dev["seed-firm-knowledge"].post({
     incompleteMatterMode: QUICK_START_INCOMPLETE_MATTER_MODE,
     matters: QUICK_START_MATTER_COUNT,
@@ -160,10 +194,7 @@ const startMatterImport = async (
       response.error.status === 409
         ? DEV_QUICK_START_ERROR.matterImportRunning
         : DEV_QUICK_START_ERROR.matterImport;
-    throw new DevQuickStartError({
-      code,
-      message: ERROR_MESSAGES[code],
-    });
+    refusedStep(code, response.error);
   }
 
   if (response.data instanceof Response) {
@@ -211,7 +242,7 @@ export const DevQuickStartButton = ({ redirectTo }: { redirectTo: string }) => {
       analytics.captureError(result.error);
       notifyUserError(result.error, DEV_QUICK_START_COPY.errorTitle, {
         description: DevQuickStartError.is(result.error)
-          ? ERROR_MESSAGES[result.error.code]
+          ? result.error.message
           : userErrorFromThrown(
               result.error,
               DEV_QUICK_START_COPY.errorFallback,
@@ -328,7 +359,7 @@ export const DevQuickStartContinuation = ({
       analytics.captureError(result.error);
       notifyUserError(result.error, DEV_QUICK_START_COPY.errorTitle, {
         description: DevQuickStartError.is(result.error)
-          ? ERROR_MESSAGES[result.error.code]
+          ? result.error.message
           : userErrorFromThrown(
               result.error,
               DEV_QUICK_START_COPY.errorFallback,

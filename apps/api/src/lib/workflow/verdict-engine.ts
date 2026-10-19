@@ -18,7 +18,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
-import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 import type {
   AIJustification,
   AIResult,
@@ -259,7 +259,8 @@ export const buildTierMatchUserMessage = ({
   return lines.join("\n");
 };
 
-const tierMatchSchema = v.strictObject({
+/** Read by the structured-output role contract test. @public */
+export const tierMatchSchema = v.strictObject({
   tier: v.picklist(["compliant", "fallback", "deviation", "not-applicable"]),
   rationale: v.pipe(v.string(), v.maxLength(1000)),
   matched: v.optional(
@@ -385,7 +386,7 @@ export const gradeTierMatch = async ({
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     dataClass: "customer",
     feature: "playbook.verdict",
-    modelRole: "pdf",
+    modelTask: "pdf",
     orgAIConfig: orgAIConfig ?? null,
     modelTier: admission.modelTier,
     properties: {
@@ -401,9 +402,9 @@ export const gradeTierMatch = async ({
 
   return await Result.tryPromise({
     try: async (): Promise<TierMatchVerdict> => {
-      const result = await generateTanStackObjectForRole({
+      const result = await generateTanStackObjectForTask({
         dataClass: "customer",
-        role: "pdf",
+        task: "pdf",
         orgAIConfig,
         managedAIResidency,
         organizationId,
@@ -412,7 +413,7 @@ export const gradeTierMatch = async ({
         analytics: aiAnalytics,
         caching: resolveCaching({
           promptCachingEnabled,
-          role: "pdf",
+          task: "pdf",
           scopeKey: entityVersionId,
         }),
         serviceTier,
@@ -452,7 +453,8 @@ const TIER_MATCH_BATCH_SYSTEM_PROMPT =
   "Grade every item on its own, keep its item number, and return exactly one " +
   "verdict per item.";
 
-const tierMatchBatchSchema = v.strictObject({
+/** Read by the structured-output role contract test. @public */
+export const tierMatchBatchSchema = v.strictObject({
   verdicts: v.array(
     v.strictObject({
       item: v.pipe(v.number(), v.integer(), v.minValue(1)),
@@ -520,7 +522,7 @@ export const gradeTierMatches = async ({
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     dataClass: "customer",
     feature: "playbook.verdict",
-    modelRole: "pdf",
+    modelTask: "pdf",
     orgAIConfig: orgAIConfig ?? null,
     modelTier: admission.modelTier,
     properties: {
@@ -536,9 +538,9 @@ export const gradeTierMatches = async ({
 
   return await Result.tryPromise({
     try: async (): Promise<ReadonlyMap<string, TierMatchVerdict>> => {
-      const result = await generateTanStackObjectForRole({
+      const result = await generateTanStackObjectForTask({
         dataClass: "customer",
-        role: "pdf",
+        task: "pdf",
         orgAIConfig,
         managedAIResidency,
         organizationId,
@@ -547,7 +549,7 @@ export const gradeTierMatches = async ({
         analytics: aiAnalytics,
         caching: resolveCaching({
           promptCachingEnabled,
-          role: "pdf",
+          task: "pdf",
           scopeKey: entityVersionId,
         }),
         serviceTier,

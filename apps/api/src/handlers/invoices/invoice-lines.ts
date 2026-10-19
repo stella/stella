@@ -71,6 +71,7 @@ export const tVatRateBps = t.Integer({
 export const tVatTreatment = t.Union([
   t.Literal("domestic_vat"),
   t.Literal("not_vat_payer"),
+  t.Literal("outside_scope"),
   t.Literal("reverse_charge"),
   t.Literal("exempt"),
 ]);

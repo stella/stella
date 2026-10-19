@@ -102,3 +102,42 @@ describe("Button loading icon", () => {
     expect(markup).not.toContain("button-loader");
   });
 });
+
+describe("Button press feedback", () => {
+  const PRESS = "motion-safe:active:scale-[0.98]";
+
+  test("an enabled button gives under the pointer, icon buttons included", () => {
+    for (const markup of [
+      renderToStaticMarkup(<Button>Save</Button>),
+      renderToStaticMarkup(<Button aria-label="Close" size="icon" />),
+      renderToStaticMarkup(<Button variant="ghost">Cancel</Button>),
+    ]) {
+      expect(markup).toContain(PRESS);
+      expect(markup).toContain("transition-transform");
+      expect(markup).toContain("select-none");
+    }
+  });
+
+  test("a button that cannot act never appears to respond", () => {
+    for (const markup of [
+      renderToStaticMarkup(<Button disabled>Save</Button>),
+      renderToStaticMarkup(
+        <Button disabled tooltip="Save the draft first">
+          Approve
+        </Button>,
+      ),
+      renderToStaticMarkup(<Button loading>Save</Button>),
+    ]) {
+      expect(markup).not.toContain(PRESS);
+    }
+  });
+
+  test("menu rows and link-styled buttons keep their surface's treatment", () => {
+    expect(
+      renderToStaticMarkup(<Button size="row">Rename</Button>),
+    ).not.toContain(PRESS);
+    expect(
+      renderToStaticMarkup(<Button variant="link">Learn more</Button>),
+    ).not.toContain(PRESS);
+  });
+});

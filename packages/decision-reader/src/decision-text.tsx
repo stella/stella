@@ -48,7 +48,6 @@ import {
   HighlightedText,
   InlineContent,
   WrappedParagraphRun,
-  inlinesToPlainText,
   rangesForPiece,
 } from "./document-ast-text";
 import type { TextAnchor } from "./document-ast-text";
@@ -57,6 +56,7 @@ import { HeadnoteBlock } from "./headnote-block";
 import type { HeadnoteOrigin } from "./headnote-block";
 import type { ProvisionAnchorSpan } from "./provision-anchors";
 import { locateProvisionAnchors } from "./provision-anchors";
+import { provisionCardsOf } from "./provision-card.logic";
 import type { DecisionReaderAdapters } from "./reader-adapters";
 import { useReaderAdapters, useReaderMessages } from "./reader-adapters";
 import { ReaderInsetBox } from "./reader-inset-box";
@@ -65,6 +65,7 @@ import type {
   CitationAnchorSource,
   CitedProvisionTarget,
   DecisionProvisionAnchor,
+  ExternalDecisionProvisionAnchor,
   DecisionStatuteCitationAnchor,
   ReaderDecision,
 } from "./reader-types";
@@ -403,7 +404,7 @@ const DecisionTopMatterSections = ({
   return (
     // The text is read like the decision it belongs to: the article's serif,
     // size and line-height, inherited. Only the labels are chrome.
-    <ReaderInsetBox className="mb-8">
+    <ReaderInsetBox className="mb-8" density="roomy">
       {legalSentence !== null && (
         <HeadnoteBlock
           defaultOpen
@@ -496,6 +497,7 @@ const buildAnchorsByPieceId = ({
   blocks,
   citations,
   provisionSpans,
+  externalProvisionSpans,
   statutes,
 }: {
   adapters: Pick<
@@ -506,6 +508,10 @@ const buildAnchorsByPieceId = ({
   blocks: readonly Block[];
   citations: readonly CitationAnchorSource[];
   provisionSpans: Record<string, ProvisionAnchorSpan<CitedProvisionTarget>[]>;
+  externalProvisionSpans: Record<
+    string,
+    ProvisionAnchorSpan<{ href: string }>[]
+  >;
   statutes: readonly DecisionStatuteCitationAnchor[];
 }): DecisionTextAnchorPlacements => {
   const failures: ProvisionPlacementFailure[] = [];
@@ -551,6 +557,7 @@ const buildAnchorsByPieceId = ({
   const blockIds = new Set([
     ...Object.keys(citationSpans),
     ...Object.keys(provisionSpans),
+    ...Object.keys(externalProvisionSpans),
     ...statuteSpans.keys(),
     ...externalCjeuSpansByBlock.keys(),
     ...annotationsByBlock.keys(),
@@ -610,6 +617,24 @@ const buildAnchorsByPieceId = ({
           });
         },
         start: span.start,
+      });
+    }
+    for (const span of externalProvisionSpans[blockId] ?? []) {
+      anchors.push({
+        start: span.start,
+        end: span.end,
+        key: `provision:${span.source.id}`,
+        render: (children): ReactElement => (
+          <ExternalCitationLink href={span.source.target.href}>
+            {renderLinkAnnotations({
+              annotations: annotationsOverlappingTextSpan(
+                blockAnnotations ?? [],
+                span,
+              ),
+              children,
+            })}
+          </ExternalCitationLink>
+        ),
       });
     }
     for (const span of statuteSpans.get(blockId) ?? []) {
@@ -696,19 +721,11 @@ const buildAnchorsByPieceId = ({
     }
     provisionsByAnchorId.set(
       block.anchorId,
-      spans.map((span) => (
-        <Fragment key={`${span.source.id}:${String(span.start)}`}>
+      provisionCardsOf(spans.map(({ source }) => source)).map((card) => (
+        <Fragment key={card.id}>
           {adapters.renderStatuteLink({
             type: "provision-expansion",
-            label: inlinesToPlainText(block.inlines).slice(
-              span.start,
-              span.end,
-            ),
-            provision: span.source.target,
-            version: {
-              type: "consolidation",
-              validFrom: span.source.target.document.versionValidFrom,
-            },
+            citations: card.citations,
           })}
         </Fragment>
       )),
@@ -726,6 +743,9 @@ export type PrepareDecisionTextPlacementsOptions = {
   blocks: readonly Block[];
   citationAnchors: readonly CitationAnchorSource[];
   provisionAnchors: readonly DecisionProvisionAnchor[];
+  externalProvisionAnchors?:
+    | readonly ExternalDecisionProvisionAnchor[]
+    | undefined;
   statuteCitationAnchors: readonly DecisionStatuteCitationAnchor[];
 };
 
@@ -735,11 +755,16 @@ export const prepareDecisionTextPlacements = ({
   blocks,
   citationAnchors,
   provisionAnchors,
+  externalProvisionAnchors = [],
   statuteCitationAnchors,
 }: PrepareDecisionTextPlacementsOptions): DecisionTextAnchorPlacements => {
   const provisionPlacement = locateProvisionAnchors({
     blocks,
     provisions: provisionAnchors,
+  });
+  const externalPlacement = locateProvisionAnchors({
+    blocks,
+    provisions: externalProvisionAnchors,
   });
   const placements = buildAnchorsByPieceId({
     adapters,
@@ -747,12 +772,17 @@ export const prepareDecisionTextPlacements = ({
     blocks,
     citations: citationAnchors,
     provisionSpans: provisionPlacement.anchorsByPieceId,
+    externalProvisionSpans: externalPlacement.anchorsByPieceId,
     statutes: statuteCitationAnchors,
   });
   return {
     anchorsByPieceId: placements.anchorsByPieceId,
     provisionsByAnchorId: placements.provisionsByAnchorId,
-    failures: [...provisionPlacement.failures, ...placements.failures],
+    failures: [
+      ...provisionPlacement.failures,
+      ...externalPlacement.failures,
+      ...placements.failures,
+    ],
   };
 };
 
@@ -1020,17 +1050,23 @@ export const DecisionText = ({
 
   const { anchorsByPieceId, provisionsByAnchorId } = placements;
 
-  const supplementsByAnchorId = new Map(notesByAnchorId);
+  // A block's note keeps its place in the tree whether the provision cards
+  // above it are shown or not, so toggling them never remounts the note.
+  const supplementsByAnchorId = new Map<string, ReactNode>();
+  const supplementedAnchorIds = new Set(notesByAnchorId?.keys());
   if (expandProvisions) {
-    for (const [anchorId, cards] of provisionsByAnchorId) {
-      supplementsByAnchorId.set(
-        anchorId,
-        <>
-          {cards}
-          {notesByAnchorId?.get(anchorId)}
-        </>,
-      );
+    for (const anchorId of provisionsByAnchorId.keys()) {
+      supplementedAnchorIds.add(anchorId);
     }
+  }
+  for (const anchorId of supplementedAnchorIds) {
+    supplementsByAnchorId.set(
+      anchorId,
+      <>
+        {expandProvisions ? provisionsByAnchorId.get(anchorId) : null}
+        {notesByAnchorId?.get(anchorId)}
+      </>,
+    );
   }
 
   // One return, so the attribution line cannot be forgotten on the branch
@@ -1057,9 +1093,10 @@ export const DecisionText = ({
                   onClick={() => onAnnotationActivate(annotation.id)}
                   type="button"
                 >
-                  {annotation.kind === "comment"
-                    ? messages["folio.comment"]
-                    : messages["legalReader.annotations.highlight"]}
+                  {annotation.activationLabel ??
+                    (annotation.kind === "comment"
+                      ? messages["folio.comment"]
+                      : messages["legalReader.annotations.highlight"])}
                 </button>
               ))}
             </div>

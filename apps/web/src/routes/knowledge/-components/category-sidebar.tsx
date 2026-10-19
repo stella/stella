@@ -3,6 +3,7 @@ import { useCallback, useState } from "react";
 
 import { useTranslations } from "use-intl";
 
+import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -738,6 +739,7 @@ const CategoryFormDialogBody = ({
           </label>
           <Input
             id="category-name"
+            maxLength={DEFAULT_VARCHAR_MAX_LENGTH}
             onChange={(e) => setName(e.target.value)}
             placeholder={labels.namePlaceholder}
             value={name}

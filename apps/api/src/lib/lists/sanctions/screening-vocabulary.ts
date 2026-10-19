@@ -16,13 +16,51 @@ export type SanctionsClassification =
   (typeof SANCTIONS_CLASSIFICATIONS)[number];
 
 export const SANCTIONS_SCREENING_STATUSES = [
+  // Every candidate was screened and none matched.
   "clear",
+  // At least one entry resembles the subject; each needs human review.
   "possible-match",
+  // The list could not answer: nothing was screened.
   "unavailable",
+  // A bounded scan screened only part of the list and found no match: not a
+  // clearance.
+  "incomplete",
 ] as const;
 
 export type SanctionsScreeningStatus =
   (typeof SANCTIONS_SCREENING_STATUSES)[number];
+
+/**
+ * How strongly each list status decides the screening's: the highest one
+ * present wins. Total over the status union, so a new status must be ranked.
+ */
+const SANCTIONS_STATUS_PRECEDENCE = {
+  clear: 0,
+  incomplete: 1,
+  unavailable: 2,
+  "possible-match": 3,
+} as const satisfies Record<SanctionsScreeningStatus, number>;
+
+/**
+ * The screening's status from its lists' statuses: possible-match, then
+ * unavailable, then incomplete. It is clear only when there is at least one
+ * list and every list is clear; no lists at all is unavailable.
+ */
+export const aggregateSanctionsScreeningStatus = (
+  statuses: readonly SanctionsScreeningStatus[],
+): SanctionsScreeningStatus => {
+  let aggregate: SanctionsScreeningStatus | null = null;
+  for (const status of statuses) {
+    if (
+      aggregate === null ||
+      SANCTIONS_STATUS_PRECEDENCE[status] >
+        SANCTIONS_STATUS_PRECEDENCE[aggregate]
+    ) {
+      aggregate = status;
+    }
+  }
+  return aggregate ?? "unavailable";
+};
 
 export const SANCTIONS_UNAVAILABLE_REASONS = [
   // No edition of the list has been loaded yet.
@@ -31,7 +69,7 @@ export const SANCTIONS_UNAVAILABLE_REASONS = [
   "access-denied",
   // The list has not been verified against its publisher within its limit.
   "stale",
-  // The stored edition could not be read or its screening could not complete.
+  // The stored edition or its screening index could not be loaded.
   "load-failed",
   // A company ID was given without a name and the register holds no company
   // under it, so there was no name to screen.

@@ -418,6 +418,7 @@ export const packReaderSourcePage = ({
     blockFragments: packed.blockFragments,
     citationAnchors: packed.citationAnchors,
     provisionAnchors: packed.provisionAnchors,
+    provisionStatus: source.provisionStatus,
     nextCursor: next === null ? null : encodeReaderCursor(next),
   };
 };

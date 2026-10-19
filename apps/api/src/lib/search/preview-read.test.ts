@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 
+import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import { toSafeId } from "@/api/lib/branded-types";
 import { HIGHLIGHT_START, HIGHLIGHT_STOP } from "@/api/lib/search/highlight";
 import { readSearchPreview as readSearchPreviewWithDatabase } from "@/api/lib/search/preview";
@@ -100,22 +101,20 @@ describe("search preview rendering contract", () => {
             id: "00000000-0000-4000-8000-000000000010",
             isTarget: false,
             role: "user",
-            content: {
-              version: 1,
-              data: [{ type: "text", text: "Review this agreement" }],
-            },
+            content: toPersistedChatMessageContentV3({
+              data: [{ type: "text", content: "Review this agreement" }],
+            }),
           },
           {
             id: "00000000-0000-4000-8000-000000000011",
             isTarget: true,
             role: "assistant",
-            content: {
-              version: 2,
+            content: toPersistedChatMessageContentV3({
               data: [
                 { type: "text", content: "## Key issue" },
                 { type: "text", content: "The cap is uncapped." },
               ],
-            },
+            }),
           },
         ],
       },
@@ -147,19 +146,17 @@ describe("search preview rendering contract", () => {
             id: "00000000-0000-4000-8000-000000000010",
             isTarget: false,
             role: "user",
-            content: {
-              version: 2,
+            content: toPersistedChatMessageContentV3({
               data: [{ type: "text", content: oversizedContent }],
-            },
+            }),
           },
           {
             id: "00000000-0000-4000-8000-000000000011",
             isTarget: true,
             role: "assistant",
-            content: {
-              version: 2,
+            content: toPersistedChatMessageContentV3({
               data: [{ type: "text", content: "not returned" }],
-            },
+            }),
           },
         ],
       },
@@ -196,19 +193,17 @@ describe("search preview rendering contract", () => {
             id: "00000000-0000-4000-8000-000000000010",
             isTarget: false,
             role: "user",
-            content: {
-              version: 2,
+            content: toPersistedChatMessageContentV3({
               data: [{ type: "text", content: "a".repeat(16_000) }],
-            },
+            }),
           },
           {
             id: "00000000-0000-4000-8000-000000000011",
             isTarget: true,
             role: "assistant",
-            content: {
-              version: 2,
+            content: toPersistedChatMessageContentV3({
               data: [{ type: "text", content: "matched message" }],
-            },
+            }),
           },
         ],
       },
@@ -239,15 +234,14 @@ describe("search preview rendering contract", () => {
             id: "00000000-0000-4000-8000-000000000010",
             isTarget: true,
             role: "assistant",
-            content: {
-              version: 2,
+            content: toPersistedChatMessageContentV3({
               data: [
                 {
                   type: "text",
                   content: `${"a".repeat(20_000)} résumé ${"b".repeat(1000)}`,
                 },
               ],
-            },
+            }),
           },
         ],
       },
@@ -278,15 +272,14 @@ describe("search preview rendering contract", () => {
             id: "00000000-0000-4000-8000-000000000010",
             isTarget: true,
             role: "assistant",
-            content: {
-              version: 2,
+            content: toPersistedChatMessageContentV3({
               data: [
                 {
                   type: "text",
                   content: `closing ${"a".repeat(20_000)} closing, memo`,
                 },
               ],
-            },
+            }),
           },
         ],
       },
@@ -315,25 +308,25 @@ describe("search preview rendering contract", () => {
             id: "00000000-0000-4000-8000-000000000010",
             isTarget: true,
             role: "user",
-            content: {
-              version: 2,
+            content: toPersistedChatMessageContentV3({
               data: [{ type: "text", content: "target" }],
-            },
+            }),
           },
           {
             id: "00000000-0000-4000-8000-000000000011",
             isTarget: false,
             role: "assistant",
-            content: { version: 2, data: [{ type: "text", content: "reply" }] },
+            content: toPersistedChatMessageContentV3({
+              data: [{ type: "text", content: "reply" }],
+            }),
           },
           {
             id: "00000000-0000-4000-8000-000000000012",
             isTarget: false,
             role: "user",
-            content: {
-              version: 2,
+            content: toPersistedChatMessageContentV3({
               data: [{ type: "text", content: "follow-up" }],
-            },
+            }),
           },
         ],
       },
@@ -369,21 +362,23 @@ describe("search preview rendering contract", () => {
             id: "00000000-0000-4000-8000-000000000010",
             isTarget: true,
             role: "assistant",
-            content: {
-              version: 2,
+            content: toPersistedChatMessageContentV3({
               data: [],
               metadata: {
                 sourceDocuments: [
                   {
+                    entityId: "entity_1",
                     title: "Closing memorandum",
                     mention: "@closing-memo",
                     entityRef: "entity_1",
                     matterRef: "matter_1",
                     kind: "document",
+                    mimeType: "application/pdf",
+                    workspaceId: previewQuery.accessibleWorkspaceIds[0],
                   },
                 ],
               },
-            },
+            }),
           },
         ],
       },
@@ -396,46 +391,6 @@ describe("search preview rendering contract", () => {
           id: "00000000-0000-4000-8000-000000000010",
           role: "assistant",
           content: "Closing memorandum\n\n@closing-memo\n\ndocument",
-        },
-      ],
-    });
-  });
-
-  test("normalizes legacy source-document metadata for chat previews", async () => {
-    rootDbExecuteMock.mockResolvedValueOnce([
-      {
-        messages: [
-          {
-            id: "00000000-0000-4000-8000-000000000010",
-            isTarget: true,
-            role: "assistant",
-            content: {
-              version: 1,
-              data: [
-                { type: "text", text: "The answer cites:" },
-                {
-                  type: "data-stella-source-document",
-                  data: {
-                    title: "Closing memorandum",
-                    mention: "@closing-memo",
-                    kind: "document",
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      },
-    ]);
-
-    expect(await readSearchPreview({ ...previewQuery, type: "chat" })).toEqual({
-      type: "chat-messages",
-      messages: [
-        {
-          id: "00000000-0000-4000-8000-000000000010",
-          role: "assistant",
-          content:
-            "The answer cites:\n\nClosing memorandum\n\n@closing-memo\n\ndocument",
         },
       ],
     });
@@ -465,19 +420,17 @@ describe("search preview rendering contract", () => {
             id: "00000000-0000-4000-8000-000000000010",
             isTarget: true,
             role: "user",
-            content: {
-              version: 2,
+            content: toPersistedChatMessageContentV3({
               data: [{ type: "text", content: "indemnity" }],
-            },
+            }),
           },
           {
             id: "00000000-0000-4000-8000-000000000011",
             isTarget: false,
             role: "assistant",
-            content: {
-              version: 2,
+            content: toPersistedChatMessageContentV3({
               data: [{ type: "text", content: "liability" }],
-            },
+            }),
           },
         ],
         title: "Unrelated title",
@@ -509,7 +462,7 @@ describe("search preview rendering contract", () => {
             id: "00000000-0000-4000-8000-000000000010",
             isTarget: true,
             role: "assistant",
-            content: { version: 2, data: [null] },
+            content: { version: 3, data: [null] },
           },
         ],
       },

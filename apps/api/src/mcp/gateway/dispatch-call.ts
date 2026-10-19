@@ -2,6 +2,7 @@ import type { CallToolResult } from "@modelcontextprotocol/server";
 import { panic } from "better-result";
 import * as v from "valibot";
 
+import { modelMayStartUninvoked } from "@/api/lib/agent-skills/invocation";
 import {
   describeMissingSkillTools,
   SKILL_TOOL_AVAILABILITY_STATUS,
@@ -30,10 +31,7 @@ import {
   callGatewayExternalMcpTool,
   gatewayLoadErrorResult,
 } from "@/api/mcp/gateway/external-tools";
-import {
-  GATEWAY_TOOL_KIND,
-  modeAllowsGatewayTools,
-} from "@/api/mcp/gateway/mode-policy";
+import { modeAllowsGatewayTools } from "@/api/mcp/gateway/mode-policy";
 import {
   readSkillTool,
   resolveSkillTool,
@@ -145,7 +143,7 @@ export const dispatchGatewayToolCall = async ({
   dependencies?: GatewayDispatchDependencies;
 }): Promise<GatewayDispatchResult | null> => {
   if (isExternalMcpToolName(toolName)) {
-    if (!modeAllowsGatewayTools(mode, GATEWAY_TOOL_KIND.externalMcp)) {
+    if (!modeAllowsGatewayTools(mode)) {
       return null;
     }
     return {
@@ -161,7 +159,7 @@ export const dispatchGatewayToolCall = async ({
   if (!isSkillToolName(toolName)) {
     return null;
   }
-  if (!modeAllowsGatewayTools(mode, GATEWAY_TOOL_KIND.skill)) {
+  if (!modeAllowsGatewayTools(mode)) {
     return null;
   }
 
@@ -188,6 +186,19 @@ export const dispatchGatewayToolCall = async ({
         grantedScopes: context.grantedScopes,
         missingTools: resolved.availability.missingTools,
         skillName: resolved.name,
+      }),
+    };
+  }
+
+  // A `manual` skill is not a tool on this surface (`tools/list` leaves it
+  // out); it is a prompt the user starts.
+  if (!modelMayStartUninvoked(resolved)) {
+    return {
+      type: "internal",
+      result: structuredErrorResult({
+        code: "unknown_tool",
+        message: `The skill ${resolved.name} runs only when the user invokes it, so it is not a tool.`,
+        hint: `Ask the user to start the prompt ${toolName} from their client's prompt list.`,
       }),
     };
   }

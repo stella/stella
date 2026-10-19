@@ -1,0 +1,8 @@
+[
+  {
+    "file": "apps/api/src/handlers/seller-profiles/update.ts",
+    "from": "9c71c0fc30854c01b61a0ab77558b49cd1da62a9cd3554a2671dbc48784099e8",
+    "to": "5ffac904ba623fc6e5e375de08bef306b4e9c27b22c0de3934b7a0fd55d78c55",
+    "reason": "The same row lock now also reads vat_id and vat_payer so the VAT payer rule is checked against the locked row; no new acquisition."
+  }
+]

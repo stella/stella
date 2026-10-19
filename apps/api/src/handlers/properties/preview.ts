@@ -78,7 +78,7 @@ const config = {
     consumesServices: true,
   },
   body: previewBodySchema,
-  requiresUsage: { actionType: "chat", modelRole: "fast" },
+  requiresUsage: { actionType: "chat", modelTask: "short-text" },
 } satisfies WorkspaceHandlerConfig;
 
 const PREVIEW_TIMEOUT_MS = 60_000;

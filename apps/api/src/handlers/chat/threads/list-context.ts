@@ -123,8 +123,7 @@ const UUID_PATTERN =
 
 /**
  * Every mention a thread's recent user messages carry, per message in order.
- * Versions 2 and 3 keep mentions in metadata; version 1 kept them as
- * data-stella-mentions parts; the composer's mention chips persist only as
+ * Mentions live in v3 metadata; the composer's mention chips persist as
  * mention links in the text.
  */
 const mentionValuesQuery = sql`
@@ -139,9 +138,6 @@ const mentionValuesQuery = sql`
     jsonb_path_query_array(
       recent.content,
       '$.metadata.mentions.mentions[*]'
-    ) || jsonb_path_query_array(
-      recent.content,
-      '$.data[*] ? (@.type == "data-stella-mentions").data.mentions[*]'
     )
   ) WITH ORDINALITY AS mention(value, ordinality)
   UNION ALL
@@ -166,8 +162,7 @@ const mentionValuesQuery = sql`
 `;
 
 /**
- * Uploads the surviving messages still reference: image and document parts
- * (versions 2 and 3) and legacy file parts (version 1). An upload whose
+ * Uploads the surviving v3 image and document parts still reference. An upload whose
  * message was edited away or truncated is not context any more.
  */
 const attachmentRefsQuery = sql`
@@ -184,9 +179,6 @@ const attachmentRefsQuery = sql`
     jsonb_path_query_array(
       recent.content,
       '$.data[*] ? (@.type == "image" || @.type == "document").source.value ? (@.type() == "string")'
-    ) || jsonb_path_query_array(
-      recent.content,
-      '$.data[*] ? (@.type == "file").url ? (@.type() == "string")'
     )
   ) AS ref(url)
 `;

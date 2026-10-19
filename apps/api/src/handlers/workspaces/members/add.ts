@@ -31,7 +31,7 @@ const config = {
   permissions: { workspace: ["update"] },
   accountAccess: ACCOUNT_ACCESS.standard,
   realtime: workspaceRealtimeUpdates,
-  mcp: { type: "tool", name: "manage_organization" },
+  mcp: { type: "tool", name: "add_matter_member" },
   body: addWorkspaceMemberBodySchema,
 } satisfies WorkspaceHandlerConfig;
 
@@ -44,7 +44,7 @@ export type AddWorkspaceMemberProps = {
 };
 
 // Shared add-member logic reused by the HTTP handler and the
-// `manage_organization` MCP tool, so both emit the identical audit event and
+// `add_matter_member` MCP tool, so both emit the identical audit event and
 // enforce the same org-membership, workspace-lock, and member-count rules.
 export const addWorkspaceMemberHandler = async function* ({
   safeDb,

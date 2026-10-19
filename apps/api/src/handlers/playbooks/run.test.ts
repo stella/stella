@@ -138,7 +138,6 @@ describe("run playbook handler", () => {
       const mcp = mapHandlerResult({
         id: "playbooks.run",
         result,
-        access: "write",
       });
       expect(mcp).toMatchObject({
         status: "error",

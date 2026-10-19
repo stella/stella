@@ -41,6 +41,7 @@ import { cn } from "@stll/ui/utils";
 
 import { ContactPicker } from "@/components/contact-picker";
 import { MATTER_INFO_ICON_SLOT_CLASS } from "@/components/workspaces/matter-info-layout";
+import { useSingleFlight } from "@/hooks/use-single-flight";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
@@ -75,11 +76,17 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
   const updateWorkspace = useUpdateWorkspace();
   const createContact = useCreateContact();
 
-  const handleCreateAndSetClient = (name: string, type: ContactType) => {
+  const createOnce = useSingleFlight();
+  const createAndSetClient = (
+    name: string,
+    type: ContactType,
+    settled: () => void,
+  ) => {
     const id = toSafeId<"contact">(createUuid());
     createContact.mutate(
       { id, type, displayName: name },
       {
+        onSettled: settled,
         onSuccess: () => {
           detached(
             queryClient.invalidateQueries({
@@ -93,6 +100,14 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
           notifyUserError(error, t("errors.actionFailed"));
         },
       },
+    );
+  };
+  const handleCreateAndSetClient = (name: string, type: ContactType) => {
+    detached(
+      createOnce.runSettled((settled) =>
+        createAndSetClient(name, type, settled),
+      ),
+      "parties-section.create-client",
     );
   };
 
@@ -363,11 +378,17 @@ const PromoteDialog = ({ workspaceId }: PromoteDialogProps) => {
     setSelectedContact(null);
   };
 
-  const handleCreateContact = (name: string, type: ContactType) => {
+  const createOnce = useSingleFlight();
+  const createPartyContact = (
+    name: string,
+    type: ContactType,
+    settled: () => void,
+  ) => {
     const id = toSafeId<"contact">(createUuid());
     createContact.mutate(
       { id, type, displayName: name },
       {
+        onSettled: settled,
         onSuccess: () => {
           detached(
             queryClient.invalidateQueries({
@@ -383,6 +404,14 @@ const PromoteDialog = ({ workspaceId }: PromoteDialogProps) => {
       },
     );
   };
+  const handleCreateContact = (name: string, type: ContactType) => {
+    detached(
+      createOnce.runSettled((settled) =>
+        createPartyContact(name, type, settled),
+      ),
+      "parties-section.create-contact",
+    );
+  };
 
   const handleSubmit = () => {
     if (!selectedContact) {
@@ -393,8 +422,8 @@ const PromoteDialog = ({ workspaceId }: PromoteDialogProps) => {
       {
         workspaceId,
         update: {
-          type: "promote",
-          value: { clientId: selectedContact.id },
+          type: "clientId",
+          value: selectedContact.id,
         },
       },
       {
@@ -660,8 +689,10 @@ const AddPartyDialog = ({
     value: role,
   }));
 
-  const handleSubmit = () => {
+  const submitOnce = useSingleFlight();
+  const addSelectedParty = (settled: () => void) => {
     if (!selectedContact || !selectedRole) {
+      settled();
       return;
     }
 
@@ -672,6 +703,7 @@ const AddPartyDialog = ({
         role: selectedRole,
       },
       {
+        onSettled: settled,
         onSuccess: () => {
           stellaToast.add({
             title: t("success.partyAdded"),
@@ -691,6 +723,12 @@ const AddPartyDialog = ({
           notifyUserError(error, t("errors.actionFailed"));
         },
       },
+    );
+  };
+  const handleSubmit = () => {
+    detached(
+      submitOnce.runSettled(addSelectedParty),
+      "parties-section.add-party",
     );
   };
 

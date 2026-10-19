@@ -2,9 +2,17 @@ import { panic } from "better-result";
 
 import { partitionTestFiles, parseApiTestShard } from "./test-file-shards";
 
-// Reserve the remaining nine minutes for setup, migrations and diagnostics.
-export const POSTGRES_TEST_SHARD_IDS = [1, 2, 3] as const;
-export const POSTGRES_SHARD_TEST_BUDGET_SECONDS = 360;
+// Two shards: each hosted runner is a slot in a shared job pool, and the
+// suites fit two shards well inside the merge group's longest job.
+// Reserve the remaining seven minutes for setup, migrations and diagnostics.
+export const POSTGRES_TEST_SHARD_IDS = [1, 2] as const;
+export const POSTGRES_SHARD_TEST_BUDGET_SECONDS = 480;
+// Shard counts a past full run may have used. A run certifies coverage only
+// when its shard jobs are exactly 1..n for one of these counts.
+export const POSTGRES_CERTIFIABLE_SHARD_COUNTS: readonly number[] = [
+  POSTGRES_TEST_SHARD_IDS.length,
+  3,
+];
 export const POSTGRES_UNKNOWN_TEST_SECONDS = 5;
 
 type PlanPostgresTestShardsOptions = {

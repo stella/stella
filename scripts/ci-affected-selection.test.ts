@@ -180,13 +180,17 @@ test("test matrix admission has one graph owner and no independent path filter",
     path.join(root, "scripts/ci-api-test-plan.ts"),
     "utf-8",
   );
-  expect(planner).toContain("selectedTestJobs(changed, root)");
-  expect(planner).not.toMatch(/turbo|git diff|test-scope\.ts/u);
+  expect(planner).toContain("selectedTestJobs(output.slice(jsonStart), root)");
+  expect(planner).toContain('"bun", "scripts/test-scope.ts"');
+  expect(planner).toContain('"--dry=json"');
   const workflow = readFileSync(
     path.join(root, ".github/workflows/ci.yml"),
     "utf-8",
   );
   expect(workflow).toContain(
-    "(github.event_name == 'pull_request' || github.event_name == 'merge_group') && steps.api-test-deps.outcome == 'success'",
+    "(github.event_name == 'pull_request' || github.event_name == 'merge_group') && steps.planner-deps.outcome == 'success' && steps.api-test-deps.outcome == 'success'",
+  );
+  expect(workflow).toContain(
+    `TEST_SCOPE: \${{ needs.ci-plan.outputs.test_scope }}`,
   );
 });
