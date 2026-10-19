@@ -680,7 +680,7 @@ test.skipIf(process.platform === "win32")(
   async () => {
     const cwd = await scratch();
     try {
-      const check = (deadline: "twice-budget" | "none" | undefined) =>
+      const check = async (deadline: "twice-budget" | "none" | undefined) =>
         runBudgetedCheck({
           // Spins well past twice the 200 ms budget, then exits cleanly.
           command: [
