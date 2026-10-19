@@ -631,7 +631,6 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "WebSocket URL for collaborative editing. Unset keeps the single-user editing path.",
   VITE_BETA_FEATURES_ENABLED:
     "Expose Settings → Beta features without enabling any preview by default.",
-  VITE_FEATURE_AI_MEMORY: "Show tenant-scoped AI memory settings.",
   VITE_FEATURE_GOVERNED_WORKFLOW:
     "Show governed work-obligation fields on a task (owner, acknowledgement, hard deadline).",
   VITE_FEATURE_INBOX:
@@ -982,7 +981,6 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   VITE_COLLAB_URL: ENV_CREDENTIAL_KIND.notCredential,
   VITE_DESKTOP_BRIDGE_PORT: ENV_CREDENTIAL_KIND.notCredential,
   VITE_DESKTOP_RELEASES_BASE_URL: ENV_CREDENTIAL_KIND.notCredential,
-  VITE_FEATURE_AI_MEMORY: ENV_CREDENTIAL_KIND.notCredential,
   VITE_FEATURE_FOLIO_COLLAB: ENV_CREDENTIAL_KIND.notCredential,
   VITE_FEATURE_GOVERNED_WORKFLOW: ENV_CREDENTIAL_KIND.notCredential,
   VITE_FEATURE_INBOX: ENV_CREDENTIAL_KIND.notCredential,
@@ -1666,6 +1664,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "CODE_QUALITY_PROCESS_GROUP",
   // Lowers the code-check Turbo task count; the pre-push check sets it to 1.
   "CODE_CHECK_CONCURRENCY",
+  // Replaces the detected code-check memory size (tests pin the plan with it).
+  "CODE_CHECK_MEMORY_BYTES",
   // CI installer budget selected from restored package-cache contents.
   "CI_INSTALL_CACHE_RESTORED",
   "CI_POSTGRES_TEST_SELECTION",
