@@ -1,7 +1,8 @@
-import { describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import { env } from "@/api/env";
 import { createRememberTool } from "@/api/handlers/chat/tools/remember-tool";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
@@ -11,12 +12,20 @@ import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import type { MemberRole } from "@/api/lib/member-roles";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 const organizationId = mintAuthProviderId<"organization">();
 const userId = mintAuthProviderId<"user">();
 const workspaceId = toSafeId<"workspace">(Bun.randomUUIDv7());
+const state = createTestState({ file: import.meta.path, config: env });
+beforeEach(() => {
+  state.setConfig("FEATURE_AI_MEMORY", true);
+  state.setConfig("API_FEATURE_ACCESS_GRANTS", {
+    "ai-memory": [{ type: "organization", organizationId }],
+  });
+});
 const memoryId = toSafeId<"aiMemory">(Bun.randomUUIDv7());
 
 type RememberHarnessOptions = {
@@ -30,18 +39,25 @@ const rememberHarness = ({
 }: RememberHarnessOptions) => {
   const inserted: unknown[] = [];
   const audited: unknown[] = [];
-  const { getCallCount, safeDb } = createScopedDbMock({
-    insert: () => ({
-      values: (values: unknown) => {
-        inserted.push(values);
-        return {
-          onConflictDoNothing: () => ({
-            returning: async () => await Promise.resolve([{ id: memoryId }]),
-          }),
-        };
+  const { getCallCount, safeDb } = createScopedDbMock(
+    {
+      insert: () => ({
+        values: (values: unknown) => {
+          inserted.push(values);
+          return {
+            onConflictDoNothing: () => ({
+              returning: async () => await Promise.resolve([{ id: memoryId }]),
+            }),
+          };
+        },
+      }),
+    },
+    {
+      featureAccess: {
+        identity: { email: "member@example.test", emailVerified: true },
       },
-    }),
-  });
+    },
+  );
   const recordAuditEvent: AuditRecorder = async (_tx, event) => {
     audited.push(event);
     await Promise.resolve();
@@ -71,6 +87,17 @@ const rememberHarness = ({
 };
 
 describe("chat remember tool", () => {
+  test("an uninvited account cannot execute a remembered tool", async () => {
+    state.setConfig("API_FEATURE_ACCESS_GRANTS", {});
+    const harness = rememberHarness({});
+    expect(
+      await rejectionOf(
+        harness.remember({ content: "Use numbered paragraphs" }),
+      ),
+    ).toMatchObject({ kind: "unavailable" });
+    expect(harness.inserted).toEqual([]);
+    expect(harness.audited).toEqual([]);
+  });
   test("saves matter memory under the chat's matter with an audit event", async () => {
     const harness = rememberHarness({});
     expect(
