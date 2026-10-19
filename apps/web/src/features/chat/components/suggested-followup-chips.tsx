@@ -92,10 +92,9 @@ export const SuggestedFollowupChips = ({
         label={t("chat.suggestedFollowupsLabel")}
         onSelect={(id) => {
           const index = Number(id);
-          const prompt = prompts.at(index);
-          if (prompt === undefined) {
-            return panic(`Unknown suggested follow-up index: ${id}`);
-          }
+          const prompt =
+            prompts.at(index) ??
+            panic(`Unknown suggested follow-up index: ${id}`);
           analytics.captureFollowupSelected({
             index,
             source: "generated",
