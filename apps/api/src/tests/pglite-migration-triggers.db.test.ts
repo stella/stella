@@ -22,7 +22,6 @@ const DRIZZLE_DIR = nodePath.resolve(import.meta.dir, "../../drizzle");
 const TRIGGERS_NOT_INSTALLED_IN_TESTS = [
   "case_law_decisions.case_law_corpus_jurisdictions_country_update",
   "case_law_decisions.case_law_corpus_jurisdictions_insert",
-  "case_law_decisions.case_law_decisions_corpus_country_shape",
   "case_law_decisions.case_law_decisions_legacy_corpus_mirror_settle",
   "case_law_decisions.case_law_decisions_legacy_redaction_fence",
   "case_law_decisions.case_law_decisions_projection_epoch_monotonic",

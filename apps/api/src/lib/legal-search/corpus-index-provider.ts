@@ -21,7 +21,9 @@ import {
 import { decisionIdentifierProjection } from "@/api/lib/case-law/decision-identifiers";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import {
+  caseLawAppliedProjections,
   caseLawCorpusAppliedRevision,
+  caseLawCorpusServingGeneration,
   caseLawCorpusDocumentCanRecur,
   currentCaseLawCorpusProjection,
 } from "@/api/lib/legal-search/case-law-corpus-projection";
@@ -34,9 +36,11 @@ import { corpusIndexBrowseFacets } from "@/api/lib/legal-search/corpus-index-fac
 import { courtPartitionsForCourtFilter } from "@/api/lib/legal-search/corpus-index-group-contract";
 import { readServingCorpusIndexTargetTx } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
 import { requireCorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
-import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
+import {
+  readCorpusIndexSearchPage,
+  type CorpusCandidateRankingInput,
+} from "@/api/lib/legal-search/corpus-index-pagination";
 import { caseLawCorpusQueryFields } from "@/api/lib/legal-search/corpus-index-read-contract";
-import type { CorpusProjectionRevision } from "@/api/lib/legal-search/corpus-index-revision-clause";
 import { markCorpusFragment } from "@/api/lib/legal-search/corpus-passage-highlight";
 import {
   caseLawCorpusQuery,
@@ -68,7 +72,6 @@ import { loadDocumentContext } from "@/api/lib/legal-search/document-context";
 import { resolveExpandedCorpusQuery } from "@/api/lib/legal-search/expansion";
 import {
   blendStableCitationAuthority,
-  type ScoredCandidate,
   stableBlendUpperBound,
 } from "@/api/lib/legal-search/rerank";
 import {
@@ -186,6 +189,8 @@ export const rehydrateCorpusIndexProviderCandidatesStatement = (
       canRecur: caseLawCorpusDocumentCanRecur(generation).as("can_recur"),
       appliedRevision:
         caseLawCorpusAppliedRevision(generation).as("applied_revision"),
+      appliedGeneration:
+        caseLawCorpusServingGeneration(generation).as("applied_generation"),
     })
     .from(publishedCaseLawDecisions)
     .innerJoin(
@@ -226,11 +231,10 @@ export const rehydrateCorpusIndexProviderCandidates =
     ) => await rehydrateCorpusIndexProviderCandidatesQuery(tx, options),
   );
 
-type RankCorpusIndexProviderCandidatesOptions = {
+type RankCorpusIndexProviderCandidatesOptions = CorpusCandidateRankingInput & {
   caseLawDb?: CaseLawPublicReadDb | undefined;
   hitDispositions?: CorpusHitDispositionCounter | undefined;
   generation: string;
-  candidates: readonly ScoredCandidate[];
   /** Groups earlier pages emitted (`SearchCursor.excludedGroups`). */
   excludedGroups: readonly string[] | undefined;
 };
@@ -240,6 +244,7 @@ export const rankCorpusIndexProviderCandidates = async ({
   hitDispositions = createCorpusHitDispositionCounter(),
   generation,
   candidates,
+  selectAppliedCandidates,
   excludedGroups,
 }: RankCorpusIndexProviderCandidatesOptions) => {
   const ids = candidates.map((candidate) =>
@@ -264,18 +269,20 @@ export const rankCorpusIndexProviderCandidates = async ({
   const authorityById = new Map(
     rows.map((row) => [String(row.id), row.citationAuthority]),
   );
-  const revisionById = new Map<string, CorpusProjectionRevision>();
-  for (const { id, appliedRevision } of rows) {
-    if (appliedRevision !== null) {
-      revisionById.set(String(id), appliedRevision);
-    }
-  }
+  const appliedById = caseLawAppliedProjections(rows);
+  const revisionById = new Map(
+    [...appliedById].map(([id, { revision }]) => [id, revision]),
+  );
 
   // Drop candidates missing from Postgres (index/DB drift) so we never
   // surface a hit we cannot render. Only documents with later physical
   // passages need exclusions when the position window advances.
   const excluded = new Set(excludedGroups);
-  const rendered = candidates.filter(
+  const rendered = (
+    selectAppliedCandidates === undefined
+      ? candidates
+      : selectAppliedCandidates(appliedById)
+  ).filter(
     (candidate) =>
       displayById.has(candidate.id) && revisionById.has(candidate.id),
   );
@@ -469,11 +476,12 @@ const searchResult = async (
     // no unseen candidate could out-blend the page cursor. Saturated
     // authority is bounded by 1, so the bound reads nothing from the corpus.
     unseenScoreUpperBound: stableBlendUpperBound,
-    rankCandidates: async (candidates) =>
+    rankCandidates: async (candidates, { selectAppliedCandidates }) =>
       await rankCorpusIndexProviderCandidates({
         hitDispositions,
         generation,
         candidates,
+        selectAppliedCandidates,
         excludedGroups: parsedCursor?.excludedGroups,
       }),
   });
