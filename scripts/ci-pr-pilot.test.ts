@@ -274,6 +274,8 @@ test("off and unset preserve today's job plan across every event and depth", asy
         ),
         "postgres-service-suites",
         "generated-sources",
+        "code-quality-api-cancel",
+        "code-quality-web-rest-cancel",
 
         "pr-heavy-gate",
       ]),
@@ -480,6 +482,7 @@ test("pilot pushes execute only the fast allowlist and its generated-input prere
     }
     if (
       allowed.includes(name) &&
+      !name.endsWith("-cancel") &&
       evaluate(
         original.jobs[name]?.if ?? "true",
         conditionContext("normal-v1", "pull_request", "fast"),

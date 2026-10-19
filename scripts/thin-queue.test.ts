@@ -787,10 +787,16 @@ test("failure-only cancellation jobs resolve both successful and failed dependen
       for (const failed of [false, true]) {
         const value = context({ event, variable: "full", queueDepth: "full" });
         value.failure = () => failed;
+        const pullRequestHelper =
+          id.endsWith("-cancel") && id.startsWith("code-quality-");
         expect(selected(job.if, value), `${id}/${event.event}/${failed}`).toBe(
-          failed && event.event === "merge_group",
+          failed &&
+            event.event ===
+              (pullRequestHelper ? "pull_request" : "merge_group"),
         );
-        if (event.event === "merge_group") {
+        if (
+          event.event === (pullRequestHelper ? "pull_request" : "merge_group")
+        ) {
           const unresolved = Object.fromEntries(
             Object.entries(value).filter(([key]) => key !== "failure"),
           );
@@ -908,6 +914,8 @@ test("unset and full preserve historical predicates except declared PR, Postgres
         "postgres-service-suites",
         "pr-heavy-gate",
         "marketing-screenshots-cancel",
+        "code-quality-api-cancel",
+        "code-quality-web-rest-cancel",
         "ci-quick-checks",
         "code-quality-web-rest",
         "desktop-rust-tests",

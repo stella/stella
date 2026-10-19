@@ -3573,13 +3573,21 @@ jobs:
             bun run check:result-consumption -- --base "origin/$BASE_REF" --leg api
           fi
 
-      - &pr_code_quality_cancel
-        name: Cancel pull request run after code quality failure
-        if: failure() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+      - *merge_group_cancel
+
+  code-quality-api-cancel:
+    needs: code-quality-api
+    if: failure() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    permissions:
+      actions: write
+    steps:
+      - name: Cancel pull request run after code quality failure
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
-          script: |
+          script: &pr_code_quality_cancel |
             let diagnostic;
             let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
@@ -3620,8 +3628,6 @@ jobs:
               ...context.repo,
               run_id: context.runId,
             });
-
-      - *merge_group_cancel
 
   code-quality-web-rest:
     needs: [ci-plan, generated-sources]
@@ -3799,9 +3805,21 @@ jobs:
             bun run check:result-consumption -- --base "origin/$BASE_REF" --leg rest
           fi
 
-      - *pr_code_quality_cancel
-
       - *merge_group_cancel
+
+  code-quality-web-rest-cancel:
+    needs: code-quality-web-rest
+    if: failure() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    permissions:
+      actions: write
+    steps:
+      - name: Cancel pull request run after code quality failure
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          retries: 0
+          script: *pr_code_quality_cancel
 
   query-perf:
     needs: ci-plan
