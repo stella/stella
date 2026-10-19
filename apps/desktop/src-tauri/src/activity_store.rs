@@ -143,10 +143,10 @@ impl ActivityStore {
             continue;
           }
           if entry.file_name() != DAYS_DIR_NAME
-            && !entry
+            && entry
               .path()
               .extension()
-              .is_some_and(|extension| extension == "tmp")
+              .is_none_or(|extension| extension != "tmp")
           {
             paths.push(entry.path());
           }
@@ -164,7 +164,7 @@ impl ActivityStore {
         .map_err(EncryptedReadError::Unavailable)?
         .into_iter()
         .map(|(path, _)| path)
-        .filter(|path| !path.extension().is_some_and(|extension| extension == "tmp")),
+        .filter(|path| path.extension().is_none_or(|extension| extension != "tmp")),
     );
     let mut unavailable = None;
     for path in paths {
@@ -305,9 +305,9 @@ impl ActivityStore {
         Some(pending.clone())
       }
       PendingMutation::Cancel(key) => {
-        if !saved_pending
+        if saved_pending
           .as_ref()
-          .is_some_and(|saved| saved.idempotency_key == key)
+          .is_none_or(|saved| saved.idempotency_key != key)
         {
           return Err("activity batch key does not match".into());
         }
