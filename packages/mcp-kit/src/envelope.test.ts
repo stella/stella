@@ -198,6 +198,9 @@ describe("closest tool names", () => {
     expect(toolNameDistance("x".repeat(10_000), "search_documents")).toBe(
       Number.POSITIVE_INFINITY,
     );
+    expect(toolNameDistance("search_documents", "x".repeat(10_000))).toBe(
+      Number.POSITIVE_INFINITY,
+    );
     expect(performance.now() - startedAt).toBeLessThan(50);
   });
 
