@@ -897,13 +897,14 @@ const enforcePublisherPolicy = async <Target extends PublisherTarget>(
   );
   state.decision = evaluated.decision ?? state.decision;
   const intervalMs = Math.min(evaluated.intervalMs, MAX_CRAWL_DELAY_MS);
-  if (!evaluated.refusal) {
+  const refusal = evaluated.refusal;
+  if (!refusal) {
     return Result.ok(intervalMs);
   }
   const policy =
     state.url.origin === state.requestedOrigin ? options.policy : undefined;
   if (policy?.type !== "licensed") {
-    return Result.err(evaluated.refusal);
+    return Result.err(refusal);
   }
   if (runtime.onTelemetry === undefined) {
     return Result.err(
@@ -912,7 +913,7 @@ const enforcePublisherPolicy = async <Target extends PublisherTarget>(
           "A licensed bypass needs an onTelemetry sink to record its evidence",
         url: state.url.href,
         origin: state.url.origin,
-        cause: evaluated.refusal,
+        cause: refusal,
       }),
     );
   }
@@ -924,7 +925,7 @@ const enforcePublisherPolicy = async <Target extends PublisherTarget>(
       event: "publisher_fetch_policy_bypass",
       url: state.url.href,
       origin: state.url.origin,
-      refusal: evaluated.refusal,
+      refusal,
       policy,
       delayMs: intervalMs,
     });
