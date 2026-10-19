@@ -27,7 +27,11 @@ const FIXTURES = {
     gazette: ["https://www.e-sbirka.cz/eli/cz/sb/2005/485"],
     text: "Soud návrh odmítl podle § 46 odst. 1 písm. a) s. ř. s. a o nákladech rozhodl podle § 60 odst. 3 ve spojení s § 120 s. ř. s.; vyhláška č. 485/2005 Sb. byla zrušena.",
   },
-  EU: null,
+  EU: {
+    anchors: ["art_6-par_1-pt_a"],
+    gazette: [],
+    text: "Article 6(1)(a) GDPR",
+  },
   HUN: null,
   POL: null,
   SVK: null,
@@ -136,12 +140,20 @@ describe("provision citation grammars", () => {
     },
   );
 
-  test("a grammar exists only where the legislation corpus can open the act", () => {
+  test("a grammar links hosted legislation or the EU publisher", () => {
     for (const grammar of Object.values(PROVISION_CITATION_GRAMMARS)) {
       if (grammar.status === "supported") {
-        expect(isPublicLegislationCountry(grammar.jurisdiction)).toBe(true);
+        expect(
+          grammar.target === "publisher" ||
+            isPublicLegislationCountry(grammar.jurisdiction),
+        ).toBe(true);
       }
     }
+  });
+
+  test("EU references open at the publisher while national fallback stays hosted", () => {
+    expect(PROVISION_CITATION_GRAMMARS.EU.target).toBe("publisher");
+    expect(PROVISION_CITATION_GRAMMARS.CZE.target).toBe("hosted");
   });
 
   test("gazette citations are read with every grammar, whoever cites them", () => {

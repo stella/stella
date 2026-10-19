@@ -120,7 +120,10 @@ export const CaseDecisionInspectorView = ({
   // No text is shown before the decision loads, so the default is moot then.
   const caseNumberType =
     decision?.caseNumberType ?? DECISION_IDENTIFIER_TYPES.CASE_NUMBER;
-  const provisionAnchors = useDecisionProvisionAnchors({
+  const {
+    anchors: provisionAnchors,
+    externalAnchors: externalProvisionAnchors,
+  } = useDecisionProvisionAnchors({
     court: decision?.court ?? null,
     caseNumber: decision?.caseNumber ?? null,
     surface: "inspector",
@@ -290,6 +293,7 @@ export const CaseDecisionInspectorView = ({
                   notesByAnchorId={notesByAnchorId}
                   onAnnotationActivate={annotations.setActiveAnnotationId}
                   provisionAnchors={provisionAnchors}
+                  externalProvisionAnchors={externalProvisionAnchors}
                   statuteCitationAnchors={statuteCitationAnchors}
                 />
               </>

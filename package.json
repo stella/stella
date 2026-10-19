@@ -147,7 +147,6 @@
     "@gdp-ts/core": "0.1.0",
     "@oxlint/plugins": "catalog:",
     "@shadcn/lint": "catalog:",
-    "@stll/aho-corasick": "catalog:",
     "@stll/collation": "workspace:*",
     "@stll/oxlint-config": "1.4.0",
     "@stll/portable-path": "workspace:*",
