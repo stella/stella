@@ -6,71 +6,7 @@ import type { Block } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
 
 import { validateAst } from "./validate-ast";
-
-// Copied from the implementation immediately before document reuse was added.
-const referenceNormalize = (text: string): string =>
-  text
-    .replace(/\s+/gu, " ")
-    .replace(/\u00a0/gu, " ")
-    .trim()
-    .toLowerCase();
-
-const REFERENCE_SKIP_WORDS = new Set([
-  "[obrázek]",
-  "obrázek",
-  "česká",
-  "republika",
-  "jménem",
-  "republiky",
-  "pokračování",
-]);
-const REFERENCE_LETTER = /\p{L}/u;
-const referenceTrimNonLetters = (word: string): string => {
-  let start = 0;
-  let end = word.length;
-  while (start < end && !REFERENCE_LETTER.test(word.charAt(start))) {
-    start += 1;
-  }
-  while (end > start && !REFERENCE_LETTER.test(word.charAt(end - 1))) {
-    end -= 1;
-  }
-  return word.slice(start, end);
-};
-const referenceSeparateSkipMarkers = (text: string): string => {
-  let separated = "";
-  let index = 0;
-  while (index < text.length) {
-    const open = text.indexOf("[", index);
-    const close = open === -1 ? -1 : text.indexOf("]", open + 1);
-    if (close === -1) {
-      return separated + text.slice(index);
-    }
-    const marker = referenceTrimNonLetters(
-      text.slice(open + 1, close).toLowerCase(),
-    );
-    separated +=
-      text.slice(index, open) +
-      (REFERENCE_SKIP_WORDS.has(marker) ? " " : text.slice(open, close + 1));
-    index = close + 1;
-  }
-  return separated;
-};
-const referenceExtractWords = (text: string): Set<string> => {
-  const words = new Set<string>();
-  for (const word of referenceSeparateSkipMarkers(text).split(/\s+/u)) {
-    const noBrackets = word.replace(/[[\]]/gu, "");
-    const clean = referenceTrimNonLetters(noBrackets.toLowerCase());
-    if (
-      clean.length >= 3 &&
-      !/^\d+$/u.test(clean) &&
-      !REFERENCE_SKIP_WORDS.has(clean) &&
-      !/^\[\d+\]$/u.test(word.toLowerCase())
-    ) {
-      words.add(clean);
-    }
-  }
-  return words;
-};
+import { validateAstReference } from "./validate-ast.reference.test";
 
 const token = fc
   .tuple(
@@ -94,6 +30,7 @@ const escapeHtml = (text: string): string =>
 const blocksFor = (text: string): Block[] => [
   {
     type: "paragraph",
+    id: "generated",
     anchorId: "generated",
     inlines: [{ type: "text", text }],
     plainText: text,
@@ -114,19 +51,7 @@ test("validation normalization matches the pre-reuse implementation", () => {
         const html = `<p>${escapeHtml(source)}</p>`;
         const blocks = blocksFor(ast);
 
-        // The copied helpers form the old normalization oracle. Exercising the
-        // word helper explicitly ensures this remains a word and length guard.
-        expect(
-          referenceExtractWords(referenceNormalize(source)).size,
-        ).toBeGreaterThan(0);
-        const referenceHtml = `<p>${escapeHtml(referenceNormalize(source))}</p>`;
-        const reference = validateAst(
-          referenceHtml,
-          blocksFor(referenceNormalize(ast)),
-        );
-        // Work counters measure source traversal before normalization; the old
-        // validator therefore reports them from the original-cased document.
-        reference.stats.work = validateAst(html, blocks).stats.work;
+        const reference = validateAstReference(html, blocks);
 
         expect(validateAst(html, blocks)).toEqual(reference);
         expect(

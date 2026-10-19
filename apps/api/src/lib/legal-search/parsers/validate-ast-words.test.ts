@@ -6,6 +6,7 @@ test("anonymization brackets retain pre-reuse Greek final sigma diagnostics", ()
   const result = validateAst("<p>ΛΟΓΟ[Σ]</p>", [
     {
       type: "paragraph",
+      id: "generated",
       anchorId: "greek-word",
       inlines: [{ type: "text", text: "ΛΟΓΟΣ" }],
       plainText: "ΛΟΓΟΣ",
@@ -23,6 +24,7 @@ test("retention length includes characters introduced by lowercasing", () => {
   const result = validateAst(`<p>${source}</p>`, [
     {
       type: "paragraph",
+      id: "generated",
       anchorId: "expanded-lowercase",
       inlines: [{ type: "text", text: "İ".repeat(30) }],
       plainText: "İ".repeat(30),
