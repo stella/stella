@@ -11,6 +11,10 @@ import {
   MCP_DEFAULT_RESOURCE_SCOPES,
 } from "@/api/mcp/constants";
 import type { McpMode } from "@/api/mcp/constants";
+import {
+  createPublicMcpHandlerContext,
+  type McpRequestContext,
+} from "@/api/mcp/context";
 import { DECISION_READER_TOOL_SET } from "@/api/mcp/decision-reader-tools";
 import { DOCUMENT_TOOL_SET } from "@/api/mcp/document-tools";
 import { FEEDBACK_TOOL_SET } from "@/api/mcp/feedback-tools";
@@ -22,6 +26,7 @@ import { READER_ANNOTATION_TOOL_SET } from "@/api/mcp/reader-annotation-tools";
 import { RESEARCH_ADMIN_TOOL_SET } from "@/api/mcp/research-admin-tools";
 import { STELLA_TOOL_SET } from "@/api/mcp/stella-tools";
 import { TEMPLATE_TOOL_SET } from "@/api/mcp/template-tools";
+import { mcpToolInputAuthorityDenial } from "@/api/mcp/tool-authority";
 import {
   scopeProseToSurface,
   type ToolVocabulary,
@@ -32,6 +37,10 @@ import type {
   RuntimeMcpToolOutputContract,
   McpToolSet,
   ToolScope,
+} from "@/api/mcp/tool-types";
+import {
+  PUBLIC_MCP_TOOL_DEFINITION,
+  PUBLIC_MCP_TOOL_HANDLER,
 } from "@/api/mcp/tool-types";
 
 type DefaultMcpToolSets = readonly [
@@ -472,6 +481,48 @@ export const getStaticMcpToolHandler = (
 ) =>
   (mode === "law" ? MCP_TOOL_HANDLERS.law.get(toolName) : undefined) ??
   MCP_TOOL_HANDLERS.default.get(toolName);
+
+export type StaticMcpToolInvocation =
+  | { status: "refused"; denial: "member-role" | "credential" | null }
+  | { status: "invoked"; response: Awaited<ReturnType<McpToolHandler>> };
+
+/** The sole execution seam for a registered static tool. */
+export const invokeStaticMcpTool = async ({
+  args,
+  context,
+  definition,
+  mode = "default",
+}: {
+  args: Record<string, unknown>;
+  context: McpRequestContext;
+  definition: McpToolDefinition;
+  mode?: McpMode;
+}): Promise<StaticMcpToolInvocation> => {
+  const denial = mcpToolInputAuthorityDenial(context, definition, args);
+  if (denial !== null) {
+    return { status: "refused", denial };
+  }
+
+  if (PUBLIC_MCP_TOOL_DEFINITION in definition) {
+    const publicContext = createPublicMcpHandlerContext(context);
+    if (publicContext.isErr()) {
+      return { status: "refused", denial: null };
+    }
+    return {
+      status: "invoked",
+      response: await definition[PUBLIC_MCP_TOOL_HANDLER]({
+        args,
+        context: publicContext.value,
+      }),
+    };
+  }
+
+  const handler = getStaticMcpToolHandler(definition.name, mode);
+  if (handler === undefined) {
+    return { status: "refused", denial: null };
+  }
+  return { status: "invoked", response: await handler({ args, context }) };
+};
 
 export const listStaticMcpToolDefinitions = (
   mode: McpMode = "default",

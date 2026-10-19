@@ -11,10 +11,7 @@ import { isRecord } from "@/api/lib/type-guards";
 import { BILLING_TOOL_HANDLERS } from "@/api/mcp/billing-tools";
 import { CAPABILITY_TOOL_HANDLERS } from "@/api/mcp/capability-tools";
 import { COMPAT_TOOL_HANDLERS } from "@/api/mcp/compat-tools";
-import {
-  createPublicMcpHandlerContext,
-  type McpRequestContext,
-} from "@/api/mcp/context";
+import type { McpRequestContext } from "@/api/mcp/context";
 import { DECISION_READER_TOOL_HANDLERS } from "@/api/mcp/decision-reader-tools";
 import { DOCUMENT_TOOL_HANDLERS } from "@/api/mcp/document-tools";
 import { finalizeToolEgress } from "@/api/mcp/egress";
@@ -33,8 +30,8 @@ import { READER_ANNOTATION_TOOL_HANDLERS } from "@/api/mcp/reader-annotation-too
 import { RESEARCH_ADMIN_TOOL_HANDLERS } from "@/api/mcp/research-admin-tools";
 import {
   DEFAULT_MCP_TOOL_DEFINITIONS,
-  getStaticMcpToolHandler,
   getStaticMcpToolDefinition,
+  invokeStaticMcpTool,
 } from "@/api/mcp/static-tool-definitions";
 import { STELLA_TOOL_HANDLERS } from "@/api/mcp/stella-tools";
 import { TEMPLATE_TOOL_HANDLERS } from "@/api/mcp/template-tools";
@@ -49,14 +46,7 @@ import type {
   PublicMcpToolHandler,
   TypedHandlerDataByName,
 } from "@/api/mcp/tool-types";
-import {
-  PUBLIC_MCP_TOOL_DEFINITION,
-  PUBLIC_MCP_TOOL_HANDLER,
-} from "@/api/mcp/tool-types";
-import {
-  structuredErrorResult,
-  validationErrorResult,
-} from "@/api/mcp/tool-utils";
+import { validationErrorResult } from "@/api/mcp/tool-utils";
 
 import type {
   ChatProjectableToolName,
@@ -373,22 +363,21 @@ export const runRegistryReadTool = async ({
       toolName,
       handler,
     });
-  } else if (PUBLIC_MCP_TOOL_DEFINITION in staticDefinition) {
-    const publicContext = createPublicMcpHandlerContext(context);
-    response = Result.isError(publicContext)
-      ? structuredErrorResult({
-          code: "feature_disabled",
-          message: "Tool is unavailable.",
-        })
-      : await staticDefinition[PUBLIC_MCP_TOOL_HANDLER]({
-          args: scoped.value,
-          context: publicContext.value,
-        });
   } else {
-    response = await (
-      getStaticMcpToolHandler(toolName) ??
-      panic(`Read tool ${toolName} is missing its handler`)
-    )({ args: scoped.value, context });
+    const invocation = await invokeStaticMcpTool({
+      args: scoped.value,
+      context,
+      definition: staticDefinition,
+    });
+    if (invocation.status === "refused") {
+      return Result.err(
+        new ChatToolError({
+          kind: "unavailable",
+          message: `Your member role does not permit ${toolName}.`,
+        }),
+      );
+    }
+    response = invocation.response;
   }
   const finished = await finalizeToolEgress({
     context,

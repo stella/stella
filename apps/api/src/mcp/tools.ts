@@ -48,6 +48,7 @@ import { observeMcpToolCall } from "@/api/mcp/observe-tool-call";
 import {
   getStaticMcpToolDefinition,
   getStaticMcpToolHandler,
+  invokeStaticMcpTool,
 } from "@/api/mcp/static-tool-definitions";
 import { scopeToolResultToSurface } from "@/api/mcp/surface-tool-mentions";
 import {
@@ -58,17 +59,13 @@ import {
 import type {
   InternalToolResult,
   McpToolDefinition,
-  McpToolHandler,
   McpToolResponse,
   McpToolInputSchema,
   PublicMcpToolHandler,
   RuntimeMcpToolOutputContract,
   ToolScope,
 } from "@/api/mcp/tool-types";
-import {
-  PUBLIC_MCP_TOOL_DEFINITION,
-  PUBLIC_MCP_TOOL_HANDLER,
-} from "@/api/mcp/tool-types";
+import { PUBLIC_MCP_TOOL_DEFINITION } from "@/api/mcp/tool-types";
 import {
   confirmationUnavailableResult,
   FEATURE_DISABLED_MESSAGE,
@@ -84,10 +81,6 @@ import {
 const DOCUMENTS_MCP_CAPABILITY_IDS: ReadonlySet<string> = new Set(
   DOCUMENT_VERSION_UPLOAD_CAPABILITY_IDS,
 );
-
-const requireStaticMcpToolHandler = (toolName: string, mode: McpMode) =>
-  getStaticMcpToolHandler(toolName, mode) ??
-  panic(`Tool ${toolName} has no handler`);
 
 export const invokePublicMcpHandler = async (
   handler: PublicMcpToolHandler,
@@ -105,29 +98,38 @@ export const invokePublicMcpHandler = async (
   return await handler({ args, context: publicContext.value });
 };
 
-const invokeStaticMcpHandler = async ({
+const staticInvocationRefusal = (
+  toolName: string,
+  denial: "member-role" | "credential" | null,
+) =>
+  structuredErrorResult({
+    ...(denial === null
+      ? {
+          code: "permission_denied",
+          message: `Tool ${toolName} is unavailable.`,
+        }
+      : mcpToolAuthorityDenialRefusal(`this ${toolName} operation`, denial)),
+  });
+
+const staticInputAuthorityRefusal = ({
   args,
   context,
   definition,
-  handler,
-  mode,
 }: {
   args: Record<string, unknown>;
   context: McpRequestContext;
   definition: McpToolDefinition;
-  handler: McpToolHandler | undefined;
-  mode: McpMode;
-}): Promise<McpToolResponse> =>
-  PUBLIC_MCP_TOOL_DEFINITION in definition
-    ? await invokePublicMcpHandler(
-        definition[PUBLIC_MCP_TOOL_HANDLER],
-        args,
-        context,
-      )
-    : await (handler ?? requireStaticMcpToolHandler(definition.name, mode))({
-        args,
-        context,
-      });
+}) => {
+  const denial = mcpToolInputAuthorityDenial(context, definition, args);
+  return denial === null
+    ? null
+    : structuredErrorResult(
+        mcpToolAuthorityDenialRefusal(
+          `this ${definition.name} operation`,
+          denial,
+        ),
+      );
+};
 
 /**
  * Central unknown-key backstop for static tools. Every curated tool derives its
@@ -612,19 +614,14 @@ const dispatchMcpToolCall = async ({
   }
   const normalizedArgs = normalized.value;
   const inputNotes = normalized.notes;
-  const inputDenial = mcpToolInputAuthorityDenial(
+  const inputRefusal = staticInputAuthorityRefusal({
+    args: normalizedArgs,
     context,
-    staticTool,
-    normalizedArgs,
-  );
-  if (inputDenial !== null) {
-    const refusal = mcpToolAuthorityDenialRefusal(
-      `this ${toolName} operation`,
-      inputDenial,
-    );
-    return serializeForSurface(structuredErrorResult(refusal));
+    definition: staticTool,
+  });
+  if (inputRefusal !== null) {
+    return serializeForSurface(inputRefusal);
   }
-
   const handler = getStaticMcpToolHandler(toolName, mode);
   if (!handler && !(PUBLIC_MCP_TOOL_DEFINITION in staticTool)) {
     return serializeForSurface(unknownToolResult(toolName));
@@ -675,13 +672,18 @@ const dispatchMcpToolCall = async ({
       const executionContext = requiresConfirmation
         ? bindApprovedMcpAuditContext(context)
         : context;
-      const response = await invokeStaticMcpHandler({
+      const invocation = await invokeStaticMcpTool({
         args: normalizedArgs,
         context: executionContext,
         definition: staticTool,
-        handler,
         mode,
       });
+      if (invocation.status === "refused") {
+        return serializeForSurface(
+          staticInvocationRefusal(toolName, invocation.denial),
+        );
+      }
+      const response = invocation.response;
       const finalized = await finalizeToolEgress(
         {
           context: executionContext,

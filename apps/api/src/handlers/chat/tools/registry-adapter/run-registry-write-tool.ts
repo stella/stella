@@ -28,7 +28,10 @@ import { matterRequiredResult } from "@/api/mcp/matter-requirement";
 import { MATTER_TOOL_HANDLERS } from "@/api/mcp/matter-tools";
 import { READER_ANNOTATION_TOOL_HANDLERS } from "@/api/mcp/reader-annotation-tools";
 import { RESEARCH_ADMIN_TOOL_HANDLERS } from "@/api/mcp/research-admin-tools";
-import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
+import {
+  getStaticMcpToolDefinition,
+  invokeStaticMcpTool,
+} from "@/api/mcp/static-tool-definitions";
 import { STELLA_TOOL_HANDLERS } from "@/api/mcp/stella-tools";
 import { TEMPLATE_TOOL_HANDLERS } from "@/api/mcp/template-tools";
 import {
@@ -228,6 +231,15 @@ export const runRegistryWriteTool = async (
   }
   const entry = WRITE_TOOL_REF_FIELD_MAP[toolName];
 
+  if (!hasMcpToolAuthority(context, staticDefinition)) {
+    return Result.err(
+      new ChatToolError({
+        kind: "unavailable",
+        message: `Your member role does not permit ${toolName}.`,
+      }),
+    );
+  }
+
   if ("unavailableInputParams" in entry) {
     for (const param of entry.unavailableInputParams) {
       if (param in args) {
@@ -239,17 +251,6 @@ export const runRegistryWriteTool = async (
         );
       }
     }
-  }
-
-  // Registration already withholds the tool from a member without its
-  // declared permissions; this keeps the refusal on the execution path.
-  if (!hasMcpToolAuthority(context, staticDefinition)) {
-    return Result.err(
-      new ChatToolError({
-        kind: "unavailable",
-        message: `Your member role does not permit ${toolName}.`,
-      }),
-    );
   }
 
   if (
@@ -314,12 +315,11 @@ export const runRegistryWriteTool = async (
     );
   }
 
-  // The exact grant of the operation the normalized input selects.
   if (!hasMcpToolInputAuthority(context, staticDefinition, normalized.value)) {
     return Result.err(
       new ChatToolError({
         kind: "unavailable",
-        message: `Your member role does not permit this ${toolName} operation.`,
+        message: `Your member role does not permit ${toolName}.`,
       }),
     );
   }
@@ -369,13 +369,23 @@ export const runRegistryWriteTool = async (
     return Result.err(toRegistryChatToolError(needsMatter.error));
   }
 
-  const response = await REGISTRY_WRITE_TOOL_HANDLERS[toolName]({
+  const invocation = await invokeStaticMcpTool({
     args: applyChatApprovalConfirmation({
       args: normalized.value,
       toolName,
     }),
     context,
+    definition: staticDefinition,
   });
+  if (invocation.status === "refused") {
+    return Result.err(
+      new ChatToolError({
+        kind: "unavailable",
+        message: `Your member role does not permit this ${toolName} operation.`,
+      }),
+    );
+  }
+  const response = invocation.response;
   const finished = await finalizeToolEgress({
     context,
     mode: "default",
