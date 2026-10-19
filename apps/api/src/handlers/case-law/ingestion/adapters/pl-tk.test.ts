@@ -27,6 +27,7 @@ import {
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   assemblePlTkDecision,
+  createPlTkPageCache,
   createPlTkSessionCooldown,
   createPlTkPublisherSessionCooldown,
   encodePlTkCursor,
@@ -620,6 +621,45 @@ describe("the crawl cursor", () => {
 });
 
 describe("a crawl page against the portal", () => {
+  test("assembling several cases retains at most the current parsed page", async () => {
+    const cases = await Promise.all([
+      caseFixture("pl-tk-case-k-2-26.html.gz"),
+      caseFixture("pl-tk-case-k-44-16.html.gz"),
+      caseFixture("pl-tk-case-u-1-86.html.gz"),
+    ]);
+    const rows = [
+      rowFor({ documentId: "25564", caseId: "29150", caseNumber: "K 2/26" }),
+      rowFor({ documentId: "16940", caseId: "17892", caseNumber: "K 44/16" }),
+      rowFor({ documentId: "4980", caseId: "322", caseNumber: "U 1/86" }),
+    ];
+    const cache = createPlTkPageCache();
+    const sizes: number[] = [];
+    const actual = rows.map((row, index) => {
+      const casePage = cases[index] ?? panic("missing case fixture");
+      const caseId = row.caseId ?? panic("missing case id");
+      cache.html.set(caseId, casePage);
+      const parsedPage = cache.parse(caseId, casePage);
+      sizes.push(cache.parsedSize());
+      return assemblePlTkDecision({
+        row,
+        casePage,
+        parsedPage,
+        rawParts: plTkRawPartsOf(row, casePage),
+      });
+    });
+
+    expect(sizes).toEqual([1, 1, 1]);
+    expect(actual).toEqual(
+      rows.map((row, index) =>
+        assemblePlTkDecision({
+          row,
+          casePage: cases[index],
+          rawParts: plTkRawPartsOf(row, cases[index]),
+        }),
+      ),
+    );
+  });
+
   test("reads the stage's oldest rulings first, over HTTP/2, one case page per case", async () => {
     const [first, last, oldestCase] = await Promise.all([
       listingFixture("pl-tk-listing-merits-page-0.html.gz"),

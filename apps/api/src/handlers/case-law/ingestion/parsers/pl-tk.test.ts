@@ -540,7 +540,7 @@ const generatedCasePage = (seed: number): string => {
           )}</div>`,
       )
       .join("");
-    return `<div id="sprawaForm:tabView:dok_${id}">
+    const container = `<div id="sprawaForm:tabView:dok_${id}">
       <div class="prop"><div class="name">Rodzaj orzeczenia<script>ignored</script></div><div class="value">Wyrok<style>ignored</style></div></div>
       <div class="prop"><div class="name">Data</div><div class="value">${1 + pick(28)} stycznia 2026</div></div>
       <div class="prop"><div class="name">Dotyczy</div><div class="value">Sprawa ${seed}-${index}</div></div>
@@ -549,14 +549,26 @@ const generatedCasePage = (seed: number): string => {
         1 + pick(4),
       )}</div>
     </div>`;
-  }).join("");
-  return `<div id="sprawaForm:tabView">
+    return { container: wrap(container, pick(4)), wrapped: pick(2) === 0 };
+  });
+  const wrappedRulings = rulings
+    .filter((ruling) => ruling.wrapped)
+    .map((ruling) => ruling.container)
+    .join("");
+  const standaloneRulings = rulings
+    .filter((ruling) => !ruling.wrapped)
+    .map((ruling) => ruling.container)
+    .join("");
+  return `${wrap(
+    `<div id="sprawaForm:tabView">
     <div id="sprawaForm:tabView:metryka">
       <div class="prop"><div class="name">Sygnatura</div><div class="value">K ${seed}/26</div></div>
       <div class="prop"><div class="name">Data wpływu do TK</div><div class="value">2 lutego 2026</div></div>
       <div class="ui-panel"><span class="ui-panel-title">Podmiot w sprawie</span><ul><li class="ui-datalist-item">Wnioskodawca ${seed}</li></ul></div>
-    </div>${rulings}
-  </div>`;
+    </div>${wrappedRulings}
+  </div>`,
+    pick(4),
+  )}${standaloneRulings}`;
 };
 
 test(
@@ -642,11 +654,11 @@ for (const href of [
 
 test("excludes script and style from ruling metadata", () => {
   const ruling = readPlTkRuling(
-    parsePlTkPage(`<div id="sprawaForm:tabView"><div id="sprawaForm:tabView:dok_1">
+    parsePlTkPage(`<div id="sprawaForm:tabView:dok_1">
     <div class="prop"><div class="name">Dotyczy<script>bad-label</script></div><div class="value">Visible<style>bad-value</style> subject</div></div>
     <div class="prop"><div class="name">Miejsce publikacji</div><div class="value"><table><tr><td><table><tr><td>Dz.U.<script>bad-citation</script> 2026</td><td>other register</td></tr></table></td><td><a href="https://example.org">ISAP<style>bad-link</style></a></td></tr></table></div></div>
     <div id="tekst_1"><p>Visible decision<script>bad-script</script><style>bad-style</style></p></div>
-  </div></div>`),
+  </div>`),
     "1",
   );
   expect(ruling?.textHtml).toBe("<p>Visible decision</p>");

@@ -335,23 +335,27 @@ export const parsePlTkPage = (html: string): ParsedPlTkPage => {
   const propsByContainer = new Map<
     AnyNode,
     Map<string, cheerio.Cheerio<AnyNode>>
-  >(containers.map((container) => [container, new Map()]));
+  >();
+  for (const container of containers) {
+    const props = new Map<string, cheerio.Cheerio<AnyNode>>();
+    $(container)
+      .find(".prop")
+      .each((_, element) => {
+        const prop = $(element);
+        const name = propName(prop);
+        if (name !== undefined && !props.has(name)) {
+          props.set(name, prop.children(".value").first());
+        }
+      });
+    propsByContainer.set(container, props);
+  }
   const names = new Set<string>();
   scope.find(".prop").each((_, element) => {
-    const prop = $(element);
-    const name = propName(prop);
+    const name = propName($(element));
     if (name === undefined) {
       return;
     }
     names.add(name);
-    const container = containers.find((candidate) =>
-      $(element).parents().toArray().includes(candidate),
-    );
-    const props =
-      container === undefined ? undefined : propsByContainer.get(container);
-    if (props !== undefined && !props.has(name)) {
-      props.set(name, prop.children(".value").first());
-    }
   });
   scope
     .find(".ui-panel-title, .ui-datatable-header, .ui-datalist-header")
