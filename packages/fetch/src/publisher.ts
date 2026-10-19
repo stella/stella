@@ -217,7 +217,8 @@ const parseRobots = (body: string): Group[] => {
   const groups: Group[] = [];
   let current: Group | undefined;
   let sawRule = false;
-  for (const rawLine of body.split(/\r?\n/u)) {
+  // RFC 9309 ends a line with CR, LF or CRLF.
+  for (const rawLine of body.split(/\r\n|\r|\n/u)) {
     const comment = rawLine.indexOf("#");
     const line = rawLine.slice(0, comment === -1 ? undefined : comment).trim();
     const separator = line.indexOf(":");

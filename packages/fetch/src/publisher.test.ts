@@ -615,6 +615,27 @@ describe("publisher scheduler", () => {
     expect(resources).toBe(1);
   });
 
+  test("a CR-only robots.txt still refuses a disallowed resource", async () => {
+    const requested: string[] = [];
+    const request = createPolitePublisherFetch({
+      validateTarget: allowTarget,
+      fetcher: async (input) => {
+        requested.push(input.url.href);
+        return input.url.pathname === "/robots.txt"
+          ? new Response("User-agent: *\rDisallow: /")
+          : new Response("resource");
+      },
+      defaultMinimumIntervalMs: 0,
+    });
+
+    const outcome = await request("https://publisher.example/one");
+
+    expect(Result.isError(outcome) && outcome.error._tag).toBe(
+      "robots_disallowed",
+    );
+    expect(requested).toEqual(["https://publisher.example/robots.txt"]);
+  });
+
   test("a licensed bypass without an audit sink is refused before the resource is fetched", async () => {
     const requested: string[] = [];
     const request = createPolitePublisherFetch({
