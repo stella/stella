@@ -15,7 +15,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { createMembershipScopedDb, markRlsDatabase } from "@/api/db/scoped";
-import { invoiceInMatter } from "@/api/handlers/invoices/invoice-scope";
+import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { getPgErrorCode } from "@/api/lib/pg-error";

@@ -18,7 +18,7 @@ import { readInvoiceDocumentLines } from "@/api/handlers/invoices/invoice-lines"
 import {
   invoiceInMatter,
   invoiceTouchesMatter,
-} from "@/api/handlers/invoices/invoice-scope";
+} from "@/api/lib/billing/invoice-scope";
 import { selectTimekeeperNames } from "@/api/lib/billing/timekeeper-names";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";

@@ -424,9 +424,7 @@ const useComposerSubmit = ({
               matters: client.matters.flatMap((matter) => {
                 const timeEntryIds = matter.prefill.timeEntries
                   .filter((entry) =>
-                    body.timeEntryIds?.includes(
-                      toSafeId<"timeEntry">(entry.id),
-                    ),
+                    body.timeEntryIds.includes(toSafeId<"timeEntry">(entry.id)),
                   )
                   .map((entry) => toSafeId<"timeEntry">(entry.id));
                 const expenseIds = matter.prefill.expenses

@@ -5,11 +5,11 @@ import { INVOICE_LINE_SOURCE } from "@stll/api-contract";
 
 import type { Transaction } from "@/api/db/root";
 import { invoiceLines, INVOICE_BILLING_PURPOSE } from "@/api/db/schema";
-import { invoiceInMatter } from "@/api/handlers/invoices/invoice-scope";
 import {
   lockBillingArrangement,
   readBillingUsage,
 } from "@/api/lib/billing/arrangements";
+import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 

@@ -1,5 +1,7 @@
 import { panic, Result } from "better-result";
 
+import { BackfillHeldError } from "@stll/db-load-gate/backfill-pass";
+
 import { CASE_LAW_COVERAGE_INDEX } from "@/api/lib/case-law/coverage-index";
 import {
   publishedCaseLawDecisionIndexDefinitionPredicateSql,
@@ -14,7 +16,6 @@ import {
   REWRITTEN_MIGRATION_INDEXES,
   type RequiredMigrationIndex,
 } from "../lib/db/migration-history";
-import { BackfillHeldError } from "./backfill-runtime";
 import { BETTER_AUTH_OAUTH_RESOURCE_REPAIR } from "./better-auth-oauth-resource-repair";
 import {
   CHAT_CONTENT_V3_CONSTRAINTS,

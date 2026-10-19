@@ -9,11 +9,11 @@ import {
   invoices,
   timeEntries,
 } from "@/api/db/schema";
-import { invoiceInMatter } from "@/api/handlers/invoices/invoice-scope";
 import { invoiceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { recordBillingCapCrossings } from "@/api/lib/billing/arrangements";
+import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { lockInvoiceInStatus } from "@/api/lib/db/aggregate-lock";

@@ -13,15 +13,15 @@ import {
 import { invoices, timeEntries } from "@/api/db/schema";
 import { INVOICE_DETAIL_RELATIONS } from "@/api/handlers/invoices/invoice-detail";
 import { readInvoiceTotals } from "@/api/handlers/invoices/invoice-lines";
-import {
-  invoiceInMatter,
-  invoiceTouchesMatter,
-  invoiceMatterShare,
-} from "@/api/handlers/invoices/invoice-scope";
 import { deleteTimeEntryHandler } from "@/api/handlers/time-entries/delete";
 import { updateTimeEntryHandler } from "@/api/handlers/time-entries/update";
 import { readOrgEntitlementHandler } from "@/api/handlers/usage/entitlement/get";
 import { TIME_ENTRY_VISIBILITY } from "@/api/lib/billing-constants";
+import {
+  invoiceInMatter,
+  invoiceTouchesMatter,
+  invoiceMatterShare,
+} from "@/api/lib/billing/invoice-scope";
 import {
   NARRATIVE_LANGUAGE_MAX_LENGTH,
   NARRATIVE_LANGUAGE_PATTERN,
@@ -1360,6 +1360,18 @@ const readInvoiceDetail = async ({
     }),
   );
 
+/** A listed line without its release stamp, always with its matter. */
+const projectInvoiceLine = <
+  Line extends { releasedAt: unknown; workspace: unknown },
+>({
+  releasedAt: _releasedAt,
+  ...line
+}: Line) => ({
+  ...line,
+  workspace:
+    line.workspace ?? panic("Invoice line has no participating matter"),
+});
+
 const handleListInvoicesTool: TypedMcpToolHandler<
   v.InferInput<typeof LIST_INVOICES_PROJECTION>
 > = async ({ args, context }) => {
@@ -1486,9 +1498,7 @@ const handleListInvoicesTool: TypedMcpToolHandler<
             : null,
         };
       }),
-      lines: invoiceRow.lines.map(
-        ({ releasedAt: _releasedAt, ...line }) => line,
-      ),
+      lines: invoiceRow.lines.map(projectInvoiceLine),
       totals: totals.value,
     };
 

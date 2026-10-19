@@ -76,6 +76,7 @@ export const FEATURE_REGISTRY = defineFeatureRegistry({
     ownership: {
       handlerDirectories: [
         "apps/api/src/handlers/billing-codes",
+        "apps/api/src/handlers/client-invoices",
         "apps/api/src/handlers/expenses",
         "apps/api/src/handlers/invoices",
         "apps/api/src/handlers/number-series",

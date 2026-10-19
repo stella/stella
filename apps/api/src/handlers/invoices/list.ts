@@ -3,11 +3,11 @@ import { and, asc } from "drizzle-orm";
 import { t } from "elysia";
 
 import { invoices } from "@/api/db/schema";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import {
   invoiceTouchesMatter,
   invoiceMatterShare,
-} from "@/api/handlers/invoices/invoice-scope";
-import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
+} from "@/api/lib/billing/invoice-scope";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";

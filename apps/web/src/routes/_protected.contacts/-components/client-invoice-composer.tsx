@@ -112,7 +112,7 @@ const ClientInvoiceSelection = ({ clientId }: { clientId: string }) => {
   } else {
     content = (
       <InvoiceComposer
-        key={`${clientId}:${periodStart}:${periodEnd}`}
+        key={`${clientId}:${periodStart ?? ""}:${periodEnd ?? ""}`}
         workspaceId={first.workspaceId}
         client={{ clientId, matters }}
         prefill={{

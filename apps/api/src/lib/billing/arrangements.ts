@@ -28,6 +28,8 @@ import {
   newBillingCapCrossings,
 } from "./arrangements.logic";
 
+export { lockBillingArrangement } from "./arrangement-lock";
+
 type BillingArrangementConfiguration = Pick<
   typeof billingArrangements.$inferSelect,
   | "mode"
@@ -60,21 +62,6 @@ export const billingArrangementResponse = (
       row.alertThresholdBps ?? panic("Capped arrangement has no threshold"),
     revision: row.revision,
   };
-};
-
-export const lockBillingArrangement = async (
-  tx: Transaction,
-  workspaceId: SafeId<"workspace">,
-) => {
-  // Same matter lock as timer/invoice guards; it also serializes first-row creation.
-  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`);
-  const rows = await tx
-    .select()
-    .from(billingArrangements)
-    .where(eq(billingArrangements.workspaceId, workspaceId))
-    .limit(1)
-    .for("update");
-  return rows.at(0);
 };
 
 type ReadBillingUsageOptions = {

@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 
 import { BILLING_STATUS } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { PG_ERROR } from "@/api/lib/pg-error";
@@ -17,14 +18,18 @@ import createInvoice from "./create";
 
 type CreateInvoiceCtx = Parameters<typeof createInvoice.handler>[0];
 
-const entry = (id: string, currency: string) => ({
+const entry = (
+  id: string,
+  currency: string,
+  invoiceId: SafeId<"invoice"> | null = null,
+) => ({
   id: toSafeId<"timeEntry">(id),
   billedMinutes: 60,
   rateAtEntry: 10_000,
   status: BILLING_STATUS.APPROVED,
   billable: true,
   currency,
-  invoiceId: null,
+  invoiceId,
 });
 
 const entrySelection = (
@@ -126,12 +131,7 @@ describe("createInvoice", () => {
   });
 
   test("rejects entries that are already attached to another invoice", async () => {
-    const entries = [
-      {
-        ...entry("te_1", "USD"),
-        invoiceId: toSafeId<"invoice">("inv_existing"),
-      },
-    ];
+    const entries = [entry("te_1", "USD", toSafeId<"invoice">("inv_existing"))];
     const { safeDb, scopedDb } = createScopedDbMock({
       $count: async () => 0,
       select: (fields?: object) => entrySelection(entries, fields),

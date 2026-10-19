@@ -516,9 +516,14 @@ export const ${name} = { run: { featureId: "fixture", ${target} } };`;
         await Bun.file(`${apiDirectory}${file}`).text(),
       );
     }
-    const ordinary = "apps/api/src/handlers/contacts/get.ts";
+    const ordinaryHandlers = [
+      "apps/api/src/handlers/account-exports/download.ts",
+      "apps/api/src/handlers/contacts/get.ts",
+    ];
     const featureFile = "apps/api/src/handlers/lists/verifications/create.ts";
-    expect(sources.has(ordinary)).toBe(true);
+    for (const ordinary of ordinaryHandlers) {
+      expect(sources.has(ordinary)).toBe(true);
+    }
     expect(sources.has(featureFile)).toBe(true);
     const additional = "apps/api/src/handlers/lists/fixture/list.ts";
     sources.set(additional, "export const list = () => true;");
@@ -536,14 +541,16 @@ export const ${name} = { run: { featureId: "fixture", ${target} } };`;
     const violations = validateFeatureAccessDeclarations({
       registry: FEATURE_REGISTRY,
       endpoints: [
-        { file: ordinary, config: {} },
+        ...ordinaryHandlers.map((file) => ({ file, config: {} })),
         { file: featureFile, config: {} },
       ],
       sources,
     });
-    expect(
-      violations.filter((violation) => violation.file === ordinary),
-    ).toEqual([]);
+    for (const ordinary of ordinaryHandlers) {
+      expect(
+        violations.filter((violation) => violation.file === ordinary),
+      ).toEqual([]);
+    }
     expect(
       violations.some(
         (violation) =>

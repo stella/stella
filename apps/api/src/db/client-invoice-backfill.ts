@@ -47,6 +47,7 @@ export const CLIENT_INVOICE_BACKFILL = {
     } finally {
       await connection.execute("SET statement_timeout = 0");
     }
+    return { type: "complete" };
   },
 } satisfies OnlineRepair;
 

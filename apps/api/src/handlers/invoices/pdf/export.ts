@@ -5,11 +5,11 @@ import { Temporal } from "@stll/time";
 import { INVOICE_STATUS } from "@/api/db/schema";
 import { INVOICE_DETAIL_RELATIONS } from "@/api/handlers/invoices/invoice-detail";
 import { readInvoiceDocumentLines } from "@/api/handlers/invoices/invoice-lines";
-import { invoiceInMatter } from "@/api/handlers/invoices/invoice-scope";
 import { renderInvoicePdf } from "@/api/handlers/invoices/pdf/render";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
+import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {

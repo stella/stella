@@ -39,8 +39,8 @@ import {
   invoiceLines,
 } from "@/api/db/schema";
 import { withSharedTransactionTimeoutRestoration } from "@/api/db/shared-pool-timeouts";
-import { invoiceInMatter } from "@/api/handlers/invoices/invoice-scope";
-import { lockBillingArrangement } from "@/api/lib/billing/arrangements";
+import { lockBillingArrangement } from "@/api/lib/billing/arrangement-lock";
+import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
