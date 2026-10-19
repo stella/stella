@@ -16,6 +16,7 @@ import {
   dueWaivers,
   expiredWaiverAnnotations,
   expiredWaiverFailures,
+  EXPIRY_AT_CHANGE_GATE,
   expiryInstant,
   exceptionInventory as inventoryJson,
   loadWaivers,
@@ -26,6 +27,11 @@ import {
   uncoveredExpirySources,
   waiverKey,
 } from "./dated-waivers";
+import {
+  REGISTRY_FILE as FLAKY_TEST_QUARANTINE_FILE,
+  serializeRegistry,
+  type QuarantineEntry,
+} from "./flaky-test-quarantine";
 
 const doc = {
   dependency: "doc-package",
@@ -34,8 +40,16 @@ const doc = {
   checkedAt: "2026-09-06T00:00:00.000Z",
   expiresAt: "2026-10-06T00:00:00.000Z",
 } as const;
+const flaky = {
+  id: "packages/example/src/b.test.ts::group > flaky case",
+  owner: "octocat",
+  reason: "Fails intermittently.",
+  created: "2026-09-25",
+  expires: "2026-10-05",
+} satisfies QuarantineEntry;
 const sources = {
   [DOC_SOURCE_FILE]: 'const exclusions = ["doc-package"];',
+  [FLAKY_TEST_QUARANTINE_FILE]: serializeRegistry({ entries: [flaky] }),
   "bunfig.toml":
     '[install]\nminimumReleaseAgeExcludes = [\n "new-package", # quarantine-expires: 2026-10-02T01:02:03.000Z\n]\n',
   "scripts/dependency-audit-baseline.json":
@@ -121,7 +135,7 @@ test("complete owner UTC day and exact five-day grace boundary are preserved", (
   expect(dueWaivers(entries, new Date(boundary))).toEqual(entries);
   expect(dueWaivers(entries, new Date(boundary - 1))).toEqual([]);
 });
-test("elapsed entries fail globally and warn only unrelated changes", () => {
+test("elapsed entries fail globally and annotate unrelated or policy-only changes", () => {
   const entries = inventory();
   const now = new Date("2026-10-07T00:00:00.000Z");
   expect(expiredWaiverFailures(entries, now)).toHaveLength(entries.length);
@@ -141,10 +155,201 @@ test("elapsed entries fail globally and warn only unrelated changes", () => {
         changedFiles: new Set([entry.source]),
       },
     };
-    expect(expiredWaiverFailures([entry], now, owner)).toHaveLength(1);
-    expect(expiredWaiverAnnotations([entry], now, owner)).toEqual([]);
+    const blocking = EXPIRY_AT_CHANGE_GATE[entry.kind] === "fail";
+    expect(expiredWaiverFailures([entry], now, owner)).toHaveLength(
+      blocking ? 1 : 0,
+    );
+    expect(expiredWaiverAnnotations([entry], now, owner)).toHaveLength(
+      blocking ? 0 : 1,
+    );
   }
 });
+
+test("elapsed release-age exclusions annotate the change gate at the exact deadline", () => {
+  const entries = inventory();
+  const change = {
+    scope: { type: "changes" as const, changedFiles: new Set(["bunfig.toml"]) },
+  };
+  const exclusionLine = entries.find(
+    ({ kind }) => kind === "release-age-exclusion",
+  )?.line;
+  expect(exclusionLine).toBeNumber();
+  expect(
+    expiredWaiverAnnotations(
+      entries,
+      new Date("2026-10-02T01:02:02.999Z"),
+      change,
+    ),
+  ).toEqual([]);
+  const annotations = expiredWaiverAnnotations(
+    entries,
+    new Date("2026-10-02T01:02:03.000Z"),
+    change,
+  );
+  expect(annotations).toHaveLength(1);
+  expect(annotations.at(0)).toStartWith(
+    `::warning file=bunfig.toml,line=${String(exclusionLine)}::`,
+  );
+  expect(annotations.at(0)).toContain(
+    "new-package (release-age-exclusion) expired at 2026-10-02T01:02:03.000Z",
+  );
+  const allSourcesChanged = {
+    scope: {
+      type: "changes" as const,
+      changedFiles: new Set(entries.map(({ source }) => source)),
+    },
+  };
+  expect(
+    expiredWaiverAnnotations(
+      entries,
+      new Date("2026-10-07T00:00:00.000Z"),
+      allSourcesChanged,
+    ),
+  ).toHaveLength(
+    entries.filter(({ kind }) => kind === "release-age-exclusion").length,
+  );
+  expect(
+    expiredWaiverFailures(
+      entries,
+      new Date("2026-10-02T01:02:03.000Z"),
+      change,
+    ),
+  ).toEqual([]);
+});
+
+test("an elapsed flaky-test quarantine annotates the change gate instead of failing it", () => {
+  const entries = collectWaivers({
+    read,
+    docs: [],
+    audit: [],
+    bunfigs: [],
+    releaseAgeSources: {},
+    flakyTestQuarantines: [flaky],
+  }).filter(({ kind }) => kind === "flaky-test-quarantine");
+  expect(
+    entries.map(({ kind, line, probe }) => ({ kind, line, probe })),
+  ).toEqual([
+    {
+      kind: "flaky-test-quarantine",
+      line: 4,
+      probe: {
+        command: [
+          "bun",
+          "--cwd=packages/example",
+          "run",
+          "test",
+          "--",
+          "src/b.test.ts",
+          "-t",
+          "flaky case",
+        ],
+        attempts: 20,
+      },
+    },
+  ]);
+  const elapsed = new Date("2026-10-06T00:00:00.000Z");
+  const change = {
+    scope: {
+      type: "changes" as const,
+      changedFiles: new Set([FLAKY_TEST_QUARANTINE_FILE]),
+    },
+  };
+  expect(
+    expiredWaiverAnnotations(
+      entries,
+      new Date("2026-10-05T23:59:59.999Z"),
+      change,
+    ),
+  ).toEqual([]);
+  expect(expiredWaiverFailures(entries, elapsed, change)).toEqual([]);
+  expect(expiredWaiverAnnotations(entries, elapsed, change)).toEqual([
+    `::warning file=${FLAKY_TEST_QUARANTINE_FILE},line=4::${flaky.id} (flaky-test-quarantine) expired at 2026-10-05; ${RECHECK_INSTRUCTIONS["flaky-test-quarantine"]}`,
+  ]);
+});
+
+test("an elapsed test quarantine and other elapsed waivers still fail the change check", () => {
+  const quarantine = readTestQuarantines({
+    "packages/example/src/a.test.ts":
+      'import { test } from "bun:test";\n// test-quarantine-expires: 2026-10-05T00:00:00.000Z\ntest.skip("a case", () => {});',
+  });
+  const entries = [...inventory(), ...quarantine];
+  const change = {
+    scope: {
+      type: "changes" as const,
+      changedFiles: new Set(entries.map(({ source }) => source)),
+    },
+  };
+  expect(
+    expiredWaiverFailures(
+      entries,
+      new Date("2026-10-04T23:59:59.999Z"),
+      change,
+    ).some((failure) => failure.endsWith("dated waiver expired: a case")),
+  ).toBe(false);
+  const failures = expiredWaiverFailures(
+    entries,
+    new Date("2026-10-05T00:00:00.000Z"),
+    change,
+  );
+  expect(failures).toContain(
+    "packages/example/src/a.test.ts:3 dated waiver expired: a case",
+  );
+  const allElapsed = expiredWaiverFailures(
+    entries,
+    new Date("2026-10-07T00:00:00.000Z"),
+    change,
+  );
+  expect(allElapsed).toHaveLength(
+    entries.filter(({ kind }) => kind !== "release-age-exclusion").length,
+  );
+  expect(allElapsed.some((failure) => failure.includes("new-package"))).toBe(
+    false,
+  );
+});
+
+test("every elapsed waiver kind belongs to exactly one expiry outcome in each scope", () => {
+  const entries = [
+    ...inventory(),
+    ...collectWaivers({
+      read,
+      docs: [],
+      audit: [],
+      bunfigs: [],
+      releaseAgeSources: {},
+      flakyTestQuarantines: [flaky],
+      quarantineSources: {
+        "packages/example/src/a.test.ts":
+          '// test-quarantine-expires: 2026-10-05\ntest.skip("a case", () => {});',
+      },
+    }).filter(
+      ({ kind }) =>
+        kind === "quarantined-test" || kind === "flaky-test-quarantine",
+    ),
+  ];
+  expect(entries.map(({ kind }) => kind).toSorted()).toEqual(
+    Object.keys(RECHECK_INSTRUCTIONS).toSorted(),
+  );
+  const now = new Date("2026-10-07T00:00:00.000Z");
+  for (const entry of entries) {
+    const scopes = [
+      { scope: { type: "all" } },
+      { scope: { type: "changes", changedFiles: new Set(["README.md"]) } },
+      { scope: { type: "changes", changedFiles: new Set([entry.source]) } },
+    ] as const;
+    for (const context of scopes) {
+      const failures = expiredWaiverFailures([entry], now, context);
+      const annotations = expiredWaiverAnnotations([entry], now, context);
+      expect(failures.length + annotations.length).toBe(1);
+      const blocking =
+        context.scope.type === "all" ||
+        (context.scope.changedFiles.has(entry.source) &&
+          EXPIRY_AT_CHANGE_GATE[entry.kind] === "fail");
+      expect(failures).toHaveLength(blocking ? 1 : 0);
+      expect(annotations).toHaveLength(blocking ? 0 : 1);
+    }
+  }
+});
+
 test("an expired waiver fails a change only when the change touches its source", () => {
   const quarantine = readTestQuarantines({
     "packages/example/src/a.test.ts":
@@ -260,6 +465,9 @@ export const DOC_SOURCE_EXCLUSIONS = ["doc-package"].map(noLlmsTxt);
       }
       if (file === "scripts/suppression-waivers.json") {
         return '{"waivers":[]}';
+      }
+      if (file === FLAKY_TEST_QUARANTINE_FILE) {
+        return serializeRegistry({ entries: [] });
       }
       return "";
     });
@@ -501,6 +709,7 @@ test("all waiver kinds retain their keys when unrelated lines shift their locato
       quarantineSources: {
         "a.test.ts": `${prefix}${quarantined}`,
       },
+      flakyTestQuarantines: [flaky],
     });
   const original = entriesAt("");
   expect(Object.keys(RECHECK_INSTRUCTIONS).toSorted()).toEqual(
@@ -561,7 +770,6 @@ test("check consumes validated tracked files without spawning under the offline 
       JSON.stringify({
         scope: { type: "all" },
         baseBunfigs: {},
-        basePackageManifests: {},
         baseProposals: {},
         baseEntries: null,
       }),

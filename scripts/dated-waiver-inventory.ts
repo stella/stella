@@ -30,7 +30,6 @@ const prepareCheck = (file: string): void => {
   writeFileSync(file, `${tracked.join("\0")}\0`);
   const scope = readExpiryCheckScope();
   const baseBunfigs = new Map<string, string>();
-  const basePackageManifests = new Map<string, string>();
   const baseProposals = new Map<string, string>();
   let baseEntries: WaiverReference[] | null = null;
   if (scope.type === "changes") {
@@ -52,10 +51,7 @@ const prepareCheck = (file: string): void => {
     for (const source of baseFiles.filter(
       (candidate) =>
         quarantineBunfigFiles([candidate]).length > 0 ||
-        candidate.startsWith(".github/dated-exception-proposals/") ||
-        (scope.changedFiles.has(candidate) &&
-          (candidate === "package.json" ||
-            candidate.endsWith("/package.json"))),
+        candidate.startsWith(".github/dated-exception-proposals/"),
     )) {
       const contents = Bun.spawnSync([
         "git",
@@ -69,8 +65,6 @@ const prepareCheck = (file: string): void => {
         baseBunfigs.set(source, contents.stdout.toString());
       } else if (source.startsWith(".github/dated-exception-proposals/")) {
         baseProposals.set(source, contents.stdout.toString());
-      } else {
-        basePackageManifests.set(source, contents.stdout.toString());
       }
     }
     // A new or renewed proposal's reference is checked against the base
@@ -98,7 +92,6 @@ const prepareCheck = (file: string): void => {
           ? scope
           : { ...scope, changedFiles: [...scope.changedFiles] },
       baseBunfigs: Object.fromEntries(baseBunfigs),
-      basePackageManifests: Object.fromEntries(basePackageManifests),
       baseProposals: Object.fromEntries(baseProposals),
       baseEntries,
     }),

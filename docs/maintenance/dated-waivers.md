@@ -22,11 +22,13 @@ refreshes preserve owner edits to extension requests. Persisted review records
 remain valid after the exception is removed. A merge hold prevents arming.
 
 Only wall-clock expiry is scoped in pull requests and merge groups: an elapsed
-entry fails changes to its owning file; release-age exclusions also cover the
-applicable lockfile and manifests pinning that package. Unrelated changes emit a
-warning naming the entry and remediation. Main and scheduled checks remain
-blocking for all expired entries. Malformed dates, missing annotations, invalid
-globs, incomplete exclusions and other structural errors always block.
+entry of a blocking kind fails changes to its owning file. Release-age exclusions
+and flaky-test quarantine entries always emit warnings at the per-change gate,
+even when their source changes; unrelated changes also warn for every other
+elapsed entry. Each warning names the entry and remediation. Full checks on main
+and scheduled runs enforce all expired entries. Malformed dates, missing
+annotations, invalid globs, incomplete exclusions and other structural errors
+always block.
 
 The existing required expiry check consumes a prepared local context so its
 offline phase needs neither network access nor subprocesses. PR and merge-group
@@ -47,8 +49,14 @@ kinds, whose removal needs successful probes; `removal` is respectively
 `at-expiry` or `requires-probe`. The inventory never claims a probe passed from
 the date alone. Date-only deadlines hold through their entire UTC day.
 
-Consumers must select by `kind`, `file`, and `entry`, never by array position or
-line number. The inventory uses the guard parsers and rejects unregistered dated
-policy owners. Ratchet allowances currently forbid expiry fields rather than
-creating dated exceptions. New dated kinds need an adapter and removal probe;
-they cannot silently enter the inventory as ordinary JSON dates.
+Consumers select by `kind`, `file`, and `entry`, never by array position or line
+number. The inventory uses owning guard parsers and rejects unregistered dated
+policy owners. Ratchet allowances forbid expiry fields. Every new dated kind
+needs an adapter, removal probe, and explicit per-change expiry policy. An
+adjacent `test-quarantine-expires: <exact UTC timestamp>` comment owns a literal
+`test.skip` or `it.skip`; its probe unmasks the declaration and runs the owning
+test command twenty times, rejecting zero-test and skipped-test receipts. Entries
+in `scripts/flaky-test-quarantine.json` use the `flaky-test-quarantine` kind and
+probe the test without its registry entry. Their expiry warns on pull requests
+and merge groups and blocks the scheduled main check (see
+[flaky-test-quarantine.md](flaky-test-quarantine.md)).

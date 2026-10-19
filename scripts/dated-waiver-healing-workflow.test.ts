@@ -284,12 +284,9 @@ test("required CI expiry checks cannot be skipped by paths, reuse, or queue dept
   expect(trackedFiles?.run).toBe(
     'bun scripts/dated-waiver-inventory.ts --prepare --tracked-files "$RUNNER_TEMP/dated-waiver-tracked-files"',
   );
-  // Offline, over the tracked tree, scoped to the change when one is listed.
-  expect(check?.run).toMatch(
-    /^bun --preload \.\/scripts\/offline-network-preload\.ts scripts\/dated-waivers\.ts --check --tracked-files "\$RUNNER_TEMP\/dated-waiver-tracked-files" "\$\{scope\[@\]\}"$/mu,
-  );
-  expect(check?.run).toContain(
-    'scope=(--changed-files "$DATED_WAIVER_CHANGED_FILES")',
+  // The prepared context owns the scope consumed by the offline check.
+  expect(check?.run).toBe(
+    'bun --preload ./scripts/offline-network-preload.ts scripts/dated-waivers.ts --check --tracked-files "$RUNNER_TEMP/dated-waiver-tracked-files"',
   );
   for (const step of expiry.steps) {
     expect(step.env?.["GH_TOKEN"]).toBeUndefined();

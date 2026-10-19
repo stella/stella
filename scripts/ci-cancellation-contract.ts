@@ -64,7 +64,6 @@ export const isCanonicalFailureCancellation = (step: unknown) =>
 // requests get a read-only token that cannot cancel the run, so they skip it.
 export const PR_CODE_QUALITY_CANCEL_STEP = {
   name: "Cancel pull request run after code quality failure",
-  if: "failure() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository",
   uses: CANONICAL_CANCEL_STEP.uses,
   with: {
     retries: 0,
@@ -80,3 +79,11 @@ export const PR_CODE_QUALITY_JOBS = [
   "code-quality-api",
   "code-quality-web-rest",
 ] as const;
+
+export const PR_CODE_QUALITY_CANCEL_JOBS = {
+  "code-quality-api-cancel": "code-quality-api",
+  "code-quality-web-rest-cancel": "code-quality-web-rest",
+} as const;
+
+export const PR_CODE_QUALITY_CANCEL_IF =
+  "failure() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository";
