@@ -8,7 +8,7 @@ import {
   createCaseLawDecisionPath,
   createCaseLawDecisionRouteParams,
 } from "@stll/api-contract/case-law-decision-route";
-import { HeadnoteOriginLabel } from "@stll/decision-reader/headnote-block";
+import { CourtTierBadge } from "@stll/decision-reader/court-tier-badge";
 import type { CitedDecisionTarget as ReaderCitedDecisionTarget } from "@stll/decision-reader/reader-types";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Skeleton } from "@stll/ui/skeleton";
@@ -29,7 +29,7 @@ import {
   CITATION_TREATMENT_LABEL,
 } from "@/features/case-law/citation-treatment";
 import type { CitationTreatment } from "@/features/case-law/citation-treatment";
-import { decisionOptions } from "@/features/case-law/queries/decisions";
+import { decisionCardSummaryOptions } from "@/features/case-law/queries/decisions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { formatDecisionDate } from "@/lib/decision-date";
 import { detached } from "@/lib/detached";
@@ -145,7 +145,7 @@ export const CitedDecisionCard = ({
 }) => {
   const t = useTranslations();
   const format = useFormatter();
-  const read = useQuery(decisionOptions(decisionId));
+  const read = useQuery(decisionCardSummaryOptions(decisionId));
   const view = useQueryView(read);
 
   if (view.type === "pending") {
@@ -165,9 +165,6 @@ export const CitedDecisionCard = ({
   const date = formatDecisionDate(decision.decisionDate, format);
   const headnote =
     decision.headnote.type === "present" ? decision.headnote.text : null;
-  const publication = decision.identifiers.find(
-    ({ type }) => type === "reporter-citation",
-  )?.value;
 
   return (
     <div className="flex flex-col gap-3">
@@ -202,18 +199,15 @@ export const CitedDecisionCard = ({
         <div className="space-y-1">
           <div className="text-foreground-disabled flex items-center justify-between text-xs font-semibold tracking-wide uppercase">
             <span>{t("caseLaw.viewer.legalSentence")}</span>
-            <HeadnoteOriginLabel
-              origin={{
-                type: "court",
-                chip:
-                  decision.courtAbbreviation === null
-                    ? null
-                    : {
-                        abbreviation: decision.courtAbbreviation,
-                        tier: decision.courtTier,
-                      },
-              }}
-            />
+            {decision.courtAbbreviation === null ? (
+              <span className="align-middle">{t("common.court")}</span>
+            ) : (
+              <CourtTierBadge
+                abbreviation={decision.courtAbbreviation}
+                className="align-middle"
+                tier={decision.courtTier}
+              />
+            )}
           </div>
           <BidiText as="p" className="line-clamp-6 text-sm leading-relaxed">
             {headnote}
@@ -222,12 +216,12 @@ export const CitedDecisionCard = ({
       )}
       <div className="text-muted-foreground flex flex-wrap gap-x-3 text-xs">
         <span>
-          {t("caseLaw.citation.citedByCount", {
+          {t("caseLaw.citation.citedSummary", {
             count: decision.citationCount,
           })}
         </span>
-        {publication !== undefined && (
-          <BidiText as="span">{publication}</BidiText>
+        {decision.publication !== null && (
+          <BidiText as="span">{decision.publication}</BidiText>
         )}
       </div>
     </div>

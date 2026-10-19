@@ -877,7 +877,6 @@
     },
     "citation": {
       "citedAtLeast": "Citada al menos {count} veces",
-      "citedByCount": "Citado por {count}",
       "citedSummary": "{count, plural, =0 {Sin citas} one {Citada una vez} other {Citada # veces}}",
       "dateUnavailable": "Fecha no disponible",
       "decisionCount": "{count, plural, =0 {Ninguna resolución} one {# resolución} other {# resoluciones}}",

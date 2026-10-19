@@ -22,7 +22,10 @@ import {
   listDecisionsQuerySchema,
 } from "@/api/handlers/case-law/decisions/list";
 import listDecisionCitations from "@/api/handlers/case-law/decisions/list-citations";
-import { createSafePublicSubjectFollowUpHandler } from "@/api/handlers/case-law/decisions/public-subject";
+import {
+  createSafePublicSubjectFollowUpHandler,
+  createSafePublicSubjectHandler,
+} from "@/api/handlers/case-law/decisions/public-subject";
 import readCaseLawCoverage from "@/api/handlers/case-law/decisions/read-coverage";
 import {
   projectDecisionReader,
@@ -43,6 +46,10 @@ import {
   readCaseLawCorpusStatusQuerySchema,
 } from "@/api/handlers/case-law/decisions/status";
 import summarizeDecisionCitations from "@/api/handlers/case-law/decisions/summarize-citations";
+import {
+  decisionSummaryResponseSchema,
+  readDecisionSummary,
+} from "@/api/handlers/case-law/decisions/summary";
 import readJudgePortrait from "@/api/handlers/case-law/judges/read-portrait";
 import {
   readStatuteCitationCountsHandler,
@@ -258,6 +265,20 @@ const readDecision = createSafePublicSubjectFollowUpHandler({
       ? projectDecisionReader(hydrated)
       : hydrated;
   },
+});
+
+const readDecisionSummaryRoute = createSafePublicSubjectHandler({
+  config: {
+    contract: "patch",
+    accountAccess: ACCOUNT_ACCESS.sandbox,
+    mcp: { type: "covered", by: "read_case_law_decision" },
+    cache: { kind: "none" },
+    params: t.Object({ decisionId: tSafeId("caseLawDecision") }),
+    response: decisionSummaryResponseSchema,
+  },
+  caseLawDb: caseLawPublicReadDb,
+  locate: ({ params: { decisionId } }) => ({ kind: "id", id: decisionId }),
+  read: readDecisionSummary,
 });
 
 const readDecisionBySlug = createSafePublicSubjectFollowUpHandler({
@@ -511,6 +532,10 @@ export const publicCaseLawRoute = new Elysia({
     params: readDecisionBySlug.config.params,
     query: readDecisionBySlug.config.query,
     response: readDecisionBySlug.config.response,
+  })
+  .get("/decisions/:decisionId/summary", readDecisionSummaryRoute.handler, {
+    params: readDecisionSummaryRoute.config.params,
+    response: readDecisionSummaryRoute.config.response,
   })
   .get("/decisions/:decisionId", readDecision.handler, {
     params: readDecision.config.params,

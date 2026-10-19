@@ -877,7 +877,6 @@
     },
     "citation": {
       "citedAtLeast": "Citováno nejméně {count}krát",
-      "citedByCount": "Citováno v {count} rozhodnutích",
       "citedSummary": "{count, plural, =0 {Necitováno} one {Citováno jednou} few {Citováno #krát} other {Citováno #krát}}",
       "dateUnavailable": "Datum neuvedeno",
       "decisionCount": "{count, plural, =0 {Žádná rozhodnutí} one {# rozhodnutí} few {# rozhodnutí} other {# rozhodnutí}}",

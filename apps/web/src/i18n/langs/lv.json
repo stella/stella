@@ -877,7 +877,6 @@
     },
     "citation": {
       "citedAtLeast": "Citēts vismaz {count} reizes",
-      "citedByCount": "Citēts {count} nolēmumos",
       "citedSummary": "{count, plural, =0 {Nav citēts} zero {Citēts # reižu} one {Citēts vienu reizi} other {Citēts # reizes}}",
       "dateUnavailable": "Datums nav norādīts",
       "decisionCount": "{count, plural, =0 {Nav nolēmumu} zero {# nolēmumu} one {# nolēmums} other {# nolēmumi}}",
