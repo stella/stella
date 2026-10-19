@@ -68,6 +68,64 @@ test("matches nested elements selected by namespace prefix", () => {
   );
 });
 
+test("skips non-element markup around and within matching elements", () => {
+  const cases = [
+    "<!-- <p>opening</p> </p> -->",
+    "<![CDATA[ <p>opening</p> </p> ]]>",
+    "<?reader <p>opening</p> </p> ?>",
+  ];
+
+  for (const markup of cases) {
+    const xml = `${markup}<p data-id="outer">before${markup}<q>text</q>after</p>`;
+    const result = firstXmlElement(xml, "p");
+
+    expect(result.kind).toBe("found");
+    if (result.kind !== "found") {
+      continue;
+    }
+    expect(result.match.start).toBe(markup.length);
+    expect(result.match.end).toBe(xml.length);
+    expect(xml.slice(result.match.contentStart, result.match.contentEnd)).toBe(
+      `before${markup}<q>text</q>after`,
+    );
+    expect(replaceXmlElementContent(xml, "p", "updated").unwrap()).toBe(
+      `${markup}<p data-id="outer">updated</p>`,
+    );
+  }
+});
+
+test("reports incomplete non-element markup", () => {
+  for (const xml of ["<root><!-- <p></p>", "<root><![CDATA[ <p></p>"]) {
+    expect(firstXmlElement(xml, "p")).toEqual({ kind: "incomplete" });
+    expect(replaceXmlElements(xml, "p", () => "").isErr()).toBe(true);
+  }
+});
+
+test("matches a reference parser with generated non-element markup", () => {
+  const markup = fc.constantFrom(
+    "<!-- <p>open</p> </p> -->",
+    "<![CDATA[ <p>open</p> </p> ]]>",
+  );
+  assertProperty(
+    "matches a reference parser with generated non-element markup",
+    fc.property(
+      fc.array(markup, { maxLength: 8 }),
+      fc.array(markup, { maxLength: 8 }),
+      fc.array(markup, { maxLength: 8 }),
+      (before, inside, after) => {
+        const prefix = before.join("");
+        const suffix = after.join("");
+        const xml = `<root>${prefix}<p><p>nested</p>${inside.join("")}text</p>${suffix}</root>`;
+        const expected = `<root>${prefix}<p>updated</p>${suffix}</root>`;
+
+        expect(XML_PARSER.parse(xml)).toBeDefined();
+        const actual = replaceXmlElementContent(xml, "p", "updated").unwrap();
+        expect(XML_PARSER.parse(actual)).toEqual(XML_PARSER.parse(expected));
+      },
+    ),
+  );
+});
+
 test("matches a reference parser for generated nested documents", () => {
   assertProperty(
     "matches a reference parser for generated nested documents",
@@ -144,6 +202,17 @@ test("completes a deeply nested one-megabyte document scan within the budget", (
   const elapsed = performance.now() - started;
 
   expect(result.unwrap()).toBe("");
+  expect(elapsed).toBeLessThan(200);
+});
+
+test("completes a one-megabyte comment-rich scan within the budget", () => {
+  const comment = "<!-- <item></item> -->";
+  const xml = comment.repeat(Math.ceil((1024 * 1024) / comment.length));
+  const started = performance.now();
+  const result = replaceXmlElements(xml, "item", () => "");
+  const elapsed = performance.now() - started;
+
+  expect(result.unwrap()).toBe(xml);
   expect(elapsed).toBeLessThan(200);
 });
 

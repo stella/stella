@@ -25,6 +25,47 @@ export class XmlScanError extends TaggedError("XmlScanError")<{
 
 type XmlScanCompletion = { status: "complete" } | { status: "incomplete" };
 
+type NonElementMarkupResult =
+  | { kind: "element" }
+  | { kind: "skipped"; cursor: number }
+  | { kind: "incomplete" };
+
+const skipNonElementMarkup = (
+  xml: string,
+  start: number,
+): NonElementMarkupResult => {
+  let terminator: string | null = null;
+  if (xml.startsWith("<!--", start)) {
+    terminator = "-->";
+  } else if (xml.startsWith("<![CDATA[", start)) {
+    terminator = "]]>";
+  } else if (xml.startsWith("<?", start)) {
+    terminator = "?>";
+  } else if (!xml.startsWith("<!", start)) {
+    return { kind: "element" };
+  }
+
+  if (terminator !== null) {
+    const end = xml.indexOf(terminator, start + 2);
+    return end === -1
+      ? { kind: "incomplete" }
+      : { kind: "skipped", cursor: end + terminator.length };
+  }
+
+  let quote: '"' | "'" | null = null;
+  for (let cursor = start + 2; cursor < xml.length; cursor += 1) {
+    const character = xml[cursor];
+    if (quote === null && (character === '"' || character === "'")) {
+      quote = character;
+    } else if (character === quote) {
+      quote = null;
+    } else if (quote === null && character === ">") {
+      return { kind: "skipped", cursor: cursor + 1 };
+    }
+  }
+  return { kind: "incomplete" };
+};
+
 const isNameBoundary = (character: string | undefined): boolean =>
   character === ">" || character === "/" || /\s/u.test(character ?? "");
 
@@ -53,6 +94,14 @@ const findMatchingClose = ({
     const tagStart = xml.indexOf("<", cursor);
     if (tagStart === -1) {
       return null;
+    }
+    const markup = skipNonElementMarkup(xml, tagStart);
+    if (markup.kind === "incomplete") {
+      return null;
+    }
+    if (markup.kind === "skipped") {
+      cursor = markup.cursor;
+      continue;
     }
     const closing = xml[tagStart + 1] === "/";
     const tagNameStart = tagStart + (closing ? 2 : 1);
@@ -112,12 +161,16 @@ export const xmlElements = function* (
     if (start === -1) {
       return { status: "complete" };
     }
+    const markup = skipNonElementMarkup(xml, start);
+    if (markup.kind === "incomplete") {
+      return { status: "incomplete" };
+    }
+    if (markup.kind === "skipped") {
+      cursor = markup.cursor;
+      continue;
+    }
     const nameStart = start + 1;
-    if (
-      xml[nameStart] === "/" ||
-      xml[nameStart] === "!" ||
-      xml[nameStart] === "?"
-    ) {
+    if (xml[nameStart] === "/") {
       cursor = nameStart;
       continue;
     }
