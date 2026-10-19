@@ -48,20 +48,27 @@ describe.serial("public-law relation scan", () => {
   });
 
   test("public case-law reads allow type-only base schema imports", async () => {
-    for (const declaration of [
+    const declarations = [
       'import type { caseLawDecisions as decisions } from "@/api/db/schema/case-law";',
       'import { type caseLawDecisions as decisions } from "@/api/db/schema/case-law";',
-    ]) {
-      const source = [
-        'import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";',
+    ];
+    const results = await Promise.all(
+      declarations.map(async (declaration) => ({
         declaration,
-        "export type DecisionTable = typeof decisions;",
-        "void caseLawPublicReadDb;",
-      ].join("\n");
-      expect(
-        await lint(source, "apps/api/src/handlers/case-law/read.ts"),
-      ).toEqual([]);
-    }
+        lines: await lint(
+          [
+            'import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";',
+            declaration,
+            "export type DecisionTable = typeof decisions;",
+            "void caseLawPublicReadDb;",
+          ].join("\n"),
+          "apps/api/src/handlers/case-law/read.ts",
+        ),
+      })),
+    );
+    expect(results).toEqual(
+      declarations.map((declaration) => ({ declaration, lines: [] })),
+    );
   });
 
   test("decision-surface mode checks base reads without private relation checks", async () => {
@@ -547,17 +554,21 @@ describe.serial("public-law relation scan", () => {
         "void readHandle;",
         "export const query = sql`select id from case_law_decisions`;",
       ].join("\n");
-    for (const typeName of [
-      "CaseLawPublicReadDb",
-      "CaseLawPublicReadTransaction",
-    ]) {
-      expect(
-        await lint(
-          caseLawReadTypeSource(typeName),
-          `apps/api/src/handlers/case-law/${typeName}.ts`,
-        ),
-      ).toHaveLength(1);
-    }
+    const typeNames = ["CaseLawPublicReadDb", "CaseLawPublicReadTransaction"];
+    const typeResults = await Promise.all(
+      typeNames.map(async (typeName) => ({
+        typeName,
+        reported: (
+          await lint(
+            caseLawReadTypeSource(typeName),
+            `apps/api/src/handlers/case-law/${typeName}.ts`,
+          )
+        ).length,
+      })),
+    );
+    expect(typeResults).toEqual(
+      typeNames.map((typeName) => ({ typeName, reported: 1 })),
+    );
     const registeredQuery = [
       'import { definePublicLawSharedQuery, PUBLIC_LAW_SHARED_QUERY } from "@/api/lib/public-law-shared-query";',
       'import { sql } from "drizzle-orm";',
