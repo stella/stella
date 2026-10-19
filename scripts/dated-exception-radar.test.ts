@@ -12,7 +12,7 @@ import {
   radarAction,
   radarBody,
   radarFiles,
-  radarGroups,
+  radarProposalGroups,
   radarReuse,
   radarWriteNeeded,
   validateRadarRemoval,
@@ -40,10 +40,10 @@ const applyRemovals = (entries: readonly DatedWaiver[], initial: string) => {
   return contents;
 };
 const group = () => {
-  const result = radarGroups([
-    entry("bunfig.toml"),
-    entry(".claude/mcp/bunfig.toml"),
-  ]).at(0);
+  const result = radarProposalGroups(
+    [entry("bunfig.toml"), entry(".claude/mcp/bunfig.toml")],
+    now,
+  ).at(0);
   if (!result) {
     throw new Error("Fixture group missing");
   }
@@ -84,7 +84,7 @@ test("one release-age proposal removes every carrying bunfig", () => {
 
 test("one release-age proposal removes all due exclusions from a shared bunfig", () => {
   const other = { ...entry("bunfig.toml"), id: "better-result", line: 4 };
-  const grouped = radarGroups([entry("bunfig.toml"), other]);
+  const grouped = radarProposalGroups([entry("bunfig.toml"), other], now);
   expect(grouped).toHaveLength(1);
 
   const fixtureBunfig = `[install]\nminimumReleaseAgeExcludes = [\n  "bun-types", # quarantine-expires: ${expiry}\n  "better-result", # quarantine-expires: ${expiry}\n]\n`;
@@ -103,7 +103,7 @@ test("release-age groups form connected components over packages and owning file
   const a2 = entry("bunfig2.toml");
   const b = { ...entry("bunfig2.toml"), id: "better-result" };
   const c = { ...entry("bunfig3.toml"), id: "valibot" };
-  const groups = radarGroups([a1, c, b, a2]);
+  const groups = radarProposalGroups([a1, c, b, a2], now);
 
   expect(groups).toHaveLength(2);
   expect(
@@ -120,29 +120,29 @@ test("release-age group keys are stable across input order", () => {
     entry("bunfig2.toml"),
     { ...entry("bunfig2.toml"), id: "better-result" },
   ];
-  expect(radarGroups(entries).at(0)?.key).toBe(
-    radarGroups(entries.toReversed()).at(0)?.key,
+  expect(radarProposalGroups(entries, now).at(0)?.key).toBe(
+    radarProposalGroups(entries.toReversed(), now).at(0)?.key,
   );
 });
 
 test("release-age group identity survives owner order and subsets but separates deadlines", () => {
   const first = entry("bunfig.toml");
   const second = entry(".claude/mcp/bunfig.toml");
-  const key = radarGroups([first, second]).at(0)?.key;
+  const key = radarProposalGroups([first, second], now).at(0)?.key;
   expect(key).toBeDefined();
   for (const inventory of [[second, first], [first], [second]]) {
-    expect(radarGroups(inventory).at(0)?.key).toBe(key);
+    expect(radarProposalGroups(inventory, now).at(0)?.key).toBe(key);
   }
   const anotherDeadline = {
     ...first,
     source: "another/bunfig.toml",
-    expiresAt: "2026-10-19T12:00:00.000Z",
+    expiresAt: "2026-10-17T12:00:00.000Z",
   };
-  expect(radarGroups([first, anotherDeadline])).toHaveLength(2);
-  expect(radarGroups([anotherDeadline]).at(0)?.key).not.toBe(key);
+  expect(radarProposalGroups([first, anotherDeadline], now)).toHaveLength(2);
+  expect(radarProposalGroups([anotherDeadline], now).at(0)?.key).not.toBe(key);
 });
 
-test("orphan reconciliation retires only radar removals absent from the full inventory", async () => {
+test("orphan reconciliation retires only machine-owned removals absent from the proposal groups", async () => {
   const current = group();
   const proposal = (key: string) => ({
     key,
@@ -155,6 +155,7 @@ test("orphan reconciliation retires only radar removals absent from the full inv
   const read: string[] = [];
   const orphans = await orphanRadarRemovals({
     inventory: current.entries,
+    now,
     proposals: [currentProposal, staleRemoval, ownerExtension, otherProposal],
     readBody: async ({ key }) => {
       read.push(key);
@@ -172,6 +173,56 @@ test("orphan reconciliation retires only radar removals absent from the full inv
   expect(radarWriteNeeded(0, orphans)).toBe(true);
   expect(radarWriteNeeded(0, [])).toBe(false);
   expect(radarWriteNeeded(0, [], true)).toBe(true);
+});
+
+test("orphan reconciliation and publication use the same due release-age groups", async () => {
+  const expired = {
+    ...entry("bunfig.toml"),
+    expiresAt: "2026-10-14T12:00:00.000Z",
+  };
+  const later = {
+    ...entry("bunfig.toml"),
+    id: "better-result",
+    expiresAt: "2026-10-19T12:00:00.000Z",
+  };
+  const inventory = [expired, later];
+  const initialGroup = radarProposalGroups(inventory, now).at(0);
+  if (!initialGroup) {
+    throw new Error("Initial proposal group missing");
+  }
+  expect(initialGroup.entries).toEqual([expired]);
+  const initialProposal = {
+    key: initialGroup.key,
+    branch: `chore/dated-waiver-${initialGroup.key}`,
+  };
+  const removalBody = async () =>
+    "<!-- dated-exception-radar:1 -->\ndated-exception-action: removal";
+
+  for (const runNow of [now, new Date("2026-10-15T18:00:00.000Z")]) {
+    expect(
+      await orphanRadarRemovals({
+        inventory,
+        now: runNow,
+        proposals: [initialProposal],
+        readBody: removalBody,
+      }),
+    ).toEqual([]);
+    expect(radarProposalGroups(inventory, runNow)).toEqual([initialGroup]);
+  }
+
+  const expandedNow = new Date("2026-10-16T12:00:00.000Z");
+  const expandedGroups = radarProposalGroups(inventory, expandedNow);
+  expect(expandedGroups).toHaveLength(1);
+  expect(expandedGroups.at(0)?.entries).toEqual(inventory);
+  expect(expandedGroups.at(0)?.key).not.toBe(initialGroup.key);
+  expect(
+    await orphanRadarRemovals({
+      inventory,
+      now: expandedNow,
+      proposals: [initialProposal],
+      readBody: removalBody,
+    }),
+  ).toEqual([initialProposal]);
 });
 test("release-age removal opens early and arms only at expiry", async () => {
   for (const [at, expected] of [
@@ -248,7 +299,7 @@ test("arming requires the complete generated edit after expiry", () => {
 test("clean inventory performs no writes or arming", async () => {
   let writes = 0;
   await publishRadar({
-    groups: radarGroups([]),
+    groups: radarProposalGroups([], now),
     statuses: new Map(),
     now,
     publish: async () => {

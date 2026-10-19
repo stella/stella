@@ -30,9 +30,7 @@ export type RadarGroup = { key: string; entries: DatedWaiver[] };
 const releaseAgeIdentity = (entry: DatedWaiver) =>
   JSON.stringify([entry.kind, entry.id, entry.expiresAt]);
 
-export const radarGroups = (
-  inventory: readonly DatedWaiver[],
-): RadarGroup[] => {
+const radarGroups = (inventory: readonly DatedWaiver[]): RadarGroup[] => {
   const groups = new Map<string, RadarGroup>();
   const releaseAgeGroups: DatedWaiver[][] = [];
   const groupByIdentity = new Map<string, DatedWaiver[]>();
@@ -92,17 +90,26 @@ export const radarGroups = (
   ];
 };
 
+export const radarProposalGroups = (
+  inventory: readonly DatedWaiver[],
+  now: Date,
+) => radarGroups(dueWaivers(inventory, now, 3));
+
 type RadarOrphansOptions = {
   inventory: readonly DatedWaiver[];
+  now: Date;
   proposals: readonly RemovalProposal[];
   readBody: (proposal: RemovalProposal) => Promise<string>;
 };
 export const orphanRadarRemovals = async ({
   inventory,
+  now,
   proposals,
   readBody,
 }: RadarOrphansOptions): Promise<RemovalProposal[]> => {
-  const current = new Set(radarGroups(inventory).map(({ key }) => key));
+  const current = new Set(
+    radarProposalGroups(inventory, now).map(({ key }) => key),
+  );
   const orphans: RemovalProposal[] = [];
   for (const proposal of proposals) {
     if (current.has(proposal.key)) {
@@ -121,9 +128,13 @@ export const orphanRadarRemovals = async ({
   }
   return orphans;
 };
-const discoverRadarOrphans = async (inventory: readonly DatedWaiver[]) =>
+const discoverRadarOrphans = async (
+  inventory: readonly DatedWaiver[],
+  now: Date,
+) =>
   orphanRadarRemovals({
     inventory,
+    now,
     proposals: await listRemovalProposals({
       repo: "stella/stella",
       request: githubRequest,
@@ -283,7 +294,7 @@ export const validateRadarRemoval = ({
   read: (source: string) => string;
   now: Date;
 }): void => {
-  const group = radarGroups(dueWaivers(inventory, now, 3)).find(
+  const group = radarProposalGroups(inventory, now).find(
     ({ key }) => branch === `chore/dated-waiver-${key}`,
   );
   if (!group) {
@@ -518,7 +529,7 @@ const main = async () => {
   const inventory = loadWaivers(trackedPolicyFiles());
   if (process.argv.includes("--probe")) {
     const now = new Date();
-    const groups = radarGroups(dueWaivers(inventory, now, 3));
+    const groups = radarProposalGroups(inventory, now);
     const budget = createProbeBudget({
       attempts: groups.reduce(
         (total, group) =>
@@ -555,7 +566,7 @@ const main = async () => {
       },
     );
     const orphans = await Result.tryPromise(async () =>
-      discoverRadarOrphans(inventory),
+      discoverRadarOrphans(inventory, now),
     );
     if (process.env["GITHUB_OUTPUT"]) {
       appendFileSync(
@@ -581,13 +592,13 @@ const main = async () => {
   // Publish on the probe's clock: a waiver that turns due between the two
   // steps has no probe evidence yet and waits for the next run.
   const now = new Date(report.now);
-  const groups = radarGroups(dueWaivers(inventory, now, 3));
+  const groups = radarProposalGroups(inventory, now);
   const statuses = new Map(
     report.entries.map(({ key, status }) => [key, status]),
   );
   const orphanFailures: string[] = [];
   const discovered = await Result.tryPromise(async () =>
-    discoverRadarOrphans(inventory),
+    discoverRadarOrphans(inventory, now),
   );
   if (Result.isError(discovered)) {
     orphanFailures.push("discovery");
