@@ -368,7 +368,7 @@ pub fn run() {
                 mgr.reveal_support_root();
               }
               tray::MenuAction::OpenSessionFile(id) => {
-                let mgr = manager.lock().await;
+                let mut mgr = manager.lock().await;
                 mgr.open_session_file(&id);
               }
               tray::MenuAction::RevealSession(id) => {

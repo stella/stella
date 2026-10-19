@@ -5,6 +5,16 @@
 
 fn main() {}
 
+#[cfg(windows)]
+fn probe_windows_move() {
+  // guard: winsafe::MoveFileEx
+  let _ = winsafe::MoveFileEx(
+    "unused",
+    Some("unused"),
+    winsafe::co::MOVEFILE::WRITE_THROUGH,
+  );
+}
+
 fn probe_0() {
   // guard: std::fs::rename
   let _ = std::fs::rename("unused", "unused");

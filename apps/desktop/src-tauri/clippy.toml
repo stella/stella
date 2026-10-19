@@ -5,6 +5,7 @@
 # are banned everywhere else so a second "which screen" rule cannot appear;
 # the owner carries the only `allow`.
 disallowed-methods = [
+  { path = "winsafe::MoveFileEx", reason = "create private desktop files through local_store" },
   { path = "std::fs::rename", reason = "create private desktop files through local_store" },
   { path = "std::fs::hard_link", reason = "create private desktop files through local_store" },
   { path = "tokio::fs::rename", reason = "create private desktop files through local_store" },
