@@ -286,8 +286,16 @@ if (!databaseUrl || !enabled) {
           });
         }
         const request: typeof fetchWithTimeout = async (url) => {
+          let requestUrl: string;
+          if (typeof url === "string") {
+            requestUrl = url;
+          } else if (url instanceof URL) {
+            requestUrl = url.href;
+          } else {
+            requestUrl = url.url;
+          }
           const response =
-            responses.get(String(url)) ??
+            responses.get(requestUrl) ??
             panic("Unexpected BfDI fixture request");
           return new Response(Buffer.from(response.bytes), {
             headers: { "content-type": response.contentType },

@@ -147,7 +147,8 @@ export const parseBfdiDocument = ({
     const date = /^(\d{2})\.(\d{2})\.(\d{4})$/u.exec(
       compact(dates.find(".value").text()),
     );
-    const issuedOn = date ? `${date.at(3)}-${date.at(2)}-${date.at(1)}` : "";
+    const [, day, month, year] = date ?? [];
+    const issuedOn = day && month && year ? [year, month, day].join("-") : "";
     if (!parsePlainDate(issuedOn)) {
       return yield* invalid("BfDI publication date is invalid");
     }
@@ -493,7 +494,8 @@ export const createBfdiAdapter = (input: unknown) =>
           });
         }),
       fetchDocument: createBfdiDocumentReader({ policy, urls }),
-      getTotalCount: async () => ({ type: "no-count-endpoint" }),
+      getTotalCount: async () =>
+        await Promise.resolve({ type: "no-count-endpoint" }),
       sliceWalk: {
         type: "unsupported",
         reason:

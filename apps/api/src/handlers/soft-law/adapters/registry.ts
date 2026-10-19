@@ -54,13 +54,15 @@ export const SOFT_LAW_ADMISSIONS = {
   "eu-edpb": {
     state: "registered",
     loadAdapter: async (configuration) =>
-      configuration.type === "default"
-        ? Result.ok(edpbAdapter)
-        : Result.err(
-            new SoftLawIngestionError({
-              message: "EDPB does not accept an admission file",
-            }),
-          ),
+      await Promise.resolve(
+        configuration.type === "default"
+          ? Result.ok(edpbAdapter)
+          : Result.err(
+              new SoftLawIngestionError({
+                message: "EDPB does not accept an admission file",
+              }),
+            ),
+      ),
     descriptor: {
       license: "permitted-redistribution",
       attribution:
@@ -73,13 +75,15 @@ export const SOFT_LAW_ADMISSIONS = {
   "eu-wp29": {
     state: "registered",
     loadAdapter: async (configuration) =>
-      configuration.type === "default"
-        ? Result.ok(wp29Adapter)
-        : Result.err(
-            new SoftLawIngestionError({
-              message: "WP29 does not accept an admission file",
-            }),
-          ),
+      await Promise.resolve(
+        configuration.type === "default"
+          ? Result.ok(wp29Adapter)
+          : Result.err(
+              new SoftLawIngestionError({
+                message: "WP29 does not accept an admission file",
+              }),
+            ),
+      ),
     descriptor: {
       license: "restricted",
       attribution: "Article 29 Working Party; European Commission archive",
