@@ -290,6 +290,9 @@ test("overlapping discovery and replay converge while preserving complete raw an
     second.entries.at(0) ?? panic("Missing overlapping BfDI fixture entry");
   expect(entry).toBeDefined();
   expect(duplicate).toBeDefined();
+  // Discovery entries carry the document discriminator ingestion switches on.
+  expect(entry.type).toBe("document");
+  expect(duplicate.type).toBe("document");
   const document = (
     await adapter.fetchDocument(entry, { signal: signal(), fetch: read.fetch })
   ).unwrap();

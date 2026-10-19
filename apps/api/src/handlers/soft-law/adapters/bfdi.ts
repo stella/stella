@@ -167,6 +167,7 @@ export const parseBfdiDocument = ({
       return yield* invalid("BfDI document locator differs from its admission");
     }
     return Result.ok({
+      type: "document",
       url: asset,
       sourcePages: [detailUrl],
       metadata: {
