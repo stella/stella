@@ -3,9 +3,14 @@ import { memoryAdapter } from "better-auth/adapters/memory";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
-import { createSocialProvider, getAuth } from "@/api/lib/auth";
+import {
+  createSocialProvider,
+  createSocialProviders,
+  getAuth,
+} from "@/api/lib/auth";
 import {
   classifyAuthSessionPath,
+  isNewDeviceNoticeAuthPath,
   isSessionCreatingAuthPath,
 } from "@/api/lib/auth/session-path-classification";
 
@@ -36,6 +41,7 @@ describe("auth session paths", () => {
       "/sign-in/email",
       "/sign-in/email-otp",
       "/sign-in/social",
+      "/sign-up/email",
     ]);
 
     const enabledPaths = getEnabledAuthEndpointPaths();
@@ -49,9 +55,49 @@ describe("auth session paths", () => {
     );
   });
 
-  test("configures every social provider for authorization redirects", () => {
-    const socialProviders = Object.values(getAuth().options.socialProviders);
+  test("identifies only configured new-device notice completion endpoints", () => {
+    const expectedNoticeOnlyPaths = new Set([
+      "/two-factor/verify-backup-code",
+      "/two-factor/verify-otp",
+      "/two-factor/verify-totp",
+    ]);
+    const noticeOnlyPaths = getEnabledAuthEndpointPaths().filter(
+      (path) =>
+        isNewDeviceNoticeAuthPath(path) && !isSessionCreatingAuthPath(path),
+    );
 
+    expect(noticeOnlyPaths.toSorted()).toEqual(
+      [...expectedNoticeOnlyPaths].toSorted(),
+    );
+  });
+
+  test("routes a completed TOTP challenge to one new-device notice and skips its email-code first step", () => {
+    const paths = ["/two-factor/verify-totp", "/two-factor/send-otp"];
+
+    expect(paths.filter(isNewDeviceNoticeAuthPath)).toEqual([
+      "/two-factor/verify-totp",
+    ]);
+  });
+
+  test("keeps verification from signing in automatically", () => {
+    expect(
+      getAuth().options.emailVerification.autoSignInAfterVerification,
+    ).toBe(false);
+    expect(isSessionCreatingAuthPath("/verify-email")).toBe(false);
+  });
+
+  test("configures every social provider for authorization redirects", () => {
+    const socialProviders = Object.values(
+      createSocialProviders({
+        googleClientId: "google-client-id",
+        googleClientSecret: "google-client-secret",
+        microsoftClientId: "microsoft-client-id",
+        microsoftClientSecret: "microsoft-client-secret",
+        microsoftTenantId: "common",
+      }),
+    );
+
+    expect(socialProviders.length).toBeGreaterThan(0);
     for (const provider of socialProviders) {
       expect(provider.disableIdTokenSignIn).toBe(true);
     }

@@ -164,6 +164,7 @@ import {
 } from "@/api/lib/auth/session-lifetime";
 import { createDatabaseSessionLifetimeStore } from "@/api/lib/auth/session-lifetime-store";
 import {
+  isNewDeviceNoticeAuthPath,
   isSecondFactorAuthSessionPath,
   isSessionCreatingAuthPath,
 } from "@/api/lib/auth/session-path-classification";
@@ -318,6 +319,39 @@ const SIGN_IN_EMAIL_OTP_PATH = "/sign-in/email-otp";
 export const createSocialProvider = <T extends object>(provider: T) => ({
   ...provider,
   disableIdTokenSignIn: true,
+});
+
+type SocialProviderSettings = {
+  googleClientId: string | undefined;
+  googleClientSecret: string | undefined;
+  microsoftClientId: string | undefined;
+  microsoftClientSecret: string | undefined;
+  microsoftTenantId: string | undefined;
+};
+
+export const createSocialProviders = (settings: SocialProviderSettings) => ({
+  ...(settings.googleClientId && settings.googleClientSecret
+    ? {
+        google: createSocialProvider({
+          clientId: settings.googleClientId,
+          clientSecret: settings.googleClientSecret,
+        }),
+      }
+    : {}),
+  ...(settings.microsoftClientId &&
+  settings.microsoftClientSecret &&
+  settings.microsoftTenantId
+    ? {
+        microsoft: createSocialProvider({
+          clientId: settings.microsoftClientId,
+          clientSecret: settings.microsoftClientSecret,
+          tenantId: settings.microsoftTenantId,
+          mapProfileToUser: createMicrosoftProfileMapper(
+            settings.microsoftTenantId,
+          ),
+        }),
+      }
+    : {}),
 });
 
 type SignInEmailOtpBody = {
@@ -1764,6 +1798,7 @@ export const createAuth = (
       localPasswordEnabled: isSelfhostLocalPasswordAuthEnabled(),
       reviewAccountConfigured: isReviewAccountConfigured(),
     }),
+    emailVerification: { autoSignInAfterVerification: false },
     databaseHooks: {
       account: {
         create: { before: reviewDatabaseHooks.accountCreateBefore },
@@ -1839,30 +1874,13 @@ export const createAuth = (
       },
     },
     database: membershipAuthAdapter,
-    socialProviders: {
-      ...(env.GOOGLE_AUTH_CLIENT_ID && env.GOOGLE_AUTH_CLIENT_SECRET
-        ? {
-            google: createSocialProvider({
-              clientId: env.GOOGLE_AUTH_CLIENT_ID,
-              clientSecret: env.GOOGLE_AUTH_CLIENT_SECRET,
-            }),
-          }
-        : {}),
-      ...(env.MICROSOFT_AUTH_CLIENT_ID &&
-      env.MICROSOFT_AUTH_CLIENT_SECRET &&
-      env.MICROSOFT_AUTH_TENANT_ID
-        ? {
-            microsoft: createSocialProvider({
-              clientId: env.MICROSOFT_AUTH_CLIENT_ID,
-              clientSecret: env.MICROSOFT_AUTH_CLIENT_SECRET,
-              tenantId: env.MICROSOFT_AUTH_TENANT_ID,
-              mapProfileToUser: createMicrosoftProfileMapper(
-                env.MICROSOFT_AUTH_TENANT_ID,
-              ),
-            }),
-          }
-        : {}),
-    },
+    socialProviders: createSocialProviders({
+      googleClientId: env.GOOGLE_AUTH_CLIENT_ID,
+      googleClientSecret: env.GOOGLE_AUTH_CLIENT_SECRET,
+      microsoftClientId: env.MICROSOFT_AUTH_CLIENT_ID,
+      microsoftClientSecret: env.MICROSOFT_AUTH_CLIENT_SECRET,
+      microsoftTenantId: env.MICROSOFT_AUTH_TENANT_ID,
+    }),
     plugins: [
       REGISTRATION_RETENTION_SCHEMA_PLUGIN,
       sessionLifetime.plugin,
@@ -2245,7 +2263,7 @@ export const createAuth = (
         return undefined;
       }),
       after: createAuthMiddleware(async (ctx) => {
-        if (!isSessionCreatingAuthPath(ctx.path) || isLocalDevOpen()) {
+        if (!isNewDeviceNoticeAuthPath(ctx.path) || isLocalDevOpen()) {
           return;
         }
 

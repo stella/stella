@@ -1,5 +1,6 @@
 const AUTH_SESSION_PATH_DISPOSITION = {
   secondFactor: "second_factor",
+  secondFactorCompletion: "second_factor_completion",
   noSecondFactor: "no_second_factor",
   existingSession: "existing_session",
   noSession: "no_session",
@@ -7,6 +8,7 @@ const AUTH_SESSION_PATH_DISPOSITION = {
 
 type AuthSessionPathClassification =
   | { disposition: "second_factor" }
+  | { disposition: "second_factor_completion"; reason: string }
   | { disposition: "no_second_factor"; reason: string }
   | { disposition: "existing_session"; reason: string }
   | { disposition: "no_session"; reason: string };
@@ -25,6 +27,13 @@ const existingSession = (reason: string): AuthSessionPathClassification => ({
   reason,
 });
 
+const secondFactorCompletion = (
+  reason: string,
+): AuthSessionPathClassification => ({
+  disposition: AUTH_SESSION_PATH_DISPOSITION.secondFactorCompletion,
+  reason,
+});
+
 const noSession = (reason: string): AuthSessionPathClassification => ({
   disposition: AUTH_SESSION_PATH_DISPOSITION.noSession,
   reason,
@@ -36,7 +45,7 @@ const EXACT_AUTH_SESSION_PATHS = new Map<string, AuthSessionPathClassification>(
     ["/sign-in/social", SECOND_FACTOR],
     ["/sign-in/email", noSecondFactor("self-hosted password sign-in")],
     ["/email-otp/verify-email", noSecondFactor("first email verification")],
-    ["/sign-up/email", noSession("self-hosted password registration")],
+    ["/sign-up/email", noSecondFactor("self-hosted password registration")],
     ["/verify-email", noSession("email verification")],
     ["/get-session", existingSession("authenticated session refresh")],
     ["/update-session", existingSession("authenticated session update")],
@@ -47,15 +56,15 @@ const EXACT_AUTH_SESSION_PATHS = new Map<string, AuthSessionPathClassification>(
     ["/two-factor/disable", existingSession("second-factor removal")],
     [
       "/two-factor/verify-backup-code",
-      existingSession("second-factor challenge completion"),
+      secondFactorCompletion("second-factor challenge completion"),
     ],
     [
       "/two-factor/verify-otp",
-      existingSession("second-factor challenge completion"),
+      secondFactorCompletion("second-factor challenge completion"),
     ],
     [
       "/two-factor/verify-totp",
-      existingSession("second-factor challenge completion"),
+      secondFactorCompletion("second-factor challenge completion"),
     ],
     [
       "/organization/set-active",
@@ -102,6 +111,30 @@ const EXACT_AUTH_SESSION_PATHS = new Map<string, AuthSessionPathClassification>(
     ["/sign-out", noSession("session removal")],
     ["/social-link-hint", noSession("social account lookup")],
     ["/token", noSession("token exchange")],
+    ["/oauth2/authorize", noSession("OAuth authorization request")],
+    ["/oauth2/consent", noSession("OAuth consent submission")],
+    ["/oauth2/consent-info", noSession("OAuth consent information")],
+    ["/oauth2/continue", noSession("OAuth authorization continuation")],
+    ["/oauth2/delete-consent", noSession("OAuth consent removal")],
+    ["/oauth2/end-session", noSession("OAuth session end request")],
+    [
+      "/oauth2/end-session/confirm",
+      noSession("OAuth session end confirmation"),
+    ],
+    ["/oauth2/get-client", noSession("OAuth client lookup")],
+    ["/oauth2/get-clients", noSession("OAuth client listing")],
+    ["/oauth2/get-consent", noSession("OAuth consent lookup")],
+    ["/oauth2/get-consents", noSession("OAuth consent listing")],
+    ["/oauth2/introspect", noSession("OAuth token introspection")],
+    ["/oauth2/public-client", noSession("OAuth public client lookup")],
+    [
+      "/oauth2/public-client-prelogin",
+      noSession("OAuth public client pre-login lookup"),
+    ],
+    ["/oauth2/register", noSession("OAuth client registration")],
+    ["/oauth2/revoke", noSession("OAuth token revocation")],
+    ["/oauth2/token", noSession("OAuth token exchange")],
+    ["/oauth2/userinfo", noSession("OAuth user information")],
     ["/two-factor/get-totp-uri", noSession("enrollment code request")],
     ["/two-factor/send-otp", noSession("challenge message request")],
     [
@@ -152,10 +185,6 @@ const AUTH_SESSION_PATH_PREFIXES: readonly {
     prefix: "/api-key/",
     classification: noSession("API key management"),
   },
-  {
-    prefix: "/oauth2/",
-    classification: noSession("OAuth authorization-server endpoint"),
-  },
 ];
 
 export const classifyAuthSessionPath = (
@@ -186,6 +215,19 @@ export const isSessionCreatingAuthPath = (
 ): boolean => {
   const classification = classifyAuthSessionPath(path);
   return (
+    classification?.disposition ===
+      AUTH_SESSION_PATH_DISPOSITION.secondFactor ||
+    classification?.disposition === AUTH_SESSION_PATH_DISPOSITION.noSecondFactor
+  );
+};
+
+export const isNewDeviceNoticeAuthPath = (
+  path: string | undefined,
+): boolean => {
+  const classification = classifyAuthSessionPath(path);
+  return (
+    classification?.disposition ===
+      AUTH_SESSION_PATH_DISPOSITION.secondFactorCompletion ||
     classification?.disposition ===
       AUTH_SESSION_PATH_DISPOSITION.secondFactor ||
     classification?.disposition === AUTH_SESSION_PATH_DISPOSITION.noSecondFactor

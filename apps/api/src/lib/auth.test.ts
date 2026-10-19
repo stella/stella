@@ -530,6 +530,7 @@ describe("isSessionCreatingAuthPath", () => {
     expect(isSessionCreatingAuthPath("/callback/microsoft")).toBe(true);
     expect(isSessionCreatingAuthPath("/sign-in/email")).toBe(true);
     expect(isSessionCreatingAuthPath("/email-otp/verify-email")).toBe(true);
+    expect(isSessionCreatingAuthPath("/sign-up/email")).toBe(true);
   });
 
   test("ignores paths that establish no session", () => {
@@ -720,7 +721,10 @@ describe("new-account email policy", () => {
             body: { email: "blocked@mailinator.com", type: "sign-in" },
             path: "/email-otp/send-verification-otp",
           },
-          { accountExists: async () => accountExists },
+          {
+            accountExists: async () => accountExists,
+            rateLimitMode: NEW_ACCOUNT_OTP_RATE_LIMIT_MODE.bypassed,
+          },
         ),
       ),
     );
