@@ -82,6 +82,15 @@ const captureQueryFailure = (sqlState: string): void => {
   captureError(new Error("query failed", { cause: driverError }));
 };
 
+const errorAt = (className: "Error" | "TypeError", location: string): Error => {
+  const error =
+    className === "TypeError"
+      ? new TypeError("private detail")
+      : new Error("private detail");
+  error.stack = `${className}: private detail\n    at run (${location})`;
+  return error;
+};
+
 const extractionError = ({
   exitCode,
   message,
@@ -224,9 +233,35 @@ describe("captureError issue grouping", () => {
     );
 
     expect(firstExceptionValue()).toMatch(
-      /^HandlerError\[upstream_unavailable\] 502 transient$/u,
+      /^HandlerError\[upstream_unavailable\] 502 transient at apps\/api\/src\/lib\/analytics\/capture\.test\.ts:\d+:\d+$/u,
     );
   });
+
+  test.each([
+    "/workspace/stella/apps/api/src/lib/analytics/capture.ts:319:17",
+    "/app/apps/api/src/lib/analytics/capture.ts:319:17",
+  ])("keeps recognized absolute repository frames from %s", (location) => {
+    captureError(errorAt("Error", location));
+
+    expect(firstExceptionValue()).toBe(
+      "Error unclassified defect at apps/api/src/lib/analytics/capture.ts:319:17",
+    );
+  });
+
+  test.each(["Error", "TypeError"] as const)(
+    "does not render a class-derived code for %s",
+    (className) => {
+      captureError(
+        errorAt(className, "apps/api/src/lib/analytics/capture.test.ts:1:2"),
+      );
+
+      const value = firstExceptionValue();
+      expect(value).not.toContain(`[${className}]`);
+      expect(value).toBe(
+        `${className} unclassified defect at apps/api/src/lib/analytics/capture.test.ts:1:2`,
+      );
+    },
+  );
 
   test("captured properties never carry arbitrary message text", () => {
     assertProperty(

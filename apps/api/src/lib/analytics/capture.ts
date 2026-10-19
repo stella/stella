@@ -162,7 +162,8 @@ export const exceptionValue = ({
 
 const CLASS_TOKEN = /^[A-Za-z_$][A-Za-z0-9_$]{0,127}$/u;
 const CODE_TOKEN = /^[A-Za-z0-9_.:-]{1,64}$/u;
-const REPOSITORY_FRAME = /^(?:apps|packages)\/[A-Za-z0-9_./-]+:\d+(?::\d+)?$/u;
+const REPOSITORY_FRAME =
+  /^(?:(?:\/workspace\/stella|\/app)\/)?((?:apps|packages)\/[A-Za-z0-9_./-]+:\d+(?::\d+)?)$/u;
 
 const exceptionClass = (value: string): ExceptionClass =>
   // `errorTag` normally supplies a class token; keep a fixed fallback if a
@@ -177,11 +178,16 @@ const exceptionCode = (value: string | undefined): ExceptionCode | undefined =>
 
 const exceptionFrame = (
   value: string | undefined,
-): ExceptionFrame | undefined =>
-  value !== undefined && REPOSITORY_FRAME.test(value)
-    ? // SAFETY: failure evidence emits a repository-relative code location.
-      (value as ExceptionFrame)
-    : undefined;
+): ExceptionFrame | undefined => {
+  if (value === undefined) {
+    return undefined;
+  }
+  const repositoryFrame = REPOSITORY_FRAME.exec(value)?.at(1);
+  return repositoryFrame === undefined
+    ? undefined
+    : // SAFETY: the captured suffix passed the repository-frame allowlist.
+      (repositoryFrame as ExceptionFrame);
+};
 
 /**
  * The grouping fingerprint and the suppression key are the same identity read
@@ -316,10 +322,12 @@ const captureErrorWithOptions = (
       : undefined;
   const { context, rejected } = acceptCaptureContext(safeContext);
   const status = requestErrorStatusFields(evidence)["error.status_code"];
-  const code = exceptionCode(fingerprint["error.code"]);
+  const className = exceptionClass(tag);
+  const candidateCode = exceptionCode(fingerprint["error.code"]);
+  const code = candidateCode === className ? undefined : candidateCode;
   const frame = exceptionFrame(fingerprint["error.frame"]);
   const value = exceptionValue({
-    className: exceptionClass(tag),
+    className,
     ...(code === undefined ? {} : { code }),
     ...(status === undefined ? {} : { status }),
     ...(grading === undefined
