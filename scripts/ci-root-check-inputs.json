@@ -321,7 +321,7 @@
     "Model catalog generation guard": [
       "@stll/ai-catalog",
       "@stll/fetch",
-      "@stll/time",
+      "@stll/stable-stringify",
       "packages/scripts/fixtures/**",
       "scripts/**"
     ],

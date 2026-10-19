@@ -309,7 +309,9 @@ const movedHelper = ({
   head.set(
     `${PARSERS}parser-a.ts`,
     [
-      "// parser-output-unchanged: helper moved without output changes",
+      ...(keepCounterpart
+        ? ["// parser-output-unchanged: helper moved without output changes"]
+        : []),
       keepCounterpart
         ? 'import { helper } from "./moved-helper";'
         : "const helper = () => 'base';",
@@ -471,6 +473,58 @@ test("parser source deletions without a counterpart still require a version bump
   ]);
 });
 
+const deletedWorkspaceDependency = (marker = "") => {
+  const base = fixture({ adapters: ["A"] });
+  const parser = `${PARSERS}parser-a.ts`;
+  base.set(
+    "packages/dependency/package.json",
+    JSON.stringify({ exports: "./src/index.ts" }),
+  );
+  base.set(
+    "packages/dependency/src/index.ts",
+    "export const dependency = () => 'base';\n",
+  );
+  base.set(
+    parser,
+    'import { dependency } from "@stll/dependency";\nimport { helper } from "./shared-helper";\nexport const parseA = () => dependency() + helper();\n',
+  );
+  const head = new Map(base);
+  head.delete("packages/dependency/package.json");
+  head.delete("packages/dependency/src/index.ts");
+  head.set(
+    parser,
+    `${marker}import { dependency } from "@stll/dependency";\nimport { helper } from "./shared-helper";\nexport const parseA = () => dependency() + helper();\n`,
+  );
+  return { base, head, parser };
+};
+
+test("an owner-level marker exempts a deleted parser dependency", () => {
+  const { base, head } = deletedWorkspaceDependency(
+    "// parser-output-unchanged: [test-a] dependency now resolves to the equivalent published package\n",
+  );
+  expect(changed(base, head)).toEqual([]);
+});
+
+test("a deleted parser dependency without an owner-level marker requires a version bump", () => {
+  const { base, head } = deletedWorkspaceDependency();
+  expect(changed(base, head)).toEqual([
+    expect.stringContaining("test-a: parser version 1 must exceed base 1"),
+  ]);
+});
+
+test("an owner-level marker does not exempt another modified parser dependency", () => {
+  const { base, head } = deletedWorkspaceDependency(
+    "// parser-output-unchanged: [test-a] dependency now resolves to the equivalent published package\n",
+  );
+  head.set(
+    `${PARSERS}shared-helper.ts`,
+    "export const helper = () => 'changed';\n",
+  );
+  expect(changed(base, head)).toEqual([
+    expect.stringContaining(`${PARSERS}shared-helper.ts`),
+  ]);
+});
+
 test("deleted modules containing only reexports need no parser version bump", () => {
   for (const source of [
     'export { helper } from "./shared-helper";\n',
@@ -507,9 +561,11 @@ test("deleted reexport modules with any local code still need a bump", () => {
     const { base, head, facade } = deletedFacade(
       `export { helper } from "./shared-helper";\n${localCode}\n`,
     );
-    expect(changed(base, head)).toEqual([
-      `test-a: parser version 1 must exceed base 1; changed: ${facade}`,
-    ]);
+    head.set(
+      `${PARSERS}parser-a.ts`,
+      'import { helper } from "./shared-helper";\nexport const parseA = () => helper();\n',
+    );
+    expect(changed(base, head)).toEqual([expect.stringContaining(facade)]);
   }
 });
 

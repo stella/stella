@@ -625,8 +625,22 @@ export const checkParserVersions = ({
     if (changed.length === 0 || current.version > previous.version) {
       continue;
     }
+    const ownerHasAddedMarker = [...current.parsers].some((file) => {
+      const baseLines = new Set((base.get(file) ?? "").split("\n"));
+      return (head.get(file) ?? "").split("\n").some((line) => {
+        if (baseLines.has(line)) {
+          return false;
+        }
+        const marker = OUTPUT_UNCHANGED.exec(line);
+        const owner = marker?.at(1);
+        return marker !== null && (owner === undefined || owner === key);
+      });
+    });
     const unexempted = changed.filter((file) => {
       if (movedSources.has(file) || deletedReexports.has(file)) {
+        return false;
+      }
+      if (!head.has(file) && ownerHasAddedMarker) {
         return false;
       }
       const baseLines = new Set((base.get(file) ?? "").split("\n"));
