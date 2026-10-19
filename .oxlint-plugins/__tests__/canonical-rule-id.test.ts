@@ -26,33 +26,38 @@ describe.serial("suppression IDs follow their configured spelling", () => {
     );
     expect(entries.length).toBeGreaterThan(0);
     const reason = " --  keep spacing, punctuation: -- unchanged; café";
-    // oxlint's JSON report for one file is cut short on Linux once it outgrows
-    // a pipe buffer, so every alias is checked in batches of a bounded size.
-    const BATCH = 40;
+    const source = entries
+      .map(
+        ([alias]) => `// oxlint-disable-next-line ${alias}${reason}\nvoid 0;`,
+      )
+      .join("\n");
+    const expected = entries
+      .map(
+        ([, canonical]) =>
+          `// oxlint-disable-next-line ${canonical}${reason}\nvoid 0;`,
+      )
+      .join("\n");
+    // Only reporting needs bounded batches: oxlint truncates a large JSON
+    // diagnostic report, while the fix and fixed-point runs report no errors.
+    const BATCH = 250;
     for (let start = 0; start < entries.length; start += BATCH) {
       const batch = entries.slice(start, start + BATCH);
-      const source = batch
+      const batchSource = batch
         .map(
           ([alias]) => `// oxlint-disable-next-line ${alias}${reason}\nvoid 0;`,
         )
         .join("\n");
-      const expected = batch
-        .map(
-          ([, canonical]) =>
-            `// oxlint-disable-next-line ${canonical}${reason}\nvoid 0;`,
-        )
-        .join("\n");
-      expect(await lintSingleRule(RULE, source, options)).toHaveLength(
+      expect(await lintSingleRule(RULE, batchSource, options)).toHaveLength(
         batch.length,
       );
-      const fixed = await runSingleRule(RULE, source, {
-        ...options,
-        fix: true,
-      });
-      expect(fixed.source).toBe(expected);
-      expect(fixed.lines).toEqual([]);
-      expect(await lintSingleRule(RULE, fixed.source, options)).toEqual([]);
     }
+    const fixed = await runSingleRule(RULE, source, {
+      ...options,
+      fix: true,
+    });
+    expect(fixed.source).toBe(expected);
+    expect(fixed.lines).toEqual([]);
+    expect(await lintSingleRule(RULE, fixed.source, options)).toEqual([]);
   });
 
   test("all directive forms and comma lists retain their exact layout", async () => {

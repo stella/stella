@@ -36,6 +36,7 @@ import {
   testFailures,
   type ApiStep,
   type FailureRecord,
+  failedTests,
 } from "./ci-failure-digest";
 
 const ROOT = path.resolve(import.meta.dir, "..");
@@ -121,6 +122,16 @@ test("bun test failures keep their error and repository location", () => {
       line: 12,
     },
   ]);
+});
+
+test("failed Bun tests keep the package scope and file header they ran under", () => {
+  expect(failedTests(BUN_FAILURE)).toEqual([
+    { scope: "@stll/api", file: "src/math.test.ts", name: "math > adds" },
+  ]);
+  // An unhandled error between tests names no test to quarantine.
+  expect(
+    failedTests(["# Unhandled error between tests", "error: boom"]),
+  ).toEqual([]);
 });
 
 test("a test run's tail lists only the failures, after everything else", () => {
@@ -265,7 +276,7 @@ test.each(["stall", "signal"])(
       const kind = classify(step, lines);
       expect(kind).toBe("infra");
       const output = annotations([
-        { job: "runner", step, kind, lines, url: "" },
+        { job: "runner", step, kind, lines, url: "", tests: [] },
       ]);
       expect(output.at(0)).toContain("[infra]");
       expect(output.at(0)).toContain(
@@ -497,6 +508,7 @@ const record = (index: number): FailureRecord => ({
   lines: [
     { message: "100% broken\nsecond", file: "apps/a,b.ts", line: index + 1 },
   ],
+  tests: [],
 });
 
 test("annotations escape workflow command syntax and respect the step cap", () => {

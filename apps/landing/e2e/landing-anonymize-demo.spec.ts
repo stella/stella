@@ -153,7 +153,7 @@ test("live anonymization demo does not expose runtime errors", async ({
 
   await expect(page.locator(DEMO_SELECTORS.textarea)).toBeVisible();
   await expect(page.locator(DEMO_SELECTORS.status)).toHaveText(
-    "Something went wrong.",
+    "Something went wrong. Reload the page to try again.",
     { timeout: 30_000 },
   );
 });
