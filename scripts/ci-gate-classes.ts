@@ -255,5 +255,11 @@ export const CI_GATES: Readonly<Record<string, JobGate>> = {
       },
     },
   },
-  "ci-result": { class: "correctness" },
+  "ci-result": {
+    class: "correctness",
+    steps: {
+      "Write required-jobs record": { class: "advisory", owner: "ci" },
+      "Upload required-jobs record": { class: "advisory", owner: "ci" },
+    },
+  },
 };
