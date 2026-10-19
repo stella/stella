@@ -296,6 +296,7 @@ export const FileTabPanel = ({
     isEmailViewerActive: display.isEmailViewerActive,
     isPdfDisplay,
     minimized,
+    needsConversionStatus: display.needsConversionStatus,
     needsPropertyResolution: display.needsPropertyResolution,
     tab,
   });

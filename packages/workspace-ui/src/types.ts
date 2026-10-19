@@ -41,6 +41,20 @@ export type FieldContent =
       encrypted: boolean;
       sha256Hex: string;
       pdfFileId: string | null;
+      pdfDerivative?:
+        | { status: "not-required" | "pending" | "ready" }
+        | {
+            status: "failed";
+            reason?: "enqueue" | "processing" | "too-large" | undefined;
+            conversionRefusal?:
+              | { kind: "unsupported_field"; fieldType: string }
+              | {
+                  kind: "legacy_format";
+                  replacementExtension: ".xlsx" | ".pptx";
+                }
+              | undefined;
+          }
+        | undefined;
     }
   | {
       type: "date";

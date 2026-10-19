@@ -1,5 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 
+import type { WorkspaceFieldContent } from "@stll/workspace-ui/types";
+
 import {
   EMAIL_CHAT_MODE,
   getEmailChatMode,
@@ -18,6 +20,7 @@ type FileTabEntityQueryInput = {
   isEmailViewerActive: boolean;
   isPdfDisplay: boolean;
   minimized: boolean;
+  needsConversionStatus: boolean;
   needsPropertyResolution: boolean;
 };
 
@@ -28,10 +31,12 @@ const shouldQueryFileTabEntity = ({
   isEmailViewerActive,
   isPdfDisplay,
   minimized,
+  needsConversionStatus,
   needsPropertyResolution,
 }: FileTabEntityQueryInput) =>
   isEmailViewerActive ||
   needsPropertyResolution ||
+  (isActive && !minimized && needsConversionStatus) ||
   (isActive &&
     !minimized &&
     canUpdateEntity &&
@@ -46,13 +51,20 @@ const getFileTabEntityState = ({
   entityData:
     | {
         extractionFileFieldId?: string | null | undefined;
-        fields: { id: string; propertyId?: string | undefined }[];
+        fields: {
+          id: string;
+          propertyId?: string | undefined;
+          content?: WorkspaceFieldContent;
+        }[];
       }
     | undefined;
   entityQueryError: boolean;
   needsPropertyResolution: boolean;
   tab: FileTab;
 }) => {
+  const fileContent = entityData?.fields.find(
+    (field) => field.id === tab.id,
+  )?.content;
   const resolvedEmailChatMode = getEmailChatMode({
     extractionFileFieldId: entityData?.extractionFileFieldId,
     fieldId: tab.id,
@@ -63,6 +75,11 @@ const getFileTabEntityState = ({
       isError: entityQueryError,
     });
   return {
+    conversionRefusal:
+      fileContent?.type === "file" &&
+      fileContent.pdfDerivative?.status === "failed"
+        ? fileContent.pdfDerivative.conversionRefusal
+        : undefined,
     emailChatMode: shouldSurfaceEmailResolutionError
       ? EMAIL_CHAT_MODE.resolutionError
       : resolvedEmailChatMode,

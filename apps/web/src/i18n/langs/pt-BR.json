@@ -3503,6 +3503,10 @@
       "unsupportedVisualContent": "Este arquivo contém imagens ou gráficos vetoriais que não podem ser verificados quanto a texto sensível. A exportação não está disponível.",
       "workspaceTermsHeading": "Termos do espaço de trabalho ({count})"
     },
+    "conversionRefusal": {
+      "legacyFormat": "Este é um arquivo antigo do {format}. Salve-o novamente como {replacementExtension} para convertê-lo.",
+      "unsupportedField": "Este documento contém um campo {fieldType} que não pode ser convertido."
+    },
     "external": {
       "confirmDescription": "Você está prestes a acessar um site externo.",
       "confirmTitle": "Abrir link externo?",

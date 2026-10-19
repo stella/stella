@@ -14,7 +14,10 @@ import {
   EMAIL_CHAT_MODE,
 } from "@/components/inspector/email-html-viewer.logic";
 import type { FileTabDisplayState } from "@/components/inspector/file-tab-panel.logic";
-import { InspectorPdfErrorFallback } from "@/components/inspector/inspector-pdf-error-fallback";
+import {
+  ConversionRefusalFallback,
+  InspectorPdfErrorFallback,
+} from "@/components/inspector/inspector-pdf-error-fallback";
 import { InspectorRestoreHold } from "@/components/inspector/inspector-restore-hold";
 import type { FileTab } from "@/components/inspector/inspector-tabs-store";
 import { MarkdownFileViewer } from "@/components/inspector/markdown-file-viewer";
@@ -231,6 +234,9 @@ export const FileTabViewer = ({
           />
         </>
       );
+    }
+    if (entity.conversionRefusal !== undefined) {
+      return <ConversionRefusalFallback refusal={entity.conversionRefusal} />;
     }
     return (
       <PeekPdfViewer

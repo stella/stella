@@ -3503,6 +3503,10 @@
       "unsupportedVisualContent": "Šiame faile yra vaizdų arba vektorinės grafikos, kurių neįmanoma patikrinti, ar juose nėra neskelbtino teksto. Eksportuoti negalima.",
       "workspaceTermsHeading": "Darbo srities terminai ({count})"
     },
+    "conversionRefusal": {
+      "legacyFormat": "Tai seno formato „{format}“ failas. Norėdami jį konvertuoti, iš naujo įrašykite kaip {replacementExtension}.",
+      "unsupportedField": "Šiame dokumente yra {fieldType} laukas, kurio konvertuoti negalima."
+    },
     "external": {
       "confirmDescription": "Ketinate apsilankyti išorinėje svetainėje.",
       "confirmTitle": "Atidaryti išorinę nuorodą?",

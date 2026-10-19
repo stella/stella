@@ -31,6 +31,7 @@ import {
   splitWebp,
   withJpegComponents,
 } from "@/api/tests/helpers/image-fixtures";
+import { legacyWordFile } from "@/api/tests/helpers/legacy-word-fixture";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
@@ -217,7 +218,7 @@ describe("PDF conversion routes", () => {
       () => new Response(pdf),
       async () =>
         await convertToPdf(
-          fileOf(new TextEncoder().encode("doc"), "text/plain"),
+          fileOf(legacyWordFile(["ordinary text"]), "application/msword"),
         ),
     );
 
@@ -284,7 +285,7 @@ describe("PDF conversion routes", () => {
       () => new Response("busy", { status: 503 }),
       async () =>
         await convertToPdf(
-          fileOf(new TextEncoder().encode("doc"), "text/plain"),
+          fileOf(legacyWordFile(["ordinary text"]), "application/msword"),
           { retry: "caller" },
         ),
     );
@@ -450,8 +451,8 @@ describe("converter upload filenames", () => {
         async () =>
           await convertToPdf(
             namedFileOf(
-              new TextEncoder().encode("doc"),
-              "text/plain",
+              legacyWordFile(["ordinary text"]),
+              "application/msword",
               "brief.doc",
             ),
           ),

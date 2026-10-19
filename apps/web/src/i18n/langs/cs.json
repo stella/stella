@@ -3503,6 +3503,10 @@
       "unsupportedVisualContent": "Tento soubor obsahuje obrázky nebo vektorovou grafiku, u kterých nelze ověřit citlivý text. Export není k dispozici.",
       "workspaceTermsHeading": "Slovníček pro anonymizaci ({count})"
     },
+    "conversionRefusal": {
+      "legacyFormat": "Toto je starší soubor {format}. Chcete-li jej převést, uložte jej znovu jako {replacementExtension}.",
+      "unsupportedField": "Tento dokument obsahuje pole {fieldType}, které nelze převést."
+    },
     "external": {
       "confirmDescription": "Chystáte se navštívit externí web.",
       "confirmTitle": "Otevřít externí odkaz?",

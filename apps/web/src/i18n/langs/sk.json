@@ -3503,6 +3503,10 @@
       "unsupportedVisualContent": "Tento súbor obsahuje obrázky alebo vektorovú grafiku, pri ktorých nemožno overiť citlivý text. Export nie je k dispozícii.",
       "workspaceTermsHeading": "Výrazy pracovného priestoru ({count})"
     },
+    "conversionRefusal": {
+      "legacyFormat": "Toto je starší súbor {format}. Ak ho chcete konvertovať, znova ho uložte ako {replacementExtension}.",
+      "unsupportedField": "Tento dokument obsahuje pole {fieldType}, ktoré nemožno konvertovať."
+    },
     "external": {
       "confirmDescription": "Chystáte sa navštíviť externý web.",
       "confirmTitle": "Otvoriť externý odkaz?",

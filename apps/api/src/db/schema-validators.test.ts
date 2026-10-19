@@ -82,6 +82,33 @@ test("an upper-case code passes through unchanged", async () => {
   ).toEqual({ version: 1, type: "money", amountCents: 1500, currency: "KWD" });
 });
 
+test.each([
+  { kind: "unsupported_field", fieldType: "INCLUDEPICTURE" },
+  { kind: "legacy_format", replacementExtension: ".xlsx" },
+] as const)(
+  "a conversion refusal is preserved in file state",
+  async (refusal) => {
+    const value = {
+      version: 1,
+      type: "file",
+      id: "00000000-0000-4000-8000-000000000000",
+      fileName: "brief.doc",
+      mimeType: "application/msword",
+      sizeBytes: 10,
+      encrypted: false,
+      sha256Hex: "0".repeat(64),
+      pdfFileId: null,
+      pdfDerivative: {
+        status: "failed",
+        reason: "processing",
+        conversionRefusal: refusal,
+      },
+    };
+
+    expect(await storedValue(value)).toEqual(value);
+  },
+);
+
 describe("property content types", () => {
   test("the extractable subset is the property union minus the hand-entered kinds", () => {
     // The AI-extractable union is now its own schema rather than a type-level
