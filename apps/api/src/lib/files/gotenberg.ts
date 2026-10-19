@@ -1,10 +1,13 @@
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 
 import { fetchWithTimeout } from "@stll/fetch";
 
 import { env } from "@/api/env";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
-import { checkConversionInput } from "@/api/lib/files/conversion-input";
+import {
+  checkConversionInput,
+  type ConversionInputRefusal,
+} from "@/api/lib/files/conversion-input";
 import type { DerivativeAdmissionError } from "@/api/lib/files/derivative-admission";
 import { admitDerivativeImage } from "@/api/lib/files/derivative-admission";
 import type { ImageHeader } from "@/api/lib/files/image-header";
@@ -68,10 +71,31 @@ export class ImageTranscodeError extends TaggedError("ImageTranscodeError")<{
   cause?: unknown;
 }> {}
 
+export type ConversionInputErrorReason =
+  | ConversionInputRefusal
+  | { kind: "inspection_failed" };
+
 export class ConversionInputError extends TaggedError("ConversionInputError")<{
   message: string;
-  reason: "external_reference";
+  reason: ConversionInputErrorReason;
+  cause?: unknown;
 }> {}
+
+const conversionInputRefusalMessage = (
+  reason: ConversionInputRefusal,
+): string => {
+  switch (reason.kind) {
+    case "external_reference":
+      return "The document contains a reference that cannot be converted.";
+    case "unsupported_field":
+      return `The document field ${reason.fieldType} cannot be converted.`;
+    case "legacy_format":
+      return `Re-save this document as ${reason.replacementExtension} to convert it.`;
+    default:
+      reason satisfies never;
+      return panic("Unexpected conversion input refusal");
+  }
+};
 
 type ConvertToPdfError =
   | DerivativeAdmissionError
@@ -300,7 +324,7 @@ export const convertToPdf = async (
         const input = await checkConversionInput(mimeType, bytes);
         if (input.kind === "refuse") {
           throw new ConversionInputError({
-            message: "Document input is not eligible for conversion",
+            message: conversionInputRefusalMessage(input.reason),
             reason: input.reason,
           });
         }
@@ -308,8 +332,9 @@ export const convertToPdf = async (
       catch: (cause) =>
         cause instanceof ConversionInputError
           ? cause
-          : new GotenbergError({
-              message: "Failed to inspect document input",
+          : new ConversionInputError({
+              message: "The document could not be inspected for conversion.",
+              reason: { kind: "inspection_failed" },
               cause,
             }),
     });

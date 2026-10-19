@@ -11,9 +11,14 @@ type ConversionInputResult =
   | { kind: "convert" }
   | {
       kind: "refuse";
-      reason: "external_reference";
       format: ConvertibleMime;
+      reason: ConversionInputRefusal;
     };
+
+export type ConversionInputRefusal =
+  | { kind: "external_reference" }
+  | { kind: "unsupported_field"; fieldType: string }
+  | { kind: "legacy_format"; replacementExtension: ".xlsx" | ".pptx" };
 
 type Detector = (bytes: Uint8Array) => Promise<boolean> | boolean;
 
@@ -258,6 +263,11 @@ const XML_NAMESPACES = {
   xlink: "http://www.w3.org/1999/xlink",
 } as const;
 
+const HYPERLINK_RELATIONSHIP_TYPES = new Set([
+  "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink",
+  "http://purl.oclc.org/ooxml/officeDocument/relationships/hyperlink",
+]);
+
 const xmlNameMatches = (
   node: slimdom.Element | slimdom.Attr,
   namespace: string | null,
@@ -290,6 +300,17 @@ const relationshipHasExternalReference = (source: string): boolean => {
     }
     const targetMode = xmlAttribute(element, XML_NAMESPACES.none, "targetmode");
     const target = xmlAttribute(element, XML_NAMESPACES.none, "target");
+    const relationshipType = xmlAttribute(
+      element,
+      XML_NAMESPACES.none,
+      "type",
+    )?.trim();
+    if (
+      relationshipType !== undefined &&
+      HYPERLINK_RELATIONSHIP_TYPES.has(relationshipType)
+    ) {
+      continue;
+    }
     if (
       targetMode?.toLowerCase() === "external" ||
       (target !== null && !isLocalReference(target))
@@ -436,16 +457,21 @@ const SAFE_FIELD_KEYWORDS: ReadonlySet<string> = new Set<SafeFieldKeyword>(
   SAFE_FIELD_KEYWORD_VALUES,
 );
 
-const fieldInstructionIsRefused = (value: string): boolean => {
+const unsupportedFieldType = (value: string): string | null => {
   const tokens = value.trim().split(/\s+/u);
   while (tokens.at(0)?.startsWith("\\") === true) {
     tokens.shift();
   }
   const keyword = tokens.at(0)?.toUpperCase();
-  return keyword === undefined || !SAFE_FIELD_KEYWORDS.has(keyword);
+  return keyword === undefined || !SAFE_FIELD_KEYWORDS.has(keyword)
+    ? (keyword ?? "UNKNOWN")
+    : null;
 };
 
-const ooxmlFieldHasExternalReference = (source: string): boolean => {
+const fieldInstructionIsRefused = (value: string): boolean =>
+  unsupportedFieldType(value) !== null;
+
+const ooxmlUnsupportedField = (source: string): string | null => {
   const document = slimdom.parseXmlDocument(source);
   for (const element of xmlElements(document.documentElement)) {
     if (!xmlNameMatches(element, XML_NAMESPACES.wordprocessing, "fldsimple")) {
@@ -456,8 +482,10 @@ const ooxmlFieldHasExternalReference = (source: string): boolean => {
       XML_NAMESPACES.wordprocessing,
       "instr",
     );
-    if (instruction === null || fieldInstructionIsRefused(instruction)) {
-      return true;
+    const fieldType =
+      instruction === null ? "UNKNOWN" : unsupportedFieldType(instruction);
+    if (fieldType !== null) {
+      return fieldType;
     }
   }
   const instructions: { instruction: string; closed: boolean }[] = [];
@@ -473,19 +501,19 @@ const ooxmlFieldHasExternalReference = (source: string): boolean => {
       } else if (type === "separate") {
         const field = instructions.at(-1);
         if (field !== undefined && !field.closed) {
-          if (fieldInstructionIsRefused(field.instruction)) {
-            return true;
+          const fieldType = unsupportedFieldType(field.instruction);
+          if (fieldType !== null) {
+            return fieldType;
           }
           field.closed = true;
         }
       } else if (type === "end") {
         const field = instructions.pop();
-        if (
-          field !== undefined &&
-          !field.closed &&
-          fieldInstructionIsRefused(field.instruction)
-        ) {
-          return true;
+        if (field !== undefined && !field.closed) {
+          const fieldType = unsupportedFieldType(field.instruction);
+          if (fieldType !== null) {
+            return fieldType;
+          }
         }
       }
       continue;
@@ -498,25 +526,26 @@ const ooxmlFieldHasExternalReference = (source: string): boolean => {
         if (field !== undefined && !field.closed) {
           field.instruction += value;
         }
-      } else if (fieldInstructionIsRefused(value)) {
-        return true;
+      } else {
+        const fieldType = unsupportedFieldType(value);
+        if (fieldType !== null) {
+          return fieldType;
+        }
       }
     }
   }
-  return false;
+  return null;
 };
 
 const isOoxmlInspectedPath = (path: string): boolean => {
-  if (path.endsWith(".rels") || path === "word/document.xml") {
+  if (path.endsWith(".rels")) {
     return true;
   }
-  if (!path.startsWith("word/")) {
-    return false;
-  }
-  const name = path.slice("word/".length);
   return (
-    (name.startsWith("header") || name.startsWith("footer")) &&
-    name.endsWith(".xml")
+    (path.startsWith("word/") ||
+      path.startsWith("ppt/") ||
+      path.startsWith("xl/")) &&
+    path.endsWith(".xml")
   );
 };
 
@@ -603,10 +632,30 @@ const ooxmlHasExternalReference = async (bytes: Uint8Array): Promise<boolean> =>
     isOoxmlInspectedPath,
     (path) => (path.endsWith(".rels") ? "metadata" : "body"),
     (path, source) =>
-      path.endsWith(".rels")
-        ? relationshipHasExternalReference(source)
-        : ooxmlFieldHasExternalReference(source),
+      path.endsWith(".rels") && relationshipHasExternalReference(source),
   );
+
+const ooxmlUnsupportedFieldType = async (
+  bytes: Uint8Array,
+): Promise<string | null> => {
+  const archive = await loadDocxArchive(bytes);
+  const paths = Object.keys(archive.zip.files).filter(
+    (path) => isOoxmlInspectedPath(path) && !path.endsWith(".rels"),
+  );
+  for (const path of paths) {
+    const part = await readInspectedPart(archive, path, "body");
+    if (part.kind === "too_large") {
+      return "UNKNOWN";
+    }
+    if (part.kind === "source") {
+      const fieldType = ooxmlUnsupportedField(part.value);
+      if (fieldType !== null) {
+        return fieldType;
+      }
+    }
+  }
+  return null;
+};
 
 const odfHasExternalReference = async (bytes: Uint8Array): Promise<boolean> =>
   await archiveHas(
@@ -824,9 +873,6 @@ const binaryFieldsMatch = (bytes: Uint8Array, wide: boolean): boolean => {
 
 const docHasExternalReference = (bytes: Uint8Array): boolean =>
   binaryFieldsMatch(bytes, false) || binaryFieldsMatch(bytes, true);
-const legacyOfficeHasExternalReference = (bytes: Uint8Array): boolean =>
-  binaryFieldsMatch(bytes, false) || binaryFieldsMatch(bytes, true);
-
 const safe = (): false => false;
 
 const DETECTORS = {
@@ -837,8 +883,8 @@ const DETECTORS = {
     ooxmlHasExternalReference,
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
     ooxmlHasExternalReference,
-  "application/vnd.ms-excel": legacyOfficeHasExternalReference,
-  "application/vnd.ms-powerpoint": legacyOfficeHasExternalReference,
+  "application/vnd.ms-excel": safe,
+  "application/vnd.ms-powerpoint": safe,
   "application/vnd.oasis.opendocument.presentation": odfHasExternalReference,
   "application/vnd.oasis.opendocument.spreadsheet": odfHasExternalReference,
   "application/vnd.oasis.opendocument.text": odfHasExternalReference,
@@ -859,7 +905,42 @@ const DETECTORS = {
 export const checkConversionInput = async (
   mime: ConvertibleMime,
   bytes: Uint8Array,
-): Promise<ConversionInputResult> =>
-  (await DETECTORS[mime](bytes))
-    ? { kind: "refuse", reason: "external_reference", format: mime }
+): Promise<ConversionInputResult> => {
+  if (mime === "application/vnd.ms-excel") {
+    return {
+      kind: "refuse",
+      format: mime,
+      reason: { kind: "legacy_format", replacementExtension: ".xlsx" },
+    };
+  }
+  if (mime === "application/vnd.ms-powerpoint") {
+    return {
+      kind: "refuse",
+      format: mime,
+      reason: { kind: "legacy_format", replacementExtension: ".pptx" },
+    };
+  }
+  if (
+    mime ===
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+    mime ===
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation" ||
+    mime === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  ) {
+    const fieldType = await ooxmlUnsupportedFieldType(bytes);
+    if (fieldType !== null) {
+      return {
+        kind: "refuse",
+        format: mime,
+        reason: { kind: "unsupported_field", fieldType },
+      };
+    }
+  }
+  return (await DETECTORS[mime](bytes))
+    ? {
+        kind: "refuse",
+        reason: { kind: "external_reference" },
+        format: mime,
+      }
     : { kind: "convert" };
+};

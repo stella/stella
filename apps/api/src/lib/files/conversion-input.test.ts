@@ -95,7 +95,7 @@ describe("document conversion input", () => {
       const result = await checkConversionInput(fixture.mime, fixture.remote);
       expect(result.kind).toBe("refuse");
       if (result.kind === "refuse") {
-        expect(result.reason).toBe("external_reference");
+        expect(result.reason.kind).toBe("external_reference");
       }
     },
   );
@@ -117,7 +117,7 @@ describe("document conversion input", () => {
   ])("refuses non-local HTML references", async (source) => {
     expect(await checkConversionInput("text/html", encode(source))).toEqual({
       kind: "refuse",
-      reason: "external_reference",
+      reason: { kind: "external_reference" },
       format: "text/html",
     });
   });
@@ -133,7 +133,7 @@ describe("document conversion input", () => {
   ])("refuses references in parsed HTML attributes", async (source) => {
     expect(await checkConversionInput("text/html", encode(source))).toEqual({
       kind: "refuse",
-      reason: "external_reference",
+      reason: { kind: "external_reference" },
       format: "text/html",
     });
   });
@@ -160,7 +160,7 @@ describe("document conversion input", () => {
     expect(result).not.toBe("timeout");
     expect(result).toEqual({
       kind: "refuse",
-      reason: "external_reference",
+      reason: { kind: "external_reference" },
       format: "text/html",
     });
   });
@@ -177,11 +177,85 @@ describe("document conversion input", () => {
       ),
     ).toEqual({
       kind: "refuse",
-      reason: "external_reference",
+      reason: { kind: "external_reference" },
       format:
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     });
   });
+
+  test.each([
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink",
+    "http://purl.oclc.org/ooxml/officeDocument/relationships/hyperlink",
+  ])("allows an external OOXML hyperlink relationship", async (type) => {
+    const input = await zip(
+      "word/_rels/document.xml.rels",
+      `<Relationships><Relationship Type=" ${type} " Target="https://example.test/page" TargetMode="External"/></Relationships>`,
+    );
+    expect(
+      await checkConversionInput(
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        input,
+      ),
+    ).toEqual({ kind: "convert" });
+  });
+
+  test.each([
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
+    "urn:x/hyperlink",
+  ])("refuses a non-hyperlink OOXML relationship", async (type) => {
+    const input = await zip(
+      "word/_rels/document.xml.rels",
+      `<Relationships><Relationship Type="${type}" Target="https://example.test/page" TargetMode="External"/></Relationships>`,
+    );
+    expect(
+      await checkConversionInput(
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        input,
+      ),
+    ).toEqual({
+      kind: "refuse",
+      reason: { kind: "external_reference" },
+      format:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    });
+  });
+
+  test.each([
+    "word/footnotes.xml",
+    "word/endnotes.xml",
+    "word/comments.xml",
+    "word/glossary/document.xml",
+  ])("refuses an unsupported field in %s", async (path) => {
+    const input = await zip(
+      path,
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:fldSimple w:instr="INCLUDEPICTURE https://example.test/a.png"/></w:document>',
+    );
+    expect(
+      await checkConversionInput(
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        input,
+      ),
+    ).toEqual({
+      kind: "refuse",
+      reason: { kind: "unsupported_field", fieldType: "INCLUDEPICTURE" },
+      format:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    });
+  });
+
+  test.each([
+    ["application/vnd.ms-excel", ".xlsx"],
+    ["application/vnd.ms-powerpoint", ".pptx"],
+  ] as const)(
+    "refuses %s with its replacement format",
+    async (mime, extension) => {
+      expect(await checkConversionInput(mime, new Uint8Array())).toEqual({
+        kind: "refuse",
+        reason: { kind: "legacy_format", replacementExtension: extension },
+        format: mime,
+      });
+    },
+  );
 
   test("refuses OOXML relationships by namespace", async () => {
     const input = await zip(
@@ -195,7 +269,7 @@ describe("document conversion input", () => {
       ),
     ).toEqual({
       kind: "refuse",
-      reason: "external_reference",
+      reason: { kind: "external_reference" },
       format:
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     });
@@ -214,7 +288,7 @@ describe("document conversion input", () => {
       ),
     ).toEqual({
       kind: "refuse",
-      reason: "external_reference",
+      reason: { kind: "external_reference" },
       format: "application/vnd.oasis.opendocument.text",
     });
   });
@@ -242,7 +316,7 @@ describe("document conversion input", () => {
         await checkConversionInput("application/xhtml+xml", input),
       ).toEqual({
         kind: "refuse",
-        reason: "external_reference",
+        reason: { kind: "external_reference" },
         format: "application/xhtml+xml",
       });
     },
@@ -260,7 +334,7 @@ describe("document conversion input", () => {
       ),
     ).toEqual({
       kind: "refuse",
-      reason: "external_reference",
+      reason: { kind: "unsupported_field", fieldType: "INCLUDEPICTURE" },
       format:
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     });
@@ -278,7 +352,7 @@ describe("document conversion input", () => {
       ),
     ).toEqual({
       kind: "refuse",
-      reason: "external_reference",
+      reason: { kind: "unsupported_field", fieldType: "INCLUDEPICTURE" },
       format:
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     });
@@ -323,7 +397,7 @@ describe("document conversion input", () => {
       ),
     ).toEqual({
       kind: "refuse",
-      reason: "external_reference",
+      reason: { kind: "unsupported_field", fieldType: "INCLUDEPICTURE" },
       format:
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     });
@@ -341,7 +415,7 @@ describe("document conversion input", () => {
       ),
     ).toEqual({
       kind: "refuse",
-      reason: "external_reference",
+      reason: { kind: "unsupported_field", fieldType: "INCLUDEPICTURE" },
       format:
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     });
@@ -366,7 +440,7 @@ describe("document conversion input", () => {
     );
     expect(await checkConversionInput("application/rtf", input)).toEqual({
       kind: "refuse",
-      reason: "external_reference",
+      reason: { kind: "external_reference" },
       format: "application/rtf",
     });
   });
@@ -386,7 +460,7 @@ describe("document conversion input", () => {
       await checkConversionInput("application/rtf", encode(source)),
     ).toEqual({
       kind: "refuse",
-      reason: "external_reference",
+      reason: { kind: "external_reference" },
       format: "application/rtf",
     });
   });
@@ -412,7 +486,7 @@ describe("document conversion input", () => {
       await checkConversionInput("application/rtf", encode(source)),
     ).toEqual({
       kind: "refuse",
-      reason: "external_reference",
+      reason: { kind: "external_reference" },
       format: "application/rtf",
     });
   });
@@ -434,7 +508,7 @@ describe("document conversion input", () => {
       await checkConversionInput("application/rtf", encode(source)),
     ).toEqual({
       kind: "refuse",
-      reason: "external_reference",
+      reason: { kind: "external_reference" },
       format: "application/rtf",
     });
   });
@@ -445,7 +519,7 @@ describe("document conversion input", () => {
     );
     expect(await checkConversionInput("application/rtf", input)).toEqual({
       kind: "refuse",
-      reason: "external_reference",
+      reason: { kind: "external_reference" },
       format: "application/rtf",
     });
   });

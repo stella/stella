@@ -142,7 +142,9 @@ const POSITIVE_FIXTURES: Record<string, () => Promise<Fixture> | Fixture> = {
         'TargetMode="External"/></Relationships>',
     }),
   html_external_reference: async () => ({
-    buffer: encoder.encode('<img src="https://example.test/image.png">'),
+    buffer: encoder.encode(
+      '<!doctype html><html><img src="https://example.test/image.png"></html>',
+    ),
     declaredMimeType: "text/html",
     fileName: "f.html",
   }),
@@ -173,6 +175,25 @@ const scanFixture = async (fixture: Fixture): Promise<readonly string[]> =>
   Result.unwrap(await scanFile(fixture)).findings.map((f) => f.rule);
 
 describe("yara rule coverage", () => {
+  test.each([
+    ["f.md", "text/markdown", "![image](url(https://example.test/a.png))"],
+    [
+      "f.css",
+      "text/css",
+      "body { background: url(https://example.test/a.png) }",
+    ],
+  ])(
+    "does not classify %s as HTML",
+    async (fileName, declaredMimeType, source) => {
+      expect(
+        await scanFixture({
+          buffer: encoder.encode(source),
+          declaredMimeType,
+          fileName,
+        }),
+      ).not.toContain("html_external_reference");
+    },
+  );
   test("every compiled rule has a positive fixture", () => {
     const uncovered = yaraRuleNames.filter(
       (rule) => !(rule in POSITIVE_FIXTURES),

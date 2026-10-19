@@ -57,13 +57,18 @@ rule html_external_reference
         description = "HTML contains an external resource reference"
         verdict = "suspicious"
     strings:
+        $doctype = /<!doctype[\s]+html(?:[\s>])/ ascii nocase
+        $html = /<html(?:[\s>])/ ascii nocase
+        $head = /<head(?:[\s>])/ ascii nocase
+        $body = /<body(?:[\s>])/ ascii nocase
         $attribute = /<(?:img|image|script|iframe|frame|video|audio|source|object|embed|input|body|table|td)[^>]{0,1024}(?:src|srcset|poster|data|background|href|xlink:href)[\s]{0,8}=[\s]{0,8}("|')(?:https?:|ftp:|file:|\/\/)/ ascii nocase
         $link = /<link[^>]{0,1024}href[\s]{0,8}=[\s]{0,8}("|')(?:https?:|ftp:|file:|\/\/)/ ascii nocase
         $base = /<base(?:[\s>])/ ascii nocase
         $refresh = /<meta[^>]{0,1024}http-equiv[\s]{0,8}=[\s]{0,8}("|')refresh("|')/ ascii nocase
         $css = /(?:@import|url\()[\s]{0,8}("|')?(?:https?:|ftp:|file:|\/\/)/ ascii nocase
     condition:
-        any of them
+        any of ($doctype, $html, $head, $body) in (0..4096) and
+        any of ($attribute, $link, $base, $refresh, $css)
 }
 
 rule odf_external_reference
