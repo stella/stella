@@ -230,12 +230,8 @@ export const createReaderAnnotationHandler = async function* ({
     );
   }
 
-  const first = mutation.rows.at(0);
-  if (first === undefined) {
-    return Result.err(
-      new HandlerError({ status: 500, message: "Annotation was not stored" }),
-    );
-  }
+  const first =
+    mutation.rows.at(0) ?? panic("An annotation mutation returned no rows");
 
   return Result.ok({
     groupId: mutation.groupId,
