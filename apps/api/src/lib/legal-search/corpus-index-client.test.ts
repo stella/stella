@@ -27,7 +27,10 @@ import {
   corpusIndexConfigFromManifest,
   CORPUS_INDEX_MANIFESTS,
 } from "@/api/lib/legal-search/corpus-index-manifest";
-import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
+import {
+  NATIVE_SCAN_TRANSPORT,
+  readCorpusIndexSearchPage,
+} from "@/api/lib/legal-search/corpus-index-pagination";
 import { judgeCorpusProjectionCleanupSettlement } from "@/api/lib/legal-search/corpus-index-projection-settlement-judgement";
 import { corpusSearchGroupToken } from "@/api/lib/legal-search/corpus-search-cursor";
 import {
@@ -594,6 +597,7 @@ const readSortedPage = async (order: CorpusSearchOrder) => {
   };
 
   await readCorpusIndexSearchPage({
+    scanTransport: NATIVE_SCAN_TRANSPORT,
     observer: "unobserved",
     cluster: "q09",
     indexId: "legal_corpus_v1_cze",

@@ -151,6 +151,10 @@ type TanStackAIAnalyticsProps = {
 export type TanStackAIAnalyticsCallbacks = {
   /** Shared attribution for nested non-generative model calls. */
   readonly usageMetering?: AIUsageMetering | undefined;
+  /** Bind one request without changing callbacks shared by concurrent runs. */
+  forModel: (
+    model: Omit<ResolvedTanStackTextModelInfo, "availability">,
+  ) => TanStackAIAnalyticsCallbacks;
   middleware: ChatMiddleware;
   captureError: (error: unknown) => void;
 };
@@ -386,10 +390,10 @@ const recordTanStackConsumption = async ({
   }
 };
 
-export const createTanStackAIAnalyticsCallbacks = ({
-  analytics = getServerAnalytics(),
-  ...config
-}: TanStackAIAnalyticsProps): TanStackAIAnalyticsCallbacks => {
+export const createTanStackAIAnalyticsCallbacks = (
+  { analytics = getServerAnalytics(), ...config }: TanStackAIAnalyticsProps,
+  resolvedModel?: Omit<ResolvedTanStackTextModelInfo, "availability">,
+): TanStackAIAnalyticsCallbacks => {
   const distinctId = config.distinctId ?? SERVER_DISTINCT_ID;
   const modelTask = config.modelTask ?? "chat";
   // Group attachment is derived centrally so call sites cannot forget it:
@@ -402,7 +406,10 @@ export const createTanStackAIAnalyticsCallbacks = ({
       ? {}
       : { groups: { organization: analyticsOrganizationId } };
   const selectedModelId = config.selectedModelId;
-  let modelInfo: ResolvedTanStackTextModelInfo | null | undefined;
+  let modelInfo: ResolvedTanStackTextModelInfo | null | undefined =
+    resolvedModel === undefined
+      ? undefined
+      : { ...resolvedModel, availability: "available" };
   const startedAt = performance.now();
   // Per-run state, keyed by `ctx.runId`: one callbacks instance may serve
   // several `chat()` requests (template filling shares one across up to
@@ -789,6 +796,8 @@ export const createTanStackAIAnalyticsCallbacks = ({
 
   return {
     captureError: captureGenerationError,
+    forModel: (model) =>
+      createTanStackAIAnalyticsCallbacks({ ...config, analytics }, model),
     usageMetering: config.usageMetering,
     middleware: {
       name: "stella-tanstack-analytics",

@@ -565,6 +565,13 @@ export const expiredWaiverAnnotations = (
         `::warning file=${escapeCommand(entry.source).replaceAll(",", "%2C").replaceAll(":", "%3A")},line=${entry.line}::${escapeCommand(`${entry.id} (${entry.kind}) expired at ${entry.expiresAt}; ${RECHECK_INSTRUCTIONS[entry.kind]}`)}`,
     );
 
+/**
+ * Expired waivers that fail this check. A pull request or merge group passes
+ * `changedFiles`: an expiry fails it only when the change touches the file that
+ * declares the waiver (adding, renewing or editing it, or the waived code a
+ * test quarantine sits on). Time alone never fails an unrelated change; the
+ * scheduled run on the default branch checks every waiver and alerts owners.
+ */
 export const expiredWaiverFailures = (
   entries: readonly DatedWaiver[],
   now: Date,
