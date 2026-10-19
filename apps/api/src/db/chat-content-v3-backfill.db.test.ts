@@ -22,6 +22,7 @@ import {
   readChatContentV3Completion,
   resetChatContentV3Checkpoints,
 } from "./chat-content-v3-backfill";
+import { createUngatedTableGateForTests } from "./online-ddl";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
 
 let database: TestDatabase;
@@ -181,7 +182,11 @@ const repair = () => {
   return {
     repair: async (connection: Connection) => {
       await installGuards(connection);
-      await implementation.repair(connection);
+      // The fixture is one rolled-back transaction, so validation runs ungated.
+      return await implementation.repair(
+        connection,
+        createUngatedTableGateForTests(connection),
+      );
     },
   };
 };

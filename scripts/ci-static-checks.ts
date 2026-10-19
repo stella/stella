@@ -1,9 +1,19 @@
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 
 import { generatedInputTreeHash } from "../packages/scripts/src/generated-input-identity";
 import { createSha256, sha256Hex } from "../packages/sha256/src/bun";
 import { CANONICAL_CANCEL_STEP } from "./ci-cancellation-contract";
+import {
+  CHECK_POOL_JOBS,
+  checkPoolResultsPath,
+} from "./ci-check-pool-registry";
 import {
   completeInstallStoreKey,
   parseGlobalStoreMode,
@@ -499,7 +509,21 @@ const main = () => {
   if (!record(before) || before["bundleKey"] !== expected.bundleKey) {
     throw new StaticCheckError("Static checks changed their input closure");
   }
-  const outcomes = json(process.env["CHECK_OUTCOMES"] ?? "{}");
+  const stepOutcomes = json(process.env["CHECK_OUTCOMES"] ?? "{}");
+  // Pooled checks are not workflow steps; their pool records the outcomes.
+  const pool = CHECK_POOL_JOBS.find((known) => known === job);
+  const poolResults =
+    pool === undefined
+      ? undefined
+      : checkPoolResultsPath(pool, process.env["RUNNER_TEMP"] ?? root);
+  const poolOutcomes =
+    poolResults !== undefined && existsSync(poolResults)
+      ? json(readFileSync(poolResults, "utf-8"))
+      : {};
+  const outcomes =
+    record(stepOutcomes) && record(poolOutcomes)
+      ? { ...stepOutcomes, ...poolOutcomes }
+      : undefined;
   const runId = Number(process.env["GITHUB_RUN_ID"]);
   const tasks = passedStaticChecks({ keys: expected.keys, outcomes, runId });
   const destination = path.join(directory, "upload");

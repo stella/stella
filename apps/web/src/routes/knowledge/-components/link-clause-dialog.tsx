@@ -46,6 +46,7 @@ import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
 import { useQueryView } from "@/lib/use-query-view";
 import { ClauseBody } from "@/routes/knowledge/-components/clause-body";
+import { filterClauseLinkCandidates } from "@/routes/knowledge/-components/link-clause-dialog.logic";
 
 // ── Types ────────────────────────────────────────────
 
@@ -205,14 +206,10 @@ export const LinkClauseDialog = ({
       : [];
   const previewVariant = variants.find((v) => v.id === previewVariantId);
 
-  const filtered = clauses.filter((c) => {
-    if (selectedCategory && c.categoryId !== selectedCategory) {
-      return false;
-    }
-    if (search && !c.title.toLowerCase().includes(search.toLowerCase())) {
-      return false;
-    }
-    return true;
+  const filtered = filterClauseLinkCandidates({
+    clauses,
+    selectedCategory,
+    search,
   });
 
   const resolveSlotName = (): string | undefined => {
