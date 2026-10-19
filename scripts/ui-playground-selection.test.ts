@@ -246,11 +246,18 @@ test("an exported stylesheet outside src selects the importing spec", () => {
         exports: { "./theme.css": "./styles/theme.css" },
       }),
     );
-    write("packages/theme/styles/theme.css", ":root {}\n");
+    write(
+      "packages/theme/styles/theme.css",
+      ":root { --bg: url('./background.svg'); }\n",
+    );
+    write("packages/theme/styles/background.svg", "<svg />\n");
     write("packages/theme/README.md", "# Theme\n");
-    expect(
-      selectGeometrySpecs(["packages/theme/styles/theme.css"], root),
-    ).toEqual([spec]);
+    for (const file of [
+      "packages/theme/styles/theme.css",
+      "packages/theme/styles/background.svg",
+    ]) {
+      expect(selectGeometrySpecs([file], root), file).toEqual([spec]);
+    }
     expect(selectGeometrySpecs(["packages/theme/README.md"], root)).toEqual([]);
   } finally {
     rmSync(root, { recursive: true, force: true });

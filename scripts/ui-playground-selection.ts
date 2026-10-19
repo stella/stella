@@ -287,6 +287,31 @@ export const staticImportClosure = (
         pending.push(...resolved.files);
         complete &&= resolved.complete;
       }
+      // Assets a stylesheet references (`url(./background.svg)`) render with
+      // it, so a local one joins the closure; one that cannot be found leaves
+      // the closure unknown.
+      for (const match of source.matchAll(
+        /url\(\s*["']?([^"')\s]+)["']?\s*\)/gu,
+      )) {
+        const reference = match[1];
+        if (
+          reference === undefined ||
+          /^(?:[a-z][a-z0-9+.-]*:|#|\/)/iu.test(reference)
+        ) {
+          continue;
+        }
+        const asset = normalize(
+          path.posix.join(
+            path.posix.dirname(file),
+            reference.split(/[?#]/u)[0] ?? reference,
+          ),
+        );
+        if (existsSync(path.join(root, asset))) {
+          pending.push(asset);
+        } else if (sourceCandidate(root, asset) === undefined) {
+          complete = false;
+        }
+      }
       continue;
     }
     if (!/\.[cm]?[jt]sx?$/u.test(file)) {
