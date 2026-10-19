@@ -3,13 +3,23 @@ import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import {
   assertChunksInjected,
+  isTransientSourcemapProcessFailure,
   listSourcemaps,
   planSourcemapPublish,
+  publishSourcemapsWithRetry,
   removeSourcemaps,
   sourcemapProcessCommand,
 } from "./publish-sourcemaps";
+
+const transientFailure = (
+  stderr = "peer closed connection without sending TLS close_notify",
+) => ({ exitCode: 1, stderr });
+
+const successfulProcess = { exitCode: 0, stderr: "" };
 
 const PUBLISH_ENV = {
   POSTHOG_SOURCEMAP_PUBLISH: "true",
@@ -105,6 +115,108 @@ describe("sourcemapProcessCommand", () => {
         POSTHOG_CLI_PROJECT_ID: "42",
       },
     });
+  });
+});
+
+describe("source map upload retries", () => {
+  test("retries a transient failure and then succeeds", async () => {
+    const results = [transientFailure(), successfulProcess];
+    const delays: number[] = [];
+    const logs: string[] = [];
+
+    await publishSourcemapsWithRetry({
+      run: () => results.shift() ?? successfulProcess,
+      sleep: async (delay) => {
+        delays.push(delay);
+      },
+      random: () => 0.5,
+      log: (message) => {
+        logs.push(message);
+      },
+    });
+
+    expect(results).toHaveLength(0);
+    expect(delays).toEqual([1000]);
+    expect(logs).toHaveLength(2);
+  });
+
+  test("exhausts transient retries and reports the last error", async () => {
+    const failures = [
+      transientFailure("connection reset"),
+      transientFailure("HTTP status 503"),
+      transientFailure("gateway timeout on final attempt"),
+    ];
+    let attempts = 0;
+
+    const failure = await rejectionOf(
+      publishSourcemapsWithRetry({
+        run: () => failures[attempts++] ?? successfulProcess,
+        sleep: async () => {},
+        random: () => 0.5,
+        log: () => {},
+      }),
+    );
+    expect(failure).toBeInstanceOf(Error);
+    expect(failure instanceof Error ? failure.message : "").toMatch(
+      /gateway timeout on final attempt/u,
+    );
+    expect(attempts).toBe(3);
+  });
+
+  test("fails a non-transient error after exactly one attempt", async () => {
+    let attempts = 0;
+
+    const failure = await rejectionOf(
+      publishSourcemapsWithRetry({
+        run: () => {
+          attempts += 1;
+          return { exitCode: 1, stderr: "HTTP status 401: invalid API key" };
+        },
+        sleep: async () => {},
+        random: () => 0.5,
+        log: () => {},
+      }),
+    );
+    expect(failure).toBeInstanceOf(Error);
+    expect(failure instanceof Error ? failure.message : "").toMatch(
+      /invalid API key/u,
+    );
+    expect(attempts).toBe(1);
+  });
+
+  test("applies bounded jitter to exponential backoff", async () => {
+    const runWithRandom = async (random: () => number) => {
+      let attempts = 0;
+      const delays: number[] = [];
+      await publishSourcemapsWithRetry({
+        run: () =>
+          attempts++ < 2
+            ? transientFailure("connection closed")
+            : successfulProcess,
+        sleep: async (delay) => {
+          delays.push(delay);
+        },
+        random,
+        log: () => {},
+      });
+      return delays;
+    };
+
+    expect(await runWithRandom(() => 0)).toEqual([500, 1000]);
+    expect(await runWithRandom(() => 1)).toEqual([1500, 3000]);
+  });
+
+  test("classifies only known transport and server failures as transient", () => {
+    expect(isTransientSourcemapProcessFailure(transientFailure())).toBeTrue();
+    expect(
+      isTransientSourcemapProcessFailure(transientFailure("HTTP status 502")),
+    ).toBeTrue();
+    expect(
+      isTransientSourcemapProcessFailure({
+        exitCode: 1,
+        stderr: "HTTP status 403: forbidden",
+      }),
+    ).toBeFalse();
   });
 });
 

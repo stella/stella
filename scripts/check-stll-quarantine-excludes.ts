@@ -182,6 +182,65 @@ export const readInstallPolicy = (bunfig: string): InstallPolicy => ({
 const excludeDeclaration = (line: string): string | undefined =>
   /^\s*"(?<name>[^"]+)",?\s*(?:#.*)?$/u.exec(line)?.groups?.["name"];
 
+const TOML_ESCAPES: Readonly<Record<string, string>> = {
+  b: "\b",
+  t: "\t",
+  n: "\n",
+  f: "\f",
+  r: "\r",
+  e: "\u001b",
+  '"': '"',
+  "\\": "\\",
+};
+
+/** The value of a TOML basic string body, so every spelling of a name is one key. */
+const decodeBasicString = (raw: string): string =>
+  raw.replaceAll(
+    /\\(?:u([\da-fA-F]{4})|U([\da-fA-F]{8})|([btnfre"\\]))/gu,
+    (
+      escape: string,
+      short: string | undefined,
+      long: string | undefined,
+      single: string | undefined,
+    ) => {
+      const code = short ?? long;
+      if (code !== undefined) {
+        return String.fromCodePoint(Number.parseInt(code, 16));
+      }
+      return TOML_ESCAPES[single ?? ""] ?? escape;
+    },
+  );
+
+const readDuplicateExcludeErrors = (bunfig: string): string[] => {
+  const range = findExcludeBlockRange(bunfig);
+  if (range === undefined) {
+    return [];
+  }
+
+  const firstBlockLine = bunfig.slice(0, range.start).split("\n").length;
+  const declarationLines = new Map<string, number[]>();
+  for (const [index, line] of bunfig
+    .slice(range.start, range.end)
+    .split("\n")
+    .entries()) {
+    const raw = excludeDeclaration(line);
+    if (raw === undefined) {
+      continue;
+    }
+    const name = decodeBasicString(raw);
+    const lineNumbers = declarationLines.get(name) ?? [];
+    lineNumbers.push(firstBlockLine + index);
+    declarationLines.set(name, lineNumbers);
+  }
+
+  return [...declarationLines]
+    .filter(([, lineNumbers]) => lineNumbers.length > 1)
+    .map(
+      ([name, lineNumbers]) =>
+        `${BUNFIG} minimumReleaseAgeExcludes lists duplicate package "${name}" on lines ${lineNumbers.join(", ")}`,
+    );
+};
+
 const exactUtcTimestampError = ({
   marker,
   name,
@@ -446,6 +505,7 @@ export const checkQuarantineExcludes = ({
   const temporary = readTemporaryExcludes(bunfig);
   const errors = [
     ...temporary.errors,
+    ...readDuplicateExcludeErrors(bunfig),
     ...readExcludeAnnotationErrors(bunfig, now),
     ...readReleaseAgeExceptionErrors(releaseAgeExceptionSources, now),
   ];
