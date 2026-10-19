@@ -112,6 +112,16 @@ describe("bundling-site scanner", () => {
       command: "bun build src/index.ts --compile --outfile app",
     },
     {
+      // Dockerfile instructions are case-insensitive and may be indented.
+      name: "a lowercase indented Docker RUN",
+      file: {
+        path: "docker/example/Dockerfile",
+        contents:
+          "FROM oven/bun:1\n  run bun build src/index.ts --outfile app.js\n",
+      },
+      command: "bun build src/index.ts --outfile app.js",
+    },
+    {
       name: "a package script bundle",
       file: {
         path: "packages/example/package.json",
