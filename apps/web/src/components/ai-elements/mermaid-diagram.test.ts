@@ -140,7 +140,7 @@ describe("mermaid diagrams", () => {
     const asStreamdownSees: DiagramPlugin = mermaidDiagram;
     const plugin = asStreamdownSees.getMermaid({ securityLevel: "loose" });
     plugin.initialize({ securityLevel: "loose" });
-    const result = await withDocumentFonts(() =>
+    const result = await withDocumentFonts(async () =>
       plugin.render("fallback-id", source),
     );
     expect(result.svg).toBe('<svg data-renderer="mermaid"></svg>');
