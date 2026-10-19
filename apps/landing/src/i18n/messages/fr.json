@@ -96,6 +96,19 @@
     "changelog": "Journal des modifications",
     "chooseLanguage": "Choisir une langue",
     "docxEditor": "Éditeur DOCX autonome",
+    "featurePreviews": {
+      "matters": {
+        "open": "Ouvert",
+        "inProgress": "En cours",
+        "done": "Terminé"
+      },
+      "documents": {
+        "comments": "Commentaires"
+      },
+      "research": {
+        "caseLaw": "Jurisprudence"
+      }
+    },
     "github": "stella sur GitHub",
     "openMenu": "Ouvrir la navigation",
     "pillars": {

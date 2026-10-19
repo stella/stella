@@ -96,6 +96,19 @@
     "changelog": "آخر التحديثات",
     "chooseLanguage": "اختر اللغة",
     "docxEditor": "محرر DOCX مستقل",
+    "featurePreviews": {
+      "matters": {
+        "open": "مفتوحة",
+        "inProgress": "قيد التنفيذ",
+        "done": "مكتمل"
+      },
+      "documents": {
+        "comments": "التعليقات"
+      },
+      "research": {
+        "caseLaw": "الاجتهاد القضائي"
+      }
+    },
     "github": "stella على GitHub",
     "openMenu": "فتح قائمة التنقل",
     "pillars": {

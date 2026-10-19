@@ -96,6 +96,19 @@
     "changelog": "Pakeitimų žurnalas",
     "chooseLanguage": "Pasirinkite kalbą",
     "docxEditor": "Atskiras DOCX redaktorius",
+    "featurePreviews": {
+      "matters": {
+        "open": "Atvira",
+        "inProgress": "Vykdoma",
+        "done": "Atlikta"
+      },
+      "documents": {
+        "comments": "Komentarai"
+      },
+      "research": {
+        "caseLaw": "Teismų praktika"
+      }
+    },
     "github": "stella platformoje GitHub",
     "openMenu": "Atidaryti naršymo meniu",
     "pillars": {
