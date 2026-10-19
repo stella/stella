@@ -43,7 +43,11 @@ import { markContentDeliveryIntent } from "@/api/lib/files/content-delivery";
 import { resolveS3Credentials, TEMP_UPLOAD_TAGGING } from "@/api/lib/s3";
 import { createS3CredentialGuard } from "@/api/lib/s3/credential-guard";
 import { PRIVATE_CACHE_CONTROL } from "@/api/lib/security-headers";
-import { requireSessionCredentialIssuer } from "@/api/lib/synthetic-principal/credential-policy";
+import {
+  issueSessionBoundCredentialTtl,
+  requireSessionCredentialIssuer,
+} from "@/api/lib/synthetic-principal/credential-policy";
+import type { SyntheticSessionAuthorityReader } from "@/api/lib/synthetic-principal/session-authority";
 
 export class S3PresignError extends TaggedError("S3PresignError")<{
   message: string;
@@ -953,23 +957,42 @@ export const presignUploadUrl = async ({
 
 export type PresignDownloadOptions = {
   userId: string | null;
+  organizationId?: string | null;
   expiresIn: number;
+  sourceSessionId: string | null;
+  readSessionAuthority: SyntheticSessionAuthorityReader;
   fileName?: string;
   scope?: S3SigningScope;
 };
 
 export const presignDownloadUrl = async (
   key: string,
-  { userId, expiresIn, fileName, scope }: PresignDownloadOptions,
-): Promise<string> => {
-  requireSessionCredentialIssuer("signedDownload", {
+  {
     userId,
-    organizationId: scope?.organizationId,
-  });
+    scope,
+    organizationId = scope?.organizationId,
+    expiresIn,
+    sourceSessionId,
+    readSessionAuthority,
+    fileName,
+  }: PresignDownloadOptions,
+): Promise<string> => {
+  const issuedExpiresIn = await issueSessionBoundCredentialTtl(
+    "signedDownload",
+    {
+      userId,
+      organizationId,
+      fileOrganizationId: scope?.organizationId,
+      requestedTtlSeconds: expiresIn,
+      now: new Date(Temporal.Now.instant().epochMilliseconds),
+      sessionId: sourceSessionId,
+      readSessionAuthority,
+    },
+  );
   const result = await Result.tryPromise({
     try: async () => {
       const client = await getPresignClient({
-        expiresIn,
+        expiresIn: issuedExpiresIn,
         key,
         scope,
         actions: ["s3:GetObject"],
@@ -984,7 +1007,7 @@ export const presignDownloadUrl = async (
             ? { ResponseContentDisposition: contentDisposition(fileName) }
             : {}),
         }),
-        { expiresIn },
+        { expiresIn: issuedExpiresIn },
       );
     },
     catch: (cause) =>

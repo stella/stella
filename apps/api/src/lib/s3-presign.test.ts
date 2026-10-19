@@ -11,6 +11,7 @@ import {
   test,
 } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
 import { sha256Base64 as hashSha256Base64 } from "@stll/sha256/node";
 
 import { getS3 } from "@/api/lib/s3";
@@ -35,6 +36,7 @@ import {
   writeTenantS3Object,
 } from "@/api/lib/s3-presign";
 import type { S3SigningScope } from "@/api/lib/s3-presign";
+import { SYNTHETIC_PRINCIPAL } from "@/api/lib/synthetic-principal/constants";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 
@@ -217,11 +219,101 @@ describe("presignDownloadUrl", () => {
     const url = await presignDownloadUrl("org_1/ws_1/file_1.pdf", {
       userId: null,
       expiresIn: 60,
+      sourceSessionId: null,
+      readSessionAuthority: async () => null,
     });
 
     expect(new URL(url).searchParams.get("response-cache-control")).toBe(
       "private, no-store",
     );
+  });
+
+  const syntheticOptions = (expiresAt: Date) => ({
+    userId: SYNTHETIC_PRINCIPAL.user.id,
+    organizationId: SYNTHETIC_PRINCIPAL.org.id,
+    expiresIn: 900,
+    sourceSessionId: "synthetic-session-download",
+    readSessionAuthority: async () => ({
+      sessionId: "synthetic-session-download",
+      expiresAt,
+    }),
+    scope: { organizationId: SYNTHETIC_PRINCIPAL.org.id },
+  });
+
+  test("bounds a monitoring download to the configured lifetime", async () => {
+    const url = await presignDownloadUrl(
+      `${SYNTHETIC_PRINCIPAL.org.id}/file.pdf`,
+      syntheticOptions(new Date(Date.now() + 5 * 60 * 1000)),
+    );
+
+    expect(
+      Number(new URL(url).searchParams.get("X-Amz-Expires")),
+    ).toBeLessThanOrEqual(60);
+  });
+
+  test("bounds a monitoring download to the remaining session lifetime", async () => {
+    const url = await presignDownloadUrl(
+      `${SYNTHETIC_PRINCIPAL.org.id}/file.pdf`,
+      syntheticOptions(new Date(Date.now() + 20_000)),
+    );
+
+    expect(
+      Number(new URL(url).searchParams.get("X-Amz-Expires")),
+    ).toBeLessThanOrEqual(20);
+  });
+
+  test("keeps the requested lifetime for a regular user", async () => {
+    const url = await presignDownloadUrl("org_1/file.pdf", {
+      userId: "user_1",
+      organizationId: "org_1",
+      expiresIn: 900,
+      sourceSessionId: "session_1",
+      readSessionAuthority: async () => null,
+      scope: { organizationId: "org_1" },
+    });
+
+    expect(new URL(url).searchParams.get("X-Amz-Expires")).toBe("900");
+  });
+
+  test.each([
+    {
+      name: "monitoring user in another organization",
+      options: {
+        ...syntheticOptions(new Date(Date.now() + 60_000)),
+        organizationId: "org_1",
+        scope: { organizationId: "org_1" },
+      },
+    },
+    {
+      name: "another user in the monitoring organization",
+      options: {
+        ...syntheticOptions(new Date(Date.now() + 60_000)),
+        userId: "user_1",
+      },
+    },
+    {
+      name: "monitoring file in another organization",
+      options: {
+        ...syntheticOptions(new Date(Date.now() + 60_000)),
+        scope: { organizationId: "org_1" },
+      },
+    },
+    {
+      name: "inactive monitoring session",
+      options: {
+        ...syntheticOptions(new Date(Date.now() + 60_000)),
+        readSessionAuthority: async () => null,
+      },
+    },
+  ])("refuses $name", async ({ options }) => {
+    expect(
+      await rejectionOf(
+        presignDownloadUrl(`${SYNTHETIC_PRINCIPAL.org.id}/file.pdf`, options),
+      ),
+    ).toMatchObject({
+      status: 403,
+      code: "account_access_unavailable",
+    });
   });
 });
 

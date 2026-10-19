@@ -544,6 +544,7 @@ const joinFolioCollabRoomHandler = async function* ({
 
   const seedDownloadUrl = await presignDocxFieldDownload({
     userId,
+    sourceSessionId,
     fileContent: joined.seedFileContent,
     organizationId,
     workspaceId,

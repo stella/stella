@@ -19,7 +19,6 @@ import {
   resetAwsS3ClientForTesting,
   setScopedS3ClientFactoryForTesting,
   setScopedSigningEnabledForTesting,
-  presignDownloadUrl,
   presignUploadUrl,
 } from "@/api/lib/s3-presign";
 import { subscribe, subscribeUser } from "@/api/lib/sse";
@@ -42,7 +41,13 @@ const workspaceId = toSafeId<"workspace">("workspace_credential_issuer");
 
 type IndependentRefusedIssuer = Exclude<
   keyof typeof USER_SESSION_CREDENTIAL_ISSUERS,
-  "session" | "cookieCache" | "collabRoom" | "oauth" | "apiKey" | "invitation"
+  | "session"
+  | "cookieCache"
+  | "collabRoom"
+  | "oauth"
+  | "apiKey"
+  | "invitation"
+  | "signedDownload"
 >;
 type IssuerProbe = (
   principal: typeof syntheticCredentialPrincipal,
@@ -118,15 +123,6 @@ export const refusedCredentialIssuerProbes = {
   pdfSigning: async ({ userId, organizationId }) =>
     await expectRefusal(() =>
       createPdfSigningToken({ userId, organizationId }),
-    ),
-  signedDownload: async ({ userId, organizationId }) =>
-    await withSignerSentinel(
-      async () =>
-        await presignDownloadUrl("tenant/fixture.pdf", {
-          userId,
-          expiresIn: 60,
-          scope: { organizationId },
-        }),
     ),
   signedUpload: async ({ userId, organizationId }) =>
     await withSignerSentinel(async () => {

@@ -1,7 +1,7 @@
 import { and, eq, gt, like, sql } from "drizzle-orm";
 
 import { session } from "@/api/db/auth-schema";
-import type { rootDb } from "@/api/db/root";
+import { rootDb } from "@/api/db/root";
 import { syntheticSessionControl } from "@/api/db/schema";
 import { escapeLike } from "@/api/lib/escape-like";
 
@@ -17,6 +17,10 @@ type ReadSyntheticSessionAuthorityOptions = {
   userId: string;
   now?: Date;
 };
+
+export type SyntheticSessionAuthorityReader = (
+  options: ReadSyntheticSessionAuthorityOptions,
+) => Promise<{ expiresAt: Date; sessionId: string } | null>;
 
 export const readSyntheticSessionAuthority = async (
   db: Pick<typeof rootDb, "select">,
@@ -49,6 +53,9 @@ export const readSyntheticSessionAuthority = async (
     .limit(1);
   return row ?? null;
 };
+
+export const readLiveSyntheticSessionAuthority: SyntheticSessionAuthorityReader =
+  async (options) => await readSyntheticSessionAuthority(rootDb, options);
 
 export const authorizeSyntheticSession = async (
   db: Pick<typeof rootDb, "select">,

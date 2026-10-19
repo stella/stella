@@ -9,6 +9,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { recordContentDeliveryReceipt } from "@/api/lib/files/content-delivery";
 import { presignDownloadUrl } from "@/api/lib/s3-presign";
 import type { S3SigningKeyspace } from "@/api/lib/s3-presign";
+import { readLiveSyntheticSessionAuthority } from "@/api/lib/synthetic-principal/session-authority";
 
 export type ContentDisposition = "attachment" | "inline";
 
@@ -90,6 +91,8 @@ export const auditedPresignDownload = async ({
   return await signDownload(s3Key, {
     userId,
     expiresIn: expiresInSeconds,
+    sourceSessionId: null,
+    readSessionAuthority: readLiveSyntheticSessionAuthority,
     ...(fileName ? { fileName } : {}),
     ...(organizationId
       ? {
