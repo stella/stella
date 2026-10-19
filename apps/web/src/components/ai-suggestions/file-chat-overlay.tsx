@@ -2532,6 +2532,7 @@ const FileChatOverlayInner = ({
               <FileChatTitleSlot
                 activeOrganizationId={activeOrganizationId}
                 hasMessages={hasMessages}
+                persistedThread={data}
                 threadRef={threadRef}
                 usedAnonymization={data.usedAnonymization}
               />

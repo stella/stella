@@ -1503,6 +1503,9 @@ export const TOOLING_ENV_KEYS = new Set([
   "FLAKE_CHILD_RECORD",
   "FLAKE_GATE_FIXTURE_PRELOADED",
   "FLAKE_GATE_TRIAL",
+  // Quarantine preload: report directory for its JSON lines; registry path override for fixture trees.
+  "FLAKY_TEST_QUARANTINE_REGISTRY",
+  "FLAKY_TEST_QUARANTINE_REPORT_DIR",
   "GH_READ_TOKEN",
   "HEAD_SHA",
   // Scheduled journey checks: endpoint overrides and bounded request/retry timing.

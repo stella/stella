@@ -78,7 +78,10 @@ import type {
   SanctionsCheckResult,
 } from "@/api/lib/business-registries/sanctions-check";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
-import { CITATION_READ_DIRECTIONS } from "@/api/lib/case-law/citation-vocabulary";
+import {
+  CITATION_READ_DIRECTIONS,
+  CITATION_TREATMENTS,
+} from "@/api/lib/case-law/citation-vocabulary";
 import { readDecisionTextMetadata } from "@/api/lib/case-law/decision-text";
 import type { CaseLawSearchGuidanceMode } from "@/api/lib/case-law/search-guidance-mode";
 import { functionWordsWarning } from "@/api/lib/case-law/search-warnings";
@@ -111,6 +114,7 @@ import type { McpRequestContext } from "@/api/mcp/context";
 import { resolveMcpToolOutputContract } from "@/api/mcp/gateway/list-tools";
 import { deriveContactDisplayName } from "@/api/mcp/matter-tools";
 import { windowProvisionText } from "@/api/mcp/provision-text-window";
+import type { ReadCaseLawDecisionSuccess } from "@/api/mcp/public-law-handlers";
 import { getMcpResourceModeConfig } from "@/api/mcp/resource-policy-contract";
 import { DEFAULT_MCP_CLI_ANNOTATIONS } from "@/api/mcp/static-cli-metadata";
 import {
@@ -1403,7 +1407,7 @@ describe("OpenAI-compatible MCP tools", () => {
           minLength: 1,
           maxLength: 256,
           description:
-            'Only decisions citing this provision, as a lawyer writes it: "§ 316 odst. 2 ZP", "§ 52 písm. g) zákoníku práce", "čl. 10 Listiny". A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, exact total.',
+            'Only decisions citing this provision, as a lawyer writes it: "§ 316 odst. 2 ZP", "§ 52 písm. g) zákoníku práce", "čl. 10 Listiny", "Article 6(1)(a) GDPR". EU provisions work for every decision country. A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, exact total.',
         },
         has_legal_sentence: {
           type: "boolean",
@@ -1501,6 +1505,16 @@ describe("OpenAI-compatible MCP tools", () => {
           enum: [...CITATION_READ_DIRECTIONS],
           description:
             "Which side of the citation graph to read: 'cites' for the decisions this decision cites, 'cited_by' for the decisions that cite it. Citing is not agreeing: both sides carry negative treatments.",
+        },
+        doctrine: {
+          type: "string",
+          enum: ["distinguishes", "limits"],
+          description: "Only citations with this reviewed doctrinal finding.",
+        },
+        polarity: {
+          type: "string",
+          enum: [...CITATION_TREATMENTS],
+          description: "Only citations with this polarity reading.",
         },
         limit: withKind(
           {
@@ -3649,6 +3663,8 @@ describe("OpenAI-compatible MCP tools", () => {
       args: {
         decision_id: DECISION_ID,
         direction: "cited_by",
+        doctrine: "limits",
+        polarity: "negative",
         limit: 5,
       },
       context: createContext(),
@@ -3660,6 +3676,8 @@ describe("OpenAI-compatible MCP tools", () => {
       cursor: undefined,
       decisionId: DECISION_ID,
       direction: "cited_by",
+      doctrine: "limits",
+      polarity: "negative",
       limit: 5,
       surface: "search",
     });
@@ -3667,6 +3685,8 @@ describe("OpenAI-compatible MCP tools", () => {
       decisionId: DECISION_ID,
       direction: "cited_by",
       doctrineAvailability: "available",
+      doctrine: "limits",
+      polarity: "negative",
       nextCursor: "Y2l0YXRpb25fY3Vyc29yXzI",
       citations: [
         {
@@ -3708,7 +3728,11 @@ describe("OpenAI-compatible MCP tools", () => {
   test("read_case_law_citations defaults the page size and passes the cursor through", async () => {
     readGatedDecisionCitationsMock.mockResolvedValue({
       type: "page",
-      page: { items: [], nextCursor: null, doctrineAvailability: "available" },
+      page: {
+        items: [],
+        nextCursor: null,
+        doctrineAvailability: "available",
+      },
     });
 
     await handleMcpToolCall({
@@ -3729,6 +3753,35 @@ describe("OpenAI-compatible MCP tools", () => {
       limit: LIMITS.caseLawAgentCitationPageSizeDefault,
       surface: "search",
     });
+  });
+
+  test("read_case_law_citations refuses doctrine filters when doctrine is unavailable", async () => {
+    readGatedDecisionCitationsMock.mockResolvedValue({
+      type: "doctrine_unavailable",
+    });
+
+    const result = await handleMcpToolCall({
+      args: {
+        decision_id: DECISION_ID,
+        direction: "cited_by",
+        doctrine: "distinguishes",
+      },
+      context: createContext(),
+      toolName: "read_case_law_citations",
+    });
+
+    const error = validationEnvelope(result);
+    expect(error["code"]).toBe("validation_error");
+    expect(error["message"]).toBe("Doctrine filtering is unavailable");
+    expect(error["hint"]).toBe(
+      "Call read_case_law_citations again without doctrine; the response's doctrineAvailability will report whether doctrine can be read.",
+    );
+    expect(error["issues"]).toEqual([
+      {
+        path: "doctrine",
+        message: "Doctrine is unavailable on this case-law surface.",
+      },
+    ]);
   });
 
   test("read_case_law_citations answers not found for a subject the gate denies", async () => {
@@ -3806,6 +3859,7 @@ describe("OpenAI-compatible MCP tools", () => {
       "language",
       "date_from",
       "date_to",
+      "as_of",
       "limit",
       "cursor",
     ]);
@@ -3836,9 +3890,11 @@ describe("OpenAI-compatible MCP tools", () => {
       ),
     );
     expect(schema?.["additionalProperties"]).toBe(false);
-    // The corpus search has no as-of filter, so it must not advertise one:
-    // a point-in-time question is answered by read_statute.
-    expect(schema?.properties?.["as_of"]).toBeUndefined();
+    expect(schema?.properties?.["as_of"]).toMatchObject({
+      type: "string",
+      format: "date",
+      maxLength: 10,
+    });
     expect(searchTool?.description).toContain("No facets are returned");
   });
 
@@ -3967,6 +4023,8 @@ describe("OpenAI-compatible MCP tools", () => {
           {
             documentId: STATUTE_ID,
             effectiveDate: "2014-01-01",
+            versionValidFrom: "2014-01-01",
+            versionValidTo: null,
             eli: STATUTE_ELI,
             country: "CZE",
             documentType: "act",
@@ -3988,12 +4046,17 @@ describe("OpenAI-compatible MCP tools", () => {
       const result = await handleMcpToolCall({
         // Lower case on the wire: the country is folded by the contract, so a
         // model writing `cze` reaches the same jurisdiction.
-        args: { country: "cze", query: "nahrada skody" },
+        args: {
+          as_of: "2027-01-01",
+          country: "cze",
+          query: "nahrada skody",
+        },
         context: createContext(),
         toolName: "search_legislation",
       });
 
       expect(searchLegislationHandlerMock.mock.calls.at(0)?.at(0)).toEqual({
+        asOf: "2027-01-01",
         jurisdiction: "CZE",
         limit: 10,
         query: "nahrada skody",
@@ -4009,6 +4072,8 @@ describe("OpenAI-compatible MCP tools", () => {
             documentId: STATUTE_ID,
             documentType: "act",
             effectiveDate: "2014-01-01",
+            versionValidFrom: "2014-01-01",
+            versionValidTo: null,
             eli: STATUTE_ELI,
             language: "cs",
             match: { type: matchType },
@@ -5260,6 +5325,17 @@ describe("OpenAI-compatible MCP tools", () => {
         { work: "262/2006 Sb.", unit: "section", section: 52, letter: "g" },
       ],
       ["čl. 10 Listiny", { unit: "article", section: 10 }],
+      [
+        "Article 6(1)(a) GDPR",
+        {
+          jurisdiction: "EU",
+          work: "32016R0679",
+          unit: "article",
+          section: 6,
+          subsection: "1",
+          letter: "a",
+        },
+      ],
     ])(
       "reads the provision %s onto every phrasing's search",
       async (provision, expected) => {
@@ -5291,6 +5367,9 @@ describe("OpenAI-compatible MCP tools", () => {
       ["§ 10 Listiny", "is not divided into the units"],
       ["§ 316 odst. 2 a 3 ZP", "several provisions or a range"],
       ["§ 316–318 ZP", "several provisions or a range"],
+      ["Article 5 and Article 6 GDPR", "several provisions"],
+      ["Article 6 GDPR and 7", "several provisions"],
+      ["Article 6 GDPR and Article 7 GDPR", "several provisions"],
     ])(
       "refuses the provision %s before any search, naming the fix",
       async (provision, message) => {
@@ -5987,7 +6066,7 @@ describe("OpenAI-compatible MCP tools", () => {
       caller: "attributed",
       citationsCursor: null,
       documentHydration: STORED_ONLY_DOCUMENT_HYDRATION,
-      surface: "search",
+      surface: "identity",
     });
     expect(readGatedDecisionCitationDigestMock).toHaveBeenCalledWith({
       caseLawDb: caseLawPublicReadDb,
@@ -6112,6 +6191,70 @@ describe("OpenAI-compatible MCP tools", () => {
         context: createContext(),
         toolName: "read_case_law_decision",
       });
+
+    test.each([null, createCitationDigest()])(
+      "identity-only countries report unavailable citations on MCP and CLI (%#)",
+      async (digest) => {
+        const base = createReadDecisionResult();
+        readGatedDecisionMock.mockResolvedValue({
+          ...base,
+          id: toSafeId<"caseLawDecision">(DECISION_ID),
+          country: "EU",
+          decisionDate: "2024-02-01",
+          documentAst: null,
+          fulltext: "Synthetic EU decision.",
+          identifiers: [
+            {
+              type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+              value: base.caseNumber,
+            },
+          ],
+          documentPending: false,
+          hasDocument: true,
+          documentReadFailed: false,
+          documentUnavailable: false,
+          courtId: null,
+          courtTier: "other",
+          languageGroupKey: null,
+          projectionDigest: null,
+          documentAstSource: null,
+          sections: null,
+          headnote: base.textFields.headnote,
+          createdAt: new Date("2024-02-01T00:00:00.000Z"),
+          updatedAt: new Date("2024-02-01T00:00:00.000Z"),
+          source: { ...base.source, id: toSafeId<"caseLawSource">("src_1") },
+          judges: [],
+          languageAlternates: [],
+          citationsFrom: [],
+          citationsTo: [],
+        } satisfies ReadCaseLawDecisionSuccess);
+        readGatedDecisionCitationDigestMock.mockResolvedValue(digest);
+        const result = await handleMcpToolCall({
+          args: { decision_ids: [DECISION_ID], include: ["citations"] },
+          context: createContext(),
+          toolName: "read_case_law_decision",
+        });
+        const mcp = parseToolPayload(result);
+        expect(mcp).toMatchObject({
+          items: [
+            {
+              status: "found",
+              decision: {
+                citations: {
+                  status: "unavailable",
+                  reason: "country_not_search_admitted",
+                  country: "EU",
+                },
+              },
+            },
+          ],
+        });
+        const cli = renderThroughCli(result, undefined);
+        expect(cli.printed).toEqual(mcp);
+        expect(cli.exitCode).toBe(0);
+        expect(readGatedDecisionCitationDigestMock).not.toHaveBeenCalled();
+      },
+    );
 
     test("query passage identity and enclosing headings survive the MCP to CLI contract", async () => {
       const base = createReadDecisionResult();
