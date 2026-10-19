@@ -15,6 +15,22 @@ describe(RULE, () => {
     ).toEqual([4, 6]);
   });
 
+  test("rejects mutations through a default node:fs import", async () => {
+    expect(
+      await lint(
+        'import fs from "node:fs";\nimport path from "node:path";\nfs.writeFileSync(path.join(import.meta.dir, "baseline.json"), "changed");\nfs.readFileSync(path.join(import.meta.dir, "baseline.json"), "utf8");',
+      ),
+    ).toEqual([3]);
+  });
+
+  test("rejects a write stream opened on a checkout path", async () => {
+    expect(
+      await lint(
+        'import { createWriteStream } from "node:fs";\nimport path from "node:path";\ncreateWriteStream(path.join(import.meta.dir, "baseline.json"));',
+      ),
+    ).toEqual([3]);
+  });
+
   // path.resolve keeps the last absolute segment: a checkout part beside a
   // temporary one still targets the checkout.
   test("rejects a checkout path resolved beside a temporary one", async () => {

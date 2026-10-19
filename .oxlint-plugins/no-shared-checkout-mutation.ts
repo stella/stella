@@ -37,6 +37,8 @@ const MUTATORS = new Set([
   "cpSync",
   "copyFile",
   "copyFileSync",
+  // Opens its destination with flag "w" by default, which truncates it.
+  "createWriteStream",
 ]);
 // CommonJS module locations, available as globals.
 const CHECKOUT_GLOBALS = new Set(["__dirname", "__filename"]);
@@ -398,6 +400,21 @@ export default eslintCompatPlugin({
               binding !== null && NODE_FS_MODULES.has(binding.moduleId)
                 ? binding.imported
                 : null;
+            // A default `node:fs` import exposes the same functions as members.
+            if (
+              mutator === null &&
+              isAstNode(node.callee) &&
+              node.callee.type === "MemberExpression"
+            ) {
+              const receiver = resolveImport(context, node.callee.object);
+              if (
+                receiver !== null &&
+                receiver.imported === "default" &&
+                NODE_FS_MODULES.has(receiver.moduleId)
+              ) {
+                mutator = memberPropertyName(node.callee);
+              }
+            }
             if (
               mutator === null &&
               isAstNode(node.callee) &&
