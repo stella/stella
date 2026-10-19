@@ -7,15 +7,21 @@ import * as v from "valibot";
 const repositoryRoot = path.resolve(import.meta.dir, "..");
 const diagnosticReport = v.object({
   diagnostics: v.array(
-    v.object({ code: v.string(), message: v.string(), filename: v.string() }),
+    v.object({
+      code: v.string(),
+      message: v.string(),
+      filename: v.string(),
+      severity: v.string(),
+    }),
   ),
 });
 
-// A design system that cannot load is one failure per linted file. The plugin
-// otherwise re-reports it at every class of every rule, which reads like a set
-// of real class errors. Deduplication is keyed by the file's parsed tree, so
-// each lint of a file reports it again and nothing carries over between files.
-test("an unavailable Tailwind design system fails as one typed error per file", async () => {
+// A design system that cannot load is one failure per rule and linted file.
+// The plugin otherwise re-reports it at every class, which reads like a set of
+// real class errors. Each rule reports it once with its own severity, keyed by
+// the file's parsed tree, so a warning-level rule cannot absorb an error-level
+// one and nothing carries over between files.
+test("an unavailable Tailwind design system fails as one typed error per rule and file", async () => {
   const directory = await mkdtemp(
     path.join(tmpdir(), "stella-tailwind-design-system-"),
   );
@@ -32,9 +38,10 @@ test("an unavailable Tailwind design system fails as one typed error per file", 
         ],
         settings: { tailwindcss: { entryPoint } },
         rules: {
+          // A warning-level rule must not absorb the error-level reports.
+          "tailwindcss/no-duplicate-classes": "warn",
           "tailwindcss/no-unknown-classes": "error",
           "tailwindcss/no-conflicting-classes": "error",
-          "tailwindcss/no-duplicate-classes": "error",
         },
       })};`,
     );
@@ -65,9 +72,20 @@ test("an unavailable Tailwind design system fails as one typed error per file", 
     expect(exitCode).toBe(1);
     const { diagnostics } = v.parse(diagnosticReport, JSON.parse(stdout));
     expect(
-      diagnostics.map(({ filename }) => path.basename(filename)).toSorted(),
+      diagnostics
+        .map(
+          ({ filename, code, severity }) =>
+            `${path.basename(filename)} ${code} ${severity}`,
+        )
+        .toSorted(),
       stdout,
-    ).toEqual(["first.tsx", "second.tsx"]);
+    ).toEqual(
+      ["first.tsx", "second.tsx"].flatMap((file) => [
+        `${file} tailwindcss(no-conflicting-classes) error`,
+        `${file} tailwindcss(no-duplicate-classes) warning`,
+        `${file} tailwindcss(no-unknown-classes) error`,
+      ]),
+    );
     for (const { message } of diagnostics) {
       expect(message).toStartWith("tailwind design system not loaded: ");
     }

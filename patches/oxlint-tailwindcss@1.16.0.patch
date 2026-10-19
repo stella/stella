@@ -1,5 +1,5 @@
 diff --git a/dist/index.cjs b/dist/index.cjs
-index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..608146553484d2ff00d10c89b500b4789e8ba437 100644
+index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..f3fd2f6da7b48cca0a61e6ba11266eabadee9c7b 100644
 --- a/dist/index.cjs
 +++ b/dist/index.cjs
 @@ -2480,7 +2480,8 @@ function isFatalError(err) {
@@ -12,29 +12,31 @@ index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..608146553484d2ff00d10c89b500b478
  }
  /**
  * Helper for DS-dependent rules to convert a caught fatal error into a
-@@ -2488,8 +2489,20 @@ function formatFatalError(err) {
+@@ -2488,8 +2489,22 @@ function formatFatalError(err) {
  * visitor should bail out), `false` otherwise — the rule layer rethrows
  * non-fatal errors to surface real bugs.
  */
 +const reportedFatalDsErrors = /* @__PURE__ */ new WeakMap();
  function reportFatalDsError(context, err, node) {
  	if (!isFatalError(err)) return false;
-+	// One unavailable design system is one failure per linted file, not one per
-+	// class and rule. The parsed tree is new on every lint, so a long-lived lint
-+	// host reports the failure again on its next run.
++	// One unavailable design system is one failure per rule and linted file, not
++	// one per class. Each rule reports it once, so its own severity still
++	// applies. The parsed tree is new on every lint, so a long-lived lint host
++	// reports the failure again on its next run.
 +	const reported = formatFatalError(err);
 +	const tree = context.sourceCode?.ast;
 +	if (tree !== void 0) {
++		const key = `${context.id}\0${reported}`;
 +		const seen = reportedFatalDsErrors.get(tree) ?? /* @__PURE__ */ new Set();
-+		if (seen.has(reported)) return true;
-+		seen.add(reported);
++		if (seen.has(key)) return true;
++		seen.add(key);
 +		reportedFatalDsErrors.set(tree, seen);
 +	}
  	context.report({
  		node,
  		messageId: DS_UNAVAILABLE_MESSAGE_ID,
 diff --git a/dist/index.mjs b/dist/index.mjs
-index 61c624233238edcc998099f3d496c04caa7ba154..19c282077b16007d50f602bd17496dacc85fab0f 100644
+index 61c624233238edcc998099f3d496c04caa7ba154..6746733758097eb3305e7e650089c0ff72ff8930 100644
 --- a/dist/index.mjs
 +++ b/dist/index.mjs
 @@ -2483,7 +2483,8 @@ function isFatalError(err) {
@@ -47,22 +49,24 @@ index 61c624233238edcc998099f3d496c04caa7ba154..19c282077b16007d50f602bd17496dac
  }
  /**
  * Helper for DS-dependent rules to convert a caught fatal error into a
-@@ -2491,8 +2492,20 @@ function formatFatalError(err) {
+@@ -2491,8 +2492,22 @@ function formatFatalError(err) {
  * visitor should bail out), `false` otherwise — the rule layer rethrows
  * non-fatal errors to surface real bugs.
  */
 +const reportedFatalDsErrors = /* @__PURE__ */ new WeakMap();
  function reportFatalDsError(context, err, node) {
  	if (!isFatalError(err)) return false;
-+	// One unavailable design system is one failure per linted file, not one per
-+	// class and rule. The parsed tree is new on every lint, so a long-lived lint
-+	// host reports the failure again on its next run.
++	// One unavailable design system is one failure per rule and linted file, not
++	// one per class. Each rule reports it once, so its own severity still
++	// applies. The parsed tree is new on every lint, so a long-lived lint host
++	// reports the failure again on its next run.
 +	const reported = formatFatalError(err);
 +	const tree = context.sourceCode?.ast;
 +	if (tree !== void 0) {
++		const key = `${context.id}\0${reported}`;
 +		const seen = reportedFatalDsErrors.get(tree) ?? /* @__PURE__ */ new Set();
-+		if (seen.has(reported)) return true;
-+		seen.add(reported);
++		if (seen.has(key)) return true;
++		seen.add(key);
 +		reportedFatalDsErrors.set(tree, seen);
 +	}
  	context.report({
