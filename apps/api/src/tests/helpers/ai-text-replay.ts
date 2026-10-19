@@ -287,6 +287,8 @@ export const seamExportsOf = (role: SeamExportRole): string[] =>
   );
 
 const SOURCE_ROOT = path.resolve(import.meta.dir, "../..");
+const GENERATION_SEAM_MODULE = "@/api/lib/tanstack-ai-generate";
+const GENERATION_SEAM_PATH = path.join(SOURCE_ROOT, "lib/tanstack-ai-generate");
 
 /** Code that is not a call site: the seam itself, local mocks, tests. */
 const NOT_A_CALL_SITE = ["lib/tanstack-ai-generate.ts", "dev/", "tests/"];
@@ -318,24 +320,85 @@ const isOutsideRuntimeCode = (node: ts.Node): boolean => {
   }
 };
 
-/** How many runtime references `source` makes to `names`. */
-const runtimeReferences = (
+/** How many runtime references `source` makes to imported exports in `names`. */
+export const runtimeReferences = (
   file: string,
   source: string,
   names: ReadonlySet<string>,
 ): number => {
+  const sourceFile = ts.createSourceFile(
+    file,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+  );
+  const compilerHost = ts.createCompilerHost({ noResolve: true });
+  compilerHost.getSourceFile = (requestedFile) =>
+    requestedFile === file ? sourceFile : undefined;
+  const checker = ts
+    .createProgram([file], { noResolve: true }, compilerHost)
+    .getTypeChecker();
+  const importedBindings = new Set<ts.Symbol>();
+  const namespaceBindings = new Set<ts.Symbol>();
+
+  // The seam by its path alias, or by a relative path from this file.
+  const isSeamModule = (specifier: string) =>
+    specifier === GENERATION_SEAM_MODULE ||
+    (specifier.startsWith(".") &&
+      path.resolve(path.dirname(file), specifier.replace(/\.tsx?$/u, "")) ===
+        GENERATION_SEAM_PATH);
+  for (const statement of sourceFile.statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier) ||
+      !isSeamModule(statement.moduleSpecifier.text)
+    ) {
+      continue;
+    }
+    const bindings = statement.importClause?.namedBindings;
+    if (bindings === undefined) {
+      continue;
+    }
+    if (ts.isNamespaceImport(bindings)) {
+      const symbol = checker.getSymbolAtLocation(bindings.name);
+      if (symbol !== undefined) {
+        namespaceBindings.add(symbol);
+      }
+      continue;
+    }
+    for (const element of bindings.elements) {
+      const importedName = element.propertyName?.text ?? element.name.text;
+      if (!names.has(importedName)) {
+        continue;
+      }
+      const symbol = checker.getSymbolAtLocation(element.name);
+      if (symbol !== undefined) {
+        importedBindings.add(symbol);
+      }
+    }
+  }
+
   let count = 0;
   const visit = (node: ts.Node): void => {
+    if (ts.isIdentifier(node) && !isOutsideRuntimeCode(node)) {
+      const symbol = checker.getSymbolAtLocation(node);
+      if (symbol !== undefined && importedBindings.has(symbol)) {
+        count += 1;
+      }
+    }
     if (
-      ts.isIdentifier(node) &&
-      names.has(node.text) &&
+      ts.isPropertyAccessExpression(node) &&
+      names.has(node.name.text) &&
       !isOutsideRuntimeCode(node)
     ) {
-      count += 1;
+      const symbol = checker.getSymbolAtLocation(node.expression);
+      if (symbol !== undefined && namespaceBindings.has(symbol)) {
+        count += 1;
+      }
     }
     ts.forEachChild(node, visit);
   };
-  visit(ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true));
+  visit(sourceFile);
   return count;
 };
 

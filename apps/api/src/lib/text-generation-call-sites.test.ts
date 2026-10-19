@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import path from "node:path";
 
 import { env } from "@/api/env";
 import {
@@ -9,6 +10,7 @@ import {
 import {
   discoverTextCallSites,
   installTextReplay,
+  runtimeReferences,
   seamExportsOf,
 } from "@/api/tests/helpers/ai-text-replay";
 import {
@@ -30,6 +32,8 @@ const testState = createTestState({ file: import.meta.path, config: env });
 const replayCassette = installTextReplay(testState);
 
 describe("text generation call site census", () => {
+  const textExports = new Set(seamExportsOf("text"));
+
   test("every call site is replayed or pending, by its runtime references", () => {
     const registered = {
       ...Object.fromEntries(
@@ -68,6 +72,48 @@ describe("text generation call site census", () => {
     const discovered = discoverTextCallSites();
     expect(discovered.get("handlers/chat/compaction.ts")).toBe(2);
     expect(discovered.get("handlers/chat/suggest-thread-title.ts")).toBe(1);
+  });
+
+  test("an aliased seam import counts calls through its local binding", () => {
+    const source = `
+      import { generateTanStackTextForTask as generate } from "@/api/lib/tanstack-ai-generate";
+      await generate({});
+    `;
+
+    expect(runtimeReferences("aliased.ts", source, textExports)).toBe(1);
+  });
+
+  test("a relative seam import counts like the path alias", () => {
+    const source = `
+      import { generateTanStackTextForTask as generate } from "./tanstack-ai-generate";
+      await generate({});
+    `;
+
+    expect(
+      runtimeReferences(
+        path.join(import.meta.dir, "relative.ts"),
+        source,
+        textExports,
+      ),
+    ).toBe(1);
+  });
+
+  test("a namespace seam import counts calls through its exported member", () => {
+    const source = `
+      import * as ai from "@/api/lib/tanstack-ai-generate";
+      await ai.generateTanStackTextForTask({});
+    `;
+
+    expect(runtimeReferences("namespace.ts", source, textExports)).toBe(1);
+  });
+
+  test("a local with a seam export name is not an imported reference", () => {
+    const source = `
+      const generateTanStackTextForTask = () => "local";
+      generateTanStackTextForTask();
+    `;
+
+    expect(runtimeReferences("local.ts", source, textExports)).toBe(0);
   });
 
   test("every structured export of the seam is in the structured-output census", () => {
