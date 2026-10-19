@@ -58,6 +58,7 @@ export const ADAPTER_PUBLISHER_GATES = {
   [ADAPTER_KEYS.CZ_NS]: "nsoud-cz",
   [ADAPTER_KEYS.CZ_NSS]: "nssoud-cz",
   [ADAPTER_KEYS.CZ_REGIONAL]: "justice-cz",
+  [ADAPTER_KEYS.CZ_UOHS]: "uohs-cz",
   [ADAPTER_KEYS.SK_COURTS]: "justice-sk",
   [ADAPTER_KEYS.SK_US]: "ustavnysud-sk",
   [ADAPTER_KEYS.PL_COURTS]: "saos-pl",

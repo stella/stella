@@ -370,6 +370,13 @@ export const PROCESSED_FIELD_INVENTORY = {
       ),
     ),
   },
+  [ADAPTER_KEYS.CZ_UOHS]: {
+    "court-paragraph-numbers": skippedField(
+      PROCESSED_FIELD_SKIP_REASONS.UNASSESSED,
+      "the PDF text reader has no paragraph-number handling",
+      unrecordedEvidence("the synthetic PDF has no numbered reasoning"),
+    ),
+  },
   [IMPORT_SOURCE_KEYS.COURTLISTENER]: {
     "court-paragraph-numbers": skippedField(
       PROCESSED_FIELD_SKIP_REASONS.UNASSESSED,

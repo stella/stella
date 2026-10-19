@@ -12,6 +12,7 @@ import type {
 import { propertyConfig } from "@stll/property-testing";
 import { normalizeUnicode } from "@stll/text-normalize";
 
+import { czUohsDecisionIdentifiers } from "@/api/handlers/case-law/ingestion/adapters/cz-uohs";
 import {
   normalizeHuBhgyRow,
   readHuBhgySearch,
@@ -34,6 +35,21 @@ import { CITATION_STORAGE_WIDTHS } from "@/api/lib/case-law/citation-storage-bou
 import { storeDecisionIdentifiersInMetadata } from "@/api/lib/legal-search/decision-identifier-metadata";
 
 describe("extractCitations", () => {
+  test("an ÚOHS citation normalizes to the adapter's emitted identifier", () => {
+    const [citation] = extractCitations([
+      { index: 0, text: "ÚOHS ÚOHS-R0901/2026/VZ" },
+    ]);
+    const emitted = czUohsDecisionIdentifiers({
+      spisová_značka: "R0901/2026/VZ",
+      číslo_jednací: "90001/2026/163",
+    });
+    expect(
+      normalizeDecisionIdentifierValue(
+        citation!.identifierType,
+        citation!.citationText,
+      ),
+    ).toBe(emitted[0]!.value);
+  });
   test.each([
     ["ÚOHS ÚOHS-S123/2024/VZ", "ÚOHS-S123/2024/VZ"],
     ["OHS ÚOHS-R456/2025/VZ", "ÚOHS-R456/2025/VZ"],

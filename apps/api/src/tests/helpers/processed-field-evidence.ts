@@ -348,6 +348,7 @@ export const PROCESSED_FIELD_EVIDENCE_READERS = {
   "cz-ns": readCzNs,
   "cz-nss": readCzNss,
   "cz-us": readCzUs,
+  "cz-uohs": null,
   "sk-courts": null,
   "sk-us": readSkUs,
   "pl-courts": null,

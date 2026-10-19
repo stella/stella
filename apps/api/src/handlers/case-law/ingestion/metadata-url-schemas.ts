@@ -51,6 +51,7 @@ export const METADATA_URL_SCHEMAS = {
   [ADAPTER_KEYS.PL_KIS]: PL_KIS_METADATA_URL_SCHEMA,
   [ADAPTER_KEYS.PL_UODO]: undefined,
   [ADAPTER_KEYS.PL_UOKIK]: PL_UOKIK_METADATA_URL_SCHEMA,
+  [ADAPTER_KEYS.CZ_UOHS]: undefined,
   [IMPORT_SOURCE_KEYS.COURTLISTENER]: undefined,
 } as const satisfies Record<AdapterKey | ImportSourceKey, unknown>;
 
