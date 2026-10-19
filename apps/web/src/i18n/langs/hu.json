@@ -1019,6 +1019,7 @@
       "pageOfCount": "{page}. oldal / {pageCount}",
       "pageOfEstimatedCount": "{page}. oldal / ~{pageCount}",
       "pageOfEstimatedCountLabel": "{page}. oldal a körülbelül {pageCount} oldalból",
+      "pageWithEstimatedMatchCounts": "{page}. oldal · körülbelül {exactCount, plural, one {# pontos egyezés} other {# pontos egyezés}} · {relaxedCount, plural, one {# részleges egyezés} other {# részleges egyezés}}",
       "pageWithEstimatedResultCount": "{page}. oldal · körülbelül {count, plural, one {# találat} other {# találat}}",
       "pageWithMatchCounts": "{page}. oldal · {exactCount, plural, one {# pontos egyezés} other {# pontos egyezés}} · {relaxedCount, plural, one {# részleges egyezés} other {# részleges egyezés}}",
       "pageWithResultCount": "{page}. oldal · {count, plural, one {# találat} other {# találat}}",

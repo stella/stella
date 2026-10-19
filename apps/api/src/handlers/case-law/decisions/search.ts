@@ -31,6 +31,8 @@ import {
   DEFAULT_SEARCH_EXCERPT,
   SEARCH_TOTAL_NOT_COUNTED,
   SEARCH_TOTAL_TYPE,
+  type SearchPageReach,
+  type SearchPaginationOutcome,
   type SearchTotal,
 } from "@stll/api-contract/search";
 import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/us-reporter-citation";
@@ -2427,6 +2429,35 @@ export const countDroppedIdentityCandidates = ({
   return inWindow(candidateCount) - inWindow(rehydratedCandidateCount);
 };
 
+type AssembleTwoPhaseSearchResponseOptions<
+  Page extends object,
+  Answer extends object,
+> = {
+  answer: Answer;
+  page: Page;
+  pageReach: SearchPageReach;
+  paginationOutcome: SearchPaginationOutcome;
+  relaxedHitCount: number;
+};
+
+/** Joins the strict result-set metadata to any hits appended by relaxation. */
+export const assembleTwoPhaseSearchResponse = <
+  Page extends object,
+  Answer extends object,
+>({
+  answer,
+  page,
+  pageReach,
+  paginationOutcome,
+  relaxedHitCount,
+}: AssembleTwoPhaseSearchResponseOptions<Page, Answer>) => ({
+  ...page,
+  relaxedHitCount,
+  paginationOutcome,
+  pageReach,
+  ...answer,
+});
+
 export const searchCorpusIndexDecisions = async ({
   body,
   caseLawDb,
@@ -2976,12 +3007,12 @@ export const searchCorpusIndexDecisions = async ({
     });
   }
   return projectCaseLawSearchResponse(
-    {
-      ...page,
+    assembleTwoPhaseSearchResponse({
+      page,
       relaxedHitCount: twoPhase.relaxedHitCount,
       paginationOutcome: searchPage.paginationOutcome,
       pageReach: searchPage.reach,
-      ...searchAnswer({
+      answer: searchAnswer({
         body,
         interpretation,
         hitCount: page.hits.length,
@@ -2989,7 +3020,7 @@ export const searchCorpusIndexDecisions = async ({
         countsResultSet:
           isFirstPage && searchPageEnd(searchPage) === SEARCH_PAGE_END.COMPLETE,
       }),
-    },
+    }),
     decisionHeadnoteMaxChars(body.headnotePresentation),
   );
 };

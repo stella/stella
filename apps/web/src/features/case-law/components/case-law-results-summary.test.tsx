@@ -16,8 +16,17 @@ const { CaseLawResultsSummaryText } =
 afterEach(cleanup);
 afterAll(async () => await unregisterDomEnvironment());
 
-const renderHeading = (relaxedHitCount: number) =>
-  render(
+const renderHeading = (
+  relaxedHitCount: number,
+  total?:
+    | { type: typeof SEARCH_TOTAL_TYPE.EXACT; count: number }
+    | { type: typeof SEARCH_TOTAL_TYPE.ESTIMATE; count: number },
+) => {
+  const resultTotal = total ?? {
+    type: SEARCH_TOTAL_TYPE.EXACT,
+    count: 0,
+  };
+  return render(
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
       <FormattingProvider locale="en" timeZone="UTC">
         <CaseLawResultsSummaryText
@@ -25,16 +34,27 @@ const renderHeading = (relaxedHitCount: number) =>
           intent={{ type: "text", text: "employment dismissal" }}
           page={1}
           relaxedHitCount={relaxedHitCount}
-          total={{ type: SEARCH_TOTAL_TYPE.EXACT, count: 0 }}
+          total={resultTotal}
         />
       </FormattingProvider>
     </IntlProvider>,
   );
+};
 
 test("reports exact and appended partial matches separately", () => {
   const view = renderHeading(3);
   expect(
     view.getByText("Page 1 · 0 exact matches · 3 partial matches"),
+  ).toBeTruthy();
+});
+
+test("keeps an estimated exact-match total approximate beside partial matches", () => {
+  const view = renderHeading(3, {
+    type: SEARCH_TOTAL_TYPE.ESTIMATE,
+    count: 120,
+  });
+  expect(
+    view.getByText("Page 1 · about 120 exact matches · 3 partial matches"),
   ).toBeTruthy();
 });
 

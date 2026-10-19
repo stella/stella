@@ -59,9 +59,13 @@ export const CaseLawResultsSummaryText = ({
     );
   }
   if (relaxedHitCount > 0 && total.type !== SEARCH_TOTAL_TYPE.NOT_COUNTED) {
+    const message =
+      total.type === SEARCH_TOTAL_TYPE.ESTIMATE
+        ? "caseLaw.pagination.pageWithEstimatedMatchCounts"
+        : "caseLaw.pagination.pageWithMatchCounts";
     return (
       <p className="text-xs tabular-nums">
-        {t("caseLaw.pagination.pageWithMatchCounts", {
+        {t(message, {
           exactCount: total.count,
           page: format.number(page),
           relaxedCount: relaxedHitCount,

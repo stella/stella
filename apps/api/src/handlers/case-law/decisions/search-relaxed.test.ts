@@ -1,8 +1,13 @@
 import { expect, test } from "bun:test";
 
 import { parseDecisionQuery } from "@stll/api-contract/decision-query-intent";
-import { SEARCH_PAGINATION_COMPLETE } from "@stll/api-contract/search";
+import {
+  SEARCH_PAGE_REACH,
+  SEARCH_PAGINATION_COMPLETE,
+  SEARCH_TOTAL_TYPE,
+} from "@stll/api-contract/search";
 
+import { assembleTwoPhaseSearchResponse } from "@/api/handlers/case-law/decisions/search";
 import {
   interpretDecisionQuery,
   searchAnswer,
@@ -55,4 +60,28 @@ test("a short case-law page appends relaxed hits and emits relaxed_match", async
       relaxedMatch: result.relaxedShown,
     }).warnings.map(({ code }) => code),
   ).toContain("relaxed_match");
+});
+
+test("the handler response keeps strict metadata beside appended relaxed hits", () => {
+  const strictFacets = {
+    courts: [{ value: "Nejvyšší soud", count: 2, countType: "exact" }],
+  };
+  const response = assembleTwoPhaseSearchResponse({
+    page: {
+      hits: [{ decisionId: "relaxed-1" }, { decisionId: "relaxed-2" }],
+      total: { type: SEARCH_TOTAL_TYPE.EXACT, count: 0 },
+      facets: strictFacets,
+    },
+    relaxedHitCount: 2,
+    paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+    pageReach: SEARCH_PAGE_REACH.REACHED,
+    answer: { queryUsed: "possible intoxication dismissal", warnings: [] },
+  });
+
+  expect(response).toMatchObject({
+    hits: [{ decisionId: "relaxed-1" }, { decisionId: "relaxed-2" }],
+    total: { type: SEARCH_TOTAL_TYPE.EXACT, count: 0 },
+    relaxedHitCount: 2,
+    facets: strictFacets,
+  });
 });
