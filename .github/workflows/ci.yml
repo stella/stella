@@ -1327,6 +1327,7 @@ jobs:
           mapfile -t changed_files < <(jq -r '.[]' <<< "$CHANGED_FILES")
           specs=$(bun scripts/ui-playground-selection.ts "${changed_files[@]}") || specs=""
           if ! jq -e 'type == "array" and all(.[]; type == "string")' <<< "$specs" >/dev/null; then
+            echo "::warning::UI playground selection failed; running every geometry spec."
             specs=$(find apps/web/e2e/ui-playground -maxdepth 1 -name '*.geometry.spec.ts' -print | sort | jq -Rsc 'split("\n") | map(select(length > 0))')
           fi
           echo "specs=$specs" >> "$GITHUB_OUTPUT"
@@ -3319,7 +3320,6 @@ jobs:
       fail-fast: false
       matrix:
         suite: ${{ github.event_name == 'pull_request' && needs.ci-plan.outputs.desktop_browser_required == 'true' && needs.ci-plan.outputs.ui_playground_specs != '[]' && fromJSON('["desktop","ui"]') || github.event_name == 'pull_request' && needs.ci-plan.outputs.ui_playground_specs != '[]' && fromJSON('["ui"]') || github.event_name == 'pull_request' && fromJSON('["desktop"]') || fromJSON('["desktop","ui"]') }}
-        install-scope: [browser]
     container:
       image: ${{ needs.ci-plan.outputs.playwright_image }}
       credentials: ${{ startsWith(needs.ci-plan.outputs.playwright_image, 'ghcr.io/') && fromJSON(format('{{"username":"{0}","password":"{1}"}}', github.actor, secrets.GITHUB_TOKEN)) || fromJSON('{}') }}
