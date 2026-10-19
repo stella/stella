@@ -17,6 +17,7 @@ import {
 } from "@/api/lib/legal-search/corpus-storage";
 import type { CorpusWriteOutcome } from "@/api/lib/legal-search/corpus-storage";
 import {
+  admitLegislationAmendmentTarget,
   LegislationAmendmentObservationError,
   sanitizeLegislationAmendments,
 } from "@/api/lib/legal-search/legislation-amendments";
@@ -174,9 +175,13 @@ export class LegislationRevision {
   readonly #amendmentObservation: LegislationAmendmentObservation;
 
   constructor(input: LegislationDocumentInput) {
-    const amendments = input.amendments
-      ? sanitizeLegislationAmendments(input.amendments)
-      : undefined;
+    const observed = input.amendments;
+    const amendments =
+      observed === undefined
+        ? undefined
+        : admitLegislationAmendmentTarget(input.eli).andThen(() =>
+            sanitizeLegislationAmendments(observed),
+          );
     if (amendments === undefined) {
       this.#amendmentObservation = { type: "not-observed" };
     } else if (Result.isOk(amendments)) {

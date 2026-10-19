@@ -242,3 +242,16 @@ test("sanitized coverage keeps only the fields of its own kind", () => {
     expect(result.isOk() && result.value.coverage).toEqual(coverage);
   }
 });
+
+test("amendments of a work whose ELI cannot be indexed beside them are refused, not thrown", () => {
+  // "č" is two UTF-8 bytes: the target fits its 512-byte bound at 251 of
+  // them after the prefix, and one more byte is refused.
+  const atBound = `eli/cz/sb/${"č".repeat(251)}`;
+  const observation = (eli: string) =>
+    new LegislationRevision({ ...document, eli }).amendmentObservation;
+  expect(observation(atBound)).toEqual({ type: "accepted" });
+  const refused = observation(`${atBound}x`);
+  expect(refused.type === "rejected" && refused.error.reason).toBe(
+    "target_eli_too_long",
+  );
+});

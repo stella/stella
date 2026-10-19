@@ -41,6 +41,7 @@ const columnLength = (column: { length: number | undefined; name: string }) =>
   column.length ??
   panic(`legislation_amendments.${column.name} needs a length`);
 const AMENDMENT_IDENTITY_MAX_BYTES = {
+  targetEli: columnLength(legislationAmendments.targetEli),
   publisherId: columnLength(legislationAmendments.publisherId),
   amendingEli: columnLength(legislationAmendments.amendingEli),
 } as const;
@@ -61,6 +62,7 @@ export type LegislationAmendmentObservationErrorReason =
   | "invalid_observed_at"
   | "invalid_partial_unlocated_relations"
   | "publisher_id_too_long"
+  | "target_eli_too_long"
   | "relation_limit_exceeded"
   | "unstated_coverage_with_relations";
 
@@ -109,6 +111,24 @@ const sanitizedCoverage = (
 };
 
 /** Sanitize before hashing, and reject identities whose effects would collide. */
+/**
+ * The amended work's own identity enters every amendment index entry beside
+ * the relation identities, so it is bounded the same way; the statute itself
+ * is still stored when its amendments are refused.
+ */
+export const admitLegislationAmendmentTarget = (
+  targetEli: string,
+): Result<void, LegislationAmendmentObservationError> =>
+  exceedsBytes(targetEli, AMENDMENT_IDENTITY_MAX_BYTES.targetEli)
+    ? Result.err(
+        new LegislationAmendmentObservationError({
+          message:
+            "Legislation amendments target an ELI longer than can be stored",
+          reason: "target_eli_too_long",
+        }),
+      )
+    : Result.ok();
+
 export const sanitizeLegislationAmendments = (
   snapshot: LegislationAmendmentSnapshot,
 ): Result<
