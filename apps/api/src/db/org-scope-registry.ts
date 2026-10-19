@@ -215,6 +215,8 @@ import {
   legalReaderAnnotations,
   legalReaderAnswerMessages,
   legalReaderAnswers,
+  legislationAmendmentSnapshots,
+  legislationAmendments,
   legislationDocuments,
   legislationFacetCounts,
   legislationFacetRefreshes,
@@ -2301,6 +2303,16 @@ export const GLOBAL_SCOPE_TABLES = {
   },
   legislationSources: {
     table: legislationSources,
+    ownership: "public-corpus",
+    reason: "Public corpus rows admitted by the declared corpus policy.",
+  },
+  legislationAmendmentSnapshots: {
+    table: legislationAmendmentSnapshots,
+    ownership: "public-corpus",
+    reason: "Public corpus rows admitted by the declared corpus policy.",
+  },
+  legislationAmendments: {
+    table: legislationAmendments,
     ownership: "public-corpus",
     reason: "Public corpus rows admitted by the declared corpus policy.",
   },

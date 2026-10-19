@@ -304,6 +304,7 @@ const recordOutboundFetches = async <TResult>(
  * outline and the plain text are both derived from.
  */
 const statuteDocumentFixture = (documentId: string) => ({
+  pendingChanges: null,
   id: documentId,
   eli: "/eli/cz/sb/2012/89",
   slug: "89-2012-sb-obcansky-zakonik",
