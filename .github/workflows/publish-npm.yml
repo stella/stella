@@ -43,7 +43,6 @@ on:
       - packages/workspace-model/CHANGELOG.md
       - packages/workspace-ui/CHANGELOG.md
       - packages/stable-stringify/CHANGELOG.md
-      - packages/time/CHANGELOG.md
       - packages/text-normalize/CHANGELOG.md
       - packages/agent-input/CHANGELOG.md
       - packages/mcp-kit/CHANGELOG.md

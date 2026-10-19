@@ -1462,7 +1462,7 @@ describe("parallel code-quality legs", () => {
     const css = ["bun", "run", "lint:css"];
     for (const scope of [
       [],
-      ["--filter=./apps/api", "--filter=./packages/time"],
+      ["--filter=./apps/api", "--filter=./packages/agent-input"],
     ]) {
       expect(
         separateApiLintFromTypecheck([css, turbo(...scope)], 16 * GiB),

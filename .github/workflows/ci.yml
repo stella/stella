@@ -2290,7 +2290,6 @@ jobs:
           bun scripts/check-published-exports.ts packages/workspace-model
           bun scripts/check-published-exports.ts packages/workspace-ui
           bun scripts/check-published-exports.ts packages/stable-stringify
-          bun scripts/check-published-exports.ts packages/time
           bun scripts/check-published-exports.ts packages/text-normalize
           bun scripts/check-published-exports.ts packages/agent-input
 
