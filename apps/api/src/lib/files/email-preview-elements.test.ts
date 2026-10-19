@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { load } from "cheerio";
+import { isTag } from "domhandler";
 
 import {
   EMAIL_PREVIEW_DOM_OPTIONS,
@@ -50,6 +51,9 @@ const expectCanonicalDocument = (html: string): void => {
   ).toBe(true);
   expect($.html()).not.toContain(REMOTE_URL);
   $("*").each((_, element) => {
+    if (!isTag(element)) {
+      return;
+    }
     for (const value of Object.values(element.attribs)) {
       expect(value).not.toContain(REMOTE_URL);
     }
