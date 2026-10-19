@@ -67,7 +67,7 @@ export const summarizeVersionDiff = async ({
     prompt: `Diff between the previous and the new version ("+ " added, "- " removed, "@@" unchanged lines elided):\n\n${diffText}`,
     outputSchema: changeSummarySchema,
     serviceTier: "standard",
-    abortSignal: AbortSignal.timeout(SUMMARY_TIMEOUT_MS),
+    deadlineMs: SUMMARY_TIMEOUT_MS,
   });
 
   return summary;

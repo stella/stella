@@ -12,6 +12,10 @@ export const CHAT_MESSAGE_EDIT_FORMAT = {
   link: "link",
   style: "style",
 } as const;
+export const CHAT_MESSAGE_LINK_INTENT = {
+  set: "set",
+  remove: "remove",
+} as const;
 export const CHAT_MESSAGE_EDIT_KEY_SOURCES = ["byok", "instance"] as const;
 export const CHAT_MESSAGE_EDIT_STYLES = [
   "paragraph",
@@ -44,12 +48,19 @@ const formatEditSchema = v.union([
     type: v.picklist([CHAT_MESSAGE_EDIT_TYPE.format]),
     ...spanEntries,
     format: v.picklist([CHAT_MESSAGE_EDIT_FORMAT.link]),
+    intent: v.picklist([CHAT_MESSAGE_LINK_INTENT.set]),
     url: v.pipe(
       v.string(),
       v.maxLength(CHAT_MESSAGE_EDIT_URL_MAX_LENGTH),
       v.url(),
       v.regex(/^https?:\/\//u),
     ),
+  }),
+  v.strictObject({
+    type: v.picklist([CHAT_MESSAGE_EDIT_TYPE.format]),
+    ...spanEntries,
+    format: v.picklist([CHAT_MESSAGE_EDIT_FORMAT.link]),
+    intent: v.picklist([CHAT_MESSAGE_LINK_INTENT.remove]),
   }),
   v.strictObject({
     type: v.picklist([CHAT_MESSAGE_EDIT_TYPE.format]),

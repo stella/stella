@@ -61,11 +61,11 @@
   },
   "candidate:.github/workflows/autofix.yml/regenerate-scope": {
     "kind": "ordinary",
-    "qualifier": "Checks; no publication, tag creation, or deployment."
+    "qualifier": "Plans pull-request autofix scope using settled-run evidence; no release publication, tag creation, or deployment."
   },
   "candidate:.github/workflows/autofix.yml/regenerate-derived-files": {
     "kind": "ordinary",
-    "qualifier": "Checks; no publication, tag creation, or deployment."
+    "qualifier": "Regenerates and pushes scoped pull-request autofix commits; no release publication, tag creation, or deployment."
   },
   "candidate:.github/workflows/bot-refresh-auto-merge.yml/arm": {
     "kind": "ordinary",
@@ -93,7 +93,15 @@
   },
   "candidate:.github/workflows/ci.yml/ci-plan": {
     "kind": "support",
-    "qualifier": "Prerequisites follow the workflow's execution conditions."
+    "qualifier": "Plans trust, scopes and prerequisites for merge-required checks."
+  },
+  "candidate:.github/workflows/ci.yml/generated-sources": {
+    "kind": "support",
+    "qualifier": "Produces generated-source artifacts required by merge-gating package checks."
+  },
+  "candidate:.github/workflows/ci.yml/pr-heavy-gate": {
+    "kind": "support",
+    "qualifier": "Gates merge-required heavy suites on successful pull-request quick checks."
   },
   "candidate:.github/workflows/ci.yml/docker-checks": {
     "kind": "support",
@@ -113,7 +121,7 @@
   },
   "candidate:.github/workflows/ci.yml/ci-tests": {
     "kind": "support",
-    "qualifier": "Prerequisites follow the workflow's execution conditions."
+    "qualifier": "Runs scoped package tests and reports quarantined outcomes for the merge verdict."
   },
   "candidate:.github/workflows/ci.yml/api-test-durations": {
     "kind": "support",
@@ -125,11 +133,11 @@
   },
   "candidate:.github/workflows/ci.yml/code-quality-api": {
     "kind": "support",
-    "qualifier": "Prerequisites follow the workflow's execution conditions."
+    "qualifier": "Runs API code-quality checks required by the merge verdict."
   },
   "candidate:.github/workflows/ci.yml/code-quality-web-rest": {
     "kind": "support",
-    "qualifier": "Prerequisites follow the workflow's execution conditions."
+    "qualifier": "Runs web and remaining code-quality checks required by the merge verdict."
   },
   "candidate:.github/workflows/ci.yml/query-perf": {
     "kind": "support",
@@ -193,7 +201,7 @@
   },
   "candidate:.github/workflows/ci.yml/e2e-landing": {
     "kind": "support",
-    "qualifier": "Prerequisites follow the workflow's execution conditions."
+    "qualifier": "Builds and tests affected landing pages at every CI depth, subject to trust and the pull-request heavy gate."
   },
   "candidate:.github/workflows/ci.yml/marketing-screenshots": {
     "kind": "support",
@@ -241,7 +249,7 @@
   },
   "candidate:.github/workflows/ci.yml/ci-result": {
     "kind": "support",
-    "qualifier": "Prerequisites follow the workflow's execution conditions."
+    "qualifier": "Aggregates planned check outcomes into the required merge verdict and records its evaluated jobs."
   },
   "candidate:.github/workflows/ci.yml/ci-quick-checks": {
     "kind": "support",
@@ -253,11 +261,7 @@
   },
   "candidate:.github/workflows/cla.yml/verify-signatures": {
     "kind": "ordinary",
-    "qualifier": "Checks; no publication, tag creation, or deployment."
-  },
-  "candidate:.github/workflows/cleanup-queued-pr-runs.yml/cleanup": {
-    "kind": "ordinary",
-    "qualifier": "Checks; no publication, tag creation, or deployment."
+    "qualifier": "Verifies contributor signatures and reports merge-gating CLA checks; no publication, tag creation, or deployment."
   },
   "candidate:.github/workflows/codeql.yml/scope": {
     "kind": "ordinary",
@@ -352,10 +356,6 @@
     "qualifier": "Checks; no publication, tag creation, or deployment."
   },
   "candidate:.github/workflows/fetch-public-documents.yml/fetch": {
-    "kind": "ordinary",
-    "qualifier": "Checks; no publication, tag creation, or deployment."
-  },
-  "candidate:.github/workflows/flake-gate.yml/report": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment."
   },
@@ -625,31 +625,31 @@
   },
   "candidate:.github/workflows/release.yml/resolve": {
     "kind": "support",
-    "qualifier": "Prerequisites follow the workflow's execution conditions."
+    "qualifier": "Resolves and verifies the requested release source and emits a trusted receipt for release jobs."
   },
   "candidate:.github/workflows/release.yml/smoke": {
     "kind": "support",
-    "qualifier": "Prerequisites follow the workflow's execution conditions."
+    "qualifier": "Smoke-tests the built API image by digest before release publication and promotion."
   },
   "candidate:.github/workflows/release.yml/build": {
     "kind": "priority",
-    "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions."
+    "qualifier": "Builds, pushes and attests API image digests for the resolved release."
   },
   "candidate:.github/workflows/release.yml/prepare-web-image": {
     "kind": "priority",
-    "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions."
+    "qualifier": "Reuses a verified web receipt or builds, publishes and attests the resolved release web image."
   },
   "candidate:.github/workflows/release.yml/manifest": {
     "kind": "priority",
-    "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions."
+    "qualifier": "Publishes immutable release image tags and creates the draft GitHub release with its artifacts."
   },
   "candidate:.github/workflows/release.yml/promote": {
     "kind": "priority",
-    "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions."
+    "qualifier": "Deploys stable releases to production, verifies the served commit, publishes the release and advances stable image tags."
   },
   "candidate:.github/workflows/release.yml/promote-staging": {
     "kind": "priority",
-    "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions."
+    "qualifier": "Deploys release-candidate tags to staging and publishes the GitHub prerelease."
   },
   "candidate:.github/workflows/safe-chain-cache.yml/warm": {
     "kind": "ordinary",
@@ -657,7 +657,7 @@
   },
   "candidate:.github/workflows/scheduled-run-alerts.yml/notify": {
     "kind": "ordinary",
-    "qualifier": "Checks; no publication, tag creation, or deployment."
+    "qualifier": "Notifies failures of watched workflows, including release health and quarantine maintenance; no release publication or deployment."
   },
   "candidate:.github/workflows/scorecard.yml/scorecard": {
     "kind": "ordinary",
@@ -714,5 +714,33 @@
   "supplier1:.github/workflows/provenance-update.yml/update": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/ci.yml/code-quality-api-cancel": {
+    "kind": "ordinary",
+    "qualifier": "Cancels same-repository pull-request runs after API code-quality failure; no publication or deployment."
+  },
+  "candidate:.github/workflows/ci.yml/code-quality-web-rest-cancel": {
+    "kind": "ordinary",
+    "qualifier": "Cancels same-repository pull-request runs after web or remaining code-quality failure; no publication or deployment."
+  },
+  "candidate:.github/workflows/flaky-test-quarantine.yml/expiry": {
+    "kind": "ordinary",
+    "qualifier": "Checks quarantine expiry on scheduled or manual default-branch runs; no publication or deployment."
+  },
+  "candidate:.github/workflows/flaky-test-quarantine.yml/propose": {
+    "kind": "ordinary",
+    "qualifier": "Scans flake history and opens or refreshes a review-required quarantine proposal; no release publication or deployment."
+  },
+  "candidate:.github/workflows/release-health.yml/window": {
+    "kind": "support",
+    "qualifier": "Evaluates a dispatched stable release after its observation window and records health evidence for the next promotion gate."
+  },
+  "candidate:.github/workflows/release.yml/release-health-gate": {
+    "kind": "support",
+    "qualifier": "Requires healthy previous-release evidence or explicit manual acknowledgement before stable production promotion."
+  },
+  "candidate:.github/workflows/release.yml/dispatch-release-health": {
+    "kind": "support",
+    "qualifier": "Dispatches health evaluation after successful stable production promotion to supply evidence for the next release gate."
   }
 }

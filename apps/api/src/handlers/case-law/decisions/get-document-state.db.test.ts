@@ -290,7 +290,11 @@ if (!databaseUrl || !runPostgresTests) {
       ]);
       const detail = await caseLawPublicReadDb(
         async (tx) =>
-          await listPublicDecisionLanguageAlternates({ tx, languageGroupKey }),
+          await listPublicDecisionLanguageAlternates({
+            tx,
+            languageGroupKey,
+            countries: ["CZE"],
+          }),
       );
       expect(
         detail.map(({ id, language, hasDocument }) => ({

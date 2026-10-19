@@ -309,10 +309,8 @@ const getSuggestedPrompts = createSafeRootHandler(
               maxOutputTokens: SUGGESTIONS_MAX_OUTPUT_TOKENS,
               temperature: 0.3,
               serviceTier: "standard",
-              abortSignal: AbortSignal.any([
-                actionSignal,
-                AbortSignal.timeout(15_000),
-              ]),
+              abortSignal: actionSignal,
+              deadlineMs: 15_000,
             });
             return Result.ok({ prompts: cleanSuggestionsText(text) });
           } catch (error) {

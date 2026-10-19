@@ -71,13 +71,6 @@ test("the consolidated quick checks retain the support classification of the job
   ).toBe(SUPPORT);
 });
 
-test("the opt-in flake report remains an ordinary non-publishing check", () => {
-  const { decisions } = readClassificationInputs(repositoryRoot);
-  expect(
-    decisions["candidate:.github/workflows/flake-gate.yml/report"]?.kind,
-  ).toBe(ORDINARY);
-});
-
 test("committed classifications declare every local action", () => {
   const manifest = v.parse(
     PUBLIC_METADATA,
