@@ -67,7 +67,7 @@ import {
 } from "@/api/lib/chat/thread-stored-content-send-mode";
 import type { ThreadStoredContentSendMode } from "@/api/lib/chat/thread-stored-content-send-mode";
 import type { TimestampIdCursor } from "@/api/lib/db-pagination";
-import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import { isThreadMemoryEnabled } from "@/api/lib/memory/memory-access";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
 
@@ -154,7 +154,7 @@ type RunChatThreadCompactionOptions = {
    * Whether this deployment may derive AI memory from chat. Passed in rather
    * than read from `env` here so the value that lands on the checkpoint is the
    * one the caller observed, and so the re-enable path is exercisable.
-   * Defaults to the deployment flag.
+   * Defaults to current thread-owner feature admission.
    */
   extractionFeatureEnabled?: boolean | undefined;
   modelId?: string | undefined;
@@ -776,7 +776,7 @@ const advanceCheckpointOnTx = async ({
   const memoryEligibility = resolveCheckpointMemoryEligibility({
     extractionFeatureEnabled:
       options.extractionFeatureEnabled ??
-      isDeploymentFeatureEnabled("FEATURE_AI_MEMORY"),
+      (await isThreadMemoryEnabled({ tx, threadId })),
     previous: observed.checkpoint?.memoryEligibility ?? null,
     segmentMessages: plan.messagesToSummarize,
   });

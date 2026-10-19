@@ -138,6 +138,7 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "legislation_documents.sections",
   "legislation_documents.document_ast",
   "legislation_documents.metadata",
+  "legislation_amendment_snapshots.coverage",
   "legislation_sources.config",
   "legislation_sources.descriptor",
   "mcp_connector_authorization_reviews.observed_endpoint_origins",
@@ -177,6 +178,7 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "soft_law_document_versions.metadata",
   "soft_law_document_versions.source_dates",
   "soft_law_ingestion_attempts.entry",
+  "soft_law_ingestion_attempts.raw_objects",
   "system_audit_runs.counts",
   "template_fills.structure_errors",
   "template_persistence_requests.result",
@@ -503,6 +505,8 @@ const MATTER_REMOVAL_RETAINED_COLUMNS = {
     "Organization-scoped connection; the person stays an organization member.",
   "sharepoint_oauth_state.user_id":
     "Organization-scoped connection; the person stays an organization member.",
+  "chat_tool_grants.user_id":
+    "The person's own organization-scoped tool approvals; every tool call still checks matter access.",
   "invitation.inviter_id":
     "Organization invitation; the person stays an organization member.",
   "session.user_id":

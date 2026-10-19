@@ -230,10 +230,8 @@ const buildProposalRequest = ({
       tenantWorkspaceIds: [workspaceId],
       system: SYSTEM_PROMPT,
       messages,
-      abortSignal: AbortSignal.any([
-        abortSignal,
-        AbortSignal.timeout(timeoutMs),
-      ]),
+      abortSignal,
+      deadlineMs: timeoutMs,
       outputSchema: proposedPositionsSchema,
     },
   };
