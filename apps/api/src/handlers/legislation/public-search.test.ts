@@ -58,7 +58,9 @@ const runTimedSearch = async (
   let clock = 0;
   let databaseReads = 0;
   const records: Parameters<
-    NonNullable<Parameters<typeof searchLegislationHandler>[3]>["emitStage"]
+    NonNullable<
+      NonNullable<Parameters<typeof searchLegislationHandler>[3]>["emitStage"]
+    >
   >[0][] = [];
   const dependencies = {
     provider: "corpus-index",
