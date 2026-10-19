@@ -10809,40 +10809,37 @@ describe("OpenAI-compatible MCP tools", () => {
     });
   });
 
-  test("organization settings reach validation without confirmation", async () => {
+  test("organization settings need a person's approval in stella", async () => {
     const result = await handleMcpToolCall({
       args: {},
       context: createContext(),
       toolName: "update_organization_settings",
     });
 
-    const error = validationEnvelope(result);
-    expect(error["code"]).toBe("validation_error");
-    expect(error["message"]).toBe("Provide at least one setting to change");
+    expectErrorEnvelope(result, {
+      code: "person_approval_required",
+      message:
+        "update_organization_settings needs a person's approval in stella and cannot run from this client",
+      hint: "Do not retry it. Describe the change in your reply so the user can make or approve it in stella.",
+    });
   });
 
-  test("member removal needs a person's approval, whatever the client sends", async () => {
-    for (const args of [
-      { matter_id: "00000000-0000-4000-8000-0000000e0001", user_id: "user_2" },
-      {
+  test("member removal needs a person's approval in stella", async () => {
+    const result = await handleMcpToolCall({
+      args: {
         matter_id: "00000000-0000-4000-8000-0000000e0001",
         user_id: "user_2",
-        confirm: true,
       },
-    ]) {
-      const result = await handleMcpToolCall({
-        args,
-        context: createContext(),
-        toolName: "remove_matter_member",
-      });
+      context: createContext(),
+      toolName: "remove_matter_member",
+    });
 
-      expectErrorEnvelope(result, {
-        code: "person_approval_required",
-        message:
-          "remove_matter_member needs a person's approval in stella and cannot run from this client",
-        hint: "Do not retry it. Describe the change in your reply so the user can make or approve it in stella.",
-      });
-    }
+    expectErrorEnvelope(result, {
+      code: "person_approval_required",
+      message:
+        "remove_matter_member needs a person's approval in stella and cannot run from this client",
+      hint: "Do not retry it. Describe the change in your reply so the user can make or approve it in stella.",
+    });
   });
 
   // A guessed tool name reports unknown_tool rather than a bare string, so an

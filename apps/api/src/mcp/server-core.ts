@@ -44,8 +44,6 @@ import {
 import { chargeMcpReadBytes } from "@/api/lib/rate-limit/mcp-read-fence";
 import { isEventStreamResponse, withSseHeartbeat } from "@/api/lib/sse";
 import { mcpActionPeriodIdentity } from "@/api/mcp/action-admission-identity";
-import { AGENT_CALL_SURFACE, decideAgentCall } from "@/api/mcp/agent-access";
-import type { AgentCallRefusal } from "@/api/mcp/agent-access";
 import {
   isMcpSession,
   type McpAuthenticationFailure,
@@ -102,10 +100,7 @@ import {
   setMcpMetricProtocolPath,
   setMcpMetricToolName,
 } from "@/api/mcp/request-metrics";
-import {
-  getStaticMcpToolDefinition,
-  listStaticMcpToolDefinitions,
-} from "@/api/mcp/static-tool-definitions";
+import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
 import { scopeHintToSurface } from "@/api/mcp/surface-tool-mentions";
 import { withToolAuthChallenge } from "@/api/mcp/tool-auth-challenge";
 import { resolveMcpReadClass } from "@/api/mcp/tool-types";
@@ -131,41 +126,6 @@ const responseDisposition = new AsyncLocalStorage<{ type: "read" | "tool" }>();
 const mcpStructuredErrorResult = (
   args: Parameters<typeof structuredErrorResult>[0],
 ): CallToolResult => serializeToolResult(structuredErrorResult(args));
-
-/**
- * The refusal for a static tool call a person must make or approve, decided
- * before action admission so it never spends the caller's budget. A missing
- * confirmation is left to dispatch, which reports it after the call's
- * references resolve. Connector tools are outside agent access; their servers
- * own their confirmation protocol.
- */
-const personGatedRefusal = ({
-  args,
-  context,
-  mode,
-  toolName,
-}: {
-  args: Record<string, unknown>;
-  context: McpRequestContext;
-  mode: McpMode;
-  toolName: string;
-}): AgentCallRefusal | null => {
-  const definition = getStaticMcpToolDefinition(toolName, mode);
-  if (definition === undefined) {
-    return null;
-  }
-  const decision = decideAgentCall({
-    target: { type: "tool", name: toolName, access: definition.access },
-    context,
-    surface: AGENT_CALL_SURFACE.mcp,
-    subject: toolName,
-    confirmed: args["confirm"] === true,
-  });
-  return decision.type === "refuse" &&
-    decision.refusal.code !== "confirmation_required"
-    ? decision.refusal
-    : null;
-};
 
 // Only an explicit read hint permits refusal after a tool has run.
 const toolResultDisposition = (annotations: McpTool["annotations"]) =>
@@ -949,16 +909,6 @@ export const createMcpHttpRequestHandler = ({
     });
     if (authorityRefusal !== null) {
       return mcpStructuredErrorResult(authorityRefusal);
-    }
-    // Likewise, a call only a person may make or approve.
-    const personRefusal = personGatedRefusal({
-      args: toolRequest.params.arguments ?? {},
-      context,
-      mode,
-      toolName,
-    });
-    if (personRefusal !== null) {
-      return mcpStructuredErrorResult(personRefusal);
     }
 
     const resultDisposition = toolResultDisposition(definition.annotations);

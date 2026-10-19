@@ -236,8 +236,10 @@ The maps are private: `decideAgentCall` (dispatch, chat) and
 `describeAgentAccess` (listings, the CLI registry export) read them through one
 resolver, and `agent-access.test.ts` asserts no other module gates on
 confirmation. Listings append a sentence to each `person-approves` or
-`person-only` description. A missing confirmation is reported after the call's
-references resolve; every other refusal comes before the input is read.
+`person-only` description. Agent access is decided once the caller is known to
+hold the operation's grant, so a role without it still reads
+`permission_denied`. A missing confirmation is reported after the call's
+references resolve; every other refusal comes before the handler runs.
 Upstream connector tools are outside this map: their servers own their own
 confirmation protocol.
 

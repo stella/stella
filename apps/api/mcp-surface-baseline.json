@@ -366,8 +366,8 @@
       "documents": {"title": 23, "description": 290, "inputSchema": 750, "outputSchema": 464, "annotations": 124, "payloadUtf8Bytes": 1798}
     },
     "write_capability": {
-      "advanced": {"title": 16, "description": 433, "inputSchema": 1053, "outputSchema": 95, "annotations": 116, "payloadUtf8Bytes": 1814},
-      "documents": {"title": 16, "description": 326, "inputSchema": 1015, "outputSchema": 95, "annotations": 116, "payloadUtf8Bytes": 1669}
+      "advanced": {"title": 16, "description": 503, "inputSchema": 1053, "outputSchema": 95, "annotations": 116, "payloadUtf8Bytes": 1884},
+      "documents": {"title": 16, "description": 396, "inputSchema": 1015, "outputSchema": 95, "annotations": 116, "payloadUtf8Bytes": 1739}
     }
   }
 }

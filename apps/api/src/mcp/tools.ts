@@ -456,26 +456,6 @@ const dispatchMcpToolCall = async ({
     );
   }
 
-  // Agent access, before the input is read: what a person must run or approve
-  // is refused whatever the arguments. A missing confirmation is reported
-  // below, once the call's references resolve, so it never answers for a
-  // resource the caller cannot see. `confirm` is read exactly, as the
-  // normalizer reads it. Capability-catalog tools defer to the capability
-  // their call selects (`capability-tools.ts`).
-  const decision = decideAgentCall({
-    target: { type: "tool", name: toolName, access: staticTool.access },
-    context,
-    surface: AGENT_CALL_SURFACE.mcp,
-    subject: toolName,
-    confirmed: args["confirm"] === true,
-  });
-  if (
-    decision.type === "refuse" &&
-    decision.refusal.code !== "confirmation_required"
-  ) {
-    return serializeForSurface(structuredErrorResult(decision.refusal));
-  }
-
   const unknownArgs = findUndeclaredArguments({
     args,
     inputSchema: staticTool.inputSchema,
@@ -523,6 +503,26 @@ const dispatchMcpToolCall = async ({
       inputDenial,
     );
     return serializeForSurface(structuredErrorResult(refusal));
+  }
+
+  // Agent access, once the caller is known to hold the operation's grant: what
+  // a person must run or approve is refused here, before the handler or any
+  // reference lookup. A missing confirmation is reported below, once the
+  // call's references resolve, so it never answers for a resource the caller
+  // cannot see. Capability-catalog tools defer to the capability their call
+  // selects (`capability-tools.ts`).
+  const decision = decideAgentCall({
+    target: { type: "tool", name: toolName, access: staticTool.access },
+    context,
+    surface: AGENT_CALL_SURFACE.mcp,
+    subject: toolName,
+    confirmed: normalizedArgs["confirm"] === true,
+  });
+  if (
+    decision.type === "refuse" &&
+    decision.refusal.code !== "confirmation_required"
+  ) {
+    return serializeForSurface(structuredErrorResult(decision.refusal));
   }
 
   const handler = getStaticMcpToolHandler(toolName, mode);

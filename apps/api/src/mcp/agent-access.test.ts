@@ -193,6 +193,46 @@ describe("classification", () => {
     );
   });
 
+  test("organization-wide settings changes need a person's approval", () => {
+    // The sender list is a read the catalog files under write (it needs the
+    // settings grant); every other settings write changes the organization.
+    const reads = new Set([
+      "organization-settings.correspondence.allowed-senders.list",
+    ]);
+    const settingsWrites = capabilityCatalog.filter(
+      ({ id, access }) =>
+        id.startsWith("organization-settings.") &&
+        access === "write" &&
+        !reads.has(id),
+    );
+    expect(settingsWrites.length).toBeGreaterThan(0);
+    const changesSettings = {
+      kind: AGENT_ACCESS_KIND.personApproves,
+      reason: "changes-organization-settings",
+    };
+    for (const { id } of settingsWrites) {
+      expect({
+        id,
+        access: describeAgentAccess({
+          target: { type: "capability", id },
+          context: CALLER,
+        }).access,
+      }).toEqual({ id, access: changesSettings });
+    }
+    for (const name of [
+      "update_organization_settings",
+      "set_practice_jurisdictions",
+    ]) {
+      expect(
+        describeAgentAccess({ target: toolTarget(name), context: CALLER })
+          .access,
+      ).toEqual(changesSettings);
+    }
+    for (const id of reads) {
+      expect(kindOf({ type: "capability", id })).toBe(AGENT_ACCESS_KIND.open);
+    }
+  });
+
   test("an unclassified target is a defect, not an open door", () => {
     expect(() =>
       describeAgentAccess({
@@ -302,27 +342,44 @@ describe("decisions", () => {
 });
 
 describe("transport boundary", () => {
-  test("add_matter_member does not run from an MCP caller that sends confirm", async () => {
-    const { context, scopedDb } = createContext();
-    const result = await handleMcpToolCall({
-      args: { matter_id: MATTER_ID, user_id: "user_2", confirm: true },
-      context,
-      toolName: "add_matter_member",
-    });
-    expect(errorCode(result)).toBe("person_approval_required");
-    expect(scopedDb).not.toHaveBeenCalled();
-  });
+  // These tools declare no `confirm`, so sending it is an input error; with or
+  // without it, the handler never runs.
+  test.each([
+    {
+      tool: "add_matter_member",
+      args: { matter_id: MATTER_ID, user_id: "user_2" },
+      code: "person_approval_required",
+    },
+    {
+      tool: "delete_matter",
+      args: { matter_id: MATTER_ID },
+      code: "person_only",
+    },
+    {
+      tool: "update_organization_settings",
+      args: { prompt_caching_enabled: true },
+      code: "person_approval_required",
+    },
+  ])(
+    "$tool does not run from an MCP caller, even with confirm",
+    async ({ tool, args, code }) => {
+      const { context, scopedDb } = createContext();
+      const refused = await handleMcpToolCall({
+        args,
+        context,
+        toolName: tool,
+      });
+      expect(errorCode(refused)).toBe(code);
 
-  test("delete_matter does not run from an MCP caller that sends confirm", async () => {
-    const { context, scopedDb } = createContext();
-    const result = await handleMcpToolCall({
-      args: { matter_id: MATTER_ID, confirm: true },
-      context,
-      toolName: "delete_matter",
-    });
-    expect(errorCode(result)).toBe("person_only");
-    expect(scopedDb).not.toHaveBeenCalled();
-  });
+      const withConfirm = await handleMcpToolCall({
+        args: { ...args, confirm: true },
+        context,
+        toolName: tool,
+      });
+      expect(withConfirm.isError).toBe(true);
+      expect(scopedDb).not.toHaveBeenCalled();
+    },
+  );
 
   test("the generic executor refuses the same capabilities", async () => {
     const { context, scopedDb } = createContext();

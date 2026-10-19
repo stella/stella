@@ -25,6 +25,31 @@ const APP_BASE_URL = env.FRONTEND_URL.replace(/\/$/u, "");
 
 const { getMcpToolDefinition, handleMcpToolCall, listMcpTools } =
   await import("@/api/mcp/tools");
+const { STELLA_TOOL_HANDLERS } = await import("@/api/mcp/stella-tools");
+const { isMcpEgressPlan } = await import("@/api/mcp/tool-types");
+const { serializeToolResult } = await import("@/api/mcp/tool-utils");
+
+/**
+ * The jurisdictions handler as an approved call runs it. MCP dispatch refuses
+ * the tool before its handler, because changing organization settings needs a
+ * person's approval in stella.
+ */
+const runSetPracticeJurisdictions = async ({
+  args,
+  context,
+}: {
+  args: Record<string, unknown>;
+  context: McpRequestContext;
+}) => {
+  const response = await STELLA_TOOL_HANDLERS.set_practice_jurisdictions({
+    args,
+    context,
+  });
+  if (isMcpEgressPlan(response)) {
+    throw new Error("set_practice_jurisdictions returns a finished result");
+  }
+  return serializeToolResult(response);
+};
 
 type PracticeJurisdictionRow = {
   practiceJurisdictions: { countryCode: string; isPrimary: boolean }[];
@@ -207,7 +232,7 @@ describe("set_practice_jurisdictions MCP tool", () => {
       }),
     });
 
-    const result = await handleMcpToolCall({
+    const result = await runSetPracticeJurisdictions({
       args: {
         jurisdictions: [
           { country_code: "CZ", is_primary: true },
@@ -215,7 +240,6 @@ describe("set_practice_jurisdictions MCP tool", () => {
         ],
       },
       context,
-      toolName: "set_practice_jurisdictions",
     });
 
     expect(result.isError).toBeUndefined();
@@ -243,6 +267,29 @@ describe("set_practice_jurisdictions MCP tool", () => {
         resourceType: "organization_settings",
       }),
     );
+  });
+
+  test("an MCP call needs a person's approval in stella", async () => {
+    const insertMock = mock(() => ({
+      values: () => ({
+        onConflictDoUpdate: async () => undefined,
+      }),
+    }));
+    const context = createContext({
+      scopedDb: createScopedDb({ insert: insertMock }),
+    });
+
+    const result = await handleMcpToolCall({
+      args: { jurisdictions: [{ country_code: "CZ", is_primary: true }] },
+      context,
+      toolName: "set_practice_jurisdictions",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseToolPayload(result)).toMatchObject({
+      error: { code: "person_approval_required" },
+    });
+    expect(insertMock).not.toHaveBeenCalled();
   });
 
   test("rejects roles without organization settings permission", async () => {
@@ -279,7 +326,7 @@ describe("set_practice_jurisdictions MCP tool", () => {
   test("promotes the first entry to primary when none was flagged", async () => {
     const context = createContext();
 
-    const result = await handleMcpToolCall({
+    const result = await runSetPracticeJurisdictions({
       args: {
         jurisdictions: [
           { country_code: "CZ", is_primary: false },
@@ -287,7 +334,6 @@ describe("set_practice_jurisdictions MCP tool", () => {
         ],
       },
       context,
-      toolName: "set_practice_jurisdictions",
     });
 
     expect(parseToolPayload(result)).toEqual({
@@ -301,7 +347,7 @@ describe("set_practice_jurisdictions MCP tool", () => {
   test("rejects more than one primary jurisdiction", async () => {
     const context = createContext();
 
-    const result = await handleMcpToolCall({
+    const result = await runSetPracticeJurisdictions({
       args: {
         jurisdictions: [
           { country_code: "CZ", is_primary: true },
@@ -309,7 +355,6 @@ describe("set_practice_jurisdictions MCP tool", () => {
         ],
       },
       context,
-      toolName: "set_practice_jurisdictions",
     });
 
     expect(result.isError).toBe(true);
@@ -323,12 +368,11 @@ describe("set_practice_jurisdictions MCP tool", () => {
   test("rejects malformed country codes", async () => {
     const context = createContext();
 
-    const result = await handleMcpToolCall({
+    const result = await runSetPracticeJurisdictions({
       args: {
         jurisdictions: [{ country_code: "ZZZ", is_primary: true }],
       },
       context,
-      toolName: "set_practice_jurisdictions",
     });
 
     expect(result.isError).toBe(true);
@@ -337,12 +381,11 @@ describe("set_practice_jurisdictions MCP tool", () => {
   test("rejects camelCase jurisdiction keys", async () => {
     const context = createContext();
 
-    const result = await handleMcpToolCall({
+    const result = await runSetPracticeJurisdictions({
       args: {
         jurisdictions: [{ countryCode: "CZ", isPrimary: true }],
       },
       context,
-      toolName: "set_practice_jurisdictions",
     });
 
     expect(result.isError).toBe(true);
@@ -365,10 +408,9 @@ describe("set_practice_jurisdictions MCP tool", () => {
       scopedDb: createScopedDb({ insert: insertMock }),
     });
 
-    const result = await handleMcpToolCall({
+    const result = await runSetPracticeJurisdictions({
       args: { jurisdictions: [] },
       context,
-      toolName: "set_practice_jurisdictions",
     });
 
     expect(result.isError).toBe(true);
@@ -379,10 +421,9 @@ describe("set_practice_jurisdictions MCP tool", () => {
   test("rejects input missing the jurisdictions field", async () => {
     const context = createContext();
 
-    const result = await handleMcpToolCall({
+    const result = await runSetPracticeJurisdictions({
       args: {},
       context,
-      toolName: "set_practice_jurisdictions",
     });
 
     expect(result.isError).toBe(true);
@@ -394,10 +435,9 @@ describe("set_practice_jurisdictions MCP tool", () => {
   test("rejects non-array jurisdictions input", async () => {
     const context = createContext();
 
-    const result = await handleMcpToolCall({
+    const result = await runSetPracticeJurisdictions({
       args: { jurisdictions: "CZ" },
       context,
-      toolName: "set_practice_jurisdictions",
     });
 
     expect(result.isError).toBe(true);
