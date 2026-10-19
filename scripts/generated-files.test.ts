@@ -877,14 +877,14 @@ test("route-tree CI scope covers every manifest input and output", () => {
   const paths = [...routeTree.inputs, ...routeTree.outputs].map((glob) =>
     glob.replace(/\/\*\*$/u, "/*"),
   );
-  expect([...ROUTE_TREE_INPUTS].toSorted()).toEqual(paths.toSorted());
+  expect(paths.toSorted()).toEqual([...ROUTE_TREE_INPUTS].toSorted());
 });
 
 test("CI rate snapshot scope stays pinned to the manifest", () => {
   const inputs = generator("model-rates").inputs.map((glob) =>
     glob.replace(/\/\*\*$/u, "/*"),
   );
-  expect([...MODEL_CATALOG_DRIFT_INPUTS].toSorted()).toEqual(inputs.toSorted());
+  expect(inputs.toSorted()).toEqual([...MODEL_CATALOG_DRIFT_INPUTS].toSorted());
 });
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
