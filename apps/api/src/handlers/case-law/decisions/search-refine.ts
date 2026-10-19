@@ -164,10 +164,8 @@ const refineCaseLawSearch = createSafeRootHandler(
             prompt,
             outputSchema: caseLawRefineOutputSchema,
             maxOutputTokens: 120,
-            abortSignal: AbortSignal.any([
-              request.signal,
-              AbortSignal.timeout(CASE_LAW_REFINE_TIMEOUT_MS),
-            ]),
+            abortSignal: request.signal,
+            deadlineMs: CASE_LAW_REFINE_TIMEOUT_MS,
           }),
         catch: (error: unknown) => {
           analytics.captureError(error);
