@@ -20,6 +20,13 @@ import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { withTimeout } from "@/api/lib/with-timeout";
 import type { McpRequestContext } from "@/api/mcp/context";
 
+type CaseLawCourtContext = {
+  testDependencies?: Pick<
+    NonNullable<McpRequestContext["testDependencies"]>,
+    "readCaseLawCourtNames"
+  >;
+};
+
 /**
  * A court filter as an agent writes it, read onto a court the corpus stores.
  *
@@ -288,7 +295,7 @@ export const resolveCourtFilter = async ({
   court,
   courts: requestedCourts,
 }: {
-  context: McpRequestContext;
+  context: CaseLawCourtContext;
   country: string;
   court: string | undefined;
   courts?: string[] | undefined;
@@ -388,7 +395,7 @@ const readCachedCourtNames = async (
  * did before this reader existed, which is the honest degradation.
  */
 const loadCaseLawCourtNames = async (
-  context: McpRequestContext,
+  context: CaseLawCourtContext,
   country: string,
 ): Promise<readonly string[] | null> => {
   const read = context.testDependencies?.readCaseLawCourtNames;

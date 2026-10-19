@@ -17,14 +17,18 @@ export type RequiresThirdPartyOutbound = {
   readonly [REQUIRES_THIRD_PARTY_OUTBOUND]: true;
 };
 
-type ThirdPartyOutboundHandlerOptions = {
+type ThirdPartyOutboundHandlerOptions<TContext> = {
   args: Record<string, unknown>;
-  context: McpRequestContext;
+  context: TContext;
   permit: ThirdPartyOutboundPermit;
 };
 
-type ThirdPartyOutboundHandler<TData, TDependencies extends unknown[]> = ((
-  request: { args: Record<string, unknown>; context: McpRequestContext },
+type ThirdPartyOutboundHandler<
+  TData,
+  TDependencies extends unknown[],
+  TContext,
+> = ((
+  request: { args: Record<string, unknown>; context: TContext },
   ...dependencies: TDependencies
 ) => Promise<TypedMcpToolResponse<TData>>) &
   RequiresThirdPartyOutbound;
@@ -37,12 +41,14 @@ type ThirdPartyOutboundHandler<TData, TDependencies extends unknown[]> = ((
 export const withThirdPartyOutbound = <
   TData,
   TDependencies extends unknown[] = [],
+  TContext extends Pick<McpRequestContext, "thirdPartyOutboundPermit"> =
+    McpRequestContext,
 >(
   handler: (
-    options: ThirdPartyOutboundHandlerOptions,
+    options: ThirdPartyOutboundHandlerOptions<TContext>,
     ...dependencies: TDependencies
   ) => Promise<TypedMcpToolResponse<TData>>,
-): ThirdPartyOutboundHandler<TData, TDependencies> =>
+): ThirdPartyOutboundHandler<TData, TDependencies, TContext> =>
   Object.assign(
     async (
       {
@@ -50,7 +56,7 @@ export const withThirdPartyOutbound = <
         context,
       }: {
         args: Record<string, unknown>;
-        context: McpRequestContext;
+        context: TContext;
       },
       ...dependencies: TDependencies
     ): Promise<TypedMcpToolResponse<TData>> => {

@@ -10,19 +10,25 @@ import {
   brandPersistedCaseLawDecisionId,
   brandPersistedLegislationDocumentId,
 } from "@/api/lib/safe-id-boundaries";
-import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import {
+  asTestRaw,
+  publicMcpHandlerContextForTest,
+} from "@/api/tests/helpers/test-tool-set";
 
-import type { McpRequestContext } from "./context";
+import type { McpRequestContext, PublicMcpHandlerContext } from "./context";
 import {
   blocksDecisionOutput,
   openDecisionOutput,
   provisionPreviewOutput,
   READER_PAGE_MAX_CHARS,
 } from "./decision-reader-contract";
-import { DECISION_READER_TOOL_SET } from "./decision-reader-tools";
+import {
+  DECISION_READER_TOOL_HANDLERS,
+  DECISION_READER_TOOL_SET,
+} from "./decision-reader-tools";
 import { decodeReaderCursor } from "./decision-reader.logic";
 import type { ReaderSource } from "./decision-reader.logic";
-import type { McpToolHandler, McpToolResponse } from "./tool-types";
+import type { McpToolResponse } from "./tool-types";
 
 const id = "af6c7d89-41ab-42ba-814e-b657703584eb";
 const otherId = "af6c7d89-41ab-42ba-814e-b657703584ec";
@@ -107,9 +113,18 @@ const sourceOf = (
   }) satisfies ReaderSource;
 const contextWith = (
   testDependencies: NonNullable<McpRequestContext["testDependencies"]>,
-) => asTestRaw<McpRequestContext>({ testDependencies });
+) =>
+  publicMcpHandlerContextForTest(
+    asTestRaw<McpRequestContext>({
+      organizationId: "00000000-0000-4000-8000-000000000001",
+      testDependencies,
+    }),
+  );
 
-type HandlerInput = Parameters<McpToolHandler>[0];
+type HandlerInput = {
+  args: Record<string, unknown>;
+  context: PublicMcpHandlerContext;
+};
 
 // Registry handlers erase their data type; parsing through the published
 // output schema restores it and asserts the contract on every call.
@@ -131,15 +146,15 @@ const typedCall =
   };
 
 const open = typedCall(
-  DECISION_READER_TOOL_SET.handlers.open_case_law_decision,
+  DECISION_READER_TOOL_HANDLERS.open_case_law_decision,
   openDecisionOutput,
 );
 const blocks = typedCall(
-  DECISION_READER_TOOL_SET.handlers.read_case_law_decision_blocks,
+  DECISION_READER_TOOL_HANDLERS.read_case_law_decision_blocks,
   blocksDecisionOutput,
 );
 const preview = typedCall(
-  DECISION_READER_TOOL_SET.handlers.preview_cited_provision,
+  DECISION_READER_TOOL_HANDLERS.preview_cited_provision,
   provisionPreviewOutput,
 );
 

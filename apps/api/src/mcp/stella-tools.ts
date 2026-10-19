@@ -62,6 +62,7 @@ import {
 } from "@/api/handlers/case-law/decisions/get-deferred-document";
 import { interpretDecisionQuery } from "@/api/handlers/case-law/decisions/search-interpretation";
 import { dateOfBirthFromColumns } from "@/api/handlers/contacts/person-details";
+import { lawReadRequestObserver } from "@/api/handlers/legal-resolve/admission";
 import {
   identifyOrganizationJurisdictions,
   normalizePracticeJurisdictions,
@@ -143,10 +144,7 @@ import {
 } from "@/api/lib/safe-id-boundaries";
 import { decodeCursor } from "@/api/lib/search/cursor";
 import { getSearchReader } from "@/api/lib/search/provider";
-import {
-  ACTION_COST_CALL_KIND,
-  actionRequestObserver,
-} from "@/api/lib/usage/action-costs/context";
+import { ACTION_COST_CALL_KIND } from "@/api/lib/usage/action-costs/context";
 import { withTimeout } from "@/api/lib/with-timeout";
 import { resolveCourtFilter } from "@/api/mcp/case-law-court-filter";
 import { decisionBlockDeepLink } from "@/api/mcp/case-law-decision-link";
@@ -171,7 +169,10 @@ import {
   MANY_REQUIRED_TERMS_THRESHOLD,
   searchCaseLawTexts,
 } from "@/api/mcp/case-law-search-guidance";
-import type { McpRequestContext } from "@/api/mcp/context";
+import type {
+  McpRequestContext,
+  PublicMcpHandlerContext,
+} from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import {
   defaultReadCaseLawCoverageHandler,
@@ -196,11 +197,11 @@ import type {
   InternalToolErrorResult,
   McpTextFieldSpec,
   McpToolDefinition,
-  McpToolHandler,
+  PublicMcpToolHandler,
   TypedMcpToolHandler,
   TypedMcpToolResponse,
 } from "@/api/mcp/tool-types";
-import { defineMcpToolSet } from "@/api/mcp/tool-types";
+import { defineMcpToolSet, definePublicReadTool } from "@/api/mcp/tool-types";
 import {
   buildCaseLawDecisionAppUrl,
   legalCitationLinkFields,
@@ -259,17 +260,6 @@ const defaultReadWorkspaceMembersHandler: typeof readWorkspaceMembersHandler =
     await (
       await import("@/api/handlers/workspaces/workspace-members-read")
     ).readWorkspaceMembersHandler(input);
-
-type StellaToolName =
-  | "case_law_coverage"
-  | "list_matters"
-  | "read_case_law_citations"
-  | "read_case_law_decision"
-  | "read_contact"
-  | "read_content_across_matters"
-  | "search_case_law"
-  | "search_across_matters"
-  | "set_practice_jurisdictions";
 
 // --- Text-field specs (plan 049, Option B) --------------------------------
 
@@ -1036,7 +1026,7 @@ const toPracticeJurisdiction = (
   isPrimary: jurisdiction.is_primary,
 });
 
-export const STELLA_TOOL_DEFINITIONS = [
+const RAW_STELLA_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
     consumesServices: false,
     annotations: {
@@ -1333,7 +1323,7 @@ export const STELLA_TOOL_DEFINITIONS = [
     },
     scope: "stella:onboarding",
   }),
-] as const satisfies readonly McpToolDefinition[];
+] as const;
 
 const emptyCaseLawSearchNextStep = {
   nextStep:
@@ -2335,11 +2325,13 @@ const mismatchedSearchCursorResult = (encoded: number, queryCount: number) =>
     hint: `Send the same ${String(encoded)} queries this cursor was issued for, in the same order, or omit 'cursor' to start a new search.`,
   });
 
-const mcpCorpusQueryVariant = ({ testDependencies }: McpRequestContext) =>
+const mcpCorpusQueryVariant = ({ testDependencies }: PublicMcpHandlerContext) =>
   testDependencies?.corpusIndexQueryVariant ??
   envBase.CORPUS_INDEX_QUERY_VARIANT;
 
-const mcpCaseLawSearchGuidance = ({ testDependencies }: McpRequestContext) =>
+const mcpCaseLawSearchGuidance = ({
+  testDependencies,
+}: PublicMcpHandlerContext) =>
   testDependencies?.caseLawSearchGuidance ??
   envBase.MCP_CASE_LAW_SEARCH_GUIDANCE;
 
@@ -2499,7 +2491,7 @@ const readSearchProvision = async ({
   country,
 }: {
   args: v.InferOutput<typeof searchCaseLawArgsSchema>;
-  context: McpRequestContext;
+  context: PublicMcpHandlerContext;
   country: string;
 }): Promise<SearchProvisionArgRead> => {
   const text = args.provision;
@@ -2539,7 +2531,7 @@ const readSearchProvision = async ({
 
 type ListSearchCaseLawProvisionOptions = {
   args: v.InferOutput<typeof searchCaseLawArgsSchema>;
-  context: McpRequestContext;
+  context: PublicMcpHandlerContext;
   country: NonNullable<ReturnType<typeof publicCaseLawCountry>>;
   /** Absent when the call named neither queries nor a provision. */
   provision: CaseLawProvisionFilter | undefined;
@@ -2631,15 +2623,15 @@ const listSearchCaseLawProvision = async ({
 
 const SEARCH_ADMISSION = { domain: "caseLaw", surface: "search" } as const;
 
-const handleSearchCaseLawTool: TypedMcpToolHandler<
+const handleSearchCaseLawTool: PublicMcpToolHandler<
   v.InferInput<typeof SEARCH_CASE_LAW_PROJECTION>
 > = async ({ args, context }) => {
   const parsed = v.safeParse(searchCaseLawArgsSchema, args);
   if (!parsed.success) {
     return validationErrorResult(parsed.issues);
   }
-  const observer = actionRequestObserver(
-    context.organizationId,
+  const observer = lawReadRequestObserver(
+    context.lawReadAdmission,
     ACTION_COST_CALL_KIND.corpusRequest,
   );
   const {
@@ -3421,7 +3413,7 @@ const decisionTextPositionOf = ({
     ? { type: "page", page: page ?? LIMITS.caseLawDecisionFirstPage }
     : { type: "query", query };
 
-const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
+const handleReadCaseLawDecisionTool: PublicMcpToolHandler<
   v.InferInput<typeof READ_CASE_LAW_DECISION_PROJECTION>
 > = async ({ args, context }) => {
   const parsed = v.safeParse(readCaseLawDecisionArgsSchema, args);
@@ -3604,7 +3596,7 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
   );
 };
 
-const handleReadCaseLawCitationsTool: TypedMcpToolHandler<
+const handleReadCaseLawCitationsTool: PublicMcpToolHandler<
   v.InferInput<typeof READ_CASE_LAW_CITATIONS_PROJECTION>
 > = async ({ args, context }) => {
   const parsed = v.safeParse(readCaseLawCitationsArgsSchema, args);
@@ -3821,7 +3813,7 @@ const handleSetPracticeJurisdictionsTool: TypedMcpToolHandler<
   );
 };
 
-const handleCaseLawCoverageTool: TypedMcpToolHandler<
+const handleCaseLawCoverageTool: PublicMcpToolHandler<
   v.InferInput<typeof CASE_LAW_COVERAGE_PROJECTION>
 > = async ({ args, context }) => {
   const parsed = v.safeParse(caseLawCoverageArgsSchema, args);
@@ -3945,11 +3937,40 @@ export const STELLA_TOOL_HANDLERS = {
   search_case_law: handleSearchCaseLawTool,
   search_across_matters: handleSearchAcrossMattersTool,
   set_practice_jurisdictions: handleSetPracticeJurisdictionsTool,
-} satisfies Record<StellaToolName, McpToolHandler>;
+};
+
+const STELLA_TENANT_TOOL_HANDLERS = {
+  list_matters: handleListMattersTool,
+  read_contact: handleReadContactTool,
+  read_content_across_matters: handleReadContentAcrossMattersTool,
+  search_across_matters: handleSearchAcrossMattersTool,
+  set_practice_jurisdictions: handleSetPracticeJurisdictionsTool,
+};
+
+export const STELLA_TOOL_DEFINITIONS = [
+  RAW_STELLA_TOOL_DEFINITIONS[0],
+  RAW_STELLA_TOOL_DEFINITIONS[1],
+  definePublicReadTool(RAW_STELLA_TOOL_DEFINITIONS[2], handleSearchCaseLawTool),
+  definePublicReadTool(
+    RAW_STELLA_TOOL_DEFINITIONS[3],
+    handleCaseLawCoverageTool,
+  ),
+  RAW_STELLA_TOOL_DEFINITIONS[4],
+  definePublicReadTool(
+    RAW_STELLA_TOOL_DEFINITIONS[5],
+    handleReadCaseLawDecisionTool,
+  ),
+  definePublicReadTool(
+    RAW_STELLA_TOOL_DEFINITIONS[6],
+    handleReadCaseLawCitationsTool,
+  ),
+  RAW_STELLA_TOOL_DEFINITIONS[7],
+  RAW_STELLA_TOOL_DEFINITIONS[8],
+] as const satisfies readonly McpToolDefinition[];
 
 export const STELLA_TOOL_SET = defineMcpToolSet(
   STELLA_TOOL_DEFINITIONS,
-  STELLA_TOOL_HANDLERS,
+  STELLA_TENANT_TOOL_HANDLERS,
   {
     case_law_coverage: defineChatProjectionMcpToolOutput(
       CASE_LAW_COVERAGE_PROJECTION,

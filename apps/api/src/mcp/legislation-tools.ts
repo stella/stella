@@ -18,6 +18,7 @@ import type { Block } from "@stll/legal-ast/document-ast";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 import { STATUTE_TIMELINE_RESOURCE_URI } from "@stll/mcp-apps/resource-uri";
 
+import { lawReadRequestObserver } from "@/api/handlers/legal-resolve/admission";
 import type { StatuteExpressionResolution } from "@/api/handlers/legislation/by-eli";
 import type { readProvisionHistoryHandler } from "@/api/handlers/legislation/provision-history";
 import { extractProvisionText } from "@/api/handlers/legislation/provision-text";
@@ -40,11 +41,8 @@ import { LIMITS } from "@/api/lib/limits";
 import { projectionPayload } from "@/api/lib/projection-totality";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedLegislationDocumentId } from "@/api/lib/safe-id-boundaries";
-import {
-  ACTION_COST_CALL_KIND,
-  actionRequestObserver,
-} from "@/api/lib/usage/action-costs/context";
-import type { McpRequestContext } from "@/api/mcp/context";
+import { ACTION_COST_CALL_KIND } from "@/api/lib/usage/action-costs/context";
+import type { PublicMcpHandlerContext } from "@/api/mcp/context";
 import {
   isProvisionTextCursor,
   windowProvisionText,
@@ -65,10 +63,9 @@ import { serializeAuthorizedCorpusMcpResourceName } from "@/api/mcp/resource-ser
 import type {
   InternalToolErrorResult,
   McpToolDefinition,
-  McpToolHandler,
-  TypedMcpToolHandler,
+  PublicMcpToolHandler,
 } from "@/api/mcp/tool-types";
-import { defineMcpToolSet } from "@/api/mcp/tool-types";
+import { defineMcpToolSet, definePublicReadTool } from "@/api/mcp/tool-types";
 import {
   invalidCursorResult,
   buildLegislationDocumentAppUrl,
@@ -364,7 +361,7 @@ const readProvisionHistoryArgsSchema = nullAsAbsent(
   }),
 );
 
-const LEGISLATION_TOOL_DEFINITIONS = [
+const RAW_LEGISLATION_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
     consumesServices: false,
     annotations: {
@@ -512,7 +509,7 @@ const LEGISLATION_TOOL_DEFINITIONS = [
     name: "read_provision_history",
     scope: "stella:read",
   }),
-] as const satisfies readonly McpToolDefinition[];
+] as const;
 
 const legislationResourceName = (documentId: string): string =>
   serializeAuthorizedCorpusMcpResourceName(
@@ -576,7 +573,7 @@ const invalidCursorError = (toolName: LegislationToolName, cursor: string) =>
 
 // --- search_legislation ---------------------------------------------------
 
-const handleSearchLegislationTool: TypedMcpToolHandler<
+const handleSearchLegislationTool: PublicMcpToolHandler<
   v.InferInput<typeof SEARCH_LEGISLATION_PROJECTION>
 > = async ({ args, context }) => {
   const parsed = v.safeParse(searchLegislationArgsSchema, args);
@@ -613,8 +610,8 @@ const handleSearchLegislationTool: TypedMcpToolHandler<
     );
   }
 
-  const observer = actionRequestObserver(
-    context.organizationId,
+  const observer = lawReadRequestObserver(
+    context.lawReadAdmission,
     ACTION_COST_CALL_KIND.corpusRequest,
   );
   const result = await (
@@ -720,7 +717,7 @@ const buildStatuteOutline = (blocks: readonly Block[]) => {
 type ReadStatutePageContextOptions = {
   cursor: string | undefined;
   document: StatuteDocument;
-  context: McpRequestContext;
+  context: PublicMcpHandlerContext;
 };
 
 // Versions and navigation describe the whole consolidation; only its first
@@ -766,7 +763,7 @@ const readStatutePageContext = async ({
   };
 };
 
-const handleReadStatuteTool: TypedMcpToolHandler<
+const handleReadStatuteTool: PublicMcpToolHandler<
   v.InferInput<typeof READ_STATUTE_PROJECTION>
 > = async ({ args, context }) => {
   const parsed = v.safeParse(readStatuteArgsSchema, args);
@@ -1083,7 +1080,7 @@ const parseProvisionEntries = (
     };
   });
 
-const handleReadStatuteProvisionsTool: TypedMcpToolHandler<
+const handleReadStatuteProvisionsTool: PublicMcpToolHandler<
   v.InferInput<typeof READ_STATUTE_PROVISIONS_PROJECTION>
 > = async ({ args, context }) => {
   // Two stages: the envelope and the array bound fail the whole call, because
@@ -1253,7 +1250,7 @@ const isProvisionHistoryPage = (
 ): value is ProvisionHistoryPage =>
   typeof value === "object" && "items" in value && Array.isArray(value.items);
 
-const handleReadProvisionHistoryTool: TypedMcpToolHandler<
+const handleReadProvisionHistoryTool: PublicMcpToolHandler<
   v.InferInput<typeof READ_PROVISION_HISTORY_PROJECTION>
 > = async ({ args, context }) => {
   const parsed = v.safeParse(readProvisionHistoryArgsSchema, args);
@@ -1387,11 +1384,30 @@ export const LEGISLATION_TOOL_HANDLERS = {
   read_statute: handleReadStatuteTool,
   read_statute_provisions: handleReadStatuteProvisionsTool,
   read_provision_history: handleReadProvisionHistoryTool,
-} satisfies Record<LegislationToolName, McpToolHandler>;
+};
+
+const LEGISLATION_TOOL_DEFINITIONS = [
+  definePublicReadTool(
+    RAW_LEGISLATION_TOOL_DEFINITIONS[0],
+    handleSearchLegislationTool,
+  ),
+  definePublicReadTool(
+    RAW_LEGISLATION_TOOL_DEFINITIONS[1],
+    handleReadStatuteTool,
+  ),
+  definePublicReadTool(
+    RAW_LEGISLATION_TOOL_DEFINITIONS[2],
+    handleReadStatuteProvisionsTool,
+  ),
+  definePublicReadTool(
+    RAW_LEGISLATION_TOOL_DEFINITIONS[3],
+    handleReadProvisionHistoryTool,
+  ),
+] as const satisfies readonly McpToolDefinition[];
 
 export const LEGISLATION_TOOL_SET = defineMcpToolSet(
   LEGISLATION_TOOL_DEFINITIONS,
-  LEGISLATION_TOOL_HANDLERS,
+  {},
   {
     search_legislation: defineChatProjectionMcpToolOutput(
       SEARCH_LEGISLATION_PROJECTION,

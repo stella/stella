@@ -29,10 +29,16 @@ import { COMPAT_TOOL_HANDLERS } from "@/api/mcp/compat-tools";
 import type { McpMode } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { finalizeToolEgress } from "@/api/mcp/egress";
-import type { McpToolHandler } from "@/api/mcp/tool-types";
+import type {
+  McpToolHandler,
+  PublicMcpToolHandler,
+} from "@/api/mcp/tool-types";
 import { serializeToolResult } from "@/api/mcp/tool-utils";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
-import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import {
+  asTestRaw,
+  publicMcpHandlerContextForTest,
+} from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 /**
@@ -178,18 +184,30 @@ type CompatPayload = {
   error?: { code: string; hint: string; issues?: { path: string }[] };
 };
 
-const run = async ({
-  args,
-  context,
-  handler,
-  mode = "default",
-}: {
-  args: Record<string, unknown>;
-  context: McpRequestContext;
-  handler: McpToolHandler;
-  mode?: McpMode;
-}): Promise<CompatPayload> => {
-  const response = await handler({ args, context });
+type RunCompatOptions =
+  | {
+      args: Record<string, unknown>;
+      context: McpRequestContext;
+      handler: PublicMcpToolHandler;
+      mode: "law";
+    }
+  | {
+      args: Record<string, unknown>;
+      context: McpRequestContext;
+      handler: McpToolHandler;
+      mode?: Exclude<McpMode, "law">;
+    };
+
+const run = async (options: RunCompatOptions): Promise<CompatPayload> => {
+  const { args, context } = options;
+  const mode = options.mode ?? "default";
+  const response =
+    options.mode === "law"
+      ? await options.handler({
+          args,
+          context: publicMcpHandlerContextForTest(context),
+        })
+      : await options.handler({ args, context });
   const result: CallToolResult = serializeToolResult(
     // The dispatch boundary forwards the context's anonymization seams to the
     // pipeline; this stands in for it so the suite exercises the same path.
@@ -584,17 +602,25 @@ describe("compat search reaching the public corpus", () => {
   ] as const) {
     test(`an organization practising only outside the corpus still searches all of it (${surface.mode})`, async () => {
       await withCorpus(async () => {
-        const payload = await run({
-          args: { query: "promlčení" },
-          context: createContext({
-            practiceJurisdictions: [{ countryCode: "JP", isPrimary: true }],
-            ...(surface.searchProvider === undefined
-              ? {}
-              : { searchProvider: surface.searchProvider }),
-          }),
-          handler: surface.handler,
-          mode: surface.mode,
+        const context = createContext({
+          practiceJurisdictions: [{ countryCode: "JP", isPrimary: true }],
+          ...(surface.searchProvider === undefined
+            ? {}
+            : { searchProvider: surface.searchProvider }),
         });
+        const payload = await (surface.mode === "law"
+          ? run({
+              args: { query: "promlčení" },
+              context,
+              handler: LAW_COMPAT_TOOL_HANDLERS.search,
+              mode: "law",
+            })
+          : run({
+              args: { query: "promlčení" },
+              context,
+              handler: COMPAT_TOOL_HANDLERS.search,
+              mode: "default",
+            }));
 
         expect(payload.results?.map(({ id }) => id)).toEqual([
           `decision:${DECISION_ID}`,

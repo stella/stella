@@ -18,6 +18,7 @@ import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
 import { documentHydrationFor } from "@/api/handlers/case-law/decisions/get-deferred-document";
+import { lawReadRequestObserver } from "@/api/handlers/legal-resolve/admission";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { isSearchIndexUnavailable } from "@/api/lib/legal-search/search-index-unavailable";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
@@ -28,7 +29,10 @@ import {
   actionRequestObserver,
 } from "@/api/lib/usage/action-costs/context";
 import { encodeCompatId } from "@/api/mcp/compat-ids";
-import type { McpRequestContext } from "@/api/mcp/context";
+import type {
+  McpRequestContext,
+  PublicMcpHandlerContext,
+} from "@/api/mcp/context";
 import {
   defaultReadGatedDecisionWithDocument,
   defaultReadPublicLegislationHandler,
@@ -154,7 +158,7 @@ export const rankCorpusCountries = <TCountry extends string>(
  * select.
  */
 export const resolveCompatCorpusCountries = async (
-  _context: McpRequestContext,
+  _context: McpRequestContext | PublicMcpHandlerContext,
 ): Promise<CompatCorpusCountries> =>
   await Promise.resolve({
     caseLaw: rankCorpusCountries(PUBLIC_CASE_LAW_COUNTRIES, []),
@@ -270,7 +274,7 @@ const searchDecisions = async ({
   cursors,
   query,
 }: {
-  context: McpRequestContext;
+  context: McpRequestContext | PublicMcpHandlerContext;
   countries: readonly PublicCaseLawCountry[];
   cursors: CorpusSubCursors;
   query: string;
@@ -278,10 +282,16 @@ const searchDecisions = async ({
   if (countries.length === 0) {
     return { type: "page", page: EMPTY_PAGE };
   }
-  const observer = actionRequestObserver(
-    context.organizationId,
-    ACTION_COST_CALL_KIND.corpusRequest,
-  );
+  const observer =
+    "lawReadAdmission" in context
+      ? lawReadRequestObserver(
+          context.lawReadAdmission,
+          ACTION_COST_CALL_KIND.corpusRequest,
+        )
+      : actionRequestObserver(
+          context.organizationId,
+          ACTION_COST_CALL_KIND.corpusRequest,
+        );
   const search =
     context.testDependencies?.searchDecisionsHandler ??
     defaultSearchDecisionsHandler;
@@ -384,7 +394,7 @@ const searchStatutes = async ({
   cursors,
   query,
 }: {
-  context: McpRequestContext;
+  context: McpRequestContext | PublicMcpHandlerContext;
   countries: readonly PublicLegislationCountry[];
   cursors: CorpusSubCursors;
   query: string;
@@ -392,10 +402,16 @@ const searchStatutes = async ({
   if (countries.length === 0) {
     return { type: "page", page: EMPTY_PAGE };
   }
-  const observer = actionRequestObserver(
-    context.organizationId,
-    ACTION_COST_CALL_KIND.corpusRequest,
-  );
+  const observer =
+    "lawReadAdmission" in context
+      ? lawReadRequestObserver(
+          context.lawReadAdmission,
+          ACTION_COST_CALL_KIND.corpusRequest,
+        )
+      : actionRequestObserver(
+          context.organizationId,
+          ACTION_COST_CALL_KIND.corpusRequest,
+        );
   const search =
     context.testDependencies?.searchLegislationHandler ??
     defaultSearchLegislationHandler;
@@ -514,7 +530,7 @@ export const searchCompatCorpus = async ({
   cursors,
   query,
 }: {
-  context: McpRequestContext;
+  context: McpRequestContext | PublicMcpHandlerContext;
   countries: CompatCorpusCountries;
   cursors: CompatCorpusCursors;
   query: string;
@@ -582,7 +598,7 @@ export const readCompatDecision = async ({
   context,
   decisionId,
 }: {
-  context: McpRequestContext;
+  context: McpRequestContext | PublicMcpHandlerContext;
   decisionId: string;
 }): Promise<CompatCorpusRead> => {
   const read =
@@ -650,7 +666,7 @@ export const readCompatStatute = async ({
   context,
   eli,
 }: {
-  context: McpRequestContext;
+  context: McpRequestContext | PublicMcpHandlerContext;
   eli: string;
 }): Promise<CompatCorpusRead> => {
   const resolved = await (

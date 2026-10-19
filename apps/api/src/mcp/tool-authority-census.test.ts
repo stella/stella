@@ -5,9 +5,11 @@ import * as v from "valibot";
 
 import type { Transaction } from "@/api/db/root";
 import type { CachedMcpToolDefinition } from "@/api/db/schema";
+import { runRegistryReadTool } from "@/api/handlers/chat/tools/registry-adapter/run-registry-tool";
 import { recordSkillReadAudit } from "@/api/lib/agent-skills/skill-read-audit";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
+import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import {
   createFeatureAccessSnapshot,
   decideFeatureAccess,
@@ -32,8 +34,15 @@ import {
 } from "@/api/mcp/gateway/list-tools";
 import { resolveSkillTool } from "@/api/mcp/gateway/skills";
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
-import type { McpToolDefinition } from "@/api/mcp/tool-types";
-import { handleMcpToolCall, listMcpTools } from "@/api/mcp/tools";
+import {
+  PUBLIC_MCP_TOOL_DEFINITION,
+  type McpToolDefinition,
+} from "@/api/mcp/tool-types";
+import {
+  handleMcpToolCall,
+  invokePublicMcpHandler,
+  listMcpTools,
+} from "@/api/mcp/tools";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const PROBE_ARGUMENT = "authority_census_probe";
@@ -330,6 +339,12 @@ const validTenantCalls = [
   dependency: keyof DataDependencyCalls;
 }[];
 
+const chatTenantCallNames = new Set([
+  "list_time_entries",
+  "list_invoices",
+  "get_usage",
+]);
+
 describe("MCP tool authority census", () => {
   test("covers every mode and dynamic family", () => {
     const entries = census();
@@ -354,6 +369,22 @@ describe("MCP tool authority census", () => {
         expect(definition.authority.kind).toBeOneOf(["public", "tenant"]);
       } else {
         expect(definition.permissions.type).toBeDefined();
+      }
+    }
+  });
+
+  test("every public static definition uses the public constructor", () => {
+    for (const mode of MCP_MODES) {
+      for (const definition of listStaticMcpToolDefinitions(mode)) {
+        if (
+          definition.access === "read" &&
+          definition.authority.kind === "public"
+        ) {
+          expect(
+            PUBLIC_MCP_TOOL_DEFINITION in definition,
+            `${mode}:${definition.name}`,
+          ).toBeTrue();
+        }
       }
     }
   });
@@ -404,6 +435,88 @@ describe("MCP tool authority census", () => {
 
       expect(calls[validCall.dependency], validCall.name).toBeGreaterThan(0);
       expect(errorCodeOf(result), validCall.name).not.toBe("permission_denied");
+    }
+  });
+
+  test("dispatch builds the public handler context", async () => {
+    const context = contextFor({ workspace: ["read"] });
+    context.testDependencies = {
+      resolveDecision: async ({ admission }) => {
+        expect(admission).toBeDefined();
+        return { status: "country_unavailable" };
+      },
+    };
+
+    const result = await handleMcpToolCall({
+      args: { country: "CZE", identifier: "1 Cdo 1/2026" },
+      context,
+      dependencies: dispatchDependencies,
+      mode: "advanced",
+      toolName: "resolve_case_law_decision",
+    });
+
+    expect(errorCodeOf(result)).toBeNull();
+
+    await invokePublicMcpHandler(
+      ({ context: handlerContext }) => {
+        expect("organizationId" in handlerContext).toBeFalse();
+        expect("scopedDb" in handlerContext).toBeFalse();
+        return { status: "success", data: {} };
+      },
+      {},
+      context,
+    );
+  });
+
+  test("chat reads apply each tenant declaration before their handler", async () => {
+    const definitions = listStaticMcpToolDefinitions("advanced");
+
+    for (const validCall of validTenantCalls.filter(({ name }) =>
+      chatTenantCallNames.has(name),
+    )) {
+      const definition = definitions.find(
+        ({ name }) => name === validCall.name,
+      );
+      expect(definition?.access).toBe("read");
+      if (
+        definition?.access !== "read" ||
+        definition.authority.kind !== "tenant"
+      ) {
+        continue;
+      }
+
+      const refRegistry = createChatRefRegistry();
+      const matterRef = refRegistry.toMatterRef(
+        toSafeId<"workspace">(WORKSPACE_ID),
+      );
+      const args =
+        "matter_id" in validCall.args
+          ? { ...validCall.args, matter_id: matterRef }
+          : validCall.args;
+      const refusedCalls: DataDependencyCalls = { safeDb: 0, scopedDb: 0 };
+      const refused = await runRegistryReadTool({
+        args,
+        context: contextFor({ workspace: [] }, refusedCalls),
+        refRegistry,
+        toolName: validCall.name,
+      });
+
+      expect(Result.isError(refused), validCall.name).toBeTrue();
+      if (Result.isError(refused)) {
+        expect(refused.error.kind, validCall.name).toBe("unavailable");
+      }
+      expect(refusedCalls, validCall.name).toEqual({ safeDb: 0, scopedDb: 0 });
+
+      const allowedCalls: DataDependencyCalls = { safeDb: 0, scopedDb: 0 };
+      const allowed = await runRegistryReadTool({
+        args,
+        context: contextFor(definition.authority.permissions, allowedCalls),
+        refRegistry,
+        toolName: validCall.name,
+      });
+      if (Result.isError(allowed)) {
+        expect(allowed.error.kind, validCall.name).not.toBe("unavailable");
+      }
     }
   });
 

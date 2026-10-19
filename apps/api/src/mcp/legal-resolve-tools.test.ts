@@ -9,7 +9,10 @@ import { admitLawRead } from "@/api/handlers/legal-resolve/admission";
 import { resolveDecision } from "@/api/handlers/legal-resolve/decision";
 import { resolveLawCitation } from "@/api/handlers/legal-resolve/law";
 import { toSafeId } from "@/api/lib/branded-types";
-import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import {
+  asTestRaw,
+  publicMcpHandlerContextForTest,
+} from "@/api/tests/helpers/test-tool-set";
 
 import type { McpRequestContext } from "./context";
 import { hasGrantedScope } from "./gateway/static-tool-visibility";
@@ -18,7 +21,7 @@ import {
   LEGAL_RESOLVE_TOOL_HANDLERS,
   LEGAL_RESOLVE_TOOL_SET,
 } from "./legal-resolve-tools";
-import type { InternalToolResult, TypedMcpToolResponse } from "./tool-types";
+import type { InternalToolResult, McpToolResponse } from "./tool-types";
 import { isMcpEgressPlan } from "./tool-types";
 import { serializeToolResult } from "./tool-utils";
 
@@ -35,16 +38,18 @@ if (Result.isError(admitted)) {
 const contextWith = (
   testDependencies: NonNullable<McpRequestContext["testDependencies"]>,
 ) =>
-  asTestRaw<McpRequestContext>({
-    organizationId,
-    testDependencies: {
-      admitLawRead: () => admitted,
-      ...testDependencies,
-    },
-  });
+  publicMcpHandlerContextForTest(
+    asTestRaw<McpRequestContext>({
+      organizationId,
+      testDependencies: {
+        admitLawRead: () => admitted,
+        ...testDependencies,
+      },
+    }),
+  );
 
 const unwrapInternalResult = <TData>(
-  response: TypedMcpToolResponse<TData>,
+  response: McpToolResponse<TData>,
 ): InternalToolResult<TData> => {
   if (isMcpEgressPlan(response)) {
     return panic("Expected a finished tool result, not an egress plan");

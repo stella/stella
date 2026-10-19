@@ -19,6 +19,7 @@ import { observeFailure } from "@/api/lib/observability/observe-failure";
 import type { McpMode } from "@/api/mcp/constants";
 import {
   bindApprovedMcpAuditContext,
+  createPublicMcpHandlerContext,
   type McpRequestContext,
 } from "@/api/mcp/context";
 import { finalizeToolEgress } from "@/api/mcp/egress";
@@ -57,9 +58,16 @@ import {
 import type {
   InternalToolResult,
   McpToolDefinition,
+  McpToolHandler,
+  McpToolResponse,
   McpToolInputSchema,
+  PublicMcpToolHandler,
   RuntimeMcpToolOutputContract,
   ToolScope,
+} from "@/api/mcp/tool-types";
+import {
+  PUBLIC_MCP_TOOL_DEFINITION,
+  PUBLIC_MCP_TOOL_HANDLER,
 } from "@/api/mcp/tool-types";
 import {
   confirmationUnavailableResult,
@@ -76,6 +84,50 @@ import {
 const DOCUMENTS_MCP_CAPABILITY_IDS: ReadonlySet<string> = new Set(
   DOCUMENT_VERSION_UPLOAD_CAPABILITY_IDS,
 );
+
+const requireStaticMcpToolHandler = (toolName: string, mode: McpMode) =>
+  getStaticMcpToolHandler(toolName, mode) ??
+  panic(`Tool ${toolName} has no handler`);
+
+export const invokePublicMcpHandler = async (
+  handler: PublicMcpToolHandler,
+  args: Record<string, unknown>,
+  context: McpRequestContext,
+): Promise<McpToolResponse> => {
+  const publicContext = createPublicMcpHandlerContext(context);
+  if (Result.isError(publicContext)) {
+    return structuredErrorResult({
+      code: "feature_disabled",
+      message: "This tool is unavailable on this deployment.",
+      retryable: false,
+    });
+  }
+  return await handler({ args, context: publicContext.value });
+};
+
+const invokeStaticMcpHandler = async ({
+  args,
+  context,
+  definition,
+  handler,
+  mode,
+}: {
+  args: Record<string, unknown>;
+  context: McpRequestContext;
+  definition: McpToolDefinition;
+  handler: McpToolHandler | undefined;
+  mode: McpMode;
+}): Promise<McpToolResponse> =>
+  PUBLIC_MCP_TOOL_DEFINITION in definition
+    ? await invokePublicMcpHandler(
+        definition[PUBLIC_MCP_TOOL_HANDLER],
+        args,
+        context,
+      )
+    : await (handler ?? requireStaticMcpToolHandler(definition.name, mode))({
+        args,
+        context,
+      });
 
 /**
  * Central unknown-key backstop for static tools. Every curated tool derives its
@@ -460,7 +512,6 @@ const dispatchMcpToolCall = async ({
   const serializeForSurface = createSurfaceSerializer({ context, mode });
   const staticTool = getStaticMcpToolDefinition(toolName, mode);
   if (staticTool) {
-    // Role and credential refusals are independent of the caller's enrolment.
     const toolRefusal = mcpToolAuthorityRefusal({
       authority: context,
       definition: staticTool,
@@ -480,7 +531,6 @@ const dispatchMcpToolCall = async ({
   if (unavailableResult !== undefined) {
     return unavailableResult;
   }
-
   const gatewayResult = await callGatewayTool({
     args,
     context,
@@ -491,7 +541,6 @@ const dispatchMcpToolCall = async ({
   if (gatewayResult !== undefined) {
     return gatewayResult;
   }
-
   if (!staticTool) {
     return serializeForSurface(unknownToolResult(toolName));
   }
@@ -563,7 +612,6 @@ const dispatchMcpToolCall = async ({
   }
   const normalizedArgs = normalized.value;
   const inputNotes = normalized.notes;
-  // With the input: the exact grant of the operation it selects.
   const inputDenial = mcpToolInputAuthorityDenial(
     context,
     staticTool,
@@ -578,7 +626,7 @@ const dispatchMcpToolCall = async ({
   }
 
   const handler = getStaticMcpToolHandler(toolName, mode);
-  if (!handler) {
+  if (!handler && !(PUBLIC_MCP_TOOL_DEFINITION in staticTool)) {
     return serializeForSurface(unknownToolResult(toolName));
   }
 
@@ -627,9 +675,12 @@ const dispatchMcpToolCall = async ({
       const executionContext = requiresConfirmation
         ? bindApprovedMcpAuditContext(context)
         : context;
-      const response = await handler({
+      const response = await invokeStaticMcpHandler({
         args: normalizedArgs,
         context: executionContext,
+        definition: staticTool,
+        handler,
+        mode,
       });
       const finalized = await finalizeToolEgress(
         {

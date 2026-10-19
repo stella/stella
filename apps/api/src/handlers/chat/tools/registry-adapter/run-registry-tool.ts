@@ -11,8 +11,11 @@ import { isRecord } from "@/api/lib/type-guards";
 import { BILLING_TOOL_HANDLERS } from "@/api/mcp/billing-tools";
 import { CAPABILITY_TOOL_HANDLERS } from "@/api/mcp/capability-tools";
 import { COMPAT_TOOL_HANDLERS } from "@/api/mcp/compat-tools";
-import type { McpRequestContext } from "@/api/mcp/context";
-import { DECISION_READER_TOOL_SET } from "@/api/mcp/decision-reader-tools";
+import {
+  createPublicMcpHandlerContext,
+  type McpRequestContext,
+} from "@/api/mcp/context";
+import { DECISION_READER_TOOL_HANDLERS } from "@/api/mcp/decision-reader-tools";
 import { DOCUMENT_TOOL_HANDLERS } from "@/api/mcp/document-tools";
 import { finalizeToolEgress } from "@/api/mcp/egress";
 import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
@@ -30,20 +33,30 @@ import { READER_ANNOTATION_TOOL_HANDLERS } from "@/api/mcp/reader-annotation-too
 import { RESEARCH_ADMIN_TOOL_HANDLERS } from "@/api/mcp/research-admin-tools";
 import {
   DEFAULT_MCP_TOOL_DEFINITIONS,
+  getStaticMcpToolHandler,
   getStaticMcpToolDefinition,
 } from "@/api/mcp/static-tool-definitions";
 import { STELLA_TOOL_HANDLERS } from "@/api/mcp/stella-tools";
 import { TEMPLATE_TOOL_HANDLERS } from "@/api/mcp/template-tools";
 import type { RequiresThirdPartyOutbound } from "@/api/mcp/third-party-outbound";
+import { hasMcpToolAuthority } from "@/api/mcp/tool-authority";
 import type {
   AllHandlerOutputsTyped,
   AssertTrue,
   HandlerOutputsMatchByName,
   McpToolHandler,
   McpToolResponse,
+  PublicMcpToolHandler,
   TypedHandlerDataByName,
 } from "@/api/mcp/tool-types";
-import { validationErrorResult } from "@/api/mcp/tool-utils";
+import {
+  PUBLIC_MCP_TOOL_DEFINITION,
+  PUBLIC_MCP_TOOL_HANDLER,
+} from "@/api/mcp/tool-types";
+import {
+  structuredErrorResult,
+  validationErrorResult,
+} from "@/api/mcp/tool-utils";
 
 import type {
   ChatProjectableToolName,
@@ -113,13 +126,12 @@ const REGISTRY_READ_TOOL_HANDLERS = {
     CAPABILITY_TOOL_HANDLERS[MCP_CAPABILITY_EXECUTORS.read],
   // Non-projectable: MCP host reader navigation and widget data. Wired only
   // to keep this map exhaustive over every read tool.
-  open_case_law_decision:
-    DECISION_READER_TOOL_SET.handlers.open_case_law_decision,
+  open_case_law_decision: DECISION_READER_TOOL_HANDLERS.open_case_law_decision,
   read_case_law_decision_blocks:
-    DECISION_READER_TOOL_SET.handlers.read_case_law_decision_blocks,
+    DECISION_READER_TOOL_HANDLERS.read_case_law_decision_blocks,
   preview_cited_provision:
-    DECISION_READER_TOOL_SET.handlers.preview_cited_provision,
-} satisfies Record<RegistryReadToolName, McpToolHandler>;
+    DECISION_READER_TOOL_HANDLERS.preview_cited_provision,
+} satisfies Record<RegistryReadToolName, McpToolHandler | PublicMcpToolHandler>;
 
 type ProjectableRegistryReadToolName = ChatProjectableToolName<
   typeof READ_TOOL_REF_FIELD_MAP
@@ -316,6 +328,15 @@ export const runRegistryReadTool = async ({
     );
   }
 
+  if (!hasMcpToolAuthority(context, staticDefinition)) {
+    return Result.err(
+      new ChatToolError({
+        kind: "unavailable",
+        message: `Your member role does not permit ${toolName}.`,
+      }),
+    );
+  }
+
   const dehydrated = dehydrateInputRefs({ args, refRegistry, toolName });
   if (Result.isError(dehydrated)) {
     return Result.err(dehydrated.error);
@@ -344,18 +365,31 @@ export const runRegistryReadTool = async ({
     return Result.err(scoped.error);
   }
 
-  const response =
-    handler === undefined
-      ? await REGISTRY_READ_TOOL_HANDLERS[toolName]({
-          args: scoped.value,
-          context,
+  let response: McpToolResponse;
+  if (handler !== undefined) {
+    response = await runInjectedHandler({
+      args: scoped.value,
+      context,
+      toolName,
+      handler,
+    });
+  } else if (PUBLIC_MCP_TOOL_DEFINITION in staticDefinition) {
+    const publicContext = createPublicMcpHandlerContext(context);
+    response = Result.isError(publicContext)
+      ? structuredErrorResult({
+          code: "feature_disabled",
+          message: "Tool is unavailable.",
         })
-      : await runInjectedHandler({
+      : await staticDefinition[PUBLIC_MCP_TOOL_HANDLER]({
           args: scoped.value,
-          context,
-          toolName,
-          handler,
+          context: publicContext.value,
         });
+  } else {
+    response = await (
+      getStaticMcpToolHandler(toolName) ??
+      panic(`Read tool ${toolName} is missing its handler`)
+    )({ args: scoped.value, context });
+  }
   const finished = await finalizeToolEgress({
     context,
     mode: "default",

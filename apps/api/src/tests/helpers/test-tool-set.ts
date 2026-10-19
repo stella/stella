@@ -1,4 +1,32 @@
+import { panic, Result } from "better-result";
+
+import { admitLawRead } from "@/api/handlers/legal-resolve/admission";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
+import type {
+  McpRequestContext,
+  PublicMcpHandlerContext,
+} from "@/api/mcp/context";
+
+export const publicMcpHandlerContextForTest = (
+  context: McpRequestContext,
+): PublicMcpHandlerContext => {
+  const admission = admitLawRead({
+    organizationId: context.organizationId,
+    publicLawEnabled: () => true,
+  });
+  if (Result.isError(admission)) {
+    return panic("Expected public law admission in test context");
+  }
+  return {
+    lawReadAdmission: admission.value,
+    ...(context.thirdPartyOutboundPermit === undefined
+      ? {}
+      : { thirdPartyOutboundPermit: context.thirdPartyOutboundPermit }),
+    ...(context.testDependencies === undefined
+      ? {}
+      : { testDependencies: context.testDependencies }),
+  };
+};
 
 /**
  * Test-only adapter for TanStack chat tool maps.

@@ -19,7 +19,10 @@ import { isMcpEgressPlan } from "@/api/mcp/tool-types";
 import { serializeToolResult } from "@/api/mcp/tool-utils";
 import { listMcpTools } from "@/api/mcp/tools";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
-import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import {
+  asTestRaw,
+  publicMcpHandlerContextForTest,
+} from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 const WORKSPACE_ID = "00000000-0000-4000-8000-000000000001";
@@ -212,7 +215,7 @@ describe("search_boe_legislation feature gating", () => {
   test("rejects block_id without law_id before any BOE fetch", async () => {
     const result = await RESEARCH_ADMIN_TOOL_HANDLERS.search_boe_legislation({
       args: { block_id: "a1" },
-      context: createContext("owner"),
+      context: publicMcpHandlerContextForTest(createContext("owner")),
     });
     expect(errorMessage(result)).toBe("block_id requires law_id");
   });
@@ -223,11 +226,11 @@ describe("search_boe_legislation feature gating", () => {
     );
     const result = await RESEARCH_ADMIN_TOOL_HANDLERS.search_boe_legislation({
       args: { query: "arrendamiento" },
-      context: {
+      context: publicMcpHandlerContextForTest({
         ...createContext("owner"),
         thirdPartyOutboundPermit: undefined,
         testDependencies: { searchConsolidatedLegislation },
-      },
+      }),
     });
     expect(errorText(result)).toContain('"code":"permission_denied"');
     expect(searchConsolidatedLegislation).not.toHaveBeenCalled();
@@ -236,7 +239,7 @@ describe("search_boe_legislation feature gating", () => {
   test("requires at least one search filter in search mode", async () => {
     const result = await RESEARCH_ADMIN_TOOL_HANDLERS.search_boe_legislation({
       args: {},
-      context: createContext("owner"),
+      context: publicMcpHandlerContextForTest(createContext("owner")),
     });
     expect(errorMessage(result)).toBe(
       "Provide law_id to read a law, or at least one search filter",

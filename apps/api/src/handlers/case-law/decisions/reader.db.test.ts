@@ -43,9 +43,12 @@ import {
   publicLawColumnPairs,
 } from "@/api/lib/public-law-relations";
 import type { McpRequestContext } from "@/api/mcp/context";
-import { DECISION_READER_TOOL_SET } from "@/api/mcp/decision-reader-tools";
+import { DECISION_READER_TOOL_HANDLERS } from "@/api/mcp/decision-reader-tools";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
-import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import {
+  asTestRaw,
+  publicMcpHandlerContextForTest,
+} from "@/api/tests/helpers/test-tool-set";
 import {
   createTestPglite,
   withPublicLawReaderRole,
@@ -496,19 +499,22 @@ describe("public decision reader database boundary", () => {
       }).blocks.at(-1)?.plainText ?? "";
     expect(body).not.toBe("");
     const blocksFor = async (appReaderText: AppReaderText) =>
-      await DECISION_READER_TOOL_SET.handlers.read_case_law_decision_blocks({
+      await DECISION_READER_TOOL_HANDLERS.read_case_law_decision_blocks({
         args: { decision_id: withheldId },
-        context: asTestRaw<McpRequestContext>({
-          testDependencies: {
-            readDecisionReaderSource: async (options: ReaderSourceOptions) =>
-              await readDecisionReaderSource({
-                ...options,
-                caseLawDb,
-                legislationDb,
-                appReaderTextOf: () => appReaderText,
-              }),
-          },
-        }),
+        context: publicMcpHandlerContextForTest(
+          asTestRaw<McpRequestContext>({
+            organizationId: "00000000-0000-4000-8000-000000000001",
+            testDependencies: {
+              readDecisionReaderSource: async (options: ReaderSourceOptions) =>
+                await readDecisionReaderSource({
+                  ...options,
+                  caseLawDb,
+                  legislationDb,
+                  appReaderTextOf: () => appReaderText,
+                }),
+            },
+          }),
+        ),
       });
     const full = await blocksFor(APP_READER_TEXT.FULL);
     expect(full).toMatchObject({

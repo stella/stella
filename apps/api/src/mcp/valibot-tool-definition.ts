@@ -10,7 +10,7 @@ import {
 import { toJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
 import { isUnknownArray } from "@/api/lib/type-guards";
 import type {
-  McpToolDefinition,
+  McpToolDefinitionAuthoring,
   McpToolAnnotationReasons,
   McpToolInputSchema,
   McpToolOutputContract,
@@ -38,19 +38,21 @@ type JsonSchemaProjectionWaiver = {
   reason: string;
 };
 
-type ToolWithoutInputSchema<TDefinition> = TDefinition extends McpToolDefinition
-  ? Omit<TDefinition, "annotationReasons" | "inputSchema">
-  : never;
+type ToolWithoutInputSchema<TDefinition> =
+  TDefinition extends McpToolDefinitionAuthoring
+    ? Omit<TDefinition, "annotationReasons" | "inputSchema">
+    : never;
 
-type ValibotMcpToolInput = ToolWithoutInputSchema<McpToolDefinition> & {
-  inputSchema: NullAsAbsentInputSchema;
-  annotationReasons?: McpToolAnnotationReasons;
-  /** Explicit kinds JSON Schema cannot express, keyed by dotted field path. */
-  inputNormalization?: Readonly<
-    Record<string, AgentInputNormalizationAnnotation>
-  >;
-  jsonSchemaProjectionWaiver?: JsonSchemaProjectionWaiver;
-};
+type ValibotMcpToolInput =
+  ToolWithoutInputSchema<McpToolDefinitionAuthoring> & {
+    inputSchema: NullAsAbsentInputSchema;
+    annotationReasons?: McpToolAnnotationReasons;
+    /** Explicit kinds JSON Schema cannot express, keyed by dotted field path. */
+    inputNormalization?: Readonly<
+      Record<string, AgentInputNormalizationAnnotation>
+    >;
+    jsonSchemaProjectionWaiver?: JsonSchemaProjectionWaiver;
+  };
 
 type ValibotMcpToolDefinition<TDefinition extends ValibotMcpToolInput> = Omit<
   TDefinition,

@@ -1,24 +1,21 @@
-import { panic, Result } from "better-result";
+import { panic } from "better-result";
 import * as v from "valibot";
 
 import { AGENT_INPUT_NORMALIZATION_KIND } from "@stll/agent-input";
 import { legalResolveResponseSchema } from "@stll/api-contract/legal-resolve";
 import { CASE_LAW_RESULTS_RESOURCE_URI } from "@stll/mcp-apps/resource-uri";
 
-import { admitLawRead } from "@/api/handlers/legal-resolve/admission";
 import type { resolveDecision } from "@/api/handlers/legal-resolve/decision";
 import type { resolveLawCitation } from "@/api/handlers/legal-resolve/law";
 import { LAW_READ_SCOPE } from "@/api/handlers/legal-resolve/scope";
 import { LIMITS } from "@/api/lib/limits";
 
-import { defineMcpToolSet } from "./tool-types";
-import type { TypedMcpToolHandler } from "./tool-types";
+import { defineMcpToolSet, definePublicReadTool } from "./tool-types";
+import type { McpToolDefinition, PublicMcpToolHandler } from "./tool-types";
 import {
   countryInputSchema,
   countryNormalization,
   nullAsAbsent,
-  structuredErrorResult,
-  featureDisabledHint,
   toolDataResult,
   validationErrorResult,
 } from "./tool-utils";
@@ -26,23 +23,6 @@ import {
   defineMcpToolOutput,
   defineValibotMcpTool,
 } from "./valibot-tool-definition";
-
-type AdmissionFailure = Extract<
-  ReturnType<typeof admitLawRead>,
-  { error: unknown }
->["error"];
-
-const ADMISSION_ERRORS = {
-  missing_scope: {
-    code: "feature_disabled",
-    message: "Public law is not enabled on this deployment.",
-    hint: featureDisabledHint("FEATURE_PUBLIC_LAW"),
-    retryable: false,
-  },
-} as const satisfies Record<
-  AdmissionFailure["type"],
-  Parameters<typeof structuredErrorResult>[0]
->;
 
 const defaultResolveDecision: typeof resolveDecision = async (...input) =>
   await (
@@ -147,7 +127,7 @@ const common = {
   },
 } as const;
 
-const LEGAL_RESOLVE_TOOL_DEFINITIONS = [
+const RAW_LEGAL_RESOLVE_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
     ...common,
     name: "resolve_case_law_decision",
@@ -187,7 +167,7 @@ const LEGAL_RESOLVE_TOOL_DEFINITIONS = [
 ] as const;
 
 type ResolveData = v.InferOutput<typeof legalResolveResponseSchema>;
-const handleResolveDecision: TypedMcpToolHandler<ResolveData> = async ({
+const handleResolveDecision: PublicMcpToolHandler<ResolveData> = async ({
   args,
   context,
 }) => {
@@ -195,32 +175,20 @@ const handleResolveDecision: TypedMcpToolHandler<ResolveData> = async ({
   if (!parsed.success) {
     return validationErrorResult(parsed.issues);
   }
-  const admission = (context.testDependencies?.admitLawRead ?? admitLawRead)({
-    organizationId: context.organizationId,
-  });
-  if (Result.isError(admission)) {
-    return structuredErrorResult(ADMISSION_ERRORS[admission.error.type]);
-  }
   const { country, identifier } = parsed.output;
   return toolDataResult(
     await (context.testDependencies?.resolveDecision ?? defaultResolveDecision)(
-      { admission: admission.value, country, identifier },
+      { admission: context.lawReadAdmission, country, identifier },
     ),
   );
 };
-const handleResolveLaw: TypedMcpToolHandler<ResolveData> = async ({
+const handleResolveLaw: PublicMcpToolHandler<ResolveData> = async ({
   args,
   context,
 }) => {
   const parsed = v.safeParse(resolveLawArgsSchema, args);
   if (!parsed.success) {
     return validationErrorResult(parsed.issues);
-  }
-  const admission = (context.testDependencies?.admitLawRead ?? admitLawRead)({
-    organizationId: context.organizationId,
-  });
-  if (Result.isError(admission)) {
-    return structuredErrorResult(ADMISSION_ERRORS[admission.error.type]);
   }
   const { country, source, section, as_of: asOf } = parsed.output;
   switch (source.type) {
@@ -230,7 +198,7 @@ const handleResolveLaw: TypedMcpToolHandler<ResolveData> = async ({
           context.testDependencies?.resolveLawCitation ??
           defaultResolveLawCitation
         )({
-          admission: admission.value,
+          admission: context.lawReadAdmission,
           country,
           input: { citation: source.citation, section, asOf },
         }),
@@ -241,7 +209,7 @@ const handleResolveLaw: TypedMcpToolHandler<ResolveData> = async ({
           context.testDependencies?.resolveLawCitation ??
           defaultResolveLawCitation
         )({
-          admission: admission.value,
+          admission: context.lawReadAdmission,
           country,
           input: {
             collection: source.collection,
@@ -262,9 +230,16 @@ export const LEGAL_RESOLVE_TOOL_HANDLERS = {
   resolve_case_law_decision: handleResolveDecision,
   resolve_law_citation: handleResolveLaw,
 };
+const LEGAL_RESOLVE_TOOL_DEFINITIONS = [
+  definePublicReadTool(
+    RAW_LEGAL_RESOLVE_TOOL_DEFINITIONS[0],
+    handleResolveDecision,
+  ),
+  definePublicReadTool(RAW_LEGAL_RESOLVE_TOOL_DEFINITIONS[1], handleResolveLaw),
+] as const satisfies readonly McpToolDefinition[];
 export const LEGAL_RESOLVE_TOOL_SET = defineMcpToolSet(
   LEGAL_RESOLVE_TOOL_DEFINITIONS,
-  LEGAL_RESOLVE_TOOL_HANDLERS,
+  {},
   {
     resolve_case_law_decision: defineMcpToolOutput(legalResolveResponseSchema),
     resolve_law_citation: defineMcpToolOutput(legalResolveResponseSchema),

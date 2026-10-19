@@ -30,7 +30,10 @@ import {
   brandPersistedUserId,
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
-import type { McpRequestContext } from "@/api/mcp/context";
+import type {
+  McpRequestContext,
+  PublicMcpHandlerContext,
+} from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import { withThirdPartyOutbound } from "@/api/mcp/third-party-outbound";
 import type {
@@ -39,7 +42,7 @@ import type {
   TypedMcpToolHandler,
   TypedMcpToolResponse,
 } from "@/api/mcp/tool-types";
-import { defineMcpToolSet } from "@/api/mcp/tool-types";
+import { defineMcpToolSet, definePublicReadTool } from "@/api/mcp/tool-types";
 import {
   bindWorkspaceRecorder,
   cursorInput,
@@ -58,13 +61,6 @@ import {
   defineMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
-
-type ResearchAdminToolName =
-  | "search_boe_legislation"
-  | "list_audit_log"
-  | "add_matter_member"
-  | "remove_matter_member"
-  | "update_organization_settings";
 
 /** Consolidated-law relation kinds accepted by search_boe_legislation `relation_type`. */
 const RELATION_TYPE_VALUES = [
@@ -491,7 +487,9 @@ const SEARCH_BOE_LEGISLATION_TOOL_DEFINITION = defineValibotMcpTool({
 });
 
 const handleSearchBoeLegislationTool = withThirdPartyOutbound<
-  v.InferInput<typeof SEARCH_BOE_LEGISLATION_PROJECTION>
+  v.InferInput<typeof SEARCH_BOE_LEGISLATION_PROJECTION>,
+  [],
+  PublicMcpHandlerContext
 >(async ({ args, context, permit }) => {
   const boe = boeClient(permit);
 
@@ -1058,7 +1056,10 @@ const handleUpdateOrganizationSettingsTool: TypedMcpToolHandler<
 };
 
 const RESEARCH_ADMIN_TOOL_DEFINITIONS = [
-  SEARCH_BOE_LEGISLATION_TOOL_DEFINITION,
+  definePublicReadTool(
+    SEARCH_BOE_LEGISLATION_TOOL_DEFINITION,
+    handleSearchBoeLegislationTool,
+  ),
   LIST_AUDIT_LOG_TOOL_DEFINITION,
   ADD_MATTER_MEMBER_TOOL_DEFINITION,
   REMOVE_MATTER_MEMBER_TOOL_DEFINITION,
@@ -1071,11 +1072,18 @@ export const RESEARCH_ADMIN_TOOL_HANDLERS = {
   add_matter_member: handleAddMatterMemberTool,
   remove_matter_member: handleRemoveMatterMemberTool,
   update_organization_settings: handleUpdateOrganizationSettingsTool,
-} satisfies Record<ResearchAdminToolName, McpToolHandler>;
+};
+
+const RESEARCH_ADMIN_TENANT_TOOL_HANDLERS = {
+  list_audit_log: handleListAuditLogTool,
+  add_matter_member: handleAddMatterMemberTool,
+  remove_matter_member: handleRemoveMatterMemberTool,
+  update_organization_settings: handleUpdateOrganizationSettingsTool,
+};
 
 export const RESEARCH_ADMIN_TOOL_SET = defineMcpToolSet(
   RESEARCH_ADMIN_TOOL_DEFINITIONS,
-  RESEARCH_ADMIN_TOOL_HANDLERS,
+  RESEARCH_ADMIN_TENANT_TOOL_HANDLERS,
   {
     list_audit_log: defineMcpToolOutput(LIST_AUDIT_LOG_OUTPUT_SCHEMA),
     add_matter_member: defineChatProjectionMcpToolOutput(

@@ -59,7 +59,10 @@ import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { CASE_LAW_COVERAGE_FIXTURE } from "@/api/tests/helpers/case-law-coverage-fixture";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
-import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import {
+  asTestRaw,
+  publicMcpHandlerContextForTest,
+} from "@/api/tests/helpers/test-tool-set";
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -2201,7 +2204,7 @@ describe("registry projection contract", () => {
         // shared output projection directly to reach its deployment fallback.
         const response = await handler({
           args,
-          context: contextFor(toolName, {}),
+          context: publicMcpHandlerContextForTest(contextFor(toolName, {})),
         });
         if (!("status" in response) || response.status !== "success") {
           panic("Citation handler failed");

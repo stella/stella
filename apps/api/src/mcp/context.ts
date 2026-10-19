@@ -25,9 +25,9 @@ import type {
   searchDecisionsHandler,
 } from "@/api/handlers/case-law/decisions/search";
 import type { resolveAnnotationTarget } from "@/api/handlers/legal-reader/annotations/document-blocks";
-import type {
+import {
   admitLawRead,
-  LawReadAdmission,
+  type LawReadAdmission,
 } from "@/api/handlers/legal-resolve/admission";
 import type { resolveDecision } from "@/api/handlers/legal-resolve/decision";
 import type { resolveLawCitation } from "@/api/handlers/legal-resolve/law";
@@ -329,9 +329,12 @@ export type PublicMcpHandlerContext = {
   testDependencies?: Pick<
     NonNullable<McpRequestContext["testDependencies"]>,
     | "getLawTextBlock"
+    | "caseLawSearchGuidance"
+    | "corpusIndexQueryVariant"
     | "listCaseLawProvisionDecisions"
     | "listStatuteVersionsHandler"
     | "readCaseLawCourtNames"
+    | "readCaseLawProvisionScope"
     | "readCaseLawCoverageHandler"
     | "readDecisionReaderSource"
     | "readGatedDecisionCitationDigest"
@@ -351,6 +354,27 @@ export type PublicMcpHandlerContext = {
     | "searchDecisionsHandler"
     | "searchLegislationHandler"
   >;
+};
+
+/** Build the only context public handlers may receive after the central gate. */
+export const createPublicMcpHandlerContext = (
+  context: McpRequestContext,
+): Result<PublicMcpHandlerContext, { type: "missing_scope" }> => {
+  const admission = (context.testDependencies?.admitLawRead ?? admitLawRead)({
+    organizationId: context.organizationId,
+  });
+  if (Result.isError(admission)) {
+    return admission;
+  }
+  return Result.ok({
+    lawReadAdmission: admission.value,
+    ...(context.thirdPartyOutboundPermit === undefined
+      ? {}
+      : { thirdPartyOutboundPermit: context.thirdPartyOutboundPermit }),
+    ...(context.testDependencies === undefined
+      ? {}
+      : { testDependencies: context.testDependencies }),
+  });
 };
 
 /**

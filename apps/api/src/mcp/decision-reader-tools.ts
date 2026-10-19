@@ -15,7 +15,7 @@ import {
   brandPersistedLegislationDocumentId,
 } from "@/api/lib/safe-id-boundaries";
 
-import type { McpRequestContext } from "./context";
+import type { PublicMcpHandlerContext } from "./context";
 import {
   blocksDecisionOutput,
   openDecisionArgs,
@@ -32,8 +32,8 @@ import {
   selectReaderWindow,
 } from "./decision-reader.logic";
 import type { ReaderSource } from "./decision-reader.logic";
-import { defineMcpToolSet } from "./tool-types";
-import type { McpToolDefinition, TypedMcpToolHandler } from "./tool-types";
+import { defineMcpToolSet, definePublicReadTool } from "./tool-types";
+import type { McpToolDefinition, PublicMcpToolHandler } from "./tool-types";
 import {
   buildCaseLawDecisionAppUrl,
   internalFailureResult,
@@ -95,7 +95,7 @@ const metadataWithFragment = (
       : `${metadata.url}#${decisionParagraphFragment(paragraphs)}`,
 });
 const readSource = async (
-  context: McpRequestContext,
+  context: PublicMcpHandlerContext,
   options: Parameters<typeof readDecisionReaderSource>[0],
 ) =>
   await Result.tryPromise(
@@ -174,7 +174,7 @@ const PREVIEW_CITED_PROVISION_TOOL_DEFINITION = defineValibotMcpTool({
   _meta: { ui: { visibility: ["app"] } },
 });
 
-const openTool: TypedMcpToolHandler<
+const openTool: PublicMcpToolHandler<
   v.InferInput<typeof openDecisionOutput>
 > = async ({ args, context }) => {
   const parsed = v.safeParse(
@@ -235,7 +235,7 @@ const openTool: TypedMcpToolHandler<
   }
 };
 
-const blocksTool: TypedMcpToolHandler<
+const blocksTool: PublicMcpToolHandler<
   v.InferInput<typeof blocksDecisionOutput>
 > = async ({ args, context }) => {
   const parsed = v.safeParse(
@@ -322,7 +322,7 @@ const blocksTool: TypedMcpToolHandler<
   return toolDataResult(payload);
 };
 
-const previewTool: TypedMcpToolHandler<
+const previewTool: PublicMcpToolHandler<
   v.InferInput<typeof provisionPreviewOutput>
 > = async ({ args, context }) => {
   const parsed = v.safeParse(
@@ -360,17 +360,19 @@ const previewTool: TypedMcpToolHandler<
   return toolDataResult(preview.value);
 };
 
+export const DECISION_READER_TOOL_HANDLERS = {
+  open_case_law_decision: openTool,
+  read_case_law_decision_blocks: blocksTool,
+  preview_cited_provision: previewTool,
+};
+
 export const DECISION_READER_TOOL_SET = defineMcpToolSet(
   [
-    OPEN_DECISION_TOOL_DEFINITION,
-    READ_DECISION_BLOCKS_TOOL_DEFINITION,
-    PREVIEW_CITED_PROVISION_TOOL_DEFINITION,
+    definePublicReadTool(OPEN_DECISION_TOOL_DEFINITION, openTool),
+    definePublicReadTool(READ_DECISION_BLOCKS_TOOL_DEFINITION, blocksTool),
+    definePublicReadTool(PREVIEW_CITED_PROVISION_TOOL_DEFINITION, previewTool),
   ] as const satisfies readonly McpToolDefinition[],
-  {
-    open_case_law_decision: openTool,
-    read_case_law_decision_blocks: blocksTool,
-    preview_cited_provision: previewTool,
-  },
+  {},
   {
     open_case_law_decision: defineMcpToolOutput(openDecisionOutput),
     read_case_law_decision_blocks: defineMcpToolOutput(blocksDecisionOutput),

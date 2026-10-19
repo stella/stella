@@ -3,6 +3,7 @@ import * as v from "valibot";
 
 import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import { actionRequestObserver } from "@/api/lib/usage/action-costs/context";
 
 type LawReadClaim = Readonly<{
   organizationId: SafeId<"organization">;
@@ -39,3 +40,9 @@ export const admitLawRead = ({
   }
   return Result.ok(v.parse(lawReadAdmissionSchema, { organizationId }));
 };
+
+/** Create usage observation without exposing the admission's tenant claim. */
+export const lawReadRequestObserver = (
+  admission: LawReadAdmission,
+  callKind: Parameters<typeof actionRequestObserver>[1],
+) => actionRequestObserver(admission.organizationId, callKind);

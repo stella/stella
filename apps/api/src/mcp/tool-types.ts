@@ -249,7 +249,7 @@ type McpToolDestructiveBranch =
       nonDestructiveReason?: never;
     };
 
-export type McpToolDefinition = McpToolAccessBranch &
+type BaseMcpToolDefinition = McpToolAccessBranch &
   McpToolDestructiveBranch & {
     annotationReasons: McpToolAnnotationReasons;
     /**
@@ -293,6 +293,26 @@ export type McpToolDefinition = McpToolAccessBranch &
     name: string;
     scope: ToolScope;
   };
+
+/** Authoring shape consumed by schema factories before public definitions are sealed. */
+export type McpToolDefinitionAuthoring = BaseMcpToolDefinition;
+
+export const PUBLIC_MCP_TOOL_DEFINITION = Symbol("PublicMcpToolDefinition");
+export const PUBLIC_MCP_TOOL_HANDLER = Symbol("PublicMcpToolHandler");
+
+export type PublicMcpToolDefinition = BaseMcpToolDefinition & {
+  access: "read";
+  authority: { kind: "public"; reason: string };
+  readonly [PUBLIC_MCP_TOOL_DEFINITION]: true;
+  readonly [PUBLIC_MCP_TOOL_HANDLER]: PublicMcpToolHandler;
+};
+
+type NonPublicMcpToolDefinition = BaseMcpToolDefinition &
+  ({ access: "read"; authority: { kind: "tenant" } } | { access: "write" });
+
+export type McpToolDefinition =
+  | NonPublicMcpToolDefinition
+  | PublicMcpToolDefinition;
 
 type DefaultMcpResourceScope = (typeof MCP_ADVANCED_RESOURCE_SCOPES)[number];
 
@@ -623,19 +643,31 @@ export type PublicMcpToolHandler<TData = unknown> = (options: {
   context: PublicMcpHandlerContext;
 }) => McpToolResponse<TData> | Promise<McpToolResponse<TData>>;
 
-type PublicReadDefinition = McpToolDefinition & {
-  access: "read";
-  authority: { kind: "public"; reason: string };
-};
 type TenantReadDefinition = McpToolDefinition & {
   access: "read";
   authority: { kind: "tenant"; permissions: PermissionInput };
 };
 
-export const definePublicReadTool = <TData>(
-  definition: PublicReadDefinition,
+export const definePublicReadTool = <
+  TData,
+  const TDefinition extends McpToolDefinitionAuthoring & {
+    access: "read";
+    authority: { kind: "public"; reason: string };
+  },
+>(
+  definition: TDefinition,
   handler: PublicMcpToolHandler<TData>,
-) => ({ ...definition, handler });
+) => {
+  const sealed = {
+    ...definition,
+    [PUBLIC_MCP_TOOL_DEFINITION]: true,
+    [PUBLIC_MCP_TOOL_HANDLER]: handler,
+  } satisfies TDefinition & {
+    readonly [PUBLIC_MCP_TOOL_DEFINITION]: true;
+    readonly [PUBLIC_MCP_TOOL_HANDLER]: PublicMcpToolHandler<TData>;
+  };
+  return sealed;
+};
 
 export const defineTenantReadTool = <TData>(
   definition: TenantReadDefinition,
@@ -643,7 +675,11 @@ export const defineTenantReadTool = <TData>(
 ) => ({ ...definition, handler });
 
 type TypedHandlerData<THandler> =
-  THandler extends McpToolHandler<infer TData> ? TData : never;
+  THandler extends McpToolHandler<infer TData>
+    ? TData
+    : THandler extends PublicMcpToolHandler<infer TData>
+      ? TData
+      : never;
 
 type IsAny<TValue> = 0 extends 1 & TValue ? true : false;
 
@@ -709,7 +745,15 @@ export type AssertTrue<TValue extends true> = TValue;
 
 export type McpToolHandlerMap<
   TDefinitions extends readonly McpToolDefinition[],
-> = Readonly<Record<TDefinitions[number]["name"], McpToolHandler>>;
+> = Readonly<
+  Record<
+    Exclude<
+      TDefinitions[number]["name"],
+      Extract<TDefinitions[number], PublicMcpToolDefinition>["name"]
+    >,
+    McpToolHandler
+  >
+>;
 
 export type McpToolOutputContractMap<
   TDefinitions extends readonly McpToolDefinition[],
@@ -733,8 +777,10 @@ type OutputDataByName<TOutputs> = {
 };
 
 type OutputContractAssertion<THandlers, TOutputs> =
-  IdentityOutputNames<TOutputs> extends infer TNames extends keyof THandlers &
-    keyof TOutputs
+  Extract<
+    IdentityOutputNames<TOutputs>,
+    keyof THandlers & keyof TOutputs
+  > extends infer TNames extends keyof THandlers & keyof TOutputs
     ? [TNames] extends [never]
       ? unknown
       : AllHandlerOutputsTyped<THandlers, TNames> extends true
@@ -752,9 +798,12 @@ type OutputBoundHandlerMap<
   TDefinitions extends readonly McpToolDefinition[],
   TOutputs extends McpToolOutputContractMap<TDefinitions>,
 > = {
-  readonly [TName in TDefinitions[number]["name"]]: McpToolHandler<
-    OutputContractData<TOutputs[TName]>
-  >;
+  readonly [
+    TName in Exclude<
+      TDefinitions[number]["name"],
+      Extract<TDefinitions[number], PublicMcpToolDefinition>["name"]
+    >
+  ]: McpToolHandler<OutputContractData<TOutputs[TName]>>;
 };
 
 export type McpToolSet<

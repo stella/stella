@@ -4,42 +4,48 @@ import { MCP_APPS } from "@stll/mcp-apps/manifest";
 
 import { inspectAppManifest } from "./app-guards";
 import { DEFAULT_MCP_TOOL_DEFINITIONS } from "./static-tool-definitions";
-import type { McpToolDefinition } from "./tool-types";
+import { definePublicReadTool, type McpToolDefinition } from "./tool-types";
 
-const readerTool = {
-  name: "reader_blocks",
-  description: "Read decision blocks",
-  access: "read",
-  authority: { kind: "public", reason: "Reads fixture public data." },
-  readClass: "public",
-  annotationReasons: {
-    readOnlyHint: "Reads fixture data without modifying it.",
-    destructiveHint: "The fixture changes no existing data.",
-    openWorldHint: "The fixture reads local data only.",
+const readerTool = definePublicReadTool(
+  {
+    name: "reader_blocks",
+    description: "Read decision blocks",
+    access: "read",
+    authority: { kind: "public", reason: "Reads fixture public data." },
+    readClass: "public",
+    annotationReasons: {
+      readOnlyHint: "Reads fixture data without modifying it.",
+      destructiveHint: "The fixture changes no existing data.",
+      openWorldHint: "The fixture reads local data only.",
+    },
+    anonymized: { exposure: "passthrough" },
+    consumesServices: false,
+    scope: "stella:read",
+    inputSchema: { type: "object" },
+    annotations: {
+      title: "Decision blocks",
+      readOnlyHint: true,
+      destructiveHint: false,
+      openWorldHint: false,
+    },
+    _meta: { ui: { visibility: ["app"] } },
   },
-  anonymized: { exposure: "passthrough" },
-  consumesServices: false,
-  scope: "stella:read",
-  inputSchema: { type: "object" },
-  annotations: {
-    title: "Decision blocks",
-    readOnlyHint: true,
-    destructiveHint: false,
-    openWorldHint: false,
-  },
-  _meta: { ui: { visibility: ["app"] } },
-} as const satisfies McpToolDefinition;
+  async () => ({ status: "success", data: {} }),
+);
 
-const opener = {
-  ...readerTool,
-  name: "open_reader",
-  _meta: {
-    ui: {
-      resourceUri: "ui://stella/test-reader",
-      visibility: ["model", "app"],
+const opener = definePublicReadTool(
+  {
+    ...readerTool,
+    name: "open_reader",
+    _meta: {
+      ui: {
+        resourceUri: "ui://stella/test-reader",
+        visibility: ["model", "app"],
+      },
     },
   },
-} as const satisfies McpToolDefinition;
+  async () => ({ status: "success", data: {} }),
+);
 
 const manifest = [
   {

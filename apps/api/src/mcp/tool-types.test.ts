@@ -1,7 +1,12 @@
 import { describe, test, expectTypeOf } from "bun:test";
 
 import type { ActionKindDefinition } from "@/api/lib/rate-limit/action-kinds";
+import type { PublicMcpHandlerContext } from "@/api/mcp/context";
+import type { STELLA_TOOL_DEFINITIONS } from "@/api/mcp/stella-tools";
 import type {
+  PUBLIC_MCP_TOOL_DEFINITION,
+  PUBLIC_MCP_TOOL_HANDLER,
+  PublicMcpToolHandler,
   AllHandlerOutputsTyped,
   HandlerOutputsMatchByName,
   McpToolDefinition,
@@ -69,5 +74,25 @@ describe("MCP service classification contract", () => {
     expectTypeOf<
       ActionKindDefinition["consumesServices"]
     >().toEqualTypeOf<boolean>();
+  });
+});
+
+describe("public MCP handler contract", () => {
+  test("requires the constructor brand and narrows handler context", () => {
+    type PublicDefinition = (typeof STELLA_TOOL_DEFINITIONS)[2];
+    type RawPublicDefinition = Omit<
+      PublicDefinition,
+      typeof PUBLIC_MCP_TOOL_DEFINITION | typeof PUBLIC_MCP_TOOL_HANDLER
+    >;
+
+    expectTypeOf<RawPublicDefinition>().not.toExtend<McpToolDefinition>();
+
+    expectTypeOf<PublicMcpHandlerContext>().not.toHaveProperty(
+      "organizationId",
+    );
+    expectTypeOf<PublicMcpHandlerContext>().not.toHaveProperty("scopedDb");
+    expectTypeOf<
+      Parameters<PublicMcpToolHandler>[0]["context"]
+    >().toEqualTypeOf<PublicMcpHandlerContext>();
   });
 });

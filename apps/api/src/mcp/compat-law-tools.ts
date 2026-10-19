@@ -25,8 +25,11 @@ import {
   encodeCompatSearchCursor,
   invalidCompatIdResult,
 } from "@/api/mcp/compat-shared";
-import type { McpToolDefinition, McpToolHandler } from "@/api/mcp/tool-types";
-import { defineMcpToolSet } from "@/api/mcp/tool-types";
+import type {
+  McpToolDefinition,
+  PublicMcpToolHandler,
+} from "@/api/mcp/tool-types";
+import { defineMcpToolSet, definePublicReadTool } from "@/api/mcp/tool-types";
 import {
   cursorInput,
   nullAsAbsent,
@@ -48,8 +51,6 @@ import {
  * `extractedContent`, which is what makes the audience's claim that no matter
  * data is reachable a property of the code rather than of a conditional.
  */
-
-type LawCompatToolName = "fetch" | "search";
 
 const lawCompatSearchArgsSchema = nullAsAbsent(
   v.strictObject({
@@ -79,7 +80,7 @@ const lawCompatFetchArgsSchema = nullAsAbsent(
   }),
 );
 
-const LAW_COMPAT_TOOL_DEFINITIONS = [
+const RAW_LAW_COMPAT_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
     consumesServices: false,
     annotations: {
@@ -132,9 +133,9 @@ const LAW_COMPAT_TOOL_DEFINITIONS = [
     name: "fetch",
     scope: "stella:read",
   }),
-] as const satisfies readonly McpToolDefinition[];
+] as const;
 
-const handleLawCompatSearchTool: McpToolHandler<
+const handleLawCompatSearchTool: PublicMcpToolHandler<
   v.InferInput<typeof COMPAT_SEARCH_OUTPUT_SCHEMA>
 > = async ({ args, context }) => {
   const parsed = v.safeParse(lawCompatSearchArgsSchema, args);
@@ -176,7 +177,7 @@ const handleLawCompatSearchTool: McpToolHandler<
   };
 };
 
-const handleLawCompatFetchTool: McpToolHandler<
+const handleLawCompatFetchTool: PublicMcpToolHandler<
   v.InferInput<typeof LAW_COMPAT_FETCH_OUTPUT_SCHEMA>
 > = async ({ args, context }) => {
   const parsed = v.safeParse(lawCompatFetchArgsSchema, args);
@@ -195,11 +196,22 @@ const handleLawCompatFetchTool: McpToolHandler<
 export const LAW_COMPAT_TOOL_HANDLERS = {
   fetch: handleLawCompatFetchTool,
   search: handleLawCompatSearchTool,
-} satisfies Record<LawCompatToolName, McpToolHandler>;
+};
+
+const LAW_COMPAT_TOOL_DEFINITIONS = [
+  definePublicReadTool(
+    RAW_LAW_COMPAT_TOOL_DEFINITIONS[0],
+    handleLawCompatSearchTool,
+  ),
+  definePublicReadTool(
+    RAW_LAW_COMPAT_TOOL_DEFINITIONS[1],
+    handleLawCompatFetchTool,
+  ),
+] as const satisfies readonly McpToolDefinition[];
 
 export const LAW_COMPAT_TOOL_SET = defineMcpToolSet(
   LAW_COMPAT_TOOL_DEFINITIONS,
-  LAW_COMPAT_TOOL_HANDLERS,
+  {},
   {
     fetch: defineMcpToolOutput(LAW_COMPAT_FETCH_OUTPUT_SCHEMA),
     search: defineMcpToolOutput(COMPAT_SEARCH_OUTPUT_SCHEMA),
