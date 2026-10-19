@@ -198,8 +198,8 @@ test("BfDI refuses incomplete pages, ambiguous assets, changed identity and unsu
 test("blob counter changes preserve source identity without inventing an edition", async () => {
   const html = await fixtureText("bfdi-recommendation.html");
   const original = parseBfdiDocument({ html, ...admitted }).unwrap();
-  await assertProperty(
-    "bfdi-blob-locator-is-not-an-edition",
+  assertProperty(
+    "blob counter changes preserve source identity without inventing an edition",
     fc.property(fc.integer({ min: 1, max: 9999 }), (counter) => {
       const documentUrl = ASSET.replace("v=5", () => `v=${counter}`);
       const changed = parseBfdiDocument({

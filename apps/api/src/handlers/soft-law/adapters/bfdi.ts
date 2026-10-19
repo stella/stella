@@ -349,7 +349,9 @@ const createBfdiDocumentReader =
           bytes: Buffer.from(part.contentBase64, "base64"),
           contentType: part.contentType,
           purpose: "discovery" as const,
-          provenance: part.provenance,
+          ...(part.provenance === undefined
+            ? {}
+            : { provenance: part.provenance }),
         })),
         {
           role: "document",
