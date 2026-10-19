@@ -415,6 +415,16 @@ const MarginNoteBody = ({
   placement,
   presence = "normal",
 }: MarginNoteProps) => {
+  const observeSize = (el: HTMLElement | null) => {
+    if (el === null || measureRef === undefined) {
+      return undefined;
+    }
+    measureRef(el, item.id);
+    const observer = new ResizeObserver(() => measureRef(el, item.id));
+    observer.observe(el);
+    return () => observer.disconnect();
+  };
+
   switch (item.kind) {
     case "provision": {
       const position = notePlacementPresentation(placement);
@@ -422,7 +432,7 @@ const MarginNoteBody = ({
         <div
           className={position.className}
           style={position.style}
-          ref={(el) => measureRef?.(el, item.id)}
+          ref={observeSize}
         >
           <CitedProvisionExpansion
             citations={item.citations}
@@ -437,17 +447,7 @@ const MarginNoteBody = ({
         <div
           className={position.className}
           style={position.style}
-          ref={(el) => {
-            if (el === null) {
-              return undefined;
-            }
-            measureRef?.(el, item.id);
-            const observer = new ResizeObserver(() =>
-              measureRef?.(el, item.id),
-            );
-            observer.observe(el);
-            return () => observer.disconnect();
-          }}
+          ref={observeSize}
           onMouseEnter={() => onHover?.(true)}
           onMouseLeave={() => onHover?.(false)}
         >
