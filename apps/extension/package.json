@@ -27,7 +27,7 @@
     "valibot": "catalog:"
   },
   "devDependencies": {
-    "@playwright/test": "^1.63.0",
+    "@playwright/test": "^1.64.0",
     "@stll/typescript-config": "workspace:*",
     "@types/chrome": "0.3.5",
     "bun-types": "catalog:",
