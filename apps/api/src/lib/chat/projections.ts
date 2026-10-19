@@ -1607,7 +1607,18 @@ const caseLawDecisionProjection = v.strictObject({
   source_url: v.optional(publicUrl()),
   caseNumber: v.string(),
   caseNumberType: caseNumberTypeProjection,
-  citations: v.optional(caseLawCitationSummaryProjection),
+  citations: v.optional(
+    v.union([
+      projectionBranch(caseLawCitationSummaryProjection),
+      projectionBranch(
+        v.strictObject({
+          status: v.literal("unavailable"),
+          reason: v.literal("country_not_search_admitted"),
+          country: v.string(),
+        }),
+      ),
+    ]),
+  ),
   country: v.optional(v.string()),
   court: v.optional(v.string()),
   // The court's short form as a lawyer writes it (ÚS, NS, NSS, SN, CJEU),
@@ -1783,6 +1794,8 @@ export const SEARCH_LEGISLATION_PROJECTION = v.union([
           documentId: passthroughId(),
           documentType: v.nullable(v.string()),
           effectiveDate: v.nullable(v.string()),
+          versionValidFrom: v.nullable(v.string()),
+          versionValidTo: v.nullable(v.string()),
           eli: v.string(),
           language: v.string(),
           match: v.strictObject({
