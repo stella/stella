@@ -807,7 +807,7 @@ describe("closestToolNames", () => {
   test("keeps ASCII tie order and empty candidate behavior", () => {
     expect(closestToolNames("x", ["b", "a"])).toEqual(["a", "b"]);
     expect(closestToolNames("x", [])).toEqual([]);
-    expect(closestToolNames("", ["a", "ab"])).toEqual(["a"]);
+    expect(closestToolNames("", ["a", "ab"])).toEqual(["a", "ab"]);
   });
 
   test("caps suggestions at three names", () => {

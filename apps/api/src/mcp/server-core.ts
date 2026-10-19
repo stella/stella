@@ -151,9 +151,9 @@ const takeStreamReaderOwnership = <T>(body: ReadableStream<T>) =>
   body.getReader();
 
 const formatUnknownToolName = (toolName: string): string =>
-  toolName.length <= MAX_TOOL_NAME_SUGGESTION_CHARS
+  toolName.length <= MAX_TOOL_NAME_CHARS
     ? toolName
-    : `${toolName.slice(0, MAX_TOOL_NAME_SUGGESTION_CHARS)}...`;
+    : `${toolName.slice(0, MAX_TOOL_NAME_CHARS)}...`;
 
 /** `missing_scope` envelope with a CLI command that preserves all grants. */
 const missingScopeResult = ({
