@@ -572,15 +572,13 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
         container.scrollTop,
       behavior: "instant",
     });
-    const range = ast
-      ? paragraphRangeIndices(ast.blocks, {
-          startAnchorId: anchorId,
-          endAnchorId,
-        })
-      : null;
-    const highlighted = range
-      ? ast?.blocks.slice(range.startIndex, range.endIndex + 1)
-      : [];
+    const blocks = ast?.blocks ?? [];
+    const range = paragraphRangeIndices(blocks, {
+      startAnchorId: anchorId,
+      endAnchorId,
+    });
+    const highlighted =
+      range === null ? [] : blocks.slice(range.startIndex, range.endIndex + 1);
     const highlightedElements = highlighted
       .map((block) =>
         container.querySelector<HTMLElement>(`#${CSS.escape(block.anchorId)}`),
