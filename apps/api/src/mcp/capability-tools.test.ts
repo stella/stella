@@ -9,7 +9,6 @@ import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-p
 import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
 
 import { member } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
 import type { workspaceViews } from "@/api/db/schema";
 import {
   auditLogs,
@@ -1946,23 +1945,38 @@ describe("synthesized capability authorization lifetime", () => {
       request: new Request("http://localhost/mcp"),
       workspaceId: toSafeId<"workspace">("ws_1"),
     });
-    const tx = asTestRaw<Transaction>({
-      insert: () => ({
-        values: async (rows: Record<string, unknown>[]) => {
-          inserted = rows;
-        },
-      }),
-    });
+    const { scopedDb } = createScopedDbMock(
+      {
+        insert: () => ({
+          values: async (rows: Record<string, unknown>[]) => {
+            inserted = rows;
+          },
+        }),
+      },
+      {
+        entityAuditOwners: [
+          {
+            id: toSafeId<"entity">("entity-1"),
+            workspaceId: toSafeId<"workspace">("ws_2"),
+            featureOwner: "shared",
+          },
+        ],
+      },
+    );
 
-    await synthesized.createAuditRecorder({
-      workspaceId: toSafeId<"workspace">("ws_2"),
-    })(tx, {
-      action: "create",
-      resourceId: "entity-1",
-      resourceType: "entity",
-    });
+    await scopedDb(
+      async (tx) =>
+        await synthesized.createAuditRecorder({
+          workspaceId: toSafeId<"workspace">("ws_2"),
+        })(tx, {
+          action: "create",
+          resourceId: "entity-1",
+          resourceType: "entity",
+        }),
+    );
 
     expect(inserted[0]).toMatchObject({
+      featureOwner: "shared",
       performerId: "agent-1",
       performerType: "agent",
       triggerSource: "mcp",

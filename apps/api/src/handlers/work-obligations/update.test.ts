@@ -91,6 +91,9 @@ describe("updateWorkObligation", () => {
       },
       {
         visibleResources: { entity: [entityId] },
+        entityAuditOwners: [
+          { id: entityId, workspaceId, featureOwner: "shared" },
+        ],
         featureAccess: { identity: CALLER_IDENTITY },
       },
     );
@@ -227,6 +230,9 @@ describe("updateWorkObligation", () => {
       },
       {
         visibleResources: { entity: [entityId] },
+        entityAuditOwners: [
+          { id: entityId, workspaceId, featureOwner: "shared" },
+        ],
         featureAccess: { identity: CALLER_IDENTITY },
       },
     );
@@ -356,6 +362,9 @@ describe("updateWorkObligation", () => {
         },
         {
           visibleResources: { entity: [entityId] },
+          entityAuditOwners: [
+            { id: entityId, workspaceId, featureOwner: "shared" },
+          ],
           featureAccess: { identity: CALLER_IDENTITY },
         },
       );

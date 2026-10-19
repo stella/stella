@@ -42,6 +42,10 @@ type FeatureAccessMockOptions = {
 };
 
 type ScopedDbMockOptions = {
+  entityAuditOwners?: Pick<
+    typeof entities.$inferSelect,
+    "id" | "workspaceId" | "featureOwner"
+  >[];
   entityTransferEligibility?: {
     entityId: typeof entities.$inferSelect.id;
     eligible: boolean;
@@ -103,6 +107,33 @@ const fixtureSelect =
       typeof selection === "object" && selection !== null
         ? Object.values(selection)
         : [];
+    if (
+      options?.entityAuditOwners !== undefined &&
+      typeof selection === "object" &&
+      selection !== null &&
+      "entityId" in selection &&
+      selection.entityId === entities.id &&
+      "workspaceId" in selection &&
+      selection.workspaceId === entities.workspaceId &&
+      "featureOwner" in selection &&
+      selection.featureOwner === entities.featureOwner
+    ) {
+      const query = createSelectQueryMock(
+        options.entityAuditOwners.map(({ id, workspaceId, featureOwner }) => ({
+          entityId: id,
+          workspaceId,
+          featureOwner,
+        })),
+      );
+      return {
+        from: (table: unknown) => {
+          if (table !== entities) {
+            return panic("Audit ownership fixture must read entities");
+          }
+          return query.from();
+        },
+      };
+    }
     // Linked ownership is an explicit fixture boundary; ordinary resource
     // selects must never accidentally stand in for persisted flow pointers.
     if (columns.includes(flowRunSteps.runId)) {
