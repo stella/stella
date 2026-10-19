@@ -5,6 +5,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import type { OxlintConfig } from "oxlint";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 const REPOSITORY_ROOT = path.resolve(import.meta.dir, "../..");
 
 /** The oxlint JSON report fields this helper reads, at any nesting level. */
@@ -462,10 +464,18 @@ export const lintSingleRule = async (
 export const lintRuleAcrossFiles = async (
   ruleName: string,
   files: Readonly<Record<string, string>>,
-  { plugin = ruleName }: { plugin?: string } = {},
+  {
+    plugin = ruleName,
+    ruleOptions,
+    ruleOptionsForRoot,
+  }: Pick<
+    LintSingleRuleOptions,
+    "plugin" | "ruleOptions" | "ruleOptionsForRoot"
+  > = {},
 ): Promise<Record<string, number[]>> => {
   const directory = await mkdtemp(path.join(tmpdir(), `stella-${ruleName}-`));
   const names = Object.keys(files).toSorted();
+  const configuredRuleOptions = ruleOptionsForRoot?.(directory) ?? ruleOptions;
   const lintResult = await Result.tryPromise(async () => {
     const configPath = path.join(directory, "oxlint.json");
     await Bun.write(
@@ -475,7 +485,12 @@ export const lintRuleAcrossFiles = async (
         jsPlugins: [
           path.join(REPOSITORY_ROOT, ".oxlint-plugins", `${plugin}.ts`),
         ],
-        rules: { [`${plugin}/${ruleName}`]: "error" },
+        rules: {
+          [`${plugin}/${ruleName}`]:
+            configuredRuleOptions === undefined
+              ? "error"
+              : ["error", configuredRuleOptions],
+        },
       })}\n`,
     );
     for (const name of names) {
@@ -520,7 +535,9 @@ export const lintRuleAcrossFiles = async (
     const line = reportedLine(diagnostic, `${plugin}(${ruleName})`);
     const filename =
       isRecord(diagnostic) && typeof diagnostic.filename === "string"
-        ? path.basename(diagnostic.filename)
+        ? path.isAbsolute(diagnostic.filename)
+          ? repoRelativePath(directory, diagnostic.filename)
+          : diagnostic.filename
         : undefined;
     const lines = filename === undefined ? undefined : linesByFile[filename];
     if (line === null || lines === undefined) {
