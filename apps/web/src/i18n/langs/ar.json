@@ -1020,6 +1020,7 @@
       "pageOfEstimatedCount": "الصفحة {page} من ~{pageCount}",
       "pageOfEstimatedCountLabel": "الصفحة {page} من نحو {pageCount}",
       "pageWithEstimatedResultCount": "الصفحة {page} · {count, plural, zero {نحو صفر نتيجة} one {نحو نتيجة واحدة} two {نحو نتيجتين} few {نحو # نتائج} many {نحو # نتيجة} other {نحو # نتيجة}}",
+      "pageWithMatchCounts": "الصفحة {page} · {exactCount, plural, zero {لا تطابقات تامة} one {تطابق تام واحد} two {تطابقان تامان} few {# تطابقات تامة} many {# تطابقًا تامًا} other {# تطابق تام}} · {relaxedCount, plural, zero {لا تطابقات جزئية} one {تطابق جزئي واحد} two {تطابقان جزئيان} few {# تطابقات جزئية} many {# تطابقًا جزئيًا} other {# تطابق جزئي}}",
       "pageWithResultCount": "الصفحة {page} · {count, plural, zero {لا نتائج} one {نتيجة واحدة} two {نتيجتان} few {# نتائج} many {# نتيجة} other {# نتيجة}}",
       "perPage": "لكل صفحة",
       "refineForMore": "ضيّق نطاق البحث لعرض مزيد من النتائج"

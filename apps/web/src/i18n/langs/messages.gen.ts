@@ -1023,6 +1023,7 @@ type Messages = {
       "pageOfEstimatedCount": "Page {page} of ~{pageCount}";
       "pageOfEstimatedCountLabel": "Page {page} of about {pageCount}";
       "pageWithEstimatedResultCount": "Page {page} · about {count, plural, one {# result} other {# results}}";
+      "pageWithMatchCounts": "Page {page} · {exactCount, plural, one {# exact match} other {# exact matches}} · {relaxedCount, plural, one {# partial match} other {# partial matches}}";
       "pageWithResultCount": "Page {page} · {count, plural, one {# result} other {# results}}";
       "perPage": "Per page";
       "refineForMore": "Refine your search to see more results";

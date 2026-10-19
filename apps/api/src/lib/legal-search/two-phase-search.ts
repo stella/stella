@@ -51,6 +51,7 @@ export type TwoPhaseSearchResult<Page, Hit> = {
   pages: readonly Page[];
   nextCursor: string | null;
   paginationOutcome: SearchPaginationOutcome;
+  relaxedHitCount: number;
   relaxedShown: boolean;
 };
 
@@ -86,6 +87,7 @@ export const runTwoPhaseSearch = async <
       pages: [],
       nextCursor: null,
       paginationOutcome: { type: "complete" },
+      relaxedHitCount: 0,
       relaxedShown: false,
     };
   }
@@ -105,6 +107,7 @@ export const runTwoPhaseSearch = async <
       pages: [page],
       nextCursor: encodeCursor(page, phase),
       paginationOutcome: page.paginationOutcome,
+      relaxedHitCount: phase.type === "relaxed" ? hits.length : 0,
       relaxedShown: phase.type === "relaxed" && hits.length > 0,
     };
   }
@@ -128,6 +131,7 @@ export const runTwoPhaseSearch = async <
       pages: [page],
       nextCursor: null,
       paginationOutcome: page.paginationOutcome,
+      relaxedHitCount: 0,
       relaxedShown: false,
     };
   }
@@ -140,6 +144,7 @@ export const runTwoPhaseSearch = async <
     pages: [page, extra],
     nextCursor: encodeCursor(extra, relaxed),
     paginationOutcome: extra.paginationOutcome,
+    relaxedHitCount: relaxedHits.length,
     relaxedShown: relaxedHits.length > 0,
   };
 };

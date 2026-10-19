@@ -45,6 +45,7 @@ test("a short case-law page appends relaxed hits and emits relaxed_match", async
   });
 
   expect(result.hits.map(({ id }) => id)).toEqual(["strict", "relaxed"]);
+  expect(result.relaxedHitCount).toBe(1);
   expect(
     searchAnswer({
       body,

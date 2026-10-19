@@ -1087,6 +1087,7 @@ const searchPostgresDecisions = async (
       hits,
       facets,
       total,
+      relaxedHitCount: 0,
       nextCursor,
       paginationOutcome: SEARCH_PAGINATION_COMPLETE,
       pageReach: SEARCH_PAGE_REACH.REACHED,
@@ -2659,6 +2660,7 @@ export const searchCorpusIndexDecisions = async ({
         return projectCaseLawSearchResponse(
           {
             ...page,
+            relaxedHitCount: 0,
             ...searchAnswer({
               body,
               interpretation,
@@ -2694,6 +2696,7 @@ export const searchCorpusIndexDecisions = async ({
         hits: [],
         facets: null,
         total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 0),
+        relaxedHitCount: 0,
         nextCursor: null,
         paginationOutcome: SEARCH_PAGINATION_COMPLETE,
         pageReach: SEARCH_PAGE_REACH.REACHED,
@@ -2955,6 +2958,7 @@ export const searchCorpusIndexDecisions = async ({
   return projectCaseLawSearchResponse(
     {
       ...page,
+      relaxedHitCount: twoPhase.relaxedHitCount,
       paginationOutcome: searchPage.paginationOutcome,
       pageReach: searchPage.reach,
       ...searchAnswer({
@@ -3210,6 +3214,7 @@ export const listCaseLawProvisionDecisions = async ({
   return projectCaseLawSearchResponse(
     {
       ...page,
+      relaxedHitCount: 0,
       paginationOutcome: SEARCH_PAGINATION_COMPLETE,
       pageReach: SEARCH_PAGE_REACH.REACHED,
       queryUsed: "",

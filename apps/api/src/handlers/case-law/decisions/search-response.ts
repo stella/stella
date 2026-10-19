@@ -165,6 +165,7 @@ export const projectCaseLawSearchResponse = (
             .map(projectBucket),
         },
   total: response.total,
+  relaxedHitCount: response.relaxedHitCount,
   nextCursor: nullableText(
     response.nextCursor,
     CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,

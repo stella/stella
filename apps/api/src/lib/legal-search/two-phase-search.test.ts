@@ -96,6 +96,7 @@ describe("two-phase corpus search", () => {
       ]),
     });
     expect(result.hits.map(({ id }) => id)).toEqual(["a", "b", "c"]);
+    expect(result.relaxedHitCount).toBe(2);
     expect(result.relaxedShown).toBe(true);
   });
 

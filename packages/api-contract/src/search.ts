@@ -79,6 +79,14 @@ export type SearchTotal =
     }
   | { readonly type: typeof SEARCH_TOTAL_TYPE.NOT_COUNTED };
 
+/** Counts a case-law result page reports without mixing match semantics. */
+export type CaseLawSearchResultCounts = {
+  /** The whole exact-match result set, which facets describe. */
+  readonly total: SearchTotal;
+  /** Results appended to this page after matching any query word. */
+  readonly relaxedHitCount: number;
+};
+
 export const SEARCH_TOTAL_NOT_COUNTED = {
   type: SEARCH_TOTAL_TYPE.NOT_COUNTED,
 } as const satisfies SearchTotal;
