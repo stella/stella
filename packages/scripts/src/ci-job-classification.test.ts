@@ -1459,3 +1459,59 @@ test("GitHub on keys retain their string identity in canonical YAML", () => {
   expect(quoted.value.digest).toBe(original.value.digest);
   expect(extraKey.value.digest).not.toBe(original.value.digest);
 });
+
+// The digest asks for a re-review only when the job's kind can change: its
+// runner and a github-script body cannot, while the secrets a script reads,
+// the job's permissions and the actions it uses can.
+test("job digests follow kind inputs, not the runner or a github-script body", () => {
+  type WorkflowOptions = {
+    runner?: string;
+    script?: string;
+    permissions?: string;
+    action?: string;
+  };
+  const workflow = ({
+    runner = "ubuntu-latest",
+    script = "core.info(context.runId);",
+    permissions = "read",
+    action = "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3",
+  }: WorkflowOptions = {}) =>
+    [
+      "on: pull_request",
+      "jobs:",
+      "  gate:",
+      `    runs-on: ${runner}`,
+      "    permissions:",
+      `      actions: ${permissions}`,
+      "    steps:",
+      `      - uses: ${action}`,
+      "        with:",
+      "          retries: 3",
+      "          script: |",
+      `            ${script}`,
+    ].join("\n");
+  const digest = (text: string) => {
+    const parsed = parseDocument(text);
+    if (parsed.isErr()) {
+      throw parsed.error;
+    }
+    return parsed.value.jobs["gate"]?.digest;
+  };
+  const original = digest(workflow());
+  expect(original).toBeDefined();
+  expect(digest(workflow({ runner: "ubuntu-24.04-arm" }))).toBe(original);
+  expect(
+    digest(workflow({ script: "for (;;) { await github.paginate(x); }" })),
+  ).toBe(original);
+  expect(digest(workflow({ script: "core.info(secrets.TOKEN);" }))).not.toBe(
+    original,
+  );
+  expect(digest(workflow({ permissions: "write" }))).not.toBe(original);
+  expect(
+    digest(
+      workflow({
+        action: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+      }),
+    ),
+  ).not.toBe(original);
+});

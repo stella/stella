@@ -6,10 +6,12 @@ export class AdmissionError extends TaggedError("AdmissionError")<{
 }> {}
 
 // Only these document/job/step keys are omitted; new keys participate automatically.
-// YAML comments are absent from the parsed objects. Action inputs stay intact.
+// YAML comments are absent from the parsed objects. Action inputs stay intact,
+// except a github-script body, which is handled like `run`. The runner does
+// not decide a job's kind, so changing it needs no re-review.
 export const CLASSIFICATION_EXCLUSIONS = {
   document: ["name", "run-name"],
-  job: ["name", "timeout-minutes"],
+  job: ["name", "timeout-minutes", "runs-on"],
   step: ["name", "timeout-minutes", "run"],
 } as const;
 
@@ -152,12 +154,23 @@ end
 def project(value, scope)
   value.reject { |key,_| EXCLUSIONS.fetch(scope).include?(key) }
 end
+def github_script(step)
+  uses = step['uses']
+  options = step['with']
+  return nil unless uses.is_a?(String) && uses.start_with?('actions/github-script@') && options.is_a?(Hash)
+  options['script'].is_a?(String) ? options['script'] : nil
+end
 def step_shapes(value)
   value.map do |s|
     shape = project(s, 'step')
+    script = github_script(s)
+    # A github-script body is the step's program, like run: it leaves the
+    # definition and contributes only its secret references. What the script
+    # may write is bounded by the job permissions, which stay in the digest.
+    shape['with'] = shape['with'].reject { |key, _| key == 'script' } if script
     publication_command = s.fetch('run', '').match?(/publish|deploy|release|push/i)
     shape['parallel'] = step_shapes(s['parallel']) if s.key?('parallel')
-    refs = secret_refs(s['run'])
+    refs = secret_refs([s['run'], script].compact)
     next if shape.empty? && refs.empty? && !publication_command
     {'definition'=>shape, 'run-secret-refs'=>refs, 'publication-command'=>publication_command}
   end.compact
