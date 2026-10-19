@@ -103,7 +103,7 @@ export const citationTextCaseMatch = (
   const storedSuffix =
     withoutRegistrySuffix(caseNumber) === caseNumber
       ? undefined
-      : caseNumber.match(CASE_NUMBER_SUFFIX)?.at(0);
+      : CASE_NUMBER_SUFFIX.exec(caseNumber)?.at(0);
   for (const needle of caseNumberCandidates(caseNumber)) {
     for (
       let at = prose.text.indexOf(needle);
@@ -120,7 +120,7 @@ export const citationTextCaseMatch = (
         continue;
       }
       const suffix = dated
-        ? after.match(LEADING_CASE_NUMBER_SUFFIX)?.at(0)
+        ? LEADING_CASE_NUMBER_SUFFIX.exec(after)?.at(0)
         : undefined;
       const end = last + 1 + (suffix?.length ?? 0);
       if (
