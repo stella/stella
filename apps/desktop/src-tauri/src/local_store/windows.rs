@@ -57,6 +57,7 @@ impl Parent {
       OpenMode::Append => {
         options.append(true).create(true);
       }
+      #[cfg(test)]
       OpenMode::AppendExisting => {
         options.append(true);
       }

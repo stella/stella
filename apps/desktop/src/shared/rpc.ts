@@ -26,8 +26,6 @@ export type {
   OpenFileRequest,
   OpenFileResponse,
   DocumentRecoverySnapshot,
-  RecoveryAccess,
-  RecoveryStatus,
   RecoveryTarget,
   SessionSnapshot,
   SessionStatus,

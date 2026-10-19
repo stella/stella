@@ -217,6 +217,7 @@ pub enum OpenMode {
   ExclusiveRead,
   CreateNew,
   Append,
+  #[cfg(test)]
   AppendExisting,
   Lock,
 }

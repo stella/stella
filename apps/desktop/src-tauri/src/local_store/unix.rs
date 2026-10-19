@@ -201,6 +201,7 @@ impl Parent {
       OpenMode::Read => OFlags::RDONLY,
       OpenMode::CreateNew => OFlags::WRONLY | OFlags::CREATE | OFlags::EXCL,
       OpenMode::Append => OFlags::WRONLY | OFlags::CREATE | OFlags::APPEND,
+      #[cfg(test)]
       OpenMode::AppendExisting => OFlags::WRONLY | OFlags::APPEND,
       OpenMode::Lock => OFlags::RDWR | OFlags::CREATE,
     };
