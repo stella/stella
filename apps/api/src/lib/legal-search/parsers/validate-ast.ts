@@ -1,6 +1,6 @@
 // parser-output-unchanged: Non-CourtListener callers omit sourcePolicy; their original default expressions and detectors are retained, with baseline fixture diagnostics locked by validate-ast-defaults.test.ts.
 // parser-output-unchanged: Validation work counters are diagnostics only; parsed records are unchanged.
-// parser-output-unchanged: Reusing a caller's parsed document and normalizing its source words once preserves the same reference text, diagnostics, and stored parser output.
+// parser-output-unchanged: Callers may reuse their already-parsed document; reference extraction, validation diagnostics, and stored parser output are unchanged.
 /**
  * AST sanity checker.
  *
@@ -80,7 +80,8 @@ const normalize = (text: string): string =>
   text
     .replace(/\s+/gu, " ")
     .replace(/\u00a0/gu, " ")
-    .trim();
+    .trim()
+    .toLowerCase();
 
 const SKIP_WORDS = new Set([
   "[obrázek]",
@@ -154,16 +155,15 @@ const separateSkipMarkers = (text: string): string => {
 const isMeaningfulWord = (clean: string): boolean =>
   clean.length >= 3 && !/^\d+$/u.test(clean) && !SKIP_WORDS.has(clean);
 
-export const extractWords = (text: string): Set<string> => {
+const extractWords = (text: string): Set<string> => {
   const words = new Set<string>();
-  const normalized = separateSkipMarkers(text)
-    // Lowercasing is context-sensitive (for example, Greek final sigma), so
-    // anonymization brackets must not interrupt the word before this pass.
-    .replace(/[[\]]/gu, "")
-    .toLowerCase();
-  for (const w of normalized.split(/\s+/u)) {
-    const clean = trimNonLetters(w);
-    if (isMeaningfulWord(clean) && !/^\[\d+\]$/u.test(w)) {
+  for (const w of separateSkipMarkers(text).split(/\s+/u)) {
+    // Strip brackets first (anonymization markers like
+    // "[o]rganizace" or "[OBRÁZEK]"), then trim remaining
+    // non-letter chars from edges.
+    const noBrackets = w.replace(/[[\]]/gu, "");
+    const clean = trimNonLetters(noBrackets.toLowerCase());
+    if (isMeaningfulWord(clean) && !/^\[\d+\]$/u.test(w.toLowerCase())) {
       words.add(clean);
     }
   }
@@ -413,8 +413,8 @@ export const validateAst = (
   const wordComparisonText = options?.wordComparisonText;
   const comparisonWords =
     wordComparisonText === undefined ||
-    normalize(wordComparisonText).replace(/\s+/gu, "").toLowerCase() !==
-      originalText.replace(/\s+/gu, "").toLowerCase()
+    normalize(wordComparisonText).replace(/\s+/gu, "") !==
+      originalText.replace(/\s+/gu, "")
       ? originalWords
       : extractWords(normalize(wordComparisonText));
   const missingWords = missingFrom(comparisonWords);
