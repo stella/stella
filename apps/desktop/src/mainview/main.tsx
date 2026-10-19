@@ -37,6 +37,7 @@ const ClipboardEditor = lazy(
   async () => import("../clipboard/ClipboardEditor"),
 );
 const ActivityApp = lazy(async () => import("../activity/ActivityApp"));
+const OnboardingApp = lazy(async () => import("../onboarding/OnboardingApp"));
 
 const isReactRoot = (value: unknown): value is ReactRoot =>
   typeof value === "object" &&
@@ -126,6 +127,12 @@ const Root = () => {
     content = (
       <Suspense fallback={<main className="bg-background min-h-dvh" />}>
         <ActivityApp />
+      </Suspense>
+    );
+  } else if (windowLabel === "onboarding") {
+    content = (
+      <Suspense fallback={<main className="bg-background min-h-dvh" />}>
+        <OnboardingApp />
       </Suspense>
     );
   } else if (windowLabel === "clipboard-editor") {
