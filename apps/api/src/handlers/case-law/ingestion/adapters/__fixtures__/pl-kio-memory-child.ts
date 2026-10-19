@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 import { Buffer } from "node:buffer";
+import { existsSync, readFileSync } from "node:fs";
 
 import {
   decodeSourceRawEnvelope,
@@ -195,8 +196,22 @@ if (
   panic("KIO memory fixture document was not retained in the raw envelope");
 }
 
+// This process's own high-water RSS. On Linux VmHWM starts afresh at exec, so
+// it excludes the forked parent's pages (which ru_maxrss would count) and,
+// unlike polling, cannot miss a short spike. Elsewhere the child's own maxRSS
+// (kilobytes) is exact, since posix_spawn does not inherit the parent's peak.
+const PROC_STATUS = "/proc/self/status";
+const peakRssBytes = existsSync(PROC_STATUS)
+  ? Number(
+      /^VmHWM:\s+(?<kilobytes>\d+) kB$/mu.exec(
+        readFileSync(PROC_STATUS, "utf-8"),
+      )?.groups?.["kilobytes"] ?? panic("VmHWM missing from /proc/self/status"),
+    ) * 1024
+  : process.resourceUsage().maxRSS * 1024;
+
 process.stdout.write(
   `${JSON.stringify({
+    peakRssBytes,
     targetBytes,
     documentBytes,
     fulltextChars: decision.fulltext?.length ?? 0,

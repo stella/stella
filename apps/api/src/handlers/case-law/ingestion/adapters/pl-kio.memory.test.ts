@@ -1,4 +1,4 @@
-import { Result, panic } from "better-result";
+import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -20,26 +20,6 @@ const TWELVE_MIB = 12 * 1024 * 1024;
 const SIXTEEN_MIB = 16 * 1024 * 1024;
 const RESPONSE_SIZES = [256 * 1024, 1024 * 1024, TWELVE_MIB, SIXTEEN_MIB];
 const INGESTION_PATHS = ["fetch", "replay"] as const;
-
-const samplePeakRss = async (pid: number): Promise<number> => {
-  const status = Bun.file(`/proc/${pid}/status`);
-  let peakBytes = 0;
-  while (true) {
-    const read = await Result.tryPromise({
-      try: async () => await status.text(),
-      catch: (error) => error,
-    });
-    if (Result.isError(read)) {
-      return peakBytes;
-    }
-    const match = /^VmRSS:\s+(?<kilobytes>\d+) kB$/mu.exec(read.value);
-    const kilobytes = Number(match?.groups?.["kilobytes"]);
-    if (Number.isFinite(kilobytes)) {
-      peakBytes = Math.max(peakBytes, kilobytes * 1024);
-    }
-    await Bun.sleep(5);
-  }
-};
 
 const runMemoryChild = async (
   targetBytes: number,
@@ -70,11 +50,10 @@ const runMemoryChild = async (
       stderr: "pipe",
     },
   );
-  const [stdout, stderr, exitCode, peakBytes] = await Promise.all([
+  const [stdout, stderr, exitCode] = await Promise.all([
     new Response(child.stdout).text(),
     new Response(child.stderr).text(),
     child.exited,
-    samplePeakRss(child.pid),
   ]);
   if (exitCode !== 0) {
     panic(`KIO memory child failed (${exitCode}): ${stderr}`);
@@ -87,6 +66,9 @@ const runMemoryChild = async (
   if (
     receipt === null ||
     typeof receipt !== "object" ||
+    !("peakRssBytes" in receipt) ||
+    typeof receipt.peakRssBytes !== "number" ||
+    !(receipt.peakRssBytes > 0) ||
     !("targetBytes" in receipt) ||
     typeof receipt.targetBytes !== "number" ||
     !("documentBytes" in receipt) ||
@@ -125,6 +107,8 @@ const runMemoryChild = async (
     overflowBudgetType: receipt.overflowBudgetType,
     path: receipt.path,
   };
+  // The child reports its own high-water RSS; see the memory child fixture.
+  const peakBytes = receipt.peakRssBytes;
   return { receipt: memoryReceipt, peakBytes, exitCode, stderr };
 };
 
