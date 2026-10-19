@@ -356,6 +356,8 @@ export const DOC_SOURCE_EXCLUSIONS = [
   "nodemailer",
   "onnxruntime-node",
   "oxlint-tailwindcss",
+  "parse5",
+  "parse5-htmlparser2-tree-adapter",
   "pdfjs-dist",
   "postal-mime",
   "prism-react-renderer",
