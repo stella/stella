@@ -172,7 +172,7 @@ describe("document conversion input", () => {
   test("refuses OOXML field instructions for remote content", async () => {
     const input = await zip(
       "word/document.xml",
-      '<w:document xmlns:w="urn:w"><w:instrText>INCLUDEPICTURE https://example.test/a.png</w:instrText></w:document>',
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:instrText>INCLUDEPICTURE https://example.test/a.png</w:instrText></w:document>',
     );
     expect(
       await checkConversionInput(
@@ -187,11 +187,42 @@ describe("document conversion input", () => {
     });
   });
 
+  test.each([
+    '<q:document xmlns:q="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><q:fldSimple q:instr="INCLUDEPICTURE https://example.test/a.png"/></q:document>',
+    '<q:document xmlns:q="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><q:fldChar q:fldCharType="begin"/><q:instrText>INCLUDEPICTURE https://example.test/a.png</q:instrText><q:fldChar q:fldCharType="end"/></q:document>',
+  ])("refuses OOXML field instructions by namespace", async (document) => {
+    const input = await zip("word/document.xml", document);
+    expect(
+      await checkConversionInput(
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        input,
+      ),
+    ).toEqual({
+      kind: "refuse",
+      reason: "external_reference",
+      format:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    });
+  });
+
+  test.each([
+    '<q:document xmlns:q="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><q:fldSimple q:instr="PAGE"/></q:document>',
+    '<q:document xmlns:q="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><q:fldChar q:fldCharType="begin"/><q:instrText>TOC \\o &quot;1-3&quot;</q:instrText><q:fldChar q:fldCharType="end"/></q:document>',
+  ])("converts allowed OOXML fields by namespace", async (document) => {
+    const input = await zip("word/document.xml", document);
+    expect(
+      await checkConversionInput(
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        input,
+      ),
+    ).toEqual({ kind: "convert" });
+  });
+
   test("converts a DOCX with a large document body", async () => {
     const paragraph = "<w:p><w:r><w:t>ordinary text</w:t></w:r></w:p>";
     const input = await zip(
       "word/document.xml",
-      `<w:document xmlns:w="urn:w">${paragraph.repeat(70_000)}</w:document>`,
+      `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">${paragraph.repeat(70_000)}</w:document>`,
     );
     expect(
       await checkConversionInput(
@@ -204,7 +235,7 @@ describe("document conversion input", () => {
   test("refuses OOXML field instructions joined across runs", async () => {
     const input = await zip(
       "word/document.xml",
-      '<w:document xmlns:w="urn:w"><w:fldChar w:fldCharType="begin"/><w:r><w:instrText>INCLUDE</w:instrText></w:r><w:r><w:instrText>PICTURE "http://x.invalid/a.png"</w:instrText></w:r><w:fldChar w:fldCharType="end"/></w:document>',
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:fldChar w:fldCharType="begin"/><w:r><w:instrText>INCLUDE</w:instrText></w:r><w:r><w:instrText>PICTURE "http://x.invalid/a.png"</w:instrText></w:r><w:fldChar w:fldCharType="end"/></w:document>',
     );
     expect(
       await checkConversionInput(
@@ -222,7 +253,7 @@ describe("document conversion input", () => {
   test("refuses OOXML instructions joined around a nested field", async () => {
     const input = await zip(
       "word/document.xml",
-      '<w:document xmlns:w="urn:w"><w:fldChar w:fldCharType="begin"/><w:instrText>INCLUDE</w:instrText><w:fldChar w:fldCharType="begin"/><w:instrText>PAGE</w:instrText><w:fldChar w:fldCharType="separate"/><w:t>1</w:t><w:fldChar w:fldCharType="end"/><w:instrText>PICTURE "http://x.invalid/a.png"</w:instrText><w:fldChar w:fldCharType="separate"/><w:fldChar w:fldCharType="end"/></w:document>',
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:fldChar w:fldCharType="begin"/><w:instrText>INCLUDE</w:instrText><w:fldChar w:fldCharType="begin"/><w:instrText>PAGE</w:instrText><w:fldChar w:fldCharType="separate"/><w:t>1</w:t><w:fldChar w:fldCharType="end"/><w:instrText>PICTURE "http://x.invalid/a.png"</w:instrText><w:fldChar w:fldCharType="separate"/><w:fldChar w:fldCharType="end"/></w:document>',
     );
     expect(
       await checkConversionInput(
@@ -240,7 +271,7 @@ describe("document conversion input", () => {
   test("converts ordinary nested OOXML fields", async () => {
     const input = await zip(
       "word/document.xml",
-      '<w:document xmlns:w="urn:w"><w:fldChar w:fldCharType="begin"/><w:instrText>IF </w:instrText><w:fldChar w:fldCharType="begin"/><w:instrText>PAGE</w:instrText><w:fldChar w:fldCharType="separate"/><w:t>1</w:t><w:fldChar w:fldCharType="end"/><w:instrText> = 1 "first" "later"</w:instrText><w:fldChar w:fldCharType="separate"/><w:t>first</w:t><w:fldChar w:fldCharType="end"/></w:document>',
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:fldChar w:fldCharType="begin"/><w:instrText>IF </w:instrText><w:fldChar w:fldCharType="begin"/><w:instrText>PAGE</w:instrText><w:fldChar w:fldCharType="separate"/><w:t>1</w:t><w:fldChar w:fldCharType="end"/><w:instrText> = 1 "first" "later"</w:instrText><w:fldChar w:fldCharType="separate"/><w:t>first</w:t><w:fldChar w:fldCharType="end"/></w:document>',
     );
     expect(
       await checkConversionInput(
@@ -258,6 +289,38 @@ describe("document conversion input", () => {
       kind: "refuse",
       reason: "external_reference",
       format: "application/rtf",
+    });
+  });
+
+  test.each([
+    String.raw`{\rtf1{\field{\*\fldinst \'49NCLUDEPICTURE "https://example.test/a.png"}}}`,
+    String.raw`{\rtf1{\field{\*\fldinst \u73?NCLUDEPICTURE "https://example.test/a.png"}}}`,
+    String.raw`{\rtf1{\field{\*\fldinst {\b INCLUDE}{PICTURE "https://example.test/a.png"}}}}`,
+    String.raw`{\rtf1{\field{\*\fldinst INCLUDETEXT "https://example.test/a"}}}`,
+    String.raw`{\rtf1{\field{\*\fldinst IMPORT "https://example.test/a"}}}`,
+    String.raw`{\rtf1{\field{\*\fldinst LINK "https://example.test/a"}}}`,
+    String.raw`{\rtf1{\field{\*\fldinst DDEAUTO "example"}}}`,
+    String.raw`{\rtf1{\field{\*\fldinst SOMETHING "example"}}}`,
+    String.raw`{\rtf1{\field{\*\fldinst \'4}}}`,
+  ])("refuses undecodable or unlisted RTF fields", async (source) => {
+    expect(
+      await checkConversionInput("application/rtf", encode(source)),
+    ).toEqual({
+      kind: "refuse",
+      reason: "external_reference",
+      format: "application/rtf",
+    });
+  });
+
+  test.each([
+    String.raw`{\rtf1{\field{\*\fldinst PAGE}}}`,
+    String.raw`{\rtf1{\field{\*\fldinst \'50AGE}}}`,
+    String.raw`{\rtf1{\field{\*\fldinst HYPERLINK "https://example.test/terms"}}}`,
+  ])("converts allowed RTF fields", async (source) => {
+    expect(
+      await checkConversionInput("application/rtf", encode(source)),
+    ).toEqual({
+      kind: "convert",
     });
   });
 

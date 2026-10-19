@@ -278,52 +278,129 @@ const xmlAttribute = (
   return null;
 };
 
-const firstTokenMatches = (
-  value: string,
-  keywords: ReadonlySet<string>,
-): boolean => {
-  let cursor = 0;
-  while (/\s/u.test(value[cursor] ?? "")) {
-    cursor++;
+const SAFE_FIELD_KEYWORD_VALUES = [
+  "PAGE",
+  "NUMPAGES",
+  "SECTIONPAGES",
+  "DATE",
+  "TIME",
+  "CREATEDATE",
+  "SAVEDATE",
+  "PRINTDATE",
+  "AUTHOR",
+  "TITLE",
+  "SUBJECT",
+  "FILENAME",
+  "REF",
+  "PAGEREF",
+  "NOTEREF",
+  "SEQ",
+  "TOC",
+  "TC",
+  "XE",
+  "INDEX",
+  "STYLEREF",
+  "NUMWORDS",
+  "NUMCHARS",
+  "IF",
+  "COMPARE",
+  "SET",
+  "=",
+  "FORMTEXT",
+  "FORMCHECKBOX",
+  "FORMDROPDOWN",
+  "SYMBOL",
+  "EQ",
+  "ADVANCE",
+  "QUOTE",
+  "MERGEFIELD",
+  "LISTNUM",
+  "AUTONUM",
+  "AUTONUMLGL",
+  "AUTONUMOUT",
+  "BIDIOUTLINE",
+  "GOTOBUTTON",
+  "MACROBUTTON",
+  "PRIVATE",
+  "ASK",
+  "FILLIN",
+  "DOCPROPERTY",
+  "DOCVARIABLE",
+  "INFO",
+  "KEYWORDS",
+  "COMMENTS",
+  "LASTSAVEDBY",
+  "TEMPLATE",
+  "USERNAME",
+  "USERINITIALS",
+  "USERADDRESS",
+  "REVNUM",
+  "EDITTIME",
+  "HYPERLINK",
+] as const;
+type SafeFieldKeyword = (typeof SAFE_FIELD_KEYWORD_VALUES)[number];
+const SAFE_FIELD_KEYWORDS: ReadonlySet<string> = new Set<SafeFieldKeyword>(
+  SAFE_FIELD_KEYWORD_VALUES,
+);
+
+const fieldInstructionIsRefused = (value: string): boolean => {
+  const tokens = value.trim().split(/\s+/u);
+  while (tokens.at(0)?.startsWith("\\") === true) {
+    tokens.shift();
   }
-  let end = cursor;
-  while (/[a-z]/iu.test(value[end] ?? "")) {
-    end++;
-  }
-  return keywords.has(value.slice(cursor, end).toUpperCase());
+  const keyword = tokens.at(0)?.toUpperCase();
+  return keyword === undefined || !SAFE_FIELD_KEYWORDS.has(keyword);
 };
 
-const OOXML_FIELD_KEYWORDS: ReadonlySet<string> = new Set([
-  "INCLUDEPICTURE",
-  "INCLUDETEXT",
-  "LINK",
-]);
+const WORDPROCESSINGML_NAMESPACE =
+  "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+
+const isWordprocessingElement = (
+  element: slimdom.Element,
+  localName: string,
+): boolean =>
+  element.namespaceURI === WORDPROCESSINGML_NAMESPACE &&
+  element.localName.toLowerCase() === localName;
+
+const wordprocessingAttribute = (
+  element: slimdom.Element,
+  localName: string,
+): string | null => {
+  for (const attribute of element.attributes) {
+    if (
+      attribute.namespaceURI === WORDPROCESSINGML_NAMESPACE &&
+      attribute.localName.toLowerCase() === localName
+    ) {
+      return attribute.value;
+    }
+  }
+  return null;
+};
 
 const ooxmlFieldHasExternalReference = (source: string): boolean => {
   const document = slimdom.parseXmlDocument(source);
   for (const element of xmlElements(document.documentElement)) {
-    if (element.localName !== "fldSimple") {
+    if (!isWordprocessingElement(element, "fldsimple")) {
       continue;
     }
-    const instruction = xmlAttribute(element, "w:instr");
-    if (
-      instruction !== null &&
-      firstTokenMatches(instruction, OOXML_FIELD_KEYWORDS)
-    ) {
+    const instruction = wordprocessingAttribute(element, "instr");
+    if (instruction === null || fieldInstructionIsRefused(instruction)) {
       return true;
     }
   }
   const instructions: { instruction: string; closed: boolean }[] = [];
   for (const element of xmlElements(document.documentElement)) {
-    const name = element.localName.toLowerCase();
-    if (name === "fldchar") {
-      const type = xmlAttribute(element, "w:fldchartype")?.toLowerCase();
+    if (isWordprocessingElement(element, "fldchar")) {
+      const type = wordprocessingAttribute(
+        element,
+        "fldchartype",
+      )?.toLowerCase();
       if (type === "begin") {
         instructions.push({ instruction: "", closed: false });
       } else if (type === "separate") {
         const field = instructions.at(-1);
         if (field !== undefined && !field.closed) {
-          if (firstTokenMatches(field.instruction, OOXML_FIELD_KEYWORDS)) {
+          if (fieldInstructionIsRefused(field.instruction)) {
             return true;
           }
           field.closed = true;
@@ -333,14 +410,14 @@ const ooxmlFieldHasExternalReference = (source: string): boolean => {
         if (
           field !== undefined &&
           !field.closed &&
-          firstTokenMatches(field.instruction, OOXML_FIELD_KEYWORDS)
+          fieldInstructionIsRefused(field.instruction)
         ) {
           return true;
         }
       }
       continue;
     }
-    if (name === "instrtext") {
+    if (isWordprocessingElement(element, "instrtext")) {
       const value = element.textContent ?? "";
       const fieldIndex = instructions.length - 1;
       if (fieldIndex >= 0) {
@@ -348,7 +425,7 @@ const ooxmlFieldHasExternalReference = (source: string): boolean => {
         if (field !== undefined && !field.closed) {
           field.instruction += value;
         }
-      } else if (firstTokenMatches(value, OOXML_FIELD_KEYWORDS)) {
+      } else if (fieldInstructionIsRefused(value)) {
         return true;
       }
     }
@@ -478,12 +555,137 @@ const odfHasExternalReference = async (bytes: Uint8Array): Promise<boolean> =>
     },
   );
 
-const RTF_FIELD_KEYWORDS: ReadonlySet<string> = new Set([
-  "INCLUDEPICTURE",
-  "INCLUDETEXT",
-  "IMPORT",
-  "LINK",
-]);
+type RtfDecodeResult = { value: string; end: number } | null;
+
+const skipRtfDestination = (source: string, start: number): number | null => {
+  let cursor = start + 3;
+  let depth = 1;
+  while (cursor < source.length && depth > 0) {
+    if (source[cursor] === "\\") {
+      cursor += source[cursor + 1] === "'" ? 4 : 2;
+      continue;
+    }
+    if (source[cursor] === "{") {
+      depth++;
+    }
+    if (source[cursor] === "}") {
+      depth--;
+    }
+    cursor++;
+  }
+  return depth === 0 ? cursor : null;
+};
+
+const rtfUnicodeCodePoint = (signed: number): number =>
+  signed < 0 ? signed + 65_536 : signed;
+
+const decodeRtfInstruction = (
+  source: string,
+  start: number,
+): RtfDecodeResult => {
+  let cursor = start;
+  let value = "";
+  let fallbackLength = 1;
+  let fallbackRemaining = 0;
+  let depth = 1;
+  while (cursor < source.length) {
+    const character = source[cursor];
+    if (character === "{") {
+      if (source.startsWith("{\\*", cursor)) {
+        const destinationEnd = skipRtfDestination(source, cursor);
+        if (destinationEnd === null) {
+          return null;
+        }
+        cursor = destinationEnd;
+        continue;
+      }
+      depth++;
+      cursor++;
+      continue;
+    }
+    if (character === "}") {
+      depth--;
+      cursor++;
+      if (depth === 0) {
+        return { value, end: cursor };
+      }
+      continue;
+    }
+    if (character !== "\\") {
+      if (fallbackRemaining > 0) {
+        fallbackRemaining--;
+      } else {
+        value += character;
+      }
+      cursor++;
+      continue;
+    }
+    cursor++;
+    const symbol = source[cursor];
+    if (symbol === undefined) {
+      return null;
+    }
+    if (symbol === "'") {
+      const hex = source.slice(cursor + 1, cursor + 3);
+      if (!/^[\da-f]{2}$/iu.test(hex)) {
+        return null;
+      }
+      if (fallbackRemaining > 0) {
+        fallbackRemaining--;
+      } else {
+        value += latin1(new Uint8Array([Number.parseInt(hex, 16)]));
+      }
+      cursor += 3;
+      continue;
+    }
+    if (symbol === "\\" || symbol === "{" || symbol === "}") {
+      if (fallbackRemaining > 0) {
+        fallbackRemaining--;
+      } else {
+        value += symbol;
+      }
+      cursor++;
+      continue;
+    }
+    if (!/[a-z]/iu.test(symbol)) {
+      cursor++;
+      continue;
+    }
+    const wordStart = cursor;
+    while (/[a-z]/iu.test(source[cursor] ?? "")) {
+      cursor++;
+    }
+    const word = source.slice(wordStart, cursor).toLowerCase();
+    const parameterStart = cursor;
+    if (source[cursor] === "-") {
+      cursor++;
+    }
+    while (/\d/u.test(source[cursor] ?? "")) {
+      cursor++;
+    }
+    const parameterSource = source.slice(parameterStart, cursor);
+    if (source[cursor] === " ") {
+      cursor++;
+    }
+    if (word === "uc") {
+      if (!/^\d+$/u.test(parameterSource)) {
+        return null;
+      }
+      fallbackLength = Number.parseInt(parameterSource, 10);
+    } else if (word === "u") {
+      if (!/^-?\d+$/u.test(parameterSource)) {
+        return null;
+      }
+      const signed = Number.parseInt(parameterSource, 10);
+      if (signed < -32_768 || signed > 32_767) {
+        return null;
+      }
+      value += String.fromCodePoint(rtfUnicodeCodePoint(signed));
+      fallbackRemaining = fallbackLength;
+    }
+  }
+  return null;
+};
 
 const rtfHasExternalReference = (bytes: Uint8Array): boolean => {
   const source = latin1(bytes);
@@ -503,50 +705,16 @@ const rtfHasExternalReference = (bytes: Uint8Array): boolean => {
       cursor += 2;
       continue;
     }
-    let end = cursor + marker.length;
-    let depth = 1;
-    let escaped = false;
-    while (end < source.length && depth > 0) {
-      const character = source[end];
-      if (escaped) {
-        escaped = false;
-      } else if (character === "\\") {
-        escaped = true;
-      } else if (character === "{") {
-        depth++;
-      } else if (character === "}") {
-        depth--;
-      }
-      end++;
-    }
-    if (
-      firstTokenMatches(
-        source.slice(cursor + marker.length, end - 1),
-        RTF_FIELD_KEYWORDS,
-      )
-    ) {
+    const decoded = decodeRtfInstruction(source, cursor + marker.length);
+    if (decoded === null || fieldInstructionIsRefused(decoded.value)) {
       return true;
     }
-    cursor = end;
+    cursor = decoded.end;
   }
   return false;
 };
 
-const LEGACY_FIELD_KEYWORDS: ReadonlySet<string> = new Set([
-  "INCLUDEPICTURE",
-  "INCLUDETEXT",
-  "LINK",
-]);
-const DOC_FIELD_KEYWORDS: ReadonlySet<string> = new Set([
-  ...LEGACY_FIELD_KEYWORDS,
-  "IMPORT",
-]);
-
-const binaryFieldsMatch = (
-  bytes: Uint8Array,
-  wide: boolean,
-  keywords: ReadonlySet<string>,
-): boolean => {
+const binaryFieldsMatch = (bytes: Uint8Array, wide: boolean): boolean => {
   const step = wide ? 2 : 1;
   for (let cursor = 0; cursor + step <= bytes.length; cursor += step) {
     if (bytes[cursor] !== 0x13 || (wide && bytes[cursor + 1] !== 0)) {
@@ -563,7 +731,7 @@ const binaryFieldsMatch = (
       }
       cursor += step;
     }
-    if (firstTokenMatches(latin1(new Uint8Array(field)), keywords)) {
+    if (fieldInstructionIsRefused(latin1(new Uint8Array(field)))) {
       return true;
     }
   }
@@ -571,11 +739,9 @@ const binaryFieldsMatch = (
 };
 
 const docHasExternalReference = (bytes: Uint8Array): boolean =>
-  binaryFieldsMatch(bytes, false, DOC_FIELD_KEYWORDS) ||
-  binaryFieldsMatch(bytes, true, DOC_FIELD_KEYWORDS);
+  binaryFieldsMatch(bytes, false) || binaryFieldsMatch(bytes, true);
 const legacyOfficeHasExternalReference = (bytes: Uint8Array): boolean =>
-  binaryFieldsMatch(bytes, false, LEGACY_FIELD_KEYWORDS) ||
-  binaryFieldsMatch(bytes, true, LEGACY_FIELD_KEYWORDS);
+  binaryFieldsMatch(bytes, false) || binaryFieldsMatch(bytes, true);
 
 const safe = (): false => false;
 
