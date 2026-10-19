@@ -857,6 +857,14 @@ const expectScope = ({ current, base }: ScopeOptions) => {
   ) {
     originalScope["needs"] = "ci-plan";
   }
+  // Jobs were pinned to ubuntu-24.04, the image ubuntu-latest resolved to, so
+  // a merge base that still names the floating label runs the same image.
+  if (
+    originalScope["runs-on"] === "ubuntu-latest" &&
+    scope["runs-on"] === "ubuntu-24.04"
+  ) {
+    originalScope["runs-on"] = "ubuntu-24.04";
+  }
   const originalEnvironment =
     originalScope["env"] === undefined
       ? undefined
