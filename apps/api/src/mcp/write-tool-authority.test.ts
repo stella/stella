@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { roles } from "@stll/permissions";
@@ -300,8 +301,6 @@ describe("write tool permissions", () => {
     },
   );
 
-  // An admitted call counts against the caller's action budget even when
-  // dispatch then refuses it, so the refusal must come first.
   test.each([
     { denial: "member-role", context: mcpContextFor("external") },
     {
@@ -312,14 +311,16 @@ describe("write tool permissions", () => {
       }),
     },
   ])(
-    "over http a $denial refusal is answered before action admission",
+    "over http action admission wraps the $denial authority refusal",
     async ({ context }) => {
       let admissions = 0;
       const result = await callMcpToolOverHttp({
-        admitAction: async () => {
+        admitAction: async ({ run }) => {
           admissions += 1;
-          return await Promise.reject(
-            new Error("admission must not run for an unauthorized call"),
+          return Result.ok(
+            await run(new AbortController().signal, {
+              reservePeriod: async () => Result.ok(undefined),
+            }),
           );
         },
         args: { matter_id: "matter_1", confirm: true },
@@ -327,7 +328,7 @@ describe("write tool permissions", () => {
         mode: "default",
         toolName: "delete_matter",
       });
-      expect(admissions).toBe(0);
+      expect(admissions).toBe(1);
       const item = result.content.at(0);
       expect(
         item?.type === "text" ? JSON.parse(item.text) : null,

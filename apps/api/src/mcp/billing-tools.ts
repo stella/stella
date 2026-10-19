@@ -561,10 +561,6 @@ const decodeTimeEntryPageCursor = (
 const handleListTimeEntriesTool: TypedMcpToolHandler<
   v.InferInput<typeof LIST_TIME_ENTRIES_PROJECTION>
 > = async ({ args, context }) => {
-  if (!hasEffectiveAuthority(context, { timeEntry: ["read"] })) {
-    return errorResult("Forbidden");
-  }
-
   const parsed = v.safeParse(listTimeEntriesArgsSchema, args);
   if (!parsed.success) {
     return validationErrorResult(parsed.issues);
@@ -1171,10 +1167,6 @@ const resolveRateArgsSchema = nullAsAbsent(
 const handleResolveRateTool: McpToolHandler<
   v.InferInput<typeof RESOLVE_RATE_PROJECTION>
 > = async ({ args, context }) => {
-  if (!hasEffectiveAuthority(context, { rate: ["read"] })) {
-    return errorResult("Forbidden");
-  }
-
   const parsed = v.safeParse(resolveRateArgsSchema, args);
   if (!parsed.success) {
     return validationErrorResult(parsed.issues);
@@ -1290,10 +1282,6 @@ const readInvoiceDetail = async ({
 const handleListInvoicesTool: TypedMcpToolHandler<
   v.InferInput<typeof LIST_INVOICES_PROJECTION>
 > = async ({ args, context }) => {
-  if (!hasEffectiveAuthority(context, { workspace: ["read"] })) {
-    return errorResult("Forbidden");
-  }
-
   const parsed = v.safeParse(listInvoicesArgsSchema, args);
   if (!parsed.success) {
     return validationErrorResult(parsed.issues);
@@ -1483,10 +1471,6 @@ const getUsageArgsSchema = nullAsAbsent(v.strictObject({}));
 const handleGetUsageTool: TypedMcpToolHandler<
   v.InferInput<typeof GET_USAGE_PROJECTION>
 > = async ({ args, context }) => {
-  if (!hasEffectiveAuthority(context, { organizationSettings: ["update"] })) {
-    return errorResult("Forbidden");
-  }
-
   const parsed = v.safeParse(getUsageArgsSchema, args);
   if (!parsed.success) {
     return validationErrorResult(parsed.issues);
@@ -1538,7 +1522,10 @@ export const BILLING_TOOL_DEFINITIONS = [
         "The matter_id/time_entry_id cross-field requirement stays authoritative in the runtime schema.",
     },
     access: "read",
-    authority: { kind: "tenant", permissions: { workspace: ["read"] } },
+    authority: {
+      kind: "tenant",
+      permissions: { workspace: ["read"], timeEntry: ["read"] },
+    },
     readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
@@ -1639,7 +1626,10 @@ export const BILLING_TOOL_DEFINITIONS = [
       "rate applies.",
     inputSchema: resolveRateArgsSchema,
     access: "read",
-    authority: { kind: "tenant", permissions: { workspace: ["read"] } },
+    authority: {
+      kind: "tenant",
+      permissions: { workspace: ["read"], rate: ["read"] },
+    },
     readClass: "tenant",
     anonymized: { exposure: "passthrough" },
     feature: "FEATURE_TIME_BILLING",
@@ -1703,7 +1693,13 @@ export const BILLING_TOOL_DEFINITIONS = [
       "Requires organization-settings management access.",
     inputSchema: getUsageArgsSchema,
     access: "read",
-    authority: { kind: "tenant", permissions: { workspace: ["read"] } },
+    authority: {
+      kind: "tenant",
+      permissions: {
+        workspace: ["read"],
+        organizationSettings: ["update"],
+      },
+    },
     readClass: "tenant",
     anonymized: { exposure: "passthrough" },
     feature: "FEATURE_USAGE",

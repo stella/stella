@@ -480,7 +480,7 @@ describe("empty-result onboarding next step", () => {
     expect(onboardingNextStepOf(result)).toBeUndefined();
   });
 
-  test("search_case_law returns the onboarding next step when empty and jurisdictions are missing", async () => {
+  test("search_case_law returns a neutral next step when empty", async () => {
     searchDecisionsHandlerMock.mockResolvedValue({
       paginationOutcome: SEARCH_PAGINATION_COMPLETE,
       facets: null,
@@ -504,8 +504,8 @@ describe("empty-result onboarding next step", () => {
       toolName: "search_case_law",
     });
 
-    expect(onboardingNextStepOf(result)).toContain(
-      "set_practice_jurisdictions",
+    expect(onboardingNextStepOf(result)).toBe(
+      "Try a broader query, remove optional filters, or call case_law_coverage to inspect available jurisdictions.",
     );
   });
 
@@ -555,7 +555,7 @@ describe("empty-result onboarding next step", () => {
     expect(onboardingNextStepOf(result)).toBeUndefined();
   });
 
-  test("search_case_law returns no next step when jurisdictions are configured", async () => {
+  test("search_case_law keeps the neutral next step when jurisdictions are configured", async () => {
     searchDecisionsHandlerMock.mockResolvedValue({
       paginationOutcome: SEARCH_PAGINATION_COMPLETE,
       facets: null,
@@ -578,6 +578,8 @@ describe("empty-result onboarding next step", () => {
       toolName: "search_case_law",
     });
 
-    expect(onboardingNextStepOf(result)).toBeUndefined();
+    expect(onboardingNextStepOf(result)).toBe(
+      "Try a broader query, remove optional filters, or call case_law_coverage to inspect available jurisdictions.",
+    );
   });
 });

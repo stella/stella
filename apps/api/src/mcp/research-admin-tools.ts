@@ -213,7 +213,10 @@ const LIST_AUDIT_LOG_TOOL_DEFINITION = defineValibotMcpTool({
   // fields cannot be enumerated for redaction, so this read tool fails closed
   // and never appears on the anonymized surface.
   access: "read",
-  authority: { kind: "tenant", permissions: { workspace: ["read"] } },
+  authority: {
+    kind: "tenant",
+    permissions: { workspace: ["read"], auditLog: ["read"] },
+  },
   readClass: "tenant",
   anonymized: { exposure: "excluded", reason: "dynamic_tenant_payload" },
   name: "list_audit_log",
@@ -612,10 +615,6 @@ const handleSearchBoeLegislationTool = withThirdPartyOutbound<
 const handleListAuditLogTool: McpToolHandler<
   v.InferInput<typeof LIST_AUDIT_LOG_OUTPUT_SCHEMA>
 > = async ({ args, context }) => {
-  if (!hasEffectiveAuthority(context, { auditLog: ["read"] })) {
-    return errorResult("Forbidden");
-  }
-
   const parsed = v.safeParse(
     LIST_AUDIT_LOG_TOOL_DEFINITION.inputSchemaSource,
     args,

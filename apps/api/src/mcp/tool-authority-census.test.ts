@@ -251,6 +251,16 @@ const expectedCounts = {
   law: 15,
 } as const satisfies Record<McpMode, number>;
 
+const tenantResourceAuthorities = {
+  get_usage: {
+    workspace: ["read"],
+    organizationSettings: ["update"],
+  },
+  list_audit_log: { workspace: ["read"], auditLog: ["read"] },
+  list_time_entries: { workspace: ["read"], timeEntry: ["read"] },
+  resolve_rate: { workspace: ["read"], rate: ["read"] },
+} as const;
+
 describe("MCP tool authority census", () => {
   test("covers every mode and dynamic family", () => {
     const entries = census();
@@ -275,6 +285,26 @@ describe("MCP tool authority census", () => {
         expect(definition.authority.kind).toBeOneOf(["public", "tenant"]);
       } else {
         expect(definition.permissions.type).toBeDefined();
+      }
+    }
+  });
+
+  test("tenant resource reads declare their complete authority", () => {
+    for (const [name, permissions] of Object.entries(
+      tenantResourceAuthorities,
+    )) {
+      const definitions = census()
+        .map(({ definition }) => definition)
+        .filter((definition) => definition.name === name);
+      expect(definitions.length).toBeGreaterThan(0);
+      for (const definition of definitions) {
+        expect(definition.access).toBe("read");
+        if (definition.access !== "read") {
+          continue;
+        }
+        expect(JSON.stringify(definition.authority)).toBe(
+          JSON.stringify({ kind: "tenant", permissions }),
+        );
       }
     }
   });
