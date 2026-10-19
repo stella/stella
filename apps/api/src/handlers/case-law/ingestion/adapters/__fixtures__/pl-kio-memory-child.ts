@@ -156,7 +156,11 @@ if (path === "replay") {
   // source string used to build this fixture's envelope.
   documentHtml = "";
   Bun.gc(true);
-  const replay = plKioAdapter.reparseStoredRaw?.({
+  const reparse = plKioAdapter.reparseStoredRaw;
+  if (reparse === undefined) {
+    panic("KIO memory fixture requires stored raw replay");
+  }
+  const replay = await reparse({
     raw,
     contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
     sourceDocumentId: "30308",
@@ -170,8 +174,8 @@ if (path === "replay") {
     documentUrl: null,
     metadata: {},
   });
-  if (replay?.type !== "parsed") {
-    panic(`KIO memory fixture replay was not parsed: ${replay?.type}`);
+  if (replay.type !== "parsed") {
+    panic(`KIO memory fixture replay was not parsed: ${replay.type}`);
   }
   assembled = { type: "built", decision: replay.result };
 } else if (path === "fetch") {
@@ -185,13 +189,16 @@ if (assembled.type !== "built") {
 
 const decision = assembled.decision;
 const budget = decision.metadata["documentStatus"] ?? "accepted";
+if (typeof budget !== "string") {
+  panic("KIO memory fixture document status was not a string");
+}
 if (workload === "accepted" && budget !== "accepted") {
-  panic(`KIO fixture accepted workload was rejected: ${String(budget)}`);
+  panic(`KIO fixture accepted workload was rejected: ${budget}`);
 }
 const rawParts = decodeSourceRawEnvelope(decision.sourceRaw ?? "");
 if (
   rawParts === null ||
-  Buffer.byteLength(rawParts.document ?? "") !== documentBytes
+  Buffer.byteLength(rawParts["document"] ?? "") !== documentBytes
 ) {
   panic("KIO memory fixture document was not retained in the raw envelope");
 }
