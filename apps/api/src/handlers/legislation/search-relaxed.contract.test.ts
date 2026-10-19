@@ -74,6 +74,7 @@ const PRESENT_FILTERS = {
   language: "cs",
   dateFrom: "1999-01-01",
   dateTo: "2030-01-01",
+  asOf: "2026-01-01",
 } as const satisfies Required<RequestFilters>;
 
 const DIFFERENT_FILTERS = {
@@ -84,6 +85,7 @@ const DIFFERENT_FILTERS = {
   language: { language: "sk" },
   dateFrom: { dateFrom: "1998-01-01" },
   dateTo: { dateTo: "2031-01-01" },
+  asOf: { asOf: "2027-01-01" },
 } as const satisfies {
   [Field in keyof RequestFilters]-?: Required<Pick<RequestFilters, Field>>;
 };

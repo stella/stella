@@ -895,6 +895,7 @@ const recoveryCases = {
   "dependency-audit": "later-green",
   "suppression-waiver": "changed-source",
   "quarantined-test": "changed-source",
+  "flaky-test-quarantine": "changed-source",
 } as const satisfies Record<
   DatedWaiver["kind"],
   "later-green" | "changed-source"

@@ -1143,7 +1143,6 @@
     "apps/web/src/features/guides/use-guide-runner.ts": 2,
     "apps/web/src/features/knowledge/playbook-editor/playbook-editor.tsx": 1,
     "apps/web/src/features/knowledge/public/tools/tool-contribute-page.tsx": 1,
-    "apps/web/src/features/knowledge/views/tools/tools-catalogue-view.tsx": 1,
     "apps/web/src/lib/pdf/pdf-context.tsx": 1,
     "apps/web/src/routes/_protected.chat/-components/chat-thread-page.tsx": 1,
     "apps/web/src/routes/_protected.chat/index.tsx": 1,
