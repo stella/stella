@@ -284,6 +284,16 @@ pub async fn install_update(
     .map_err(|error| error.to_string())
 }
 
+// Repository code generation writes a fixed source artifact, outside application data.
+#[cfg(test)]
+pub(crate) fn write_generated_rpc_bindings(bindings: &str) -> std::io::Result<()> {
+  fs::write(
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+      .join("../../../packages/api-contract/src/desktop-rpc.gen.ts"),
+    bindings,
+  )
+}
+
 #[cfg(all(test, unix))]
 pub(crate) fn local_file_creation_child(test_name: &str) -> bool {
   if std::env::var_os("STELLA_LOCAL_FILE_CHILD").is_some() {
