@@ -272,26 +272,53 @@ const ooxmlFieldHasExternalReference = (source: string): boolean => {
       return true;
     }
   }
+  const instructions: string[] = [];
   const lower = source.toLowerCase();
   let cursor = 0;
-  while ((cursor = lower.indexOf("<w:instrtext", cursor)) !== -1) {
-    const start = source.indexOf(">", cursor);
-    if (start === -1) {
+  while ((cursor = lower.indexOf("<", cursor)) !== -1) {
+    const tagEnd = source.indexOf(">", cursor + 1);
+    if (tagEnd === -1) {
       break;
     }
-    const end = lower.indexOf("</w:instrtext>", start + 1);
-    if (end === -1) {
-      break;
+    const tag = source.slice(cursor, tagEnd + 1);
+    const lowerTag = tag.toLowerCase();
+    if (lowerTag.startsWith("<w:fldchar")) {
+      const type = attributeValue(tag, "w:fldchartype")?.toLowerCase();
+      if (type === "begin") {
+        instructions.push("");
+      } else if (
+        (type === "separate" || type === "end") &&
+        instructions.length > 0
+      ) {
+        const instruction = instructions.pop();
+        if (
+          instruction !== undefined &&
+          firstTokenMatches(instruction, OOXML_FIELD_KEYWORDS)
+        ) {
+          return true;
+        }
+      }
+      cursor = tagEnd + 1;
+      continue;
     }
-    if (
-      firstTokenMatches(
-        decodeCharacterReferences(source.slice(start + 1, end)),
-        OOXML_FIELD_KEYWORDS,
-      )
-    ) {
-      return true;
+    if (lowerTag.startsWith("<w:instrtext")) {
+      const textEnd = lower.indexOf("</w:instrtext>", tagEnd + 1);
+      if (textEnd === -1) {
+        break;
+      }
+      const value = decodeCharacterReferences(
+        source.slice(tagEnd + 1, textEnd),
+      );
+      const fieldIndex = instructions.length - 1;
+      if (fieldIndex >= 0) {
+        instructions[fieldIndex] = `${instructions[fieldIndex] ?? ""}${value}`;
+      } else if (firstTokenMatches(value, OOXML_FIELD_KEYWORDS)) {
+        return true;
+      }
+      cursor = textEnd + "</w:instrtext>".length;
+      continue;
     }
-    cursor = end + 14;
+    cursor = tagEnd + 1;
   }
   return false;
 };
@@ -315,6 +342,8 @@ const isOdfInspectedPath = (path: string): boolean =>
   path === "styles.xml" ||
   (path.endsWith("/content.xml") && path.includes("/"));
 
+type PartSize = "body" | "metadata";
+
 type InspectedPart =
   | { kind: "missing" }
   | { kind: "too_large" }
@@ -323,7 +352,12 @@ type InspectedPart =
 const readInspectedPart = async (
   archive: Awaited<ReturnType<typeof loadDocxArchive>>,
   path: string,
+  partSize: PartSize,
 ): Promise<InspectedPart> => {
+  if (partSize === "body") {
+    const value = await archive.readEntryString(path);
+    return value === null ? { kind: "missing" } : { kind: "source", value };
+  }
   const entry = archive.zip.file(path);
   if (entry === null) {
     return { kind: "missing" };
@@ -354,12 +388,13 @@ const readInspectedPart = async (
 const archiveHas = async (
   bytes: Uint8Array,
   select: (path: string) => boolean,
+  partSize: (path: string) => PartSize,
   inspect: (path: string, source: string) => boolean,
 ): Promise<boolean> => {
   const archive = await loadDocxArchive(bytes);
   const selectedPaths = Object.keys(archive.zip.files).filter(select);
   for (const path of selectedPaths) {
-    const part = await readInspectedPart(archive, path);
+    const part = await readInspectedPart(archive, path, partSize(path));
     switch (part.kind) {
       case "missing":
         break;
@@ -379,25 +414,34 @@ const archiveHas = async (
 };
 
 const ooxmlHasExternalReference = async (bytes: Uint8Array): Promise<boolean> =>
-  await archiveHas(bytes, isOoxmlInspectedPath, (path, source) =>
-    path.endsWith(".rels")
-      ? relationshipHasExternalReference(source)
-      : ooxmlFieldHasExternalReference(source),
+  await archiveHas(
+    bytes,
+    isOoxmlInspectedPath,
+    (path) => (path.endsWith(".rels") ? "metadata" : "body"),
+    (path, source) =>
+      path.endsWith(".rels")
+        ? relationshipHasExternalReference(source)
+        : ooxmlFieldHasExternalReference(source),
   );
 
 const odfHasExternalReference = async (bytes: Uint8Array): Promise<boolean> =>
-  await archiveHas(bytes, isOdfInspectedPath, (_path, source) => {
-    for (const tag of tags(source)) {
-      if (tag.toLowerCase().startsWith("<text:a")) {
-        continue;
+  await archiveHas(
+    bytes,
+    isOdfInspectedPath,
+    (path) => (path === "styles.xml" ? "metadata" : "body"),
+    (_path, source) => {
+      for (const tag of tags(source)) {
+        if (tag.toLowerCase().startsWith("<text:a")) {
+          continue;
+        }
+        const href = attributeValue(tag, "xlink:href");
+        if (href !== null && !isLocalReference(href)) {
+          return true;
+        }
       }
-      const href = attributeValue(tag, "xlink:href");
-      if (href !== null && !isLocalReference(href)) {
-        return true;
-      }
-    }
-    return false;
-  });
+      return false;
+    },
+  );
 
 const RTF_FIELD_KEYWORDS: ReadonlySet<string> = new Set([
   "INCLUDEPICTURE",
@@ -412,16 +456,30 @@ const rtfHasExternalReference = (bytes: Uint8Array): boolean => {
   if (lower.includes("\\objlink")) {
     return true;
   }
-  const marker = "{\\*\\fldinst";
   let cursor = 0;
-  while ((cursor = lower.indexOf(marker, cursor)) !== -1) {
+  while ((cursor = lower.indexOf("{\\", cursor)) !== -1) {
+    let marker: string | null = null;
+    if (lower.startsWith("{\\*\\fldinst", cursor)) {
+      marker = "{\\*\\fldinst";
+    } else if (lower.startsWith("{\\fldinst", cursor)) {
+      marker = "{\\fldinst";
+    }
+    if (marker === null) {
+      cursor += 2;
+      continue;
+    }
     let end = cursor + marker.length;
     let depth = 1;
     while (end < source.length && depth > 0) {
-      if (source[end] === "{" && source[end - 1] !== "\\") {
+      let slashCount = 0;
+      for (let at = end - 1; at >= 0 && source[at] === "\\"; at--) {
+        slashCount++;
+      }
+      const escaped = slashCount % 2 === 1;
+      if (source[end] === "{" && !escaped) {
         depth++;
       }
-      if (source[end] === "}" && source[end - 1] !== "\\") {
+      if (source[end] === "}" && !escaped) {
         depth--;
       }
       end++;

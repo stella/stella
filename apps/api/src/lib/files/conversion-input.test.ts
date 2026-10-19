@@ -126,6 +126,60 @@ describe("document conversion input", () => {
     });
   });
 
+  test("converts a DOCX with a large document body", async () => {
+    const paragraph = "<w:p><w:r><w:t>ordinary text</w:t></w:r></w:p>";
+    const input = await zip(
+      "word/document.xml",
+      `<w:document>${paragraph.repeat(70_000)}</w:document>`,
+    );
+    expect(
+      await checkConversionInput(
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        input,
+      ),
+    ).toEqual({ kind: "convert" });
+  });
+
+  test("refuses OOXML field instructions joined across runs", async () => {
+    const input = await zip(
+      "word/document.xml",
+      '<w:document><w:fldChar w:fldCharType="begin"/><w:r><w:instrText>INCLUDE</w:instrText></w:r><w:r><w:instrText>PICTURE "http://x.invalid/a.png"</w:instrText></w:r><w:fldChar w:fldCharType="end"/></w:document>',
+    );
+    expect(
+      await checkConversionInput(
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        input,
+      ),
+    ).toEqual({
+      kind: "refuse",
+      reason: "external_reference",
+      format:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    });
+  });
+
+  test("refuses RTF field instructions without a destination marker", async () => {
+    const input = encode(
+      '{\\field{\\fldinst INCLUDEPICTURE "http://x.invalid/a.png"}}',
+    );
+    expect(await checkConversionInput("application/rtf", input)).toEqual({
+      kind: "refuse",
+      reason: "external_reference",
+      format: "application/rtf",
+    });
+  });
+
+  test("counts RTF braces after escaped backslashes", async () => {
+    const input = encode(
+      '{\\field{\\fldinst HYPERLINK "local" \\\\{ INCLUDEPICTURE "http://x.invalid/a.png"}}{\\fldinst INCLUDETEXT "http://x.invalid/body"}}',
+    );
+    expect(await checkConversionInput("application/rtf", input)).toEqual({
+      kind: "refuse",
+      reason: "external_reference",
+      format: "application/rtf",
+    });
+  });
+
   test("covers every document format outcome", () => {
     const formats = new Set(Object.values(fixtures).map(({ mime }) => mime));
     expect(formats).toEqual(
