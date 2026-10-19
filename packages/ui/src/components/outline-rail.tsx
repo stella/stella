@@ -665,9 +665,6 @@ export const OutlineRail = ({
     >
       {presentation !== "panel" && (
         <div
-          {...(presentation === "popover"
-            ? { "aria-controls": panelId, "aria-expanded": panelOpen }
-            : {})}
           className="relative min-h-0 flex-1"
           data-outline-ticks
           onMouseEnter={openPanel}
@@ -684,6 +681,12 @@ export const OutlineRail = ({
                 <TooltipTrigger
                   render={
                     <button
+                      {...(presentation === "popover"
+                        ? {
+                            "aria-controls": panelId,
+                            "aria-expanded": panelOpen,
+                          }
+                        : {})}
                       aria-current={isActive ? "true" : undefined}
                       aria-label={item.label}
                       className={cn(

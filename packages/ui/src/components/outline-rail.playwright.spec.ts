@@ -227,11 +227,11 @@ test("popover tick focus opens the outline and Escape returns focus", async ({
   const panel = page.getByRole("navigation", { name: "Document outline" });
 
   await firstTick.focus();
-  await expect(ticks).toHaveAttribute("aria-expanded", "true");
+  await expect(firstTick).toHaveAttribute("aria-expanded", "true");
   await expect(panel).toBeVisible();
   await panel.locator("button").first().focus();
   await page.keyboard.press("Escape");
-  await expect(ticks).toHaveAttribute("aria-expanded", "false");
+  await expect(firstTick).toHaveAttribute("aria-expanded", "false");
   await expect(panel).toBeHidden();
   await expect(firstTick).toBeFocused();
 });
@@ -239,10 +239,11 @@ test("popover tick focus opens the outline and Escape returns focus", async ({
 test("popover closes when focus leaves its rail", async ({ page }) => {
   await openFixture(page, "popover");
   const ticks = page.locator("[data-outline-ticks]");
-  await ticks.locator("button").first().focus();
-  await expect(ticks).toHaveAttribute("aria-expanded", "true");
+  const firstTick = ticks.locator("button").first();
+  await firstTick.focus();
+  await expect(firstTick).toHaveAttribute("aria-expanded", "true");
   await page.getByTestId("resize-composer").focus();
-  await expect(ticks).toHaveAttribute("aria-expanded", "false");
+  await expect(firstTick).toHaveAttribute("aria-expanded", "false");
 });
 
 test("popover opens when the pointer hovers the tick strip", async ({
@@ -250,10 +251,11 @@ test("popover opens when the pointer hovers the tick strip", async ({
 }) => {
   await openFixture(page, "popover");
   const ticks = page.locator("[data-outline-ticks]");
+  const firstTick = ticks.locator("button").first();
   const panel = page.getByRole("navigation", { name: "Document outline" });
-  await expect(ticks).toHaveAttribute("aria-expanded", "false");
+  await expect(firstTick).toHaveAttribute("aria-expanded", "false");
   await ticks.hover({ position: { x: 1, y: 1 } });
-  await expect(ticks).toHaveAttribute("aria-expanded", "true");
+  await expect(firstTick).toHaveAttribute("aria-expanded", "true");
   await expect(panel).toBeVisible();
 });
 
@@ -268,6 +270,7 @@ test.describe("coarse-pointer controls", () => {
       await page.evaluate(() => matchMedia("(pointer: coarse)").matches),
     ).toBe(true);
     const ticks = page.locator("[data-outline-ticks]");
+    const firstTick = ticks.locator("button").first();
     const assertTouchTarget = async (control: Locator) => {
       const target = await control.evaluate((element) => {
         const style = getComputedStyle(element, "::after");
@@ -280,9 +283,9 @@ test.describe("coarse-pointer controls", () => {
       expect(target.height).toBeGreaterThanOrEqual(44);
     };
     await ticks.tap({ position: { x: 1, y: 1 } });
-    await expect(ticks).toHaveAttribute("aria-expanded", "true");
+    await expect(firstTick).toHaveAttribute("aria-expanded", "true");
     await page.getByTestId("resize-composer").tap();
-    await expect(ticks).toHaveAttribute("aria-expanded", "false");
+    await expect(firstTick).toHaveAttribute("aria-expanded", "false");
     await ticks.tap({ position: { x: 1, y: 1 } });
     const collapse = page
       .getByRole("button", { name: "Collapse", exact: true })

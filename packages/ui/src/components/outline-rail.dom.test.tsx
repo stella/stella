@@ -83,8 +83,12 @@ test("focusing a tick opens the popover", async () => {
     const tick = ticks?.querySelector<HTMLButtonElement>("button");
     expect(ticks).not.toBeNull();
     expect(tick).not.toBeNull();
+    expect(ticks?.hasAttribute("aria-controls")).toBe(false);
+    expect(tick?.getAttribute("aria-controls")).toBe(
+      rendered.container.querySelector("nav")?.id,
+    );
     await act(async () => tick?.focus());
-    expect(ticks?.getAttribute("aria-expanded")).toBe("true");
+    expect(tick?.getAttribute("aria-expanded")).toBe("true");
   } finally {
     await cleanup(rendered.root, rendered.container, rendered.scrollContainer);
   }
@@ -106,7 +110,7 @@ test("Escape closes the popover and restores focus to its tick", async () => {
         new KeyboardEvent("keydown", { bubbles: true, key: "Escape" }),
       );
     });
-    expect(ticks?.getAttribute("aria-expanded")).toBe("false");
+    expect(tick?.getAttribute("aria-expanded")).toBe("false");
     expect(document.activeElement).toBe(tick ?? null);
   } finally {
     await cleanup(rendered.root, rendered.container, rendered.scrollContainer);
@@ -124,7 +128,7 @@ test("moving focus outside the rail closes the popover", async () => {
     const tick = ticks?.querySelector<HTMLButtonElement>("button");
     await act(async () => tick?.focus());
     await act(async () => outside.focus());
-    expect(ticks?.getAttribute("aria-expanded")).toBe("false");
+    expect(tick?.getAttribute("aria-expanded")).toBe("false");
   } finally {
     outside.remove();
     await cleanup(rendered.root, rendered.container, rendered.scrollContainer);
@@ -139,6 +143,9 @@ test("rail presentation remains a host-owned tick strip", async () => {
     expect(group?.getAttribute("aria-label")).toBe("Document outline");
     expect(ticks).not.toBeNull();
     expect(ticks?.hasAttribute("aria-controls")).toBe(false);
+    expect(ticks?.querySelector("button")?.hasAttribute("aria-controls")).toBe(
+      false,
+    );
     expect(rendered.container.querySelector("nav")).toBeNull();
   } finally {
     await cleanup(rendered.root, rendered.container, rendered.scrollContainer);
@@ -159,9 +166,9 @@ test("leaving the rail from inside the panel closes the popover", async () => {
       ?.querySelector<HTMLButtonElement>("button");
     await act(async () => tick?.focus());
     await act(async () => panelButton?.focus());
-    expect(ticks?.getAttribute("aria-expanded")).toBe("true");
+    expect(tick?.getAttribute("aria-expanded")).toBe("true");
     await act(async () => outside.focus());
-    expect(ticks?.getAttribute("aria-expanded")).toBe("false");
+    expect(tick?.getAttribute("aria-expanded")).toBe("false");
   } finally {
     outside.remove();
     await cleanup(rendered.root, rendered.container, rendered.scrollContainer);
