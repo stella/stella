@@ -29,6 +29,23 @@ export const OWNER_REASON_REQUIRED = "OWNER_REASON_REQUIRED";
 export type RadarGroup = { key: string; entries: DatedWaiver[] };
 const releaseAgeIdentity = (entry: DatedWaiver) =>
   JSON.stringify([entry.kind, entry.id, entry.expiresAt]);
+const compareRadarEntries = (left: DatedWaiver, right: DatedWaiver) => {
+  const leftKey = JSON.stringify([
+    left.kind,
+    left.id,
+    left.expiresAt,
+    left.source,
+    left.line,
+  ]);
+  const rightKey = JSON.stringify([
+    right.kind,
+    right.id,
+    right.expiresAt,
+    right.source,
+    right.line,
+  ]);
+  return leftKey < rightKey ? -1 : Number(leftKey > rightKey);
+};
 
 const radarGroups = (inventory: readonly DatedWaiver[]): RadarGroup[] => {
   const groups = new Map<string, RadarGroup>();
@@ -93,7 +110,34 @@ const radarGroups = (inventory: readonly DatedWaiver[]): RadarGroup[] => {
 export const radarProposalGroups = (
   inventory: readonly DatedWaiver[],
   now: Date,
-) => radarGroups(dueWaivers(inventory, now, 3));
+) =>
+  radarGroups(dueWaivers(inventory, now, 3))
+    .map((group) => {
+      if (group.entries.at(0)?.kind !== "release-age-exclusion") {
+        return group;
+      }
+      const earliestExpiry = Math.min(
+        ...group.entries.map(({ expiresAt }) =>
+          Date.parse(expiryInstant(expiresAt)),
+        ),
+      );
+      const armingInstant = Math.max(now.getTime(), earliestExpiry);
+      const entries = group.entries
+        .filter(
+          ({ expiresAt }) =>
+            Date.parse(expiryInstant(expiresAt)) <= armingInstant,
+        )
+        .toSorted(compareRadarEntries);
+      return {
+        key: sha256Hex(
+          [...new Set(entries.map(releaseAgeIdentity))].toSorted().join("\n"),
+        ).slice(0, 24),
+        entries,
+      };
+    })
+    .toSorted((left, right) =>
+      left.key < right.key ? -1 : Number(left.key > right.key),
+    );
 
 type RadarOrphansOptions = {
   inventory: readonly DatedWaiver[];
@@ -173,7 +217,10 @@ export const radarAction = (
   if (entry.kind === "release-age-exclusion") {
     return {
       kind: "removal",
-      arm: now.getTime() >= Date.parse(expiryInstant(entry.expiresAt)),
+      arm: group.entries.every(
+        ({ expiresAt }) =>
+          now.getTime() >= Date.parse(expiryInstant(expiresAt)),
+      ),
     } as const;
   }
   return status === "green"

@@ -18,7 +18,11 @@ import {
   validateRadarRemoval,
 } from "./dated-exception-radar";
 import { removeWaiver } from "./dated-waiver-probes";
-import { dueWaivers, type DatedWaiver } from "./dated-waivers";
+import {
+  dueWaivers,
+  prematureExclusionRemovals,
+  type DatedWaiver,
+} from "./dated-waivers";
 
 const expiry = "2026-10-18T12:00:00.000Z";
 const now = new Date("2026-10-15T12:00:00.000Z");
@@ -183,7 +187,7 @@ test("orphan reconciliation and publication use the same due release-age groups"
   const later = {
     ...entry("bunfig.toml"),
     id: "better-result",
-    expiresAt: "2026-10-19T12:00:00.000Z",
+    expiresAt: "2026-10-17T12:00:00.000Z",
   };
   const inventory = [expired, later];
   const initialGroup = radarProposalGroups(inventory, now).at(0);
@@ -191,6 +195,39 @@ test("orphan reconciliation and publication use the same due release-age groups"
     throw new Error("Initial proposal group missing");
   }
   expect(initialGroup.entries).toEqual([expired]);
+  const reversedGroup = radarProposalGroups(inventory.toReversed(), now).at(0);
+  if (!reversedGroup) {
+    throw new Error("Reversed proposal group missing");
+  }
+  expect(reversedGroup).toEqual(initialGroup);
+  expect(radarAction(reversedGroup, "green", now)).toEqual(
+    radarAction(initialGroup, "green", now),
+  );
+
+  const sharedBunfig = `[install]\nminimumReleaseAgeExcludes = [\n  "bun-types", # quarantine-expires: ${expired.expiresAt}\n  "better-result", # quarantine-expires: ${later.expiresAt}\n]\n`;
+  const initialFiles = radarFiles(initialGroup, () => sharedBunfig).files;
+  const initialBunfig = initialFiles["bunfig.toml"] ?? "";
+  validateRadarRemoval({
+    inventory,
+    branch: `chore/dated-waiver-${initialGroup.key}`,
+    files: initialFiles,
+    read: () => sharedBunfig,
+    now,
+  });
+  expect(
+    prematureExclusionRemovals(
+      { "bunfig.toml": sharedBunfig },
+      { "bunfig.toml": initialBunfig },
+      now,
+    ),
+  ).toEqual([]);
+  expect(
+    checkQuarantineExcludes({
+      bunfig: initialBunfig,
+      lockfile: '"packages": {}',
+      now,
+    }).errors,
+  ).toEqual([]);
   const initialProposal = {
     key: initialGroup.key,
     branch: `chore/dated-waiver-${initialGroup.key}`,
@@ -210,10 +247,13 @@ test("orphan reconciliation and publication use the same due release-age groups"
     expect(radarProposalGroups(inventory, runNow)).toEqual([initialGroup]);
   }
 
-  const expandedNow = new Date("2026-10-16T12:00:00.000Z");
+  const expandedNow = new Date("2026-10-18T12:00:00.000Z");
   const expandedGroups = radarProposalGroups(inventory, expandedNow);
   expect(expandedGroups).toHaveLength(1);
-  expect(expandedGroups.at(0)?.entries).toEqual(inventory);
+  expect(expandedGroups.at(0)?.entries).toEqual([later, expired]);
+  expect(radarProposalGroups(inventory.toReversed(), expandedNow)).toEqual(
+    expandedGroups,
+  );
   expect(expandedGroups.at(0)?.key).not.toBe(initialGroup.key);
   expect(
     await orphanRadarRemovals({
@@ -223,6 +263,25 @@ test("orphan reconciliation and publication use the same due release-age groups"
       readBody: removalBody,
     }),
   ).toEqual([initialProposal]);
+  const expandedGroup = expandedGroups.at(0);
+  if (!expandedGroup) {
+    throw new Error("Expanded proposal group missing");
+  }
+  const expandedFiles = radarFiles(expandedGroup, () => sharedBunfig).files;
+  validateRadarRemoval({
+    inventory,
+    branch: `chore/dated-waiver-${expandedGroup.key}`,
+    files: expandedFiles,
+    read: () => sharedBunfig,
+    now: expandedNow,
+  });
+  expect(
+    prematureExclusionRemovals(
+      { "bunfig.toml": sharedBunfig },
+      { "bunfig.toml": expandedFiles["bunfig.toml"] ?? "" },
+      expandedNow,
+    ),
+  ).toEqual([]);
 });
 test("release-age removal opens early and arms only at expiry", async () => {
   for (const [at, expected] of [
