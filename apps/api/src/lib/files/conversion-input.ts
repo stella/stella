@@ -192,9 +192,15 @@ const htmlHasExternalReference = (bytes: Uint8Array): boolean => {
       continue;
     }
     const name = node.name.toLowerCase();
+    const adjustedAttributeName = (key: string): string => {
+      const prefix = node["x-attribsPrefix"]?.[key];
+      return prefix === undefined ? key : [prefix, key].join(":");
+    };
     const attributes = Object.entries(node.attribs);
     const attribute = (wanted: string) =>
-      attributes.find(([key]) => key.toLowerCase() === wanted)?.[1];
+      attributes.find(
+        ([key]) => adjustedAttributeName(key).toLowerCase() === wanted,
+      )?.[1];
     if (
       name === "base" ||
       (name === "meta" && attribute("http-equiv")?.toLowerCase() === "refresh")
@@ -202,7 +208,7 @@ const htmlHasExternalReference = (bytes: Uint8Array): boolean => {
       return true;
     }
     for (const [rawKey, value] of attributes) {
-      const key = rawKey.toLowerCase();
+      const key = adjustedAttributeName(rawKey).toLowerCase();
       if (key === "style" && cssHasExternalReference(value)) {
         return true;
       }
@@ -219,6 +225,9 @@ const htmlHasExternalReference = (bytes: Uint8Array): boolean => {
         }
         continue;
       }
+      const isForeignContentLoader =
+        node.namespace !== "http://www.w3.org/1999/xhtml" &&
+        ["image", "use", "feimage", "script"].includes(name);
       const reference =
         [
           "src",
@@ -228,7 +237,9 @@ const htmlHasExternalReference = (bytes: Uint8Array): boolean => {
           "action",
           "formaction",
         ].includes(key) ||
-        (key === "href" && name !== "a" && name !== "area");
+        (key === "href" && name !== "a" && name !== "area") ||
+        ((key === "href" || key === ["xlink", "href"].join(":")) &&
+          isForeignContentLoader);
       if (reference && !isLocalReference(value)) {
         return true;
       }
@@ -255,36 +266,46 @@ const xmlElements = function* (
 };
 
 const XML_NAMESPACES = {
-  none: null,
-  relationships: "http://schemas.openxmlformats.org/package/2006/relationships",
-  svg: "http://www.w3.org/2000/svg",
-  text: "urn:oasis:names:tc:opendocument:xmlns:text:1.0",
-  wordprocessing:
+  none: new Set([null]),
+  officeDocumentRelationships: new Set([
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
+    "http://purl.oclc.org/ooxml/officeDocument/relationships",
+  ]),
+  relationships: new Set([
+    "http://schemas.openxmlformats.org/package/2006/relationships",
+    "http://purl.oclc.org/ooxml/package/relationships",
+  ]),
+  svg: new Set(["http://www.w3.org/2000/svg"]),
+  text: new Set(["urn:oasis:names:tc:opendocument:xmlns:text:1.0"]),
+  wordprocessing: new Set([
     "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
-  xhtml: "http://www.w3.org/1999/xhtml",
-  xlink: "http://www.w3.org/1999/xlink",
+    "http://purl.oclc.org/ooxml/wordprocessingml/main",
+  ]),
+  xhtml: new Set(["http://www.w3.org/1999/xhtml"]),
+  xlink: new Set(["http://www.w3.org/1999/xlink"]),
 } as const;
 
-const HYPERLINK_RELATIONSHIP_TYPES = new Set([
-  "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink",
-  "http://purl.oclc.org/ooxml/officeDocument/relationships/hyperlink",
-]);
+const HYPERLINK_RELATIONSHIP_TYPES = new Set(
+  [...XML_NAMESPACES.officeDocumentRelationships].map(
+    (namespace) => `${namespace}/hyperlink`,
+  ),
+);
 
 const xmlNameMatches = (
   node: slimdom.Element | slimdom.Attr,
-  namespace: string | null,
+  namespaces: ReadonlySet<string | null>,
   localName: string,
 ): boolean =>
-  node.namespaceURI === namespace &&
+  namespaces.has(node.namespaceURI) &&
   node.localName.toLowerCase() === localName.toLowerCase();
 
 const xmlAttribute = (
   element: slimdom.Element,
-  namespace: string | null,
+  namespaces: ReadonlySet<string | null>,
   localName: string,
 ): string | null => {
   for (const attribute of element.attributes) {
-    if (xmlNameMatches(attribute, namespace, localName)) {
+    if (xmlNameMatches(attribute, namespaces, localName)) {
       return attribute.value;
     }
   }

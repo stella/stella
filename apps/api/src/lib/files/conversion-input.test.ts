@@ -171,6 +171,23 @@ describe("document conversion input", () => {
     expect(withoutNamespaceMap).not.toMatch(
       /["'`](?:xlink|w|r|draw|text|office|svg):|["'`]<[a-z][\w.-]*:[\w.-]+/iu,
     );
+
+    const namespaceMap =
+      /const XML_NAMESPACES = \{([\s\S]*?)\} as const;/u.exec(source)?.[1];
+    expect(namespaceMap).toBeDefined();
+    const ooxmlNamespaces = [
+      ...(namespaceMap?.matchAll(
+        /https?:\/\/(?:schemas\.openxmlformats\.org|purl\.oclc\.org\/ooxml)\/[^"\s]+/gu,
+      ) ?? []),
+    ].map(([namespace]) => namespace);
+    expect(ooxmlNamespaces).toEqual([
+      "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
+      "http://purl.oclc.org/ooxml/officeDocument/relationships",
+      "http://schemas.openxmlformats.org/package/2006/relationships",
+      "http://purl.oclc.org/ooxml/package/relationships",
+      "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
+      "http://purl.oclc.org/ooxml/wordprocessingml/main",
+    ]);
   });
 
   test.each(Object.entries(fixtures))(
@@ -232,6 +249,25 @@ describe("document conversion input", () => {
     '<img src="relative.png">',
     '<svg><use href="#icon"></use></svg>',
   ])("allows local and navigation HTML references", async (source) => {
+    expect(await checkConversionInput("text/html", encode(source))).toEqual({
+      kind: "convert",
+    });
+  });
+
+  test.each(["image", "use", "feImage"])(
+    "refuses an HTML foreign %s reference",
+    async (element) => {
+      const source = `<svg><${element} xlink:href="https://example.test/a.png"></${element}></svg>`;
+      expect(await checkConversionInput("text/html", encode(source))).toEqual({
+        kind: "refuse",
+        reason: { kind: "external_reference" },
+        format: "text/html",
+      });
+    },
+  );
+
+  test("allows an HTML foreign navigation reference", async () => {
+    const source = '<svg><a xlink:href="https://x.test">link</a></svg>';
     expect(await checkConversionInput("text/html", encode(source))).toEqual({
       kind: "convert",
     });
@@ -458,6 +494,71 @@ describe("document conversion input", () => {
       ),
     ).toEqual({ kind: "convert" });
   });
+
+  test.each([
+    [
+      "simple",
+      '<w:document xmlns:w="http://purl.oclc.org/ooxml/wordprocessingml/main"><w:fldSimple w:instr="INCLUDEPICTURE https://example.test/a.png"/></w:document>',
+      "INCLUDEPICTURE",
+    ],
+    [
+      "complex",
+      '<w:document xmlns:w="http://purl.oclc.org/ooxml/wordprocessingml/main"><w:fldChar w:fldCharType="begin"/><w:instrText>INCLUDETEXT https://example.test/a.docx</w:instrText><w:fldChar w:fldCharType="end"/></w:document>',
+      "INCLUDETEXT",
+    ],
+  ])("refuses a Strict %s field", async (_kind, document, fieldType) => {
+    const input = await zip("word/document.xml", document);
+    expect(
+      await checkConversionInput(
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        input,
+      ),
+    ).toEqual({
+      kind: "refuse",
+      reason: { kind: "unsupported_field", fieldType },
+      format:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    });
+  });
+
+  test("converts an allowed Strict field", async () => {
+    const input = await zip(
+      "word/document.xml",
+      '<w:document xmlns:w="http://purl.oclc.org/ooxml/wordprocessingml/main"><w:fldSimple w:instr="PAGE"/></w:document>',
+    );
+    expect(
+      await checkConversionInput(
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        input,
+      ),
+    ).toEqual({ kind: "convert" });
+  });
+
+  test.each([
+    [
+      "image",
+      "http://purl.oclc.org/ooxml/officeDocument/relationships/image",
+      "refuse",
+    ],
+    [
+      "hyperlink",
+      "http://purl.oclc.org/ooxml/officeDocument/relationships/hyperlink",
+      "convert",
+    ],
+  ] as const)(
+    "handles a Strict %s external relationship",
+    async (_kind, type, outcome) => {
+      const input = await zip(
+        "word/_rels/document.xml.rels",
+        `<Relationships xmlns="http://purl.oclc.org/ooxml/package/relationships"><Relationship Type="${type}" Target="https://example.test/resource" TargetMode="External"/></Relationships>`,
+      );
+      const result = await checkConversionInput(
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        input,
+      );
+      expect(result.kind).toBe(outcome);
+    },
+  );
 
   test("converts a DOCX with a large document body", async () => {
     const paragraph = "<w:p><w:r><w:t>ordinary text</w:t></w:r></w:p>";
