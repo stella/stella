@@ -490,9 +490,6 @@ const SEARCH_BOE_LEGISLATION_TOOL_DEFINITION = defineValibotMcpTool({
 const handleSearchBoeLegislationTool = withThirdPartyOutbound<
   v.InferInput<typeof SEARCH_BOE_LEGISLATION_PROJECTION>
 >(async ({ args, context, permit }) => {
-  if (!hasEffectiveAuthority(context, { workspace: ["read"] })) {
-    return errorResult("Forbidden");
-  }
   const boe = boeClient(permit);
 
   const parsed = v.safeParse(searchBoeLegislationArgsSchema, args);

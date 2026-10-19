@@ -27,6 +27,7 @@ import {
   isMcpFeatureInputEnabled,
 } from "@/api/mcp/feature-access";
 import { dispatchGatewayToolCall } from "@/api/mcp/gateway/dispatch-call";
+import type { ExternalGatewayDependencies } from "@/api/mcp/gateway/external-tools";
 import {
   getGatewayMcpToolDefinition,
   isMcpToolFeatureEnabled,
@@ -229,16 +230,30 @@ export const listMcpTools = async (
   context: McpRequestContext,
   mode: McpMode = "default",
   scopes?: readonly string[],
+  externalGatewayDependencies?: ExternalGatewayDependencies,
 ): Promise<McpTool[]> => {
   if (scopes === undefined) {
-    return toMcpTools(await listGatewayMcpToolDefinitions({ context, mode }), {
-      mode,
-      context,
-    });
+    return toMcpTools(
+      await listGatewayMcpToolDefinitions({
+        context,
+        mode,
+        ...(externalGatewayDependencies === undefined
+          ? {}
+          : { externalGatewayDependencies }),
+      }),
+      { mode, context },
+    );
   }
 
   return toMcpTools(
-    await listGatewayMcpToolDefinitions({ context, mode, scopes }),
+    await listGatewayMcpToolDefinitions({
+      context,
+      mode,
+      scopes,
+      ...(externalGatewayDependencies === undefined
+        ? {}
+        : { externalGatewayDependencies }),
+    }),
     { mode, context },
   );
 };

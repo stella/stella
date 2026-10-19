@@ -1,29 +1,43 @@
+import type { CallToolResult } from "@modelcontextprotocol/server";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
 import type { Transaction } from "@/api/db/root";
 import type { CachedMcpToolDefinition } from "@/api/db/schema";
+import { recordSkillReadAudit } from "@/api/lib/agent-skills/skill-read-audit";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
+import {
+  createFeatureAccessSnapshot,
+  decideFeatureAccess,
+} from "@/api/lib/feature-access/policy";
+import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
 import type { LoadedMcpConnection } from "@/api/lib/mcp-upstream/connections";
-import { MCP_MODES } from "@/api/mcp/constants";
+import { MCP_MODES, MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
+import type { McpMode } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import {
+  dispatchGatewayToolCall,
+  type GatewayDispatchDependencies,
+} from "@/api/mcp/gateway/dispatch-call";
+import {
   callGatewayExternalMcpTool,
+  gatewayLoadErrorResult,
   type ExternalGatewayDependencies,
 } from "@/api/mcp/gateway/external-tools";
 import {
   externalToolDefinition,
-  listGatewayMcpToolDefinitions,
   skillToolDefinition,
 } from "@/api/mcp/gateway/list-tools";
+import { resolveSkillTool } from "@/api/mcp/gateway/skills";
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
-import {
-  hasMcpToolAuthority,
-  mcpToolAuthorityRefusal,
-} from "@/api/mcp/tool-authority";
 import type { McpToolDefinition } from "@/api/mcp/tool-types";
+import { handleMcpToolCall, listMcpTools } from "@/api/mcp/tools";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+const PROBE_ARGUMENT = "authority_census_probe";
+const SKILL_NAME = "skill__authority_fixture";
 
 const connectorTool = {
   exposedName: "mcp__fixture__read",
@@ -47,63 +61,216 @@ const connectorDependencies = {
   proxyMcpToolCall: async () => ({ content: [] }),
   refreshCachedMcpToolsForConnection: async () => undefined,
 } satisfies ExternalGatewayDependencies;
-const connectorRows = {
-  from: () => connectorRows,
-  innerJoin: () => connectorRows,
-  where: () => connectorRows,
-  orderBy: () => connectorRows,
-  limit: async () => [
-    {
-      allowedTools: null,
-      cachedTools: [connectorTool],
-      connectorId: connector.connectorId,
-      displayName: connector.displayName,
-      slug: connector.slug,
-      userConnectionId: connector.userConnectionId,
-    },
-  ],
-};
+const connectorRows = [
+  {
+    allowedTools: null,
+    cachedTools: [connectorTool],
+    connectorId: connector.connectorId,
+    displayName: connector.displayName,
+    slug: connector.slug,
+    userConnectionId: connector.userConnectionId,
+  },
+];
+const skillRows = [
+  {
+    id: toSafeId<"agentSkill">("skill_authority_fixture"),
+    scope: "private" as const,
+    userId: "user_fixture",
+    slug: "authority_fixture",
+    name: "Authority fixture",
+    description: "Fixture skill",
+    version: "1.0.0",
+    license: null,
+    compatibility: null,
+    metadata: {},
+    body: "Read the fixture.",
+    invocation: "auto" as const,
+    origin: "authored" as const,
+  },
+];
+
 const safeDb: McpRequestContext["safeDb"] = async (callback) =>
   Result.ok(
-    await callback(asTestRaw<Transaction>({ select: () => connectorRows })),
+    await callback(
+      asTestRaw<Transaction>({
+        select: (selection: Record<string, unknown>) => {
+          const rows = "cachedTools" in selection ? connectorRows : skillRows;
+          const builder = {
+            from: () => builder,
+            innerJoin: () => builder,
+            where: () => builder,
+            orderBy: () => builder,
+            limit: async () => rows,
+          };
+          return builder;
+        },
+      }),
+    ),
   );
-const narrowedContext = asTestRaw<McpRequestContext>({
-  credentialPermissions: { timeEntry: ["read"] },
-  grantedScopes: ["stella:external_mcps"],
-  memberRole: "owner",
-  organizationId: toSafeId<"organization">("org_fixture"),
-  safeDb,
-  thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
-  userEmail: "member@example.test",
-  userId: toSafeId<"user">("user_fixture"),
+
+const contextFor = (
+  credentialPermissions: McpRequestContext["credentialPermissions"],
+): McpRequestContext =>
+  asTestRaw<McpRequestContext>({
+    credentialPermissions,
+    featureAccessSnapshot: createFeatureAccessSnapshot({
+      userId: "user_fixture",
+      organizationId: "org_fixture",
+      decisions: new Map(
+        Object.entries(FEATURE_REGISTRY).map(([featureId, definition]) => [
+          featureId,
+          decideFeatureAccess({
+            registry: FEATURE_REGISTRY,
+            featureId,
+            userId: "user_fixture",
+            organizationId: "org_fixture",
+            membership: true,
+            user: { email: "member@example.test", emailVerified: true },
+            grants: Object.fromEntries(
+              Object.keys(FEATURE_REGISTRY).map((id) => [
+                id,
+                [
+                  {
+                    type: "organization" as const,
+                    organizationId: "org_fixture",
+                  },
+                ],
+              ]),
+            ),
+            enrolments:
+              definition.enrolment === "self-serve"
+                ? [
+                    {
+                      featureId,
+                      userId: "user_fixture",
+                      organizationId: "org_fixture",
+                    },
+                  ]
+                : [],
+          }),
+        ]),
+      ),
+    }),
+    grantedScopes: MCP_OAUTH_SCOPES,
+    memberRole: "owner",
+    organizationId: toSafeId<"organization">("org_fixture"),
+    recordAuditEvent: async () => undefined,
+    safeDb,
+    thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
+    userEmail: "member@example.test",
+    userId: toSafeId<"user">("user_fixture"),
+  });
+
+const fixtureSkill = skillToolDefinition({
+  description: "Fixture skill",
+  displayName: "Authority fixture",
+  exposedName: SKILL_NAME,
+});
+const fixtureConnector = externalToolDefinition({
+  cachedTool: connectorTool,
+  connectorDisplayName: connector.displayName,
 });
 
-const definitions = (): McpToolDefinition[] => {
-  const tools = new Map<string, McpToolDefinition>();
-  for (const mode of MCP_MODES) {
-    for (const definition of listStaticMcpToolDefinitions(mode)) {
-      tools.set(definition.name, definition);
-    }
-  }
-  const skill = skillToolDefinition({
-    description: "Fixture skill",
-    displayName: "Fixture skill",
-    exposedName: "skill__fixture",
-  });
-  const connectorDefinition = externalToolDefinition({
-    cachedTool: {
-      ...connectorTool,
-    },
-    connectorDisplayName: "Fixture",
-  });
-  tools.set(skill.name, skill);
-  tools.set(connectorDefinition.name, connectorDefinition);
-  return [...tools.values()];
+type CensusEntry = {
+  mode: McpMode;
+  definition: McpToolDefinition;
 };
 
+const census = (): CensusEntry[] => [
+  ...MCP_MODES.flatMap((mode) =>
+    listStaticMcpToolDefinitions(mode).map((definition) => ({
+      mode,
+      definition,
+    })),
+  ),
+  { mode: "advanced", definition: fixtureConnector },
+  { mode: "advanced", definition: fixtureSkill },
+];
+
+const gatewayDependencies = {
+  callGatewayExternalMcpTool: async (args) =>
+    await callGatewayExternalMcpTool({
+      ...args,
+      dependencies: connectorDependencies,
+    }),
+  gatewayLoadErrorResult,
+  readSkillTool: async () => null,
+  recordSkillReadAudit,
+  resolveSkillTool: async (args) =>
+    await resolveSkillTool({
+      ...args,
+      context: contextFor({ chat: ["create"] }),
+    }),
+} satisfies GatewayDispatchDependencies;
+
+const dispatchDependencies = {
+  dispatchGatewayToolCall: async (args) =>
+    await dispatchGatewayToolCall({
+      ...args,
+      dependencies: gatewayDependencies,
+    }),
+} satisfies { dispatchGatewayToolCall: typeof dispatchGatewayToolCall };
+
+const listedNames = async (entry: CensusEntry, context: McpRequestContext) =>
+  new Set(
+    (
+      await listMcpTools(
+        context,
+        entry.mode,
+        context.grantedScopes,
+        connectorDependencies,
+      )
+    ).map(({ name }) => name),
+  );
+
+const errorCodeOf = (result: CallToolResult): string | null => {
+  const item = result.content.at(0);
+  const payload: unknown = item?.type === "text" ? JSON.parse(item.text) : null;
+  const parsed = v.safeParse(
+    v.object({ error: v.object({ code: v.string() }) }),
+    payload,
+  );
+  return parsed.success ? parsed.output.error.code : null;
+};
+
+const call = async (entry: CensusEntry, context: McpRequestContext) =>
+  await handleMcpToolCall({
+    args:
+      entry.definition.name === SKILL_NAME ? {} : { [PROBE_ARGUMENT]: true },
+    context,
+    dependencies: dispatchDependencies,
+    mode: entry.mode,
+    toolName: entry.definition.name,
+  });
+
+const expectedCounts = {
+  advanced: 78,
+  default: 72,
+  documents: 13,
+  anonymized: 34,
+  law: 15,
+} as const satisfies Record<McpMode, number>;
+
 describe("MCP tool authority census", () => {
+  test("covers every mode and dynamic family", () => {
+    const entries = census();
+    for (const mode of MCP_MODES) {
+      expect(entries.filter((entry) => entry.mode === mode)).toHaveLength(
+        expectedCounts[mode],
+      );
+    }
+    expect(
+      entries.some(({ definition }) => definition.name === SKILL_NAME),
+    ).toBeTrue();
+    expect(
+      entries.some(
+        ({ definition }) => definition.name === connectorTool.exposedName,
+      ),
+    ).toBeTrue();
+  });
+
   test("every registered tool declares its authority", () => {
-    for (const definition of definitions()) {
+    for (const { definition } of census()) {
       if (definition.access === "read") {
         expect(definition.authority.kind).toBeOneOf(["public", "tenant"]);
       } else {
@@ -112,65 +279,47 @@ describe("MCP tool authority census", () => {
     }
   });
 
-  test("tenant reads require their declared effective authority", () => {
-    const tenantReads = definitions().filter(
-      (definition) =>
-        definition.access === "read" && definition.authority.kind === "tenant",
+  test("read authority controls listing and dispatch in every mode", async () => {
+    const narrowed = contextFor({ timeEntry: ["read"] });
+    const reads = census().filter(
+      ({ definition }) => definition.access === "read",
     );
-    expect(tenantReads.length).toBeGreaterThan(0);
+    expect(reads.length).toBeGreaterThan(0);
 
-    for (const definition of tenantReads) {
-      const narrowed = asTestRaw<McpRequestContext>({
-        memberRole: "owner",
-        credentialPermissions: { timeEntry: ["read"] },
+    for (const entry of reads) {
+      const { definition } = entry;
+      if (definition.access !== "read") {
+        continue;
+      }
+      const narrowedListed = await listedNames(entry, narrowed);
+      const narrowedCode = errorCodeOf(await call(entry, narrowed));
+
+      if (definition.authority.kind === "public") {
+        expect(narrowedListed.has(definition.name)).toBeTrue();
+        expect(narrowedCode).not.toBe("permission_denied");
+        continue;
+      }
+
+      expect(narrowedListed.has(definition.name)).toBeFalse();
+      expect({
+        mode: entry.mode,
+        name: definition.name,
+        code: narrowedCode,
+      }).toEqual({
+        mode: entry.mode,
+        name: definition.name,
+        code: "permission_denied",
       });
-      expect(hasMcpToolAuthority(narrowed, definition)).toBeFalse();
-      expect(
-        mcpToolAuthorityRefusal({
-          authority: narrowed,
-          definition,
-          toolName: definition.name,
-          userEmail: "member@example.test",
-        })?.code,
-      ).toBe("permission_denied");
-      expect(
-        hasMcpToolAuthority(
-          {
-            memberRole: "owner",
-            credentialPermissions:
-              definition.access === "read" &&
-              definition.authority.kind === "tenant"
-                ? definition.authority.permissions
-                : undefined,
-          },
-          definition,
-        ),
-      ).toBeTrue();
+
+      const declared = contextFor(definition.authority.permissions);
+      expect({
+        mode: entry.mode,
+        name: definition.name,
+        listed: (await listedNames(entry, declared)).has(definition.name),
+      }).toEqual({ mode: entry.mode, name: definition.name, listed: true });
+      expect(errorCodeOf(await call(entry, declared))).not.toBe(
+        "permission_denied",
+      );
     }
-  });
-
-  test("offers and runs connector tools by their declared permissions", async () => {
-    const listed = await listGatewayMcpToolDefinitions({
-      context: narrowedContext,
-      mode: "advanced",
-      scopes: narrowedContext.grantedScopes,
-      externalGatewayDependencies: connectorDependencies,
-    });
-    expect(
-      listed.some(({ name }) => name === connectorTool.exposedName),
-    ).toBeFalse();
-
-    const called = await callGatewayExternalMcpTool({
-      args: {},
-      context: narrowedContext,
-      definitionFor: externalToolDefinition,
-      dependencies: connectorDependencies,
-      toolName: connectorTool.exposedName,
-    });
-    expect(called.isError).toBeTrue();
-    expect(called.content.at(0)).toMatchObject({
-      type: "text",
-      text: expect.stringContaining("permission_denied"),
-    });
   });
 });
