@@ -881,11 +881,12 @@ test("classification ignores unrelated workflow and composite action edits", () 
   expect(result.isOk()).toBe(true);
 });
 
+// A runner change is not among them: it cannot change a job's kind (see
+// "job digests follow kind inputs, not the runner or a github-script body").
 for (const change of [
   "    permissions: {contents: write}\n",
   `    env: {TOKEN: '${githubExpression("secrets.RELEASE_TOKEN")}'}\n`,
   "    environment: production\n",
-  "    runs-on: ubuntu-latest\n",
 ]) {
   test(`classification shape changes require review and refresh: ${change.trim()}`, () => {
     const f = fixture();
