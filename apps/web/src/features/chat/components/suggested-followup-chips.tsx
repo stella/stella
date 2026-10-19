@@ -85,13 +85,15 @@ export const SuggestedFollowupChips = ({
   return (
     <div className={cn("max-w-full pb-2", className)}>
       <SuggestedActions
+        // The message keys each chip, so the next answer's set is a new row
+        // even when it has as many prompts; the position is what we measure.
         actions={prompts.map((prompt, index) => ({
-          id: String(index),
+          id: `${messageId}:${String(index)}`,
           label: prompt,
         }))}
         label={t("chat.suggestedFollowupsLabel")}
         onSelect={(id) => {
-          const index = Number(id);
+          const index = Number(id.slice(id.lastIndexOf(":") + 1));
           const prompt =
             prompts.at(index) ??
             panic(`Unknown suggested follow-up index: ${id}`);
