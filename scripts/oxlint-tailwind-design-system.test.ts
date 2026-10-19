@@ -38,10 +38,12 @@ test("an unavailable Tailwind design system fails as one typed error per rule an
         ],
         settings: { tailwindcss: { entryPoint } },
         rules: {
-          // A warning-level rule must not absorb the error-level reports.
-          "tailwindcss/no-duplicate-classes": "warn",
+          // A warning-level rule that needs the design system must not absorb
+          // the error-level reports.
+          "tailwindcss/no-conflicting-classes": "warn",
           "tailwindcss/no-unknown-classes": "error",
-          "tailwindcss/no-conflicting-classes": "error",
+          // Duplicate detection needs no design system and reports nothing.
+          "tailwindcss/no-duplicate-classes": "error",
         },
       })};`,
     );
@@ -81,8 +83,7 @@ test("an unavailable Tailwind design system fails as one typed error per rule an
       stdout,
     ).toEqual(
       ["first.tsx", "second.tsx"].flatMap((file) => [
-        `${file} tailwindcss(no-conflicting-classes) error`,
-        `${file} tailwindcss(no-duplicate-classes) warning`,
+        `${file} tailwindcss(no-conflicting-classes) warning`,
         `${file} tailwindcss(no-unknown-classes) error`,
       ]),
     );
