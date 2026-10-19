@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import { checkQuarantineExcludes } from "./check-stll-quarantine-excludes";
 import {
   existingRadarProposal,
   extensionProposal,
@@ -16,6 +17,7 @@ import {
   radarWriteNeeded,
   validateRadarRemoval,
 } from "./dated-exception-radar";
+import { removeWaiver } from "./dated-waiver-probes";
 import { dueWaivers, type DatedWaiver } from "./dated-waivers";
 
 const expiry = "2026-10-18T12:00:00.000Z";
@@ -29,6 +31,14 @@ const entry = (source: string): DatedWaiver => ({
   probe: { command: ["bun", "check"], attempts: 3 },
 });
 const fixture = `[install]\nminimumReleaseAgeExcludes = [\n  "bun-types", # quarantine-expires: ${expiry}\n]\n`;
+const applyRemovals = (entries: readonly DatedWaiver[], initial: string) => {
+  let contents = initial;
+  const read = () => contents;
+  for (const waiver of entries) {
+    contents = removeWaiver(waiver, read).at(0)?.after ?? contents;
+  }
+  return contents;
+};
 const group = () => {
   const result = radarGroups([
     entry("bunfig.toml"),
@@ -72,6 +82,49 @@ test("one release-age proposal removes every carrying bunfig", () => {
   }
 });
 
+test("one release-age proposal removes all due exclusions from a shared bunfig", () => {
+  const other = { ...entry("bunfig.toml"), id: "better-result", line: 4 };
+  const grouped = radarGroups([entry("bunfig.toml"), other]);
+  expect(grouped).toHaveLength(1);
+
+  const fixtureBunfig = `[install]\nminimumReleaseAgeExcludes = [\n  "bun-types", # quarantine-expires: ${expiry}\n  "better-result", # quarantine-expires: ${expiry}\n]\n`;
+  const bunfig = applyRemovals(grouped.at(0)?.entries ?? [], fixtureBunfig);
+  expect(
+    checkQuarantineExcludes({
+      bunfig,
+      lockfile: '"packages": {}',
+      now: new Date(expiry),
+    }).errors,
+  ).toEqual([]);
+});
+
+test("release-age groups form connected components over packages and owning files", () => {
+  const a1 = entry("bunfig1.toml");
+  const a2 = entry("bunfig2.toml");
+  const b = { ...entry("bunfig2.toml"), id: "better-result" };
+  const c = { ...entry("bunfig3.toml"), id: "valibot" };
+  const groups = radarGroups([a1, c, b, a2]);
+
+  expect(groups).toHaveLength(2);
+  expect(
+    groups.map(({ entries }) => entries.map(({ id }) => id).toSorted()),
+  ).toContainEqual(["better-result", "bun-types", "bun-types"]);
+  expect(
+    groups.map(({ entries }) => entries.map(({ id }) => id)),
+  ).toContainEqual(["valibot"]);
+});
+
+test("release-age group keys are stable across input order", () => {
+  const entries = [
+    entry("bunfig1.toml"),
+    entry("bunfig2.toml"),
+    { ...entry("bunfig2.toml"), id: "better-result" },
+  ];
+  expect(radarGroups(entries).at(0)?.key).toBe(
+    radarGroups(entries.toReversed()).at(0)?.key,
+  );
+});
+
 test("release-age group identity survives owner order and subsets but separates deadlines", () => {
   const first = entry("bunfig.toml");
   const second = entry(".claude/mcp/bunfig.toml");
@@ -80,7 +133,11 @@ test("release-age group identity survives owner order and subsets but separates 
   for (const inventory of [[second, first], [first], [second]]) {
     expect(radarGroups(inventory).at(0)?.key).toBe(key);
   }
-  const anotherDeadline = { ...first, expiresAt: "2026-10-19T12:00:00.000Z" };
+  const anotherDeadline = {
+    ...first,
+    source: "another/bunfig.toml",
+    expiresAt: "2026-10-19T12:00:00.000Z",
+  };
   expect(radarGroups([first, anotherDeadline])).toHaveLength(2);
   expect(radarGroups([anotherDeadline]).at(0)?.key).not.toBe(key);
 });

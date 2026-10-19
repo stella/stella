@@ -27,29 +27,69 @@ import {
 const root = path.resolve(import.meta.dir, "..");
 export const OWNER_REASON_REQUIRED = "OWNER_REASON_REQUIRED";
 export type RadarGroup = { key: string; entries: DatedWaiver[] };
+const releaseAgeIdentity = (entry: DatedWaiver) =>
+  JSON.stringify([entry.kind, entry.id, entry.expiresAt]);
+
 export const radarGroups = (
   inventory: readonly DatedWaiver[],
 ): RadarGroup[] => {
   const groups = new Map<string, RadarGroup>();
+  const releaseAgeGroups: DatedWaiver[][] = [];
+  const groupByIdentity = new Map<string, DatedWaiver[]>();
+  const groupBySource = new Map<string, DatedWaiver[]>();
+  const mergeReleaseAgeGroups = (
+    target: DatedWaiver[],
+    merged: DatedWaiver[],
+  ) => {
+    target.push(...merged);
+    releaseAgeGroups.splice(releaseAgeGroups.indexOf(merged), 1);
+    for (const entry of merged) {
+      groupByIdentity.set(releaseAgeIdentity(entry), target);
+      groupBySource.set(entry.source, target);
+    }
+  };
+
   for (const entry of inventory) {
-    const identity =
-      entry.kind === "release-age-exclusion"
-        ? JSON.stringify([entry.kind, entry.id, entry.expiresAt])
-        : waiverKey(entry);
+    if (entry.kind === "release-age-exclusion") {
+      const identity = releaseAgeIdentity(entry);
+      const identityGroup = groupByIdentity.get(identity);
+      const sourceGroup = groupBySource.get(entry.source);
+      const group = identityGroup ?? sourceGroup ?? [];
+      if (!identityGroup && !sourceGroup) {
+        releaseAgeGroups.push(group);
+      } else if (
+        identityGroup &&
+        sourceGroup &&
+        identityGroup !== sourceGroup
+      ) {
+        mergeReleaseAgeGroups(identityGroup, sourceGroup);
+      }
+      group.push(entry);
+      groupByIdentity.set(identity, group);
+      groupBySource.set(entry.source, group);
+      continue;
+    }
+
+    const identity = waiverKey(entry);
     const existing = groups.get(identity);
     if (existing) {
       existing.entries.push(entry);
     } else {
       groups.set(identity, {
-        key:
-          entry.kind === "release-age-exclusion"
-            ? sha256Hex(identity).slice(0, 24)
-            : waiverKey(entry),
+        key: identity,
         entries: [entry],
       });
     }
   }
-  return [...groups.values()];
+  return [
+    ...groups.values(),
+    ...releaseAgeGroups.map((entries) => ({
+      key: sha256Hex(
+        [...new Set(entries.map(releaseAgeIdentity))].toSorted().join("\n"),
+      ).slice(0, 24),
+      entries,
+    })),
+  ];
 };
 
 type RadarOrphansOptions = {
