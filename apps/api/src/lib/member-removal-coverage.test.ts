@@ -138,6 +138,7 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "legislation_documents.sections",
   "legislation_documents.document_ast",
   "legislation_documents.metadata",
+  "legislation_amendment_snapshots.coverage",
   "legislation_sources.config",
   "legislation_sources.descriptor",
   "mcp_connector_authorization_reviews.observed_endpoint_origins",

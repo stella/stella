@@ -120,7 +120,7 @@ export const listStatuteVersionsHandler = async ({
     const work = await selectWorkKey(tx, documentId, surface);
 
     if (work === null) {
-      return null;
+      return { type: "missing" } as const;
     }
 
     const conditions: SQL[] = workKeyConditions(work, surface);
@@ -164,14 +164,13 @@ export const listStatuteVersionsHandler = async ({
     // The look-ahead row is dropped by the cursor page, so it never owns relations.
     for (const row of page.slice(0, limit)) {
       const openingDate = row.versionValidFrom;
-      if (openingDate === null || !effectOpensVersion(openingDate, row)) {
-        continue;
-      }
-      const currentOwner = amendmentOwnerByOpeningDate.get(openingDate);
-      // A relation belongs to one response version: prefer the default when it
-      // opens that day, otherwise retain the first eligible row in page order.
-      if (currentOwner === undefined || row.id === defaultId) {
-        amendmentOwnerByOpeningDate.set(openingDate, row);
+      if (openingDate !== null && effectOpensVersion(openingDate, row)) {
+        const currentOwner = amendmentOwnerByOpeningDate.get(openingDate);
+        // A relation belongs to one response version: prefer the default when it
+        // opens that day, otherwise retain the first eligible row in page order.
+        if (currentOwner === undefined || row.id === defaultId) {
+          amendmentOwnerByOpeningDate.set(openingDate, row);
+        }
       }
     }
     // Query only dates some returned version owns, so relations nobody can
@@ -191,43 +190,48 @@ export const listStatuteVersionsHandler = async ({
       typeof amendments.items
     >();
     for (const relation of amendments.items) {
-      if (relation.effectiveDate === null) {
-        continue;
-      }
-      const owner = amendmentOwnerByOpeningDate.get(relation.effectiveDate);
-      if (owner === undefined) {
-        continue;
-      }
-      const owned = amendmentsByOwner.get(owner.id);
-      if (owned === undefined) {
-        amendmentsByOwner.set(owner.id, [relation]);
-      } else {
-        owned.push(relation);
+      if (relation.effectiveDate !== null) {
+        const owner = amendmentOwnerByOpeningDate.get(relation.effectiveDate);
+        if (owner !== undefined) {
+          const owned = amendmentsByOwner.get(owner.id);
+          if (owned === undefined) {
+            amendmentsByOwner.set(owner.id, [relation]);
+          } else {
+            owned.push(relation);
+          }
+        }
       }
     }
-    return page.map((row) =>
-      projectStatuteVersion({
-        ...row,
-        isDefault: row.id === defaultId,
-        // The actor comes from an explicit publisher relation; multiple acts
-        // starting on one day remain separate effects in that day's wording.
-        amendedBy: projectStatuteAmendments({
-          snapshot,
-          page: {
-            ...amendments,
-            items: amendmentsByOwner.get(row.id) ?? [],
-          },
+    const amendmentsFor = (id: SafeId<"legislationDocument">) => {
+      const owned = amendmentsByOwner.get(id);
+      return owned === undefined ? [] : owned;
+    };
+    return {
+      type: "found",
+      rows: page.map((row) =>
+        projectStatuteVersion({
+          ...row,
+          isDefault: row.id === defaultId,
+          // The actor comes from an explicit publisher relation; multiple acts
+          // starting on one day remain separate effects in that day's wording.
+          amendedBy: projectStatuteAmendments({
+            snapshot,
+            page: {
+              ...amendments,
+              items: amendmentsFor(row.id),
+            },
+          }),
         }),
-      }),
-    );
+      ),
+    } as const;
   });
 
-  if (rows === null) {
+  if (rows.type === "missing") {
     return status(404, { message: "Legislation document not found" });
   }
 
   return createCursorPage({
-    rows,
+    rows: rows.rows,
     limit,
     cursorForItem: (item) =>
       encodePaginationCursor([

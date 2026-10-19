@@ -61,7 +61,7 @@ const windowFields = {
   versionValidTo: nullableBoundedString(readerTextBytes.versionValidTo),
   ...labelFields,
 };
-export const statuteAmendmentPageSchema = t.Object(
+const statuteAmendmentPageSchema = t.Object(
   {
     items: t.Array(
       t.Object(

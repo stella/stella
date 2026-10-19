@@ -529,6 +529,11 @@ export const ROLE_GRANT_STATEMENTS = [
     GRANT SELECT, INSERT, DELETE ON TABLE "legislation_work_names"
     TO stella_ingestion
   `,
+  `
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
+      "legislation_amendment_snapshots", "legislation_amendments"
+    TO stella_ingestion
+  `,
   // Final-generation state is observable by request code but mutated only by
   // ingestion. A narrowly scoped database function owns retirement deletes.
   `
