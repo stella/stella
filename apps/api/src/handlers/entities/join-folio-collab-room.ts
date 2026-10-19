@@ -504,6 +504,7 @@ const joinFolioCollabRoomHandler = async function* ({
 
       const { token, tokenExpiresAt } = await issueFolioCollabToken({
         sourceSessionId,
+        authorityDb: tx,
         generation,
         permissions: { canEdit: true },
         roomId: room.id,
@@ -542,13 +543,19 @@ const joinFolioCollabRoomHandler = async function* ({
     );
   }
 
-  const seedDownloadUrl = await presignDocxFieldDownload({
-    userId,
-    sourceSessionId,
-    fileContent: joined.seedFileContent,
-    organizationId,
-    workspaceId,
-  });
+  const seedDownloadUrl = yield* Result.await(
+    safeDb(
+      async (tx) =>
+        await presignDocxFieldDownload({
+          authorityDb: tx,
+          userId,
+          sourceSessionId,
+          fileContent: joined.seedFileContent,
+          organizationId,
+          workspaceId,
+        }),
+    ),
+  );
 
   return Result.ok({
     baseVersionId: joined.baseVersionId,

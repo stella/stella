@@ -274,6 +274,7 @@ const buildExistingOpenDesktopEditSessionResponse = async ({
     return {
       baseVersionNumber: baseVersion.versionNumber,
       downloadUrl: await presignDesktopEditDownloadFromFileId({
+        authorityDb: tx,
         userId,
         fileId: existingSession.checkpointFileId,
         fileName: existingSession.fileName,
@@ -311,6 +312,7 @@ const buildExistingOpenDesktopEditSessionResponse = async ({
   return {
     baseVersionNumber: baseVersion.versionNumber,
     downloadUrl: await presignDesktopEditFileDownload({
+      authorityDb: tx,
       userId,
       fileTarget: baseVersionTarget,
       organizationId,
@@ -537,6 +539,7 @@ export const openDesktopEditSessionHandler = async function* ({
         value: {
           baseVersionNumber: currentTarget.baseVersionNumber,
           downloadUrl: await presignDesktopEditFileDownload({
+            authorityDb: tx,
             userId,
             fileTarget: currentTarget,
             organizationId,

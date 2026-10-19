@@ -11,7 +11,7 @@ import {
 import type { DesktopEditFileType } from "@/api/lib/desktop-edit-file-types";
 import { createFileKey } from "@/api/lib/files/utils";
 import { presignDownloadUrl } from "@/api/lib/s3-presign";
-import { readLiveSyntheticSessionAuthority } from "@/api/lib/synthetic-principal/session-authority";
+import { bindSyntheticSessionAuthorityReader } from "@/api/lib/synthetic-principal/session-authority";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 type DatabaseTransaction = Transaction;
@@ -344,12 +344,14 @@ export const readVersionDesktopEditTarget = async ({
 };
 
 export const presignDocxFieldDownload = async ({
+  authorityDb,
   fileContent,
   organizationId,
   sourceSessionId,
   userId,
   workspaceId,
 }: {
+  authorityDb: DatabaseTransaction;
   fileContent: DocxFieldContent;
   organizationId: SafeId<"organization">;
   sourceSessionId: string | null;
@@ -367,19 +369,21 @@ export const presignDocxFieldDownload = async ({
       userId,
       expiresIn: 900,
       sourceSessionId,
-      readSessionAuthority: readLiveSyntheticSessionAuthority,
+      readSessionAuthority: bindSyntheticSessionAuthorityReader(authorityDb),
       fileName: fileContent.fileName,
       scope: { organizationId, workspaceId },
     },
   );
 
 export const presignDocxDownloadFromFileId = async ({
+  authorityDb,
   fileId,
   fileName,
   organizationId,
   userId,
   workspaceId,
 }: {
+  authorityDb: DatabaseTransaction;
   fileId: string;
   fileName: string;
   organizationId: SafeId<"organization">;
@@ -397,18 +401,20 @@ export const presignDocxDownloadFromFileId = async ({
       userId,
       expiresIn: 900,
       sourceSessionId: null,
-      readSessionAuthority: readLiveSyntheticSessionAuthority,
+      readSessionAuthority: bindSyntheticSessionAuthorityReader(authorityDb),
       fileName,
       scope: { organizationId, workspaceId },
     },
   );
 
 export const presignDesktopEditFileDownload = async ({
+  authorityDb,
   fileTarget,
   organizationId,
   userId,
   workspaceId,
 }: {
+  authorityDb: DatabaseTransaction;
   fileTarget: DesktopEditableFileTarget;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user"> | null;
@@ -425,13 +431,14 @@ export const presignDesktopEditFileDownload = async ({
       userId,
       expiresIn: 900,
       sourceSessionId: null,
-      readSessionAuthority: readLiveSyntheticSessionAuthority,
+      readSessionAuthority: bindSyntheticSessionAuthorityReader(authorityDb),
       fileName: fileTarget.fileContent.fileName,
       scope: { organizationId, workspaceId },
     },
   );
 
 export const presignDesktopEditDownloadFromFileId = async ({
+  authorityDb,
   fileId,
   fileName,
   fileType,
@@ -439,6 +446,7 @@ export const presignDesktopEditDownloadFromFileId = async ({
   userId,
   workspaceId,
 }: {
+  authorityDb: DatabaseTransaction;
   fileId: string;
   fileName: string;
   fileType: DesktopEditFileType;
@@ -457,7 +465,7 @@ export const presignDesktopEditDownloadFromFileId = async ({
       userId,
       expiresIn: 900,
       sourceSessionId: null,
-      readSessionAuthority: readLiveSyntheticSessionAuthority,
+      readSessionAuthority: bindSyntheticSessionAuthorityReader(authorityDb),
       fileName,
       scope: { organizationId, workspaceId },
     },

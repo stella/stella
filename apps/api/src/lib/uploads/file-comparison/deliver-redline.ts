@@ -18,7 +18,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { FILE_READ_URL_EXPIRY_SECONDS } from "@/api/lib/files/read-file";
 import { putTemporaryS3ObjectWithSignal } from "@/api/lib/s3";
 import { presignDownloadUrl } from "@/api/lib/s3-presign";
-import { readLiveSyntheticSessionAuthority } from "@/api/lib/synthetic-principal/session-authority";
+import { bindSyntheticSessionAuthorityReader } from "@/api/lib/synthetic-principal/session-authority";
 import {
   FILE_COMPARISON_REDLINE_TTL_SECONDS,
   fileComparisonExpiry,
@@ -138,7 +138,11 @@ export const deliverTemporaryRedline = async (
         userId,
         expiresIn: FILE_READ_URL_EXPIRY_SECONDS,
         sourceSessionId: null,
-        readSessionAuthority: readLiveSyntheticSessionAuthority,
+        readSessionAuthority: async (options) =>
+          await scopedDb(
+            async (tx) =>
+              await bindSyntheticSessionAuthorityReader(tx)(options),
+          ),
         fileName,
         // The key is organization-level `tmp/`, never workspace storage.
         scope: { organizationId, workspaceId: null },

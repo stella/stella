@@ -20,7 +20,7 @@ import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getS3 } from "@/api/lib/s3";
 import { presignDownloadUrl } from "@/api/lib/s3-presign";
-import { readLiveSyntheticSessionAuthority } from "@/api/lib/synthetic-principal/session-authority";
+import { bindSyntheticSessionAuthorityReader } from "@/api/lib/synthetic-principal/session-authority";
 
 import { resolvedReportResultFieldId } from "../result-field";
 
@@ -137,7 +137,13 @@ const readReportExport = createSafeHandler(
                 userId: user.id,
                 expiresIn: DOWNLOAD_URL_EXPIRES_SECONDS,
                 sourceSessionId: session.id,
-                readSessionAuthority: readLiveSyntheticSessionAuthority,
+                readSessionAuthority: async (options) =>
+                  (
+                    await safeDb(
+                      async (tx) =>
+                        await bindSyntheticSessionAuthorityReader(tx)(options),
+                    )
+                  ).unwrap(),
                 fileName: downloadFileName(resultS3Key),
                 scope: {
                   keyspace: "exports",

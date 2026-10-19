@@ -522,13 +522,19 @@ const checkpointFolioCollabRoom = createSafeHandler(
       );
     }
 
-    const downloadUrl = await presignDocxDownloadFromFileId({
-      userId: user.id,
-      fileId: nextFileId,
-      fileName: target.room.fileName,
-      organizationId: session.activeOrganizationId,
-      workspaceId,
-    });
+    const downloadUrl = yield* Result.await(
+      safeDb(
+        async (tx) =>
+          await presignDocxDownloadFromFileId({
+            authorityDb: tx,
+            userId: user.id,
+            fileId: nextFileId,
+            fileName: target.room.fileName,
+            organizationId: session.activeOrganizationId,
+            workspaceId,
+          }),
+      ),
+    );
     return Result.ok({
       checkpointedAt: checkpointedAt.toISOString(),
       downloadUrl,

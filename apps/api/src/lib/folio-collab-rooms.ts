@@ -172,7 +172,7 @@ type FolioCollabTokenIssueDb = {
 
 type IssueFolioCollabTokenOptions = {
   sourceSessionId: string | null;
-  authorityDb?: Pick<typeof rootDb, "select">;
+  authorityDb: Pick<typeof rootDb, "select">;
   generation: number;
   permissions: FolioCollabTokenPermissions;
   roomId: SafeId<"folioCollabRoom">;
@@ -207,7 +207,7 @@ export const cleanupExpiredFolioCollabRoomTokens = async ({
 
 export const issueFolioCollabToken = async ({
   sourceSessionId,
-  authorityDb = rootDb,
+  authorityDb,
   generation,
   permissions,
   roomId,
