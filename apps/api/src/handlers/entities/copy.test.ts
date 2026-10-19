@@ -1514,6 +1514,13 @@ describe("copy-to-workspace", () => {
       ) => await callback(tx),
     });
     const { safeDb, scopedDb } = createScopedDbMock(transactionFixture, {
+      entityAuditOwners: [
+        {
+          id: documentId,
+          workspaceId: sourceWorkspaceId,
+          featureOwner: "shared",
+        },
+      ],
       featureAccess: { identity: CALLER_IDENTITY },
       entityTransferEligibility: [documentId, folderId, childDocId].map(
         (entityId) => ({ entityId, eligible: true }),

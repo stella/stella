@@ -16,9 +16,8 @@ import { AGENDA_ITEM_KIND } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isFeatureEnabled } from "@/api/lib/feature-access/policy";
 
-type EntityColumnKey = keyof typeof entities.$inferSelect;
-
 const ENTITY_COLUMNS = getColumns(entities);
+type EntityColumnKey = keyof typeof ENTITY_COLUMNS;
 const ENTITY_COLUMN_KEYS = Object.keys(ENTITY_COLUMNS).filter(
   (key): key is EntityColumnKey => Object.hasOwn(ENTITY_COLUMNS, key),
 );
@@ -69,6 +68,7 @@ const SIGNAL_ENTITY_COLUMNS = {
   id: sql`${signals.id}`,
   workspaceId: sql`${signals.workspaceId}`,
   entityFeatureGate: sql`NULL::text`,
+  featureOwner: sql`NULL::text`,
   kind: sql`CASE WHEN ${proposalKind} IS NOT NULL THEN 'task'::text END`,
   listItemType: sql`NULL`,
   parentId: sql`NULL`,

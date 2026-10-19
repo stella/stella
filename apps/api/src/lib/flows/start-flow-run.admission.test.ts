@@ -16,6 +16,7 @@ import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { PLAIN_MEMBER_FACTS } from "@/api/tests/helpers/member-authorization";
 import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { createSelectQueryMock } from "@/api/tests/scoped-db-mock";
 
 const testState = createTestState({ file: import.meta.path, config: env });
 
@@ -66,18 +67,8 @@ const manualFixtureRows = (projection: Record<string, unknown>) => {
   return [{ featureId: "flows", organizationId, userId }];
 };
 
-const selectManualFixtureRows = (projection: Record<string, unknown>) => {
-  const rows = Promise.resolve(manualFixtureRows(projection));
-  // Resolving the existing promise preserves its query methods at every chain link.
-  const resolveRows = Promise.resolve.bind(Promise, rows);
-  const query = Object.assign(rows, {
-    innerJoin: resolveRows,
-    where: resolveRows,
-    for: resolveRows,
-    limit: resolveRows,
-  });
-  return { from: async () => query };
-};
+const selectManualFixtureRows = (projection: Record<string, unknown>) =>
+  createSelectQueryMock(manualFixtureRows(projection));
 
 // Savepoints share rows and counters, but each transaction level needs its own
 // identity so aggregate lock histories follow PostgreSQL savepoint lifetimes.
