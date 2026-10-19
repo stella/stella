@@ -1935,7 +1935,7 @@ test("the required-jobs record names every workflow job once and carries the ver
       label: "pull-request-fast-outside-failure",
       options: {
         event: EVENT.pullRequest,
-        results: { "e2e-landing": "failure" },
+        results: { "e2e-vite-canary": "failure" },
         suiteDepth: SUITE_DEPTH.fast,
       },
     },
@@ -1945,7 +1945,7 @@ test("the required-jobs record names every workflow job once and carries the ver
       label: "pull-request-fast-superseded-cancel",
       options: {
         event: EVENT.pullRequest,
-        results: { "e2e-landing": "cancelled" },
+        results: { "e2e-vite-canary": "cancelled" },
         suiteDepth: SUITE_DEPTH.fast,
         cancellationEvidence: "superseded",
       },
@@ -2036,7 +2036,7 @@ test("the required-jobs record names every workflow job once and carries the ver
   const fastRequired = fast.record.required.map(({ job }) => job);
   expect(fastRequired).toContain("ci-quick-checks");
   // A fast run leaves its heavy suites to the queue.
-  expect(fast.record.not_required).toContain("e2e-landing");
+  expect(fast.record.not_required).toContain("e2e-vite-canary");
   expect(fastRequired.length).toBeLessThan(success.record.required.length);
 
   // The record holds every job the verdict counted, not only the fast set.
@@ -2044,17 +2044,17 @@ test("the required-jobs record names every workflow job once and carries the ver
   expect(outside.exitCode).toBe(1);
   expect(outside.record.verdict).toBe("failure");
   expect(outside.record.required).toContainEqual({
-    job: "e2e-landing",
+    job: "e2e-vite-canary",
     conclusion: "failure",
   });
-  expect(outside.record.not_required).not.toContain("e2e-landing");
+  expect(outside.record.not_required).not.toContain("e2e-vite-canary");
 
   const superseded = take("pull-request-fast-superseded-cancel");
   expect(superseded.record.required).toContainEqual({
-    job: "e2e-landing",
+    job: "e2e-vite-canary",
     conclusion: "cancelled",
   });
-  expect(superseded.record.not_required).not.toContain("e2e-landing");
+  expect(superseded.record.not_required).not.toContain("e2e-vite-canary");
   expect(superseded.exitCode).toBe(0);
   expect(superseded.record.verdict).toBe("success");
 
