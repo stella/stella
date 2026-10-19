@@ -98,4 +98,56 @@ describe("authorization response binding census", () => {
       expect(observed).toBe(registrationMode);
     }
   });
+
+  test("continues the exchange when observation does not complete", async () => {
+    const binding = createAuthorizationResponseBinding({
+      authorizationServer: {
+        issuer,
+        authorization_endpoint: `${issuer}/authorize`,
+        token_endpoint: `${issuer}/token`,
+      },
+      registrationMode: "dcr",
+    });
+    const exchangeArguments = {
+      code: "authorization-code",
+      redirectUri: "https://app.example.com/v1/mcp/oauth/callback",
+      responseIssuer: issuer,
+    };
+    const calls: (typeof exchangeArguments)[] = [];
+
+    const result = await observeAuthorizationResponseBinding({
+      binding,
+      response: { issuer },
+      observe: () => {
+        throw new Error("observation did not complete");
+      },
+      exchange: async () => {
+        calls.push(exchangeArguments);
+        return "exchanged";
+      },
+    });
+
+    expect(result).toBe("exchanged");
+    expect(calls).toEqual([exchangeArguments]);
+  });
+
+  test("compares response issuers for unbound observations", () => {
+    const binding = createAuthorizationResponseBinding({
+      authorizationServer: {
+        issuer,
+        authorization_endpoint: `${issuer}/authorize`,
+        token_endpoint: `${issuer}/token`,
+      },
+      registrationMode: "dcr",
+    });
+
+    expect(
+      evaluateAuthorizationResponseBinding(binding, { issuer }).issMatches,
+    ).toBe(true);
+    expect(
+      evaluateAuthorizationResponseBinding(binding, {
+        issuer: "https://different.example.com",
+      }).issMatches,
+    ).toBe(false);
+  });
 });

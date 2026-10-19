@@ -20,6 +20,7 @@ import {
   mcpResourceMatchesConnector,
   mcpWellKnownProtectedResourceUrls,
 } from "@/api/lib/mcp-upstream/url-safety";
+import { logger } from "@/api/lib/observability/logger";
 import {
   safeOutboundFetchBytes,
   validateOutboundFetchTarget,
@@ -484,23 +485,31 @@ export type McpClientRegistrationMode = "cimd" | "dcr" | "unsupported";
 export type AuthorizationResponseRegistrationMode =
   | "cimd"
   | "dcr"
-  | "pre_registered";
+  | "pre_registered"
+  | "unknown";
+
+type KnownAuthorizationResponseRegistrationMode = Exclude<
+  AuthorizationResponseRegistrationMode,
+  "unknown"
+>;
 
 export type AuthorizationResponseBinding =
   | {
       type: "issuer";
-      issuer: string;
+      expectedIssuer: string;
       registrationMode: AuthorizationResponseRegistrationMode;
       issSupportedAdvertised: true;
     }
   | {
       type: "redirect";
       bindingId: string;
+      expectedIssuer: string;
       registrationMode: AuthorizationResponseRegistrationMode;
       issSupportedAdvertised: false;
     }
   | {
       type: "unbound";
+      expectedIssuer: string;
       reason:
         | "no_issuer_support_shared_client"
         | "no_issuer_support_shared_redirect"
@@ -516,14 +525,14 @@ export const createAuthorizationResponseBinding = ({
   registrationMode,
 }: {
   authorizationServer: UpstreamAuthorizationServerMetadata;
-  registrationMode: AuthorizationResponseRegistrationMode;
+  registrationMode: KnownAuthorizationResponseRegistrationMode;
 }): AuthorizationResponseBinding => {
   if (
     authorizationServer.authorization_response_iss_parameter_supported === true
   ) {
     return {
       type: "issuer",
-      issuer: authorizationServer.issuer,
+      expectedIssuer: authorizationServer.issuer,
       registrationMode,
       issSupportedAdvertised: true,
     };
@@ -532,12 +541,14 @@ export const createAuthorizationResponseBinding = ({
   return registrationMode === "cimd"
     ? {
         type: "unbound",
+        expectedIssuer: authorizationServer.issuer,
         reason: "no_issuer_support_shared_client",
         registrationMode,
         issSupportedAdvertised: false,
       }
     : {
         type: "unbound",
+        expectedIssuer: authorizationServer.issuer,
         reason: "no_issuer_support_shared_redirect",
         registrationMode,
         issSupportedAdvertised: false,
@@ -558,9 +569,11 @@ export const evaluateAuthorizationResponseBinding = (
   response: { issuer: string | undefined },
 ): AuthorizationResponseBindingVerdict => {
   const issPresent = response.issuer !== undefined;
+  const issMatches = issPresent
+    ? response.issuer === binding.expectedIssuer
+    : null;
   switch (binding.type) {
     case "issuer": {
-      const issMatches = response.issuer === binding.issuer;
       if (!issPresent) {
         return {
           type: "would_refuse",
@@ -579,13 +592,13 @@ export const evaluateAuthorizationResponseBinding = (
           };
     }
     case "redirect":
-      return { type: "accepted", issPresent, issMatches: null };
+      return { type: "accepted", issPresent, issMatches };
     case "unbound":
       return {
         type: "would_refuse",
         reason: "binding_unavailable",
         issPresent,
-        issMatches: null,
+        issMatches,
       };
     default: {
       binding satisfies never;
@@ -606,7 +619,11 @@ export const observeAuthorizationResponseBinding = async <T>({
   response: { issuer: string | undefined };
 }): Promise<T> => {
   const verdict = evaluateAuthorizationResponseBinding(binding, response);
-  observe(verdict);
+  try {
+    observe(verdict);
+  } catch {
+    logger.warn("mcp.oauth.binding_observation_failed");
+  }
 
   switch (AUTHORIZATION_RESPONSE_BINDING_MODE) {
     case "observe":

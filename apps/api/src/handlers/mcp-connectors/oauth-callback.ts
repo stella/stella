@@ -98,21 +98,17 @@ const redirect = (input: CallbackRedirectInput) =>
   });
 
 const logAuthorizationResponseBindingObservation = ({
-  authorizationServerUrl,
   binding,
   connectorId,
   verdict,
 }: {
-  authorizationServerUrl: string;
   binding: AuthorizationResponseBinding;
   connectorId: SafeId<"mcpConnector">;
   verdict: AuthorizationResponseBindingVerdict;
 }) => {
   logger.info("mcp.oauth.binding_observed", {
     connectorId,
-    issuerHost: new URL(
-      binding.type === "issuer" ? binding.issuer : authorizationServerUrl,
-    ).hostname,
+    issuerHost: URL.parse(binding.expectedIssuer)?.hostname ?? null,
     registrationMode: binding.registrationMode,
     issSupportedAdvertised: binding.issSupportedAdvertised,
     issPresent: verdict.issPresent,
@@ -618,8 +614,9 @@ export const createMcpOAuthCallbackHandler = (
 
           const legacyBinding = {
             type: "unbound",
+            expectedIssuer: row.authorizationServerUrl,
             reason: "state_without_binding",
-            registrationMode: "pre_registered",
+            registrationMode: "unknown",
             issSupportedAdvertised: false,
           } satisfies AuthorizationResponseBinding;
           const binding = row.authorizationResponseBinding ?? legacyBinding;
@@ -628,7 +625,6 @@ export const createMcpOAuthCallbackHandler = (
             response: { issuer: input.iss },
             observe: (verdict) =>
               logAuthorizationResponseBindingObservation({
-                authorizationServerUrl: row.authorizationServerUrl,
                 binding,
                 connectorId: row.connectorId,
                 verdict,
