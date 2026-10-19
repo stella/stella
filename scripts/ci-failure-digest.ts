@@ -54,12 +54,24 @@ export type FailureLine = {
   readonly line?: number;
 };
 
+/**
+ * A failing Bun test as its run printed it: the Turbo scope (package name, or
+ * empty), the file header relative to that package, and the full test name.
+ * The flaky-test history resolves it to a repository path.
+ */
+export type FailedTest = {
+  readonly scope: string;
+  readonly file: string;
+  readonly name: string;
+};
+
 export type FailureRecord = {
   readonly job: string;
   readonly step: string;
   readonly kind: FailureKind;
   readonly url: string;
   readonly lines: readonly FailureLine[];
+  readonly tests: readonly FailedTest[];
 };
 
 // ---------------------------------------------------------------------------
@@ -176,22 +188,42 @@ const logLines = (rawLines: readonly string[]): LogLine[] =>
 export const POOLED_FAILURE_PREFIX = "FAILED check: ";
 const POOLED_FAILURE_SEPARATOR = " -- ";
 
+// The pool opens each check's log group with `<name>: <outcome> in <n> s`.
+const POOLED_GROUP_HEADER =
+  /^##\[group\](.*): (?:passed|FAILED(?: \(continue-on-error\))?) in [\d.]+ s$/u;
+
+type PooledFailureRecord = {
+  readonly name: string;
+  readonly cause: string;
+  /** The raw lines of the check's own log group, for its failed tests. */
+  readonly groupLines: readonly string[];
+};
+
 const pooledFailureRecords = (
   rawLines: readonly string[],
-): { name: string; cause: string }[] => {
-  const records: { name: string; cause: string }[] = [];
-  let grouped = false;
+): PooledFailureRecord[] => {
+  const records: PooledFailureRecord[] = [];
+  const groups = new Map<string, string[]>();
+  let group: string[] | undefined;
   for (const raw of rawLines) {
     const { text } = logLine(raw);
     if (text.startsWith("##[group]")) {
-      grouped = true;
+      group = [];
+      const name = POOLED_GROUP_HEADER.exec(text)?.[1];
+      if (name !== undefined) {
+        groups.set(name, group);
+      }
       continue;
     }
     if (text.startsWith("##[endgroup]")) {
-      grouped = false;
+      group = undefined;
       continue;
     }
-    if (grouped || !text.startsWith(POOLED_FAILURE_PREFIX)) {
+    if (group !== undefined) {
+      group.push(raw);
+      continue;
+    }
+    if (!text.startsWith(POOLED_FAILURE_PREFIX)) {
       continue;
     }
     const record = text.slice(POOLED_FAILURE_PREFIX.length);
@@ -200,14 +232,16 @@ const pooledFailureRecords = (
       continue;
     }
     // `%25` decodes last, so an escaped `%` never starts another escape.
+    const name = record
+      .slice(0, separator)
+      .replaceAll("%2D", "-")
+      .replaceAll("%0A", "\n")
+      .replaceAll("%0D", "\r")
+      .replaceAll("%25", "%");
     records.push({
-      name: record
-        .slice(0, separator)
-        .replaceAll("%2D", "-")
-        .replaceAll("%0A", "\n")
-        .replaceAll("%0D", "\r")
-        .replaceAll("%25", "%"),
+      name,
       cause: record.slice(separator + POOLED_FAILURE_SEPARATOR.length),
+      groupLines: groups.get(name) ?? [],
     });
   }
   return records;
@@ -243,6 +277,8 @@ export type TestFailure = {
   readonly name: string;
   readonly file?: string;
   readonly line?: number;
+  /** The Bun file header the result was printed under. */
+  readonly source?: string;
   readonly detail: readonly string[];
 };
 
@@ -406,10 +442,12 @@ export const testFailures = (rawLines: readonly string[]): TestFailure[] => {
       if (result[1] === "fail") {
         const block = cleanDetail(pending.get(scope) ?? []);
         const frame = firstFrame(block);
-        const file = frame?.path ?? currentFile.get(scope);
+        const source = currentFile.get(scope);
+        const file = frame?.path ?? source;
         failures.push({
           scope,
           name: result[2] ?? "",
+          ...(source === undefined ? {} : { source }),
           ...(file === undefined ? {} : { file: shortPath(file) }),
           ...(frame === undefined ? {} : { line: Number(frame.line) }),
           detail: block.filter((detail) => !isStackFrame(detail)),
@@ -481,6 +519,12 @@ export const testFailures = (rawLines: readonly string[]): TestFailure[] => {
   }
   return [...best.values()];
 };
+
+/** Failing Bun tests with the file header they were printed under. */
+export const failedTests = (rawLines: readonly string[]): FailedTest[] =>
+  testFailures(rawLines).flatMap(({ scope, source, name }) =>
+    source === undefined ? [] : [{ scope, file: source, name }],
+  );
 
 const where = (failure: TestFailure): string => {
   if (failure.file === undefined) {
@@ -1113,7 +1157,7 @@ export const buildDigest = ({ jobs, logFor }: DigestOptions): FailureRecord[] =>
       const pooled =
         segment === undefined ? [] : pooledFailureRecords(segment.lines);
       if (pooled.length > 0) {
-        return pooled.map(({ name, cause }) => {
+        return pooled.map(({ name, cause, groupLines }) => {
           const lines = [{ message: cause }];
           return {
             job: job.name,
@@ -1121,6 +1165,7 @@ export const buildDigest = ({ jobs, logFor }: DigestOptions): FailureRecord[] =>
             kind: classify(name, lines),
             url: job.html_url ?? "",
             lines,
+            tests: failedTests(groupLines),
           };
         });
       }
@@ -1138,6 +1183,7 @@ export const buildDigest = ({ jobs, logFor }: DigestOptions): FailureRecord[] =>
           kind: classify(step.name, lines),
           url: job.html_url ?? "",
           lines,
+          tests: segment === undefined ? [] : failedTests(segment.lines),
         },
       ];
     });
