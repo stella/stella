@@ -1,9 +1,10 @@
-import { panic } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { load } from "cheerio";
 import { isTag } from "domhandler";
 import * as slimdom from "slimdom";
 
 import { loadDocxArchive } from "@/api/lib/docx-archive";
+import { CompoundFile } from "@/api/lib/files/compound-file";
 import { DOCUMENT_METADATA_ENTRY_MAX_BYTES } from "@/api/lib/files/document-properties";
 import type { ConvertibleMime } from "@/api/lib/files/pdf-derivative-policy";
 
@@ -18,7 +19,8 @@ type ConversionInputResult =
 export type ConversionInputRefusal =
   | { kind: "external_reference" }
   | { kind: "unsupported_field"; fieldType: string }
-  | { kind: "legacy_format"; replacementExtension: ".xlsx" | ".pptx" };
+  | { kind: "legacy_format"; replacementExtension: ".xlsx" | ".pptx" }
+  | { kind: "inspection_failed" };
 
 type Detector = (bytes: Uint8Array) => Promise<boolean> | boolean;
 
@@ -847,36 +849,208 @@ const rtfHasExternalReference = (bytes: Uint8Array): boolean => {
   return false;
 };
 
-const binaryFieldsMatch = (bytes: Uint8Array, wide: boolean): boolean => {
-  const step = wide ? 2 : 1;
-  for (let cursor = 0; cursor + step <= bytes.length; cursor += step) {
-    if (bytes[cursor] !== 0x13 || (wide && bytes[cursor + 1] !== 0)) {
-      continue;
-    }
-    const field: number[] = [];
-    cursor += step;
-    while (cursor + step <= bytes.length) {
-      if (bytes[cursor] === 0x14 && (!wide || bytes[cursor + 1] === 0)) {
-        break;
-      }
-      if (!wide || bytes[cursor + 1] === 0) {
-        field.push(bytes[cursor] ?? 0);
-      }
-      cursor += step;
-    }
-    if (fieldInstructionIsRefused(latin1(new Uint8Array(field)))) {
-      return true;
-    }
-  }
-  return false;
+class LegacyWordParseError extends TaggedError("LegacyWordParseError")<{
+  message: string;
+}> {}
+
+const legacyWordError = (message: string): LegacyWordParseError =>
+  new LegacyWordParseError({ message });
+
+const checkedView = (
+  bytes: Uint8Array,
+  offset: number,
+  length: number,
+): Result<DataView, LegacyWordParseError> =>
+  offset < 0 || length < 0 || offset + length > bytes.byteLength
+    ? Result.err(legacyWordError("Legacy Word structure is out of bounds"))
+    : Result.ok(new DataView(bytes.buffer, bytes.byteOffset + offset, length));
+
+type WordPiece = {
+  cpStart: number;
+  cpEnd: number;
+  offset: number;
+  wide: boolean;
 };
 
-const docHasExternalReference = (bytes: Uint8Array): boolean =>
-  binaryFieldsMatch(bytes, false) || binaryFieldsMatch(bytes, true);
+const readWordPieces = (
+  word: Uint8Array,
+  table: Uint8Array,
+): Result<WordPiece[], LegacyWordParseError> =>
+  Result.gen(function* () {
+    const fib = yield* checkedView(word, 0, 426);
+    if (fib.getUint16(0, true) !== 0xa5_ec) {
+      return Result.err(legacyWordError("Legacy Word FIB is invalid"));
+    }
+    const fcClx = fib.getUint32(418, true);
+    const lcbClx = fib.getUint32(422, true);
+    if (lcbClx < 5 || fcClx + lcbClx > table.byteLength) {
+      return Result.err(legacyWordError("Legacy Word CLX is out of bounds"));
+    }
+    let cursor = fcClx;
+    const clxEnd = fcClx + lcbClx;
+    while (cursor < clxEnd && table[cursor] === 1) {
+      const prc = yield* checkedView(table, cursor, 3);
+      cursor += 3 + prc.getUint16(1, true);
+    }
+    const pcdt = yield* checkedView(table, cursor, 5);
+    if (pcdt.getUint8(0) !== 2) {
+      return Result.err(legacyWordError("Legacy Word piece table is missing"));
+    }
+    const plcBytes = pcdt.getUint32(1, true);
+    cursor += 5;
+    if (
+      plcBytes < 4 ||
+      (plcBytes - 4) % 12 !== 0 ||
+      cursor + plcBytes > clxEnd
+    ) {
+      return Result.err(legacyWordError("Legacy Word piece table is invalid"));
+    }
+    const pieceCount = (plcBytes - 4) / 12;
+    const plc = yield* checkedView(table, cursor, plcBytes);
+    const pieces: WordPiece[] = [];
+    for (let index = 0; index < pieceCount; index++) {
+      const cpStart = plc.getUint32(index * 4, true);
+      const cpEnd = plc.getUint32((index + 1) * 4, true);
+      const pcdOffset = (pieceCount + 1) * 4 + index * 8;
+      const encodedOffset = plc.getUint32(pcdOffset + 2, true);
+      const wide = Math.floor(encodedOffset / 0x40_00_00_00) % 2 === 0;
+      const offset = wide
+        ? encodedOffset % 0x40_00_00_00
+        : (encodedOffset % 0x40_00_00_00) / 2;
+      const byteLength = (cpEnd - cpStart) * (wide ? 2 : 1);
+      if (
+        cpEnd < cpStart ||
+        !Number.isInteger(offset) ||
+        offset + byteLength > word.byteLength
+      ) {
+        return Result.err(
+          legacyWordError("Legacy Word text piece is out of bounds"),
+        );
+      }
+      pieces.push({ cpStart, cpEnd, offset, wide });
+    }
+    return Result.ok(pieces);
+  });
+
+const wordRangeText = (
+  word: Uint8Array,
+  pieces: readonly WordPiece[],
+  rangeStart: number,
+  rangeEnd: number,
+): Result<string, LegacyWordParseError> => {
+  let value = "";
+  let coveredUntil = rangeStart;
+  for (const piece of pieces) {
+    const start = Math.max(rangeStart, piece.cpStart);
+    const end = Math.min(rangeEnd, piece.cpEnd);
+    if (start >= end) {
+      continue;
+    }
+    if (start !== coveredUntil) {
+      return Result.err(legacyWordError("Legacy Word text range has a gap"));
+    }
+    const unit = piece.wide ? 2 : 1;
+    const offset = piece.offset + (start - piece.cpStart) * unit;
+    const bytes = word.subarray(offset, offset + (end - start) * unit);
+    value += piece.wide
+      ? new TextDecoder("utf-16le").decode(bytes)
+      : latin1(bytes);
+    coveredUntil = end;
+  }
+  return coveredUntil === rangeEnd
+    ? Result.ok(value)
+    : Result.err(legacyWordError("Legacy Word text range is incomplete"));
+};
+
+const unsupportedFieldInText = (
+  source: string,
+): Result<string | null, LegacyWordParseError> => {
+  const stack: { instruction: string; separated: boolean }[] = [];
+  for (const character of source) {
+    if (character === "\u0013") {
+      stack.push({ instruction: "", separated: false });
+      continue;
+    }
+    if (character === "\u0014" || character === "\u0015") {
+      const field = stack.at(-1);
+      if (!field) {
+        continue;
+      }
+      if (!field.separated) {
+        const fieldType = unsupportedFieldType(field.instruction);
+        if (fieldType !== null) {
+          return Result.ok(fieldType);
+        }
+        field.separated = true;
+      }
+      if (character === "\u0015") {
+        stack.pop();
+      }
+      continue;
+    }
+    for (const field of stack) {
+      if (!field.separated) {
+        field.instruction += character;
+      }
+    }
+  }
+  return stack.length === 0
+    ? Result.ok(null)
+    : Result.err(legacyWordError("Legacy Word field is unfinished"));
+};
+
+const docUnsupportedFieldType = (
+  bytes: Uint8Array,
+): Result<string | null, LegacyWordParseError> =>
+  Result.gen(function* () {
+    const file = yield* CompoundFile.parse(bytes).mapError((error) =>
+      legacyWordError(error.message),
+    );
+    const wordEntry = file.streamEntries.find(
+      ({ path }) => path.length === 1 && path[0] === "WordDocument",
+    );
+    if (!wordEntry) {
+      return Result.err(
+        legacyWordError("Legacy Word document stream is missing"),
+      );
+    }
+    const word = yield* file
+      .readStream(wordEntry.entry)
+      .mapError((error) => legacyWordError(error.message));
+    const fib = yield* checkedView(word, 0, 426);
+    const tableName =
+      Math.floor(fib.getUint16(10, true) / 0x02_00) % 2 === 0
+        ? "0Table"
+        : "1Table";
+    const tableEntry = file.streamEntries.find(
+      ({ path }) => path.length === 1 && path[0] === tableName,
+    );
+    if (!tableEntry) {
+      return Result.err(legacyWordError("Legacy Word table stream is missing"));
+    }
+    const table = yield* file
+      .readStream(tableEntry.entry)
+      .mapError((error) => legacyWordError(error.message));
+    const pieces = yield* readWordPieces(word, table);
+    let cp = 0;
+    for (const offset of [76, 80, 84, 88, 92, 96, 100, 104]) {
+      const length = fib.getUint32(offset, true);
+      if (length === 0) {
+        continue;
+      }
+      const range = yield* wordRangeText(word, pieces, cp, cp + length);
+      const fieldType = yield* unsupportedFieldInText(range);
+      if (fieldType !== null) {
+        return Result.ok(fieldType);
+      }
+      cp += length;
+    }
+    return Result.ok(null);
+  });
 const safe = (): false => false;
 
 const DETECTORS = {
-  "application/msword": docHasExternalReference,
+  "application/msword": safe,
   "application/vnd.openxmlformats-officedocument.presentationml.presentation":
     ooxmlHasExternalReference,
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
@@ -933,6 +1107,23 @@ export const checkConversionInput = async (
         kind: "refuse",
         format: mime,
         reason: { kind: "unsupported_field", fieldType },
+      };
+    }
+  }
+  if (mime === "application/msword") {
+    const fieldType = docUnsupportedFieldType(bytes);
+    if (Result.isError(fieldType)) {
+      return {
+        kind: "refuse",
+        format: mime,
+        reason: { kind: "inspection_failed" },
+      };
+    }
+    if (fieldType.value !== null) {
+      return {
+        kind: "refuse",
+        format: mime,
+        reason: { kind: "unsupported_field", fieldType: fieldType.value },
       };
     }
   }

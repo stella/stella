@@ -71,9 +71,7 @@ export class ImageTranscodeError extends TaggedError("ImageTranscodeError")<{
   cause?: unknown;
 }> {}
 
-export type ConversionInputErrorReason =
-  | ConversionInputRefusal
-  | { kind: "inspection_failed" };
+export type ConversionInputErrorReason = ConversionInputRefusal;
 
 export class ConversionInputError extends TaggedError("ConversionInputError")<{
   message: string;
@@ -91,6 +89,8 @@ const conversionInputRefusalMessage = (
       return `The document field ${reason.fieldType} cannot be converted.`;
     case "legacy_format":
       return `Re-save this document as ${reason.replacementExtension} to convert it.`;
+    case "inspection_failed":
+      return "The document could not be inspected for conversion.";
     default:
       reason satisfies never;
       return panic("Unexpected conversion input refusal");
@@ -320,26 +320,24 @@ export const convertToPdf = async (
 
   if (isConvertibleMimeType(mimeType)) {
     const inspection = await Result.tryPromise({
-      try: async () => {
-        const input = await checkConversionInput(mimeType, bytes);
-        if (input.kind === "refuse") {
-          throw new ConversionInputError({
-            message: conversionInputRefusalMessage(input.reason),
-            reason: input.reason,
-          });
-        }
-      },
+      try: async () => await checkConversionInput(mimeType, bytes),
       catch: (cause) =>
-        cause instanceof ConversionInputError
-          ? cause
-          : new ConversionInputError({
-              message: "The document could not be inspected for conversion.",
-              reason: { kind: "inspection_failed" },
-              cause,
-            }),
+        new ConversionInputError({
+          message: "The document could not be inspected for conversion.",
+          reason: { kind: "inspection_failed" },
+          cause,
+        }),
     });
     if (Result.isError(inspection)) {
       return inspection;
+    }
+    if (inspection.value.kind === "refuse") {
+      return Result.err(
+        new ConversionInputError({
+          message: conversionInputRefusalMessage(inspection.value.reason),
+          reason: inspection.value.reason,
+        }),
+      );
     }
   }
 

@@ -217,7 +217,7 @@ describe("PDF conversion routes", () => {
       () => new Response(pdf),
       async () =>
         await convertToPdf(
-          fileOf(new TextEncoder().encode("doc"), "application/msword"),
+          fileOf(new TextEncoder().encode("doc"), "text/plain"),
         ),
     );
 
@@ -284,7 +284,7 @@ describe("PDF conversion routes", () => {
       () => new Response("busy", { status: 503 }),
       async () =>
         await convertToPdf(
-          fileOf(new TextEncoder().encode("doc"), "application/msword"),
+          fileOf(new TextEncoder().encode("doc"), "text/plain"),
           { retry: "caller" },
         ),
     );
@@ -451,7 +451,7 @@ describe("converter upload filenames", () => {
           await convertToPdf(
             namedFileOf(
               new TextEncoder().encode("doc"),
-              "application/msword",
+              "text/plain",
               "brief.doc",
             ),
           ),

@@ -3,6 +3,7 @@ import JSZip from "jszip";
 
 import { writeZipEntry } from "@stll/docx-utils";
 
+import { buildCompoundFile } from "@/api/lib/files/compound-file.test-fixture";
 import { checkConversionInput } from "@/api/lib/files/conversion-input";
 import type { ConvertibleMime } from "@/api/lib/files/pdf-derivative-policy";
 
@@ -17,7 +18,61 @@ const zip = async (path: string, value: string): Promise<Uint8Array> =>
 const binaryField = (instruction: string): Uint8Array =>
   new Uint8Array([0x13, ...encode(instruction), 0x14]);
 
-type Fixture = { mime: ConvertibleMime; remote: Uint8Array; local: Uint8Array };
+type DocPiece = { text: string; wide?: boolean };
+
+const legacyDoc = (
+  ranges: readonly string[],
+  piecesInput?: readonly DocPiece[],
+  extraStreams: { path: string[]; bytes: Uint8Array }[] = [],
+): Uint8Array => {
+  const pieces = piecesInput ?? [{ text: ranges.join("") }];
+  const word = new Uint8Array(2048);
+  const fib = new DataView(word.buffer);
+  fib.setUint16(0, 0xa5_ec, true);
+  for (const [index, range] of ranges.entries()) {
+    fib.setUint32(76 + index * 4, range.length, true);
+  }
+
+  const pieceCount = pieces.length;
+  const plcBytes = 4 + pieceCount * 12;
+  const table = new Uint8Array(5 + plcBytes);
+  const tableView = new DataView(table.buffer);
+  table[0] = 2;
+  tableView.setUint32(1, plcBytes, true);
+  fib.setUint32(418, 0, true);
+  fib.setUint32(422, table.byteLength, true);
+
+  let cp = 0;
+  let wordOffset = 512;
+  for (const [index, piece] of pieces.entries()) {
+    tableView.setUint32(5 + index * 4, cp, true);
+    const bytes = piece.wide
+      ? new Uint8Array(Buffer.from(piece.text, "utf16le"))
+      : new Uint8Array(Buffer.from(piece.text, "latin1"));
+    const pcdOffset = 5 + (pieceCount + 1) * 4 + index * 8;
+    tableView.setUint32(
+      pcdOffset + 2,
+      piece.wide ? wordOffset : 0x40_00_00_00 + wordOffset * 2,
+      true,
+    );
+    word.set(bytes, wordOffset);
+    wordOffset += bytes.byteLength;
+    cp += piece.text.length;
+  }
+  tableView.setUint32(5 + pieceCount * 4, cp, true);
+  return buildCompoundFile([
+    { path: ["WordDocument"], bytes: word },
+    { path: ["0Table"], bytes: table },
+    ...extraStreams,
+  ]);
+};
+
+type Fixture = {
+  mime: ConvertibleMime;
+  remote: Uint8Array;
+  local: Uint8Array;
+  remoteReason?: "external_reference" | "unsupported_field";
+};
 
 const fixtures = {
   ooxml: {
@@ -69,12 +124,90 @@ const fixtures = {
   },
   doc: {
     mime: "application/msword",
-    remote: binaryField("INCLUDETEXT https://example.test/content"),
-    local: encode("important link HYPERLINK https://example.test/terms"),
+    remote: legacyDoc(["\u0013INCLUDETEXT file.doc\u0015"]),
+    local: legacyDoc(["\u0013HYPERLINK https://example.test/terms\u0015"]),
+    remoteReason: "unsupported_field",
   },
 } as const satisfies Record<string, Fixture>;
 
 describe("document conversion input", () => {
+  test("legacy Word reads compressed and wide text pieces", async () => {
+    const first = "\u0013PAGE\u0015";
+    const second = "\u0013HYPERLINK https://example.test\u0015";
+    expect(
+      await checkConversionInput(
+        "application/msword",
+        legacyDoc(
+          [first + second],
+          [{ text: first }, { text: second, wide: true }],
+        ),
+      ),
+    ).toEqual({ kind: "convert" });
+  });
+
+  test.each(["INCLUDEPICTURE", "INCLUDETEXT"])(
+    "legacy Word refuses a %s field by name",
+    async (fieldType) => {
+      expect(
+        await checkConversionInput(
+          "application/msword",
+          legacyDoc([`\u0013${fieldType} file\u0014result\u0015`]),
+        ),
+      ).toEqual({
+        kind: "refuse",
+        format: "application/msword",
+        reason: { kind: "unsupported_field", fieldType },
+      });
+    },
+  );
+
+  test("legacy Word checks nested field instructions", async () => {
+    expect(
+      await checkConversionInput(
+        "application/msword",
+        legacyDoc(["\u0013IF \u0013INCLUDEPICTURE file\u0015 = x\u0015"]),
+      ),
+    ).toMatchObject({
+      kind: "refuse",
+      reason: { kind: "unsupported_field", fieldType: "INCLUDEPICTURE" },
+    });
+  });
+
+  test("legacy Word checks footnote text independently", async () => {
+    expect(
+      await checkConversionInput(
+        "application/msword",
+        legacyDoc(["main", "\u0013INCLUDETEXT file\u0015"]),
+      ),
+    ).toMatchObject({
+      kind: "refuse",
+      reason: { kind: "unsupported_field", fieldType: "INCLUDETEXT" },
+    });
+  });
+
+  test("legacy Word ignores field bytes outside document text", async () => {
+    expect(
+      await checkConversionInput(
+        "application/msword",
+        legacyDoc(["ordinary text"], undefined, [
+          { path: ["Data"], bytes: binaryField("INCLUDETEXT file") },
+        ]),
+      ),
+    ).toEqual({ kind: "convert" });
+  });
+
+  test("legacy Word refuses a truncated piece table", async () => {
+    const input = legacyDoc(["text"]);
+    const truncated = input.slice(0, input.byteLength - 64);
+    expect(await checkConversionInput("application/msword", truncated)).toEqual(
+      {
+        kind: "refuse",
+        format: "application/msword",
+        reason: { kind: "inspection_failed" },
+      },
+    );
+  });
+
   test("keeps qualified XML names centralized", async () => {
     const source = await Bun.file(
       new URL("conversion-input.ts", import.meta.url),
@@ -95,7 +228,9 @@ describe("document conversion input", () => {
       const result = await checkConversionInput(fixture.mime, fixture.remote);
       expect(result.kind).toBe("refuse");
       if (result.kind === "refuse") {
-        expect(result.reason.kind).toBe("external_reference");
+        expect(result.reason.kind).toBe(
+          fixture.remoteReason ?? "external_reference",
+        );
       }
     },
   );
