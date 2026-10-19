@@ -447,6 +447,9 @@ describe("answer source classification", () => {
         country: "CZE",
         court: "Ústavní soud",
         decisionId,
+        language: null,
+        languageAlternates: null,
+        slug: null,
       }),
     );
     const result = collectSourceChipEntries({
@@ -536,7 +539,7 @@ describe("answer source classification", () => {
     ]);
   });
 
-  test.each([
+  test.each<[string, string | undefined, string]>([
     ["SCOTUS", "supreme", "supreme"],
     ["KSBR", "regional", "regional"],
     ["NS", undefined, "supreme"],
