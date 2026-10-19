@@ -538,7 +538,9 @@ export const publicCaseLawRoute = new Elysia({
     query: listDecisionCitations.config.query,
     response: listDecisionCitations.config.response,
     beforeHandle: ({ query }) =>
-      rejectInvalidCursor(query.cursor, decodeCitationCursor),
+      rejectInvalidCursor(query.cursor, (cursor) =>
+        decodeCitationCursor(cursor, query),
+      ),
   })
   .get(
     "/decisions/:decisionId/citations/summary",

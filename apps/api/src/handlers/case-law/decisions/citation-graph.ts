@@ -281,6 +281,21 @@ export const decodeCitationCursor = (
 export const encodeCitationCursor = (id: SafeId<"caseLawCitation">): string =>
   encodePaginationCursor([id]);
 
+/** The citation page cursor `decodeCitationCursor` accepts: bound to its filter. */
+export const encodeCitationPageCursor = ({
+  id,
+  query,
+}: {
+  id: SafeId<"caseLawCitation">;
+  query: Omit<ListDecisionCitationsQuery, "cursor">;
+}): string =>
+  encodePaginationCursor([
+    id,
+    query.direction,
+    query.doctrine ?? null,
+    query.polarity ?? null,
+  ]);
+
 type ScannedRow = {
   id: SafeId<"caseLawCitation">;
   citationText: string;
@@ -335,12 +350,7 @@ const createScannedPage = ({
     limit,
     nextCursor:
       rows.length > limit && lastScanned !== undefined
-        ? encodePaginationCursor([
-            lastScanned.id,
-            query.direction,
-            query.doctrine ?? null,
-            query.polarity ?? null,
-          ])
+        ? encodeCitationPageCursor({ id: lastScanned.id, query })
         : null,
   };
 };

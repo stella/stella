@@ -17,6 +17,7 @@ import { env } from "@/api/env";
 import {
   decodeCitationCursor,
   encodeCitationCursor,
+  encodeCitationPageCursor,
 } from "@/api/handlers/case-law/decisions/citation-graph";
 import {
   decodeDecisionCitationCursor,
@@ -212,6 +213,7 @@ const TEST_DOCUMENT_ID = brandPersistedLegislationDocumentId(
   "00000000-0000-4000-8000-000000000003",
 );
 const TEST_CONTEXT = "a".repeat(64);
+const CITATION_QUERY = { direction: "outgoing" } as const;
 
 const publicCursorRouteKey = (method: string, path: string, field: string) =>
   `${method} ${path}#${field}`;
@@ -599,7 +601,10 @@ describe("public case-law route boundary", () => {
             decodeDecisionDateCursor,
             encodePaginationCursor(["2026-01-01", id]),
           ],
-          [decodeCitationCursor, encodePaginationCursor([id])],
+          [
+            (cursor: string) => decodeCitationCursor(cursor, CITATION_QUERY),
+            encodePaginationCursor([id, CITATION_QUERY.direction, null, null]),
+          ],
           [
             decodeCitingDecisionsCursor,
             encodePaginationCursor([TEST_CONTEXT, "2026-01-01", id]),
@@ -631,7 +636,13 @@ describe("public case-law route boundary", () => {
               id: TEST_DECISION_ID,
             }),
           ),
-          decodeCitationCursor(encodeCitationCursor(TEST_CITATION_ID)),
+          decodeCitationCursor(
+            encodeCitationPageCursor({
+              id: TEST_CITATION_ID,
+              query: CITATION_QUERY,
+            }),
+            CITATION_QUERY,
+          ),
           decodeDecisionCitationCursor(
             encodeDecisionCitationCursor({
               from: {
