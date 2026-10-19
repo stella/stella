@@ -8,16 +8,6 @@ import { classifyAuthSessionPath } from "@/api/lib/auth/session-path-classificat
 
 const BASE_URL = "http://localhost:3001";
 
-const isSessionCandidatePath = (path: string): boolean =>
-  path.startsWith("/sign-in/") ||
-  path.startsWith("/sign-up/") ||
-  path.startsWith("/callback/") ||
-  path === "/verify-email" ||
-  path === "/email-otp/verify-email" ||
-  path.startsWith("/magic-link/") ||
-  path.startsWith("/one-tap/") ||
-  path.startsWith("/oauth2/");
-
 describe("auth session paths", () => {
   test("classifies every auth endpoint", () => {
     const auth = getAuth();
@@ -25,7 +15,6 @@ describe("auth session paths", () => {
     const unclassified = Object.values(auth.api)
       .map((endpoint) => endpoint.path)
       .filter((path): path is string => typeof path === "string")
-      .filter(isSessionCandidatePath)
       .filter(
         (path) =>
           !disabledPaths.has(path) &&
@@ -33,6 +22,16 @@ describe("auth session paths", () => {
       );
 
     expect(unclassified).toEqual([]);
+  });
+
+  test("configures every social provider for authorization redirects", () => {
+    const socialProviders = Object.values(
+      getAuth().options.socialProviders ?? {},
+    );
+
+    for (const provider of socialProviders) {
+      expect(provider.disableIdTokenSignIn).toBe(true);
+    }
   });
 
   test("social sign-in uses provider authorization redirects", async () => {
