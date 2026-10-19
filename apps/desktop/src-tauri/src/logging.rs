@@ -10,7 +10,7 @@
 //! platform log directory. It carries levels, event names and codes only:
 //! see `TrailLayer`.
 
-use std::fs::{self, File, OpenOptions};
+use std::fs::{self, File};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -239,7 +239,7 @@ impl RollingLog {
         fs::remove_file(&to)?;
       }
       if from.exists() {
-        fs::rename(&from, &to)?;
+        crate::local_store::rename_private(&from, &to)?;
       }
     }
     self.file = open_append(&self.path)?;
@@ -275,9 +275,7 @@ impl Write for RollingLog {
 // Log lines can name documents and accounts, so the file is private to
 // the user like the rest of the app data.
 fn open_append(path: &Path) -> io::Result<File> {
-  let mut options = OpenOptions::new();
-  options.create(true).append(true);
-  crate::local_store::open_private(&mut options, path)
+  crate::local_store::open_private(crate::local_store::OpenMode::Append, path)
 }
 
 /// Logs `cause` as the reason for `what`. Only for causes whose text carries

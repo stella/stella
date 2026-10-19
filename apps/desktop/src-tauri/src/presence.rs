@@ -120,33 +120,28 @@ fn load_desktop_id_with(
   crate::local_store::create_private_dir(parent)?;
   let id = Uuid::new_v4();
   let staged = parent.join(format!(".desktop-presence-id-{id}.tmp"));
-  let mut file = crate::local_store::open_private(
-    std::fs::OpenOptions::new().write(true).create_new(true),
-    &staged,
-  )?;
+  let mut file =
+    crate::local_store::open_private(crate::local_store::OpenMode::CreateNew, &staged)?;
   let result = (|| {
     file.write_all(id.to_string().as_bytes())?;
     file.sync_all()?;
     // Close before publication so Windows can rename and remove the temporary file.
     drop(file);
     before_publish(&staged);
-    match std::fs::hard_link(&staged, path) {
+    match crate::local_store::link_private(&staged, path) {
       Ok(()) => Ok(id),
       Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
         // Lock a stable sibling, not the inode replaced by the repair's rename.
         // Never remove the lock file: all concurrent repairs must lock the same inode.
         let repair_lock = crate::local_store::open_private(
-          std::fs::OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(false),
+          crate::local_store::OpenMode::Lock,
           &path.with_extension("lock"),
         )?;
         repair_lock.lock()?;
         if let Some(winner) = read_desktop_id(path)? {
           return Ok(winner);
         }
-        std::fs::rename(&staged, path)?;
+        crate::local_store::rename_private(&staged, path)?;
         Ok(id)
       }
       Err(error) => Err(error),

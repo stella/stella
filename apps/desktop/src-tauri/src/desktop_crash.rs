@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::{
-  fs::{self, OpenOptions},
+  fs,
   io::{self, Read},
   path::{Path, PathBuf},
   sync::{Arc, Mutex},
@@ -453,10 +453,10 @@ fn lock_run(path: &Path) -> io::Result<Option<RunLock>> {
     io::Error::new(io::ErrorKind::InvalidInput, "missing marker directory")
   })?;
   crate::local_store::create_private_dir(parent)?;
-  let mut options = OpenOptions::new();
-  options.read(true).write(true).create(true).truncate(false);
-  let file =
-    crate::local_store::open_private(&mut options, &path.with_extension("lock"))?;
+  let file = crate::local_store::open_private(
+    crate::local_store::OpenMode::Lock,
+    &path.with_extension("lock"),
+  )?;
   match file.try_lock() {
     Ok(()) => Ok(Some(RunLock {
       path: path.to_path_buf(),

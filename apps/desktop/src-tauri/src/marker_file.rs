@@ -55,14 +55,14 @@ impl MarkerFile {
       .map_err(|error| format!("marker file directory failed: {error}"))?;
 
     match crate::local_store::open_private(
-      fs::OpenOptions::new().write(true).create_new(true),
+      crate::local_store::OpenMode::CreateNew,
       path,
     ) {
       Ok(_) => Ok(()),
       Err(error)
         if error.kind() == ErrorKind::AlreadyExists && is_regular_marker(path) =>
       {
-        crate::local_store::open_private(fs::OpenOptions::new().read(true), path)
+        crate::local_store::open_private(crate::local_store::OpenMode::Read, path)
           .map(|_| ())
           .map_err(|error| format!("marker file open failed: {error}"))
       }
