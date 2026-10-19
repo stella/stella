@@ -206,13 +206,13 @@ const conditionContext = (profile: string, event: string, depth: string) => {
     "needs.ci-plan.outputs.suite_depth": depth,
     "needs.ci-plan.outputs.queue_depth": "full",
     "needs.ci-plan.outputs.trusted": "true",
-    "needs.ci-plan.outputs.e2e_production_required": "true",
   };
   for (const name of Object.keys(workflow.jobs)) {
     values[`needs.${name}.result`] = "success";
   }
   const scopes = source.matchAll(
-    /needs\.ci-plan\.outputs\.([a-z_]+_required)/gu,
+    // Scope names carry digits (`e2e_landing_required`).
+    /needs\.ci-plan\.outputs\.([a-z0-9_]+_required)/gu,
   );
   for (const match of scopes) {
     const scope = match.at(1);
