@@ -253,6 +253,7 @@ runtime validation, or integration tests.
 
 ### Architecture, configuration, AI, and type safety
 
+- [`no-model-timeout-abort-signal`](./no-model-timeout-abort-signal.ts) (`no-model-timeout-abort-signal`): rejects `AbortSignal.timeout(...)` inside the `abortSignal` option of direct `generateTanStack*` calls; model-call time limits use `deadlineMs` so they retain typed deadline semantics.
 - [`ai-output-strict-schema`](./ai-output-strict-schema.ts) (`ai-output-strict-schema`): requires AI structured-output schemas to reject unknown properties instead of silently accepting model drift.
 - [`require-complete-compaction-generation`](./require-complete-compaction-generation.ts) (`require-complete-compaction-generation`): requires every compaction-owned text generation call to apply the shared compaction request (complete-output policy, sized ceiling, bounded prompt) before its durable checkpoint can advance.
 - [`confine-owner`](./confine-owner.ts) (`confine-owner`): confines each capability in `scripts/ownership.ts` to the module that owns it; the same table renders `docs/module-ownership.md`, and a bypass is an `allowed` entry with a reason rather than a new rule.
