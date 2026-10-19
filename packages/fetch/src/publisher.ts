@@ -129,6 +129,13 @@ type RobotsState =
   | { type: "unavailable"; cause?: unknown };
 type CachedRobots = { expiresAt: number; state: RobotsState };
 
+/** Every robots refusal a licensed policy may bypass, each only with an audit record. */
+export type PublisherBypassableRefusal =
+  | RobotsUnavailableError
+  | CrawlDelayUnsupportedError
+  | AgentExcludedError
+  | RobotsDisallowedError;
+
 const publisherPolicyFor = (
   state: RobotsState,
   url: URL,
@@ -136,7 +143,7 @@ const publisherPolicyFor = (
 ): {
   decision?: PublisherRobotsDecision;
   intervalMs: number;
-  refusal?: PublisherPolicyError;
+  refusal?: PublisherBypassableRefusal;
 } => {
   if (state.type === "unavailable") {
     return {

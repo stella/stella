@@ -9,6 +9,7 @@ import {
   evaluatePublisherRobots,
   readBoundedBody,
 } from "./publisher";
+import type { PublisherBypassableRefusal } from "./publisher";
 
 describe("RFC 9309 matching", () => {
   test("linear wildcard matching agrees with a dynamic-programming reference", () => {
@@ -614,6 +615,91 @@ describe("publisher scheduler", () => {
     expect(outcome.isOk()).toBe(true);
     expect(resources).toBe(1);
   });
+
+  // Total over the bypassable refusals: a new kind cannot land without a case.
+  const BYPASS_CASES = {
+    robots_disallowed: () => new Response("User-agent: *\nDisallow: /"),
+    agent_excluded: () => new Response("User-agent: stella\nDisallow: /"),
+    crawl_delay_unsupported: () =>
+      new Response("User-agent: *\nCrawl-delay: 3600"),
+    robots_unavailable: () => new Response("unavailable", { status: 503 }),
+  } as const satisfies Record<
+    PublisherBypassableRefusal["_tag"],
+    () => Response
+  >;
+  const licensedPolicy = {
+    type: "licensed" as const,
+    basis: "publisher agreement",
+    evidenceUrl: "https://publisher.example/license",
+  };
+
+  test.each(Object.entries(BYPASS_CASES))(
+    "every licensed bypass of %s requires an awaited audit record",
+    async (tag, robots) => {
+      const sinks = {
+        missing: undefined,
+        rejecting: async () => {
+          await Promise.resolve();
+          throw new Error("audit store unavailable");
+        },
+      };
+      for (const [name, onTelemetry] of Object.entries(sinks)) {
+        const requested: string[] = [];
+        const request = createPolitePublisherFetch({
+          validateTarget: allowTarget,
+          clock: { now: () => 0, sleep: async () => undefined },
+          ...(onTelemetry === undefined ? {} : { onTelemetry }),
+          fetcher: async (input) => {
+            requested.push(input.url.pathname);
+            return input.url.pathname === "/robots.txt"
+              ? robots()
+              : new Response("licensed document");
+          },
+          defaultMinimumIntervalMs: 0,
+        });
+        const outcome = await request("https://publisher.example/one", {
+          policy: licensedPolicy,
+        });
+        expect({
+          name,
+          tag: Result.isError(outcome) && outcome.error._tag,
+        }).toEqual({
+          name,
+          tag: "publisher_bypass_unaudited",
+        });
+        expect({ name, requested }).toEqual({
+          name,
+          requested: ["/robots.txt"],
+        });
+      }
+
+      const recorded: string[] = [];
+      const requested: string[] = [];
+      const request = createPolitePublisherFetch({
+        validateTarget: allowTarget,
+        clock: { now: () => 0, sleep: async () => undefined },
+        onTelemetry: async (event) => {
+          await Promise.resolve();
+          recorded.push(event.refusal._tag);
+        },
+        fetcher: async (input) => {
+          requested.push(input.url.pathname);
+          return input.url.pathname === "/robots.txt"
+            ? robots()
+            : new Response("licensed document");
+        },
+        defaultMinimumIntervalMs: 0,
+      });
+      const outcome = await request("https://publisher.example/one", {
+        policy: licensedPolicy,
+      });
+      expect(outcome.isOk() && outcome.value.robotsDecision).toBe(
+        "licensed_bypass",
+      );
+      expect(recorded).toEqual([tag]);
+      expect(requested).toEqual(["/robots.txt", "/one"]);
+    },
+  );
 
   test("a CR-only robots.txt still refuses a disallowed resource", async () => {
     const requested: string[] = [];
