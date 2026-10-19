@@ -60,7 +60,7 @@ pub fn partition_sessions(
   let mut retired = Vec::new();
   for mut session in sessions {
     match session.account_owner.take() {
-      Some(owner) if current == Some(&owner) => {
+      Some(_owner) if current.is_some() => {
         active.push(OwnedSession { owner, session })
       }
       owner => {
