@@ -18,10 +18,7 @@ import {
   chatAnswerDecisionTargets,
   chatAnswerMarkdownDocuments,
 } from "@/components/chat/chat-decision-citations.logic";
-import type {
-  ChatToolCallPart,
-  ChatUIMessage,
-} from "@/components/chat/chat-ui-tools";
+import type { ChatToolCallPart } from "@/components/chat/chat-ui-tools";
 import type {
   BusinessRegistrySourceReference,
   CaseLawDecisionSourceReference,
@@ -36,7 +33,7 @@ export type SourceDocumentEntry = {
   id?: string | undefined;
 };
 
-export type CaseLawSourceMetadata = {
+type CaseLawSourceMetadata = {
   caseNumber: string;
   court: string;
   courtShortCode: string;
@@ -78,10 +75,12 @@ const CZECH_COURT_TIER_BY_SHORT_CODE = {
   OS: "other",
 } as const satisfies Readonly<Record<string, CourtTierLabel>>;
 
+const czechCourtTiers: ReadonlyMap<string, CourtTierLabel> = new Map(
+  Object.entries(CZECH_COURT_TIER_BY_SHORT_CODE),
+);
+
 export const courtTierForSource = (courtShortCode: string): CourtTierLabel =>
-  CZECH_COURT_TIER_BY_SHORT_CODE[
-    courtShortCode as keyof typeof CZECH_COURT_TIER_BY_SHORT_CODE
-  ] ?? "other";
+  czechCourtTiers.get(courtShortCode) ?? "other";
 
 const isCourtTierLabel = (value: unknown): value is CourtTierLabel =>
   typeof value === "string" && COURT_TIER_LABELS.some((tier) => tier === value);
@@ -595,8 +594,7 @@ export const collectSourceChipEntries = ({
     return true;
   });
   const uniqueExternalSources = dedupeExternalSources(externalSources);
-  const message = { parts } as ChatUIMessage;
-  const markdownDocuments = chatAnswerMarkdownDocuments(message);
+  const markdownDocuments = chatAnswerMarkdownDocuments({ parts });
   const hrefs = new Set(markdownDocuments.flatMap(chatAnswerCitationHrefs));
   const decisionIds = new Set(
     chatAnswerDecisionTargets({

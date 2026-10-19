@@ -11,9 +11,9 @@ import type { CaseLawDecisionRouteParams } from "@stll/api-contract/case-law-dec
 import { resolveLegalCitationLinks } from "@stll/api-contract/legal-citation-links";
 
 import { isOpaquePersistedChatToolCallPart } from "@/components/chat/chat-ui-tools";
-import type { ChatUIMessage } from "@/components/chat/chat-ui-tools";
 import type { ExternalSourceReference } from "@/components/chat/external-source-store";
 import { referenceFromHref } from "@/components/references/reference.logic";
+import type { ChatMessage } from "@/lib/api-contract";
 
 /** Uses the same CommonMark/GFM link grammar as the answer renderer, excluding code and unused definitions. */
 export const chatAnswerCitationHrefs = (markdown: string) => {
@@ -138,9 +138,17 @@ export type ChatAnswerDecisionTarget =
   | { type: "id"; decisionId: string }
   | { type: "route"; params: CaseLawDecisionRouteParams };
 
+const askUserAnalysis = (input: unknown) =>
+  typeof input === "object" &&
+  input !== null &&
+  "analysis" in input &&
+  typeof input.analysis === "string"
+    ? input.analysis
+    : undefined;
+
 /** Only fields actually handed to a Markdown renderer contribute links. */
 export const chatAnswerMarkdownDocuments = (
-  message: ChatUIMessage,
+  message: Pick<ChatMessage, "parts">,
   isAwaitingUser = false,
 ) => {
   const text: string[] = [];
@@ -155,10 +163,12 @@ export const chatAnswerMarkdownDocuments = (
       part.name === "ask-user" &&
       part.state !== "input-streaming" &&
       (isAwaitingUser ||
-        (part.state === "complete" && part.output !== undefined)) &&
-      part.input?.analysis
+        (part.state === "complete" && part.output !== undefined))
     ) {
-      text.push(part.input.analysis);
+      const analysis = askUserAnalysis(part.input);
+      if (analysis) {
+        text.push(analysis);
+      }
     }
   }
   return text;
