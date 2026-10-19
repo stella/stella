@@ -3,7 +3,10 @@ import type { OwnershipEntry } from "../ownership-types.ts";
 export default {
   id: "transaction-proof-minting",
   capability: "Minting transaction-bound checked proofs",
-  owner: ["apps/api/src/lib/proofs/checked-transaction.ts"],
+  owner: [
+    "apps/api/src/lib/proofs/checked-transaction.ts",
+    "apps/api/src/lib/workspaces/matter-access-proof.ts",
+  ],
   summary:
     "The shared proof core names the actor, entity and transaction, runs the trusted predicate, and supplies evidence only after success. Predicate modules retain their domain checks.",
   enforcement: {

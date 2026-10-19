@@ -724,6 +724,7 @@ describe.serial("transaction proof ownership", () => {
       'export * from "@gdp-ts/core";',
       'const { defineProof } = await import("@gdp-ts/core");',
       'import { name, type Named, type Proof } from "@gdp-ts/core";',
+      'import { defineProof } from "@gdp-ts/core"; const readable = defineProof("MatterReadable"); const writable = defineProof("MatterWritable");',
     ].join("\n");
     const rejectedPaths = [
       "apps/api/src/lib/signals/proofs/second-mint.ts",
@@ -743,7 +744,7 @@ describe.serial("transaction proof ownership", () => {
       Object.fromEntries(
         sourcePaths.map((sourcePath) => [
           sourcePath,
-          rejectedPaths.includes(sourcePath) ? [1, 2, 3, 4, 5] : [],
+          rejectedPaths.includes(sourcePath) ? [1, 2, 3, 4, 5, 7] : [],
         ]),
       ),
     );

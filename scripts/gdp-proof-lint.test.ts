@@ -240,3 +240,24 @@ describe("GDP proof anti-forgery rules", () => {
     ).toHaveLength(0);
   });
 });
+
+describe("matter access proof ownership", () => {
+  test("rejects matter proof construction and exported provers outside the owner", async () => {
+    const assertionViolations = await messages(
+      `import type { Proof } from "@gdp-ts/core";
+       const read = {} as Proof<"MatterReadable", [unknown, unknown, unknown, unknown]>;
+       const write = {} as Proof<"MatterWritable", [unknown, unknown, unknown, unknown]>;`,
+      ["no-proof-assertion"],
+    );
+    expect(assertionViolations).toHaveLength(2);
+
+    const exportViolations = await messages(
+      `import { defineProof } from "@gdp-ts/core";
+       const MatterReadableProver = defineProof("MatterReadable");
+       const MatterWritableProver = defineProof("MatterWritable");
+       export { MatterReadableProver, MatterWritableProver };`,
+      ["no-exported-prover"],
+    );
+    expect(exportViolations).toHaveLength(2);
+  });
+});

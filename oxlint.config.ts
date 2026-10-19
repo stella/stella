@@ -1780,7 +1780,10 @@ const config = defineConfig({
       rules: { "no-test-support-import/no-test-support-import": "error" },
     },
     {
-      files: ["apps/api/src/lib/proofs/checked-transaction.ts"],
+      files: [
+        "apps/api/src/lib/proofs/checked-transaction.ts",
+        "apps/api/src/lib/workspaces/matter-access-proof.ts",
+      ],
       rules: {
         "gdp-ts/no-define-proof": "off",
         "gdp-ts/no-exported-prover": "error",
