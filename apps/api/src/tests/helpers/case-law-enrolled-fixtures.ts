@@ -2724,17 +2724,46 @@ export const plUokikRulingFixture = (): EnrolledAdapterFixture => ({
 export const czUohsFixture = (): EnrolledAdapterFixture => ({
   rawFieldValues: {},
   buildDecision: async () => {
-    const payload = await Bun.file(
+    const document = new Uint8Array(
+      await Bun.file(
+        new URL(
+          "../../handlers/case-law/ingestion/adapters/__fixtures__/cz-uohs-decision.pdf",
+          import.meta.url,
+        ),
+      ).arrayBuffer(),
+    );
+    globalThis.fetch = asFetchMock(
+      async () => await Promise.resolve(new Response(document)),
+    );
+    const payload: unknown = await Bun.file(
       new URL(
         "../../handlers/case-law/ingestion/adapters/__fixtures__/cz-uohs-decisions.jsonld",
         import.meta.url,
       ),
     ).json();
-    const record = parseCzUohsListing(payload)[1];
-    return await buildCzUohsDecision(
-      record ?? panic("the ÚOHS fixture lost its second record"),
+    const record = parseCzUohsListing(payload)[0];
+    const decision = await buildCzUohsDecision(
+      record ?? panic("the ÚOHS fixture lost its first record"),
       "2026-10-19T00:00:00Z",
     );
+    const objects = Object.fromEntries(
+      Object.entries(decision.sourceRawObjects ?? {}).map(
+        ([part, { bytes, contentType }]) => [
+          part,
+          sourceBinaryRef({
+            family: RAW_SOURCE_FAMILY.CASE_LAW,
+            sourceId: ADAPTER_KEYS.CZ_UOHS,
+            documentId: decision.sourceDocumentId ?? "cz-uohs-fixture",
+            bytes,
+            contentType,
+          }),
+        ],
+      ),
+    );
+    return {
+      ...decision,
+      sourceRaw: withSourceRawObjects(decision.sourceRaw ?? "", objects),
+    };
   },
 });
 

@@ -10,15 +10,19 @@ import {
   EMPTY_AST,
   encodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  SOURCE_TOTAL_PROBE_FAILURE,
+  sourceTotalProbeFailed,
   sourceTotalRead,
   storedSourceSurface,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
+import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import {
   readPublisherBytes,
   readPublisherText,
   unreadPublisherError,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
+import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { normalizeDecisionIdentifierValue } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import {
   extractPlSnLines,
@@ -30,7 +34,13 @@ import {
   checkedDecisionMetadata,
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
-import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import {
+  READ_OUTCOME_METADATA_KEY,
+  storedReadUnavailable,
+  type StoredReadOutcome,
+  UNAVAILABLE_CYCLES_BEFORE_MARKING,
+} from "@/api/lib/errors/read-outcome";
+import type { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import {
   ADAPTER_KEYS,
@@ -44,8 +54,8 @@ import { isRecord } from "@/api/lib/type-guards";
 const LISTING_URL = "https://uohs.gov.cz/opendata/rozhodnuti.jsonld";
 const ORIGIN = "https://uohs.gov.cz";
 const HOST_POLICY = { type: "exact-origin", origins: [ORIGIN] } as const;
-const raise = <T>(error: unknown): T => Result.err<T>(error).unwrap();
 const PAGE_SIZE = 20;
+const CURSOR_VERSION = 1;
 
 export const CZ_UOHS_COLLECTIONS = [
   "hospodarska-soutez",
@@ -83,18 +93,10 @@ const recordSchema = v.looseObject({
 });
 type CzUohsRecord = v.InferOutput<typeof recordSchema>;
 
-export const parseCzUohsListing = (payload: unknown): CzUohsRecord[] => {
-  if (!isRecord(payload) || !Array.isArray(payload["rozhodnutí"])) {
-    return raise(
-      new AdapterFetchError({
-        message: "ÚOHS listing has no rozhodnutí array",
-        adapterKey: ADAPTER_KEYS.CZ_UOHS,
-        cursor: null,
-      }),
-    );
-  }
-  return v.parse(v.array(recordSchema), payload["rozhodnutí"]);
-};
+const listingSchema = v.looseObject({ rozhodnutí: v.array(recordSchema) });
+
+export const parseCzUohsListing = (payload: unknown): CzUohsRecord[] =>
+  v.parse(listingSchema, payload).rozhodnutí;
 
 export const czUohsCollectionOf = (
   record: Pick<CzUohsRecord, "odbor">,
@@ -103,11 +105,11 @@ export const czUohsCollectionOf = (
     .map(collectionFromUrl)
     .filter((value): value is CzUohsCollection => value !== undefined);
   if (values.length !== 1) {
-    return raise(
+    return panic(
       new CzUohsUnknownCollectionError({
         message: "ÚOHS decision has an unknown odbor",
         odbor: record.odbor,
-      }),
+      }).message,
     );
   }
   return values.at(0) ?? panic("validated ÚOHS collection disappeared");
@@ -124,20 +126,23 @@ const publisherReadOptions = (
   redirect: "error" as const,
 });
 
-const readListingText = async (signal?: AbortSignal): Promise<string> => {
+const readListingText = async (
+  cursor: string | null,
+  signal?: AbortSignal,
+): Promise<Result<string, AdapterFetchError>> => {
   const outcome = await readPublisherText(
     LISTING_URL,
     publisherReadOptions("listing", signal),
   );
   if (outcome.type === "present") {
-    return outcome.value;
+    return Result.ok(outcome.value);
   }
-  return raise(
+  return Result.err(
     unreadPublisherError({
       outcome,
       message: "ÚOHS listing could not be read",
       adapterKey: ADAPTER_KEYS.CZ_UOHS,
-      cursor: null,
+      cursor,
     }),
   );
 };
@@ -180,55 +185,101 @@ export const buildCzUohsDecision = async (
   signal?: AbortSignal,
 ): Promise<IngestionResult> => {
   const collection = czUohsCollectionOf(record);
-  const document = record.dokument.at(0);
-  const documentUrl = document?.url;
-  let bytes: Uint8Array | undefined;
+  const primaryDocumentUrl = record.dokument.at(0)?.url;
+  const rawObjectEntries: [
+    string,
+    { bytes: Uint8Array; contentType: string },
+  ][] = [];
+  const provenanceEntries: [
+    string,
+    { url: string; retrievedAt: string; sha256: string },
+  ][] = [];
+  const documentFailures: {
+    index: number;
+    type: "fetch-failed" | "parse-failed";
+    reason: string;
+    url: string;
+  }[] = [];
+  let documentReadOutcome: StoredReadOutcome | undefined;
   let fulltext: string | undefined;
-  let extractionFailure: string | undefined;
-  let documentRetrievedAt: string | undefined;
-  if (documentUrl !== undefined) {
+  for (const [index, document] of record.dokument.entries()) {
+    const part = index === 0 ? "document" : `document-${index}`;
+    const documentUrl = document.url;
     const target = restrictOutboundUrl({
       hostPolicy: HOST_POLICY,
       rawUrl: documentUrl,
     });
     if (target === null) {
-      return raise(
-        new AdapterFetchError({
-          message: "ÚOHS document escaped publisher origin",
-          adapterKey: ADAPTER_KEYS.CZ_UOHS,
-          cursor: null,
-        }),
-      );
+      documentFailures.push({
+        index,
+        type: "fetch-failed",
+        reason: "document escaped publisher origin",
+        url: documentUrl,
+      });
+      continue;
     }
     const outcome = await readPublisherBytes(target, {
       ...publisherReadOptions("document", signal),
       redirect: "error",
     });
     if (outcome.type !== "present") {
-      return raise(
-        unreadPublisherError({
+      if (outcome.type === "unavailable") {
+        documentReadOutcome = storedReadUnavailable({
+          cause: outcome.cause,
+          scope: "document",
+          consecutiveCycles: UNAVAILABLE_CYCLES_BEFORE_MARKING,
+        });
+      } else if (outcome.type === "refused") {
+        documentReadOutcome = { ...outcome, scope: "document" };
+      } else {
+        documentReadOutcome = outcome;
+      }
+      documentFailures.push({
+        index,
+        type: "fetch-failed",
+        reason: unreadPublisherError({
           outcome,
           message: "ÚOHS PDF could not be read",
           adapterKey: ADAPTER_KEYS.CZ_UOHS,
           cursor: null,
-        }),
-      );
+        }).message,
+        url: documentUrl,
+      });
+      continue;
     }
-    documentRetrievedAt = Temporal.Now.instant().toString();
+    const documentRetrievedAt = Temporal.Now.instant().toString();
     const documentBytes = outcome.value;
-    bytes = documentBytes;
+    rawObjectEntries.push([
+      part,
+      { bytes: documentBytes, contentType: "application/pdf" },
+    ]);
+    provenanceEntries.push([
+      part,
+      {
+        url: documentUrl,
+        retrievedAt: documentRetrievedAt,
+        sha256: sha256Hex(documentBytes),
+      },
+    ]);
     const extracted = await Result.tryPromise({
       try: async () => await pdfText(documentBytes),
       catch: String,
     });
     if (Result.isError(extracted) || extracted.value.length === 0) {
-      extractionFailure = Result.isError(extracted)
-        ? extracted.error
-        : "empty-text";
+      documentFailures.push({
+        index,
+        type: "parse-failed",
+        reason: Result.isError(extracted) ? extracted.error : "empty-text",
+        url: documentUrl,
+      });
     } else {
-      fulltext = extracted.value;
+      // The first successfully parsed document in publisher order is the
+      // canonical decision text; every document is still retained below.
+      fulltext ??= extracted.value;
     }
   }
+  const sourceRawObjects = Object.fromEntries(rawObjectEntries);
+  const documentProvenance = Object.fromEntries(provenanceEntries);
   const rawRecord = JSON.stringify(record);
   const sourceRaw = encodeSourceRawEnvelope({
     listing: rawRecord,
@@ -238,15 +289,7 @@ export const buildCzUohsDecision = async (
         retrievedAt: listingRetrievedAt,
         sha256: sha256Hex(rawRecord),
       },
-      ...(bytes === undefined
-        ? {}
-        : {
-            document: {
-              url: documentUrl,
-              retrievedAt: documentRetrievedAt,
-              sha256: sha256Hex(bytes),
-            },
-          }),
+      documents: documentProvenance,
     }),
   });
   const identifiers = czUohsDecisionIdentifiers(record);
@@ -261,12 +304,19 @@ export const buildCzUohsDecision = async (
     ...(record.datum_právní_moci === undefined
       ? {}
       : { decisionDate: record.datum_právní_moci.datum }),
-    decisionType: "rozhodnutí",
+    ...(record.typ_rozhodnutí.at(0) === undefined
+      ? {}
+      : { decisionType: record.typ_rozhodnutí[0] }),
     ...(fulltext === undefined ? {} : { fulltext }),
+    ...(fulltext === undefined && documentReadOutcome !== undefined
+      ? { isListingOnly: true }
+      : {}),
     sourceUrl: record.iri,
-    ...(documentUrl === undefined ? {} : { documentUrl }),
+    ...(primaryDocumentUrl === undefined
+      ? {}
+      : { documentUrl: primaryDocumentUrl }),
     textFields: absentDecisionTextFields(
-      extractionFailure === undefined
+      documentFailures.length === 0 && record.dokument.length === 0
         ? TEXT_ABSENCE_REASON.NOT_PUBLISHED
         : TEXT_ABSENCE_REASON.PARSE_FAILED,
     ),
@@ -283,60 +333,133 @@ export const buildCzUohsDecision = async (
       participants: record.účastník,
       recordTypes: record.typ,
       documents: record.dokument,
-      ...(extractionFailure === undefined
+      ...(documentFailures.length === 0
         ? {}
         : {
-            documentExtraction: { type: "failed", reason: extractionFailure },
+            documentExtraction: {
+              type: "failed",
+              failures: documentFailures,
+            },
           }),
+      ...(documentReadOutcome === undefined
+        ? {}
+        : { [READ_OUTCOME_METADATA_KEY]: documentReadOutcome }),
     }),
     rawHash: sourceFingerprint({
       sourceRaw,
-      ...(bytes === undefined
+      ...(Object.keys(sourceRawObjects).length === 0
         ? {}
-        : {
-            sourceRawObjects: {
-              document: { bytes, contentType: "application/pdf" },
-            },
-          }),
+        : { sourceRawObjects }),
     }),
     parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_UOHS],
     documentAst: EMPTY_AST,
     sourceRaw,
-    ...(bytes === undefined
-      ? {}
-      : {
-          sourceRawObjects: {
-            document: { bytes, contentType: "application/pdf" },
-          },
-        }),
+    ...(Object.keys(sourceRawObjects).length === 0 ? {} : { sourceRawObjects }),
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   });
 };
 
-const readListing = async (signal?: AbortSignal) => {
-  const raw = await readListingText(signal);
-  const retrievedAt = Temporal.Now.instant().toString();
-  return {
-    records: parseCzUohsListing(JSON.parse(raw)),
-    retrievedAt,
-  };
+type CzUohsListing = {
+  records: CzUohsRecord[];
+  retrievedAt: string;
+  snapshotId: string;
 };
 
-const nextCollection = (slice: string, step: number): string | null => {
-  let index = -1;
-  for (const [candidateIndex, collection] of CZ_UOHS_COLLECTIONS.entries()) {
-    if (collection === slice) {
-      index = candidateIndex;
-    }
+type CzUohsCursor = {
+  version: typeof CURSOR_VERSION;
+  afterId?: string;
+  parkedOn?: string;
+  snapshotId?: string;
+};
+
+const listingSnapshots = new Map<string, CzUohsListing>();
+
+const todayUtc = (): string => Temporal.Now.plainDateISO("UTC").toString();
+
+export const encodeCzUohsCursor = (cursor: CzUohsCursor): string =>
+  JSON.stringify(cursor);
+
+const cursorSchema = v.strictObject({
+  version: v.literal(CURSOR_VERSION),
+  afterId: v.optional(v.string()),
+  parkedOn: v.optional(v.string()),
+  snapshotId: v.optional(v.string()),
+});
+
+// A cursor this adapter did not write is refused: restarting the walk would
+// silently re-fetch every decision.
+export const parseCzUohsCursor = (
+  cursor: string | null,
+): Result<CzUohsCursor, AdapterFetchError> =>
+  cursor === null
+    ? Result.ok({ version: CURSOR_VERSION })
+    : Result.try({
+        try: (): CzUohsCursor => {
+          const { afterId, parkedOn, snapshotId } = v.parse(
+            cursorSchema,
+            JSON.parse(cursor),
+          );
+          return {
+            version: CURSOR_VERSION,
+            ...(afterId === undefined ? {} : { afterId }),
+            ...(parkedOn === undefined ? {} : { parkedOn }),
+            ...(snapshotId === undefined ? {} : { snapshotId }),
+          };
+        },
+        catch: adapterCatch(ADAPTER_KEYS.CZ_UOHS, cursor),
+      });
+
+const readListing = async (
+  cursor: string | null,
+  signal?: AbortSignal,
+): Promise<Result<CzUohsListing, AdapterFetchError>> => {
+  const rawResult = await readListingText(cursor, signal);
+  if (Result.isError(rawResult)) {
+    return rawResult;
   }
-  return index === -1 ? null : (CZ_UOHS_COLLECTIONS[index + step] ?? null);
+  const raw = rawResult.value;
+  const retrievedAt = Temporal.Now.instant().toString();
+  return Result.try({
+    try: () => ({
+      records: parseCzUohsListing(JSON.parse(raw)).toSorted((left, right) => {
+        if (left.iri === right.iri) {
+          return 0;
+        }
+        return left.iri < right.iri ? -1 : 1;
+      }),
+      retrievedAt,
+      snapshotId: sha256Hex(raw),
+    }),
+    catch: adapterCatch(ADAPTER_KEYS.CZ_UOHS, cursor),
+  });
+};
+
+const listingForCursor = async (
+  cursor: string | null,
+  position: CzUohsCursor,
+  signal?: AbortSignal,
+): Promise<Result<CzUohsListing, AdapterFetchError>> => {
+  const cached =
+    position.snapshotId === undefined
+      ? undefined
+      : listingSnapshots.get(position.snapshotId);
+  if (cached !== undefined && position.parkedOn === undefined) {
+    return Result.ok(cached);
+  }
+  const read = await readListing(cursor, signal);
+  if (Result.isError(read)) {
+    return read;
+  }
+  listingSnapshots.clear();
+  listingSnapshots.set(read.value.snapshotId, read.value);
+  return read;
 };
 
 export const czUohsAdapter = defineSourceAdapter({
   key: ADAPTER_KEYS.CZ_UOHS,
   documentStage: "inline",
   language: "cs",
-  minRequestIntervalMs: 0,
+  minRequestIntervalMs: publisherRequestIntervalMs(ADAPTER_KEYS.CZ_UOHS),
   sourceSurfaces: {
     surfaces: {
       listing: storedSourceSurface("listing"),
@@ -392,47 +515,79 @@ export const czUohsAdapter = defineSourceAdapter({
     },
   },
   fetchPage: async (cursor, _config, signal) => {
-    const offset = Number(cursor ?? "0");
-    const { records, retrievedAt } = await readListing(signal);
-    const selected = records.slice(offset, offset + PAGE_SIZE);
+    const parsedPosition = parseCzUohsCursor(cursor);
+    if (Result.isError(parsedPosition)) {
+      return parsedPosition;
+    }
+    const position = parsedPosition.value;
+    const encoded = encodeCzUohsCursor(position);
+    if (position.parkedOn !== undefined && position.parkedOn >= todayUtc()) {
+      return Result.ok({ decisions: [], nextCursor: encoded });
+    }
+    const listing = await listingForCursor(cursor, position, signal);
+    if (Result.isError(listing)) {
+      return listing;
+    }
+    // A parked walk resumes after its frontier: one listing read per cycle,
+    // new documents only (rule 19); reconciliation covers the rest.
+    const afterId = position.afterId;
+    const remaining = listing.value.records.filter(
+      (record) => afterId === undefined || record.iri > afterId,
+    );
+    const selected = remaining.slice(0, PAGE_SIZE);
     const decisions: IngestionResult[] = [];
     for (const record of selected) {
-      decisions.push(await buildCzUohsDecision(record, retrievedAt, signal));
+      decisions.push(
+        await buildCzUohsDecision(record, listing.value.retrievedAt, signal),
+      );
     }
+    const lastId = selected.at(-1)?.iri ?? afterId;
+    const reachedTip = selected.length < PAGE_SIZE;
     return Result.ok({
       decisions,
-      nextCursor:
-        offset + PAGE_SIZE >= records.length
-          ? String(offset)
-          : String(offset + PAGE_SIZE),
+      nextCursor: encodeCzUohsCursor({
+        version: CURSOR_VERSION,
+        ...(lastId === undefined ? {} : { afterId: lastId }),
+        snapshotId: listing.value.snapshotId,
+        ...(reachedTip ? { parkedOn: todayUtc() } : {}),
+      }),
     });
   },
-  getTotalCount: async (signal) =>
-    sourceTotalRead((await readListing(signal)).records.length),
+  getTotalCount: async (signal) => {
+    const listing = await readListing(null, signal);
+    if (Result.isOk(listing)) {
+      return sourceTotalRead(listing.value.records.length);
+    }
+    return listing.error.httpStatus === undefined
+      ? sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD)
+      : sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.HTTP_STATUS);
+  },
   reconciliation: {
-    firstSlice: CZ_UOHS_COLLECTIONS[0],
-    sliceOf: () => "pristup-k-dopravni-infrastrukture",
-    nextSlice: (slice) => nextCollection(slice, 1),
-    previousSlice: (slice) => nextCollection(slice, -1),
+    // The publisher exposes one atomic listing, so its one slice contains
+    // every collection and makes every newly published record tip-visible.
+    firstSlice: "all",
+    sliceOf: () => "all",
+    nextSlice: () => null,
+    previousSlice: () => null,
     tipWindowDays: 1,
     revisionOf: (payload) => payload,
     listSlicePage: async ({ slice, page, signal }) => {
-      const { records } = await readListing(signal);
-      const matches = records.filter(
-        (record) => czUohsCollectionOf(record) === slice,
-      );
+      if (slice !== "all" || page !== 0) {
+        return { items: [], totalPages: 0 };
+      }
+      const listing = await readListing(null, signal);
+      if (Result.isError(listing)) {
+        return await Promise.reject(listing.error);
+      }
       return {
-        items:
-          page === 0
-            ? matches.map((payload) => ({
-                identity: {
-                  type: "document",
-                  sourceDocumentId: payload.iri,
-                },
-                payload,
-              }))
-            : [],
-        totalPages: matches.length === 0 ? 0 : 1,
+        items: listing.value.records.map((payload) => ({
+          identity: {
+            type: "document",
+            sourceDocumentId: payload.iri,
+          },
+          payload,
+        })),
+        totalPages: listing.value.records.length === 0 ? 0 : 1,
       };
     },
     buildDecision: async (payload, signal) =>
