@@ -131,6 +131,15 @@ test("publisher amendment faults return every typed rejection reason", () => {
       },
     },
     {
+      reason: "amending_eli_too_long",
+      input: {
+        ...snapshot,
+        relations: [
+          { ...relation, amendingEli: `eli/cz/sb/${"č".repeat(503)}` },
+        ],
+      },
+    },
+    {
       reason: "empty_affected_anchor",
       input: {
         ...snapshot,
@@ -181,4 +190,19 @@ test("publisher amendment faults return every typed rejection reason", () => {
       expect(result.error.message).not.toBe("");
     }
   }
+});
+
+test("an amending ELI at the column's character bound is accepted", () => {
+  const relation = snapshot.relations.at(0);
+  if (relation === undefined) {
+    throw new Error("expected the amendment fixture to carry a relation");
+  }
+  // Two UTF-16 code units per character: the bound counts characters.
+  const amendingEli = `eli/cz/sb/${"😀".repeat(502)}`;
+  expect([...amendingEli]).toHaveLength(512);
+  const result = sanitizeLegislationAmendments({
+    ...snapshot,
+    relations: [{ ...relation, amendingEli }],
+  });
+  expect(result.isOk()).toBe(true);
 });

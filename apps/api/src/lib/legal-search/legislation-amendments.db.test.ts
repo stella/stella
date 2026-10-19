@@ -155,6 +155,14 @@ const rejectedSnapshots = (): {
     },
   },
   {
+    reason: "amending_eli_too_long",
+    snapshot: {
+      observedAt: "2026-10-18T10:00:00Z",
+      relations: [{ ...relation, amendingEli: `eli/cz/sb/${"9".repeat(503)}` }],
+      coverage: { type: "complete" },
+    },
+  },
+  {
     reason: "empty_affected_anchor",
     snapshot: {
       observedAt: "2026-10-18T10:00:00Z",

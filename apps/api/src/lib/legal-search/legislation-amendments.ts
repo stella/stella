@@ -32,6 +32,11 @@ import { isRecord } from "@/api/lib/type-guards";
 export const LEGISLATION_AMENDMENT_PAGE_MAX = 500;
 export const LEGISLATION_AMENDMENT_SNAPSHOT_MAX = 50_000;
 const AMENDMENT_INSERT_BATCH_SIZE = 1000;
+// The column's own bound: an accepted observation that cannot be stored would
+// roll back the statute it arrived with.
+const AMENDING_ELI_MAX_CHARS =
+  legislationAmendments.amendingEli.length ??
+  panic("legislation_amendments.amending_eli must declare its length");
 
 export type SanitizedLegislationAmendmentSnapshot =
   LegislationAmendmentSnapshot & Brand<"SanitizedLegislationAmendmentSnapshot">;
@@ -39,6 +44,7 @@ export type SanitizedLegislationAmendmentSnapshot =
 export type LegislationAmendmentObservationErrorReason =
   | "duplicate_publisher_id"
   | "empty_affected_anchor"
+  | "amending_eli_too_long"
   | "empty_amending_eli"
   | "empty_publisher_id"
   | "incomplete_coverage_without_reason"
@@ -116,6 +122,13 @@ export const sanitizeLegislationAmendments = (
       return rejected(
         "empty_amending_eli",
         "Legislation amendment has an empty amending ELI",
+      );
+    }
+    // varchar length counts characters, not UTF-16 code units.
+    if ([...amendingEli].length > AMENDING_ELI_MAX_CHARS) {
+      return rejected(
+        "amending_eli_too_long",
+        "Legislation amendment has an amending ELI longer than can be stored",
       );
     }
     if (affectedAnchor === "") {
