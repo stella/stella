@@ -617,9 +617,7 @@ export const observeAuthorizationResponseBinding = async <T>({
   response: { issuer: string | undefined };
 }): Promise<T> => {
   const verdict = evaluateAuthorizationResponseBinding(binding, response);
-  try {
-    observe(verdict);
-  } catch {
+  if (Result.isError(Result.try(() => observe(verdict)))) {
     logger.warn("mcp.oauth.binding_observation_failed");
   }
 
