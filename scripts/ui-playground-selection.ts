@@ -405,11 +405,13 @@ export const selectGeometrySpecs = (
   if (!inventory.complete || [...changed].some(isSharedPlaygroundHarness)) {
     return inventory.specs;
   }
+  // A workspace export can point outside `src` (an exported stylesheet), so
+  // every package path goes on to the closure check.
   if (
     ![...changed].some(
       (file) =>
         file.startsWith("apps/web/src/") ||
-        /^packages\/[^/]+\/src\//u.test(file) ||
+        file.startsWith("packages/") ||
         file.endsWith(".geometry.spec.ts"),
     )
   ) {

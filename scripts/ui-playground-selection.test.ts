@@ -232,6 +232,31 @@ test("a browser export change selects the importing spec", () => {
   }
 });
 
+test("an exported stylesheet outside src selects the importing spec", () => {
+  const { root, spec, write } = createSelectionFixture();
+  try {
+    write(
+      "apps/web/src/routes/dev/fixture.ts",
+      'import "@stll/fixture-theme/theme.css";\n',
+    );
+    write(
+      "packages/theme/package.json",
+      JSON.stringify({
+        name: "@stll/fixture-theme",
+        exports: { "./theme.css": "./styles/theme.css" },
+      }),
+    );
+    write("packages/theme/styles/theme.css", ":root {}\n");
+    write("packages/theme/README.md", "# Theme\n");
+    expect(
+      selectGeometrySpecs(["packages/theme/styles/theme.css"], root),
+    ).toEqual([spec]);
+    expect(selectGeometrySpecs(["packages/theme/README.md"], root)).toEqual([]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("a transitive CSS import change selects the importing spec", () => {
   const { root, spec, write } = createSelectionFixture();
   try {
