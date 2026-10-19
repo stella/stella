@@ -33,6 +33,9 @@ export type KeyActionTimer = {
   /** Reports the time since the timer started; later calls do nothing, so
    *  a settle path that runs twice still reports one duration. */
   finish: () => void;
+  /** Fixes the end of the action without reporting it yet: the action is
+   *  over, but whether it counts is decided later. The first mark wins. */
+  mark: () => void;
   /** Drops the measurement: the action failed or was abandoned, and its
    *  duration would skew the success timings. */
   cancel: () => void;
@@ -51,6 +54,7 @@ export const startKeyActionTimer = (
   { abandonAfterMs, now = () => performance.now() }: KeyActionTimerOptions = {},
 ): KeyActionTimer => {
   const startedAt = now();
+  let endedAt: number | undefined;
   let settled = false;
   return {
     finish: () => {
@@ -58,7 +62,7 @@ export const startKeyActionTimer = (
         return;
       }
       settled = true;
-      const elapsedMs = now() - startedAt;
+      const elapsedMs = (endedAt ?? now()) - startedAt;
       if (abandonAfterMs !== undefined && elapsedMs > abandonAfterMs) {
         return;
       }
@@ -67,6 +71,9 @@ export const startKeyActionTimer = (
         return;
       }
       analytics.captureKeyActionTiming({ ...measure, durationBucketMs });
+    },
+    mark: () => {
+      endedAt ??= now();
     },
     cancel: () => {
       settled = true;

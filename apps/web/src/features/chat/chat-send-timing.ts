@@ -78,8 +78,10 @@ export const createChatSendTiming = (
         return;
       }
       if (hasAssistantText(messages, turn.userMessageId)) {
+        // Reported only once the turn settles: a reply that then errors or
+        // is stopped is not an answered message.
         turn.firstTokenSeen = true;
-        turn.firstToken.finish();
+        turn.firstToken.mark();
       }
     },
     statusChanged: (status: ChatClientState) => {
@@ -88,8 +90,12 @@ export const createChatSendTiming = (
         case "streaming":
           return;
         case "ready":
-          // A reply without text (a tool card alone) has no first token.
-          turn?.firstToken.cancel();
+          if (turn?.firstTokenSeen === true) {
+            turn.firstToken.finish();
+          } else {
+            // A reply without text (a tool card alone) has no first token.
+            turn?.firstToken.cancel();
+          }
           turn?.total.finish();
           turn = undefined;
           return;

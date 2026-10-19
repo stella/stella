@@ -82,6 +82,24 @@ describe("startKeyActionTimer", () => {
     expect(Object.keys(captured[0] ?? {}).toSorted()).toEqual(TIMING_KEYS);
   });
 
+  test("a mark fixes the end that a later finish reports", () => {
+    const { analytics, captured } = recorder();
+    const clock = manualClock();
+    const timer = startKeyActionTimer(
+      analytics,
+      { action: "chat-first-token", surface: "chat-thread" },
+      { now: clock.now },
+    );
+    clock.advance(200);
+    timer.mark();
+    clock.advance(9000);
+    timer.mark();
+    expect(captured).toEqual([]);
+    timer.finish();
+
+    expect(captured.map((entry) => entry.durationBucketMs)).toEqual([250]);
+  });
+
   test("reports nothing once cancelled", () => {
     const { analytics, captured } = recorder();
     const timer = startKeyActionTimer(analytics, {

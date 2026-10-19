@@ -87,6 +87,24 @@ test("assistant text from an earlier turn is not this message's first token", ()
   expect(captured.map((entry) => entry.action)).toEqual(["chat-total"]);
 });
 
+test("reply text before an error or a stop reports nothing", () => {
+  const { advance, captured, timing } = setup();
+
+  timing.started("chat-thread", sent.id);
+  advance(400);
+  timing.messagesChanged([sent, message("reply_1", "assistant", "partial")]);
+  timing.statusChanged("error");
+  timing.statusChanged("ready");
+
+  timing.started("document-chat", sent.id);
+  advance(400);
+  timing.messagesChanged([sent, message("reply_2", "assistant", "partial")]);
+  timing.abandoned();
+  timing.statusChanged("ready");
+
+  expect(captured).toEqual([]);
+});
+
 test("an errored, stopped or left turn reports nothing", () => {
   const { captured, timing } = setup();
 
