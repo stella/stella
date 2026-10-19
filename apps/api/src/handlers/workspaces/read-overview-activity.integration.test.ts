@@ -82,6 +82,7 @@ const seedActivity = async ({
       id: entityId,
       workspaceId,
       kind: "document",
+      name: "Activity document",
       featureOwner: "shared",
     })
     .onConflictDoNothing();
@@ -125,6 +126,7 @@ const seedFormulaAgentActivity = async (): Promise<SafeId<"auditLog">> => {
     id: resourceId,
     workspaceId: ids.wsA1,
     kind: "document",
+    name: "Activity document",
     featureOwner: "shared",
   });
   seededEntityIds.push(resourceId);
