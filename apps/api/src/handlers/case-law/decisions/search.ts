@@ -232,6 +232,7 @@ import {
 import {
   type CorpusSearchCursor,
   type CorpusSearchPhase,
+  corpusSearchGroupToken,
   decodeCorpusSearchCursor,
   encodeCorpusSearchCursor,
   isStaleCorpusSearchCursor,

@@ -18,7 +18,10 @@ export type TwoPhaseSearchPage<Hit> = {
   paginationOutcome: SearchPaginationOutcome;
 };
 
-type TwoPhaseSearchOptions<Page extends TwoPhaseSearchPage<Hit>, Hit> = {
+/** The hit type a page carries: inferred from the page, never given apart. */
+type HitOf<Page extends TwoPhaseSearchPage<unknown>> = Page["hits"][number];
+
+type TwoPhaseSearchOptions<Page extends TwoPhaseSearchPage<unknown>> = {
   /**
    * The strict read begins at the first result. Only that read may top up:
    * a later page (by cursor or by offset) cannot know which strict hits the
@@ -42,12 +45,12 @@ type TwoPhaseSearchOptions<Page extends TwoPhaseSearchPage<Hit>, Hit> = {
     cursor: SearchCursor | null,
   ) => Promise<Page | null>;
   encodeCursor: (page: Page, phase: CorpusSearchPhase) => string | null;
-  groupToken: (hit: Hit, page: Page) => string;
-  hitId: (hit: Hit) => string;
+  groupToken: (hit: HitOf<Page>, page: Page) => string;
+  hitId: (hit: HitOf<Page>) => string;
 };
 
-export type TwoPhaseSearchResult<Page, Hit> = {
-  hits: Hit[];
+export type TwoPhaseSearchResult<Page extends TwoPhaseSearchPage<unknown>> = {
+  hits: HitOf<Page>[];
   pages: readonly Page[];
   nextCursor: string | null;
   paginationOutcome: SearchPaginationOutcome;
@@ -62,8 +65,7 @@ export type TwoPhaseSearchResult<Page, Hit> = {
  * no page re-ranks what another page cannot.
  */
 export const runTwoPhaseSearch = async <
-  Page extends TwoPhaseSearchPage<Hit>,
-  Hit,
+  Page extends TwoPhaseSearchPage<unknown>,
 >({
   atStart,
   cursor,
@@ -76,9 +78,7 @@ export const runTwoPhaseSearch = async <
   encodeCursor,
   groupToken,
   hitId,
-}: TwoPhaseSearchOptions<Page, Hit>): Promise<
-  TwoPhaseSearchResult<Page, Hit>
-> => {
+}: TwoPhaseSearchOptions<Page>): Promise<TwoPhaseSearchResult<Page>> => {
   const phase = cursor?.phase ?? { type: "strict", fingerprint, generation };
   const page = await read(phase, limit, cursor);
   if (page === null) {
