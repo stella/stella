@@ -96,6 +96,8 @@ const decision = {
     ecli: null,
     court: "Fixture court",
     decisionDate: null,
+    language: "en",
+    languageAlternates: [],
     readerUrl: "/case/fixture",
     text: {
       status: "readable",
