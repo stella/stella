@@ -30,12 +30,13 @@ import { ScrollArea } from "@stll/ui/scroll-area";
 import { cn } from "@stll/ui/utils";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
-import { env } from "@/env";
 import type { TranslationKey } from "@/i18n/types";
 import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
 import { betaFeaturesAvailable } from "@/lib/beta-features";
 import { useKeyboardShortcutsDialogStore } from "@/lib/keyboard-shortcuts-dialog-store";
+import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/access";
+import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
 import { pageTitle } from "@/lib/page-title";
 import { useQueryView } from "@/lib/use-query-view";
 
@@ -109,6 +110,7 @@ const NAV_ITEM_CLASS = cn(
 );
 
 function SettingsLayout() {
+  const memoryEnabled = useCallerFeatureEnabled(CALLER_FEATURE.aiMemory);
   const t = useTranslations();
   const roleQuery = useQuery(roleOptions);
   const roleView = useQueryView(roleQuery);
@@ -121,7 +123,7 @@ function SettingsLayout() {
   });
   const openShortcuts = useKeyboardShortcutsDialogStore((store) => store.open);
   const canUseMemory =
-    env.VITE_FEATURE_AI_MEMORY &&
+    memoryEnabled &&
     role !== undefined &&
     authClient.organization.checkRolePermission({
       role,
