@@ -10,6 +10,7 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { ScrollTextIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
+import { openCaseLawDecision } from "@/components/chat/case-law-open";
 import { classifyChatHttpLink } from "@/components/chat/chat-app-link.logic";
 import { chatAppOrigins } from "@/components/chat/chat-app-origins";
 import {
@@ -21,6 +22,7 @@ import { useOpenStatuteLink } from "@/components/chat/statute-open";
 import { InlinePill } from "@/components/inline-pill";
 import { isPlainPrimaryClick } from "@/components/inspector/case-decision-view";
 import type { CitedDecisionParagraph } from "@/components/references/reference.logic";
+import { useOpenDecisionTab } from "@/features/case-law/open-decision-tab";
 import { ProxyChatLink } from "@/features/chat/components/proxy-chat-link";
 import { detached } from "@/lib/detached";
 
@@ -143,6 +145,75 @@ const InteractiveLegalCitation = ({
   return <LegalCitationView {...props} citation={citation} onClick={onClick} />;
 };
 
+/** A source-tray row for a decision with a known id: it keeps its full label,
+ *  and a plain click opens the decision as an inline citation does, while
+ *  other clicks follow the link. */
+const DecisionTrayLink = ({
+  decisionId,
+  href,
+  children,
+}: {
+  decisionId: string;
+  href: string;
+  children: ReactNode;
+}) => {
+  const t = useTranslations();
+  const { open } = useOpenDecisionTab();
+  const onClick: MouseEventHandler<HTMLAnchorElement> = (event) => {
+    if (!isPlainPrimaryClick(event) || event.defaultPrevented) {
+      return;
+    }
+    event.preventDefault();
+    detached(
+      openCaseLawDecision({ type: "ref", ref: decisionId }, open),
+      "legal-citation.open-tray-decision",
+    );
+  };
+  return (
+    <ProxyChatLink
+      appearance="tray"
+      href={href}
+      newTabLabel={t("common.openInNewTab")}
+      onClick={onClick}
+    >
+      {children}
+    </ProxyChatLink>
+  );
+};
+
+/** A tray row that shows its own full label: a decision with a known id opens
+ *  in the reader, anything else is a link. */
+const FullLabelTrayLink = ({
+  citation,
+  ...props
+}: LegalCitationLinkProps & {
+  citation: ReturnType<typeof resolveLegalCitationLinks>;
+}) => {
+  const t = useTranslations();
+  const href = citation.type === "external" ? props.source.url : citation.url;
+  const decisionId =
+    props.source.caseLawDecision?.decisionId ??
+    (citation.type === "decision"
+      ? extractCaseLawDecisionIdFromIdRouteParam(citation.params.slug)
+      : null);
+  if (props.interactive && decisionId !== null) {
+    return (
+      <DecisionTrayLink decisionId={decisionId} href={href}>
+        {props.children}
+      </DecisionTrayLink>
+    );
+  }
+  return (
+    <ProxyChatLink
+      appearance="tray"
+      href={href}
+      newTabLabel={t("common.openInNewTab")}
+    >
+      {props.children}
+    </ProxyChatLink>
+  );
+};
+
 // A publisher alias can carry its paragraph anchor only in the stored reader URL.
 const readUrlAnchor = (href: string): string | undefined => {
   const { hash } = new URL(href);
@@ -170,16 +241,7 @@ export const LegalCitationLink = (props: LegalCitationLinkProps) => {
     appOrigins,
   });
   if (props.appearance === "tray" && props.fullTrayLabel === true) {
-    const href = citation.type === "external" ? props.source.url : citation.url;
-    return (
-      <ProxyChatLink
-        appearance="tray"
-        href={href}
-        newTabLabel={t("common.openInNewTab")}
-      >
-        {props.children}
-      </ProxyChatLink>
-    );
+    return <FullLabelTrayLink {...props} citation={citation} />;
   }
   const passage =
     props.appearance === "inline"
