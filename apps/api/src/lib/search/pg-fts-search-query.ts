@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 
-import { flowOwnedEntityVisibilitySql } from "@/api/lib/flows/visibility";
+import { activityFeatureOwnerVisibilitySql } from "@/api/lib/flows/visibility";
 import { searchDocumentsAccessSql } from "@/api/lib/search/contact-workspace-access-sql";
 import { decodeCursor } from "@/api/lib/search/cursor";
 import { TS_HEADLINE_CONFIG } from "@/api/lib/search/highlight";
@@ -22,10 +22,10 @@ export const buildDocumentSearchQueries = (query: SearchQuery) => {
   assertAuthorizedSearchScope(query);
 
   const { organizationId, userId, limit } = query;
-  const flowVisibility = flowOwnedEntityVisibilitySql({
+  const flowVisibility = activityFeatureOwnerVisibilitySql({
     organizationId,
     userId,
-    entityId: sql`sd.entity_id`,
+    featureOwner: sql`e.feature_owner`,
     workspaceId: sql`sd.workspace_id`,
   });
 
@@ -80,7 +80,7 @@ export const buildDocumentSearchQueries = (query: SearchQuery) => {
       ts_rank(sd.tsv, ${tsQuery})::float8 AS score,
       sd.updated_at
     FROM search_documents sd
-    JOIN entities e ON e.id = sd.entity_id
+    JOIN entities e ON e.id = sd.entity_id AND e.workspace_id = sd.workspace_id
     JOIN entity_versions ev ON ev.id = e.current_version_id
     JOIN workspaces w ON w.id = sd.workspace_id
     WHERE ${orgFilter}
@@ -97,7 +97,7 @@ export const buildDocumentSearchQueries = (query: SearchQuery) => {
   const countQuery = sql`
     SELECT count(*)::int AS total
     FROM search_documents sd
-    JOIN entities e ON e.id = sd.entity_id
+    JOIN entities e ON e.id = sd.entity_id AND e.workspace_id = sd.workspace_id
     JOIN entity_versions ev ON ev.id = e.current_version_id
     WHERE ${orgFilter}
       ${workspaceSelectionFilter}
@@ -113,7 +113,7 @@ export const buildDocumentSearchQueries = (query: SearchQuery) => {
   const kindFacetQuery = sql`
     SELECT sd.kind AS value, count(*)::int AS count
     FROM search_documents sd
-    JOIN entities e ON e.id = sd.entity_id
+    JOIN entities e ON e.id = sd.entity_id AND e.workspace_id = sd.workspace_id
     JOIN entity_versions ev ON ev.id = e.current_version_id
     WHERE ${orgFilter}
       ${workspaceSelectionFilter}
@@ -130,7 +130,7 @@ export const buildDocumentSearchQueries = (query: SearchQuery) => {
       w.name AS label,
       count(*)::int AS count
     FROM search_documents sd
-    JOIN entities e ON e.id = sd.entity_id
+    JOIN entities e ON e.id = sd.entity_id AND e.workspace_id = sd.workspace_id
     JOIN entity_versions ev ON ev.id = e.current_version_id
     JOIN workspaces w ON w.id = sd.workspace_id
     WHERE ${orgFilter}
@@ -152,10 +152,10 @@ const CONTENT_HEADLINE_CONFIG =
 
 export const buildContentSearchQueries = (query: ContentSearchQuery) => {
   const { organizationId, userId, workspaceId, limit } = query;
-  const flowVisibility = flowOwnedEntityVisibilitySql({
+  const flowVisibility = activityFeatureOwnerVisibilitySql({
     organizationId,
     userId,
-    entityId: sql`sd.entity_id`,
+    featureOwner: sql`e.feature_owner`,
     workspaceId: sql`sd.workspace_id`,
   });
   const tsQuery = buildSearchTsQuery(query.query);
@@ -178,7 +178,7 @@ export const buildContentSearchQueries = (query: ContentSearchQuery) => {
         ) AS passage,
         ts_rank(sd.tsv, ${tsQuery})::float8 AS score
       FROM search_documents sd
-      JOIN entities e ON e.id = sd.entity_id
+      JOIN entities e ON e.id = sd.entity_id AND e.workspace_id = sd.workspace_id
       JOIN entity_versions ev ON ev.id = e.current_version_id
       WHERE sd.organization_id = ${organizationId}
         ${singleWorkspaceFilter}
@@ -191,7 +191,7 @@ export const buildContentSearchQueries = (query: ContentSearchQuery) => {
     countQuery: sql`
       SELECT count(*)::int AS total
       FROM search_documents sd
-      JOIN entities e ON e.id = sd.entity_id
+      JOIN entities e ON e.id = sd.entity_id AND e.workspace_id = sd.workspace_id
       JOIN entity_versions ev ON ev.id = e.current_version_id
       WHERE sd.organization_id = ${organizationId}
         ${singleWorkspaceFilter}
