@@ -186,4 +186,3 @@ export const PageCropPlayground = () => {
     </div>
   );
 };
-// Selection probe for the affected UI playground specs; reverted next.
