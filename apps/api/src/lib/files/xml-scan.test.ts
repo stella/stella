@@ -115,3 +115,15 @@ test("distinguishes incomplete and absent elements", () => {
     kind: "absent",
   });
 });
+
+test("keeps the attributes of a self-closing element when filling it", () => {
+  const xml =
+    '<Properties><ep:TotalTime xmlns:ep="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" /></Properties>';
+
+  expect(replaceXmlElementContent(xml, "ep:TotalTime", "0").unwrap()).toBe(
+    '<Properties><ep:TotalTime xmlns:ep="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties">0</ep:TotalTime></Properties>',
+  );
+  expect(replaceXmlElementContent("<a><b/></a>", "b", "x").unwrap()).toBe(
+    "<a><b>x</b></a>",
+  );
+});

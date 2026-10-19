@@ -205,7 +205,7 @@ export const replaceXmlElementContent = (
 ): Result<string, XmlScanError> =>
   replaceXmlElements(xml, name, (match) =>
     match.selfClosing
-      ? `<${name}>${content}</${name}>`
+      ? `${match.openTag.slice(0, match.openTag.lastIndexOf("/")).trimEnd()}>${content}</${match.name}>`
       : `${match.openTag}${content}${match.closeTag}`,
   );
 
