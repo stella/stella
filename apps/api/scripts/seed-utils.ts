@@ -7,6 +7,11 @@
 
 import { panic } from "better-result";
 
+import {
+  formatSeedUuid,
+  MARKETING_LOCALE_ACCOUNTS,
+  seedIdHashInput,
+} from "@stll/playwright-tools/marketing-locales";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { toSafeId } from "@/api/lib/branded-types";
@@ -14,8 +19,11 @@ import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 
 // ─── Constants ──────────────────────────────────────────
 
-export const DEFAULT_USER_ID = "test-user-stella-dev";
-export const DEFAULT_ORG_ID = toSafeId<"organization">("test-org-stella-dev");
+// The English development firm, which the marketing captures also film.
+export const DEFAULT_USER_ID = MARKETING_LOCALE_ACCOUNTS.en.userId;
+export const DEFAULT_ORG_ID = toSafeId<"organization">(
+  MARKETING_LOCALE_ACCOUNTS.en.organizationId,
+);
 
 export const DEFAULT_SEED_COLLEAGUE_COUNT = 3;
 export const DEFAULT_TEST_USER_COLLEAGUE_COUNT = 7;
@@ -155,7 +163,7 @@ const GENERATED_SEED_COLLEAGUES = Array.from({
   length: MAX_SEED_COLLEAGUE_COUNT - BASE_SEED_COLLEAGUES.length,
 }).map((_, index) => getGeneratedSeedColleague(index));
 
-export const SEED_COLLEAGUES: readonly SeedColleague[] = [
+const SEED_COLLEAGUES: readonly SeedColleague[] = [
   ...BASE_SEED_COLLEAGUES,
   ...GENERATED_SEED_COLLEAGUES,
 ];
@@ -178,31 +186,6 @@ export const ALL_TEST_USER_IDS = [
     (colleague) => colleague.id,
   ),
 ];
-
-export const buildSeedUserIds = ({
-  primaryUserId,
-  colleagueCount = DEFAULT_SEED_COLLEAGUE_COUNT,
-}: {
-  primaryUserId: string;
-  colleagueCount?: number;
-}): string[] => [
-  primaryUserId,
-  ...getSeedColleagues(colleagueCount).map((colleague) => colleague.id),
-];
-
-export const buildSeedUserRates = (
-  userIds: readonly string[],
-): Record<string, number> => {
-  const entries = userIds.map((userId, index) => {
-    if (index === 0) {
-      return [userId, 6500] as const;
-    }
-
-    return [userId, SEED_COLLEAGUES[index - 1]?.hourlyRate ?? 4000] as const;
-  });
-
-  return Object.fromEntries(entries);
-};
 
 export const pickAuthor = (
   userIds: readonly string[],
@@ -233,19 +216,10 @@ const getSeedIdNamespace = (): string => {
 
 export const seedId = <T extends SafeIdType = never>(
   label: string,
-): SafeId<T> => {
-  const namespace = getSeedIdNamespace();
-  const namespacedLabel = namespace ? `${namespace}:${label}` : label;
-  const hash = hashSha256Hex(namespacedLabel);
-  const raw = hash.slice(0, 32);
-  if (raw.length !== 32) {
-    panic(`Seed data: failed to create UUID for label "${label}"`);
-  }
-  const uuid = `${raw.slice(0, 12)}5${raw.slice(13, 16)}8${raw.slice(17)}`;
-  return toSafeId<T>(
-    `${uuid.slice(0, 8)}-${uuid.slice(8, 12)}-${uuid.slice(12, 16)}-${uuid.slice(16, 20)}-${uuid.slice(20, 32)}`,
+): SafeId<T> =>
+  toSafeId<T>(
+    formatSeedUuid(hashSha256Hex(seedIdHashInput(getSeedIdNamespace(), label))),
   );
-};
 
 /** Safe array access for seed data (panics on out-of-bounds). */
 export const at = <T>(arr: readonly T[], i: number): T => {

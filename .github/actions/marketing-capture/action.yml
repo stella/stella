@@ -184,6 +184,15 @@ runs:
         STELLA_LOCAL_DEV: "1"
       run: bun --filter @stll/api db:seed-dev
 
+    - name: Seed the localized marketing firms
+      # One firm per non-English capture locale, written in its language from
+      # hand-written content packs; it reuses the case-law corpus above.
+      shell: bash
+      env:
+        NODE_ENV: development
+        STELLA_LOCAL_DEV: "1"
+      run: bun --filter @stll/api db:seed-marketing-locales
+
     - name: Capture marketing screenshots
       shell: bash
       env:

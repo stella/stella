@@ -106,13 +106,27 @@ import { requireLocalDevOpen } from "@/api/runtime-mode";
 
 import { seedCaseLaw } from "./seed-case-law";
 import {
+  assertSeedLocaleMatches,
+  SEED_CONTENT_BY_LOCALE,
+  SEED_LOCALE,
+} from "./seed-content/locales";
+import {
+  ACTIVITY_CODE_KEYS,
+  MAIN_MATTER_LABELS,
+  TASK_CODE_KEYS,
+} from "./seed-content/types";
+import type {
+  MainMatterLabel,
+  SeedEmail,
+  SeedEmailAttachment,
+  SupplierAgreementParagraph,
+  SupplierAgreementRun,
+} from "./seed-content/types";
+import {
   buildExportReviewCitationSeeds,
+  buildExportReviewDocNames,
   buildExportReviewDocumentText,
   buildExportReviewMetadata,
-  EXPORT_REVIEW_DOC_NAMES,
-  EXPORT_REVIEW_DOCUMENT_TYPES,
-  EXPORT_REVIEW_FOLDERS,
-  EXPORT_REVIEW_JURISDICTIONS,
   EXPORT_TABLE_FOLDER_COUNT,
   EXPORT_TABLE_MATTER_LABEL,
   exportReviewCitationBlockId,
@@ -133,8 +147,6 @@ import {
 } from "./seed-test-user";
 import {
   at,
-  buildSeedUserIds,
-  buildSeedUserRates,
   DEFAULT_ORG_ID,
   DEFAULT_SEED_COLLEAGUE_COUNT,
   DEFAULT_USER_ID,
@@ -144,6 +156,13 @@ import {
 } from "./seed-utils";
 
 const db = openMaintenanceDb({ readOnly: false });
+
+// Every name, document and note this run writes, in the target firm's
+// language (seed-content/locales.ts).
+const SEED_CONTENT = SEED_CONTENT_BY_LOCALE[SEED_LOCALE];
+const SUPPLIER_AGREEMENT = SEED_CONTENT.supplierAgreement;
+const EXPORT_REVIEW_COPY = SEED_CONTENT.exportReview;
+const EXPORT_REVIEW_DOC_NAMES = buildExportReviewDocNames(EXPORT_REVIEW_COPY);
 
 // ─── Mock file generators ───────────────────────────────
 
@@ -163,22 +182,15 @@ const HEAVY_MATTER_FOLDER_COUNT = 25;
 // "Document Type" classifier uses the org taxonomy labels so playbook gating
 // can match the SPA document.
 const AKVIZICE_MATTER_LABEL = "ws-akvizice-energo";
-// English filename over a Czech-language body: the workspace stills film this
-// file list, and the marketing cast files documents in English; the body stays
-// Czech (like Due_Diligence_Report.pdf) so the Czech playbook demo keeps a
-// Czech-law SPA to review.
-const AKVIZICE_SPA_DOC_NAME = "Share_Acquisition_Agreement.pdf";
+// The org taxonomy labels in the seeded firm's language, keyed like the
+// default taxonomy.
+const documentTypeLabels: Readonly<Record<string, string>> =
+  SEED_CONTENT.documentTypeLabels;
+const documentTypeLabel = (key: string): string =>
+  documentTypeLabels[key] ?? panic(`Missing document type label: ${key}`);
 // The taxonomy key the Czech playbook is scoped to; its label classifies the
-// akvizice SPA document so the gate matches. Derived from the single source of
-// truth so the field value never drifts from the taxonomy.
-const SPA_DOCUMENT_TYPE_KEY = "spa";
-const spaDocumentType = DEFAULT_DOCUMENT_TYPES.find(
-  (documentType) => documentType.key === SPA_DOCUMENT_TYPE_KEY,
-);
-if (!spaDocumentType) {
-  panic(`Missing default document type: ${SPA_DOCUMENT_TYPE_KEY}`);
-}
-const SPA_DOCUMENT_TYPE_LABEL = spaDocumentType.label;
+// akvizice SPA document so the gate matches.
+const SPA_DOCUMENT_TYPE_LABEL = documentTypeLabel("spa");
 
 type BillingCodeId = SafeId<"billingCode">;
 type ContactId = SafeId<"contact">;
@@ -291,315 +303,10 @@ export const createMockDocx = async (
 // liability cap is redlined from 300% of fees to the playbook cap of 100%
 // of annual fees, and clause 14.1's thirty-day termination notice is the
 // second playbook deviation. Keep the clause 12 wording in sync with
-// storyEditorDocument.
-const SUPPLIER_AGREEMENT_DOC_NAME = "Supplier_Agreement.docx";
-
-// Reviewer identity stamped on the tracked changes and margin comments;
-// Clara Novak is a seeded colleague (clara@stella.dev).
-const SUPPLIER_AGREEMENT_REVIEWER = {
-  author: "Clara Novak",
-  date: "2026-07-16T09:30:00Z",
-  initials: "CN",
-} as const;
-
-type SupplierAgreementComment = {
-  id: number;
-  text: string;
-};
-
-const SUPPLIER_AGREEMENT_COMMENTS: SupplierAgreementComment[] = [
-  {
-    id: 1,
-    text:
-      "Above the approved liability cap: the Procurement Playbook allows at " +
-      "most 100% of annual fees. Redlined to the playbook position; needs " +
-      "Legal sign-off.",
-  },
-  {
-    id: 2,
-    text:
-      "Playbook requires at least ninety (90) days' termination notice for " +
-      "supply-critical agreements. Second deviation flagged for Legal " +
-      "review.",
-  },
-];
-
-type SupplierAgreementRun =
-  | { kind: "deleted"; text: string }
-  | { kind: "inserted"; text: string }
-  | { kind: "text"; text: string };
+// storyEditorDocument. Its words come from the content pack
+// (SupplierAgreementContent); every locale keeps both deviations.
 
 type SeedTrackedChangeDisposition = "keep" | "reject";
-
-type SupplierAgreementParagraph = {
-  /** Margin comment (id in SUPPLIER_AGREEMENT_COMMENTS) anchored to the paragraph. */
-  commentId?: number;
-  runs: SupplierAgreementRun[];
-  style: "body" | "heading" | "title";
-};
-
-const body = (text: string): SupplierAgreementParagraph => ({
-  runs: [{ kind: "text", text }],
-  style: "body",
-});
-
-const heading = (text: string): SupplierAgreementParagraph => ({
-  runs: [{ kind: "text", text }],
-  style: "heading",
-});
-
-const SUPPLIER_AGREEMENT_PARAGRAPHS: SupplierAgreementParagraph[] = [
-  { runs: [{ kind: "text", text: "Supplier Agreement" }], style: "title" },
-  body("NEGOTIATION DRAFT v4 — CONTAINS TRACKED CHANGES"),
-  body(
-    "This Supplier Agreement (the “Agreement”) is entered into as of 1 July " +
-      "2026 (the “Effective Date”) by and between:",
-  ),
-  body(
-    "(1) Northstar Robotics, Inc., a Delaware corporation with offices at " +
-      "548 Market Street, San Francisco, California 94104, United States " +
-      "(the “Customer”); and",
-  ),
-  body(
-    "(2) Meridian Precision Components GmbH, a company organised under the " +
-      "laws of Germany with registered offices at Werkstrasse 12, 80339 " +
-      "Munich, Germany (the “Supplier”),",
-  ),
-  body("each a “Party” and together the “Parties”."),
-  body(
-    "WHEREAS the Customer designs and manufactures autonomous mobile robots " +
-      "and requires a reliable supply of precision drive components; and " +
-      "WHEREAS the Supplier manufactures harmonic drive gears, actuator " +
-      "housings and related components meeting the Specifications; NOW, " +
-      "THEREFORE, the Parties agree as follows.",
-  ),
-  heading("1. Definitions and interpretation"),
-  body(
-    "1.1 In this Agreement: “Affiliate” means any entity that directly or " +
-      "indirectly controls, is controlled by, or is under common control " +
-      "with a Party; “Annual Fees” means the aggregate fees paid or payable " +
-      "by the Customer under this Agreement during the twelve (12) months " +
-      "immediately preceding the event giving rise to the relevant claim; " +
-      "“Business Day” means a day other than a Saturday, Sunday or public " +
-      "holiday in San Francisco or Munich; “Order” means a purchase order " +
-      "issued by the Customer under Clause 3; “Products” means the " +
-      "components listed in Annex 1; and “Specifications” means the " +
-      "technical specifications set out in Annex 1, as amended in " +
-      "accordance with Clause 2.3.",
-  ),
-  body(
-    "1.2 Headings are for convenience only and do not affect " +
-      "interpretation. References to Clauses and Annexes are to the clauses " +
-      "of, and annexes to, this Agreement.",
-  ),
-  heading("2. Supply of products"),
-  body(
-    "2.1 The Supplier shall manufacture and supply the Products in " +
-      "accordance with the Specifications, the agreed quality standards and " +
-      "the terms of this Agreement.",
-  ),
-  body(
-    "2.2 The Supplier shall maintain sufficient production capacity to " +
-      "satisfy the Customer's rolling forecast, up to one hundred and " +
-      "twenty per cent (120%) of the most recent quarterly forecast volume.",
-  ),
-  body(
-    "2.3 Neither Party may change the Specifications without the prior " +
-      "written approval of the other Party. The Supplier shall give the " +
-      "Customer at least twelve (12) months' written notice before " +
-      "discontinuing any Product.",
-  ),
-  heading("3. Forecasts and orders"),
-  body(
-    "3.1 The Customer shall provide a rolling twelve (12) month forecast, " +
-      "updated monthly. The first three (3) months of each forecast are " +
-      "binding on the Customer.",
-  ),
-  body(
-    "3.2 The Customer shall order Products by issuing an Order stating " +
-      "quantities, delivery dates and delivery locations. The Supplier " +
-      "shall accept or reject an Order within five (5) Business Days; an " +
-      "Order not rejected within that period is deemed accepted.",
-  ),
-  body(
-    "3.3 The Customer may cancel or reschedule an accepted Order more than " +
-      "sixty (60) days before the scheduled delivery date at no charge.",
-  ),
-  heading("4. Delivery, title and risk"),
-  body(
-    "4.1 The Supplier shall deliver the Products DAP (Incoterms 2020) to " +
-      "the Customer's facility identified in the Order. Delivery dates are " +
-      "of the essence.",
-  ),
-  body(
-    "4.2 If the Supplier fails to deliver by the confirmed delivery date, " +
-      "the Customer is entitled to a delay credit of 0.5% of the Order " +
-      "value per commenced week of delay, up to 5% of the Order value.",
-  ),
-  body(
-    "4.3 Title to and risk in the Products pass to the Customer on " +
-      "completed delivery under Clause 4.1.",
-  ),
-  heading("5. Prices and payment"),
-  body(
-    "5.1 Prices are set out in Annex 2 and are fixed until 31 December " +
-      "2026. Price changes thereafter require ninety (90) days' written " +
-      "notice and the Customer's written agreement.",
-  ),
-  body(
-    "5.2 The Supplier shall invoice monthly in arrears. Undisputed invoices " +
-      "are payable within forty-five (45) days of receipt of a correct " +
-      "invoice.",
-  ),
-  body(
-    "5.3 The Parties shall review prices annually in good faith, targeting " +
-      "a productivity improvement of two per cent (2%) per year.",
-  ),
-  heading("6. Quality, inspection and non-conforming products"),
-  body(
-    "6.1 The Supplier shall maintain a quality management system certified " +
-      "to ISO 9001 (or equivalent) and shall retain quality records for " +
-      "each Product lot for at least ten (10) years.",
-  ),
-  body(
-    "6.2 The Customer may perform incoming inspection within ten (10) " +
-      "Business Days of delivery. Rejection of non-conforming Products " +
-      "within that period does not limit the Customer's warranty rights.",
-  ),
-  body(
-    "6.3 For non-conforming Products the Supplier shall, at the Customer's " +
-      "election, replace the Products or refund the price, in each case " +
-      "within ten (10) Business Days of notice.",
-  ),
-  heading("7. Warranties"),
-  body(
-    "7.1 The Supplier warrants that for twenty-four (24) months from " +
-      "delivery each Product conforms to the Specifications, is free from " +
-      "defects in materials and workmanship, and complies with applicable " +
-      "law.",
-  ),
-  body(
-    "7.2 The remedies in Clause 6.3 apply to any breach of the warranty in " +
-      "Clause 7.1, without prejudice to the Customer's other rights under " +
-      "this Agreement.",
-  ),
-  heading("8. Intellectual property"),
-  body(
-    "8.1 Each Party retains all rights in its background intellectual " +
-      "property. Tooling, designs and Specifications provided by the " +
-      "Customer remain the Customer's property and may be used by the " +
-      "Supplier solely to perform this Agreement.",
-  ),
-  heading("9. Confidentiality"),
-  body(
-    "9.1 Each Party shall keep the other Party's confidential information " +
-      "secret, use it solely to perform this Agreement, and disclose it " +
-      "only to personnel and advisers who need it and are bound by " +
-      "equivalent obligations. This Clause survives for five (5) years " +
-      "after termination.",
-  ),
-  heading("10. Data protection and security"),
-  body(
-    "10.1 Each Party shall comply with applicable data protection law in " +
-      "connection with this Agreement and shall implement appropriate " +
-      "technical and organisational measures to protect personal data it " +
-      "processes for the other Party.",
-  ),
-  heading("11. Insurance"),
-  body(
-    "11.1 The Supplier shall maintain product liability insurance of at " +
-      "least EUR 5,000,000 per occurrence with a reputable insurer and " +
-      "shall provide certificates of insurance on request.",
-  ),
-  heading("12. Limitation of liability"),
-  body(
-    "12.1 Nothing in this Agreement excludes or limits either Party's " +
-      "liability for death or personal injury caused by negligence, for " +
-      "fraud or fraudulent misrepresentation, or for any other liability " +
-      "that may not be excluded or limited as a matter of law. Each party " +
-      "remains responsible for its obligations under this Agreement.",
-  ),
-  {
-    commentId: 1,
-    runs: [
-      {
-        kind: "text",
-        text: "12.2 The Supplier’s aggregate liability shall not exceed ",
-      },
-      { kind: "deleted", text: "300% of the fees" },
-      { kind: "inserted", text: "100% of the annual fees" },
-      { kind: "text", text: " paid under this Agreement." },
-    ],
-    style: "body",
-  },
-  body(
-    "12.3 Neither Party is liable for loss of profits, loss of revenue, " +
-      "loss of data, or any indirect or consequential loss, however " +
-      "arising.",
-  ),
-  body(
-    "12.4 The exclusions in this section survive termination of the Agreement.",
-  ),
-  heading("13. Indemnities"),
-  body(
-    "13.1 The Supplier shall indemnify the Customer against third-party " +
-      "claims that a Product as delivered infringes intellectual property " +
-      "rights, provided the Customer notifies the Supplier promptly and " +
-      "gives the Supplier control of the defence.",
-  ),
-  heading("14. Term and termination"),
-  {
-    commentId: 2,
-    runs: [
-      {
-        kind: "text",
-        text:
-          "14.1 This Agreement starts on the Effective Date and continues " +
-          "for an initial term of three (3) years, renewing automatically " +
-          "for successive one (1) year periods. Either Party may terminate " +
-          "this Agreement for convenience by giving the other Party thirty " +
-          "(30) days' prior written notice.",
-      },
-    ],
-    style: "body",
-  },
-  body(
-    "14.2 Either Party may terminate this Agreement with immediate effect " +
-      "by written notice if the other Party undergoes a change of control " +
-      "without the terminating Party's prior written approval, becomes " +
-      "insolvent, or commits a material breach that remains uncured thirty " +
-      "(30) days after written notice of the breach.",
-  ),
-  body(
-    "14.3 Termination does not affect accrued rights. On termination the " +
-      "Supplier shall return the Customer's tooling, designs and " +
-      "confidential information, and shall support an orderly transition " +
-      "of supply for up to six (6) months.",
-  ),
-  heading("15. Force majeure"),
-  body(
-    "15.1 Neither Party is liable for delay or failure to perform caused " +
-      "by events beyond its reasonable control, provided it notifies the " +
-      "other Party without undue delay and uses reasonable efforts to " +
-      "mitigate. If a force majeure event continues for more than sixty " +
-      "(60) days, either Party may terminate affected Orders.",
-  ),
-  heading("16. General"),
-  body(
-    "16.1 This Agreement is governed by the laws of England and Wales, and " +
-      "the courts of London have exclusive jurisdiction.",
-  ),
-  body(
-    "16.2 This Agreement, including its Annexes, is the entire agreement " +
-      "between the Parties regarding its subject matter. Amendments must " +
-      "be in writing and signed by both Parties. Notices must be in " +
-      "writing to the addresses above.",
-  ),
-  body("SIGNED for and on behalf of NORTHSTAR ROBOTICS, INC."),
-  body("Elena Park, Chief Executive Officer"),
-  body("SIGNED for and on behalf of MERIDIAN PRECISION COMPONENTS GMBH"),
-  body("Katrin Vogel, Managing Director"),
-];
 
 /**
  * Plain-text rendition of the Supplier Agreement with the tracked changes
@@ -607,9 +314,8 @@ const SUPPLIER_AGREEMENT_PARAGRAPHS: SupplierAgreementParagraph[] = [
  * extracted content and the search index, same as `documentTexts` entries.
  */
 const buildSupplierAgreementText = (): string =>
-  SUPPLIER_AGREEMENT_PARAGRAPHS.filter(
-    (paragraph) => paragraph.style !== "title",
-  )
+  SUPPLIER_AGREEMENT.paragraphs
+    .filter((paragraph) => paragraph.style !== "title")
     .map((paragraph) =>
       paragraph.runs
         .filter((run) => run.kind !== "deleted")
@@ -634,7 +340,7 @@ const createSupplierAgreementDocx = async (
 ): Promise<Buffer> => {
   const JSZip = (await import("jszip")).default;
   const zip = new JSZip();
-  const { author, date } = SUPPLIER_AGREEMENT_REVIEWER;
+  const { author, date, initials } = SUPPLIER_AGREEMENT.reviewer;
 
   writeZipEntry(
     zip,
@@ -664,9 +370,8 @@ const createSupplierAgreementDocx = async (
     const sizeXml = '<w:sz w:val="22"/>';
     const runProps = `<w:rPr>${boldXml}${sizeXml}</w:rPr>`;
     const text =
-      disposition === "reject" &&
-      run.text === "NEGOTIATION DRAFT v4 — CONTAINS TRACKED CHANGES"
-        ? "NEGOTIATION DRAFT v3"
+      disposition === "reject" && run.text === SUPPLIER_AGREEMENT.draftMarker
+        ? SUPPLIER_AGREEMENT.baseDraftMarker
         : run.text;
     const escaped = xmlEscape(text);
     if (disposition === "reject") {
@@ -722,7 +427,7 @@ const createSupplierAgreementDocx = async (
     );
   };
 
-  const paragraphs = SUPPLIER_AGREEMENT_PARAGRAPHS.map(paragraphXml).join("");
+  const paragraphs = SUPPLIER_AGREEMENT.paragraphs.map(paragraphXml).join("");
 
   writeZipEntry(
     zip,
@@ -733,13 +438,15 @@ const createSupplierAgreementDocx = async (
       "</w:document>",
   );
 
-  const commentsXml = SUPPLIER_AGREEMENT_COMMENTS.map(
-    (comment) =>
-      `<w:comment w:id="${comment.id}" w:author="${xmlEscape(author)}" ` +
-      `w:initials="${SUPPLIER_AGREEMENT_REVIEWER.initials}" w:date="${date}">` +
-      `<w:p><w:r><w:t xml:space="preserve">${xmlEscape(comment.text)}</w:t></w:r></w:p>` +
-      "</w:comment>",
-  ).join("");
+  const commentsXml = SUPPLIER_AGREEMENT.comments
+    .map(
+      (comment) =>
+        `<w:comment w:id="${comment.id}" w:author="${xmlEscape(author)}" ` +
+        `w:initials="${initials}" w:date="${date}">` +
+        `<w:p><w:r><w:t xml:space="preserve">${xmlEscape(comment.text)}</w:t></w:r></w:p>` +
+        "</w:comment>",
+    )
+    .join("");
   writeZipEntry(
     zip,
     "word/comments.xml",
@@ -802,172 +509,9 @@ const buildHeavyMatterDocNames = (): string[] => {
   return result;
 };
 
-export const SEED_EMAIL_FILE_NAMES = [
-  "Closing_tomorrow_final_checklist.eml",
-  "Fwd_ERU_clearance_condition_7.eml",
-  "Client_update_Praha.eml",
-] as const;
+// ─── Email files ────────────────────────────────────────
 
-type SeedEmailFileName = (typeof SEED_EMAIL_FILE_NAMES)[number];
-
-type SeedEmailAttachment =
-  | {
-      type: "pdf";
-      fileName: string;
-      title: string;
-      bodyText: string;
-    }
-  | {
-      type: "text";
-      fileName: string;
-      bodyText: string;
-    };
-
-type SeedEmail = {
-  from: string;
-  to: readonly string[];
-  cc: readonly string[];
-  date: string;
-  subject: string;
-  textBody: string;
-  htmlBody: string;
-  attachments: readonly SeedEmailAttachment[];
-};
-
-const SEED_EMAILS = {
-  "Closing_tomorrow_final_checklist.eml": {
-    from: "Elena Park <elena.park@northstar.example>",
-    to: [
-      "Marcus Chen <marcus.chen@northstarseed.example>",
-      "Katrin Vogel <katrin.vogel@meridian.example>",
-    ],
-    cc: [
-      "Clara Novak <clara.novak@counsel.example>",
-      "Closing Team <closing@northstar.example>",
-    ],
-    date: "Thu, 16 Jul 2026 17:42:00 +0200",
-    subject: "Closing tomorrow: final checklist and funds flow",
-    textBody: `Hi all,
-
-We are ready to sign tomorrow at 09:00 CET. Please treat the attached funds flow as final unless Clara circulates a replacement before 08:30.
-
-The EUR 2,500,000 escrow amount must not be released until both signature pages and the condition 7 waiver are confirmed in writing.
-
-Final actions:
-1. Katrin: return the signed supplier consent by 08:15.
-2. Marcus: confirm the originating account ending 2048.
-3. Clara: release the completion email after checking all signatures.
-
-If anything changes overnight, reply to this thread rather than starting a new one.
-
-Elena`,
-    htmlBody: `<p>Hi all,</p>
-<p>We are ready to sign tomorrow at <strong>09:00 CET</strong>. Please treat the attached funds flow as final unless Clara circulates a replacement before 08:30.</p>
-<table style="border-collapse:collapse;width:100%;margin:16px 0">
-  <tr><td style="border:1px solid #d1d5db;padding:8px"><strong>Signing</strong></td><td style="border:1px solid #d1d5db;padding:8px">17 July 2026, 09:00 CET</td></tr>
-  <tr><td style="border:1px solid #d1d5db;padding:8px"><strong>Escrow</strong></td><td style="border:1px solid #d1d5db;padding:8px">EUR 2,500,000</td></tr>
-  <tr><td style="border:1px solid #d1d5db;padding:8px"><strong>Release gate</strong></td><td style="border:1px solid #d1d5db;padding:8px">Signatures + condition 7 waiver</td></tr>
-</table>
-<p><strong>The EUR 2,500,000 escrow amount must not be released until both signature pages and the condition 7 waiver are confirmed in writing.</strong></p>
-<p>Final actions:</p>
-<ol>
-  <li>Katrin: return the signed supplier consent by 08:15.</li>
-  <li>Marcus: confirm the originating account ending 2048.</li>
-  <li>Clara: release the completion email after checking all signatures.</li>
-</ol>
-<p>If anything changes overnight, reply to this thread rather than starting a new one.</p>
-<p>Elena</p>`,
-    attachments: [
-      {
-        type: "pdf",
-        fileName: "Final_Funds_Flow.pdf",
-        title: "Final Funds Flow",
-        bodyText:
-          "Northstar closing funds flow. Escrow: EUR 2,500,000. Release only after signed pages and the condition 7 waiver are confirmed by closing counsel.",
-      },
-      {
-        type: "text",
-        fileName: "Closing_contacts.txt",
-        bodyText:
-          "Closing counsel: Clara Novak\nEscrow desk: +420 555 010 204\nCompletion bridge: 08:45 CET",
-      },
-    ],
-  },
-  "Fwd_ERU_clearance_condition_7.eml": {
-    from: "Clara Novak <clara.novak@counsel.example>",
-    to: ["Elena Park <elena.park@northstar.example>"],
-    cc: ["Deal Team <deal-team@northstar.example>"],
-    date: "Wed, 15 Jul 2026 14:18:00 +0200",
-    subject: "Fwd: ERÚ clearance received — condition 7 remains open",
-    textBody: `Elena,
-
-The regulator has issued the clearance. Condition 7 is still open because the filing requires an updated grid-connection schedule by 20 July 2026.
-
-My recommendation: closing may proceed only if the seller gives the attached undertaking and EUR 2,500,000 remains in escrow.
-
----------- Forwarded message ---------
-From: Regulatory Filings <filings@eru.example>
-Date: Wed, 15 Jul 2026 at 13:52
-Subject: Decision ERU-2026-184
-To: Clara Novak <clara.novak@counsel.example>
-
-The Energy Regulatory Office grants clearance subject to condition 7. The applicant must provide the updated grid-connection schedule no later than 20 July 2026.
-
-Clara`,
-    htmlBody: `<p>Elena,</p>
-<p>The regulator has issued the clearance. <strong>Condition 7 is still open</strong> because the filing requires an updated grid-connection schedule by 20 July 2026.</p>
-<p>My recommendation: closing may proceed only if the seller gives the attached undertaking and EUR 2,500,000 remains in escrow.</p>
-<div class="gmail_quote" style="border-left:3px solid #d1d5db;margin:20px 0;padding-left:16px;color:#4b5563">
-  <div>---------- Forwarded message ---------</div>
-  <div><strong>From:</strong> Regulatory Filings &lt;filings@eru.example&gt;</div>
-  <div><strong>Date:</strong> Wed, 15 Jul 2026 at 13:52</div>
-  <div><strong>Subject:</strong> Decision ERU-2026-184</div>
-  <div><strong>To:</strong> Clara Novak &lt;clara.novak@counsel.example&gt;</div>
-  <p>The Energy Regulatory Office grants clearance subject to condition 7. The applicant must provide the updated grid-connection schedule no later than 20 July 2026.</p>
-</div>
-<p>Clara</p>`,
-    attachments: [
-      {
-        type: "pdf",
-        fileName: "Seller_Undertaking_Condition_7.pdf",
-        title: "Seller Undertaking — Condition 7",
-        bodyText:
-          "The seller undertakes to provide the updated grid-connection schedule by 20 July 2026 and accepts that EUR 2,500,000 remains in escrow until written confirmation.",
-      },
-    ],
-  },
-  "Client_update_Praha.eml": {
-    from: "Karim Haddad <karim.haddad@counsel.example>",
-    to: [
-      "Petra Malá <petra.mala@energo.example>",
-      "ليلى منصور <layla.mansour@northstar.example>",
-    ],
-    cc: [],
-    date: "Tue, 14 Jul 2026 11:06:00 +0200",
-    subject: "Client update: Praha / تحديث العميل",
-    textBody: `Hello Petra and Layla,
-
-The Prague signing remains scheduled for 17 July 2026. No new corporate approvals are required.
-
-Česky: Prodávající musí dodat aktualizovaný harmonogram připojení nejpozději 20. července 2026. Částka 2 500 000 EUR zůstane v úschově do písemného potvrzení.
-
-العربية: سيبقى مبلغ 2,500,000 يورو في حساب الضمان حتى استلام التأكيد الكتابي. لا يجوز الإفراج عن المبلغ قبل ذلك.
-
-Regards,
-Karim`,
-    htmlBody: `<p>Hello Petra and Layla,</p>
-<p>The Prague signing remains scheduled for <strong>17 July 2026</strong>. No new corporate approvals are required.</p>
-<p lang="cs"><strong>Česky:</strong> Prodávající musí dodat aktualizovaný harmonogram připojení nejpozději 20. července 2026. Částka 2 500 000 EUR zůstane v úschově do písemného potvrzení.</p>
-<p lang="ar" dir="rtl"><strong>العربية:</strong> سيبقى مبلغ 2,500,000 يورو في حساب الضمان حتى استلام التأكيد الكتابي. لا يجوز الإفراج عن المبلغ قبل ذلك.</p>
-<p>Regards,<br>Karim</p>`,
-    attachments: [],
-  },
-} as const satisfies Record<SeedEmailFileName, SeedEmail>;
-
-const seedEmailFileNames = new Set<string>(SEED_EMAIL_FILE_NAMES);
-
-const isSeedEmailFileName = (fileName: string): fileName is SeedEmailFileName =>
-  seedEmailFileNames.has(fileName);
+const seedEmails: Readonly<Record<string, SeedEmail>> = SEED_CONTENT.emails;
 
 const wrapBase64 = (value: Buffer): string =>
   value
@@ -991,8 +535,7 @@ const createSeedEmailAttachment = (
   };
 };
 
-export const createSeedEmail = (fileName: SeedEmailFileName): Buffer => {
-  const email = SEED_EMAILS[fileName];
+export const createSeedEmail = (fileName: string, email: SeedEmail): Buffer => {
   const slug = fileName.replaceAll(/[^a-z0-9]/giu, "-");
   const boundary = `stella-seed-mixed-${slug}`;
   const alternativeBoundary = `stella-seed-alt-${slug}`;
@@ -1047,7 +590,7 @@ type SeedFileFormat =
       type: "email";
       extension: "eml";
       mimeType: typeof EML_MIME_TYPE;
-      fileName: SeedEmailFileName;
+      email: SeedEmail;
     }
   | {
       type: "pdf";
@@ -1059,1724 +602,108 @@ const resolveSeedFileFormat = (fileName: string): SeedFileFormat => {
   if (fileName.endsWith(".docx")) {
     return { type: "docx", extension: "docx", mimeType: DOCX_MIME };
   }
-  if (isSeedEmailFileName(fileName)) {
+  const email = seedEmails[fileName];
+  if (email !== undefined) {
     return {
       type: "email",
       extension: "eml",
       mimeType: EML_MIME_TYPE,
-      fileName,
+      email,
     };
   }
   return { type: "pdf", extension: "pdf", mimeType: PDF_MIME };
 };
 
-const workspaceDocNames: Record<string, string[]> = {
-  "ws-akvizice-energo": [
-    AKVIZICE_SPA_DOC_NAME,
-    "Due_Diligence_Report.pdf",
-    "Board_Consent_Northstar.docx",
-    "Expert_Valuation_Report.pdf",
-    "Internal_SAFE_Agreement.docx",
-    "Redacted_Due_Diligence_Extract.docx",
-    SUPPLIER_AGREEMENT_DOC_NAME,
-    ...SEED_EMAIL_FILE_NAMES,
-  ],
-  "ws-stavebni-spor": [
-    "Zaloba_o_nahradu_skody.pdf",
-    "Znalecky_posudek_stavba.pdf",
-    "Protokol_o_mistnim_setreni.docx",
-    "Doplneni_dukazu.pdf",
-  ],
-  "ws-due-diligence": [
-    "DD_Checklist_Legal.pdf",
-    "Corporate_Structure_Chart.pdf",
-    "Share_Purchase_Agreement_Draft.docx",
-    "Regulatory_Compliance_Report.pdf",
-  ],
-  "ws-pracovni-spory": [
-    "Vypoved_z_pracovniho_pomeru.pdf",
-    "Odvolani_proti_rozhodnuti.pdf",
-    "Pracovni_smlouva.docx",
-    "Svedecka_vypoved.pdf",
-  ],
-  "ws-compliance-ceska-energie": [
-    "Compliance_Manual_2024.pdf",
-    "AML_Risk_Assessment.pdf",
-    "Internal_Audit_Report.docx",
-    "Compliance_Training_Materials.pdf",
-  ],
-  "ws-reorganizace": [
-    "Reorganizacni_plan.pdf",
-    "Projekt_rozdeleni.pdf",
-    "Zapis_z_valneho_shromazdeni.docx",
-    "Schemata_holdingove_struktury.pdf",
-  ],
-  "ws-cross-border": [
-    "Term_Sheet_Cross_Border.pdf",
-    "Regulatory_Filing_EU.pdf",
-    "Merger_Agreement_Draft.docx",
-    "Competition_Law_Analysis.pdf",
-  ],
-  "ws-gdpr-audit": [
-    "GDPR_Gap_Analysis.pdf",
-    "Data_Processing_Agreement.pdf",
-    "Privacy_Impact_Assessment.docx",
-    "Cookie_Policy_Draft.pdf",
-  ],
-  [HEAVY_MATTER_LABEL]: buildHeavyMatterDocNames(),
+// ─── Documents per workspace ────────────────────────────
+
+/**
+ * Every main matter's documents in listing order: the content pack's for
+ * the standard matters, the generated data room, and (English firm only)
+ * the virtualization stress matter.
+ */
+const workspaceDocNames: Record<string, readonly string[]> = {
+  ...SEED_CONTENT.matterDocuments,
+  // Key order matters: extra matters pick documents from this table by
+  // position.
+  ...(SEED_LOCALE === "en"
+    ? { [HEAVY_MATTER_LABEL]: buildHeavyMatterDocNames() }
+    : {}),
   [EXPORT_TABLE_MATTER_LABEL]: EXPORT_REVIEW_DOC_NAMES,
 };
 
 /**
- * Realistic extracted text for each document. Keyed by
- * filename so the same text is reused when doc names cycle
- * across extra workspaces.
+ * Extracted text of each document, by file name: the content pack's bodies,
+ * the supplier agreement derived from its tracked-change paragraphs, and
+ * the data room's generated review extracts.
  */
 const documentTexts: Record<string, string> = {
-  // ws-akvizice-energo
-  [AKVIZICE_SPA_DOC_NAME]: `SMLOUVA O AKVIZICI AKCIÍ
-
-Smluvní strany:
-1. Kupující: InvestCo Capital, a.s., IČO: 28456789, se sídlem Praha 1, Národní 15
-2. Prodávající: EnerGo Holding, s.r.o., IČO: 25678901, se sídlem Brno, Veveří 42
-
-Článek I – Předmět smlouvy
-1.1 Prodávající převádí na Kupujícího 100 % akcií společnosti EnerGo Distribuce, a.s. (dále jen „Cílová společnost"), IČO: 27890123, zapsané v obchodním rejstříku u Krajského soudu v Brně, oddíl B, vložka 5678.
-1.2 Akcie jsou kmenové, na jméno, v zaknihované podobě, o jmenovité hodnotě 1 000 Kč každá, celkový počet 50 000 ks.
-
-Článek II – Kupní cena
-2.1 Kupní cena činí 125 000 000 Kč (slovy: sto dvacet pět milionů korun českých).
-2.2 Kupní cena bude uhrazena ve třech splátkách:
-  a) 50 000 000 Kč do 10 pracovních dnů od podpisu této smlouvy;
-  b) 50 000 000 Kč do 30 dnů po splnění odkládacích podmínek dle článku IV;
-  c) 25 000 000 Kč do 90 dnů po dokončení transakce (holdback).
-
-Článek III – Prohlášení a záruky
-3.1 Prodávající prohlašuje a zaručuje, že:
-  a) je výlučným vlastníkem převáděných akcií, bez jakýchkoli zástavních práv;
-  b) Cílová společnost nemá žádné nesplacené závazky přesahující 5 000 000 Kč;
-  c) vedené soudní spory nepřesahují částku 2 000 000 Kč.
-
-Článek IV – Odkládací podmínky
-4.1 Dokončení transakce je podmíněno:
-  a) schválením Úřadem pro ochranu hospodářské soutěže;
-  b) souhlasem Energetického regulačního úřadu;
-  c) absencí podstatné nepříznivé změny (Material Adverse Change).
-
-V Praze dne 15. března 2025`,
-
-  "Due_Diligence_Report.pdf": `ZPRÁVA O PRÁVNÍ PROVĚRCE (DUE DILIGENCE)
-Cílová společnost: EnerGo Distribuce, a.s.
-
-1. SHRNUTÍ
-Právní prověrka byla provedena v období 1.–28. února 2025. Celkem bylo přezkoumáno 347 dokumentů. Celkové riziko hodnotíme jako STŘEDNÍ.
-
-2. KORPORÁTNÍ STRUKTURA
-- Základní kapitál: 50 000 000 Kč, plně splacen
-- Jediný akcionář: EnerGo Holding, s.r.o.
-- Představenstvo: Ing. Jan Procházka (předseda), Mgr. Petra Malá
-- Dozorčí rada: 3 členové, funkční období do 12/2026
-
-3. IDENTIFIKOVANÁ RIZIKA
-3.1 Vysoká rizika:
-  - Licence na distribuci elektřiny vyprší 31. 12. 2025 (nutno prodloužit)
-  - Probíhající řízení s ERÚ o pokutě 3 200 000 Kč za porušení podmínek licence
-
-3.2 Střední rizika:
-  - 2 pracovněprávní spory (celková expozice cca 800 000 Kč)
-  - Nájemní smlouva na hlavní sídlo končí 06/2026, bez opce na prodloužení
-  - Zástavní právo na transformační stanici Brno-jih (zajištění úvěru)
-
-3.3 Nízká rizika:
-  - Drobné nesrovnalosti v zápisu do katastru nemovitostí
-  - Chybějící GDPR záznamy o zpracování pro 2 subdodavatele
-
-4. DOPORUČENÍ
-  a) Zajistit prodloužení licence ERÚ PŘED dokončením akvizice
-  b) Vyžádat si od prodávajícího specifickou odškodňovací klauzuli na řízení ERÚ
-  c) Zařadit nájemní smlouvu do seznamu smluv ke změně (change of control)
-
-Zpracoval: Advokátní kancelář Novák & Partners
-Datum: 28. února 2025`,
-
-  "Board_Consent_Northstar.docx": `NORTHSTAR ROBOTICS, INC.
-
-UNANIMOUS WRITTEN CONSENT OF THE BOARD OF DIRECTORS
-
-The undersigned, constituting all members of the Board of Directors, approve the issuance of a Simple Agreement for Future Equity to Northstar Seed Fund I, L.P. for a purchase amount of EUR 500,000, subject to a post-money valuation cap of EUR 8,000,000.
-
-The officers of the Company are authorized to execute the agreement and take any action reasonably necessary to complete the financing.
-
-Approved on 15 July 2026.
-
-Elena Park, Director
-Daniel Ortiz, Director`,
-
-  "Internal_SAFE_Agreement.docx": `INTERNAL DRAFT — FOR REVIEW ONLY
-
-SAFE
-(Simple Agreement for Future Equity)
-
-THIS CERTIFIES THAT in exchange for the payment by Northstar Seed Fund I, L.P. (the “Investor”) of EUR 500,000 on or about 15 July 2026, Northstar Robotics, Inc., a Delaware corporation (the “Company”), issues to the Investor the right to certain shares of the Company’s capital stock, subject to the terms below.
-
-1. EVENTS
-
-Equity Financing. If there is an Equity Financing before this instrument terminates, the Company will automatically issue to the Investor the number of shares of Safe Preferred Stock equal to the Purchase Amount divided by the Conversion Price.
-
-Liquidity Event. If there is a Liquidity Event before this instrument terminates, the Investor will be entitled to receive, immediately before or concurrently with the closing, the greater of the Purchase Amount or the amount payable on the number of shares of Common Stock equal to the Purchase Amount divided by the Liquidity Price.
-
-Dissolution Event. If there is a Dissolution Event before this instrument terminates, the Investor will be entitled to receive the Purchase Amount immediately before the consummation of the Dissolution Event.
-
-2. DEFINITIONS
-
-“Company Capitalization” means the total number of issued and outstanding shares of capital stock of the Company, calculated on a fully diluted basis immediately before the Equity Financing.
-
-“Post-Money Valuation Cap” means EUR 8,000,000.
-
-“Discount Rate” means 80%.
-
-3. COMPANY REPRESENTATIONS
-
-The Company is duly incorporated, validly existing, and in good standing under the laws of Delaware. The execution and performance of this instrument have been duly authorized by the Company’s board of directors.
-
-4. INVESTOR REPRESENTATIONS
-
-The Investor has full legal capacity and authority to execute this instrument and is acquiring it for investment purposes, not with a view to distribution.
-
-5. MISCELLANEOUS
-
-This instrument is governed by the laws of the State of Delaware. Any amendment or waiver must be in writing and signed by the Company and either the Investor or holders of a majority of the aggregate purchase amounts of outstanding instruments with the same Post-Money Valuation Cap and Discount Rate.
-
-NORTHSTAR ROBOTICS, INC.
-
-By: Elena Park, Chief Executive Officer
-
-NORTHSTAR SEED FUND I, L.P.
-
-By: Marcus Chen, General Partner`,
-
-  [SUPPLIER_AGREEMENT_DOC_NAME]: buildSupplierAgreementText(),
-
-  "Redacted_Due_Diligence_Extract.docx": `CONFIDENTIAL — REDACTED REVIEW COPY
-
-PROJECT NORTHSTAR
-LEGAL DUE DILIGENCE EXTRACT
-
-1. PARTIES
-
-Target company: ████████████████████████
-Seller: ████████████████████████████████
-Buyer: Northstar Robotics, Inc.
-
-2. TRANSACTION VALUE
-
-The proposed purchase price is EUR ███████████, subject to the working-capital adjustment described in Schedule 4.
-
-3. KEY FINDINGS
-
-The target is party to a material supply agreement with ███████████████. The agreement contains a change-of-control clause requiring written consent before completion.
-
-An employment dispute involving █████████████ remains pending. External counsel estimates the maximum exposure at EUR ████████.
-
-4. RECOMMENDATION
-
-Obtain change-of-control consent, require a specific indemnity for the pending dispute, and retain EUR █████████ from the purchase price until the claim is resolved.
-
-Prepared for internal review. Personal names, counterparties, account numbers, and commercially sensitive amounts have been redacted.`,
-
-  "Expert_Valuation_Report.pdf": `ZNALECKÝ POSUDEK č. 127-15/2025
-O stanovení hodnoty 100 % akcií společnosti EnerGo Distribuce, a.s.
-
-Znalec: doc. Ing. Karel Fiala, Ph.D., znalec v oboru ekonomika
-Jmenován: Krajský soud v Praze, č.j. Spr 765/2019
-
-ZÁVĚR:
-Tržní hodnota 100 % akcií společnosti EnerGo Distribuce, a.s. k datu ocenění 31. 1. 2025 činí:
-
-  118 500 000 Kč až 132 000 000 Kč
-
-Střední hodnota: 125 250 000 Kč
-
-Metoda ocenění: kombinace výnosové metody DCF entity (váha 60 %) a metody tržního porovnání (váha 40 %).
-
-Klíčové předpoklady:
-- WACC: 8,7 %
-- Terminální růst: 2,0 %
-- Plánované EBITDA 2025: 28 500 000 Kč
-- Plánované EBITDA 2026: 31 200 000 Kč
-- Multiplikátor EV/EBITDA srovnatelných společností: 4,2x–4,8x
-
-V Praze dne 5. února 2025`,
-
-  // ws-stavebni-spor
-  "Zaloba_o_nahradu_skody.pdf": `ŽALOBA O NÁHRADU ŠKODY
-
-Krajský soud v Ostravě
-Havlíčkovo nábřeží 34
-728 81 Ostrava
-
-Žalobce: Městská správa silnic Ostrava, příspěvková organizace, IČO: 70890692
-Právní zástupce: JUDr. Tomáš Novák, advokát, ev. č. ČAK 12456
-
-Žalovaný: StavProjekt, s.r.o., IČO: 26845123, se sídlem Ostrava, Porubská 15
-
-Žalovaná částka: 8 750 000 Kč s příslušenstvím
-
-I. Skutkový stav
-Žalovaný provedl na základě smlouvy o dílo č. 2022/0456 ze dne 15. 3. 2022 rekonstrukci mostu ev. č. 4773-1 přes řeku Odru. Dílo bylo předáno 30. 11. 2022. V dubnu 2024 byla při pravidelné prohlídce zjištěna závažná statická porucha nosné konstrukce.
-
-II. Znalecký posudek
-Dle znaleckého posudku Ing. Pavla Krejčího (č. 89-7/2024) je příčinou poruchy použití betonu nižší pevnostní třídy (C25/30 místo projektovaného C35/45) a nedostatečné krytí výztuže (18 mm místo min. 35 mm).
-
-III. Návrh
-Žalobce navrhuje, aby soud uložil žalovanému povinnost zaplatit žalobci částku 8 750 000 Kč, sestávající z:
-  a) 6 500 000 Kč – náklady na sanaci;
-  b) 1 250 000 Kč – náklady na provizorní omezení provozu;
-  c) 1 000 000 Kč – znalecké a projektové náklady.
-
-V Ostravě dne 20. ledna 2025`,
-
-  "Znalecky_posudek_stavba.pdf": `ZNALECKÝ POSUDEK č. 89-7/2024
-Předmět: Posouzení příčin statické poruchy mostu ev. č. 4773-1
-
-Znalec: Ing. Pavel Krejčí, CSc., soudní znalec v oboru stavebnictví
-
-NÁLEZ:
-1. Na nosné konstrukci mostu byly identifikovány trhliny šířky 0,8–2,3 mm v oblastech maximálních ohybových momentů.
-2. Jádrové vývrty prokázaly pevnost betonu v tlaku 27,3 MPa (odpovídá třídě C25/30), zatímco projekt předepisuje C35/45 (min. 45 MPa).
-3. Krycí vrstva výztuže činí průměrně 18 mm, minimum dle ČSN EN 1992-1-1 pro třídu prostředí XD1 je 35 mm.
-
-ZÁVĚR:
-Příčinou zjištěných poruch je jednoznačně:
-  a) použití betonu nižší pevnostní třídy;
-  b) nedodržení minimálního krytí výztuže.
-Obě vady jsou důsledkem nedostatečné kontroly kvality při provádění.
-
-Odhadované náklady na sanaci: 6 200 000–6 800 000 Kč.
-
-V Ostravě dne 15. listopadu 2024`,
-
-  "Protokol_o_mistnim_setreni.docx": `PROTOKOL O MÍSTNÍM ŠETŘENÍ
-
-Věc: Statická porucha mostu ev. č. 4773-1
-Místo: Ostrava – Svinov, most přes Odru na silnici II/479
-Datum: 8. dubna 2024, 9:00–14:30
-
-Přítomni:
-- Ing. Pavel Krejčí, CSc. – soudní znalec
-- Mgr. Jan Dvořák – zástupce žalobce
-- Ing. Roman Čížek – zástupce žalovaného (StavProjekt, s.r.o.)
-- Bc. Marie Pokorná – stavební dozor města
-
-Průběh šetření:
-1. Vizuální prohlídka spodní stavby – zjištěny trhliny na 3 z 5 příčníků.
-2. Odběr 6 jádrových vývrtů z nosné desky (vzorky V1–V6).
-3. Měření tloušťky krycí vrstvy výztuže profometrem – 12 měřicích bodů.
-4. Fotodokumentace – celkem 87 snímků (příloha č. 1).
-
-Vyjádření žalovaného:
-Ing. Čížek namítl, že trhliny mohly vzniknout v důsledku zvýšeného zatížení nadměrnými vozidly. Toto tvrzení bude posouzeno ve znaleckém posudku.
-
-Protokol sepsán v Ostravě dne 8. dubna 2024.`,
-
-  "Doplneni_dukazu.pdf": `DOPLNĚNÍ DŮKAZNÍCH NÁVRHŮ
-
-Krajský soud v Ostravě
-sp. zn. 15 C 234/2024
-
-Žalobce tímto navrhuje provést následující důkazy:
-1. Stavební deník č. 2022/0456 vedený žalovaným (k prokázání odchylek od projektu).
-2. Dodací listy betonárny Cemex Ostrava za období 3–11/2022.
-3. Výslech svědka Ing. Milana Březiny, stavbyvedoucího (k okolnostem změny receptury betonu).
-4. Revizní zpráva TÜV SÜD Czech ze dne 22. 5. 2024.
-
-V Ostravě dne 5. února 2025`,
-
-  // ws-due-diligence
-  "DD_Checklist_Legal.pdf": `LEGAL DUE DILIGENCE CHECKLIST
-
-Target: TechFlow Solutions, s.r.o.
-Engagement: Project Atlas – Legal DD
-Date: January 2025
-
-1. CORPORATE
-  [✓] Certificate of incorporation
-  [✓] Articles of association (current version)
-  [✓] Shareholder register
-  [✗] Board minutes for past 3 years (only 2 years provided)
-  [✓] Powers of attorney
-
-2. CONTRACTS
-  [✓] Customer contracts (top 20 by revenue)
-  [✓] Supplier agreements
-  [✗] Change of control provisions review (in progress)
-  [✓] Lease agreements
-
-3. EMPLOYMENT
-  [✓] Employment contracts (template + deviations)
-  [✓] Collective bargaining agreement
-  [✗] Stock option plan documentation (missing vesting schedule)
-  [✓] Non-compete agreements
-
-4. INTELLECTUAL PROPERTY
-  [✓] Patent registrations (3 CZ, 1 EP)
-  [✓] Trademark portfolio
-  [✗] Open source license audit (pending)
-  [✓] Software license agreements
-
-5. LITIGATION
-  [✓] Pending proceedings (1 minor labor dispute, EUR 15K)
-  [✓] Regulatory investigations (none)
-  [✓] Tax audit history
-
-Overall completion: 78% (14/18 items)
-Outstanding items require follow-up by Feb 15, 2025.`,
-
-  "Corporate_Structure_Chart.pdf": `CORPORATE STRUCTURE – PROJECT ATLAS
-
-TechFlow Group B.V. (Netherlands)
-  │
-  ├── 100% TechFlow Solutions, s.r.o. (Czech Republic)
-  │     ├── 51% TechFlow Labs, s.r.o. (Czech Republic)
-  │     └── 100% TechFlow Services, Kft. (Hungary)
-  │
-  ├── 100% TechFlow GmbH (Germany)
-  │     └── 100% TechFlow Consulting AG (Switzerland)
-  │
-  └── 80% TechFlow UK Ltd. (United Kingdom)
-        └── 100% TechFlow Ireland DAC (Ireland)
-
-Key financial data (2024 consolidated):
-- Revenue: EUR 42.3M
-- EBITDA: EUR 8.1M
-- Employees: 312 (CZ: 185, HU: 45, DE: 52, UK: 30)
-- Net debt: EUR 3.2M
-
-Regulatory notes:
-- Czech subsidiary holds trade licenses for IT services
-- Hungarian entity operates under simplified tax regime
-- UK entity requires FCA notification for fintech module`,
-
-  "Share_Purchase_Agreement_Draft.docx": `SHARE PURCHASE AGREEMENT – DRAFT v3.2
-
-Between:
-(1) TechFlow Group B.V. ("Seller")
-(2) Nordic Digital Ventures AB ("Buyer")
-
-Re: Acquisition of 100% shares in TechFlow Solutions, s.r.o.
-
-ARTICLE 1 – DEFINITIONS
-"Business Day" means any day other than Saturday, Sunday, or public holiday in the Czech Republic or the Netherlands.
-"Closing Date" means the fifth Business Day after satisfaction of all Conditions Precedent.
-"Material Adverse Change" means any event reducing EBITDA by more than 15% compared to the 2024 audited accounts.
-
-ARTICLE 2 – PURCHASE PRICE
-2.1 The Purchase Price shall be EUR 35,000,000 (thirty-five million euros).
-2.2 The Purchase Price shall be adjusted by a locked-box mechanism with an effective date of December 31, 2024.
-2.3 Permitted leakage: salaries, rent, and ordinary-course trade payables.
-
-ARTICLE 3 – CONDITIONS PRECEDENT
-3.1 Antitrust clearance from Czech ÚOHS (no Phase II referral);
-3.2 Consent of key customers representing >60% of revenue;
-3.3 No Material Adverse Change between signing and closing.
-
-ARTICLE 4 – WARRANTIES
-The Seller warrants that the information in the Data Room is true and complete as of the date hereof.
-
-[REMAINDER SUBJECT TO NEGOTIATION]`,
-
-  "Regulatory_Compliance_Report.pdf": `REGULATORY COMPLIANCE REPORT
-TechFlow Solutions, s.r.o. – Project Atlas DD
-
-1. DATA PROTECTION (GDPR)
-Status: PARTIALLY COMPLIANT
-- Data Processing Agreement with 12 of 15 sub-processors (3 pending)
-- DPIA completed for customer analytics module
-- Data breach notification procedure in place
-- Missing: appointed DPO (required due to large-scale processing)
-Recommendation: Appoint DPO before closing; budget EUR 45K/year
-
-2. TRADE LICENSES
-Status: COMPLIANT
-- All required Czech trade licenses active and valid through 2027
-- Hungarian trade license renewed in October 2024
-
-3. EMPLOYMENT REGULATIONS
-Status: COMPLIANT WITH MINOR GAPS
-- Czech labor code requirements met
-- Working time records: 2 instances of non-compliance in Q3 2024
-- Collective bargaining agreement expires March 2026
-Risk level: LOW
-
-4. FINANCIAL REGULATION
-Status: NOT APPLICABLE (fintech module not launched in CZ)
-Note: UK FCA notification required if fintech module is deployed via TechFlow UK Ltd.
-
-Overall risk rating: LOW-MEDIUM
-Estimated remediation cost: EUR 65,000–85,000`,
-
-  // ws-pracovni-spory
-  "Vypoved_z_pracovniho_pomeru.pdf": `VÝPOVĚĎ Z PRACOVNÍHO POMĚRU
-
-Zaměstnavatel: Moravské strojírny, a.s., IČO: 49567890, se sídlem Zlín, Třída Tomáše Bati 1500
-
-Zaměstnanec: Ing. Radek Procházka, dat. nar. 3. 8. 1982, bytem Zlín, Březnická 22
-
-Podle § 52 písm. c) zákoníku práce dáváme výpověď z pracovního poměru z důvodu organizačních změn. Na základě rozhodnutí představenstva ze dne 10. 12. 2024 se ruší pozice vedoucího oddělení technické kontroly, kterou zastáváte.
-
-Výpovědní doba činí 2 měsíce a začne běžet prvním dnem kalendářního měsíce následujícího po doručení této výpovědi.
-
-Odstupné: Náleží Vám odstupné ve výši trojnásobku průměrného výdělku dle § 67 odst. 1 písm. c) zákoníku práce, tj. 187 500 Kč.
-
-Ve Zlíně dne 15. ledna 2025
-
-Za zaměstnavatele: Ing. Josef Malý, personální ředitel`,
-
-  "Odvolani_proti_rozhodnuti.pdf": `ODVOLÁNÍ PROTI ROZHODNUTÍ ZAMĚSTNAVATELE
-
-Moravské strojírny, a.s.
-k rukám personálního ředitele
-Třída Tomáše Bati 1500, Zlín
-
-Věc: Neplatnost výpovědi ze dne 15. 1. 2025
-
-Já, Ing. Radek Procházka, tímto namítám neplatnost výpovědi z následujících důvodů:
-
-1. Organizační změna nebyla skutečně realizována – pozice vedoucího technické kontroly nebyla zrušena, nýbrž přejmenována na „manažer kvality" a obsazena jiným zaměstnancem (Ing. Kopecká, nastoupila 1. 2. 2025).
-
-2. Zaměstnavatel nedodržel povinnost nabídky jiného vhodného pracovního místa dle § 73a odst. 2 ZP, přestože v době výpovědi byla volná pozice vedoucího údržby.
-
-3. V době doručení výpovědi jsem čerpal pracovní neschopnost (od 14. 1. 2025), výpověď tedy nemohla být platně doručena dle § 334 ZP.
-
-Pokud zaměstnavatel neodvolá výpověď do 15 dnů, podám žalobu o určení neplatnosti výpovědi dle § 72 zákoníku práce.
-
-Ve Zlíně dne 5. února 2025
-Ing. Radek Procházka`,
-
-  "Pracovni_smlouva.docx": `PRACOVNÍ SMLOUVA
-
-Zaměstnavatel: Moravské strojírny, a.s., IČO: 49567890
-Zaměstnanec: Ing. Radek Procházka, dat. nar. 3. 8. 1982
-
-1. Druh práce: vedoucí oddělení technické kontroly
-2. Místo výkonu práce: Zlín, Třída Tomáše Bati 1500
-3. Den nástupu: 1. března 2018
-4. Pracovní poměr se sjednává na dobu neurčitou
-5. Zkušební doba: 3 měsíce
-6. Mzda: 62 500 Kč měsíčně (mzdový výměr příloha č. 1)
-7. Týdenní pracovní doba: 40 hodin
-8. Dovolená: 5 týdnů ročně
-
-Zaměstnanec potvrzuje, že byl seznámen s pracovním řádem, předpisy BOZP a interními směrnicemi zaměstnavatele.
-
-Ve Zlíně dne 25. února 2018`,
-
-  "Svedecka_vypoved.pdf": `SVĚDECKÁ VÝPOVĚĎ
-
-Okresní soud ve Zlíně
-sp. zn. 12 C 45/2025
-
-Svědek: Bc. Lucie Dvořáková, dat. nar. 12. 4. 1990
-Vztah k účastníkům: kolegkyně žalobce, vedoucí oddělení HR
-
-Výpověď:
-"Pracuji v Moravských strojírnách od roku 2015 jako vedoucí personálního oddělení. K organizační změně ze dne 10. 12. 2024 mohu uvést následující:
-
-Rozhodnutí o zrušení pozice vedoucího technické kontroly připravoval finanční ředitel Ing. Kučera. Před tímto rozhodnutím jsem upozorňovala, že pan Procházka by mohl být převeden na pozici vedoucího údržby, která byla v té době neobsazena. Toto mi bylo zamítnuto s odůvodněním, že na tuto pozici je již vybrán externí kandidát.
-
-Dne 20. ledna 2025 nastoupila na nově vytvořenou pozici 'manažer kvality' Ing. Kopecká. Náplň práce se z 80 % shoduje s původní pozicí vedoucího technické kontroly."
-
-Svědek poučen dle § 126 o.s.ř. o povinnosti vypovídat pravdivě.
-
-Ve Zlíně dne 10. března 2025`,
-
-  // ws-compliance-ceska-energie
-  "Compliance_Manual_2024.pdf": `COMPLIANCE MANUÁL 2024
-Česká Energie, a.s.
-
-1. ÚVOD
-Tento manuál stanovuje pravidla pro dodržování regulatorních požadavků, etických norem a vnitřních předpisů společnosti Česká Energie, a.s.
-
-2. PROTIKORUPČNÍ POLITIKA
-2.1 Zákaz přijímání a poskytování úplatků dle zákona č. 40/2009 Sb. (trestní zákoník), § 331–334.
-2.2 Dary a pohoštění: max. hodnota 2 000 Kč/osoba/rok, nutná evidence v registru darů.
-2.3 Sponzoring: schvaluje výhradně představenstvo.
-
-3. STŘET ZÁJMŮ
-Každý zaměstnanec je povinen ohlásit střet zájmů prostřednictvím formuláře COI-01. Lhůta: 5 pracovních dnů od zjištění.
-
-4. WHISTLEBLOWING
-Oznámení lze podat:
-  a) e-mailem: compliance@ceskaenergie.cz
-  b) telefonicky: interní linka 5555
-  c) poštou: Compliance Officer, Česká Energie, a.s., Vinohradská 100, Praha 3
-Ochrana oznamovatele dle zákona č. 171/2023 Sb. je garantována.
-
-5. SANKCE ZA PORUŠENÍ
-Disciplinární řízení, výpověď, trestní oznámení dle závažnosti.
-
-Platnost: 1. 1. 2024 – 31. 12. 2024
-Schválil: Ing. Helena Marková, Chief Compliance Officer`,
-
-  "AML_Risk_Assessment.pdf": `AML RISK ASSESSMENT
-Česká Energie, a.s. – Annual Review 2024
-
-EXECUTIVE SUMMARY
-Overall AML risk rating: MEDIUM
-
-1. CUSTOMER RISK
-- Total B2B customers: 1,247
-- High-risk jurisdictions: 3 customers (Russia-linked beneficial owners identified and terminated)
-- PEP exposure: 2 customers flagged, enhanced due diligence applied
-- KYC completion rate: 98.7%
-
-2. PRODUCT/SERVICE RISK
-- Energy trading positions: medium risk (large value, cross-border)
-- Retail supply: low risk
-- Green certificate trading: medium risk (new product, limited history)
-
-3. GEOGRAPHIC RISK
-- Primary operations: Czech Republic (low risk)
-- Cross-border trading: Germany, Austria, Slovakia (low risk)
-- Spot market participation: Leipzig EEX (medium risk due to volume)
-
-4. TRANSACTION MONITORING
-- Alerts generated (2024): 456
-- Alerts escalated to MLRO: 34
-- Suspicious Activity Reports filed: 2
-- False positive rate: 92.5%
-
-5. RECOMMENDATIONS
-  a) Implement automated sanctions screening (current: manual, bi-weekly)
-  b) Enhance UBO verification for green certificate counterparties
-  c) Update customer risk scoring model (last update: 2022)
-
-Prepared by: External AML Advisor, Deloitte Advisory s.r.o.
-Date: December 2024`,
-
-  "Internal_Audit_Report.docx": `ZPRÁVA INTERNÍHO AUDITU č. 2024/07
-Česká Energie, a.s.
-
-Oblast auditu: Proces schvalování dodavatelů
-Období: Q1–Q3 2024
-Auditor: Ing. Marek Vlček, CIA
-
-ZJIŠTĚNÍ:
-1. (VYSOKÁ PRIORITA) U 3 z 15 testovaných dodavatelů chybělo ověření skutečného vlastníka (UBO). Jedná se o dodavatele s kumulativním obratem 12,5 mil. Kč.
-
-2. (STŘEDNÍ PRIORITA) Interní směrnice SM-07 vyžaduje tříkolové výběrové řízení pro zakázky nad 5 mil. Kč. U 2 zakázek bylo provedeno pouze dvoukolové řízení (zakázky č. 2024/089 a 2024/112).
-
-3. (NÍZKÁ PRIORITA) 8 dodavatelských smluv překročilo platnost bez formálního prodloužení (auto-renewal klauzule).
-
-DOPORUČENÍ:
-1. Zavést automatickou kontrolu UBO při registraci nového dodavatele do SAP.
-2. Implementovat workflow pro schvalování výjimek z SM-07.
-3. Nasadit upozornění 60 dnů před expirací smlouvy.
-
-VYJÁDŘENÍ MANAGEMENTU:
-Všechna doporučení přijata. Implementace do 31. 3. 2025.`,
-
-  "Compliance_Training_Materials.pdf": `COMPLIANCE ŠKOLENÍ 2024
-Česká Energie, a.s.
-
-Modul 1: Protikorupční pravidla
-- Co je úplatek? Definice dle § 331 TZ
-- Příklady zakázaného jednání
-- Jak reagovat na nabídku úplatku
-- Quiz: 5 otázek (min. skóre: 80 %)
-
-Modul 2: GDPR a ochrana dat
-- Práva subjektů údajů
-- Jak bezpečně zacházet s osobními údaji
-- Incidenty: co dělat při úniku dat
-- Quiz: 5 otázek (min. skóre: 80 %)
-
-Modul 3: Whistleblowing
-- Kdy a jak podat oznámení
-- Ochrana oznamovatele dle zákona č. 171/2023 Sb.
-- Praktické příklady
-- Quiz: 3 otázky
-
-Statistika účasti:
-- Povinní zaměstnanci: 842
-- Absolvovali: 819 (97,3 %)
-- Průměrné skóre: 91 %
-- Zbývající termín: 31. 12. 2024`,
-
-  // ws-reorganizace
-  "Reorganizacni_plan.pdf": `REORGANIZAČNÍ PLÁN
-PrůmyslPlus, a.s. – v reorganizaci
-
-Krajský soud v Praze, sp. zn. MSPH 60 INS 4567/2024
-
-1. ZÁKLADNÍ ÚDAJE
-Dlužník: PrůmyslPlus, a.s., IČO: 25467890
-Insolvenční správce: JUDr. Pavel Černý, se sídlem Praha 4
-Celkové přihlášené pohledávky: 245 000 000 Kč
-Zajištěné pohledávky: 120 000 000 Kč
-Nezajištěné pohledávky: 125 000 000 Kč
-
-2. NAVRHOVANÉ ŘEŠENÍ
-2.1 Zajištění věřitelé obdrží 100 % svých pohledávek:
-  - Splácení po dobu 5 let, úrok 3 % p.a.
-  - Zajištění: zástavní právo k nemovitostem v k.ú. Hostivař
-
-2.2 Nezajištění věřitelé obdrží 35 % svých pohledávek:
-  - Jednorázová výplata do 90 dnů od schválení plánu
-  - Zdroj: prodej neprovozního majetku (pozemky Uhříněves)
-
-3. PROVOZNÍ OPATŘENÍ
-  a) Snížení počtu zaměstnanců z 450 na 320
-  b) Ukončení ztrátové divize povrchových úprav
-  c) Restrukturalizace dodavatelského řetězce
-
-4. HARMONOGRAM
-  - Schválení věřitelským výborem: březen 2025
-  - Schválení soudem: květen 2025
-  - Zahájení plnění: červen 2025
-
-Zpracoval: JUDr. Pavel Černý, insolvenční správce
-Datum: 15. ledna 2025`,
-
-  "Projekt_rozdeleni.pdf": `PROJEKT ROZDĚLENÍ ODŠTĚPENÍM
-
-Rozdělovaná společnost: PrůmyslPlus, a.s. (v reorganizaci)
-Nástupnická společnost: PrůmyslPlus Manufacturing, s.r.o. (nově zakládaná)
-
-Dle § 243 a násl. zákona č. 125/2008 Sb. o přeměnách obchodních společností.
-
-1. ODŠTĚPOVANÝ MAJETEK
-  - Výrobní hala Hostivař (LV 4567, k.ú. Hostivař)
-  - Strojní vybavení dle přílohy č. 1 (účetní hodnota 45 mil. Kč)
-  - Zásoby materiálu (účetní hodnota 12 mil. Kč)
-  - Pohledávky z obchodního styku (28 mil. Kč)
-
-2. PŘECHÁZEJÍCÍ ZÁVAZKY
-  - Závazky vůči dodavatelům výrobního materiálu (15 mil. Kč)
-  - Pracovněprávní závazky vůči 280 zaměstnancům dle § 338 ZP
-
-3. ZÁKLADNÍ KAPITÁL NÁSTUPNICKÉ SPOLEČNOSTI
-  - 20 000 000 Kč (dvacet milionů korun českých)
-  - Jediný společník: strategický investor (určen na základě výběrového řízení)
-
-4. ROZHODNÝ DEN: 1. července 2025
-
-Projekt schválen valnou hromadou dne 20. února 2025.`,
-
-  "Zapis_z_valneho_shromazdeni.docx": `ZÁPIS Z MIMOŘÁDNÉ VALNÉ HROMADY
-PrůmyslPlus, a.s. (v reorganizaci)
-
-Datum: 20. února 2025, 10:00
-Místo: Praha 4,Chodovská 1580/14
-Přítomni: akcionáři zastupující 89,3 % základního kapitálu
-
-Program:
-1. Zahájení, volba orgánů valné hromady
-2. Schválení reorganizačního plánu
-3. Schválení projektu rozdělení odštěpením
-4. Změna stanov
-5. Různé
-
-Usnesení č. 1: Valná hromada schvaluje reorganizační plán ze dne 15. 1. 2025.
-Hlasování: pro 87,1 %, proti 2,2 %, zdržel se 0 %
-
-Usnesení č. 2: Valná hromada schvaluje projekt rozdělení odštěpením.
-Hlasování: pro 85,5 %, proti 3,8 %, zdržel se 0 %
-
-Usnesení č. 3: Valná hromada schvaluje změnu stanov v rozsahu dle přílohy.
-Hlasování: pro 89,3 %, proti 0 %, zdržel se 0 %
-
-Zápis vyhotovil: JUDr. Anna Bílá, notářka
-Notářský zápis č. NZ 112/2025`,
-
-  "Schemata_holdingove_struktury.pdf": `SCHÉMA HOLDINGOVÉ STRUKTURY – PO REORGANIZACI
-
-PrůmyslPlus, a.s. (mateřská společnost)
-  │
-  ├── 100% PrůmyslPlus Manufacturing, s.r.o.
-  │     (výrobní činnost, 280 zaměstnanců)
-  │
-  ├── 100% PrůmyslPlus Services, s.r.o.
-  │     (servis a údržba, 40 zaměstnanců)
-  │
-  └── 60% PrůmyslPlus Slovakia, s.r.o.
-        (obchodní zastoupení pro SR, 15 zaměstnanců)
-
-Strategický investor: vstup do PrůmyslPlus Manufacturing
-  - Podíl: 70 % po kapitálovém vstupu
-  - Investice: 85 000 000 Kč
-  - Podmínky: zachování zaměstnanosti min. 3 roky
-
-Časový plán restrukturalizace:
-  Q2 2025: schválení soudem + zápis odštěpení
-  Q3 2025: kapitálový vstup investora
-  Q4 2025: dokončení reorganizace, splnění plánu`,
-
-  // ws-cross-border
-  "Term_Sheet_Cross_Border.pdf": `TERM SHEET – CROSS-BORDER ACQUISITION
-
-Project: Project Danube
-Date: January 15, 2025
-
-Buyer: NordicAqua Industries AB (Sweden)
-Target: AquaTech Central Europe, s.r.o. (Czech Republic)
-
-1. TRANSACTION STRUCTURE
-   Type: Share deal (100% acquisition)
-   Consideration: EUR 28,000,000 (enterprise value)
-   Adjustments: Net debt, working capital (target: EUR 4.2M)
-
-2. KEY TERMS
-   Exclusivity period: 60 days from signing
-   Break fee: EUR 500,000 (mutual)
-   Governing law: Czech Republic
-   Arbitration: ICC Prague
-
-3. CONDITIONS PRECEDENT
-   a) Satisfactory legal, financial, and tax DD
-   b) Czech antitrust clearance (ÚOHS)
-   c) EU foreign subsidy regulation filing (if required)
-   d) Consent of key customers (>50% revenue)
-   e) No MAC between signing and closing
-
-4. INDICATIVE TIMELINE
-   DD completion: March 31, 2025
-   SPA signing: April 30, 2025
-   Regulatory approvals: June 30, 2025
-   Closing: July 31, 2025
-
-5. EMPLOYEE MATTERS
-   Key management retention: 24-month lock-in
-   No redundancies for 12 months post-closing
-
-This Term Sheet is non-binding except for clauses 2 (exclusivity) and 2 (break fee).`,
-
-  "Regulatory_Filing_EU.pdf": `EU REGULATORY FILING – PROJECT DANUBE
-
-Filing Authority: European Commission, DG Competition
-Filing Type: EU Foreign Subsidies Regulation (FSR), Art. 21
-
-1. PARTIES
-   Notifying Party: NordicAqua Industries AB
-   - Registered: Stockholm, Sweden
-   - Group revenue (2024): EUR 890M
-   - Employees: 4,200
-
-   Target: AquaTech Central Europe, s.r.o.
-   - Registered: Prague, Czech Republic
-   - Revenue (2024): EUR 31M
-   - Employees: 145
-   - Market share (CZ water treatment): ~12%
-
-2. FOREIGN SUBSIDIES ASSESSMENT
-   NordicAqua received the following financial contributions:
-   a) Swedish Innovation Agency grant: EUR 2.1M (R&D, 2022–2024)
-   b) EIB loan at preferential rate: EUR 15M (green infrastructure)
-   c) Regional employment subsidy: EUR 800K (Gothenburg plant)
-
-   Total financial contributions (3 years): EUR 17.9M
-   Threshold for notification: EUR 50M (not met)
-
-   CONCLUSION: Mandatory FSR notification NOT required.
-   Voluntary pre-notification recommended due to:
-   - Size of acquirer relative to target market
-   - Strategic sector (water infrastructure)
-
-3. CZECH ANTITRUST (ÚOHS)
-   Combined market share in CZ: <15%
-   Filing required: YES (turnover thresholds met)
-   Expected timeline: 30 days (Phase I, no concerns anticipated)
-
-4. MERGER CONTROL – OTHER JURISDICTIONS
-   Slovakia: filing not required (no target turnover)
-   Germany: filing not required (target revenue <EUR 5M in DE)
-   Poland: filing not required (no operations)
-
-Prepared by: Novák & Partners, Prague
-Date: February 2025`,
-
-  "Merger_Agreement_Draft.docx": `MERGER AGREEMENT – DRAFT v2.1
-Project Danube
-
-PARTIES:
-(1) NordicAqua Industries AB, reg. no. 556789-0123, Stockholm ("Buyer")
-(2) WaterTech Holding GmbH, HRB 45678, Munich ("Seller")
-(3) AquaTech Central Europe, s.r.o., IČO: 04567890, Prague ("Company")
-
-RECITALS:
-(A) Seller is the sole shareholder of the Company.
-(B) Buyer wishes to acquire 100% of the shares in the Company.
-(C) The Parties have agreed on the terms set forth herein.
-
-ARTICLE 1 – SALE AND PURCHASE
-1.1 Subject to the terms of this Agreement, Seller sells and Buyer purchases all Shares.
-1.2 The Shares are transferred free from all Encumbrances.
-
-ARTICLE 2 – PURCHASE PRICE
-2.1 Enterprise Value: EUR 28,000,000
-2.2 Equity Value = Enterprise Value – Net Debt + excess Working Capital
-2.3 Estimated Equity Value at Signing: EUR 24,800,000
-2.4 Completion Accounts to be prepared within 60 days of Closing.
-
-ARTICLE 3 – SELLER'S WARRANTIES
-3.1 The Seller makes the warranties set out in Schedule 3.
-3.2 Warranty cap: 30% of the Purchase Price (EUR 7,440,000)
-3.3 De minimis threshold: EUR 50,000
-3.4 Basket (deductible): EUR 250,000
-3.5 Warranty period: 24 months from Closing (tax: 60 months)
-
-[SCHEDULES TO BE ATTACHED]`,
-
-  "Competition_Law_Analysis.pdf": `COMPETITION LAW ANALYSIS
-Project Danube – NordicAqua / AquaTech
-
-1. MARKET DEFINITION
-   Relevant product market: industrial water treatment systems
-   Relevant geographic market: Czech Republic (national)
-
-2. MARKET SHARES (2024)
-   Company                    | CZ Market Share
-   Veolia Water Technologies  | 22%
-   Xylem (Wedeco)            | 18%
-   AquaTech CE (target)      | 12%
-   NordicAqua (buyer)        | 3%
-   Others                    | 45%
-
-   Combined post-merger: ~15% → no dominance concern
-
-3. HORIZONTAL OVERLAP
-   Both parties active in industrial water treatment.
-   Combined share <25% in all segments.
-   No significant barrier to entry (multiple EU competitors).
-
-4. VERTICAL EFFECTS
-   NordicAqua supplies membrane filters used by AquaTech.
-   Current share of NordicAqua in membrane supply: <8% (CZ).
-   No foreclosure risk identified.
-
-5. ASSESSMENT
-   Phase I clearance expected (no serious doubts).
-   No remedies anticipated.
-   Filing fee: CZK 100,000
-
-   Recommended filing date: March 15, 2025
-   Expected decision: April 15, 2025
-
-Prepared by: Novák & Partners, Prague`,
-
-  // ws-gdpr-audit
-  "GDPR_Gap_Analysis.pdf": `GDPR GAP ANALYSIS REPORT
-Client: MedTech Innovations, s.r.o.
-
-Assessment Date: January 2025
-Assessor: Novák & Partners – Data Protection Practice
-
-1. EXECUTIVE SUMMARY
-   Current compliance level: 62% (target: 95%)
-   Critical gaps: 4
-   High-priority gaps: 7
-   Medium-priority gaps: 5
-
-2. CRITICAL GAPS
-   2.1 No appointed DPO despite processing health data (Art. 37)
-   2.2 Consent mechanism for clinical trial data does not meet Art. 7 requirements
-   2.3 Data transfers to US cloud provider lack adequate safeguards (post-Schrems II)
-   2.4 No documented data breach response procedure (Art. 33/34)
-
-3. HIGH-PRIORITY GAPS
-   3.1 Privacy notices incomplete (missing retention periods, legal basis)
-   3.2 DPIA not conducted for AI diagnostic module
-   3.3 Processor agreements missing with 3 of 8 sub-processors
-   3.4 Records of processing activities incomplete (Art. 30)
-   3.5 Employee training not conducted in past 12 months
-   3.6 Right to erasure process not documented
-   3.7 Cookie consent banner non-compliant (pre-checked boxes)
-
-4. REMEDIATION TIMELINE
-   Critical: 30 days
-   High: 90 days
-   Medium: 180 days
-
-   Estimated total cost: EUR 45,000–65,000`,
-
-  "Data_Processing_Agreement.pdf": `DATA PROCESSING AGREEMENT
-
-Between:
-Controller: MedTech Innovations, s.r.o., IČO: 09876543
-Processor: CloudHealth Services, Inc., Delaware, USA
-
-Pursuant to Article 28 GDPR
-
-1. SCOPE OF PROCESSING
-   Personal data categories: patient health records, diagnostic images, treatment plans
-   Data subjects: patients of Controller's clients (hospitals, clinics)
-   Processing purpose: cloud storage, AI-assisted diagnostics, reporting
-
-2. PROCESSOR OBLIGATIONS
-   2.1 Process data only on documented instructions from Controller
-   2.2 Ensure confidentiality (all personnel under NDA)
-   2.3 Implement technical measures: AES-256 encryption at rest, TLS 1.3 in transit
-   2.4 Assist Controller with DPIA and data subject rights requests
-   2.5 Delete all data within 30 days of contract termination
-
-3. SUB-PROCESSORS
-   Approved sub-processors:
-   a) AWS (Frankfurt region) – infrastructure
-   b) Datadog (EU) – monitoring
-   Controller must be notified 30 days before any sub-processor change.
-
-4. INTERNATIONAL TRANSFERS
-   Transfer mechanism: EU Standard Contractual Clauses (2021/914)
-   Supplementary measures: encryption, access controls, data localization option
-
-5. AUDIT RIGHTS
-   Controller may audit Processor once per year with 30 days' notice.
-   SOC 2 Type II report provided annually.
-
-Effective date: February 1, 2025`,
-
-  "Privacy_Impact_Assessment.docx": `DATA PROTECTION IMPACT ASSESSMENT (DPIA)
-MedTech Innovations – AI Diagnostic Module
-
-1. DESCRIPTION OF PROCESSING
-   The AI Diagnostic Module processes medical images (X-rays, CT scans, MRIs) to provide preliminary diagnostic suggestions to physicians.
-   Data volume: ~50,000 images/month
-   Storage: CloudHealth Services (AWS Frankfurt)
-   Retention: 5 years (regulatory requirement)
-
-2. NECESSITY AND PROPORTIONALITY
-   Legal basis: legitimate interest (Art. 6(1)(f)) for processing; explicit consent (Art. 9(2)(a)) for health data
-   Purpose limitation: diagnostic assistance only; no secondary use
-   Data minimization: images pseudonymized before AI processing
-
-3. RISKS TO DATA SUBJECTS
-   3.1 HIGH: Re-identification of pseudonymized images through metadata correlation
-   3.2 HIGH: Misdiagnosis leading to patient harm (not a GDPR risk per se, but relevant)
-   3.3 MEDIUM: Unauthorized access to health data in transit
-   3.4 LOW: Data subject unable to exercise right to explanation (Art. 22)
-
-4. MITIGATION MEASURES
-   3.1 → Strip all DICOM metadata before processing; use random patient tokens
-   3.2 → AI output labeled as "preliminary suggestion"; physician review mandatory
-   3.3 → End-to-end encryption; zero-trust network architecture
-   3.4 → Implement explainability layer (SHAP values for model decisions)
-
-5. DPA CONSULTATION
-   Consultation with ÚOOÚ recommended due to large-scale health data processing.
-
-Completed by: Mgr. Jana Horáková, DPO (external)
-Date: January 2025`,
-
-  "Cookie_Policy_Draft.pdf": `COOKIE POLICY – DRAFT
-MedTech Innovations, s.r.o.
-
-Last updated: January 2025
-
-1. WHAT ARE COOKIES
-   Cookies are small text files stored on your device when you visit our website (www.medtechinnovations.cz).
-
-2. COOKIES WE USE
-
-   Essential cookies (no consent required):
-   - session_id: user authentication (expires: session)
-   - csrf_token: security (expires: session)
-   - cookie_consent: stores your cookie preferences (expires: 12 months)
-
-   Analytics cookies (consent required):
-   - _ga, _gid: Google Analytics – website usage statistics
-   - _hjid: Hotjar – user behavior analysis
-
-   Marketing cookies (consent required):
-   - _fbp: Facebook Pixel – ad performance measurement
-   - _gcl_au: Google Ads conversion tracking
-
-3. HOW TO MANAGE COOKIES
-   You can manage your preferences through our cookie banner or browser settings.
-   Withdrawing consent does not affect the lawfulness of prior processing.
-
-4. DATA TRANSFERS
-   Google Analytics data may be transferred to the US. We use Google's EU data residency option where available.
-
-5. CONTACT
-   Data Protection Officer: Mgr. Jana Horáková
-   Email: dpo@medtechinnovations.cz
-   Supervisory authority: ÚOOÚ (www.uoou.cz)`,
+  ...SEED_CONTENT.documentTexts,
+  [SUPPLIER_AGREEMENT.fileName]: buildSupplierAgreementText(),
+  ...Object.fromEntries(
+    EXPORT_REVIEW_DOC_NAMES.map((fileName, index) => [
+      fileName,
+      buildExportReviewDocumentText(EXPORT_REVIEW_COPY, fileName, index),
+    ]),
+  ),
 };
-
-for (let i = 0; i < EXPORT_REVIEW_DOC_NAMES.length; i++) {
-  const fileName = at(EXPORT_REVIEW_DOC_NAMES, i);
-  documentTexts[fileName] = buildExportReviewDocumentText(fileName, i);
-}
 
 // ─── Contacts ───────────────────────────────────────────
 
-const orgContacts = [
-  {
-    id: seedId("contact-org-novak-partners"),
-    type: "organization" as const,
-    displayName: "Novák & Partners, s.r.o.",
-    organizationName: "Novák & Partners, s.r.o.",
-    registrationNumber: "27145689",
-    taxId: "CZ27145689",
-    bankAccounts: [
-      {
-        iban: "CZ6508000000192000145399",
-        bic: "GIBACZPX",
-        bankName: "Česká spořitelna",
-        currency: "CZK",
-      },
-    ],
-    billingAddress: {
-      line1: "Národní 60/28",
-      city: "Praha",
-      state: "Praha 1",
-      postalCode: "110 00",
-      country: "Česká republika",
-    },
-    defaultHourlyRate: 4500,
-    currency: "CZK",
-    paymentTermDays: 30,
-    emails: [
-      {
-        type: "work" as const,
-        address: "info@novak-partners.cz",
-        isPrimary: true,
-      },
-    ],
-    phones: [
-      {
-        type: "office" as const,
-        number: "+420 221 111 222",
-        isPrimary: true,
-      },
-    ],
-    color: "blue",
-  },
-  {
-    id: seedId("contact-org-ceska-energie"),
-    type: "organization" as const,
-    displayName: "Česká Energie a.s.",
-    organizationName: "Česká Energie a.s.",
-    registrationNumber: "45274649",
-    taxId: "CZ45274649",
-    bankAccounts: [
-      {
-        iban: "CZ9501000000270100610043",
-        bic: "KOMBCZPP",
-        bankName: "Komerční banka",
-        currency: "CZK",
-      },
-      {
-        iban: "DE89370400440532013000",
-        bic: "COBADEFFXXX",
-        bankName: "Commerzbank",
-        currency: "EUR",
-      },
-    ],
-    billingAddress: {
-      line1: "Vodičkova 791/41",
-      city: "Praha",
-      state: "Praha 1",
-      postalCode: "110 00",
-      country: "Česká republika",
-    },
-    defaultHourlyRate: 5000,
-    currency: "CZK",
-    paymentTermDays: 14,
-    emails: [
-      {
-        type: "work" as const,
-        address: "legal@ceska-energie.cz",
-        isPrimary: true,
-      },
-    ],
-    phones: [
-      {
-        type: "office" as const,
-        number: "+420 234 567 890",
-        isPrimary: true,
-      },
-    ],
-    color: "green",
-  },
-  {
-    id: seedId("contact-org-moravska-stavebni"),
-    type: "organization" as const,
-    displayName: "Moravská stavební, s.r.o.",
-    organizationName: "Moravská stavební, s.r.o.",
-    registrationNumber: "60711086",
-    taxId: "CZ60711086",
-    bankAccounts: [
-      {
-        accountNumber: "2901761283/2010",
-        bankName: "Fio banka",
-        currency: "CZK",
-      },
-    ],
-    billingAddress: {
-      line1: "Masarykova 31",
-      city: "Brno",
-      postalCode: "602 00",
-      country: "Česká republika",
-    },
-    defaultHourlyRate: 3500,
-    currency: "CZK",
-    paymentTermDays: 30,
-    emails: [
-      {
-        type: "work" as const,
-        address: "kancelar@moravska-stavebni.cz",
-        isPrimary: true,
-      },
-    ],
-    color: "orange",
-  },
-  {
-    id: seedId("contact-org-greenleaf"),
-    type: "organization" as const,
-    displayName: "Greenleaf Investments Ltd.",
-    organizationName: "Greenleaf Investments Ltd.",
-    registrationNumber: "12345678",
-    taxId: "GB123456789",
-    bankAccounts: [
-      {
-        iban: "GB29NWBK60161331926819",
-        bic: "NWBKGB2L",
-        bankName: "NatWest",
-        currency: "GBP",
-      },
-    ],
-    billingAddress: {
-      line1: "25 Old Broad Street",
-      city: "London",
-      postalCode: "EC2N 1HN",
-      country: "United Kingdom",
-    },
-    defaultHourlyRate: 350,
-    currency: "GBP",
-    paymentTermDays: 45,
-    emails: [
-      {
-        type: "work" as const,
-        address: "legal@greenleaf-investments.co.uk",
-        isPrimary: true,
-      },
-    ],
-    color: "emerald",
-  },
-  {
-    id: seedId("contact-org-northstar-robotics"),
-    type: "organization" as const,
-    displayName: "Northstar Robotics, Inc.",
-    organizationName: "Northstar Robotics, Inc.",
-    registrationNumber: "7483921",
-    taxId: "US-94-7483921",
-    bankAccounts: [],
-    billingAddress: {
-      line1: "548 Market Street",
-      city: "San Francisco",
-      state: "California",
-      postalCode: "94104",
-      country: "United States",
-    },
-    defaultHourlyRate: 450,
-    currency: "USD",
-    paymentTermDays: 30,
-    emails: [
-      {
-        type: "work" as const,
-        address: "legal@northstar-robotics.example",
-        isPrimary: true,
-      },
-    ],
-    phones: [],
-    color: "violet",
-  },
-];
-
-// Additional org contacts for overview stress-testing
-const moreOrgContacts = [
-  {
-    id: seedId("contact-org-bratislava-legal"),
-    type: "organization" as const,
-    displayName: "Bratislava Legal Group, s.r.o.",
-    organizationName: "Bratislava Legal Group, s.r.o.",
-    registrationNumber: "36721484",
-    taxId: "SK2022336611",
-    billingAddress: {
-      line1: "Michalská 9",
-      city: "Bratislava",
-      postalCode: "811 01",
-      country: "Slovensko",
-    },
-    defaultHourlyRate: 200,
-    currency: "EUR",
-    paymentTermDays: 30,
-    emails: [
-      {
-        type: "work" as const,
-        address: "office@bratislava-legal.sk",
-        isPrimary: true,
-      },
-    ],
-    color: "indigo",
-  },
-  {
-    id: seedId("contact-org-muller-bergmann"),
-    type: "organization" as const,
-    displayName: "Müller & Bergmann Rechtsanwälte",
-    organizationName: "Müller & Bergmann Rechtsanwälte",
-    registrationNumber: "HRB 123456",
-    taxId: "DE987654321",
-    billingAddress: {
-      line1: "Friedrichstraße 44",
-      city: "Berlin",
-      postalCode: "10117",
-      country: "Deutschland",
-    },
-    defaultHourlyRate: 380,
-    currency: "EUR",
-    paymentTermDays: 21,
-    emails: [
-      {
-        type: "work" as const,
-        address: "kanzlei@muller-bergmann.de",
-        isPrimary: true,
-      },
-    ],
-    color: "rose",
-  },
-  {
-    id: seedId("contact-org-thames-advisory"),
-    type: "organization" as const,
-    displayName: "Thames Advisory Partners LLP",
-    organizationName: "Thames Advisory Partners LLP",
-    registrationNumber: "OC345678",
-    taxId: "GB345678901",
-    billingAddress: {
-      line1: "1 Finsbury Avenue",
-      city: "London",
-      postalCode: "EC2M 2PF",
-      country: "United Kingdom",
-    },
-    defaultHourlyRate: 450,
-    currency: "GBP",
-    paymentTermDays: 30,
-    emails: [
-      {
-        type: "work" as const,
-        address: "enquiries@thames-advisory.co.uk",
-        isPrimary: true,
-      },
-    ],
-    color: "teal",
-  },
-  {
-    id: seedId("contact-org-zilina-steel"),
-    type: "organization" as const,
-    displayName: "Žilina Steel Works, a.s.",
-    organizationName: "Žilina Steel Works, a.s.",
-    registrationNumber: "31625801",
-    taxId: "SK2020459789",
-    billingAddress: {
-      line1: "Priemyselná 12",
-      city: "Žilina",
-      postalCode: "010 01",
-      country: "Slovensko",
-    },
-    defaultHourlyRate: 180,
-    currency: "EUR",
-    paymentTermDays: 45,
-    emails: [
-      {
-        type: "work" as const,
-        address: "legal@zilina-steel.sk",
-        isPrimary: true,
-      },
-    ],
-    color: "slate",
-  },
-  {
-    id: seedId("contact-org-pragobanka"),
-    type: "organization" as const,
-    displayName: "PragoBanka, a.s.",
-    organizationName: "PragoBanka, a.s.",
-    registrationNumber: "49241257",
-    taxId: "CZ49241257",
-    billingAddress: {
-      line1: "Senovážné náměstí 15",
-      city: "Praha",
-      postalCode: "110 00",
-      country: "Česká republika",
-    },
-    defaultHourlyRate: 5500,
-    currency: "CZK",
-    paymentTermDays: 14,
-    emails: [
-      {
-        type: "work" as const,
-        address: "pravni@pragobanka.cz",
-        isPrimary: true,
-      },
-    ],
-    color: "lime",
-  },
-  {
-    id: seedId("contact-org-dunaj-pharma"),
-    type: "organization" as const,
-    displayName: "Dunaj Pharma, s.r.o.",
-    organizationName: "Dunaj Pharma, s.r.o.",
-    registrationNumber: "44556677",
-    taxId: "SK2044556677",
-    billingAddress: {
-      line1: "Záhradnícka 46",
-      city: "Bratislava",
-      postalCode: "821 08",
-      country: "Slovensko",
-    },
-    defaultHourlyRate: 220,
-    currency: "EUR",
-    paymentTermDays: 30,
-    emails: [
-      {
-        type: "work" as const,
-        address: "legal@dunaj-pharma.sk",
-        isPrimary: true,
-      },
-    ],
-    color: "pink",
-  },
-  {
-    id: seedId("contact-org-nord-energie"),
-    type: "organization" as const,
-    displayName: "Nord Energie GmbH",
-    organizationName: "Nord Energie GmbH",
-    registrationNumber: "HRB 789012",
-    taxId: "DE789012345",
-    billingAddress: {
-      line1: "Am Sandtorkai 50",
-      city: "Hamburg",
-      postalCode: "20457",
-      country: "Deutschland",
-    },
-    defaultHourlyRate: 320,
-    currency: "EUR",
-    paymentTermDays: 30,
-    emails: [
-      {
-        type: "work" as const,
-        address: "recht@nord-energie.de",
-        isPrimary: true,
-      },
-    ],
-    color: "yellow",
-  },
-  {
-    id: seedId("contact-org-ostrava-mining"),
-    type: "organization" as const,
-    displayName: "Ostrava Mining Corp., a.s.",
-    organizationName: "Ostrava Mining Corp., a.s.",
-    registrationNumber: "25831470",
-    taxId: "CZ25831470",
-    billingAddress: {
-      line1: "Nádražní 88",
-      city: "Ostrava",
-      postalCode: "702 00",
-      country: "Česká republika",
-    },
-    defaultHourlyRate: 4000,
-    currency: "CZK",
-    paymentTermDays: 30,
-    emails: [
-      {
-        type: "work" as const,
-        address: "office@ostrava-mining.cz",
-        isPrimary: true,
-      },
-    ],
-    color: "stone",
-  },
-  {
-    id: seedId("contact-org-crown-shipping"),
-    type: "organization" as const,
-    displayName: "Crown Shipping Ltd.",
-    organizationName: "Crown Shipping Ltd.",
-    registrationNumber: "09876543",
-    taxId: "GB987654321",
-    billingAddress: {
-      line1: "3 Royal Exchange",
-      city: "London",
-      postalCode: "EC3V 3DG",
-      country: "United Kingdom",
-    },
-    defaultHourlyRate: 400,
-    currency: "GBP",
-    paymentTermDays: 45,
-    emails: [
-      {
-        type: "work" as const,
-        address: "legal@crown-shipping.co.uk",
-        isPrimary: true,
-      },
-    ],
-    color: "red",
-  },
-  {
-    id: seedId("contact-org-tatra-motors"),
-    type: "organization" as const,
-    displayName: "Tatra Motors, a.s.",
-    organizationName: "Tatra Motors, a.s.",
-    registrationNumber: "47892315",
-    taxId: "CZ47892315",
-    billingAddress: {
-      line1: "Areál Tatra 1450",
-      city: "Kopřivnice",
-      postalCode: "742 21",
-      country: "Česká republika",
-    },
-    defaultHourlyRate: 4200,
-    currency: "CZK",
-    paymentTermDays: 30,
-    emails: [
-      {
-        type: "work" as const,
-        address: "pravni@tatra-motors.cz",
-        isPrimary: true,
-      },
-    ],
-    color: "purple",
-  },
-  {
-    id: seedId("contact-org-kosice-tech"),
-    type: "organization" as const,
-    displayName: "Košice Tech Ventures, s.r.o.",
-    organizationName: "Košice Tech Ventures, s.r.o.",
-    registrationNumber: "55667788",
-    taxId: "SK2055667788",
-    billingAddress: {
-      line1: "Hlavná 32",
-      city: "Košice",
-      postalCode: "040 01",
-      country: "Slovensko",
-    },
-    defaultHourlyRate: 190,
-    currency: "EUR",
-    paymentTermDays: 30,
-    emails: [
-      {
-        type: "work" as const,
-        address: "office@kosice-tech.sk",
-        isPrimary: true,
-      },
-    ],
-    color: "zinc",
-  },
-];
-
-const personContacts = [
-  {
-    id: seedId("contact-person-jan-novak"),
-    type: "person" as const,
-    displayName: "JUDr. Jan Novák",
-    prefix: "JUDr.",
-    firstName: "Jan",
-    lastName: "Novák",
-    emails: [
-      {
-        type: "work" as const,
-        address: "jan.novak@novak-partners.cz",
-        isPrimary: true,
-      },
-    ],
-    phones: [
-      {
-        type: "mobile" as const,
-        number: "+420 602 111 222",
-        isPrimary: true,
-      },
-    ],
-    color: "violet",
-  },
-  {
-    id: seedId("contact-person-eva-svobodova"),
-    type: "person" as const,
-    displayName: "Mgr. Eva Svobodová",
-    prefix: "Mgr.",
-    firstName: "Eva",
-    lastName: "Svobodová",
-    emails: [
-      {
-        type: "work" as const,
-        address: "eva.svobodova@ceska-energie.cz",
-        isPrimary: true,
-      },
-    ],
-    phones: [
-      {
-        type: "mobile" as const,
-        number: "+420 603 444 555",
-        isPrimary: true,
-      },
-    ],
-    color: "fuchsia",
-  },
-  {
-    id: seedId("contact-person-petr-dvorak"),
-    type: "person" as const,
-    displayName: "Ing. Petr Dvořák",
-    prefix: "Ing.",
-    firstName: "Petr",
-    lastName: "Dvořák",
-    emails: [
-      {
-        type: "work" as const,
-        address: "dvorak@moravska-stavebni.cz",
-        isPrimary: true,
-      },
-    ],
-    color: "cyan",
-  },
-  {
-    id: seedId("contact-person-sarah-williams"),
-    type: "person" as const,
-    displayName: "Sarah Williams",
-    firstName: "Sarah",
-    lastName: "Williams",
-    emails: [
-      {
-        type: "work" as const,
-        address: "s.williams@greenleaf-investments.co.uk",
-        isPrimary: true,
-      },
-    ],
-    phones: [
-      {
-        type: "mobile" as const,
-        number: "+44 7700 900123",
-        isPrimary: true,
-      },
-    ],
-    color: "sky",
-  },
-  {
-    id: seedId("contact-person-milan-kral"),
-    type: "person" as const,
-    displayName: "JUDr. Milan Král, Ph.D.",
-    prefix: "JUDr.",
-    firstName: "Milan",
-    lastName: "Král",
-    suffix: "Ph.D.",
-    notes: "Odborník na stavební právo",
-    emails: [
-      {
-        type: "work" as const,
-        address: "kral@kral-advokat.cz",
-        isPrimary: true,
-      },
-    ],
-    color: "amber",
-  },
-];
+const { orgContacts, personContacts, moreOrgContacts } = SEED_CONTENT;
 
 // ─── Workspaces (Matters) ───────────────────────────────
 
-const seedWorkspaces = [
-  {
-    id: seedId("ws-akvizice-energo"),
-    // The matter the marketing editor scenes film: its breadcrumb frames the
-    // Supplier_Agreement.docx redline (Northstar Robotics buying drive
-    // components from Meridian Precision), so the name stays supplier-themed.
-    name: "Meridian supply agreement",
-    reference: "2026/031",
-    clientId: at(orgContacts, 4).id, // Northstar Robotics
-    billingReference: "NS-SUPPLY-2026",
-  },
-  {
-    id: seedId("ws-stavebni-spor"),
-    name: "Stavební spor - Brno Centrál",
-    reference: "2024/002",
-    clientId: at(orgContacts, 2).id, // Moravská stavební
-    billingReference: "MS-LIT-2024",
-  },
-  {
-    id: seedId("ws-due-diligence"),
-    name: "Due Diligence - Greenleaf Fund III",
-    reference: "2024/003",
-    clientId: at(orgContacts, 3).id, // Greenleaf
-    billingReference: "GL-DD-2024",
-  },
-  {
-    id: seedId("ws-pracovni-spory"),
-    name: "Pracovní spory - Novák",
-    reference: "2024/004",
-    clientId: at(orgContacts, 0).id, // Novák & Partners
-  },
-  {
-    id: seedId("ws-compliance-ceska-energie"),
-    name: "Compliance program",
-    reference: "2024/005",
-    clientId: at(orgContacts, 1).id, // Česká Energie
-    billingReference: "CE-COMP-2024",
-  },
-  {
-    id: seedId("ws-reorganizace"),
-    name: "Reorganizace skupiny",
-    reference: "2024/006",
-    clientId: at(orgContacts, 0).id, // Novák & Partners
-  },
-  {
-    id: seedId("ws-cross-border"),
-    name: "Cross-border M&A Advisory",
-    reference: "2024/007",
-    clientId: at(orgContacts, 3).id, // Greenleaf
-    billingReference: "GL-MA-2024",
-  },
-  {
-    id: seedId("ws-gdpr-audit"),
-    name: "GDPR Audit a implementace",
-    reference: "2024/008",
-    clientId: at(orgContacts, 2).id, // Moravská stavební
-    billingReference: "MS-GDPR-2024",
-  },
-  {
-    id: seedId("ws-export-review"),
-    name: "Export Review - Project Atlas Data Room",
-    reference: "2024/059",
-    clientId: at(orgContacts, 3).id, // Greenleaf
-    billingReference: "GL-EXPORT-2024",
-  },
-  {
-    id: seedId("ws-heavy-virtualization"),
-    name: "Virtualization Scale Test Matter",
-    reference: "PERF/1000",
-    clientId: at(orgContacts, 0).id, // Novák & Partners
-    billingReference: "PERF-VIRT-1000",
-  },
-];
+type SeedWorkspace = {
+  id: WorkspaceId;
+  label: string;
+  name: string;
+  reference: string;
+  clientId: ContactId;
+  billingReference?: string;
+};
+
+// The virtualization stress matter: a thousand generated files, for the
+// English development firm only (no capture films it).
+const HEAVY_MATTER = {
+  name: "Virtualization Scale Test Matter",
+  reference: "PERF/1000",
+  clientIndex: 0,
+  billingReference: "PERF-VIRT-1000",
+} as const;
+
+const seedWorkspaces: readonly SeedWorkspace[] = [
+  ...MAIN_MATTER_LABELS.map((label) => ({
+    label,
+    ...SEED_CONTENT.matters[label],
+  })),
+  ...(SEED_LOCALE === "en"
+    ? [{ label: HEAVY_MATTER_LABEL, ...HEAVY_MATTER }]
+    : []),
+].map(({ label, clientIndex, ...matter }) => ({
+  id: seedId(label),
+  label,
+  ...matter,
+  clientId: at(orgContacts, clientIndex).id,
+}));
+
+/** A main matter's seeded workspace, by its label. */
+const seedWorkspaceFor = (label: MainMatterLabel): SeedWorkspace =>
+  seedWorkspaces.find((workspace) => workspace.label === label) ??
+  panic(`Missing seed workspace ${label}`);
 
 // ─── Sidebar recents ordering ───────────────────────────
 // The app sidebar's "Recent matters" list is ordered by
 // workspaces.lastActivityAt (apps/web/src/components/app-sidebar.logic.ts),
 // and the marketing recordings film that sidebar. Relying on the column's
 // defaultNow() orders matters by seed insertion time, which surfaced the
-// last few MORE_WORKSPACES entries (Czech-named) in every recording. Every
-// workspace therefore gets a deterministic lastActivityAt: the matters
-// below (English names, English client names) are pinned to the newest
-// dates so they fill all visible recents slots (sidebar limit is 5) with
-// margin, and every other matter falls back to an older date derived from
-// its insertion index. Keyed by the org-unique matter reference.
-const RECENT_MATTER_ACTIVITY: Record<string, string> = {
-  "2024/059": "2026-07-17T09:00:00.000Z", // Export Review - Project Atlas Data Room (Greenleaf)
-  "2026/031": "2026-07-16T15:00:00.000Z", // Meridian supply agreement (Northstar Robotics)
-  "2024/058": "2026-07-16T11:00:00.000Z", // Fund IV Structuring (Greenleaf)
-  "2024/046": "2026-07-15T16:00:00.000Z", // Sanctions Screening Programme (Crown Shipping)
-  "2024/018": "2026-07-15T10:30:00.000Z", // Post-Acquisition Integration (Thames Advisory)
-  "2024/003": "2026-07-14T14:00:00.000Z", // Due Diligence - Greenleaf Fund III (Greenleaf)
-  "2024/043": "2026-07-14T09:00:00.000Z", // Charter Party Dispute (Crown Shipping)
-  "2024/020": "2026-07-13T15:00:00.000Z", // Anti-Bribery Compliance Review (Thames Advisory)
-  "2024/007": "2026-07-13T10:00:00.000Z", // Cross-border M&A Advisory (Greenleaf)
-  "2024/016": "2026-07-12T14:00:00.000Z", // Shareholder Dispute Resolution (Thames Advisory)
-};
+// last few extra matters in every recording. Every workspace therefore gets
+// a deterministic lastActivityAt: the content pack's `recentMatterActivity`
+// pins the filmed matters to the newest dates so they fill all visible
+// recents slots (sidebar limit is 5) with margin, and every other matter
+// falls back to an older date derived from its insertion index. Keyed by
+// the org-unique matter reference.
+const recentMatterActivity: Readonly<Record<string, string>> =
+  SEED_CONTENT.recentMatterActivity;
 
 const HOUR_MS = 3_600_000;
 const DAY_MS = 24 * HOUR_MS;
@@ -2787,7 +714,7 @@ const FALLBACK_ACTIVITY_BASE_MS = Date.UTC(2026, 1, 2, 8, 0, 0);
 const FALLBACK_ACTIVITY_STEP_MS = HOUR_MS;
 
 const workspaceLastActivityAt = (reference: string, index: number): Date => {
-  const pinned = RECENT_MATTER_ACTIVITY[reference];
+  const pinned = recentMatterActivity[reference];
   return pinned
     ? new Date(pinned)
     : new Date(FALLBACK_ACTIVITY_BASE_MS + index * FALLBACK_ACTIVITY_STEP_MS);
@@ -2853,11 +780,14 @@ const buildProperties = (
   wsId: WorkspaceId,
   wsLabel: string,
 ): PropertySeed[] => {
+  const { properties: propertyNames } = SEED_CONTENT;
+  const [activeStatus, inReviewStatus, closedStatus, onHoldStatus] =
+    propertyNames.statusOptions;
   const base: PropertySeed[] = [
     {
       id: seedId(`${wsLabel}-prop-file`),
       workspaceId: wsId,
-      name: "Documents",
+      name: propertyNames.documents,
       content: { version: 1, type: "file" },
       tool: { version: 1, type: "manual-input" },
       system: true,
@@ -2866,15 +796,15 @@ const buildProperties = (
     {
       id: seedId(`${wsLabel}-prop-status`),
       workspaceId: wsId,
-      name: "Status",
+      name: propertyNames.status,
       content: {
         version: 1,
         type: "single-select",
         options: [
-          { color: "green", value: "Active" },
-          { color: "amber", value: "In Review" },
-          { color: "red", value: "Closed" },
-          { color: "gray", value: "On Hold" },
+          { color: "green", value: activeStatus },
+          { color: "amber", value: inReviewStatus },
+          { color: "red", value: closedStatus },
+          { color: "gray", value: onHoldStatus },
         ],
         fallback: null,
       },
@@ -2883,14 +813,14 @@ const buildProperties = (
     {
       id: seedId(`${wsLabel}-prop-notes`),
       workspaceId: wsId,
-      name: "Notes",
+      name: propertyNames.notes,
       content: { version: 1, type: "text" },
       tool: { version: 1, type: "manual-input" },
     },
     {
       id: seedId(`${wsLabel}-prop-due-date`),
       workspaceId: wsId,
-      name: "Due Date",
+      name: propertyNames.dueDate,
       content: { version: 1, type: "date" },
       tool: { version: 1, type: "manual-input" },
     },
@@ -2911,17 +841,17 @@ const buildProperties = (
       {
         id: seedId(`${wsLabel}-prop-document-type`),
         workspaceId: wsId,
-        name: "Document Type",
+        name: propertyNames.documentType,
         content: {
           version: 1,
           type: "single-select",
           options: DEFAULT_DOCUMENT_TYPES.map((documentType, index) => ({
             color: at(docTypeColors, index % docTypeColors.length),
-            value: documentType.label,
+            value: documentTypeLabel(documentType.key),
           })),
           fallback: null,
         },
-        tool: aiTool("Extract the document category from the attached file."),
+        tool: aiTool(propertyNames.documentTypePrompt),
       },
     ];
   }
@@ -2930,102 +860,114 @@ const buildProperties = (
     return base;
   }
 
+  const { columns } = EXPORT_REVIEW_COPY;
+  const [lowRisk, mediumRisk, highRisk, criticalRisk] =
+    EXPORT_REVIEW_COPY.riskLevels;
+  const [notStarted, inReview, needsPartner, cleared] =
+    EXPORT_REVIEW_COPY.reviewStatuses;
+  const [directCitation, needsSourceCheck, conflictingEvidence] =
+    EXPORT_REVIEW_COPY.evidenceQuality;
+  const [changeOfControl, termination, dataRoom, renewal] =
+    EXPORT_REVIEW_COPY.primaryTags;
+  const [consentNeeded, pricing, privacy, security] =
+    EXPORT_REVIEW_COPY.secondaryTags;
+
   return [
     ...base,
     {
       id: seedId(`${wsLabel}-prop-document-type`),
       workspaceId: wsId,
-      name: "Document Type",
+      name: columns.documentType.name,
       content: {
         version: 1,
         type: "single-select",
-        options: EXPORT_REVIEW_DOCUMENT_TYPES.map((value, index) => ({
+        options: EXPORT_REVIEW_COPY.documentTypes.map((value, index) => ({
           color: at(["blue", "teal", "violet", "amber"], index % 4),
           value,
         })),
         fallback: null,
       },
-      tool: aiTool("Extract the document category from the attached file."),
+      tool: aiTool(columns.documentType.prompt),
     },
     {
       id: seedId(`${wsLabel}-prop-counterparty`),
       workspaceId: wsId,
-      name: "Counterparty",
+      name: columns.counterparty.name,
       content: { version: 1, type: "text" },
-      tool: aiTool("Extract the primary counterparty named in the document."),
+      tool: aiTool(columns.counterparty.prompt),
     },
     {
       id: seedId(`${wsLabel}-prop-jurisdiction`),
       workspaceId: wsId,
-      name: "Jurisdiction",
+      name: columns.jurisdiction.name,
       content: {
         version: 1,
         type: "single-select",
-        options: EXPORT_REVIEW_JURISDICTIONS.map((value, index) => ({
+        options: EXPORT_REVIEW_COPY.jurisdictions.map((value, index) => ({
           color: at(["cyan", "green", "purple", "orange", "gray"], index),
           value,
         })),
         fallback: null,
       },
-      tool: aiTool("Extract the relevant jurisdiction from the document."),
+      tool: aiTool(columns.jurisdiction.prompt),
     },
     {
       id: seedId(`${wsLabel}-prop-governing-law`),
       workspaceId: wsId,
-      name: "Governing Law",
+      name: columns.governingLaw.name,
       content: { version: 1, type: "text" },
-      tool: aiTool("Extract the governing law clause."),
+      tool: aiTool(columns.governingLaw.prompt),
     },
     {
       id: seedId(`${wsLabel}-prop-effective-date`),
       workspaceId: wsId,
-      name: "Effective Date",
+      name: columns.effectiveDate.name,
       content: { version: 1, type: "date" },
-      tool: aiTool("Extract the effective date as an ISO date."),
+      tool: aiTool(columns.effectiveDate.prompt),
     },
     {
       id: seedId(`${wsLabel}-prop-expiry-date`),
       workspaceId: wsId,
-      name: "Expiry Date",
+      name: columns.expiryDate.name,
       content: { version: 1, type: "date" },
-      tool: aiTool("Extract the expiry or renewal date as an ISO date."),
+      tool: aiTool(columns.expiryDate.prompt),
     },
     {
       id: seedId(`${wsLabel}-prop-contract-value`),
       workspaceId: wsId,
-      name: "Contract Value",
+      name: columns.contractValue.name,
       content: { version: 1, type: "int" },
-      tool: aiTool("Extract the contract value in euros."),
+      tool: aiTool(columns.contractValue.prompt),
     },
     {
       id: seedId(`${wsLabel}-prop-risk-level`),
       workspaceId: wsId,
-      name: "Risk Level",
+      name: columns.riskLevel.name,
       content: {
         version: 1,
         type: "single-select",
         options: [
-          { color: "green", value: "Low" },
-          { color: "amber", value: "Medium" },
-          { color: "red", value: "High" },
-          { color: "purple", value: "Critical" },
+          { color: "green", value: lowRisk },
+          { color: "amber", value: mediumRisk },
+          { color: "red", value: highRisk },
+          { color: "purple", value: criticalRisk },
         ],
         fallback: null,
       },
-      tool: aiTool("Classify the diligence risk level."),
+      tool: aiTool(columns.riskLevel.prompt),
     },
     {
       id: seedId(`${wsLabel}-prop-review-status`),
       workspaceId: wsId,
-      name: "Review Status",
+      name: columns.reviewStatus.name,
       content: {
         version: 1,
         type: "single-select",
         options: [
-          { color: "gray", value: "Not Started" },
-          { color: "blue", value: "In Review" },
-          { color: "amber", value: "Needs Partner" },
-          { color: "green", value: "Cleared" },
+          { color: "gray", value: notStarted },
+          { color: "blue", value: inReview },
+          { color: "amber", value: needsPartner },
+          { color: "green", value: cleared },
         ],
         fallback: null,
       },
@@ -3034,53 +976,53 @@ const buildProperties = (
     {
       id: seedId(`${wsLabel}-prop-evidence-quality`),
       workspaceId: wsId,
-      name: "Evidence Quality",
+      name: columns.evidenceQuality.name,
       content: {
         version: 1,
         type: "single-select",
         options: [
-          { color: "green", value: "Direct citation" },
-          { color: "amber", value: "Needs source check" },
-          { color: "red", value: "Conflicting evidence" },
+          { color: "green", value: directCitation },
+          { color: "amber", value: needsSourceCheck },
+          { color: "red", value: conflictingEvidence },
         ],
         fallback: null,
       },
-      tool: aiTool("Assess whether the extracted value has direct support."),
+      tool: aiTool(columns.evidenceQuality.prompt),
     },
     {
       id: seedId(`${wsLabel}-prop-tags`),
       workspaceId: wsId,
-      name: "Tags",
+      name: columns.tags.name,
       content: {
         version: 1,
         type: "multi-select",
         options: [
-          { color: "blue", value: "change of control" },
-          { color: "amber", value: "termination" },
-          { color: "violet", value: "data room" },
-          { color: "green", value: "renewal" },
-          { color: "red", value: "consent needed" },
-          { color: "cyan", value: "pricing" },
-          { color: "purple", value: "privacy" },
-          { color: "gray", value: "security" },
+          { color: "blue", value: changeOfControl },
+          { color: "amber", value: termination },
+          { color: "violet", value: dataRoom },
+          { color: "green", value: renewal },
+          { color: "red", value: consentNeeded },
+          { color: "cyan", value: pricing },
+          { color: "purple", value: privacy },
+          { color: "gray", value: security },
         ],
         fallback: null,
       },
-      tool: aiTool("Extract concise diligence tags."),
+      tool: aiTool(columns.tags.prompt),
     },
     {
       id: seedId(`${wsLabel}-prop-key-obligation`),
       workspaceId: wsId,
-      name: "Key Obligation",
+      name: columns.keyObligation.name,
       content: { version: 1, type: "text" },
-      tool: aiTool("Extract the key obligation relevant to closing."),
+      tool: aiTool(columns.keyObligation.prompt),
     },
     {
       id: seedId(`${wsLabel}-prop-risk-finding`),
       workspaceId: wsId,
-      name: "Risk Finding",
+      name: columns.riskFinding.name,
       content: { version: 1, type: "text" },
-      tool: aiTool("Summarize the key diligence risk in one sentence."),
+      tool: aiTool(columns.riskFinding.prompt),
     },
   ];
 };
@@ -3111,7 +1053,7 @@ const buildEntities = (wsId: WorkspaceId, wsLabel: string): EntitySeed[] => {
         versionId: seedId(`${wsLabel}-folder-${i + 1}-v`),
         workspaceId: wsId,
         kind: "folder",
-        name: at(EXPORT_REVIEW_FOLDERS, i),
+        name: at(EXPORT_REVIEW_COPY.folders, i),
       });
     }
 
@@ -3173,7 +1115,7 @@ const buildEntities = (wsId: WorkspaceId, wsLabel: string): EntitySeed[] => {
       versionId: seedId(`${wsLabel}-folder-1-v`),
       workspaceId: wsId,
       kind: "folder",
-      name: "Documents",
+      name: SEED_CONTENT.folders.documents,
     },
     {
       entityId: seedId(`${wsLabel}-doc-1`),
@@ -3230,31 +1172,6 @@ type FieldSeed = {
   content: FieldContent;
 };
 
-const statuses = ["Active", "In Review", "Closed", "On Hold"];
-
-const notes = [
-  "Awaiting client feedback on latest draft",
-  "Reviewed by senior partner; minor revisions needed",
-  "Final version pending signature",
-  "Opposing counsel requested extension",
-  "Submitted to court registry",
-  "Internal review completed",
-  "Client meeting scheduled to discuss terms",
-  "Requires translation to English",
-  "Expert opinion attached separately",
-  "Pending regulatory approval",
-  "Redlined version sent to counterparty",
-  "Board resolution required before execution",
-  "Notarization scheduled for next week",
-  "Updated to reflect amended legislation",
-  "Confidential; restricted distribution",
-  "Cross-referenced with due diligence findings",
-  "Template updated to current standards",
-  "Risk assessment appended",
-  "Fee estimate included in cover letter",
-  "Archived after matter closure",
-];
-
 /**
  * Deterministic future date within ~6 months of 2025-03-01.
  *
@@ -3278,7 +1195,7 @@ const addExportReviewFields = (
   doc: EntitySeed,
   index: number,
 ) => {
-  const metadata = buildExportReviewMetadata(index);
+  const metadata = buildExportReviewMetadata(EXPORT_REVIEW_COPY, index);
   result.push(
     {
       id: seedId(`${wsLabel}-field-document-type-${index}`),
@@ -3399,7 +1316,7 @@ const addExportReviewFields = (
       content: {
         version: 1,
         type: "multi-select",
-        value: metadata.tags,
+        value: [...metadata.tags],
       },
     },
     {
@@ -3427,6 +1344,9 @@ const addExportReviewFields = (
   );
 };
 
+const statuses = SEED_CONTENT.properties.statusOptions;
+const { notes } = SEED_CONTENT;
+
 const buildFields = (
   wsLabel: string,
   entitySeeds: EntitySeed[],
@@ -3445,7 +1365,7 @@ const buildFields = (
     // the filmed files view matches the landing mock's framing.
     const isSupplierAgreement =
       wsLabel === AKVIZICE_MATTER_LABEL &&
-      doc.name === SUPPLIER_AGREEMENT_DOC_NAME;
+      doc.name === SUPPLIER_AGREEMENT.fileName;
 
     // Status field
     result.push({
@@ -3457,7 +1377,7 @@ const buildFields = (
         version: 1,
         type: "single-select",
         value: isSupplierAgreement
-          ? "In Review"
+          ? at(statuses, 1)
           : at(statuses, i % statuses.length),
       },
     });
@@ -3490,7 +1410,7 @@ const buildFields = (
         version: 1,
         type: "text",
         value: isSupplierAgreement
-          ? "Two positions outside playbook"
+          ? SUPPLIER_AGREEMENT.note
           : at(notes, noteIndex),
       },
     });
@@ -3503,7 +1423,7 @@ const buildFields = (
     // (DocumentType == "Share Purchase Agreement") matches it.
     if (
       wsLabel === AKVIZICE_MATTER_LABEL &&
-      doc.name === AKVIZICE_SPA_DOC_NAME
+      doc.name === SEED_CONTENT.spaDocumentName
     ) {
       result.push({
         id: seedId(`${wsLabel}-field-document-type-${i}`),
@@ -3602,9 +1522,9 @@ const buildExportReviewJustifications = (
 
   for (let i = 0; i < docs.length; i++) {
     const fileName = at(EXPORT_REVIEW_DOC_NAMES, i);
-    const metadata = buildExportReviewMetadata(i);
+    const metadata = buildExportReviewMetadata(EXPORT_REVIEW_COPY, i);
     const { fileFieldId } = exportReviewDocumentIds(i);
-    const seeds = buildExportReviewCitationSeeds(metadata);
+    const seeds = buildExportReviewCitationSeeds(EXPORT_REVIEW_COPY, metadata);
 
     for (const citationSeed of seeds) {
       const fieldId = seedId<"field">(
@@ -3696,29 +1616,15 @@ const seedParties: PartySeed[] = [
 
 // ─── Billing codes ─────────────────────────────────────
 
-const TASK_CODES = [
-  { code: "RESEARCH", label: "Legal research" },
-  { code: "REVIEW", label: "Document review" },
-  { code: "DRAFT", label: "Drafting" },
-  { code: "MEETING", label: "Meeting / conference" },
-  { code: "COURT", label: "Court appearance" },
-  { code: "FILING", label: "Filing and service" },
-  { code: "DISCOVERY", label: "Discovery" },
-  { code: "NEGOTIATE", label: "Negotiation" },
-  { code: "ADVISE", label: "Advisory" },
-  { code: "ADMIN", label: "Administrative" },
-] as const;
+const TASK_CODES = TASK_CODE_KEYS.map((code) => ({
+  code,
+  label: SEED_CONTENT.billing.taskCodeLabels[code],
+}));
 
-const ACTIVITY_CODES = [
-  { code: "PLAN", label: "Planning and strategy" },
-  { code: "COMMUNICATE", label: "Communication" },
-  { code: "ANALYZE", label: "Analysis" },
-  { code: "MANAGE", label: "Case management" },
-  { code: "TRAVEL", label: "Travel" },
-  { code: "ATTEND", label: "Attendance" },
-  { code: "PREPARE", label: "Preparation" },
-  { code: "CORRESPOND", label: "Correspondence" },
-] as const;
+const ACTIVITY_CODES = ACTIVITY_CODE_KEYS.map((code) => ({
+  code,
+  label: SEED_CONTENT.billing.activityCodeLabels[code],
+}));
 
 type BillingCodeSeed = {
   id: BillingCodeId;
@@ -3795,8 +1701,8 @@ const buildRateTables = ({
     tables.push({
       id: tableId,
       workspaceId: ws.id,
-      name: "Default Rate Table",
-      currency: "CZK",
+      name: SEED_CONTENT.billing.rateTableName,
+      currency: SEED_CONTENT.currency,
     });
     for (let ui = 0; ui < userIds.length; ui++) {
       const userId = at(userIds, ui);
@@ -3814,49 +1720,6 @@ const buildRateTables = ({
 };
 
 // ─── Extended time entries (~500) ──────────────────────
-
-const EXTENDED_NARRATIVES = [
-  "Review of acquisition agreement draft",
-  "Client conference call re: deal terms",
-  "Legal research on regulatory compliance",
-  "Preparation of due diligence checklist",
-  "Analysis of opposing party's motion",
-  "Drafting response to counterparty",
-  "Review of financial disclosure documents",
-  "Witness interview preparation",
-  "Court filing and service coordination",
-  "Negotiation of settlement terms",
-  "Review of employment contract amendments",
-  "Compliance risk assessment meeting",
-  "Cross-border regulatory analysis",
-  "GDPR gap analysis and documentation",
-  "Internal team strategy discussion",
-  "Preparation of expert witness report",
-  "Review of corporate restructuring plan",
-  "Analysis of environmental permit conditions",
-  "Draft shareholder resolution",
-  "Anti-money laundering review",
-  "Review of merger notification filing",
-  "Client update on litigation status",
-  "Research on jurisdictional questions",
-  "Preparation of closing documents",
-  "Review of lease agreement modifications",
-  "Correspondence with opposing counsel",
-  "Due diligence on target company assets",
-  "Review of intellectual property portfolio",
-  "Preparation for arbitration hearing",
-  "Analysis of insurance coverage terms",
-  "Tax advisory on cross-border transaction",
-  "Review of non-compete clause enforceability",
-  "Preparation of board meeting minutes",
-  "Research on data protection regulations",
-  "Draft supply contract amendments",
-  "Review of regulatory investigation response",
-  "Client briefing on new legislation",
-  "Analysis of construction contract claims",
-  "Preparation of settlement proposal",
-  "Review of export control compliance",
-];
 
 type ExtendedTimeEntrySeed = {
   id: SafeId<"timeEntry">;
@@ -3876,18 +1739,7 @@ type ExtendedTimeEntrySeed = {
   invoiceId: InvoiceId | null;
 };
 
-const WS_LABELS = [
-  "ws-akvizice-energo",
-  "ws-stavebni-spor",
-  "ws-due-diligence",
-  "ws-pracovni-spory",
-  "ws-compliance-ceska-energie",
-  "ws-reorganizace",
-  "ws-cross-border",
-  "ws-gdpr-audit",
-  EXPORT_TABLE_MATTER_LABEL,
-  HEAVY_MATTER_LABEL,
-] as const;
+const WS_LABELS = seedWorkspaces.map((workspace) => workspace.label);
 
 const buildExtendedTimeEntries = (
   invoiceIds: InvoiceId[],
@@ -3915,7 +1767,8 @@ const buildExtendedTimeEntries = (
     const duration = 15 + ((i * 7 + 13) % 226);
     const billedMinutes = Math.ceil(duration / 6) * 6;
 
-    const narrative = at(EXTENDED_NARRATIVES, i % EXTENDED_NARRATIVES.length);
+    const narratives = SEED_CONTENT.billing.timeEntryNarratives;
+    const narrative = at(narratives, i % narratives.length);
     const taskCode = at(TASK_CODES, i % TASK_CODES.length).code;
     const activityCode = at(ACTIVITY_CODES, i % ACTIVITY_CODES.length).code;
 
@@ -3944,7 +1797,7 @@ const buildExtendedTimeEntries = (
       durationMinutes: duration,
       billedMinutes,
       rateAtEntry: rate,
-      currency: "CZK",
+      currency: SEED_CONTENT.currency,
       narrative,
       billable,
       status,
@@ -3963,15 +1816,14 @@ const buildExtendedTimeEntries = (
 // about that matter's documents, rates in CZK minor units, and the invoice
 // total is their sum. The extended entries above never link to it.
 const DUE_DILIGENCE_INVOICE_INDEX = 2;
-const DUE_DILIGENCE_WS_LABEL = "ws-due-diligence";
+const DUE_DILIGENCE_WS_LABEL = "ws-due-diligence" satisfies MainMatterLabel;
 
+// Narratives come from the content pack, in this order.
 const DUE_DILIGENCE_INVOICE_ENTRIES = [
   {
     date: "2025-02-03",
     docIndex: 1,
     minutes: 150,
-    narrative:
-      "Review of target corporate records against the legal DD checklist",
     task: "REVIEW",
     activity: "ANALYZE",
   },
@@ -3979,7 +1831,6 @@ const DUE_DILIGENCE_INVOICE_ENTRIES = [
     date: "2025-02-05",
     docIndex: 2,
     minutes: 90,
-    narrative: "Analysis of group structure and shareholder register",
     task: "RESEARCH",
     activity: "ANALYZE",
   },
@@ -3987,7 +1838,6 @@ const DUE_DILIGENCE_INVOICE_ENTRIES = [
     date: "2025-02-10",
     docIndex: 4,
     minutes: 120,
-    narrative: "Review of regulatory permits and compliance findings",
     task: "REVIEW",
     activity: "ANALYZE",
   },
@@ -3995,8 +1845,6 @@ const DUE_DILIGENCE_INVOICE_ENTRIES = [
     date: "2025-02-12",
     docIndex: 1,
     minutes: 180,
-    narrative:
-      "Red-flag summary of change-of-control clauses in material contracts",
     task: "DRAFT",
     activity: "PREPARE",
   },
@@ -4004,7 +1852,6 @@ const DUE_DILIGENCE_INVOICE_ENTRIES = [
     date: "2025-02-18",
     docIndex: 3,
     minutes: 210,
-    narrative: "Mark-up of share purchase agreement warranties and indemnities",
     task: "DRAFT",
     activity: "PREPARE",
   },
@@ -4012,7 +1859,6 @@ const DUE_DILIGENCE_INVOICE_ENTRIES = [
     date: "2025-02-20",
     docIndex: 3,
     minutes: 60,
-    narrative: "Call with client on disclosure schedule and SPA comments",
     task: "MEETING",
     activity: "COMMUNICATE",
   },
@@ -4023,12 +1869,10 @@ const buildDueDiligenceInvoiceEntries = (
   userIds: readonly string[],
   userRates: Record<string, number>,
 ): ExtendedTimeEntrySeed[] => {
-  const workspace = at(seedWorkspaces, DUE_DILIGENCE_INVOICE_INDEX);
-  if (at(WS_LABELS, DUE_DILIGENCE_INVOICE_INDEX) !== DUE_DILIGENCE_WS_LABEL) {
-    panic("The due-diligence invoice must live in the due-diligence matter");
-  }
+  const workspace = seedWorkspaceFor(DUE_DILIGENCE_WS_LABEL);
   return DUE_DILIGENCE_INVOICE_ENTRIES.map((entry, index) => {
     const userId = at(userIds, index % userIds.length);
+    const narrative = at(SEED_CONTENT.billing.invoiceEntryNarratives, index);
     return {
       id: seedId(`dd-invoice-time-entry-${index}`),
       workspaceId: workspace.id,
@@ -4037,10 +1881,11 @@ const buildDueDiligenceInvoiceEntries = (
       dateWorked: entry.date,
       durationMinutes: entry.minutes,
       billedMinutes: entry.minutes,
-      // Seed user rates are whole CZK per hour; entries store minor units.
+      // Seed user rates are whole currency units per hour; entries store
+      // minor units.
       rateAtEntry: (userRates[userId] ?? 4000) * 100,
-      currency: "CZK",
-      narrative: entry.narrative,
+      currency: SEED_CONTENT.currency,
+      narrative,
       billable: true,
       status: "billed",
       taskCode: entry.task,
@@ -4094,19 +1939,6 @@ type MissingSeedExpenseCategory = Exclude<
 
 true satisfies MissingSeedExpenseCategory extends never ? true : never;
 
-const EXPENSE_DESCRIPTIONS = [
-  "Court filing fee",
-  "Travel to client office",
-  "Expert witness consultation fee",
-  "Document printing and binding",
-  "Courier delivery of signed contracts",
-  "Notarization fee",
-  "Land registry extract",
-  "Process server fee",
-  "Conference room rental",
-  "Postage for certified mail",
-];
-
 const buildExpenses = (userIds: readonly string[]): ExpenseSeed[] => {
   const expenseSeeds: ExpenseSeed[] = [];
   const TARGET = 50;
@@ -4127,10 +1959,8 @@ const buildExpenses = (userIds: readonly string[]): ExpenseSeed[] => {
       SEED_EXPENSE_CATEGORIES,
       i % SEED_EXPENSE_CATEGORIES.length,
     );
-    const description = at(
-      EXPENSE_DESCRIPTIONS,
-      i % EXPENSE_DESCRIPTIONS.length,
-    );
+    const descriptions = SEED_CONTENT.billing.expenseDescriptions;
+    const description = at(descriptions, i % descriptions.length);
     const billable = i % 5 !== 0;
     const statusRoll = i % 10;
     let status: ExpenseSeed["status"] = "draft";
@@ -4149,7 +1979,7 @@ const buildExpenses = (userIds: readonly string[]): ExpenseSeed[] => {
       matterId,
       dateIncurred: dateStr,
       amount,
-      currency: "CZK",
+      currency: SEED_CONTENT.currency,
       category,
       description,
       billable,
@@ -4189,11 +2019,11 @@ const buildInvoices = (dueDiligenceTotal: number): InvoiceSeed[] => {
     invoiceSeeds.push({
       id: invoiceSeedId(i),
       workspaceId: ws.id,
-      invoiceNumber: `INV-2025-${String(i + 1).padStart(4, "0")}`,
+      invoiceNumber: `${SEED_CONTENT.billing.invoiceNumberPrefix}-2025-${String(i + 1).padStart(4, "0")}`,
       status: at(invoiceStatuses, i),
       invoiceDate: `2025-0${i + 1}-15`,
       dueDate: `2025-0${i + 2}-15`,
-      currency: "CZK",
+      currency: SEED_CONTENT.currency,
       totalAmount:
         i === DUE_DILIGENCE_INVOICE_INDEX
           ? dueDiligenceTotal
@@ -4205,270 +2035,7 @@ const buildInvoices = (dueDiligenceTotal: number): InvoiceSeed[] => {
 
 // ─── Additional workspaces for overview stress-testing ──
 
-const MORE_WORKSPACES = [
-  // Bratislava Legal Group
-  {
-    name: "Reštitučné konanie Bratislava",
-    reference: "2024/009",
-    clientLabel: "contact-org-bratislava-legal",
-  },
-  {
-    name: "Obchodný spor – dodávky",
-    reference: "2024/010",
-    clientLabel: "contact-org-bratislava-legal",
-  },
-  {
-    name: "Prevod obchodného podielu",
-    reference: "2024/011",
-    clientLabel: "contact-org-bratislava-legal",
-  },
-  // Müller & Bergmann
-  {
-    name: "Kartellrechtliche Prüfung",
-    reference: "2024/012",
-    clientLabel: "contact-org-muller-bergmann",
-  },
-  {
-    name: "Gesellschafterstreit GmbH",
-    reference: "2024/013",
-    clientLabel: "contact-org-muller-bergmann",
-  },
-  {
-    name: "Arbeitsrechtliche Restrukturierung",
-    reference: "2024/014",
-    clientLabel: "contact-org-muller-bergmann",
-  },
-  {
-    name: "Datenschutz-Folgenabschätzung",
-    reference: "2024/015",
-    clientLabel: "contact-org-muller-bergmann",
-  },
-  // Thames Advisory
-  {
-    name: "Shareholder Dispute Resolution",
-    reference: "2024/016",
-    clientLabel: "contact-org-thames-advisory",
-  },
-  {
-    name: "UK Regulatory Filing",
-    reference: "2024/017",
-    clientLabel: "contact-org-thames-advisory",
-  },
-  {
-    name: "Post-Acquisition Integration",
-    reference: "2024/018",
-    clientLabel: "contact-org-thames-advisory",
-  },
-  {
-    name: "Employee Share Scheme",
-    reference: "2024/019",
-    clientLabel: "contact-org-thames-advisory",
-  },
-  {
-    name: "Anti-Bribery Compliance Review",
-    reference: "2024/020",
-    clientLabel: "contact-org-thames-advisory",
-  },
-  // Žilina Steel
-  {
-    name: "Environmentálne povolenia",
-    reference: "2024/021",
-    clientLabel: "contact-org-zilina-steel",
-  },
-  {
-    name: "Kolektívna zmluva 2025",
-    reference: "2024/022",
-    clientLabel: "contact-org-zilina-steel",
-  },
-  {
-    name: "Cezhraničná dodávka ocele",
-    reference: "2024/023",
-    clientLabel: "contact-org-zilina-steel",
-  },
-  // PragoBanka
-  {
-    name: "Syndikovaný úvěr – strukturace",
-    reference: "2024/024",
-    clientLabel: "contact-org-pragobanka",
-  },
-  {
-    name: "Regulatorní reporting ČNB",
-    reference: "2024/025",
-    clientLabel: "contact-org-pragobanka",
-  },
-  {
-    name: "AML vyšetřování",
-    reference: "2024/026",
-    clientLabel: "contact-org-pragobanka",
-  },
-  {
-    name: "Spotřebitelské úvěry – audit",
-    reference: "2024/027",
-    clientLabel: "contact-org-pragobanka",
-  },
-  {
-    name: "Bankovní záruky – rámcová smlouva",
-    reference: "2024/028",
-    clientLabel: "contact-org-pragobanka",
-  },
-  {
-    name: "Digitální transformace – právní rámec",
-    reference: "2024/029",
-    clientLabel: "contact-org-pragobanka",
-  },
-  // Dunaj Pharma
-  {
-    name: "Registrácia liečiv ŠÚKL",
-    reference: "2024/030",
-    clientLabel: "contact-org-dunaj-pharma",
-  },
-  {
-    name: "Klinické skúšanie – zmluvy",
-    reference: "2024/031",
-    clientLabel: "contact-org-dunaj-pharma",
-  },
-  {
-    name: "Patentový spor – generikum",
-    reference: "2024/032",
-    clientLabel: "contact-org-dunaj-pharma",
-  },
-  {
-    name: "Distribučná sieť – regulácia",
-    reference: "2024/033",
-    clientLabel: "contact-org-dunaj-pharma",
-  },
-  // Nord Energie
-  {
-    name: "Windpark Genehmigung Nordsee",
-    reference: "2024/034",
-    clientLabel: "contact-org-nord-energie",
-  },
-  {
-    name: "Energieliefervertrag B2B",
-    reference: "2024/035",
-    clientLabel: "contact-org-nord-energie",
-  },
-  {
-    name: "Netzanschluss Offshore",
-    reference: "2024/036",
-    clientLabel: "contact-org-nord-energie",
-  },
-  {
-    name: "EEG-Umlage Optimierung",
-    reference: "2024/037",
-    clientLabel: "contact-org-nord-energie",
-  },
-  {
-    name: "Gasliefervertrag Russland-Exit",
-    reference: "2024/038",
-    clientLabel: "contact-org-nord-energie",
-  },
-  // Ostrava Mining
-  {
-    name: "Těžební licence – prodloužení",
-    reference: "2024/039",
-    clientLabel: "contact-org-ostrava-mining",
-  },
-  {
-    name: "Rekultivace území Karviná",
-    reference: "2024/040",
-    clientLabel: "contact-org-ostrava-mining",
-  },
-  {
-    name: "Pracovní úrazy – hromadná žaloba",
-    reference: "2024/041",
-    clientLabel: "contact-org-ostrava-mining",
-  },
-  {
-    name: "Emise CO₂ – povolenky EU ETS",
-    reference: "2024/042",
-    clientLabel: "contact-org-ostrava-mining",
-  },
-  // Crown Shipping
-  {
-    name: "Charter Party Dispute",
-    reference: "2024/043",
-    clientLabel: "contact-org-crown-shipping",
-  },
-  {
-    name: "Marine Insurance Claim",
-    reference: "2024/044",
-    clientLabel: "contact-org-crown-shipping",
-  },
-  {
-    name: "Port Authority Compliance",
-    reference: "2024/045",
-    clientLabel: "contact-org-crown-shipping",
-  },
-  {
-    name: "Sanctions Screening Programme",
-    reference: "2024/046",
-    clientLabel: "contact-org-crown-shipping",
-  },
-  {
-    name: "Bill of Lading Fraud Investigation",
-    reference: "2024/047",
-    clientLabel: "contact-org-crown-shipping",
-  },
-  // Tatra Motors
-  {
-    name: "Homologace vozidla EU",
-    reference: "2024/048",
-    clientLabel: "contact-org-tatra-motors",
-  },
-  {
-    name: "Záruční spor – flotila",
-    reference: "2024/049",
-    clientLabel: "contact-org-tatra-motors",
-  },
-  {
-    name: "Dodavatelský řetězec – audit",
-    reference: "2024/050",
-    clientLabel: "contact-org-tatra-motors",
-  },
-  {
-    name: "Ochranná známka TATRA",
-    reference: "2024/051",
-    clientLabel: "contact-org-tatra-motors",
-  },
-  // Košice Tech Ventures
-  {
-    name: "Seed investment – term sheet",
-    reference: "2024/052",
-    clientLabel: "contact-org-kosice-tech",
-  },
-  {
-    name: "IP licenčná zmluva",
-    reference: "2024/053",
-    clientLabel: "contact-org-kosice-tech",
-  },
-  {
-    name: "ESOP program pre zamestnancov",
-    reference: "2024/054",
-    clientLabel: "contact-org-kosice-tech",
-  },
-  // Extra matters for existing clients (deeper grouping)
-  {
-    name: "Daňová optimalizace holdingu",
-    reference: "2024/055",
-    clientLabel: "contact-org-novak-partners",
-  },
-  {
-    name: "Obchodní registr – změny",
-    reference: "2024/056",
-    clientLabel: "contact-org-ceska-energie",
-  },
-  {
-    name: "Stavební povolení Brno-jih",
-    reference: "2024/057",
-    clientLabel: "contact-org-moravska-stavebni",
-  },
-  {
-    name: "Fund IV Structuring",
-    reference: "2024/058",
-    clientLabel: "contact-org-greenleaf",
-  },
-];
+const MORE_WORKSPACES = SEED_CONTENT.extraMatters;
 
 // ─── Playbooks (knowledge base) ─────────────────────────
 
@@ -5057,19 +2624,21 @@ export const userFileCleanupKeys = ({
 export async function seed(organizationId?: string, userId?: string) {
   requireLocalDevOpen("Seeding");
   const ORG_ID = toSafeId<"organization">(organizationId ?? DEFAULT_ORG_ID);
+  // The module-level tables were built in one locale; never write them into
+  // another locale's firm.
+  assertSeedLocaleMatches(ORG_ID);
   let USER_ID = userId ?? DEFAULT_USER_ID;
-  let resolvedSeedUserIds: readonly string[] | undefined;
   const toWs = (id: WorkspaceId) => id;
 
-  const ensureSeedUsers = async () => {
+  /** The owner first, then the colleagues in author rotation order. */
+  const ensureSeedUsers = async (): Promise<readonly string[]> => {
     if (ORG_ID === DEFAULT_ORG_ID && USER_ID === DEFAULT_USER_ID) {
       const { colleagueUserIds, testUserId } = await ensureTestUsers(ORG_ID);
       USER_ID = testUserId;
-      resolvedSeedUserIds = [
+      return [
         testUserId,
         ...colleagueUserIds.slice(0, DEFAULT_SEED_COLLEAGUE_COUNT),
       ];
-      return;
     }
     await ensurePrimarySeedUserInOrganization({
       organizationId: ORG_ID,
@@ -5077,9 +2646,9 @@ export async function seed(organizationId?: string, userId?: string) {
     });
     const colleagueUserIds = await ensureSeedColleaguesInOrganization({
       organizationId: ORG_ID,
-      colleagueCount: DEFAULT_SEED_COLLEAGUE_COUNT,
+      colleagues: SEED_CONTENT.colleagues,
     });
-    resolvedSeedUserIds = [USER_ID, ...colleagueUserIds];
+    return [USER_ID, ...colleagueUserIds];
   };
 
   /**
@@ -5237,14 +2806,17 @@ export async function seed(organizationId?: string, userId?: string) {
 
   // Ensure referenced users exist in the target org before seeding matters,
   // billing, and analytics data; then clear deterministic IDs for replay.
-  await ensureSeedUsers();
-  const seedUserIds =
-    resolvedSeedUserIds ??
-    buildSeedUserIds({
-      primaryUserId: USER_ID,
-      colleagueCount: DEFAULT_SEED_COLLEAGUE_COUNT,
-    });
-  const seedUserRates = buildSeedUserRates(seedUserIds);
+  const seedUserIds = await ensureSeedUsers();
+  // Hourly rates in whole currency units: the owner's, then each
+  // colleague's, by position.
+  const seedUserRates: Record<string, number> = Object.fromEntries(
+    seedUserIds.map((id, index) => [
+      id,
+      index === 0
+        ? SEED_CONTENT.ownerHourlyRate
+        : (SEED_CONTENT.colleagues[index - 1]?.hourlyRate ?? 4000),
+    ]),
+  );
   await clearSeedData();
 
   console.log("Seeding development data...\n");
@@ -5415,12 +2987,10 @@ export async function seed(organizationId?: string, userId?: string) {
     `  Workspaces: ${seedWorkspaces.length} + ${moreWsCount} extra = ${seedWorkspaces.length + moreWsCount}`,
   );
 
-  const marketingAgentWorkspace = at(seedWorkspaces, 8);
-  if (at(WS_LABELS, 8) !== EXPORT_TABLE_MATTER_LABEL) {
-    panic("The marketing agent thread must live in the Export Review matter");
-  }
+  const marketingAgentWorkspace = seedWorkspaceFor(EXPORT_TABLE_MATTER_LABEL);
   const marketingAgent = buildMarketingAgentThread({
     createdAt: new Date("2026-07-16T09:30:00.000Z"),
+    locale: SEED_LOCALE,
     organizationId: ORG_ID,
     userId: USER_ID,
     workspaceId: marketingAgentWorkspace.id,
@@ -5590,7 +3160,7 @@ export async function seed(organizationId?: string, userId?: string) {
       createdAt,
       updatedAt,
     });
-    if (e.name === SUPPLIER_AGREEMENT_DOC_NAME) {
+    if (e.name === SUPPLIER_AGREEMENT.fileName) {
       supplierAgreementEntities.push(e);
     } else {
       plainVersionRows.push({
@@ -5707,14 +3277,14 @@ export async function seed(organizationId?: string, userId?: string) {
     .flat()
     .filter(
       (name) =>
-        name !== SUPPLIER_AGREEMENT_DOC_NAME && !seedEmailFileNames.has(name),
+        name !== SUPPLIER_AGREEMENT.fileName && seedEmails[name] === undefined,
     );
 
   /** Seed all document content for a single workspace. */
   const seedDocumentsForWorkspace = async (
     wsId: WorkspaceId,
     wsLabel: string,
-    docNames: string[],
+    docNames: readonly string[],
   ) => {
     const filePropertyId = seedId(`${wsLabel}-prop-file`);
     const docEntities = allEntities.filter(
@@ -5735,14 +3305,14 @@ export async function seed(organizationId?: string, userId?: string) {
       // The Supplier Agreement ships real tracked changes and comments, so
       // it has a dedicated builder instead of the generic paragraph mock.
       const buildContent = async () => {
-        if (fileName === SUPPLIER_AGREEMENT_DOC_NAME) {
+        if (fileName === SUPPLIER_AGREEMENT.fileName) {
           return await createSupplierAgreementDocx("keep");
         }
         switch (format.type) {
           case "docx":
             return await createMockDocx(title, configuredDocText);
           case "email":
-            return createSeedEmail(format.fileName);
+            return createSeedEmail(fileName, format.email);
           case "pdf":
             return createTextPdf(title, configuredDocText);
           default: {
@@ -5810,7 +3380,7 @@ export async function seed(organizationId?: string, userId?: string) {
       );
       fileCount++;
 
-      if (fileName === SUPPLIER_AGREEMENT_DOC_NAME) {
+      if (fileName === SUPPLIER_AGREEMENT.fileName) {
         const baseVersionId = supplierAgreementBaseVersionId(wsId);
         const baseFileId = seedId<"userFile">(
           `${wsLabel}-supplier-agreement-base-file`,
@@ -5906,7 +3476,7 @@ export async function seed(organizationId?: string, userId?: string) {
   type WsDocPlan = {
     wsId: WorkspaceId;
     wsLabel: string;
-    docNames: string[];
+    docNames: readonly string[];
   };
   const docPlans: WsDocPlan[] = [];
 
@@ -6226,7 +3796,7 @@ export async function seed(organizationId?: string, userId?: string) {
   }
   console.log(`  Expenses: ${expenseSeeds.length}`);
 
-  // 13b. Issuing setup: a default seller profile, the Czech VAT rates and a
+  // 13b. Issuing setup: a default seller profile, the firm's VAT rates and a
   // default invoice number series, so a new invoice prefills and issues.
   await withAggregateTransaction(db, async (tx) => {
     // These tables force row-level security, so the transaction takes the
@@ -6240,16 +3810,9 @@ export async function seed(organizationId?: string, userId?: string) {
       .values({
         id: seedId<"sellerProfile">("seller-profile-default"),
         organizationId: ORG_ID,
-        legalName: "Stella Demo Legal s.r.o.",
-        registrationId: "12345678",
-        vatId: "CZ12345678",
+        ...SEED_CONTENT.issuing.seller,
         vatPayer: true,
-        addressLine1: "Vodičkova 12",
-        city: "Praha",
-        postalCode: "110 00",
-        country: "CZ",
-        iban: "CZ6508000000192000145399",
-        defaultCurrency: "CZK",
+        defaultCurrency: SEED_CONTENT.currency,
         isDefault: true,
       })
       .onConflictDoNothing();
@@ -6261,17 +3824,13 @@ export async function seed(organizationId?: string, userId?: string) {
           id: seedId<"vatRate">("vat-rate-standard"),
           organizationId: ORG_ID,
           code: "standard",
-          name: "Standard rate",
-          rateBps: 2100,
-          validFrom: "2013-01-01",
+          ...SEED_CONTENT.issuing.vatRates.standard,
         },
         {
           id: seedId<"vatRate">("vat-rate-reduced"),
           organizationId: ORG_ID,
           code: "reduced",
-          name: "Reduced rate",
-          rateBps: 1200,
-          validFrom: "2024-01-01",
+          ...SEED_CONTENT.issuing.vatRates.reduced,
         },
       ])
       .onConflictDoNothing();
@@ -6282,7 +3841,7 @@ export async function seed(organizationId?: string, userId?: string) {
         id: seedId<"numberSeries">("number-series-invoices"),
         organizationId: ORG_ID,
         documentType: "invoice",
-        name: "Invoices",
+        name: SEED_CONTENT.issuing.numberSeriesName,
         pattern: "{YYYY}-{SEQ}",
         padding: 4,
         isDefault: true,
@@ -6292,7 +3851,7 @@ export async function seed(organizationId?: string, userId?: string) {
   console.log("  Issuing setup: seller profile, VAT rates, number series");
 
   // 14. Templates & clauses (knowledge base)
-  await seedTemplates(ORG_ID, seedUserIds);
+  await seedTemplates(ORG_ID, seedUserIds, SEED_CONTENT.templates);
 
   // 15. Playbooks (knowledge base) + the org document-type taxonomy the
   // type-scoped playbook references. ensureDefaultDocumentTypes is intentionally
@@ -6308,7 +3867,7 @@ export async function seed(organizationId?: string, userId?: string) {
           DEFAULT_DOCUMENT_TYPES.map((documentType) => ({
             organizationId: ORG_ID,
             key: documentType.key,
-            label: documentType.label,
+            label: documentTypeLabel(documentType.key),
             sortOrder: documentType.sortOrder,
           })),
         )
@@ -6325,11 +3884,16 @@ export async function seed(organizationId?: string, userId?: string) {
   // 16. Global case-law corpus for search and references. This pulls real prod
   // fixtures and is the most schema-coupled step; a local schema drift here
   // (e.g. a worktree whose migrations lag the shared dev DB) must not abort the
-  // whole seed or dump a giant error toast — warn and continue.
-  let caseLawSeeded = false;
+  // whole seed or dump a giant error toast — warn and continue. The corpus is
+  // shared by every organization, so the per-locale marketing firms, seeded
+  // after the English one (seed-marketing-locales.ts), only add their own
+  // readers and fail loudly when the corpus is missing.
+  let caseLawSeeded = SEED_LOCALE !== "en";
   try {
-    await seedCaseLaw();
-    caseLawSeeded = true;
+    if (SEED_LOCALE === "en") {
+      await seedCaseLaw();
+      caseLawSeeded = true;
+    }
   } catch (error) {
     logErrorOutput({
       level: "warn",
@@ -6343,7 +3907,12 @@ export async function seed(organizationId?: string, userId?: string) {
   // The marketing seed needs the corpus rows; skip it when the corpus seed
   // was skipped, but keep its own failures fatal (the screenshots need them).
   if (caseLawSeeded) {
-    await seedMarketingCaseLaw({ db, organizationId: ORG_ID, userId: USER_ID });
+    await seedMarketingCaseLaw({
+      db,
+      locale: SEED_LOCALE,
+      organizationId: ORG_ID,
+      userId: USER_ID,
+    });
   }
 
   console.log("\nDone. Dev data seeded successfully.");

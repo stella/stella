@@ -9,7 +9,11 @@ import {
 } from "@stll/api-contract/case-law-decision-route";
 import { decisionAnalysisSchema } from "@stll/legal-ast/analysis";
 import { persistedDocumentAstSchema } from "@stll/legal-ast/document-ast";
-import scenes from "@stll/playwright-tools/marketing-case-law.json" with { type: "json" };
+import {
+  MARKETING_CASE_LAW,
+  MARKETING_CASE_LAW_COPY,
+} from "@stll/playwright-tools/marketing-case-law";
+import type { MarketingLocale } from "@stll/playwright-tools/marketing-locales";
 
 import {
   caseLawDecisions,
@@ -36,7 +40,8 @@ import { sourceIdFor } from "./seed-case-law";
 import { seedId } from "./seed-utils";
 
 const RECORDED_AT = new Date("2026-01-15T09:00:00Z");
-const FIXTURE_FILES = ["cz-ns", "cz-us"] as const;
+// Fixtures with numbered paragraphs, which the filmed readers mark.
+const FIXTURE_FILES = ["cz-ns", "cz-nss", "cz-us", "sk-us"] as const;
 const fixtureSchema = v.object({
   source: v.looseObject({ adapter_key: v.string() }),
   decisions: v.array(
@@ -51,7 +56,11 @@ const fixtureSchema = v.object({
 
 // The screenshot seed owns these completed local conversations. Both the
 // public analysis and private marks use the same checked-in paragraph anchors.
-const seedCorpusAnalyses = async () => {
+// The analysis lives on the shared decision row, so each locale films its own
+// decisions (@stll/playwright-tools/marketing-case-law).
+const seedCorpusAnalyses = async (locale: MarketingLocale) => {
+  const scenes = MARKETING_CASE_LAW[locale];
+  const copy = MARKETING_CASE_LAW_COPY[locale];
   const fixtures = await Promise.all(
     FIXTURE_FILES.map(async (name) =>
       v.parse(
@@ -159,7 +168,7 @@ const seedCorpusAnalyses = async () => {
         tree: [
           {
             id: `marketing-issue-${decision.id}`,
-            label: "Legal issue",
+            label: copy.issueLabel,
             category: "reasoning",
             startAnchorId: highlight.anchorId,
             endAnchorId: highlight.anchorId,
@@ -178,7 +187,7 @@ const seedCorpusAnalyses = async () => {
             // The reader draws its outline only for two or more headings, so
             // the shot needs the decision's closing section as a second one.
             id: `marketing-outcome-${decision.id}`,
-            label: "Outcome",
+            label: copy.outcomeLabel,
             category: "outcome",
             startAnchorId: lastBlock.anchorId,
             endAnchorId: lastBlock.anchorId,
@@ -198,7 +207,7 @@ const seedCorpusAnalyses = async () => {
               ],
             },
           ],
-          language: "en",
+          language: copy.analysisLanguage,
         },
         abstract: {
           spans: [
@@ -213,7 +222,7 @@ const seedCorpusAnalyses = async () => {
             },
             { text: ` ${scene.followUpAnswer}`, anchors: [] },
           ],
-          language: "en",
+          language: copy.analysisLanguage,
         },
         topics: [],
       });
@@ -235,17 +244,20 @@ const seedCorpusAnalyses = async () => {
 
 type SeedMarketingCaseLawOptions = {
   db: MaintenanceDb;
+  locale: MarketingLocale;
   organizationId: SafeId<"organization">;
   userId: string;
 };
 
 export const seedMarketingCaseLaw = async ({
   db,
+  locale,
   organizationId,
   userId,
 }: SeedMarketingCaseLawOptions) => {
   requireLocalDevOpen("Seeding marketing case-law stories");
-  const stories = await seedCorpusAnalyses();
+  const { threadTitlePrefix } = MARKETING_CASE_LAW_COPY[locale];
+  const stories = await seedCorpusAnalyses(locale);
   const readerMarks: (typeof legalReaderAnnotations.$inferInsert)[] = [];
   await withAggregateTransaction(db, async (tx) => {
     for (const { scene, decision, highlight, underline } of stories) {
@@ -307,7 +319,7 @@ export const seedMarketingCaseLaw = async ({
         userId,
         workspaceId: null,
         subjectDecisionId: decision.id,
-        title: `Case review · ${decision.caseNumber}`,
+        title: `${threadTitlePrefix} · ${decision.caseNumber}`,
         titleSource: "user",
         createdAt: RECORDED_AT,
         updatedAt: last.createdAt,

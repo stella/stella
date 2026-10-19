@@ -1,19 +1,26 @@
 import { expect, test } from "@playwright/test";
-import type { APIRequestContext, Page } from "@playwright/test";
+import type { APIRequestContext, BrowserContext, Page } from "@playwright/test";
 import * as v from "valibot";
 
-import { isPublicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
+import {
+  isPublicCaseLawCountry,
+  isPublicCaseLawPageCountry,
+} from "@stll/api-contract/case-law-launch-readiness";
 import {
   PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD,
   PROFESSIONAL_USE_STATEMENT_VERSION,
 } from "@stll/api-contract/professional-use";
-import marketingCaseLaw from "@stll/playwright-tools/marketing-case-law.json" with { type: "json" };
+import { MARKETING_CASE_LAW } from "@stll/playwright-tools/marketing-case-law";
+import {
+  MARKETING_LOCALE_ACCOUNTS,
+  MARKETING_LOCALE_MARKERS,
+  MARKETING_LOCALES,
+} from "@stll/playwright-tools/marketing-locales";
+import type { MarketingLocale } from "@stll/playwright-tools/marketing-locales";
 import { setFixedBrowserTime } from "@stll/ui/browser-clock";
 
 import {
   getMarketingAgentThreadId,
-  MARKETING_AGENT_FIRST_QUESTION,
-  MARKETING_AGENT_THREAD_TITLE,
   settleMarketingAgentThread,
 } from "./agent-thread";
 import { CAPTURE_DPR } from "./captures";
@@ -21,37 +28,19 @@ import { getMarketingDecisionPaths } from "./case-law-reader";
 import {
   assertNoActiveEditBadge,
   releaseSupplierAgreementEditLock,
-  SUPPLIER_AGREEMENT_EDITOR_PATH,
-  SUPPLIER_AGREEMENT_ENTITY_ID,
+  supplierAgreementEditorPath,
 } from "./edit-locks";
+import { marketingSeedIds } from "./seed-ids";
+import { uiText } from "./ui-text";
 
-const AKVIZICE_WORKSPACE_ID = "6cbf3f81-bcc9-55da-8a4e-840221d4cabe";
-const EXPORT_REVIEW_WORKSPACE_ID = "bb8641dc-0667-574c-8e30-152a1fd4b3f5";
-// Seeded `Redacted_Due_Diligence_Extract.docx` in the same matter, opened by
-// the anonymization capture.
-const ANONYMIZED_EXTRACT_ENTITY_ID = "c3dc74a6-7855-5157-84db-ddf14f886df4";
-const ANONYMIZED_EXTRACT_FIELD_ID = "e98a6746-dae9-5509-888b-d58bfbca9a33";
-// seedId("ws-due-diligence") and seedId("invoice-2") from db:seed-dev:
-// INV-2025-0003, a sent invoice whose billed time entries the invoicing
-// capture lists.
-const DUE_DILIGENCE_WORKSPACE_ID = "fb2ce658-f761-5fdd-84c9-109a15003f49";
-const SENT_INVOICE_ID = "e55ceae6-b520-565d-8cb9-96f96d928994";
-const SENT_INVOICE_NUMBER = "INV-2025-0003";
-// The seeded time entries span fixed dates (Dec 2024 - Feb 2025); naming the
-// day in the URL keeps the timesheet off the wall-clock "today".
-const TIME_TRACKING_DATE = "2024-12-13";
-// The org that owns every seeded marketing workspace (AKVIZICE/EXPORT_REVIEW/
-// Meridian). Fixed id from seed-utils' DEFAULT_ORG_ID ("Harbrook & Partners",
-// apps/api/scripts/seed-test-user.ts), seeded by
-// db:seed-test-user then populated by db:seed-dev. A fresh email-OTP sign-in
-// starts with no active organization, so we set it server-side (below) instead
-// of driving the org-picker UI, which the workspace routes below depend on.
-const MARKETING_ORGANIZATION_ID = "test-org-stella-dev";
 // Duplicated from apps/web/src/consts.ts, exactly as
 // apps/web/public/prepaint-init.js duplicates it: the e2e project has no
 // `@/` path alias. Writing any other key silently leaves the app on its
 // system colour-scheme preference.
 const THEME_STORAGE_KEY = "stella-ui-theme";
+// The language picker's persisted store (apps/web/src/i18n/i18n-store.ts,
+// `getStorageKey("i18n")`), which prepaint-init.js reads as I18N_STORAGE_KEY.
+const I18N_STORAGE_KEY = "stella-i18n";
 const INSPECTOR_STORAGE_PREFIXES = [
   "stella:inspector-minimized:v1:",
   "stella:inspector-state:v1:",
@@ -80,117 +69,174 @@ const VERSION_CAPTION_OFFSET_MS = 5 * 60_000;
 // column, below the sidebar.
 const DEFAULT_CLIP = { x: 255, y: 0, width: 1137, height: 710 } as const;
 
-const captures = [
-  {
-    name: "workspace",
-    path: `/workspaces/${AKVIZICE_WORKSPACE_ID}/`,
-    prepare: "open-files",
-    readyText: "Meridian supply agreement",
-  },
-  {
-    name: "tabular-review",
-    path: `/workspaces/${EXPORT_REVIEW_WORKSPACE_ID}/`,
-    prepare: "open-table",
-    readyText: "Export Review - Project Atlas Data Room",
-  },
-  ...marketingCaseLaw.map(
-    (scenario, index) =>
-      ({
-        name: `story-public-data-${String(index + 1)}`,
-        prepare: "open-decision",
-        country: scenario.country,
-        decisionText: scenario.caseNumber,
-        readyText: "Case Law",
-        clip: { x: 0, y: 0, width: 1440, height: 760 },
-      }) as const,
-  ),
-  {
-    name: "editor",
-    path: SUPPLIER_AGREEMENT_EDITOR_PATH,
-    readyText: "Supplier_Agreement.docx",
-    readySelector: '[aria-label="Document content"][contenteditable="true"]',
-    // `?editing=true` is a request, not a state: without this the shot can
-    // land on the read-only viewer while the editor is still unlocking. The
-    // editable ProseMirror surface exists only after the request succeeds.
-    versionAnchor: {
-      workspaceId: AKVIZICE_WORKSPACE_ID,
-      entityId: SUPPLIER_AGREEMENT_ENTITY_ID,
+// The time entries span fixed dates (Dec 2024 - Feb 2025); naming the day in
+// the URL keeps the timesheet off the wall-clock "today".
+const TIME_TRACKING_DATE = "2024-12-13";
+
+/**
+ * Every product shot of one locale's firm. All content comes from that
+ * firm's seed (apps/api/scripts/seed-marketing-locales.ts, English:
+ * db:seed-dev), including the AI answers, which are stored fixtures.
+ */
+const capturesFor = (locale: MarketingLocale) => {
+  const ids = marketingSeedIds(locale);
+  const markers = MARKETING_LOCALE_MARKERS[locale];
+  const caseLawSearchCountry = markers.caseLawSearchCountry;
+  return [
+    {
+      name: "workspace",
+      path: `/workspaces/${ids.meridianWorkspaceId}/`,
+      prepare: "open-files",
+      readyText: markers.meridianMatterName,
     },
-  },
-  {
-    // The seeded change-of-control thread in the Export Review matter
-    // (apps/api/scripts/seed-marketing-agent-thread.ts), resolved by title so
-    // the shot never lands on the empty /chat/new composer.
-    name: "agent",
-    prepare: "open-agent-thread",
-    // The thread's first question; the answers, citations, generated view
-    // and recap are awaited in the "open-agent-thread" prepare block below so
-    // the shot never ships mid-render.
-    readyText: MARKETING_AGENT_FIRST_QUESTION,
-  },
-  { name: "templates", path: "/knowledge/templates", readyText: "Templates" },
-  {
-    name: "anonymization",
-    path:
-      `/workspaces/${AKVIZICE_WORKSPACE_ID}/all/document` +
-      `?entity=${ANONYMIZED_EXTRACT_ENTITY_ID}` +
-      `&field=${ANONYMIZED_EXTRACT_FIELD_ID}`,
-    readyText: "Redacted_Due_Diligence_Extract.docx",
-    readySelector: ".layout-run-text",
-    versionAnchor: {
-      workspaceId: AKVIZICE_WORKSPACE_ID,
-      entityId: ANONYMIZED_EXTRACT_ENTITY_ID,
+    {
+      name: "tabular-review",
+      path: `/workspaces/${ids.exportReviewWorkspaceId}/`,
+      prepare: "open-table",
+      readyText: markers.exportReviewMatterName,
     },
-  },
-  {
-    // Contacts are listed by display name, so the first seeded organisation
-    // heads the list on every run.
-    name: "contacts",
-    path: "/contacts",
-    readyText: "Bratislava Legal Group, s.r.o.",
-  },
-  {
-    name: "time-tracking",
-    path: `/time?date=${TIME_TRACKING_DATE}`,
-    prepare: "await-time-entries",
-    readyText: "Timesheets",
-  },
-  {
-    name: "invoicing",
-    path: `/workspaces/${DUE_DILIGENCE_WORKSPACE_ID}/invoices/${SENT_INVOICE_ID}`,
-    prepare: "await-invoice-entries",
-    readyText: SENT_INVOICE_NUMBER,
-  },
-  {
-    // The Export Review table with its export menu open.
-    name: "import-export",
-    path: `/workspaces/${EXPORT_REVIEW_WORKSPACE_ID}/`,
-    prepare: "open-table-export",
-    readyText: "Export Review - Project Atlas Data Room",
-  },
-  {
-    // The Czech results listing without a query: every seeded CZE decision,
-    // in the listing's own order. A keyword query depends on what the
-    // best-effort seed search index matched and returned no rows in CI.
-    name: "case-law-search",
-    path: "/law/cases?country=cze",
-    prepare: "await-search-results",
-    country: "CZE",
-    readyText: "Case Law",
-    clip: { x: 0, y: 0, width: 1440, height: 760 },
-  },
-] as const;
+    ...MARKETING_CASE_LAW[locale].map(
+      (scenario, index) =>
+        ({
+          name: `story-public-data-${String(index + 1)}`,
+          prepare: "open-decision",
+          country: scenario.country,
+          decisionText: scenario.caseNumber,
+          readyText: uiText(locale, "common.caseLaw"),
+          clip: { x: 0, y: 0, width: 1440, height: 760 },
+        }) as const,
+    ),
+    {
+      name: "editor",
+      path: supplierAgreementEditorPath(ids.supplierAgreement),
+      readyText: markers.supplierAgreementFileName,
+      readySelector: '[aria-label="Document content"][contenteditable="true"]',
+      // `?editing=true` is a request, not a state: without this the shot can
+      // land on the read-only viewer while the editor is still unlocking. The
+      // editable ProseMirror surface exists only after the request succeeds.
+      versionAnchor: {
+        workspaceId: ids.meridianWorkspaceId,
+        entityId: ids.supplierAgreement.entityId,
+      },
+    },
+    {
+      // The seeded change-of-control thread in the Export Review matter
+      // (apps/api/scripts/seed-marketing-agent-thread.ts), resolved by title so
+      // the shot never lands on the empty /chat/new composer.
+      name: "agent",
+      prepare: "open-agent-thread",
+      // The thread's first question; the answers, citations, generated view
+      // and recap are awaited in the "open-agent-thread" prepare block below
+      // so the shot never ships mid-render.
+      readyText: markers.agent.questions[0],
+    },
+    {
+      name: "templates",
+      path: "/knowledge/templates",
+      readyText: uiText(locale, "navigation.templates"),
+    },
+    {
+      name: "anonymization",
+      path:
+        `/workspaces/${ids.meridianWorkspaceId}/all/document` +
+        `?entity=${ids.anonymizedExtract.entityId}` +
+        `&field=${ids.anonymizedExtract.fieldId}`,
+      readyText: markers.redactedExtractFileName,
+      readySelector: ".layout-run-text",
+      versionAnchor: {
+        workspaceId: ids.meridianWorkspaceId,
+        entityId: ids.anonymizedExtract.entityId,
+      },
+    },
+    {
+      // Contacts are listed by display name, so the first seeded organisation
+      // heads the list on every run.
+      name: "contacts",
+      path: "/contacts",
+      readyText: markers.firstContactName,
+    },
+    {
+      name: "time-tracking",
+      path: `/time?date=${TIME_TRACKING_DATE}`,
+      prepare: "await-time-entries",
+      readyText: uiText(locale, "billing.timesheets"),
+    },
+    {
+      // The sent invoice (`invoice-2`) whose billed time entries the
+      // capture lists.
+      name: "invoicing",
+      path: `/workspaces/${ids.dueDiligenceWorkspaceId}/invoices/${ids.sentInvoiceId}`,
+      prepare: "await-invoice-entries",
+      readyText: markers.sentInvoiceNumber,
+    },
+    {
+      // The Export Review table with its export menu open.
+      name: "import-export",
+      path: `/workspaces/${ids.exportReviewWorkspaceId}/`,
+      prepare: "open-table-export",
+      readyText: markers.exportReviewMatterName,
+    },
+    // The results listing without a query: every seeded decision of the
+    // country, in the listing's own order. A keyword query depends on what
+    // the best-effort seed search index matched and returned no rows in CI.
+    ...(caseLawSearchCountry === null
+      ? []
+      : [
+          {
+            name: "case-law-search",
+            path: `/law/cases?country=${caseLawSearchCountry.toLowerCase()}`,
+            prepare: "await-search-results",
+            country: caseLawSearchCountry,
+            readyText: uiText(locale, "common.caseLaw"),
+            clip: { x: 0, y: 0, width: 1440, height: 760 },
+          } as const,
+        ]),
+  ] as const;
+};
 
 // Stills share the recordings' device pixel ratio, so the PNGs are twice the
 // CSS clip size and stay sharp on retina screens. Clips stay in CSS pixels.
 test.use({ deviceScaleFactor: CAPTURE_DPR });
 
-test("capture landing product screenshots", async ({
+// One test per locale firm: each signs in as that firm's owner with the
+// browser in the firm's language, and writes `{name}{suffix}{-dark}.png`
+// (English keeps the unsuffixed names; Czech `-cs`, Slovak `-sk`).
+for (const locale of MARKETING_LOCALES) {
+  const account = MARKETING_LOCALE_ACCOUNTS[locale];
+  test.describe(locale, () => {
+    test.use({ locale: account.browserLocale });
+
+    test(`capture landing product screenshots (${locale})`, async ({
+      context,
+      page,
+      request,
+    }) => {
+      await captureLocale({ context, locale, page, request });
+    });
+  });
+}
+
+type CaptureLocaleOptions = {
+  context: BrowserContext;
+  locale: MarketingLocale;
+  page: Page;
+  request: APIRequestContext;
+};
+
+const captureLocale = async ({
   context,
+  locale,
   page,
   request,
-}) => {
-  await authenticateMarketingSession(request);
+}: CaptureLocaleOptions) => {
+  const account = MARKETING_LOCALE_ACCOUNTS[locale];
+  const ids = marketingSeedIds(locale);
+  const captures = capturesFor(locale);
+  const editLock = {
+    ...MARKETING_URLS,
+    supplierAgreement: ids.supplierAgreement,
+  };
+  await authenticateMarketingSession(request, locale);
   const { cookies } = await request.storageState();
   await context.addCookies(cookies);
 
@@ -200,6 +246,19 @@ test("capture landing product screenshots", async ({
   // a fresh page sits on about:blank, where the localStorage access in the
   // theme loop below throws a SecurityError.
   await page.goto("/law", { waitUntil: "domcontentloaded" });
+  // Choose the language the way the language picker does: its persisted
+  // store, which every later navigation boots from. The browser locale
+  // (test.use above) already matches, for regional formatting.
+  await page.evaluate(
+    ([storageKey, lang]) => {
+      localStorage.setItem(
+        storageKey,
+        JSON.stringify({ state: { lang }, version: 0 }),
+      );
+    },
+    [I18N_STORAGE_KEY, locale] as const,
+  );
+  await page.reload({ waitUntil: "domcontentloaded" });
   // `domcontentloaded` only means the document parsed; on a cold dev server the
   // client still has to compile and hydrate the app before anything but the
   // splash paints (measured at ~11s locally, several times that on a CI
@@ -208,25 +267,40 @@ test("capture landing product screenshots", async ({
   await expect(page.locator("main").first()).toBeVisible({
     timeout: COLD_COMPILE_TIMEOUT,
   });
-  await expect(page.getByText("Legal database").first()).toBeVisible({
+  await expect(
+    page.getByText(uiText(locale, "common.legalDatabase")).first(),
+  ).toBeVisible({
     timeout: COLD_COMPILE_TIMEOUT,
   });
 
   // Start from no edit lock: a lock left by an earlier run would badge the
   // Supplier Agreement row in the workspace shot.
-  await releaseSupplierAgreementEditLock(page.request, MARKETING_URLS);
+  await releaseSupplierAgreementEditLock(page.request, editLock);
 
   // Resolved once (not per capture/theme): only needed when the "agent"
   // capture is actually part of this run.
   const agentThreadPath =
     !requestedCapture || requestedCapture === "agent"
-      ? await resolveAgentThreadPath(page.request)
+      ? await resolveAgentThreadPath(page.request, locale)
       : undefined;
 
   const decisionPaths =
     !requestedCapture || requestedCapture.startsWith("story-public-data-")
-      ? await resolveDecisionPaths(page.request)
+      ? await resolveDecisionPaths(page.request, locale)
       : new Map<string, string>();
+
+  // The workspace tabs carry their views' names, which the API localizes
+  // for the reader's language.
+  const viewTabName = async (
+    workspaceId: string,
+    layoutType: "filesystem" | "table",
+  ) =>
+    await resolveViewName({
+      layoutType,
+      locale,
+      request: page.request,
+      workspaceId,
+    });
 
   // Whether the shared page still carries a pinned clock from a previous
   // capture; see the anchor block in the capture loop.
@@ -250,8 +324,14 @@ test("capture landing product screenshots", async ({
         continue;
       }
       if ("country" in capture) {
+        // A reader films a published decision page; the listing films
+        // public search.
+        const isPublic =
+          capture.prepare === "open-decision"
+            ? isPublicCaseLawPageCountry(capture.country)
+            : isPublicCaseLawCountry(capture.country);
         expect(
-          isPublicCaseLawCountry(capture.country),
+          isPublic,
           `${capture.name}: the filmed jurisdiction is publicly supported`,
         ).toBe(true);
       }
@@ -332,9 +412,12 @@ test("capture landing product screenshots", async ({
         // explicit user action and assert the route honored that contract.
         const inspectorDock = page.locator('[data-slot="inspector-dock"]');
         await inspectorDock
-          .getByRole("button", { exact: true, name: "Show pane" })
+          .getByRole("button", {
+            exact: true,
+            name: uiText(locale, "inspector.showPane"),
+          })
           .click();
-        const scenario = marketingCaseLaw.find(
+        const scenario = MARKETING_CASE_LAW[locale].find(
           (item) => item.caseNumber === capture.decisionText,
         );
         if (scenario === undefined) {
@@ -468,43 +551,65 @@ test("capture landing product screenshots", async ({
         await expectNoMarginNoteCut(page, clip.y);
       }
       if ("prepare" in capture && capture.prepare === "open-files") {
-        await page.getByRole("tab", { name: "Files" }).click();
+        await page
+          .getByRole("tab", {
+            name: await viewTabName(ids.meridianWorkspaceId, "filesystem"),
+          })
+          .click();
         await expect(page).toHaveURL(
-          new RegExp(`/workspaces/${AKVIZICE_WORKSPACE_ID}/[^/?]+`, "u"),
+          new RegExp(`/workspaces/${ids.meridianWorkspaceId}/[^/?]+`, "u"),
         );
+        const markers = MARKETING_LOCALE_MARKERS[locale];
         await expect(
-          page.getByText("Internal_SAFE_Agreement.docx").first(),
+          page.getByText(markers.safeAgreementFileName).first(),
         ).toBeVisible();
         // Both themes must show the same rows: no document carries an edit
         // lock badge (the editor capture releases its lock below).
         await expect(
-          page.getByText("Supplier_Agreement.docx").first(),
+          page.getByText(markers.supplierAgreementFileName).first(),
         ).toBeVisible();
         await assertNoActiveEditBadge(page, capture.name);
       }
       if ("prepare" in capture && capture.prepare === "open-table") {
-        await page.getByRole("tab", { name: "Table" }).click();
+        await page
+          .getByRole("tab", {
+            name: await viewTabName(ids.exportReviewWorkspaceId, "table"),
+          })
+          .click();
         await expect(page.getByRole("grid")).toBeVisible();
       }
       if ("prepare" in capture && capture.prepare === "await-time-entries") {
         // The total row renders only once the day's entries have loaded.
         await expect(
-          page.getByText("Total", { exact: true }).first(),
+          page
+            .getByText(uiText(locale, "billing.total"), { exact: true })
+            .first(),
         ).toBeVisible();
       }
       if ("prepare" in capture && capture.prepare === "await-invoice-entries") {
-        await expect(page.getByText("Linked time entries")).toBeVisible();
+        await expect(
+          page.getByText(uiText(locale, "billing.invoices.linkedTimeEntries")),
+        ).toBeVisible();
         await expect(page.locator("table tbody tr").first()).toBeVisible();
       }
       if ("prepare" in capture && capture.prepare === "open-table-export") {
-        await page.getByRole("tab", { name: "Table" }).click();
+        await page
+          .getByRole("tab", {
+            name: await viewTabName(ids.exportReviewWorkspaceId, "table"),
+          })
+          .click();
         await expect(page.getByRole("grid")).toBeVisible();
         await page
-          .getByRole("button", { exact: true, name: "Export table" })
+          .getByRole("button", {
+            exact: true,
+            name: uiText(locale, "workspaces.views.exportTable"),
+          })
           .first()
           .click();
         await expect(
-          page.getByRole("menuitem", { name: "Export XLSX" }),
+          page.getByRole("menuitem", {
+            name: uiText(locale, "workspaces.views.exportXlsx"),
+          }),
         ).toBeVisible();
       }
       if ("prepare" in capture && capture.prepare === "await-search-results") {
@@ -524,6 +629,7 @@ test("capture landing product screenshots", async ({
         // style tag applies to this document only, misses nothing.
         await settleMarketingAgentThread(page, {
           frameBottom: DEFAULT_CLIP.y + DEFAULT_CLIP.height,
+          locale,
         });
       }
       await page.locator("body").waitFor({ state: "visible" });
@@ -542,34 +648,33 @@ test("capture landing product screenshots", async ({
       });
 
       const themeSuffix = theme === "dark" ? "-dark" : "";
+      const fileName = `${capture.name}${account.captureSuffix}${themeSuffix}.png`;
       // Soft, so one run reports every drifted capture; a hard assertion
       // aborts the loop at the first mismatch and hides the rest until the
       // next run.
-      await expect
-        .soft(page)
-        .toHaveScreenshot(`${capture.name}${themeSuffix}.png`, {
-          animations: "disabled",
-          caret: "hide",
-          clip: "clip" in capture ? capture.clip : DEFAULT_CLIP,
-          // Baselines are produced on the CI runner by the "Update marketing
-          // screenshots" workflow (.github/workflows/
-          // marketing-screenshots-update.yml) and compared on that same runner
-          // image, so this only has to absorb run-to-run rendering noise, not
-          // a macOS-to-Linux font gap. Dispatch that workflow on the branch
-          // when the UI change is intended.
-          maxDiffPixelRatio: 0.005,
-          scale: "device",
-        });
+      await expect.soft(page).toHaveScreenshot(fileName, {
+        animations: "disabled",
+        caret: "hide",
+        clip: "clip" in capture ? capture.clip : DEFAULT_CLIP,
+        // Baselines are produced on the CI runner by the "Update marketing
+        // screenshots" workflow (.github/workflows/
+        // marketing-screenshots-update.yml) and compared on that same runner
+        // image, so this only has to absorb run-to-run rendering noise, not
+        // a macOS-to-Linux font gap. Dispatch that workflow on the branch
+        // when the UI change is intended.
+        maxDiffPixelRatio: 0.005,
+        scale: "device",
+      });
       // `?editing=true` opened an edit session, i.e. a lease-backed lock on the
       // Supplier Agreement. A full navigation never unmounts the editor, so
       // the session would outlive this capture and badge the document in the
       // next theme pass's workspace shot. Release it explicitly.
       if (capture.name === "editor") {
-        await releaseSupplierAgreementEditLock(page.request, MARKETING_URLS);
+        await releaseSupplierAgreementEditLock(page.request, editLock);
       }
     }
   }
-});
+};
 
 // Each product capture owns its Inspector state. Full navigation creates a
 // fresh store, while removing the persisted Inspector state prevents an editor
@@ -651,18 +756,57 @@ const expectNoMarginNoteCut = async (page: Page, clipTop: number) => {
 // API (the same lookup record-product-story.ts's resolveMarketingViewRoutes
 // uses), instead of a fixed thread id that would need updating whenever the
 // dev seed reruns.
-const resolveAgentThreadPath = async (request: APIRequestContext) => {
-  const apiBaseURL = process.env["E2E_API_URL"] ?? "http://localhost:3001";
-  const response = await request.get(`${apiBaseURL}/v1/chat/threads?limit=50`);
+const resolveAgentThreadPath = async (
+  request: APIRequestContext,
+  locale: MarketingLocale,
+) => {
+  const response = await request.get(
+    `${MARKETING_URLS.apiUrl}/v1/chat/threads?limit=50`,
+  );
   expect(response.ok(), await response.text()).toBe(true);
-  const threadId = getMarketingAgentThreadId(await response.json());
+  const threadId = getMarketingAgentThreadId(await response.json(), locale);
   if (!threadId) {
     throw new Error(
-      `Could not find the seeded "${MARKETING_AGENT_THREAD_TITLE}" thread ` +
-        "for the agent screenshot",
+      `Could not find the seeded "${MARKETING_LOCALE_MARKERS[locale].agent.threadTitle}" ` +
+        "thread for the agent screenshot",
     );
   }
-  return `/chat/workspaces/${EXPORT_REVIEW_WORKSPACE_ID}/${threadId}`;
+  return `/chat/workspaces/${marketingSeedIds(locale).exportReviewWorkspaceId}/${threadId}`;
+};
+
+const viewListSchema = v.array(
+  v.looseObject({
+    name: v.string(),
+    layout: v.looseObject({ type: v.string() }),
+  }),
+);
+
+type ResolveViewNameOptions = {
+  layoutType: "filesystem" | "table";
+  locale: MarketingLocale;
+  request: APIRequestContext;
+  workspaceId: string;
+};
+
+/** The name a workspace's default view of this layout shows in its tab. */
+const resolveViewName = async ({
+  layoutType,
+  locale,
+  request,
+  workspaceId,
+}: ResolveViewNameOptions) => {
+  const response = await request.get(
+    `${MARKETING_URLS.apiUrl}/v1/views/${workspaceId}`,
+    { headers: { "Accept-Language": locale } },
+  );
+  expect(response.ok(), await response.text()).toBe(true);
+  const view = v
+    .parse(viewListSchema, await response.json())
+    .find(({ layout }) => layout.type === layoutType);
+  if (view === undefined) {
+    throw new Error(`Workspace ${workspaceId} has no ${layoutType} view`);
+  }
+  return view.name;
 };
 
 const DECISION_THREAD_PAGE_LIMIT = 100;
@@ -673,7 +817,10 @@ const threadPageSchema = v.object({
 
 // The threads endpoint lists newest first, so the seeded readers can sit
 // beyond the first page on a busy dev account: follow its cursor to the end.
-const resolveDecisionPaths = async (request: APIRequestContext) => {
+const resolveDecisionPaths = async (
+  request: APIRequestContext,
+  locale: MarketingLocale,
+) => {
   const global: unknown[] = [];
   let cursor: string | null = null;
   for (let page = 0; page < DECISION_THREAD_PAGE_LIMIT; page++) {
@@ -692,7 +839,7 @@ const resolveDecisionPaths = async (request: APIRequestContext) => {
     }
     global.push(...parsed.output.global);
     if (parsed.output.nextCursor === null) {
-      return getMarketingDecisionPaths({ global });
+      return getMarketingDecisionPaths({ global }, MARKETING_CASE_LAW[locale]);
     }
     cursor = parsed.output.nextCursor;
   }
@@ -761,12 +908,15 @@ const getCurrentVersionCreatedAt = (payload: unknown): string | undefined => {
 const isUnknownArray = (value: unknown): value is unknown[] =>
   Array.isArray(value);
 
-const authenticateMarketingSession = async (request: APIRequestContext) => {
+const authenticateMarketingSession = async (
+  request: APIRequestContext,
+  locale: MarketingLocale,
+) => {
+  const { email, organizationId } = MARKETING_LOCALE_ACCOUNTS[locale];
   const apiBaseURL = process.env["E2E_API_URL"] ?? "http://localhost:3001";
   const webOrigin = new URL(
     process.env["E2E_WEB_URL"] ?? "http://localhost:3000",
   ).origin;
-  const email = "test@stella.dev";
   const sendResponse = await request.post(
     `${apiBaseURL}/api/auth/email-otp/send-verification-otp`,
     { data: { email, type: "sign-in" }, headers: { origin: webOrigin } },
@@ -799,7 +949,7 @@ const authenticateMarketingSession = async (request: APIRequestContext) => {
   const setActiveResponse = await request.post(
     `${apiBaseURL}/api/auth/organization/set-active`,
     {
-      data: { organizationId: MARKETING_ORGANIZATION_ID },
+      data: { organizationId },
       headers: { origin: webOrigin },
     },
   );

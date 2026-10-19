@@ -7,23 +7,24 @@
 // check that scenes which should show no lock show none.
 import type { APIRequestContext, Page } from "@playwright/test";
 
-// The negotiated Supplier Agreement in the "Meridian supply agreement"
-// matter (seed-dev.ts: `ws-akvizice-energo-doc-7` /
-// `ws-akvizice-energo-field-file-6`), and the matter's file property
-// (`ws-akvizice-energo-prop-file`), which keys its edit lock with the entity.
-const MERIDIAN_WORKSPACE_ID = "6cbf3f81-bcc9-55da-8a4e-840221d4cabe";
-export const SUPPLIER_AGREEMENT_ENTITY_ID =
-  "84824638-eb81-58c5-8a81-5d7e961fb7d5";
-export const SUPPLIER_AGREEMENT_FIELD_ID =
-  "3f985a8b-26be-5a07-89d3-2a05acb94354";
-const SUPPLIER_AGREEMENT_PROPERTY_ID = "fa85736e-0b89-5386-8332-c2bb53f18c46";
+import type { SupplierAgreementIds } from "./seed-ids";
 
 /** The editor route that opens the Supplier Agreement and takes its lock. */
-export const SUPPLIER_AGREEMENT_EDITOR_PATH =
-  `/workspaces/${MERIDIAN_WORKSPACE_ID}/all/document` +
+export const supplierAgreementEditorPath = ({
+  workspaceId,
+  entityId,
+  fieldId,
+}: SupplierAgreementIds) =>
+  `/workspaces/${workspaceId}/all/document` +
   "?editing=true" +
-  `&entity=${SUPPLIER_AGREEMENT_ENTITY_ID}` +
-  `&field=${SUPPLIER_AGREEMENT_FIELD_ID}`;
+  `&entity=${entityId}` +
+  `&field=${fieldId}`;
+
+type ReleaseEditLockOptions = {
+  apiUrl: string;
+  webUrl: string;
+  supplierAgreement: SupplierAgreementIds;
+};
 
 /**
  * Cancel the signed-in user's live edit session on the Supplier Agreement,
@@ -32,14 +33,14 @@ export const SUPPLIER_AGREEMENT_EDITOR_PATH =
  */
 export const releaseSupplierAgreementEditLock = async (
   request: APIRequestContext,
-  { apiUrl, webUrl }: { apiUrl: string; webUrl: string },
+  { apiUrl, webUrl, supplierAgreement }: ReleaseEditLockOptions,
 ) => {
   const response = await request.post(
-    `${apiUrl}/v1/entities/${MERIDIAN_WORKSPACE_ID}/desktop-edit-sessions/release`,
+    `${apiUrl}/v1/entities/${supplierAgreement.workspaceId}/desktop-edit-sessions/release`,
     {
       data: {
-        entityId: SUPPLIER_AGREEMENT_ENTITY_ID,
-        propertyId: SUPPLIER_AGREEMENT_PROPERTY_ID,
+        entityId: supplierAgreement.entityId,
+        propertyId: supplierAgreement.propertyId,
       },
       headers: { origin: new URL(webUrl).origin },
     },
