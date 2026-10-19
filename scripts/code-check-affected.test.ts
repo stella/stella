@@ -1181,14 +1181,38 @@ const workspaceManifests = (): WorkspaceManifest[] =>
   );
 
 describe("parallel code-quality legs", () => {
-  test("quality steps use the job timeout as their only outer deadline", () => {
+  // A healthy run may take its whole warning budget, so a step never stops
+  // before it; a stalled run must not hold the job, and with it a merge group,
+  // until the job's own timeout.
+  test("quality steps stop between their warning budget and their job timeout", () => {
     const workflow = readFileSync(".github/workflows/ci.yml", "utf-8");
-    const steps = workflow
-      .split(/\n {6}- name: /u)
-      .filter((step) => /^Code quality(?: \((?:web|rest)\))?\n/u.test(step));
-    expect(steps).toHaveLength(3);
-    for (const step of steps) {
-      expect(step).not.toMatch(/^ {8}timeout-minutes:/mu);
+    const minutes = (text: string, indent: number) =>
+      Number(
+        new RegExp(`^ {${indent}}timeout-minutes: (\\d+)$`, "mu").exec(
+          text,
+        )?.[1] ?? Number.NaN,
+      );
+    for (const [job, names] of [
+      ["code-quality-api", ["Code quality"]],
+      ["code-quality-web-rest", ["Code quality (web)", "Code quality (rest)"]],
+    ] as const) {
+      const block =
+        workflow.split(new RegExp(`\\n  ${job}:\\n`, "u")).at(1) ??
+        panic(`Missing job ${job}`);
+      const jobBlock = block.split(/\n {2}[\w-]+:\n/u).at(0) ?? block;
+      const jobMinutes = minutes(jobBlock, 4);
+      for (const name of names) {
+        const step =
+          jobBlock
+            .split(/\n {6}- name: /u)
+            .find((candidate) => candidate.startsWith(`${name}\n`)) ??
+          panic(`Missing step ${name}`);
+        const stepMinutes = minutes(step, 8);
+        expect(stepMinutes * 60_000, name).toBeGreaterThanOrEqual(
+          CODE_CHECK_EXECUTION_BUDGET_MS,
+        );
+        expect(stepMinutes, name).toBeLessThan(jobMinutes);
+      }
     }
   });
 
