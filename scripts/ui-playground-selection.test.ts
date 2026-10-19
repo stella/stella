@@ -19,6 +19,25 @@ import {
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
+const createSelectionFixture = () => {
+  const root = mkdtempSync(path.join(tmpdir(), "ui-playground-selection-"));
+  const write = (file: string, source: string) => {
+    mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+    writeFileSync(path.join(root, file), source);
+  };
+  const spec = "apps/web/e2e/ui-playground/fixture.geometry.spec.ts";
+  write(
+    "apps/web/src/routes/dev/-visual-metadata.ts",
+    "export const visualRegistry = {\n  fixture: {},\n} as const;\n",
+  );
+  write(
+    "apps/web/src/routes/dev/-visual-registry.tsx",
+    'export const visualRegistry = {\n  fixture: {\n    loader: () => import("./fixture"),\n  },\n} as const;\n',
+  );
+  write(spec, 'const url = "/dev?visual=fixture";\n');
+  return { root, spec, write };
+};
+
 test("every geometry spec opens registered visuals with loader modules", () => {
   const inventory = readPlaygroundInventory(ROOT);
   expect(inventory.specs.length).toBeGreaterThan(0);
@@ -152,6 +171,67 @@ test("unresolved internal imports fail the closure closed", () => {
     expect(staticImportClosure("apps/web/src/renamed.ts", root)).toMatchObject({
       complete: true,
     });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a missing workspace package selects the affected spec", () => {
+  const { root, spec, write } = createSelectionFixture();
+  try {
+    write(
+      "apps/web/src/routes/dev/fixture.ts",
+      'import "@stll/missing-package";\n',
+    );
+    expect(selectGeometrySpecs(["apps/web/src/unrelated.ts"], root)).toEqual([
+      spec,
+    ]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a browser export change selects the importing spec", () => {
+  const { root, spec, write } = createSelectionFixture();
+  try {
+    write(
+      "apps/web/src/routes/dev/fixture.ts",
+      'import "@stll/fixture-package";\n',
+    );
+    write(
+      "packages/fixture/package.json",
+      JSON.stringify({
+        name: "@stll/fixture-package",
+        exports: {
+          ".": {
+            browser: "./src/browser.ts",
+            import: "./src/import.ts",
+          },
+        },
+      }),
+    );
+    write(
+      "packages/fixture/src/browser.ts",
+      "export const target = 'browser';",
+    );
+    write("packages/fixture/src/import.ts", "export const target = 'import';");
+    expect(
+      selectGeometrySpecs(["packages/fixture/src/browser.ts"], root),
+    ).toEqual([spec]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a transitive CSS import change selects the importing spec", () => {
+  const { root, spec, write } = createSelectionFixture();
+  try {
+    write("apps/web/src/routes/dev/fixture.ts", 'import "./a.css";\n');
+    write("apps/web/src/routes/dev/a.css", '@import "./b.css";\n');
+    write("apps/web/src/routes/dev/b.css", ".fixture {}\n");
+    expect(
+      selectGeometrySpecs(["apps/web/src/routes/dev/b.css"], root),
+    ).toEqual([spec]);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

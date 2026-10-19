@@ -23,20 +23,24 @@ export type PlaygroundInventory = {
 const normalize = (file: string) =>
   file.replaceAll("\\", "/").replace(/^\.\//u, "");
 
-const importExportTarget = (value: unknown): string | undefined => {
+const importExportTargets = (value: unknown): readonly string[] | undefined => {
   if (typeof value === "string") {
-    return value;
+    return [value];
   }
   if (typeof value !== "object" || value === null) {
     return undefined;
   }
-  if ("import" in value) {
-    return importExportTarget(value.import);
+  const targets: string[] = [];
+  for (const condition of ["browser", "import", "default"] as const) {
+    if (condition in value) {
+      const conditionalTargets = importExportTargets(value[condition]);
+      if (conditionalTargets === undefined) {
+        return undefined;
+      }
+      targets.push(...conditionalTargets);
+    }
   }
-  if ("default" in value) {
-    return importExportTarget(value.default);
-  }
-  return undefined;
+  return targets.length === 0 ? undefined : targets;
 };
 
 export const registeredVisualNames = (source: string): ReadonlySet<string> => {
@@ -135,19 +139,19 @@ const resolveImport = (
   imported: string,
   importer: string,
   root: string,
-): { file?: string; internal: boolean } => {
+): { files: readonly string[]; internal: boolean; complete: boolean } => {
   const importPath = imported.split("?", 1)[0] ?? imported;
-  let candidate: string | undefined;
+  let candidates: readonly string[] | undefined;
   if (importPath.startsWith(".")) {
-    candidate = path.posix.join(path.posix.dirname(importer), importPath);
+    candidates = [path.posix.join(path.posix.dirname(importer), importPath)];
   } else if (importPath.startsWith("@/")) {
-    candidate = `${WEB_SOURCE}/${importPath.slice(2)}`;
+    candidates = [`${WEB_SOURCE}/${importPath.slice(2)}`];
   } else {
     const workspace = /^@stll\/([^/]+)(?:\/(.*))?$/u.exec(importPath);
     if (workspace !== null) {
       const packagesDirectory = path.join(root, "packages");
       if (!existsSync(packagesDirectory)) {
-        return { internal: true };
+        return { files: [], internal: true, complete: false };
       }
       const packageRoot = readdirSync(packagesDirectory, {
         withFileTypes: true,
@@ -170,7 +174,17 @@ const resolveImport = (
           );
         });
       if (packageRoot === undefined) {
-        return { internal: false };
+        const installedManifest = path.join(
+          root,
+          "node_modules",
+          "@stll",
+          workspace[1] ?? "",
+          "package.json",
+        );
+        if (existsSync(installedManifest)) {
+          return { files: [], internal: false, complete: true };
+        }
+        return { files: [], internal: true, complete: false };
       }
       const packageJson = path.join(root, packageRoot, "package.json");
       if (existsSync(packageJson)) {
@@ -188,21 +202,29 @@ const resolveImport = (
           const exported = Object.entries(manifest.exports).find(
             ([key]) => key === subpath,
           )?.[1];
-          const target = importExportTarget(exported);
-          if (target === undefined) {
-            return { internal: true };
+          const targets = importExportTargets(exported);
+          if (targets === undefined) {
+            return { files: [], internal: true, complete: false };
           }
-          candidate = `${packageRoot}/${target}`;
+          candidates = targets.map((target) => `${packageRoot}/${target}`);
         }
       }
-      candidate ??= `${packageRoot}/src${workspace[2] === undefined ? "/index" : `/${workspace[2]}`}`;
+      candidates ??= [
+        `${packageRoot}/src${workspace[2] === undefined ? "/index" : `/${workspace[2]}`}`,
+      ];
     }
   }
-  if (candidate === undefined) {
-    return { internal: false };
+  if (candidates === undefined) {
+    return { files: [], internal: false, complete: true };
   }
-  const file = sourceCandidate(root, candidate);
-  return file === undefined ? { internal: true } : { file, internal: true };
+  const files = candidates
+    .map((candidate) => sourceCandidate(root, candidate))
+    .filter((file): file is string => file !== undefined);
+  return {
+    files,
+    internal: true,
+    complete: files.length === candidates.length,
+  };
 };
 
 export const staticImportClosure = (
@@ -220,6 +242,20 @@ export const staticImportClosure = (
     const absolute = path.join(root, file);
     if (!existsSync(absolute)) {
       complete = false;
+      continue;
+    }
+    if (file.endsWith(".css")) {
+      const source = readFileSync(absolute, "utf-8");
+      const imports = [
+        ...source.matchAll(/@import\s+(?:url\(\s*)?["']([^"']+)["']\s*\)?/gu),
+      ]
+        .map((match) => match[1])
+        .filter((imported): imported is string => imported !== undefined);
+      for (const imported of imports) {
+        const resolved = resolveImport(imported, file, root);
+        pending.push(...resolved.files);
+        complete &&= resolved.complete;
+      }
       continue;
     }
     if (!/\.[cm]?[jt]sx?$/u.test(file)) {
@@ -241,9 +277,8 @@ export const staticImportClosure = (
     }
     for (const imported of imports) {
       const resolved = resolveImport(imported, file, root);
-      if (resolved.file !== undefined) {
-        pending.push(resolved.file);
-      } else if (resolved.internal) {
+      pending.push(...resolved.files);
+      if (!resolved.complete && resolved.internal) {
         complete = false;
       }
     }
