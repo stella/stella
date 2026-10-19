@@ -22,6 +22,7 @@ import { writeZipEntry } from "@stll/docx-utils";
 import { DESKTOP_EDIT_FILE_TYPE_CONFIG } from "@/api/lib/desktop-edit-file-types";
 import type { DocxArchive } from "@/api/lib/docx-archive";
 import { loadDocxArchive } from "@/api/lib/docx-archive";
+import { firstXmlElement, xmlElements } from "@/api/lib/files/xml-scan";
 import { LIMITS } from "@/api/lib/limits";
 
 const STAMP_BOOKMARK = "stella_dms_ref";
@@ -1229,17 +1230,12 @@ const findNextBookmarkId = (xmlParts: Iterable<string>): number => {
 };
 
 const replaceStampParagraph = (footerXml: string, newPara: string): string => {
-  // Match the entire paragraph containing the bookmark
-  const re = new RegExp(
-    `<w:p>[\\s\\S]*?w:name="${STAMP_BOOKMARK_NAME_SOURCE}"[\\s\\S]*?</w:p>`,
-    "u",
-  );
-
-  if (re.test(footerXml)) {
-    return footerXml.replace(re, () => newPara);
+  for (const match of xmlElements(footerXml, "w:p")) {
+    const paragraph = footerXml.slice(match.start, match.end);
+    if (paragraph.includes(`w:name="${STAMP_BOOKMARK}`)) {
+      return `${footerXml.slice(0, match.start)}${newPara}${footerXml.slice(match.end)}`;
+    }
   }
-
-  // Fallback: append
   return footerXml.replace(CLOSING_FTR_RE, () => `${newPara}\n</w:ftr>`);
 };
 
@@ -1357,17 +1353,21 @@ const extractBookmarkText = (
   verificationCode: string | null;
   stamp: string | null;
 } | null => {
-  const re = new RegExp(
-    `<w:bookmarkStart[^>]*w:name="${STAMP_BOOKMARK_NAME_SOURCE}"` +
-      "[\\s\\S]*?<w:bookmarkEnd[^>]*/>",
-    "u",
+  const start = [...xmlElements(xml, "w:bookmarkStart")].find((match) =>
+    STAMP_BOOKMARK_MARKER_RE.test(match.openTag),
   );
-  const match = re.exec(xml);
-  if (!match) {
+  if (start === undefined) {
+    return null;
+  }
+  const remaining = xml.slice(start.end);
+  const end = firstXmlElement(remaining, "w:bookmarkEnd");
+  if (end === null) {
     return null;
   }
 
-  const fullText = collectRunText(match[0]).trim();
+  const fullText = collectRunText(
+    xml.slice(start.start, start.end + end.end),
+  ).trim();
   if (!fullText) {
     return null;
   }

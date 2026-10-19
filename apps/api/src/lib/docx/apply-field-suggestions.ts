@@ -13,6 +13,8 @@
  * it as unmapped.
  */
 
+import { replaceXmlElements } from "@/api/lib/files/xml-scan";
+
 import type { FieldMeta, InputType } from "./types";
 
 export type FieldSuggestion = {
@@ -35,8 +37,6 @@ const escapeXml = (value: string): string =>
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;");
 
-const W_T_RE = /(?<open><w:t[^>]*>)(?<content>[\s\S]*?)(?<close><\/w:t>)/gu;
-
 /** Replace `literal` with `replacement` only inside `<w:t>` text content. */
 const replaceInTextNodes = (
   xml: string,
@@ -47,10 +47,12 @@ const replaceInTextNodes = (
   if (escapedLiteral.length === 0) {
     return xml;
   }
-  return xml.replace(
-    W_T_RE,
-    (_match, open: string, content: string, close: string) =>
-      open + content.split(escapedLiteral).join(escapeXml(replacement)) + close,
+  return replaceXmlElements(xml, "w:t", (match, content) =>
+    match.selfClosing
+      ? match.openTag
+      : match.openTag +
+        content.split(escapedLiteral).join(escapeXml(replacement)) +
+        match.closeTag,
   );
 };
 

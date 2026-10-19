@@ -1,15 +1,13 @@
 import { Result } from "better-result";
 
-import { writeZipEntry } from "@stll/docx-utils";
+import { DOCX_MAX_ENTRY_BYTES, writeZipEntry } from "@stll/docx-utils";
 
 import { loadDocxArchive } from "@/api/lib/docx-archive";
+import { firstXmlElement, replaceXmlElements } from "@/api/lib/files/xml-scan";
 
 const REGEX_HAS_PAGE_SET_UP_PR = /<pageSetUpPr[\s/>]/u;
 const REGEX_EXTRACT_PAGE_SET_UP_PR = /<pageSetUpPr(?<attrs>[^/]*?)\/>/gu;
 const REGEX_REMOVE_FIT_TO_PAGE = /(?<!\s)\s*fitToPage="[^"]*"/u;
-const REGEX_HAS_OPEN_SHEET_PR = /<sheetPr[^>]*>[\s\S]*?<\/sheetPr>/u;
-const REGEX_EXTRACT_OPEN_SHEET_PR =
-  /(?<open><sheetPr[^>]*>)(?<inner>[\s\S]*?)(?<close><\/sheetPr>)/u;
 const REGEX_HAS_SELF_CLOSING_SHEET_PR = /<sheetPr[^>]*\/>/u;
 const REGEX_EXTRACT_SELF_CLOSING_SHEET_PR = /<sheetPr(?<attrs>[^>]*?)\/>/u;
 const REGEX_SHEET_LANDMARK =
@@ -35,7 +33,9 @@ const REGEX_SHEET_FILENAME = /^xl\/worksheets\/sheet\d+\.xml$/u;
  *   before `</worksheet>`.
  */
 export const patchSheetXml = (xml: string): string => {
-  let out = xml;
+  const sheetData = xml.indexOf("<sheetData");
+  const suffix = sheetData === -1 ? "" : xml.slice(sheetData);
+  let out = sheetData === -1 ? xml : xml.slice(0, sheetData);
 
   // ── sheetPr / pageSetUpPr ───────────────────────────────
 
@@ -48,14 +48,14 @@ export const patchSheetXml = (xml: string): string => {
       return `<pageSetUpPr${cleaned ? ` ${cleaned}` : ""} fitToPage="1"/>`;
     });
   } else {
-    const hasOpenSheetPr = REGEX_HAS_OPEN_SHEET_PR.test(out);
+    const sheetPr = firstXmlElement(out, "sheetPr");
 
-    if (hasOpenSheetPr) {
-      // Insert pageSetUpPr inside existing open sheetPr
-      out = out.replace(
-        REGEX_EXTRACT_OPEN_SHEET_PR,
-        (_, open: string, inner: string, close: string) =>
-          `${open}${inner}<pageSetUpPr fitToPage="1"/>${close}`,
+    if (sheetPr !== null && !sheetPr.selfClosing) {
+      out = replaceXmlElements(
+        out,
+        "sheetPr",
+        (match, inner) =>
+          `${match.openTag}${inner}<pageSetUpPr fitToPage="1"/>${match.closeTag}`,
       );
     } else if (REGEX_HAS_SELF_CLOSING_SHEET_PR.test(out)) {
       // Handle self-closing <sheetPr ... />
@@ -79,6 +79,9 @@ export const patchSheetXml = (xml: string): string => {
       }
     }
   }
+
+  // The paired element scan above is confined to the bounded worksheet header.
+  out += suffix;
 
   // ── pageSetup ───────────────────────────────────────────
 
@@ -145,7 +148,7 @@ export const applyFitToPage = async (
       await Promise.all(
         sheetPaths.map(async (path) => ({
           path,
-          xml: await archive.readEntryString(path),
+          xml: await archive.readEntryString(path, DOCX_MAX_ENTRY_BYTES),
         })),
       ),
   );

@@ -25,7 +25,7 @@ import type {
   DocumentPropertyKey,
   DocumentPropertyValue,
 } from "@stll/api-contract";
-import { writeZipEntry } from "@stll/docx-utils";
+import { DOCX_MAX_ENTRY_BYTES, writeZipEntry } from "@stll/docx-utils";
 import {
   isOfficeCollaborationPart,
   officeIdentityFields,
@@ -34,6 +34,13 @@ import {
 
 import { DocxArchiveError, loadDocxArchive } from "@/api/lib/docx-archive";
 import { savePdfRewrite } from "@/api/lib/files/pdf-signatures";
+import {
+  clearXmlElements,
+  firstXmlElement,
+  removeXmlElements,
+  replaceXmlElementContent,
+  xmlElementText,
+} from "@/api/lib/files/xml-scan";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 
@@ -222,25 +229,10 @@ const decodeXmlText = (value: string): string =>
     },
   );
 
-const elementRegexCache = new Map<string, RegExp>();
-
-/**
- * Text content of the first `<name>` element, or null when absent or empty.
- * A regex rather than a DOM parse: these documents are untrusted input and the
- * values wanted are flat leaf text, so there is nothing to gain from building
- * a tree (and no external-entity surface to defend).
- */
+/** Text content of the first `<name>` element, or null when absent or empty. */
 const elementText = (xml: string, name: string): string | null => {
-  let regex = elementRegexCache.get(name);
-  if (!regex) {
-    regex = new RegExp(
-      `<${name}(?:\\s[^>]*)?(?:/>|>(?<body>[\\s\\S]*?)</${name}>)`,
-      "u",
-    );
-    elementRegexCache.set(name, regex);
-  }
-  const body = regex.exec(xml)?.groups?.["body"];
-  return body === undefined ? null : decodeXmlText(body);
+  const text = xmlElementText(xml, name);
+  return text === null ? null : decodeXmlText(text);
 };
 
 const attributeRegexCache = new Map<string, RegExp>();
@@ -534,29 +526,9 @@ const ODF_META_CLEARED = [
   { namespace: ODF_META_NS, localName: "editing-duration" },
 ] as const satisfies readonly XmlElement[];
 
-const clearRegexCache = new Map<string, RegExp>();
-
-/**
- * Empty every occurrence of `<name>…</name>`, leaving the element in place.
- * Deleting the elements outright is the other option, but Word and LibreOffice
- * both treat a missing part as "never had properties" and helpfully write fresh
- * ones from the current user on the next save; an empty element stays empty.
- */
-const clearElements = (xml: string, names: readonly string[]): string => {
-  let cleared = xml;
-  for (const name of names) {
-    let regex = clearRegexCache.get(name);
-    if (!regex) {
-      regex = new RegExp(
-        `(<${name}(?:\\s[^>]*)?>)[\\s\\S]*?(</${name}>)`,
-        "gu",
-      );
-      clearRegexCache.set(name, regex);
-    }
-    cleared = cleared.replace(regex, "$1$2");
-  }
-  return cleared;
-};
+/** Empty every occurrence while leaving each element in place. */
+const clearElements = (xml: string, names: readonly string[]): string =>
+  clearXmlElements(xml, names);
 
 const XML_NAMESPACE_DECLARATION_RE =
   /\bxmlns(?::(?<prefix>[A-Za-z_][\w.-]*))?\s*=\s*(?<quote>["'])(?<namespace>[^"']*)\k<quote>/gu;
@@ -585,36 +557,33 @@ const hasNamespacedElement = (xml: string, element: XmlElement): boolean =>
     new RegExp(`<${name}(?:\\s|>)`, "u").test(xml),
   );
 
-const removeNamespacedElements = (
+const transformQualifiedElements = (
   xml: string,
   element: XmlElement,
-  keep?: (openTag: string) => boolean,
+  transform: (current: string, name: string) => string,
 ): string => {
   let result = xml;
   for (const name of qualifiedNames(xml, element)) {
-    const regex = new RegExp(
-      `<${name}(?<attributes>\\s[^>]*)?(?:/>|>[\\s\\S]*?</${name}>)`,
-      "gu",
-    );
-    result = result.replace(regex, (match) =>
-      keep?.(match) === true ? match : "",
-    );
+    result = transform(result, name);
   }
   return result;
 };
 
+const removeNamespacedElements = (
+  xml: string,
+  element: XmlElement,
+  keep?: (openTag: string) => boolean,
+): string =>
+  transformQualifiedElements(xml, element, (result, name) =>
+    removeXmlElements(result, name, keep),
+  );
+
+const zeroNamespacedElement = (xml: string, element: XmlElement): string =>
+  transformQualifiedElements(xml, element, (result, name) =>
+    replaceXmlElementContent(result, name, "0"),
+  );
+
 /** `<TotalTime>` is numeric: blanking it yields invalid OOXML, so zero it. */
-const zeroNamespacedElement = (xml: string, element: XmlElement): string => {
-  let result = xml;
-  for (const name of qualifiedNames(xml, element)) {
-    const regex = new RegExp(
-      `(<${name}(?:\\s[^>]*)?>)[\\s\\S]*?(</${name}>)`,
-      "gu",
-    );
-    result = result.replace(regex, "$10$2");
-  }
-  return result;
-};
 
 const isSignedZipArchive = (
   archive: Awaited<ReturnType<typeof loadDocxArchive>>,
@@ -654,7 +623,7 @@ const scrubZipArchive = async (
       part,
       xml: part.propertyEntry
         ? await readPropertyEntry(archive, part.path)
-        : await archive.readEntryString(part.path),
+        : await archive.readEntryString(part.path, DOCX_MAX_ENTRY_BYTES),
     })),
   );
   for (const { part, xml } of read) {
@@ -1034,8 +1003,8 @@ const declareOoxmlParts = async (
   parts: readonly OoxmlPart[],
 ): Promise<boolean> => {
   const [contentTypes, rels] = await Promise.all([
-    archive.readEntryString(CONTENT_TYPES_PATH),
-    archive.readEntryString(PACKAGE_RELS_PATH),
+    archive.readEntryString(CONTENT_TYPES_PATH, PROPERTY_ENTRY_MAX_BYTES),
+    archive.readEntryString(PACKAGE_RELS_PATH, PROPERTY_ENTRY_MAX_BYTES),
   ]);
   if (contentTypes === null || rels === null) {
     return false;
@@ -1097,31 +1066,15 @@ const XML_1_FORBIDDEN_CONTROL_RE = /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/u;
  * closing root tag rather than dropping the edit silently.
  */
 const setElement = (xml: string, name: string, value: string, root: string) => {
-  // Every replacement below is a function, not a string: the value is written
-  // by a person, and `$&` or `$'` in a replacement string is interpreted by JS
-  // even when the search is a plain string, which would splice surrounding
-  // markup into the property.
   const text = escapeXmlText(value);
-  const existing = new RegExp(
-    `(<${name}(?:\\s[^>]*)?>)[\\s\\S]*?(</${name}>)`,
-    "u",
-  );
-  if (existing.test(xml)) {
-    return xml.replace(
-      existing,
-      (_match, open: string, close: string) => `${open}${text}${close}`,
-    );
+  if (firstXmlElement(xml, name) !== null) {
+    return replaceXmlElementContent(xml, name, text);
   }
-  // Self-closing form, which is how an empty property is often written.
-  const selfClosing = new RegExp(`<${name}(?:\\s[^>]*)?/>`, "u");
-  if (selfClosing.test(xml)) {
-    return xml.replace(selfClosing, () => `<${name}>${text}</${name}>`);
-  }
-  const closingRoot = new RegExp(`</${root}>`, "u");
-  if (!closingRoot.test(xml)) {
+  const rootElement = firstXmlElement(xml, root);
+  if (rootElement === null || rootElement.selfClosing) {
     return xml;
   }
-  return xml.replace(closingRoot, () => `<${name}>${text}</${name}></${root}>`);
+  return `${xml.slice(0, rootElement.contentEnd)}<${name}>${text}</${name}>${xml.slice(rootElement.contentEnd)}`;
 };
 
 export type WriteDocumentPropertiesOptions = {
@@ -1186,7 +1139,7 @@ export const writeDocumentProperties = async ({
     const read = await Promise.all(
       parts.map(async (part) => ({
         part,
-        xml: await archive.readEntryString(OOXML_PART_PATH[part]),
+        xml: await readPropertyEntry(archive, OOXML_PART_PATH[part]),
       })),
     );
     // Declared before anything is written: skipping a missing part instead
