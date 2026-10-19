@@ -166,7 +166,7 @@ const resolveImport = (
             typeof manifest === "object" &&
             manifest !== null &&
             "name" in manifest &&
-            manifest.name === `@stll/${workspace[1]}`
+            manifest.name === `@stll/${workspace[1] ?? ""}`
           );
         });
       if (packageRoot === undefined) {
