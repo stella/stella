@@ -905,6 +905,7 @@ export const revokeOAuthToken = async ({
     return Result.err(
       new HandlerError({
         status: 502,
+        code: "upstream_unavailable",
         message: "MCP token revocation request failed",
         cause: response.error,
       }),
