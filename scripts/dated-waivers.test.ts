@@ -156,27 +156,34 @@ test("an expired waiver fails a change only when the change touches its source",
   expect(all.length).toBeGreaterThan(1);
   // An unrelated change never fails on time alone.
   expect(
-    expiredWaiverFailures(
-      entries,
-      later,
-      new Set(["apps/web/src/unrelated.ts"]),
-    ),
+    expiredWaiverFailures(entries, later, {
+      scope: {
+        type: "changes",
+        changedFiles: new Set(["apps/web/src/unrelated.ts"]),
+      },
+    }),
   ).toEqual([]);
-  expect(expiredWaiverFailures(entries, later, new Set())).toEqual([]);
+  expect(
+    expiredWaiverFailures(entries, later, {
+      scope: { type: "changes", changedFiles: new Set() },
+    }),
+  ).toEqual([]);
   // Touching the declaring file (renewing, editing, or the quarantined test
   // itself) fails exactly that waiver's expiry.
   expect(
-    expiredWaiverFailures(
-      entries,
-      later,
-      new Set(["packages/example/src/a.test.ts"]),
-    ),
+    expiredWaiverFailures(entries, later, {
+      scope: {
+        type: "changes",
+        changedFiles: new Set(["packages/example/src/a.test.ts"]),
+      },
+    }),
   ).toEqual(["packages/example/src/a.test.ts:3 dated waiver expired: a case"]);
-  const suppression = expiredWaiverFailures(
-    entries,
-    later,
-    new Set(["scripts/suppression-waivers.json"]),
-  );
+  const suppression = expiredWaiverFailures(entries, later, {
+    scope: {
+      type: "changes",
+      changedFiles: new Set(["scripts/suppression-waivers.json"]),
+    },
+  });
   expect(suppression.length).toBeGreaterThan(0);
   expect(
     suppression.every((failure) =>
