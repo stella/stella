@@ -799,7 +799,7 @@
     },
     "packages/chat": {
       "name": "@stll/chat",
-      "version": "0.2.1",
+      "version": "0.2.2",
       "dependencies": {
         "@ag-ui/core": "1.0.2",
         "@stll/ai-catalog": "workspace:^",
@@ -846,7 +846,7 @@
     },
     "packages/cli": {
       "name": "@stll/cli",
-      "version": "5.0.0",
+      "version": "5.1.0",
       "bin": {
         "stella": "./dist/cli.js",
       },
@@ -1127,7 +1127,7 @@
     },
     "packages/mcp-kit": {
       "name": "@stll/mcp-kit",
-      "version": "0.2.1",
+      "version": "0.2.2",
       "dependencies": {
         "@stll/agent-input": "workspace:^",
         "better-result": "catalog:",

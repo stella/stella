@@ -1,5 +1,19 @@
 # @stll/cli
 
+## 5.1.0
+
+### Minor Changes
+
+- [#6144](https://github.com/stella/stella/pull/6144) [`fb28b69`](https://github.com/stella/stella/commit/fb28b69d95d8094029029517032bfe1b519cc83d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `read_case_law_citations` filters by doctrine and polarity; a doctrine filter on a surface without doctrine is refused instead of returning an empty page.
+
+- [#5986](https://github.com/stella/stella/pull/5986) [`20eaeb8`](https://github.com/stella/stella/commit/20eaeb874a0f097a78b56b520a3fe80226c4d187) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add an as-of date to legislation search and return the matched consolidation validity window.
+
+### Patch Changes
+
+- [#5984](https://github.com/stella/stella/pull/5984) [`a4dc90d`](https://github.com/stella/stella/commit/a4dc90d7e0174d34f3435408998c973db7c538d7) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Resolve EU decisions by ECLI and include available decision languages.
+
+- [#5982](https://github.com/stella/stella/pull/5982) [`fcd5c17`](https://github.com/stella/stella/commit/fcd5c17d4bf9f955501d6f09aac6bd2bb277ff61) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Document EU-law provision filters for case-law search.
+
 ## 5.0.0
 
 ### Major Changes
