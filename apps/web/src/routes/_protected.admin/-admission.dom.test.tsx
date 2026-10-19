@@ -100,7 +100,7 @@ describe("organization admin admission", () => {
         queryClient.setQueryData(roleOptions.queryKey, role);
         queryClient.setQueryData(workspacesNavigationOptions(CALLER).queryKey, {
           workspaces: [],
-          features: { timeBilling: false },
+          features: { timeBilling: false, signals: false, flows: false },
         });
         const requestCount = requests.length;
         const outcome: unknown = await Promise.resolve()
