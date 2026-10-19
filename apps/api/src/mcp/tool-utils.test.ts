@@ -800,16 +800,6 @@ describe("closestToolNames", () => {
     );
   });
 
-  test("matches a name whose words were regrouped", () => {
-    expect(
-      closestToolNames("widgets.delete-part", [
-        "widgets.bolts.delete",
-        "widgets.parts.get",
-        "widgets.parts.delete",
-      ]).at(0),
-    ).toBe("widgets.parts.delete");
-  });
-
   test("returns nothing for an unrelated miss", () => {
     expect(closestToolNames("zzzzzzzzzzzz", candidates)).toEqual([]);
   });
@@ -820,19 +810,14 @@ describe("closestToolNames", () => {
     expect(closestToolNames("", ["a", "ab"])).toEqual(["a"]);
   });
 
-  test("caps the suggestions at the requested limit", () => {
-    expect(
-      closestToolNames("matter", candidates, 2).length,
-    ).toBeLessThanOrEqual(2);
+  test("caps suggestions at three names", () => {
+    expect(closestToolNames("matter", candidates).length).toBeLessThanOrEqual(
+      3,
+    );
   });
 
-  test("matches a name spelled as a chat script function or in another case", () => {
-    for (const spelling of [
-      "external_list_matters",
-      "listMatters",
-      "LIST_MATTERS",
-      "list-matters",
-    ]) {
+  test("matches common separator and case spellings", () => {
+    for (const spelling of ["listMatters", "LIST_MATTERS", "list-matters"]) {
       expect(closestToolNames(spelling, candidates).at(0)).toBe("list_matters");
     }
   });

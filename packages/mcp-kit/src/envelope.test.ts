@@ -192,6 +192,15 @@ describe("tool results preserve JSON data or return a safe error", () => {
 });
 
 describe("closest tool names", () => {
+  test("bounds suggestion work and preserves short near matches", () => {
+    const startedAt = performance.now();
+    expect(closestNames("x".repeat(10_000), ["search_documents"])).toEqual([]);
+    expect(performance.now() - startedAt).toBeLessThan(50);
+    expect(closestNames("search_documnts", ["search_documents"])).toEqual([
+      "search_documents",
+    ]);
+  });
+
   test("matches contained names and returns at most three closest names", () => {
     expect(closestNames("eta", ["theta", "beta"])).toEqual(["beta", "theta"]);
     expect(closestNames("cat", ["rat", "mat", "hat", "bat"])).toEqual([
