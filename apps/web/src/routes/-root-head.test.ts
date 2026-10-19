@@ -34,6 +34,31 @@ describe("root document feature marker", () => {
     ).toBe(false);
   });
 
+  test("lets the app reach the screen edges without blocking zoom", () => {
+    const viewport = createRootHead(false).meta.find(
+      (meta) => "name" in meta && meta.name === "viewport",
+    );
+    const content =
+      viewport !== undefined && "content" in viewport ? viewport.content : "";
+
+    expect(content).toContain("viewport-fit=cover");
+    // Pinch zoom is an accessibility feature; the app never turns it off.
+    expect(content).not.toMatch(/user-scalable|maximum-scale/u);
+  });
+
+  test("colours the browser chrome for both colour schemes", () => {
+    const media = createRootHead(false).meta.flatMap((meta) =>
+      "name" in meta && meta.name === "theme-color" && "media" in meta
+        ? [meta.media]
+        : [],
+    );
+
+    expect(media.toSorted()).toEqual([
+      "(prefers-color-scheme: dark)",
+      "(prefers-color-scheme: light)",
+    ]);
+  });
+
   test("supplies default robots metadata for each feature state", () => {
     for (const enabled of [false, true]) {
       expect(createRootHead(enabled).meta).toContainEqual({

@@ -297,6 +297,22 @@ describe("scopeCorpusRead", () => {
 
     expect(read.unwrap()).toEqual({ limit: 5 });
   });
+
+  it("returns a failed country lookup as a retryable error, never a rejection", async () => {
+    const read = await scopeCorpusRead({
+      scopes: CZECH_CASE_LAW,
+      toolName: "read_case_law_decision",
+      args: { decision_ids: [CZECH_DECISION] },
+      resolveCountries: {
+        ...RESOLVER,
+        decisions: async () => {
+          throw new Error("public database unavailable");
+        },
+      },
+    });
+
+    expect(Result.isError(read) && read.error.kind).toBe("transient");
+  });
 });
 
 describe("restrictChatToolsToCorpusScope", () => {

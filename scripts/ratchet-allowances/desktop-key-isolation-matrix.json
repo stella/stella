@@ -1,0 +1,6 @@
+{
+  "metric": "implicit-root-connection-shapes",
+  "file": "apps/api/src/lib/business-registries/desktop/auth.ts",
+  "delta": 1,
+  "reason": "Production binds the membership pool once when it builds the desktop credential authorizers, so the cross-tenant matrix can run the same authorization path against its test database. The module already used this pool; no dependency takes the owner connection as a default."
+}

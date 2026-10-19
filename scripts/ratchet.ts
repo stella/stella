@@ -36,6 +36,7 @@ import ts from "typescript";
 
 import { compareCodeUnit } from "@stll/collation";
 
+import { GRADED_HANDLER_CODE_REASON } from "../apps/api/src/lib/errors/graded-handler-codes";
 import { MCP_WRITE_ONLY_RESOURCE_SCOPES } from "../packages/api-contract/src/mcp";
 import { countDbAwaitInLoopDirectives } from "./db-await-in-loop";
 import {
@@ -150,15 +151,14 @@ const readSource = (tree: SourceTree, rel: string): string => {
 
 // Lines that are pure comments (JSDoc `*`, `//`, `/* ... */` openers).
 const COMMENT_LINE = /^\s*(?:\/\/|\*|\/\*)/u;
-const LINE_COMMENT_TAIL = /\/\/.*/u;
-// --- String/template literal stripping --------------------------------------
+// --- String/template literal and comment stripping --------------------------
 // A regex counter scanning raw line text cannot tell "as" the type-assertion
-// keyword from "as" the English word sitting inside a string, and a stray `//`
-// inside a string (e.g. a URL) must not be mistaken for a comment tail. Every
-// lexical counter below first blanks string/template literal contents so it
-// only ever scans code. This is still a single char-by-char pass per line,
-// carrying only the minimal state needed to survive a template literal that
-// spans multiple lines.
+// keyword from "as" the English word sitting inside a string, a stray `//`
+// inside a string (e.g. a URL) must not be mistaken for a comment tail, and a
+// quote inside a comment must not be mistaken for a string. Every lexical
+// counter below scans lines from one char-by-char pass that tracks literal and
+// comment state together, carrying only the minimal state needed to survive a
+// template literal or block comment that spans multiple lines.
 //
 // Trade-off: `${...}` interpolation inside a template literal is NOT parsed
 // specially — the whole template span up to the next unescaped backtick is
@@ -170,12 +170,6 @@ const LINE_COMMENT_TAIL = /\/\/.*/u;
 // "line-based". Accepted, documented fidelity limit — same spirit as the
 // other known limitations called out in the self-test fixtures below.
 const BLANKED_LITERAL = " ";
-
-const QUOTE_CHARACTER = /['"`]/u;
-
-type LiteralScanState = { readonly inTemplate: boolean };
-
-const NO_OPEN_TEMPLATE: LiteralScanState = { inTemplate: false };
 
 // Index of the next unescaped `quote` at or after `from`, or -1.
 const findUnescapedQuote = (
@@ -196,133 +190,146 @@ const findUnescapedQuote = (
   return -1;
 };
 
-// Blank string/template literal contents in `raw`, carrying open-template
-// state across lines. Returns the remaining code (literal contents replaced
-// by a single space, so word boundaries around the literal still hold) plus
-// the state to pass into the next line.
-const stripStringLiterals = (
+type LexState = {
+  readonly inTemplate: boolean;
+  readonly inBlockComment: boolean;
+};
+
+const LEX_START: LexState = { inTemplate: false, inBlockComment: false };
+
+// Characters that can open a literal or a comment.
+const LEXICAL_CHARACTER = /['"`/]/u;
+
+type LexedLine = {
+  /** Literal contents blanked; comments kept verbatim. */
+  readonly blanked: string;
+  /** Also without the trailing `//` comment. */
+  readonly stripped: string;
+  /** Also without block comments. */
+  readonly code: string;
+};
+
+// One pass over a line that tracks literal and comment state together, so a
+// quote inside a comment (`the model's`, a doc-comment code span) never opens
+// a literal that would blank the real code after it, and a `//` inside a
+// string never truncates the line. Literal contents become a single space, so
+// word boundaries around a literal still hold; an open template literal or
+// block comment carries into the next line.
+const lexLine = (
   raw: string,
-  state: LiteralScanState,
-): { code: string; state: LiteralScanState } => {
-  // Most lines in the tree hold no literal at all, and the scan below appends
-  // one character at a time. Returning those lines untouched is what keeps the
-  // whole-tree counters (duplicate-token-blocks above all) affordable.
-  if (!state.inTemplate && !QUOTE_CHARACTER.test(raw)) {
-    return { code: raw, state: NO_OPEN_TEMPLATE };
+  state: LexState,
+): { line: LexedLine; state: LexState } => {
+  // Most lines in the tree hold no literal or comment at all. Returning those
+  // untouched is what keeps the whole-tree counters (duplicate-token-blocks
+  // above all) affordable.
+  if (
+    !state.inTemplate &&
+    !state.inBlockComment &&
+    !LEXICAL_CHARACTER.test(raw)
+  ) {
+    return { line: { blanked: raw, stripped: raw, code: raw }, state };
   }
 
-  let out = "";
+  let blanked = "";
+  let stripped = "";
+  let code = "";
+  let { inTemplate, inBlockComment } = state;
   let i = 0;
-
-  if (state.inTemplate) {
-    const close = findUnescapedQuote(raw, 0, "`");
-    if (close === -1) {
-      return { code: out, state };
-    }
-    out += BLANKED_LITERAL;
-    i = close + 1;
-  }
-
-  let inTemplate = false;
   while (i < raw.length) {
-    const ch = raw[i];
+    if (inTemplate) {
+      const close = findUnescapedQuote(raw, i, "`");
+      if (close === -1) {
+        break;
+      }
+      blanked += BLANKED_LITERAL;
+      stripped += BLANKED_LITERAL;
+      code += BLANKED_LITERAL;
+      i = close + 1;
+      inTemplate = false;
+      continue;
+    }
+    if (inBlockComment) {
+      const close = raw.indexOf("*/", i);
+      const end = close === -1 ? raw.length : close + 2;
+      blanked += raw.slice(i, end);
+      stripped += raw.slice(i, end);
+      i = end;
+      inBlockComment = close === -1;
+      continue;
+    }
+    const ch = raw[i] ?? "";
     if (ch === "'" || ch === '"' || ch === "`") {
       const close = findUnescapedQuote(raw, i + 1, ch);
       if (close === -1) {
         // Unterminated: a template literal legitimately continues on the
         // next line; an unterminated '/" is invalid JS, blank defensively.
-        if (ch === "`") {
-          inTemplate = true;
-        }
+        inTemplate = ch === "`";
         break;
       }
-      out += BLANKED_LITERAL;
+      blanked += BLANKED_LITERAL;
+      stripped += BLANKED_LITERAL;
+      code += BLANKED_LITERAL;
       i = close + 1;
       continue;
     }
-    out += ch;
-    i += 1;
-  }
-
-  return { code: out, state: { inTemplate } };
-};
-
-const stripBlockComments = (
-  code: string,
-  inBlockComment: boolean,
-): { code: string; inBlockComment: boolean } => {
-  if (!inBlockComment && !code.includes("/*")) {
-    return { code, inBlockComment: false };
-  }
-
-  let output = "";
-  let cursor = 0;
-  let inside = inBlockComment;
-  while (cursor < code.length) {
-    if (inside) {
-      const close = code.indexOf("*/", cursor);
-      if (close === -1) {
-        return { code: output, inBlockComment: true };
-      }
-      cursor = close + 2;
-      inside = false;
-      continue;
-    }
-    const open = code.indexOf("/*", cursor);
-    if (open === -1) {
-      output += code.slice(cursor);
+    if (ch === "/" && raw[i + 1] === "/") {
+      blanked += raw.slice(i);
       break;
     }
-    output += code.slice(cursor, open);
-    cursor = open + 2;
-    inside = true;
+    if (ch === "/" && raw[i + 1] === "*") {
+      blanked += "/*";
+      stripped += "/*";
+      i += 2;
+      inBlockComment = true;
+      continue;
+    }
+    blanked += ch;
+    stripped += ch;
+    code += ch;
+    i += 1;
   }
-  return { code: output, inBlockComment: inside };
+  return {
+    line: { blanked, stripped, code },
+    state: { inTemplate, inBlockComment },
+  };
 };
 
-// The lexical counters below all scan the same stripped lines of a file, so
-// each stripping pass runs once per file rather than once per counter.
-const recentLiteralBlankedLines = memoizeRecent<readonly string[]>(2);
-const recentLiteralStrippedLines = memoizeRecent<readonly string[]>(2);
-const recentCodeLines = memoizeRecent<readonly string[]>(2);
+// The lexical counters below all scan the same lexed lines of a file, so the
+// lexer runs once per file rather than once per counter.
+type LexedFile = {
+  readonly blanked: readonly string[];
+  readonly stripped: readonly string[];
+  readonly code: readonly string[];
+};
+
+const recentLexedFiles = memoizeRecent<LexedFile>(2);
+
+const lexFile = (content: string): LexedFile =>
+  recentLexedFiles(content, () => {
+    const blanked: string[] = [];
+    const stripped: string[] = [];
+    const code: string[] = [];
+    let state = LEX_START;
+    for (const raw of content.split("\n")) {
+      const lexed = lexLine(raw, state);
+      state = lexed.state;
+      blanked.push(lexed.line.blanked);
+      stripped.push(lexed.line.stripped);
+      code.push(lexed.line.code);
+    }
+    return { blanked, stripped, code };
+  });
 
 // Every line with string and template literal contents blanked.
 const literalBlankedLines = (content: string): readonly string[] =>
-  recentLiteralBlankedLines(content, () => {
-    const lines: string[] = [];
-    let literalState = NO_OPEN_TEMPLATE;
-    for (const raw of content.split("\n")) {
-      const { code, state } = stripStringLiterals(raw, literalState);
-      literalState = state;
-      lines.push(code);
-    }
-    return lines;
-  });
+  lexFile(content).blanked;
 
-// The same lines with their trailing `//` comment dropped. Order matters:
-// doing this on the ORIGINAL line (as the counters used to) means a `//`
-// inside a string (e.g. `const s = "http://x" as string;`) truncates the line
-// before the string is ever recognized as a string, silently dropping real
-// code (including real casts) after it. Blanking literals first fixes that.
+// The same lines with their trailing `//` comment dropped.
 const literalStrippedLines = (content: string): readonly string[] =>
-  recentLiteralStrippedLines(content, () =>
-    literalBlankedLines(content).map((code) =>
-      code.replace(LINE_COMMENT_TAIL, ""),
-    ),
-  );
+  lexFile(content).stripped;
 
 // The same lines with block comments removed as well.
-const codeLines = (content: string): readonly string[] =>
-  recentCodeLines(content, () => {
-    const lines: string[] = [];
-    let inBlockComment = false;
-    for (const line of literalStrippedLines(content)) {
-      const stripped = stripBlockComments(line, inBlockComment);
-      inBlockComment = stripped.inBlockComment;
-      lines.push(stripped.code);
-    }
-    return lines;
-  });
+const codeLines = (content: string): readonly string[] => lexFile(content).code;
 
 const countAsCasts: FileCounter = (content, { file }) => {
   const source = parseSource({ fileName: file, text: content });
@@ -2265,6 +2272,85 @@ const countFailureLegacyOutputPins: FileCounter = (content, { file }) =>
     (spec) => specProperty(spec, "legacy") !== undefined,
   ).length;
 
+const HANDLER_ERROR_CLASS = "HandlerError";
+const CLASSIFY_FAILURE = "classifyFailure";
+const SERVER_ERROR_STATUSES: ReadonlySet<string> = new Set([
+  "500",
+  "502",
+  "503",
+]);
+const GRADED_HANDLER_CODES: ReadonlySet<string> = new Set(
+  Object.keys(GRADED_HANDLER_CODE_REASON),
+);
+
+const mayAnswerServerError = (expression: ts.Expression): boolean => {
+  let found = false;
+  const visit = (node: ts.Node): void => {
+    if (ts.isNumericLiteral(node) && SERVER_ERROR_STATUSES.has(node.text)) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(expression);
+  return found;
+};
+
+const unwrapParentheses = (expression: ts.Expression): ts.Expression =>
+  ts.isParenthesizedExpression(expression)
+    ? unwrapParentheses(expression.expression)
+    : expression;
+
+/**
+ * One per `new HandlerError({ status: 5xx, … })` the failure grader can only
+ * call `unclassified`: no graded `code` literal, and not branded by a
+ * `classifyFailure(…)` wrapped around the construction. A status written as
+ * any expression holding a 5xx literal (a ternary, a lookup default) counts;
+ * an opaque status variable is out of reach of a syntax census.
+ */
+const countUnclassifiedHandlerFailures: FileCounter = (content, { file }) => {
+  if (!content.includes(HANDLER_ERROR_CLASS)) {
+    return 0;
+  }
+  const sourceFile = parseSource({ fileName: file, text: content });
+  const classified = new Set<ts.Node>();
+  let count = 0;
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === CLASSIFY_FAILURE
+    ) {
+      const branded = node.arguments.at(0);
+      if (branded !== undefined) {
+        classified.add(unwrapParentheses(branded));
+      }
+    }
+    const spec = ts.isNewExpression(node) ? node.arguments?.at(0) : undefined;
+    if (
+      ts.isNewExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === HANDLER_ERROR_CLASS &&
+      spec !== undefined &&
+      ts.isObjectLiteralExpression(spec) &&
+      !classified.has(node)
+    ) {
+      const status = specProperty(spec, "status")?.initializer;
+      const code = specProperty(spec, "code")?.initializer;
+      const graded =
+        code !== undefined &&
+        ts.isStringLiteralLike(code) &&
+        GRADED_HANDLER_CODES.has(code.text);
+      if (status !== undefined && mayAnswerServerError(status) && !graded) {
+        count += 1;
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return count;
+};
+
 const FAILURE_SINK_SOURCE_GLOBS = [
   "apps/api/src/**/*.{ts,tsx}",
   "apps/legal-atlas-runner/src/**/*.ts",
@@ -3501,6 +3587,16 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
     include: FAILURE_SINK_SOURCE_GLOBS,
     exclude: isExcludedSource,
     count: countFailureLegacyOutputPins,
+  },
+  {
+    scope: "file",
+    id: "unclassified-handler-failures",
+    description:
+      "`new HandlerError({ status: 5xx })` constructions with no graded `code` literal and no `classifyFailure(…)` brand: each one grades `unclassified`, which the post-release check alerts on whenever it fires. Name the failure (a graded code, a brand, or a typed error class with a declared reason) instead of adding one; gated per file",
+    include: FAILURE_SINK_SOURCE_GLOBS,
+    exclude: isExcludedSource,
+    count: countUnclassifiedHandlerFailures,
+    perFile: true,
   },
   {
     scope: "repo",

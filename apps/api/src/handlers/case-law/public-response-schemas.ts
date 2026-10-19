@@ -2,6 +2,7 @@ import type { TSchema } from "@sinclair/typebox";
 import { t } from "elysia";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
+import { DOCTRINAL_TREATMENTS } from "@stll/api-contract/case-law-doctrine";
 import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
 import { DECISION_PRIMARY_REFERENCE_TYPES } from "@stll/legal-ast/decision-identifier";
 
@@ -227,8 +228,12 @@ const citation = t.Object(
     citationText: boundedString(16_384),
     sectionIndex: numberOrNull,
     treatment: t.UnionEnum(CITATION_TREATMENTS),
+    doctrine: t.Union([
+      t.UnionEnum([...DOCTRINAL_TREATMENTS, "unread"]),
+      t.Null(),
+    ]),
     decision: t.Union([relatedDecision, t.Null()]),
-  } satisfies Record<keyof DecisionCitationRow, TSchema>,
+  } satisfies Record<keyof Omit<DecisionCitationRow, "evidenceQuote">, TSchema>,
   { additionalProperties: false },
 );
 // A leading citation always names a held decision; only the general list
@@ -243,9 +248,12 @@ const leadingCitation = t.Object(
   } satisfies Record<keyof LeadingCitationRow, TSchema>,
   { additionalProperties: false },
 );
-export const citationsResponseSchema = page(
-  citation,
-  LIMITS.caseLawSearchPageSizeMax,
+export const citationsResponseSchema = t.Object(
+  {
+    ...page(citation, LIMITS.caseLawSearchPageSizeMax).properties,
+    doctrineAvailability: t.UnionEnum(["available", "unavailable"]),
+  },
+  { additionalProperties: false },
 );
 export const leadingCitationsResponseSchema = t.Object(
   {
@@ -432,9 +440,58 @@ const countryCoverage = {
     { maxItems: CASE_LAW_SOURCE_ROWS_BOUND },
   ),
 };
+const provisionProcessingState = t.Union([
+  t.Object(
+    {
+      type: t.Literal("available"),
+      pendingCount: boundedString(128),
+      oldestPendingAt: nullableBoundedString(128),
+      sampledAt: boundedString(128),
+      revision: t.Number(),
+      scopeGeneration: t.Number(),
+    },
+    { additionalProperties: false },
+  ),
+  t.Object(
+    {
+      type: t.Literal("notSupportedYet"),
+      reason: t.Union([
+        t.Literal("no_profile"),
+        t.Literal("no_multilingual_profile"),
+        t.Literal("language_not_supported"),
+        t.Literal("unknown_jurisdiction"),
+      ]),
+    },
+    { additionalProperties: false },
+  ),
+  t.Object(
+    {
+      type: t.Literal("unavailable"),
+      reason: t.Union([
+        t.Literal("state_not_seeded"),
+        t.Literal("scope_inactive"),
+        t.Literal("revision_unavailable"),
+        t.Literal("read_failed"),
+      ]),
+      lastSampledAt: nullableBoundedString(128),
+    },
+    { additionalProperties: false },
+  ),
+]);
+
 export const coverageResponseSchema = t.Object(
   {
     generatedAt: boundedString(128),
+    provisionProcessing: t.Array(
+      t.Object(
+        {
+          country: countryCoverage.country,
+          state: provisionProcessingState,
+        },
+        { additionalProperties: false },
+      ),
+      { maxItems: CASE_LAW_JURISDICTIONS.length },
+    ),
     totals: t.Object(
       { searchable: t.Number(), stored },
       { additionalProperties: false },

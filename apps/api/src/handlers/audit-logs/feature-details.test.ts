@@ -295,7 +295,6 @@ describe("audit operation details follow verification enrolment", () => {
         const mapped = mapHandlerResult({
           id: "audit-logs.list",
           result,
-          access: "read",
         });
         if (!isMcpEgressPlan(mapped) || mapped.egress !== "structured") {
           throw new TypeError("Audit capabilities return structured results");

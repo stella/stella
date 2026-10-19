@@ -87,15 +87,15 @@ export const readCourtNames = async ({
     async (tx) =>
       await tx.execute(sql`
         WITH RECURSIVE court_walk AS (
-          SELECT min(d.court) AS court
-          FROM case_law_decisions d
-          WHERE d.country = ${country}
+          SELECT min(first_decision.court) AS court
+          FROM case_law_published_decisions first_decision
+          WHERE first_decision.country = ${country}
           UNION ALL
           SELECT (
-            SELECT min(d.court)
-            FROM case_law_decisions d
-            WHERE d.country = ${country}
-              AND d.court > court_walk.court
+            SELECT min(next_decision.court)
+            FROM case_law_published_decisions next_decision
+            WHERE next_decision.country = ${country}
+              AND next_decision.court > court_walk.court
           )
           FROM court_walk
           WHERE court_walk.court IS NOT NULL

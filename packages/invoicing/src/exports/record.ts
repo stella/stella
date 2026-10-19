@@ -97,7 +97,8 @@ export const quantityText = (quantity: string | null): string => {
 
 /**
  * The rate VAT is charged at on a line: only domestic VAT charges any, so an
- * exempt, reverse-charge or non-payer line reads 0 whatever rate it stores.
+ * exempt, reverse-charge, out-of-scope or non-payer line reads 0 whatever
+ * rate it stores.
  */
 export const effectiveVatRateBps = (
   line: Pick<InvoiceExportLine, "vatRateBps" | "vatTreatment">,

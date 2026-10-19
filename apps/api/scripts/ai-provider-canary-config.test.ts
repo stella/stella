@@ -3,24 +3,25 @@ import { describe, expect, test } from "bun:test";
 
 import {
   BYOK_MODEL_OPTIONS,
-  DEFAULT_MODELS,
+  resolveDefaultModel,
   getOutputTokenLimit,
   isBYOKModelRoleSupported,
-  MODEL_ROLES,
+  MODEL_TASKS,
+  MODEL_TASK_OVERRIDE_GROUP,
 } from "@stll/ai-catalog";
 
 import {
   CANARY_PROVIDERS,
   missingCanaryProviders,
-  modelRoleMaxOutputTokens,
+  modelTaskMaxOutputTokens,
   structuredOutputBudgetEdgeMaxOutputTokens,
-  structuredOutputModelRoleMaxOutputTokens,
+  structuredOutputModelTaskMaxOutputTokens,
   TOOL_CALL_PROBE_MAX_OUTPUT_TOKENS,
   WEEKLY_TOOL_SHAPES,
   weeklyCanaryRotation,
 } from "./ai-provider-canary-config";
 
-describe("AI provider canary role budgets", () => {
+describe("AI provider canary task budgets", () => {
   const model = "model";
 
   test("caps every curated model's probes at its catalog output limit", () => {
@@ -31,12 +32,12 @@ describe("AI provider canary role budgets", () => {
         if (limit === undefined) {
           panic(`Missing catalog output limit for ${modelId}`);
         }
-        for (const role of MODEL_ROLES) {
+        for (const task of MODEL_TASKS) {
           expect(
-            modelRoleMaxOutputTokens({ modelId, role }),
+            modelTaskMaxOutputTokens({ modelId, task }),
           ).toBeLessThanOrEqual(limit);
           expect(
-            structuredOutputModelRoleMaxOutputTokens({ modelId, role }),
+            structuredOutputModelTaskMaxOutputTokens({ modelId, task }),
           ).toBeLessThanOrEqual(limit);
         }
         expect(
@@ -51,35 +52,35 @@ describe("AI provider canary role budgets", () => {
   });
 
   test("keeps structured probes within the provider timeout envelope", () => {
-    for (const role of MODEL_ROLES) {
+    for (const task of MODEL_TASKS) {
       expect(
-        structuredOutputModelRoleMaxOutputTokens({ modelId: model, role }),
-      ).toBeLessThanOrEqual(modelRoleMaxOutputTokens({ modelId: model, role }));
+        structuredOutputModelTaskMaxOutputTokens({ modelId: model, task }),
+      ).toBeLessThanOrEqual(modelTaskMaxOutputTokens({ modelId: model, task }));
     }
 
     expect(
-      structuredOutputModelRoleMaxOutputTokens({
+      structuredOutputModelTaskMaxOutputTokens({
         modelId: model,
-        role: "reasoning",
+        task: "reasoning",
       }),
     ).toBeLessThan(21_000);
     expect(
-      modelRoleMaxOutputTokens({ modelId: model, role: "reasoning" }),
+      modelTaskMaxOutputTokens({ modelId: model, task: "reasoning" }),
     ).toBeGreaterThan(
-      structuredOutputModelRoleMaxOutputTokens({
+      structuredOutputModelTaskMaxOutputTokens({
         modelId: model,
-        role: "reasoning",
+        task: "reasoning",
       }),
     );
   });
 
-  test("budgets tool-execution probes above every short-reply role", () => {
-    for (const role of MODEL_ROLES) {
-      if (role === "reasoning") {
+  test("budgets tool-execution probes above every short-reply task", () => {
+    for (const task of MODEL_TASKS) {
+      if (task === "reasoning") {
         continue;
       }
       expect(TOOL_CALL_PROBE_MAX_OUTPUT_TOKENS).toBeGreaterThan(
-        modelRoleMaxOutputTokens({ modelId: model, role }),
+        modelTaskMaxOutputTokens({ modelId: model, task }),
       );
     }
     // Amazon Nova v1 accepts at most 10,000 output tokens and takes part in
@@ -89,7 +90,7 @@ describe("AI provider canary role budgets", () => {
 
   test("budgets the budget-edge probe above a truncating ceiling", () => {
     // A one-property schema still gets the tool-execution headroom: the
-    // "fast"-role default is a provider's smallest model, and a structured
+    // "short-text"-task default is a provider's smallest model, and a structured
     // object cut off mid-tool-use is rejected, not shortened.
     expect(
       structuredOutputBudgetEdgeMaxOutputTokens({
@@ -106,18 +107,18 @@ describe("AI provider canary role budgets", () => {
     ).toBeGreaterThan(TOOL_CALL_PROBE_MAX_OUTPUT_TOKENS);
   });
 
-  test("clamps role budgets to a model's output limit", () => {
+  test("clamps task budgets to a model's output limit", () => {
     const nova = "us.amazon.nova-lite-v1:0";
-    for (const role of MODEL_ROLES) {
+    for (const task of MODEL_TASKS) {
       expect(
-        modelRoleMaxOutputTokens({ modelId: nova, role }),
+        modelTaskMaxOutputTokens({ modelId: nova, task }),
       ).toBeLessThanOrEqual(10_000);
       expect(
-        structuredOutputModelRoleMaxOutputTokens({ modelId: nova, role }),
+        structuredOutputModelTaskMaxOutputTokens({ modelId: nova, task }),
       ).toBeLessThanOrEqual(10_000);
     }
     expect(
-      modelRoleMaxOutputTokens({ modelId: model, role: "reasoning" }),
+      modelTaskMaxOutputTokens({ modelId: model, task: "reasoning" }),
     ).toBeGreaterThan(10_000);
   });
 });
@@ -167,7 +168,7 @@ describe("AI provider canary coverage", () => {
 });
 
 describe("AI provider weekly rotation", () => {
-  test("cycles through every curated model with supported roles", () => {
+  test("cycles through every curated model with supported tasks", () => {
     for (const provider of CANARY_PROVIDERS) {
       const models = BYOK_MODEL_OPTIONS[provider];
       const rotations = models.map((_, rotationIndex) =>
@@ -182,21 +183,31 @@ describe("AI provider weekly rotation", () => {
         }).modelId,
       ).toBe(models[0]);
 
-      for (const { modelId, modelRoles } of rotations) {
-        const supportedRoles = MODEL_ROLES.filter((role) =>
-          isBYOKModelRoleSupported({ modelId, provider, role }),
+      for (const { modelId, modelTasks } of rotations) {
+        const supportedTasks = MODEL_TASKS.filter((task) =>
+          isBYOKModelRoleSupported({
+            modelId,
+            provider,
+            role: MODEL_TASK_OVERRIDE_GROUP[task],
+          }),
         );
-        const nonDefaultRoles = supportedRoles.filter(
-          (role) => DEFAULT_MODELS[provider][role] !== modelId,
+        const nonDefaultTasks = supportedTasks.filter(
+          (task) =>
+            (resolveDefaultModel({ task, orgProviders: [provider] })?.modelId ??
+              null) !== modelId,
         );
-        const expectedRoles =
-          nonDefaultRoles.length > 0 ? nonDefaultRoles : supportedRoles;
+        const expectedTasks =
+          nonDefaultTasks.length > 0 ? nonDefaultTasks : supportedTasks;
 
-        expect(modelRoles).toEqual(expectedRoles);
-        for (const role of modelRoles) {
-          expect(isBYOKModelRoleSupported({ modelId, provider, role })).toBe(
-            true,
-          );
+        expect(modelTasks).toEqual(expectedTasks);
+        for (const task of modelTasks) {
+          expect(
+            isBYOKModelRoleSupported({
+              modelId,
+              provider,
+              role: MODEL_TASK_OVERRIDE_GROUP[task],
+            }),
+          ).toBe(true);
         }
       }
     }

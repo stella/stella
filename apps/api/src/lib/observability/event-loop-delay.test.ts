@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, spyOn, test } from "bun:test";
 
 import {
   EVENT_LOOP_STALL_THRESHOLD_MS,
@@ -7,6 +7,7 @@ import {
 } from "@/api/lib/observability/event-loop-delay";
 import {
   emitEventLoopDelayMetric,
+  emitProcessMemoryLog,
   resetMetricLineSinkForTesting,
   setMetricLineSinkForTesting,
 } from "@/api/lib/observability/request-metrics";
@@ -29,6 +30,7 @@ const startRecording = (options: {
   const stalls: number[] = [];
   const monitor = startEventLoopDelayMonitor({
     ...options,
+    onReportInterval: () => {},
     onReport: (report) => {
       reports.push(report);
     },
@@ -108,6 +110,58 @@ describe("event-loop delay monitoring", () => {
     expect(stalls).toEqual([]);
   });
 
+  test("reports memory on a timer tick even before the histogram has samples", () => {
+    const lines: string[] = [];
+    setMetricLineSinkForTesting((line) => {
+      lines.push(line);
+    });
+    const originalSetInterval = globalThis.setInterval;
+    let reportTick: (() => void) | undefined;
+    const interval = spyOn(globalThis, "setInterval").mockImplementation(
+      (
+        ...[handler, delay, ...args]: Parameters<typeof globalThis.setInterval>
+      ) => {
+        if (delay === 200 && typeof handler === "function") {
+          reportTick = () => handler(...args);
+        }
+        return originalSetInterval(handler, delay, ...args);
+      },
+    );
+    const reports: EventLoopDelayReport[] = [];
+    const monitor = startEventLoopDelayMonitor({
+      reportIntervalMs: 200,
+      onReportInterval: () =>
+        emitProcessMemoryLog({
+          rssBytes: 10,
+          heapUsedBytes: 5,
+          arrayBuffersBytes: 2,
+          uploadFinalizeInFlightBytes: 0,
+        }),
+      onReport: (report) => {
+        reports.push(report);
+      },
+      onStall: () => {},
+    });
+    try {
+      expect(reportTick).toBeDefined();
+      reportTick?.();
+      expect(reports).toEqual([]);
+      expect(lines.map((line): unknown => JSON.parse(line))).toEqual([
+        {
+          severity: "INFO",
+          message: "runtime.process_memory",
+          rssBytes: 10,
+          heapUsedBytes: 5,
+          arrayBuffersBytes: 2,
+          uploadFinalizeInFlightBytes: 0,
+        },
+      ]);
+    } finally {
+      monitor.stop();
+      interval.mockRestore();
+    }
+  });
+
   test("each window is one undimensioned EMF record with max and p99", () => {
     const lines: string[] = [];
     setMetricLineSinkForTesting((line) => {
@@ -135,5 +189,31 @@ describe("event-loop delay monitoring", () => {
         EventLoopDelayP99: 12,
       },
     ]);
+  });
+
+  test("logs only bounded process counters without creating custom metrics", () => {
+    const lines: string[] = [];
+    setMetricLineSinkForTesting((line) => {
+      lines.push(line);
+    });
+
+    emitProcessMemoryLog({
+      rssBytes: 1_500_000_000,
+      heapUsedBytes: 400_000_000,
+      arrayBuffersBytes: 300_000_000,
+      uploadFinalizeInFlightBytes: 50_000_000,
+    });
+
+    expect(lines.map((line): unknown => JSON.parse(line))).toEqual([
+      {
+        severity: "INFO",
+        message: "runtime.process_memory",
+        rssBytes: 1_500_000_000,
+        heapUsedBytes: 400_000_000,
+        arrayBuffersBytes: 300_000_000,
+        uploadFinalizeInFlightBytes: 50_000_000,
+      },
+    ]);
+    expect(lines.at(0)?.length).toBeLessThan(300);
   });
 });

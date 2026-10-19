@@ -15,6 +15,8 @@ import {
   formatCurrencyAmount,
 } from "@/components/billing/format-currency";
 import { GlobalTimer } from "@/features/time-timers/global-timer";
+import { useSingleFlight } from "@/hooks/use-single-flight";
+import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   formatDecimalHours,
@@ -63,6 +65,7 @@ export const TimesheetDayView = ({
   const matterNameMap = useMatterNameMap(workspaceId);
 
   const createEntry = useCreateTimeEntry();
+  const createOnce = useSingleFlight();
   const updateEntry = useUpdateTimeEntry();
   const deleteEntry = useDeleteTimeEntry();
 
@@ -89,7 +92,10 @@ export const TimesheetDayView = ({
     ? entries.find((e) => e.id === editingId)
     : null;
 
-  const handleCreate = (values: TimeEntryFormValues) => {
+  const createFromValues = (
+    values: TimeEntryFormValues,
+    settled: () => void,
+  ) => {
     createEntry.mutate(
       {
         workspaceId,
@@ -104,11 +110,18 @@ export const TimesheetDayView = ({
         activityCode: values.activityCode || null,
       },
       {
+        onSettled: settled,
         onSuccess: () => setFormOpen(false),
         onError: (error) => {
           notifyUserError(error, t("errors.actionFailed"));
         },
       },
+    );
+  };
+  const handleCreate = (values: TimeEntryFormValues) => {
+    detached(
+      createOnce.runSettled((settled) => createFromValues(values, settled)),
+      "timesheet-day-view.create",
     );
   };
 

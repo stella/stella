@@ -1,6 +1,6 @@
 {
   "route": "/settings/account/desktop",
-  "reason": "Load professional-use acceptance before protected route data is requested.",
+  "reason": "Load professional-use acceptance before protected route data; read desktop presence to show linked app state while offering connection on this computer.",
   "budget": {
     "depth": 4,
     "requests": [
@@ -9,6 +9,7 @@
       "GET /api/auth/organization/list",
       "GET /health",
       "GET /v1/chat/threads",
+      "GET /v1/desktop/presence",
       "GET /v1/me/professional-use",
       "GET /v1/notifications",
       "GET /v1/notifications/events",
@@ -31,7 +32,8 @@
       "GET /v1/signals/count": 1,
       "GET /v1/time-timers": 1,
       "GET /v1/workspaces/navigation": 1,
-      "GET /v1/me/professional-use": 1
+      "GET /v1/me/professional-use": 1,
+      "GET /v1/desktop/presence": 1
     },
     "dbQueries": {
       "GET /api/auth/get-session": 4,
@@ -46,7 +48,8 @@
       "GET /v1/signals/count": 4,
       "GET /v1/time-timers": 7,
       "GET /v1/workspaces/navigation": 7,
-      "GET /v1/me/professional-use": 1
+      "GET /v1/me/professional-use": 1,
+      "GET /v1/desktop/presence": 4
     },
     "responseSizes": {
       "GET /api/auth/get-session": 1024,
@@ -60,7 +63,8 @@
       "GET /v1/signals/count": 1024,
       "GET /v1/time-timers": 1024,
       "GET /v1/workspaces/navigation": 20480,
-      "GET /v1/me/professional-use": 1024
+      "GET /v1/me/professional-use": 1024,
+      "GET /v1/desktop/presence": 1024
     }
   }
 }

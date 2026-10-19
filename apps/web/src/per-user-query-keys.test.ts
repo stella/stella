@@ -9,6 +9,7 @@ import { savedTimeNarrativesKeys } from "@/components/billing/saved-time-narrati
 import { companyFormatKeys } from "@/components/company-format-library";
 import { readerAnnotationKeys } from "@/components/legal-reader/annotations/reader-annotations-query";
 import { savedSearchKeys } from "@/components/saved-searches.logic";
+import { readerAnswersOptions } from "@/features/case-law/components/case-viewer/reader-answers-query";
 import { chatKeys } from "@/features/chat/chat-query-contract";
 import { desktopPresenceOptions } from "@/features/desktop/desktop-presence";
 import { lawHistoryKeys } from "@/features/law-search-history/law-search-history-query";
@@ -58,7 +59,7 @@ import {
   organizationSettingsOptions,
   optionalOrganizationSettingsOptions,
 } from "@/queries/organization-settings";
-import { auditLogOptions } from "@/routes/_protected.settings/-queries/audit-logs";
+import { auditLogOptions } from "@/routes/_protected.admin/-queries/audit-logs";
 import { connectedAppsOptions } from "@/routes/_protected.settings/-queries/connections";
 import { memoriesKeys } from "@/routes/_protected.settings/-queries/memories";
 import { memoryMattersOptions } from "@/routes/_protected.settings/-queries/memory-matters";
@@ -116,6 +117,9 @@ const KEY_TYPE_HAS_USER = "the key argument's type requires userId";
 
 // Keyed by handler path under apps/api/src/handlers.
 const PER_USER_READS: Record<string, PerUserRead> = {
+  "account-exports/download.ts": { kind: "not-per-user", reason: DOWNLOAD },
+  "account-exports/get.ts": { kind: "no-web-caller", calls: [] },
+  "account-exports/status/get.ts": { kind: "no-web-caller", calls: [] },
   "search-history/list.ts": {
     kind: "keyed",
     calls: ['api["search-history"].get'],
@@ -214,7 +218,7 @@ const PER_USER_READS: Record<string, PerUserRead> = {
   "audit-logs/list.ts": {
     kind: "keyed",
     calls: ['api["audit-logs"].get'],
-    files: ["routes/_protected.settings/-queries/audit-logs.ts"],
+    files: ["routes/_protected.admin/-queries/audit-logs.ts"],
     keys: () => [
       auditLogOptions({
         viewer: { userId: USER, organizationId: ORG },
@@ -234,6 +238,11 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     calls: ["api.catalogue.get"],
     files: ["lib/knowledge/queries/catalogue.ts"],
     keys: () => [catalogueOptions(ORG, USER).queryKey],
+  },
+  "chat/link-icons/get.ts": {
+    kind: "not-per-user",
+    reason:
+      "Public site icons are shared by hostname; the caller is used only for miss admission.",
   },
   "chat/get-suggested-prompts.ts": { kind: "owned-id", reason: OWNED_THREAD },
   "chat/get-thread-recap.ts": { kind: "owned-id", reason: OWNED_THREAD },
@@ -366,8 +375,16 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     opaqueKeys: { "readerAnnotationKeys.forTarget(key)": KEY_TYPE_HAS_USER },
   },
   "legal-reader/answers/list.ts": {
-    kind: "no-web-caller",
+    kind: "keyed",
     calls: ["api.reader.answers.get"],
+    files: ["features/case-law/components/case-viewer/reader-answers-query.ts"],
+    keys: () => [
+      readerAnswersOptions({
+        organizationId: ORG,
+        userId: USER,
+        decisionId: "decision",
+      }).queryKey,
+    ],
   },
   "lists/items/list.ts": {
     kind: "keyed",

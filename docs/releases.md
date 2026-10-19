@@ -149,17 +149,39 @@ or change deployed feature flags.
    a newer staging dispatch replaced it while it waited, dispatch it again
    with the same `sha`; tagging refuses until `staging/verified` is green.
 
-7. Tag the commit once all three statuses are green:
+   A commit that landed through the merge queue usually needs neither heavy
+   status. The queue fast-forwards `main` to the merge-group commit, so the
+   `ci-result` check of that merge group's CI run sits on the release commit
+   itself. That check is the merge-group receipt: a `ci-result` check run on
+   the release commit, created by GitHub Actions, concluded `success`, in a
+   `merge_group` run of `.github/workflows/ci.yml` from `main`'s queue that
+   also completed successfully. It stands in for both `main/heavy` and
+   `main/pr-depth`. If any merge-group `ci-result` on the commit is not a
+   success, or a `ci-result` check run cannot be tied to its workflow run, the
+   receipt is refused and the two statuses are required. `staging/verified` is
+   required either way.
+
+   A merge-group run validates only its own group's diff, so the receipt also
+   needs every commit since the previous release tag to have reached `main`
+   through a validated merge group. The gate runs
+   `bun scripts/check-release-queue-history.ts --require` over that range; an
+   admin merge, a direct push, or history that cannot be read keeps
+   `main/heavy` and `main/pr-depth` required, and the log names the commits
+   the receipt does not cover.
+
+7. Tag the commit once `staging/verified` is green and it carries either the
+   merge-group receipt or green `main/heavy` and `main/pr-depth`:
 
    ```bash
    gh workflow run release-tag.yml --ref main -f sha=<release-sha>
    ```
 
-   `release-tag.yml` tags exactly that commit, and refuses unless both
-   `staging/verified` and `main/heavy` are `success` on it; the refusal names
-   each status that is missing or not green. It checks both again right
+   `release-tag.yml` tags exactly that commit, and refuses unless
+   `staging/verified` is `success` on it and it carries the merge-group
+   receipt or `success` on both `main/heavy` and `main/pr-depth`; the refusal
+   names each gate that is missing or not green. It checks them again right
    before pushing the tag. Leaving `sha` blank selects the
-   newest commit on `main` that carries both. The workflow also runs the CLI
+   newest commit on `main` that passes these gates. The workflow also runs the CLI
    coupling check; if it fails (a CLI changeset merged after the release
    commit), apply it with `bun run changeset:version` plus
    `bun run changeset --empty` and release from the commit that merges it.
@@ -173,10 +195,28 @@ or change deployed feature flags.
    leaves the tag, the immutable images, and the draft; rerunning the
    workflow for the same tag reuses them. RCs continue to target staging and
    are published as prereleases once the staging promotion finishes.
-9. After a stable release succeeds, `publish-npm.yml` checks out the same
-   release commit, packs the CLI, installs that exact tarball under plain Node,
-   and runs its unauthenticated compatibility canary against production. Only
-   then can the hardened npm publishing job publish `@stll/cli`.
+9. Once production serves a stable release, `release.yml` dispatches
+   `release-health.yml`. It waits until 60 minutes after publication, then
+   compares the release's failure fingerprints (handler, error class and
+   code, counted by the API as `release_failure_window` analytics events)
+   with the previous stable release's. Any `unclassified` failure, or a
+   fingerprint the previous release never produced that occurs at least
+   three times, makes the release unhealthy; a query that cannot answer
+   makes it inconclusive. The run records the verdict as
+   `release-health.json` on the GitHub release and fails unless the verdict
+   is healthy, which alerts through `scheduled-run-alerts.yml`. The query
+   reads the `POSTHOG_RELEASE_HEALTH_API_KEY` secret (a PostHog personal API
+   key limited to query read) and the `POSTHOG_PROJECT_ID` variable.
+
+   The next production promotion refuses while the previous stable release
+   is unhealthy, inconclusive, or still inside its window without a
+   verdict. After investigating, re-dispatch `release.yml` for the new tag
+   with `acknowledge_unhealthy_release` set to that previous release.
+
+10. After a stable release succeeds, `publish-npm.yml` checks out the same
+    release commit, packs the CLI, installs that exact tarball under plain Node,
+    and runs its unauthenticated compatibility canary against production. Only
+    then can the hardened npm publishing job publish `@stll/cli`.
 
 Changing `packages/cli/package.json` on `main` does not publish the CLI by
 itself. This ordering is deliberate: the API must advertise support for the

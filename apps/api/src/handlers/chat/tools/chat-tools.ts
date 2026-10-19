@@ -91,6 +91,7 @@ import {
   WEB_SEARCH_TOOL_NAME,
 } from "@/api/handlers/chat/tools/web-search-tools";
 import { createWorkspaceTools } from "@/api/handlers/chat/tools/workspace-tools";
+import type { ModelOfferedSkills } from "@/api/lib/agent-skills/invocation";
 import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -110,14 +111,18 @@ import type {
 } from "@/api/lib/chat/chat-tool-types";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import type { ChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
-import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { authorizeDocumentWriteAccess } from "@/api/lib/entities/authorize-document-write";
 import type {
   DocumentWriteAccess,
   NewDocumentVersionOperation,
 } from "@/api/lib/entities/authorize-document-write";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
-import { CHAT_ONLY_FEATURE_TOOL_DEFINITIONS } from "@/api/lib/feature-access/registry";
+import {
+  CHAT_ONLY_FEATURE_TOOL_DEFINITIONS,
+  AI_MEMORY_FEATURE_ID,
+  FEATURE_REGISTRY,
+  type FeatureRegistry,
+} from "@/api/lib/feature-access/registry";
 import { FIELD_VALUE_WRITE_PERMISSIONS } from "@/api/lib/fields/write-field";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
@@ -557,7 +562,7 @@ export type GetChatToolsProps = {
    */
   corpusScopes?: readonly ChatCorpusScope[] | undefined;
   registryDispatch: Record<BusinessRegistrySlug, RegistryHandler>;
-  skillMetadata?: readonly SkillMetadata[] | undefined;
+  skillMetadata?: ModelOfferedSkills<SkillMetadata> | undefined;
   activeSkillContext?: ActiveChatSkillContext | null | undefined;
   recordAuditEvent?: AuditRecorder | undefined;
   /** Records reads that run without an approval, such as `load-skill`. */
@@ -827,7 +832,16 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   const {
     featureAccessSnapshot,
     testDependencies,
-    memoryEnabled = isDeploymentFeatureEnabled("FEATURE_AI_MEMORY"),
+    memoryEnabled = isMcpDescriptorFeatureEnabled({
+      context: {
+        featureAccessSnapshot: props.featureAccessSnapshot,
+        organizationId: props.organizationId,
+        userId: props.userId,
+      },
+      kind: "tools",
+      id: REMEMBER_TOOL_NAME,
+      featureId: AI_MEMORY_FEATURE_ID,
+    }),
     safeDb,
     scopedDb,
     pinServerValidatedWorkspaceId,
@@ -1315,6 +1329,11 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     },
   });
   const projected = props.projectToolSet?.(registered) ?? registered;
+  const featureRegistry: FeatureRegistry = FEATURE_REGISTRY;
+  const toolFeatureId = (name: string) =>
+    CHAT_ONLY_FEATURE_TOOL_DEFINITIONS.find(
+      (definition) => definition.name === name,
+    )?.featureId ?? getStaticMcpToolDefinition(name)?.featureId;
   const tools = Object.fromEntries(
     Object.entries(
       restrictChatToolsToCorpusScope(projected, corpusScopes),
@@ -1328,10 +1347,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
         },
         kind: "tools",
         id: name,
-        featureId:
-          CHAT_ONLY_FEATURE_TOOL_DEFINITIONS.find(
-            (definition) => definition.name === name,
-          )?.featureId ?? getStaticMcpToolDefinition(name)?.featureId,
+        featureId: toolFeatureId(name),
       }),
     ),
   );
@@ -1348,6 +1364,22 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
         : [WEB_SEARCH_TOOL_NAME, FETCH_URL_TOOL_NAME].map(
             (name) => [name, "web research is off for this chat"] as const,
           )),
+      // Only a generally available feature may be named when withheld;
+      // invitation and self-serve tools stay invisible to unenrolled callers.
+      ...Object.keys(projected)
+        .filter((name) => {
+          const featureId = toolFeatureId(name);
+          return (
+            !(name in tools) &&
+            featureId !== undefined &&
+            Object.hasOwn(featureRegistry, featureId) &&
+            featureRegistry[featureId]?.enrolment === "general-availability"
+          );
+        })
+        .map(
+          (name) =>
+            [name, "unavailable for this caller or deployment"] as const,
+        ),
       ...Object.keys(registered)
         .filter((name) => !(name in projected))
         .map((name) => [name, "subagents cannot call it"] as const),

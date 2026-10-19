@@ -63,6 +63,7 @@ const source = ({ decisionId, texts }: FixtureOptions) =>
     } satisfies DocumentAst,
     citationAnchors: [],
     provisionAnchors: [],
+    provisionStatus: null,
     referenceNextCursor: null,
   }) as const satisfies NonNullable<
     Awaited<ReturnType<typeof readDecisionReaderSource>>
@@ -77,6 +78,7 @@ describe("private reader answer corpus excerpts", () => {
           decisionId,
           audience: "model",
           phase: "blocks",
+          surface: "search",
         });
         return source({ decisionId, texts: ["Civil liability"] });
       },

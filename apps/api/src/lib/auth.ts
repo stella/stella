@@ -78,7 +78,6 @@ import {
   AUTH_SESSION_STORAGE_OPTIONS,
   AUTH_VERIFICATION_STORAGE_OPTIONS,
 } from "@/api/lib/auth-adapter-options";
-import { AUTH_USER_ADDITIONAL_FIELDS } from "@/api/lib/auth-user-additional-fields";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import { createAgentUserPlugin } from "@/api/lib/auth/agent-auth-user";
 import { authCookiePolicy } from "@/api/lib/auth/auth-cookie-name";
@@ -175,6 +174,7 @@ import {
   socialCallbackErrorUrl,
   socialSignInProvider,
 } from "@/api/lib/auth/social-sign-in-outcome";
+import { AUTH_USER_ADDITIONAL_FIELDS } from "@/api/lib/auth/user-additional-fields";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -287,6 +287,7 @@ import {
   ORGANIZATION_DELETION_REFUSAL_CODE,
 } from "@/api/lib/usage/renewing-hosted-subscription";
 import { normalizeUserShortcutsField } from "@/api/lib/user-shortcuts";
+import { readAuthorizedWorkspaces } from "@/api/lib/workspaces/authorized-workspace-ids";
 import {
   MCP_ALL_RESOURCE_SCOPES,
   MCP_MEMBER_ID_CLAIM,
@@ -2912,6 +2913,20 @@ const createAuthDatabases = (
   safeDb: createMembershipSafeDb(rlsDb, databaseIdentity),
 });
 
+const readOrganizationWorkspaces = async (
+  scopedDb: AuthScopedDb,
+  organizationId: SafeId<"organization">,
+): Promise<AccessibleWorkspace[]> => {
+  const outcome = await scopedDb(
+    async (tx) => await readAuthorizedWorkspaces(tx, { organizationId }),
+  );
+  if (outcome.isErr()) {
+    const { error } = outcome;
+    throw error;
+  }
+  return outcome.value.workspaces;
+};
+
 const resolveValidateAuth = async ({
   getSession,
   request,
@@ -3018,12 +3033,9 @@ const resolveValidateAuth = async ({
 
   let accessibleWorkspacesPromise: Promise<AccessibleWorkspace[]> | null = null;
   const getAccessibleWorkspaces = async (): Promise<AccessibleWorkspace[]> => {
-    accessibleWorkspacesPromise ??= scopedDb(
-      async (tx) =>
-        await tx
-          .select({ id: workspaces.id, status: workspaces.status })
-          .from(workspaces)
-          .where(eq(workspaces.organizationId, activeOrganizationId)),
+    accessibleWorkspacesPromise ??= readOrganizationWorkspaces(
+      scopedDb,
+      activeOrganizationId,
     ).then((items) => {
       for (const workspace of items) {
         validatedWorkspaceIdSet.add(workspace.id);

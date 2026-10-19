@@ -21,6 +21,8 @@ const runtimeAggregateOwners = new Set([
   "packages/scripts/src/generated-files.ts",
   // Exercises runtime generation in a packaged checkout.
   "packages/scripts/src/prepared-generated-sources.test.ts",
+  // Literal fixtures prove generated aggregates cannot enter the Git index.
+  "scripts/check-mcp-generated-tracking.test.ts",
   ".oxfmtrc.json",
   "knip.json",
   "turbo.json",

@@ -524,6 +524,30 @@ pub fn clipboard_copy_item(
 }
 
 #[tauri::command]
+pub fn clipboard_copy_items(
+  caller: ClipboardCaller,
+  format: ClipboardCopyFormat,
+  ids: Vec<String>,
+  state: State<'_, ClipboardAppState>,
+  window: WebviewWindow,
+) -> Result<(), ClipboardCopyError> {
+  if let [id] = ids.as_slice() {
+    return clipboard_copy_item(caller, format, id.clone(), state, window);
+  }
+  let copy_error = |message| ClipboardCopyError::Copy { message };
+  {
+    let mut manager = state.lock().map_err(|_| copy_error(lock_error()))?;
+    let combined = manager.compose_items(&ids, format).map_err(copy_error)?;
+    if let Err(message) = manager.write_item(&combined, None, format) {
+      manager.clear_suppression();
+      return Err(copy_error(message));
+    }
+  }
+  clipboard_window::hide(&window)
+    .map_err(|message| ClipboardCopyError::Hide { message })
+}
+
+#[tauri::command]
 pub fn clipboard_hide(
   _caller: ClipboardCaller,
   window: WebviewWindow,

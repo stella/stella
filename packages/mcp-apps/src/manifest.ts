@@ -7,6 +7,7 @@ import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-exec
 import {
   STATUTE_TIMELINE_RESOURCE_URI,
   CASE_LAW_RESULTS_RESOURCE_URI,
+  CITATION_GRAPH_RESOURCE_URI,
   DECISION_READER_RESOURCE_URI,
 } from "./resource-uri";
 
@@ -54,6 +55,13 @@ export const MCP_APPS = [
     ],
   },
   {
+    directory: "citation-graph",
+    uri: CITATION_GRAPH_RESOURCE_URI,
+    linkedTools: ["read_case_law_citations"],
+    type: "presentation",
+    callableTools: ["read_case_law_citations", "open_case_law_decision"],
+  },
+  {
     directory: "statute-timeline",
     uri: STATUTE_TIMELINE_RESOURCE_URI,
     linkedTools: ["read_provision_history"],
@@ -64,9 +72,10 @@ export const MCP_APPS = [
 
 export const CASE_LAW_RESULTS_APP = MCP_APPS[2];
 export const DECISION_READER_APP = MCP_APPS[3];
+export const CITATION_GRAPH_APP = MCP_APPS[4];
 export type PresentationApp = Extract<
   (typeof MCP_APPS)[number],
   { type: "presentation" }
 >;
 
-export const STATUTE_TIMELINE_APP = MCP_APPS[4];
+export const STATUTE_TIMELINE_APP = MCP_APPS[5];

@@ -1,7 +1,9 @@
 import { PGlite } from "@electric-sql/pglite";
 import { pg_trgm } from "@electric-sql/pglite/contrib/pg_trgm";
-import { getTableName, sql } from "drizzle-orm";
+import { panic } from "better-result";
+import { getTableName, isTable, sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
+import { getViewConfig, isPgView, PgDialect } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
 
 import * as agentAuthSchema from "@/api/db/agent-auth-schema";
@@ -10,7 +12,11 @@ import * as rlsExports from "@/api/db/rls";
 import * as schema from "@/api/db/schema";
 import type { AnyDrizzle } from "@/api/db/scoped";
 import {
+  caseLawDecisionViewGrantStatement,
+  CENSUS_COLUMN_GRANTS_BY_RELATION,
+  DOCTRINE_COLUMN_GRANTS_BY_RELATION,
   PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
+  publicLawColumnPairs,
   ROLLOUT_CASE_LAW_SOURCE_COLUMNS,
   ROLLOUT_CASE_LAW_SOURCE_RELATION,
   ROLLOUT_CASE_LAW_WHOLE_RELATIONS,
@@ -24,15 +30,18 @@ import {
   installPgliteAccountAuditRls,
   installPgliteChatMessageRevisionsRls,
   installPgliteChatSecretRls,
+  installPgliteCitationDoctrineRls,
   installPgliteReaderAnswerRls,
   installPgliteChatTurnRunIdLookup,
   installPgliteAgentSkillRevisionTrigger,
+  installPgliteAiMemoryActiveUserGuard,
   installPgliteCaseLawObservationFence,
   installPgliteCorpusProjectionRevisionFence,
   installPgliteServiceClientCredentialCascade,
   installPgliteLegislationExpressionIdentity,
   installPgliteLegislationPayloadRevision,
   installPgliteProvisionExtractionState,
+  installPgliteCaseLawCountryShape,
   installPgliteSchedulerJobPauseLog,
   installPgliteOrganizationMemberCapacity,
   installPgliteWorkspaceContactCapacity,
@@ -68,6 +77,19 @@ const allSchema = {
   ...agentAuthSchema,
   ...rlsExports,
 };
+
+const publicLawRelations = new Set(
+  Object.keys(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION),
+);
+const publicLawViews = Object.values(allSchema).flatMap((entity) => {
+  if (!isPgView(entity)) {
+    return [];
+  }
+  const config = getViewConfig(entity);
+  return !config.isExisting && publicLawRelations.has(config.name)
+    ? [entity]
+    : [];
+});
 
 const quoteSqlIdentifier = (identifier: string) =>
   `"${identifier.replaceAll('"', '""')}"`;
@@ -287,7 +309,34 @@ const CORPUS_PROJECTION_REVISION_TABLE_SQL = quoteSqlIdentifier(
  * harness mirrors the migrations, so it leaves them ungranted too.
  */
 const PUBLIC_LAW_COLUMNS_GRANTED_IN_A_LATER_RELEASE: ReadonlySet<string> =
-  new Set(["case_law_decisions.docket_family_key"]);
+  new Set([
+    "case_law_decisions.docket_family_key",
+    ...[DOCTRINE_COLUMN_GRANTS_BY_RELATION, CENSUS_COLUMN_GRANTS_BY_RELATION]
+      .flatMap(publicLawColumnPairs)
+      .map(({ relation, column }) => `${relation}.${column}`),
+  ]);
+
+const grantedPublicLawColumns = (
+  relation: string,
+  columns: Readonly<Record<string, unknown>>,
+) =>
+  Object.keys(columns).filter(
+    (column) =>
+      !PUBLIC_LAW_COLUMNS_GRANTED_IN_A_LATER_RELEASE.has(
+        `${relation}.${column}`,
+      ),
+  );
+
+// Expansion releases may declare permitted grants before their relations exist.
+// The harness pushes only this checkout's schema, so it cannot grant those yet.
+export const availableSchemaRelationNames = new Set<string>(
+  Object.values(schema).flatMap((relation) => {
+    if (isTable(relation)) {
+      return [getTableName(relation)];
+    }
+    return isPgView(relation) ? [getViewConfig(relation).name] : [];
+  }),
+);
 
 /**
  * Role grants the harness runs after `stella`'s table privileges are set from
@@ -300,6 +349,7 @@ export const ROLE_GRANT_STATEMENTS = [
   `GRANT INSERT, UPDATE ON TABLE "soft_law_documents", "soft_law_document_versions", "soft_law_document_locators", "soft_law_ingestion_attempts" TO stella_ingestion`,
   `GRANT UPDATE (listing_baseline, listing_seen, listing_expected_total, sync_cursor, last_sync_at, run_state, run_id, run_started_at, lease_token, lease_expires_at, failure_tag) ON TABLE "soft_law_sources" TO stella_ingestion`,
   `GRANT SELECT, INSERT, UPDATE ON TABLE "case_law_decision_aliases" TO stella_ingestion`,
+  caseLawDecisionViewGrantStatement("stella_ingestion"),
   `
     GRANT SELECT (${AUTH_USER_STELLA_SELECT_COLUMNS_SQL})
       ON TABLE "user" TO stella
@@ -343,8 +393,13 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_ingestion_events",
       "case_law_ingestion_failures",
       "case_law_index_jobs",
-      "case_law_citation_reviews"
+      "case_law_citation_reviews",
+      "case_law_citation_doctrine_reviews"
     TO stella_ingestion
+  `,
+  // Redaction erases the doctrine evidence quoted from the citing decision.
+  `
+    GRANT DELETE ON TABLE "case_law_citation_doctrine_reviews" TO stella_ingestion
   `,
   `
     GRANT INSERT, UPDATE, DELETE ON TABLE
@@ -476,6 +531,11 @@ export const ROLE_GRANT_STATEMENTS = [
     GRANT SELECT, INSERT, DELETE ON TABLE "legislation_work_names"
     TO stella_ingestion
   `,
+  `
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
+      "legislation_amendment_snapshots", "legislation_amendments"
+    TO stella_ingestion
+  `,
   // Final-generation state is observable by request code but mutated only by
   // ingestion. A narrowly scoped database function owns retirement deletes.
   `
@@ -502,6 +562,16 @@ export const ROLE_GRANT_STATEMENTS = [
   `
     GRANT UPDATE (provisioning_status, attested_at, updated_at)
       ON TABLE "corpus_index_group_enrollments" TO stella_ingestion
+  `,
+  // The serving pointer is written by the gated flip and deleted when a
+  // whole generation is promoted; ingestion may not rewrite its key.
+  `
+    GRANT SELECT, INSERT, DELETE ON TABLE "corpus_index_jurisdiction_serving"
+    TO stella_ingestion
+  `,
+  `
+    GRANT UPDATE (generation, from_generation, flipped_at)
+      ON TABLE "corpus_index_jurisdiction_serving" TO stella_ingestion
   `,
   // The withdrawal trail is append-only: ingestion records, the app reads.
   `
@@ -543,20 +613,16 @@ export const ROLE_GRANT_STATEMENTS = [
   // Alias reader grants land only after the release declaring them optional.
   ...Object.entries(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION)
     .filter(
-      ([relation]) =>
+      ([relation, columns]) =>
+        availableSchemaRelationNames.has(relation) &&
         relation !== getTableName(schema.caseLawDecisionAliases) &&
         relation !== getTableName(schema.caseLawDecisionCitationStats) &&
-        relation !== getTableName(schema.caseLawDecisionCitationStatsState),
+        relation !== getTableName(schema.caseLawDecisionCitationStatsState) &&
+        grantedPublicLawColumns(relation, columns).length > 0,
     )
     .map(
       ([relation, columns]) => `
-      GRANT SELECT (${Object.keys(columns)
-        .filter(
-          (column) =>
-            !PUBLIC_LAW_COLUMNS_GRANTED_IN_A_LATER_RELEASE.has(
-              `${relation}.${column}`,
-            ),
-        )
+      GRANT SELECT (${grantedPublicLawColumns(relation, columns)
         .map(quoteSqlIdentifier)
         .join(", ")})
         ON TABLE ${quoteSqlIdentifier(relation)}
@@ -637,6 +703,56 @@ const applyStellaTablePrivileges = async (client: PGlite): Promise<void> => {
   await client.exec(statements.join(";\n"));
 };
 
+const installTestPublicLawViews = async (
+  db: Pick<ReturnType<typeof drizzle>, "execute">,
+): Promise<void> => {
+  const dialect = new PgDialect();
+  for (const view of publicLawViews) {
+    const config = getViewConfig(view);
+    const query = config.query;
+    if (query === undefined) {
+      panic(`Public-law view ${config.name} has no query`);
+    }
+    if (config.with !== undefined) {
+      panic(
+        `Public-law fixture view ${config.name} must use plain view semantics`,
+      );
+    }
+    const rendered = dialect.sqlToQuery(query);
+    if (rendered.params.length > 0) {
+      panic(`Public-law view ${config.name} query has bound parameters`);
+    }
+    await db.execute(sql`
+      CREATE VIEW ${sql.identifier(config.schema ?? "public")}.${sql.identifier(
+        config.name,
+      )}
+      AS (${sql.raw(rendered.sql)})
+    `);
+  }
+};
+
+/** Rebuild schema-derived views and their grants after a fixture column change. */
+export const rebuildTestPublicLawViews = async (
+  client: PGlite,
+  change: () => Promise<void>,
+): Promise<void> => {
+  const db = drizzle({ client });
+  for (const view of publicLawViews) {
+    const config = getViewConfig(view);
+    await db.execute(sql`
+      DROP VIEW ${sql.identifier(config.schema ?? "public")}.${sql.identifier(
+        config.name,
+      )}
+    `);
+  }
+  await change();
+  await installTestPublicLawViews(db);
+  await applyStellaTablePrivileges(client);
+  for (const statement of ROLE_GRANT_STATEMENTS) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
 /**
  * Build a fully provisioned test PGlite from scratch: RLS roles, schema
  * prerequisites, the drizzle schema push, workspace-access objects, and
@@ -683,6 +799,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
     await installPgliteEntityFeatureGateMaintenance(tx);
   });
   await installPgliteAgentSkillRevisionTrigger(db);
+  await installPgliteAiMemoryActiveUserGuard(db);
   await installPgliteDecisionAliases(db);
   await installPgliteCorpusProjectionRevisionFence(db);
   await installPgliteServiceClientCredentialCascade(db);
@@ -691,6 +808,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteLegislationPayloadRevision(db);
   await installPgliteLegislationExpressionIdentity(db);
   await installPgliteProvisionExtractionState(db);
+  await installPgliteCaseLawCountryShape(db);
   await installPgliteCaseLawObservationFence(db);
   await installPglitePdfSigningTokenScopes(db);
   await installPgliteDesktopPresenceRls(db);
@@ -702,6 +820,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteAccountAuditRls(db);
   await installPgliteChatMessageRevisionsRls(db);
   await installPgliteChatSecretRls(db);
+  await installPgliteCitationDoctrineRls(db);
   await installPgliteReaderAnswerRls(db);
   await installPgliteSchedulerJobPauseLog(db);
   await installPgliteTreeParentGuards(db);

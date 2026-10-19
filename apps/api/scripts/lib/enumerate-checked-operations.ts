@@ -4,7 +4,7 @@ import path from "node:path";
 import ts from "typescript";
 
 import { canonicalModuleId } from "../../../../.oxlint-plugins/module-id.ts";
-import { VERIFICATION_MODEL_ROLE } from "../../src/lib/lists/verification/model-call";
+import { VERIFICATION_MODEL_TASK } from "../../src/lib/lists/verification/model-call";
 import { REPO_ROOT } from "./enumerate-safe-handlers";
 
 type ConditionalOperation = {
@@ -114,8 +114,8 @@ const readMeteringValue = (node: ts.Expression): unknown => {
       }),
     );
   }
-  if (ts.isIdentifier(node) && node.text === "VERIFICATION_MODEL_ROLE") {
-    return VERIFICATION_MODEL_ROLE;
+  if (ts.isIdentifier(node) && node.text === "VERIFICATION_MODEL_TASK") {
+    return VERIFICATION_MODEL_TASK;
   }
   return panic(`Admission census cannot resolve ${node.getText()}`);
 };

@@ -34,6 +34,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/visual-preview/src/**/*.ts",
   "apps/api/src/handlers/realtime-resource-sets.ts",
   "apps/api/src/lib/auth/**/*.ts",
+  "apps/api/src/handlers/account-exports/**/*.ts",
   "apps/api/src/handlers/agent-auth/**/*.ts",
   "apps/api/src/handlers/ai-config/**/*.ts",
   "apps/api/src/handlers/audit-logs/**/*.ts",
@@ -85,6 +86,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/handlers/user-files/**/*.ts",
   "apps/api/src/handlers/verify/**/*.ts",
   "apps/api/src/handlers/work-obligations/**/*.ts",
+  "apps/api/src/lib/account-export/**/*.ts",
   "apps/api/src/lib/bbox/**/*.ts",
   "apps/api/src/lib/billing/**/*.ts",
   "apps/api/src/lib/clauses/**/*.ts",
@@ -159,6 +161,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/lib/web-search/**/*.{ts,tsx}",
   "apps/web/src/queries/**/*.{ts,tsx}",
   "apps/web/src/routes/-protected-app/**/*.{ts,tsx}",
+  "apps/web/src/routes/_protected.admin/**/*.{ts,tsx}",
   "apps/web/src/routes/dev/**/*.{ts,tsx}",
   "apps/web/src/routes/sitemaps/**/*.{ts,tsx}",
   "apps/web/src/stores/**/*.{ts,tsx}",
@@ -193,6 +196,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "packages/sha256/src/**/*.ts",
   "packages/start-runtime/src/**/*.ts",
   "packages/template-packs/src/**/*.ts",
+  "packages/test-kit/src/**/*.ts",
   "packages/text-normalize/src/**/*.ts",
   "packages/time/src/**/*.ts",
   "packages/uuid-codec/src/**/*.ts",
@@ -201,6 +205,8 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
 ] as const;
 
 export const RESULT_BOUNDARY_GLOBS = [
+  // MCP request handlers translate typed gateway failures into SDK protocol errors.
+  "apps/api/src/mcp/server-core.ts",
   // Process startup consumes login refusals through Promise rejection before accepting work.
   "apps/api/src/lib/db/assert-database-login-posture.ts",
   // Elysia consumes prevalidation feature denials through its error pipeline.
@@ -223,6 +229,9 @@ export const RESULT_BOUNDARY_GLOBS = [
   "apps/api/src/handlers/**/*route.ts",
   "apps/api/src/server.ts",
   "apps/api/src/lib/account-deletion-cleanup-queue.ts",
+  // The ZIP async iterator and Node pipeline propagate failures to the worker.
+  "apps/api/src/lib/account-export/archive.ts",
+  "apps/api/src/lib/account-export/queue.ts",
   "apps/api/src/lib/bilingual/run-queue.ts",
   "apps/api/src/lib/document-processing-queue.ts",
   "apps/api/src/lib/document-review/run-queue.ts",
@@ -294,6 +303,10 @@ export const RESULT_BOUNDARY_GLOBS = [
   "packages/cli/src/cli.ts",
   "packages/start-runtime/src/runtime.ts",
   "packages/ssr-testkit/src/assert-document.ts",
+  // The test kit reports a hung wait or a refused connection to the test
+  // runner, and stands in for the platform's throwing socket API.
+  "packages/test-kit/src/network.ts",
+  "packages/test-kit/src/wait.ts",
   "packages/property-testing/src/index.ts",
   // wasm-bindgen reports initialization failures and traps through rejection;
   // this adapter converts that runtime contract to a typed Result.
@@ -312,7 +325,6 @@ export const RESULT_CONVENTION_EXCLUDE_GLOBS = [
   ...RESULT_BOUNDARY_GLOBS,
   "apps/api/evals/**",
   "apps/api/src/tests/**",
-  "apps/api/src/mcp/generated/**",
   "**/*.test.*",
   "**/*.spec.*",
   "**/__tests__/**",

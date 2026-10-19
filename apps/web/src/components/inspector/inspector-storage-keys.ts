@@ -8,6 +8,18 @@ export type InspectorStorageScope = {
 
 const INSPECTOR_MINIMIZED_STORAGE_PREFIX = "stella:inspector-minimized:v1";
 const INSPECTOR_STATE_STORAGE_PREFIX = "stella:inspector-state:v1";
+const INSPECTOR_RESTORE_PENDING_PREFIX = "stella:inspector-restore-pending:v1";
+
+/** Session flag set while restored tabs have not yet settled (sessionStorage):
+ *  still present at the next start means that load never got idle. */
+export const inspectorRestorePendingStorageKey = ({
+  userId,
+  organizationId,
+}: InspectorStorageScope) =>
+  ownerStorageKey(`${INSPECTOR_RESTORE_PENDING_PREFIX}:${organizationId}:`, {
+    kind: "user",
+    userId,
+  });
 
 /** Where one user's minimized flag for one organization is kept. */
 export const inspectorMinimizedStorageKey = ({

@@ -24,13 +24,13 @@ import { assertProperty } from "@stll/property-testing";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
+  toPersistedChatMessageContentV3,
   createChatAttachmentPart,
   chatMessageContentFromMessage,
   chatMessageFromPersisted,
   normalizePersistedChatMessageContent,
   getAwaitingUserInteractions,
   isChatPart,
-  toChatMessageContent,
   toPersistableChatMessage,
 } from "@/api/handlers/chat/chat-message-parts";
 import { chatRefsWrittenIn } from "@/api/handlers/chat/chat-refs-shown";
@@ -50,6 +50,7 @@ import {
   validateToolCallParts,
   validateMessage as validateMessageWithPersistence,
 } from "@/api/handlers/chat/chat-schema";
+import { normalizeStoredChatToolExecutor } from "@/api/handlers/chat/legacy-tool-compat";
 import { createOrgTools } from "@/api/handlers/chat/tools/org-tools";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -819,9 +820,8 @@ describe("validateMessage", () => {
       input: {},
       state: "input-complete",
     } as const;
-    const content = toChatMessageContent({
-      version: 2,
-      data: [gate, completed, pending],
+    const content = toPersistedChatMessageContentV3({
+      data: [gate, completed, pending].map(normalizeStoredChatToolExecutor),
     });
     const id = chatMessageId("msg_legacy_owners");
     const history = chatMessageFromPersisted({
@@ -932,7 +932,7 @@ describe("validateMessage", () => {
       },
       persistedMessage: {
         role: "assistant",
-        content: toChatMessageContent({ version: 2, data: [gate, call] }),
+        content: toPersistedChatMessageContentV3({ data: [gate, call] }),
       },
       resume: [
         {
@@ -1006,8 +1006,7 @@ describe("validateMessage", () => {
       },
       persistedMessage: {
         role: "assistant",
-        content: toChatMessageContent({
-          version: 2,
+        content: toPersistedChatMessageContentV3({
           data: [gate, client],
           metadata: {
             turnOutcome: {
@@ -1080,8 +1079,7 @@ describe("validateMessage", () => {
         },
         persistedMessage: {
           role: "assistant",
-          content: toChatMessageContent({
-            version: 2,
+          content: toPersistedChatMessageContentV3({
             data: [call],
             metadata: { turnOutcome: { type: "completed" } },
           }),
@@ -1443,8 +1441,7 @@ describe("validateMessage", () => {
       },
       persistedMessage: {
         role: "assistant",
-        content: toChatMessageContent({
-          version: 2,
+        content: toPersistedChatMessageContentV3({
           data: [{ type: "text", content: "Done" }, trustedAudio],
         }),
       },
@@ -1589,8 +1586,7 @@ describe("validateMessage", () => {
       },
       persistedMessage: {
         role: "assistant",
-        content: toChatMessageContent({
-          version: 2,
+        content: toPersistedChatMessageContentV3({
           data: persistedParts,
           metadata: persistedMetadata,
         }),
@@ -1626,8 +1622,7 @@ describe("validateMessage", () => {
       },
       persistedMessage: {
         role: "assistant",
-        content: toChatMessageContent({
-          version: 2,
+        content: toPersistedChatMessageContentV3({
           data: persistedParts,
           metadata: persistedMetadata,
         }),
@@ -1684,8 +1679,7 @@ describe("validateMessage", () => {
       },
       persistedMessage: {
         role: "assistant",
-        content: toChatMessageContent({
-          version: 2,
+        content: toPersistedChatMessageContentV3({
           data: [
             {
               metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
@@ -2102,7 +2096,7 @@ describe("validateMessage", () => {
     ] as const;
     const persistedMessage = {
       role: "assistant" as const,
-      content: toChatMessageContent({ version: 2, data: [...canonicalParts] }),
+      content: toPersistedChatMessageContentV3({ data: [...canonicalParts] }),
     };
     const continuationParts = [
       canonicalParts[0],
@@ -2289,7 +2283,7 @@ describe("validateMessage", () => {
       },
       persistedMessage: {
         role: "assistant",
-        content: toChatMessageContent({ version: 2, data: [canonicalCall] }),
+        content: toPersistedChatMessageContentV3({ data: [canonicalCall] }),
       },
       resume: [
         {
@@ -2353,7 +2347,7 @@ describe("validateMessage", () => {
       },
       persistedMessage: {
         role: "assistant",
-        content: toChatMessageContent({ version: 2, data: [canonicalCall] }),
+        content: toPersistedChatMessageContentV3({ data: [canonicalCall] }),
       },
       safeDb: noDbReads,
       threadId: chatThreadId("thread_ask_user_completion"),

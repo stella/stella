@@ -3,7 +3,7 @@ import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import * as v from "valibot";
 
-import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
+import { PUBLIC_CASE_LAW_PAGE_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 
 import type { rootDb } from "@/api/db/root";
 import {
@@ -16,12 +16,12 @@ import {
   setSharedStatementTimeout,
 } from "@/api/db/shared-pool-timeouts";
 import { envBase } from "@/api/env-base";
-import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
+import { publishedCaseLawDecisionFor } from "@/api/lib/case-law/published-decisions-sql";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import {
-  decisionBucketSql,
-  decisionMonthSql,
-  decisionYearSql,
+  decisionBucketSqlFor,
+  decisionMonthSqlFor,
+  decisionYearSqlFor,
   SITEMAP_ALL_BUCKET,
 } from "@/api/lib/case-law/sitemap-shard-sql";
 import { executedRows } from "@/api/lib/db/executed-rows";
@@ -40,7 +40,7 @@ export const SITEMAP_SHARD_SPLIT_THRESHOLD = Math.floor(
 
 /**
  * Index entries one count statement reads. The count walks
- * `case_law_decisions_sitemap_shard_idx` in its own order, a page at a time,
+ * `case_law_decisions_sitemap_shard_published_idx` in its own order, a page at a time,
  * so each statement's work is bounded by this and not by the corpus.
  */
 export const SITEMAP_REFRESH_PAGE_SIZE = 20_000;
@@ -150,7 +150,7 @@ const afterCursorSql = (
  * in index order, counted per month and bucket among the redistributable
  * sources, with the page's last entry as the cursor for the next one.
  *
- * Every column the page reads is on `case_law_decisions_sitemap_shard_idx` and
+ * Every column the page reads is on `case_law_decisions_sitemap_shard_published_idx` and
  * the publication gate is its partial predicate, so the page is an index-only
  * range read that stops at the limit. A page with no rows ends the phase; a
  * page whose rows are all withheld still returns its cursor, with no counts.
@@ -173,11 +173,11 @@ export const sitemapRefreshPageSql = ({
       ${caseLawDecisions.sourceId} AS source_id,
       ${caseLawDecisions.updatedAt} AS updated_at,
       ${caseLawDecisions.id} AS id,
-      ${decisionYearSql} AS year,
-      ${decisionMonthSql} AS month,
-      ${decisionBucketSql} AS bucket
+      ${decisionYearSqlFor(caseLawDecisions)} AS year,
+      ${decisionMonthSqlFor(caseLawDecisions)} AS month,
+      ${decisionBucketSqlFor(caseLawDecisions)} AS bucket
     FROM ${caseLawDecisions}
-    WHERE ${publishedCaseLawDecision}
+    WHERE ${publishedCaseLawDecisionFor(caseLawDecisions)}
       AND ${caseLawDecisions.country} = ${country}
       AND ${afterCursorSql(phase, cursor)}
     ORDER BY
@@ -302,7 +302,7 @@ const countSitemapMonths = async (
     await setTransactionBudget(tx, budget);
     const months: CountryMonths = new Map();
     let pages = 0;
-    for (const country of PUBLIC_CASE_LAW_COUNTRIES) {
+    for (const country of PUBLIC_CASE_LAW_PAGE_COUNTRIES) {
       for (const phase of ["dated", "undated"] as const) {
         let cursor: SitemapRefreshCursor | null = null;
         do {

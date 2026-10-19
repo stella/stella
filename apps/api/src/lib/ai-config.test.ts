@@ -2,14 +2,15 @@ import { describe, expect, test } from "bun:test";
 
 import {
   BYOK_DEFAULT_MODELS,
-  MODEL_ROLES,
+  MODEL_TASKS,
   TANSTACK_AI_PROVIDERS,
   isBYOKProviderRoleSupported,
 } from "@stll/ai-catalog";
+import { MODEL_DEFAULTS_LEDGER } from "@stll/ai-catalog/model-defaults-ledger";
 
 import {
   normalizeOrgAIConfig,
-  resolveOrgAIModelForRole,
+  resolveOrgAIModelForTask,
 } from "@/api/lib/ai-config";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 
@@ -154,21 +155,21 @@ describe("normalizeOrgAIConfig auto-heal", () => {
 });
 
 describe("organization catalog defaults", () => {
-  test("every provider and role resolves its canonical default without storing overrides", () => {
+  test("every provider and task resolves its canonical default without storing overrides", () => {
     for (const provider of TANSTACK_AI_PROVIDERS) {
       const config = {
         providers: [{ provider, apiKey: "fixture-key" }],
         overrideModels: null,
         decision: null,
       } satisfies OrgAIConfig;
-      for (const role of MODEL_ROLES) {
-        const entry = BYOK_DEFAULT_MODELS[provider][role];
+      for (const task of MODEL_TASKS) {
+        const entry = MODEL_DEFAULTS_LEDGER[task][provider];
         if (entry.kind === "unsupported") {
-          expect(resolveOrgAIModelForRole(config, role)).toBeNull();
+          expect(resolveOrgAIModelForTask(config, task)).toBeNull();
         } else {
-          expect(resolveOrgAIModelForRole(config, role)).toEqual({
+          expect(resolveOrgAIModelForTask(config, task)).toEqual({
             provider,
-            modelId: entry.modelId,
+            modelId: entry.candidate.modelId,
           });
         }
       }
@@ -186,12 +187,12 @@ describe("organization catalog defaults", () => {
     expect(normalizeOrgAIConfig(config).overrideModels).toEqual(
       config.overrideModels,
     );
-    expect(resolveOrgAIModelForRole(config, "fast")).toEqual({
+    expect(resolveOrgAIModelForTask(config, "short-text")).toEqual({
       provider: "google",
       modelId: BYOK_DEFAULT_MODELS.google.fast.modelId,
     });
   });
-  test("defaults use the first configured provider that supports the role", () => {
+  test("defaults use the first configured provider that supports the task", () => {
     const config = {
       providers: [mistralProvider, googleProvider],
       overrideModels: null,
@@ -200,10 +201,10 @@ describe("organization catalog defaults", () => {
     expect(
       isBYOKProviderRoleSupported({ provider: "mistral", role: "pdf" }),
     ).toBe(false);
-    expect(resolveOrgAIModelForRole(config, "pdf")).toEqual({
+    expect(resolveOrgAIModelForTask(config, "pdf")).toEqual({
       provider: "google",
       modelId: BYOK_DEFAULT_MODELS.google.pdf.modelId,
     });
-    expect(resolveOrgAIModelForRole(config, "chat")?.provider).toBe("mistral");
+    expect(resolveOrgAIModelForTask(config, "chat")?.provider).toBe("mistral");
   });
 });

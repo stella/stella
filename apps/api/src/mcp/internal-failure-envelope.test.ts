@@ -151,8 +151,8 @@ const REPRESENTATIVE_DB_FAILURES: {
   },
   {
     file: "research-admin-tools.ts",
-    handler: RESEARCH_ADMIN_TOOL_HANDLERS.manage_organization,
-    args: { action: "add_member", matter_id: WORKSPACE_ID, user_id: "user_2" },
+    handler: RESEARCH_ADMIN_TOOL_HANDLERS.add_matter_member,
+    args: { matter_id: WORKSPACE_ID, user_id: "user_2" },
   },
 ];
 

@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { SERVER_ANALYTICS_EVENTS } from "@/api/lib/analytics/server-analytics";
 import { toSafeId } from "@/api/lib/branded-types";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
-import type { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import type { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import {
   installRecordingAnalytics,
@@ -21,7 +21,7 @@ const generateObjectMock = mock(async () => ({ boxes: [] as unknown[] }));
 // SAFETY: This suite only dispatches the bbox schema and configures outputs
 // matching that schema; Bun's mock type cannot express the generic schema tie.
 const generateObjectForTest =
-  generateObjectMock as typeof generateTanStackObjectForRole;
+  generateObjectMock as typeof generateTanStackObjectForTask;
 
 const generate = async () =>
   await generateBBoxData({
@@ -29,7 +29,8 @@ const generate = async () =>
     prompt: "Which court decided this?",
     fieldContent: "Nejvyšší soud",
     justificationText: "The decision names the deciding court.",
-    abortSignal: AbortSignal.timeout(1000),
+    abortSignal: new AbortController().signal,
+    deadlineMs: 1000,
     justificationId: "justification_test",
     organizationId: toSafeId<"organization">("org_test"),
     admission: testModelAdmission(toSafeId<"organization">("org_test")),
@@ -38,7 +39,7 @@ const generate = async () =>
     orgAIConfig: null,
     managedAIResidency: "eu" as const,
     promptCachingEnabled: false,
-    generateObjectForRole: generateObjectForTest,
+    generateObjectForTask: generateObjectForTest,
   });
 
 describe("generateBBoxData", () => {

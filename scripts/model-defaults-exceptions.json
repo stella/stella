@@ -1,0 +1,254 @@
+[
+  {
+    "id": "seed:analysis:anthropic",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:analysis:azure_foundry",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:analysis:bedrock",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:analysis:google",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:analysis:huggingface",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:analysis:mistral",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:analysis:openai",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:analysis:openai_compatible",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:analysis:openrouter",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:chat:anthropic",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:chat:azure_foundry",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:chat:bedrock",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:chat:google",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:chat:huggingface",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:chat:mistral",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:chat:openai",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:chat:openai_compatible",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:chat:openrouter",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:classify:anthropic",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:classify:azure_foundry",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:classify:bedrock",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:classify:google",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:classify:huggingface",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:classify:mistral",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:classify:openai",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:classify:openai_compatible",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:classify:openrouter",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:pdf:anthropic",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:pdf:azure_foundry",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:pdf:bedrock",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:pdf:google",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:pdf:huggingface",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:pdf:openai",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:pdf:openai_compatible",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:pdf:openrouter",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:reasoning:anthropic",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:reasoning:azure_foundry",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:reasoning:bedrock",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:reasoning:google",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:reasoning:huggingface",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:reasoning:mistral",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:reasoning:openai",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:reasoning:openai_compatible",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:reasoning:openrouter",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:search-expand:anthropic",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:search-expand:azure_foundry",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:search-expand:bedrock",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:search-expand:google",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:search-expand:huggingface",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:search-expand:mistral",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:search-expand:openai",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:search-expand:openai_compatible",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:search-expand:openrouter",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:short-text:anthropic",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:short-text:azure_foundry",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:short-text:bedrock",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:short-text:google",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:short-text:huggingface",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:short-text:mistral",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:short-text:openai",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:short-text:openai_compatible",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:short-text:openrouter",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "unsupported:pdf:mistral",
+    "reason": "The text adapter cannot serve the document-input task."
+  }
+]

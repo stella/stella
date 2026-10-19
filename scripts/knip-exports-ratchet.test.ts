@@ -4,6 +4,7 @@ import {
   checkRegressions,
   collectIssueSymbols,
   diffSummaries,
+  formatFileDeltas,
   increasedWorkspaces,
   summarizeKnipReport,
   type Summary,
@@ -159,6 +160,10 @@ test("check fails on a new unused export even when the workspace total has slack
       status: "dropped",
       current: 3,
       baseline: 5,
+      changedFiles: [
+        { file: "apps/web/src/lib/citations.ts", from: 0, to: 1 },
+        { file: "apps/web/src/lib/retired.ts", from: 3, to: 0 },
+      ],
       regressedFiles: [
         { file: "apps/web/src/lib/citations.ts", from: 0, to: 1 },
       ],
@@ -186,4 +191,40 @@ test("a move between files fails the check but records without a flag", () => {
 
 test("check passes when no file rose", () => {
   expect(checkRegressions(CURRENT, CURRENT)).toEqual([]);
+});
+
+test("diff diagnostics name reductions, removed files and increases in sorted order", () => {
+  const diffs = diffSummaries(
+    {
+      "apps/web": {
+        count: 4,
+        files: {
+          "apps/web/stable.ts": 1,
+          "apps/web/new.ts": 1,
+          "apps/web/changed.ts": 2,
+        },
+      },
+    },
+    {
+      "apps/web": {
+        count: 6,
+        files: {
+          "apps/web/stable.ts": 1,
+          "apps/web/removed.ts": 2,
+          "apps/web/changed.ts": 3,
+        },
+      },
+    },
+  );
+  const diff = diffs.at(0);
+  expect(diff).toBeDefined();
+  if (diff === undefined) {
+    throw new TypeError("Expected workspace diff");
+  }
+  expect(formatFileDeltas(diff.changedFiles)).toBe(
+    "      apps/web/changed.ts: 3 -> 2\n" +
+      "      apps/web/new.ts: 0 -> 1\n" +
+      "      apps/web/removed.ts: 2 -> 0",
+  );
+  expect(formatFileDeltas([])).toBe("");
 });

@@ -1,4 +1,7 @@
-import { isPublicLegislationCountry } from "@stll/api-contract/legislation-publication";
+import {
+  isPublicLegislationCountry,
+  isPublicLegislationPageCountry,
+} from "@stll/api-contract/legislation-publication";
 import type { StatuteQueryCountry } from "@stll/api-contract/statute-query-capability";
 import { createStatuteRouteParams } from "@stll/api-contract/statute-route";
 import type { StatuteRouteInput } from "@stll/api-contract/statute-route";
@@ -23,6 +26,13 @@ export const isPublicStatuteCountry = (
   value: string,
 ): value is StatuteCountry =>
   isStatuteCountry(value) && isPublicLegislationCountry(value.toUpperCase());
+
+/** A statute jurisdiction whose pages are served, listed and crawlable. */
+export const isPublicStatutePageCountry = (
+  value: string,
+): value is StatuteCountry =>
+  isStatuteCountry(value) &&
+  isPublicLegislationPageCountry(value.toUpperCase());
 
 /**
  * A statute jurisdiction as a reader names it, from its route segment. One

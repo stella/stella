@@ -4,7 +4,7 @@ import path from "node:path";
 import * as v from "valibot";
 
 import type { GatedTestSelection } from "../apps/api/scripts/gated-test-selection";
-import { POSTGRES_TEST_SHARD_IDS } from "../apps/api/scripts/postgres-test-shards";
+import { POSTGRES_CERTIFIABLE_SHARD_COUNTS } from "../apps/api/scripts/postgres-test-shards";
 import { planPostgresTests } from "./ci-postgres-test-plan";
 import { parseJunit } from "./fix-tests-on-base";
 
@@ -128,20 +128,38 @@ const fullRunJobsSchema = v.object({
 
 type PostgresRunJobs = v.InferOutput<typeof fullRunJobsSchema>["jobs"];
 
-export const hasSuccessfulPostgresShards = (jobs: PostgresRunJobs): boolean =>
-  POSTGRES_TEST_SHARD_IDS.every((shard) => {
-    const name = `postgres-service-suites (${shard})`;
-    return jobs.some(
-      (job) =>
-        (job.name === name || job.name.endsWith(` / ${name}`)) &&
-        job.conclusion === "success" &&
-        job.steps.some(
-          (step) =>
-            step.name === "Run Postgres-gated API suites" &&
-            step.conclusion === "success",
+const POSTGRES_SHARD_JOB = /(?:^| \/ )postgres-service-suites \((\d+)\)$/u;
+
+// A historical run is judged by the shard topology it ran with, which can
+// differ from today's: its shard jobs must be exactly 1..n for a known n,
+// and every one of them must have succeeded.
+export const hasSuccessfulPostgresShards = (jobs: PostgresRunJobs): boolean => {
+  const shards = new Set(
+    jobs.flatMap((job) => {
+      const shard = POSTGRES_SHARD_JOB.exec(job.name)?.at(1);
+      return shard === undefined ? [] : [Number(shard)];
+    }),
+  );
+  const count = Math.max(0, ...shards);
+  return (
+    POSTGRES_CERTIFIABLE_SHARD_COUNTS.includes(count) &&
+    shards.size === count &&
+    Array.from({ length: count }, (_, index) => index + 1).every(
+      (shard) =>
+        shards.has(shard) &&
+        jobs.some(
+          (job) =>
+            POSTGRES_SHARD_JOB.exec(job.name)?.at(1) === String(shard) &&
+            job.conclusion === "success" &&
+            job.steps.some(
+              (step) =>
+                step.name === "Run Postgres-gated API suites" &&
+                step.conclusion === "success",
+            ),
         ),
-    );
-  });
+    )
+  );
+};
 
 if (import.meta.main) {
   const checked = await Result.tryPromise(async () => {

@@ -162,16 +162,22 @@ const quoteNotFoundMessage = (block: Block | undefined): string => {
 /** How many candidate anchors an ambiguity issue names. */
 const AMBIGUITY_ANCHORS_SHOWN = 8;
 
-const matchesIn = (blocks: readonly Block[], quote: string) =>
-  blocks.flatMap((block) =>
-    piecesOf(block).flatMap((piece) =>
-      findOccurrences(piece.text, quote).map((occurrence) => ({
+// Both sides are matched as Unicode scalar values: an isolated surrogate
+// becomes U+FFFD (one UTF-16 unit, so offsets are unchanged) and can never
+// match half of a surrogate pair.
+const matchesIn = (blocks: readonly Block[], rawQuote: string) => {
+  const quote = rawQuote.toWellFormed();
+  return blocks.flatMap((block) =>
+    piecesOf(block).flatMap((rawPiece) => {
+      const piece = { ...rawPiece, text: rawPiece.text.toWellFormed() };
+      return findOccurrences(piece.text, quote).map((occurrence) => ({
         block,
         occurrence,
         piece,
-      })),
-    ),
+      }));
+    }),
   );
+};
 
 const locateOne = (
   { blocks, blocksByAnchor }: LocateContext,

@@ -8,7 +8,10 @@ import type {
   ReaderAnswerStreamEvent,
   ReaderAnswerUsage,
 } from "@stll/api-contract/reader-answers";
-import { READER_ANSWER_ERROR_CODES } from "@stll/api-contract/reader-answers";
+import {
+  READER_ANSWER_DEADLINE_MS,
+  READER_ANSWER_ERROR_CODES,
+} from "@stll/api-contract/reader-answers";
 import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
@@ -16,10 +19,7 @@ import { legalReaderAnswerMessages, legalReaderAnswers } from "@/api/db/schema";
 import type { AnnotationAuthorScope } from "@/api/handlers/legal-reader/annotations/target";
 import { runReaderAnswerModel } from "@/api/handlers/legal-reader/answers/model";
 import type { ReaderAnswerModelRunner } from "@/api/handlers/legal-reader/answers/model";
-import {
-  answerOwnerPredicate,
-  READER_ANSWER_DEADLINE_MS,
-} from "@/api/handlers/legal-reader/answers/operation";
+import { answerOwnerPredicate } from "@/api/handlers/legal-reader/answers/operation";
 import type { PreparedReaderAnswer } from "@/api/handlers/legal-reader/answers/operation";
 import {
   buildReaderAnswerPrompt,

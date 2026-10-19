@@ -94,5 +94,9 @@
   {
     "name": "Dependabot group guard",
     "reason": "Reads installed manifests, so it moved to ci-checks-policy after the install as 'Dependabot group guard (installed packages)'."
+  },
+  {
+    "name": "MCP app package bundles and shared assets guard",
+    "reason": "Its outputs are derived before use and no longer committed, so it became 'MCP app derived outputs guard': it builds them, checks the bundle budgets, and fails when an output is missing, empty, or tracked again."
   }
 ]

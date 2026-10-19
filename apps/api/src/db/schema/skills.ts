@@ -13,7 +13,11 @@ import {
   user,
   timestamptz,
 } from "./common";
-import { AGENT_SKILL_ORIGINS, AGENT_SKILL_SCOPES } from "./files-views";
+import {
+  AGENT_SKILL_INVOCATIONS,
+  AGENT_SKILL_ORIGINS,
+  AGENT_SKILL_SCOPES,
+} from "./files-views";
 
 const sqlValueList = (values: readonly string[]) =>
   sql.join(
@@ -45,6 +49,10 @@ export const agentSkills = p.pgTable(
     contentHash: p.varchar("content_hash", { length: 64 }).notNull(),
     body: p.text().notNull(),
     enabled: p.boolean().notNull().default(true),
+    invocation: p
+      .text("invocation", { enum: AGENT_SKILL_INVOCATIONS })
+      .notNull()
+      .default("auto"),
     // Optional slash-command handle. When set, the skill surfaces in
     // the chat slash menu. Uniqueness is enforced by partial indexes
     // below: team commands are unique per org, private commands are
@@ -68,6 +76,10 @@ export const agentSkills = p.pgTable(
     p.check(
       "agent_skills_origin_check",
       sql`${table.origin} IN (${sqlValueList(AGENT_SKILL_ORIGINS)})`,
+    ),
+    p.check(
+      "agent_skills_invocation_check",
+      sql`${table.invocation} IN (${sqlValueList(AGENT_SKILL_INVOCATIONS)})`,
     ),
     p
       .uniqueIndex("agent_skills_org_team_slug_uidx")

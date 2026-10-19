@@ -1,15 +1,15 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 
-import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
+import { PUBLIC_CASE_LAW_PAGE_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 
 import type { rootDb } from "@/api/db/root";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
-import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
+import { publishedCaseLawDecisionFor } from "@/api/lib/case-law/published-decisions-sql";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import {
-  decisionBucketSql,
-  decisionMonthSql,
-  decisionYearSql,
+  decisionBucketSqlFor,
+  decisionMonthSqlFor,
+  decisionYearSqlFor,
 } from "@/api/lib/case-law/sitemap-shard-sql";
 
 type OldSitemapRefreshDb = Pick<typeof rootDb, "select">;
@@ -19,8 +19,11 @@ type OldSitemapRefreshDb = Pick<typeof rootDb, "select">;
  * comparisons. This mirrors `sitemapBucketCountsQuery` at e67ad8b7d9 and has no
  * country cursor or page limit.
  */
-export const oldSitemapBucketCountsQuery = (db: OldSitemapRefreshDb) =>
-  db
+export const oldSitemapBucketCountsQuery = (db: OldSitemapRefreshDb) => {
+  const decisionYearSql = decisionYearSqlFor(caseLawDecisions);
+  const decisionMonthSql = decisionMonthSqlFor(caseLawDecisions);
+  const decisionBucketSql = decisionBucketSqlFor(caseLawDecisions);
+  return db
     .select({
       country: caseLawDecisions.country,
       year: decisionYearSql.as("year"),
@@ -36,8 +39,8 @@ export const oldSitemapBucketCountsQuery = (db: OldSitemapRefreshDb) =>
     .where(
       and(
         redistributableCaseLawSource,
-        publishedCaseLawDecision,
-        inArray(caseLawDecisions.country, [...PUBLIC_CASE_LAW_COUNTRIES]),
+        publishedCaseLawDecisionFor(caseLawDecisions),
+        inArray(caseLawDecisions.country, [...PUBLIC_CASE_LAW_PAGE_COUNTRIES]),
       ),
     )
     .groupBy(
@@ -46,3 +49,4 @@ export const oldSitemapBucketCountsQuery = (db: OldSitemapRefreshDb) =>
       decisionMonthSql,
       decisionBucketSql,
     );
+};

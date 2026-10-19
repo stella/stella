@@ -88,6 +88,7 @@ export const SYSTEM_RUN_ACTOR_COUNTS = {
     "reviewRequired",
     "failed",
   ],
+  "system:eu-soft-law-ingestion": ["sourcesRegistered"],
   "system:corpus-generation-operator": ["registered", "promoted", "demoted"],
 } as const satisfies Record<`system:${string}`, readonly string[]>;
 
@@ -105,6 +106,7 @@ export type SystemAuditCounts<A extends SystemRunActor> = Readonly<
 export const TENANT_SYSTEM_ACTOR = {
   serviceClientOperator: "system:service-client-operator",
   serviceClient: "system:service-client",
+  folioCollaborationRecovery: "system:folio-collaboration-recovery",
   sanctionsMonitoringDrain: "system:sanctions-monitoring-drain",
   sanctionsMonitoringBackfill: "system:sanctions-monitoring-backfill",
   memoryCurator: "system:memory-curator",

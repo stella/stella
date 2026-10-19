@@ -49,6 +49,7 @@ const builtInRow = {
   license: null,
   compatibility: null,
   enabled: true,
+  invocation: "auto",
   resourceCount: 0,
 } as const;
 
@@ -66,6 +67,7 @@ const installedRow = {
   sourceUrl: null,
   contentHash: "hash",
   enabled: true,
+  invocation: "auto",
   command: null,
   body: null,
   userId: USER_ID,

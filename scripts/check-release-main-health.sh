@@ -1,27 +1,44 @@
 #!/usr/bin/env bash
 # Read-only release gate, run again immediately before the tag push: the commit
-# needs staging/verified plus trusted main/heavy and main/pr-depth success, and sparse or skipped
-# heavy runs provide no green evidence.
+# needs staging/verified plus either a merge-group ci-result receipt on the
+# commit itself whose queue history since the previous release tag is fully
+# validated (check-release-receipt-coverage.sh), or trusted main/heavy and
+# main/pr-depth success; sparse or skipped heavy runs provide no green evidence.
 set -euo pipefail
 
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 gh_retry_script="${GH_RETRY_SCRIPT:-$(dirname "${BASH_SOURCE[0]}")/gh-retry.sh}"
 repo="${1:?repository is required}"
 sha="${2:?commit SHA is required}"
 tree_proof_verifier="${RELEASE_TREE_PROOF_VERIFIER:-$(dirname "${BASH_SOURCE[0]}")/verify-release-tree-proof.sh}"
 proof="${3:-}"
-if [[ -z "$proof" ]]; then
-  proof=$(bash "$tree_proof_verifier" --find-proof "$repo" "$sha")
-  proof="${proof:-$sha}"
-fi
-bash "$tree_proof_verifier" "$repo" "$sha" "$proof" >/dev/null
 [[ "$repo" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ && "$sha" =~ ^[0-9a-f]{40}$ ]] || {
   echo '::error::RELEASE_HEAVY_NOT_GREEN: invalid repository or SHA' >&2; exit 1;
 }
 refuse() { echo "::error::$1" >&2; exit 1; }
+# One receipt decision per run, made before anything relies on it: the
+# receipt is read on the release commit itself, never on a reused proof, and
+# counts only when no commit since the previous release bypassed the merge
+# queue. The verifier receives the same decision, so the suite bindings it
+# skips are exactly the statuses this gate does not require. Output stays on
+# stderr: callers forward stdout to step outputs.
+required_contexts='["staging/verified","main/heavy","main/pr-depth"]'
+receipt=false
+coverage=uncovered
+if bash "$script_dir/check-release-receipt-coverage.sh" "$repo" "$sha"; then
+  receipt=true
+  coverage=covered
+  required_contexts='["staging/verified"]'
+fi
+if [[ -z "$proof" ]]; then
+  proof=$(bash "$tree_proof_verifier" --receipt-coverage "$coverage" --find-proof "$repo" "$sha")
+  proof="${proof:-$sha}"
+fi
+bash "$tree_proof_verifier" --receipt-coverage "$coverage" "$repo" "$sha" "$proof" >/dev/null
 if [[ "$proof" != "$sha" ]]; then
   target_statuses=$(bash "$gh_retry_script" api --paginate --slurp "repos/$repo/commits/$sha/statuses?per_page=100")
-  jq -e '
-    [.[][]] as $all | all(["staging/verified","main/heavy","main/pr-depth"][];
+  jq -e --argjson contexts "$required_contexts" '
+    [.[][]] as $all | all($contexts[];
       . as $context | ([$all[] | select(.context == $context)][0].state // "missing") as $state |
       $state == "missing" or $state == "success")
   ' <<< "$target_statuses" >/dev/null || refuse 'RELEASE_STATUS_NOT_GREEN: target has a newer non-green status'
@@ -55,8 +72,10 @@ validate_workflow_status() {
 if [[ "$proof" != "$sha" ]]; then
   validate_workflow_status "staging/verified" ".github/workflows/deploy-staging.yml" "Staging release proof " "RELEASE_STAGING_NOT_GREEN"
 fi
-validate_workflow_status "main/heavy" ".github/workflows/main-heavy.yml" "Main heavy suites " "RELEASE_HEAVY_NOT_GREEN"
-validate_workflow_status "main/pr-depth" ".github/workflows/main-pr-depth.yml" "Main PR-depth checks " "RELEASE_PR_DEPTH_NOT_GREEN"
+if [[ "$receipt" != true ]]; then
+  validate_workflow_status "main/heavy" ".github/workflows/main-heavy.yml" "Main heavy suites " "RELEASE_HEAVY_NOT_GREEN"
+  validate_workflow_status "main/pr-depth" ".github/workflows/main-pr-depth.yml" "Main PR-depth checks " "RELEASE_PR_DEPTH_NOT_GREEN"
+fi
 incidents=$(bash "$gh_retry_script" api --paginate --slurp "repos/$repo/issues?state=open&labels=main-health-incident&per_page=100")
 jq -e '[.[][]] | length == 0' <<< "$incidents" >/dev/null \
   || refuse 'RELEASE_OPEN_MAIN_INCIDENT: an unresolved main-health incident blocks tagging'

@@ -35,7 +35,10 @@ import {
 } from "@/api/lib/lists/sanctions/monitoring-input";
 import { createSanctionsIndexCache } from "@/api/lib/lists/sanctions/screening-index";
 import { screenSanctionsSubject } from "@/api/lib/lists/sanctions/screening-service";
-import type { SanctionsPossibleMatch } from "@/api/lib/lists/sanctions/screening-service";
+import type {
+  SanctionsListOutcome,
+  SanctionsPossibleMatch,
+} from "@/api/lib/lists/sanctions/screening-service";
 import { encodePaginationCursor } from "@/api/lib/pagination";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { executeRowsScopedDb } from "@/api/tests/helpers/pglite-rows-scoped-db";
@@ -283,6 +286,59 @@ const stateFor = async (contactId: typeof contacts.$inferSelect.id) => ({
   coverage: await screeningFor(contactId),
 });
 
+test("an incomplete screening of a newer edition keeps the earlier matches visible", async () => {
+  await activate("7");
+  const contact = await addContact();
+  const work = await prepare(contact);
+  const outcome = work.outcome;
+  if (outcome.status !== "possible-match") {
+    panic("Expected matching fixture");
+  }
+  expect(await commit(work)).toEqual([contact.id]);
+  const initial = await stateFor(contact.id);
+  expect(initial.matches.map(({ state }) => state)).toEqual(["active"]);
+  const nextEditionId = await activate("8");
+  expect(
+    await commit({
+      ...work,
+      outcome: {
+        source: outcome.source,
+        issuer: outcome.issuer,
+        classification: outcome.classification,
+        pendingUpdate: outcome.pendingUpdate,
+        editionId: nextEditionId,
+        publishedAt: outcome.publishedAt,
+        verifiedAt: outcome.verifiedAt,
+        status: "incomplete",
+        reason: null,
+        totalMatches: 0,
+        truncated: true,
+        possibleMatches: [],
+      } satisfies SanctionsListOutcome,
+    }),
+  ).toEqual([contact.id]);
+  const bounded = await stateFor(contact.id);
+  expect(bounded.matches).toEqual(initial.matches);
+  expect(bounded.coverage).toMatchObject({
+    status: "incomplete",
+    editionId: nextEditionId,
+  });
+  const read = await scopedDb(
+    async (tx) =>
+      await readContactSanctions(tx, {
+        organizationId: orgId,
+        contactId: contact.id,
+        now,
+      }),
+  );
+  if (read.isErr()) {
+    panic("Synthetic contact read failed");
+  }
+  expect(
+    read.value.matches.items.map(({ sourceEntryId }) => sourceEntryId),
+  ).toEqual(initial.matches.map(({ sourceEntryId }) => sourceEntryId));
+});
+
 test(
   "incomplete monitoring outcomes preserve matches events and coverage at the result bound",
   async () => {
@@ -363,6 +419,71 @@ test(
       );
       expect(await stateFor(contact.id)).toEqual(initial);
     }
+    const incomplete = {
+      source: outcome.source,
+      issuer: outcome.issuer,
+      classification: outcome.classification,
+      pendingUpdate: outcome.pendingUpdate,
+      editionId: outcome.editionId,
+      publishedAt: outcome.publishedAt,
+      verifiedAt: outcome.verifiedAt,
+      status: "incomplete",
+      reason: null,
+      totalMatches: 0,
+      truncated: true,
+      possibleMatches: [],
+    } satisfies SanctionsListOutcome;
+    // A bounded scan of an edition that is no longer current settles nothing.
+    expect(
+      await commit({
+        ...work,
+        outcome: {
+          ...incomplete,
+          editionId: "00000000-0000-4000-8000-0000000000aa",
+        },
+      }),
+    ).toEqual([]);
+    expect(await stateFor(contact.id)).toEqual(initial);
+    // On the current edition it is recorded as coverage only: no active match
+    // lapses and no event (so no notification) is written.
+    expect(await commit({ ...work, outcome: incomplete })).toEqual([
+      contact.id,
+    ]);
+    const bounded = await stateFor(contact.id);
+    expect(bounded.matches).toEqual(initial.matches);
+    expect(bounded.events).toEqual(initial.events);
+    expect(bounded.coverage).toMatchObject({
+      status: "incomplete",
+      reason: null,
+      editionId,
+    });
+    const read = await scopedDb(
+      async (tx) =>
+        await readContactSanctions(tx, {
+          organizationId: orgId,
+          contactId: contact.id,
+          now,
+        }),
+    );
+    if (read.isErr()) {
+      panic("Synthetic contact read failed");
+    }
+    expect(
+      read.value.lists.find(({ source }) => source === "eu"),
+    ).toMatchObject({ status: "incomplete", reason: null });
+    expect(
+      read.value.matches.items.map(({ sourceEntryId }) => sourceEntryId),
+    ).toEqual([first.sourceEntryId, second.sourceEntryId]);
+    await expectFailure(
+      async () =>
+        await scopedDb(async (tx) => {
+          await tx
+            .update(sanctionsContactScreenings)
+            .set({ editionId: null })
+            .where(eq(sanctionsContactScreenings.contactId, contact.id));
+        }),
+      "sanctions_contact_screenings_incomplete_edition_check",
+    );
     await db.insert(sanctionsEditionEntries).values(
       entries.slice(2, 1000).map(({ sourceEntryId, contentHash }) => ({
         editionId,

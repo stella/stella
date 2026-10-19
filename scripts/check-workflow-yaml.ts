@@ -9,6 +9,10 @@ import { flattenWorkflowSteps } from "./workflow-steps";
 
 const WORKFLOW_DIRECTORY = ".github/workflows";
 const ACTION_DIRECTORY = ".github/actions";
+// GitHub rejects a workflow file over 512,000 bytes and then runs none of
+// its jobs. Fail at 80 % of that, while there is still room to shrink it.
+export const GITHUB_WORKFLOW_LIMIT_BYTES = 512_000;
+export const WORKFLOW_SIZE_LIMIT_BYTES = GITHUB_WORKFLOW_LIMIT_BYTES * 0.8;
 
 class WorkflowYamlError extends TaggedError("WorkflowYamlError")<{
   message: string;
@@ -42,6 +46,15 @@ export const parseWorkflowYaml = async (file: string): Promise<unknown> => {
       message: `${file}: invalid YAML`,
       file,
       cause: error,
+    });
+  }
+};
+
+export const validateWorkflowSize = (bytes: number, file: string): void => {
+  if (bytes > WORKFLOW_SIZE_LIMIT_BYTES) {
+    throw new WorkflowYamlError({
+      message: `${file}: ${bytes} bytes exceeds the ${WORKFLOW_SIZE_LIMIT_BYTES}-byte workflow size limit (80 % of GitHub's ${GITHUB_WORKFLOW_LIMIT_BYTES}-byte limit); move long step bodies into scripts checked out at github.workflow_sha, or share repeated steps through YAML anchors or a local action`,
+      file,
     });
   }
 };
@@ -116,13 +129,15 @@ const localActionReferences = (value: unknown): string[] => {
   if (isRecord(value["runs"]) && "steps" in value["runs"]) {
     groups.push(value["runs"]["steps"]);
   }
-  return groups.flatMap(flattenWorkflowSteps).flatMap((step) => {
-    const uses = step["uses"];
-    return typeof uses === "string" &&
-      (uses.startsWith("$/") || uses.startsWith("./"))
-      ? [uses]
-      : [];
-  });
+  return groups
+    .flatMap((steps) => flattenWorkflowSteps(steps))
+    .flatMap((step) => {
+      const uses = step["uses"];
+      return typeof uses === "string" &&
+        (uses.startsWith("$/") || uses.startsWith("./"))
+        ? [uses]
+        : [];
+    });
 };
 
 type LocalActionReferencesOptions = {
@@ -253,6 +268,7 @@ export const checkWorkflowYaml = async (root: string): Promise<void> => {
   }
   for (const name of workflowNames) {
     const file = path.join(workflowDirectory, name);
+    validateWorkflowSize(Bun.file(file).size, file);
     validateLocalActionReferences({
       value: await parseWorkflowYaml(file),
       root,

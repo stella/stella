@@ -42,7 +42,6 @@ const DIRECT_FETCH_MODULES = {
   "judges/import-cz-us-roster.ts": "reserve",
   /** Test-only helpers, not a path any crawl takes. */
   "ingestion/adapters/test-utils.ts": "test-only",
-  "ingestion/adapters/update-fixtures.ts": "test-only",
 } as const;
 
 /**

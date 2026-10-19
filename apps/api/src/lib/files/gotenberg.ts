@@ -4,8 +4,24 @@ import { fetchWithTimeout } from "@stll/fetch";
 
 import { env } from "@/api/env";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import type { DerivativeAdmissionError } from "@/api/lib/files/derivative-admission";
+import { admitDerivativeImage } from "@/api/lib/files/derivative-admission";
+import type { ImageHeader } from "@/api/lib/files/image-header";
+import { readImageHeader } from "@/api/lib/files/image-header";
+import type { EmbeddableImageMimeType } from "@/api/lib/files/image-pdf";
+import {
+  canEmbedInProcess,
+  imageToPdf,
+  isEmbeddableImageMimeType,
+} from "@/api/lib/files/image-pdf";
+import { streamMultipartForm } from "@/api/lib/files/multipart-stream";
 import { applyFitToPage } from "@/api/lib/files/xlsx-preprocess";
 import { basicAuthorizationHeader } from "@/api/lib/http-basic-auth";
+import { LIMITS } from "@/api/lib/limits";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
+import { withTimeout } from "@/api/lib/with-timeout";
 
 export {
   isConvertibleMimeType,
@@ -24,20 +40,6 @@ const XLSX_MIME_TYPES = new Set([
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 ]);
 
-/**
- * Image MIME types that benefit from the Chromium HTML route
- * instead of LibreOffice (which adds A4 whitespace around the
- * image).
- */
-const IMAGE_MIME_TYPES = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/gif",
-  "image/tiff",
-  "image/bmp",
-  "image/webp",
-]);
-
 type ConvertToPdfResult = {
   buffer: ArrayBuffer;
   sizeBytes: number;
@@ -48,6 +50,93 @@ class GotenbergError extends TaggedError("GotenbergError")<{
   statusCode?: number;
   cause?: unknown;
 }> {}
+
+class ImagePdfError extends TaggedError("ImagePdfError")<{
+  message: string;
+  cause?: unknown;
+}> {}
+
+/**
+ * An image the converter cannot import that could not be turned into a PDF
+ * in-process either. Sending it to the converter instead would fail on every
+ * attempt, so this is the conversion's final answer.
+ */
+export class ImageTranscodeError extends TaggedError("ImageTranscodeError")<{
+  message: string;
+  cause?: unknown;
+}> {}
+
+type ConvertToPdfError =
+  | DerivativeAdmissionError
+  | GotenbergError
+  | ImageTranscodeError;
+
+const IMAGE_EMBED_FAILED_SINK = failureSink({
+  event: "file_conversion.image_embed_failed",
+  expected: [],
+});
+
+const IMAGE_TRANSCODE_FAILED_SINK = failureSink({
+  event: "file_conversion.image_transcode_failed",
+  expected: [],
+});
+
+/**
+ * Image types the converter's LibreOffice route has no import filter for:
+ * Gotenberg 8.37 accepts .bmp, .gif, .tif/.tiff, .png and .jpg/.jpeg, but
+ * not .webp. These are re-encoded as PNG in-process and embedded directly.
+ */
+const IN_PROCESS_ONLY_IMAGE_MIME_TYPES = {
+  "image/webp": null,
+} as const satisfies Record<string, null>;
+
+const isInProcessOnlyImageMimeType = (mimeType: string): boolean =>
+  Object.hasOwn(IN_PROCESS_ONLY_IMAGE_MIME_TYPES, mimeType);
+
+/**
+ * Extensions the converter's LibreOffice route accepts for each image type
+ * it renders, canonical first. The route picks its import filter by the
+ * uploaded filename's extension, so an image named without one (or with the
+ * wrong one) would fail to convert.
+ */
+const CONVERTER_IMAGE_EXTENSIONS: ReadonlyMap<
+  string,
+  readonly [string, ...string[]]
+> = new Map([
+  ["image/bmp", ["bmp"]],
+  ["image/gif", ["gif"]],
+  ["image/jpeg", ["jpg", "jpeg"]],
+  ["image/png", ["png"]],
+  ["image/tiff", ["tiff", "tif"]],
+]);
+
+/**
+ * The (unsanitized) name to upload a file to the converter under. An image
+ * keeps its extension when it is one the converter accepts for the image's
+ * type; a missing or wrong extension is replaced by the type's canonical
+ * one. Other types keep the uploaded name.
+ */
+const withConverterExtension = (fileName: string, mimeType: string): string => {
+  const accepted = CONVERTER_IMAGE_EXTENSIONS.get(mimeType);
+  if (accepted === undefined) {
+    return fileName;
+  }
+  // A dot only starts an extension inside the last path segment, and not as
+  // its first character (a dotfile name has no extension).
+  const segmentStart =
+    Math.max(fileName.lastIndexOf("/"), fileName.lastIndexOf("\\")) + 1;
+  const lastDot = fileName.lastIndexOf(".");
+  const hasExtension = lastDot > segmentStart;
+  const extension = hasExtension
+    ? fileName.slice(lastDot + 1).toLowerCase()
+    : null;
+  if (extension !== null && accepted.includes(extension)) {
+    return fileName;
+  }
+  const stem = hasExtension ? fileName.slice(0, lastDot) : fileName;
+  const [canonical] = accepted;
+  return `${stem}.${canonical}`;
+};
 
 const gotenbergAuth = (): string =>
   basicAuthorizationHeader(env.GOTENBERG_USERNAME, env.GOTENBERG_PASSWORD);
@@ -60,199 +149,172 @@ const GOTENBERG_RETRY = {
     error.statusCode === undefined || error.statusCode >= 500,
 } as const;
 
-/** Post an HTML document to Gotenberg's Chromium route. */
-const chromiumHtmlToPdf = async (
-  html: string,
-  formFields: Record<string, string>,
-): Promise<ConvertToPdfResult> => {
-  const formData = new FormData();
-  formData.append(
-    "files",
-    new Blob([html], { type: "text/html" }),
-    "index.html",
-  );
-  for (const [key, value] of Object.entries(formFields)) {
-    formData.append(key, value);
-  }
+type ConvertToPdfOptions = {
+  /**
+   * Who retries a failed converter call. `in-call` retries transient
+   * converter failures inside this call, for request paths where nothing
+   * else would. `caller` makes one call at most one conversion, for callers
+   * whose own retry policy (a queue's attempts) already bounds the total, so
+   * the two never multiply into repeated full-size conversions.
+   */
+  retry?: "in-call" | "caller";
+};
 
-  const response = await fetchWithTimeout(
-    `${env.GOTENBERG_URL}/forms/chromium/convert/html`,
-    {
-      method: "POST",
-      headers: { Authorization: gotenbergAuth() },
-      body: formData,
-      timeoutMs: 30_000,
+/** The bytes of `view` as an `ArrayBuffer`, without a copy when they already are one. */
+const toArrayBuffer = (view: Uint8Array): ArrayBuffer =>
+  view.buffer instanceof ArrayBuffer &&
+  view.byteOffset === 0 &&
+  view.byteLength === view.buffer.byteLength
+    ? view.buffer
+    : view.slice().buffer;
+
+const embedImage = async (
+  bytes: Uint8Array,
+  header: ImageHeader,
+  mimeType: EmbeddableImageMimeType,
+): Promise<Result<ConvertToPdfResult, ImagePdfError>> =>
+  await Result.tryPromise({
+    try: async () => {
+      const pdf = await imageToPdf({ bytes, header, mimeType });
+      return { buffer: toArrayBuffer(pdf), sizeBytes: pdf.byteLength };
     },
-  );
-
-  if (!response.ok) {
-    throw new GotenbergError({
-      message: `Gotenberg returned ${response.status}`,
-      statusCode: response.status,
-    });
-  }
-
-  const result = await response.arrayBuffer();
-  return { buffer: result, sizeBytes: result.byteLength };
-};
-
-// ── Image dimension parsing ──────────────────────────────
-
-type ImageSize = { width: number; height: number };
-
-/** Read width/height from a PNG IHDR chunk (bytes 16..23). */
-const parsePngSize = (buf: Uint8Array): ImageSize | null => {
-  // PNG signature: 137 80 78 71 13 10 26 10
-  // Need at least 24 bytes: 8-byte signature + 4-byte length
-  // + 4-byte IHDR tag + 4-byte width + 4-byte height
-  if (buf.length < 24 || buf[0] !== 0x89 || buf[1] !== 0x50) {
-    return null;
-  }
-  const view = new DataView(buf.buffer, buf.byteOffset);
-  return {
-    width: view.getUint32(16),
-    height: view.getUint32(20),
-  };
-};
-
-/** Read width/height from the first JPEG SOF marker. */
-const parseJpegSize = (buf: Uint8Array): ImageSize | null => {
-  if (buf[0] !== 0xff || buf[1] !== 0xd8) {
-    return null;
-  }
-  let offset = 2;
-  while (offset < buf.length - 1) {
-    if (buf[offset] !== 0xff) {
-      return null;
-    }
-    const marker = buf.at(offset + 1);
-    if (marker === undefined) {
-      return null;
-    }
-    // SOF0..SOF3 markers carry dimensions
-    if (marker >= 0xc0 && marker <= 0xc3) {
-      if (offset + 8 >= buf.length) {
-        return null;
-      }
-      const view = new DataView(buf.buffer, buf.byteOffset);
-      return {
-        height: view.getUint16(offset + 5),
-        width: view.getUint16(offset + 7),
-      };
-    }
-    // Skip to next marker
-    if (offset + 3 >= buf.length) {
-      return null;
-    }
-    const len = new DataView(buf.buffer, buf.byteOffset).getUint16(offset + 2);
-    offset += 2 + len;
-  }
-  return null;
-};
-
-/** Best-effort image dimension extraction from raw bytes. */
-const getImageSize = (buf: ArrayBuffer, mimeType: string): ImageSize | null => {
-  const bytes = new Uint8Array(buf);
-  if (mimeType === "image/png") {
-    return parsePngSize(bytes);
-  }
-  if (mimeType === "image/jpeg") {
-    return parseJpegSize(bytes);
-  }
-  return null;
-};
-
-// ── Image-to-PDF conversion ─────────────────────────────
-
-/** Pixels to inches at 96 DPI (Chromium's default). */
-const pxToIn = (px: number) => px / 96;
+    catch: (cause) =>
+      new ImagePdfError({ message: "Failed to embed image", cause }),
+  });
 
 /**
- * Convert an image to PDF via Gotenberg's Chromium HTML route.
- * Reads the image dimensions, sets @page size to match, and
- * produces a PDF with no margins or whitespace.
- *
- * Falls back to the LibreOffice route for formats whose
- * dimensions we can't parse (GIF, TIFF, BMP, WebP).
+ * Re-encode an admitted image the converter cannot import as PNG and embed
+ * that. Admission already bounded the declared pixel count; the decoder
+ * enforces the same budget and the pipeline runs under the derivative
+ * wall-clock ceiling. The PNG carries no EXIF, so its header's orientation
+ * (1) is what the WebP header reader reports for the source too.
  */
-const convertImageToPdf = async (
-  fileBuffer: ArrayBuffer,
-  mimeType: string,
-  size: ImageSize,
-): Promise<ConvertToPdfResult> => {
-  const base64 = Buffer.from(fileBuffer).toString("base64");
-  const dataUri = `data:${mimeType};base64,${base64}`;
-
-  const html = `<!DOCTYPE html>
-<html>
-<head><style>
-@page {
-  size: ${size.width}px ${size.height}px;
-  margin: 0;
-}
-* { margin: 0; padding: 0; }
-img { display: block; width: ${size.width}px; height: ${size.height}px; }
-</style></head>
-<body><img src="${dataUri}"></body>
-</html>`;
-
-  return await chromiumHtmlToPdf(html, {
-    paperWidth: String(pxToIn(size.width)),
-    paperHeight: String(pxToIn(size.height)),
-    marginTop: "0",
-    marginBottom: "0",
-    marginLeft: "0",
-    marginRight: "0",
-    preferCssPageSize: "true",
+const transcodeImageToPdf = async (
+  bytes: Uint8Array,
+): Promise<Result<ConvertToPdfResult, ImageTranscodeError>> => {
+  Bun.Image.backend = "bun";
+  const png = await Result.tryPromise({
+    try: async () =>
+      await withTimeout(
+        async () =>
+          await new Bun.Image(bytes, {
+            maxPixels: LIMITS.imageDerivativeSourcePixelsMax,
+          })
+            .png()
+            .bytes(),
+        {
+          label: "image-transcode",
+          timeoutMs: LIMITS.imageDerivativeTimeoutMs,
+        },
+      ),
+    catch: (cause) =>
+      new ImageTranscodeError({ message: "Failed to decode image", cause }),
   });
+  if (Result.isError(png)) {
+    return png;
+  }
+  const header = readImageHeader(png.value, "image/png");
+  if (header === null || !canEmbedInProcess(header)) {
+    return Result.err(
+      new ImageTranscodeError({
+        message: "Transcoded image is not an embeddable PNG",
+      }),
+    );
+  }
+  const embedded = await embedImage(png.value, header, "image/png");
+  if (Result.isError(embedded)) {
+    return Result.err(
+      new ImageTranscodeError({
+        message: "Failed to embed transcoded image",
+        cause: embedded.error,
+      }),
+    );
+  }
+  return Result.ok(embedded.value);
 };
 
-export const convertToPdf = async ({
-  bytes: fileBuffer,
-  fileName,
-  mimeType,
-}: ScannedFile): Promise<Result<ConvertToPdfResult, GotenbergError>> => {
-  const imageSize = IMAGE_MIME_TYPES.has(mimeType)
-    ? getImageSize(fileBuffer, mimeType)
-    : null;
+/**
+ * Convert a scanned file to PDF. Images are admitted by the pixel count
+ * their header declares before anything decodes them. JPEG and PNG whose
+ * header shows an encoding the in-process embedder handles become a
+ * one-page PDF directly. WebP, which the converter cannot import, is
+ * re-encoded as PNG in-process and embedded; a failure there is observed
+ * and returned as an `ImageTranscodeError`, never sent to the converter.
+ * Every other image (BMP, GIF, TIFF, and JPEG/PNG encodings the embedder
+ * does not handle), an embed that fails anyway, and every other type go to
+ * Gotenberg's LibreOffice route.
+ */
+export const convertToPdf = async (
+  file: ScannedFile,
+  { retry = "in-call" }: ConvertToPdfOptions = {},
+): Promise<Result<ConvertToPdfResult, ConvertToPdfError>> => {
+  const { fileName, mimeType } = file;
+  const bytes = new Uint8Array(file.bytes);
+  const admission = admitDerivativeImage(bytes, mimeType);
+  if (admission.type === "refused") {
+    return Result.err(admission.error);
+  }
 
-  if (imageSize) {
-    return Result.tryPromise(
-      {
-        try: async () =>
-          await convertImageToPdf(fileBuffer, mimeType, imageSize),
-        catch: (cause) =>
-          cause instanceof GotenbergError
-            ? cause
-            : new GotenbergError({
-                message: "Failed to convert image",
-                cause,
-              }),
-      },
-      { retry: GOTENBERG_RETRY },
-    );
+  const { header } = admission;
+  if (header !== null && isInProcessOnlyImageMimeType(mimeType)) {
+    const transcoded = await transcodeImageToPdf(bytes);
+    if (Result.isError(transcoded)) {
+      observeFailure(transcoded.error, {
+        sink: IMAGE_TRANSCODE_FAILED_SINK,
+        ctx: { operation: "image-transcode-to-pdf" },
+      });
+    }
+    return transcoded;
+  }
+
+  if (
+    header !== null &&
+    isEmbeddableImageMimeType(mimeType) &&
+    canEmbedInProcess(header)
+  ) {
+    const embedded = await embedImage(bytes, header, mimeType);
+    // An embed failure never reaches the caller (it falls back below), so
+    // only the value crosses into the caller-facing error type.
+    if (Result.isOk(embedded)) {
+      return Result.ok(embedded.value);
+    }
+    // The header promised an encoding the embedder then refused: observe
+    // it and let the converter render the image instead.
+    observeFailure(embedded.error, {
+      sink: IMAGE_EMBED_FAILED_SINK,
+      ctx: { operation: "image-to-pdf" },
+    });
   }
 
   return await Result.tryPromise(
     {
       try: async () => {
-        const buffer = XLSX_MIME_TYPES.has(mimeType)
-          ? await applyFitToPage(fileBuffer)
-          : fileBuffer;
-
-        const formData = new FormData();
-        formData.append("files", new Blob([buffer]), fileName);
-        formData.append("exportNotes", "true");
-        formData.append("exportNotesInMargin", "true");
-
+        const source = XLSX_MIME_TYPES.has(mimeType)
+          ? new Uint8Array(await applyFitToPage(file.bytes))
+          : bytes;
+        // Streamed from the caller's buffer, so the request holds no second
+        // copy of the source.
+        const form = streamMultipartForm({
+          file: {
+            fieldName: "files",
+            // The converter picks its import filter by extension.
+            fileName: sanitizeFilenamePreservingExtension(
+              withConverterExtension(fileName, mimeType),
+            ),
+            bytes: source,
+          },
+          fields: { exportNotes: "true", exportNotesInMargin: "true" },
+        });
         const response = await fetchWithTimeout(
           `${env.GOTENBERG_URL}/forms/libreoffice/convert`,
           {
             method: "POST",
             headers: {
               Authorization: gotenbergAuth(),
+              "Content-Type": form.contentType,
+              "Content-Length": String(form.contentLength),
             },
-            body: formData,
+            body: form.body,
             timeoutMs: 30_000,
           },
         );
@@ -265,10 +327,7 @@ export const convertToPdf = async ({
         }
 
         const result = await response.arrayBuffer();
-        return {
-          buffer: result,
-          sizeBytes: result.byteLength,
-        };
+        return { buffer: result, sizeBytes: result.byteLength };
       },
       catch: (cause) => {
         if (cause instanceof GotenbergError) {
@@ -280,6 +339,6 @@ export const convertToPdf = async ({
         });
       },
     },
-    { retry: GOTENBERG_RETRY },
+    retry === "in-call" ? { retry: GOTENBERG_RETRY } : undefined,
   );
 };

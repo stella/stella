@@ -10,6 +10,7 @@ import { useInspectorCommandStore } from "@/components/inspector/inspector-comma
 import { normalizeInspectorGroupAssignments } from "@/components/inspector/inspector-groups.logic";
 import {
   inspectorMinimizedStorageKey,
+  inspectorRestorePendingStorageKey,
   inspectorStateStorageKey,
 } from "@/components/inspector/inspector-storage-keys";
 import {
@@ -26,11 +27,11 @@ import {
   isGenericInspectorTab,
   reconcileSharedInspectorTabs,
 } from "@/components/inspector/inspector-tabs-slice";
-import "@/components/inspector/inspector-persistence-references";
 import {
   getInspectorPersistenceReference,
   getInspectorView,
 } from "@/components/inspector/view-registry";
+import "@/components/inspector/inspector-persistence-references";
 import {
   decisionChatKey,
   isOptionalLegalDocumentChatKey,
@@ -135,6 +136,134 @@ const writePersistedMinimized = (
       ),
     )
     .unwrapOr(undefined);
+};
+
+// Restored tabs mount the docked viewer at load. If a restore keeps the page
+// from ever settling, every reload would restore the same tabs again; a
+// session flag set before the restore and cleared once the page has settled
+// tells the next start to restore minimized instead.
+const RESTORE_SETTLE_DELAY_MS = 2000;
+
+const restorePendingKey = (scope: InspectorBroadcastScope) =>
+  inspectorRestorePendingStorageKey(scope);
+
+// The flag records which page load set it. Another start in the same page (a
+// shell that attaches the store after a client navigation) sees this page's
+// own unsettled restore, which is not a stalled earlier load.
+let pageLoadId = createUuid();
+
+/** Tests model a reload by starting again in a new page load. */
+export const startNewPageLoadForTest = (): void => {
+  pageLoadId = createUuid();
+};
+
+const readRestorePending = (scope: InspectorBroadcastScope): boolean => {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  return requireBrowserStorage("session")
+    .andThen((storage) =>
+      Result.try(() => storage.getItem(restorePendingKey(scope))),
+    )
+    .map((value) => value !== null && value !== pageLoadId)
+    .unwrapOr(false);
+};
+
+const writeRestorePending = (
+  scope: InspectorBroadcastScope,
+  pending: boolean,
+): void => {
+  if (typeof window === "undefined") {
+    return;
+  }
+  requireBrowserStorage("session")
+    .andThen((storage) =>
+      Result.try(() => {
+        if (pending) {
+          storage.setItem(restorePendingKey(scope), pageLoadId);
+        } else {
+          storage.removeItem(restorePendingKey(scope));
+        }
+      }),
+    )
+    .unwrapOr(undefined);
+};
+
+// Viewers the restore mounted that have not loaded their document yet. The
+// flag stays until every one has loaded and the page then stays responsive:
+// a document that arrives after the delay could still stall the page.
+let restoreHolds = 0;
+let settlingScope: InspectorBroadcastScope | null = null;
+let settleTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Clears the flag once nothing restored is still loading and the page has
+ *  stayed responsive for a moment: a busy main thread runs neither the timer
+ *  nor the idle callback. */
+const scheduleRestoreSettle = (): void => {
+  const scope = settlingScope;
+  if (scope === null || restoreHolds > 0) {
+    return;
+  }
+  if (settleTimer !== null) {
+    clearTimeout(settleTimer);
+  }
+  settleTimer = setTimeout(() => {
+    settleTimer = null;
+    const clear = () => {
+      if (restoreHolds === 0 && settlingScope === scope) {
+        writeRestorePending(scope, false);
+        settlingScope = null;
+      }
+    };
+    if (typeof globalThis.requestIdleCallback === "function") {
+      globalThis.requestIdleCallback(clear);
+    } else {
+      clear();
+    }
+  }, RESTORE_SETTLE_DELAY_MS);
+};
+
+const clearRestorePendingWhenSettled = (
+  scope: InspectorBroadcastScope,
+): void => {
+  settlingScope = scope;
+  scheduleRestoreSettle();
+  // A page that can run its pagehide handler is not stuck, so leaving it
+  // (a reload, a navigation) settles the restore even inside the delay.
+  if (typeof globalThis.addEventListener === "function") {
+    globalThis.addEventListener(
+      "pagehide",
+      () => {
+        if (settlingScope === scope) {
+          writeRestorePending(scope, false);
+          settlingScope = null;
+        }
+      },
+      { once: true },
+    );
+  }
+};
+
+/**
+ * Held by a restored viewer from mount until its document has loaded (or
+ * failed), so the restore counts as settled only after the viewer is ready.
+ * The returned release is idempotent.
+ */
+export const holdInspectorRestoreSettle = (): (() => void) => {
+  restoreHolds += 1;
+  if (settleTimer !== null) {
+    clearTimeout(settleTimer);
+    settleTimer = null;
+  }
+  let released = false;
+  return () => {
+    if (released) {
+      return;
+    }
+    released = true;
+    restoreHolds -= 1;
+    scheduleRestoreSettle();
+  };
 };
 
 let inspectorBroadcastSession: InspectorBroadcastSession | null = null;
@@ -798,13 +927,32 @@ const initializeInspectorScope = (
   }
   inspectorScopeOwnership.set(store, scopeKey);
   const persistedMinimized = readPersistedMinimized(scope);
-  if (store.getState().minimized !== persistedMinimized) {
-    store.setState({ minimized: persistedMinimized });
+  // The previous restore never settled: keep the pane closed this time.
+  const recovering = readRestorePending(scope);
+  const minimized = persistedMinimized || recovering;
+  if (store.getState().minimized !== minimized) {
+    store.setState({ minimized });
   }
   if (inspectorBroadcastSession?.scopeKey !== scopeKey) {
     const persisted = readPersistedInspectorState(scope);
+    // Nothing to restore: a flag left by an earlier start has nothing to
+    // guard any more.
+    if (persisted === null && recovering) {
+      writeRestorePending(scope, false);
+    }
     if (persisted !== null) {
       const tabs = persisted.tabs.map(normalizeInspectorBroadcastTab);
+      if (recovering) {
+        getAnalytics().captureInspectorRestoreRecovered({
+          tabCount: tabs.length,
+        });
+      }
+      if (!minimized && tabs.length > 0) {
+        writeRestorePending(scope, true);
+        clearRestorePendingWhenSettled(scope);
+      } else if (recovering) {
+        writeRestorePending(scope, false);
+      }
       adoptRestoredLegalDocumentChatThreads(legalDocumentChatThreadsIn(tabs));
       store.setState({
         tabs,

@@ -23,6 +23,7 @@ import {
   parseStrippingUndeclaredKeys,
   reportToolOutputDegrade,
 } from "@/api/lib/chat/tool-output-degrade";
+import { maskUuids } from "@/api/lib/chat/uuid-mask";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   isSearchIndexUnavailable,
@@ -408,8 +409,7 @@ export const enumProp = (description: string, values: readonly string[]) =>
  * that behavior selects an irreversible operation or outbound send;
  * `destructiveHint` alone does not require confirmation. Set it only after a
  * human has approved the selected operation. Pass a custom `description` for
- * outbound sends or an action-scoped gate (e.g. `manage_organization`, where
- * only the `remove_member` action requires it).
+ * outbound sends or an operation-specific confirmation reason.
  */
 export const confirmProp = (
   description = "Must be true to run this irreversible operation. Set it only after a " +
@@ -522,10 +522,10 @@ const successStructuredContent = (
     projected,
   );
   if (Result.isError(parsed)) {
-    // Paths only: an issue's `input` is the tool's output, which carries
-    // matter content.
-    const paths = parsed.error.issues.map(
-      (issue) => v.getDotPath(issue) ?? "(root)",
+    // Paths only, ids masked: an issue's `input` is the tool's output, which
+    // carries matter content, and a dynamic key can be an id.
+    const paths = parsed.error.issues.map((issue) =>
+      maskUuids(v.getDotPath(issue) ?? "(root)"),
     );
     return panic(
       "MCP tool output violated its advertised contract",
@@ -946,7 +946,10 @@ export const didYouMean = (labels: readonly string[]): string => {
     : `Did you mean one of ${labels.join(", ")}?`;
 };
 
-const levenshtein = (a: string, b: string): number => {
+const levenshtein = (left: string, right: string): number => {
+  // Over Unicode scalar values, so an astral character is one edit.
+  const a = Array.from(left);
+  const b = Array.from(right);
   // Rolling single-row DP. `previous` always holds `b.length + 1` entries and
   // every read below is in range by construction; `panic` documents that as a
   // hard invariant instead of masking an out-of-range read with a default.
@@ -1237,21 +1240,20 @@ export const buildMatterUrl = (workspaceId: string) =>
 
 export { buildDocumentUrl } from "@/api/lib/mcp-connectors/app-urls";
 
-/** Keep the legacy app URL beside the shared primary/source link contract. */
+/** Return the primary reader or publisher link with its distinct source. */
 export const legalCitationLinkFields = ({
-  appUrl,
+  url,
   sourceUrl,
 }: {
-  appUrl: string | null;
+  url: string | null;
   sourceUrl: string | null;
 }) => {
   const links = resolveLegalCitationLinks({
-    appUrl,
+    url,
     sourceUrl,
     appOrigins: new Set([new URL(getAppBaseUrl()).origin]),
   });
   return {
-    appUrl,
     url: links.url,
     ...(links.type === "external" || links.source_url === undefined
       ? {}

@@ -16,7 +16,10 @@ import {
 import { deriveDecisionReferences } from "@/api/handlers/case-law/citations/decision-references";
 import type { DecisionReference } from "@/api/handlers/case-law/citations/decision-references";
 import type { extractCitations } from "@/api/handlers/case-law/ingestion/citation-extractor";
-import { applyCitationReviews } from "@/api/handlers/case-law/polarity/reviews";
+import {
+  applyCitationReviews,
+  applyDoctrineReviews,
+} from "@/api/handlers/case-law/polarity/reviews";
 import {
   ACTIVE_RULE_SOURCES,
   loadRules,
@@ -278,6 +281,7 @@ const citationContent = (row: {
   sectionIndex?: number | null | undefined;
   polarity?: string | null | undefined;
   polarityRuleId?: string | null | undefined;
+  doctrinalTreatment?: string | null | undefined;
 }): string =>
   JSON.stringify([
     row.citationText,
@@ -292,6 +296,7 @@ const citationContent = (row: {
     row.sectionIndex ?? null,
     row.polarity ?? null,
     row.polarityRuleId ?? null,
+    row.doctrinalTreatment ?? null,
   ]);
 
 /**
@@ -359,7 +364,8 @@ export const writeDecisionCitations = async (
                kind,
                section_index,
                polarity,
-               polarity_rule_id::text AS polarity_rule_id
+               polarity_rule_id::text AS polarity_rule_id,
+               doctrinal_treatment
           FROM ${caseLawCitations}
          WHERE citing_decision_id = ${decisionId}::uuid
       `),
@@ -386,6 +392,7 @@ export const writeDecisionCitations = async (
             : Number(row["section_index"]),
         polarity: textOrNull(row["polarity"]),
         polarityRuleId: textOrNull(row["polarity_rule_id"]),
+        doctrinalTreatment: textOrNull(row["doctrinal_treatment"]),
       });
       const id = brandPersistedCaseLawCitationId(row["id"]);
       const ids = unmatched.get(key);
@@ -399,7 +406,10 @@ export const writeDecisionCitations = async (
 
   const incoming: CitationRow[] = [];
   let kept = 0;
-  for (const row of await applyCitationReviews(tx, rows)) {
+  for (const row of await applyDoctrineReviews(
+    tx,
+    await applyCitationReviews(tx, rows),
+  )) {
     const matches = unmatched.get(citationContent(row));
     if (matches !== undefined && matches.length > 0) {
       matches.pop();

@@ -1,0 +1,5 @@
+{
+  "metric": "lint-suppression-directives",
+  "delta": 1,
+  "reason": "ProseMirror DecorationSet.map(mapping, doc) requires a document as its second argument. unicorn/no-array-method-this-argument mistakes that API for Array.map; the single directive is limited to the composition-preserving decoration mapping call."
+}

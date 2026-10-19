@@ -13,7 +13,13 @@ import type { SQL } from "drizzle-orm";
 import { DESKTOP_HANDOFF_FAILURE } from "@stll/api-contract/desktop-handoff";
 
 import type { rootDb, Transaction } from "@/api/db/root";
-import { entityVersions, pdfSigningSessions } from "@/api/db/schema";
+import {
+  entities,
+  entityVersions,
+  pdfSigningSessions,
+  properties,
+  workspaces,
+} from "@/api/db/schema";
 import { createScopedDb, createTenantlessDb } from "@/api/db/scoped";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -54,6 +60,14 @@ const createdSessionIds: SafeId<"pdfSigningSession">[] = [];
 
 const MINUTE_MS = 60_000;
 
+/** A matter without a client in tenant A, reached through membership only. */
+const personalMatter = {
+  baseVersionId: createSafeId<"entityVersion">(),
+  entityId: createSafeId<"entity">(),
+  propertyId: createSafeId<"property">(),
+  workspaceId: createSafeId<"workspace">(),
+};
+
 const recordedAuditEvents: AuditEvent[] = [];
 const recordAuditEvent: AuditRecorder = async (_tx, event) => {
   recordedAuditEvents.push(...(Array.isArray(event) ? event : [event]));
@@ -63,7 +77,7 @@ type SeedOptions = {
   /** A creator other than the tenant's own member. */
   createdBy?: string;
   handoffExpiresAt?: Date;
-  tenant?: "a" | "b";
+  tenant?: "a" | "b" | "personal";
 };
 
 const seedHandoff = async ({
@@ -73,22 +87,23 @@ const seedHandoff = async ({
 }: SeedOptions = {}) => {
   const sessionId = createSafeId<"pdfSigningSession">();
   const handoffToken = createPdfSigningToken();
-  const tenantIds =
-    tenant === "a"
-      ? {
-          baseVersionId: ids.entityVersionA1,
-          createdBy: ids.userA1,
-          entityId: ids.entityA1,
-          propertyId: ids.filePropertyA1,
-          workspaceId: ids.wsA1,
-        }
-      : {
-          baseVersionId: ids.entityVersionB1,
-          createdBy: ids.userB1,
-          entityId: ids.entityB1,
-          propertyId: ids.filePropertyB1,
-          workspaceId: ids.wsB1,
-        };
+  const tenantIds = {
+    a: {
+      baseVersionId: ids.entityVersionA1,
+      createdBy: ids.userA1,
+      entityId: ids.entityA1,
+      propertyId: ids.filePropertyA1,
+      workspaceId: ids.wsA1,
+    },
+    b: {
+      baseVersionId: ids.entityVersionB1,
+      createdBy: ids.userB1,
+      entityId: ids.entityB1,
+      propertyId: ids.filePropertyB1,
+      workspaceId: ids.wsB1,
+    },
+    personal: { ...personalMatter, createdBy: ids.userA1 },
+  }[tenant];
 
   // `pdf_signing_sessions_open_uidx` allows one open exchange per person per
   // file field, so each seeded row replaces the tenant's previous one.
@@ -143,6 +158,34 @@ beforeAll(async () => {
   ids = fixture.ids;
   db = asTestRaw<typeof rootDb>(testDb);
   tokenDb = testTokenDb();
+
+  await testDb.insert(workspaces).values({
+    id: personalMatter.workspaceId,
+    organizationId: ids.orgA,
+    clientId: null,
+    name: "Personal matter",
+    reference: `REF-${personalMatter.workspaceId}`,
+    status: "active",
+  });
+  await testDb.insert(entities).values({
+    id: personalMatter.entityId,
+    workspaceId: personalMatter.workspaceId,
+    kind: "document",
+    name: "personal-matter-document",
+  });
+  await testDb.insert(entityVersions).values({
+    id: personalMatter.baseVersionId,
+    workspaceId: personalMatter.workspaceId,
+    entityId: personalMatter.entityId,
+  });
+  await testDb.insert(properties).values({
+    id: personalMatter.propertyId,
+    workspaceId: personalMatter.workspaceId,
+    name: "Signed file",
+    content: { version: 1, type: "file" },
+    tool: { version: 1, type: "manual-input" },
+    status: "fresh",
+  });
 });
 
 afterAll(async () => {
@@ -152,6 +195,9 @@ afterAll(async () => {
         .delete(pdfSigningSessions)
         .where(inArray(pdfSigningSessions.id, createdSessionIds));
     }
+    await testDb
+      .delete(workspaces)
+      .where(eq(workspaces.id, personalMatter.workspaceId));
   } finally {
     await releaseRlsFixture();
   }
@@ -224,6 +270,27 @@ describe("pdf signing handoff redemption", () => {
       .from(pdfSigningSessions)
       .where(eq(pdfSigningSessions.id, sessionId));
     expect(rows.at(0)?.sessionTokenHash).toBeNull();
+  });
+
+  test("follows the creator's matter access for an owner without a matter membership", async () => {
+    // userAdmin owns tenant A and holds no matter membership row.
+    const identity = { userId: ids.userAdmin, organizationId: ids.orgA };
+    const onClientMatter = await seedHandoff({ createdBy: ids.userAdmin });
+    const onPersonalMatter = await seedHandoff({
+      createdBy: ids.userAdmin,
+      tenant: "personal",
+    });
+
+    expect(
+      await redeemPdfSigningHandoff(onClientMatter.handoffToken, tokenDb, {
+        identity,
+      }),
+    ).not.toBeNull();
+    expect(
+      await redeemPdfSigningHandoff(onPersonalMatter.handoffToken, tokenDb, {
+        identity,
+      }),
+    ).toBeNull();
   });
 
   test("spends nothing unless the whole redemption commits", async () => {
@@ -328,6 +395,28 @@ describe("pdf signing session authorization", () => {
     }
     expect(authorized.value.workspaceId).toBe(workspaceId);
     expect(authorized.value.userId).toBe(ids.userA1);
+  });
+
+  test("refuses a session on a matter without a client to an owner without a matter membership", async () => {
+    const { sessionId } = await seedHandoff({
+      createdBy: ids.userAdmin,
+      tenant: "personal",
+    });
+    const sessionToken = createPdfSigningToken();
+    await testDb
+      .update(pdfSigningSessions)
+      .set({
+        handoffConsumedAt: new Date(),
+        sessionTokenHash: hashPdfSigningToken(sessionToken),
+        tokenExpiresAt: new Date(Date.now() + 10 * MINUTE_MS),
+      })
+      .where(eq(pdfSigningSessions.id, sessionId));
+
+    const authorized = await authorizePdfSigningSession(
+      { sessionId, sessionToken },
+      tokenDb,
+    );
+    expect(authorized.status).toBe("permission-revoked");
   });
 
   test("refuses another tenant's session token for this session", async () => {

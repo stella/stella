@@ -13,7 +13,15 @@ import { Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { PencilIcon, ShieldAlertIcon } from "@stll/ui/icons";
+import {
+  MoreHorizontalIcon,
+  PencilIcon,
+  PlusIcon,
+  ShieldAlertIcon,
+} from "@stll/ui/icons";
+import { ListItemStatus } from "@stll/ui/list";
+import type { StatusTone } from "@stll/ui/list";
+import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import {
   Select,
   SelectItem,
@@ -22,12 +30,12 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 import { Textarea } from "@stll/ui/textarea";
-import { cn } from "@stll/ui/utils";
 
 import { ListItemSources } from "@/components/workspaces/list-item-sources";
-import { ListSourceAction } from "@/components/workspaces/list-source-action";
+import { ListSourceForm } from "@/components/workspaces/list-source-form";
 import { FactDate } from "@/features/avt/fact-date";
 import { factItems, orderHeldFirst } from "@/features/avt/fact-details.logic";
+import { factLabel } from "@/features/avt/fact-label.logic";
 import { FactSource } from "@/features/avt/fact-source";
 import {
   InterpNote,
@@ -173,22 +181,27 @@ type FactRowProps = {
 const FactRow = ({ workspaceId, listId, fact }: FactRowProps) => {
   const t = useTranslations();
   const canUpdate = usePermissions({ entity: ["update"] });
+  const legalListsEnabled = useCallerFeatureEnabled(CALLER_FEATURE.legalLists);
   const { saveDetails } = useFactDetailActions({ workspaceId, listId });
   const saveState = useFactSaveState({ workspaceId, listId }, fact.id);
   const [sourcesOpen, setSourcesOpen] = React.useState(false);
+  const [addingSource, setAddingSource] = React.useState(false);
+  const [noteDraft, setNoteDraft] = React.useState<string | null>(null);
   const details = fact.factDetails;
-  const canEdit =
-    canUpdate && (details === null || details.scoring !== undefined);
-  const held = details?.scoring === "held";
-  const evidenceKind = details?.evidenceKind ?? null;
+  // An undescribed fact counts as included; a described one without a scoring
+  // value is not editable here and claims no scoring status.
+  const scoring = details === null ? UNDESCRIBED_FACT.scoring : details.scoring;
+  const canEdit = canUpdate && scoring !== undefined;
+  const canAddSource = legalListsEnabled && canUpdate;
+  const note = details?.interpretationNote ?? null;
+  const { reference, statement } = factLabel(fact.name, {
+    medium: details?.medium ?? null,
+    occurredOn: details?.occurredOn ?? null,
+    precision: details?.occurredOnPrecision ?? null,
+  });
 
   const save = (changes: Partial<EditableFactDetails>) => {
     if (!canEdit) {
-      return;
-    }
-    const scoring =
-      details === null ? UNDESCRIBED_FACT.scoring : details.scoring;
-    if (scoring === undefined) {
       return;
     }
     saveDetails(fact.id, {
@@ -199,88 +212,195 @@ const FactRow = ({ workspaceId, listId, fact }: FactRowProps) => {
   };
 
   return (
-    <li className={cn("space-y-2 p-3", held && "bg-warning/6")}>
-      <div className="flex flex-col gap-3 md:flex-row md:items-start">
-        <div className="min-w-0 flex-1 space-y-2 text-sm leading-relaxed">
-          <p className="wrap-break-word" dir="auto">
-            {fact.name}
-          </p>
-          <div className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-            {fact.firstSource !== null && (
-              <FactSource
-                documentId={fact.firstSource.documentId}
-                documentName={fact.firstSource.documentName}
-                locator={fact.firstSource.locator}
-                workspaceId={workspaceId}
-              />
-            )}
-            {fact.firstSource !== null && (
-              <Button
-                size="xs"
-                variant="ghost"
-                onClick={() => setSourcesOpen((open) => !open)}
-                aria-expanded={sourcesOpen}
-              >
-                {t("common.showAll")}
-              </Button>
-            )}
-            {evidenceKind !== null && <span>{evidenceKind}</span>}
-            <FactDate
-              occurredOn={details?.occurredOn ?? null}
-              precision={details?.occurredOnPrecision ?? null}
-            />
-            <MediumChip medium={details?.medium ?? null} />
-          </div>
-          <InterpNote note={details?.interpretationNote ?? null} />
-          <ListSourceAction
-            workspaceId={workspaceId}
-            listId={listId}
-            itemEntityId={fact.id}
-            onCreated={() => setSourcesOpen(true)}
-          />
-          {sourcesOpen && (
-            <ListItemSources
-              workspaceId={workspaceId}
-              listId={listId}
-              itemEntityId={fact.id}
-            />
+    <li className="flex flex-col gap-2 px-3 py-2.5 sm:flex-row sm:items-start sm:gap-4">
+      <div className="min-w-0 flex-1 space-y-1">
+        <div className="flex items-baseline gap-2">
+          {reference !== null && (
+            <span className="text-muted-foreground text-2xs shrink-0 font-mono tabular-nums">
+              <bdi>{reference}</bdi>
+            </span>
           )}
+          <p
+            className="min-w-0 text-sm leading-snug text-pretty wrap-break-word"
+            dir="auto"
+          >
+            {statement}
+          </p>
         </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <ConfidenceSelect
-            disabled={!canEdit}
-            onChange={(confidence) => save({ confidence })}
-            value={details?.confidence ?? null}
+        <FactMeta
+          fact={fact}
+          onToggleSources={() => setSourcesOpen((open) => !open)}
+          sourcesOpen={sourcesOpen}
+          workspaceId={workspaceId}
+        />
+        <InterpNote note={note} />
+        {!canEdit && (
+          <p className="text-muted-foreground text-xs">
+            {t(
+              canUpdate
+                ? "errors.actionAdmission.notEnabled"
+                : "errors.api.forbidden",
+            )}
+          </p>
+        )}
+        {noteDraft !== null && (
+          <InterpretationNoteEditor
+            draft={noteDraft}
+            onCancel={() => setNoteDraft(null)}
+            onChange={setNoteDraft}
+            onSave={(interpretationNote) => {
+              save({ interpretationNote });
+              setNoteDraft(null);
+            }}
           />
+        )}
+        {addingSource && (
+          <ListSourceForm
+            itemEntityId={fact.id}
+            listId={listId}
+            onClose={() => setAddingSource(false)}
+            onCreated={() => setSourcesOpen(true)}
+            workspaceId={workspaceId}
+          />
+        )}
+        {sourcesOpen && (
+          <ListItemSources
+            itemEntityId={fact.id}
+            listId={listId}
+            workspaceId={workspaceId}
+          />
+        )}
+      </div>
+      <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
+        {scoring !== undefined && (
+          <ListItemStatus tone={SCORING_STATUS[scoring].tone}>
+            {t(SCORING_STATUS[scoring].labelKey)}
+          </ListItemStatus>
+        )}
+        {scoring === "held" && (
           <Button
             disabled={!canEdit}
-            onClick={() => save({ scoring: held ? "included" : "held" })}
-            size="sm"
+            onClick={() => save({ scoring: "included" })}
+            size="xs"
             variant="outline"
           >
-            {held
-              ? t("avt.anchorFacts.includeInScoring")
-              : t("avt.anchorFacts.holdOutOfScoring")}
+            {t("avt.anchorFacts.includeInScoring")}
           </Button>
-          <SaveIndicator state={saveState} />
-        </div>
+        )}
+        <ConfidenceSelect
+          disabled={!canEdit}
+          onChange={(confidence) => save({ confidence })}
+          value={details?.confidence ?? null}
+        />
+        <SaveIndicator state={saveState} />
+        <Menu>
+          <MenuTrigger
+            render={
+              <Button
+                aria-label={t("common.actions")}
+                size="icon-sm"
+                title={t("common.actions")}
+                variant="ghost"
+              />
+            }
+          >
+            <MoreHorizontalIcon />
+          </MenuTrigger>
+          <MenuPopup align="end">
+            {scoring !== "held" && (
+              <MenuItem
+                disabled={!canEdit}
+                onClick={() => save({ scoring: "held" })}
+              >
+                {t("avt.anchorFacts.holdOutOfScoring")}
+              </MenuItem>
+            )}
+            <MenuItem
+              disabled={!canEdit}
+              onClick={() => setNoteDraft(note ?? "")}
+            >
+              <PencilIcon />
+              {note === null
+                ? t("avt.anchorFacts.addInterpretationNote")
+                : t("avt.anchorFacts.editInterpretationNote")}
+            </MenuItem>
+            {canAddSource && (
+              <MenuItem onClick={() => setAddingSource(true)}>
+                <PlusIcon />
+                {t("lists.sources.add")}
+              </MenuItem>
+            )}
+          </MenuPopup>
+        </Menu>
       </div>
-      {!canEdit && (
-        <p className="text-muted-foreground text-xs">
-          {t(
-            canUpdate
-              ? "errors.actionAdmission.notEnabled"
-              : "errors.api.forbidden",
-          )}
-        </p>
-      )}
-      <InterpretationNoteEditor
-        disabled={!canEdit}
-        key={details?.interpretationNote ?? ""}
-        note={details?.interpretationNote ?? null}
-        onSave={(interpretationNote) => save({ interpretationNote })}
-      />
     </li>
+  );
+};
+
+type FactMetaProps = {
+  workspaceId: string;
+  fact: ListItem;
+  sourcesOpen: boolean;
+  onToggleSources: () => void;
+};
+
+/** One quiet line: kind · date · medium · source document. */
+const FactMeta = ({
+  workspaceId,
+  fact,
+  sourcesOpen,
+  onToggleSources,
+}: FactMetaProps) => {
+  const t = useTranslations();
+  const details = fact.factDetails;
+  const parts: React.ReactElement[] = [];
+  if (details !== null && details.evidenceKind !== null) {
+    parts.push(<span key="kind">{details.evidenceKind}</span>);
+  }
+  if (details !== null && details.occurredOn !== null) {
+    parts.push(
+      <FactDate
+        key="date"
+        occurredOn={details.occurredOn}
+        precision={details.occurredOnPrecision}
+      />,
+    );
+  }
+  if (details !== null && details.medium !== null) {
+    parts.push(<MediumChip key="medium" medium={details.medium} />);
+  }
+  if (fact.firstSource !== null) {
+    parts.push(
+      <span className="inline-flex min-w-0 items-center gap-1" key="source">
+        <FactSource
+          documentId={fact.firstSource.documentId}
+          documentName={fact.firstSource.documentName}
+          locator={fact.firstSource.locator}
+          workspaceId={workspaceId}
+        />
+        <Button
+          aria-expanded={sourcesOpen}
+          onClick={onToggleSources}
+          size="xs"
+          variant="ghost"
+        >
+          {t("common.showAll")}
+        </Button>
+      </span>,
+    );
+  }
+  if (parts.length === 0) {
+    return null;
+  }
+  return (
+    <div className="text-muted-foreground flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs">
+      {parts.map((part, index) => (
+        <React.Fragment key={part.key}>
+          {index > 0 && <span aria-hidden="true">·</span>}
+          {part}
+        </React.Fragment>
+      ))}
+    </div>
   );
 };
 
@@ -294,6 +414,17 @@ const UNDESCRIBED_FACT = {
   scoring: "included",
   confidence: null,
 } as const satisfies EditableFactDetails;
+
+type FactScoring = NonNullable<EditableFactDetails["scoring"]>;
+
+/** How each scoring state reads in a fact row. */
+const SCORING_STATUS = {
+  included: { tone: "success", labelKey: "avt.anchorFacts.inScoring" },
+  held: { tone: "warning", labelKey: "avt.anchorFacts.heldForReview" },
+} as const satisfies Record<
+  FactScoring,
+  { tone: StatusTone; labelKey: string }
+>;
 
 type ConfidenceSelectProps = {
   value: FactConfidence | null;
@@ -319,6 +450,7 @@ const ConfidenceSelect = ({
     >
       <SelectTrigger
         aria-label={t("avt.anchorFacts.interpretiveConfidence")}
+        className="w-36"
         size="sm"
       >
         <SelectValue placeholder={t("avt.anchorFacts.setConfidence")} />
@@ -336,57 +468,38 @@ const ConfidenceSelect = ({
 };
 
 type InterpretationNoteEditorProps = {
-  note: string | null;
-  disabled: boolean;
+  draft: string;
+  onChange: (draft: string) => void;
   onSave: (note: string | null) => void;
+  onCancel: () => void;
 };
 
 /** A note only where the meaning is contested; saving it empty clears it. */
 const InterpretationNoteEditor = ({
-  note,
-  disabled,
+  draft,
+  onChange,
   onSave,
+  onCancel,
 }: InterpretationNoteEditorProps) => {
   const t = useTranslations();
-  const [draft, setDraft] = React.useState<string | null>(null);
-
-  if (draft === null) {
-    return (
-      <Button
-        disabled={disabled}
-        onClick={() => setDraft(note ?? "")}
-        size="xs"
-        variant="ghost"
-      >
-        <PencilIcon />
-        {note === null
-          ? t("avt.anchorFacts.addInterpretationNote")
-          : t("avt.anchorFacts.editInterpretationNote")}
-      </Button>
-    );
-  }
-
   const trimmed = draft.trim();
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-1.5 pt-1">
       <Textarea
         aria-label={t("avt.anchorFacts.interpretationNote")}
         autoFocus
-        onChange={(event) => setDraft(event.target.value)}
+        onChange={(event) => onChange(event.target.value)}
         placeholder={t("avt.anchorFacts.interpretationNotePlaceholder")}
         value={draft}
       />
       <div className="flex gap-1.5">
         <Button
-          onClick={() => {
-            onSave(trimmed === "" ? null : trimmed);
-            setDraft(null);
-          }}
+          onClick={() => onSave(trimmed === "" ? null : trimmed)}
           size="sm"
         >
           {t("common.save")}
         </Button>
-        <Button onClick={() => setDraft(null)} size="sm" variant="ghost">
+        <Button onClick={onCancel} size="sm" variant="ghost">
           {t("common.cancel")}
         </Button>
       </div>

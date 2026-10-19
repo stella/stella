@@ -97,6 +97,7 @@ const toRowDisplay = (entry: CatalogueDisplayEntry): CatalogueRowDisplay => ({
   icon: entry.icon,
   iconUrl: entry.iconUrl,
   jurisdictions: entry.jurisdictions,
+  invocation: entry.invocation,
 });
 
 /** The organization's tools: the shared catalogue view with the member's

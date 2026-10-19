@@ -1,0 +1,5 @@
+{
+  "metric": "nullish-array-fallback",
+  "delta": 4,
+  "reason": "Reader-answer caches are absent before the initial fetch or first streamed event. The hook initializes empty client collections in the event updater, polling callbacks and rendered loading state; query.error and per-card errors remain separate and visible, so failed reads are not converted into successful empty results."
+}

@@ -1,0 +1,143 @@
+{
+  "apps/api/src/db/entity-feature-gate-metadata.ts::reads-authorization-view": {
+    "reason": "Row policy definition: part of the gate itself, not a consumer of it.",
+    "sites": {
+      "WORKSPACE_SCOPE_SQL": 1
+    }
+  },
+  "apps/api/src/db/entity-feature-policies.ts::reads-authorization-view": {
+    "reason": "Row policy definition: part of the gate itself, not a consumer of it.",
+    "sites": {
+      "entityFeaturePolicies": 1
+    }
+  },
+  "apps/api/src/db/rls.ts::reads-authorization-view": {
+    "reason": "Declares the view and the workspace row policies that consult it.",
+    "sites": {
+      "WORKSPACE_ACCESS_VIEW_NAME": 2,
+      "aiMemoryWorkspaceCheck": 1,
+      "stellaAuthorizedWorkspaces": 2,
+      "workspaceAccessCheck": 1,
+      "workspaceArrayCheck": 1
+    }
+  },
+  "apps/api/src/lib/auth.ts::derives-matter-access": {
+    "reason": "Route authorization and realtime audience resolution run on the owner connection before a scoped transaction exists; the proved id is pinned and every later read passes the row policies. Moves to the owner module once it offers a per-member check.",
+    "sites": {
+      "memberWorkspaceAccess.membershipExists": 3,
+      "memberWorkspaceAccess.membershipExists.id": 1
+    }
+  },
+  "apps/api/src/lib/auth.ts::names-matter-role-rule": {
+    "reason": "Request authorization checks matter reach in the query that reads the member on every request, as an indexed point lookup; it moves onto the database access function when the view and policies are rebuilt on it.",
+    "sites": {
+      "memberWorkspaceAccess": 1
+    }
+  },
+  "apps/api/src/lib/auth.ts::owner-connection-workspace-set": {
+    "reason": "Builds the request matter set from the authorization view inside a scoped transaction; the set only ever holds ids the row policies admitted, and later reads still pass the policies.",
+    "sites": {
+      "<module>#rootDb": 1,
+      "claimDesktopAccountGrant.db#rootDb": 1,
+      "createAuth.auth.databaseHooks.user.create.after#rootDb": 1,
+      "createAuth.auth.hooks.after.notified.try.previousSessions#rootDb": 1,
+      "createAuth.auth.plugins.customAccessTokenClaims.row#rootDb": 1,
+      "createAuth.auth.plugins.postLogin.shouldRedirect.memberships#rootDb": 1,
+      "createAuth.hasSessionMembership#rootDb": 1,
+      "createAuth.membershipAuthAdapter.adapter.admitClient.execute#rootDb": 1,
+      "createAuth.membershipAuthAdapter.adapter.protectCreate#rootDb": 1,
+      "createAuth.membershipAuthAdapter.adapter.touchClient.touched#rootDb": 1,
+      "createAuth.organizationLifecycleHooks.recordAccessState#rootDb": 1,
+      "createAuth.organizationLifecycleHooks.recordProfessionalUse#rootDb": 1,
+      "createAuth.organizationLifecycleHooks.seedDefaultDocumentTypes#rootDb": 1,
+      "createAuth.organizationLifecycleHooks.seedMemberDefaults#rootDb": 1,
+      "createAuth.organizationPlugin.organizationHooks.beforeDeleteOrganization.teardown.try#rootDb": 1,
+      "createAuth.organizationPlugin.organizationHooks.beforeRemoveMember.removal.try#rootDb": 1,
+      "createAuth.rawAuthAdapter#rootDb": 1,
+      "createAuth.refuseBeyondMemberCapacity.admission#rootDb": 1,
+      "createAuth.refuseLastOwnerChange#rootDb": 1,
+      "createAuth.requireAssignableMemberRole.actor#rootDb": 1,
+      "createAuth.resolveSessionAccount#rootDb": 1,
+      "createAuth.sessionLifetime.store#rootDb": 1,
+      "getSessionAndMemberAuthorization.memberAuthorizationResult.authorization#rootDb": 1,
+      "isActiveOrganizationMember.authorization#rootDb": 1,
+      "issueDesktopAccountGrant.db#rootDb": 1,
+      "readAccountProfessionalUse#rootDb": 1,
+      "realtimeAuthorizers.user#rootDb": 1,
+      "realtimeAuthorizers.workspace#rootDb": 1,
+      "resolveCredentialMemberAuthorization#rootDb": 1,
+      "resolveValidateAuth.getActiveWorkspaceIds": 2,
+      "resolveValidateAuth.getActiveWorkspaceIds.activeWorkspaceIds": 1,
+      "resolveValidateAuth.getWorkspaceAccess#rootDb": 1,
+      "resolveValidateAuth.orgSettings#rootDb": 1
+    }
+  },
+  "apps/api/src/lib/db/member-access-hold.ts::names-matter-role-rule": {
+    "reason": "The role condition selects only the existing unassigned-client-matter row lock scope. The later statement decides access with the database rule; lock-order unification is a separate follow-up.",
+    "sites": {
+      "holdMemberAccessOnTx.reachesClientMatters": 1
+    }
+  },
+  "apps/api/src/lib/delete-account.ts::owner-connection-workspace-set": {
+    "reason": "Account deletion reassigns work among the remaining members of the departing user's matters; a system operation, not a reader's allowlist.",
+    "sites": {
+      "checkUserOrganizationOwnership.try.orgIdsWithOtherOwners#rootDb": 1,
+      "checkUserOrganizationOwnership.try.ownedOrgs#rootDb": 1,
+      "enqueueStorageCleanupOrLog#rootDb": 1,
+      "getPendingTasksAndMembers.try.otherMembers": 1,
+      "getPendingTasksAndMembers.try.otherMembers#rootDb": 1,
+      "getPendingTasksAndMembers.try.userAssignments#rootDb": 1
+    }
+  },
+  "apps/api/src/lib/search/index-entity.ts::owner-connection-workspace-set": {
+    "reason": "The local helper receives the matter column to build an index version token in the projection; it filters nothing by a matter set.",
+    "sites": {
+      "<module>#rootDb": 1,
+      "buildSearchDocument#rootDb": 1,
+      "buildSearchDocument.versionSetToken": 1,
+      "upsertSearchDocument#rootDb": 1
+    }
+  },
+  "apps/api/src/lib/search/index-global.ts::owner-connection-workspace-set": {
+    "reason": "The owner connection only maintains search projections; reads take the caller's scoped transaction and filter by the ids the request resolved through the owner module.",
+    "sites": {
+      "<module>": 2,
+      "<module>#rootDb": 1,
+      "readGlobalFacet": 1,
+      "readGlobalFacet.entityWorkspaceFacetFilter": 1,
+      "readGlobalFacet.entityWorkspaceFilter": 1,
+      "readGlobalFacet.matterWorkspaceFacetFilter": 1,
+      "readGlobalSearch": 1,
+      "readGlobalSearch.chatScope": 1,
+      "readGlobalSearch.contactPromise": 1,
+      "readGlobalSearch.contactTypeFacetCountPromise": 1,
+      "readGlobalSearch.contactWorkspaceFilter": 1,
+      "readGlobalSearch.countPromises": 1,
+      "readGlobalSearch.entityWorkspaceFacetFilter": 1,
+      "readGlobalSearch.entityWorkspaceFilter": 1,
+      "readGlobalSearch.matterWorkspaceFacetFilter": 1,
+      "readGlobalSearch.matterWorkspaceFilter": 1,
+      "rebuildSupplementalSearchIndex#rootDb": 1,
+      "syncWorkspaceSearchActivity#rootDb": 1,
+      "writeWorkspaceProjections": 2
+    }
+  },
+  "apps/api/src/lib/time-entry-timer-access.ts::derives-matter-access": {
+    "reason": "The timer retains the original role/client/assignment predicate only to preserve row-lock scope and the client-admin assignment-lock exemption. A later statement decides access with the database rule; lock-order changes are a separate follow-up.",
+    "sites": {
+      "hasCurrentTimerMatterAccess.rows": 1
+    }
+  },
+  "apps/api/src/lib/time-entry-timer-access.ts::names-matter-role-rule": {
+    "reason": "The timer retains the original role/client/assignment predicate only to preserve row-lock scope and the client-admin assignment-lock exemption. A later statement decides access with the database rule; lock-order changes are a separate follow-up.",
+    "sites": {
+      "hasCurrentTimerMatterAccess.rows": 1
+    }
+  },
+  "apps/api/src/lib/workspace-deletion.ts::names-matter-role-rule": {
+    "reason": "The role condition only preserves the assignment-row lock scope for client-matter deletion. A later statement decides matter access with the database rule.",
+    "sites": {
+      "actorCanAccessWorkspace": 1
+    }
+  }
+}

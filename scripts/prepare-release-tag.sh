@@ -19,17 +19,38 @@ while [[ $# -gt 0 ]]; do
 done
 [[ -n "$repo" ]] || { echo "::error::--repo is required" >&2; exit 2; }
 
-# All gates must succeed on one verified proof commit.
+# All status gates must succeed on one verified proof commit. A merge-group
+# ci-result receipt on the release commit itself stands in for main/heavy and
+# main/pr-depth when the queue validated every commit since the previous
+# release tag (check-release-receipt-coverage.sh); staging/verified is always
+# required.
 required_contexts='["staging/verified","main/heavy","main/pr-depth"]'
+gates_message='staging/verified plus either main/heavy and main/pr-depth or a merge-group ci-result receipt'
 
 release_states() {
+  local proof_sha="$1" target_sha="$2" states
   # Statuses arrive newest first. A later failure invalidates an earlier success.
-  bash "$gh_retry_script" api --paginate --slurp "repos/$repo/commits/$1/statuses?per_page=100" \
+  states=$(bash "$gh_retry_script" api --paginate --slurp "repos/$repo/commits/$proof_sha/statuses?per_page=100" \
     | jq -r --argjson contexts "$required_contexts" '
         [.[][]] as $all
         | $contexts[]
         | . as $context
-        | "\($context) = \(([$all[] | select(.context == $context)][0].state) // "missing")"'
+        | "\($context) = \(([$all[] | select(.context == $context)][0].state) // "missing")"') || return 1
+  if all_success "$states"; then
+    printf '%s\n' "$states"
+  elif ! grep -qx 'staging/verified = success' <<< "$states"; then
+    printf '%s\n' "$states" 'merge-group receipt = missing'
+  else
+    # Same rule as the health gate: the receipt counts only when the queue
+    # validated every commit since the previous release tag.
+    local coverage=0
+    bash "$script_dir/check-release-receipt-coverage.sh" "$repo" "$target_sha" 2>/dev/null || coverage=$?
+    case "$coverage" in
+      0) printf '%s\n' 'staging/verified = success' 'merge-group receipt = success' ;;
+      2) printf '%s\n' "$states" 'merge-group receipt = not covering unvalidated or unreadable queue history' ;;
+      *) printf '%s\n' "$states" 'merge-group receipt = missing' ;;
+    esac
+  fi
 }
 
 all_success() {
@@ -41,14 +62,14 @@ if [[ -z "$sha" ]]; then
   while IFS= read -r candidate; do
     selected_proof=$(bash "$tree_proof_verifier" --find-proof "$repo" "$candidate")
     selected_proof="${selected_proof:-$candidate}"
-    states=$(release_states "$selected_proof")
+    states=$(release_states "$selected_proof" "$candidate")
     if all_success "$states"; then
       sha="$candidate"
       proof="$selected_proof"
       break
     fi
   done <<< "$candidates"
-  [[ -n "$sha" ]] || { echo "::error::No commit on main carries success on staging/verified, main/heavy and main/pr-depth" >&2; exit 1; }
+  [[ -n "$sha" ]] || { echo "::error::No commit on main carries $gates_message" >&2; exit 1; }
 fi
 
 candidate=$(bash "$script_dir/check-release-candidate.sh" "$sha")
@@ -60,10 +81,10 @@ if [[ -z "$proof" ]]; then
   proof="${proof:-$sha}"
 fi
 bash "$tree_proof_verifier" "$repo" "$sha" "$proof" >/dev/null
-states=$(release_states "$proof")
+states=$(release_states "$proof" "$sha")
 if ! all_success "$states"; then
   missing=$(grep -v ' = success$' <<< "$states" | paste -sd ',' - | sed 's/,/, /g')
-  echo "::error::RELEASE_STATUS_NOT_GREEN: release SHA $sha needs success on staging/verified, main/heavy and main/pr-depth; it carries $missing" >&2
+  echo "::error::RELEASE_STATUS_NOT_GREEN: release SHA $sha needs $gates_message; it carries $missing" >&2
   exit 1
 fi
 bash "$script_dir/check-release-main-health.sh" "$repo" "$sha" "$proof"
