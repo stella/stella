@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { BUSINESS_REGISTRY_SLUGS } from "@stll/api-contract";
+import type { CourtTierLabel } from "@stll/api-contract/case-law-court-tiers";
 import {
   createCaseLawDecisionPath,
   createCaseLawDecisionRouteParams,
@@ -19,6 +20,8 @@ import {
   sortCourtTiers,
 } from "@/components/chat/source-chips.logic";
 import type { ExternalSourceEntry } from "@/components/chat/source-chips.logic";
+
+const APP_ORIGINS: ReadonlySet<string> = new Set(["https://app.test"]);
 
 describe("external source extraction from tool output", () => {
   test("keeps a root-relative URL only when it opens a legal reader page", () => {
@@ -350,6 +353,7 @@ const decisionPart = (output: unknown) => ({
 describe("answer source classification", () => {
   test("classifies a persisted document by its canonical entity link", () => {
     const result = collectSourceChipEntries({
+      appOrigins: APP_ORIGINS,
       sourceDocuments: [
         {
           entityId: "document-1",
@@ -375,6 +379,7 @@ describe("answer source classification", () => {
   test("splits cited and consulted decisions and merges duplicate hits", () => {
     const citedUrl = "https://example.test/cases/cited";
     const result = collectSourceChipEntries({
+      appOrigins: APP_ORIGINS,
       parts: [
         decisionPart({
           results: [
@@ -418,6 +423,7 @@ describe("answer source classification", () => {
   test("keeps a decision without court metadata as a generic source", () => {
     const decisionId = "a5a95801-7a7c-4c8b-98b3-7d17c8b8d7f9";
     const result = collectSourceChipEntries({
+      appOrigins: APP_ORIGINS,
       parts: [
         decisionPart({
           url: "https://example.test/cases/missing",
@@ -453,6 +459,7 @@ describe("answer source classification", () => {
       }),
     );
     const result = collectSourceChipEntries({
+      appOrigins: APP_ORIGINS,
       parts: [
         decisionPart({
           url: "https://example.test/cases/missing",
@@ -468,6 +475,7 @@ describe("answer source classification", () => {
 
   test("keeps decision dates in the plain ISO form the row formats", () => {
     const result = collectSourceChipEntries({
+      appOrigins: APP_ORIGINS,
       parts: [
         decisionPart({
           results: [
@@ -492,6 +500,7 @@ describe("answer source classification", () => {
   test("keeps a non-legal external URL whose path contains cases", () => {
     const url = "https://example.test/cases/customer-story";
     const result = collectSourceChipEntries({
+      appOrigins: APP_ORIGINS,
       parts: [decisionPart({ url, title: "Customer story" })],
     });
 
@@ -515,6 +524,7 @@ describe("answer source classification", () => {
   ])("classifies %s Markdown destinations as cited", (_kind, markdown) => {
     const url = "https://example.test/cases/cited";
     const result = collectSourceChipEntries({
+      appOrigins: APP_ORIGINS,
       parts: [
         decisionPart({ url, title: "Cited source" }),
         { type: "text", content: markdown },
@@ -539,7 +549,7 @@ describe("answer source classification", () => {
     ]);
   });
 
-  test.each<[string, string | undefined, string]>([
+  test.each<[string, string | undefined, CourtTierLabel]>([
     ["SCOTUS", "supreme", "supreme"],
     ["KSBR", "regional", "regional"],
     ["NS", undefined, "supreme"],

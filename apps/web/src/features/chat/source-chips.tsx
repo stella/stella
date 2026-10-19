@@ -8,6 +8,7 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Separator } from "@stll/ui/separator";
 import { cn } from "@stll/ui/utils";
 
+import { chatAppOrigins } from "@/components/chat/chat-app-origins";
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import { useExternalSourceStore } from "@/components/chat/external-source-store";
 import { LegalCitationLink } from "@/components/chat/legal-citation-link";
@@ -36,6 +37,7 @@ export const SourceChips = ({
   workspaceId,
 }: SourceChipsProps) => {
   const { entries, uniqueExternalSources } = collectSourceChipEntries({
+    appOrigins: chatAppOrigins(),
     parts,
     sourceDocuments,
   });

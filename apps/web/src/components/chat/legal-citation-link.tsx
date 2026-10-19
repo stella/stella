@@ -11,6 +11,7 @@ import { ScrollTextIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import { classifyChatHttpLink } from "@/components/chat/chat-app-link.logic";
+import { chatAppOrigins } from "@/components/chat/chat-app-origins";
 import {
   ChatDecisionCitation,
   ChatRouteDecisionCitation,
@@ -20,7 +21,6 @@ import { useOpenStatuteLink } from "@/components/chat/statute-open";
 import { InlinePill } from "@/components/inline-pill";
 import { isPlainPrimaryClick } from "@/components/inspector/case-decision-view";
 import type { CitedDecisionParagraph } from "@/components/references/reference.logic";
-import { env } from "@/env";
 import { ProxyChatLink } from "@/features/chat/components/proxy-chat-link";
 import { detached } from "@/lib/detached";
 
@@ -163,10 +163,7 @@ const uncountedParagraph = (anchorId: string): CitedDecisionParagraph => ({
 
 export const LegalCitationLink = (props: LegalCitationLinkProps) => {
   const t = useTranslations();
-  const appOrigins = new Set([
-    new URL(env.VITE_PUBLIC_APP_URL).origin,
-    ...(typeof window === "undefined" ? [] : [window.location.origin]),
-  ]);
+  const appOrigins = chatAppOrigins();
   const citation = resolveLegalCitationLinks({
     url: props.source.url,
     sourceUrl: props.source.sourceUrl ?? props.source.url,

@@ -540,9 +540,13 @@ const getMcpToolInfo = (part: ChatToolCallPart): McpToolInfo | null => {
 };
 
 export const collectSourceChipEntries = ({
+  appOrigins,
   parts,
   sourceDocuments = [],
 }: {
+  /** Origins whose links are Stella pages; relative answer links resolve
+   *  against them, so a cited in-app route is matched to its source. */
+  appOrigins: ReadonlySet<string>;
   parts: ChatMessage["parts"];
   sourceDocuments?: readonly ChatSourceDocument[] | undefined;
 }): {
@@ -593,7 +597,7 @@ export const collectSourceChipEntries = ({
     chatAnswerDecisionTargets({
       markdownDocuments,
       sources: uniqueExternalSources,
-      appOrigins: new Set(),
+      appOrigins,
     }).flatMap((target) => (target.type === "id" ? [target.decisionId] : [])),
   );
   const isLinked = (urls: readonly (string | undefined)[]) =>
