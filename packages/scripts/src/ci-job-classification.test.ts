@@ -41,6 +41,46 @@ const repositoryRoot = path.resolve(import.meta.dir, "../../..");
 const githubExpression = (expression: string) =>
   ["$", "{{ ", expression, " }}"].join("");
 
+test("the classification CLI accepts an explicit check flag and source directory", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "ci-check-flag-"));
+  try {
+    mkdirSync(path.join(directory, ".github"));
+    const manifest = {
+      version: 1,
+      mode: "public-metadata",
+      repository: "candidate",
+      workflows: [],
+      nodes: [],
+    } as const satisfies PublicMetadata;
+    for (const [file, value] of Object.entries({
+      "ci-job-classification.json": manifest,
+      "ci-job-classification-decisions.json": {},
+      "ci-job-classification-sources.json": {},
+    })) {
+      writeFileSync(
+        path.join(directory, ".github", file),
+        JSON.stringify(value),
+      );
+    }
+    const result = Bun.spawnSync(
+      [
+        process.execPath,
+        "scripts/check-ci-job-classification.ts",
+        "--check",
+        directory,
+      ],
+      { cwd: repositoryRoot, stdout: "pipe", stderr: "pipe" },
+    );
+    expect(new TextDecoder().decode(result.stderr)).toBe("");
+    expect(result.exitCode).toBe(0);
+    expect(new TextDecoder().decode(result.stdout)).toBe(
+      "Classified 0 workflows\n",
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("committed classifications cover the repository and its pinned metadata callees", () => {
   const { manifest, decisions, snapshots, reader } =
     readClassificationInputs(repositoryRoot);

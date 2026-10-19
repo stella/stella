@@ -85,7 +85,9 @@ export const checkJobClassification = ({ root, mode }: CheckOptions) =>
 if (import.meta.main) {
   const args = Bun.argv.slice(2);
   const result = checkJobClassification({
-    root: path.resolve(args.find((arg) => arg !== "--write") ?? "."),
+    root: path.resolve(
+      args.find((arg) => arg !== "--write" && arg !== "--check") ?? ".",
+    ),
     mode: args.includes("--write") ? "write" : "check",
   });
   if (result.isErr()) {
