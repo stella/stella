@@ -82,8 +82,9 @@ export const ChatBreadcrumb = ({
   });
   const titleOptions = chatThreadTitleOptions({
     activeOrganizationId,
-    enabled: titleEnabled,
     key: { threadId, workspaceId },
+    needed: titleEnabled,
+    persistedThread: threadData,
   });
   const titleQuery = useQuery(titleOptions);
   const titleView = useQueryView(titleQuery);

@@ -1,14 +1,18 @@
 import { readFileSync } from "node:fs";
 
 export const PILOT_FAST_ROOTS = [
+  "generated-sources",
   "desktop-rust-lint",
   "scan-engine-wasm-drift",
   "ci-checks-generated",
   "ci-checks-policy",
   "ci-checks-rest",
   "ci-tests",
+  "pr-heavy-gate",
   "code-quality-api",
+  "code-quality-api-cancel",
   "code-quality-web-rest",
+  "code-quality-web-rest-cancel",
   "query-perf",
 ] as const;
 /** Jobs every profile runs: wall-clock checks no plan scope can skip. */

@@ -1,4 +1,5 @@
 import { foldSearchMatchText } from "@stll/text-normalize";
+import { containsSearchMatchKey } from "@stll/text-normalize/search-match-key";
 
 import {
   filterToolEntries,
@@ -67,7 +68,7 @@ const matchesSearchQuery = (
       ...entry.jurisdictions,
     ].join(" "),
   );
-  return terms.every((term) => haystack.includes(term));
+  return terms.every((term) => containsSearchMatchKey(haystack, term));
 };
 
 export const filterPublicToolEntries = <T extends PublicToolBrowseEntry>(

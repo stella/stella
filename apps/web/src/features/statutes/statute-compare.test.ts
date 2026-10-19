@@ -417,7 +417,7 @@ describe("one provision compared", () => {
 
     expect(rows.map((row) => [row.type, row.status])).toEqual([
       ["heading", "changed"],
-      ["text", "unchanged"],
+      ["paragraph", "unchanged"],
     ]);
   });
 
@@ -707,7 +707,7 @@ describe("aligning a renumbered or extended subdivision", () => {
 
     expect(
       rows
-        .filter((row) => row.type === "text")
+        .filter((row) => row.type === "paragraph")
         .map((row) => [rowShape(row), textOf(row.before), textOf(row.after)]),
     ).toEqual([
       ["deleted", "(1) zrušeno", null],
