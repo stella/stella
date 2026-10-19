@@ -6,7 +6,7 @@ import type { Analytics, SearchTimingSurface } from "@/lib/analytics/types";
 
 // A search whose results never arrive (an error, a page left) leaves its
 // start behind; a later result set for the same text is another search.
-export const SEARCH_RESULTS_ABANDON_AFTER_MS = 60_000;
+const SEARCH_RESULTS_ABANDON_AFTER_MS = 60_000;
 
 type PendingSearch = { query: string; timer: KeyActionTimer };
 

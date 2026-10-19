@@ -6,7 +6,7 @@ import type { Analytics, DocumentTimingSurface } from "@/lib/analytics/types";
 // An open whose editor never becomes ready (a PDF, a closed tab, a tab that
 // was already mounted) leaves its start behind; past this, a later ready
 // signal for the same file belongs to another visit.
-export const DOCUMENT_OPEN_ABANDON_AFTER_MS = 60_000;
+const DOCUMENT_OPEN_ABANDON_AFTER_MS = 60_000;
 
 type PendingOpen = {
   requestedAt: number;

@@ -104,7 +104,7 @@ export const createChatSendTiming = (
           return;
         default:
           status satisfies never;
-          return panic("Unhandled chat client state");
+          panic("Unhandled chat client state");
       }
     },
     abandoned: drop,
