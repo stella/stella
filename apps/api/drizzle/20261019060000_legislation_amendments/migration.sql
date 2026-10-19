@@ -11,7 +11,7 @@ CREATE TABLE "legislation_amendment_snapshots" (
   CONSTRAINT "legislation_amendment_snapshots_source_fk" FOREIGN KEY ("source_id") REFERENCES "legislation_sources"("id") ON DELETE CASCADE
 );--> statement-breakpoint
 CREATE TABLE "legislation_amendments" (
-  "source_id" uuid NOT NULL REFERENCES "legislation_sources"("id") ON DELETE CASCADE,
+  "source_id" uuid NOT NULL CONSTRAINT "legislation_amendments_source_id_legislation_sources_id_fk" REFERENCES "legislation_sources"("id") ON DELETE CASCADE,
   "target_eli" varchar(512) NOT NULL,
   "language" varchar(16) NOT NULL,
   "publisher_id" varchar(512) NOT NULL,

@@ -224,3 +224,21 @@ test("amendment identities are bounded in UTF-8 bytes, not characters", () => {
     "publisher_id_too_long",
   );
 });
+
+test("sanitized coverage keeps only the fields of its own kind", () => {
+  const widened = (coverage: LegislationAmendmentSnapshot["coverage"]) => ({
+    ...snapshot,
+    relations: coverage.type === "not-stated" ? [] : snapshot.relations,
+    // Adapters live outside this repository; their objects can carry more.
+    coverage: { ...coverage, publisherNote: "extra" },
+  });
+  const cases: LegislationAmendmentSnapshot["coverage"][] = [
+    { type: "complete" },
+    { type: "partial", unlocatedRelations: 2, reason: "Two unlocated" },
+    { type: "not-stated", reason: "No publisher field" },
+  ];
+  for (const coverage of cases) {
+    const result = sanitizeLegislationAmendments(widened(coverage));
+    expect(result.isOk() && result.value.coverage).toEqual(coverage);
+  }
+});

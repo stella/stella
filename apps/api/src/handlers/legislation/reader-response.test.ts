@@ -400,6 +400,15 @@ test("amendment previews preserve same-day actors, staged starts, and source gap
     projectStatuteAmendments({ page: { ...page, items: [] }, snapshot })
       ?.coverage.type,
   ).toBe("partial");
+  // A stored coverage carrying a key the closed response schema refuses
+  // projects to its known fields only.
+  const widened = {
+    ...snapshot,
+    coverage: { ...snapshot.coverage, publisherNote: "extra" },
+  };
+  expect(
+    projectStatuteAmendments({ page, snapshot: widened })?.coverage,
+  ).toEqual(snapshot.coverage);
 });
 
 test("effect dates label only eligible version openings across every expression state", () => {

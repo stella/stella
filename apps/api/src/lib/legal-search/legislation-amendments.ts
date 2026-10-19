@@ -16,6 +16,7 @@ import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { stripDangerousChars } from "@/api/lib/legal-search/corpus-sanitize";
 import type {
+  LegislationAmendmentCoverage,
   LegislationAmendmentRelation,
   LegislationAmendmentSnapshot,
 } from "@/api/lib/legal-search/legislation-ingestion-types";
@@ -79,6 +80,33 @@ const sanitizedLegislationAmendmentSnapshotSchema = pipe(
   custom<LegislationAmendmentSnapshot>(isLegislationAmendmentSnapshot),
   brand("SanitizedLegislationAmendmentSnapshot"),
 );
+
+/**
+ * Field by field: the publisher's object may carry keys the closed response
+ * schemas refuse, and a stored one would break every read of the statute.
+ */
+const sanitizedCoverage = (
+  coverage: LegislationAmendmentCoverage,
+): LegislationAmendmentCoverage => {
+  switch (coverage.type) {
+    case "complete":
+      return { type: "complete" };
+    case "partial":
+      return {
+        type: "partial",
+        unlocatedRelations: coverage.unlocatedRelations,
+        reason: stripDangerousChars(coverage.reason),
+      };
+    case "not-stated":
+      return {
+        type: "not-stated",
+        reason: stripDangerousChars(coverage.reason),
+      };
+    default:
+      coverage satisfies never;
+      return panic("Unhandled amendment coverage type");
+  }
+};
 
 /** Sanitize before hashing, and reject identities whose effects would collide. */
 export const sanitizeLegislationAmendments = (
@@ -211,10 +239,7 @@ export const sanitizeLegislationAmendments = (
     parse(sanitizedLegislationAmendmentSnapshotSchema, {
       observedAt: observedAt.value.toString(),
       relations,
-      coverage:
-        coverage.type === "complete"
-          ? { type: "complete" }
-          : { ...coverage, reason: stripDangerousChars(coverage.reason) },
+      coverage: sanitizedCoverage(coverage),
     }),
   );
 };

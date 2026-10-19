@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { t } from "elysia";
 import type { Static } from "elysia";
 import * as v from "valibot";
@@ -20,6 +21,7 @@ import {
   type readLegislationAmendmentSnapshot,
 } from "@/api/lib/legal-search/legislation-amendments";
 import { LEGISLATION_AMENDMENT_CHANGE_KINDS } from "@/api/lib/legal-search/legislation-ingestion-types";
+import type { LegislationAmendmentCoverage } from "@/api/lib/legal-search/legislation-ingestion-types";
 import type { ProvisionPreview } from "@/api/lib/legal-search/legislation-provision-preview";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -101,6 +103,31 @@ const statuteAmendmentPageSchema = t.Object(
 
 export type StatuteAmendmentPage = Static<typeof statuteAmendmentPageSchema>;
 
+// Field by field: a stored snapshot written before its keys were closed must
+// still pass the closed response schema.
+const projectedCoverage = (
+  coverage: LegislationAmendmentCoverage,
+): StatuteAmendmentPage["coverage"] => {
+  switch (coverage.type) {
+    case "complete":
+      return { type: "complete" };
+    case "partial":
+      return {
+        type: "partial",
+        unlocatedRelations: coverage.unlocatedRelations,
+        reason: truncateTextBytes(coverage.reason, 8192),
+      };
+    case "not-stated":
+      return {
+        type: "not-stated",
+        reason: truncateTextBytes(coverage.reason, 8192),
+      };
+    default:
+      coverage satisfies never;
+      return panic("Unhandled amendment coverage type");
+  }
+};
+
 type ProjectStatuteAmendmentsOptions = {
   page: Awaited<ReturnType<typeof readLegislationAmendments>>;
   snapshot: Awaited<ReturnType<typeof readLegislationAmendmentSnapshot>>;
@@ -124,10 +151,7 @@ export const projectStatuteAmendments = ({
       effectiveText: nullableText(row.effectiveText, 8192),
     })),
     observedAt: snapshot.observedAt.toISOString(),
-    coverage:
-      coverage.type === "complete"
-        ? { type: "complete" }
-        : { ...coverage, reason: truncateTextBytes(coverage.reason, 8192) },
+    coverage: projectedCoverage(coverage),
     truncated: page.nextCursor !== null,
   };
 };
