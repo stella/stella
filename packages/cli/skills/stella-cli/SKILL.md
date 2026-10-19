@@ -200,6 +200,7 @@ are omitted here. Input union keys are required unless marked `?`.
 - `stella case-law citations`
   - `--decision-id` — Case-law decision ID (string)
   - `--direction` — Which side of the citation graph to read: 'cites' for the decisions this decision cites, 'cited_by' for the decisions that cite it. Citing is not agreeing: both sides carry negative treatments. (enum: cites, cited_by)
+  - optional: --doctrine (distinguishes|limits), --polarity (negative|neutral|positive|supportive|mixed|unclassified)
 - `stella case-law coverage`
   - optional: --country
 - `stella case-law open`
@@ -311,7 +312,7 @@ are omitted here. Input union keys are required unless marked `?`.
 - `stella legislation search`
   - `--query` — Search query (string)
   - `--country` — Required corpus country. Admitted: CZE. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
-  - optional: --document-type, --status, --language, --date-from, --date-to
+  - optional: --document-type, --status, --language, --date-from, --date-to, --as-of
 - `stella matter add-member`
   - `--matter-id` — Matter ID (string)
   - `--user-id` — Existing organization member ID (string)
