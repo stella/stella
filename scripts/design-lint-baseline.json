@@ -1063,7 +1063,6 @@
     "apps/api/src/handlers/sharepoint/oauth-callback.ts": 2,
     "apps/api/src/handlers/signals/acceptances/create.ts": 2,
     "apps/api/src/handlers/skills/proposals/from-comments/create.ts": 1,
-    "apps/api/src/handlers/soft-law/publisher-access.ts": 1,
     "apps/api/src/handlers/style-sets/storage.ts": 2,
     "apps/api/src/handlers/templates/fills/create.ts": 1,
     "apps/api/src/handlers/templates/prefill.ts": 1,
