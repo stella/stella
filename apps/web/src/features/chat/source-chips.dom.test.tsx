@@ -70,6 +70,34 @@ const renderSources = () =>
     </QueryClientProvider>,
   );
 
+const renderInvalidDateSource = () =>
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <IntlProvider locale="en" messages={englishMessages} timeZone="UTC">
+        <SourceChips
+          messageId="invalid-date-answer"
+          parts={[
+            {
+              type: "tool-call",
+              id: "search",
+              name: "infosoud_lookup_case",
+              state: "complete",
+              arguments: "{}",
+              input: {},
+              output: {
+                url: "https://example.test/cases/invalid-date",
+                caseNumber: "3 Cdo 3/26",
+                court: "Nejvyšší soud",
+                courtAbbreviation: "NS",
+                decisionDate: "not-a-date",
+              },
+            },
+          ]}
+        />
+      </IntlProvider>
+    </QueryClientProvider>,
+  );
+
 test("shows cited court groups and keeps consulted decisions collapsed", () => {
   renderSources();
   expect(
@@ -92,4 +120,14 @@ test("shows cited court groups and keeps consulted decisions collapsed", () => {
       }),
     ).toBeNull();
   }
+});
+
+test("renders a case-law source without an invalid decision date", () => {
+  renderInvalidDateSource();
+  const disclosure = screen.getByText("Also consulted (1)");
+  fireEvent.click(disclosure);
+  expect(
+    screen.getByText("3 Cdo 3/26", { selector: ".font-medium" }),
+  ).toBeTruthy();
+  expect(screen.queryByText(/not-a-date/u)).toBeNull();
 });

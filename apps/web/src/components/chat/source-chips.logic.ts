@@ -1,3 +1,5 @@
+import { Result } from "better-result";
+
 import { isBusinessRegistrySlug } from "@stll/api-contract";
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import type { CourtTierLabel } from "@stll/api-contract/case-law-court-tiers";
@@ -7,6 +9,7 @@ import {
 } from "@stll/api-contract/case-law-decision-route";
 import { parseStatutePath } from "@stll/api-contract/statute-route";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
+import { Temporal } from "@stll/time";
 
 import {
   chatAnswerCitationHrefs,
@@ -23,6 +26,7 @@ import type {
   ExternalSourceReference,
 } from "@/components/chat/external-source-store";
 import { decisionCitationCourtLabel } from "@/components/references/decision-citation-chip.logic";
+import { entityReferenceHref } from "@/components/references/reference.logic";
 import type { ChatMessage, ChatSourceDocument } from "@/lib/api-contract";
 
 export type SourceDocumentEntry = {
@@ -76,6 +80,9 @@ export const courtTierForSource = (courtShortCode: string): CourtTierLabel =>
   CZECH_COURT_TIER_BY_SHORT_CODE[
     courtShortCode as keyof typeof CZECH_COURT_TIER_BY_SHORT_CODE
   ] ?? "other";
+
+const isCourtTierLabel = (value: unknown): value is CourtTierLabel =>
+  typeof value === "string" && COURT_TIER_LABELS.some((tier) => tier === value);
 
 export const sortCourtTiers = (tiers: readonly CourtTierLabel[]) =>
   tiers.toSorted(
@@ -153,6 +160,19 @@ const getStringField = (
     }
   }
   return undefined;
+};
+
+const getDateField = (
+  value: Record<string, unknown>,
+  fields: readonly string[],
+): string | undefined => {
+  const date = getStringField(value, fields);
+  if (date === undefined) {
+    return undefined;
+  }
+  const isPlainDate = Result.try(() => Temporal.PlainDate.from(date)).isOk();
+  const isInstant = Result.try(() => Temporal.Instant.from(date)).isOk();
+  return isPlainDate || isInstant ? date : undefined;
 };
 
 const getTextField = (
@@ -401,10 +421,12 @@ export const collectExternalSources = (
                 caseNumber,
                 court,
                 courtShortCode,
-                decisionDate: getStringField(value, ["decisionDate", "date"]),
+                decisionDate: getDateField(value, ["decisionDate", "date"]),
                 decisionId: getStringField(value, ["decisionId"]),
                 holding,
-                tier: courtTierForSource(courtShortCode),
+                tier: isCourtTierLabel(value["courtTier"])
+                  ? value["courtTier"]
+                  : courtTierForSource(courtShortCode),
               },
             }
           : {}),
@@ -576,8 +598,19 @@ export const collectSourceChipEntries = ({
     );
   const entries: SourceChipEntry[] = [];
   for (const source of uniqueSources) {
+    const canonicalHref =
+      source.data.workspaceId === null
+        ? undefined
+        : entityReferenceHref({
+            entityId: source.data.entityId,
+            matterId: source.data.workspaceId,
+          });
     entries.push({
-      relation: isLinked([source.data.entityRef, source.data.mention])
+      relation: isLinked([
+        canonicalHref,
+        source.data.entityRef,
+        source.data.mention,
+      ])
         ? "cited"
         : "consulted",
       type: "document",

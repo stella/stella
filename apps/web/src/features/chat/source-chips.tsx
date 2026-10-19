@@ -5,6 +5,7 @@ import { useFormatter, useTranslations } from "use-intl";
 import { isEntityKind } from "@stll/api-contract";
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { BidiText } from "@stll/ui/bidi-text";
+import { Separator } from "@stll/ui/separator";
 import { cn } from "@stll/ui/utils";
 
 import { openEntityInInspector } from "@/components/chat/entity-open";
@@ -54,29 +55,38 @@ export const SourceChips = ({
   }
 
   return (
-    <div className="w-full space-y-2" data-chat-answer-citations>
-      {cited.length > 0 && (
-        <SourceEntryList
-          entries={cited}
-          messageId={messageId}
-          workspaceId={workspaceId}
-        />
-      )}
-      {consulted.length > 0 && (
-        <details className="group">
-          <summary className="focus-visible:ring-ring text-muted-foreground cursor-pointer rounded-sm text-xs focus-visible:ring-2 focus-visible:outline-none">
-            {t("alsoConsulted", { count: consulted.length })}
-          </summary>
-          <div className="mt-2">
+    <>
+      <Separator
+        className="self-stretch"
+        data-chat-answer-citations-divider
+        orientation="vertical"
+      />
+      <div className="contents" data-chat-answer-citations>
+        <div className="w-full space-y-2">
+          {cited.length > 0 && (
             <SourceEntryList
-              entries={consulted}
-              messageId={`${messageId}-consulted`}
+              entries={cited}
+              messageId={messageId}
               workspaceId={workspaceId}
             />
-          </div>
-        </details>
-      )}
-    </div>
+          )}
+          {consulted.length > 0 && (
+            <details className="group">
+              <summary className="focus-visible:ring-ring text-muted-foreground cursor-pointer rounded-sm text-xs focus-visible:ring-2 focus-visible:outline-none">
+                {t("alsoConsulted", { count: consulted.length })}
+              </summary>
+              <div className="mt-2">
+                <SourceEntryList
+                  entries={consulted}
+                  messageId={`${messageId}-consulted`}
+                  workspaceId={workspaceId}
+                />
+              </div>
+            </details>
+          )}
+        </div>
+      </div>
+    </>
   );
 };
 

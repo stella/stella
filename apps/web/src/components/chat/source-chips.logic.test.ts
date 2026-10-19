@@ -344,6 +344,30 @@ const decisionPart = (output: unknown) => ({
 });
 
 describe("answer source classification", () => {
+  test("classifies a persisted document by its canonical entity link", () => {
+    const result = collectSourceChipEntries({
+      sourceDocuments: [
+        {
+          entityId: "document-1",
+          kind: "document",
+          mimeType: "application/pdf",
+          title: "Authority.pdf",
+          workspaceId: "workspace-1",
+        },
+      ],
+      parts: [
+        {
+          type: "text",
+          content: "[Authority](#stella-entity=workspace-1:document-1)",
+        },
+      ],
+    });
+
+    expect(result.entries).toEqual([
+      expect.objectContaining({ relation: "cited", type: "document" }),
+    ]);
+  });
+
   test("splits cited and consulted decisions and merges duplicate hits", () => {
     const citedUrl = "https://example.test/cases/cited";
     const result = collectSourceChipEntries({
@@ -459,5 +483,45 @@ describe("answer source classification", () => {
       "other",
       "other",
     ]);
+  });
+
+  test.each([
+    ["SCOTUS", "supreme", "supreme"],
+    ["KSBR", "regional", "regional"],
+    ["NS", undefined, "supreme"],
+    ["NS", "invalid", "supreme"],
+  ])(
+    "uses the supplied %s court tier when valid and otherwise infers it",
+    (courtAbbreviation, courtTier, expectedTier) => {
+      const sources: ExternalSourceEntry[] = [];
+      collectExternalSources(
+        {
+          url: `https://example.test/${courtAbbreviation}`,
+          caseNumber: "1/2026",
+          court: "Example court",
+          courtAbbreviation,
+          courtTier,
+        },
+        sources,
+      );
+
+      expect(sources.at(0)?.caseLaw?.tier).toBe(expectedTier);
+    },
+  );
+
+  test("omits invalid decision dates during extraction", () => {
+    const sources: ExternalSourceEntry[] = [];
+    collectExternalSources(
+      {
+        url: "https://example.test/invalid-date",
+        caseNumber: "1/2026",
+        court: "Example court",
+        courtAbbreviation: "SCOTUS",
+        decisionDate: "not-a-date",
+      },
+      sources,
+    );
+
+    expect(sources.at(0)?.caseLaw?.decisionDate).toBeUndefined();
   });
 });
