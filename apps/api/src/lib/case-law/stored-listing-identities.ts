@@ -22,12 +22,24 @@ type ReadStoredListingIdentitiesOptions = {
   identities: readonly ListingIdentity[];
 };
 
+type StoredListingDecision = { id: string; withText: boolean };
+
+/**
+ * One listed identity's stored matches. A document entry claims its decisions
+ * outright; a case-number entry only names candidates, because the same row
+ * may be claimed by a document entry anywhere in the listing.
+ */
+type StoredListingIdentity = {
+  key: string;
+  decisions: StoredListingDecision[];
+};
+
 /** Resolve publisher ownership and current folded supplements within the source. */
 export const readStoredListingIdentities = async ({
   tx,
   sourceId,
   identities,
-}: ReadStoredListingIdentitiesOptions) => {
+}: ReadStoredListingIdentitiesOptions): Promise<StoredListingIdentity[]> => {
   const judgment = alias(caseLawDecisions, "census_supplement_judgment");
   const merged = and(
     supplementIsMergedFor(caseLawDecisionSupplements),
@@ -39,18 +51,15 @@ export const readStoredListingIdentities = async ({
     caseNumber: identity.type === "case-number" ? identity.caseNumber : null,
     language: identity.type === "case-number" ? identity.language : null,
   }));
-  // A case-number listing entry may name a decision whose detail later stored a
-  // publisher document id, so it matches regardless of that id; a row this
-  // listing already claims by document id cannot also answer for a case number.
-  const listedDocumentIds = JSON.stringify(
-    incoming.flatMap(({ documentId }) =>
-      documentId === null ? [] : [documentId],
-    ),
-  );
+  // A case-number entry may name a decision whose detail later stored a
+  // publisher document id, so it matches regardless of that id.
   return await tx
     .select({
       key: sql<string>`incoming.key`,
-      withText: sql<boolean>`bool_or((${caseLawDecisions.id} is not null and ${rowHoldsDocumentFor(caseLawDecisions)}) or (${merged} and ${rowHoldsDocumentFor(judgment)}))`,
+      decisions: sql<StoredListingDecision[]>`(
+        coalesce(jsonb_agg(DISTINCT jsonb_build_object('id', ${caseLawDecisions.id}, 'withText', ${rowHoldsDocumentFor(caseLawDecisions)})) FILTER (WHERE ${caseLawDecisions.id} IS NOT NULL), '[]'::jsonb)
+        || coalesce(jsonb_agg(DISTINCT jsonb_build_object('id', ${judgment.id}, 'withText', ${rowHoldsDocumentFor(judgment)})) FILTER (WHERE ${merged}), '[]'::jsonb)
+      )`,
     })
     .from(
       sql`jsonb_to_recordset(${JSON.stringify(incoming)}::text::jsonb) AS incoming(key text, "documentId" text, "caseNumber" text, language text)`,
@@ -71,7 +80,7 @@ export const readStoredListingIdentities = async ({
             caseLawDecisions.id,
             canonicalDecisionIdSql(caseLawDecisionSourceIdentities.decisionId),
           ),
-          sql`(${caseLawDecisions.sourceDocumentId} = incoming."documentId" OR (${caseLawDecisions.caseNumber} = incoming."caseNumber" AND ${caseLawDecisions.language} = incoming.language AND (${caseLawDecisions.sourceDocumentId} IS NULL OR NOT jsonb_exists(${listedDocumentIds}::text::jsonb, ${caseLawDecisions.sourceDocumentId}))))`,
+          sql`(${caseLawDecisions.sourceDocumentId} = incoming."documentId" OR (${caseLawDecisions.caseNumber} = incoming."caseNumber" AND ${caseLawDecisions.language} = incoming.language))`,
         ),
       ),
     )

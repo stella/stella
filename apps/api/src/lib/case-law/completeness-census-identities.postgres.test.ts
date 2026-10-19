@@ -261,6 +261,24 @@ describe.skipIf(!enabled)("retained publisher identities (postgres)", () => {
           stored: 1,
           withText: 1,
         });
+        // The writer reads identities in batches of 500: the claim made in the
+        // first batch must still hold for the case number in the second.
+        const unstored = Array.from({ length: 499 }, (_, index) => ({
+          type: "document" as const,
+          sourceDocumentId: `unstored-${index}`,
+        }));
+        expect(
+          await record(2, [
+            { type: "document" as const, sourceDocumentId: "detail-only-id" },
+            ...unstored,
+            caseNumber,
+          ]),
+        ).toMatchObject({
+          verdict: "incomplete",
+          publisher: 501,
+          stored: 1,
+          withText: 1,
+        });
       } finally {
         await db.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
       }

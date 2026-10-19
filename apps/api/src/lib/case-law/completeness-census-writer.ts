@@ -17,6 +17,57 @@ import { createUnrecognizedSourceReporter } from "@/api/lib/legal-search/source-
 
 const CENSUS_IDENTITY_BATCH_SIZE = 500;
 
+type CensusIdentityMatch = {
+  identity: ListingIdentity;
+  decisions: Awaited<
+    ReturnType<typeof readStoredListingIdentities>
+  >[number]["decisions"];
+};
+
+/**
+ * A stored decision answers for one listed entry. Document entries claim theirs
+ * across the whole listing first, so a case-number entry in another batch can
+ * never count a row the listing already names by document id.
+ */
+const countCensusMatches = (matches: readonly CensusIdentityMatch[]) => {
+  const claimed = new Set(
+    matches.flatMap(({ identity, decisions }) =>
+      identity.type === "document" ? decisions.map(({ id }) => id) : [],
+    ),
+  );
+  let storedCount = 0;
+  let textCount = 0;
+  for (const { identity, decisions } of matches) {
+    const counted = countedDecisions({ identity, decisions, claimed });
+    if (counted.length === 0) {
+      continue;
+    }
+    storedCount += 1;
+    if (counted.some(({ withText }) => withText)) {
+      textCount += 1;
+    }
+  }
+  return { storedCount, textCount };
+};
+
+const countedDecisions = ({
+  identity,
+  decisions,
+  claimed,
+}: CensusIdentityMatch & { claimed: ReadonlySet<string> }) => {
+  switch (identity.type) {
+    case "document":
+      return decisions;
+    case "case-number":
+      return decisions.filter(({ id }) => !claimed.has(id));
+    case "unidentifiable":
+      return panic("Census lookup matched an unkeyable listing entry");
+    default:
+      identity satisfies never;
+      return panic("Unhandled listing identity type");
+  }
+};
+
 type RecordCensusOptions = {
   sourceId: SafeId<"caseLawSource">;
   leaseToken: SafeId<"caseLawSourceIngestionLease">;
@@ -69,8 +120,7 @@ export const recordCompletenessCensus = async (
         identitiesByKey.set(key, identity);
       }
     }
-    let storedCount = 0;
-    let textCount = 0;
+    const matches: CensusIdentityMatch[] = [];
     for (const batch of chunk(
       [...identitiesByKey.values()],
       CENSUS_IDENTITY_BATCH_SIZE,
@@ -80,9 +130,16 @@ export const recordCompletenessCensus = async (
         sourceId: options.sourceId,
         identities: batch,
       });
-      storedCount += rows.length;
-      textCount += rows.filter(({ withText }) => withText).length;
+      for (const { key, decisions } of rows) {
+        matches.push({
+          identity:
+            identitiesByKey.get(key) ??
+            panic(`Census lookup returned an unlisted identity: ${key}`),
+          decisions,
+        });
+      }
     }
+    const { storedCount, textCount } = countCensusMatches(matches);
     const observation = {
       sourceId: options.sourceId,
       slice: options.slice,
