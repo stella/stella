@@ -1,3 +1,5 @@
+import ts from "typescript";
+
 export type BundledConsumerSite = Readonly<{
   file: string;
   command: string;
@@ -91,6 +93,40 @@ const runScripts = (node: unknown): string[] => {
   );
 };
 
+// A `Bun.build(...)` call anywhere in the program: read from the syntax tree,
+// so a mention in a string or comment never counts and a call never hides
+// behind other code on its line.
+const isBunBuildCallee = (callee: ts.Expression): boolean => {
+  if (ts.isPropertyAccessExpression(callee)) {
+    return (
+      ts.isIdentifier(callee.expression) &&
+      callee.expression.text === "Bun" &&
+      callee.name.text === "build"
+    );
+  }
+  return (
+    ts.isElementAccessExpression(callee) &&
+    ts.isIdentifier(callee.expression) &&
+    callee.expression.text === "Bun" &&
+    ts.isStringLiteralLike(callee.argumentExpression) &&
+    callee.argumentExpression.text === "build"
+  );
+};
+
+const callsBunBuild = (path: string, contents: string): boolean => {
+  const source = ts.createSourceFile(
+    path,
+    contents,
+    ts.ScriptTarget.Latest,
+    false,
+  );
+  const visit = (node: ts.Node): boolean =>
+    (ts.isCallExpression(node) && isBunBuildCallee(node.expression)) ||
+    (ts.forEachChild(node, (child) => (visit(child) ? true : undefined)) ??
+      false);
+  return visit(source);
+};
+
 const workflowCommands = (contents: string): string[] =>
   runScripts(Bun.YAML.parse(contents)).flatMap(shellBuildCommands);
 
@@ -106,10 +142,7 @@ export const scanBundledConsumers = (
         commands = packageCommands(contents);
       } else if (isWorkflow(path)) {
         commands = workflowCommands(contents);
-      } else if (
-        isBuildScript(path) &&
-        /^[^"'`\n]*\bBun\.build\s*\(/mu.test(contents)
-      ) {
+      } else if (isBuildScript(path) && callsBunBuild(path, contents)) {
         commands = [BUN_BUILD_CALL];
       }
       return commands.map((command) => ({ file: path, command }));

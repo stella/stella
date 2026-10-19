@@ -16,6 +16,7 @@ const SCAN_GLOBS = [
   ".github/workflows/*.yaml",
   ".github/ci-checks/*.yml",
   ".github/actions/**/action.yml",
+  ".github/actions/**/action.yaml",
   "scripts/**/*.{ts,tsx,js,jsx,mts,mjs,cts,cjs}",
   "apps/*/scripts/**/*.{ts,tsx,js,jsx,mts,mjs,cts,cjs}",
   "packages/*/scripts/**/*.{ts,tsx,js,jsx,mts,mjs,cts,cjs}",
@@ -166,9 +167,56 @@ describe("bundling-site scanner", () => {
       },
       command: "Bun.build(",
     },
+    {
+      name: "a Bun build API call after a string on its line",
+      file: {
+        path: "scripts/build-example.ts",
+        contents:
+          'const mode = "production"; await Bun.build({ entrypoints: [] });\n',
+      },
+      command: "Bun.build(",
+    },
+    {
+      name: "a Bun build API call by element access",
+      file: {
+        path: "packages/example/scripts/build.mts",
+        contents: 'await Bun["build"]({ entrypoints: [] });\n',
+      },
+      command: "Bun.build(",
+    },
   ])("reports $name", ({ file, command }) => {
     expect(scanBundledConsumers([file])).toEqual([
       { file: file.path, command },
     ]);
+  });
+
+  test("ignores Bun build mentions that are not calls", () => {
+    const file = {
+      path: "scripts/build-notes.ts",
+      contents:
+        '// Bun.build({ entrypoints: [] })\nconst note = "Bun.build(";\nconst build = Bun.build;\n',
+    };
+    expect(scanBundledConsumers([file])).toEqual([]);
+  });
+
+  // The scanner accepts these shapes; enumeration must read each of them,
+  // or a site there is never scanned.
+  test.each([
+    "apps/example/Dockerfile",
+    "docker/example/Dockerfile",
+    "apps/example/package.json",
+    "packages/example/package.json",
+    ".github/workflows/example.yml",
+    ".github/workflows/example.yaml",
+    ".github/ci-checks/example.yml",
+    ".github/actions/example/action.yml",
+    ".github/actions/example/action.yaml",
+    "scripts/build.ts",
+    "apps/example/scripts/build.mjs",
+    "packages/example/scripts/build.cts",
+  ])("enumerates %s", (path) => {
+    expect(
+      SCAN_GLOBS.some((pattern) => new Bun.Glob(pattern).match(path)),
+    ).toBe(true);
   });
 });
