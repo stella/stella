@@ -7,6 +7,22 @@ const SPEC_DIRECTORY = "apps/web/e2e/ui-playground";
 const METADATA = `${WEB_SOURCE}/routes/dev/-visual-metadata.ts`;
 const REGISTRY = `${WEB_SOURCE}/routes/dev/-visual-registry.tsx`;
 const SOURCE_EXTENSIONS = [".ts", ".tsx", ".mts", ".js", ".jsx", ".css"];
+// Modules that wrap every playground page: the browser entries, the root
+// route and the dev route. A change anywhere in their closure can move any
+// visual, so it selects every spec.
+const APP_SHELL_ENTRIES = [
+  `${WEB_SOURCE}/boot-prefetch-entry.ts`,
+  `${WEB_SOURCE}/client.tsx`,
+  `${WEB_SOURCE}/router.tsx`,
+  `${WEB_SOURCE}/routes/__root.tsx`,
+  `${WEB_SOURCE}/routes/dev.tsx`,
+];
+// The generated route tree reaches every route of the app, and the visual
+// registry every playground page; each page is covered by its own loader.
+const APP_SHELL_BOUNDARY: ReadonlySet<string> = new Set([
+  `${WEB_SOURCE}/routeTree.gen.ts`,
+  REGISTRY,
+]);
 const IMPORT_CLOSURES = new Map<
   string,
   ReturnType<typeof staticImportClosure>
@@ -230,12 +246,13 @@ const resolveImport = (
 export const staticImportClosure = (
   entry: string,
   root = REPO_ROOT,
+  boundary: ReadonlySet<string> = new Set(),
 ): { files: ReadonlySet<string>; complete: boolean } => {
   const files = new Set<string>();
   const pending = [sourceCandidate(root, entry) ?? normalize(entry)];
   let complete = true;
   for (let file = pending.pop(); file !== undefined; file = pending.pop()) {
-    if (files.has(file)) {
+    if (files.has(file) || boundary.has(file)) {
       continue;
     }
     files.add(file);
@@ -320,10 +337,33 @@ export const readPlaygroundInventory = (
   return { specs, registeredVisuals, loaderByVisual, visualsBySpec, complete };
 };
 
+/** The app shell's import closure; incomplete when any entry is missing or
+ *  reaches an internal module the selector cannot resolve. */
+export const appShellClosure = (
+  root = REPO_ROOT,
+): { files: ReadonlySet<string>; complete: boolean } => {
+  const files = new Set<string>();
+  let complete = true;
+  for (const entry of APP_SHELL_ENTRIES) {
+    const cacheKey = `${root}\0shell\0${entry}`;
+    const closure =
+      IMPORT_CLOSURES.get(cacheKey) ??
+      staticImportClosure(entry, root, APP_SHELL_BOUNDARY);
+    IMPORT_CLOSURES.set(cacheKey, closure);
+    complete &&= closure.complete;
+    for (const file of closure.files) {
+      files.add(file);
+    }
+  }
+  return { files, complete };
+};
+
 export const isSharedPlaygroundHarness = (file: string): boolean => {
   const normalized = normalize(file);
   if (
     normalized === "bun.lock" ||
+    normalized === "package.json" ||
+    normalized === "apps/web/package.json" ||
     normalized.startsWith("patches/") ||
     /^apps\/web\/(?:vite|tailwind|postcss)\.config\.[^/]+$/u.test(normalized) ||
     normalized === "apps/web/index.html" ||
@@ -363,6 +403,10 @@ export const selectGeometrySpecs = (
     )
   ) {
     return [];
+  }
+  const shell = appShellClosure(root);
+  if (!shell.complete || [...changed].some((file) => shell.files.has(file))) {
+    return inventory.specs;
   }
   const selected = new Set<string>();
   const closures = new Map<string, ReturnType<typeof staticImportClosure>>();

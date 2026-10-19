@@ -35,6 +35,15 @@ const createSelectionFixture = () => {
     'export const visualRegistry = {\n  fixture: {\n    loader: () => import("./fixture"),\n  },\n} as const;\n',
   );
   write(spec, 'const url = "/dev?visual=fixture";\n');
+  for (const entry of [
+    "apps/web/src/boot-prefetch-entry.ts",
+    "apps/web/src/client.tsx",
+    "apps/web/src/router.tsx",
+    "apps/web/src/routes/__root.tsx",
+    "apps/web/src/routes/dev.tsx",
+  ]) {
+    write(entry, "export {};\n");
+  }
   return { root, spec, write };
 };
 
@@ -250,5 +259,70 @@ test("render inputs outside source select every geometry spec", () => {
     "packages/ui/package.json",
   ]) {
     expect(selectGeometrySpecs([file], ROOT), file).toEqual(all);
+  }
+});
+
+test("an app shell change selects every spec, the route tree does not", () => {
+  const fixture = createSelectionFixture();
+  try {
+    fixture.write("apps/web/src/routes/dev/fixture.tsx", "export {};\n");
+    fixture.write(
+      "apps/web/src/routes/__root.tsx",
+      'import "@/styles/app.css";\nimport "@/providers";\n',
+    );
+    fixture.write("apps/web/src/styles/app.css", '@import "./tokens.css";\n');
+    fixture.write("apps/web/src/styles/tokens.css", ":root {}\n");
+    fixture.write("apps/web/src/providers.tsx", "export {};\n");
+    fixture.write(
+      "apps/web/src/router.tsx",
+      'import { routeTree } from "@/routeTree.gen";\nexport { routeTree };\n',
+    );
+    fixture.write(
+      "apps/web/src/routeTree.gen.ts",
+      'import "./routes/other";\nexport const routeTree = {};\n',
+    );
+    fixture.write("apps/web/src/routes/other.tsx", "export {};\n");
+
+    for (const file of [
+      "apps/web/src/styles/tokens.css",
+      "apps/web/src/providers.tsx",
+      "apps/web/src/routes/__root.tsx",
+    ]) {
+      expect(selectGeometrySpecs([file], fixture.root), file).toEqual([
+        fixture.spec,
+      ]);
+    }
+    expect(
+      selectGeometrySpecs(["apps/web/src/routes/other.tsx"], fixture.root),
+    ).toEqual([]);
+  } finally {
+    rmSync(fixture.root, { force: true, recursive: true });
+  }
+});
+
+test("a missing app shell entry selects every spec", () => {
+  const fixture = createSelectionFixture();
+  try {
+    fixture.write("apps/web/src/routes/dev/fixture.tsx", "export {};\n");
+    rmSync(path.join(fixture.root, "apps/web/src/client.tsx"));
+    expect(
+      selectGeometrySpecs(["apps/web/src/unrelated.ts"], fixture.root),
+    ).toEqual([fixture.spec]);
+  } finally {
+    rmSync(fixture.root, { force: true, recursive: true });
+  }
+});
+
+test("the web and root manifests select every spec", () => {
+  const fixture = createSelectionFixture();
+  try {
+    fixture.write("apps/web/src/routes/dev/fixture.tsx", "export {};\n");
+    for (const file of ["apps/web/package.json", "package.json"]) {
+      expect(selectGeometrySpecs([file], fixture.root), file).toEqual([
+        fixture.spec,
+      ]);
+    }
+  } finally {
+    rmSync(fixture.root, { force: true, recursive: true });
   }
 });
