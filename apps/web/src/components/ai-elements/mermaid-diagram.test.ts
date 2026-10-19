@@ -1,11 +1,13 @@
 import { panic } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
 import fc from "fast-check";
 import { Window } from "happy-dom";
+import type { DiagramPlugin } from "streamdown";
 
 import { assertProperty } from "@stll/property-testing";
 
 import {
+  FALLBACK_MERMAID_CONFIG,
   mermaidDiagram,
   renderDiagram,
 } from "@/components/ai-elements/mermaid-diagram";
@@ -64,6 +66,29 @@ const svgViolations = (svg: string): string[] => {
   ]);
 };
 
+const withDocumentFonts = async <T>(run: () => Promise<T>): Promise<T> => {
+  const window = new Window();
+  const restore = {
+    document: Reflect.get(globalThis, "document"),
+    getComputedStyle: Reflect.get(globalThis, "getComputedStyle"),
+  };
+  Object.defineProperty(window.document, "fonts", {
+    configurable: true,
+    value: { ready: Promise.resolve() },
+  });
+  Reflect.set(globalThis, "document", window.document);
+  Reflect.set(globalThis, "getComputedStyle", () => ({
+    fontFamily: "sans-serif",
+    getPropertyValue: () => "monospace",
+  }));
+  try {
+    return await run();
+  } finally {
+    Reflect.set(globalThis, "document", restore.document);
+    Reflect.set(globalThis, "getComputedStyle", restore.getComputedStyle);
+  }
+};
+
 const MIN_FRAGMENTS = 1;
 const MAX_FRAGMENTS = 4;
 const MAX_FILLER_LENGTH = 8;
@@ -83,31 +108,46 @@ describe("mermaid diagrams", () => {
     // Streamdown renders the chart again for its fullscreen view through the
     // same plugin `render` and injects the returned markup as is in both
     // views, so this entry point is the one whose output must be clean.
-    const window = new Window();
-    const restore = {
-      document: Reflect.get(globalThis, "document"),
-      getComputedStyle: Reflect.get(globalThis, "getComputedStyle"),
-    };
-    Object.defineProperty(window.document, "fonts", {
-      configurable: true,
-      value: { ready: Promise.resolve() },
-    });
-    Reflect.set(globalThis, "document", window.document);
-    Reflect.set(globalThis, "getComputedStyle", () => ({
-      fontFamily: "sans-serif",
-      getPropertyValue: () => "monospace",
+    const source =
+      'flowchart TD\n  A["<img src=x onerror=alert(1)>"] --> B\n  click A href "javascript:alert(1)"';
+    const plugin = mermaidDiagram.getMermaid();
+    const [inline, fullscreen] = await withDocumentFonts(async () => [
+      await plugin.render("inline", source),
+      await plugin.render("inline", source),
+    ]);
+    expect(svgViolations(inline.svg)).toEqual([]);
+    expect(fullscreen.svg).toBe(inline.svg);
+  });
+
+  test("the fallback renderer runs mermaid in strict mode whatever streamdown passes", async () => {
+    // The plugin ignores streamdown's `initialize`, so a config streamdown
+    // hands over never reaches the fallback; the engine must still be strict
+    // when it renders a diagram pele cannot detect.
+    const engineConfigs: unknown[] = [];
+    const engineRenders: [string, string][] = [];
+    void mock.module("mermaid", () => ({
+      default: {
+        initialize: (config: unknown) => {
+          engineConfigs.push(config);
+        },
+        render: async (id: string, text: string) => {
+          engineRenders.push([id, text]);
+          return { svg: '<svg data-renderer="mermaid"></svg>' };
+        },
+      },
     }));
-    try {
-      const source =
-        'flowchart TD\n  A["<img src=x onerror=alert(1)>"] --> B\n  click A href "javascript:alert(1)"';
-      const plugin = mermaidDiagram.getMermaid();
-      const inline = await plugin.render("inline", source);
-      const fullscreen = await plugin.render("inline", source);
-      expect(svgViolations(inline.svg)).toEqual([]);
-      expect(fullscreen.svg).toBe(inline.svg);
-    } finally {
-      Reflect.set(globalThis, "document", restore.document);
-      Reflect.set(globalThis, "getComputedStyle", restore.getComputedStyle);
+    const source = "zenuml\n  Alice.method()";
+    const asStreamdownSees: DiagramPlugin = mermaidDiagram;
+    const plugin = asStreamdownSees.getMermaid({ securityLevel: "loose" });
+    plugin.initialize({ securityLevel: "loose" });
+    const result = await withDocumentFonts(() =>
+      plugin.render("fallback-id", source),
+    );
+    expect(result.svg).toBe('<svg data-renderer="mermaid"></svg>');
+    expect(engineRenders).toEqual([["fallback-id", source]]);
+    expect(engineConfigs.length).toBeGreaterThan(0);
+    for (const config of engineConfigs) {
+      expect(config).toMatchObject(FALLBACK_MERMAID_CONFIG);
     }
   });
 

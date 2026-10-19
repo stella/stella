@@ -1,3 +1,4 @@
+import type { MermaidConfig } from "@streamdown/mermaid";
 import type { RenderOptions } from "pele";
 import type { DiagramPlugin } from "streamdown";
 
@@ -34,9 +35,15 @@ export const renderDiagram = async ({
   };
 };
 
+// Streamdown's own mermaid config never reaches the fallback: the plugin
+// below ignores `initialize`, so the fallback pins its security level here.
+export const FALLBACK_MERMAID_CONFIG = {
+  securityLevel: "strict",
+} as const satisfies MermaidConfig;
+
 const renderWithMermaid = async (id: string, source: string) => {
   const { mermaid } = await import("@streamdown/mermaid");
-  return mermaid.getMermaid().render(id, source);
+  return mermaid.getMermaid(FALLBACK_MERMAID_CONFIG).render(id, source);
 };
 
 const documentFonts = async (): Promise<DiagramFonts> => {
