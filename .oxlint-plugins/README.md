@@ -24,6 +24,8 @@ row there instead of writing a new import detector.
 
 ## Automatic fixes
 
+- [`no-model-timeout-abort-signal`](./no-model-timeout-abort-signal.ts) (`no-model-timeout-abort-signal`): rejects `AbortSignal.timeout(...)` inside the `abortSignal` option of direct `generateTanStack*` calls; model-call time limits use `deadlineMs` so they retain typed deadline semantics.
+
 `oxlint --fix` repairs violations only when the rule can derive one local,
 deterministic result without choosing a domain value, dependency, or control-flow
 contract:
