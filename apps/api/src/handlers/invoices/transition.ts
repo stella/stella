@@ -6,6 +6,7 @@ import { INVOICE_COUNTRY_PROFILES, invoiceCountryOf } from "@stll/invoicing";
 
 import type { Transaction } from "@/api/db/root";
 import { resultTx } from "@/api/db/safe-db";
+import type { SafeDbError } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
   INVOICE_ATTACHMENT,
@@ -268,7 +269,7 @@ const releaseInvoiceEntries = async (
 type VatCurrencyGuardOptions = {
   tx: Transaction;
   sellerProfileId: SafeId<"sellerProfile"> | null;
-  organizationId: string;
+  organizationId: SafeId<"organization">;
   currency: string;
   vatAmountMinor: number;
 };
@@ -304,8 +305,9 @@ const vatCurrencyError = async ({
   });
 };
 
+/** A finalize that reuses an issued number surfaces as a conflict. */
 const duplicateInvoiceNumberError = (
-  error: HandlerError,
+  error: HandlerError | SafeDbError,
 ): HandlerError | null =>
   DatabaseError.is(error) && error.code === PG_ERROR.UNIQUE_VIOLATION
     ? new HandlerError({
@@ -532,7 +534,8 @@ const transitionInvoice = createSafeHandler(
     if (conflict !== null) {
       return Result.err(conflict);
     }
-    return Result.ok(yield* result);
+    const transitioned = yield* result;
+    return Result.ok(transitioned);
   },
 );
 

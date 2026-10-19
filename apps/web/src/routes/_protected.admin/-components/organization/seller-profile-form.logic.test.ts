@@ -28,6 +28,9 @@ const empty = {
   bic: "",
   accountNumber: "",
   defaultCurrency: " eur ",
+  taxId: "",
+  registerEntry: "",
+  barRegistration: "",
   footerNotes: "",
 } satisfies v.InferInput<typeof schema>;
 
