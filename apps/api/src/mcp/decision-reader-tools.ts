@@ -184,7 +184,7 @@ const openTool: TypedMcpToolHandler<
     decisionId: brandPersistedCaseLawDecisionId(parsed.output.decision_id),
     phase: "blocks",
     audience: "model",
-    surface: "search",
+    surface: "identity",
   });
   if (Result.isError(read)) {
     return internalFailureResult(read.error);
@@ -259,7 +259,7 @@ const blocksTool: TypedMcpToolHandler<
     phase,
     ...(referenceCursor === undefined ? {} : { referenceCursor }),
     audience: "app",
-    surface: "search",
+    surface: "identity",
   });
   if (Result.isError(read)) {
     return internalFailureResult(read.error);

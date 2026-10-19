@@ -84,7 +84,7 @@
     "typecheck:tests": "bun ../../packages/scripts/src/api-typecheck-config.ts tsconfig.tests.json && bun check --no-pretty --all --project=tsconfig.tests.json",
     "typecheck:scripts": "bun check --no-pretty --all --project=tsconfig.scripts.json",
     "typecheck:contracts": "bun check --no-pretty --all --project=tsconfig.contracts.json",
-    "typecheck:visual-sandbox": "bun check --no-pretty --all --project=tsconfig.visual-sandbox.json",
+    "typecheck:visual-sandbox": "bun test scripts/visual-sandbox-tsconfig.test.ts && bun check --no-pretty --all --project=tsconfig.visual-sandbox.json",
     "test:perf": "bun scripts/run-perf-tests.ts"
   },
   "dependencies": {
@@ -119,7 +119,6 @@
     "@smithy/fetch-http-handler": "^5.8.0",
     "@stll/agent-engine": "workspace:*",
     "@stll/agent-input": "workspace:*",
-    "@stll/aho-corasick": "catalog:",
     "@stll/ai-catalog": "workspace:*",
     "@stll/analytics-config": "workspace:*",
     "@stll/anonymize": "catalog:",
@@ -145,7 +144,6 @@
     "@stll/fetch": "workspace:*",
     "@stll/folio-agents": "catalog:",
     "@stll/folio-core": "catalog:",
-    "@stll/fuzzy-search": "catalog:",
     "@stll/infosoud": "workspace:*",
     "@stll/invoicing": "workspace:*",
     "@stll/legal-ast": "workspace:*",

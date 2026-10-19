@@ -560,8 +560,11 @@ describe("changed-file autofix boundary", () => {
     );
     const autofix = fix.indexOf("--type-aware --fix");
     expect(prepare).toBeGreaterThan(0);
-    expect(typecheck).toBeGreaterThan(prepare);
-    expect(autofix).toBeGreaterThan(typecheck);
+    // The fixer runs on the prepared type graph; its rewrites are checked
+    // afterwards and restored when their project does not type-check.
+    expect(autofix).toBeGreaterThan(prepare);
+    expect(typecheck).toBeGreaterThan(autofix);
+    expect(fix.slice(typecheck)).toContain("restore_lint_paths");
     expect(fix).toContain("set -euo pipefail");
     expect(fix).toContain(
       `bun --bun oxfmt -c .oxfmtrc.json --no-error-on-unmatched-pattern "\${format_paths[@]}"`,

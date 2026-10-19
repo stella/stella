@@ -11,6 +11,7 @@ import type { createMcpAuthenticationFailureLimiter } from "@/api/handlers/mcp/t
 import { dropCredentialedCors } from "@/api/handlers/public-cors";
 import { resolveRateLimitClientAddress } from "@/api/lib/client-ip";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
+import { createRequestRouteClassifier } from "@/api/lib/rate-limit/tenant-action-boundary";
 import {
   MCP_ADVANCED_DISCOVERY_PATH,
   MCP_ADVANCED_HTTP_PATH,
@@ -33,7 +34,7 @@ import {
 type HandleMcpHttpRequest = (
   request: Request,
   options?: { clientIp?: string | null | undefined; mode?: McpMode },
-) => Promise<Response>;
+) => Response | Promise<Response>;
 
 type RouteSet = {
   headers: Record<string, string | number | boolean | undefined>;
@@ -271,3 +272,15 @@ export const createMcpRoute = ({
       { parse: "none" },
     );
 };
+
+const mcpRouteRegistry = createMcpRoute({
+  handleMcpHttpRequest: () => new Response(null),
+});
+
+export const isMcpTransportRequest = createRequestRouteClassifier({
+  routes: mcpRouteRegistry.routes,
+  staticRoutes: mcpRouteRegistry.router.static,
+  strictPath: mcpRouteRegistry.config.strictPath,
+  aot: mcpRouteRegistry.config.aot,
+  classifyRoute: (route) => route.method === "ALL",
+});
