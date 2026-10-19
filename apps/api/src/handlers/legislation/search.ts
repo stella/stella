@@ -169,7 +169,15 @@ type SearchLegislationDependencies = {
   now?: () => number;
   emitStage?: typeof emitRequestStage;
   stageToolName?: string;
+  corpusSearch?: typeof corpusIndexSearch;
+  projectHit?: typeof projectLegislationSearchHit;
 };
+
+type ObserveLegislationStage = <T>(
+  stage: Extract<RequestStage, "candidate_hydration" | "work_collapse_ranking">,
+  operation: () => T | Promise<T>,
+  counts: (value: T) => { candidateCount?: number; resultCount?: number },
+) => Promise<T>;
 
 const defaultSearchLegislationDependencies: SearchLegislationDependencies = {
   loadSearchConfigs: loadPublicFtsSearchConfigs,
@@ -258,6 +266,7 @@ type RehydrateLegislationCandidatesOptions = CorpusCandidateRankingInput & {
    * page, so it is not shown again.
    */
   cursorId?: string | undefined;
+  observeStage?: ObserveLegislationStage | undefined;
   /**
    * The Works the query names, read once per request by the caller; read
    * here when absent.
@@ -556,6 +565,7 @@ export const rehydrateLegislationCandidates = async ({
   excludedWorkTokens,
   ranking = "authority",
   hitDispositions = createCorpusHitDispositionCounter(),
+  observeStage = async (_stage, operation) => await operation(),
 }: RehydrateLegislationCandidatesOptions) => {
   const ids = candidates.map((candidate) =>
     toSafeId<"legislationDocument">(candidate.id),
@@ -564,136 +574,149 @@ export const rehydrateLegislationCandidates = async ({
   // (metadata changed, async re-index/delete pending) must not satisfy filters
   // it no longer matches.
   const requestFilters = legislationRequestFilters(body);
-  const read = await legislationDb(async (tx) => {
-    const candidateRead =
-      ids.length === 0
-        ? { rows: [], dispositions: [] }
-        : await readLegislationCandidateRows(tx, {
-            ids,
-            generation,
-            body,
-          });
-    recordCorpusRehydrationDispositions(
-      candidateRead.dispositions,
-      hitDispositions,
-    );
-    const rows = candidateRead.rows;
-    const named =
-      namedWorks ??
-      (await readNamedLegislationWorks(tx, {
-        query: body.query,
-        country: body.jurisdiction,
-      }));
-    const [cursorWork] =
-      cursorId === undefined || !isUuid(cursorId)
-        ? []
-        : await tx
-            .select({
-              sourceId: legislationDocuments.sourceId,
-              eli: legislationDocuments.eli,
-              language: legislationDocuments.language,
-            })
-            .from(legislationDocuments)
-            .where(
-              eq(
-                legislationDocuments.id,
-                toSafeId<"legislationDocument">(cursorId),
-              ),
-            );
-    const representatives = await readLegislationWorkRepresentatives(
-      tx,
-      [...rows, ...named],
-      requestFilters,
-    );
-    return { rows, named, cursorWork, representatives };
-  });
+  const read = await observeStage(
+    "candidate_hydration",
+    async () =>
+      await legislationDb(async (tx) => {
+        const candidateRead =
+          ids.length === 0
+            ? { rows: [], dispositions: [] }
+            : await readLegislationCandidateRows(tx, {
+                ids,
+                generation,
+                body,
+              });
+        recordCorpusRehydrationDispositions(
+          candidateRead.dispositions,
+          hitDispositions,
+        );
+        const rows = candidateRead.rows;
+        const named =
+          namedWorks ??
+          (await readNamedLegislationWorks(tx, {
+            query: body.query,
+            country: body.jurisdiction,
+          }));
+        const [cursorWork] =
+          cursorId === undefined || !isUuid(cursorId)
+            ? []
+            : await tx
+                .select({
+                  sourceId: legislationDocuments.sourceId,
+                  eli: legislationDocuments.eli,
+                  language: legislationDocuments.language,
+                })
+                .from(legislationDocuments)
+                .where(
+                  eq(
+                    legislationDocuments.id,
+                    toSafeId<"legislationDocument">(cursorId),
+                  ),
+                );
+        const representatives = await readLegislationWorkRepresentatives(
+          tx,
+          [...rows, ...named],
+          requestFilters,
+        );
+        return { rows, named, cursorWork, representatives };
+      }),
+    () => ({ candidateCount: candidates.length }),
+  );
 
-  const byId = new Map<string, LegislationSearchRow>(
-    read.rows.map((row) => [String(row.id), row]),
-  );
-  const authorityById = new Map(
-    read.rows.map((row) => [String(row.id), row.citationAuthority]),
-  );
-  const appliedById = new Map<string, CorpusAppliedProjection>();
-  const manifest = requireCorpusIndexManifest("legislation", generation);
-  for (const { id, appliedRevision } of read.rows) {
-    if (appliedRevision !== null) {
-      appliedById.set(
-        String(id),
-        corpusAppliedProjection(manifest, appliedRevision),
+  return await observeStage(
+    "work_collapse_ranking",
+    async () => {
+      const byId = new Map<string, LegislationSearchRow>(
+        read.rows.map((row) => [String(row.id), row]),
       );
-    }
-  }
-  const revisionById = new Map(
-    [...appliedById].map(([id, { revision }]) => [id, revision]),
+      const authorityById = new Map(
+        read.rows.map((row) => [String(row.id), row.citationAuthority]),
+      );
+      const appliedById = new Map<string, CorpusAppliedProjection>();
+      const manifest = requireCorpusIndexManifest("legislation", generation);
+      for (const { id, appliedRevision } of read.rows) {
+        if (appliedRevision !== null) {
+          appliedById.set(
+            String(id),
+            corpusAppliedProjection(manifest, appliedRevision),
+          );
+        }
+      }
+      const revisionById = new Map(
+        [...appliedById].map(([id, { revision }]) => [id, revision]),
+      );
+      const appliedCandidates =
+        selectAppliedCandidates === undefined
+          ? candidates
+          : selectAppliedCandidates(appliedById);
+      const rankedCandidates =
+        ranking === "authority"
+          ? blendStableCitationAuthority({
+              candidates: appliedCandidates,
+              authorityById,
+            })
+          : appliedCandidates.map(({ id, score }) => ({
+              id,
+              score,
+              lexicalScore: score,
+              citationAuthority: 0,
+            }));
+      const ranked = rankedCandidates.flatMap((hit) => {
+        const row = byId.get(hit.id);
+        return row === undefined
+          ? []
+          : [{ ...hit, work: legislationWorkRefKey(row) }];
+      });
+      const representatives = new Map<string, LegislationWorkRepresentative>();
+      for (const { isCurrent, ...row } of read.representatives) {
+        byId.set(String(row.id), row);
+        representatives.set(legislationWorkRefKey(row), {
+          id: String(row.id),
+          isCurrent,
+        });
+      }
+
+      const collapsed = collapseLegislationHitsByWork({
+        ranked,
+        representatives,
+        // Named Works that apply today are placed first; a name only repealed or
+        // not-yet-effective acts carry still places those.
+        namedWorks: pinnedLegislationWorks(
+          read.named.map((work) => legislationWorkRefKey(work)),
+          representatives,
+        ),
+        namedScoreFloor: NAMED_WORK_SCORE_FLOOR,
+        excludedWork:
+          read.cursorWork === undefined
+            ? null
+            : legislationWorkRefKey(read.cursorWork),
+        excludedWorkTokens: new Set(excludedWorkTokens),
+      });
+
+      const recurringTokens = new Set([
+        ...read.rows
+          .filter((row) => row.canRecur)
+          .map((row) => corpusSearchGroupToken(legislationWorkRefKey(row))),
+        // Named Works are inserted independently of physical matches on every page.
+        ...read.named.map((work) =>
+          corpusSearchGroupToken(legislationWorkRefKey(work)),
+        ),
+        ...(read.cursorWork === undefined
+          ? []
+          : [corpusSearchGroupToken(legislationWorkRefKey(read.cursorWork))]),
+      ]);
+
+      return {
+        context: { byId },
+        revisionById,
+        ranked: collapsed.ranked,
+        groups: collapsed.workTokens.filter((token) =>
+          recurringTokens.has(token),
+        ),
+      };
+    },
+    ({ ranked }) => ({ resultCount: ranked.length }),
   );
-  const appliedCandidates =
-    selectAppliedCandidates === undefined
-      ? candidates
-      : selectAppliedCandidates(appliedById);
-  const rankedCandidates =
-    ranking === "authority"
-      ? blendStableCitationAuthority({
-          candidates: appliedCandidates,
-          authorityById,
-        })
-      : appliedCandidates.map(({ id, score }) => ({
-          id,
-          score,
-          lexicalScore: score,
-          citationAuthority: 0,
-        }));
-  const ranked = rankedCandidates.flatMap((hit) => {
-    const row = byId.get(hit.id);
-    return row === undefined
-      ? []
-      : [{ ...hit, work: legislationWorkRefKey(row) }];
-  });
-  const representatives = new Map<string, LegislationWorkRepresentative>();
-  for (const { isCurrent, ...row } of read.representatives) {
-    byId.set(String(row.id), row);
-    representatives.set(legislationWorkRefKey(row), {
-      id: String(row.id),
-      isCurrent,
-    });
-  }
-
-  const collapsed = collapseLegislationHitsByWork({
-    ranked,
-    representatives,
-    // Named Works that apply today are placed first; a name only repealed or
-    // not-yet-effective acts carry still places those.
-    namedWorks: pinnedLegislationWorks(
-      read.named.map((work) => legislationWorkRefKey(work)),
-      representatives,
-    ),
-    namedScoreFloor: NAMED_WORK_SCORE_FLOOR,
-    excludedWork:
-      read.cursorWork === undefined
-        ? null
-        : legislationWorkRefKey(read.cursorWork),
-    excludedWorkTokens: new Set(excludedWorkTokens),
-  });
-
-  const recurringTokens = new Set([
-    ...read.rows
-      .filter((row) => row.canRecur)
-      .map((row) => corpusSearchGroupToken(legislationWorkRefKey(row))),
-    // Named Works are inserted independently of physical matches on every page.
-    ...read.named.map((work) =>
-      corpusSearchGroupToken(legislationWorkRefKey(work)),
-    ),
-    ...(read.cursorWork === undefined
-      ? []
-      : [corpusSearchGroupToken(legislationWorkRefKey(read.cursorWork))]),
-  ]);
-
-  return {
-    context: { byId },
-    revisionById,
-    ranked: collapsed.ranked,
-    groups: collapsed.workTokens.filter((token) => recurringTokens.has(token)),
-  };
 };
 
 /** A named Work placed first on the Postgres path, with its keyset key. */
@@ -1123,6 +1146,27 @@ type CorpusLegislationSearchOptions = {
   observer: RegistryRequestObservation;
   serving: ServingCorpusIndexGeneration;
   hitDispositions: CorpusHitDispositionCounter;
+  observeStage: ObserveLegislationStage;
+  now: () => number;
+  emitIndexScan: (durationMs: number, candidateCount: number) => void;
+};
+
+const createIndexRecorder = ({
+  now,
+  emit,
+}: {
+  now: () => number;
+  emit: (durationMs: number, candidateCount: number) => void;
+}) => {
+  const startedAt = now();
+  let recorded = false;
+  return (candidateCount: number) => {
+    if (recorded) {
+      return;
+    }
+    recorded = true;
+    emit(now() - startedAt, candidateCount);
+  };
 };
 
 const corpusIndexSearch = async ({
@@ -1132,6 +1176,9 @@ const corpusIndexSearch = async ({
   observer,
   serving,
   hitDispositions,
+  observeStage,
+  now,
+  emitIndexScan,
 }: CorpusLegislationSearchOptions): Promise<{
   hits: LegislationHit[];
   nextCursor: string | null;
@@ -1179,7 +1226,8 @@ const corpusIndexSearch = async ({
         excludedWorkTokens.add(token);
       }
     }
-    return await readCorpusIndexSearchPage({
+    const recordIndex = createIndexRecorder({ now, emit: emitIndexScan });
+    const page = await readCorpusIndexSearchPage({
       hitDispositions,
       observer,
       cluster,
@@ -1205,8 +1253,9 @@ const corpusIndexSearch = async ({
       extractSnippet: extractCorpusSnippet,
       unseenScoreUpperBound:
         active.type === "strict" ? stableBlendUpperBound : (score) => score,
-      rankCandidates: async (candidates, { selectAppliedCandidates }) =>
-        await rehydrateLegislationCandidates({
+      rankCandidates: async (candidates, { selectAppliedCandidates }) => {
+        recordIndex(candidates.length);
+        return await rehydrateLegislationCandidates({
           hitDispositions,
           body,
           candidates,
@@ -1217,8 +1266,12 @@ const corpusIndexSearch = async ({
           namedWorks: active.type === "strict" ? namedWorks : [],
           excludedWorkTokens: [...excludedWorkTokens],
           ranking: active.type === "strict" ? "authority" : "lexical",
-        }),
+          observeStage,
+        });
+      },
     });
+    recordIndex(page.pageRanked.length);
+    return page;
   };
 
   type PhasePage = NonNullable<Awaited<ReturnType<typeof readPhase>>>;
@@ -1265,7 +1318,6 @@ const corpusIndexSearch = async ({
     };
   }
   const hits = hitsOf(page, phase);
-  // A continuation means strict results remain. Only an exhausted first page can append coverage hits.
   if (
     phase.type === "relaxed" ||
     parsedCursor !== null ||
@@ -1295,7 +1347,6 @@ const corpusIndexSearch = async ({
     generation,
     strictWorkTokens,
   };
-  // This synthetic boundary admits every relaxed score while carrying the strict Works to exclude.
   const boundary: SearchCursor = {
     score: Number.MAX_VALUE,
     id: "00000000-0000-0000-0000-000000000000",
@@ -1320,6 +1371,16 @@ const corpusIndexSearch = async ({
     paginationOutcome: extra.paginationOutcome,
   };
 };
+
+const runCorpusIndexSearch = async (
+  options: CorpusLegislationSearchOptions,
+  dependencies: SearchLegislationDependencies,
+) => await (dependencies.corpusSearch ?? corpusIndexSearch)(options);
+
+const projectSearchHits = (
+  hits: LegislationHit[],
+  dependencies: SearchLegislationDependencies,
+) => hits.map(dependencies.projectHit ?? projectLegislationSearchHit);
 
 /**
  * The serving legislation generation, or null under the pg-fts provider. No
@@ -1357,15 +1418,11 @@ export const searchLegislationHandler = async (
   const now = dependencies.now ?? (() => performance.now());
   const emitStage = dependencies.emitStage ?? emitRequestStage;
   const route = "/v1/law/statutes/search";
-  const completedStages: { stage: RequestStage; startedAt: number }[] = [];
-  const beginStage = (stage: RequestStage) => {
-    const timing = { stage, startedAt: now() };
-    completedStages.push(timing);
-    return timing;
-  };
+  const beginStage = (stage: RequestStage) => ({ stage, startedAt: now() });
   const finishStage = (
-    timing: (typeof completedStages)[number],
+    timing: { stage: RequestStage; startedAt: number },
     counts: { candidateCount?: number; resultCount?: number } = {},
+    durationMs = now() - timing.startedAt,
   ) => {
     emitStage({
       route,
@@ -1373,10 +1430,20 @@ export const searchLegislationHandler = async (
         ? {}
         : { toolName: dependencies.stageToolName }),
       stage: timing.stage,
-      durationMs: now() - timing.startedAt,
+      durationMs,
       ...counts,
       outcome: "completed",
     });
+  };
+  const observeStage: ObserveLegislationStage = async (
+    stage,
+    operation,
+    counts,
+  ) => {
+    const timing = beginStage(stage);
+    const value = await operation();
+    finishStage(timing, counts(value));
+    return value;
   };
   const unavailable =
     body.jurisdiction === undefined
@@ -1482,34 +1549,35 @@ export const searchLegislationHandler = async (
 
   const hitDispositions = createCorpusHitDispositionCounter();
   try {
-    const scanTiming = beginStage("index_scan");
     const {
       hits: items,
       nextCursor,
       paginationOutcome,
     } = serving !== null
-      ? await corpusIndexSearch({
-          body,
-          parsedCursor,
-          legislationDb,
-          observer,
-          serving,
-          hitDispositions,
-        })
+      ? await runCorpusIndexSearch(
+          {
+            body,
+            parsedCursor,
+            legislationDb,
+            observer,
+            serving,
+            hitDispositions,
+            observeStage,
+            now,
+            emitIndexScan: (durationMs, candidateCount) =>
+              finishStage(
+                { stage: "index_scan", startedAt: 0 },
+                { candidateCount },
+                durationMs,
+              ),
+          },
+          dependencies,
+        )
       : await pgSearch(body, parsedCursor, legislationDb, dependencies);
-    finishStage(scanTiming, { candidateCount: items.length });
-
-    // The search engines hydrate stored candidates and collapse physical
-    // versions while producing `items`. These explicit completion markers
-    // keep the public entry points on one shared observation path.
-    const hydrationTiming = beginStage("candidate_hydration");
-    finishStage(hydrationTiming, { candidateCount: items.length });
-    const collapseTiming = beginStage("work_collapse_ranking");
-    finishStage(collapseTiming, { resultCount: items.length });
 
     const serializationTiming = beginStage("response_serialization");
     const response: Static<typeof searchLegislationSuccessResponseSchema> = {
-      items: items.map(projectLegislationSearchHit),
+      items: projectSearchHits(items, dependencies),
       nextCursor,
       paginationOutcome,
       total: SEARCH_TOTAL_NOT_COUNTED,

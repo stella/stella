@@ -1,15 +1,16 @@
+import { Result } from "better-result";
 import { expect, test } from "bun:test";
 import Elysia from "elysia";
-import { readFileSync } from "node:fs";
 
 import { PUBLIC_COUNTRY_UNAVAILABLE_STATUS } from "@stll/api-contract/public-country-capability";
 import {
   SEARCH_PAGINATION_COMPLETE,
   SEARCH_TOTAL_TYPE,
 } from "@stll/api-contract/search";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { createPublicStatuteSearch } from "@/api/handlers/legislation/public-search";
-import type { searchLegislationHandler } from "@/api/handlers/legislation/search";
+import { searchLegislationHandler } from "@/api/handlers/legislation/search";
 import { isSafePublicHandler } from "@/api/lib/api-handlers";
 import {
   decodeCorpusSearchCursor,
@@ -17,6 +18,7 @@ import {
 } from "@/api/lib/legal-search/corpus-search-cursor";
 import { NO_EXPANSION_DICTIONARY_IDENTITY } from "@/api/lib/legal-search/morphology/dictionary";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
+import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
 
 const result = {
   items: [],
@@ -25,12 +27,129 @@ const result = {
   total: { type: SEARCH_TOTAL_TYPE.NOT_COUNTED },
 };
 
-test("the shared search operation records every legislation stage", () => {
-  const source = readFileSync(new URL("search.ts", import.meta.url), "utf-8");
-  expect(source).toContain('beginStage("index_scan")');
-  expect(source).toContain('beginStage("candidate_hydration")');
-  expect(source).toContain('beginStage("work_collapse_ranking")');
-  expect(source).toContain('beginStage("response_serialization")');
+const timingHit = {
+  match: { type: "strict" },
+  documentId: "6b1d2f34-58aa-4d1c-9d0f-2c3b4a5e6f70",
+  eli: "eli/cz/act/2024/1",
+  slug: null,
+  title: "Timing fixture",
+  country: "CZE",
+  language: "cs",
+  documentType: "act",
+  status: "current",
+  effectiveDate: "2024-01-01",
+  versionValidFrom: "2024-01-01",
+  versionValidTo: null,
+  sourceUrl: null,
+  headline: null,
+  score: 1,
+} as const;
+
+const runTimedSearch = async (
+  stageToolName?: string,
+  failHydration = false,
+) => {
+  let clock = 0;
+  const records: Parameters<
+    NonNullable<Parameters<typeof searchLegislationHandler>[3]>["emitStage"]
+  >[0][] = [];
+  const dependencies = {
+    provider: "corpus-index",
+    loadSearchConfigs: async () => [],
+    readServingGeneration: async () =>
+      Result.ok({
+        family: "legislation",
+        generation: "legislation_test",
+        cluster: "q09",
+      }),
+    now: () => clock,
+    emitStage: (record) => records.push(record),
+    ...(stageToolName === undefined ? {} : { stageToolName }),
+    corpusSearch: async ({ emitIndexScan, observeStage }) => {
+      clock += 7;
+      emitIndexScan(7, 3);
+      await observeStage(
+        "candidate_hydration",
+        () => {
+          clock += 11;
+          if (failHydration) {
+            throw new Error("hydration failed");
+          }
+          return { count: 3 };
+        },
+        ({ count }) => ({ candidateCount: count }),
+      );
+      await observeStage(
+        "work_collapse_ranking",
+        () => {
+          clock += 13;
+          return { count: 1 };
+        },
+        ({ count }) => ({ resultCount: count }),
+      );
+      return {
+        hits: [timingHit],
+        nextCursor: null,
+        paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+      };
+    },
+    projectHit: (hit) => {
+      clock += 17;
+      return hit;
+    },
+  } satisfies NonNullable<Parameters<typeof searchLegislationHandler>[3]>;
+  const db: LegislationReadDb = async (read) => await read(Object.create(null));
+  const operation = searchLegislationHandler(
+    { query: "timing" },
+    db,
+    "unobserved",
+    dependencies,
+  );
+  return { operation, records };
+};
+
+test.each([
+  [undefined, false],
+  ["search_legislation", true],
+] as const)(
+  "shared search reports real stage durations for %s entry point",
+  async (toolName, hasToolName) => {
+    const { operation, records } = await runTimedSearch(toolName);
+    await operation;
+    expect(records).toEqual([
+      expect.objectContaining({
+        stage: "index_scan",
+        durationMs: 7,
+        candidateCount: 3,
+      }),
+      expect.objectContaining({
+        stage: "candidate_hydration",
+        durationMs: 11,
+        candidateCount: 3,
+      }),
+      expect.objectContaining({
+        stage: "work_collapse_ranking",
+        durationMs: 13,
+        resultCount: 1,
+      }),
+      expect.objectContaining({
+        stage: "response_serialization",
+        durationMs: 17,
+        resultCount: 1,
+      }),
+    ]);
+    for (const record of records) {
+      expect(record.toolName).toBe(hasToolName ? toolName : undefined);
+    }
+  },
+);
+
+test("a failed hydration reports only the completed index scan", async () => {
+  const { operation, records } = await runTimedSearch(undefined, true);
+  expect(await rejectionOf(operation)).toEqual(
+    expect.objectContaining({ message: "hydration failed" }),
+  );
+  expect(records.map(({ stage }) => stage)).toEqual(["index_scan"]);
 });
 
 const testSearchRoute = (search: typeof searchLegislationHandler) => {
