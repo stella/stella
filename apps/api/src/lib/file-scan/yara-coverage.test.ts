@@ -141,6 +141,23 @@ const POSITIVE_FIXTURES: Record<string, () => Promise<Fixture> | Fixture> = {
         'relationships/oleObject" Target="https://e.example/p" ' +
         'TargetMode="External"/></Relationships>',
     }),
+  html_external_reference: async () => ({
+    buffer: encoder.encode('<img src="https://example.test/image.png">'),
+    declaredMimeType: "text/html",
+    fileName: "f.html",
+  }),
+  odf_external_reference: async () =>
+    await docx({
+      "content.xml":
+        '<draw:image xlink:href="https://example.test/image.png"/>',
+    }),
+  rtf_external_reference: async () => ({
+    buffer: encoder.encode(
+      "{\\rtf1 INCLUDEPICTURE https://example.test/a.png}",
+    ),
+    declaredMimeType: "application/rtf",
+    fileName: "f.rtf",
+  }),
   ooxml_dde: async () =>
     await docx({
       "word/document.xml":

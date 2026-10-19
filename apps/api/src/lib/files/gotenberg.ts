@@ -4,6 +4,7 @@ import { fetchWithTimeout } from "@stll/fetch";
 
 import { env } from "@/api/env";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import { checkConversionInput } from "@/api/lib/files/conversion-input";
 import type { DerivativeAdmissionError } from "@/api/lib/files/derivative-admission";
 import { admitDerivativeImage } from "@/api/lib/files/derivative-admission";
 import type { ImageHeader } from "@/api/lib/files/image-header";
@@ -15,6 +16,7 @@ import {
   isEmbeddableImageMimeType,
 } from "@/api/lib/files/image-pdf";
 import { streamMultipartForm } from "@/api/lib/files/multipart-stream";
+import { isConvertibleMimeType } from "@/api/lib/files/pdf-derivative-policy";
 import { applyFitToPage } from "@/api/lib/files/xlsx-preprocess";
 import { basicAuthorizationHeader } from "@/api/lib/http-basic-auth";
 import { LIMITS } from "@/api/lib/limits";
@@ -66,8 +68,14 @@ export class ImageTranscodeError extends TaggedError("ImageTranscodeError")<{
   cause?: unknown;
 }> {}
 
+export class ConversionInputError extends TaggedError("ConversionInputError")<{
+  message: string;
+  reason: "external_reference";
+}> {}
+
 type ConvertToPdfError =
   | DerivativeAdmissionError
+  | ConversionInputError
   | GotenbergError
   | ImageTranscodeError;
 
@@ -284,6 +292,18 @@ export const convertToPdf = async (
       sink: IMAGE_EMBED_FAILED_SINK,
       ctx: { operation: "image-to-pdf" },
     });
+  }
+
+  if (isConvertibleMimeType(mimeType)) {
+    const input = await checkConversionInput(mimeType, bytes);
+    if (input.kind === "refuse") {
+      return Result.err(
+        new ConversionInputError({
+          message: "Document input is not eligible for conversion",
+          reason: input.reason,
+        }),
+      );
+    }
   }
 
   return await Result.tryPromise(

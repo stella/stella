@@ -51,6 +51,44 @@ rule ooxml_activex
         $content_types and $activex
 }
 
+rule html_external_reference
+{
+    meta:
+        description = "HTML contains an external resource reference"
+        verdict = "suspicious"
+    strings:
+        $attribute = /<(?:img|script|iframe|frame|video|audio|source|object|body|table|td)[^>]{0,1024}(?:src|srcset|poster|data|background)[\s]{0,8}=[\s]{0,8}("|')(?:https?:|ftp:|file:|\/\/)/ ascii nocase
+        $link = /<link[^>]{0,1024}href[\s]{0,8}=[\s]{0,8}("|')(?:https?:|ftp:|file:|\/\/)/ ascii nocase
+        $base = /<base(?:[\s>])/ ascii nocase
+        $refresh = /<meta[^>]{0,1024}http-equiv[\s]{0,8}=[\s]{0,8}("|')refresh("|')/ ascii nocase
+        $css = /(?:@import|url\()[\s]{0,8}("|')?(?:https?:|ftp:|file:|\/\/)/ ascii nocase
+    condition:
+        any of them
+}
+
+rule odf_external_reference
+{
+    meta:
+        description = "ODF contains an external resource reference"
+        verdict = "suspicious"
+    strings:
+        $href = /<(?:draw:image|draw:object|draw:object-ole|draw:frame)[^>]{0,1024}xlink:href[\s]{0,8}=[\s]{0,8}("|')(?:https?:|ftp:|file:|\/\/)/ ascii nocase
+    condition:
+        $href
+}
+
+rule rtf_external_reference
+{
+    meta:
+        description = "RTF contains an external resource field"
+        verdict = "suspicious"
+    strings:
+        $header = "{\\rtf" ascii nocase
+        $field = /(?:INCLUDEPICTURE|INCLUDETEXT|IMPORT|LINK|\\objlink)/ ascii nocase
+    condition:
+        $header and $field
+}
+
 rule ooxml_dde
 {
     meta:

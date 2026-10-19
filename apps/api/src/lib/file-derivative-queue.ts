@@ -51,6 +51,7 @@ import {
   resolveQueuedFileObject,
 } from "@/api/lib/files/file-object-ids";
 import {
+  ConversionInputError,
   convertToPdf,
   shouldGeneratePdfDerivative,
 } from "@/api/lib/files/gotenberg";
@@ -684,6 +685,12 @@ const buildPdfDerivative = async (
   }
   const conversion = await convertToPdf(source.source, { retry: "caller" });
   if (Result.isError(conversion)) {
+    if (conversion.error instanceof ConversionInputError) {
+      return {
+        type: "refused",
+        reason: DERIVATIVE_FAILURE_REASON.PROCESSING,
+      };
+    }
     if (conversion.error instanceof DerivativeAdmissionError) {
       return {
         type: "refused",
