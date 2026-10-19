@@ -170,7 +170,8 @@ export const parseWp29Archive = (html: string) => {
       const statedLanguages = new Set(
         links
           .toArray()
-          .flatMap((node) => assetLanguage($(node).attr("href") ?? "") ?? []),
+          .map((node) => assetLanguage($(node).attr("href") ?? ""))
+          .filter((language) => language !== undefined),
       );
       if (statedLanguages.size > 1) {
         return Result.err(
