@@ -618,20 +618,18 @@ const courtOf = (
   $: Root,
   text: cheerio.Cheerio<AnyNode>,
 ): string | undefined => {
-  const isBeforeBench = (element: AnyNode): boolean =>
-    $(element).closest(AFTER_BENCH).length === 0;
+  const front = text.clone();
+  front.find(AFTER_BENCH).remove();
   const candidates = [
-    ...text
+    ...front
       .find(".wyrok_sklad")
       .first()
       .find("p, td, div")
       .toArray()
-      .filter(isBeforeBench)
       .map((element) => collapse(visibleHtmlText($(element)))),
-    ...text
+    ...front
       .find("p, td, div")
       .toArray()
-      .filter(isBeforeBench)
       .map((element) => collapse(visibleHtmlText($(element)))),
   ];
   for (const line of candidates) {

@@ -7,6 +7,9 @@
 
 import { describe, expect, test } from "bun:test";
 import * as cheerio from "cheerio";
+import fc from "fast-check";
+
+import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import {
   listPlTkPageFields,
@@ -17,6 +20,7 @@ import {
   readPlTkRuling,
   validatePlTkBlocks,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-tk";
+import * as preChange from "@/api/handlers/case-law/ingestion/parsers/pl-tk.pre-change-reference.test-helper";
 
 const FIXTURES = new URL("__fixtures__/", import.meta.url);
 
@@ -486,7 +490,127 @@ describe("the court a ruling names", () => {
 
     expect(court).toBeUndefined();
   });
+
+  test("a reasons section nested in a front wrapper cannot name the deciding court", () => {
+    const page = parsePlTkPage(`<div id="sprawaForm:tabView">
+      <div id="sprawaForm:tabView:dok_1">
+        <div id="tekst_1"><div class="document-wrapper">
+          <p>Wprowadzenie do orzeczenia</p>
+          <section><div class="wyrok_uzasadnienie">
+            <p>Sąd Najwyższy w składzie siedmiu sędziów</p>
+          </div></section>
+        </div></div>
+      </div>
+    </div>`);
+
+    expect(readPlTkRuling(page, "1")?.courtAsPrinted).toBeUndefined();
+  });
 });
+
+const generatedCasePage = (seed: number): string => {
+  let state = seed;
+  const pick = (limit: number): number => {
+    state = (state * 1_664_525 + 1_013_904_223) % 4_294_967_296;
+    return Math.abs(state) % limit;
+  };
+  const wrap = (value: string, depth: number): string => {
+    let wrapped = value;
+    for (let index = 0; index < depth; index += 1) {
+      wrapped = `<div class="wrapper-${index}">${wrapped}</div>`;
+    }
+    return wrapped;
+  };
+  const rulingCount = 2 + pick(2);
+  const rulings = Array.from({ length: rulingCount }, (_, index) => {
+    const id = String(seed * 10 + index + 1);
+    const printedCourt = pick(2) === 0 ? "Trybunał Konstytucyjny" : undefined;
+    const front = printedCourt
+      ? `<p>${printedCourt} w składzie:</p>`
+      : `<p>Sygn. akt K ${seed}/${index + 1}</p>`;
+    const afterBench = [
+      "wyrok_sentencja",
+      "wyrok_uzasadnienie",
+      "wyrok_zdanieodrebne",
+    ]
+      .map(
+        (className, region) =>
+          `<div class="${className}">${wrap(
+            `<p>Sąd ${seed}-${index}-${region} w składzie:</p><p>Treść ${region}</p>`,
+            pick(4),
+          )}</div>`,
+      )
+      .join("");
+    return `<div id="sprawaForm:tabView:dok_${id}">
+      <div class="prop"><div class="name">Rodzaj orzeczenia<script>ignored</script></div><div class="value">Wyrok<style>ignored</style></div></div>
+      <div class="prop"><div class="name">Data</div><div class="value">${1 + pick(28)} stycznia 2026</div></div>
+      <div class="prop"><div class="name">Dotyczy</div><div class="value">Sprawa ${seed}-${index}</div></div>
+      <div id="tekst_${id}">${wrap(
+        `<p>WYROK</p>${front}${afterBench}<div class="prop"><div class="name">Pole tekstu</div><div class="value">Wartość</div></div><script>ignored</script><style>ignored</style>`,
+        1 + pick(4),
+      )}</div>
+    </div>`;
+  }).join("");
+  return `<div id="sprawaForm:tabView">
+    <div id="sprawaForm:tabView:metryka">
+      <div class="prop"><div class="name">Sygnatura</div><div class="value">K ${seed}/26</div></div>
+      <div class="prop"><div class="name">Data wpływu do TK</div><div class="value">2 lutego 2026</div></div>
+      <div class="ui-panel"><span class="ui-panel-title">Podmiot w sprawie</span><ul><li class="ui-datalist-item">Wnioskodawca ${seed}</li></ul></div>
+    </div>${rulings}
+  </div>`;
+};
+
+test(
+  "pl-tk.generated-pages-match-pre-change-reader",
+  () => {
+    assertProperty(
+      "pl-tk.generated-pages-match-pre-change-reader",
+      fc.property(fc.integer({ min: 1, max: 1_000_000 }), (seed) => {
+        const html = generatedCasePage(seed);
+        const parsedPage = parsePlTkPage(html);
+        const page = readPlTkCasePage(parsedPage);
+        const referencePage = preChange.readPlTkCasePage(html);
+        expect(page).not.toBeNull();
+        expect(referencePage).not.toBeNull();
+        for (const documentId of page?.rulingIds ?? []) {
+          const ruling = readPlTkRuling(parsedPage, documentId);
+          const referenceRuling = preChange.readPlTkRuling(html, documentId);
+          const parseInput = {
+            caseNumber: page?.record.caseNumber ?? documentId,
+            court: ruling?.courtAsPrinted ?? "Trybunał Konstytucyjny",
+            decisionDate: ruling?.decisionDate,
+            decisionType: ruling?.decisionForm,
+            documentId,
+            sourceUrl: "https://ipo.trybunal.gov.pl/ipo/Sprawa",
+            documentUrl: undefined,
+            textHtml: ruling?.textHtml ?? "",
+          };
+          const actual = {
+            fields: listPlTkPageFields(parsedPage),
+            page,
+            ruling,
+            parsed: parsePlTkText({ page: parsedPage, ...parseInput }),
+          };
+          const reference = {
+            fields: preChange.listPlTkPageFields(html),
+            page: referencePage,
+            ruling: referenceRuling,
+            parsed: preChange.parsePlTkText({
+              ...parseInput,
+              decisionDate: referenceRuling?.decisionDate,
+              decisionType: referenceRuling?.decisionForm,
+              court:
+                referenceRuling?.courtAsPrinted ?? "Trybunał Konstytucyjny",
+              textHtml: referenceRuling?.textHtml ?? "",
+            }),
+          };
+          expect(JSON.stringify(actual)).toBe(JSON.stringify(reference));
+        }
+      }),
+      { numRuns: 300, seed: 62_850_001 },
+    );
+  },
+  propertyTestTimeout(30_000),
+);
 
 for (const href of [
   "/ipo/dok?dok=F 1.pdf",
