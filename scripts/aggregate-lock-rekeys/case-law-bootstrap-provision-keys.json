@@ -1,0 +1,8 @@
+[
+  {
+    "file": "apps/api/src/lib/legal-search/corpus-index-projection-bootstrap.ts",
+    "from": "844803085939e5d5d246fcfdd796e820265abda1aad557fdef7b3c4996c1af9e",
+    "to": "a8fdcbb49ebf048380f683cbc48c7f10d964f34bea0853cfbd6ee5b1e732860e",
+    "reason": "Existing case-law bootstrap page transaction; the page now also reads vacated jurisdictions and provision keys inside it, which changes its source fingerprint without changing the acquisition, its order or the count."
+  }
+]

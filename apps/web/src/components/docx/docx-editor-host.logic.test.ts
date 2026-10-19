@@ -104,7 +104,89 @@ describe("hosted DOCX editor: pane vocabulary", () => {
   });
 });
 
+type ClaimChange =
+  | "canUnlock"
+  | "isEditing"
+  | "scaleOffset"
+  | "propertyId"
+  | "bindings"
+  | "initialScrollTop";
+
+const changedClaim = (
+  base: DocxEditorClaim,
+  change: ClaimChange,
+): DocxEditorClaim => {
+  switch (change) {
+    case "canUnlock":
+      return { ...base, canUnlock: !base.canUnlock };
+    case "isEditing":
+      return { ...base, isEditing: !base.isEditing };
+    case "scaleOffset":
+      return { ...base, scaleOffset: 0.5 };
+    case "propertyId":
+      return { ...base, document: { ...document, propertyId: "property-2" } };
+    case "bindings":
+      return { ...base, bindings: { onClose: () => undefined } };
+    case "initialScrollTop":
+      return base.slot === DOCX_EDITOR_SLOT.inspector
+        ? { ...base, initialScrollTop: 99 }
+        : { ...base, canUnlock: !base.canUnlock };
+    default:
+      change satisfies never;
+      return base;
+  }
+};
+
 describe("hosted DOCX editor: claiming", () => {
+  test("re-claiming an equal claim returns the same registry, even from new objects", () => {
+    for (const slot of [DOCX_EDITOR_SLOT.main, DOCX_EDITOR_SLOT.inspector]) {
+      const registry = claimDocxEditorSlot(EMPTY_DOCX_EDITOR_REGISTRY, {
+        claim: claimFor(slot, 1),
+        hostKey,
+      });
+      let current = registry;
+      // A panel that rebuilds its document object on every render.
+      for (let render = 0; render < 50; render += 1) {
+        current = claimDocxEditorSlot(current, {
+          claim: { ...claimFor(slot, 1), document: { ...document } },
+          hostKey,
+        });
+      }
+      expect(current).toBe(registry);
+    }
+  });
+
+  test("any change to what a claim asks for yields a new registry", () => {
+    fc.assert(
+      fc.property(
+        fc.constantFrom(DOCX_EDITOR_SLOT.main, DOCX_EDITOR_SLOT.inspector),
+        fc.constantFrom(
+          "canUnlock",
+          "isEditing",
+          "scaleOffset",
+          "propertyId",
+          "bindings",
+          "initialScrollTop",
+        ),
+        (slot, change) => {
+          const base = claimFor(slot, 1);
+          const registry = claimDocxEditorSlot(EMPTY_DOCX_EDITOR_REGISTRY, {
+            claim: base,
+            hostKey,
+          });
+          const changed = changedClaim(base, change);
+          const next = claimDocxEditorSlot(registry, {
+            claim: changed,
+            hostKey,
+          });
+          expect(next).not.toBe(registry);
+          expect(next[hostKey]?.lastClaim).toBe(changed);
+        },
+      ),
+      propertyConfig(),
+    );
+  });
+
   test("a claim opens the entry and drives the instance", () => {
     const registry = claimDocxEditorSlot(EMPTY_DOCX_EDITOR_REGISTRY, {
       claim: mainClaim(1),

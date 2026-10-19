@@ -24,6 +24,9 @@ export const WEB_ANALYTICS_EVENTS = {
   feedbackDialogOpened: "feedback_dialog_opened",
   feedbackReportSubmitted: "feedback_report_submitted",
   provisionPlacementGaps: "provision_placement_gaps",
+  inspectorRestoreRecovered: "inspector_restore_recovered",
+  followupShown: "followup_shown",
+  followupSelected: "followup_selected",
 } as const;
 
 export type WebAnalyticsEvent =
@@ -55,11 +58,37 @@ export type Analytics = {
   captureProvisionPlacementGaps: (
     properties: ProvisionPlacementGapsProperties,
   ) => void;
+  captureInspectorRestoreRecovered: (
+    properties: InspectorRestoreRecoveredProperties,
+  ) => void;
+  captureFollowupShown: (properties: FollowupShownProperties) => void;
+  captureFollowupSelected: (properties: FollowupSelectedProperties) => void;
   captureRouteErrorLifecycle: (
     properties: RouteErrorLifecycleProperties,
   ) => Promise<void>;
   identifyUser: (user: AnalyticsUserIdentity) => void;
   reset: (options?: AnalyticsResetOptions) => void;
+};
+
+export type FollowupSurface =
+  | "chat-thread"
+  | "document-chat"
+  | "inspector-chat";
+
+// Click-through needs where and how a suggestion was used, never which
+// conversation it came from.
+type FollowupProperties = {
+  source: "generated";
+  surface: FollowupSurface;
+};
+
+type FollowupShownProperties = FollowupProperties & {
+  count: number;
+};
+
+type FollowupSelectedProperties = FollowupProperties & {
+  index: number;
+  via: "chip" | "ghost-tab";
 };
 
 // Why a guide step could not be shown against the live app surface. Emitted so
@@ -103,6 +132,12 @@ export type ErrorCaptureContext =
 // Stored citations a decision reader could not place: one event per decision,
 // reader surface and reason, counting the rows. A placement gap is a data
 // outcome (corpus coverage or linker drift), not an exception.
+/** The inspector restored its tabs minimized because the previous load never
+ *  settled after restoring them. Counts only, never tab content. */
+type InspectorRestoreRecoveredProperties = {
+  tabCount: number;
+};
+
 type ProvisionPlacementGapsProperties = {
   surface: string;
   kind: ProvisionPlacementFailureKind;

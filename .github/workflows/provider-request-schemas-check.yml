@@ -29,7 +29,7 @@ permissions: {}
 
 jobs:
   provider-request-schemas-check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read
@@ -47,7 +47,8 @@ jobs:
           bun-version-file: "package.json"
 
       - name: Install dependencies
-        run: bun ci --ignore-scripts
+        timeout-minutes: 5
+        run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           # .npmrc references NPM_TOKEN, but installs must not expose
           # the real npm token to dependency lifecycle scripts.

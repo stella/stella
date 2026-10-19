@@ -99,6 +99,7 @@ export const stageReviewSuggestions = ({
 
   for (const [snapshot, items] of groups) {
     const result = editor.applyDocumentOperations({
+      undefinedReferences: "refuse",
       snapshot,
       batch: {
         version: DOCUMENT_OPERATION_CONTRACT_VERSION,

@@ -188,6 +188,7 @@ export const readLegislationShelfHandler = async (
   legislationDb: LegislationReadDb,
 ) => {
   const countryRead = readPublicLawCountry(country, {
+    domain: "legislation",
     admitted: PUBLIC_LEGISLATION_COUNTRIES,
     surface: "search",
   });

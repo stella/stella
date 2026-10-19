@@ -1,0 +1,6 @@
+{
+  "metric": "root-connection-type-imports",
+  "file": "apps/api/src/lib/account-export/store.ts",
+  "delta": 1,
+  "reason": "The durable export ledger operation accepts an explicit transaction-only structural dependency inferred from the existing database handle, preserving transaction and atomic account audit typing without importing test-only types."
+}

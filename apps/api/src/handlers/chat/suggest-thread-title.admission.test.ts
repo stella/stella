@@ -123,7 +123,7 @@ const runDeniedTitle = async ({
     });
   const endpoint = createSuggestThreadTitle({
     admit,
-    generateTextForRole: async () => {
+    generateTextForTask: async () => {
       modelCalls += 1;
       throw new HandlerError({
         status: 500,

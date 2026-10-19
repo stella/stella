@@ -75,4 +75,14 @@ describe.serial(RULE_NAME, () => {
       2, 3, 4, 5, 6, 7,
     ]);
   });
+
+  test("admits a quotation's reader link only in its own file", async () => {
+    const source = [
+      "export const One = () => <a href={sanitizeHref(readerHref)}>Decision</a>;",
+      'export const Two = () => <a href={sanitizeHref(readerHref)} target="_blank">Decision</a>;',
+      "export const Three = () => <a href={sanitizeHref(citation.url)}>Citation</a>;",
+    ].join("\n");
+    expect(await lint(source, "answer-quote.tsx")).toEqual([2, 3]);
+    expect(await lint(source, "chat-surface.tsx")).toEqual([1, 2, 3]);
+  });
 });

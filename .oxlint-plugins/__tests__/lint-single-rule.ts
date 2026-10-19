@@ -5,6 +5,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import type { OxlintConfig } from "oxlint";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 const REPOSITORY_ROOT = path.resolve(import.meta.dir, "../..");
 
 /** The oxlint JSON report fields this helper reads, at any nesting level. */
@@ -188,6 +190,32 @@ export const sharedLines = (
 export const sharedRuns: { readonly code: string; readonly cases: number }[] =
   [];
 
+/**
+ * Every batch claimed for a configuration, accepted or not, so tests can prove
+ * that each case was linted exactly once whatever the grouping.
+ */
+export const claimedBatches: {
+  readonly code: string;
+  readonly cases: number;
+}[] = [];
+
+type PendingGate = {
+  readonly cases: number;
+  readonly ready: Promise<undefined>;
+  readonly resolve: (value: undefined) => void;
+};
+
+const pendingGates = new Map<string, PendingGate>();
+
+/** Hold one rule's next batch until this many cases have registered. */
+export const holdSharedRunUntilPendingForTest = (
+  code: string,
+  cases: number,
+) => {
+  const { promise, resolve } = Promise.withResolvers<undefined>();
+  pendingGates.set(code, { cases, ready: promise, resolve });
+};
+
 const lintTogether = async (
   requests: readonly SharedRequest[],
   code: string,
@@ -196,6 +224,7 @@ const lintTogether = async (
   if (first === undefined) {
     return [];
   }
+  claimedBatches.push({ code, cases: requests.length });
   if (requests.length > 1) {
     const sourceFiles = requests.map(({ lintCase }) => lintCase.sourceFile);
     const lines = sharedLines(
@@ -256,10 +285,22 @@ const lintShared = async (
     const pending = pendingByConfig.get(configKey);
     if (pending !== undefined) {
       pending.push({ lintCase, resolve, reject });
+      const gate = pendingGates.get(code);
+      if (gate !== undefined && pending.length >= gate.cases) {
+        gate.resolve(undefined);
+      }
       return;
     }
     pendingByConfig.set(configKey, [{ lintCase, resolve, reject }]);
     withOxlintSlot(async () => {
+      const gate = pendingGates.get(code);
+      if (gate !== undefined) {
+        if (gate.cases <= 1) {
+          gate.resolve(undefined);
+        }
+        await gate.ready;
+        pendingGates.delete(code);
+      }
       // Let tests that reach the same configuration this turn join the run.
       await nextTurn();
       const requests = pendingByConfig.get(configKey) ?? [];
@@ -423,10 +464,18 @@ export const lintSingleRule = async (
 export const lintRuleAcrossFiles = async (
   ruleName: string,
   files: Readonly<Record<string, string>>,
-  { plugin = ruleName }: { plugin?: string } = {},
+  {
+    plugin = ruleName,
+    ruleOptions,
+    ruleOptionsForRoot,
+  }: Pick<
+    LintSingleRuleOptions,
+    "plugin" | "ruleOptions" | "ruleOptionsForRoot"
+  > = {},
 ): Promise<Record<string, number[]>> => {
   const directory = await mkdtemp(path.join(tmpdir(), `stella-${ruleName}-`));
   const names = Object.keys(files).toSorted();
+  const configuredRuleOptions = ruleOptionsForRoot?.(directory) ?? ruleOptions;
   const lintResult = await Result.tryPromise(async () => {
     const configPath = path.join(directory, "oxlint.json");
     await Bun.write(
@@ -436,7 +485,12 @@ export const lintRuleAcrossFiles = async (
         jsPlugins: [
           path.join(REPOSITORY_ROOT, ".oxlint-plugins", `${plugin}.ts`),
         ],
-        rules: { [`${plugin}/${ruleName}`]: "error" },
+        rules: {
+          [`${plugin}/${ruleName}`]:
+            configuredRuleOptions === undefined
+              ? "error"
+              : ["error", configuredRuleOptions],
+        },
       })}\n`,
     );
     for (const name of names) {
@@ -481,7 +535,9 @@ export const lintRuleAcrossFiles = async (
     const line = reportedLine(diagnostic, `${plugin}(${ruleName})`);
     const filename =
       isRecord(diagnostic) && typeof diagnostic.filename === "string"
-        ? path.basename(diagnostic.filename)
+        ? path.isAbsolute(diagnostic.filename)
+          ? repoRelativePath(directory, diagnostic.filename)
+          : diagnostic.filename
         : undefined;
     const lines = filename === undefined ? undefined : linesByFile[filename];
     if (line === null || lines === undefined) {

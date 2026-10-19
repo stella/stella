@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   measure:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 120
     strategy:
       fail-fast: false
@@ -41,6 +41,7 @@ jobs:
           bun-version-file: package.json
 
       - name: Install dependencies
+        timeout-minutes: 5
         env:
           NPM_TOKEN: ""
         run: bash scripts/retry.sh bun ci --ignore-scripts
@@ -98,6 +99,7 @@ jobs:
           bun-version-file: package.json
 
       - name: Install dependencies
+        timeout-minutes: 5
         env:
           NPM_TOKEN: ""
         run: bash scripts/retry.sh bun ci --ignore-scripts

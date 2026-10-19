@@ -569,7 +569,7 @@
           "question": "De onde vêm os dados?"
         },
         "1": {
-          "answer": "Duas listas, ambas em expansão. Os registros conectados já incluem ARES (Tchéquia), Companies House (Reino Unido), SEC EDGAR (EUA), KRS (Polônia), PRH (Finlândia) e VIES (IVA da UE). Além dos registros, as fontes oficiais são conectadas jurisdição por jurisdição; Tchéquia, Espanha e Taiwan, por exemplo, já têm fontes conectadas, e o leitor de jurisprudência foi feito para navegar e filtrar por jurisdição conforme novas fontes oficiais são adicionadas.",
+          "answer": "O leitor de jurisprudência pública oferece atualmente decisões tchecas. Os registros de empresas conectados incluem ARES (Tchéquia), Companies House (Reino Unido), SEC EDGAR (Estados Unidos), KRS (Polônia), PRH (Finlândia) e VIES (IVA da UE).",
           "question": "Quais jurisdições e registros estão cobertos?"
         },
         "2": {
@@ -892,9 +892,11 @@
     "bringWorkspaceToFront": "Trazer o espaço de trabalho da stella para a frente",
     "controlBody": "A stella é um software jurídico de <gh>código aberto</gh> que você pode auto-hospedar: inspecione o código, rode do seu jeito e exporte tudo em formatos padrão.",
     "controlTitle": "Mantenha o controle da infraestrutura.",
-    "dataBody": "Jurisprudência e registros de empresas de todas as jurisdições em que você atua, carregados direto no caso. A anonimização mantém os dados identificadores longe da IA.",
+    "dataBody": "Leia jurisprudência tcheca com notas de IA sobre questões jurídicas, trechos destacados e sublinhados, comentários de um advogado e respostas com citações. Consulte empresas nos registros oficiais conectados e acesse as fontes a partir de um caso.",
+    "dataConstitutionalAlt": "Decisão do Tribunal Constitucional tcheco IV.ÚS 1394/24 com parágrafos numerados, uma nota de IA sobre a questão jurídica, um trecho destacado, um trecho sublinhado, um comentário de um advogado e uma conversa com duas perguntas e respostas com citações.",
     "dataEyebrow": "Dados jurídicos",
-    "dataMainAlt": "Uma decisão judicial oficial aberta na stella",
+    "dataMainAlt": "Decisão da Suprema Corte tcheca 27 Cdo 59/2022 com parágrafos numerados, uma nota de IA sobre a questão jurídica, um trecho destacado, um trecho sublinhado, um comentário de um advogado e uma conversa com duas perguntas e respostas com citações.",
+    "dataSupremeAlt": "Decisão da Suprema Corte tcheca 27 Cdo 1525/2025 com parágrafos numerados, uma nota de IA sobre a questão jurídica, um trecho destacado, um trecho sublinhado, um comentário de um advogado e uma conversa com duas perguntas e respostas com citações.",
     "dataTitle": "Jurisprudência e registros à mão.",
     "exploreAgent": "Explorar o agente de IA",
     "exploreAnonymization": "Explorar a anonimização",

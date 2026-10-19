@@ -569,7 +569,7 @@
           "question": "Odkiaľ dáta pochádzajú?"
         },
         "1": {
-          "answer": "Dva zoznamy a oba rastú. Medzi pripojenými registrami už sú ARES (Česko), Companies House (Spojené kráľovstvo), SEC EDGAR (USA), KRS (Poľsko), PRH (Fínsko) a VIES (DPH v EÚ). Oficiálne zdroje judikatúry pribúdajú jurisdikciu po jurisdikcii; má ich napríklad Česko, Španielsko aj Taiwan a v čítačke judikatúry môžete prechádzať a filtrovať podľa jurisdikcie.",
+          "answer": "Verejná čítačka judikatúry teraz sprístupňuje české rozhodnutia. Medzi pripojené registre spoločností patria ARES (Česko), Companies House (Spojené kráľovstvo), SEC EDGAR (USA), KRS (Poľsko), PRH (Fínsko) a VIES (DPH v EÚ).",
           "question": "Ktoré jurisdikcie a registre sú pokryté?"
         },
         "2": {
@@ -892,9 +892,11 @@
     "bringWorkspaceToFront": "Preniesť do popredia pracovný priestor aplikácie stella",
     "controlBody": "stella je <gh>open source</gh> právny softvér, ktorý si môžete prevádzkovať na vlastnej infraštruktúre: nahliadnite do kódu, prevádzkujte ho po svojom a exportujte všetko v štandardných formátoch.",
     "controlTitle": "Majte technológie pod kontrolou.",
-    "dataBody": "Judikatúra a obchodné registre zo všetkých jurisdikcií, v ktorých pôsobíte, načítané priamo do spisu. Anonymizácia pritom drží identifikačné údaje mimo dosahu AI.",
+    "dataBody": "Čítajte českú judikatúru s poznámkami AI k právnym otázkam, zvýraznením, podčiarknutím, komentármi právnika a odpoveďami s citáciami. Vyhľadávajte spoločnosti v pripojených oficiálnych registroch a odkazujte na zdroje zo spisu.",
+    "dataConstitutionalAlt": "Rozhodnutie českého Ústavného súdu IV.ÚS 1394/24 s číslovanými odsekmi, poznámkou AI k právnej otázke, zvýraznením, podčiarknutím, komentárom právnika a chatom s dvoma otázkami a odpoveďami s citáciami.",
     "dataEyebrow": "Právne dáta",
-    "dataMainAlt": "Oficiálne súdne rozhodnutie otvorené v aplikácii stella",
+    "dataMainAlt": "Rozhodnutie českého Najvyššieho súdu 27 Cdo 59/2022 s číslovanými odsekmi, poznámkou AI k právnej otázke, zvýraznením, podčiarknutím, komentárom právnika a chatom s dvoma otázkami a odpoveďami s citáciami.",
+    "dataSupremeAlt": "Rozhodnutie českého Najvyššieho súdu 27 Cdo 1525/2025 s číslovanými odsekmi, poznámkou AI k právnej otázke, zvýraznením, podčiarknutím, komentárom právnika a chatom s dvoma otázkami a odpoveďami s citáciami.",
     "dataTitle": "Judikatúra a registre po ruke.",
     "exploreAgent": "Preskúmať AI agenta",
     "exploreAnonymization": "Preskúmať anonymizáciu",

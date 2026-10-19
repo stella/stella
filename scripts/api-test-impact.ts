@@ -29,7 +29,9 @@ export const API_ALL_RULES = {
   npm: /(?:^|\/)\.npmrc$/u,
   turbo: /(?:^|\/)turbo\.json$/u,
   patches: /^patches\//u,
-  github: /^\.github\//u,
+  // Keep this list aligned with the local actions used by the API-running jobs
+  // in ci.yml. api-test-impact.test.ts fails when a new action is wired there.
+  github: /^\.github\/(?:workflows\/ci\.yml|actions\/ci-install(?:\/.*)?)$/u,
   migrations: /^apps\/api\/drizzle\//u,
   database: /^apps\/api\/src\/db\//u,
   runner: /^apps\/api\/scripts\//u,

@@ -2,7 +2,7 @@
 // `require-complete-compaction-generation/require-complete-compaction-generation`.
 
 import { compactionGenerationRequest as completeRequest } from "@/api/lib/chat/compaction-tokens";
-import { generateTanStackTextForRole as generateText } from "@/api/lib/tanstack-ai-generate";
+import { generateTanStackTextForTask as generateText } from "@/api/lib/tanstack-ai-generate";
 
 declare const baseOptions: Parameters<typeof generateText>[0];
 

@@ -73,6 +73,7 @@ export const readStatuteBySlugHandler = async ({
   }
 
   const countryRead = readPublicLawCountry(query.country, {
+    domain: "legislation",
     admitted: PUBLIC_LEGISLATION_PAGE_COUNTRIES,
     surface: "pages",
   });

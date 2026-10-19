@@ -18,7 +18,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
-import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 import type {
   AIJustification,
   AIResult,
@@ -386,7 +386,7 @@ export const gradeTierMatch = async ({
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     dataClass: "customer",
     feature: "playbook.verdict",
-    modelRole: "pdf",
+    modelTask: "pdf",
     orgAIConfig: orgAIConfig ?? null,
     modelTier: admission.modelTier,
     properties: {
@@ -402,9 +402,9 @@ export const gradeTierMatch = async ({
 
   return await Result.tryPromise({
     try: async (): Promise<TierMatchVerdict> => {
-      const result = await generateTanStackObjectForRole({
+      const result = await generateTanStackObjectForTask({
         dataClass: "customer",
-        role: "pdf",
+        task: "pdf",
         orgAIConfig,
         managedAIResidency,
         organizationId,
@@ -413,7 +413,7 @@ export const gradeTierMatch = async ({
         analytics: aiAnalytics,
         caching: resolveCaching({
           promptCachingEnabled,
-          role: "pdf",
+          task: "pdf",
           scopeKey: entityVersionId,
         }),
         serviceTier,
@@ -522,7 +522,7 @@ export const gradeTierMatches = async ({
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     dataClass: "customer",
     feature: "playbook.verdict",
-    modelRole: "pdf",
+    modelTask: "pdf",
     orgAIConfig: orgAIConfig ?? null,
     modelTier: admission.modelTier,
     properties: {
@@ -538,9 +538,9 @@ export const gradeTierMatches = async ({
 
   return await Result.tryPromise({
     try: async (): Promise<ReadonlyMap<string, TierMatchVerdict>> => {
-      const result = await generateTanStackObjectForRole({
+      const result = await generateTanStackObjectForTask({
         dataClass: "customer",
-        role: "pdf",
+        task: "pdf",
         orgAIConfig,
         managedAIResidency,
         organizationId,
@@ -549,7 +549,7 @@ export const gradeTierMatches = async ({
         analytics: aiAnalytics,
         caching: resolveCaching({
           promptCachingEnabled,
-          role: "pdf",
+          task: "pdf",
           scopeKey: entityVersionId,
         }),
         serviceTier,

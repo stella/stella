@@ -99,7 +99,6 @@ const firstSentence = (text: string): string => {
 const SUMMARY_MAX_LENGTH = 160;
 
 const TABLE_BUILDERS = new Set(["pgTable", "withRLS"]);
-
 /** Flags in one fixed order, so a line reads the same in every module. */
 const FLAG_ORDER = [
   "pk",
@@ -196,6 +195,27 @@ const findTableCall = (node: ts.Node): ts.CallExpression | null => {
     }
   }
   return ts.forEachChild(node, findTableCall) ?? null;
+};
+
+const findViewCall = (node: ts.Node): ts.CallExpression | null => {
+  if (ts.isCallExpression(node) && calleeName(node.expression) === "pgView") {
+    return node;
+  }
+  return ts.forEachChild(node, findViewCall) ?? null;
+};
+
+const findViewSource = (node: ts.Node): string | null => {
+  if (
+    ts.isCallExpression(node) &&
+    ts.isPropertyAccessExpression(node.expression) &&
+    node.expression.name.text === "from"
+  ) {
+    const source = node.arguments.at(0);
+    if (source !== undefined && ts.isIdentifier(source)) {
+      return source.text;
+    }
+  }
+  return ts.forEachChild(node, findViewSource) ?? null;
 };
 
 /** `pgTable(...).enableRLS()`: RLS switched on by the declaration's own chain. */
@@ -302,72 +322,101 @@ export const indexSchemaSource = ({
     sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line +
     1;
   const tables: IndexedTable[] = [];
-  for (const statement of sourceFile.statements) {
+  const declarations = sourceFile.statements.flatMap((statement) => {
     if (
       !ts.isVariableStatement(statement) ||
       !statement.modifiers?.some(
         (modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword,
       )
     ) {
+      return [];
+    }
+    return statement.declarationList.declarations.filter(
+      (
+        declaration,
+      ): declaration is ts.VariableDeclaration & {
+        name: ts.Identifier;
+        initializer: ts.Expression;
+      } =>
+        ts.isIdentifier(declaration.name) &&
+        declaration.initializer !== undefined,
+    );
+  });
+  const tableColumns = new Map<string, ts.ObjectLiteralExpression>();
+  for (const declaration of declarations) {
+    const call = findTableCall(declaration.initializer);
+    const columnsArgument = call?.arguments.at(1);
+    if (
+      columnsArgument !== undefined &&
+      ts.isObjectLiteralExpression(columnsArgument)
+    ) {
+      tableColumns.set(declaration.name.text, columnsArgument);
+    }
+  }
+  for (const declaration of declarations) {
+    const tableCall = findTableCall(declaration.initializer);
+    const viewCall = findViewCall(declaration.initializer);
+    const call = tableCall ?? viewCall;
+    const nameArgument = call?.arguments.at(0);
+    const ownColumnsArgument = tableCall?.arguments.at(1);
+    const viewSource =
+      viewCall === null ? null : findViewSource(declaration.initializer);
+    const columnsArgument =
+      ownColumnsArgument ??
+      (viewSource === null ? undefined : tableColumns.get(viewSource));
+    if (
+      call === null ||
+      nameArgument === undefined ||
+      !ts.isStringLiteralLike(nameArgument) ||
+      columnsArgument === undefined ||
+      !ts.isObjectLiteralExpression(columnsArgument)
+    ) {
       continue;
     }
-    for (const declaration of statement.declarationList.declarations) {
-      if (!ts.isIdentifier(declaration.name) || !declaration.initializer) {
-        continue;
-      }
-      const call = findTableCall(declaration.initializer);
-      const [nameArgument, columnsArgument] = call?.arguments ?? [];
-      if (
-        call === null ||
-        nameArgument === undefined ||
-        !ts.isStringLiteralLike(nameArgument) ||
-        columnsArgument === undefined ||
-        !ts.isObjectLiteralExpression(columnsArgument)
-      ) {
-        continue;
-      }
-      const columns: IndexedColumn[] = [];
-      for (const property of columnsArgument.properties) {
-        // Columns a helper spreads in are listed by the helper's name, so a
-        // reader knows to follow it rather than finding the table short.
-        if (ts.isSpreadAssignment(property)) {
-          const helper = property.expression.getText(sourceFile);
-          columns.push({
-            builder: "spread",
-            flags: [],
-            key: `{...${helper}}`,
-            line: lineOf(property),
-            sqlName: `{...${helper}}`,
-            summary: leadingSummary(property, source),
-          });
-          continue;
-        }
-        if (!ts.isPropertyAssignment(property)) {
-          continue;
-        }
-        const key = propertyKey(property.name);
-        if (key === null) {
-          continue;
-        }
+    const columns: IndexedColumn[] = [];
+    for (const property of columnsArgument.properties) {
+      // Columns a helper spreads in are listed by the helper's name, so a
+      // reader knows to follow it rather than finding the table short.
+      if (ts.isSpreadAssignment(property)) {
+        const helper = property.expression.getText(sourceFile);
         columns.push({
-          key,
+          builder: "spread",
+          flags: [],
+          key: `{...${helper}}`,
           line: lineOf(property),
+          sqlName: `{...${helper}}`,
           summary: leadingSummary(property, source),
-          ...describeColumn(key, property.initializer),
         });
+        continue;
       }
-      tables.push({
-        columns,
-        exportName: declaration.name.text,
-        line: lineOf(statement),
-        rls:
-          calleeName(call.expression) === "withRLS" ||
-          enablesRls(declaration.initializer) ||
-          /Policies\(\)|pgPolicy\(/u.test(call.getText(sourceFile)),
-        sqlName: nameArgument.text,
-        summary: leadingSummary(statement, source),
+      if (!ts.isPropertyAssignment(property)) {
+        continue;
+      }
+      const key = propertyKey(property.name);
+      if (key === null) {
+        continue;
+      }
+      columns.push({
+        key,
+        line: lineOf(property),
+        summary: leadingSummary(property, source),
+        ...describeColumn(key, property.initializer),
       });
     }
+    const statement = declaration.parent.parent;
+    tables.push({
+      columns,
+      exportName: declaration.name.text,
+      line: lineOf(statement),
+      rls:
+        (tableCall !== null &&
+          calleeName(tableCall.expression) === "withRLS") ||
+        enablesRls(declaration.initializer) ||
+        (tableCall !== null &&
+          /Policies\(\)|pgPolicy\(/u.test(tableCall.getText(sourceFile))),
+      sqlName: nameArgument.text,
+      summary: leadingSummary(statement, source),
+    });
   }
   return tables;
 };

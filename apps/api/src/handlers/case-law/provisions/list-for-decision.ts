@@ -1,6 +1,7 @@
 import { panic } from "better-result";
-import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
+import type { SelectResultFields } from "drizzle-orm/query-builders/select.types";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 import * as v from "valibot";
@@ -11,7 +12,7 @@ import { PROVISION_LINK_STATUS_TYPES } from "@stll/api-contract/provision-link-s
 import type { ProvisionLinkStatus } from "@stll/api-contract/provision-link-status";
 
 import {
-  caseLawDecisions,
+  publishedCaseLawDecisions,
   caseLawProvisionCitations,
   caseLawProvisionExtractions,
   caseLawProvisionExtractionRevisions,
@@ -92,8 +93,14 @@ const LEGACY_CITATION_FIELDS = {
   // Drizzle detects absent left-join rows from the first column; keep it non-null.
   jurisdiction: caseLawProvisionCitations.jurisdiction,
   workIdentifier: caseLawProvisionCitations.workIdentifier,
-  workNumber: caseLawProvisionCitations.workNumber,
-  workYear: caseLawProvisionCitations.workYear,
+  workNumber: sql<
+    number | null
+  >`CASE WHEN ${caseLawProvisionCitations.jurisdiction} = 'EU'
+    THEN ${caseLawProvisionCitations.euWorkNumber} ELSE ${caseLawProvisionCitations.workNumber} END`,
+  workYear: sql<
+    number | null
+  >`CASE WHEN ${caseLawProvisionCitations.jurisdiction} = 'EU'
+    THEN ${caseLawProvisionCitations.euWorkYear} ELSE ${caseLawProvisionCitations.workYear} END`,
   workCollection: caseLawProvisionCitations.workCollection,
   workEli: caseLawProvisionCitations.workEli,
   workSource: caseLawProvisionCitations.workSource,
@@ -146,9 +153,8 @@ const UNAVAILABLE_SPAN_FIELDS = {
   targetStatus: null,
 } satisfies Record<keyof typeof SPAN_CITATION_FIELDS, null>;
 
-type ProvisionRow = Pick<
-  typeof caseLawProvisionCitations.$inferSelect,
-  keyof typeof LEGACY_CITATION_FIELDS | keyof typeof SPAN_CITATION_FIELDS
+type ProvisionRow = SelectResultFields<
+  typeof LEGACY_CITATION_FIELDS & typeof SPAN_CITATION_FIELDS
 >;
 
 type ProvisionPageOptions = {
@@ -225,11 +231,11 @@ const readLegacyProvisionPage = async ({
   }
   const [decisionMetadata] = await tx
     .select({
-      country: caseLawDecisions.country,
-      language: caseLawDecisions.language,
+      country: publishedCaseLawDecisions.country,
+      language: publishedCaseLawDecisions.language,
     })
-    .from(caseLawDecisions)
-    .where(eq(caseLawDecisions.id, decisionId));
+    .from(publishedCaseLawDecisions)
+    .where(eq(publishedCaseLawDecisions.id, decisionId));
   if (decisionMetadata === undefined) {
     panic("Authorized decision disappeared");
   }
@@ -237,13 +243,12 @@ const readLegacyProvisionPage = async ({
     .select(LEGACY_CITATION_FIELDS)
     .from(caseLawProvisionCitations)
     .innerJoin(
-      caseLawDecisions,
-      eq(caseLawDecisions.id, caseLawProvisionCitations.decisionId),
+      publishedCaseLawDecisions,
+      eq(publishedCaseLawDecisions.id, caseLawProvisionCitations.decisionId),
     )
     .where(
       and(
         eq(caseLawProvisionCitations.decisionId, decisionId),
-        isNull(caseLawDecisions.redactedAt),
         cursor === null
           ? undefined
           : sql`(${caseLawProvisionCitations.spanStart}, ${caseLawProvisionCitations.anchor}) > (${cursor.spanStart}::integer, ${cursor.anchor}::text)`,
@@ -291,7 +296,7 @@ export const listDecisionProvisionsHandler = async ({
     return await readLegacyProvisionPage({ subject, cursor, limit });
   }
 
-  const decision = caseLawDecisions;
+  const decision = publishedCaseLawDecisions;
   const extraction = caseLawProvisionExtractions;
   const revisions = caseLawProvisionExtractionRevisions;
   const registry = caseLawProvisionExtractionRevisionsRegistry;
@@ -330,8 +335,6 @@ export const listDecisionProvisionsHandler = async ({
   }));
   const pageConditions = [
     eq(caseLawProvisionCitations.decisionId, decisionId),
-    // A redacted decision's old citation excerpts must not escape its tombstone.
-    isNull(decision.redactedAt),
     ...(cursor === null
       ? []
       : [

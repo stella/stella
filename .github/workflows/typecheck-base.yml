@@ -19,7 +19,7 @@ permissions:
 
 jobs:
   record:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - name: Checkout
@@ -32,6 +32,7 @@ jobs:
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
       - name: Install dependencies
+        timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""

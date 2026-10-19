@@ -39,7 +39,7 @@ jobs:
     # Ordinary changes coalesce into the next scheduled run; releases run immediately.
     if: >-
       github.event_name != 'push' || startsWith(github.event.head_commit.message, 'chore: release v')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: read
@@ -231,9 +231,6 @@ jobs:
       checks: read
       pull-requests: read
       packages: read
-      # Declared by ci-plan's merge-queue yield, which runs only on
-      # pull_request events and never here.
-      statuses: write
     with:
       depth: full
       heavy_only: true
@@ -246,7 +243,7 @@ jobs:
   status:
     if: always() && needs.validate.result != 'skipped' && needs.validate.outputs.run != 'false' && !needs.validate.outputs.proof
     needs: [validate, suites]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: read

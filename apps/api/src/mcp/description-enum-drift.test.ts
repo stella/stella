@@ -292,10 +292,10 @@ describe("MCP tool descriptions only name values their own contract declares", (
       new WeakSet<object>(),
     ).literals;
 
-    // `direction` is input-only and the polarities are output-only, so a walk
+    // `direction` is input-only and `passage.mention` output-only, so a walk
     // reading one side would report the other's values as drift.
     expect(fromInput).toContain("cited_by");
-    expect(fromInput.has("unclassified")).toBe(false);
+    expect(fromInput.has("latest_of_several")).toBe(false);
     expect(executable).toContain("unclassified");
 
     // `passage.mention` sits below the advertised schema's detail depth, where
