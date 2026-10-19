@@ -1,4 +1,7 @@
 import { panic } from "better-result";
+import { load } from "cheerio";
+import { isTag } from "domhandler";
+import * as slimdom from "slimdom";
 
 import { loadDocxArchive } from "@/api/lib/docx-archive";
 import { DOCUMENT_METADATA_ENTRY_MAX_BYTES } from "@/api/lib/files/document-properties";
@@ -18,48 +21,6 @@ const text = (bytes: Uint8Array): string => new TextDecoder().decode(bytes);
 const latin1 = (bytes: Uint8Array): string =>
   new TextDecoder("windows-1252").decode(bytes);
 
-const CHARACTER_REFERENCES: Readonly<Record<string, string>> = {
-  amp: "&",
-  apos: "'",
-  colon: ":",
-  gt: ">",
-  lt: "<",
-  quot: '"',
-};
-
-const decodeCharacterReferences = (value: string): string => {
-  let decoded = "";
-  let cursor = 0;
-  while (cursor < value.length) {
-    if (value[cursor] !== "&") {
-      decoded += value[cursor];
-      cursor++;
-      continue;
-    }
-    const end = value.indexOf(";", cursor + 1);
-    if (end === -1) {
-      decoded += value[cursor];
-      cursor++;
-      continue;
-    }
-    const reference = value.slice(cursor + 1, end);
-    let replacement = CHARACTER_REFERENCES[reference.toLowerCase()];
-    const radix =
-      reference.startsWith("#x") || reference.startsWith("#X") ? 16 : 10;
-    const digits = radix === 16 ? reference.slice(2) : reference.slice(1);
-    if (reference.startsWith("#")) {
-      const code = Number.parseInt(digits, radix);
-      replacement =
-        Number.isFinite(code) && code > 0 && code <= 0x10_ff_ff
-          ? String.fromCodePoint(code)
-          : undefined;
-    }
-    decoded += replacement ?? value.slice(cursor, end + 1);
-    cursor = end + 1;
-  }
-  return decoded;
-};
-
 const isSchemeCharacter = (character: string): boolean =>
   (character >= "a" && character <= "z") ||
   (character >= "0" && character <= "9") ||
@@ -69,7 +30,7 @@ const isSchemeCharacter = (character: string): boolean =>
 
 const isLocalReference = (value: string): boolean => {
   let normalized = "";
-  for (const character of decodeCharacterReferences(value)) {
+  for (const character of value) {
     const code = character.codePointAt(0) ?? 0;
     if (code > 0x1f && code !== 0x7f) {
       normalized += character;
@@ -99,124 +60,205 @@ const isLocalReference = (value: string): boolean => {
   return false;
 };
 
-const attributeValue = (tag: string, name: string): string | null => {
-  const lower = tag.toLowerCase();
-  let at = 0;
-  while ((at = lower.indexOf(name, at)) !== -1) {
-    const before = at === 0 ? " " : lower[at - 1];
-    const after = lower[at + name.length];
-    if (
-      (before === " " || before === "\t" || before === "\n") &&
-      after !== undefined
-    ) {
-      let cursor = at + name.length;
-      while (
-        tag[cursor] === " " ||
-        tag[cursor] === "\t" ||
-        tag[cursor] === "\n"
-      ) {
-        cursor++;
+const normalizeCss = (source: string): string | null => {
+  let normalized = "";
+  for (let cursor = 0; cursor < source.length; cursor++) {
+    if (source[cursor] === "/" && source[cursor + 1] === "*") {
+      const end = source.indexOf("*/", cursor + 2);
+      if (end === -1) {
+        return null;
       }
-      if (tag[cursor] !== "=") {
-        at += name.length;
-        continue;
-      }
-      cursor++;
-      while (
-        tag[cursor] === " " ||
-        tag[cursor] === "\t" ||
-        tag[cursor] === "\n"
-      ) {
-        cursor++;
-      }
-      const quote = tag[cursor];
-      if (quote === '"' || quote === "'") {
-        const end = tag.indexOf(quote, cursor + 1);
-        return end === -1 ? null : tag.slice(cursor + 1, end);
-      }
-      let end = cursor;
-      while (end < tag.length && !" \t\n>".includes(tag[end] ?? ">")) {
-        end++;
-      }
-      return tag.slice(cursor, end);
+      normalized += " ";
+      cursor = end + 1;
+      continue;
     }
-    at += name.length;
+    if (source[cursor] !== "\\") {
+      normalized += source[cursor];
+      continue;
+    }
+    cursor++;
+    if (cursor >= source.length) {
+      return null;
+    }
+    if (source[cursor] === "\n" || source[cursor] === "\f") {
+      continue;
+    }
+    if (source[cursor] === "\r") {
+      if (source[cursor + 1] === "\n") {
+        cursor++;
+      }
+      continue;
+    }
+    const hex = /^[\da-f]{1,6}/iu.exec(source.slice(cursor))?.[0];
+    if (hex === undefined) {
+      normalized += source[cursor];
+      continue;
+    }
+    const codePoint = Number.parseInt(hex, 16);
+    if (codePoint === 0 || codePoint > 0x10_ff_ff) {
+      return null;
+    }
+    normalized += String.fromCodePoint(codePoint);
+    cursor += hex.length - 1;
+    if (/\s/u.test(source[cursor + 1] ?? "")) {
+      cursor++;
+    }
   }
-  return null;
+  return normalized;
 };
 
-const tags = (source: string): string[] => {
-  const result: string[] = [];
-  let cursor = 0;
-  while ((cursor = source.indexOf("<", cursor)) !== -1) {
-    const end = source.indexOf(">", cursor + 1);
-    if (end === -1) {
-      break;
-    }
-    result.push(source.slice(cursor, end + 1));
-    cursor = end + 1;
+const nextCssReference = (
+  lower: string,
+  cursor: number,
+): { at: number; markerLength: number } | null => {
+  const urlAt = lower.indexOf("url(", cursor);
+  const importAt = lower.indexOf("@import", cursor);
+  if (urlAt === -1 && importAt === -1) {
+    return null;
   }
-  return result;
+  if (urlAt === -1) {
+    return { at: importAt, markerLength: 7 };
+  }
+  if (importAt === -1 || urlAt < importAt) {
+    return { at: urlAt, markerLength: 4 };
+  }
+  return { at: importAt, markerLength: 7 };
 };
 
 const cssHasExternalReference = (source: string): boolean => {
-  const lower = source.toLowerCase();
-  for (const marker of ["url(", "@import"]) {
-    let at = 0;
-    while ((at = lower.indexOf(marker, at)) !== -1) {
-      let valueAt = at + marker.length;
-      while (" \t\n(".includes(lower[valueAt] ?? "")) {
-        valueAt++;
-      }
-      const quote = lower[valueAt];
-      if (quote === '"' || quote === "'") {
-        valueAt++;
-      }
-      if (!isLocalReference(lower.slice(valueAt).split(/[\s;)]/u)[0] ?? "")) {
-        return true;
-      }
-      at = valueAt + 1;
+  const normalized = normalizeCss(source);
+  if (normalized === null) {
+    return true;
+  }
+  const lower = normalized.toLowerCase();
+  let cursor = 0;
+  while (cursor < lower.length) {
+    const reference = nextCssReference(lower, cursor);
+    if (reference === null) {
+      return false;
     }
+    const isUrl = reference.markerLength === 4;
+    let valueAt = reference.at + reference.markerLength;
+    while (valueAt < lower.length && /\s/u.test(lower[valueAt] ?? "")) {
+      valueAt++;
+    }
+    if (!isUrl && lower.slice(valueAt, valueAt + 4) === "url(") {
+      valueAt += 4;
+      while (valueAt < lower.length && /\s/u.test(lower[valueAt] ?? "")) {
+        valueAt++;
+      }
+    }
+    if (valueAt >= lower.length) {
+      return true;
+    }
+    const quote = lower[valueAt];
+    const quoted = quote === '"' || quote === "'";
+    if (quoted) {
+      valueAt++;
+    }
+    let end = valueAt;
+    if (quoted) {
+      while (end < lower.length && lower[end] !== quote) {
+        end++;
+      }
+    } else {
+      while (end < lower.length && !/[\s;)]/u.test(lower[end] ?? "")) {
+        end++;
+      }
+    }
+    if (end === valueAt || (quoted && end >= lower.length)) {
+      return true;
+    }
+    if (!isLocalReference(normalized.slice(valueAt, end))) {
+      return true;
+    }
+    cursor = end + 1;
   }
   return false;
 };
 
 const htmlHasExternalReference = (bytes: Uint8Array): boolean => {
   const source = text(bytes);
-  if (cssHasExternalReference(source)) {
-    return true;
-  }
-  for (const tag of tags(source)) {
-    const lower = tag.toLowerCase();
+  const $ = load(source);
+  for (const node of $("*").toArray()) {
+    if (!isTag(node)) {
+      continue;
+    }
+    const name = node.name.toLowerCase();
+    const attributes = Object.entries(node.attribs);
+    const attribute = (wanted: string) =>
+      attributes.find(([key]) => key.toLowerCase() === wanted)?.[1];
     if (
-      lower.startsWith("<base") ||
-      (lower.startsWith("<meta") &&
-        attributeValue(tag, "http-equiv")?.toLowerCase() === "refresh")
+      name === "base" ||
+      (name === "meta" && attribute("http-equiv")?.toLowerCase() === "refresh")
     ) {
       return true;
     }
-    const attributes = ["src", "poster", "data", "background"];
-    if (
-      lower.startsWith("<link") ||
-      lower.startsWith("<embed") ||
-      lower.startsWith("<input") ||
-      lower.startsWith("<image")
-    ) {
-      attributes.push("href", "xlink:href");
-    }
-    for (const name of attributes) {
-      const value = attributeValue(tag, name);
-      if (value !== null && !isLocalReference(value)) {
+    for (const [rawKey, value] of attributes) {
+      const key = rawKey.toLowerCase();
+      if (key === "style" && cssHasExternalReference(value)) {
+        return true;
+      }
+      if (key === "srcset") {
+        if (
+          value
+            .split(",")
+            .some(
+              (candidate) =>
+                !isLocalReference(candidate.trim().split(/\s/u)[0] ?? ""),
+            )
+        ) {
+          return true;
+        }
+        continue;
+      }
+      const reference =
+        [
+          "src",
+          "poster",
+          "data",
+          "background",
+          "xlink:href",
+          "action",
+          "formaction",
+        ].includes(key) ||
+        (key === "href" && name !== "a" && name !== "area");
+      if (reference && !isLocalReference(value)) {
         return true;
       }
     }
-    const srcset = attributeValue(tag, "srcset");
+    if (name === "style" && cssHasExternalReference($(node).text())) {
+      return true;
+    }
+  }
+  return false;
+};
+
+const xmlElements = function* (
+  element: slimdom.Element | null,
+): Generator<slimdom.Element> {
+  if (element === null) {
+    return;
+  }
+  yield element;
+  for (const child of element.childNodes) {
+    if (child instanceof slimdom.Element) {
+      yield* xmlElements(child);
+    }
+  }
+};
+
+const relationshipHasExternalReference = (source: string): boolean => {
+  const document = slimdom.parseXmlDocument(source);
+  for (const element of xmlElements(document.documentElement)) {
+    if (element.localName !== "Relationship") {
+      continue;
+    }
+    const targetMode = xmlAttribute(element, "targetmode");
+    const target = xmlAttribute(element, "target");
     if (
-      srcset
-        ?.split(",")
-        .some(
-          (part) => !isLocalReference(part.trim().split(/\s/u)[0] ?? ""),
-        ) === true
+      targetMode?.toLowerCase() === "external" ||
+      (target !== null && !isLocalReference(target))
     ) {
       return true;
     }
@@ -224,20 +266,16 @@ const htmlHasExternalReference = (bytes: Uint8Array): boolean => {
   return false;
 };
 
-const relationshipHasExternalReference = (source: string): boolean => {
-  for (const tag of tags(source)) {
-    if (!tag.toLowerCase().startsWith("<relationship")) {
-      continue;
-    }
-    if (attributeValue(tag, "targetmode")?.toLowerCase() !== "external") {
-      continue;
-    }
-    const type = attributeValue(tag, "type")?.toLowerCase();
-    if (type === undefined || !type.endsWith("/hyperlink")) {
-      return true;
+const xmlAttribute = (
+  element: slimdom.Element,
+  name: string,
+): string | null => {
+  for (const attribute of element.attributes) {
+    if (attribute.name.toLowerCase() === name) {
+      return attribute.value;
     }
   }
-  return false;
+  return null;
 };
 
 const firstTokenMatches = (
@@ -262,11 +300,12 @@ const OOXML_FIELD_KEYWORDS: ReadonlySet<string> = new Set([
 ]);
 
 const ooxmlFieldHasExternalReference = (source: string): boolean => {
-  for (const tag of tags(source)) {
-    if (!tag.toLowerCase().startsWith("<w:fldsimple")) {
+  const document = slimdom.parseXmlDocument(source);
+  for (const element of xmlElements(document.documentElement)) {
+    if (element.localName !== "fldSimple") {
       continue;
     }
-    const instruction = attributeValue(tag, "w:instr");
+    const instruction = xmlAttribute(element, "w:instr");
     if (
       instruction !== null &&
       firstTokenMatches(instruction, OOXML_FIELD_KEYWORDS)
@@ -275,17 +314,10 @@ const ooxmlFieldHasExternalReference = (source: string): boolean => {
     }
   }
   const instructions: { instruction: string; closed: boolean }[] = [];
-  const lower = source.toLowerCase();
-  let cursor = 0;
-  while ((cursor = lower.indexOf("<", cursor)) !== -1) {
-    const tagEnd = source.indexOf(">", cursor + 1);
-    if (tagEnd === -1) {
-      break;
-    }
-    const tag = source.slice(cursor, tagEnd + 1);
-    const lowerTag = tag.toLowerCase();
-    if (lowerTag.startsWith("<w:fldchar")) {
-      const type = attributeValue(tag, "w:fldchartype")?.toLowerCase();
+  for (const element of xmlElements(document.documentElement)) {
+    const name = element.localName.toLowerCase();
+    if (name === "fldchar") {
+      const type = xmlAttribute(element, "w:fldchartype")?.toLowerCase();
       if (type === "begin") {
         instructions.push({ instruction: "", closed: false });
       } else if (type === "separate") {
@@ -306,17 +338,10 @@ const ooxmlFieldHasExternalReference = (source: string): boolean => {
           return true;
         }
       }
-      cursor = tagEnd + 1;
       continue;
     }
-    if (lowerTag.startsWith("<w:instrtext")) {
-      const textEnd = lower.indexOf("</w:instrtext>", tagEnd + 1);
-      if (textEnd === -1) {
-        break;
-      }
-      const value = decodeCharacterReferences(
-        source.slice(tagEnd + 1, textEnd),
-      );
+    if (name === "instrtext") {
+      const value = element.textContent ?? "";
       const fieldIndex = instructions.length - 1;
       if (fieldIndex >= 0) {
         const field = instructions[fieldIndex];
@@ -326,10 +351,7 @@ const ooxmlFieldHasExternalReference = (source: string): boolean => {
       } else if (firstTokenMatches(value, OOXML_FIELD_KEYWORDS)) {
         return true;
       }
-      cursor = textEnd + "</w:instrtext>".length;
-      continue;
     }
-    cursor = tagEnd + 1;
   }
   return false;
 };
@@ -442,11 +464,12 @@ const odfHasExternalReference = async (bytes: Uint8Array): Promise<boolean> =>
     isOdfInspectedPath,
     (path) => (path === "styles.xml" ? "metadata" : "body"),
     (_path, source) => {
-      for (const tag of tags(source)) {
-        if (tag.toLowerCase().startsWith("<text:a")) {
+      const document = slimdom.parseXmlDocument(source);
+      for (const element of xmlElements(document.documentElement)) {
+        if (element.localName.toLowerCase() === "a") {
           continue;
         }
-        const href = attributeValue(tag, "xlink:href");
+        const href = xmlAttribute(element, "xlink:href");
         if (href !== null && !isLocalReference(href)) {
           return true;
         }

@@ -295,14 +295,26 @@ export const convertToPdf = async (
   }
 
   if (isConvertibleMimeType(mimeType)) {
-    const input = await checkConversionInput(mimeType, bytes);
-    if (input.kind === "refuse") {
-      return Result.err(
-        new ConversionInputError({
-          message: "Document input is not eligible for conversion",
-          reason: input.reason,
-        }),
-      );
+    const inspection = await Result.tryPromise({
+      try: async () => {
+        const input = await checkConversionInput(mimeType, bytes);
+        if (input.kind === "refuse") {
+          throw new ConversionInputError({
+            message: "Document input is not eligible for conversion",
+            reason: input.reason,
+          });
+        }
+      },
+      catch: (cause) =>
+        cause instanceof ConversionInputError
+          ? cause
+          : new GotenbergError({
+              message: "Failed to inspect document input",
+              cause,
+            }),
+    });
+    if (Result.isError(inspection)) {
+      return inspection;
     }
   }
 

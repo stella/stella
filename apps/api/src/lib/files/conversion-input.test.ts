@@ -28,18 +28,18 @@ const fixtures = {
     ),
     local: await zip(
       "word/_rels/document.xml.rels",
-      '<Relationships><Relationship Type="x/hyperlink" Target="https://example.test/terms" TargetMode="External"/></Relationships>',
+      '<Relationships><Relationship Type="x/hyperlink" Target="notes.xml"/></Relationships>',
     ),
   },
   odf: {
     mime: "application/vnd.oasis.opendocument.text",
     remote: await zip(
       "content.xml",
-      '<draw:image xlink:href="https://example.test/image.png"/>',
+      '<content xmlns:draw="urn:draw" xmlns:xlink="urn:xlink"><draw:image xlink:href="https://example.test/image.png"/></content>',
     ),
     local: await zip(
       "content.xml",
-      '<text:a xlink:href="https://example.test/terms">Terms</text:a><draw:image xlink:href="Pictures/a.png"/>',
+      '<content xmlns:text="urn:text" xmlns:draw="urn:draw" xmlns:xlink="urn:xlink"><text:a xlink:href="https://example.test/terms">Terms</text:a><draw:image xlink:href="Pictures/a.png"/></content>',
     ),
   },
   rtf: {
@@ -108,10 +108,71 @@ describe("document conversion input", () => {
     });
   });
 
+  test.each([
+    '<img alt=">" src="https://example.test/a.png">',
+    "<img alt='>' src='https://example.test/a.png'>",
+    '<img alt="&#x3e;" src="https://example.test/a.png">',
+    "<img SRC=https://example.test/a.png>",
+    '<div style="background:url(//x.test/a)"></div>',
+    '<svg><use href="https://x.test/s#a"></use></svg>',
+    '<link HREF="https://example.test/a.css">',
+  ])("refuses references in parsed HTML attributes", async (source) => {
+    expect(await checkConversionInput("text/html", encode(source))).toEqual({
+      kind: "refuse",
+      reason: "external_reference",
+      format: "text/html",
+    });
+  });
+
+  test.each([
+    '<a href="https://x.test">link</a>',
+    '<img src="data:image/png;base64,AA==">',
+    '<img src="relative.png">',
+    '<svg><use href="#icon"></use></svg>',
+  ])("allows local and navigation HTML references", async (source) => {
+    expect(await checkConversionInput("text/html", encode(source))).toEqual({
+      kind: "convert",
+    });
+  });
+
+  test.each([
+    "<style>@import   </style>",
+    "<style>body{background:url(   </style>",
+  ])("refuses unfinished CSS references", async (source) => {
+    const result = await Promise.race([
+      checkConversionInput("text/html", encode(source)),
+      Bun.sleep(1000).then(() => "timeout"),
+    ]);
+    expect(result).not.toBe("timeout");
+    expect(result).toEqual({
+      kind: "refuse",
+      reason: "external_reference",
+      format: "text/html",
+    });
+  });
+
+  test.each([
+    '<Relationships><Relationship TargetMode="External" Target="local.xml"/></Relationships>',
+    "<Relationships><Relationship target='https://example.test/a' type='x' targetmode='internal'/></Relationships>",
+  ])("refuses non-local OOXML relationships", async (relationship) => {
+    const input = await zip("word/_rels/document.xml.rels", relationship);
+    expect(
+      await checkConversionInput(
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        input,
+      ),
+    ).toEqual({
+      kind: "refuse",
+      reason: "external_reference",
+      format:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    });
+  });
+
   test("refuses OOXML field instructions for remote content", async () => {
     const input = await zip(
       "word/document.xml",
-      "<w:document><w:instrText>INCLUDEPICTURE https://example.test/a.png</w:instrText></w:document>",
+      '<w:document xmlns:w="urn:w"><w:instrText>INCLUDEPICTURE https://example.test/a.png</w:instrText></w:document>',
     );
     expect(
       await checkConversionInput(
@@ -130,7 +191,7 @@ describe("document conversion input", () => {
     const paragraph = "<w:p><w:r><w:t>ordinary text</w:t></w:r></w:p>";
     const input = await zip(
       "word/document.xml",
-      `<w:document>${paragraph.repeat(70_000)}</w:document>`,
+      `<w:document xmlns:w="urn:w">${paragraph.repeat(70_000)}</w:document>`,
     );
     expect(
       await checkConversionInput(
@@ -143,7 +204,7 @@ describe("document conversion input", () => {
   test("refuses OOXML field instructions joined across runs", async () => {
     const input = await zip(
       "word/document.xml",
-      '<w:document><w:fldChar w:fldCharType="begin"/><w:r><w:instrText>INCLUDE</w:instrText></w:r><w:r><w:instrText>PICTURE "http://x.invalid/a.png"</w:instrText></w:r><w:fldChar w:fldCharType="end"/></w:document>',
+      '<w:document xmlns:w="urn:w"><w:fldChar w:fldCharType="begin"/><w:r><w:instrText>INCLUDE</w:instrText></w:r><w:r><w:instrText>PICTURE "http://x.invalid/a.png"</w:instrText></w:r><w:fldChar w:fldCharType="end"/></w:document>',
     );
     expect(
       await checkConversionInput(
@@ -161,7 +222,7 @@ describe("document conversion input", () => {
   test("refuses OOXML instructions joined around a nested field", async () => {
     const input = await zip(
       "word/document.xml",
-      '<w:document><w:fldChar w:fldCharType="begin"/><w:instrText>INCLUDE</w:instrText><w:fldChar w:fldCharType="begin"/><w:instrText>PAGE</w:instrText><w:fldChar w:fldCharType="separate"/><w:t>1</w:t><w:fldChar w:fldCharType="end"/><w:instrText>PICTURE "http://x.invalid/a.png"</w:instrText><w:fldChar w:fldCharType="separate"/><w:fldChar w:fldCharType="end"/></w:document>',
+      '<w:document xmlns:w="urn:w"><w:fldChar w:fldCharType="begin"/><w:instrText>INCLUDE</w:instrText><w:fldChar w:fldCharType="begin"/><w:instrText>PAGE</w:instrText><w:fldChar w:fldCharType="separate"/><w:t>1</w:t><w:fldChar w:fldCharType="end"/><w:instrText>PICTURE "http://x.invalid/a.png"</w:instrText><w:fldChar w:fldCharType="separate"/><w:fldChar w:fldCharType="end"/></w:document>',
     );
     expect(
       await checkConversionInput(
@@ -179,7 +240,7 @@ describe("document conversion input", () => {
   test("converts ordinary nested OOXML fields", async () => {
     const input = await zip(
       "word/document.xml",
-      '<w:document><w:fldChar w:fldCharType="begin"/><w:instrText>IF </w:instrText><w:fldChar w:fldCharType="begin"/><w:instrText>PAGE</w:instrText><w:fldChar w:fldCharType="separate"/><w:t>1</w:t><w:fldChar w:fldCharType="end"/><w:instrText> = 1 "first" "later"</w:instrText><w:fldChar w:fldCharType="separate"/><w:t>first</w:t><w:fldChar w:fldCharType="end"/></w:document>',
+      '<w:document xmlns:w="urn:w"><w:fldChar w:fldCharType="begin"/><w:instrText>IF </w:instrText><w:fldChar w:fldCharType="begin"/><w:instrText>PAGE</w:instrText><w:fldChar w:fldCharType="separate"/><w:t>1</w:t><w:fldChar w:fldCharType="end"/><w:instrText> = 1 "first" "later"</w:instrText><w:fldChar w:fldCharType="separate"/><w:t>first</w:t><w:fldChar w:fldCharType="end"/></w:document>',
     );
     expect(
       await checkConversionInput(

@@ -191,6 +191,19 @@ describe("PDF conversion routes", () => {
     expect(Result.isOk(result)).toBe(true);
   });
 
+  test("returns an error when document inspection cannot read the archive", async () => {
+    const { result, urls } = await withConverterFetch(
+      () => new Response("unexpected", { status: 500 }),
+      async () =>
+        await convertToPdf(
+          fileOf(new TextEncoder().encode("not a zip"), DOCX_MIME_TYPE),
+        ),
+    );
+
+    expect(Result.isError(result)).toBe(true);
+    expect(urls).toEqual([]);
+  });
+
   test("a caller-owned retry makes exactly one converter call per conversion", async () => {
     const { result, urls } = await withConverterFetch(
       () => new Response("busy", { status: 503 }),
