@@ -630,13 +630,8 @@ const extractCandidates = async ({
             prompt: buildExtractionPrompt({ summary, transcript }),
             outputSchema: extractionSchema,
             maxOutputTokens: MEMORY_MAX_OUTPUT_TOKENS,
-            // Combine the per-call timeout with the scheduler's shutdown signal
-            // so a graceful stop cancels an in-flight model call immediately.
-            abortSignal: AbortSignal.any([
-              AbortSignal.timeout(EXTRACTION_TIMEOUT_MS),
-              schedulerSignal,
-              leaseSignal,
-            ]),
+            abortSignal: AbortSignal.any([schedulerSignal, leaseSignal]),
+            deadlineMs: EXTRACTION_TIMEOUT_MS,
           });
         },
       });

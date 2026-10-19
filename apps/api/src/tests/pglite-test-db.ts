@@ -41,6 +41,7 @@ import {
   installPgliteLegislationExpressionIdentity,
   installPgliteLegislationPayloadRevision,
   installPgliteProvisionExtractionState,
+  installPgliteCaseLawCountryShape,
   installPgliteSchedulerJobPauseLog,
   installPgliteOrganizationMemberCapacity,
   installPgliteWorkspaceContactCapacity,
@@ -530,6 +531,11 @@ export const ROLE_GRANT_STATEMENTS = [
     GRANT SELECT, INSERT, DELETE ON TABLE "legislation_work_names"
     TO stella_ingestion
   `,
+  `
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
+      "legislation_amendment_snapshots", "legislation_amendments"
+    TO stella_ingestion
+  `,
   // Final-generation state is observable by request code but mutated only by
   // ingestion. A narrowly scoped database function owns retirement deletes.
   `
@@ -556,6 +562,16 @@ export const ROLE_GRANT_STATEMENTS = [
   `
     GRANT UPDATE (provisioning_status, attested_at, updated_at)
       ON TABLE "corpus_index_group_enrollments" TO stella_ingestion
+  `,
+  // The serving pointer is written by the gated flip and deleted when a
+  // whole generation is promoted; ingestion may not rewrite its key.
+  `
+    GRANT SELECT, INSERT, DELETE ON TABLE "corpus_index_jurisdiction_serving"
+    TO stella_ingestion
+  `,
+  `
+    GRANT UPDATE (generation, from_generation, flipped_at)
+      ON TABLE "corpus_index_jurisdiction_serving" TO stella_ingestion
   `,
   // The withdrawal trail is append-only: ingestion records, the app reads.
   `
@@ -792,6 +808,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteLegislationPayloadRevision(db);
   await installPgliteLegislationExpressionIdentity(db);
   await installPgliteProvisionExtractionState(db);
+  await installPgliteCaseLawCountryShape(db);
   await installPgliteCaseLawObservationFence(db);
   await installPglitePdfSigningTokenScopes(db);
   await installPgliteDesktopPresenceRls(db);
