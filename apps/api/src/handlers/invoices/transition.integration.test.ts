@@ -40,10 +40,6 @@ import updateInvoice from "./update";
 
 setDefaultTimeout(120_000);
 
-if (process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true") {
-  throw new Error("This suite must run through test:postgres");
-}
-
 type TransitionCtx = Parameters<typeof transitionInvoice.handler>[0];
 
 let testDb: TestDatabase;
