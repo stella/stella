@@ -8,6 +8,7 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { AI_MEMORY_FEATURE_ID } from "@/api/lib/feature-access/registry";
 
@@ -121,5 +122,11 @@ const deleteMemory = createSafeRootHandler(
     }
   },
 );
+
+declareAggregateMutation(deleteMemory.handler, {
+  type: "independent",
+  reason:
+    "Deletes one memory row in one transaction and re-checks its ownership fields in the delete itself; no aggregate state spans memories.",
+});
 
 export default deleteMemory;

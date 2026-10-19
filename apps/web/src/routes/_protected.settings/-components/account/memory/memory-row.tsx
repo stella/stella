@@ -120,8 +120,8 @@ export const MemoryRow = ({
           confirmation: commonT("delete"),
         })}
         loading={deleteMemory.isPending}
-        onConfirm={async () => {
-          await deleteMemory.mutateAsync();
+        onConfirm={() => {
+          deleteMemory.mutate();
         }}
         onOpenChange={setDeleteDialogOpen}
         open={deleteDialogOpen}
