@@ -4,6 +4,7 @@ import { DrizzleQueryError } from "drizzle-orm";
 
 import { errorFingerprint } from "@/api/lib/errors/utils";
 import { logger, sanitizeLogAttributes } from "@/api/lib/observability/logger";
+import { APP_VERSION } from "@/api/lib/version";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 
 const originalStderrWrite = process.stderr.write;
@@ -107,6 +108,7 @@ describe("logger attributes", () => {
       severity: "ERROR",
       message: "test.failed",
       ...expected,
+      "service.version": APP_VERSION,
     });
   });
 
@@ -172,6 +174,7 @@ describe("logger attributes", () => {
     expect(JSON.parse(output)).toEqual({
       severity: "INFO",
       message: "request.completed",
+      "service.version": APP_VERSION,
       "error.type": "TaggedError",
       "error.class": "TaggedError",
       "error.code": "DATABASE_UNAVAILABLE",

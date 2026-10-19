@@ -1,7 +1,14 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
-import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readdir,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
 import { pathToFileURL } from "node:url";
@@ -1019,6 +1026,160 @@ test("route tree has one derived owner and a cache producer for every consumer",
     );
   }
 });
+
+test("web messages have one derived owner and are generated wherever the route tree is", () => {
+  const owner = generator("i18n-messages-web");
+  expect(owner.outputKind).toBe("derived");
+  const output = "apps/web/src/i18n/langs/messages.gen.ts";
+  expect(owner.outputs).toEqual([output]);
+  expect(
+    GENERATORS.filter(({ outputs }) =>
+      outputs.some((file) => file === output),
+    ).map(({ id }) => id),
+  ).toEqual([owner.id]);
+  const ignored = Bun.spawnSync(["git", "check-ignore", "--no-index", output]);
+  expect(ignored.exitCode).toBe(0);
+  const config = v.parse(
+    v.object({
+      tasks: v.record(
+        v.string(),
+        v.looseObject({
+          dependsOn: v.optional(v.array(v.string())),
+          outputs: v.optional(v.array(v.string())),
+        }),
+      ),
+    }),
+    Bun.JSONC.parse(
+      readFileSync(new URL("../turbo.json", import.meta.url), "utf-8"),
+    ),
+  );
+  expect(config.tasks["@stll/web#generate:messages"]?.outputs).toEqual([
+    "src/i18n/langs/messages.gen.ts",
+  ]);
+  expect(
+    generationInputs("generate:messages")
+      .map((input) =>
+        input.startsWith("$TURBO_ROOT$/")
+          ? input.replace("$TURBO_ROOT$/", "")
+          : `apps/web/${input}`,
+      )
+      .toSorted(),
+  ).toEqual([...owner.inputs].toSorted());
+  // Every task that needs the derived route tree reads the web sources, and
+  // those import the message declarations too. API type generation reads the
+  // routes only.
+  for (const [name, task] of Object.entries(config.tasks)) {
+    const dependsOn = task.dependsOn ?? [];
+    if (
+      dependsOn.includes("generate:route-tree") &&
+      name !== "@stll/web#generate:api-types"
+    ) {
+      expect(dependsOn, name).toContain("generate:messages");
+    }
+    if (dependsOn.includes("@stll/web#generate:route-tree")) {
+      expect(dependsOn, name).toContain("@stll/web#generate:messages");
+    }
+  }
+  const manifests = v.parse(
+    v.object({ scripts: v.record(v.string(), v.string()) }),
+    JSON.parse(
+      readFileSync(
+        new URL("../apps/web/package.json", import.meta.url),
+        "utf-8",
+      ),
+    ),
+  );
+  // Outside Turbo, scripts generate both through one producer step, a shape
+  // the Docker source closure and the shell parsers recognise.
+  expect(manifests.scripts["generate:web-sources"]).toBe(
+    "bun run generate:route-tree && bun run generate:messages",
+  );
+  for (const [name, script] of Object.entries(manifests.scripts)) {
+    if (name === "generate:web-sources") {
+      continue;
+    }
+    expect(script, name).not.toContain("bun run generate:route-tree");
+    // The fallback is either this producer step or the root generate, which
+    // includes generate:messages (checked below).
+    if (script.includes('[ -n "$TURBO_HASH" ]')) {
+      expect(
+        script.includes(
+          '([ -n "$TURBO_HASH" ] || bun run generate:web-sources)',
+        ) ||
+          /\[ -n "\$TURBO_HASH" \] \|\| bun run (?:--cwd \.\.\/\.\. )?generate\)/u.test(
+            script,
+          ),
+        name,
+      ).toBe(true);
+    }
+  }
+  const root = v.parse(
+    v.object({ scripts: v.object({ generate: v.string() }) }),
+    JSON.parse(
+      readFileSync(new URL("../package.json", import.meta.url), "utf-8"),
+    ),
+  );
+  expect(root.scripts.generate).toContain("generate:messages");
+});
+
+// Runs in a copy of the tracked files the checks read, never by deleting the
+// checkout's declarations: other test files read them concurrently.
+test("web catalog checks pass without the derived message declarations", async () => {
+  const repo = new URL("..", import.meta.url).pathname;
+  const tracked = Bun.spawnSync(
+    [
+      "git",
+      "ls-files",
+      "-z",
+      "--",
+      "apps/web/package.json",
+      "apps/web/src",
+      "apps/web/scripts",
+      "apps/web/public/prepaint-init.js",
+      "packages/ai-catalog/src",
+    ],
+    { cwd: repo, stdout: "pipe", stderr: "pipe" },
+  );
+  expect(tracked.exitCode).toBe(0);
+  const files = tracked.stdout.toString().split("\0").filter(Boolean);
+  expect(files).not.toContain("apps/web/src/i18n/langs/messages.gen.ts");
+  const copy = await mkdtemp(nodePath.join(tmpdir(), "web-catalog-check-"));
+  try {
+    for (const file of files) {
+      await mkdir(nodePath.dirname(nodePath.join(copy, file)), {
+        recursive: true,
+      });
+      await writeFile(
+        nodePath.join(copy, file),
+        await Bun.file(nodePath.join(repo, file)).bytes(),
+      );
+    }
+    // Code and dependencies are shared read-only with the checkout.
+    for (const link of [
+      "node_modules",
+      "apps/web/node_modules",
+      "packages/scripts",
+    ]) {
+      if (existsSync(nodePath.join(repo, link))) {
+        await symlink(nodePath.join(repo, link), nodePath.join(copy, link));
+      }
+    }
+    const check = Bun.spawnSync(["bun", "run", "i18n:check"], {
+      cwd: nodePath.join(copy, "apps/web"),
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(new TextDecoder().decode(check.stderr)).not.toContain("error");
+    expect(check.exitCode).toBe(0);
+    expect(
+      existsSync(
+        nodePath.join(copy, "apps/web/src/i18n/langs/messages.gen.ts"),
+      ),
+    ).toBe(false);
+  } finally {
+    await rm(copy, { recursive: true, force: true });
+  }
+}, 60_000);
 
 test("long optional runs accept dispatch only", () => {
   for (const file of [
