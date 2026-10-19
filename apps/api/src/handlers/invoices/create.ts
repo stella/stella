@@ -37,7 +37,11 @@ import { latestDate } from "@/api/lib/billing/invoice-prefill.logic";
 import { canApproveTimeEntries } from "@/api/lib/billing/time-entry-authorization";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tCurrencyCode, tSafeId } from "@/api/lib/custom-schema";
+import {
+  tCurrencyCode,
+  tInvoiceLanguage,
+  tSafeId,
+} from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import type { CentsAmount } from "@/api/lib/money";
@@ -46,7 +50,6 @@ import { PG_ERROR } from "@/api/lib/pg-error";
 
 import { INVOICE_ENTRIES_MODIFIED_MESSAGE } from "./concurrent-modification";
 import { tInvoiceDocumentType, validateInvoiceDocument } from "./document-type";
-import { tInvoiceLanguage } from "./invoice-language";
 
 type InvoiceDocumentType = Static<typeof tInvoiceDocumentType>;
 

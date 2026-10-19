@@ -23,7 +23,6 @@ import {
   validatePersonDetails,
 } from "@/api/handlers/contacts/person-details";
 import { contactTypeSchema } from "@/api/handlers/contacts/schema";
-import { tInvoiceLanguage } from "@/api/handlers/invoices/invoice-language";
 import { captureError } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -31,7 +30,12 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { dateOfBirthSchema } from "@/api/lib/business-registries/date-of-birth";
 import { nationalityCodesSchema } from "@/api/lib/business-registries/nationality-codes";
-import { tMinorUnitAmount, tSafeId, tUserId } from "@/api/lib/custom-schema";
+import {
+  tInvoiceLanguage,
+  tMinorUnitAmount,
+  tSafeId,
+  tUserId,
+} from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";
 import { pickDefined } from "@/api/lib/pick-defined";
@@ -405,7 +409,6 @@ const updateContactById = createSafeRootHandler(
       "and an unknown contact is a 404.",
     permissions: { contact: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
-    featureAccess: { featureId: "time-billing", type: "required" },
     mcp: { type: "covered", by: "save_contact" },
     params: updateContactParamsSchema,
     body: updateContactBodySchema,

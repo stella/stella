@@ -25,6 +25,7 @@ import { flatFeeInvoiceRefusal } from "@/api/lib/billing/invoice-arrangements";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   tCurrencyCode,
+  tInvoiceLanguage,
   tSafeId,
   workspaceParams,
 } from "@/api/lib/custom-schema";
@@ -32,7 +33,6 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { pickDefined } from "@/api/lib/pick-defined";
 
 import { tInvoiceDocumentType, validateInvoiceDocument } from "./document-type";
-import { tInvoiceLanguage } from "./invoice-language";
 import { recalculateInvoiceTotals } from "./invoice-lines";
 
 const updateInvoiceBodySchema = t.Object({
