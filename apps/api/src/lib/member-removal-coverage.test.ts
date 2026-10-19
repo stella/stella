@@ -144,6 +144,7 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "mcp_connector_authorization_reviews.approved_endpoint_origins",
   "mcp_connectors.oauth_confirmed_endpoint_origins",
   "mcp_oauth_clients.registration_response",
+  "mcp_oauth_state.authorization_response_binding",
   "mcp_user_connections.cached_tools",
   "notifications.metadata",
   "organization_settings.practice_jurisdictions",
