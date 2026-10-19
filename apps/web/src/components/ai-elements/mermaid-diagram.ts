@@ -1,8 +1,6 @@
-import type { MermaidConfig } from "@streamdown/mermaid";
-import type { RenderOptions } from "pele";
-import type { DiagramPlugin } from "streamdown";
-
-type DiagramSvg = { svg: string };
+import { Result, TaggedError } from "better-result";
+import type { PeleErrorCode, RenderOptions } from "pele";
+import type * as PeleLazy from "pele/lazy";
 
 type DiagramFonts = Required<
   Pick<RenderOptions, "fontFamily" | "fontFamilyMono">
@@ -13,40 +11,85 @@ const PELE_OPTIONS = {
   images: false,
 } as const satisfies RenderOptions;
 
+export type DiagramRenderFailureReason = PeleErrorCode | "engine-unavailable";
+
+export class DiagramRenderFailure extends TaggedError("DiagramRenderFailure")<{
+  reason: DiagramRenderFailureReason;
+  message: string;
+  cause?: unknown;
+}>() {}
+
+export type RenderedDiagram = { svg: string };
+
+export type DiagramRender = Result<RenderedDiagram, DiagramRenderFailure>;
+
+type DiagramEngine = Pick<
+  typeof PeleLazy,
+  "PeleError" | "detectType" | "load" | "render"
+>;
+
+const loadPele = (): Promise<DiagramEngine> => import("pele/lazy");
+
 type RenderDiagramArgs = {
   id: string;
   source: string;
   fonts: DiagramFonts;
-  fallback: (id: string, source: string) => Promise<DiagramSvg>;
+  loadEngine?: () => Promise<DiagramEngine>;
 };
 
+/**
+ * Renders a fenced Mermaid block with pele, the only diagram engine in the
+ * app. Every way it can fail (no engine chunk, an unsupported diagram type, a
+ * syntax or limit error thrown by the synchronous render) comes back as a
+ * typed failure, so the caller shows the source instead of a broken diagram.
+ */
 export const renderDiagram = async ({
   id,
   source,
   fonts,
-  fallback,
-}: RenderDiagramArgs): Promise<DiagramSvg> => {
-  const pele = await import("pele/lazy");
-  if (!(await pele.load(pele.detectType(source)))) {
-    return fallback(id, source);
+  loadEngine = loadPele,
+}: RenderDiagramArgs): Promise<DiagramRender> => {
+  const engine = await Result.tryPromise({
+    try: async () => {
+      const pele = await loadEngine();
+      return { pele, loaded: await pele.load(pele.detectType(source)) };
+    },
+    catch: (cause) =>
+      new DiagramRenderFailure({
+        reason: "engine-unavailable",
+        message: "The diagram engine could not be loaded.",
+        cause,
+      }),
+  });
+  if (Result.isError(engine)) {
+    return Result.err(engine.error);
   }
-  return {
-    svg: pele.render(source, { ...PELE_OPTIONS, ...fonts, idPrefix: id }).svg,
-  };
+  const { pele, loaded } = engine.value;
+  if (!loaded) {
+    return Result.err(
+      new DiagramRenderFailure({
+        reason: "unsupported-diagram",
+        message: "The diagram type is not supported.",
+      }),
+    );
+  }
+  return Result.try({
+    try: () => ({
+      svg: pele.render(source, { ...PELE_OPTIONS, ...fonts, idPrefix: id }).svg,
+    }),
+    catch: (cause) =>
+      new DiagramRenderFailure({
+        reason: cause instanceof pele.PeleError ? cause.code : "syntax",
+        message:
+          cause instanceof Error
+            ? cause.message
+            : "The diagram could not be rendered.",
+        cause,
+      }),
+  });
 };
 
-// Streamdown's own mermaid config never reaches the fallback: the plugin
-// below ignores `initialize`, so the fallback pins its security level here.
-export const FALLBACK_MERMAID_CONFIG = {
-  securityLevel: "strict",
-} as const satisfies MermaidConfig;
-
-const renderWithMermaid = async (id: string, source: string) => {
-  const { mermaid } = await import("@streamdown/mermaid");
-  return mermaid.getMermaid(FALLBACK_MERMAID_CONFIG).render(id, source);
-};
-
-const documentFonts = async (): Promise<DiagramFonts> => {
+export const documentFonts = async (): Promise<DiagramFonts> => {
   await document.fonts.ready;
   return {
     fontFamily: getComputedStyle(document.body).fontFamily,
@@ -55,19 +98,3 @@ const documentFonts = async (): Promise<DiagramFonts> => {
       .trim(),
   };
 };
-
-export const mermaidDiagram = {
-  name: "mermaid",
-  type: "diagram",
-  language: "mermaid",
-  getMermaid: () => ({
-    initialize: () => undefined,
-    render: async (id: string, source: string) =>
-      renderDiagram({
-        id,
-        source,
-        fonts: await documentFonts(),
-        fallback: renderWithMermaid,
-      }),
-  }),
-} as const satisfies DiagramPlugin;

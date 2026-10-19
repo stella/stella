@@ -229,12 +229,7 @@ export const DOC_SOURCES = {
     url: "https://oxc.rs/llms.txt",
   },
   Streamdown: {
-    dependencies: [
-      "streamdown",
-      "@streamdown/cjk",
-      "@streamdown/math",
-      "@streamdown/mermaid",
-    ],
+    dependencies: ["streamdown", "@streamdown/cjk", "@streamdown/math"],
     url: "https://streamdown.dev/llms.txt",
   },
   BetterResult: {

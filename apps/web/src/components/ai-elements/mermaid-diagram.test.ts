@@ -1,16 +1,13 @@
-import { panic } from "better-result";
-import { describe, expect, mock, test } from "bun:test";
+import { Result } from "better-result";
+import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import { Window } from "happy-dom";
-import type { DiagramPlugin } from "streamdown";
+import path from "node:path";
+import * as pele from "pele/lazy";
 
 import { assertProperty } from "@stll/property-testing";
 
-import {
-  FALLBACK_MERMAID_CONFIG,
-  mermaidDiagram,
-  renderDiagram,
-} from "@/components/ai-elements/mermaid-diagram";
+import { renderDiagram } from "@/components/ai-elements/mermaid-diagram";
 import { DIAGRAM_FIXTURES } from "@/components/ai-elements/mermaid-diagram.fixtures";
 
 const FONTS = { fontFamily: "sans-serif", fontFamilyMono: "monospace" };
@@ -40,11 +37,18 @@ const PAINT_ATTRIBUTES = new Set([
   "style",
 ]);
 
-const unusedFallback = async () =>
-  panic("fallback must not run for a type pele renders");
-
 const renderWithPele = async (source: string) =>
-  renderDiagram({ id: "d", source, fonts: FONTS, fallback: unusedFallback });
+  renderDiagram({ id: "d", source, fonts: FONTS });
+
+const FLOWCHART = "flowchart TD\n  A --> B";
+
+const REPO_ROOT = path.resolve(import.meta.dir, "../../../../..");
+
+// Specifiers of the mermaid engine and of every package that bundles it.
+const MERMAID_SPECIFIER = /^(?:mermaid|@streamdown\/mermaid)(?:\/.*)?$/u;
+
+const IMPORT_SPECIFIER =
+  /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+|\bmock\.module\(\s*|\brequire\(\s*)["']([^"']+)["']/gu;
 
 const svgViolations = (svg: string): string[] => {
   const window = new Window();
@@ -66,29 +70,6 @@ const svgViolations = (svg: string): string[] => {
   ]);
 };
 
-const withDocumentFonts = async <T>(run: () => Promise<T>): Promise<T> => {
-  const window = new Window();
-  const restore = {
-    document: Reflect.get(globalThis, "document"),
-    getComputedStyle: Reflect.get(globalThis, "getComputedStyle"),
-  };
-  Object.defineProperty(window.document, "fonts", {
-    configurable: true,
-    value: { ready: Promise.resolve() },
-  });
-  Reflect.set(globalThis, "document", window.document);
-  Reflect.set(globalThis, "getComputedStyle", () => ({
-    fontFamily: "sans-serif",
-    getPropertyValue: () => "monospace",
-  }));
-  try {
-    return await run();
-  } finally {
-    Reflect.set(globalThis, "document", restore.document);
-    Reflect.set(globalThis, "getComputedStyle", restore.getComputedStyle);
-  }
-};
-
 const MIN_FRAGMENTS = 1;
 const MAX_FRAGMENTS = 4;
 const MAX_FILLER_LENGTH = 8;
@@ -98,73 +79,73 @@ describe("mermaid diagrams", () => {
   test.each(DIAGRAM_FIXTURES.map(({ name, source }) => [name, source]))(
     "renders %s with pele",
     async (_name, source) => {
-      const { svg } = await renderWithPele(source);
-      expect(svg).toStartWith("<svg");
-      expect(svgViolations(svg)).toEqual([]);
+      const result = await renderWithPele(source);
+      if (Result.isError(result)) {
+        throw result.error;
+      }
+      expect(result.value.svg).toStartWith("<svg");
+      expect(svgViolations(result.value.svg)).toEqual([]);
     },
   );
 
-  test("the plugin entry streamdown calls inline and in fullscreen returns the checked svg", async () => {
-    // Streamdown renders the chart again for its fullscreen view through the
-    // same plugin `render` and injects the returned markup as is in both
-    // views, so this entry point is the one whose output must be clean.
-    const source =
-      'flowchart TD\n  A["<img src=x onerror=alert(1)>"] --> B\n  click A href "javascript:alert(1)"';
-    const plugin = mermaidDiagram.getMermaid();
-    const [inline, fullscreen] = await withDocumentFonts(async () => [
-      await plugin.render("inline", source),
-      await plugin.render("inline", source),
-    ]);
-    expect(svgViolations(inline.svg)).toEqual([]);
-    expect(fullscreen.svg).toBe(inline.svg);
-  });
-
-  test("the fallback renderer runs mermaid in strict mode whatever streamdown passes", async () => {
-    // The plugin ignores streamdown's `initialize`, so a config streamdown
-    // hands over never reaches the fallback; the engine must still be strict
-    // when it renders a diagram pele cannot detect.
-    const engineConfigs: unknown[] = [];
-    const engineRenders: [string, string][] = [];
-    void mock.module("mermaid", () => ({
-      default: {
-        initialize: (config: unknown) => {
-          engineConfigs.push(config);
+  test("a pele render that throws becomes a typed failure carrying pele's code", async () => {
+    const result = await renderDiagram({
+      id: "d",
+      source: FLOWCHART,
+      fonts: FONTS,
+      loadEngine: async () => ({
+        ...pele,
+        render: () => {
+          throw new pele.PeleError("too many nodes", "limit");
         },
-        render: async (id: string, text: string) => {
-          engineRenders.push([id, text]);
-          return { svg: '<svg data-renderer="mermaid"></svg>' };
-        },
-      },
-    }));
-    const source = "zenuml\n  Alice.method()";
-    const asStreamdownSees: DiagramPlugin = mermaidDiagram;
-    const plugin = asStreamdownSees.getMermaid({ securityLevel: "loose" });
-    plugin.initialize({ securityLevel: "loose" });
-    const result = await withDocumentFonts(async () =>
-      plugin.render("fallback-id", source),
-    );
-    expect(result.svg).toBe('<svg data-renderer="mermaid"></svg>');
-    expect(engineRenders).toEqual([["fallback-id", source]]);
-    expect(engineConfigs.length).toBeGreaterThan(0);
-    for (const config of engineConfigs) {
-      expect(config).toMatchObject(FALLBACK_MERMAID_CONFIG);
+      }),
+    });
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error._tag).toBe("DiagramRenderFailure");
+      expect(result.error.reason).toBe("limit");
     }
   });
 
-  test("hands diagram types pele cannot detect to the fallback renderer", async () => {
-    const calls: [string, string][] = [];
-    const source = "zenuml\n  Alice.method()";
+  test("a non-pele throw from the render is still a typed failure", async () => {
     const result = await renderDiagram({
-      id: "fallback-id",
-      source,
+      id: "d",
+      source: FLOWCHART,
       fonts: FONTS,
-      fallback: async (id, text) => {
-        calls.push([id, text]);
-        return { svg: '<svg data-renderer="fallback"></svg>' };
+      loadEngine: async () => ({
+        ...pele,
+        render: () => {
+          throw new TypeError("unexpected engine state");
+        },
+      }),
+    });
+    expect(Result.isError(result) && result.error.reason).toBe("syntax");
+  });
+
+  test("an engine chunk that fails to load is a typed failure, not a rejection", async () => {
+    const result = await renderDiagram({
+      id: "d",
+      source: FLOWCHART,
+      fonts: FONTS,
+      loadEngine: async () => {
+        throw new TypeError("Failed to fetch dynamically imported module");
       },
     });
-    expect(calls).toEqual([["fallback-id", source]]);
-    expect(result.svg).toBe('<svg data-renderer="fallback"></svg>');
+    expect(Result.isError(result) && result.error.reason).toBe(
+      "engine-unavailable",
+    );
+  });
+
+  test("diagram types pele cannot render are typed failures, never handed to another engine", async () => {
+    const result = await renderWithPele("zenuml\n  Alice.method()");
+    expect(Result.isError(result) && result.error.reason).toBe(
+      "unsupported-diagram",
+    );
+  });
+
+  test("malformed diagram text is a typed failure", async () => {
+    const result = await renderWithPele("flowchart TD\n  A --> [[[");
+    expect(Result.isError(result)).toBe(true);
   });
 
   test("hostile diagram text never yields active content, links, or remote fetches", async () => {
@@ -227,17 +208,59 @@ describe("mermaid diagrams", () => {
     await assertProperty(
       "hostile diagram text never yields active content, links, or remote fetches",
       fc.asyncProperty(template, text, async (build, value) => {
-        const svg = await renderWithPele(build(value)).then(
-          (result) => result.svg,
-          () => null,
-        );
-        if (svg !== null) {
+        const result = await renderWithPele(build(value));
+        if (Result.isOk(result)) {
           rendered += 1;
-          expect(svgViolations(svg)).toEqual([]);
+          expect(svgViolations(result.value.svg)).toEqual([]);
         }
       }),
       { numRuns: NUM_RUNS },
     );
     expect(rendered).toBeGreaterThan(NUM_RUNS / 2);
+  });
+});
+
+describe("mermaid engine census", () => {
+  test("no mermaid engine package is installed", async () => {
+    const lockfile = await Bun.file(path.join(REPO_ROOT, "bun.lock")).text();
+    const packages = [...lockfile.matchAll(/^ {4}"([^"]+)": \["([^"]+)@/gmu)]
+      .map(([, key = "", resolved = ""]) => [key, resolved])
+      .filter(([key = "", resolved = ""]) =>
+        [key.split("/").at(-1), resolved].some((name) =>
+          MERMAID_SPECIFIER.test(name ?? ""),
+        ),
+      );
+    expect(packages).toEqual([]);
+  });
+
+  test("no tracked source file imports a mermaid engine", () => {
+    // `git grep` narrows to lines that load a module by that name; the
+    // specifier check then keeps only exact mermaid engine specifiers.
+    const grep = Bun.spawnSync(
+      [
+        "git",
+        "grep",
+        "-n",
+        "-E",
+        String.raw`(from|import|import\(|mock\.module\(|require\()[[:space:]]*["'](@streamdown/)?mermaid`,
+        "--",
+        "*.ts",
+        "*.tsx",
+        "*.js",
+        "*.mjs",
+        "*.cjs",
+      ],
+      { cwd: REPO_ROOT },
+    );
+    expect([0, 1]).toContain(grep.exitCode);
+    const offenders = grep.stdout
+      .toString()
+      .split("\n")
+      .filter((line) =>
+        [...line.matchAll(IMPORT_SPECIFIER)].some(([, specifier = ""]) =>
+          MERMAID_SPECIFIER.test(specifier),
+        ),
+      );
+    expect(offenders).toEqual([]);
   });
 });

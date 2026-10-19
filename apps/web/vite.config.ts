@@ -611,7 +611,6 @@ export default defineConfig(({ mode, command }) => {
         "@stll/folio-core/utils/findReplace",
         "@streamdown/cjk",
         "@streamdown/math",
-        "@streamdown/mermaid",
         "@tanstack/react-table",
         "@tanstack/react-table/static-functions",
         "@tiptap/extension-heading",
