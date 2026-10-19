@@ -63,3 +63,14 @@ describe("AI API failures", () => {
     expect(error.message).toBe(message);
   });
 });
+
+describe("server errors outside AI", () => {
+  test("a generic server error keeps the caller's fallback", () => {
+    const error = toAPIError({
+      status: 500,
+      value: { code: "internal_server_error", message: "Server detail" },
+    });
+
+    expect(userErrorFromThrown(error, "Action failed")).toBe("Action failed");
+  });
+});
