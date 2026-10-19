@@ -73,6 +73,33 @@ describe("extractCitations", () => {
     },
   );
 
+  test("a neighbouring number's prefix is not a Czech authority cue", () => {
+    expect(
+      extractCitations([
+        { index: 0, text: "ÚOOÚ ÚOHS-S1/2024/VZ a ÚOHS-S2/2024/VZ" },
+      ]).map(({ citationText }) => citationText),
+    ).toEqual([]);
+    expect(
+      extractCitations([
+        { index: 0, text: "UOOU-12345/17-12 a UOOU-54321/18-3" },
+      ]).map(({ citationText }) => citationText),
+    ).toEqual([]);
+  });
+
+  test("Polish authority citations carry the type their adapter stores", () => {
+    const [citation] = extractCitations([
+      { index: 0, text: "decyzja Prezesa UOKiK nr DOK-1/2020" },
+    ]);
+    const stored = plUokikDecisionIdentifiers("DOK-1/2020").at(0);
+    expect(citation?.citationText).toBe("DOK-1/2020");
+    expect(citation?.identifierType).toBe(stored?.type);
+    expect(
+      extractCitations([{ index: 0, text: "znak sprawy DKN.5131.6.2024" }]).at(
+        0,
+      )?.identifierType,
+    ).toBe(DECISION_IDENTIFIER_TYPES.CASE_NUMBER);
+  });
+
   test("rejects Czech authority numbers without their own cue", () => {
     expect(
       extractCitations([{ index: 0, text: "ÚOHS-S123/2024/VZ" }]),

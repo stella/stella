@@ -789,7 +789,9 @@ export const CUE_GATED_CITATION_PATTERNS = [
     cue: /znak\p{L}*\s+sprawy|\bUODO\b|Ochrony\s+Danych\s+Osobowych/iu,
     windowBefore: 120,
     windowAfter: 0,
-    identifierType: DECISION_IDENTIFIER_TYPES.AUTHORITY_DECISION_NUMBER,
+    // The type the authority's own adapter stores: citations resolve only
+    // to identifiers of the same type.
+    identifierType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
     refuses: null,
   },
   {
@@ -801,13 +803,17 @@ export const CUE_GATED_CITATION_PATTERNS = [
     cue: /\bUOKiK\b|Urz[ęe]d\p{L}*\s+Ochrony\s+Konkurencji|Ochrony\s+Konkurencji\s+i\s+Konsument/iu,
     windowBefore: 160,
     windowAfter: 60,
-    identifierType: DECISION_IDENTIFIER_TYPES.AUTHORITY_DECISION_NUMBER,
+    // The type the authority's own adapter stores: citations resolve only
+    // to identifiers of the same type.
+    identifierType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
     refuses: null,
   },
   {
     id: "cz-uohs",
     pattern: CZ_UOHS_PATTERN,
-    cue: /\b(?:ÚOHS|OHS)\b|Úřad\s+pro\s+ochranu\s+hospodářské\s+soutěže|rozhodnutí\s+předsedy/iu,
+    // Letter-aware boundaries (`\b` is ASCII-only), refusing a hyphen: the
+    // `ÚOHS-` prefix of a neighbouring number is not a cue.
+    cue: /(?<![\p{L}\d])(?:ÚOHS|OHS)(?![\p{L}\d-])|Úřad\s+pro\s+ochranu\s+hospodářské\s+soutěže|rozhodnutí\s+předsedy/iu,
     windowBefore: 180,
     windowAfter: 80,
     identifierType: DECISION_IDENTIFIER_TYPES.AUTHORITY_DECISION_NUMBER,
@@ -816,7 +822,7 @@ export const CUE_GATED_CITATION_PATTERNS = [
   {
     id: "cz-uoou",
     pattern: CZ_UOOU_PATTERN,
-    cue: /(?<!\p{L})(?:ÚOOÚ|UOOU)(?!\p{L})|Úřad\s+pro\s+ochranu\s+osobních\s+údajů|rozhodnutí\s+předsedy/iu,
+    cue: /(?<![\p{L}\d])(?:ÚOOÚ|UOOU)(?![\p{L}\d-])|Úřad\s+pro\s+ochranu\s+osobních\s+údajů|rozhodnutí\s+předsedy/iu,
     windowBefore: 180,
     windowAfter: 80,
     identifierType: DECISION_IDENTIFIER_TYPES.AUTHORITY_DECISION_NUMBER,
