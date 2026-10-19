@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
+import { XMLParser } from "fast-xml-parser";
 import JSZip from "jszip";
 
 import { writeZipEntry } from "@stll/docx-utils";
@@ -24,6 +25,7 @@ const W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 const R_NS =
   "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
 const DOCX_CONFIG = DESKTOP_EDIT_FILE_TYPE_CONFIG.docx;
+const XML_PARSER = new XMLParser({ ignoreAttributes: false });
 
 const CONTENT_TYPES_XML = [
   '<?xml version="1.0" encoding="UTF-8"?>',
@@ -234,6 +236,38 @@ describe("injectStamp", () => {
     expect(footer).toContain("Existing footer");
     expect(footer).toContain("stella_dms_ref");
     expect(footer).toContain(stamp);
+  });
+
+  test("replaces an outer footer paragraph containing the stamp bookmark", async () => {
+    const relNs =
+      "http://schemas.openxmlformats.org/package/2006/relationships";
+    const footerRelType =
+      "http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer";
+    const docx = await makeDocx({
+      footerXml: [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        `<w:ftr xmlns:w="${W_NS}" xmlns:r="${R_NS}">`,
+        '<w:p w:rsidR="outer"><w:pPr/><w:r><w:txbxContent>',
+        '<w:p><w:bookmarkStart w:id="0" w:name="stella_dms_ref"/><w:r><w:t>old stamp</w:t></w:r></w:p>',
+        "</w:txbxContent></w:r></w:p>",
+        "</w:ftr>",
+      ].join(""),
+      docRels: [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        `<Relationships xmlns="${relNs}">`,
+        `<Relationship Id="rId1" Type="${footerRelType}" Target="footer1.xml"/>`,
+        "</Relationships>",
+      ].join(""),
+    });
+
+    const stamped = await injectStamp(docx, stamp, code, baseUrl);
+    const footer = await readZipFile(stamped, "word/footer1.xml");
+
+    expect(XML_PARSER.parse(footer ?? "")).toBeDefined();
+    expect(footer).not.toContain('w:rsidR="outer"');
+    expect(footer).not.toContain("old stamp");
+    expect(footer).toContain(stamp);
+    expect(footer?.match(/<w:p(?:\s|>)/gu)).toHaveLength(1);
   });
 
   test("stamps every footer variant referenced across document sections once", async () => {

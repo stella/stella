@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
+import { XMLParser } from "fast-xml-parser";
 
 import { assertProperty } from "@stll/property-testing";
 
@@ -12,6 +13,8 @@ import {
   XmlScanError,
   xmlElementText,
 } from "./xml-scan";
+
+const XML_PARSER = new XMLParser({ ignoreAttributes: false });
 
 test("reads and transforms qualified elements in document order", () => {
   const xml =
@@ -39,6 +42,59 @@ test("distinguishes element names that share a prefix", () => {
   const xml = "<w:p><w:pPr></w:pPr><w:r>text</w:r></w:p>";
   expect(replaceXmlElementContent(xml, "w:p", "updated").unwrap()).toBe(
     "<w:p>updated</w:p>",
+  );
+});
+
+test("matches nested elements of the same name as one outer element", () => {
+  const twoLevels =
+    '<w:p w:rsidR="1"><w:pPr/><w:p/><w:txbxContent><w:p>inner</w:p></w:txbxContent></w:p>';
+  const threeLevels =
+    "<w:p><w:p><w:p>deep</w:p></w:p><w:pPr>style</w:pPr></w:p>";
+
+  expect(replaceXmlElementContent(twoLevels, "w:p", "updated").unwrap()).toBe(
+    '<w:p w:rsidR="1">updated</w:p>',
+  );
+  expect(replaceXmlElementContent(threeLevels, "w:p", "updated").unwrap()).toBe(
+    "<w:p>updated</w:p>",
+  );
+});
+
+test("matches nested elements selected by namespace prefix", () => {
+  const xml =
+    "<root><w:p><w:p>inner</w:p></w:p><w:r>keep</w:r><x:p>other</x:p></root>";
+
+  expect(removeXmlElements(xml, { prefix: "w" }).unwrap()).toBe(
+    "<root><x:p>other</x:p></root>",
+  );
+});
+
+test("matches a reference parser for generated nested documents", () => {
+  assertProperty(
+    "matches a reference parser for generated nested documents",
+    fc.property(
+      fc.array(fc.integer({ min: 1, max: 8 }), {
+        minLength: 1,
+        maxLength: 20,
+      }),
+      (depths) => {
+        const elements = depths.map((depth, index) => {
+          const opening = `<p data-index="${String(index)}">`;
+          const nestedOpening = "<p><pPr/><p/>".repeat(depth - 1);
+          const nestedClosing = "</p>".repeat(depth - 1);
+          return `${opening}${nestedOpening}value${nestedClosing}</p>`;
+        });
+        const xml = `<root>${elements.join("")}</root>`;
+        expect(XML_PARSER.parse(xml)).toBeDefined();
+
+        const expected = `<root>${depths
+          .map((_, index) => `<p data-index="${String(index)}">updated</p>`)
+          .join("")}</root>`;
+        const actual = replaceXmlElementContent(xml, "p", "updated").unwrap();
+
+        expect(XML_PARSER.parse(actual)).toBeDefined();
+        expect(actual).toBe(expected);
+      },
+    ),
   );
 });
 
@@ -77,6 +133,17 @@ test("completes a one-megabyte incomplete document scan within the budget", () =
   const elapsed = performance.now() - started;
 
   expect(result.isErr()).toBe(true);
+  expect(elapsed).toBeLessThan(200);
+});
+
+test("completes a deeply nested one-megabyte document scan within the budget", () => {
+  const depth = Math.floor((1024 * 1024) / 13);
+  const xml = `${"<item>".repeat(depth)}${"</item>".repeat(depth)}`;
+  const started = performance.now();
+  const result = replaceXmlElements(xml, "item", () => "");
+  const elapsed = performance.now() - started;
+
+  expect(result.unwrap()).toBe("");
   expect(elapsed).toBeLessThan(200);
 });
 

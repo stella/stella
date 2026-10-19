@@ -36,10 +36,72 @@ const matchesSelector = (
     ? name === selector
     : name.startsWith(`${selector.prefix}:`);
 
-/**
- * An element nested inside one of the same name pairs with the first closing tag.
- * @yields Each complete matching element.
- */
+type MatchingCloseOptions = {
+  xml: string;
+  name: string;
+  openEnd: number;
+};
+
+const findMatchingClose = ({
+  xml,
+  name,
+  openEnd,
+}: MatchingCloseOptions): { closingStart: number; end: number } | null => {
+  let depth = 1;
+  let cursor = openEnd;
+  while (cursor < xml.length) {
+    const tagStart = xml.indexOf("<", cursor);
+    if (tagStart === -1) {
+      return null;
+    }
+    const closing = xml[tagStart + 1] === "/";
+    const tagNameStart = tagStart + (closing ? 2 : 1);
+    let tagNameEnd = tagNameStart;
+    while (tagNameEnd < xml.length && !isNameBoundary(xml[tagNameEnd])) {
+      tagNameEnd += 1;
+    }
+
+    let tagEndIndex = tagNameEnd;
+    let quote: '"' | "'" | null = null;
+    while (tagEndIndex < xml.length) {
+      const character = xml[tagEndIndex];
+      if (quote === null && (character === '"' || character === "'")) {
+        quote = character;
+      } else if (character === quote) {
+        quote = null;
+      } else if (quote === null && character === ">") {
+        break;
+      }
+      tagEndIndex += 1;
+    }
+    if (tagEndIndex === xml.length) {
+      return null;
+    }
+    cursor = tagEndIndex + 1;
+
+    if (xml.slice(tagNameStart, tagNameEnd) !== name) {
+      continue;
+    }
+    if (closing) {
+      depth -= 1;
+      if (depth === 0) {
+        return { closingStart: tagStart, end: cursor };
+      }
+      continue;
+    }
+
+    let slash = tagEndIndex - 1;
+    while (slash >= tagNameEnd && /\s/u.test(xml[slash] ?? "")) {
+      slash -= 1;
+    }
+    if (xml[slash] !== "/") {
+      depth += 1;
+    }
+  }
+  return null;
+};
+
+/** @yields Each complete matching element in document order. */
 export const xmlElements = function* (
   xml: string,
   selector: XmlElementSelector,
@@ -106,37 +168,22 @@ export const xmlElements = function* (
       continue;
     }
 
-    const closingNeedle = `</${name}`;
-    let closingStart = xml.indexOf(closingNeedle, openEnd);
-    while (
-      closingStart !== -1 &&
-      !isNameBoundary(xml[closingStart + closingNeedle.length])
-    ) {
-      closingStart = xml.indexOf(
-        closingNeedle,
-        closingStart + closingNeedle.length,
-      );
-    }
-    if (closingStart === -1) {
+    const closing = findMatchingClose({ xml, name, openEnd });
+    if (closing === null) {
       return { status: "incomplete" };
     }
-    const closingEndIndex = xml.indexOf(">", closingStart + name.length + 2);
-    if (closingEndIndex === -1) {
-      return { status: "incomplete" };
-    }
-    const end = closingEndIndex + 1;
     yield {
       start,
-      end,
+      end: closing.end,
       openEnd,
       contentStart: openEnd,
-      contentEnd: closingStart,
+      contentEnd: closing.closingStart,
       name,
       openTag,
-      closeTag: xml.slice(closingStart, end),
+      closeTag: xml.slice(closing.closingStart, closing.end),
       selfClosing: false,
     };
-    cursor = end;
+    cursor = closing.end;
   }
   return { status: "complete" };
 };
