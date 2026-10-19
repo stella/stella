@@ -237,7 +237,7 @@ const createProposalFromComments = createSafeRootHandler(
         await generateTanStackObjectForTask({
           dataClass: "customer",
           admission: configuredModelAdmission({ modelAdmission }),
-          abortSignal: AbortSignal.timeout(GENERATION_TIMEOUT_MS),
+          deadlineMs: GENERATION_TIMEOUT_MS,
           maxOutputTokens: GENERATION_MAX_OUTPUT_TOKENS,
           task: "short-text",
           serviceTier: "flex",

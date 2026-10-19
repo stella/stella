@@ -1681,6 +1681,7 @@ const FileChatOverlayInner = ({
   });
 
   const editorController = useChatEditor({
+    followupAnalytics: { surface: "document-chat" },
     placeholder: filePlaceholder,
     suggestedFollowupPrompt,
     threadRef,
@@ -2577,6 +2578,8 @@ const FileChatOverlayInner = ({
                 clipped): they stay inside the chat window, scroll with the
                 messages, and are never smashed against the card edge. */}
             <SuggestedFollowupChips
+              analyticsSurface="document-chat"
+              messageId={lastMessageId}
               onSelect={(prompt) => {
                 // Mirror the PromptBar send guard: when an editable DOCX's edit
                 // snapshot isn't ready, block the chip send too so the model
@@ -2607,6 +2610,7 @@ const FileChatOverlayInner = ({
                 );
               }}
               prompts={suggestedPrompts}
+              threadId={threadRef.threadId}
               surface="plain"
             />
           </ChatThreadCard>

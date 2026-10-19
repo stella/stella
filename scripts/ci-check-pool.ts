@@ -416,6 +416,21 @@ const logPath = (directory: string, index: number) =>
 
 // A nested group would end the check's own group in the job log.
 const NESTED_GROUP = /^(::(?:end)?group::|##\[(?:end)?group\])/gmu;
+// An error command printed by a check that passed comes from a fixture or a
+// refusal the check exercises, never from this run's failure; left active it
+// becomes a job annotation that failure digests then report as the cause.
+const ERROR_COMMAND = /^(::error\b)/gmu;
+
+/** A check's log as the job log shows it, so the check cannot drive the job's commands. */
+export const checkLogText = (
+  output: string,
+  outcome: CheckResult["outcome"],
+): string => {
+  const grouped = output.replace(NESTED_GROUP, " $1");
+  return outcome === "failure"
+    ? grouped
+    : grouped.replace(ERROR_COMMAND, " $1");
+};
 const escapeProperty = (value: string) =>
   value
     .replaceAll("%", "%25")
@@ -625,7 +640,7 @@ const main = async () => {
           ? readFileSync(logPath(directory, index), "utf-8")
           : "";
       if (planned[index]?.status === "selected") {
-        const text = output.replace(NESTED_GROUP, " $1");
+        const text = checkLogText(output, result.outcome);
         writeOut(text === "" || text.endsWith("\n") ? text : `${text}\n`);
       }
       print("::endgroup::");
