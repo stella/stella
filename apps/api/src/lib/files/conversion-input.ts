@@ -87,7 +87,8 @@ const isLocalReference = (value: string): boolean => {
     return false;
   }
   const colon = normalized.indexOf(":");
-  if (colon <= 0 || normalized[0] < "a" || normalized[0] > "z") {
+  const first = normalized.charAt(0);
+  if (colon <= 0 || first < "a" || first > "z") {
     return true;
   }
   for (let index = 1; index < colon; index++) {
@@ -378,7 +379,8 @@ const readInspectedPart = async (
     stream.on("data", (chunk: Buffer) => {
       size += chunk.length;
       if (size > DOCUMENT_METADATA_ENTRY_MAX_BYTES) {
-        stream.destroy();
+        stream.removeAllListeners("data");
+        stream.pause();
         resolve({ kind: "too_large" });
         return;
       }
