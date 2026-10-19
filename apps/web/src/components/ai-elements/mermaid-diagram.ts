@@ -28,7 +28,7 @@ type DiagramEngine = Pick<
   "PeleError" | "detectType" | "load" | "render"
 >;
 
-const loadPele = (): Promise<DiagramEngine> => import("pele/lazy");
+const loadPele = async (): Promise<DiagramEngine> => import("pele/lazy");
 
 type RenderDiagramArgs = {
   id: string;
