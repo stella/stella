@@ -939,14 +939,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/ci.yml",
-      "digest": "defa10315087338dd9704a4be27a3ceda578c59372b71488ea95cd92b3f93ab7",
+      "digest": "cee508b8b24d982e6342f2f3b3c17ea4c9c03b1ac9b742947fc8c8586e6d89a0",
       "references": ["./.github/workflows/ci.yml"],
       "jobs": [
         {
           "id": "ci-plan",
           "kind": "support",
           "qualifier": "Plans trust, scopes and prerequisites for merge-required checks.",
-          "digest": "f49088725732515bd37e0785e0408582d5ecc5449f7460b2d6c673f323ac5787"
+          "digest": "0cd67fb0fbdbd666c1616544bfc6ba49b07decfdbd58bbedd63fb18344ffb25a"
         },
         {
           "id": "generated-sources",
@@ -1198,7 +1198,7 @@
           "id": "ci-result",
           "kind": "support",
           "qualifier": "Aggregates planned check outcomes into the required merge verdict and records its evaluated jobs.",
-          "digest": "3a893c216435a837d32adae7c25c918862e5b9e2aafc408e3c52b5ea58024a03"
+          "digest": "0122915f6e3ddc409d6298d446ec7a5bb93b3a08aa3500124464e9f022c9ca35"
         }
       ],
       "edges": {
