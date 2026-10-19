@@ -71,14 +71,6 @@ describe("auth session paths", () => {
     );
   });
 
-  test("routes a completed TOTP challenge to one new-device notice and skips its email-code first step", () => {
-    const paths = ["/two-factor/verify-totp", "/two-factor/send-otp"];
-
-    expect(paths.filter(isNewDeviceNoticeAuthPath)).toEqual([
-      "/two-factor/verify-totp",
-    ]);
-  });
-
   test("keeps verification from signing in automatically", () => {
     expect(
       getAuth().options.emailVerification.autoSignInAfterVerification,

@@ -48,7 +48,6 @@ import {
 } from "@stll/permissions";
 import type { PermissionInput } from "@stll/permissions";
 import { RUNTIME_MODE, type RuntimeMode } from "@stll/runtime-mode";
-import { parseUserAgent, type ParsedUserAgent } from "@stll/user-agent";
 import { isUuid } from "@stll/uuid-codec";
 
 import { member, user as authUser } from "@/api/db/auth-schema";
@@ -115,6 +114,7 @@ import type {
   MemberAuthorization,
   MemberAuthorizationLookup,
 } from "@/api/lib/auth/member-authorization";
+import { sendNewDeviceNotice } from "@/api/lib/auth/new-device-notice";
 import {
   createOAuthConsentInfoPlugin,
   getVerifiedOAuthOrigins,
@@ -164,7 +164,6 @@ import {
 } from "@/api/lib/auth/session-lifetime";
 import { createDatabaseSessionLifetimeStore } from "@/api/lib/auth/session-lifetime-store";
 import {
-  isNewDeviceNoticeAuthPath,
   isSecondFactorAuthSessionPath,
   isSessionCreatingAuthPath,
 } from "@/api/lib/auth/session-path-classification";
@@ -309,7 +308,6 @@ const REFRESH_TOKEN_EXPIRES_IN = 30 * 24 * 60 * 60;
 const REFRESH_TOKEN_REUSE_INTERVAL = 30;
 
 const SEND_VERIFICATION_OTP_PATH = "/email-otp/send-verification-otp";
-const SIGN_IN_EMAIL_PATH = "/sign-in/email";
 const PREFERRED_NAME_MAX_LENGTH = 120;
 const WORD_EDIT_SHORTCUT_MAX_LENGTH = 16;
 
@@ -874,13 +872,6 @@ const isMcpResourceScope = (
   scope: string,
 ): scope is (typeof MCP_ALL_RESOURCE_SCOPES)[number] =>
   includes(MCP_ALL_RESOURCE_SCOPES, scope);
-
-// A device is its browser and OS; a user agent naming neither is no device.
-const newDeviceLoginDeviceKey = ({
-  browser,
-  os,
-}: ParsedUserAgent): string | null =>
-  browser === null && os === null ? null : `${browser ?? ""}|${os ?? ""}`;
 
 // Building an `Intl.DateTimeFormat` re-parses its options every call; cache
 // one per language instead of rebuilding it for every new-device-login email.
@@ -2263,97 +2254,62 @@ export const createAuth = (
         return undefined;
       }),
       after: createAuthMiddleware(async (ctx) => {
-        if (!isNewDeviceNoticeAuthPath(ctx.path) || isLocalDevOpen()) {
-          return;
-        }
-
-        if (
-          ctx.path === SIGN_IN_EMAIL_PATH &&
-          !isTransactionalEmailConfigured()
-        ) {
-          return;
-        }
-
         const newSession = ctx.context.newSession;
-        if (!newSession) {
-          return;
-        }
-
-        const notified = await Result.tryPromise({
-          try: async () => {
-            const { user, session } = newSession;
-
-            const previousSessions = await rootDb.query.session.findMany({
-              where: {
-                userId: user.id,
-                id: { ne: session.id },
-              },
-              orderBy: { createdAt: "desc" },
-              limit: LIMITS.newDeviceLoginSessionScanLimit,
-              columns: {
-                ipAddress: true,
-                userAgent: true,
-              },
-            });
-
-            if (previousSessions.length === 0) {
-              return;
-            }
-
-            const knownIPs = new Set<string>();
-            const knownDevices = new Set<string>();
-            for (const previous of previousSessions) {
-              if (previous.ipAddress) {
-                knownIPs.add(previous.ipAddress);
+        await sendNewDeviceNotice({
+          path: ctx.path,
+          newSession: newSession
+            ? {
+                user: {
+                  id: toSafeId<"user">(newSession.user.id),
+                  email: newSession.user.email,
+                },
+                session: {
+                  id: newSession.session.id,
+                  ipAddress: newSession.session.ipAddress,
+                  userAgent: newSession.session.userAgent,
+                  createdAt: newSession.session.createdAt,
+                },
               }
-              const previousDeviceKey = newDeviceLoginDeviceKey(
-                parseUserAgent(previous.userAgent),
-              );
-              if (previousDeviceKey !== null) {
-                knownDevices.add(previousDeviceKey);
-              }
-            }
-
-            const currentDevice = parseUserAgent(session.userAgent);
-            const deviceKey = newDeviceLoginDeviceKey(currentDevice);
-            const currentIpAddress = session.ipAddress;
-            const isNewIP =
-              typeof currentIpAddress === "string" &&
-              !knownIPs.has(currentIpAddress);
-            const isNewDevice =
-              deviceKey !== null && !knownDevices.has(deviceKey);
-
-            if (!isNewIP && !isNewDevice) {
-              return;
-            }
-
-            const deviceLabel =
-              currentDevice.browser && currentDevice.os
-                ? `${currentDevice.browser} on ${currentDevice.os}`
-                : (currentDevice.browser ?? currentDevice.os ?? "Unknown");
-            const lang = extractLangFromRequest(ctx.request);
-            const formattedTime = getNewDeviceLoginDateTimeFormat(lang).format(
-              session.createdAt,
-            );
-
-            ctx.context.runInBackground(
-              sendNewDeviceLoginEmail({
-                email: user.email,
-                device: deviceLabel,
-                ipAddress: session.ipAddress ?? "Unknown",
-                time: formattedTime,
-                sessionsUrl: `${env.FRONTEND_URL}${ACTIVE_SESSIONS_FRONTEND_PATH}`,
-                lang,
-              }).catch((error: unknown) => {
-                captureError(error, { source: "new-device-login-email" });
+            : null,
+          dependencies: {
+            findPreviousSessions: async (validatedUserId, sessionId) =>
+              await rootDb.query.session.findMany({
+                where: {
+                  userId: validatedUserId,
+                  id: { ne: sessionId },
+                },
+                orderBy: { createdAt: "desc" },
+                limit: LIMITS.newDeviceLoginSessionScanLimit,
+                columns: {
+                  ipAddress: true,
+                  userAgent: true,
+                },
               }),
-            );
+            sendNotice: ({ email, device, ipAddress, createdAt }) => {
+              const lang = extractLangFromRequest(ctx.request);
+              const formattedTime =
+                getNewDeviceLoginDateTimeFormat(lang).format(createdAt);
+
+              ctx.context.runInBackground(
+                sendNewDeviceLoginEmail({
+                  email,
+                  device,
+                  ipAddress,
+                  time: formattedTime,
+                  sessionsUrl: `${env.FRONTEND_URL}${ACTIVE_SESSIONS_FRONTEND_PATH}`,
+                  lang,
+                }).catch((error: unknown) => {
+                  captureError(error, { source: "new-device-login-email" });
+                  throw error;
+                }),
+              );
+            },
+            isTransactionalEmailConfigured,
+            isLocalDev: isLocalDevOpen,
+            onError: (error) =>
+              captureError(error, { source: "new-device-login-hook" }),
           },
-          catch: (cause) => cause,
         });
-        if (Result.isError(notified)) {
-          captureError(notified.error, { source: "new-device-login-hook" });
-        }
       }),
     },
   });
