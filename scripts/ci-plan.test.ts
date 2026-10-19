@@ -1935,7 +1935,7 @@ test("the required-jobs record names every workflow job once and carries the ver
       label: "pull-request-fast-outside-failure",
       options: {
         event: EVENT.pullRequest,
-        results: { "e2e-landing": "failure" },
+        results: { "e2e-vite-canary": "failure" },
         suiteDepth: SUITE_DEPTH.fast,
       },
     },
@@ -1945,7 +1945,7 @@ test("the required-jobs record names every workflow job once and carries the ver
       label: "pull-request-fast-superseded-cancel",
       options: {
         event: EVENT.pullRequest,
-        results: { "e2e-landing": "cancelled" },
+        results: { "e2e-vite-canary": "cancelled" },
         suiteDepth: SUITE_DEPTH.fast,
         cancellationEvidence: "superseded",
       },
@@ -2036,7 +2036,7 @@ test("the required-jobs record names every workflow job once and carries the ver
   const fastRequired = fast.record.required.map(({ job }) => job);
   expect(fastRequired).toContain("ci-quick-checks");
   // A fast run leaves its heavy suites to the queue.
-  expect(fast.record.not_required).toContain("e2e-landing");
+  expect(fast.record.not_required).toContain("e2e-vite-canary");
   expect(fastRequired.length).toBeLessThan(success.record.required.length);
 
   // The record holds every job the verdict counted, not only the fast set.
@@ -2044,17 +2044,17 @@ test("the required-jobs record names every workflow job once and carries the ver
   expect(outside.exitCode).toBe(1);
   expect(outside.record.verdict).toBe("failure");
   expect(outside.record.required).toContainEqual({
-    job: "e2e-landing",
+    job: "e2e-vite-canary",
     conclusion: "failure",
   });
-  expect(outside.record.not_required).not.toContain("e2e-landing");
+  expect(outside.record.not_required).not.toContain("e2e-vite-canary");
 
   const superseded = take("pull-request-fast-superseded-cancel");
   expect(superseded.record.required).toContainEqual({
-    job: "e2e-landing",
+    job: "e2e-vite-canary",
     conclusion: "cancelled",
   });
-  expect(superseded.record.not_required).not.toContain("e2e-landing");
+  expect(superseded.record.not_required).not.toContain("e2e-vite-canary");
   expect(superseded.exitCode).toBe(0);
   expect(superseded.record.verdict).toBe("success");
 
@@ -3168,10 +3168,10 @@ test("the landing site is built once when its browser checks are planned", () =>
       suiteDepth,
       e2eLandingRequired,
     ).at(0);
-  // e2e-landing runs only at full depth, and builds the site itself there.
+  // e2e-landing runs at every depth and builds the site itself.
   expect(landingBuild("full", "true")).toBe("false");
   expect(landingBuild("full", "false")).toBe("true");
-  expect(landingBuild("fast", "true")).toBe("true");
+  expect(landingBuild("fast", "true")).toBe("false");
   expect(landingBuild("fast", "false")).toBe("true");
   expect(ciJobs["e2e-landing"]).toBeDefined();
   expect(jobSteps(ciJobs["e2e-landing"]).map(({ run }) => run)).toContain(
@@ -3179,7 +3179,37 @@ test("the landing site is built once when its browser checks are planned", () =>
       ({ name }) => name === "Build landing",
     )?.run,
   );
-  expect(jobIf(ciJobs["e2e-landing"])).toContain(FULL_DEPTH_PREDICATE);
+  // A landing change is checked in its own pull request and merge group,
+  // not only by the scheduled full run.
+  expect(jobIf(ciJobs["e2e-landing"])).not.toContain(FULL_DEPTH_PREDICATE);
+  expect(jobIf(ciJobs["e2e-landing"])).toContain(
+    "(github.event_name != 'pull_request' || needs.pr-heavy-gate.result == 'success')",
+  );
+  const { outputs } = v.parse(
+    v.object({ outputs: v.record(v.string(), v.string()) }),
+    ciJobs["ci-plan"],
+  );
+  expect(outputs["pr_heavy_gate_required"]).toContain(
+    "steps.changed-files.outputs.e2e_landing_required == 'true'",
+  );
+});
+
+// The path list covers the landing's own tree; the deploy scope adds every
+// workspace it depends on, transitively, and the packages they resolve to.
+test("e2e-landing follows the landing's whole dependency graph", () => {
+  const source = readFileSync(
+    new URL("../.github/workflows/ci.yml", import.meta.url),
+    "utf-8",
+  );
+  const detection = source.slice(
+    source.indexOf(
+      `e2e_landing_required=$(bash scripts/detect-e2e-changes.sh landing "\${changed_files[@]}")`,
+    ),
+    source.indexOf("          # Path scopes for the build/smoke jobs"),
+  );
+  expect(detection).toContain(
+    'e2e_landing_required=$(bun scripts/landing-deploy-scope.ts --base "$comparison_base" --head HEAD) || e2e_landing_required=true',
+  );
 });
 
 test("ci-checks gates each generated-output guard on its planned scope", () => {
@@ -6018,7 +6048,8 @@ test("every gated merge-group job has a required PR path or an explicit queue-on
       paths,
       scopes,
       "fast",
-      "false",
+      // The paths change a landing page.
+      "true",
       "pull_request",
       "fix: update checks",
     ),
@@ -7230,6 +7261,8 @@ const heavyGatePlanOutput = ({ event, plan }: HeavyGatePlanOptions) => {
             plan["collab_redis_required"] ?? "",
           "steps.e2e-pr-plan.outputs.selection_required":
             plan["browser_spec_selection_required"] ?? "",
+          "steps.changed-files.outputs.e2e_landing_required":
+            plan["e2e_landing_required"] ?? "",
         },
       }),
     ),
@@ -7720,6 +7753,7 @@ test("Postgres PR required checks follow trust, run eligibility and the general 
 const GATED_HEAVY_ROOTS = [
   "ci-browser",
   "ci-tests",
+  "e2e-landing",
   "postgres-service-suites",
   "service-suites",
   "web-build",
@@ -7730,6 +7764,7 @@ test("the planner derives the PR heavy jobs from everything waiting on the gate"
     "api-test-durations",
     "ci-browser",
     "ci-tests",
+    "e2e-landing",
     "e2e-production-shard",
     "e2e-report",
     "marketing-screenshots",
