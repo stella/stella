@@ -1,9 +1,13 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import type { RetainedActivityFeatureOwner } from "@/api/db/feature-owner";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
+
+type FeatureOwnerRow = { feature_owner: RetainedActivityFeatureOwner };
+type IdRow = { id: string };
 
 describe.skipIf(!enabled)(
   "retained activity ownership migration (postgres)",
@@ -110,39 +114,49 @@ describe.skipIf(!enabled)(
 
             for (const scenario of cases) {
               // db-await-in-loop: assert each deleted lifecycle's retained rows independently.
-              const audits =
-                await session`SELECT feature_owner FROM audit_logs WHERE id IN (${scenario.id}, ${`${scenario.id}-field`})`;
+              const audits = await session<
+                FeatureOwnerRow[]
+              >`SELECT feature_owner FROM audit_logs WHERE id IN (${scenario.id}, ${`${scenario.id}-field`})`;
               expect(audits).toHaveLength(2);
               expect(audits.map((row) => row.feature_owner)).toEqual([
                 scenario.owner,
                 scenario.owner,
               ]);
-              const notices =
-                await session`SELECT feature_owner FROM notifications WHERE id = ${scenario.id}`;
+              const notices = await session<
+                FeatureOwnerRow[]
+              >`SELECT feature_owner FROM notifications WHERE id = ${scenario.id}`;
               expect(notices.map((row) => row.feature_owner)).toEqual([
                 scenario.owner,
               ]);
             }
             expect(
               (
-                await session`SELECT feature_owner FROM audit_logs WHERE id = 'ordinary'`
+                await session<
+                  FeatureOwnerRow[]
+                >`SELECT feature_owner FROM audit_logs WHERE id = 'ordinary'`
               ).map((row) => row.feature_owner),
             ).toEqual(["shared"]);
             expect(
               (
-                await session`SELECT feature_owner FROM notifications WHERE id = 'ordinary'`
+                await session<
+                  FeatureOwnerRow[]
+                >`SELECT feature_owner FROM notifications WHERE id = 'ordinary'`
               ).map((row) => row.feature_owner),
             ).toEqual(["shared"]);
             await session`INSERT INTO audit_logs (id, resource_type, resource_id) VALUES ('new-unclassified', 'entity', 'missing')`;
             await session`INSERT INTO notifications (id, kind) VALUES ('new-unclassified', 'mention')`;
             expect(
               (
-                await session`SELECT feature_owner FROM audit_logs WHERE id = 'new-unclassified'`
+                await session<
+                  FeatureOwnerRow[]
+                >`SELECT feature_owner FROM audit_logs WHERE id = 'new-unclassified'`
               ).map((row) => row.feature_owner),
             ).toEqual(["unknown"]);
             expect(
               (
-                await session`SELECT feature_owner FROM notifications WHERE id = 'new-unclassified'`
+                await session<
+                  FeatureOwnerRow[]
+                >`SELECT feature_owner FROM notifications WHERE id = 'new-unclassified'`
               ).map((row) => row.feature_owner),
             ).toEqual(["unknown"]);
             // Exercise the policies installed by the shipped migration as the application role.
@@ -162,14 +176,14 @@ describe.skipIf(!enabled)(
               set_config('app.workspace_ids', ${`{${workspaceId}}`}, true)`;
             await session.unsafe("SET LOCAL ROLE stella");
             expect(
-              (await session`SELECT id FROM audit_logs ORDER BY id`).map(
-                (row) => row.id,
-              ),
+              (
+                await session<IdRow[]>`SELECT id FROM audit_logs ORDER BY id`
+              ).map((row) => row.id),
             ).toEqual(["ordinary"]);
             expect(
-              (await session`SELECT id FROM notifications ORDER BY id`).map(
-                (row) => row.id,
-              ),
+              (
+                await session<IdRow[]>`SELECT id FROM notifications ORDER BY id`
+              ).map((row) => row.id),
             ).toEqual(["ordinary"]);
             expect(
               await session`UPDATE notifications SET user_id = user_id WHERE id = 'performer-flow' RETURNING id`,
@@ -177,11 +191,13 @@ describe.skipIf(!enabled)(
             await session.unsafe("RESET ROLE");
             await session`INSERT INTO feature_enrolments VALUES ('migration-org', 'migration-user', 'flows')`;
             await session.unsafe("SET LOCAL ROLE stella");
-            expect(await session`SELECT id FROM audit_logs`).toHaveLength(7);
             expect(
-              (await session`SELECT id FROM notifications ORDER BY id`).map(
-                (row) => row.id,
-              ),
+              await session<IdRow[]>`SELECT id FROM audit_logs`,
+            ).toHaveLength(7);
+            expect(
+              (
+                await session<IdRow[]>`SELECT id FROM notifications ORDER BY id`
+              ).map((row) => row.id),
             ).toEqual([
               "ordinary",
               "performer-flow",
@@ -198,10 +214,12 @@ describe.skipIf(!enabled)(
             await session`DELETE FROM feature_enrolments`;
             await session.unsafe("SET LOCAL ROLE stella");
             expect(
-              (await session`SELECT id FROM audit_logs`).map((row) => row.id),
+              (await session<IdRow[]>`SELECT id FROM audit_logs`).map(
+                (row) => row.id,
+              ),
             ).toEqual(["ordinary"]);
             expect(
-              (await session`SELECT id FROM notifications`).map(
+              (await session<IdRow[]>`SELECT id FROM notifications`).map(
                 (row) => row.id,
               ),
             ).toEqual(["ordinary"]);

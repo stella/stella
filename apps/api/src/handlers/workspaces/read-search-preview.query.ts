@@ -41,6 +41,7 @@ type PreviewSourceColumns = typeof AGENDA_COLUMNS &
 
 const UNPROJECTED_PREVIEW_COLUMNS = [
   "entityFeatureGate", // RLS state is internal to the gate.
+  "featureOwner", // Retained ownership controls admission, not highlight content.
   "workspaceId", // Already supplied by the authorized route.
   "kind", // Each query fixes the kind; the response groups identify it.
   "listItemType", // Only filters agenda rows; never returned.
