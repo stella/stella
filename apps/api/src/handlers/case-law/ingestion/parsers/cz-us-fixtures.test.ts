@@ -46,8 +46,13 @@ describe("committed CZ ÚS fixtures", () => {
     expect(Object.keys(snapshots).toSorted()).toEqual(names);
     for (const name of names) {
       const html = await gunzipText(new URL(name, FIXTURES));
+      const snapshot = snapshots[name];
+      expect(snapshot).toBeDefined();
+      if (snapshot === undefined) {
+        throw new Error(`Missing parser snapshot for ${name}`);
+      }
       expect(JSON.stringify(parseUsDecisionHtml(inputFor(name, html)))).toBe(
-        snapshots[name],
+        snapshot,
       );
     }
   });
