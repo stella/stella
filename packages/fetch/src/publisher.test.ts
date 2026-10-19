@@ -164,6 +164,25 @@ describe("RFC 9309 matching", () => {
     );
   });
 
+  test("a wildcard counts toward rule specificity", () => {
+    // "/*.htm" is six octets as written and outranks the five-octet "/page".
+    const groups = [
+      {
+        agents: ["stella"],
+        rules: [
+          { type: "allow" as const, pattern: "/page" },
+          { type: "disallow" as const, pattern: "/*.htm" },
+        ],
+      },
+    ];
+    expect(evaluatePublisherRobots(groups, "Stella", "/page.htm").allowed).toBe(
+      false,
+    );
+    expect(evaluatePublisherRobots(groups, "Stella", "/page").allowed).toBe(
+      true,
+    );
+  });
+
   test("wildcards and end anchors apply to the path plus query", () => {
     assertProperty(
       "wildcards and end anchors apply to the path plus query",
