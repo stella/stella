@@ -134,7 +134,7 @@ test("two decisions from one court render each case number once as the accessibl
     "a[data-decision-citation]",
   )) {
     expect(trigger.getAttribute("aria-label")).toContain(
-      trigger.textContent?.replace("NS", "") ?? "",
+      trigger.textContent.replace("NS", ""),
     );
   }
 });
@@ -177,9 +177,7 @@ test("a link label that does not name the case still shows the verified identity
     ).toContain("23 Cdo 651/2023"),
   );
   expect(screen.container.textContent).toContain("Decision A");
-  expect(screen.container.textContent?.split("23 Cdo 651/2023")).toHaveLength(
-    2,
-  );
+  expect(screen.container.textContent.split("23 Cdo 651/2023")).toHaveLength(2);
 });
 
 test("a real slug cache read contributes its resolved canonical decision to answer disambiguation", async () => {
@@ -234,7 +232,8 @@ test("a real slug cache read contributes its resolved canonical decision to answ
   expect(
     screen.container.querySelector(`[data-decision-citation="${second.id}"]`)
       ?.textContent,
-  ).toBe(paragraph);
+  ).toContain(second.caseNumber);
+  expect(screen.container.textContent).toContain(paragraph);
   expect(client.isFetching()).toBe(0);
 });
 
@@ -297,8 +296,9 @@ test("passive answer links and complete carried source metadata schedule no deci
   await waitFor(() =>
     expect(
       active.container.querySelector("[data-decision-citation]")?.textContent,
-    ).toBe(paragraph),
+    ).toContain(first.caseNumber),
   );
+  expect(active.container.textContent).toContain(paragraph);
   expect(client.isFetching()).toBe(0);
 });
 
@@ -390,10 +390,12 @@ test("the court's number the link carries shows at first paint, from a read or a
   const chips = view.container.querySelectorAll("[data-decision-citation]");
   expect(chips).toHaveLength(3);
   const [carried, read, unnumbered] = chips;
-  expect(carried?.textContent).toBe(`${paragraph}¶ 8`);
+  expect(carried?.textContent).toEndWith("¶ 8");
+  expect(carried?.textContent).not.toContain(paragraph);
+  expect(view.container.textContent).toContain(paragraph);
   expect(carried?.getAttribute("aria-label")).toEndWith(", paragraph 8");
-  expect(read?.textContent).toBe(`${paragraph}¶ 9`);
-  expect(unnumbered?.textContent).toBe(paragraph);
+  expect(read?.textContent).toEndWith("¶ 9");
+  expect(unnumbered?.textContent).not.toContain("¶");
   expect(unnumbered?.getAttribute("aria-label")).not.toContain("paragraph");
   expect(client.isFetching()).toBe(0);
 });
