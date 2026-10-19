@@ -185,7 +185,7 @@ export const createRememberTool = ({
         return Result.err(sanitizedContentResult.error);
       }
 
-      const decision = await safeDb((tx) =>
+      const decision = await safeDb(async (tx) =>
         resolveFeatureAccess({
           tx,
           organizationId,

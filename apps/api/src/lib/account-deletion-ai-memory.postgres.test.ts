@@ -44,21 +44,17 @@ if (!databaseUrl || !runPostgresTests) {
         createdBy: userId,
       } as const;
       try {
-        await deletion
-          .insert(organization)
-          .values({
-            id: organizationId,
-            name: "Memory settings",
-            slug: organizationId,
-            createdAt: new Date(),
-          });
-        await deletion
-          .insert(user)
-          .values({
-            id: userId,
-            name: "Memory settings",
-            email: `${userId}@example.test`,
-          });
+        await deletion.insert(organization).values({
+          id: organizationId,
+          name: "Memory settings",
+          slug: organizationId,
+          createdAt: new Date(),
+        });
+        await deletion.insert(user).values({
+          id: userId,
+          name: "Memory settings",
+          email: `${userId}@example.test`,
+        });
         deleting = deletion.transaction(async (tx) => {
           // Match lockAccountRow's NO KEY UPDATE acquisition exactly.
           await tx.execute(

@@ -7,6 +7,8 @@ import listMemories from "@/api/handlers/memories/list";
 import updateMemory from "@/api/handlers/memories/update";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
 import { featureAccessGate } from "@/api/lib/auth/feature-access/route";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 import { AI_MEMORY_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
 import { createStandardApiRateLimitOptions } from "@/api/lib/rate-limit/standard-api";
@@ -18,6 +20,11 @@ import { createStandardApiRateLimitOptions } from "@/api/lib/rate-limit/standard
 export const memoriesRoute = new Elysia({
   prefix: "/v1/memories",
 })
+  .use(
+    deploymentFeatureGate(() =>
+      isDeploymentFeatureEnabled("FEATURE_AI_MEMORY"),
+    ),
+  )
   .use(featureAccessGate(AI_MEMORY_FEATURE_ID))
   .use(rateLimit(createStandardApiRateLimitOptions()))
   .use(authMacro)

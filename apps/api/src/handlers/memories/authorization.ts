@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 
-import type { AccessibleWorkspace } from "@/api/lib/auth";
+import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";

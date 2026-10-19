@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { toSafeId } from "@/api/lib/branded-types";
 import { createFeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import {
   AI_MEMORY_FEATURE_ID,
@@ -20,8 +21,8 @@ import { memoriesRoute } from "./routes";
 import updateMemory from "./update";
 
 const snapshot = createFeatureAccessSnapshot({
-  organizationId: "org_test",
-  userId: "user_test",
+  organizationId: toSafeId<"organization">("org_test"),
+  userId: toSafeId<"user">("user_test"),
   decisions: new Map(),
 });
 
@@ -117,8 +118,8 @@ describe("memory feature admission", () => {
       isMcpDescriptorFeatureEnabled({
         context: {
           featureAccessSnapshot: snapshot,
-          organizationId: "org_test",
-          userId: "user_test",
+          organizationId: toSafeId<"organization">("org_test"),
+          userId: toSafeId<"user">("user_test"),
         },
         kind: "tools",
         id: "remember",

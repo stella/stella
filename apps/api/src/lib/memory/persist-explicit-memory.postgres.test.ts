@@ -127,13 +127,11 @@ if (!databaseUrl || !runPostgresTests) {
             name: "Memory dedup race organization",
             slug: `memory-dedup-race-${organizationId}`,
           });
-          await deletionDb
-            .insert(user)
-            .values({
-              id: userId,
-              name: "Memory settings",
-              email: `${userId}@example.test`,
-            });
+          await deletionDb.insert(user).values({
+            id: userId,
+            name: "Memory settings",
+            email: `${userId}@example.test`,
+          });
           const scope = resolveMemoryWriteScope({
             accessibleWorkspaces: [],
             authority: sessionMemberRole("owner"),
@@ -169,9 +167,17 @@ if (!databaseUrl || !runPostgresTests) {
             });
           });
 
+          const waitForInsert = async () => {
+            await insertCompleted.promise;
+            return "insert_completed" as const;
+          };
+          const waitForPersistence = async () => {
+            await persistence;
+            return "finished" as const;
+          };
           const phase = await Promise.race([
-            insertCompleted.promise.then(() => "insert_completed" as const),
-            persistence.then(() => "finished" as const),
+            waitForInsert(),
+            waitForPersistence(),
           ]);
           expect(phase).toBe("insert_completed");
           if (phase !== "insert_completed") {
