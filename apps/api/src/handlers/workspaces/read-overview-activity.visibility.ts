@@ -1,4 +1,4 @@
-import { and, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
+import { and, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 
 import { auditLogs } from "@/api/db/schema";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";

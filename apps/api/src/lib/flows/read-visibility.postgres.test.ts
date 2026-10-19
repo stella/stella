@@ -106,6 +106,7 @@ if (!databaseUrl || !enabled) {
             filters: toMatterActivityFilters({}),
           };
           const context = {
+            request: new Request("https://api.example.test/v1/workspaces"),
             safeDb,
             scopedDb,
             workspaceId: fixture.workspaceId,
