@@ -209,13 +209,15 @@ describe("bundling-site scanner", () => {
     };
     const found = scanBundledConsumers([file]).map(siteName);
     expect(found).toHaveLength(2);
-    expect(compareSiteCounts(found, found.slice(0, 1))).toEqual({
-      missing: [found[0]],
+    const once = found.slice(0, 1);
+    expect(found).toEqual([...once, ...once]);
+    expect(compareSiteCounts(found, once)).toEqual({
+      missing: once,
       stale: [],
     });
-    expect(compareSiteCounts(found.slice(0, 1), found)).toEqual({
+    expect(compareSiteCounts(once, found)).toEqual({
       missing: [],
-      stale: [found[0]],
+      stale: once,
     });
     expect(compareSiteCounts(found, found)).toEqual({ missing: [], stale: [] });
   });
