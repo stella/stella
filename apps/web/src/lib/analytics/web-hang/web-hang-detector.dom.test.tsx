@@ -1,8 +1,12 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { sleep } from "@stll/concurrency/sleep";
+
 import type { Analytics } from "@/lib/analytics/types";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
+
+import type { HangLocks } from "./web-hang-detector";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/chat/private-id" });
 const {
@@ -60,11 +64,32 @@ const markerKeys = () =>
     (name): name is string => name?.startsWith(HANG_MARKER_PREFIX) === true,
   );
 
+/** In-memory Web Locks: a name stays held until its granted promise settles. */
+const createFakeLocks = () => {
+  const held = new Set<string>();
+  const locks: HangLocks = {
+    request: async (name, granted) => {
+      held.add(name);
+      try {
+        await granted();
+      } finally {
+        held.delete(name);
+      }
+    },
+    query: async () => ({
+      held: Array.from(held, (name) => ({ name })),
+      pending: [],
+    }),
+  };
+  return { held, locks };
+};
+
 type SetupOptions = {
   random?: () => number;
   now?: () => number;
   browser?: Window & Partial<Pick<typeof globalThis, "PerformanceObserver">>;
   attachment?: "immediate" | "deferred";
+  locks?: HangLocks;
 };
 
 const setup = ({
@@ -72,6 +97,7 @@ const setup = ({
   now = () => HANG_STALE_MS + 10,
   browser = window,
   attachment = "immediate",
+  locks = createFakeLocks().locks,
 }: SetupOptions = {}) => {
   const existingKeys = new Set(markerKeys());
   const hangs: Parameters<Analytics["capturePageHangSuspected"]>[0][] = [];
@@ -81,6 +107,7 @@ const setup = ({
     build: "current",
     now,
     random,
+    locks,
   });
   disposers.push(detector.dispose);
   const markerKey = markerKeys().find((name) => !existingKeys.has(name));
@@ -103,7 +130,10 @@ const setup = ({
   return { detector, hangs, frames, attach, markerKey };
 };
 
-const setupRetirementScenario = (clock: { value: number }) => {
+const setupRetirementScenario = (
+  clock: { value: number },
+  locks: HangLocks | undefined = createFakeLocks().locks,
+) => {
   const intervalDescriptor = Object.getOwnPropertyDescriptor(
     window,
     "setInterval",
@@ -117,7 +147,7 @@ const setupRetirementScenario = (clock: { value: number }) => {
     "requestIdleCallback",
   );
   let onHeartbeat: (() => void) | undefined;
-  let onRetirement: (() => void) | undefined;
+  let onRetirement: (() => unknown) | undefined;
   let retirementDelay: number | undefined;
   Object.defineProperty(window, "setInterval", {
     configurable: true,
@@ -128,7 +158,7 @@ const setupRetirementScenario = (clock: { value: number }) => {
   });
   Object.defineProperty(window, "setTimeout", {
     configurable: true,
-    value: (task: () => void, delay: number) => {
+    value: (task: () => unknown, delay: number) => {
       onRetirement = task;
       retirementDelay = delay;
       return 2;
@@ -141,7 +171,7 @@ const setupRetirementScenario = (clock: { value: number }) => {
       return 3;
     },
   });
-  const current = setup({ now: () => clock.value });
+  const current = setup({ now: () => clock.value, locks });
   current.detector.routeReady("/chat/$threadId");
   return {
     ...current,
@@ -149,8 +179,8 @@ const setupRetirementScenario = (clock: { value: number }) => {
     heartbeat: () => {
       onHeartbeat?.();
     },
-    retire: () => {
-      onRetirement?.();
+    retire: async () => {
+      await onRetirement?.();
     },
     restore: () => {
       if (intervalDescriptor) {
@@ -359,7 +389,7 @@ test("a successful safe boot clears its marker before monitoring the healthy ses
     }
   }
 });
-test("a healthy replacement retires an abandoned recent boot before it becomes stale", () => {
+test("a healthy replacement retires a destroyed document's recent boot before it becomes stale", async () => {
   const clock = { value: 100 };
   seed("boot", { started: 1, heartbeat: 90 });
   const replacement = setupRetirementScenario(clock);
@@ -367,7 +397,7 @@ test("a healthy replacement retires an abandoned recent boot before it becomes s
     expect(replacement.detector.safeMode).toBe(false);
     expect(replacement.retirementDelay()).toBe(2 * HANG_HEARTBEAT_MS);
     clock.value += 2 * HANG_HEARTBEAT_MS;
-    replacement.retire();
+    await replacement.retire();
     expect(local.getItem(key)).toBeNull();
 
     clock.value = HANG_STALE_MS + 101;
@@ -379,7 +409,46 @@ test("a healthy replacement retires an abandoned recent boot before it becomes s
     replacement.restore();
   }
 });
-test("a healthy replacement keeps a visible boot whose heartbeat advances", () => {
+test("a hung document keeps its boot evidence while a healthy neighbour becomes ready, and the next load reports it", async () => {
+  const clock = { value: 100 };
+  const fake = createFakeLocks();
+  seed("boot", { started: 1, heartbeat: 90 });
+  // The hung document is alive: it still holds its liveness lock.
+  fake.held.add(key);
+  const neighbour = setupRetirementScenario(clock, fake.locks);
+  try {
+    clock.value += 2 * HANG_HEARTBEAT_MS;
+    await neighbour.retire();
+    expect(local.getItem(key)).toContain('"heartbeat":90');
+
+    // The user closes the hung tab; the browser releases its lock.
+    fake.held.delete(key);
+    clock.value = HANG_STALE_MS + 91;
+    const next = setup({ now: () => clock.value, locks: fake.locks });
+    expect(next.hangs).toEqual([
+      expect.objectContaining({
+        routeTemplate: "/chat/$threadId",
+        phase: "boot",
+      }),
+    ]);
+    expect(next.detector.safeMode).toBe(true);
+  } finally {
+    neighbour.restore();
+  }
+});
+test("without the Locks API a healthy replacement never retires boot evidence", async () => {
+  const clock = { value: 100 };
+  seed("boot", { started: 1, heartbeat: 90 });
+  const replacement = setupRetirementScenario(clock, undefined);
+  try {
+    clock.value += 2 * HANG_HEARTBEAT_MS;
+    await replacement.retire();
+    expect(local.getItem(key)).not.toBeNull();
+  } finally {
+    replacement.restore();
+  }
+});
+test("a healthy replacement keeps a visible boot whose heartbeat advances", async () => {
   const clock = { value: 100 };
   seed("boot", { started: 1, heartbeat: 90 });
   const replacement = setupRetirementScenario(clock);
@@ -390,36 +459,60 @@ test("a healthy replacement keeps a visible boot whose heartbeat advances", () =
     }
     local.setItem(key, neighbour.replace('"heartbeat":90', '"heartbeat":200'));
     clock.value += 2 * HANG_HEARTBEAT_MS;
-    replacement.retire();
+    await replacement.retire();
     expect(local.getItem(key)).toContain('"heartbeat":200');
   } finally {
     replacement.restore();
   }
 });
-test("a healthy replacement leaves hidden boot markers alone", () => {
+test("a healthy replacement leaves hidden boot markers alone", async () => {
   const clock = { value: 100 };
   seed("boot", { started: 1, heartbeat: 90, visible: false });
   const replacement = setupRetirementScenario(clock);
   try {
     clock.value += 2 * HANG_HEARTBEAT_MS;
-    replacement.retire();
+    await replacement.retire();
     expect(local.getItem(key)).not.toBeNull();
   } finally {
     replacement.restore();
   }
 });
-test("a disposed replacement does not retire abandoned boot markers", () => {
+test("a disposed replacement does not retire abandoned boot markers", async () => {
   const clock = { value: 100 };
   seed("boot", { started: 1, heartbeat: 90 });
   const replacement = setupRetirementScenario(clock);
   try {
     replacement.detector.dispose();
     clock.value += 2 * HANG_HEARTBEAT_MS;
-    replacement.retire();
+    await replacement.retire();
     expect(local.getItem(key)).not.toBeNull();
   } finally {
     replacement.restore();
   }
+});
+test("pagehide releases the liveness lock with the marker and pageshow takes both back", async () => {
+  const fake = createFakeLocks();
+  const { markerKey } = setup({ locks: fake.locks });
+  await sleep(0);
+  expect(fake.held.has(markerKey ?? "")).toBe(true);
+  window.dispatchEvent(new Event("pagehide"));
+  await sleep(0);
+  expect(fake.held.has(markerKey ?? "")).toBe(false);
+  expect(local.getItem(markerKey ?? "")).toBeNull();
+  window.dispatchEvent(new Event("pageshow"));
+  await sleep(0);
+  expect(fake.held.has(markerKey ?? "")).toBe(true);
+  expect(local.getItem(markerKey ?? "")).not.toBeNull();
+});
+test("a document holds its liveness lock until it is disposed", async () => {
+  const fake = createFakeLocks();
+  const { detector, markerKey } = setup({ locks: fake.locks });
+  await sleep(0);
+  expect(markerKey).toBeDefined();
+  expect(fake.held.has(markerKey ?? "")).toBe(true);
+  detector.dispose();
+  await sleep(0);
+  expect(fake.held.has(markerKey ?? "")).toBe(false);
 });
 test("heartbeats run every three seconds only while visible and refresh on visibility changes", () => {
   const intervalDescriptor = Object.getOwnPropertyDescriptor(

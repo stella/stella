@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { createDetached } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
 import { browserStorage } from "@/lib/account/browser-storage";
@@ -100,6 +101,18 @@ export type HangDetectorOptions = {
   build: string;
   now?: () => number;
   random?: () => number;
+  /**
+   * Document liveness: the browser releases a document's lock when the
+   * document is destroyed, while a hung document keeps holding it.
+   */
+  locks?: HangLocks;
+};
+
+type LockNames = readonly { name?: string }[];
+/** The part of the Web Locks API this detector uses; LockManager satisfies it. */
+export type HangLocks = {
+  request: (name: string, granted: () => Promise<void>) => Promise<unknown>;
+  query: () => Promise<{ held?: LockNames; pending?: LockNames }>;
 };
 
 type ObserveFramesOptions = {
@@ -219,11 +232,16 @@ export const createWebHangDetector = ({
   build,
   now = () => Temporal.Now.instant().epochMilliseconds,
   random = Math.random,
+  locks = "locks" in browser.navigator ? browser.navigator.locks : undefined,
 }: HangDetectorOptions) => {
   const local = browserStorage("local");
   // sessionStorage is copied by duplicate/opener tabs: identity belongs to
   // this document, so another document can never erase its evidence.
   const key = `${HANG_MARKER_PREFIX}${createEphemeralId()}`;
+  // Requested before the marker is written, so every marker another document
+  // can read is backed by a held or pending lock while this document lives.
+  const liveness = createLivenessLock(locks, key);
+  liveness.acquire();
   const started = now();
   const { bootCandidates, previous } = scanEarlierDocuments(local, started);
   const prior = previous?.marker ?? null;
@@ -278,9 +296,11 @@ export const createWebHangDetector = ({
   const onHide = () => {
     stopped = true;
     Result.try(() => local?.removeItem(key)).unwrapOr(undefined);
+    liveness.release();
   };
   const onShow = () => {
     stopped = false;
+    liveness.acquire();
     onVisibility();
   };
   let timer: ReturnType<typeof browser.setInterval> | undefined;
@@ -293,6 +313,7 @@ export const createWebHangDetector = ({
       browser.clearTimeout(retirementTimer);
     }
     observer?.disconnect();
+    liveness.release();
     browser.document.removeEventListener("visibilitychange", onVisibility);
     browser.removeEventListener("pagehide", onHide);
     browser.removeEventListener("pageshow", onShow);
@@ -361,16 +382,14 @@ export const createWebHangDetector = ({
         } else {
           persist();
         }
-        const retireBootCandidates = () => {
-          if (stopped) {
-            return;
-          }
+        const retireBootCandidates = () =>
           retireAbandonedBootCandidates({
             storage: local,
+            locks,
             candidates: bootCandidates,
             started: marker.started,
+            stopped: () => stopped,
           });
-        };
         const retirementDelay = Math.max(
           0,
           started + 2 * HANG_HEARTBEAT_MS - now(),
@@ -403,24 +422,78 @@ export const createWebHangDetector = ({
   };
 };
 
+// Boot runs before analytics attach, so a refused request has nowhere to be
+// reported. The document then just lacks a liveness signal: neighbours see no
+// held lock and treat its marker as they did before liveness existed.
+const detachedLockRequest = createDetached(() => undefined);
+
+/**
+ * The document's liveness lock, held while its marker exists. pagehide
+ * releases it with the marker: a page holding a Web Lock is not eligible for
+ * the back/forward cache, and a hung page cannot run pagehide anyway.
+ */
+const createLivenessLock = (locks: HangLocks | undefined, key: string) => {
+  let releaseHeld: (() => void) | undefined;
+  return {
+    acquire: () => {
+      if (!locks || releaseHeld) {
+        return;
+      }
+      const held = new Promise<void>((resolve) => {
+        releaseHeld = resolve;
+      });
+      detachedLockRequest(
+        locks.request(key, () => held),
+        "web-hang.liveness",
+      );
+    },
+    release: () => {
+      releaseHeld?.();
+      releaseHeld = undefined;
+    },
+  };
+};
+
 type BootCandidate = { key: string; heartbeat: number };
 type RetireBootCandidatesOptions = {
   storage: Storage | null;
+  locks: HangLocks | undefined;
   candidates: BootCandidate[];
   started: number;
+  stopped: () => boolean;
 };
 
-const retireAbandonedBootCandidates = ({
+/**
+ * A silent heartbeat looks the same for a destroyed document and a hung one,
+ * so only a released liveness lock proves a boot was abandoned. Without the
+ * Locks API nothing is retired: the evidence waits until a later load reads it.
+ */
+const retireAbandonedBootCandidates = async ({
   storage,
+  locks,
   candidates,
   started,
+  stopped,
 }: RetireBootCandidatesOptions) => {
+  if (!locks || stopped()) {
+    return;
+  }
+  const snapshot = await Result.tryPromise(() => locks.query());
+  if (Result.isError(snapshot) || stopped()) {
+    return;
+  }
+  const live = new Set(
+    [...(snapshot.value.held ?? []), ...(snapshot.value.pending ?? [])].map(
+      (lock) => lock.name,
+    ),
+  );
   const records = new Map(
     readHangMarkers(storage).map((record) => [record.key, record.marker]),
   );
   for (const candidate of candidates) {
     const current = records.get(candidate.key);
     if (
+      !live.has(candidate.key) &&
       current?.phase === "boot" &&
       current.visible &&
       current.started < started &&
