@@ -42,6 +42,7 @@ import {
 import {
   applyChatModelChange,
   chatThreadOptions,
+  chatThreadTitleOptions,
   groupedChatThreadsOptions,
   invalidateGroupedChatThreads,
   invalidateChatThreadLists,
@@ -255,6 +256,30 @@ describe("chat thread fetch failures", () => {
 
   afterEach(() => {
     globalThis.fetch = previousFetch;
+  });
+
+  test("a thread whose first message is still being sent has no title to read", async () => {
+    globalThis.fetch = createFetchMock(404, { message: "Thread not found" });
+    const draft = await queryClient().query(options(true));
+    const titleOptions = (
+      persistedThread: ChatThreadFetched | undefined,
+      needed?: boolean,
+    ) =>
+      chatThreadTitleOptions({
+        activeOrganizationId: "org_test",
+        key: { threadId: "thread-fetch-failure", workspaceId: undefined },
+        persistedThread,
+        ...(needed === undefined ? {} : { needed }),
+      });
+
+    // Before the server read resolves, and while it reports no row (the send
+    // that creates it is in flight), GET /title would answer 404.
+    expect(titleOptions(undefined).enabled).toBe(false);
+    expect(titleOptions(draft).enabled).toBe(false);
+    // Once a refetch after the turn reports the row, the title is read.
+    const persisted = { ...draft, threadExists: true };
+    expect(titleOptions(persisted).enabled).toBe(true);
+    expect(titleOptions(persisted, false).enabled).toBe(false);
   });
 
   test("returns an empty draft for an allowed missing thread", async () => {

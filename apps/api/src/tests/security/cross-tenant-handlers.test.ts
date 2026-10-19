@@ -131,6 +131,7 @@ import listReaderAnnotations from "@/api/handlers/legal-reader/annotations/list"
 import listReaderAnswers from "@/api/handlers/legal-reader/answers/list";
 import updateReaderAnswer from "@/api/handlers/legal-reader/answers/update";
 import listLegalLists from "@/api/handlers/lists/list";
+import deleteMemory from "@/api/handlers/memories/delete";
 import listMemories from "@/api/handlers/memories/list";
 import listNotifications from "@/api/handlers/notifications/list";
 import getNumberSeries from "@/api/handlers/number-series/get";
@@ -166,6 +167,7 @@ import {
   decideFeatureAccess,
 } from "@/api/lib/feature-access/policy";
 import {
+  AI_MEMORY_FEATURE_ID,
   FEATURE_REGISTRY,
   LEGAL_LISTS_FEATURE_ID,
 } from "@/api/lib/feature-access/registry";
@@ -250,6 +252,33 @@ const legalListAccess = ({ session, user }: TestHandlerContext) =>
           featureId: LEGAL_LISTS_FEATURE_ID,
           grants: {
             [LEGAL_LISTS_FEATURE_ID]: [
+              {
+                type: "organization",
+                organizationId: session.activeOrganizationId,
+              },
+            ],
+          },
+          organizationId: session.activeOrganizationId,
+          userId: user.id,
+          user: { email: "member@example.test", emailVerified: true },
+          membership: true,
+        }),
+      ],
+    ]),
+  });
+
+const memoryAccess = ({ session, user }: TestHandlerContext) =>
+  createFeatureAccessSnapshot({
+    organizationId: session.activeOrganizationId,
+    userId: user.id,
+    decisions: new Map([
+      [
+        AI_MEMORY_FEATURE_ID,
+        decideFeatureAccess({
+          registry: FEATURE_REGISTRY,
+          featureId: AI_MEMORY_FEATURE_ID,
+          grants: {
+            [AI_MEMORY_FEATURE_ID]: [
               {
                 type: "organization",
                 organizationId: session.activeOrganizationId,
@@ -1523,16 +1552,34 @@ const isolationCases: IsolationCase[] = [
     name: "memory list",
     runAAgainstB: async ({ workspaceA }) =>
       await runHandler(listMemories, workspaceA, {
+        featureAccessSnapshot: memoryAccess(workspaceA),
         query: { scope: "organization", status: "active", limit: 100 },
       }),
     runBPositive: async ({ workspaceB }) =>
       await runHandler(listMemories, workspaceB, {
+        featureAccessSnapshot: memoryAccess(workspaceB),
         query: { scope: "organization", status: "active", limit: 100 },
       }),
     expectDenied: (result, { ids: testIds }) =>
       expectPageExcludesId(result, testIds.aiMemoryFirmB),
     expectPositive: (result, { ids: testIds }) =>
       expectPageContainsId(result, testIds.aiMemoryFirmB),
+  },
+  {
+    name: "memory delete",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(deleteMemory, workspaceA, {
+        featureAccessSnapshot: memoryAccess(workspaceA),
+        params: { memoryId: testIds.aiMemoryDeleteB },
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(deleteMemory, workspaceB, {
+        featureAccessSnapshot: memoryAccess(workspaceB),
+        params: { memoryId: testIds.aiMemoryDeleteB },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result, { ids: testIds }) =>
+      expect(result).toEqual({ id: testIds.aiMemoryDeleteB }),
   },
   {
     name: "organization contact read by id",
