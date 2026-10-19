@@ -35,13 +35,14 @@ type SessionLifetimeDecision = {
 
 /** Keeps framework session creation aligned with explicitly minted credentials. */
 export const decidePinnedSessionLifetime = (
-  session: Pick<Session, "id" | "createdAt">,
+  session: Partial<Pick<Session, "id" | "createdAt">>,
 ): SessionLifetimeDecision | undefined =>
-  session.id.startsWith(SYNTHETIC_SESSION_PREFIX)
+  session.id?.startsWith(SYNTHETIC_SESSION_PREFIX)
     ? {
         refreshMode: "fixed",
         expiresAt: new Date(
-          session.createdAt.getTime() + SYNTHETIC_SESSION_LIFETIME_MS,
+          (session.createdAt ?? new Date()).getTime() +
+            SYNTHETIC_SESSION_LIFETIME_MS,
         ),
       }
     : undefined;

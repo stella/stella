@@ -1,10 +1,12 @@
 import Elysia from "elysia";
+import type { Context } from "elysia";
 import { timingSafeEqual } from "node:crypto";
 
 import { sha256Bytes } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import { env } from "@/api/env";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { getRequestId } from "@/api/lib/observability/request-context";
 import { reserveSyntheticSessionBudget } from "@/api/lib/rate-limit/synthetic-session-budget";
 import { mintSyntheticSession } from "@/api/lib/synthetic-principal/store";
@@ -51,31 +53,36 @@ export const createSyntheticRoute = ({
   if (keys === undefined) {
     return route;
   }
-  return route.post(
-    "/session",
-    async ({ request, status }) => {
-      const keyLabel = authorizedKeyLabel(
-        request.headers.get("x-stella-synthetic-key"),
-        { keys, nowMs },
-      );
-      if (keyLabel === undefined) {
-        return new Response(null, { status: 404 });
-      }
-      if (!(await reserveBudget())) {
-        return status(429, { error: "Try again later." });
-      }
-      const session = await mintSession({
-        keyLabel,
-        requestId: getRequestId(request),
-        userAgent: request.headers.get("user-agent"),
-      });
-      if (session === null) {
-        return new Response(null, { status: 404 });
-      }
-      return session;
-    },
-    { parse: "none" },
-  );
+  const createSession = async ({
+    request,
+    status,
+  }: Pick<Context, "request" | "status">) => {
+    const keyLabel = authorizedKeyLabel(
+      request.headers.get("x-stella-synthetic-key"),
+      { keys, nowMs },
+    );
+    if (keyLabel === undefined) {
+      return new Response(null, { status: 404 });
+    }
+    if (!(await reserveBudget())) {
+      return status(429, { error: "Try again later." });
+    }
+    const session = await mintSession({
+      keyLabel,
+      requestId: getRequestId(request),
+      userAgent: request.headers.get("user-agent"),
+    });
+    if (session === null) {
+      return new Response(null, { status: 404 });
+    }
+    return session;
+  };
+  declareAggregateMutation(createSession, {
+    type: "independent",
+    reason:
+      "The monitoring session store serializes its singleton control row and owns the account, session, and audit writes in one transaction.",
+  });
+  return route.post("/session", createSession, { parse: "none" });
 };
 
 export const syntheticRoute = createSyntheticRoute({
