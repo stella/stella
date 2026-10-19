@@ -1446,13 +1446,32 @@ const generatorEntries = (
       }
     }
     const filter = words.indexOf("--filter");
+    // A generator only runs in an image that holds its package and the package
+    // script it invokes; without either, the image cannot produce the output.
     if (
       filter !== -1 &&
-      ![...inventory].some(
-        ([file, origin]) =>
-          file.endsWith("/package.json") &&
-          JSON.parse(text(root, origin)).name === words.at(filter + 1),
-      )
+      ![...inventory].some(([file, origin]) => {
+        if (!file.endsWith("/package.json")) {
+          return false;
+        }
+        const manifest: unknown = JSON.parse(text(root, origin));
+        if (
+          typeof manifest !== "object" ||
+          manifest === null ||
+          !("name" in manifest) ||
+          manifest.name !== words.at(filter + 1)
+        ) {
+          return false;
+        }
+        const script = words.at(filter + 2);
+        return (
+          script === undefined ||
+          ("scripts" in manifest &&
+            typeof manifest.scripts === "object" &&
+            manifest.scripts !== null &&
+            Object.hasOwn(manifest.scripts, script))
+        );
+      })
     ) {
       return [];
     }

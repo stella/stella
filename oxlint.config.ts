@@ -187,6 +187,12 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("require-json-import-attribute.fixture.ts", [
     "require-json-import-attribute/require-json-import-attribute",
   ]),
+  fixtureRuleOverride("no-raw-eden-telemetry.fixture.ts", [
+    "no-raw-eden-telemetry/no-raw-eden-telemetry",
+  ]),
+  fixtureRuleOverride("no-unsafe-controller-editor-access.fixture.ts", [
+    "no-unsafe-controller-editor-access/no-unsafe-controller-editor-access",
+  ]),
   fixtureRuleOverride("drizzle.fixture.ts", [
     "drizzle/enforce-delete-with-where",
     "drizzle/enforce-update-with-where",
@@ -1145,6 +1151,7 @@ const config = defineConfig({
     "eslint/grouped-accessor-pairs": "off",
     "no-restricted-imports": ["error", { paths: [noZodImport] }],
     "no-bare-error/no-bare-error": "error",
+    "no-raw-eden-telemetry/no-raw-eden-telemetry": "error",
     "no-minted-auth-provider-id/no-minted-auth-provider-id": "error",
     "ai-output-strict-schema/ai-output-strict-schema": "error",
     "decision-shaped-output-schema/decision-shaped-output-schema": "error",
@@ -1452,6 +1459,7 @@ const config = defineConfig({
     stellaLowercasePluginSpecifier,
     "./.oxlint-plugins/no-raw-cache-control.ts",
     "./.oxlint-plugins/confine-sql-close.ts",
+    "./.oxlint-plugins/confine-online-ddl.ts",
     "./.oxlint-plugins/raw-hash-from-source-fingerprint.ts",
     "./.oxlint-plugins/no-raw-sha256.ts",
     "./.oxlint-plugins/no-hand-rolled-concurrency.ts",
@@ -1569,6 +1577,8 @@ const config = defineConfig({
     "./.oxlint-plugins/require-escape-like.ts",
     "./.oxlint-plugins/sql-perf.ts",
     "./.oxlint-plugins/no-bare-error.ts",
+    "./.oxlint-plugins/no-raw-eden-telemetry.ts",
+    "./.oxlint-plugins/no-unsafe-controller-editor-access.ts",
     "./.oxlint-plugins/no-minted-auth-provider-id.ts",
     "./.oxlint-plugins/ai-output-strict-schema.ts",
     "./.oxlint-plugins/decision-shaped-output-schema.ts",
@@ -1703,6 +1713,17 @@ const config = defineConfig({
       },
     },
     {
+      // Tests, fixtures and the owner are skipped inside the rule; SQL
+      // migration files are not JavaScript, so oxlint never reads them.
+      files: [
+        "apps/api/src/**/*.{ts,tsx,js,mjs}",
+        ".oxlint-plugins/__fixtures__/confine-online-ddl.fixture.ts",
+      ],
+      rules: {
+        "confine-online-ddl/confine-online-ddl": "error",
+      },
+    },
+    {
       files: [
         "packages/scripts/src/dev-*.ts",
         "packages/scripts/src/agent-session.ts",
@@ -1732,7 +1753,18 @@ const config = defineConfig({
       files: ["apps/api/src/**/*.ts"],
       rules: {
         "gdp-ts/no-define-proof": "error",
-        "gdp-ts/no-proof-assertion": "error",
+        "gdp-ts/no-proof-assertion": [
+          "error",
+          {
+            proofImports: [
+              "(^|/)proofs(/|$)",
+              "(^|/)workspaces/matter-access-proof(?:\\.ts)?$",
+            ],
+          },
+        ],
+        "gdp-ts/no-matter-proof-forgery": "error",
+        "gdp-ts/no-matter-proof-kind-outside-owner": "error",
+        "gdp-ts/no-matter-access-context-escape": "error",
       },
     },
     {
@@ -2506,6 +2538,14 @@ const config = defineConfig({
             ignorePrimitives: { string: true, boolean: true },
           },
         ],
+      },
+    },
+    {
+      // Controller instances can outlive their editor during unmount.
+      files: ["apps/web/src/**/*.{ts,tsx}"],
+      rules: {
+        "no-unsafe-controller-editor-access/no-unsafe-controller-editor-access":
+          "error",
       },
     },
     {
@@ -4094,9 +4134,6 @@ const config = defineConfig({
         "apps/web/src/**/template-preview.tsx",
         "apps/web/src/**/template-preview-view.tsx",
         "apps/web/src/**/page-citation.tsx",
-        // Generated message types: UI copy may legitimately contain words
-        // like "right-click"; these strings are never class names.
-        "apps/web/src/i18n/langs/messages.gen.ts",
       ],
       rules: { "no-physical-properties/no-physical-properties": "off" },
     },
