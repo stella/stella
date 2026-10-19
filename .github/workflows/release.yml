@@ -39,7 +39,7 @@ env:
 jobs:
   resolve:
     name: Resolve trusted release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: read
@@ -273,7 +273,7 @@ jobs:
             platform: linux/arm64
             cache_from_tag: buildcache-release-arm64
             cache_to_tag: buildcache-release-arm64
-          - runner: ubuntu-latest
+          - runner: ubuntu-24.04
             platform: linux/amd64
             cache_from_tag: buildcache-release-amd64
             cache_to_tag: buildcache-release-amd64
@@ -367,7 +367,7 @@ jobs:
 
   prepare-web-image:
     name: Build and publish web image
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 55
     needs: resolve
     permissions:
@@ -603,7 +603,7 @@ jobs:
 
   manifest:
     name: Assemble multi-arch manifest and GitHub release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     needs: [resolve, build, prepare-web-image, smoke]
     outputs:
@@ -917,7 +917,7 @@ jobs:
     # window (release-health.yml) before another one replaces it. Runs just
     # before the promotion, so a window that closes during the build counts.
     name: Gate on the previous release's health
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     needs: [resolve, manifest, prepare-web-image, smoke]
     if: ${{ !contains(needs.resolve.outputs.release_ref, '-') }}
@@ -972,7 +972,7 @@ jobs:
     # Auto-promote stable releases (vX.Y.Z) to production. Any tag
     # carrying a prerelease label (vX.Y.Z-anything) publishes the
     # artifact and is handled by `promote-staging` below.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # The infra workflow waits for online migrations to reach their real
     # terminal state. Match GitHub's full hosted-job window so this caller
     # cannot time out first and lose observation of an active promotion.
@@ -1112,7 +1112,7 @@ jobs:
   dispatch-release-health:
     # Start the post-release window for the release production now serves.
     name: Start the post-release health window
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     needs: [resolve, promote]
     permissions:
@@ -1143,7 +1143,7 @@ jobs:
     # Same dispatch pattern as `promote` above; the infra workflow
     # reads target_environment to resolve the staging-scoped vars
     # and apply role.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     needs: [resolve, manifest, prepare-web-image, smoke]
     if: ${{ contains(needs.resolve.outputs.release_ref, '-rc.') }}

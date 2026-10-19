@@ -33,7 +33,7 @@ jobs:
       github.event_name != 'delete'
       || (github.event.ref_type == 'branch'
           && startsWith(github.event.ref, 'gh-readonly-queue/'))
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       actions: write

@@ -19,7 +19,7 @@ import { productionE2eChanged } from "./production-e2e-inputs.mjs";
 const TRUE = "true";
 const FALSE = "false";
 const BOTH_PLATFORMS =
-  '[{"runner":"ubuntu-24.04-arm","platform":"linux/arm64"},{"runner":"ubuntu-latest","platform":"linux/amd64"}]';
+  '[{"runner":"ubuntu-24.04-arm","platform":"linux/arm64"},{"runner":"ubuntu-24.04","platform":"linux/amd64"}]';
 const ARM_PLATFORM = '[{"runner":"ubuntu-24.04-arm","platform":"linux/arm64"}]';
 
 export type ChangedFileScopeInput = {
