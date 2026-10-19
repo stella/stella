@@ -174,6 +174,7 @@ jobs:
       fix_tests_on_base_required: ${{ steps.changed-files.outputs.fix_tests_on_base_required }}
       landing_build_required: ${{ steps.changed-files.outputs.landing_build_required }}
       desktop_browser_required: ${{ steps.changed-files.outputs.desktop_browser_required }}
+      ui_playground_specs: ${{ steps.ui-playground-plan.outputs.specs || '[]' }}
       # The job and result gate consume the same event/depth decision.
       ci_browser_scope_required: ${{ steps.changed-files.outputs.ci_browser_scope_required }}
       ci_browser_required: >-
@@ -181,7 +182,7 @@ jobs:
         && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
         && steps.changed-files.outputs.package_checks_required == 'true'
         && steps.changed-files.outputs.ci_browser_scope_required == 'true'
-        && ((github.event_name == 'pull_request' && steps.changed-files.outputs.desktop_browser_required == 'true')
+        && ((github.event_name == 'pull_request' && (steps.changed-files.outputs.desktop_browser_required == 'true' || steps.ui-playground-plan.outputs.specs != '[]'))
         || (github.event_name != 'pull_request'
         && steps.depth.outputs.suite_depth == 'full')
         || (github.event_name == 'merge_group'
@@ -1314,6 +1315,17 @@ jobs:
           if [[ "$package_checks_required" != "true" ]]; then
             echo "::notice::Only documentation changed; skipping package CI checks."
           fi
+
+      - name: Plan UI playground geometry specs
+        id: ui-playground-plan
+        if: steps.completed-depth.outputs.run_required != 'false' && steps.changed-files.outcome == 'success'
+        env:
+          CHANGED_FILES: ${{ steps.changed-files.outputs.changed_files }}
+        run: |
+          mapfile -t changed_files < <(jq -r '.[]' <<< "$CHANGED_FILES")
+          specs=$(bun scripts/ui-playground-selection.ts "${changed_files[@]}") || \
+            specs=$(find apps/web/e2e/ui-playground -maxdepth 1 -name '*.geometry.spec.ts' -print | sort | jq -Rsc 'split("\n") | map(select(length > 0))')
+          echo "specs=$specs" >> "$GITHUB_OUTPUT"
 
       - name: Plan query performance scope
         id: query-perf-scope
@@ -3268,7 +3280,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: ${{ github.event_name == 'pull_request' && fromJSON('["desktop"]') || fromJSON('["desktop","ui"]') }}
+        suite: ${{ github.event_name == 'pull_request' && needs.ci-plan.outputs.desktop_browser_required == 'true' && needs.ci-plan.outputs.ui_playground_specs != '[]' && fromJSON('["desktop","ui"]') || github.event_name == 'pull_request' && needs.ci-plan.outputs.ui_playground_specs != '[]' && fromJSON('["ui"]') || github.event_name == 'pull_request' && fromJSON('["desktop"]') || fromJSON('["desktop","ui"]') }}
     container:
       image: ${{ needs.ci-plan.outputs.playwright_image }}
       credentials: ${{ startsWith(needs.ci-plan.outputs.playwright_image, 'ghcr.io/') && fromJSON(format('{{"username":"{0}","password":"{1}"}}', github.actor, secrets.GITHUB_TOKEN)) || fromJSON('{}') }}
@@ -3294,13 +3306,18 @@ jobs:
         run: echo "required=$REQUIRED" >> "$GITHUB_OUTPUT"
 
       - name: Check UI browser test scope
-        if: github.event_name != 'pull_request' && needs.ci-plan.outputs.package_checks_required == 'true'
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
         id: ui-browser-tests
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
           EVENT_NAME: ${{ github.event_name }}
           HEAVY_ONLY: ${{ inputs.heavy_only }}
+          SELECTED_SPECS: ${{ needs.ci-plan.outputs.ui_playground_specs }}
         run: |
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            [[ "$SELECTED_SPECS" != '[]' ]] && echo "required=true" >> "$GITHUB_OUTPUT" || echo "required=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           if [[ "$EVENT_NAME" == "workflow_dispatch" || "${HEAVY_ONLY:-false}" == true ]] || ! git diff --quiet "origin/$BASE_REF"...HEAD -- \
             .github/actions/setup-playwright \
             .github/workflows/ci.yml \
@@ -3458,7 +3475,15 @@ jobs:
         if: matrix.suite == 'ui' && steps.ui-browser-tests.outputs.required == 'true'
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/test-ui-playground-visuals.json
-        run: bun --filter @stll/web test:e2e:ui-playground
+          SELECTED_SPECS: ${{ needs.ci-plan.outputs.ui_playground_specs }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [[ "$EVENT_NAME" != "pull_request" ]]; then
+            bun --filter @stll/web test:e2e:ui-playground
+            exit 0
+          fi
+          mapfile -t specs < <(jq -r '.[]' <<< "$SELECTED_SPECS")
+          bun --filter @stll/web test:e2e:ui-playground -- "${specs[@]}"
 
       - name: Test extension browser boundary
         if: matrix.suite == 'ui' && steps.extension-browser-tests.outputs.required == 'true'
