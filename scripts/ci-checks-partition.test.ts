@@ -565,6 +565,26 @@ const withTaskResultCacheSetup = (step: Step): Step => {
     },
   };
 };
+// PR-depth runs check out the dispatched commit in every leg; a merge base
+// whose legs predate that checked out the workflow ref, which is the same
+// commit on pull requests and merge groups.
+const PR_DEPTH_CHECKOUT_REF = [
+  "$",
+  "{{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}",
+].join("");
+const withPrDepthCheckoutRef = (step: Step): Step => {
+  if (usesOf(step) !== "actions/checkout@<pinned>") {
+    return step;
+  }
+  const inputs = v.parse(
+    v.looseObject({ with: v.optional(v.record(v.string(), v.unknown())) }),
+    step,
+  ).with;
+  if (inputs?.["ref"] !== undefined) {
+    return step;
+  }
+  return { ...step, with: { ...inputs, ref: PR_DEPTH_CHECKOUT_REF } };
+};
 const ownedInstallFlags = '["--frozen-lockfile","--ignore-scripts"]';
 const scopedInstallActions = new Set([
   "./.github/actions/ci-install",
@@ -1238,6 +1258,7 @@ test("each CI check leg preserves merge-base setup, supply-chain protection and 
     const { steps, "timeout-minutes": timeout, ...scope } = partition;
     const originalSetup = setupSteps(originalSteps)
       .map(withTaskResultCacheSetup)
+      .map(withPrDepthCheckoutRef)
       .map((step) => withInstallCache(step, base))
       .map((step) => {
         if (
