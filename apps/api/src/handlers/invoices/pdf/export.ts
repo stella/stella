@@ -135,10 +135,10 @@ export const createInvoicePdfExport = (
         );
       }
       const amounts = yield* readInvoiceDocumentLines(loaded.invoice);
-      const rendered = yield* Result.await(
+      const outcome = yield* Result.await(
         Result.tryPromise({
-          try: async () => {
-            const outcome = await renderInvoice({
+          try: async () =>
+            await renderInvoice({
               session: invoiceTypstSession,
               createdAt: new Date(),
               invoice: {
@@ -159,34 +159,32 @@ export const createInvoicePdfExport = (
                 },
                 totals: amounts.totals,
               },
-            });
-            if (outcome.isErr()) {
-              throw outcome.error;
-            }
-            if (outcome.value.status === "rejected") {
-              const infrastructureFailure = [
-                "timeout",
-                "crashed",
-                "memory",
-              ].includes(outcome.value.reason);
-              throw new HandlerError({
-                status: infrastructureFailure ? 503 : 409,
-                message: infrastructureFailure
-                  ? "The invoice PDF renderer is temporarily unavailable."
-                  : outcome.value.diagnostics.join("\n") ||
-                    `Invoice rendering was rejected: ${outcome.value.reason}`,
-                hint: infrastructureFailure
-                  ? "Try exporting the invoice again later."
-                  : "Check the seller payment details and invoice dates before exporting.",
-                retryable: infrastructureFailure,
-              });
-            }
-            return outcome.value.pdf;
-          },
+            }),
           catch: invoiceRenderError,
         }),
       );
-      const body = rendered;
+      if (outcome.isErr()) {
+        return Result.err(invoiceRenderError(outcome.error));
+      }
+      if (outcome.value.status === "rejected") {
+        const infrastructureFailure = ["timeout", "crashed", "memory"].includes(
+          outcome.value.reason,
+        );
+        return Result.err(
+          new HandlerError({
+            status: infrastructureFailure ? 503 : 409,
+            message: infrastructureFailure
+              ? "The invoice PDF renderer is temporarily unavailable."
+              : outcome.value.diagnostics.join("\n") ||
+                `Invoice rendering was rejected: ${outcome.value.reason}`,
+            hint: infrastructureFailure
+              ? "Try exporting the invoice again later."
+              : "Check the seller payment details and invoice dates before exporting.",
+            retryable: infrastructureFailure,
+          }),
+        );
+      }
+      const body = outcome.value.pdf;
       const number =
         loaded.invoice.status === INVOICE_STATUS.DRAFT
           ? "draft"

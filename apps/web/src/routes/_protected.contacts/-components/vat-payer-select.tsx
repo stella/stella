@@ -29,6 +29,15 @@ export const VatPayerSelect = ({ contact }: { contact: ContactData }) => {
     [YES]: t("contacts.fields.vatPayerYes"),
     [NO]: t("contacts.fields.vatPayerNo"),
   };
+  const labelOf = (current: unknown) => {
+    if (current === YES) {
+      return labels[YES];
+    }
+    if (current === NO) {
+      return labels[NO];
+    }
+    return labels[UNKNOWN];
+  };
 
   return (
     <div className="flex items-center gap-2 py-1">
@@ -50,7 +59,7 @@ export const VatPayerSelect = ({ contact }: { contact: ContactData }) => {
           aria-label={t("contacts.fields.vatPayer")}
           className="min-w-0 flex-1"
         >
-          <SelectValue>{(current) => labels[current]}</SelectValue>
+          <SelectValue>{labelOf}</SelectValue>
         </SelectTrigger>
         <SelectPopup>
           <SelectItem value={YES}>{labels[YES]}</SelectItem>

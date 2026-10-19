@@ -141,7 +141,7 @@ const MEDIUM_DATE = {
   timeZone: "UTC",
 } as const satisfies Intl.DateTimeFormatOptions;
 
-const isInvoiceLanguage = (value: string): value is InvoiceLanguage =>
+const isInvoiceLanguage = (value: string | null): value is InvoiceLanguage =>
   INVOICE_LANGUAGES.some((language) => language === value);
 
 /** A muted note saying where a prefilled value came from. */
