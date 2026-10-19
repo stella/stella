@@ -2,7 +2,11 @@ import { expect, test } from "bun:test";
 
 import { LegislationRevision } from "@/api/handlers/legislation/revision";
 import { createSafeId } from "@/api/lib/branded-types";
-import { sanitizeLegislationAmendments } from "@/api/lib/legal-search/legislation-amendments";
+import {
+  LEGISLATION_AMENDMENT_SNAPSHOT_MAX,
+  sanitizeLegislationAmendments,
+} from "@/api/lib/legal-search/legislation-amendments";
+import type { LegislationAmendmentObservationErrorReason } from "@/api/lib/legal-search/legislation-amendments";
 import type {
   LegislationAmendmentSnapshot,
   LegislationDocumentInput,
@@ -85,27 +89,96 @@ test("amendment source hashes follow effects and coverage while identical newer 
     ).not.toBe(original.sourceHash(classification));
   }
 });
-test("amendment snapshots reject collisions and impossible coverage before persistence", () => {
-  expect(() =>
-    sanitizeLegislationAmendments({
-      ...snapshot,
-      relations: [...snapshot.relations, ...snapshot.relations],
-    }),
-  ).toThrow("empty or duplicate identity");
-  expect(() =>
-    sanitizeLegislationAmendments({
-      ...snapshot,
-      coverage: { type: "not-stated", reason: "No publisher field" },
-    }),
-  ).toThrow("cannot carry relations");
-  expect(() =>
-    sanitizeLegislationAmendments({
-      ...snapshot,
-      coverage: {
-        type: "partial",
-        unlocatedRelations: 0,
-        reason: "Missing fragment",
+test("publisher amendment faults return every typed rejection reason", () => {
+  const relation = snapshot.relations.at(0);
+  if (relation === undefined) {
+    throw new Error("expected the amendment fixture to carry a relation");
+  }
+  const cases: {
+    reason: LegislationAmendmentObservationErrorReason;
+    input: LegislationAmendmentSnapshot;
+  }[] = [
+    {
+      reason: "invalid_observed_at",
+      input: { ...snapshot, observedAt: "bad" },
+    },
+    {
+      reason: "relation_limit_exceeded",
+      input: {
+        ...snapshot,
+        relations: Array.from(
+          { length: LEGISLATION_AMENDMENT_SNAPSHOT_MAX + 1 },
+          (_, index) => ({ ...relation, publisherId: String(index) }),
+        ),
       },
-    }),
-  ).toThrow("unlocated relation count");
+    },
+    {
+      reason: "empty_publisher_id",
+      input: {
+        ...snapshot,
+        relations: [{ ...relation, publisherId: "\u0000" }],
+      },
+    },
+    {
+      reason: "duplicate_publisher_id",
+      input: { ...snapshot, relations: [relation, relation] },
+    },
+    {
+      reason: "empty_amending_eli",
+      input: {
+        ...snapshot,
+        relations: [{ ...relation, amendingEli: "\u0000" }],
+      },
+    },
+    {
+      reason: "empty_affected_anchor",
+      input: {
+        ...snapshot,
+        relations: [{ ...relation, affectedAnchor: "\u0000" }],
+      },
+    },
+    {
+      reason: "invalid_effective_date",
+      input: {
+        ...snapshot,
+        relations: [
+          { ...relation, effective: { type: "date", on: "2027-02-30" } },
+        ],
+      },
+    },
+    {
+      reason: "incomplete_coverage_without_reason",
+      input: {
+        ...snapshot,
+        coverage: { type: "not-stated", reason: "\u0000" },
+        relations: [],
+      },
+    },
+    {
+      reason: "invalid_partial_unlocated_relations",
+      input: {
+        ...snapshot,
+        coverage: {
+          type: "partial",
+          unlocatedRelations: 0,
+          reason: "Missing fragment",
+        },
+      },
+    },
+    {
+      reason: "unstated_coverage_with_relations",
+      input: {
+        ...snapshot,
+        coverage: { type: "not-stated", reason: "No publisher field" },
+      },
+    },
+  ];
+  for (const { input, reason } of cases) {
+    const result = sanitizeLegislationAmendments(input);
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.reason).toBe(reason);
+      expect(result.error.message).not.toBe("");
+    }
+  }
 });

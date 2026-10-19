@@ -1,3 +1,5 @@
+import { Result } from "better-result";
+
 import { createStatuteSlug } from "@stll/api-contract/statute-route";
 import { createSha256 } from "@stll/sha256/bun";
 
@@ -14,7 +16,10 @@ import {
   writeCorpusDocument,
 } from "@/api/lib/legal-search/corpus-storage";
 import type { CorpusWriteOutcome } from "@/api/lib/legal-search/corpus-storage";
-import { sanitizeLegislationAmendments } from "@/api/lib/legal-search/legislation-amendments";
+import {
+  LegislationAmendmentObservationError,
+  sanitizeLegislationAmendments,
+} from "@/api/lib/legal-search/legislation-amendments";
 import type { SanitizedLegislationAmendmentSnapshot } from "@/api/lib/legal-search/legislation-amendments";
 import { typedLegislationClassification } from "@/api/lib/legal-search/legislation-expression-classification";
 import type { LegislationExpressionClassification } from "@/api/lib/legal-search/legislation-expression-classification";
@@ -29,6 +34,7 @@ type SanitizedLegislationDocumentInput = Omit<
 
 const sanitizeInput = (
   input: LegislationDocumentInput,
+  amendments: SanitizedLegislationAmendmentSnapshot | undefined,
 ): SanitizedLegislationDocumentInput => ({
   ...input,
   eli: stripDangerousChars(input.eli),
@@ -42,10 +48,7 @@ const sanitizeInput = (
       ? undefined
       : stripDangerousChars(input.sourceRaw),
   metadata: sanitizeMetadata(input.metadata ?? {}),
-  amendments:
-    input.amendments === undefined
-      ? undefined
-      : sanitizeLegislationAmendments(input.amendments),
+  amendments,
   expression:
     input.expression === undefined
       ? undefined
@@ -147,6 +150,11 @@ class RevisionProjection {
 
 export type LegislationRevisionProjection = RevisionProjection;
 
+export type LegislationAmendmentObservation =
+  | { type: "not-observed" }
+  | { type: "accepted" }
+  | { type: "rejected"; error: LegislationAmendmentObservationError };
+
 type WriteRevisionCorpusOptions = {
   documentId: string;
   stored: Parameters<typeof writeCorpusDocument>[0]["stored"];
@@ -163,11 +171,32 @@ type RevisionSourceRaw = {
 export class LegislationRevision {
   readonly #input: SanitizedLegislationDocumentInput;
   readonly #contentHash: string;
+  readonly #amendmentObservation: LegislationAmendmentObservation;
 
   constructor(input: LegislationDocumentInput) {
+    const amendments = input.amendments
+      ? sanitizeLegislationAmendments(input.amendments)
+      : undefined;
+    if (amendments === undefined) {
+      this.#amendmentObservation = { type: "not-observed" };
+    } else if (Result.isOk(amendments)) {
+      this.#amendmentObservation = { type: "accepted" };
+    } else {
+      this.#amendmentObservation = {
+        type: "rejected",
+        error: amendments.error,
+      };
+    }
     // Sanitizing first turns values structuredClone rejects (functions,
     // symbols, promises in metadata) into storable ones before the snapshot.
-    this.#input = structuredClone(sanitizeInput(input));
+    this.#input = structuredClone(
+      sanitizeInput(
+        input,
+        amendments !== undefined && Result.isOk(amendments)
+          ? amendments.value
+          : undefined,
+      ),
+    );
     this.#contentHash = corpusContentHash({
       text: this.#input.fulltext ?? null,
       sections: this.#input.sections ?? null,
@@ -178,6 +207,18 @@ export class LegislationRevision {
   // Reads cannot mutate the snapshot used by either writer.
   get input() {
     return structuredClone(this.#input);
+  }
+  get amendmentObservation() {
+    if (this.#amendmentObservation.type !== "rejected") {
+      return this.#amendmentObservation;
+    }
+    return {
+      type: "rejected",
+      error: new LegislationAmendmentObservationError({
+        message: this.#amendmentObservation.error.message,
+        reason: this.#amendmentObservation.error.reason,
+      }),
+    } as const;
   }
   get window() {
     return storedWindow(this.#input.version);

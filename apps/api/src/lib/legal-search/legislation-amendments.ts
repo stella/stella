@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { and, asc, eq, gt, inArray, or, sql } from "drizzle-orm";
 import { brand, custom, parse, pipe } from "valibot";
 import type { Brand } from "valibot";
@@ -36,6 +36,25 @@ const AMENDMENT_INSERT_BATCH_SIZE = 1000;
 export type SanitizedLegislationAmendmentSnapshot =
   LegislationAmendmentSnapshot & Brand<"SanitizedLegislationAmendmentSnapshot">;
 
+export type LegislationAmendmentObservationErrorReason =
+  | "duplicate_publisher_id"
+  | "empty_affected_anchor"
+  | "empty_amending_eli"
+  | "empty_publisher_id"
+  | "incomplete_coverage_without_reason"
+  | "invalid_effective_date"
+  | "invalid_observed_at"
+  | "invalid_partial_unlocated_relations"
+  | "relation_limit_exceeded"
+  | "unstated_coverage_with_relations";
+
+export class LegislationAmendmentObservationError extends TaggedError(
+  "LegislationAmendmentObservationError",
+)<{
+  message: string;
+  reason: LegislationAmendmentObservationErrorReason;
+}> {}
+
 const isLegislationAmendmentSnapshot = (
   value: unknown,
 ): value is LegislationAmendmentSnapshot =>
@@ -49,83 +68,128 @@ const sanitizedLegislationAmendmentSnapshotSchema = pipe(
 /** Sanitize before hashing, and reject identities whose effects would collide. */
 export const sanitizeLegislationAmendments = (
   snapshot: LegislationAmendmentSnapshot,
-): SanitizedLegislationAmendmentSnapshot => {
-  Temporal.Instant.from(snapshot.observedAt);
+): Result<
+  SanitizedLegislationAmendmentSnapshot,
+  LegislationAmendmentObservationError
+> => {
+  const rejected = (
+    reason: LegislationAmendmentObservationErrorReason,
+    message: string,
+  ) =>
+    Result.err(new LegislationAmendmentObservationError({ message, reason }));
+  const observedAt = Result.try(() =>
+    Temporal.Instant.from(snapshot.observedAt),
+  );
+  if (Result.isError(observedAt)) {
+    return rejected(
+      "invalid_observed_at",
+      "Invalid amendment observation time",
+    );
+  }
   if (snapshot.relations.length > LEGISLATION_AMENDMENT_SNAPSHOT_MAX) {
-    return panic("Legislation amendment snapshot exceeds its relation limit");
+    return rejected(
+      "relation_limit_exceeded",
+      "Legislation amendment snapshot exceeds its relation limit",
+    );
   }
   const seen = new Set<string>();
   const nullableText = (text: string | null) =>
     text === null ? null : stripDangerousChars(text);
-  const relations = snapshot.relations
-    .map((relation) => {
-      const publisherId = stripDangerousChars(relation.publisherId);
-      const amendingEli = stripDangerousChars(relation.amendingEli);
-      const affectedAnchor = stripDangerousChars(relation.affectedAnchor);
-      if (
-        publisherId === "" ||
-        amendingEli === "" ||
-        affectedAnchor === "" ||
-        seen.has(publisherId)
-      ) {
-        return panic(
-          "Legislation amendment snapshot has an empty or duplicate identity",
-        );
-      }
-      seen.add(publisherId);
-      if (
-        relation.effective.type === "date" &&
-        parsePlainDate(relation.effective.on) === null
-      ) {
-        return panic("Legislation amendment has an invalid effective date");
-      }
-      return {
-        publisherId,
-        amendingEli,
-        amendingTitle: nullableText(relation.amendingTitle),
-        amendingAnchor: nullableText(relation.amendingAnchor),
-        affectedAnchor,
-        changeKind: relation.changeKind,
-        effective:
-          relation.effective.type === "date"
-            ? { type: "date", on: relation.effective.on }
-            : {
-                type: "not-stated",
-                text: nullableText(relation.effective.text),
-              },
-        publisherInstruction: nullableText(relation.publisherInstruction),
-      } satisfies LegislationAmendmentRelation;
-    })
-    .toSorted((left, right) =>
-      compareCodeUnit(left.publisherId, right.publisherId),
-    );
+  const relations: LegislationAmendmentRelation[] = [];
+  for (const relation of snapshot.relations) {
+    const publisherId = stripDangerousChars(relation.publisherId);
+    const amendingEli = stripDangerousChars(relation.amendingEli);
+    const affectedAnchor = stripDangerousChars(relation.affectedAnchor);
+    if (publisherId === "") {
+      return rejected(
+        "empty_publisher_id",
+        "Legislation amendment has an empty publisher identity",
+      );
+    }
+    if (seen.has(publisherId)) {
+      return rejected(
+        "duplicate_publisher_id",
+        "Legislation amendment snapshot has a duplicate publisher identity",
+      );
+    }
+    if (amendingEli === "") {
+      return rejected(
+        "empty_amending_eli",
+        "Legislation amendment has an empty amending ELI",
+      );
+    }
+    if (affectedAnchor === "") {
+      return rejected(
+        "empty_affected_anchor",
+        "Legislation amendment has an empty affected anchor",
+      );
+    }
+    seen.add(publisherId);
+    if (
+      relation.effective.type === "date" &&
+      parsePlainDate(relation.effective.on) === null
+    ) {
+      return rejected(
+        "invalid_effective_date",
+        "Legislation amendment has an invalid effective date",
+      );
+    }
+    relations.push({
+      publisherId,
+      amendingEli,
+      amendingTitle: nullableText(relation.amendingTitle),
+      amendingAnchor: nullableText(relation.amendingAnchor),
+      affectedAnchor,
+      changeKind: relation.changeKind,
+      effective:
+        relation.effective.type === "date"
+          ? { type: "date", on: relation.effective.on }
+          : {
+              type: "not-stated",
+              text: nullableText(relation.effective.text),
+            },
+      publisherInstruction: nullableText(relation.publisherInstruction),
+    });
+  }
+  relations.sort((left, right) =>
+    compareCodeUnit(left.publisherId, right.publisherId),
+  );
   const coverage = snapshot.coverage;
   if (
     coverage.type !== "complete" &&
     stripDangerousChars(coverage.reason).trim() === ""
   ) {
-    return panic("Incomplete legislation amendment coverage needs a reason");
+    return rejected(
+      "incomplete_coverage_without_reason",
+      "Incomplete legislation amendment coverage needs a reason",
+    );
   }
   if (
     coverage.type === "partial" &&
     (!Number.isSafeInteger(coverage.unlocatedRelations) ||
       coverage.unlocatedRelations < 1)
   ) {
-    return panic(
+    return rejected(
+      "invalid_partial_unlocated_relations",
       "Partial legislation amendment coverage needs an unlocated relation count",
     );
   }
   if (coverage.type === "not-stated" && relations.length > 0) {
-    return panic("Unstated legislation amendments cannot carry relations");
+    return rejected(
+      "unstated_coverage_with_relations",
+      "Unstated legislation amendments cannot carry relations",
+    );
   }
-  return parse(sanitizedLegislationAmendmentSnapshotSchema, {
-    observedAt: Temporal.Instant.from(snapshot.observedAt).toString(),
-    relations,
-    coverage:
-      coverage.type === "complete"
-        ? { type: "complete" }
-        : { ...coverage, reason: stripDangerousChars(coverage.reason) },
-  });
+  return Result.ok(
+    parse(sanitizedLegislationAmendmentSnapshotSchema, {
+      observedAt: observedAt.value.toString(),
+      relations,
+      coverage:
+        coverage.type === "complete"
+          ? { type: "complete" }
+          : { ...coverage, reason: stripDangerousChars(coverage.reason) },
+    }),
+  );
 };
 
 const snapshotWork = (work: LegislationWorkRef) =>

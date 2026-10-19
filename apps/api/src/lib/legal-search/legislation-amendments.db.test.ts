@@ -26,14 +26,19 @@ import { listStatuteVersionsHandler } from "@/api/handlers/legislation/versions"
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   LEGISLATION_AMENDMENT_PAGE_MAX,
+  LEGISLATION_AMENDMENT_SNAPSHOT_MAX,
   readLegislationAmendments,
   readLegislationAmendmentSnapshot,
   sanitizeLegislationAmendments,
   syncLegislationAmendmentsTx,
 } from "@/api/lib/legal-search/legislation-amendments";
-import type { SanitizedLegislationAmendmentSnapshot } from "@/api/lib/legal-search/legislation-amendments";
+import type {
+  LegislationAmendmentObservationErrorReason,
+  SanitizedLegislationAmendmentSnapshot,
+} from "@/api/lib/legal-search/legislation-amendments";
 import type {
   LegislationAmendmentRelation,
+  LegislationAmendmentSnapshot,
   LegislationDocumentInput,
 } from "@/api/lib/legal-search/legislation-ingestion-types";
 import type {
@@ -73,7 +78,7 @@ const snapshot = (
     observedAt,
     relations,
     coverage: { type: "complete" },
-  });
+  }).unwrap();
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;
 let scopedDb: ScopedDb;
@@ -101,6 +106,97 @@ const incoming = async (limit = 10, cursor: string | null = null) =>
     limit,
     cursor,
   });
+
+const rejectedSnapshots = (): {
+  reason: LegislationAmendmentObservationErrorReason;
+  snapshot: LegislationAmendmentSnapshot;
+}[] => [
+  {
+    reason: "invalid_observed_at",
+    snapshot: {
+      observedAt: "bad",
+      relations: [],
+      coverage: { type: "complete" },
+    },
+  },
+  {
+    reason: "relation_limit_exceeded",
+    snapshot: {
+      observedAt: "2026-10-18T10:00:00Z",
+      relations: Array.from(
+        { length: LEGISLATION_AMENDMENT_SNAPSHOT_MAX + 1 },
+        (_, index) => ({ ...relation, publisherId: String(index) }),
+      ),
+      coverage: { type: "complete" },
+    },
+  },
+  {
+    reason: "empty_publisher_id",
+    snapshot: {
+      observedAt: "2026-10-18T10:00:00Z",
+      relations: [{ ...relation, publisherId: "\u0000" }],
+      coverage: { type: "complete" },
+    },
+  },
+  {
+    reason: "duplicate_publisher_id",
+    snapshot: {
+      observedAt: "2026-10-18T10:00:00Z",
+      relations: [relation, relation],
+      coverage: { type: "complete" },
+    },
+  },
+  {
+    reason: "empty_amending_eli",
+    snapshot: {
+      observedAt: "2026-10-18T10:00:00Z",
+      relations: [{ ...relation, amendingEli: "\u0000" }],
+      coverage: { type: "complete" },
+    },
+  },
+  {
+    reason: "empty_affected_anchor",
+    snapshot: {
+      observedAt: "2026-10-18T10:00:00Z",
+      relations: [{ ...relation, affectedAnchor: "\u0000" }],
+      coverage: { type: "complete" },
+    },
+  },
+  {
+    reason: "invalid_effective_date",
+    snapshot: {
+      observedAt: "2026-10-18T10:00:00Z",
+      relations: [
+        { ...relation, effective: { type: "date", on: "2027-02-30" } },
+      ],
+      coverage: { type: "complete" },
+    },
+  },
+  {
+    reason: "incomplete_coverage_without_reason",
+    snapshot: {
+      observedAt: "2026-10-18T10:00:00Z",
+      relations: [],
+      coverage: { type: "not-stated", reason: "\u0000" },
+    },
+  },
+  {
+    reason: "invalid_partial_unlocated_relations",
+    snapshot: {
+      observedAt: "2026-10-18T10:00:00Z",
+      relations: [],
+      coverage: { type: "partial", reason: "missing", unlocatedRelations: 0 },
+    },
+  },
+  {
+    reason: "unstated_coverage_with_relations",
+    snapshot: {
+      observedAt: "2026-10-18T10:00:00Z",
+      relations: [relation],
+      coverage: { type: "not-stated", reason: "No relation model" },
+    },
+  },
+];
 beforeAll(async () => {
   client = await createTestPglite();
   db = drizzle({ client });
@@ -132,6 +228,50 @@ afterAll(async () => {
 });
 
 describe("publisher amendment snapshots", () => {
+  test("every rejected observation stores its statute and preserves the previous snapshot", async () => {
+    await sync(snapshot("2026-10-16T11:00:00Z", [relation]));
+    const beforeRelations = await incoming();
+    const beforeSnapshot = await readLegislationAmendmentSnapshot(
+      asTestRaw(db),
+      work,
+    );
+
+    for (const [index, rejection] of rejectedSnapshots().entries()) {
+      const result = await processLegislationDocument(
+        {
+          sourceId,
+          eli: work.eli,
+          title: `Civil Code ${index}`,
+          country: "CZE",
+          language: work.language,
+          version: {
+            type: "consolidation",
+            validFrom: "2027-01-01",
+            end: { type: "open" },
+          },
+          fulltext: `wording ${index}`,
+          rawHash: `rejected-observation-${index}`,
+          amendments: rejection.snapshot,
+        },
+        scopedDb,
+        { corpus },
+      );
+      expect(result.type).toBe("stored");
+      if (result.type === "stored") {
+        expect(result.amendmentObservation.type).toBe("rejected");
+        if (result.amendmentObservation.type === "rejected") {
+          expect(result.amendmentObservation.error.reason).toBe(
+            rejection.reason,
+          );
+        }
+      }
+      expect(await incoming()).toEqual(beforeRelations);
+      expect(
+        await readLegislationAmendmentSnapshot(asTestRaw(db), work),
+      ).toEqual(beforeSnapshot);
+    }
+  });
+
   test("unchanged ingestion sanitizes a newer amendment observation", async () => {
     const input = {
       sourceId,
@@ -534,7 +674,7 @@ describe("publisher amendment snapshots", () => {
             type: "not-stated",
             reason: "No relation model in this source channel",
           },
-        }),
+        }).unwrap(),
       ),
     ).toBe("not-observed");
     expect(await incoming()).toEqual(rows);
@@ -604,7 +744,7 @@ describe("publisher amendment snapshots", () => {
           type: "not-stated",
           reason: "No relation model in this source channel",
         },
-      }),
+      }).unwrap(),
     );
     expect(await sync(snapshot("2026-10-16T11:00:00Z", [relation]))).toBe(
       "applied",

@@ -15,6 +15,7 @@ import {
   LEGISLATION_CORPUS_DEPENDENCIES,
 } from "@/api/handlers/legislation/revision";
 import type {
+  LegislationAmendmentObservation,
   LegislationCorpusDependencies,
   LegislationRevisionProjection,
 } from "@/api/handlers/legislation/revision";
@@ -93,6 +94,7 @@ export type ProcessLegislationResult =
       skipped: boolean;
       /** Object-storage write failed; the row keeps its previous sourceHash so a re-ingest retries. */
       corpusWriteFailed: boolean;
+      amendmentObservation: LegislationAmendmentObservation;
     }
   | {
       /**
@@ -873,6 +875,14 @@ export const processLegislationDocument = async (
 ): Promise<ProcessLegislationResult> => {
   const revision = new LegislationRevision(input);
   const revisionInput = revision.input;
+  const amendmentObservation = revision.amendmentObservation;
+  if (amendmentObservation.type === "rejected") {
+    captureError(amendmentObservation.error, {
+      reason: amendmentObservation.error.reason,
+      sourceId: revisionInput.sourceId,
+      step: "processLegislationDocument.amendmentObservation",
+    });
+  }
   const window = revision.window;
   const stated = statedClassification(revisionInput);
   const expectedContentHash = revision.contentHash;
@@ -927,6 +937,7 @@ export const processLegislationDocument = async (
       inserted: false,
       skipped: true,
       corpusWriteFailed: false,
+      amendmentObservation,
     };
   }
 
@@ -1016,6 +1027,7 @@ export const processLegislationDocument = async (
     inserted,
     skipped: false,
     corpusWriteFailed,
+    amendmentObservation,
   };
 };
 
