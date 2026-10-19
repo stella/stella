@@ -583,12 +583,13 @@ test.each([0, 7])(
         [
           process.execPath,
           "-e",
-          `const timer = setInterval(() => console.log('progress'), 10); setTimeout(() => { clearInterval(timer); process.exit(${exitCode}); }, 3000);`,
+          `const timer = setInterval(() => console.log('progress'), 10); setTimeout(() => { clearInterval(timer); process.exit(${exitCode}); }, 4000);`,
         ],
         cwd,
-        // Past the 2 s warning budget, a full second inside the deadline of
-        // twice that budget, so process startup cannot reach it.
-        2000,
+        // A second past the 3 s warning budget and two seconds inside the
+        // deadline of twice that budget, so a cold process start cannot reach
+        // it.
+        3000,
         1000,
       );
       const result = await check.result;
@@ -616,9 +617,10 @@ test.skipIf(process.platform === "win32")(
           `const fs = require("node:fs"); const end = Date.now() + 6000; while (Date.now() < end) {} const cpu = process.cpuUsage(); fs.writeFileSync("cpu-ms", String((cpu.user + cpu.system) / 1000));`,
         ],
         cwd,
-        // The 6 s compile outlasts both the warning budget and the stall
-        // window, and ends inside the deadline of twice the budget.
-        timeoutMs: 4000,
+        // The 6 s compile outlasts both the 5 s warning budget and the stall
+        // window, and ends four seconds inside the deadline of twice the
+        // budget, so a cold process start cannot reach it.
+        timeoutMs: 5000,
         stallMs: 4000,
         graceMs: 200,
         summary: "none",
