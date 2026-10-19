@@ -138,7 +138,7 @@ async fn probe_20() {
 
 fn probe_21() {
   // guard: std::fs::write
-  let _ = std::fs::write("unused");
+  let _ = std::fs::write("unused", b"check");
 }
 
 fn probe_22() {
@@ -191,7 +191,7 @@ fn probe_30() {
 
 async fn probe_31() {
   // guard: tokio::fs::write
-  let _ = tokio::fs::write("unused").await;
+  let _ = tokio::fs::write("unused", b"check").await;
 }
 
 async fn probe_32() {
