@@ -6,8 +6,7 @@ import { ACCOUNT_EXPORT_SCOPES } from "@stll/api-contract";
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 
 import { member, organization, user } from "@/api/db/auth-schema";
-import { rootDb } from "@/api/db/root";
-import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import { rlsDb, rootDb } from "@/api/db/root";
 import { accountAuditLogs, accountExports } from "@/api/db/schema";
 import {
   createMembershipSafeDb,
@@ -128,12 +127,8 @@ describe.skipIf(!postgresTestsEnabled)(
         serverValidatedWorkspaceIds: [],
         userId,
       };
-      const scopedDb = asTestRaw<ScopedDb>(
-        createMembershipScopedDb(rootDb, identity),
-      );
-      const safeDb = asTestRaw<SafeDb>(
-        createMembershipSafeDb(rootDb, identity),
-      );
+      const scopedDb = createMembershipScopedDb(rlsDb, identity);
+      const safeDb = createMembershipSafeDb(rlsDb, identity);
       context = asTestRaw<McpRequestContext>({
         accessibleWorkspaceIds: [],
         accessibleWorkspaceIdSet: new Set(),
