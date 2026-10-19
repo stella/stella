@@ -72,7 +72,16 @@ pub fn partition_sessions(
   SessionPartition { active, retired }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum EditorState {
+  #[default]
+  Unknown,
+  Attached,
+  Closed,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "status", rename_all = "camelCase")]
 pub enum CopyRetirement {
   Pending {
@@ -81,7 +90,9 @@ pub enum CopyRetirement {
     synced_sha: Option<String>,
   },
   Quarantined {
+    source: PathBuf,
     path: PathBuf,
+    synced_sha: Option<String>,
   },
   Removed,
 }
@@ -96,6 +107,7 @@ pub enum TokenRetirement {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RetiredSession {
+  pub editor_state: EditorState,
   pub id: String,
   pub account_owner: Option<AccountOwner>,
   pub file_name: String,
@@ -118,6 +130,7 @@ impl RetiredSession {
       .map_or("unassigned", AccountOwner::as_str);
     let destination = quarantine.join(namespace).join(&id).join(name);
     Ok(Self {
+      editor_state: session.editor_state,
       id,
       account_owner: session.account_owner,
       file_name: session.file_name,
@@ -131,6 +144,17 @@ impl RetiredSession {
     })
   }
 
+  pub fn needs_editor_check(&self) -> bool {
+    self.editor_state != EditorState::Closed
+      && matches!(
+        self.copy,
+        CopyRetirement::Quarantined {
+          synced_sha: Some(_),
+          ..
+        }
+      )
+  }
+
   pub fn finished(&self) -> bool {
     self.token == TokenRetirement::Deleted
       && !matches!(self.copy, CopyRetirement::Pending { .. })
@@ -140,10 +164,14 @@ impl RetiredSession {
 pub trait RetirementIo {
   fn delete_token(&self, session_id: &str) -> Result<(), String>;
   fn move_copy(&self, source: &Path, destination: &Path) -> io::Result<()>;
+  fn copy_hash(&self, path: &Path) -> io::Result<String>;
 }
 
 pub struct NativeRetirementIo;
 impl RetirementIo for NativeRetirementIo {
+  fn copy_hash(&self, path: &Path) -> io::Result<String> {
+    hash_file(path)
+  }
   fn delete_token(&self, session_id: &str) -> Result<(), String> {
     crate::keychain::delete_token(session_id)
   }
@@ -168,51 +196,59 @@ fn hash_file(path: &Path) -> io::Result<String> {
 
 fn retire_copy(
   copy: &CopyRetirement,
+  editor_state: EditorState,
   edit_root: &Path,
   io: &impl RetirementIo,
 ) -> Result<CopyRetirement, String> {
-  let CopyRetirement::Pending {
-    source,
-    destination,
-    synced_sha,
-  } = copy
-  else {
-    return Ok(copy.clone());
-  };
-  if !source.starts_with(edit_root) {
-    return Err("document copy is outside the editing directory".into());
-  }
-  let parent = destination
-    .parent()
-    .ok_or("invalid document recovery directory")?;
-  local_store::create_private_dir(parent).map_err(|error| error.to_string())?;
-  match io.move_copy(source, destination) {
-    Ok(()) => {}
-    Err(error) if error.kind() == io::ErrorKind::NotFound => {
-      match local_store::open_private(local_store::OpenMode::Read, destination) {
-        Ok(_) => {}
+  let (source, destination, synced_sha) = match copy {
+    CopyRetirement::Pending {
+      source,
+      destination,
+      synced_sha,
+    } => {
+      if !source.starts_with(edit_root) {
+        return Err("document copy is outside the editing directory".into());
+      }
+      let parent = destination
+        .parent()
+        .ok_or("invalid document recovery directory")?;
+      local_store::create_private_dir(parent).map_err(|error| error.to_string())?;
+      match io.move_copy(source, destination) {
+        Ok(()) => {}
         Err(error) if error.kind() == io::ErrorKind::NotFound => {
-          return Ok(CopyRetirement::Removed);
+          match local_store::open_private(local_store::OpenMode::Read, destination) {
+            Ok(_) => {}
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+              return Ok(CopyRetirement::Removed);
+            }
+            Err(error) => return Err(error.to_string()),
+          }
         }
         Err(error) => return Err(error.to_string()),
       }
+      (source, destination, synced_sha)
     }
-    Err(error) => return Err(error.to_string()),
-  }
+    CopyRetirement::Quarantined {
+      source,
+      path,
+      synced_sha,
+    } => (source, path, synced_sha),
+    CopyRetirement::Removed => return Ok(CopyRetirement::Removed),
+  };
   if let Some(expected) = synced_sha {
-    match hash_file(destination) {
-      Ok(actual) if actual == *expected => {
+    match io.copy_hash(destination) {
+      Ok(actual) if actual == *expected && editor_state == EditorState::Closed => {
         local_store::remove_private(destination).map_err(|error| error.to_string())?;
         return Ok(CopyRetirement::Removed);
       }
       Ok(_) => {}
-      Err(error) => {
-        tracing::warn!(error = %error, "document recovery copy kept without a confirmed hash")
-      }
+      Err(error) => return Err(error.to_string()),
     }
   }
   Ok(CopyRetirement::Quarantined {
+    source: source.clone(),
     path: destination.clone(),
+    synced_sha: synced_sha.clone(),
   })
 }
 
@@ -222,9 +258,12 @@ pub fn retire_session(
   io: &impl RetirementIo,
 ) -> Result<(), String> {
   let mut failures = Vec::new();
-  match retire_copy(&record.copy, edit_root, io) {
+  match retire_copy(&record.copy, record.editor_state, edit_root, io) {
     Ok(copy) => record.copy = copy,
-    Err(error) => failures.push(error),
+    Err(error) => {
+      record.editor_state = EditorState::Unknown;
+      failures.push(error);
+    }
   }
   if record.token == TokenRetirement::Pending {
     match io.delete_token(&record.session_id) {
@@ -258,6 +297,9 @@ mod tests {
     fault: Fault,
   }
   impl RetirementIo for Io {
+    fn copy_hash(&self, path: &Path) -> io::Result<String> {
+      hash_file(path)
+    }
     fn delete_token(&self, id: &str) -> Result<(), String> {
       if matches!(self.fault, Fault::Token) {
         return Err("credential unavailable".into());
@@ -285,6 +327,7 @@ mod tests {
     local_store::create_private_dir(file.parent().unwrap()).unwrap();
     local_store::write_private_atomic(&file, b"download").unwrap();
     PersistedDesktopSession {
+      editor_state: EditorState::Attached,
       account_owner: owner,
       download_sha: Some(hex::encode(Sha256::digest(b"download"))),
       api_base_url: "https://api.example.test".into(),
@@ -379,6 +422,7 @@ mod tests {
           }
           1 => {
             if let Some(item) = active.last_mut() {
+              item.editor_state = EditorState::Attached;
               let bytes = format!("edited {} {step}", item.id).into_bytes();
               local_store::write_private_atomic(Path::new(&item.file_path), &bytes)
                 .unwrap();
@@ -397,6 +441,11 @@ mod tests {
           5 => current = Some(owners[(step / 3) % owners.len()].clone()),
           6 => io.fault = Fault::Move,
           7 => io.fault = Fault::None,
+          8 => {
+            if let Some(item) = active.last_mut() {
+              item.editor_state = EditorState::Closed;
+            }
+          }
           _ => {}
         }
         let partition = partition_sessions(active, current.as_ref());
@@ -462,7 +511,7 @@ mod tests {
                       destination.clone()
                     }
                   }
-                  CopyRetirement::Quarantined { path } => path.clone(),
+                  CopyRetirement::Quarantined { path, .. } => path.clone(),
                   CopyRetirement::Removed => {
                     panic!("unsynced edit must remain recoverable")
                   }
@@ -491,6 +540,95 @@ mod tests {
   }
 
   #[test]
+  fn recovery_keeps_a_copy_while_an_editor_is_attached() {
+    use std::cell::Cell;
+    use std::io::Write;
+    struct EditorIo {
+      boundary: Io,
+      writer: RefCell<std::fs::File>,
+      written: Cell<bool>,
+    }
+    impl RetirementIo for EditorIo {
+      fn delete_token(&self, id: &str) -> Result<(), String> {
+        self.boundary.delete_token(id)
+      }
+      fn move_copy(&self, source: &Path, destination: &Path) -> io::Result<()> {
+        self.boundary.move_copy(source, destination)
+      }
+      fn copy_hash(&self, path: &Path) -> io::Result<String> {
+        let checked = hash_file(path)?;
+        assert_eq!(checked, hex::encode(Sha256::digest(b"download")));
+        if !self.written.replace(true) {
+          let mut writer = self.writer.borrow_mut();
+          writer.write_all(b" edited")?;
+          writer.sync_all()?;
+        }
+        Ok(checked)
+      }
+    }
+    let sandbox =
+      std::env::temp_dir().join(format!("desktop-editor-{}", uuid::Uuid::new_v4()));
+    let root = sandbox.join("editing");
+    let item = session(&root, Some(AccountOwner::fixture("account")), 1);
+    let writer = local_store::open_private(
+      local_store::OpenMode::AppendExisting,
+      Path::new(&item.file_path),
+    )
+    .unwrap();
+    let mut record = RetiredSession::plan(item, &sandbox.join("recovery")).unwrap();
+    let boundary = EditorIo {
+      boundary: Io {
+        tokens: RefCell::new(HashSet::from(["1".into()])),
+        fault: Fault::None,
+      },
+      writer: RefCell::new(writer),
+      written: Cell::new(false),
+    };
+    retire_session(&mut record, &root, &boundary).unwrap();
+    assert!(boundary.written.get());
+    let CopyRetirement::Quarantined { path, .. } = &record.copy else {
+      panic!("an attached editor keeps its recovery copy");
+    };
+    assert_eq!(std::fs::read(path).unwrap(), b"download edited");
+    assert!(record.needs_editor_check());
+    drop(boundary);
+    record.editor_state = EditorState::Closed;
+    let boundary = Io {
+      tokens: RefCell::new(HashSet::new()),
+      fault: Fault::None,
+    };
+    retire_session(&mut record, &root, &boundary).unwrap();
+    let CopyRetirement::Quarantined { path, .. } = &record.copy else {
+      panic!("changed recovery bytes remain available");
+    };
+    assert_eq!(std::fs::read(path).unwrap(), b"download edited");
+    std::fs::remove_dir_all(sandbox).unwrap();
+  }
+
+  #[test]
+  fn recovery_removes_synced_copies_after_editor_close() {
+    let sandbox =
+      std::env::temp_dir().join(format!("desktop-editor-{}", uuid::Uuid::new_v4()));
+    let root = sandbox.join("editing");
+    let item = session(&root, Some(AccountOwner::fixture("account")), 1);
+    let mut record = RetiredSession::plan(item, &sandbox.join("recovery")).unwrap();
+    let boundary = Io {
+      tokens: RefCell::new(HashSet::from(["1".into()])),
+      fault: Fault::None,
+    };
+    for state in [EditorState::Attached, EditorState::Unknown] {
+      record.editor_state = state;
+      retire_session(&mut record, &root, &boundary).unwrap();
+      assert!(matches!(record.copy, CopyRetirement::Quarantined { .. }));
+    }
+    record.editor_state = EditorState::Closed;
+    retire_session(&mut record, &root, &boundary).unwrap();
+    assert!(matches!(record.copy, CopyRetirement::Removed));
+    assert!(record.finished());
+    std::fs::remove_dir_all(sandbox).unwrap();
+  }
+
+  #[test]
   fn unassigned_sessions_use_manual_recovery() {
     let sandbox =
       std::env::temp_dir().join(format!("desktop-session-{}", uuid::Uuid::new_v4()));
@@ -511,7 +649,7 @@ mod tests {
     };
     retire_session(&mut record, &root, &io).unwrap();
     assert!(record.account_owner.is_none());
-    let CopyRetirement::Quarantined { path } = record.copy else {
+    let CopyRetirement::Quarantined { path, .. } = record.copy else {
       panic!("manual recovery must remain available")
     };
     assert!(path.starts_with(sandbox.join("recovery/unassigned")));

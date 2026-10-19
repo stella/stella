@@ -140,7 +140,7 @@ pub async fn open_session_file(
   session_id: String,
   state: State<'_, AppState>,
 ) -> Result<bool, String> {
-  let mgr = state.lock().await;
+  let mut mgr = state.lock().await;
   Ok(mgr.open_session_file(&session_id))
 }
 

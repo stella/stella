@@ -225,7 +225,7 @@ const DocumentRecovery = ({
   const [busy, setBusy] = useState(false);
   const act = async (target: RecoveryTarget | "retry") => {
     setBusy(true);
-    const result = await Result.tryPromise(() =>
+    const result = await Result.tryPromise(async () =>
       target === "retry"
         ? invoke<AppSnapshot>("get_state").then(() => onRefresh())
         : invoke("open_recovery_folder", { target }),

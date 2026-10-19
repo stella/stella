@@ -42,10 +42,14 @@ impl Parent {
   }
 
   pub(super) fn open(&self, mode: OpenMode) -> io::Result<fs::File> {
+    use std::os::windows::fs::OpenOptionsExt;
     let mut options = fs::OpenOptions::new();
     match mode {
       OpenMode::Read => {
         options.read(true);
+      }
+      OpenMode::ExclusiveRead => {
+        options.read(true).share_mode(0);
       }
       OpenMode::CreateNew => {
         options.write(true).create_new(true);
@@ -68,8 +72,18 @@ impl Parent {
   }
 
   pub(super) fn move_to(&self, destination: &Self) -> io::Result<()> {
-    fs::hard_link(&self.path, &destination.path)?;
-    fs::remove_file(&self.path)
+    let source = self.path.to_str().ok_or_else(|| {
+      io::Error::new(io::ErrorKind::InvalidInput, "invalid local file path")
+    })?;
+    let destination = destination.path.to_str().ok_or_else(|| {
+      io::Error::new(io::ErrorKind::InvalidInput, "invalid local file path")
+    })?;
+    winsafe::MoveFileEx(
+      source,
+      Some(destination),
+      winsafe::co::MOVEFILE::WRITE_THROUGH,
+    )
+    .map_err(|error| io::Error::from_raw_os_error(error.raw() as i32))
   }
 
   pub(super) fn link_to(&self, destination: &Self) -> io::Result<()> {
