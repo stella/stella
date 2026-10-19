@@ -336,9 +336,10 @@ describe("external source extraction from tool output", () => {
 const decisionPart = (output: unknown) => ({
   type: "tool-call" as const,
   id: "search",
-  name: "case-law-search",
+  name: "web_search" as const,
   state: "complete" as const,
   arguments: "{}",
+  input: {},
   output,
 });
 
