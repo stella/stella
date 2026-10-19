@@ -42,6 +42,8 @@ describe.skipIf(!enabled)("monitoring session database invariants", () => {
         await client.unsafe(`SET search_path TO ${schema}, public`);
         await client.unsafe(`
           CREATE TABLE session (id text PRIMARY KEY, user_id text NOT NULL);
+          CREATE TABLE organization (id text PRIMARY KEY, name text NOT NULL, slug text NOT NULL UNIQUE, created_at timestamptz NOT NULL);
+          INSERT INTO organization (id, name, slug, created_at) VALUES ('ordinary-org', 'Existing Organization', 'product-monitoring', now());
           CREATE TABLE member (id text PRIMARY KEY, user_id text NOT NULL, organization_id text NOT NULL);
         `);
         for (const statement of migration
@@ -54,6 +56,28 @@ describe.skipIf(!enabled)("monitoring session database invariants", () => {
             await client.unsafe(statement);
           }
         }
+        const reservedSlug = await Result.tryPromise(
+          () =>
+            client`INSERT INTO organization (id, name, slug, created_at) VALUES ('other-org', 'Other Organization', ${SYNTHETIC_PRINCIPAL.org.slug}, now())`,
+        );
+        expect(reservedSlug.isErr()).toBe(true);
+        if (reservedSlug.isErr()) {
+          expect(
+            isPgConstraintError(
+              reservedSlug.error,
+              PG_ERROR.CHECK_VIOLATION,
+              "organization_monitoring_slug_check",
+            ),
+          ).toBe(true);
+        }
+        expect(
+          await client`SELECT id, slug FROM organization WHERE id = ${SYNTHETIC_PRINCIPAL.org.id}`,
+        ).toEqual([
+          expect.objectContaining({
+            id: SYNTHETIC_PRINCIPAL.org.id,
+            slug: SYNTHETIC_PRINCIPAL.org.slug,
+          }),
+        ]);
         await client`INSERT INTO session (id, user_id) VALUES ('synthetic-session-valid', ${SYNTHETIC_PRINCIPAL.user.id})`;
         const invalidSession = await Result.tryPromise(
           () =>
@@ -166,6 +190,8 @@ describe.skipIf(!enabled)("monitoring session lifecycle", () => {
           );
         }
         await client`INSERT INTO synthetic_session_control (id) VALUES (${SYNTHETIC_SESSION_CONTROL_ID})`;
+        await client`INSERT INTO organization (id, name, slug, created_at) VALUES ('ordinary-org', 'Existing Organization', 'product-monitoring', now())`;
+        await client`INSERT INTO organization (id, name, slug, created_at) VALUES (${SYNTHETIC_PRINCIPAL.org.id}, ${SYNTHETIC_PRINCIPAL.org.name}, ${SYNTHETIC_PRINCIPAL.org.slug}, now())`;
         const store = createSyntheticSessionStore(db);
         const request = {
           keyLabel: "test",
@@ -223,10 +249,27 @@ describe.skipIf(!enabled)("monitoring session lifecycle", () => {
             lifetime_seconds: 1800,
           });
         }
-        expect(await client`SELECT id FROM organization`).toEqual([
+        expect(
+          await client`SELECT id FROM organization WHERE id = ${SYNTHETIC_PRINCIPAL.org.id}`,
+        ).toEqual([
           expect.objectContaining({ id: SYNTHETIC_PRINCIPAL.org.id }),
         ]);
+        expect(
+          await client`SELECT id, slug FROM organization WHERE id = 'ordinary-org'`,
+        ).toEqual([
+          expect.objectContaining({
+            id: "ordinary-org",
+            slug: "product-monitoring",
+          }),
+        ]);
         expect(await client`SELECT id FROM member`).toHaveLength(1);
+        expect(
+          await client`SELECT organization_id FROM organization_access_states`,
+        ).toEqual([
+          expect.objectContaining({
+            organization_id: SYNTHETIC_PRINCIPAL.org.id,
+          }),
+        ]);
         const audits =
           await client`SELECT performer_type, trigger_type, metadata FROM audit_logs WHERE action = 'synthetic.session_minted'`;
         expect(audits).toHaveLength(2);

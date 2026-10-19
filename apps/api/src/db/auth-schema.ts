@@ -257,6 +257,10 @@ export const organization = pgTable(
   },
   (table) => [
     uniqueIndex("organization_slug_uidx").on(table.slug),
+    check(
+      "organization_monitoring_slug_check",
+      sql`${table.slug} <> ${sql.raw(`'${SYNTHETIC_PRINCIPAL.org.slug}'`)} OR ${table.id} = ${sql.raw(`'${SYNTHETIC_PRINCIPAL.org.id}'`)}`,
+    ),
     ...authOrganizationPolicies(),
   ],
 );

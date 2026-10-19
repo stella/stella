@@ -70,20 +70,17 @@ export const createSyntheticSessionStore = (
           updatedAt: now,
         });
       }
-      const insertedOrganizations = await tx
+      await tx
         .insert(organization)
         .values({
           ...principal.org,
           createdAt: now,
         })
-        .onConflictDoNothing({ target: organization.id })
-        .returning({ id: organization.id });
-      if (insertedOrganizations.length > 0) {
-        await recordNewOrganizationAccessState(tx, {
-          organizationId: brandPersistedOrganizationId(principal.org.id),
-          now,
-        });
-      }
+        .onConflictDoNothing({ target: organization.id });
+      await recordNewOrganizationAccessState(tx, {
+        organizationId: brandPersistedOrganizationId(principal.org.id),
+        now,
+      });
       const insertedMembers = await tx
         .insert(member)
         .values({

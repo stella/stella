@@ -7,7 +7,7 @@ export const SYNTHETIC_PRINCIPAL = {
   org: {
     id: "synthetic-prod-org",
     name: "Product Monitoring",
-    slug: "product-monitoring",
+    slug: "stella:monitoring:synthetic-prod-org",
   },
   memberId: "synthetic-prod-member",
 } as const;

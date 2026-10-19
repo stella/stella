@@ -19,7 +19,7 @@ export const SYNTHETIC_PRINCIPAL_POLICY = {
   "email-code-sign-in": "refused",
   "verify-email": "refused",
   session: "own-organization",
-  mcp: "allowed",
+  mcp: "refused",
   "create-organization": "refused",
   "manage-organization": "refused",
   "send-invitation": "refused",
@@ -55,8 +55,6 @@ export const checkSyntheticPrincipalAccess = ({
   }
   const disposition = SYNTHETIC_PRINCIPAL_POLICY[operation];
   switch (disposition) {
-    case REVIEW_ACCOUNT_DISPOSITION.allowed:
-      return Result.ok();
     case REVIEW_ACCOUNT_DISPOSITION.ownOrganization:
       if (
         typeof organizationId === "string" &&

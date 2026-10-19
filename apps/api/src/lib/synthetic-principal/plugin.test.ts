@@ -1,4 +1,5 @@
 import { apiKey } from "@better-auth/api-key";
+import { oauthProvider } from "@better-auth/oauth-provider";
 import { betterAuth } from "better-auth";
 import type { BetterAuthPlugin } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
@@ -34,6 +35,9 @@ type AuthRequestCase = {
 };
 
 const REFUSED_AUTH_REQUESTS = {
+  mcp: [
+    { path: "/oauth2/consent", body: { accept: true }, requiresSession: true },
+  ],
   "password-sign-in": [
     {
       path: "/sign-in/email",
@@ -206,6 +210,12 @@ const createSyntheticAuth = async ({
       teamMember: [],
       organizationRole: [],
       apikey: [],
+      oauthClient: [],
+      oauthAccessToken: [],
+      oauthRefreshToken: [],
+      oauthConsent: [],
+      oauthResource: [],
+      oauthClientResource: [],
     }),
     emailAndPassword: resolveEmailAndPasswordOptions({
       localPasswordEnabled: true,
@@ -232,6 +242,13 @@ const createSyntheticAuth = async ({
         config: syntheticPrincipalAuthConfig,
         checkAccess: checkSyntheticPrincipalAccess,
         localPasswordEnabled: true,
+      }),
+      oauthProvider({
+        loginPage: "/sign-in",
+        consentPage: "/consent",
+        disableJwtPlugin: true,
+        resourceSeedMode: "none",
+        scopes: ["offline_access", "read"],
       }),
       apiKey(),
       emailOTP({
@@ -384,4 +401,25 @@ test("refuses identity linking and account creation in OAuth callbacks", async (
       SYNTHETIC_PRINCIPAL.user.email,
     ),
   ).toBeNull();
+});
+
+test("refuses OAuth authorization from a monitoring session", async () => {
+  const { auth, cookie } = await createSyntheticAuth();
+  const query = new URLSearchParams({
+    client_id: "fixture-client",
+    response_type: "code",
+    redirect_uri: "https://client.example.test/callback",
+    scope: "offline_access read",
+    code_challenge: "fixture-challenge",
+    code_challenge_method: "S256",
+  });
+  const response = await auth.handler(
+    new Request(`http://localhost:3001/api/auth/oauth2/authorize?${query}`, {
+      headers: { cookie: cookie ?? "" },
+    }),
+  );
+  expect(response.status).toBe(403);
+  expect(await response.json()).toMatchObject({
+    code: "account_access_unavailable",
+  });
 });

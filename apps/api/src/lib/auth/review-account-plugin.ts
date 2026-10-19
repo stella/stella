@@ -84,9 +84,10 @@ const sessionCheckedOperation = ({
   if (operation !== null) {
     return operation;
   }
-  return path.startsWith("/oauth2/") || path.startsWith("/organization/")
-    ? "session-only"
-    : null;
+  if (path.startsWith("/oauth2/")) {
+    return REVIEW_ACCOUNT_OPERATION.mcp;
+  }
+  return path.startsWith("/organization/") ? "session-only" : null;
 };
 
 /** Refuses a request naming any organization but the review account's own. */

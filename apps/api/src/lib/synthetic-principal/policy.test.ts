@@ -58,20 +58,12 @@ describe("synthetic principal access", () => {
     expect(Result.isError(missingOrganization)).toBe(true);
   });
 
-  test("leaves ordinary accounts and the MCP operation available", () => {
+  test("leaves ordinary accounts available", () => {
     expect(
       Result.isOk(
         checkSyntheticPrincipalAccess({
           email: "member@example.test",
           operation: "delete-account",
-        }),
-      ),
-    ).toBe(true);
-    expect(
-      Result.isOk(
-        checkSyntheticPrincipalAccess({
-          email: SYNTHETIC_PRINCIPAL.user.email,
-          operation: "mcp",
         }),
       ),
     ).toBe(true);

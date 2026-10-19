@@ -146,7 +146,9 @@ export const requireChatToolModelAdmission = (
   admission ?? panic("A chat tool dispatched a model outside an admitted turn");
 
 /** Who a dispatch serves, and the proof that its work was admitted. */
-export type ModelDispatchScope =
+export type ModelDispatchScope = {
+  userId?: SafeId<"user"> | undefined;
+} & (
   | {
       organizationId: SafeId<"organization">;
       admission: ModelDispatchAdmission;
@@ -154,14 +156,21 @@ export type ModelDispatchScope =
   | {
       organizationId: null;
       admission: NoOrganizationModelDispatch;
-    };
+    }
+);
 
 /** A proof minted for one organization never admits another's dispatch. */
 export const assertModelDispatchScope = ({
+  userId,
   organizationId,
   admission,
 }: ModelDispatchScope): void => {
-  if (organizationId !== null && isSyntheticPrincipal({ organizationId })) {
+  if (
+    isSyntheticPrincipal({
+      userId,
+      organizationId: organizationId ?? undefined,
+    })
+  ) {
     throw ownAIKeyRequiredError();
   }
   switch (admission.type) {

@@ -4,8 +4,13 @@ ALTER TABLE "session" ADD CONSTRAINT "session_monitoring_principal_check" CHECK 
   (id NOT LIKE 'synthetic-session-%' OR user_id = 'synthetic-prod-user')
   AND (id NOT LIKE 'smoke-session-%' OR user_id IN ('smoke-user-stella', 'smoke-ai-user-stella'))
 ) NOT VALID;--> statement-breakpoint
-ALTER TABLE "session" VALIDATE CONSTRAINT "session_monitoring_principal_check";--> statement-breakpoint
 CREATE INDEX "session_monitoring_id_idx" ON "session" (id) WHERE id LIKE 'synthetic-session-%';--> statement-breakpoint
+ALTER TABLE "organization" ADD CONSTRAINT "organization_monitoring_slug_check" CHECK (
+  slug <> 'stella:monitoring:synthetic-prod-org' OR id = 'synthetic-prod-org'
+) NOT VALID;--> statement-breakpoint
+INSERT INTO "organization" (id, name, slug, created_at) VALUES (
+  'synthetic-prod-org', 'Product Monitoring', 'stella:monitoring:synthetic-prod-org', now()
+) ON CONFLICT (id) DO NOTHING;--> statement-breakpoint
 CREATE FUNCTION enforce_synthetic_membership() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   IF NEW.user_id = 'synthetic-prod-user' AND NEW.organization_id <> 'synthetic-prod-org' THEN
