@@ -2047,12 +2047,11 @@ export const extractCitations = (
             continue;
           }
           if (
-            cueGate.refuses !== null &&
-            cueGate.refuses({
+            cueGate.refuses?.({
               caseNumber,
               text: section.text,
               matchIndex: match.index,
-            })
+            }) === true
           ) {
             continue;
           }
